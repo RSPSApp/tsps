@@ -72,6 +72,7 @@ import {
   PluginCombatEngine,
   PluginCombatMethodResolver,
   PluginItemDropEvent,
+  PluginItemPickupEvent,
   PluginButtonClickEvent,
   PluginInterfaceActionClickEvent,
   PluginBonusEvent,
@@ -188,6 +189,7 @@ export class PluginManager {
     [];
   private static itemActionHooks: PluginHook<PluginItemActionEvent>[] = [];
   private static itemDropHooks: PluginHook<PluginItemDropEvent>[] = [];
+  private static itemPickupHooks: PluginHook<PluginItemPickupEvent>[] = [];
   private static buttonClickHooks: PluginHook<PluginButtonClickEvent>[] = [];
   private static interfaceActionClickHooks: PluginHook<PluginInterfaceActionClickEvent>[] =
     [];
@@ -1179,6 +1181,25 @@ export class PluginManager {
         event,
         "ground_item_interaction",
         "ground_item_interaction"
+      );
+    }
+    return event.handled === true;
+  }
+
+  public static emitItemPickup(event: PluginItemPickupEvent): boolean {
+    if (!event || !event.player || !event.groundItem || event.handled) {
+      return false;
+    }
+
+    for (const hook of PluginManager.itemPickupHooks) {
+      if (event.handled) {
+        break;
+      }
+      PluginManager.executeHook(
+        hook,
+        event,
+        "item_pickup",
+        "item_pickup"
       );
     }
     return event.handled === true;
@@ -2495,6 +2516,15 @@ export class PluginManager {
       },
       onGroundItemSecondClick: (itemIds, handler) => {
         registerGroundItemClickHook(2, itemIds, handler, "ground-item-second");
+      },
+      onItemPickup: (handler) => {
+        if (typeof handler !== "function") {
+          return;
+        }
+        PluginManager.itemPickupHooks.push({
+          pluginName,
+          handler,
+        });
       },
       onItemOnObject: (handler, filter) => {
         if (typeof handler !== "function") {

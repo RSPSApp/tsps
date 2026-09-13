@@ -3,6 +3,7 @@ import { ItemOnGroundManager, OperationType } from "../../../game/entity/impl/gr
 import { Location } from "../../../game/model/Location";
 import { Sounds } from "../../../game/Sounds";
 import { Sound } from "../../../game/Sound";
+import { PluginManager } from "../../../plugins/PluginManager";
 
 export class PickupItemPacketListener {
   public static pickup(player: any, itemId: number, x: number, y: number): void {
@@ -34,6 +35,26 @@ export class PickupItemPacketListener {
       return;
     }
 
+    const groundItem = ItemOnGroundManager.getGroundItem(
+      player.getUsername(),
+      itemId,
+      position
+    );
+    if (!groundItem) {
+      return;
+    }
+
+    const pickupEvent = {
+      player,
+      groundItem,
+      itemId,
+      location: position,
+      handled: false,
+    };
+    if (PluginManager.emitItemPickup(pickupEvent)) {
+      return;
+    }
+
     const inventory = player.getInventory();
     if (
       !(
@@ -44,15 +65,6 @@ export class PickupItemPacketListener {
       )
     ) {
       inventory.full();
-      return;
-    }
-
-    const groundItem = ItemOnGroundManager.getGroundItem(
-      player.getUsername(),
-      itemId,
-      position
-    );
-    if (!groundItem) {
       return;
     }
 

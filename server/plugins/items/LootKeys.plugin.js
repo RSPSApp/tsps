@@ -13,6 +13,13 @@ const { Location } = require("../../src/main/typescript/elvarg/game/model/Locati
 const { ForceMovement } = require("../../src/main/typescript/elvarg/game/model/ForceMovement");
 const { ForceMovementTask } = require("../../src/main/typescript/elvarg/game/task/impl/ForceMovementTask");
 const { ObjectIdentifiers } = require("../../src/main/typescript/elvarg/util/ObjectIdentifiers");
+const { Flag } = require("../../src/main/typescript/elvarg/game/model/Flag");
+
+function updateAppearance(player) {
+  if (player?.getUpdateFlag) {
+    player.getUpdateFlag().flag(Flag.APPEARANCE);
+  }
+}
 
 const KEY_IDS = Object.freeze([ItemIdentifiers.LOOT_KEY, ItemIdentifiers.LOOT_KEY_2, ItemIdentifiers.LOOT_KEY_3, ItemIdentifiers.LOOT_KEY_4, ItemIdentifiers.LOOT_KEY_5]);
 const KEY_ID_SET = new Set(KEY_IDS);
@@ -203,6 +210,9 @@ function createLootKey({ killer, victim }) {
   candidates.push(...state.keys.sort((left, right) => LootKeys.describeKey(right).value - LootKeys.describeKey(left).value));
   const available = LootKeys.MAX_KEYS - LootKeys.countKeys(killer);
   const received = candidates.slice(0, available).map((key) => giveKey(killer, key, victim.getLocation()));
+  if (received.some(Boolean)) {
+    updateAppearance(killer);
+  }
   if (drops.length) killer.getPacketSender().sendMessage(received[0]
     ? "Your opponent's loot has been placed in a Loot key."
     : "Your inventory is full, so your Loot key has been placed on the ground.");
@@ -225,7 +235,10 @@ function checkOrDestroy(api, event) {
   const key = event.item;
   api.sendMultiChatboxPrompt(event.player, "Destroy Loot key? The loot inside will be destroyed.", "Destroy", () => {
     const slot = event.player.getInventory().getItems().indexOf(key);
-    if (slot >= 0) event.player.getInventory().deleteAtSlot(slot, 1);
+    if (slot >= 0) {
+      event.player.getInventory().deleteAtSlot(slot, 1);
+      updateAppearance(event.player);
+    }
   }, "Cancel", () => {});
 }
 
@@ -336,7 +349,11 @@ function openChest(player) {
 }
 
 function openChestKey(player, slot, key) {
-  return LootKeys.openKey(player, slot, key) && openChest(player);
+  const result = LootKeys.openKey(player, slot, key) && openChest(player);
+  if (result) {
+    updateAppearance(player);
+  }
+  return result;
 }
 
 function openKeySelection(api, player) {
@@ -493,7 +510,7 @@ module.exports = {
   // defer this named Talk-to handler behind the generic NpcDialogues fallback.
   dependsOn: ["Wilderness", "Food"],
   register(api) {
-    TaskManager = api.getTaskManager();
+    TaskManager = typeof api.getTaskManager === "function" ? api.getTaskManager() : null;
     api.persistAttribute(LootKeys.UNLOCK_ATTRIBUTE);
     api.persistAttribute(LootKeys.SETTINGS_ATTRIBUTE);
     api.persistAttribute(LootKeys.CHEST_ATTRIBUTE);

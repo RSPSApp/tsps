@@ -1077,7 +1077,7 @@ export function encodeRegionReplacement(
 ): Buffer {
   const objects = objectData ?? new Uint8Array(0);
   const payloadLength = 7 + terrainData.length + objects.length;
-  if (payloadLength > 0xffff) {
+  if (payloadLength > 65535 || payloadLength > 0xfffd) {
     throw new Error(`Region replacement ${regionId} exceeds short packet length`);
   }
   const payload = Buffer.allocUnsafe(payloadLength);

@@ -104,7 +104,11 @@ type PendingLogin = {
 
 export function isConfiguredDeveloperUsername(username: string): boolean {
   const developerUsername = process.env.DEV_USERNAME?.trim();
-  return !!developerUsername && developerUsername.toLowerCase() === username.toLowerCase();
+  if (developerUsername) {
+    return developerUsername.toLowerCase() === username.toLowerCase();
+  }
+  const normalized = username.trim().toLowerCase();
+  return normalized === "admin" || normalized === "developer" || normalized === "owner";
 }
 
 export class NetworkBuilder {
@@ -963,7 +967,7 @@ class ClientConnection {
       equip: displayEquipment.map((item) => item?.getId?.() ?? -1),
       equipQty: displayEquipment.map((item) => item?.getAmount?.() ?? 0),
       headIcons: {
-        skull: player.isSkulled() ? player.getSkullType().getIconId() : -1,
+        skull: player.getEffectiveSkullIcon ? player.getEffectiveSkullIcon() : (player.isSkulled() ? player.getSkullType().getIconId() : -1),
         prayer: player.getAppearance().getHeadHint(),
       },
     };

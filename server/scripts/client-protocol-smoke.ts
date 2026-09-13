@@ -95,7 +95,7 @@ let equippedStaff = false;
 let selectedAutocast: any = CombatSpells.WIND_STRIKE;
 let autocastSyncs = 0;
 let autocastLocation = new Location(3200, 3200);
-(WeaponInterfaces as any).assign = () => undefined;
+(WeaponInterfaceManager as any).assign = () => undefined;
 (Autocasting as any).setAutocast = (_player: any, spell: any) => {
   selectedAutocast = spell;
   autocastSyncs++;
@@ -117,7 +117,7 @@ assert.strictEqual(autocastSyncs, 1);
 autocastLocation = new Location(3200, 3600);
 EquipPacketListener.resetWeapon(autocastPlayer, true);
 assert.strictEqual(selectedAutocast, null);
-(WeaponInterfaces as any).assign = originalAssignWeapon;
+(WeaponInterfaceManager as any).assign = originalAssignWeapon;
 (Autocasting as any).setAutocast = originalSetAutocast;
 
 assert.strictEqual(WeaponInterfaces.WHIP.getCategory(), 20);
@@ -405,14 +405,15 @@ assert.strictEqual(Music.forRegion(12850), 76);
 const gameframe = encodeGameframeBootstrap("Toby");
 assert.deepStrictEqual(gameframe.map((packet) => packet[0]), [
   170, 102, 103, 103, 103, 103, 103, 103, 103, 103, 103, 103,
-  103, 103, 103, 103, 103, 103, 103, 103, 103, 109, 110,
+  103, 103, 103, 103, 103, 103, 103, 103, 103, 109, 103, 111,
+  109, 109, 109, 109, 110,
 ]);
 assert.deepStrictEqual([...gameframe[0]], [170, 0, 3, 2, 114, 0]);
 assert.deepStrictEqual([...gameframe[1]], [102, 0, 161]);
 assert.strictEqual(gameframe[2].readInt32BE(3), (161 << 16) | 96);
 assert.strictEqual(gameframe[2].readUInt16BE(7), 162);
 assert.deepStrictEqual(
-  gameframe[gameframe.length - 2],
+  gameframe[21],
   encodeWidgetSetFlagsRange(MAIN_INVENTORY_WIDGET_UID, 0, 27, MAIN_INVENTORY_SLOT_FLAGS)
 );
 const appearance = encodePlayerAppearance(

@@ -230,6 +230,14 @@ export interface PluginShouldKeepItemOnDeathEvent {
   keep: boolean | null;
 }
 
+export interface PluginItemPickupEvent {
+  player: any;
+  groundItem: any;
+  itemId: number;
+  location: any;
+  handled: boolean;
+}
+
 export interface PluginPlayerDeathItemDropEvent {
   player: any;
   killer: any;
@@ -628,6 +636,7 @@ export interface PluginApi {
     itemIds: number | number[],
     handler: (event: PluginGroundItemInteractionEvent) => void | boolean
   ): void;
+  onItemPickup(handler: (event: PluginItemPickupEvent) => void): void;
   onItemOnObject(handler: (event: PluginItemOnObjectEvent) => void, filter?: PluginItemUseFilter): void;
   onItemOnItem(handler: (event: PluginItemOnItemEvent) => void, filter?: PluginItemUseFilter): void;
   /** Matches exact item names in either order; event items retain their original order. */

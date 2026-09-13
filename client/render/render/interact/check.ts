@@ -494,7 +494,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
 
                 // When hovering a player, Walk here target becomes the player's label.
                 if (walkHereEntry) {
-                    walkHereEntry.targetName = `<col=ffffff>${playerWalkLabel}`;
+                    walkHereEntry.targetName = playerWalkLabel.startsWith("<col=")
+                        ? playerWalkLabel
+                        : `<col=ffffff>${playerWalkLabel}`;
                 }
 
                 // Item selection: Use only (HttpHeaders.addPlayerToMenu).

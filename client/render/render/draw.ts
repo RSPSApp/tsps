@@ -321,7 +321,6 @@ export function addUnbatchedNpcRenderData(host: WebGLOsrsRendererHost): void {
                 }
             }
             if (!map) continue;
-            if (!host.shouldRenderNpcFromMap(map, ecsId)) continue;
 
             const dataOffset = host.actorRenderCount | 0;
             const required = dataOffset + 1;

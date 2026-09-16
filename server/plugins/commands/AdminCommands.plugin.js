@@ -1567,17 +1567,6 @@ module.exports = {
     api.registerCommand("item", itemHandler);
     api.registerCommand("pickup", itemHandler);
 
-    api.registerCommand("admin", ({ player }) => {
-      player.setRights(PlayerRights.DEVELOPER);
-      player.getPacketSender().sendMessage("You are now a developer / administrator.");
-      return true;
-    });
-    api.registerCommand("giveadmin", ({ player }) => {
-      player.setRights(PlayerRights.DEVELOPER);
-      player.getPacketSender().sendMessage("You are now a developer / administrator.");
-      return true;
-    });
-
     api.registerCommand("unlockprayers", ({ player, parts }) => {
       if (!requireRights(player, ownerOrDev)) {
         return true;

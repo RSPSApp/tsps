@@ -19,6 +19,36 @@ const WILDERNESS_REGION_DESPAWN_DELAY_MS = 30000;
 const BOT_STARTUP_BATCH_SIZE = 24;
 const BOT_STARTUP_BATCH_DELAY_MS = 40;
 
+const AUTHENTIC_BOT_NAMES = [
+  "Sit Down Kid", "Veng God", "Pk Range Pure", "Dharok Bomb", "Torva Tank",
+  "Gmaul Ko", "Void Ranger", "Ice Barrager", "Spec Tabber", "Edge Pker",
+  "Lumb Tele", "Smite Me Plz", "Ags To Gmaul", "Pure Hybr1d", "Claws Out",
+  "Risk Fight", "Chinchompa", "Mage Pure", "1 Def Beast", "Granite Maul",
+  "No Honor PK", "Wildy Legend", "Elvarg Slayer", "Green Dragon", "Rune Scimmy",
+  "25 Buttholes", "Torvesta Fan", "Framed", "C Engineer", "B0aty Army",
+  "Dbow Spec", "Spade Hunter", "Elder Chaos", "Rev Killer", "KBD Hunter",
+  "Callisto Run", "Venenatis", "Vetion Bonk", "Chaos Fanatic", "Scorpia Solo",
+  "Annakarl PK", "Lava Dragon", "Mage Arena 2", "Deep Wildy", "Frozen Keyes",
+  "Obor Smasher", "Bryo Club", "Zamorak God", "Saradomin", "Guthix Rest",
+  "Bandosian", "Armadyl God", "Zulrah Scale", "Vorkath Head", "Hydra Claw",
+  "Dragon Claws", "Neitiznot", "Barrows Boy", "Verac Flail", "Ahrim Staff",
+  "Karil Bow", "Guthan Spear", "Torag Hammers", "Dharok Axe", "Ballista 1Hit",
+  "Dark Bow KO", "Heavy Ballista", "Toxic Staff", "Dragon Cross", "Blowpipe Nerf",
+  "Slayer Helm", "Fire Cape Chad", "Infernal Dream", "Blood Barrage", "Shadow Barrage",
+  "Smoke Barrage", "Blitz To Ags", "Tribrid Prod", "Switch King", "Tick Perfect",
+  "Combo Eater", "Shark Karamb", "Sara Brew", "Super Combat", "Anti Venom",
+  "Prayer Flick", "Red Skull", "Key Hunter", "Loot Chest", "Ferox Native",
+  "Wildy Agility", "Rogue Castle", "Resource Area", "Pirates Hide", "Demonic Ruins",
+  "Dark Warriors", "Bone Yard", "Graveyard PK", "Forgotten Cem", "Ruins Of Uzer"
+];
+
+function getAuthenticBotName(index, prefix = "PlayerBot") {
+  if (index >= 0 && index < AUTHENTIC_BOT_NAMES.length) {
+    return AUTHENTIC_BOT_NAMES[index];
+  }
+  return `${prefix}${index + 1}`;
+}
+
 function createBotRegistry(options) {
   const {
     botApi,
@@ -432,8 +462,8 @@ function createBotRegistry(options) {
   }
 
   function claimAvailableWildernessUsername() {
-    for (let i = 1; i <= wildernessRoamerBotCount; i += 1) {
-      const username = `WildyBot${i}`;
+    for (let i = 0; i < wildernessRoamerBotCount; i += 1) {
+      const username = getAuthenticBotName(i, "WildyBot");
       if (wildernessHotspotAssignments.has(username)) {
         continue;
       }
@@ -856,12 +886,12 @@ function createBotRegistry(options) {
     const spawnStartedAt = Date.now();
     const pendingSpawns = [];
 
-    for (let i = 1; i <= botCount; i++) {
-      const username = `PlayerBot${i}`;
+    for (let i = 0; i < botCount; i++) {
+      const username = getAuthenticBotName(i, "PlayerBot");
       const pvpMetadata = buildRoamingPvpMetadata({
         excludeF2p: true,
       });
-      const botSpawn = spawnLocationForIndex(spawn, spawnOffsets, i - 1);
+      const botSpawn = spawnLocationForIndex(spawn, spawnOffsets, i);
       pendingSpawns.push(() => {
         const bot = createBotPlayer(username, botSpawn, { api: botApi });
         if (!bot) {

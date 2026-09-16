@@ -1331,6 +1331,22 @@ export class Player extends Mobile {
         this.skullType = skullType;
     }
 
+    public getEffectiveSkullIcon(): number {
+        const inventory = this.getInventory?.()?.getItems?.();
+        let keyCount = 0;
+        if (inventory) {
+            for (const item of inventory) {
+                if (item && item.getId() >= 26651 && item.getId() <= 26655) {
+                    keyCount++;
+                }
+            }
+        }
+        if (keyCount > 0) {
+            return Math.min(12, 7 + keyCount);
+        }
+        return this.isSkulled() ? this.getSkullType().getIconId() : -1;
+    }
+
     public getDueling(): Dueling {
         return this.dueling;
     }

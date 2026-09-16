@@ -157,7 +157,8 @@ export function osrsTargetLabel(e: OsrsMenuEntry, opts: TargetLabelOptions = {})
                       includeLevels,
                   )
                 : rawName;
-        t = base.length ? `${colorStartTag(baseColor)}${base}` : "";
+        const prefix = hasColorTag(base) ? "" : colorStartTag(baseColor);
+        t = base.length ? `${prefix}${base}` : "";
     }
     if (
         includeIds &&

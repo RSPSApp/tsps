@@ -115,18 +115,20 @@ export function processWidgetKeyboardInput(
             return;
         }
 
-        for (const keyEvent of input.keyEvents) {
-            const OSRS_KEY_ESCAPE = 13;
-            if (keyEvent.keyTyped === OSRS_KEY_ESCAPE) {
-                // Same IF_CLOSE packet MenuAction.ts already sends for
-                // MenuOpcode.WidgetClose (verified against
-                // ClientBinaryEncoder.ts/ClientProtocol.ts - IF_CLOSE = 55,
-                // 0-byte payload, decodes server-side to {type:
-                // "interface_close"}, handled in NetworkBuilder.ts via
-                // Player.closeInterruptibleInterfaces()).
-                const pkt = createPacket(ClientPacket.IF_CLOSE);
-                queuePacket(pkt);
-                return;
+        // If an open modal exists and Esc closing is enabled (varbit 4681), close the modal
+        const hasOpenModal = Array.from(widgetManager.interfaceParents.values()).some(
+            (p) => p && (p.type === 0 || p.type === 3),
+        );
+        const escClosesModal = (deps.getVarManager()?.getVarbit?.(4681) ?? 1) === 1;
+        if (hasOpenModal && escClosesModal) {
+            for (const keyEvent of input.keyEvents) {
+                const OSRS_KEY_ESCAPE = 13;
+                if (keyEvent.keyTyped === OSRS_KEY_ESCAPE) {
+                    const pkt = createPacket(ClientPacket.IF_CLOSE);
+                    queuePacket(pkt);
+                    deps.getCs2Vm()?.deferIfClose?.();
+                    return;
+                }
             }
         }
 
@@ -169,6 +171,7 @@ export function processWidgetKeyboardInput(
         }
 
         // Process all key events for all widgets with onKey handlers
+        let handledAny = false;
         for (const keyEvent of input.keyEvents) {
             for (const w of keyWidgetsByUid.values()) {
                 const keyCtx: Partial<ScriptEvent> = {
@@ -179,10 +182,15 @@ export function processWidgetKeyboardInput(
                 };
                 if (w.eventHandlers?.onKey) {
                     deps.getCs2Vm().invokeEventHandler(w, "onKey", keyCtx);
+                    handledAny = true;
                 } else if (w.onKey) {
                     deps.executeScriptListener(w, w.onKey, keyCtx);
+                    handledAny = true;
                 }
             }
+        }
+        if (handledAny && widgetManager) {
+            widgetManager.invalidateAll();
         }
     }
 }

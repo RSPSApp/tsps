@@ -372,11 +372,11 @@ export class PlayerSession {
           npcTransformationId,
           equipQty: equipment.map((item) => item?.getAmount?.() ?? 0),
           headIcons: {
-            skull: player.isSkulled() ? player.getSkullType().getIconId() : -1,
+            skull: player.getEffectiveSkullIcon?.() ?? (player.isSkulled() ? player.getSkullType().getIconId() : -1),
             prayer: player.getAppearance().getHeadHint(),
           },
         },
-        player.getUsername(),
+        player.isPlayerBot?.() ? `<col=ff0000>${player.getUsername()}</col>` : player.getUsername(),
         player.getSkillManager().getCombatLevel(),
         player.getSkillManager().getTotalLevel(),
         animations

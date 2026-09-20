@@ -128,7 +128,6 @@ class PvpFreezeAndKiteNode {
     const opponentMelee = opponentMethod.type() === CombatType.MELEE;
     const opponentRange = opponentMethod.attackDistance(target);
     const freezeTicks = target.getTimers().left(TimerKey.FREEZE);
-    const opponentDelay = opponentCombat.getAttackDelay();
     // Judge the position now, not a guaranteed escape from every possible chase.
     const inMeleeReach = (tile) => {
       const dx = Math.abs(tile.getX() - targetLoc.getX());
@@ -162,16 +161,28 @@ class PvpFreezeAndKiteNode {
       reason = "pvp_death_dot";
     } else if (steppingOut) {
       reason = "pvp_death_dot_step_out";
-    } else if (opponentMelee && delay > 1 &&
-        (melee ? delay > 2 && opponentDelay < delay && inMeleeReach(playerLoc) : distance <= 2)) {
-      reason = melee ? "pvp_deny_melee" : "pvp_kite";
+    } else if (melee && delay > 2 && distance <= 2) {
+      reason = "pvp_reposition";
+    } else if (!melee && delay > 1 && opponentMelee && distance <= 2) {
+      reason = "pvp_kite";
+    } else if (!melee && delay > 2 && !opponentMelee && distance <= range) {
+      reason = "pvp_reposition";
     } else {
       return false;
     }
 
     if (!steppingOut && World.getProcessCycle() < (lastStep?.nextMoveCycle ?? 0)) return false;
 
-    const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+    // A two-tile run can cross an adjacent opponent and finish behind them.
+    // Keep both the outward route and melee return within one movement tick.
+    const stride = player.getMovementQueue().isRunToggled() ? 2 : 1;
+    const radius = reason === "pvp_reposition" || reason === "pvp_kite" ? stride : 1;
+    const offsets = [];
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        if (dx !== 0 || dy !== 0) offsets.push([dx, dy]);
+      }
+    }
     const candidates = offsets.map(([dx, dy]) => {
       const tile = new Location(playerLoc.getX() + dx, playerLoc.getY() + dy, playerLoc.getZ());
       const tx = Math.abs(tile.getX() - targetLoc.getX());
@@ -187,12 +198,10 @@ class PvpFreezeAndKiteNode {
         if (candidate.distance !== 1 || (melee && candidate.diagonal)) return false;
         if (!melee && opponentMelee && opponentRange === 1 && !candidate.diagonal) return false;
       } else {
-        // Force a melee opponent to reposition, while retaining our next hit.
-        // A diagonal sidestep is useful even if they can follow it.
-        if (candidate.distance === 0 || inMeleeReach(candidate.tile) ||
-            candidate.distance > (melee ? 2 : range)) return false;
-        if (melee && candidate.returnSteps > (player.getMovementQueue().isRunToggled() ? 2 : 1)) return false;
-        if (!melee && candidate.distance < distance) return false;
+        if (candidate.distance === 0 || candidate.distance > (melee ? 2 : range)) return false;
+        if (melee && candidate.returnSteps > stride) return false;
+        if (!melee && opponentMelee &&
+            (inMeleeReach(candidate.tile) || candidate.distance <= 1 || candidate.distance < distance)) return false;
         if (lastStep?.target === target && candidate.tile.getX() === lastStep.fromX &&
             candidate.tile.getY() === lastStep.fromY) return false;
       }
@@ -208,17 +217,10 @@ class PvpFreezeAndKiteNode {
       state.pvp.movementReview = { target, attackCycle };
       if (Math.random() > Number(profile?.combatMoveChance ?? 0)) return false;
     }
-    // Skilled melee bots favour a short sidestep over giving up more distance.
-    if (melee && reason === "pvp_deny_melee" && Number(profile?.confidenceTier ?? 0) >= 3 &&
-        candidates.some((candidate) => candidate.distance === 1)) {
-      for (let i = candidates.length - 1; i >= 0; i--) {
-        if (candidates[i].distance > 1) candidates.splice(i, 1);
-      }
-    }
     while (candidates.length > 0) {
       const [{ tile }] = candidates.splice(Math.floor(Math.random() * candidates.length), 1);
       if (this.moveCombatStep(player, tile.getX(), tile.getY(), {
-        state, nowMs, basicPather: false, maxRouteSegmentTiles: 1, reason,
+        state, nowMs, basicPather: false, maxRouteSegmentTiles: radius, reason,
       })) {
         state.pvp.lastCombatStep = {
           target, targetX: targetLoc.getX(), targetY: targetLoc.getY(), reason,

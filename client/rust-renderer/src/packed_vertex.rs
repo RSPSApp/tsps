@@ -117,10 +117,8 @@ pub struct PackedVertexDeduper {
 impl PackedVertexDeduper {
     pub fn push(&mut self, input: VertexInput, reuse: bool) -> u32 {
         let vertex = PackedVertex::encode(input);
-        if reuse {
-            if let Some(index) = self.indices.get(&vertex) {
-                return *index;
-            }
+        if reuse && let Some(index) = self.indices.get(&vertex) {
+            return *index;
         }
 
         let index = self.vertices.len() as u32;

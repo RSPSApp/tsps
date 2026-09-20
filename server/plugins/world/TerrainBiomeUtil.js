@@ -4,12 +4,9 @@ const path = require("path");
 const { ObjectType } = require("./ObjectType");
 const { decodeRegionObjects, decodeRegionTerrainData } = require("./RegionBuildingAnalysisUtil");
 const { PROCEDURAL_DATA_DIRECTORY } = require("./ProceduralDataPaths");
+const { isWaterOverlayId } = require("../../src/main/typescript/elvarg/game/cache/TerrainWater");
 
 const TERRAIN_BIOME_DIRECTORY = path.join(PROCEDURAL_DATA_DIRECTORY, "terrain-biomes");
-
-// Derived from web client HD tile override water rules (waterType != NONE).
-const WATER_OVERLAY_IDS = new Set([6, 7, 29, 41, 42, 72, 85, 95, 104, 128, 130, 133, 151, 156, 158, 161, 181, 245, 246]);
-const WATER_UNDERLAY_IDS = new Set([54, 133, 134]);
 
 const TREE_NAME_PATTERN =
   /\b(tree|oak|willow|maple|yew|magic|mahogany|teak|blisterwood|sulliuscep|juniper|evergreen|arctic pine|achey)\b/i;
@@ -28,16 +25,6 @@ function sanitizeBiomeName(raw) {
 
 function regionId(regionX, regionY) {
   return ((regionX & 0xff) << 8) | (regionY & 0xff);
-}
-
-function isWaterTile(overlayId, underlayId) {
-  if (WATER_OVERLAY_IDS.has(overlayId | 0)) {
-    return true;
-  }
-  if (WATER_UNDERLAY_IDS.has(underlayId | 0)) {
-    return true;
-  }
-  return false;
 }
 
 function isTreeObject(obj) {
@@ -215,7 +202,7 @@ function sampleRegionTerrainForBiome(regionX, regionY) {
     for (let localY = 0; localY < 64; localY++) {
       const overlayId = terrainData?.overlays?.[0]?.[localX]?.[localY] | 0;
       const underlayId = terrainData?.underlays?.[0]?.[localX]?.[localY] | 0;
-      if (isWaterTile(overlayId, underlayId)) {
+      if (isWaterOverlayId(overlayId)) {
         waterTileCount++;
         continue;
       }
@@ -298,8 +285,7 @@ function sampleRegionTerrainForBiome(regionX, regionY) {
     for (let localX = 0; localX < 64; localX++) {
       for (let localY = 0; localY < 64; localY++) {
         const overlayId = terrainData?.overlays?.[0]?.[localX]?.[localY] | 0;
-        const underlayId = terrainData?.underlays?.[0]?.[localX]?.[localY] | 0;
-        if (isWaterTile(overlayId, underlayId)) {
+        if (isWaterOverlayId(overlayId)) {
           continue;
         }
         const key = (localX << 6) | localY;

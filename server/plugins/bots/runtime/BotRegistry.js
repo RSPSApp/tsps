@@ -981,7 +981,8 @@ function createBotRegistry(options) {
       const offsetX = tileIndex % width;
       const offsetY = Math.floor(tileIndex / width);
       const candidate = new Location(minX + offsetX, minY + offsetY, z);
-      if (Wilderness.isInLocation(candidate) && isOutsideWildernessHotspots(candidate) && !RegionManager.blocked(candidate, null)) {
+      if (Wilderness.isInLocation(candidate) && isOutsideWildernessHotspots(candidate) &&
+          !RegionManager.blocked(candidate, null) && !RegionManager.isWater(candidate)) {
         return candidate;
       }
     }
@@ -1011,11 +1012,11 @@ function createBotRegistry(options) {
     const width = maxX - minX + 1;
     const height = maxY - minY + 1;
     if (width <= 0 || height <= 0) {
-      return RegionManager.blocked(anchor, null) ? null : anchor;
+      return RegionManager.blocked(anchor, null) || RegionManager.isWater(anchor) ? null : anchor;
     }
     const totalTiles = width * height;
     if (totalTiles <= 0) {
-      return RegionManager.blocked(anchor, null) ? null : anchor;
+      return RegionManager.blocked(anchor, null) || RegionManager.isWater(anchor) ? null : anchor;
     }
     const seedBase =
       Math.imul(index + 1, 1103515245) ^
@@ -1033,12 +1034,13 @@ function createBotRegistry(options) {
       const candidate = new Location(minX + offsetX, minY + offsetY, z);
       if (
         Wilderness.isInLocation(candidate) &&
-        !RegionManager.blocked(candidate, null)
+        !RegionManager.blocked(candidate, null) &&
+        !RegionManager.isWater(candidate)
       ) {
         return candidate;
       }
     }
-    if (Wilderness.isInLocation(anchor) && !RegionManager.blocked(anchor, null)) {
+    if (Wilderness.isInLocation(anchor) && !RegionManager.blocked(anchor, null) && !RegionManager.isWater(anchor)) {
       return anchor.clone().setZ(z);
     }
     return null;

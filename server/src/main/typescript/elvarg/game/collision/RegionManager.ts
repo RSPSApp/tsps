@@ -13,6 +13,7 @@ import { PluginManager } from "../../plugins/PluginManager";
 import { MapRegionReplacementManager } from "./MapRegionReplacementManager";
 import { CacheMaps } from "../cache/CacheMaps";
 import { CachePipeline } from "../cache/CachePipeline";
+import { isWaterOverlayId } from "../cache/TerrainWater";
 
 export class RegionManager {
     public static PROJECTILE_NORTH_WEST_BLOCKED = 0x200;
@@ -72,6 +73,11 @@ export class RegionManager {
             RegionManager.loadMapFiles(x, y);
         }
         return RegionManager.getRegionid(regionId);
+    }
+
+    public static isWater(position: Location): boolean {
+        return RegionManager.getRegion(position.getX(), position.getY())
+            ?.isWater(position.getX(), position.getY(), position.getZ()) === true;
     }
     private static addClippingForVariableObject(x: number, y: number, height: number, type: number, direction: number, tall: boolean, privateArea: PrivateArea) {
         if (type == 0) {
@@ -759,6 +765,7 @@ export class RegionManager {
         RegionManager.clearRegionMapObjects(regionId);
         region.clips = undefined;
         region.roofTiles = undefined;
+        region.waterTiles = undefined;
         region.setLoaded(false);
 
         const absX = ((regionId >> 8) & 0xff) * 64;
@@ -805,10 +812,12 @@ export class RegionManager {
                 Array.from({ length: 64 }, () => new Array(64).fill(0))
             );
             const roofTiles = new Uint8Array(2048);
+            const waterTiles = new Uint8Array(512);
             const newTerrainFormat = CachePipeline.getActive().revision >= 209;
             for (let z = 0; z < 4; z++) {
                 for (let tileX = 0; tileX < 64; tileX++) {
                     for (let tileY = 0; tileY < 64; tileY++) {
+                        let overlayId = 0;
                         while (true) {
                             const tileType = newTerrainFormat
                                 ? groundStream.readUShort()
@@ -819,8 +828,9 @@ export class RegionManager {
                                 groundStream.readUnsignedByte();
                                 break;
                             } else if (tileType <= 49) {
-                                if (newTerrainFormat) groundStream.readUShort();
-                                else groundStream.readUnsignedByte();
+                                overlayId = newTerrainFormat
+                                    ? groundStream.readUShort()
+                                    : groundStream.readUnsignedByte();
                             } else if (tileType <= 81) {
                                 heightMap[z][tileX][tileY] = tileType - 49;
                                 if (((tileType - 49) & Region.TILE_FLAG_UNDER_ROOF) !== 0) {
@@ -829,9 +839,14 @@ export class RegionManager {
                                 }
                             }
                         }
+                        if (z === 0 && isWaterOverlayId(overlayId)) {
+                            const index = (tileX << 6) | tileY;
+                            waterTiles[index >> 3] |= 1 << (index & 7);
+                        }
                     }
                 }
             }
+            r.waterTiles = waterTiles;
             for (let i = 0; i < 4; i++) {
                 for (let i2 = 0; i2 < 64; i2++) {
                     for (let i3 = 0; i3 < 64; i3++) {

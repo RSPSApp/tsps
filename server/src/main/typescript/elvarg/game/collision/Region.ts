@@ -6,6 +6,7 @@ export class Region {
     private objectFile: number;
     public clips?: number[][][];
     public roofTiles?: Uint8Array;
+    public waterTiles?: Uint8Array;
     public static readonly TILE_FLAG_UNDER_ROOF = 0x4;
     private loaded: boolean;
 
@@ -85,6 +86,12 @@ export class Region {
         if (!Number.isInteger(plane) || plane < 0 || plane > 3) return false;
         const index = (plane << 12) | ((x & 63) << 6) | (y & 63);
         return ((this.roofTiles?.[index >> 3] ?? 0) & (1 << (index & 7))) !== 0;
+    }
+
+    public isWater(x: number, y: number, plane: number): boolean {
+        if (plane !== 0) return false;
+        const index = ((x & 63) << 6) | (y & 63);
+        return ((this.waterTiles?.[index >> 3] ?? 0) & (1 << (index & 7))) !== 0;
     }
 
     public getLocalPosition(position: Location): number[] {

@@ -81,7 +81,6 @@ function createBotPlayer(username, spawn, options = {}) {
   bot.setLongUsername(Misc.stringToLongBigInt(username));
   bot.setHostAddress("bot");
   bot.setAutoRetaliate(false);
-  bot.setRunning(false);
   bot.setLastKnownRegion(spawn.clone());
 
   let appliedPersistence = false;
@@ -104,6 +103,10 @@ function createBotPlayer(username, spawn, options = {}) {
       console.error(`[PlayerBots] Failed to load persistence for ${username}`, err);
     }
   }
+
+  // Apply after persistence so older walking-only saves also start with run enabled.
+  bot.setRunning(true);
+  bot.setRunEnergy(100);
 
   // Older bot saves often have empty/missing appearance arrays; randomize once
   // so bots don't collapse to the same default look.

@@ -13,6 +13,7 @@ const COOK_INTERVAL_TICKS = 4;
 
 const COOKABLES = Object.freeze([
   { raw: ItemIds.RAW_BEEF, cooked: ItemIds.COOKED_MEAT, burnt: ItemIds.BURNT_MEAT, level: 1, xp: 30, stopBurn: 34, name: "meat" },
+  { raw: ItemIds.RAW_RAT_MEAT, cooked: ItemIds.COOKED_MEAT, burnt: ItemIds.BURNT_MEAT, level: 1, xp: 30, stopBurn: 34, name: "rat meat" },
   { raw: ItemIds.RAW_CHICKEN, cooked: ItemIds.COOKED_CHICKEN, burnt: ItemIds.BURNT_CHICKEN, level: 1, xp: 30, stopBurn: 34, name: "chicken" },
   { raw: ItemIds.RAW_RABBIT, cooked: ItemIds.COOKED_RABBIT, burnt: ItemIds.BURNT_RABBIT, level: 1, xp: 30, stopBurn: 37, name: "rabbit" },
   { raw: ItemIds.RAW_SHRIMPS, cooked: ItemIds.SHRIMPS, burnt: ItemIds.BURNT_SHRIMP, level: 1, xp: 30, stopBurn: 33, name: "shrimp" },
@@ -213,6 +214,25 @@ function handleCook(activeSessions, event) {
   }
 }
 
+function handleRangeCook(activeSessions, event) {
+  const item = event.player.getInventory().getItems().find((inventoryItem) =>
+    inventoryItem
+    && !ItemDefinition.forId(inventoryItem.getId()).isNoted()
+    && COOKABLE_BY_RAW.has(inventoryItem.getId())
+  );
+  if (!item) {
+    event.player.sendMessage("You don't have anything to cook.");
+    return;
+  }
+
+  startCooking(
+    event.player,
+    event.object,
+    COOKABLE_BY_RAW.get(item.getId()),
+    activeSessions
+  );
+}
+
 module.exports = {
   name: "Cooking",
   register(api) {
@@ -228,6 +248,7 @@ module.exports = {
     });
 
     api.onItemOnObject(handleCook.bind(null, activeSessions), { noted: false });
+    api.onObjectInteraction("Range", { Cook: handleRangeCook.bind(null, activeSessions) });
 
     api.log("registered", {
       cookables: COOKABLES.length,

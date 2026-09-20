@@ -1,0 +1,1161 @@
+{
+  "presetGroups": [
+    {
+      "id": "main_126",
+      "weight": 30,
+      "presetKeys": [
+        "MAIN_HYBRID_126", "MAIN_RUNE_126", "MAIN_MELEE_126", "MAIN_RCB_TANK_126",
+        "DHAROK_126", "MAIN_BARRAGE_126", "VOID_RANGER_126", "VOID_MELEE_126",
+        "KARILS_TANK_126", "MAIN_TRIBRID_126"
+      ]
+    },
+    {
+      "id": "pure_1_def",
+      "weight": 30,
+      "presetKeys": [
+        "DDS_PURE_M_73", "DDS_PURE_R_73", "G_MAULER_70", "NH_PURE_83",
+        "OBBY_MAULER_57"
+      ]
+    },
+    {
+      "id": "tank_45_def",
+      "weight": 15,
+      "presetKeys": [
+        "ATT_60_ZERKER_94", "ATT_70_ZERKER_97"
+      ]
+    },
+    {
+      "id": "tank_70_def",
+      "weight": 15,
+      "presetKeys": [
+        "MAIN_RCB_TANK_70"
+      ]
+    },
+    {
+      "id": "random",
+      "weight": 10,
+      "presetKeys": []
+    }
+  ],
+  "pools": {
+    "ancient_autocast_staves": [
+      "ANCIENT_STAFF"
+    ],
+    "regular_autocast_staves": [
+      "STAFF_OF_AIR", "STAFF_OF_WATER", "STAFF_OF_EARTH", "STAFF_OF_FIRE",
+      "MAGIC_STAFF", "BATTLESTAFF", "AIR_BATTLESTAFF", "WATER_BATTLESTAFF",
+      "EARTH_BATTLESTAFF", "FIRE_BATTLESTAFF", "MYSTIC_AIR_STAFF", "MYSTIC_WATER_STAFF",
+      "MYSTIC_EARTH_STAFF", "MYSTIC_FIRE_STAFF"
+    ],
+    "regular_air_staves": [
+      "STAFF_OF_AIR", "AIR_BATTLESTAFF", "MYSTIC_AIR_STAFF"
+    ],
+    "regular_water_staves": [
+      "STAFF_OF_WATER", "WATER_BATTLESTAFF", "MYSTIC_WATER_STAFF"
+    ],
+    "regular_earth_staves": [
+      "STAFF_OF_EARTH", "EARTH_BATTLESTAFF", "MYSTIC_EARTH_STAFF"
+    ],
+    "regular_fire_staves": [
+      "STAFF_OF_FIRE", "FIRE_BATTLESTAFF", "MYSTIC_FIRE_STAFF"
+    ],
+    "regular_arcane_staves": [
+      "MAGIC_STAFF", "BATTLESTAFF"
+    ],
+    "f2p_air_staves": [
+      "STAFF_OF_AIR"
+    ],
+    "f2p_water_staves": [
+      "STAFF_OF_WATER"
+    ],
+    "f2p_earth_staves": [
+      "STAFF_OF_EARTH"
+    ],
+    "f2p_fire_staves": [
+      "STAFF_OF_FIRE"
+    ],
+    "mage_hats": [
+      "SKELETAL_HELM", "SKELETAL_HELM_2", "MYSTIC_HAT", "MYSTIC_HAT_DARK_",
+      "MYSTIC_HAT_LIGHT_", "MYSTIC_HAT_DUSK_", "INFINITY_HAT", "SPLITBARK_HELM",
+      "GHOSTLY_HOOD", "ELDER_CHAOS_HOOD", "DAGONHAI_HAT"
+    ],
+    "mage_gloves": [
+      "SKELETAL_GLOVES", "SKELETAL_GLOVES_2", "MYSTIC_GLOVES", "MYSTIC_GLOVES_DARK_",
+      "MYSTIC_GLOVES_LIGHT_", "MYSTIC_GLOVES_DUSK_", "INFINITY_GLOVES", "SPLITBARK_GAUNTLETS",
+      "GHOSTLY_GLOVES"
+    ],
+    "mage_boots": [
+      "SKELETAL_BOOTS", "SKELETAL_BOOTS_2", "MYSTIC_BOOTS", "MYSTIC_BOOTS_DARK_",
+      "MYSTIC_BOOTS_LIGHT_", "MYSTIC_BOOTS_DUSK_", "INFINITY_BOOTS", "SPLITBARK_BOOTS",
+      "GHOSTLY_BOOTS"
+    ],
+    "mage_capes": [
+      "SARADOMIN_CAPE", "ZAMORAK_CAPE", "GUTHIX_CAPE", "GHOSTLY_CLOAK",
+      "AVAS_ACCUMULATOR"
+    ],
+    "mage_offhands": [
+      "UNHOLY_BOOK", "BOOK_OF_DARKNESS"
+    ],
+    "range_heads": [
+      "COIF", "GREEN_HAT", "GREY_HAT", "BLUE_HAT",
+      "RED_HAT", "ZAMORAK_COIF", "GUTHIX_COIF", "SARADOMIN_COIF",
+      "ANCIENT_COIF", "BANDOS_COIF", "ARMADYL_COIF"
+    ],
+    "range_bodies": [
+      "LEATHER_BODY", "STUDDED_BODY", "GREEN_DHIDE_BODY", "BLUE_DHIDE_BODY",
+      "RED_DHIDE_BODY", "BLACK_DHIDE_BODY", "SPINED_BODY", "SNAKESKIN_BODY",
+      "ZAMORAK_DHIDE_BODY", "GUTHIX_DHIDE_BODY", "SARADOMIN_DHIDE_BODY", "ANCIENT_DHIDE_BODY",
+      "BANDOS_DHIDE_BODY", "ARMADYL_DHIDE_BODY"
+    ],
+    "range_legs": [
+      "STUDDED_CHAPS", "GREEN_DHIDE_CHAPS", "BLUE_DHIDE_CHAPS", "RED_DHIDE_CHAPS",
+      "BLACK_DHIDE_CHAPS", "SPINED_CHAPS", "SNAKESKIN_CHAPS", "ZAMORAK_CHAPS",
+      "GUTHIX_CHAPS", "SARADOMIN_CHAPS", "ANCIENT_CHAPS", "BANDOS_CHAPS",
+      "ARMADYL_CHAPS"
+    ],
+    "range_gloves": [
+      "GREEN_DHIDE_VAMBRACES", "BLUE_DHIDE_VAMBRACES", "RED_DHIDE_VAMBRACES", "BLACK_DHIDE_VAMBRACES",
+      "SPINED_GLOVES", "SNAKESKIN_VAMBRACES", "ZAMORAK_BRACERS", "GUTHIX_BRACERS",
+      "SARADOMIN_BRACERS", "ANCIENT_BRACERS", "BANDOS_BRACERS", "ARMADYL_BRACERS",
+      "MITHRIL_GLOVES", "BARROWS_GLOVES"
+    ],
+    "range_boots": [
+      "CLIMBING_BOOTS", "SNAKESKIN_BOOTS", "SPINED_BOOTS", "ANCIENT_DHIDE_BOOTS",
+      "BANDOS_DHIDE_BOOTS", "GUTHIX_DHIDE_BOOTS", "ARMADYL_DHIDE_BOOTS", "SARADOMIN_DHIDE_BOOTS",
+      "ZAMORAK_DHIDE_BOOTS"
+    ],
+    "range_capes": [
+      "AVAS_ACCUMULATOR", "OBSIDIAN_CAPE"
+    ],
+    "black_masks": [
+      "BLACK_MASK"
+    ],
+    "f2p_capes": [
+      "BLACK_CAPE", "RED_CAPE"
+    ],
+    "f2p_range_heads": [
+      "COIF", "GREEN_HAT", "GREY_HAT", "BLUE_HAT",
+      "RED_HAT"
+    ],
+    "f2p_range_bodies": [
+      "LEATHER_BODY", "HARDLEATHER_BODY", "STUDDED_BODY", "GREEN_DHIDE_BODY"
+    ],
+    "f2p_range_legs": [
+      "STUDDED_CHAPS", "GREEN_DHIDE_CHAPS"
+    ],
+    "f2p_mage_heads": [
+      "WIZARD_HAT", "BLUE_WIZARD_HAT"
+    ],
+    "f2p_mage_bodies": [
+      "BLUE_WIZARD_ROBE", "ZAMORAK_ROBE_TOP", "MONKS_ROBE_TOP"
+    ],
+    "f2p_mage_legs": [
+      "ZAMORAK_ROBE_LEGS", "MONKS_ROBE"
+    ],
+    "hybrid_mage_tops": [
+      "SKELETAL_TOP", "SKELETAL_TOP_2", "MYSTIC_ROBE_TOP", "MYSTIC_ROBE_TOP_DARK_",
+      "MYSTIC_ROBE_TOP_LIGHT_", "INFINITY_TOP", "SPLITBARK_BODY", "GHOSTLY_ROBE",
+      "ELDER_CHAOS_TOP", "DAGONHAI_ROBE_TOP"
+    ],
+    "hybrid_range_legs": [
+      "SKELETAL_BOTTOMS", "SKELETAL_BOTTOMS_2", "MYSTIC_ROBE_BOTTOM", "SPLITBARK_LEGS",
+      "BLACK_DHIDE_CHAPS", "RED_DHIDE_CHAPS", "BLUE_DHIDE_CHAPS", "SPINED_CHAPS",
+      "ANCIENT_CHAPS", "BANDOS_CHAPS", "ARMADYL_CHAPS", "GUTHIX_CHAPS",
+      "SARADOMIN_CHAPS", "ZAMORAK_CHAPS"
+    ],
+    "elite_spec_weapons": [
+      "DRAGON_CLAWS", "ARMADYL_GODSWORD", "BANDOS_GODSWORD", "SARADOMIN_GODSWORD",
+      "ZAMORAK_GODSWORD", "ANCIENT_GODSWORD", "BARRELCHEST_ANCHOR"
+    ]
+  },
+  "regularMagicPackages": [
+    {
+      "weight": 2,
+      "style": "air",
+      "staffPool": "regular_air_staves",
+      "spells": [
+        "WIND_STRIKE", "WIND_BOLT", "WIND_BLAST", "WIND_WAVE"
+      ]
+    },
+    {
+      "weight": 2,
+      "style": "water",
+      "staffPool": "regular_water_staves",
+      "spells": [
+        "WATER_STRIKE", "WATER_BOLT", "WATER_BLAST", "WATER_WAVE"
+      ]
+    },
+    {
+      "weight": 2,
+      "style": "earth",
+      "staffPool": "regular_earth_staves",
+      "spells": [
+        "EARTH_STRIKE", "EARTH_BOLT", "EARTH_BLAST", "EARTH_WAVE"
+      ]
+    },
+    {
+      "weight": 3,
+      "style": "fire",
+      "staffPool": "regular_fire_staves",
+      "spells": [
+        "FIRE_STRIKE", "FIRE_BOLT", "FIRE_BLAST", "FIRE_WAVE"
+      ]
+    },
+    {
+      "weight": 1,
+      "style": "arcane",
+      "staffPool": "regular_arcane_staves",
+      "spells": [
+        "FIRE_STRIKE", "FIRE_BOLT", "FIRE_BLAST", "FIRE_WAVE"
+      ]
+    }
+  ],
+  "f2pMagicPackages": [
+    {
+      "weight": 2,
+      "style": "air",
+      "staffPool": "f2p_air_staves",
+      "spells": [
+        "WIND_BOLT", "WIND_BLAST"
+      ]
+    },
+    {
+      "weight": 2,
+      "style": "water",
+      "staffPool": "f2p_water_staves",
+      "spells": [
+        "WATER_BOLT", "WATER_BLAST"
+      ]
+    },
+    {
+      "weight": 2,
+      "style": "earth",
+      "staffPool": "f2p_earth_staves",
+      "spells": [
+        "EARTH_BOLT", "EARTH_BLAST"
+      ]
+    },
+    {
+      "weight": 3,
+      "style": "fire",
+      "staffPool": "f2p_fire_staves",
+      "spells": [
+        "FIRE_BOLT", "FIRE_BLAST"
+      ]
+    }
+  ],
+  "loadouts": [
+    {
+      "id": "edge_main_melee",
+      "label": "Edge Main Melee",
+      "tags": [
+        "edge", "melee", "main"
+      ],
+      "weaponFamilies": [
+        "whip", "dds", "dscim", "ags",
+        "anchor", "dharok", "veracs", "dhalberd"
+      ],
+      "armorFamilies": [
+        "fighter", "barrows", "rune", "granite",
+        "mixed", "dharok"
+      ],
+      "archetypes": [
+        "main_whip", "zerker_whip", "zerker_dscim", "ags_zerker",
+        "ancient_gs_venge", "zerker_venge_ags", "zerker_whip_claws", "med_whip_ags",
+        "full_dharok", "veracs_venge_claws", "obsidian_set_mauler", "dhalberd_venge_ags"
+      ],
+      "inventoryBias": {
+        "food": 0.55,
+        "potions": 0.2,
+        "comboEat": 0.05
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "chaos_temple"
+      ]
+    },
+    {
+      "id": "edge_ranged_melee",
+      "label": "Edge Ranged/Melee",
+      "tags": [
+        "edge", "hybrid", "range"
+      ],
+      "weaponFamilies": [
+        "rune_cb", "msb", "dds", "dscim",
+        "karils_cb", "blowpipe"
+      ],
+      "armorFamilies": [
+        "dhide", "fighter", "rune", "skeletal",
+        "mixed"
+      ],
+      "archetypes": [
+        "msb_gmaul", "rcb_dds", "msb_dds", "dark_bow_ags",
+        "zerker_dcb_ags", "med_dcb_claws", "void_dcb_claws", "void_dcb_ags",
+        "void_ballista_ags", "ballista_pure", "karils_venge_ags", "blowpipe_venge_ags"
+      ],
+      "inventoryBias": {
+        "food": 0.5,
+        "potions": 0.22,
+        "comboEat": 0.08
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south"
+      ]
+    },
+    {
+      "id": "deep_wild_hybrid",
+      "label": "Deep Wild Hybrid",
+      "tags": [
+        "deep", "hybrid", "risk"
+      ],
+      "weaponFamilies": [
+        "ancients", "rune_cb", "staff", "dds",
+        "spear", "sotd"
+      ],
+      "armorFamilies": [
+        "mystic", "dhide", "ahrim", "skeletal"
+      ],
+      "archetypes": [
+        "ancients_hybrid", "elite_ancients_dbow", "tribrid_main", "elite_nh_ags",
+        "elite_nh_claws", "volatile_nh", "med_tribrid_ags", "nh_pure",
+        "budget_nh_dds", "budget_nh_ags", "toxic_sotd_hybrid", "spear_tribrid_ags",
+        "sotd_hybrid_claws"
+      ],
+      "inventoryBias": {
+        "food": 0.4,
+        "potions": 0.28,
+        "comboEat": 0.12
+      },
+      "hotspots": [
+        "mage_bank", "revs_entrance", "chaos_temple"
+      ]
+    },
+    {
+      "id": "anti_pk_hybrid",
+      "label": "Anti-PK Hybrid",
+      "tags": [
+        "anti", "hybrid", "escape"
+      ],
+      "weaponFamilies": [
+        "staff", "rune_cb", "whip", "dds"
+      ],
+      "armorFamilies": [
+        "dhide", "mystic", "tank", "skeletal"
+      ],
+      "archetypes": [
+        "anti_pk_rcb", "anti_pk_whip", "budget_anti_pk", "budget_nh_dds",
+        "med_tribrid_ags", "toxic_sotd_hybrid"
+      ],
+      "inventoryBias": {
+        "food": 0.5,
+        "potions": 0.24,
+        "comboEat": 0.1
+      },
+      "hotspots": [
+        "edge_south", "chaos_temple", "revs_entrance", "green_drags_gate"
+      ]
+    },
+    {
+      "id": "budget_pk",
+      "label": "Budget PK",
+      "tags": [
+        "budget", "edge", "melee"
+      ],
+      "weaponFamilies": [
+        "dscim", "rune_cb", "msb", "anchor"
+      ],
+      "armorFamilies": [
+        "rune", "green_dhide", "granite", "mixed"
+      ],
+      "archetypes": [
+        "budget_scim", "budget_rcb", "budget_msb"
+      ],
+      "inventoryBias": {
+        "food": 0.58,
+        "potions": 0.14,
+        "comboEat": 0.03
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "chaos_temple"
+      ]
+    },
+    {
+      "id": "initiate_pure",
+      "label": "Initiate Pure",
+      "tags": [
+        "edge", "pure", "initiate", "melee"
+      ],
+      "weaponFamilies": [
+        "dscim", "dds", "gmaul", "msb"
+      ],
+      "armorFamilies": [
+        "initiate", "mixed", "dhide"
+      ],
+      "archetypes": [
+        "initiate_dscim_dds", "initiate_dscim_gmaul", "initiate_msb_gmaul"
+      ],
+      "inventoryBias": {
+        "food": 0.56,
+        "potions": 0.18,
+        "comboEat": 0.08
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "chaos_temple"
+      ]
+    },
+    {
+      "id": "low_level_pure",
+      "label": "Low Level Pure",
+      "tags": [
+        "edge", "pure", "low", "melee"
+      ],
+      "weaponFamilies": [
+        "msb", "dds", "gmaul", "ags"
+      ],
+      "armorFamilies": [
+        "dhide", "spined", "light", "mixed"
+      ],
+      "archetypes": [
+        "low_level_dds_pure", "low_level_gmaul_pure", "low_level_msb_ags_pure", "msb_gmaul",
+        "msb_dds"
+      ],
+      "inventoryBias": {
+        "food": 0.54,
+        "potions": 0.18,
+        "comboEat": 0.1
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "chaos_temple"
+      ]
+    },
+    {
+      "id": "rune_pure_members",
+      "label": "Rune Pure Members",
+      "tags": [
+        "edge", "pure", "rune", "mid"
+      ],
+      "weaponFamilies": [
+        "dscim", "msb", "dds", "ags"
+      ],
+      "armorFamilies": [
+        "rune", "fighter", "mixed", "dhide"
+      ],
+      "archetypes": [
+        "rune_pure_dscim_dds", "rune_pure_msb_ags", "initiate_dscim_dds", "initiate_msb_gmaul"
+      ],
+      "inventoryBias": {
+        "food": 0.54,
+        "potions": 0.18,
+        "comboEat": 0.08
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "chaos_temple"
+      ]
+    },
+    {
+      "id": "void_pure",
+      "label": "Void Pure",
+      "tags": [
+        "edge", "pure", "void", "risk"
+      ],
+      "weaponFamilies": [
+        "msb", "ballista", "claws", "ags"
+      ],
+      "armorFamilies": [
+        "void", "range"
+      ],
+      "archetypes": [
+        "void_pure_claws", "void_pure_ballista", "ballista_pure"
+      ],
+      "inventoryBias": {
+        "food": 0.48,
+        "potions": 0.24,
+        "comboEat": 0.12
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south"
+      ]
+    },
+    {
+      "id": "f2p_strength_pure",
+      "label": "F2P Strength Pure",
+      "tags": [
+        "edge", "f2p", "melee", "pure"
+      ],
+      "weaponFamilies": [
+        "maple_shortbow", "rune_wh", "rune_baxe"
+      ],
+      "armorFamilies": [
+        "green_dhide", "studded", "light"
+      ],
+      "archetypes": [
+        "f2p_rwh_pure", "f2p_rbaxe_pure"
+      ],
+      "inventoryBias": {
+        "food": 0.64,
+        "potions": 0.08,
+        "comboEat": 0
+      },
+      "hotspots": [
+        "varrock_ditch"
+      ]
+    },
+    {
+      "id": "f2p_rune_pure",
+      "label": "F2P Rune Pure",
+      "tags": [
+        "edge", "f2p", "melee", "rune"
+      ],
+      "weaponFamilies": [
+        "rune_scim", "rune_2h", "rune_baxe"
+      ],
+      "armorFamilies": [
+        "rune", "green_dhide", "mixed"
+      ],
+      "archetypes": [
+        "f2p_rscim_r2h", "f2p_rscim_rbaxe"
+      ],
+      "inventoryBias": {
+        "food": 0.62,
+        "potions": 0.08,
+        "comboEat": 0
+      },
+      "hotspots": [
+        "varrock_ditch"
+      ]
+    },
+    {
+      "id": "f2p_range_ko",
+      "label": "F2P Range KO",
+      "tags": [
+        "edge", "f2p", "range", "ko"
+      ],
+      "weaponFamilies": [
+        "maple_shortbow", "rune_2h", "rune_baxe"
+      ],
+      "armorFamilies": [
+        "green_dhide", "studded", "leather"
+      ],
+      "archetypes": [
+        "f2p_maple_r2h", "f2p_maple_rbaxe"
+      ],
+      "inventoryBias": {
+        "food": 0.62,
+        "potions": 0.08,
+        "comboEat": 0
+      },
+      "hotspots": [
+        "varrock_ditch"
+      ]
+    },
+    {
+      "id": "f2p_bind_pure",
+      "label": "F2P Bind Pure",
+      "tags": [
+        "edge", "f2p", "magic", "range"
+      ],
+      "weaponFamilies": [
+        "staff", "maple_shortbow"
+      ],
+      "armorFamilies": [
+        "wizard", "zamorak", "green_dhide"
+      ],
+      "archetypes": [
+        "f2p_bind_blast", "f2p_bind_maple"
+      ],
+      "inventoryBias": {
+        "food": 0.58,
+        "potions": 0.06,
+        "comboEat": 0
+      },
+      "hotspots": [
+        "varrock_ditch"
+      ]
+    },
+    {
+      "id": "f2p_addy_pure",
+      "label": "F2P Addy Pure",
+      "tags": [
+        "edge", "f2p", "melee", "tank"
+      ],
+      "weaponFamilies": [
+        "rune_scim", "rune_2h", "rune_baxe"
+      ],
+      "armorFamilies": [
+        "adamant", "mixed"
+      ],
+      "archetypes": [
+        "f2p_addy_r2h_tank", "f2p_addy_rbaxe_tank"
+      ],
+      "inventoryBias": {
+        "food": 0.6,
+        "potions": 0.08,
+        "comboEat": 0
+      },
+      "hotspots": [
+        "varrock_ditch"
+      ]
+    },
+    {
+      "id": "f2p_mage_pure",
+      "label": "F2P Mage Pure",
+      "tags": [
+        "edge", "f2p", "magic", "pure"
+      ],
+      "weaponFamilies": [
+        "staff"
+      ],
+      "armorFamilies": [
+        "wizard", "zamorak", "monk"
+      ],
+      "archetypes": [
+        "f2p_fire_blast_pure", "f2p_wind_blast_pure"
+      ],
+      "inventoryBias": {
+        "food": 0.56,
+        "potions": 0.04,
+        "comboEat": 0
+      },
+      "hotspots": [
+        "varrock_ditch"
+      ]
+    },
+    {
+      "id": "f2p_bind_ko",
+      "label": "F2P Bind KO",
+      "tags": [
+        "edge", "f2p", "magic", "melee",
+        "ko"
+      ],
+      "weaponFamilies": [
+        "staff", "rune_2h", "rune_baxe"
+      ],
+      "armorFamilies": [
+        "wizard", "zamorak", "monk"
+      ],
+      "archetypes": [
+        "f2p_bind_r2h", "f2p_bind_rbaxe"
+      ],
+      "inventoryBias": {
+        "food": 0.58,
+        "potions": 0.06,
+        "comboEat": 0
+      },
+      "hotspots": [
+        "varrock_ditch"
+      ]
+    },
+    {
+      "id": "rusher",
+      "label": "Rusher",
+      "tags": [
+        "rush", "spec", "edge"
+      ],
+      "weaponFamilies": [
+        "dds", "gmaul", "ags", "anchor"
+      ],
+      "armorFamilies": [
+        "light", "fighter", "mixed"
+      ],
+      "archetypes": [
+        "gmaul_rusher", "dds_rusher", "obby_rusher", "obby_mauler"
+      ],
+      "inventoryBias": {
+        "food": 0.44,
+        "potions": 0.16,
+        "comboEat": 0.14
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south"
+      ]
+    },
+    {
+      "id": "edge_venge_zerker",
+      "label": "Edge Venge Zerker",
+      "tags": [
+        "edge", "melee", "zerker", "veng"
+      ],
+      "weaponFamilies": [
+        "whip", "dscim", "dcb", "dds",
+        "ags", "claws"
+      ],
+      "armorFamilies": [
+        "fighter", "barrows", "rune", "mixed",
+        "void"
+      ],
+      "archetypes": [
+        "ancient_gs_venge", "zerker_venge_ags", "zerker_dcb_ags", "zerker_whip_claws",
+        "veracs_venge_claws", "karils_venge_ags"
+      ],
+      "inventoryBias": {
+        "food": 0.52,
+        "potions": 0.22,
+        "comboEat": 0.1
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "green_drags_gate"
+      ]
+    },
+    {
+      "id": "edge_med_level",
+      "label": "Edge Med Level",
+      "tags": [
+        "edge", "med", "hybrid", "veng"
+      ],
+      "weaponFamilies": [
+        "whip", "dcb", "ags", "claws",
+        "ancients", "blowpipe", "dhalberd"
+      ],
+      "armorFamilies": [
+        "fighter", "barrows", "void", "dhide",
+        "mystic", "mixed"
+      ],
+      "archetypes": [
+        "med_whip_ags", "med_dcb_claws", "med_tribrid_ags", "blowpipe_venge_ags",
+        "dhalberd_venge_ags"
+      ],
+      "inventoryBias": {
+        "food": 0.48,
+        "potions": 0.24,
+        "comboEat": 0.12
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "revs_entrance"
+      ]
+    },
+    {
+      "id": "edge_void_risk",
+      "label": "Edge Void Risk",
+      "tags": [
+        "edge", "void", "range", "hybrid"
+      ],
+      "weaponFamilies": [
+        "dcb", "ballista", "claws", "ags"
+      ],
+      "armorFamilies": [
+        "void", "dhide", "fighter"
+      ],
+      "archetypes": [
+        "void_dcb_claws", "void_dcb_ags", "void_ballista_ags"
+      ],
+      "inventoryBias": {
+        "food": 0.46,
+        "potions": 0.24,
+        "comboEat": 0.12
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south"
+      ]
+    },
+    {
+      "id": "edge_void_melee",
+      "label": "Edge Void Melee",
+      "tags": [
+        "edge", "void", "melee", "risk"
+      ],
+      "weaponFamilies": [
+        "whip", "ags", "claws", "dcb"
+      ],
+      "armorFamilies": [
+        "void", "fighter", "mixed"
+      ],
+      "archetypes": [
+        "void_melee_claws", "void_melee_ags", "void_dcb_claws", "void_dcb_ags"
+      ],
+      "inventoryBias": {
+        "food": 0.48,
+        "potions": 0.24,
+        "comboEat": 0.12
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south"
+      ]
+    },
+    {
+      "id": "edge_barrows_venge",
+      "label": "Edge Barrows Venge",
+      "tags": [
+        "edge", "barrows", "venge", "risk"
+      ],
+      "weaponFamilies": [
+        "karils_cb", "veracs", "ags", "claws"
+      ],
+      "armorFamilies": [
+        "barrows", "fighter", "mixed"
+      ],
+      "archetypes": [
+        "karils_venge_ags", "veracs_venge_claws"
+      ],
+      "inventoryBias": {
+        "food": 0.5,
+        "potions": 0.22,
+        "comboEat": 0.1
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "green_drags_gate"
+      ]
+    },
+    {
+      "id": "mid_tank",
+      "label": "Mid Tank",
+      "tags": [
+        "edge", "mid", "tank", "veng"
+      ],
+      "weaponFamilies": [
+        "whip", "dcb", "ags", "staff"
+      ],
+      "armorFamilies": [
+        "fighter", "granite", "rune", "mixed",
+        "dhide"
+      ],
+      "archetypes": [
+        "mid_tank_whip_ags", "mid_tank_dcb_ags", "toxic_sotd_hybrid"
+      ],
+      "inventoryBias": {
+        "food": 0.5,
+        "potions": 0.22,
+        "comboEat": 0.1
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "green_drags_gate", "chaos_temple"
+      ]
+    },
+    {
+      "id": "edge_unorthodox_risk",
+      "label": "Edge Unorthodox Risk",
+      "tags": [
+        "edge", "unorthodox", "hybrid", "risk"
+      ],
+      "weaponFamilies": [
+        "blowpipe", "dhalberd", "spear", "sotd",
+        "ags", "claws"
+      ],
+      "armorFamilies": [
+        "dhide", "barrows", "mystic", "mixed"
+      ],
+      "archetypes": [
+        "blowpipe_venge_ags", "dhalberd_venge_ags", "obsidian_set_mauler", "spear_tribrid_ags",
+        "sotd_hybrid_claws"
+      ],
+      "inventoryBias": {
+        "food": 0.44,
+        "potions": 0.28,
+        "comboEat": 0.12
+      },
+      "hotspots": [
+        "edge_ditch", "edge_south", "revs_entrance", "green_drags_gate"
+      ]
+    },
+    {
+      "id": "deep_wild_nh",
+      "label": "Deep Wild NH",
+      "tags": [
+        "deep", "nh", "hybrid", "risk"
+      ],
+      "weaponFamilies": [
+        "ancients", "dcb", "staff", "ags",
+        "claws"
+      ],
+      "armorFamilies": [
+        "ahrim", "mystic", "dhide", "skeletal"
+      ],
+      "archetypes": [
+        "elite_nh_ags", "elite_nh_claws", "volatile_nh", "tribrid_main",
+        "elite_ancients_dbow", "toxic_sotd_hybrid", "spear_tribrid_ags", "sotd_hybrid_claws"
+      ],
+      "inventoryBias": {
+        "food": 0.36,
+        "potions": 0.3,
+        "comboEat": 0.12
+      },
+      "hotspots": [
+        "revs_entrance", "green_drags_gate"
+      ]
+    },
+    {
+      "id": "deep_wild_budget_nh",
+      "label": "Deep Wild Budget NH",
+      "tags": [
+        "deep", "nh", "budget", "hybrid"
+      ],
+      "weaponFamilies": [
+        "ancients", "rune_cb", "dark_bow", "dds"
+      ],
+      "armorFamilies": [
+        "mystic", "dhide", "skeletal", "mixed"
+      ],
+      "archetypes": [
+        "budget_nh_dds", "budget_nh_ags", "ancients_hybrid"
+      ],
+      "inventoryBias": {
+        "food": 0.44,
+        "potions": 0.26,
+        "comboEat": 0.09
+      },
+      "hotspots": [
+        "revs_entrance", "green_drags_gate"
+      ]
+    },
+    {
+      "id": "low_level_nh",
+      "label": "Low Level NH",
+      "tags": [
+        "deep", "nh", "pure", "low"
+      ],
+      "weaponFamilies": [
+        "ancients", "rune_cb", "dds", "staff"
+      ],
+      "armorFamilies": [
+        "mystic", "dhide", "pure", "skeletal"
+      ],
+      "archetypes": [
+        "low_level_nh_pure", "nh_pure", "budget_nh_dds"
+      ],
+      "inventoryBias": {
+        "food": 0.42,
+        "potions": 0.28,
+        "comboEat": 0.1
+      },
+      "hotspots": [
+        "revs_entrance", "green_drags_gate", "chaos_temple"
+      ]
+    },
+    {
+      "id": "deep_wild_staff_spec",
+      "label": "Deep Wild Staff Spec",
+      "tags": [
+        "deep", "nh", "magic", "risk"
+      ],
+      "weaponFamilies": [
+        "volatile_staff", "toxic_sotd", "staff", "dcb"
+      ],
+      "armorFamilies": [
+        "ahrim", "mystic", "dhide", "skeletal"
+      ],
+      "archetypes": [
+        "volatile_nh", "toxic_sotd_hybrid", "sotd_hybrid_claws", "elite_nh_ags"
+      ],
+      "inventoryBias": {
+        "food": 0.34,
+        "potions": 0.32,
+        "comboEat": 0.12
+      },
+      "hotspots": [
+        "revs_entrance", "green_drags_gate"
+      ]
+    }
+  ],
+  "hotspots": [
+    {
+      "id": "edge_ditch",
+      "label": "Edge Ditch",
+      "dangerTier": "medium",
+      "enabled": true,
+      "targetBots": 13,
+      "maxBots": 18,
+      "roamRadius": 6,
+      "lingerMs": 9000,
+      "maxSimultaneousFights": 5,
+      "area": {
+        "minX": 3078,
+        "maxX": 3091,
+        "minY": 3525,
+        "maxY": 3535,
+        "z": 0
+      },
+      "anchor": {
+        "x": 3085,
+        "y": 3528,
+        "z": 0
+      },
+      "allowedProfiles": [
+        "standard", "veteran", "elite"
+      ],
+      "allowedLoadouts": [
+        "edge_main_melee", "edge_ranged_melee", "low_level_pure", "rune_pure_members",
+        "edge_venge_zerker", "edge_med_level", "edge_void_risk", "void_pure",
+        "edge_void_melee", "edge_barrows_venge", "mid_tank", "edge_unorthodox_risk",
+        "rusher", "budget_pk"
+      ],
+      "styleWeights": {
+        "melee": 0.45,
+        "range": 0.25,
+        "hybrid": 0.3
+      },
+      "activityWeights": {
+        "seek": 0.62,
+        "bait": 0.25,
+        "fight": 0.05,
+        "escape": 0.08
+      }
+    },
+    {
+      "id": "edge_south",
+      "label": "Edge North East",
+      "dangerTier": "medium",
+      "enabled": true,
+      "targetBots": 9,
+      "maxBots": 14,
+      "roamRadius": 7,
+      "lingerMs": 11000,
+      "maxSimultaneousFights": 4,
+      "area": {
+        "minX": 3092,
+        "maxX": 3106,
+        "minY": 3525,
+        "maxY": 3536,
+        "z": 0
+      },
+      "anchor": {
+        "x": 3099,
+        "y": 3529,
+        "z": 0
+      },
+      "allowedProfiles": [
+        "novice", "standard", "veteran", "elite"
+      ],
+      "allowedLoadouts": [
+        "edge_main_melee", "edge_ranged_melee", "low_level_pure", "rune_pure_members",
+        "edge_venge_zerker", "edge_med_level", "edge_void_risk", "void_pure",
+        "edge_void_melee", "edge_barrows_venge", "mid_tank", "edge_unorthodox_risk",
+        "rusher", "budget_pk", "anti_pk_hybrid"
+      ],
+      "styleWeights": {
+        "melee": 0.3,
+        "range": 0.33,
+        "hybrid": 0.37
+      },
+      "activityWeights": {
+        "seek": 0.44,
+        "bait": 0.18,
+        "fight": 0.2,
+        "escape": 0.18
+      }
+    },
+    {
+      "id": "varrock_ditch",
+      "label": "Varrock Ditch (F2P)",
+      "dangerTier": "low",
+      "enabled": true,
+      "targetBots": 80,
+      "maxBots": 112,
+      "roamRadius": 3,
+      "lingerMs": 10000,
+      "maxSimultaneousFights": 8,
+      "area": {
+        "minX": 3228,
+        "maxX": 3262,
+        "minY": 3525,
+        "maxY": 3542,
+        "z": 0
+      },
+      "anchor": {
+        "x": 3243,
+        "y": 3526,
+        "z": 0
+      },
+      "allowedProfiles": [
+        "novice", "standard", "veteran", "elite"
+      ],
+      "allowedLoadouts": [
+        "f2p_strength_pure", "f2p_rune_pure", "f2p_range_ko", "f2p_bind_pure",
+        "f2p_addy_pure", "f2p_mage_pure", "f2p_bind_ko"
+      ],
+      "styleWeights": {
+        "melee": 0.48,
+        "range": 0.3,
+        "hybrid": 0.22
+      },
+      "activityWeights": {
+        "seek": 0.5,
+        "bait": 0.16,
+        "fight": 0.22,
+        "escape": 0.12
+      }
+    },
+    {
+      "id": "revs_entrance",
+      "label": "Revs Entrance",
+      "dangerTier": "high",
+      "enabled": true,
+      "targetBots": 6,
+      "maxBots": 12,
+      "roamRadius": 4,
+      "lingerMs": 9500,
+      "area": {
+        "minX": 3129,
+        "maxX": 3139,
+        "minY": 3833,
+        "maxY": 3843,
+        "z": 0
+      },
+      "anchor": {
+        "x": 3134,
+        "y": 3838,
+        "z": 0
+      },
+      "allowedProfiles": [
+        "standard", "veteran", "elite"
+      ],
+      "allowedLoadouts": [
+        "deep_wild_hybrid", "deep_wild_nh", "low_level_nh", "deep_wild_budget_nh",
+        "deep_wild_staff_spec", "edge_unorthodox_risk", "anti_pk_hybrid", "edge_ranged_melee",
+        "edge_med_level"
+      ],
+      "styleWeights": {
+        "melee": 0.12,
+        "range": 0.28,
+        "hybrid": 0.6
+      },
+      "activityWeights": {
+        "seek": 0.46,
+        "bait": 0.14,
+        "fight": 0.1,
+        "escape": 0.3
+      },
+      "maxSimultaneousFights": null
+    },
+    {
+      "id": "green_drags_gate",
+      "label": "Green Drags Gate",
+      "dangerTier": "medium",
+      "enabled": true,
+      "targetBots": 6,
+      "maxBots": 12,
+      "roamRadius": 8,
+      "lingerMs": 9500,
+      "area": {
+        "minX": 2974,
+        "maxX": 3002,
+        "minY": 3598,
+        "maxY": 3622,
+        "z": 0
+      },
+      "anchor": {
+        "x": 2988,
+        "y": 3610,
+        "z": 0
+      },
+      "allowedProfiles": [
+        "novice", "standard", "veteran"
+      ],
+      "allowedLoadouts": [
+        "budget_pk", "anti_pk_hybrid", "low_level_nh", "edge_main_melee",
+        "low_level_pure", "edge_venge_zerker", "edge_med_level", "edge_void_melee",
+        "mid_tank", "edge_barrows_venge", "edge_unorthodox_risk", "deep_wild_budget_nh",
+        "deep_wild_staff_spec"
+      ],
+      "styleWeights": {
+        "melee": 0.44,
+        "range": 0.18,
+        "hybrid": 0.38
+      },
+      "activityWeights": {
+        "seek": 0.54,
+        "bait": 0.16,
+        "fight": 0.08,
+        "escape": 0.22
+      },
+      "maxSimultaneousFights": null
+    }
+  ]
+}

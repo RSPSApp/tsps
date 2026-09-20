@@ -43,6 +43,7 @@ function playerWithAttributes(attributes = new Map()) {
 
 test("custom presets rehydrate from their persisted attribute", () => {
   let onButton;
+  let onCanBankItem;
   const persisted = [];
   presets.register({
     getPrayerHandler: () => ({}),
@@ -50,6 +51,7 @@ test("custom presets rehydrate from their persisted attribute", () => {
     getSkillManager: () => ({}),
     persistAttribute: (key) => persisted.push(key),
     registerCustomInterface() {},
+    onCanBankItem(handler) { onCanBankItem = handler; },
     onInterfaceActionButton(_buttons, handler) { onButton = handler; },
   });
   assert.deepEqual(persisted, ["pvp:customPresets"]);
@@ -69,6 +71,16 @@ test("custom presets rehydrate from their persisted attribute", () => {
   onButton({ player: restored.player, buttonId: customSlot });
   assert.equal(restored.player.getCurrentPreset().getName(), "Saved Build");
   assert.ok(restored.strings.includes("<col=ffffff>Saved Build</col>"));
+
+  const messages = [];
+  const event = {
+    player: { sendMessage: (message) => messages.push(message) },
+    item: { isUntradeable: () => true },
+    allow: true,
+  };
+  onCanBankItem(event);
+  assert.equal(event.allow, false);
+  assert.deepEqual(messages, ["Preset items cannot be banked."]);
 });
 
 test("server-owned items inherit gameplay and deliver external models before definitions", async () => {
@@ -123,4 +135,76 @@ test("server-owned items inherit gameplay and deliver external models before def
   assert.throws(() => CacheDefinitions.registerCustomItems([{ ...custom, id: 70000 }]), /id must/);
   assert.throws(() => CacheDefinitions.registerCustomItems([custom, custom]), /duplicate item/);
   assert.equal(CacheDefinitions.getItem(custom.id).id, custom.id, "invalid registration preserves live definitions");
+});
+
+test("preset-spawned items carry the untradeable metadata", () => {
+  const { Item } = require("../dist/game/model/Item");
+  const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
+  const item = presets._test.spawnPresetItem(
+    new Item(ItemIdentifiers.COINS),
+    presets.getGlobalPresetPool()[0],
+  );
+
+  assert.equal(item.getMetaValue(Item.UNTRADEABLE_META), true);
+  assert.equal(item.isTradeable(), false);
+  assert.equal(item.isLostOnDeath(), true);
+});
+
+test("deposit booth slot actions reach Bank.deposit", () => {
+  const booth = require("../plugins/objects/BankDepositBooth.plugin");
+  const { Bank } = require("../dist/game/model/container/impl/Bank");
+  let onInterfaceActionClick;
+  booth.register({
+    onObjectInteraction() {},
+    onInterfaceActionClick(handler) { onInterfaceActionClick = handler; },
+    onInterfaceActionButton() {},
+    onItemOnObject() {},
+    emitCanBank: () => null,
+  });
+
+  let amount = 1;
+  const item = { getId: () => 4153 };
+  const player = {
+    getInterfaceId: () => 192,
+    getInventory: () => ({ forSlot: () => item, getAmount: () => amount }),
+    getPacketSender: () => ({ clearItemOnInterface() {}, sendItemContainer() {} }),
+  };
+  const deposit = Bank.deposit;
+  try {
+    Bank.deposit = (_player, id, slot, moved) => {
+      assert.equal(id, 4153);
+      assert.equal(slot, 0);
+      assert.equal(moved, 1);
+      amount = 0;
+    };
+    const event = { player, buttonId: (192 << 16) | 24, itemId: 4153, slot: 0, action: 2, handled: false };
+    onInterfaceActionClick(event);
+    assert.equal(event.handled, true);
+  } finally {
+    Bank.deposit = deposit;
+  }
+});
+
+test("a player preset bot announces its suppressed drops once", () => {
+  const botDeathLoot = require("../plugins/bots/runtime/BotDeathLoot");
+  const messages = [];
+  const killer = {
+    isRegistered: () => true,
+    isPlayerBot: () => false,
+    sendMessage: (message) => messages.push(message),
+  };
+  const victim = { isPlayerBot: () => true };
+  const event = {
+    player: victim,
+    killer,
+    item: { isUntradeable: () => true },
+    dropEligible: false,
+    handled: false,
+  };
+
+  botDeathLoot.handleBotDeathItemDrop(event);
+  botDeathLoot.handleBotDeathItemDrop(event);
+  botDeathLoot.clearBotDeathLootPlan(victim);
+
+  assert.deepEqual(messages, ["This bot was using a player preset and therefore has not dropped its items. Regular bots will still drop items"]);
 });

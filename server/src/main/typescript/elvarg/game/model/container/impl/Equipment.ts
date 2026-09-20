@@ -88,7 +88,7 @@ export class Equipment extends ItemContainer {
     public properEquipmentForWilderness(): boolean {
         let count = 0;
         for (const item of this.getValidItems()) {
-            if (item != null && item.getDefinition().isTradeable())
+            if (item != null && item.isTradeable())
                 count++;
         }
         return count >= 3;

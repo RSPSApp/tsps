@@ -307,7 +307,13 @@ export class Trading {
             if (this.state === TradeState.TRADE_SCREEN && this.interact.getTrading().getState() === TradeState.TRADE_SCREEN) {
 
                 // Check if the item is in the right place
-                if (from.getItems()[slot].getId() === id) {
+                const offered = from.getItems()[slot];
+                if (offered.getId() === id) {
+
+                    if (!offered.isTradeable()) {
+                        this.player.sendMessage("You cannot trade that item.");
+                        return;
+                    }
 
                     // Make sure we can fit that amount in the trade
                     if (from instanceof Inventory) {

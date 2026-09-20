@@ -3,6 +3,8 @@ const getItemDefinition = () => require('../definition/ItemDefinition').ItemDefi
 
 export class Item {
 
+    public static readonly UNTRADEABLE_META = "untradeable";
+
     public id: number;
     public amount: number;
     public meta: Record<string, unknown> | null;
@@ -156,6 +158,26 @@ export class Item {
 
     public getDefinition(): any {
         return getItemDefinition().forId(this.id);
+    }
+
+    public isTradeable(): boolean {
+        return !this.isUntradeable() && this.getDefinition().isTradeable();
+    }
+
+    public isSellable(): boolean {
+        return !this.isUntradeable() && this.getDefinition().isSellable();
+    }
+
+    public isDropable(): boolean {
+        return !this.isUntradeable() && this.getDefinition().isDropable();
+    }
+
+    public isUntradeable(): boolean {
+        return this.getMetaValue(Item.UNTRADEABLE_META) === true;
+    }
+
+    public isLostOnDeath(): boolean {
+        return this.isUntradeable();
     }
 
     public clone(): Item {

@@ -207,16 +207,16 @@ export class ShopManager {
         }
         const itemId = inventoryItem.getId();
         if (action.kind === "value") {
-            this.priceCheck(player, shop, itemId, false);
+            this.priceCheck(player, shop, itemId, false, inventoryItem);
         } else if (action.kind === "x") {
             player.setEnteredAmountAction({
-                execute: (amount: number) => this.sellItem(player, shop, itemId, amount),
+                execute: (amount: number) => this.sellItem(player, shop, inventoryItem, amount),
             });
             player.getPacketSender().sendEnterAmountPrompt(
                 "How many would you like to sell?"
             );
         } else {
-            this.sellItem(player, shop, itemId, action.amount);
+            this.sellItem(player, shop, inventoryItem, action.amount);
         }
         return true;
     }
@@ -440,7 +440,8 @@ export class ShopManager {
         player: any,
         shop: RuntimeShop,
         itemId: number,
-        fromShop: boolean
+        fromShop: boolean,
+        item?: any
     ): void {
         if (!fromShop && shop.definition.getCurrency() === "COINS" && this.isBloodMoneyShopItem(itemId)) {
             player.sendMessage("PK shop items cannot be sold for coins.");
@@ -455,7 +456,7 @@ export class ShopManager {
         const definition = ItemDefinition.forId(itemId);
         let price = this.itemPrice(shop, definition);
         if (!fromShop) {
-            if (!definition.isSellable?.()) {
+            if (!item?.isSellable?.()) {
                 player.sendMessage(
                     "This item cannot be sold to a shop."
                 );
@@ -544,9 +545,13 @@ export class ShopManager {
     private static sellItem(
         player: any,
         shop: RuntimeShop,
-        itemId: number,
+        item: any,
         amount: number
     ): void {
+        const itemId = item?.getId?.();
+        if (!Number.isInteger(itemId)) {
+            return;
+        }
         if (shop.definition.getCurrency() === "COINS" && this.isBloodMoneyShopItem(itemId)) {
             player.sendMessage("PK shop items cannot be sold for coins.");
             return;
@@ -558,13 +563,17 @@ export class ShopManager {
             return;
         }
         const definition = ItemDefinition.forId(itemId);
-        if (!definition.isSellable?.()) {
+        if (!item.isSellable()) {
             player.sendMessage("This item cannot be sold.");
             return;
         }
 
-        let quantity = Math.min(this.normalizeAmount(amount), this.MAX_ACTION_AMOUNT);
-        quantity = Math.min(quantity, player.getInventory().getAmount(itemId));
+        const inventory = player.getInventory();
+        const slot = inventory.getItems().indexOf(item);
+        if (slot < 0) {
+            return;
+        }
+        let quantity = Math.min(this.normalizeAmount(amount), this.MAX_ACTION_AMOUNT, item.getAmount());
         if (quantity <= 0) {
             return;
         }
@@ -581,7 +590,7 @@ export class ShopManager {
             return;
         }
 
-        player.getInventory().deleteNumber(itemId, quantity);
+        inventory.deleteAtSlot(slot, quantity);
         this.addCurrency(
             player,
             shop.definition.getCurrency(),

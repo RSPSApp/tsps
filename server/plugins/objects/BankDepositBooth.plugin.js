@@ -170,8 +170,8 @@ module.exports = {
     api.onObjectInteraction("Bank deposit box", { Deposit: openDepositBox });
     api.onObjectInteraction("Bank Deposit Box", { Deposit: openDepositBox });
 
-    api.onItemAction((event) => {
-      if (handleDepositContainerAction(event.player, event.interfaceId, event.itemId, event.slot, event.clickType)) {
+    api.onInterfaceActionClick((event) => {
+      if (handleDepositContainerAction(event.player, event.buttonId, event.itemId, event.slot, event.action)) {
         event.handled = true;
       }
     });

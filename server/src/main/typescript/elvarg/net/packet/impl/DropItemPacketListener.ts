@@ -74,7 +74,7 @@ export class DropItemPacketListener {
       return;
     }
 
-    if (item.getDefinition().isDropable()) {
+    if (item.isDropable()) {
       if (dropEvent.dropToGround !== false) {
         const toFloor = item.clone();
         if (Wilderness.isIn(player)) {

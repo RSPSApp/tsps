@@ -47,7 +47,7 @@ function getItemsToKeep(player, settings) {
       !item ||
       item.getId() <= 0 ||
       item.getAmount() <= 0 ||
-      !item.getDefinition().isTradeable()
+      !item.isTradeable()
     ) {
       continue;
     }
@@ -76,7 +76,8 @@ function getDeathItems(player, toKeep) {
       continue;
     }
 
-    const tradeable = item.getDefinition().isTradeable();
+    const tradeable = item.isTradeable();
+    const lostOnDeath = tradeable || item.isLostOnDeath();
     items.push({
       slot: items.length,
       itemId: item.getId(),
@@ -84,7 +85,7 @@ function getDeathItems(player, toKeep) {
     });
     states.push({
       slot: states.length,
-      itemId: tradeable ? LOST_ITEM_STATE : KEPT_ITEM_STATE,
+      itemId: lostOnDeath ? LOST_ITEM_STATE : KEPT_ITEM_STATE,
       quantity: 1,
     });
 

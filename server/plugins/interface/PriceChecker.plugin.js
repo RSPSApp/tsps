@@ -90,7 +90,7 @@ class PriceCheckerContainer extends ItemContainer {
       let movedAny = false;
       for (const item of this.player.getInventory().getValidItems()) {
         const definition = item.getDefinition();
-        if (!definition.isSellable() || definition.getValue() <= 0) {
+        if (!item.isSellable() || definition.getValue() <= 0) {
           continue;
         }
         this.player
@@ -112,8 +112,8 @@ class PriceCheckerContainer extends ItemContainer {
       this.player.getInterfaceId() == PRICE_CHECKER_INTERFACE_ID
     ) {
       if (this.player.getInventory().getItems()[slot].getId() == id) {
-        const item = new Item(id, amount);
-        if (!item.getDefinition().isSellable()) {
+        const item = this.player.getInventory().getItems()[slot].clone().setAmount(amount);
+        if (!item.isSellable()) {
           this.player.sendMessage("That item cannot be pricechecked because it isn't sellable.");
           return true;
         }

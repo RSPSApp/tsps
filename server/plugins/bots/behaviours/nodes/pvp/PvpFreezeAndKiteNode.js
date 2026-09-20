@@ -49,9 +49,7 @@ class PvpFreezeAndKiteNode {
 
     const profile = this.getProfile?.(state) ?? null;
     const openerFreeze = this.shouldOpenWithFreeze(player, state, target, profile);
-    if (!openerFreeze && this.maybeMoveBetweenHits(player, state, target, profile, nowMs)) {
-      return { handled: true, status: "running" };
-    }
+    if (!openerFreeze) this.maybeMoveBetweenHits(player, state, target, profile, nowMs);
 
     if (!openerFreeze && nowMs < Number(pvp.nextFreezeReviewAt ?? 0)) {
       return { handled: false, status: "running" };
@@ -108,6 +106,8 @@ class PvpFreezeAndKiteNode {
     const playerLoc = player?.getLocation?.();
     const targetLoc = target?.getLocation?.();
     if (!combat || !playerLoc || !targetLoc || playerLoc.getZ() !== targetLoc.getZ()) return false;
+    if (player.getTimers?.().has?.(TimerKey.FREEZE) ||
+        playerLoc.getDistance(targetLoc) > 2) return false;
     if (combat.getTarget?.() !== target && combat.getAttacker?.() !== target) return false;
 
     const attackReady = combat.willAttackBeReadyIn?.(1) === true;

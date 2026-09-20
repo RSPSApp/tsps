@@ -2,7 +2,7 @@
   "presetGroups": [
     {
       "id": "main_126",
-      "weight": 30,
+      "weight": 12,
       "presetKeys": [
         "MAIN_HYBRID_126", "MAIN_RUNE_126", "MAIN_MELEE_126", "MAIN_RCB_TANK_126",
         "DHAROK_126", "MAIN_BARRAGE_126", "VOID_RANGER_126", "VOID_MELEE_126",
@@ -11,7 +11,7 @@
     },
     {
       "id": "pure_1_def",
-      "weight": 30,
+      "weight": 12,
       "presetKeys": [
         "DDS_PURE_M_73", "DDS_PURE_R_73", "G_MAULER_70", "NH_PURE_83",
         "OBBY_MAULER_57"
@@ -19,21 +19,21 @@
     },
     {
       "id": "tank_45_def",
-      "weight": 15,
+      "weight": 6,
       "presetKeys": [
         "ATT_60_ZERKER_94", "ATT_70_ZERKER_97"
       ]
     },
     {
       "id": "tank_70_def",
-      "weight": 15,
+      "weight": 5,
       "presetKeys": [
         "MAIN_RCB_TANK_70"
       ]
     },
     {
       "id": "random",
-      "weight": 10,
+      "weight": 65,
       "presetKeys": []
     }
   ],

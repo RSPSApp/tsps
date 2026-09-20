@@ -23,11 +23,18 @@ interface RawShopDefinition {
     originalStock?: unknown;
     items?: unknown;
     prices?: unknown;
+    requiresPresets?: unknown;
     stockAmount?: unknown;
     defaultRestockTicks?: unknown;
     restockTicks?: unknown;
     defaultDestockTicks?: unknown;
     soldItemDestockTicks?: unknown;
+}
+
+let presetShopPricesEnabled = false;
+
+export function setPresetShopPricesEnabled(enabled: boolean): void {
+    presetShopPricesEnabled = enabled === true;
 }
 
 export class ShopDefinitionLoader extends DefinitionLoader {
@@ -116,7 +123,10 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             this.parseTicks(raw.soldItemDestockTicks) ??
             ShopDefinitionLoader.GENERAL_STORE_SOLD_ITEM_DESTOCK_TICKS;
 
-        const prices = this.itemPrices(raw.prices);
+        const usePresetPrices = raw.requiresPresets === true && presetShopPricesEnabled;
+        const prices = raw.requiresPresets === true && !usePresetPrices
+            ? new Map<number, number>()
+            : this.itemPrices(raw.prices);
         const stock: ShopStockDefinition[] = [];
         if (Array.isArray(raw.originalStock)) {
             for (const entry of raw.originalStock as RawShopStockDefinition[]) {
@@ -159,9 +169,12 @@ export class ShopDefinitionLoader extends DefinitionLoader {
         const name = typeof raw.name === "string" && raw.name.trim()
             ? raw.name.trim()
             : "Shop";
-        const currency = typeof raw.currency === "string" && raw.currency.trim()
+        const configuredCurrency = typeof raw.currency === "string" && raw.currency.trim()
             ? raw.currency.trim().toUpperCase()
             : "COINS";
+        const currency = raw.requiresPresets === true && !usePresetPrices
+            ? "COINS"
+            : configuredCurrency;
         return new ShopDefinition(
             id,
             name,

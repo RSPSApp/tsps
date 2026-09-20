@@ -112,10 +112,10 @@ export class Combat {
     private routedTargetZ = Number.MIN_SAFE_INTEGER;
     private lastPreMovementCycle = -1;
     private lastPostMovementCycle = -1;
-    private manualMovementCycle = -1;
+    private manualMovementUntilCycle = -1;
 
-    public preserveMovementThisCycle(): void {
-        this.manualMovementCycle = World.getProcessCycle();
+    public preserveMovementForTicks(ticks = 1): void {
+        this.manualMovementUntilCycle = World.getProcessCycle() + Math.max(0, ticks) - 1;
     }
     private cycleState: CombatCycleState | null = null;
     public rangedWeapon: RangedWeapon | null = null;
@@ -128,6 +128,7 @@ export class Combat {
             return;
         }
         const previousTarget = this.target;
+        if (previousTarget !== target) this.manualMovementUntilCycle = -1;
         if (previousTarget && previousTarget !== target && this.method) {
             this.method.onCombatEnded(this.character, previousTarget);
         }
@@ -211,7 +212,7 @@ export class Combat {
 
         this.character.setMobileInteraction(target);
 
-        if (this.manualMovementCycle === cycle) {
+        if (this.manualMovementUntilCycle >= cycle) {
             return;
         }
 
@@ -383,6 +384,7 @@ export class Combat {
     }
 
     public reset(): void {
+        this.manualMovementUntilCycle = -1;
         const previousTarget = this.target;
         this.generation++;
         this.target = null;

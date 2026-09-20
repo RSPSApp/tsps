@@ -294,23 +294,19 @@ class PvpCombatExecutionNode {
       targetCombatType
     );
     const flickPrayers = confidenceTier >= 3;
-    const protectionPrayer =
-      flickPrayers && target.getCombat?.()?.willAttackBeReadyIn?.(1) !== true
-        ? null
-        : desiredProtectionPrayer;
     const protectionStable =
-      protectionPrayer != null
-        ? pvp.cachedProtectionPrayerId === protectionPrayer &&
+      desiredProtectionPrayer != null
+        ? pvp.cachedProtectionPrayerId === desiredProtectionPrayer &&
           pvp.cachedPrayerTargetCombatType === targetCombatType &&
           pvp.cachedPrayerTargetUsername === targetUsername &&
-          isPrayerActive(player, protectionPrayer) &&
-          !hasOtherActivePrayer(player, PrayerHandler.PROTECTION_PRAYERS, protectionPrayer)
+          isPrayerActive(player, desiredProtectionPrayer) &&
+          !hasOtherActivePrayer(player, PrayerHandler.PROTECTION_PRAYERS, desiredProtectionPrayer)
         : !hasOtherActivePrayer(player, PrayerHandler.PROTECTION_PRAYERS);
     const shouldRefreshProtectionPrayers = !protectionStable;
-    if (protectionPrayer != null) {
+    if (desiredProtectionPrayer != null) {
       if (shouldRefreshProtectionPrayers) {
-        activateFirstAvailablePrayer(this.PrayerHandler, player, [protectionPrayer]);
-        deactivatePrayerSet(this.PrayerHandler, player, PrayerHandler.PROTECTION_PRAYERS, protectionPrayer);
+        activateFirstAvailablePrayer(this.PrayerHandler, player, [desiredProtectionPrayer]);
+        deactivatePrayerSet(this.PrayerHandler, player, PrayerHandler.PROTECTION_PRAYERS, desiredProtectionPrayer);
       }
     } else {
       if (shouldRefreshProtectionPrayers) {
@@ -340,7 +336,7 @@ class PvpCombatExecutionNode {
         deactivatePrayerSet(this.PrayerHandler, player, MANAGED_OFFENSIVE_PRAYERS);
       }
     }
-    pvp.cachedProtectionPrayerId = protectionPrayer;
+    pvp.cachedProtectionPrayerId = desiredProtectionPrayer;
     pvp.cachedOffensivePrayerId = activatedOffensivePrayer ?? null;
     pvp.cachedPrayerTargetCombatType = targetCombatType;
     pvp.cachedPrayerPlayerCombatType = playerCombatType;

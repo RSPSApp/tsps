@@ -199,6 +199,22 @@ mod tests {
     }
 
     #[test]
+    fn matches_typescript_vertex_buffer_golden_words() {
+        // Golden packet generated from the current VertexBuffer.ts bit layout.
+        let untextured = PackedVertex::encode(input(-1));
+        assert_eq!(
+            [untextured.v0, untextured.v1, untextured.v2],
+            [0x8101_0370, 0x091a_4020, 0x8201_ffee]
+        );
+
+        let textured = PackedVertex::encode(input(700));
+        assert_eq!(
+            [textured.v0, textured.v1, textured.v2],
+            [0x8101_0370, 0xaf1a_4020, 0x8201_ffee]
+        );
+    }
+
+    #[test]
     fn texture_id_uses_same_split_bits_as_glsl_decoder() {
         let packed = PackedVertex::encode(input(700));
         assert_eq!(packed.texture_id(), Some(700));

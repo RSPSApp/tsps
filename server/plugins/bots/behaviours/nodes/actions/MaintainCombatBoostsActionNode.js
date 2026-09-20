@@ -70,7 +70,7 @@ class MaintainCombatBoostsActionNode {
     const resolved = resolveBotNodeContext(context, this.botStatesByName, {
       requiredMode: "pvp",
       requireNotBusy: false,
-      requireNotInCombat: true,
+      requireNotInCombat: false,
       requireNoTraversalTransition: false,
     });
     if (!resolved) {
@@ -78,25 +78,19 @@ class MaintainCombatBoostsActionNode {
     }
 
     const { player, state } = resolved;
-    if (!state?.pvp) {
+    if (!state?.pvp || player.getHitpoints() <= 0 || player.isDyingReturn()) {
       return "failure";
     }
 
     const profile = getPvpProfile(state.pvp.profileId);
     const rules = BOOST_RULES_BY_PROFILE[profile?.id];
     if (!rules) {
-      state.pvp.appliedBoostProfileId = null;
-      return "failure";
-    }
-
-    if (state.pvp.appliedBoostProfileId === profile.id) {
       return "failure";
     }
 
     for (const [skill, rule] of rules) {
       ensureBoostLevel(player, skill, rule);
     }
-    state.pvp.appliedBoostProfileId = profile.id;
 
     return "failure";
   }

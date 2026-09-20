@@ -1,8 +1,7 @@
 "use strict";
 
-const { applyPreset } = require("../../../modes/pvp/Presets");
+const { applyPreset, getGlobalPresetByKey } = require("../../../modes/pvp/Presets");
 const { Presetable } = require("../../../../src/main/typescript/elvarg/game/content/presets/Presetable");
-const { PredefinedPresets } = require("../../../../src/main/typescript/elvarg/game/content/presets/PredefinedPresets");
 const { CombatSpells } = require("../../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
 const { Item } = require("../../../../src/main/typescript/elvarg/game/model/Item");
 const { MagicSpellbook } = require("../../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
@@ -197,7 +196,7 @@ function selectBotPreset(state, rng = Math.random) {
   const presetKey = group.presetKeys.includes(pvp.presetPoolPresetKey)
     ? pvp.presetPoolPresetKey
     : choose(group.presetKeys, rng);
-  const preset = PredefinedPresets[presetKey];
+  const preset = getGlobalPresetByKey(presetKey);
   if (!preset) {
     return null;
   }

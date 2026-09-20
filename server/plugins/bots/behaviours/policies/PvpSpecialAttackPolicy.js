@@ -198,7 +198,8 @@ function shouldUseSpecNow(player, target, state, profile, special, weaponId) {
   if (!canSpecTarget(player, target, special)) return false;
   const finisher = isSpecFinisher(player, target, state, special, weaponId);
   const reliability = Number(profile?.specUseChance ?? 0.3);
-  const chance = finisher ? reliability : reliability * (shouldPressureSpec(player, state, profile) ? 0.3 : 0.15);
+  const chance = finisher ? Math.min(0.995, reliability + 0.08) :
+    reliability * (shouldPressureSpec(player, state, profile) ? 0.3 : 0.15);
   return Math.random() <= chance;
 }
 

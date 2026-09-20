@@ -453,7 +453,15 @@ function maybeRunPressureCombatScript(context) {
     return { handled: false, forcedCombatType: null };
   }
   if (bestCandidate.combatType !== pressureContext.currentCombatType && !meleeFinisher) {
-    const switchChance = Number(profile?.nextHitStyleSwitchChance ?? profile?.switchChance ?? 0.5);
+    const currentProtected = pressureContext.targetPrayers[
+      PrayerHandler.getProtectingPrayer(pressureContext.currentCombatType)
+    ] === true;
+    const candidateProtected = pressureContext.targetPrayers[
+      PrayerHandler.getProtectingPrayer(bestCandidate.combatType)
+    ] === true;
+    const switchChance = Math.min(0.995,
+      Number(profile?.nextHitStyleSwitchChance ?? profile?.switchChance ?? 0.5) +
+      (currentProtected && !candidateProtected ? 0.1 : 0));
     if (Math.random() > switchChance) {
       schedulePressureCheck(state, nowMs, PRESSURE_FAILURE_COOLDOWN_MS);
       return { handled: false, forcedCombatType: null };

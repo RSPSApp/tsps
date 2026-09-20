@@ -1539,7 +1539,7 @@ class PvpBehavior {
         target,
       })
     );
-    return this.ServerPerf.measurePhase("bot.pvp.tick.combat_execution", () =>
+    const combatStatus = this.ServerPerf.measurePhase("bot.pvp.tick.combat_execution", () =>
       this.combatExecutionNode.tick({
         player,
         state,
@@ -1547,6 +1547,8 @@ class PvpBehavior {
         target,
       })
     );
+    this.freezeAndKiteNode.maybeMoveBetweenHits(player, state, target, this.getProfile(state), nowMs);
+    return combatStatus;
   }
 
   isValidTarget(player, target) {

@@ -112,6 +112,11 @@ export class Combat {
     private routedTargetZ = Number.MIN_SAFE_INTEGER;
     private lastPreMovementCycle = -1;
     private lastPostMovementCycle = -1;
+    private manualMovementCycle = -1;
+
+    public preserveMovementThisCycle(): void {
+        this.manualMovementCycle = World.getProcessCycle();
+    }
     private cycleState: CombatCycleState | null = null;
     public rangedWeapon: RangedWeapon | null = null;
     public ammunition: Ammunition | null = null;
@@ -205,6 +210,10 @@ export class Combat {
         }
 
         this.character.setMobileInteraction(target);
+
+        if (this.manualMovementCycle === cycle && this.character.getMovementQueue().size() > 0) {
+            return;
+        }
 
         if (this.character.isNpc() && CombatRange.overlapsEntities(this.character, target)) {
             this.processNpcUnderTarget(state);

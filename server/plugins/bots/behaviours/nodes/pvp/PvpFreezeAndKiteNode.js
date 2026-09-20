@@ -6,7 +6,7 @@ const { Equipment } = require("../../../../../src/main/typescript/elvarg/game/mo
 const { Location } = require("../../../../../src/main/typescript/elvarg/game/model/Location");
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { WeaponInterfaces } = require("../../../../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaces");
-const { requestMovement } = require("../../navigation/BotNavigation");
+const { requestMovement, peekMovementRequest, dispatchMovementRequest, clearMovementRequest } = require("../../navigation/BotNavigation");
 
 const RANGED_WEAPON_INTERFACES = new Set([
   WeaponInterfaces.SHORTBOW,
@@ -49,7 +49,6 @@ class PvpFreezeAndKiteNode {
 
     const profile = this.getProfile?.(state) ?? null;
     const openerFreeze = this.shouldOpenWithFreeze(player, state, target, profile);
-    if (!openerFreeze) this.maybeMoveBetweenHits(player, state, target, profile, nowMs);
 
     if (!openerFreeze && nowMs < Number(pvp.nextFreezeReviewAt ?? 0)) {
       return { handled: false, status: "running" };
@@ -118,7 +117,7 @@ class PvpFreezeAndKiteNode {
       target.getTimers?.().has?.(TimerKey.FREEZE) === true;
 
     if (canDeathDot && !attackReady && !sameTile) {
-      return requestMovement(player, targetLoc.getX(), targetLoc.getY(), {
+      return this.moveCombatStep(player, targetLoc.getX(), targetLoc.getY(), {
         state,
         nowMs,
         basicPather: true,
@@ -128,7 +127,7 @@ class PvpFreezeAndKiteNode {
     }
 
     if (!(canDeathDot && attackReady && sameTile) &&
-        (combat.getAttackDelay?.() !== 2 || Math.random() > Number(profile?.combatMoveChance ?? 0))) {
+        (combat.getAttackDelay?.() < 2 || Math.random() > Number(profile?.combatMoveChance ?? 0))) {
       return false;
     }
 
@@ -137,8 +136,10 @@ class PvpFreezeAndKiteNode {
     for (let index = 0; index < offsets.length; index++) {
       const [dx, dy] = offsets[(start + index) % offsets.length];
       const tile = new Location(targetLoc.getX() + dx, targetLoc.getY() + dy, targetLoc.getZ());
+      if (tile.getX() === playerLoc.getX() && tile.getY() === playerLoc.getY()) continue;
+      if (playerLoc.getDistance(tile) > 1) continue;
       if (this.regionManager?.blocked?.(tile, null) || this.regionManager?.isWater?.(tile)) continue;
-      return requestMovement(player, tile.getX(), tile.getY(), {
+      return this.moveCombatStep(player, tile.getX(), tile.getY(), {
         state,
         nowMs,
         basicPather: true,
@@ -147,6 +148,16 @@ class PvpFreezeAndKiteNode {
       });
     }
     return false;
+  }
+
+  moveCombatStep(player, x, y, options) {
+    if (!requestMovement(player, x, y, options)) return false;
+    const request = peekMovementRequest(player);
+    const result = dispatchMovementRequest(player, request, options.state);
+    if (peekMovementRequest(player) === request) clearMovementRequest(player);
+    if (!result?.hasRoute) return false;
+    player.getCombat().preserveMovementThisCycle();
+    return true;
   }
 
   shouldOpenWithFreeze(player, state, target, profile) {

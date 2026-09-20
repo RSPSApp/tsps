@@ -1,0 +1,494 @@
+[
+  {
+    "key": "G_MAULER_70",
+    "name": "G Mauler (R)",
+    "inventory": [
+      "RUNE_CROSSBOW", ["DRAGONSTONE_BOLTS_E_", 75], "RANGING_POTION_4_", "SUPER_STRENGTH_4_",
+      "COOKED_KARAMBWAN", "GRANITE_MAUL", "SUPER_RESTORE_4_", "SUPER_ATTACK_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SARADOMIN_BREW_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "COIF",
+      "cape": "AVAS_ACCUMULATOR",
+      "weapon": "MAGIC_SHORTBOW",
+      "amulet": "AMULET_OF_GLORY",
+      "body": "LEATHER_BODY",
+      "legs": "BLACK_DHIDE_CHAPS",
+      "hands": "MITHRIL_GLOVES",
+      "feet": "CLIMBING_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["RUNE_ARROW", 75]
+    },
+    "stats": [50, 1, 99, 85, 99, 1, 1],
+    "spellbook": "NORMAL"
+  },
+  {
+    "key": "OBBY_MAULER_57",
+    "name": "Obby Mauler",
+    "inventory": [
+      "SUPER_STRENGTH_4_", "RANGING_POTION_4_", "SUPER_RESTORE_4_", "RING_OF_RECOIL",
+      "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "TZHAAR_KET_OM", "MAGIC_SHORTBOW", "SHARK", "SHARK",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "SHARK", "SHARK"
+    ],
+    "equipment": {
+      "head": "IRON_FULL_HELM",
+      "cape": "OBSIDIAN_CAPE",
+      "weapon": ["RUNE_KNIFE", 250],
+      "amulet": "AMULET_OF_GLORY",
+      "body": "IRON_PLATEBODY",
+      "shield": "UNHOLY_BOOK",
+      "legs": "BLACK_DHIDE_CHAPS",
+      "hands": "MITHRIL_GLOVES",
+      "feet": "CLIMBING_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["RUNE_ARROW", 75]
+    },
+    "stats": [1, 1, 99, 80, 60, 31, 1],
+    "spellbook": "NORMAL"
+  },
+  {
+    "key": "DDS_PURE_M_73",
+    "name": "DDS Pure (M)",
+    "inventory": [
+      "DRAGON_DAGGER_P_PLUS_PLUS_", "SHARK", "SHARK", "SUPER_STRENGTH_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SUPER_RESTORE_4_", "SUPER_ATTACK_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SARADOMIN_BREW_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "IRON_FULL_HELM",
+      "cape": "OBSIDIAN_CAPE",
+      "weapon": "DRAGON_SCIMITAR",
+      "amulet": "AMULET_OF_GLORY",
+      "body": "IRON_PLATEBODY",
+      "shield": "BOOK_OF_DARKNESS",
+      "legs": "BLACK_DHIDE_CHAPS",
+      "hands": "MITHRIL_GLOVES",
+      "feet": "CLIMBING_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [60, 1, 99, 85, 1, 1, 1],
+    "spellbook": "NORMAL"
+  },
+  {
+    "key": "DDS_PURE_R_73",
+    "name": "DDS Pure (R)",
+    "inventory": [
+      "RUNE_CROSSBOW", ["DRAGONSTONE_BOLTS_E_", 75], "RANGING_POTION_4_", "SUPER_STRENGTH_4_",
+      "COOKED_KARAMBWAN", "DRAGON_DAGGER_P_PLUS_PLUS_", "SUPER_RESTORE_4_", "SUPER_ATTACK_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SARADOMIN_BREW_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "COIF",
+      "cape": "AVAS_ACCUMULATOR",
+      "weapon": "MAGIC_SHORTBOW",
+      "amulet": "AMULET_OF_GLORY",
+      "body": "LEATHER_BODY",
+      "legs": "BLACK_DHIDE_CHAPS",
+      "hands": "MITHRIL_GLOVES",
+      "feet": "CLIMBING_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["RUNE_ARROW", 75]
+    },
+    "stats": [50, 1, 99, 85, 99, 1, 1],
+    "spellbook": "NORMAL"
+  },
+  {
+    "key": "NH_PURE_83",
+    "name": "NH Pure",
+    "inventory": [
+      "RUNE_CROSSBOW", "BLACK_DHIDE_CHAPS", "RANGING_POTION_4_", "SUPER_STRENGTH_4_",
+      "AVAS_ACCUMULATOR", "DRAGON_DAGGER_P_PLUS_PLUS_", "SUPER_RESTORE_4_", "SUPER_ATTACK_4_",
+      ["DRAGONSTONE_BOLTS_E_", 75], "BOOK_OF_WAR", "SUPER_RESTORE_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      ["WATER_RUNE", 1000], ["BLOOD_RUNE", 1000], ["DEATH_RUNE", 1000], "SHARK"
+    ],
+    "equipment": {
+      "head": "GREY_HAT",
+      "cape": "ZAMORAK_CAPE",
+      "weapon": "MAGIC_SHORTBOW",
+      "amulet": "AMULET_OF_GLORY",
+      "body": "ZAMORAK_MONK_TOP",
+      "legs": "ZAMORAK_MONK_BOTTOM",
+      "hands": "MITHRIL_GLOVES",
+      "feet": "CLIMBING_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["RUNE_ARROW", 175]
+    },
+    "stats": [60, 1, 85, 99, 99, 1, 99],
+    "spellbook": "ANCIENT"
+  },
+  {
+    "key": "ATT_60_ZERKER_94",
+    "name": "60Att. Zerker",
+    "inventory": [
+      "DRAGON_DAGGER_P_PLUS_PLUS_", "SHARK", "SUPER_ATTACK_4_", "SUPER_STRENGTH_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SUPER_RESTORE_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SUPER_RESTORE_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "RING_OF_RECOIL",
+      ["DEATH_RUNE", 1000], ["EARTH_RUNE", 1000], ["ASTRAL_RUNE", 1000], "SHARK"
+    ],
+    "equipment": {
+      "head": "BERSERKER_HELM",
+      "cape": "STRENGTH_CAPE_T_",
+      "weapon": "DRAGON_SCIMITAR",
+      "amulet": "AMULET_OF_GLORY",
+      "body": "FIGHTER_TORSO",
+      "shield": "RUNE_DEFENDER",
+      "legs": "RUNE_PLATELEGS",
+      "hands": "BARROWS_GLOVES",
+      "feet": "RUNE_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [60, 45, 99, 95, 99, 52, 94],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "ATT_70_ZERKER_97",
+    "name": "70Att. Zerker",
+    "inventory": [
+      "DRAGON_DAGGER_P_PLUS_PLUS_", "SHARK", "SUPER_ATTACK_4_", "SUPER_STRENGTH_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SUPER_RESTORE_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SUPER_RESTORE_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "SHARK",
+      "COOKED_KARAMBWAN", "SHARK", "SHARK", "RING_OF_RECOIL",
+      ["DEATH_RUNE", 1000], ["EARTH_RUNE", 1000], ["ASTRAL_RUNE", 1000], "SHARK"
+    ],
+    "equipment": {
+      "head": "BERSERKER_HELM",
+      "cape": "STRENGTH_CAPE_T_",
+      "weapon": "ABYSSAL_WHIP",
+      "amulet": "AMULET_OF_GLORY",
+      "body": "FIGHTER_TORSO",
+      "shield": "RUNE_DEFENDER",
+      "legs": "RUNE_PLATELEGS",
+      "hands": "BARROWS_GLOVES",
+      "feet": "RUNE_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [70, 45, 99, 95, 99, 52, 94],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "MAIN_RUNE_126",
+    "name": "Main Rune",
+    "inventory": [
+      "SUPER_STRENGTH_4_", "SARADOMIN_BREW_4_", "SUPER_RESTORE_4_", "SUPER_RESTORE_4_",
+      "SUPER_ATTACK_4_", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
+      "DRAGON_DAGGER_P_PLUS_PLUS_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "HELM_OF_NEITIZNOT",
+      "cape": "FIRE_CAPE",
+      "weapon": "ABYSSAL_WHIP",
+      "amulet": "AMULET_OF_FURY",
+      "body": "FIGHTER_TORSO",
+      "shield": "RUNE_DEFENDER",
+      "legs": "RUNE_PLATELEGS",
+      "hands": "BARROWS_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "MAIN_MELEE_126",
+    "name": "Main AGS",
+    "inventory": [
+      "ARMADYL_GODSWORD", "SARADOMIN_BREW_4_", "SUPER_RESTORE_4_", "SUPER_RESTORE_4_",
+      "DRAGON_DAGGER_P_PLUS_PLUS_", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
+      "SUPER_ATTACK_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_STRENGTH_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "HELM_OF_NEITIZNOT",
+      "cape": "FIRE_CAPE",
+      "weapon": "ABYSSAL_WHIP",
+      "amulet": "AMULET_OF_FURY",
+      "body": "FIGHTER_TORSO",
+      "shield": "RUNE_DEFENDER",
+      "legs": "RUNE_PLATELEGS",
+      "hands": "BARROWS_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "MAIN_RCB_TANK_126",
+    "name": "Main RCB Tank",
+    "inventory": [
+      "DRAGON_DAGGER_P_PLUS_PLUS_", ["DRAGONSTONE_BOLTS_E_", 175], "RANGING_POTION_4_", "SARADOMIN_BREW_4_",
+      "RUNE_CROSSBOW", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
+      "SUPER_RESTORE_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_ATTACK_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_STRENGTH_4_", "SHARK", "SHARK", "SHARK",
+      "SARADOMIN_BREW_4_", "SHARK", "SHARK", "SHARK",
+      "SUPER_RESTORE_4_", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "VERACS_HELM",
+      "cape": "FIRE_CAPE",
+      "weapon": "RUNE_CROSSBOW",
+      "amulet": "AMULET_OF_FURY",
+      "body": "BLACK_DHIDE_BODY",
+      "shield": "SPIRIT_SHIELD",
+      "legs": "VERACS_PLATESKIRT",
+      "hands": "BARROWS_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["DRAGONSTONE_BOLTS_E_", 175]
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "MAIN_RCB_TANK_70",
+    "name": "70 Def Tank",
+    "inventory": [
+      "DRAGON_DAGGER_P_PLUS_PLUS_", ["DRAGONSTONE_BOLTS_E_", 175], "RANGING_POTION_4_", "SARADOMIN_BREW_4_",
+      "RUNE_CROSSBOW", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
+      "SUPER_RESTORE_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_ATTACK_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_STRENGTH_4_", "SHARK", "SHARK", "SHARK",
+      "SARADOMIN_BREW_4_", "SHARK", "SHARK", "SHARK",
+      "SUPER_RESTORE_4_", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "VERACS_HELM",
+      "cape": "FIRE_CAPE",
+      "weapon": "RUNE_CROSSBOW",
+      "amulet": "AMULET_OF_FURY",
+      "body": "BLACK_DHIDE_BODY",
+      "shield": "SPIRIT_SHIELD",
+      "legs": "VERACS_PLATESKIRT",
+      "hands": "BARROWS_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["DRAGONSTONE_BOLTS_E_", 175]
+    },
+    "stats": [99, 70, 99, 99, 99, 99, 99],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "DHAROK_126",
+    "name": "Dharok",
+    "inventory": [
+      "DRAGON_DAGGER_P_PLUS_PLUS_", "SARADOMIN_BREW_4_", "SUPER_RESTORE_4_", "SUPER_RESTORE_4_",
+      "SUPER_ATTACK_4_", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
+      "SUPER_STRENGTH_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "DHAROKS_HELM",
+      "cape": "FIRE_CAPE",
+      "weapon": "DHAROKS_GREATAXE",
+      "amulet": "AMULET_OF_FURY",
+      "body": "DHAROKS_PLATEBODY",
+      "legs": "DHAROKS_PLATELEGS",
+      "hands": "BARROWS_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "MAIN_BARRAGE_126",
+    "name": "Main Barrage",
+    "inventory": [
+      "RUNE_CROSSBOW", ["DRAGONSTONE_BOLTS_E_", 150], "SUPER_RESTORE_4_", "SARADOMIN_BREW_4_",
+      "DRAGON_DAGGER_P_PLUS_PLUS_", ["WATER_RUNE", 6000], ["BLOOD_RUNE", 2000], ["DEATH_RUNE", 4000],
+      "BLACK_DHIDE_BODY", "BLACK_DHIDE_CHAPS", "SUPER_RESTORE_4_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "AHRIMS_HOOD",
+      "cape": "SARADOMIN_CAPE",
+      "weapon": "ANCIENT_STAFF",
+      "amulet": "AMULET_OF_FURY",
+      "body": "AHRIMS_ROBETOP",
+      "shield": "SPIRIT_SHIELD",
+      "legs": "AHRIMS_ROBESKIRT",
+      "hands": "BARROWS_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "ANCIENT",
+    "autocastSpellId": 12891
+  },
+  {
+    "key": "VOID_RANGER_126",
+    "name": "Void Ranger",
+    "inventory": [
+      "DARK_BOW", ["DRAGON_ARROW", 100], "RANGING_POTION_4_", "SARADOMIN_BREW_4_",
+      "DRAGON_DAGGER_P_PLUS_PLUS_", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
+      "SUPER_RESTORE_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_ATTACK_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_STRENGTH_4_", "SHARK", "SHARK", "SHARK",
+      "SARADOMIN_BREW_4_", "SHARK", "SHARK", "SHARK",
+      "SUPER_RESTORE_4_", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "VOID_RANGER_HELM",
+      "cape": "AVAS_ACCUMULATOR",
+      "weapon": "RUNE_CROSSBOW",
+      "amulet": "AMULET_OF_FURY",
+      "body": "ELITE_VOID_TOP",
+      "legs": "ELITE_VOID_ROBE",
+      "hands": "VOID_KNIGHT_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["DRAGONSTONE_BOLTS_E_", 175]
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "VOID_MELEE_126",
+    "name": "Void Melee",
+    "inventory": [
+      "ARMADYL_GODSWORD", "SARADOMIN_BREW_4_", "SUPER_RESTORE_4_", "SARADOMIN_BREW_4_",
+      "DRAGON_DAGGER_P_PLUS_PLUS_", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
+      "SUPER_ATTACK_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_STRENGTH_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "SHARK", "SHARK",
+      "SHARK", "SHARK", "RING_OF_RECOIL", "SHARK"
+    ],
+    "equipment": {
+      "head": "VOID_MELEE_HELM",
+      "cape": "FIRE_CAPE",
+      "weapon": "ABYSSAL_WHIP",
+      "amulet": "AMULET_OF_FURY",
+      "body": "ELITE_VOID_TOP",
+      "shield": "DRAGON_DEFENDER",
+      "legs": "ELITE_VOID_ROBE",
+      "hands": "VOID_KNIGHT_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "KARILS_TANK_126",
+    "name": "Karils Tank",
+    "inventory": [
+      "DRAGON_DAGGER_P_PLUS_PLUS_", "SHARK", "RANGING_POTION_4_", "SARADOMIN_BREW_4_",
+      "SHARK", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
+      "SUPER_RESTORE_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_ATTACK_4_", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
+      "SUPER_STRENGTH_4_", "SHARK", "SHARK", "SHARK",
+      "SARADOMIN_BREW_4_", "SHARK", "SHARK", "SHARK",
+      "SUPER_RESTORE_4_", "SHARK", "COOKED_KARAMBWAN", "SHARK"
+    ],
+    "equipment": {
+      "head": "KARILS_COIF",
+      "cape": "FIRE_CAPE",
+      "weapon": "KARILS_CROSSBOW",
+      "amulet": "AMULET_OF_FURY",
+      "body": "KARILS_LEATHERTOP",
+      "legs": "KARILS_LEATHERSKIRT",
+      "hands": "BARROWS_GLOVES",
+      "feet": "DRAGON_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["BOLT_RACK", 500]
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "LUNAR"
+  },
+  {
+    "key": "MAIN_HYBRID_126",
+    "name": "Main Hybrid",
+    "inventory": [
+      "RUNE_PLATEBODY", "ABYSSAL_WHIP", "BLACK_DHIDE_BODY", "SARADOMIN_BREW_4_",
+      "RUNE_PLATELEGS", "RUNE_DEFENDER", "DRAGON_DAGGER_P_PLUS_PLUS_", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "SUPER_RESTORE_4_",
+      "SHARK", "SHARK", "SHARK", "SUPER_RESTORE_4_",
+      "SHARK", "SHARK", "SHARK", "SUPER_ATTACK_4_",
+      "SHARK", "SHARK", "SHARK", "SUPER_STRENGTH_4_",
+      "SHARK", ["DEATH_RUNE", 4000], ["WATER_RUNE", 6000], ["BLOOD_RUNE", 2000]
+    ],
+    "equipment": {
+      "head": "HELM_OF_NEITIZNOT",
+      "cape": "SARADOMIN_CAPE",
+      "weapon": "ANCIENT_STAFF",
+      "amulet": "AMULET_OF_GLORY",
+      "body": "MYSTIC_ROBE_TOP",
+      "shield": "UNHOLY_BOOK",
+      "legs": "MYSTIC_ROBE_BOTTOM",
+      "hands": "BARROWS_GLOVES",
+      "feet": "CLIMBING_BOOTS",
+      "ring": "RING_OF_RECOIL"
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "ANCIENT",
+    "autocastSpellId": 12891
+  },
+  {
+    "key": "MAIN_TRIBRID_126",
+    "name": "Main Tribrid",
+    "inventory": [
+      "AVAS_ACCUMULATOR", "BLACK_DHIDE_BODY", "ABYSSAL_WHIP", "SARADOMIN_BREW_4_",
+      "RUNE_CROSSBOW", "RUNE_PLATELEGS", "RUNE_DEFENDER", "SARADOMIN_BREW_4_",
+      "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "DRAGON_DAGGER_P_PLUS_PLUS_", "SUPER_RESTORE_4_",
+      "SHARK", "SHARK", "SHARK", "SUPER_RESTORE_4_",
+      "SHARK", "SHARK", "SHARK", "SUPER_STRENGTH_4_",
+      "SHARK", "SHARK", "SHARK", "SUPER_ATTACK_4_",
+      ["WATER_RUNE", 6000], ["BLOOD_RUNE", 2000], ["DEATH_RUNE", 4000], "RANGING_POTION_4_"
+    ],
+    "equipment": {
+      "head": "HELM_OF_NEITIZNOT",
+      "cape": "SARADOMIN_CAPE",
+      "weapon": "ANCIENT_STAFF",
+      "amulet": "AMULET_OF_GLORY",
+      "body": "MYSTIC_ROBE_TOP",
+      "shield": "SPIRIT_SHIELD",
+      "legs": "MYSTIC_ROBE_BOTTOM",
+      "hands": "BARROWS_GLOVES",
+      "feet": "CLIMBING_BOOTS",
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["DRAGONSTONE_BOLTS_E_", 500]
+    },
+    "stats": [99, 99, 99, 99, 99, 99, 99],
+    "spellbook": "ANCIENT",
+    "autocastSpellId": 12891
+  }
+]

@@ -1,8 +1,11 @@
 "use strict";
 
+const { CanAttackResponse } = require("../../../../../src/main/typescript/elvarg/game/content/combat/CombatFactory");
+
 class PvpValidateEngagementNode {
   constructor(options = {}) {
     this.AreaManager = options.api.getAreaManager();
+    this.CombatFactory = options.api.getCombatFactory();
     this.behaviorMode = options.behaviorMode;
     this.setPhase = options.setPhase;
     this.stopPvp = options.stopPvp;
@@ -81,7 +84,9 @@ class PvpValidateEngagementNode {
         ? false
         : targetFollowing.isRegistered?.() === true &&
           (targetFollowing.getHitpoints?.() ?? 0) > 0);
-    if (!isMultiEngagement && hasOtherOccupant) {
+    if (!isMultiEngagement && hasOtherOccupant &&
+        this.CombatFactory.canAttackPermission(player, target, false,
+          this.CombatFactory.getMethod(player)) !== CanAttackResponse.CAN_ATTACK) {
       this.setPhase?.(state, this.pvpPhase?.SEEKING ?? "seeking");
       if (pvpOnly) {
         this.resetSeekingState?.(player, state, nowMs, "target_in_other_combat");

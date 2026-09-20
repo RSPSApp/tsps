@@ -159,6 +159,7 @@ class PlayerBotBehaviorTreeFactory {
       }
     };
     return new SelectorNode([
+      new ActionNode((context) => this.maintainCombatBoostsActionNode.tick(context)),
       new ActionNode((context) => {
         // Escape decisions must run before queued chasing, food, or target selection.
         const defensive = this.pvpBehavior.tickDefensive(context);
@@ -174,12 +175,6 @@ class PlayerBotBehaviorTreeFactory {
           return "failure";
         }
         return processPendingMovementActionNode.tick(context);
-      }),
-      new ActionNode((context) => {
-        if (resolveState(context)?.mode !== this.behaviorMode.PVP) {
-          return "failure";
-        }
-        return this.maintainCombatBoostsActionNode.tick(context);
       }),
       new ActionNode((context) => this.eatFoodActionNode.tick(context)),
       new ActionNode((context) => {

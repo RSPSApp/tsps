@@ -136,6 +136,12 @@ function createPvpBehaviorState() {
     lastSpecAt: 0,
     lastOneTickAt: 0,
     lastPressureScriptAt: 0,
+    lastStyleSwitchAt: 0,
+    pressureAttackReviewed: false,
+    lastCombatStep: null,
+    movementReview: null,
+    backstep: null,
+    nextBackstepCycle: 0,
     escapeThreshold: 0.24,
     riskTolerance: 0.3,
     confidenceTier: 2,
@@ -204,6 +210,12 @@ function clearPvpBehaviorState(state) {
   state.pvp.lastSpecAt = 0;
   state.pvp.lastOneTickAt = 0;
   state.pvp.lastPressureScriptAt = 0;
+  state.pvp.lastStyleSwitchAt = 0;
+  state.pvp.pressureAttackReviewed = false;
+  state.pvp.lastCombatStep = null;
+  state.pvp.movementReview = null;
+  state.pvp.backstep = null;
+  state.pvp.nextBackstepCycle = 0;
   state.pvp.currentTargetScore = 0;
   state.pvp.targetLockUntil = 0;
   state.pvp.pjTargetUsername = null;

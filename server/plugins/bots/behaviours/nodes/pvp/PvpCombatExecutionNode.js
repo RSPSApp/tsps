@@ -293,6 +293,7 @@ class PvpCombatExecutionNode {
       confidenceTier,
       targetCombatType
     );
+    const flickPrayers = confidenceTier >= 3;
     const protectionStable =
       desiredProtectionPrayer != null
         ? pvp.cachedProtectionPrayerId === desiredProtectionPrayer &&
@@ -313,10 +314,10 @@ class PvpCombatExecutionNode {
       }
     }
 
-    const offensivePrayerIds = this.resolveOffensivePrayerPriority(state, playerCombatType);
-    if (offensivePrayerIds.length === 0) {
-      return false;
-    }
+    const offensivePrayerIds =
+      flickPrayers && player.getCombat?.()?.willAttackBeReadyIn?.(1) !== true
+        ? []
+        : this.resolveOffensivePrayerPriority(state, playerCombatType);
     const preferredOffensivePrayer = offensivePrayerIds[0] ?? null;
     const offensiveStable =
       preferredOffensivePrayer == null
@@ -451,6 +452,11 @@ class PvpCombatExecutionNode {
     }
 
     const profile = this.getProfile?.(state) ?? null;
+    if (Number(profile?.confidenceTier ?? 0) >= 3) {
+      this.ServerPerf.measurePhase("bot.pvp.combat_execution.prayer_flick", () =>
+        this.reviewPrayers(player, state, target, nowMs, profile)
+      );
+    }
     this.ServerPerf.measurePhase("bot.pvp.combat_execution.spec", () =>
       this.maybeUseSpecialAttack?.({
         player,

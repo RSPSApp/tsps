@@ -9,6 +9,46 @@
         "death": 5491
       }
     },
+    "86": {
+      "name": "Ghost",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
+    "87": {
+      "name": "Ghost",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
+    "91": {
+      "name": "Ghost",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
+    "92": {
+      "name": "Ghost",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
     "100": {
       "name": "Rock Crab",
       "anims": {
@@ -740,6 +780,36 @@
       },
       "sounds": {
         "death": 512
+      }
+    },
+    "2528": {
+      "name": "Ghost",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
+    "2529": {
+      "name": "Ghost",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
+    "2530": {
+      "name": "Ghost",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
       }
     },
     "2693": {
@@ -2315,6 +2385,26 @@
         "death": 512
       }
     },
+    "6319": {
+      "name": "Tree spirit (hard)",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
+    "6380": {
+      "name": "Tree spirit",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
     "6776": {
       "name": "Man",
       "anims": {
@@ -2472,6 +2562,26 @@
       },
       "sounds": {
         "death": 512
+      }
+    },
+    "8512": {
+      "name": "Tormented Soul",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
+      }
+    },
+    "8513": {
+      "name": "Tormented Soul",
+      "anims": {
+        "attack": 5532,
+        "block": 5533,
+        "death": 5534,
+        "spawn": 5530,
+        "walk": 5531
       }
     },
     "8700": {

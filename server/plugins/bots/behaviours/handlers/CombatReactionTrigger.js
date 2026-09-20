@@ -45,7 +45,7 @@ class CombatReactionTrigger {
     const combatFactory = this.api.getCombatFactory();
     const combatMethod = combatFactory.getMethod(player);
     if (
-      combatFactory.canAttack(player, combatMethod, followed) !==
+      combatFactory.canAttackPermission(player, followed, false, combatMethod) !==
       CanAttackResponse.CAN_ATTACK
     ) {
       return;

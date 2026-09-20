@@ -273,7 +273,7 @@ function bootPlayerBotsRuntime(options = {}) {
           state.pvp.nextActionAt = nowMs + randomInRange(3500, 7000);
           state.pvp.phase = "seeking";
 
-          applyGeneratedPvpLoadout(player, state, {
+          const loadoutApplied = applyGeneratedPvpLoadout(player, state, {
             api: botApi,
           });
 
@@ -282,7 +282,7 @@ function bootPlayerBotsRuntime(options = {}) {
             hotspotId: state.pvp.hotspotId ?? null,
             loadoutId: state.pvp.loadoutId ?? null,
           });
-          return true;
+          return loadoutApplied;
         },
       })
     );

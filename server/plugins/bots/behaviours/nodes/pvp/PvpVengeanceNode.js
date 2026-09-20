@@ -106,7 +106,6 @@ class PvpVengeanceNode {
     if (player.hasVengeanceReturn?.() === true) {
       pvp.lastVengeanceAt = nowMs;
       pvp.nextVengeanceAttemptAt = nowMs + randomInRange(1800, 3200);
-      this.scheduleCombatAction?.(state, nowMs);
       this.setPhase?.(state, this.pvpPhase?.COMBAT ?? "combat");
       return { handled: true, status: "running" };
     }

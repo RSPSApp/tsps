@@ -1313,50 +1313,10 @@ class BotBehaviorTask extends Task {
     if (!attacker.isRegistered?.() || (attacker.getHitpoints?.() ?? 0) <= 0) {
       return false;
     }
-    if (!Wilderness.isIn(player) || !Wilderness.isIn(attacker)) {
-      if (combat?.getTarget?.() === attacker || combat?.getAttacker?.() === attacker) {
-        combat.reset?.();
-        combat.setUnderAttack?.(null);
-      }
-      if (player.getCombatFollowing?.() === attacker) {
-        player.setCombatFollowing?.(null);
-      }
-      return false;
-    }
-    const privateArea = player.getPrivateArea?.();
-    if (attacker.getPrivateArea?.() !== privateArea) {
-      return false;
-    }
-    const isMultiEngagement = this.AreaManager.inMulti(player) && this.AreaManager.inMulti(attacker);
-    if (!isMultiEngagement) {
-      const attackerCombat = attacker.getCombat?.();
-      const attackerTarget = attackerCombat?.getTarget?.();
-      const attackerAttacker = attackerCombat?.getAttacker?.();
-      const attackerFollowing = attacker.getCombatFollowing?.();
-      const occupiedByOther =
-        (attackerTarget &&
-          attackerTarget !== player &&
-          attackerTarget.isRegistered?.() === true &&
-          (attackerTarget.getHitpoints?.() ?? 0) > 0) ||
-        (attackerAttacker &&
-          attackerAttacker !== player &&
-          attackerAttacker.isRegistered?.() === true &&
-          (attackerAttacker.getHitpoints?.() ?? 0) > 0) ||
-        (attackerFollowing &&
-          attackerFollowing !== player &&
-          attackerFollowing.isRegistered?.() === true &&
-          (attackerFollowing.getHitpoints?.() ?? 0) > 0);
-      if (occupiedByOther) {
-        return false;
-      }
-      const combatMethod = this.CombatFactory.getMethod(player);
-      if (
-        this.CombatFactory.canAttackPermission(player, attacker, false, combatMethod) !==
-        CanAttackResponse.CAN_ATTACK
-      ) {
-        return false;
-      }
-    }
+    // Core permissions cover PvP worlds, safe zones and single-combat ownership.
+    const combatMethod = this.CombatFactory.getMethod(player);
+    if (this.CombatFactory.canAttackPermission(player, attacker, false, combatMethod) !==
+        CanAttackResponse.CAN_ATTACK) return false;
 
     const currentTarget = combat?.getTarget?.();
     if (currentTarget) {
@@ -1548,11 +1508,21 @@ class BotBehaviorTask extends Task {
 
     if (state.deathResetApplied) {
       if (this.isPvpOnlyBot(state) && this.handlePersistentPvpRespawn) {
-        this.handlePersistentPvpRespawn(entry, nowMs);
+        if (!this.handlePersistentPvpRespawn(entry, nowMs)) return;
       }
       state.deathResetApplied = false;
       this.scheduleNextDecision(state, nowMs);
     }
+
+    // Spawning and respawning can briefly retain a combat link. Retry once that link has
+    // cleared instead of leaving the bot naked after the first rejected loadout attempt.
+    if (this.isPvpOnlyBot(state) && state.pvp) {
+      const hasInventory = player.getInventory?.().getItems?.().some((item) => item?.getId?.() > 0);
+      const hasEquipment = player.getEquipment?.().getItems?.().some((item) => item?.getId?.() > 0);
+      if (!hasInventory && !hasEquipment) state.pvp.loadoutPending = true;
+    }
+    if (this.isPvpOnlyBot(state) && state.pvp?.loadoutPending &&
+        this.handlePersistentPvpRespawn && !this.handlePersistentPvpRespawn(entry, nowMs)) return;
 
     if (state.pvp?.retreat) return;
 

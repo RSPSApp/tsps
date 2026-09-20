@@ -5,6 +5,63 @@ const { Equipment } = require("../../../../src/main/typescript/elvarg/game/model
 const { WeaponInterfaces } = require("../../../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaces");
 const { ItemIdentifiers } = require("../../../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
+const { MagicSpellbook } = require("../../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
+const { Skill } = require("../../../../src/main/typescript/elvarg/game/model/Skill");
+
+// Resolve from the loadout, not autocast: Wilderness weapon switches clear autocast.
+function resolveOffensiveSpell(player) {
+  const { CombatSpells } = require("../../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
+  const presetSpell = CombatSpells.getCombatSpell(player.getCurrentPreset?.()?.getAutocastSpellId?.() ?? -1);
+  const spells = presetSpell ? [presetSpell] : player.getSpellbook() === MagicSpellbook.ANCIENT
+    ? [CombatSpells.ICE_BARRAGE, CombatSpells.ICE_BLITZ, CombatSpells.ICE_BURST, CombatSpells.ICE_RUSH]
+    : [];
+  return spells.find((spell) => spell.getSpellbook() === player.getSpellbook() &&
+    spell.levelRequired() <= player.getSkillManager().getCurrentLevel(Skill.MAGIC) &&
+    player.getInventory().containsAllItem(spell.itemsToConsume(player)) &&
+    player.getEquipment().containsAllItem(spell.equipmentRequired(player) ?? [])) ?? null;
+}
+
+function equipStyleGear(player, combatType) {
+  const { EquipPacketListener } = require("../../../../src/main/typescript/elvarg/net/packet/impl/EquipPacketListener");
+  const { Inventory } = require("../../../../src/main/typescript/elvarg/game/model/container/impl/Inventory");
+  const equipment = player.getEquipment();
+  const twoHanded = equipment.get(Equipment.WEAPON_SLOT).getDefinition().isDoubleHanded();
+  // ponytail: individual bonuses approximate switch sets; explicit sets are needed
+  // if future loadouts carry competing armour with full-set effects.
+  const score = (item) => {
+    const b = item.getDefinition().getBonuses() ?? [];
+    const attack = combatType === CombatType.MAGIC ? (b[3] ?? 0) :
+      combatType === CombatType.RANGED ? (b[4] ?? 0) : Math.max(...b.slice(0, 3), 0);
+    const strength = b[combatType === CombatType.MAGIC ? 12 : combatType === CombatType.RANGED ? 11 : 10] ?? 0;
+    return attack + strength * 2 + b.slice(5, 10).reduce((sum, value) => sum + value, 0) * 0.01;
+  };
+  const bestBySlot = new Map();
+  for (const item of [...equipment.getItems(), ...player.getInventory().getItems()]) {
+    if (!item || item.getId() <= 0) continue;
+    const definition = item.getDefinition();
+    const slot = definition.getEquipmentType().getSlot();
+    if (slot < 0 || slot === Equipment.WEAPON_SLOT || slot === Equipment.AMMUNITION_SLOT ||
+        (slot === Equipment.SHIELD_SLOT && twoHanded)) continue;
+    const requirements = definition.getRequirements();
+    if (requirements && Skill.values().some((skill) =>
+      (requirements[skill.getIndex()] ?? 0) > player.getSkillManager().getMaxLevel(skill))) continue;
+    const best = bestBySlot.get(slot);
+    if (!best || score(item) > score(best)) bestBySlot.set(slot, item);
+  }
+  let changed = false;
+  for (const [slot, item] of bestBySlot) {
+    const id = item.getId();
+    if (equipment.get(slot).getId() === id) continue;
+    // Every equip can move inventory entries; resolve the live slot each time.
+    const inventorySlot = resolveInventorySlotByItemId(player, id);
+    if (inventorySlot >= 0) {
+      EquipPacketListener.equip(player, id, inventorySlot, Inventory.INTERFACE_ID);
+      changed ||= equipment.get(slot).getId() === id;
+    }
+  }
+  return changed;
+}
+
 const STAFF_INTERFACES = new Set([
   WeaponInterfaces.STAFF,
   WeaponInterfaces.ANCIENT_STAFF,
@@ -177,6 +234,14 @@ function buildCombatSnapshot(player, state, nowMs) {
   let preferredSpecCandidate = null;
   let fallbackSpecCandidate = null;
 
+  firstArrow = ARROW_IDS.has(currentAmmoId) ? { ammoId: currentAmmoId, slot: -1 } : null;
+  firstBolt = BOLT_IDS.has(currentAmmoId) ? { ammoId: currentAmmoId, slot: -1 } : null;
+  for (let slot = 0; slot < inventoryItems.length; slot++) {
+    const id = inventoryItems[slot]?.getId?.();
+    if (!firstArrow && ARROW_IDS.has(id)) firstArrow = { ammoId: id, slot };
+    if (!firstBolt && BOLT_IDS.has(id)) firstBolt = { ammoId: id, slot };
+  }
+
   for (let slot = 0; slot < inventoryItems.length; slot++) {
     const item = inventoryItems[slot];
     const itemId = item?.getId?.() ?? -1;
@@ -188,23 +253,10 @@ function buildCombatSnapshot(player, state, nowMs) {
       slotByItemId.set(itemId, slot);
     }
 
-    if (!firstArrow && ARROW_IDS.has(itemId)) {
-      firstArrow = { ammoId: itemId, slot };
-    } else if (!firstBolt && BOLT_IDS.has(itemId)) {
-      firstBolt = { ammoId: itemId, slot };
-    }
-
     if (!preferredSpecCandidate && itemId === generatedSpecWeaponId) {
       preferredSpecCandidate = { weaponId: itemId, slot };
     } else if (!fallbackSpecCandidate && SUPPORTED_SPEC_WEAPONS.includes(itemId)) {
       fallbackSpecCandidate = { weaponId: itemId, slot };
-    }
-
-    if (
-      itemId === generatedSpecWeaponId ||
-      (SPEC_WEAPON_IDS.has(itemId) && itemId !== generatedPrimaryWeaponId)
-    ) {
-      continue;
     }
 
     const weaponInterface = item?.getDefinition?.()?.getWeaponInterface?.();
@@ -232,15 +284,17 @@ function buildCombatSnapshot(player, state, nowMs) {
       slot,
       weaponInterface,
       ammo,
-      current: itemId === generatedPrimaryWeaponId,
+      current: false,
     };
     const existing = styleCandidatesByType.get(combatType);
-    if (!existing || (!existing.current && candidate.current)) {
+    if (!existing || itemId === generatedPrimaryWeaponId ||
+        (SPEC_WEAPON_IDS.has(existing.weaponId) && !SPEC_WEAPON_IDS.has(itemId))) {
       styleCandidatesByType.set(combatType, candidate);
     }
   }
 
-  if (currentWeaponId > 0 && currentCombatType != null) {
+  const currentWeaponType = classifyWeaponInterface(currentWeaponInterface);
+  if (currentWeaponId > 0 && currentWeaponType != null) {
     let currentAmmo = null;
     if (BOW_INTERFACES.has(currentWeaponInterface)) {
       currentAmmo =
@@ -253,13 +307,24 @@ function buildCombatSnapshot(player, state, nowMs) {
           ? { ammoId: currentAmmoId, slot: -1 }
           : cloneAmmoCandidate(firstBolt);
     }
-    styleCandidatesByType.set(currentCombatType, {
-      combatType: currentCombatType,
-      weaponId: currentWeaponId,
-      slot: -1,
-      weaponInterface: currentWeaponInterface,
-      ammo: currentAmmo,
-      current: true,
+    const alternative = styleCandidatesByType.get(currentWeaponType);
+    if (!alternative || !SPEC_WEAPON_IDS.has(currentWeaponId) || currentWeaponId === generatedPrimaryWeaponId) {
+      styleCandidatesByType.set(currentWeaponType, {
+        combatType: currentWeaponType,
+        weaponId: currentWeaponId,
+        slot: -1,
+        weaponInterface: currentWeaponInterface,
+        ammo: currentAmmo,
+        current: currentWeaponType === currentCombatType,
+      });
+    }
+  }
+
+  // Ancients can be manually cast without a staff (notably the NH pure preset).
+  if (!styleCandidatesByType.has(CombatType.MAGIC) && player.getSpellbook() === MagicSpellbook.ANCIENT) {
+    styleCandidatesByType.set(CombatType.MAGIC, {
+      combatType: CombatType.MAGIC, weaponId: currentWeaponId, slot: -1,
+      weaponInterface: currentWeaponInterface, ammo: null, current: false,
     });
   }
 
@@ -286,8 +351,8 @@ function getPvpCombatSnapshot(player, state, nowMs) {
   const currentAmmoId = getAmmoId(player);
   const currentWeaponInterface = player?.getWeapon?.() ?? null;
   const combat = player?.getCombat?.();
-  const castSpellId = combat?.getCastSpell?.()?.spellId ?? null;
-  const autocastSpellId = combat?.getAutocastSpell?.()?.spellId ?? null;
+  const castSpellId = combat?.getCastSpell?.()?.spellId?.() ?? null;
+  const autocastSpellId = combat?.getAutocastSpell?.()?.spellId?.() ?? null;
   const specialActive = player?.isSpecialActivated?.() === true;
   if (
     cached &&
@@ -330,6 +395,8 @@ function invalidatePvpCombatSnapshot(state) {
 }
 
 module.exports = {
+  equipStyleGear,
+  resolveOffensiveSpell,
   ARROW_IDS,
   BOLT_IDS,
   BOW_INTERFACES,

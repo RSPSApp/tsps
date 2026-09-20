@@ -6,7 +6,6 @@ const { CombatSpecial } = require("../../../src/main/typescript/elvarg/game/cont
 const { CombatSpells } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
 const { Autocasting } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/Autocasting");
 const { Presetable } = require("../../../src/main/typescript/elvarg/game/content/presets/Presetable");
-const { PredefinedPresets } = require("../../../src/main/typescript/elvarg/game/content/presets/PredefinedPresets");
 const { Wilderness } = require("../../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const { isSafeLocation: isFeroxSafeLocation } = require("../../items/LootKeys.plugin");
 const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
@@ -15,6 +14,9 @@ const { MagicSpellbook } = require("../../../src/main/typescript/elvarg/game/mod
 const { Flag } = require("../../../src/main/typescript/elvarg/game/model/Flag");
 const { Bank } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Bank");
 const { Misc } = require("../../../src/main/typescript/elvarg/util/Misc");
+const { ItemIdentifiers } = require("../../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const fs = require("fs");
+const path = require("path");
 const { setPresetShopPricesEnabled } = require("../../../src/main/typescript/elvarg/game/definition/loader/impl/ShopDefinitionLoader");
 const {
   GROUP_ID,
@@ -74,26 +76,40 @@ const COMBAT_SKILLS = [
   Skill.MAGIC,
 ];
 
-const GLOBAL_PRESETS = [
-  PredefinedPresets.G_MAULER_70,
-  PredefinedPresets.OBBY_MAULER_57,
-  PredefinedPresets.DDS_PURE_M_73,
-  PredefinedPresets.DDS_PURE_R_73,
-  PredefinedPresets.NH_PURE_83,
-  PredefinedPresets.ATT_60_ZERKER_94,
-  PredefinedPresets.ATT_70_ZERKER_97,
-  PredefinedPresets.MAIN_RUNE_126,
-  PredefinedPresets.MAIN_MELEE_126,
-  PredefinedPresets.MAIN_RCB_TANK_126,
-  PredefinedPresets.MAIN_RCB_TANK_70,
-  PredefinedPresets.DHAROK_126,
-  PredefinedPresets.MAIN_BARRAGE_126,
-  PredefinedPresets.VOID_RANGER_126,
-  PredefinedPresets.VOID_MELEE_126,
-  PredefinedPresets.KARILS_TANK_126,
-  PredefinedPresets.MAIN_HYBRID_126,
-  PredefinedPresets.MAIN_TRIBRID_126,
-];
+const SPELLBOOKS = { NORMAL: MagicSpellbook.NORMAL, ANCIENT: MagicSpellbook.ANCIENT, LUNAR: MagicSpellbook.LUNAR, ARCEUUS: MagicSpellbook.ARCEUUS };
+const EQUIPMENT_KEYS = new Set(["head", "cape", "amulet", "weapon", "body", "shield", "legs", "hands", "feet", "ring", "ammo"]);
+
+function loadPlayerPresets() {
+  const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "pvp-presets-players.json");
+  const rows = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!Array.isArray(rows) || rows.length !== GLOBAL_ROW_COUNT) throw new Error(`[presets] ${file} must contain ${GLOBAL_ROW_COUNT} presets`);
+  const keys = new Set();
+  const readItem = (value, location) => {
+    const itemKey = typeof value === "string" ? value : value?.[0];
+    const amount = typeof value === "string" ? 1 : value?.[1];
+    if (typeof itemKey !== "string" || (typeof value !== "string" && (!Array.isArray(value) || value.length !== 2))) throw new Error(`[presets] ${location} must be an ItemIdentifiers key or [key, amount]`);
+    const id = ItemIdentifiers[itemKey];
+    if (!Number.isInteger(id)) throw new Error(`[presets] ${location} has unknown ItemIdentifiers key ${itemKey}`);
+    if (!Number.isInteger(amount) || amount < 1 || amount > 0x7fffffff) throw new Error(`[presets] ${location}.amount must be 1..2147483647`);
+    return new Item(id, amount);
+  };
+  const presets = rows.map((row, index) => {
+    const location = `row ${index}`;
+    if (!row || typeof row !== "object" || typeof row.key !== "string" || !/^[A-Z0-9_]+$/.test(row.key) || keys.has(row.key)) throw new Error(`[presets] ${location} has an invalid or duplicate key`);
+    keys.add(row.key);
+    if (typeof row.name !== "string" || !row.name.trim()) throw new Error(`[presets] ${location}.name must be a non-empty string`);
+    if (!Array.isArray(row.inventory) || row.inventory.length > 28) throw new Error(`[presets] ${location}.inventory must contain at most 28 items`);
+    if (!row.equipment || typeof row.equipment !== "object" || Array.isArray(row.equipment) || Object.keys(row.equipment).some((slot) => !EQUIPMENT_KEYS.has(slot))) throw new Error(`[presets] ${location}.equipment has an invalid slot name`);
+    if (!Array.isArray(row.stats) || row.stats.length !== 7 || row.stats.some((level) => !Number.isInteger(level) || level < 1 || level > 99)) throw new Error(`[presets] ${location}.stats must contain seven levels from 1 to 99`);
+    if (!Object.hasOwn(SPELLBOOKS, row.spellbook)) throw new Error(`[presets] ${location}.spellbook is invalid`);
+    if (row.autocastSpellId !== undefined && !Number.isInteger(row.autocastSpellId)) throw new Error(`[presets] ${location}.autocastSpellId must be an integer`);
+    return [row.key, new Presetable(row.name, row.inventory.map((item, slot) => readItem(item, `${location}.inventory[${slot}]`)), Object.entries(row.equipment).map(([slot, item]) => readItem(item, `${location}.equipment.${slot}`)), row.stats, SPELLBOOKS[row.spellbook], true, row.autocastSpellId ?? -1)];
+  });
+  return { list: presets.map(([, preset]) => preset), byKey: new Map(presets) };
+}
+
+const PLAYER_PRESETS = loadPlayerPresets();
+const GLOBAL_PRESETS = PLAYER_PRESETS.list;
 
 function getGlobalPresetPool() {
   return GLOBAL_PRESETS.filter((preset) => preset != null);
@@ -111,6 +127,10 @@ function getGlobalPresetByName(name) {
     }
   }
   return null;
+}
+
+function getGlobalPresetByKey(key) {
+  return typeof key === "string" ? PLAYER_PRESETS.byKey.get(key) ?? null : null;
 }
 
 function resolvePresetPool(options = {}) {
@@ -705,6 +725,7 @@ module.exports = {
   applyPreset,
   applyRandomGlobalPreset,
   getGlobalPresetByName,
+  getGlobalPresetByKey,
   getGlobalPresetPool,
   isEnabled: () => presetsEnabled,
   openPresetInterface,

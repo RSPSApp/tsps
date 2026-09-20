@@ -1,8 +1,7 @@
 "use strict";
 
-const { applyPreset } = require("../../../modes/pvp/Presets");
+const { applyPreset, getGlobalPresetByKey } = require("../../../modes/pvp/Presets");
 const { Presetable } = require("../../../../src/main/typescript/elvarg/game/content/presets/Presetable");
-const { PredefinedPresets } = require("../../../../src/main/typescript/elvarg/game/content/presets/PredefinedPresets");
 const { CombatSpells } = require("../../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
 const { Item } = require("../../../../src/main/typescript/elvarg/game/model/Item");
 const { MagicSpellbook } = require("../../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
@@ -197,7 +196,7 @@ function selectBotPreset(state, rng = Math.random) {
   const presetKey = group.presetKeys.includes(pvp.presetPoolPresetKey)
     ? pvp.presetPoolPresetKey
     : choose(group.presetKeys, rng);
-  const preset = PredefinedPresets[presetKey];
+  const preset = getGlobalPresetByKey(presetKey);
   if (!preset) {
     return null;
   }
@@ -3338,10 +3337,22 @@ function applyGeneratedPvpLoadout(player, state, options = {}) {
   }
   const combat = player.getCombat?.();
   if (combat?.getTarget?.() || combat?.getAttacker?.() || player.getCombatFollowing?.()) {
+    if (state?.pvp) state.pvp.loadoutPending = true;
     return false;
   }
-  const generated = buildGeneratedPreset(player, state);
+  let generated;
+  try {
+    generated = buildGeneratedPreset(player, state);
+  } catch (error) {
+    if (state?.pvp) state.pvp.loadoutPending = true;
+    options.api?.log?.("bot_pvp_loadout_generation_failed", {
+      username: player.getUsername?.(),
+      error: String(error),
+    });
+    return false;
+  }
   if (!generated?.preset) {
+    if (state?.pvp) state.pvp.loadoutPending = true;
     options.api?.log?.("bot_pvp_loadout_failed", {
       username: player.getUsername?.(),
       loadoutId: state?.pvp?.loadoutId ?? "edge_main_melee",
@@ -3349,7 +3360,19 @@ function applyGeneratedPvpLoadout(player, state, options = {}) {
     return false;
   }
   player.setCurrentPreset?.(generated.preset);
-  if (!applyPreset(player, generated.preset)) {
+  let applied = false;
+  try {
+    applied = applyPreset(player, generated.preset);
+  } catch (error) {
+    options.api?.log?.("bot_pvp_loadout_apply_error", {
+      username: player.getUsername?.(),
+      loadoutId: generated.loadoutId,
+      archetypeId: generated.archetypeId,
+      error: String(error),
+    });
+  }
+  if (!applied) {
+    if (state?.pvp) state.pvp.loadoutPending = true;
     options.api?.log?.("bot_pvp_loadout_apply_failed", {
       username: player.getUsername?.(),
       loadoutId: generated.loadoutId,
@@ -3366,6 +3389,7 @@ function applyGeneratedPvpLoadout(player, state, options = {}) {
     if (foodSlot >= 0) player.getInventory().deleteAtSlot(foodSlot, 1);
   }
   if (state?.pvp) {
+    state.pvp.loadoutPending = false;
     const equipment = generated.preset.getEquipment?.() ?? [];
     const inventory = generated.preset.getInventory?.() ?? [];
     state.pvp.generatedArchetypeId = generated.archetypeId;

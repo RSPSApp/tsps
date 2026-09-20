@@ -235,6 +235,7 @@ class PvpBehavior {
       getProfile: (state) => this.getProfile(state),
       scheduleCombatAction,
       scheduleFreezeReview,
+      regionManager: this.api.getRegionManager(),
       pvpPhase: PVP_PHASE,
     });
     this.vengeanceNode = new PvpVengeanceNode({
@@ -1512,6 +1513,12 @@ class PvpBehavior {
     }
 
     const target = validation?.target ?? null;
+    // Establish combat before support actions can consume this decision.
+    if (target && player.getCombat().getTarget() !== target &&
+        this.CombatFactory.canAttackPermission(player, target, false,
+          this.CombatFactory.getMethod(player)) === CanAttackResponse.CAN_ATTACK) {
+      player.getCombat().attack(target);
+    }
     const freeze = this.ServerPerf.measurePhase("bot.pvp.tick.freeze", () =>
       this.freezeAndKiteNode.tick({
         player,
@@ -1524,7 +1531,7 @@ class PvpBehavior {
       return freeze.status ?? "failure";
     }
 
-    const vengeance = this.ServerPerf.measurePhase("bot.pvp.tick.vengeance", () =>
+    this.ServerPerf.measurePhase("bot.pvp.tick.vengeance", () =>
       this.vengeanceNode.tick({
         player,
         state,
@@ -1532,11 +1539,7 @@ class PvpBehavior {
         target,
       })
     );
-    if (vengeance?.handled) {
-      return vengeance.status ?? "failure";
-    }
-
-    return this.ServerPerf.measurePhase("bot.pvp.tick.combat_execution", () =>
+    const combatStatus = this.ServerPerf.measurePhase("bot.pvp.tick.combat_execution", () =>
       this.combatExecutionNode.tick({
         player,
         state,
@@ -1544,6 +1547,8 @@ class PvpBehavior {
         target,
       })
     );
+    this.freezeAndKiteNode.maybeMoveBetweenHits(player, state, target, this.getProfile(state), nowMs);
+    return combatStatus;
   }
 
   isValidTarget(player, target) {

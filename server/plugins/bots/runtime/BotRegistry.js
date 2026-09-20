@@ -563,7 +563,7 @@ function createBotRegistry(options) {
     });
     state.pvp.presetPoolEnabled = true;
     syncBotProfileAttribute(bot, state);
-    applyInitialPvpLoadout(bot, state);
+    if (!applyInitialPvpLoadout(bot, state)) state.pvp.loadoutPending = true;
     applyForcedModeForDiagnosis(bot, state);
     bot.setLocation?.(botSpawn.clone());
     bot.setLastKnownRegion?.(botSpawn.clone());

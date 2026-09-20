@@ -1548,11 +1548,21 @@ class BotBehaviorTask extends Task {
 
     if (state.deathResetApplied) {
       if (this.isPvpOnlyBot(state) && this.handlePersistentPvpRespawn) {
-        this.handlePersistentPvpRespawn(entry, nowMs);
+        if (!this.handlePersistentPvpRespawn(entry, nowMs)) return;
       }
       state.deathResetApplied = false;
       this.scheduleNextDecision(state, nowMs);
     }
+
+    // Spawning and respawning can briefly retain a combat link. Retry once that link has
+    // cleared instead of leaving the bot naked after the first rejected loadout attempt.
+    if (this.isPvpOnlyBot(state) && state.pvp) {
+      const hasInventory = player.getInventory?.().getItems?.().some((item) => item?.getId?.() > 0);
+      const hasEquipment = player.getEquipment?.().getItems?.().some((item) => item?.getId?.() > 0);
+      if (!hasInventory && !hasEquipment) state.pvp.loadoutPending = true;
+    }
+    if (this.isPvpOnlyBot(state) && state.pvp?.loadoutPending &&
+        this.handlePersistentPvpRespawn && !this.handlePersistentPvpRespawn(entry, nowMs)) return;
 
     if (state.pvp?.retreat) return;
 

@@ -180,6 +180,9 @@ function scoreCandidate(candidate, state, profile, pressureContext) {
   const distance = Number(pressureContext?.distance ?? 99);
   const preferredStyle = pressureContext?.preferredStyle ?? state?.pvp?.preferredCombatStyle;
   let score = candidate.current ? 0.45 : 0.2;
+  if (preferredStyle === "hybrid") {
+    score += candidate.current ? -0.4 : 0.15;
+  }
 
   if (candidate.combatType === CombatType.MAGIC && pressureContext?.magicPressureAvailable !== true) {
     return Number.NEGATIVE_INFINITY;
@@ -380,6 +383,7 @@ function maybeRunPressureCombatScript(context) {
       : null;
   if (
     !meleeFinisher &&
+    pressureContext.preferredStyle !== "hybrid" &&
     ServerPerf.measurePhase("bot.pvp.pressure_script.fast_keep_style", () =>
       isCurrentStyleAlreadyGoodEnough(pressureContext)
     )
@@ -417,7 +421,7 @@ function maybeRunPressureCombatScript(context) {
     schedulePressureCheck(state, nowMs, PRESSURE_FAILURE_COOLDOWN_MS);
     return { handled: false, forcedCombatType: null };
   }
-  if (bestCandidate.slot >= 0) {
+  if (bestCandidate.slot >= 0 && !meleeFinisher) {
     const switchChance = Number(profile?.nextHitStyleSwitchChance ?? profile?.switchChance ?? 0.5);
     if (Math.random() > switchChance) {
       schedulePressureCheck(state, nowMs, PRESSURE_FAILURE_COOLDOWN_MS);

@@ -59,17 +59,6 @@ function getOwnHpRatio(player) {
   return current / max;
 }
 
-function getTargetHpRatio(target) {
-  const current = Math.max(0, Number(target?.getHitpoints?.() ?? 0));
-  let max = current;
-  if (target?.isPlayer?.() === true) {
-    const maxLevel = target?.getSkillManager?.()?.getMaxLevel?.(Skill.HITPOINTS);
-    max = Number(maxLevel ?? current ?? 1);
-  }
-  max = Math.max(1, max);
-  return current / max;
-}
-
 function getEffectiveTargetHpRatio(target) {
   const pendingAwareCurrent = Math.max(
     0,
@@ -188,29 +177,30 @@ function shouldUseSpecNow(player, target, state, profile, special, weaponId) {
   if (Number(player?.getSpecialPercentage?.() ?? 0) < Number(special.getDrainAmount?.() ?? 101)) {
     return false;
   }
-  const targetHpRatio = getTargetHpRatio(target);
+  const targetHpRatio = getEffectiveTargetHpRatio(target);
   const finisherHpRatio = Number(profile?.specFinisherHpRatio ?? 0.45);
+  const finisher = targetHpRatio <= finisherHpRatio;
   const pressure = shouldPressureSpec(player, state, profile);
   let chance = Number(profile?.specUseChance ?? 0.3);
 
-  if (targetHpRatio <= finisherHpRatio) {
-    chance += 0.15;
+  if (finisher) {
+    chance = Math.max(0.9, chance + 0.15);
   } else if (targetHpRatio <= Math.min(0.72, finisherHpRatio + 0.16)) {
     chance -= 0.04;
   } else if (!pressure) {
-    return false;
+    chance *= 0.8;
   }
 
   if (weaponId === ItemIdentifiers.GRANITE_MAUL) {
     if (targetHpRatio > finisherHpRatio + 0.1 && !pressure) {
-      return false;
+      chance -= 0.06;
     }
     chance += 0.1;
   }
 
   if (weaponId === ItemIdentifiers.ANCIENT_GODSWORD) {
     if (targetHpRatio > finisherHpRatio + 0.18 && !pressure) {
-      return false;
+      chance -= 0.04;
     }
   }
 
@@ -219,7 +209,7 @@ function shouldUseSpecNow(player, target, state, profile, special, weaponId) {
     weaponId === ItemIdentifiers.DRAGON_CLAWS
   ) {
     if (targetHpRatio > finisherHpRatio + 0.16 && !pressure) {
-      return false;
+      chance -= 0.06;
     }
     if (targetHpRatio <= finisherHpRatio + 0.06) {
       chance += 0.1;
@@ -228,14 +218,14 @@ function shouldUseSpecNow(player, target, state, profile, special, weaponId) {
 
   if (weaponId === ItemIdentifiers.HEAVY_BALLISTA) {
     if (targetHpRatio > finisherHpRatio + 0.12 && !pressure) {
-      return false;
+      chance -= 0.05;
     }
     chance += 0.06;
   }
 
   if (weaponId === ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF) {
     if (targetHpRatio > finisherHpRatio + 0.14 && !pressure) {
-      return false;
+      chance -= 0.05;
     }
     if (targetHpRatio <= finisherHpRatio + 0.08) {
       chance += 0.12;
@@ -518,10 +508,12 @@ function maybeUseSpecialAttack(context) {
   const combatSnapshot = getPvpCombatSnapshot(player, state, nowMs);
   const inventorySpec = resolveInventorySpecWeapon(player, state, combatSnapshot);
   const switchChance = Number(profile?.specSwitchChance ?? 0.4);
+  const finisher =
+    getEffectiveTargetHpRatio(target) <= Number(profile?.specFinisherHpRatio ?? 0.45);
   if (
     inventorySpec &&
     SWITCHABLE_SPEC_WEAPONS.has(inventorySpec.weaponId) &&
-    Math.random() <= switchChance &&
+    (finisher || Math.random() <= switchChance) &&
     shouldUseSpecNow(player, target, state, profile, inventorySpec.special, inventorySpec.weaponId)
   ) {
     if (equipWeaponFromInventory(player, state, inventorySpec.slot, inventorySpec.weaponId)) {

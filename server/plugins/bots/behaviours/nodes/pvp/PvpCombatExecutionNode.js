@@ -293,19 +293,24 @@ class PvpCombatExecutionNode {
       confidenceTier,
       targetCombatType
     );
+    const flickPrayers = confidenceTier >= 3;
+    const protectionPrayer =
+      flickPrayers && target.getCombat?.()?.willAttackBeReadyIn?.(1) !== true
+        ? null
+        : desiredProtectionPrayer;
     const protectionStable =
-      desiredProtectionPrayer != null
-        ? pvp.cachedProtectionPrayerId === desiredProtectionPrayer &&
+      protectionPrayer != null
+        ? pvp.cachedProtectionPrayerId === protectionPrayer &&
           pvp.cachedPrayerTargetCombatType === targetCombatType &&
           pvp.cachedPrayerTargetUsername === targetUsername &&
-          isPrayerActive(player, desiredProtectionPrayer) &&
-          !hasOtherActivePrayer(player, PrayerHandler.PROTECTION_PRAYERS, desiredProtectionPrayer)
+          isPrayerActive(player, protectionPrayer) &&
+          !hasOtherActivePrayer(player, PrayerHandler.PROTECTION_PRAYERS, protectionPrayer)
         : !hasOtherActivePrayer(player, PrayerHandler.PROTECTION_PRAYERS);
     const shouldRefreshProtectionPrayers = !protectionStable;
-    if (desiredProtectionPrayer != null) {
+    if (protectionPrayer != null) {
       if (shouldRefreshProtectionPrayers) {
-        activateFirstAvailablePrayer(this.PrayerHandler, player, [desiredProtectionPrayer]);
-        deactivatePrayerSet(this.PrayerHandler, player, PrayerHandler.PROTECTION_PRAYERS, desiredProtectionPrayer);
+        activateFirstAvailablePrayer(this.PrayerHandler, player, [protectionPrayer]);
+        deactivatePrayerSet(this.PrayerHandler, player, PrayerHandler.PROTECTION_PRAYERS, protectionPrayer);
       }
     } else {
       if (shouldRefreshProtectionPrayers) {
@@ -313,10 +318,10 @@ class PvpCombatExecutionNode {
       }
     }
 
-    const offensivePrayerIds = this.resolveOffensivePrayerPriority(state, playerCombatType);
-    if (offensivePrayerIds.length === 0) {
-      return false;
-    }
+    const offensivePrayerIds =
+      flickPrayers && player.getCombat?.()?.willAttackBeReadyIn?.(1) !== true
+        ? []
+        : this.resolveOffensivePrayerPriority(state, playerCombatType);
     const preferredOffensivePrayer = offensivePrayerIds[0] ?? null;
     const offensiveStable =
       preferredOffensivePrayer == null
@@ -335,7 +340,7 @@ class PvpCombatExecutionNode {
         deactivatePrayerSet(this.PrayerHandler, player, MANAGED_OFFENSIVE_PRAYERS);
       }
     }
-    pvp.cachedProtectionPrayerId = desiredProtectionPrayer;
+    pvp.cachedProtectionPrayerId = protectionPrayer;
     pvp.cachedOffensivePrayerId = activatedOffensivePrayer ?? null;
     pvp.cachedPrayerTargetCombatType = targetCombatType;
     pvp.cachedPrayerPlayerCombatType = playerCombatType;
@@ -451,6 +456,11 @@ class PvpCombatExecutionNode {
     }
 
     const profile = this.getProfile?.(state) ?? null;
+    if (Number(profile?.confidenceTier ?? 0) >= 3) {
+      this.ServerPerf.measurePhase("bot.pvp.combat_execution.prayer_flick", () =>
+        this.reviewPrayers(player, state, target, nowMs, profile)
+      );
+    }
     this.ServerPerf.measurePhase("bot.pvp.combat_execution.spec", () =>
       this.maybeUseSpecialAttack?.({
         player,

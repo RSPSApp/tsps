@@ -3,8 +3,10 @@
 const { CombatSpells } = require("../../../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
 const { MagicSpellbook } = require("../../../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { Equipment } = require("../../../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
+const { Location } = require("../../../../../src/main/typescript/elvarg/game/model/Location");
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { WeaponInterfaces } = require("../../../../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaces");
+const { requestMovement } = require("../../navigation/BotNavigation");
 
 const RANGED_WEAPON_INTERFACES = new Set([
   WeaponInterfaces.SHORTBOW,
@@ -31,6 +33,7 @@ class PvpFreezeAndKiteNode {
     this.getProfile = options.getProfile;
     this.scheduleCombatAction = options.scheduleCombatAction;
     this.scheduleFreezeReview = options.scheduleFreezeReview;
+    this.regionManager = options.regionManager;
     this.pvpPhase = options.pvpPhase;
   }
 
@@ -46,6 +49,9 @@ class PvpFreezeAndKiteNode {
 
     const profile = this.getProfile?.(state) ?? null;
     const openerFreeze = this.shouldOpenWithFreeze(player, state, target, profile);
+    if (!openerFreeze && this.maybeMoveBetweenHits(player, state, target, profile, nowMs)) {
+      return { handled: true, status: "running" };
+    }
 
     if (!openerFreeze && nowMs < Number(pvp.nextFreezeReviewAt ?? 0)) {
       return { handled: false, status: "running" };
@@ -95,6 +101,52 @@ class PvpFreezeAndKiteNode {
     this.scheduleCombatAction?.(state, nowMs);
     this.setPhase?.(state, this.pvpPhase?.COMBAT ?? "combat");
     return finish(true, "running");
+  }
+
+  maybeMoveBetweenHits(player, state, target, profile, nowMs) {
+    const combat = player?.getCombat?.();
+    const playerLoc = player?.getLocation?.();
+    const targetLoc = target?.getLocation?.();
+    if (!combat || !playerLoc || !targetLoc || playerLoc.getZ() !== targetLoc.getZ()) return false;
+    if (combat.getTarget?.() !== target && combat.getAttacker?.() !== target) return false;
+
+    const attackReady = combat.willAttackBeReadyIn?.(1) === true;
+    const sameTile = playerLoc.getX() === targetLoc.getX() && playerLoc.getY() === targetLoc.getY();
+    const canDeathDot =
+      Number(profile?.confidenceTier ?? 0) >= 3 &&
+      state?.pvp?.preferredCombatStyle === "hybrid" &&
+      target.getTimers?.().has?.(TimerKey.FREEZE) === true;
+
+    if (canDeathDot && !attackReady && !sameTile) {
+      return requestMovement(player, targetLoc.getX(), targetLoc.getY(), {
+        state,
+        nowMs,
+        basicPather: true,
+        maxRouteSegmentTiles: 2,
+        reason: "pvp_death_dot",
+      });
+    }
+
+    if (!(canDeathDot && attackReady && sameTile) &&
+        (combat.getAttackDelay?.() !== 2 || Math.random() > Number(profile?.combatMoveChance ?? 0))) {
+      return false;
+    }
+
+    const start = Math.floor(Math.random() * 8);
+    const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+    for (let index = 0; index < offsets.length; index++) {
+      const [dx, dy] = offsets[(start + index) % offsets.length];
+      const tile = new Location(targetLoc.getX() + dx, targetLoc.getY() + dy, targetLoc.getZ());
+      if (this.regionManager?.blocked?.(tile, null) || this.regionManager?.isWater?.(tile)) continue;
+      return requestMovement(player, tile.getX(), tile.getY(), {
+        state,
+        nowMs,
+        basicPather: true,
+        maxRouteSegmentTiles: 2,
+        reason: sameTile ? "pvp_death_dot_step_out" : "pvp_between_hits",
+      });
+    }
+    return false;
   }
 
   shouldOpenWithFreeze(player, state, target, profile) {

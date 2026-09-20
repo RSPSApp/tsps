@@ -235,6 +235,7 @@ class PvpBehavior {
       getProfile: (state) => this.getProfile(state),
       scheduleCombatAction,
       scheduleFreezeReview,
+      regionManager: this.api.getRegionManager(),
       pvpPhase: PVP_PHASE,
     });
     this.vengeanceNode = new PvpVengeanceNode({

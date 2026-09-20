@@ -12,7 +12,7 @@ pub mod packed_vertex;
 #[cfg(target_arch = "wasm32")]
 mod webgl;
 
-pub use draw::{filter_draw_ranges, DrawRange, DrawStats};
+pub use draw::{DrawRange, DrawStats, filter_draw_ranges};
 pub use packed_vertex::{PackedVertex, VertexInput};
 
 #[cfg(target_arch = "wasm32")]

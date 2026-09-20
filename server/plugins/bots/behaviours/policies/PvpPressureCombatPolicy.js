@@ -8,6 +8,8 @@ const { EquipPacketListener } = require("../../../../src/main/typescript/elvarg/
 const { TimerKey } = require("../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { Inventory } = require("../../../../src/main/typescript/elvarg/game/model/container/impl/Inventory");
 const {
+  equipStyleGear,
+  resolveOffensiveSpell,
   BOW_INTERFACES,
   CROSSBOW_INTERFACES,
   getAmmoId,
@@ -87,8 +89,7 @@ function isLikelyMeleeThreat(target) {
 }
 
 function canUseMagicPressure(player) {
-  const combat = player?.getCombat?.();
-  return combat?.getAutocastSpell?.() != null;
+  return resolveOffensiveSpell(player) != null;
 }
 
 function shouldUseFreeze(player, profile, magicCandidate, pressureContext) {
@@ -180,9 +181,6 @@ function scoreCandidate(candidate, state, profile, pressureContext) {
   const distance = Number(pressureContext?.distance ?? 99);
   const preferredStyle = pressureContext?.preferredStyle ?? state?.pvp?.preferredCombatStyle;
   let score = candidate.current ? 0.45 : 0.2;
-  if (preferredStyle === "hybrid") {
-    score += candidate.current ? -0.4 : 0.15;
-  }
 
   if (candidate.combatType === CombatType.MAGIC && pressureContext?.magicPressureAvailable !== true) {
     return Number.NEGATIVE_INFINITY;
@@ -283,7 +281,9 @@ function maybeEquipCandidate(player, candidate, state) {
     equipInventoryItem(player, ammoSlot, candidate.ammo.ammoId ?? candidate.ammo.itemId);
     invalidatePvpCombatSnapshot(state);
   }
-  return getWeaponId(player) === candidate.weaponId;
+  if (getWeaponId(player) !== candidate.weaponId) return false;
+  if (equipStyleGear(player, candidate.combatType)) invalidatePvpCombatSnapshot(state);
+  return true;
 }
 
 function tryQueuedSpecialAttack(player, target) {
@@ -307,10 +307,19 @@ function executePressureStyle(player, target, candidate, state) {
   if (!maybeEquipCandidate(player, candidate, state)) {
     return false;
   }
-  if (candidate.combatType !== CombatType.MAGIC) {
-    combat.setCastSpell?.(null);
+  if (candidate.combatType === CombatType.MAGIC) {
+    const spell = resolveOffensiveSpell(player);
+    if (!spell) return false;
+    if (isStaffInterface(player.getWeapon())) {
+      const { Autocasting } = require("../../../../src/main/typescript/elvarg/game/content/combat/magic/Autocasting");
+      Autocasting.setAutocast(player, spell);
+    }
+    combat.castSpellOn(target, spell);
+  } else {
+    combat.setCastSpell(null);
+    combat.setAutocastSpell(null);
+    combat.attack(target);
   }
-  combat.attack(target);
   return true;
 }
 
@@ -337,7 +346,13 @@ function maybeRunPressureCombatScript(context) {
     return { handled: false, forcedCombatType: null };
   }
   if (!isAttackWindowOpen(player)) {
+    pvp.pressureAttackReviewed = false;
     return { handled: false, forcedCombatType: null };
+  }
+  // Hold the selected setup until this attack opportunity has passed. This also
+  // prevents repeated rolls while chasing or waiting for a clear attack tile.
+  if (pvp.pressureAttackReviewed || pvp.lastSpecAt === nowMs) {
+    return { handled: true, forcedCombatType: null };
   }
   if (nowMs < Number(pvp.nextPressureCheckAt ?? 0)) {
     return { handled: false, forcedCombatType: null };
@@ -364,6 +379,7 @@ function maybeRunPressureCombatScript(context) {
   if (nowMs < Number(pvp.lastPressureScriptAt ?? 0) + cooldownMs) {
     return { handled: false, forcedCombatType: null };
   }
+  pvp.pressureAttackReviewed = true;
   if (Math.random() > Number(profile?.nextHitScriptChance ?? 1)) {
     schedulePressureCheck(state, nowMs, PRESSURE_FAILURE_COOLDOWN_MS);
     return { handled: false, forcedCombatType: null };
@@ -372,17 +388,22 @@ function maybeRunPressureCombatScript(context) {
   const combatSnapshot = ServerPerf.measurePhase("bot.pvp.pressure_script.snapshot", () =>
     getPvpCombatSnapshot(player, state, nowMs)
   );
-  const candidates = combatSnapshot?.styleCandidatesByType ?? new Map();
+  const candidates = new Map(combatSnapshot?.styleCandidatesByType);
   const pressureContext = ServerPerf.measurePhase("bot.pvp.pressure_script.context", () =>
     buildPressureContext(player, target, state)
   );
+  if (!pressureContext.magicPressureAvailable) candidates.delete(CombatType.MAGIC);
+  if (candidates.size > 1) pressureContext.preferredStyle = "hybrid";
   const meleeFinisher =
-    pressureContext.targetHpRatio <= Number(profile.nextHitMeleeFinisherHpRatio ?? profile.specFinisherHpRatio ?? 0.45) &&
-    (pressureContext.distance <= MELEE_DISTANCE_TILES || !player.getTimers().has(TimerKey.FREEZE))
+    pressureContext.targetHpRatio <= Number(profile.nextHitMeleeFinisherHpRatio ?? 0.45) &&
+    (pressureContext.distance <= MELEE_DISTANCE_TILES || !player.getTimers().has(TimerKey.FREEZE)) &&
+    pressureContext.targetPrayers[PrayerHandler.getProtectingPrayer(CombatType.MELEE)] !== true
       ? candidates.get(CombatType.MELEE)
       : null;
   if (
     !meleeFinisher &&
+    candidates.size < 2 &&
+    pressureContext.currentCombatType !== CombatType.MAGIC &&
     pressureContext.preferredStyle !== "hybrid" &&
     ServerPerf.measurePhase("bot.pvp.pressure_script.fast_keep_style", () =>
       isCurrentStyleAlreadyGoodEnough(pressureContext)
@@ -395,7 +416,9 @@ function maybeRunPressureCombatScript(context) {
     };
   }
   const magicCandidate = candidates.get(CombatType.MAGIC) ?? null;
-  const shouldFreeze = ServerPerf.measurePhase("bot.pvp.pressure_script.freeze_check", () =>
+  const switchIntervalMs = ({ novice: 7200, standard: 4800, veteran: 3600, elite: 2400 })[profile.id] ?? 4800;
+  const canSwitchStyle = nowMs >= Number(pvp.lastStyleSwitchAt ?? 0) + switchIntervalMs;
+  const shouldFreeze = canSwitchStyle && ServerPerf.measurePhase("bot.pvp.pressure_script.freeze_check", () =>
     shouldUseFreeze(player, profile, magicCandidate, pressureContext)
   );
   if (shouldFreeze) {
@@ -405,6 +428,7 @@ function maybeRunPressureCombatScript(context) {
       )
     ) {
       player.getCombat?.().castSpellOn?.(target, FREEZE_SPELLS[profile.id]);
+      pvp.lastStyleSwitchAt = nowMs;
       pvp.lastFreezeAt = nowMs;
       pvp.lastPressureScriptAt = nowMs;
       schedulePressureCheck(state, nowMs, PRESSURE_RETRY_COOLDOWN_MS);
@@ -414,14 +438,21 @@ function maybeRunPressureCombatScript(context) {
     }
   }
 
-  const bestCandidate = ServerPerf.measurePhase("bot.pvp.pressure_script.choose_candidate", () =>
+  let bestCandidate = ServerPerf.measurePhase("bot.pvp.pressure_script.choose_candidate", () =>
     meleeFinisher ?? chooseBestCandidate(candidates, state, profile, pressureContext)
   );
+  const currentCandidate = [...candidates.values()].find((candidate) => candidate.current);
+  if (currentCandidate && bestCandidate && bestCandidate !== currentCandidate &&
+      (!canSwitchStyle || (!meleeFinisher &&
+        scoreCandidate(bestCandidate, state, profile, pressureContext) <
+        scoreCandidate(currentCandidate, state, profile, pressureContext) + 0.6))) {
+    bestCandidate = currentCandidate;
+  }
   if (!bestCandidate) {
     schedulePressureCheck(state, nowMs, PRESSURE_FAILURE_COOLDOWN_MS);
     return { handled: false, forcedCombatType: null };
   }
-  if (bestCandidate.slot >= 0 && !meleeFinisher) {
+  if (bestCandidate.combatType !== pressureContext.currentCombatType && !meleeFinisher) {
     const switchChance = Number(profile?.nextHitStyleSwitchChance ?? profile?.switchChance ?? 0.5);
     if (Math.random() > switchChance) {
       schedulePressureCheck(state, nowMs, PRESSURE_FAILURE_COOLDOWN_MS);
@@ -437,6 +468,7 @@ function maybeRunPressureCombatScript(context) {
     return { handled: false, forcedCombatType: null };
   }
 
+  if (bestCandidate.combatType !== pressureContext.currentCombatType) pvp.lastStyleSwitchAt = nowMs;
   pvp.lastPressureScriptAt = nowMs;
   schedulePressureCheck(state, nowMs, PRESSURE_RETRY_COOLDOWN_MS);
   scheduleCombatAction?.(state, nowMs);

@@ -1,6 +1,12 @@
 "use strict";
 
+const { equipStyleGear } = require("./PvpCombatRuntimeCache");
+
 const { CombatSpecial } = require("../../../../src/main/typescript/elvarg/game/content/combat/CombatSpecial");
+const { CombatType } = require("../../../../src/main/typescript/elvarg/game/content/combat/CombatType");
+const { DamageFormulas } = require("../../../../src/main/typescript/elvarg/game/content/combat/formula/DamageFormulas");
+const { ItemDefinition } = require("../../../../src/main/typescript/elvarg/game/definition/ItemDefinition");
+const { PrayerHandler } = require("../../../../src/main/typescript/elvarg/game/content/PrayerHandler");
 const { Equipment } = require("../../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { Skill } = require("../../../../src/main/typescript/elvarg/game/model/Skill");
 const { ItemIdentifiers } = require("../../../../src/main/typescript/elvarg/util/ItemIdentifiers");
@@ -59,18 +65,42 @@ function getOwnHpRatio(player) {
   return current / max;
 }
 
-function getEffectiveTargetHpRatio(target) {
-  const pendingAwareCurrent = Math.max(
-    0,
-    Number(target?.getHitpointsAfterPendingDamage?.() ?? target?.getHitpoints?.() ?? 0)
-  );
-  let max = pendingAwareCurrent;
-  if (target?.isPlayer?.() === true) {
-    const maxLevel = target?.getSkillManager?.()?.getMaxLevel?.(Skill.HITPOINTS);
-    max = Number(maxLevel ?? pendingAwareCurrent ?? 1);
+function isSpecFinisher(player, target, state, special, weaponId) {
+  if (!special || !target) return false;
+  const hp = Math.max(0, Number(target.getHitpoints()));
+  if (hp === 0) return false;
+  const type = special.getCombatMethod().type();
+  const bonusIndex = type === CombatType.MELEE ? 0 : type === CombatType.RANGED ? 1 : 2;
+  const equipped = player.getEquipment();
+  const weapon = ItemDefinition.forId(weaponId);
+  const bonusFor = (id) => id > 0 ? Number(ItemDefinition.forId(id).getBonuses()?.[10 + bonusIndex] ?? 0) : 0;
+  const currentBonus = Number(player.getBonusManager().getOtherBonus()[bonusIndex] ?? 0);
+  let projectedBonus = currentBonus;
+  if (getWeaponId(player) !== weaponId) {
+    projectedBonus += bonusFor(weaponId) - bonusFor(getWeaponId(player));
+    if (weapon.isDoubleHanded()) projectedBonus -= bonusFor(equipped.get(Equipment.SHIELD_SLOT)?.getId());
   }
-  max = Math.max(1, max);
-  return pendingAwareCurrent / max;
+  const ammoId = Number(state?.pvp?.generatedSpecAmmoId ?? -1);
+  if (type === CombatType.RANGED && ammoId > 0) {
+    projectedBonus += bonusFor(ammoId) - bonusFor(getAmmoId(player));
+  }
+  let maxHit;
+  if (type === CombatType.MAGIC) {
+    if (weaponId !== ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF) return false;
+    maxHit = DamageFormulas.getVolatileNightmareStaffBaseMaxHit(player) * (1 + projectedBonus / 100);
+  } else {
+    const base = type === CombatType.MELEE
+      ? DamageFormulas.calculateMaxMeleeHit(player, false)
+      : DamageFormulas.calculateMaxRangedHit(player, false);
+    // ponytail: approximate switched gear from the existing max hit; set effects and
+    // rounding can differ. Use a full equipment projection if exact prediction is needed.
+    maxHit = Math.max(0, (base - 0.5) * Math.max(0, projectedBonus + 64) /
+      Math.max(1, currentBonus + 64) + 0.5) * special.getStrengthMultiplier();
+  }
+  if ([CombatSpecial.DRAGON_CLAWS, CombatSpecial.DRAGON_DAGGER,
+      CombatSpecial.DARK_BOW, CombatSpecial.MAGIC_SHORTBOW].includes(special)) maxHit *= 2;
+  // A plausible high roll, not a guaranteed maximum; delayed godsword damage is excluded.
+  return hp <= Math.floor(maxHit * 0.75);
 }
 
 function isVeteranOrEliteProfile(profile) {
@@ -102,21 +132,6 @@ function resolveInventoryWeapon(player, weaponId, snapshot = null) {
     slot,
     special: getSpecialForWeaponId(weaponId),
   };
-}
-
-function shouldUseOneTickNow(player, target, state, profile) {
-  if (!isVeteranOrEliteProfile(profile) || !target) {
-    return false;
-  }
-  const targetHpRatio = getEffectiveTargetHpRatio(target);
-  if (targetHpRatio <= Number(profile?.oneTickFinisherHpRatio ?? 0.4)) {
-    return true;
-  }
-  const ownHpRatio = getOwnHpRatio(player);
-  if (ownHpRatio > Number(profile?.oneTickPressureHpRatio ?? 0.3)) {
-    return false;
-  }
-  return Number(state?.pvp?.lastDamageTakenAt ?? 0) > 0;
 }
 
 function resolveInventorySpecWeapon(player, state, snapshot = null) {
@@ -170,85 +185,20 @@ function shouldPressureSpec(player, state, profile) {
   return lastTaken > 0;
 }
 
+function canSpecTarget(player, target, special) {
+  if (!target || !special) return false;
+  const hp = Number(target.getHitpoints());
+  if (hp <= 0) return false;
+  const protection = PrayerHandler.getProtectingPrayer(special.getCombatMethod().type());
+  return target.getPrayerActive?.()?.[protection] !== true &&
+    player.getSpecialPercentage() >= special.getDrainAmount();
+}
+
 function shouldUseSpecNow(player, target, state, profile, special, weaponId) {
-  if (!special || !target) {
-    return false;
-  }
-  if (Number(player?.getSpecialPercentage?.() ?? 0) < Number(special.getDrainAmount?.() ?? 101)) {
-    return false;
-  }
-  const targetHpRatio = getEffectiveTargetHpRatio(target);
-  const finisherHpRatio = Number(profile?.specFinisherHpRatio ?? 0.45);
-  const finisher = targetHpRatio <= finisherHpRatio;
-  const pressure = shouldPressureSpec(player, state, profile);
-  let chance = Number(profile?.specUseChance ?? 0.3);
-
-  if (finisher) {
-    chance = Math.max(0.9, chance + 0.15);
-  } else if (targetHpRatio <= Math.min(0.72, finisherHpRatio + 0.16)) {
-    chance -= 0.04;
-  } else if (!pressure) {
-    chance *= 0.8;
-  }
-
-  if (weaponId === ItemIdentifiers.GRANITE_MAUL) {
-    if (targetHpRatio > finisherHpRatio + 0.1 && !pressure) {
-      chance -= 0.06;
-    }
-    chance += 0.1;
-  }
-
-  if (weaponId === ItemIdentifiers.ANCIENT_GODSWORD) {
-    if (targetHpRatio > finisherHpRatio + 0.18 && !pressure) {
-      chance -= 0.04;
-    }
-  }
-
-  if (
-    weaponId === ItemIdentifiers.ARMADYL_GODSWORD ||
-    weaponId === ItemIdentifiers.DRAGON_CLAWS
-  ) {
-    if (targetHpRatio > finisherHpRatio + 0.16 && !pressure) {
-      chance -= 0.06;
-    }
-    if (targetHpRatio <= finisherHpRatio + 0.06) {
-      chance += 0.1;
-    }
-  }
-
-  if (weaponId === ItemIdentifiers.HEAVY_BALLISTA) {
-    if (targetHpRatio > finisherHpRatio + 0.12 && !pressure) {
-      chance -= 0.05;
-    }
-    chance += 0.06;
-  }
-
-  if (weaponId === ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF) {
-    if (targetHpRatio > finisherHpRatio + 0.14 && !pressure) {
-      chance -= 0.05;
-    }
-    if (targetHpRatio <= finisherHpRatio + 0.08) {
-      chance += 0.12;
-    }
-  }
-
-  if (
-    weaponId === ItemIdentifiers.MAGIC_SHORTBOW ||
-    weaponId === ItemIdentifiers.MAGIC_SHORTBOW_I_ ||
-    weaponId === ItemIdentifiers.MAGIC_SHORTBOW_3
-  ) {
-    chance -= 0.08;
-  }
-
-  if (weaponId === ItemIdentifiers.DARK_BOW) {
-    if (targetHpRatio <= finisherHpRatio + 0.1) {
-      chance += 0.12;
-    } else if (!pressure) {
-      chance -= 0.04;
-    }
-  }
-
-  chance = Math.max(0.05, Math.min(0.95, chance));
+  if (!canSpecTarget(player, target, special)) return false;
+  const finisher = isSpecFinisher(player, target, state, special, weaponId);
+  const reliability = Number(profile?.specUseChance ?? 0.3);
+  const chance = finisher ? reliability : reliability * (shouldPressureSpec(player, state, profile) ? 0.3 : 0.15);
   return Math.random() <= chance;
 }
 
@@ -354,14 +304,17 @@ function maybeSwitchBackToPrimaryWeapon(context) {
   return switched;
 }
 
-function tryActivateSpecial(player) {
+function tryActivateSpecial(player, target) {
   const special = player?.getCombatSpecial?.();
-  if (!special) {
+  if (!canSpecTarget(player, target, special)) {
     return false;
   }
   if (player?.isSpecialActivated?.() === true) {
     return true;
   }
+  equipStyleGear(player, special.getCombatMethod().type());
+  player.getCombat().setCastSpell(null);
+  player.getCombat().setAutocastSpell(null);
   const before = player?.isSpecialActivated?.() === true;
   const beforePercentage = Number(player?.getSpecialPercentage?.() ?? 0);
   const beforeQueued =
@@ -403,11 +356,6 @@ function maybeUseOneTickAttack(context, profile) {
   }
   pvp.nextOneTickCheckAt = nowMs + ONE_TICK_FAST_CHECK_COOLDOWN_MS;
 
-  if (!shouldUseOneTickNow(player, target, state, profile)) {
-    return false;
-  }
-
-  const pendingTargetHpRatio = getEffectiveTargetHpRatio(target);
   const combatSnapshot = getPvpCombatSnapshot(player, state, nowMs);
   const oneTickBaseChance = Number(profile?.oneTickUseChance ?? 0);
   const gmaulChance = Math.min(
@@ -425,8 +373,9 @@ function maybeUseOneTickAttack(context, profile) {
 
   if (
     gmaulCandidate &&
+    shouldUseSpecNow(player, target, state, profile, gmaulCandidate.special, gmaulCandidate.weaponId) &&
     isWithinMeleeRange(player, target) &&
-    Math.random() <= Math.max(0.05, gmaulChance + (pendingTargetHpRatio <= 0.24 ? 0.12 : 0))
+    Math.random() <= Math.max(0.05, gmaulChance)
   ) {
     if (
       gmaulCandidate.slot >= 0 &&
@@ -434,7 +383,7 @@ function maybeUseOneTickAttack(context, profile) {
     ) {
       return false;
     }
-    if (tryActivateSpecial(player)) {
+    if (tryActivateSpecial(player, target)) {
       pvp.lastOneTickAt = nowMs;
       pvp.lastSpecAt = nowMs;
       scheduleSpecReview?.(state, nowMs);
@@ -446,12 +395,13 @@ function maybeUseOneTickAttack(context, profile) {
   if (!inventorySpec || inventorySpec.weaponId === ItemIdentifiers.GRANITE_MAUL) {
     return false;
   }
+  if (!shouldUseSpecNow(player, target, state, profile, inventorySpec.special, inventorySpec.weaponId)) return false;
   if (Number(player?.getSpecialPercentage?.() ?? 0) < Number(inventorySpec.special?.getDrainAmount?.() ?? 101)) {
     return false;
   }
 
   let switchChance = Number(profile?.oneTickSwitchChance ?? 0);
-  if (pendingTargetHpRatio <= Number(profile?.oneTickFinisherHpRatio ?? 0.4)) {
+  if (isSpecFinisher(player, target, state, inventorySpec.special, inventorySpec.weaponId)) {
     switchChance += 0.12;
   }
   if (Math.random() > Math.max(0.05, Math.min(0.98, switchChance))) {
@@ -465,7 +415,7 @@ function maybeUseOneTickAttack(context, profile) {
   if (specAmmoId > 0) {
     equipAmmoFromInventory(player, state, specAmmoId, combatSnapshot);
   }
-  if (tryActivateSpecial(player)) {
+  if (tryActivateSpecial(player, target)) {
     pvp.lastOneTickAt = nowMs;
     pvp.lastSpecAt = nowMs;
     scheduleSpecReview?.(state, nowMs);
@@ -480,6 +430,19 @@ function maybeUseSpecialAttack(context) {
   if (!player || !pvp || !target) {
     return false;
   }
+
+  // Recheck queued specials even while the review timer is cooling down.
+  if (!canSpecTarget(player, target, player.getCombatSpecial?.()) &&
+      (player.isSpecialActivated?.() || player.getCombat().isGraniteMaulSpecialQueued())) {
+    player.setSpecialActivated(false);
+    player.getCombat().setGraniteMaulSpecialQueued(false);
+    player.getPacketSender().sendSpecialAttackState(false);
+  }
+
+  if (!player.getCombat().willAttackBeReadyIn(1)) return false;
+  if (pvp.pressureAttackReviewed) return false;
+  if (pvp.backstep && player.getCombat().getAttackDelay() > 1) return false;
+  if (pvp.backstep) pvp.nextSpecReviewAt = 0;
 
   const profile = context?.profile ?? getPvpProfile(pvp.profileId);
   const canCheckOneTick =
@@ -497,7 +460,7 @@ function maybeUseSpecialAttack(context) {
   const currentSpecial = player?.getCombatSpecial?.() ?? getSpecialForWeaponId(currentWeaponId);
 
   if (shouldUseSpecNow(player, target, state, profile, currentSpecial, currentWeaponId)) {
-    const activated = tryActivateSpecial(player);
+    const activated = tryActivateSpecial(player, target);
     if (activated) {
       pvp.lastSpecAt = nowMs;
       scheduleSpecReview?.(state, nowMs);
@@ -509,7 +472,7 @@ function maybeUseSpecialAttack(context) {
   const inventorySpec = resolveInventorySpecWeapon(player, state, combatSnapshot);
   const switchChance = Number(profile?.specSwitchChance ?? 0.4);
   const finisher =
-    getEffectiveTargetHpRatio(target) <= Number(profile?.specFinisherHpRatio ?? 0.45);
+    inventorySpec && isSpecFinisher(player, target, state, inventorySpec.special, inventorySpec.weaponId);
   if (
     inventorySpec &&
     SWITCHABLE_SPEC_WEAPONS.has(inventorySpec.weaponId) &&
@@ -521,7 +484,7 @@ function maybeUseSpecialAttack(context) {
       if (specAmmoId > 0) {
         equipAmmoFromInventory(player, state, specAmmoId, combatSnapshot);
       }
-      const activated = tryActivateSpecial(player);
+      const activated = tryActivateSpecial(player, target);
       if (activated) {
         pvp.lastSpecAt = nowMs;
       }
@@ -544,6 +507,9 @@ function maybeUseSpecialAttack(context) {
 }
 
 module.exports = {
+  canSpecTarget,
+  isSpecFinisher,
+  resolveInventorySpecWeapon,
   maybeSwitchBackToPrimaryWeapon,
   maybeUseSpecialAttack,
 };

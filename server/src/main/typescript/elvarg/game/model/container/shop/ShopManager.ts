@@ -67,6 +67,7 @@ export class ShopManager {
     private static readonly MAX_SHOP_ITEMS = 1000;
     private static readonly MAX_ACTION_AMOUNT = 5000;
     private static readonly SALES_TAX = 0.85;
+    private static readonly BLOOD_MONEY_SHOP_IDS = [13, 14, 27];
     private static readonly shopsById = new Map<number, RuntimeShop>();
     private static readonly activeShopByPlayer = new WeakMap<object, number>();
     private static readonly activeTargetByPlayer = new WeakMap<object, number>();
@@ -441,6 +442,10 @@ export class ShopManager {
         itemId: number,
         fromShop: boolean
     ): void {
+        if (!fromShop && shop.definition.getCurrency() === "COINS" && this.isBloodMoneyShopItem(itemId)) {
+            player.sendMessage("PK shop items cannot be sold for coins.");
+            return;
+        }
         if (!fromShop && !this.buysItem(shop, itemId)) {
             player.sendMessage(
                 "You cannot sell this item to this shop."
@@ -542,6 +547,10 @@ export class ShopManager {
         itemId: number,
         amount: number
     ): void {
+        if (shop.definition.getCurrency() === "COINS" && this.isBloodMoneyShopItem(itemId)) {
+            player.sendMessage("PK shop items cannot be sold for coins.");
+            return;
+        }
         if (!this.buysItem(shop, itemId)) {
             player.sendMessage(
                 "You cannot sell this item to this shop."
@@ -689,6 +698,12 @@ export class ShopManager {
 
     private static buysItem(shop: RuntimeShop, itemId: number): boolean {
         return this.isGeneralStore(shop) || (shop.originalAmounts.get(itemId) ?? 0) > 0;
+    }
+
+    private static isBloodMoneyShopItem(itemId: number): boolean {
+        return this.BLOOD_MONEY_SHOP_IDS.some((shopId) =>
+            ShopDefinition.forId(shopId)?.getOriginalStock().some((stock) => stock.id === itemId)
+        );
     }
 
     private static deletesItems(shop: RuntimeShop): boolean {

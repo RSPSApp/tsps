@@ -1,7 +1,51 @@
 [
-  { "id": 13, "name": "PK Weapon Shop", "icon": "Dragon claws", "stockAmount": 2000000000, "items": "Twisted Bow, Bow of Faerdhinen, Elder Maul, Dragon Claws, Voidwaker, Blade of Saeldor, Dragon Hunter Lance, Zamorakian Hasta, Vesta's Longsword, Statius's Warhammer, Abyssal Dagger, Abyssal Tentacle, Ghrazi Rapier, Inquisitor's Mace, Abyssal Bludgeon, Osmumten's Fang, Scythe of Vitur, Leaf-Bladed Battleaxe, Armadyl Crossbow, Zaryte Crossbow, Dark Bow, Heavy Ballista, Light Ballista, Magic Shortbow (i), Craw's Bow, Dragon Crossbow, Hunter's Sunlight Crossbow, Webweaver Bow, Toxic Blowpipe, Volatile Nightmare Staff, Harmonised Nightmare Staff, Eldritch Nightmare Staff, Staff of the Dead, Toxic Staff of the Dead, Master Wand, Kodai Wand, Tumeken's Shadow" },
-  { "id": 14, "name": "PK Armor Shop", "icon": "Dharok's helm", "stockAmount": 2000000000, "items": "Justiciar Armour Set, Elysian Spirit Shield, Arcane Spirit Shield, Avernic Defender, Dragonfire Shield, Dragonfire Ward, Ancient Wyvern Shield, Infernal Cape, Max Cape, Void Knight Set, Elite Void Set, Ancestral Robe Top, Ancestral Robe Bottom, Ancestral Hat, Masori Mask (f), Masori Body (f), Masori Chaps (f), Armadyl Chestplate, Armadyl Chainskirt, Armadyl Helmet, Bandos Chestplate, Bandos Tassets, Inquisitor's Great Helm, Inquisitor's Hauberk, Inquisitor's Plateskirt, Torva Full Helm, Torva Platebody, Torva Platelegs, Primordial Boots, Pegasian Boots, Eternal Boots, Echo Boots, Guardian Boots, Devout Boots, Bandos Boots, Ferocious Gloves, Zaryte Vambraces, Neitiznot Faceguard, Blessed D'hide Body, Blessed D'hide Chaps, Xerician Robe Top, Xerician Robe Bottom, Elder Chaos Top, Elder Chaos Hood, Elder Chaos Robe Bottom, Amulet of Rancour, Amulet of Torture, Amulet of Blood Fury, Necklace of Anguish, Occult Necklace, Salve Amulet (ei), Amulet of the Damned, Amulet of Avarice, Bonecrusher Necklace, Ultor Ring, Bellator Ring, Magus Ring, Venator Ring, Ring of Suffering (i), Ring of Suffering, Lightbearer, Ring of the Gods (i), Ring of the Gods, Berserker Ring (i), Archers Ring (i), Seers Ring (i), Warrior Ring (i), Tyrannical Ring (i), Ring of Shadows, Ring of Endurance, Tyrannical Ring, Treasonous Ring" },
-  { "id": 27, "name": "Pk Supplies Shop", "icon": 23685, "stockAmount": 2000000000, "originalStock": [{ "id": 4561, "amount": 2000000000, "price": 1000 }], "items": [11730, 20996, "Divine Super Combat Potion(4), Divine Bastion Potion(4), Divine Battlemage Potion(4), Divine Ranging Potion(4), Divine Magic Potion(4), Wrath Rune, Mist Rune, Dust Rune, Mud Rune, Smoke Rune, Steam Rune, Lava Rune, Aether Rune, Bluefin, Rocktail, Marlin, Halibut, Sunfire Splinter, Morrigan's Javelin, Morrigan's Throwing Axe"] },
+  {
+    "id": 13,
+    "name": "PK Weapon Shop",
+    "icon": "Dragon claws",
+    "currency": "BLOOD_MONEY",
+    "stockAmount": 2000000000,
+    "items": "Twisted Bow, Bow of Faerdhinen, Elder Maul, Dragon Claws, Voidwaker, Blade of Saeldor, Dragon Hunter Lance, Zamorakian Hasta, Vesta's Longsword, Statius's Warhammer, Abyssal Dagger, Abyssal Tentacle, Ghrazi Rapier, Inquisitor's Mace, Abyssal Bludgeon, Osmumten's Fang, Scythe of Vitur, Leaf-Bladed Battleaxe, Armadyl Crossbow, Zaryte Crossbow, Dark Bow, Heavy Ballista, Light Ballista, Magic Shortbow (i), Craw's Bow, Dragon Crossbow, Hunter's Sunlight Crossbow, Webweaver Bow, Toxic Blowpipe, Volatile Nightmare Staff, Harmonised Nightmare Staff, Eldritch Nightmare Staff, Staff of the Dead, Toxic Staff of the Dead, Master Wand, Kodai Wand, Tumeken's Shadow",
+    "prices": {
+      "Twisted Bow": 30000, "Bow of Faerdhinen": 20000, "Elder Maul": 30000, "Dragon Claws": 20000, "Voidwaker": 20000, "Blade of Saeldor": 18000, "Dragon Hunter Lance": 18000, "Zamorakian Hasta": 10000, "Vesta's Longsword": 18000, "Statius's Warhammer": 18000,
+      "Abyssal Dagger": 7500, "Abyssal Tentacle": 10000, "Ghrazi Rapier": 20000, "Inquisitor's Mace": 18000, "Abyssal Bludgeon": 15000, "Osmumten's Fang": 15000, "Scythe of Vitur": 30000, "Leaf-Bladed Battleaxe": 7500, "Armadyl Crossbow": 12000, "Zaryte Crossbow": 20000,
+      "Dark Bow": 7500, "Heavy Ballista": 12000, "Light Ballista": 7500, "Magic Shortbow (i)": 7500, "Craw's Bow": 10000, "Dragon Crossbow": 7500, "Hunter's Sunlight Crossbow": 7500, "Webweaver Bow": 10000, "Toxic Blowpipe": 10000, "Volatile Nightmare Staff": 20000,
+      "Harmonised Nightmare Staff": 20000, "Eldritch Nightmare Staff": 20000, "Staff of the Dead": 10000, "Toxic Staff of the Dead": 12000, "Master Wand": 7500, "Kodai Wand": 15000, "Tumeken's Shadow": 30000
+    }
+  },
+  {
+    "id": 14,
+    "name": "PK Armor Shop",
+    "icon": "Dharok's helm",
+    "currency": "BLOOD_MONEY",
+    "stockAmount": 2000000000,
+    "items": "Justiciar Armour Set, Elysian Spirit Shield, Arcane Spirit Shield, Avernic Defender, Dragonfire Shield, Dragonfire Ward, Ancient Wyvern Shield, Infernal Cape, Max Cape, Void Knight Set, Elite Void Set, Ancestral Robe Top, Ancestral Robe Bottom, Ancestral Hat, Masori Mask (f), Masori Body (f), Masori Chaps (f), Armadyl Chestplate, Armadyl Chainskirt, Armadyl Helmet, Bandos Chestplate, Bandos Tassets, Inquisitor's Great Helm, Inquisitor's Hauberk, Inquisitor's Plateskirt, Torva Full Helm, Torva Platebody, Torva Platelegs, Primordial Boots, Pegasian Boots, Eternal Boots, Echo Boots, Guardian Boots, Devout Boots, Bandos Boots, Ferocious Gloves, Zaryte Vambraces, Neitiznot Faceguard, Blessed D'hide Body, Blessed D'hide Chaps, Xerician Robe Top, Xerician Robe Bottom, Elder Chaos Top, Elder Chaos Hood, Elder Chaos Robe Bottom, Amulet of Rancour, Amulet of Torture, Amulet of Blood Fury, Necklace of Anguish, Occult Necklace, Salve Amulet (ei), Amulet of the Damned, Amulet of Avarice, Bonecrusher Necklace, Ultor Ring, Bellator Ring, Magus Ring, Venator Ring, Ring of Suffering (i), Ring of Suffering, Lightbearer, Ring of the Gods (i), Ring of the Gods, Berserker Ring (i), Archers Ring (i), Seers Ring (i), Warrior Ring (i), Tyrannical Ring (i), Ring of Shadows, Ring of Endurance, Tyrannical Ring, Treasonous Ring",
+    "prices": {
+      "Justiciar Armour Set": 25000, "Elysian Spirit Shield": 25000, "Arcane Spirit Shield": 20000, "Avernic Defender": 15000, "Dragonfire Shield": 7500, "Dragonfire Ward": 15000, "Ancient Wyvern Shield": 15000, "Infernal Cape": 30000, "Max Cape": 15000, "Void Knight Set": 7500,
+      "Elite Void Set": 10000, "Ancestral Robe Top": 25000, "Ancestral Robe Bottom": 25000, "Ancestral Hat": 15000, "Masori Mask (f)": 20000, "Masori Body (f)": 25000, "Masori Chaps (f)": 20000, "Armadyl Chestplate": 12000, "Armadyl Chainskirt": 12000, "Armadyl Helmet": 7500,
+      "Bandos Chestplate": 12000, "Bandos Tassets": 12000, "Inquisitor's Great Helm": 15000, "Inquisitor's Hauberk": 20000, "Inquisitor's Plateskirt": 15000, "Torva Full Helm": 25000, "Torva Platebody": 25000, "Torva Platelegs": 25000, "Primordial Boots": 10000, "Pegasian Boots": 10000,
+      "Eternal Boots": 10000, "Echo Boots": 12000, "Guardian Boots": 5000, "Devout Boots": 5000, "Bandos Boots": 5000, "Ferocious Gloves": 10000, "Zaryte Vambraces": 15000, "Neitiznot Faceguard": 10000, "Blessed D'hide Body": 7500, "Blessed D'hide Chaps": 7500,
+      "Xerician Robe Top": 5000, "Xerician Robe Bottom": 5000, "Elder Chaos Top": 7500, "Elder Chaos Hood": 5000, "Elder Chaos Robe Bottom": 7500, "Amulet of Rancour": 25000, "Amulet of Torture": 12000, "Amulet of Blood Fury": 10000, "Necklace of Anguish": 15000, "Occult Necklace": 7500,
+      "Salve Amulet (ei)": 5000, "Amulet of the Damned": 5000, "Amulet of Avarice": 7500, "Bonecrusher Necklace": 10000, "Ultor Ring": 15000, "Bellator Ring": 15000, "Magus Ring": 15000, "Venator Ring": 15000, "Ring of Suffering (i)": 10000, "Ring of Suffering": 7500,
+      "Lightbearer": 15000, "Ring of the Gods (i)": 15000, "Ring of the Gods": 10000, "Berserker Ring (i)": 10000, "Archers Ring (i)": 10000, "Seers Ring (i)": 10000, "Warrior Ring (i)": 10000, "Tyrannical Ring (i)": 10000, "Ring of Shadows": 10000, "Ring of Endurance": 15000,
+      "Tyrannical Ring": 7500, "Treasonous Ring": 7500
+    }
+  },
+  {
+    "id": 27,
+    "name": "Pk Supplies Shop",
+    "icon": 23685,
+    "currency": "BLOOD_MONEY",
+    "stockAmount": 2000000000,
+    "originalStock": [{ "id": 4561, "amount": 2000000000, "price": 1000 }],
+    "items": [11730, 20996, "Divine Super Combat Potion(4), Divine Bastion Potion(4), Divine Battlemage Potion(4), Divine Ranging Potion(4), Divine Magic Potion(4), Wrath Rune, Mist Rune, Dust Rune, Mud Rune, Smoke Rune, Steam Rune, Lava Rune, Aether Rune, Bluefin, Rocktail, Marlin, Halibut, Sunfire Splinter, Morrigan's Javelin, Morrigan's Throwing Axe"],
+    "prices": {
+      "4561": 100, "11730": 125, "20996": 150,
+      "Divine Super Combat Potion(4)": 100, "Divine Bastion Potion(4)": 100, "Divine Battlemage Potion(4)": 100, "Divine Ranging Potion(4)": 100, "Divine Magic Potion(4)": 100,
+      "Wrath Rune": 5, "Mist Rune": 1, "Dust Rune": 1, "Mud Rune": 1, "Smoke Rune": 1, "Steam Rune": 1, "Lava Rune": 1, "Aether Rune": 10,
+      "Bluefin": 20, "Rocktail": 30, "Marlin": 25, "Halibut": 30, "Sunfire Splinter": 1, "Morrigan's Javelin": 25, "Morrigan's Throwing Axe": 25
+    }
+  },
   { "id": 1, "name": "Rune Shop", "icon": "Fire rune", "stockAmount": 2000000000, "items": "Air Rune, Water Rune, Earth Rune, Fire Rune, Sunfire Rune, Mind Rune, Body Rune, Cosmic Rune, Chaos Rune, Astral Rune, Nature Rune, Law Rune, Death Rune, Blood Rune, Soul Rune" },
   { "id": 2, "name": "Food Shop", "icon": "Manta ray", "stockAmount": 2000000000, "items": "Manta Ray, Cooked Karambwan, Anglerfish, Dark Crab, Sea Turtle, Tuna Potato, Mushroom Potato, Shark, Monkfish, Swordfish, Lobster, Salmon, Trout, Shrimps, Blighted Manta Ray, Blighted Anglerfish, Blighted Karambwan, Saradomin Brew(4), Guthix Rest(4), Meat Pizza, Pineapple Pizza, Anchovy Pizza, Summer Pie, Wild Pie, Apple Pie, Admiral Pie, Chocolate Cake, Strawberry, Cooked Sweetcorn, Potato with Butter" },
   { "id": 3, "name": "Potion Shop", "icon": "Super strength(4)", "stockAmount": 2000000000, "items": "Super Combat Potion(4), Bastion Potion(4), Battlemage Potion(4), Forgotten Brew(4), Ancient Brew(4), Zamorak Brew(4), Saradomin Brew(4), Sanfew Serum(4), Anti-venom+(4), Extended Super Antifire(4), Goading Potion(4), Stamina Potion(4), Ranging Potion(4), Magic Potion(4), Super Restore(4), Blighted Super Restore(4), Prayer Potion(4), Super Attack(4), Super Strength(4), Super Defence(4), Super Energy(4), Combat Potion(4), Energy Potion(4), Antipoison(4), Attack Potion(4), Strength Potion(4), Defence Potion(4)" },

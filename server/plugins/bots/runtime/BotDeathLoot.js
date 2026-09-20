@@ -2,6 +2,7 @@
 
 const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { ItemIdentifiers } = require("../../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const { Wilderness } = require("../../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const {
   ATTR_BOT_PVP_PROFILE_ID,
   ATTR_CUSTOM_DEATH_LOOT_DROPPED,
@@ -42,6 +43,18 @@ function getProfileLootRules(profileId) {
 
 function isRealPlayer(player) {
   return player?.isRegistered?.() === true && player?.isPlayerBot?.() !== true;
+}
+
+function isRecruitedBy(victim, player) {
+  const ownerUsername = victim?.getAttribute?.(ATTR_RECRUIT_OWNER_USERNAME);
+  const username = player?.getUsername?.();
+  return typeof ownerUsername === "string" && typeof username === "string" &&
+    ownerUsername.toLowerCase() === username.toLowerCase();
+}
+
+function isEligibleBotRewardKill(killer, victim) {
+  return isRealPlayer(killer) && !isRecruitedBy(victim, killer) &&
+    Wilderness.isIn?.(killer) === true && Wilderness.isIn?.(victim) === true;
 }
 
 function shouldSuppressDefaultBotDrops(victim) {
@@ -124,7 +137,7 @@ function getOrCreateDeathLootPlan(victim, killer, runtime) {
     return plan;
   }
 
-  const canRewardKiller = isRealPlayer(killer);
+  const canRewardKiller = isEligibleBotRewardKill(killer, victim);
   const profileId = resolveProfileId(victim, runtime);
   const rules = getProfileLootRules(profileId);
   if (canRewardKiller) {

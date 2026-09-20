@@ -62,12 +62,14 @@ pub fn filter_draw_ranges(
 }
 
 pub fn parse_draw_ranges(flat: &[u32]) -> Result<Vec<DrawRange>, &'static str> {
-    if flat.len() % 3 != 0 {
+    if !flat.len().is_multiple_of(3) {
         return Err("draw range packet must contain triples");
     }
 
-    Ok(flat
-        .chunks_exact(3)
+    let (chunks, remainder) = flat.as_chunks::<3>();
+    debug_assert!(remainder.is_empty());
+    Ok(chunks
+        .iter()
         .map(|chunk| DrawRange::new(chunk[0], chunk[1], chunk[2]))
         .collect())
 }

@@ -22,6 +22,7 @@ interface RawShopDefinition {
     currency?: unknown;
     originalStock?: unknown;
     items?: unknown;
+    prices?: unknown;
     stockAmount?: unknown;
     defaultRestockTicks?: unknown;
     restockTicks?: unknown;
@@ -115,6 +116,7 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             this.parseTicks(raw.soldItemDestockTicks) ??
             ShopDefinitionLoader.GENERAL_STORE_SOLD_ITEM_DESTOCK_TICKS;
 
+        const prices = this.itemPrices(raw.prices);
         const stock: ShopStockDefinition[] = [];
         if (Array.isArray(raw.originalStock)) {
             for (const entry of raw.originalStock as RawShopStockDefinition[]) {
@@ -123,7 +125,7 @@ export class ShopDefinitionLoader extends DefinitionLoader {
                 if (!Number.isInteger(itemId) || itemId <= 0 || amount <= 0) {
                     continue;
                 }
-                const price = Number(entry?.price);
+                const price = prices.get(itemId) ?? Number(entry?.price);
                 stock.push({
                     id: itemId,
                     amount,
@@ -150,7 +152,7 @@ export class ShopDefinitionLoader extends DefinitionLoader {
                 id: itemId,
                 amount: stockAmount,
                 restockTicks: null,
-                price: null,
+                price: prices.get(itemId) ?? null,
             });
         }
 
@@ -187,6 +189,23 @@ export class ShopDefinitionLoader extends DefinitionLoader {
             }
         }
         return items;
+    }
+
+    private itemPrices(value: unknown): Map<number, number> {
+        const prices = new Map<number, number>();
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+            return prices;
+        }
+        for (const [item, rawPrice] of Object.entries(value as Record<string, unknown>)) {
+            const itemId = Number.isInteger(Number(item))
+                ? Number(item)
+                : this.itemIdForName(item);
+            const price = Number(rawPrice);
+            if (itemId !== null && itemId > 0 && Number.isFinite(price) && price > 0) {
+                prices.set(itemId, Math.floor(price));
+            }
+        }
+        return prices;
     }
 
     private itemIdForName(name: string): number | null {

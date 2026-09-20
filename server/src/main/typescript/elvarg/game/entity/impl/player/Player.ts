@@ -175,6 +175,7 @@ export class Player extends Mobile {
     private static readonly PREFERRED_LOCAL_PLAYERS = 250;
     private static readonly VIEW_DISTANCE_REGROW_CYCLES = 10;
     public skullType: SkullType;
+    private skullIconOverride: number | null = null;
     public combatSpecial: CombatSpecial;
     private recoilDamage: number;
     private vengeanceTimer = new SecondsTimer();
@@ -1325,6 +1326,20 @@ export class Player extends Mobile {
 
     public getSkullType(): SkullType {
         return this.skullType;
+    }
+
+    public getSkullIconId(): number {
+        return this.skullIconOverride ?? this.skullType.getIconId();
+    }
+
+    public setSkullIconOverride(iconId: number | null): void {
+        const normalizedIconId = Number.isInteger(iconId) && iconId >= 0 ? iconId : null;
+        if (this.skullIconOverride === normalizedIconId) {
+            return;
+        }
+
+        this.skullIconOverride = normalizedIconId;
+        this.getUpdateFlag().flag(Flag.APPEARANCE);
     }
 
     public setSkullType(skullType: SkullType) {

@@ -969,7 +969,7 @@ class ClientConnection {
       equip: displayEquipment.map((item) => item?.getId?.() ?? -1),
       equipQty: displayEquipment.map((item) => item?.getAmount?.() ?? 0),
       headIcons: {
-        skull: player.isSkulled() ? player.getSkullType().getIconId() : -1,
+        skull: player.isSkulled() ? player.getSkullIconId() : -1,
         prayer: player.getAppearance().getHeadHint(),
       },
     };

@@ -9,8 +9,10 @@ const LAST_GLOW_PRESET_ATTRIBUTE = "killstreaks:lastGlowPreset";
 
 const BASE_BLOOD_MONEY_REWARD = 150;
 const STREAK_STEP = 5;
-const STREAK_STEP_REWARD = 50;
-const STREAK_MILESTONE_REWARD = 500;
+const STREAK_STEP_REWARD = 25;
+const STREAK_MILESTONE_REWARD = 100;
+const MAX_BLOOD_MONEY_STREAK = 10;
+const RECENT_KILL_TARGET_LIMIT = 5;
 
 const GLOW_PRESETS = Object.freeze({
   off: 0,
@@ -204,7 +206,7 @@ function trackRecentKill(killer, victim) {
   if (!Array.isArray(recentKills) || !victimHost) {
     return;
   }
-  if (recentKills.length >= 1) {
+  if (recentKills.length >= RECENT_KILL_TARGET_LIMIT) {
     recentKills.shift();
   }
   recentKills.push(victimHost);
@@ -230,11 +232,12 @@ function shouldRewardPlayerKill(killer, victim) {
 }
 
 function resolveStepReward(streak) {
-  return Math.floor(Math.max(0, streak) / STREAK_STEP) * STREAK_STEP_REWARD;
+  const cappedStreak = Math.min(Math.max(0, streak), MAX_BLOOD_MONEY_STREAK);
+  return Math.floor(cappedStreak / STREAK_STEP) * STREAK_STEP_REWARD;
 }
 
 function resolveMilestoneReward(streak) {
-  if (streak <= 0 || streak % STREAK_STEP !== 0) {
+  if (streak <= 0 || streak > MAX_BLOOD_MONEY_STREAK || streak % STREAK_STEP !== 0) {
     return 0;
   }
   return Math.floor(streak / STREAK_STEP) * STREAK_MILESTONE_REWARD;
@@ -428,10 +431,7 @@ module.exports = {
       const playerKill = isEligiblePlayerKill(killer, victim);
 
       if (botKill) {
-        const progress = applyKillstreakProgressAndAnnouncements(killer);
-        awardKillstreakScaledReward(killer, victim, progress.streak, {
-          baseReward: 0,
-        });
+        applyKillstreakProgressAndAnnouncements(killer);
       }
       handleVictimDefeat(victim, { countDeath: playerKill });
       if (playerKill) {

@@ -33,7 +33,7 @@
       "SUPER_STRENGTH_4_", "RANGING_POTION_4_", "SUPER_RESTORE_4_", "RING_OF_RECOIL",
       "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
       "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN", "COOKED_KARAMBWAN",
-      "TZHAAR_KET_OM", "SHARK", "SHARK", "SHARK",
+      "TZHAAR_KET_OM", "MAGIC_SHORTBOW", "SHARK", "SHARK",
       "SHARK", "SHARK", "SHARK", "SHARK",
       "SHARK", "SHARK", "SHARK", "SHARK",
       "SHARK", "SHARK", "SHARK", "SHARK"
@@ -48,7 +48,8 @@
       "legs": "BLACK_DHIDE_CHAPS",
       "hands": "MITHRIL_GLOVES",
       "feet": "CLIMBING_BOOTS",
-      "ring": "RING_OF_RECOIL"
+      "ring": "RING_OF_RECOIL",
+      "ammo": ["RUNE_ARROW", 75]
     },
     "stats": [1, 1, 99, 80, 60, 31, 1],
     "spellbook": "NORMAL"
@@ -147,11 +148,11 @@
       ["DEATH_RUNE", 1000], ["EARTH_RUNE", 1000], ["ASTRAL_RUNE", 1000], "SHARK"
     ],
     "equipment": {
-      "head": "WARRIOR_HELM",
+      "head": "BERSERKER_HELM",
       "cape": "STRENGTH_CAPE_T_",
       "weapon": "DRAGON_SCIMITAR",
       "amulet": "AMULET_OF_GLORY",
-      "body": "RUNE_PLATEBODY",
+      "body": "FIGHTER_TORSO",
       "shield": "RUNE_DEFENDER",
       "legs": "RUNE_PLATELEGS",
       "hands": "BARROWS_GLOVES",
@@ -174,11 +175,11 @@
       ["DEATH_RUNE", 1000], ["EARTH_RUNE", 1000], ["ASTRAL_RUNE", 1000], "SHARK"
     ],
     "equipment": {
-      "head": "WARRIOR_HELM",
+      "head": "BERSERKER_HELM",
       "cape": "STRENGTH_CAPE_T_",
       "weapon": "ABYSSAL_WHIP",
       "amulet": "AMULET_OF_GLORY",
-      "body": "RUNE_PLATEBODY",
+      "body": "FIGHTER_TORSO",
       "shield": "RUNE_DEFENDER",
       "legs": "RUNE_PLATELEGS",
       "hands": "BARROWS_GLOVES",
@@ -207,7 +208,7 @@
       "amulet": "AMULET_OF_FURY",
       "body": "FIGHTER_TORSO",
       "shield": "RUNE_DEFENDER",
-      "legs": "BANDOS_TASSETS",
+      "legs": "RUNE_PLATELEGS",
       "hands": "BARROWS_GLOVES",
       "feet": "DRAGON_BOOTS",
       "ring": "RING_OF_RECOIL"
@@ -217,7 +218,7 @@
   },
   {
     "key": "MAIN_MELEE_126",
-    "name": "Main Melee",
+    "name": "Main AGS",
     "inventory": [
       "ARMADYL_GODSWORD", "SARADOMIN_BREW_4_", "SUPER_RESTORE_4_", "SUPER_RESTORE_4_",
       "DRAGON_DAGGER_P_PLUS_PLUS_", ["ASTRAL_RUNE", 1000], ["EARTH_RUNE", 1000], ["DEATH_RUNE", 1000],
@@ -230,11 +231,11 @@
     "equipment": {
       "head": "HELM_OF_NEITIZNOT",
       "cape": "FIRE_CAPE",
-      "weapon": "ABYSSAL_TENTACLE",
+      "weapon": "ABYSSAL_WHIP",
       "amulet": "AMULET_OF_FURY",
-      "body": "BANDOS_CHESTPLATE",
+      "body": "FIGHTER_TORSO",
       "shield": "RUNE_DEFENDER",
-      "legs": "BANDOS_TASSETS",
+      "legs": "RUNE_PLATELEGS",
       "hands": "BARROWS_GLOVES",
       "feet": "DRAGON_BOOTS",
       "ring": "RING_OF_RECOIL"
@@ -394,7 +395,7 @@
     "equipment": {
       "head": "VOID_MELEE_HELM",
       "cape": "FIRE_CAPE",
-      "weapon": "ABYSSAL_TENTACLE",
+      "weapon": "ABYSSAL_WHIP",
       "amulet": "AMULET_OF_FURY",
       "body": "ELITE_VOID_TOP",
       "shield": "DRAGON_DEFENDER",

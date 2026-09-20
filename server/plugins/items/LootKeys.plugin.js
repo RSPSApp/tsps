@@ -18,6 +18,7 @@ const KEY_IDS = Object.freeze([ItemIdentifiers.LOOT_KEY, ItemIdentifiers.LOOT_KE
 const KEY_ID_SET = new Set(KEY_IDS);
 const KEY_DATA = "lootKey";
 const MAX_KEYS = 5;
+const LOOT_KEY_SKULL_ICON_BASE = 7;
 const UNLOCK_ATTRIBUTE = "lootKeysUnlocked";
 const ENABLED_ATTRIBUTE = "lootKeysEnabled";
 const SETTINGS_ATTRIBUTE = "lootKeySettings";
@@ -39,6 +40,14 @@ const setLootKeysEnabled = (player, enabled) => {
   player?.setAttribute?.(ENABLED_ATTRIBUTE, enabled === true);
 };
 const countKeys = (player) => (player?.getInventory?.()?.getValidItems?.() ?? []).filter(isLootKey).length;
+const lootKeyCountByPlayer = new WeakMap();
+
+function syncLootKeySkull(player) {
+  const keyCount = countKeys(player);
+  if (lootKeyCountByPlayer.get(player) === keyCount) return;
+  lootKeyCountByPlayer.set(player, keyCount);
+  player?.setSkullIconOverride?.(keyCount ? LOOT_KEY_SKULL_ICON_BASE + keyCount : null);
+}
 
 function getSettings(player) {
   const settings = player?.getAttribute?.(SETTINGS_ATTRIBUTE);
@@ -88,6 +97,7 @@ function openKey(player, slot, expectedKey = null) {
     return false;
   }
   player.getInventory().deleteAtSlot(slot, 1);
+  syncLootKeySkull(player);
   setChestItems(player, items);
   setChestTab(player, KEY_IDS.indexOf(key.getId()));
   return true;
@@ -194,6 +204,7 @@ function giveKey(killer, key, location) {
   const receivedKey = LootKeys.reindexKey(key, LootKeys.countKeys(killer));
   if (killer.getInventory().getFreeSlots() > 0) {
     killer.getInventory().addItem(receivedKey);
+    syncLootKeySkull(killer);
     return true;
   }
   ItemOnGroundManager.registerNonGlobals(killer, receivedKey, location.clone());
@@ -234,7 +245,10 @@ function checkOrDestroy(api, event) {
   const key = event.item;
   api.sendMultiChatboxPrompt(event.player, "Destroy Loot key? The loot inside will be destroyed.", "Destroy", () => {
     const slot = event.player.getInventory().getItems().indexOf(key);
-    if (slot >= 0) event.player.getInventory().deleteAtSlot(slot, 1);
+    if (slot >= 0) {
+      event.player.getInventory().deleteAtSlot(slot, 1);
+      syncLootKeySkull(event.player);
+    }
   }, "Cancel", () => {});
 }
 
@@ -509,6 +523,10 @@ module.exports = {
     api.persistAttribute(LootKeys.SETTINGS_ATTRIBUTE);
     api.persistAttribute(LootKeys.CHEST_ATTRIBUTE);
     api.persistAttribute(LootKeys.CHEST_TAB_ATTRIBUTE);
+    api.onPlayerLogin(({ player }) => syncLootKeySkull(player));
+    // ponytail: scan the 28-slot inventory per tick; use inventory-change hooks if this becomes hot.
+    api.onPlayerProcess(({ player }) => syncLootKeySkull(player));
+    api.onPlayerLogout(({ player }) => lootKeyCountByPlayer.delete(player));
     api.onPlayerDeathItemDrop((event) => {
       if (LootKeys.countKeys(event.killer) < LootKeys.MAX_KEYS) warnedAtKeyLimit.delete(event.killer);
       if (LootKeys.hasEnabledLootKeys(event.killer) && LootKeys.countKeys(event.killer) >= LootKeys.MAX_KEYS && !warnedAtKeyLimit.has(event.killer)) {

@@ -184,7 +184,7 @@ function handleStake(event) {
   const inventorySlot = removing ? [...offer.keys()][slot] : slot;
   const item = removing ? offer.get(inventorySlot) : player.getInventory().getItems()[slot];
   if (!item?.isValid() || item.getId() !== itemId) return;
-  if (item.getId() !== COINS && !item.getDefinition().isTradeable()) {
+  if (item.getId() !== COINS && !item.isTradeable()) {
     player.sendMessage("You cannot stake that item.");
     return;
   }

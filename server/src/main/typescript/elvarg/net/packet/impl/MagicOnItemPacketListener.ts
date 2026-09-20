@@ -188,8 +188,8 @@ export class MagicOnItemPacketListener {
       return;
     }
     if (
-      !definition?.isTradeable?.() ||
-      !definition?.isSellable?.() ||
+      !item?.isTradeable?.() ||
+      !item?.isSellable?.() ||
       itemId === ItemIdentifiers.COINS ||
       definition.getHighAlchValue() <= 0 ||
       definition.getLowAlchValue() <= 0

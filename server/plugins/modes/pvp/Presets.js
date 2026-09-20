@@ -192,6 +192,14 @@ function cloneItem(item) {
     : new Item(item.getId(), item.getAmount());
 }
 
+function spawnPresetItem(item, preset) {
+  const next = cloneItem(item);
+  if (next && (PLAYER_PRESETS.list.includes(preset) || (!preset.getIsGlobal?.() && isSpawnable(next.getId())))) {
+    next.setMetaValue(Item.UNTRADEABLE_META, true);
+  }
+  return next;
+}
+
 function isSpawnable(itemId) {
   const allowed = GameConstants.ALLOWED_SPAWNS;
   if (allowed?.has) {
@@ -533,7 +541,7 @@ function applyPreset(player, preset) {
   }
 
   for (const item of preset.getInventory() ?? []) {
-    const next = cloneItem(item);
+    const next = spawnPresetItem(item, preset);
     if (!next) {
       continue;
     }
@@ -541,7 +549,7 @@ function applyPreset(player, preset) {
   }
 
   for (const item of preset.getEquipment() ?? []) {
-    const next = cloneItem(item);
+    const next = spawnPresetItem(item, preset);
     if (!next) {
       continue;
     }
@@ -730,11 +738,17 @@ module.exports = {
   isEnabled: () => presetsEnabled,
   openPresetInterface,
   shouldOpenOnDeath,
+  _test: { spawnPresetItem },
   register(api) {
     presetsEnabled = true;
     setPresetShopPricesEnabled(true);
     api.persistAttribute(CUSTOM_PRESETS_ATTRIBUTE);
     api.registerCustomInterface(INTERFACE_DEFINITION);
+    api.onCanBankItem((event) => {
+      if (!event.item?.isUntradeable?.()) return;
+      event.player.sendMessage("Preset items cannot be banked.");
+      event.allow = false;
+    });
 
     api.onInterfaceActionButton(PRESET_BUTTON_UIDS, ({ player, buttonId }) =>
       handlePresetActionButton(player, buttonId)

@@ -34,7 +34,7 @@ const copyItem = (item, amount = item.getAmount()) => ({
 });
 
 function canStore(item) {
-  return item?.isValid?.() && item.getDefinition().isTradeable() && !isBag(item);
+  return item?.isValid?.() && item.isTradeable() && !isBag(item);
 }
 
 function store(bag, item, amount = item.getAmount()) {

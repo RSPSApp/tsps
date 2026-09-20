@@ -205,7 +205,7 @@ module.exports = {
     api.registerCustomInterface(INTERFACE_DEFINITION);
 
     api.onItemDropPolicy((event) => {
-      if (event.item.getDefinition().isDropable()) return;
+      if (event.item.isDropable()) return;
       open(event.player, event.item, event.slot);
       event.handled = true;
     });

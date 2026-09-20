@@ -195,7 +195,7 @@ export class ItemOnGroundManager {
         if (player.getPrivateArea() !== item.getPrivateArea() || item.getPosition().getDistance(player.getLocation()) > 64) return false;
         if (item.getState() === State.SEEN_BY_PLAYER) return this.isOwner(player.getUsername(), item);
         return this.isOwner(player.getUsername(), item)
-            || (item.getItem().getDefinition().isTradeable() && item.getItem().getDefinition().isDropable());
+            || (item.getItem().isTradeable() && item.getItem().isDropable());
     }
 
 

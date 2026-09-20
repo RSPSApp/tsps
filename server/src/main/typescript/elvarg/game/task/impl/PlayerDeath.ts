@@ -84,7 +84,7 @@ export class PlayerDeathTask extends Task {
                         for (let item of playerItems) {
                             const dropEligible =
                                 shouldDropItemsOnDeath &&
-                                (item.getDefinition().isTradeable() || Barrows.isBarrowsItem(item.getId())) &&
+                                (item.isTradeable() || (!item.isLostOnDeath() && Barrows.isBarrowsItem(item.getId()))) &&
                                 !this.itemsToKeep.includes(item) &&
                                 this.player.getRights() !== PlayerRights.OWNER &&
                                 this.player.getRights() !== PlayerRights.DEVELOPER;
@@ -115,10 +115,11 @@ export class PlayerDeathTask extends Task {
                             }
                             // Keep tradeable items
                             if (
-                                (!item.getDefinition().isTradeable() && !Barrows.isBarrowsItem(item.getId())) ||
+                                item.isLostOnDeath() ||
+                                (!item.isTradeable() && !Barrows.isBarrowsItem(item.getId())) ||
                                 this.itemsToKeep.includes(item)
                             ) {
-                                if (!this.itemsToKeep.includes(item)) {
+                                if (!item.isLostOnDeath() && !this.itemsToKeep.includes(item)) {
                                     this.itemsToKeep.push(item);
                                 }
                                 continue;
@@ -259,7 +260,7 @@ export class PlayerDeathTask extends Task {
                 item == null ||
                 item.getId() <= 0 ||
                 item.getAmount() <= 0 ||
-                !item.getDefinition().isTradeable()
+                !item.isTradeable()
             ) {
                 continue;
             }

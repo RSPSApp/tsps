@@ -9,7 +9,6 @@ license = "MIT"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-bytemuck = "1"
 wasm-bindgen = "0.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

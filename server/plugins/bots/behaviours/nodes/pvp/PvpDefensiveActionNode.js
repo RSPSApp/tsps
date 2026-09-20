@@ -6,7 +6,8 @@ const { TeleportHandler } = require("../../../../../src/main/typescript/elvarg/g
 const { TeleportType } = require("../../../../../src/main/typescript/elvarg/game/model/teleportation/TeleportType");
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { Wilderness } = require("../../../../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
-const { queueRouteAndFlagAppearance, clearMovementRequest } = require("../../navigation/BotNavigation");
+const { CanAttackResponse } = require("../../../../../src/main/typescript/elvarg/game/content/combat/CombatFactory");
+const { queueRouteAndFlagAppearance, clearMovementRequest, peekMovementRequest } = require("../../navigation/BotNavigation");
 const { applyGeneratedPvpLoadout } = require("../../policies/PvpLoadoutPolicy");
 const { getEnabledWildernessHotspots, createHotspotAnchorLocation } = require("../../pvp/WildernessHotspotRegistry");
 
@@ -62,7 +63,6 @@ class PvpDefensiveActionNode {
     if (player.isTeleportingReturn() || player.getForceMovement() != null) return running;
 
     const combat = player.getCombat();
-    if (combat.getTarget()) combat.reset();
     player.setCombatFollowing(null);
     player.setFollowing(null);
     const home = new Location(state.home.x, state.home.y, state.home.z ?? 0);
@@ -75,6 +75,7 @@ class PvpDefensiveActionNode {
     }
     if ((atHome || arrived) && !combat.getAttacker()) {
       // Walking home while teleblocked must finish the same recovery as teleporting.
+      if (combat.getTarget()) combat.reset();
       clearMovementRequest(player);
       if (!applyGeneratedPvpLoadout(player, state, { api: this.api })) return running;
       state.virtualFoodChargesRemaining = null;
@@ -96,6 +97,7 @@ class PvpDefensiveActionNode {
         retreat.destination = createHotspotAnchorLocation(hotspots[Math.floor(Math.random() * hotspots.length)]) ?? home;
       }
       if (TeleportHandler.checkReqs(player, retreat.destination, RETREAT_TELEPORT_LEVEL)) {
+        if (combat.getTarget()) combat.reset();
         clearMovementRequest(player);
         TeleportHandler.teleport(player, retreat.destination, TeleportType.NORMAL, false);
         retreat.teleportStarted = true;
@@ -107,8 +109,15 @@ class PvpDefensiveActionNode {
         player.getMovementQueue().isMovementBlocked()) {
       clearMovementRequest(player);
       player.getMovementQueue().reset();
+      return this.fightWhileTrapped(player, state, nowMs, target);
+    }
+    const pending = peekMovementRequest(player);
+    if (pending?.noPathAttempts > 0 && pending.nextDispatchAtMs > nowMs &&
+        player.getMovementQueue().size() === 0) {
+      this.fightWhileTrapped(player, state, nowMs, target);
       return running;
     }
+    if (combat.getTarget()) combat.reset();
     player.setRunning(player.getRunEnergy() > 0);
     if (level < RETREAT_TELEPORT_LEVEL && !combat.getAttacker()) {
       queueRouteAndFlagAppearance(player, home.getX(), home.getY(), {
@@ -125,6 +134,21 @@ class PvpDefensiveActionNode {
     const targetY = location.getY() + (deep ? -RETREAT_STEP_TILES : dy * RETREAT_STEP_TILES);
     queueRouteAndFlagAppearance(player, targetX, targetY, { state, reason: "pvp_retreat" });
     return running;
+  }
+
+  fightWhileTrapped(player, state, nowMs, target) {
+    const combat = player.getCombat();
+    const attacker = combat.getAttacker() ?? target;
+    const factory = this.api.getCombatFactory();
+    if (!attacker || factory.canAttackPermission(player, attacker, false,
+        factory.getMethod(player)) !== CanAttackResponse.CAN_ATTACK) {
+      return { handled: true, status: "running" };
+    }
+    state.pvp.targetPlayer = attacker;
+    state.pvp.targetUsername = attacker.getUsername();
+    state.pvp.endsAt = Math.max(state.pvp.endsAt ?? 0, nowMs + 30000);
+    if (combat.getTarget() !== attacker) combat.attack(attacker);
+    return { handled: false, status: "running" };
   }
 }
 

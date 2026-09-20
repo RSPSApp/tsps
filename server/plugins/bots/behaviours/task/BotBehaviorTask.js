@@ -1313,50 +1313,10 @@ class BotBehaviorTask extends Task {
     if (!attacker.isRegistered?.() || (attacker.getHitpoints?.() ?? 0) <= 0) {
       return false;
     }
-    if (!Wilderness.isIn(player) || !Wilderness.isIn(attacker)) {
-      if (combat?.getTarget?.() === attacker || combat?.getAttacker?.() === attacker) {
-        combat.reset?.();
-        combat.setUnderAttack?.(null);
-      }
-      if (player.getCombatFollowing?.() === attacker) {
-        player.setCombatFollowing?.(null);
-      }
-      return false;
-    }
-    const privateArea = player.getPrivateArea?.();
-    if (attacker.getPrivateArea?.() !== privateArea) {
-      return false;
-    }
-    const isMultiEngagement = this.AreaManager.inMulti(player) && this.AreaManager.inMulti(attacker);
-    if (!isMultiEngagement) {
-      const attackerCombat = attacker.getCombat?.();
-      const attackerTarget = attackerCombat?.getTarget?.();
-      const attackerAttacker = attackerCombat?.getAttacker?.();
-      const attackerFollowing = attacker.getCombatFollowing?.();
-      const occupiedByOther =
-        (attackerTarget &&
-          attackerTarget !== player &&
-          attackerTarget.isRegistered?.() === true &&
-          (attackerTarget.getHitpoints?.() ?? 0) > 0) ||
-        (attackerAttacker &&
-          attackerAttacker !== player &&
-          attackerAttacker.isRegistered?.() === true &&
-          (attackerAttacker.getHitpoints?.() ?? 0) > 0) ||
-        (attackerFollowing &&
-          attackerFollowing !== player &&
-          attackerFollowing.isRegistered?.() === true &&
-          (attackerFollowing.getHitpoints?.() ?? 0) > 0);
-      if (occupiedByOther) {
-        return false;
-      }
-      const combatMethod = this.CombatFactory.getMethod(player);
-      if (
-        this.CombatFactory.canAttackPermission(player, attacker, false, combatMethod) !==
-        CanAttackResponse.CAN_ATTACK
-      ) {
-        return false;
-      }
-    }
+    // Core permissions cover PvP worlds, safe zones and single-combat ownership.
+    const combatMethod = this.CombatFactory.getMethod(player);
+    if (this.CombatFactory.canAttackPermission(player, attacker, false, combatMethod) !==
+        CanAttackResponse.CAN_ATTACK) return false;
 
     const currentTarget = combat?.getTarget?.();
     if (currentTarget) {

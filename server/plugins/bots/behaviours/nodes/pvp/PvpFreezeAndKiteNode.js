@@ -2,7 +2,7 @@
 
 const { CombatSpells } = require("../../../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
 const { MagicSpellbook } = require("../../../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
-const { Equipment } = require("../../../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
+const { CombatType } = require("../../../../../src/main/typescript/elvarg/game/content/combat/CombatType");
 const { Location } = require("../../../../../src/main/typescript/elvarg/game/model/Location");
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { WeaponInterfaces } = require("../../../../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaces");
@@ -105,47 +105,57 @@ class PvpFreezeAndKiteNode {
     const playerLoc = player?.getLocation?.();
     const targetLoc = target?.getLocation?.();
     if (!combat || !playerLoc || !targetLoc || playerLoc.getZ() !== targetLoc.getZ()) return false;
-    if (player.getTimers?.().has?.(TimerKey.FREEZE) ||
-        playerLoc.getDistance(targetLoc) > 2) return false;
+    if (player.getTimers?.().has?.(TimerKey.FREEZE)) return false;
     if (combat.getTarget?.() !== target && combat.getAttacker?.() !== target) return false;
 
-    const attackReady = combat.willAttackBeReadyIn?.(1) === true;
-    const sameTile = playerLoc.getX() === targetLoc.getX() && playerLoc.getY() === targetLoc.getY();
-    const canDeathDot =
-      Number(profile?.confidenceTier ?? 0) >= 3 &&
-      state?.pvp?.preferredCombatStyle === "hybrid" &&
-      target.getTimers?.().has?.(TimerKey.FREEZE) === true;
-
-    if (canDeathDot && !attackReady && !sameTile) {
-      return this.moveCombatStep(player, targetLoc.getX(), targetLoc.getY(), {
-        state,
-        nowMs,
-        basicPather: true,
-        maxRouteSegmentTiles: 2,
-        reason: "pvp_death_dot",
-      });
-    }
-
-    if (!(canDeathDot && attackReady && sameTile) &&
-        (combat.getAttackDelay?.() < 2 || Math.random() > Number(profile?.combatMoveChance ?? 0))) {
+    const delay = combat.getAttackDelay();
+    const distance = Math.max(Math.abs(playerLoc.getX() - targetLoc.getX()),
+      Math.abs(playerLoc.getY() - targetLoc.getY()));
+    const method = combat.resolveMethodForCurrentCycle();
+    const melee = method.type() === CombatType.MELEE;
+    const targetMelee = target.getCombat().resolveMethodForCurrentCycle().type() === CombatType.MELEE;
+    const canDeathDot = Number(profile?.confidenceTier ?? 0) >= 3 &&
+      state?.pvp?.preferredCombatStyle === "hybrid" && distance <= 1 &&
+      target.getTimers().has(TimerKey.FREEZE);
+    let desiredDistance;
+    let reason;
+    if (canDeathDot) {
+      desiredDistance = delay > 1 ? 0 : 1;
+      reason = delay > 1 ? "pvp_death_dot" : "pvp_death_dot_step_out";
+    } else if (delay > 1 && targetMelee) {
+      // One tile out of melee reach; ranged styles keep a modest firing distance.
+      desiredDistance = melee ? 2 : Math.min(3, method.attackDistance(player));
+      reason = melee ? "pvp_step_back" : "pvp_kite";
+      if (distance > desiredDistance) return false;
+    } else {
+      // Let ordinary combat following close the gap for the next hit.
       return false;
     }
-
-    const start = Math.floor(Math.random() * 8);
+    if (distance === desiredDistance) {
+      if (delay > 1) {
+        player.getMovementQueue().reset();
+        combat.preserveMovementThisCycle();
+      }
+      return false;
+    }
+    // Returning from underneath is mandatory; initiating a tactic depends on skill.
+    if (distance !== 0 && Math.random() > Number(profile?.combatMoveChance ?? 0)) return false;
     const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
-    for (let index = 0; index < offsets.length; index++) {
-      const [dx, dy] = offsets[(start + index) % offsets.length];
-      const tile = new Location(targetLoc.getX() + dx, targetLoc.getY() + dy, targetLoc.getZ());
-      if (tile.getX() === playerLoc.getX() && tile.getY() === playerLoc.getY()) continue;
-      if (playerLoc.getDistance(tile) > 1) continue;
-      if (this.regionManager?.blocked?.(tile, null) || this.regionManager?.isWater?.(tile)) continue;
-      return this.moveCombatStep(player, tile.getX(), tile.getY(), {
-        state,
-        nowMs,
-        basicPather: true,
-        maxRouteSegmentTiles: 2,
-        reason: sameTile ? "pvp_death_dot_step_out" : "pvp_between_hits",
-      });
+    const candidates = offsets.map(([dx, dy]) => {
+      const tile = new Location(playerLoc.getX() + dx, playerLoc.getY() + dy, playerLoc.getZ());
+      const tx = Math.abs(tile.getX() - targetLoc.getX());
+      const ty = Math.abs(tile.getY() - targetLoc.getY());
+      return { tile, distance: Math.max(tx, ty), diagonal: tx > 0 && ty > 0 };
+    }).filter((candidate) =>
+      Math.abs(candidate.distance - desiredDistance) < Math.abs(distance - desiredDistance) &&
+      !(desiredDistance === 1 && candidate.diagonal) &&
+      !this.regionManager.blocked(candidate.tile, player.getPrivateArea()) &&
+      !this.regionManager.isWater(candidate.tile)
+    ).sort((a, b) => Math.abs(a.distance - desiredDistance) - Math.abs(b.distance - desiredDistance));
+    for (const { tile } of candidates) {
+      if (this.moveCombatStep(player, tile.getX(), tile.getY(), {
+        state, nowMs, basicPather: false, maxRouteSegmentTiles: 1, reason,
+      })) return true;
     }
     return false;
   }
@@ -156,6 +166,18 @@ class PvpFreezeAndKiteNode {
     const result = dispatchMovementRequest(player, request, options.state);
     if (peekMovementRequest(player) === request) clearMovementRequest(player);
     if (!result?.hasRoute) return false;
+    // A blocked adjacent tile must not turn a combat step into a long detour.
+    let previous = player.getLocation();
+    let steps = 0;
+    for (const point of player.getMovementQueue().pointsReturn()) {
+      steps += Math.max(Math.abs(point.position.getX() - previous.getX()),
+        Math.abs(point.position.getY() - previous.getY()));
+      previous = point.position;
+    }
+    if (steps > 1) {
+      player.getMovementQueue().reset();
+      return false;
+    }
     player.getCombat().preserveMovementThisCycle();
     return true;
   }

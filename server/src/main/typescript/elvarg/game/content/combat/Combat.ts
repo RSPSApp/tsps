@@ -211,7 +211,7 @@ export class Combat {
 
         this.character.setMobileInteraction(target);
 
-        if (this.manualMovementCycle === cycle && this.character.getMovementQueue().size() > 0) {
+        if (this.manualMovementCycle === cycle) {
             return;
         }
 

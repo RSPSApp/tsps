@@ -1,6 +1,9 @@
 "use strict";
 
 const { applyPreset, getGlobalPresetByKey } = require("../../../modes/pvp/Presets");
+const { GameConstants } = require("../../../../src/main/typescript/elvarg/game/GameConstants");
+const fs = require("fs");
+const path = require("path");
 const { Presetable } = require("../../../../src/main/typescript/elvarg/game/content/presets/Presetable");
 const { CombatSpells } = require("../../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
 const { Item } = require("../../../../src/main/typescript/elvarg/game/model/Item");
@@ -13,109 +16,62 @@ const { isFoodItem } = require("../../../items/Food.plugin");
 const ICE_BARRAGE_SPELL_ID = 12891;
 const ICE_BLITZ_SPELL_ID = CombatSpells.ICE_BLITZ.spellId();
 const ICE_BARRAGE_COMBAT_SPELL_ID = CombatSpells.ICE_BARRAGE.spellId();
-const WIND_STRIKE_SPELL_ID = CombatSpells.WIND_STRIKE.spellId();
-const WATER_STRIKE_SPELL_ID = CombatSpells.WATER_STRIKE.spellId();
-const EARTH_STRIKE_SPELL_ID = CombatSpells.EARTH_STRIKE.spellId();
-const FIRE_STRIKE_SPELL_ID = CombatSpells.FIRE_STRIKE.spellId();
-const WIND_BOLT_SPELL_ID = CombatSpells.WIND_BOLT.spellId();
-const WATER_BOLT_SPELL_ID = CombatSpells.WATER_BOLT.spellId();
-const EARTH_BOLT_SPELL_ID = CombatSpells.EARTH_BOLT.spellId();
 const FIRE_BOLT_SPELL_ID = CombatSpells.FIRE_BOLT.spellId();
-const WIND_BLAST_SPELL_ID = CombatSpells.WIND_BLAST.spellId();
-const WATER_BLAST_SPELL_ID = CombatSpells.WATER_BLAST.spellId();
-const EARTH_BLAST_SPELL_ID = CombatSpells.EARTH_BLAST.spellId();
 const FIRE_BLAST_SPELL_ID = CombatSpells.FIRE_BLAST.spellId();
-const WIND_WAVE_SPELL_ID = CombatSpells.WIND_WAVE.spellId();
-const WATER_WAVE_SPELL_ID = CombatSpells.WATER_WAVE.spellId();
-const EARTH_WAVE_SPELL_ID = CombatSpells.EARTH_WAVE.spellId();
-const FIRE_WAVE_SPELL_ID = CombatSpells.FIRE_WAVE.spellId();
-const ANCIENT_AUTOCAST_STAVES = Object.freeze([
-  ItemIdentifiers.ANCIENT_STAFF,
-]);
-const REGULAR_AUTOCAST_STAVES = Object.freeze([
-  ItemIdentifiers.STAFF_OF_AIR,
-  ItemIdentifiers.STAFF_OF_WATER,
-  ItemIdentifiers.STAFF_OF_EARTH,
-  ItemIdentifiers.STAFF_OF_FIRE,
-  ItemIdentifiers.MAGIC_STAFF,
-  ItemIdentifiers.BATTLESTAFF,
-  ItemIdentifiers.AIR_BATTLESTAFF,
-  ItemIdentifiers.WATER_BATTLESTAFF,
-  ItemIdentifiers.EARTH_BATTLESTAFF,
-  ItemIdentifiers.FIRE_BATTLESTAFF,
-  ItemIdentifiers.MYSTIC_AIR_STAFF,
-  ItemIdentifiers.MYSTIC_WATER_STAFF,
-  ItemIdentifiers.MYSTIC_EARTH_STAFF,
-  ItemIdentifiers.MYSTIC_FIRE_STAFF,
-]);
+const WIND_BLAST_SPELL_ID = CombatSpells.WIND_BLAST.spellId();
+function loadBotLoadoutDefinitions() {
+  const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "pvp-bot-loadouts.json");
+  const definitions = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!definitions || typeof definitions !== "object" || Array.isArray(definitions)) {
+    throw new Error("[pvp bot loadouts] expected an object");
+  }
+  if (!Array.isArray(definitions.presetGroups) || !definitions.pools ||
+      typeof definitions.pools !== "object") {
+    throw new Error("[pvp bot loadouts] missing presetGroups or pools");
+  }
+  return definitions;
+}
 
-const REGULAR_MAGIC_PACKAGES = Object.freeze([
-  Object.freeze({
-    weight: 2,
-    style: "air",
-    staffs: Object.freeze([
-      ItemIdentifiers.STAFF_OF_AIR,
-      ItemIdentifiers.AIR_BATTLESTAFF,
-      ItemIdentifiers.MYSTIC_AIR_STAFF,
-    ]),
-    strikeSpellId: WIND_STRIKE_SPELL_ID,
-    boltSpellId: WIND_BOLT_SPELL_ID,
-    blastSpellId: WIND_BLAST_SPELL_ID,
-    waveSpellId: WIND_WAVE_SPELL_ID,
-  }),
-  Object.freeze({
-    weight: 2,
-    style: "water",
-    staffs: Object.freeze([
-      ItemIdentifiers.STAFF_OF_WATER,
-      ItemIdentifiers.WATER_BATTLESTAFF,
-      ItemIdentifiers.MYSTIC_WATER_STAFF,
-    ]),
-    strikeSpellId: WATER_STRIKE_SPELL_ID,
-    boltSpellId: WATER_BOLT_SPELL_ID,
-    blastSpellId: WATER_BLAST_SPELL_ID,
-    waveSpellId: WATER_WAVE_SPELL_ID,
-  }),
-  Object.freeze({
-    weight: 2,
-    style: "earth",
-    staffs: Object.freeze([
-      ItemIdentifiers.STAFF_OF_EARTH,
-      ItemIdentifiers.EARTH_BATTLESTAFF,
-      ItemIdentifiers.MYSTIC_EARTH_STAFF,
-    ]),
-    strikeSpellId: EARTH_STRIKE_SPELL_ID,
-    boltSpellId: EARTH_BOLT_SPELL_ID,
-    blastSpellId: EARTH_BLAST_SPELL_ID,
-    waveSpellId: EARTH_WAVE_SPELL_ID,
-  }),
-  Object.freeze({
-    weight: 3,
-    style: "fire",
-    staffs: Object.freeze([
-      ItemIdentifiers.STAFF_OF_FIRE,
-      ItemIdentifiers.FIRE_BATTLESTAFF,
-      ItemIdentifiers.MYSTIC_FIRE_STAFF,
-    ]),
-    strikeSpellId: FIRE_STRIKE_SPELL_ID,
-    boltSpellId: FIRE_BOLT_SPELL_ID,
-    blastSpellId: FIRE_BLAST_SPELL_ID,
-    waveSpellId: FIRE_WAVE_SPELL_ID,
-  }),
-  Object.freeze({
-    weight: 1,
-    style: "arcane",
-    staffs: Object.freeze([
-      ItemIdentifiers.MAGIC_STAFF,
-      ItemIdentifiers.BATTLESTAFF,
-    ]),
-    strikeSpellId: FIRE_STRIKE_SPELL_ID,
-    boltSpellId: FIRE_BOLT_SPELL_ID,
-    blastSpellId: FIRE_BLAST_SPELL_ID,
-    waveSpellId: FIRE_WAVE_SPELL_ID,
-  }),
-]);
+const BOT_LOADOUT_DEFINITIONS = loadBotLoadoutDefinitions();
 
+function pool(name) {
+  const entries = BOT_LOADOUT_DEFINITIONS.pools[name];
+  if (!Array.isArray(entries)) throw new Error("[pvp bot loadouts] unknown pool " + name);
+  return Object.freeze(entries.map((key) => {
+    const id = ItemIdentifiers[key];
+    if (!Number.isInteger(id)) throw new Error(
+      "[pvp bot loadouts] pool " + name + " has unknown ItemIdentifiers key " + key
+    );
+    return id;
+  }));
+}
+
+function spellId(key) {
+  const spell = CombatSpells[key];
+  if (!spell || typeof spell.spellId !== "function") {
+    throw new Error("[pvp bot loadouts] unknown CombatSpells key " + key);
+  }
+  return spell.spellId();
+}
+
+function magicPackages(definitions, spellCount) {
+  if (!Array.isArray(definitions)) throw new Error("[pvp bot loadouts] magic packages must be an array");
+  return Object.freeze(definitions.map((definition) => {
+    if (!Array.isArray(definition.spells) || definition.spells.length !== spellCount) {
+      throw new Error("[pvp bot loadouts] " + definition.style + " has invalid spell list");
+    }
+    const spells = definition.spells.map(spellId);
+    return Object.freeze({
+      weight: Number(definition.weight), style: definition.style, staffs: pool(definition.staffPool),
+      strikeSpellId: spells[0], boltSpellId: spells[spellCount === 4 ? 1 : 0],
+      blastSpellId: spells[spellCount === 4 ? 2 : 1], waveSpellId: spells[3],
+    });
+  }));
+}
+
+const ANCIENT_AUTOCAST_STAVES = pool("ancient_autocast_staves");
+const REGULAR_AUTOCAST_STAVES = pool("regular_autocast_staves");
+const REGULAR_MAGIC_PACKAGES = magicPackages(BOT_LOADOUT_DEFINITIONS.regularMagicPackages, 4);
 function weightedPick(definitions, rng = Math.random) {
   if (!Array.isArray(definitions) || definitions.length === 0) {
     return null;
@@ -148,34 +104,9 @@ function choose(values, rng = Math.random) {
   return values[Math.floor(rng() * values.length)] ?? null;
 }
 
-const BOT_PRESET_GROUPS = Object.freeze([
-  Object.freeze({
-    id: "main_126",
-    weight: 30,
-    presetKeys: Object.freeze([
-      "MAIN_HYBRID_126", "MAIN_RUNE_126", "MAIN_MELEE_126", "MAIN_RCB_TANK_126", "DHAROK_126",
-      "MAIN_BARRAGE_126", "VOID_RANGER_126", "VOID_MELEE_126", "KARILS_TANK_126", "MAIN_TRIBRID_126",
-    ]),
-  }),
-  Object.freeze({
-    id: "pure_1_def",
-    weight: 30,
-    presetKeys: Object.freeze([
-      "DDS_PURE_M_73", "DDS_PURE_R_73", "G_MAULER_70", "NH_PURE_83", "OBBY_MAULER_57",
-    ]),
-  }),
-  Object.freeze({
-    id: "tank_45_def",
-    weight: 15,
-    presetKeys: Object.freeze(["ATT_60_ZERKER_94", "ATT_70_ZERKER_97"]),
-  }),
-  Object.freeze({
-    id: "tank_70_def",
-    weight: 15,
-    presetKeys: Object.freeze(["MAIN_RCB_TANK_70"]),
-  }),
-  Object.freeze({ id: "random", weight: 10, presetKeys: Object.freeze([]) }),
-]);
+const BOT_PRESET_GROUPS = Object.freeze(BOT_LOADOUT_DEFINITIONS.presetGroups.map((group) =>
+  Object.freeze({ ...group, presetKeys: Object.freeze([...group.presetKeys]) })
+));
 
 function selectBotPreset(state, rng = Math.random) {
   const pvp = state?.pvp;
@@ -237,246 +168,27 @@ function fillFood(inventory, foodId, count) {
   }
 }
 
-const MAGE_HATS = Object.freeze([
-  ItemIdentifiers.SKELETAL_HELM,
-  ItemIdentifiers.SKELETAL_HELM_2,
-  ItemIdentifiers.MYSTIC_HAT,
-  ItemIdentifiers.MYSTIC_HAT_DARK_,
-  ItemIdentifiers.MYSTIC_HAT_LIGHT_,
-  ItemIdentifiers.MYSTIC_HAT_DUSK_,
-  ItemIdentifiers.INFINITY_HAT,
-  ItemIdentifiers.SPLITBARK_HELM,
-  ItemIdentifiers.GHOSTLY_HOOD,
-  ItemIdentifiers.ELDER_CHAOS_HOOD,
-  ItemIdentifiers.DAGONHAI_HAT,
-]);
-
-const MAGE_BODIES = Object.freeze([
-  ItemIdentifiers.SKELETAL_TOP,
-  ItemIdentifiers.SKELETAL_TOP_2,
-  ItemIdentifiers.MYSTIC_ROBE_TOP,
-  ItemIdentifiers.MYSTIC_ROBE_TOP_DARK_,
-  ItemIdentifiers.MYSTIC_ROBE_TOP_LIGHT_,
-  ItemIdentifiers.MYSTIC_ROBE_TOP_DUSK_,
-  ItemIdentifiers.INFINITY_TOP,
-  ItemIdentifiers.SPLITBARK_BODY,
-  ItemIdentifiers.GHOSTLY_ROBE,
-  ItemIdentifiers.ELDER_CHAOS_TOP,
-  ItemIdentifiers.DAGONHAI_ROBE_TOP,
-]);
-
-const MAGE_LEGS = Object.freeze([
-  ItemIdentifiers.SKELETAL_BOTTOMS,
-  ItemIdentifiers.SKELETAL_BOTTOMS_2,
-  ItemIdentifiers.MYSTIC_ROBE_BOTTOM,
-  ItemIdentifiers.MYSTIC_ROBE_BOTTOM_DARK_,
-  ItemIdentifiers.MYSTIC_ROBE_BOTTOM_LIGHT_,
-  ItemIdentifiers.MYSTIC_ROBE_BOTTOM_DUSK_,
-  ItemIdentifiers.INFINITY_BOTTOMS,
-  ItemIdentifiers.SPLITBARK_LEGS,
-  ItemIdentifiers.GHOSTLY_ROBE,
-  ItemIdentifiers.ELDER_CHAOS_ROBE,
-  ItemIdentifiers.DAGONHAI_ROBE_BOTTOM,
-]);
-
-const MAGE_GLOVES = Object.freeze([
-  ItemIdentifiers.SKELETAL_GLOVES,
-  ItemIdentifiers.SKELETAL_GLOVES_2,
-  ItemIdentifiers.MYSTIC_GLOVES,
-  ItemIdentifiers.MYSTIC_GLOVES_DARK_,
-  ItemIdentifiers.MYSTIC_GLOVES_LIGHT_,
-  ItemIdentifiers.MYSTIC_GLOVES_DUSK_,
-  ItemIdentifiers.INFINITY_GLOVES,
-  ItemIdentifiers.SPLITBARK_GAUNTLETS,
-  ItemIdentifiers.GHOSTLY_GLOVES,
-]);
-
-const MAGE_BOOTS = Object.freeze([
-  ItemIdentifiers.SKELETAL_BOOTS,
-  ItemIdentifiers.SKELETAL_BOOTS_2,
-  ItemIdentifiers.MYSTIC_BOOTS,
-  ItemIdentifiers.MYSTIC_BOOTS_DARK_,
-  ItemIdentifiers.MYSTIC_BOOTS_LIGHT_,
-  ItemIdentifiers.MYSTIC_BOOTS_DUSK_,
-  ItemIdentifiers.INFINITY_BOOTS,
-  ItemIdentifiers.SPLITBARK_BOOTS,
-  ItemIdentifiers.GHOSTLY_BOOTS,
-]);
-
-const MAGE_CAPES = Object.freeze([
-  ItemIdentifiers.SARADOMIN_CAPE,
-  ItemIdentifiers.ZAMORAK_CAPE,
-  ItemIdentifiers.GUTHIX_CAPE,
-  ItemIdentifiers.GHOSTLY_CLOAK,
-  ItemIdentifiers.AVAS_ACCUMULATOR,
-]);
-
-const MAGE_OFFHANDS = Object.freeze([
-  ItemIdentifiers.UNHOLY_BOOK,
-  ItemIdentifiers.BOOK_OF_DARKNESS,
-]);
-
-const MAGE_STAVES = Object.freeze([
-  ...ANCIENT_AUTOCAST_STAVES,
-  ...REGULAR_AUTOCAST_STAVES,
-]);
-
-const RANGE_HEADS = Object.freeze([
-  ItemIdentifiers.COIF,
-  ItemIdentifiers.GREEN_HAT,
-  ItemIdentifiers.GREY_HAT,
-  ItemIdentifiers.BLUE_HAT,
-  ItemIdentifiers.RED_HAT,
-  ItemIdentifiers.ZAMORAK_COIF,
-  ItemIdentifiers.GUTHIX_COIF,
-  ItemIdentifiers.SARADOMIN_COIF,
-  ItemIdentifiers.ANCIENT_COIF,
-  ItemIdentifiers.BANDOS_COIF,
-  ItemIdentifiers.ARMADYL_COIF,
-]);
-
-const RANGE_BODIES = Object.freeze([
-  ItemIdentifiers.LEATHER_BODY,
-  ItemIdentifiers.STUDDED_BODY,
-  ItemIdentifiers.GREEN_DHIDE_BODY,
-  ItemIdentifiers.BLUE_DHIDE_BODY,
-  ItemIdentifiers.RED_DHIDE_BODY,
-  ItemIdentifiers.BLACK_DHIDE_BODY,
-  ItemIdentifiers.SPINED_BODY,
-  ItemIdentifiers.SNAKESKIN_BODY,
-  ItemIdentifiers.ZAMORAK_DHIDE,
-  ItemIdentifiers.GUTHIX_DRAGONHIDE,
-  ItemIdentifiers.SARADOMIN_DHIDE,
-  ItemIdentifiers.ANCIENT_DHIDE,
-  ItemIdentifiers.BANDOS_DHIDE,
-  ItemIdentifiers.ARMADYL_DHIDE,
-]);
-
-const RANGE_LEGS = Object.freeze([
-  ItemIdentifiers.STUDDED_CHAPS,
-  ItemIdentifiers.GREEN_DHIDE_CHAPS,
-  ItemIdentifiers.BLUE_DHIDE_CHAPS,
-  ItemIdentifiers.RED_DHIDE_CHAPS,
-  ItemIdentifiers.BLACK_DHIDE_CHAPS,
-  ItemIdentifiers.SPINED_CHAPS,
-  ItemIdentifiers.SNAKESKIN_CHAPS,
-  ItemIdentifiers.ZAMORAK_CHAPS,
-  ItemIdentifiers.GUTHIX_CHAPS,
-  ItemIdentifiers.SARADOMIN_CHAPS,
-  ItemIdentifiers.ANCIENT_CHAPS,
-  ItemIdentifiers.BANDOS_CHAPS,
-  ItemIdentifiers.ARMADYL_CHAPS,
-]);
-
-const RANGE_GLOVES = Object.freeze([
-  ItemIdentifiers.GREEN_DHIDE_VAMB,
-  ItemIdentifiers.BLUE_DHIDE_VAMB,
-  ItemIdentifiers.RED_DHIDE_VAMB,
-  ItemIdentifiers.BLACK_DHIDE_VAMB,
-  ItemIdentifiers.SPINED_GLOVES,
-  ItemIdentifiers.SNAKESKIN_VAMBRACES,
-  ItemIdentifiers.ZAMORAK_BRACERS,
-  ItemIdentifiers.GUTHIX_BRACERS,
-  ItemIdentifiers.SARADOMIN_BRACERS,
-  ItemIdentifiers.ANCIENT_BRACERS,
-  ItemIdentifiers.BANDOS_BRACERS,
-  ItemIdentifiers.ARMADYL_BRACERS,
-  ItemIdentifiers.MITHRIL_GLOVES,
-  ItemIdentifiers.BARROWS_GLOVES,
-]);
-
-const RANGE_BOOTS = Object.freeze([
-  ItemIdentifiers.CLIMBING_BOOTS,
-  ItemIdentifiers.SNAKESKIN_BOOTS,
-  ItemIdentifiers.SPINED_BOOTS,
-  ItemIdentifiers.ANCIENT_DHIDE_BOOTS,
-  ItemIdentifiers.BANDOS_DHIDE_BOOTS,
-  ItemIdentifiers.GUTHIX_DHIDE_BOOTS,
-  ItemIdentifiers.ARMADYL_DHIDE_BOOTS,
-  ItemIdentifiers.SARADOMIN_DHIDE_BOOTS,
-  ItemIdentifiers.ZAMORAK_DHIDE_BOOTS,
-]);
-
-const RANGE_CAPES = Object.freeze([
-  ItemIdentifiers.AVAS_ACCUMULATOR,
-  ItemIdentifiers.OBSIDIAN_CAPE,
-]);
-
-const BLACK_MASKS = Object.freeze([
-  ItemIdentifiers.BLACK_MASK,
-]);
-
-const F2P_CAPES = Object.freeze([
-  ItemIdentifiers.BLACK_CAPE,
-  ItemIdentifiers.RED_CAPE,
-]);
-
-const F2P_RANGE_HEADS = Object.freeze([
-  ItemIdentifiers.COIF,
-  ItemIdentifiers.GREEN_HAT,
-  ItemIdentifiers.GREY_HAT,
-  ItemIdentifiers.BLUE_HAT,
-  ItemIdentifiers.RED_HAT,
-]);
-
-const F2P_RANGE_BODIES = Object.freeze([
-  ItemIdentifiers.LEATHER_BODY,
-  ItemIdentifiers.HARDLEATHER_BODY,
-  ItemIdentifiers.STUDDED_BODY,
-  ItemIdentifiers.GREEN_DHIDE_BODY,
-]);
-
-const F2P_RANGE_LEGS = Object.freeze([
-  ItemIdentifiers.STUDDED_CHAPS,
-  ItemIdentifiers.GREEN_DHIDE_CHAPS,
-]);
-
-const F2P_MAGE_HEADS = Object.freeze([
-  ItemIdentifiers.WIZARD_HAT,
-  ItemIdentifiers.BLUE_WIZARD_HAT,
-]);
-
-const F2P_MAGE_BODIES = Object.freeze([
-  ItemIdentifiers.BLUE_WIZARD_ROBE,
-  ItemIdentifiers.ZAMORAK_ROBE_TOP,
-  ItemIdentifiers.MONKS_ROBE_TOP,
-]);
-
-const F2P_MAGE_LEGS = Object.freeze([
-  ItemIdentifiers.ZAMORAK_ROBE_LEGS,
-  ItemIdentifiers.MONKS_ROBE,
-]);
-
-const HYBRID_MAGE_TOPS = Object.freeze([
-  ItemIdentifiers.SKELETAL_TOP,
-  ItemIdentifiers.SKELETAL_TOP_2,
-  ItemIdentifiers.MYSTIC_ROBE_TOP,
-  ItemIdentifiers.MYSTIC_ROBE_TOP_DARK_,
-  ItemIdentifiers.MYSTIC_ROBE_TOP_LIGHT_,
-  ItemIdentifiers.INFINITY_TOP,
-  ItemIdentifiers.SPLITBARK_BODY,
-  ItemIdentifiers.GHOSTLY_ROBE,
-  ItemIdentifiers.ELDER_CHAOS_TOP,
-  ItemIdentifiers.DAGONHAI_ROBE_TOP,
-]);
-
-const HYBRID_RANGE_LEGS = Object.freeze([
-  ItemIdentifiers.SKELETAL_BOTTOMS,
-  ItemIdentifiers.SKELETAL_BOTTOMS_2,
-  ItemIdentifiers.MYSTIC_ROBE_BOTTOM,
-  ItemIdentifiers.SPLITBARK_LEGS,
-  ItemIdentifiers.BLACK_DHIDE_CHAPS,
-  ItemIdentifiers.RED_DHIDE_CHAPS,
-  ItemIdentifiers.BLUE_DHIDE_CHAPS,
-  ItemIdentifiers.SPINED_CHAPS,
-  ItemIdentifiers.ANCIENT_CHAPS,
-  ItemIdentifiers.BANDOS_CHAPS,
-  ItemIdentifiers.ARMADYL_CHAPS,
-  ItemIdentifiers.GUTHIX_CHAPS,
-  ItemIdentifiers.SARADOMIN_CHAPS,
-  ItemIdentifiers.ZAMORAK_CHAPS,
-]);
-
+const MAGE_HATS = pool("mage_hats");
+const MAGE_GLOVES = pool("mage_gloves");
+const MAGE_BOOTS = pool("mage_boots");
+const MAGE_CAPES = pool("mage_capes");
+const MAGE_OFFHANDS = pool("mage_offhands");
+const RANGE_HEADS = pool("range_heads");
+const RANGE_BODIES = pool("range_bodies");
+const RANGE_LEGS = pool("range_legs");
+const RANGE_GLOVES = pool("range_gloves");
+const RANGE_BOOTS = pool("range_boots");
+const RANGE_CAPES = pool("range_capes");
+const BLACK_MASKS = pool("black_masks");
+const F2P_CAPES = pool("f2p_capes");
+const F2P_RANGE_HEADS = pool("f2p_range_heads");
+const F2P_RANGE_BODIES = pool("f2p_range_bodies");
+const F2P_RANGE_LEGS = pool("f2p_range_legs");
+const F2P_MAGE_HEADS = pool("f2p_mage_heads");
+const F2P_MAGE_BODIES = pool("f2p_mage_bodies");
+const F2P_MAGE_LEGS = pool("f2p_mage_legs");
+const HYBRID_MAGE_TOPS = pool("hybrid_mage_tops");
+const HYBRID_RANGE_LEGS = pool("hybrid_range_legs");
 function chooseHybridWearSet() {
   return {
     head: choose([
@@ -705,36 +417,7 @@ function buildInitiateRangeInventory(specWeaponId, ammoAmount = 180, options = {
   return inventory.slice(0, 28);
 }
 
-const F2P_MAGIC_PACKAGES = Object.freeze([
-  Object.freeze({
-    weight: 2,
-    style: "air",
-    staffs: Object.freeze([ItemIdentifiers.STAFF_OF_AIR]),
-    boltSpellId: WIND_BOLT_SPELL_ID,
-    blastSpellId: WIND_BLAST_SPELL_ID,
-  }),
-  Object.freeze({
-    weight: 2,
-    style: "water",
-    staffs: Object.freeze([ItemIdentifiers.STAFF_OF_WATER]),
-    boltSpellId: WATER_BOLT_SPELL_ID,
-    blastSpellId: WATER_BLAST_SPELL_ID,
-  }),
-  Object.freeze({
-    weight: 2,
-    style: "earth",
-    staffs: Object.freeze([ItemIdentifiers.STAFF_OF_EARTH]),
-    boltSpellId: EARTH_BOLT_SPELL_ID,
-    blastSpellId: EARTH_BLAST_SPELL_ID,
-  }),
-  Object.freeze({
-    weight: 3,
-    style: "fire",
-    staffs: Object.freeze([ItemIdentifiers.STAFF_OF_FIRE]),
-    boltSpellId: FIRE_BOLT_SPELL_ID,
-    blastSpellId: FIRE_BLAST_SPELL_ID,
-  }),
-]);
+const F2P_MAGIC_PACKAGES = magicPackages(BOT_LOADOUT_DEFINITIONS.f2pMagicPackages, 2);
 
 function buildF2pMagicPackage(options = {}) {
   const {
@@ -863,15 +546,7 @@ function isEliteProfile(profile) {
 }
 
 function chooseEliteSpecWeapon() {
-  return choose([
-    ItemIdentifiers.DRAGON_CLAWS,
-    ItemIdentifiers.ARMADYL_GODSWORD,
-    ItemIdentifiers.BANDOS_GODSWORD,
-    ItemIdentifiers.SARADOMIN_GODSWORD,
-    ItemIdentifiers.ZAMORAK_GODSWORD,
-    ItemIdentifiers.ANCIENT_GODSWORD,
-    ItemIdentifiers.BARRELCHEST_ANCHOR,
-  ]);
+  return choose(pool("elite_spec_weapons"));
 }
 
 function profileAllowedForArchetype(archetype, profile) {

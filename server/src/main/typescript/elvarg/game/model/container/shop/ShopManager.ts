@@ -702,6 +702,7 @@ export class ShopManager {
 
     private static isBloodMoneyShopItem(itemId: number): boolean {
         return this.BLOOD_MONEY_SHOP_IDS.some((shopId) =>
+            ShopDefinition.forId(shopId)?.getCurrency() === "BLOOD_MONEY" &&
             ShopDefinition.forId(shopId)?.getOriginalStock().some((stock) => stock.id === itemId)
         );
     }

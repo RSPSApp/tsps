@@ -15,6 +15,7 @@ const { MagicSpellbook } = require("../../../src/main/typescript/elvarg/game/mod
 const { Flag } = require("../../../src/main/typescript/elvarg/game/model/Flag");
 const { Bank } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Bank");
 const { Misc } = require("../../../src/main/typescript/elvarg/util/Misc");
+const { setPresetShopPricesEnabled } = require("../../../src/main/typescript/elvarg/game/definition/loader/impl/ShopDefinitionLoader");
 const {
   GROUP_ID,
   COMPONENT,
@@ -710,6 +711,7 @@ module.exports = {
   shouldOpenOnDeath,
   register(api) {
     presetsEnabled = true;
+    setPresetShopPricesEnabled(true);
     api.persistAttribute(CUSTOM_PRESETS_ATTRIBUTE);
     api.registerCustomInterface(INTERFACE_DEFINITION);
 

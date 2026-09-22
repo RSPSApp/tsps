@@ -1,59 +1,34 @@
+const fs = require("fs");
+const path = require("path");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
+const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
+const { DialogueChainBuilder } = require("../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
+const { NpcDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
+const { EndDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
 
-const TURAEL_MASTER = Object.freeze({
-  name: "Turael",
-  basePoints: 1,
-  consecutiveTaskPoints: [
-    [10, 3],
-    [50, 10],
-    [100, 25],
-    [250, 50],
-    [1000, 75],
-  ],
-});
+const SLAYER_MASTERS = Object.freeze(Object.fromEntries(
+  Object.entries(JSON.parse(fs.readFileSync(
+    path.join(GameConstants.DEFINITIONS_DIRECTORY, "slayer-tasks.json"),
+    "utf8"
+  ))).map(([id, master]) => [id, { ...master, id: Number(id) }])
+));
 
-const TASKS = Object.freeze([
-  { name: "banshees", hint: "in the Slayer Tower", min: 15, max: 50, slayerLevel: 15, weight: 8, npcNames: ["banshee", "twisted banshee"] },
-  { name: "bats", hint: "in the Taverly Dungeon", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["bat", "giant bat"] },
-  { name: "chickens", hint: "in Lumbridge", min: 15, max: 50, slayerLevel: 1, weight: 6, npcNames: ["chicken", "mounted terrorbird gnome", "terrorbird", "rooster"] },
-  { name: "bears", hint: "outside Varrock", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["black bear", "grizzly bear", "grizzly bear cub", "bear cub", "callisto"] },
-  { name: "cave bugs", hint: "Lumbridge dungeon", min: 10, max: 20, slayerLevel: 7, weight: 8, npcNames: ["cave bug"] },
-  { name: "cave crawlers", hint: "Lumbridge dungeon", min: 15, max: 50, slayerLevel: 10, weight: 8, npcNames: ["cave crawler"] },
-  { name: "cave slime", hint: "Lumbridge dungeon", min: 10, max: 20, slayerLevel: 17, weight: 8, npcNames: ["cave slime"] },
-  { name: "cows", hint: "Lumbridge", min: 15, max: 50, slayerLevel: 1, weight: 8, npcNames: ["cow", "cow calf"] },
-  { name: "crawling hands", hint: "in the Slayer Tower", min: 15, max: 50, slayerLevel: 5, weight: 8, npcNames: ["crawling hand"] },
-  { name: "desert lizards", hint: "in the desert", min: 15, max: 50, slayerLevel: 22, weight: 8, npcNames: ["lizard", "small lizard", "desert lizard"] },
-  { name: "dogs", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["dog", "jackal", "guard dog", "wild dog"] },
-  { name: "dwarves", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["dwarf", "dwarf gang member", "chaos dwarf"] },
-  { name: "ghosts", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["ghost", "tortured soul"] },
-  { name: "goblins", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["goblin", "cave goblin guard"] },
-  { name: "icefiends", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 8, npcNames: ["icefiend"] },
-  { name: "kalphites", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 6, npcNames: ["kalphite worker", "kalphite soldier", "kalphite guardian", "kalphite queen"] },
-  { name: "minotaurs", hint: "", min: 10, max: 20, slayerLevel: 1, weight: 7, npcNames: ["minotaur"] },
-  { name: "monkeys", hint: "", min: 10, max: 20, slayerLevel: 1, weight: 7, npcNames: ["monkey", "karmjan monkey", "monkey guard", "monkey archer", "zombie monkey"] },
-  { name: "rats", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["rat", "giant rat", "dungeon rat", "brine rat"] },
-  { name: "scorpions", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["scorpion", "king scorpion", "poison scorpion", "pit scorpion", "scorpia"] },
-  { name: "skeletons", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["skeleton", "skeleton mage", "vet'ion"] },
-  { name: "spiders", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 6, npcNames: ["spider", "giant spider", "shadow spider", "giant crypt spider", "venenatis"] },
-  { name: "wolves", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["wolf", "white wolf", "big wolf"] },
-  { name: "zombies", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["zombie", "undead one"] },
-]);
-
-function initializePlayerSlayerState(player) {
-  if (typeof player.getSlayerPoints === "function" && !Number.isFinite(player.getSlayerPoints())) {
-    player.setSlayerPoints(0);
-  }
-  if (typeof player.getConsecutiveTasks === "function" && !Number.isFinite(player.getConsecutiveTasks())) {
-    player.setConsecutiveTasks(0);
-  }
-}
+const TASK_ATTRIBUTE = "slayer:task";
+const POINTS_ATTRIBUTE = "slayer:points";
+const STREAK_ATTRIBUTE = "slayer:streak";
 
 function wrapTask(taskData) {
   return {
     ...taskData,
+    name: taskData.name.toLowerCase(),
+    min: taskData.quantity[0],
+    max: taskData.quantity[1],
+    slayerLevel: taskData.slayer_level,
+    weight: taskData.weight,
+    npcNames: taskData.npc_names,
     getHint() {
-      return this.hint;
+      return this.locations?.[0] ?? "";
     },
     getNpcNames() {
       return this.npcNames;
@@ -64,6 +39,8 @@ function wrapTask(taskData) {
   };
 }
 
+// ponytail: reward tables and quest/unlock state stay out until the Slayer
+// points/streak tables are exported; assignment still tracks both as attributes.
 function wrapMaster(masterData) {
   return {
     ...masterData,
@@ -96,46 +73,111 @@ function wrapActiveTask(master, task, remaining) {
   };
 }
 
-function assignTask(player) {
-  if (player.getSlayerTask()) {
-    player
-      .getPacketSender()
-      .sendInterfaceRemoval()
-      .sendMessage("You already have a Slayer task.");
-    return false;
+/** Only a plain snapshot is persisted; the wrappers are rebuilt from the dump. */
+function setActiveTask(player, activeTask) {
+  player.setAttribute(TASK_ATTRIBUTE, activeTask
+    ? {
+        masterId: activeTask.getMaster().id,
+        slug: activeTask.getTask().slug,
+        remaining: activeTask.getRemaining(),
+      }
+    : null);
+}
+
+function getActiveTask(player) {
+  const saved = player.getAttribute(TASK_ATTRIBUTE);
+  if (!saved || !Number.isInteger(saved.masterId) || typeof saved.slug !== "string") {
+    return null;
+  }
+  const masterData = SLAYER_MASTERS[String(saved.masterId)];
+  const taskData = masterData?.tasks.find((task) => task.slug === saved.slug);
+  if (!taskData) {
+    return null;
+  }
+  return wrapActiveTask(
+    wrapMaster({ id: masterData.id, name: masterData.name, basePoints: 0, consecutiveTaskPoints: [] }),
+    wrapTask(taskData),
+    saved.remaining
+  );
+}
+
+function getPoints(player) {
+  const points = player.getAttribute(POINTS_ATTRIBUTE);
+  return Number.isFinite(points) ? points : 0;
+}
+
+function getStreak(player) {
+  const streak = player.getAttribute(STREAK_ATTRIBUTE);
+  return Number.isFinite(streak) ? streak : 0;
+}
+
+function assignTask(player, masterData) {
+  const activeTask = getActiveTask(player);
+  if (activeTask) {
+    return `You're still hunting ${activeTask.getTask().toString()}; you have ${activeTask.getRemaining()} to go. Come back when you've finished your task.`;
   }
 
   const slayerLevel = player.getSkillManager().getMaxLevel(Skill.SLAYER);
-  const possibleTasks = TASKS.filter((task) => slayerLevel >= task.slayerLevel);
+  const possibleTasks = masterData.tasks.filter((task) => slayerLevel >= task.slayer_level);
   if (possibleTasks.length === 0) {
-    player
-      .getPacketSender()
-      .sendInterfaceRemoval()
-      .sendMessage(
-        "Nieve was unable to give you a Slayer task. Please try again later."
-      );
-    return false;
+    return `${masterData.name} was unable to give you a Slayer task. Please try again later.`;
   }
 
-  Misc.randomElements(possibleTasks);
-  const totalWeight = possibleTasks.reduce((sum, task) => sum + task.weight, 0);
-  let selected = possibleTasks[0];
+  let roll = Misc.getRandom(
+    possibleTasks.reduce((sum, task) => sum + task.weight, 0) - 1
+  );
+  let selected = possibleTasks[possibleTasks.length - 1];
   for (const task of possibleTasks) {
-    if (Misc.getRandom(totalWeight) <= task.weight) {
+    if (roll < task.weight) {
       selected = task;
       break;
     }
+    roll -= task.weight;
   }
 
-  const remaining = Misc.randomInclusive(selected.min, selected.max);
-  player.setSlayerTask(
-    wrapActiveTask(wrapMaster(TURAEL_MASTER), wrapTask(selected), remaining)
-  );
-  return true;
+  const remaining = Misc.randomInclusive(selected.quantity[0], selected.quantity[1]);
+  setActiveTask(player, wrapActiveTask(
+    wrapMaster({ id: masterData.id, name: masterData.name, basePoints: 0, consecutiveTaskPoints: [] }),
+    wrapTask(selected),
+    remaining
+  ));
+  return `Your new task is to kill ${remaining} ${selected.name.toLowerCase()}.`;
+}
+
+/** Match a master by the slugged name, then spawn id, transformed id, display name. */
+function masterForNpc({ master, npcId, definitionId, npcName }) {
+  const named = master
+    ? Object.values(SLAYER_MASTERS).find(
+        (candidate) => candidate.dialogue === master || candidate.name === master
+      )
+    : undefined;
+  return named
+    ?? SLAYER_MASTERS[String(npcId)]
+    ?? SLAYER_MASTERS[String(definitionId)]
+    ?? Object.values(SLAYER_MASTERS).find(
+        (candidate) => candidate.name === npcName || candidate.dialogue === npcName
+      )
+    ?? null;
+}
+
+/** The line to show for an assignment from this NPC, or null when it assigns nothing. */
+function assignTaskForNpc(player, npc) {
+  const master = masterForNpc(npc ?? {});
+  return master ? assignTask(player, master) : null;
+}
+
+/** The line to show for the active task's location, or false when there is no task. */
+function taskTip(player) {
+  const task = getActiveTask(player);
+  if (!task) return false;
+  const hint = task.getTask().getHint();
+  return hint
+    ? `You should be able to find your task at ${hint}.`
+    : "You're on a Slayer task; check your task list for the details.";
 }
 
 function onNpcKilled(player, npc) {
-  const task = player.getSlayerTask();
+  const task = getActiveTask(player);
   if (!task) {
     return;
   }
@@ -159,39 +201,88 @@ function onNpcKilled(player, npc) {
   task.setRemaining(task.getRemaining() - 1);
 
   if (task.getRemaining() > 0) {
+    setActiveTask(player, task);
     return;
   }
 
   let rewardPoints = task.getMaster().getBasePoints();
-  player.setConsecutiveTasks(player.getConsecutiveTasks() + 1);
+  const streak = getStreak(player) + 1;
+  player.setAttribute(STREAK_ATTRIBUTE, streak);
 
   for (const [requiredTasks, bonusPoints] of task.getMaster().getConsecutiveTaskPoints()) {
-    if (player.getConsecutiveTasks() % requiredTasks === 0) {
+    if (streak % requiredTasks === 0) {
       rewardPoints = bonusPoints;
       break;
     }
   }
 
-  player.setSlayerPoints(player.getSlayerPoints() + rewardPoints);
+  player.setAttribute(POINTS_ATTRIBUTE, getPoints(player) + rewardPoints);
   player.sendMessage(
-    `You have succesfully completed @dre@${player.getConsecutiveTasks()}@bla@ slayer tasks in a row.`
+    `You have succesfully completed ${streak} slayer tasks in a row.`
   );
   player.sendMessage(
-    `You earned @dre@${rewardPoints}@bla@ Slayer ${
+    `You earned ${rewardPoints} Slayer ${
       rewardPoints === 1 ? "point" : "points"
-    }, your new total is now @dre@${player.getSlayerPoints()}.`
+    }, your new total is now ${getPoints(player)}.`
   );
-  player.setSlayerTask(null);
+  setActiveTask(player, null);
+}
+
+function assignFromNpcEvent(event) {
+  const line = assignTaskForNpc(event.player, event);
+  if (line) event.line = line;
+}
+
+function taskTipEvent(event) {
+  const line = taskTip(event.player);
+  if (line) event.line = line;
+}
+
+// Show a line in the NPC's chatbox rather than a game message.
+function sayAsNpc(player, npcId, text) {
+  const dialogue = new DialogueChainBuilder().add(
+    new NpcDialogue(0, npcId, text),
+    new EndDialogue(1)
+  );
+  player.getDialogueManager().startDialogues(dialogue);
+}
+
+// The "Assignment" right-click, caught by click slot so transformed forms whose
+// cache definition drops the label (Nieve) still work. A labelled slot must say
+// "Assignment"; the NPC is matched against the master dump inside the handler.
+function assignFromNpcClick(event) {
+  if (event.clickType !== 3) return;
+  const label = event.definition?.getActions?.()?.[event.clickType - 1];
+  if (label && label !== "Assignment") return;
+  const message = assignTaskForNpc(event.player, {
+    npcId: event.npcId,
+    definitionId: event.definition?.getId?.(),
+    npcName: event.definition?.getName?.(),
+  });
+  if (!message) return;
+  event.handled = true;
+  sayAsNpc(event.player, event.definition?.getId?.() ?? event.npcId, message);
 }
 
 module.exports = {
   name: "Slayer",
+  // Exported for tests/slayer-assign.test.cjs; nothing else reads them.
+  assignTask,
+  assignTaskForNpc,
+  getActiveTask,
+  taskTip,
   register(api) {
-    api.onPlayerLogin(({ player }) => {
-      initializePlayerSlayerState(player);
-    });
+    api.persistAttribute(TASK_ATTRIBUTE);
+    api.persistAttribute(POINTS_ATTRIBUTE);
+    api.persistAttribute(STREAK_ATTRIBUTE);
 
-    api.onSlayerAssignRequest((player) => assignTask(player));
+    // Cross-plugin events: the dialogue emitter fills in the line it should speak.
+    api.onCustomEvent("slayer:assignment", assignFromNpcEvent);
+    api.onCustomEvent("slayer:task-tip", taskTipEvent);
+
+    // The "Assignment" click (slot 3) on any NPC; the master check lives in the
+    // handler rather than the NPC's name or the option label.
+    api.onNpcInteraction(assignFromNpcClick);
 
     api.onNpcDeath(({ killer, npc }) => {
       if (!killer || !killer.isPlayer?.()) {
@@ -200,6 +291,9 @@ module.exports = {
       onNpcKilled(killer, npc);
     });
 
-    api.log("registered", { tasks: TASKS.length });
+    api.log("registered", {
+      masters: new Set(Object.values(SLAYER_MASTERS).map((master) => master.name)).size,
+      tasks: new Set(Object.values(SLAYER_MASTERS).flatMap((master) => master.tasks.map((task) => task.slug))).size,
+    });
   },
 };

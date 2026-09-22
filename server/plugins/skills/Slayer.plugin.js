@@ -6,6 +6,12 @@ const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameCon
 const { DialogueChainBuilder } = require("../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { NpcDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
 const { EndDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
+const { ShopDefinition } = require("../../src/main/typescript/elvarg/game/definition/ShopDefinition");
+const { ShopManager } = require("../../src/main/typescript/elvarg/game/model/container/shop/ShopManager");
+
+const SLAYER_EQUIPMENT_SHOP = "Slayer Equipment (shop)";
+const SLAYER_REWARDS_SHOP = "Slayer Rewards";
+const SLAYER_POINTS_CURRENCY = "SLAYER_POINTS";
 
 const SLAYER_MASTERS = Object.freeze(Object.fromEntries(
   Object.entries(JSON.parse(fs.readFileSync(
@@ -264,6 +270,42 @@ function assignFromNpcClick(event) {
   sayAsNpc(event.player, event.definition?.getId?.() ?? event.npcId, message);
 }
 
+// A dialogued shop option (Trade/Rewards). The core binds these from shops.json
+// for the base NPC ids; this covers forms whose spawn id is a transform, like
+// Nieve's 1455 -> 7108, where the click event carries the spawn id.
+function openMasterShop(event, shopName) {
+  const master = masterForNpc({
+    npcId: event.npcId,
+    definitionId: event.definition?.getId?.(),
+    npcName: event.definition?.getName?.(),
+  });
+  if (!master) return false;
+  const shops = ShopDefinition.all().filter((shop) => shop.getName() === shopName);
+  if (shops.length !== 1) return false;
+  ShopManager.open(event.player, shops[0].getId(), true);
+  return true;
+}
+
+function openSlayerEquipment(event) {
+  return openMasterShop(event, SLAYER_EQUIPMENT_SHOP);
+}
+
+function openSlayerRewards(event) {
+  return openMasterShop(event, SLAYER_REWARDS_SHOP);
+}
+
+// Slayer rewards are paid with the same attribute the tasks award.
+function slayerPointsCurrency() {
+  return {
+    name: "Slayer points",
+    amount: (player) => getPoints(player),
+    add: (player, value) =>
+      player.setAttribute(POINTS_ATTRIBUTE, getPoints(player) + Math.max(0, Math.floor(value))),
+    remove: (player, value) =>
+      player.setAttribute(POINTS_ATTRIBUTE, Math.max(0, getPoints(player) - Math.floor(value))),
+  };
+}
+
 module.exports = {
   name: "Slayer",
   // Exported for tests/slayer-assign.test.cjs; nothing else reads them.
@@ -276,6 +318,9 @@ module.exports = {
     api.persistAttribute(POINTS_ATTRIBUTE);
     api.persistAttribute(STREAK_ATTRIBUTE);
 
+    // The Slayer Rewards shop (data-driven from shops.json) spends task points.
+    api.registerShopCurrency(SLAYER_POINTS_CURRENCY, slayerPointsCurrency());
+
     // Cross-plugin events: the dialogue emitter fills in the line it should speak.
     api.onCustomEvent("slayer:assignment", assignFromNpcEvent);
     api.onCustomEvent("slayer:task-tip", taskTipEvent);
@@ -283,6 +328,9 @@ module.exports = {
     // The "Assignment" click (slot 3) on any NPC; the master check lives in the
     // handler rather than the NPC's name or the option label.
     api.onNpcInteraction(assignFromNpcClick);
+
+    // Shop options for transformed master forms the shops.json binding misses.
+    api.onAnyNpcInteraction({ Trade: openSlayerEquipment, Rewards: openSlayerRewards });
 
     api.onNpcDeath(({ killer, npc }) => {
       if (!killer || !killer.isPlayer?.()) {

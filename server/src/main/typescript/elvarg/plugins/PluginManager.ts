@@ -3013,6 +3013,9 @@ export class PluginManager {
       registerShopCurrency: (name, handler) => {
         ShopManager.registerCurrency(name, handler);
       },
+      registerItemShopCurrency: (itemId, options) => {
+        ShopManager.registerItemCurrency(itemId, options);
+      },
       persistAttribute: (key) => PlayerSave.persistAttribute(key),
       setPlayerPersistence: (persistence) => {
         if (

@@ -31,100 +31,6 @@
     "npcInteractions": []
   },
   {
-    "id": 11,
-    "name": "Void Knight Magic Store",
-    "originalStock": [
-      {
-        "id": 554,
-        "amount": 5000
-      },
-      {
-        "id": 555,
-        "amount": 5000
-      },
-      {
-        "id": 556,
-        "amount": 5000
-      },
-      {
-        "id": 557,
-        "amount": 5000
-      },
-      {
-        "id": 558,
-        "amount": 5000
-      },
-      {
-        "id": 559,
-        "amount": 5000
-      },
-      {
-        "id": 562,
-        "amount": 250
-      },
-      {
-        "id": 560,
-        "amount": 250
-      }
-    ],
-    "npcInteractions": []
-  },
-  {
-    "id": 12,
-    "name": "Void Knight Archery Store",
-    "originalStock": [
-      {
-        "id": 825,
-        "amount": 10
-      },
-      {
-        "id": 826,
-        "amount": 10
-      },
-      {
-        "id": 827,
-        "amount": 10
-      },
-      {
-        "id": 828,
-        "amount": 10
-      },
-      {
-        "id": 829,
-        "amount": 10
-      },
-      {
-        "id": 830,
-        "amount": 10
-      },
-      {
-        "id": 39,
-        "amount": 5
-      },
-      {
-        "id": 40,
-        "amount": 5
-      },
-      {
-        "id": 41,
-        "amount": 5
-      },
-      {
-        "id": 42,
-        "amount": 5
-      },
-      {
-        "id": 43,
-        "amount": 5
-      },
-      {
-        "id": 44,
-        "amount": 5
-      }
-    ],
-    "npcInteractions": []
-  },
-  {
     "id": 1000,
     "name": "Aaron's Archery Appendages.",
     "currency": "COINS",
@@ -685,7 +591,14 @@
         "restockTicks": 10
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          1501
+        ],
+        "optionSlot": 5
+      }
+    ]
   },
   {
     "id": 1008,
@@ -1343,6 +1256,7 @@
     "npcInteractions": [
       {
         "npcIds": [
+          3208,
           8724,
           8725
         ],
@@ -2558,7 +2472,14 @@
         "restockTicks": 100
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          3837
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1034,
@@ -3031,7 +2952,19 @@
         "restockTicks": 25
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2580,
+          2581,
+          2582,
+          4936,
+          4937,
+          4938
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1039,
@@ -4623,7 +4556,16 @@
         "restockTicks": 100
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          3101,
+          9140,
+          14659
+        ],
+        "optionSlot": 4
+      }
+    ]
   },
   {
     "id": 1064,
@@ -5659,7 +5601,14 @@
         "restockTicks": 500
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          5250
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1082,
@@ -7290,7 +7239,8 @@
     "npcInteractions": [
       {
         "npcIds": [
-          775
+          775,
+          3688
         ],
         "optionSlot": 3
       }
@@ -7696,7 +7646,14 @@
         "restockTicks": 2
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          5363
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1117,
@@ -9503,6 +9460,7 @@
     "npcInteractions": [
       {
         "npcIds": [
+          6953,
           6954
         ],
         "optionSlot": 3
@@ -9708,6 +9666,7 @@
     "npcInteractions": [
       {
         "npcIds": [
+          776,
           3689
         ],
         "optionSlot": 3
@@ -11124,6 +11083,7 @@
     "npcInteractions": [
       {
         "npcIds": [
+          775,
           3688
         ],
         "optionSlot": 3
@@ -11164,7 +11124,8 @@
     "npcInteractions": [
       {
         "npcIds": [
-          776
+          776,
+          3689
         ],
         "optionSlot": 3
       }
@@ -11740,7 +11701,14 @@
         "restockTicks": 500
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2893
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1185,
@@ -11910,7 +11878,14 @@
         "restockTicks": 100
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2825
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1189,
@@ -12484,7 +12459,9 @@
     "npcInteractions": [
       {
         "npcIds": [
-          3208
+          3208,
+          8724,
+          8725
         ],
         "optionSlot": 3
       }
@@ -12809,7 +12786,14 @@
         "restockTicks": 10000
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          757
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1210,
@@ -13658,9 +13642,21 @@
       {
         "id": 27279,
         "amount": 2000000000
+      },
+      {
+        "id": 30955,
+        "amount": 2000000000
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7456,
+          11674
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1219,
@@ -13763,7 +13759,14 @@
         "restockTicks": 1
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          4789
+        ],
+        "optionSlot": 4
+      }
+    ]
   },
   {
     "id": 1221,
@@ -13939,12 +13942,7 @@
     "npcInteractions": [
       {
         "npcIds": [
-          2813
-        ],
-        "optionSlot": 3
-      },
-      {
-        "npcIds": [
+          2813,
           2814
         ],
         "optionSlot": 3
@@ -14750,7 +14748,15 @@
         "amount": 2000000000
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          13920,
+          13921
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1235,
@@ -15351,7 +15357,14 @@
         "restockTicks": 10
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          1350
+        ],
+        "optionSlot": 5
+      }
+    ]
   },
   {
     "id": 1247,
@@ -15915,7 +15928,14 @@
         "restockTicks": 200
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          5362
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1257,
@@ -15928,7 +15948,14 @@
         "restockTicks": 10
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          3340
+        ],
+        "optionSlot": 4
+      }
+    ]
   },
   {
     "id": 1258,
@@ -16323,7 +16350,14 @@
         "restockTicks": 10
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          3340
+        ],
+        "optionSlot": 4
+      }
+    ]
   },
   {
     "id": 1268,
@@ -17454,7 +17488,16 @@
         "restockTicks": 28
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          11598,
+          11599,
+          11600
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1286,
@@ -17784,7 +17827,15 @@
         "restockTicks": 1000
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          1289,
+          1290
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1294,
@@ -17867,7 +17918,15 @@
         "restockTicks": 10
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          1289,
+          1290
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1295,
@@ -18757,7 +18816,16 @@
         "restockTicks": 100
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          3101,
+          9140,
+          14659
+        ],
+        "optionSlot": 4
+      }
+    ]
   },
   {
     "id": 1311,
@@ -19000,7 +19068,15 @@
         "restockTicks": 200
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          4642,
+          10634
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1315,
@@ -19628,7 +19704,33 @@
         "restockTicks": 1
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          403,
+          404,
+          3307,
+          6797,
+          6798,
+          6799,
+          7108,
+          7109,
+          7110,
+          7663,
+          8623,
+          10432,
+          10433,
+          10434,
+          13618,
+          13619,
+          13620,
+          13621,
+          13622,
+          13623
+        ],
+        "optionSlot": 4
+      }
+    ]
   },
   {
     "id": 1325,
@@ -20411,7 +20513,17 @@
         "restockTicks": 5
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          4703,
+          4704,
+          4705,
+          4706
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1338,
@@ -21287,7 +21399,16 @@
         "restockTicks": 10
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          4102,
+          5613,
+          5614
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1351,
@@ -21560,7 +21681,61 @@
         "restockTicks": 100
       }
     ],
-    "npcInteractions": []
+    "npcInteractions": [
+      {
+        "npcIds": [
+          9299,
+          9300,
+          9301,
+          9302,
+          9303,
+          9304,
+          9305,
+          9307,
+          9308,
+          9309,
+          9310,
+          9311,
+          9360,
+          9361,
+          9362,
+          9363,
+          9364,
+          9365,
+          9366,
+          9367,
+          9368,
+          9369,
+          9370,
+          9371,
+          12630,
+          12631,
+          12640,
+          12641,
+          12779,
+          12780,
+          12781,
+          12782,
+          12799,
+          12800,
+          12801,
+          12802,
+          15505,
+          15510,
+          15512,
+          15517,
+          15519,
+          15524,
+          15526,
+          15531,
+          15533,
+          15538,
+          15540,
+          15545
+        ],
+        "optionSlot": 3
+      }
+    ]
   },
   {
     "id": 1355,
@@ -25380,7 +25555,7 @@
     "originalStock": [
       {
         "id": 33537,
-        "amount": 20,
+        "amount": 50,
         "restockTicks": 10
       }
     ],
@@ -25791,6 +25966,3606 @@
       },
       {
         "id": 2446,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": []
+  },
+  {
+    "id": 1424,
+    "name": "Agility Arena Store",
+    "currency": "BRIMHAVEN VOUCHER",
+    "originalStock": [
+      {
+        "id": 2998,
+        "amount": 2000000000
+      },
+      {
+        "id": 3000,
+        "amount": 2000000000
+      },
+      {
+        "id": 2997,
+        "amount": 2000000000
+      },
+      {
+        "id": 12641,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7650,
+          7651
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1425,
+    "name": "Alry the Angler's Angling Accessories",
+    "currency": "MOLCH PEARL",
+    "originalStock": [
+      {
+        "id": 22846,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 22844,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 22838,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 13258,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 13259,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 13260,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 13261,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 34065,
+        "amount": 10000,
+        "restockTicks": 1
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          8521
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1426,
+    "name": "Armour store.",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          1561
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1427,
+    "name": "Barbarian Assault Reward Shop",
+    "currency": "HONOUR POINTS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          1656
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1428,
+    "name": "Bounty Hunter Shop (Deadman Mode)",
+    "currency": "ARCHAIC EMBLEM",
+    "originalStock": [
+      {
+        "id": 4207,
+        "amount": 2000000000
+      },
+      {
+        "id": 12759,
+        "amount": 2000000000
+      },
+      {
+        "id": 12761,
+        "amount": 2000000000
+      },
+      {
+        "id": 12763,
+        "amount": 2000000000
+      },
+      {
+        "id": 12757,
+        "amount": 2000000000
+      },
+      {
+        "id": 12781,
+        "amount": 2000000000
+      },
+      {
+        "id": 12782,
+        "amount": 2000000000
+      },
+      {
+        "id": 12775,
+        "amount": 2000000000
+      },
+      {
+        "id": 12776,
+        "amount": 2000000000
+      },
+      {
+        "id": 12777,
+        "amount": 2000000000
+      },
+      {
+        "id": 12778,
+        "amount": 2000000000
+      },
+      {
+        "id": 12779,
+        "amount": 2000000000
+      },
+      {
+        "id": 12780,
+        "amount": 2000000000
+      },
+      {
+        "id": 12771,
+        "amount": 2000000000
+      },
+      {
+        "id": 12769,
+        "amount": 2000000000
+      },
+      {
+        "id": 12798,
+        "amount": 2000000000
+      },
+      {
+        "id": 21202,
+        "amount": 2000000000
+      },
+      {
+        "id": 12800,
+        "amount": 2000000000
+      },
+      {
+        "id": 12802,
+        "amount": 2000000000
+      },
+      {
+        "id": 12783,
+        "amount": 2000000000
+      },
+      {
+        "id": 12786,
+        "amount": 2000000000
+      },
+      {
+        "id": 12804,
+        "amount": 2000000000
+      },
+      {
+        "id": 30692,
+        "amount": 2000000000
+      },
+      {
+        "id": 24587,
+        "amount": 2000000000
+      },
+      {
+        "id": 22586,
+        "amount": 2000000000
+      },
+      {
+        "id": 24585,
+        "amount": 2000000000
+      },
+      {
+        "id": 11740,
+        "amount": 2000000000
+      },
+      {
+        "id": 12789,
+        "amount": 2000000000
+      },
+      {
+        "id": 24613,
+        "amount": 2000000000
+      },
+      {
+        "id": 24615,
+        "amount": 2000000000
+      },
+      {
+        "id": 24621,
+        "amount": 2000000000
+      },
+      {
+        "id": 24607,
+        "amount": 2000000000
+      },
+      {
+        "id": 26705,
+        "amount": 2000000000
+      },
+      {
+        "id": 3105,
+        "amount": 2000000000
+      },
+      {
+        "id": 12849,
+        "amount": 2000000000
+      },
+      {
+        "id": 24229,
+        "amount": 2000000000
+      },
+      {
+        "id": 12846,
+        "amount": 2000000000
+      },
+      {
+        "id": 12855,
+        "amount": 2000000000
+      },
+      {
+        "id": 12856,
+        "amount": 2000000000
+      },
+      {
+        "id": 2436,
+        "amount": 2000000000
+      },
+      {
+        "id": 2440,
+        "amount": 2000000000
+      },
+      {
+        "id": 23551,
+        "amount": 2000000000
+      },
+      {
+        "id": 23567,
+        "amount": 2000000000
+      },
+      {
+        "id": 23575,
+        "amount": 2000000000
+      },
+      {
+        "id": 20393,
+        "amount": 2000000000
+      },
+      {
+        "id": 23583,
+        "amount": 2000000000
+      },
+      {
+        "id": 23543,
+        "amount": 2000000000
+      },
+      {
+        "id": 11951,
+        "amount": 2000000000
+      },
+      {
+        "id": 2450,
+        "amount": 2000000000
+      },
+      {
+        "id": 5952,
+        "amount": 2000000000
+      },
+      {
+        "id": 3040,
+        "amount": 2000000000
+      },
+      {
+        "id": 26706,
+        "amount": 2000000000
+      },
+      {
+        "id": 27165,
+        "amount": 2000000000
+      },
+      {
+        "id": 27164,
+        "amount": 2000000000
+      },
+      {
+        "id": 27163,
+        "amount": 2000000000
+      },
+      {
+        "id": 24204,
+        "amount": 2000000000
+      },
+      {
+        "id": 24201,
+        "amount": 2000000000
+      },
+      {
+        "id": 24198,
+        "amount": 2000000000
+      },
+      {
+        "id": 24195,
+        "amount": 2000000000
+      },
+      {
+        "id": 24192,
+        "amount": 2000000000
+      },
+      {
+        "id": 24187,
+        "amount": 2000000000
+      },
+      {
+        "id": 27624,
+        "amount": 2000000000
+      },
+      {
+        "id": 28551,
+        "amount": 2000000000
+      },
+      {
+        "id": 28552,
+        "amount": 2000000000
+      },
+      {
+        "id": 28553,
+        "amount": 2000000000
+      },
+      {
+        "id": 28554,
+        "amount": 2000000000
+      },
+      {
+        "id": 33004,
+        "amount": 2000000000
+      },
+      {
+        "id": 33005,
+        "amount": 2000000000
+      },
+      {
+        "id": 33006,
+        "amount": 2000000000
+      },
+      {
+        "id": 33007,
+        "amount": 2000000000
+      },
+      {
+        "id": 33008,
+        "amount": 2000000000
+      },
+      {
+        "id": 33009,
+        "amount": 2000000000
+      },
+      {
+        "id": 34059,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          308,
+          7943,
+          12113
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1429,
+    "name": "Bounty Hunter Shop (historical)",
+    "currency": "BOUNTY HUNTER POINTS",
+    "originalStock": [
+      {
+        "id": 12855,
+        "amount": 2000000000
+      },
+      {
+        "id": 12856,
+        "amount": 2000000000
+      },
+      {
+        "id": 22586,
+        "amount": 2000000000
+      },
+      {
+        "id": 24585,
+        "amount": 2000000000
+      },
+      {
+        "id": 30692,
+        "amount": 2000000000
+      },
+      {
+        "id": 24587,
+        "amount": 2000000000
+      },
+      {
+        "id": 12789,
+        "amount": 2000000000
+      },
+      {
+        "id": 12849,
+        "amount": 2000000000
+      },
+      {
+        "id": 24229,
+        "amount": 2000000000
+      },
+      {
+        "id": 24592,
+        "amount": 2000000000
+      },
+      {
+        "id": 24589,
+        "amount": 2000000000
+      },
+      {
+        "id": 24595,
+        "amount": 2000000000
+      },
+      {
+        "id": 24598,
+        "amount": 2000000000
+      },
+      {
+        "id": 24607,
+        "amount": 2000000000
+      },
+      {
+        "id": 24613,
+        "amount": 2000000000
+      },
+      {
+        "id": 24615,
+        "amount": 2000000000
+      },
+      {
+        "id": 24621,
+        "amount": 2000000000
+      },
+      {
+        "id": 24619,
+        "amount": 2000000000
+      },
+      {
+        "id": 12804,
+        "amount": 2000000000
+      },
+      {
+        "id": 12781,
+        "amount": 2000000000
+      },
+      {
+        "id": 12782,
+        "amount": 2000000000
+      },
+      {
+        "id": 12775,
+        "amount": 2000000000
+      },
+      {
+        "id": 12776,
+        "amount": 2000000000
+      },
+      {
+        "id": 12777,
+        "amount": 2000000000
+      },
+      {
+        "id": 12778,
+        "amount": 2000000000
+      },
+      {
+        "id": 12779,
+        "amount": 2000000000
+      },
+      {
+        "id": 12780,
+        "amount": 2000000000
+      },
+      {
+        "id": 24336,
+        "amount": 2000000000
+      },
+      {
+        "id": 12759,
+        "amount": 2000000000
+      },
+      {
+        "id": 12761,
+        "amount": 2000000000
+      },
+      {
+        "id": 12763,
+        "amount": 2000000000
+      },
+      {
+        "id": 12757,
+        "amount": 2000000000
+      },
+      {
+        "id": 12771,
+        "amount": 2000000000
+      },
+      {
+        "id": 12769,
+        "amount": 2000000000
+      },
+      {
+        "id": 12798,
+        "amount": 2000000000
+      },
+      {
+        "id": 21202,
+        "amount": 2000000000
+      },
+      {
+        "id": 12800,
+        "amount": 2000000000
+      },
+      {
+        "id": 12802,
+        "amount": 2000000000
+      },
+      {
+        "id": 12783,
+        "amount": 2000000000
+      },
+      {
+        "id": 12786,
+        "amount": 2000000000
+      },
+      {
+        "id": 12846,
+        "amount": 2000000000
+      },
+      {
+        "id": 3105,
+        "amount": 2000000000
+      },
+      {
+        "id": 4740,
+        "amount": 2000000000
+      },
+      {
+        "id": 21326,
+        "amount": 2000000000
+      },
+      {
+        "id": 892,
+        "amount": 2000000000
+      },
+      {
+        "id": 890,
+        "amount": 2000000000
+      },
+      {
+        "id": 9244,
+        "amount": 2000000000
+      },
+      {
+        "id": 4207,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          308,
+          7943,
+          12113
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1430,
+    "name": "Bounty Hunter Store",
+    "currency": "BOUNTY HUNTER POINTS",
+    "originalStock": [
+      {
+        "id": 27925,
+        "amount": 2000000000
+      },
+      {
+        "id": 27928,
+        "amount": 2000000000
+      },
+      {
+        "id": 27931,
+        "amount": 2000000000
+      },
+      {
+        "id": 27934,
+        "amount": 2000000000
+      },
+      {
+        "id": 27937,
+        "amount": 2000000000
+      },
+      {
+        "id": 27940,
+        "amount": 2000000000
+      },
+      {
+        "id": 27943,
+        "amount": 2000000000
+      },
+      {
+        "id": 27946,
+        "amount": 2000000000
+      },
+      {
+        "id": 27949,
+        "amount": 2000000000
+      },
+      {
+        "id": 27952,
+        "amount": 2000000000
+      },
+      {
+        "id": 27955,
+        "amount": 2000000000
+      },
+      {
+        "id": 27902,
+        "amount": 2000000000
+      },
+      {
+        "id": 27906,
+        "amount": 2000000000
+      },
+      {
+        "id": 27910,
+        "amount": 2000000000
+      },
+      {
+        "id": 27914,
+        "amount": 2000000000
+      },
+      {
+        "id": 27918,
+        "amount": 2000000000
+      },
+      {
+        "id": 27922,
+        "amount": 2000000000
+      },
+      {
+        "id": 28072,
+        "amount": 2000000000
+      },
+      {
+        "id": 28074,
+        "amount": 2000000000
+      },
+      {
+        "id": 28076,
+        "amount": 2000000000
+      },
+      {
+        "id": 28078,
+        "amount": 2000000000
+      },
+      {
+        "id": 28080,
+        "amount": 2000000000
+      },
+      {
+        "id": 28017,
+        "amount": 2000000000
+      },
+      {
+        "id": 27098,
+        "amount": 2000000000
+      },
+      {
+        "id": 26711,
+        "amount": 2000000000
+      },
+      {
+        "id": 27113,
+        "amount": 2000000000
+      },
+      {
+        "id": 12846,
+        "amount": 2000000000
+      },
+      {
+        "id": 24595,
+        "amount": 2000000000
+      },
+      {
+        "id": 24589,
+        "amount": 2000000000
+      },
+      {
+        "id": 24592,
+        "amount": 2000000000
+      },
+      {
+        "id": 24598,
+        "amount": 2000000000
+      },
+      {
+        "id": 27997,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          308,
+          7943,
+          12113
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1431,
+    "name": "Brimhaven Agility Arena Ticket Exchange",
+    "currency": "AGILITY ARENA TICKET (DISCONTINUED)",
+    "originalStock": [
+      {
+        "id": 2998,
+        "amount": 2000000000
+      },
+      {
+        "id": 3000,
+        "amount": 2000000000
+      },
+      {
+        "id": 2997,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7650,
+          7651
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1432,
+    "name": "Castle Wars Ticket Exchange",
+    "currency": "CASTLE WARS TICKET",
+    "originalStock": [
+      {
+        "id": 4071,
+        "amount": 2000000000
+      },
+      {
+        "id": 25165,
+        "amount": 2000000000
+      },
+      {
+        "id": 4069,
+        "amount": 2000000000
+      },
+      {
+        "id": 4070,
+        "amount": 2000000000
+      },
+      {
+        "id": 11893,
+        "amount": 2000000000
+      },
+      {
+        "id": 25163,
+        "amount": 2000000000
+      },
+      {
+        "id": 4072,
+        "amount": 2000000000
+      },
+      {
+        "id": 4068,
+        "amount": 2000000000
+      },
+      {
+        "id": 4506,
+        "amount": 2000000000
+      },
+      {
+        "id": 25169,
+        "amount": 2000000000
+      },
+      {
+        "id": 4504,
+        "amount": 2000000000
+      },
+      {
+        "id": 4505,
+        "amount": 2000000000
+      },
+      {
+        "id": 11894,
+        "amount": 2000000000
+      },
+      {
+        "id": 25167,
+        "amount": 2000000000
+      },
+      {
+        "id": 4507,
+        "amount": 2000000000
+      },
+      {
+        "id": 4503,
+        "amount": 2000000000
+      },
+      {
+        "id": 4511,
+        "amount": 2000000000
+      },
+      {
+        "id": 25157,
+        "amount": 2000000000
+      },
+      {
+        "id": 4509,
+        "amount": 2000000000
+      },
+      {
+        "id": 4510,
+        "amount": 2000000000
+      },
+      {
+        "id": 11895,
+        "amount": 2000000000
+      },
+      {
+        "id": 25155,
+        "amount": 2000000000
+      },
+      {
+        "id": 4512,
+        "amount": 2000000000
+      },
+      {
+        "id": 4508,
+        "amount": 2000000000
+      },
+      {
+        "id": 4515,
+        "amount": 2000000000
+      },
+      {
+        "id": 4516,
+        "amount": 2000000000
+      },
+      {
+        "id": 4513,
+        "amount": 2000000000
+      },
+      {
+        "id": 4514,
+        "amount": 2000000000
+      },
+      {
+        "id": 11891,
+        "amount": 2000000000
+      },
+      {
+        "id": 11892,
+        "amount": 2000000000
+      },
+      {
+        "id": 11898,
+        "amount": 2000000000
+      },
+      {
+        "id": 11896,
+        "amount": 2000000000
+      },
+      {
+        "id": 11897,
+        "amount": 2000000000
+      },
+      {
+        "id": 11899,
+        "amount": 2000000000
+      },
+      {
+        "id": 11900,
+        "amount": 2000000000
+      },
+      {
+        "id": 11901,
+        "amount": 2000000000
+      },
+      {
+        "id": 27165,
+        "amount": 2000000000
+      },
+      {
+        "id": 27164,
+        "amount": 2000000000
+      },
+      {
+        "id": 27163,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          11650
+        ],
+        "optionSlot": 4
+      }
+    ]
+  },
+  {
+    "id": 1433,
+    "name": "Davon's Amulet Store. (Default)",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          8680
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1434,
+    "name": "Davon's Amulet Store. (Karamja gloves)",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          8680
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1435,
+    "name": "Deadman Reward Store",
+    "currency": "DEADMAN POINTS",
+    "originalStock": [
+      {
+        "id": 29625,
+        "amount": 2000000000
+      },
+      {
+        "id": 29628,
+        "amount": 2000000000
+      },
+      {
+        "id": 29622,
+        "amount": 2000000000
+      },
+      {
+        "id": 29619,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          8390,
+          8391
+        ],
+        "optionSlot": 4
+      }
+    ]
+  },
+  {
+    "id": 1436,
+    "name": "Dom Onion's Reward Shop",
+    "currency": "NMZ",
+    "originalStock": [
+      {
+        "id": 1779,
+        "amount": 2000000000
+      },
+      {
+        "id": 1783,
+        "amount": 2000000000
+      },
+      {
+        "id": 401,
+        "amount": 2000000000
+      },
+      {
+        "id": 6470,
+        "amount": 2000000000
+      },
+      {
+        "id": 556,
+        "amount": 2000000000
+      },
+      {
+        "id": 555,
+        "amount": 2000000000
+      },
+      {
+        "id": 557,
+        "amount": 2000000000
+      },
+      {
+        "id": 554,
+        "amount": 2000000000
+      },
+      {
+        "id": 1436,
+        "amount": 2000000000
+      },
+      {
+        "id": 7936,
+        "amount": 2000000000
+      },
+      {
+        "id": 11738,
+        "amount": 2000000000
+      },
+      {
+        "id": 227,
+        "amount": 2000000000
+      },
+      {
+        "id": 11740,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": []
+  },
+  {
+    "id": 1437,
+    "name": "Dusuri's Star Shop",
+    "currency": "STARDUST",
+    "originalStock": [
+      {
+        "id": 25539,
+        "amount": 50,
+        "restockTicks": 1
+      },
+      {
+        "id": 25547,
+        "amount": 50,
+        "restockTicks": 1
+      },
+      {
+        "id": 25537,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 25533,
+        "amount": 1000,
+        "restockTicks": 1
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          10630,
+          10631
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1438,
+    "name": "Farmer Gricoller's Rewards",
+    "currency": "TITHE",
+    "originalStock": [
+      {
+        "id": 21254,
+        "amount": 2000000000
+      },
+      {
+        "id": 13642,
+        "amount": 2000000000
+      },
+      {
+        "id": 13643,
+        "amount": 2000000000
+      },
+      {
+        "id": 13641,
+        "amount": 2000000000
+      },
+      {
+        "id": 13645,
+        "amount": 2000000000
+      },
+      {
+        "id": 6032,
+        "amount": 2000000000
+      },
+      {
+        "id": 6034,
+        "amount": 2000000000
+      },
+      {
+        "id": 13657,
+        "amount": 2000000000
+      },
+      {
+        "id": 20747,
+        "amount": 2000000000
+      },
+      {
+        "id": 11738,
+        "amount": 2000000000
+      },
+      {
+        "id": 22993,
+        "amount": 2000000000
+      },
+      {
+        "id": 13639,
+        "amount": 2000000000
+      },
+      {
+        "id": 13226,
+        "amount": 2000000000
+      },
+      {
+        "id": 13353,
+        "amount": 2000000000
+      },
+      {
+        "id": 1459,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          6920
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1439,
+    "name": "Gabooty's Tai Bwo Wannai Cooperative. (Default)",
+    "currency": "TRADING STICKS",
+    "originalStock": [
+      {
+        "id": 6341,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6343,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6345,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6349,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6347,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6313,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6315,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6317,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6351,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6353,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6355,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6357,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6359,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6361,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6363,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6365,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6367,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6369,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6371,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6373,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6375,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6377,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6379,
+        "amount": 50,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          6424,
+          6425
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1440,
+    "name": "Gabooty's Tai Bwo Wannai Cooperative. (Karamja gloves)",
+    "currency": "TRADING STICKS",
+    "originalStock": [
+      {
+        "id": 6341,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6343,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6345,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6349,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6347,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6313,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6315,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6317,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6351,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6353,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6355,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6357,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6359,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6361,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6363,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6365,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6367,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6369,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6371,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6373,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6375,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6377,
+        "amount": 50,
+        "restockTicks": 100
+      },
+      {
+        "id": 6379,
+        "amount": 50,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          6424,
+          6425
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1441,
+    "name": "Gabooty's Tai Bwo Wannai Drinky Store. (Default)",
+    "currency": "TRADING STICKS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          6424,
+          6425
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1442,
+    "name": "Gabooty's Tai Bwo Wannai Drinky Store. (Karamja gloves)",
+    "currency": "TRADING STICKS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          6424,
+          6425
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1443,
+    "name": "Giants' Foundry Reward Shop",
+    "currency": "FOUNDRY REPUTATION",
+    "originalStock": [
+      {
+        "id": 27012,
+        "amount": 2000000000
+      },
+      {
+        "id": 27014,
+        "amount": 2000000000
+      },
+      {
+        "id": 27017,
+        "amount": 2000000000
+      },
+      {
+        "id": 27019,
+        "amount": 2000000000
+      },
+      {
+        "id": 27023,
+        "amount": 2000000000
+      },
+      {
+        "id": 27025,
+        "amount": 2000000000
+      },
+      {
+        "id": 27027,
+        "amount": 2000000000
+      },
+      {
+        "id": 27029,
+        "amount": 2000000000
+      },
+      {
+        "id": 27021,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          11467,
+          11468,
+          11469,
+          11470,
+          11472
+        ],
+        "optionSlot": 5
+      }
+    ]
+  },
+  {
+    "id": 1444,
+    "name": "Grace's Graceful Clothing",
+    "currency": "MARK OF GRACE",
+    "originalStock": [
+      {
+        "id": 30047,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 30053,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 30056,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 30059,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 30062,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 30050,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 12641,
+        "amount": 1000,
+        "restockTicks": 1
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          5919
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1445,
+    "name": "The Green Ghost",
+    "currency": "ECTO-TOKENS",
+    "originalStock": [
+      {
+        "id": 5767,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": []
+  },
+  {
+    "id": 1446,
+    "name": "Grum's Gold Exchange.",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2889
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1447,
+    "name": "Hendor's Awesome Ores",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7717
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1448,
+    "name": "Honest Jimmy's House of Stuff",
+    "currency": "PIECES OF EIGHT",
+    "originalStock": [
+      {
+        "id": 8952,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8959,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8991,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8953,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8960,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8992,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8954,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8961,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8993,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8955,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8962,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8994,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8956,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8963,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8995,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8957,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8964,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8996,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8958,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8965,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8997,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8966,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8967,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8968,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8969,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8970,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8971,
+        "amount": 10,
+        "restockTicks": 100
+      },
+      {
+        "id": 8988,
+        "amount": 200,
+        "restockTicks": 100
+      },
+      {
+        "id": 8940,
+        "amount": 200,
+        "restockTicks": 100
+      },
+      {
+        "id": 8941,
+        "amount": 200,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          1816
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1449,
+    "name": "Justine's stuff for the Last Shopper Standing",
+    "currency": "LAST MAN STANDING POINTS",
+    "originalStock": [
+      {
+        "id": 24189,
+        "amount": 2000000000
+      },
+      {
+        "id": 24190,
+        "amount": 2000000000
+      },
+      {
+        "id": 24191,
+        "amount": 2000000000
+      },
+      {
+        "id": 24219,
+        "amount": 2000000000
+      },
+      {
+        "id": 24217,
+        "amount": 2000000000
+      },
+      {
+        "id": 24187,
+        "amount": 2000000000
+      },
+      {
+        "id": 24251,
+        "amount": 2000000000
+      },
+      {
+        "id": 24613,
+        "amount": 2000000000
+      },
+      {
+        "id": 24615,
+        "amount": 2000000000
+      },
+      {
+        "id": 24621,
+        "amount": 2000000000
+      },
+      {
+        "id": 24607,
+        "amount": 2000000000
+      },
+      {
+        "id": 890,
+        "amount": 2000000000
+      },
+      {
+        "id": 4740,
+        "amount": 2000000000
+      },
+      {
+        "id": 892,
+        "amount": 2000000000
+      },
+      {
+        "id": 9244,
+        "amount": 2000000000
+      },
+      {
+        "id": 24595,
+        "amount": 2000000000
+      },
+      {
+        "id": 24589,
+        "amount": 2000000000
+      },
+      {
+        "id": 24592,
+        "amount": 2000000000
+      },
+      {
+        "id": 24598,
+        "amount": 2000000000
+      },
+      {
+        "id": 3105,
+        "amount": 2000000000
+      },
+      {
+        "id": 22586,
+        "amount": 2000000000
+      },
+      {
+        "id": 24585,
+        "amount": 2000000000
+      },
+      {
+        "id": 12783,
+        "amount": 2000000000
+      },
+      {
+        "id": 12786,
+        "amount": 2000000000
+      },
+      {
+        "id": 12789,
+        "amount": 2000000000
+      },
+      {
+        "id": 4207,
+        "amount": 2000000000
+      },
+      {
+        "id": 12849,
+        "amount": 2000000000
+      },
+      {
+        "id": 24229,
+        "amount": 2000000000
+      },
+      {
+        "id": 12798,
+        "amount": 2000000000
+      },
+      {
+        "id": 21202,
+        "amount": 2000000000
+      },
+      {
+        "id": 12800,
+        "amount": 2000000000
+      },
+      {
+        "id": 12802,
+        "amount": 2000000000
+      },
+      {
+        "id": 12759,
+        "amount": 2000000000
+      },
+      {
+        "id": 12761,
+        "amount": 2000000000
+      },
+      {
+        "id": 12763,
+        "amount": 2000000000
+      },
+      {
+        "id": 12757,
+        "amount": 2000000000
+      },
+      {
+        "id": 12771,
+        "amount": 2000000000
+      },
+      {
+        "id": 12769,
+        "amount": 2000000000
+      },
+      {
+        "id": 30692,
+        "amount": 2000000000
+      },
+      {
+        "id": 24587,
+        "amount": 2000000000
+      },
+      {
+        "id": 24287,
+        "amount": 2000000000
+      },
+      {
+        "id": 12804,
+        "amount": 2000000000
+      },
+      {
+        "id": 12846,
+        "amount": 2000000000
+      },
+      {
+        "id": 24619,
+        "amount": 2000000000
+      },
+      {
+        "id": 24207,
+        "amount": 2000000000
+      },
+      {
+        "id": 24209,
+        "amount": 2000000000
+      },
+      {
+        "id": 24211,
+        "amount": 2000000000
+      },
+      {
+        "id": 24213,
+        "amount": 2000000000
+      },
+      {
+        "id": 24215,
+        "amount": 2000000000
+      },
+      {
+        "id": 24520,
+        "amount": 2000000000
+      },
+      {
+        "id": 24192,
+        "amount": 2000000000
+      },
+      {
+        "id": 24195,
+        "amount": 2000000000
+      },
+      {
+        "id": 24198,
+        "amount": 2000000000
+      },
+      {
+        "id": 24201,
+        "amount": 2000000000
+      },
+      {
+        "id": 24204,
+        "amount": 2000000000
+      },
+      {
+        "id": 12781,
+        "amount": 2000000000
+      },
+      {
+        "id": 12782,
+        "amount": 2000000000
+      },
+      {
+        "id": 12775,
+        "amount": 2000000000
+      },
+      {
+        "id": 12776,
+        "amount": 2000000000
+      },
+      {
+        "id": 12777,
+        "amount": 2000000000
+      },
+      {
+        "id": 12778,
+        "amount": 2000000000
+      },
+      {
+        "id": 12779,
+        "amount": 2000000000
+      },
+      {
+        "id": 12780,
+        "amount": 2000000000
+      },
+      {
+        "id": 24336,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          8721
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1450,
+    "name": "Leagues Reward Shop",
+    "currency": "LEAGUE POINTS",
+    "originalStock": [
+      {
+        "id": 24413,
+        "amount": 2000000000
+      },
+      {
+        "id": 24460,
+        "amount": 2000000000
+      },
+      {
+        "id": 24463,
+        "amount": 2000000000
+      },
+      {
+        "id": 24466,
+        "amount": 2000000000
+      },
+      {
+        "id": 24469,
+        "amount": 2000000000
+      },
+      {
+        "id": 24472,
+        "amount": 2000000000
+      },
+      {
+        "id": 24475,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": []
+  },
+  {
+    "id": 1451,
+    "name": "The Long Hall",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": []
+  },
+  {
+    "id": 1452,
+    "name": "Mahogany Homes Reward Shop",
+    "currency": "MAHOGANY HOMES POINTS",
+    "originalStock": [
+      {
+        "id": 24884,
+        "amount": 2000000000
+      },
+      {
+        "id": 24880,
+        "amount": 2000000000
+      },
+      {
+        "id": 24882,
+        "amount": 2000000000
+      },
+      {
+        "id": 24885,
+        "amount": 2000000000
+      },
+      {
+        "id": 24872,
+        "amount": 2000000000
+      },
+      {
+        "id": 24874,
+        "amount": 2000000000
+      },
+      {
+        "id": 24876,
+        "amount": 2000000000
+      },
+      {
+        "id": 24878,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          6439,
+          7417
+        ],
+        "optionSlot": 5
+      }
+    ]
+  },
+  {
+    "id": 1453,
+    "name": "Mairin's Market",
+    "currency": "MERMAID'S TEAR",
+    "originalStock": [
+      {
+        "id": 21562,
+        "amount": 100,
+        "restockTicks": 10
+      },
+      {
+        "id": 21564,
+        "amount": 100,
+        "restockTicks": 10
+      },
+      {
+        "id": 21566,
+        "amount": 100,
+        "restockTicks": 10
+      },
+      {
+        "id": 21649,
+        "amount": 10,
+        "restockTicks": 10
+      },
+      {
+        "id": 21490,
+        "amount": 100,
+        "restockTicks": 10
+      },
+      {
+        "id": 21693,
+        "amount": 100,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7784
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1454,
+    "name": "Mining Guild Mineral Exchange",
+    "currency": "UNIDENTIFIED MINERALS",
+    "originalStock": [
+      {
+        "id": 21343,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 21345,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 25533,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 25537,
+        "amount": 100,
+        "restockTicks": 1
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7719
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1455,
+    "name": "Mysterious Hallowed Goods",
+    "currency": "HALLOWED MARK",
+    "originalStock": [
+      {
+        "id": 24709,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 24719,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 24721,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 24723,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 24725,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 24727,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 24731,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 24729,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 24733,
+        "amount": 100,
+        "restockTicks": 1
+      },
+      {
+        "id": 24946,
+        "amount": 100,
+        "restockTicks": 1
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          9639,
+          9640
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1456,
+    "name": "The Nutcracker",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": []
+  },
+  {
+    "id": 1457,
+    "name": "Petrified Pete's Ore Shop",
+    "currency": "VOLCANIC MINE POINTS",
+    "originalStock": [
+      {
+        "id": 440,
+        "amount": 2000000000
+      },
+      {
+        "id": 442,
+        "amount": 2000000000
+      },
+      {
+        "id": 453,
+        "amount": 2000000000
+      },
+      {
+        "id": 444,
+        "amount": 2000000000
+      },
+      {
+        "id": 447,
+        "amount": 2000000000
+      },
+      {
+        "id": 449,
+        "amount": 2000000000
+      },
+      {
+        "id": 451,
+        "amount": 2000000000
+      },
+      {
+        "id": 21622,
+        "amount": 2000000000
+      },
+      {
+        "id": 21543,
+        "amount": 2000000000
+      },
+      {
+        "id": 21545,
+        "amount": 2000000000
+      },
+      {
+        "id": 21541,
+        "amount": 2000000000
+      },
+      {
+        "id": 25615,
+        "amount": 2000000000
+      },
+      {
+        "id": 21697,
+        "amount": 2000000000
+      },
+      {
+        "id": 27693,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7776
+        ],
+        "optionSlot": 4
+      }
+    ]
+  },
+  {
+    "id": 1458,
+    "name": "Prospector Percy's Nugget Shop",
+    "currency": "GOLDEN NUGGET",
+    "originalStock": [
+      {
+        "id": 764,
+        "amount": 1,
+        "restockTicks": 1
+      },
+      {
+        "id": 766,
+        "amount": 1,
+        "restockTicks": 1
+      },
+      {
+        "id": 25533,
+        "amount": 1000,
+        "restockTicks": 1
+      },
+      {
+        "id": 25537,
+        "amount": 100,
+        "restockTicks": 1
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          6562
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1459,
+    "name": "PvP Arena Rewards",
+    "currency": "PVP ARENA POINTS",
+    "originalStock": [
+      {
+        "id": 26705,
+        "amount": 2000000000
+      },
+      {
+        "id": 26706,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          3331
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1460,
+    "name": "Ramarno's Shard Exchange",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          10684,
+          10685
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1461,
+    "name": "Ranging Guild Ticket Exchange",
+    "currency": "ARCHERY TICKET",
+    "originalStock": [
+      {
+        "id": 47,
+        "amount": 2000000000
+      },
+      {
+        "id": 1133,
+        "amount": 2000000000
+      },
+      {
+        "id": 892,
+        "amount": 2000000000
+      },
+      {
+        "id": 1169,
+        "amount": 2000000000
+      },
+      {
+        "id": 1135,
+        "amount": 2000000000
+      },
+      {
+        "id": 829,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          6071
+        ],
+        "optionSlot": 1
+      }
+    ]
+  },
+  {
+    "id": 1462,
+    "name": "Skull in a Chest Inn",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": []
+  },
+  {
+    "id": 1463,
+    "name": "Slayer Rewards",
+    "currency": "SLAYER_POINTS",
+    "originalStock": [
+      {
+        "id": 11866,
+        "amount": 2000000000
+      },
+      {
+        "id": 11875,
+        "amount": 2000000000
+      },
+      {
+        "id": 4160,
+        "amount": 2000000000
+      },
+      {
+        "id": 13226,
+        "amount": 2000000000
+      },
+      {
+        "id": 30692,
+        "amount": 2000000000
+      },
+      {
+        "id": 22586,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          403,
+          404,
+          3307,
+          6797,
+          6798,
+          6799,
+          7108,
+          7109,
+          7110,
+          7663,
+          8623,
+          10432,
+          10433,
+          10434,
+          13618,
+          13619,
+          13620,
+          13621,
+          13622,
+          13623
+        ],
+        "optionSlot": 5
+      }
+    ]
+  },
+  {
+    "id": 1464,
+    "name": "Soul Wars Reward Shop",
+    "currency": "ZEAL TOKENS",
+    "originalStock": [
+      {
+        "id": 25346,
+        "amount": 2000000000
+      },
+      {
+        "id": 25340,
+        "amount": 2000000000
+      },
+      {
+        "id": 25342,
+        "amount": 2000000000
+      },
+      {
+        "id": 24613,
+        "amount": 2000000000
+      },
+      {
+        "id": 24615,
+        "amount": 2000000000
+      },
+      {
+        "id": 24621,
+        "amount": 2000000000
+      },
+      {
+        "id": 24607,
+        "amount": 2000000000
+      },
+      {
+        "id": 24589,
+        "amount": 2000000000
+      },
+      {
+        "id": 24592,
+        "amount": 2000000000
+      },
+      {
+        "id": 24595,
+        "amount": 2000000000
+      },
+      {
+        "id": 24598,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          10528,
+          10529
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1465,
+    "name": "Speedrunning Reward Shop",
+    "currency": "SPEEDRUN POINTS",
+    "originalStock": [
+      {
+        "id": 27414,
+        "amount": 2000000000
+      },
+      {
+        "id": 27416,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          11852,
+          11853
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1466,
+    "name": "Temple Supplies",
+    "currency": "ABYSSAL PEARLS",
+    "originalStock": [
+      {
+        "id": 26850,
+        "amount": 100
+      },
+      {
+        "id": 26852,
+        "amount": 100
+      },
+      {
+        "id": 26854,
+        "amount": 100
+      },
+      {
+        "id": 26856,
+        "amount": 100
+      },
+      {
+        "id": 26818,
+        "amount": 100
+      },
+      {
+        "id": 26820,
+        "amount": 100
+      },
+      {
+        "id": 26822,
+        "amount": 100
+      },
+      {
+        "id": 26813,
+        "amount": 100
+      },
+      {
+        "id": 1438,
+        "amount": 100
+      },
+      {
+        "id": 1444,
+        "amount": 100
+      },
+      {
+        "id": 1440,
+        "amount": 100
+      },
+      {
+        "id": 1442,
+        "amount": 100
+      },
+      {
+        "id": 1448,
+        "amount": 100
+      },
+      {
+        "id": 1446,
+        "amount": 100
+      },
+      {
+        "id": 1452,
+        "amount": 100
+      },
+      {
+        "id": 1454,
+        "amount": 100
+      },
+      {
+        "id": 1462,
+        "amount": 100
+      },
+      {
+        "id": 1458,
+        "amount": 100
+      },
+      {
+        "id": 1456,
+        "amount": 100
+      },
+      {
+        "id": 1450,
+        "amount": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          11404,
+          11446,
+          11447,
+          11448
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1467,
+    "name": "Thessalia's Makeovers",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          10477,
+          10478
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1468,
+    "name": "TzHaar-Hur-Lek's Ore and Gem Store (Default)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 438,
+        "amount": 5,
+        "restockTicks": 100
+      },
+      {
+        "id": 436,
+        "amount": 5,
+        "restockTicks": 100
+      },
+      {
+        "id": 440,
+        "amount": 2,
+        "restockTicks": 100
+      },
+      {
+        "id": 1623,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 1621,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6571,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 9194,
+        "amount": 50,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2184
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1469,
+    "name": "TzHaar-Hur-Lek's Ore and Gem Store (Karamja gloves)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 438,
+        "amount": 5,
+        "restockTicks": 100
+      },
+      {
+        "id": 436,
+        "amount": 5,
+        "restockTicks": 100
+      },
+      {
+        "id": 440,
+        "amount": 2,
+        "restockTicks": 100
+      },
+      {
+        "id": 1623,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 1621,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6571,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 9194,
+        "amount": 50,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2184
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1470,
+    "name": "TzHaar-Hur-Rin's Ore and Gem Store (Default)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 438,
+        "amount": 25,
+        "restockTicks": 100
+      },
+      {
+        "id": 436,
+        "amount": 25,
+        "restockTicks": 100
+      },
+      {
+        "id": 440,
+        "amount": 15,
+        "restockTicks": 100
+      },
+      {
+        "id": 442,
+        "amount": 12,
+        "restockTicks": 100
+      },
+      {
+        "id": 453,
+        "amount": 20,
+        "restockTicks": 100
+      },
+      {
+        "id": 444,
+        "amount": 12,
+        "restockTicks": 100
+      },
+      {
+        "id": 447,
+        "amount": 4,
+        "restockTicks": 100
+      },
+      {
+        "id": 449,
+        "amount": 2,
+        "restockTicks": 100
+      },
+      {
+        "id": 451,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 1623,
+        "amount": 16,
+        "restockTicks": 100
+      },
+      {
+        "id": 1621,
+        "amount": 12,
+        "restockTicks": 300
+      },
+      {
+        "id": 1619,
+        "amount": 8,
+        "restockTicks": 500
+      },
+      {
+        "id": 1617,
+        "amount": 6,
+        "restockTicks": 1000
+      },
+      {
+        "id": 6571,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 9194,
+        "amount": 50,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7689
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1471,
+    "name": "TzHaar-Hur-Rin's Ore and Gem Store (Karamja gloves)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 438,
+        "amount": 25,
+        "restockTicks": 100
+      },
+      {
+        "id": 436,
+        "amount": 25,
+        "restockTicks": 100
+      },
+      {
+        "id": 440,
+        "amount": 15,
+        "restockTicks": 100
+      },
+      {
+        "id": 442,
+        "amount": 12,
+        "restockTicks": 100
+      },
+      {
+        "id": 453,
+        "amount": 20,
+        "restockTicks": 100
+      },
+      {
+        "id": 444,
+        "amount": 12,
+        "restockTicks": 100
+      },
+      {
+        "id": 447,
+        "amount": 4,
+        "restockTicks": 100
+      },
+      {
+        "id": 449,
+        "amount": 2,
+        "restockTicks": 100
+      },
+      {
+        "id": 451,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 1623,
+        "amount": 16,
+        "restockTicks": 100
+      },
+      {
+        "id": 1621,
+        "amount": 12,
+        "restockTicks": 300
+      },
+      {
+        "id": 1619,
+        "amount": 8,
+        "restockTicks": 500
+      },
+      {
+        "id": 1617,
+        "amount": 6,
+        "restockTicks": 1000
+      },
+      {
+        "id": 6571,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 9194,
+        "amount": 50,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7689
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1472,
+    "name": "TzHaar-Hur-Tel's Equipment Store (Default)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 6522,
+        "amount": 500,
+        "restockTicks": 10
+      },
+      {
+        "id": 6523,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6525,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6528,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6526,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6527,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6568,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6524,
+        "amount": 1,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2183
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1473,
+    "name": "TzHaar-Hur-Tel's Equipment Store (Karamja gloves)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 6522,
+        "amount": 500,
+        "restockTicks": 10
+      },
+      {
+        "id": 6523,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6525,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6528,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6526,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6527,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6568,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6524,
+        "amount": 1,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2183
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1474,
+    "name": "TzHaar-Hur-Zal's Equipment Store (Default)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 6522,
+        "amount": 500,
+        "restockTicks": 10
+      },
+      {
+        "id": 6523,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6525,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6528,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6526,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6527,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6568,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6524,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 21298,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 21301,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 21304,
+        "amount": 1,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7688
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1475,
+    "name": "TzHaar-Hur-Zal's Equipment Store (Karamja gloves)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 6522,
+        "amount": 500,
+        "restockTicks": 10
+      },
+      {
+        "id": 6523,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6525,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6528,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6526,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6527,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6568,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 6524,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 21298,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 21301,
+        "amount": 1,
+        "restockTicks": 100
+      },
+      {
+        "id": 21304,
+        "amount": 1,
+        "restockTicks": 100
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          7688
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1476,
+    "name": "TzHaar-Mej-Roh's Rune Store (Default)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 554,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 555,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 556,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 557,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 558,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 559,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 562,
+        "amount": 2500,
+        "restockTicks": 95
+      },
+      {
+        "id": 560,
+        "amount": 2500,
+        "restockTicks": 105
+      },
+      {
+        "id": 21707,
+        "amount": 50,
+        "restockTicks": 40
+      },
+      {
+        "id": 21701,
+        "amount": 50,
+        "restockTicks": 40
+      },
+      {
+        "id": 21698,
+        "amount": 50,
+        "restockTicks": 40
+      },
+      {
+        "id": 21704,
+        "amount": 50,
+        "restockTicks": 40
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2185
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1477,
+    "name": "TzHaar-Mej-Roh's Rune Store (Karamja gloves)",
+    "currency": "TOKKUL",
+    "originalStock": [
+      {
+        "id": 554,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 555,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 556,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 557,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 558,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 559,
+        "amount": 5000,
+        "restockTicks": 20
+      },
+      {
+        "id": 562,
+        "amount": 2500,
+        "restockTicks": 95
+      },
+      {
+        "id": 560,
+        "amount": 2500,
+        "restockTicks": 105
+      },
+      {
+        "id": 21707,
+        "amount": 50,
+        "restockTicks": 40
+      },
+      {
+        "id": 21701,
+        "amount": 50,
+        "restockTicks": 40
+      },
+      {
+        "id": 21698,
+        "amount": 50,
+        "restockTicks": 40
+      },
+      {
+        "id": 21704,
+        "amount": 50,
+        "restockTicks": 40
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          2185
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1478,
+    "name": "Vale Research Exchange",
+    "currency": "VALE RESEARCH POINTS",
+    "originalStock": [
+      {
+        "id": 31052,
+        "amount": 2000000000
+      },
+      {
+        "id": 31043,
+        "amount": 2000000000
+      },
+      {
+        "id": 31034,
+        "amount": 2000000000
+      },
+      {
+        "id": 31032,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          14577,
+          14578,
+          14582
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1479,
+    "name": "Worm Tongue's Wares",
+    "currency": "TERMITES",
+    "originalStock": [
+      {
+        "id": 12641,
+        "amount": 2000000000
+      },
+      {
+        "id": 30040,
+        "amount": 2000000000
+      },
+      {
+        "id": 30044,
+        "amount": 2000000000
+      },
+      {
+        "id": 30042,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          13982
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1480,
+    "name": "Yrsa's Shoe Store",
+    "currency": "COINS",
+    "originalStock": [],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          3933
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1481,
+    "name": "Events Reward Shop",
+    "currency": "EVENT POINTS",
+    "originalStock": [
+      {
+        "id": 31181,
+        "amount": 2000000000
+      },
+      {
+        "id": 31184,
+        "amount": 2000000000
+      },
+      {
+        "id": 31187,
+        "amount": 2000000000
+      },
+      {
+        "id": 31190,
+        "amount": 2000000000
+      },
+      {
+        "id": 31193,
+        "amount": 2000000000
+      },
+      {
+        "id": 31196,
+        "amount": 2000000000
+      },
+      {
+        "id": 31199,
+        "amount": 2000000000
+      },
+      {
+        "id": 31202,
+        "amount": 2000000000
+      },
+      {
+        "id": 31205,
+        "amount": 2000000000
+      },
+      {
+        "id": 31208,
+        "amount": 2000000000
+      }
+    ],
+    "npcInteractions": [
+      {
+        "npcIds": [
+          14801,
+          14802
+        ],
+        "optionSlot": 3
+      }
+    ]
+  },
+  {
+    "id": 1482,
+    "name": "Flakes 'n' Flotsam",
+    "currency": "SPIRIT FLAKES",
+    "originalStock": [
+      {
+        "id": 25582,
+        "amount": 2000000000
+      },
+      {
+        "id": 25580,
         "amount": 2000000000
       }
     ],

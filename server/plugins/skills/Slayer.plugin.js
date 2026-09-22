@@ -4,19 +4,16 @@ const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 
-const SLAYER_MASTERS = Object.freeze(JSON.parse(fs.readFileSync(
-  path.join(GameConstants.DEFINITIONS_DIRECTORY, "slayer-tasks.json"),
-  "utf8"
-)));
+const SLAYER_MASTERS = Object.freeze(Object.fromEntries(
+  Object.entries(JSON.parse(fs.readFileSync(
+    path.join(GameConstants.DEFINITIONS_DIRECTORY, "slayer-tasks.json"),
+    "utf8"
+  ))).map(([id, master]) => [id, { ...master, id: Number(id) }])
+));
 
-function initializePlayerSlayerState(player) {
-  if (typeof player.getSlayerPoints === "function" && !Number.isFinite(player.getSlayerPoints())) {
-    player.setSlayerPoints(0);
-  }
-  if (typeof player.getConsecutiveTasks === "function" && !Number.isFinite(player.getConsecutiveTasks())) {
-    player.setConsecutiveTasks(0);
-  }
-}
+const TASK_ATTRIBUTE = "slayer:task";
+const POINTS_ATTRIBUTE = "slayer:points";
+const STREAK_ATTRIBUTE = "slayer:streak";
 
 function wrapTask(taskData) {
   return {
@@ -39,9 +36,9 @@ function wrapTask(taskData) {
   };
 }
 
+// ponytail: reward tables and quest/unlock state stay out until the Slayer
+// points/streak tables are exported; assignment still tracks both as attributes.
 function wrapMaster(masterData) {
-  // ponytail: task assignment only; reward tables and quest/unlock state stay out
-  // until the server has those player-state hooks.
   return {
     ...masterData,
     getBasePoints() {
@@ -73,25 +70,54 @@ function wrapActiveTask(master, task, remaining) {
   };
 }
 
+/** Only a plain snapshot is persisted; the wrappers are rebuilt from the dump. */
+function setActiveTask(player, activeTask) {
+  player.setAttribute(TASK_ATTRIBUTE, activeTask
+    ? {
+        masterId: activeTask.getMaster().id,
+        slug: activeTask.getTask().slug,
+        remaining: activeTask.getRemaining(),
+      }
+    : null);
+}
+
+function getActiveTask(player) {
+  const saved = player.getAttribute(TASK_ATTRIBUTE);
+  if (!saved || !Number.isInteger(saved.masterId) || typeof saved.slug !== "string") {
+    return null;
+  }
+  const masterData = SLAYER_MASTERS[String(saved.masterId)];
+  const taskData = masterData?.tasks.find((task) => task.slug === saved.slug);
+  if (!taskData) {
+    return null;
+  }
+  return wrapActiveTask(
+    wrapMaster({ id: masterData.id, name: masterData.name, basePoints: 0, consecutiveTaskPoints: [] }),
+    wrapTask(taskData),
+    saved.remaining
+  );
+}
+
+function getPoints(player) {
+  const points = player.getAttribute(POINTS_ATTRIBUTE);
+  return Number.isFinite(points) ? points : 0;
+}
+
+function getStreak(player) {
+  const streak = player.getAttribute(STREAK_ATTRIBUTE);
+  return Number.isFinite(streak) ? streak : 0;
+}
+
 function assignTask(player, masterData) {
-  if (player.getSlayerTask()) {
-    player
-      .getPacketSender()
-      .sendInterfaceRemoval()
-      .sendMessage("You already have a Slayer task.");
-    return false;
+  const activeTask = getActiveTask(player);
+  if (activeTask) {
+    return `You're still hunting ${activeTask.getTask().toString()}; you have ${activeTask.getRemaining()} to go.`;
   }
 
   const slayerLevel = player.getSkillManager().getMaxLevel(Skill.SLAYER);
   const possibleTasks = masterData.tasks.filter((task) => slayerLevel >= task.slayer_level);
   if (possibleTasks.length === 0) {
-    player
-      .getPacketSender()
-      .sendInterfaceRemoval()
-      .sendMessage(
-        `${masterData.name} was unable to give you a Slayer task. Please try again later.`
-      );
-    return false;
+    return `${masterData.name} was unable to give you a Slayer task. Please try again later.`;
   }
 
   let roll = Misc.getRandom(
@@ -107,16 +133,42 @@ function assignTask(player, masterData) {
   }
 
   const remaining = Misc.randomInclusive(selected.quantity[0], selected.quantity[1]);
-  player.setSlayerTask(wrapActiveTask(
-    wrapMaster({ name: masterData.name, basePoints: 0, consecutiveTaskPoints: [] }),
+  setActiveTask(player, wrapActiveTask(
+    wrapMaster({ id: masterData.id, name: masterData.name, basePoints: 0, consecutiveTaskPoints: [] }),
     wrapTask(selected),
     remaining
   ));
-  return true;
+  return `Your new task is to kill ${remaining} ${selected.name.toLowerCase()}.`;
+}
+
+/** Match a master by spawn id, then resolved definition id, then display name. */
+function masterForNpc({ npcId, definitionId, npcName }) {
+  return SLAYER_MASTERS[String(npcId)]
+    ?? SLAYER_MASTERS[String(definitionId)]
+    ?? Object.values(SLAYER_MASTERS).find(
+        (master) => master.name === npcName || master.dialogue === npcName
+      )
+    ?? null;
+}
+
+/** The line to show for an assignment from this NPC, or null when it assigns nothing. */
+function assignTaskForNpc(player, npc) {
+  const master = masterForNpc(npc ?? {});
+  return master ? assignTask(player, master) : null;
+}
+
+/** The line to show for the active task's location, or false when there is no task. */
+function taskTip(player) {
+  const task = getActiveTask(player);
+  if (!task) return false;
+  const hint = task.getTask().getHint();
+  return hint
+    ? `You should be able to find your task at ${hint}.`
+    : "You're on a Slayer task; check your task list for the details.";
 }
 
 function onNpcKilled(player, npc) {
-  const task = player.getSlayerTask();
+  const task = getActiveTask(player);
   if (!task) {
     return;
   }
@@ -140,46 +192,79 @@ function onNpcKilled(player, npc) {
   task.setRemaining(task.getRemaining() - 1);
 
   if (task.getRemaining() > 0) {
+    setActiveTask(player, task);
     return;
   }
 
   let rewardPoints = task.getMaster().getBasePoints();
-  player.setConsecutiveTasks(player.getConsecutiveTasks() + 1);
+  const streak = getStreak(player) + 1;
+  player.setAttribute(STREAK_ATTRIBUTE, streak);
 
   for (const [requiredTasks, bonusPoints] of task.getMaster().getConsecutiveTaskPoints()) {
-    if (player.getConsecutiveTasks() % requiredTasks === 0) {
+    if (streak % requiredTasks === 0) {
       rewardPoints = bonusPoints;
       break;
     }
   }
 
-  player.setSlayerPoints(player.getSlayerPoints() + rewardPoints);
+  player.setAttribute(POINTS_ATTRIBUTE, getPoints(player) + rewardPoints);
   player.sendMessage(
-    `You have succesfully completed @dre@${player.getConsecutiveTasks()}@bla@ slayer tasks in a row.`
+    `You have succesfully completed ${streak} slayer tasks in a row.`
   );
   player.sendMessage(
-    `You earned @dre@${rewardPoints}@bla@ Slayer ${
+    `You earned ${rewardPoints} Slayer ${
       rewardPoints === 1 ? "point" : "points"
-    }, your new total is now @dre@${player.getSlayerPoints()}.`
+    }, your new total is now ${getPoints(player)}.`
   );
-  player.setSlayerTask(null);
+  setActiveTask(player, null);
+}
+
+function assignFromNpcEvent(event) {
+  const line = assignTaskForNpc(event.player, event);
+  if (line) event.line = line;
+}
+
+function taskTipEvent(event) {
+  const line = taskTip(event.player);
+  if (line) event.line = line;
+}
+
+// The "Assignment" right-click, caught by click slot so transformed forms whose
+// cache definition drops the label (Nieve) still work. A labelled slot must say
+// "Assignment"; the NPC is matched against the master dump inside the handler.
+function assignFromNpcClick(event) {
+  if (event.clickType !== 3) return;
+  const label = event.definition?.getActions?.()?.[event.clickType - 1];
+  if (label && label !== "Assignment") return;
+  const message = assignTaskForNpc(event.player, {
+    npcId: event.npcId,
+    definitionId: event.definition?.getId?.(),
+    npcName: event.definition?.getName?.(),
+  });
+  if (!message) return;
+  event.handled = true;
+  event.player.getPacketSender().sendMessage(message);
 }
 
 module.exports = {
   name: "Slayer",
+  // Exported for tests/slayer-assign.test.cjs; nothing else reads them.
+  assignTask,
+  assignTaskForNpc,
+  getActiveTask,
+  taskTip,
   register(api) {
-    api.onPlayerLogin(({ player }) => {
-      initializePlayerSlayerState(player);
-    });
+    api.persistAttribute(TASK_ATTRIBUTE);
+    api.persistAttribute(POINTS_ATTRIBUTE);
+    api.persistAttribute(STREAK_ATTRIBUTE);
 
-    api.onAnyNpcInteraction({
-      Assignment: (event) => {
-        const master = SLAYER_MASTERS[String(event.npcId)];
-        if (!master) return false;
-        assignTask(event.player, master);
-        return true;
-      },
-    });
+    // Cross-plugin events: the dialogue emitter fills in the line it should speak.
+    api.onCustomEvent("slayer:assignment", assignFromNpcEvent);
+    api.onCustomEvent("slayer:task-tip", taskTipEvent);
+
+    // The "Assignment" click (slot 3) on any NPC; the master check lives in the
+    // handler rather than the NPC's name or the option label.
+    api.onNpcInteraction(assignFromNpcClick);
 
     api.onNpcDeath(({ killer, npc }) => {
       if (!killer || !killer.isPlayer?.()) {

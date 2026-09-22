@@ -142,6 +142,24 @@ function startDialogue(api, event, steps, branches = {}) {
             if (ShopManager.open(player, shops[0].getId(), true)) return;
           }
         }
+        // The exporter slugs a Slayer master's assignment line so the task plugin
+        // can start it; the plugin fills in the line to speak, then the chain resumes.
+        if (step.type === "action" && step.action === "slayer_assignment") {
+          const request = {
+            player,
+            npcId: event.npcId,
+            definitionId: event.definition?.getId?.(),
+            npcName: event.definition?.getName?.(),
+            line: null,
+          };
+          api.emitCustomEvent("slayer:assignment", request);
+          if (request.line) return run([{ npc: request.line }, ...rest]);
+        }
+        if (step.type === "action" && step.action === "slayer_task_tip") {
+          const request = { player, line: null };
+          api.emitCustomEvent("slayer:task-tip", request);
+          if (request.line) return run([{ npc: request.line }, ...rest]);
+        }
         // ponytail: prose conditions, effects and unresolved jumps have no executable contract.
         // Stop here; add structured conditions/actions to the data before implementing them.
         unavailable();

@@ -165,10 +165,6 @@ export class Player extends Mobile {
         { pouch: { itemId: 5512, requiredLevel: 50, capacity: 9, decayChance: 29 }, runeEssenceAmt: 0, pureEssenceAmt: 0 },
         { pouch: { itemId: 5514, requiredLevel: 75, capacity: 12, decayChance: 10 }, runeEssenceAmt: 0, pureEssenceAmt: 0 },
     ];
-    // Slayer
-    private slayerTask: any;
-    private slayerPoints: number;
-    private consecutiveTasks: number;
 
     // Combat
     private static readonly PREFERRED_VIEW_DISTANCE = 15;
@@ -1509,30 +1505,6 @@ export class Player extends Mobile {
 
     public setEnteredSyntaxAction(enteredSyntaxAction: EnteredSyntaxAction): void {
         this.enteredSyntaxAction = enteredSyntaxAction;
-    }
-
-    public getSlayerTask(): any {
-        return this.slayerTask;
-    }
-
-    public setSlayerTask(slayerTask: any): void {
-        this.slayerTask = slayerTask;
-    }
-
-    public getConsecutiveTasks(): number {
-        return this.consecutiveTasks;
-    }
-
-    public setConsecutiveTasks(consecutiveTasks: number): void {
-        this.consecutiveTasks = consecutiveTasks;
-    }
-
-    public getSlayerPoints(): number {
-        return this.slayerPoints;
-    }
-
-    public setSlayerPoints(slayerPoints: number): void {
-        this.slayerPoints = slayerPoints;
     }
 
     public getDialogueManager(): DialogueManager {

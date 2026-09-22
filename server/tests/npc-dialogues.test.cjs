@@ -46,3 +46,22 @@ test('prose conditions take their first branch and dead jumps fall through', () 
   assert.equal(flatten(talk('Perdu'))[0].npc,
     "It seems you're missing out on some valuable experience. Would you like it?");
 });
+
+test('a slayer master assigns from a slugged action, not literal prose', () => {
+  const steps = talk('Krystilia');
+  const found = { action: false, tip: false, spoken: false };
+  const walk = (nodes) => {
+    for (const node of nodes ?? []) {
+      if (node.action === 'slayer_assignment') found.action = true;
+      if (node.action === 'slayer_task_tip') found.tip = true;
+      if (typeof node.npc === 'string' && node.npc.includes('Your new task is to kill')) found.spoken = true;
+      walk(node.steps);
+      for (const option of node.options ?? []) walk(option.steps);
+    }
+  };
+  walk(steps);
+  assert.ok(found.action, 'the assignment step carries the slug');
+  assert.ok(found.tip, 'the task tip step carries the slug');
+  // The placeholder line must not survive as something a player can read.
+  assert.equal(found.spoken, false);
+});

@@ -9,9 +9,9 @@ const { ItemDefinition } = require("../../../../src/main/typescript/elvarg/game/
 const { PrayerHandler } = require("../../../../src/main/typescript/elvarg/game/content/PrayerHandler");
 const { Equipment } = require("../../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { Skill } = require("../../../../src/main/typescript/elvarg/game/model/Skill");
-const { ItemIdentifiers } = require("../../../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { EquipPacketListener } = require("../../../../src/main/typescript/elvarg/net/packet/impl/EquipPacketListener");
 const { getPvpProfile } = require("../pvp/PvpAssignment");
+const { randomInRange } = require("../navigation/BotNavigation");
 const {
   getAmmoId,
   getPvpCombatSnapshot,
@@ -19,29 +19,21 @@ const {
   invalidatePvpCombatSnapshot,
   resolveInventorySlotByItemId,
   SUPPORTED_SPEC_WEAPONS,
+  COMBAT_ITEM_IDS,
 } = require("./PvpCombatRuntimeCache");
 
-const SWITCHABLE_SPEC_WEAPONS = new Set([
-  ItemIdentifiers.ARMADYL_GODSWORD,
-  ItemIdentifiers.ANCIENT_GODSWORD,
-  ItemIdentifiers.BANDOS_GODSWORD,
-  ItemIdentifiers.DARK_BOW,
-  ItemIdentifiers.DRAGON_CLAWS,
-  ItemIdentifiers.DRAGON_DAGGER_P_PLUS_PLUS_,
-  ItemIdentifiers.HEAVY_BALLISTA,
-  ItemIdentifiers.GRANITE_MAUL,
-  ItemIdentifiers.MAGIC_SHORTBOW,
-  ItemIdentifiers.MAGIC_SHORTBOW_I_,
-  ItemIdentifiers.MAGIC_SHORTBOW_3,
-  ItemIdentifiers.SARADOMIN_GODSWORD,
-  ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF,
-  ItemIdentifiers.ZAMORAK_GODSWORD,
-]);
-
-const POST_SPEC_SWITCHBACK_DELAY_MS = 900;
+const POST_SPEC_SWITCHBACK_DELAY_MIN_MS = 700;
+const POST_SPEC_SWITCHBACK_DELAY_MAX_MS = 1300;
 const ONE_TICK_ATTACK_WINDOW_TICKS = 2;
 const ONE_TICK_FAST_CHECK_COOLDOWN_MS = 450;
 const SWITCHBACK_RETRY_COOLDOWN_MS = 450;
+
+function markSpecUsed(pvp, nowMs) {
+  pvp.lastSpecAt = nowMs;
+  pvp.specSwitchbackAt =
+    nowMs + randomInRange(POST_SPEC_SWITCHBACK_DELAY_MIN_MS, POST_SPEC_SWITCHBACK_DELAY_MAX_MS);
+  pvp.nextSwitchbackCheckAt = pvp.specSwitchbackAt;
+}
 
 function getSpecialForWeaponId(weaponId) {
   if (!Number.isInteger(weaponId) || weaponId <= 0) {
@@ -86,7 +78,7 @@ function isSpecFinisher(player, target, state, special, weaponId) {
   }
   let maxHit;
   if (type === CombatType.MAGIC) {
-    if (weaponId !== ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF) return false;
+    if (weaponId !== COMBAT_ITEM_IDS.magicFinisherWeapon) return false;
     maxHit = DamageFormulas.getVolatileNightmareStaffBaseMaxHit(player) * (1 + projectedBonus / 100);
   } else {
     const base = type === CombatType.MELEE
@@ -280,7 +272,7 @@ function maybeSwitchBackToPrimaryWeapon(context) {
     currentWeaponId <= 0 ||
     primaryWeaponId <= 0 ||
     currentWeaponId === primaryWeaponId ||
-    !SWITCHABLE_SPEC_WEAPONS.has(currentWeaponId)
+    !SUPPORTED_SPEC_WEAPONS.has(currentWeaponId)
   ) {
     pvp.nextSwitchbackCheckAt = 0;
     return false;
@@ -289,7 +281,9 @@ function maybeSwitchBackToPrimaryWeapon(context) {
     pvp.nextSwitchbackCheckAt = nowMs + SWITCHBACK_RETRY_COOLDOWN_MS;
     return false;
   }
-  const earliestSwitchbackAt = Number(pvp.lastSpecAt ?? 0) + POST_SPEC_SWITCHBACK_DELAY_MS;
+  const earliestSwitchbackAt =
+    Number(pvp.specSwitchbackAt ?? 0) ||
+    Number(pvp.lastSpecAt ?? 0) + POST_SPEC_SWITCHBACK_DELAY_MIN_MS;
   if (nowMs < earliestSwitchbackAt) {
     pvp.nextSwitchbackCheckAt = earliestSwitchbackAt;
     return false;
@@ -364,13 +358,13 @@ function maybeUseOneTickAttack(context, profile) {
     oneTickBaseChance + Number(profile?.oneTickGmaulChance ?? 0)
   );
   const gmaulCandidate =
-    getWeaponId(player) === ItemIdentifiers.GRANITE_MAUL
+    getWeaponId(player) === COMBAT_ITEM_IDS.oneTickWeapon
       ? {
-          weaponId: ItemIdentifiers.GRANITE_MAUL,
+          weaponId: COMBAT_ITEM_IDS.oneTickWeapon,
           slot: -1,
-          special: getSpecialForWeaponId(ItemIdentifiers.GRANITE_MAUL),
+          special: getSpecialForWeaponId(COMBAT_ITEM_IDS.oneTickWeapon),
         }
-      : resolveInventoryWeapon(player, ItemIdentifiers.GRANITE_MAUL, combatSnapshot);
+      : resolveInventoryWeapon(player, COMBAT_ITEM_IDS.oneTickWeapon, combatSnapshot);
 
   if (
     gmaulCandidate &&
@@ -386,14 +380,14 @@ function maybeUseOneTickAttack(context, profile) {
     }
     if (tryActivateSpecial(player, target)) {
       pvp.lastOneTickAt = nowMs;
-      pvp.lastSpecAt = nowMs;
+      markSpecUsed(pvp, nowMs);
       scheduleSpecReview?.(state, nowMs);
       return true;
     }
   }
 
   const inventorySpec = resolveInventorySpecWeapon(player, state, combatSnapshot);
-  if (!inventorySpec || inventorySpec.weaponId === ItemIdentifiers.GRANITE_MAUL) {
+  if (!inventorySpec || inventorySpec.weaponId === COMBAT_ITEM_IDS.oneTickWeapon) {
     return false;
   }
   if (!shouldUseSpecNow(player, target, state, profile, inventorySpec.special, inventorySpec.weaponId)) return false;
@@ -418,7 +412,7 @@ function maybeUseOneTickAttack(context, profile) {
   }
   if (tryActivateSpecial(player, target)) {
     pvp.lastOneTickAt = nowMs;
-    pvp.lastSpecAt = nowMs;
+    markSpecUsed(pvp, nowMs);
     scheduleSpecReview?.(state, nowMs);
     return true;
   }
@@ -463,7 +457,7 @@ function maybeUseSpecialAttack(context) {
   if (shouldUseSpecNow(player, target, state, profile, currentSpecial, currentWeaponId)) {
     const activated = tryActivateSpecial(player, target);
     if (activated) {
-      pvp.lastSpecAt = nowMs;
+      markSpecUsed(pvp, nowMs);
       scheduleSpecReview?.(state, nowMs);
       return true;
     }
@@ -476,7 +470,7 @@ function maybeUseSpecialAttack(context) {
     inventorySpec && isSpecFinisher(player, target, state, inventorySpec.special, inventorySpec.weaponId);
   if (
     inventorySpec &&
-    SWITCHABLE_SPEC_WEAPONS.has(inventorySpec.weaponId) &&
+    SUPPORTED_SPEC_WEAPONS.has(inventorySpec.weaponId) &&
     (finisher || Math.random() <= switchChance) &&
     shouldUseSpecNow(player, target, state, profile, inventorySpec.special, inventorySpec.weaponId)
   ) {
@@ -487,7 +481,7 @@ function maybeUseSpecialAttack(context) {
       }
       const activated = tryActivateSpecial(player, target);
       if (activated) {
-        pvp.lastSpecAt = nowMs;
+        markSpecUsed(pvp, nowMs);
       }
       scheduleSpecReview?.(state, nowMs);
       return true;

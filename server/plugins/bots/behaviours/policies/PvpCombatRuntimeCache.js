@@ -7,6 +7,7 @@ const { ItemIdentifiers } = require("../../../../src/main/typescript/elvarg/util
 
 const { MagicSpellbook } = require("../../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { Skill } = require("../../../../src/main/typescript/elvarg/game/model/Skill");
+const { PVP_LOADOUT_DEFINITIONS } = require("../pvp/PvpLoadoutRegistry");
 
 // Resolve from the loadout, not autocast: Wilderness weapon switches clear autocast.
 function resolveOffensiveSpell(player) {
@@ -88,48 +89,27 @@ const CROSSBOW_INTERFACES = new Set([
   WeaponInterfaces.CROSSBOW,
   WeaponInterfaces.KARILS_CROSSBOW,
 ]);
-const ARROW_IDS = new Set([
-  ItemIdentifiers.ADAMANT_ARROW,
-  ItemIdentifiers.BROAD_ARROWS_2,
-  ItemIdentifiers.DRAGON_ARROW,
-  ItemIdentifiers.RUNE_ARROW,
-]);
-const BOLT_IDS = new Set([
-  ItemIdentifiers.DRAGONSTONE_BOLTS_E_,
-  ItemIdentifiers.BOLT_RACK,
-]);
-const SPEC_WEAPON_IDS = new Set([
-  ItemIdentifiers.ARMADYL_GODSWORD,
-  ItemIdentifiers.ANCIENT_GODSWORD,
-  ItemIdentifiers.BANDOS_GODSWORD,
-  ItemIdentifiers.DARK_BOW,
-  ItemIdentifiers.DRAGON_CLAWS,
-  ItemIdentifiers.DRAGON_DAGGER_P_PLUS_PLUS_,
-  ItemIdentifiers.HEAVY_BALLISTA,
-  ItemIdentifiers.GRANITE_MAUL,
-  ItemIdentifiers.MAGIC_SHORTBOW,
-  ItemIdentifiers.MAGIC_SHORTBOW_I_,
-  ItemIdentifiers.MAGIC_SHORTBOW_3,
-  ItemIdentifiers.SARADOMIN_GODSWORD,
-  ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF,
-  ItemIdentifiers.ZAMORAK_GODSWORD,
-]);
-const SUPPORTED_SPEC_WEAPONS = Object.freeze([
-  ItemIdentifiers.ARMADYL_GODSWORD,
-  ItemIdentifiers.ANCIENT_GODSWORD,
-  ItemIdentifiers.BANDOS_GODSWORD,
-  ItemIdentifiers.DARK_BOW,
-  ItemIdentifiers.DRAGON_CLAWS,
-  ItemIdentifiers.DRAGON_DAGGER_P_PLUS_PLUS_,
-  ItemIdentifiers.HEAVY_BALLISTA,
-  ItemIdentifiers.GRANITE_MAUL,
-  ItemIdentifiers.MAGIC_SHORTBOW,
-  ItemIdentifiers.MAGIC_SHORTBOW_I_,
-  ItemIdentifiers.MAGIC_SHORTBOW_3,
-  ItemIdentifiers.SARADOMIN_GODSWORD,
-  ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF,
-  ItemIdentifiers.ZAMORAK_GODSWORD,
-]);
+function resolveConfiguredItemIds(keys, label) {
+  if (!Array.isArray(keys)) throw new Error("[pvp bot loadouts] " + label + " must be an array");
+  return keys.map((key) => {
+    const id = ItemIdentifiers[key];
+    if (!Number.isInteger(id)) throw new Error("[pvp bot loadouts] " + label + " has unknown ItemIdentifiers key " + key);
+    return id;
+  });
+}
+
+const combatDefinitions = PVP_LOADOUT_DEFINITIONS.combat ?? {};
+const ARROW_IDS = new Set(resolveConfiguredItemIds(combatDefinitions.arrows, "combat.arrows"));
+const BOLT_IDS = new Set(resolveConfiguredItemIds(combatDefinitions.bolts, "combat.bolts"));
+const SPEC_WEAPON_IDS = new Set(resolveConfiguredItemIds(combatDefinitions.specWeapons, "combat.specWeapons"));
+const SUPPORTED_SPEC_WEAPONS = Object.freeze([...SPEC_WEAPON_IDS]);
+const COMBAT_ITEM_IDS = Object.freeze(Object.fromEntries(
+  Object.entries(combatDefinitions.specialCases ?? {}).map(([name, key]) => [
+    name,
+    resolveConfiguredItemIds([key], "combat.specialCases." + name)[0],
+  ])
+));
+const START_COMBAT_POTION_NAMES = new Set(combatDefinitions.startCombatPotions ?? []);
 
 function getWeaponId(player) {
   return player?.getEquipment?.()?.get?.(Equipment.WEAPON_SLOT)?.getId?.() ?? -1;
@@ -399,10 +379,12 @@ module.exports = {
   resolveOffensiveSpell,
   ARROW_IDS,
   BOLT_IDS,
+  COMBAT_ITEM_IDS,
   BOW_INTERFACES,
   CROSSBOW_INTERFACES,
   SPEC_WEAPON_IDS,
   SUPPORTED_SPEC_WEAPONS,
+  START_COMBAT_POTION_NAMES,
   classifyWeaponInterface,
   getAmmoId,
   getPvpCombatSnapshot,

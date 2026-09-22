@@ -37,6 +37,2161 @@
       "presetKeys": []
     }
   ],
+  "combat": {
+    "arrows": ["ADAMANT_ARROW", "BROAD_ARROWS_2", "DRAGON_ARROW", "RUNE_ARROW"],
+    "bolts": ["BROAD_BOLTS", "DRAGONSTONE_BOLTS_E_", "BOLT_RACK"],
+    "specWeapons": [
+      "ARMADYL_GODSWORD", "ANCIENT_GODSWORD", "BANDOS_GODSWORD", "DARK_BOW",
+      "DRAGON_CLAWS", "DRAGON_DAGGER_P_PLUS_PLUS_", "DRAGON_WARHAMMER",
+      "HEAVY_BALLISTA", "GRANITE_MAUL", "MAGIC_SHORTBOW", "MAGIC_SHORTBOW_I_",
+      "MAGIC_SHORTBOW_3", "SARADOMIN_GODSWORD", "VOLATILE_NIGHTMARE_STAFF",
+      "ZAMORAK_GODSWORD", "BARRELCHEST_ANCHOR"
+    ],
+    "specAmmo": {
+      "DARK_BOW": ["DRAGON_ARROW"],
+      "MAGIC_SHORTBOW": ["RUNE_ARROW", "ADAMANT_ARROW", "BROAD_ARROWS_2"],
+      "MAGIC_SHORTBOW_I_": ["RUNE_ARROW", "ADAMANT_ARROW", "BROAD_ARROWS_2"],
+      "MAGIC_SHORTBOW_3": ["RUNE_ARROW", "ADAMANT_ARROW", "BROAD_ARROWS_2"],
+      "HEAVY_BALLISTA": ["DRAGON_JAVELIN", "RUNE_JAVELIN", "ADAMANT_JAVELIN"]
+    },
+    "specialCases": {
+      "magicFinisherWeapon": "VOLATILE_NIGHTMARE_STAFF",
+      "oneTickWeapon": "GRANITE_MAUL"
+    },
+    "startCombatPotions": [
+      "Strength potion",
+      "Super attack",
+      "Super strength",
+      "Super combat potion",
+      "Ranging potion"
+    ]
+  },
+  "archetypes": [
+{
+      "id": "initiate_dscim_dds",
+      "weight": 8,
+      "spellbook": "NORMAL",
+      "stats": [60,20,99,90,82,52,94],
+      "equipment": {
+        "head": "INITIATE_SALLET",
+        "cape": ["OBSIDIAN_CAPE","STRENGTH_CAPE_T_","ZAMORAK_CAPE"],
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "body": "INITIATE_HAUBERK",
+        "shield": ["MITHRIL_DEFENDER","UNHOLY_BOOK","BOOK_OF_LAW"],
+        "legs": "INITIATE_CUISSE",
+        "hands": ["MITHRIL_GLOVES","ADAMANT_GLOVES","COMBAT_BRACELET"],
+        "feet": ["CLIMBING_BOOTS","ROCK_CLIMBING_BOOTS"],
+        "ring": ["RING_OF_RECOIL","BERSERKER_RING"]
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":2},"SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "initiate_dscim_gmaul",
+      "weight": 8,
+      "spellbook": "NORMAL",
+      "stats": [60,20,99,90,88,52,82],
+      "equipment": {
+        "head": "INITIATE_SALLET",
+        "cape": ["OBSIDIAN_CAPE","STRENGTH_CAPE_T_","ZAMORAK_CAPE"],
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "body": "INITIATE_HAUBERK",
+        "shield": ["MITHRIL_DEFENDER","UNHOLY_BOOK","BOOK_OF_LAW"],
+        "legs": ["INITIATE_CUISSE","BLACK_DHIDE_CHAPS"],
+        "hands": ["MITHRIL_GLOVES","ADAMANT_GLOVES","COMBAT_BRACELET"],
+        "feet": ["CLIMBING_BOOTS","ROCK_CLIMBING_BOOTS"],
+        "ring": ["RING_OF_RECOIL","BERSERKER_RING"]
+      },
+      "inventory": ["GRANITE_MAUL","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":2},"SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":6},{"item":"SHARK","repeat":15}],
+      "fill": "SHARK"
+    },
+{
+      "id": "initiate_msb_gmaul",
+      "weight": 12,
+      "spellbook": "NORMAL",
+      "stats": [50,20,99,88,96,52,82],
+      "equipment": {
+        "head": "INITIATE_SALLET",
+        "cape": ["AVAS_ACCUMULATOR","OBSIDIAN_CAPE"],
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_STRENGTH"],
+        "body": "INITIATE_HAUBERK",
+        "legs": ["BLACK_DHIDE_CHAPS","INITIATE_CUISSE"],
+        "hands": ["MITHRIL_GLOVES","ADAMANT_GLOVES","COMBAT_BRACELET"],
+        "feet": ["CLIMBING_BOOTS","ROCK_CLIMBING_BOOTS"],
+        "ring": ["RING_OF_RECOIL","BERSERKER_RING"],
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 140
+        }
+      },
+      "inventory": ["GRANITE_MAUL",{"item":"RUNE_ARROW","amount":180},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":2},"SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":15}],
+      "fill": "SHARK"
+    },
+{
+      "id": "low_level_dds_pure",
+      "weight": 6,
+      "spellbook": "NORMAL",
+      "stats": [60,1,90,86,85,31,52],
+      "equipment": {
+        "head": "@budget_range_heads",
+        "cape": "@budget_capes",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "low_level_gmaul_pure",
+      "weight": 18,
+      "spellbook": "NORMAL",
+      "stats": [50,1,92,84,92,31,52],
+      "equipment": {
+        "head": "@budget_range_heads",
+        "cape": "@budget_capes",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["GRANITE_MAUL",{"item":"RUNE_ARROW","amount":180},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "dwh_pure",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [1,1,99,85,75,52,1],
+      "equipment": {
+        "head": "@budget_range_heads",
+        "cape": "@budget_capes",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "body": ["BLACK_DHIDE_BODY","GREEN_DHIDE_BODY","SPINED_BODY"],
+        "legs": ["BLACK_DHIDE_CHAPS","GREEN_DHIDE_CHAPS","SPINED_CHAPS"],
+        "hands": ["MITHRIL_GLOVES","ADAMANT_GLOVES","@budget_range_gloves"],
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["DRAGON_WARHAMMER",{"item":"RUNE_ARROW","amount":180},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "rune_pure_dscim_dds",
+      "weight": 6,
+      "spellbook": "NORMAL",
+      "stats": [60,40,95,92,85,52,70],
+      "equipment": {
+        "head": ["RUNE_FULL_HELM","BERSERKER_HELM","HELM_OF_NEITIZNOT"],
+        "cape": ["OBSIDIAN_CAPE","STRENGTH_CAPE_T_"],
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_STRENGTH"],
+        "body": ["RUNE_PLATEBODY","FIGHTER_TORSO"],
+        "shield": ["RUNE_DEFENDER","MITHRIL_KITESHIELD"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT"],
+        "hands": ["MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["CLIMBING_BOOTS","ROCK_CLIMBING_BOOTS","RUNE_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "rune_pure_msb_ags",
+      "weight": 9,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,40,95,94,99,52,74],
+      "equipment": {
+        "head": ["RUNE_FULL_HELM","HELM_OF_NEITIZNOT","COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF"],
+        "cape": ["AVAS_ACCUMULATOR","OBSIDIAN_CAPE"],
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_STRENGTH"],
+        "body": ["RUNE_PLATEBODY","FIGHTER_TORSO","BLACK_DHIDE_BODY"],
+        "legs": ["RUNE_PLATELEGS","BLACK_DHIDE_CHAPS","RUNE_PLATESKIRT"],
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","RUNE_BOOTS","RANGER_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["ARMADYL_GODSWORD",{"item":"RUNE_ARROW","amount":180},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "void_pure_claws",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,42,99,94,99,42,94],
+      "equipment": {
+        "head": "VOID_RANGER_HELM",
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "ELITE_VOID_TOP",
+        "legs": "ELITE_VOID_ROBE",
+        "hands": "VOID_KNIGHT_GLOVES",
+        "feet": ["DRAGON_BOOTS","RANGER_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 140
+        }
+      },
+      "inventory": ["DRAGON_CLAWS",{"item":"RUNE_ARROW","amount":180},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "void_pure_ballista",
+      "weight": 6,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,42,99,94,99,42,94],
+      "equipment": {
+        "head": "VOID_RANGER_HELM",
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "HEAVY_BALLISTA",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "ELITE_VOID_TOP",
+        "legs": "ELITE_VOID_ROBE",
+        "hands": "VOID_KNIGHT_GLOVES",
+        "feet": ["DRAGON_BOOTS","RANGER_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGON_JAVELIN",
+          "amount": 70
+        }
+      },
+      "inventory": ["DRAGON_CLAWS",{"item":"DRAGON_JAVELIN","amount":90},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "low_level_nh_pure",
+      "weight": 10,
+      "spellbook": "ANCIENT",
+      "stats": [60,1,85,90,90,52,85],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "weapon": {
+          "magicStaff": "ANCIENT_STAFF"
+        },
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["@budget_range_bodies","@budget_mage_tops"],
+        "legs": ["@budget_range_legs","@budget_mage_legs"],
+        "hands": ["@budget_range_gloves","@budget_mage_gloves"],
+        "feet": ["@budget_range_boots","@budget_mage_boots"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": [{"item":"DRAGON_DAGGER_P_PLUS_PLUS_","repeat":2},"RUNE_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":70},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":2},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":6},{"item":"SHARK","repeat":7}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "mid_tank_whip_ags",
+      "weight": 9,
+      "minimumProfileIds": ["standard","veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,70,99,99,85,77,74],
+      "equipment": {
+        "head": ["HELM_OF_NEITIZNOT","BERSERKER_HELM","BLACK_MASK"],
+        "cape": ["OBSIDIAN_CAPE","AVAS_ACCUMULATOR"],
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_FURY"],
+        "body": ["FIGHTER_TORSO","GRANITE_BODY","RUNE_PLATEBODY"],
+        "shield": ["RUNE_DEFENDER","DRAGON_DEFENDER","ADAMANT_KITESHIELD"],
+        "legs": ["DRAGON_PLATELEGS","DRAGON_PLATESKIRT","OBSIDIAN_PLATELEGS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","RUNE_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["ARMADYL_GODSWORD","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "mid_tank_dcb_ags",
+      "weight": 8,
+      "minimumProfileIds": ["standard","veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,70,99,99,99,77,74],
+      "equipment": {
+        "head": ["HELM_OF_NEITIZNOT","COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF"],
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_FURY"],
+        "body": ["FIGHTER_TORSO","BLACK_DHIDE_BODY","GRANITE_BODY"],
+        "legs": ["BLACK_DHIDE_CHAPS","OBSIDIAN_PLATELEGS","DRAGON_PLATELEGS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","RANGER_BOOTS","RUNE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 95
+        }
+      },
+      "inventory": ["ARMADYL_GODSWORD",{"item":"DRAGONSTONE_BOLTS_E_","amount":120},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_rwh_pure",
+      "weight": 18,
+      "spellbook": "NORMAL",
+      "stats": [20,1,90,82,85,1,1],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": "MAPLE_SHORTBOW",
+        "amulet": ["AMULET_OF_POWER","AMULET_OF_STRENGTH"],
+        "body": ["LEATHER_BODY","HARDLEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS"],
+        "ammo": {
+          "item": "ADAMANT_ARROW",
+          "amount": 120
+        }
+      },
+      "inventory": ["RUNE_WARHAMMER",{"item":"ADAMANT_ARROW","amount":180},{"item":"STRENGTH_POTION_4_","repeat":2},{"item":"ANCHOVY_PIZZA","repeat":3},{"item":"SWORDFISH","repeat":21}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_rbaxe_pure",
+      "weight": 14,
+      "spellbook": "NORMAL",
+      "stats": [40,1,92,84,82,1,1],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": "MAPLE_SHORTBOW",
+        "amulet": ["AMULET_OF_POWER","AMULET_OF_STRENGTH"],
+        "body": ["LEATHER_BODY","HARDLEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS"],
+        "ammo": {
+          "item": "ADAMANT_ARROW",
+          "amount": 120
+        }
+      },
+      "inventory": ["RUNE_BATTLEAXE",{"item":"ADAMANT_ARROW","amount":180},{"item":"STRENGTH_POTION_4_","repeat":2},{"item":"ANCHOVY_PIZZA","repeat":4},{"item":"SWORDFISH","repeat":20}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_rscim_r2h",
+      "weight": 18,
+      "spellbook": "NORMAL",
+      "stats": [40,40,90,88,75,1,1],
+      "equipment": {
+        "head": "RUNE_FULL_HELM",
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": "RUNE_SCIMITAR",
+        "amulet": ["AMULET_OF_POWER","AMULET_OF_STRENGTH"],
+        "body": "RUNE_CHAINBODY",
+        "shield": "RUNE_KITESHIELD",
+        "legs": ["GREEN_DHIDE_CHAPS","ADAMANT_PLATELEGS"]
+      },
+      "inventory": ["RUNE_2H_SWORD",{"item":"STRENGTH_POTION_4_","repeat":2},{"item":"ANCHOVY_PIZZA","repeat":4},{"item":"SWORDFISH","repeat":21}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_rscim_rbaxe",
+      "weight": 14,
+      "spellbook": "NORMAL",
+      "stats": [40,40,92,88,70,1,1],
+      "equipment": {
+        "head": "RUNE_FULL_HELM",
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": "RUNE_SCIMITAR",
+        "amulet": ["AMULET_OF_POWER","AMULET_OF_STRENGTH"],
+        "body": "RUNE_CHAINBODY",
+        "shield": "RUNE_KITESHIELD",
+        "legs": ["GREEN_DHIDE_CHAPS","ADAMANT_PLATELEGS"]
+      },
+      "inventory": ["RUNE_BATTLEAXE",{"item":"STRENGTH_POTION_4_","repeat":2},{"item":"ANCHOVY_PIZZA","repeat":3},{"item":"SWORDFISH","repeat":22}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_maple_r2h",
+      "weight": 18,
+      "spellbook": "NORMAL",
+      "stats": [40,1,85,84,92,1,1],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": "MAPLE_SHORTBOW",
+        "amulet": "AMULET_OF_POWER",
+        "body": ["LEATHER_BODY","HARDLEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS"],
+        "ammo": {
+          "item": "ADAMANT_ARROW",
+          "amount": 140
+        }
+      },
+      "inventory": ["RUNE_2H_SWORD",{"item":"ADAMANT_ARROW","amount":220},{"item":"STRENGTH_POTION_4_","repeat":2},{"item":"ANCHOVY_PIZZA","repeat":2},{"item":"SWORDFISH","repeat":22}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_maple_rbaxe",
+      "weight": 14,
+      "spellbook": "NORMAL",
+      "stats": [40,1,84,84,92,1,1],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": "MAPLE_SHORTBOW",
+        "amulet": "AMULET_OF_POWER",
+        "body": ["LEATHER_BODY","HARDLEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS"],
+        "ammo": {
+          "item": "ADAMANT_ARROW",
+          "amount": 140
+        }
+      },
+      "inventory": ["RUNE_BATTLEAXE",{"item":"ADAMANT_ARROW","amount":220},{"item":"STRENGTH_POTION_4_","repeat":2},{"item":"ANCHOVY_PIZZA","repeat":3},{"item":"SWORDFISH","repeat":21}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_bind_blast",
+      "weight": 10,
+      "spellbook": "NORMAL",
+      "stats": [1,1,60,76,82,1,75],
+      "autocastSpell": "FIRE_BLAST",
+      "equipment": {
+        "head": ["WIZARD_HAT","BLUE_WIZARD_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": {
+          "magicStaff": "STAFF_OF_FIRE"
+        },
+        "amulet": ["AMULET_OF_MAGIC","AMULET_OF_POWER"],
+        "body": ["BLUE_WIZARD_ROBE","ZAMORAK_ROBE_TOP","MONKS_ROBE_TOP"],
+        "legs": ["ZAMORAK_ROBE_LEGS","MONKS_ROBE"]
+      },
+      "inventory": ["MAPLE_SHORTBOW",{"item":"ADAMANT_ARROW","amount":160},"STRENGTH_POTION_4_",{"item":"ANCHOVY_PIZZA","repeat":4},{"item":"SWORDFISH","repeat":21}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "f2p",
+        "tier": "blast",
+        "elements": ["air","water","earth","fire"]
+      }
+    },
+{
+      "id": "f2p_bind_maple",
+      "weight": 8,
+      "spellbook": "NORMAL",
+      "stats": [1,1,50,74,85,1,70],
+      "autocastSpell": "FIRE_BOLT",
+      "equipment": {
+        "head": ["WIZARD_HAT","BLUE_WIZARD_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": {
+          "magicStaff": "STAFF_OF_FIRE"
+        },
+        "amulet": ["AMULET_OF_MAGIC","AMULET_OF_POWER"],
+        "body": ["BLUE_WIZARD_ROBE","ZAMORAK_ROBE_TOP","MONKS_ROBE_TOP"],
+        "legs": ["ZAMORAK_ROBE_LEGS","MONKS_ROBE"]
+      },
+      "inventory": ["MAPLE_SHORTBOW",{"item":"ADAMANT_ARROW","amount":160},"STRENGTH_POTION_4_",{"item":"ANCHOVY_PIZZA","repeat":4},{"item":"SWORDFISH","repeat":21}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "f2p",
+        "tier": "bolt",
+        "elements": ["air","water","earth","fire"]
+      }
+    },
+{
+      "id": "f2p_addy_r2h_tank",
+      "weight": 16,
+      "spellbook": "NORMAL",
+      "stats": [40,30,92,90,65,1,1],
+      "equipment": {
+        "head": ["ADAMANT_FULL_HELM","ADAMANT_MED_HELM"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": "RUNE_SCIMITAR",
+        "amulet": ["AMULET_OF_POWER","AMULET_OF_STRENGTH"],
+        "body": ["ADAMANT_CHAINBODY","ADAMANT_PLATEBODY"],
+        "shield": "ADAMANT_KITESHIELD",
+        "legs": ["ADAMANT_PLATELEGS","ADAMANT_PLATESKIRT"]
+      },
+      "inventory": ["RUNE_2H_SWORD",{"item":"STRENGTH_POTION_4_","repeat":2},{"item":"ANCHOVY_PIZZA","repeat":2},{"item":"SWORDFISH","repeat":23}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_addy_rbaxe_tank",
+      "weight": 14,
+      "spellbook": "NORMAL",
+      "stats": [40,30,92,90,62,1,1],
+      "equipment": {
+        "head": ["ADAMANT_FULL_HELM","ADAMANT_MED_HELM"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": "RUNE_SCIMITAR",
+        "amulet": ["AMULET_OF_POWER","AMULET_OF_STRENGTH"],
+        "body": ["ADAMANT_CHAINBODY","ADAMANT_PLATEBODY"],
+        "shield": "ADAMANT_KITESHIELD",
+        "legs": ["ADAMANT_PLATELEGS","ADAMANT_PLATESKIRT"]
+      },
+      "inventory": ["RUNE_BATTLEAXE",{"item":"STRENGTH_POTION_4_","repeat":2},{"item":"ANCHOVY_PIZZA","repeat":2},{"item":"SWORDFISH","repeat":23}],
+      "fill": "SHARK"
+    },
+{
+      "id": "f2p_fire_blast_pure",
+      "weight": 8,
+      "spellbook": "NORMAL",
+      "stats": [1,1,65,78,1,1,85],
+      "autocastSpell": "FIRE_BLAST",
+      "equipment": {
+        "head": ["WIZARD_HAT","BLUE_WIZARD_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": {
+          "magicStaff": "STAFF_OF_FIRE"
+        },
+        "amulet": ["AMULET_OF_MAGIC","AMULET_OF_POWER"],
+        "body": ["BLUE_WIZARD_ROBE","ZAMORAK_ROBE_TOP","MONKS_ROBE_TOP"],
+        "legs": ["ZAMORAK_ROBE_LEGS","MONKS_ROBE"]
+      },
+      "inventory": ["STRENGTH_POTION_4_",{"item":"ANCHOVY_PIZZA","repeat":5},{"item":"SWORDFISH","repeat":22}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "f2p",
+        "tier": "blast",
+        "elements": ["fire","water","earth","air"]
+      }
+    },
+{
+      "id": "f2p_wind_blast_pure",
+      "weight": 6,
+      "spellbook": "NORMAL",
+      "stats": [1,1,60,76,1,1,79],
+      "autocastSpell": "WIND_BLAST",
+      "equipment": {
+        "head": ["WIZARD_HAT","BLUE_WIZARD_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": {
+          "magicStaff": "STAFF_OF_AIR"
+        },
+        "amulet": ["AMULET_OF_MAGIC","AMULET_OF_POWER"],
+        "body": ["BLUE_WIZARD_ROBE","ZAMORAK_ROBE_TOP","MONKS_ROBE_TOP"],
+        "legs": ["ZAMORAK_ROBE_LEGS","MONKS_ROBE"]
+      },
+      "inventory": ["STRENGTH_POTION_4_",{"item":"ANCHOVY_PIZZA","repeat":5},{"item":"SWORDFISH","repeat":22}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "f2p",
+        "tier": "blast",
+        "elements": ["air","water","earth","fire"]
+      }
+    },
+{
+      "id": "f2p_bind_r2h",
+      "weight": 8,
+      "spellbook": "NORMAL",
+      "stats": [40,1,75,78,1,1,79],
+      "autocastSpell": "FIRE_BLAST",
+      "equipment": {
+        "head": ["WIZARD_HAT","BLUE_WIZARD_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": {
+          "magicStaff": "STAFF_OF_FIRE"
+        },
+        "amulet": ["AMULET_OF_MAGIC","AMULET_OF_POWER"],
+        "body": ["BLUE_WIZARD_ROBE","ZAMORAK_ROBE_TOP","MONKS_ROBE_TOP"],
+        "legs": ["ZAMORAK_ROBE_LEGS","MONKS_ROBE"]
+      },
+      "inventory": ["RUNE_2H_SWORD","STRENGTH_POTION_4_",{"item":"ANCHOVY_PIZZA","repeat":4},{"item":"SWORDFISH","repeat":22}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "f2p",
+        "tier": "blast",
+        "elements": ["air","water","earth","fire"]
+      }
+    },
+{
+      "id": "f2p_bind_rbaxe",
+      "weight": 7,
+      "spellbook": "NORMAL",
+      "stats": [40,1,74,78,1,1,76],
+      "autocastSpell": "FIRE_BOLT",
+      "equipment": {
+        "head": ["WIZARD_HAT","BLUE_WIZARD_HAT"],
+        "cape": ["BLACK_CAPE","RED_CAPE"],
+        "weapon": {
+          "magicStaff": "STAFF_OF_FIRE"
+        },
+        "amulet": ["AMULET_OF_MAGIC","AMULET_OF_POWER"],
+        "body": ["BLUE_WIZARD_ROBE","ZAMORAK_ROBE_TOP","MONKS_ROBE_TOP"],
+        "legs": ["ZAMORAK_ROBE_LEGS","MONKS_ROBE"]
+      },
+      "inventory": ["RUNE_BATTLEAXE","STRENGTH_POTION_4_",{"item":"ANCHOVY_PIZZA","repeat":4},{"item":"SWORDFISH","repeat":22}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "f2p",
+        "tier": "bolt",
+        "elements": ["air","water","earth","fire"]
+      }
+    },
+{
+      "id": "main_whip",
+      "weight": 30,
+      "spellbook": "LUNAR",
+      "stats": [75,70,99,99,94,70,94],
+      "equipment": {
+        "head": ["HELM_OF_NEITIZNOT","WARRIOR_HELM","BLACK_MASK"],
+        "cape": ["OBSIDIAN_CAPE","STRENGTH_CAPE_T_"],
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["RUNE_PLATEBODY","RUNE_CHAINBODY","FIGHTER_TORSO","OBSIDIAN_PLATEBODY"],
+        "shield": ["RUNE_DEFENDER"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": [["DRAGON_DAGGER_P_PLUS_PLUS_","DRAGON_DAGGER_P_PLUS_PLUS_","ANCIENT_GODSWORD","BARRELCHEST_ANCHOR"],"SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "full_dharok",
+      "weight": 12,
+      "spellbook": "LUNAR",
+      "stats": [70,70,99,99,1,70,1],
+      "equipment": {
+        "head": "DHAROKS_HELM",
+        "cape": ["OBSIDIAN_CAPE","STRENGTH_CAPE_T_"],
+        "weapon": "DHAROKS_GREATAXE",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_FURY"],
+        "body": "DHAROKS_PLATEBODY",
+        "legs": "DHAROKS_PLATELEGS",
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["SUPER_COMBAT_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":2},{"item":"SARADOMIN_BREW_4_","repeat":2},"RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":6},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "zerker_whip",
+      "weight": 24,
+      "spellbook": "LUNAR",
+      "stats": [70,45,99,95,90,52,94],
+      "equipment": {
+        "head": ["WARRIOR_HELM","BLACK_MASK"],
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["RUNE_PLATEBODY","RUNE_CHAINBODY","FIGHTER_TORSO","OBSIDIAN_PLATEBODY"],
+        "shield": ["RUNE_DEFENDER"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": "CLIMBING_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": [["DRAGON_DAGGER_P_PLUS_PLUS_","BARRELCHEST_ANCHOR"],"SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":18}],
+      "fill": "SHARK"
+    },
+{
+      "id": "zerker_dscim",
+      "weight": 10,
+      "spellbook": "LUNAR",
+      "stats": [60,45,99,92,85,52,94],
+      "equipment": {
+        "head": ["WARRIOR_HELM","BLACK_MASK"],
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["RUNE_PLATEBODY","RUNE_CHAINBODY","FIGHTER_TORSO","OBSIDIAN_PLATEBODY"],
+        "shield": ["RUNE_DEFENDER"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": "CLIMBING_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": [["DRAGON_DAGGER_P_PLUS_PLUS_","BARRELCHEST_ANCHOR"],"SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":18}],
+      "fill": "SHARK"
+    },
+{
+      "id": "zerker_venge_ags",
+      "weight": 14,
+      "spellbook": "LUNAR",
+      "stats": [75,45,99,96,90,70,94],
+      "equipment": {
+        "head": ["WARRIOR_HELM","BLACK_MASK"],
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["RUNE_PLATEBODY","RUNE_CHAINBODY","FIGHTER_TORSO","OBSIDIAN_PLATEBODY"],
+        "shield": ["RUNE_DEFENDER"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": "CLIMBING_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["ARMADYL_GODSWORD","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "ancient_gs_venge",
+      "weight": 9,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,45,99,96,90,70,94],
+      "equipment": {
+        "head": ["WARRIOR_HELM","BLACK_MASK"],
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_FURY"],
+        "body": ["RUNE_PLATEBODY","RUNE_CHAINBODY","FIGHTER_TORSO","OBSIDIAN_PLATEBODY","GRANITE_BODY"],
+        "shield": ["RUNE_DEFENDER","DRAGON_DEFENDER"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS","DRAGON_PLATELEGS","DRAGON_PLATESKIRT"],
+        "hands": "BARROWS_GLOVES",
+        "feet": "CLIMBING_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["ANCIENT_GODSWORD","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "zerker_dcb_ags",
+      "weight": 10,
+      "minimumProfileIds": ["standard","veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,45,99,94,99,70,94],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF","SPINED_HELM"],
+        "cape": ["AVAS_ACCUMULATOR","OBSIDIAN_CAPE"],
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["FIGHTER_TORSO","LEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY","BLUE_DHIDE_BODY","RED_DHIDE_BODY","BLACK_DHIDE_BODY","SPINED_BODY","SNAKESKIN_BODY","ZAMORAK_DHIDE_BODY","GUTHIX_DHIDE_BODY","SARADOMIN_DHIDE_BODY","ANCIENT_DHIDE_BODY","BANDOS_DHIDE_BODY","ARMADYL_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLACK_DHIDE_CHAPS","SPINED_CHAPS","SNAKESKIN_CHAPS","ZAMORAK_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS"],
+        "hands": ["GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 90
+        }
+      },
+      "inventory": ["ARMADYL_GODSWORD",{"item":"DRAGONSTONE_BOLTS_E_","amount":120},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "zerker_whip_claws",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,45,99,95,90,70,94],
+      "equipment": {
+        "head": ["WARRIOR_HELM","BLACK_MASK"],
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["RUNE_PLATEBODY","RUNE_CHAINBODY","FIGHTER_TORSO","OBSIDIAN_PLATEBODY","GRANITE_BODY"],
+        "shield": ["RUNE_DEFENDER","DRAGON_DEFENDER"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS","DRAGON_PLATELEGS","DRAGON_PLATESKIRT"],
+        "hands": "BARROWS_GLOVES",
+        "feet": "DRAGON_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DRAGON_CLAWS","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "med_whip_ags",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,75,99,99,95,94,77],
+      "equipment": {
+        "head": ["HELM_OF_NEITIZNOT","BLACK_MASK"],
+        "cape": ["OBSIDIAN_CAPE","AVAS_ACCUMULATOR"],
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["FIGHTER_TORSO",null],
+        "shield": ["RUNE_DEFENDER","DRAGON_DEFENDER"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS","DRAGON_PLATELEGS","DRAGON_PLATESKIRT"],
+        "hands": "BARROWS_GLOVES",
+        "feet": "DRAGON_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["ARMADYL_GODSWORD","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":6},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "med_dcb_claws",
+      "weight": 7,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,75,99,99,99,94,77],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF","HELM_OF_NEITIZNOT"],
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["FIGHTER_TORSO","LEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY","BLUE_DHIDE_BODY","RED_DHIDE_BODY","BLACK_DHIDE_BODY","SPINED_BODY","SNAKESKIN_BODY","ZAMORAK_DHIDE_BODY","GUTHIX_DHIDE_BODY","SARADOMIN_DHIDE_BODY","ANCIENT_DHIDE_BODY","BANDOS_DHIDE_BODY","ARMADYL_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLACK_DHIDE_CHAPS","SPINED_CHAPS","SNAKESKIN_CHAPS","ZAMORAK_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 95
+        }
+      },
+      "inventory": ["DRAGON_CLAWS",{"item":"DRAGONSTONE_BOLTS_E_","amount":125},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "med_tribrid_ags",
+      "weight": 6,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [75,75,99,99,99,94,94],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["AHRIMS_HOOD","HELM_OF_NEITIZNOT","COIF","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["AHRIMS_ROBETOP","SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","BLACK_DHIDE_BODY"],
+        "legs": ["AHRIMS_ROBESKIRT","SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 90
+        }
+      },
+      "inventory": ["ABYSSAL_WHIP","ARMADYL_GODSWORD","DRAGON_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":100},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":2},"SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "karils_venge_ags",
+      "weight": 9,
+      "minimumProfileIds": ["standard","veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,70,99,94,99,70,94],
+      "equipment": {
+        "head": "KARILS_COIF",
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "KARILS_CROSSBOW",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_FURY"],
+        "body": "KARILS_LEATHERTOP",
+        "legs": "KARILS_LEATHERSKIRT",
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","RANGER_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "BOLT_RACK",
+          "amount": 180
+        }
+      },
+      "inventory": ["ARMADYL_GODSWORD",{"item":"BOLT_RACK","amount":210},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "veracs_venge_claws",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,70,99,99,80,70,94],
+      "equipment": {
+        "head": "VERACS_HELM",
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "VERACS_FLAIL",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "VERACS_BRASSARD",
+        "legs": "VERACS_PLATESKIRT",
+        "hands": "BARROWS_GLOVES",
+        "feet": "DRAGON_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DRAGON_CLAWS","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":6},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "blowpipe_venge_ags",
+      "weight": 6,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,70,99,95,99,70,94],
+      "equipment": {
+        "head": ["VOID_RANGER_HELM","COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF"],
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "TOXIC_BLOWPIPE",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["BLACK_DHIDE_BODY","RED_DHIDE_BODY"],
+        "legs": ["BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","RANGER_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGON_DART",
+          "amount": 160
+        }
+      },
+      "inventory": ["ARMADYL_GODSWORD",{"item":"DRAGON_DART","amount":320},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "dhalberd_venge_ags",
+      "weight": 6,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,70,99,99,80,70,94],
+      "equipment": {
+        "head": ["HELM_OF_NEITIZNOT","BERSERKER_HELM"],
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "DRAGON_HALBERD",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["FIGHTER_TORSO","GRANITE_BODY"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS","DRAGON_PLATELEGS","DRAGON_PLATESKIRT"],
+        "hands": "BARROWS_GLOVES",
+        "feet": "DRAGON_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["ARMADYL_GODSWORD","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":6},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "spear_tribrid_ags",
+      "weight": 7,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [80,75,99,99,99,90,94],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["HELM_OF_NEITIZNOT",null],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["BLACK_DHIDE_BODY",null],
+        "legs": ["BLACK_DHIDE_CHAPS",null],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 100
+        }
+      },
+      "inventory": ["ZAMORAKIAN_SPEAR","ARMADYL_GODSWORD","DRAGON_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":110},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":2},"SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "sotd_hybrid_claws",
+      "weight": 5,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "ANCIENT",
+      "stats": [85,80,99,99,99,94,94],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["AHRIMS_HOOD","HELM_OF_NEITIZNOT","COIF","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "STAFF_OF_THE_DEAD",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_FURY"],
+        "body": ["AHRIMS_ROBETOP","SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","BLACK_DHIDE_BODY"],
+        "shield": ["UNHOLY_BOOK","BOOK_OF_DARKNESS"],
+        "legs": ["AHRIMS_ROBESKIRT","SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["STAFF_OF_THE_DEAD","DRAGON_CLAWS","RUNE_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":90},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","BOOK_OF_DARKNESS","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},"SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":9}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "toxic_sotd_hybrid",
+      "weight": 6,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [85,80,99,99,99,94,94],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["AHRIMS_HOOD","HELM_OF_NEITIZNOT","COIF","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_FURY"],
+        "body": ["AHRIMS_ROBETOP","SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","BLACK_DHIDE_BODY"],
+        "legs": ["AHRIMS_ROBESKIRT","SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 95
+        }
+      },
+      "inventory": ["TOXIC_STAFF_OF_THE_DEAD",null,"DRAGON_CLAWS","DRAGON_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":110},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","BOOK_OF_DARKNESS","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":3},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":8}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "msb_gmaul",
+      "weight": 24,
+      "spellbook": "NORMAL",
+      "stats": [50,1,99,88,99,1,1],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF","SPINED_HELM"],
+        "cape": ["AVAS_ACCUMULATOR","OBSIDIAN_CAPE"],
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["LEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY","BLUE_DHIDE_BODY","RED_DHIDE_BODY","BLACK_DHIDE_BODY","SPINED_BODY","SNAKESKIN_BODY","ZAMORAK_DHIDE_BODY","GUTHIX_DHIDE_BODY","SARADOMIN_DHIDE_BODY","ANCIENT_DHIDE_BODY","BANDOS_DHIDE_BODY","ARMADYL_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLACK_DHIDE_CHAPS","SPINED_CHAPS","SNAKESKIN_CHAPS","ZAMORAK_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS"],
+        "hands": ["GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["GRANITE_MAUL",{"item":"RUNE_ARROW","amount":150},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "rcb_dds",
+      "weight": 24,
+      "spellbook": "NORMAL",
+      "stats": [60,45,90,92,99,52,70],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF","SPINED_HELM"],
+        "cape": ["AVAS_ACCUMULATOR","OBSIDIAN_CAPE"],
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["LEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY","BLUE_DHIDE_BODY","RED_DHIDE_BODY","BLACK_DHIDE_BODY","SPINED_BODY","SNAKESKIN_BODY","ZAMORAK_DHIDE_BODY","GUTHIX_DHIDE_BODY","SARADOMIN_DHIDE_BODY","ANCIENT_DHIDE_BODY","BANDOS_DHIDE_BODY","ARMADYL_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLACK_DHIDE_CHAPS","SPINED_CHAPS","SNAKESKIN_CHAPS","ZAMORAK_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS"],
+        "hands": ["GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 75
+        }
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"DRAGONSTONE_BOLTS_E_","amount":125},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "msb_dds",
+      "weight": 18,
+      "spellbook": "NORMAL",
+      "stats": [60,1,92,90,99,31,1],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF","SPINED_HELM"],
+        "cape": ["AVAS_ACCUMULATOR","OBSIDIAN_CAPE"],
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["LEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY","BLUE_DHIDE_BODY","RED_DHIDE_BODY","BLACK_DHIDE_BODY","SPINED_BODY","SNAKESKIN_BODY","ZAMORAK_DHIDE_BODY","GUTHIX_DHIDE_BODY","SARADOMIN_DHIDE_BODY","ANCIENT_DHIDE_BODY","BANDOS_DHIDE_BODY","ARMADYL_DHIDE_BODY"],
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLACK_DHIDE_CHAPS","SPINED_CHAPS","SNAKESKIN_CHAPS","ZAMORAK_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS"],
+        "hands": ["GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 175
+        }
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"RUNE_ARROW","amount":175},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "dark_bow_ags",
+      "weight": 8,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,45,99,96,99,70,94],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF","SPINED_HELM"],
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "DARK_BOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "FIGHTER_TORSO",
+        "legs": ["STUDDED_CHAPS","GREEN_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLACK_DHIDE_CHAPS","SPINED_CHAPS","SNAKESKIN_CHAPS","ZAMORAK_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS"],
+        "hands": "BARROWS_GLOVES",
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGON_ARROW",
+          "amount": 60
+        }
+      },
+      "inventory": ["ARMADYL_GODSWORD",{"item":"DRAGON_ARROW","amount":90},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "void_dcb_claws",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,42,99,94,99,42,94],
+      "equipment": {
+        "head": "VOID_RANGER_HELM",
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "ELITE_VOID_TOP",
+        "legs": "ELITE_VOID_ROBE",
+        "hands": "VOID_KNIGHT_GLOVES",
+        "feet": ["SNAKESKIN_BOOTS","RANGER_BOOTS","DRAGON_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 90
+        }
+      },
+      "inventory": ["DRAGON_CLAWS",{"item":"DRAGONSTONE_BOLTS_E_","amount":120},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "void_dcb_ags",
+      "weight": 7,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,42,99,94,99,42,94],
+      "equipment": {
+        "head": "VOID_RANGER_HELM",
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "ELITE_VOID_TOP",
+        "legs": "ELITE_VOID_ROBE",
+        "hands": "VOID_KNIGHT_GLOVES",
+        "feet": ["SNAKESKIN_BOOTS","RANGER_BOOTS","DRAGON_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 90
+        }
+      },
+      "inventory": ["ARMADYL_GODSWORD",{"item":"DRAGONSTONE_BOLTS_E_","amount":120},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "void_ballista_ags",
+      "weight": 4,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,45,99,95,99,45,94],
+      "equipment": {
+        "head": "VOID_RANGER_HELM",
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "HEAVY_BALLISTA",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "ELITE_VOID_TOP",
+        "legs": "ELITE_VOID_ROBE",
+        "hands": "VOID_KNIGHT_GLOVES",
+        "feet": ["DRAGON_BOOTS","RANGER_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGON_JAVELIN",
+          "amount": 60
+        }
+      },
+      "inventory": ["ARMADYL_GODSWORD",{"item":"DRAGON_JAVELIN","amount":80},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "void_melee_claws",
+      "weight": 6,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,42,99,94,90,42,94],
+      "equipment": {
+        "head": "VOID_MELEE_HELM",
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "ELITE_VOID_TOP",
+        "legs": "ELITE_VOID_ROBE",
+        "hands": "VOID_KNIGHT_GLOVES",
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DRAGON_CLAWS","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "void_melee_ags",
+      "weight": 5,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,42,99,94,90,42,94],
+      "equipment": {
+        "head": "VOID_MELEE_HELM",
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "ELITE_VOID_TOP",
+        "legs": "ELITE_VOID_ROBE",
+        "hands": "VOID_KNIGHT_GLOVES",
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["ARMADYL_GODSWORD","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "ancients_hybrid",
+      "weight": 28,
+      "spellbook": "ANCIENT",
+      "stats": [99,99,99,99,99,99,99],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["COIF","HELM_OF_NEITIZNOT","BLACK_MASK","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["SARADOMIN_CAPE","ZAMORAK_CAPE","GUTHIX_CAPE","GHOSTLY_CLOAK","AVAS_ACCUMULATOR","AVAS_ACCUMULATOR","OBSIDIAN_CAPE"],
+        "weapon": ["RUNE_CROSSBOW","ANCIENT_STAFF"],
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","LEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY","BLUE_DHIDE_BODY","RED_DHIDE_BODY","BLACK_DHIDE_BODY","SPINED_BODY","SNAKESKIN_BODY","ZAMORAK_DHIDE_BODY","GUTHIX_DHIDE_BODY","SARADOMIN_DHIDE_BODY","ANCIENT_DHIDE_BODY","BANDOS_DHIDE_BODY","ARMADYL_DHIDE_BODY"],
+        "shield": ["UNHOLY_BOOK","BOOK_OF_DARKNESS"],
+        "legs": ["SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["ABYSSAL_WHIP","DRAGON_DAGGER_P_PLUS_PLUS_","RUNE_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":120},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":2},"SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":11}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": false
+      }
+    },
+{
+      "id": "elite_ancients_dbow",
+      "weight": 12,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "ANCIENT",
+      "stats": [99,99,99,99,99,99,99],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["AHRIMS_HOOD","HELM_OF_NEITIZNOT","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["SARADOMIN_CAPE","ZAMORAK_CAPE","GUTHIX_CAPE","GHOSTLY_CLOAK","AVAS_ACCUMULATOR","AVAS_ACCUMULATOR","OBSIDIAN_CAPE"],
+        "weapon": "ANCIENT_STAFF",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["AHRIMS_ROBETOP","KARILS_LEATHERTOP",null],
+        "shield": ["UNHOLY_BOOK","BOOK_OF_DARKNESS"],
+        "legs": ["AHRIMS_ROBESKIRT","BLACK_DHIDE_CHAPS",null],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","RANGER_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DARK_BOW",{"item":"DRAGON_ARROW","amount":90},"RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":4},{"item":"SARADOMIN_BREW_4_","repeat":3},{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":14}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "tribrid_main",
+      "weight": 22,
+      "spellbook": "ANCIENT",
+      "stats": [99,99,99,99,99,99,99],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["COIF","HELM_OF_NEITIZNOT","BLACK_MASK","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","LEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY","BLUE_DHIDE_BODY","RED_DHIDE_BODY","BLACK_DHIDE_BODY","SPINED_BODY","SNAKESKIN_BODY","ZAMORAK_DHIDE_BODY","GUTHIX_DHIDE_BODY","SARADOMIN_DHIDE_BODY","ANCIENT_DHIDE_BODY","BANDOS_DHIDE_BODY","ARMADYL_DHIDE_BODY"],
+        "legs": ["SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 80
+        }
+      },
+      "inventory": ["ABYSSAL_WHIP","DRAGON_DAGGER_P_PLUS_PLUS_","RUNE_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":120},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":2},{"item":"SARADOMIN_BREW_4_","repeat":3},{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":8}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": false
+      }
+    },
+{
+      "id": "nh_pure",
+      "weight": 14,
+      "spellbook": "ANCIENT",
+      "stats": [60,1,90,99,99,52,99],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["COIF","GREY_HAT","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["ZAMORAK_CAPE","SARADOMIN_CAPE","ZAMORAK_CAPE","GUTHIX_CAPE","GHOSTLY_CLOAK","AVAS_ACCUMULATOR"],
+        "weapon": {
+          "magicStaff": "ANCIENT_STAFF"
+        },
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["ZAMORAK_ROBE_TOP","GHOSTLY_ROBE","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","MYSTIC_ROBE_TOP_DUSK_","SPLITBARK_BODY","BLACK_DHIDE_BODY","RED_DHIDE_BODY"],
+        "legs": ["BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","STUDDED_CHAPS"],
+        "hands": ["MITHRIL_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": [{"item":"DRAGON_DAGGER_P_PLUS_PLUS_","repeat":2},"RUNE_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":60},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":8}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "elite_nh_ags",
+      "weight": 10,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "ANCIENT",
+      "stats": [99,99,99,99,99,99,99],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["AHRIMS_HOOD","HELM_OF_NEITIZNOT","COIF","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["AHRIMS_ROBETOP","SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","BLACK_DHIDE_BODY"],
+        "legs": ["AHRIMS_ROBESKIRT","SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 95
+        }
+      },
+      "inventory": ["ABYSSAL_WHIP","ARMADYL_GODSWORD","DRAGON_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":110},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":3},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":9}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "elite_nh_claws",
+      "weight": 9,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "ANCIENT",
+      "stats": [99,99,99,99,99,99,99],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["AHRIMS_HOOD","HELM_OF_NEITIZNOT","COIF","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["AHRIMS_ROBETOP","SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","BLACK_DHIDE_BODY"],
+        "legs": ["AHRIMS_ROBESKIRT","SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 95
+        }
+      },
+      "inventory": ["ABYSSAL_WHIP","DRAGON_CLAWS","DRAGON_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":110},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":3},{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":7}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "volatile_nh",
+      "weight": 5,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "ANCIENT",
+      "stats": [99,99,99,99,99,99,99],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["AHRIMS_HOOD","HELM_OF_NEITIZNOT","COIF","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "DRAGON_CROSSBOW",
+        "amulet": ["AMULET_OF_GLORY","AMULET_OF_FURY"],
+        "body": ["AHRIMS_ROBETOP","SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","BLACK_DHIDE_BODY"],
+        "legs": ["AHRIMS_ROBESKIRT","SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 95
+        }
+      },
+      "inventory": ["VOLATILE_NIGHTMARE_STAFF","ABYSSAL_WHIP",null,"DRAGON_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":110},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","BOOK_OF_DARKNESS","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":7}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "budget_nh_dds",
+      "weight": 10,
+      "spellbook": "ANCIENT",
+      "stats": [75,45,90,92,90,70,85],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "body": ["@budget_range_bodies","@budget_mage_tops"],
+        "legs": ["@budget_range_legs","@budget_mage_legs"],
+        "hands": ["@budget_range_gloves","@budget_mage_gloves"],
+        "feet": ["@budget_range_boots","@budget_mage_boots"],
+        "ring": "RING_OF_RECOIL",
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 70
+        }
+      },
+      "inventory": ["@budget_melee_switches","DRAGON_DAGGER_P_PLUS_PLUS_","RUNE_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":80},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS",["MYSTIC_ROBE_TOP","SPLITBARK_BODY"],["MYSTIC_ROBE_BOTTOM","BLACK_DHIDE_CHAPS"],"UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": false
+      }
+    },
+{
+      "id": "budget_nh_ags",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [75,70,94,96,94,77,90],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "body": ["@budget_range_bodies","@budget_mage_tops"],
+        "legs": ["@budget_range_legs","@budget_mage_legs"],
+        "hands": ["@budget_range_gloves","@budget_mage_gloves"],
+        "feet": ["@budget_range_boots","@budget_mage_boots"],
+        "ring": "RING_OF_RECOIL",
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 85
+        }
+      },
+      "inventory": ["@budget_melee_switches","DRAGON_DAGGER_P_PLUS_PLUS_","RUNE_CROSSBOW",{"item":"DRAGONSTONE_BOLTS_E_","amount":90},"BLACK_DHIDE_BODY","BLACK_DHIDE_CHAPS","MYSTIC_ROBE_TOP","MYSTIC_ROBE_BOTTOM","UNHOLY_BOOK","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},"SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":9}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": false
+      }
+    },
+{
+      "id": "anti_pk_rcb",
+      "weight": 24,
+      "spellbook": "ANCIENT",
+      "stats": [90,80,95,99,99,77,94],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["COIF","HELM_OF_NEITIZNOT","BLACK_MASK","SKELETAL_HELM","SKELETAL_HELM_2","MYSTIC_HAT","MYSTIC_HAT_DARK_","MYSTIC_HAT_LIGHT_","MYSTIC_HAT_DUSK_","INFINITY_HAT","SPLITBARK_HELM","GHOSTLY_HOOD","ELDER_CHAOS_HOOD","DAGONHAI_HAT"],
+        "cape": ["AVAS_ACCUMULATOR",null],
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP","LEATHER_BODY","STUDDED_BODY","GREEN_DHIDE_BODY","BLUE_DHIDE_BODY","RED_DHIDE_BODY","BLACK_DHIDE_BODY","SPINED_BODY","SNAKESKIN_BODY","ZAMORAK_DHIDE_BODY","GUTHIX_DHIDE_BODY","SARADOMIN_DHIDE_BODY","ANCIENT_DHIDE_BODY","BANDOS_DHIDE_BODY","ARMADYL_DHIDE_BODY"],
+        "legs": ["SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 90
+        }
+      },
+      "inventory": ["ABYSSAL_WHIP","DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},["SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP"],["SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],"SUPER_ATTACK_4_","SUPER_STRENGTH_4_","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":2},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":13}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": false
+      }
+    },
+{
+      "id": "anti_pk_whip",
+      "weight": 22,
+      "spellbook": "ANCIENT",
+      "stats": [99,90,99,99,94,77,94],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["HELM_OF_NEITIZNOT","BLACK_MASK",null],
+        "cape": ["OBSIDIAN_CAPE","AVAS_ACCUMULATOR",null],
+        "weapon": ["ABYSSAL_WHIP","RUNE_CROSSBOW"],
+        "amulet": "AMULET_OF_GLORY",
+        "body": [null,null],
+        "shield": [null,null],
+        "legs": [null,null],
+        "hands": ["BARROWS_GLOVES","SKELETAL_GLOVES","SKELETAL_GLOVES_2","MYSTIC_GLOVES","MYSTIC_GLOVES_DARK_","MYSTIC_GLOVES_LIGHT_","MYSTIC_GLOVES_DUSK_","INFINITY_GLOVES","SPLITBARK_GAUNTLETS","GHOSTLY_GLOVES","GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["DRAGON_BOOTS","CLIMBING_BOOTS","SKELETAL_BOOTS","SKELETAL_BOOTS_2","MYSTIC_BOOTS","MYSTIC_BOOTS_DARK_","MYSTIC_BOOTS_LIGHT_","MYSTIC_BOOTS_DUSK_","INFINITY_BOOTS","SPLITBARK_BOOTS","GHOSTLY_BOOTS","CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["RUNE_CROSSBOW","DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},["SKELETAL_TOP","SKELETAL_TOP_2","MYSTIC_ROBE_TOP","MYSTIC_ROBE_TOP_DARK_","MYSTIC_ROBE_TOP_LIGHT_","INFINITY_TOP","SPLITBARK_BODY","GHOSTLY_ROBE","ELDER_CHAOS_TOP","DAGONHAI_ROBE_TOP"],["SKELETAL_BOTTOMS","SKELETAL_BOTTOMS_2","MYSTIC_ROBE_BOTTOM","SPLITBARK_LEGS","BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","BLUE_DHIDE_CHAPS","SPINED_CHAPS","ANCIENT_CHAPS","BANDOS_CHAPS","ARMADYL_CHAPS","GUTHIX_CHAPS","SARADOMIN_CHAPS","ZAMORAK_CHAPS"],"SUPER_ATTACK_4_","SUPER_STRENGTH_4_","RANGING_POTION_4_","SUPER_RESTORE_4_",{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":12}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": false
+      }
+    },
+{
+      "id": "budget_anti_pk",
+      "weight": 14,
+      "spellbook": "ANCIENT",
+      "stats": [70,45,90,92,90,52,85],
+      "autocastSpell": "ICE_BARRAGE",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "body": ["@budget_range_bodies","@budget_mage_tops"],
+        "legs": ["@budget_range_legs","@budget_mage_legs"],
+        "hands": ["@budget_range_gloves","@budget_mage_gloves"],
+        "feet": ["@budget_range_boots","@budget_mage_boots"],
+        "ring": "RING_OF_RECOIL",
+        "weapon": ["RUNE_CROSSBOW","DRAGON_SCIMITAR"],
+        "amulet": "AMULET_OF_GLORY",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 85
+        }
+      },
+      "inventory": ["@budget_melee_switches","DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_mage_tops","@budget_mage_legs","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":12}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": false
+      }
+    },
+{
+      "id": "budget_scim",
+      "weight": 14,
+      "spellbook": "NORMAL",
+      "stats": [60,45,90,88,70,43,70],
+      "equipment": {
+        "head": "@budget_melee_heads",
+        "cape": "@budget_capes",
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_melee_bodies",
+        "shield": "@budget_melee_offhands",
+        "legs": "@budget_melee_legs",
+        "hands": "MITHRIL_GLOVES",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": [["DRAGON_DAGGER_P_PLUS_PLUS_","BARRELCHEST_ANCHOR"],"SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":18}],
+      "fill": "SHARK"
+    },
+{
+      "id": "budget_rcb",
+      "weight": 20,
+      "spellbook": "NORMAL",
+      "stats": [60,45,85,90,90,43,70],
+      "equipment": {
+        "head": "@budget_range_heads",
+        "cape": "@budget_capes",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGONSTONE_BOLTS_E_",
+          "amount": 60
+        }
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"DRAGONSTONE_BOLTS_E_","amount":100},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "budget_msb",
+      "weight": 18,
+      "spellbook": "NORMAL",
+      "stats": [50,1,85,85,95,31,1],
+      "equipment": {
+        "head": "@budget_range_heads",
+        "cape": "@budget_capes",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 120
+        }
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"RUNE_ARROW","amount":150},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "budget_max_tribrid",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [99,70,99,99,99,94,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["@budget_range_bodies","@budget_mage_tops"],
+        "legs": ["@budget_range_legs","@budget_mage_legs"],
+        "hands": ["@budget_range_gloves","@budget_mage_gloves"],
+        "feet": ["@budget_range_boots","@budget_mage_boots"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "BROAD_BOLTS",
+          "amount": 120
+        }
+      },
+      "inventory": ["@budget_melee_switches","DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_mage_tops","@budget_mage_legs","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "budget_zerker_tribrid",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [60,45,99,99,99,94,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": "@budget_melee_heads",
+        "cape": "@budget_capes",
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_melee_bodies",
+        "shield": "@budget_melee_offhands",
+        "legs": "@budget_melee_legs",
+        "hands": "MITHRIL_GLOVES",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "BROAD_BOLTS",
+          "amount": 110
+        }
+      },
+      "inventory": ["@budget_melee_switches","DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_range_bodies","@budget_range_legs","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "budget_med_tribrid",
+      "weight": 5,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [75,75,99,99,99,94,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": "@budget_melee_heads",
+        "cape": "@budget_capes",
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_melee_bodies",
+        "shield": "@budget_melee_offhands",
+        "legs": "@budget_melee_legs",
+        "hands": "MITHRIL_GLOVES",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["RUNE_CROSSBOW",{"item":"BROAD_BOLTS","amount":110},{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_range_bodies","@budget_range_legs","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "budget_pure_tribrid",
+      "weight": 5,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [60,1,99,99,99,52,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["RUNE_CROSSBOW",{"item":"BROAD_BOLTS","amount":100},"DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_mage_tops","@budget_mage_legs","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "budget_gmaul_tribrid",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [50,1,99,99,99,52,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["GRANITE_MAUL",{"item":"RUNE_ARROW","amount":180},{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_mage_tops","@budget_mage_legs","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "budget_range_tank",
+      "weight": 8,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [75,70,99,99,99,94,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "BROAD_BOLTS",
+          "amount": 120
+        }
+      },
+      "inventory": ["@budget_melee_switches","DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_melee_bodies","@budget_melee_legs","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "budget_venge_dscim_rcb",
+      "weight": 4,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [60,45,99,99,99,70,94],
+      "equipment": {
+        "head": "@budget_melee_heads",
+        "cape": "@budget_capes",
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_melee_bodies",
+        "shield": "@budget_melee_offhands",
+        "legs": "@budget_melee_legs",
+        "hands": "MITHRIL_GLOVES",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["RUNE_CROSSBOW",{"item":"BROAD_BOLTS","amount":110},"DRAGON_DAGGER_P_PLUS_PLUS_","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK"
+    },
+{
+      "id": "budget_venge_msb_gmaul",
+      "weight": 6,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [50,1,99,99,99,70,94],
+      "equipment": {
+        "head": "@budget_range_heads",
+        "cape": "@budget_capes",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["@budget_melee_switches","GRANITE_MAUL",{"item":"RUNE_ARROW","amount":180},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK"
+    },
+{
+      "id": "budget_ancient_msb_dds",
+      "weight": 6,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [50,1,99,99,99,52,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": ["@budget_range_gloves","@budget_mage_gloves"],
+        "feet": ["@budget_range_boots","@budget_mage_boots"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_",{"item":"RUNE_ARROW","amount":180},{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_mage_tops","@budget_mage_legs","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "rune_pure_nh_anchor",
+      "weight": 4,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [60,40,99,99,99,94,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": "@budget_melee_heads",
+        "cape": "@budget_capes",
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_melee_bodies",
+        "shield": "@budget_melee_offhands",
+        "legs": "@budget_melee_legs",
+        "hands": "MITHRIL_GLOVES",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["RUNE_CROSSBOW",{"item":"BROAD_BOLTS","amount":110},"BARRELCHEST_ANCHOR",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_range_bodies","@budget_range_legs","@budget_mage_tops","@budget_mage_legs","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "med_nh_anchor",
+      "weight": 5,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "ANCIENT",
+      "stats": [75,70,99,99,99,94,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": ["@budget_range_heads","@budget_mage_hats"],
+        "cape": "@budget_capes",
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": ["@budget_range_gloves","@budget_mage_gloves"],
+        "feet": ["@budget_range_boots","@budget_mage_boots"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "BROAD_BOLTS",
+          "amount": 120
+        }
+      },
+      "inventory": ["@budget_melee_switches","BARRELCHEST_ANCHOR",{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_melee_bodies","@budget_melee_legs","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "budget_lunar_ranged_tank",
+      "weight": 5,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,70,99,99,99,70,94],
+      "equipment": {
+        "head": "@budget_range_heads",
+        "cape": "@budget_capes",
+        "weapon": "RUNE_CROSSBOW",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "BROAD_BOLTS",
+          "amount": 120
+        }
+      },
+      "inventory": ["@budget_melee_switches","DRAGON_DAGGER_P_PLUS_PLUS_","@budget_melee_bodies","@budget_melee_legs","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","RANGING_POTION_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK"
+    },
+{
+      "id": "dwh_zerker_nh",
+      "weight": 3,
+      "minimumProfileIds": ["elite"],
+      "spellbook": "ANCIENT",
+      "stats": [1,45,99,99,99,94,94],
+      "autocastSpell": "ICE_BLITZ",
+      "equipment": {
+        "head": "@budget_melee_heads",
+        "cape": "@budget_capes",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "body": "@budget_melee_bodies",
+        "legs": "@budget_melee_legs",
+        "hands": ["MITHRIL_GLOVES","@budget_range_gloves"],
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["DRAGON_WARHAMMER","RUNE_CROSSBOW",{"item":"BROAD_BOLTS","amount":100},{"item":"ANCIENT_STAFF","magicStaff":"ANCIENT_STAFF"},"@budget_range_bodies","@budget_range_legs","@budget_mage_tops","@budget_mage_legs","RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_",{"item":"SUPER_RESTORE_4_","repeat":3},{"item":"SARADOMIN_BREW_4_","repeat":2},{"item":"COOKED_KARAMBWAN","repeat":3},{"item":"SHARK","repeat":10}],
+      "fill": "SHARK",
+      "magic": {
+        "type": "pvp",
+        "allowAncients": true,
+        "preferAncients": true
+      }
+    },
+{
+      "id": "ags_zerker",
+      "weight": 12,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "LUNAR",
+      "stats": [75,45,99,97,90,70,94],
+      "equipment": {
+        "head": "BERSERKER_HELM",
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "ABYSSAL_WHIP",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["FIGHTER_TORSO","GRANITE_BODY"],
+        "shield": ["RUNE_DEFENDER","DRAGON_DEFENDER"],
+        "legs": ["RUNE_PLATELEGS","RUNE_PLATESKIRT","OBSIDIAN_PLATELEGS","DRAGON_PLATELEGS","DRAGON_PLATESKIRT"],
+        "hands": "BARROWS_GLOVES",
+        "feet": "DRAGON_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["ARMADYL_GODSWORD","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "obby_mauler",
+      "weight": 10,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [1,1,99,82,70,31,1],
+      "equipment": {
+        "head": "BERSERKER_HELM",
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "TZHAAR_KET_OM",
+        "amulet": "AMULET_OF_STRENGTH",
+        "body": "FIGHTER_TORSO",
+        "legs": "OBSIDIAN_PLATELEGS",
+        "hands": "BARROWS_GLOVES",
+        "feet": "CLIMBING_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DRAGON_CLAWS","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":6},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "obsidian_set_mauler",
+      "weight": 7,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [60,60,99,95,70,31,52],
+      "equipment": {
+        "head": "OBSIDIAN_HELMET",
+        "cape": "OBSIDIAN_CAPE",
+        "weapon": "TZHAAR_KET_OM",
+        "amulet": "BERSERKER_NECKLACE",
+        "body": "OBSIDIAN_PLATEBODY",
+        "legs": "OBSIDIAN_PLATELEGS",
+        "hands": "BARROWS_GLOVES",
+        "feet": "DRAGON_BOOTS",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DRAGON_CLAWS","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":5},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "ballista_pure",
+      "weight": 10,
+      "minimumProfileIds": ["veteran","elite"],
+      "spellbook": "NORMAL",
+      "stats": [75,1,95,85,99,52,94],
+      "equipment": {
+        "head": ["COIF","GREEN_HAT","GREY_HAT","BLUE_HAT","RED_HAT","ZAMORAK_COIF","GUTHIX_COIF","SARADOMIN_COIF","ANCIENT_COIF","BANDOS_COIF","ARMADYL_COIF","VOID_RANGER_HELM"],
+        "cape": "AVAS_ACCUMULATOR",
+        "weapon": "HEAVY_BALLISTA",
+        "amulet": "AMULET_OF_GLORY",
+        "body": ["BLACK_DHIDE_BODY","RED_DHIDE_BODY","SPINED_BODY"],
+        "legs": ["BLACK_DHIDE_CHAPS","RED_DHIDE_CHAPS","SPINED_CHAPS"],
+        "hands": ["GREEN_DHIDE_VAMBRACES","BLUE_DHIDE_VAMBRACES","RED_DHIDE_VAMBRACES","BLACK_DHIDE_VAMBRACES","SPINED_GLOVES","SNAKESKIN_VAMBRACES","ZAMORAK_BRACERS","GUTHIX_BRACERS","SARADOMIN_BRACERS","ANCIENT_BRACERS","BANDOS_BRACERS","ARMADYL_BRACERS","MITHRIL_GLOVES","BARROWS_GLOVES"],
+        "feet": ["CLIMBING_BOOTS","SNAKESKIN_BOOTS","SPINED_BOOTS","ANCIENT_DHIDE_BOOTS","BANDOS_DHIDE_BOOTS","GUTHIX_DHIDE_BOOTS","ARMADYL_DHIDE_BOOTS","SARADOMIN_DHIDE_BOOTS","ZAMORAK_DHIDE_BOOTS"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "DRAGON_JAVELIN",
+          "amount": 70
+        }
+      },
+      "inventory": ["DRAGON_CLAWS",{"item":"DRAGON_JAVELIN","amount":90},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "gmaul_rusher",
+      "weight": 26,
+      "spellbook": "NORMAL",
+      "stats": [50,1,99,85,99,31,1],
+      "equipment": {
+        "head": "@budget_range_heads",
+        "cape": "@budget_capes",
+        "body": "@budget_range_bodies",
+        "legs": "@budget_range_legs",
+        "hands": "@budget_range_gloves",
+        "feet": "@budget_range_boots",
+        "weapon": "MAGIC_SHORTBOW",
+        "amulet": ["AMULET_OF_STRENGTH","AMULET_OF_GLORY"],
+        "ring": "RING_OF_RECOIL",
+        "ammo": {
+          "item": "RUNE_ARROW",
+          "amount": 150
+        }
+      },
+      "inventory": ["GRANITE_MAUL",{"item":"RUNE_ARROW","amount":180},"RANGING_POTION_4_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_",{"item":"COOKED_KARAMBWAN","repeat":4},{"item":"SHARK","repeat":17}],
+      "fill": "SHARK"
+    },
+{
+      "id": "dds_rusher",
+      "weight": 12,
+      "spellbook": "NORMAL",
+      "stats": [60,1,95,86,80,31,1],
+      "equipment": {
+        "head": "@budget_melee_heads",
+        "cape": "@budget_capes",
+        "weapon": "DRAGON_SCIMITAR",
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_melee_bodies",
+        "shield": "@budget_melee_offhands",
+        "legs": "@budget_melee_legs",
+        "hands": "MITHRIL_GLOVES",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["DRAGON_DAGGER_P_PLUS_PLUS_","SUPER_ATTACK_4_","SUPER_STRENGTH_4_","SUPER_RESTORE_4_","SARADOMIN_BREW_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":6},{"item":"SHARK","repeat":16}],
+      "fill": "SHARK"
+    },
+{
+      "id": "obby_rusher",
+      "weight": 14,
+      "spellbook": "NORMAL",
+      "stats": [1,1,99,80,60,31,1],
+      "equipment": {
+        "head": "@budget_melee_heads",
+        "cape": "@budget_capes",
+        "weapon": {
+          "item": "RUNE_KNIFE",
+          "amount": 250
+        },
+        "amulet": "AMULET_OF_GLORY",
+        "body": "@budget_melee_bodies",
+        "shield": "@budget_melee_offhands",
+        "legs": "@budget_melee_legs",
+        "hands": "MITHRIL_GLOVES",
+        "feet": "@budget_range_boots",
+        "ring": "RING_OF_RECOIL"
+      },
+      "inventory": ["TZHAAR_KET_OM","SUPER_STRENGTH_4_","RANGING_POTION_4_","SUPER_RESTORE_4_","RING_OF_RECOIL",{"item":"COOKED_KARAMBWAN","repeat":8},{"item":"SHARK","repeat":15}],
+      "fill": "SHARK"
+    }
+  ],
   "pools": {
     "ancient_autocast_staves": [
       "ANCIENT_STAFF"
@@ -127,6 +2282,63 @@
     "range_capes": [
       "AVAS_ACCUMULATOR", "OBSIDIAN_CAPE"
     ],
+    "budget_capes": [
+      "AVAS_ACCUMULATOR", "ZAMORAK_CAPE", "GUTHIX_CAPE", "SARADOMIN_CAPE"
+    ],
+    "budget_melee_heads": [
+      "WARRIOR_HELM", "SPINED_HELM", "IRON_FULL_HELM", "COIF"
+    ],
+    "budget_melee_bodies": [
+      "RUNE_PLATEBODY", "RUNE_CHAINBODY", "GRANITE_BODY", "BLACK_DHIDE_BODY", "FIGHTER_TORSO"
+    ],
+    "budget_melee_legs": [
+      "RUNE_PLATELEGS", "RUNE_PLATESKIRT", "BLACK_DHIDE_CHAPS", "SPINED_CHAPS"
+    ],
+    "budget_melee_offhands": [
+      "RUNE_DEFENDER", "MITHRIL_KITESHIELD", "UNHOLY_BOOK"
+    ],
+    "budget_melee_switches": [
+      "DRAGON_SCIMITAR", "RUNE_SCIMITAR", "DRAGON_MACE"
+    ],
+    "budget_range_heads": [
+      "COIF", "GREEN_HAT", "GREY_HAT", "BLUE_HAT", "RED_HAT",
+      "ZAMORAK_COIF", "GUTHIX_COIF", "SARADOMIN_COIF", "SPINED_HELM"
+    ],
+    "budget_range_bodies": [
+      "LEATHER_BODY", "STUDDED_BODY", "GREEN_DHIDE_BODY", "BLUE_DHIDE_BODY",
+      "RED_DHIDE_BODY", "BLACK_DHIDE_BODY", "SPINED_BODY", "SNAKESKIN_BODY"
+    ],
+    "budget_range_legs": [
+      "STUDDED_CHAPS", "GREEN_DHIDE_CHAPS", "BLUE_DHIDE_CHAPS", "RED_DHIDE_CHAPS",
+      "BLACK_DHIDE_CHAPS", "SPINED_CHAPS", "SNAKESKIN_CHAPS"
+    ],
+    "budget_range_gloves": [
+      "GREEN_DHIDE_VAMBRACES", "BLUE_DHIDE_VAMBRACES", "RED_DHIDE_VAMBRACES", "BLACK_DHIDE_VAMBRACES",
+      "SPINED_GLOVES", "SNAKESKIN_VAMBRACES", "MITHRIL_GLOVES"
+    ],
+    "budget_range_boots": [
+      "CLIMBING_BOOTS", "SNAKESKIN_BOOTS", "SPINED_BOOTS", "RUNE_BOOTS"
+    ],
+    "budget_mage_hats": [
+      "MYSTIC_HAT", "MYSTIC_HAT_DARK_", "MYSTIC_HAT_LIGHT_", "SKELETAL_HELM",
+      "GHOSTLY_HOOD", "ELDER_CHAOS_HOOD"
+    ],
+    "budget_mage_tops": [
+      "SKELETAL_TOP", "MYSTIC_ROBE_TOP", "MYSTIC_ROBE_TOP_DARK_",
+      "MYSTIC_ROBE_TOP_LIGHT_", "SPLITBARK_BODY", "GHOSTLY_ROBE", "ELDER_CHAOS_TOP"
+    ],
+    "budget_mage_legs": [
+      "SKELETAL_BOTTOMS", "MYSTIC_ROBE_BOTTOM", "SPLITBARK_LEGS",
+      "BLACK_DHIDE_CHAPS", "RED_DHIDE_CHAPS", "SPINED_CHAPS"
+    ],
+    "budget_mage_gloves": [
+      "MYSTIC_GLOVES", "MYSTIC_GLOVES_DARK_", "MYSTIC_GLOVES_LIGHT_",
+      "SKELETAL_GLOVES", "GHOSTLY_GLOVES"
+    ],
+    "budget_mage_boots": [
+      "MYSTIC_BOOTS", "MYSTIC_BOOTS_DARK_", "MYSTIC_BOOTS_LIGHT_",
+      "SKELETAL_BOOTS", "GHOSTLY_BOOTS"
+    ],
     "black_masks": [
       "BLACK_MASK"
     ],
@@ -162,10 +2374,6 @@
       "BLACK_DHIDE_CHAPS", "RED_DHIDE_CHAPS", "BLUE_DHIDE_CHAPS", "SPINED_CHAPS",
       "ANCIENT_CHAPS", "BANDOS_CHAPS", "ARMADYL_CHAPS", "GUTHIX_CHAPS",
       "SARADOMIN_CHAPS", "ZAMORAK_CHAPS"
-    ],
-    "elite_spec_weapons": [
-      "DRAGON_CLAWS", "ARMADYL_GODSWORD", "BANDOS_GODSWORD", "SARADOMIN_GODSWORD",
-      "ZAMORAK_GODSWORD", "ANCIENT_GODSWORD", "BARRELCHEST_ANCHOR"
     ]
   },
   "regularMagicPackages": [
@@ -280,7 +2488,7 @@
         "edge", "hybrid", "range"
       ],
       "weaponFamilies": [
-        "rune_cb", "msb", "dds", "dscim",
+        "rune_cb", "msb", "dds", "dscim", "ancients", "staff",
         "karils_cb", "blowpipe"
       ],
       "armorFamilies": [
@@ -290,7 +2498,9 @@
       "archetypes": [
         "msb_gmaul", "rcb_dds", "msb_dds", "dark_bow_ags",
         "zerker_dcb_ags", "med_dcb_claws", "void_dcb_claws", "void_dcb_ags",
-        "void_ballista_ags", "ballista_pure", "karils_venge_ags", "blowpipe_venge_ags"
+        "void_ballista_ags", "ballista_pure", "karils_venge_ags", "blowpipe_venge_ags",
+        "budget_nh_dds", "budget_max_tribrid", "budget_range_tank", "budget_ancient_msb_dds",
+        "budget_lunar_ranged_tank", "rune_pure_nh_anchor", "med_nh_anchor"
       ],
       "inventoryBias": {
         "food": 0.5,
@@ -367,7 +2577,10 @@
         "rune", "green_dhide", "granite", "mixed"
       ],
       "archetypes": [
-        "budget_scim", "budget_rcb", "budget_msb"
+        "budget_scim", "budget_rcb", "budget_msb", "budget_max_tribrid",
+        "budget_zerker_tribrid", "budget_med_tribrid", "budget_pure_tribrid",
+        "budget_gmaul_tribrid", "budget_range_tank", "budget_venge_dscim_rcb",
+        "budget_venge_msb_gmaul", "budget_ancient_msb_dds", "budget_lunar_ranged_tank"
       ],
       "inventoryBias": {
         "food": 0.58,
@@ -409,13 +2622,13 @@
         "edge", "pure", "low", "melee"
       ],
       "weaponFamilies": [
-        "msb", "dds", "gmaul", "ags"
+        "msb", "dds", "gmaul", "dwh"
       ],
       "armorFamilies": [
         "dhide", "spined", "light", "mixed"
       ],
       "archetypes": [
-        "low_level_dds_pure", "low_level_gmaul_pure", "low_level_msb_ags_pure", "msb_gmaul",
+        "low_level_dds_pure", "low_level_gmaul_pure", "dwh_pure", "msb_gmaul",
         "msb_dds"
       ],
       "inventoryBias": {
@@ -440,7 +2653,8 @@
         "rune", "fighter", "mixed", "dhide"
       ],
       "archetypes": [
-        "rune_pure_dscim_dds", "rune_pure_msb_ags", "initiate_dscim_dds", "initiate_msb_gmaul"
+        "rune_pure_dscim_dds", "rune_pure_msb_ags", "rune_pure_nh_anchor",
+        "initiate_dscim_dds", "initiate_msb_gmaul"
       ],
       "inventoryBias": {
         "food": 0.54,
@@ -651,13 +2865,13 @@
         "rush", "spec", "edge"
       ],
       "weaponFamilies": [
-        "dds", "gmaul", "ags", "anchor"
+        "dds", "gmaul", "dwh", "ags", "anchor"
       ],
       "armorFamilies": [
         "light", "fighter", "mixed"
       ],
       "archetypes": [
-        "gmaul_rusher", "dds_rusher", "obby_rusher", "obby_mauler"
+        "gmaul_rusher", "dds_rusher", "obby_rusher", "obby_mauler", "dwh_pure"
       ],
       "inventoryBias": {
         "food": 0.44,
@@ -860,7 +3074,8 @@
       ],
       "archetypes": [
         "elite_nh_ags", "elite_nh_claws", "volatile_nh", "tribrid_main",
-        "elite_ancients_dbow", "toxic_sotd_hybrid", "spear_tribrid_ags", "sotd_hybrid_claws"
+        "elite_ancients_dbow", "toxic_sotd_hybrid", "spear_tribrid_ags", "sotd_hybrid_claws",
+        "dwh_zerker_nh"
       ],
       "inventoryBias": {
         "food": 0.36,
@@ -884,7 +3099,8 @@
         "mystic", "dhide", "skeletal", "mixed"
       ],
       "archetypes": [
-        "budget_nh_dds", "budget_nh_ags", "ancients_hybrid"
+        "budget_nh_dds", "budget_nh_ags", "ancients_hybrid", "rune_pure_nh_anchor",
+        "med_nh_anchor"
       ],
       "inventoryBias": {
         "food": 0.44,

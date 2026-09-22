@@ -1,44 +1,13 @@
+const fs = require("fs");
+const path = require("path");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
+const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 
-const TURAEL_MASTER = Object.freeze({
-  name: "Turael",
-  basePoints: 1,
-  consecutiveTaskPoints: [
-    [10, 3],
-    [50, 10],
-    [100, 25],
-    [250, 50],
-    [1000, 75],
-  ],
-});
-
-const TASKS = Object.freeze([
-  { name: "banshees", hint: "in the Slayer Tower", min: 15, max: 50, slayerLevel: 15, weight: 8, npcNames: ["banshee", "twisted banshee"] },
-  { name: "bats", hint: "in the Taverly Dungeon", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["bat", "giant bat"] },
-  { name: "chickens", hint: "in Lumbridge", min: 15, max: 50, slayerLevel: 1, weight: 6, npcNames: ["chicken", "mounted terrorbird gnome", "terrorbird", "rooster"] },
-  { name: "bears", hint: "outside Varrock", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["black bear", "grizzly bear", "grizzly bear cub", "bear cub", "callisto"] },
-  { name: "cave bugs", hint: "Lumbridge dungeon", min: 10, max: 20, slayerLevel: 7, weight: 8, npcNames: ["cave bug"] },
-  { name: "cave crawlers", hint: "Lumbridge dungeon", min: 15, max: 50, slayerLevel: 10, weight: 8, npcNames: ["cave crawler"] },
-  { name: "cave slime", hint: "Lumbridge dungeon", min: 10, max: 20, slayerLevel: 17, weight: 8, npcNames: ["cave slime"] },
-  { name: "cows", hint: "Lumbridge", min: 15, max: 50, slayerLevel: 1, weight: 8, npcNames: ["cow", "cow calf"] },
-  { name: "crawling hands", hint: "in the Slayer Tower", min: 15, max: 50, slayerLevel: 5, weight: 8, npcNames: ["crawling hand"] },
-  { name: "desert lizards", hint: "in the desert", min: 15, max: 50, slayerLevel: 22, weight: 8, npcNames: ["lizard", "small lizard", "desert lizard"] },
-  { name: "dogs", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["dog", "jackal", "guard dog", "wild dog"] },
-  { name: "dwarves", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["dwarf", "dwarf gang member", "chaos dwarf"] },
-  { name: "ghosts", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["ghost", "tortured soul"] },
-  { name: "goblins", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["goblin", "cave goblin guard"] },
-  { name: "icefiends", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 8, npcNames: ["icefiend"] },
-  { name: "kalphites", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 6, npcNames: ["kalphite worker", "kalphite soldier", "kalphite guardian", "kalphite queen"] },
-  { name: "minotaurs", hint: "", min: 10, max: 20, slayerLevel: 1, weight: 7, npcNames: ["minotaur"] },
-  { name: "monkeys", hint: "", min: 10, max: 20, slayerLevel: 1, weight: 7, npcNames: ["monkey", "karmjan monkey", "monkey guard", "monkey archer", "zombie monkey"] },
-  { name: "rats", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["rat", "giant rat", "dungeon rat", "brine rat"] },
-  { name: "scorpions", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["scorpion", "king scorpion", "poison scorpion", "pit scorpion", "scorpia"] },
-  { name: "skeletons", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["skeleton", "skeleton mage", "vet'ion"] },
-  { name: "spiders", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 6, npcNames: ["spider", "giant spider", "shadow spider", "giant crypt spider", "venenatis"] },
-  { name: "wolves", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["wolf", "white wolf", "big wolf"] },
-  { name: "zombies", hint: "", min: 15, max: 50, slayerLevel: 1, weight: 7, npcNames: ["zombie", "undead one"] },
-]);
+const SLAYER_MASTERS = Object.freeze(JSON.parse(fs.readFileSync(
+  path.join(GameConstants.DEFINITIONS_DIRECTORY, "slayer-tasks.json"),
+  "utf8"
+)));
 
 function initializePlayerSlayerState(player) {
   if (typeof player.getSlayerPoints === "function" && !Number.isFinite(player.getSlayerPoints())) {
@@ -52,8 +21,14 @@ function initializePlayerSlayerState(player) {
 function wrapTask(taskData) {
   return {
     ...taskData,
+    name: taskData.name.toLowerCase(),
+    min: taskData.quantity[0],
+    max: taskData.quantity[1],
+    slayerLevel: taskData.slayer_level,
+    weight: taskData.weight,
+    npcNames: taskData.npc_names,
     getHint() {
-      return this.hint;
+      return this.locations?.[0] ?? "";
     },
     getNpcNames() {
       return this.npcNames;
@@ -65,6 +40,8 @@ function wrapTask(taskData) {
 }
 
 function wrapMaster(masterData) {
+  // ponytail: task assignment only; reward tables and quest/unlock state stay out
+  // until the server has those player-state hooks.
   return {
     ...masterData,
     getBasePoints() {
@@ -96,7 +73,7 @@ function wrapActiveTask(master, task, remaining) {
   };
 }
 
-function assignTask(player) {
+function assignTask(player, masterData) {
   if (player.getSlayerTask()) {
     player
       .getPacketSender()
@@ -106,31 +83,35 @@ function assignTask(player) {
   }
 
   const slayerLevel = player.getSkillManager().getMaxLevel(Skill.SLAYER);
-  const possibleTasks = TASKS.filter((task) => slayerLevel >= task.slayerLevel);
+  const possibleTasks = masterData.tasks.filter((task) => slayerLevel >= task.slayer_level);
   if (possibleTasks.length === 0) {
     player
       .getPacketSender()
       .sendInterfaceRemoval()
       .sendMessage(
-        "Nieve was unable to give you a Slayer task. Please try again later."
+        `${masterData.name} was unable to give you a Slayer task. Please try again later.`
       );
     return false;
   }
 
-  Misc.randomElements(possibleTasks);
-  const totalWeight = possibleTasks.reduce((sum, task) => sum + task.weight, 0);
-  let selected = possibleTasks[0];
+  let roll = Misc.getRandom(
+    possibleTasks.reduce((sum, task) => sum + task.weight, 0) - 1
+  );
+  let selected = possibleTasks[possibleTasks.length - 1];
   for (const task of possibleTasks) {
-    if (Misc.getRandom(totalWeight) <= task.weight) {
+    if (roll < task.weight) {
       selected = task;
       break;
     }
+    roll -= task.weight;
   }
 
-  const remaining = Misc.randomInclusive(selected.min, selected.max);
-  player.setSlayerTask(
-    wrapActiveTask(wrapMaster(TURAEL_MASTER), wrapTask(selected), remaining)
-  );
+  const remaining = Misc.randomInclusive(selected.quantity[0], selected.quantity[1]);
+  player.setSlayerTask(wrapActiveTask(
+    wrapMaster({ name: masterData.name, basePoints: 0, consecutiveTaskPoints: [] }),
+    wrapTask(selected),
+    remaining
+  ));
   return true;
 }
 
@@ -191,7 +172,14 @@ module.exports = {
       initializePlayerSlayerState(player);
     });
 
-    api.onSlayerAssignRequest((player) => assignTask(player));
+    api.onAnyNpcInteraction({
+      Assignment: (event) => {
+        const master = SLAYER_MASTERS[String(event.npcId)];
+        if (!master) return false;
+        assignTask(event.player, master);
+        return true;
+      },
+    });
 
     api.onNpcDeath(({ killer, npc }) => {
       if (!killer || !killer.isPlayer?.()) {
@@ -200,6 +188,9 @@ module.exports = {
       onNpcKilled(killer, npc);
     });
 
-    api.log("registered", { tasks: TASKS.length });
+    api.log("registered", {
+      masters: new Set(Object.values(SLAYER_MASTERS).map((master) => master.name)).size,
+      tasks: new Set(Object.values(SLAYER_MASTERS).flatMap((master) => master.tasks.map((task) => task.slug))).size,
+    });
   },
 };

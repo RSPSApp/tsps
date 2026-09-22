@@ -47,12 +47,36 @@ test('prose conditions take their first branch and dead jumps fall through', () 
     "It seems you're missing out on some valuable experience. Would you like it?");
 });
 
+test('a condition branch that continues reaches the next sibling check', () => {
+  const steps = flatten([
+    {
+      type: 'condition', text: 'If high combat:', steps: [
+        { npc: 'very strong' },
+        {
+          type: 'choice',
+          options: [
+            { text: 'no', steps: [{ player: 'no' }, { type: 'jump', reference: 'continues' }] },
+            { text: 'yes', steps: [{ player: 'yes' }, { type: 'end' }] },
+          ],
+        },
+      ],
+    },
+    { type: 'condition', text: "If no assignment:", steps: [{ npc: 'assigned' }] },
+    { type: 'condition', text: 'If has assignment:', steps: [{ npc: 'still hunting' }] },
+  ]);
+  // The detour keeps its prompt, then falls through to the first following check.
+  assert.deepEqual(steps.map((step) => step.npc).filter(Boolean), ['very strong', 'assigned']);
+});
+
 test('a slayer master assigns from a slugged action, not literal prose', () => {
   const steps = talk('Krystilia');
   const found = { action: false, tip: false, spoken: false };
   const walk = (nodes) => {
     for (const node of nodes ?? []) {
-      if (node.action === 'slayer_assignment') found.action = true;
+      if (node.action === 'slayer_assignment') {
+        found.action = true;
+        assert.equal(node.target, 'Krystilia');
+      }
       if (node.action === 'slayer_task_tip') found.tip = true;
       if (typeof node.npc === 'string' && node.npc.includes('Your new task is to kill')) found.spoken = true;
       walk(node.steps);

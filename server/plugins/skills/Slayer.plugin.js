@@ -3,6 +3,9 @@ const path = require("path");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
+const { DialogueChainBuilder } = require("../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
+const { NpcDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
+const { EndDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
 
 const SLAYER_MASTERS = Object.freeze(Object.fromEntries(
   Object.entries(JSON.parse(fs.readFileSync(
@@ -111,7 +114,7 @@ function getStreak(player) {
 function assignTask(player, masterData) {
   const activeTask = getActiveTask(player);
   if (activeTask) {
-    return `You're still hunting ${activeTask.getTask().toString()}; you have ${activeTask.getRemaining()} to go.`;
+    return `You're still hunting ${activeTask.getTask().toString()}; you have ${activeTask.getRemaining()} to go. Come back when you've finished your task.`;
   }
 
   const slayerLevel = player.getSkillManager().getMaxLevel(Skill.SLAYER);
@@ -141,12 +144,18 @@ function assignTask(player, masterData) {
   return `Your new task is to kill ${remaining} ${selected.name.toLowerCase()}.`;
 }
 
-/** Match a master by spawn id, then resolved definition id, then display name. */
-function masterForNpc({ npcId, definitionId, npcName }) {
-  return SLAYER_MASTERS[String(npcId)]
+/** Match a master by the slugged name, then spawn id, transformed id, display name. */
+function masterForNpc({ master, npcId, definitionId, npcName }) {
+  const named = master
+    ? Object.values(SLAYER_MASTERS).find(
+        (candidate) => candidate.dialogue === master || candidate.name === master
+      )
+    : undefined;
+  return named
+    ?? SLAYER_MASTERS[String(npcId)]
     ?? SLAYER_MASTERS[String(definitionId)]
     ?? Object.values(SLAYER_MASTERS).find(
-        (master) => master.name === npcName || master.dialogue === npcName
+        (candidate) => candidate.name === npcName || candidate.dialogue === npcName
       )
     ?? null;
 }
@@ -229,6 +238,15 @@ function taskTipEvent(event) {
   if (line) event.line = line;
 }
 
+// Show a line in the NPC's chatbox rather than a game message.
+function sayAsNpc(player, npcId, text) {
+  const dialogue = new DialogueChainBuilder().add(
+    new NpcDialogue(0, npcId, text),
+    new EndDialogue(1)
+  );
+  player.getDialogueManager().startDialogues(dialogue);
+}
+
 // The "Assignment" right-click, caught by click slot so transformed forms whose
 // cache definition drops the label (Nieve) still work. A labelled slot must say
 // "Assignment"; the NPC is matched against the master dump inside the handler.
@@ -243,7 +261,7 @@ function assignFromNpcClick(event) {
   });
   if (!message) return;
   event.handled = true;
-  event.player.getPacketSender().sendMessage(message);
+  sayAsNpc(event.player, event.definition?.getId?.() ?? event.npcId, message);
 }
 
 module.exports = {

@@ -15,15 +15,20 @@ const MASTER = {
 
 function fakePlayer(attributes = {}) {
   const store = new Map(Object.entries(attributes));
-  const messages = [];
-  const sender = { sendMessage: (text) => messages.push(String(text)) };
+  const dialogues = [];
   return {
-    messages,
+    dialogues,
     getAttribute: (key) => store.get(key),
     setAttribute: (key, value) => store.set(key, value),
     getSkillManager: () => ({ getMaxLevel: (skill) => (skill === Skill.SLAYER ? 99 : 1) }),
-    getPacketSender: () => sender,
+    getDialogueManager: () => ({ startDialogues: (builder) => dialogues.push(builder) }),
   };
+}
+
+// The NPC line the plugin last spoke.
+function spokenLine(player) {
+  const builder = player.dialogues.at(-1);
+  return builder?.getDialogues?.().get(0)?.text;
 }
 
 function captureApi() {
@@ -57,7 +62,7 @@ test('a snapshot rebuilds the active task from the dump', () => {
 test('an existing assignment is reported, not replaced', () => {
   const snapshot = { masterId: 7663, slug: 'ankou', remaining: 7 };
   const player = fakePlayer({ 'slayer:task': snapshot });
-  assert.match(assignTask(player, MASTER), /still hunting ankou; you have 7 to go/);
+  assert.match(assignTask(player, MASTER), /still hunting ankou; you have 7 to go\. Come back when you've finished your task\./);
   assert.equal(player.getAttribute('slayer:task'), snapshot);
 });
 
@@ -76,7 +81,7 @@ test('the Assignment click is wired for any slayer master npc', () => {
   const masterEvent = { player: master, npcId: 7663, clickType: 3, handled: false };
   api.npcClick(masterEvent);
   assert.equal(masterEvent.handled, true);
-  assert.match(master.messages.at(-1), /Your new task is to kill/);
+  assert.match(spokenLine(master), /Your new task is to kill/);
 
   const outsider = fakePlayer();
   const outsiderEvent = { player: outsider, npcId: 999, clickType: 3, handled: false };
@@ -85,12 +90,21 @@ test('the Assignment click is wired for any slayer master npc', () => {
   assert.equal(outsider.getAttribute('slayer:task'), undefined);
 });
 
+test('the Assignment click speaks the current task as a dialogue', () => {
+  const api = captureApi();
+  const player = fakePlayer({ 'slayer:task': { masterId: 7663, slug: 'ankou', remaining: 7 } });
+  const event = { player, npcId: 7663, clickType: 3, handled: false };
+  api.npcClick(event);
+  assert.equal(event.handled, true);
+  assert.match(spokenLine(player), /still hunting ankou; you have 7 to go\. Come back when you've finished your task\./);
+});
+
 test('Nieve assigns from her transformed definition, not her spawn id', () => {
   const api = captureApi();
   // Spawn 1455 transforms to 7108; only the latter is in the task dump.
   const player = fakePlayer();
   api.npcClick({ player, npcId: 1455, definition: { getId: () => 7108 }, clickType: 3, handled: false });
-  assert.match(player.messages.at(-1), /Your new task is to kill/);
+  assert.match(spokenLine(player), /Your new task is to kill/);
 });
 
 test('a different labelled slot is not treated as Assignment', () => {
@@ -99,7 +113,7 @@ test('a different labelled slot is not treated as Assignment', () => {
   const event = { player, npcId: 7663, definition: { getActions: () => [null, null, 'Trade'] }, clickType: 3, handled: false };
   api.npcClick(event);
   assert.equal(event.handled, false);
-  assert.equal(player.messages.length, 0);
+  assert.equal(player.dialogues.length, 0);
 });
 
 test('the assignment event fills the line and ignores non-masters', () => {
@@ -112,6 +126,11 @@ test('the assignment event fills the line and ignores non-masters', () => {
   const nieve = { player: fakePlayer(), npcId: 1455, definitionId: 7108, npcName: 'Nieve', line: null };
   api.events['slayer:assignment'](nieve);
   assert.match(nieve.line, /Your new task is to kill/);
+
+  // The exporter slugs the master name, so runtime ids are only a fallback.
+  const slugged = { player: fakePlayer(), master: 'Nieve', npcId: 0, line: null };
+  api.events['slayer:assignment'](slugged);
+  assert.match(slugged.line, /Your new task is to kill/);
 
   const outsider = { player: fakePlayer(), npcId: 999, line: null };
   api.events['slayer:assignment'](outsider);

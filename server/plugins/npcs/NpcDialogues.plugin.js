@@ -50,9 +50,29 @@ function aliasKeys(data) {
 }
 
 /**
+ * True when the branch ends in a wiki "continues" marker, meaning the writer
+ * intends the next sibling condition to run after it rather than ending here.
+ */
+function continues(steps) {
+  for (const step of steps ?? []) {
+    if (step.type === "jump") {
+      if (/^continue/i.test(step.reference ?? "")) return true;
+      continue;
+    }
+    if (continues(step.steps)) return true;
+    for (const option of step.options ?? []) {
+      if (continues(option.steps)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Conditions carry prose, not a testable expression, and every jump id in the dump
  * points at nothing. Take the first branch of a run of sibling conditions - they are
- * written as alternatives - and let jumps fall through to whatever follows.
+ * written as alternatives - and let jumps fall through to whatever follows. A branch
+ * that explicitly "continues" also appends the sibling checks after it, so a detour
+ * like Mazchna's high-combat prompt still reaches the assignment.
  * ponytail: first branch, not the true one. Structured conditions would fix it.
  */
 function flatten(steps) {
@@ -64,8 +84,12 @@ function flatten(steps) {
       out.push(step);
       continue;
     }
+    const runStart = position;
     while (steps[position + 1]?.type === "condition") position++;
     out.push(...flatten(step.steps || []));
+    if (continues(step.steps)) {
+      out.push(...flatten(steps.slice(runStart + 1, position + 1)));
+    }
   }
   return out;
 }
@@ -147,6 +171,7 @@ function startDialogue(api, event, steps, branches = {}) {
         if (step.type === "action" && step.action === "slayer_assignment") {
           const request = {
             player,
+            master: step.target,
             npcId: event.npcId,
             definitionId: event.definition?.getId?.(),
             npcName: event.definition?.getName?.(),
@@ -156,7 +181,7 @@ function startDialogue(api, event, steps, branches = {}) {
           if (request.line) return run([{ npc: request.line }, ...rest]);
         }
         if (step.type === "action" && step.action === "slayer_task_tip") {
-          const request = { player, line: null };
+          const request = { player, master: step.target, line: null };
           api.emitCustomEvent("slayer:task-tip", request);
           if (request.line) return run([{ npc: request.line }, ...rest]);
         }

@@ -1,5 +1,6 @@
 import { chatHistory } from "../../../rs/cs2/ChatHistory";
 import type { ScriptEvent } from "../../../rs/cs2/Cs2Vm";
+import { VARBIT_KEYBINDING_ESC_TO_CLOSE } from "../../../common/vars";
 import { collectWidgetsWithKeyHandlers } from "../../../widgets/menu/utils";
 import { ClientPacket, createPacket, queuePacket } from "../../../network/packet";
 import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
@@ -115,9 +116,21 @@ export function processWidgetKeyboardInput(
             return;
         }
 
-        for (const keyEvent of input.keyEvents) {
-            const OSRS_KEY_ESCAPE = 13;
-            if (keyEvent.keyTyped === OSRS_KEY_ESCAPE) {
+        // Escape closes the open modal when the "Esc closes current interface"
+        // keybinding is enabled (varbit 4681, set from All Settings).
+        const OSRS_KEY_ESCAPE = 13;
+        if (
+            input.keyEvents.some((keyEvent) => keyEvent.keyTyped === OSRS_KEY_ESCAPE) &&
+            deps.getVarManager().getVarbit(VARBIT_KEYBINDING_ESC_TO_CLOSE) !== 0
+        ) {
+            let hasOpenModal = false;
+            for (const parent of widgetManager.interfaceParents.values()) {
+                if (parent && (parent.type === 0 || parent.type === 3)) {
+                    hasOpenModal = true;
+                    break;
+                }
+            }
+            if (hasOpenModal) {
                 // Same IF_CLOSE packet MenuAction.ts already sends for
                 // MenuOpcode.WidgetClose (verified against
                 // ClientBinaryEncoder.ts/ClientProtocol.ts - IF_CLOSE = 55,
@@ -126,6 +139,7 @@ export function processWidgetKeyboardInput(
                 // Player.closeInterruptibleInterfaces()).
                 const pkt = createPacket(ClientPacket.IF_CLOSE);
                 queuePacket(pkt);
+                deps.getCs2Vm().deferIfClose();
                 return;
             }
         }
@@ -168,8 +182,13 @@ export function processWidgetKeyboardInput(
             }
         }
 
-        // Process all key events for all widgets with onKey handlers
+        // Process all key events for all widgets with onKey handlers.
+        // Typed characters (keyTyped === -1) are text input and don't change
+        // keybind varbits, so only real key presses force a widget refresh -
+        // otherwise every keystroke would invalidate the whole tree.
+        let invalidateNeeded = false;
         for (const keyEvent of input.keyEvents) {
+            const keyPress = keyEvent.keyTyped !== -1;
             for (const w of keyWidgetsByUid.values()) {
                 const keyCtx: Partial<ScriptEvent> = {
                     mouseX: mx - (w._absX ?? w.x ?? 0),
@@ -179,10 +198,17 @@ export function processWidgetKeyboardInput(
                 };
                 if (w.eventHandlers?.onKey) {
                     deps.getCs2Vm().invokeEventHandler(w, "onKey", keyCtx);
+                    invalidateNeeded ||= keyPress;
                 } else if (w.onKey) {
                     deps.executeScriptListener(w, w.onKey, keyCtx);
+                    invalidateNeeded ||= keyPress;
                 }
             }
+        }
+        // onKey handlers (e.g. the side-tab keybind script) mutate varbits the
+        // renderer caches, so force a refresh once a key press handler has run.
+        if (invalidateNeeded) {
+            widgetManager.invalidateAll();
         }
     }
 }

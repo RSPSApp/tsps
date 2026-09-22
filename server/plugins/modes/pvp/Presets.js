@@ -196,6 +196,7 @@ function spawnPresetItem(item, preset) {
   const next = cloneItem(item);
   if (next && (PLAYER_PRESETS.list.includes(preset) || (!preset.getIsGlobal?.() && isSpawnable(next.getId())))) {
     next.setMetaValue(Item.UNTRADEABLE_META, true);
+    next.setMetaValue(Item.UNBANKABLE_META, true);
   }
   return next;
 }
@@ -745,7 +746,7 @@ module.exports = {
     api.persistAttribute(CUSTOM_PRESETS_ATTRIBUTE);
     api.registerCustomInterface(INTERFACE_DEFINITION);
     api.onCanBankItem((event) => {
-      if (!event.item?.isUntradeable?.()) return;
+      if (!event.item?.isUnbankable?.()) return;
       event.player.sendMessage("Preset items cannot be banked.");
       event.allow = false;
     });

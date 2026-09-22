@@ -165,7 +165,7 @@ function handleBotDeathItemDrop(event, runtime) {
   );
   const selectedDrop = plan?.killer && event.dropEligible;
 
-  if (event.item?.isUntradeable?.() && isRealPlayer(event.killer) && !plan.presetLootNoticeSent) {
+  if (event.item?.isUnbankable?.() && isRealPlayer(event.killer) && !plan.presetLootNoticeSent) {
     event.killer.sendMessage("This bot was using a player preset and therefore has not dropped its items. Regular bots will still drop items");
     plan.presetLootNoticeSent = true;
   }

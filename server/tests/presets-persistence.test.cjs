@@ -75,7 +75,7 @@ test("custom presets rehydrate from their persisted attribute", () => {
   const messages = [];
   const event = {
     player: { sendMessage: (message) => messages.push(message) },
-    item: { isUntradeable: () => true },
+    item: { isUnbankable: () => true },
     allow: true,
   };
   onCanBankItem(event);
@@ -137,7 +137,7 @@ test("server-owned items inherit gameplay and deliver external models before def
   assert.equal(CacheDefinitions.getItem(custom.id).id, custom.id, "invalid registration preserves live definitions");
 });
 
-test("preset-spawned items carry the untradeable metadata", () => {
+test("preset-spawned items carry the untradeable and unbankable metadata", () => {
   const { Item } = require("../dist/game/model/Item");
   const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
   const item = presets._test.spawnPresetItem(
@@ -146,8 +146,10 @@ test("preset-spawned items carry the untradeable metadata", () => {
   );
 
   assert.equal(item.getMetaValue(Item.UNTRADEABLE_META), true);
+  assert.equal(item.getMetaValue(Item.UNBANKABLE_META), true);
   assert.equal(item.isTradeable(), false);
   assert.equal(item.isLostOnDeath(), true);
+  assert.equal(item.isUnbankable(), true);
 });
 
 test("deposit booth slot actions reach Bank.deposit", () => {
@@ -197,7 +199,7 @@ test("a player preset bot announces its suppressed drops once", () => {
   const event = {
     player: victim,
     killer,
-    item: { isUntradeable: () => true },
+    item: { isUnbankable: () => true },
     dropEligible: false,
     handled: false,
   };

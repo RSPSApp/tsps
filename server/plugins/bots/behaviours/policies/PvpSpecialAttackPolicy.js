@@ -272,7 +272,7 @@ function maybeSwitchBackToPrimaryWeapon(context) {
     currentWeaponId <= 0 ||
     primaryWeaponId <= 0 ||
     currentWeaponId === primaryWeaponId ||
-    !SUPPORTED_SPEC_WEAPONS.has(currentWeaponId)
+    !SUPPORTED_SPEC_WEAPONS.includes(currentWeaponId)
   ) {
     pvp.nextSwitchbackCheckAt = 0;
     return false;
@@ -470,7 +470,7 @@ function maybeUseSpecialAttack(context) {
     inventorySpec && isSpecFinisher(player, target, state, inventorySpec.special, inventorySpec.weaponId);
   if (
     inventorySpec &&
-    SUPPORTED_SPEC_WEAPONS.has(inventorySpec.weaponId) &&
+    SUPPORTED_SPEC_WEAPONS.includes(inventorySpec.weaponId) &&
     (finisher || Math.random() <= switchChance) &&
     shouldUseSpecNow(player, target, state, profile, inventorySpec.special, inventorySpec.weaponId)
   ) {

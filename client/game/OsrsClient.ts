@@ -337,22 +337,29 @@ import { WorldViewManager } from "./worldview/WorldViewManager";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
 
-// OSRS side-panel order skips inventory because Escape selects it separately.
-const TAB_SHORTCUTS: Readonly<Record<string, number>> = {
-    F1: 0,
-    F2: 1,
-    F3: 2,
-    F4: 4,
-    F5: 5,
-    F6: 6,
-    F7: 7,
-    F8: 8,
-    F9: 9,
-    F10: 10,
-    F11: 11,
-    F12: 12,
-    Escape: 3,
-};
+// Escape selects the inventory side panel separately; it is not exposed as a
+// configurable keybinding, so it stays hardcoded.
+const ESCAPE_TAB_SHORTCUT = 3;
+
+// All Settings keybindings map a varbit to the side-panel tab it opens. Values
+// are OSRS key codes: 0 = unbound, 1 = F1 ... 12 = F12. Names/tabs verified
+// against RuneLite VarbitID (STONE_*_KEY) and interface_layouts.json tabIds.
+// The server (Settings.plugin.js) owns the current values and defaults.
+const KEYBINDING_TABS: ReadonlyArray<{ varbit: number; tab: number }> = [
+    { varbit: 4675, tab: 0 }, // Combat
+    { varbit: 4676, tab: 1 }, // Stats
+    { varbit: 4677, tab: 2 }, // Journal/Quests
+    { varbit: 4678, tab: 3 }, // Inventory
+    { varbit: 4679, tab: 4 }, // Worn equipment
+    { varbit: 4680, tab: 5 }, // Prayer
+    { varbit: 4682, tab: 6 }, // Magic
+    { varbit: 4683, tab: 7 }, // Clan chat
+    { varbit: 4684, tab: 8 }, // Friends
+    { varbit: 4686, tab: 11 }, // Options (settings)
+    { varbit: 4687, tab: 10 }, // Options (secondary)
+    { varbit: 4688, tab: 13 }, // Music
+    { varbit: 4689, tab: 10 }, // Logout
+];
 
 // Enum IDs consumed by the stock tab-switch script (914), per game-frame layout.
 const TAB_SWITCH_SCRIPT = 914;
@@ -996,7 +1003,7 @@ export class OsrsClient {
         document.addEventListener(
             "keydown",
             (event) => {
-                const shortcut = TAB_SHORTCUTS[event.key] ?? TAB_SHORTCUTS[event.code];
+                const shortcut = this.resolveKeyShortcut(event);
                 const functionKeyEvent =
                     event.code.startsWith("F") ||
                     event.key.startsWith("F") ||
@@ -3790,6 +3797,28 @@ export class OsrsClient {
         const script = this.cs2Vm.context?.loadScript?.(scriptId | 0);
         if (!script) return;
         this.cs2Vm.run(script, args, []);
+    }
+
+    /** Resolve a keydown to a side-panel tab using the All Settings keybindings. */
+    private resolveKeyShortcut(event: KeyboardEvent): number | undefined {
+        if (event.key === "Escape" || event.code === "Escape") {
+            return ESCAPE_TAB_SHORTCUT;
+        }
+        // Cheap reject before the regex - almost all keydowns are not functions.
+        if (event.key.charCodeAt(0) !== 70 && event.code.charCodeAt(0) !== 70) {
+            return undefined;
+        }
+        const match = /^F(\d{1,2})$/.exec(event.key) ?? /^F(\d{1,2})$/.exec(event.code);
+        if (!match) return undefined;
+        const pressed = Number(match[1]);
+        if (pressed < 1 || pressed > 12) return undefined;
+
+        const varManager = this.varManager;
+        if (!varManager) return undefined;
+        for (const binding of KEYBINDING_TABS) {
+            if (varManager.getVarbit(binding.varbit) === pressed) return binding.tab;
+        }
+        return undefined;
     }
 
     /** Switch the stock side panel through its cache script so all tab widgets update together. */

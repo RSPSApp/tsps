@@ -44,6 +44,33 @@ RSPS code, say so explicitly in the PR so it can be checked.
 validation and safety checks centralised in its emit/register paths so plugins stay simple.
 Do not add feature-specific logic to it unless it is genuinely generic hook infrastructure.
 
+### Cross-Plugin Events
+
+Plugins talk to each other only through the generic custom-event API, never through a
+feature-specific hook or emit method added to `PluginManager`. A bespoke
+`onSlayerAssignRequest` / `emitSlayerAssignRequest` pair is exactly the hardcoded event
+this rule bans - use `onCustomEvent` / `emitCustomEvent` instead.
+
+```js
+// emitter: a mutable payload is the reply channel
+const request = { player, npcId, line: null };
+api.emitCustomEvent("slayer:assignment", request);
+if (request.line) { /* use request.line */ }
+
+// listener
+api.onCustomEvent("slayer:assignment", (request) => {
+  request.line = "...";
+});
+```
+
+- Names are namespaced `domain:event` (`slayer:assignment`, `duelarena:validate-winnings`,
+  `mining:success`).
+- `emitCustomEvent` is synchronous and fire-and-forget; it returns nothing. A handler that
+  answers back mutates the payload it was given (`request.line`, `event.accept`,
+  `event.handled`), and the emitter reads it straight after.
+- The emitter owns the event name and payload shape; the listener owns the handler. Adding
+  a new cross-plugin interaction means a new event name, not new `PluginManager` surface.
+
 ## Plugin Shape
 
 `register` is **attach-only**. It wires hook names to handlers and does nothing else - no

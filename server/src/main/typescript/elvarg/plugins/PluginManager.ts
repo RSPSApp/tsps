@@ -207,10 +207,6 @@ export class PluginManager {
   private static commandRights = new Map<string, number | null>();
   /** Lowest rights id a plugin has overridden a command to, taking priority over registration. */
   private static commandRightsOverrides = new Map<string, number | null>();
-  private static slayerAssignHooks: Array<{
-    pluginName: string;
-    handler: (player: any) => boolean;
-  }> = [];
   private static combatEngine: PluginCombatEngine | null = null;
   private static combatEngineOwner: string | null = null;
   private static combatDamageProvider: PluginCombatDamageProvider | null = null;
@@ -1121,22 +1117,6 @@ export class PluginManager {
       PluginManager.executeHook(hook, event, "ground_item_pickup", "ground_item_pickup");
     }
     return event.handled === true;
-  }
-
-  public static emitSlayerAssignRequest(player: any): boolean {
-    for (const hook of PluginManager.slayerAssignHooks) {
-      try {
-        if (hook.handler(player) === true) {
-          return true;
-        }
-      } catch (err) {
-        console.error(
-          `[plugins] slayer_assign hook failed (${hook.pluginName})`,
-          err
-        );
-      }
-    }
-    return false;
   }
 
   public static emitItemOnObject(event: PluginItemOnObjectEvent): boolean {
@@ -2525,12 +2505,6 @@ export class PluginManager {
             handler(event);
           },
         });
-      },
-      onSlayerAssignRequest: (handler) => {
-        if (typeof handler !== "function") {
-          return;
-        }
-        PluginManager.slayerAssignHooks.push({ pluginName, handler });
       },
       onNpcClick: (npcIds, clickType, handler) => {
         registerNpcClickHook(clickType, npcIds, handler);

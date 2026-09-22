@@ -700,7 +700,10 @@ export class PacketSender {
       }
       return this;
     }
-    if (interfaceId >= 0 && this.player.getSession().sendClientPacket(encodeWidgetClose(interfaceId))) return this;
+    if (interfaceId >= 0) {
+      this.player.getSession().sendClientPacket(encodeWidgetClose(interfaceId));
+    }
+    return this;
   }
 
   sendItemContainer(containerOrInterfaceId: number | any, interfaceId?: number): this {

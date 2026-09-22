@@ -602,7 +602,6 @@ export interface PluginApi {
     handler: (event: PluginNpcAggressionToleranceEvent) => void
   ): void;
   onPlayerDefeated(handler: (event: PluginPlayerDefeatedEvent) => void): void;
-  onSlayerAssignRequest(handler: (player: any) => boolean): void;
   onNpcClick(
     npcIds: number | number[],
     clickType: number,

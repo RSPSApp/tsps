@@ -82,6 +82,32 @@ export class ShopManager {
         this.currencyHandlers.set(name, handler);
     }
 
+    public static registerItemCurrency(
+        itemId: number,
+        options?: { name?: string; aliases?: string[] }
+    ): void {
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+            throw new Error(`Invalid item shop currency: ${itemId}`);
+        }
+        const name =
+            options?.name ??
+            ItemDefinition.forId(itemId)?.getName?.() ??
+            `Item ${itemId}`;
+        const handler: ShopCurrencyHandler = {
+            name,
+            amount: (player) =>
+                Number(player?.getInventory?.()?.getAmount?.(itemId) ?? 0),
+            add: (player, amount) => player?.getInventory?.()?.adds?.(itemId, amount),
+            remove: (player, amount) =>
+                player?.getInventory?.()?.deleteNumber?.(itemId, amount),
+        };
+        for (const key of [name, ...(options?.aliases ?? [])]) {
+            if (typeof key === "string" && key.trim()) {
+                this.registerCurrency(key.trim().toUpperCase(), handler);
+            }
+        }
+    }
+
     public static initialize(): void {
         this.reload();
     }

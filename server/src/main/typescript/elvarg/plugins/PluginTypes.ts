@@ -748,6 +748,11 @@ export interface PluginApi {
     name: string,
     handler: { amount(player: any): number; add(player: any, amount: number): void; remove(player: any, amount: number): void; name: string }
   ): void;
+  /** Register an inventory item as a shop currency, keyed by its item name and optional aliases. */
+  registerItemShopCurrency(
+    itemId: number,
+    options?: { name?: string; aliases?: string[] }
+  ): void;
   /** Save and restore this player attribute; values must be JSON-compatible. */
   persistAttribute(key: string): void;
   setPlayerPersistence(persistence: PlayerPersistence): void;

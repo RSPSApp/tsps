@@ -4,6 +4,8 @@ const { test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { Skill } = require('../dist/game/model/Skill');
+const { ShopDefinition } = require('../dist/game/definition/ShopDefinition');
+const { ShopManager } = require('../dist/game/model/container/shop/ShopManager');
 const Slayer = require('../plugins/skills/Slayer.plugin');
 const { assignTask, getActiveTask } = Slayer;
 
@@ -32,11 +34,14 @@ function spokenLine(player) {
 }
 
 function captureApi() {
-  const api = { log() {}, onNpcDeath() {}, persisted: [], events: {} };
+  const api = { log() {}, onNpcDeath() {}, persisted: [], events: {}, anyNpc: {}, currencies: {}, sources: {} };
   Slayer.register({
     ...api,
     persistAttribute: (key) => api.persisted.push(key),
+    registerShopCurrency: (name, handler) => { api.currencies[name] = handler; },
+    registerDefinitionSource: (type, source) => { api.sources[source.name] = source; },
     onNpcInteraction: (handler) => { api.npcClick = handler; },
+    onAnyNpcInteraction: (registered) => { api.anyNpc = registered; },
     onCustomEvent: (name, handler) => { api.events[name] = handler; },
   });
   return api;
@@ -114,6 +119,74 @@ test('a different labelled slot is not treated as Assignment', () => {
   api.npcClick(event);
   assert.equal(event.handled, false);
   assert.equal(player.dialogues.length, 0);
+});
+
+test('the Trade option opens the Slayer Equipment shop for a master', () => {
+  const api = captureApi();
+  assert.equal(typeof api.anyNpc.Trade, 'function');
+  const all = ShopDefinition.all;
+  const open = ShopManager.open;
+  const opened = [];
+  ShopDefinition.all = () => [{ getName: () => 'Slayer Equipment (shop)', getId: () => 1324 }];
+  ShopManager.open = (player, id) => { opened.push(id); return true; };
+  try {
+    assert.equal(api.anyNpc.Trade({ player: fakePlayer(), npcId: 7663 }), true);
+    assert.deepEqual(opened, [1324]);
+    assert.equal(api.anyNpc.Trade({ player: fakePlayer(), npcId: 999 }), false);
+  } finally {
+    ShopDefinition.all = all;
+    ShopManager.open = open;
+  }
+});
+
+test('the Rewards option opens the Slayer Rewards shop for a master', () => {
+  const api = captureApi();
+  assert.equal(typeof api.anyNpc.Rewards, 'function');
+  const all = ShopDefinition.all;
+  const open = ShopManager.open;
+  const opened = [];
+  ShopDefinition.all = () => [{ getName: () => 'Slayer Rewards', getId: () => 1424 }];
+  ShopManager.open = (player, id) => { opened.push(id); return true; };
+  try {
+    assert.equal(api.anyNpc.Rewards({ player: fakePlayer(), npcId: 7663 }), true);
+    assert.deepEqual(opened, [1424]);
+    assert.equal(api.anyNpc.Rewards({ player: fakePlayer(), npcId: 999 }), false);
+  } finally {
+    ShopDefinition.all = all;
+    ShopManager.open = open;
+  }
+});
+
+test('Slayer points back the rewards shop currency', () => {
+  const api = captureApi();
+  const currency = api.currencies.SLAYER_POINTS;
+  assert.ok(currency, 'a SLAYER_POINTS currency is registered');
+  assert.equal(currency.name, 'Slayer points');
+
+  const player = fakePlayer({ 'slayer:points': 200 });
+  assert.equal(currency.amount(player), 200);
+  currency.remove(player, 75);
+  assert.equal(player.getAttribute('slayer:points'), 125);
+  currency.add(player, 25);
+  assert.equal(player.getAttribute('slayer:points'), 150);
+  currency.remove(player, 9999);
+  assert.equal(player.getAttribute('slayer:points'), 0);
+  assert.equal(currency.amount(fakePlayer()), 0);
+});
+
+test('the Slayer Rewards shop spends Slayer points', () => {
+  const api = captureApi();
+  const source = api.sources['slayer-rewards'];
+  assert.ok(source, 'a slayer-rewards shop source is registered');
+  const shops = source.load();
+  assert.equal(shops.length, 1);
+  assert.equal(shops[0].name, 'Slayer Rewards');
+  assert.equal(shops[0].currency, 'SLAYER_POINTS');
+  const prices = Object.fromEntries(shops[0].originalStock.map((stock) => [stock.id, stock.price]));
+  // Herb sack and rune pouch cost 750 points; looting bag costs 10.
+  assert.equal(prices[13226], 750);
+  assert.equal(prices[30692], 750);
+  assert.equal(prices[22586], 10);
 });
 
 test('the assignment event fills the line and ignores non-masters', () => {

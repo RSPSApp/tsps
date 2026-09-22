@@ -3,9 +3,27 @@ const path = require("path");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
+const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { DialogueChainBuilder } = require("../../src/main/typescript/elvarg/game/model/dialogues/builders/DialogueChainBuilder");
 const { NpcDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/NpcDialogue");
 const { EndDialogue } = require("../../src/main/typescript/elvarg/game/model/dialogues/entries/impl/EndDialogue");
+const { ShopDefinition } = require("../../src/main/typescript/elvarg/game/definition/ShopDefinition");
+const { ShopManager } = require("../../src/main/typescript/elvarg/game/model/container/shop/ShopManager");
+
+const SLAYER_EQUIPMENT_SHOP = "Slayer Equipment (shop)";
+const SLAYER_REWARDS_SHOP = "Slayer Rewards";
+// Plugin-owned shop id, outside the core shops.json range.
+const SLAYER_REWARDS_SHOP_ID = 1424;
+const SLAYER_POINTS_CURRENCY = "SLAYER_POINTS";
+// [item, point cost] pairs from the wiki's Slayer Rewards Buy table.
+const SLAYER_REWARDS_STOCK = [
+  [ItemIdentifiers.SLAYER_RING_8_, 75],
+  [ItemIdentifiers.BROAD_BOLTS, 35],
+  [ItemIdentifiers.BROAD_ARROWS_2, 35],
+  [ItemIdentifiers.HERB_SACK, 750],
+  [ItemIdentifiers.RUNE_POUCH_6, 750],
+  [ItemIdentifiers.LOOTING_BAG_2, 10],
+];
 
 const SLAYER_MASTERS = Object.freeze(Object.fromEntries(
   Object.entries(JSON.parse(fs.readFileSync(
@@ -264,6 +282,49 @@ function assignFromNpcClick(event) {
   sayAsNpc(event.player, event.definition?.getId?.() ?? event.npcId, message);
 }
 
+// A master's shop-opening option only works for a Slayer master; the check lives
+// in the handler, like Assignment. Used for Trade (equipment) and Rewards.
+function openMasterShop(event, shopName) {
+  const master = masterForNpc({
+    npcId: event.npcId,
+    definitionId: event.definition?.getId?.(),
+    npcName: event.definition?.getName?.(),
+  });
+  if (!master) return false;
+  const shops = ShopDefinition.all().filter((shop) => shop.getName() === shopName);
+  if (shops.length !== 1) return false;
+  ShopManager.open(event.player, shops[0].getId(), true);
+  return true;
+}
+
+function openSlayerEquipment(event) {
+  return openMasterShop(event, SLAYER_EQUIPMENT_SHOP);
+}
+
+function openSlayerRewards(event) {
+  return openMasterShop(event, SLAYER_REWARDS_SHOP);
+}
+
+function slayerPointsCurrency() {
+  return {
+    name: "Slayer points",
+    amount: (player) => getPoints(player),
+    add: (player, value) =>
+      player.setAttribute(POINTS_ATTRIBUTE, getPoints(player) + Math.max(0, Math.floor(value))),
+    remove: (player, value) =>
+      player.setAttribute(POINTS_ATTRIBUTE, Math.max(0, getPoints(player) - Math.floor(value))),
+  };
+}
+
+function slayerRewardsShop() {
+  return {
+    id: SLAYER_REWARDS_SHOP_ID,
+    name: SLAYER_REWARDS_SHOP,
+    currency: SLAYER_POINTS_CURRENCY,
+    originalStock: SLAYER_REWARDS_STOCK.map(([id, price]) => ({ id, amount: 1000, price })),
+  };
+}
+
 module.exports = {
   name: "Slayer",
   // Exported for tests/slayer-assign.test.cjs; nothing else reads them.
@@ -276,6 +337,14 @@ module.exports = {
     api.persistAttribute(POINTS_ATTRIBUTE);
     api.persistAttribute(STREAK_ATTRIBUTE);
 
+    // Slayer reward points back the Slayer Rewards shop, so the shop spends the
+    // same attribute the tasks pay in.
+    api.registerShopCurrency(SLAYER_POINTS_CURRENCY, slayerPointsCurrency());
+    api.registerDefinitionSource("shops", {
+      name: "slayer-rewards",
+      load: () => [slayerRewardsShop()],
+    });
+
     // Cross-plugin events: the dialogue emitter fills in the line it should speak.
     api.onCustomEvent("slayer:assignment", assignFromNpcEvent);
     api.onCustomEvent("slayer:task-tip", taskTipEvent);
@@ -283,6 +352,9 @@ module.exports = {
     // The "Assignment" click (slot 3) on any NPC; the master check lives in the
     // handler rather than the NPC's name or the option label.
     api.onNpcInteraction(assignFromNpcClick);
+
+    // Shop options on any NPC; only Slayer masters have these shops.
+    api.onAnyNpcInteraction({ Trade: openSlayerEquipment, Rewards: openSlayerRewards });
 
     api.onNpcDeath(({ killer, npc }) => {
       if (!killer || !killer.isPlayer?.()) {

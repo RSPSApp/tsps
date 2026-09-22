@@ -4,6 +4,7 @@ const getItemDefinition = () => require('../definition/ItemDefinition').ItemDefi
 export class Item {
 
     public static readonly UNTRADEABLE_META = "untradeable";
+    public static readonly UNBANKABLE_META = "unbankable";
 
     public id: number;
     public amount: number;
@@ -174,6 +175,10 @@ export class Item {
 
     public isUntradeable(): boolean {
         return this.getMetaValue(Item.UNTRADEABLE_META) === true;
+    }
+
+    public isUnbankable(): boolean {
+        return this.getMetaValue(Item.UNBANKABLE_META) === true;
     }
 
     public isLostOnDeath(): boolean {

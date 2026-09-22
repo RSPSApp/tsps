@@ -7,12 +7,13 @@ const { TeleportType } = require("../../../../../src/main/typescript/elvarg/game
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { Wilderness } = require("../../../../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const { CanAttackResponse } = require("../../../../../src/main/typescript/elvarg/game/content/combat/CombatFactory");
-const { queueRouteAndFlagAppearance, clearMovementRequest, peekMovementRequest } = require("../../navigation/BotNavigation");
+const { queueRouteAndFlagAppearance, clearMovementRequest, peekMovementRequest, randomInRange } = require("../../navigation/BotNavigation");
 const { applyGeneratedPvpLoadout } = require("../../policies/PvpLoadoutPolicy");
 const { getEnabledWildernessHotspots, createHotspotAnchorLocation } = require("../../pvp/WildernessHotspotRegistry");
 
 const RETREAT_STEP_TILES = 12;
-const RETREAT_FOOD_CHARGES = 2;
+const RETREAT_FOOD_CHARGES_MIN = 1;
+const RETREAT_FOOD_CHARGES_MAX = 4;
 const RETREAT_TELEPORT_LEVEL = 20;
 
 class PvpDefensiveActionNode {
@@ -36,7 +37,10 @@ class PvpDefensiveActionNode {
       return { handled: true, status: "failure" };
     }
     const foodCharges = state.virtualFoodChargesRemaining ?? this.getProfile(state).foodCharges;
-    if (!pvp.retreat && foodCharges <= RETREAT_FOOD_CHARGES) {
+    if (!Number.isInteger(pvp.retreatFoodCharges)) {
+      pvp.retreatFoodCharges = randomInRange(RETREAT_FOOD_CHARGES_MIN, RETREAT_FOOD_CHARGES_MAX);
+    }
+    if (!pvp.retreat && foodCharges <= pvp.retreatFoodCharges) {
       pvp.retreat = { autoRetaliate: player.autoRetaliateReturn(), teleportStarted: false };
       player.setAutoRetaliate(false);
       clearMovementRequest(player);

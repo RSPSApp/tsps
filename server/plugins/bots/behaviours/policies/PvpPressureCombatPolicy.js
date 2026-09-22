@@ -44,6 +44,20 @@ function isVeteranOrEliteProfile(profile) {
   return profile?.id === "veteran" || profile?.id === "elite";
 }
 
+// The bot has no established combat type until it picks a style, so callers can
+// pass null. getProtectingPrayer only accepts a real CombatType, so map anything
+// else to -1 (no prayer) instead of throwing.
+function protectingPrayerFor(combatType) {
+  if (
+    combatType !== CombatType.MELEE &&
+    combatType !== CombatType.RANGED &&
+    combatType !== CombatType.MAGIC
+  ) {
+    return -1;
+  }
+  return PrayerHandler.getProtectingPrayer(combatType);
+}
+
 function getDistance(player, target) {
   const playerLoc = player?.getLocation?.();
   const targetLoc = target?.getLocation?.();
@@ -454,10 +468,10 @@ function maybeRunPressureCombatScript(context) {
   }
   if (bestCandidate.combatType !== pressureContext.currentCombatType && !meleeFinisher) {
     const currentProtected = pressureContext.targetPrayers[
-      PrayerHandler.getProtectingPrayer(pressureContext.currentCombatType)
+      protectingPrayerFor(pressureContext.currentCombatType)
     ] === true;
     const candidateProtected = pressureContext.targetPrayers[
-      PrayerHandler.getProtectingPrayer(bestCandidate.combatType)
+      protectingPrayerFor(bestCandidate.combatType)
     ] === true;
     const switchChance = Math.min(0.995,
       Number(profile?.nextHitStyleSwitchChance ?? profile?.switchChance ?? 0.5) +

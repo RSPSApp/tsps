@@ -509,6 +509,8 @@ function startNpcAnimationQuestionnaire(api, player, npcId, possibleAnimations) 
   let npc = null;
   queueNpcSpawn(player, npcId, 1, (spawned) => {
     npc = spawned;
+    // Keep the test dummy passive so it does not attack while animating.
+    npc.getDefinition().aggressive = false;
   }, 1);
   if (!npc) {
     player.sendMessage("Unable to spawn that NPC.");

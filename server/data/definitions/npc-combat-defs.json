@@ -280,6 +280,16 @@
         "death": 512
       }
     },
+    "1153": {
+      "name": "Ogre",
+      "anims": {
+        "block": 360,
+        "death": 361,
+        "attack": 359,
+        "stand": 357,
+        "walk": 358
+      }
+    },
     "1173": {
       "name": "Chicken",
       "anims": {
@@ -472,6 +482,26 @@
       },
       "sounds": {
         "death": 411
+      }
+    },
+    "2095": {
+      "name": "Ogre",
+      "anims": {
+        "block": 360,
+        "death": 361,
+        "attack": 359,
+        "stand": 357,
+        "walk": 358
+      }
+    },
+    "2096": {
+      "name": "Ogre",
+      "anims": {
+        "block": 360,
+        "death": 361,
+        "attack": 359,
+        "stand": 357,
+        "walk": 358
       }
     },
     "2205": {
@@ -2562,6 +2592,26 @@
       },
       "sounds": {
         "death": 512
+      }
+    },
+    "7989": {
+      "name": "Ogress Warrior",
+      "anims": {
+        "block": 360,
+        "death": 361,
+        "attack": 359,
+        "stand": 357,
+        "walk": 358
+      }
+    },
+    "7990": {
+      "name": "Ogress Warrior",
+      "anims": {
+        "block": 360,
+        "death": 361,
+        "attack": 359,
+        "stand": 357,
+        "walk": 358
       }
     },
     "8512": {

@@ -76,8 +76,9 @@ const DOUBLE_DOOR_ID_FAMILIES = Object.freeze([
   Object.freeze([1589, 1590, 1591]),
   Object.freeze([1596, 1597, 1598]),
   Object.freeze([4423, 4424, 4425]),
+  Object.freeze([2039, 2041, 1571, 1572]),
 ]);
-const SPECIAL_DOUBLE_DOOR_LEFT_IDS = new Set([1568, 1571, 1727, 14751, 14753]);
+const SPECIAL_DOUBLE_DOOR_LEFT_IDS = new Set([1568, 1571, 1727, 14751, 14753, 2039]);
 const SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID = new Map([
   [1568, [1569]],
   [1569, [1568]],
@@ -89,6 +90,8 @@ const SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID = new Map([
   [14752, [14751, 14753]],
   [14753, [14752, 14754]],
   [14754, [14751, 14753]],
+  [2039, [2041]],
+  [2041, [2039]],
 ]);
 const SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID = new Map([
   [1568, 1571],
@@ -97,6 +100,8 @@ const SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID = new Map([
   [1728, 1572],
   [14751, 14753],
   [14752, 14754],
+  [2039, 1571],
+  [2041, 1572],
 ]);
 const DOUBLE_DOOR_FAMILY_IDS_BY_ID = new Map(
   DOUBLE_DOOR_ID_FAMILIES.flatMap((familyIds) =>

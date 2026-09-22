@@ -130,10 +130,16 @@ function createPvpBehaviorState() {
     lastDamageTakenAt: 0,
     lastDamageDealtAt: 0,
     lastFoodAt: 0,
+    f2pFoodPending: false,
+    f2pFoodPendingHp: null,
+    retreatFoodCharges: null,
     lastBrewAt: 0,
     lastComboEatAt: 0,
     lastVengeanceAt: 0,
+    startCombatPotionsReady: false,
+    startCombatPotionNames: [],
     lastSpecAt: 0,
+    specSwitchbackAt: 0,
     lastOneTickAt: 0,
     lastPressureScriptAt: 0,
     lastStyleSwitchAt: 0,
@@ -204,10 +210,16 @@ function clearPvpBehaviorState(state) {
   state.pvp.lastDamageTakenAt = 0;
   state.pvp.lastDamageDealtAt = 0;
   state.pvp.lastFoodAt = 0;
+  state.pvp.f2pFoodPending = false;
+  state.pvp.f2pFoodPendingHp = null;
+  state.pvp.retreatFoodCharges = null;
   state.pvp.lastBrewAt = 0;
   state.pvp.lastComboEatAt = 0;
   state.pvp.lastVengeanceAt = 0;
+  state.pvp.startCombatPotionsReady = false;
+  state.pvp.startCombatPotionNames = [];
   state.pvp.lastSpecAt = 0;
+  state.pvp.specSwitchbackAt = 0;
   state.pvp.lastOneTickAt = 0;
   state.pvp.lastPressureScriptAt = 0;
   state.pvp.lastStyleSwitchAt = 0;
@@ -700,6 +712,9 @@ function setModePvp(
   state.pvp.phase = "seeking";
   state.pvp.targetUsername = targetUsername;
   state.pvp.targetPlayer = targetPlayer;
+  state.pvp.startCombatPotionsReady = false;
+  state.pvp.startCombatPotionNames = [];
+  state.pvp.retreatFoodCharges = null;
   state.pvp.endsAt = nowMs + durationMs;
   state.pvp.nextActionAt = nowMs;
   if (player.getRunEnergy?.() > 0) {
@@ -740,6 +755,9 @@ function teleportHome(player, state) {
   if (!player || !state?.home) {
     return false;
   }
+  if (isTeleblocked(player)) {
+    return false;
+  }
   const home = new Location(state.home.x, state.home.y, state.home.z ?? 0);
   player.performAnimation(HOME_TELEPORT_START_ANIMATION);
   player.performGraphic(HOME_TELEPORT_START_GRAPHIC);
@@ -747,6 +765,16 @@ function teleportHome(player, state) {
   player.performAnimation(HOME_TELEPORT_END_ANIMATION);
   player.getUpdateFlag().flag(Flag.APPEARANCE);
   return true;
+}
+
+function isTeleblocked(player) {
+  return player?.getCombat?.()?.getTeleblockTimer?.()?.finished?.() === false;
+}
+
+function computeEatThreshold(maxHp, eatAtHpRatio, isF2p) {
+  return isF2p
+    ? Math.min(24, Math.max(1, maxHp - 1))
+    : Math.max(1, Math.ceil(maxHp * eatAtHpRatio));
 }
 
 function createInitialState(home, behaviorMode) {
@@ -804,4 +832,6 @@ module.exports = {
   setModeSmelting,
   setModeFiremaking,
   teleportHome,
+  isTeleblocked,
+  computeEatThreshold,
 };

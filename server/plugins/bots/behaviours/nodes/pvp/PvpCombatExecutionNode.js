@@ -8,11 +8,16 @@ const {
   CanAttackResponse,
 } = require("../../../../../src/main/typescript/elvarg/game/content/combat/CombatFactory");
 const { GameConstants } = require("../../../../../src/main/typescript/elvarg/game/GameConstants");
+const { Inventory } = require("../../../../../src/main/typescript/elvarg/game/model/container/impl/Inventory");
+const { ItemActionPacketListener } = require("../../../../../src/main/typescript/elvarg/net/packet/impl/ItemActionPacketListener");
+const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
+const { getPotionName } = require("../../../../items/Potions.plugin");
 const { randomInRange } = require("../../navigation/BotNavigation");
 const {
   getPvpCombatSnapshot,
   getWeaponId,
   resolveCurrentCombatType,
+  START_COMBAT_POTION_NAMES,
 } = require("../../policies/PvpCombatRuntimeCache");
 
 const MELEE_OFFENSIVE_PRAYERS = Object.freeze([
@@ -425,6 +430,42 @@ class PvpCombatExecutionNode {
     return this.reviewPrayers(player, state, target, nowMs, profile);
   }
 
+  drinkStartCombatPotion(player, state) {
+    const pvp = state?.pvp;
+    if (!player || !pvp || pvp.startCombatPotionsReady === true) {
+      return false;
+    }
+
+    const usedPotionNames = pvp.startCombatPotionNames ?? [];
+    const inventory = player.getInventory?.();
+    const potion = (inventory?.getItems?.() ?? [])
+      .map((item, slot) => ({ item, slot, name: getPotionName(item?.getId?.()) }))
+      .find(({ name }) => START_COMBAT_POTION_NAMES.has(name) && !usedPotionNames.includes(name));
+
+    if (!potion) {
+      pvp.startCombatPotionsReady = true;
+      return false;
+    }
+    if (player.getTimers?.().has?.(TimerKey.POTION)) {
+      return true;
+    }
+
+    const itemId = potion.item.getId?.();
+    const handled = ItemActionPacketListener.handleAction(
+      player,
+      Inventory.INTERFACE_ID,
+      itemId,
+      potion.slot,
+      1
+    );
+    const replaced = inventory.getItems?.()[potion.slot]?.getId?.() !== itemId;
+    if (handled && replaced) {
+      pvp.startCombatPotionNames = [...usedPotionNames, potion.name];
+      return true;
+    }
+    return false;
+  }
+
   tick(context) {
     const { player, state, nowMs, target } = context ?? {};
     const pvp = state?.pvp;
@@ -452,6 +493,11 @@ class PvpCombatExecutionNode {
     }
 
     const profile = this.getProfile?.(state) ?? null;
+    if (this.drinkStartCombatPotion(player, state)) {
+      this.setPhase?.(state, this.pvpPhase?.COMBAT ?? "combat");
+      this.scheduleCombatAction?.(state, nowMs);
+      return "running";
+    }
     if (Number(profile?.confidenceTier ?? 0) >= 3) {
       this.ServerPerf.measurePhase("bot.pvp.combat_execution.prayer_flick", () =>
         this.reviewPrayers(player, state, target, nowMs, profile)

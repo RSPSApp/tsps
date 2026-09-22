@@ -28,6 +28,8 @@ test('PvP retreat respects depth, teleblock, freezes and replenishes only after 
       if (name.endsWith('/BotNavigation')) return {
         queueRouteAndFlagAppearance: (_, x, y) => routes.push({ x, y }),
         clearMovementRequest: () => {},
+        peekMovementRequest: () => null,
+        randomInRange: () => 2,
       };
       if (name.endsWith('/PvpLoadoutPolicy')) return {
         applyGeneratedPvpLoadout: () => { loads++; hp = 99; return true; },
@@ -56,6 +58,7 @@ test('PvP retreat respects depth, teleblock, freezes and replenishes only after 
   const node = new module.exports.PvpDefensiveActionNode({
     setPhase: (state, phase) => { state.pvp.phase = phase; },
     getProfile: () => ({ id: profile, foodCharges: 10 }), stopPvp: () => {},
+    api: { getCombatFactory: () => ({ canAttackPermission: () => undefined, getMethod: () => null }) },
   });
   const tick = () => node.tick({ player, state, nowMs: 1000, target: null });
   try {

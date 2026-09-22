@@ -2,9 +2,17 @@ const { Animation } = require("../../../../../src/main/typescript/elvarg/game/mo
 const { Skill } = require("../../../../../src/main/typescript/elvarg/game/model/Skill");
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { getPvpProfile } = require("../../pvp/PvpAssignment");
+const { isFoodItem } = require("../../../../items/Food.plugin");
+const { computeEatThreshold } = require("../../state/PlayerBotState");
 const { resolveBotNodeContext } = require("../context/BotNodeContext");
 
 const EAT_ANIMATION = new Animation(829);
+
+function findFoodSlots(inventory) {
+  return (inventory?.getItems?.() ?? [])
+    .map((item, slot) => (isFoodItem(item?.getId?.()) ? slot : -1))
+    .filter((slot) => slot >= 0);
+}
 
 class EatFoodActionNode {
   constructor(botStatesByName, api, options = {}) {
@@ -67,11 +75,35 @@ class EatFoodActionNode {
     }
 
     const pvpProfile = this.resolvePvpProfile(state);
-    const lowHpRatio =
-      state?.mode === "pvp" ? this.getCachedPvpEatAtHpRatio(state) : this.lowHpRatio;
-    const lowHpThreshold = Math.max(1, Math.ceil(maxHp * lowHpRatio));
+    const isF2pPvp = state?.mode === "pvp" && state.pvp?.loadoutId?.startsWith("f2p_");
+    const lowHpRatio = state?.mode === "pvp" ? this.getCachedPvpEatAtHpRatio(state) : this.lowHpRatio;
+    const lowHpThreshold = computeEatThreshold(maxHp, lowHpRatio, isF2pPvp);
     if (currentHp > lowHpThreshold) {
+      if (isF2pPvp) {
+        state.pvp.f2pFoodPending = false;
+        state.pvp.f2pFoodPendingHp = null;
+      }
       return "failure";
+    }
+
+    if (isF2pPvp) {
+      const combat = player.getCombat?.();
+      const engaged = Boolean(
+        combat?.getTarget?.() || combat?.getAttacker?.() || player.getCombatFollowing?.()
+      );
+      if (!engaged) {
+        state.pvp.f2pFoodPending = false;
+        state.pvp.f2pFoodPendingHp = null;
+      } else if (state.pvp.f2pFoodPending !== true) {
+        state.pvp.f2pFoodPending = true;
+        state.pvp.f2pFoodPendingHp = currentHp;
+        return "failure";
+      } else if (currentHp >= Number(state.pvp.f2pFoodPendingHp ?? currentHp)) {
+        return "failure";
+      } else {
+        state.pvp.f2pFoodPending = false;
+        state.pvp.f2pFoodPendingHp = null;
+      }
     }
 
     if (!Number.isFinite(state.virtualFoodChargesRemaining)) {
@@ -96,6 +128,15 @@ class EatFoodActionNode {
       return "failure";
     }
 
+    const inventory = player.getInventory?.();
+    const foodSlots = findFoodSlots(inventory);
+    if (foodSlots.length === 0) {
+      if (Number(state.virtualFoodChargesRemaining) > 0) {
+        state.virtualFoodChargesRemaining = 0;
+      }
+      return "failure";
+    }
+
     const timers = player.getTimers?.();
     if (!timers || timers.has?.(TimerKey.FOOD) || timers.has?.(TimerKey.STUN)) {
       return "failure";
@@ -111,6 +152,7 @@ class EatFoodActionNode {
     let comboEatTriggered = false;
     if (
       pvpProfile &&
+      foodSlots.length > 1 &&
       Math.random() < Number(pvpProfile.comboEatChance ?? 0) &&
       currentHp <= Math.max(1, Math.ceil(maxHp * Math.max(0.1, lowHpRatio * 0.72)))
     ) {
@@ -120,9 +162,14 @@ class EatFoodActionNode {
         state.pvp.lastComboEatAt = nowMs ?? Date.now();
       }
     }
+    const foodItemsConsumed = comboEatTriggered ? 2 : 1;
+    for (const slot of foodSlots.slice(0, foodItemsConsumed)) {
+      inventory.deleteAtSlot?.(slot, 1, false);
+    }
+    inventory.refreshItems?.();
     state.virtualFoodChargesRemaining = Math.max(
       0,
-      Number(state.virtualFoodChargesRemaining) - 1
+      Number(state.virtualFoodChargesRemaining) - foodItemsConsumed
     );
     player.heal?.(healAmount);
     if (state?.pvp) {
@@ -135,6 +182,7 @@ class EatFoodActionNode {
       nextHp,
       healAmount,
       comboEatTriggered,
+      foodItemsConsumed,
       chargesRemaining: state.virtualFoodChargesRemaining,
       maxHp,
       threshold: lowHpThreshold,

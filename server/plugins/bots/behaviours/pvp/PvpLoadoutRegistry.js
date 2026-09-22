@@ -23,8 +23,16 @@ function freezeLoadout(loadout) {
 function loadPvpLoadouts() {
   const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "pvp-bot-loadouts.json");
   const definitions = JSON.parse(fs.readFileSync(file, "utf8"));
-  if (!Array.isArray(definitions?.loadouts) || definitions.loadouts.length === 0) {
-    throw new Error("[pvp bot loadouts] missing loadouts");
+  if (!definitions || typeof definitions !== "object" || Array.isArray(definitions) ||
+      !Array.isArray(definitions.presetGroups) || !Array.isArray(definitions.archetypes) ||
+      !definitions.pools || typeof definitions.pools !== "object" ||
+      !definitions.combat || typeof definitions.combat !== "object" ||
+      !Array.isArray(definitions.combat.arrows) || !Array.isArray(definitions.combat.bolts) ||
+      !Array.isArray(definitions.combat.specWeapons) ||
+      !definitions.combat.specAmmo || typeof definitions.combat.specAmmo !== "object" ||
+      !definitions.combat.specialCases || typeof definitions.combat.specialCases !== "object" ||
+      !Array.isArray(definitions.loadouts) || definitions.loadouts.length === 0) {
+    throw new Error("[pvp bot loadouts] missing required definitions");
   }
   const loadouts = {};
   for (const definition of definitions.loadouts) {
@@ -36,10 +44,13 @@ function loadPvpLoadouts() {
     }
     loadouts[definition.id] = freezeLoadout(definition);
   }
-  return Object.freeze(loadouts);
+  return { definitions, loadouts: Object.freeze(loadouts) };
 }
 
-const PVP_LOADOUTS = loadPvpLoadouts();
+const {
+  definitions: PVP_LOADOUT_DEFINITIONS,
+  loadouts: PVP_LOADOUTS,
+} = loadPvpLoadouts();
 const PVP_LOADOUT_IDS = Object.freeze(Object.keys(PVP_LOADOUTS));
 
 function getPvpLoadout(loadoutId) {
@@ -51,6 +62,7 @@ function listPvpLoadouts() {
 }
 
 module.exports = {
+  PVP_LOADOUT_DEFINITIONS,
   PVP_LOADOUT_IDS,
   PVP_LOADOUTS,
   getPvpLoadout,

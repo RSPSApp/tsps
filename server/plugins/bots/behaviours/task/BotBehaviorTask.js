@@ -13,6 +13,8 @@ const {
 const { callModeHook } = require("../hooks/ModeHookContract");
 const {
   isPvpOnlyBotState,
+  isTeleblocked,
+  computeEatThreshold,
   resetMovementState,
   setModePvp,
 } = require("../state/PlayerBotState");
@@ -1108,7 +1110,8 @@ class BotBehaviorTask extends Task {
       return false;
     }
     const eatAtHpRatio = this.getCachedPvpEatAtHpRatio(state);
-    const eatThreshold = Math.max(1, Math.ceil(maxHp * eatAtHpRatio));
+    const isF2pPvp = state.pvp.loadoutId?.startsWith("f2p_");
+    const eatThreshold = computeEatThreshold(maxHp, eatAtHpRatio, isF2pPvp);
     return currentHp <= eatThreshold;
   }
 
@@ -1191,6 +1194,9 @@ class BotBehaviorTask extends Task {
     }
     const location = player.getLocation?.();
     if (!location || !Wilderness.isInLocation(location)) {
+      return false;
+    }
+    if (isTeleblocked(player)) {
       return false;
     }
     const blockedTileCheckAt = Number(state.blockedTileCheckAt ?? 0);

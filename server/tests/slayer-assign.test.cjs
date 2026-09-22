@@ -4,6 +4,8 @@ const { test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { Skill } = require('../dist/game/model/Skill');
+const { ShopDefinition } = require('../dist/game/definition/ShopDefinition');
+const { ShopManager } = require('../dist/game/model/container/shop/ShopManager');
 const Slayer = require('../plugins/skills/Slayer.plugin');
 const { assignTask, getActiveTask } = Slayer;
 
@@ -32,11 +34,13 @@ function spokenLine(player) {
 }
 
 function captureApi() {
-  const api = { log() {}, onNpcDeath() {}, persisted: [], events: {} };
+  const api = { log() {}, onNpcDeath() {}, persisted: [], events: {}, anyNpc: {}, currencies: {} };
   Slayer.register({
     ...api,
     persistAttribute: (key) => api.persisted.push(key),
+    registerShopCurrency: (name, handler) => { api.currencies[name] = handler; },
     onNpcInteraction: (handler) => { api.npcClick = handler; },
+    onAnyNpcInteraction: (registered) => { api.anyNpc = registered; },
     onCustomEvent: (name, handler) => { api.events[name] = handler; },
   });
   return api;
@@ -146,4 +150,45 @@ test('the task-tip event reports the active task location', () => {
   const none = { player: fakePlayer(), line: null };
   api.events['slayer:task-tip'](none);
   assert.equal(none.line, null);
+});
+
+test('Slayer points back the rewards shop currency', () => {
+  const api = captureApi();
+  const currency = api.currencies.SLAYER_POINTS;
+  assert.ok(currency, 'SLAYER_POINTS is registered as a shop currency');
+  assert.equal(currency.name, 'Slayer points');
+
+  const player = fakePlayer({ 'slayer:points': 200 });
+  assert.equal(currency.amount(player), 200);
+  currency.remove(player, 75);
+  assert.equal(player.getAttribute('slayer:points'), 125);
+  currency.add(player, 25);
+  assert.equal(player.getAttribute('slayer:points'), 150);
+  currency.remove(player, 9999);
+  assert.equal(player.getAttribute('slayer:points'), 0);
+  assert.equal(currency.amount(fakePlayer()), 0);
+});
+
+test('the Trade and Rewards options open the master shops for a transformed npc', () => {
+  const api = captureApi();
+  assert.equal(typeof api.anyNpc.Trade, 'function');
+  assert.equal(typeof api.anyNpc.Rewards, 'function');
+  const all = ShopDefinition.all;
+  const open = ShopManager.open;
+  const opened = [];
+  ShopDefinition.all = () => [
+    { getName: () => 'Slayer Equipment (shop)', getId: () => 1324 },
+    { getName: () => 'Slayer Rewards', getId: () => 1463 },
+  ];
+  ShopManager.open = (player, id) => { opened.push(id); return true; };
+  try {
+    // Nieve's spawn (1455) transforms to 7108.
+    assert.equal(api.anyNpc.Trade({ player: fakePlayer(), npcId: 1455, definition: { getId: () => 7108 } }), true);
+    assert.equal(api.anyNpc.Rewards({ player: fakePlayer(), npcId: 1455, definition: { getId: () => 7108 } }), true);
+    assert.deepEqual(opened, [1324, 1463]);
+    assert.equal(api.anyNpc.Trade({ player: fakePlayer(), npcId: 999 }), false);
+  } finally {
+    ShopDefinition.all = all;
+    ShopManager.open = open;
+  }
 });

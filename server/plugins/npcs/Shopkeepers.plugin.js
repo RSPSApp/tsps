@@ -34,14 +34,19 @@ const ITEM_CURRENCIES = [
 ];
 
 const POINT_CURRENCIES = [
+  "Bounty Hunter Points",
   "Deadman Points",
   "event points",
   "Foundry Reputation",
   "Honour points",
+  "Last Man Standing Points",
   "League Points",
+  "Mahogany Homes Points",
   "NMZ",
+  "PvP Arena Points",
   "Speedrun Points",
   "Tithe",
+  "Vale Research Points",
   "Volcanic Mine points",
   "Zeal Tokens",
 ];

@@ -82,3 +82,16 @@ test('point currencies persist on a player attribute', () => {
   nmz.remove(player, 999);
   assert.equal(nmz.amount(player), 0);
 });
+
+test('the imported points shops have registered currencies', () => {
+  const { handlers } = loadPlugin();
+  for (const key of [
+    'BOUNTY HUNTER POINTS',
+    'LAST MAN STANDING POINTS',
+    'MAHOGANY HOMES POINTS',
+    'PVP ARENA POINTS',
+    'VALE RESEARCH POINTS',
+  ]) {
+    assert.ok(handlers.has(key), `missing currency handler: ${key}`);
+  }
+});

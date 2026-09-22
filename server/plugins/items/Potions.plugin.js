@@ -854,6 +854,9 @@ module.exports = {
   isPotionItem(itemId) {
     return POTION_BY_ITEM_ID.has(itemId);
   },
+  getPotionName(itemId) {
+    return POTION_BY_ITEM_ID.get(itemId)?.potion?.name ?? null;
+  },
   register(api) {
     pluginApi = api;
     initDragonfireProtectionCoreAccess(api);

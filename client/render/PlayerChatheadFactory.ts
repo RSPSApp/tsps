@@ -133,6 +133,7 @@ export class PlayerChatheadFactory {
 
         // 1. Equipment (Helmets/Masks)
         let headCoveredByItem = false;
+        let jawCoveredByItem = false;
         if (equip && equip.length > 0) {
             const rawHead = equip[0];
             if (rawHead >= 256 && rawHead < 512) {
@@ -257,7 +258,9 @@ export class PlayerChatheadFactory {
                     if (secondary >= 0) models.push(secondary);
                     if (models.length) {
                         pushItemModelDatas(models, foundItem);
-                        headCoveredByItem = true;
+                        const coveredSlots = [foundItem.wearPos2, foundItem.wearPos3];
+                        headCoveredByItem = coveredSlots.includes(8);
+                        jawCoveredByItem = coveredSlots.includes(11);
                     } else {
                         // Fallback: some items only populate body models; use them so helmets still show.
                         const bodyModels: number[] = [];
@@ -324,9 +327,9 @@ export class PlayerChatheadFactory {
             }
         }
 
-        // Only add base head kit if no helmet chathead models were found
+        // Preserve head and jaw kits unless the equipped item explicitly covers them.
         if (!headCoveredByItem) pushKitModels(effectiveHeadKitId);
-        pushKitModels(jawKitId);
+        if (!jawCoveredByItem) pushKitModels(jawKitId);
 
         if (modelIds.length === 0) {
             console.warn(

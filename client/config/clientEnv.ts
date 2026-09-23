@@ -124,6 +124,50 @@ export function getPublicWebRtcRelayConfig(): WebRtcRelayConfig {
     return { signalUrl: DEFAULT_WEBRTC_SIGNAL_URL, iceServers: DEFAULT_WEBRTC_ICE_SERVERS };
 }
 
+let iceCache: { signalUrl: string; iceServers: RTCIceServer[]; expiresAt: number } | undefined;
+
+// Set after a direct (non-relay) WebRTC connection fails, so the next attempt
+// forces TURN (iceTransportPolicy: "relay") for clients behind symmetric NAT.
+let relayFallbackPreferred = false;
+
+export function preferWebRtcRelay(): void {
+    relayFallbackPreferred = true;
+}
+
+export function shouldPreferWebRtcRelay(): boolean {
+    return relayFallbackPreferred;
+}
+
+/**
+ * ICE servers for connecting to a relay, including short-lived TURN credentials
+ * fetched from the relay's `/turn` endpoint. Falls back to `fallback` (STUN)
+ * when TURN is unavailable, so P2P still works on non-symmetric NATs.
+ */
+export async function resolveIceServers(signalUrl: string, fallback: RTCIceServer[]): Promise<RTCIceServer[]> {
+    const now = Date.now();
+    if (iceCache && iceCache.signalUrl === signalUrl && iceCache.expiresAt > now + 30_000) {
+        return iceCache.iceServers;
+    }
+    try {
+        const url = new URL(signalUrl);
+        url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+        url.pathname = "/turn";
+        const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (response.ok) {
+            const data = await response.json();
+            const iceServers = Array.isArray(data?.iceServers) ? data.iceServers.filter(isIceServer) : [];
+            if (iceServers.length > 0) {
+                const ttlSeconds = Number.isFinite(data?.ttlSeconds) ? data.ttlSeconds : 0;
+                iceCache = { signalUrl, iceServers, expiresAt: now + Math.max(60, ttlSeconds) * 1000 };
+                return iceServers;
+            }
+        }
+    } catch {
+        // TURN is optional; fall back to the configured ICE servers.
+    }
+    return fallback;
+}
+
 export function getBrowserHostWorldConfig(): BrowserHostWorldConfig | undefined {
     if (typeof window === "undefined") return undefined;
     const params = new URLSearchParams(window.location.search);

@@ -1,4 +1,5 @@
 import { setPacketSocket } from "../../packet";
+import { preferWebRtcRelay } from "../../../config/clientEnv";
 import { WS_GLOBAL_KEY, WS_SUPPRESS_RECONNECT_KEY, RECONNECT_DELAY_MAX_MS, RECONNECT_MAX_ATTEMPTS } from "../constants";
 import { clearLoginConnectRetryTimer } from "./loginHelpers";
 import { state } from "../state";
@@ -29,6 +30,9 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
             // Don't reconnect if: suppressed (HMR/logout), clean close with specific reasons, or max attempts reached
             const isIntentionalClose =
                 evt.wasClean && (evt.reason === "logout" || evt.reason === "page unload");
+            // 4001 = WebRTC connectivity failure. Retry once, forcing the TURN relay.
+            const connectivityFailure = evt.code === 4001;
+            if (connectivityFailure) preferWebRtcRelay();
             const terminalConnectFailure = evt.code === 4000;
             // Only reconnect if we have stored session credentials (were previously logged in)
             const hasSession = state.sessionUsername !== null && state.sessionPassword !== null;

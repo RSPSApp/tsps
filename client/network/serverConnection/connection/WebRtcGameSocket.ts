@@ -1,4 +1,5 @@
 import type { GameSocket, WebRtcConnectionConfig } from "./GameSocket";
+import { resolveIceServers, shouldPreferWebRtcRelay } from "../../../config/clientEnv";
 
 const CONNECTING = 0;
 const OPEN = 1;
@@ -46,9 +47,9 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
     public binaryType: BinaryType = "arraybuffer";
     public readonly url: string;
     private state = CONNECTING;
-    private readonly peer: RTCPeerConnection;
-    private readonly channel: RTCDataChannel;
-    private readonly contentChannel: RTCDataChannel;
+    private peer!: RTCPeerConnection;
+    private channel!: RTCDataChannel;
+    private contentChannel!: RTCDataChannel;
     private nextContentId = 0;
     private readonly contentRequests = new Map<number, {
         body: string;
@@ -56,7 +57,7 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         reject: (error: Error) => void;
         timeout: ReturnType<typeof setTimeout>;
     }>();
-    private readonly signal: WebSocket;
+    private signal?: WebSocket;
     private readonly sessionId = typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
         : Array.from(crypto.getRandomValues(new Uint32Array(4)), (part) => part.toString(16)).join("-");
@@ -69,17 +70,41 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
     constructor(private readonly config: WebRtcConnectionConfig) {
         super();
         this.url = signallingEndpoint(config.signalUrl);
-        this.peer = new RTCPeerConnection({ iceServers: config.iceServers });
+        this.timeout = setTimeout(
+            () => this.state === CONNECTING && this.fail(`WebRTC connection to world ${config.worldId} timed out`, true),
+            CONNECT_TIMEOUT_MS,
+        );
+        void this.start();
+    }
+
+    /**
+     * Resolve ICE servers (including short-lived TURN credentials from the relay)
+     * before creating the peer, so symmetric-NAT clients can fall back to relaying.
+     */
+    private async start(): Promise<void> {
+        if (this.state >= CLOSING) return;
+        let iceServers = this.config.iceServers;
+        try {
+            iceServers = await resolveIceServers(this.config.signalUrl, this.config.iceServers);
+        } catch {}
+        if (this.state >= CLOSING) return;
+        // After a direct connection fails, force the TURN relay so symmetric-NAT
+        // clients are not stuck on an unusable direct candidate pair.
+        const urlsOf = (server: RTCIceServer) => (Array.isArray(server.urls) ? server.urls : [server.urls]);
+        const hasTurn = iceServers.some((server) =>
+            urlsOf(server).some((url) => typeof url === "string" && url.startsWith("turn")),
+        );
+        const relayOnly = hasTurn && shouldPreferWebRtcRelay();
+        this.peer = new RTCPeerConnection({
+            iceServers,
+            ...(relayOnly ? { iceTransportPolicy: "relay" as RTCIceTransportPolicy } : {}),
+        });
         this.channel = this.peer.createDataChannel("game", { ordered: true });
         this.channel.binaryType = "arraybuffer";
         // Content requests use their own channel, never the binary game protocol.
         this.contentChannel = this.peer.createDataChannel("content", { ordered: true });
         this.contentChannel.addEventListener("message", (event) => this.receiveContent(event.data));
         this.signal = new WebSocket(this.url);
-        this.timeout = setTimeout(
-            () => this.state === CONNECTING && this.fail(`WebRTC connection to world ${config.worldId} timed out`),
-            CONNECT_TIMEOUT_MS,
-        );
         this.bindPeer();
         this.bindSignal();
     }
@@ -104,15 +129,16 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         clearTimeout(this.timeout);
         this.sendSignal({ type: "session-close", sessionId: this.sessionId, message: reason });
         this.finishClose(code, reason, code === 1000);
-        try { this.signal.close(1000, "game channel closed"); } catch {}
-        try { this.channel.close(); } catch {}
-        try { this.peer.close(); } catch {}
+        try { this.signal?.close(1000, "game channel closed"); } catch {}
+        try { this.channel?.close(); } catch {}
+        try { this.peer?.close(); } catch {}
     }
 
     public async fetchContent(path: string): Promise<unknown> {
         if (path.length > 2048 || !/^\/api\/[a-z0-9-]+(?:\/[a-z0-9-]+)*(?:\?[^#]*)?$/i.test(path)) {
             throw new Error("Invalid content path");
         }
+        if (!this.contentChannel) throw new Error("Content channel unavailable");
         if (this.contentChannel.readyState === "connecting") {
             await new Promise<void>((resolve, reject) => {
                 const done = () => {
@@ -175,7 +201,7 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
             }
         };
         this.peer.onconnectionstatechange = () => {
-            if (this.peer.connectionState === "failed") this.fail("WebRTC ICE negotiation failed");
+            if (this.peer.connectionState === "failed") this.fail("WebRTC ICE negotiation failed", true);
         };
         this.channel.addEventListener("message", (event) => {
             const data = event.data;
@@ -187,7 +213,7 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         });
         this.channel.addEventListener("open", () => void this.open());
         this.channel.addEventListener("close", () => this.finishClose(1006, "DataChannel closed", false));
-        this.channel.addEventListener("error", () => this.fail("WebRTC DataChannel failed"));
+        this.channel.addEventListener("error", () => this.fail("WebRTC DataChannel failed", true));
     }
 
     private bindSignal(): void {
@@ -277,13 +303,14 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         try { this.signal.close(1000, "DataChannel established"); } catch {}
     }
 
-    private fail(message: string): void {
+    private fail(message: string, retryable = false): void {
         if (this.state >= CLOSING) return;
         console.warn(`[webrtc] ${message}`);
         const event = new Event("error") as Event & { error?: Error };
         event.error = new Error(message);
         this.dispatchEvent(event);
-        this.close(4000, message);
+        // 4001 = connectivity failure (retry once via TURN); 4000 = terminal.
+        this.close(retryable ? 4001 : 4000, message);
     }
 
     private finishClose(code: number, reason: string, wasClean: boolean): void {
@@ -299,6 +326,6 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
     }
 
     private sendSignal(payload: Record<string, unknown>): void {
-        if (this.signal.readyState === WebSocket.OPEN) this.signal.send(JSON.stringify(payload));
+        if (this.signal?.readyState === WebSocket.OPEN) this.signal.send(JSON.stringify(payload));
     }
 }

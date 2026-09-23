@@ -216,8 +216,13 @@ export class WebRtcGameConnector {
   }
 
   private acceptDataChannel(sessionId: string, state: PeerState, channel: RTCDataChannel): void {
-    if (channel.label !== "game" || !channel.ordered
-      || channel.maxRetransmits !== null || channel.maxPacketLifeTime !== null) {
+    if (channel.label !== "game") {
+      // Browsers open auxiliary channels (e.g. "content") that this dedicated
+      // server does not use. They must never tear down the game session.
+      try { channel.close(); } catch {}
+      return;
+    }
+    if (!channel.ordered || channel.maxRetransmits !== null || channel.maxPacketLifeTime !== null) {
       channel.close();
       this.failSession(sessionId, "invalid_game_channel");
       return;

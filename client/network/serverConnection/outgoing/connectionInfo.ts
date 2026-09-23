@@ -17,10 +17,15 @@ export function getLastUrl(): string {
 }
 
 export function setServerUrl(url: string, webRtcConfig?: WebRtcConnectionConfig): void {
-    const browserHostWorld = getBrowserHostWorldConfig();
-    if (browserHostWorld) {
-        url = browserHostWorld.signalUrl;
-        webRtcConfig = browserHostWorld;
+    // A world in the URL path (e.g. /play/browser-77xv4c) only applies when the
+    // caller has not explicitly chosen a server, so the in-client world list can
+    // still switch away from it.
+    if (!webRtcConfig) {
+        const browserHostWorld = getBrowserHostWorldConfig();
+        if (browserHostWorld) {
+            url = browserHostWorld.signalUrl;
+            webRtcConfig = browserHostWorld;
+        }
     }
     const changed = state.lastUrl !== url
         || JSON.stringify(state.webRtcConfig) !== JSON.stringify(webRtcConfig);

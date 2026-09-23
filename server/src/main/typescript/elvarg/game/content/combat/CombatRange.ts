@@ -146,8 +146,8 @@ export class CombatRange {
     }
 
     private static hasOpenCardinalEdge(fromX: number, fromY: number, toX: number, toY: number, z: number, area: any): boolean {
-        const fromMask = toX > fromX ? 0x8 : toX < fromX ? 0x80 : toY > fromY ? 0x20 : 0x2;
-        const toMask = toX > fromX ? 0x80 : toX < fromX ? 0x8 : toY > fromY ? 0x2 : 0x20;
+        const fromMask = toX > fromX ? 0x8 : toX < fromX ? 0x80 : toY > fromY ? 0x2 : 0x20;
+        const toMask = toX > fromX ? 0x80 : toX < fromX ? 0x8 : toY > fromY ? 0x20 : 0x2;
         const invalid = RegionManager.UNKNOWN | RegionManager.UNLOADED_TILE;
         return (RegionManager.getClipping(fromX, fromY, z, area) & (fromMask | invalid)) === 0
             && (RegionManager.getClipping(toX, toY, z, area) & (toMask | invalid)) === 0;

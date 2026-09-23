@@ -29,6 +29,7 @@ import {
     type RegionPackMessage,
 } from "./hostProtocol/regionPackMessage";
 import { browserHostOrigin, browserHostWindow } from "./hostProtocol/origin";
+import { isBrowserHostClient } from "../../../config/clientEnv";
 import {
     NPC_SPAWN_MESSAGE,
     NPC_SPAWN_REQUEST_MESSAGE,
@@ -495,7 +496,7 @@ async function loadLocalEditorData(resource = ""): Promise<string> {
 
 async function loadWorldDefinition(): Promise<EditModeWorldDefinition> {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("browser-host-client") === "1") {
+    if (isBrowserHostClient()) {
         const definition = params.get("browser-host-world-definition");
         return definition
             ? parseBrowserHostWorldDefinition(definition)
@@ -1772,7 +1773,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     plugin.setConfig({ enabled: true });
     const params = new URLSearchParams(window.location.search);
     const host = browserHostWindow();
-    if (params.get("browser-host-client") === "1" && host) {
+    if (isBrowserHostClient() && host) {
         const hostOrigin = browserHostOrigin();
         const loadedNpcSpawnRegions = new Map<
             number,

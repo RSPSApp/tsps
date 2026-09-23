@@ -168,18 +168,38 @@ export async function resolveIceServers(signalUrl: string, fallback: RTCIceServe
     return fallback;
 }
 
+/** World id from the URL path, e.g. /play/world-1 -> "world-1". */
+function worldIdFromPath(): string | undefined {
+    if (typeof window === "undefined") return undefined;
+    const base = (process.env.PUBLIC_URL ?? "").replace(/\/+$/, "");
+    let path = window.location.pathname;
+    if (base && path.startsWith(base)) path = path.slice(base.length);
+    const segment = path.replace(/^\/+/, "").split("/")[0];
+    return segment && /^[A-Za-z0-9._-]{1,64}$/.test(segment) ? segment : undefined;
+}
+
+/**
+ * True when the client was launched by a browser host (the /host page) and may
+ * use the host control channel. Signalled by `browser-host-origin`, with the
+ * legacy `browser-host-client=1` still accepted.
+ */
+export function isBrowserHostClient(): boolean {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("browser-host-client") === "1" || params.has("browser-host-origin");
+}
+
 export function getBrowserHostWorldConfig(): BrowserHostWorldConfig | undefined {
     if (typeof window === "undefined") return undefined;
     const params = new URLSearchParams(window.location.search);
-    if (params.get("browser-host-client") !== "1") return undefined;
-    const worldId = params.get("browser-host-world");
+    const worldId = worldIdFromPath() ?? params.get("browser-host-world");
     if (!worldId || !/^[A-Za-z0-9._-]{1,64}$/.test(worldId)) return undefined;
     return { ...getPublicWebRtcRelayConfig(), worldId };
 }
 
 /** Public relay directory used to discover WebRTC worlds. */
 export function getWebRtcRelayConfig(): WebRtcRelayConfig | undefined {
-    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("browser-host-client")) {
+    if (typeof window !== "undefined" && (isBrowserHostClient() || worldIdFromPath())) {
         return getPublicWebRtcRelayConfig();
     }
 

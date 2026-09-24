@@ -363,8 +363,9 @@ function refreshWildernessUi(player, tile, inWilderness) {
   if (player.getWildernessLevel() !== 0) {
     player.setWildernessLevel(0);
   }
-  if (player.getMultiIcon() !== 0) {
-    player.setMultiIcon(0);
+  const multiIcon = Wilderness.isMulti(tile.x, tile.y) ? 1 : 0;
+  if (player.getMultiIcon() !== multiIcon) {
+    player.setMultiIcon(multiIcon);
   }
 }
 
@@ -428,8 +429,9 @@ function leaveWilderness(player, tile, wasInWilderness) {
   if (player.getWildernessLevel() !== 0) {
     player.setWildernessLevel(0);
   }
-  if (player.getMultiIcon() !== 0) {
-    player.setMultiIcon(0);
+  const multiIcon = Wilderness.isMulti(tile.x, tile.y) ? 1 : 0;
+  if (player.getMultiIcon() !== multiIcon) {
+    player.setMultiIcon(multiIcon);
   }
   syncWildernessState(player, false);
   lastPvpLayoutState.delete(player);

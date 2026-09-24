@@ -78,6 +78,7 @@ const DESTINATIONS = {
     teleport("Vet'ion", location(3219, 3788), TeleportType.NORMAL),
     teleport("Count Draynor", location(3077, 9772), TeleportType.NORMAL),
     teleport("Elvarg", location(2852, 9637), TeleportType.NORMAL),
+    teleport("Kalphite Queen", location(3508, 9494), TeleportType.NORMAL),
   ],
 };
 

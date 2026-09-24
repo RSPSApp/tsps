@@ -15,6 +15,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
+const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
@@ -28,6 +29,9 @@ const DROPS_FILE = "npc-drops.json";
 const SUBTABLES_FILE = "npc-drop-subtables.json";
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
+const KALPHITE_QUEEN_NOTED_ITEMS = new Set([
+  1391, 3049, 207, 3051, 219, 2363, 1783, 444, 1513, 1621, 1619, 1617, 245, 3138, 1987, 5940, 6016,
+]);
 
 /** npcId -> array of shared table objects (one instance per distinct table) */
 const tablesByNpc = new Map();
@@ -81,6 +85,25 @@ function parseQuantityRaw(raw) {
   return null;
 }
 
+function isNotedQuantity(raw) {
+  return typeof raw === "string" && /\(noted\)/i.test(raw);
+}
+
+function applyWikiCorrections(tableById) {
+  const kalphiteQueen = tableById.kalphite_queen;
+  if (!kalphiteQueen) {
+    return;
+  }
+  for (const entry of kalphiteQueen.entries || []) {
+    if (KALPHITE_QUEEN_NOTED_ITEMS.has(entry.item_id)) {
+      entry.noted = true;
+    }
+    if (entry.section === "Consumables") {
+      entry.roll_group = "kalphite_queen_consumable";
+    }
+  }
+}
+
 function loadDrops() {
   tablesByNpc.clear();
   sharedTables.clear();
@@ -100,6 +123,7 @@ function loadDrops() {
     );
     return { npcs: 0, tables: 0, shared: 0, unusableSubtableRows: 0 };
   }
+  applyWikiCorrections(tableById);
 
   for (const [npcId, npc] of Object.entries(dump.npcs)) {
     const id = Number(npcId);
@@ -140,6 +164,7 @@ function loadDrops() {
         entries.push({
           itemId: entry.item_id,
           quantity: parseQuantityRaw(entry.quantity_raw) || [1, 1],
+          noted: isNotedQuantity(entry.quantity_raw),
           weight: rarity.weight,
           outOf: rarity.outOf,
         });
@@ -214,7 +239,11 @@ function rollSharedTable(name, player, depth = 0) {
         return rollSharedTable(entry.ref, player, depth + 1);
       }
       const [min, max] = entry.quantity;
-      return [{ itemId: entry.itemId, amount: min + randomInt(Math.max(1, max - min + 1)) }];
+      return [{
+        itemId: entry.itemId,
+        amount: min + randomInt(Math.max(1, max - min + 1)),
+        noted: entry.noted === true,
+      }];
     }
   }
   return [];
@@ -230,10 +259,10 @@ function resolveEntry(entry, player) {
   if (!Number.isInteger(entry.item_id)) {
     return [];
   }
-  const drops = [{ itemId: entry.item_id, amount: rollQuantity(entry) }];
+  const drops = [{ itemId: entry.item_id, amount: rollQuantity(entry), noted: entry.noted === true }];
   for (const bonus of entry.bonus_drops || []) {
     if (Number.isInteger(bonus.item_id)) {
-      drops.push({ itemId: bonus.item_id, amount: rollQuantity(bonus) });
+      drops.push({ itemId: bonus.item_id, amount: rollQuantity(bonus), noted: bonus.noted === true });
     }
   }
   return drops;
@@ -248,6 +277,7 @@ function rollTable(table, player, npc) {
   const entries = Array.isArray(table.entries) ? table.entries : [];
 
   const main = [];
+  const separateGroups = new Map();
   let preRollHit = false;
 
   for (const entry of entries) {
@@ -259,11 +289,27 @@ function rollTable(table, player, npc) {
         preRollHit = true;
       }
     } else if (entry.separate_roll) {
-      if (hits(entry)) {
+      if (entry.roll_group) {
+        const group = separateGroups.get(entry.roll_group) || [];
+        group.push(entry);
+        separateGroups.set(entry.roll_group, group);
+      } else if (hits(entry)) {
         drops.push(...resolveEntry(entry, player));
       }
     } else if (Number.isInteger(entry.weight)) {
       main.push(entry);
+    }
+  }
+
+  for (const group of separateGroups.values()) {
+    const outOf = Number(group[0]?.out_of);
+    let roll = randomInt(Number.isInteger(outOf) && outOf > 0 ? outOf : group.reduce((sum, entry) => sum + entry.weight, 0));
+    for (const entry of group) {
+      roll -= entry.weight;
+      if (roll < 0) {
+        drops.push(...resolveEntry(entry, player));
+        break;
+      }
     }
   }
 
@@ -329,7 +375,12 @@ function dropFor(player, npc, npcId, location) {
         continue;
       }
     }
-    const item = new Item(drop.itemId, drop.amount);
+    const definition = ItemDefinition.forId(drop.itemId);
+    const noteId = definition.getNoteId();
+    const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted()
+      ? noteId
+      : drop.itemId;
+    const item = new Item(itemId, drop.amount);
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
@@ -337,7 +388,7 @@ function dropFor(player, npc, npcId, location) {
       itemOnGroundManager.registerLocation(player, item, location);
     } else {
       for (let i = 0; i < drop.amount; i++) {
-        itemOnGroundManager.registerLocation(player, new Item(drop.itemId, 1), location);
+        itemOnGroundManager.registerLocation(player, new Item(itemId, 1), location);
       }
     }
   }

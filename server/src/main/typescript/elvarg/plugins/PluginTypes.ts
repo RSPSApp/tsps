@@ -146,6 +146,12 @@ export interface PluginNpcDeathEvent {
   location: { x: number; y: number; z: number };
 }
 
+/** Fired before an NPC enters its death task. Set preventDeath for phase changes. */
+export interface PluginNpcBeforeDeathEvent {
+  npc: any;
+  preventDeath: boolean;
+}
+
 export interface PluginCanAttackEvent {
   attacker: any;
   target: any;
@@ -564,6 +570,7 @@ export interface PluginApi {
     definition: PluginNpcInteractionDefinition
   ): void;
   onNpcDeath(handler: (event: PluginNpcDeathEvent) => void): void;
+  onNpcBeforeDeath(handler: (event: PluginNpcBeforeDeathEvent) => void): void;
   onCanAttack(handler: (event: PluginCanAttackEvent) => void): void;
   onCanTeleport(handler: (event: PluginCanTeleportEvent) => void): void;
   onCanEat(handler: (event: PluginCanEatEvent) => void): void;

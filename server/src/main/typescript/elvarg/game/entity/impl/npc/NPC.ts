@@ -20,6 +20,7 @@ import { Wilderness } from "../../../content/wilderness/Wilderness";
 import { MovementQueue } from "../../../model/movement/MovementQueue";
 import { GameConstants } from "../../../GameConstants";
 import { Animation } from "../../../model/Animation";
+import { PluginManager } from "../../../../plugins/PluginManager";
 
 export class NPC extends Mobile {
     private static sameLocation(a: Location | null | undefined, b: Location | null | undefined): boolean {
@@ -277,6 +278,9 @@ export class NPC extends Mobile {
 
     public appendDeath() {
         if (!this.isDying) {
+            if (PluginManager.emitNpcBeforeDeath({ npc: this, preventDeath: false })) {
+                return;
+            }
             TaskManager.submit(new NPCDeathTask(this));
             this.isDying = true;
         }

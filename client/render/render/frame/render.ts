@@ -1052,6 +1052,38 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                 }
             } catch {}
 
+            // NPC head icons are cache-defined and can contain multiple sprites, such
+            // as the Kalphite Queen's simultaneous Protect from Magic and Missiles.
+            try {
+                const ne = host.osrsClient.npcEcs;
+                ne.forEachActive((ecsId: number) => {
+                    if (overheadPrayers.length >= overheadPrayerMaxEntries) return;
+                    const type = host.getEffectiveNpcType(ne.getNpcTypeId(ecsId) | 0);
+                    const archives = type?.headIconSpriteIds;
+                    const sprites = type?.headIconSpriteIndices;
+                    if (!archives || !sprites) return;
+
+                    const npcHeadIcons = archives
+                        .map((archiveId, index) => ({ archiveId, spriteId: sprites[index] ?? -1 }))
+                        .filter((icon) => icon.archiveId >= 0 && icon.spriteId >= 0);
+                    if (npcHeadIcons.length === 0) return;
+
+                    const mid = (ne as any).mapId?.[ecsId] ?? 0;
+                    const npcTypeId = ne.getNpcTypeId(ecsId) | 0;
+                    const entry = host.acquireOverheadPrayerEntry();
+                    entry.worldX = ((mid >> 8) & 0xff) * 64 + (ne.getX(ecsId) | 0) / 128.0;
+                    entry.worldZ = (mid & 0xff) * 64 + (ne.getY(ecsId) | 0) / 128.0;
+                    entry.plane = ne.getLevel(ecsId) | 0;
+                    entry.footprintRadius = host.getNpcFootprintRadius(npcTypeId);
+                    entry.groupKey = host.makeActorGroupKey(true, ne.getServerId(ecsId) | 0);
+                    entry.heightOffsetTiles = host.getNpcDefaultHeight(npcTypeId) / 128.0;
+                    entry.headIconPk = -1;
+                    entry.headIconPrayer = -1;
+                    entry.npcHeadIcons = npcHeadIcons;
+                    overheadPrayers.push(entry);
+                });
+            } catch {}
+
             // Render hitsplats for other players
             try {
                 const pe = host.osrsClient.playerEcs;

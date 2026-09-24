@@ -110,6 +110,8 @@ export interface OverheadPrayerEntry {
     headIconPk: number;
     /** Prayer head icon index (0 = Protect from Melee, 1 = Missiles, 2 = Magic, etc.) */
     headIconPrayer: number;
+    /** Cache-defined overhead sprites for NPCs, which may contain multiple icons. */
+    npcHeadIcons?: { archiveId: number; spriteId: number }[];
 }
 
 export interface OverlayUpdateArgs {

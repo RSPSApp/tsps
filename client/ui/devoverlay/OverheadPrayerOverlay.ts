@@ -59,6 +59,8 @@ export class OverheadPrayerOverlay implements Overlay {
         pk: new Set<number>(),
         prayer: new Set<number>(),
     };
+    private npcIconSprites = new Map<string, SpriteTexture>();
+    private failedNpcIconKeys = new Set<string>();
     private archiveIds = { pk: -1, prayer: -1 };
 
     private screenSize: Float32Array = new Float32Array(2);
@@ -104,6 +106,13 @@ export class OverheadPrayerOverlay implements Overlay {
             this.iconSprites[kind].clear();
             this.failedSpriteIndices[kind].clear();
         }
+        for (const sprite of this.npcIconSprites.values()) {
+            try {
+                sprite.tex.delete?.();
+            } catch {}
+        }
+        this.npcIconSprites.clear();
+        this.failedNpcIconKeys.clear();
     }
 
     dispose(): void {
@@ -192,6 +201,30 @@ export class OverheadPrayerOverlay implements Overlay {
         }
     }
 
+    private getNpcSprite(archiveId: number, spriteId: number): SpriteTexture | undefined {
+        const key = `${archiveId}:${spriteId}`;
+        const cached = this.npcIconSprites.get(key);
+        if (cached) return cached;
+        if (this.failedNpcIconKeys.has(key) || archiveId < 0 || spriteId < 0) return undefined;
+
+        if (!this.spriteIndex) this.initAssetsFromCache();
+        if (!this.spriteIndex) return undefined;
+
+        try {
+            const indexed = SpriteLoader.loadIntoIndexedSprites(this.spriteIndex, archiveId)?.[spriteId];
+            if (!indexed) {
+                this.failedNpcIconKeys.add(key);
+                return undefined;
+            }
+            const sprite = this.createTextureFromIndexedSprite(indexed);
+            this.npcIconSprites.set(key, sprite);
+            return sprite;
+        } catch {
+            this.failedNpcIconKeys.add(key);
+            return undefined;
+        }
+    }
+
     private createTextureFromIndexedSprite(spr: IndexedSprite): SpriteTexture {
         const width = Math.max(1, spr.subWidth | 0);
         const height = Math.max(1, spr.subHeight | 0);
@@ -259,6 +292,7 @@ export class OverheadPrayerOverlay implements Overlay {
             const sprites = [
                 this.getSprite("pk", entry.headIconPk | 0),
                 this.getSprite("prayer", entry.headIconPrayer | 0),
+                ...(entry.npcHeadIcons ?? []).map((icon) => this.getNpcSprite(icon.archiveId, icon.spriteId)),
             ].filter((sprite): sprite is SpriteTexture => sprite !== undefined);
             if (sprites.length === 0) continue;
 

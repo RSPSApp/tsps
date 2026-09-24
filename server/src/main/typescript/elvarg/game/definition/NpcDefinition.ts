@@ -145,6 +145,10 @@ export class NpcDefinition {
     public getRespawn(): number {
         return this.respawn;
     }
+
+    public setRespawn(respawn: number): void {
+        this.respawn = Math.max(0, Math.trunc(respawn));
+    }
     
     public getMaxHit(): number {
         return this.maxHit;

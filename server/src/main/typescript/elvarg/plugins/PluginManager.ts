@@ -32,6 +32,7 @@ import {
   PluginItemOnObjectEvent,
   PluginSpellOnObjectEvent,
   PluginNpcDeathEvent,
+  PluginNpcBeforeDeathEvent,
   PluginNpcAggressionToleranceEvent,
   PluginNpcInteractionEvent,
   PluginNpcInteractionDefinition,
@@ -157,6 +158,7 @@ export class PluginManager {
   private static nextObjectHookOrder = 0;
   private static npcInteractionHooks: PluginHook<PluginNpcInteractionEvent>[] = [];
   private static npcDeathHooks: PluginHook<PluginNpcDeathEvent>[] = [];
+  private static npcBeforeDeathHooks: PluginHook<PluginNpcBeforeDeathEvent>[] = [];
   private static canAttackHooks: PluginHook<PluginCanAttackEvent>[] = [];
   private static canTeleportHooks: PluginHook<PluginCanTeleportEvent>[] = [];
   private static canEatHooks: PluginHook<PluginCanEatEvent>[] = [];
@@ -718,6 +720,13 @@ export class PluginManager {
     for (const hook of PluginManager.npcDeathHooks) {
       PluginManager.executeHook(hook, event, "npc_death", "npc_death");
     }
+  }
+
+  public static emitNpcBeforeDeath(event: PluginNpcBeforeDeathEvent): boolean {
+    for (const hook of PluginManager.npcBeforeDeathHooks) {
+      PluginManager.executeHook(hook, event, "npc_before_death", "npc_before_death");
+    }
+    return event.preventDeath === true;
   }
 
   public static emitCanAttack(
@@ -2131,6 +2140,19 @@ export class PluginManager {
               return;
             }
             handler(event);
+          },
+        });
+      },
+      onNpcBeforeDeath: (handler) => {
+        if (typeof handler !== "function") {
+          return;
+        }
+        PluginManager.npcBeforeDeathHooks.push({
+          pluginName,
+          handler: (event) => {
+            if (event?.npc) {
+              handler(event);
+            }
           },
         });
       },

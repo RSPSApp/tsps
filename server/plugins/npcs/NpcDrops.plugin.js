@@ -350,7 +350,13 @@ module.exports = {
     pluginApi = api;
     itemOnGroundManager = api.getItemOnGroundManager();
 
-    const stats = loadDrops();
+    // Parsed on the first NPC death rather than at boot: an idle world (or one with no
+    // combat) never needs the ~10 MiB of drop tables.
+    let stats = null;
+    const ensureDrops = () => {
+      if (!stats) stats = loadDrops();
+      return stats;
+    };
 
     api.onNpcDeath(({ killer, npc, npcId }) => {
       if (!killer || !npc) {
@@ -361,6 +367,7 @@ module.exports = {
         return;
       }
       try {
+        ensureDrops();
         dropFor(killer, npc, id, npc.getLocation());
       } catch (error) {
         console.error("[NpcDrops] failed to roll drops for npc", id, error);
@@ -369,9 +376,9 @@ module.exports = {
 
     api.registerCommand("reloaddrops", ({ player }) => {
       try {
-        const reloaded = loadDrops();
+        stats = loadDrops();
         player.sendMessage(
-          `Reloaded drops: ${reloaded.npcs} npcs, ${reloaded.tables} tables.`
+          `Reloaded drops: ${stats.npcs} npcs, ${stats.tables} tables.`
         );
       } catch (error) {
         console.error("[NpcDrops] reload failed", error);
@@ -380,7 +387,7 @@ module.exports = {
       return true;
     }, PlayerRights.OWNER);
 
-    api.log("registered", stats);
+    api.log("registered", { lazy: true });
   },
 
   // Exposed for the smoke test.

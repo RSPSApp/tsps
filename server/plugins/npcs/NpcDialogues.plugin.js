@@ -206,23 +206,31 @@ module.exports = {
   flatten,
   register(api) {
     const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "npc-dialogues.json");
-    const data = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
-      throw new Error(`${file}: expected dialogues keyed by transcript name`);
-    }
-    for (const [name, npc] of Object.entries(data)) {
-      if (npc.steps !== undefined && !Array.isArray(npc.steps)) {
-        throw new Error(`${file}: ${name} has non-array steps`);
+    // Parsed on the first Talk-to rather than at boot: the 17 MiB transcript dump expands
+    // to ~35 MiB of objects, and a world where nobody talks never needs it.
+    let loaded;
+    const load = () => {
+      if (loaded) return loaded;
+      const data = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        throw new Error(`${file}: expected dialogues keyed by transcript name`);
       }
-      if (npc.default != null && !Object.hasOwn(npc.variants ?? {}, npc.default)) {
-        throw new Error(`${file}: ${name} names a missing default variant`);
+      for (const [name, npc] of Object.entries(data)) {
+        if (npc.steps !== undefined && !Array.isArray(npc.steps)) {
+          throw new Error(`${file}: ${name} has non-array steps`);
+        }
+        if (npc.default != null && !Object.hasOwn(npc.variants ?? {}, npc.default)) {
+          throw new Error(`${file}: ${name} names a missing default variant`);
+        }
       }
-    }
-    const aliases = aliasKeys(data);
+      loaded = { data, aliases: aliasKeys(data) };
+      return loaded;
+    };
     api.onAnyNpcInteraction({
       "Talk-to": (event) => {
         const name = event.definition.getName();
         if (SPECIAL_NPC_DIALOGUES.has(name)) return false;
+        const { data, aliases } = load();
         let npc = Object.hasOwn(data, name) ? data[name] : undefined;
         if (!pickVariant(npc) && aliases.has(name)) npc = data[aliases.get(name)];
         const variant = pickVariant(npc);

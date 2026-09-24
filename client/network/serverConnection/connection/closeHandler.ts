@@ -31,8 +31,11 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
             const isIntentionalClose =
                 evt.wasClean && (evt.reason === "logout" || evt.reason === "page unload");
             // 4001 = WebRTC connectivity failure. Retry once, forcing the TURN relay.
+            // Never do this for a suppressed/intentional close: logging out makes the
+            // server drop the data channel, and treating that as a connectivity failure
+            // pins the rest of the session to relay-only, so the next login flails.
             const connectivityFailure = evt.code === 4001;
-            if (connectivityFailure) preferWebRtcRelay();
+            if (connectivityFailure && !suppress && !isIntentionalClose) preferWebRtcRelay();
             const terminalConnectFailure = evt.code === 4000;
             // Only reconnect if we have stored session credentials (were previously logged in)
             const hasSession = state.sessionUsername !== null && state.sessionPassword !== null;

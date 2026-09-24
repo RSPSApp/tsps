@@ -172,3 +172,8 @@
     max-width: 48px !important;
     overflow: hidden;
 }
+
+/* Leva is a debug panel; hide it entirely while the map editor is open. */
+.map-editor-active .leva-left {
+    display: none !important;
+}

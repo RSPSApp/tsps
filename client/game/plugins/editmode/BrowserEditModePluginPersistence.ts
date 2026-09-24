@@ -11,9 +11,16 @@ export function createBrowserEditModePluginPersistence(
         load: (): Partial<EditModePluginConfig> | undefined => {
             try {
                 const raw = window.localStorage.getItem(storageKey);
-                return raw
-                    ? { ...(JSON.parse(raw) as Partial<EditModePluginConfig>), edits: [] }
-                    : undefined;
+                if (!raw) return undefined;
+                // Zone overlays always start hidden; their toggles live in Settings.
+                return {
+                    ...(JSON.parse(raw) as Partial<EditModePluginConfig>),
+                    edits: [],
+                    showPvpZones: false,
+                    showDuelZones: false,
+                    showSafeZones: false,
+                    showMultiCombatZones: false,
+                };
             } catch {
                 return undefined;
             }

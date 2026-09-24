@@ -28,7 +28,8 @@ export class EditorToolbar {
         Object.assign(this.element.style, {
             position: "fixed",
             left: "12px",
-            top: "12px",
+            // Clear the editor's top bar (48px) with an 8px gap.
+            top: "56px",
             zIndex: "10001",
             display: "flex",
             flexDirection: "column",

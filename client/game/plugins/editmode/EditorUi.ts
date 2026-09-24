@@ -11,6 +11,7 @@ import {
     createCameraIcon,
     createConfigIcon,
     EditorToolbar,
+    type EditorTool,
     createCloseIcon,
     createDuplicateIcon,
     createDownloadIcon,
@@ -67,6 +68,10 @@ const INPUT_STYLE: Partial<CSSStyleDeclaration> = {
     background: "#111318",
     font: "13px sans-serif",
 };
+
+const TOP_BAR_HEIGHT = 48;
+/** Gap below the top bar where floating panels and toasts start. */
+const TOP_BAR_CLEARANCE = `${TOP_BAR_HEIGHT + 8}px`;
 
 function npcClickKey(opcode: number): "first_click" | "second_click" | "third_click" | "fourth_click" | undefined {
     switch (opcode) {
@@ -161,7 +166,7 @@ class EditorChrome {
     private readonly toolbar: EditorToolbar;
     private readonly palette: EditorPalette;
     private readonly selectionDetails: HTMLDivElement;
-    private readonly bottomBar: HTMLDivElement;
+    private readonly topBar: HTMLDivElement;
     private readonly heightInput: HTMLInputElement;
     private readonly renderAllInput: HTMLInputElement;
     private readonly mapIconsInput: HTMLInputElement;
@@ -174,7 +179,7 @@ class EditorChrome {
     private readonly multiCombatZonesInput: HTMLInputElement;
     private readonly unsubscribe: () => void;
     private readonly canvasShell?: HTMLElement;
-    private readonly previousCanvasBottom: string;
+    private readonly previousCanvasTop: string;
     private detailPanel?: HTMLElement;
     private overlayPalette?: HTMLElement;
     private shopBrowser?: HTMLElement;
@@ -212,48 +217,61 @@ class EditorChrome {
             onInspect: (id) => this.showDefinition(this.currentSearchMode(), id),
         });
 
+        const tools: EditorTool[] = [
+            { id: "select", label: "Selection tool", icon: createPointerIcon },
+            {
+                id: "cache-search",
+                label: "Search NPCs / Objects / Items",
+                icon: createSearchIcon,
+                action: () => this.togglePalette(),
+            },
+            {
+                id: "overlay",
+                label: "Choose overlay",
+                icon: () => createOverlayIcon(this.overlayColor(plugin.getConfig().overlayId)),
+                action: () => this.toggleOverlayPalette(),
+            },
+            { id: "path", label: "Draw path", icon: createPathIcon },
+            {
+                id: "shops",
+                label: "Browse shops",
+                icon: createShopIcon,
+                action: () => this.toggleShopBrowser(),
+            },
+            {
+                id: "world-map",
+                label: "World map",
+                icon: createWorldMapIcon,
+                action: () => this.toggleWorldMap(),
+            },
+            {
+                id: "refresh-map",
+                label: "Refresh map",
+                icon: createRefreshIcon,
+                action: () => {
+                    this.plugin.refreshMap();
+                    this.toast("Refreshing map...");
+                },
+            },
+            {
+                id: "settings",
+                label: "Editor settings",
+                icon: createConfigIcon,
+                action: () => this.toggleSettings(),
+            },
+        ];
+        // Saving goes to the host via the top bar; standalone edits download as files here.
+        if (!browserHostWindow()) {
+            tools.push({
+                id: "export-region",
+                label: "Download world and map edits",
+                icon: createDownloadIcon,
+                dividerBefore: true,
+                action: () => this.exportRegions(),
+            });
+        }
         this.toolbar = new EditorToolbar(
-            [
-                { id: "select", label: "Selection tool", icon: createPointerIcon },
-                {
-                    id: "cache-search",
-                    label: "Search NPCs / Objects / Items",
-                    icon: createSearchIcon,
-                    action: () => this.togglePalette(),
-                },
-                {
-                    id: "overlay",
-                    label: "Choose overlay",
-                    icon: () => createOverlayIcon(this.overlayColor(plugin.getConfig().overlayId)),
-                    action: () => this.toggleOverlayPalette(),
-                },
-                { id: "path", label: "Draw path", icon: createPathIcon },
-                {
-                    id: "shops",
-                    label: "Browse shops",
-                    icon: createShopIcon,
-                    action: () => this.toggleShopBrowser(),
-                },
-                {
-                    id: "world-map",
-                    label: "World map",
-                    icon: createWorldMapIcon,
-                    action: () => this.toggleWorldMap(),
-                },
-                {
-                    id: "settings",
-                    label: "Editor settings",
-                    icon: createConfigIcon,
-                    action: () => this.toggleSettings(),
-                },
-                {
-                    id: "export-region",
-                    label: browserHostWindow() ? "Save changes to world" : "Download world and map edits",
-                    icon: () => browserHostWindow() ? createSaveIcon() : createDownloadIcon(),
-                    dividerBefore: true,
-                    action: () => this.exportRegions(),
-                },
-            ],
+            tools,
             "select",
             (toolId) =>
                 this.plugin.setConfig({
@@ -265,7 +283,7 @@ class EditorChrome {
         this.selectionDetails.dataset.mapEditor = "selection-details";
         Object.assign(this.selectionDetails.style, PANEL_STYLE, {
             right: "12px",
-            top: "12px",
+            top: TOP_BAR_CLEARANCE,
             left: "auto",
             width: "270px",
             display: "none",
@@ -275,26 +293,26 @@ class EditorChrome {
         stopClientInput(this.selectionDetails);
         document.body.appendChild(this.selectionDetails);
 
-        this.bottomBar = document.createElement("div");
-        this.bottomBar.dataset.mapEditor = "bottom-bar";
-        Object.assign(this.bottomBar.style, {
+        this.topBar = document.createElement("div");
+        this.topBar.dataset.mapEditor = "top-bar";
+        Object.assign(this.topBar.style, {
             position: "absolute",
             left: "0",
             right: "0",
-            bottom: "0",
-            height: "38px",
+            top: "0",
+            height: `${TOP_BAR_HEIGHT}px`,
             zIndex: "10001",
             boxSizing: "border-box",
             display: "flex",
             alignItems: "center",
-            gap: "7px",
-            padding: "5px 12px",
-            borderTop: "1px solid rgba(255,255,255,0.16)",
+            gap: "12px",
+            padding: "10px 12px 10px 20px",
+            borderBottom: "1px solid rgba(255,255,255,0.16)",
             color: "#eef4ff",
             background: "#121418",
             font: "13px sans-serif",
         });
-        stopClientInput(this.bottomBar);
+        stopClientInput(this.topBar);
 
         const heightLabel = document.createElement("span");
         heightLabel.textContent = "HL:";
@@ -365,89 +383,93 @@ class EditorChrome {
             text: string,
             color: string,
             change: (checked: boolean) => void,
-        ): { label: HTMLLabelElement; input: HTMLInputElement } => {
+        ): HTMLInputElement => {
             const label = document.createElement("label");
             Object.assign(label.style, {
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                marginLeft: "8px",
+                display: "grid",
+                gridTemplateColumns: "16px minmax(0, 1fr)",
+                alignItems: "start",
+                columnGap: "12px",
+                margin: "14px 0",
+                lineHeight: "20px",
                 color,
                 cursor: "pointer",
             });
-            label.append(`${text}:`);
             const input = document.createElement("input");
             input.type = "checkbox";
             input.setAttribute("aria-label", `Show ${text} zones`);
             input.addEventListener("change", () => change(input.checked));
-            label.appendChild(input);
-            return { label, input };
+            Object.assign(input.style, { width: "16px", height: "16px", margin: "2px 0 0" });
+            label.append(input, `${text} zones`);
+            this.settingsContent.appendChild(label);
+            return input;
         };
-        const pvpZones = zoneToggle("PvP", "#fca5a5", (checked) =>
+        this.pvpZonesInput = zoneToggle("PvP", "#fca5a5", (checked) =>
             this.plugin.setConfig({ showPvpZones: checked }),
         );
-        this.pvpZonesInput = pvpZones.input;
-        const multiCombatZones = zoneToggle("Multi", "#fcd34d", (checked) =>
+        this.multiCombatZonesInput = zoneToggle("Multi", "#fcd34d", (checked) =>
             this.plugin.setConfig({ showMultiCombatZones: checked }),
         );
-        this.multiCombatZonesInput = multiCombatZones.input;
-        const duelZones = zoneToggle("Duel", "#c4b5fd", (checked) => this.plugin.setConfig({ showDuelZones: checked }));
-        this.duelZonesInput = duelZones.input;
-        const safeZones = zoneToggle("Safe", "#86efac", (checked) => this.plugin.setConfig({ showSafeZones: checked }));
-        this.safeZonesInput = safeZones.input;
-        this.bottomBar.append(
+        this.duelZonesInput = zoneToggle("Duel", "#c4b5fd", (checked) =>
+            this.plugin.setConfig({ showDuelZones: checked }),
+        );
+        this.safeZonesInput = zoneToggle("Safe", "#86efac", (checked) =>
+            this.plugin.setConfig({ showSafeZones: checked }),
+        );
+        this.topBar.append(
             heightLabel,
             decrement,
             this.heightInput,
             increment,
         );
-        this.bottomBar.append(pvpZones.label, multiCombatZones.label, safeZones.label, duelZones.label);
-        const refreshMap = document.createElement("button");
-        refreshMap.type = "button";
-        refreshMap.replaceChildren(createRefreshIcon(), document.createTextNode("Refresh map"));
-        refreshMap.title = "Rebuild all loaded map squares";
-        Object.assign(refreshMap.style, {
-            height: "28px",
-            marginLeft: "auto",
-            padding: "0 10px",
-            border: "1px solid rgba(255,255,255,0.2)",
-            borderRadius: "4px",
-            color: "#fff",
-            background: "rgba(255,255,255,0.07)",
-            cursor: "pointer",
-            font: "13px sans-serif",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-        });
-        refreshMap.addEventListener("click", () => {
-            this.plugin.refreshMap();
-            this.toast("Refreshing map...");
-        });
-        this.bottomBar.appendChild(refreshMap);
+        if (browserHostWindow()) {
+            const save = document.createElement("button");
+            save.type = "button";
+            save.title = "Save world and map edits";
+            save.setAttribute("aria-label", save.title);
+            save.replaceChildren(createSaveIcon(), document.createTextNode("Save changes"));
+            Object.assign(save.style, {
+                height: "28px",
+                marginRight: "16px",
+                padding: "0 12px 0 16px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                border: "1px solid #8b7138",
+                borderRadius: "4px",
+                color: "#f3db9b",
+                background: "#3c321f",
+                cursor: "pointer",
+                font: "13px sans-serif",
+            });
+            save.addEventListener("click", () => this.exportRegions());
+            this.topBar.prepend(save);
+        }
 
         const viewport = document.querySelector<HTMLElement>(".game-viewport");
         this.canvasShell =
             viewport?.querySelector<HTMLElement>(".game-canvas-shell") ?? undefined;
-        this.previousCanvasBottom = this.canvasShell?.style.bottom ?? "";
+        this.previousCanvasTop = this.canvasShell?.style.top ?? "";
         if (viewport && this.canvasShell) {
-            this.canvasShell.style.bottom = this.bottomBar.style.height;
-            viewport.appendChild(this.bottomBar);
+            this.canvasShell.style.top = this.topBar.style.height;
+            viewport.appendChild(this.topBar);
             requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         }
 
+        document.body.classList.add("map-editor-active");
         this.sync();
         this.unsubscribe = plugin.subscribe(() => this.sync());
     }
 
     remove(): void {
+        document.body.classList.remove("map-editor-active");
         this.unsubscribe();
         this.toolbar.remove();
         this.palette.remove();
         this.selectionDetails.remove();
-        this.bottomBar.remove();
+        this.topBar.remove();
         this.closeSettings();
-        if (this.canvasShell) this.canvasShell.style.bottom = this.previousCanvasBottom;
+        if (this.canvasShell) this.canvasShell.style.top = this.previousCanvasTop;
         requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         this.detailPanel?.remove();
         this.overlayPalette?.remove();
@@ -521,7 +543,7 @@ class EditorChrome {
         this.overlaySwatches = this.plugin.getOverlaySwatches();
         const panel = createPanel("overlay-palette", "300px");
         Object.assign(panel.style, {
-            top: "12px",
+            top: TOP_BAR_CLEARANCE,
             maxHeight: "calc(100vh - 24px)",
             overflowY: "auto",
             zIndex: "10004",
@@ -857,7 +879,7 @@ class EditorChrome {
         this.detailPanel = panel;
         Object.assign(panel.style, {
             right: "12px",
-            top: "12px",
+            top: TOP_BAR_CLEARANCE,
             left: "auto",
             maxHeight: "calc(100vh - 24px)",
             overflowY: "auto",
@@ -1024,7 +1046,7 @@ class EditorChrome {
         this.shopPreviewScrollTop = 0;
         const panel = createPanel("shop-editor", "560px");
         Object.assign(panel.style, {
-            right: "12px", top: "12px", left: "auto", maxWidth: "calc(100vw - 32px)",
+            right: "12px", top: TOP_BAR_CLEARANCE, left: "auto", maxWidth: "calc(100vw - 32px)",
             maxHeight: "calc(100vh - 24px)", overflowY: "auto", zIndex: "10005",
         });
         this.shopEditor = panel;
@@ -1306,7 +1328,7 @@ class EditorChrome {
         element.textContent = message;
         Object.assign(element.style, PANEL_STYLE, {
             left: "60px",
-            top: "12px",
+            top: TOP_BAR_CLEARANCE,
             width: "auto",
             padding: "8px 12px",
         });

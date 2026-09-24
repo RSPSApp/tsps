@@ -168,14 +168,25 @@ export async function resolveIceServers(signalUrl: string, fallback: RTCIceServe
     return fallback;
 }
 
+// The live client is mounted at /play (package.json homepage). The dev server is
+// served from the root (PUBLIC_URL "/"), but host links still carry the /play mount.
+const WORLD_PATH_MOUNT = "/play";
+
+/** Strip the app mount from a pathname, then take the next segment as the world id. */
+export function parseWorldIdFromPath(pathname: string, publicUrl: string): string | undefined {
+    const base = publicUrl.replace(/\/+$/, "");
+    let path = pathname;
+    const mount = base || WORLD_PATH_MOUNT;
+    if (path === mount) path = "/";
+    else if (path.startsWith(`${mount}/`)) path = path.slice(mount.length);
+    const segment = path.replace(/^\/+/, "").split("/")[0];
+    return segment && /^[A-Za-z0-9._-]{1,64}$/.test(segment) ? segment : undefined;
+}
+
 /** World id from the URL path, e.g. /play/world-1 -> "world-1". */
 function worldIdFromPath(): string | undefined {
     if (typeof window === "undefined") return undefined;
-    const base = (process.env.PUBLIC_URL ?? "").replace(/\/+$/, "");
-    let path = window.location.pathname;
-    if (base && path.startsWith(base)) path = path.slice(base.length);
-    const segment = path.replace(/^\/+/, "").split("/")[0];
-    return segment && /^[A-Za-z0-9._-]{1,64}$/.test(segment) ? segment : undefined;
+    return parseWorldIdFromPath(window.location.pathname ?? "", process.env.PUBLIC_URL ?? "");
 }
 
 /**

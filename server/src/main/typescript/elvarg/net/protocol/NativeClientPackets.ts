@@ -127,7 +127,7 @@ export const CLIENT_PACKET_LENGTHS: Record<number, number> = {
     [ClientPacketId.OPPLAYER3]: 3,
     [ClientPacketId.OPPLAYER6]: 3,
     [ClientPacketId.OPNPC5]: 3,
-    [ClientPacketId.APPEARANCE_SET]: 13,
+    [ClientPacketId.APPEARANCE_SET]: 20,
     [ClientPacketId.OPLOC5]: 7,
     [ClientPacketId.IF_CLOSE]: 0,
     [ClientPacketId.OPOBJ4]: 7,

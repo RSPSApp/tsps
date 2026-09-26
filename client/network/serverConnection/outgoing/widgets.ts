@@ -203,15 +203,17 @@ export function sendPlayerDesignConfirm(appearance: {
     const { createPacket, queuePacket } = require("../../packet");
     const { ClientPacketId } = require("../../../common/network/ClientPacketId");
 
-    // Payload: gender (1), kits[7] (7, -1=0xff), colors[5] (5)
+    // Payload: gender (1), kits[7] (14, signed short, -1=0xffff), colors[5] (5)
     const pkt = createPacket(ClientPacketId.APPEARANCE_SET);
     const gender = (appearance.gender | 0) === 1 ? 1 : 0;
     pkt.packetBuffer.writeByte(gender);
 
+    // Identity kit ids in current caches exceed 255, and 255 is itself a valid kit, so kits
+    // must go out as shorts rather than bytes (a byte would alias 256-306 and steal the -1 sentinel).
     const kits = Array.isArray(appearance.kits) ? appearance.kits : [];
     for (let i = 0; i < 7; i++) {
         const v = Number.isFinite(kits[i]) ? kits[i] | 0 : -1;
-        pkt.packetBuffer.writeByte(v);
+        pkt.packetBuffer.writeShort(v);
     }
 
     const colors = Array.isArray(appearance.colors) ? appearance.colors : [];

@@ -1305,6 +1305,9 @@ export class OsrsClient {
         this.widgetManager.openSubInterface(payload.targetUid, payload.groupId, payload.type);
         this.cs2Vm.clearHandlerCaches();
         markWidgetsLoaded();
+        // PlayerDesign (679) starts each open from the live appearance, so an abandoned or
+        // unconfirmed editing session is not carried into the next open.
+        if ((payload.groupId | 0) === 679) this.playerDesign?.clear?.();
         if (Array.isArray(payload.postScripts) && this.cs2Vm) {
             for (const ps of payload.postScripts) {
                 const scriptId = ps?.scriptId | 0;

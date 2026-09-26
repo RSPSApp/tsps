@@ -344,7 +344,7 @@ const ESCAPE_TAB_SHORTCUT = 3;
 
 // All Settings keybindings map a varbit to the side-panel tab it opens. Values
 // are OSRS key codes: 0 = unbound, 1 = F1 ... 12 = F12. Names/tabs verified
-// against RuneLite VarbitID (STONE_*_KEY) and interface_layouts.json tabIds.
+// against RuneLite VarbitID (STONE_*_KEY) and interface-layouts.json tabIds.
 // The server (Settings.plugin.js) owns the current values and defaults.
 const KEYBINDING_TABS: ReadonlyArray<{ varbit: number; tab: number }> = [
     { varbit: 4675, tab: 0 }, // Combat

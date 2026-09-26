@@ -56,7 +56,7 @@ function iconItemId(icon) {
 }
 
 function customShops() {
-  const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "CustomShops.json");
+  const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "custom-shops.json");
   const raw = JSON.parse(fs.readFileSync(file, "utf8"));
   if (!Array.isArray(raw)) return [];
   return raw

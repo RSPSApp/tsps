@@ -29,7 +29,7 @@ export class InterfaceLayoutDefinitionLoader extends DefinitionLoader {
   }
 
   public file(): string {
-    return GameConstants.DEFINITIONS_DIRECTORY + "interface_layouts.json";
+    return GameConstants.DEFINITIONS_DIRECTORY + "interface-layouts.json";
   }
 
   private validate(

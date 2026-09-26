@@ -95,7 +95,7 @@ export class ShopDefinitionLoader extends DefinitionLoader {
     }
 
     private readCoreDefinitions(): RawShopDefinition[] {
-        const files = [this.file(), GameConstants.DEFINITIONS_DIRECTORY + "CustomShops.json"];
+        const files = [this.file(), GameConstants.DEFINITIONS_DIRECTORY + "custom-shops.json"];
         const definitions: RawShopDefinition[] = [];
         for (const file of files) {
             const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));

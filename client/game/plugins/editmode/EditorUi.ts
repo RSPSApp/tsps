@@ -1292,7 +1292,7 @@ class EditorChrome {
                 this.shopsDirty = false;
             }
             if (npcInteractionsDirty) {
-                FileSaver.saveAs(new Blob([JSON.stringify(this.npcInteractions, null, 2) + "\n"], { type: "application/json" }), "npc_interactions.json");
+                FileSaver.saveAs(new Blob([JSON.stringify(this.npcInteractions, null, 2) + "\n"], { type: "application/json" }), "npc-interactions.json");
                 this.npcInteractionsDirty = false;
             }
             for (const pack of exported) {

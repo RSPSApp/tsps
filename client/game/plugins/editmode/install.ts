@@ -424,11 +424,11 @@ export function parseBrowserHostShops(contents: string): EditModeShop[] {
 export function parseBrowserHostNpcInteractions(contents: string): EditModeNpcInteractions {
     const parsed: unknown = JSON.parse(contents);
     if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-        throw new Error("Browser host provided invalid npc_interactions.json");
+        throw new Error("Browser host provided invalid npc-interactions.json");
     }
     for (const [npcId, interactions] of Object.entries(parsed)) {
         if (!Number.isInteger(Number(npcId)) || Number(npcId) < 0 || !interactions || Array.isArray(interactions) || typeof interactions !== "object") {
-            throw new Error("Browser host provided invalid npc_interactions.json");
+            throw new Error("Browser host provided invalid npc-interactions.json");
         }
     }
     return parsed as EditModeNpcInteractions;

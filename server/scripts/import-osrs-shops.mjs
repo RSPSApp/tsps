@@ -7,7 +7,7 @@
  *   docs/shops-by-npc.json         - which NPC option opens each shop (optional)
  *
  * The script preserves the ids of shops already in shops.json (ids are
- * referenced by npc_interactions.json and plugin shop sources) and assigns new
+ * referenced by npc-interactions.json and plugin shop sources) and assigns new
  * ids above the current maximum. Entries not covered by the osrsreboxed dump
  * (the legacy core shops) are kept as they are.
  *

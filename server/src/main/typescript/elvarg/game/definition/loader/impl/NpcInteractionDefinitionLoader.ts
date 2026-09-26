@@ -97,14 +97,14 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
     }
 
     public file(): string {
-        return GameConstants.DEFINITIONS_DIRECTORY + "npc_interactions.json";
+        return GameConstants.DEFINITIONS_DIRECTORY + "npc-interactions.json";
     }
 
     private readCoreDefinitions(): RawNpcInteractionDefinition[] {
         const parsed: unknown = this.readCoreDocument();
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
             throw new Error(
-                "npc_interactions.json must contain an object keyed by NPC id"
+                "npc-interactions.json must contain an object keyed by NPC id"
             );
         }
         return Object.entries(parsed as Record<string, unknown>).map(
@@ -228,7 +228,7 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
         const parsed: unknown = JSON.parse(fs.readFileSync(this.file(), "utf8"));
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
             throw new Error(
-                "npc_interactions.json must contain an object keyed by NPC id"
+                "npc-interactions.json must contain an object keyed by NPC id"
             );
         }
         return parsed as Record<string, unknown>;

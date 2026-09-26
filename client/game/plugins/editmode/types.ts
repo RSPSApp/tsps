@@ -54,7 +54,7 @@ export interface EditModeNpcMenuOption {
     isAttack: boolean;
 }
 
-/** The on-disk npc_interactions.json object, keyed by NPC type id. */
+/** The on-disk npc-interactions.json object, keyed by NPC type id. */
 export type EditModeNpcInteractions = Record<string, Record<string, unknown>>;
 
 export type EditModeWorldZoneTag = string;

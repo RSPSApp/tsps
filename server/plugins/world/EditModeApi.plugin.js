@@ -20,7 +20,7 @@ module.exports = {
       if (segments.length === 0) return getWorldDefinition();
       if (segments.length !== 1) return undefined;
       const file = segments[0] === "shops" ? "shops.json"
-        : segments[0] === "npc-interactions" ? "npc_interactions.json" : undefined;
+        : segments[0] === "npc-interactions" ? "npc-interactions.json" : undefined;
       if (file) return JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "data/definitions", file), "utf8"));
     });
   },

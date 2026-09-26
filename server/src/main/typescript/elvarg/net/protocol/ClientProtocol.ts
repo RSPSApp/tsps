@@ -414,7 +414,7 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
     case NativeClientPacket.APPEARANCE_SET:
       return {
         type: "appearance", gender: reader.byte(),
-        kits: Array.from({ length: 7 }, () => reader.byte()),
+        kits: Array.from({ length: 7 }, () => reader.signedShort()),
         colors: Array.from({ length: 5 }, () => reader.byte()),
       };
     case NativeClientPacket.WORLD_MAP_CLICK: {

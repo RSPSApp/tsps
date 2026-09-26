@@ -62,7 +62,9 @@ export class PlayerModelLoader {
     ): Model | undefined {
         const missesBefore = this.modelLoader.missCount ?? 0;
         const modelDatas: ModelData[] = [];
-        const modelRenderLayers: number[] = [];
+        // null = keep the model's own per-face priorities (only the torso uses these; its
+        // overlay/pocket faces carry higher priorities than the shirt and must win on ties).
+        const modelRenderLayers: (number | null)[] = [];
         const colors = Array.isArray(appearance.colors) ? appearance.colors : [];
 
         // Body parts 0..6 per Idk: 0 head, 1 jaw, 2 torso, 3 arms, 4 hands, 5 legs, 6 feet
@@ -106,7 +108,7 @@ export class PlayerModelLoader {
                         }
                     }
                     modelDatas.push(md);
-                    modelRenderLayers.push(part === 2 ? 0 : 7);
+                    modelRenderLayers.push(part === 2 ? null : 7);
                 }
             } catch {}
         }
@@ -174,10 +176,44 @@ export class PlayerModelLoader {
         const merged = ModelData.merge(modelDatas, modelDatas.length);
         const model = merged.light(this.textureLoader, 64, 850, -30, -50, -30);
         model.faceRenderLayers = new Uint8Array(merged.faceCount);
+        // Default every face to the priority it came out of the cache with, then override the
+        // parts/equipment that use an explicit render layer. The torso keeps its cache
+        // priorities so its shaped faces (pockets, hem) stack correctly instead of z-fighting.
+        if (model.faceRenderPriorities) model.faceRenderLayers.set(model.faceRenderPriorities);
+        // The torso's cache priorities (e.g. 2 = hem, 3 = shirt, 4 = front overlay) sit only one
+        // layer apart, but the overlay can be a model-unit behind the shirt surface. One layer of
+        // depth bias (~0.015) then barely clears it, so the overlay z-fights and flickers as the
+        // camera/animation shifts. Spread the torso's distinct priorities across 0..3 so each step
+        // gets a real depth margin while staying under the amulet's layer (4).
+        const torsoFaceRanges: number[][] = [];
+        {
+            let off = 0;
+            for (let i = 0; i < modelDatas.length; i++) {
+                const end = off + modelDatas[i].faceCount;
+                if (modelRenderLayers[i] === null) torsoFaceRanges.push([off, end]);
+                off = end;
+            }
+        }
+        if (torsoFaceRanges.length > 0) {
+            const distinct = new Set<number>();
+            for (const [start, end] of torsoFaceRanges) {
+                for (let f = start; f < end; f++) distinct.add(model.faceRenderLayers[f]);
+            }
+            const sorted = [...distinct].sort((a, b) => a - b);
+            const last = sorted.length - 1;
+            const remapped = new Map<number, number>();
+            sorted.forEach((p, i) => remapped.set(p, i === last ? 3 : Math.min(i, 2)));
+            for (const [start, end] of torsoFaceRanges) {
+                for (let f = start; f < end; f++) {
+                    model.faceRenderLayers[f] = remapped.get(model.faceRenderLayers[f]) ?? 0;
+                }
+            }
+        }
         let faceOffset = 0;
         for (let i = 0; i < modelDatas.length; i++) {
             const faceEnd = faceOffset + modelDatas[i].faceCount;
-            model.faceRenderLayers.fill(modelRenderLayers[i], faceOffset, faceEnd);
+            const layer = modelRenderLayers[i];
+            if (layer !== null) model.faceRenderLayers.fill(layer, faceOffset, faceEnd);
             faceOffset = faceEnd;
         }
         // do not baseline-align the merged player model (PlayerComposition.getModel

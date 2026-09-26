@@ -218,10 +218,15 @@ export function registerChatOps(handlers: HandlerMap): void {
     // In OSRS, this handles :: commands - the CS2 script strips the :: prefix
     handlers.set(Opcodes.DOCHEAT, (ctx) => {
         const command = ctx.stringStack[--ctx.stringStackSize];
-        // Send command to server with :: prefix restored for server-side handling
-        if (command && command.trim()) {
-            sendChat("::" + command.trim(), "public", 0);
+        const trimmed = typeof command === "string" ? command.trim() : "";
+        if (!trimmed) return;
+        // Client plugins may claim a command (e.g. ::317) and consume it locally.
+        const osrsClient = (globalThis as any)?.osrsClient;
+        if (osrsClient?.clientPlugins?.handleClientCommand?.(trimmed)) {
+            return;
         }
+        // Send command to server with :: prefix restored for server-side handling
+        sendChat("::" + trimmed, "public", 0);
     });
 
     // CHAT_SETMESSAGEFILTER (5021): Sets the message filter string

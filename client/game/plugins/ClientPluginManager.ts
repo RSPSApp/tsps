@@ -3,6 +3,51 @@ import type { InputManager } from "../InputManager";
 import type { DrawCall, Program } from "picogl";
 import type { ProgramSource } from "../../render/shaders/ShaderUtil";
 import type { WebGLOsrsRenderer } from "../../render/WebGLOsrsRenderer";
+import type { GLRenderer } from "../../widgets/gl/renderer";
+import type { ClickRegistry } from "../../widgets/gl/click-registry";
+
+/**
+ * Draw/input context handed to a plugin that supplies a custom gameframe (the
+ * sidebar and chatbox). Coordinates are the overlay canvas in device pixels, the
+ * same space the widget overlay draws into.
+ */
+export type GameFrameDrawContext = {
+    renderer: GLRenderer;
+    /** Multiplier from widget layout units to canvas pixels. */
+    renderScaleX: number;
+    renderScaleY: number;
+    renderOffsetX: number;
+    renderOffsetY: number;
+    switchTab(tab: number): void;
+    /** Resolved rects (logical units) of the content the frame decorates. */
+    anchors: {
+        chat?: { x: number; y: number; width: number; height: number };
+        tabContent?: { x: number; y: number; width: number; height: number };
+    };
+    /** Rebuilt each UI frame; register tab hit regions here. */
+    clicks?: ClickRegistry;
+};
+
+export interface GameFrameProvider {
+    isGameFrameActive(): boolean;
+    /** Hide stock widgets by uid/group/type/contentType (e.g. the OSRS compass). */
+    widgetRules?(): {
+        uid?: number;
+        group?: number;
+        type?: number;
+        contentType?: number;
+        hide?: boolean;
+    }[];
+    /** Root-interface uids whose own chrome must NOT be hidden by hideStockChrome. */
+    keepChrome?(): number[];
+    /**
+     * Return true while active to hide the stock root interface's own decorative
+     * widgets (backgrounds/borders), keeping its mounted content (tab interfaces,
+     * minimap, chat). Lets a custom frame replace the chrome without doubling up.
+     */
+    hideStockChrome?(): boolean;
+    drawGameFrame(context: GameFrameDrawContext): void;
+}
 
 export type CameraInputContext = {
     camera: Camera;
@@ -29,6 +74,10 @@ export interface ClientPlugin {
     updateInteractionPointer?(camera: Camera): void;
     handleCameraFollow?(context: CameraFollowContext): boolean;
     shouldKeepWorldMenuOpen?(): boolean;
+    /** Supplies an alternate gameframe (e.g. the classic 317 frame). */
+    gameFrame?: GameFrameProvider;
+    /** Handle a client-side `::command`; return true to consume it (no server round trip). */
+    handleClientCommand?(command: string): boolean;
 }
 
 export class ClientPluginManager {
@@ -81,6 +130,19 @@ export class ClientPluginManager {
 
     shouldKeepWorldMenuOpen(): boolean {
         return this.plugins.some((plugin) => plugin.shouldKeepWorldMenuOpen?.() === true);
+    }
+
+    /** The active custom gameframe, if any plugin supplies one. */
+    activeGameFrame(): GameFrameProvider | undefined {
+        for (const plugin of this.plugins) {
+            const frame = plugin.gameFrame;
+            if (frame?.isGameFrameActive()) return frame;
+        }
+        return undefined;
+    }
+
+    handleClientCommand(command: string): boolean {
+        return this.plugins.some((plugin) => plugin.handleClientCommand?.(command) === true);
     }
 
 }

@@ -264,6 +264,7 @@ import { PlayerMovementSync } from "./movement/PlayerMovementSync";
 import { NpcInstanceFlushController } from "./npc/NpcInstanceFlushController";
 import { ClientPluginManager } from "./plugins/ClientPluginManager";
 import { FirstPersonPlugin } from "./plugins/firstperson/FirstPersonPlugin";
+import { GameFrame317Plugin } from "./plugins/gameframe317/GameFrame317Plugin";
 import { HdPlugin } from "./plugins/hd/HdPlugin";
 import { createBrowserGroundItemsPluginPersistence } from "./plugins/grounditems/BrowserGroundItemsPluginPersistence";
 import { GroundItemsPlugin } from "./plugins/grounditems/GroundItemsPlugin";
@@ -569,6 +570,7 @@ export class OsrsClient {
     readonly splitPrivateChatPlugin: SplitPrivateChatPlugin;
     readonly clientPlugins: ClientPluginManager = new ClientPluginManager();
     readonly firstPersonPlugin: FirstPersonPlugin;
+    readonly gameFrame317Plugin: GameFrame317Plugin;
     readonly hdPlugin = new HdPlugin();
     readonly tileHighlightManager: TileHighlightManager = new TileHighlightManager();
     private sidebarPluginVisibility: Required<SidebarPluginVisibilityOptions> = {
@@ -1166,6 +1168,8 @@ export class OsrsClient {
         this.firstPersonPlugin = new FirstPersonPlugin(this);
         this.clientPlugins.add(this.firstPersonPlugin);
         this.clientPlugins.add(this.hdPlugin);
+        this.gameFrame317Plugin = new GameFrame317Plugin(this);
+        this.clientPlugins.add(this.gameFrame317Plugin);
         this.syncSidebarPlugins(true);
         if (new URLSearchParams(window.location.search).has("edit")) {
             this.loadEditModePlugin();
@@ -3965,6 +3969,23 @@ export class OsrsClient {
 
     triggerInitialVarTransmitForGroup(groupId: number): void {
         this.widgetTransmitProcessor.triggerInitialVarTransmitForGroup(groupId);
+    }
+
+    /**
+     * Drain queued widget transm/timer/script events immediately. A client-side
+     * tab switch queues its layout work for the next 20ms tick, so without this
+     * the newly shown interface renders at (0,0) for a frame before it's placed.
+     */
+    flushWidgetEvents(): void {
+        try {
+            this.processWidgetTransmits();
+        } catch {}
+        try {
+            this.processWidgetTimers();
+        } catch {}
+        try {
+            this.processScriptEvents();
+        } catch {}
     }
 
     triggerInvTransmitForGroup(groupId: number): void {

@@ -1288,6 +1288,17 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         const y1 = Math.round((logicalY + logicalHeight) * rootScaleY + rootOffsetY);
         const width = Math.max(1, x1 - x);
         const height = Math.max(1, y1 - y);
+        // A custom gameframe can hide the stock gameframe's own chrome (its
+        // background/border sprite and rect widgets, which live in the root
+        // interface) while leaving all interface widgets, including mounted tab
+        // interfaces and their backgrounds, to render.
+        const isRootGroupWidget =
+            typeof opts.rootGroupId === "number" && ((w.uid >>> 16) === (opts.rootGroupId | 0));
+        const skipOwnVisuals =
+            opts.hideStockChrome === true &&
+            (w.type === 3 || w.type === 5) &&
+            isRootGroupWidget &&
+            !(opts.keepChromeUids?.includes(w.uid) ?? false);
         const isContainer = w.type === 0 || w.type === 11;
         const staticChildren = isContainer
             ? (widgetManager?.getStaticChildrenByParentUid(w.uid) ?? EMPTY_WIDGETS)
@@ -1602,8 +1613,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     }
 
                     const clickRegisterStartMs = profileWidgetRender ? performance.now() : 0;
-                    clicks.register(target);
-                    clickRegisteredWidgets++;
+                    if (!skipOwnVisuals) {
+                        clicks.register(target);
+                        clickRegisteredWidgets++;
+                    }
 
                     // Debug: draw purple outline for clickable areas
                     if (DEBUG_CLICK_AREAS) {
@@ -1663,8 +1676,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     }
 
                     const clickRegisterStartMs = profileWidgetRender ? performance.now() : 0;
-                    clicks.register(target);
-                    clickRegisteredWidgets++;
+                    if (!skipOwnVisuals) {
+                        clicks.register(target);
+                        clickRegisteredWidgets++;
+                    }
                     cancelSelectionWidgets++;
                     if (profileWidgetRender) {
                         clickRegisterMs += performance.now() - clickRegisterStartMs;
@@ -1735,6 +1750,15 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         // Compass is rendered before type-based logic
         //  draws WallDecoration.compass with camera yaw rotation and circular mask
         const contentType = (w as any).contentType ?? 0;
+        // A custom gameframe can hide stock widgets outright (compass, XP drops...).
+        const hiddenRule = opts.widgetRules?.find(
+            (r) => r.hide === true &&
+                (r.uid === undefined || r.uid === w.uid) &&
+                (r.group === undefined || r.group === (w.uid >>> 16)) &&
+                (r.type === undefined || r.type === w.type) &&
+                (r.contentType === undefined || r.contentType === contentType),
+        );
+        if (hiddenRule) return;
         if (contentType === 1339) {
             const compassStartMs = profileWidgetRender ? performance.now() : 0;
             const compassSpriteId = opts.widgetManager?.compassSpriteId ?? -1;
@@ -2807,7 +2831,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         }
         if (w.arcStart !== undefined || w.arcEnd !== undefined) {
             renderArcWidget(glr, w, x, y, width, height, rootScaleX, rootScaleY);
-        } else if (w.type === 3) {
+        } else if (w.type === 3 && !skipOwnVisuals) {
             const rectStartMs = profileWidgetRender ? performance.now() : 0;
             // Type 3 rectangle rendering
             // Rectangle widget rendering
@@ -2925,7 +2949,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             if (profileWidgetRender) {
                 rectMs += performance.now() - rectStartMs;
             }
-        } else if (w.type === 5 && contentType !== 1339 && contentType !== 1338) {
+        } else if (w.type === 5 && contentType !== 1339 && contentType !== 1338 && !skipOwnVisuals) {
             const spriteStartMs = profileWidgetRender ? performance.now() : 0;
             const spriteTextureDrawCallsStart = profileWidgetRender
                 ? glr.getPerfCounters().textureDrawCalls

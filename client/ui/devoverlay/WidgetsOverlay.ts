@@ -18,6 +18,7 @@ import {
 } from "../../widgets/gl/widgets-gl";
 import { drawTextGL } from "../../widgets/components/TextRenderer";
 import type { WidgetManager } from "../../widgets/WidgetManager";
+import type { GameFrameDrawContext } from "../../game/plugins/ClientPluginManager";
 import { Overlay, OverlayInitArgs, OverlayUpdateArgs, RenderPhase } from "./Overlay";
 
 export interface WidgetsContext {
@@ -283,6 +284,9 @@ export class WidgetsOverlay implements Overlay {
         baseRenderOpts.hostCanvas = hostCanvas || undefined;
         baseRenderOpts.widgetManager = this.ctx.getWidgetManager?.();
         baseRenderOpts.game = this.ctx.getGameContext?.();
+        const activeGameFrame = this.ctx.getGameContext?.()?.osrsClient?.clientPlugins?.activeGameFrame?.();
+        baseRenderOpts.hideStockChrome = activeGameFrame?.hideStockChrome?.() === true;
+        baseRenderOpts.rootGroupId = this.ctx.getWidgetManager?.()?.rootInterface;
 
         // PERF: Reuse cached array instead of allocating new one each frame
         this.widgetEntries.length = 0;
@@ -304,8 +308,11 @@ export class WidgetsOverlay implements Overlay {
         // Widgets position themselves via their xPositionMode/yPositionMode alignment.
         // No external centering needed - just render at computed positions.
         // Keep legacy GL hover/tooltip text disabled; CS2-generated tooltip widgets are canonical.
+        const gameFrame = this.ctx.getGameContext?.()?.osrsClient?.clientPlugins?.activeGameFrame?.();
         const renderOpts: GLRenderOpts = {
             ...baseRenderOpts,
+            widgetRules: gameFrame?.widgetRules?.(),
+            keepChromeUids: gameFrame?.keepChrome?.(),
             rootOffsetX:
                 typeof (root as any).__widgetRenderOffsetX === "number"
                     ? Math.round(Number((root as any).__widgetRenderOffsetX) * this.overlayScaleX)
@@ -669,6 +676,9 @@ export class WidgetsOverlay implements Overlay {
             return;
         }
 
+        // A plugin may supply an alternate gameframe (e.g. the classic 317 frame).
+        const gameFrame = this.ctx.getGameContext?.()?.osrsClient?.clientPlugins?.activeGameFrame?.();
+
         if (this.widgetEntries.length === 0) {
             const widgetManager = this.ctx.getWidgetManager?.();
             if (!this.hasPresentedFrame || (widgetManager?.rootInterface ?? -1) === -1) {
@@ -731,7 +741,7 @@ export class WidgetsOverlay implements Overlay {
             // open, partial dirty-rect redraws can visibly blink as hover/click state changes
             // every frame. Redraw the full overlay for the duration of the menu instead.
             const forceFullRedraw =
-                !this.hasPresentedFrame || this.rootSetChanged || menuOpen || tradeOverlayDirty;
+                !this.hasPresentedFrame || this.rootSetChanged || menuOpen || tradeOverlayDirty || !!gameFrame;
             const preciseDirtyCount = preciseDirtyWidgets.length | 0;
             const shouldRedraw =
                 anyDirty ||
@@ -797,6 +807,12 @@ export class WidgetsOverlay implements Overlay {
                     // Full pass: reset transient input targets, rebuild root order, redraw all roots.
                     beginWidgetUiFrame(this.glRenderer);
                     this.glRenderer.clear(0, 0, 0, 0);
+                    // A custom gameframe draws first (backdrop) so the OSRS content
+                    // (tab interfaces, minimap, chat) composites on top of it.
+                    if (gameFrame) {
+                        gameFrame.drawGameFrame(this.buildGameFrameContext(this.glRenderer));
+                        this.glRenderer.flush();
+                    }
                     try {
                         const roots = (sharedUi as any).__widgetRoots;
                         if (roots) {
@@ -873,6 +889,72 @@ export class WidgetsOverlay implements Overlay {
         } catch (e) {
             console.error("Error rendering widgets:", e);
         }
+    }
+
+    private buildGameFrameContext(glr: GLRenderer): GameFrameDrawContext {
+        const client = this.ctx.getGameContext?.()?.osrsClient;
+        const widgetManager = this.ctx.getWidgetManager?.();
+        // Use the exact letterbox transform the widget roots got, not a fresh
+        // canvas-fill scale - otherwise the frame drifts from the widgets on resize.
+        const root: any = this.widgetEntries[0]?.root;
+        const renderScaleX = typeof root?.__widgetRenderScaleX === "number" ? root.__widgetRenderScaleX : 1;
+        const renderScaleY = typeof root?.__widgetRenderScaleY === "number" ? root.__widgetRenderScaleY : 1;
+        const renderOffsetX = typeof root?.__widgetRenderOffsetX === "number" ? root.__widgetRenderOffsetX : 0;
+        const renderOffsetY = typeof root?.__widgetRenderOffsetY === "number" ? root.__widgetRenderOffsetY : 0;
+        const rectOf = (w: any) => w ? {
+            x: w._absLogicalX ?? w.x ?? 0,
+            y: w._absLogicalY ?? w.y ?? 0,
+            width: w.width ?? 0,
+            height: w.height ?? 0,
+        } : undefined;
+        const containerOf = (group: number) => {
+            const parents: any = widgetManager?.interfaceParents;
+            if (!parents || typeof parents[Symbol.iterator] !== "function") return undefined;
+            for (const [uid, parent] of parents) {
+                if (parent?.group === group) return rectOf((widgetManager as any)?.getWidgetByUid?.(uid));
+            }
+            return undefined;
+        };
+        const activeTab = client?.varManager?.getVarcInt?.(171) ?? 0;
+        // Root 161 mounts its 14 tab interfaces into child slots 76..89 (index = tab).
+        const tabSlot = 76 + Math.max(0, Math.min(13, activeTab));
+        // Live absolute rect (sum of ancestors' x/y). _absLogicalX is only filled in
+        // during the render pass, so it's stale for a tab container that was just
+        // switched to and hasn't been rendered at its new spot yet.
+        const absRectOf = (w: any) => {
+            if (!w) return undefined;
+            let ax = 0;
+            let ay = 0;
+            let cur = w;
+            for (let guard = 0; cur && guard < 32; guard++) {
+                ax += Number(cur.x) || 0;
+                ay += Number(cur.y) || 0;
+                const parentUid = cur.parentUid;
+                if (parentUid === undefined || parentUid === 0xffff || parentUid === w.uid) break;
+                cur = (widgetManager as any)?.getWidgetByUid?.(parentUid);
+            }
+            return { x: ax, y: ay, width: w.width ?? 0, height: w.height ?? 0 };
+        };
+        return {
+            renderer: glr,
+            renderScaleX,
+            renderScaleY,
+            renderOffsetX,
+            renderOffsetY,
+            switchTab: (tab: number) => {
+                try {
+                    client?.switchToTab?.(tab);
+                    // Apply the queued tab layout now, so the next draw has the new
+                    // tab content at its sidebar position instead of (0,0).
+                    client?.flushWidgetEvents?.();
+                } catch {}
+            },
+            clicks: (glr.canvas as any)?.__clicks,
+            anchors: {
+                chat: containerOf(162),
+                tabContent: absRectOf((widgetManager as any)?.getWidgetByUid?.((161 << 16) | tabSlot)),
+            },
+        };
     }
 
     private getTradeAmountOverlaySignature(widgetManager?: WidgetManager): string {

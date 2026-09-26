@@ -35,6 +35,14 @@ export type GLRenderOpts = {
     rootClip?: ClipRect;
     // Optional game context (game client, player ECS, etc.)
     game?: any;
+    // When set, hide the root interface's own sprite/rect widgets (chrome) while
+    // still rendering its mounted content. rootGroupId is the root interface id.
+    hideStockChrome?: boolean;
+    rootGroupId?: number;
+    // A custom gameframe can hide stock widgets by group or content type.
+    widgetRules?: WidgetRule[];
+    // Root-interface uids whose own chrome should NOT be hidden by hideStockChrome.
+    keepChromeUids?: number[];
     // Access to cache for plugin-driven child loading
     getCacheSystem?: () => CacheSystem;
     widgetManager?: WidgetManager;
@@ -78,4 +86,18 @@ export type GLRenderOpts = {
     openGroup?: (groupId: number | string) => void;
     // Skip legacy GL hover/tooltip text. CS2 tooltip widgets remain rendered normally.
     skipTooltip?: boolean;
+};
+
+/** A custom gameframe's rule to hide stock widgets. All specified fields must
+ * match (uid, group, type, contentType). */
+export type WidgetRule = {
+    /** Match an exact widget uid ((group << 16) | child). */
+    uid?: number;
+    /** Match the widget's interface group (uid >>> 16). */
+    group?: number;
+    /** Match the widget type (0 container, 3 rect, 4 text, 5 sprite...). */
+    type?: number;
+    /** Match the widget's contentType (e.g. 1339 = compass). */
+    contentType?: number;
+    hide?: boolean;
 };

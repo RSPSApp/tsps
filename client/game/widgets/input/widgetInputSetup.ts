@@ -50,7 +50,7 @@ export function buildWidgetInputFrame(
 
     // Helper to collect widgets from all roots
     const collectFromAllRoots = (px: number, py: number): any[] => {
-        return collectWidgetsAtPointAcrossRoots(
+        const hits = collectWidgetsAtPointAcrossRoots(
             allRoots,
             px,
             py,
@@ -59,6 +59,15 @@ export function buildWidgetInputFrame(
             getInterfaceParentRoots,
             isInputCaptureWidget,
         );
+        // A custom gameframe may hide the stock chrome: drop it from input picking
+        // so hidden OSRS tabs can't be clicked (the frame registers its own).
+        const gameFrame = (globalThis as any)?.osrsClient?.clientPlugins?.activeGameFrame?.();
+        if (!gameFrame?.hideStockChrome?.()) return hits;
+        const rootId = widgetManager.rootInterface;
+        const keep = new Set<number>(gameFrame.keepChrome?.() ?? []);
+        return hits.filter((w: any) => !(
+            (w.uid >>> 16) === rootId && (w.type === 3 || w.type === 5) && !keep.has(w.uid)
+        ));
     };
 
     // MouseOver/MouseLeave handling

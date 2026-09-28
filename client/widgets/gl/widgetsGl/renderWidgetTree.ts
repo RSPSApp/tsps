@@ -2371,7 +2371,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     typeof w.spriteId2 === "number" && (w.spriteId2 | 0) >= 0
                         ? w.spriteId2 | 0
                         : renderMaskSpriteId;
-                const minimapMask: SpriteMaskData | undefined =
+                const frameMask = osrsClient.clientPlugins?.activeGameFrame()?.minimapMask?.(
+                    glr, logicalX, logicalY, logicalWidth, logicalHeight);
+                const minimapMask: SpriteMaskData | undefined = frameMask ?? (
                     renderMaskSpriteId >= 0
                         ? tc.getWidgetSpriteMaskById(renderMaskSpriteId, {
                               borderType: ((w as any).borderType ?? 0) | 0,
@@ -2380,8 +2382,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                               flipH: !!(w.horizontalFlip || (w as any).flippedH),
                               flipV: !!(w.verticalFlip || (w as any).flippedV),
                           })
-                        : undefined;
-                const clickMask: SpriteMaskData | undefined =
+                        : undefined);
+                const clickMask: SpriteMaskData | undefined = frameMask ?? (
                     clickMaskSpriteId === renderMaskSpriteId
                         ? minimapMask
                         : clickMaskSpriteId >= 0
@@ -2392,7 +2394,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                                 flipH: !!(w.horizontalFlip || (w as any).flippedH),
                                 flipV: !!(w.verticalFlip || (w as any).flippedV),
                             })
-                          : undefined;
+                          : undefined);
 
                 if (playerState && minimapMask && clickMask) {
                     // Get interpolated player position from ECS

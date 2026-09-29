@@ -1,0 +1,5586 @@
+{
+  "updated": "2026-09-29",
+  "note": "Progress is calculated from implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Expand a task for steps and acceptance criteria.",
+  "categories": [
+    {
+      "name": "Core engine",
+      "summary": "Shared systems that all game content runs on.",
+      "items": [
+        {
+          "name": "Movement & pathfinding",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "in-progress"
+          ]
+        },
+        {
+          "name": "World tick & lifecycle",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Player and NPC synchronisation",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Accounts & sessions",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Save persistence",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Plugin runtime",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "in-progress"
+          ]
+        },
+        {
+          "name": "Networking & packets",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Define the runtime contract",
+          "steps": [
+            "Trace every caller and lifecycle hook related to {feature}; record the authoritative entry and exit points in code comments only where non-obvious.",
+            "Define valid inputs, owned state, observable outputs and cleanup responsibilities for {feature}.",
+            "Reuse the existing engine service or manager pattern nearest to {feature}; do not add a parallel abstraction."
+          ],
+          "acceptanceCriteria": [
+            "All existing callers route through one authoritative implementation.",
+            "Invalid state is rejected without corrupting world or player state."
+          ]
+        },
+        {
+          "name": "Implement lifecycle integration",
+          "steps": [
+            "Connect {feature} to startup, tick, login/logout or shutdown hooks only where its state actually changes.",
+            "Make repeated initialization and cleanup idempotent.",
+            "Ensure exceptions cannot leave registrations, timers or world entities orphaned."
+          ],
+          "acceptanceCriteria": [
+            "Starting and stopping the server twice produces the same registered state.",
+            "Interrupted operations clean up owned resources."
+          ]
+        },
+        {
+          "name": "Persist and restore state",
+          "steps": [
+            "Identify which {feature} state must survive logout or restart and add it to the existing persistence format.",
+            "Validate and default missing or stale saved values during hydration.",
+            "Restore state before dependent packets or plugins consume it."
+          ],
+          "acceptanceCriteria": [
+            "Old saves without the new fields still load.",
+            "A save/load round trip preserves all player-visible {feature} state."
+          ]
+        },
+        {
+          "name": "Handle concurrency and edge cases",
+          "steps": [
+            "List the tick-order, disconnect, duplicate-request and capacity edge cases for {feature}.",
+            "Add guards at the shared mutation boundary rather than at individual callers.",
+            "Make failures observable with an actionable error or player message."
+          ],
+          "acceptanceCriteria": [
+            "Duplicate or reordered requests cannot duplicate state or items.",
+            "Disconnecting mid-operation leaves the world consistent."
+          ]
+        },
+        {
+          "name": "Add automated engine coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Skills",
+      "summary": "Individual skill loops, actions, rewards and progression.",
+      "items": [
+        {
+          "name": "Attack",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Strength",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Defence",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Hitpoints",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Ranged",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Prayer",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Magic",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Cooking",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Woodcutting",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fletching",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fishing",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Firemaking",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Crafting",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Smithing",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mining",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Herblore",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Agility",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Thieving",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Slayer",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Farming",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Runecraft",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Hunter",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Construction",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Sailing",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement training actions",
+          "steps": [
+            "Find the canonical OSRS actions, objects, NPCs and items for {feature}, then map them to existing plugin interaction hooks.",
+            "Implement start, repeat, interrupt and stop behaviour using the server tick/task system.",
+            "Gate every action by location, tool, resource and animation requirements."
+          ],
+          "acceptanceCriteria": [
+            "Every supported action can start and stop without a stuck task.",
+            "Unsupported interactions fall through without consuming inputs."
+          ]
+        },
+        {
+          "name": "Implement levels, XP and success formulas",
+          "steps": [
+            "Add the OSRS level requirements and XP values for each supported {feature} action as data near the plugin.",
+            "Implement success, depletion and timing formulas using existing stat and random helpers.",
+            "Apply boosts and level changes at the same point the action is resolved."
+          ],
+          "acceptanceCriteria": [
+            "Below-level actions are rejected with the correct message.",
+            "Known level/action fixtures produce the expected XP and timing."
+          ]
+        },
+        {
+          "name": "Implement inputs, outputs and rewards",
+          "steps": [
+            "Enumerate the supported {feature} inputs, tools, outputs, by-products and rare rewards.",
+            "Check inventory capacity before mutation and perform input/output changes atomically.",
+            "Connect collection, pet, clue or achievement hooks where the repository already exposes them."
+          ],
+          "acceptanceCriteria": [
+            "No input is lost when output cannot be added.",
+            "Quantities and reward rolls match the tracked OSRS data."
+          ]
+        },
+        {
+          "name": "Connect client feedback",
+          "steps": [
+            "Send the correct animation, graphic, sound, chat message and interface update for each {feature} action.",
+            "Refresh inventory, equipment, skills and world objects only when their state changed.",
+            "Verify cancel and failure paths clear transient client state."
+          ],
+          "acceptanceCriteria": [
+            "The client displays XP and resource changes on the resolving tick.",
+            "Interrupted actions stop animations and do not continue invisibly."
+          ]
+        },
+        {
+          "name": "Add automated skill coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Quests",
+      "summary": "Every current OSRS quest is tracked individually.",
+      "items": [
+        {
+          "name": "Below Ice Mountain",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Biohazard",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Children of the Sun",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Client of Kourend",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Clock Tower",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Cook's Assistant",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Current Affairs",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Death Plateau",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Demon Slayer",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Doric's Quest",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Druidic Ritual",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Dwarf Cannon",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Eagles' Peak",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Elemental Workshop I",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Ernest the Chicken",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Ethically Acquired Antiquities",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fishing Contest",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Gertrude's Cat",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Goblin Diplomacy",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Hazeel Cult",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Ides of Milk",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Imp Catcher",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Jungle Potion",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Learning the Ropes",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Misthalin Mystery",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Monk's Friend",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Murder Mystery",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Pandemonium",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Pirate's Treasure",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Plague City",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "A Porcine of Interest",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Priest in Peril",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Prince Ali Rescue",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Rag and Bone Man I",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Recruitment Drive",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Restless Ghost",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "The Ribbiting Tale of a Lily Pad Labour Dispute",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Romeo & Juliet",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Rune Mysteries",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Sheep Herder",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Sheep Shearer",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Shield of Arrav",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Tower of Life",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Witch's Potion",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "X Marks the Spot",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Animal Magnetism",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Another Slice of H.A.M.",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Ascent of Arceuus",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "At First Light",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Big Chompy Bird Hunting",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Black Knights' Fortress",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Bone Voyage",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Cold War",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Corsair Curse",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Creature of Fenkenstrain",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Death on the Isle",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Death to the Dorgeshuun",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Depths of Despair",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Dig Site",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Eadgar's Ruse",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Elemental Workshop II",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Enlightened Journey",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Eyes of Glouphrie",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fairytale I - Growing Pains",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Feud",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fight Arena",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Forgettable Tale...",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Forsaken Tower",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Fremennik Trials",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Garden of Death",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Garden of Tranquillity",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Getting Ahead",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Ghosts Ahoy",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Giant Dwarf",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Golem",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Grand Tree",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Hand in the Sand",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Holy Grail",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Horror from the Deep",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Icthlarin's Little Helper",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "In Aid of the Myreque",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "In Search of the Myreque",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Knight's Sword",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Lost City",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Lost Tribe",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Making History",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Merlin's Crystal",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mountain Daughter",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Nature Spirit",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Observatory Quest",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Olaf's Quest",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Prying Times",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Queen of Thieves",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Ratcatchers",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Scorpion Catcher",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Scrambled!",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Sea Slug",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Shades of Mort'ton",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Shadow of the Storm",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Shilo Village",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Sleeping Giants",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Slug Menace",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "A Soul's Bane",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Spirits of the Elid",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tai Bwo Wannai Trio",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "A Tail of Two Cats",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tale of the Righteous",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tears of Guthix",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Temple of Ikov",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Temple of the Eye",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Tourist Trap",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tree Gnome Village",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tribal Totem",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Troll Romance",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Troll Stronghold",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Twilight's Promise",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Vampyre Slayer",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Wanted!",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Watchtower",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Waterfall Quest",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "What Lies Below",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Witch's House",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Zogre Flesh Eaters",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Between a Rock...",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Cabin Fever",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Contact!",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Darkness of Hallowvale",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Defender of Varrock",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Devious Minds",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Dragon Slayer I",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Enakhra's Lament",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fairytale II - Cure a Queen",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fallen From Grace",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Family Crest",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Fremennik Isles",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Great Brain Robbery",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Haunted Mine",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Heart of Darkness",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Heroes' Quest",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "King's Ransom",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "A Kingdom Divided",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Land of the Goblins",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Lunar Diplomacy",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Meat and Greet",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "My Arm's Big Adventure",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "One Small Favour",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Path of Glouphrie",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Rag and Bone Man II",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Red Reef",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Regicide",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Roving Elves",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Royal Trouble",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Rum Deal",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Shadows of Custodia",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "A Taste of Hope",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Throne of Miscellania",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Troubled Tortugans",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Underground Pass",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Beneath Cursed Sands",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Curse of Arrav",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Desert Treasure I",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Dream Mentor",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Final Dawn",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Fremennik Exiles",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Grim Tales",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Legends' Quest",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Making Friends with My Arm",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Monkey Madness I",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mourning's End Part I",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mourning's End Part II",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "A Night at the Theatre",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Perilous Moons",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Secrets of the North",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Sins of the Father",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Swan Song",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Desert Treasure II - The Fallen Empire",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Dragon Slayer II",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Monkey Madness II",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Song of the Elves",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "While Guthix Sleeps",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Blood Moon Rises",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Recipe for Disaster",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Register quest state and requirements",
+          "steps": [
+            "Extract {feature} start requirements, quest points, varp/varbit state and prerequisites from the canonical quest data.",
+            "Register one persisted stage attribute and explicit started/completed values with QuestRuntime.",
+            "Implement the start-point NPC/object interaction and reject unmet requirements without changing state."
+          ],
+          "acceptanceCriteria": [
+            "A new player can start only when all requirements are met.",
+            "Logout and login preserve the exact quest stage."
+          ]
+        },
+        {
+          "name": "Implement dialogue branches",
+          "steps": [
+            "Import or reuse the canonical {feature} transcript and map each stage to its valid NPC/player dialogue branches.",
+            "Implement choices, repeated conversations, item recovery and post-quest dialogue.",
+            "Ensure every dialogue exit either preserves state or advances exactly one intended stage."
+          ],
+          "acceptanceCriteria": [
+            "Every registered stage has a reachable dialogue entrypoint.",
+            "Repeating or cancelling dialogue cannot skip objectives or duplicate rewards."
+          ]
+        },
+        {
+          "name": "Implement objectives and world interactions",
+          "steps": [
+            "List each {feature} objective in order, including items, kills, puzzles, travel and world-state changes.",
+            "Implement each objective through existing item, NPC, object, area and combat hooks.",
+            "Validate prerequisite stage and required items at the shared handler before advancing."
+          ],
+          "acceptanceCriteria": [
+            "Objectives cannot be completed out of order.",
+            "Quest-only items can be recovered and are cleaned up when appropriate."
+          ]
+        },
+        {
+          "name": "Implement journal, rewards and completion",
+          "steps": [
+            "Add stage-specific journal lines that state the next actionable objective.",
+            "Apply XP, items, unlocks and quest points once through QuestRuntime completion.",
+            "Implement any post-quest access, shops, teleports or combat changes."
+          ],
+          "acceptanceCriteria": [
+            "The completion scroll and quest list update immediately.",
+            "Completion is idempotent and rewards cannot be claimed twice."
+          ]
+        },
+        {
+          "name": "Add automated quest-flow coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Minigames",
+      "summary": "Repeatable combat, skilling and competitive activities.",
+      "items": [
+        {
+          "name": "Barbarian Assault",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Barrows",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Bounty Hunter",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Castle Wars",
+          "tasks": [
+            "in-progress",
+            "in-progress",
+            "in-progress",
+            "in-progress",
+            "todo"
+          ],
+          "taskDetails": [
+            {
+              "name": "Complete lobby, entry and team assignment",
+              "steps": [
+                "Verify all Saradomin, Zamorak and Guthix portal coordinates and options against the active cache.",
+                "Remove test-only automatic bot seeding from production flow or gate it behind explicit development configuration.",
+                "Enforce team-size balancing, forbidden head/cape equipment and external consumable restrictions before teleporting.",
+                "Cover leaving, logout and countdown cancellation from both waiting rooms."
+              ],
+              "acceptanceCriteria": [
+                "A player cannot join an invalid or overfull team.",
+                "A lobby can return to idle with no bots, colours, overlay or countdown task left behind."
+              ]
+            },
+            {
+              "name": "Complete the match lifecycle and HUD",
+              "steps": [
+                "Keep idle, starting, active and ending transitions in one authoritative state machine.",
+                "Verify the 20-minute timer, minimum-player rules, early termination and two consecutive matches.",
+                "Drive both team HUDs from server score, flag and timer state without stale cached vars.",
+                "Restore login/logout participants to the lobby with temporary state removed."
+              ],
+              "acceptanceCriteria": [
+                "A match starts and ends exactly once under normal, empty-team and disconnect paths.",
+                "A second match begins with zero score, safe flags and no previous timers or entities."
+              ]
+            },
+            {
+              "name": "Complete flag capture, return and scoring",
+              "steps": [
+                "Verify stand pickup, weapon-slot requirements, carrier hints and stand object replacement for both teams.",
+                "Handle carrier death, manual drop, stepping-stone return, teammate return and enemy pickup.",
+                "Require the scoring team's own flag at base before capture and update HUD state on the same tick.",
+                "Prevent repeated stand/object interactions from duplicating flags or scores."
+              ],
+              "acceptanceCriteria": [
+                "Every flag state has exactly one representation: stand, carrier or dropped object.",
+                "A deterministic capture scenario increments one score and restores the captured flag."
+              ]
+            },
+            {
+              "name": "Implement every arena interaction and supply",
+              "steps": [
+                "Audit every gate, door, barrier, stair, ladder, tunnel and stepping-stone route in both castles and underground.",
+                "Implement barricade placement limits, ownership, attack/destruction, clipping cleanup and explosive-potion interaction.",
+                "Implement rocks, rope, pickaxe, tinderbox and toolkit uses plus table take-1/take-5 limits.",
+                "Verify spawn-room restrictions, altar use and enemy spawn blocking."
+              ],
+              "acceptanceCriteria": [
+                "Every visible arena option is handled or deliberately documented as unsupported.",
+                "Ending the match removes all temporary NPCs, clipping, items and dynamic objects."
+              ]
+            },
+            {
+              "name": "Add Castle Wars end-to-end regression coverage",
+              "steps": [
+                "Build the smallest plugin smoke harness with two players and deterministic task ticks.",
+                "Cover join, countdown, start, flag steal/drop/return/capture, death/respawn, score HUD and rewards.",
+                "Add failure checks for friendly fire, enemy bandaging, teleporting, team-colour removal and reconnect.",
+                "Assert win, loss and tie ticket amounts plus complete cleanup after endGame."
+              ],
+              "acceptanceCriteria": [
+                "The test fails when any core flag or cleanup invariant regresses.",
+                "The scenario runs locally without network, real-time waits or manually spawned clients."
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Clan Wars",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Duel Arena",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Emir's Arena",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fortis Colosseum",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Inferno",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Last Man Standing",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mage Arena",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Nightmare Zone",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Pest Control",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Soul Wars",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Temple Trekking",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "TzHaar Fight Cave",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "TzHaar Fight Pit",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "TzHaar-Ket-Rak's Challenges",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Archery Competition",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Brimhaven Agility Arena",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fishing Trawler",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Forestry",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Giants' Foundry",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Gnome Ball",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Gnome Restaurant",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Guardians of the Rift",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Hallowed Sepulchre",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Impetuous Impulses",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mage Training Arena",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mahogany Homes",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mastering Mixology",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Pyramid Plunder",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Rogues' Den",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Sorceress's Garden",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Stealing artefacts",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Gauntlet",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Mess",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tithe Farm",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Trouble Brewing",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Vale Totems",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Volcanic Mine",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Warriors' Guild",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement entry, lobby and team rules",
+          "steps": [
+            "Map every {feature} entrance, exit and lobby object to the existing area/plugin hooks.",
+            "Validate equipment, inventory, skill, party and team-balance rules before moving the player.",
+            "Define logout and reconnect handling for lobby and active-game states."
+          ],
+          "acceptanceCriteria": [
+            "Invalid entrants remain outside with a useful message.",
+            "Leaving or disconnecting cannot strand minigame-only items or state."
+          ]
+        },
+        {
+          "name": "Implement the match state machine",
+          "steps": [
+            "Define explicit idle, starting, active and ending states for {feature}.",
+            "Implement minimum-player checks, countdown cancellation, timed transitions and clean restart.",
+            "Keep timers and scheduled tasks owned by one match instance and cancel them on reset."
+          ],
+          "acceptanceCriteria": [
+            "A match starts and ends once under normal and cancellation paths.",
+            "Two consecutive matches do not inherit scores, objects or timers."
+          ]
+        },
+        {
+          "name": "Implement objectives, scoring and rewards",
+          "steps": [
+            "Enumerate {feature} objectives, score mutations, win/tie/loss rules and reward currencies.",
+            "Guard every score mutation by active phase, participant membership and objective prerequisites.",
+            "Award and persist rewards once, including full-inventory handling."
+          ],
+          "acceptanceCriteria": [
+            "Scores visible to clients match authoritative server state.",
+            "Reconnect, death or repeated interaction cannot duplicate score or rewards."
+          ]
+        },
+        {
+          "name": "Implement arena mechanics and cleanup",
+          "steps": [
+            "Map all {feature} arena objects, supplies, hazards, shortcuts and restricted actions.",
+            "Implement death, respawn, teleport, item-drop and early-exit behaviour.",
+            "Remove spawned entities, temporary clipping, items, overlays and interaction options on every exit path."
+          ],
+          "acceptanceCriteria": [
+            "All documented arena routes and interactables have a handler.",
+            "Ending or aborting a match restores every participant and world object."
+          ]
+        },
+        {
+          "name": "Add automated minigame coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bosses",
+      "summary": "Standalone, wilderness, slayer, quest and skilling encounters.",
+      "items": [
+        {
+          "name": "Abyssal Sire",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Alchemical Hydra",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Amoxliatl",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Araxxor",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Barrows brothers",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Bryophyta",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Callisto",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Cerberus",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Chaos Elemental",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Chaos Fanatic",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Corporeal Beast",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Count Draynor",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Crazy archaeologist",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Dagannoth Kings",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Doom of Mokhaiotl",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Elvarg",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "The Forgotten Four",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Gemstone Crab",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Giant Mole",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "God Wars Dungeon generals",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Grotesque Guardians",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Hespori",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Hueycoatl",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Kalphite Queen",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "King Black Dragon",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "done"
+          ]
+        },
+        {
+          "name": "Kraken",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Mimic",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Moons of Peril",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Nex",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "The Nightmare",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Obor",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Phantom Muspah",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Royal Titans",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Sarachnis",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Scorpia",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Scurrius",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Shellbane gryphon",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Skotizo",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tempoross",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Thermonuclear smoke devil",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "TzKal-Zuk",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "TzTok-Jad",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Venenatis",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Vet'ion",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Vorkath",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Wintertodt",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Yama",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Zalcano",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Zulrah",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement access and encounter setup",
+          "steps": [
+            "Map {feature} location, prerequisites, instance rules and spawn/reset triggers.",
+            "Prevent duplicate encounters and define logout, death and re-entry behaviour.",
+            "Initialize combat state, arena objects and player-visible encounter feedback."
+          ],
+          "acceptanceCriteria": [
+            "Access rules reject invalid players without spawning the boss.",
+            "A reset produces one clean encounter with no stale entities."
+          ]
+        },
+        {
+          "name": "Implement attacks and phases",
+          "steps": [
+            "List {feature} attack styles, animations, graphics, projectiles, timings and target rules.",
+            "Implement phase thresholds and mechanic priority through the existing combat method APIs.",
+            "Cap or validate damage, movement and safe-zone rules at their authoritative boundary."
+          ],
+          "acceptanceCriteria": [
+            "A deterministic simulation reaches every phase and special attack.",
+            "Protection, avoidance and damage rules match the documented encounter."
+          ]
+        },
+        {
+          "name": "Implement drops and kill credit",
+          "steps": [
+            "Add {feature} guaranteed, common, unique, tertiary and pet rolls to the shared drop data.",
+            "Assign kill credit, kill count and contribution using existing combat ownership rules.",
+            "Connect collection log, clue, task and achievement hooks when available."
+          ],
+          "acceptanceCriteria": [
+            "Only eligible participants receive rolls and kill credit.",
+            "Drop-table fixtures cover unique and always-drop paths."
+          ]
+        },
+        {
+          "name": "Implement failure and recovery",
+          "steps": [
+            "Define death storage, gravestone, fee, safe-death and hardcore consequences for {feature}.",
+            "Reset hazards, spawned adds and arena state on wipe, teleport and disconnect.",
+            "Make repeat entry safe after every failure path."
+          ],
+          "acceptanceCriteria": [
+            "A wipe leaves no active hazards or stuck boss state.",
+            "Items follow the repository's configured death rules."
+          ]
+        },
+        {
+          "name": "Add automated boss-encounter coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Raids",
+      "summary": "Full multi-room raid encounters and reward systems.",
+      "items": [
+        {
+          "name": "Chambers of Xeric",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Theatre of Blood",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tombs of Amascut",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement party and raid setup",
+          "steps": [
+            "Define {feature} party ownership, size limits, requirements and entry validation.",
+            "Create raid-scoped state for layout, modifiers, deaths, supplies and participants.",
+            "Handle invite, leave, logout and rejoin without duplicating a raid."
+          ],
+          "acceptanceCriteria": [
+            "Only one authoritative raid instance exists per party.",
+            "Invalid or stale party members cannot enter."
+          ]
+        },
+        {
+          "name": "Implement rooms and progression",
+          "steps": [
+            "Enumerate {feature} combat, puzzle and skilling rooms and their completion conditions.",
+            "Generate or select layouts using deterministic raid-scoped state.",
+            "Unlock transitions only after the authoritative room completion event."
+          ],
+          "acceptanceCriteria": [
+            "Every supported layout has a path from entry to final boss.",
+            "Room state survives reconnect where OSRS permits it."
+          ]
+        },
+        {
+          "name": "Implement bosses and modifiers",
+          "steps": [
+            "Implement every {feature} boss phase, scaling rule and difficulty modifier through shared combat APIs.",
+            "Scope hazards, NPCs and objects to the raid instance.",
+            "Reset each room cleanly after wipe or abandonment."
+          ],
+          "acceptanceCriteria": [
+            "Scaling fixtures cover solo and maximum supported party size.",
+            "No raid entity leaks into the public world or another party."
+          ]
+        },
+        {
+          "name": "Implement points, loot and completion",
+          "steps": [
+            "Track personal and party points at each documented contribution and penalty.",
+            "Resolve unique and regular loot once from final authoritative points.",
+            "Persist completion, collection and personal-best data before releasing the instance."
+          ],
+          "acceptanceCriteria": [
+            "Known point fixtures produce expected loot probabilities.",
+            "Repeated chest interaction cannot duplicate rewards."
+          ]
+        },
+        {
+          "name": "Add automated raid coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Leagues",
+      "summary": "Temporary-mode rules, progression and account state.",
+      "items": [
+        {
+          "name": "League mode foundations",
+          "tasks": [
+            "done",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tasks",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Relics",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Area unlocks",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Combat masteries",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Points & rewards",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement mode account rules",
+          "steps": [
+            "Define how {feature} behaves for league accounts versus normal accounts.",
+            "Apply XP, drop-rate, death, trading and area restrictions through existing mode hooks.",
+            "Keep league state isolated from permanent-mode saves."
+          ],
+          "acceptanceCriteria": [
+            "Switching modes cannot leak items or progression.",
+            "All league-only rules are disabled for normal accounts."
+          ]
+        },
+        {
+          "name": "Implement progression data",
+          "steps": [
+            "Define {feature} unlock tiers, prerequisites and persisted identifiers as data.",
+            "Validate unlock requests server-side and make them idempotent.",
+            "Recompute derived bonuses after login and unlock."
+          ],
+          "acceptanceCriteria": [
+            "Invalid unlock ordering is rejected.",
+            "Save/load preserves unlocked state and derived effects."
+          ]
+        },
+        {
+          "name": "Implement tasks, points and rewards",
+          "steps": [
+            "Register each relevant task trigger with a stable key and point value.",
+            "Award completion once at the authoritative gameplay event.",
+            "Connect points, tiers and reward-shop eligibility."
+          ],
+          "acceptanceCriteria": [
+            "Repeated events cannot award a task twice.",
+            "Point totals equal the sum of completed task values."
+          ]
+        },
+        {
+          "name": "Connect league interfaces",
+          "steps": [
+            "Populate {feature} task, relic, area and summary widgets from server state.",
+            "Send incremental updates after progression changes.",
+            "Handle empty, locked and completed states."
+          ],
+          "acceptanceCriteria": [
+            "UI state matches a fresh server snapshot after login.",
+            "Unlocks appear without requiring relog."
+          ]
+        },
+        {
+          "name": "Add automated league-progression coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Weapons & equipment",
+      "summary": "Weapon categories, combat options, ammunition and special behaviour.",
+      "items": [
+        {
+          "name": "Pickaxes",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Harpoons",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Daggers",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Swords",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Hastas",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Spears",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Partisans",
+          "tasks": [
+            "done",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Sickles",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Machetes",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Axes",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Claws",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Cutlasses",
+          "tasks": [
+            "done",
+            "done",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Scimitars",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Scythes",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Longswords",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Battleaxes",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Whips",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Two-handed swords",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Halberds",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Banners",
+          "tasks": [
+            "done",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Blackjacks",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Canes",
+          "tasks": [
+            "done",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Polestaves",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Maces",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mauls",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Warhammers",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Staves",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Battlestaves",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Croziers",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mystic staves",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Powered staves",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Bladed staves",
+          "tasks": [
+            "done",
+            "done",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Wands",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Shortbows",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Longbows",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Composite bows",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Crossbows",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Ballistas",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Darts",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Throwing knives",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Throwing axes",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Chinchompas",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Blowpipes",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Salamanders",
+          "tasks": [
+            "done",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Shields & defenders",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Special attacks",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Add definitions and equip requirements",
+          "steps": [
+            "Enumerate {feature} item IDs, equipment slot, bonuses, speed, range and level requirements.",
+            "Load data through existing item/equipment definitions instead of hardcoding per interaction.",
+            "Validate equip, unequip, two-handed and shield conflicts atomically."
+          ],
+          "acceptanceCriteria": [
+            "Every tracked item shows correct bonuses and requirements.",
+            "Failed equipment changes leave inventory and equipment unchanged."
+          ]
+        },
+        {
+          "name": "Implement attack styles and animations",
+          "steps": [
+            "Map {feature} combat options to attack type, stance, XP style, speed and range.",
+            "Assign attack, block and idle animations plus required graphics/projectiles.",
+            "Refresh weapon interface and style state on equip changes."
+          ],
+          "acceptanceCriteria": [
+            "Each combat option trains the intended skills.",
+            "Attack timing and range match the item definition."
+          ]
+        },
+        {
+          "name": "Implement ammunition and charges",
+          "steps": [
+            "Define compatible ammunition, rune, charge or degradation requirements for {feature}.",
+            "Consume resources only when the attack or effect resolves.",
+            "Implement recovery, breakage, empty-state and recharge transitions."
+          ],
+          "acceptanceCriteria": [
+            "Attacks cannot occur without compatible resources.",
+            "Consumption and recovery fixtures match documented rates."
+          ]
+        },
+        {
+          "name": "Implement special and unique effects",
+          "steps": [
+            "List every {feature} special attack, passive, set interaction and target restriction.",
+            "Implement effects through CombatSpecial or EquipmentEffects shared registries.",
+            "Apply energy, cooldown and immunity checks before mutation."
+          ],
+          "acceptanceCriteria": [
+            "Special energy and effects apply exactly once.",
+            "Unsupported or immune targets receive no unintended state change."
+          ]
+        },
+        {
+          "name": "Add automated weapon coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Consumables",
+      "summary": "Items consumed for healing, boosts, travel and utility.",
+      "items": [
+        {
+          "name": "Food",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Potions",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Prayer restoration",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Antipoison & antivenom",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Alcohol & temporary boosts",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Tablets & teleport items",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Runes & ammunition",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Charged jewellery",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Degradable & charged items",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Define supported items and options",
+          "steps": [
+            "Enumerate {feature} item IDs, doses/variants, menu options and level requirements.",
+            "Register interactions through the existing item/food/potion handlers.",
+            "Reject invalid states before deleting or transforming an item."
+          ],
+          "acceptanceCriteria": [
+            "Every variant resolves to one canonical handler.",
+            "Unsupported items fall through without consumption."
+          ]
+        },
+        {
+          "name": "Implement timing and consumption",
+          "steps": [
+            "Apply {feature} eat/drink/use delays and combat action delays using existing timers.",
+            "Consume exactly one unit or transform to the correct remaining-dose item.",
+            "Handle queued, spammed and interrupted interactions."
+          ],
+          "acceptanceCriteria": [
+            "Repeated clicks cannot bypass the documented delay.",
+            "Inventory mutation occurs once on the resolving action."
+          ]
+        },
+        {
+          "name": "Implement effects and expiry",
+          "steps": [
+            "Apply healing, stat changes, immunity, damage or utility effects for {feature}.",
+            "Use the existing boost and timer systems for stacking and expiry.",
+            "Send all required skill, message, animation and sound updates."
+          ],
+          "acceptanceCriteria": [
+            "Boost caps and drains match repository conventions.",
+            "Expiry restores or removes every temporary effect."
+          ]
+        },
+        {
+          "name": "Handle combinations and edge cases",
+          "steps": [
+            "Implement combo rules, full-health restrictions, poison state and inventory-capacity cases.",
+            "Define PvP, minigame and area restrictions for {feature}.",
+            "Ensure death/logout clears only effects that should not persist."
+          ],
+          "acceptanceCriteria": [
+            "Forbidden combinations are rejected without item loss.",
+            "Save/load behaviour matches the effect's persistence rule."
+          ]
+        },
+        {
+          "name": "Add automated consumable coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Combat, prayers & spellbooks",
+      "summary": "Shared PvM and PvP rules outside individual equipment and encounters.",
+      "items": [
+        {
+          "name": "Melee combat",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Ranged combat",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Magic combat",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Accuracy & damage formulas",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Protection prayers",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Offensive prayers",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Normal spellbook",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Ancient Magicks",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Lunar spellbook",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Arceuus spellbook",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Status effects",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Death mechanics",
+          "tasks": [
+            "done",
+            "done",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Wilderness rules",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement formulas and eligibility",
+          "steps": [
+            "Identify the authoritative accuracy, damage, drain or cast formula for {feature}.",
+            "Apply equipment, levels, boosts, prayers and target modifiers through shared formula helpers.",
+            "Reject invalid targets, ranges, resources and cooldown states before creating hits."
+          ],
+          "acceptanceCriteria": [
+            "Known fixtures match expected max hit and accuracy/drain values.",
+            "Invalid actions spend no resources."
+          ]
+        },
+        {
+          "name": "Implement visual and tick sequencing",
+          "steps": [
+            "Map {feature} animations, graphics, sounds and projectiles to their correct ticks.",
+            "Queue hits and effects through the existing pending-hit system.",
+            "Synchronize client state before and after resolution."
+          ],
+          "acceptanceCriteria": [
+            "Impact occurs on the documented tick.",
+            "Interrupted or dead actors cannot resolve stale effects."
+          ]
+        },
+        {
+          "name": "Implement resources and restrictions",
+          "steps": [
+            "Consume runes, ammunition, prayer, energy or charges at the authoritative resolution point.",
+            "Apply spellbook, area, duel, wilderness and equipment restrictions.",
+            "Handle autocast or repeated-action state changes."
+          ],
+          "acceptanceCriteria": [
+            "Resource costs are exact and cannot go negative.",
+            "Restricted actions fail consistently across every caller."
+          ]
+        },
+        {
+          "name": "Implement status and death edge cases",
+          "steps": [
+            "Define {feature} interactions with immunity, protection, movement, poison/venom and death.",
+            "Clean up pending state on teleport, logout and target removal.",
+            "Preserve kill credit and death processing order."
+          ],
+          "acceptanceCriteria": [
+            "No effect applies after its actor or target leaves scope.",
+            "PvP and PvM ownership remain correct."
+          ]
+        },
+        {
+          "name": "Add automated combat coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "World, NPCs & transport",
+      "summary": "The explorable world and the interactions that connect it.",
+      "items": [
+        {
+          "name": "Regions & collision",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "NPC spawns",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "NPC dialogue",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Object interactions",
+          "tasks": [
+            "done",
+            "done",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Doors, ladders & stairs",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Spell teleports",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Jewellery teleports",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Fairy rings",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Spirit trees",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Charter ships",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Boats & Sailing routes",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Music regions",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Add world definitions",
+          "steps": [
+            "Enumerate {feature} regions, coordinates, object/NPC IDs, orientations and access requirements.",
+            "Store static data in the repository's existing definition format.",
+            "Validate cache IDs and coordinates against the active cache revision."
+          ],
+          "acceptanceCriteria": [
+            "Definitions load without duplicate or missing identifiers.",
+            "The feature appears only at intended locations."
+          ]
+        },
+        {
+          "name": "Implement interactions and routing",
+          "steps": [
+            "Register all {feature} click options and route destinations through existing hooks.",
+            "Check proximity, clipping, level, quest and item requirements server-side.",
+            "Use movement/teleport APIs that preserve facing, height and private-area context."
+          ],
+          "acceptanceCriteria": [
+            "Every visible option has a matching handler.",
+            "Invalid routing cannot cross blocked tiles or planes."
+          ]
+        },
+        {
+          "name": "Connect dialogue, animation and UI",
+          "steps": [
+            "Add required dialogue choices, animations, graphics, sounds and interfaces for {feature}.",
+            "Advance state only after the corresponding interaction resolves.",
+            "Clear transient UI or movement locks on cancel and failure."
+          ],
+          "acceptanceCriteria": [
+            "Client feedback matches the resulting world state.",
+            "Cancellation leaves the player interactive."
+          ]
+        },
+        {
+          "name": "Handle world-state edge cases",
+          "steps": [
+            "Define respawn, depletion, competition, instancing and restart behaviour for {feature}.",
+            "Scope dynamic objects and NPCs to the correct world/private area.",
+            "Clean up spawned state on plugin reload and server shutdown."
+          ],
+          "acceptanceCriteria": [
+            "Multiple players cannot create duplicate shared state.",
+            "Restart restores the expected baseline world."
+          ]
+        },
+        {
+          "name": "Add automated world-interaction coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Economy, trading & banking",
+      "summary": "Item storage, exchange and value flows.",
+      "items": [
+        {
+          "name": "Inventory & equipment",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Banks & tabs",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Deposit boxes",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Player trading",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Shops",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Alternative currencies",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Item drops",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Loot tables",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Grand Exchange",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Death storage & reclaim",
+          "tasks": [
+            "done",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement the transaction flow",
+          "steps": [
+            "Define {feature} source, destination, ownership and commit point.",
+            "Reuse existing container and transaction methods so validation precedes mutation.",
+            "Refresh only containers and interfaces changed by the commit."
+          ],
+          "acceptanceCriteria": [
+            "A successful transaction conserves item and currency totals.",
+            "Failure leaves every container unchanged."
+          ]
+        },
+        {
+          "name": "Validate items and permissions",
+          "steps": [
+            "Check tradeability, account mode, binding, capacity, quantity and area restrictions for {feature}.",
+            "Perform validation on authoritative current state immediately before commit.",
+            "Return a specific player-facing reason for rejection."
+          ],
+          "acceptanceCriteria": [
+            "Forged slots, IDs or quantities cannot bypass validation.",
+            "Restricted items never enter an invalid container."
+          ]
+        },
+        {
+          "name": "Persist balances and storage",
+          "steps": [
+            "Add all {feature} balances, tabs, offers or storage state to existing persistence.",
+            "Validate hydrated values and repair safe legacy defaults.",
+            "Make save/load atomic with the transaction boundary."
+          ],
+          "acceptanceCriteria": [
+            "Restart cannot duplicate or erase committed value.",
+            "Legacy saves load without manual migration."
+          ]
+        },
+        {
+          "name": "Handle interruption and abuse cases",
+          "steps": [
+            "Test {feature} under disconnect, concurrent request, full container and rapid-repeat conditions.",
+            "Lock or revalidate at the smallest shared mutation boundary.",
+            "Log invariant violations without exposing sensitive state."
+          ],
+          "acceptanceCriteria": [
+            "Duplicate requests commit at most once.",
+            "Both parties recover consistent state after interruption."
+          ]
+        },
+        {
+          "name": "Add automated economy coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Clues, achievements & collections",
+      "summary": "Long-term completion and account-goal systems.",
+      "items": [
+        {
+          "name": "Beginner clues",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Easy clues",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Medium clues",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Hard clues",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Elite clues",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Master clues",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Combat achievements",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Achievement diaries",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Collection log",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Music cape tracking",
+          "tasks": [
+            "in-progress",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Quest cape tracking",
+          "tasks": [
+            "in-progress",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Define entries and requirements",
+          "steps": [
+            "Enumerate {feature} entries, stable keys, prerequisites, tiers and source events.",
+            "Store progression data separately from presentation text.",
+            "Register source events at their authoritative completion hooks."
+          ],
+          "acceptanceCriteria": [
+            "Every entry has a unique persisted key.",
+            "Unmet requirements cannot advance progression."
+          ]
+        },
+        {
+          "name": "Implement generation and progression",
+          "steps": [
+            "Implement {feature} selection, weighting, duplicate and step-transition rules.",
+            "Persist active and completed state before issuing the next step or reward.",
+            "Handle cancellation, destruction and replacement."
+          ],
+          "acceptanceCriteria": [
+            "Progress cannot skip or repeat a completed step unintentionally.",
+            "Save/load resumes at the exact active step."
+          ]
+        },
+        {
+          "name": "Implement rewards and unlocks",
+          "steps": [
+            "Define {feature} reward tables, thresholds and one-time unlocks.",
+            "Resolve rolls once at the authoritative completion event.",
+            "Handle full inventory through the repository's standard fallback."
+          ],
+          "acceptanceCriteria": [
+            "Repeated completion interaction cannot duplicate rewards.",
+            "Reward fixtures cover common and rare outcomes."
+          ]
+        },
+        {
+          "name": "Connect journals and interfaces",
+          "steps": [
+            "Populate {feature} list, detail, progress and completion UI from server state.",
+            "Send incremental updates after each state mutation.",
+            "Represent locked, active, complete and empty states."
+          ],
+          "acceptanceCriteria": [
+            "A fresh login snapshot matches persisted progression.",
+            "Completion updates without reopening the interface."
+          ]
+        },
+        {
+          "name": "Add automated completion-system coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pets",
+      "summary": "Followers, ownership, storage and pet-specific behaviour.",
+      "items": [
+        {
+          "name": "Follower system",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Ownership persistence",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Storage & reclamation",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Skilling pets",
+          "tasks": [
+            "in-progress",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Boss pets",
+          "tasks": [
+            "in-progress",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Quest & activity pets",
+          "tasks": [
+            "in-progress",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Metamorphosis",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Define ownership and unlocks",
+          "steps": [
+            "Enumerate {feature} pet item/NPC IDs, unlock sources and duplicate rules.",
+            "Persist ownership with one stable key per pet or variant.",
+            "Award ownership before spawning or item delivery."
+          ],
+          "acceptanceCriteria": [
+            "Duplicate rolls follow the configured duplicate policy.",
+            "Ownership survives logout and restart."
+          ]
+        },
+        {
+          "name": "Implement following behaviour",
+          "steps": [
+            "Spawn {feature} in the player's private follower context.",
+            "Implement follow distance, teleport catch-up, doors and plane changes.",
+            "Prevent multiple active followers."
+          ],
+          "acceptanceCriteria": [
+            "The pet follows without blocking player movement.",
+            "Teleport and region changes cannot orphan the pet."
+          ]
+        },
+        {
+          "name": "Implement storage and recovery",
+          "steps": [
+            "Add pickup, drop, bank, insurance/storage and reclaim flows for {feature}.",
+            "Validate ownership and capacity before item/NPC conversion.",
+            "Handle player death and disconnect."
+          ],
+          "acceptanceCriteria": [
+            "Pet conversion never duplicates or loses ownership.",
+            "A lost active pet can be reclaimed through the intended flow."
+          ]
+        },
+        {
+          "name": "Implement pet interactions",
+          "steps": [
+            "Add {feature} dialogue, metamorphosis, animation and menu actions.",
+            "Persist variant state where required.",
+            "Reject unavailable variants without changing the active pet."
+          ],
+          "acceptanceCriteria": [
+            "Every visible pet action has deterministic output.",
+            "Variant changes survive respawn and relog where intended."
+          ]
+        },
+        {
+          "name": "Add automated pet coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Social & multiplayer",
+      "summary": "Player communication and cooperative systems.",
+      "items": [
+        {
+          "name": "Public chat",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Private messages",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Friends & ignore lists",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Friends chat",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Clan system",
+          "tasks": [
+            "todo",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Grouping",
+          "tasks": [
+            "in-progress",
+            "todo",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Player following",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Player trading",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Co-op content support",
+          "tasks": [
+            "done",
+            "in-progress",
+            "todo",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement the interaction flow",
+          "steps": [
+            "Define {feature} request, accept, reject, leave and timeout transitions.",
+            "Validate both players' live state and permissions before each transition.",
+            "Send symmetric state updates to every affected participant."
+          ],
+          "acceptanceCriteria": [
+            "Repeated or crossed requests resolve once.",
+            "Disconnect clears pending state for all participants."
+          ]
+        },
+        {
+          "name": "Implement privacy and moderation",
+          "steps": [
+            "Apply ignore, privacy, mute, rank and account-mode rules to {feature}.",
+            "Enforce rules server-side before broadcasting content or presence.",
+            "Return minimal feedback without leaking hidden status."
+          ],
+          "acceptanceCriteria": [
+            "Blocked users cannot transmit through alternate entrypoints.",
+            "Hidden presence remains hidden after relog."
+          ]
+        },
+        {
+          "name": "Persist relationships and settings",
+          "steps": [
+            "Store {feature} relationships, ranks and preferences in existing player persistence.",
+            "Normalize names and stable identifiers at the data boundary.",
+            "Load state before presence or channel registration."
+          ],
+          "acceptanceCriteria": [
+            "Rename/case differences do not duplicate relationships.",
+            "Save/load preserves settings and memberships."
+          ]
+        },
+        {
+          "name": "Handle multiplayer edge cases",
+          "steps": [
+            "Test {feature} during world change, logout, full lists, stale targets and simultaneous actions.",
+            "Make cleanup idempotent and scoped to affected participants.",
+            "Rate-limit abusive repeat requests where an existing limiter is available."
+          ],
+          "acceptanceCriteria": [
+            "No ghost membership or pending request remains after disconnect.",
+            "Capacity limits are enforced atomically."
+          ]
+        },
+        {
+          "name": "Add automated multiplayer coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Client & interfaces",
+      "summary": "Browser client rendering, controls and game interfaces.",
+      "items": [
+        {
+          "name": "WebGL world renderer",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Gameframe & tabs",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Widget runtime",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Inventory & equipment UI",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "done",
+            "todo"
+          ]
+        },
+        {
+          "name": "Bank & shop UI",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Quest journal",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Combat options",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Spellbooks",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Prayer book",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "in-progress",
+            "todo"
+          ]
+        },
+        {
+          "name": "Minimap & world map",
+          "tasks": [
+            "done",
+            "done",
+            "done",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Audio & music",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        },
+        {
+          "name": "Mobile controls",
+          "tasks": [
+            "done",
+            "done",
+            "in-progress",
+            "todo",
+            "todo"
+          ]
+        }
+      ],
+      "taskTemplate": [
+        {
+          "name": "Implement layout and input",
+          "steps": [
+            "Map {feature} widgets, child IDs, actions, scrolling and keyboard/touch input.",
+            "Reuse the existing widget runtime and layout primitives.",
+            "Keep interaction hitboxes aligned at supported UI scales."
+          ],
+          "acceptanceCriteria": [
+            "All visible controls respond at desktop and mobile breakpoints.",
+            "Unsupported actions do not emit malformed packets."
+          ]
+        },
+        {
+          "name": "Connect server state",
+          "steps": [
+            "Define the initial {feature} snapshot and incremental update packets.",
+            "Apply updates idempotently and ignore stale responses.",
+            "Invalidate only affected widgets or render regions."
+          ],
+          "acceptanceCriteria": [
+            "Opening the interface from a fresh login renders complete state.",
+            "Out-of-order updates cannot overwrite newer state."
+          ]
+        },
+        {
+          "name": "Add accessibility and responsive behaviour",
+          "steps": [
+            "Provide semantic labels, keyboard focus and progress/status text for {feature}.",
+            "Test narrow, standard and high-scale layouts without clipping.",
+            "Preserve readable contrast and reduced-motion behaviour."
+          ],
+          "acceptanceCriteria": [
+            "Core actions are keyboard accessible.",
+            "Content remains usable at the mobile breakpoint."
+          ]
+        },
+        {
+          "name": "Handle loading and failures",
+          "steps": [
+            "Render loading, empty, unavailable and malformed-data states for {feature}.",
+            "Bound untrusted text and numeric values before rendering.",
+            "Allow retry or safe close without reloading the client."
+          ],
+          "acceptanceCriteria": [
+            "Malformed payloads do not crash the interface.",
+            "Failure state explains the next available action."
+          ]
+        },
+        {
+          "name": "Add automated interface coverage",
+          "steps": [
+            "Locate the smallest existing test or smoke-check pattern used by neighbouring {feature} code.",
+            "Add a deterministic happy-path check for {feature} that fails before the implementation and passes afterward.",
+            "Add one failure or boundary case covering the highest-risk state transition for {feature}."
+          ],
+          "acceptanceCriteria": [
+            "The check runs through an existing repository test command without network access.",
+            "A regression in the implemented {feature} behaviour produces a clear failing assertion."
+          ]
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    "Each item inherits its category taskTemplate; replace {feature} with the item name when implementing.",
+    "Complete steps in order, reuse neighbouring repository patterns, and update a task status only when every acceptance criterion passes.",
+    "Status values are todo, in-progress and done. Progress is derived automatically; never enter a percentage."
+  ]
+}

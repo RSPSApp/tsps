@@ -597,13 +597,6 @@ export class PlayerSyncManager {
             endSubY,
             orientation,
         );
-        // Forced movement resets pathLength; clear any queued movement.
-        try {
-            this.playerEcs.clearServerQueue(ecsIndex);
-        } catch {}
-        try {
-            this.playerEcs.setForcedMovementSteps(ecsIndex, 0);
-        } catch {}
         this.playerEcs.setRunning(ecsIndex, false);
 
         const state = this.movementSync.getState(serverId);

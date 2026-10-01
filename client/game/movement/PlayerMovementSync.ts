@@ -284,9 +284,6 @@ export class PlayerMovementSync {
 
         // ── Teleport / first appearance ─────────────────────────────────
         if (teleport) {
-            try {
-                this.playerEcs.clearServerQueue(ecsIndex);
-            } catch {}
             this.playerEcs.teleport(ecsIndex, path.to.x, path.to.y, resolvedLevel);
             this.playerEcs.setRunning(ecsIndex, false);
             state.setTile(path.to, opts.subX, opts.subY, resolvedLevel);
@@ -298,11 +295,6 @@ export class PlayerMovementSync {
             } else if (typeof opts.rotation === "number") {
                 this.playerEcs.setRotationImmediate(ecsIndex, opts.rotation & 2047);
                 state.lastOrientation = opts.rotation & 2047;
-            }
-            if (opts.moved) {
-                try {
-                    this.animController?.cancelSequenceOnMove?.(state.serverId);
-                } catch {}
             }
             return;
         }

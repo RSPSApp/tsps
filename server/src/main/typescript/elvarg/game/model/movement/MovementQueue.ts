@@ -90,6 +90,7 @@ export class MovementQueue {
      */
     private isMoving = false;
     private movedThisCycle = false;
+    private lastMoveCycle = -2;
     private blockedByDynamicOccupancy = false;
     private routeEvaluated = false;
     private alternativeRoute = false;
@@ -290,7 +291,7 @@ export class MovementQueue {
             return Mobility.STUNNED;
         }
 
-        if (this.character.isNeedsPlacement() || this.isMovementBlocked()) {
+        if (this.character.isNeedsPlacement() || this.isMovementBlocked() || this.player?.getForceMovement() != null) {
             return Mobility.INVALID;
         }
 
@@ -390,6 +391,10 @@ export class MovementQueue {
 
     public didMoveThisCycle(): boolean {
         return this.movedThisCycle;
+    }
+
+    public didMovePreviousCycle(): boolean {
+        return this.lastMoveCycle === World.getProcessCycle() - 1;
     }
 
     public wasBlockedByDynamicOccupancy(): boolean {
@@ -511,6 +516,7 @@ export class MovementQueue {
 
         this.isMoving = moved;
         this.movedThisCycle = moved;
+        if (moved) this.lastMoveCycle = World.getProcessCycle();
 
         if (this.points.length === 0) {
             this.syncDestinationFlagToRoute();
@@ -1308,7 +1314,7 @@ export class MovementQueue {
             this.player.sendMessage("You can't reach that!");
             task.stop();
             TaskManager.cancelTasks(this.player.getIndex());
-        }));
+        }, false));
     }
 
     private isAtPointOfFocus(destX: number, destY: number): boolean {

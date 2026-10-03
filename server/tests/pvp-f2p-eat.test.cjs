@@ -19,7 +19,7 @@ function loadNode() {
       if (name.endsWith('/PvpAssignment')) {
         return { getPvpProfile: () => ({ id: 'standard', foodCharges: 10, eatAtHpRatio: 0.45, comboEatChance: 0 }) };
       }
-      if (name.endsWith('/Food.plugin')) return { isFoodItem: () => false };
+      if (name.endsWith('/Food.plugin')) return { isFoodItem: () => false, ATTACK_DELAY: 3, COMBO_ATTACK_DELAY: 2 };
       if (name.endsWith('/state/PlayerBotState')) return {
         computeEatThreshold: (maxHp, ratio, f2p) =>
           f2p ? Math.min(24, Math.max(1, maxHp - 1)) : Math.max(1, Math.ceil(maxHp * ratio)),

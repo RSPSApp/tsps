@@ -388,6 +388,15 @@ export class Combat {
         this.nextAttackCycle = Math.max(this.nextAttackCycle, World.getProcessCycle() + Math.max(0, ticks | 0));
     }
 
+    /**
+     * Adds ticks to the attack timer as OSRS does when eating. The timer keeps
+     * counting down past zero while idle, so a delay only blocks an attack when
+     * it outlasts the time already waited (Wiki: Food).
+     */
+    public delayAttack(ticks: number): void {
+        this.nextAttackCycle += Math.max(0, ticks | 0);
+    }
+
     public getAttackDelay(): number {
         return Math.max(0, this.nextAttackCycle - World.getProcessCycle());
     }

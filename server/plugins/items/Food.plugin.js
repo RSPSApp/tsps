@@ -10,6 +10,9 @@ const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
 const EAT_ANIMATION = new Animation(829);
+// Ticks eating adds to the attack timer; combo foods add 2 (Wiki: Food).
+const ATTACK_DELAY = 3;
+const COMBO_ATTACK_DELAY = 2;
 
 const FOOD = new Map([
   [ItemIds.KEBAB, { heal: 4 }],
@@ -19,7 +22,7 @@ const FOOD = new Map([
   [ItemIds.SLICE_OF_CAKE, { heal: 5 }],
   [ItemIds.NULL_2422, { heal: 12, verb: "use" }],
   [ItemIds.JANGERBERRIES, { heal: 2 }],
-  [ItemIds.WORM_CRUNCHIES, { heal: 7 }],
+  [ItemIds.WORM_CRUNCHIES, { heal: 7, karambwan: true }],
   [ItemIds.EDIBLE_SEAWEED, { heal: 4 }],
   [ItemIds.ANCHOVIES, { heal: 1 }],
   [ItemIds.SHRIMPS, { heal: 3 }],
@@ -106,6 +109,8 @@ module.exports = {
   name: "Food",
   FOOD,
   FOOD_ITEM_IDS,
+  ATTACK_DELAY,
+  COMBO_ATTACK_DELAY,
   isFoodItem(itemId) {
     return FOOD.has(itemId);
   },
@@ -147,7 +152,7 @@ module.exports = {
       }
 
       timers.extendOrRegister(TimerKey.FOOD, 3);
-      player.getCombat().extendAttackDelay(5);
+      player.getCombat().delayAttack(food.karambwan ? COMBO_ATTACK_DELAY : ATTACK_DELAY);
       if (food.karambwan) {
         timers.registers(TimerKey.KARAMBWAN, 3);
         timers.registers(TimerKey.POTION, 3);

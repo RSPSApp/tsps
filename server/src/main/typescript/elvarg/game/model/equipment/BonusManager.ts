@@ -4,6 +4,15 @@ import { Equipment } from "../container/impl/Equipment";
 import { getCrystalBowAttackBonus, getCrystalBowRangedStrength, isCrystalBow } from "../../content/combat/ranged/CrystalBow";
 import { PluginManager } from "../../../plugins/PluginManager";
 
+/** Ranged strength's place in an item's bonus array. */
+const RANGED_STRENGTH_INDEX = 11;
+
+/** Loaded lazily: the ranged data reaches back into combat, which uses this class. */
+function firesFromAmmoSlot(player: Player): boolean {
+    const { Ammunition } = require("../../content/combat/ranged/RangedData");
+    return Ammunition.firesFromAmmoSlot(player);
+}
+
 export class BonusManager {
     public static readonly ATTACK_STAB = 0;
     public static readonly ATTACK_SLASH = 1;
@@ -41,6 +50,13 @@ export class BonusManager {
             }
         }
 
+        // A thrown or self-ammo weapon doesn't fire the ammo slot, so its ranged strength
+        // doesn't count (a dragon knife with dragon arrows equipped gets the knife's +30 only).
+        const ammo = player.getEquipment().getItems()[Equipment.AMMUNITION_SLOT];
+        if (ammo && ammo.getId() > 0 && counts(ammo.getId()) && !firesFromAmmoSlot(player)) {
+            bonuses[RANGED_STRENGTH_INDEX] -= Number(ItemDefinition.forId(ammo.getId()).getBonuses()?.[RANGED_STRENGTH_INDEX] ?? 0);
+        }
+
         const weaponId = player.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId?.() ?? -1;
         if (isCrystalBow(weaponId) && counts(weaponId)) {
             const weaponDefinition = ItemDefinition.forId(weaponId);
@@ -52,7 +68,7 @@ export class BonusManager {
                     rangedAttackBonus - Number(definitionBonuses[BonusManager.ATTACK_RANGE] ?? 0);
             }
             if (rangedStrengthBonus != null) {
-                bonuses[11] += rangedStrengthBonus - Number(definitionBonuses[11] ?? 0);
+                bonuses[RANGED_STRENGTH_INDEX] += rangedStrengthBonus - Number(definitionBonuses[RANGED_STRENGTH_INDEX] ?? 0);
             }
         }
         PluginManager.applyBonusProviders(player, bonuses);

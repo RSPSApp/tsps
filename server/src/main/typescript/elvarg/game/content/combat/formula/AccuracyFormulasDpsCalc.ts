@@ -476,9 +476,8 @@ export class AccuracyFormulasDpsCalc {
             rngStrength += 3;
         rngStrength += 8;
 
-        if (CombatEquipment.wearingEliteVoid(player, CombatType.RANGED)) {
-            rngStrength = AccuracyFormulasDpsCalc.scaleRatio(rngStrength, 1125, 1000);
-        } else if (CombatEquipment.wearingVoid(player, CombatType.RANGED)) {
+        // Void and elite void both add 10% ranged accuracy; elite's 12.5% is damage only.
+        if (CombatEquipment.wearingEliteVoid(player, CombatType.RANGED) || CombatEquipment.wearingVoid(player, CombatType.RANGED)) {
             rngStrength = AccuracyFormulasDpsCalc.scalePercent(rngStrength, 110);
         }
 

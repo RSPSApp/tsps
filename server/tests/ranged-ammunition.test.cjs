@@ -211,3 +211,63 @@ test('hits on NPCs and player melee take the processing-order tick', () => {
   assert.equal(CombatFactory.hitProcessingDelay(hit(false, false, CombatType.RANGED)), 0, 'NPC attacks on players are unchanged');
   assert.equal(CombatFactory.hitProcessingDelay(hit(false, true, CombatType.RANGED)), 1);
 });
+
+test("a thrown weapon doesn't get the ammo slot's ranged strength; a bow does", () => {
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { BonusManager } = require('../dist/game/model/equipment/BonusManager');
+  const { Equipment } = require('../dist/game/model/container/impl/Equipment');
+  const { Item } = require('../dist/game/model/Item');
+  CachePipeline.initialize();
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  const strengthWith = (weaponId) => {
+    const items = Array.from({ length: 14 }, () => new Item(-1, 0));
+    items[Equipment.WEAPON_SLOT] = new Item(weaponId, 100);
+    items[Equipment.AMMUNITION_SLOT] = new Item(Items.DRAGON_ARROW, 100);
+    const bonuses = new BonusManager();
+    BonusManager.update({ getEquipment: () => ({ getItems: () => items }), getBonusManager: () => bonuses });
+    return bonuses.getOtherBonus()[BonusManager.RANGED_STRENGTH];
+  };
+  assert.equal(strengthWith(Items.DRAGON_KNIFE), 30, "the knife's +30, not the arrows' +60 on top");
+  assert.equal(strengthWith(Items.MAGIC_SHORTBOW), 60, "a bow fires the arrows: their +60");
+});
+
+test('scaled damage rounds down: a 17 into a protection prayer in PvP is 10', () => {
+  const { HitDamage } = require('../dist/game/content/combat/hit/HitDamage');
+  const { HitMask } = require('../dist/game/content/combat/hit/HitMask');
+  const hit = new HitDamage(17, HitMask.RED);
+  hit.multiplyDamage(0.6);
+  assert.equal(hit.getDamage(), 10);
+  const elysian = new HitDamage(13, HitMask.RED);
+  elysian.multiplyDamage(0.75);
+  assert.equal(elysian.getDamage(), 9);
+  assert.equal(new HitDamage(12.9, HitMask.RED).getDamage(), 12, 'whole damage however it was made');
+});
+
+test('elite void adds 10% ranged accuracy like void (its 12.5% is damage only)', () => {
+  const { AccuracyFormulasDpsCalc } = require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc');
+  const { CombatEquipment } = require('../dist/game/content/combat/CombatEquipment');
+  const { FightStyle } = require('../dist/game/content/combat/FightStyle');
+  const original = { elite: CombatEquipment.wearingEliteVoid, plain: CombatEquipment.wearingVoid };
+  let elite = false;
+  CombatEquipment.wearingEliteVoid = () => elite;
+  CombatEquipment.wearingVoid = () => elite;
+  try {
+    const roll = () => {
+      const player = {
+        isNpc: () => false, isPlayer: () => true, getAsPlayer() { return this; },
+        getSkillManager: () => ({ getCurrentLevel: () => 99 }),
+        getFightType: () => ({ getStyle: () => FightStyle.RAPID }),
+        getPrayerActive: () => [],
+        getEquipment: () => ({ getItems: () => [], get: () => ({ getId: () => -1 }) }),
+        getAttribute: () => undefined,
+      };
+      return AccuracyFormulasDpsCalc.effectiveRangedAttack(player);
+    };
+    const plain = roll();
+    elite = true;
+    assert.equal(roll(), Math.floor(plain * 110 / 100));
+  } finally {
+    CombatEquipment.wearingEliteVoid = original.elite;
+    CombatEquipment.wearingVoid = original.plain;
+  }
+});

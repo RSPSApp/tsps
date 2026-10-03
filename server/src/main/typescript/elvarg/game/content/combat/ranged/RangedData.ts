@@ -327,6 +327,18 @@ export class Ammunition {
         Ammunition.rangedAmmunition.set(itemId, this);
     }
 
+    /**
+     * Whether the wielded weapon fires what is in the ammo slot (bows, crossbows). Thrown
+     * weapons, self-ammo bows and plugin-loaded weapons (the blowpipe) don't, so the ammo
+     * slot's ranged strength doesn't count for them. Mirrors getFor.
+     */
+    public static firesFromAmmoSlot(p: Player): boolean {
+        const weapon = Number(p.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId?.() ?? -1);
+        if (isCrystalBow(weapon) || RangedWeapon.getSelfAmmo(weapon)) return false;
+        if (PluginManager.resolveRangedAmmunition(p) != null) return false;
+        return !Ammunition.rangedAmmunition.has(weapon);
+    }
+
     public static getFor(p: Player): Ammunition {
         // First try to get a throw weapon as ammo
         const weapon = Number(p.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId());

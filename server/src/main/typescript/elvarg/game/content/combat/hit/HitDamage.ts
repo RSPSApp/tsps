@@ -25,12 +25,15 @@ export class HitDamage {
         this.update();
     }
 
+    /** Scales the damage, rounding down as OSRS does (a 17 into a protection prayer in PvP is 10). */
     public multiplyDamage(mod: number): void {
         this.damage *= mod;
         this.update();
     }
 
+    /** Damage is always whole: anything scaled (prayer, the Elysian, bolt effects) rounds down. */
     public update(): void {
+        this.damage = Number.isFinite(this.damage) ? Math.floor(this.damage) : 0;
         if (this.damage > 0) {
             this.hitmask = this.startHitmask == HitMask.BLUE ? HitMask.RED : this.startHitmask;
         } else {

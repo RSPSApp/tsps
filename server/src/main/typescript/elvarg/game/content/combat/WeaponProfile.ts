@@ -7,7 +7,7 @@ import { CRYSTAL_BOW_ALL_WEAPON_IDS } from "./ranged/CrystalBow";
 import { ItemIdentifiers } from "../../../util/ItemIdentifiers";
 
 export type HitDelayProfile = { base: number; distanceOffset: number; divisor: number };
-export type ProjectileProfile = { delay: number; speed: number; startHeight: number; endHeight: number };
+export type ProjectileProfile = { delay: number; speed?: number; startHeight: number; endHeight: number; lengthAdjustment?: number; stepMultiplier?: number };
 
 export interface WeaponCombatProfile {
     itemIds?: number[];
@@ -27,7 +27,10 @@ export interface WeaponCombatProfile {
     specialDamage?: { minimum: number; maximum: number };
 }
 
-const DEFAULT_PROJECTILE: ProjectileProfile = { delay: 40, speed: 57, startHeight: 43, endHeight: 31 };
+// OSRS projectile types (server projanim config): an arrow ends at delay + lengthAdjustment +
+// stepMultiplier * distance client cycles after the shot.
+const DEFAULT_PROJECTILE: ProjectileProfile = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 43, endHeight: 31 };
+const THROWN_PROJECTILE: ProjectileProfile = { delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 43, endHeight: 31 };
 const STANDARD_HIT: HitDelayProfile = { base: 1, distanceOffset: 3, divisor: 6 };
 const DEFAULT_RANGED: WeaponCombatProfile = {
     attackDistance: 6,
@@ -117,7 +120,7 @@ export class WeaponProfiles {
             longRangeDistance: 9,
             longRangeFightType: FightType.CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 46, speed: 62, startHeight: 44, endHeight: 35 }],
+            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 44, endHeight: 35 }],
             fireSound: Sound.SHOOT_CROSSBOW,
             boltEffects: true,
         });
@@ -127,7 +130,7 @@ export class WeaponProfiles {
             longRangeDistance: 9,
             longRangeFightType: FightType.KARILS_CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 46, speed: 62, startHeight: 44, endHeight: 35 }],
+            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 44, endHeight: 35 }],
             fireSound: Sound.SHOOT_CROSSBOW,
         });
         this.add(WeaponInterfaces.BLOWPIPE, {
@@ -137,7 +140,7 @@ export class WeaponProfiles {
             longRangeDistance: 7,
             longRangeFightType: FightType.BLOWPIPE_LONGRANGE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
-            projectiles: [{ delay: 40, speed: 60, startHeight: 40, endHeight: 35 }],
+            projectiles: [{ delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 40, endHeight: 35 }],
             startGraphic: false,
             fireSound: Sound.THROW_DART,
         });
@@ -148,7 +151,7 @@ export class WeaponProfiles {
             longRangeDistance: 6,
             longRangeFightType: FightType.KNIFE_LONGRANGE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
-            projectiles: [DEFAULT_PROJECTILE],
+            projectiles: [THROWN_PROJECTILE],
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.DART, {
@@ -158,7 +161,7 @@ export class WeaponProfiles {
             longRangeDistance: 5,
             longRangeFightType: FightType.DART_LONGRANGE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
-            projectiles: [DEFAULT_PROJECTILE],
+            projectiles: [THROWN_PROJECTILE],
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.JAVELIN, {
@@ -168,7 +171,7 @@ export class WeaponProfiles {
             longRangeDistance: 6,
             longRangeFightType: FightType.JAVELIN_LONGRANGE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
-            projectiles: [DEFAULT_PROJECTILE],
+            projectiles: [THROWN_PROJECTILE],
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.OBBY_RINGS, {
@@ -177,7 +180,7 @@ export class WeaponProfiles {
             longRangeDistance: 6,
             longRangeFightType: FightType.OBBY_RING_LONGRANGE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
-            projectiles: [{ delay: 30, speed: 55, startHeight: 43, endHeight: 31 }],
+            projectiles: [{ delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 43, endHeight: 31 }],
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.HALBERD, { attackDistance: 2 });
@@ -188,7 +191,7 @@ export class WeaponProfiles {
             longRangeDistance: 9,
             longRangeFightType: FightType.BALLISTA_LONGRANGE,
             hitDelays: [{ base: 2, distanceOffset: 1, divisor: 6 }],
-            projectiles: [{ delay: 46, speed: 62, startHeight: 44, endHeight: 35 }],
+            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 44, endHeight: 35 }],
             fireSound: Sound.SHOOT_CROSSBOW,
         });
         this.add(WeaponInterfaces.DARK_BOW, {
@@ -198,7 +201,7 @@ export class WeaponProfiles {
             longRangeDistance: 10,
             longRangeFightType: FightType.LONGBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT, { base: 1, distanceOffset: 2, divisor: 3 }],
-            projectiles: [DEFAULT_PROJECTILE, { delay: 33, speed: 61, startHeight: 48, endHeight: 31 }],
+            projectiles: [DEFAULT_PROJECTILE, { delay: 41, lengthAdjustment: 14, stepMultiplier: 10, startHeight: 48, endHeight: 31 }],
             fireSound: Sound.SHOOT_BOW_QUIET,
             ammoRequired: 2,
             specialDamage: { minimum: 8, maximum: 48 },
@@ -231,7 +234,7 @@ export class WeaponProfiles {
             longRangeDistance: 9,
             longRangeFightType: FightType.CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 46, speed: 62, startHeight: 44, endHeight: 35 }],
+            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 44, endHeight: 35 }],
             fireSound: Sound.SHOOT_CROSSBOW,
             boltEffects: true,
         });

@@ -100,6 +100,7 @@ import {
     subscribeWorldEntityInfo,
 } from "../network/ServerConnection";
 import type { WorldEntityInfoPayload } from "../network/ServerConnection";
+import { sendSetHeading } from "../network/serverConnection/outgoing/movement";
 import type {
     CollectionLogServerPayload,
     HitsplatServerPayload,
@@ -136,7 +137,7 @@ import {
 import { ClientPacketId, createPacket, queuePacket } from "../network/packet";
 import { WebGLMapSquare } from "../render/WebGLMapSquare";
 import type { MinimapIcon } from "../render/loader/SdMapData";
-import type { NpcInstance } from "../render/npc/NpcRenderTemplate";
+import { type NpcInstance, npcOwnerMapId } from "../render/npc/NpcRenderTemplate";
 import { MenuTargetType, type OsrsMenuEntry } from "../rs/MenuEntry";
 import { SoundEffectLoader } from "../rs/audio/SoundEffectLoader";
 import { CacheSystem } from "../rs/cache/CacheSystem";
@@ -154,7 +155,7 @@ import {
 } from "../rs/config/meltype/MapElementTypeLoader";
 import { NpcTypeLoader } from "../rs/config/npctype/NpcTypeLoader";
 import { ObjModelLoader } from "../rs/config/objtype/ObjModelLoader";
-import { ObjTypeLoader } from "../rs/config/objtype/ObjTypeLoader";
+import { ObjTypeLoader, PostProcessedObjTypeLoader } from "../rs/config/objtype/ObjTypeLoader";
 import { EquipToDisplaySlot, EquipmentSlot } from "../rs/config/player/Equipment";
 import { PlayerAppearance } from "../rs/config/player/PlayerAppearance";
 import type { SeqSoundEffect, SeqType } from "../rs/config/seqtype/SeqType";
@@ -183,6 +184,7 @@ import { TextureLoader } from "../rs/texture/TextureLoader";
 import { faceAngleRs } from "../rs/utils/rotation";
 import { getOsrsInterfaceScalingPercent, setOsrsInterfaceScalingPercent } from "../ui/UiScale";
 import {
+    setHelmSteeringHandler,
     setNpcExamineIdResolver,
     setSpellSelectionClearHandler,
     setSpellSelectionResolver,
@@ -277,6 +279,7 @@ import { createBrowserRememberLoginPluginPersistence } from "./plugins/rememberl
 import { RememberLoginPlugin } from "./plugins/rememberlogin/RememberLoginPlugin";
 import { createBrowserTileMarkersPluginPersistence } from "./plugins/tilemarkers/BrowserTileMarkersPluginPersistence";
 import { TileMarkersPlugin } from "./plugins/tilemarkers/TileMarkersPlugin";
+import { createHelmSteeringDeps, steerFromHelm } from "./sailing/HelmSteering";
 import { createBrowserVengeanceTimerPluginPersistence } from "./plugins/vengeancetimer/BrowserVengeanceTimerPluginPersistence";
 import { VengeanceTimerPlugin } from "./plugins/vengeancetimer/VengeanceTimerPlugin";
 import { createBrowserStatusTimerPluginPersistence } from "./plugins/statustimer/BrowserStatusTimerPluginPersistence";
@@ -550,6 +553,8 @@ export class OsrsClient {
     // Local player name (from server handshake)
     localPlayerName: string = "";
     localPlayerIsAdmin: boolean = false;
+    /** From the login handshake; false = free-to-play world (read by cs1 and MAP_MEMBERS). */
+    isMembersWorld: boolean = true;
     private localChatNameIcons: number[] = [];
     private localChatNamePrefix: string = "";
     private readonly tradeRequestTargetsByName = new Map<string, number>();
@@ -978,6 +983,8 @@ export class OsrsClient {
     private scriptRetryGeneration = 0;
     private readonly chatTextMetrics: ChatTextMetrics;
     private readonly npcInstances: NpcInstanceFlushController;
+    /** Overhead icons the server set on NPCs, by server index (they override the type's own). */
+    readonly npcHeadIcons = new Map<number, Array<{ archiveId: number; spriteId: number }>>();
 
     private resolveChatPlayerNameForScript(_scriptId: number): string {
         let baseName = this.localPlayerName ?? "";
@@ -1017,34 +1024,29 @@ export class OsrsClient {
         rendererType: OsrsRendererType,
         cache?: LoadedCache,
     ) {
+        ClientState.isWorldEntityTile = (tileX, tileY) =>
+            this.worldViewManager.isWorldEntityTile(tileX, tileY);
         document.addEventListener(
             "keydown",
             (event) => {
-                const shortcut = this.resolveKeyShortcut(event);
-                const functionKeyEvent =
-                    event.code.startsWith("F") ||
-                    event.key.startsWith("F") ||
-                    event.key.startsWith("Brightness") ||
-                    event.key.startsWith("Audio");
-                if (functionKeyEvent) {
-                    console.info("[OsrsClient] function keydown", {
-                        key: event.key,
-                        code: event.code,
-                        repeat: event.repeat,
-                        loggedIn: this.isLoggedIn(),
-                        hasVarManager: !!this.varManager,
-                    });
+                // Capture build-menu chat before tab shortcuts, plugin handlers,
+                // or focus on a non-input component can swallow the event.
+                const constructionOpen = this.widgetManager?.rootInterface === 458 ||
+                    [...(this.widgetManager?.interfaceParents.values() ?? [])]
+                        .some((parent) => parent.group === 458);
+                if (this.isLoggedIn() && constructionOpen &&
+                    (event.key.length === 1 || ["Enter", "Backspace", "Escape", "Tab", "PageUp", "PageDown"].includes(event.key))) {
+                    this.inputManager.onKeyDown(event, true);
+                    this.widgetInputController.handleConstructionKeyboardInput();
+                    event.stopImmediatePropagation();
+                    return;
                 }
+                const shortcut = this.resolveKeyShortcut(event);
                 if (!this.isLoggedIn() || event.repeat || shortcut === undefined) {
                     return;
                 }
 
                 this.switchToTab(shortcut);
-                console.info("[OsrsClient] switched game tab from function key", {
-                    key: event.key,
-                    tab: shortcut,
-                    activeTab: this.varManager?.getVarcInt(VARC_ACTIVE_TAB),
-                });
                 event.preventDefault();
                 if (event.key !== "Escape") event.stopImmediatePropagation();
             },
@@ -1081,6 +1083,8 @@ export class OsrsClient {
             ),
         );
         setNpcExamineIdResolver((serverId) => this.resolveNpcExamineTypeId(serverId));
+        const helmSteering = createHelmSteeringDeps(this, sendSetHeading);
+        setHelmSteeringHandler((worldX, worldY) => steerFromHelm(helmSteering, worldX, worldY));
         const globalState = globalThis as typeof globalThis & {
             DEBUG_PROJECTILES?: boolean;
             DEBUG_PROJECTILES_VERBOSE?: boolean;
@@ -1334,6 +1338,11 @@ export class OsrsClient {
         return ((root << 16) | (mapped & 0xffff)) | 0;
     }
 
+    /** True while the server has a sub-interface mounted at this standard (161) target. */
+    public hasServerSubInterface(standardTargetUid: number): boolean {
+        return this.serverSubInterfaces.has(standardTargetUid | 0);
+    }
+
     /** Mounts a sub-interface and runs everything the open packet asked for. */
     private mountSubInterface(payload: any): void {
         if (!this.widgetManager) {
@@ -1448,18 +1457,7 @@ export class OsrsClient {
             handleWidgetAction: (event) => this.handleWidgetAction(event),
             handleTradeWidgetAction: (widget, event, groupId, childId) =>
                 this.handleTradeWidgetAction(widget, event, groupId, childId),
-            handleInventorySlotMove: (
-                from,
-                to,
-                localPredictionApplied,
-                previousSnapshotSignature,
-            ) =>
-                this.handleInventorySlotMove(
-                    from,
-                    to,
-                    localPredictionApplied,
-                    previousSnapshotSignature,
-                ),
+            handleInventorySlotMove: (from, to) => this.handleInventorySlotMove(from, to),
             buildWidgetActionPayload: (event) =>
                 this.widgetActionRouter.buildWidgetActionPayload(event) ?? null,
             resolveTransmitFlagWidget: (eventWidget, payload) =>
@@ -2218,7 +2216,7 @@ export class OsrsClient {
                     if (tradeQuantity.action === "offer") {
                         sendTradeOffer(tradeQuantity.slot, tradeQuantity.itemId, quantity);
                     } else {
-                        sendTradeRemove(tradeQuantity.slot, quantity);
+                        sendTradeRemove(tradeQuantity.slot, tradeQuantity.itemId, quantity);
                     }
                     return;
                 }
@@ -2286,6 +2284,7 @@ export class OsrsClient {
 
         // Clean up click targets when interfaces close to prevent stale/ghost click regions
         this.widgetManager.onInterfaceClose = (groupId) => {
+            this.widgetInputController.onInterfaceClosed(groupId);
             this.customInterfaces.onInterfaceClosed(groupId);
             // The click registry is on the WidgetsOverlay's GL canvas, not the main game canvas
             const glCanvas = (this.renderer as any)?.getWidgetsGLCanvas?.();
@@ -2308,7 +2307,11 @@ export class OsrsClient {
             this.resolvePlayerPlane,
             this.npcEcs,
             this.seqTypeLoader,
-            (plane: number, x: number, y: number) => this.renderer.getCollisionFlagAt(plane, x, y),
+            // A run step is rebuilt with the client's route finder. On a boat deck (its own scene,
+            // no main-world collision) the deck counts as open floor: the server has already
+            // checked the run against the deck, so only the step between two deck tiles is drawn.
+            (plane: number, x: number, y: number) =>
+                ClientState.isWorldEntityTile(x, y) ? 0 : this.renderer.getCollisionFlagAt(plane, x, y),
         );
         this.playerSyncManager = new PlayerSyncManager({
             ecs: this.playerEcs,
@@ -2641,6 +2644,16 @@ export class OsrsClient {
                     w.itemQuantity = 0;
                     this.widgetManager.invalidateWidgetRender(w, "server-set-model");
                 }
+            } else if (payload?.action === "set_position") {
+                // IF_SETPOSITION: as the cs2 op, move within the parent and keep the modes.
+                const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
+                if (w) {
+                    w.rawX = Number(payload.x) | 0;
+                    w.rawY = Number(payload.y) | 0;
+                    if (w.xPositionMode === 0) w.x = w.rawX;
+                    if (w.yPositionMode === 0) w.y = w.rawY;
+                    this.widgetManager.invalidateWidget(w, "server-set-position");
+                }
             } else if (payload?.action === "set_item") {
                 const uid = Number(payload.uid) | 0;
                 const itemId = Number(payload.itemId) | 0;
@@ -2797,7 +2810,8 @@ export class OsrsClient {
                 // RUNCLIENTSCRIPT packet - run a CS2 script with arguments
                 const scriptId = Number(payload.scriptId) | 0;
                 const args = payload.args;
-                if (scriptId > 0 && this.cs2Vm && Array.isArray(args)) {
+                // A negative id carries only vars and inventories (see below).
+                if (scriptId !== 0 && this.cs2Vm && Array.isArray(args)) {
                     if (
                         (scriptId === SCRIPT_HIGHLIGHT_SCREEN_COMPONENT ||
                             scriptId === SCRIPT_HIGHLIGHT_TEXTBOX_DEFAULT) &&
@@ -2857,72 +2871,24 @@ export class OsrsClient {
                                 Array.isArray(snapshot.slots) ? snapshot.slots : [],
                                 { selectedSlot: null },
                             );
+                            // Interfaces listening to this inventory redraw, as for any update;
+                            // an "other" inventory (id + 32768) notifies listeners of its id.
+                            markInvTransmit(inventoryId & 0x7fff);
                         }
                     }
-                    const script = this.cs2Vm.context.loadScript(scriptId);
-                    if (script) {
-                        // Separate int and string args
-                        const intArgs: number[] = [];
-                        const stringArgs: string[] = [];
-                        for (const arg of args) {
-                            if (typeof arg === "number") {
-                                intArgs.push(arg | 0);
-                            } else if (typeof arg === "string") {
-                                stringArgs.push(arg);
-                            }
+                    const intArgs: number[] = [];
+                    const stringArgs: string[] = [];
+                    for (const arg of args) {
+                        if (typeof arg === "number") {
+                            intArgs.push(arg | 0);
+                        } else if (typeof arg === "string") {
+                            stringArgs.push(arg);
                         }
+                    }
 
-                        try {
-                            // Optional CS2 trace: only if already enabled by the user.
-                            const traceCfg: any = (globalThis as any).__cs2Trace;
-                            const shouldTrace = !!traceCfg?.enabled;
-                            let prevTraceEnabled: boolean | undefined;
-                            let prevTraceScripts: any;
-                            let prevTraceLines: any;
-                            let prevTraceMaxLines: any;
-                            if (shouldTrace) {
-                                prevTraceEnabled = traceCfg.enabled;
-                                prevTraceScripts = traceCfg.scripts;
-                                prevTraceLines = traceCfg.lines;
-                                prevTraceMaxLines = traceCfg.maxLines;
-                                traceCfg.scripts = traceCfg.scripts ?? null;
-                                traceCfg.lines = 0;
-                                traceCfg.maxLines = traceCfg.maxLines ?? 2000;
-                                (globalThis as any).__cs2Trace = traceCfg;
-                            }
-                            // RUNCLIENTSCRIPT has no event component context. Do not inherit
-                            // active/dot widgets left by previous UI event scripts; mounted
-                            // interface coordinate helpers depend on the current script group.
-                            this.cs2Vm.activeWidget = null;
-                            this.cs2Vm.dotWidget = null;
-                            try {
-                                this.cs2Vm.run(script, intArgs, stringArgs);
-                            } finally {
-                                this.cs2Vm.activeWidget = null;
-                                this.cs2Vm.dotWidget = null;
-                            }
-                            if (shouldTrace && traceCfg) {
-                                traceCfg.enabled = prevTraceEnabled;
-                                traceCfg.scripts = prevTraceScripts;
-                                traceCfg.lines = prevTraceLines;
-                                traceCfg.maxLines = prevTraceMaxLines;
-                                (globalThis as any).__cs2Trace = traceCfg;
-                            }
-                            // CRITICAL: Invalidate widgets after script runs so changes are rendered.
-                            // CS2 scripts modify widget properties (text, hidden, position, etc.)
-                            // but without invalidation the render system won't repaint.
-                            if (this.widgetManager) {
-                                this.widgetManager.invalidateAll();
-                            }
-                        } catch (err) {
-                            console.error(
-                                `[OsrsClient] run_script error for script ${scriptId}:`,
-                                err,
-                            );
-                        }
-                    } else {
-                        console.warn(`[OsrsClient] run_script: script ${scriptId} not found`);
-                    }
+                    // A negative id carries only vars and inventories, with no script to run.
+                    const script = scriptId >= 0 ? this.cs2Vm.context.loadScript(scriptId) : null;
+                    if (script) this.cs2Vm.run(script, intArgs, stringArgs);
                 }
             } else if ((payload as any)?.action === "set_varbits") {
                 // Server-initiated varbit sync without running a script
@@ -3402,8 +3368,15 @@ export class OsrsClient {
             );
             // Capture server-assigned ID as soon as handshake arrives
             this.trackServerSubscription(
-                subscribeHandshake(({ id, name, appearance, chatIcons, chatPrefix, isAdmin }) => {
+                subscribeHandshake(({ id, name, appearance, chatIcons, chatPrefix, isAdmin, membersWorld }) => {
                     try {
+                        const isMembersWorld = membersWorld !== false;
+                        if (isMembersWorld !== this.isMembersWorld) {
+                            this.isMembersWorld = isMembersWorld;
+                            // Item names/options are baked at load; re-decode with the new world type.
+                            PostProcessedObjTypeLoader.membersWorld = isMembersWorld;
+                            this.objTypeLoader?.clearCache?.();
+                        }
                         // Store the local player name for CS2 scripts (CHAT_PLAYERNAME)
                         if (name) {
                             this.localPlayerName = name;
@@ -3504,9 +3477,11 @@ export class OsrsClient {
                         console.log(
                             `[OsrsClient] REBUILD_NORMAL received: regionX=${payload.regionX} regionY=${payload.regionY} regions=${payload.mapRegions.length}`,
                         );
+                        const wasInInstance = ClientState.inInstance;
                         ClientState.inInstance = false;
                         ClientState.instanceTemplateChunks = null;
-                        if (this.renderer && "clearInstance" in this.renderer) {
+                        const rendererWasInInstance = (this.renderer as any)?.instanceActive === true;
+                        if ((wasInInstance || rendererWasInInstance) && this.renderer && "clearInstance" in this.renderer) {
                             (this.renderer as any).clearInstance();
                         }
                     } catch (err) {
@@ -3521,10 +3496,11 @@ export class OsrsClient {
                         console.log(
                             `[OsrsClient] REBUILD_WORLDENTITY received: entity=${payload.entityIndex} config=${payload.configId} size=${payload.sizeX}x${payload.sizeZ} regionX=${payload.regionX} regionY=${payload.regionY} regions=${payload.mapRegions.length}`,
                         );
-                        // World entity scene anchor: entityCoord + sizeChunks * 4 (tile precision).
-                        // entityCoord=3050, sizeChunks=8, fineBase=8*64=512fine=4tiles → anchor=3054.
-                        const entityWorldX = 3054;
-                        const entityWorldY = 3193;
+                        // The deck scene keeps its own coordinates: 13x13 chunks centred on
+                        // the region, so this anchor puts the scene base at (region - 6) * 8.
+                        // Where the deck is drawn in the world comes from WORLDENTITY_INFO.
+                        const entityWorldX = payload.regionX * 8 + 4;
+                        const entityWorldY = payload.regionY * 8 + 4;
 
                         // Collect extra locs from addedLocs that fall in source region
                         const extraLocs: Array<{
@@ -3560,19 +3536,9 @@ export class OsrsClient {
                             );
                         }
 
-                        // Set local player's worldViewId to this entity
-                        if (this.controlledPlayerServerId >= 0) {
-                            const localEcsIdx = this.playerEcs.getIndexForServerId(
-                                this.controlledPlayerServerId,
-                            );
-                            if (localEcsIdx !== undefined) {
-                                this.playerEcs.setWorldViewId(localEcsIdx, payload.entityIndex);
-                                this.worldViewManager.addPlayerToWorldView(
-                                    payload.entityIndex,
-                                    localEcsIdx,
-                                );
-                            }
-                        }
+                        // Boats of other players are built too; the local player is only on
+                        // this one if they stand in its deck scene.
+                        this.syncLocalWorldView();
                     } catch (err) {
                         console.warn("[OsrsClient] rebuild_worldentity error", err);
                     }
@@ -3591,6 +3557,7 @@ export class OsrsClient {
                         ? frame.localIndex | 0
                         : this.lastPlayerSyncLocalIndex;
                     this.playerSyncManager.handleFrame(frame);
+                    this.syncLocalWorldView();
                 } catch (err) {
                     console.warn("[OsrsClient] player_sync frame error", err);
                 }
@@ -5915,6 +5882,8 @@ export class OsrsClient {
         this.updateGameState(GameState.LOGIN_SCREEN);
     }
 
+    private logoutUnsubscribe?: () => void;
+
     /**
      * Perform logout - called by CS2 LOGOUT opcode.
      * Sends logout request to server and waits for consent before completing.
@@ -5922,11 +5891,12 @@ export class OsrsClient {
     performLogout(afterLogout?: () => void): void {
         console.log("[OsrsClient] Requesting logout from server...");
 
-        // Subscribe to logout response (one-shot)
+        // A refusal keeps listening: the server may approve later (a Fight Cave wave ending).
+        this.logoutUnsubscribe?.();
         const unsubscribe = subscribeLogoutResponse((response) => {
-            unsubscribe();
-
             if (response.success) {
+                unsubscribe();
+                this.logoutUnsubscribe = undefined;
                 console.log("[OsrsClient] Server approved logout, completing...");
 
                 // Suppress reconnection after intentional logout
@@ -5956,6 +5926,8 @@ export class OsrsClient {
                 chatHistory.addMessage("game", reason);
             }
         });
+
+        this.logoutUnsubscribe = unsubscribe;
 
         // Send logout request to server
         sendLogout();
@@ -6098,7 +6070,9 @@ export class OsrsClient {
     }
 
     getMinimapImageUrl(mapX: number, mapY: number, level: number = 0): string | undefined {
-        if (mapX < 0 || mapY < 0 || mapX >= MapManager.MAX_MAP_X || mapY >= MapManager.MAX_MAP_Y) {
+        // Instance allocations can lie beyond the cache's overworld bounds.
+        // Each coordinate occupies one byte in the minimap image key.
+        if (mapX < 0 || mapY < 0 || mapX > 0xff || mapY > 0xff) {
             return undefined;
         }
         const mapId = this.getMinimapImageKey(mapX, mapY, level);
@@ -7124,6 +7098,8 @@ export class OsrsClient {
             clientCycle: getClientCycle() | 0,
             localTileX: decodeBase.tileX | 0,
             localTileY: decodeBase.tileY | 0,
+            rootTileX: payload.rootTileX | 0,
+            rootTileY: payload.rootTileY | 0,
             level: decodeBase.level | 0,
         });
 
@@ -7145,7 +7121,7 @@ export class OsrsClient {
     }
 
     private getNpcInstanceRenderMapId(
-        instance: Pick<NpcInstance, "worldViewId" | "x" | "y">,
+        instance: Pick<NpcInstance, "worldViewId" | "x" | "y" | "ownerMapId">,
     ): number {
         const worldViewId = instance.worldViewId;
         if (typeof worldViewId === "number" && worldViewId >= 0) {
@@ -7153,9 +7129,47 @@ export class OsrsClient {
             const overlayMapY = 200 + (worldViewId | 0);
             return getMapSquareId(overlayMapX, overlayMapY);
         }
-        const mapX = getMapIndexFromTile(instance.x | 0);
-        const mapY = getMapIndexFromTile(instance.y | 0);
-        return getMapSquareId(mapX, mapY);
+        return npcOwnerMapId(instance);
+    }
+
+    /**
+     * The map square that owns (draws and picks) an NPC on a tile. An instance scene is built as
+     * one map square, so while one is drawn every NPC in it belongs to that square; elsewhere it
+     * is the 64x64 square the tile is in.
+     */
+    private npcOwnerMap(tileX: number, tileY: number): { mapX: number; mapY: number; instance: boolean } {
+        const scene = (this.renderer as any)?.instanceSceneMap as { mapX: number; mapY: number } | null | undefined;
+        if (scene && (this.renderer as any)?.instanceActive) {
+            return { mapX: scene.mapX | 0, mapY: scene.mapY | 0, instance: true };
+        }
+        return { mapX: getMapIndexFromTile(tileX | 0), mapY: getMapIndexFromTile(tileY | 0), instance: false };
+    }
+
+    /**
+     * Moves every NPC to the map square that now owns it: called when an instance scene is drawn
+     * (all of its NPCs move to its square) or left (they go back to their own squares).
+     * `refreshMapId` is a map just swapped in, whose NPCs are rebuilt either way.
+     */
+    rehomeNpcs(refreshMapId?: number): void {
+        let changed = false;
+        // The new scene's map is rebuilt from scratch: give it its NPCs again.
+        if (typeof refreshMapId === "number") {
+            this.npcInstances.markMapPendingReload(refreshMapId | 0);
+            changed = true;
+        }
+        for (const instance of this.npcInstances.instanceMap.values()) {
+            if (typeof instance.worldViewId === "number" && instance.worldViewId >= 0) continue;
+            const owner = this.npcOwnerMap(instance.x | 0, instance.y | 0);
+            const ownerMapId = getMapSquareId(owner.mapX, owner.mapY);
+            const nextOwner = owner.instance ? ownerMapId : undefined;
+            if (instance.ownerMapId === nextOwner && npcOwnerMapId(instance) === ownerMapId) continue;
+            instance.ownerMapId = nextOwner;
+            const ecsId = typeof instance.serverId === "number" ? this.npcEcs.getEcsIdForServer(instance.serverId) : undefined;
+            if (ecsId !== undefined) this.npcEcs.rebaseToMapSquare(ecsId, owner.mapX, owner.mapY);
+            this.npcInstances.markMapPendingReload(ownerMapId);
+            changed = true;
+        }
+        if (changed) this.npcInstances.scheduleFlush();
     }
 
     private spawnNpcBinary(
@@ -7169,10 +7183,12 @@ export class OsrsClient {
 
         const worldTileX = spawn.tileX | 0;
         const worldTileY = spawn.tileY | 0;
-        const mapX = getMapIndexFromTile(worldTileX);
-        const mapY = getMapIndexFromTile(worldTileY);
-        const localTileX = worldTileX & 63;
-        const localTileY = worldTileY & 63;
+        const owner = this.npcOwnerMap(worldTileX, worldTileY);
+        const mapX = owner.mapX;
+        const mapY = owner.mapY;
+        // Relative to the owning square, which in an instance need not contain the tile.
+        const localTileX = (worldTileX - mapX * 64) | 0;
+        const localTileY = (worldTileY - mapY * 64) | 0;
         const mapBaseX = (mapX << 13) | 0;
         const mapBaseY = (mapY << 13) | 0;
 
@@ -7255,7 +7271,8 @@ export class OsrsClient {
             return;
         }
         const size = Math.max(1, npcType?.size | 0);
-        const rotSpeed = Math.max(1, npcType?.rotationSpeed | 0);
+        // A turn speed of 0 never turns (the Inferno's Ancestral Glyph slides side to side).
+        const rotSpeed = Math.max(0, npcType?.rotationSpeed | 0);
         const localX = (localTileX * 128 + size * 64) | 0;
         const localY = (localTileY * 128 + size * 64) | 0;
 
@@ -7354,8 +7371,9 @@ export class OsrsClient {
         try {
             const st = this.npcEcs.getServerState(ecsId);
             if (st) {
-                const nextMapX = getMapIndexFromTile(st.tileX | 0);
-                const nextMapY = getMapIndexFromTile(st.tileY | 0);
+                const nextOwner = this.npcOwnerMap(st.tileX | 0, st.tileY | 0);
+                const nextMapX = nextOwner.mapX;
+                const nextMapY = nextOwner.mapY;
                 const nextMapId = getMapSquareId(nextMapX, nextMapY) | 0;
                 if ((nextMapId | 0) !== (mapId | 0)) {
                     // Keep ECS map ownership in sync with movement state so map-bucketed systems
@@ -7385,6 +7403,11 @@ export class OsrsClient {
         const serverId = npcId | 0;
         if (serverId <= 0) return;
         const ecsId = this.npcEcs.getEcsIdForServer(serverId);
+
+        if (Array.isArray(block.headIcons)) {
+            if (block.headIcons.length > 0) this.npcHeadIcons.set(serverId, block.headIcons);
+            else this.npcHeadIcons.delete(serverId);
+        }
 
         if (ecsId !== undefined) {
             if (typeof block.faceEntity === "number") {
@@ -7478,6 +7501,7 @@ export class OsrsClient {
                     ? worldViewId | 0
                     : undefined
                 : prev?.worldViewId;
+        const owner = this.npcOwnerMap(worldTileX, worldTileY);
         const nextInstance: NpcInstance = {
             serverId: sid,
             typeId: typeId | 0,
@@ -7485,6 +7509,7 @@ export class OsrsClient {
             y: worldTileY | 0,
             level: level | 0,
             ...(nextWorldViewId !== undefined ? { worldViewId: nextWorldViewId } : {}),
+            ...(owner.instance ? { ownerMapId: getMapSquareId(owner.mapX, owner.mapY) } : {}),
         };
         const mapId = this.getNpcInstanceRenderMapId(nextInstance);
 
@@ -7508,6 +7533,7 @@ export class OsrsClient {
             prev.level = nextInstance.level;
             prev.serverId = sid;
             prev.worldViewId = nextInstance.worldViewId;
+            prev.ownerMapId = nextInstance.ownerMapId;
         } else {
             this.npcInstances.instanceMap.set(key, nextInstance);
             this.npcInstances.markMapPendingReload(mapId);
@@ -7522,6 +7548,7 @@ export class OsrsClient {
         const existingInstance = this.npcInstances.instanceMap.get(instanceKey);
         // Keep OSRS-style global NPC index array in sync for menuAction packet gates.
         ClientState.npcs[sid] = null;
+        this.npcHeadIcons.delete(sid);
         try {
             (this.renderer as any)?.clearNpcHealthBars?.(sid);
         } catch {}
@@ -7541,83 +7568,22 @@ export class OsrsClient {
         this.npcInstances.notifyRendererReady();
     }
 
-    handleInventorySlotMove(
-        fromSlot: number,
-        toSlot: number,
-        localPredictionApplied: boolean = false,
-        previousSnapshotSignature?: string,
-    ): void {
+    handleInventorySlotMove(fromSlot: number, toSlot: number): void {
         const src = Math.max(0, Math.min(Inventory.SLOT_COUNT - 1, fromSlot | 0));
         const dst = Math.max(0, Math.min(Inventory.SLOT_COUNT - 1, toSlot | 0));
         if (src === dst) return;
+        const sourceEntry = this.inventory.getSlot(src);
+        if (!sourceEntry || sourceEntry.itemId <= 0) return;
 
-        let before = previousSnapshotSignature;
-        if (!localPredictionApplied) {
-            const sourceEntry = this.inventory.getSlot(src);
-            if (!sourceEntry || sourceEntry.itemId <= 0) return;
-            before = this.inventory.snapshotSignature();
-            this.inventory.swapSlots(src, dst);
-        }
-
-        const predictedSource = this.inventory.getSlot(src);
-        const predictedDestination = this.inventory.getSlot(dst);
-
-        try {
-            console.log("[inventory] move slot", {
-                from: src,
-                to: dst,
-                predictedSourceItem: predictedSource?.itemId ?? -1,
-                predictedDestinationItem: predictedDestination?.itemId ?? -1,
-            });
-        } catch {}
-
-        // Publish the already-mutated model into the actual WebGL widget state before
-        // onDragComplete or clearDragWidgetVisualState can render another frame.
-        this.publishInventorySlotPrediction(src, dst);
-        const after = this.inventory.snapshotSignature();
-        this.pendingInventoryMovePredictions.push({
-            before: before ?? after,
-            after,
-        });
+        const before = this.inventory.snapshotSignature();
+        this.inventory.swapSlots(src, dst);
+        this.pendingInventoryMovePredictions.push({ before, after: this.inventory.snapshotSignature() });
         sendInventoryMove(src, dst);
 
-        // Dispatch through the inventory UI's CS2 state bridge. This client renders its
-        // inventory through WidgetNode/WebGL rather than a React inventory component.
+        // Refresh the entire slot through its cache script: item, actions, drag
+        // listeners, visibility and transparency must describe the same item.
         markInvTransmit(93);
-    }
-
-    private publishInventorySlotPrediction(...slotIndexes: number[]): void {
-        const slots = new Set(
-            slotIndexes
-                .map((slot) => slot | 0)
-                .filter((slot) => slot >= 0 && slot < Inventory.SLOT_COUNT),
-        );
-        if (slots.size === 0) return;
-
-        const updatedWidgets = new Set<any>();
-        const updateWidget = (widget: any, slot: number): void => {
-            if (!widget || updatedWidgets.has(widget)) return;
-            if (((widget.groupId ?? -1) | 0) !== 149) return;
-            if (((widget.childIndex ?? -1) | 0) !== slot) return;
-            if (((widget.type ?? -1) | 0) !== 5) return;
-
-            const entry = this.inventory.getSlot(slot);
-            const itemId = entry && entry.itemId > 0 ? entry.itemId | 0 : -1;
-            const quantity = itemId > 0 ? Math.max(0, entry?.quantity ?? 0) | 0 : 0;
-            widget.itemId = itemId;
-            widget.itemQuantity = quantity;
-            widget.itemAmount = quantity;
-            markWidgetInteractionDirty(widget);
-            this.widgetManager.invalidateWidgetRender(widget, "inventory-move-prediction");
-            updatedWidgets.add(widget);
-        };
-
-        for (const parent of this.widgetManager.getWidgetsForGroup(149)) {
-            if (!Array.isArray(parent.children)) continue;
-            for (const slot of slots) {
-                updateWidget(parent.children[slot], slot);
-            }
-        }
+        this.triggerInvTransmitForGroup(149);
     }
 
     handleInventorySlotTap(slotIndex: number): void {
@@ -7847,7 +7813,7 @@ export class OsrsClient {
             if (entity) {
                 entity.drawMode = spawn.drawMode;
                 if (spawn.position) {
-                    entity.queuePosition(spawn.position);
+                    entity.setPosition(spawn.position);
                 }
                 if (spawn.mask) {
                     this.applyWorldEntityMask(spawn.entityIndex, entity, spawn.mask);
@@ -7885,16 +7851,40 @@ export class OsrsClient {
 
     private despawnWorldEntity(entityIndex: number): void {
         console.log(`[OsrsClient] Despawning world entity ${entityIndex}`);
+        // Before the world view goes: its bounds say which added locs were the boat's.
+        if (this.renderer && "clearWorldEntityLocs" in this.renderer) {
+            (this.renderer as any).clearWorldEntityLocs(entityIndex);
+        }
         if (this.renderer && "clearWorldEntity" in this.renderer) {
             (this.renderer as any).clearWorldEntity(entityIndex);
         }
         if (this.controlledPlayerServerId >= 0) {
             const localEcsIdx = this.playerEcs.getIndexForServerId(this.controlledPlayerServerId);
-            if (localEcsIdx !== undefined) {
+            // Only a boat the local player is on takes them off it; other boats come and go.
+            if (localEcsIdx !== undefined && this.playerEcs.getWorldViewId(localEcsIdx) === entityIndex) {
                 this.playerEcs.setWorldViewId(localEcsIdx, -1);
                 this.worldViewManager.removePlayerFromWorldView(entityIndex, localEcsIdx);
             }
         }
+    }
+
+    /**
+     * Puts the local player in the world view of the boat whose deck scene they stand in, or
+     * the main world (-1). The server sends every nearby boat's scene, so being sent a boat
+     * doesn't mean being on it; where the player stands decides.
+     */
+    private syncLocalWorldView(): void {
+        if (this.controlledPlayerServerId < 0) return;
+        const localEcsIdx = this.playerEcs.getIndexForServerId(this.controlledPlayerServerId);
+        const tile = this.playerSyncManager.getServerTile(this.controlledPlayerServerId);
+        if (localEcsIdx === undefined || !tile) return;
+        const view = this.worldViewManager.findWorldViewAt(tile.tileX, tile.tileY);
+        const next = view && view.id !== -1 ? view.id : -1;
+        const current = this.playerEcs.getWorldViewId(localEcsIdx);
+        if (next === current) return;
+        if (current >= 0) this.worldViewManager.removePlayerFromWorldView(current, localEcsIdx);
+        this.playerEcs.setWorldViewId(localEcsIdx, next);
+        if (next >= 0) this.worldViewManager.addPlayerToWorldView(next, localEcsIdx);
     }
 
     /**

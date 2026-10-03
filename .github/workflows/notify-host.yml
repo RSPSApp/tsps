@@ -1,0 +1,15 @@
+name: Deploy browser host
+
+# Every merge to main rebuilds the rsps-host server snapshot and redeploys it.
+on:
+    push:
+        branches: [main]
+
+jobs:
+    notify:
+        if: github.repository == 'RSPSApp/tsps'
+        runs-on: ubuntu-latest
+        steps:
+            - run: gh api repos/tobywisener/rsps-host/dispatches -f event_type=tsps-main
+              env:
+                  GH_TOKEN: ${{ secrets.HOST_DISPATCH_TOKEN }}

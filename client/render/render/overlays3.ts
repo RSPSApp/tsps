@@ -188,6 +188,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS, DEFAULT_OVERHEAD_CHAT_COLOR, OVERHEAD_CHAT_COLOR_TABLE, DEFAULT_NPC_HEALTH, MAX_ESTIMATED_HEALTH } from "./constants";
+import { projectDeckToWorld } from "./worldEntityMotion";
 
 export function trimActorHealthBars(host: WebGLOsrsRendererHost, 
         map: Map<number, ActorHealthBarsState>,
@@ -260,9 +261,20 @@ export function appendPlayerOverheadText(host: WebGLOsrsRendererHost,
         const text = chatState.text;
         if (!text || text.length === 0) return;
 
+        let x = pe.getX(index) | 0;
+        let y = pe.getY(index) | 0;
+        // On a boat the player stands in deck coordinates; place the text where the deck is drawn.
+        const worldViewId = pe.getWorldViewId(index) | 0;
+        if (worldViewId >= 0) {
+            const projected = projectDeckToWorld(host, worldViewId, x, y);
+            if (!projected) return;
+            x = projected.x;
+            y = projected.y;
+        }
+
         const overhead = host.acquireOverheadTextEntry();
-        overhead.worldX = (pe.getX(index) | 0) / 128.0;
-        overhead.worldZ = (pe.getY(index) | 0) / 128.0;
+        overhead.worldX = x / 128.0;
+        overhead.worldZ = y / 128.0;
         overhead.plane = pe.getLevel(index) | 0;
         overhead.footprintRadius = RENDER_CONSTANTS.PLAYER_FOOTPRINT_RADIUS;
         overhead.groupKey = host.makeActorGroupKey(false, pe.getServerIdForIndex?.(index) ?? 0);

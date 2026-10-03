@@ -65,7 +65,7 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     if (SqlitePlayerPersistence.IMPORT_LEGACY_JSON) {
       this.importLegacySaves();
     } else {
-      console.info("[persistence] legacy JSON import is disabled");
+      console.debug("[persistence] legacy JSON import is disabled");
     }
   }
 
@@ -206,21 +206,11 @@ class SqlitePlayerPersistence extends PlayerPersistence {
         passwordHashWithSalt: "",
         isDiscordLogin: false,
         cachedDiscordAccessToken: "",
-        title: "",
         autoRetaliate: true,
-        xpLocked: false,
-        clanChat: "",
-        targetTeleportUnlocked: false,
-        preserveUnlocked: false,
-        rigourUnlocked: false,
-        auguryUnlocked: false,
         hasVengeance: false,
         lastVengeanceTimer: 0,
         specPercentage: 100,
-        recoilDamage: 0,
         poisonDamage: 0,
-        crystalBowShotsInStage: 0,
-        crystalBowTrackedStageItemId: -1,
         barrowsCrypt: 0,
         barrowsChests: 0,
         killedBrothers: [],
@@ -232,13 +222,6 @@ class SqlitePlayerPersistence extends PlayerPersistence {
         skullTimer: 0,
         running: false,
         runEnergy: 100,
-        totalKills: 0,
-        killstreak: 0,
-        highestKillstreak: 0,
-        recentKills: [],
-        deaths: 0,
-        points: 0,
-        pouches: [],
         inventory: [],
         equipment: [],
         appearance: [],
@@ -261,7 +244,6 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     save.quickPrayers = this.hydrateQuickPrayers(parsed.quickPrayers);
     save.friends = this.hydrateRelationArray(parsed.friends, { max: 200 });
     save.ignores = this.hydrateRelationArray(parsed.ignores, { max: 100 });
-    save.recentKills = this.hydrateStringArray(parsed.recentKills);
     save.flags = this.hydrateFlags(parsed.flags);
     save.banks = this.hydrateBanks(parsed.banks);
     return save;

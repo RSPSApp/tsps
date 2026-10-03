@@ -133,7 +133,10 @@ void main() {
     // OSRS-style fog: rounded-square boundary around the player
     vec2 playerOffset = vec2(localPos.x - u_playerPos.x, localPos.z - u_playerPos.y);
 
-    v_fogAmount = fogFactorOSRS(playerOffset);
+    // Boat decks are drawn from their own deck coordinates, so their distance to the player
+    // can't be measured here; decks are always around the player, so leave them unfogged.
+    bool isWorldEntityDraw = u_worldEntityTransform != mat4(1.0);
+    v_fogAmount = isWorldEntityDraw ? 0.0 : fogFactorOSRS(playerOffset);
     v_fogAmount = isLoading * max(1.0 - loadAlpha, v_fogAmount) +
         (1.0 - isLoading) * v_fogAmount;
 

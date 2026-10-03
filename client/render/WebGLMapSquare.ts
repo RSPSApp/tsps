@@ -892,7 +892,7 @@ export class WebGLMapSquare {
             let plane = npc.level | 0;
             if (
                 plane < 3 &&
-                (tileRenderFlags[1][tileX + borderSize][tileY + borderSize] & 0x2) === 2
+                ((tileRenderFlags[1]?.[tileX + borderSize]?.[tileY + borderSize] ?? 0) & 0x2) === 2
             ) {
                 plane++;
             }
@@ -1316,8 +1316,13 @@ export class WebGLMapSquare {
     }
 
     delete() {
+        // An instance scene or a boat deck is drawn away from its square's corner and is only
+        // ever replaced by a rebuilt copy of itself: its server NPCs live on into the copy (the
+        // server still has them in view and removes them itself). A world square is unloaded
+        // because the player went far away, and its NPCs go with it.
+        const rebuiltInPlace = this.renderPosX !== this.mapX || this.renderPosY !== this.mapY;
         runMapSquareAction(this.mapX, this.mapY, "npcEcs.destroyNpcsForMap", () =>
-            this._npcEcs?.destroyNpcsForMap(this.mapX, this.mapY),
+            this._npcEcs?.destroyNpcsForMap(this.mapX, this.mapY, rebuiltInPlace),
         );
         releaseDrawCallRange(this.drawCall);
         releaseDrawCallRange(this.drawCallAlpha);
@@ -1636,7 +1641,7 @@ export class WebGLMapSquare {
             let plane = npc.level | 0;
             if (
                 plane < 3 &&
-                (this.tileRenderFlags[1][tileX + borderSize][tileY + borderSize] & 0x2) === 2
+                ((this.tileRenderFlags[1]?.[tileX + borderSize]?.[tileY + borderSize] ?? 0) & 0x2) === 2
             ) {
                 plane++;
             }

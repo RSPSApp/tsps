@@ -1,14 +1,15 @@
-const { FriendsChatManager } = require("./FriendsChatManager");
+const { FriendsChatManager, CHAT_FILTERS_ATTRIBUTE, CLAN_CHAT_ATTRIBUTE } = require("./FriendsChatManager");
 
 module.exports = {
   name: "FriendsList",
   register(api) {
+    api.persistAttribute(CHAT_FILTERS_ATTRIBUTE);
     api.onCanAttack((event) => {
       if (event.allow !== null) return;
       const { attacker, target } = event;
       if (!attacker || !target || attacker === target) return;
-      const channel = attacker.getCurrentClanChat?.();
-      if (channel == null || channel !== target.getCurrentClanChat?.()) return;
+      const channel = attacker.getAttribute?.(CLAN_CHAT_ATTRIBUTE);
+      if (channel == null || channel !== target.getAttribute?.(CLAN_CHAT_ATTRIBUTE)) return;
       attacker.sendMessage("You cannot attack a player who is in your clan chat.");
       event.allow = false;
     });

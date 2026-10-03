@@ -17,7 +17,8 @@ class TeleportTask extends Task {
     constructor(
         private readonly player: Player,
         private readonly targetLocation: Location,
-        private readonly teleportType: TeleportType
+        private readonly teleportType: TeleportType,
+        private readonly onArrival?: () => void
     ) {
         super(1, player, true);
     }
@@ -35,6 +36,7 @@ class TeleportTask extends Task {
             this.player.performAnimation(this.teleportType.getEndAnimation());
             this.player.performGraphic(this.teleportType.getEndGraphic());
             this.player.moveTo(this.targetLocation);
+            this.onArrival?.();
         } else if (this.teleportTick === this.teleportType.getStartTick() + 2) {
             this.player.getMovementQueue().setBlockMovement(false).reset();
             this.stop();
@@ -64,7 +66,7 @@ export class TeleportHandler {
      * @param teleportType
      *            The type of teleport.
      */
-    public static teleport(player: Player, targetLocation: Location, teleportType: TeleportType, wildernessWarning: boolean): void {
+    public static teleport(player: Player, targetLocation: Location, teleportType: TeleportType, wildernessWarning: boolean, onArrival?: () => void): void {
         if (wildernessWarning) {
             let warning = "";
             const wilderness = Wilderness.isInLocation(targetLocation);
@@ -73,7 +75,7 @@ export class TeleportHandler {
                 warning += "Are you sure you want to teleport there? ";
                 if (wildernessLevel > 0) {
                     warning += "It's in level @red@" + wildernessLevel + "@bla@ wilderness! ";
-                    if (Wilderness.isMulti(targetLocation.getX(), targetLocation.getY())) {
+                    if (Wilderness.isMulti(targetLocation.getX(), targetLocation.getY(), targetLocation.getZ())) {
                         warning += "Additionally, @red@it's a multi zone@bla@. Other players may attack you simultaneously.";
                     } else {
                         warning += "Other players will be able to attack you.";
@@ -92,7 +94,7 @@ export class TeleportHandler {
         player.setUntargetable(true);
         player.setTeleporting(true);
         Sounds.sendSound(player, Sound.TELEPORT);
-        TaskManager.submit(new TeleportTask(player, targetLocation, teleportType));
+        TaskManager.submit(new TeleportTask(player, targetLocation, teleportType, onArrival));
         player.getClickDelay().reset();
     }
 
@@ -128,7 +130,7 @@ export class TeleportHandler {
             return false;
         }
 
-        if (PluginManager.emitCanTeleport(player, wildernessLevelLimit) === false) {
+        if (PluginManager.emitCanTeleport(player, wildernessLevelLimit, targetLocation) === false) {
             return false;
         }
 

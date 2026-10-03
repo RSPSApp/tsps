@@ -349,31 +349,20 @@ export function handleInboundWorld(msg: any): boolean {
         return true;
     }
     if (msg.type === "runClientScript") {
-        // Server-pushed runClientScript - execute CS2 script (rsmod parity)
         try {
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
             const mv = g?.__osrsClient;
             const payload = msg.payload as { scriptId: number; args: (number | string)[] };
-            if (mv && mv.cs2Vm) {
-                const scriptId = payload.scriptId | 0;
-                const args = payload.args || [];
-                console.log(`[runClientScript] executing script ${scriptId} with args:`, args);
-                const script = mv.cs2Vm.context?.loadScript?.(scriptId);
-                if (script) {
-                    // Separate int and string args
-                    const intArgs: number[] = [];
-                    const strArgs: string[] = [];
-                    for (const arg of args) {
-                        if (typeof arg === "number") {
-                            intArgs.push(arg | 0);
-                        } else if (typeof arg === "string") {
-                            strArgs.push(arg);
-                        }
-                    }
-                    mv.cs2Vm.run(script, intArgs, strArgs);
-                } else {
-                    console.warn(`[runClientScript] script ${scriptId} not found`);
+            const scriptId = payload.scriptId | 0;
+            const script = mv?.cs2Vm?.context?.loadScript?.(scriptId);
+            if (script) {
+                const intArgs: number[] = [];
+                const stringArgs: string[] = [];
+                for (const arg of payload.args || []) {
+                    if (typeof arg === "number") intArgs.push(arg | 0);
+                    else if (typeof arg === "string") stringArgs.push(arg);
                 }
+                mv.cs2Vm.run(script, intArgs, stringArgs);
             }
         } catch (err) {
             console.warn("runClientScript handler error", err);

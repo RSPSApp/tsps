@@ -67,7 +67,7 @@ test('point currencies persist on a player attribute', () => {
   const { handlers, persisted } = loadPlugin();
   const nmz = handlers.get('NMZ');
   assert.ok(nmz, 'NMZ currency registered');
-  assert.ok(persisted.has('shopCurrency:NMZ'), 'NMZ attribute persisted');
+  assert.ok(persisted.has('shop-currency:NMZ'), 'NMZ attribute persisted');
 
   const attributes = new Map();
   const player = {

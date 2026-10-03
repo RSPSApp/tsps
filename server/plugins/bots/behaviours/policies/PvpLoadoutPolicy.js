@@ -12,6 +12,8 @@ const { getPvpLoadout, PVP_LOADOUT_DEFINITIONS } = require("../pvp/PvpLoadoutReg
 const { SPEC_WEAPON_IDS } = require("./PvpCombatRuntimeCache");
 const { isFoodItem } = require("../../../items/Food.plugin");
 
+const CURRENT_PRESET_ATTRIBUTE = "pvp:current-preset";
+
 const ICE_BARRAGE_SPELL_ID = 12891;
 const ICE_BLITZ_SPELL_ID = CombatSpells.ICE_BLITZ.spellId();
 const ICE_BARRAGE_COMBAT_SPELL_ID = CombatSpells.ICE_BARRAGE.spellId();
@@ -418,7 +420,7 @@ function applyGeneratedPvpLoadout(player, state, options = {}) {
     });
     return false;
   }
-  player.setCurrentPreset?.(generated.preset);
+  player.setAttribute?.(CURRENT_PRESET_ATTRIBUTE, generated.preset);
   let applied = false;
   try {
     applied = applyPreset(player, generated.preset);

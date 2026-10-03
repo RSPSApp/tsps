@@ -37,6 +37,8 @@ export class WorldEntity {
     pendingPathStepCount: number = 0;
     interpolationInitialized: boolean = false;
     private hasInterpolated: boolean = false;
+    /** False until the first WORLDENTITY_INFO spawn places the entity in the world. */
+    hasPosition: boolean = false;
 
     configId: number = -1;
     actionMask: number = 31;
@@ -61,6 +63,7 @@ export class WorldEntity {
     }
 
     setPosition(pos: Position): void {
+        this.hasPosition = true;
         this.hasInterpolated = false;
         copyPosition(pos, this.position);
         copyPosition(pos, this.pathSteps[0].position);
@@ -68,14 +71,17 @@ export class WorldEntity {
         this.interpolationInitialized = false;
     }
 
+    /**
+     * Queue a smoothly interpolated move. OSRS sends scene-local positions and snaps anything
+     * outside the 104-tile scene; our server sends absolute world fine coordinates, so every
+     * queued move interpolates.
+     */
     queuePosition(pos: Position): void {
-        const tileX = (pos.x / 128) | 0;
-        const tileZ = (pos.z / 128) | 0;
-        if (tileX >= 0 && tileX < 104 && tileZ >= 0 && tileZ < 104) {
-            this.enqueuePathStep(pos);
-        } else {
+        if (!this.hasPosition) {
             this.setPosition(pos);
+            return;
         }
+        this.enqueuePathStep(pos);
     }
 
     private enqueuePathStep(pos: Position): void {
@@ -93,6 +99,7 @@ export class WorldEntity {
     }
 
     interpolatePath(cycle: number, cycleFraction: number): void {
+        if (!this.hasPosition) return;
         if (this.pendingPathStepCount === 0) {
             this.setPosition(this.pathSteps[0].position);
             return;

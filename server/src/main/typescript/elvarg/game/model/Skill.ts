@@ -25,8 +25,10 @@ export class Skill {
     public static SLAYER = new Skill(12122, 12162);
     public static FARMING = new Skill(5267, 13928);
     public static RUNECRAFTING = new Skill(4267, 8672);
-    public static CONSTRUCTION = new Skill(7267, 18801);
-    public static HUNTER = new Skill(8267, 18829);
+    public static CONSTRUCTION = new Skill(7267, 18801, 22);
+    public static HUNTER = new Skill(8267, 18829, 21);
+    // No legacy level-up chatbox or skills tab button; client stat 23 as in OSRS.
+    public static SAILING = new Skill(-1, -1, 23);
 
     private static readonly VALUES: Skill[] = [
         Skill.ATTACK,
@@ -52,6 +54,7 @@ export class Skill {
         Skill.RUNECRAFTING,
         Skill.CONSTRUCTION,
         Skill.HUNTER,
+        Skill.SAILING,
     ];
     private static readonly NAMES: readonly string[] = [
         "Attack",
@@ -77,6 +80,7 @@ export class Skill {
         "Runecrafting",
         "Construction",
         "Hunter",
+        "Sailing",
     ];
 
     private static readonly ALLOWED_TO_SET_LEVELS: ReadonlySet<Skill> = new Set([
@@ -115,7 +119,7 @@ export class Skill {
      * @param chatboxInterface
      * @param button
      */
-    constructor(chatboxInterface: number, button: number) {
+    constructor(chatboxInterface: number, button: number, private readonly clientId?: number) {
         this.chatboxInterface = chatboxInterface;
         this.button = button;
         if (!Number.isInteger(Skill.nextIndex)) {
@@ -165,6 +169,12 @@ export class Skill {
      */
     public getIndex(): number {
         return this.index;
+    }
+
+    // Saved arrays predate OSRS's Hunter/Construction order. Keep their indices
+    // stable and translate only when sending skill IDs to the client.
+    public getClientId(): number {
+        return this.clientId ?? this.index;
     }
     /**
 

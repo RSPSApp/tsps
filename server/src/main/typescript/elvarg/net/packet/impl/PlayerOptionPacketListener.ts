@@ -17,6 +17,9 @@ export class PlayerOptionPacketListener {
     }
     if (option === 2) return TradeRequestPacketListener.request(player, index);
     if (option === 3) return FollowPlayerPacketListener.request(player, index);
+    const route = { player, target, option, handled: false };
+    PluginManager.emitCustomEvent("player:option-route", route);
+    if (route.handled) return;
     player.getMovementQueue().walkToEntity(target, () => {
       PluginManager.emitPlayerOption({ player, target, option, handled: false });
     });

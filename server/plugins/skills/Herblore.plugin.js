@@ -54,6 +54,7 @@ function finishedPotionKey(a, b) {
 
 module.exports = {
   name: "Herblore",
+  members: true,
   register(api) {
     api.onItemFirstAction((event) => {
       const { player, itemId, slot } = event;

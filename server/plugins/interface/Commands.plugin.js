@@ -47,6 +47,11 @@ const COMMANDS = {
     "::serverperf [ticks] - Show server performance",
   ],
   developer: [
+    "::toa - Teleport to the Tombs of Amascut lobby",
+    "::toaskippuzzle - Complete the current ToA puzzle for the party",
+    "::toaskipboss - Complete the current ToA boss encounter for the party",
+    "::toaskiptowarden - Mark every ToA path complete (in the Nexus) to open the Wardens",
+    "::toaskiptoreward [points] [raid level] [purple|lightbearer|fang|ward|masori|mask|body|chaps|shadow] [pet] - End the ToA raid and go to the chest",
     "::kick [player] - Disconnect player",
     "::exit [player] - Close player client",
     "::copybank [player] - Copy player bank",

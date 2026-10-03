@@ -211,6 +211,12 @@ export class ClientBinaryEncoder {
         return this.buffer.toPacket(ClientPacketId.WALK);
     }
 
+    encodeSetHeading(heading: number): Uint8Array {
+        this.buffer.reset();
+        this.buffer.writeByte(heading & 15);
+        return this.buffer.toPacket(ClientPacketId.SET_HEADING);
+    }
+
     encodeFace(rot?: number, tile?: { x: number; y: number }): Uint8Array {
         this.buffer.reset();
         this.buffer.writeBoolean(rot !== undefined);
@@ -552,6 +558,9 @@ export function encodeClientMessage(msg: { type: string; payload: any }): Uint8A
 
         case "face":
             return clientEncoder.encodeFace(payload.rot, payload.tile);
+
+        case "set_heading":
+            return clientEncoder.encodeSetHeading(payload.heading);
 
         case "teleport":
             return clientEncoder.encodeTeleport(payload.to.x, payload.to.y, payload.level);

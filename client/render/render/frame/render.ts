@@ -1,3 +1,4 @@
+import { updateSkyColor } from "../environment";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -210,6 +211,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                 if (host.overheadTextOverlay) host.overheadTextOverlay.scale = overlayScale;
                 if (host.hitsplatOverlay) host.hitsplatOverlay.scale = overlayScale;
                 if (host.overheadPrayerOverlay) host.overheadPrayerOverlay.scale = overlayScale;
+                if (host.tutorialHintOverlay) host.tutorialHintOverlay.scale = overlayScale;
                 if (host.healthBarOverlay) {
                     host.healthBarOverlay.scale =
                         overlayScale * RENDER_CONSTANTS.HEALTH_BAR_VISUAL_SCALE;
@@ -237,6 +239,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                 if (host.overheadTextOverlay) host.overheadTextOverlay.scale = overlayScale;
                 if (host.hitsplatOverlay) host.hitsplatOverlay.scale = overlayScale;
                 if (host.overheadPrayerOverlay) host.overheadPrayerOverlay.scale = overlayScale;
+                if (host.tutorialHintOverlay) host.tutorialHintOverlay.scale = overlayScale;
                 if (host.healthBarOverlay) {
                     host.healthBarOverlay.scale =
                         overlayScale * RENDER_CONSTANTS.HEALTH_BAR_VISUAL_SCALE;
@@ -577,6 +580,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
             sceneViewport.width,
             sceneViewport.height,
         );
+        updateSkyColor(host);
         host.clearSceneFramebuffer(sceneFramebufferViewport);
         // keep CS2-visible viewport zoom in sync with the viewport widget size
         // (Client.viewportZoom; i.e., Rasterizer3D.get3dZoom()) so scripts and widget models scale correctly.
@@ -625,6 +629,9 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
             }
         } catch {}
 
+        // Boat transforms live in view space, so rebuild them for this camera.
+        host.worldEntityAnimator?.compose(camera.viewMatrix as Float32Array);
+
         // Update hovered tile using latest camera matrices
         profiler.startPhase("hover");
         host.updateHoveredTile();
@@ -648,14 +655,17 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                 (Math.floor(previewTileZ / 8) * 8 - SCENE_PREVIEW_HALF_TILES) | 0,
             );
         }
+        // Aboard a boat, stream around the boat's projected position (playerPosUni) rather
+        // than the server's scene base.
+        const streamAroundPlayer = host.getControlledPlayerWorldViewId() >= 0;
         host.mapManager.update(
             host.playerPosUni[0],
             host.playerPosUni[1],
             camera,
             frameCount,
             host.osrsClient.mapRadius,
-            ClientState.baseX | 0,
-            ClientState.baseY | 0,
+            streamAroundPlayer ? -1 : ClientState.baseX | 0,
+            streamAroundPlayer ? -1 : ClientState.baseY | 0,
             host.osrsClient.expandedMapLoading | 0,
         );
         host.syncStreamGenerationFromMapManager();
@@ -843,6 +853,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                 sceneViewport.width,
                 sceneViewport.height,
             );
+            host.worldEntityAnimator?.compose(camera.viewMatrix as Float32Array);
         }
 
         // Update overlays and draw pre-present overlays (e.g., hitsplats) into frame texture.
@@ -1069,12 +1080,14 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                 ne.forEachActive((ecsId: number) => {
                     if (overheadPrayers.length >= overheadPrayerMaxEntries) return;
                     const type = host.getEffectiveNpcType(ne.getNpcTypeId(ecsId) | 0);
+                    // Icons the server set (the Hunllef's protection) win over the type's own.
+                    const serverIcons = host.osrsClient.npcHeadIcons?.get(ne.getServerId(ecsId) | 0);
                     const archives = type?.headIconSpriteIds;
                     const sprites = type?.headIconSpriteIndices;
-                    if (!archives || !sprites) return;
+                    if (!serverIcons && (!archives || !sprites)) return;
 
-                    const npcHeadIcons = archives
-                        .map((archiveId, index) => ({ archiveId, spriteId: sprites[index] ?? -1 }))
+                    const npcHeadIcons = (serverIcons ?? archives!
+                        .map((archiveId, index) => ({ archiveId, spriteId: sprites![index] ?? -1 })))
                         .filter((icon) => icon.archiveId >= 0 && icon.spriteId >= 0);
                     if (npcHeadIcons.length === 0) return;
 
@@ -1671,6 +1684,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                     `[WebGLOsrsRenderer] mapsToLoad applying: mapX=${pendingMap.mapX} mapY=${pendingMap.mapY} verts=${pendingMap.vertices?.length}`,
                 );
                 mapApplyCount++;
+                if (pendingMap === host.pendingInstanceScene) host.replaceSceneWithInstance(pendingMap);
                 host.loadMap(
                     host.mainProgram,
                     host.mainAlphaProgram,

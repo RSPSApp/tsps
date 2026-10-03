@@ -516,6 +516,12 @@ export const DebugControls = memo(
                                 osrsClient.showCollisionOverlay = !!v;
                             },
                         },
+                        "Enable Tile Overlay": {
+                            value: osrsClient.hoverOverlayEnabled,
+                            onChange: (v: boolean) => {
+                                osrsClient.hoverOverlayEnabled = !!v;
+                            },
+                        },
                         "Object Bounds (purple)": {
                             value: false,
                             onChange: (v: boolean) => {

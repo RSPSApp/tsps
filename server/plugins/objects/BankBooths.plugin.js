@@ -113,6 +113,8 @@ module.exports = {
   register(api) {
     api.onObjectInteraction("Bank booth", {
       "Bank": ({ player }) => openBank(player),
+      // Some booths (e.g. Tutorial Island 10083) only offer "Use".
+      "Use": ({ player }) => openBank(player),
     });
     api.onObjectInteraction("Bank chest", {
       "Use": ({ player }) => openBank(player),

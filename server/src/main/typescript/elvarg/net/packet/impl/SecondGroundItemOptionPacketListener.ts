@@ -26,7 +26,8 @@ export class SecondGroundItemOptionPacketListener {
       const groundItem = ItemOnGroundManager.getGroundItem(
         player.getUsername(),
         itemId,
-        position
+        position,
+        player.getPrivateArea(),
       );
       if (!groundItem) {
         return;

@@ -761,6 +761,7 @@ export function loadOpcodeDbOsrs(_baseDir: string): OpcodeDb {
     add(7508, "db_find");
     add(7509, "db_findall");
     add(7510, "db_find_filter");
+    add(8011, "array_fill_sequence");
 
     // Volume control opcodes
     add(3203, "setvolumemusic");

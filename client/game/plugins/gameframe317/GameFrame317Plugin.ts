@@ -46,6 +46,9 @@ const BOTTOM_STONE: [string, number, number, boolean, boolean][] = [
 ];
 
 const ICON_SIZE = 30;
+const CHAT_BACKING_COLOUR = 0xffffff;
+/** The 317 parchment sits 4px higher than the stock chat display. */
+const CHAT_CONTENT_Y = -4;
 /** Fine-tuning for the OSRS icons (they don't quite match the 317 stone slots). */
 /** The 317 bottom stones are ~34x36, so centre the OSRS icons in that box. */
 const OSRS_SLOT_W = 34;
@@ -84,8 +87,11 @@ export class GameFrame317Plugin implements ClientPlugin {
             widgetRules: () => [
                 // Hide the OSRS chatbox background + tab stones (type 5); the
                 // chat text/messages are type 4 and still render over our section.
-                { group: 162, type: 3, hide: true },
-                { group: 162, type: 5, hide: true },
+                // Item icons are type 5 too (the chatbox item search), so keep those.
+                // Only the white transparent-chat backing rects go (clientscript 923); the
+                // input separator line and the dialog scroll-area frame are other colours.
+                { group: 162, type: 3, colour: CHAT_BACKING_COLOUR, hide: true },
+                { group: 162, type: 5, item: false, hide: true },
                 { contentType: 1339, hide: this.fixed },
             ],
             // Resizable keeps the OSRS minimap frame; fixed draws the 317 mapback.
@@ -111,22 +117,13 @@ export class GameFrame317Plugin implements ClientPlugin {
     /** Align mounted widgets before layout; restore stock coordinates when disabled. */
     updateWidgetLayout(): void {
         const manager = this.osrsClient.widgetManager;
-        const chat = manager.getWidgetByUid((162 << 16) | 56);
-        const history = manager.getWidgetByUid((162 << 16) | 58);
-        // The centered text container loses one 14px line; its bottom moves up 8px.
-        const chatHeight = this.enabled ? 26 : 12;
-        const chatY = this.enabled ? -1 : 0;
-        if (chat && history && (chat.rawHeight !== chatHeight || chat.rawY !== chatY)) {
-            manager.ensureLayout(history);
-            const oldHeight = history.height;
-            chat.rawHeight = chatHeight;
-            chat.rawY = chatY;
-            manager.invalidateWidget(chat);
-            manager.ensureLayout(history);
-            // Preserve the scroll position relative to the bottom, then redraw through CS2.
-            const vars = this.osrsClient.varManager;
-            vars.setVarcInt(7, vars.getVarcInt(7) + oldHeight - history.height);
-            this.osrsClient.cs2Vm?.invokeEventHandler(manager.getWidgetByUid(162 << 16), "onChatTransmit");
+        // The chat display (messages + input + separator line) rides with 162:56
+        // in both layouts; the 317 sprite anchors to the container, not this child.
+        const display = manager.getWidgetByUid((162 << 16) | 56);
+        const displayY = this.enabled ? CHAT_CONTENT_Y : 0;
+        if (display && display.rawY !== displayY) {
+            display.rawY = displayY;
+            manager.invalidateWidget(display);
         }
         if (!this.fixed) return;
         for (const [child, property, stock, fixed] of [
@@ -310,23 +307,38 @@ export class GameFrame317Plugin implements ClientPlugin {
             this.drawNamed(renderer, name, X(bx), Y(y), scale, fh, fv);
         }
 
-        // Icons.
+        // Tab icons the server has not revealed yet have no mounted content
+        // (the gameframe's toplevel_sidebuttons_enable uses the same signal).
+        const flashTab = ((this.osrsClient?.varManager?.getVarbit?.(3756) ?? 0) | 0) - 1;
+        const flashAlpha = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(Date.now() / 180));
+        const alphaFor = (tab: number) => (tab === flashTab ? flashAlpha : 1);
+
         for (let i = 0; i < TOP_ICON_POS.length; i++) {
+            if (!this.tabVisible(i)) continue;
             const [x, y] = TOP_ICON_POS[i];
-            this.drawIcon(renderer, i, X(x), Y(y), scale);
+            this.drawIcon(renderer, i, X(x), Y(y), scale, alphaFor(i));
             this.registerTab(context, i, X(x), Y(y), scale);
         }
         const clanX = BOTTOM_ICON_POS[0][0] - 29;
         const clanY = BOTTOM_ICON_POS[0][1];
-        this.drawOsrsIcon(renderer, "osrs_clan", X(clanX), Y(clanY), scale);
-        this.registerTab(context, 7, X(clanX), Y(clanY), scale);
-        for (let i = 0; i < BOTTOM_ICON_POS.length; i++) {
-            const [x, y] = BOTTOM_ICON_POS[i];
-            if (i === 0) this.drawOsrsIcon(renderer, "osrs_account", X(x), Y(y), scale);
-            else if (i === 1) this.drawOsrsIcon(renderer, "osrs_friends", X(x), Y(y), scale);
-            else this.drawIcon(renderer, i + 7, X(x), Y(y), scale);
-            this.registerTab(context, i + 8, X(x), Y(y), scale);
+        if (this.tabVisible(7)) {
+            this.drawOsrsIcon(renderer, "osrs_clan", X(clanX), Y(clanY), scale, alphaFor(7));
+            this.registerTab(context, 7, X(clanX), Y(clanY), scale);
         }
+        for (let i = 0; i < BOTTOM_ICON_POS.length; i++) {
+            const tab = i + 8;
+            if (!this.tabVisible(tab)) continue;
+            const [x, y] = BOTTOM_ICON_POS[i];
+            if (i === 0) this.drawOsrsIcon(renderer, "osrs_account", X(x), Y(y), scale, alphaFor(tab));
+            else if (i === 1) this.drawOsrsIcon(renderer, "osrs_friends", X(x), Y(y), scale, alphaFor(tab));
+            else this.drawIcon(renderer, i + 7, X(x), Y(y), scale, alphaFor(tab));
+            this.registerTab(context, tab, X(x), Y(y), scale);
+        }
+    }
+
+    /** True when the server has mounted this tab's content (icon revealed), in any layout. */
+    private tabVisible(tab: number): boolean {
+        return this.osrsClient?.hasServerSubInterface?.((161 << 16) | (76 + tab)) ?? true;
     }
 
     /** Stretch a sprite to fill a logical rect (no tiling). */
@@ -383,7 +395,7 @@ export class GameFrame317Plugin implements ClientPlugin {
     }
 
     /** OSRS side icons are smaller than the 317 slots, so centre them; tune per icon. */
-    private drawOsrsIcon(renderer: GLRenderer, name: string, x: number, y: number, scale: number): void {
+    private drawOsrsIcon(renderer: GLRenderer, name: string, x: number, y: number, scale: number, alpha = 1): void {
         const texture = this.textures.get(name);
         if (!texture?.tex) return;
         const tune = OSRS_ICON_TUNE[name] ?? {};
@@ -398,11 +410,11 @@ export class GameFrame317Plugin implements ClientPlugin {
             this.renderOffsetY + dy * scale,
             w * scale,
             h * scale,
-            1, 1, 0, [0, 0, 0], false, false, 1,
+            1, 1, 0, [0, 0, 0], false, false, alpha,
         );
     }
 
-    private drawIcon(renderer: GLRenderer, index: number, x: number, y: number, scale: number): void {
+    private drawIcon(renderer: GLRenderer, index: number, x: number, y: number, scale: number, alpha = 1): void {
         const texture = this.iconTextures[index];
         if (!texture?.tex) return;
         renderer.drawTexture(
@@ -411,7 +423,7 @@ export class GameFrame317Plugin implements ClientPlugin {
             this.renderOffsetY + y * scale,
             texture.w * scale,
             texture.h * scale,
-            1, 1, 0, [0, 0, 0], false, false, 1,
+            1, 1, 0, [0, 0, 0], false, false, alpha,
         );
     }
 

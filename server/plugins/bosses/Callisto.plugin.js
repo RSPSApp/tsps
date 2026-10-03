@@ -104,6 +104,7 @@ let TaskManager;
 
 module.exports = {
   name: "Callisto",
+  members: true,
   register(api) {
     CombatFactory = api.getCombatFactory();
     TaskManager = api.getTaskManager();

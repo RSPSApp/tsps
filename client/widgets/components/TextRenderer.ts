@@ -21,7 +21,7 @@ interface TextSegment {
  * Parse OSRS text markup tags like <col=808080>text</col>
  * Returns an array of text segments with their styling
  */
-function parseOsrsMarkup(text: string, defaultColor: number): TextSegment[] {
+export function parseOsrsMarkup(text: string, defaultColor: number): TextSegment[] {
     const segments: TextSegment[] = [];
     let currentColor = defaultColor;
     let currentShadow = -1; // -1 = default (black if shadow enabled)
@@ -70,6 +70,13 @@ function parseOsrsMarkup(text: string, defaultColor: number): TextSegment[] {
             // Handle </col> or </color> closing tag
             if (tagContent === "/col" || tagContent === "/color") {
                 currentColor = defaultColor;
+                i = tagEnd + 1;
+                continue;
+            }
+
+            // <gt> and <lt> are the escapes for a literal > and < (a submenu's arrow is " <gt>")
+            if (tagContent === "gt" || tagContent === "lt") {
+                segments.push(makeSegment(tagContent === "gt" ? ">" : "<"));
                 i = tagEnd + 1;
                 continue;
             }
@@ -181,7 +188,7 @@ function parseOsrsMarkup(text: string, defaultColor: number): TextSegment[] {
 
 /** Check if text contains OSRS markup tags */
 function hasOsrsMarkup(text: string): boolean {
-    return /<col=|<\/col>|<color=|<\/color>|<shad|<\/shad>|<br>|<img=|<u>|<u=|<\/u>|<str>|<\/str>/i.test(
+    return /<col=|<\/col>|<color=|<\/color>|<shad|<\/shad>|<br>|<img=|<u>|<u=|<\/u>|<str>|<\/str>|<gt>|<lt>/i.test(
         text,
     );
 }

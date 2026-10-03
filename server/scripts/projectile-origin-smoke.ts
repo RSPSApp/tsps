@@ -36,3 +36,64 @@ assert.equal(Projectile.arrivalCycles(kbd, new Location(3010, 3002, 0)), 120);
 assert.equal(Projectile.arrivalCycles(new Location(3002, 3002, 0), new Location(3005, 3002, 0)), 70);
 
 console.info("projectile origin smoke passed");
+
+// --- God Wars Dungeon access rules and drop fixtures ---
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const gwdRules = require("../plugins/bosses/godwars/GodWarsRules");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const dropDefinitions = require("../data/definitions/npc-drops.json");
+
+// Troll Stronghold partial completion (Dad defeated) and the 60 Strength/Agility
+// boulder. A regression to any of these must fail the offline test.
+assert.equal(gwdRules.canMoveBoulder(10, 99, 99).ok, false);
+assert.equal(gwdRules.canMoveBoulder(20, 59, 59).ok, false);
+assert.equal(gwdRules.canMoveBoulder(20, 60, 1).ok, true);
+assert.equal(gwdRules.canMoveBoulder(20, 1, 60).ok, true);
+
+// First entry needs a rope; once tied the hole stays open.
+assert.equal(gwdRules.canClimbEntrance(20, false, false).ok, false);
+assert.equal(gwdRules.canClimbEntrance(20, true, false).tiesRope, true);
+assert.equal(gwdRules.canClimbEntrance(20, false, true).ok, true);
+
+// God item, then 40 essence; an ecumenical key skips the essence only.
+assert.equal(
+  gwdRules.canOpenBossDoor({ hasGodItem: false, killCount: 40, hasKey: false }).ok,
+  false
+);
+assert.equal(
+  gwdRules.canOpenBossDoor({ hasGodItem: true, killCount: 39, hasKey: false }).ok,
+  false
+);
+assert.equal(
+  gwdRules.canOpenBossDoor({ hasGodItem: true, killCount: 40, hasKey: false }).ok,
+  true
+);
+assert.deepEqual(gwdRules.canOpenBossDoor({ hasGodItem: true, killCount: 0, hasKey: true }), {
+  ok: true,
+  consumesKey: true,
+});
+
+// Each general's drops table exists with an always drop and a unique fixture.
+const generalFixtures: Array<[string, string]> = [
+  ["general_graardor", "Bandos chestplate"],
+  ["kreearra", "Armadyl helmet"],
+  ["commander_zilyana", "Saradomin sword"],
+  ["kril_tsutsaroth", "Staff of the Dead"],
+];
+for (const [tableId, unique] of generalFixtures) {
+  const table = dropDefinitions.tables[tableId];
+  assert.ok(table, `missing drops table ${tableId}`);
+  assert.ok(
+    table.entries.some((entry: any) => entry.always === true),
+    `${tableId} has no always drop`
+  );
+  assert.ok(
+    table.entries.some((entry: any) => entry.name === unique),
+    `${tableId} is missing unique ${unique}`
+  );
+}
+for (const npcId of ["2215", "3162", "2205", "3129", "2216", "3163", "2206", "3130"]) {
+  assert.ok(dropDefinitions.npcs[npcId]?.tables?.length > 0, `npc ${npcId} has no drops`);
+}
+
+console.info("gwd access and drops smoke passed");

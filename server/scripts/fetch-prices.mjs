@@ -1,7 +1,7 @@
 import { writeFile, rename } from "node:fs/promises";
 
-const destination = new URL("../data/item-prices.json", import.meta.url);
-const temporary = new URL("../data/item-prices.json.tmp", import.meta.url);
+const destination = new URL("../data/definitions/item-prices.json", import.meta.url);
+const temporary = new URL("../data/definitions/item-prices.json.tmp", import.meta.url);
 const response = await fetch("https://prices.runescape.wiki/api/v2/osrs/latest", {
   headers: { "User-Agent": "elvarg-typescript item-price fetcher" },
   signal: AbortSignal.timeout(30_000),

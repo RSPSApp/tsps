@@ -18,6 +18,14 @@ export class NpcDialogue extends Dialogue {
         this.npcId = npcId;
         this.text = text;
     }
+    public getNpcId(): number {
+        return this.npcId;
+    }
+
+    public getText(): string {
+        return this.text;
+    }
+
     public send(player: Player): void {
         const sender = player.getPacketSender();
         sender

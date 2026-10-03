@@ -39,6 +39,7 @@ function getAmountToKeep(player, settings) {
 
 function getItemsToKeep(player, settings) {
   const items = [];
+  const alwaysKept = [];
   for (const item of [
     ...player.getInventory().getItems(),
     ...player.getEquipment().getItems(),
@@ -51,7 +52,12 @@ function getItemsToKeep(player, settings) {
     ) {
       continue;
     }
-    if (pluginApi.emitShouldKeepItemOnDeath(player, item) === false) {
+    const keep = pluginApi.emitShouldKeepItemOnDeath(player, item);
+    if (keep === false) {
+      continue;
+    }
+    if (keep === true) {
+      alwaysKept.push(item);
       continue;
     }
     items.push(item);
@@ -59,7 +65,7 @@ function getItemsToKeep(player, settings) {
 
   items.sort((a, b) => b.getDefinition().getValue() - a.getDefinition().getValue());
   const amountToKeep = getAmountToKeep(player, settings);
-  return items.slice(0, amountToKeep);
+  return [...items.slice(0, amountToKeep), ...alwaysKept];
 }
 
 function getDeathItems(player, toKeep) {

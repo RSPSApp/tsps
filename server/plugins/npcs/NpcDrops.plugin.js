@@ -5,7 +5,7 @@
  *   docs/drops-json/npc-drops.json -> data/definitions/npc-drops.json
  *   docs/drops-json/subtables.json -> data/definitions/npc-drop-subtables.json
  *
- * Shape: { tables: { "<tableId>": { label, main_max_roll, entries[], tertiary[] } },
+ * Shape: { tables: { "<tableId>": { label, main_max_roll, rolls?, entries[], tertiary[] } },
  *           npcs:   { "<npcId>": { name, tables: ["<tableId>"] } } }
  * Entries carry `weight` out of `out_of`; `shared_table` entries roll one of the shared tables
  * (rare drop table, gem, herb, seed) held in the subtables file.
@@ -90,6 +90,17 @@ function isNotedQuantity(raw) {
 }
 
 function applyWikiCorrections(tableById) {
+  // Each bronze piece survives on its own 9/10 roll (Wiki: 72.9% to get all three back); the
+  // export flattened them into one 27-slot roll that always returns exactly one piece.
+  for (const entry of tableById.animated_bronze_armour?.entries || []) {
+    if (entry.section === "Armour") {
+      Object.assign(entry, { separate_roll: true, weight: 9, out_of: 10 });
+    }
+  }
+  // Zulrah: two rolls on its table per kill, tertiary drops excluded (Wiki, Drops).
+  if (tableById.zulrah) {
+    tableById.zulrah.rolls = 2;
+  }
   const kalphiteQueen = tableById.kalphite_queen;
   if (!kalphiteQueen) {
     return;
@@ -268,21 +279,16 @@ function resolveEntry(entry, player) {
   return drops;
 }
 
-/**
- * One kill: guaranteed drops, then a pre-roll (which replaces the main roll when it hits),
- * then a single weighted main-table roll, then independent separate/tertiary rolls.
- */
-function rollTable(table, player, npc) {
+/** One roll on a table: its pre-roll, main roll and separate rolls. */
+function rollOnce(table, entries, player) {
   const drops = [];
-  const entries = Array.isArray(table.entries) ? table.entries : [];
-
   const main = [];
   const separateGroups = new Map();
   let preRollHit = false;
 
   for (const entry of entries) {
     if (entry.always) {
-      drops.push(...resolveEntry(entry, player));
+      continue;
     } else if (entry.pre_roll) {
       if (!preRollHit && hits(entry)) {
         drops.push(...resolveEntry(entry, player));
@@ -327,6 +333,27 @@ function rollTable(table, player, npc) {
     }
   }
 
+  return drops;
+}
+
+/**
+ * One kill: guaranteed drops, then a pre-roll (which replaces the main roll when it hits),
+ * then a single weighted main-table roll, then independent separate/tertiary rolls. A table
+ * with `rolls` repeats everything but the guaranteed and tertiary drops that many times.
+ */
+function rollTable(table, player, npc) {
+  const drops = [];
+  const entries = Array.isArray(table.entries) ? table.entries : [];
+  for (const entry of entries) {
+    if (entry.always) {
+      drops.push(...resolveEntry(entry, player));
+    }
+  }
+  const rolls = Number.isInteger(table.rolls) && table.rolls > 1 ? table.rolls : 1;
+  for (let roll = 0; roll < rolls; roll++) {
+    drops.push(...rollOnce(table, entries, player));
+  }
+
   for (const entry of table.tertiary || []) {
     // A tertiary at 1/1 is a conditional drop, not a guaranteed one: the wiki writes
     // "Always" for things that always drop *given* a condition (an active clue step, a quest,
@@ -364,6 +391,15 @@ function dropFor(player, npc, npcId, location) {
   }
 
   const drops = rollTable(table, player, npc);
+  // Drops that depend on the killer's progress (Warriors' Guild defenders) are edited in place.
+  pluginApi?.emitCustomEvent("npc-drops:roll", { player, npc, npcId, drops });
+  const event = { player, npc, npcId, drops, handled: false };
+  pluginApi.emitCustomEvent("npc-drops:generated", event);
+  if (event.handled) return drops.length;
+  // Where the loot lands; a boss whose body is out of reach (Zulrah) moves it under the killer.
+  const where = { player, npc, npcId, location };
+  pluginApi.emitCustomEvent("npc-drops:location", where);
+  location = where.location;
   for (const drop of drops) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
       continue;

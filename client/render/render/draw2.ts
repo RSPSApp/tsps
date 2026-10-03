@@ -350,7 +350,10 @@ export function drawWithRoofPlaneFilter(host: WebGLOsrsRendererHost,
 
 export function getMapTileDistanceFromPoint(host: WebGLOsrsRendererHost, map: WebGLMapSquare, tileX: number, tileY: number): number {
 
-        // World entity overlays use baseWorldX/Y for distance instead of mapX/Y
+        // Boat decks are built in their own deck coordinates and drawn through a movement
+        // transform, so their render base says nothing about where they appear. They are
+        // always around the player, so treat them as at distance 0.
+        if (host.mapManager.worldEntityMapIds.has(map.id)) return 0;
         const mapMinTileX = map.getRenderBaseTileX();
         const mapMinTileY = map.getRenderBaseTileY();
         const mapTileSpan = map.getLocalTileSpan();
@@ -407,6 +410,8 @@ export function isMapWithinRenderDistance(host: WebGLOsrsRendererHost,
         renderDistancePadTiles: number,
     ): boolean {
 
+        // See getMapTileDistanceFromPoint: boat decks are always in range.
+        if (host.mapManager.worldEntityMapIds.has(map.id)) return true;
         const zoneDistance = host.getMapZoneDistanceFromPoint(map, tileX, tileY);
         const renderDistanceZones = Math.max(
             0,

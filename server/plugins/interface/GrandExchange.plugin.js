@@ -30,10 +30,13 @@ const FINISHED = 5;
 const OFFER_DELAY_MS = 5000;
 const MAX = 0x7fffffff;
 const COINS = ItemIdentifiers.COINS;
+// OSRS: members get all 8 offer slots, free-to-play worlds the first 3.
+const usableSlots = () => (pluginApi.core.WorldDefinition.isMembersWorld() ? 8 : 3);
 const offers = new WeakMap();
 const completionTimers = new WeakMap();
 const viewing = new WeakMap();
 const searching = new WeakSet();
+let pluginApi;
 
 function validItem(id) {
   if (!CacheDefinitions.hasItem(id)) return false;
@@ -42,9 +45,9 @@ function validItem(id) {
 }
 
 function price(id) {
-  // ponytail: fixed cache values, minimum 1 gp; replace with market prices if needed.
+  // OSRS market quote from item-prices.json; store value for unquoted/custom items.
   const base = ItemDefinition.forId(id).unNote();
-  return Math.max(1, Math.min(MAX, Math.floor(ItemDefinition.forId(base).getValue()) || 1));
+  return Math.max(1, Math.min(MAX, Math.floor(ItemDefinition.forId(base).getGrandExchangeValue()) || 1));
 }
 
 function active(player, offer) {
@@ -52,8 +55,8 @@ function active(player, offer) {
 }
 
 function completedOffers(player) {
-  let slots = player.getAttribute("grandExchangeOffers");
-  if (!slots) player.setAttribute("grandExchangeOffers", slots = {});
+  let slots = player.getAttribute("grand-exchange-offers");
+  if (!slots) player.setAttribute("grand-exchange-offers", slots = {});
   return slots;
 }
 
@@ -189,8 +192,12 @@ function chooseItem(player, offer) {
 }
 
 function start(player, sell, slot = 0, itemId = -1) {
+  if (slot >= usableSlots()) {
+    player.sendMessage("You need to be on a members' world to use this slot.");
+    return;
+  }
   if (Object.hasOwn(completedOffers(player), slot)) {
-    const free = Array.from({ length: 8 }, (_, i) => i).find((i) => !Object.hasOwn(completedOffers(player), i));
+    const free = Array.from({ length: usableSlots() }, (_, i) => i).find((i) => !Object.hasOwn(completedOffers(player), i));
     if (free == null) {
       player.sendMessage("Collect an offer before creating another one.");
       return;
@@ -219,6 +226,12 @@ function confirm(player, offer) {
   const inputAmount = offer.sell ? amount : total;
   if (inventory.getAmount(inputId) < inputAmount) {
     sender.sendMessage(offer.sell ? "You do not have enough of that item." : "You do not have enough coins.");
+    return;
+  }
+  // Plugins may veto an offer (e.g. an untradeable item that cannot be listed).
+  const confirmation = { player, itemId: offer.itemId, sell: offer.sell, accepted: true };
+  pluginApi.emitCustomEvent("ge:offer-confirmed", confirmation);
+  if (confirmation.accepted === false) {
     return;
   }
 
@@ -269,6 +282,15 @@ function collect(player, action, slot = viewing.get(player)) {
   }
   destination.setItems(result.getItems());
   if (action !== 3) inventory.refreshItems();
+  // Plugins may change what the collection hands over (e.g. a bought bond
+  // arrives untradeable) before the offer is cleared and saved below.
+  pluginApi.emitCustomEvent("ge:offer-collected", {
+    player,
+    itemId: outputId,
+    amount: outputAmount,
+    destination: action === 3 ? "bank" : "inventory",
+    container: destination,
+  });
   delete completedOffers(player)[slot];
   saveOffers(player);
   const sender = player.getPacketSender();
@@ -338,6 +360,10 @@ function openCollectionBox({ player }) {
     sender.sendInterfaceFlagsRange(collectUid(child), 3, 4, 14);
   }
   sender.sendInterfaceFlags(collectUid(3), 2).sendInterfaceFlags(collectUid(4), 2);
+  // Children 5-12 are slots 1-8; script 789 draws all of them, so hide the members-only ones.
+  for (let child = 5; child <= 12; child++) {
+    sender.sendInterfaceDisplayState(collectUid(child), child - 5 >= usableSlots());
+  }
   return true;
 }
 
@@ -409,7 +435,8 @@ const EXCHANGE_BUTTONS = [uid(4), uid(24), uid(26), uid(30), ...Array.from({ len
 module.exports = {
   name: "GrandExchange",
   register(api) {
-    api.persistAttribute("grandExchangeOffers");
+    pluginApi = api;
+    api.persistAttribute("grand-exchange-offers");
     api.onPlayerLogin(({ player }) => {
       for (const offer of Object.values(completedOffers(player))) scheduleCompletion(player, offer);
     });

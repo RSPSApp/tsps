@@ -1,4 +1,7 @@
 import { MAX_GAME_MESSAGE_BYTES } from "./BinaryChannel";
+import { BoatManager } from "../game/content/sailing/BoatManager";
+import { TemplatedInstanceArea } from "../game/model/areas/impl/TemplatedInstanceArea";
+import { WorldEntitySync } from "../game/content/sailing/WorldEntitySync";
 import { Packet } from "./packet/Packet";
 import { PacketBuilder } from "./packet/PacketBuilder";
 import { NetworkConstants } from "./NetworkConstants";
@@ -11,9 +14,11 @@ import {
   ActorUpdateView,
   encodePlayerAppearance,
   encodeInitialPlayerSync,
+  encodeLogoutResponse,
   encodeNpcSync,
   encodePlaySong,
   encodePlayerSync,
+  encodeRebuildNormal,
   encodeTick,
   NpcSyncState,
   PlayerSyncState,
@@ -26,6 +31,8 @@ import { ServerPerf } from "../util/ServerPerf";
 import { ObjectManager } from "../game/entity/impl/object/ObjectManager";
 import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacementManager";
 import { CacheDefinitions } from "../game/cache/CacheDefinitions";
+import { CachePipeline } from "../game/cache/CachePipeline";
+import type { PrivateArea } from "../game/model/areas/impl/PrivateArea";
 
 type SessionChannel = {
   binaryTransport?: boolean;
@@ -61,7 +68,8 @@ export class PlayerSession {
   private replayedSceneBaseX = -1;
   private replayedSceneBaseY = -1;
   private replayedSceneLevel = -1;
-  private replayedPrivateArea: unknown;
+  private replayedPrivateArea: PrivateArea | null = null;
+  private replayedSceneVersion = 0;
   private hasReplayedScene = false;
   private playerSyncState?: PlayerSyncState;
   private npcSyncState: NpcSyncState = createNpcSyncState();
@@ -109,6 +117,28 @@ export class PlayerSession {
       && y >= this.replayedSceneBaseY && y < this.replayedSceneBaseY + 104;
   }
 
+  private sendRebuildNormal(
+    centerChunkX: number,
+    centerChunkY: number,
+    forceReload: boolean,
+  ): boolean {
+    const xteaKeys: number[][] = [];
+    const minMapX = Math.trunc((centerChunkX - 6) / 8);
+    const maxMapX = Math.trunc((centerChunkX + 6) / 8);
+    const minMapY = Math.trunc((centerChunkY - 6) / 8);
+    const maxMapY = Math.trunc((centerChunkY + 6) / 8);
+
+    for (let mapX = minMapX; mapX <= maxMapX; mapX++) {
+      for (let mapY = minMapY; mapY <= maxMapY; mapY++) {
+        xteaKeys.push(CachePipeline.getXtea((mapX << 8) | mapY));
+      }
+    }
+
+    return this.sendClientPacket(
+      encodeRebuildNormal(centerChunkX, centerChunkY, forceReload, xteaKeys),
+    );
+  }
+
   public sendClientPacket(frame: Buffer): boolean {
     if (!this.isBinaryChannelOpen() || typeof this.channel.send !== "function") {
       return false;
@@ -132,6 +162,13 @@ export class PlayerSession {
       });
     }
     return true;
+  }
+
+  /** Logs out as an accepted logout button does: the client is told, then the socket closes. */
+  public logout(): void {
+    this.sendClientPacket(encodeLogoutResponse());
+    this.flushPackets();
+    this.channel.close?.(1000, "logout");
   }
 
   public flushPackets(): boolean {
@@ -172,8 +209,12 @@ export class PlayerSession {
       y: location.getY(),
       level: location.getZ(),
     };
+    // The main-world map follows the tile under a player on a boat deck, so the sea streams
+    // in as the boat moves; the deck itself arrives as a world entity.
+    const sceneLocation = BoatManager.rootLocation(player);
+    const sceneTile = { x: sceneLocation.getX(), y: sceneLocation.getY(), level: sceneLocation.getZ() };
     ServerPerf.measurePhase("network.flush.region_updates", () => {
-      const musicRegion = ((current.x >> 6) << 8) | (current.y >> 6);
+      const musicRegion = ((sceneTile.x >> 6) << 8) | (sceneTile.y >> 6);
       if (musicRegion !== this.lastGroundItemRegion) {
         this.lastGroundItemRegion = musicRegion;
         require("../game/entity/impl/grounditem/ItemOnGroundManager")
@@ -192,20 +233,36 @@ export class PlayerSession {
 
     const initialSync = !this.playerSyncState;
     if (initialSync) {
-      this.sceneBaseX = Math.max(0, (current.x - 48) & ~7);
-      this.sceneBaseY = Math.max(0, (current.y - 48) & ~7);
+      this.sceneBaseX = Math.max(0, (sceneTile.x - 48) & ~7);
+      this.sceneBaseY = Math.max(0, (sceneTile.y - 48) & ~7);
     } else {
-      const localX = current.x - this.sceneBaseX;
-      const localY = current.y - this.sceneBaseY;
-      if (localX < 16 || localX >= 88) this.sceneBaseX = Math.max(0, (current.x - 48) & ~7);
-      if (localY < 16 || localY >= 88) this.sceneBaseY = Math.max(0, (current.y - 48) & ~7);
+      const localX = sceneTile.x - this.sceneBaseX;
+      const localY = sceneTile.y - this.sceneBaseY;
+      if (localX < 16 || localX >= 88) this.sceneBaseX = Math.max(0, (sceneTile.x - 48) & ~7);
+      if (localY < 16 || localY >= 88) this.sceneBaseY = Math.max(0, (sceneTile.y - 48) & ~7);
     }
-    const privateArea = player.getPrivateArea();
+    const privateArea = BoatManager.syncArea(player);
+    // A templated instance is drawn from its own palette, streamed like the normal map.
+    const templated = privateArea instanceof TemplatedInstanceArea ? privateArea : null;
+    const sceneVersion = templated?.getSceneVersion() ?? 0;
     const sceneChanged = !this.hasReplayedScene
       || this.replayedSceneBaseX !== this.sceneBaseX
       || this.replayedSceneBaseY !== this.sceneBaseY
-      || this.replayedSceneLevel !== current.level
-      || this.replayedPrivateArea !== privateArea;
+      || this.replayedSceneLevel !== sceneTile.level
+      || this.replayedPrivateArea !== privateArea
+      || this.replayedSceneVersion !== sceneVersion;
+    const rebuildNeeded = (privateArea == null || templated != null) && (
+      !this.hasReplayedScene
+      || this.replayedSceneBaseX !== this.sceneBaseX
+      || this.replayedSceneBaseY !== this.sceneBaseY
+      || this.replayedPrivateArea !== privateArea
+      || this.replayedSceneVersion !== sceneVersion
+    );
+    if (rebuildNeeded && !(templated
+      ? this.sendClientPacket(templated.encodeScene(sceneTile.x >> 3, sceneTile.y >> 3))
+      : this.sendRebuildNormal(sceneTile.x >> 3, sceneTile.y >> 3, this.replayedPrivateArea != null))) {
+      return;
+    }
     const replacementWindowChanged = !this.hasReplayedScene
       || this.replayedSceneBaseX !== this.sceneBaseX
       || this.replayedSceneBaseY !== this.sceneBaseY;
@@ -224,7 +281,7 @@ export class PlayerSession {
     // xrsps replays the initial scene during login; later scene replays follow
     // the authoritative player-sync base below.
     if (initialSync && sceneChanged) {
-      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY, current.level);
+      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);
       if (!this.isBinaryChannelOpen()) return;
     }
 
@@ -261,10 +318,11 @@ export class PlayerSession {
         const location = npc.getLocation();
         const face = npc.getFace()?.getDirection?.();
         return {
-          ...this.createActorUpdates(npc, npc.getDefinition().getHitpoints(), false),
+          ...this.createActorUpdates(npc, npc.getMaxHitpoints(), false),
           interactionIndex: this.interactionIndex(npc.getInteractingMobile()),
           index: npc.getIndex(),
           typeId: npc.getId(),
+          headIcon: npc.getHeadIcon(),
           x: location.getX(),
           y: location.getY(),
           level: location.getZ(),
@@ -275,7 +333,12 @@ export class PlayerSession {
       })
     );
     const localForceMovement = player.getForceMovement();
-    const npcLocal = localForceMovement
+    const boatAboard = BoatManager.getBoatAboard(player);
+    const rootTile = boatAboard ? BoatManager.rootLocation(player) : undefined;
+    // NPCs are in the main world, so a player on a deck sees them from the tile under them.
+    const npcLocal = rootTile
+      ? { x: rootTile.getX(), y: rootTile.getY(), level: rootTile.getZ() }
+      : localForceMovement
       ? {
           x: localForceMovement.getStart().getX() + localForceMovement.getEnd().getX(),
           y: localForceMovement.getStart().getY() + localForceMovement.getEnd().getY(),
@@ -289,7 +352,10 @@ export class PlayerSession {
 
     const syncSent = ServerPerf.measurePhase("network.flush.socket_send", () => {
       const tickFrame = encodeTick(tick, Date.now());
+      // Boats first, so a player on a deck refers to a boat the client already has.
+      const worldEntities = WorldEntitySync.flush(player);
       if (!this.sendClientPacket(tickFrame)
+        || !worldEntities.every((packet) => this.sendClientPacket(packet))
         || !this.sendClientPacket(playerSync)
         || !this.sendClientPacket(npcSync)) {
         return false;
@@ -304,14 +370,15 @@ export class PlayerSession {
     if (!syncSent) return;
 
     if (!initialSync && sceneChanged) {
-      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY, current.level);
+      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);
       if (!this.isBinaryChannelOpen()) return;
     }
     if (sceneChanged) {
       this.replayedSceneBaseX = this.sceneBaseX;
       this.replayedSceneBaseY = this.sceneBaseY;
-      this.replayedSceneLevel = current.level;
+      this.replayedSceneLevel = sceneTile.level;
       this.replayedPrivateArea = privateArea;
+      this.replayedSceneVersion = sceneVersion;
       this.hasReplayedScene = true;
     }
   }
@@ -328,8 +395,11 @@ export class PlayerSession {
       const weapon = equipment[3]?.getDefinition?.();
       const npcTransformationId = player.getNpcTransformationId();
       const transformedNpc = npcTransformationId >= 0 ? CacheDefinitions.getNpc(npcTransformationId) : undefined;
+      const renderAnimations = player.getRenderAnimations();
       const animations = skillAnimation > 0
         ? new Array(7).fill(skillAnimation)
+        : renderAnimations
+          ? renderAnimations
         : transformedNpc
           ? [
               transformedNpc.idleSeqId,
@@ -407,6 +477,8 @@ export class PlayerSession {
       y: location.getY(),
       level: location.getZ(),
       appearance: payload,
+      worldView: BoatManager.getBoatAboard(player)?.entityIndex,
+      resetPath: player.isNeedsPlacement(),
       movementType: player.getRunningDirection().getId() >= 0
         ? 2
         : player.getWalkingDirection().getId() >= 0 ? 1 : undefined,
@@ -460,12 +532,13 @@ export class PlayerSession {
         : undefined,
       hits: hits.length > 0
         ? hits.map((hit: any) => ({
-            type: this.hitsplatType(hit.getHitmask(), mine),
+            type: hit.getSplatType?.(mine) ?? this.hitsplatType(hit.getHitmask(), mine),
             damage: hit.getDamage(),
           }))
         : undefined,
       health: hits.length > 0
-        ? { current: actor.getHitpoints(), max: maxHitpoints }
+        ? actor.getDisplayedHealth?.()
+          ?? { current: actor.getHitpoints(), max: maxHitpoints, bar: actor.getHealthBar?.() ?? undefined }
         : undefined,
     };
   }

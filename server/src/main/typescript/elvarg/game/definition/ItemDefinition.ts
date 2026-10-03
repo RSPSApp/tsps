@@ -20,7 +20,7 @@ export class ItemDefinition {
         definition.bonuses = [...(base.bonuses ?? new Array(14).fill(0))];
         definition.requirements = [...(base.requirements ?? new Array(23).fill(0))];
         for (const key of ["equipmentType", "weaponInterface", "doubleHanded", "stackable",
-            "tradeable", "dropable", "sellable", "value", "highAlch", "lowAlch", "dropValue",
+            "tradeable", "dropable", "sellable", "value", "grandExchangeValue", "highAlch", "lowAlch", "dropValue",
             "bloodMoneyValue", "blockAnim", "standAnim", "walkAnim", "runAnim", "standTurnAnim",
             "turn180Anim", "turn90CWAnim", "turn90CCWAnim", "bonuses", "requirements"]) {
             const value = raw[key];
@@ -44,11 +44,13 @@ export class ItemDefinition {
     private sellable: boolean;
     private noted: boolean;
     private value: number;
+    private grandExchangeValue: number;
     private bloodMoneyValue: number;
     private highAlch: number;
     private lowAlch: number;
     private dropValue: number;
     private noteId: number = -1;
+    private placeholderId: number = -1;
     private blockAnim: number = 424;
     private standAnim: number = 808;
     private walkAnim: number = 819;
@@ -86,6 +88,9 @@ export class ItemDefinition {
         this.dropable = cached.inventoryActions[4]?.toLowerCase() === "drop";
         this.noted = cached.noteTemplate !== -1;
         this.noteId = cached.note;
+        // Placeholders have their own cache entry; items without one (such as
+        // charged variants) leave no placeholder.
+        this.placeholderId = cached.placeholderTemplate === -1 ? cached.placeholder : -1;
         this.value = cached.price;
         this.weight = cached.weight;
         if (this.equipmentType.getSlot() === -1 && EQUIPMENT_SLOTS.has(cached.wearPos)) {
@@ -108,6 +113,11 @@ export class ItemDefinition {
 
     public getValue(): number {
         return this.value;
+    }
+
+    /** OSRS Grand Exchange quote from data/definitions/item-prices.json; falls back to the store value. */
+    public getGrandExchangeValue(): number {
+        return this.grandExchangeValue > 0 ? this.grandExchangeValue : this.value;
     }
 
     public getBloodMoneyValue(): number {
@@ -144,6 +154,11 @@ export class ItemDefinition {
 
     public isNoted(): boolean {
         return this.noted;
+    }
+
+    /** The faded bank placeholder for this item, or -1 if it has none. */
+    public getPlaceholderId(): number {
+        return this.placeholderId;
     }
 
     public getNoteId(): number {

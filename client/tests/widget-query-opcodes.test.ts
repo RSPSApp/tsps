@@ -39,6 +39,9 @@ const ctx: any = {
     widgetManager: {
         getGroup() {},
         getWidgetByUid(uid: number) { return widgets.get(uid) ?? null; },
+        isServerOwnedWidget() { return false; },
+        interfaceParents: new Map(),
+        getInterfaceParentContainerUid() { return undefined; },
     },
     paramTypeLoader: { load: () => ({ defaultInt: 0, isString: () => false }) },
 };
@@ -73,6 +76,18 @@ ctx.pushInt(2);
 run(Opcodes.CC_WIDGET_QUERY);
 assert.equal(ctx.popInt(), 1);
 run(Opcodes.WIDGET_QUERY_NEXT);
+assert.equal(activeWidget, nested);
+
+// OSRS CCs live flat under their static component: a nested CC's layer is the
+// static root, and cc_find(root, index) reaches it (Tutorial Island tab flash, script 8491).
+ctx.setActiveWidget(nested);
+run(Opcodes.CC_GETLAYER);
+assert.equal(ctx.popInt(), root.uid);
+
+ctx.pushInt(root.uid);
+ctx.pushInt(2);
+run(Opcodes.CC_FIND);
+assert.equal(ctx.popInt(), 1);
 assert.equal(activeWidget, nested);
 
 console.log("widget query opcode tests passed");

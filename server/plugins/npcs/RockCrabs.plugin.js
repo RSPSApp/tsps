@@ -223,6 +223,7 @@ let AreaManager;
 
 module.exports = {
   name: "RockCrabs",
+  members: true,
   register(api) {
     CombatFactory = api.getCombatFactory();
     AreaManager = api.getAreaManager();

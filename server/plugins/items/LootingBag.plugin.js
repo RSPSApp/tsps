@@ -201,6 +201,7 @@ function handleItemOnItem(event) {
 
 module.exports = {
   name: "LootingBag",
+  members: true,
   dependsOn: ["Wilderness", "Food", "Potions", "LootKeys"],
   register(api) {
     api.onGroundItemPickup((event) => {

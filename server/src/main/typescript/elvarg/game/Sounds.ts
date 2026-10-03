@@ -1,10 +1,8 @@
 import { Player } from '../game/entity/impl/player/Player'
-import { LostCitySynthId } from '../game/LostCityAudioIds'
 import { Sound } from '../game/Sound'
 import { World } from './World'
 export class Sounds {
     private static readonly knownSoundsByName = Sounds.buildKnownSoundsByName();
-    private static readonly generatedLostCitySoundsByName = Sounds.buildGeneratedLostCitySoundsByName();
     private static readonly knownSoundsById = Sounds.buildKnownSoundsById();
 
     private static buildKnownSoundsByName(): ReadonlyMap<string, Sound> {
@@ -14,29 +12,9 @@ export class Sounds {
         return new Map(entries);
     }
 
-    private static buildGeneratedLostCitySoundsByName(): ReadonlyMap<string, Sound> {
-        const byName = new Map<string, Sound>();
-        for (const key of Object.keys(LostCitySynthId)) {
-            if (/^\d+$/.test(key)) {
-                continue;
-            }
-            if (Sounds.knownSoundsByName.has(key)) {
-                continue;
-            }
-            const id = (LostCitySynthId as unknown as Record<string, number>)[key];
-            byName.set(key, new Sound(id, 1, 0, 0));
-        }
-        return byName;
-    }
-
     private static buildKnownSoundsById(): ReadonlyMap<number, Sound> {
         const byId = new Map<number, Sound>();
         for (const sound of Sounds.knownSoundsByName.values()) {
-            if (!byId.has(sound.getId())) {
-                byId.set(sound.getId(), sound);
-            }
-        }
-        for (const sound of Sounds.generatedLostCitySoundsByName.values()) {
             if (!byId.has(sound.getId())) {
                 byId.set(sound.getId(), sound);
             }
@@ -146,17 +124,10 @@ export class Sounds {
             return Sounds.knownSoundsById.get(Number.parseInt(normalized, 10)) ?? null;
         }
 
-        return Sounds.knownSoundsByName.get(normalized)
-            ?? Sounds.generatedLostCitySoundsByName.get(normalized)
-            ?? null;
+        return Sounds.knownSoundsByName.get(normalized) ?? null;
     }
 
     public static knownSoundNames(): ReadonlyArray<string> {
-        return [
-            ...new Set([
-                ...Sounds.knownSoundsByName.keys(),
-                ...Sounds.generatedLostCitySoundsByName.keys(),
-            ]),
-        ].sort();
+        return [...Sounds.knownSoundsByName.keys()].sort();
     }
 }

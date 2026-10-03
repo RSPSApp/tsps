@@ -43,6 +43,11 @@ export abstract class Area {
         // By default, do nothing in process.
     }
 
+    /** Whether this area is a multi-combat zone. Areas outside the Wilderness opt in here. */
+    public isMulti(): boolean {
+        return false;
+    }
+
     public getBoundaries(): Boundary[] {
         return this.boundaries;
     }

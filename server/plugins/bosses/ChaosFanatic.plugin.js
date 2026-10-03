@@ -169,6 +169,7 @@ let BonusManager;
 
 module.exports = {
   name: "ChaosFanatic",
+  members: true,
   register(api) {
     TaskManager = api.getTaskManager();
     BonusManager = api.getBonusManager();

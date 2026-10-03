@@ -3,7 +3,6 @@ import PicoGL, { DrawCall, Texture, VertexBuffer } from "picogl";
 
 import { EquipmentSlot } from "../../rs/config/player/Equipment";
 import { PlayerAppearance } from "../../rs/config/player/PlayerAppearance";
-import { getMapIndexFromTile } from "../../rs/map/MapFileIndex";
 import { Model } from "../../rs/model/Model";
 import { ModelData } from "../../rs/model/ModelData";
 import { clamp } from "../../common/utils/MathUtil";
@@ -79,7 +78,6 @@ export class PlayerRenderer {
     constructor(private renderer: WebGLOsrsRenderer) {}
 
     // Reusable buffers to avoid per-frame allocations
-    private playerIndicesBuffer: number[] = [];
     private slotsBuffer: number[] = [];
     private playerSlotScratch: Int32Array = new Int32Array(2048);
     private frameRenderSelectionId: number = -1;
@@ -831,19 +829,7 @@ export class PlayerRenderer {
             const pe: any = r.osrsClient.playerEcs as any;
             const pid = pe.getIndexForServerId?.(r.osrsClient.controlledPlayerServerId);
             if (pid === undefined) return undefined;
-            const pn = pe.size?.() ?? (pe as any).size?.() ?? 0;
-            // Reuse buffer
-            const playerIndices = this.playerIndicesBuffer;
-            playerIndices.length = 0;
-            for (let j = 0; j < pn; j++) {
-                const tileX = ((pe.getX?.(j) ?? 0) / 128) | 0;
-                const tileY = ((pe.getY?.(j) ?? 0) / 128) | 0;
-                if (
-                    getMapIndexFromTile(tileX) === map.mapX &&
-                    getMapIndexFromTile(tileY) === map.mapY
-                )
-                    playerIndices.push(j | 0);
-            }
+            const playerIndices = this.getRenderPlayersForMap(map);
             const idx = playerIndices.indexOf(pid | 0);
             if (idx === -1) return undefined;
             return { slot: idx | 0, pid: pid | 0 };
@@ -876,20 +862,7 @@ export class PlayerRenderer {
             // Gather players present in this map and assign slots consistent with addPlayerRenderData
             const rAny: any = this.renderer as any;
             const pe = rAny.osrsClient.playerEcs as any;
-            const pn = pe.size?.() ?? 0;
-            if (!(pn > 0)) return;
-            // Reuse buffer
-            const playerIndices = this.playerIndicesBuffer;
-            playerIndices.length = 0;
-            for (let j = 0; j < pn; j++) {
-                const tileX = ((pe.getX?.(j) ?? 0) / 128) | 0;
-                const tileY = ((pe.getY?.(j) ?? 0) / 128) | 0;
-                if (
-                    getMapIndexFromTile(tileX) === map.mapX &&
-                    getMapIndexFromTile(tileY) === map.mapY
-                )
-                    playerIndices.push(j | 0);
-            }
+            const playerIndices = this.getRenderPlayersForMap(map);
             if (playerIndices.length === 0) return;
 
             // Prepare shared state
@@ -2678,6 +2651,10 @@ export class PlayerRenderer {
             map.id,
         );
         const renderSelf = this.renderer.osrsClient.renderSelf !== false;
+        // Instances are one 104-tile scene, not a single 64-tile world map square.
+        const baseTileX = map.getRenderBaseTileX();
+        const baseTileY = map.getRenderBaseTileY();
+        const tileSpan = map.getLocalTileSpan();
 
         for (const activePid of pe.getAllActiveIndices()) {
             const pid = activePid | 0;
@@ -2704,8 +2681,8 @@ export class PlayerRenderer {
                     continue;
                 }
                 if (
-                    getMapIndexFromTile(tileX) !== map.mapX ||
-                    getMapIndexFromTile(tileY) !== map.mapY
+                    tileX < baseTileX || tileX >= baseTileX + tileSpan ||
+                    tileY < baseTileY || tileY >= baseTileY + tileSpan
                 ) {
                     continue;
                 }

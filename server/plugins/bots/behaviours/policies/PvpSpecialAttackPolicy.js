@@ -35,19 +35,17 @@ function markSpecUsed(pvp, nowMs) {
   pvp.nextSwitchbackCheckAt = pvp.specSwitchbackAt;
 }
 
+/** Multiplier the special's owner declares for burst-finisher prediction. */
+function getFinisherDamageMultiplier(special) {
+  const value = Number(special?.getMetadata?.()?.finisherDamageMultiplier ?? 1);
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
 function getSpecialForWeaponId(weaponId) {
   if (!Number.isInteger(weaponId) || weaponId <= 0) {
     return null;
   }
-  for (const value of Object.values(CombatSpecial)) {
-    if (!(value instanceof CombatSpecial)) {
-      continue;
-    }
-    if (value.getIdentifiers?.().includes?.(weaponId)) {
-      return value;
-    }
-  }
-  return null;
+  return CombatSpecial.getForWeaponId(weaponId);
 }
 
 function getOwnHpRatio(player) {
@@ -89,8 +87,7 @@ function isSpecFinisher(player, target, state, special, weaponId) {
     maxHit = Math.max(0, (base - 0.5) * Math.max(0, projectedBonus + 64) /
       Math.max(1, currentBonus + 64) + 0.5) * special.getStrengthMultiplier();
   }
-  if ([CombatSpecial.DRAGON_CLAWS, CombatSpecial.DRAGON_DAGGER,
-      CombatSpecial.DARK_BOW, CombatSpecial.MAGIC_SHORTBOW].includes(special)) maxHit *= 2;
+  maxHit *= getFinisherDamageMultiplier(special);
   // A plausible high roll, not a guaranteed maximum; delayed godsword damage is excluded.
   return hp <= Math.floor(maxHit * 0.75);
 }
@@ -313,12 +310,12 @@ function tryActivateSpecial(player, target) {
   const before = player?.isSpecialActivated?.() === true;
   const beforePercentage = Number(player?.getSpecialPercentage?.() ?? 0);
   const beforeQueued =
-    player?.getCombat?.()?.isGraniteMaulSpecialQueued?.() === true;
+    player?.getCombat?.()?.isSpecialAttackQueued?.() === true;
   CombatSpecial.activate(player);
   const afterActivated = player?.isSpecialActivated?.() === true;
   const afterPercentage = Number(player?.getSpecialPercentage?.() ?? 0);
   const afterQueued =
-    player?.getCombat?.()?.isGraniteMaulSpecialQueued?.() === true;
+    player?.getCombat?.()?.isSpecialAttackQueued?.() === true;
   return (
     before !== afterActivated ||
     afterActivated === true ||
@@ -428,9 +425,9 @@ function maybeUseSpecialAttack(context) {
 
   // Recheck queued specials even while the review timer is cooling down.
   if (!canSpecTarget(player, target, player.getCombatSpecial?.()) &&
-      (player.isSpecialActivated?.() || player.getCombat().isGraniteMaulSpecialQueued())) {
+      (player.isSpecialActivated?.() || player.getCombat().isSpecialAttackQueued())) {
     player.setSpecialActivated(false);
-    player.getCombat().setGraniteMaulSpecialQueued(false);
+    player.getCombat().setSpecialAttackQueued(false);
     player.getPacketSender().sendSpecialAttackState(false);
   }
 

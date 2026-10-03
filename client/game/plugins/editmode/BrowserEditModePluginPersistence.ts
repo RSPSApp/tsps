@@ -19,6 +19,7 @@ export function createBrowserEditModePluginPersistence(
                     showPvpZones: false,
                     showDuelZones: false,
                     showSafeZones: false,
+                    showF2pZones: false,
                     showMultiCombatZones: false,
                 };
             } catch {

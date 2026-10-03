@@ -27,6 +27,7 @@ class SkillEntered implements EnteredAmountAction {
 export class SkillManager {
     public static readonly AMOUNT_OF_SKILLS: number = Skill.values().length;
     public static readonly MAX_EXPERIENCE: number = 1000000000;
+    public static readonly XP_LOCKED_ATTRIBUTE = "skills:xp-locked";
     public static readonly EXPERIENCE_FOR_99: number = 13034431;
     public static readonly EXP_ARRAY: number[] = [0, 83, 174, 276, 388, 512, 650, 801, 969, 1154, 1358, 1584, 1833, 2107,
         2411, 2746, 3115, 3523, 3973, 4470, 5018, 5624, 6291, 7028, 7842, 8740, 9730, 10824, 12031, 13363, 14833,
@@ -129,6 +130,9 @@ export class SkillManager {
         if (!Number.isFinite(experience) || experience <= 0) {
             return this;
         }
+        if (PluginManager.emitCanGainExperience(this.player, skill, experience) === false) {
+            return this;
+        }
 
         // Multipliers...
         if (multipliers) {
@@ -139,7 +143,7 @@ export class SkillManager {
         this.player.getPacketSender().sendExpDrop(skill, experience);
 
         // Don't add the experience if it has been locked..
-        if (this.player.experienceLockedReturn())
+        if (this.player.getAttribute(SkillManager.XP_LOCKED_ATTRIBUTE) === true)
             return this;
 
         // If we already have max exp, don't add any more.
@@ -169,18 +173,14 @@ export class SkillManager {
             let skillName = skill.getName();
             this.skills.maxLevel[skill.getIndex()] += level;
             this.stopSkillable(); // Stop skilling on level up like osrs
+            // Publish the new current level and native stats before feedback hooks run.
+            this.setCurrentLevels(skill, this.skills.maxLevel[skill.getIndex()]);
             PluginManager.emitPlayerLevelUp({
                 player: this.player,
                 skill,
                 oldLevel: startingLevel,
                 newLevel: this.skills.maxLevel[skill.getIndex()],
             });
-            this.setCurrentLevels(skill, this.skills.maxLevel[skill.getIndex()]);
-            this.player.getPacketSender().sendInterfaceRemoval();
-            this.player.getPacketSender().sendString("Congratulations! You have achieved a " + skillName + " level!", 4268);
-            this.player.getPacketSender().sendString("Well done. You are now level " + newLevel + ".", 4269);
-            this.player.getPacketSender().sendString("Click here to continue.", 358);
-            this.player.getPacketSender().sendChatboxInterface(skill.getChatboxInterface());
             this.player.performGraphic(SkillManager.LEVEL_UP_GRAPHIC);
             Sounds.sendSound(this.player, Sound.LEVEL_UP);
             this.player.sendMessage("You've just advanced " + skillName + " level! You have reached level " + newLevel);
@@ -191,7 +191,7 @@ export class SkillManager {
             }
             this.player.getUpdateFlag().flag(Flag.APPEARANCE);
         }
-        this.updateSkill(skill);
+        if (newLevel <= startingLevel) this.updateSkill(skill);
         return this;
     }
 
@@ -275,14 +275,6 @@ export class SkillManager {
     }
 
     public updateSkill(skill: Skill) {
-        const maxLevel = this.getMaxLevel(skill);
-        const currentLevel = this.getCurrentLevel(skill);
-
-        // Update the Prayer tab's level text.
-        if (skill === Skill.PRAYER) {
-            this.player.getPacketSender().sendString(currentLevel + "/" + maxLevel, 687);
-        }
-
         if (skill === Skill.PRAYER || skill === Skill.DEFENCE) {
             const prayerLevel = this.getMaxLevel(Skill.PRAYER);
             const defenceLevel = this.getMaxLevel(Skill.DEFENCE);
@@ -293,17 +285,8 @@ export class SkillManager {
                 .sendVarbit(5452, prayerLevel >= PrayerData.AUGURY.requirement && defenceLevel >= 70 ? 1 : 0);
         }
 
-        // Send total level
-        this.player.getPacketSender().sendString("" + this.getTotalLevel(), 31200);
-
-        this.player.getPacketSender().sendString("" + this.getTotalLevel(), 31200);
-
-
-        // Send combat level
-        const combatLevel = "Combat level: " + this.getCombatLevel();
-        this.player.getPacketSender().sendString(combatLevel, 19000).sendString(combatLevel, 5858);
-
-        // Send the skill
+        // Native skill deltas also carry total and combat levels; legacy 317
+        // text widgets do not exist in the OSRS interfaces.
         this.player.getPacketSender().sendSkill(skill);
 
         return this;
@@ -461,11 +444,9 @@ export class SkillManager {
         const raw = Number(this.skills.maxLevel[idx]);
         const fromArray = Number.isFinite(raw) ? Math.max(1, Math.floor(raw)) : 1;
         const fromExp = Math.max(1, SkillManager.getLevelForExperience(this.getExperience(skill)));
-        const resolved = Math.max(fromArray, fromExp);
-        if (this.skills.maxLevel[idx] !== resolved) {
-            this.skills.maxLevel[idx] = resolved;
-        }
-        return resolved;
+        // Don't write this back: mid-way through setMaxLevel(...).setExperience(...) the old
+        // experience would pin the max level at its old value (issue #101).
+        return Math.max(fromArray, fromExp);
     }
 
     /**

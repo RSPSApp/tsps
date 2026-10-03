@@ -84,6 +84,19 @@ export abstract class PrivateArea extends Area {
         return objects;
     }
 
+    /**
+     * Whether people in this area see, and are seen from, the main world around them. A boat
+     * deck does: it is drawn where the boat is at sea.
+     */
+    public countsAsMainWorld(): boolean {
+        return false;
+    }
+
+    /** Allows an instance to validate client-only dynamic locs on demand. */
+    public resolveObject(_id: number, _location: Location): GameObject | null {
+        return null;
+    }
+
     private clipKey(location: Location): string {
         return `${location.getX()},${location.getY()},${location.getZ()}`;
     }

@@ -142,7 +142,8 @@ export class ProjectileRenderer {
             .texture("u_textureMaterials", (this.renderer as any).textureMaterials)
             .texture("u_waterTextures", (this.renderer as any).waterTextures)
             .uniform("u_worldEntityOpacity", 1.0)
-            .uniform("u_mapPos", vec2.fromValues(map.mapX, map.mapY))
+            // Where the map is drawn: its corner, or an instance's scene base.
+            .uniform("u_mapPos", vec2.fromValues(map.renderPosX, map.renderPosY))
             .uniform("u_npcDataOffset", baseOffset | 0)
             .texture("u_npcDataTexture", actorDataTexture)
             .texture("u_heightMap", map.heightMapTexture)
@@ -198,8 +199,8 @@ export class ProjectileRenderer {
         // the scene, but let every shell blend instead of the outer one hiding the rest.
         if (transparent) app.depthMask(false);
 
-        const mapWorldX = map.mapX << 13;
-        const mapWorldY = map.mapY << 13;
+        const mapWorldX = map.getRenderBaseTileX() * 128;
+        const mapWorldY = map.getRenderBaseTileY() * 128;
 
         for (const group of groups.values()) {
             const vaoRec = this.getOrCreateSpotAnimGpu(

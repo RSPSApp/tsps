@@ -95,14 +95,31 @@ export class NPC extends Mobile {
     private id: number;
     private movementCoordinator: NPCMovementCoordinator = new NPCMovementCoordinator(this);
     private hitpoints: number;
+    private maxHitpointsOverride = -1;
+    /** Multiplies this NPC's attack and defence rolls (raid scaling); 1 leaves them alone. */
+    private rollFactor = 1;
     private spawnPosition: Location;
     private headIcon = -1;
     private isDying: boolean;
     private owner: Player;
+    private ownerOnly: boolean = false;
     private visible: boolean = true;
     private face: FacingDirection = FacingDirection.SOUTH;
     private pet: boolean;
     private movementSteps = 1;
+    private scriptedMovement: boolean = false;
+    /** Hits show their damage but never lower this NPC's hitpoints (a boss whose HP is a timer). */
+    private hitpointsLocked: boolean = false;
+    /** The headbar (healthbar config id and its width) shown over this NPC, when not the default. */
+    private healthBarOverride: { id: number; width: number } | null = null;
+    /** Scales the combat XP players get for damaging this NPC (OSRS gives some bosses less). */
+    private combatXpMultiplier: number = 1;
+    private defenceLevel: number | null = null;
+    private defenceRestoreCycle = 0;
+    // ponytail: standard regeneration; add encounter-specific rates/caps with those bosses.
+    private static readonly STAT_RESTORE_TICKS = 100;
+    /** Ticks per level a drained stat comes back; a boss can restore faster (the Corporeal Beast). */
+    private statRestoreTicks = NPC.STAT_RESTORE_TICKS;
 
     constructor(id: number, position: Location) {
         super(position)
@@ -124,7 +141,7 @@ export class NPC extends Mobile {
      * @return
      */
     public static create(id: number, location: Location) {
-        let implementationClass = NPC.NPC_IMPLEMENTATION_MAP.get(id);
+        let implementationClass = NPC.NPC_IMPLEMENTATION_MAP?.get(id);
         if (implementationClass != null) {
             // If this NPC has been implemented by its own class, instantiate that first
             try {
@@ -211,10 +228,13 @@ export class NPC extends Mobile {
                 // the same target via follow/combat. Without this guard, pets can oscillate:
                 // follow sets face-to-player, then NPC.process clears interaction for range
                 // and resets face back to spawn direction in the same cycle.
+                // "interaction:keep": a scripted NPC (a boss whose attacks a plugin drives) keeps
+                // facing its target at any range.
                 const trackingInteractionTarget =
                     this.getFollowing() === interactingMobile
                     || this.getCombatFollowing() === interactingMobile
-                    || this.getCombat().getTarget() === interactingMobile;
+                    || this.getCombat().getTarget() === interactingMobile
+                    || this.hasFlag("interaction:keep");
                 const targetUnregistered =
                     typeof interactingMobile.isRegistered === "function"
                     && !interactingMobile.isRegistered();
@@ -248,12 +268,13 @@ export class NPC extends Mobile {
             }
 
             AreaManager.process(this);
-            if (this.getCombat().getLastAttack().hasElapsed(20000)
-                || this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING) {
-                if (this.getDefinition().getHitpoints() > this.hitpoints) {
-                    this.setHitpoints(this.hitpoints + (this.getDefinition().getHitpoints() * 0.1));
-                    if (this.hitpoints > this.getDefinition().getHitpoints()) {
-                        this.setHitpoints(this.getDefinition().getHitpoints());
+            if (!this.hitpointsLocked && (this.getCombat().getLastAttack().hasElapsed(20000)
+                || this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING)) {
+                const max = this.getMaxHitpoints();
+                if (max > this.hitpoints) {
+                    this.setHitpoints(this.hitpoints + (max * 0.1));
+                    if (this.hitpoints > max) {
+                        this.setHitpoints(max);
                     }
                 }
             }
@@ -297,9 +318,29 @@ export class NPC extends Mobile {
         return this;
     }
 
+    /** Full health: the definition's hitpoints unless this NPC was scaled (raids). */
+    public getMaxHitpoints(): number {
+        return this.maxHitpointsOverride >= 0 ? this.maxHitpointsOverride : this.getDefinition().getHitpoints();
+    }
+
+    /** Scales this one NPC's full health, e.g. by raid level or party size; -1 restores the definition's. */
+    public getRollFactor(): number {
+        return this.rollFactor;
+    }
+
+    public setRollFactor(factor: number): NPC {
+        this.rollFactor = Number.isFinite(factor) && factor > 0 ? factor : 1;
+        return this;
+    }
+
+    public setMaxHitpoints(maxHitpoints: number): NPC {
+        this.maxHitpointsOverride = Math.trunc(maxHitpoints);
+        return this;
+    }
+
     public heal(heal: number) {
-        if ((this.hitpoints + heal) > this.getDefinition().getHitpoints()) {
-            this.setHitpoints(this.getDefinition().getHitpoints());
+        if ((this.hitpoints + heal) > this.getMaxHitpoints()) {
+            this.setHitpoints(this.getMaxHitpoints());
             return;
         }
         this.setHitpoints(this.hitpoints + heal);
@@ -349,6 +390,31 @@ export class NPC extends Mobile {
         // 13 = magic
         // 14 = range
         return base;
+    }
+
+    /** Temporary Defence belongs to this NPC, never its shared definition. */
+    public getDefenceLevel(): number {
+        const base = this.getCurrentDefinition().getStats()[2];
+        if (this.defenceLevel === null) return base;
+        const restored = Math.floor((World.getProcessCycle() - this.defenceRestoreCycle) / this.statRestoreTicks);
+        if (restored > 0) {
+            this.defenceLevel = Math.min(base, this.defenceLevel + restored);
+            this.defenceRestoreCycle += restored * this.statRestoreTicks;
+            if (this.defenceLevel === base) this.defenceLevel = null;
+        }
+        return this.defenceLevel ?? base;
+    }
+
+    public setStatRestoreTicks(ticks: number): void {
+        this.statRestoreTicks = Math.max(1, Math.trunc(ticks));
+    }
+
+    public setDefenceLevel(level: number): void {
+        if (!Number.isFinite(level)) throw new RangeError("Invalid NPC Defence level");
+        if (this.defenceLevel === null) this.defenceRestoreCycle = World.getProcessCycle();
+        const base = this.getCurrentDefinition().getStats()[2];
+        this.defenceLevel = Math.max(0, Math.min(base, Math.floor(level)));
+        if (this.defenceLevel === base) this.defenceLevel = null;
     }
 
     public getBaseAttackSpeed(): number {
@@ -413,6 +479,16 @@ export class NPC extends Mobile {
 
     public setOwner(owner: Player): NPC {
         this.owner = owner;
+        return this;
+    }
+
+    /** Owner-scoped spawns (quest instances) are only visible to their owner. */
+    public isOwnerOnly(): boolean {
+        return this.ownerOnly;
+    }
+
+    public setOwnerOnly(ownerOnly: boolean): NPC {
+        this.ownerOnly = ownerOnly;
         return this;
     }
 
@@ -522,7 +598,44 @@ export class NPC extends Mobile {
     }
 
     public manipulateHit(hit: PendingHit): PendingHit {
-        return hit;
+        return PluginManager.emitNpcHitModify(this, hit);
+    }
+
+    /**
+     * While true, Combat leaves this NPC's movement queue alone (no pursuit route,
+     * no in-range reset) and does not attack. Plugins driving a scripted walk set
+     * this, path the NPC themselves, then clear it on arrival to resume combat.
+     */
+    public setScriptedMovement(scripted: boolean): void {
+        this.scriptedMovement = scripted;
+    }
+
+    public isScriptedMovement(): boolean {
+        return this.scriptedMovement;
+    }
+
+    public setHitpointsLocked(locked: boolean): void {
+        this.hitpointsLocked = locked;
+    }
+
+    public isHitpointsLocked(): boolean {
+        return this.hitpointsLocked;
+    }
+
+    public setHealthBar(bar: { id: number; width: number } | null): void {
+        this.healthBarOverride = bar;
+    }
+
+    public getHealthBar(): { id: number; width: number } | null {
+        return this.healthBarOverride;
+    }
+
+    public setCombatXpMultiplier(multiplier: number): void {
+        this.combatXpMultiplier = multiplier;
+    }
+
+    public getCombatXpMultiplier(): number {
+        return this.combatXpMultiplier;
     }
 
     /**

@@ -392,11 +392,16 @@ export class NpcEcs {
         this.worldViewId[id] = -1;
     }
 
-    destroyNpcsForMap(mapX: number, mapY: number): void {
+    destroyNpcsForMap(mapX: number, mapY: number, keepServerNpcs = false): void {
         const mid = getMapSquareId(mapX, mapY);
         const list = this.perMap.get(mid);
         if (!list) return;
+        const kept: number[] = [];
         for (const id of list) {
+            if (keepServerNpcs && (this.serverId[id] | 0) > 0) {
+                kept.push(id);
+                continue;
+            }
             this.active[id] = 0;
             this.freeList.push(id);
             this.interactionIndex[id] = NO_INTERACTION;
@@ -408,7 +413,11 @@ export class NpcEcs {
             this.serverId[id] = 0;
             this.hasServerState[id] = 0;
         }
-        this.perMap.delete(mid);
+        if (kept.length > 0) {
+            this.perMap.set(mid, kept);
+        } else {
+            this.perMap.delete(mid);
+        }
     }
 
     /**

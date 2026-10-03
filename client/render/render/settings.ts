@@ -191,6 +191,10 @@ import { RENDER_CONSTANTS } from "./constants";
 
 export function setSkyColor(host: WebGLOsrsRendererHost, r: number, g: number, b: number) {
 
+        // A colour picked by hand stays; the panel reporting the current colour back doesn't count.
+        const unchanged = [r, g, b].every((value, i) => Math.round(value) === Math.round(host.skyColor[i] * 255));
+        if (unchanged) return;
+        host.skyColorOverride = true;
         host.skyColor[0] = r / 255;
         host.skyColor[1] = g / 255;
         host.skyColor[2] = b / 255;
@@ -340,6 +344,7 @@ export function onResize(host: WebGLOsrsRendererHost, width: number, height: num
             if (host.overheadTextOverlay) host.overheadTextOverlay.scale = overlayScale;
             if (host.hitsplatOverlay) host.hitsplatOverlay.scale = overlayScale;
             if (host.overheadPrayerOverlay) host.overheadPrayerOverlay.scale = overlayScale;
+            if (host.tutorialHintOverlay) host.tutorialHintOverlay.scale = overlayScale;
             if (host.healthBarOverlay) {
                 host.healthBarOverlay.scale =
                     overlayScale * RENDER_CONSTANTS.HEALTH_BAR_VISUAL_SCALE;

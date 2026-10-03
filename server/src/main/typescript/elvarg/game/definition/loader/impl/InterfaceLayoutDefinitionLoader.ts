@@ -25,7 +25,7 @@ export class InterfaceLayoutDefinitionLoader extends DefinitionLoader {
       definitions.push(this.validate(key, raw, idsByKey));
     }
     InterfaceLayoutRegistry.replace(definitions);
-    console.info(`[interfaces] Loaded ${definitions.length} interface layouts`);
+    console.debug(`[interfaces] Loaded ${definitions.length} interface layouts`);
   }
 
   public file(): string {

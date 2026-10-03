@@ -83,6 +83,12 @@ export class ClientState {
     /** Template chunk grid for the current instance (4×13×13, -1 = empty). */
     static instanceTemplateChunks: number[][][] | null = null;
 
+    /**
+     * Whether a tile lies in a world entity's own scene (such as a boat deck) rather than the
+     * main scene. Player sync uses it to skip the main scene's bounds checks for those tiles.
+     */
+    static isWorldEntityTile: (tileX: number, tileY: number) => boolean = () => false;
+
     /** Current region center X in chunk coordinates (from last REBUILD_REGION/REBUILD_NORMAL). */
     static regionX: number = -1;
 

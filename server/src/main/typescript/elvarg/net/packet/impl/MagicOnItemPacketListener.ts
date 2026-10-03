@@ -13,6 +13,7 @@ import { Sound } from "../../../game/Sound";
 import { Sounds } from "../../../game/Sounds";
 import { ItemIdentifiers } from "../../../util/ItemIdentifiers";
 import { World } from "../../../game/World";
+import { PluginManager } from "../../../plugins/PluginManager";
 import { CombatRange } from "../../../game/content/combat/CombatRange";
 import { ArceuusItemSpells } from "../../../game/content/combat/magic/ArceuusItemSpells";
 
@@ -228,7 +229,7 @@ export class MagicOnItemPacketListener {
   }
 
   private findVisibleGroundItem(player: any, groundItemId: number, position: Location): any | null {
-    const exact = ItemOnGroundManager.getGroundItem(player.getUsername(), groundItemId, position);
+    const exact = ItemOnGroundManager.getGroundItem(player.getUsername(), groundItemId, position, player.getPrivateArea());
     if (exact) {
       return exact;
     }
@@ -255,6 +256,9 @@ export class MagicOnItemPacketListener {
   }
 
   public castOnItem(player: any, spellId: number, itemId: number, slot: number): boolean {
+    if (PluginManager.emitCanUseItem(player, itemId, "magic") === false) {
+      return true;
+    }
     if (ArceuusItemSpells.castOnItem(player, spellId, itemId, slot)) {
       return true;
     }

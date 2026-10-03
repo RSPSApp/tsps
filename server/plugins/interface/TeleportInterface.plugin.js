@@ -6,15 +6,17 @@ const { FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("./wi
 
 const GROUP_ID = 30007;
 const MAIN_MODAL_UID = (161 << 16) | 16;
-const TAB = { TELEPORTS: "teleports", WILDERNESS: "wilderness", BOSSES: "bosses" };
-const TAB_ORDER = [TAB.TELEPORTS, TAB.WILDERNESS, TAB.BOSSES];
-const TAB_LABELS = { [TAB.TELEPORTS]: "Teleports", [TAB.WILDERNESS]: "Wilderness", [TAB.BOSSES]: "Bosses" };
+const TAB = { TELEPORTS: "teleports", WILDERNESS: "wilderness", BOSSES: "bosses", MINIGAMES: "minigames" };
+const TAB_ORDER = [TAB.TELEPORTS, TAB.WILDERNESS, TAB.BOSSES, TAB.MINIGAMES];
+const TAB_LABELS = { [TAB.TELEPORTS]: "Teleports", [TAB.WILDERNESS]: "Wilderness", [TAB.BOSSES]: "Bosses", [TAB.MINIGAMES]: "Minigames" };
 const COMPONENT = { ROOT: 0, FRAME: 1, TAB_START: 10, TAB_LABEL_START: 20, LIST_VIEW: 30, LIST_SCROLLBAR: 31, ROW_BACKGROUND_START: 100, ROW_LABEL_START: 200 };
 const uid = (component) => (GROUP_ID << 16) | component;
 const ROW_COUNT = 32;
 const ROW_HEIGHT = 24;
 const ROW_COLUMNS = 2;
 const ROW_WIDTH = 216;
+const TAB_WIDTH = 106;
+const TAB_STEP = 114;
 const LIST_CONTENT_HEIGHT = Math.ceil(ROW_COUNT / ROW_COLUMNS) * ROW_HEIGHT;
 const TAB_UIDS = TAB_ORDER.map((_, index) => uid(COMPONENT.TAB_START + index));
 const ROW_UIDS = Array.from({ length: ROW_COUNT }, (_, row) => uid(COMPONENT.ROW_LABEL_START + row));
@@ -79,6 +81,21 @@ const DESTINATIONS = {
     teleport("Count Draynor", location(3077, 9772), TeleportType.NORMAL),
     teleport("Elvarg", location(2852, 9637), TeleportType.NORMAL),
     teleport("Kalphite Queen", location(3508, 9494), TeleportType.NORMAL),
+    teleport("Corporeal Beast", location(2966, 4252, 2), TeleportType.NORMAL),
+    teleport("Zulrah", location(2196, 3056), TeleportType.NORMAL),
+  ],
+  [TAB.MINIGAMES]: [
+    teleport("Barrows", location(3565, 3315), TeleportType.NORMAL),
+    teleport("Blast Furnace", location(1939, 4958), TeleportType.NORMAL),
+    teleport("Castle Wars", location(2440, 3089), TeleportType.NORMAL),
+    teleport("Duel Arena", location(3366, 3266), TeleportType.NORMAL),
+    teleport("Pest Control", location(2657, 2639), TeleportType.NORMAL),
+    teleport("TzHaar Fight Caves", location(2438, 5168), TeleportType.NORMAL),
+    teleport("TzHaar Fight Pits", location(2399, 5177), TeleportType.NORMAL),
+    teleport("The Gauntlet", location(3032, 6127, 1), TeleportType.NORMAL),
+    teleport("The Inferno", location(2495, 5111), TeleportType.NORMAL),
+    teleport("Warriors' Guild", location(2876, 3546), TeleportType.NORMAL),
+    teleport("Wintertodt", location(1630, 3955), TeleportType.NORMAL),
   ],
 };
 
@@ -90,13 +107,13 @@ function buildInterface() {
   });
   add(COMPONENT.FRAME, root, { widthMode: 1, heightMode: 1, width: 494, height: 316 });
   for (let index = 0; index < TAB_ORDER.length; index++) {
-    const x = 18 + index * 152;
+    const x = 18 + index * TAB_STEP;
     add(COMPONENT.TAB_START + index, root, {
-      type: TYPE_RECTANGLE, rawX: x, rawY: 32, rawWidth: 146, rawHeight: 24, width: 146, height: 24,
+      type: TYPE_RECTANGLE, rawX: x, rawY: 32, rawWidth: TAB_WIDTH, rawHeight: 24, width: TAB_WIDTH, height: 24,
       filled: true, color: 0x2b241b, mouseOverColor: 0x3a3125, opacity: 32, actions: ["Open"], flags: FLAG_OP1,
     });
     add(COMPONENT.TAB_LABEL_START + index, root, {
-      type: TYPE_TEXT, rawX: x, rawY: 32, rawWidth: 146, rawHeight: 24, width: 146, height: 24,
+      type: TYPE_TEXT, rawX: x, rawY: 32, rawWidth: TAB_WIDTH, rawHeight: 24, width: TAB_WIDTH, height: 24,
       text: "", fontId: 496, textColor: 0xffd27f, textShadowed: true, xTextAlignment: 1, yTextAlignment: 1,
     });
   }

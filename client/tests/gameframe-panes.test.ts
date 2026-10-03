@@ -48,7 +48,13 @@ assert.equal(classic.get(61), 54, "quest tab icon");
 assert.equal(classic.get(89), 86, "music side panel");
 assert.equal(classic.get(33), 33, "classic minimap orbs retain a valid mount");
 
-assert.equal(loadGameframePaneRedirect(enumLoader, 601), undefined, "unknown roots have no redirect");
+const mobile = loadGameframePaneRedirect(enumLoader, 601);
+assert.ok(mobile, "mobile layout has a redirect");
+assert.equal(mobile.get(96), 49, "mobile chatbox");
+assert.equal(mobile.get(9), 21, "mobile username");
+assert.equal(mobile.get(33), 22, "mobile minimap orbs");
+assert.equal(mobile.get(16), 27, "mobile main modal");
+assert.equal(mobile.get(76), 116, "mobile combat tab");
 
 // Server mounts must address panes present in the cache's layout redirects.
 for (const [root, expectedChild] of [[161, 33], [164, 33], [548, 25]]) {
@@ -114,7 +120,7 @@ assert.equal(vm.intStack[0], 42, "Other settings still use the cache getter with
 // Render calls and tab hits share the widget transform, without needing WebGL.
 (GameFrame317Plugin.prototype as any).loadAssets = async () => {};
 const fixedWidgets = new Map([
-    [17, { rawX: 547 }], [9, { rawX: 516 }], [11, { rawWidth: 519 }],
+    [17, { rawX: 547 }], [9, { rawX: 516 }], [11, { rawWidth: 519 }], [56, { rawY: 0 }],
 ]);
 const actions: any[] = [];
 const reportStone = { spriteId: 3057 };
@@ -151,7 +157,8 @@ vars.setVarcInt(41, 0);
 vars.setVarcInt(42, -1);
 assert.equal(plugin.gameFrame.isGameFrameActive(), true);
 plugin.updateWidgetLayout();
-assert.deepEqual([...fixedWidgets.values()], [{ rawX: 553 }, { rawX: 521 }, { rawWidth: 519 }]);
+assert.deepEqual([...fixedWidgets.values()], [{ rawX: 553 }, { rawX: 521 }, { rawWidth: 519 }, { rawY: -4 }],
+    "Fixed 317 lifts the chat display (and its separator line) 4px");
 plugin.gameFrame.drawGameFrame(context as any);
 assert.deepEqual(draws.find(([t]) => t.name === "invback").slice(1, 3), [1116, 430]);
 const chatDraws = draws.filter(([t]) => t.name.startsWith("chat_"));
@@ -180,13 +187,19 @@ assert.deepEqual(hits[0].rect, { x: 1096, y: 362, w: 68, h: 68 });
 for (const hit of hits) hit.onClick();
 assert.deepEqual(tabs, Array.from({ length: 14 }, (_, i) => i));
 assert.equal(plugin.gameFrame.widgetRules!().find(rule => rule.contentType === 1339)?.hide, true);
+assert.equal(plugin.gameFrame.widgetRules!().find(rule => rule.group === 162 && rule.type === 5)?.item, false,
+    "Hiding the chatbox stones must spare item icons (the chatbox item search)");
+assert.equal(plugin.gameFrame.widgetRules!().find(rule => rule.group === 162 && rule.type === 3)?.colour, 0xffffff,
+    "Only the white chat backing is hidden, keeping the input separator line");
 vars.setVarp(VARP_GAMEFRAME_317, 0);
 plugin.updateWidgetLayout();
-assert.deepEqual([...fixedWidgets.values()], [{ rawX: 547 }, { rawX: 516 }, { rawWidth: 519 }]);
+assert.deepEqual([...fixedWidgets.values()], [{ rawX: 547 }, { rawX: 516 }, { rawWidth: 519 }, { rawY: 0 }]);
 assert.equal(plugin.gameFrame.isGameFrameActive(), false);
 frameWidgets.rootInterface = 161;
 vars.setVarp(VARP_GAMEFRAME_317, 1);
 assert.equal(plugin.gameFrame.isGameFrameActive(), true);
+plugin.updateWidgetLayout();
+assert.equal(fixedWidgets.get(56)!.rawY, -4, "Resizable 317 lifts the chat display too");
 assert.equal(plugin.gameFrame.widgetRules!().find(rule => rule.contentType === 1339)?.hide, false);
 assert.ok(plugin.gameFrame.keepChrome!().includes((161 << 16) | 32), "Resizable 317 retains the minimap frame sprite");
 draws.length = hits.length = 0;

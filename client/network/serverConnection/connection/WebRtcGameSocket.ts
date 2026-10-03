@@ -217,22 +217,24 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
     }
 
     private bindSignal(): void {
-        this.signal.addEventListener("open", () => {
+        const signal = this.signal;
+        if (!signal) return;
+        signal.addEventListener("open", () => {
             this.sendSignal({
                 type: "connect",
                 worldId: this.config.worldId,
                 sessionId: this.sessionId,
             });
         });
-        this.signal.addEventListener("message", (event) => {
+        signal.addEventListener("message", (event) => {
             void this.handleSignal(event.data).catch((error) => {
                 this.fail(`WebRTC negotiation failed: ${(error as Error).message}`);
             });
         });
-        this.signal.addEventListener("error", () => {
+        signal.addEventListener("error", () => {
             if (this.state !== OPEN) this.fail("Could not connect to the WebRTC signalling relay");
         });
-        this.signal.addEventListener("close", () => {
+        signal.addEventListener("close", () => {
             if (this.state === CONNECTING && !this.remoteDescriptionSet) {
                 this.fail("WebRTC signalling closed before negotiation completed");
             }
@@ -300,7 +302,7 @@ export class WebRtcGameSocket extends EventTarget implements GameSocket {
         }
         this.dispatchEvent(new Event("open"));
         // Signalling is no longer on the gameplay path after SCTP opens.
-        try { this.signal.close(1000, "DataChannel established"); } catch {}
+        try { this.signal?.close(1000, "DataChannel established"); } catch {}
     }
 
     private fail(message: string, retryable = false): void {

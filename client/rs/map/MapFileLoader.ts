@@ -1,5 +1,6 @@
 import { CacheIndex } from "../cache/CacheIndex";
 import { Bzip2 } from "../compression/Bzip2";
+import { Gzip } from "../compression/Gzip";
 import { ByteBuffer } from "../io/ByteBuffer";
 import { MapFileIndex } from "./MapFileIndex";
 
@@ -15,7 +16,18 @@ export class MapFileLoader {
     ) {}
 
     setRegionReplacements(replacements?: Map<number, MapRegionReplacement>): void {
-        this.regionReplacements = replacements ?? new Map();
+        this.regionReplacements = new Map(
+            [...(replacements ?? new Map())].map(([regionId, replacement]) => [
+                regionId,
+                {
+                    ...replacement,
+                    terrainData: (replacement.terrainData[0] & 0xff) === 0x1f &&
+                        (replacement.terrainData[1] & 0xff) === 0x8b
+                        ? Gzip.decompress(replacement.terrainData)
+                        : replacement.terrainData,
+                },
+            ]),
+        );
     }
 
     getTerrainData(mapX: number, mapY: number, xteasMap?: XteaMap): Int8Array | undefined {
@@ -37,7 +49,7 @@ export class MapFileLoader {
 
     getLocData(mapX: number, mapY: number, xteasMap: XteaMap): Int8Array | undefined {
         const replacement = this.regionReplacements.get((mapX << 8) | mapY);
-        if (replacement?.objectData) return replacement.objectData;
+        if (replacement) return replacement.objectData;
         const archiveId = this.mapFileIndex.getLocArchiveId(mapX, mapY);
         if (archiveId === -1) {
             return undefined;

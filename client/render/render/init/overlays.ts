@@ -209,6 +209,11 @@ export function initOverlays(host: WebGLOsrsRendererHost, ): void {
             console.warn("Failed to init overhead text overlay", e);
         }
         try {
+            host.tutorialHintOverlay?.init(initArgs);
+        } catch (e) {
+            console.warn("Failed to init tutorial hint overlay", e);
+        }
+        try {
             host.overheadPrayerOverlay?.init(initArgs);
         } catch (e) {
             console.warn("Failed to init overhead prayer overlay", e);

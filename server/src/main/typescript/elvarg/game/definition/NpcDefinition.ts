@@ -27,6 +27,8 @@ export class NpcDefinition {
     private poisonous: boolean = false;
     private venomous: boolean = false;
     private demon: boolean = false;
+    /** Wiki "members" flag from monsters-complete.json; false for NPCs not in the dump. */
+    private members: boolean = false;
     /** Which default CombatMethod this NPC fights with; see NPC.getCombatMethod(). */
     private attackType: CombatType = CombatType.MELEE;
     /** Projectile graphic for ranged/magic attacks; -1 falls back to the generic one. */
@@ -204,6 +206,10 @@ export class NpcDefinition {
 
     public isDemon(): boolean {
         return this.demon;
+    }
+
+    public isMembers(): boolean {
+        return this.members;
     }
 
     public getAttackType(): CombatType {

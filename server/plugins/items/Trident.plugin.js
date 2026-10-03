@@ -120,6 +120,7 @@ function sendChargeStatus(player, tridentItem) {
 
 module.exports = {
   name: "Trident",
+  members: true,
   register(api) {
     api.onItemOnItem((event) => {
       const { player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot, usedItem, usedWithItem } = event;

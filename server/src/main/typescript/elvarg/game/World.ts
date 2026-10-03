@@ -18,9 +18,11 @@ import { PluginManager } from '../plugins/PluginManager';
 import { ServerPerf } from '../util/ServerPerf';
 import { ActiveRegionIndex, ActiveRegionSnapshot } from './ActiveRegionIndex';
 import { ShopManager } from './model/container/shop/ShopManager';
+import { BoatManager } from "./content/sailing/BoatManager";
+import type { Mobile } from "./entity/impl/Mobile";
 import { HitQueue } from './content/combat/hit/HitQueue';
 
-const ATTR_SKIP_PERSISTENCE = "botSkipPersistence";
+const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 
 export class World {
     // 2048 leaves headroom above the 2000-bot stress-test mode (see
@@ -242,6 +244,10 @@ export class World {
         return World.activeRegionIndex.getSnapshot();
     }
 
+    public static isLocationActive(location: Location): boolean {
+        return World.activeRegionIndex.isLocationActive(location.getX(), location.getY(), location.getZ());
+    }
+
     public static markActiveRegionsDirty(): void {
         World.refreshActiveRegions();
     }
@@ -430,11 +436,12 @@ export class World {
         return false;
     }
 
-    private static addToUpdateBucket<T extends { getLocation(): Location }>(
+    private static addToUpdateBucket<T extends Mobile>(
         buckets: Map<string, T[]>,
         entity: T
     ): void {
-        const loc = entity.getLocation();
+        // An actor on a boat deck is found where the boat is in the main world.
+        const loc = BoatManager.rootLocation(entity);
         const key = World.getUpdateBucketKey(loc.getX(), loc.getY(), loc.getZ());
         const bucket = buckets.get(key);
         if (bucket) {
@@ -595,7 +602,7 @@ export class World {
         const viewDistance = player.getViewDistance();
         return World.collectFromBuckets(
             World.playerUpdateBuckets,
-            player.getLocation(),
+            BoatManager.rootLocation(player),
             Math.max(0, Math.ceil(viewDistance / 8)),
             World.MAX_LOCAL_PLAYERS + World.MAX_NEW_LOCAL_PLAYERS_PER_CYCLE
         );
@@ -606,7 +613,7 @@ export class World {
     }
 
     public static getNearbyNpcsForUpdate(player: Player): NPC[] {
-        const nearby = World.collectFromBuckets(World.npcUpdateBuckets, player.getLocation());
+        const nearby = World.collectFromBuckets(World.npcUpdateBuckets, BoatManager.rootLocation(player));
         nearby.sort((a, b) => a.getIndex() - b.getIndex());
         return nearby;
     }
@@ -620,8 +627,9 @@ export class World {
     // reads this list directly to know who to include in the player's view.
     private static updateLocalPlayers(player: Player): void {
         const localPlayers = player.getLocalPlayers();
-        const origin = player.getLocation();
-        const privateArea = player.getPrivateArea();
+        // Measured in the main world, so people aboard boats and ashore see each other.
+        const origin = BoatManager.rootLocation(player);
+        const privateArea = BoatManager.syncArea(player);
         const viewDistance = player.getViewDistance();
 
         // Compact in place rather than filter()+push(...spread), which allocated two
@@ -631,9 +639,10 @@ export class World {
             const local = localPlayers[read];
             if (
                 World.getPlayers().get(local.getIndex()) != null &&
-                local.getLocation().isViewableFromWithin(origin, viewDistance) &&
+                BoatManager.rootLocation(local).isViewableFromWithin(origin, viewDistance) &&
                 !local.isNeedsPlacement() &&
-                local.getPrivateArea() === privateArea
+                BoatManager.syncArea(local) === privateArea &&
+                BoatManager.canSeeAboard(player, local)
             ) {
                 localPlayers[write++] = local;
             }
@@ -649,8 +658,9 @@ export class World {
         for (const candidate of World.getNearbyPlayersForUpdate(player)) {
             if (localPlayers.length >= World.MAX_LOCAL_PLAYERS || added >= World.MAX_NEW_LOCAL_PLAYERS_PER_CYCLE) break;
             if (!candidate || candidate === player || seen.has(candidate.getIndex())) continue;
-            if (!candidate.getLocation().isViewableFromWithin(origin, viewDistance)) continue;
-            if (candidate.getPrivateArea() !== privateArea) continue;
+            if (!BoatManager.rootLocation(candidate).isViewableFromWithin(origin, viewDistance)) continue;
+            if (BoatManager.syncArea(candidate) !== privateArea) continue;
+            if (!BoatManager.canSeeAboard(player, candidate)) continue;
             localPlayers.push(candidate);
             seen.add(candidate.getIndex());
             added++;
@@ -663,15 +673,18 @@ export class World {
     // reads this list directly to know which NPCs to include in the player's view.
     private static updateLocalNpcs(player: Player, nearbyNpcs: NPC[]): void {
         const localNpcs = player.getLocalNpcs();
+        const origin = BoatManager.rootLocation(player);
+        const privateArea = BoatManager.syncArea(player);
         for (let index = 0; index < localNpcs.length;) {
             const npc = localNpcs[index];
             if (
                 World.getNpcs().get(npc.getIndex()) != null &&
                 npc.isRegistered() &&
                 npc.isVisible() &&
-                player.getLocation().isViewableFrom(npc.getLocation()) &&
+                origin.isViewableFrom(BoatManager.rootLocation(npc)) &&
                 !npc.isNeedsPlacement() &&
-                npc.getPrivateArea() === player.getPrivateArea()
+                BoatManager.syncArea(npc) === privateArea &&
+                (!npc.isOwnerOnly?.() || npc.getOwner?.() === player)
             ) {
                 index++;
             } else {
@@ -683,7 +696,7 @@ export class World {
 
         // Keep the owner's active pet in their local NPC list even when normal candidate
         // scans are noisy, to avoid a "spawned but invisible" pet.
-        const currentPet = player.getCurrentPet?.();
+        const currentPet = player.getAttribute("pets:current") as NPC | undefined;
         if (currentPet != null && currentPet.isRegistered() && currentPet.isVisible()) {
             if (currentPet.getPrivateArea() !== player.getPrivateArea()) {
                 currentPet.setArea(player.getArea());
@@ -701,8 +714,9 @@ export class World {
         for (const npc of nearbyNpcs) {
             if (localNpcs.length >= World.MAX_LOCAL_NPCS) break;
             if (npc == null || localIndexes.has(npc.getIndex()) || !npc.isVisible() || npc.isNeedsPlacement()) continue;
-            if (npc.getPrivateArea() !== player.getPrivateArea()) continue;
-            if (!npc.getLocation().isViewableFrom(player.getLocation())) continue;
+            if (BoatManager.syncArea(npc) !== privateArea) continue;
+            if (npc.isOwnerOnly?.() && npc.getOwner?.() !== player) continue;
+            if (!BoatManager.rootLocation(npc).isViewableFrom(origin)) continue;
             localNpcs.push(npc);
             localIndexes.add(npc.getIndex());
         }
@@ -1043,7 +1057,13 @@ export class World {
                     if (player.isPlayerBot?.() !== true) {
                         activeRegionsChanged = true;
                     }
-                    World.players.remove(player);
+                    try {
+                        World.players.remove(player);
+                    } catch (e) {
+                        // A removal hook (logout/save) threw: the player is already deregistered,
+                        // so keep the tick alive and leave the failure observable.
+                        console.error(`[world] Failed to remove player ${player.getUsername?.() ?? "unknown"}`, e);
+                    }
                     World.removePlayerQueue.splice(index, 1);
                 }
                 amount++;
@@ -1094,7 +1114,12 @@ export class World {
                 const wasRegistered =
                     typeof npc.isRegistered === "function" ? npc.isRegistered() : null;
                 const indexBefore = typeof npc.getIndex === "function" ? npc.getIndex() : null;
-                World.npcs.remove(npc);
+                try {
+                    World.npcs.remove(npc);
+                } catch (e) {
+                    // Same contract as players: a throwing removal hook must not abort the tick.
+                    console.error("[world] Failed to remove npc", indexBefore, e);
+                }
                 if (typeof npc.isPet === "function" && npc.isPet()) {
                     const owner: any = typeof npc.getOwner === "function" ? npc.getOwner() : null;
                     const ownerName = owner && typeof owner.getUsername === "function"
@@ -1145,6 +1170,9 @@ export class World {
             }
         });
 
+        // Boats move after their passengers, before sync sees anyone's position.
+        timed("move_boats", () => BoatManager.tick());
+
         // Owners that did not take a turn this cycle (bot stride) still need their
         // walk-to interactions ticked, or the interaction hangs until they do.
         timed("walk_to_sweep", () => TaskManager.processRemainingWalkTo());
@@ -1193,7 +1221,6 @@ export class World {
             World.players.forEach((player) => {
                 try {
                     player.resetUpdating();
-                    player.setCachedUpdateBlock(null);
                 } catch (e) {
                     console.log(e);
                     player.requestLogout();

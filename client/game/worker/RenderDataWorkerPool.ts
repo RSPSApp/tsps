@@ -3,7 +3,7 @@ import { QueuedTask } from "threads/dist/master/pool";
 import { WorkerDescriptor } from "threads/dist/master/pool-types";
 import { ObservablePromise } from "threads/dist/observable-promise";
 
-import { LoadedCache } from "../Caches";
+import { canUseSharedArrayBuffer, LoadedCache } from "../Caches";
 import { CustomItemRegistry } from "../../custom/items/CustomItemRegistry";
 import { CustomModelRegistry } from "../../custom/items/CustomModelRegistry";
 import { NpcGeometryData } from "../../render/loader/NpcGeometryData";
@@ -24,6 +24,8 @@ function spawnWorker(): Promise<RenderDataWorkerThread> {
 
 export class RenderDataWorkerPool {
     static create(size: number): RenderDataWorkerPool {
+        // ponytail: serial map builds without sharing; shared buffers avoid ~200 MB per worker.
+        size = canUseSharedArrayBuffer() ? size : 1;
         const pool = Pool(() => spawnWorker(), size);
         const workers = pool["workers"] as WorkerDescriptor<RenderDataWorkerThread>[];
         return new RenderDataWorkerPool(pool, workers, size);
@@ -76,6 +78,7 @@ export class RenderDataWorkerPool {
         mapY: number,
         maxLevel: number,
         loadedTextureIds: number[],
+        renderBaseTile?: { x: number; y: number },
     ): QueuedTask<RenderDataWorkerThread, NpcGeometryData> {
         return this.pool.queue(
             (w) =>
@@ -84,6 +87,7 @@ export class RenderDataWorkerPool {
                     mapY,
                     maxLevel,
                     loadedTextureIds,
+                    renderBaseTile,
                 ) as ObservablePromise<NpcGeometryData>,
         );
     }

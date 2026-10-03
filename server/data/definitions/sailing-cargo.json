@@ -1,0 +1,56 @@
+{
+  "tools": [
+    { "slot": 0, "name": "Captain's log", "give": [31986], "accept": [31985, 31986] },
+    { "slot": 1, "name": "Spyglass", "give": [31803], "accept": [31803] },
+    { "slot": 2, "name": "Current duck", "give": [31805], "accept": [31805] },
+    { "slot": 3, "name": "Crowbar", "give": [31807], "accept": [31807] },
+    { "slot": 4, "name": "Diving gear", "give": [7534, 7535], "accept": [7534, 7535] }
+  ],
+  "categories": {
+    "salvage": {
+      "lostOnRecovery": true,
+      "names": [
+        "Small salvage", "Fishy salvage", "Barracuda salvage", "Large salvage",
+        "Plundered salvage", "Martial salvage", "Fremennik salvage", "Opulent salvage"
+      ]
+    },
+    "cargo": {
+      "lostOnRecovery": true,
+      "namePrefixes": ["Crate of "]
+    },
+    "fish": {
+      "lostOnRecovery": true,
+      "names": [
+        "Raw giant krill", "Giant blue krill", "Fish crate (giant krill)",
+        "Raw haddock", "Golden haddock", "Fish crate (haddock)",
+        "Raw yellowfin", "Orangefin", "Fish crate (yellowfin)",
+        "Raw halibut", "Huge halibut", "Fish crate (halibut)",
+        "Raw bluefin", "Purplefin", "Fish crate (bluefin)",
+        "Raw marlin", "Swift marlin", "Fish crate (marlin)",
+        "Raw herring", "Herring", "Raw mackerel", "Mackerel", "Raw cod", "Cod",
+        "Raw bass", "Bass", "Raw tuna", "Tuna", "Raw swordfish", "Swordfish",
+        "Raw lobster", "Lobster", "Raw karambwan", "Cooked karambwan",
+        "Raw anglerfish", "Anglerfish", "Raw monkfish", "Monkfish", "Raw shark", "Shark",
+        "Raw karambwanji", "Raw shrimps", "Shrimps", "Raw anchovies", "Anchovies",
+        "Raw sardine", "Sardine"
+      ]
+    },
+    "supplies": {
+      "names": [
+        "Repair kit",
+        "Bronze cannonball", "Iron cannonball", "Steel cannonball", "Mithril cannonball",
+        "Adamant cannonball", "Rune cannonball", "Dragon cannonball",
+        "Beer glass", "Grog", "Cider", "Whirlpool surprise", "Kraken ink stout",
+        "Perildance bitter", "Trawler's trust", "Horizon's lure",
+        "Fish offcuts", "Fine fish offcuts", "Camphor crate", "Ice cooler", "Fish crate (empty)"
+      ]
+    },
+    "equipment": {
+      "names": [
+        "Sailing cape", "Sailing cape(t)", "Sailing hood",
+        "Small fishing net", "Big fishing net", "Fishing rod", "Fishing bait", "Lobster pot",
+        "Harpoon", "Karambwan vessel", "Sandworms"
+      ]
+    }
+  }
+}

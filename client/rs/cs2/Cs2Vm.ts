@@ -2123,7 +2123,11 @@ export class Cs2Vm {
                         substitutedInts[i] = event.widget?.childIndex ?? -1;
                         break;
                     case ScriptArgMagic.DRAG_TARGET_ID:
-                        substitutedInts[i] = event.dragTarget?.uid ?? -1;
+                        // Dynamic drag targets use the same (parent id, child index)
+                        // identity as the source widget, not the renderer's runtime UID.
+                        substitutedInts[i] = event.dragTarget?.fileId === -1
+                            ? (event.dragTarget.parentUid ?? -1)
+                            : (event.dragTarget?.uid ?? -1);
                         break;
                     case ScriptArgMagic.DRAG_TARGET_CHILD_INDEX:
                         substitutedInts[i] = event.dragTarget?.childIndex ?? -1;

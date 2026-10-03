@@ -7,6 +7,9 @@ const { DonatorRights } = require("../../src/main/typescript/elvarg/game/model/r
 const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 
 const INAPPROPRIATE_TITLES = ["nigger", "ass", "boobs"];
+const XP_LOCKED_ATTRIBUTE = "skills:xp-locked";
+const LOYALTY_TITLE_ATTRIBUTE = "loyalty:title";
+const YELL_UNTIL_ATTRIBUTE = "yell:until";
 
 function commandTail(raw, parts) {
   return raw.substring(parts[0].length).trim();
@@ -131,11 +134,6 @@ module.exports = {
       return true;
     });
 
-    api.registerCommand("kdr", ({ player }) => {
-      player.forceChat(`I currently have ${player.getKillDeathRatio()} kdr!`);
-      return true;
-    });
-
     api.registerCommand("timeplayed", ({ player }) => {
       player.forceChat(`I've been playing for ${Misc.getFormattedPlayTime(player)}.`);
       return true;
@@ -184,8 +182,9 @@ module.exports = {
     });
 
     api.registerCommand("lockxp", ({ player }) => {
-      player.setExperienceLocked(!player.experienceLockedReturn());
-      player.sendMessage(`Lock: ${player.experienceLockedReturn()}`);
+      const locked = player.getAttribute(XP_LOCKED_ATTRIBUTE) !== true;
+      player.setAttribute(XP_LOCKED_ATTRIBUTE, locked);
+      player.sendMessage(`Lock: ${locked}`);
       return true;
     });
 
@@ -222,7 +221,7 @@ module.exports = {
         player.sendMessage("You're not allowed to have that in your title.");
         return true;
       }
-      player.setLoyaltyTitle(`@blu@${nextTitle}`);
+      player.setAttribute(LOYALTY_TITLE_ATTRIBUTE, `@blu@${nextTitle}`);
       return true;
     });
 
@@ -258,9 +257,9 @@ module.exports = {
         player.sendMessage("You are muted and cannot yell.");
         return true;
       }
-      if (!player.getYellDelay().finished()) {
-        player
-          .sendMessage(`You must wait another ${player.getYellDelay().secondsRemaining()} seconds to do that.`);
+      const yellWaitMs = Number(player.getAttribute(YELL_UNTIL_ATTRIBUTE) ?? 0) - Date.now();
+      if (yellWaitMs > 0) {
+        player.sendMessage(`You must wait another ${Math.ceil(yellWaitMs / 1000)} seconds to do that.`);
         return true;
       }
 
@@ -281,7 +280,7 @@ module.exports = {
 
       const delaySeconds = yellDelaySeconds(player);
       if (delaySeconds > 0) {
-        player.getYellDelay().start(delaySeconds);
+        player.setAttribute(YELL_UNTIL_ATTRIBUTE, Date.now() + delaySeconds * 1000);
       }
       return true;
     });

@@ -8,7 +8,8 @@ const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 
-const COOK_ANIMATION = new Animation(896);
+const FIRE_COOK_ANIMATION = new Animation(896);
+const RANGE_COOK_ANIMATION = new Animation(897);
 const COOK_INTERVAL_TICKS = 4;
 
 const COOKABLES = Object.freeze([
@@ -16,6 +17,7 @@ const COOKABLES = Object.freeze([
   { raw: ItemIds.RAW_RAT_MEAT, cooked: ItemIds.COOKED_MEAT, burnt: ItemIds.BURNT_MEAT, level: 1, xp: 30, stopBurn: 34, name: "rat meat" },
   { raw: ItemIds.RAW_CHICKEN, cooked: ItemIds.COOKED_CHICKEN, burnt: ItemIds.BURNT_CHICKEN, level: 1, xp: 30, stopBurn: 34, name: "chicken" },
   { raw: ItemIds.RAW_RABBIT, cooked: ItemIds.COOKED_RABBIT, burnt: ItemIds.BURNT_RABBIT, level: 1, xp: 30, stopBurn: 37, name: "rabbit" },
+  { raw: ItemIds.BREAD_DOUGH, cooked: ItemIds.BREAD, burnt: ItemIds.BURNT_BREAD, level: 1, xp: 40, stopBurn: 38, name: "bread", rangeOnly: true },
   { raw: ItemIds.RAW_SHRIMPS, cooked: ItemIds.SHRIMPS, burnt: ItemIds.BURNT_SHRIMP, level: 1, xp: 30, stopBurn: 33, name: "shrimp" },
   { raw: ItemIds.RAW_ANCHOVIES, cooked: ItemIds.ANCHOVIES, burnt: ItemIds.BURNT_FISH, level: 1, xp: 30, stopBurn: 34, name: "anchovies" },
   { raw: ItemIds.RAW_SARDINE, cooked: ItemIds.SARDINE, burnt: ItemIds.BURNT_FISH, level: 1, xp: 40, stopBurn: 38, name: "sardine" },
@@ -101,14 +103,13 @@ function startCooking(player, object, cookable, activeSessions) {
   stopCooking(activeSessions, player, false);
   activeSessions.set(player, {
     cookable,
+    animation: object.getDefinition().getName() === "Fire" ? FIRE_COOK_ANIMATION : RANGE_COOK_ANIMATION,
     objectId: object.getId(),
     location: object.getLocation().clone(),
     privateArea: object.getPrivateArea(),
     nextCookTick: 0,
   });
 
-  Sounds.sendSound(player, Sound.COOKING_COOK);
-  player.performAnimation(COOK_ANIMATION);
   return true;
 }
 
@@ -158,13 +159,17 @@ class CookingTask extends Task {
       }
       session.nextCookTick = this.cycle + COOK_INTERVAL_TICKS;
       Sounds.sendSound(player, Sound.COOKING_COOK);
-      player.performAnimation(COOK_ANIMATION);
+      player.performAnimation(session.animation);
 
       player.getInventory().deleteNumber(session.cookable.raw, 1);
       if (isSuccess(player, session.cookable)) {
         player.getInventory().addItem(new Item(session.cookable.cooked, 1));
-        Sounds.sendSound(player, Sound.COOKING_FOOD);
         player.sendMessage(`You cook the ${session.cookable.name}.`);
+        pluginApi.emitCustomEvent("cooking:success", {
+          player,
+          skill: Skill.COOKING,
+          itemId: session.cookable.cooked,
+        });
         const levelBefore = player
           .getSkillManager()
           .getMaxLevel(Skill.COOKING);
@@ -178,7 +183,6 @@ class CookingTask extends Task {
         }
       } else {
         player.getInventory().addItem(new Item(session.cookable.burnt, 1));
-        Sounds.sendSound(player, Sound.COOKING_BURN);
         const rawName =
           ItemDefinition.forId(session.cookable.raw)?.getName?.()?.toLowerCase?.() ||
           session.cookable.name;
@@ -189,6 +193,7 @@ class CookingTask extends Task {
 }
 
 let TaskManager;
+let pluginApi;
 
 function handleCook(activeSessions, event) {
   const definition = event.object.getDefinition();
@@ -199,7 +204,7 @@ function handleCook(activeSessions, event) {
   }
 
   const cookable = COOKABLE_BY_RAW.get(event.itemId);
-  if (!cookable) {
+  if (!cookable || (cookable.rangeOnly && definition.getName() === "Fire")) {
     return;
   }
 
@@ -233,9 +238,18 @@ function handleRangeCook(activeSessions, event) {
   );
 }
 
+/** "cooking:raw-xp": the Cooking XP for cooking request.rawId, e.g. for the infernal harpoon. */
+function answerRawXp(request) {
+  const cookable = COOKABLE_BY_RAW.get(request.rawId);
+  if (cookable) {
+    request.xp = cookable.xp;
+  }
+}
+
 module.exports = {
   name: "Cooking",
   register(api) {
+    pluginApi = api;
     TaskManager = api.getTaskManager();
     const activeSessions = new Map();
     TaskManager.submit(new CookingTask(activeSessions));
@@ -249,6 +263,7 @@ module.exports = {
 
     api.onItemOnObject(handleCook.bind(null, activeSessions), { noted: false });
     api.onObjectInteraction("Range", { Cook: handleRangeCook.bind(null, activeSessions) });
+    api.onCustomEvent("cooking:raw-xp", answerRawXp);
 
     api.log("registered", {
       cookables: COOKABLES.length,

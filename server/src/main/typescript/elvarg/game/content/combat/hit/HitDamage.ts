@@ -46,4 +46,16 @@ export class HitDamage {
     public setHitmask(hitmask: HitMask): void {
         this.hitmask = hitmask;
     }
+
+    /** Cache hitsplat ids that replace the hitmask's: one for the target, one for everyone else. */
+    private splatTypes: { mine: number; others: number } | null = null;
+
+    public setSplatTypes(mine: number, others: number): HitDamage {
+        this.splatTypes = { mine, others };
+        return this;
+    }
+
+    public getSplatType(mine: boolean): number | null {
+        return this.splatTypes ? (mine ? this.splatTypes.mine : this.splatTypes.others) : null;
+    }
 }

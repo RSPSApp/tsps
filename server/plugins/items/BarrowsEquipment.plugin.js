@@ -178,6 +178,7 @@ function repairEquipment(event) {
 
 module.exports = {
   name: "BarrowsEquipment",
+  members: true,
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();

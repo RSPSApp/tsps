@@ -3,7 +3,7 @@ import { RawData, WebSocket } from "ws";
 
 export const MAX_GAME_MESSAGE_BYTES = 64 * 1024;
 
-export type BinaryChannelKind = "websocket" | "webrtc" | "tcp";
+export type BinaryChannelKind = "websocket" | "webrtc" | "tcp" | "headless";
 
 export interface BinaryChannel {
   readonly kind: BinaryChannelKind;
@@ -102,5 +102,38 @@ export class TcpBinaryChannel implements BinaryChannel {
 
   public isOpen(): boolean {
     return !this.socket.destroyed && this.socket.writable;
+  }
+}
+
+/** A client with no socket: everything sent to it is dropped. Lets the server drive a login without a real client. */
+export class HeadlessBinaryChannel implements BinaryChannel {
+  public readonly kind = "headless" as const;
+  public readonly binaryTransport = true as const;
+  public readonly remoteAddress = "headless";
+  private open = true;
+  private readonly closeHandlers: Array<() => void> = [];
+
+  public get readyState(): number {
+    return this.open ? 1 : 3;
+  }
+
+  public send(): void {}
+
+  public close(): void {
+    if (!this.open) return;
+    this.open = false;
+    for (const handler of this.closeHandlers) handler();
+  }
+
+  public onData(): void {}
+
+  public onClose(handler: () => void): void {
+    this.closeHandlers.push(handler);
+  }
+
+  public onError(): void {}
+
+  public isOpen(): boolean {
+    return this.open;
   }
 }

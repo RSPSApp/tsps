@@ -17,7 +17,7 @@ function shouldSkipDat2MainCacheWrite(): boolean {
     return isSafari;
 }
 
-function canUseSharedArrayBuffer(): boolean {
+export function canUseSharedArrayBuffer(): boolean {
     // Safari/WebKit throws "Unable to convert chunk to Uint8Array" when assembling
     // large downloads into SharedArrayBuffer-backed views. Use plain ArrayBuffers.
     if (isSafari) return false;

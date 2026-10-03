@@ -49,6 +49,9 @@ export class AreaManager {
 
         // Handle processing..
         if (area != null) {
+            // Record the area first: process() may move the actor into another area
+            // (Pest Control), which is only detectable against what was recorded.
+            c.setArea(area);
             const processedArea = area;
             area.process(c);
             if (c.getArea() !== processedArea) {
@@ -83,8 +86,11 @@ export class AreaManager {
     }
 
     public static inMulti(c: Mobile): boolean {
+        if (c.getArea()?.isMulti()) {
+            return true;
+        }
         const location = c.getLocation();
-        return Wilderness.isMulti(location.getX(), location.getY());
+        return Wilderness.isMulti(location.getX(), location.getY(), location.getZ());
     }
 
     /**

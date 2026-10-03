@@ -56,6 +56,14 @@ let spellSelectionResolver: SpellSelectionResolver = null;
 type NpcExamineIdResolver = ((serverId: number) => number | undefined) | null;
 let npcExamineIdResolver: NpcExamineIdResolver = null;
 
+/** Steers the boat instead of walking while at a helm; returns true when it handled the click. */
+type HelmSteeringHandler = ((worldX: number, worldY: number) => boolean) | null;
+let helmSteeringHandler: HelmSteeringHandler = null;
+
+export function setHelmSteeringHandler(handler: HelmSteeringHandler): void {
+    helmSteeringHandler = handler;
+}
+
 export function setSpellSelectionClearHandler(handler: (() => void) | null): void {
     clearSpellSelectionHandler = handler;
 }
@@ -115,7 +123,7 @@ function normalizeSelectedSpellState(): void {
  */
 export function inferMenuAction(
     option: string | undefined,
-    _targetType?: MenuTargetType,
+    targetType?: MenuTargetType,
 ): MenuAction | undefined {
     if (!option) return undefined;
     const s = String(option).trim().toLowerCase();
@@ -127,8 +135,10 @@ export function inferMenuAction(
         case "walk here":
             return MenuAction.WalkHere;
         case "examine":
-        case "inspect":
             return MenuAction.Examine;
+        case "inspect":
+            // Inspect is a real object operation (e.g. the ToA grouping obelisk).
+            return targetType === MenuTargetType.LOC ? undefined : MenuAction.Examine;
         case "cancel":
             return MenuAction.Cancel;
         case "follow":
@@ -708,6 +718,9 @@ export function menuAction(
         const localY = arg1 | 0;
         const worldX = (ClientState.baseX | 0) + localX;
         const worldY = (ClientState.baseY | 0) + localY;
+        if (helmSteeringHandler?.(worldX, worldY)) {
+            return;
+        }
         const modifierFlags = ctrlHeld
             ? ClientState.isShiftPressed()
                 ? MODIFIER_FLAG_CTRL_SHIFT

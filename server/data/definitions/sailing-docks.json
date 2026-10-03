@@ -1,0 +1,8 @@
+[
+  {
+    "id": "the_pandemonium",
+    "shipwright": "Junior Jim",
+    "portWizard": { "x": 3059, "y": 2981, "z": 0 },
+    "shipyardReturn": { "x": 3058, "y": 2980, "z": 0 }
+  }
+]

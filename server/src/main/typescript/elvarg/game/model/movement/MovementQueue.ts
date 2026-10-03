@@ -64,6 +64,8 @@ export class MovementQueue {
          * discarded.
          */
     private static MAXIMUM_SIZE = 100;
+    /** An entity flag: steps go straight on, whatever the map's clipping. */
+    public static readonly IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 
     /**
      * The character whose walking queue this is.
@@ -90,6 +92,7 @@ export class MovementQueue {
      */
     private isMoving = false;
     private movedThisCycle = false;
+    private lastMoveCycle = -2;
     private blockedByDynamicOccupancy = false;
     private routeEvaluated = false;
     private alternativeRoute = false;
@@ -290,7 +293,7 @@ export class MovementQueue {
             return Mobility.STUNNED;
         }
 
-        if (this.character.isNeedsPlacement() || this.isMovementBlocked()) {
+        if (this.character.isNeedsPlacement() || this.isMovementBlocked() || this.player?.getForceMovement() != null) {
             return Mobility.INVALID;
         }
 
@@ -392,6 +395,10 @@ export class MovementQueue {
         return this.movedThisCycle;
     }
 
+    public didMovePreviousCycle(): boolean {
+        return this.lastMoveCycle === World.getProcessCycle() - 1;
+    }
+
     public wasBlockedByDynamicOccupancy(): boolean {
         return this.blockedByDynamicOccupancy;
     }
@@ -406,6 +413,10 @@ export class MovementQueue {
      * a search every cycle. The queue is kept instead, and the actor resumes its
      * original path once the blocker moves.
      */
+    public isStepBlocked(): boolean {
+        return this.stepBlocked;
+    }
+
     public wasRouteInvalidated(): boolean {
         return this.stepBlocked && !this.stepBlockedByEntity;
     }
@@ -505,12 +516,12 @@ export class MovementQueue {
                 this.handleRegionChange();
                 this.syncWildernessStateForMovedPlayer();
                 this.drainRunEnergy();
-                this.character.getAsPlayer().setOldPosition(previous);
             }
         }
 
         this.isMoving = moved;
         this.movedThisCycle = moved;
+        if (moved) this.lastMoveCycle = World.getProcessCycle();
 
         if (this.points.length === 0) {
             this.syncDestinationFlagToRoute();
@@ -578,6 +589,11 @@ export class MovementQueue {
     private validatedStep(source: Location, destination: Location): Location | null {
         const signX = Math.sign(destination.getX() - source.getX());
         const signY = Math.sign(destination.getY() - source.getY());
+        // An NPC that moves over what the map blocks (the Inferno's Ancestral Glyph, over the
+        // pit before TzKal-Zuk) steps straight on, as OSRS's walk steps without collision.
+        if (this.character.hasFlag?.(MovementQueue.IGNORE_CLIPPING_FLAG)) {
+            return source.transform(signX, signY);
+        }
         const candidates: number[][] = [];
         if (this.character.getSize() === 1 && signX !== 0 && signY !== 0) {
             candidates.push([signX, signY]);
@@ -611,7 +627,10 @@ export class MovementQueue {
         }
         const diffX = this.character.getLocation().getX() - this.character.getLastKnownRegion().getRegionX() * 8;
         const diffY = this.character.getLocation().getY() - this.character.getLastKnownRegion().getRegionY() * 8;
-        let regionChanged = false;
+        // A plane change keeps the same x/y region, but it swaps the whole set of
+        // NPCs/objects visible to the player, so it must refresh the active regions
+        // too (otherwise the new floor's NPCs are never sent until a relog).
+        let regionChanged = this.character.getLocation().getZ() !== this.character.getLastKnownRegion().getZ();
         if (diffX < 16)
             regionChanged = true;
         else if (diffX >= 88)
@@ -659,7 +678,7 @@ export class MovementQueue {
 
         if (inWilderness) {
             const wildernessLevel = Wilderness.levelAt(location.getX(), location.getY());
-            const multiIcon = Wilderness.isMulti(location.getX(), location.getY()) ? 1 : 0;
+            const multiIcon = Wilderness.isMulti(location.getX(), location.getY(), location.getZ()) ? 1 : 0;
             player.setWildernessLevel(wildernessLevel);
             player.setMultiIcon(multiIcon);
             // The pvp_icons overlay (and its level text) is owned by the Wilderness plugin.
@@ -704,6 +723,14 @@ export class MovementQueue {
             return;
         }
         const nowMs = Date.now();
+
+        // A pet waits out its owner's death and catches up once they respawn.
+        const npcCharacter = this.character.isNpc() ? this.character.getAsNpc() : null;
+        if (npcCharacter?.isPet() && npcCharacter.getOwner() === following && following.isRegistered()
+            && (following.getHitpoints() <= 0 || following.getAsPlayer()?.isDyingReturn?.() === true)) {
+            this.reset();
+            return;
+        }
 
         if (
             following === this.character ||
@@ -1090,7 +1117,7 @@ export class MovementQueue {
         };
     }
 
-    public walkToEntity(entity: Mobile, runnable?: () => void) {
+    public walkToEntity(entity: Mobile, runnable?: () => void, range = 1) {
         let mobility = this.getMobility();
         if (!mobility.canMove()) {
             mobility.sendMessage(this.player);
@@ -1107,7 +1134,10 @@ export class MovementQueue {
 
         this.walkToReset();
 
-        if (PathFinder.reachedEntity(this.player, entity)) {
+        const reached = () => range <= 1 ? PathFinder.reachedEntity(this.player, entity) :
+            this.isInteractionTargetValid(entity) && this.player.getLocation().isWithinDistance(entity.getLocation(), range)
+            && RegionManager.canProjectileAttack(this.player, this.player.getLocation(), entity.getLocation());
+        if (reached()) {
             this.player.setMobileInteraction(entity);
             runnable?.();
             return;
@@ -1131,7 +1161,7 @@ export class MovementQueue {
             }
             this.player.setMobileInteraction(entity);
 
-            if (PathFinder.reachedEntity(this.player, entity)) {
+            if (reached()) {
                 this.player.getMovementQueue().reset();
                 runnable?.();
                 task.stop();
@@ -1180,7 +1210,10 @@ export class MovementQueue {
         if (!object) return false;
         const location = object.getLocation();
         if (!location || location.getZ() !== this.player.getLocation().getZ()) return false;
-        if (object.getPrivateArea?.() !== this.player.getPrivateArea()) return false;
+        // A map loc (no private area of its own) is shared by the private areas laid over the
+        // map, as the click lookup (MapObjects.getPrivateArea) treats it: the Inferno's exit.
+        const area = object.getPrivateArea?.() ?? null;
+        if (area !== null && area !== this.player.getPrivateArea()) return false;
         return object.getId() === id && object.getType() === type;
     }
 
@@ -1238,9 +1271,10 @@ export class MovementQueue {
         //System.err.println("RequestedX=" + objectX + " requestedY=" + objectY + " givenX=" + finalDestinationX + " givenY=" + finalDestinationY);
 
         this.player.setPositionToFace(new Location(objectX, objectY));
+        const interactionArea = this.player.getPrivateArea();
         let repathAttempts = 0;
         TaskManager.submit(new MovementTask(this.player.getIndex(), (task) => {
-            if (!this.isInteractionObjectValid(object, id, type)) {
+            if (this.player.getPrivateArea() !== interactionArea || !this.isInteractionObjectValid(object, id, type)) {
                 this.reset();
                 task.stop();
                 return;
@@ -1258,6 +1292,11 @@ export class MovementQueue {
                 routeSpec.reachBlockAccessFlags
             )) {
                 // Arrival is not a failed route: operate on the following cycle.
+                // No extra arriveDelay here: in OSRS that delay only applies to actions that
+                // move you. Banks, tables, shops and NPCs fire the tick after you arrive, which
+                // this already does. A global delay would make every one of those a tick slower
+                // than OSRS and break tick-based skilling. Ops that move the player get it from
+                // the shared climb (Ladders.plugin.js ladders:climbUp/climbDown) or ObstacleRunner.
                 if (this.didMoveThisCycle()) return;
                 if (objectX === this.player.getLocation().getX() && objectY === this.player.getLocation().getY()) {
                     this.player.setDirection([Direction.WEST, Direction.NORTH, Direction.EAST, Direction.SOUTH][direction]);
@@ -1302,7 +1341,7 @@ export class MovementQueue {
             this.player.sendMessage("You can't reach that!");
             task.stop();
             TaskManager.cancelTasks(this.player.getIndex());
-        }));
+        }, false));
     }
 
     private isAtPointOfFocus(destX: number, destY: number): boolean {

@@ -1,6 +1,7 @@
 /**
  * Client operations: stats, inventory, world info, viewport, camera, settings
  */
+import { PostProcessedObjTypeLoader } from "../../config/objtype/ObjTypeLoader";
 import {
     ClientState,
     DEFAULT_SCREEN_HEIGHT,
@@ -232,7 +233,7 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.MAP_MEMBERS, (ctx) => {
-        ctx.pushInt(1);
+        ctx.pushInt(PostProcessedObjTypeLoader.membersWorld ? 1 : 0);
     });
 
     handlers.set(Opcodes.STAFFMODLEVEL, (ctx) => {

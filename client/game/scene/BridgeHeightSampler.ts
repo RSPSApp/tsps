@@ -1,4 +1,3 @@
-import { getMapIndexFromTile } from "../../rs/map/MapFileIndex";
 import { Scene } from "../../rs/scene/Scene";
 import type { MapManager, MapSquare } from "../MapManager";
 import { clampPlane } from "../utils/PlaneUtil";
@@ -9,8 +8,6 @@ type HeightMapBridgeMapSquare = TileFlagMapSquare & {
     borderSize?: number;
     heightMapSize?: number;
     heightMapData?: Int16Array;
-    baseWorldX?: number;
-    baseWorldY?: number;
 };
 
 export interface BridgeHeightSample {
@@ -27,9 +24,7 @@ export function sampleBridgeHeightForWorldTile<T extends MapSquare>(
     basePlane: number,
     strategy: BridgePlaneStrategy = BridgePlaneStrategy.RENDER,
 ): BridgeHeightSample {
-    const mapX = getMapIndexFromTile(worldX);
-    const mapY = getMapIndexFromTile(worldY);
-    const map = mapManager.getMap(mapX, mapY) as HeightMapBridgeMapSquare | undefined;
+    const map = mapManager.getMapForWorldTile(worldX, worldY) as HeightMapBridgeMapSquare | undefined;
     const result: BridgeHeightSample = {
         plane: clampPlane(basePlane),
         height: 0,
@@ -39,18 +34,14 @@ export function sampleBridgeHeightForWorldTile<T extends MapSquare>(
         return result;
     }
 
-    // For instances, the height data may be at source coordinates while the map
-    // is registered at instance coordinates. Use baseWorldX/Y if available.
-    const mapWorldX =
-        typeof map.baseWorldX === "number" ? map.baseWorldX : mapX * Scene.MAP_SQUARE_SIZE;
-    const mapWorldY =
-        typeof map.baseWorldY === "number" ? map.baseWorldY : mapY * Scene.MAP_SQUARE_SIZE;
+    const mapWorldX = map.getRenderBaseTileX?.() ?? map.mapX * Scene.MAP_SQUARE_SIZE;
+    const mapWorldY = map.getRenderBaseTileY?.() ?? map.mapY * Scene.MAP_SQUARE_SIZE;
     const localPxX = Math.floor((worldX - mapWorldX) * 128);
     const localPxY = Math.floor((worldY - mapWorldY) * 128);
 
     let tileX = localPxX >> 7;
     let tileY = localPxY >> 7;
-    const maxTileIndex = Scene.MAP_SQUARE_SIZE - 1;
+    const maxTileIndex = (map.getLocalTileSpan?.() ?? Scene.MAP_SQUARE_SIZE) - 1;
     tileX = Math.max(0, Math.min(maxTileIndex, tileX));
     tileY = Math.max(0, Math.min(maxTileIndex, tileY));
 

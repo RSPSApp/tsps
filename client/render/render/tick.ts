@@ -188,6 +188,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
+import { updateWorldEntityMotion } from "./worldEntityMotion";
 
 export function tickPass(host: WebGLOsrsRendererHost, 
         time: number,
@@ -259,6 +260,7 @@ export function tickPass(host: WebGLOsrsRendererHost,
 
         host.worldEntityAnimator?.tick(clientCycle);
         host.osrsClient.worldViewManager.interpolateEntities(clientCycle, host.clientTickPhase);
+        updateWorldEntityMotion(host);
 
         // Propagate listener position for positional audio and advance ambient loops.
         const soundSystem = host.osrsClient.soundEffectSystem;

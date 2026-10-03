@@ -17,10 +17,9 @@ const getPluginManager = () =>
     require("../../../../plugins/PluginManager").PluginManager as typeof import("../../../../plugins/PluginManager").PluginManager;
 
 export class Bank extends ItemContainer {
-    full(): ItemContainer;
-    full(itemId: number): boolean;
-    full(itemId?: unknown): boolean | ItemContainer {
-        throw new Error("Method not implemented.");
+    full(): ItemContainer {
+        this.getPlayer().sendMessage("Not enough space in bank.");
+        return this;
     }
     public static readonly TOTAL_BANK_TABS = 11;
     public static readonly CONTAINER_START = 50300;
@@ -28,6 +27,13 @@ export class Bank extends ItemContainer {
     public static readonly INVENTORY_INTERFACE_ID = 5064;
     public static readonly MAIN_INTERFACE_ID = 12;
     public static readonly SIDE_INTERFACE_ID = 15;
+    /** The tab buttons: slot 10 is "all items", slots 11-19 are tabs 1-9. */
+    public static readonly TABS_CHILD = 10;
+    public static readonly TAB_BUTTON_SLOT_OFFSET = 10;
+    public static readonly ITEMS_CHILD = 12;
+    public static readonly SIDE_ITEMS_CHILD = 3;
+    /** Drops on the empty space after tab N's items report item-grid slot 1428 + N. */
+    public static readonly TAB_DROP_SLOT_OFFSET = 1410 + 9 * 2;
 
     constructor(public player: Player) {
         super(player);
@@ -41,16 +47,9 @@ export class Bank extends ItemContainer {
     public static withdraw(player: Player, item: number, slot: number, amount: number, fromBankTab: number) {
         if (Bank.isOpen(player)) {
 
-            // The item's real tab
-            const itemTab = Bank.getTabForItem(player, item);
-
-            // Check if we're withdrawing the item from the proper tab, but only if we
-            // aren't bank searching.
-            if (itemTab !== fromBankTab) {
-                if (!player.isSearchingBank()) {
-                    return;
-                }
-            }
+            // The client names the exact tab and slot; a search result can come
+            // from any tab.
+            const itemTab = player.isSearchingBank() ? Bank.getTabForItem(player, item) : fromBankTab;
 
             // Make sure we're only withdrawing what we have.
             let maxAmount = player.getBank(itemTab).getAmount(item);
@@ -71,7 +70,7 @@ export class Bank extends ItemContainer {
 
                 player.getBank(itemTab).switchsItem(
                     player.getInventory(),
-                    new Item(item, amount),
+                    player.getBank(itemTab).getItems()[slot].clone().setAmount(amount),
                     slot,
                     false,
                     false
@@ -85,15 +84,15 @@ export class Bank extends ItemContainer {
 
             } else {
 
-                // Withdrawing an item which belongs in another tab from the main tab.
-                if (player.getCurrentBankTab() === 0 && fromBankTab !== 0) {
-                    slot = player.getBank(itemTab).getSlotForItemId(item);
-                }
-
                 // Make sure the item is in the slot we've found.
-                if (player.getBank(itemTab).getItems()[slot].getId() !== item) {
+                const stack = player.getBank(itemTab).getItems()[slot];
+                if (!stack || stack.getId() !== item) {
                     return;
                 }
+
+                // Another stack of the same item (different metadata) may share
+                // the tab, so take no more than this one holds.
+                amount = Math.min(amount, stack.getAmount());
 
                 // Delete placeholder.
                 if (amount <= 0) {
@@ -105,7 +104,7 @@ export class Bank extends ItemContainer {
                 // Perform the switch.
                 player.getBank(itemTab).switchsItem(
                     player.getInventory(),
-                    new Item(item, amount),
+                    player.getBank(itemTab).getItems()[slot].clone().setAmount(amount),
                     slot,
                     false,
                     false
@@ -161,11 +160,11 @@ export class Bank extends ItemContainer {
             }
 
             const tab = Bank.getTabForItem(player, item);
-            if (!player.isSearchingBank()) {
-                player.setCurrentBankTab(tab);
-            }
 
-            player.getInventory().switchItem(player.getBank(tab), new Item(item, amount),false , slot, !player.isSearchingBank());
+            Bank.depositFromSlots(player, player.getBank(tab), slot, amount);
+            if (!player.isSearchingBank()) {
+                player.getBank(tab).refreshItems();
+            }
             if (player.isSearchingBank()) {
                 player.getBank(this.BANK_SEARCH_TAB_INDEX).refreshItems();
             }
@@ -174,6 +173,31 @@ export class Bank extends ItemContainer {
 
             // Refresh inventory
             player.getInventory().refreshItems();
+        }
+    }
+
+    /**
+     * Moves up to `amount` of the inventory item in `slot` into `bank`, each
+     * item as itself so it keeps its metadata (charges, contents). A stack
+     * moves from the clicked slot only; unstackable items start there and
+     * continue through the other bankable slots holding the same item.
+     */
+    private static depositFromSlots(player: Player, bank: Bank, slot: number, amount: number) {
+        const inventory = player.getInventory();
+        const clicked = inventory.getItems()[slot];
+        if (clicked.getDefinition().isStackable()) {
+            inventory.switchItem(bank, clicked.clone().setAmount(Math.min(amount, clicked.getAmount())), false, slot, false);
+            return;
+        }
+        const id = clicked.getId();
+        const slots = [slot, ...inventory.getItems().map((_, index) => index).filter((index) => index !== slot)];
+        let moved = 0;
+        for (const index of slots) {
+            if (moved >= amount) break;
+            const item = inventory.getItems()[index];
+            if (item.getId() !== id || getPluginManager().emitCanBankItem(player, item) === false) continue;
+            inventory.switchItem(bank, item.clone(), false, index, false);
+            moved++;
         }
     }
 
@@ -242,18 +266,206 @@ export class Bank extends ItemContainer {
         }
     }
 
-    public static resolveDisplaySlot(player: Player, clientSlot: number): { tab: number; slot: number; item: Item } | null {
-        if (!Number.isInteger(clientSlot) || clientSlot < 0) return null;
-        let current = 0;
-        for (let tab = 0; tab < 10; tab++) {
-            const bank = player.getBank(tab);
-            for (const item of bank.getValidItems()) {
-                if (current++ === clientSlot) {
-                    return { tab, slot: bank.getSlotForItemId(item.getId()), item };
+    /**
+     * The bank in the order the client lays it out: tabs 1-9, then the main
+     * tab. The cache scripts find each tab's range from the tab-size varbits
+     * (4171-4179), so this order must match them. Placeholders are included.
+     */
+    public static layout(player: Player): Array<{ tab: number; slot: number; item: Item }> {
+        const entries: Array<{ tab: number; slot: number; item: Item }> = [];
+        for (const tab of [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]) {
+            player.getBank(tab).getItems().forEach((item, slot) => {
+                if (item != null && item.getId() > 0 && item.getAmount() >= 0) {
+                    entries.push({ tab, slot, item });
+                }
+            });
+        }
+        return entries;
+    }
+
+    /** The item the client shows: a placeholder shows its faded cache placeholder. */
+    public static displayItemId(item: Item): number {
+        if (item.getAmount() > 0) return item.getId();
+        const placeholderId = item.getDefinition().getPlaceholderId();
+        return placeholderId >= 0 ? placeholderId : item.getId();
+    }
+
+    /** Removes the placeholder in `slot` of `tab`. */
+    public static releasePlaceholder(player: Player, tab: number, slot: number): void {
+        const item = player.getBank(tab).getItems()[slot];
+        if (!item || item.getId() <= 0 || item.getAmount() !== 0) return;
+        item.setId(-1);
+        item.setMeta(null);
+        player.getBank(tab).refreshItems();
+    }
+
+    public static viewTab(player: Player, tab: number): void {
+        if (tab > Bank.getTabCount(player)) {
+            player.sendMessage("To create a new tab, drag an item here.");
+            return;
+        }
+        player.setCurrentBankTab(tab);
+        player.getBank(tab).refreshItems();
+    }
+
+    /** Moves every item in `tab` (placeholders included) into the main tab. */
+    public static collapseTab(player: Player, tab: number): void {
+        if (tab <= 0 || tab > Bank.getTabCount(player)) return;
+        const items = player.getBank(tab).getValidItems();
+        if (player.getBank(0).getFreeSlots() < items.length) {
+            player.sendMessage("You don't have enough free slots in your main tab to do that.");
+            return;
+        }
+        for (const item of items) {
+            player.getBank(0).add(item.clone(), false);
+        }
+        player.getBank(tab).resetItems();
+        if (player.getCurrentBankTab() === tab) {
+            player.setCurrentBankTab(0);
+        }
+        player.getBank(0).refreshItems();
+    }
+
+    /** Removes the placeholders in `tab`, or in every tab for "all items" (0). */
+    public static releasePlaceholders(player: Player, tab: number): void {
+        const tabs = tab === 0 ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] : [tab];
+        for (const index of tabs) {
+            for (const item of player.getBank(index).getItems()) {
+                if (item != null && item.getId() > 0 && item.getAmount() === 0) {
+                    item.setId(-1);
+                    item.setMeta(null);
                 }
             }
         }
-        return null;
+        player.getBank(0).refreshItems();
+    }
+
+    /**
+     * Handles a drag (IF_BUTTOND) within the bank or its inventory panel.
+     * Returns false for drags the bank doesn't own.
+     */
+    public static handleDrag(player: Player, drag: {
+        sourceWidgetId: number; sourceSlot: number; sourceItemId: number;
+        targetWidgetId: number; targetSlot: number;
+    }): boolean {
+        const sourceGroup = drag.sourceWidgetId >>> 16, sourceChild = drag.sourceWidgetId & 0xffff;
+        const targetGroup = drag.targetWidgetId >>> 16, targetChild = drag.targetWidgetId & 0xffff;
+        const fromBank = sourceGroup === Bank.MAIN_INTERFACE_ID && sourceChild === Bank.ITEMS_CHILD;
+        const fromInventory = sourceGroup === Bank.SIDE_INTERFACE_ID && sourceChild === Bank.SIDE_ITEMS_CHILD;
+        if (!(fromBank || fromInventory) || !Bank.isOpen(player)) return false;
+
+        let tab: number | undefined;
+        if (targetGroup === Bank.MAIN_INTERFACE_ID && targetChild === Bank.TABS_CHILD) {
+            tab = drag.targetSlot - Bank.TAB_BUTTON_SLOT_OFFSET;
+        } else if (targetGroup === Bank.MAIN_INTERFACE_ID && targetChild === Bank.ITEMS_CHILD
+            && drag.targetSlot >= Bank.TAB_DROP_SLOT_OFFSET) {
+            tab = drag.targetSlot - Bank.TAB_DROP_SLOT_OFFSET;
+        }
+        if (tab !== undefined && (tab < 0 || tab > 9)) return true;
+
+        if (fromInventory && targetGroup === Bank.SIDE_INTERFACE_ID && targetChild === Bank.SIDE_ITEMS_CHILD) {
+            player.getInventory().swap(drag.sourceSlot, drag.targetSlot).refreshItems();
+        } else if (fromInventory && targetGroup === Bank.MAIN_INTERFACE_ID) {
+            Bank.depositDragged(player, drag.sourceSlot, drag.sourceItemId, tab);
+        } else if (fromBank && tab !== undefined) {
+            Bank.moveToTab(player, drag.sourceSlot, drag.sourceItemId, tab);
+        } else if (fromBank && targetGroup === Bank.MAIN_INTERFACE_ID && targetChild === Bank.ITEMS_CHILD) {
+            Bank.moveItem(player, drag.sourceSlot, drag.sourceItemId, drag.targetSlot);
+        }
+        return true;
+    }
+
+    /** The slot after `bank`'s last item, where a moved item joins the tab; -1 if full. */
+    private static endSlot(bank: Bank): number {
+        const items = bank.getItems();
+        let last = -1;
+        items.forEach((item, slot) => {
+            if (item != null && item.getId() > 0) last = slot;
+        });
+        return last + 1 < bank.capacity() ? last + 1 : bank.getEmptySlot();
+    }
+
+    /** The tab a drop onto `tab` goes to: an existing tab, or one new tab after the last. */
+    private static dropTab(player: Player, tab: number): number {
+        return Math.min(tab, Bank.getTabCount(player) + 1);
+    }
+
+    /**
+     * Deposits an inventory stack dropped on the bank. An item already in
+     * the bank joins its stack; otherwise it goes to the tab it was dropped
+     * on, or where a click would deposit it.
+     */
+    private static depositDragged(player: Player, slot: number, itemId: number, tab: number | undefined) {
+        const item = player.getInventory().getItems()[slot];
+        if (!item || item.getId() <= 0 || item.getId() !== itemId) return;
+        if (getPluginManager().emitCanBankItem(player, item) === false) return;
+        const unnoted = item.getDefinition().unNote();
+        let target = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].find((index) => player.getBank(index).contains(unnoted));
+        if (target === undefined) {
+            target = tab === undefined ? Bank.getTabForItem(player, itemId) : Bank.dropTab(player, tab);
+        }
+        Bank.depositFromSlots(player, player.getBank(target), slot, item.getDefinition().isStackable() ? item.getAmount() : 1);
+        player.getBank(target).refreshItems();
+        player.getInventory().refreshItems();
+    }
+
+    /** Moves the bank item at `clientSlot` to the end of `tab`, creating the tab if it's new. */
+    private static moveToTab(player: Player, clientSlot: number, itemId: number, tab: number) {
+        const entry = Bank.resolveDisplaySlot(player, clientSlot);
+        if (!entry || Bank.displayItemId(entry.item) !== itemId) return;
+        tab = Bank.dropTab(player, tab);
+        if (tab === entry.tab) return;
+        const target = player.getBank(tab);
+        const slot = Bank.endSlot(target);
+        if (slot < 0) {
+            target.full();
+            return;
+        }
+        target.setItem(slot, entry.item.clone());
+        entry.item.setId(-1);
+        entry.item.setMeta(null);
+        entry.item.setAmount(0);
+        player.getBank(entry.tab).refreshItems();
+    }
+
+    /**
+     * Moves the bank item at `fromClientSlot` onto the item at
+     * `toClientSlot`, swapping or inserting by the player's setting. Across
+     * tabs, a swap trades the two items' places (each takes the other's tab)
+     * and an insert puts the dragged item into the other tab there.
+     */
+    private static moveItem(player: Player, fromClientSlot: number, itemId: number, toClientSlot: number) {
+        const from = Bank.resolveDisplaySlot(player, fromClientSlot);
+        const to = Bank.resolveDisplaySlot(player, toClientSlot);
+        if (!from || !to || Bank.displayItemId(from.item) !== itemId || fromClientSlot === toClientSlot) return;
+        const bank = player.getBank(to.tab);
+        if (from.tab !== to.tab && !player.insertModeReturn()) {
+            player.getBank(from.tab).setItem(from.slot, to.item);
+            bank.setItem(to.slot, from.item);
+            bank.refreshItems();
+            return;
+        }
+        let fromSlot = from.slot;
+        if (from.tab !== to.tab) {
+            fromSlot = Bank.endSlot(bank);
+            if (fromSlot < 0) {
+                bank.full();
+                return;
+            }
+            bank.setItem(fromSlot, from.item.clone());
+            from.item.setId(-1);
+            from.item.setMeta(null);
+            from.item.setAmount(0);
+        }
+        Bank.rearrange(player, bank, fromSlot, to.slot);
+        if (from.tab !== to.tab) {
+            player.getBank(from.tab).refreshItems();
+        }
+    }
+
+    public static resolveDisplaySlot(player: Player, clientSlot: number): { tab: number; slot: number; item: Item } | null {
+        if (!Number.isInteger(clientSlot) || clientSlot < 0) return null;
+        return Bank.layout(player)[clientSlot] ?? null;
     }
 
     public static actionAmount(
@@ -296,7 +508,13 @@ export class Bank extends ItemContainer {
 
         if (packet.groupId === Bank.MAIN_INTERFACE_ID && packet.childId === 12 && packet.slot != null) {
             const entry = Bank.resolveDisplaySlot(player, packet.slot);
-            if (!entry || (packet.itemId != null && packet.itemId !== entry.item.getId())) return true;
+            if (!entry || (packet.itemId != null && packet.itemId !== Bank.displayItemId(entry.item))) return true;
+            if (entry.item.getAmount() === 0) {
+                if (packet.buttonNum === 8 || packet.option?.trim().toLowerCase() === "release") {
+                    Bank.releasePlaceholder(player, entry.tab, entry.slot);
+                }
+                return true;
+            }
             const amount = Bank.actionAmount(
                 "withdraw", packet.buttonNum, packet.option, entry.item.getAmount(),
                 player.getBankCustomQuantity(), player.getBankQuantityMode(),
@@ -314,6 +532,16 @@ export class Bank extends ItemContainer {
                 player.getBankCustomQuantity(), player.getBankQuantityMode(),
             );
             if (amount > 0) Bank.deposits(player, item.getId(), packet.slot, amount);
+            return true;
+        }
+
+        if (packet.groupId === Bank.MAIN_INTERFACE_ID && packet.childId === Bank.TABS_CHILD && packet.slot != null) {
+            const tab = packet.slot - Bank.TAB_BUTTON_SLOT_OFFSET;
+            if (tab < 0 || tab > 9) return true;
+            const option = packet.option?.trim().toLowerCase() ?? "";
+            if (packet.buttonNum === 6 || option.includes("collapse")) Bank.collapseTab(player, tab);
+            else if (packet.buttonNum === 7 || option.includes("placeholder")) Bank.releasePlaceholders(player, tab);
+            else Bank.viewTab(player, tab);
             return true;
         }
 
@@ -671,6 +899,9 @@ export class Bank extends ItemContainer {
             .sendSubInterface((161 << 16) | 16, Bank.MAIN_INTERFACE_ID, 0, { varps, varbits })
             .sendSubInterface((161 << 16) | 74, Bank.SIDE_INTERFACE_ID, 3, { varps, varbits })
             .sendInterfaceFlagsRange((Bank.MAIN_INTERFACE_ID << 16) | 12, 0, 1409, 3409919)
+            // The empty space after each tab's items is a drop target (one per tab).
+            .sendInterfaceFlagsRange((Bank.MAIN_INTERFACE_ID << 16) | Bank.ITEMS_CHILD,
+                Bank.TAB_DROP_SLOT_OFFSET, Bank.TAB_DROP_SLOT_OFFSET + 9, 1 << 20)
             .sendInterfaceFlagsRange((Bank.SIDE_INTERFACE_ID << 16) | 3, 0, 27, 3278846)
             .sendVarbit(12393, 1)
             .sendString(`Bank of ${GameConstants.NAME}`, (Bank.MAIN_INTERFACE_ID << 16) | 3);
@@ -693,11 +924,6 @@ export class Bank extends ItemContainer {
         }
         sender.sendBankSnapshot().sendItemContainer(this.getPlayer().getInventory(), Bank.INVENTORY_INTERFACE_ID);
 
-        return this;
-    }
-
-    public fulls(): ItemContainer | boolean {
-        this.getPlayer().sendMessage("Not enough space in bank.");
         return this;
     }
 

@@ -845,6 +845,10 @@ export class RsmodRouteFinding {
     if (exitStrategy !== RECTANGLE_EXCLUSIVE_STRATEGY && srcX === destX && srcY === destY) {
       return true;
     }
+    if ((exitStrategy === WALL_STRATEGY || exitStrategy === WALL_DECO_STRATEGY) &&
+      collides(srcX, srcY, destX, destY, srcSize, srcSize, 1, 1)) {
+      return true;
+    }
     switch (exitStrategy) {
       case WALL_STRATEGY:
         return srcSize === 1

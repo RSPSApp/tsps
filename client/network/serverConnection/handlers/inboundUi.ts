@@ -15,6 +15,7 @@ import { handleShopPayload } from "../domain/shop";
 import { handleSmithingPayload } from "../domain/smithing";
 import { emitPlayerSync, emitSkills } from "../domain/skills";
 import { handleTradePayload } from "../domain/trade";
+import { markChatTransmit } from "../../../game/TransmitCycles";
 import { getClientCycle } from "../timing";
 import { cloneRunEnergyState, state } from "../state";
 import {
@@ -229,6 +230,19 @@ export function handleInboundUi(msg: any): boolean {
         }
         return true;
     }
+    if (msg.type === "chat_filter_settings") {
+        // The server's saved filters; the chatbox buttons redraw on the chat transmit.
+        const payload = msg.payload as { publicMode: number; privateMode: number; tradeMode: number };
+        const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
+        const vm = g?.__osrsClient?.cs2Vm;
+        if (vm) {
+            vm.publicChatMode = payload.publicMode | 0;
+            vm.privateChatMode = payload.privateMode | 0;
+            vm.tradeChatMode = payload.tradeMode | 0;
+        }
+        markChatTransmit();
+        return true;
+    }
     if (msg.type === "friends_chat") {
         const snapshot = msg.payload as FriendsChatSnapshot;
         state.lastFriendsChat = snapshot;
@@ -266,6 +280,20 @@ export function handleInboundUi(msg: any): boolean {
     if (msg.type === "notification") {
         const payload = msg.payload as NotificationEvent;
         for (const cb of state.notificationListeners) cb(payload);
+        return true;
+    }
+    if (msg.type === "system_update") {
+        const payload = msg.payload as { remainingCentis?: number } | undefined;
+        const raw = Number(payload?.remainingCentis);
+        const remainingCentis = Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
+        state.lastSystemUpdate = { remainingCentis, receivedAtMs: Date.now() };
+        for (const cb of state.systemUpdateListeners) {
+            try {
+                cb({ remainingCentis });
+            } catch (err) {
+                console.warn("system update listener error", err);
+            }
+        }
         return true;
     }
     return false;

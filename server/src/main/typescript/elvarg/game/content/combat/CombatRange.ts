@@ -78,6 +78,13 @@ export class CombatRange {
         return this.hasProjectileLine(sourceBounds, destinationBounds, source, sourceLocation.getZ());
     }
 
+    /** Their footprints touch without overlapping. */
+    static beside(a: Mobile, b: Mobile): boolean {
+        const first = this.bounds(a);
+        const second = this.bounds(b);
+        return !this.overlaps(first, second) && this.distance(first, second) <= 1;
+    }
+
     static overlapsEntities(a: Mobile, b: Mobile): boolean {
         return !!a && !!b && a.getLocation().getZ() === b.getLocation().getZ() &&
             this.overlaps(this.bounds(a), this.bounds(b));

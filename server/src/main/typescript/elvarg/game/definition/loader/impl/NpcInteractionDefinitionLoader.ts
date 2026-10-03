@@ -88,7 +88,7 @@ export class NpcInteractionDefinitionLoader extends DefinitionLoader {
                 )
         );
         NpcInteractionDefinition.replace(definitions);
-        console.info(
+        (invalid > 0 ? console.warn : console.debug)(
             `[npc-interactions] Loaded ${definitions.length} definitions from ` +
             `${sources.map((source) => source.name).join("+")} ` +
             `(candidates=${candidates}, invalid=${invalid})`

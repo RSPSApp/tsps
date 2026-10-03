@@ -161,10 +161,15 @@ module.exports = {
             ...devServerConfig,
             hot: false,
             liveReload: false,
-            headers: {
-                "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
-                "Cross-Origin-Embedder-Policy": "require-corp",
-                "Cross-Origin-Resource-Policy": "cross-origin",
+            headers: (req) => {
+                const params = new URL(req.url, "http://localhost").searchParams;
+                // Browser hosts need their cross-origin opener for editor messages.
+                const browserHost = params.has("browser-host-origin") || params.get("browser-host-client") === "1";
+                return {
+                    "Cross-Origin-Opener-Policy": browserHost ? "same-origin-allow-popups" : "same-origin",
+                    "Cross-Origin-Embedder-Policy": "require-corp",
+                    "Cross-Origin-Resource-Policy": "cross-origin",
+                };
             },
             client: {
                 ...devServerConfig.client,

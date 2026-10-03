@@ -1,4 +1,5 @@
 import { CombatPoisonData } from '../game/task/impl/CombatPoisonEffect'
+import { Sailing } from "./content/sailing/Sailing";
 import { PlayerPunishment } from "../util/PlayerPunishment";
 import { Systems } from "./Systems";
 import { RegionManager } from "./collision/RegionManager";
@@ -41,5 +42,6 @@ export class GameBuilder {
         new NpcSpawnDefinitionLoader().load();
         new ShopDefinitionLoader().load();
         ShopManager.initialize();
+        Sailing.initialize();
     }
 }

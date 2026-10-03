@@ -1171,6 +1171,10 @@ export class WidgetManager {
         this.interfaceParents.clear();
         this.groupToContainerUid.clear();
 
+        // Ownership is tied to widget instances that no longer exist; a fresh
+        // load must let cache scripts rebuild server-overridden components.
+        this.serverOwnedWidgets.clear();
+
         // Clear special widget references
         this.viewportWidget = null;
         this.minimapWidget = null;

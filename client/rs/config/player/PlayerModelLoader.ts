@@ -38,7 +38,12 @@ const equipmentModelRenderOrder = (slot: EquipmentSlot): number => {
     return slot;
 };
 
-const equipmentRenderLayer = (slot: EquipmentSlot): number => {
+// Feet/boots share the legs' layer: a higher layer's depth bias (~15 model units at 7) pushes
+// them through a skirt hanging in front. Leg equipment sits at 0 (under the torso); leg kits at 7.
+const feetRenderLayer = (kits: number[]): number => ((kits[5] ?? -1) !== -1 ? 7 : 0);
+
+const equipmentRenderLayer = (slot: EquipmentSlot, kits: number[]): number => {
+    if (slot === EquipmentSlot.BOOTS) return feetRenderLayer(kits);
     if (slot === EquipmentSlot.BODY || slot === EquipmentSlot.LEGS) return 0;
     if (slot === EquipmentSlot.AMULET) return 4;
     return 7;
@@ -108,7 +113,9 @@ export class PlayerModelLoader {
                         }
                     }
                     modelDatas.push(md);
-                    modelRenderLayers.push(part === 2 ? null : 7);
+                    modelRenderLayers.push(
+                        part === 2 ? null : part === 6 ? feetRenderLayer(appearance.kits) : 7,
+                    );
                 }
             } catch {}
         }
@@ -332,7 +339,7 @@ export class PlayerModelLoader {
         return this.buildStaticModel(
             workingAppearance,
             extras.map(({ obj }) => obj),
-            extras.map(({ slot }) => equipmentRenderLayer(slot)),
+            extras.map(({ slot }) => equipmentRenderLayer(slot, kits)),
         );
     }
 
@@ -370,7 +377,7 @@ export class PlayerModelLoader {
         return this.buildStaticModel(
             armAppearance,
             extras.map(({ obj }) => obj),
-            extras.map(({ slot }) => equipmentRenderLayer(slot)),
+            extras.map(({ slot }) => equipmentRenderLayer(slot, armAppearance.kits)),
         );
     }
 

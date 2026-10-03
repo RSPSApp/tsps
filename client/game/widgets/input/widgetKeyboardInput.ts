@@ -3,9 +3,51 @@ import type { ScriptEvent } from "../../../rs/cs2/Cs2Vm";
 import { VARBIT_KEYBINDING_ESC_TO_CLOSE } from "../../../common/vars";
 import { collectWidgetsWithKeyHandlers } from "../../../widgets/menu/utils";
 import { ClientPacket, createPacket, queuePacket } from "../../../network/packet";
+import { sendChat } from "../../../network/serverConnection/outgoing/inventoryChat";
 import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
-import type { WidgetInteractionController } from "../WidgetInteractionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
+
+export function processConstructionKeyboardInput(
+    deps: WidgetInputControllerDeps,
+    input: WidgetInputFrame["input"],
+    widgetManager: WidgetManager,
+): boolean {
+    const constructionOpen = widgetManager.rootInterface === 458 || [...widgetManager.interfaceParents.values()]
+        .some((parent) => (parent.group | 0) === 458);
+    if (constructionOpen) {
+        // Script 73 rejects hidden chat layers before touching VarC 335.
+        // The build modal has no text field: keep using the normal chat
+        // buffer and sender without depending on its widget visibility.
+        const vars = deps.getVarManager();
+        const vm = deps.getCs2Vm();
+        vm.inputDialogType = 0;
+        vm.inputDialogWidgetId = -1;
+        vm.inputDialogString = "";
+        deps.setPendingInputDialogAction(null);
+        deps.setPendingTradeQuantityAction(null);
+        for (const keyEvent of input.keyEvents) {
+            const text = vars.getVarcString(335) ?? "";
+            if (keyEvent.keyTyped === 13) {
+                queuePacket(createPacket(ClientPacket.IF_CLOSE));
+                deps.getCs2Vm().deferIfClose();
+            } else if (keyEvent.keyTyped === 85) {
+                vars.setVarcString(335, text.slice(0, -1));
+            } else if (keyEvent.keyTyped === 84) {
+                if (text.trim()) {
+                    const friendsChat = text.startsWith("/") && !text.startsWith("//");
+                    sendChat(friendsChat ? text.slice(1) : text, friendsChat ? "friends_chat" : "public", friendsChat ? 2 : 0);
+                    vars.setVarcString(335, "");
+                }
+            } else if (keyEvent.keyPressed >= 32 && text.length < 80) {
+                vars.setVarcString(335, text + String.fromCharCode(keyEvent.keyPressed));
+            }
+        }
+        const chat = widgetManager.findWidget(162, 0);
+        if (chat) deps.executeScriptListener(chat, [223]); // Native chat-buffer redraw.
+        return true;
+    }
+    return false;
+}
 
 export function processWidgetKeyboardInput(
     deps: WidgetInputControllerDeps,
@@ -14,11 +56,14 @@ export function processWidgetKeyboardInput(
 ): void {
     const { input, mx, my, allRoots, visibleMap, getStaticChildren } = frame;
     if (input.keyEvents.length > 0) {
-        // When inputDialogType > 0, keyboard input is captured for the dialog
-        // Type 0 = no dialog, Type 1 = default, Type 2 = interface-scoped, Type 3 = widget-scoped
-        const dialogActive = deps.getCs2Vm().inputDialogType > 0;
+        if (processConstructionKeyboardInput(deps, input, widgetManager)) return;
+        const dialogActive = (
+            deps.getCs2Vm().inputDialogType > 1 ||
+            deps.getPendingInputDialogAction() !== null ||
+            deps.getPendingTradeQuantityAction() !== null
+        );
         const customInterfaceSearchHandled =
-        !dialogActive && deps.getCustomInterfaces().handleSearchKeyEvents(input.keyEvents);
+            !dialogActive && deps.getCustomInterfaces().handleSearchKeyEvents(input.keyEvents);
 
         // Process keyboard input for active dialog before widget handlers
         if (dialogActive) {
@@ -167,7 +212,6 @@ export function processWidgetKeyboardInput(
             if (widgetManager.isEffectivelyHidden(containerUid)) continue;
             // Root interface is already covered by allRoots.
             if ((parent.group | 0) === (widgetManager.rootInterface | 0)) continue;
-
             const subRoots = widgetManager.getAllGroupRoots(parent.group);
             for (const root of subRoots) {
                 const keyWidgets = collectWidgetsWithKeyHandlers(

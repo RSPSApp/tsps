@@ -6,6 +6,7 @@ import { Skill } from "../../../model/Skill";
 import { TeleportHandler } from "../../../model/teleportation/TeleportHandler";
 import { TeleportType } from "../../../model/teleportation/TeleportType";
 import { Spell } from "./Spell";
+import { PluginManager } from "../../../../plugins/PluginManager";
 
 type TeleportData = {
     spellbook: MagicSpellbook;
@@ -16,7 +17,7 @@ type TeleportData = {
 };
 
 class TeleportSpell extends Spell {
-    constructor(private readonly data: TeleportData) { super(); }
+    constructor(readonly data: TeleportData) { super(); }
 
     spellId(): number { return 0; }
     levelRequired(): number { return this.data.level; }
@@ -26,14 +27,15 @@ class TeleportSpell extends Spell {
     startCast(): void { }
     getSpellbook(): MagicSpellbook { return this.data.spellbook; }
 
-    cast(player: Player): boolean {
+    cast(player: Player, name: string): boolean {
         if (!TeleportHandler.checkReqs(player, this.data.destination) || !this.canCast(player, false)) {
             return true;
         }
         if (!this.canCast(player, true)) {
             return true;
         }
-        TeleportHandler.teleport(player, this.data.destination, this.data.spellbook === MagicSpellbook.ANCIENT ? TeleportType.ANCIENT : TeleportType.NORMAL, false);
+        TeleportHandler.teleport(player, this.data.destination, this.data.spellbook === MagicSpellbook.ANCIENT ? TeleportType.ANCIENT : TeleportType.NORMAL, false,
+            () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name }));
         player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
         return true;
     }
@@ -69,8 +71,13 @@ export class SpellTeleports {
         ["ghorrock teleport", teleport(MagicSpellbook.ANCIENT, 96, 106, [rune(563, 2), rune(555, 8)], 2977, 3873)],
     ]);
 
+    public static getTeleportDestinations() {
+        return Array.from(this.SPELLS, ([name, spell]) => ({ name, ...spell.data }));
+    }
+
     static handleSelf(player: Player, name: string | undefined): boolean {
-        const spell = this.SPELLS.get(name?.trim().toLowerCase() ?? "");
-        return spell ? spell.cast(player) : false;
+        const key = name?.trim().toLowerCase() ?? "";
+        const spell = this.SPELLS.get(key);
+        return spell ? spell.cast(player, key) : false;
     }
 }

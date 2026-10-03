@@ -53,10 +53,16 @@ const SCRIPT_ACCOUNT_SUMMARY_SET_TIME_ID = 3970;
 const VARBIT_ACCOUNT_SUMMARY_DISPLAY_PLAYTIME = 12933;
 const sessionStartByPlayer = new WeakMap();
 const playtimeRevealedByPlayer = new WeakMap();
+let pluginApi;
 
 function mountSideJournalContent(player, groupId, tabIndex) {
   player.getPacketSender().sendSubInterface(SIDE_JOURNAL_TAB_CONTAINER_UID, groupId);
   player.getPacketSender().sendVarbit(VARBIT_SIDE_JOURNAL_SELECTED_TAB, tabIndex);
+  if (groupId === INTERFACE_QUEST_LIST_ID) {
+    // The client renders the quest list only while 399 is mounted and purges the
+    // row flags on unmount, so the quest runtime repopulates on every open.
+    pluginApi?.emitCustomEvent("quest:list-refresh", { player });
+  }
   if (groupId === INTERFACE_CHARACTER_SUMMARY_ID) {
     // Re-send row flags every time 712 comes back - the client drops them
     // on unmount, so a one-time login send only covers the very first view.
@@ -75,6 +81,7 @@ function sessionMinutes(player) {
 module.exports = {
   name: "SideJournalDefaults",
   register(api) {
+    pluginApi = api;
     api.onPlayerLogin(({ player }) => {
       sessionStartByPlayer.set(player, Date.now());
     });

@@ -1,6 +1,10 @@
 import * as PicoGL from "picogl";
 
 declare module "picogl" {
+    export interface VertexBuffer {
+        byteLength: number;
+    }
+
     export interface DrawCall extends Omit<PicoGL.DrawCall, "numElements"> {
         offsets: number[];
         numElements: number[];

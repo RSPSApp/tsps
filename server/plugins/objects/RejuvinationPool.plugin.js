@@ -3,7 +3,7 @@ const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 
-const ATTR_BLEED_TASK_KEY = "combat:bleed:taskKey";
+const ATTR_BLEED_TASK_KEY = "combat:bleed:task-key";
 const POOL_USE_DELAY_MS = 1000;
 const nextPoolUseAt = new WeakMap();
 
@@ -31,6 +31,7 @@ function restoreLoweredStats(player) {
     return;
   }
   for (const skill of Skill.values()) {
+    if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) continue;
     const current = Number(skillManager.getCurrentLevel?.(skill) ?? 0);
     const max = Number(skillManager.getMaxLevel?.(skill) ?? 0);
     if (current < max) {
@@ -45,7 +46,7 @@ function restorePrayer(player) {
     return;
   }
   const maxPrayer = Number(skillManager.getMaxLevel?.(Skill.PRAYER) ?? 0);
-  if (maxPrayer > 0) {
+  if (maxPrayer > (skillManager.getCurrentLevel(Skill.PRAYER) ?? 0)) {
     skillManager.setCurrentLevels?.(Skill.PRAYER, maxPrayer, true);
   }
 }
@@ -53,7 +54,7 @@ function restorePrayer(player) {
 function restoreHitpoints(player) {
   const skillManager = player.getSkillManager?.();
   const maxHp = Number(skillManager?.getMaxLevel?.(Skill.HITPOINTS) ?? 0);
-  if (maxHp > 0) {
+  if (maxHp > (player.getHitpoints?.() ?? 0)) {
     player.setHitpoints?.(maxHp);
   }
 }
@@ -85,19 +86,21 @@ function clearBleed(player) {
   }
 }
 
-function restoreFromPool(player) {
-  restoreHitpoints(player);
+function restoreFromPool(player, tier) {
   restoreSpecialAttack(player);
-  restoreRunEnergy(player);
-  restorePrayer(player);
-  restoreLoweredStats(player);
-  clearPoisonAndVenom(player);
-  clearBleed(player);
+  if (tier >= 1) restoreRunEnergy(player);
+  if (tier >= 2) restorePrayer(player);
+  if (tier >= 3) restoreLoweredStats(player);
+  if (tier >= 4) {
+    restoreHitpoints(player);
+    clearPoisonAndVenom(player);
+    clearBleed(player);
+  }
 }
 
 let TaskManager;
 
-function drinkFromPool(event) {
+function drinkFromPool(event, tier = 4) {
   const player = event.player;
   if (isRecentPvpCombat(player)) {
     player.sendMessage("You can't drink from the pool during combat.");
@@ -110,16 +113,25 @@ function drinkFromPool(event) {
     return;
   }
   nextPoolUseAt.set(player, now + POOL_USE_DELAY_MS);
-  restoreFromPool(player);
+  restoreFromPool(player, tier);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
-  player.sendMessage("You feel fully rejuvenated.");
+  player.sendMessage("You feel rejuvenated.");
   event.handled = true;
 }
+
+function restoration(event) { return drinkFromPool(event, 0); }
+function revitalisation(event) { return drinkFromPool(event, 1); }
+function rejuvenation(event) { return drinkFromPool(event, 2); }
+function fancyRejuvenation(event) { return drinkFromPool(event, 3); }
 
 module.exports = {
   name: "RejuvinationPool",
   register(api) {
     TaskManager = api.getTaskManager();
+    api.onObjectInteraction("Pool of Restoration", { Drink: restoration });
+    api.onObjectInteraction("Pool of Revitalisation", { Drink: revitalisation });
+    api.onObjectInteraction("Pool of Rejuvenation", { Drink: rejuvenation });
+    api.onObjectInteraction("Fancy pool of Rejuvenation", { Drink: fancyRejuvenation });
     api.onObjectInteraction("Ornate pool of Rejuvenation", { Drink: drinkFromPool });
   },
 };

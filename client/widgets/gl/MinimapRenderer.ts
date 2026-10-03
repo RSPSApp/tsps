@@ -7,6 +7,30 @@
  * - Batched sprite rendering for dots
  */
 import { createProgram } from "./gl-utils";
+import type { WebGLOsrsRenderer } from "../../render/WebGLOsrsRenderer";
+
+/** Image and icon coordinates share the same scene bounds. */
+export function getMinimapMaps(
+    renderer: Pick<WebGLOsrsRenderer, "instanceActive" | "mapManager"> | undefined,
+    tileX: number,
+    tileY: number,
+): Array<{ mapX: number; mapY: number; baseX: number; baseY: number; size: number }> {
+    if (renderer?.instanceActive) {
+        const map = renderer.mapManager.getMapForWorldTile(tileX, tileY);
+        return map ? [{
+            mapX: map.mapX, mapY: map.mapY,
+            baseX: map.getRenderBaseTileX(), baseY: map.getRenderBaseTileY(),
+            size: map.getLocalTileSpan(),
+        }] : [];
+    }
+    const maps = [];
+    for (let x = (tileX >> 6) - 1; x <= (tileX >> 6) + 1; x++) {
+        for (let y = (tileY >> 6) - 1; y <= (tileY >> 6) + 1; y++) {
+            maps.push({ mapX: x, mapY: y, baseX: x * 64, baseY: y * 64, size: 64 });
+        }
+    }
+    return maps;
+}
 
 // Vertex shader for minimap tiles and sprites
 // Applies rotation around the minimap center
@@ -529,8 +553,8 @@ export class MinimapRenderer {
     }
 
     /**
-     * Draw an overlay element (unrotated, stays upright)
-     * Position is given in rotated minimap coordinates
+     * Draw an overlay element (upright unless `angle` is given)
+     * Position is given in rotated minimap coordinates; pivot is in scaled sprite pixels
      */
     drawOverlay(
         tex: MinimapTexture,
@@ -538,6 +562,9 @@ export class MinimapRenderer {
         screenY: number,
         width?: number,
         height?: number,
+        angle = 0,
+        pivotX?: number,
+        pivotY?: number,
     ) {
         const gl = this.gl;
         const w = width ?? tex.w;
@@ -554,28 +581,24 @@ export class MinimapRenderer {
         this.bindNearestTexture(tex.tex);
         gl.uniform1i(this.uTexture_ov, 0);
 
-        const x0 = screenX - w / 2;
-        const y0 = screenY - h / 2;
-        const x1 = screenX + w / 2;
-        const y1 = screenY + h / 2;
-
+        // Sprite pixel (pivotX, pivotY) lands on the pivot point; corners are
+        // rotated clockwise (screen y-down) by `angle` around it.
+        const px = pivotX ?? w / 2;
+        const py = pivotY ?? h / 2;
+        const sin = Math.sin(angle);
+        const cos = Math.cos(angle);
         const verts = this.quadVerts;
-        verts[0] = x0;
-        verts[1] = y0;
-        verts[2] = 0;
-        verts[3] = 0;
-        verts[4] = x1;
-        verts[5] = y0;
-        verts[6] = 1;
-        verts[7] = 0;
-        verts[8] = x1;
-        verts[9] = y1;
-        verts[10] = 1;
-        verts[11] = 1;
-        verts[12] = x0;
-        verts[13] = y1;
-        verts[14] = 0;
-        verts[15] = 1;
+        const corners = [0, 0, 1, 0, 1, 1, 0, 1];
+        for (let i = 0; i < 4; i++) {
+            const u = corners[i * 2];
+            const v = corners[i * 2 + 1];
+            const ox = u * w - px;
+            const oy = v * h - py;
+            verts[i * 4] = screenX + ox * cos - oy * sin;
+            verts[i * 4 + 1] = screenY + ox * sin + oy * cos;
+            verts[i * 4 + 2] = u;
+            verts[i * 4 + 3] = v;
+        }
 
         gl.bindVertexArray(this.vao);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);

@@ -49,8 +49,13 @@ export class ObjectDefinition extends ObjectIdentifiers {
         return definition;
     }
 
+    /**
+     * A floor decoration (shape 22) blocks movement only when its blockWalk is 1, as in the OSRS
+     * client and rsmod. Being interactive doesn't make it block: ToA's pressure plates and the
+     * POH's build spaces are walked on.
+     */
     isClippedDecoration(): boolean {
-        return this.interactive || this.clipType === 1;
+        return this.clipType === 1;
     }
 
     /** Resolve the same per-player loc variant that the client displays. */

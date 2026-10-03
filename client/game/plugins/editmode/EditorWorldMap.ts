@@ -28,6 +28,23 @@ type EditorWorldMapClient = {
 
 const MAX_TILE_CANVASES = 48;
 
+type ZoneVisibility = { showPvp: boolean; showMulti: boolean; showDuel: boolean; showSafe: boolean; showF2p: boolean };
+
+// Draw order on overlap: the first visible tag wins.
+const ZONE_TYPE_LABELS = [["duel", "Duel"], ["safe", "Safe"], ["f2p", "F2P"], ["pvp", "PvP"], ["multi-combat", "Multi-combat"]] as const;
+const ZONE_COLORS: Record<string, string> = {
+    duel: "#c4b5fd", safe: "#86efac", f2p: "#93c5fd", pvp: "#fca5a5", "multi-combat": "#fcd34d",
+};
+
+/** The colour a zone is drawn in, or undefined while none of its tags are toggled on. */
+function zoneColor(visible: ZoneVisibility, zone: EditModeWorldZone): string | undefined {
+    const shown: Record<string, boolean> = {
+        duel: visible.showDuel, safe: visible.showSafe, f2p: visible.showF2p, pvp: visible.showPvp, "multi-combat": visible.showMulti,
+    };
+    const tag = ZONE_TYPE_LABELS.find(([tag]) => shown[tag] && zone.tags.includes(tag))?.[0];
+    return tag ? ZONE_COLORS[tag] : undefined;
+}
+
 /**
  * The editor map deliberately does not mount widget group 595. It reuses the
  * cached in-game map tiles, but owns its DOM and pointer events completely.
@@ -55,7 +72,7 @@ export class EditorWorldMap {
     constructor(
         private readonly client: EditorWorldMapClient,
         private readonly onNavigate: (tile: EditModeTile) => void,
-        private readonly getZones: () => { zones: readonly EditModeWorldZone[]; showPvp: boolean; showMulti: boolean; showDuel: boolean; showSafe: boolean } | undefined,
+        private readonly getZones: () => (ZoneVisibility & { zones: readonly EditModeWorldZone[] }) | undefined,
         private readonly onZoneResize: (index: number, bounds: Pick<EditModeBoundedWorldZone, "minX" | "maxX" | "minY" | "maxY">) => void,
         private readonly onNewZone: (bounds: Pick<EditModeBoundedWorldZone, "minX" | "maxX" | "minY" | "maxY">, tag: EditModeWorldZone["tags"][number]) => void,
         private readonly onZoneTypeChange: (index: number, tag: EditModeWorldZone["tags"][number]) => void,
@@ -184,7 +201,7 @@ export class EditorWorldMap {
         const zoneType = document.createElement("select");
         zoneType.title = "Zone type";
         zoneType.setAttribute("aria-label", zoneType.title);
-        for (const tag of ["pvp", "multi-combat", "safe", "duel"] as const) zoneType.add(new Option(tag === "duel" ? "Duel" : tag === "pvp" ? "PvP" : tag === "safe" ? "Safe" : "Multi-combat", tag));
+        for (const [tag, label] of ZONE_TYPE_LABELS) zoneType.add(new Option(label, tag));
         Object.assign(zoneType.style, {
             display: "none", height: "25px", padding: "0 5px", border: "1px solid rgba(255,255,255,0.18)",
             borderRadius: "4px", color: "#e5e7eb", background: "#303640", font: "inherit",
@@ -353,7 +370,7 @@ export class EditorWorldMap {
         for (let index = 0; index < visible.zones.length; index++) {
             const zone = visible.zones[index];
             if (zone.minX === undefined) continue;
-            if (!(visible.showDuel && zone.tags.includes("duel")) && !(visible.showPvp && zone.tags.includes("pvp")) && !(visible.showMulti && zone.tags.includes("multi-combat")) && !(visible.showSafe && zone.tags.includes("safe"))) continue;
+            if (!zoneColor(visible, zone)) continue;
             for (const [corner, x, y] of corners(zone)) {
                 const px = canvas.width / 2 + (x - this.centerX) * this.pixelsPerTile;
                 const py = canvas.height / 2 - (y - this.centerY) * this.pixelsPerTile;
@@ -371,8 +388,7 @@ export class EditorWorldMap {
         for (let index = visible.zones.length - 1; index >= 0; index--) {
             const zone = visible.zones[index];
             if (zone.minX === undefined) continue;
-            const shown = (visible.showDuel && zone.tags.includes("duel")) || (visible.showPvp && zone.tags.includes("pvp")) || (visible.showMulti && zone.tags.includes("multi-combat")) || (visible.showSafe && zone.tags.includes("safe"));
-            if (shown && tile.x >= zone.minX && tile.x <= zone.maxX && tile.y >= zone.minY && tile.y <= zone.maxY) return index;
+            if (zoneColor(visible, zone) && tile.x >= zone.minX && tile.x <= zone.maxX && tile.y >= zone.minY && tile.y <= zone.maxY) return index;
         }
         return undefined;
     }
@@ -382,7 +398,7 @@ export class EditorWorldMap {
         const zone = index === undefined ? undefined : this.getZones()?.zones[index];
         if (this.zoneTypeSelect) {
             this.zoneTypeSelect.style.display = this.canEditZones ? "inline-block" : "none";
-            if (zone) this.zoneTypeSelect.value = zone.tags.includes("duel") ? "duel" : zone.tags.includes("safe") ? "safe" : zone.tags.includes("multi-combat") ? "multi-combat" : "pvp";
+            if (zone) this.zoneTypeSelect.value = ZONE_TYPE_LABELS.find(([tag]) => zone.tags.includes(tag))?.[0] ?? "pvp";
         }
         if (this.deleteZoneButton) this.deleteZoneButton.style.display = zone ? "inline-block" : "none";
     }
@@ -393,8 +409,7 @@ export class EditorWorldMap {
         if (!canvas || !visible) return "grab";
         for (const zone of visible.zones) {
             if (zone.minX === undefined) continue;
-            const color = (visible.showDuel && zone.tags.includes("duel")) || (visible.showPvp && zone.tags.includes("pvp")) || (visible.showMulti && zone.tags.includes("multi-combat")) || (visible.showSafe && zone.tags.includes("safe"));
-            if (!color) continue;
+            if (!zoneColor(visible, zone)) continue;
             const left = canvas.width / 2 + (zone.minX - this.centerX) * this.pixelsPerTile;
             const right = canvas.width / 2 + (zone.maxX + 1 - this.centerX) * this.pixelsPerTile;
             const top = canvas.height / 2 - (zone.maxY + 1 - this.centerY) * this.pixelsPerTile;
@@ -462,7 +477,7 @@ export class EditorWorldMap {
             for (let index = 0; index < visible.zones.length; index++) {
                 const zone = visible.zones[index];
                 if (zone.minX === undefined) continue;
-                const color = visible.showDuel && zone.tags.includes("duel") ? "#c4b5fd" : visible.showSafe && zone.tags.includes("safe") ? "#86efac" : visible.showPvp && zone.tags.includes("pvp") ? "#fca5a5" : visible.showMulti && zone.tags.includes("multi-combat") ? "#fcd34d" : undefined;
+                const color = zoneColor(visible, zone);
                 if (!color) continue;
                 const x = width / 2 + (zone.minX - this.centerX) * this.pixelsPerTile;
                 const y = height / 2 - (zone.maxY + 1 - this.centerY) * this.pixelsPerTile;
@@ -487,7 +502,7 @@ export class EditorWorldMap {
         if (this.plotStart && this.plotEnd) {
             const x = width / 2 + (Math.min(this.plotStart.x, this.plotEnd.x) - this.centerX) * this.pixelsPerTile;
             const y = height / 2 - (Math.max(this.plotStart.y, this.plotEnd.y) + 1 - this.centerY) * this.pixelsPerTile;
-            context.strokeStyle = this.zoneTypeSelect?.value === "duel" ? "#c4b5fd" : this.zoneTypeSelect?.value === "safe" ? "#86efac" : this.zoneTypeSelect?.value === "pvp" ? "#fca5a5" : "#fcd34d";
+            context.strokeStyle = ZONE_COLORS[this.zoneTypeSelect?.value ?? ""] ?? ZONE_COLORS["multi-combat"];
             context.setLineDash([5, 4]);
             context.strokeRect(x, y, (Math.abs(this.plotEnd.x - this.plotStart.x) + 1) * this.pixelsPerTile, (Math.abs(this.plotEnd.y - this.plotStart.y) + 1) * this.pixelsPerTile);
             context.setLineDash([]);

@@ -1,5 +1,6 @@
 const { Location } = require("../../../src/main/typescript/elvarg/game/model/Location");
 const { Wilderness } = require("../../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
+const { isMembersArea } = require("../../../src/main/typescript/elvarg/game/definition/WorldDefinition");
 const {
   getEnabledWildernessHotspots,
   getWildernessHotspot,
@@ -982,6 +983,7 @@ function createBotRegistry(options) {
       const offsetY = Math.floor(tileIndex / width);
       const candidate = new Location(minX + offsetX, minY + offsetY, z);
       if (Wilderness.isInLocation(candidate) && isOutsideWildernessHotspots(candidate) &&
+          !isMembersArea(candidate.getX(), candidate.getY()) &&
           !RegionManager.blocked(candidate, null) && !RegionManager.isWater(candidate)) {
         return candidate;
       }
@@ -1034,6 +1036,7 @@ function createBotRegistry(options) {
       const candidate = new Location(minX + offsetX, minY + offsetY, z);
       if (
         Wilderness.isInLocation(candidate) &&
+        !isMembersArea(candidate.getX(), candidate.getY()) &&
         !RegionManager.blocked(candidate, null) &&
         !RegionManager.isWater(candidate)
       ) {

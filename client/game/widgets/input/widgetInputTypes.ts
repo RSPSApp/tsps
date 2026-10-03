@@ -73,8 +73,6 @@ export type WidgetInputControllerDeps = {
     handleInventorySlotMove: (
         fromSlot: number,
         toSlot: number,
-        localPredictionApplied: boolean,
-        previousSnapshotSignature: string,
     ) => void;
     buildWidgetActionPayload: (
         event: Parameters<

@@ -42,14 +42,15 @@ import { RandomGen } from "../../../util/RandomGen";
 import { TimerKey } from "../../../util/timers/TimerKey";
 import { CombatType } from "./CombatType";
 import { CombatSpecial } from "./CombatSpecial";
+import { resolveSpecialAttackType } from "./WeaponSpecialTraits";
 import { CombatPoisonData } from "../../task/impl/CombatPoisonEffect";
 import { PoisonType } from "../../task/impl/CombatPoisonEffect";
 import { CombatConstants } from "./CombatConstants";
 import { Wilderness } from "../wilderness/Wilderness";
-import { ZaryteCrossbowCombatMethod } from "./method/impl/specials/ZaryteCrossbowCombatMethod";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { ServerPerf } from "../../../util/ServerPerf";
 import { World } from "../../World";
+import { ItemOnGroundManager } from "../../entity/impl/grounditem/ItemOnGroundManager";
 import { WeaponProfiles } from "./WeaponProfile";
 import { Barrows } from "./Barrows";
 import {
@@ -58,6 +59,15 @@ import {
     isChargedCrystalBow,
     isEmptyCrystalBow,
 } from "./ranged/CrystalBow";
+
+export type SpecialDamageBounds = {
+    minimumMultiplier?: number;
+    maximumMultiplier?: number;
+    minimumBonus?: number;
+    maximumBonus?: number;
+    cap?: number;
+    reduction?: number;
+};
 
 const getPlayerCombatSpecial = (player: Player): CombatSpecial | null => {
     const accessor = (player as any)?.getCombatSpecial;
@@ -70,7 +80,8 @@ const getPlayerCombatSpecial = (player: Player): CombatSpecial | null => {
     return ((player as any)?.combatSpecial ?? null) as CombatSpecial | null;
 };
 
-const isDeveloperGraniteMaulSpec = (entity: Mobile): entity is Player => {
+/** Developer debug: a queued-attack special (granite maul) forced to hit 50. */
+const isDeveloperQueuedAttackSpec = (entity: Mobile): entity is Player => {
     if (!entity.isPlayer()) {
         return false;
     }
@@ -79,12 +90,15 @@ const isDeveloperGraniteMaulSpec = (entity: Mobile): entity is Player => {
     return (
         player.getRights?.() === PlayerRights.DEVELOPER &&
         player.isSpecialActivated() &&
-        getPlayerCombatSpecial(player) === CombatSpecial.GRANITE_MAUL
+        getPlayerCombatSpecial(player)?.getTraits()?.queuedAttack === true
     );
 };
 
 export class CombatFactory {
     private static readonly RANDOM = new RandomGen();
+    public static readonly RECOIL_DAMAGE_ATTRIBUTE = "ring-of-recoil:damage";
+    public static readonly CRYSTAL_BOW_SHOTS_ATTRIBUTE = "crystal-bow:shots-in-stage";
+    public static readonly CRYSTAL_BOW_ITEM_ATTRIBUTE = "crystal-bow:tracked-item";
     /**
      * The default melee combat method.
      */
@@ -155,14 +169,19 @@ export class CombatFactory {
         return CombatFactory.MELEE_COMBAT;
     }
 
-    static getHitDamage(entity: Mobile, victim: Mobile, type: CombatType, bypassProtectionPrayer = false) {
+    static getHitDamage(entity: Mobile, victim: Mobile, type: CombatType, bypassProtectionPrayer = false, boundsOverride?: SpecialDamageBounds) {
+        const specialTraits = CombatSpecial.activeTraitsFor(entity);
+        if (specialTraits?.ignoreProtectionPrayer) {
+            bypassProtectionPrayer = true;
+        }
+        const prayerType = resolveSpecialAttackType(specialTraits?.damageType) ?? type;
         let damage = 0;
         if (type == CombatType.MELEE) {
-            damage = Misc.randomInclusive(0, DamageFormulas.calculateMaxMeleeHit(entity));
+            damage = CombatFactory.rollSpecialDamage(entity, DamageFormulas.sourceMaxHit(entity, CombatType.MELEE), boundsOverride);
         } else if (type == CombatType.RANGED) {
-            let maxHit = DamageFormulas.calculateMaxRangedHit(entity);
+            let maxHit = DamageFormulas.sourceMaxHit(entity, CombatType.RANGED);
             maxHit = PluginManager.modifyRangedMaxHit(entity, victim, maxHit);
-            damage = Misc.randomInclusive(0, maxHit);
+            damage = CombatFactory.rollSpecialDamage(entity, maxHit, boundsOverride);
 
             // Do ranged effects with the calculated damage..
             if (entity.isPlayer()) {
@@ -176,13 +195,13 @@ export class CombatFactory {
                 if (damageRange) {
                     damage = Math.max(damageRange.minimum, Math.min(damageRange.maximum, damage));
                 }
-                if (profile?.boltEffects && Misc.getRandom(10) == 1) {
+                if (profile?.boltEffects && CombatFactory.boltEffectTriggered(entity)) {
                     let multiplier = RangedData.getSpecialEffectsMultiplier(player, victim, damage);
                     damage *= multiplier;
                 }
             }
         } else if (type == CombatType.MAGIC) {
-            damage = Misc.randomInclusive(0, DamageFormulas.getMagicMaxhit(entity));
+            damage = CombatFactory.rollSpecialDamage(entity, DamageFormulas.sourceMaxHit(entity, CombatType.MAGIC), boundsOverride);
         }
 
         if (entity.isNpc() && victim.isPlayer() && ArceuusSpells.hasWard(victim)) {
@@ -202,7 +221,7 @@ export class CombatFactory {
         if (!bypassProtectionPrayer) {
 
             // Check if victim is is using correct protection prayer
-            if (PrayerHandler.isActivated(victim, PrayerHandler.getProtectingPrayer(type))) {
+            if (PrayerHandler.isActivated(victim, PrayerHandler.getProtectingPrayer(prayerType))) {
 
                 // Apply the damage reduction mod
                 if (entity.isNpc()) {
@@ -219,11 +238,129 @@ export class CombatFactory {
             }
         }
 
-        if (type == CombatType.MELEE && isDeveloperGraniteMaulSpec(entity)) {
+        if (type == CombatType.MELEE && isDeveloperQueuedAttackSpec(entity)) {
             hitDamage = new HitDamage(50, HitMask.RED);
         }
 
         return hitDamage;
+    }
+
+    /**
+     * Applies an explicit per-style max hit to an incoming hit.
+     *
+     * NpcDefinitions carry a single max hit (the wiki's highest style), so a boss
+     * whose styles cap differently passes the cap for the style it rolled - the
+     * bounds ride as flat bonuses so the exact integer max survives
+     * rollSpecialDamage's floor, and protection prayers still reduce the result
+     * unless bypassProtectionPrayer is set. Damage is capped to the target's
+     * current hitpoints, matching the cap PendingHit rolls with.
+     */
+    public static applyStyleDamage(
+        hit: PendingHit,
+        maxHit: number,
+        options: { minHit?: number; bypassProtectionPrayer?: boolean } = {}
+    ): void {
+        if (!hit || !hit.isAccurate() || hit.getHits().length === 0) {
+            return;
+        }
+        const attacker = hit.getAttacker();
+        const target = hit.getTarget();
+        const rolled = CombatFactory.getHitDamage(
+            attacker,
+            target,
+            hit.getCombatType(),
+            options.bypassProtectionPrayer === true,
+            {
+                minimumMultiplier: 0,
+                maximumMultiplier: 0,
+                minimumBonus: Math.max(0, options.minHit ?? 0),
+                maximumBonus: Math.max(0, Math.trunc(maxHit)),
+            }
+        );
+        hit.getHits()[0].setDamage(Math.max(0, Math.min(rolled.getDamage(), target.getHitpoints())));
+        hit.updateTotalDamage();
+    }
+
+    /**
+     * Rolls one hit's damage. With no active special traits this is the ordinary
+     * 0..maxHit roll; with traits it honours per-hit min/max multipliers, flat
+     * bonuses and a maximum cap.
+     */
+    private static rollSpecialDamage(entity: Mobile, maxHit: number, boundsOverride?: SpecialDamageBounds): number {
+        const traits = CombatSpecial.activeTraitsFor(entity);
+        if (!traits && !boundsOverride) {
+            return Misc.randomInclusive(0, maxHit);
+        }
+        let minimum = Math.floor(
+            maxHit * (boundsOverride?.minimumMultiplier ?? traits?.minimumDamageMultiplier ?? 0)
+        );
+        let maximum = Math.floor(
+            maxHit * (boundsOverride?.maximumMultiplier ?? traits?.maximumDamageMultiplier ?? 1)
+        );
+        minimum += Math.trunc(boundsOverride?.minimumBonus ?? traits?.minimumDamageBonus ?? 0);
+        maximum += Math.trunc(boundsOverride?.maximumBonus ?? traits?.maximumDamageBonus ?? 0);
+        const cap = boundsOverride?.cap ?? traits?.maximumDamageCap;
+        if (cap !== undefined) {
+            maximum = Math.min(maximum, Math.trunc(cap));
+            minimum = Math.min(minimum, maximum);
+        }
+        const reduction = boundsOverride?.reduction ?? 0;
+        if (reduction > 0) {
+            maximum = Math.max(0, maximum - Math.trunc(reduction));
+            minimum = Math.min(minimum, maximum);
+        }
+        if (maximum < minimum) {
+            const swap = minimum;
+            minimum = maximum;
+            maximum = swap;
+        }
+        return Misc.randomInclusive(Math.max(0, minimum), Math.max(0, maximum));
+    }
+
+    /**
+     * Applies a resolved hit's damage. When the hit carries per-hitsplat reveal
+     * delays (special `hitDelayTicks`), each later hitsplat is queued on its own
+     * tick instead of landing all at once.
+     */
+    private static applyResolvedHitDamage(target: Mobile, resolvedHit: PendingHit): void {
+        const hits = resolvedHit.getHits();
+        const delays = resolvedHit.getHitDelays();
+        if (!delays || delays.length <= 1 || delays.length !== hits.length) {
+            target.getCombat().getHitQueue().addPendingDamage(hits);
+            return;
+        }
+        const base = Math.min(...delays);
+        for (let i = 0; i < hits.length; i++) {
+            const extra = Math.max(0, delays[i] - base);
+            if (extra <= 0) {
+                target.getCombat().getHitQueue().addPendingDamage([hits[i]]);
+                continue;
+            }
+            TaskManager.submit(new (class extends Task {
+                constructor() {
+                    super(extra);
+                }
+                execute(): void {
+                    if (target.isRegistered() && target.getHitpoints() > 0) {
+                        target.getCombat().getHitQueue().addPendingDamage([hits[i]]);
+                    }
+                    this.stop();
+                }
+            })());
+        }
+    }
+
+    /** Enchanted-bolt activation, honouring special traits that scale/guarantee it. */
+    private static boltEffectTriggered(entity: Mobile): boolean {
+        const traits = CombatSpecial.activeTraitsFor(entity);
+        if (traits?.guaranteedEnchantedBoltEffect === true) {
+            return true;
+        }
+        const multiplier = traits?.enchantedBoltEffectChanceMultiplier;
+        if (multiplier !== undefined && multiplier > 0) {
+            return Misc.getRandom(Math.max(1, Math.round(10 / multiplier))) === 1;
+        }
+        return Misc.getRandom(10) === 1;
     }
 
     static applyExtraHitRolls(attacker: Mobile, target: Mobile, combatType: CombatType, damage: HitDamage, accurate: boolean, method: CombatMethod) {
@@ -235,15 +372,12 @@ export class CombatFactory {
             return;
         }
 
-        const guaranteedCrossbowEffect =
-            combatType == CombatType.RANGED &&
-            accurate &&
-            method instanceof ZaryteCrossbowCombatMethod;
-
+        // Bolt activation is data-driven: a special that guarantees the effect
+        // declares `guaranteedEnchantedBoltEffect` (see boltEffectTriggered).
         if (combatType == CombatType.RANGED
             && attacker.isPlayer()
             && WeaponProfiles.get(attacker.getAsPlayer())?.boltEffects
-            && (guaranteedCrossbowEffect || Misc.getRandom(10) == 1)) {
+            && CombatFactory.boltEffectTriggered(attacker)) {
             const multiplier = RangedData.getSpecialEffectsMultiplier(attacker.getAsPlayer(), target, damage.getDamage());
             if (multiplier !== 1.0) {
                 damage.setDamage(Math.floor(damage.getDamage() * multiplier));
@@ -445,7 +579,7 @@ export class CombatFactory {
             ? CanAttackResponse.CAN_ATTACK
             : ServerPerf.measurePhase(
                 "combat.process.can_attack.policy",
-                () => CombatFactory.canAttackByPolicy(attacker, target)
+                () => CombatFactory.canAttackByPolicy(attacker, target, method)
             );
         if (areaResponse != CanAttackResponse.CAN_ATTACK) {
             return areaResponse;
@@ -462,8 +596,14 @@ export class CombatFactory {
             const player = attacker.getAsPlayer();
             const special = getPlayerCombatSpecial(player);
             if (player.isSpecialActivated() && special != null) {
-                if (special !== CombatSpecial.GRANITE_MAUL || !player.getCombat().isGraniteMaulSpecialQueued()) {
-                    if (player.getSpecialPercentage() < special.getDrainAmount()) {
+                const queuedAttackInFlight =
+                    special.getTraits()?.queuedAttack === true &&
+                    player.getCombat().isSpecialAttackQueued();
+                if (!queuedAttackInFlight) {
+                    const drainAmount = special.getDrainAmountForWeaponId(
+                        player.getEquipment().get(Equipment.WEAPON_SLOT).getId()
+                    );
+                    if (player.getSpecialPercentage() < drainAmount) {
                         return CanAttackResponse.NOT_ENOUGH_SPECIAL_ENERGY;
                     }
                 }
@@ -492,7 +632,7 @@ export class CombatFactory {
         return CanAttackResponse.CAN_ATTACK;
     }
 
-    public static canAttackByPolicy(attacker: Mobile, target: Mobile): CanAttackResponse {
+    public static canAttackByPolicy(attacker: Mobile, target: Mobile, method?: CombatMethod): CanAttackResponse {
         if (attacker.getPrivateArea() !== target.getPrivateArea()) {
             return CanAttackResponse.CANT_ATTACK_IN_AREA;
         }
@@ -500,7 +640,7 @@ export class CombatFactory {
             (Wilderness.isInSafeBuilding(attacker.getLocation()) || Wilderness.isInSafeBuilding(target.getLocation()))) {
             return CanAttackResponse.CANT_ATTACK_IN_AREA;
         }
-        const pluginCanAttack = PluginManager.emitCanAttack(attacker, target);
+        const pluginCanAttack = PluginManager.emitCanAttack(attacker, target, method);
         if (pluginCanAttack === true) {
             return CanAttackResponse.CAN_ATTACK;
         }
@@ -580,9 +720,20 @@ export class CombatFactory {
         // Add this hit to the target's hitQueue.
         target.getCombat().getHitQueue().addPendingHit(
             qHit,
-            World.getProcessCycle() + qHit.getDelay() +
-                (attacker.isPlayer() && qHit.getCombatType() === CombatType.MELEE ? 1 : 0),
+            World.getProcessCycle() + qHit.getDelay() + CombatFactory.hitProcessingDelay(qHit),
         );
+    }
+
+    /**
+     * OSRS processes NPCs before players each tick, so a hit queued against an NPC lands
+     * one tick after the distance table (Wiki: Hit delay). Player melee keeps its tick too:
+     * the target's queue drains at the start of its own turn, which has already passed.
+     */
+    public static hitProcessingDelay(hit: PendingHit): number {
+        const targetIsNpc = hit.getTarget()?.isNpc?.() === true;
+        const meleePlayerAttack = hit.getAttacker()?.isPlayer?.() === true
+            && hit.getCombatType() === CombatType.MELEE;
+        return targetIsNpc || meleePlayerAttack ? 1 : 0;
     }
 
     public static executeHit(qHit: PendingHit) {
@@ -624,6 +775,7 @@ export class CombatFactory {
         // Melee blocks play when the attack is launched; projectiles block on a non-fatal impact.
         if (
             combatType !== CombatType.MELEE &&
+            target.getBlockAnim() >= 0 &&
             target.getHitpoints() >
                 target.getCombat().getHitQueue().getQueuedDamage() + damage
         ) {
@@ -658,7 +810,7 @@ export class CombatFactory {
         // Don't apply magic splash damage from player casts.
         const magicSplash = combatType == CombatType.MAGIC && !resolvedHit.isAccurate();
         if (!(magicSplash && attacker.isPlayer())) {
-            target.getCombat().getHitQueue().addPendingDamage(resolvedHit.getHits());
+            CombatFactory.applyResolvedHitDamage(target, resolvedHit);
         }
 
         // Make sure to let the combat method know we finished the attack.
@@ -756,9 +908,14 @@ export class CombatFactory {
             hitSkills.includes(Skill.MAGIC.getIndex()) &&
             hitSkills.includes(Skill.DEFENCE.getIndex());
 
-        // Hit XP is expressed relative to one melee style, which OSRS pays at
-        // 4/damage. Everything below is that ratio: magic 2/damage is /2,
-        // hitpoints 1.33/damage is /3, defensive-cast defence 1/damage is /4.
+        // OSRS pays 4 XP per damage to a melee or ranged style, and the other
+        // hit skills are fixed fractions of that same 4 XP: magic 2 (4/2),
+        // hitpoints 1.33 (4/3), defensive-autocast magic 1.33 (4/3) and
+        // defensive-autocast defence 1 (4/4). Multiply by the base before
+        // dividing so low hits are not floored away.
+        // Some NPCs give less (the Gemstone Crab 87.5%: 3.5 per damage).
+        const target = hit.getTarget?.();
+        const OSRS_DAMAGE_XP = 4 * (target?.isNpc?.() ? target.getAsNpc().getCombatXpMultiplier?.() ?? 1 : 1);
         // Add magic exp, even if total damage is 0.
         // Since spells have a base exp reward
         if (hit.getCombatType() === CombatType.MAGIC) {
@@ -767,7 +924,7 @@ export class CombatFactory {
                     if (!defensiveMagicSplit) {
                         player.getSkillManager().addExperience(
                             Skill.MAGIC,
-                            Math.floor(hitDamage / 2)/* + player.getCombat().getPreviousCast().baseExperience() */,
+                            Math.floor((hitDamage * OSRS_DAMAGE_XP) / 2)/* + player.getCombat().getPreviousCast().baseExperience() */,
                             true
                         );
                     }
@@ -783,8 +940,8 @@ export class CombatFactory {
             return;
         }
 
-        // Add hp xp
-        player.getSkillManager().addExperience(Skill.HITPOINTS, Math.floor(hitDamage / 3), true);
+        // Add hp xp (1.33/damage)
+        player.getSkillManager().addExperience(Skill.HITPOINTS, Math.floor((hitDamage * OSRS_DAMAGE_XP) / 3), true);
 
         // Magic xp was already added
         if (hit.getCombatType() === CombatType.MAGIC) {
@@ -792,19 +949,19 @@ export class CombatFactory {
                 return;
             }
             // Defensive casting is not an even split: 1.33 magic / 1.0 defence.
-            player.getSkillManager().addExperience(Skill.MAGIC, Math.floor(hitDamage / 3), true);
-            player.getSkillManager().addExperience(Skill.DEFENCE, Math.floor(hitDamage / 4), true);
+            player.getSkillManager().addExperience(Skill.MAGIC, Math.floor((hitDamage * OSRS_DAMAGE_XP) / 3), true);
+            player.getSkillManager().addExperience(Skill.DEFENCE, hitDamage, true);
             return;
         }
 
-        // Add all other skills xp
+        // Add all other skills xp (4/damage, split across the styles)
         let exp = hitSkills;
         for (let i of exp) {
             let skill = Skill.values()[i];
             if (!skill) {
                 continue;
             }
-            player.getSkillManager().addExperience(skill, Math.floor(hitDamage / exp.length), true);
+            player.getSkillManager().addExperience(skill, Math.floor((hitDamage * OSRS_DAMAGE_XP) / exp.length), true);
         }
     }
 
@@ -876,17 +1033,18 @@ export class CombatFactory {
         let returnDmg = Math.floor(Math.random() * 3) + 1 === 2 ? 0 : (damage * RECOIL_DMG_MULTIPLIER) + 1;
 
         // Increase recoil damage for a player.
-        player.setRecoilDamage(player.getRecoilDamage() + returnDmg);
+        const recoilDamage = Number(player.getAttribute(CombatFactory.RECOIL_DAMAGE_ATTRIBUTE) ?? 0) + returnDmg;
+        player.setAttribute(CombatFactory.RECOIL_DAMAGE_ATTRIBUTE, recoilDamage);
 
         // Deal damage back to attacker
         attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED)]);
 
         // Degrading ring of recoil for a player.
-        if (player.getRecoilDamage() >= 40) {
+        if (recoilDamage >= 40) {
             player.getEquipment().set(Equipment.RING_SLOT, new Item(-1));
             player.getEquipment().refreshItems();
             player.sendMessage("Your ring of recoil has degraded.");
-            player.setRecoilDamage(0);
+            player.setAttribute(CombatFactory.RECOIL_DAMAGE_ATTRIBUTE, 0);
         }
     }
 
@@ -942,8 +1100,11 @@ export class CombatFactory {
             return;
         }
 
-        CombatFactory.skull(attacker, SkullType.WHITE_SKULL, 300);
+        // Wiki: a white skull lasts 30 minutes after attacking a player.
+        CombatFactory.skull(attacker, SkullType.WHITE_SKULL, CombatFactory.PVP_SKULL_SECONDS);
     }
+
+    public static readonly PVP_SKULL_SECONDS = 30 * 60;
 
     static skull(player: Player, type: SkullType, seconds: number) {
         player.setSkullType(type);
@@ -1163,26 +1324,29 @@ export class CombatFactory {
         return true;
     }
 
-    public static decrementAmmo(player: Player, pos: Location, amount: number) {
+    /** Fired ammunition has a 20% chance to break on impact; the rest lands on the floor. */
+    private static readonly AMMO_BREAK_CHANCE = 20;
+
+    /**
+     * @param delayTicks the shot's flight time in ticks. The outcome is rolled now but the
+     *   count and the floor drop only apply when the projectile lands, so the quiver matches
+     *   the hitsplat instead of emptying at the bowstring.
+     */
+    public static decrementAmmo(player: Player, pos: Location, amount: number, delayTicks = 0) {
         // Get the ranged weapon data
         const rangedWeapon = player.getCombat().getRangedWeapon();
 
-        // Determine which slot we are decrementing ammo from.
-        let slot = Equipment.AMMUNITION_SLOT;
-
-        // Thrown weapons consume ammunition from the weapon slot.
-        if (CombatFactory.usesWeaponSlotAmmo(rangedWeapon)) {
-            slot = Equipment.WEAPON_SLOT;
-        }
-
-        let accumalator = player.getEquipment().get(Equipment.CAPE_SLOT).getId() == 10499;
-        if (accumalator) {
-            if (Misc.getRandom(12) <= 9) {
-                return;
-            }
-        }
-
+        // Plugin-owned ammunition (toxic blowpipe scales, the Gauntlet's bows) consumes itself.
         if (PluginManager.decrementRangedAmmo(player, pos, amount)) {
+            return;
+        }
+
+        if (
+            rangedWeapon === RangedWeapon.WEBWEAVER_BOW ||
+            rangedWeapon === RangedWeapon.CRAWS_BOW ||
+            rangedWeapon === RangedWeapon.TONALZTICS_OF_RALOS
+        ) {
+            // TODO: consume a revenant ether / charge; charge storage is not modelled yet.
             return;
         }
 
@@ -1192,12 +1356,9 @@ export class CombatFactory {
             if (!isChargedCrystalBow(weaponId)) {
                 return;
             }
-            if (player.getCrystalBowTrackedStageItemId() !== weaponId) {
-                player.setCrystalBowTrackedStageItemId(weaponId);
-                player.setCrystalBowShotsInStage(0);
-            }
-
-            let shotsInStage = Number(player.getCrystalBowShotsInStage() ?? 0);
+            let shotsInStage = player.getAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE) === weaponId
+                ? Number(player.getAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE) ?? 0)
+                : 0;
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 shotsInStage += 1;
@@ -1213,8 +1374,8 @@ export class CombatFactory {
                 weaponItem.setId(nextWeaponId);
             }
 
-            player.setCrystalBowTrackedStageItemId(currentWeaponId);
-            player.setCrystalBowShotsInStage(shotsInStage);
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, currentWeaponId);
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, shotsInStage);
             player.getEquipment().refreshItems();
             BonusManager.update(player);
             player.getUpdateFlag().flag(Flag.APPEARANCE);
@@ -1225,34 +1386,73 @@ export class CombatFactory {
             return;
         }
 
-        player.getEquipment().get(slot).decrementAmountBy(amount);
+        // Determine which slot we are decrementing ammo from.
+        // Thrown weapons consume ammunition from the weapon slot.
+        let slot = Equipment.AMMUNITION_SLOT;
+        if (CombatFactory.usesWeaponSlotAmmo(rangedWeapon)) {
+            slot = Equipment.WEAPON_SLOT;
+        }
+        const ammoItem = player.getEquipment().get(slot);
 
-        // Drop arrows if the player isn't using an accumalator
-        if (player.getCombat().getAmmunition().dropOnFloor()) {
-            if (!accumalator) {
-                /*
-                for(let i = 0; i < amount; i++) {
-                    GroundItemManager.spawnGroundItem(player,
-                    new GroundItem(new Item(player.getEquipment().get(slot).getId()), pos,
-                    player.getUsername(), false, 120, true, 120));
+        // Per shot: 20% break, (80 - recovery)% land on the floor where the target stood,
+        // the rest is recovered by a plugin (Ava's devices).
+        const recovery = PluginManager.rangedAmmoRecovery(player);
+        const dropChance = 80 - recovery;
+        let lost = 0;
+        let dropped = 0;
+        for (let shot = 0; shot < amount; shot++) {
+            const roll = Misc.getRandom(99); // 0..99
+            if (roll < CombatFactory.AMMO_BREAK_CHANCE) {
+                lost++;
+            } else if (roll < CombatFactory.AMMO_BREAK_CHANCE + dropChance) {
+                dropped++;
+            }
+            // Otherwise the device recovered it before it hit the floor.
+        }
+
+        const apply = () => {
+            // A swap mid-flight moved this stack out of the slot; don't touch the new one.
+            if (player.getEquipment().get(slot) !== ammoItem) {
+                return;
+            }
+
+            if (dropped > 0 && pos) {
+                ItemOnGroundManager.registerLocation(player, new Item(ammoItem.getId(), dropped), pos);
+            }
+
+            const consumed = lost + dropped;
+            if (consumed > 0) {
+                ammoItem.decrementAmountBy(consumed);
+            }
+
+            // If we are at 0 ammo remove the item from the equipment completely.
+            if (ammoItem.getAmount() == 0) {
+                player.sendMessage("You have run out of ammunition!");
+                player.getEquipment().set(slot, new Item(-1));
+
+                if (slot == Equipment.WEAPON_SLOT) {
+                    WeaponInterfaceManager.assign(player);
+                    player.getUpdateFlag().flag(Flag.APPEARANCE);
                 }
-                */
             }
+
+            // Refresh the equipment interface.
+            player.getEquipment().refreshItems();
+        };
+
+        if (delayTicks > 0) {
+            TaskManager.submit(new (class extends Task {
+                constructor() {
+                    super(delayTicks);
+                }
+                execute(): void {
+                    apply();
+                    this.stop();
+                }
+            })());
+        } else {
+            apply();
         }
-
-        // If we are at 0 ammo remove the item from the equipment completely.
-        if (player.getEquipment().get(slot).getAmount() == 0) {
-            player.sendMessage("You have run out of ammunition!");
-            player.getEquipment().set(slot, new Item(-1));
-
-            if (slot == Equipment.WEAPON_SLOT) {
-                WeaponInterfaceManager.assign(player);
-                player.getUpdateFlag().flag(Flag.APPEARANCE);
-            }
-        }
-
-        // Refresh the equipment interface.
-        player.getEquipment().refreshItems();
     }
 
     private static usesWeaponSlotAmmo(rangedWeapon: RangedWeapon): boolean {

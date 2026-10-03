@@ -293,6 +293,7 @@ function awardConditionalDrops({ killer, npc }) {
 
 module.exports = {
   name: "KalphiteQueen",
+  members: true,
   register(api) {
     TaskManager = api.getTaskManager();
     ItemOnGroundManager = api.getItemOnGroundManager();

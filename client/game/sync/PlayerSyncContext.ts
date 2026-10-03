@@ -25,6 +25,8 @@ export interface PlayerSyncState {
         directions: number[];
         /** True when the movement stream encoded a 2-tile displacement. */
         movedTwoTiles: boolean;
+        /** A teleport (possibly onto another plane), not a walk or run step. */
+        teleport?: boolean;
     };
 
     /**

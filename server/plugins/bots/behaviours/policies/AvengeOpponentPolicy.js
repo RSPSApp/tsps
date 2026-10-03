@@ -12,6 +12,8 @@ const {
   ATTR_RECRUIT_OWNER_USERNAME,
 } = require("../../runtime/BotRecruitConstants");
 
+const CLAN_CHAT_ATTRIBUTE = "clan-chat:channel";
+
 const IMMEDIATE_PJ_DURATION_MS = 30000;
 
 class AvengeOpponentPolicy {
@@ -68,8 +70,8 @@ class AvengeOpponentPolicy {
     if (bot.getAttribute?.(ATTR_RECRUIT_OWNER_USERNAME) === candidate.getUsername?.()) {
       return true;
     }
-    const botClan = bot.getCurrentClanChat?.();
-    return botClan != null && candidate.getCurrentClanChat?.() === botClan;
+    const botClan = bot.getAttribute?.(CLAN_CHAT_ATTRIBUTE);
+    return botClan != null && candidate.getAttribute?.(CLAN_CHAT_ATTRIBUTE) === botClan;
   }
 
   resolveRealPlayerTarget(bot, realDamagerEntries, distanceTiles) {

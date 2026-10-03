@@ -70,7 +70,7 @@ class MaintainCombatBoostsActionNode {
     const resolved = resolveBotNodeContext(context, this.botStatesByName, {
       requiredMode: "pvp",
       requireNotBusy: false,
-      requireNotInCombat: false,
+      requireNotInCombat: true, // Preserve enemy stat drains until the fight ends.
       requireNoTraversalTransition: false,
     });
     if (!resolved) {

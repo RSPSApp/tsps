@@ -56,7 +56,7 @@ references/deobfuscator/cache
 public/map-images
 .idea
 references
-mcp
+/mcp
 AGENTS.md
 toolkit
 CLAUDE.md

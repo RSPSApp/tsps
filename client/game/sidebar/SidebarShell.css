@@ -1,7 +1,7 @@
 .rl-sidebar-root {
     --sidebar-panel-width: min(320px, calc(100vw - 28px));
     --sidebar-toggle-width: 24px;
-    --sidebar-toggle-height: 118px;
+    --sidebar-toggle-height: 59px;
     --sidebar-close-size: 44px;
     --sidebar-edge-gap: 14px;
     --sidebar-shell-gap: 12px;
@@ -476,6 +476,17 @@
     font-size: 12px;
 }
 
+/* Mobile: the edge toggle only needs to fit the chevron plus a little padding,
+   and sits level with the minimap/orb cluster instead of the desktop 30%. */
+.game-viewport-mobile .rl-sidebar-root {
+    --sidebar-toggle-width: 16px;
+    --sidebar-toggle-height: 30px;
+}
+
+.game-viewport-mobile .rl-sidebar-toggle {
+    top: 20%;
+}
+
 @media (max-width: 960px) {
     .rl-sidebar-root {
         --sidebar-panel-width: min(292px, calc(100vw - 24px));
@@ -496,7 +507,7 @@
         --sidebar-edge-gap: 10px;
         --sidebar-shell-gap: 8px;
         --sidebar-toggle-width: 22px;
-        --sidebar-toggle-height: 102px;
+        --sidebar-toggle-height: 51px;
         --sidebar-close-size: 42px;
     }
 

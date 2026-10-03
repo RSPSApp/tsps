@@ -107,21 +107,26 @@ export class Autocasting {
 
     public static setAutocast(player: Player, spell: CombatSpell | null): void {
         player.getCombat().setAutocastSpell(spell);
-        if (!player.getEquipment().hasStaffEquipped() && spell != null) {
+        const activeSpell = player.getEquipment().hasStaffEquipped() ? spell : null;
+        if (activeSpell == null && spell != null) {
             player.sendMessage("Default spell set. Please equip a staff to use autocast.");
-            return;
         }
 
+        this.refreshIndicators(player);
+        getBonusManager().update(player);
+        if (activeSpell != null) {
+            const childId = player.getFightType()?.getChildId?.() ?? FightType.STAFF_POUND.getChildId();
+            player.getPacketSender().sendConfig(FightType.STAFF_BASH.getParentId(), childId);
+        }
+    }
+
+    public static refreshIndicators(player: Player): void {
+        const spell = player.getEquipment().hasStaffEquipped() ? player.getCombat().getAutocastSpell() : null;
         const defensive = player.getFightType()?.getStyle?.() === FightStyle.DEFENSIVE;
         player.getPacketSender()
             .sendVarbit(275, spell == null ? 0 : 1)
             .sendVarbit(276, spell == null ? 0 : this.resolveAutocastIndex(spell))
             .sendVarbit(2668, spell != null && defensive ? 1 : 0);
-        getBonusManager().update(player);
-        if (spell != null) {
-            const childId = player.getFightType()?.getChildId?.() ?? FightType.STAFF_POUND.getChildId();
-            player.getPacketSender().sendConfig(FightType.STAFF_BASH.getParentId(), childId);
-        }
     }
 
     private static resolveAutocastIndex(spell: CombatSpell): number {

@@ -1,4 +1,5 @@
 import { MenuTargetType, type OsrsMenuEntry } from "../../rs/MenuEntry";
+import { ClientState } from "../../game/ClientState";
 import { MenuAction, inferMenuAction } from "./MenuAction";
 import type { MenuClickContext, SimpleMenuEntry } from "./MenuEngine";
 import { normalizeMenuEntries } from "./MenuEngine";
@@ -89,9 +90,15 @@ export function formatActorNameWithLevel(
     return out;
 }
 
-function appendDebugIdLabel(target: string | undefined, itemId: number | undefined): string | undefined {
+function appendDebugIdLabel(
+    target: string | undefined,
+    itemId: number | undefined,
+    position?: { x: number; y: number },
+): string | undefined {
     if (typeof itemId !== "number" || !Number.isFinite(itemId) || itemId < 0) return target;
-    const idLabel = `ID: ${Math.trunc(itemId)}`;
+    let idLabel = `ID: ${Math.trunc(itemId)}`;
+    // Objects carry their tile; append the world x,y after the ID for developers.
+    if (position) idLabel += ` ${position.x},${position.y}`;
     return target && target.length ? `${target} (${idLabel})` : idLabel;
 }
 
@@ -167,7 +174,16 @@ export function osrsTargetLabel(e: OsrsMenuEntry, opts: TargetLabelOptions = {})
             e.targetType === MenuTargetType.OBJ ||
             e.targetType === MenuTargetType.ITEM)
     ) {
-        t = appendDebugIdLabel(t, e.targetId) ?? t;
+        const position =
+            e.targetType === MenuTargetType.LOC &&
+            typeof e.mapX === "number" &&
+            typeof e.mapY === "number"
+                ? {
+                      x: (ClientState.baseX | 0) + (e.mapX | 0),
+                      y: (ClientState.baseY | 0) + (e.mapY | 0),
+                  }
+                : undefined;
+        t = appendDebugIdLabel(t, e.targetId, position) ?? t;
     }
     return t;
 }

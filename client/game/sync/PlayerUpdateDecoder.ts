@@ -4,6 +4,7 @@ import {
     directionToDelta,
     runDirectionToDelta,
 } from "../../common/Direction";
+import { ClientState } from "../ClientState";
 import { BitStream } from "./BitStream";
 import { getPlayerSyncHuffman } from "./HuffmanProvider";
 import { PlayerSyncContext, type PlayerSyncState } from "./PlayerSyncContext";
@@ -73,9 +74,11 @@ export class PlayerUpdateDecoder {
 
     /**
      * Returns true when a tile coordinate is outside the current 104x104 scene window.
-     * Guards against invalid deltas that would corrupt path queues.
+     * Guards against invalid deltas that would corrupt path queues. A tile in a world entity's
+     * own scene (a boat deck) is never outside: the window is the main scene's.
      */
     private isOutsideScene(context: PlayerSyncContext, tileX: number, tileY: number): boolean {
+        if (ClientState.isWorldEntityTile(tileX | 0, tileY | 0)) return false;
         const localX = (tileX | 0) - (context.baseX | 0);
         const localY = (tileY | 0) - (context.baseY | 0);
         return localX < 0 || localX >= SCENE_SIZE || localY < 0 || localY >= SCENE_SIZE;
@@ -251,8 +254,10 @@ export class PlayerUpdateDecoder {
             state.active = true;
         }
         const isLocal = (context.localIndex | 0) === (index | 0);
+        // The main scene's edges only apply off a world entity: a deck tile is never near them.
         const localOutOfBounds =
             isLocal &&
+            !ClientState.isWorldEntityTile(state.tileX | 0, state.tileY | 0) &&
             ((state.tileX | 0) - (context.baseX | 0) < 12 ||
                 (state.tileX | 0) - (context.baseX | 0) >= 92 ||
                 (state.tileY | 0) - (context.baseY | 0) < 12 ||
@@ -386,6 +391,7 @@ export class PlayerUpdateDecoder {
                 tileY: targetY,
                 directions: [],
                 movedTwoTiles: false,
+                teleport: true,
             };
         } else {
             this.applyMultiStepDelta(
@@ -591,6 +597,19 @@ export class PlayerUpdateDecoder {
                 }
                 if ((mask & PlayerUpdateMask.ForceMovement) !== 0) {
                     const fm = this.readForcedMovement(stream, clientCycle);
+                    // A teleport in the same update (such as climbing onto a roof, then a forced
+                    // move along it) still has to land first, or the level change is lost and
+                    // the player is drawn on the old plane until they next move.
+                    if (state.pendingMove?.teleport) {
+                        movements.push({
+                            index,
+                            mode: "teleport",
+                            tile: { x: state.pendingMove.tileX, y: state.pendingMove.tileY, level: state.level },
+                            subX: toSubCoord(state.pendingMove.tileX),
+                            subY: toSubCoord(state.pendingMove.tileY),
+                            snap: true,
+                        });
+                    }
                     const baseX = state.pendingMove ? state.pendingMove.tileX : state.tileX;
                     const baseY = state.pendingMove ? state.pendingMove.tileY : state.tileY;
                     fm.startTileX = (baseX + (fm.startDeltaX | 0)) | 0;

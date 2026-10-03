@@ -56,7 +56,7 @@ export class RegionManager {
                 }
             }
         }
-        console.info(`[collision] indexed ${RegionManager.regions.size} cache regions`);
+        console.debug(`[collision] indexed ${RegionManager.regions.size} cache regions`);
     }
 
     public static getRegionid(regionId: number): Region | undefined {

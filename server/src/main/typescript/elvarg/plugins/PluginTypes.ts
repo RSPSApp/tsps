@@ -116,6 +116,28 @@ export interface PluginNpcInteractionEvent {
   handled: boolean;
 }
 
+export interface PluginNpcRouteEvent extends PluginNpcInteractionEvent {
+  range: number;
+}
+
+/** Context handed to dialogue plugins when a Talk-to transcript is about to play. */
+export interface PluginNpcDialogueContext {
+  player: any;
+  npc: any;
+  npcId: number;
+  definition?: NpcDefinition;
+  /** Transcript pages registered for this NPC id, with the variant names each page offers. */
+  pages: Array<{ page: string; variants: string[] }>;
+}
+
+/** A wiki prose condition the dialogue runtime needs a plugin to answer. */
+export interface PluginNpcDialogueConditionEvent extends PluginNpcDialogueContext {
+  /** The wiki prose, e.g. "If the player already has the necessary items:". */
+  text: string;
+  /** Anchor id of the condition step, when the export provides one. */
+  stepId?: string;
+}
+
 export interface PluginNpcInteractionTeleportLocation {
   x: number;
   y: number;
@@ -152,16 +174,102 @@ export interface PluginNpcBeforeDeathEvent {
   preventDeath: boolean;
 }
 
+/**
+ * Fired as an incoming hit resolves on an NPC, before damage is applied.
+ * Handlers mutate the pending hit directly (damage, hitsplats).
+ */
+export interface PluginNpcHitModifyEvent {
+  npc: any;
+  hit: any;
+}
+
+/** Rectangular player zone for onZoneEnter/onZoneExit; omit `levels` for all planes. */
+export interface PluginZone {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  levels?: number[];
+}
+
+export interface PluginZoneEvent {
+  player: any;
+  zone: PluginZone;
+}
+
+export interface PluginNpcSpawnDefinition {
+  id: number;
+  x: number;
+  y: number;
+  z?: number;
+  wanderRadius?: number;
+  face?: number;
+  owner?: any;
+  /** Hide the NPC from everyone except `owner` (quest instances). */
+  ownerOnly?: boolean;
+}
+
 export interface PluginCanAttackEvent {
   attacker: any;
   target: any;
+  /** The attacking combat method, so handlers can allow/deny per style. */
+  method?: any;
   allow: boolean | null;
 }
 
 export interface PluginCanTeleportEvent {
   player: any;
   wildernessLevelLimit?: number;
+  /** Where the teleport lands, when the caller knows it. */
+  destination?: any;
   allow: boolean | null;
+}
+
+/** Inventory item click, item-on-X use or spell-on-item; allow=false drops the packet. */
+export interface PluginCanUseItemEvent {
+  player: any;
+  itemId: number;
+  /** "action", "use", "magic", or "bonus" (worn item's stats being counted; no message expected). */
+  action: string;
+  /** The clicked menu option for "action" (e.g. "Drop", "Examine"). */
+  option?: string;
+  allow: boolean | null;
+}
+
+export interface PluginCanGainExperienceEvent {
+  player: any;
+  skill: any;
+  experience: number;
+  allow: boolean | null;
+}
+
+/** Fired per npc-spawns definition at load; allow=false skips the spawn. */
+export interface PluginCanSpawnNpcEvent {
+  npcId: number;
+  location: any;
+  allow: boolean | null;
+}
+
+/** Fired per shop stock entry at load; allow=false drops it from the shop. */
+export interface PluginCanStockItemEvent {
+  shopId: number;
+  itemId: number;
+  allow: boolean | null;
+}
+
+export interface PluginPrayerDisabledEvent {
+  player: any;
+  prayer: any;
+  disabled: boolean | null;
+  /** Shown to the player when disabled is true. */
+  message?: string;
+}
+
+export interface PluginCanLogoutEvent {
+  player: any;
+  allow: boolean | null;
+  /** Shown to the player when allow is false. */
+  reason?: string;
 }
 
 export interface PluginCanEatEvent {
@@ -194,6 +302,19 @@ export interface PluginTradeRequestEvent {
   player: any;
   target: any;
   handled: boolean;
+}
+
+/**
+ * Fires once per player when a trade completes, after the offered items have
+ * changed hands and before either player is saved. `received` and `given` are
+ * the item stacks this player gained and handed over; mutating the player's
+ * containers here (e.g. converting a bond to its untradeable form) is saved.
+ */
+export interface PluginTradeCompletedEvent {
+  player: any;
+  partner: any;
+  received: any[];
+  given: any[];
 }
 
 /** Fires after a player successfully starts following another player (right-click Follow). Observer only - the follow itself already happened. */
@@ -302,6 +423,8 @@ export interface PluginSpellDisabledEvent {
   player: any;
   spellbook: any;
   spellId: number;
+  /** The Spell being cast, when the caller has it (e.g. spell.isMembers()). */
+  spell?: any;
   disabled: boolean | null;
 }
 
@@ -461,6 +584,8 @@ export interface PluginInterfaceActionClickEvent {
   sourceSlot?: number;
   sourceItemId?: number;
   argsData?: Buffer;
+  /** Sent by a cache script (if_triggeroplocal) rather than a click; its arguments are in argsData. */
+  scriptTrigger?: boolean;
   handled: boolean;
 }
 
@@ -474,6 +599,22 @@ export interface PluginCombatEngine {
 
 export interface PluginCombatMethodResolver {
   resolve(attacker: any): any | null;
+}
+
+export interface PluginCombatSpecialDefinition {
+  id: string;
+  itemIds: number[];
+  drainAmount: number;
+  strengthMultiplier: number;
+  accuracyMultiplier: number;
+  combatMethod: any;
+  weaponInterface?: any;
+  /** Open, plugin-owned data; core never interprets it. */
+  metadata?: Record<string, unknown>;
+  /** Roll overrides applied by core while this special is active. */
+  traits?: Record<string, unknown>;
+  /** Per-variant energy cost override, keyed by item id. */
+  drainAmountByItemId?: Record<number, number>;
 }
 
 export interface PluginNpcCombatMethodProvider {
@@ -523,6 +664,12 @@ export interface PluginRangedAmmoHandler {
   decrementAmmo(player: any, pos: any, amount: number): boolean;
 }
 
+/** A share of fired ammunition recovered before it lands, e.g. by an Ava's device. */
+export interface PluginRangedAmmoRecovery {
+  /** Percentage (0-100) recovered for this player, or null to fall through. */
+  recovery(player: any): number | null;
+}
+
 export interface PluginRangedCombatModifier {
   modifyMaxHit(attacker: any, target: any, maxHit: number): number | null;
   modifyAttackRoll(attacker: any, target: any, attackRoll: number): number | null;
@@ -538,6 +685,16 @@ export interface PluginApi {
   onFriendAdd(handler: (event: PluginFriendEvent) => void): void;
   onFriendRemove(handler: (event: PluginFriendEvent) => void): void;
   onPlayerProcess(handler: (event: PluginPlayerProcessEvent) => void): void;
+  /** Fires when a player enters a rectangular zone (levels omitted = all planes). */
+  onZoneEnter(zone: PluginZone, handler: (event: PluginZoneEvent) => void): void;
+  /** Fires when a player leaves a rectangular zone. */
+  onZoneExit(zone: PluginZone, handler: (event: PluginZoneEvent) => void): void;
+  /**
+   * Spawns an NPC from a plugin. `ownerOnly` keeps it visible (and aggressive)
+   * only for `owner`, for instanced/quest spawns. Returns the NPC or null.
+   */
+  spawnNpc(definition: PluginNpcSpawnDefinition): any;
+  removeNpc(npc: any): void;
   onPlayerLevelUp(handler: (event: PluginPlayerLevelUpEvent) => void): void;
   /** Subscribes to an exact namespaced plugin event, such as `mining:success`. */
   onCustomEvent(
@@ -556,6 +713,8 @@ export interface PluginApi {
     actions: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>
   ): void;
   onNpcInteraction(handler: (event: PluginNpcInteractionEvent) => void): void;
+  /** Set a non-combat NPC option's approach range before movement starts. */
+  onNpcRoute(handler: (event: PluginNpcRouteEvent) => void): void;
   /** Exact, case-sensitive NPC name and option matching. Return false to fall through. */
   onNpcInteraction(
     npcName: string,
@@ -565,14 +724,30 @@ export interface PluginApi {
   onAnyNpcInteraction(
     actions: Record<string, (event: PluginNpcInteractionEvent) => void | boolean>
   ): void;
+  /**
+   * Pick which transcript variant a Talk-to should play, e.g. by quest stage.
+   * Return a variant name (or `{ page, variant }`); null/undefined falls through.
+   */
+  onNpcDialogueVariant(
+    handler: (event: PluginNpcDialogueContext) => string | { page?: string; variant: string } | null | undefined
+  ): void;
+  /**
+   * Answer a wiki prose condition step. Return true/false to choose the branch,
+   * or null/undefined to fall through (the runtime then defaults to the first branch).
+   */
+  onNpcDialogueCondition(
+    handler: (event: PluginNpcDialogueConditionEvent) => boolean | null | undefined
+  ): void;
   registerNpcInteraction(
     npcIds: number | number[],
     definition: PluginNpcInteractionDefinition
   ): void;
   onNpcDeath(handler: (event: PluginNpcDeathEvent) => void): void;
   onNpcBeforeDeath(handler: (event: PluginNpcBeforeDeathEvent) => void): void;
+  onNpcHitModify(handler: (event: PluginNpcHitModifyEvent) => void): void;
   onCanAttack(handler: (event: PluginCanAttackEvent) => void): void;
   onCanTeleport(handler: (event: PluginCanTeleportEvent) => void): void;
+  onCanLogout(handler: (event: PluginCanLogoutEvent) => void): void;
   onCanEat(handler: (event: PluginCanEatEvent) => void): void;
   onFiremakingBlocked(
     handler: (event: PluginFiremakingBlockedEvent) => void
@@ -580,6 +755,7 @@ export interface PluginApi {
   onCanDrink(handler: (event: PluginCanDrinkEvent) => void): void;
   onCanTrade(handler: (event: PluginCanTradeEvent) => void): void;
   onTradeRequest(handler: (event: PluginTradeRequestEvent) => void): void;
+  onTradeCompleted(handler: (event: PluginTradeCompletedEvent) => void): void;
   onPlayerFollow(handler: (event: PluginPlayerFollowEvent) => void): void;
   onPlayerAttack(handler: (event: PluginPlayerAttackEvent) => void): void;
   onCanBank(handler: (event: PluginCanBankEvent) => void): void;
@@ -595,6 +771,11 @@ export interface PluginApi {
     handler: (event: PluginPlayerDeathItemDropEvent) => void
   ): void;
   onCanEquip(handler: (event: PluginCanEquipEvent) => void): void;
+  onCanUseItem(handler: (event: PluginCanUseItemEvent) => void): void;
+  onCanGainExperience(handler: (event: PluginCanGainExperienceEvent) => void): void;
+  onCanSpawnNpc(handler: (event: PluginCanSpawnNpcEvent) => void): void;
+  onCanStockItem(handler: (event: PluginCanStockItemEvent) => void): void;
+  onPrayerDisabled(handler: (event: PluginPrayerDisabledEvent) => void): void;
   onCanUnequip(handler: (event: PluginCanUnequipEvent) => void): void;
   onPlayerDeath(handler: (event: PluginPlayerDeathEvent) => void): void;
   onPlayerOption(handler: (event: PluginPlayerOptionEvent) => void): void;
@@ -670,6 +851,12 @@ export interface PluginApi {
       string | ((player: any, optionIndex: number, optionText: string) => void)
     >
   ): boolean;
+  /**
+   * Reads an entry from world.json `pluginConfig` by key, e.g.
+   * `getPluginConfig("TutorialIsland:allowSkip", true)`. Returns `defaultValue`
+   * when the key is not set.
+   */
+  getPluginConfig<T = unknown>(key: string, defaultValue?: T): T;
   onButton(
     buttonIds: number | number[],
     handler: (event: PluginButtonClickEvent) => void | boolean
@@ -772,6 +959,8 @@ export interface PluginApi {
    * fix, not a capability change - see PluginApi doc comment for the
    * narrower-API follow-up.
    */
+  /** Shared core classes/helpers so content plugins avoid core relative requires. */
+  core: PluginCoreApi;
   getWorld(): any;
   getTaskManager(): any;
   getRegionManager(): any;
@@ -838,8 +1027,14 @@ export interface PluginApi {
   registerBonusProvider(provider: PluginBonusProvider): void;
   registerRangedAmmoResolver(resolver: PluginRangedAmmoResolver): void;
   registerRangedAmmoHandler(handler: PluginRangedAmmoHandler): void;
+  registerRangedAmmoRecovery(recovery: PluginRangedAmmoRecovery): void;
   registerRangedCombatModifier(modifier: PluginRangedCombatModifier): void;
   registerWeaponProfile(profile: WeaponCombatProfile): void;
+  /**
+   * Registers a weapon special attack. `id` is a stable plugin-chosen key (used by
+   * core for the granite maul queued-attack path and by cross-plugin lookups).
+   */
+  registerCombatSpecial(definition: PluginCombatSpecialDefinition): void;
   registerCombatMethodResolver(resolver: PluginCombatMethodResolver): void;
   /**
    * Registers a combat method provider for one or more NPC IDs.
@@ -854,8 +1049,105 @@ export interface PluginApi {
   ): void;
 }
 
+/**
+ * Core classes and static helpers exposed to plugins as a shared singleton
+ * (`api.core`), so content plugins never need `src/main/typescript/elvarg` paths.
+ * Typed as `any` on purpose: this is a deliberately thin, evolving surface.
+ */
+export interface PluginCoreApi {
+  MeleeCombatMethod: any;
+  RangedCombatMethod: any;
+  MagicCombatMethod: any;
+  CombatMethod: any;
+  CombatSpecial: any;
+  CombatFactory: any;
+  CombatType: any;
+  SkullType: any;
+  CombatConstants: any;
+  DamageFormulas: any;
+  PendingHit: any;
+  HitDamage: any;
+  HitMask: any;
+  RangedWeapon: any;
+  Ammunition: any;
+  WeaponProfiles: any;
+  FightStyle: any;
+  WeaponInterfaceManager: any;
+  PrayerHandler: any;
+  DuelRule: any;
+  RegionManager: any;
+  Animation: any;
+  Graphic: any;
+  GraphicHeight: any;
+  Priority: any;
+  Projectile: any;
+  Skill: any;
+  Item: any;
+  Flag: any;
+  Direction: any;
+  Equipment: any;
+  Bank: any;
+  Task: any;
+  CountdownTask: any;
+  ForceMovement: any;
+  ForceMovementTask: any;
+  TaskManager: any;
+  ItemIdentifiers: any;
+  NpcIdentifiers: any;
+  ObjectIdentifiers: any;
+  ShopIdentifiers: any;
+  Misc: any;
+  TimerKey: any;
+  Sound: any;
+  Sounds: any;
+  Location: any;
+  Boundary: any;
+  PolygonalBoundary: any;
+  Area: any;
+  World: any;
+  GameObject: any;
+  PrivateArea: any;
+  TemplatedInstanceArea: any;
+  ObjectManager: any;
+  OperationType: any;
+  LocModelType: any;
+  MapObjects: any;
+  ItemOnGroundManager: any;
+  ItemDefinition: any;
+  CacheDefinitions: any;
+  PathFinder: any;
+  NpcDefinition: any;
+  ObjectDefinition: any;
+  MagicSpellbook: any;
+  Spell: any;
+  CombatNormalSpell: any;
+  NPC: any;
+  GameConstants: any;
+  WorldDefinition: any;
+  TeleportHandler: any;
+  TeleportType: any;
+  DialogueChainBuilder: any;
+  NpcDialogue: any;
+  PlayerDialogue: any;
+  OptionDialogue: any;
+  StatementDialogue: any;
+  ItemStatementDialogue: any;
+  ActionDialogue: any;
+  EndDialogue: any;
+  CreationMenu: any;
+  PlayerRights: any;
+  Server: any;
+  PluginManager: any;
+  ShopManager: any;
+  MultiChatboxPrompt: any;
+  dispatchClientMessages: (player: any, messages: any[]) => boolean;
+  connectHeadlessClient: (username: string, password: string) => Promise<{ player?: any; error?: string }>;
+}
+
 export interface PluginModule {
   name: string;
   dependsOn?: string[];
+  /** Members content: not loaded when world.json sets membersWorld false. */
+  members?: boolean;
   register(api: PluginApi): void;
 }

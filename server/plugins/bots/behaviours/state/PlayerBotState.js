@@ -45,7 +45,6 @@ function createWoodcuttingBehaviorState() {
     target: null,
     nextActionAt: 0,
     nextSearchAt: 0,
-    nextDebugChatAt: 0,
     searchTarget: null,
   };
 }
@@ -55,7 +54,6 @@ function createMiningBehaviorState() {
     target: null,
     nextActionAt: 0,
     nextSearchAt: 0,
-    nextDebugChatAt: 0,
     searchTarget: null,
   };
 }
@@ -277,7 +275,6 @@ function clearWoodcuttingBehaviorState(state) {
   state.woodcutting.target = null;
   state.woodcutting.nextActionAt = 0;
   state.woodcutting.nextSearchAt = 0;
-  state.woodcutting.nextDebugChatAt = 0;
   state.woodcutting.searchTarget = null;
 }
 
@@ -288,7 +285,6 @@ function clearMiningBehaviorState(state) {
   state.mining.target = null;
   state.mining.nextActionAt = 0;
   state.mining.nextSearchAt = 0;
-  state.mining.nextDebugChatAt = 0;
   state.mining.searchTarget = null;
 }
 

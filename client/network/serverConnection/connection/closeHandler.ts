@@ -19,6 +19,7 @@ export function initSocketCloseHandler(ws: GameSocket, initConnection: (url: str
         // Clear the packet writer state.socket
         setPacketSocket(null);
         state.lastSkillsState = undefined;
+        state.lastSystemUpdate = undefined;
         state.playerSyncContext = null;
         state.playerUpdateDecoder = null;
         clearLoginConnectRetryTimer();

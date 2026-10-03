@@ -220,6 +220,8 @@ export function handleInboundSync(msg: any): boolean {
             const payload = msg.payload as any;
             const loopCycle = Number(payload?.loopCycle) | 0;
             const large = payload?.large === true;
+            const rootTileX = Number(payload?.rootTileX) | 0;
+            const rootTileY = Number(payload?.rootTileY) | 0;
             let buffer: Uint8Array;
             const pkt = payload?.packet;
             if (pkt instanceof Uint8Array) {
@@ -233,7 +235,7 @@ export function handleInboundSync(msg: any): boolean {
             if (!buffer || buffer.length === 0) return true;
             for (const cb of state.npcInfoListeners) {
                 try {
-                    cb({ loopCycle, large, packet: buffer });
+                    cb({ loopCycle, large, rootTileX, rootTileY, packet: buffer });
                 } catch (err) {
                     console.warn("npc_info listener error", err);
                 }

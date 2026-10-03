@@ -8,6 +8,7 @@ const {
 } = require("./widgetGroup");
 
 const GROUP_ID = 30005;
+const PENDING_ATTRIBUTE = "destroy-item:pending";
 const ITEM_FONT = 495; // p12_full
 const FANCY_FONT = 497; // q8_full
 const COMPONENT = {
@@ -184,7 +185,7 @@ function close(player) {
 
 function open(player, item, slot) {
   pendingDestroys.set(player, { itemId: item.getId(), amount: item.getAmount(), slot });
-  player.setDestroyItem(item.getId());
+  player.setAttribute(PENDING_ATTRIBUTE, item.getId());
   player
     .getPacketSender()
     .sendChatboxInterface(GROUP_ID)
@@ -194,7 +195,7 @@ function open(player, item, slot) {
 
 function pendingDestroy(player) {
   const pending = pendingDestroys.get(player);
-  if (!pending || player.getDestroyItem() !== pending.itemId) return undefined;
+  if (!pending || player.getAttribute(PENDING_ATTRIBUTE) !== pending.itemId) return undefined;
   if (!player.getPacketSender().isChatboxInterface(GROUP_ID)) return undefined;
   return pending;
 }

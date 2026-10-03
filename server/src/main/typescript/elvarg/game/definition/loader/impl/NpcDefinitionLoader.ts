@@ -21,6 +21,7 @@ type CombatStats = {
     poisonous?: boolean;
     venomous?: boolean;
     demon?: boolean;
+    members?: boolean;
     attackType?: CombatType;
     slayerLevel?: number;
     attackBonuses?: {
@@ -81,6 +82,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             poisonous: monster.poisonous === true,
             venomous: monster.venomous === true,
             demon: Array.isArray(monster.attributes) && monster.attributes.includes("demon"),
+            members: monster.members === true,
             attackType: NpcDefinitionLoader.resolveAttackType(monster.attack_type),
             slayerLevel:
                 monster.slayer_monster === true && monster.slayer_level > 0
@@ -229,6 +231,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     poisonous: stat.poisonous ?? definition.isPoisonous(),
                     venomous: stat.venomous ?? definition.isVenomous(),
                     demon: stat.demon ?? definition.isDemon(),
+                    members: stat.members ?? definition.isMembers(),
                     attackType: stat.attackType ?? definition.getAttackType(),
                     slayerLevel: stat.slayerLevel ?? definition.getSlayerLevel(),
                 });
@@ -252,7 +255,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                 });
             }
         }
-        console.info(
+        (mismatched > 0 ? console.warn : console.debug)(
             `[npc-definitions] cache-backed; configured stats applied=${applied}, mismatched=${mismatched}, ` +
             `service animations inferred=${inferredAnimations}, guessed=${guessedAnimations}`
         );

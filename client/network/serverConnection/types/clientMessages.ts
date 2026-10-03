@@ -16,6 +16,7 @@ type ClientToServer =
       }
     | { type: "walk"; payload: { to: { x: number; y: number }; run?: boolean } }
     | { type: "face"; payload: { rot?: number; tile?: { x: number; y: number } } }
+    | { type: "set_heading"; payload: { heading: number } }
     | { type: "teleport"; payload: { to: { x: number; y: number }; level?: number } }
     | {
           type: "handshake";

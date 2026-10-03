@@ -198,8 +198,12 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
             // Suppress the base cache-baked loc at this tile so a deregistered
             // object (e.g. a chopped tree) actually disappears - buildScene has
             // no other way to know a cache loc was removed.
-            const overrideKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
-            const existingOverride = host.locOverrides.get(overrideKey);
+            let overrideKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
+            let existingOverride = host.locOverrides.get(overrideKey);
+            if (typeof existingOverride?.matchType === "number" && existingOverride.matchType !== shape) {
+                overrideKey += `,${shape}`;
+                existingOverride = host.locOverrides.get(overrideKey);
+            }
             if (
                 existingOverride?.newId !== 0 ||
                 typeof existingOverride.matchType !== "number" ||
@@ -209,6 +213,11 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
                     newId: 0,
                     matchType: shape as LocModelType,
                 });
+            }
+
+            if (host.instanceActive) {
+                host.scheduleInstanceLocRebuild();
+                return;
             }
 
             const mapX = Math.floor(tile.x / 64);
@@ -252,7 +261,19 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
             if ((shape | 0) < 0) return;
             const exactKey = `${tile.x | 0},${tile.y | 0},${level | 0},${locId | 0}`;
             const matchKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
-            for (const key of [exactKey, matchKey]) {
+            // A loc the server added is found by its own id. The tile-wide key there holds
+            // the removal of the map's loc it replaced, which must survive the animation.
+            const added = host.addedLocs.get(`${tile.x | 0},${tile.y | 0},${level | 0},${shape | 0}`);
+            const onAddedLoc = added !== undefined && (added.locId | 0) === (locId | 0);
+            const keys = onAddedLoc ? [exactKey] : [exactKey, matchKey];
+            // A boat deck rebuilds its whole scene for an animation, so the same animation
+            // sent again while it plays (a salvaging hook's idle, every tick) only extends it.
+            const loops = locAnimationLoops(host, animId);
+            const repeating =
+                deckViewAt(host, tile) !== undefined &&
+                host.locOverrides.get(exactKey)?.seqId === (animId | 0) &&
+                (loops || host.locAnimTimers.has(exactKey));
+            for (const key of keys) {
                 const existingTimer = host.locAnimTimers.get(key);
                 if (existingTimer) {
                     clearTimeout(existingTimer);
@@ -283,20 +304,25 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
                 seqId: animId | 0,
                 seqRandomStart: false,
             });
-            host.locOverrides.set(matchKey, {
-                newId: -1,
-                newRotation: rotation & 0x3,
-                seqId: animId | 0,
-                seqRandomStart: false,
-                matchType: shape as LocModelType,
-                matchRotation: rotation & 0x3,
-            });
-            host.reloadLocAnimationTile(tile, locId);
+            if (!onAddedLoc) {
+                host.locOverrides.set(matchKey, {
+                    newId: -1,
+                    newRotation: rotation & 0x3,
+                    seqId: animId | 0,
+                    seqRandomStart: false,
+                    matchType: shape as LocModelType,
+                    matchRotation: rotation & 0x3,
+                });
+            }
+            if (!repeating) host.reloadLocAnimationTile(tile, locId);
 
+            // As in OSRS, a sequence with a frame step loops (or holds its last frames) until
+            // the loc is animated again or changed; only one without plays once and reverts.
+            if (loops) return;
             const durationMs = host.getLocAnimationDurationMs(animId);
             const timer = setTimeout(() => {
                 let changed = false;
-                for (const key of [exactKey, matchKey]) {
+                for (const key of keys) {
                     const current = host.locOverrides.get(key);
                     if (
                         current &&
@@ -312,16 +338,37 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
                     host.reloadLocAnimationTile(tile, locId);
                 }
             }, durationMs);
-            host.locAnimTimers.set(exactKey, timer);
-            host.locAnimTimers.set(matchKey, timer);
+            for (const key of keys) host.locAnimTimers.set(key, timer);
         } catch (err) {
             console.warn("onLocAnim error", err);
         }
     
 }
 
+/** The boat (world entity) whose deck scene holds a tile, if any. */
+/** Whether a loc animation keeps going: its sequence has a frame step to loop back by. */
+function locAnimationLoops(host: WebGLOsrsRendererHost, seqId: number): boolean {
+    try {
+        const seqType = host.osrsClient?.seqTypeLoader?.load(seqId | 0) as { frameStep?: number } | undefined;
+        return (seqType?.frameStep ?? -1) > 0;
+    } catch {
+        return false;
+    }
+}
+
+function deckViewAt(host: WebGLOsrsRendererHost, tile: { x: number; y: number }): number | undefined {
+    const view = host.osrsClient?.worldViewManager?.findWorldViewAt(tile.x | 0, tile.y | 0);
+    return view && host.worldEntityOverlays?.has(view.id) ? view.id : undefined;
+}
+
 export function reloadLocAnimationTile(host: WebGLOsrsRendererHost, tile: { x: number; y: number }, locId: number): void {
 
+        // A deck loc belongs to its boat's scene, which is rebuilt as a whole.
+        const deckView = deckViewAt(host, tile);
+        if (deckView !== undefined) {
+            host.scheduleWorldEntityLocRebuild(deckView);
+            return;
+        }
         const mapX = Math.floor((tile.x | 0) / 64);
         const mapY = Math.floor((tile.y | 0) / 64);
         if (host.instanceActive) {

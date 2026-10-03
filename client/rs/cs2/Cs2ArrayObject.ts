@@ -182,6 +182,19 @@ export class Cs2ArrayObject {
         return index;
     }
 
+    /** Sets `[start, end)` to first, first + 1, … (a negative bound means the array's edge). */
+    fillSequence(first: number, start: number, end: number): void {
+        this.ensureWritable();
+        if (this.valueType !== "int") {
+            throw new Error("RuntimeException");
+        }
+        const startIndex = start < 0 ? 0 : start;
+        const endIndex = end < 0 || end > this._length ? this._length : end;
+        for (let i = startIndex; i < endIndex; i++) {
+            this.values[i] = (first + i - startIndex) | 0;
+        }
+    }
+
     countMatches(value: any, start: number, end: number): number {
         const startIndex = start < 0 ? 0 : start;
         const endIndex = end < 0 || end > this._length ? this._length : end;

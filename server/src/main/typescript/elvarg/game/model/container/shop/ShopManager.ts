@@ -11,6 +11,7 @@ import { ItemIdentifiers } from "../../../../util/ItemIdentifiers";
 import { Misc } from "../../../../util/Misc";
 import { ShopIdentifiers } from "../../../../util/ShopIdentifiers";
 import { encodeShopClose, encodeShopOpen } from "../../../../net/protocol/ClientProtocol";
+import { PlayerSave } from "../../../entity/impl/player/persistence/PlayerSave";
 
 export interface ShopItemContainerAction {
     kind: "value" | "buy_sell" | "x";
@@ -25,6 +26,8 @@ export interface ShopCurrencyHandler {
     add(player: any, amount: number): void;
     remove(player: any, amount: number): void;
     name: string;
+    /** The inventory item the currency is paid in, if it is one. */
+    itemId?: number;
 }
 
 interface RuntimeShop {
@@ -68,6 +71,15 @@ export class ShopManager {
     private static readonly MAX_ACTION_AMOUNT = 5000;
     private static readonly SALES_TAX = 0.85;
     private static readonly BLOOD_MONEY_SHOP_IDS = [13, 14, 27];
+    /**
+     * The quantity row (Value, Buy-1/5/10/50) sets varbit 6348, which the
+     * cache scripts read to make an item's left-click "Value" or "Buy N".
+     */
+    private static readonly QUANTITY_VARBIT = 6348;
+    private static readonly QUANTITY_MODE_BY_BUTTON = new Map([[5, 0], [8, 1], [10, 2], [12, 3], [14, 4]]);
+    private static readonly QUANTITY_BY_MODE = [0, 1, 5, 10, 50];
+    private static readonly QUANTITY_MODE_ATTRIBUTE = "shop:quantity-mode";
+    private static readonly POINTS_ATTRIBUTE = "shop:points";
     private static readonly shopsById = new Map<number, RuntimeShop>();
     private static readonly activeShopByPlayer = new WeakMap<object, number>();
     private static readonly activeTargetByPlayer = new WeakMap<object, number>();
@@ -95,6 +107,7 @@ export class ShopManager {
             `Item ${itemId}`;
         const handler: ShopCurrencyHandler = {
             name,
+            itemId,
             amount: (player) =>
                 Number(player?.getInventory?.()?.getAmount?.(itemId) ?? 0),
             add: (player, amount) => player?.getInventory?.()?.adds?.(itemId, amount),
@@ -109,6 +122,7 @@ export class ShopManager {
     }
 
     public static initialize(): void {
+        PlayerSave.persistAttribute(this.QUANTITY_MODE_ATTRIBUTE);
         this.reload();
     }
 
@@ -255,16 +269,26 @@ export class ShopManager {
         slot?: number;
         itemId?: number;
     }): boolean {
-        if (!this.isOpen(player) || packet.slot == null) return false;
+        if (!this.isOpen(player)) return false;
+        const mode = this.QUANTITY_MODE_BY_BUTTON.get(packet.childId);
+        if (packet.groupId === this.MAIN_INTERFACE_ID && mode !== undefined) {
+            this.setQuantityMode(player, mode);
+            return true;
+        }
+        if (packet.slot == null) return false;
         const option = packet.option?.trim().toLowerCase() ?? "";
-        const amount = this.actionAmount(packet.buttonNum, option);
+        const selected = this.QUANTITY_BY_MODE[this.quantityMode(player)];
+        const amount = this.actionAmount(packet.buttonNum, option) ??
+            (packet.groupId === this.MAIN_INTERFACE_ID && packet.buttonNum === 1 && !option && selected > 0 ? selected : null);
         const examine = packet.buttonNum === 10 || option === "examine";
 
         if (packet.groupId === this.MAIN_INTERFACE_ID && packet.childId === 16) {
             const slot = packet.slot - 1;
             const shop = this.currentShop(player);
             const item = shop ? this.itemAtDisplaySlot(shop, slot) : null;
-            if (!item) return true;
+            // The stock can shift (sold-in items leave), so the clicked slot
+            // must still hold the item the client showed there.
+            if (!item || (packet.itemId != null && packet.itemId > 0 && packet.itemId !== item.itemId)) return true;
             if (examine) {
                 const definition = ItemDefinition.forId(item.itemId);
                 player.sendMessage(definition.getExamine() || definition.getName());
@@ -298,6 +322,35 @@ export class ShopManager {
             return true;
         }
         return false;
+    }
+
+    /** The player's open shop; `stock` is in display order, so an entry's index is its display slot. */
+    public static getOpenShop(player: any): {
+        name: string; currency: string; stock: Array<{ itemId: number; amount: number; price: number }>;
+    } | null {
+        const shop = this.currentShop(player);
+        if (!shop) return null;
+        return {
+            name: shop.definition.getName(),
+            currency: this.currencyName(shop.definition.getCurrency()),
+            stock: this.displayEntries(shop).map((entry) => ({
+                ...entry, price: this.itemPrice(shop, ItemDefinition.forId(entry.itemId)),
+            })),
+        };
+    }
+
+    private static quantityMode(player: any): number {
+        const mode = Number(player.getAttribute?.(this.QUANTITY_MODE_ATTRIBUTE) ?? 0);
+        return Number.isInteger(mode) && mode >= 0 && mode < this.QUANTITY_BY_MODE.length ? mode : 0;
+    }
+
+    private static setQuantityMode(player: any, mode: number): void {
+        player.setAttribute?.(this.QUANTITY_MODE_ATTRIBUTE, mode);
+        const shop = this.currentShop(player);
+        if (shop) {
+            // Reopening rebuilds the stock, and with it each item's left-click op.
+            this.openInterface(player, shop, false, this.activeTargetByPlayer.get(player) ?? ((161 << 16) | 16));
+        }
     }
 
     public static actionAmount(button: number, option?: string): number | null {
@@ -404,6 +457,7 @@ export class ShopManager {
         });
         player.setInterfaceId(this.MAIN_INTERFACE_ID);
         player.setStatus(PlayerStatus.SHOPPING);
+        sender.sendVarbit(this.QUANTITY_VARBIT, this.quantityMode(player));
         sender.sendSubInterface(targetUid, this.MAIN_INTERFACE_ID, 0)
             .sendSubInterface((161 << 16) | 79, this.SIDE_INTERFACE_ID, 1)
             .sendInterfaceScript(1074, [516, shop.definition.getName(), this.currencyItemId(shop.definition.getCurrency()), 0, 1])
@@ -442,11 +496,15 @@ export class ShopManager {
         }
     }
 
+    /**
+     * The stock in slot order. An item the shop stocks keeps its slot at 0
+     * when sold out, as in OSRS; items players sold in leave when gone.
+     */
     private static displayEntries(shop: RuntimeShop): DisplayEntry[] {
         const entries: DisplayEntry[] = [];
         for (const itemId of shop.order) {
             const amount = shop.stock.get(itemId) ?? 0;
-            if (amount > 0) {
+            if (amount > 0 || shop.originalAmounts.has(itemId)) {
                 entries.push({ itemId, amount });
             }
         }
@@ -469,6 +527,10 @@ export class ShopManager {
         fromShop: boolean,
         item?: any
     ): void {
+        if (!fromShop) {
+            // A note sells as the item it stands for.
+            itemId = ItemDefinition.forId(itemId).unNote();
+        }
         if (!fromShop && shop.definition.getCurrency() === "COINS" && this.isBloodMoneyShopItem(itemId)) {
             player.sendMessage("PK shop items cannot be sold for coins.");
             return;
@@ -519,8 +581,7 @@ export class ShopManager {
         if (quantity <= 0) {
             return;
         }
-        const stock = shop.stock.get(itemId) ?? 0;
-        const available = Math.max(0, stock - (this.deletesItems(shop) ? 0 : 1));
+        const available = shop.stock.get(itemId) ?? 0;
         if (available <= 0) {
             player.sendMessage(
                 "This item is currently out of stock. Come back later."
@@ -578,17 +639,19 @@ export class ShopManager {
         if (!Number.isInteger(itemId)) {
             return;
         }
-        if (shop.definition.getCurrency() === "COINS" && this.isBloodMoneyShopItem(itemId)) {
+        // A note sells as the item it stands for.
+        const stockId = ItemDefinition.forId(itemId).unNote();
+        if (shop.definition.getCurrency() === "COINS" && this.isBloodMoneyShopItem(stockId)) {
             player.sendMessage("PK shop items cannot be sold for coins.");
             return;
         }
-        if (!this.buysItem(shop, itemId)) {
+        if (!this.buysItem(shop, stockId)) {
             player.sendMessage(
                 "You cannot sell this item to this shop."
             );
             return;
         }
-        const definition = ItemDefinition.forId(itemId);
+        const definition = ItemDefinition.forId(stockId);
         if (!item.isSellable()) {
             player.sendMessage("This item cannot be sold.");
             return;
@@ -599,7 +662,17 @@ export class ShopManager {
         if (slot < 0) {
             return;
         }
-        let quantity = Math.min(this.normalizeAmount(amount), this.MAX_ACTION_AMOUNT, item.getAmount());
+        // A stack sells from its own slot; unstackable items (one per slot)
+        // start at the clicked slot and continue through the others.
+        const slots = item.getDefinition().isStackable()
+            ? [slot]
+            : [slot, ...inventory.getItems().map((_, index) => index).filter((index) => index !== slot)];
+        const sellable = slots.filter((index) => {
+            const held = inventory.getItems()[index];
+            return held?.getId() === itemId && held.isSellable();
+        });
+        const held = sellable.reduce((total, index) => total + inventory.getItems()[index].getAmount(), 0);
+        let quantity = Math.min(this.normalizeAmount(amount), this.MAX_ACTION_AMOUNT, held);
         if (quantity <= 0) {
             return;
         }
@@ -611,18 +684,30 @@ export class ShopManager {
             player.sendMessage("This item has no value.");
             return;
         }
-        if ((shop.stock.get(itemId) ?? 0) <= 0 && shop.order.length >= this.MAX_SHOP_ITEMS) {
+        if ((shop.stock.get(stockId) ?? 0) <= 0 && shop.order.length >= this.MAX_SHOP_ITEMS) {
             player.sendMessage("The shop is currently full.");
             return;
         }
 
-        inventory.deleteAtSlot(slot, quantity);
+        if (!this.canReceivePayment(player, shop.definition.getCurrency(), sellable, quantity)) {
+            player.sendMessage("You don't have enough inventory space.");
+            return;
+        }
+
+        let remaining = quantity;
+        for (const index of sellable) {
+            if (remaining <= 0) break;
+            const taken = Math.min(remaining, inventory.getItems()[index].getAmount());
+            inventory.deleteAtSlot(index, taken, false);
+            remaining -= taken;
+        }
+        inventory.refreshItems();
         this.addCurrency(
             player,
             shop.definition.getCurrency(),
             quantity * price
         );
-        this.addStock(shop, itemId, quantity);
+        this.addStock(shop, stockId, quantity);
         Sounds.sendSound(player, Sound.DROP_ITEM);
         this.refresh(shop.definition.getId());
         this.ensureRestockTask();
@@ -636,7 +721,7 @@ export class ShopManager {
             const original = shop.originalAmounts.get(itemId) ?? 0;
             const current = shop.stock.get(itemId) ?? 0;
             const decrease = current > original;
-            const increase = current < original && !this.isGeneralStore(shop);
+            const increase = current < original;
             if (!decrease && !increase) {
                 shop.changeTimers.delete(itemId);
                 continue;
@@ -711,11 +796,7 @@ export class ShopManager {
     private static removeStock(shop: RuntimeShop, itemId: number, amount: number): number {
         const quantity = this.normalizeAmount(amount);
         const current = shop.stock.get(itemId) ?? 0;
-        const removable = Math.max(
-            0,
-            current - (this.deletesItems(shop) ? 0 : 1)
-        );
-        const removed = Math.min(removable, quantity);
+        const removed = Math.min(current, quantity);
         if (removed <= 0) {
             return 0;
         }
@@ -746,8 +827,10 @@ export class ShopManager {
         return this.isGeneralStore(shop);
     }
 
+    /** General stores buy any item; the shop data only marks them by name. */
     private static isGeneralStore(shop: RuntimeShop): boolean {
-        return shop.definition.getId() === ShopIdentifiers.GENERAL_STORE;
+        return shop.definition.getId() === ShopIdentifiers.GENERAL_STORE ||
+            /general store/i.test(shop.definition.getName());
     }
 
     private static itemPrice(shop: RuntimeShop, definition: ItemDefinition): number {
@@ -764,7 +847,7 @@ export class ShopManager {
         const handler = this.currencyHandlers.get(currency);
         if (handler) return Math.max(0, handler.amount(player) | 0);
         if (currency === "POINTS") {
-            return Number(player.getPoints?.() ?? 0);
+            return Number(player.getAttribute(this.POINTS_ATTRIBUTE) ?? 0);
         }
         const itemId = this.currencyItemId(currency);
         return itemId > 0
@@ -787,7 +870,7 @@ export class ShopManager {
             return;
         }
         if (currency === "POINTS") {
-            player.setPoints((player.getPoints?.() ?? 0) + quantity);
+            player.setAttribute(this.POINTS_ATTRIBUTE, this.currencyAmount(player, currency) + quantity);
             return;
         }
         const itemId = this.currencyItemId(currency);
@@ -811,13 +894,26 @@ export class ShopManager {
             return;
         }
         if (currency === "POINTS") {
-            player.setPoints(Math.max(0, (player.getPoints?.() ?? 0) - quantity));
+            player.setAttribute(this.POINTS_ATTRIBUTE, Math.max(0, this.currencyAmount(player, currency) - quantity));
             return;
         }
         const itemId = this.currencyItemId(currency);
         if (itemId > 0) {
             player.getInventory().deleteNumber(itemId, quantity);
         }
+    }
+
+    /**
+     * Whether a sale's payment fits: the currency is not an inventory item,
+     * the player already holds some, a slot is free, or selling `quantity`
+     * from `slots` (in order) empties one.
+     */
+    private static canReceivePayment(player: any, currency: ShopCurrency, slots: number[], quantity: number): boolean {
+        const itemId = this.currencyHandlers.get(currency)?.itemId ?? this.currencyItemId(currency);
+        if (!(itemId > 0)) return true;
+        const inventory = player.getInventory();
+        if (inventory.containsNumber(itemId) || inventory.getFreeSlots() > 0) return true;
+        return slots.length > 0 && inventory.getItems()[slots[0]].getAmount() <= quantity;
     }
 
     private static currencyItemId(currency: ShopCurrency): number {

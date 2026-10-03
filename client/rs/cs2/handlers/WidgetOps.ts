@@ -239,6 +239,34 @@ function getWidgetParamValue(ctx: HandlerContext, widget: any, paramId: number):
     return raw !== undefined ? raw : getParamDefaultValue(ctx, paramId);
 }
 
+/**
+ * OSRS keeps every CC of a static component in that component's flat `children`
+ * array (nesting is only `parentChildIndex`). This client nests CCs created by
+ * cc_createchild under their CC parent, so index lookups against the static
+ * component must also search nested CCs to see the same flat index space.
+ */
+function findNestedDynamicChild(widget: WidgetNode, childIndex: number): WidgetNode | null {
+    if (!Array.isArray(widget.children)) return null;
+    for (const child of widget.children) {
+        if (!child) continue;
+        if (((child.childIndex ?? -1) | 0) === childIndex) return child;
+        const nested = findNestedDynamicChild(child, childIndex);
+        if (nested) return nested;
+    }
+    return null;
+}
+
+/** The static component a CC belongs to (OSRS `Widget.parentId` for CCs, however deeply nested). */
+function resolveStaticLayerUid(ctx: HandlerContext, widget: WidgetNode): number {
+    let uid = (widget.parentUid ?? -1) | 0;
+    for (let depth = 0; depth < 32 && uid !== -1; depth++) {
+        const parent = ctx.widgetManager.getWidgetByUid(uid);
+        if (!parent || ((parent.childIndex ?? -1) | 0) === -1) break;
+        uid = (parent.parentUid ?? -1) | 0;
+    }
+    return uid;
+}
+
 const WIDGET_QUERY_KEY = Symbol("widgetQuery");
 
 interface WidgetQueryState {
@@ -272,14 +300,6 @@ function initWidgetQuery(
         Array.isArray(widget.children)
             ? widget.children.filter((child): child is WidgetNode => !!child)
             : [];
-    const findByIndex = (widget: WidgetNode, childIndex: number): WidgetNode | null => {
-        for (const child of directChildren(widget)) {
-            if (((child.childIndex ?? -1) | 0) === childIndex) return child;
-            const nested = findByIndex(child, childIndex);
-            if (nested) return nested;
-        }
-        return null;
-    };
     const collect = (widget: WidgetNode, recursive: boolean): void => {
         for (const child of directChildren(widget)) {
             query.widgets.push(child);
@@ -294,7 +314,7 @@ function initWidgetQuery(
     }
 
     const anchor =
-        anchorWidget ?? (anchorIndex === -1 ? root : findByIndex(root, anchorIndex));
+        anchorWidget ?? (anchorIndex === -1 ? root : findNestedDynamicChild(root, anchorIndex));
     if (anchor) collect(anchor, mode === 2);
     return query;
 }
@@ -324,8 +344,10 @@ function getWidgetByUidAndChild(
     }
 
     // Dynamic children (CC_CREATE/CC_COPY path).
-    if (parent.children && childIndex >= 0 && childIndex < parent.children.length) {
-        const child = parent.children[childIndex] as WidgetNode | null;
+    if (parent.children && childIndex >= 0) {
+        const child =
+            (parent.children[childIndex] as WidgetNode | null) ??
+            findNestedDynamicChild(parent, childIndex);
         if (child) return child;
     }
 
@@ -548,10 +570,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
             // Direct index lookup - this is how OSRS works
             // Static widgets from cache are at their array index
             // Dynamic widgets created via CC_CREATE also go at their specified index
-            const direct = parent.children[childIndex];
-            if (direct) {
-                w = direct;
-            }
+            w = parent.children[childIndex] ?? findNestedDynamicChild(parent, childIndex);
         }
 
         //  (class28): only update scriptActiveWidget/scriptDotWidget on success.
@@ -736,9 +755,9 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         }
 
         if (!parent.children) parent.children = [];
-        if (childIndex > 0 && !parent.children[childIndex - 1]) {
-            throw new Error("RuntimeException");
-        }
+        // The live client allows a gap: the boat selection interface (script 8628) creates its
+        // first row on 934:19 at the child count 5295 returned for 934:18. Skipped indices
+        // stay empty.
         while (parent.children.length <= childIndex) parent.children.push(null);
 
         // IMPORTANT: Dynamic widgets must have a unique runtime UID in our client.
@@ -1509,7 +1528,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         // CC_GETLAYER only pushes the widget's parentId (parent widget UID).
         // It does NOT change the active/dot widget selection.
         const w = getTargetWidget(ctx, intOp);
-        let parentUid = w?.parentUid ?? -1;
+        let parentUid = w ? resolveStaticLayerUid(ctx, w) : -1;
         if (w && typeof parentUid === "number" && parentUid !== -1) {
             // mounted interface roots have parentId=-1 in their own widget arrays,
             // even though they are drawn within a mount container (InterfaceParent).
@@ -2358,7 +2377,8 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         invalidateWidgetRender(ctx, w);
     });
 
-    handlers.set(Opcodes.CC_SETMODEL_PLAYERCHATHEAD, (ctx, intOp) => {
+    // Model type 8: modelId is a loc id, drawn with that loc's model (see renderModelCanvas).
+    handlers.set(Opcodes.CC_SETMODEL_LOC, (ctx, intOp) => {
         const modelId = ctx.intStack[--ctx.intStackSize];
         const w = getTargetWidget(ctx, intOp);
         if (!w) {
@@ -2369,7 +2389,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         invalidateWidgetRender(ctx, w);
     });
 
-    handlers.set(Opcodes.IF_SETMODEL_PLAYERCHATHEAD, (ctx) => {
+    handlers.set(Opcodes.IF_SETMODEL_LOC, (ctx) => {
         const w = getWidgetFromStack(ctx);
         const modelId = ctx.intStack[--ctx.intStackSize];
         if (!w) {
@@ -2388,7 +2408,8 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const scrollX = ctx.intStack[ctx.intStackSize];
         const scrollY = ctx.intStack[ctx.intStackSize + 1];
         const w = getTargetWidget(ctx, intOp);
-        if (w && ctx.widgetManager.isServerOwnedWidget(w.uid)) return;
+        // Scroll position is user state, not server content: cache scrollbar
+        // scripts must still move server-owned views.
         if (w) {
             // scroll clamping uses the widget's current computed width/height.
             ensureWidgetLayout(ctx, w);
@@ -2409,7 +2430,6 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const scrollX = ctx.intStack[ctx.intStackSize];
         const scrollY = ctx.intStack[ctx.intStackSize + 1];
         const w = ctx.widgetManager.getWidgetByUid(uid);
-        if (w && ctx.widgetManager.isServerOwnedWidget(uid)) return;
         if (w) {
             // scroll clamping uses the widget's current computed width/height.
             ensureWidgetLayout(ctx, w);
@@ -3335,11 +3355,12 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.forwardIfTriggerOpLocal();
     });
 
-    handlers.set(Opcodes.CC_RESUME_PAUSEBUTTON, (ctx) => {
+    handlers.set(Opcodes.CC_RESUME_PAUSEBUTTON, (ctx, intOp) => {
         // Resume paused button - signals that a dialog continue button was clicked.
-        // Uses activeWidget.id (parent UID), not activeWidget.uid.
-        // resumePauseWidget
-        const w = ctx.activeWidget;
+        // Uses the widget's id (parent UID), not its uid. Like the other cc_ ops, the operand
+        // picks the widget: 1 is the one found with cc_find 1 (the ToA party panel's applicant
+        // and invocation buttons resume their pausebuttons child that way).
+        const w = getTargetWidget(ctx, intOp);
         if (w && ctx.sendResumePauseButton) {
             const widgetUid =
                 (typeof (w as any).id === "number" ? (w as any).id : (w.uid ?? 0)) | 0;

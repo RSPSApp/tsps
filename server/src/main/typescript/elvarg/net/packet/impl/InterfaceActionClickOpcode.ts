@@ -19,6 +19,7 @@ export class InterfaceActionClickOpcode {
       sourceSlot?: number;
       sourceItemId?: number;
       argsData?: Buffer;
+      scriptTrigger?: boolean;
     } = {}
   ): boolean {
 

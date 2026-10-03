@@ -238,7 +238,8 @@ export class LocPlacementPreviewOverlay implements Overlay {
         alpha: boolean,
         renderer: LocPlacementPreviewRenderer,
     ): Batch | undefined {
-        if (!this.app || !this.gl || !this.sceneUniforms || !this.waterMask || faces.length === 0) return undefined;
+        if (!this.app || !this.gl || !this.sceneUniforms || !this.waterMask ||
+            !this.previewVertShader || !this.mainFragShader || faces.length === 0) return undefined;
         const scene = new SceneBuffer(textureLoader, textureIdIndexMap, model.verticesCount);
         scene.addModel(model, faces);
         const vertices = scene.vertexBuf.byteArray();

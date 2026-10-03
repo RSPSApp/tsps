@@ -312,8 +312,21 @@ export function computeFrameRoofPlaneLimit(host: WebGLOsrsRendererHost, ): numbe
         const cameraTile = host.getCameraTileXY();
         const playerTile = host.getPlayerTileXY();
 
+        // Deck actors stand on level 0 of a boat scene while the deck and its facilities are
+        // on the boat's base plane, so measure roofs from the deck plane when aboard.
+        let playerPlane = host.getPlayerBasePlane() | 0;
+        const worldViewId = host.getControlledPlayerWorldViewId();
+        if (worldViewId >= 0) {
+            const overlay = host.worldEntityOverlays.get(worldViewId);
+            const deckPlane =
+                overlay?.basePlane ||
+                (overlay ? host.osrsClient.worldEntityTypeLoader?.load(overlay.configId)?.basePlane : 0) ||
+                0;
+            playerPlane = Math.max(playerPlane, deckPlane);
+        }
+
         return computeRoofPlaneLimit(host.mapManager, host.maxLevel, {
-            playerRawPlane: host.getPlayerBasePlane() | 0,
+            playerRawPlane: playerPlane,
             cameraPitch: host.getCameraPitchRs(),
             roofsHidden: host.osrsClient.roofsHidden,
             cameraTile,

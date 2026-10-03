@@ -20,6 +20,9 @@ const MAP_LOAD_RETRY_MAX_DELAY_MS = 5000;
 export interface MapSquare {
     mapX: number;
     mapY: number;
+    getRenderBaseTileX?(): number;
+    getRenderBaseTileY?(): number;
+    getLocalTileSpan?(): number;
 
     canRender(frameCount: number): boolean;
 
@@ -196,6 +199,24 @@ export class MapManager<T extends MapSquare> {
 
     getMap(mapX: number, mapY: number): T | undefined {
         return this.mapSquares.get(getMapSquareId(mapX, mapY));
+    }
+
+    /** Resolve world tiles against scene bounds; instances span multiple map squares. */
+    getMapForWorldTile(tileX: number, tileY: number): T | undefined {
+        const contains = (map: T): boolean => {
+            const x = map.getRenderBaseTileX?.() ?? map.mapX * Scene.MAP_SQUARE_SIZE;
+            const y = map.getRenderBaseTileY?.() ?? map.mapY * Scene.MAP_SQUARE_SIZE;
+            const span = map.getLocalTileSpan?.() ?? Scene.MAP_SQUARE_SIZE;
+            return tileX >= x && tileX < x + span && tileY >= y && tileY < y + span;
+        };
+        const id = getMapSquareId(Math.floor(tileX / Scene.MAP_SQUARE_SIZE), Math.floor(tileY / Scene.MAP_SQUARE_SIZE));
+        const direct = this.mapSquares.get(id);
+        if (direct && !this.worldEntityMapIds.has(id) && contains(direct)) return direct;
+        for (const [mapId, map] of this.mapSquares) {
+            // Ship overlays have their own coordinate space and are selected by world view.
+            if (!this.worldEntityMapIds.has(mapId) && contains(map)) return map;
+        }
+        return undefined;
     }
 
     getGridRevision(): number {

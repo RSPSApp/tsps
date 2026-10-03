@@ -47,7 +47,7 @@ class ArceuusSelfSpell extends Spell {
 }
 
 class ArceuusTeleportSpell extends Spell {
-    constructor(private readonly data: TeleportSpell) {
+    constructor(readonly data: TeleportSpell) {
         super();
     }
 
@@ -76,14 +76,14 @@ class ArceuusTeleportSpell extends Spell {
 const rune = (id: number, amount = 1) => new Item(id, amount);
 const teleport = (level: number, experience: number, runes: Item[], x: number, y: number, z = 0, cooldown?: TeleportSpell["cooldown"]) =>
     new ArceuusTeleportSpell({ level, experience, runes, destination: new Location(x, y, z), cooldown });
-const THRALL_COOLDOWN = { attribute: "arceuus:thrallUntil", duration: 30_000 };
+const THRALL_COOLDOWN = { attribute: "arceuus:thrall-until", duration: 30_000 };
 
 /** Self-cast Arceuus spells. Targeted spells remain in their respective packet handlers. */
 export class ArceuusSpells {
-    public static readonly WARD_UNTIL = "arceuus:wardUntil";
-    public static readonly DEATH_CHARGE_UNTIL = "arceuus:deathChargeUntil";
-    public static readonly SHADOW_VEIL_UNTIL = "arceuus:shadowVeilUntil";
-    public static readonly MARK_UNTIL = "arceuus:markUntil";
+    public static readonly WARD_UNTIL = "arceuus:ward-until";
+    public static readonly DEATH_CHARGE_UNTIL = "arceuus:death-charge-until";
+    public static readonly SHADOW_VEIL_UNTIL = "arceuus:shadow-veil-until";
+    public static readonly MARK_UNTIL = "arceuus:mark-until";
     private static readonly CORRUPTION = "arceuus:corruption";
     private static readonly SELF_SPELLS = new Map<string, ArceuusSelfSpell>([
         ["ward of arceuus", new ArceuusSelfSpell({
@@ -104,12 +104,12 @@ export class ArceuusSpells {
         })],
         ["demonic offering", new ArceuusSelfSpell({
             id: 15346, level: 84, experience: 175, runes: [rune(566), rune(21880)],
-            cooldown: { attribute: "arceuus:offeringUntil", duration: 5_400 },
+            cooldown: { attribute: "arceuus:offering-until", duration: 5_400 },
             effect: (player) => ArceuusOfferings.demonic(player),
         })],
         ["sinister offering", new ArceuusSelfSpell({
             id: 8796, level: 92, experience: 180, runes: [rune(565), rune(21880)],
-            cooldown: { attribute: "arceuus:offeringUntil", duration: 5_400 },
+            cooldown: { attribute: "arceuus:offering-until", duration: 5_400 },
             effect: (player) => ArceuusOfferings.sinister(player),
         })],
         ["death charge", new ArceuusSelfSpell({
@@ -144,7 +144,7 @@ export class ArceuusSpells {
         ["resurrect greater zombie", new ArceuusSelfSpell({ id: 25514, level: 76, experience: 88, runes: [rune(565, 5), rune(554, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10886, 6, 3, 1) })],
     ]);
     private static readonly TELEPORTS = new Map<string, ArceuusTeleportSpell>([
-        ["arceuus home teleport", teleport(1, 0, [], 1712, 3882, 0, { attribute: "magic:homeTeleportUntil", duration: 1_800_000 })],
+        ["arceuus home teleport", teleport(1, 0, [], 1712, 3882, 0, { attribute: "magic:home-teleport-until", duration: 1_800_000 })],
         ["arceuus library teleport", teleport(6, 9, [rune(557, 2), rune(563)], 1632, 3838)],
         ["draynor manor teleport", teleport(17, 16, [rune(557), rune(555), rune(563)], 3108, 3352)],
         ["battlefront teleport", teleport(23, 19, [rune(557), rune(554), rune(563)], 1348, 3739)],
@@ -158,6 +158,10 @@ export class ArceuusSpells {
         ["barrows teleport", teleport(83, 90, [rune(4695, 2), rune(565), rune(563, 2)], 3565, 3315)],
         ["ape atoll teleport", teleport(90, 100, [rune(4695, 2), rune(565, 2), rune(563, 2)], 2770, 9100)],
     ]);
+
+    public static getTeleportDestinations() {
+        return Array.from(this.TELEPORTS, ([name, spell]) => ({ name, ...spell.data }));
+    }
 
     public static handleSpell(player: Player, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";

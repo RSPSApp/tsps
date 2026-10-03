@@ -45,6 +45,16 @@ export abstract class CombatMethod {
         return 1;
     }
 
+    /**
+     * Defence the accuracy roll is taken against. Override for attacks that roll
+     * one style's accuracy against another style's defence - e.g. Kree'arra's
+     * "ranged magic" rolls Magic accuracy against the target's Ranged defence.
+     * Damage still uses `type()`; only the defence side of the roll changes.
+     */
+    public accuracyDefenceType(type: CombatType): CombatType {
+        return type;
+    }
+
     public abstract type(): CombatType;
     public abstract hits(character: Mobile, target: Mobile): PendingHit[];
 }

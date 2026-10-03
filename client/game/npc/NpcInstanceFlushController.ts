@@ -171,8 +171,11 @@ export class NpcInstanceFlushController {
             !!renderer.waterTextures &&
             !!renderer.sceneUniformBuffer;
         const mapManager = renderer?.mapManager as MapManager<any> | undefined;
+        // An instance scene isn't streamed, so the map manager's current map stays unset.
         const mapManagerReady =
-            !!mapManager && (mapManager.currentMapX | 0) >= 0 && (mapManager.currentMapY | 0) >= 0;
+            !!mapManager &&
+            (((mapManager.currentMapX | 0) >= 0 && (mapManager.currentMapY | 0) >= 0) ||
+                (!!renderer?.instanceActive && !!renderer?.instanceSceneMap));
 
         if (!rendererReady || !mapManagerReady) {
             for (const mapId of pending) this.mapsPendingReload.add(mapId);
@@ -196,7 +199,10 @@ export class NpcInstanceFlushController {
             const mapY = mapId & 0xff;
 
             const isWorldEntityOverlay = mapManager.worldEntityMapIds.has(mapId);
-            if (!isWorldEntityOverlay && !mapManager.isMapInCurrentGrid(mapX, mapY)) {
+            // An instance scene is one map that isn't streamed, so it is never in the grid.
+            const scene = renderer.instanceActive ? renderer.instanceSceneMap : null;
+            const isInstanceScene = !!scene && (((scene.mapX << 8) | scene.mapY) === mapId);
+            if (!isWorldEntityOverlay && !isInstanceScene && !mapManager.isMapInCurrentGrid(mapX, mapY)) {
                 remaining.add(mapId);
                 continue;
             }
@@ -216,6 +222,11 @@ export class NpcInstanceFlushController {
                             mapY,
                             renderer.maxLevel ?? 3,
                             Array.from(renderer.loadedTextureIds ?? []),
+                            // NPC tiles are relative to where the map is drawn (an instance
+                            // scene's base, not its square's corner).
+                            typeof map.getRenderBaseTileX === "function"
+                                ? { x: map.getRenderBaseTileX(), y: map.getRenderBaseTileY() }
+                                : undefined,
                         );
                         if (!npcGeometry) return { mapId, status: "retry" as const };
 

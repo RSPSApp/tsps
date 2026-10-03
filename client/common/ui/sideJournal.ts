@@ -83,15 +83,15 @@ export const QUEST_LIST_ENTRY_LIST_UID = packWidgetUid(
     INTERFACE_QUEST_LIST_ID,
     QUEST_LIST_ENTRY_LIST_CHILD_ID,
 );
-export const QUEST_LIST_QUEST_POINTS_CHILD_ID = 9;
-export const QUEST_LIST_QUEST_POINTS_UID = packWidgetUid(
-    INTERFACE_QUEST_LIST_ID,
-    QUEST_LIST_QUEST_POINTS_CHILD_ID,
-);
-export const QUEST_LIST_COMPLETED_CHILD_ID = 10;
+export const QUEST_LIST_COMPLETED_CHILD_ID = 9;
 export const QUEST_LIST_COMPLETED_UID = packWidgetUid(
     INTERFACE_QUEST_LIST_ID,
     QUEST_LIST_COMPLETED_CHILD_ID,
+);
+export const QUEST_LIST_QUEST_POINTS_CHILD_ID = 10;
+export const QUEST_LIST_QUEST_POINTS_UID = packWidgetUid(
+    INTERFACE_QUEST_LIST_ID,
+    QUEST_LIST_QUEST_POINTS_CHILD_ID,
 );
 export const QUEST_LIST_ENTRY_MAX_SLOT = 199;
 // Ops 1-6 transmit (View info / Read journal / Show on map / wiki ops / Pin journal)

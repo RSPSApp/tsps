@@ -63,6 +63,8 @@ import { LoadingMessageOverlay } from "../ui/devoverlay/LoadingMessageOverlay";
 import { LoginOverlay } from "../ui/devoverlay/LoginOverlay";
 import { OverheadPrayerOverlay } from "../ui/devoverlay/OverheadPrayerOverlay";
 import { OverheadTextOverlay } from "../ui/devoverlay/OverheadTextOverlay";
+import { TutorialHintOverlay } from "../ui/devoverlay/TutorialHintOverlay";
+import { SystemUpdateOverlay } from "../ui/devoverlay/SystemUpdateOverlay";
 import {
     HealthBarEntry,
     HitsplatEntry,
@@ -241,6 +243,12 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public instanceRegionX: number = 0;
     public instanceRegionY: number = 0;
     public instanceLocRebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Bumped per instance scene build; only the latest build's result is applied. */
+    public instanceBuildSeq: number = 0;
+    /** A built instance scene waiting in mapsToLoad; it replaces the drawn scene when applied. */
+    public pendingInstanceScene: SdMapData | null = null;
+    /** The map square the drawn instance scene is built as; it owns every NPC in the scene. */
+    public instanceSceneMap: { mapX: number; mapY: number } | null = null;
     /** Active world entity overlays (rendered on top of normal world). */
     public worldEntityOverlays: Map<
         number,
@@ -488,6 +496,7 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public readonly interactHighlightDrawTargets: InteractHighlightDrawTarget[] = [];
     public loginOverlay?: LoginOverlay;
     public loadingMessageOverlay?: LoadingMessageOverlay;
+    public systemUpdateOverlay?: SystemUpdateOverlay;
     public objectIdOverlay?: any;
     public walkableOverlay?: any;
     public widgetsOverlay?: WidgetsOverlay;
@@ -528,13 +537,16 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     // Settings
     maxLevel: number = Scene.MAX_LEVELS - 1;
 
-    // 117HD blue skybox (#B9D6FF). Clear color + fog tint share this.
+    // Clear color + fog tint. Starts as 117HD's blue sky (#B9D6FF); updateSkyColor follows the
+    // area's environment each frame (render/environment.ts).
     skyColor: vec4 = vec4.fromValues(
         HD_SKY_COLOR_VEC4[0],
         HD_SKY_COLOR_VEC4[1],
         HD_SKY_COLOR_VEC4[2],
         HD_SKY_COLOR_VEC4[3],
     );
+    /** Set once a sky colour is picked in the dev panel; otherwise the area's environment decides. */
+    skyColorOverride: boolean = false;
     fogDepth: number = 24; // Manual fog start (tiles); used only when autoFogDepth is off
     /** Dynamic fog: fog start tracks render distance each frame. */
     autoFogDepth: boolean = true;
@@ -757,6 +769,7 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     // Approximate player defaultHeight in tile units (model.height / 128)
     public playerDefaultHeightTiles: number = 200 / 128;
     public overheadTextOverlay?: OverheadTextOverlay;
+    public tutorialHintOverlay?: TutorialHintOverlay;
     public overheadPrayerOverlay?: OverheadPrayerOverlay;
     public overheadTextOutput: OverheadTextEntry[] = [];
     public overheadTextPool: OverheadTextEntry[] = [];
@@ -781,6 +794,8 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         this.sceneRaycaster = new SceneRaycaster(this.mapManager, osrsClient);
         this.sceneRaycaster.worldEntityTransformProvider = (map) =>
             this.getWorldEntityTransformForMap(map);
+        this.sceneRaycaster.deckToWorldProvider = (entityIndex, fineX, fineY) =>
+            this.projectDeckToWorld(entityIndex, fineX, fineY);
         const previousOnMapRemoved = this.mapManager.onMapRemoved;
         this.mapManager.onMapRemoved = (mapX: number, mapY: number) => {
             this.clearMinimapIconsForMap(mapX | 0, mapY | 0);
@@ -1486,6 +1501,10 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         return render.scheduleInstanceLocRebuild(this);
     }
 
+    public replaceSceneWithInstance(mapData: SdMapData): void {
+        return render.replaceSceneWithInstance(this, mapData);
+    }
+
     clearInstance(): void {
         return render.clearInstance(this);
     }
@@ -1550,12 +1569,34 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         return render.getNpcModelYOffset(this, deckHeight);
     }
 
+    /** World fine position of a point on a boat's deck; see worldEntityMotion. */
+    projectDeckToWorld(
+        entityIndex: number,
+        fineX: number,
+        fineY: number,
+    ): { x: number; y: number } | undefined {
+        return render.projectDeckToWorld(this, entityIndex, fineX, fineY);
+    }
+
+    /** World fine point on the sea under a screen position, around a boat. */
+    pickSeaPointAt(
+        entityIndex: number,
+        mouseX: number,
+        mouseY: number,
+    ): { x: number; y: number } | undefined {
+        return render.pickSeaPoint(this, entityIndex, mouseX, mouseY);
+    }
+
     getWorldEntityTransformForTile(tileX: number, tileY: number): Float32Array {
         return render.getWorldEntityTransformForTile(this, tileX, tileY);
     }
 
     clearWorldEntity(entityIndex: number): void {
         return render.clearWorldEntity(this, entityIndex);
+    }
+
+    clearWorldEntityLocs(entityIndex: number): void {
+        return render.clearWorldEntityLocs(this, entityIndex);
     }
 
     clearAllWorldEntities(): void {

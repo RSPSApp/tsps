@@ -4,6 +4,7 @@ const { GameConstants } = require("../../../../../src/main/typescript/elvarg/gam
 const { Misc } = require("../../../../../src/main/typescript/elvarg/util/Misc");
 const {
   FriendsChatManager,
+  CLAN_CHAT_ATTRIBUTE,
 } = require("../../../../interface/FriendsChatManager");
 const { resolveAlternativeLoadoutId } = require("../../pvp/PvpAssignment");
 const { applyGeneratedPvpLoadout } = require("../../policies/PvpLoadoutPolicy");
@@ -203,7 +204,7 @@ class ClanRecruitActionNode {
       return false;
     }
     const ownerClan = FriendsChatManager.getOwnedChannel(owner);
-    return ownerClan != null && bot.getCurrentClanChat?.() === ownerClan;
+    return ownerClan != null && bot.getAttribute?.(CLAN_CHAT_ATTRIBUTE) === ownerClan;
   }
 
   shouldSnapToOwner(bot, owner) {
@@ -250,8 +251,8 @@ class ClanRecruitActionNode {
     if (candidate.getPrivateArea?.() !== bot.getPrivateArea?.()) {
       return null;
     }
-    const ownerClan = owner.getCurrentClanChat?.();
-    if (ownerClan != null && candidate.getCurrentClanChat?.() === ownerClan) {
+    const ownerClan = owner.getAttribute?.(CLAN_CHAT_ATTRIBUTE);
+    if (ownerClan != null && candidate.getAttribute?.(CLAN_CHAT_ATTRIBUTE) === ownerClan) {
       return null;
     }
     return candidate;

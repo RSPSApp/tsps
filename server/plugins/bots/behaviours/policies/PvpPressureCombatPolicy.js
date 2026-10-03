@@ -305,7 +305,7 @@ function tryQueuedSpecialAttack(player, target) {
   if (!combat || !target) {
     return false;
   }
-  const graniteQueued = combat.isGraniteMaulSpecialQueued?.() === true;
+  const graniteQueued = combat.isSpecialAttackQueued?.() === true;
   if (player?.isSpecialActivated?.() !== true && !graniteQueued) {
     return false;
   }

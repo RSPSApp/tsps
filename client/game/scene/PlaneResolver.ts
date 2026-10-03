@@ -1,4 +1,3 @@
-import { getMapIndexFromTile } from "../../rs/map/MapFileIndex";
 import { Scene } from "../../rs/scene/Scene";
 import type { MapManager, MapSquare } from "../MapManager";
 import { clampPlane } from "../utils/PlaneUtil";
@@ -143,14 +142,14 @@ function resolveForWorldTile<T extends MapSquare>(
         localTileY: number,
     ) => number,
 ): number {
-    const map = mapManager.getMap(getMapIndexFromTile(tileX), getMapIndexFromTile(tileY)) as
+    const map = mapManager.getMapForWorldTile(tileX, tileY) as
         | (T & TileFlagMapSquare)
         | undefined;
     if (!map) {
         return clampPlane(basePlane);
     }
-    const localX = tileX & (Scene.MAP_SQUARE_SIZE - 1);
-    const localY = tileY & (Scene.MAP_SQUARE_SIZE - 1);
+    const localX = tileX - (map.getRenderBaseTileX?.() ?? map.mapX * Scene.MAP_SQUARE_SIZE);
+    const localY = tileY - (map.getRenderBaseTileY?.() ?? map.mapY * Scene.MAP_SQUARE_SIZE);
     return localResolver(map, basePlane, localX, localY);
 }
 

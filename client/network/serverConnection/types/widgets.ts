@@ -78,6 +78,12 @@ export type WidgetServerPayload =
           varbits?: Record<number, number>;
       }
     | {
+          action: "set_position";
+          uid: number;
+          x: number;
+          y: number;
+      }
+    | {
           action: "set_model";
           uid: number;
           modelId?: number;

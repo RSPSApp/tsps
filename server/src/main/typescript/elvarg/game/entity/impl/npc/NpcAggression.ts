@@ -33,7 +33,8 @@ export class NpcAggression {
             let npcDefinition: NpcDefinition = npc.getCurrentDefinition();
             if (npcDefinition == null || npc.getHitpoints() <= 0
                 || !npcDefinition.isAggressive()
-                || npc.getPrivateArea() != player.getPrivateArea()) {
+                || npc.getPrivateArea() != player.getPrivateArea()
+                || (npc.isOwnerOnly?.() && npc.getOwner?.() !== player)) {
                 // Make sure the npc is available to attack the player.
                 continue;
             }

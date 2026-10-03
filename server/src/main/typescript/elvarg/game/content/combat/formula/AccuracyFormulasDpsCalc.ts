@@ -10,9 +10,12 @@ import type { Player } from '../../../entity/impl/player/Player';
 import { World } from "../../../World";
 import { CombatEquipment } from "../CombatEquipment";
 import { PluginManager } from "../../../../plugins/PluginManager";
+import { CombatSpecial } from "../CombatSpecial";
+import { resolveSpecialAttackType, WeaponSpecialTraits } from "../WeaponSpecialTraits";
 
 type RollCacheEntry = {
     cycle: number;
+    defenceLevel: number;
     effectiveAttackLevel?: number;
     effectiveDefenseLevel?: number;
     effectiveRangedAttack?: number;
@@ -53,11 +56,13 @@ export class AccuracyFormulasDpsCalc {
 
     private static getRollCache(entity: Mobile): RollCacheEntry {
         const cycle = World.getProcessCycle();
+        const defenceLevel = entity.isNpc() ? entity.getAsNpc().getDefenceLevel()
+            : entity.getAsPlayer().getSkillManager().getCurrentLevel(Skill.DEFENCE);
         const cached = this.rollCache.get(entity);
-        if (cached && cached.cycle === cycle) {
+        if (cached && cached.cycle === cycle && cached.defenceLevel === defenceLevel) {
             return cached;
         }
-        const next: RollCacheEntry = { cycle, defenseMeleeRolls: new Map<number, number>() };
+        const next: RollCacheEntry = { cycle, defenceLevel, defenseMeleeRolls: new Map<number, number>() };
         this.rollCache.set(entity, next);
         return next;
     }
@@ -153,23 +158,124 @@ export class AccuracyFormulasDpsCalc {
         return 100;
     }
 
-    public static rollAccuracy(entity: any, enemy: any, style: any) {
-        if (style === CombatType.MELEE) {
-            let attRoll = AccuracyFormulasDpsCalc.attackMeleeRoll(entity);
-            let defRoll = AccuracyFormulasDpsCalc.calcDefenseMeleeRoll(entity, enemy);
-            return this.randomInclusive(attRoll) > this.randomInclusive(defRoll);
-
-        } else if (style === CombatType.RANGED) {
-            let attRoll = AccuracyFormulasDpsCalc.attackRangedRoll(entity);
-            attRoll = PluginManager.modifyRangedAttackRoll(entity, enemy, attRoll);
-            let defRoll = AccuracyFormulasDpsCalc.defenseRangedRoll(enemy);
-            return this.randomInclusive(attRoll) > this.randomInclusive(defRoll);
-        } else if (style === CombatType.MAGIC) {
-            let attRoll = AccuracyFormulasDpsCalc.attackMagicRoll(entity);
-            let defRoll = AccuracyFormulasDpsCalc.defenseMagicRoll(enemy);
-            return this.randomInclusive(attRoll) > this.randomInclusive(defRoll);
+    /**
+     * Applies a special's accuracy traits to a completed attack roll. Falls back
+     * to the legacy per-weapon `accuracyMultiplier` when no traits are declared,
+     * so existing specials are unaffected.
+     */
+    private static applyAccuracyTraits(
+        attRoll: number,
+        entity: Mobile,
+        combatType: CombatType,
+        traits: WeaponSpecialTraits | null
+    ): number {
+        if (!entity.isPlayer()) {
+            return attRoll;
         }
-        return false;
+        const player = entity.getAsPlayer();
+        const special = getPlayerCombatSpecial(player);
+        if (special == null || !player.isSpecialActivated()) {
+            return attRoll;
+        }
+        if (traits == null && special.getCombatMethod().type() !== combatType) {
+            return attRoll;
+        }
+        const stages = traits?.accuracyMultiplierStages;
+        if (stages && stages.length > 0) {
+            return stages.reduce((roll, multiplier) => Math.floor(roll * multiplier), attRoll);
+        }
+        const multiplier = traits?.accuracyMultiplier ?? special.getAccuracyMultiplier();
+        return AccuracyFormulasDpsCalc.scaleSpecial(attRoll, multiplier);
+    }
+
+    /**
+     * Resolves the attacker and target rolls for an attack, honouring special traits.
+     *
+     * `defenceType` is the per-method override used by attacks that roll one
+     * style's accuracy against another style's defence (Kree'arra's ranged
+     * magic); special traits still win over it when declared.
+     */
+    public static specialRolls(
+        entity: any,
+        enemy: any,
+        style: any,
+        defenceType?: CombatType
+    ): { attack: number; defence: number } | null {
+        const traits: WeaponSpecialTraits | null = CombatSpecial.activeTraitsFor(entity);
+        const attackStyle = resolveSpecialAttackType(traits?.rollAttackType) ?? style;
+        const defenceStyle = resolveSpecialAttackType(traits?.defenceRollAttackType) ?? defenceType ?? attackStyle;
+
+        let attRoll: number;
+        if (attackStyle === CombatType.MELEE) {
+            attRoll = AccuracyFormulasDpsCalc.attackMeleeRoll(entity);
+        } else if (attackStyle === CombatType.RANGED) {
+            attRoll = AccuracyFormulasDpsCalc.attackRangedRoll(entity);
+            attRoll = PluginManager.modifyRangedAttackRoll(entity, enemy, attRoll);
+        } else if (attackStyle === CombatType.MAGIC) {
+            attRoll = AccuracyFormulasDpsCalc.attackMagicRoll(entity);
+        } else {
+            return null;
+        }
+
+        let defRoll: number;
+        if (defenceStyle === CombatType.MELEE) {
+            const meleeIndex = traits?.meleeAttackBonusIndex
+                ?? (entity.isNpc() ? 3 : entity.getAsPlayer().getFightType().getBonusType());
+            const defenceIndex = traits?.meleeDefenceBonusIndex ?? meleeIndex;
+            defRoll = AccuracyFormulasDpsCalc.defenseMeleeRoll(enemy, defenceIndex);
+        } else if (defenceStyle === CombatType.RANGED) {
+            defRoll = AccuracyFormulasDpsCalc.defenseRangedRoll(enemy);
+        } else {
+            defRoll = AccuracyFormulasDpsCalc.defenseMagicRoll(enemy);
+        }
+
+        if (traits?.defenceRollMultiplier !== undefined) {
+            defRoll = Math.floor(defRoll * traits.defenceRollMultiplier);
+        }
+        if (entity.isNpc()) {
+            attRoll = Math.floor(attRoll * entity.getAsNpc().getRollFactor());
+        }
+        if (enemy.isNpc()) {
+            defRoll = Math.floor(defRoll * enemy.getAsNpc().getRollFactor());
+        }
+
+        return { attack: attRoll, defence: defRoll };
+    }
+
+    public static rollAccuracy(entity: any, enemy: any, style: any, defenceType?: CombatType) {
+        const rolls = AccuracyFormulasDpsCalc.specialRolls(entity, enemy, style, defenceType);
+        if (rolls == null) {
+            return false;
+        }
+        return this.randomInclusive(rolls.attack) > this.randomInclusive(rolls.defence);
+    }
+
+    /** Number of successful independent accuracy rolls out of `count`. */
+    public static rollAccuracyCount(entity: any, enemy: any, style: any, count: number, defenceType?: CombatType): number {
+        let successful = 0;
+        for (let roll = 0; roll < Math.max(0, Math.trunc(count)); roll++) {
+            if (AccuracyFormulasDpsCalc.rollAccuracy(entity, enemy, style, defenceType)) {
+                successful++;
+            }
+        }
+        return successful;
+    }
+
+    /**
+     * Single fixed-percentage accuracy roll used by execute-window specials:
+     * the attack roll is scaled, then compared deterministically to the defence roll.
+     */
+    public static rollFixedAccuracy(entity: any, enemy: any, style: any, multiplier: number, defenceType?: CombatType): boolean {
+        const rolls = AccuracyFormulasDpsCalc.specialRolls(entity, enemy, style, defenceType);
+        if (rolls == null) {
+            return false;
+        }
+        const attack = Math.max(0, Math.floor(rolls.attack * multiplier));
+        const defence = Math.max(0, Math.floor(rolls.defence));
+        if (attack >= defence) {
+            return true;
+        }
+        return Math.random() < (attack + 1) / (defence + 1);
     }
 
     public static hitChance(attRoll: number, defRoll: number) {
@@ -193,8 +299,13 @@ export class AccuracyFormulasDpsCalc {
         }
 
         let player = entity.getAsPlayer();
+        const traits = CombatSpecial.activeTraitsFor(entity);
+        let visibleAttack = player.getSkillManager().getCurrentLevel(Skill.ATTACK);
+        if (traits?.attackLevelMultiplier !== undefined) {
+            visibleAttack = Math.floor(visibleAttack * traits.attackLevelMultiplier);
+        }
         let att = AccuracyFormulasDpsCalc.scalePercent(
-            player.getSkillManager().getCurrentLevel(Skill.ATTACK),
+            visibleAttack,
             AccuracyFormulasDpsCalc.meleeAttackPrayerPercent(player)
         );
 
@@ -236,7 +347,9 @@ export class AccuracyFormulasDpsCalc {
         let attSlash = player.getBonusManager().getAttackBonus()[BonusManager.ATTACK_SLASH];
         let attCrush = player.getBonusManager().getAttackBonus()[BonusManager.ATTACK_CRUSH];
 
-        switch (player.getFightType().getBonusType()) {
+        const traits = CombatSpecial.activeTraitsFor(entity);
+        const bonusType = traits?.meleeAttackBonusIndex ?? player.getFightType().getBonusType();
+        switch (bonusType) {
             case BonusManager.ATTACK_STAB:
                 attRoll *= attStab + 64;
                 break;
@@ -251,10 +364,7 @@ export class AccuracyFormulasDpsCalc {
                 attRoll *= maxAtt + 64;
         }
 
-        const special = getPlayerCombatSpecial(player);
-        if (player.isSpecialActivated() && special?.getCombatMethod().type() === CombatType.MELEE) {
-            attRoll = AccuracyFormulasDpsCalc.scaleSpecial(attRoll, special.getAccuracyMultiplier());
-        }
+        attRoll = AccuracyFormulasDpsCalc.applyAccuracyTraits(attRoll, entity, CombatType.MELEE, traits);
 
         cache.attackMeleeRoll = Math.floor(attRoll);
         return cache.attackMeleeRoll;
@@ -266,7 +376,7 @@ export class AccuracyFormulasDpsCalc {
             return cache.effectiveDefenseLevel;
         }
         if (enemy.isNpc()) {
-            cache.effectiveDefenseLevel = enemy.getAsNpc().getCurrentDefinition().getStats()[2] + 9;
+            cache.effectiveDefenseLevel = cache.defenceLevel + 9;
             return cache.effectiveDefenseLevel;
         }
 
@@ -393,13 +503,12 @@ export class AccuracyFormulasDpsCalc {
 
         attRoll *= (accuracyBonus + 64);
 
-        if (entity.isPlayer()) {
-            const player = entity.getAsPlayer();
-            const special = getPlayerCombatSpecial(player);
-            if (player.isSpecialActivated() && special?.getCombatMethod().type() === CombatType.RANGED) {
-                attRoll = AccuracyFormulasDpsCalc.scaleSpecial(attRoll, special.getAccuracyMultiplier());
-            }
-        }
+        attRoll = AccuracyFormulasDpsCalc.applyAccuracyTraits(
+            attRoll,
+            entity,
+            CombatType.RANGED,
+            CombatSpecial.activeTraitsFor(entity)
+        );
 
         cache.attackRangedRoll = Math.floor(attRoll);
         return cache.attackRangedRoll;
@@ -487,13 +596,12 @@ export class AccuracyFormulasDpsCalc {
         let attRoll = AccuracyFormulasDpsCalc.effectiveMagicLevel(entity);
         attRoll *= (accuracyBonus + 64);
 
-        if (entity.isPlayer()) {
-            const player = entity.getAsPlayer();
-            const special = getPlayerCombatSpecial(player);
-            if (player.isSpecialActivated() && special?.getCombatMethod().type() === CombatType.MAGIC) {
-                attRoll = AccuracyFormulasDpsCalc.scaleSpecial(attRoll, special.getAccuracyMultiplier());
-            }
-        }
+        attRoll = AccuracyFormulasDpsCalc.applyAccuracyTraits(
+            attRoll,
+            entity,
+            CombatType.MAGIC,
+            CombatSpecial.activeTraitsFor(entity)
+        );
 
         const demonbaneMultiplier = (entity.getCombat().getSelectedSpell() as any)?.demonbaneAccuracyMultiplier?.(entity);
         if (typeof demonbaneMultiplier === "number") {

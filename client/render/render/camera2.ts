@@ -188,6 +188,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
+import { projectDeckToWorld } from "./worldEntityMotion";
 
 export function updateCameraFollow(host: WebGLOsrsRendererHost, deltaTime?: number, timeSec?: number): void {
 
@@ -195,8 +196,16 @@ export function updateCameraFollow(host: WebGLOsrsRendererHost, deltaTime?: numb
         const playerEcsIndex = host.getControlledPlayerEcsIndex();
         if (playerEcsIndex === undefined) return;
 
-        const px = pe.getX(playerEcsIndex) | 0;
-        const py = pe.getY(playerEcsIndex) | 0;
+        let px = pe.getX(playerEcsIndex) | 0;
+        let py = pe.getY(playerEcsIndex) | 0;
+        // On a boat the player stands in deck coordinates; follow where the deck is drawn.
+        const worldViewId = host.getControlledPlayerWorldViewId();
+        if (worldViewId >= 0) {
+            const projected = projectDeckToWorld(host, worldViewId, px, py);
+            if (!projected) return; // not placed yet: keep the camera where it is
+            px = Math.round(projected.x);
+            py = Math.round(projected.y);
+        }
         const playerX = px / 128;
         const playerZ = py / 128;
 

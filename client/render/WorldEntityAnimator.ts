@@ -15,8 +15,15 @@ interface WorldEntityAnimState {
     rootTransform: Float32Array;
 }
 
+const IDENTITY = mat4.create() as Float32Array;
+
 export class WorldEntityAnimator {
     private entities: Map<number, WorldEntityAnimState> = new Map();
+    /** World-space placement of each moving entity's deck scene (tile units). */
+    private readonly movement = new Map<number, Float32Array>();
+    /** Bobbing and movement combined for the view-space shader uniform. */
+    private readonly composed = new Map<number, Float32Array>();
+    private readonly viewInverse = mat4.create();
 
     constructor(
         private worldEntityTypeLoader: WorldEntityTypeLoader | undefined,
@@ -109,10 +116,49 @@ export class WorldEntityAnimator {
 
     removeEntity(entityIndex: number): void {
         this.entities.delete(entityIndex);
+        this.movement.delete(entityIndex);
+        this.composed.delete(entityIndex);
     }
 
     clear(): void {
         this.entities.clear();
+        this.movement.clear();
+        this.composed.clear();
+    }
+
+    /** Sets (or clears) where an entity's deck scene is placed in the world this frame. */
+    setMovement(entityIndex: number, worldTransform: Float32Array | undefined): void {
+        if (worldTransform) {
+            this.movement.set(entityIndex, worldTransform);
+        } else {
+            this.movement.delete(entityIndex);
+            this.composed.delete(entityIndex);
+        }
+    }
+
+    getMovement(entityIndex: number): Float32Array | undefined {
+        return this.movement.get(entityIndex);
+    }
+
+    /**
+     * Rebuilds the shader transforms for the current camera. The shader applies
+     * `u_worldEntityTransform` after the view matrix, so a world-space placement M becomes
+     * `bob * V * M * V^-1` in view space. Call whenever the view matrix changes.
+     */
+    compose(viewMatrix: Float32Array): void {
+        if (this.movement.size === 0) return;
+        if (!mat4.invert(this.viewInverse, viewMatrix)) return;
+        for (const [entityIndex, worldTransform] of this.movement) {
+            let out = this.composed.get(entityIndex);
+            if (!out) {
+                out = mat4.create() as Float32Array;
+                this.composed.set(entityIndex, out);
+            }
+            const bob = this.entities.get(entityIndex)?.rootTransform ?? IDENTITY;
+            mat4.multiply(out, worldTransform, this.viewInverse);
+            mat4.multiply(out, viewMatrix, out);
+            mat4.multiply(out, bob, out);
+        }
     }
 
     tick(clientCycle: number): void {
@@ -157,6 +203,6 @@ export class WorldEntityAnimator {
     }
 
     getTransform(entityIndex: number): Float32Array | undefined {
-        return this.entities.get(entityIndex)?.rootTransform;
+        return this.composed.get(entityIndex) ?? this.entities.get(entityIndex)?.rootTransform;
     }
 }

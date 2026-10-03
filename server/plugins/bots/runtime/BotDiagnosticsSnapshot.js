@@ -1,5 +1,7 @@
 const { readPoint, readTile, formatPoint } = require("../lib/BotValueUtils");
 
+const CURRENT_PRESET_ATTRIBUTE = "pvp:current-preset";
+
 const STUCK_THRESHOLDS_MS = Object.freeze({
   ditchTransition: 10000,
   pendingMove: 12000,
@@ -322,7 +324,7 @@ function createBotDiagnosticsSnapshot({
   const currentTile = readTile(bot?.getLocation?.());
   const faceTile = readTile(bot?.getPositionToFace?.());
   const followUsername = bot?.getFollowing?.()?.getUsername?.() ?? null;
-  const recruitOwnerUsername = bot?.getAttribute?.("botRecruitOwnerUsername") ?? null;
+  const recruitOwnerUsername = bot?.getAttribute?.("bot-recruit-owner-username") ?? null;
   const queueSize = resolveQueueSize(queue);
   const moving = isQueueMoving(queue);
   const recentHistory =
@@ -396,7 +398,7 @@ function renderBotDiagnosticsLines({
   lines.push(
     chatTrim(
       `[Bot Status] Loadout: pvp=${pvpLoadoutId} preset=${
-        bot?.getCurrentPreset?.()?.getName?.() ?? "none"
+        bot?.getAttribute?.(CURRENT_PRESET_ATTRIBUTE)?.getName?.() ?? "none"
       } equipped=${equipped.length} primaryWeaponId=${
         state?.pvp?.generatedPrimaryWeaponId ?? "n/a"
       }`

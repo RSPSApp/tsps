@@ -64,6 +64,7 @@ export function subscribeHandshake(
         chatIcons?: number[];
         chatPrefix?: string;
         isAdmin?: boolean;
+        membersWorld?: boolean;
     }) => void,
 ): () => void {
     state.handshakeListeners.add(cb);
@@ -171,6 +172,19 @@ export function subscribeFriendsChat(cb: (snapshot: FriendsChatSnapshot) => void
 export function subscribeNotifications(cb: (event: NotificationEvent) => void): () => void {
     state.notificationListeners.add(cb);
     return () => state.notificationListeners.delete(cb);
+}
+
+export function subscribeSystemUpdate(
+    cb: (info: { remainingCentis: number }) => void,
+): () => void {
+    state.systemUpdateListeners.add(cb);
+    const last = state.lastSystemUpdate;
+    if (last && last.remainingCentis > 0) {
+        try {
+            cb({ remainingCentis: last.remainingCentis });
+        } catch {}
+    }
+    return () => state.systemUpdateListeners.delete(cb);
 }
 
 /**

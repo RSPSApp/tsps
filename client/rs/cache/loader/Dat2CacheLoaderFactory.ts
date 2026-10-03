@@ -6,9 +6,8 @@ import {
 } from "../../config/bastype/BasTypeLoader";
 import { GraphicsDefaults } from "../../config/defaults/GraphicsDefaults";
 import {
-    ArchiveEnumTypeLoader,
+    DeferredArchiveEnumTypeLoader,
     EnumTypeLoader,
-    IndexEnumTypeLoader,
 } from "../../config/enumtype/EnumTypeLoader";
 import {
     ArchiveOverlayFloorTypeLoader,
@@ -216,16 +215,14 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     }
 
     getEnumTypeLoader(): EnumTypeLoader | undefined {
-        try {
-            const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
-            if (configIndex.archiveExists(ConfigType.DAT2.enums)) {
-                const enumsArchive = configIndex.getArchive(ConfigType.DAT2.enums);
-                return new ArchiveEnumTypeLoader(this.cacheInfo, enumsArchive);
-            }
-        } catch (e) {
-            console.error("Failed to load enum archive", e);
-        }
-        return undefined;
+        const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
+        if (!configIndex.archiveExists(ConfigType.DAT2.enums)) return undefined;
+
+        // The browser streams config archives on demand. Reading it here can race
+        // startup and permanently leave the CS2 VM without enum definitions.
+        return new DeferredArchiveEnumTypeLoader(this.cacheInfo, () =>
+            configIndex.getArchive(ConfigType.DAT2.enums),
+        );
     }
 
     getStructTypeLoader(): StructTypeLoader | undefined {

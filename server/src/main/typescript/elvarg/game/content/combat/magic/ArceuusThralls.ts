@@ -12,7 +12,7 @@ import { TaskManager } from "../../../task/TaskManager";
 import { Location } from "../../../model/Location";
 
 const THRALL_KEY = "arceuus:thrall";
-const THRALL_PURSUIT_KEY = "arceuus:thrallPursuit";
+const THRALL_PURSUIT_KEY = "arceuus:thrall-pursuit";
 
 export class ArceuusThralls {
     public static summon(player: Player, npcId: number, prayerCost: number, maxHit: number, attackDistance: number): void {

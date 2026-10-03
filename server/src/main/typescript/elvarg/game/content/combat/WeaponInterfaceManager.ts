@@ -2,6 +2,7 @@ import { Equipment } from "../../model/container/impl/Equipment";
 import type { Player } from "../../entity/impl/player/Player";
 import { FightType } from "./FightType";
 import { CombatSpecial } from "./CombatSpecial";
+import { Autocasting } from "./magic/Autocasting";
 import { FightStyle } from "./FightStyle";
 import { WeaponInterfaces } from "./WeaponInterfaces";
 
@@ -15,6 +16,7 @@ export class WeaponInterfaceManager {
         if (!fightType) return false;
         player.setFightType(fightType);
         player.getPacketSender().sendConfig(fightType.getParentId(), fightType.getChildId());
+        Autocasting.refreshIndicators(player);
         return true;
     }
 
@@ -62,28 +64,13 @@ export class WeaponInterfaceManager {
         );
 
         const currentFightType = FightType.resolve(player.getFightType());
-        if (currentFightType) {
-            const matchingFightType = availableFightTypes.find((type) => type === currentFightType);
-            if (matchingFightType) {
-                player.setFightType(matchingFightType);
-                player.getPacketSender().sendConfig(matchingFightType.getParentId(), matchingFightType.getChildId());
-                return;
-            }
-        }
-
-        //Set default attack style to aggressive!
-        for (const type of availableFightTypes) {
-            if (type.getStyle() == FightStyle.AGGRESSIVE) {
-                player.setFightType(type);
-                player.getPacketSender().sendConfig(type.getParentId(), type.getChildId());
-                return;
-            }
-        }
-
-        //Still no proper attack style.
-        //Set it to the first one..
-        player.setFightType(availableFightTypes[0]);
-        player.getPacketSender().sendConfig(player.getFightType().getParentId(), player.getFightType().getChildId());
+        const fightType = availableFightTypes.find(type => type === currentFightType)
+            ?? availableFightTypes.find(type => type.getStyle() === FightStyle.AGGRESSIVE)
+            ?? availableFightTypes[0];
+        player.setFightType(fightType);
+        player.getPacketSender().sendConfig(fightType.getParentId(), fightType.getChildId());
+        // Covers unequip, bank equipment deposits, login and depleted thrown weapons.
+        Autocasting.refreshIndicators(player);
     }
 
 }

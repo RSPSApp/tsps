@@ -343,14 +343,15 @@ export function chooseDefaultMenuEntry(
     }
 
     // Priority 4: First non-deprioritized actionable entry (excluding Walk here/Examine/Cancel)
-    const skippedOptions = new Set(["walk here", "examine", "inspect", "cancel"]);
+    const skippedOptions = new Set(["walk here", "examine", "cancel"]);
     const actionableEntry = entries.find((e) => {
         const lower = String(e.option || "").toLowerCase();
-        return !e.deprioritized && !skippedOptions.has(lower);
+        const action = e.action ?? inferMenuAction(e.option, e.targetType);
+        return !e.deprioritized && !skippedOptions.has(lower) && action !== MenuAction.Examine;
     });
     if (actionableEntry) {
         if (!actionableEntry.action)
-            actionableEntry.action = inferMenuAction(actionableEntry.option);
+            actionableEntry.action = inferMenuAction(actionableEntry.option, actionableEntry.targetType);
         return actionableEntry;
     }
 

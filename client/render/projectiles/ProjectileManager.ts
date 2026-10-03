@@ -480,14 +480,18 @@ export class ProjectileManager implements IProjectileManager {
         const tick = this.getCurrentTick();
         const out = this.projectilesForMapBuffer;
         out.length = 0; // Clear and reuse buffer
+        // An instance scene is one map square: it draws every projectile in the scene, as it does
+        // every NPC (a Gauntlet arena need not be in the square the scene is built as).
+        const r: any = this.renderer as any;
+        const scene = r.instanceActive ? r.instanceSceneMap : null;
         for (const p of this.projectiles.values()) {
             if (tick < p.startCycle) continue;
 
             const pos = p.getPosition();
             // Map check: X >> 13 gives map coordinate (8192 units per map)
             // Or using tiles: (X / 128) >> 6
-            const pMapX = pos.x >> 13;
-            const pMapY = pos.y >> 13;
+            const pMapX = scene ? scene.mapX | 0 : pos.x >> 13;
+            const pMapY = scene ? scene.mapY | 0 : pos.y >> 13;
 
             if (pMapX === mapX && pMapY === mapY) {
                 out.push(p);

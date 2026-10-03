@@ -68,6 +68,7 @@ let BonusManager;
 
 module.exports = {
   name: "TwistedBow",
+  members: true,
   register(api) {
     BonusManager = api.getBonusManager();
     api.registerRangedCombatModifier({

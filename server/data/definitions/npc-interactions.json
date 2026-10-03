@@ -51,20 +51,6 @@
       "args": { "shopId": 3 }
     }
   },
-  "3309": {
-    "first_click": {
-      "method": "core.shops.open",
-      "args": { "shopId": 6 }
-    },
-    "second_click": {
-      "method": "core.shops.open",
-      "args": { "shopId": 6 }
-    },
-    "third_click": {
-      "method": "core.shops.open",
-      "args": { "shopId": 7 }
-    }
-  },
   "4921": {
     "first_click": {
       "method": "core.shops.open",

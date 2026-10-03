@@ -82,7 +82,8 @@ export function handleTradeWidgetAction(
     const entry = source.getSlot(slot);
     const itemId =
         entry && entry.itemId > 0 ? entry.itemId : (event.itemId ?? widget?.itemId ?? -1);
-    const available = isOffer ? inventory.count(itemId) : (entry?.quantity ?? 0);
+    // Unstackable items take one slot each, so count every slot holding the item.
+    const available = source.count(itemId);
     if (optionKey.endsWith("x")) {
         if (!(itemId > 0) || available <= 0) return true;
         deps.setPendingTradeQuantityAction({
@@ -101,11 +102,11 @@ export function handleTradeWidgetAction(
     const quantity = resolveTradeActionQuantity(optionKey, available);
     if (!quantity || quantity <= 0) return true;
 
+    if (!(itemId > 0)) return true;
     if (isOffer) {
-        if (!(itemId > 0)) return true;
         sendTradeOffer(slot, itemId, quantity);
     } else {
-        sendTradeRemove(slot, quantity);
+        sendTradeRemove(slot, itemId, quantity);
     }
     return true;
 }

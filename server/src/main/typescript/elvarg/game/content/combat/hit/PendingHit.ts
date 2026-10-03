@@ -9,6 +9,10 @@ import { HitMask } from "./HitMask";
 import { ServerPerf } from "../../../../util/ServerPerf";
 import { ArceuusSpells } from "../magic/ArceuusSpells";
 import { PluginManager } from "../../../../plugins/PluginManager";
+import { CombatSpecial } from "../CombatSpecial";
+import { DamageFormulas } from "../formula/DamageFormulas";
+import type { SpecialDamageBounds } from "../CombatFactory";
+import type { WeaponSpecialTraits } from "../WeaponSpecialTraits";
 
 type PendingHitConfig = {
     delay?: number;
@@ -27,6 +31,8 @@ export class PendingHit {
     private readonly delay: number;
     private accurate: boolean;
     private handleAfterHitEffects: boolean;
+    /** Optional per-hitsplat extra reveal delays (from `hitDelayTicks`). */
+    private hitDelays?: number[];
 
     constructor(attacker: Mobile, target: Mobile, method: CombatMethod, delayOrConfig?: number | PendingHitConfig, handleAfterHitEffects?: boolean) {
         this.attacker = attacker;
@@ -108,6 +114,11 @@ export class PendingHit {
         return this.handleAfterHitEffects;
     }
 
+    /** Per-hitsplat extra reveal delays, or undefined when all land together. */
+    public getHitDelays(): readonly number[] | undefined {
+        return this.hitDelays;
+    }
+
     private prepareHits(hitAmount: number, rollAccuracy: boolean): HitDamage[] {
         // Check the hit amounts.
         if (hitAmount > 4) {
@@ -120,6 +131,22 @@ export class PendingHit {
 
         if (this.attacker == null || this.target == null) {
             return null;
+        }
+
+        // Utility-only specials (e.g. stat boosts that resolve outside the hit
+        // pipeline) declare skipAttack and produce no hitsplat.
+        const traits = CombatSpecial.activeTraitsFor(this.attacker);
+        if (traits?.skipAttack === true) {
+            this.totalDamage = 0;
+            return [];
+        }
+
+        // Declarative specials can request extra hits without hand-rolling hits().
+        if (traits?.hitCount !== undefined) {
+            hitAmount = Math.min(4, Math.max(hitAmount, Math.trunc(traits.hitCount)));
+        }
+        if (traits?.hitDelayTicks) {
+            this.hitDelays = [...traits.hitDelayTicks].map((tick) => Math.max(0, Math.trunc(tick)));
         }
 
         this.totalDamage = 0;
@@ -142,18 +169,12 @@ export class PendingHit {
         if (hitAmount === 1) {
             const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, bypassProtectionPrayer: false };
             PluginManager.emitCombatHitRoll(roll);
-            this.accurate = roll.forceAccurate || !rollAccuracy || ServerPerf.measurePhase(
-                "combat.process.method_hits.roll_accuracy",
-                () => AccuracyFormulasDpsCalc.rollAccuracy(
-                    this.attacker,
-                    this.target,
-                    this.combatType
-                )
-            );
+            const resolved = this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, 0);
+            this.accurate = resolved.accurate;
             const damage: HitDamage = this.accurate
                 ? ServerPerf.measurePhase(
                     "combat.process.method_hits.damage",
-                    () => CombatFactory.getHitDamage(this.attacker, this.target, this.combatType, roll.bypassProtectionPrayer)
+                    () => CombatFactory.getHitDamage(this.attacker, this.target, this.combatType, roll.bypassProtectionPrayer, resolved.bounds)
                 )
                 : new HitDamage(0, HitMask.BLUE);
             if (this.accurate && this.attacker.isPlayer() && this.target.isPlayer()) {
@@ -175,17 +196,33 @@ export class PendingHit {
             return [damage];
         }
 
+        if (traits?.firstSuccessfulAccuracyDamageRanges?.length) {
+            const resolvedBranch = this.resolveFirstSuccessfulRanges(traits, capToRemaining);
+            if (resolvedBranch) {
+                return resolvedBranch;
+            }
+        }
+
         let hits: HitDamage[] = new Array(hitAmount);
+        let firstAccurate: boolean | undefined;
+        let firstBounds: SpecialDamageBounds | undefined;
         for (let i = 0; i < hits.length; i++) {
             const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, bypassProtectionPrayer: false };
             PluginManager.emitCombatHitRoll(roll);
-            this.accurate = roll.forceAccurate || !rollAccuracy || ServerPerf.measurePhase(
-                "combat.process.method_hits.roll_accuracy",
-                () => AccuracyFormulasDpsCalc.rollAccuracy(this.attacker, this.target, this.combatType)
-            );
+            let resolved: { accurate: boolean; bounds?: SpecialDamageBounds };
+            if (i > 0 && traits?.sharedAccuracyRollAcrossHits === true) {
+                resolved = { accurate: firstAccurate === true, bounds: firstBounds };
+            } else {
+                resolved = this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, i);
+                if (i === 0) {
+                    firstAccurate = resolved.accurate;
+                    firstBounds = resolved.bounds;
+                }
+            }
+            this.accurate = resolved.accurate;
             let damage: HitDamage = this.accurate ? ServerPerf.measurePhase(
                 "combat.process.method_hits.damage",
-                () => CombatFactory.getHitDamage(this.attacker, this.target, this.combatType, roll.bypassProtectionPrayer)
+                () => CombatFactory.getHitDamage(this.attacker, this.target, this.combatType, roll.bypassProtectionPrayer, resolved.bounds)
             ) : new HitDamage(0, HitMask.BLUE);
             if (this.accurate && this.attacker.isPlayer() && this.target.isPlayer()) {
                 ArceuusSpells.applyCorruption(this.attacker.getAsPlayer(), this.target.getAsPlayer());
@@ -205,6 +242,135 @@ export class PendingHit {
             this.totalDamage += damage.getDamage();
             hits[i] = damage;
         }
+        return hits;
+    }
+
+    /**
+     * Resolves accuracy for one hitsplat using the active special's traits
+     * (accuracy roll count, guaranteed rolls, fixed execute-window accuracy)
+     * and derives the per-hit damage bounds for indexed damage ranges.
+     */
+    private rollSpecialTraits(
+        traits: WeaponSpecialTraits | null,
+        forceAccurate: boolean,
+        rollAccuracyFlag: boolean,
+        hitIndex: number
+    ): { accurate: boolean; bounds?: SpecialDamageBounds } {
+        const defenceType = this.method.accuracyDefenceType(this.combatType);
+        if (!traits) {
+            const accurate = forceAccurate || !rollAccuracyFlag ||
+                AccuracyFormulasDpsCalc.rollAccuracy(this.attacker, this.target, this.combatType, defenceType);
+            return { accurate };
+        }
+        const guaranteed =
+            traits.guaranteedHit === true ||
+            forceAccurate ||
+            (hitIndex === 0 && traits.guaranteedFirstAccuracyRoll === true);
+        const rollCount = Math.max(1, Math.trunc(traits.accuracyRollCount ?? 1));
+        let successfulRolls: number;
+        if (guaranteed || !rollAccuracyFlag) {
+            successfulRolls = rollCount;
+        } else {
+            const fixed = traits.fixedAccuracyRollMultiplierWhenTargetAtOrBelowMaximumDamage;
+            if (fixed !== undefined && this.target.getHitpoints() <= DamageFormulas.sourceMaxHit(this.attacker, this.combatType)) {
+                successfulRolls = AccuracyFormulasDpsCalc.rollFixedAccuracy(this.attacker, this.target, this.combatType, fixed, defenceType) ? 1 : 0;
+            } else {
+                successfulRolls = AccuracyFormulasDpsCalc.rollAccuracyCount(this.attacker, this.target, this.combatType, rollCount, defenceType);
+            }
+        }
+        const range = successfulRolls > 0 ? traits.damageRangeBySuccessfulAccuracyRolls?.[successfulRolls - 1] : undefined;
+
+        // maximumHitSplitCount divides the final max hit across the hit sequence.
+        const splitCount = Math.max(1, Math.trunc(traits.maximumHitSplitCount ?? 1));
+        let splitFraction = 1;
+        if (splitCount > 1) {
+            const total = Math.max(1, DamageFormulas.sourceMaxHit(this.attacker, this.combatType));
+            const index = Math.max(0, Math.min(splitCount - 1, hitIndex));
+            splitFraction =
+                (Math.floor((total * (index + 1)) / splitCount) - Math.floor((total * index) / splitCount)) /
+                total;
+        }
+
+        const bounds: SpecialDamageBounds = {
+            minimumMultiplier: (range?.minimumDamageMultiplier ?? traits.minimumDamageMultiplier ?? 0) * splitFraction,
+            maximumMultiplier: (range?.maximumDamageMultiplier ?? traits.maximumDamageMultiplier ?? 1) * splitFraction,
+            minimumBonus: traits.minimumDamageBonus,
+            maximumBonus: traits.maximumDamageBonus,
+            cap: traits.maximumDamageCap,
+            reduction: successfulRolls === rollCount ? traits.maximumHitReductionOnFullAccuracyRolls : 0,
+        };
+        return { accurate: successfulRolls > 0, bounds };
+    }
+
+    /**
+     * First-successful-accuracy branch table (dragon claws family): each entry is
+     * attempted until one lands, then its damage is split across the configured
+     * hit count. All-miss outcomes use the configured damage patterns.
+     */
+    private resolveFirstSuccessfulRanges(
+        traits: WeaponSpecialTraits,
+        capToRemaining: (damage: HitDamage) => HitDamage
+    ): HitDamage[] | null {
+        const ranges = traits.firstSuccessfulAccuracyDamageRanges ?? [];
+        if (ranges.length === 0) {
+            return null;
+        }
+        const hitCount = Math.max(1, Math.trunc(traits.hitCount ?? 1));
+        for (let attempt = 0; attempt < ranges.length; attempt++) {
+            const range = ranges[attempt];
+            const success = traits.guaranteedHit === true ||
+                AccuracyFormulasDpsCalc.rollAccuracy(
+                    this.attacker,
+                    this.target,
+                    this.combatType,
+                    this.method.accuracyDefenceType(this.combatType)
+                );
+            if (!success) {
+                continue;
+            }
+            const bounds: SpecialDamageBounds = {
+                minimumMultiplier: range.minimumDamageMultiplier,
+                maximumMultiplier: range.maximumDamageMultiplier,
+                reduction: range.maximumDamageReduction ?? 0,
+            };
+            const base = CombatFactory.getHitDamage(this.attacker, this.target, this.combatType, false, bounds).getDamage();
+            const distributed = range.distributeDamage?.(base, hitCount);
+            const hits: HitDamage[] = [];
+            let total = 0;
+            for (let i = 0; i < hitCount; i++) {
+                const raw = distributed
+                    ? distributed[i] ?? 0
+                    : base * (range.hitDamageMultipliers[i] ?? 0) + Math.trunc(range.hitDamageBonuses?.[i] ?? 0);
+                const value = Math.max(0, Math.floor(raw));
+                const hit = new HitDamage(value, value === 0 ? HitMask.BLUE : HitMask.RED);
+                capToRemaining(hit);
+                total += hit.getDamage();
+                hits.push(hit);
+            }
+            this.accurate = total > 0;
+            this.totalDamage = total;
+            return hits;
+        }
+
+        const patterns = traits.allMissDamagePatterns;
+        const fallbackRoll = Math.random();
+        const pattern = patterns && patterns.length > 0
+            ? patterns[Math.min(patterns.length - 1, Math.floor(fallbackRoll * patterns.length))]
+            : Array.from({ length: hitCount }, (_, i) =>
+                i === hitCount - 1 ? (fallbackRoll < 0.2 ? 0 : fallbackRoll < 0.6 ? 1 : 2) : 0);
+        const hits: HitDamage[] = [];
+        let total = 0;
+        let landed = false;
+        for (let i = 0; i < hitCount; i++) {
+            const value = Math.max(0, Math.floor(pattern[i] ?? 0));
+            landed = landed || value > 0;
+            const hit = new HitDamage(value, value === 0 ? HitMask.BLUE : HitMask.RED);
+            capToRemaining(hit);
+            total += hit.getDamage();
+            hits.push(hit);
+        }
+        this.accurate = landed;
+        this.totalDamage = total;
         return hits;
     }
 

@@ -11,24 +11,41 @@ const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { ArceuusSpells } = require("../../src/main/typescript/elvarg/game/content/combat/magic/ArceuusSpells");
 
 const THIEVING_ANIMATION = new Animation(881);
-const NPC_ATTACK_ANIMATION = new Animation(401);
 const PICKPOCKET_COOLDOWN_MS = 1200;
 
 class PickpocketResolveTask extends Task {
-  constructor(onResolve) {
-    super(2);
+  constructor(player, onResolve) {
+    super(2, player.getIndex());
+    this.player = player;
+    this.location = player.getLocation().clone();
     this.onResolve = onResolve;
   }
 
+  canResolve() {
+    return this.player.isRegistered() && this.player.getHitpoints() > 0 &&
+      this.player.getLocation().equals(this.location) && this.player.getMovementQueue().size() === 0 &&
+      this.player.getForceMovement() == null;
+  }
+
   execute() {
-    this.onResolve();
+    if (this.canResolve()) this.onResolve();
     this.stop();
+  }
+
+  onTick() {
+    if (!this.canResolve()) this.stop();
+  }
+
+  stop() {
+    super.stop();
+    if (this.player.isRegistered()) this.player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
   }
 }
 
 const PICKPOCKETS = [
   {
     name: "Man",
+    petBase: 257211,
     level: 1,
     xp: 8,
     stunTime: 8,
@@ -37,6 +54,7 @@ const PICKPOCKETS = [
   },
   {
     name: "Farmer",
+    petBase: 257211,
     level: 10,
     xp: 14.5,
     stunTime: 8,
@@ -45,6 +63,7 @@ const PICKPOCKETS = [
   },
   {
     name: "Rogue",
+    petBase: 257211,
     level: 32,
     xp: 36.5,
     stunTime: 9,
@@ -53,6 +72,7 @@ const PICKPOCKETS = [
   },
   {
     name: "Master Farmer",
+    petBase: 257211,
     level: 38,
     xp: 43,
     stunTime: 9,
@@ -61,6 +81,7 @@ const PICKPOCKETS = [
   },
   {
     name: "Guard",
+    petBase: 257211,
     level: 40,
     xp: 47,
     stunTime: 9,
@@ -69,6 +90,7 @@ const PICKPOCKETS = [
   },
   {
     name: "Paladin",
+    petBase: 127056,
     level: 70,
     xp: 152,
     stunTime: 10,
@@ -77,6 +99,7 @@ const PICKPOCKETS = [
   },
   {
     name: "Gnome",
+    petBase: 108718,
     level: 75,
     xp: 199,
     stunTime: 10,
@@ -89,12 +112,12 @@ const PICKPOCKET_BY_NAME = new Map(PICKPOCKETS.map((entry) => [entry.name, entry
 PICKPOCKET_BY_NAME.set("Woman", PICKPOCKET_BY_NAME.get("Man"));
 
 const STALLS = new Map([
-  ["Bakery stall", { level: 5, xp: 16, rewards: [[ItemIds.COINS, 20]] }],
-  ["Silk stall", { level: 20, xp: 24, rewards: [[ItemIds.COINS, 60]] }],
-  ["Tea stall", { level: 5, xp: 16, rewards: [[ItemIds.COINS, 20]] }],
-  ["Fur stall", { level: 35, xp: 36, rewards: [[ItemIds.COINS, 100]] }],
-  ["Gem stall", { level: 75, xp: 160, rewards: [[ItemIds.UNCUT_SAPPHIRE, 1], [ItemIds.UNCUT_EMERALD, 1]] }],
-  ["Seed Stall", { level: 27, xp: 10, rewards: [[ItemIds.POTATO_SEED, 1], [ItemIds.ONION_SEED, 1]] }],
+  ["Bakery stall", { petBase: 124066, level: 5, xp: 16, rewards: [[ItemIds.COINS, 20]] }],
+  ["Silk stall", { petBase: 68926, level: 20, xp: 24, rewards: [[ItemIds.COINS, 60]] }],
+  ["Tea stall", { petBase: 68926, level: 5, xp: 16, rewards: [[ItemIds.COINS, 20]] }],
+  ["Fur stall", { petBase: 36490, level: 35, xp: 36, rewards: [[ItemIds.COINS, 100]] }],
+  ["Gem stall", { petBase: 36490, level: 75, xp: 160, rewards: [[ItemIds.UNCUT_SAPPHIRE, 1], [ItemIds.UNCUT_EMERALD, 1]] }],
+  ["Seed Stall", { petBase: 36490, level: 27, xp: 10, rewards: [[ItemIds.POTATO_SEED, 1], [ItemIds.ONION_SEED, 1]] }],
 ]);
 
 STALLS.set("Baker's stall", STALLS.get("Bakery stall"));
@@ -147,7 +170,7 @@ function handleStealFromStall(event) {
   player.getInventory().addItem(reward);
   player.getSkillManager().addExperiences(Skill.THIEVING, stall.xp);
   player.sendMessage(`You steal ${reward.getAmount()} x ${reward.getDefinition().getName()}.`);
-  pluginApi.emitCustomEvent("thieving:success", { player, skill: Skill.THIEVING });
+  pluginApi.emitCustomEvent("thieving:success", { player, skill: Skill.THIEVING, petBase: stall.petBase });
   event.handled = true;
 }
 
@@ -195,7 +218,7 @@ function pickpocket(event) {
   npc.getTimers().registers(TimerKey.ATTACK_IMMUNITY, 10);
 
   TaskManager.submit(
-    new PickpocketResolveTask(() => {
+    new PickpocketResolveTask(player, () => {
       if (!player.isRegistered() || !npc.isRegistered()) {
         return;
       }
@@ -207,7 +230,7 @@ function pickpocket(event) {
         }
         player.sendMessage(`You steal ${loot.getAmount()} x ${loot.getDefinition().getName()}.`);
         player.getSkillManager().addExperiences(Skill.THIEVING, def.xp);
-        pluginApi.emitCustomEvent("thieving:success", { player, skill: Skill.THIEVING });
+        pluginApi.emitCustomEvent("thieving:success", { player, skill: Skill.THIEVING, petBase: def.petBase });
         return;
       }
 
@@ -218,7 +241,7 @@ function pickpocket(event) {
 
       npc.setPositionToFace(player.getLocation());
       npc.forceChat("What do you think you're doing?");
-      npc.performAnimation(NPC_ATTACK_ANIMATION);
+      npc.performAnimation(new Animation(npc.getAttackAnim()));
       player.sendMessage("You fail to pick the pocket.");
       Sounds.sendSound(player, Sound.THIEVING_STUNNED);
       CombatFactory.stun(player, def.stunTime, true);
@@ -235,6 +258,7 @@ function pickpocket(event) {
 
 module.exports = {
   name: "Thieving",
+  members: true,
   register(api) {
     pluginApi = api;
     TaskManager = api.getTaskManager();

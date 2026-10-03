@@ -27,6 +27,8 @@ const { applyGeneratedPvpLoadout } = require("../bots/behaviours/policies/PvpLoa
 const { ATTR_SKIP_PERSISTENCE } = require("../bots/runtime/BotPersistenceConstants");
 const { ShopManager } = require("../../src/main/typescript/elvarg/game/model/container/shop/ShopManager");
 
+const CURRENT_PET_ATTRIBUTE = "pets:current";
+
 const OVERLAY_HUD_UID = (161 << 16) | 8;
 const LANDER_OVERLAY = 407;
 const GAME_OVERLAY = 408;
@@ -48,6 +50,16 @@ const MAX_PESTS = 100;
 const MIN_REWARD_ACTIVITY = 1;
 const MAX_ACTIVITY = 100;
 const MAX_COMMENDATIONS = 4000;
+const POINTS_ATTRIBUTE = "pest-control:points";
+
+function getPoints(player) {
+  const points = Number(player?.getAttribute?.(POINTS_ATTRIBUTE));
+  return Number.isFinite(points) ? points : 0;
+}
+
+function setPoints(player, points) {
+  player.setAttribute(POINTS_ATTRIBUTE, Math.max(0, Math.min(MAX_COMMENDATIONS, Math.trunc(points))));
+}
 const ATTR_WAITING_BOAT = "pest-control:waiting-boat";
 const PEST_CONTROL_POINTS = "PEST_CONTROL_POINTS";
 const VOID_KNIGHT_SHOP = 11;
@@ -921,8 +933,7 @@ class PestControlMatch {
     for (const player of players) {
       const state = this.players.get(player);
       if (won && state.activity >= MIN_REWARD_ACTIVITY) {
-        const oldPoints = Number.isFinite(player.pcPoints) ? player.pcPoints : 0;
-        player.pcPoints = Math.min(MAX_COMMENDATIONS, oldPoints + this.boat.points);
+        setPoints(player, getPoints(player) + this.boat.points);
         const coins = player.getSkillManager().getCombatLevel() * 10;
         player.getInventory().adds(ItemIdentifiers.COINS, coins);
         player.sendMessage(
@@ -969,7 +980,7 @@ class PestControlWaitingArea extends Area {
     }
     player.getPacketSender().sendSubInterface(OVERLAY_HUD_UID, LANDER_OVERLAY, 1);
     player.sendMessage(`You have joined the ${this.state.boat.name.toLowerCase()} Pest Control lander.`);
-    player.sendMessage(`You currently have ${Number.isFinite(player.pcPoints) ? player.pcPoints : 0} commendation points.`);
+    player.sendMessage(`You currently have ${getPoints(player)} commendation points.`);
     this.updateOverlay(player);
   }
 
@@ -996,7 +1007,7 @@ class PestControlWaitingArea extends Area {
     const sender = player.getPacketSender();
     sender.sendString(count >= MIN_PLAYERS ? `Next Departure: ${formatTicks(this.state.countdown)}` : "Next Departure: --", (LANDER_OVERLAY << 16) | 3);
     sender.sendString(`Players Ready: ${count}`, (LANDER_OVERLAY << 16) | 4);
-    sender.sendString(`Points: ${Number.isFinite(player.pcPoints) ? player.pcPoints : 0}`, (LANDER_OVERLAY << 16) | 5);
+    sender.sendString(`Points: ${getPoints(player)}`, (LANDER_OVERLAY << 16) | 5);
     sender.sendString(`Combat level ${this.state.boat.level}+`, (LANDER_OVERLAY << 16) | 20);
   }
 }
@@ -1009,9 +1020,9 @@ class PestControlOutpostArea extends Area {
 function createPestControl(api) {
   api.registerShopCurrency(PEST_CONTROL_POINTS, {
     name: "Void Knight commendation points",
-    amount: (player) => Number.isFinite(player?.pcPoints) ? player.pcPoints : 0,
-    add: (player, amount) => { player.pcPoints = Math.max(0, (player.pcPoints || 0) + amount); },
-    remove: (player, amount) => { player.pcPoints = Math.max(0, (player.pcPoints || 0) - amount); },
+    amount: getPoints,
+    add: (player, amount) => setPoints(player, getPoints(player) + amount),
+    remove: (player, amount) => setPoints(player, getPoints(player) - amount),
   });
   api.registerDefinitionSource("shops", {
     name: "pest-control",
@@ -1097,7 +1108,7 @@ function createPestControl(api) {
       player.sendMessage(`You need a combat level of ${boat.level} to board this lander.`);
       return;
     }
-    if (player.getCurrentPet?.()) {
+    if (player.getAttribute?.(CURRENT_PET_ATTRIBUTE)) {
       player.sendMessage("You cannot bring a follower onto the lander.");
       return;
     }
@@ -1112,7 +1123,6 @@ function createPestControl(api) {
   }
 
   api.onPlayerLogin(({ player }) => {
-    player.pcPoints = Math.max(0, Math.min(MAX_COMMENDATIONS, Number.isFinite(player.pcPoints) ? player.pcPoints : 0));
     if (GAME_BOUNDS.inside(player.getLocation())) player.moveTo(OUTPOST_RETURN.clone());
   });
 
@@ -1212,6 +1222,7 @@ function leaveMatch({ player, npc }) {
 
 module.exports = {
   name: "PestControl",
+  members: true,
   register(api) {
     AreaManager = api.getAreaManager();
     ObjectManager = api.getObjectManager();

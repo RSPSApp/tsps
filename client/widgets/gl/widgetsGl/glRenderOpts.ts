@@ -99,5 +99,9 @@ export type WidgetRule = {
     type?: number;
     /** Match the widget's contentType (e.g. 1339 = compass). */
     contentType?: number;
+    /** Match only widgets that do (true) or don't (false) show an item, e.g. search result icons. */
+    item?: boolean;
+    /** Match the widget's RGB colour (rectangles/text), e.g. the white transparent-chat backing. */
+    colour?: number;
     hide?: boolean;
 };

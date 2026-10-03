@@ -187,6 +187,7 @@ import {
 } from "../../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
+import { projectDeckToWorld } from "../worldEntityMotion";
 import { RENDER_CONSTANTS, InteractHighlightTarget } from "../constants";
 
 export function resolveInteractHighlightTargetFromEntry(host: WebGLOsrsRendererHost, 
@@ -280,10 +281,22 @@ export function spawnClickCross(host: WebGLOsrsRendererHost,
 
         if (!tile) return;
         const playerPlane = host.getPlayerBasePlane() | 0;
-        const plane = tile.plane ?? playerPlane;
+        let plane = tile.plane ?? playerPlane;
+        let tileX = tile.tileX | 0;
+        let tileY = tile.tileY | 0;
+        // A click on a boat picks a tile in the boat's own scene; anchor the cross where that
+        // scene is drawn (it's aligned to the click position on screen when drawn).
+        const view = host.osrsClient.worldViewManager.findWorldViewAt(tileX, tileY);
+        if (view && view.id !== -1) {
+            const projected = projectDeckToWorld(host, view.id, (tileX << 7) + 64, (tileY << 7) + 64);
+            if (!projected) return;
+            tileX = Math.floor(projected.x / 128);
+            tileY = Math.floor(projected.y / 128);
+            plane = playerPlane;
+        }
         host.clickCrossOverlay?.spawn(
-            tile.tileX | 0,
-            tile.tileY | 0,
+            tileX,
+            tileY,
             xy.sx,
             xy.sy,
             plane,

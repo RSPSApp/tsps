@@ -86,6 +86,43 @@ function getItemDefinitionsPath() {
   );
 }
 
+// OSRS Grand Exchange quotes (yarn fetch:prices) onto ItemDefinition, kept
+// separate from the cache's store value that shops and valuation use.
+function loadItemPrices() {
+  const ItemDefinition = getItemDefinition();
+  const filePath = path.resolve(
+    process.cwd(),
+    getGameConstants().DEFINITIONS_DIRECTORY,
+    "item-prices.json"
+  );
+  if (!fs.existsSync(filePath)) {
+    return { filePath, loaded: 0 };
+  }
+  const { data } = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Invalid item-prices.json: expected a data object");
+  }
+  let loaded = 0;
+  for (const [key, quote] of Object.entries(data)) {
+    const id = Number(key);
+    if (!Number.isInteger(id) || id < 0) continue;
+    const price = [quote?.high, quote?.low].find(
+      (value) => Number.isSafeInteger(value) && value > 0
+    );
+    if (price === undefined) continue;
+    const definition = ItemDefinition.forId(id);
+    if (definition === ItemDefinition.DEFAULT) continue;
+    definition.grandExchangeValue = price;
+    const noteId = definition.getNoteId();
+    if (!definition.isNoted() && noteId >= 0) {
+      const note = ItemDefinition.forId(noteId);
+      if (note.isNoted() && note.getNoteId() === id) note.grandExchangeValue = price;
+    }
+    loaded += 1;
+  }
+  return { filePath, loaded };
+}
+
 function loadItemDefinitions() {
   const ItemDefinition = getItemDefinition();
   const filePath = getItemDefinitionsPath();
@@ -112,7 +149,10 @@ function loadItemDefinitions() {
       mismatched++;
       continue;
     }
-    def.equipmentType = hydrateEquipmentType(rawDef.equipmentType);
+    // "NONE" is the export's default, not a claim; keep the cache wearPos slot
+    // (e.g. Bronze sword 1277 is exported as NONE but wearPos 3).
+    const equipmentType = hydrateEquipmentType(rawDef.equipmentType);
+    if (equipmentType.getSlot() !== -1) def.equipmentType = equipmentType;
     def.weaponInterface = hydrateWeaponInterface(rawDef.weaponInterface);
     for (const property of [
       "doubleHanded", "sellable", "bloodMoneyValue", "highAlch",
@@ -230,6 +270,7 @@ function loadItemDefinitions() {
     total: ItemDefinition.definitions.size,
     unresolvedWeaponInterfaces,
     mismatched,
+    prices: loadItemPrices(),
   };
 }
 
@@ -260,6 +301,7 @@ module.exports = {
       total: result.total,
       unresolvedWeaponInterfaces: result.unresolvedWeaponInterfaces,
       mismatched: result.mismatched,
+      prices: result.prices.loaded,
       elapsedMs: Date.now() - startedAt,
     });
     api.registerContentEndpoint("custom-items", customItemsResource);

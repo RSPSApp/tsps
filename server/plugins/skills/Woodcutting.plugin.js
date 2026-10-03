@@ -8,12 +8,46 @@ const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { ItemIds, ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
+const Guild = require("./woodcutting/Guild.Woodcutting");
+const ClueNests = require("./woodcutting/ClueNests.Woodcutting");
+const InfernalAxe = require("./woodcutting/InfernalAxe.Woodcutting");
 
-const TREE_STUMP_OBJECT_ID = ObjectIds.TREE_STUMP_3;
+const DEFAULT_TREE_STUMP_ID = ObjectIds.TREE_STUMP_2;
+// Older trees share models but not stumps, and some sit next to an unrelated stump id; key their
+// stump by the tree's model.
+const NORMAL_TREE_STUMP_BY_MODEL = new Map([
+  [1570, ObjectIds.TREE_STUMP_2],
+  [1637, ObjectIds.TREE_STUMP_2],
+  [1667, ObjectIds.TREE_STUMP_2],
+  [1715, ObjectIds.TREE_STUMP_7],
+  [1716, ObjectIds.TREE_STUMP_11],
+  [1718, ObjectIds.TREE_STUMP_14],
+  [1719, ObjectIds.TREE_STUMP_18],
+  [1700, ObjectIds.TREE_STUMP_19],
+  [23908, ObjectIds.TREE_STUMP_50],
+  [1611, ObjectIds.TREE_STUMP_15],
+  [1614, ObjectIds.TREE_STUMP_15],
+  [1688, ObjectIds.TREE_STUMP_15],
+  [1681, ObjectIds.TREE_STUMP_17],
+  [1682, ObjectIds.TREE_STUMP_17],
+  [1683, ObjectIds.TREE_STUMP_17],
+  [14747, ObjectIds.DYING_TREE_STUMP],
+  [3944, ObjectIds.TREE_STUMP_22],
+  [4146, ObjectIds.TREE_STUMP_20],
+  [4144, ObjectIds.TREE_STUMP_24],
+  [16293, ObjectIds.TREE_STUMP_49],
+  [33650, ObjectIds.DEAD_TREE_STUMP],
+  [33625, ObjectIds.DEAD_TREE_STUMP_2],
+]);
+const stumpIdByTreeId = new Map();
 const WOODCUTTING_ACTION_INTERVAL_TICKS = 4;
 const CHOP_ANIMATION_INTERVAL_TICKS = 4;
+// Fallback for multi-log trees without a known Forestry despawn timer: 1/8 per log.
 const MULTI_TREE_DEPLETION_ROLL_MAX = 15;
 const MULTI_TREE_DEPLETION_THRESHOLD = 2;
+// OSRS Forestry: a tree's despawn timer counts down one per tick while anyone is chopping it
+// and regenerates one per tick while nobody is; it falls on the first log after reaching 0.
+const treeDespawnTimers = new Map();
 const BIRD_NEST_DROP_CHANCE = 256;
 let woodcuttingTick = 0;
 let activeSessionsRef = null;
@@ -36,30 +70,132 @@ const SEARCHABLE_NEST_IDS = new Set([
   BIRD_NESTS.RING_NEST,
 ]);
 
-const AXES = [
-  { id: ItemIds.BRONZE_AXE, requiredLevel: 1, speed: 0.03, animationId: 879 },
-  { id: ItemIds.IRON_AXE, requiredLevel: 1, speed: 0.05, animationId: 877 },
-  { id: ItemIds.STEEL_AXE, requiredLevel: 6, speed: 0.09, animationId: 875 },
-  { id: ItemIds.BLACK_AXE, requiredLevel: 6, speed: 0.11, animationId: 873 },
-  { id: ItemIds.MITHRIL_AXE, requiredLevel: 21, speed: 0.13, animationId: 871 },
-  { id: ItemIds.ADAMANT_AXE, requiredLevel: 31, speed: 0.16, animationId: 869 },
-  { id: ItemIds.RUNE_AXE, requiredLevel: 41, speed: 0.19, animationId: 867 },
-  { id: ItemIds.DRAGON_AXE, requiredLevel: 61, speed: 0.25, animationId: 2846 },
-  { id: ItemIds.INFERNAL_AXE, requiredLevel: 61, speed: 0.3, animationId: 2117 },
+const WOODCUTTING_CAPE_IDS = [
+  ItemIds.WOODCUTTING_CAPE,
+  ItemIds.WOODCUT_CAPE_T_,
+  ItemIds.MAX_CAPE,
+  ItemIds.MAX_CAPE_2,
+  ItemIds.MAX_CAPE_3,
+];
+const WOODCUTTING_CAPE_NEST_MULTIPLIER = 1.1;
+
+const LUMBERJACK_OUTFIT = [
+  { slot: Equipment.HEAD_SLOT, itemIds: [ItemIds.LUMBERJACK_HAT, ItemIds.FORESTRY_HAT], bonus: 0.004 },
+  { slot: Equipment.BODY_SLOT, itemIds: [ItemIds.LUMBERJACK_TOP, ItemIds.FORESTRY_TOP], bonus: 0.008 },
+  { slot: Equipment.LEG_SLOT, itemIds: [ItemIds.LUMBERJACK_LEGS, ItemIds.FORESTRY_LEGS], bonus: 0.006 },
+  { slot: Equipment.FEET_SLOT, itemIds: [ItemIds.LUMBERJACK_BOOTS, ItemIds.FORESTRY_BOOTS], bonus: 0.002 },
+];
+const LUMBERJACK_SET_BONUS = 0.005;
+
+// OSRS Wiki seed nest table (1,011 slots).
+const NEST_SEEDS = [
+  { id: ItemIds.ACORN, name: "acorn", weight: 214 },
+  { id: ItemIds.APPLE_TREE_SEED, name: "apple", weight: 170 },
+  { id: ItemIds.WILLOW_SEED, name: "willow", weight: 135 },
+  { id: ItemIds.BANANA_TREE_SEED, name: "banana", weight: 108 },
+  { id: ItemIds.ORANGE_TREE_SEED, name: "orange", weight: 85 },
+  { id: ItemIds.CURRY_TREE_SEED, name: "curry", weight: 68 },
+  { id: ItemIds.MAPLE_SEED, name: "maple", weight: 54 },
+  { id: ItemIds.PINEAPPLE_SEED, name: "pineapple", weight: 42 },
+  { id: ItemIds.PAPAYA_TREE_SEED, name: "papaya", weight: 34 },
+  { id: ItemIds.YEW_SEED, name: "yew", weight: 27 },
+  { id: ItemIds.PALM_TREE_SEED, name: "palm", weight: 22 },
+  { id: ItemIds.CALQUAT_TREE_SEED, name: "calquat", weight: 17 },
+  { id: ItemIds.SPIRIT_SEED, name: "spirit", weight: 11 },
+  { id: ItemIds.DRAGONFRUIT_TREE_SEED, name: "dragonfruit", weight: 6 },
+  { id: ItemIds.MAGIC_SEED, name: "magic", weight: 5 },
+  { id: ItemIds.TEAK_SEED, name: "teak", weight: 4 },
+  { id: ItemIds.MAHOGANY_SEED, name: "mahogany", weight: 4 },
+  { id: ItemIds.CELASTRUS_SEED, name: "celastrus", weight: 3 },
+  { id: ItemIds.REDWOOD_TREE_SEED, name: "redwood", weight: 2 },
 ];
 
-const AXES_BY_REQUIREMENT_DESC = [...AXES].sort(
-  (a, b) => b.requiredLevel - a.requiredLevel
-);
+// OSRS Wiki ring nest table.
+const NEST_RINGS = [
+  { id: ItemIds.GOLD_RING, name: "gold", weight: 35 },
+  { id: ItemIds.SAPPHIRE_RING, name: "sapphire", weight: 40 },
+  { id: ItemIds.EMERALD_RING, name: "emerald", weight: 15 },
+  { id: ItemIds.RUBY_RING, name: "ruby", weight: 9 },
+  { id: ItemIds.DIAMOND_RING, name: "diamond", weight: 1 },
+];
+
+// Wintertodt's own supply roll reads `speed`; it follows the axe's cut-chance tier.
+const AXE_SPEED_BY_TIER = [0.03, 0.05, 0.09, 0.11, 0.13, 0.16, 0.19, 0.25];
+
+function axe(id, requiredLevel, tier, animationId, extra = {}) {
+  return { id, requiredLevel, tier, speed: AXE_SPEED_BY_TIER[tier], animationId, ...extra };
+}
+
+// OSRS Wiki axe list. `tier` indexes the CUT_CHANCE rows: 3rd age, crystal and infernal axes cut
+// like dragon, gilded like rune and blessed like mithril. Felling axes cut like their standard
+// counterpart (their bonus needs Forester's rations, which do not exist here). Animation ids are
+// RuneLite's WOODCUTTING_* constants; blessed has none of its own and uses mithril's.
+// Listed worst to best: a player uses the last axe here they hold and can use.
+const AXES = [
+  axe(ItemIds.BRONZE_FELLING_AXE, 1, 0, 10064),
+  axe(ItemIds.BRONZE_AXE, 1, 0, 879, { standard: true }),
+  axe(ItemIds.IRON_FELLING_AXE, 1, 1, 10065),
+  axe(ItemIds.IRON_AXE, 1, 1, 877, { standard: true }),
+  axe(ItemIds.STEEL_FELLING_AXE, 6, 2, 10066),
+  axe(ItemIds.STEEL_AXE, 6, 2, 875, { standard: true }),
+  axe(ItemIds.BLACK_FELLING_AXE, 11, 3, 10067),
+  axe(ItemIds.BLACK_AXE, 11, 3, 873, { standard: true }),
+  axe(ItemIds.BLESSED_AXE, 21, 4, 871),
+  axe(ItemIds.MITHRIL_FELLING_AXE, 21, 4, 10068),
+  axe(ItemIds.MITHRIL_AXE, 21, 4, 871, { standard: true }),
+  axe(ItemIds.ADAMANT_FELLING_AXE, 31, 5, 10069),
+  axe(ItemIds.ADAMANT_AXE, 31, 5, 869, { standard: true }),
+  axe(ItemIds.GILDED_AXE, 41, 6, 8303),
+  axe(ItemIds.RUNE_FELLING_AXE, 41, 6, 10070),
+  axe(ItemIds.RUNE_AXE, 41, 6, 867, { standard: true }),
+  axe(ItemIds._3RD_AGE_FELLING_AXE, 61, 7, 10074),
+  axe(ItemIds.DRAGON_FELLING_AXE, 61, 7, 10071),
+  axe(ItemIds._3RD_AGE_AXE, 61, 7, 7264),
+  axe(ItemIds.DRAGON_AXE, 61, 7, 2846, { standard: true }),
+  axe(ItemIds.INFERNAL_AXE_UNCHARGED_, 61, 7, 2117, { requiredFiremaking: 85 }),
+  axe(ItemIds.INFERNAL_AXE_UNCHARGED__2, 61, 7, 8778, { requiredFiremaking: 85 }),
+  axe(ItemIds.INFERNAL_AXE_UNCHARGED__4, 61, 7, 8778, { requiredFiremaking: 85 }),
+  axe(ItemIds.CRYSTAL_AXE_INACTIVE_, 71, 7, 8324, { requiredAgility: 50 }),
+  axe(ItemIds.CRYSTAL_FELLING_AXE, 71, 7, 10072, { requiredAgility: 50 }),
+  axe(ItemIds.CRYSTAL_AXE, 71, 7, 8324, { requiredAgility: 50 }),
+  axe(ItemIds.INFERNAL_AXE, 61, 7, 2117, { requiredFiremaking: 85, speed: 0.3 }),
+  axe(ItemIds.INFERNAL_AXE_OR_, 61, 7, 8778, { requiredFiremaking: 85, speed: 0.3 }),
+  axe(ItemIds.INFERNAL_AXE_OR__3, 61, 7, 8778, { requiredFiremaking: 85, speed: 0.3 }),
+];
+
+// OSRS Wiki "cut chance" charts: [low, high] per axe tier (bronze, iron, steel, black, mithril,
+// adamant, rune, dragon). A log is rolled every 4 ticks with chance
+// (1 + floor(low * (99 - L) / 98) + floor(high * (L - 1) / 98)) / 256.
+// Achey, burnt, dramen and juniper trees use the normal tree chart; arctic pine and jatoba share
+// maple's. Blisterwood only lists bronze and dragon, so missing tiers scale off the normal chart.
+const CUT_CHANCE = Object.freeze({
+  normal: [[64, 200], [96, 300], [128, 400], [144, 450], [160, 500], [192, 600], [224, 700], [240, 750]],
+  oak: [[32, 100], [48, 150], [64, 200], [72, 225], [80, 250], [96, 300], [112, 350], [120, 375]],
+  willow: [[16, 50], [24, 75], [32, 100], [36, 112], [40, 125], [48, 150], [56, 175], [60, 187]],
+  teak: [[15, 46], [23, 70], [31, 93], [35, 102], [39, 117], [47, 140], [55, 164], [60, 190]],
+  maple: [[8, 25], [12, 37], [16, 50], [18, 56], [20, 62], [24, 75], [28, 87], [30, 93]],
+  mahogany: [[8, 25], [12, 38], [16, 50], [18, 54], [20, 63], [25, 75], [29, 88], [34, 94]],
+  yew: [[4, 12], [6, 19], [8, 25], [9, 28], [10, 31], [12, 37], [14, 44], [15, 47]],
+  magic: [[2, 6], [3, 9], [4, 12], [5, 13], [5, 15], [6, 18], [7, 21], [7, 22]],
+  redwood: [[2, 6], [3, 9], [4, 12], [4, 14], [5, 15], [6, 18], [7, 21], [7, 30]],
+  hollow: [[18, 26], [28, 40], [36, 54], [42, 57], [46, 68], [59, 81], [64, 94], [67, 101]],
+  blisterwood: [[15, 50], null, null, null, null, null, null, [61, 186]],
+  // The Wiki lists black as 17/71, above adamant; kept as published.
+  camphor: [[8, 23], [11, 36], [15, 47], [17, 71], [19, 59], [23, 71], [27, 83], [32, 89]],
+  ironwood: [[6, 21], [10, 38], [13, 42], [15, 46], [17, 53], [21, 63], [24, 75], [29, 80]],
+  rosewood: [[6, 18], [9, 28], [12, 37], [13, 40], [15, 47], [18, 56], [21, 66], [25, 70]],
+});
+
+const AXES_BEST_FIRST = [...AXES].reverse();
 
 const TREES = [
   {
     name: "normal tree",
     objectNames: ["Tree", "Dead tree", "Evergreen tree", "Dying tree"],
-    action: "Chop down",
+    action: ["Chop down", "Chop-down"],
     requiredLevel: 1,
     xpReward: 25,
-    logId: ItemIds.LOGS,
+    logId: ItemIds.LOGS, petBase: 317647,
     objectIds: [
       ObjectIds.EVERGREEN_TREE,
       ObjectIds.EVERGREEN_TREE_2,
@@ -97,8 +233,10 @@ const TREES = [
       ObjectIds.DEAD_TREE_19,
       ObjectIds.DEAD_TREE_20,
     ],
-    cycles: 10,
-    respawnTicks: 8,
+    cutChance: CUT_CHANCE.normal,
+    respawnTicks: 59,
+    respawnTicksMax: 98,
+    stumpId: ObjectIds.TREE_STUMP_2,
     multi: false,
   },
   {
@@ -107,10 +245,12 @@ const TREES = [
     action: "Chop",
     requiredLevel: 1,
     xpReward: 25,
-    logId: ItemIds.ACHEY_TREE_LOGS,
+    logId: ItemIds.ACHEY_TREE_LOGS, petBase: 317647,
     objectIds: [ObjectIds.ACHEY_TREE],
-    cycles: 13,
-    respawnTicks: 9,
+    cutChance: CUT_CHANCE.normal,
+    respawnTicks: 59,
+    respawnTicksMax: 98,
+    stumpId: ObjectIds.ACHEY_TREE_STUMP,
     multi: false,
   },
   {
@@ -118,8 +258,8 @@ const TREES = [
     objectNames: ["Oak tree"],
     action: "Chop down",
     requiredLevel: 15,
-    xpReward: 38,
-    logId: ItemIds.OAK_LOGS,
+    xpReward: 37.5,
+    logId: ItemIds.OAK_LOGS, petBase: 361146,
     objectIds: [
       ObjectIds.ARCTIC_PINE_TREE,
       ObjectIds.OAK_TREE, ObjectIds.OAK_TREE_2, ObjectIds.OAK_TREE_3, ObjectIds.OAK_TREE_4,
@@ -128,26 +268,30 @@ const TREES = [
       ObjectIds.OAK_TREE_13, ObjectIds.OAK_TREE_14, ObjectIds.OAK_TREE_15, ObjectIds.OAK_TREE_16,
       ObjectIds.OAK_TREE_17, ObjectIds.OAK_TREE_18,
     ],
-    cycles: 14,
-    respawnTicks: 11,
+    cutChance: CUT_CHANCE.oak,
+    respawnTicks: 14,
+    stumpId: ObjectIds.TREE_STUMP_16,
     multi: true,
+    despawnTicks: 45,
   },
   {
     name: "willow",
     objectNames: ["Willow tree"],
     action: "Chop down",
     requiredLevel: 30,
-    xpReward: 68,
-    logId: ItemIds.WILLOW_LOGS,
+    xpReward: 67.5,
+    logId: ItemIds.WILLOW_LOGS, petBase: 289286,
     objectIds: [
       ObjectIds.WILLOW_TREE, ObjectIds.WILLOW_TREE_2, ObjectIds.WILLOW_TREE_3, ObjectIds.WILLOW_TREE_4,
       ObjectIds.WILLOW_TREE_5, ObjectIds.WILLOW_TREE_6, ObjectIds.WILLOW_TREE_7, ObjectIds.WILLOW_TREE_8,
       ObjectIds.WILLOW_TREE_9, ObjectIds.WILLOW_TREE_10, ObjectIds.WILLOW_TREE_11, ObjectIds.WILLOW_TREE_12,
       ObjectIds.WILLOW_TREE_13, ObjectIds.WILLOW_TREE_14,
     ],
-    cycles: 15,
+    cutChance: CUT_CHANCE.willow,
     respawnTicks: 14,
+    stumpId: ObjectIds.TREE_STUMP_35,
     multi: true,
+    despawnTicks: 50,
   },
   {
     name: "teak",
@@ -155,28 +299,32 @@ const TREES = [
     action: "Chop down",
     requiredLevel: 35,
     xpReward: 85,
-    logId: ItemIds.TEAK_LOGS,
+    logId: ItemIds.TEAK_LOGS, petBase: 264336,
     objectIds: [
       ObjectIds.TEAK_TREE, ObjectIds.TEAK_TREE_2, ObjectIds.TEAK_TREE_3, ObjectIds.TEAK_TREE_4,
       ObjectIds.TEAK_TREE_5, ObjectIds.TEAK_TREE_6, ObjectIds.TEAK_TREE_7, ObjectIds.TEAK_TREE_8,
       ObjectIds.TEAK_TREE_9, ObjectIds.TEAK_TREE_10, ObjectIds.TEAK_TREE_11, ObjectIds.TEAK_TREE_12,
       ObjectIds.TEAK_TREE_13,
     ],
-    cycles: 16,
-    respawnTicks: 16,
+    cutChance: CUT_CHANCE.teak,
+    respawnTicks: 15,
+    stumpId: ObjectIds.TREE_STUMP_32,
     multi: true,
+    despawnTicks: 50,
   },
   {
     name: "dramen",
     objectNames: ["Dramen tree"],
     action: "Chop down",
     requiredLevel: 36,
-    xpReward: 88,
+    xpReward: 0,
+    logMessage: "You cut a branch from the Dramen tree.",
     logId: ItemIds.DRAMEN_BRANCH,
     objectIds: [ObjectIds.DRAMEN_TREE],
-    cycles: 16,
+    cutChance: CUT_CHANCE.normal,
     respawnTicks: 17,
     multi: true,
+    depletes: false,
   },
   {
     name: "maple",
@@ -184,7 +332,7 @@ const TREES = [
     action: "Chop down",
     requiredLevel: 45,
     xpReward: 100,
-    logId: ItemIds.MAPLE_LOGS,
+    logId: ItemIds.MAPLE_LOGS, petBase: 221918,
     objectIds: [
       ObjectIds.MAPLE_TREE, ObjectIds.MAPLE_TREE_2, ObjectIds.MAPLE_TREE_3, ObjectIds.MAPLE_TREE_4,
       ObjectIds.MAPLE_TREE_5, ObjectIds.MAPLE_TREE_6, ObjectIds.MAPLE_TREE_7, ObjectIds.MAPLE_TREE_8,
@@ -192,9 +340,11 @@ const TREES = [
       ObjectIds.MAPLE_TREE_13, ObjectIds.MAPLE_TREE_14, ObjectIds.MAPLE_TREE_15, ObjectIds.MAPLE_TREE_16,
       ObjectIds.MAPLE_TREE_17, ObjectIds.MAPLE_TREE_18,
     ],
-    cycles: 17,
-    respawnTicks: 18,
+    cutChance: CUT_CHANCE.maple,
+    respawnTicks: 59,
+    stumpId: ObjectIds.TREE_STUMP_36,
     multi: true,
+    despawnTicks: 100,
   },
   {
     name: "mahogany",
@@ -202,16 +352,18 @@ const TREES = [
     action: "Chop down",
     requiredLevel: 50,
     xpReward: 125,
-    logId: ItemIds.MAHOGANY_LOGS,
+    logId: ItemIds.MAHOGANY_LOGS, petBase: 220623,
     objectIds: [
       ObjectIds.MAHOGANY_TREE, ObjectIds.MAHOGANY_TREE_2, ObjectIds.MAHOGANY_TREE_3, ObjectIds.MAHOGANY_TREE_4,
       ObjectIds.MAHOGANY_TREE_5, ObjectIds.MAHOGANY_TREE_6, ObjectIds.MAHOGANY_TREE_7, ObjectIds.MAHOGANY_TREE_8,
       ObjectIds.MAHOGANY_TREE_9, ObjectIds.MAHOGANY_TREE_10, ObjectIds.MAHOGANY_TREE_11, ObjectIds.MAHOGANY_TREE_12,
       ObjectIds.MAHOGANY_TREE_13, ObjectIds.MAHOGANY_TREE_14,
     ],
-    cycles: 17,
-    respawnTicks: 20,
+    cutChance: CUT_CHANCE.mahogany,
+    respawnTicks: 14,
+    stumpId: ObjectIds.TREE_STUMP_31,
     multi: true,
+    despawnTicks: 100,
   },
   {
     name: "yew",
@@ -219,7 +371,7 @@ const TREES = [
     action: "Chop down",
     requiredLevel: 60,
     xpReward: 175,
-    logId: ItemIds.YEW_LOGS,
+    logId: ItemIds.YEW_LOGS, petBase: 145013,
     objectIds: [
       ObjectIds.YEW_TREE, ObjectIds.YEW_TREE_2, ObjectIds.YEW_TREE_3, ObjectIds.YEW_TREE_4,
       ObjectIds.YEW_TREE_5, ObjectIds.YEW_TREE_6, ObjectIds.YEW_TREE_7, ObjectIds.YEW_TREE_8,
@@ -227,9 +379,11 @@ const TREES = [
       ObjectIds.YEW_TREE_13, ObjectIds.YEW_TREE_14, ObjectIds.YEW_TREE_15, ObjectIds.YEW_TREE_16,
       ObjectIds.YEW_TREE_17, ObjectIds.YEW_TREE_18, ObjectIds.YEW_TREE_19,
     ],
-    cycles: 18,
-    respawnTicks: 28,
+    cutChance: CUT_CHANCE.yew,
+    respawnTicks: 99,
+    stumpId: ObjectIds.TREE_STUMP_38,
     multi: true,
+    despawnTicks: 190,
   },
   {
     name: "magic",
@@ -237,7 +391,7 @@ const TREES = [
     action: "Chop down",
     requiredLevel: 75,
     xpReward: 250,
-    logId: ItemIds.MAGIC_LOGS,
+    logId: ItemIds.MAGIC_LOGS, petBase: 72321,
     objectIds: [
       ObjectIds.MAGIC_TREE, ObjectIds.MAGIC_TREE_2, ObjectIds.MAGIC_TREE_3, ObjectIds.MAGIC_TREE_4,
       ObjectIds.MAGIC_TREE_5, ObjectIds.MAGIC_TREE_6, ObjectIds.MAGIC_TREE_7, ObjectIds.MAGIC_TREE_8,
@@ -245,9 +399,11 @@ const TREES = [
       ObjectIds.MAGIC_TREE_13, ObjectIds.MAGIC_TREE_14, ObjectIds.MAGIC_TREE_15, ObjectIds.MAGIC_TREE_16,
       ObjectIds.MAGIC_TREE_17, ObjectIds.MAGIC_TREE_18,
     ],
-    cycles: 20,
-    respawnTicks: 40,
+    cutChance: CUT_CHANCE.magic,
+    respawnTicks: 199,
+    stumpId: ObjectIds.TREE_STUMP_37,
     multi: true,
+    despawnTicks: 390,
   },
   {
     name: "redwood",
@@ -255,7 +411,7 @@ const TREES = [
     action: "Cut",
     requiredLevel: 90,
     xpReward: 380,
-    logId: ItemIds.REDWOOD_LOGS,
+    logId: ItemIds.REDWOOD_LOGS, petBase: 72321,
     objectIds: [
       ObjectIds.REDWOOD_TREE, ObjectIds.REDWOOD_TREE_2, ObjectIds.REDWOOD_TREE_3, ObjectIds.REDWOOD_TREE_4,
       ObjectIds.REDWOOD_TREE_5, ObjectIds.REDWOOD_TREE_6, ObjectIds.REDWOOD_TREE_7, ObjectIds.REDWOOD_TREE_8,
@@ -289,18 +445,136 @@ const TREES = [
       ObjectIds.REDWOOD_TREE_117, ObjectIds.REDWOOD_TREE_118, ObjectIds.REDWOOD_TREE_119, ObjectIds.REDWOOD_TREE_120,
       ObjectIds.REDWOOD_TREE_121,
     ],
-    cycles: 22,
+    cutChance: CUT_CHANCE.redwood,
+    respawnTicks: 199,
+    multi: true,
+    despawnTicks: 440,
+  },
+  {
+    name: "hollow",
+    objectNames: ["Hollow tree"],
+    action: "Chop down",
+    requiredLevel: 45,
+    xpReward: 82.5,
+    logId: ItemIds.BARK, petBase: 214367,
+    cutChance: CUT_CHANCE.hollow,
     respawnTicks: 43,
     multi: true,
+    despawnTicks: 60,
+  },
+  {
+    name: "arctic pine",
+    objectNames: ["Arctic pine tree"],
+    action: "Cut down",
+    requiredLevel: 54,
+    xpReward: 40,
+    logId: ItemIds.ARCTIC_PINE_LOGS, petBase: 145758,
+    cutChance: CUT_CHANCE.maple,
+    respawnTicks: 14,
+    stumpId: ObjectIds.TREE_STUMP_49,
+    multi: true,
+    despawnTicks: 140,
+  },
+  {
+    name: "mature juniper",
+    objectNames: ["Mature juniper tree"],
+    action: "Chop down",
+    requiredLevel: 42,
+    xpReward: 35,
+    logId: ItemIds.JUNIPER_LOGS, petBase: 360000,
+    cutChance: CUT_CHANCE.normal,
+    respawnTicks: 13,
+    multi: true,
+    depleteChance: 16,
+  },
+  {
+    name: "jatoba",
+    objectNames: ["Jatoba tree"],
+    action: "Chop down",
+    requiredLevel: 40,
+    xpReward: 92,
+    logId: ItemIds.JATOBA_LOGS, petBase: 264336,
+    cutChance: CUT_CHANCE.maple,
+    respawnTicks: 14,
+    multi: true,
+    depletes: false,
+  },
+  {
+    name: "blisterwood",
+    objectNames: ["Blisterwood tree"],
+    action: "Chop",
+    requiredLevel: 62,
+    xpReward: 76,
+    logId: ItemIds.BLISTERWOOD_LOGS, petBase: 289286,
+    cutChance: CUT_CHANCE.blisterwood,
+    respawnTicks: 0,
+    multi: true,
+    depleteChance: 10,
+    // OSRS: a spider jumps out instead of the tree falling; the player just has to click again.
+    interruptMessage: "A small spider jumps at you from the log you just cut.",
+  },
+  {
+    name: "burnt tree",
+    objectNames: ["Burnt tree"],
+    action: "Chop down",
+    requiredLevel: 1,
+    xpReward: 25,
+    logId: ItemIds.CHARCOAL,
+    cutChance: CUT_CHANCE.normal,
+    respawnTicks: 59,
+    respawnTicksMax: 98,
+    multi: false,
+  },
+  {
+    name: "camphor",
+    objectNames: ["Camphor tree"],
+    action: "Chop down",
+    requiredLevel: 66,
+    xpReward: 143.5,
+    logId: ItemIds.CAMPHOR_LOGS, petBase: 145013,
+    cutChance: CUT_CHANCE.camphor,
+    respawnTicks: 99,
+    multi: true,
+    despawnTicks: 200,
+  },
+  {
+    name: "ironwood",
+    objectNames: ["Ironwood tree"],
+    action: "Chop down",
+    requiredLevel: 80,
+    xpReward: 175,
+    logId: ItemIds.IRONWOOD_LOGS, petBase: 72321,
+    cutChance: CUT_CHANCE.ironwood,
+    respawnTicks: 199,
+    multi: true,
+    despawnTicks: 400,
+  },
+  {
+    name: "rosewood",
+    objectNames: ["Rosewood tree"],
+    action: "Chop down",
+    requiredLevel: 92,
+    xpReward: 212.5,
+    logId: ItemIds.ROSEWOOD_LOGS, petBase: 72321,
+    cutChance: CUT_CHANCE.rosewood,
+    respawnTicks: 205,
+    multi: true,
+    despawnTicks: 458,
   },
 ];
 
 const TREES_BY_NAME = new Map(TREES.flatMap((tree) => tree.objectNames.map((name) => [name, tree])));
+// Farmed sailing hardwoods chop like the wild trees but regrow on farming's own patch timer.
+const FARMED_HARDWOODS = ["camphor", "ironwood", "rosewood"].map((name) => ({
+  ...TREES.find((tree) => tree.name === name),
+  respawnTicks: 150,
+}));
 
 
 
 const TREE_LOG_IDS = Object.freeze(
-  Array.from(new Set(TREES.map((tree) => tree.logId)))
+  // Only the bot-tracked trees (those with objectIds); bots also burn these, so no bark/charcoal.
+  Array.from(new Set(TREES.filter((tree) => tree.objectIds).map((tree) => tree.logId)))
 );
 
 function randomIntInclusive(min, max) {
@@ -317,16 +591,21 @@ function getEquippedWeaponId(player) {
   return equippedWeapon ? equippedWeapon.getId() : -1;
 }
 
+function canUseAxe(player, axe) {
+  const skills = player.getSkillManager();
+  return (
+    getWoodcuttingLevel(player) >= axe.requiredLevel &&
+    skills.getCurrentLevel(Skill.AGILITY) >= (axe.requiredAgility ?? 1) &&
+    skills.getCurrentLevel(Skill.FIREMAKING) >= (axe.requiredFiremaking ?? 1)
+  );
+}
+
 function findBestUsableAxe(player) {
-  const woodcuttingLevel = getWoodcuttingLevel(player);
   const equippedWeaponId = getEquippedWeaponId(player);
   const inventory = player.getInventory();
 
-  for (const axe of AXES_BY_REQUIREMENT_DESC) {
-    if (woodcuttingLevel < axe.requiredLevel) {
-      continue;
-    }
-    if (equippedWeaponId === axe.id || inventory.contains(axe.id)) {
+  for (const axe of AXES_BEST_FIRST) {
+    if ((equippedWeaponId === axe.id || inventory.contains(axe.id)) && canUseAxe(player, axe)) {
       return axe;
     }
   }
@@ -334,9 +613,10 @@ function findBestUsableAxe(player) {
   return null;
 }
 
+// Bots only ever get the standard bronze-to-dragon axes.
 function findBestUsableAxeByLevel(level) {
-  for (const axe of AXES_BY_REQUIREMENT_DESC) {
-    if (level >= axe.requiredLevel) {
+  for (const axe of AXES_BEST_FIRST) {
+    if (axe.standard && level >= axe.requiredLevel) {
       return axe;
     }
   }
@@ -347,78 +627,147 @@ function isWoodcuttingActive(player) {
   return !!(activeSessionsRef && player && activeSessionsRef.has(player));
 }
 
-function calculateCyclesRequired(player, tree, axe) {
-  let cycles = tree.cycles + randomIntInclusive(0, 4);
-  cycles -= getWoodcuttingLevel(player) * 0.1;
-  cycles -= cycles * axe.speed;
-  const tickBudget = Math.max(3, Math.floor(cycles));
-  return Math.max(1, Math.ceil(tickBudget / WOODCUTTING_ACTION_INTERVAL_TICKS));
+function cutChanceRange(tree, axe) {
+  const chart = tree.cutChance ?? CUT_CHANCE.normal;
+  const range = chart[axe.tier];
+  if (range) {
+    return range;
+  }
+  const [baseLow, baseHigh] = chart[0];
+  const [normalLow, normalHigh] = CUT_CHANCE.normal[axe.tier];
+  const [normalBaseLow, normalBaseHigh] = CUT_CHANCE.normal[0];
+  return [Math.round((baseLow * normalLow) / normalBaseLow), Math.round((baseHigh * normalHigh) / normalBaseHigh)];
 }
 
-function shouldDepleteTree(tree) {
+function calculateCutChance(level, tree, axe) {
+  const [low, high] = cutChanceRange(tree, axe);
+  const successes = 1 + Math.floor((low * (99 - level)) / 98) + Math.floor((high * (level - 1)) / 98);
+  return Math.min(1, Math.max(0, successes / 256));
+}
+
+function rollLog(player, tree, axe) {
+  const level = getWoodcuttingLevel(player) + Guild.invisibleBoost(player);
+  return Math.random() < calculateCutChance(level, tree, axe);
+}
+
+// OSRS Wiki: hat 0.4%, top 0.8%, legs 0.6%, boots 0.2%, plus 0.5% for all four; forestry pieces count.
+function lumberjackXpMultiplier(player) {
+  const worn = LUMBERJACK_OUTFIT.filter((piece) => isWearing(player, piece.slot, piece.itemIds));
+  const bonus = worn.reduce((sum, piece) => sum + piece.bonus, 0);
+  return 1 + bonus + (worn.length === LUMBERJACK_OUTFIT.length ? LUMBERJACK_SET_BONUS : 0);
+}
+
+function logMessage(tree) {
+  if (tree.logMessage) {
+    return tree.logMessage;
+  }
+  const name = pluginApi.core.ItemDefinition.forId(tree.logId).getName().toLowerCase();
+  return `You get some ${name}.`;
+}
+
+function treeTimerKey(objectId, location) {
+  return `${objectId}:${location.getX()},${location.getY()},${location.getZ()}`;
+}
+
+function tickTreeDespawnTimer(state, currentTick) {
+  if (!state.tree.despawnTicks) {
+    return;
+  }
+  const key = treeTimerKey(state.objectId, state.location);
+  let timer = treeDespawnTimers.get(key);
+  if (!timer) {
+    timer = { remaining: state.tree.despawnTicks, max: state.tree.despawnTicks, lastChopTick: -1 };
+    treeDespawnTimers.set(key, timer);
+  }
+  // Several players on one tree still only drain it once per tick.
+  if (timer.lastChopTick !== currentTick) {
+    timer.lastChopTick = currentTick;
+    timer.remaining = Math.max(0, timer.remaining - 1);
+  }
+}
+
+function regenerateTreeDespawnTimers(currentTick) {
+  for (const [key, timer] of treeDespawnTimers) {
+    if (timer.lastChopTick === currentTick) {
+      continue;
+    }
+    timer.remaining++;
+    if (timer.remaining >= timer.max) {
+      treeDespawnTimers.delete(key);
+    }
+  }
+}
+
+function shouldDepleteTree(state) {
+  const tree = state.tree;
+  if (tree.depletes === false) {
+    return false;
+  }
   if (!tree.multi) {
     return true;
   }
+  if (tree.despawnTicks) {
+    const timer = treeDespawnTimers.get(treeTimerKey(state.objectId, state.location));
+    return !!timer && timer.remaining <= 0;
+  }
+  if (tree.depleteChance) {
+    return randomIntInclusive(1, tree.depleteChance) === 1;
+  }
   const roll = randomIntInclusive(0, MULTI_TREE_DEPLETION_ROLL_MAX);
-  return roll >= MULTI_TREE_DEPLETION_THRESHOLD;
+  return roll < MULTI_TREE_DEPLETION_THRESHOLD;
 }
 
-function rollBirdNestId() {
-  const random = Math.random();
-  if (random < 0.64) {
-    return BIRD_NESTS.SEED_NEST;
+function rollWeighted(table) {
+  const total = table.reduce((sum, entry) => sum + entry.weight, 0);
+  let roll = randomIntInclusive(1, total);
+  for (const entry of table) {
+    roll -= entry.weight;
+    if (roll <= 0) {
+      return entry;
+    }
   }
-  if (random < 0.96) {
-    return BIRD_NESTS.RING_NEST;
-  }
-  const color = randomIntInclusive(0, 2);
-  if (color === 0) {
-    return BIRD_NESTS.RED_EGG_NEST;
-  }
-  if (color === 1) {
-    return BIRD_NESTS.GREEN_EGG_NEST;
-  }
-  return BIRD_NESTS.BLUE_EGG_NEST;
+  return table[table.length - 1];
+}
+
+function isWearing(player, slot, itemIds) {
+  const item = player.getEquipment().getItems()[slot];
+  return !!item && itemIds.includes(item.getId());
+}
+
+// OSRS: 100 slots (seed 65, ring 32, one per egg colour); a strung rabbit foot drops 5 seed slots.
+function rollBirdNestId(player) {
+  const seedWeight = isWearing(player, Equipment.AMULET_SLOT, [ItemIds.STRUNG_RABBIT_FOOT]) ? 60 : 65;
+  return rollWeighted([
+    { id: BIRD_NESTS.SEED_NEST, weight: seedWeight },
+    { id: BIRD_NESTS.RING_NEST, weight: 32 },
+    { id: BIRD_NESTS.RED_EGG_NEST, weight: 1 },
+    { id: BIRD_NESTS.GREEN_EGG_NEST, weight: 1 },
+    { id: BIRD_NESTS.BLUE_EGG_NEST, weight: 1 },
+  ]).id;
 }
 
 function maybeDropBirdNest(player) {
-  if (!player || player.getLocation().getZ() > 0) {
+  if (!player) {
     return;
   }
-  if (randomIntInclusive(1, BIRD_NEST_DROP_CHANCE) !== 1) {
+  const chance = isWearing(player, Equipment.CAPE_SLOT, WOODCUTTING_CAPE_IDS)
+    ? WOODCUTTING_CAPE_NEST_MULTIPLIER / BIRD_NEST_DROP_CHANCE
+    : 1 / BIRD_NEST_DROP_CHANCE;
+  if (Math.random() >= chance) {
     return;
   }
 
-  const nestId = rollBirdNestId();
+  const nestId = rollBirdNestId(player);
   ItemOnGroundManager.registers(player, new Item(nestId, 1));
-  player.sendMessage("@red@A bird's nest falls out of the tree.");
+  player.sendMessage("<col=ff0000>A bird's nest falls out of the tree.");
 }
 
 function rollNestSeed() {
-  const random = randomIntInclusive(1, 1000);
-  if (random <= 220) return { id: ItemIds.ACORN, name: "acorn" };
-  if (random <= 350) return { id: ItemIds.WILLOW_SEED, name: "willow" };
-  if (random <= 400) return { id: ItemIds.MAPLE_SEED, name: "maple" };
-  if (random <= 430) return { id: ItemIds.YEW_SEED, name: "yew" };
-  if (random <= 440) return { id: ItemIds.MAGIC_SEED, name: "magic" };
-  if (random <= 600) return { id: ItemIds.APPLE_TREE_SEED, name: "apple" };
-  if (random <= 700) return { id: ItemIds.BANANA_TREE_SEED, name: "banana" };
-  if (random <= 790) return { id: ItemIds.ORANGE_TREE_SEED, name: "orange" };
-  if (random <= 850) return { id: ItemIds.CURRY_TREE_SEED, name: "curry" };
-  if (random <= 900) return { id: ItemIds.PINEAPPLE_SEED, name: "pineapple" };
-  if (random <= 930) return { id: ItemIds.PAPAYA_TREE_SEED, name: "papaya" };
-  if (random <= 960) return { id: ItemIds.PALM_TREE_SEED, name: "palm" };
-  if (random <= 980) return { id: ItemIds.CALQUAT_TREE_SEED, name: "calquat" };
-  return { id: ItemIds.SPIRIT_SEED, name: "spirit" };
+  return rollWeighted(NEST_SEEDS);
 }
 
 function rollNestRing() {
-  const random = randomIntInclusive(1, 100);
-  if (random <= 35) return { id: ItemIds.GOLD_RING, name: "gold" };
-  if (random <= 75) return { id: ItemIds.SAPPHIRE_RING, name: "sapphire" };
-  if (random <= 90) return { id: ItemIds.EMERALD_RING, name: "emerald" };
-  if (random <= 98) return { id: ItemIds.RUBY_RING, name: "ruby" };
-  return { id: ItemIds.DIAMOND_RING, name: "diamond" };
+  return rollWeighted(NEST_RINGS);
 }
 
 function searchBirdNest(player, nestId) {
@@ -494,9 +843,51 @@ class TreeRespawnTask extends Task {
   }
 }
 
-function depleteTree(treeObject, tree) {
+function firstModelId(def) {
+  return def?.models?.[0]?.[0];
+}
+
+// Newer trees keep their depleted state at the next loc id: an option-less "...stump", or (redwood,
+// some Forestry-era maples) an option-less loc with the tree's own name and a different model.
+function nextIdStump(treeId, treeDef, allowSameName) {
+  const next = pluginApi.core.CacheDefinitions.getObject(treeId + 1);
+  if (!next || (next.actions || []).some(Boolean)) {
+    return null;
+  }
+  const isStump = /stump/i.test(next.name || "");
+  const isDepletedVariant =
+    allowSameName && next.name === treeDef.name && firstModelId(next) !== firstModelId(treeDef);
+  return isStump || isDepletedVariant ? treeId + 1 : null;
+}
+
+function resolveStumpId(treeId, tree) {
+  if (stumpIdByTreeId.has(treeId)) {
+    return stumpIdByTreeId.get(treeId);
+  }
+  const treeDef = pluginApi.core.CacheDefinitions.getObject(treeId);
+  const stumpId =
+    NORMAL_TREE_STUMP_BY_MODEL.get(firstModelId(treeDef)) ??
+    (treeDef && nextIdStump(treeId, treeDef, false)) ??
+    (treeDef && nextIdStump(treeId, treeDef, true)) ??
+    tree.stumpId ??
+    DEFAULT_TREE_STUMP_ID;
+  stumpIdByTreeId.set(treeId, stumpId);
+  return stumpId;
+}
+
+function rollRespawnTicks(tree) {
+  return tree.respawnTicksMax
+    ? randomIntInclusive(tree.respawnTicks, tree.respawnTicksMax)
+    : tree.respawnTicks;
+}
+
+function depleteTree(player, treeObject, tree) {
+  const respawnTicks = rollRespawnTicks(tree);
+  const event = { player, object: treeObject, respawnTicks, handled: false };
+  pluginApi.emitCustomEvent("woodcutting:deplete-tree", event);
+  if (event.handled) return;
   const stump = new GameObject(
-    TREE_STUMP_OBJECT_ID,
+    resolveStumpId(treeObject.getId(), tree),
     treeObject.getLocation().clone(),
     treeObject.getType(),
     treeObject.getFace(),
@@ -504,10 +895,13 @@ function depleteTree(treeObject, tree) {
   );
   ObjectManager.deregister(treeObject, true);
   ObjectManager.register(stump, true);
-  TaskManager.submit(new TreeRespawnTask(tree.respawnTicks, treeObject, stump));
+  TaskManager.submit(new TreeRespawnTask(respawnTicks, treeObject, stump));
 }
 
 function startWoodcutting(player, treeObject, tree, activeSessions) {
+  const request = { player, object: treeObject, allow: true };
+  pluginApi.emitCustomEvent("woodcutting:validate-tree", request);
+  if (!request.allow) return false;
   const axe = findBestUsableAxe(player);
   if (!axe) {
     player.sendMessage("You don't have an axe which you can use.");
@@ -522,7 +916,7 @@ function startWoodcutting(player, treeObject, tree, activeSessions) {
     return false;
   }
 
-  if (player.getInventory().isFull()) {
+  if (tree.logId >= 0 && player.getInventory().isFull()) {
     player.getInventory().full();
     return false;
   }
@@ -548,7 +942,6 @@ function startWoodcutting(player, treeObject, tree, activeSessions) {
     objectId: treeObject.getId(),
     location,
     privateArea: treeObject.getPrivateArea(),
-    cyclesUntilReward: calculateCyclesRequired(player, tree, axe),
     nextActionTick: woodcuttingTick + WOODCUTTING_ACTION_INTERVAL_TICKS,
     nextAnimationTick: woodcuttingTick + CHOP_ANIMATION_INTERVAL_TICKS,
   });
@@ -580,6 +973,12 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       state.privateArea
     );
     if (!activeTree) {
+      stopWoodcutting(activeSessions, player);
+      continue;
+    }
+    const request = { player, object: activeTree, allow: true };
+    pluginApi.emitCustomEvent("woodcutting:validate-tree", request);
+    if (!request.allow) {
       stopWoodcutting(activeSessions, player);
       continue;
     }
@@ -617,11 +1016,13 @@ function processWoodcuttingTick(activeSessions, currentTick) {
 
     state.axe = axe;
 
-    if (player.getInventory().isFull()) {
+    if (state.tree.logId >= 0 && player.getInventory().isFull()) {
       player.getInventory().full();
       stopWoodcutting(activeSessions, player);
       continue;
     }
+
+    tickTreeDespawnTimer(state, currentTick);
 
     if (currentTick >= state.nextAnimationTick) {
       player.performAnimation(new Animation(state.axe.animationId));
@@ -632,29 +1033,39 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       continue;
     }
     state.nextActionTick = currentTick + WOODCUTTING_ACTION_INTERVAL_TICKS;
-    state.cyclesUntilReward--;
-    if (state.cyclesUntilReward > 0) {
+    if (!rollLog(player, state.tree, state.axe)) {
       continue;
     }
 
-    player.getInventory().adds(state.tree.logId, 1);
-    player.sendMessage("You get some logs.");
-    player.getSkillManager().addExperiences(Skill.WOODCUTTING, state.tree.xpReward);
-    pluginApi.emitCustomEvent("woodcutting:success", { player, skill: Skill.WOODCUTTING });
-    maybeDropBirdNest(player);
+    if (state.tree.logId >= 0) {
+      if (!InfernalAxe.tryBurnLog(player, state.axe.id, state.tree.logId)) {
+        player.getInventory().adds(state.tree.logId, 1);
+        player.sendMessage(logMessage(state.tree));
+      }
+      player
+        .getSkillManager()
+        .addExperiences(Skill.WOODCUTTING, state.tree.xpReward * lumberjackXpMultiplier(player));
+      pluginApi.emitCustomEvent("woodcutting:success", {
+        player,
+        skill: Skill.WOODCUTTING,
+        petBase: state.tree.petBase,
+      });
+      maybeDropBirdNest(player);
+      ClueNests.rollClueNests(player, state.tree);
+    }
 
-    if (shouldDepleteTree(state.tree)) {
+    if (shouldDepleteTree(state)) {
+      treeDespawnTimers.delete(treeTimerKey(state.objectId, state.location));
+      if (state.tree.interruptMessage) {
+        player.sendMessage(state.tree.interruptMessage);
+        stopWoodcutting(activeSessions, player);
+        continue;
+      }
       Sounds.sendSound(player, Sound.WOODCUTTING_TREE_DOWN);
-      depleteTree(activeTree, state.tree);
+      depleteTree(player, activeTree, state.tree);
       stopWoodcutting(activeSessions, player);
       continue;
     }
-
-    state.cyclesUntilReward = calculateCyclesRequired(
-      player,
-      state.tree,
-      state.axe
-    );
   }
 }
 
@@ -669,6 +1080,7 @@ class WoodcuttingTask extends Task {
     this.currentTick++;
     woodcuttingTick = this.currentTick;
     processWoodcuttingTick(this.activeSessions, this.currentTick);
+    regenerateTreeDespawnTimers(this.currentTick);
   }
 }
 
@@ -688,10 +1100,18 @@ function handleChop(event) {
   event.handled = true;
 }
 
+function requestedChop(event) {
+  // Patch hardwoods share log ids with the wild trees but regrow on farming's own timer.
+  let tree = [...FARMED_HARDWOODS, ...TREES].find(tree => tree.logId === event.logId);
+  if (tree && event.removeOnly) tree = { ...tree, logId: -1, xpReward: 0, multi: false };
+  if (tree) event.handled = startWoodcutting(event.player, event.object, tree, activeSessionsRef);
+}
+
 module.exports = {
   name: "Woodcutting",
   register(api) {
     pluginApi = api;
+    api.onCustomEvent("woodcutting:chop", requestedChop);
     TaskManager = api.getTaskManager();
     ObjectManager = api.getObjectManager();
     ItemOnGroundManager = api.getItemOnGroundManager();
@@ -699,6 +1119,9 @@ module.exports = {
     activeSessionsRef = activeSessions;
 
     TaskManager.submit(new WoodcuttingTask(activeSessions));
+    Guild.attach(api);
+    ClueNests.attach(api);
+    InfernalAxe.attach(api);
 
     api.onPlayerDisconnect(({ player }) => {
       stopWoodcutting(activeSessions, player, false);
@@ -717,7 +1140,9 @@ module.exports = {
 
     for (const tree of TREES) {
       for (const name of tree.objectNames) {
-        api.onObjectInteraction(name, { [tree.action]: handleChop });
+        for (const action of [].concat(tree.action)) {
+          api.onObjectInteraction(name, { [action]: handleChop });
+        }
       }
     }
 
@@ -728,7 +1153,7 @@ module.exports = {
     });
   },
   AXES,
-  AXES_BY_REQUIREMENT_DESC,
+  AXES_BEST_FIRST,
   TREES,
   TREE_LOG_IDS,
   findBestUsableAxe,

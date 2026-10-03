@@ -178,8 +178,67 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
     );
 }
 
+/**
+ * An instance scene is one map that isn't streamed: the map manager has no current map and
+ * the scene's map is never "in the grid". Its NPCs must still be refreshed into it, or they
+ * are never in its update list (no animation or facing) - the Gauntlet's monsters.
+ */
+async function instanceSceneNpcsAreRefreshed(): Promise<void> {
+    const applied: number[] = [];
+    const map = { refreshNpcGeometry: () => applied.push(1), getRenderBaseTileX: () => 8160, getRenderBaseTileY: () => 1600 };
+    let renderBase: unknown;
+    const renderer = {
+        app: {}, npcProgram: {}, textureArray: {}, textureMaterials: {}, waterTextures: {}, sceneUniformBuffer: {},
+        instanceActive: true,
+        instanceSceneMap: { mapX: 128, mapY: 25 },
+        mapManager: {
+            currentMapX: -1,
+            currentMapY: -1,
+            worldEntityMapIds: new Set<number>(),
+            isMapInCurrentGrid: () => false,
+            getMap: () => map,
+            loadMap: () => undefined,
+        },
+        maxLevel: 3,
+        loadedTextureIds: new Set<number>(),
+        updateTextureArray: () => undefined,
+    };
+    const controller = new NpcInstanceFlushController({
+        getRenderer: () => renderer,
+        workerPool: {
+            setNpcInstances: async () => undefined,
+            queueNpcGeometry: (...args: any[]) => {
+                renderBase = args[4];
+                return Promise.resolve({ mapX: 128, mapY: 25, loadedTextures: new Map(), vertices: new Uint8Array(), indices: new Int32Array(), npcs: [] });
+            },
+        },
+        getSeqTypeLoader: () => ({}),
+        getSeqFrameLoader: () => ({}),
+        getNpcTypeLoader: () => ({ load: () => ({}) }),
+        getBasTypeLoader: () => ({}),
+    } as any);
+    controller.instanceMap.set("sid:7", { serverId: 7, typeId: 9028, x: 8250, y: 1700, level: 1, ownerMapId: (128 << 8) | 25 });
+    controller.markMapPendingReload((128 << 8) | 25);
+    controller.scheduleFlush();
+    await waitFor(() => applied.length === 1);
+    assert.deepEqual(renderBase, { x: 8160, y: 1600 }, "built from where the scene is drawn");
+}
+
+/** Deleting an instance scene map keeps its server NPCs for the rebuilt copy. */
+function instanceSceneRebuildKeepsServerNpcs(): void {
+    const ecs = new NpcEcs();
+    const id = ecs.createNpc(128, 25, 9028, 2, 0, 0, 1, 0, 0, 0);
+    ecs.setServerMapping(id, 7);
+    ecs.destroyNpcsForMap(128, 25, true);
+    assert.ok(ecs.isActive(id) && ecs.getEcsIdForServer(7) === id, "kept for the rebuilt scene");
+    ecs.destroyNpcsForMap(128, 25);
+    assert.ok(!ecs.isActive(id), "a world square unloading still takes its NPCs");
+}
+
 async function run(): Promise<void> {
     await staleAppearanceRefreshIsNeverApplied();
+    await instanceSceneNpcsAreRefreshed();
+    instanceSceneRebuildKeepsServerNpcs();
     serverSpawnRendersBeforeMapBatchRefresh();
 }
 

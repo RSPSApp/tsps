@@ -117,6 +117,28 @@ export class Archive {
 
             buffer.offset = buffer.length - 1 - chunks * (fileCount * 4);
 
+            if (chunks === 1) {
+                const tableOffset = buffer.offset;
+                const offsets = new Int32Array(fileCount + 1);
+                let fileSize = 0;
+                for (let i = 0; i < fileCount; i++) {
+                    fileSize += buffer.readInt();
+                    const end = offsets[i] + fileSize;
+                    if (fileSize < 0 || end > tableOffset) {
+                        throw new Error("Archive: Invalid file size");
+                    }
+                    offsets[i + 1] = end;
+                }
+                if (offsets[fileCount] !== tableOffset) {
+                    throw new Error("Archive: File sizes do not match archive data");
+                }
+                // Most config archives are contiguous; retain one buffer and create views on demand.
+                return new Archive(
+                    StringUtil.hashDjb2, id, lastFileId, fileCount, fileIds,
+                    fileNameHashes, files, undefined, { data: buffer.data, offsets },
+                );
+            }
+
             const chunkSizes = new Int32Array(chunks * fileCount);
             const fileSizes = new Int32Array(fileCount);
             for (let chunk = 0; chunk < chunks; chunk++) {
@@ -168,6 +190,7 @@ export class Archive {
         readonly fileNameHashes: Int32Array,
         private readonly _files: Map<number, ArchiveFile>,
         private readonly _fileNameHashIdMap: Map<number, number> = new Map(),
+        private readonly _packedFiles?: { data: Int8Array; offsets: Int32Array },
     ) {
         if (fileNameHashes) {
             for (let i = 0; i < this.fileIds.length; i++) {
@@ -177,7 +200,25 @@ export class Archive {
     }
 
     getFile(id: number): ArchiveFile | undefined {
-        return this._files.get(id);
+        let file = this._files.get(id);
+        if (!file && this._packedFiles) {
+            // JS5 file IDs are sorted; search without allocating another per-file map.
+            let low = 0;
+            let high = this.fileIds.length - 1;
+            while (low <= high) {
+                const mid = (low + high) >>> 1;
+                const fileId = this.fileIds[mid];
+                if (fileId === id) {
+                    const { data, offsets } = this._packedFiles;
+                    file = new ArchiveFile(id, this.id, data.subarray(offsets[mid], offsets[mid + 1]));
+                    this._files.set(id, file);
+                    break;
+                }
+                if (fileId < id) low = mid + 1;
+                else high = mid - 1;
+            }
+        }
+        return file;
     }
 
     getFileId(name: string): number {
@@ -195,6 +236,8 @@ export class Archive {
     }
 
     get files(): ArchiveFile[] {
-        return Array.from(this._files.values());
+        return this._packedFiles
+            ? Array.from(this.fileIds, (id) => this.getFile(id)!)
+            : Array.from(this._files.values());
     }
 }

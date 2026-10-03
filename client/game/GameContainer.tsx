@@ -7,7 +7,7 @@ import { subscribeChatMessages, subscribeHandshake } from "../network/ServerConn
 import { DownloadProgress } from "../rs/cache/CacheFiles";
 import { Canvas } from "../ui/Canvas";
 import { formatBytes } from "../common/utils/BytesUtil";
-import { isIos, isMobileMode } from "../common/utils/DeviceUtil";
+import { isDebugMode, isIos, isMobileMode } from "../common/utils/DeviceUtil";
 import { DebugControls } from "./DebugControls";
 import "./GameContainer.css";
 import { GameRenderer } from "./GameRenderer";
@@ -445,15 +445,17 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                 )}
             </div>
 
-            {/* Debug controls sidebar (Leva) - top-left corner */}
+            {/* Debug controls sidebar (Leva) - top-left corner, ?debug only */}
 
-            <DebugControls
-                renderer={renderer}
-                hideUi={hideUi}
-                setRenderer={setRenderer}
-                setHideUi={setHideUi}
-                setDownloadProgress={setDownloadProgress}
-            />
+            {isDebugMode && (
+                <DebugControls
+                    renderer={renderer}
+                    hideUi={hideUi}
+                    setRenderer={setRenderer}
+                    setHideUi={setHideUi}
+                    setDownloadProgress={setDownloadProgress}
+                />
+            )}
         </div>
     );
 }

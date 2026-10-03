@@ -145,7 +145,8 @@ export enum Opcodes {
     /** Sets widget to render local player's full model (PlayerComposition clone) */
     CC_SETPLAYERMODEL_SELF = 1207,
     CC_SETOBJECT_ALWAYS_NUM = 1212,
-    CC_SETMODEL_PLAYERCHATHEAD = 1214,
+    /** Pops 1 int: a loc id; the widget shows that loc's model (sailing customisation, script 8825). */
+    CC_SETMODEL_LOC = 1214,
     CC_SETOP = 1300,
     CC_SETDRAGGABLE = 1301,
     CC_SETDRAGGABLEBEHAVIOR = 1302,
@@ -278,7 +279,8 @@ export enum Opcodes {
     IF_SETPLAYERHEAD_SELF = 2202,
     IF_SETOBJECT_NONUM = 2205,
     IF_SETOBJECT_ALWAYS_NUM = 2212,
-    IF_SETMODEL_PLAYERCHATHEAD = 2214,
+    /** Pops a component and a loc id, as CC_SETMODEL_LOC. */
+    IF_SETMODEL_LOC = 2214,
     IF_SETOP = 2300,
     IF_SETDRAGGABLE = 2301,
     IF_SETDRAGGABLEBEHAVIOR = 2302,
@@ -909,6 +911,8 @@ export enum Opcodes {
     ARRAY_LENGTH = 8003,
     ARRAY_COUNT_MATCHES = 8007,
     ARRAY_MAX_VALUE = 8009,
+    // Unnamed upstream; name and signature inferred from the cargo hold's grid (script 8872).
+    ARRAY_FILL_SEQUENCE = 8011,
     ARRAY_JOIN = 8019,
     ENUM_TO_ARRAY = 8020,
     ARRAY_NEW = 8022,

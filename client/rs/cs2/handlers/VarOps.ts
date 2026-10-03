@@ -153,6 +153,15 @@ export function registerVarOps(handlers: HandlerMap): void {
         ctx.pushInt(arrayObj.countMatches(value, start, end));
     });
 
+    // The cargo hold's grid (script 8872) calls it as (array, 0, -1, -1) to fill a list of slot
+    // indices before sorting it by each slot's key; 8871 then draws slot array[i] at position i.
+    handlers.set(Opcodes.ARRAY_FILL_SEQUENCE, (ctx) => {
+        const end = ctx.intStack[--ctx.intStackSize];
+        const start = ctx.intStack[--ctx.intStackSize];
+        const first = ctx.intStack[--ctx.intStackSize];
+        requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]).fillSequence(first, start, end);
+    });
+
     handlers.set(Opcodes.ARRAY_MAX_VALUE, (ctx) => {
         const arrayObj = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
         const index = arrayObj.getArgMax();

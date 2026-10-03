@@ -90,6 +90,9 @@ export enum ClientPacketId {
 
     // Dialog
     RESUME_PAUSEBUTTON = 62, // Dialog continue (6 bytes)
+
+    // Sailing: one of the 16 helm headings (0-15), sent instead of a walk while steering
+    SET_HEADING = 214, // (1 byte)
 }
 
 /**
@@ -133,6 +136,7 @@ export const CLIENT_PACKET_LENGTHS: Record<number, number> = {
     [ClientPacketId.OPOBJ4]: 7,
     [ClientPacketId.OPNPC1]: 3,
     [ClientPacketId.RESUME_PAUSEBUTTON]: 6,
+    [ClientPacketId.SET_HEADING]: 1,
     [ClientPacketId.IF_BUTTON4]: 8,
     [ClientPacketId.OPPLAYER_U]: 11,
     [ClientPacketId.IF_BUTTON5]: 8,

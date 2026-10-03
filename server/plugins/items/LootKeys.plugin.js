@@ -19,11 +19,11 @@ const KEY_ID_SET = new Set(KEY_IDS);
 const KEY_DATA = "lootKey";
 const MAX_KEYS = 5;
 const LOOT_KEY_SKULL_ICON_BASE = 7;
-const UNLOCK_ATTRIBUTE = "lootKeysUnlocked";
-const ENABLED_ATTRIBUTE = "lootKeysEnabled";
-const SETTINGS_ATTRIBUTE = "lootKeySettings";
-const CHEST_ATTRIBUTE = "lootChestContents";
-const CHEST_TAB_ATTRIBUTE = "lootChestTab";
+const UNLOCK_ATTRIBUTE = "loot-keys-unlocked";
+const ENABLED_ATTRIBUTE = "loot-keys-enabled";
+const SETTINGS_ATTRIBUTE = "loot-key-settings";
+const CHEST_ATTRIBUTE = "loot-chest-contents";
+const CHEST_TAB_ATTRIBUTE = "loot-chest-tab";
 
 const validItem = (item) => Number.isInteger(item?.id) && item.id > 0 && Number.isInteger(item?.amount) && item.amount > 0;
 const isLootKey = (item) => KEY_ID_SET.has(item?.getId?.());
@@ -68,7 +68,9 @@ function isEligibleKill(killer, victim) {
 }
 
 function itemValue(item) {
-  return (ItemDefinition.forId(item?.id ?? item?.getId?.())?.getValue?.() ?? 0) * (item?.amount ?? item?.getAmount?.() ?? 0);
+  // Loot wealth reads as market value, falling back to the store value.
+  const price = ItemDefinition.forId(item?.id ?? item?.getId?.())?.getGrandExchangeValue?.() ?? 0;
+  return price * (item?.amount ?? item?.getAmount?.() ?? 0);
 }
 
 const totalValue = (items) => items.reduce((total, item) => total + itemValue(item), 0);

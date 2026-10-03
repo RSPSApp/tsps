@@ -19,6 +19,9 @@
         "edge_void_melee", "edge_barrows_venge", "mid_tank", "edge_unorthodox_risk",
         "rusher", "budget_pk"
       ],
+      "freeWorldLoadouts": [
+        "f2p_strength_pure", "f2p_rune_pure", "f2p_range_ko", "f2p_bind_pure", "f2p_addy_pure", "f2p_mage_pure", "f2p_bind_ko"
+      ],
       "styleWeights": { "melee": 0.45, "range": 0.25, "hybrid": 0.3 },
       "activityWeights": { "seek": 0.62, "bait": 0.25, "fight": 0.05, "escape": 0.08 }
     },
@@ -39,7 +42,8 @@
         "edge_main_melee", "edge_ranged_melee", "low_level_pure", "rune_pure_members",
         "edge_venge_zerker", "edge_med_level", "edge_void_risk", "void_pure",
         "edge_void_melee", "edge_barrows_venge", "mid_tank", "edge_unorthodox_risk",
-        "rusher", "budget_pk", "anti_pk_hybrid"
+        "rusher", "budget_pk", "anti_pk_hybrid",
+        "f2p_strength_pure", "f2p_rune_pure", "f2p_range_ko", "f2p_bind_pure", "f2p_addy_pure", "f2p_mage_pure", "f2p_bind_ko"
       ],
       "styleWeights": { "melee": 0.3, "range": 0.33, "hybrid": 0.37 },
       "activityWeights": { "seek": 0.44, "bait": 0.18, "fight": 0.2, "escape": 0.18 }

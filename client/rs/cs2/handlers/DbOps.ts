@@ -14,11 +14,11 @@ function getEffectiveColumnValue(
     tableId: number,
     columnId: number,
     row: any,
-): { found: boolean; values: any[] } {
+): { found: boolean; values: any[]; types: number[] } {
     // First check if row has explicit column data
     const col = row.getColumn(columnId);
     if (col && col.values && col.values.length > 0) {
-        return { found: true, values: col.values };
+        return { found: true, values: col.values, types: col.types ?? [] };
     }
 
     // Fall back to table default values
@@ -28,12 +28,90 @@ function getEffectiveColumnValue(
         if (tableDef) {
             const colDef = tableDef.getColumn(columnId);
             if (colDef && colDef.defaultValues && colDef.defaultValues.length > 0) {
-                return { found: true, values: colDef.defaultValues };
+                return { found: true, values: colDef.defaultValues, types: colDef.types ?? [] };
             }
         }
     }
 
-    return { found: false, values: [] };
+    return { found: false, values: [], types: [] };
+}
+
+/** Whether a row's column holds `query`: in any value, or in the packed field's tuple element. */
+function columnHolds(
+    ctx: any,
+    tableId: number,
+    tableColumnPacked: number,
+    row: any,
+    query: string | number,
+): boolean {
+    const columnId = (tableColumnPacked >> 4) & 0x7f;
+    const { found, values, types } = getEffectiveColumnValue(ctx, tableId, columnId, row);
+    if (!found) return false;
+    const element = tableColumnPacked & 0xf;
+    if (element === 0 || types.length === 0) return values.includes(query);
+    for (let at = element - 1; at < values.length; at += types.length) {
+        if (values[at] === query) return true;
+    }
+    return false;
+}
+
+/**
+ * A packed field's tuple element (its low 4 bits): 0 is the whole tuple, n its (n-1)th value
+ * alone. Sailing's scripts read tuples a value at a time this way (9076 reads table 188's
+ * [size, offsetX, offsetY, xan, yan, zan, zoom] with fields 1-7).
+ */
+function tupleElementOf(tableColumnPacked: number): number {
+    return tableColumnPacked & 0xf;
+}
+
+/** The types an element selects: all of them, or the one element's. */
+function selectTypes(types: number[], element: number): number[] {
+    if (element === 0) return types;
+    return element <= types.length ? [types[element - 1]] : [];
+}
+
+function pushValue(ctx: any, type: number, val: any): void {
+    if (isStringType(type)) {
+        ctx.pushString(typeof val === "string" ? val : "");
+    } else {
+        ctx.pushInt(typeof val === "number" ? val : 0);
+    }
+}
+
+/**
+ * Pushes tuple `subIndex` of `values` (all of it, first type first, or one element), if it
+ * exists.
+ */
+function pushTuple(
+    ctx: any,
+    types: number[],
+    values: any[],
+    subIndex: number,
+    element: number,
+): boolean {
+    const tupleSize = types.length;
+    const startIdx = subIndex * tupleSize;
+    if (tupleSize === 0 || startIdx + tupleSize > values.length || element > tupleSize) {
+        return false;
+    }
+    if (element > 0) {
+        pushValue(ctx, types[element - 1], values[startIdx + element - 1]);
+        return true;
+    }
+    for (let i = 0; i < tupleSize; i++) pushValue(ctx, types[i], values[startIdx + i]);
+    return true;
+}
+
+function pushTypeDefaults(ctx: any, types: number[], nullReferences: boolean): void {
+    for (const type of types) {
+        if (isStringType(type)) {
+            ctx.pushString("");
+        } else if (nullReferences && isReferenceType(type)) {
+            ctx.pushInt(-1);
+        } else {
+            ctx.pushInt(0);
+        }
+    }
 }
 
 export function registerDbOps(handlers: HandlerMap): void {
@@ -55,15 +133,8 @@ export function registerDbOps(handlers: HandlerMap): void {
         if (ctx.dbRepository) {
             const rows = ctx.dbRepository.getRows(tableId);
             for (const row of rows) {
-                // Get effective value (explicit or default)
-                const { found, values } = getEffectiveColumnValue(ctx, tableId, columnId, row);
-                if (found) {
-                    for (const val of values) {
-                        if (val === query) {
-                            rowQuery.push(row.id);
-                            break;
-                        }
-                    }
+                if (columnHolds(ctx, tableId, tableColumnPacked, row, query)) {
+                    rowQuery.push(row.id);
                 }
             }
         } else {
@@ -94,15 +165,8 @@ export function registerDbOps(handlers: HandlerMap): void {
         if (ctx.dbRepository) {
             const rows = ctx.dbRepository.getRows(tableId);
             for (const row of rows) {
-                // Get effective value (explicit or default)
-                const { found, values } = getEffectiveColumnValue(ctx, tableId, columnId, row);
-                if (found) {
-                    for (const val of values) {
-                        if (val === query) {
-                            rowQuery.push(row.id);
-                            break;
-                        }
-                    }
+                if (columnHolds(ctx, tableId, tableColumnPacked, row, query)) {
+                    rowQuery.push(row.id);
                 }
             }
         }
@@ -128,100 +192,38 @@ export function registerDbOps(handlers: HandlerMap): void {
 
         const tableId = (tableColumnPacked >> 12) & 0xffff;
         const columnId = (tableColumnPacked >> 4) & 0x7f;
-
-        let resultCount = 0;
-        let colTypes: number[] = [];
+        const element = tupleElementOf(tableColumnPacked);
 
         if (ctx.dbRepository) {
             const rows = ctx.dbRepository.getRows(tableId);
             const row = rows.find((r) => r.id === rowId);
-
-            if (row) {
-                const col = row.getColumn(columnId);
-                if (col && col.values && col.types.length > 0) {
-                    colTypes = col.types;
-                    const tupleSize = col.types.length;
-                    const startIdx = subIndex * tupleSize;
-
-                    // Check if this tuple exists
-                    if (startIdx + tupleSize <= col.values.length) {
-                        // Push all values in the tuple (in order - first type goes first on stack)
-                        for (let i = 0; i < tupleSize; i++) {
-                            const val = col.values[startIdx + i];
-                            const type = col.types[i];
-
-                            if (isStringType(type)) {
-                                ctx.pushString(typeof val === "string" ? val : "");
-                            } else {
-                                ctx.pushInt(typeof val === "number" ? val : 0);
-                            }
-                        }
-                        resultCount = tupleSize;
-                    }
-                }
+            const col = row?.getColumn(columnId);
+            if (col && col.values && col.types.length > 0) {
+                if (pushTuple(ctx, col.types, col.values, subIndex, element)) return;
             }
         }
 
-        // If no results pushed, get column types and default values from table definition
-        if (resultCount === 0) {
-            let defaultValues: any[] | undefined;
-
-            if (ctx.dbRepository) {
-                const tables = ctx.dbRepository.getTables();
-                const tableDef = tables.get(tableId);
-                if (tableDef) {
-                    const colDef = tableDef.getColumn(columnId);
-                    if (colDef && colDef.types.length > 0) {
-                        colTypes = colDef.types;
-                        defaultValues = colDef.defaultValues;
-                    }
-                }
+        // No such tuple in the row: the table's default values, else generic defaults.
+        let colTypes: number[] = [];
+        let defaultValues: any[] | undefined;
+        if (ctx.dbRepository) {
+            const tableDef = ctx.dbRepository.getTables().get(tableId);
+            const colDef = tableDef?.getColumn(columnId);
+            if (colDef && colDef.types.length > 0) {
+                colTypes = colDef.types;
+                defaultValues = colDef.defaultValues;
             }
-
-            // Use table's default values if available, otherwise push generic defaults
-            if (defaultValues && defaultValues.length > 0) {
-                const tupleSize = colTypes.length;
-                const startIdx = subIndex * tupleSize;
-
-                if (startIdx + tupleSize <= defaultValues.length) {
-                    for (let i = 0; i < tupleSize; i++) {
-                        const val = defaultValues[startIdx + i];
-                        const type = colTypes[i];
-                        if (isStringType(type)) {
-                            ctx.pushString(typeof val === "string" ? val : "");
-                        } else {
-                            ctx.pushInt(typeof val === "number" ? val : 0);
-                        }
-                    }
-                } else {
-                    // Default values exist but not enough for this subIndex
-                    for (const type of colTypes) {
-                        if (isStringType(type)) {
-                            ctx.pushString("");
-                        } else {
-                            ctx.pushInt(0);
-                        }
-                    }
-                }
-            } else {
-                // No default values defined, push generic defaults
-                // Reference types (DBROW, OBJ, NPC, etc.) default to -1 (null)
-                // Other integers default to 0
-                for (const type of colTypes) {
-                    if (isStringType(type)) {
-                        ctx.pushString("");
-                    } else if (isReferenceType(type)) {
-                        ctx.pushInt(-1); // Null reference
-                    } else {
-                        ctx.pushInt(0);
-                    }
-                }
-
-                // If still nothing pushed (no type info), push one int as fallback
-                if (colTypes.length === 0) {
-                    ctx.pushInt(0);
-                }
-            }
+        }
+        if (defaultValues && defaultValues.length > 0) {
+            if (pushTuple(ctx, colTypes, defaultValues, subIndex, element)) return;
+            pushTypeDefaults(ctx, selectTypes(colTypes, element), false);
+            return;
+        }
+        // Reference types (DBROW, OBJ, NPC, etc.) default to -1 (null), other integers to 0.
+        pushTypeDefaults(ctx, selectTypes(colTypes, element), true);
+        // If still nothing pushed (no type info), push one int as fallback
+        if (colTypes.length === 0) {
+            ctx.pushInt(0);
         }
     });
 
@@ -296,15 +298,8 @@ export function registerDbOps(handlers: HandlerMap): void {
         if (ctx.dbRepository) {
             const rows = ctx.dbRepository.getRows(tableId);
             for (const row of rows) {
-                // Get effective value (explicit or default)
-                const { found, values } = getEffectiveColumnValue(ctx, tableId, columnId, row);
-                if (found) {
-                    for (const val of values) {
-                        if (val === query) {
-                            matchingRowIds.add(row.id);
-                            break;
-                        }
-                    }
+                if (columnHolds(ctx, tableId, tableColumnPacked, row, query)) {
+                    matchingRowIds.add(row.id);
                 }
             }
         }
@@ -368,15 +363,8 @@ export function registerDbOps(handlers: HandlerMap): void {
         if (ctx.dbRepository) {
             const rows = ctx.dbRepository.getRows(tableId);
             for (const row of rows) {
-                // Get effective value (explicit or default)
-                const { found, values } = getEffectiveColumnValue(ctx, tableId, columnId, row);
-                if (found) {
-                    for (const val of values) {
-                        if (val === query) {
-                            matchingRowIds.add(row.id);
-                            break;
-                        }
-                    }
+                if (columnHolds(ctx, tableId, tableColumnPacked, row, query)) {
+                    matchingRowIds.add(row.id);
                 }
             }
         }

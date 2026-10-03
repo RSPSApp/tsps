@@ -18,6 +18,10 @@ export class PlayerDialogue extends Dialogue {
         this.expression = expression || DialogueExpression.CALM;
     }
 
+    public getText(): string {
+        return this.text;
+    }
+
     send(player: Player) {
         PlayerDialogue.send(player, this.text, this.expression);
     }

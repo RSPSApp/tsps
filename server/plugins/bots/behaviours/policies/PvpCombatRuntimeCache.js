@@ -9,10 +9,12 @@ const { MagicSpellbook } = require("../../../../src/main/typescript/elvarg/game/
 const { Skill } = require("../../../../src/main/typescript/elvarg/game/model/Skill");
 const { PVP_LOADOUT_DEFINITIONS } = require("../pvp/PvpLoadoutRegistry");
 
+const CURRENT_PRESET_ATTRIBUTE = "pvp:current-preset";
+
 // Resolve from the loadout, not autocast: Wilderness weapon switches clear autocast.
 function resolveOffensiveSpell(player) {
   const { CombatSpells } = require("../../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
-  const presetSpell = CombatSpells.getCombatSpell(player.getCurrentPreset?.()?.getAutocastSpellId?.() ?? -1);
+  const presetSpell = CombatSpells.getCombatSpell(player.getAttribute?.(CURRENT_PRESET_ATTRIBUTE)?.getAutocastSpellId?.() ?? -1);
   const spells = presetSpell ? [presetSpell] : player.getSpellbook() === MagicSpellbook.ANCIENT
     ? [CombatSpells.ICE_BARRAGE, CombatSpells.ICE_BLITZ, CombatSpells.ICE_BURST, CombatSpells.ICE_RUSH]
     : [];

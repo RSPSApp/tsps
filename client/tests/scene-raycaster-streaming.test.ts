@@ -70,3 +70,117 @@ assert.equal(pickNpc().length, 0, "hidden NPC transform does not intercept scene
 npcType = { transforms: [1], transform: () => ({ modelIds: [123] }) };
 assert.equal(pickNpc().length, 1, "visible transformed NPC remains selectable");
 console.log("Scene raycaster invisible NPC regression passed");
+
+// A house is a single 104-tile scene with an origin that need not align to 64 tiles.
+const { MapManager } = require("../game/MapManager");
+const { WebGLMapSquare } = require("../render/WebGLMapSquare");
+const { getMapSquareId } = require("../rs/map/MapFileIndex");
+const { sampleBridgeHeightForWorldTile } = require("../game/scene/BridgeHeightSampler");
+const { getTileRenderFlagAt } = require("../game/scene/TileRenderFlags");
+const { resolveInteractionPlaneForWorldTile } = require("../game/scene/PlaneResolver");
+const { getPreferredMapForWorldTile, getMapLocalTile } = require("../render/render/interact/menu");
+const { sampleTileVertexHeightWorldUnits, updateCameraTerrainPitchPressure } = require("../render/render/camera");
+const maps = new MapManager(4, () => {});
+const house = Object.assign(Object.create(WebGLMapSquare.prototype), {
+    id: getMapSquareId(100, 100), mapX: 100, mapY: 100,
+    renderPosX: 6408 / 64, renderPosY: 6424 / 64, borderSize: 0, heightMapSize: 104,
+    heightMapData: new Int16Array(4 * 104 * 104).fill(160),
+    getTileRenderFlag: (plane: number, x: number, y: number) => plane === 1 && x === 90 && y === 91 ? 2 : 0,
+    isBridgeSurface: () => false,
+});
+maps.mapSquares.set(house.id, house);
+const houseRaycaster = new SceneRaycaster(maps, {});
+const host: any = { mapManager: maps, getControlledPlayerWorldViewId: () => -1, cameraTerrainPitchPressure: 32768 };
+host.getPreferredMapForWorldTile = (x: number, y: number) => getPreferredMapForWorldTile(host, x, y);
+host.getMapLocalTile = (map: any, x: number, y: number) => getMapLocalTile(host, map, x, y);
+host.sampleTileVertexHeightWorldUnits = (x: number, y: number, plane: number) => sampleTileVertexHeightWorldUnits(host, x, y, plane);
+for (const x of [0, 16, 55, 63, 64, 79, 90, 103]) {
+    for (const y of [0, 16, 39, 63, 64, 79, 90, 103]) {
+        const wx = 6408 + x, wy = 6424 + y;
+        assert.equal(maps.getMapForWorldTile(wx, wy), house);
+        assert.equal(host.getPreferredMapForWorldTile(wx, wy), house, "room interactions use the whole scene");
+        assert.equal(houseRaycaster.getPreferredMapForWorldTile(wx, wy), house);
+        assert.deepEqual(sampleBridgeHeightForWorldTile(maps, wx + 0.5, wy + 0.5, 1),
+            { plane: 1, height: -10, valid: true }, "camera follow cannot drop to height zero at a map boundary");
+        assert.equal(houseRaycaster.sampleHeightAt(wx + 0.5, wy + 0.5, 1), -10);
+        assert.equal(host.sampleTileVertexHeightWorldUnits(wx, wy, 1), -1280);
+        updateCameraTerrainPitchPressure(host, wx * 128 + 64, wy * 128 + 64, 1, 10);
+        assert.equal(host.cameraTerrainPitchPressure, 32768, "flat house floors must not force camera pitch");
+    }
+}
+// Distinct outer-room heights catch clamping or wrapping local coordinates at 63.
+house.heightMapData[104 * 104 + 80 * 104 + 85] = 320;
+assert.equal(sampleBridgeHeightForWorldTile(maps, 6493, 6504, 1).height, -20);
+assert.equal(getTileRenderFlagAt(maps, 1, 6498, 6515), 2);
+assert.equal(resolveInteractionPlaneForWorldTile(maps, 0, 6498, 6515), 1);
+house.getLocIdsAtLocal = (plane: number, x: number, y: number) => plane === 1 && x === 90 && y === 85 ? [4515] : [];
+house.getLocTypeRotsAtLocal = () => [10];
+house.interactionPlane = -1;
+houseRaycaster.osrsClient.groundItems = { getStacksAt: () => [] };
+houseRaycaster.getResolvedLocType = () => ({ id: 4515, actions: ["Build"], sizeX: 1, sizeY: 1 });
+houseRaycaster.getLocModelMesh = () => mesh;
+const hotspotHits: any[] = [];
+houseRaycaster.collectTileHits(house,
+    { origin: [6498.75, -10.25, 6511], direction: [0, 0, -1] },
+    6498, 6509, 10, hotspotHits, new Set(), new Map(), 1);
+assert.equal(hotspotHits[0]?.interactId, 4515, "outer room build hotspots must be pickable at their rendered height");
+assert.equal(hotspotHits[0]?.tileX, 6498);
+assert.equal(hotspotHits[0]?.tileY, 6509);
+for (const [x, y] of [[6407, 6424], [6512, 6424], [6408, 6423], [6408, 6528]]) {
+    assert.equal(maps.getMapForWorldTile(x, y), undefined);
+    assert.equal(sampleBridgeHeightForWorldTile(maps, x, y, 1).valid, false);
+}
+maps.worldEntityMapIds.add(house.id);
+assert.equal(maps.getMapForWorldTile(6490, 6500), undefined, "overlays cannot become overworld terrain");
+maps.mapSquares.clear();
+const normal = { mapX: 100, mapY: 100 };
+maps.worldEntityMapIds.clear();
+maps.mapSquares.set(getMapSquareId(100, 100), normal);
+assert.equal(maps.getMapForWorldTile(6463, 6463), normal);
+assert.equal(maps.getMapForWorldTile(6464, 6463), undefined);
+console.log("House camera heights and interaction scene bounds regression passed");
+
+// A player on a boat deck stands in deck coordinates (9600+); their pick box must sit where
+// the deck is drawn, or nobody can right-click them.
+{
+    const DECK_MAP_ID = 822400;
+    const players = [
+        { x: 3068, y: 2987, worldView: -1 },
+        { x: 9603, y: 9604, worldView: 3000 },
+    ];
+    const deckPicker = new SceneRaycaster(
+        {
+            visibleMapCount: 1,
+            visibleMaps: [{ id: DECK_MAP_ID }],
+            getMapForWorldTile: () => undefined,
+        },
+        {
+            playerEcs: {
+                size: () => players.length,
+                getIsHidden: () => false,
+                getLevel: () => 0,
+                getX: (i: number) => players[i].x * 128 + 64,
+                getY: (i: number) => players[i].y * 128 + 64,
+                getWorldViewId: (i: number) => players[i].worldView,
+                getDefaultHeightTiles: () => 1.8,
+            },
+            worldViewManager: {
+                getWorldView: (id: number) => (id === 3000 ? { overlayMapId: DECK_MAP_ID } : undefined),
+            },
+        },
+    );
+    deckPicker.sampleHeightAt = () => 0;
+    deckPicker.deckToWorldProvider = (entity: number, fineX: number, fineY: number) =>
+        entity === 3000
+            ? { x: fineX - (9603 - 3069) * 128, y: fineY - (9604 - 2987) * 128 }
+            : undefined;
+    const hits: any[] = [];
+    deckPicker.collectPlayerHits(
+        { origin: [3069.5, -10, 2987.5], direction: [0, 1, 0] },
+        100, hits, 0,
+    );
+    assert.equal(hits.length, 1, "the deck player is hit where their deck is drawn");
+    assert.equal(hits[0].playerEcsIndex, 1);
+    assert.deepEqual([hits[0].tileX, hits[0].tileY], [3069, 2987]);
+    console.log("Scene raycaster deck player regression passed");
+}

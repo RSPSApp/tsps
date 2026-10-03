@@ -8,6 +8,8 @@ import { PlayerStatus } from "../../game/model/PlayerStatus";
 import { Flag } from "../../game/model/Flag";
 import { Skill } from "../../game/model/Skill";
 import { Location } from "../../game/model/Location";
+import { Graphic } from "../../game/model/Graphic";
+import { World } from "../../game/World";
 import { DonatorRights } from "../../game/model/rights/DonatorRights";
 import { InterfaceLayoutRegistry } from "../../game/definition/InterfaceLayoutDefinition";
 import { Misc } from "../../util/Misc";
@@ -16,10 +18,12 @@ import {
   encodeChatMessage,
   encodeContentData,
   encodeDestination,
+  encodeHintArrow,
   encodeGroundItems,
   encodeGroundItemsDelta,
   encodeLocAddChange,
   encodeLocAnim,
+  encodeTileSpotAnim,
   encodeLocDel,
   encodeInventorySlot,
   encodeInventorySnapshot,
@@ -27,10 +31,12 @@ import {
   encodePlaySong,
   encodeProjectiles,
   encodeRunClientScript,
+  encodeChatFilterSettings,
   encodeRunEnergy,
   encodeSkillsDelta,
   encodeSkillsSnapshot,
   encodeSound,
+  encodeSystemUpdate,
   encodeVarbit,
   encodeVarp,
   encodeWidgetClose,
@@ -44,10 +50,13 @@ import {
   encodeWidgetSetHidden,
   encodeWidgetSetItem,
   encodeWidgetSetModel,
+  encodeWidgetSetPosition,
   encodeWidgetSetNpcHead,
   encodeWidgetSetPlayerHead,
+  encodeWidgetSetQuestList,
   encodeWidgetSetRoot,
   encodeWidgetSetText,
+  type QuestListGroup,
   type ScriptInventorySnapshot,
   MAIN_INVENTORY_GROUP_ID,
   MAIN_INVENTORY_SLOT_FLAGS,
@@ -129,11 +138,8 @@ export class PacketSender {
     return this;
   }
 
-  sendSystemUpdate(time: number): this {
-    const out = new PacketBuilder(114);
-    const byteOrder = ByteOrder.LITTLE;
-    out.putShorts(time, byteOrder);
-    this.player.getSession().write(out);
+  sendSystemUpdate(remainingCentis: number): this {
+    if (this.player.getSession().sendClientPacket(encodeSystemUpdate(remainingCentis))) return this;
     return this;
   }
 
@@ -226,14 +232,18 @@ export class PacketSender {
     return this.sendConfig(id, state);
   }
 
+  /** Populates the quest list (side journal); the client renders opcode 116. */
+  sendQuestList(groups: QuestListGroup[]): this {
+    this.player.getSession().sendClientPacket(encodeWidgetSetQuestList(groups));
+    return this;
+  }
+
   sendChatOptions(
     publicChat: number,
     privateChat: number,
     tradeChat: number
   ): this {
-    const out = new PacketBuilder(206);
-    out.put(publicChat).put(privateChat).put(tradeChat);
-    this.player.getSession().write(out);
+    this.player.getSession().sendClientPacket(encodeChatFilterSettings(publicChat, privateChat, tradeChat));
     return this;
   }
 
@@ -279,7 +289,6 @@ export class PacketSender {
   }
 
   sendWalkableInterface(interfaceId: number): this {
-    this.player.setWalkableInterfaceId(interfaceId);
     if (this.player.getSession().sendClientPacket(encodeWidgetOpen(interfaceId, false))) return this;
   }
 
@@ -332,6 +341,11 @@ export class PacketSender {
 
   public sendInterfaceRawModel(interfaceId: number, modelId: number): this {
     this.player.getSession().sendClientPacket(encodeWidgetSetModel(interfaceId, modelId));
+    return this;
+  }
+
+  public sendInterfacePosition(uid: number, x: number, y: number): this {
+    this.player.getSession().sendClientPacket(encodeWidgetSetPosition(uid, x, y));
     return this;
   }
 
@@ -482,46 +496,42 @@ export class PacketSender {
     return this;
   }
 
-  public sendPositionalHint(position: any, tilePosition: number) {
+  /**
+   * Points the native hint arrow at a tile. `tilePosition` is kept for signature
+   * compatibility; the client always centres the 6-byte marker on the tile.
+   */
+  public sendPositionalHint(position: any, tilePosition = 2): this {
     if (
       !position ||
       typeof position.getX !== "function" ||
-      typeof position.getY !== "function" ||
-      typeof position.getZ !== "function"
+      typeof position.getY !== "function"
     ) {
       return this;
     }
-    const out = new PacketBuilder(254);
-    out.put(tilePosition);
-    out.putShort(position.getX());
-    out.putShort(position.getY());
-    out.put(position.getZ());
-    this.player.getSession().write(out);
+    const z = typeof position.getZ === "function" ? position.getZ() : 0;
+    this.player
+      .getSession()
+      .sendClientPacket(encodeHintArrow(2, position.getX(), position.getY(), z));
     return this;
   }
 
-  // public sendEntityHint(mobile: Mobile) {
-  // Use client hint-arrow packet to point at a target entity.
-  public sendEntityHint(mobile: any): PacketSender {
+  /** Points the native hint arrow at an NPC; the marker follows the actor. */
+  public sendEntityHint(mobile: any): this {
     if (!mobile || typeof mobile.getIndex !== "function") {
       return this;
     }
-    const type = mobile?.isPlayer?.() ? 10 : 1;
-    const out = new PacketBuilder(254);
-    out.put(type);
-    out.putShort(mobile.getIndex());
-    out.putTypeInt(0, ValueType.STANDARD, ByteOrder.TRIPLE_INT);
-    this.player.getSession().write(out);
+    this.player.getSession().sendClientPacket(encodeHintArrow(1, mobile.getIndex(), 0, 0));
     return this;
   }
 
-  public sendEntityHintRemoval(playerHintRemoval: boolean): PacketSender {
-    let type = playerHintRemoval ? 10 : 1;
-    let out = new PacketBuilder(254);
-    out.put(type).putShort(-1);
-    out.putTypeInt(0, ValueType.STANDARD, ByteOrder.TRIPLE_INT);
-    this.player.getSession().write(out);
+  /** Clears any active hint arrow. */
+  public clearHintArrow(): this {
+    this.player.getSession().sendClientPacket(encodeHintArrow(0, 0, 0, 0));
     return this;
+  }
+
+  public sendEntityHintRemoval(_playerHintRemoval = false): this {
+    return this.clearHintArrow();
   }
 
   public sendMultiIcon(value: number): PacketSender {
@@ -592,22 +602,12 @@ export class PacketSender {
   }
 
   sendBankSnapshot(): this {
-    const slots: BankSlotView[] = [];
-    let slot = 0;
-    const banks = this.player.getBanks?.() ?? this.player.getBankTabs?.();
-    if (Array.isArray(banks)) {
-      banks.slice(0, 10).forEach((bank: any, tab: number) => {
-        for (const item of bank?.getValidItems?.() ?? []) {
-          slots.push({ slot: slot++, itemId: item.getId(), quantity: item.getAmount(), tab });
-        }
-      });
-    } else {
-      for (let tab = 0; tab < 10; tab++) {
-        for (const item of this.player.getBank?.(tab)?.getValidItems?.() ?? []) {
-          slots.push({ slot: slot++, itemId: item.getId(), quantity: item.getAmount(), tab });
-        }
-      }
-    }
+    const { Bank } = require(
+      "../../game/model/container/impl/Bank"
+    ) as typeof import("../../game/model/container/impl/Bank");
+    const slots: BankSlotView[] = Bank.layout(this.player).map(({ tab, item }, slot) => ({
+      slot, itemId: Bank.displayItemId(item), quantity: item.getAmount(), tab,
+    }));
     this.player.getSession().sendClientPacket(encodeBankSnapshot(1410, slots));
     return this;
   }
@@ -628,7 +628,7 @@ export class PacketSender {
     this.player.setEnteredAmountAction?.(null);
     this.player.setEnteredSyntaxAction?.(null);
     this.player.getDialogueManager?.()?.reset?.();
-    this.player.setDestroyItem?.(-1);
+    this.player.setAttribute?.("destroy-item:pending", -1);
     this.player.setInterfaceId?.(-1);
     this.player.setCreationMenu?.(null);
     this.player.setSearchingBank?.(false);
@@ -651,6 +651,10 @@ export class PacketSender {
     if (hadChatbox) this.player.getSession().sendClientPacket(encodeWidgetSetHidden(CHATBOX_MODAL_TARGET_UID, true));
     for (const [groupId] of closable) this.subInterfaceTargets.delete(groupId);
     return true;
+  }
+
+  public getChatboxGroupId(): number {
+    return this.chatboxGroupId;
   }
 
   public isChatboxInterface(groupId: number): boolean {
@@ -761,11 +765,23 @@ export class PacketSender {
     return this;
   }
 
-  sendGraphic(..._args: any[]): this {
+  /** Plays a graphic on a world tile for this player only. */
+  sendGraphic(graphic: Graphic, location: Location): this {
+    if (!graphic || !location) return this;
+    this.player.getSession().sendClientPacket(encodeTileSpotAnim(
+      graphic.id, location.getX(), location.getY(), location.getZ(), graphic.height ?? 0, graphic.delay ?? 0
+    ));
     return this;
   }
 
-  sendGlobalGraphic(..._args: any[]): this {
+  /** Plays a graphic on a world tile for everyone in this player's instance who can see it. */
+  sendGlobalGraphic(graphic: Graphic, location: Location): this {
+    if (!graphic || !location) return this;
+    const area = this.player.getPrivateArea();
+    World.forEachNetworkPlayer((viewer) => {
+      if (viewer.getPrivateArea() !== area || !location.isViewableFrom(viewer.getLocation())) return;
+      viewer.getPacketSender().sendGraphic(graphic, location);
+    });
     return this;
   }
 
@@ -1011,7 +1027,7 @@ export class PacketSender {
     const baseLevel = manager.getMaxLevel(skill);
     const currentLevel = manager.getCurrentLevel(skill);
     return {
-      id: skill.getIndex(),
+      id: skill.getClientId(),
       xp: manager.getExperience(skill),
       baseLevel,
       virtualLevel: baseLevel,
@@ -1057,6 +1073,8 @@ export class PacketSender {
       }
     }
     this.subInterfaceTargets.set(groupId, { targetUid, type });
+    // A (re)mounted group starts with its cache text, so resend everything written to it.
+    this.player.getFrameUpdater().clearGroup(groupId);
     this.player.getSession().sendClientPacket(encodeWidgetOpenSub(targetUid, groupId, type, options));
     if (groupId === MAIN_INVENTORY_GROUP_ID) {
       this.player.getSession().sendClientPacket(
@@ -1120,6 +1138,23 @@ export class PacketSender {
     return this;
   }
 
+  /**
+   * Sends a whole inventory by its cache id (for example a boat's cargo hold, 963), so the
+   * cache scripts reading it redraw. It rides a run-script packet with no script (id -1).
+   */
+  sendInventory(
+    inventoryId: number,
+    capacity: number,
+    items: ReadonlyArray<{ id: number; amount: number } | null>
+  ): this {
+    const slots = Array.from({ length: capacity }, (_, slot) => ({
+      slot,
+      itemId: items[slot]?.id ?? -1,
+      quantity: items[slot]?.amount ?? 0,
+    }));
+    return this.sendInterfaceScript(-1, [], undefined, undefined, { [inventoryId]: { capacity, slots } });
+  }
+
   sendClientScript(scriptId: number, ...args: (number | string)[]): this {
     this.player.getSession().sendClientPacket(encodeRunClientScript(scriptId, args));
     return this;
@@ -1130,7 +1165,7 @@ export class PacketSender {
       return this;
     }
     const out = new PacketBuilder(116);
-    out.put(skill.getIndex());
+    out.put(skill.getClientId());
     out.putInt(exp);
     this.player.getSession().write(out);
     return this;

@@ -29,8 +29,10 @@ export class BonusManager {
 
     public static update(player: Player) {
         const bonuses = new Array(BonusManager.BONUS_COUNT).fill(0);
+        // Plugins can switch an item's stats off (members items on a free-to-play world).
+        const counts = (itemId: number) => PluginManager.emitCanUseItem(player, itemId, "bonus") !== false;
         for (const item of player.getEquipment().getItems()) {
-            if (!item || item.getId() <= 0) continue;
+            if (!item || item.getId() <= 0 || !counts(item.getId())) continue;
             const definition = ItemDefinition.forId(item.getId());
             if (definition.getBonuses() != null) {
                 for (let i = 0; i < Math.min(definition.getBonuses().length, bonuses.length); i++) {
@@ -40,7 +42,7 @@ export class BonusManager {
         }
 
         const weaponId = player.getEquipment().getItems()[Equipment.WEAPON_SLOT]?.getId?.() ?? -1;
-        if (isCrystalBow(weaponId)) {
+        if (isCrystalBow(weaponId) && counts(weaponId)) {
             const weaponDefinition = ItemDefinition.forId(weaponId);
             const definitionBonuses = weaponDefinition?.getBonuses?.() ?? [];
             const rangedAttackBonus = getCrystalBowAttackBonus(weaponId);

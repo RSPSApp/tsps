@@ -40,6 +40,64 @@ async function main(): Promise<void> {
     assert.equal(shouldUseUnanimatedIdlePlayer(300, true, true, false, 808, 808), false);
     assert.equal(shouldUseUnanimatedIdlePlayer(300, true, false, true, 808, 808), false);
 
+    const { WebGLMapSquare } = await import("../render/WebGLMapSquare");
+    let tileX = 0;
+    let tileY = 0;
+    let overlayView: any;
+    const sceneRenderer = {
+        stats: { frameCount: 0 },
+        osrsClient: {
+            renderSelf: true,
+            controlledPlayerServerId: 10,
+            playerEcs: {
+                getAllActiveIndices: () => [0, 1, 2],
+                getIndexForServerId: () => 0,
+                getX: () => tileX * 128 + 64,
+                getY: () => tileY * 128 + 64,
+                getWorldViewId: (pid: number) => pid === 2 ? 5 : -1,
+            },
+            worldViewManager: { getWorldViewByOverlayMapId: () => overlayView },
+        },
+        shouldRenderPlayerIndex: () => true,
+    };
+    const scenePlayers = new PlayerRenderer(sceneRenderer as any) as any;
+    scenePlayers.isFirstPersonArmsPlayer = () => false;
+    const sceneMap = Object.assign(Object.create(WebGLMapSquare.prototype), {
+        id: 1, mapX: 100, mapY: 100,
+        renderPosX: 6408 / 64, renderPosY: 6424 / 64,
+        heightMapSize: 104, borderSize: 0,
+    });
+    const selectedAt = (x: number, y: number, map = sceneMap) => {
+        tileX = x;
+        tileY = y;
+        sceneRenderer.stats.frameCount++;
+        return scenePlayers.getRenderPlayersForMap(map);
+    };
+    for (let x = 0; x < 104; x++) {
+        for (let y = 0; y < 104; y++) {
+            assert.deepEqual(selectedAt(6408 + x, 6424 + y), [0, 1],
+                `owner and guest must render throughout the instance: ${x},${y}`);
+        }
+    }
+    for (const [x, y] of [[6407, 6424], [6512, 6424], [6408, 6423], [6408, 6528]]) {
+        assert.deepEqual(selectedAt(x, y), [], "exclude tiles outside the instance scene");
+    }
+    sceneRenderer.osrsClient.renderSelf = false;
+    assert.deepEqual(selectedAt(6500, 6500), [1], "respect hidden local-player rendering");
+    sceneRenderer.osrsClient.renderSelf = true;
+    overlayView = { id: 5, containsTile: (x: number, y: number) => x === 1 && y === 2 };
+    assert.deepEqual(selectedAt(1, 2), [2], "overlay players retain their own coordinate bounds");
+    assert.deepEqual(selectedAt(6500, 6500), []);
+    overlayView = undefined;
+    const normalMap = Object.assign(Object.create(WebGLMapSquare.prototype), {
+        id: 2, mapX: 100, mapY: 100, renderPosX: 100, renderPosY: 100,
+        heightMapSize: 76, borderSize: 6,
+    });
+    assert.deepEqual(selectedAt(6400, 6400, normalMap), [0, 1]);
+    assert.deepEqual(selectedAt(6463, 6463, normalMap), [0, 1]);
+    assert.deepEqual(selectedAt(6464, 6463, normalMap), [], "normal maps exclude neighbouring squares");
+    assert.deepEqual(selectedAt(6399, 6400, normalMap), [], "normal maps exclude terrain borders");
+
     const drawn: Array<{ slot: number; range: DrawRange }> = [];
     let slot = -1;
     let range: DrawRange = [0, 0, 0];

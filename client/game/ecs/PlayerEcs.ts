@@ -739,6 +739,11 @@ export class PlayerEcs {
         endY: number,
         targetRot: number,
     ): void {
+        this.clearServerQueue(i);
+        // PlayerSlot.applyExactMove sets pathX/Y[0] to the landing tile without
+        // moving the rendered actor there. Subsequent walks extend from it.
+        this.srvLastX[i] = this.srvNextX[i] = this.targetX[i] = endX | 0;
+        this.srvLastY[i] = this.srvNextY[i] = this.targetY[i] = endY | 0;
         this.forcedMoveStartCycle[i] = startCycle >>> 0;
         this.forcedMoveEndCycle[i] = endCycle >>> 0;
         this.forcedMoveStartX[i] = startX | 0;
@@ -1673,6 +1678,7 @@ export class PlayerEcs {
     }
 
     clearServerQueue(i: number): void {
+        this.setForcedMovementSteps(i, 0);
         if (!this.serverInterpEnabled) return;
         if (!this.srvQueueLen || i < 0 || i >= this.capacity) return;
         this.srvQueueLen[i] = 0;
@@ -1722,7 +1728,7 @@ export class PlayerEcs {
                 this.clearQueuedSteps(i);
                 return true;
             }
-        } else if ((this.x[i] | 0) === targetX && (this.y[i] | 0) === targetY) {
+        } else if ((this.srvNextX[i] | 0) === targetX && (this.srvNextY[i] | 0) === targetY) {
             this.clearQueuedSteps(i);
             return true;
         }
@@ -2028,7 +2034,7 @@ export class PlayerEcs {
                 // can follow the movement update (movement-facing) unless blocked by an action seq.
                 try {
                     const tVal = (this.srvT?.[i] as number) ?? 1.0;
-                    if (!(tVal < 1.0)) {
+                    if (!forcedHandled && !(tVal < 1.0)) {
                         const queued = this._queueLen(i) | 0;
                         if (queued > 0) {
                             this._tryStartNextSegment(i);
@@ -2049,7 +2055,7 @@ export class PlayerEcs {
                 this.prevX[i] = cx;
                 this.prevY[i] = cy;
                 // move towards target
-                if (this.serverInterpEnabled) {
+                if (!forcedHandled && this.serverInterpEnabled) {
                     // Final-stop guard: if fully arrived with no queued steps or snap,
                     // drop any residual moving hold so idle can engage immediately.
                     try {
@@ -2762,17 +2768,10 @@ export class PlayerEcs {
         // Reset animation distance to prevent phase drift after teleport
         if (this.animDistTraveled) this.animDistTraveled[i] = 0.0;
         if (this.animPhaseBias) this.animPhaseBias[i] = 0.0;
-        // Reset server interpolation state so local snap is not overridden by in-flight segments
-        if (this.srvLastX && this.srvNextX && this.srvT && this.srvOverrun) {
-            this.srvLastX[i] = sx;
-            this.srvLastY[i] = sy;
-            this.srvNextX[i] = sx;
-            this.srvNextY[i] = sy;
-            this.srvT[i] = 1.0;
-            this.srvOverrun[i] = 0.0;
-            if (this.srvPendingValid) this.srvPendingValid[i] = 0;
-            if (this.movingHold) this.movingHold[i] = 0;
-        }
+        this.clearServerQueue(i);
+        this.clearForcedMovement(i);
+        this.resetMovementDelay(i);
+        if (plane !== undefined) this.setLevel(i, plane);
         // Update occupancy immediately
         const mapX = (tileX | 0) >> 6;
         const mapY = (tileY | 0) >> 6;

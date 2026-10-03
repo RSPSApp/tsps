@@ -63,6 +63,8 @@ import { LoadingMessageOverlay } from "../../../ui/devoverlay/LoadingMessageOver
 import { LoginOverlay } from "../../../ui/devoverlay/LoginOverlay";
 import { OverheadPrayerOverlay } from "../../../ui/devoverlay/OverheadPrayerOverlay";
 import { OverheadTextOverlay } from "../../../ui/devoverlay/OverheadTextOverlay";
+import { TutorialHintOverlay } from "../../../ui/devoverlay/TutorialHintOverlay";
+import { SystemUpdateOverlay } from "../../../ui/devoverlay/SystemUpdateOverlay";
 import {
     HealthBarEntry,
     HitsplatEntry,
@@ -187,6 +189,7 @@ import {
 } from "../../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
+import { WIDGET_MODEL_TYPE_LOC, widgetLocModel } from "./widgetLocModel";
 import { RENDER_CONSTANTS } from "../constants";
 
 /**
@@ -207,6 +210,97 @@ function fitPortraitParams(model: any, params: any): any {
         (modelWidth * zoom3d) / boxWidth,
     );
     return { ...params, zoom2d: Math.max(1, zoom2d | 0) };
+}
+
+/** Chatbox interface group (chatlog + input), mirrored from the widget layer. */
+const CHATBOX_GROUP_ID = 162;
+
+/**
+ * Screen-rect of the chatbox in main-canvas pixels (top-left origin), used to
+ * anchor the system-update countdown just above the chatbox. The chat group
+ * (162) is mounted into a gameframe slot (WIDGET_OPEN_SUB) and the render
+ * pass draws the mounted root at the slot's origin plus the root's own
+ * offset - the root's cached x/y alone (0,0) would anchor the text to the
+ * screen's top-left corner. So the layout-space absolute position is walked
+ * from the hosting slot (like the widget overlay's containerOf(162)), with
+ * the chat root's own walk as fallback when the group is not mounted. The
+ * result goes through the widget root's letterbox transform (the same
+ * __widgetRenderScale/Offset the render pass applies).
+ */
+function getChatboxScreenRect(host: WebGLOsrsRendererHost): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+} | undefined {
+    try {
+        const manager = host.osrsClient?.widgetManager;
+        if (!manager) return undefined;
+        const chatRoots = manager.getAllGroupRoots?.(CHATBOX_GROUP_ID) ?? [];
+        const chatRoot = chatRoots[0];
+        if (!chatRoot) return undefined;
+
+        // The slot widget hosting the chat group, if this layout mounts it.
+        let slot: any;
+        const parents = (manager as any).interfaceParents;
+        if (parents && typeof parents[Symbol.iterator] === "function") {
+            for (const [uid, parent] of parents) {
+                if (parent?.group === CHATBOX_GROUP_ID) {
+                    slot = (manager as any).getWidgetByUid?.(uid);
+                    break;
+                }
+            }
+        }
+
+        // Layout-space absolute position (sum of ancestor x/y, like the
+        // gameframe context's absRectOf).
+        let ax = 0;
+        let ay = 0;
+        let cur: any = slot ?? chatRoot;
+        for (let guard = 0; cur && guard < 32; guard++) {
+            ax += Number(cur.x) || 0;
+            ay += Number(cur.y) || 0;
+            const parentUid = cur.parentUid;
+            if (parentUid === undefined || parentUid === 0xffff || parentUid === cur.uid) break;
+            cur = (manager as any).getWidgetByUid?.(parentUid);
+        }
+        if (slot) {
+            // The mounted root is drawn at the slot's origin plus its own offset.
+            ax += Number(chatRoot.x) || 0;
+            ay += Number(chatRoot.y) || 0;
+        }
+
+        const rootInterface: number | undefined = manager.rootInterface;
+        const viewportRoot =
+            typeof rootInterface === "number" && rootInterface >= 0
+                ? (manager.getAllGroupRoots?.(rootInterface)?.[0] ?? null)
+                : null;
+        const renderScaleX =
+            typeof (viewportRoot as any)?.__widgetRenderScaleX === "number"
+                ? (viewportRoot as any).__widgetRenderScaleX
+                : 1;
+        const renderScaleY =
+            typeof (viewportRoot as any)?.__widgetRenderScaleY === "number"
+                ? (viewportRoot as any).__widgetRenderScaleY
+                : 1;
+        const renderOffsetX =
+            typeof (viewportRoot as any)?.__widgetRenderOffsetX === "number"
+                ? (viewportRoot as any).__widgetRenderOffsetX
+                : 0;
+        const renderOffsetY =
+            typeof (viewportRoot as any)?.__widgetRenderOffsetY === "number"
+                ? (viewportRoot as any).__widgetRenderOffsetY
+                : 0;
+
+        const x = ax * renderScaleX + renderOffsetX;
+        const y = ay * renderScaleY + renderOffsetY;
+        const width = (Number(chatRoot.width) || Number(slot?.width) || 0) * renderScaleX;
+        const height = (Number(chatRoot.height) || Number(slot?.height) || 0) * renderScaleY;
+        if (!(width > 0 && height > 0)) return undefined;
+        return { x, y, width, height };
+    } catch {
+        return undefined;
+    }
 }
 
 export async function initShaders(host: WebGLOsrsRendererHost, ): Promise<Program[]> {
@@ -356,6 +450,23 @@ export async function initShaders(host: WebGLOsrsRendererHost, ): Promise<Progra
             }
         } catch {}
 
+        // Register the native Tutorial Island hint arrow overlay.
+        try {
+            if (host.overlayManager && host.hitsplatProgram && host.sceneUniformBuffer) {
+                const hint = new TutorialHintOverlay(host.hitsplatProgram, {
+                    getCacheSystem: () => host.osrsClient.cacheSystem,
+                    getClient: () => host.osrsClient,
+                    resolveNpcOverlayAnchor: (ecsId, x, z, typeId) =>
+                        host.resolveNpcOverlayAnchor(ecsId, x, z, typeId),
+                });
+                host.tutorialHintOverlay = hint;
+                host.overlayManager.add(hint);
+                try {
+                    hint.init({ app: host.app, sceneUniforms: host.sceneUniformBuffer });
+                } catch {}
+            }
+        } catch {}
+
         // Create overhead prayer overlay now; registered after the health bar overlay
         // so head icons stack above bars in the shared per-actor offset chain.
         try {
@@ -400,6 +511,22 @@ export async function initShaders(host: WebGLOsrsRendererHost, ): Promise<Progra
             }
         } catch (e) {
             console.warn("[WebGLOsrsRenderer] Failed to init loading message overlay:", e);
+        }
+
+        // Add system update countdown overlay ("System update in: MM:SS" above the chatbox)
+        try {
+            if (host.overlayManager && host.sceneUniformBuffer) {
+                host.systemUpdateOverlay = new SystemUpdateOverlay({
+                    getChatboxRect: () => getChatboxScreenRect(host),
+                });
+                host.overlayManager.add(host.systemUpdateOverlay, false);
+                host.systemUpdateOverlay.init({
+                    app: host.app,
+                    sceneUniforms: host.sceneUniformBuffer,
+                });
+            }
+        } catch (e) {
+            console.warn("[WebGLOsrsRenderer] Failed to init system update overlay:", e);
         }
 
         // Add server-path overlay (numbers over tiles returned by pathfind)
@@ -982,6 +1109,22 @@ export async function initShaders(host: WebGLOsrsRendererHost, ): Promise<Progra
                                         }
                                     }
                                 }
+                            }
+
+                            if (((params.widget?.modelType ?? 0) | 0) === WIDGET_MODEL_TYPE_LOC) {
+                                const locModel = widgetLocModel(
+                                    modelId,
+                                    host.osrsClient.locTypeLoader,
+                                    host.getInteractLocModelLoader(),
+                                    host.osrsClient.textureLoader,
+                                );
+                                // modelId is a loc id, never a model id.
+                                return locModel
+                                    ? host.model2DRenderer.renderModelInstanceToCanvasExtents(
+                                          locModel,
+                                          params,
+                                      )
+                                    : undefined;
                             }
 
                             const widgetAny = params.widget as any;

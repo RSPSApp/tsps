@@ -27,7 +27,7 @@ import { Spell } from "./Spell";
  * the weapon simply can't cast once depleted. See plugins/items/Trident.plugin.js
  * for the charging interaction; both sides share state via TRIDENT_CHARGE_META_KEY.
  */
-export const TRIDENT_CHARGE_META_KEY = "tridentCharges";
+export const TRIDENT_CHARGE_META_KEY = "trident-charges";
 export const TRIDENT_MAX_CHARGES = 2500;
 
 class TridentSpell extends CombatNormalSpell {
@@ -144,12 +144,12 @@ class CombatArceuusEffectSpell extends CombatEffectSpell {
     }
 }
 
-const ARCEUUS_MARK_UNTIL = "arceuus:markUntil";
+const ARCEUUS_MARK_UNTIL = "arceuus:mark-until";
 
 const hasArceuusMark = (target: Mobile): boolean =>
     Number(target.getAttribute(ARCEUUS_MARK_UNTIL) ?? 0) > Date.now();
 const hasArceuusWard = (target: Mobile): boolean =>
-    Number(target.getAttribute("arceuus:wardUntil") ?? 0) > Date.now();
+    Number(target.getAttribute("arceuus:ward-until") ?? 0) > Date.now();
 
 const getCombatFactory = () =>
     require("../CombatFactory").CombatFactory as typeof import("../CombatFactory").CombatFactory;
@@ -865,6 +865,7 @@ export class CombatSpells {
     });
 
     public static IBAN_BLAST = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(708);
         },
@@ -898,6 +899,7 @@ export class CombatSpells {
     });
 
     public static SNARE = new CombatEffectSpell({
+        members: true,
         castAnimation() {
             return new Animation(710);
         },
@@ -928,6 +930,7 @@ export class CombatSpells {
     });
 
     public static MAGIC_DART = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(1576);
         },
@@ -1027,6 +1030,7 @@ export class CombatSpells {
     });
 
     public static SARADOMIN_STRIKE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => {
             return new Animation(811);
         },
@@ -1060,6 +1064,7 @@ export class CombatSpells {
     });
 
     public static CLAWS_OF_GUTHIX = new CombatNormalSpell({
+        members: true,
         castAnimation: () => {
             return new Animation(811);
         },
@@ -1093,6 +1098,7 @@ export class CombatSpells {
     });
 
     public static FLAMES_OF_ZAMORAK = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(811);
         },
@@ -1126,6 +1132,7 @@ export class CombatSpells {
     });
 
     public static WIND_WAVE = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(727);
         },
@@ -1159,6 +1166,7 @@ export class CombatSpells {
     });
 
     public static WATER_WAVE = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(727);
         },
@@ -1192,6 +1200,7 @@ export class CombatSpells {
     });
 
     public static VULNERABILITY = new CombatEffectSpell({
+        members: true,
         castAnimation() {
             return new Animation(729);
         },
@@ -1248,6 +1257,7 @@ export class CombatSpells {
     });
 
     public static EARTH_WAVE = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(727);
         },
@@ -1281,6 +1291,7 @@ export class CombatSpells {
     });
 
     public static ENFEEBLE = new CombatEffectSpell({
+        members: true,
         castAnimation: function () {
             return new Animation(729);
         },
@@ -1333,6 +1344,7 @@ export class CombatSpells {
     });
 
     public static FIRE_WAVE = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(727);
         },
@@ -1376,6 +1388,7 @@ export class CombatSpells {
     });
 
     public static WIND_SURGE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => new Animation(7855),
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1456, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1457, GraphicHeight.HIGH),
@@ -1388,6 +1401,7 @@ export class CombatSpells {
     });
 
     public static WATER_SURGE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => new Animation(7855),
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1459, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1460, GraphicHeight.HIGH),
@@ -1400,6 +1414,7 @@ export class CombatSpells {
     });
 
     public static EARTH_SURGE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => new Animation(7855),
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1462, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1463, GraphicHeight.HIGH),
@@ -1412,6 +1427,7 @@ export class CombatSpells {
     });
 
     public static FIRE_SURGE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => new Animation(7855),
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1465, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1466, GraphicHeight.HIGH),
@@ -1560,12 +1576,13 @@ export class CombatSpells {
         spellEffect: (_cast, target) => {
             if (!target.isNpc()) return;
             target.getMovementQueue().reset();
-            target.setAttribute("arceuus:darkLureUntil", Date.now() + 20_000);
+            target.setAttribute("arceuus:dark-lure-until", Date.now() + 20_000);
             target.getCombat().attack(_cast);
         },
     });
 
     public static ENTANGLE = new CombatEffectSpell({
+        members: true,
         castAnimation() {
             return new Animation(710);
         },
@@ -1596,6 +1613,7 @@ export class CombatSpells {
     });
 
     public static STUN = new CombatEffectSpell({
+        members: true,
         castAnimation() {
             return new Animation(729);
         },
@@ -1671,7 +1689,8 @@ export class CombatSpells {
                     }
                     return;
                 }
-                const seconds = player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MAGIC] ? 300 : 600;
+                // Wiki: 5 minutes, halved when Protect from Magic was already up.
+                const seconds = player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MAGIC] ? 150 : 300;
                 player.getCombat().getTeleblockTimer().start(seconds);
                 player.getPacketSender().sendEffectTimer(seconds, EffectTimer.TELE_BLOCK)
                     .sendMessage("You have just been teleblocked!");

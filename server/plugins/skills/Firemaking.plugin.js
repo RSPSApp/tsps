@@ -612,6 +612,14 @@ let ObjectManager;
 let ItemOnGroundManager;
 let World;
 
+// Answers the Firemaking experience for a log, e.g. for the infernal axe's auto-burn.
+function answerLogXp(request) {
+  const log = LIGHTABLE_LOGS_BY_ID.get(request.logId);
+  if (log) {
+    request.xp = log.xpReward;
+  }
+}
+
 module.exports = {
   name: "Firemaking",
   startBotInventoryFiremaking,
@@ -647,6 +655,7 @@ module.exports = {
     }
 
     TaskManager.submit(new FiremakingTask(activeSessions));
+    api.onCustomEvent("firemaking:log-xp", answerLogXp);
 
     api.onPlayerDisconnect(({ player }) => {
       stopFiremaking(activeSessions, player, false);

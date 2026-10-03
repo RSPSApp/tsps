@@ -2,6 +2,7 @@ import { BIT_MASKS } from "../MathConstants";
 import { Archive } from "../cache/Archive";
 import { CacheIndex } from "../cache/CacheIndex";
 import { CacheInfo } from "../cache/CacheInfo";
+import { isGroupMissingError } from "../cache/js5/GroupMissingError";
 import { ByteBuffer } from "../io/ByteBuffer";
 import { Type } from "./Type";
 
@@ -61,6 +62,8 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
                 type.post();
             }
         } catch (e) {
+            // Do not poison the definition cache with an empty type while JS5 is streaming.
+            if (isGroupMissingError(e)) throw e;
             console.error("Failed loading type " + id, e);
         }
         this.cache.set(id, type);

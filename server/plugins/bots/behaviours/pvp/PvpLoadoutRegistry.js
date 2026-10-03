@@ -1,6 +1,7 @@
 "use strict";
 
 const { GameConstants } = require("../../../../src/main/typescript/elvarg/game/GameConstants");
+const { isMembersWorld } = require("../../../../src/main/typescript/elvarg/game/definition/WorldDefinition");
 const fs = require("fs");
 const path = require("path");
 
@@ -57,6 +58,11 @@ function getPvpLoadout(loadoutId) {
   return PVP_LOADOUTS[loadoutId] ?? PVP_LOADOUTS.edge_main_melee;
 }
 
+/** A free-to-play world (world.json membersWorld false) only gears bots with "f2p" loadouts. */
+function isLoadoutAvailable(loadoutId) {
+  return isMembersWorld() || PVP_LOADOUTS[loadoutId]?.tags.includes("f2p") === true;
+}
+
 function listPvpLoadouts() {
   return PVP_LOADOUT_IDS.map((loadoutId) => PVP_LOADOUTS[loadoutId]);
 }
@@ -66,5 +72,6 @@ module.exports = {
   PVP_LOADOUT_IDS,
   PVP_LOADOUTS,
   getPvpLoadout,
+  isLoadoutAvailable,
   listPvpLoadouts,
 };

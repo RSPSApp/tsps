@@ -118,7 +118,20 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
                 if (raw instanceof ArrayBuffer) {
                     // Binary protocol - may contain batched packets
                     const { decodeBatchedServerPackets } = require("../../packet/ServerBinaryDecoder");
-                    const decoded = decodeBatchedServerPackets(raw);
+                    const { messages: decoded, stalled } = decodeBatchedServerPackets(raw);
+                    if (stalled) {
+                        // Stream desynced (client/server packet tables out of lockstep,
+                        // or a corrupted frame). Keeping the socket open leaves every
+                        // later batch corrupt, so force a reconnect: the close handler
+                        // re-auths and the server resends full state on login.
+                        // 4002 = private-use code; unlike 4000 it still reconnects.
+                        // eslint-disable-next-line no-console
+                        console.error("[ws] server packet stream stalled; forcing reconnect to resync");
+                        try {
+                            ws.close(4002, "packet stream desync");
+                        } catch {}
+                        return;
+                    }
                     if (!decoded || decoded.length === 0) {
                         console.warn("[ws] Failed to decode binary packet(s)");
                         return;

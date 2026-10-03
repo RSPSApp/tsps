@@ -2,7 +2,7 @@ import { Player } from "../../../entity/impl/player/Player";
 import { Skill } from "../../../model/Skill";
 import { ItemIds } from "../../../../util/IdEnums";
 
-const BONE_XP = new Map<number, number>([
+export const BONE_XP = new Map<number, number>([
     [ItemIds.BONES, 5], [ItemIds.BAT_BONES, 6], [ItemIds.WOLF_BONES, 6], [ItemIds.BIG_BONES, 15],
     [ItemIds.BABYDRAGON_BONES, 30], [ItemIds.JOGRE_BONES, 15], [ItemIds.ZOGRE_BONES, 23],
     [ItemIds.LONG_BONE, 15], [ItemIds.CURVED_BONE, 15], [ItemIds.SHAIKAHAN_BONES, 25],

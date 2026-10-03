@@ -74,7 +74,7 @@ export class Sheep extends NPC implements NPCInteraction  {
         }
 
         player.performAnimation(Sheep.SHEARING);
-        Sounds.sendSound(player, Sound.CUTTING);
+        Sounds.sendSound(player, Sound.SHEAR_SHEEP);
 
 
 

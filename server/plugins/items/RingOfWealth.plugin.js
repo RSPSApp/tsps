@@ -8,7 +8,7 @@ const { ObjectIdentifiers } = require("../../src/main/typescript/elvarg/util/Obj
 const RING_OF_WEALTH_SCROLL = 12783;
 const IMBUE_COST = 50000;
 const COINS = 995;
-const AUTO_COLLECT_ATTRIBUTE = "ringOfWealthAutoCollect";
+const AUTO_COLLECT_ATTRIBUTE = "ring-of-wealth-auto-collect";
 const INVENTORY_INTERFACE_ID = 3214;
 const CHARGED_RINGS = new Map([
   [11980, { charges: 5, nextId: 11982, imbuedId: 20786 }],
@@ -34,20 +34,17 @@ const UNIMBUED_RING_IDS = new Map([
 ]);
 const RING_IDS = new Set([...CHARGED_RINGS.keys(), ...UNCHARGED_RINGS.keys()]);
 const TELEPORTS = [
-  { label: "Grand Exchange", destination: new Location(3163, 3488, 0) },
+  { label: "Grand Exchange", destination: new Location(3163, 3485, 0) },
   { label: "Miscellania", destination: new Location(2539, 3864, 0) },
   { label: "Falador Park", destination: new Location(2994, 3377, 0) },
   { label: "Dondakan", destination: new Location(2824, 10168, 0) },
 ];
-const RUB_ACTIONS = [
-  { type: "teleport", teleport: TELEPORTS[0] },
-  { type: "teleport", teleport: TELEPORTS[1] },
-  { type: "teleport", teleport: TELEPORTS[2] },
-  { type: "teleport", teleport: TELEPORTS[3] },
-  { type: "boss-log" },
-  { type: "coin-collection" },
-];
-const EQUIPPED_ACTIONS = [
+/**
+ * The ring's options in the cache's order (item params 451-456: Miscellania, Grand Exchange,
+ * Falador, Dondakan, Boss Log, Coin Collection), which both the inventory Rub submenu (by sub-op)
+ * and the worn options follow.
+ */
+const ACTIONS = [
   { type: "teleport", teleport: TELEPORTS[1] },
   { type: "teleport", teleport: TELEPORTS[0] },
   { type: "teleport", teleport: TELEPORTS[2] },
@@ -226,6 +223,8 @@ function removeImbueOnDeath(event, itemOnGroundManager) {
 
 module.exports = {
   name: "RingOfWealth",
+  members: true,
+  ACTIONS,
   register(api) {
     const itemOnGroundManager = api.getItemOnGroundManager();
     api.onItemAction((event) => {
@@ -235,10 +234,10 @@ module.exports = {
       const option = String(event.option ?? "").toLowerCase();
       const selectedAction = actionForOption(option);
       const submenuAction = Number.isInteger(event.subOpId)
-        ? RUB_ACTIONS[event.subOpId - 1]
+        ? ACTIONS[event.subOpId - 1]
         : null;
       const equippedAction = event.interfaceId === Equipment.INVENTORY_INTERFACE_ID
-        ? EQUIPPED_ACTIONS[event.clickType - 2]
+        ? ACTIONS[event.clickType - 2]
         : null;
       if (!handleRingAction(event, selectedAction ?? submenuAction ?? equippedAction) &&
           (option === "rub" || (event.clickType === 1 && event.interfaceId !== Equipment.INVENTORY_INTERFACE_ID))) {

@@ -6,8 +6,6 @@ const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 
 const PRAY_AT_ALTAR_ANIMATION = new Animation(645);
-const ANCIENT_ALTAR_SOUND =
-  Sounds.resolveKnownSound("PRAYERON") ?? Sound.TELEPORT;
 
 // The client transforms the occult altar to match the active spellbook. Its
 // first "Venerate" option therefore selects the spellbook omitted by the
@@ -21,7 +19,7 @@ const OCCULT_ALTAR_SPELLBOOKS = new Map([
 
 function handleAncientAltar(player) {
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
-  Sounds.sendSound(player, ANCIENT_ALTAR_SOUND);
+  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   MagicSpellbook.changeSpellbook(
     player,
     player.getSpellbook() === MagicSpellbook.ANCIENT
@@ -50,13 +48,21 @@ function handlePrayerAltar(player) {
 
 function handleOccultAltar(player, spellbook) {
   player.performAnimation(PRAY_AT_ALTAR_ANIMATION);
-  Sounds.sendSound(player, ANCIENT_ALTAR_SOUND);
+  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
   MagicSpellbook.changeSpellbook(player, spellbook);
   return true;
 }
 
 function ancientAltar({ player }) {
   return handleAncientAltar(player);
+}
+
+function lunarAltar({ player }) {
+  return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.LUNAR ? MagicSpellbook.NORMAL : MagicSpellbook.LUNAR);
+}
+
+function darkAltar({ player }) {
+  return handleOccultAltar(player, player.getSpellbook() === MagicSpellbook.ARCEUUS ? MagicSpellbook.NORMAL : MagicSpellbook.ARCEUUS);
 }
 
 function prayerAltar({ player }) {
@@ -88,6 +94,8 @@ module.exports = {
   name: "Altars",
   register: (api) => {
     api.onObjectInteraction("Ancient Altar", { Venerate: ancientAltar });
+    api.onObjectInteraction("Lunar Altar", { Venerate: lunarAltar });
+    api.onObjectInteraction("Dark Altar", { Venerate: darkAltar });
     api.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
     api.onObjectInteraction("Altar of the Occult", {
       Venerate: venerateOccultAltar,

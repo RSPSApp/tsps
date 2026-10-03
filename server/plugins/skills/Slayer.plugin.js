@@ -182,22 +182,26 @@ function taskTip(player) {
     : "You're on a Slayer task; check your task list for the details.";
 }
 
-function onNpcKilled(player, npc) {
-  const task = getActiveTask(player);
-  if (!task) {
-    return;
-  }
-
+function isTaskNpc(task, npc) {
   const npcName = npc?.getDefinition?.()?.getName?.();
-  if (!npcName) {
-    return;
+  if (!task || !npcName) {
+    return false;
   }
   const normalized = npcName.toLowerCase();
-  const isTaskNpc = task
+  return task
     .getTask()
     .getNpcNames()
     .some((name) => name === normalized);
-  if (!isTaskNpc) {
+}
+
+/** "slayer:on-task": is this NPC the player's current assignment? */
+function onTaskEvent(request) {
+  request.onTask = isTaskNpc(getActiveTask(request.player), request.npc);
+}
+
+function onNpcKilled(player, npc) {
+  const task = getActiveTask(player);
+  if (!isTaskNpc(task, npc)) {
     return;
   }
 
@@ -308,6 +312,7 @@ function slayerPointsCurrency() {
 
 module.exports = {
   name: "Slayer",
+  members: true,
   // Exported for tests/slayer-assign.test.cjs; nothing else reads them.
   assignTask,
   assignTaskForNpc,
@@ -324,6 +329,7 @@ module.exports = {
     // Cross-plugin events: the dialogue emitter fills in the line it should speak.
     api.onCustomEvent("slayer:assignment", assignFromNpcEvent);
     api.onCustomEvent("slayer:task-tip", taskTipEvent);
+    api.onCustomEvent("slayer:on-task", onTaskEvent);
 
     // The "Assignment" click (slot 3) on any NPC; the master check lives in the
     // handler rather than the NPC's name or the option label.

@@ -1,4 +1,5 @@
 import { ClientState } from "../../../game/ClientState";
+import { clearHintArrow, setHintArrowNpc, setHintArrowTile } from "../../../game/HintArrow";
 import { state } from "../state";
 
 export function handleAuthTickMessage(msg: any): boolean {
@@ -75,6 +76,16 @@ export function handleAuthTickMessage(msg: any): boolean {
         ClientState.setDestination(localX, localY);
         ClientState.destinationWorldX = worldX;
         ClientState.destinationWorldY = worldY;
+        return true;
+    }
+    if (msg.type === "hint_arrow") {
+        const arrowType = Number(msg.payload?.arrowType) | 0;
+        const a = Number(msg.payload?.a) | 0;
+        const b = Number(msg.payload?.b) | 0;
+        const c = Number(msg.payload?.c) | 0;
+        if (arrowType === 1) setHintArrowNpc(a);
+        else if (arrowType === 2) setHintArrowTile(a, b, c);
+        else clearHintArrow();
         return true;
     }
     return false;

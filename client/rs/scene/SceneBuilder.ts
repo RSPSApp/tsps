@@ -112,7 +112,7 @@ export class SceneBuilder {
         matchType?: LocModelType,
         matchRotation?: number,
     ): void {
-        const key = `${x},${y},${level},${oldId}`;
+        const key = `${x},${y},${level},${oldId}${matchType === undefined ? "" : `,${matchType}`}`;
         this.locOverrides.set(key, {
             newId,
             newRotation,
@@ -136,6 +136,40 @@ export class SceneBuilder {
 
     clearLocOverrides(): void {
         this.locOverrides.clear();
+    }
+
+    /**
+     * A bridge tile (flag 0x2 on plane 1) is drawn a plane down, so the server (as OSRS) addresses
+     * its locs one plane lower than the map stores them: the Motherlode Mine's upper level is on
+     * plane 0 to the server and plane 1 in the map.
+     */
+    private static isBridge(scene: Scene, x: number, y: number): boolean {
+        return ((scene.tileRenderFlags?.[1]?.[x]?.[y] ?? 0) & 0x2) === 2;
+    }
+
+    /** The server's plane for a loc the map stores on `level`. */
+    private static serverLevel(scene: Scene, x: number, y: number, level: number): number {
+        return level > 0 && SceneBuilder.isBridge(scene, x, y) ? level - 1 : level;
+    }
+
+    /** The map plane of a loc the server spawns on `level`. */
+    private static mapLevel(scene: Scene, x: number, y: number, level: number): number {
+        return level < scene.levels - 1 && SceneBuilder.isBridge(scene, x, y) ? level + 1 : level;
+    }
+
+    private getLocOverride(x: number, y: number, level: number, id: number, type: LocModelType, rotation: number) {
+        for (const oldId of [id, -1]) {
+            const key = `${x},${y},${level},${oldId}`;
+            for (const candidate of [`${key},${type}`, key]) {
+                const override = this.locOverrides.get(candidate);
+                if (override &&
+                    (override.matchType === undefined || override.matchType === type) &&
+                    (override.matchRotation === undefined || (override.matchRotation & 3) === (rotation & 3))) {
+                    return override;
+                }
+            }
+        }
+        return undefined;
     }
 
     setLocSpawn(
@@ -584,30 +618,15 @@ export class SceneBuilder {
                     ) {
                         let collisionMap: CollisionMap | undefined = scene.collisionMaps[level];
 
-                        // Check for dynamic loc override
-                        const overrideKey = `${sceneX},${sceneY},${level},${id}`;
-                        const wildcardOverrideKey = `${sceneX},${sceneY},${level},-1`;
-                        let override = this.locOverrides.get(overrideKey);
-                        if (
-                            override &&
-                            ((override.matchType !== undefined && override.matchType !== type) ||
-                                (override.matchRotation !== undefined &&
-                                    (override.matchRotation & 3) !== (rotation & 3)))
-                        ) {
-                            override = undefined;
-                        }
-                        if (!override) {
-                            const wildcardOverride = this.locOverrides.get(wildcardOverrideKey);
-                            if (
-                                wildcardOverride &&
-                                (wildcardOverride.matchType === undefined ||
-                                    wildcardOverride.matchType === type) &&
-                                (wildcardOverride.matchRotation === undefined ||
-                                    (wildcardOverride.matchRotation & 0x3) === (rotation & 0x3))
-                            ) {
-                                override = wildcardOverride;
-                            }
-                        }
+                        // Check for dynamic loc override, which the server sends on its plane
+                        const override = this.getLocOverride(
+                            sceneX,
+                            sceneY,
+                            SceneBuilder.serverLevel(scene, sceneX, sceneY, level),
+                            id,
+                            type,
+                            rotation,
+                        );
                         const finalId = override
                             ? (override.newId | 0) >= 0
                                 ? override.newId
@@ -684,15 +703,17 @@ export class SceneBuilder {
                 sl >= 0 &&
                 sl < scene.levels
             ) {
+                // Spawns come on the server's plane; a bridge's are a map plane up.
+                const mapLevel = SceneBuilder.mapLevel(scene, sx, sy, sl);
                 this.addLoc(
                     scene,
-                    sl,
+                    mapLevel,
                     sx,
                     sy,
                     spawn.id,
                     spawn.type,
                     spawn.rotation,
-                    scene.collisionMaps[sl],
+                    scene.collisionMaps[mapLevel],
                     locLoadType,
                 );
             }
@@ -1999,8 +2020,19 @@ export class SceneBuilder {
                         sceneX < scene.sizeX - 1 &&
                         sceneY < scene.sizeY - 1
                     ) {
+                        // Overrides use destination tiles and orientation, after chunk rotation.
+                        // A server-spawned loc suppresses the template hotspot at that tile.
+                        const finalRotation = (orientation + rotation) & 3;
+                        const override = this.getLocOverride(sceneX, sceneY, targetPlane, id, type, finalRotation);
+                        const finalId = override && override.newId >= 0 ? override.newId : id;
+                        if (finalId <= 0) continue;
+                        const moved = Number.isFinite(override?.moveToX) && Number.isFinite(override?.moveToY);
+                        const targetX = moved ? override!.moveToX! | 0 : sceneX;
+                        const targetY = moved ? override!.moveToY! | 0 : sceneY;
+                        if (targetX <= 0 || targetY <= 0 || targetX >= scene.sizeX - 1 || targetY >= scene.sizeY - 1) continue;
+
                         let collisionLevel = targetPlane;
-                        if ((scene.tileRenderFlags[1]?.[sceneX]?.[sceneY] & 0x2) === 0x2) {
+                        if ((scene.tileRenderFlags[1]?.[targetX]?.[targetY] & 0x2) === 0x2) {
                             collisionLevel = targetPlane - 1;
                         }
 
@@ -2010,13 +2042,15 @@ export class SceneBuilder {
                         this.addLoc(
                             scene,
                             targetPlane,
-                            sceneX,
-                            sceneY,
-                            id,
+                            targetX,
+                            targetY,
+                            finalId,
                             type,
-                            (orientation + rotation) & 3,
+                            override?.newRotation ?? finalRotation,
                             collisionMap,
                             locLoadType,
+                            override?.seqId,
+                            override?.seqRandomStart,
                         );
                     }
                 }

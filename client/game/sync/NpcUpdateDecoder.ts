@@ -32,6 +32,8 @@ export type NpcUpdateBlock = {
     healthBars?: HealthBarUpdate[];
     spotAnims?: NpcSpotAnimUpdate[];
     seq?: { id: number; delay: number };
+    /** Overhead icons set by the server (an empty list clears them), each a sprite group and index. */
+    headIcons?: Array<{ archiveId: number; spriteId: number }>;
     say?: string;
     colorOverride?: {
         startCycle: number;
@@ -74,6 +76,9 @@ export class NpcUpdateDecoder {
             clientCycle: number;
             localTileX: number;
             localTileY: number;
+            /** Reference for main-world NPCs; the local tile unless the player is on a boat. */
+            rootTileX?: number;
+            rootTileY?: number;
             level: number;
         },
     ): NpcInfoFrame {
@@ -199,8 +204,12 @@ export class NpcUpdateDecoder {
             const rot = (typeof defaultRot === "number" ? defaultRot : 0) & 2047;
             const typeId = stream.readBits(14) | 0;
 
-            const tileX = (opts.localTileX | 0) + (dx | 0);
-            const tileY = (opts.localTileY | 0) + (dy | 0);
+            // Deck NPCs are relative to the player's deck tile, main-world NPCs to the root tile.
+            const inMainWorld = worldViewId < 0;
+            const baseX = inMainWorld ? (opts.rootTileX ?? opts.localTileX) : opts.localTileX;
+            const baseY = inMainWorld ? (opts.rootTileY ?? opts.localTileY) : opts.localTileY;
+            const tileX = (baseX | 0) + (dx | 0);
+            const tileY = (baseY | 0) + (dy | 0);
 
             spawns.push({
                 npcId,
@@ -345,6 +354,18 @@ export class NpcUpdateDecoder {
                 if (seqId === 65535) seqId = -1;
                 const delay = stream.readUnsignedByte() | 0;
                 block.seq = { id: seqId | 0, delay: delay & 0xff };
+            }
+
+            // HEAD_ICONS (0x200): overhead prayers the server sets (the Hunllef's protection).
+            if ((mask & 0x200) !== 0) {
+                const count = stream.readUnsignedByte() | 0;
+                const icons: Array<{ archiveId: number; spriteId: number }> = [];
+                for (let i = 0; i < count; i++) {
+                    const archiveId = stream.readUnsignedShortBE() | 0;
+                    const spriteId = stream.readUnsignedByte() | 0;
+                    icons.push({ archiveId, spriteId });
+                }
+                block.headIcons = icons;
             }
 
             if (Object.keys(block).length > 0) {

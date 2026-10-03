@@ -18,6 +18,7 @@ const { ForceMovement } = require("../../src/main/typescript/elvarg/game/model/F
 const { ForceMovementTask } = require("../../src/main/typescript/elvarg/game/task/impl/ForceMovementTask");
 const { MagicCombatMethod } = require("../../src/main/typescript/elvarg/game/content/combat/method/impl/MagicCombatMethod");
 const { CombatSpells } = require("../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
+const { MOBILE_CLIENT_ATTRIBUTE } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { decodeRegionObjects, initRegionBuildingAnalysisCoreAccess } = require("../world/RegionBuildingAnalysisUtil");
 
 const REGION_ID = 14231;
@@ -349,21 +350,21 @@ function consumeLockpick(player) {
   const inventory = player.getInventory();
   const item = inventory.getItems().find((entry) => entry.getId() === Items.STRANGE_OLD_LOCKPICK || entry.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_);
   if (!item) return false;
-  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : Number(item.getMetaValue("barrows:lockpickCharges") ?? 50);
+  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : Number(item.getMetaValue("barrows:lockpick-charges") ?? 50);
   if (!Number.isInteger(charges) || charges < 1 || charges > 50) return false;
   if (charges === 1) {
     inventory.deleteItem(item, inventory.getItems().indexOf(item));
     player.sendMessage("Your strange old lockpick crumbles to dust.");
   } else {
     item.setId(Items.STRANGE_OLD_LOCKPICK);
-    item.setMetaValue("barrows:lockpickCharges", charges - 1);
+    item.setMetaValue("barrows:lockpick-charges", charges - 1);
     inventory.refreshItems();
   }
   return true;
 }
 
 function inspectLockpick({ player, item }) {
-  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : item.getMetaValue("barrows:lockpickCharges") ?? 50;
+  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : item.getMetaValue("barrows:lockpick-charges") ?? 50;
   player.sendMessage(`Your strange old lockpick has ${charges} charges remaining.`);
 }
 
@@ -699,6 +700,7 @@ function playerDeath(event) {
 
 module.exports = {
   name: "Barrows",
+  members: true,
   register(api) {
     World = api.getWorld();
     RegionManager = api.getRegionManager();
@@ -713,6 +715,14 @@ module.exports = {
     api.onObjectInteraction(handleObject);
     api.onInterfaceActionClick(answerPuzzle);
     api.onInterfaceActionButton(WELCOME_PLAY_BUTTON_UID, restoreOverlayAfterWelcome);
+    // Mobile skips the welcome screen, so its gameframe is never replaced and
+    // this mount survives. Desktop keeps waiting for the Play button, which runs
+    // after WelcomeScreen re-boots the gameframe.
+    api.onPlayerLogin(({ player }) => {
+      if (player.getAttribute(MOBILE_CLIENT_ATTRIBUTE) === true) {
+        restoreOverlayAfterWelcome({ player });
+      }
+    });
     api.onNpcDeath(handleNpcDeath);
     api.onPlayerProcess(processPlayer);
     api.onPlayerDeath(playerDeath);

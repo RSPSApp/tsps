@@ -3,7 +3,7 @@ import PicoGL, { type DrawCall, type Framebuffer, type Program, type Texture } f
 import type { WebGLOsrsRenderer } from "../../../render/WebGLOsrsRenderer";
 import type { ProgramSource } from "../../../render/shaders/ShaderUtil";
 import type { ClientPlugin } from "../ClientPluginManager";
-import { resolveHdEnvironment } from "./HdEnvironment";
+import { environmentAt } from "../../../render/render/environment";
 import { createHdProgram } from "./HdShader";
 import { collectHdLights } from "./HdLights";
 import lighting from "./hd-lighting.glsl";
@@ -94,7 +94,7 @@ export class HdPlugin implements ClientPlugin {
         set("u_hdInverseView", this.inverseView);
 
         const [x, z] = renderer.playerPosUni;
-        const environment = resolveHdEnvironment(x, z);
+        const environment = environmentAt(renderer, x, z);
         const pitch = environment.lightPitch * Math.PI / 180;
         const yaw = environment.lightYaw * Math.PI / 180;
         const direction = vec3.fromValues(Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw));

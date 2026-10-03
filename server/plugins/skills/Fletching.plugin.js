@@ -1,12 +1,11 @@
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
-const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
-const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { Task } = require("../../src/main/typescript/elvarg/game/task/Task");
 const { CreationMenu } = require("../../src/main/typescript/elvarg/game/model/menu/CreationMenu");
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 
+// Cutting and stringing sequences carry their OSRS sound in their frames.
 const CUTTING_ANIMATION = new Animation(1248);
 
 // OSRS timing references:
@@ -574,9 +573,9 @@ function performFletchingAction(player, recipe) {
 
   consumeRequirements(inventory, recipe);
   inventory.addItem(new Item(recipe.outputId, recipe.outputAmount));
-  player.getSkillManager().addExperiences(Skill.FLETCHING, recipe.xp);
   player.performAnimation(recipe.animation);
-  Sounds.sendSound(player, Sound.CUTTING);
+  player.getSkillManager().addExperiences(Skill.FLETCHING, recipe.xp);
+
   return true;
 }
 
@@ -612,10 +611,11 @@ function startFletchingSession(activeSessions, player, recipe, requestedAmount) 
     remaining: targetAmount,
     interval: recipe.intervalTicks,
     nextActionTick: fletchingTick + recipe.intervalTicks,
+    location: player.getLocation().clone(),
   });
 
   player.performAnimation(recipe.animation);
-  Sounds.sendSound(player, Sound.CUTTING);
+
   return true;
 }
 
@@ -668,6 +668,12 @@ class FletchingTask extends Task {
         continue;
       }
 
+      if (!player.getLocation().equals(session.location) ||
+          player.getMovementQueue().size() > 0 || player.getForceMovement() != null) {
+        stopFletchingSession(this.activeSessions, player);
+        continue;
+      }
+
       if (!Number.isInteger(session.remaining) || session.remaining <= 0) {
         stopFletchingSession(this.activeSessions, player, false);
         continue;
@@ -680,7 +686,7 @@ class FletchingTask extends Task {
       session.nextActionTick = this.cycle + session.interval;
 
       if (!performFletchingAction(player, session.recipe)) {
-        stopFletchingSession(this.activeSessions, player, false);
+        stopFletchingSession(this.activeSessions, player);
         continue;
       }
 
@@ -771,6 +777,7 @@ let TaskManager;
 
 module.exports = {
   name: "Fletching",
+  members: true,
   register(api) {
     TaskManager = api.getTaskManager();
     const activeSessions = new Map();

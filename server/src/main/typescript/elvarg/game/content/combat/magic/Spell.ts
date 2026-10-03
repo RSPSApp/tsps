@@ -8,7 +8,7 @@ import { Skill } from "../../../model/Skill";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
 export abstract class Spell {
-    private static readonly NEXT_CAST_AT = "magic:nextCastAt";
+    private static readonly NEXT_CAST_AT = "magic:next-cast-at";
     private static readonly CAST_DELAY_MS = 600;
 
     abstract spellId(): number;
@@ -17,6 +17,13 @@ export abstract class Spell {
     abstract equipmentRequired(player: Player): Item[];
     abstract startCast(cast: Mobile, castOn: Mobile): void
     abstract baseExperience();
+
+    /** Members-only on the standard spellbook; free-to-play worlds disable it (other books are all members). */
+    public members = false;
+
+    public isMembers(): boolean {
+        return this.members;
+    }
 
     public getSpellbook(): MagicSpellbook {
         return MagicSpellbook.NORMAL;
@@ -54,7 +61,8 @@ export abstract class Spell {
             PluginManager.emitSpellDisabled(
                 player,
                 this.getSpellbook(),
-                this.spellId()
+                this.spellId(),
+                this
             ) === true
         ) {
             player.getCombat().setCastSpell(null);

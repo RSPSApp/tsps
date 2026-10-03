@@ -18,8 +18,10 @@ const DESTROY_ITEM_NO_COMPONENT =
 const FIRST_OPTION_FLAG = 1 << 1;
 
 export class DropItemPacketListener {
+  public static readonly DESTROY_ITEM_ATTRIBUTE = "destroy-item:pending";
+
   public static destroyItemInterface(player: any, item: any) {
-    player.setDestroyItem(item.getId());
+    player.setAttribute(DropItemPacketListener.DESTROY_ITEM_ATTRIBUTE, item.getId());
     player.getPacketSender()
       .sendChatboxInterface(DESTROY_ITEM_INTERFACE_ID)
       .sendString(item.getDefinition().getName(), DESTROY_ITEM_NAME_COMPONENT)

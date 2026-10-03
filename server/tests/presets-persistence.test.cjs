@@ -1,8 +1,11 @@
 const assert = require("node:assert/strict");
-const { test } = require("node:test");
+const { test, before } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
+
+const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+before(() => CachePipeline.initialize());
 
 const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
 const { GROUP_ID, GLOBAL_ROW_COUNT, PRESET_ROW_START, uid } = require("../plugins/modes/pvp/presetsWidget");
@@ -19,7 +22,6 @@ function playerWithAttributes(attributes = new Map()) {
     sendInterfaceDisplayState() { return sender; },
     sendEnterInputPrompt() { return sender; },
   };
-  let currentPreset = null;
   let syntaxAction = null;
   const player = {
     getAttribute: (key) => attributes.get(key),
@@ -27,8 +29,6 @@ function playerWithAttributes(attributes = new Map()) {
     getInterfaceId: () => GROUP_ID,
     getPacketSender: () => sender,
     sendMessage: (message) => sender.sendMessage(message),
-    getCurrentPreset: () => currentPreset,
-    setCurrentPreset: (preset) => { currentPreset = preset; },
     setEnteredSyntaxAction: (action) => { syntaxAction = action; },
     getEnteredSyntaxAction: () => syntaxAction,
     getInventory: () => ({ copyValidItemsArray: () => [] }),
@@ -54,22 +54,22 @@ test("custom presets rehydrate from their persisted attribute", () => {
     onCanBankItem(handler) { onCanBankItem = handler; },
     onInterfaceActionButton(_buttons, handler) { onButton = handler; },
   });
-  assert.deepEqual(persisted, ["pvp:customPresets"]);
+  assert.deepEqual(persisted, ["pvp:custom-presets"]);
 
   const customSlot = uid(PRESET_ROW_START + GLOBAL_ROW_COUNT);
   const source = playerWithAttributes();
   onButton({ player: source.player, buttonId: customSlot });
   source.player.getEnteredSyntaxAction().execute("saved build");
 
-  const stored = source.attributes.get("pvp:customPresets");
+  const stored = source.attributes.get("pvp:custom-presets");
   assert.equal(stored[0].name, "Saved Build");
   assert.equal(typeof stored[0].getName, "undefined");
 
   const restored = playerWithAttributes(new Map([
-    ["pvp:customPresets", JSON.parse(JSON.stringify(stored))],
+    ["pvp:custom-presets", JSON.parse(JSON.stringify(stored))],
   ]));
   onButton({ player: restored.player, buttonId: customSlot });
-  assert.equal(restored.player.getCurrentPreset().getName(), "Saved Build");
+  assert.equal(restored.player.getAttribute("pvp:current-preset").getName(), "Saved Build");
   assert.ok(restored.strings.includes("<col=ffffff>Saved Build</col>"));
 
   const messages = [];
@@ -104,7 +104,7 @@ test("custom presets survive the player save round trip", () => {
     onCanBankItem() {},
     onInterfaceActionButton() {},
   });
-  assert.equal(PlayerSave.persistentAttributeKeys.has("pvp:customPresets"), true);
+  assert.equal(PlayerSave.persistentAttributeKeys.has("pvp:custom-presets"), true);
 
   const records = [{
     name: "Saved Build",
@@ -115,10 +115,10 @@ test("custom presets survive the player save round trip", () => {
     autocastSpellId: -1,
   }];
   const save = new PlayerSave();
-  save.attributes = { "pvp:customPresets": records };
+  save.attributes = { "pvp:custom-presets": records };
 
   const restored = new jsonPersistence.JsonPlayerPersistence().hydratePlayerSave(JSON.parse(JSON.stringify(save)));
-  assert.deepEqual(restored.attributes["pvp:customPresets"], records);
+  assert.deepEqual(restored.attributes["pvp:custom-presets"], records);
 });
 
 test("server-owned items inherit gameplay and deliver external models before definitions", async () => {
@@ -128,8 +128,6 @@ test("server-owned items inherit gameplay and deliver external models before def
   const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
   const { ContentApi } = require("../dist/net/http/ContentApi");
   const { encodeContentData } = require("../dist/net/protocol/ClientProtocol");
-  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
-  await CachePipeline.initialize();
   let onLogin;
   require("../plugins/items/ItemDefinitionLoader.plugin").register({
     log() {},
@@ -237,7 +235,7 @@ test("dropping a preset item destroys it without the confirmation interface", ()
   const realEvent = {
     player: {
       getInventory: () => ({ deleteAtSlot: () => assert.fail("real untradeables keep the prompt") }),
-      setDestroyItem: () => {},
+      setAttribute: () => {},
       getPacketSender: () => {
         const sender = {
           sendChatboxInterface: () => sender,

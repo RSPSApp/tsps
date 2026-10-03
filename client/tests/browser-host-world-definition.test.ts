@@ -42,6 +42,11 @@ for (const tags of [[], ["custom:arena", "__proto__"], ["duel"], ["pvp"], ["pvp"
     assert.deepEqual(parsed, world, "Global rules must not reject the spawn or be lost on save");
     assert.deepEqual(parseBrowserHostWorldDefinition(JSON.stringify(parsed)), world);
 }
+const configuredWorld = { ...parsedWorld, pluginConfig: { "TutorialIsland:allowSkip": false }, futureKey: [1] };
+assert.deepEqual(parseBrowserHostWorldDefinition(JSON.stringify(configuredWorld)), configuredWorld,
+    "Saving must keep pluginConfig and any other key the editor does not edit");
+const f2pWorld = { ...parsedWorld, membersWorld: false };
+assert.deepEqual(parseBrowserHostWorldDefinition(JSON.stringify(f2pWorld)), f2pWorld, "Saving must not reset a free-to-play world");
 for (const zone of [{ minX: 1, tags: ["pvp"] }, { tags: [123] }, { ...parsedWorld.zones[0], tags: [] }]) {
     assert.throws(() => parseEditModeWorldDefinition({ ...parsedWorld, zones: [zone] }));
 }
@@ -59,11 +64,12 @@ assert.equal(map.zoneAt(50, 50), undefined);
 const { EditModePlugin } = require("../game/plugins/editmode/EditModePlugin");
 const zoneEditor = new EditModePlugin();
 zoneEditor.world = { loading: false, definition: { ...parsedWorld, zones: [] } };
-for (const tag of ["pvp", "multi-combat", "safe", "duel"]) {
+for (const tag of ["pvp", "multi-combat", "safe", "duel", "f2p"]) {
     zoneEditor.addWorldZone({ minX: 1, maxX: 2, minY: 3, maxY: 4 }, tag);
 }
-assert.deepEqual(zoneEditor.getWorldDefinitionForSave().zones.map((zone: any) => zone.tags), [["pvp"], ["multi-combat"], ["safe"], ["duel"]]);
+assert.deepEqual(zoneEditor.getWorldDefinitionForSave().zones.map((zone: any) => zone.tags), [["pvp"], ["multi-combat"], ["safe"], ["duel"], ["f2p"]]);
 assert.equal(zoneEditor.getConfig().showSafeZones, true);
+assert.equal(zoneEditor.getConfig().showF2pZones, true);
 assert.equal(zoneEditor.getConfig().showDuelZones, true);
 visibleZones = { zones: [{ ...parsedWorld.zones[0], tags: ["duel"] }], showDuel: true };
 assert.equal(map.zoneAt(50, 50), 0, "Duel zones remain selectable with only Duel enabled");

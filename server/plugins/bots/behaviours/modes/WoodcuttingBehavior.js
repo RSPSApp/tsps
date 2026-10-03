@@ -34,8 +34,6 @@ const TOO_FAR_AVOID_MS = 25000;
 const TOO_FAR_AVOID_MAX_ENTRIES = 12;
 const TREE_SEARCH_REGION_RADIUS = 1;
 const SEARCH_WALK_ATTEMPTS = 12;
-const SEARCH_TREE_VISIBILITY_RADIUS_TILES = 18;
-const TREE_DEBUG_CHAT_COOLDOWN_MS = 4000;
 const FULL_INV_CHANCE_DROP_LOGS = 0.34;
 const FULL_INV_CHANCE_FIREMAKING = 0.33;
 
@@ -284,15 +282,6 @@ class WoodcuttingBehavior {
       }
       if (!targetTree) {
         state.woodcutting.target = null;
-        const visibleTrees = this.countVisibleTreesInRange(
-          player,
-          treeTiers,
-          SEARCH_TREE_VISIBILITY_RADIUS_TILES
-        );
-        if (nowMs >= (state.woodcutting.nextDebugChatAt ?? 0)) {
-          player.sendChat(`I can see ${visibleTrees} trees.`);
-          state.woodcutting.nextDebugChatAt = nowMs + TREE_DEBUG_CHAT_COOLDOWN_MS;
-        }
         if (this.queueSearchWalk(player, state)) {
           state.woodcutting.nextActionAt = nowMs + WALK_COMMAND_COOLDOWN_MS;
         }
@@ -650,45 +639,6 @@ class WoodcuttingBehavior {
     }
 
     return false;
-  }
-
-  countVisibleTreesInRange(player, treeTiers, radiusTiles) {
-    if (!player || !treeTiers || treeTiers.length === 0) {
-      return 0;
-    }
-    const loc = player.getLocation();
-    const privateArea = player.getPrivateArea();
-    const radiusSq = radiusTiles * radiusTiles;
-    const treeIds = [];
-    for (const tier of treeTiers) {
-      const ids = this.treeIdsByTier.get(tier);
-      if (ids?.length) {
-        treeIds.push(...ids);
-      }
-    }
-
-    let count = 0;
-    const candidateObjects =
-      this.objectSearch?.findCandidatesByIds?.(player, treeIds, {
-        regionRadius: TREE_SEARCH_REGION_RADIUS,
-        z: loc.getZ(),
-        privateArea,
-      }) ?? [];
-    for (const object of candidateObjects) {
-      if (!object) {
-        continue;
-      }
-      const objectLoc = object.getLocation();
-      if (!objectLoc || objectLoc.getZ() !== loc.getZ()) {
-        continue;
-      }
-      const dx = objectLoc.getX() - loc.getX();
-      const dy = objectLoc.getY() - loc.getY();
-      if (dx * dx + dy * dy <= radiusSq) {
-        count++;
-      }
-    }
-    return count;
   }
 
   handleFullInventory(player, state, nowMs) {

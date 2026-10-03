@@ -6,6 +6,9 @@
 // DisplaySettingsScript).
 const {
   encodeGameframeFlags,
+  MOBILE_CLIENT_ATTRIBUTE,
+  MOBILE_GAMEFRAME_ROOT,
+  resolveGameframeRoot,
   DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID,
 } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 const { getWorldDefinition } = require("../../src/main/typescript/elvarg/game/definition/WorldDefinition");
@@ -25,8 +28,8 @@ const GAMEFRAME_317_FIXED_OPTION = 4;
 const GAMEFRAME_GILOMARU_FIXED_OPTION = 5;
 const GAMEFRAME_GILOMARU_OPTION = 6;
 const GAMEFRAME_SKIN_VARP = 7997; // 0 = stock, 1 = 317, 2 = Gilomaru
-const CLIENT_LAYOUT_317_ATTRIBUTE = "clientLayout317";
-const CLIENT_LAYOUT_SKIN_ATTRIBUTE = "clientLayoutSkin";
+const CLIENT_LAYOUT_317_ATTRIBUTE = "client-layout317";
+const CLIENT_LAYOUT_SKIN_ATTRIBUTE = "client-layout-skin";
 const DEFAULT_GAMEFRAME_ROOT = 161;
 // world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
 const WORLD_GAMEFRAME_OPTIONS = {
@@ -38,9 +41,14 @@ const WORLD_GAMEFRAME_OPTIONS = {
 // Cache script 3962 reads this to pick the selected dropdown row; 4607 is only
 // a display mirror of the layout (no rendering effect in this revision).
 const GAMEFRAME_STONE_VARBIT = 4607;
+// The enhanced client's "show mouseover text" setting (cache script 4582 toggles it).
+// Our client reports itself as enhanced (clienttype 10) and draws the top-left text, so
+// this must be on: with it, HUD overlays laid out by script 4731 (Wintertodt, the
+// Gauntlet, ToA...) drop 23px below the text instead of sitting under it, as on live.
+const MOUSEOVER_TEXT_VARBIT = 12377;
 // Opaque player attribute; NetworkBuilder/WelcomeScreen read it to boot the
 // saved gameframe.
-const CLIENT_LAYOUT_ATTRIBUTE = "clientLayoutRoot";
+const CLIENT_LAYOUT_ATTRIBUTE = "client-layout-root";
 
 const ALL_SETTINGS_INTERFACE_ID = 134;
 const ALL_SETTINGS_SIDE_BUTTON = (116 << 16) | 32;
@@ -145,8 +153,11 @@ function syncPlayerKeybindings(player) {
 }
 
 function getGameframeRoot(player) {
-  const saved = Number(player.getAttribute(CLIENT_LAYOUT_ATTRIBUTE));
-  return GAMEFRAME_LAYOUT_ROOTS.includes(saved) ? saved : DEFAULT_GAMEFRAME_ROOT;
+  return resolveGameframeRoot(player, DEFAULT_GAMEFRAME_ROOT);
+}
+
+function isMobileClient(player) {
+  return player.getAttribute(MOBILE_CLIENT_ATTRIBUTE) === true;
 }
 
 // Cache script 3962 picks the dropdown row from this and getwindowmode; the
@@ -156,7 +167,8 @@ function syncGameframeVarbit(player) {
   const root = getGameframeRoot(player);
   const savedSkin = player.getAttribute(CLIENT_LAYOUT_SKIN_ATTRIBUTE)
     ?? (player.getAttribute(CLIENT_LAYOUT_317_ATTRIBUTE) === true ? 1 : 0);
-  const skin = (root === 161 || root === 548) && (savedSkin === 1 || savedSkin === 2) ? savedSkin : 0;
+  const skin = !isMobileClient(player) && (root === 161 || root === 548) && (savedSkin === 1 || savedSkin === 2)
+    ? savedSkin : 0;
   player.getPacketSender()
     .sendConfig(GAMEFRAME_SKIN_VARP, skin)
     .sendVarbit(GAMEFRAME_STONE_VARBIT, root === 164 ? 0 : 1);
@@ -165,7 +177,10 @@ function syncGameframeVarbit(player) {
 // Switches the client's gameframe to `root` (548 fixed / 164 classic / 161
 // modern). The client moves every server-mounted sub-interface onto the new
 // layout's components; flags have to be re-sent because set_root clears them.
+// Mobile clients stay on the stock mobile toplevel (601) and never persist the
+// lock, so their desktop layout preference survives.
 function selectGameframeOption(player, option) {
+  if (isMobileClient(player)) return MOBILE_GAMEFRAME_ROOT;
   const root = GAMEFRAME_LAYOUT_ROOTS[option];
   if (root === undefined) return undefined;
   player.setAttribute(CLIENT_LAYOUT_ATTRIBUTE, root);
@@ -199,7 +214,7 @@ function openAllSettings(player) {
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, 63, TRANSMIT_OP1);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_DROPDOWN_BUTTONS, 0, 63, TRANSMIT_OP1);
-  player.setAttribute("settingsKeybindVarbit", -1);
+  player.setAttribute("settings-keybind-varbit", -1);
   return true;
 }
 
@@ -236,7 +251,7 @@ module.exports = {
     // Changing category (or clicking any non-keybind row) must clear the tracked
     // keybind, otherwise a later dropdown in another category edits it.
     api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, ({ player }) => {
-      player.setAttribute("settingsKeybindVarbit", -1);
+      player.setAttribute("settings-keybind-varbit", -1);
       return false;
     });
 
@@ -244,14 +259,14 @@ module.exports = {
     // will edit. The server is authoritative (as in OpenRune), so we only track.
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, ({ player, slot }) => {
       const varbit = ALL_SETTINGS_KEYBIND_VARBITS[slot - ALL_SETTINGS_KEYBIND_SLOT_BASE];
-      player.setAttribute("settingsKeybindVarbit", Number.isInteger(varbit) ? varbit : -1);
+      player.setAttribute("settings-keybind-varbit", Number.isInteger(varbit) ? varbit : -1);
       return false;
     });
 
     // All Settings dropdown option selected: apply it to the tracked keybind.
     // Option buttons sit three components apart in the dropdown panel.
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, ({ player, slot }) => {
-      const varbit = player.getAttribute("settingsKeybindVarbit");
+      const varbit = player.getAttribute("settings-keybind-varbit");
       if (!Number.isInteger(varbit) || varbit < 0) return false;
       const option = Math.floor(slot / 3);
       if (!Number.isInteger(option) || option < KEY_NONE || option > MAX_KEY_VALUE) {
@@ -270,7 +285,7 @@ module.exports = {
     api.onInterfaceActionButton([...BUTTON_TO_SLOT.keys()], ({ player, buttonId }) => {
       const slot = BUTTON_TO_SLOT.get(buttonId);
       if (typeof slot === "number") {
-        player.setAttribute("activeKeybindSlot", slot);
+        player.setAttribute("active-keybind-slot", slot);
         player.getPacketSender().sendVarbit(ACTIVE_KEYBIND_SLOT_VARBIT, slot);
       }
       return false;
@@ -278,7 +293,7 @@ module.exports = {
 
     // Store the key chosen from the popup against the tracked tab.
     api.onInterfaceActionButton(KEYBINDINGS_POPUP_CONTAINER, ({ player, slot }) => {
-      const varbit = SLOT_TO_VARBIT.get(player.getAttribute("activeKeybindSlot") || 1);
+      const varbit = SLOT_TO_VARBIT.get(player.getAttribute("active-keybind-slot") || 1);
       if (varbit === undefined) return false;
       return applyKeybind(player, varbit, slot);
     });
@@ -308,6 +323,7 @@ module.exports = {
       syncPlayerKeybindings(player);
       if (worldGameframeOption !== undefined) selectGameframeOption(player, worldGameframeOption);
       syncGameframeVarbit(player);
+      player.getPacketSender().sendVarbit(MOUSEOVER_TEXT_VARBIT, 1);
     });
 
     api.registerCommand("keybinds", ({ player }) => openKeybindings(player));

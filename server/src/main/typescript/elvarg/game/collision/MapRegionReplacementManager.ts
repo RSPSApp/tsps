@@ -38,27 +38,47 @@ export class MapRegionReplacementManager {
     }
 
     const loadedSource = this.loadSource(regionId, source);
-    const payloadLength = 7 + loadedSource.terrainData.length +
-      (loadedSource.objectData?.length ?? 0);
+    return this.register(regionId, loadedSource.terrainData, loadedSource.objectData, loadedSource.resolvedSource);
+  }
+
+  public static replaceMapRegionData(
+    regionId: number,
+    terrainData: Uint8Array,
+    objectData: Uint8Array | null,
+    source: string = "runtime"
+  ): ReplaceMapRegionResult {
+    if (!Number.isInteger(regionId) || regionId < 0 || regionId > 0xffff) {
+      throw new Error(`invalid regionId: ${regionId}`);
+    }
+    return this.register(regionId, terrainData, objectData, source);
+  }
+
+  private static register(
+    regionId: number,
+    terrainData: Uint8Array,
+    objectData: Uint8Array | null,
+    source: string
+  ): ReplaceMapRegionResult {
+    const payloadLength = 7 + terrainData.length + (objectData?.length ?? 0);
     if (payloadLength > this.MAX_PACKET_PAYLOAD) {
       throw new Error(
         `region replacement is too large: region=${regionId} bytes=${payloadLength} max=${this.MAX_PACKET_PAYLOAD}`
       );
     }
-    const objectCount = this.countObjectPlacements(loadedSource.objectData);
+    const objectCount = this.countObjectPlacements(objectData);
 
     this.replacements.set(regionId, {
       regionId,
-      source: loadedSource.resolvedSource,
-      terrainData: loadedSource.terrainData,
-      objectData: loadedSource.objectData,
+      source,
+      terrainData: Uint8Array.from(terrainData),
+      objectData: objectData ? Uint8Array.from(objectData) : null,
     });
 
     return {
       regionId,
-      source: loadedSource.resolvedSource,
-      terrainBytes: loadedSource.terrainData.length,
-      objectBytes: loadedSource.objectData?.length ?? 0,
+      source,
+      terrainBytes: terrainData.length,
+      objectBytes: objectData?.length ?? 0,
       objectCount,
     };
   }

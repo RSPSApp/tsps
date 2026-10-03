@@ -40,10 +40,11 @@ import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
 import { getSceneLocs, isDoorLocType, isLowDetail } from "../loc/SceneLocs";
 import { createNpcDatas } from "../npc/NpcData";
-import type {
-    NpcInstance,
-    NpcRenderBundle,
-    NpcRenderTemplate,
+import {
+    type NpcInstance,
+    type NpcRenderBundle,
+    type NpcRenderTemplate,
+    npcOwnerMapId,
 } from "../npc/NpcRenderTemplate";
 import { isKnownWaterTextureId } from "../water/WaterTextureIds";
 import { NpcGeometryData } from "./NpcGeometryData";
@@ -1348,7 +1349,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                         : undefined;
                 if (mapProfileEnabled) console.log(`[SdMapDataLoader] Processing override: ${key} -> ${newId}`);
                 const parts = key.split(",");
-                if (parts.length === 4) {
+                if (parts.length === 4 || parts.length === 5) {
                     const worldX = parseInt(parts[0]);
                     const worldY = parseInt(parts[1]);
                     const level = parseInt(parts[2]);
@@ -1481,6 +1482,9 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                     sceneX < scene.sizeX - 1 &&
                     sceneY < scene.sizeY - 1
                 ) {
+                    // A LOC_ANIM on an added loc (such as a boat's salvaging hook) is an
+                    // override keyed by the loc's own tile and id.
+                    const animated = locOverrides?.get(`${loc.x},${loc.y},${loc.level},${loc.id}`);
                     state.sceneBuilder.addLoc(
                         scene,
                         loc.level,
@@ -1491,6 +1495,8 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                         loc.rotation,
                         scene.collisionMaps[loc.level],
                         locLoadType,
+                        typeof animated?.seqId === "number" ? animated.seqId : undefined,
+                        animated?.seqRandomStart,
                     );
                 }
             }
@@ -1592,9 +1598,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                     const overlayMapY = 200 + (worldViewId | 0);
                     return getMapSquareId(overlayMapX, overlayMapY) === currentMapId;
                 }
-                const npcMapX = getMapIndexFromTile(instance.x);
-                const npcMapY = getMapIndexFromTile(instance.y);
-                return npcMapX === mapX && npcMapY === mapY;
+                return npcOwnerMapId(instance) === currentMapId;
             });
         }
         if (!shouldLoadPartial && extraNpcsInput) {
@@ -2274,11 +2278,14 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             mapY,
             maxLevel,
             loadedTextureIds,
+            renderBaseTile,
         }: {
             mapX: number;
             mapY: number;
             maxLevel: number;
             loadedTextureIds: Set<number>;
+            /** Where the map is drawn from, when not its corner (an instance's scene base). */
+            renderBaseTile?: { x: number; y: number };
         },
     ): Promise<RenderDataResult<NpcGeometryData>> {
         this.init();
@@ -2296,11 +2303,10 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
         const borderSize = 6;
         const maxPlane = Math.max(0, maxLevel | 0);
+        const ownerMapId = getMapSquareId(mapX, mapY);
         const npcInstances = state.npcInstances.filter((instance) => {
             if ((instance.level | 0) > maxPlane) return false;
-            const npcMapX = getMapIndexFromTile(instance.x);
-            const npcMapY = getMapIndexFromTile(instance.y);
-            return npcMapX === mapX && npcMapY === mapY;
+            return npcOwnerMapId(instance) === ownerMapId;
         });
 
         const { npcSceneBuf, npcs } = buildNpcGeometry(
@@ -2309,8 +2315,8 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             textureLoader,
             textureIdIndexMap,
             npcInstances,
-            mapX * Scene.MAP_SQUARE_SIZE,
-            mapY * Scene.MAP_SQUARE_SIZE,
+            renderBaseTile ? renderBaseTile.x | 0 : mapX * Scene.MAP_SQUARE_SIZE,
+            renderBaseTile ? renderBaseTile.y | 0 : mapY * Scene.MAP_SQUARE_SIZE,
         );
 
         const vertices = npcSceneBuf.vertexBuf.byteArray();

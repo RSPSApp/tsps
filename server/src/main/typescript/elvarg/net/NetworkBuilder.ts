@@ -8,10 +8,11 @@ import { Flag } from "../game/model/Flag";
 import { Location } from "../game/model/Location";
 import { PlayerStatus } from "../game/model/PlayerStatus";
 import { PlayerRights } from "../game/model/rights/PlayerRights";
+import { isMembersWorld } from "../game/definition/WorldDefinition";
 import { PluginManager } from "../plugins/PluginManager";
 import { Misc } from "../util/Misc";
 import { PlayerPunishment } from "../util/PlayerPunishment";
-import { BinaryChannel, MAX_GAME_MESSAGE_BYTES, WebSocketBinaryChannel } from "./BinaryChannel";
+import { BinaryChannel, HeadlessBinaryChannel, MAX_GAME_MESSAGE_BYTES, WebSocketBinaryChannel } from "./BinaryChannel";
 import { BrowserHostHttpBridge, BROWSER_HOST_BRIDGE_HTML } from "./BrowserHostHttpBridge";
 import { PlayerSession } from "./PlayerSession";
 import { CachePipeline } from "../game/cache/CachePipeline";
@@ -26,6 +27,7 @@ import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacem
 import {
   decodeClientPackets,
   MAIN_INVENTORY_GROUP_ID,
+  MOBILE_CLIENT_ATTRIBUTE,
   encodeDefaultAnimations,
   encodeGameframeBootstrap,
   encodeHandshake,
@@ -33,6 +35,7 @@ import {
   encodeLogoutResponse,
   encodeWelcome,
   PlayerAppearance,
+  resolveGameframeRoot,
 } from "./protocol/ClientProtocol";
 import {
   WORLD_MAP_CLOSE_WIDGET_ID,
@@ -54,6 +57,8 @@ import { SwitchItemSlotPacketListener } from "./packet/impl/SwitchItemSlotPacket
 import { PickupItemPacketListener } from "./packet/impl/PickupItemPacketListener";
 import { SecondGroundItemOptionPacketListener } from "./packet/impl/SecondGroundItemOptionPacketListener";
 import { ItemDefinition } from "../game/definition/ItemDefinition";
+import { BoatManager } from "../game/content/sailing/BoatManager";
+import { Sailing } from "../game/content/sailing/Sailing";
 import { Bank } from "../game/model/container/impl/Bank";
 import { InterfaceActionClickOpcode } from "./packet/impl/InterfaceActionClickOpcode";
 import { ChangeAppearancePacketListener } from "./packet/impl/ChangeAppearancePacketListener";
@@ -75,10 +80,30 @@ import { SpellTeleports } from "../game/content/combat/magic/SpellTeleports";
 const OBJECT_ACTIONS = new ObjectActionPacketListener();
 const NPC_ACTIONS = new NPCOptionPacketListener();
 const MAGIC_ITEMS = new MagicOnItemPacketListener();
+type ClientMessages = ReturnType<typeof decodeClientPackets>;
+const CONNECTIONS = new WeakMap<Player, ClientConnection>();
+
+/** Runs already-decoded messages through a logged-in player's own dispatch, as if their client sent them. */
+export function dispatchClientMessages(player: Player, messages: ClientMessages): boolean {
+  const connection = CONNECTIONS.get(player);
+  if (!connection) return false;
+  connection.inject(messages);
+  return true;
+}
+
+/** Logs a player in through the normal login path with no client attached. Closing their session logs them out. */
+export async function connectHeadlessClient(username: string, password: string): Promise<{ player?: Player; error?: string }> {
+  const connection = new ClientConnection(new HeadlessBinaryChannel());
+  connection.inject([
+    { type: "login", username, password, revision: CachePipeline.getActive().revision },
+    { type: "handshake", name: username, clientType: 0 },
+  ]);
+  await connection.idle();
+  const player = connection.getPlayer();
+  return player ? { player } : { error: connection.getLoginFailure() ?? "Login did not complete." };
+}
+
 const CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE = "interface:close-on-interface-close";
-// Gameframe roots the "Game client layout" dropdown can pick (548 fixed, 164
-// classic resizable, 161 modern resizable).
-const CLIENT_LAYOUT_ROOTS = new Set([548, 164, 161]);
 const WORLD_INTERACTIONS = new Set([
   "move",
   "teleport",
@@ -177,12 +202,13 @@ export class NetworkBuilder {
   }
 }
 
-class ClientConnection {
+export class ClientConnection {
   private static readonly pendingNames = new Set<string>();
   private pending?: PendingLogin;
   private reservedName?: string;
   private player?: Player;
   private closed = false;
+  private loginFailure?: string;
   private input = Promise.resolve();
 
   constructor(private readonly channel: BinaryChannel) {
@@ -207,11 +233,39 @@ class ClientConnection {
       console.warn("[network] rejected malformed client packet", (error as Error).message);
       return;
     }
+    await this.dispatch(packets);
+  }
 
+  public inject(messages: ClientMessages): void {
+    this.input = this.input.then(() => this.dispatch(messages)).catch((error) => {
+      console.warn("[network] injected client packet rejected", error);
+    });
+  }
+
+  public idle(): Promise<void> {
+    return this.input;
+  }
+
+  public getPlayer(): Player | undefined {
+    return this.player;
+  }
+
+  public getLoginFailure(): string | undefined {
+    return this.loginFailure;
+  }
+
+  private async dispatch(packets: ClientMessages): Promise<void> {
+    // Frames already queued on the input chain can outlive the socket (a handshake
+    // buffered before a disconnect, for example). A closed connection must not act
+    // on them or build a player for a socket that is already gone.
+    if (this.closed) return;
     for (const packet of packets) {
       if (this.player) LunarSpells.expireSpellbookSwap(this.player);
       if (this.player && WORLD_INTERACTIONS.has(packet.type)) {
         if (this.player.getStatus() === PlayerStatus.TRADING) continue;
+        const input = { player: this.player, packet, handled: false };
+        PluginManager.emitCustomEvent("player:world-input", input);
+        if (input.handled) continue;
         if (
           (packet.type !== "move" || this.player.getMovementQueue().getMobility().canMove()) &&
           !(packet.type === "inventory_action" && EquipPacketListener.preservesInterfaceOnEquip(this.player))
@@ -222,6 +276,9 @@ class ClientConnection {
       switch (packet.type) {
         case "move":
           this.walk(packet.worldX, packet.worldY, packet.modifierFlags);
+          continue;
+        case "set_heading":
+          if (this.player) BoatManager.setHelmHeading(this.player, packet.heading);
           continue;
         case "npc_option":
           if (this.player) NPC_ACTIONS.executeOption(this.player, packet.index, packet.clickType);
@@ -352,7 +409,9 @@ class ClientConnection {
             if (packet.messageType === "public") {
               ChatPacketListener.handleText(this.player, packet.text);
             } else if (packet.messageType === "friends_chat") {
-              PluginManager.emitSocialPacket({ player: this.player, packet, handled: false });
+              PluginManager.emitSocialPacket({
+                player: this.player, packet: packet as typeof packet & { messageType: "friends_chat" }, handled: false,
+              });
             }
           }
           continue;
@@ -595,12 +654,15 @@ class ClientConnection {
           }
           continue;
         case "widget_drag":
-          if (this.player) SwitchItemSlotPacketListener.move(
+          if (this.player && !Bank.handleDrag(this.player, packet)) SwitchItemSlotPacketListener.move(
             this.player, packet.sourceWidgetId, packet.sourceSlot, packet.targetSlot
           );
           continue;
         case "interface_close":
           if (this.player) {
+            const close = { player: this.player, handled: false };
+            PluginManager.emitCustomEvent("interface:close", close);
+            if (close.handled) continue;
             const closeOverlayId = this.player.getAttribute?.(CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE);
             if (typeof closeOverlayId === "number" && Number.isInteger(closeOverlayId)) {
               this.player.setAttribute(CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE, null);
@@ -630,6 +692,18 @@ class ClientConnection {
               itemId: packet.itemId >= 0 ? packet.itemId : undefined,
               slot: packet.childIndex >= 0 ? packet.childIndex : undefined,
               argsData: packet.argsData,
+            });
+          } else if (this.player) {
+            // A script trigger (if_triggeroplocal from a cache script, like the boat
+            // customisation's Build): the component, the child it was for, and the script's
+            // arguments (ints as zigzag varints, strings null-terminated).
+            InterfaceActionClickOpcode.handle(this.player, packet.widgetId, 0, {
+              groupId: packet.widgetId >>> 16,
+              childId: packet.widgetId & 0xffff,
+              slot: packet.childIndex >= 0 ? packet.childIndex : undefined,
+              itemId: packet.itemId >= 0 ? packet.itemId : undefined,
+              argsData: packet.argsData,
+              scriptTrigger: true,
             });
           }
           continue;
@@ -705,14 +779,20 @@ class ClientConnection {
           await this.login(packet.username, packet.password, packet.revision);
           continue;
         case "handshake":
-          this.enterWorld();
+          this.enterWorld(packet.clientType);
           continue;
-        case "logout":
+        case "logout": {
+          const refusal = this.player ? PluginManager.emitCanLogout(this.player) : null;
+          if (refusal) {
+            this.send(encodeLogoutResponse(refusal, false));
+            continue;
+          }
           this.send(encodeLogoutResponse());
           this.player?.getSession().flushPackets();
           this.cleanup("logout");
           this.channel.close(1000, "logout");
           return;
+        }
       }
     }
   }
@@ -799,13 +879,23 @@ class ClientConnection {
       return;
     }
 
+    // encryptPassword/checkPassword are async; the socket can close while they run.
+    // Do not leave a pending login behind for a connection cleanup already released.
+    if (this.closed) {
+      this.releasePendingName();
+      return;
+    }
     this.pending = { username, passwordHash, save };
     this.send(encodeLoginResponse(true, -1, "", username));
     console.info(`[login] accepted ${username} from ${this.channel.remoteAddress}`);
   }
 
-  private enterWorld(): void {
+  private enterWorld(clientType: number = 0): void {
     if (!this.pending || this.player) return;
+    if (this.closed) {
+      this.releasePendingName();
+      return;
+    }
     const pending = this.pending;
     const session = new PlayerSession(this.channel);
     const player = new Player(session, GameConstants.DEFAULT_LOCATION.clone());
@@ -813,6 +903,9 @@ class ClientConnection {
     player.setUsername(pending.username);
     player.setLongUsername(Misc.stringToLongBigInt(pending.username));
     player.setHostAddress(this.channel.remoteAddress);
+    // Transient (not persisted) so a mobile login never overwrites the layout
+    // saved from a desktop session; resolveGameframeRoot reads it at boot.
+    if (clientType === 1) player.setAttribute(MOBILE_CLIENT_ATTRIBUTE, true);
     if (pending.save) pending.save.applyToPlayer(player);
     if (isConfiguredDeveloperUsername(player.getUsername())) player.setRights(PlayerRights.DEVELOPER);
     player.setPasswordHashWithSalt(pending.passwordHash);
@@ -820,12 +913,16 @@ class ClientConnection {
     player.getUpdateFlag().flag(Flag.APPEARANCE);
 
     if (!World.getPlayers().add(player)) {
+      this.releasePendingName();
       this.failLogin(2, "This world is full.");
       this.channel.close(1013, "world full");
       return;
     }
     this.player = player;
+    CONNECTIONS.set(player, this);
     this.releasePendingName();
+    // Back aboard a boat they logged out on at sea.
+    Sailing.onLogin(player);
     World.refreshActiveRegions();
     PluginManager.emitPlayerLogin({
       player,
@@ -838,20 +935,24 @@ class ClientConnection {
         player.getUsername(),
         PlayerRights.hasAdminRights(player),
         this.getPlayerAppearance(player),
-        player.getChatIcons()
+        player.getChatIcons(),
+        isMembersWorld()
       )
     );
     this.send(encodeDefaultAnimations());
     // 548/164/161 - what the "Game client layout" dropdown (Settings.plugin.js)
     // stores; the client maps the standard mounts onto the chosen layout.
-    const savedLayoutRoot = Number(player.getAttribute("clientLayoutRoot"));
-    const layoutRoot = CLIENT_LAYOUT_ROOTS.has(savedLayoutRoot) ? savedLayoutRoot : 161;
+    // Mobile clients resolve to the stock mobile toplevel (601) instead.
+    const layoutRoot = resolveGameframeRoot(player);
     for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot)) this.send(packet);
     player.getPacketSender()
       // The bootstrap mounts the magic tab (161:82 -> 218) directly, which does not send
       // varbit 4070, so the cache scripts would draw the standard book for everyone.
       // sendTabInterface(6) is the one place that publishes the spellbook varbit.
       .sendTabInterface(6, player.getSpellbook().getInterfaceId())
+      // Cache script 828 sets varc 103 (account is a member), which the GE, collection box
+      // and membership panels read; everyone on a members world is a member.
+      .sendInterfaceScript(828, [isMembersWorld() ? 1 : 0])
       .sendItemContainer(player.getInventory(), 3214)
       .sendSkillsSnapshot()
       .sendRunEnergy();
@@ -861,6 +962,8 @@ class ClientConnection {
   private walk(x: number, y: number, modifierFlags: number): void {
     const player = this.player;
     if (!player) return;
+    // At a boat's helm a click sets the heading (the client normally sends SET_HEADING).
+    if (BoatManager.steerToward(player, x, y)) return;
     player.getCombat().reset();
     const run = modifierFlags === 2 ||
       ((modifierFlags & 1) !== 0 ? !player.isRunningReturn() : player.isRunningReturn());
@@ -926,8 +1029,8 @@ class ClientConnection {
     if (option === "examine") {
       const definition = ItemDefinition.forId(packet.itemId);
       player.sendMessage(definition.getExamine() || definition.getName());
-    } else if (option === "take" || packet.optionIndex === 3 || packet.optionIndex == null) {
-      PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y);
+    } else if (player.getPrivateArea() || option === "take" || packet.optionIndex === 3 || packet.optionIndex == null) {
+      PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
     } else {
       SecondGroundItemOptionPacketListener.interact(
         player, packet.itemId, packet.x, packet.y, packet.optionIndex ?? 2
@@ -983,6 +1086,7 @@ class ClientConnection {
   }
 
   private failLogin(code: number, message: string): void {
+    this.loginFailure = message;
     this.send(encodeLoginResponse(false, code, message));
   }
 

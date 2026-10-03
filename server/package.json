@@ -3,6 +3,7 @@
     "node": ">=22.5.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@types/async-lock": "^1.4.2",
     "adm-zip": "^0.5.18",
     "async-lock": "^1.4.1",
@@ -13,7 +14,8 @@
     "reflect-metadata": "^0.1.13",
     "require-all": "^3.0.0",
     "socket.io-client": "^4.8.1",
-    "ws": "^8.13.0"
+    "ws": "^8.13.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
@@ -38,6 +40,8 @@
     "test:developer-rights": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/developer-rights-smoke.ts",
     "test:plugin-config": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/plugin-config-smoke.ts",
     "test:experience-rates": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/experience-rates-smoke.ts",
+    "test:combat-xp": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/combat-xp-smoke.ts",
+    "test:weapon-special-traits": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/weapon-special-traits-smoke.ts",
     "test:spellbook": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/spellbook-login-smoke.ts",
     "test:arceuus-spellbook": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/arceuus-spellbook-smoke.ts",
     "test:spell-cooldown": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/spell-cooldown-smoke.ts",
@@ -47,6 +51,8 @@
     "test:webrtc": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/webrtc-loopback-smoke.ts",
     "test:pathfinding": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/pathfinding-smoke.ts",
     "test:combat-pathing": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/combat-pathing-smoke.ts",
+    "test:quest-list": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/quest-list-smoke.ts",
+    "test:quest-runtime": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/quest-runtime-smoke.ts",
     "test:route-core": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2022\"}' ts-node ./scripts/rsmod-route-core-smoke.ts",
     "test:projectile-origin": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/projectile-origin-smoke.ts",
     "test:weapon-profiles": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/weapon-profiles-smoke.ts",
@@ -97,9 +103,13 @@
     "test:pest-control": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/pest-control-smoke.ts",
     "test:bot-pvp-loadout": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/bot-pvp-loadout-smoke.ts",
     "test:mobile-list-hooks": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2022\"}' ts-node ./scripts/mobile-list-hooks-smoke.ts",
+    "test:agent-mcp": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2022\"}' ts-node ./scripts/agent-mcp-smoke.ts",
     "dump:cs2": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-cs2.ts",
     "dump:enum": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-enum.ts",
+    "dump:seq": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-seq.ts",
+    "dump:spotanim": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-spotanim.ts",
     "dump:widget": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-widget.ts",
+    "dump:item-combat-styles": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-item-combat-styles.ts",
     "fetch:prices": "node ./scripts/fetch-prices.mjs"
   },
   "packageManager": "yarn@4.12.0+sha512.f45ab632439a67f8bc759bf32ead036a1f413287b9042726b7cc4818b7b49e14e9423ba49b18f9e06ea4941c1ad062385b1d8760a8d5091a1a31e5f6219afca8"

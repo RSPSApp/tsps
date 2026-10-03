@@ -8,6 +8,7 @@ dist
 # Runtime/server state
 data/saves/characters
 data/saves/*.sqlite*
+data/saves/gauntlet-scoreboard.json
 logs/
 caches/
 Function

@@ -255,6 +255,7 @@ export class PlayerDeathTask extends Task {
 
     private static getItemsToKeep(player: Player): Item[] {
         const items: Item[] = [];
+        const alwaysKept: Item[] = [];
         for (const item of [...player.getInventory().getItems(), ...player.getEquipment().getItems()]) {
             if (
                 item == null ||
@@ -264,13 +265,19 @@ export class PlayerDeathTask extends Task {
             ) {
                 continue;
             }
-            if (PluginManager.emitShouldKeepItemOnDeath(player, item) === false) {
+            const keep = PluginManager.emitShouldKeepItemOnDeath(player, item);
+            if (keep === false) {
+                continue;
+            }
+            // A plugin's keep=true puts the item beyond the normal keep count.
+            if (keep === true) {
+                alwaysKept.push(item);
                 continue;
             }
             items.push(item);
         }
 
         items.sort((a: Item, b: Item) => b.getDefinition().getValue() - a.getDefinition().getValue());
-        return items.slice(0, PlayerDeathTask.getAmountToKeep(player));
+        return [...items.slice(0, PlayerDeathTask.getAmountToKeep(player)), ...alwaysKept];
     }
 }

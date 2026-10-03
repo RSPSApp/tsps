@@ -36,7 +36,7 @@ export function computeMovementOrientation(stepX: number, stepY: number): number
  */
 export function interpolateRotation(currentRot: number, targetRot: number, speed: number): number {
     const delta = (targetRot - currentRot) & 2047;
-    if (delta === 0) return currentRot;
+    if (delta === 0 || speed <= 0) return currentRot;
 
     // Determine shortest rotation direction
     // When delta === 1024 (exactly 180°), pick counterclockwise (dir = -1) as tie-breaker

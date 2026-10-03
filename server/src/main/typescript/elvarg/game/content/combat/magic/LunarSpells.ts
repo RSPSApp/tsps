@@ -15,6 +15,7 @@ import { EffectSpells } from "./EffectSpells";
 import { DialogueChainBuilder } from "../../../model/dialogues/builders/DialogueChainBuilder";
 import { OptionDialogue } from "../../../model/dialogues/entries/impl/OptionDialogue";
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
+import { PluginManager } from "../../../../plugins/PluginManager";
 
 type SpellData = { level: number; experience: number; runes: Item[] };
 type TeleportData = SpellData & { destination: Location };
@@ -87,6 +88,10 @@ export class LunarSpells {
         ["tele group catherby", teleport(88, 93, [rune(9075, 15), rune(555, 3), rune(563, 3)], 2804, 3434)],
         ["tele group ice plateau", teleport(90, 99, [rune(9075, 16), rune(555, 3), rune(563, 3)], 2974, 3873)],
     ]);
+
+    public static getTeleportDestinations() {
+        return Array.from(this.TELEPORTS, ([name, spell]) => ({ name, ...spell.teleport }));
+    }
 
     public static handleSelf(player: Player, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";
@@ -164,6 +169,7 @@ export class LunarSpells {
             [1925, 1929], [1923, 1921], [1935, 1937], [229, 227], [6667, 6669],
             [1825, 1823], [1827, 1823], [1829, 1823], [1831, 1823], [5331, 5340],
         ]);
+        if (key === "humidify") PluginManager.emitCustomEvent("magic:water-containers", { player, containers: waterContainers });
         if (key === "humidify" && !items.some(item => waterContainers.has(item.getId()))) {
             player.sendMessage("You do not have any containers that can be filled with water.");
             return true;
@@ -206,10 +212,11 @@ export class LunarSpells {
                     const filled = waterContainers.get(item.getId());
                     if (filled) item.setId(filled);
                 }
+                PluginManager.emitCustomEvent("magic:humidified", { player });
             } else if (key === "hunter kit") {
                 inventory.adds(946, 1).adds(303, 1).adds(954, 2).adds(10029, 1).adds(10008, 1);
             } else if (key === "magic imbue") {
-                player.setAttribute("lunar:magicImbueUntil", Date.now() + 12 * 60_000);
+                player.setAttribute("lunar:magic-imbue-until", Date.now() + 12 * 60_000);
             } else if (key === "spin flax") {
                 for (const item of inventory.getValidItems()) if (item.getId() === 1779) item.setId(1777);
             } else if (key === "superglass make") {
@@ -349,7 +356,7 @@ export class LunarSpells {
     }
 
     private static acceptsAid(player: Player): boolean {
-        return player.getAttribute("acceptAid") !== false;
+        return player.getAttribute("accept-aid") !== false;
     }
 
     public static expireSpellbookSwap(player: Player): void {

@@ -1,5 +1,9 @@
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
-const { encodeGameframeBootstrap } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
+const {
+  encodeGameframeBootstrap,
+  MOBILE_CLIENT_ATTRIBUTE,
+  resolveGameframeRoot,
+} = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 
 const WELCOME_SCREEN_GROUP_ID = 378;
 const PLAY_BUTTON_UID = (WELCOME_SCREEN_GROUP_ID << 16) | 72;
@@ -17,9 +21,9 @@ function showWelcomeScreen(player) {
 
 function showGameframe(player) {
   // 548/164/161 - the layout the "Game client layout" dropdown saved; the
-  // client maps the standard mounts onto the chosen layout.
-  const savedRoot = Number(player.getAttribute("clientLayoutRoot"));
-  const layoutRoot = [548, 164, 161].includes(savedRoot) ? savedRoot : 161;
+  // client maps the standard mounts onto the chosen layout. Mobile clients
+  // are locked to the stock mobile toplevel (601).
+  const layoutRoot = resolveGameframeRoot(player);
   for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot)) {
     player.getSession().sendClientPacket(packet);
   }
@@ -38,7 +42,13 @@ module.exports = {
     };
 
     api.onPlayerLogin(({ player }) => {
-      if (player.isPlayerBot?.() === true || inWilderness(player)) {
+      // OSRS mobile has no welcome screen: handheld clients skip straight from
+      // login into the world (the gameframe bootstrap below is the landing).
+      if (
+        player.isPlayerBot?.() === true ||
+        inWilderness(player) ||
+        player.getAttribute(MOBILE_CLIENT_ATTRIBUTE) === true
+      ) {
         return;
       }
       pending.add(player);

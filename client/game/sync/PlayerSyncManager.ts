@@ -597,13 +597,6 @@ export class PlayerSyncManager {
             endSubY,
             orientation,
         );
-        // Forced movement resets pathLength; clear any queued movement.
-        try {
-            this.playerEcs.clearServerQueue(ecsIndex);
-        } catch {}
-        try {
-            this.playerEcs.setForcedMovementSteps(ecsIndex, 0);
-        } catch {}
         this.playerEcs.setRunning(ecsIndex, false);
 
         const state = this.movementSync.getState(serverId);
@@ -725,6 +718,11 @@ export class PlayerSyncManager {
         } else {
             this.playerEcs.setFaceDir(ecsIndex, orientation);
         }
+    }
+
+    /** The tile the server last placed a player on (not the interpolated draw position). */
+    getServerTile(serverId: number): { tileX: number; tileY: number } | undefined {
+        return this.resolveBaseTile(serverId);
     }
 
     private resolveBaseTile(

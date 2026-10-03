@@ -68,6 +68,7 @@ function applyBreachingAccuracy(attacker, attackRoll) {
 
 module.exports = {
   name: "Keris",
+  members: true,
   register(api) {
     api.registerMeleeHitModifier(applyKerisDamage);
     api.registerMeleeAttackAccuracyModifier(applyBreachingAccuracy);

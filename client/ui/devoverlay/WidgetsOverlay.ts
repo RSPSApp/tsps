@@ -8,6 +8,7 @@ import { isTouchDevice } from "../../common/utils/DeviceUtil";
 import { getUiScale } from "../UiScale";
 import { FONT_BOLD_12, FONT_VERDANA_13 } from "../fonts";
 import { getChooseOptionMenuRect } from "../../widgets/gl/choose-option";
+
 import { GLRenderer } from "../../widgets/gl/renderer";
 import {
     GLRenderOpts,
@@ -20,6 +21,13 @@ import { drawTextGL } from "../../widgets/components/TextRenderer";
 import type { WidgetManager } from "../../widgets/WidgetManager";
 import type { GameFrameDrawContext } from "../../game/plugins/ClientPluginManager";
 import { Overlay, OverlayInitArgs, OverlayUpdateArgs, RenderPhase } from "./Overlay";
+
+/**
+ * The enhanced client's "show mouseover text" setting. We report clienttype 10, so cache
+ * script 4731 only leaves room for the top-left text above HUD overlays while it is 1; the
+ * text follows it so the two never disagree. The server turns it on at login.
+ */
+const VARBIT_SHOW_MOUSEOVER_TEXT = 12377;
 
 export interface WidgetsContext {
     getCacheSystem: () => CacheSystem;
@@ -587,6 +595,9 @@ export class WidgetsOverlay implements Overlay {
     private getMouseOverTextVisualState(menuOpen: boolean): MouseOverTextVisualState {
         const client = this.ctx.getGameContext?.()?.osrsClient;
         if (!client?.showMouseOverText || menuOpen || client.menuOpen) {
+            return { signature: "hidden" };
+        }
+        if (client.varManager?.getVarbit?.(VARBIT_SHOW_MOUSEOVER_TEXT) === 0) {
             return { signature: "hidden" };
         }
 

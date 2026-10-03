@@ -99,10 +99,6 @@ export class EditorPalette {
         this.renderModeButtons();
     }
 
-    public toggle(): void {
-        this.setVisible(this.element.style.display === "none");
-    }
-
     public setVisible(visible: boolean): void {
         this.element.style.display = visible ? "block" : "none";
         if (visible) this.input.focus();

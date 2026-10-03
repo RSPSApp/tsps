@@ -510,6 +510,7 @@ export class ObjType extends Type {
         this.name = original.name;
         this.isMembers = original.isMembers;
         this.price = original.price;
+        this.isTradable = original.isTradable;
         this.stackability = ObjStackability.ALWAYS;
     }
 

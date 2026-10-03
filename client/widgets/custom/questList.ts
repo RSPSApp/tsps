@@ -3,6 +3,7 @@ import {
     QUEST_LIST_STATUS_IN_PROGRESS,
     type QuestListWidgetGroup,
 } from "../../common/ui/questList";
+import { layoutQuestScrollbarChildren } from "../../game/widgets/input/questListScrollbarInput";
 import { FONT_BOLD_12, FONT_PLAIN_11 } from "../../ui/fonts";
 import type { WidgetManager } from "../WidgetManager";
 import type { WidgetNode } from "../WidgetNode";
@@ -130,9 +131,13 @@ export function applyQuestListWidgetGroups(
     const list = widgetManager.getWidgetByUid(QUEST_LIST_LIST_UID);
     if (!list) return;
 
+    // The rows and scroll size are server content, so the cache's own quest
+    // list script (2633) must not rebuild or resize them. The scrollbar stays
+    // cache-owned: script 31 wired its dragger/arrows/wheel to scroll 399:6,
+    // and those scripts need to find and move the dragger.
     widgetManager.setServerOwnedWidget(QUEST_LIST_LIST_UID, true);
     widgetManager.setServerOwnedWidget(QUEST_LIST_TEXT_CONTAINER_UID, true);
-    widgetManager.setServerOwnedWidget(QUEST_LIST_SCROLLBAR_UID, true);
+    widgetManager.setServerOwnedWidget(QUEST_LIST_SCROLLBAR_UID, false);
     clearDynamicChildren(widgetManager, list);
 
     let y = 0;
@@ -197,40 +202,45 @@ export function applyQuestListWidgetGroups(
         }
     }
 
+    // Same shape as the cache (script 2633): the text pane 399:6 is the
+    // scrolling viewport and the list 399:7 inside it is as tall as its rows.
     const textContainer = widgetManager.getWidgetByUid(QUEST_LIST_TEXT_CONTAINER_UID);
-    // The enclosing text pane is the actual viewport. The row list can retain
-    // an old content height across a tab refresh, so using list.height here can
-    // incorrectly hide the scrollbar after an overflowed list is rebuilt.
-    const enclosingHeight = textContainer?.height ?? 0;
-    const viewportHeight = Math.max(0, (enclosingHeight > 0 ? enclosingHeight : list.height) | 0);
+    const view = textContainer ?? list;
+    widgetManager.ensureLayout(view);
+    const viewportHeight = Math.max(0, view.height | 0);
     const contentHeight = Math.max(viewportHeight, y + ROW_EXTRA_BOTTOM);
-    list.rawHeight = viewportHeight;
-    list.height = viewportHeight;
-    list.scrollHeight = contentHeight;
-    list.scrollY = Math.min(list.scrollY | 0, Math.max(0, contentHeight - viewportHeight));
-
     if (textContainer) {
-        textContainer.scrollHeight = list.scrollHeight;
-        textContainer.scrollY = Math.min(
-            textContainer.scrollY | 0,
-            Math.max(0, textContainer.scrollHeight - (textContainer.height | 0)),
-        );
-        widgetManager.invalidateWidget(textContainer, "quest-list");
+        list.heightMode = 0;
+        list.rawHeight = contentHeight;
+        list.height = contentHeight;
+        list.scrollHeight = 0;
+        list.scrollY = 0;
     }
+    view.scrollHeight = contentHeight;
+    view.scrollY = Math.min(view.scrollY | 0, Math.max(0, contentHeight - viewportHeight));
+    widgetManager.invalidateWidget(view, "quest-list");
 
     const scrollbar = widgetManager.getWidgetByUid(QUEST_LIST_SCROLLBAR_UID);
     if (scrollbar) {
-        // The list (399:7) is the component that owns the dynamic rows and
-        // therefore the scroll position. Make the link explicit so the custom
-        // quest list does not depend on a cache script's inferred linkage.
         (
             scrollbar as WidgetNode & { scrollBarTargetUid?: number; scrollBarAxis?: "y" }
-        ).scrollBarTargetUid = list.uid;
+        ).scrollBarTargetUid = view.uid;
         (
             scrollbar as WidgetNode & { scrollBarTargetUid?: number; scrollBarAxis?: "y" }
         ).scrollBarAxis = "y";
         scrollbar.isHidden = contentHeight <= viewportHeight;
         scrollbar.hidden = scrollbar.isHidden;
+        widgetManager.ensureLayout(scrollbar);
+        // Script 31 sized the dragger for the cache's own rows; resize it for
+        // the rows the server just sent (what script 72 would do).
+        layoutQuestScrollbarChildren(
+            widgetManager,
+            scrollbar,
+            viewportHeight,
+            contentHeight,
+            view.scrollY | 0,
+            scrollbar.height | 0,
+        );
         widgetManager.invalidateWidget(scrollbar, "quest-list");
     }
 

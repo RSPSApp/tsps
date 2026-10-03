@@ -120,6 +120,10 @@ const urlParams =
 export const forceMobileMode =
     urlParams?.get("mobile") === "1" || urlParams?.get("mobile") === "true";
 
+// Debug UI (the Leva panel and its F-key shortcuts) only mounts with an
+// explicit ?debug flag, so players never see it.
+export const isDebugMode = urlParams?.has("debug") ?? false;
+
 // Layout/mobile UI mode should only follow actual handheld/tablet platforms (plus overrides),
 // not generic touch-capable desktop hardware.
 export const isMobileMode = checkAndroid() || isIos || forceMobileMode;

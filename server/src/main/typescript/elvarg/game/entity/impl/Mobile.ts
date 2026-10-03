@@ -1,7 +1,8 @@
 import { Entity } from "../Entity";
 import { Sound } from "../../Sound";
 import type { CombatType } from "../../content/combat/CombatType";
-import type { HitDamage } from "../../content/combat/hit/HitDamage";
+import { HitDamage } from "../../content/combat/hit/HitDamage";
+import { HitMask } from "../../content/combat/hit/HitMask";
 import type { PendingHit } from "../../content/combat/hit/PendingHit";
 import type { NPC } from "./npc/NPC";
 import type { Player } from "./player/Player";
@@ -124,12 +125,27 @@ export abstract class Mobile extends Entity {
     }
 
     /**
+     * Called before any teleport (moveTo, smartMove, smartMoves) moves an actor, so systems
+     * such as sailing can react to every teleport source in one place.
+     */
+    private static readonly teleportListeners: Array<(mobile: Mobile, target: Location) => void> = [];
+
+    public static onBeforeTeleport(listener: (mobile: Mobile, target: Location) => void): void {
+        Mobile.teleportListeners.push(listener);
+    }
+
+    private notifyTeleport(target: Location): void {
+        for (const listener of Mobile.teleportListeners) listener(this, target);
+    }
+
+    /**
      * Teleports the character to a target location
      *
      * @param teleportTarget
      * @return
      */
     public moveTo(teleportTarget: Location): Mobile {
+        this.notifyTeleport(teleportTarget);
         this.getMovementQueue().reset();
         this.setLocation(teleportTarget.clone());
         this.setNeedsPlacement(true);
@@ -158,6 +174,7 @@ export abstract class Mobile extends Entity {
             }
         }
 
+        this.notifyTeleport(chosen);
         this.getMovementQueue().reset();
         this.setLocation(chosen.clone());
         this.setNeedsPlacement(true);
@@ -182,6 +199,7 @@ export abstract class Mobile extends Entity {
                 break;
             }
         }
+        this.notifyTeleport(chosen);
         this.getMovementQueue().reset();
         this.setLocation(chosen.clone());
         this.setNeedsPlacement(true);
@@ -205,6 +223,38 @@ export abstract class Mobile extends Entity {
         this.forcedChat = null;
         this.animation = null;
         this.graphic = null;
+        this.displayedHealth = null;
+    }
+
+    /** What the health bar shows with this tick's hits, when it is not the actor's hitpoints. */
+    private displayedHealth: { current: number; max: number; bar?: { id: number; width: number } } | null = null;
+
+    /**
+     * Shows a hitsplat that changes nothing - a meter other than hitpoints, such as the
+     * Wintertodt's cold on the warmth meter. `splat` is the cache hitsplat for the target and
+     * for everyone else; `health`, when given, is what the health bar shows with it.
+     */
+    showHitsplat(
+        damage: number,
+        splat: { mine: number; others: number },
+        health?: { current: number; max: number; bar?: { id: number; width: number } },
+    ): void {
+        const hit = new HitDamage(Math.max(0, Math.trunc(damage)), HitMask.RED).setSplatTypes(splat.mine, splat.others);
+        const flags = this.getUpdateFlag();
+        if (!flags.flagged(Flag.SINGLE_HIT)) {
+            this.setPrimaryHit(hit);
+            flags.flag(Flag.SINGLE_HIT);
+        } else if (!flags.flagged(Flag.DOUBLE_HIT)) {
+            this.setSecondaryHit(hit);
+            flags.flag(Flag.DOUBLE_HIT);
+        } else {
+            return;
+        }
+        if (health) this.displayedHealth = health;
+    }
+
+    getDisplayedHealth(): { current: number; max: number; bar?: { id: number; width: number } } | null {
+        return this.displayedHealth;
     }
 
     forceChat(message: string): Mobile {
@@ -482,6 +532,11 @@ export abstract class Mobile extends Entity {
     decrementHealth(hit: HitDamage): HitDamage {
         if (this.getHitpoints() <= 0) {
             hit.setDamage(0);
+            return hit;
+        }
+        // A boss whose HP is a timer shows every hit but keeps its HP.
+        if (this.isNpc() && this.getAsNpc().isHitpointsLocked?.()) {
+            if (hit.getDamage() < 0) hit.setDamage(0);
             return hit;
         }
         const PlayerRights = getPlayerRights();

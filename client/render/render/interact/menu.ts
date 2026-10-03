@@ -426,7 +426,7 @@ export function getPreferredMapForWorldTile(host: WebGLOsrsRendererHost, tileX: 
                 }
             }
         }
-        return host.mapManager.getMap(getMapIndexFromTile(tileX), getMapIndexFromTile(tileY)) as
+        return host.mapManager.getMapForWorldTile(tileX, tileY) as
             | WebGLMapSquare
             | undefined;
     

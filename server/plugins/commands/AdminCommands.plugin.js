@@ -40,6 +40,10 @@ const {
 
 const ATTACK_RANGE_DEBUG_GRAPHIC = new Graphic(332, 0);
 const MAX_NPC_COMMAND_SPAWNS = 20;
+const INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
+const PRESERVE_UNLOCKED_ATTRIBUTE = "prayer:preserve-unlocked";
+const RIGOUR_UNLOCKED_ATTRIBUTE = "prayer:rigour-unlocked";
+const AUGURY_UNLOCKED_ATTRIBUTE = "prayer:augury-unlocked";
 const RUNE_IDS = [554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 9075, 21880, 28929];
 const NPC_SPAWN_FILE_CANDIDATES = [
   path.join(process.cwd(), "data", "definitions", "npc-spawns.json"),
@@ -81,9 +85,9 @@ const NPC_FACING_ALIASES = Object.freeze({
   SOUTHEAST: "SOUTH_EAST",
   SOUTH_EAST: "SOUTH_EAST",
 });
-const GLOW_PRESET_ATTRIBUTE = "visual:glowPreset";
-const GLOW_INTENSITY_ATTRIBUTE = "visual:glowIntensity";
-const GLOW_CYCLE_TASK_KEY_ATTRIBUTE = "visual:glowCycleTaskKey";
+const GLOW_PRESET_ATTRIBUTE = "visual:glow-preset";
+const GLOW_INTENSITY_ATTRIBUTE = "visual:glow-intensity";
+const GLOW_CYCLE_TASK_KEY_ATTRIBUTE = "visual:glow-cycle-task-key";
 const GLOW_CYCLE_PRESETS = Object.freeze([
   "blood",
   "toxic",
@@ -1144,7 +1148,8 @@ module.exports = {
       Server.setUpdating(true);
       for (const p of World.getPlayers()) {
         if (p) {
-          p.getPacketSender().sendSystemUpdate(ticks);
+          // The system update packet carries whole seconds (tick = 600ms).
+          p.getPacketSender().sendSystemUpdate(Math.round(ticks * 0.6));
         }
       }
       TaskManager.submit(
@@ -1171,8 +1176,9 @@ module.exports = {
     }, PlayerRights.OWNER);
 
     api.registerCommand("infhp", ({ player }) => {
-      player.setInfiniteHealth(!player.hasInfiniteHealth());
-      player.sendMessage(`Invulnerable: ${player.hasInfiniteHealth()}`);
+      const invulnerable = player.getAttribute(INFINITE_HEALTH_ATTRIBUTE) !== true;
+      player.setAttribute(INFINITE_HEALTH_ATTRIBUTE, invulnerable);
+      player.sendMessage(`Invulnerable: ${invulnerable}`);
       return true;
     }, PlayerRights.OWNER);
 
@@ -1384,15 +1390,15 @@ module.exports = {
     api.registerCommand("unlockprayers", ({ player, parts }) => {
       const type = parseIntArg(parts[1]);
       if (type === 0) {
-        player.setPreserveUnlocked(true);
+        player.setAttribute(PRESERVE_UNLOCKED_ATTRIBUTE, true);
       } else if (type === 1) {
-        player.setRigourUnlocked(true);
+        player.setAttribute(RIGOUR_UNLOCKED_ATTRIBUTE, true);
       } else if (type === 2) {
-        player.setAuguryUnlocked(true);
+        player.setAttribute(AUGURY_UNLOCKED_ATTRIBUTE, true);
       }
-      player.getPacketSender().sendConfig(709, player.isPreserveUnlocked() ? 1 : 0);
-      player.getPacketSender().sendConfig(711, player.isRigourUnlocked() ? 1 : 0);
-      player.getPacketSender().sendConfig(713, player.getAuguryUnlocked() ? 1 : 0);
+      player.getPacketSender().sendConfig(709, player.getAttribute(PRESERVE_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
+      player.getPacketSender().sendConfig(711, player.getAttribute(RIGOUR_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
+      player.getPacketSender().sendConfig(713, player.getAttribute(AUGURY_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
       return true;
     }, PlayerRights.OWNER);
 

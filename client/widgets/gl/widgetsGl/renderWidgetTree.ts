@@ -1,4 +1,5 @@
 import { ClientState } from "../../../game/ClientState";
+import { hintArrow, isHintArrowBlinkOn } from "../../../game/HintArrow";
 import type { InputManager } from "../../../game/InputManager";
 import { profiler } from "../../../render/PerformanceProfiler";
 import { packWorldMapCoord } from "../../../rs/map/WorldMapArea";
@@ -16,7 +17,7 @@ import {
     findBlockingWidgetInHits as UI_findBlockingWidgetInHits,
     hasContextMenuOption as UI_hasContextMenuOption,
 } from "../../../widgets/menu/utils";
-import { MinimapRenderer } from "../MinimapRenderer";
+import { MinimapRenderer, getMinimapMaps } from "../MinimapRenderer";
 import { drawChooseOptionMenu } from "../choose-option";
 import { GLRenderer } from "../renderer";
 import {
@@ -1756,7 +1757,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 (r.uid === undefined || r.uid === w.uid) &&
                 (r.group === undefined || r.group === (w.uid >>> 16)) &&
                 (r.type === undefined || r.type === w.type) &&
-                (r.contentType === undefined || r.contentType === contentType),
+                (r.contentType === undefined || r.contentType === contentType) &&
+                (r.item === undefined || r.item === ((w as any).itemId ?? -1) >= 0) &&
+                (r.colour === undefined || r.colour === ((w as any).color ?? 0)),
         );
         if (hiddenRule) return;
         if (contentType === 1339) {
@@ -2404,9 +2407,35 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     let playerFineX: number;
                     let playerFineY: number;
 
+                    let onBoat = false;
                     if (playerIdx !== undefined && playerIdx >= 0) {
                         playerFineX = playerEcs.getX(playerIdx) | 0;
                         playerFineY = playerEcs.getY(playerIdx) | 0;
+                        // On a boat the player stands in deck coordinates; centre the
+                        // minimap on where the deck is in the world.
+                        const worldViewId = playerEcs.getWorldViewId(playerIdx) | 0;
+                        const boatProjector = osrsClient.renderer as
+                            | {
+                                  projectDeckToWorld?: (
+                                      entityIndex: number,
+                                      fineX: number,
+                                      fineY: number,
+                                  ) => { x: number; y: number } | undefined;
+                              }
+                            | undefined;
+                        const projected =
+                            worldViewId >= 0
+                                ? boatProjector?.projectDeckToWorld?.(
+                                      worldViewId,
+                                      playerFineX,
+                                      playerFineY,
+                                  )
+                                : undefined;
+                        if (projected) {
+                            playerFineX = Math.round(projected.x);
+                            playerFineY = Math.round(projected.y);
+                            onBoat = true;
+                        }
                     } else {
                         const rawSubX = (playerState.subX ?? 64) | 0;
                         const rawSubY = (playerState.subY ?? 64) | 0;
@@ -2422,18 +2451,13 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     const subY = playerFineY & 127;
                     const worldX = playerTileX + (subX - 64) / 128;
                     const worldY = playerTileY + (subY - 64) / 128;
-                    const playerLevel = Math.max(0, Math.min(3, playerState.level | 0));
+                    const playerLevel = onBoat
+                        ? 0
+                        : Math.max(0, Math.min(3, playerState.level | 0));
 
                     const cameraYaw = osrsClient.camera.yaw ?? 0;
                     const minimapZoom = osrsClient.minimapZoom ?? 4;
                     const zoomScale = minimapZoom / 4.0;
-
-                    const cameraMapX = playerTileX >> 6;
-                    const cameraMapY = playerTileY >> 6;
-                    const localTileX = playerTileX & 63;
-                    const localTileY = playerTileY & 63;
-                    const subTileX = worldX - playerTileX;
-                    const subTileY = worldY - playerTileY;
 
                     const maskW = Math.max(1, Math.round(minimapMask.width * rootScaleX));
                     const maskH = Math.max(1, Math.round(minimapMask.height * rootScaleY));
@@ -2467,31 +2491,20 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         height: maskH,
                     });
 
-                    // Draw 3x3 grid of map tiles
-                    // Each tile is 64 tiles = 256 minimap pixels at 4px/tile
-                    const TILE_SIZE = 256;
-                    const playerOffsetX = (localTileX + subTileX) * 4;
-                    const playerOffsetY = (localTileY + subTileY) * 4;
+                    // Instances have one combined image, located at the scene origin.
+                    const minimapMaps = getMinimapMaps(osrsClient.renderer, playerTileX, playerTileY);
+                    for (const { mapX, mapY, baseX, baseY, size } of minimapMaps) {
+                        const url = osrsClient.getMinimapImageUrl?.(mapX, mapY, playerLevel);
+                        if (!url) continue;
 
-                    for (let mx = 0; mx < 3; mx++) {
-                        for (let my = 0; my < 3; my++) {
-                            const mapX = cameraMapX - 1 + mx;
-                            const mapY = cameraMapY - 1 + my;
-                            const url = osrsClient.getMinimapImageUrl?.(mapX, mapY, playerLevel);
-                            if (!url) continue;
+                        // Get or trigger load of minimap tile texture
+                        const tileTex = tc.getTextureFromUrl(url);
+                        if (!tileTex) continue;
 
-                            // Get or trigger load of minimap tile texture
-                            const tileTex = tc.getTextureFromUrl(url);
-                            if (!tileTex) continue;
+                        const relX = (baseX - worldX) * 4;
+                        const relY = (worldY - baseY - size) * 4;
 
-                            // Position relative to player (in minimap pixels)
-                            // mx=0 is west, mx=2 is east; my=0 is south, my=2 is north
-                            // Formula derived from original: tileY = 512 - my*256 + offsetY - ROTATION_CENTER
-                            const relX = (mx - 1) * TILE_SIZE - playerOffsetX;
-                            const relY = -my * TILE_SIZE + playerOffsetY;
-
-                            minimapRenderer.drawTile(tileTex, relX, relY, TILE_SIZE);
-                        }
+                        minimapRenderer.drawTile(tileTex, relX, relY, size * 4);
                     }
 
                     const minimapIconProvider = osrsClient.renderer as
@@ -2503,35 +2516,31 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                               ) => Array<{ localX: number; localY: number; spriteId: number }>;
                           }
                         | undefined;
-                    for (let mx = 0; mx < 3; mx++) {
-                        for (let my = 0; my < 3; my++) {
-                            const mapX = cameraMapX - 1 + mx;
-                            const mapY = cameraMapY - 1 + my;
-                            const icons = minimapIconProvider?.getMinimapIcons?.(
-                                mapX,
-                                mapY,
-                                playerLevel,
+                    for (const { mapX, mapY, baseX, baseY } of minimapMaps) {
+                        const icons = minimapIconProvider?.getMinimapIcons?.(
+                            mapX,
+                            mapY,
+                            playerLevel,
+                        );
+                        if (!icons || icons.length === 0) continue;
+
+                        for (const icon of icons) {
+                            const iconTex = tc.getBySpriteId(icon.spriteId | 0);
+                            if (!iconTex) continue;
+
+                            const iconWorldX = baseX + (icon.localX | 0) + 0.5;
+                            const iconWorldY = baseY + (icon.localY | 0) + 0.5;
+                            const iconScreen = minimapRenderer.relativeToScreen(
+                                (iconWorldX - worldX) * 4,
+                                (worldY - iconWorldY) * 4,
                             );
-                            if (!icons || icons.length === 0) continue;
-
-                            for (const icon of icons) {
-                                const iconTex = tc.getBySpriteId(icon.spriteId | 0);
-                                if (!iconTex) continue;
-
-                                const iconWorldX = mapX * 64 + (icon.localX | 0) + 0.5;
-                                const iconWorldY = mapY * 64 + (icon.localY | 0) + 0.5;
-                                const iconScreen = minimapRenderer.relativeToScreen(
-                                    (iconWorldX - worldX) * 4,
-                                    (worldY - iconWorldY) * 4,
-                                );
-                                minimapRenderer.drawOverlay(
-                                    iconTex,
-                                    iconScreen.x,
-                                    iconScreen.y,
-                                    iconTex.w * minimapRenderScale,
-                                    iconTex.h * minimapRenderScale,
-                                );
-                            }
+                            minimapRenderer.drawOverlay(
+                                iconTex,
+                                iconScreen.x,
+                                iconScreen.y,
+                                iconTex.w * minimapRenderScale,
+                                iconTex.h * minimapRenderScale,
+                            );
                         }
                     }
 
@@ -2699,6 +2708,62 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                             markerSize,
                             [1, 1, 1, 1],
                         );
+                    }
+
+                    // Hint arrow marker (client.drawHintArrowOnMinimap -> worldToMinimap).
+                    if (hintArrow.type !== 0 && isHintArrowBlinkOn()) {
+                        let targetFineX = -1;
+                        let targetFineY = -1;
+                        if (hintArrow.type === 1) {
+                            const ecsIdx = npcEcs?.getEcsIdForServer?.(hintArrow.npcId);
+                            if (ecsIdx !== undefined && ecsIdx >= 0) {
+                                const mapId = npcEcs.getMapId(ecsIdx) | 0;
+                                targetFineX = ((mapId >> 8) << 13) + (npcEcs.getX(ecsIdx) | 0);
+                                targetFineY = ((mapId & 0xff) << 13) + (npcEcs.getY(ecsIdx) | 0);
+                            }
+                        } else if (hintArrow.type === 2) {
+                            targetFineX = (hintArrow.x << 7) + 64;
+                            targetFineY = (hintArrow.y << 7) + 64;
+                        }
+                        if (targetFineX >= 0) {
+                            // Native minimap pixels (4 per tile) after zoom, north-up.
+                            const dx = ((targetFineX - playerFineX) / 32) * zoomScale;
+                            const dy = ((targetFineY - playerFineY) / 32) * zoomScale;
+                            const screen = minimapRenderer.relativeToScreen(
+                                (targetFineX - playerFineX) / 32,
+                                (playerFineY - targetFineY) / 32,
+                            );
+                            const distSq = dx * dx + dy * dy;
+                            if (distSq > 4225 && distSq < 90000) {
+                                // Off the map: rotated edge arrow pinned inside the rim.
+                                const edgeTex = tc.getByNameToken("mapedge,0");
+                                if (edgeTex) {
+                                    const angle = Math.atan2(screen.x - centerX, centerY - screen.y);
+                                    const r = (minimapMask.width / 2 - 25) * rootScaleX;
+                                    minimapRenderer.drawOverlay(
+                                        edgeTex,
+                                        centerX + Math.sin(angle) * r,
+                                        centerY - Math.cos(angle) * r - 10 * rootScaleY,
+                                        edgeTex.w * minimapRenderScale,
+                                        edgeTex.h * minimapRenderScale,
+                                        angle,
+                                        15 * minimapRenderScale,
+                                        15 * minimapRenderScale,
+                                    );
+                                }
+                            } else if (distSq <= 4225) {
+                                const markerTex = tc.getByNameToken("mapmarker,1");
+                                if (markerTex) {
+                                    minimapRenderer.drawOverlay(
+                                        markerTex,
+                                        screen.x,
+                                        screen.y,
+                                        markerTex.w * minimapRenderScale,
+                                        markerTex.h * minimapRenderScale,
+                                    );
+                                }
+                            }
+                        }
                     }
 
                     // Draw destination flag (unrotated overlay)
@@ -3288,7 +3353,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             const modelCacheId =
                 typeof w.itemId === "number" && (w.itemId | 0) >= 0
                     ? `item:${w.itemId | 0}:${(w.itemQuantity ?? 0) | 0}`
-                    : `model:${modelId}`;
+                    : `model:${(w.modelType ?? 0) | 0}:${modelId}`;
             const cacheKey =
                 isAnimated || isPlayerDesignPreview || (isPlayerModel && !appearanceKey)
                     ? null // Animated models can't be cached (frame changes)

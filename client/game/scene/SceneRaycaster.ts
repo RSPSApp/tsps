@@ -4,7 +4,6 @@ import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import type { NpcType } from "../../rs/config/npctype/NpcType";
 import type { LocType } from "../../rs/config/loctype/LocType";
-import { getMapIndexFromTile, getMapSquareId } from "../../rs/map/MapFileIndex";
 import type { Model } from "../../rs/model/Model";
 import { Scene } from "../../rs/scene/Scene";
 import { MapManager } from "../MapManager";
@@ -76,6 +75,12 @@ export class SceneRaycaster {
     private resolvedLocTypeCache: Map<number, LocType> = new Map();
     private locModelMeshCache: Map<string, LocModelMesh> = new Map();
     worldEntityTransformProvider?: (map: WebGLMapSquare) => Float32Array | undefined;
+    /** Main-world fine position of a point in a boat's deck scene (see worldEntityMotion). */
+    deckToWorldProvider?: (
+        entityIndex: number,
+        fineX: number,
+        fineY: number,
+    ) => { x: number; y: number } | undefined;
 
     constructor(
         private readonly mapManager: MapManager<WebGLMapSquare>,
@@ -147,7 +152,7 @@ export class SceneRaycaster {
                 }
             }
         }
-        return this.mapManager.getMap(getMapIndexFromTile(tileX), getMapIndexFromTile(tileY)) as
+        return this.mapManager.getMapForWorldTile(tileX, tileY) as
             | WebGLMapSquare
             | undefined;
     }
@@ -253,13 +258,30 @@ export class SceneRaycaster {
         let fogCutoff: number | undefined;
         let playerWorldX: number | undefined;
         let playerWorldZ: number | undefined;
+        // On a boat the player stands in deck coordinates: deck hits are measured from there,
+        // main-world hits from where the deck is drawn.
+        let deckView: { containsTile(x: number, y: number): boolean } | undefined;
+        let rootWorldX: number | undefined;
+        let rootWorldZ: number | undefined;
         try {
             const pe = this.osrsClient.playerEcs;
             const sid = this.osrsClient.controlledPlayerServerId;
             const idx = pe.getIndexForServerId(sid | 0);
             if (idx !== undefined) {
-                playerWorldX = (pe.getX(idx) | 0) / 128.0;
-                playerWorldZ = (pe.getY(idx) | 0) / 128.0;
+                const fineX = pe.getX(idx) | 0;
+                const fineY = pe.getY(idx) | 0;
+                playerWorldX = fineX / 128.0;
+                playerWorldZ = fineY / 128.0;
+                const worldViewId = pe.getWorldViewId(idx) | 0;
+                const projected =
+                    worldViewId >= 0
+                        ? this.deckToWorldProvider?.(worldViewId, fineX, fineY)
+                        : undefined;
+                if (projected) {
+                    deckView = this.osrsClient.worldViewManager.getWorldView(worldViewId);
+                    rootWorldX = projected.x / 128.0;
+                    rootWorldZ = projected.y / 128.0;
+                }
             }
         } catch {
             // Ignore - fog filtering will be disabled
@@ -339,8 +361,11 @@ export class SceneRaycaster {
                 }
                 const cx = tx + 0.5;
                 const cz = ty + 0.5;
-                const qx = Math.abs(cx - playerWorldX) - fogCutoff + rounding;
-                const qz = Math.abs(cz - playerWorldZ) - fogCutoff + rounding;
+                const fromRoot = rootWorldX !== undefined && !deckView?.containsTile(tx, ty);
+                const refX = fromRoot ? (rootWorldX as number) : playerWorldX;
+                const refZ = fromRoot ? (rootWorldZ as number) : playerWorldZ;
+                const qx = Math.abs(cx - refX) - fogCutoff + rounding;
+                const qz = Math.abs(cz - refZ) - fogCutoff + rounding;
                 const sd =
                     Math.min(Math.max(qx, qz), 0) +
                     Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) -
@@ -710,15 +735,12 @@ export class SceneRaycaster {
             const worldViewId = pe.getWorldViewId(i) | 0;
             const mapId =
                 worldViewId >= 0
-                    ? (this.osrsClient.worldViewManager.getWorldView(worldViewId)?.overlayMapId ??
-                          getMapSquareId(
-                              getMapIndexFromTile((pe.getX(i) | 0) >> 7),
-                              getMapIndexFromTile((pe.getY(i) | 0) >> 7),
-                          )) | 0
-                    : getMapSquareId(
-                          getMapIndexFromTile((pe.getX(i) | 0) >> 7),
-                          getMapIndexFromTile((pe.getY(i) | 0) >> 7),
-                      );
+                    ? this.osrsClient.worldViewManager.getWorldView(worldViewId)?.overlayMapId
+                    : this.mapManager.getMapForWorldTile(
+                          (pe.getX(i) | 0) >> 7,
+                          (pe.getY(i) | 0) >> 7,
+                      )?.id;
+            if (mapId === undefined) continue;
             let list = byMap.get(mapId);
             if (!list) {
                 list = [];
@@ -740,14 +762,22 @@ export class SceneRaycaster {
                 const pid = playerIndices[indexInMap] | 0;
                 const px = pe.getX(pid) | 0;
                 const py = pe.getY(pid) | 0;
-                const worldX = px / 128.0;
-                const worldZ = py / 128.0;
                 const interactId = PLAYER_INTERACT_BASE + (indexInMap & 0x7fff);
                 const playerPlane = pe.getLevel(pid) | 0;
                 if (typeof basePlane === "number" && (playerPlane | 0) !== (basePlane | 0)) {
                     continue;
                 }
-                const groundY = this.sampleHeightAt(worldX, worldZ, playerPlane | 0);
+                // The deck scene gives the height; the box goes where the deck is drawn.
+                const groundY = this.sampleHeightAt(px / 128.0, py / 128.0, playerPlane | 0);
+                let worldX = px / 128.0;
+                let worldZ = py / 128.0;
+                const worldViewId = pe.getWorldViewId(pid) | 0;
+                if (worldViewId >= 0) {
+                    const projected = this.deckToWorldProvider?.(worldViewId, px, py);
+                    if (!projected) continue;
+                    worldX = projected.x / 128.0;
+                    worldZ = projected.y / 128.0;
+                }
                 const topY = groundY - Math.max(0.5, pe.getDefaultHeightTiles(pid) ?? 1.8);
                 const minY = Math.min(groundY, topY);
                 const maxY = Math.max(groundY, topY);
@@ -990,6 +1020,52 @@ export class SceneRaycaster {
         const tBoxMin = Math.max(boxHit.tMin, 0);
         if (tBoxMin > maxDistance) return undefined;
 
+        // OSRS (RSModel.drawFaces) tests the mouse against each face's projected 2D
+        // bounding box padded by 5px, not the triangle itself, so gaps in ladders,
+        // fences etc. are still clickable. Emulate it in a ray-aligned frame: project
+        // each vertex onto a plane perpendicular to the ray (x/z, y/z) where the mouse
+        // ray sits at (0, 0).
+        const dx = ray.direction[0];
+        const dy = ray.direction[1];
+        const dz = ray.direction[2];
+        // right = normalize(cross(dir, worldUp)) stays horizontal like the screen x axis.
+        let rx = -dz;
+        let rz = dx;
+        const rLen = Math.hypot(rx, rz);
+        if (rLen < 1e-6) {
+            rx = 1;
+            rz = 0;
+        } else {
+            rx /= rLen;
+            rz /= rLen;
+        }
+        // up = cross(right, dir)
+        const ux = -rz * dy;
+        const uy = rz * dx - rx * dz;
+        const uz = rx * dy;
+        const camera = this.osrsClient.camera;
+        const focalPx =
+            camera && camera.projectionMatrix[5] > 0 && camera.screenHeight > 0
+                ? (camera.projectionMatrix[5] * camera.screenHeight) / 2
+                : 512;
+        const pad = 5 / focalPx;
+        const ox = ray.origin[0];
+        const oy = ray.origin[1];
+        const oz = ray.origin[2];
+        const vertexCount = mesh.verticesX.length;
+        const projX = new Float32Array(vertexCount);
+        const projY = new Float32Array(vertexCount);
+        const depth = new Float32Array(vertexCount);
+        for (let v = 0; v < vertexCount; v++) {
+            const px = baseX + mesh.verticesX[v] * MODEL_WORLD_SCALE - ox;
+            const py = groundY + mesh.verticesY[v] * MODEL_WORLD_SCALE - oy;
+            const pz = baseZ + mesh.verticesZ[v] * MODEL_WORLD_SCALE - oz;
+            const z = px * dx + py * dy + pz * dz;
+            depth[v] = z;
+            projX[v] = (px * rx + pz * rz) / z;
+            projY[v] = (px * ux + py * uy + pz * uz) / z;
+        }
+
         let bestT = Number.POSITIVE_INFINITY;
         let hasVisibleFace = false;
         for (let i = 0; i < mesh.faceCount; i++) {
@@ -1000,31 +1076,22 @@ export class SceneRaycaster {
             const a = mesh.indices1[i] | 0;
             const b = mesh.indices2[i] | 0;
             const c = mesh.indices3[i] | 0;
+            if (a < 0 || b < 0 || c < 0 || a >= vertexCount || b >= vertexCount || c >= vertexCount) {
+                continue;
+            }
+            // Faces crossing the near plane are clipped in OSRS; skip them.
+            if (depth[a] <= 0 || depth[b] <= 0 || depth[c] <= 0) continue;
             if (
-                a < 0 ||
-                b < 0 ||
-                c < 0 ||
-                a >= mesh.verticesX.length ||
-                b >= mesh.verticesX.length ||
-                c >= mesh.verticesX.length
+                Math.min(projX[a], projX[b], projX[c]) > pad ||
+                Math.max(projX[a], projX[b], projX[c]) < -pad ||
+                Math.min(projY[a], projY[b], projY[c]) > pad ||
+                Math.max(projY[a], projY[b], projY[c]) < -pad
             ) {
                 continue;
             }
 
-            const ax = baseX + mesh.verticesX[a] * MODEL_WORLD_SCALE;
-            const ay = groundY + mesh.verticesY[a] * MODEL_WORLD_SCALE;
-            const az = baseZ + mesh.verticesZ[a] * MODEL_WORLD_SCALE;
-            const bx = baseX + mesh.verticesX[b] * MODEL_WORLD_SCALE;
-            const by = groundY + mesh.verticesY[b] * MODEL_WORLD_SCALE;
-            const bz = baseZ + mesh.verticesZ[b] * MODEL_WORLD_SCALE;
-            const cx = baseX + mesh.verticesX[c] * MODEL_WORLD_SCALE;
-            const cy = groundY + mesh.verticesY[c] * MODEL_WORLD_SCALE;
-            const cz = baseZ + mesh.verticesZ[c] * MODEL_WORLD_SCALE;
-
-            const t = this.intersectRayTriangle(ray, ax, ay, az, bx, by, bz, cx, cy, cz);
-            if (t === null || t < tBoxMin || t > maxDistance || t >= bestT) {
-                continue;
-            }
+            const t = (depth[a] + depth[b] + depth[c]) / 3;
+            if (t > maxDistance || t >= bestT) continue;
             bestT = t;
         }
 
@@ -1035,65 +1102,5 @@ export class SceneRaycaster {
         }
 
         return Number.isFinite(bestT) ? bestT : undefined;
-    }
-
-    private intersectRayTriangle(
-        ray: Ray,
-        ax: number,
-        ay: number,
-        az: number,
-        bx: number,
-        by: number,
-        bz: number,
-        cx: number,
-        cy: number,
-        cz: number,
-    ): number | null {
-        const EPS = 1e-6;
-
-        const edge1x = bx - ax;
-        const edge1y = by - ay;
-        const edge1z = bz - az;
-        const edge2x = cx - ax;
-        const edge2y = cy - ay;
-        const edge2z = cz - az;
-
-        const dirx = ray.direction[0];
-        const diry = ray.direction[1];
-        const dirz = ray.direction[2];
-
-        const px = diry * edge2z - dirz * edge2y;
-        const py = dirz * edge2x - dirx * edge2z;
-        const pz = dirx * edge2y - diry * edge2x;
-
-        const det = edge1x * px + edge1y * py + edge1z * pz;
-        if (det > -EPS && det < EPS) {
-            return null;
-        }
-        const invDet = 1 / det;
-
-        const tx = ray.origin[0] - ax;
-        const ty = ray.origin[1] - ay;
-        const tz = ray.origin[2] - az;
-
-        const u = (tx * px + ty * py + tz * pz) * invDet;
-        if (u < 0 || u > 1) {
-            return null;
-        }
-
-        const qx = ty * edge1z - tz * edge1y;
-        const qy = tz * edge1x - tx * edge1z;
-        const qz = tx * edge1y - ty * edge1x;
-
-        const v = (dirx * qx + diry * qy + dirz * qz) * invDet;
-        if (v < 0 || u + v > 1) {
-            return null;
-        }
-
-        const t = (edge2x * qx + edge2y * qy + edge2z * qz) * invDet;
-        if (t <= EPS) {
-            return null;
-        }
-        return t;
     }
 }

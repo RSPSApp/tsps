@@ -21,12 +21,15 @@ const MAIN_MODAL_UID = (ROOT_INTERFACE << 16) | 16;
 // children of 116:40, so clicks only reach us when that range has op1 flags
 // (encodeGameframeFlags sends them).
 const DISPLAY_LAYOUT_DROPDOWN = DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID;
-// Enum 3509 order: Fixed, Resizable Classic, Resizable Modern, Resizable 317, Fixed 317.
-const GAMEFRAME_LAYOUT_ROOTS = [548, 164, 161, 161, 548];
+// Enum 3509, including the custom entries in client/common/ui/gameframeLayout.ts.
+const GAMEFRAME_LAYOUT_ROOTS = [548, 164, 161, 161, 548, 548, 161];
 const GAMEFRAME_317_OPTION = 3;
 const GAMEFRAME_317_FIXED_OPTION = 4;
-const GAMEFRAME_317_VARP = 7997; // mirrors client/common/ui/gameframeLayout.ts
+const GAMEFRAME_GILOMARU_FIXED_OPTION = 5;
+const GAMEFRAME_GILOMARU_OPTION = 6;
+const GAMEFRAME_SKIN_VARP = 7997; // 0 = stock, 1 = 317, 2 = Gilomaru
 const CLIENT_LAYOUT_317_ATTRIBUTE = "client-layout317";
+const CLIENT_LAYOUT_SKIN_ATTRIBUTE = "client-layout-skin";
 const DEFAULT_GAMEFRAME_ROOT = 161;
 // world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.
 const WORLD_GAMEFRAME_OPTIONS = {
@@ -162,8 +165,12 @@ function isMobileClient(player) {
 // hotkey), so it can always mirror the booted layout.
 function syncGameframeVarbit(player) {
   const root = getGameframeRoot(player);
+  const savedSkin = player.getAttribute(CLIENT_LAYOUT_SKIN_ATTRIBUTE)
+    ?? (player.getAttribute(CLIENT_LAYOUT_317_ATTRIBUTE) === true ? 1 : 0);
+  const skin = !isMobileClient(player) && (root === 161 || root === 548) && (savedSkin === 1 || savedSkin === 2)
+    ? savedSkin : 0;
   player.getPacketSender()
-    .sendConfig(GAMEFRAME_317_VARP, !isMobileClient(player) && (root === 161 || root === 548) && player.getAttribute(CLIENT_LAYOUT_317_ATTRIBUTE) === true ? 1 : 0)
+    .sendConfig(GAMEFRAME_SKIN_VARP, skin)
     .sendVarbit(GAMEFRAME_STONE_VARBIT, root === 164 ? 0 : 1);
 }
 
@@ -177,7 +184,10 @@ function selectGameframeOption(player, option) {
   const root = GAMEFRAME_LAYOUT_ROOTS[option];
   if (root === undefined) return undefined;
   player.setAttribute(CLIENT_LAYOUT_ATTRIBUTE, root);
-  player.setAttribute(CLIENT_LAYOUT_317_ATTRIBUTE, option === GAMEFRAME_317_OPTION || option === GAMEFRAME_317_FIXED_OPTION);
+  const frame317 = option === GAMEFRAME_317_OPTION || option === GAMEFRAME_317_FIXED_OPTION;
+  const gilomaru = option === GAMEFRAME_GILOMARU_FIXED_OPTION || option === GAMEFRAME_GILOMARU_OPTION;
+  player.setAttribute(CLIENT_LAYOUT_317_ATTRIBUTE, frame317);
+  player.setAttribute(CLIENT_LAYOUT_SKIN_ATTRIBUTE, gilomaru ? 2 : frame317 ? 1 : 0);
   return root;
 }
 
@@ -302,6 +312,7 @@ module.exports = {
 
     api.persistAttribute(CLIENT_LAYOUT_ATTRIBUTE);
     api.persistAttribute(CLIENT_LAYOUT_317_ATTRIBUTE);
+    api.persistAttribute(CLIENT_LAYOUT_SKIN_ATTRIBUTE);
 
     // A world.json "gameframe" overrides the player's saved layout. Login hooks run before
     // NetworkBuilder sends the gameframe bootstrap (and WelcomeScreen re-sends it), both of

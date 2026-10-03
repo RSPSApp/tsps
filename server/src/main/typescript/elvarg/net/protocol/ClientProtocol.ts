@@ -1702,7 +1702,7 @@ export const MAIN_INVENTORY_SLOT_FLAGS = 0x1207fe;
 // that child range to send the selection back (mirrors OpenRune's ifSetEvents
 // on the settings dropdown buttons).
 export const DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID = (116 << 16) | 40;
-const DISPLAY_SETTINGS_DROPDOWN_OPTION_SLOTS = 5;
+const DISPLAY_SETTINGS_DROPDOWN_OPTION_SLOTS = 7;
 const FIRST_OPTION_FLAG = 1 << 1;
 
 // Quest tab icon child per gameframe root, from the cache pane redirect enums

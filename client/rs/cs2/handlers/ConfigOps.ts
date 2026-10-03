@@ -17,7 +17,7 @@ import {
 import { isNpcSearch, isNpcSearchResult, setNpcSearchResults } from "../spawnSearch";
 import { Opcodes } from "../Opcodes";
 import type { HandlerContext, HandlerMap } from "./HandlerTypes";
-import { GAMEFRAME_LAYOUT_ENUM, GAMEFRAME_317_OPTION, GAMEFRAME_317_LABEL, GAMEFRAME_317_FIXED_OPTION, GAMEFRAME_317_FIXED_LABEL } from "../../../common/ui/gameframeLayout";
+import { GAMEFRAME_LAYOUT_ENUM, GAMEFRAME_317_OPTION, GAMEFRAME_317_LABEL, GAMEFRAME_317_FIXED_OPTION, GAMEFRAME_317_FIXED_LABEL, GAMEFRAME_GILOMARU_FIXED_OPTION, GAMEFRAME_GILOMARU_FIXED_LABEL, GAMEFRAME_GILOMARU_OPTION, GAMEFRAME_GILOMARU_LABEL } from "../../../common/ui/gameframeLayout";
 
 function loadEnum(ctx: HandlerContext, enumId: number) {
     const type = ctx.enumTypeLoader?.load(enumId);
@@ -25,6 +25,8 @@ function loadEnum(ctx: HandlerContext, enumId: number) {
         for (const [key, label] of [
             [GAMEFRAME_317_OPTION, GAMEFRAME_317_LABEL],
             [GAMEFRAME_317_FIXED_OPTION, GAMEFRAME_317_FIXED_LABEL],
+            [GAMEFRAME_GILOMARU_FIXED_OPTION, GAMEFRAME_GILOMARU_FIXED_LABEL],
+            [GAMEFRAME_GILOMARU_OPTION, GAMEFRAME_GILOMARU_LABEL],
         ] as const) {
             if (type.keys.includes(key)) continue;
             type.keys.push(key);

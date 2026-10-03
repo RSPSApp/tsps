@@ -1,6 +1,6 @@
 import { markWidgetInteractionDirty } from "../../widgets/WidgetInteraction";
 import { EMOTE_SHORTCUT_SCRIPT_ID, isEmoteShortcut } from "./EmoteShortcuts";
-import { GAMEFRAME_LAYOUT_SETTING, GAMEFRAME_317_OPTION, GAMEFRAME_317_FIXED_OPTION, SETTINGS_GET_SELECTED_SCRIPT, VARP_GAMEFRAME_317 } from "../../common/ui/gameframeLayout";
+import { GAMEFRAME_LAYOUT_SETTING, GAMEFRAME_317_OPTION, GAMEFRAME_317_FIXED_OPTION, GAMEFRAME_GILOMARU_OPTION, GAMEFRAME_GILOMARU_FIXED_OPTION, SETTINGS_GET_SELECTED_SCRIPT, VARP_GAMEFRAME_SKIN } from "../../common/ui/gameframeLayout";
 import type { FriendsChatAction } from "../../common/social/FriendsChat";
 import type { WidgetManager, WidgetNode } from "../../widgets/WidgetManager";
 import type { TypeLoader } from "../config/TypeLoader";
@@ -1678,11 +1678,15 @@ export class Cs2Vm {
                         const scriptId = intOp;
                         // The cache knows the three stock layouts; report our extra
                         // selection to both the dropdown label and its highlight.
+                        const frameSkin = scriptId === SETTINGS_GET_SELECTED_SCRIPT
+                            ? this.context.varManager.getVarp(VARP_GAMEFRAME_SKIN) : 0;
                         if (scriptId === SETTINGS_GET_SELECTED_SCRIPT &&
                             this.intStack[this.intStackSize - 1] === GAMEFRAME_LAYOUT_SETTING &&
-                            this.context.varManager.getVarp(VARP_GAMEFRAME_317) === 1) {
-                            this.intStack[this.intStackSize - 1] = this.context.widgetManager?.rootInterface === 548
-                                ? GAMEFRAME_317_FIXED_OPTION : GAMEFRAME_317_OPTION;
+                            (frameSkin === 1 || frameSkin === 2)) {
+                            const fixed = this.context.widgetManager?.rootInterface === 548;
+                            this.intStack[this.intStackSize - 1] = frameSkin === 2
+                                ? (fixed ? GAMEFRAME_GILOMARU_FIXED_OPTION : GAMEFRAME_GILOMARU_OPTION)
+                                : (fixed ? GAMEFRAME_317_FIXED_OPTION : GAMEFRAME_317_OPTION);
                             break;
                         }
                         const subScript = this.context.loadScript(scriptId);

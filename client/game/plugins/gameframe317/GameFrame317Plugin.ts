@@ -1,6 +1,6 @@
 import type { ClientPlugin, GameFrameDrawContext, GameFrameProvider } from "../ClientPluginManager";
 import type { GLRenderer } from "../../../widgets/gl/renderer";
-import { GAMEFRAME_LAYOUT_DROPDOWN, GAMEFRAME_317_OPTION, VARP_GAMEFRAME_317 } from "../../../common/ui/gameframeLayout";
+import { GAMEFRAME_LAYOUT_DROPDOWN, GAMEFRAME_317_OPTION, VARP_GAMEFRAME_SKIN } from "../../../common/ui/gameframeLayout";
 
 /**
  * Classic 317 chrome, drawn behind live OSRS widgets in fixed or resizable mode.
@@ -63,22 +63,24 @@ type Texture = ReturnType<GLRenderer["createTextureFromCanvas"]>;
 
 export class GameFrame317Plugin implements ClientPlugin {
     public readonly gameFrame: GameFrameProvider;
-    private get fixed(): boolean {
+    protected get fixed(): boolean {
         return this.osrsClient.widgetManager?.rootInterface === 548;
     }
-    private get enabled(): boolean {
+    protected get enabled(): boolean {
         return (this.fixed || this.osrsClient.widgetManager?.rootInterface === 161) &&
-            this.osrsClient.varManager?.getVarp(VARP_GAMEFRAME_317) === 1;
+            this.osrsClient.varManager?.getVarp(VARP_GAMEFRAME_SKIN) === 1;
     }
-    private ready = false;
-    private renderScale = 0;
-    private renderOffsetX = 0;
-    private renderOffsetY = 0;
-    private readonly canvases = new Map<string, HTMLCanvasElement>();
-    private readonly textures = new Map<string, Texture>();
+    protected get texturePrefix(): string { return "gameframe317"; }
+    protected get chatColumns(): readonly number[] { return CHAT_COLUMNS; }
+    protected ready = false;
+    protected renderScale = 0;
+    protected renderOffsetX = 0;
+    protected renderOffsetY = 0;
+    protected readonly canvases = new Map<string, HTMLCanvasElement>();
+    protected readonly textures = new Map<string, Texture>();
     private readonly iconTextures: Texture[] = [];
 
-    constructor(private readonly osrsClient: any) {
+    constructor(protected readonly osrsClient: any) {
         this.gameFrame = {
             isGameFrameActive: () => this.enabled,
             hideStockChrome: () => true,
@@ -94,6 +96,7 @@ export class GameFrame317Plugin implements ClientPlugin {
             ],
             // Resizable keeps the OSRS minimap frame; fixed draws the 317 mapback.
             keepChrome: () => [(161 << 16) | 32],
+            updateWidgetLayout: () => this.updateWidgetLayout(),
             drawGameFrame: (context) => this.fixed ? this.drawFixed(context) : this.drawResizable(context),
         };
         void this.loadAssets();
@@ -136,7 +139,7 @@ export class GameFrame317Plugin implements ClientPlugin {
         }
     }
 
-    private async loadAssets(): Promise<void> {
+    protected async loadAssets(): Promise<void> {
         const base = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
         const names = [
             "sideicons", "redstone1", "redstone2", "redstone3",
@@ -160,21 +163,23 @@ export class GameFrame317Plugin implements ClientPlugin {
             this.canvases.set("compass_mask", mask);
         }
         const chat = this.canvases.get("chat_section");
-        if (chat) {
-            const source = chat.getContext("2d")!.getImageData(0, 0, chat.width, chat.height).data;
-            for (const state of ["selected", "hover", "selected_hover"] as const) {
-                const canvas = document.createElement("canvas");
-                canvas.width = chat.width;
-                canvas.height = chat.height;
-                const ctx = canvas.getContext("2d")!;
-                const variant = ctx.createImageData(chat.width, chat.height);
-                variant.data.set(createChatStoneVariant(source, chat.width, state));
-                ctx.putImageData(variant, 0, 0);
-                this.canvases.set(`chat_${state}`, canvas);
-            }
-        }
+        if (chat) this.buildStoneVariants(chat, "chat");
         this.ready = true;
         console.info(`[gameframe317] assets loaded (${this.canvases.size})`);
+    }
+
+    protected buildStoneVariants(chat: HTMLCanvasElement, prefix: string): void {
+        const source = chat.getContext("2d")!.getImageData(0, 0, chat.width, chat.height).data;
+        for (const state of ["selected", "hover", "selected_hover"] as const) {
+            const canvas = document.createElement("canvas");
+            canvas.width = chat.width;
+            canvas.height = chat.height;
+            const ctx = canvas.getContext("2d")!;
+            const variant = ctx.createImageData(chat.width, chat.height);
+            variant.data.set(createChatStoneVariant(source, chat.width, state));
+            ctx.putImageData(variant, 0, 0);
+            this.canvases.set(`${prefix}_${state}`, canvas);
+        }
     }
 
     private drawFixed(context: GameFrameDrawContext): void {
@@ -216,7 +221,7 @@ export class GameFrame317Plugin implements ClientPlugin {
     }
 
     /** Draws the chat section sprite anchored so its parchment fills the chat rect. */
-    private drawChatSection(renderer: GLRenderer, chat: { x: number; y: number; width: number; height: number } | undefined, scale: number): void {
+    protected drawChatSection(renderer: GLRenderer, chat: { x: number; y: number; width: number; height: number } | undefined, scale: number): void {
         if (!chat) return;
         const s = chat.width / CHAT_SPRITE.backW;
         this.drawChat(
@@ -229,7 +234,7 @@ export class GameFrame317Plugin implements ClientPlugin {
         );
     }
 
-    private drawChat(renderer: GLRenderer, x: number, y: number, width: number, height: number, scale: number): void {
+    protected drawChat(renderer: GLRenderer, x: number, y: number, width: number, height: number, scale: number): void {
         const chat = this.textures.get("chat_section");
         if (!chat?.tex) return;
         const x0 = this.renderOffsetX + x * scale;
@@ -252,10 +257,10 @@ export class GameFrame317Plugin implements ClientPlugin {
                 : this.osrsClient.widgetManager.getWidgetByUid((162 << 16) | 32)?.spriteId === 3058;
             const state = isSelected ? (isHovered ? "selected_hover" : "selected") : isHovered ? "hover" : "section";
             const texture = this.textures.get(`chat_${state}`) ?? chat;
-            const u0 = CHAT_COLUMNS[i] / 519;
-            const u1 = CHAT_COLUMNS[i + 1] / 519;
-            const left = x0 + width * scale * u0;
-            const right = x0 + width * scale * u1;
+            const u0 = this.chatColumns[i] / this.chatColumns[8];
+            const u1 = this.chatColumns[i + 1] / this.chatColumns[8];
+            const left = x0 + width * scale * CHAT_COLUMNS[i] / 519;
+            const right = x0 + width * scale * CHAT_COLUMNS[i + 1] / 519;
             renderer.drawTextureQuads(texture, new Float32Array([
                 left, y1, u0, split, right, y1, u1, split,
                 right, y2, u1, bottom, left, y2, u0, bottom,
@@ -350,9 +355,9 @@ export class GameFrame317Plugin implements ClientPlugin {
         );
     }
 
-    private buildTextures(renderer: GLRenderer): void {
+    protected buildTextures(renderer: GLRenderer): void {
         for (const [name, canvas] of this.canvases) {
-            this.textures.set(name, renderer.createTextureFromCanvas(`gameframe317:${name}`, canvas));
+            this.textures.set(name, renderer.createTextureFromCanvas(`${this.texturePrefix}:${name}`, canvas));
         }
         const strip = this.canvases.get("sideicons");
         if (strip) {
@@ -361,13 +366,13 @@ export class GameFrame317Plugin implements ClientPlugin {
                 canvas.width = ICON_SIZE;
                 canvas.height = strip.height;
                 canvas.getContext("2d")!.drawImage(strip, i * ICON_SIZE, 0, ICON_SIZE, strip.height, 0, 0, ICON_SIZE, strip.height);
-                this.iconTextures.push(renderer.createTextureFromCanvas(`gameframe317:icon:${i}`, canvas));
+                this.iconTextures.push(renderer.createTextureFromCanvas(`${this.texturePrefix}:icon:${i}`, canvas));
             }
         }
     }
 
     /** Sets the per-frame transform and lazily uploads textures. */
-    private prepare(context: GameFrameDrawContext): boolean {
+    protected prepare(context: GameFrameDrawContext): boolean {
         if (!this.enabled || !this.ready) return false;
         this.renderScale = context.renderScaleX || window.devicePixelRatio || 1;
         this.renderOffsetX = context.renderOffsetX || 0;
@@ -376,7 +381,7 @@ export class GameFrame317Plugin implements ClientPlugin {
         return this.textures.size > 0;
     }
 
-    private drawNamed(renderer: GLRenderer, name: string, x: number, y: number, scale: number, flipH: boolean, flipV: boolean): void {
+    protected drawNamed(renderer: GLRenderer, name: string, x: number, y: number, scale: number, flipH: boolean, flipV: boolean): void {
         const texture = this.textures.get(name);
         if (!texture?.tex) return;
         renderer.drawTexture(
@@ -422,9 +427,9 @@ export class GameFrame317Plugin implements ClientPlugin {
         );
     }
 
-    private registerTab(context: GameFrameDrawContext, tab: number, x: number, y: number, scale: number): void {
+    protected registerTab(context: GameFrameDrawContext, tab: number, x: number, y: number, scale: number): void {
         context.clicks?.register({
-            id: `gameframe317:tab:${tab}`,
+            id: `${this.texturePrefix}:tab:${tab}`,
             rect: {
                 x: this.renderOffsetX + (x - 2) * scale,
                 y: this.renderOffsetY + (y - 2) * scale,
@@ -466,7 +471,7 @@ export function createChatStoneVariant(source: Uint8ClampedArray, width: number,
 }
 
 /** Loads a PNG and strips the classic magenta (255,0,255) colour key. */
-async function loadSprite(url: string): Promise<HTMLCanvasElement> {
+export async function loadSprite(url: string): Promise<HTMLCanvasElement> {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`${response.status}`);
     const bitmap = await createImageBitmap(await response.blob());

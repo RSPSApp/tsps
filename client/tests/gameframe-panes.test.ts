@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 
 import { loadGameframePaneRedirect } from "../game/widgets/gameframePanes";
 import { ClientScriptLoader } from "../game/cs2/ClientScriptLoader";
-import { GAMEFRAME_LAYOUT_ENUM, GAMEFRAME_317_LABEL, GAMEFRAME_317_FIXED_LABEL, VARP_GAMEFRAME_317 } from "../common/ui/gameframeLayout";
+import { GAMEFRAME_LAYOUT_ENUM, GAMEFRAME_317_LABEL, GAMEFRAME_317_FIXED_LABEL, GAMEFRAME_GILOMARU_LABEL, GAMEFRAME_GILOMARU_FIXED_LABEL, VARP_GAMEFRAME_SKIN as VARP_GAMEFRAME_317 } from "../common/ui/gameframeLayout";
 import { GameFrame317Plugin, createChatStoneVariant } from "../game/plugins/gameframe317/GameFrame317Plugin";
+import { GilomaruGameFramePlugin } from "../game/plugins/gameframeGilomaru/GilomaruGameFramePlugin";
+import { ClientPluginManager } from "../game/plugins/ClientPluginManager";
+import { WidgetManager } from "../widgets/WidgetManager";
 import { CacheSystem } from "../rs/cache/CacheSystem";
 import { Dat2CacheLoaderFactory } from "../rs/cache/loader/Dat2CacheLoaderFactory";
 import { VarManager } from "../rs/config/vartype/VarManager";
@@ -11,7 +16,7 @@ import { Cs2Vm } from "../rs/cs2/Cs2Vm";
 import { Opcodes } from "../rs/cs2/Opcodes";
 import { Script } from "../rs/cs2/Script";
 import { loadCache, loadCacheInfos, loadCacheList } from "../scripts/cache/load-util";
-import { encodeGameframeBootstrap, ServerPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
+import { encodeGameframeBootstrap, encodeGameframeFlags, encodeWidgetSetFlagsRange, DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID, ServerPacket } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 
 const cacheInfo = loadCacheList(loadCacheInfos()).latest;
 const cache = CacheSystem.fromFiles(cacheInfo, loadCache(cacheInfo).files);
@@ -83,7 +88,7 @@ function run(ops: number[][]): void {
 
 for (let i = 0; i < 2; i++) {
     run([[Opcodes.ICONST, GAMEFRAME_LAYOUT_ENUM], [Opcodes.ENUM_GETOUTPUTCOUNT]]);
-    assert.equal(vm.intStack[0], 5, "Add the 317 options only once");
+    assert.equal(vm.intStack[0], 7, "Add custom options only once");
 }
 run([[Opcodes.ICONST, GAMEFRAME_LAYOUT_ENUM], [Opcodes.ICONST, 3], [Opcodes.ENUM_STRING]]);
 assert.equal(vm.stringStack[0], GAMEFRAME_317_LABEL);
@@ -93,10 +98,12 @@ run([[Opcodes.ICONST, GAMEFRAME_LAYOUT_ENUM], [Opcodes.ICONST, 4], [Opcodes.ENUM
 assert.equal(vm.stringStack[0], GAMEFRAME_317_FIXED_LABEL);
 assert.deepEqual(enumLoader.load(GAMEFRAME_LAYOUT_ENUM).stringValues, [
     "Fixed - Classic layout", "Resizable - Classic layout", "Resizable - Modern layout", GAMEFRAME_317_LABEL, GAMEFRAME_317_FIXED_LABEL,
+    GAMEFRAME_GILOMARU_FIXED_LABEL, GAMEFRAME_GILOMARU_LABEL,
 ]);
 
 for (const [root, stone, frame317, expected] of [
     [548, 1, 0, 0], [164, 0, 0, 1], [161, 1, 0, 2], [161, 1, 1, 3], [548, 1, 1, 4], [548, 1, 0, 0], [161, 1, 0, 2],
+    [548, 1, 2, 5], [161, 1, 2, 6], [548, 1, 1, 4],
 ]) {
     widgets.rootInterface = root;
     vars.setVarbit(4607, stone);
@@ -251,6 +258,174 @@ assert.ok(pixel(pressedHoverStone, 4, 4) < pixel(stone, 4, 4), "Selected-hover r
 for (const variant of [pressedStone, hoverStone, pressedHoverStone]) {
     assert.equal(pixel(variant, 0, 0), 40, "Do not shade the gaps around stones");
     assert.ok(variant.every((value, i) => i % 4 !== 3 || value === stone[i]), "Preserve the stone silhouette alpha");
+}
+
+// Gilomaru is independently selected and uses OSRS sprites, not the 317 icon strip.
+(GilomaruGameFramePlugin.prototype as any).loadAssets = async () => {};
+const nativeIds: number[] = [];
+const gilomaru = new GilomaruGameFramePlugin({
+    widgetManager: { ...frameWidgets, get rootInterface() { return frameWidgets.rootInterface; },
+        getWidgetByUid: (uid: number) => ({ spriteId: uid }) },
+    varManager: vars,
+});
+const gil = gilomaru as any;
+gil.ready = true;
+gil.nativeSprites = { getSpriteById: (id: number) => {
+    nativeIds.push(id);
+    return { name: "nativeIcon", tex: {}, w: 24, h: 24 };
+} };
+for (const name of ["frame", "frame_selected", "frame_hover", "frame_selected_hover", "chat_section", "chat_selected", "chat_hover", "chat_selected_hover"]) {
+    gil.textures.set(name, { name, tex: {}, w: 765, h: 503 });
+}
+const plugins = new ClientPluginManager();
+plugins.add(plugin);
+plugins.add(gilomaru);
+for (const root of [548, 161]) {
+    frameWidgets.rootInterface = root;
+    vars.setVarp(VARP_GAMEFRAME_317, 1);
+    assert.equal(plugins.activeGameFrame(), plugin.gameFrame);
+    vars.setVarp(VARP_GAMEFRAME_317, 2);
+    assert.equal(plugins.activeGameFrame(), gilomaru.gameFrame);
+    vars.setVarcInt(171, 3);
+    vars.setVarcInt(41, 0);
+    vars.setVarcInt(42, 1);
+    draws.length = hits.length = nativeIds.length = 0;
+    gilomaru.gameFrame.drawGameFrame({ ...context,
+        clicks: { register: (hit: any) => hits.push(hit), isHover: (id: string) => id.endsWith(":4") },
+        anchors: { tabContent: { x: 900, y: 300, width: 190, height: 261 },
+            chat: { x: 0, y: 500, width: 519, height: 130 } },
+    } as any);
+    assert.equal(hits.length, 14);
+    assert.ok(hits.every(hit => hit.id.startsWith("gameframeGilomaru:")));
+    assert.equal(draws.filter(([t]) => t.name === "nativeIcon").length, 14);
+    const iconEnum = enumLoader.load(1139);
+    assert.deepEqual(nativeIds, Array.from({ length: 14 }, (_, tab) => {
+        const standardChild = iconEnum.intValues[iconEnum.keys.indexOf(tab)] & 0xffff;
+        return (root << 16) | loadGameframePaneRedirect(enumLoader, root)!.get(standardChild)!;
+    }), "Icons follow the cache tab order, not their widget file order");
+    assert.ok(draws.some(([t]) => t.name === "frame_selected"));
+    assert.ok(draws.some(([t]) => t.name === "frame_hover"));
+    assert.deepEqual(draws.filter(([t]) => t.name.startsWith("chat_")).map(([t]) => t.name),
+        ["chat_section", "chat_selected", "chat_hover", ...Array(6).fill("chat_section")]);
+    assert.ok(!gilomaru.gameFrame.widgetRules!().some(rule => rule.contentType === 1339 && rule.hide),
+        "Gilomaru retains the native compass");
+    assert.ok(gilomaru.gameFrame.keepChrome!().includes((161 << 16) | 32));
+    if (root === 548) {
+        assert.deepEqual(draws.find(([t]) => t.name === "frame").slice(1, 5), [10, 20, 1530, 1006]);
+        assert.deepEqual(hits[0].rect, { x: 1064, y: 362, w: 68, h: 68 });
+    } else {
+        assert.deepEqual(hits[0].rect, { x: 1758, y: 552, w: 68, h: 68 });
+    }
+    const before = tabs.length;
+    for (const hit of hits) hit.onClick();
+    assert.deepEqual(tabs.slice(before), Array.from({ length: 14 }, (_, i) => i));
+}
+vars.setVarp(VARP_GAMEFRAME_317, 0);
+assert.equal(plugins.activeGameFrame(), undefined);
+
+// Both custom frames shorten the native history, lift its bottom/input and restore stock layout.
+const chatManager = new WidgetManager(cache);
+chatManager.resize(519, 165);
+chatManager.loadGroup(162);
+const chatText = chatManager.getWidgetByUid((162 << 16) | 56)!;
+const chatInput = chatManager.getWidgetByUid((162 << 16) | 57)!;
+const chatHistory = chatManager.getWidgetByUid((162 << 16) | 58)!;
+const chatScrollbar = chatManager.getWidgetByUid((162 << 16) | 559)!;
+chatManager.ensureLayout(chatHistory);
+chatHistory.scrollHeight = 300;
+chatHistory.scrollY = 300 - chatHistory.height;
+vars.setVarcInt(7, chatHistory.scrollY);
+vars.setVarcInt(8, chatHistory.scrollHeight);
+let chatRefreshes = 0;
+const chatClient = {
+    widgetManager: chatManager, varManager: vars,
+    cs2Vm: { invokeEventHandler(widget: any, event: string) {
+        assert.equal(widget.uid, 162 << 16);
+        assert.equal(event, "onChatTransmit");
+        assert.equal(vars.getVarcInt(8), 300);
+        chatHistory.scrollY = vars.getVarcInt(7);
+        chatRefreshes++;
+    } },
+};
+const chat317 = new GameFrame317Plugin(chatClient);
+const chatGilomaru = new GilomaruGameFramePlugin(chatClient);
+for (const [root, skin] of [[548, 1], [161, 1], [548, 2], [161, 2], [164, 0], [548, 0], [161, 0], [161, 2], [548, 1], [161, 0]]) {
+    chatManager.rootInterface = root;
+    vars.setVarp(VARP_GAMEFRAME_317, skin);
+    const frame = skin === 2 ? chatGilomaru : chat317;
+    // Mounting a layout can reset the widget before CS2 restores its saved scroll position.
+    if (skin && chatText.rawHeight === 12) chatHistory.scrollY = 0;
+    frame.updateWidgetLayout();
+    chatManager.ensureLayout(chatInput);
+    chatManager.ensureLayout(chatScrollbar);
+    assert.equal(chatHistory.height, skin ? 100 : 114, "One fewer 14px history line");
+    assert.equal(chatText.y + chatInput.y, skin ? 112 : 120, "Input moves up 8px");
+    assert.equal(chatText.y + chatHistory.height, skin ? 112 : 120, "Latest messages move up 8px");
+    assert.equal(chatScrollbar.height, chatHistory.height, "Scrollbar follows the text area");
+    assert.equal(chatHistory.scrollY, 300 - chatHistory.height, "Keep the latest messages visible");
+    const refreshed = chatRefreshes;
+    frame.updateWidgetLayout();
+    assert.equal(chatRefreshes, refreshed, "Unchanged layouts must not rebuild chat each frame");
+}
+vars.setVarcInt(7, 50);
+chatHistory.scrollY = 50;
+vars.setVarp(VARP_GAMEFRAME_317, 1);
+chat317.updateWidgetLayout();
+assert.equal(chatHistory.scrollY, 64, "Scrolled-back history keeps its bottom-relative position");
+vars.setVarp(VARP_GAMEFRAME_317, 0);
+chat317.updateWidgetLayout();
+assert.equal(chatHistory.scrollY, 50, "Restoring stock layout preserves the history position");
+
+// Exercise the real Settings plugin: dropdown slots, flags and saved-skin migration.
+const settingsModule: any = { exports: {} };
+runInNewContext(readFileSync(new URL("../../server/plugins/interface/Settings.plugin.js", import.meta.url), "utf8"), {
+    module: settingsModule,
+    require: (name: string) => name.endsWith("WorldDefinition")
+        ? { getWorldDefinition: () => ({}) }
+        : { encodeGameframeFlags, DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID },
+});
+const handlers = new Map<number, Function>();
+const savedAttributes = new Set<string>();
+let login!: Function;
+settingsModule.exports.register({
+    persistAttribute: (name: string) => savedAttributes.add(name),
+    onInterfaceActionButton: (id: number, handler: Function) => handlers.set(id, handler),
+    onPlayerLogin: (handler: Function) => { login = handler; }, registerCommand() {}, log() {},
+});
+const attributes = new Map<string, any>();
+const configs = new Map<number, number>();
+let sentRoot = 0;
+const packets: Buffer[] = [];
+const sender = {
+    sendConfig: (id: number, value: number) => { configs.set(id, value); return sender; },
+    sendVarbit: () => sender,
+    sendRootInterface: (root: number) => { sentRoot = root; },
+};
+const player = {
+    getAttribute: (key: string) => attributes.get(key),
+    setAttribute: (key: string, value: any) => attributes.set(key, value),
+    getPacketSender: () => sender,
+    getSession: () => ({ sendClientPacket: (packet: Buffer) => packets.push(packet) }),
+};
+for (const [slot, root, skin] of [[6, 548, 2], [7, 161, 2], [4, 161, 1], [5, 548, 1], [2, 164, 0], [3, 161, 0], [1, 548, 0]]) {
+    packets.length = 0;
+    assert.equal(handlers.get(DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID)!({ player, slot }), true);
+    assert.equal(sentRoot, root);
+    assert.equal(configs.get(VARP_GAMEFRAME_317), skin);
+    assert.equal(attributes.get("clientLayoutSkin"), skin);
+    assert.equal(attributes.get("clientLayout317"), skin === 1);
+    assert.ok(savedAttributes.has("clientLayoutSkin"));
+    const flags = encodeWidgetSetFlagsRange(DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID, 0, 7, 1 << 1);
+    assert.ok(packets.some(packet => packet.equals(flags)), "All seven options transmit after a layout switch");
+    login({ player });
+    assert.equal(configs.get(VARP_GAMEFRAME_317), skin, "Saved skin survives login");
+}
+attributes.delete("clientLayoutSkin");
+attributes.set("clientLayout317", true);
+login({ player });
+assert.equal(configs.get(VARP_GAMEFRAME_317), 1, "Existing 317 saves do not need migration");
+for (const slot of [0, 8, -1, 1.5, NaN]) {
+    assert.equal(handlers.get(DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID)!({ player, slot }), false);
 }
 
 console.log("gameframe pane and layout dropdown tests passed");

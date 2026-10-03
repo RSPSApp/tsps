@@ -5,6 +5,7 @@ import type { ProgramSource } from "../../render/shaders/ShaderUtil";
 import type { WebGLOsrsRenderer } from "../../render/WebGLOsrsRenderer";
 import type { GLRenderer } from "../../widgets/gl/renderer";
 import type { ClickRegistry } from "../../widgets/gl/click-registry";
+import type { SpriteMaskData } from "../../widgets/gl/texture-cache";
 
 /**
  * Draw/input context handed to a plugin that supplies a custom gameframe (the
@@ -42,6 +43,9 @@ export interface GameFrameProvider {
     }[];
     /** Root-interface uids whose own chrome must NOT be hidden by hideStockChrome. */
     keepChrome?(): number[];
+    /** Optional custom minimap opening, shared by rendering and click-to-walk. */
+    minimapMask?(renderer: GLRenderer, x: number, y: number, width: number, height: number): SpriteMaskData | undefined;
+    updateWidgetLayout?(): void;
     /**
      * Return true while active to hide the stock root interface's own decorative
      * widgets (backgrounds/borders), keeping its mounted content (tab interfaces,

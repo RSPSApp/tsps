@@ -267,6 +267,7 @@ import { NpcInstanceFlushController } from "./npc/NpcInstanceFlushController";
 import { ClientPluginManager } from "./plugins/ClientPluginManager";
 import { FirstPersonPlugin } from "./plugins/firstperson/FirstPersonPlugin";
 import { GameFrame317Plugin } from "./plugins/gameframe317/GameFrame317Plugin";
+import { GilomaruGameFramePlugin } from "./plugins/gameframeGilomaru/GilomaruGameFramePlugin";
 import { HdPlugin } from "./plugins/hd/HdPlugin";
 import { createBrowserGroundItemsPluginPersistence } from "./plugins/grounditems/BrowserGroundItemsPluginPersistence";
 import { GroundItemsPlugin } from "./plugins/grounditems/GroundItemsPlugin";
@@ -1188,6 +1189,7 @@ export class OsrsClient {
         this.clientPlugins.add(this.hdPlugin);
         this.gameFrame317Plugin = new GameFrame317Plugin(this);
         this.clientPlugins.add(this.gameFrame317Plugin);
+        this.clientPlugins.add(new GilomaruGameFramePlugin(this));
         this.syncSidebarPlugins(true);
         if (new URLSearchParams(window.location.search).has("edit")) {
             this.loadEditModePlugin();

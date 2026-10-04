@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { NpcEcs } from "../game/ecs/NpcEcs";
 import { applyNpcExactMove } from "../game/sync/NpcExactMove";
+import { applyNpcFaceTile } from "../game/sync/NpcFaceTile";
 import { NpcUpdateDecoder } from "../game/sync/NpcUpdateDecoder";
 import {
     createNpcSyncState,
@@ -101,6 +102,37 @@ function glide(): void {
     assert.equal(ecs.getServerState(id)?.tileX, 3200);
 }
 
+/** Crawl steps (half walking speed) and a tile to turn to, as the Doom's larvae and burrow use them. */
+function crawlAndFaceTile(): void {
+    const state = createNpcSyncState();
+    const decoder = new NpcUpdateDecoder();
+    const local = { x: 3200, y: 3200, level: 0 };
+    const view = (extra: object) => ({
+        index: 8, typeId: 14710, x: 3204, y: 3204, level: 0,
+        rotation: 0, walkDirection: -1, runDirection: -1, ...extra,
+    });
+    decodeNpcs(encodeNpcSync(1, local, [view({}) as any], state), decoder, 0);
+    // A crawl: one step, traversal 0 (the client moves it at half walking speed).
+    let decoded = decodeNpcs(encodeNpcSync(2, local, [view({ y: 3205, walkDirection: 1, crawl: true }) as any], state), decoder, 30);
+    assert.deepEqual(decoded.movements, [{ npcId: 8, directions: [1], traversals: [0] }]);
+    // The same step without crawling is a walk.
+    decoded = decodeNpcs(encodeNpcSync(3, local, [view({ y: 3206, walkDirection: 1 }) as any], state), decoder, 60);
+    assert.deepEqual(decoded.movements, [{ npcId: 8, directions: [1], traversals: [1] }]);
+    // Face a tile.
+    decoded = decodeNpcs(encodeNpcSync(4, local, [view({ y: 3206, faceTile: { x: 3209, y: 3206 } }) as any], state), decoder, 90);
+    assert.deepEqual(decoded.updateBlocks.get(8)?.faceTile, { x: 3209, y: 3206 });
+
+    // Turning a 5x5 NPC on corner (2, 2): a corner tile due east of its own faces east.
+    const ecs = new NpcEcs(8);
+    const mapX = 3200 >> 6;
+    const id = ecs.createNpc(mapX, mapX, 14707, 5, 2 * 128 + 320, 2 * 128 + 320, 0, 0, 2, 2);
+    applyNpcFaceTile(ecs, id, { x: 3200 + 10, y: 3202 });
+    assert.equal(ecs.getTargetRot(id), 1536, "east (0 south, 512 west, 1024 north, 1536 east)");
+    applyNpcFaceTile(ecs, id, { x: 3202, y: 3200 + 12 });
+    assert.equal(ecs.getTargetRot(id), 1024, "north");
+}
+
 roundTrip();
 glide();
+crawlAndFaceTile();
 console.log("NPC exact move tests passed");

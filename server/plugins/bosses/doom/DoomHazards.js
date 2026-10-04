@@ -228,6 +228,8 @@ class HazardSet {
     larva.__doomLarva = { protect: kind.protect ?? null, style: kind.style ?? null, giant: !!kind.giant, movedAt: this.run.ticks, born: this.run.ticks };
     larva.setFlag?.("combat:no-retaliate");
     larva.setFlag?.("movement:ignore-clipping");
+    // Capture: every larva step is a crawl, which clients play at half walking speed.
+    larva.setCrawling?.(true);
     // Capture: prayer larvae show the prayer (0-2); coloured ones the two they pray (6-8).
     const icon = kind.protect ? HEAD_ICON[kind.protect] : kind.style ? COLOURED_ICON[kind.style] : -1;
     if (icon >= 0) larva.setHeadIcon(icon);
@@ -307,7 +309,8 @@ class HazardSet {
         this.run.shield.larvaBurst();
         return;
       }
-      Shared.damage(boss, Shared.random(...LARVA.bossDamage));
+      // Capture: a bonus hitsplat (17).
+      Shared.damage(boss, Shared.random(...LARVA.bossDamage), "RED", Shared.SPLAT.BONUS);
       this.run.acid.spray();
       return;
     }
@@ -381,6 +384,7 @@ class HazardSet {
 
   rockLands(marked, tiles, style, orbs) {
     const { Animation } = Shared.core();
+    this.run.attacks.rockLanded();
     const player = this.player;
     const here = Shared.tileOf(player);
     if (tiles.some((tile) => tile.x === here.x && tile.y === here.y)) this.run.hurt(Shared.random(0, ROCK.damage));

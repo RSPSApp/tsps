@@ -29,6 +29,7 @@ The Doom's items (Eye of Ayak, avernic treads, Mokhaiotl cloth, Dom) are a separ
 | `DoomBoss.js` | The Doom's attacks, the melee charge, shockwaves and the rotation. |
 | `DoomHazards.js` | Larvae, rocks, volatile earth and the earthen shield. |
 | `DoomAcid.js` | Acid blood (delve 3+). |
+| `DoomHolyWater.js` | The holy water after a melee-punish kill. |
 | `DoomShield.js` | The demonic shield (delve 3+). |
 | `DoomBurrow.js` | The burrowed "car" phase (delve 5+). |
 | `DoomLoot.js` | The loot table and its delve scaling. |
@@ -78,7 +79,7 @@ It appears at local (29, 35), its south-west tile (it is 5×5), with anim 12418 
 
 The varps set are 4807 (all completions), 4808–4816 (this level's), 4798 (the level, 0-based), 4804 (its ticks) and 4803 (the run's ticks).
 
-Five ticks later the burrow hole (57285) opens where the Doom was, with loc anim 12477. The Doom goes at seven.
+Five ticks later the burrow hole (57285) opens where the Doom was, with loc anim 12477. The Doom goes at seven. As in the game, it's used from wherever it's clicked, with no walk to it (an `onObjectRoute` to the player's own tile).
 - **Descend** follows it to the next delve. With a unique waiting, it asks first (Wiki).
 - **Investigate** opens the reward screen (see [Rewards](#rewards)).
 
@@ -104,7 +105,7 @@ The orb and rock-piece columns from delve 6 on are guesses. The punish delay is 
 
 ## Attacks
 
-The Doom's own combat does nothing; the run attacks on its own timer.
+The Doom's own combat does nothing; the run attacks on its own timer. None of its NPCs (its three forms, the larvae, volatile earth, the earthen shield) play a block animation when hit (capture), so `npc-combat-defs.json` gives them `"block": -1` with their captured spawn and death animations; without an entry they got the default human block (424).
 
 - **First attack:** 6 ticks after it surfaces.
 - **Tongue:** when the player stands beside it (not at a corner). Anim 12416, the hit lands the next tick, and it acts again 4 ticks later. Wiki: up to 40, halved by Protect from Melee.
@@ -113,6 +114,7 @@ The Doom's own combat does nothing; the run attacks on its own timer.
   - It lands with graphic 2490 or 2492 at height 100.
   - It is rolled on impact (Wiki).
 - **The pattern** (capture): one to three orbs between rock throws, sometimes a throw at once. After a throw the Doom acts again after twice its attack speed.
+  - **No overlap with the rock's orbs:** its next attack waits while a rock is in the air, and until its orb would land the tick after the rock's last orb. The delve-5 capture had the orb after a throw 12 ticks on, not 10; the Wiki's changelog keeps them apart after a melee punish too.
 - **Rock throw:** anim 12407, projectile 3384/3385 from its centre to the tile beside it towards the player (cycles 60 to 210, heights 340 to 500).
   - **7 ticks later it bursts.** Graphic 3386/3387 where it lands, and the player's protection prayers turn off.
   - The pieces fly (see the table): one to the player's tile and the rest within four tiles. Projectiles 3388–3395, 60 + 3 cycles a tile, heights 500 to 0, each with a shadow (2380) on its tile.
@@ -124,10 +126,11 @@ The Doom's own combat does nothing; the run attacks on its own timer.
     - the rock's orbs leave together from the pieces' tiles, landing a tick apart from cycle 90 (150 at delve 2), alternating styles from the rock's.
   - At delve 8, two rocks (Wiki).
 - **The melee charge** (capture): 2 ticks after about one throw in three. Never with throws before a shockwave (Wiki).
-  - Headbar 81 runs 390 cycles, and the Doom shows headicon 6 (Magic and Ranged).
+  - Headbar 81 (100 wide) fills over 390 cycles (`npc.showHeadbar`), and the Doom shows headicon 6 (Magic and Ranged). When the charge ends the bar empties (0 to 0 over 1 cycle).
   - Anim 12408, then 12409 with graphic 3412 each tick.
-  - Only melee lands, and always. A melee hit cancels the charge (12410). The bonus, a fifth of the visible Strength bonus, lands the next tick as its own hitsplat, once per hitsplat of the hit (23 and 23 from a crystal halberd).
+  - Only melee lands, and always (100% accurate through `api.onCombatHitRoll`'s `forceAccurate`). A melee hit cancels the charge (12410). The bonus, a fifth of the visible Strength bonus, lands the next tick as its own hitsplat (type 17), once per hitsplat of the hit (23 and 23 from a crystal halberd).
   - Left 13 ticks it fires (12411), hitting the next tick: 80 at delve 5 killed the captured player.
+  - **A melee-punish kill** (Wiki): at delves 1–8, holy water flies out around the Doom, restoring 28 hitpoints, 14 prayer and 25% special attack, and clearing acid in a 3×3 where each lands. The changelog has it guaranteed when the Doom dies during the punish phase. The capture shows none when the killing blow was an arrow loosed before the charge, so here it takes the punishing melee hit (or its bonus the tick after).
 - **Shockwave:** volatile earth appear 79–96 ticks into the fight. The timer stands still while the shield is up, and from delve 5 the earth comes as the Doom surfaces instead.
   - The Doom keeps attacking until 15 ticks later: anim 12412, then 12413 at 17.
   - A slam (12414, graphic 3370) at 19, and another every 2 ticks for each further shockwave. Each lands 2 ticks after its slam, with graphics over the floor.
@@ -139,9 +142,10 @@ The Doom's own combat does nothing; the run attacks on its own timer.
 - **Larvae** (capture):
   - **When:** with about one attack in three at delve 1, one in six deeper. They drop about four tiles past the player, away from the Doom, two side by side from delve 5. They show graphic 3417 and anim 12458.
   - **Prayers:** half pray Melee at delves 1–2 (headicon 0); any prayer at delve 3 (0–2). From delve 4 they are coloured: Melee (14713, headicon 6), Magic (14712, 7) and Ranged (14711, 8). Each takes only its own style, and Melee ones come only during the shield.
-  - **Crawl:** a tile every 2 ticks (Melee ones often every tick) to the Doom's centre. There the charge varbit 17758 goes up, the player takes graphic 3426 and a hit of the charge, and the Doom heals 9 plus the charge.
-  - **Killed:** they play 12459 with graphic 3374 over their 3×3 and go the next tick. Wiki: up to 21 to the player, or 5–10 to the Doom instead.
+  - **Crawl:** a tile every 2 ticks (Melee ones often every tick) to the Doom's centre. Every step is sent as an NPC crawl (`npc.setCrawling`), which clients play at half walking speed, so a larva keeps moving instead of walking a tile and waiting. There the charge varbit 17758 goes up, the player takes graphic 3426 and a hit of the charge, and the Doom heals 9 plus the charge, shown as a heal hitsplat (type 6).
+  - **Killed:** they play 12459 with graphic 3374 over their 3×3 and go the next tick. Wiki: up to 21 to the player, or 5–10 to the Doom instead (a type-17 hitsplat in the capture).
   - **Hit with the style they pray:** "The demonic larva seems resistant to your attack."
+  - **Attack timer** (Wiki): larvae and volatile earth can be attacked while the player's attack is on cooldown. With a demonbane weapon (the Eye of Ayak among them) the timer is left as it was, so the Doom can be hit straight after; other weapons get their normal delay. Core's `api.onAttackTiming` (`ignoreDelay`, `keepDelay`) does this.
 
 ## Delves 3–4
 
@@ -153,9 +157,10 @@ The Doom's own combat does nothing; the run attacks on its own timer.
   - No acid while the Doom is shielded or burrowed. Rocks cover acid, and it is back when they break.
 - **The demonic shield** (capture): at 75% or less once it has attacked twice (seen at 68%).
   - It comes at its attack's turn: anim 12408, then 2 ticks later it becomes 14708.
-  - The HUD shows 500/500 (varp 1683 = 14708). The capture turns the bar blue (132/623/853); this server can't send `if_setcolour`.
-  - Headbar 81 runs 510 cycles (17 ticks) at every delve. Each demonbane hit restarts it (12410). Anything else is "The demonic shield resists your attack!" (Wiki).
-  - A larva bursting on it takes 100. Larvae come every 7–9 ticks from the north-west, 8–12 tiles out, the first 5 ticks in.
+  - The HUD shows 500/500 (varp 1683 = 14708), and its bar turns blue: `if_setcolour` on 303:13–15 (132/623/853, back to 25600/576/800 when it ends), then script 2102.
+  - Every tick it loops the charge (12409, graphic 3412 in spotanim slot 2), as the melee charge does; it never plays a block animation.
+  - Headbar 81 runs 510 cycles (17 ticks) at every delve. Each demonbane hit restarts it (12410 in place of the loop that tick; a larva bursting on the shield doesn't), and shows the shield's points on headbar 11 (120 wide) instead of hitpoints. Anything else is "The demonic shield resists your attack!" (Wiki).
+  - A larva bursting on it takes 100, shown as a type-17 hitsplat. Larvae come every 7–9 ticks from the north-west, 8–12 tiles out, the first 5 ticks in.
   - Broken, it becomes the Doom again with a rock throw (delves 3–4), or burrows (delve 5).
   - Left to charge, the beam fires and the shield drops (Wiki). Stored damage from larvae killed during it, up to 50, lands as it drops (Wiki; none was seen).
 
@@ -163,10 +168,12 @@ The Doom's own combat does nothing; the run attacks on its own timer.
 
 - **Burrowing** (capture, delve 5):
   - As the shield breaks: anim 12420 with graphic 3375, and rocks fall (graphic 2529, delayed per tile) on 24 tiles. The rocks stand 6 ticks later.
-  - 5 ticks after burrowing it becomes 14709 (HUD with its real hitpoints), charging for 600 cycles (20 ticks). Each hit restarts the charge.
+  - The camera shakes as it burrows (random 5 on each axis) and resets 5 ticks later, when it becomes 14709 (HUD with its real hitpoints), charging for 600 cycles (20 ticks, headbar 81). Each hit restarts the charge.
   - 3 ticks later the eye (graphic 3416, and 3415 with delay 60) marks where its centre will stop. That is the compass direction of the player from its centre, as far as the player is plus four, kept inside the arena.
   - 3 ticks after the eye it goes there, 4 tiles a tick. Rocks in the way break (graphic 2699).
-  - Each tick of a zoom is a teleport to the next tile plus an NPC `exact_move` from the tile it left, with `delay1=0`, `delay2=30` and `angle` the direction of travel (768 north-west, 1536 east). This server can't send NPC `exact_move` yet, so the Doom jumps tile to tile; once it can, each hop should send these values.
+  - Each tick of a zoom is a teleport to that tick's last tile plus an NPC `exact_move` from the tile it left, with `delay1=0`, `delay2=30` and `angle` the direction of travel (768 north-west, 1536 east). Here that is one `npc.exactMove` a tick (its defaults are these values), so the Doom glides; rocks and the player are still checked tile by tile along the way.
+  - Facing (capture): as it burrows its lock on the player is cleared (face reset), and burrowed it isn't locked on. As the eye appears it turns to the corner tile it will stop on; while zooming the exact move's angle turns it; the tick after it stops it turns once to the player's tile. Surfaced, it locks on again. This uses the NPC face-coord block (`npc.faceTile`); clients offset the tile by the NPC's size, as they do positions, so the corner it stops on faces straight along its path.
+  - Attacks while burrowed are 100% accurate (Wiki), and any hit restarts the charge.
   - The next eye comes 9 ticks after it stops. After the second zoom it surfaces 5 ticks later, into volatile earth and the shockwave.
   - Trample: 10 at delve 5 (seen), 20/30/40 at 6/7/8+ (Wiki).
 - **Delve 6+** (Wiki): three zooms, each followed by 1–3 orbs and a car slam.
@@ -220,13 +227,9 @@ The scoreboard (57288) opens interface 920, filled with strings:
   - speeds of 5/5/8 tiles a tick at delves 6/7/8+;
   - the car slam's damage (26–42) and its orbs (one per 5 tiles travelled).
 - **Larvae:** a giant one in three at delve 8, adding one charge.
+- **Holy water:** four projectiles (holy water's, 192) two to four tiles out from the Doom's edge, about a tick in flight, the restore given once as the first lands.
 - **Shockwaves:** at delves 1–4, a repeat 100 ticks after the last.
-- **Not shown here:**
-  - the HUD's colours and the charge bars (headbars 81 and 11), which need `if_setcolour` and custom headbar fills this server can't send;
-  - the Doom's heal and bonus hitsplat types (6 and 17);
-  - camera shakes;
-  - the burrowed Doom's glide (teleport plus `exact_move`; NPCs here can't `exact_move`, so it jumps tile to tile).
-- **Not done:** the melee-punish kill's restoring projectiles; the collection log.
+- **Not done:** the collection log (the server tracks none yet).
 
 ## Developer commands
 
@@ -235,3 +238,6 @@ The scoreboard (57288) opens interface 920, filled with strings:
 | `::doom` | To the lobby. |
 | `::doomdelve <n>` | Starts a run at delve n (before the Doom surfaces). |
 | `::doomkill` | Beats the Doom of the current delve. |
+| `::exactmove [npcId] [tiles] [laps] [snap]` | Glides an NPC (the burrowed Doom by default) around you. |
+| `::headbar [npcId] [barId] [cycles]` | Shows a headbar over an NPC (the Doom's charge bar by default), filling, held, then removed. |
+| `::ifcolour <group> <child> <rgb15>` | Recolours a component (the Doom's HUD bar is 303:13–15). |

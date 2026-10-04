@@ -19,6 +19,7 @@
  * it (12410). A larva comes every 7-9 ticks from the north-west, 8-12 tiles from the centre,
  * the first 5 ticks in; a larva bursting on it takes 100 (hitsplat 17). Broken at delves 3-4, it
  * becomes the Doom again with a rock throw; at delve 5 it burrows at once.
+ * Between hits it loops the charge (12409, graphic 3412 in slot 2) each tick, as the melee charge.
  * Guess: the beam firing when the charge completes ends the shield (Wiki).
  */
 
@@ -29,6 +30,9 @@ const { isDemonbane } = require("./DoomHazards");
 const SHIELD = {
   points: 500,
   charge: 17,
+  /** Capture: its charge bar runs 510 cycles; hits show the shield's points on headbar 11. */
+  chargeCycles: 510,
+  bar: { id: 11, width: 120 },
   firstLarva: 5,
   larvaEvery: [7, 9],
   larvaBurst: 100,
@@ -71,13 +75,23 @@ class ShieldPhase {
     boss.setHitpointsLocked(true);
     this.restartCharge();
     run.updateHud(true);
+    run.hudColours(true);
   }
 
   restartCharge(cancelled = false) {
     const { Animation } = Shared.core();
     const run = this.run;
     this.firesAt = run.ticks + chargeTicks(run.level);
-    if (cancelled) run.boss.performAnimation(new Animation(ANIM.BEAM_CANCEL));
+    if (cancelled) {
+      run.boss.performAnimation(new Animation(ANIM.BEAM_CANCEL));
+      this.cancelledAt = run.ticks;
+    }
+    Shared.chargeBar(run.boss, SHIELD.chargeCycles);
+  }
+
+  /** What the Doom's bar shows with a hit on the shield: its points, on the shield's bar. */
+  shieldHealth(points = this.points) {
+    return { current: Math.max(0, points), max: SHIELD.points, bar: SHIELD.bar };
   }
 
   tick() {
@@ -90,6 +104,8 @@ class ShieldPhase {
       return;
     }
     if (!this.up) return;
+    // Capture: the charge loops each tick, except a tick a demonbane hit cancels it (12410).
+    if (this.cancelledAt !== run.ticks) Shared.chargeLoop(run.boss);
     if (run.ticks >= this.nextLarvaAt) {
       this.nextLarvaAt = run.ticks + Shared.random(...SHIELD.larvaEvery);
       run.hazards.spawnLarva({ from: this.side, shield: true });
@@ -112,6 +128,7 @@ class ShieldPhase {
     }
     for (const part of hit.getHits()) part.setDamage(Math.max(1, part.getDamage()));
     hit.updateTotalDamage();
+    this.run.boss.setDisplayedHealth?.(this.shieldHealth(this.points - hit.getTotalDamage()));
     this.damage(hit.getTotalDamage());
     if (this.up) this.restartCharge(true);
   }
@@ -123,8 +140,12 @@ class ShieldPhase {
     if (this.points <= 0) this.end();
   }
 
+  /** Capture: a larva bursting on the shield shows as a bonus hitsplat (17) of up to 100. */
   larvaBurst() {
-    this.damage(SHIELD.larvaBurst);
+    if (!this.up) return;
+    const amount = Math.min(SHIELD.larvaBurst, this.points);
+    this.run.boss.showHitsplat?.(amount, { mine: Shared.SPLAT.BONUS, others: Shared.SPLAT.BONUS }, this.shieldHealth(this.points - amount));
+    this.damage(amount);
   }
 
   larvaKilled() {
@@ -138,6 +159,8 @@ class ShieldPhase {
     this.raised = false;
     this.firesAt = Infinity;
     this.nextLarvaAt = Infinity;
+    Shared.emptyChargeBar(boss);
+    run.hudColours(false);
     // Capture: at delve 5 it keeps the shielded form until it turns into the burrowed one.
     if (!run.delve.burrow) boss.setNpcTransformationId(-1);
     boss.setHitpointsLocked(false);

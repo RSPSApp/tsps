@@ -258,6 +258,15 @@ export abstract class Mobile extends Entity {
         return this.displayedHealth;
     }
 
+    /**
+     * What the health bar shows with this tick's hits instead of the actor's hitpoints (a
+     * shield's points on the shield's bar).
+     */
+    setDisplayedHealth(health: { current: number; max: number; bar?: { id: number; width: number } } | null): Mobile {
+        this.displayedHealth = health;
+        return this;
+    }
+
     forceChat(message: string): Mobile {
         this.setForcedChat(message);
         this.getUpdateFlag().flag(Flag.FORCED_CHAT);

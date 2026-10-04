@@ -72,3 +72,49 @@ test('a gliding NPC stays in view in its teleport tick; a plain teleport still l
     World.getNpcs().remove(npc);
   }
 });
+
+test('headbars besides the hitpoints one last a tick; showing one again replaces it', () => {
+  const npc = new NPC(14707, new Location(3421, 6435, 0));
+  npc.showHeadbar(81, { fill: 0, endFill: 100, duration: 390 });
+  npc.showHeadbar(11, { fill: 13 });
+  assert.deepEqual(npc.getHeadbars(), [
+    { id: 81, fill: 0, endFill: 100, duration: 390, delay: 0 },
+    { id: 11, fill: 13, endFill: 13, duration: 0, delay: 0 },
+  ]);
+  npc.showHeadbar(81, { fill: 0, endFill: 100, duration: 510 });
+  assert.equal(npc.getHeadbars().filter((bar) => bar.id === 81).length, 1, 'restarted, not stacked');
+  assert.equal(npc.getHeadbars().find((bar) => bar.id === 81).duration, 510);
+  npc.removeHeadbar(81);
+  assert.deepEqual(npc.getHeadbars().find((bar) => bar.id === 81), { id: 81, remove: true });
+  npc.resetUpdating();
+  assert.deepEqual(npc.getHeadbars(), []);
+});
+
+test('a face tile lasts a tick; crawling stays until it is turned off', () => {
+  const npc = new NPC(14710, new Location(3421, 6435, 0));
+  npc.faceTile(new Location(3419, 6445, 0));
+  assert.deepEqual(npc.getFaceTile(), { x: 3419, y: 6445 });
+  npc.resetUpdating();
+  assert.equal(npc.getFaceTile(), null);
+  assert.equal(npc.isCrawling(), false);
+  npc.setCrawling(true);
+  npc.resetUpdating();
+  assert.equal(npc.isCrawling(), true);
+});
+
+test('the attack timing hook lets an attack ignore the timer, or leave it as it was', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const api = PluginManager.createApi('timing-test');
+  api.onAttackTiming((event) => {
+    if (event.target !== 'larva') return;
+    event.ignoreDelay = true;
+    event.keepDelay = true;
+  });
+  const event = (target) => ({ attacker: {}, target, method: null, ignoreDelay: false, keepDelay: false });
+  const larva = event('larva');
+  PluginManager.emitAttackTiming(larva);
+  assert.deepEqual([larva.ignoreDelay, larva.keepDelay], [true, true]);
+  const boss = event('boss');
+  PluginManager.emitAttackTiming(boss);
+  assert.deepEqual([boss.ignoreDelay, boss.keepDelay], [false, false]);
+});

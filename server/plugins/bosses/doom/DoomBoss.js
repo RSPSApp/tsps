@@ -71,7 +71,7 @@ const SHOCKWAVE = {
  * (12411, hitting the next tick). A melee hit cancels it (12410), and the Doom acts again 7
  * ticks later at delves 1-2, 6 at 3-5. About one throw in three charges.
  */
-const CHARGE = { chance: 1 / 3, delay: 2, ticks: 13, headIcon: 6, loopGfx: 3412 };
+const CHARGE = { chance: 1 / 3, delay: 2, ticks: 13, headIcon: 6, barCycles: 390 };
 /** Capture: larvae drop with about one attack in three at delve 1, one in six deeper. */
 const LARVA_CHANCE = { first: 0.3, deeper: 0.15 };
 /** Capture: the shield comes up 2 ticks after its charge animation. */
@@ -166,6 +166,8 @@ class AttackCycle {
     this.phase = "attacks";
     this.nextAt = Infinity;
     this.sinceRock = 0;
+    this.rocksUp = 0;
+    this.rockOrbsLandAt = 0;
     this.shockwave = null;
     this.nextShockwaveAt = Infinity;
     this.charge = null;
@@ -191,6 +193,8 @@ class AttackCycle {
     this.tasks.clear();
     this.shockwave = null;
     this.charge = null;
+    this.rocksUp = 0;
+    this.rockOrbsLandAt = 0;
   }
 
   /** Runs `action` after `ticks`, unless the delve ends first. */
@@ -231,6 +235,11 @@ class AttackCycle {
     if (this.shockwave && ticks >= this.shockwave.at + SHOCKWAVE.charge && ticks < this.shockwave.at + SHOCKWAVE.resume) return;
     if (this.shieldDue()) {
       this.raiseShield();
+      return;
+    }
+    const hold = this.orbHold();
+    if (hold > 0) {
+      this.nextAt = ticks + hold;
       return;
     }
     this.attacksMade++;
@@ -309,6 +318,18 @@ class AttackCycle {
     return delve.speed * 2;
   }
 
+  /**
+   * Capture (delve 5): after a rock throw the next orb came 12 ticks on, not 10, landing after
+   * the rock's last orb; the Wiki's changelog keeps them apart after a melee punish too. So an
+   * attack waits while a rock is in the air, and until its orb would land after the rock's last.
+   */
+  orbHold() {
+    if (besideBoss(this.boss, this.player.getLocation())) return 0;
+    if (this.rocksUp > 0) return 1;
+    const lands = this.run.ticks + Math.ceil(orbFlight(this.run.level).end / 30);
+    return Math.max(0, this.rockOrbsLandAt + 1 - lands);
+  }
+
   pickOrbStyle() {
     const styles = this.run.level >= 2 ? ["ranged", "magic", "melee"] : ["ranged", "magic"];
     return styles[Math.floor(this.run.random() * styles.length)];
@@ -358,10 +379,16 @@ class AttackCycle {
   /** A rock's orbs fly from one of its debris tiles, one tick apart (DoomHazards). */
   rockOrb(from, style, flight) {
     const lands = Shared.projectile(this.run.area, Shared.loc(from), this.player, ORB[style].projectile, flight);
+    this.rockOrbsLandAt = Math.max(this.rockOrbsLandAt, this.run.ticks + lands);
     this.after(lands, () => this.orbLands(style));
   }
 
   // ---------------------------------------------------------------- rock throw
+
+  /** A thrown rock came down and its orbs are on their way (DoomHazards). */
+  rockLanded() {
+    this.rocksUp = Math.max(0, this.rocksUp - 1);
+  }
 
   /**
    * Wiki: from delve 8 two identical rocks, whose debris never overlap; the first rock's orbs
@@ -384,6 +411,7 @@ class AttackCycle {
     const boss = this.boss;
     const at = burstTile(boss, this.player);
     boss.performAnimation(new Animation(ANIM.ROCK_THROW));
+    this.rocksUp++;
     Shared.projectile(this.run.area, boss, Shared.loc(at), ROCK_LAUNCH[style], ROCK_FLIGHT);
     this.after(ROCK_BURST_TICKS, () => landed(this.run.hazards.burstRock(at, style, { orbs, exclude: exclude() })));
   }
@@ -396,16 +424,15 @@ class AttackCycle {
     this.charge = { firesAt: this.run.ticks + CHARGE.ticks };
     this.boss.performAnimation(new Animation(ANIM.BEAM_CHARGE));
     this.boss.setHeadIcon?.(CHARGE.headIcon);
+    Shared.chargeBar(this.boss, CHARGE.barCycles);
   }
 
   chargeTick() {
-    const { Animation } = Shared.core();
     if (this.run.ticks >= this.charge.firesAt) {
       this.fireBeam();
       return;
     }
-    this.boss.performAnimation(new Animation(ANIM.BEAM_LOOP));
-    this.boss.performGraphic(Shared.gfx(CHARGE.loopGfx));
+    Shared.chargeLoop(this.boss);
   }
 
   get charging() {
@@ -413,6 +440,7 @@ class AttackCycle {
   }
 
   endCharge() {
+    if (this.charge) Shared.emptyChargeBar(this.boss);
     this.charge = null;
     this.boss?.setHeadIcon?.(-1);
   }
@@ -422,6 +450,7 @@ class AttackCycle {
     const { Animation } = Shared.core();
     if (!this.charge) return 0;
     this.endCharge();
+    this.run.punishedAt = this.run.ticks;
     this.boss.performAnimation(new Animation(ANIM.BEAM_CANCEL));
     // Capture: the next attack comes punishDelay - 1 ticks after the hit lands.
     this.nextAt = this.run.ticks + this.run.delve.punishDelay - 1;

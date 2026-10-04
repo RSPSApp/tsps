@@ -312,6 +312,7 @@ import {
 import { initPlayerSyncHuffman } from "./sync/HuffmanProvider";
 import { NpcUpdateDecoder } from "./sync/NpcUpdateDecoder";
 import { applyNpcExactMove } from "./sync/NpcExactMove";
+import { applyNpcFaceTile } from "./sync/NpcFaceTile";
 import { PlayerSyncManager } from "./sync/PlayerSyncManager";
 import type { PlayerSpotAnimationEvent } from "./sync/PlayerSyncTypes";
 import { resolveTradeActionQuantity } from "./trade/TradeActionQuantity";
@@ -2647,6 +2648,15 @@ export class OsrsClient {
                     w.itemId = -1;
                     w.itemQuantity = 0;
                     this.widgetManager.invalidateWidgetRender(w, "server-set-model");
+                }
+            } else if (payload?.action === "set_colour") {
+                // IF_SETCOLOUR: as the cs2 op, the colour of text and rectangles alike.
+                const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
+                const colour = Number(payload.colour) | 0;
+                if (w && w.color !== colour) {
+                    w.textColor = colour;
+                    w.color = colour;
+                    this.widgetManager.invalidateWidgetRender(w, "server-set-colour");
                 }
             } else if (payload?.action === "set_position") {
                 // IF_SETPOSITION: as the cs2 op, move within the parent and keep the modes.
@@ -7416,6 +7426,9 @@ export class OsrsClient {
         if (ecsId !== undefined) {
             if (block.exactMove) {
                 applyNpcExactMove(this.npcEcs, ecsId, block.exactMove, getClientCycle() | 0);
+            }
+            if (block.faceTile) {
+                applyNpcFaceTile(this.npcEcs, ecsId, block.faceTile);
             }
             if (typeof block.faceEntity === "number") {
                 this.npcEcs.setInteractionIndex(ecsId, block.faceEntity | 0);

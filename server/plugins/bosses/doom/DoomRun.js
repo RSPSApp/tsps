@@ -29,6 +29,7 @@ const { ShieldPhase } = require("./DoomShield");
 const { BurrowPhase } = require("./DoomBurrow");
 const Loot = require("./DoomLoot");
 const Records = require("./DoomRecords");
+const HolyWater = require("./DoomHolyWater");
 
 const ATTR = { RUN: "doom:run", UNCLAIMED: "doom:unclaimed", ...Records.ATTR };
 
@@ -51,6 +52,15 @@ const HUD = {
   components: [0, 2, 4, 5, 8, 10, 20, 13, 14, 15, 9, 6, 7, 11, 18, 19, 16, 17, 3].map((child) => (303 << 16) | child),
   fadeComponents: [5, 8, 6, 7, 9, 11, 13, 14, 15, 20, 18, 19, 16, 17].map((child) => (303 << 16) | child),
   hp: (303 << 16) | 5,
+  /** The bar's back, sliding and remaining parts, and their colours (15-bit RGB, capture). */
+  colourComponents: [13, 14, 15].map((child) => (303 << 16) | child),
+  colours: [25600, 576, 800],
+  shieldColours: [132, 623, 853],
+  updateScript: 2102,
+  /** cc_deleteall on hpbar_hud:container (capture, at each delve change). */
+  clearScript: 2249,
+  container: (303 << 16) | 1,
+  updateComponents: [5, 20, 13, 14, 15, 8, 9, 18, 19, 16, 17].map((child) => (303 << 16) | child),
 };
 
 const runs = new Map();
@@ -179,6 +189,7 @@ class DoomRun {
     this.level = level;
     this.stage = "waiting";
     this.attacks.reset();
+    this.resetHud();
     const sender = this.player.getPacketSender();
     sender.sendVarbit(Shared.VARBIT.MISSED_ORBS, this.hazards.charge);
     this.player.sendMessage(`<col=ef1020>Delve level: ${level}</col>`);
@@ -253,7 +264,8 @@ class DoomRun {
     if (!boss || !boss.isRegistered?.() || boss.getHitpoints() <= 0) return true;
     // Its attacks are scripted: keep it from regenerating as if out of combat.
     boss.getCombat().getLastAttack?.().reset?.();
-    if (boss.getInteractingMobile?.() !== this.player) boss.setMobileInteraction?.(this.player);
+    // Capture: burrowed, it isn't locked on; it faces tiles now and then (DoomBurrow).
+    if (this.attacks.phase !== "burrow" && boss.getInteractingMobile?.() !== this.player) boss.setMobileInteraction?.(this.player);
     this.hazards.tick();
     this.acid.tick();
     if (this.player.getHitpoints() > 0) this.attacks.tick();
@@ -268,23 +280,47 @@ class DoomRun {
     Shared.damage(this.player, amount, mask);
   }
 
+  /** Capture: the Doom's heal shows as a heal hitsplat (6). */
   heal(amount) {
     const boss = this.boss;
     if (!boss || boss.getHitpoints() <= 0) return;
     boss.heal(amount);
+    boss.showHitsplat?.(amount, { mine: Shared.SPLAT.HEAL, others: Shared.SPLAT.HEAL });
     this.updateHud();
+  }
+
+  /**
+   * Capture: the HUD's bar is recoloured (303:13-15) blue while the shield is up and back after,
+   * then script 2102 redraws it.
+   */
+  hudColours(shielded, redraw = true) {
+    const sender = this.player.getPacketSender();
+    const colours = shielded ? HUD.shieldColours : HUD.colours;
+    HUD.colourComponents.forEach((component, index) => sender.sendInterfaceColour?.(component, colours[index]));
+    if (redraw) sender.sendInterfaceScript(HUD.updateScript, [...HUD.updateComponents, 1]);
   }
 
   // ---------------------------------------------------------------- the HUD
 
+  /**
+   * Capture: as the Doom surfaces, the HUD's varps, its bar colours, then 2376 with `hp` still
+   * hidden (see resetHud) - only then does 2377 lay the bar out (2246, 2101) and fade it in. A
+   * finished fade-out leaves the parts at 255 and 2887 does nothing when told to start from where
+   * they already are, so it is also faded in from 254 (as the Gemstone Crab's HUD).
+   */
   showHud() {
     const sender = this.player.getPacketSender();
     this.updateHud();
-    sender.sendInterfaceDisplayState(HUD.hp, false);
+    this.hudColours(false, false);
     sender.sendInterfaceScript(HUD.openScript, HUD.components);
-    // A fade-out left the parts at 255, and 2887 does nothing when told to start from where
-    // they already are, so it starts from 254.
     sender.sendInterfaceScript(HUD.fadeInScript, [...HUD.fadeComponents, 254]);
+  }
+
+  /** Capture: jumping the gap and each descent hide the HUD's `hp` and empty its container. */
+  resetHud() {
+    const sender = this.player.getPacketSender();
+    sender.sendInterfaceDisplayState(HUD.hp, true);
+    sender.sendInterfaceScript(HUD.clearScript, [HUD.container]);
   }
 
   /** The HUD shows the shield's points while it is up (Wiki: the bar turns blue then). */
@@ -333,6 +369,8 @@ class DoomRun {
     boss.setHitpoints(0);
     boss.performAnimation(new Animation(ANIM.DESPAWN));
     boss.performGraphic(Shared.gfx(GFX.DESPAWN));
+    if (HolyWater.punishKill(this)) HolyWater.launch(this, boss);
+    this.punishedAt = undefined;
     this.player.getCombat().reset?.();
     const ticks = this.ticks - this.levelStart;
     this.runTicks += ticks;
@@ -496,6 +534,7 @@ class DoomRun {
     this.removeNpc(this.boss);
     this.boss = null;
     this.hideHud(false);
+    this.resetHud();
     player.getPacketSender().sendVarbit(Shared.VARBIT.MISSED_ORBS, 0).sendConfig(Shared.VARP.CURRENT_LEVEL, 0);
     if (!fromArea && player.getArea?.() === this.area) this.area.leave(player, reason === "logout");
     if (!this.area.isDestroyed()) this.area.destroy();

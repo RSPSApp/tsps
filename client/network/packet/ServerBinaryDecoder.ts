@@ -893,6 +893,14 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 payload: { action: "set_model", uid: reader.readInt(), modelId: reader.readInt() },
             };
 
+        case ServerPacketId.WIDGET_SET_COLOUR: {
+            // IF_SETCOLOUR: 15-bit RGB widened as the game's client does.
+            const uid = reader.readInt();
+            const rgb15 = reader.readShort() & 0x7fff;
+            const colour = (((rgb15 >> 10) & 31) << 19) | (((rgb15 >> 5) & 31) << 11) | ((rgb15 & 31) << 3);
+            return { type: "widget", payload: { action: "set_colour", uid, colour } };
+        }
+
         case ServerPacketId.WIDGET_SET_POSITION:
             return {
                 type: "widget",

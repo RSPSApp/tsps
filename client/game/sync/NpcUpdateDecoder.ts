@@ -37,6 +37,8 @@ export type NpcUpdateBlock = {
     headIcons?: Array<{ archiveId: number; spriteId: number }>;
     /** A glide between two tiles relative to the NPC (OSRS npc exact_move), cycles absolute. */
     exactMove?: ForcedMovementUpdate;
+    /** A world tile to turn to once (OSRS npc face coord). */
+    faceTile?: { x: number; y: number };
     say?: string;
     colorOverride?: {
         startCycle: number;
@@ -63,7 +65,7 @@ export type NpcInfoFrame = {
  * - Maintains a local NPC id list internally.
  * - Only decodes the subset of update blocks that our server currently emits:
  *   FACE_ENTITY (0x8), HIT_MASK (0x20), COLOR_OVERRIDE (0x100), SPOTANIM2 (0x20000), SEQUENCE (0x10),
- *   HEAD_ICONS (0x200), EXACT_MOVE (0x400).
+ *   HEAD_ICONS (0x200), EXACT_MOVE (0x400), FACE_TILE (0x800).
  */
 export class NpcUpdateDecoder {
     private npcIndices: number[] = [];
@@ -379,6 +381,13 @@ export class NpcUpdateDecoder {
             // EXACT_MOVE (0x400): a glide between two tiles, laid out as players' forced movement.
             if ((mask & 0x400) !== 0) {
                 block.exactMove = readForcedMovement(stream, opts.clientCycle | 0);
+            }
+
+            // FACE_TILE (0x800): a world tile to turn to once.
+            if ((mask & 0x800) !== 0) {
+                const x = stream.readUnsignedShortBE() | 0;
+                const y = stream.readUnsignedShortBE() | 0;
+                block.faceTile = { x, y };
             }
 
             if (Object.keys(block).length > 0) {

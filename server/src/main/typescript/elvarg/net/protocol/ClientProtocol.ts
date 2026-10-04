@@ -59,6 +59,12 @@ export type Tile = { x: number; y: number; level: number };
 export type HitsplatView = { type: number; damage: number; delay?: number };
 /** An actor's headbar: its HP and, when not the default (config 0, 30 wide), which bar. */
 export type HealthView = { current: number; max: number; bar?: { id: number; width: number } };
+/**
+ * A headbar other than the hitpoints one (a charge bar, a shield): `fill` to `endFill` (in the
+ * bar definition's width) over `duration` client cycles, starting `delay` cycles from now; or
+ * `remove` to take it away.
+ */
+export type HeadbarView = { id: number; fill?: number; endFill?: number; duration?: number; delay?: number; remove?: boolean };
 export type AnimationView = { id: number; delay: number };
 /** A spotanim on an actor, in one of its slots (0 unless the actor shows several at once). */
 export type GraphicView = { id: number; height: number; delay: number; slot?: number };
@@ -79,6 +85,8 @@ export type ActorUpdateView = {
   graphics?: GraphicView[];
   hits?: HitsplatView[];
   health?: HealthView;
+  /** NPCs only: headbars besides the hitpoints one, sent with the hit block. */
+  bars?: HeadbarView[];
 };
 
 export type PlayerView = Tile & ActorUpdateView & {
@@ -122,6 +130,10 @@ export type NpcView = Tile & ActorUpdateView & {
   headIcon?: number;
   /** A glide from the tile it left to where it stands (OSRS npc exact_move), relative to its tile. */
   exactMove?: ForcedMovementView;
+  /** A tile to turn to once (OSRS npc face coord). */
+  faceTile?: { x: number; y: number };
+  /** Its walk step is sent as a crawl (half walking speed on the client). */
+  crawl?: boolean;
   rotation: number;
   walkDirection: number;
   runDirection: number;
@@ -1548,6 +1560,17 @@ export function encodeWidgetSetModel(uid: number, modelId: number): Buffer {
   return encodeServerPacket(ServerPacketId.WIDGET_SET_MODEL, payload);
 }
 
+/**
+ * IF_SETCOLOUR: a text or rectangle component's colour, as the game sends it: 15-bit RGB, five
+ * bits each of red, green and blue (the client widens it).
+ */
+export function encodeWidgetSetColour(uid: number, colour: number): Buffer {
+  const payload = Buffer.alloc(6);
+  payload.writeInt32BE(uid | 0, 0);
+  payload.writeUInt16BE(colour & 0x7fff, 4);
+  return encodeServerPacket(ServerPacketId.WIDGET_SET_COLOUR, payload);
+}
+
 /** IF_SETPOSITION: move a component within its parent, keeping its position modes. */
 export function encodeWidgetSetPosition(uid: number, x: number, y: number): Buffer {
   const payload = Buffer.alloc(8);
@@ -2127,6 +2150,7 @@ const NPC_MASK = {
   FORCED_CHAT: 0x40,
   HEAD_ICONS: 0x200,
   EXACT_MOVE: 0x400,
+  FACE_TILE: 0x800,
   SPOT_ANIM: 0x20000,
 } as const;
 
@@ -2200,7 +2224,8 @@ function writeHits(bytes: number[], view: ActorUpdateView, npc: boolean): void {
     smart(bytes, hit.delay ?? 0);
   }
   const health = view.health;
-  const count = health ? 1 : 0;
+  const bars = npc ? view.bars ?? [] : [];
+  const count = Math.min(255, (health ? 1 : 0) + bars.length);
   if (npc) byteA(bytes, count);
   else byteC(bytes, count);
   if (health) {
@@ -2211,6 +2236,21 @@ function writeHits(bytes: number[], view: ActorUpdateView, npc: boolean): void {
     if (npc) byteC(bytes, value);
     else bytes.push(value);
   }
+  for (const bar of bars.slice(0, count - (health ? 1 : 0))) writeHeadbar(bytes, bar);
+}
+
+/** One NPC headbar: id, duration (32767 removes it), delay, fill and, when it moves, its end. */
+function writeHeadbar(bytes: number[], bar: HeadbarView): void {
+  smart(bytes, bar.id);
+  if (bar.remove) {
+    smart(bytes, 32767);
+    return;
+  }
+  const duration = Math.max(0, Math.min(32766, bar.duration ?? 0));
+  smart(bytes, duration);
+  smart(bytes, Math.max(0, bar.delay ?? 0));
+  byteC(bytes, (bar.fill ?? 0) & 0xff);
+  if (duration > 0) byteS(bytes, (bar.endFill ?? bar.fill ?? 0) & 0xff);
 }
 
 function playerUpdateMask(
@@ -2235,9 +2275,10 @@ function npcUpdateMask(view: NpcView, writeInteraction: boolean, writeHeadIcon =
   return (writeInteraction ? NPC_MASK.FACE_ENTITY : 0) |
     (writeHeadIcon ? NPC_MASK.HEAD_ICONS : 0) |
     (view.animation ? NPC_MASK.ANIMATION : 0) |
-    (view.hits ? NPC_MASK.HIT : 0) |
+    (view.hits || view.bars?.length ? NPC_MASK.HIT : 0) |
     (view.forcedChat !== undefined ? NPC_MASK.FORCED_CHAT : 0) |
     (view.exactMove ? NPC_MASK.EXACT_MOVE : 0) |
+    (view.faceTile ? NPC_MASK.FACE_TILE : 0) |
     (view.graphics?.length ? NPC_MASK.SPOT_ANIM : 0);
 }
 
@@ -2301,7 +2342,7 @@ function writeNpcUpdateBlock(view: NpcView, writeInteraction: boolean, writeHead
     shortLEA(bytes, target);
     byteA(bytes, target >>> 16);
   }
-  if (view.hits) writeHits(bytes, view, true);
+  if (view.hits || view.bars?.length) writeHits(bytes, view, true);
   if (view.forcedChat !== undefined) writeText(bytes, view.forcedChat);
   if (view.graphics?.length) {
     bytes.push(view.graphics.length);
@@ -2325,6 +2366,10 @@ function writeNpcUpdateBlock(view: NpcView, writeInteraction: boolean, writeHead
     }
   }
   if (view.exactMove) writeForcedMovement(bytes, view.exactMove);
+  if (view.faceTile) {
+    shortBE(bytes, view.faceTile.x & 0xffff);
+    shortBE(bytes, view.faceTile.y & 0xffff);
+  }
   return Buffer.from(bytes);
 }
 
@@ -2611,6 +2656,14 @@ export function encodeNpcSync(
       writer.writeBits(1, 1);
       writer.writeBits(3, view.walkDirection);
       writer.writeBits(3, view.runDirection);
+      writer.writeBits(1, block ? 1 : 0);
+      nextIndices.push(index);
+    } else if (view.walkDirection >= 0 && view.crawl) {
+      // A crawl: the run form of the step with its run flag clear (half walking speed).
+      writer.writeBits(1, 1);
+      writer.writeBits(2, 2);
+      writer.writeBits(1, 0);
+      writer.writeBits(3, view.walkDirection);
       writer.writeBits(1, block ? 1 : 0);
       nextIndices.push(index);
     } else if (view.walkDirection >= 0) {

@@ -334,6 +334,9 @@ export class PlayerSession {
           walkDirection: this.clientDirection(npc.getWalkingDirection()),
           runDirection: this.clientDirection(npc.getRunningDirection()),
           exactMove: this.exactMoveView(npc.getExactMove?.(), location),
+          bars: npc.getHeadbars?.().length ? npc.getHeadbars() : undefined,
+          faceTile: npc.getFaceTile?.() ?? undefined,
+          crawl: npc.isCrawling?.() || undefined,
         };
       })
     );

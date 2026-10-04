@@ -1,3 +1,4 @@
+import { PluginManager } from "../../../plugins/PluginManager";
 import { HitDamageCache } from "../../content/combat/hit/HitDamageCache";
 import { HitQueue } from "../../content/combat/hit/HitQueue";
 import type { Mobile } from "../../entity/impl/Mobile";
@@ -336,7 +337,7 @@ export class Combat {
         }
 
         this.character.getMovementQueue().reset();
-        if (cycle < this.nextAttackCycle) {
+        if (cycle < this.nextAttackCycle && !this.attackTiming(method, target).ignoreDelay) {
             this.trace(`cooldown next=${this.nextAttackCycle} in=${this.nextAttackCycle - cycle}`, target);
             this.renewInteraction(target, generation);
             return;
@@ -378,6 +379,13 @@ export class Combat {
 
     public resolveCanReachForCurrentCycle(method: CombatMethod, target: Mobile, _skipTargetValidation = false): boolean {
         return CombatRange.canReach(this.character, method, target);
+    }
+
+    /** What plugins say about the attack timer for an attack on `target` (PluginAttackTimingEvent). */
+    private attackTiming(method: CombatMethod, target: Mobile): { ignoreDelay: boolean; keepDelay: boolean } {
+        const event = { attacker: this.character, target, method, ignoreDelay: false, keepDelay: false };
+        PluginManager.emitAttackTiming(event);
+        return event;
     }
 
     public setAttackDelay(ticks: number): void {
@@ -550,7 +558,8 @@ export class Combat {
             ? CombatSpecial.activeTraitsFor(this.character)
             : null;
         const bypass = bypassDelay || specialTraits?.bypassAttackDelay === true;
-        if (!bypass && cycle < this.nextAttackCycle) {
+        const timing = this.attackTiming(method, target);
+        if (!bypass && !timing.ignoreDelay && cycle < this.nextAttackCycle) {
             if (renew) this.renewInteraction(target, generation);
             return false;
         }
@@ -566,7 +575,7 @@ export class Combat {
         if (target.getCombat().getAttacker() == null) {
             CombatFactory.getMethod(target).onCombatBegan(target, this.character);
         }
-        if (!bypass) {
+        if (!bypass && !timing.keepDelay) {
             const speed = specialTraits?.attackSpeedTicks ?? method.attackSpeed(this.character);
             this.nextAttackCycle = cycle + Math.max(1, speed | 0);
         }

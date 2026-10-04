@@ -405,6 +405,19 @@ export interface PluginPlayerDealtDamageEvent {
   hit: any;
 }
 
+/**
+ * Asked before an attack: `ignoreDelay` lets it happen though the attacker's attack timer hasn't
+ * run out, and `keepDelay` leaves that timer as it was afterwards (a boss's larvae that may be hit
+ * on cooldown, some weapons adding no delay).
+ */
+export interface PluginAttackTimingEvent {
+  attacker: any;
+  target: any;
+  method: any;
+  ignoreDelay: boolean;
+  keepDelay: boolean;
+}
+
 export interface PluginCombatHitRollEvent {
   attacker: any;
   target: any;
@@ -797,6 +810,8 @@ export interface PluginApi {
     handler: (event: PluginPlayerDealtDamageEvent) => void
   ): void;
   onCombatHitRoll(handler: (event: PluginCombatHitRollEvent) => void): void;
+  /** Lets an attack ignore the attack timer, or leave it untouched (see PluginAttackTimingEvent). */
+  onAttackTiming(handler: (event: PluginAttackTimingEvent) => void): void;
   onCombatHitResolved(handler: (event: PluginCombatHitResolvedEvent) => void): void;
   onCombatAttackDistance(handler: (event: PluginCombatAttackDistanceEvent) => void): void;
   onSpellDisabled(handler: (event: PluginSpellDisabledEvent) => void): void;

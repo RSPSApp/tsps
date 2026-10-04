@@ -85,6 +85,7 @@ import {
   PluginPlayerOptionEvent,
   PluginPlayerDealtDamageEvent,
   PluginCombatHitRollEvent,
+  PluginAttackTimingEvent,
   PluginCombatHitResolvedEvent,
   PluginCombatAttackDistanceEvent,
   PluginCanUnequipEvent,
@@ -241,6 +242,7 @@ export class PluginManager {
   private static playerOptionHooks: PluginHook<PluginPlayerOptionEvent>[] = [];
   private static playerDealtDamageHooks: PluginHook<PluginPlayerDealtDamageEvent>[] = [];
   private static combatHitRollHooks: PluginHook<PluginCombatHitRollEvent>[] = [];
+  private static attackTimingHooks: PluginHook<PluginAttackTimingEvent>[] = [];
   private static combatHitResolvedHooks: PluginHook<PluginCombatHitResolvedEvent>[] = [];
   private static combatAttackDistanceHooks: PluginHook<PluginCombatAttackDistanceEvent>[] = [];
   private static spellDisabledHooks: PluginHook<PluginSpellDisabledEvent>[] = [];
@@ -1319,6 +1321,13 @@ export class PluginManager {
         "player_dealt_damage",
         "player_dealt_damage"
       );
+    }
+  }
+
+  public static emitAttackTiming(event: PluginAttackTimingEvent): void {
+    if (!event?.attacker || !event?.target) return;
+    for (const hook of PluginManager.attackTimingHooks) {
+      PluginManager.executeHook(hook, event, "attack_timing", "attack_timing");
     }
   }
 
@@ -3018,6 +3027,10 @@ export class PluginManager {
       onCombatHitRoll: (handler) => {
         if (typeof handler !== "function") return;
         PluginManager.combatHitRollHooks.push({ pluginName, handler });
+      },
+      onAttackTiming: (handler) => {
+        if (typeof handler !== "function") return;
+        PluginManager.attackTimingHooks.push({ pluginName, handler });
       },
       onCombatHitResolved: (handler) => {
         if (typeof handler !== "function") return;

@@ -257,10 +257,47 @@ function projectile(area, from, to, id, { delay = 0, end = 30, startHeight = 0, 
 }
 
 /** Typeless damage, queued for the next hit processing. */
-function damage(target, amount, mask = "RED") {
+/** Typeless damage, queued for the next hit processing; `splat` picks the cache hitsplat. */
+function damage(target, amount, mask = "RED", splat = null) {
   const { HitDamage, HitMask } = core();
   if (!target || amount <= 0 || target.getHitpoints() <= 0) return;
-  target.getCombat().getHitQueue().addPendingDamage([new HitDamage(Math.trunc(amount), HitMask[mask])]);
+  const hit = new HitDamage(Math.trunc(amount), HitMask[mask]);
+  if (splat != null) hit.setSplatTypes(splat, splat);
+  target.getCombat().getHitQueue().addPendingDamage([hit]);
+}
+
+/**
+ * Capture: the hitsplats the Doom shows besides ordinary damage - healing (6), and the bonus
+ * damage of a melee punish, a larva bursting on it, or on its shield (17).
+ */
+const SPLAT = { HEAL: 6, BONUS: 17 };
+
+/**
+ * Capture: the charge bar over the Doom (headbar 81, 100 wide) fills over the charge - 390
+ * cycles for the melee charge, 510 for the shield, 600 burrowed - and empties when it ends.
+ */
+const CHARGE_BAR = { id: 81, width: 100 };
+
+function chargeBar(npc, cycles) {
+  npc?.showHeadbar?.(CHARGE_BAR.id, { fill: 0, endFill: CHARGE_BAR.width, duration: cycles });
+}
+
+function emptyChargeBar(npc) {
+  npc?.showHeadbar?.(CHARGE_BAR.id, { fill: 0, endFill: 0, duration: 1 });
+}
+
+/**
+ * Capture: while the Doom charges its beam (the melee charge and the shield), each tick it plays
+ * the charge loop (12409) with graphic 3412 in spotanim slot 2.
+ */
+const CHARGE_LOOP = { anim: 12409, gfx: 3412, slot: 2 };
+
+function chargeLoop(npc) {
+  const { Animation } = core();
+  npc.performAnimation(new Animation(CHARGE_LOOP.anim));
+  const graphic = gfx(CHARGE_LOOP.gfx);
+  if (npc.performGraphicInSlot) npc.performGraphicInSlot(CHARGE_LOOP.slot, graphic);
+  else npc.performGraphic(graphic);
 }
 
 function isProtected(player, style) {
@@ -297,4 +334,5 @@ module.exports = {
   TILES, ARENA, DEEP, DEEP_ARENA, FLOOR, RUINS, NPC, OBJECT, VARP, VARBIT, FINAL_DAWN_COMPLETE, INTERFACE, HUD_UID,
   loc, tileOf, inBox, inArena, isDeep, frame, shift, cycle, random, randomOf, later, repeat, statement, options, fade, fadeMove,
   gfx, graphicAt, projectile, damage, isProtected, distanceTo, floorFree, onFloor,
+  SPLAT, CHARGE_BAR, chargeBar, emptyChargeBar, CHARGE_LOOP, chargeLoop,
 };

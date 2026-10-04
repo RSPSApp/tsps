@@ -23,6 +23,12 @@ import { Animation } from "../../../model/Animation";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
 /**
+ * A headbar besides the hitpoints one, for this tick's update: `fill` to `endFill` (in the
+ * bar definition's width) over `duration` client cycles from `delay` cycles on, or `remove`.
+ */
+export type NpcHeadbar = { id: number; fill?: number; endFill?: number; duration?: number; delay?: number; remove?: boolean };
+
+/**
  * A glide the client plays between two tiles (OSRS npc exact_move): from the tile the NPC left
  * to where it now stands, from `startCycles` to `endCycles` client cycles into the tick, facing
  * `angle` (0 south, 512 west, 1024 north, 1536 east).
@@ -115,6 +121,12 @@ export class NPC extends Mobile {
     private headIcon = -1;
     /** This tick's glide, sent with the NPC's update and cleared after it. */
     private exactMoveState: NpcExactMove | null = null;
+    /** This tick's headbars besides the hitpoints one, sent with the NPC's update and cleared after it. */
+    private headbars: NpcHeadbar[] = [];
+    /** Its steps are sent as crawls (half walking speed on the client) rather than walks. */
+    private crawling = false;
+    /** A tile to turn to this tick (OSRS npc face coord), sent with the NPC's update and cleared after it. */
+    private faceTileState: { x: number; y: number } | null = null;
     private isDying: boolean;
     private owner: Player;
     private ownerOnly: boolean = false;
@@ -581,9 +593,68 @@ export class NPC extends Mobile {
         return Math.round((Math.atan2(-dx, -dy) * 1024) / Math.PI) & 2047;
     }
 
+    /**
+     * Shows a headbar over the NPC besides its hitpoints bar (a charge bar, a shield): at `fill`,
+     * moving to `endFill` over `duration` client cycles (20ms each) from `delay` cycles on. Fills
+     * are in the bar definition's width (headbar 20 is 120 wide, 81 is 100).
+     */
+    public showHeadbar(
+        id: number,
+        options: { fill: number; endFill?: number; duration?: number; delay?: number }
+    ): NPC {
+        this.headbars = this.headbars.filter((bar) => bar.id !== id);
+        this.headbars.push({
+            id,
+            fill: Math.max(0, Math.trunc(options.fill)),
+            endFill: Math.max(0, Math.trunc(options.endFill ?? options.fill)),
+            duration: Math.max(0, Math.trunc(options.duration ?? 0)),
+            delay: Math.max(0, Math.trunc(options.delay ?? 0)),
+        });
+        return this;
+    }
+
+    /** Takes a headbar shown with showHeadbar away. */
+    public removeHeadbar(id: number): NPC {
+        this.headbars = this.headbars.filter((bar) => bar.id !== id);
+        this.headbars.push({ id, remove: true });
+        return this;
+    }
+
+    public getHeadbars(): NpcHeadbar[] {
+        return this.headbars;
+    }
+
+    /**
+     * Sends this NPC's steps as crawls: clients move it at half walking speed, so a step every
+     * two ticks looks continuous (a boss's larvae).
+     */
+    public setCrawling(crawling: boolean): NPC {
+        this.crawling = crawling;
+        return this;
+    }
+
+    public isCrawling(): boolean {
+        return this.crawling;
+    }
+
+    /**
+     * Turns the NPC to face a tile once (OSRS npc face coord), as opposed to following an entity
+     * with setMobileInteraction. Clients turn it at its turn speed and it keeps that facing.
+     */
+    public faceTile(location: Location): NPC {
+        this.faceTileState = { x: location.getX(), y: location.getY() };
+        return this;
+    }
+
+    public getFaceTile(): { x: number; y: number } | null {
+        return this.faceTileState;
+    }
+
     public resetUpdating() {
         super.resetUpdating();
         this.exactMoveState = null;
+        this.headbars = [];
+        this.faceTileState = null;
     }
 
     public getCombatMethod(): CombatMethod {

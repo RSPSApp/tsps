@@ -32,6 +32,7 @@ import {
   encodeProjectiles,
   encodeRunClientScript,
   encodeCameraShake,
+  encodeWidgetSetColour,
   encodeCameraReset,
   encodeChatFilterSettings,
   encodeRunEnergy,
@@ -768,6 +769,15 @@ export class PacketSender {
   }
 
   /** Shakes the camera on one axis; slot 0 left-right, 1 up-down, 2 forwards-backwards. */
+  /**
+   * Recolours a text or rectangle component (IF_SETCOLOUR). `colour` is 15-bit RGB as the game
+   * sends it - five bits each of red, green and blue, as rsprox logs it.
+   */
+  sendInterfaceColour(uid: number, colour: number): this {
+    this.player.getSession().sendClientPacket(encodeWidgetSetColour(uid, colour));
+    return this;
+  }
+
   sendCameraShake(slot: number, randomAmplitude: number, sineAmplitude = 0, sineFrequency = 0): this {
     this.player.getSession().sendClientPacket(encodeCameraShake(slot, randomAmplitude, sineAmplitude, sineFrequency));
     return this;

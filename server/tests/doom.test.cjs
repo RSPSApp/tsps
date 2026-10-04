@@ -28,7 +28,7 @@ const Records = require('../plugins/bosses/doom/DoomRecords');
 const Burrow = require('../plugins/bosses/doom/DoomBurrow');
 const { chargeTicks } = require('../plugins/bosses/doom/DoomShield');
 
-const hooks = { objects: [], prompts: [], hitModify: [], beforeDeath: [], attack: [], buttons: {} };
+const hooks = { objects: [], prompts: [], hitModify: [], beforeDeath: [], attack: [], timing: [], roll: [], buttons: {} };
 let nextIndex = 1;
 const SIZES = { [Shared.NPC.DOOM]: 5, [Shared.NPC.EARTHEN_SHIELD]: 3 };
 
@@ -43,6 +43,11 @@ function fakeNpc(id, x, y) {
     getIndex: () => npc.index,
     getLocation: () => npc.location,
     moveTo(location) { npc.location = location; },
+    exactMoves: [],
+    exactMove(location, options) {
+      npc.exactMoves.push({ from: npc.location, to: location, options, tick: npc.tickOf?.() });
+      npc.location = location;
+    },
     getSize: () => SIZES[id] ?? 1,
     getHitpoints: () => npc.hp,
     setHitpoints(value) { npc.hp = value; },
@@ -57,8 +62,17 @@ function fakeNpc(id, x, y) {
     getPrivateArea: () => npc.area,
     setFlag(flag) { npc.flags.add(flag); },
     setHealthBar(bar) { npc.bar = bar; },
+    headbars: [], splats: [], shown: [], displayed: [],
+    showHeadbar(barId, options) { npc.headbars.push({ id: barId, ...options }); },
+    removeHeadbar(barId) { npc.headbars.push({ id: barId, remove: true }); },
+    showHitsplat(damage, splat, health) { npc.shown.push({ damage, splat: splat.mine, health }); },
+    setDisplayedHealth(health) { npc.displayed.push(health); },
     setHeadIcon(icon) { npc.headIcon = icon; },
     setMobileInteraction(mobile) { npc.facing = mobile; },
+    faced: [],
+    faceTile(location) { npc.faced.push({ x: location.getX(), y: location.getY(), tick: npc.tickOf?.() }); },
+    crawling: false,
+    setCrawling(value) { npc.crawling = value; },
     getInteractingMobile: () => npc.facing,
     performAnimation(animation) { npc.anims.push(animation.getId()); },
     performGraphic(graphic) { npc.gfx.push(graphic.getId()); },
@@ -68,7 +82,12 @@ function fakeNpc(id, x, y) {
     getCombat: () => ({
       getSelectedSpell: () => null,
       getLastAttack: () => ({ reset() {} }),
-      getHitQueue: () => ({ addPendingDamage: (hits) => { if (!npc.locked) npc.hp -= hits.reduce((sum, hit) => sum + hit.getDamage(), 0); } }),
+      getHitQueue: () => ({
+        addPendingDamage: (hits) => {
+          for (const hit of hits) npc.splats.push({ damage: hit.getDamage(), splat: hit.getSplatType?.(false) ?? null });
+          if (!npc.locked) npc.hp -= hits.reduce((sum, hit) => sum + hit.getDamage(), 0);
+        },
+      }),
     }),
   };
   return npc;
@@ -85,6 +104,9 @@ function fakeApi() {
     onCanAttack: (handler) => hooks.attack.push(handler),
     onNpcBeforeDeath: (handler) => hooks.beforeDeath.push(handler),
     onNpcHitModify: (handler) => hooks.hitModify.push(handler),
+    onObjectRoute: (handler) => (hooks.route ??= []).push(handler),
+    onAttackTiming: (handler) => hooks.timing.push(handler),
+    onCombatHitRoll: (handler) => hooks.roll.push(handler),
     onPlayerDeathItemDrop() {},
     onPlayerDeath() {},
     registerCommand() {},
@@ -110,6 +132,14 @@ function fakePlayer() {
       refreshItems() {},
     }),
     dialogueActive: true, hp: 99, strength: 0, weapon: -1, varbits, varps,
+    colours: [], scriptArgs: [], camera: [], hudLog: [], prayer: 30, maxPrayer: 70, special: 50,
+    heal(amount) { p.hp = Math.min(99, p.hp + amount); },
+    getSkillManager: () => ({
+      getMaxLevel: () => p.maxPrayer,
+      increaseCurrentLevel(skill, amount, max) { p.prayer = Math.min(max, p.prayer + amount); },
+    }),
+    getSpecialPercentage: () => p.special,
+    setSpecialPercentage(value) { p.special = value; },
     isPlayer: () => true,
     isNpc: () => false,
     getIndex: () => 7,
@@ -143,8 +173,11 @@ function fakePlayer() {
         sendConfig: (id, value) => { varps.set(id, value); return sender; },
         getVarbit: (id) => varbits.get(id) ?? 0,
         sendSubInterface: () => sender,
-        sendInterfaceDisplayState: () => sender,
-        sendInterfaceScript: (id) => { p.scripts.push(id); return sender; },
+        sendInterfaceDisplayState: (uid, hidden) => { p.hudLog.push(['hide', uid & 0xffff, hidden]); return sender; },
+        sendInterfaceScript: (id, args) => { p.scripts.push(id); p.scriptArgs.push([id, args]); p.hudLog.push(['script', id, args?.at(-1)]); return sender; },
+        sendInterfaceColour: (uid, colour) => { p.colours.push([uid & 0xffff, colour]); p.hudLog.push(['colour', uid & 0xffff, colour]); return sender; },
+        sendCameraShake: (axis, random) => { p.camera.push(['shake', axis, random]); return sender; },
+        sendCameraReset: () => { p.camera.push(['reset']); return sender; },
         sendGraphic: () => sender,
         sendObject: () => sender,
         sendObjectRemoval: () => sender,
@@ -708,6 +741,7 @@ test('delve 4: coloured larvae take only their own style', () => {
 
 test('delve 5: after the shield it burrows, zooms past the player and surfaces into a shockwave', () => {
   const { player, run } = runAt(5);
+  run.boss.tickOf = () => run.ticks;
   run.attacks.active = true;
   const south = Shared.shift({ x: 1311, y: 9564 }, true);
   player.location = new Location(south.x, south.y, 0);
@@ -727,6 +761,19 @@ test('delve 5: after the shield it burrows, zooms past the player and surfaces i
   const at = Shared.frame(run.boss.location);
   assert.ok(at.y < 9571, 'it went south, towards the player');
   assert.ok(run.boss.anims.includes(12417));
+  // Capture: each tick of a zoom is one teleport and exact_move with delay1 0, delay2 30 and the
+  // direction of travel - npc.exactMove's defaults, so no options are passed.
+  const glides = run.boss.exactMoves;
+  assert.ok(glides.length >= 2, `${glides.length} glides`);
+  for (const [index, glide] of glides.entries()) {
+    const dx = glide.to.getX() - glide.from.getX();
+    const dy = glide.to.getY() - glide.from.getY();
+    assert.ok(Math.max(Math.abs(dx), Math.abs(dy)) <= 4, `glide ${index}: at most 4 tiles a tick`);
+    assert.equal(glide.options, undefined, 'the defaults: cycles 0-30, facing the way it goes');
+    if (index > 0 && glides[index - 1].tick === glide.tick - 1) {
+      assert.ok(glides[index - 1].to.equals(glide.from), 'each glide starts where the last ended');
+    }
+  }
   ticks(40);
   assert.equal(run.attacks.phase, 'attacks', 'surfaced');
   assert.equal(run.boss.getId(), Shared.NPC.DOOM);
@@ -877,4 +924,271 @@ test('death puts the player by the gap (capture)', () => {
   assert.deepEqual([player.location.getX(), player.location.getY()], [1313, 9555]);
   assert.equal(Run.runOf(player), null);
   assert.equal(player.varps.get(Shared.VARP.CURRENT_LEVEL), 0);
+});
+
+test('a zoom glides once a tick, breaking rocks and trampling the player along the way', () => {
+  const { player, run } = runAt(5);
+  run.attacks.phase = 'burrow';
+  const start = run.boss.location;
+  // Eight tiles west in two ticks; the player and a rock stand in the way of the first stretch.
+  const path = Array.from({ length: 8 }, (_, index) => ({ x: start.getX() - 1 - index, y: start.getY() }));
+  run.burrow.step = { name: 'move', at: run.ticks, path, travelled: 8, trampled: false };
+  run.burrow.zoomsLeft = 2;
+  const standing = new Location(start.getX() - 3, start.getY() + 2, 0);
+  player.location = standing;
+  run.hazards.addRock({ x: start.getX() - 2, y: start.getY() + 4 });
+  const hurt = player.damage.length;
+  run.burrow.move();
+  assert.equal(run.boss.exactMoves.length, 1, 'one glide for the tick');
+  assert.equal(run.boss.location.getX(), start.getX() - 4, 'four tiles on');
+  assert.equal(run.hazards.rocks.length, 0, 'the rock it passed broke');
+  assert.deepEqual(player.damage.slice(hurt), [10], 'trampled once (10 at delve 5)');
+  player.location = new Location(start.getX() - 20, start.getY(), 0);
+  run.burrow.move();
+  assert.equal(run.boss.exactMoves.length, 2);
+  assert.ok(run.boss.exactMoves[1].from.equals(run.boss.exactMoves[0].to));
+  assert.equal(run.boss.location.getX(), start.getX() - 8);
+  assert.equal(player.damage.length, hurt + 1, 'not trampled twice in a zoom');
+  run.end('exit');
+});
+
+// ------------------------------------------------------------------ bars, colours, splats
+
+test('the melee charge fills its bar (81, 390 cycles); a punish empties it and adds a bonus splat (17)', () => {
+  const { CombatType } = PluginManager.getCoreApi();
+  const { player, run } = surfacedRun();
+  run.attacks.active = true;
+  run.attacks.startCharge();
+  assert.deepEqual(run.boss.headbars.at(-1), { id: 81, fill: 0, endFill: 100, duration: 390 });
+  player.strength = 115;
+  hitBoss(run, player, CombatType.MELEE, 10);
+  assert.deepEqual(run.boss.headbars.at(-1), { id: 81, fill: 0, endFill: 0, duration: 1 }, 'emptied');
+  ticks(1);
+  assert.deepEqual(run.boss.splats.at(-1), { damage: 23, splat: 17 }, 'floor(115 / 5) as a bonus hitsplat');
+  run.end('exit');
+});
+
+test('the shield turns the HUD blue, shows its points on headbar 11, and larvae burst on it as 17s', () => {
+  const { CombatType } = PluginManager.getCoreApi();
+  const { player, run } = runAt(3);
+  run.attacks.active = true;
+  player.colours.length = 0;
+  run.attacks.phase = 'shield';
+  run.shield.start();
+  assert.deepEqual(player.colours, [[13, 132], [14, 623], [15, 853]], 'blue (capture)');
+  assert.deepEqual(player.scriptArgs.at(-1)[0], 2102);
+  assert.deepEqual(run.boss.headbars.at(-1), { id: 81, fill: 0, endFill: 100, duration: 510 });
+  player.weapon = 29591;
+  hitBoss(run, player, CombatType.RANGED, 43);
+  assert.deepEqual(run.boss.displayed.at(-1), { current: 457, max: 500, bar: { id: 11, width: 120 } });
+  assert.equal(run.boss.headbars.filter((bar) => bar.duration === 510).length, 2, 'the hit restarts the charge bar');
+  run.shield.larvaBurst();
+  assert.deepEqual(run.boss.shown.at(-1), { damage: 100, splat: 17, health: { current: 357, max: 500, bar: { id: 11, width: 120 } } });
+  player.colours.length = 0;
+  run.shield.damage(1000);
+  assert.deepEqual(player.colours, [[13, 25600], [14, 576], [15, 800]], 'back to normal');
+  run.end('exit');
+});
+
+test('burrowing shakes the camera until it turns, then runs a 600-cycle charge bar', () => {
+  const { player, run } = runAt(5);
+  run.attacks.active = true;
+  run.attacks.phase = 'burrow';
+  run.burrow.start();
+  assert.deepEqual(player.camera, [['shake', 0, 5], ['shake', 1, 5], ['shake', 2, 5]], 'capture: random 5 on each axis');
+  ticks(5);
+  assert.deepEqual(player.camera.at(-1), ['reset']);
+  assert.deepEqual(run.boss.headbars.at(-1), { id: 81, fill: 0, endFill: 100, duration: 600 });
+  run.end('exit');
+});
+
+test('a larva reaching the Doom shows its heal as a heal splat (6)', () => {
+  const { run } = surfacedRun();
+  run.boss.hp = 400;
+  const larva = run.spawnNpc(Shared.NPC.LARVA, { x: 1311, y: 9573 });
+  larva.__doomLarva = { protect: null, movedAt: 0, born: 0 };
+  run.hazards.larvae.add(larva);
+  run.hazards.larvaReached(larva);
+  assert.deepEqual(run.boss.shown.at(-1), { damage: 10, splat: 6, health: undefined });
+  run.end('exit');
+});
+
+test('killing it with a melee punish throws holy water: acid around it goes, and the player is restored', () => {
+  const HolyWater = require('../plugins/bosses/doom/DoomHolyWater');
+  const { player, run } = runAt(3);
+  run.attacks.active = true;
+  const centre = { x: run.boss.location.getX() + 2, y: run.boss.location.getY() + 2 };
+  for (let x = centre.x - 8; x <= centre.x + 8; x++) for (let y = centre.y - 8; y <= centre.y + 8; y++) run.acid.place({ x, y, z: 0 });
+  const acid = run.acid.pools.size;
+  player.hp = 50;
+  run.punishedAt = run.ticks;
+  assert.ok(HolyWater.punishKill(run));
+  run.defeated();
+  ticks(2);
+  assert.equal(player.hp, 78, '+28 hitpoints');
+  assert.equal(player.prayer, 44, '+14 prayer');
+  assert.equal(player.special, 75, '+25% special attack');
+  assert.ok(run.acid.pools.size < acid, 'acid cleared where it landed');
+
+  const { run: later } = runAt(9);
+  later.punishedAt = later.ticks;
+  assert.ok(!HolyWater.punishKill(later), 'not past delve 8');
+  later.end('exit');
+  run.end('exit');
+});
+
+test('the HUD opens as the capture does: hp hidden at the delve change, then colours, 2376 and a fade-in', () => {
+  const player = fakePlayer();
+  const run = Run.start(player);
+  assert.deepEqual(player.hudLog.slice(0, 2), [['hide', 5, true], ['script', 2249, (303 << 16) | 1]], 'hp hidden, container emptied');
+  player.hudLog.length = 0;
+  player.dialogueActive = false;
+  ticks(1);
+  assert.deepEqual(player.hudLog, [
+    ['colour', 13, 25600], ['colour', 14, 576], ['colour', 15, 800],
+    ['script', 2376, (303 << 16) | 3],
+    ['script', 2887, 254],
+  ], 'no un-hiding before 2376, and no 2102 on open');
+  run.end('exit');
+});
+
+test('the shield loops its charge each tick (12409 with 3412) and a demonbane hit cancels it (12410)', () => {
+  const { CombatType } = PluginManager.getCoreApi();
+  const { player, run } = runAt(3);
+  run.attacks.active = true;
+  run.attacks.phase = 'shield';
+  run.shield.start();
+  run.shield.nextLarvaAt = Infinity;
+  run.boss.anims.length = 0;
+  run.boss.gfx.length = 0;
+  ticks(2);
+  assert.deepEqual(run.boss.anims, [12409, 12409]);
+  assert.deepEqual(run.boss.gfx, [3412, 3412]);
+  player.weapon = 29591;
+  hitBoss(run, player, CombatType.RANGED, 20);
+  assert.equal(run.boss.anims.at(-1), 12410, 'the hit cancels the charge');
+  run.boss.anims.length = 0;
+  ticks(1);
+  assert.deepEqual(run.boss.anims, [12409], 'and it loops again the tick after');
+  run.end('exit');
+});
+
+
+// ------------------------------------------------------------------ larvae, timing, accuracy, facing
+
+test('larvae crawl (capture: every larva step is a crawl)', () => {
+  const { player, run } = surfacedRun();
+  player.location = new Location(1311, 9565, 0);
+  run.hazards.spawnLarva();
+  assert.equal([...run.hazards.larvae][0].crawling, true);
+  run.end('exit');
+});
+
+test('after a rock throw the next orb lands after the rock\'s last orb (capture: 12 ticks at delve 5)', () => {
+  const { player, run } = runAt(5);
+  const south = Shared.shift({ x: 1311, y: 9562 }, true);
+  player.location = new Location(south.x, south.y, 0);
+  const attacks = run.attacks;
+  attacks.active = true;
+  attacks.nextShockwaveAt = Infinity;
+  attacks.shieldDue = () => false;
+  attacks.sinceRock = 3;
+  attacks.nextAt = run.ticks;
+  const orbLands = [];
+  const orb = attacks.orb.bind(attacks);
+  attacks.orb = (style) => { orbLands.push(run.ticks + Math.ceil(Boss.orbFlight(run.level).end / 30)); orb(style); };
+  const thrownAt = run.ticks;
+  ticks(1);
+  assert.equal(attacks.sinceRock, 0, 'it threw a rock');
+  ticks(30);
+  assert.ok(attacks.rockOrbsLandAt > thrownAt, 'the rock\'s orbs flew');
+  assert.ok(orbLands.length >= 1, 'then an orb');
+  assert.ok(orbLands[0] > attacks.rockOrbsLandAt, `orb lands at ${orbLands[0]}, the rock's last at ${attacks.rockOrbsLandAt}`);
+  run.end('exit');
+});
+
+test('larvae and volatile earth can be hit on cooldown; demonbane leaves the timer alone', () => {
+  const { player, run } = surfacedRun();
+  player.location = new Location(1311, 9565, 0);
+  run.hazards.spawnLarva();
+  const larva = [...run.hazards.larvae][0];
+  const timing = (target) => {
+    const event = { attacker: player, target, method: null, ignoreDelay: false, keepDelay: false };
+    for (const handler of hooks.timing) handler(event);
+    return [event.ignoreDelay, event.keepDelay];
+  };
+  player.weapon = 4151;
+  assert.deepEqual(timing(larva), [true, false], 'any weapon: on cooldown, then its normal delay');
+  player.weapon = 29591;
+  assert.deepEqual(timing(larva), [true, true], 'demonbane: no delay after');
+  const earth = run.spawnNpc(Shared.NPC.VOLATILE_EARTH ?? 14714, { x: 1305, y: 9565 });
+  earth.__doomEarth = true;
+  assert.deepEqual(timing(earth), [true, true]);
+  assert.deepEqual(timing(run.boss), [false, false], 'not the Doom');
+  run.end('exit');
+});
+
+test('attacks while it charges are 100% accurate: melee in the melee charge, any while burrowed', () => {
+  const { CombatType } = PluginManager.getCoreApi();
+  const { player, run } = runAt(5);
+  const roll = (type) => {
+    const event = { attacker: player, target: run.boss, combatType: type, forceAccurate: false, bypassProtectionPrayer: false };
+    for (const handler of hooks.roll) handler(event);
+    return event.forceAccurate;
+  };
+  assert.equal(roll(CombatType.MELEE), false, 'not charging');
+  run.attacks.active = true;
+  run.attacks.phase = 'attacks';
+  run.attacks.startCharge();
+  assert.equal(roll(CombatType.MELEE), true);
+  assert.equal(roll(CombatType.RANGED), false, 'only melee in the melee charge');
+  run.attacks.endCharge();
+  run.attacks.phase = 'burrow';
+  run.burrow.restartCharge();
+  assert.equal(roll(CombatType.RANGED), true, 'burrowed: any style');
+  assert.equal(roll(CombatType.MAGIC), true);
+  run.end('exit');
+});
+
+test('burrowed it isn\'t locked on: it faces its stopping corner, then the player\'s tile once (capture)', () => {
+  const { player, run } = runAt(5);
+  run.boss.tickOf = () => run.ticks;
+  run.attacks.active = true;
+  const south = Shared.shift({ x: 1311, y: 9564 }, true);
+  player.location = new Location(south.x, south.y, 0);
+  run.boss.setMobileInteraction(player);
+  run.attacks.phase = 'shield';
+  run.shield.start();
+  run.shield.damage(500);
+  assert.equal(run.attacks.phase, 'burrow');
+  assert.equal(run.boss.facing, null, 'the lock is cleared as it burrows');
+  ticks(5 + Burrow.BURROW.firstEye);
+  assert.equal(run.boss.facing, null, 'and stays cleared');
+  assert.equal(run.boss.faced.length, 1, 'the eye: it faces where it stops');
+  const path = run.burrow.step.path;
+  assert.deepEqual([run.boss.faced[0].x, run.boss.faced[0].y], [path.at(-1).x, path.at(-1).y], 'the corner tile');
+  while (run.burrow.step?.name !== 'wait' && run.ticks < 200) ticks(1);
+  const stopped = run.boss.exactMoves.at(-1).tick;
+  ticks(1);
+  const last = run.boss.faced.at(-1);
+  assert.equal(last.tick, stopped + 1, 'the tick after it stops');
+  assert.deepEqual([last.x, last.y], [player.location.getX(), player.location.getY()], 'the player\'s tile');
+  while (run.attacks.phase === 'burrow' && run.ticks < 300) ticks(1);
+  assert.equal(run.attacks.phase, 'attacks', 'surfaced');
+  ticks(1);
+  assert.equal(run.boss.facing, player, 'locked on again');
+  run.end('exit');
+});
+
+test('the burrow hole is used from wherever it is clicked, without walking to it', () => {
+  const { player, run } = runAt(2);
+  player.location = new Location(run.tile({ x: 1311, y: 9561, z: 0 }).x, run.tile({ x: 1311, y: 9561, z: 0 }).y, 0);
+  const route = (objectId) => {
+    const event = { player, objectId, clickType: 1, destination: null };
+    for (const handler of hooks.route) handler(event);
+    return event.destination;
+  };
+  assert.deepEqual(route(Shared.OBJECT.BURROW_HOLE), { x: player.location.getX(), y: player.location.getY(), z: 0 }, 'its own tile: no walk');
+  assert.equal(route(Shared.OBJECT.GAP_EXIT), null, 'other locs are walked to');
+  run.end('exit');
 });

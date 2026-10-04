@@ -7,7 +7,10 @@
  * Wiki: death sends the player back to the lobby, where their grave is (this server has no
  * graves, so what would drop lands there); a melee charge is stopped only by melee, which
  * always hits and adds a fifth of the Strength bonus; larvae take one damage a hit unless it
- * is demonbane; two destroyed volatile earth make the earthen shield.
+ * is demonbane; two destroyed volatile earth make the earthen shield. Larvae and volatile earth
+ * can be attacked on cooldown, and a demonbane weapon (the Eye of Ayak among them) adds no delay
+ * after it; attacks while the Doom charges (melee during the melee charge, any while burrowed)
+ * are 100% accurate.
  */
 
 const Shared = require("./DoomShared");
@@ -16,6 +19,7 @@ const Boss = require("./DoomBoss");
 const Rewards = require("./Rewards.Doom");
 const Records = require("./DoomRecords");
 const { onObject } = require("./Lobby.Doom");
+const { isDemonbane } = require("./DoomHazards");
 
 const { NPC, OBJECT } = Shared;
 
@@ -32,6 +36,13 @@ function useExit(event) {
   if (event.option === "Quick-exit") run.end("exit");
   else run.askToExit();
   return true;
+}
+
+/** In the game the hole is used from wherever it's clicked: no walk to it. */
+function holeFromAnywhere(event) {
+  if (event.objectId !== OBJECT.BURROW_HOLE || !runIn(event.player)) return;
+  const at = event.player.getLocation();
+  event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
 }
 
 function useHole(event) {
@@ -99,7 +110,11 @@ function chargedHit(run, hit) {
   hit.updateTotalDamage();
   // Capture: the bonus lands the next tick as its own hitsplat, one for each of the hit's.
   const parts = hit.getHits().length;
-  if (bonus > 0) attacks.after(1, () => { for (let index = 0; index < parts; index++) Shared.damage(run.boss, bonus); });
+  if (bonus > 0) {
+    attacks.after(1, () => {
+      for (let index = 0; index < parts; index++) Shared.damage(run.boss, bonus, "RED", Shared.SPLAT.BONUS);
+    });
+  }
 }
 
 /** Hits on the Doom: the shield, the burrowed charge, the melee charge, then acid (delve 3+). */
@@ -115,6 +130,25 @@ function bossHit(run, hit) {
   }
   chargedHit(run, hit);
   if (hit.getTotalDamage() > 0) run.acid.spray();
+}
+
+/** Larvae and volatile earth: hit on cooldown, and with demonbane the timer is left alone (Wiki). */
+function attackTiming(event) {
+  const npc = event.target;
+  const run = ownRun(npc);
+  if (!run || event.attacker !== run.player || !(npc.__doomLarva || npc.__doomEarth)) return;
+  event.ignoreDelay = true;
+  if (isDemonbane(event.attacker)) event.keepDelay = true;
+}
+
+/** Wiki: attacks while the Doom charges are 100% accurate (melee for the melee charge). */
+function chargedAccuracy(event) {
+  const run = ownRun(event.target);
+  if (!run || event.target !== run.boss || event.attacker !== run.player) return;
+  const { CombatType } = Shared.core();
+  const meleeCharge = run.attacks.charging && event.combatType === CombatType.MELEE;
+  const burrowCharge = run.attacks.phase === "burrow" && Number.isFinite(run.burrow.firesAt);
+  if (meleeCharge || burrowCharge) event.forceAccurate = true;
 }
 
 function modifyHit(event) {
@@ -161,12 +195,15 @@ module.exports = function registerDoomDelve(api) {
     NPC.GIANT_LARVA_MAGIC], idle, { singleton: false });
   onObject(api, OBJECT.GAP_EXIT, useExit);
   onObject(api, OBJECT.BURROW_HOLE, useHole);
+  api.onObjectRoute(holeFromAnywhere);
   api.onCanAttack(onlyOwnRun);
   api.onNpcBeforeDeath(npcDowned);
   api.onNpcHitModify(modifyHit);
+  api.onAttackTiming(attackTiming);
+  api.onCombatHitRoll(chargedAccuracy);
   api.onPlayerDeathItemDrop(dropInLobby);
   api.onPlayerDeath(dieInRun);
   api.onPlayerLogin(returnToLobby);
 };
 
-Object.assign(module.exports, { useExit, useHole, onlyOwnRun, npcDowned, modifyHit, dieInRun, returnToLobby });
+Object.assign(module.exports, { useExit, useHole, holeFromAnywhere, onlyOwnRun, npcDowned, modifyHit, attackTiming, chargedAccuracy, dieInRun, returnToLobby });

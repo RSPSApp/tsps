@@ -25,7 +25,7 @@ const DISPLAY_LAYOUT_DROPDOWN = DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID;
 const GAMEFRAME_LAYOUT_ROOTS = [548, 164, 161, 161, 548];
 const GAMEFRAME_317_OPTION = 3;
 const GAMEFRAME_317_FIXED_OPTION = 4;
-const GAMEFRAME_317_VARP = 7997; // mirrors client/common/ui/gameframeLayout.ts
+const GAMEFRAME_317_VARP = 7995; // mirrors client/common/ui/gameframeLayout.ts
 const CLIENT_LAYOUT_317_ATTRIBUTE = "client-layout317";
 const DEFAULT_GAMEFRAME_ROOT = 161;
 // world.json "gameframe" -> the dropdown option (enum 3509 index) it forces on login.

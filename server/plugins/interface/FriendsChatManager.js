@@ -181,7 +181,7 @@ class FriendsChatManager {
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
         const channel = ownerKey ? this.channels.get(ownerKey) : undefined;
         if (!channel) {
-            this.gameMessage(player, "You are not currently in a chat-channel.");
+            this.gameMessage(player, "You are not in a friends chat channel. Type without the / prefix for public chat.");
             return;
         }
         const text = this.cleanMessage(rawText, 160);

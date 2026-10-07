@@ -41,7 +41,7 @@ function init(api) {
  * Tokens earned in the dummy, catapult and shot put rooms are written in the guild ledger and
  * collected from the training staff ("May I claim my tokens please?").
  */
-const LEDGER_ATTRIBUTE = "warriorsGuild:tokens";
+const LEDGER_ATTRIBUTE = "warriors-guild:tokens";
 
 function ledger(player) {
   return Number(player.getAttribute(LEDGER_ATTRIBUTE)) || 0;

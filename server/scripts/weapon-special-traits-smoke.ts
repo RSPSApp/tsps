@@ -4,7 +4,7 @@ import "../src/main/typescript/elvarg/game/content/combat/CombatFactory";
 import * as assert from "node:assert/strict";
 import { AccuracyFormulasDpsCalc } from "../src/main/typescript/elvarg/game/content/combat/formula/AccuracyFormulasDpsCalc";
 import { DamageFormulas } from "../src/main/typescript/elvarg/game/content/combat/formula/DamageFormulas";
-import { CombatEquipment } from "../src/main/typescript/elvarg/game/content/combat/CombatEquipment";
+import * as EquipmentEffects from "../src/main/typescript/elvarg/game/content/combat/EquipmentEffects";
 import { CombatType } from "../src/main/typescript/elvarg/game/content/combat/CombatType";
 import { FightStyle } from "../src/main/typescript/elvarg/game/content/combat/FightStyle";
 import { BonusManager } from "../src/main/typescript/elvarg/game/model/equipment/BonusManager";
@@ -36,13 +36,14 @@ const item = (id: number) => ({ getId: () => id });
 
 const emptyEquipment = () => ({ getItems: () => new Array(14).fill(null).map(() => item(0)) });
 
-/** Void pieces: helm + top/robe/gloves, no deflector (3 correct pieces is enough). */
-const voidEquipment = (helmet: number) => {
+/** A full Void set occupies its four actual equipment slots. */
+const voidEquipment = (helmet: number, top = ItemIdentifiers.VOID_KNIGHT_TOP,
+    robe = ItemIdentifiers.VOID_KNIGHT_ROBE, gloves = ItemIdentifiers.VOID_KNIGHT_GLOVES) => {
     const items: { getId: () => number }[] = new Array(14).fill(null).map(() => item(0));
     items[0] = item(helmet);
-    items[4] = item(8839);
-    items[7] = item(8840);
-    items[9] = item(8842);
+    items[4] = item(top);
+    items[7] = item(robe);
+    items[9] = item(gloves);
     return { getItems: () => items };
 };
 
@@ -94,6 +95,7 @@ const fakePlayer = (opts: FakePlayerOptions = {}): any => {
         }),
         getPrayerActive: () => opts.prayerActive ?? prayers(),
         getEquipment: () => opts.equipment ?? emptyEquipment(),
+        getCombat: () => ({ getSelectedSpell: () => null, getAutocastSpell: () => null }),
         isSpecialActivated: () => opts.specialActivated ?? false,
         getCombatSpecial: () => opts.special ?? null,
     };
@@ -104,6 +106,18 @@ const special = (traits: any): any => ({
     getTraits: () => traits,
     getAccuracyMultiplier: () => 1,
     getStrengthMultiplier: () => 1,
+});
+
+// With no Void plugin attached, wearing the set must have no hidden core effect.
+assert.equal(AccuracyFormulasDpsCalc.attackMeleeRoll(fakePlayer({ attack: 99, attackBonus: [100, 0, 0, 0, 0],
+    equipment: voidEquipment(ItemIdentifiers.VOID_MELEE_HELM) })), 107 * 164);
+let voidEnabled = true;
+require("../plugins/items/VoidEquipment.plugin").register({
+    core: (PluginManager as any).getCoreApi(),
+    registerCombatEffectiveLevelModifier: (modifier: EquipmentEffects.CombatEffectiveLevelModifier) =>
+        EquipmentEffects.registerCombatEffectiveLevelModifier((entity, level, context) => voidEnabled ? modifier(entity, level, context) : level),
+    registerMagicDamageBonusModifier: (modifier: EquipmentEffects.HitModifier) =>
+        EquipmentEffects.registerMagicDamageBonusModifier((entity, bonus) => voidEnabled ? modifier(entity, bonus) : bonus),
 });
 
 // 1) Melee attack roll = effectiveAttack * (attackBonus + 64).
@@ -139,7 +153,7 @@ assert.equal(
             style: FightStyle.AGGRESSIVE,
             bonusType: 0,
             attackBonus: [100, 0, 0, 0, 0],
-            equipment: voidEquipment(CombatEquipment.MELEE_VOID_HELM),
+            equipment: voidEquipment(ItemIdentifiers.VOID_MELEE_HELM),
         })
     ),
     117 * 164, // 19188
@@ -183,7 +197,7 @@ assert.equal(
         fakePlayer({
             ranged: 99,
             style: FightStyle.ACCURATE,
-            equipment: voidEquipment(CombatEquipment.RANGED_VOID_HELM),
+            equipment: voidEquipment(ItemIdentifiers.VOID_RANGER_HELM),
         })
     ),
     12, // floor((121*64 + 320) / 640)
@@ -281,6 +295,7 @@ assert.equal(
         isNpc: () => true,
         getHitpoints: () => 100,
         getAsNpc: () => npc,
+        getRollFactor: () => 1,
         getDefenceLevel: () => 10,
         getCurrentDefinition: () => ({ getStats: () => [0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }),
     };
@@ -396,7 +411,7 @@ assert.equal(
         bot.busy = () => false;
         bot.getHitpoints = () => 99;
         bot.isDyingReturn = () => false;
-        bot.getCombat = () => ({ getTarget: () => inCombat ? attacker : null });
+        bot.getCombat = () => ({ getTarget: () => inCombat ? attacker : null, getAutocastSpell: () => null });
         const before = AccuracyFormulasDpsCalc.defenseMeleeRoll(bot, BonusManager.ATTACK_CRUSH);
         impact(bot);
         assert.equal(defence, 70, "player Defence drains too");
@@ -412,6 +427,152 @@ assert.equal(
         World.getProcessCycle = originalCycle;
         NpcDefinition.forId = originalDefinition;
     }
+}
+
+// 11) Utility specials (skipAttack) are instant: the button press runs the
+// plugin effect, drains the whole bar, and clears the activated flag - no
+// target and no attack swing (Lumber Up, Rock Knocker, Fishstabber, ...).
+{
+    const registerSpecial = (name: string) => {
+        require(`../plugins/combat/specials/${name}.SpecialAttack`)({
+            core: (PluginManager as any).getCoreApi(),
+            registerCombatSpecial: CombatSpecial.register,
+        });
+    };
+    registerSpecial("DragonAxe");
+    registerSpecial("DragonPickaxe");
+    registerSpecial("DragonHarpoon");
+
+    const utilityPlayer = (spec: any, percentage: number) => {
+        const levels: Record<number, number> = {};
+        const messages: string[] = [];
+        let activated = false;
+        let special = percentage;
+        const player: any = {
+            isPlayer: () => true,
+            getAsPlayer: () => player,
+            getCombatSpecial: () => spec,
+            getDueling: () => ({ inDuel: () => false, getRules: () => [] }),
+            isSpecialActivated: () => activated,
+            setSpecialActivated: (value: boolean) => { activated = value; },
+            getSpecialPercentage: () => special,
+            decrementSpecialPercentage: (amount: number) => { special = Math.max(0, special - amount); },
+            isRecoveringSpecialAttack: () => true,
+            sendMessage: (text: string) => messages.push(text),
+            getEquipment: () => ({ get: () => ({ getId: () => 0 }) }),
+            getWeapon: () => null,
+            getPacketSender: () => ({
+                updateSpecialAttackOrb: () => {},
+                sendSpecialAttackState: () => {},
+                sendInterfaceComponentMoval: () => {},
+                sendString: () => {},
+            }),
+            getSkillManager: () => ({
+                getMaxLevel: () => 70,
+                getCurrentLevel: (skill: any) => levels[skill.getIndex()] ?? 70,
+                setCurrentLevels: (skill: any, level: number) => { levels[skill.getIndex()] = level; },
+            }),
+        };
+        return { player, messages, levels, isActivated: () => activated, percentage: () => special };
+    };
+
+    const cases = [
+        { id: "dragon_axe", skill: Skill.WOODCUTTING },
+        { id: "dragon_pickaxe", skill: Skill.MINING },
+        { id: "dragon_harpoon", skill: Skill.FISHING },
+    ];
+    for (const { id, skill } of cases) {
+        const spec = CombatSpecial.getById(id)!;
+        assert.equal(spec.getTraits()?.skipAttack, true, `${id} is a skipAttack utility special`);
+
+        const boosted = utilityPlayer(spec, 100);
+        CombatSpecial.activate(boosted.player);
+        assert.equal(boosted.levels[skill.getIndex()], 73, `${id} boosts its skill on activation`);
+        assert.equal(boosted.percentage(), 0, `${id} drains the full bar`);
+        assert.equal(boosted.isActivated(), false, `${id} does not stay toggled`);
+
+        const dry = utilityPlayer(spec, 0);
+        CombatSpecial.activate(dry.player);
+        assert.equal(dry.levels[skill.getIndex()], undefined, `${id} does not boost without energy`);
+        assert.equal(dry.isActivated(), false, `${id} never toggles on when out of energy`);
+        assert.match(dry.messages[0] ?? "", /enough special attack energy/, `${id} reports the missing energy`);
+    }
+
+    // Normal (hit-producing) specials keep the attack-swing toggle behaviour.
+    const normalSpec: any = special({});
+    normalSpec.getCombatMethod = () => ({ type: () => CombatType.MELEE });
+    const normal = utilityPlayer(normalSpec, 100);
+    CombatSpecial.activate(normal.player);
+    assert.equal(normal.isActivated(), true, "non-utility specials still toggle on");
+    assert.equal(normal.percentage(), 100, "activating a normal special does not drain on its own");
+}
+
+// Void stages remain integral before equipment and special multipliers. Every
+// worn cosmetic/locked variant works; mixed body/legs get regular set effects.
+{
+    const I = ItemIdentifiers as any;
+    for (const suffix of ["", "_L_", "_OR_", "_L_OR_"]) {
+        for (const elite of [false, true]) {
+            for (const style of [FightStyle.ACCURATE, FightStyle.AGGRESSIVE, FightStyle.CONTROLLED, FightStyle.DEFENSIVE]) {
+                const top = I[(elite ? "ELITE_VOID_TOP" : "VOID_KNIGHT_TOP") + suffix];
+                const robe = I[(elite ? "ELITE_VOID_ROBE" : "VOID_KNIGHT_ROBE") + suffix];
+                const gloves = I["VOID_KNIGHT_GLOVES" + suffix];
+                const options = { attack: 99, strength: 99, ranged: 99, magic: 99, style,
+                    attackBonus: [1, 0, 0, 23, 29], otherBonus: [91, 101, 12.3, 0],
+                    prayerActive: prayers(PrayerHandler.PIETY, PrayerHandler.RIGOUR, PrayerHandler.AUGURY),
+                    special: special({ accuracyMultiplierStages: [1.25, 1.1], damageMultiplierStages: [1.25, 1.1] }), specialActivated: true };
+                const staged = (value: number) => Math.floor(Math.floor(value * 1.25) * 1.1);
+                const melee = fakePlayer({ ...options, equipment: voidEquipment(I["VOID_MELEE_HELM" + suffix], top, robe, gloves) });
+                const meleeAttackLevel = Math.floor((118 + (style === FightStyle.ACCURATE ? 3 : style === FightStyle.CONTROLLED ? 1 : 0) + 8) * 110 / 100);
+                const meleeStrengthLevel = Math.floor((121 + (style === FightStyle.AGGRESSIVE ? 3 : style === FightStyle.CONTROLLED ? 1 : 0) + 8) * 110 / 100);
+                assert.equal(AccuracyFormulasDpsCalc.attackMeleeRoll(melee), staged(meleeAttackLevel * 65));
+                assert.equal(DamageFormulas.calculateMaxMeleeHit(melee), staged(Math.floor((meleeStrengthLevel * 155 + 320) / 640)));
+                const ranged = fakePlayer({ ...options, equipment: voidEquipment(I["VOID_RANGER_HELM" + suffix], top, robe, gloves) });
+                const rangedStance = style === FightStyle.ACCURATE ? 3 : 0;
+                const rangedAttackLevel = Math.floor((118 + rangedStance + 8) * 110 / 100);
+                const rangedStrengthLevel = Math.floor((121 + rangedStance + 8) * (elite ? 1125 : 1100) / 1000);
+                assert.equal(AccuracyFormulasDpsCalc.attackRangedRoll(ranged), staged(rangedAttackLevel * 93));
+                assert.equal(DamageFormulas.calculateMaxRangedHit(ranged), staged(Math.floor((rangedStrengthLevel * 165 + 320) / 640)));
+                const magic = fakePlayer({ ...options, bonusType: BonusManager.ATTACK_MAGIC,
+                    equipment: voidEquipment(I["VOID_MAGE_HELM" + suffix], top, robe, gloves) });
+                const magicLevel = Math.floor((123 + 9 + (style === FightStyle.ACCURATE ? 2 : 0)) * 145 / 100);
+                assert.equal(AccuracyFormulasDpsCalc.attackMagicRoll(magic), staged(magicLevel * 87));
+                assert.equal(DamageFormulas.applyMagicDamageBonus(magic, 44), Math.floor(44 * (1000 + 123 + 40 + (elite ? 50 : 0)) / 1000));
+            }
+        }
+    }
+    const mixed = fakePlayer({ ranged: 99, style: FightStyle.ACCURATE,
+        equipment: voidEquipment(I.VOID_RANGER_HELM, I.ELITE_VOID_TOP, I.VOID_KNIGHT_ROBE) });
+    assert.equal(DamageFormulas.calculateMaxRangedHit(mixed), 12, "mixed normal/elite pieces retain regular Void damage");
+    const mixedMagic = fakePlayer({ equipment: voidEquipment(I.VOID_MAGE_HELM, I.VOID_KNIGHT_TOP, I.ELITE_VOID_ROBE) });
+    assert.equal(DamageFormulas.applyMagicDamageBonus(mixedMagic, 44), 44, "mixed set does not receive elite Magic damage");
+    const offStyle = fakePlayer({ strength: 99, style: FightStyle.AGGRESSIVE, otherBonus: [91, 0, 0, 0],
+        equipment: voidEquipment(I.VOID_MELEE_HELM), special: special({ maximumHitSource: "physical_melee" }), specialActivated: true });
+    assert.equal(DamageFormulas.sourceMaxHit(offStyle, CombatType.RANGED), 29,
+        "specials using melee damage retain the melee Void stage even when launched as ranged");
+    for (const [slot, id] of [[0, I.VOID_MELEE_HELM], [4, I.VOID_KNIGHT_TOP_2],
+        [7, I.VOID_KNIGHT_ROBE_BROKEN_], [9, -1]]) {
+        const equipment = voidEquipment(I.VOID_RANGER_HELM);
+        equipment.getItems()[slot] = item(id);
+        equipment.getItems()[5] = item(I.CLUE_NEST_EASY_);
+        assert.equal(DamageFormulas.calculateMaxRangedHit(fakePlayer({ ranged: 99, style: FightStyle.ACCURATE, equipment })), 11,
+            "wrong helms, placeholders, broken/missing pieces and stale deflector ID cannot activate Void");
+    }
+    voidEnabled = false;
+    try {
+        const melee = fakePlayer({ attack: 99, strength: 99, style: FightStyle.AGGRESSIVE,
+            equipment: voidEquipment(I.VOID_MELEE_HELM), attackBonus: [100, 0, 0, 0, 0], otherBonus: [100, 0, 0, 0] });
+        assert.equal(AccuracyFormulasDpsCalc.attackMeleeRoll(melee), 107 * 164);
+        assert.equal(DamageFormulas.calculateMaxMeleeHit(melee), 28);
+        const ranged = fakePlayer({ ranged: 99, style: FightStyle.ACCURATE,
+            equipment: voidEquipment(I.VOID_RANGER_HELM, I.ELITE_VOID_TOP, I.ELITE_VOID_ROBE) });
+        assert.equal(AccuracyFormulasDpsCalc.attackRangedRoll(ranged), 110 * 64);
+        assert.equal(DamageFormulas.calculateMaxRangedHit(ranged), 11);
+        const magic = fakePlayer({ magic: 99,
+            equipment: voidEquipment(I.VOID_MAGE_HELM, I.ELITE_VOID_TOP, I.ELITE_VOID_ROBE) });
+        assert.equal(AccuracyFormulasDpsCalc.attackMagicRoll(magic), 108 * 64);
+        assert.equal(DamageFormulas.applyMagicDamageBonus(magic, 44), 44);
+    } finally { voidEnabled = true; }
 }
 
 console.info("weapon special traits smoke passed");

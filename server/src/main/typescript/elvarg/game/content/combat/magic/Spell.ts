@@ -8,7 +8,7 @@ import { Skill } from "../../../model/Skill";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
 export abstract class Spell {
-    private static readonly NEXT_CAST_AT = "magic:nextCastAt";
+    private static readonly NEXT_CAST_AT = "magic:next-cast-at";
     private static readonly CAST_DELAY_MS = 600;
 
     abstract spellId(): number;
@@ -17,6 +17,13 @@ export abstract class Spell {
     abstract equipmentRequired(player: Player): Item[];
     abstract startCast(cast: Mobile, castOn: Mobile): void
     abstract baseExperience();
+
+    /** Members-only on the standard spellbook; free-to-play worlds disable it (other books are all members). */
+    public members = false;
+
+    public isMembers(): boolean {
+        return this.members;
+    }
 
     public getSpellbook(): MagicSpellbook {
         return MagicSpellbook.NORMAL;
@@ -43,6 +50,25 @@ export abstract class Spell {
         ) !== true);
     }
 
+    /** The part of `items` the inventory cannot fully supply, aggregated per item. */
+    private static inventoryShortfall(player: Player, items: Item[]): Item[] {
+        const required = new Map<number, number>();
+        for (const item of items) {
+            if (item == null) {
+                continue;
+            }
+            required.set(item.id, (required.get(item.id) ?? 0) + item.getAmount());
+        }
+        const missing: Item[] = [];
+        for (const [id, amount] of required) {
+            const short = amount - player.getInventory().getAmount(id);
+            if (short > 0) {
+                missing.push(new Item(id, short));
+            }
+        }
+        return missing;
+    }
+
     canCast(player: Player, del: boolean): boolean {
         if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < this.levelRequired()) {
             player.sendMessage(`You need a Magic level of ${this.levelRequired()} to cast this spell.`);
@@ -54,7 +80,8 @@ export abstract class Spell {
             PluginManager.emitSpellDisabled(
                 player,
                 this.getSpellbook(),
-                this.spellId()
+                this.spellId(),
+                this
             ) === true
         ) {
             player.getCombat().setCastSpell(null);
@@ -72,10 +99,13 @@ export abstract class Spell {
 
         const items = this.itemsRequired(player);
         let itemsToConsume: Item[] = [];
+        let runeShortfall: Item[] = [];
         if (Array.isArray(items) && items.length > 0) {
             itemsToConsume = this.itemsToConsume(player, items);
+            runeShortfall = Spell.inventoryShortfall(player, itemsToConsume);
 
-            if (!player.getInventory().containsAllItem(itemsToConsume)) {
+            // A rune source (rune pouch) may cover what the inventory cannot.
+            if (runeShortfall.length > 0 && !PluginManager.checkSpellRuneSource(player, runeShortfall)) {
                 player.sendMessage("You do not have the required items to cast this spell.");
                 player.getCombat().setCastSpell(null);
                 player.getCombat().reset();
@@ -108,6 +138,9 @@ export abstract class Spell {
         } else {
             for (const item of itemsToConsume) {
                 player.getInventory().deletes(item);
+            }
+            if (runeShortfall.length > 0) {
+                PluginManager.consumeSpellRuneSource(player, runeShortfall);
             }
 
             if (player.getAttribute?.("lunar:spellbook-swap")) {

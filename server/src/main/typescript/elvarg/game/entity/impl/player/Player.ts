@@ -10,21 +10,19 @@ import { WeaponInterfaceManager } from "../../../content/combat/WeaponInterfaceM
 import { WeaponProfiles } from "../../../content/combat/WeaponProfile";
 import { PendingHit } from "../../../content/combat/hit/PendingHit";
 import { Autocasting } from "../../../content/combat/magic/Autocasting";
-import { Presetable } from "../../../content/presets/Presetable";
 import { SkillManager } from "../../../content/skill/SkillManager";
 import { ItemDefinition } from "../../../definition/ItemDefinition";
 import { Mobile } from "../Mobile";
 import { NPC } from "../npc/NPC";
 import { NpcAggression } from "../npc/NpcAggression";
+import { AggressionTolerance } from "../npc/AggressionTolerance";
 import { Animation } from "../../../model/Animation";
 import { Appearance } from "../../../model/Appearance";
-import { ChatMessage } from "../../../model/ChatMessage";
 import { EnteredAmountAction } from "../../../model/EnteredAmountAction";
 import { EnteredSyntaxAction } from "../../../model/EnteredSyntaxAction";
 import { Flag } from "../../../model/Flag";
 import { ForceMovement } from "../../../model/ForceMovement";
 import { Location } from "../../../model/Location";
-import { PlayerInteractingOption, PlayerInteractingOptions } from "../../../model/PlayerInteractingOption";
 import { PlayerRelations } from "../../../model/PlayerRelations";
 import { PlayerStatus } from "../../../model/PlayerStatus";
 import { SecondsTimer } from "../../../model/SecondsTimer";
@@ -45,7 +43,6 @@ import { PlayerDeathTask } from "../../../task/impl/PlayerDeath"
 import { PlayerSession } from "../../../../net/PlayerSession"
 import { PacketSender } from "../../../../net/packet/PacketSender"
 import { FrameUpdater } from "../../../../util/FrameUpdater"
-import { Misc } from "../../../../util/Misc";
 import { Stopwatch } from "../../../../util/Stopwatch";
 import { TimerKey } from "../../../../util/timers/TimerKey";
 import { emptySailingState, type SailingState } from "../../../content/sailing/SailingState";
@@ -59,8 +56,9 @@ import { Task } from "../../../task/Task";
 import { World } from "../../../World";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { ServerPerf } from "../../../../util/ServerPerf";
+import { getSequencePriority } from "../../../cache/NpcAnimationScanner";
 
-const ATTR_SKIP_PERSISTENCE = "botSkipPersistence";
+const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
     18: 0,
     168: 100,
@@ -70,6 +68,8 @@ const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
 };
 
 export class Player extends Mobile {
+    public static readonly INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
+
     getSize(): number {
         return 1;
     }
@@ -88,17 +88,13 @@ export class Player extends Mobile {
     public equipment = new Equipment(this);
     private clickDelay = new Stopwatch();
     private lastItemPickup = new Stopwatch();
-    private yellDelay = new SecondsTimer();
-    private aggressionTolerance = new SecondsTimer();
+    private aggressionTolerance = new AggressionTolerance(this);
     // Delay for restoring special attack
     private specialAttackRestore = new SecondsTimer();
     /*
     * Fields
     */
     private vengeTimer: SecondsTimer = new SecondsTimer();
-    public recentKills: string[] = []; // Contains ip addresses of recent kills
-    private chatMessageQueue = new Array<ChatMessage>();
-    public currentChatMessage: ChatMessage;
     // Logout
     public forcedLogoutTimer = new SecondsTimer();
     // Trading
@@ -107,8 +103,6 @@ export class Player extends Mobile {
     private sailing: SailingState = emptySailingState();
     private dueling = new Dueling(this);
     public dialogueManager = new DialogueManager(this);
-    // Presets
-    private currentPreset: Presetable;
 
     public username: string;
     private passwordHashWithSalt: string;
@@ -117,14 +111,8 @@ export class Player extends Mobile {
     private cachedDiscordAccessToken: string = "";
     public longUsername: bigint = 0n;
     private session: PlayerSession;
-    private playerInteractingOption: PlayerInteractingOption;
     public status: PlayerStatus = PlayerStatus.NONE;
-    public currentClanChat: any;
-    public clanChatName: string;
-    // Legacy shop field kept for compile compatibility with deprecated core shop classes.
-    public shop: any;
     public interfaceId: number = -1
-    private walkableInterfaceId: number = -1
     private multiIcon: number;
     private isRunning = true;
     private playerBot = false;
@@ -132,9 +120,7 @@ export class Player extends Mobile {
     private runEnergy = 100;
     private lastRunRecovery = new Stopwatch();
     private isDying: boolean;
-    public experienceLocked: boolean;
     public forceMovement: ForceMovement;
-    private currentPet: NPC;
     private skillAnimation: number;
     private renderAnimations: number[] | null = null;
     private drainingPrayer = false;
@@ -147,10 +133,6 @@ export class Player extends Mobile {
      */
     private prayerActivatedThisTick = false;
     private spellbook: MagicSpellbook = MagicSpellbook.NORMAL;
-    private destroyItem = -1;
-    private updateInventory: boolean; // Updates inventory on next tick
-    private newPlayer: boolean;
-    private packetsBlocked = false;
 
     // Skilling
     private skill: any;
@@ -161,14 +143,6 @@ export class Player extends Mobile {
 
     // Time the account was created
     private creationDate = new Date();
-    // RC
-    public pouches: any[] = [
-        { pouch: { itemId: 5509, requiredLevel: 1, capacity: 3, decayChance: -1 }, runeEssenceAmt: 0, pureEssenceAmt: 0 },
-        { pouch: { itemId: 5510, requiredLevel: 25, capacity: 6, decayChance: 45 }, runeEssenceAmt: 0, pureEssenceAmt: 0 },
-        { pouch: { itemId: 5512, requiredLevel: 50, capacity: 9, decayChance: 29 }, runeEssenceAmt: 0, pureEssenceAmt: 0 },
-        { pouch: { itemId: 5514, requiredLevel: 75, capacity: 12, decayChance: 10 }, runeEssenceAmt: 0, pureEssenceAmt: 0 },
-    ];
-
     // Combat
     private static readonly PREFERRED_VIEW_DISTANCE = 15;
     private static readonly PREFERRED_LOCAL_PLAYERS = 250;
@@ -176,24 +150,9 @@ export class Player extends Mobile {
     public skullType: SkullType;
     private skullIconOverride: number | null = null;
     public combatSpecial: CombatSpecial;
-    private recoilDamage: number;
     private vengeanceTimer = new SecondsTimer();
     private wildernessLevel: number;
     public skullTimer: number;
-    public points: number;
-    private amountDonated: number;
-    private crystalBowShotsInStage = 0;
-    private crystalBowTrackedStageItemId = -1;
-    // Bounty hunter
-    public totalKills: number;
-    public killstreak: number;
-    public highestKillstreak: number;
-    public deaths: number;
-    public pcPoints: number;
-    private preserveUnlocked: boolean;
-    private rigourUnlocked: boolean;
-    private auguryUnlocked: boolean;
-    private targetTeleportUnlocked: boolean;
     // Banking
     // Java primitive int defaults to 0; initialize explicitly in TS to avoid undefined tab routing.
     public currentBankTab = 0;
@@ -205,7 +164,6 @@ export class Player extends Mobile {
     private searchingBank = false;
     private searchSyntax = "";
     private placeholders = false;
-    private infiniteHealth: boolean;
     private fightType = FightType.UNARMED_KICK;
     public weapon: WeaponInterfaces = WeaponInterfaces.UNARMED;
     private autoRetaliate = true;
@@ -217,12 +175,6 @@ export class Player extends Mobile {
     public rights = PlayerRights.NONE;
     private chatIcons: number[] = [];
     public donatorRights = DonatorRights.NONE;
-    /**
-     * The cached player update block for updating.
-     */
-    private cachedUpdateBlock: Buffer;
-    private loyaltyTitle = "empty";
-    private oldPosition: Location;
     public id: number;
     public name: string;
 
@@ -234,9 +186,7 @@ export class Player extends Mobile {
     constructor(playerIO: PlayerSession, spawnLocation?: Location) {
         super(spawnLocation ?? GameConstants.DEFAULT_LOCATION.clone());
         this.session = playerIO;
-        this.aggressionTolerance.start(NpcAggression.NPC_TOLERANCE_SECONDS);
     }
-
 
     public onAdd() {
         this.onLogin();
@@ -251,11 +201,14 @@ export class Player extends Mobile {
         this.getCombat().getPoisonImmunityTimer().stop();
         this.getCombat().getTeleblockTimer().stop();
         this.getTimers().cancel(TimerKey.FREEZE);
+        this.getTimers().cancel(TimerKey.FREEZE_IMMUNITY);
+        this.getCombat().setCastSpell(null);
+        this.getCombat().setPreviousCast(null);
         this.getCombat().getPrayerBlockTimer().stop();
         this.setPoisonDamage(0);
         this.setVenomed(false);
         this.setWildernessLevel(0);
-        this.setRecoilDamage(0);
+        this.setAttribute(CombatFactory.RECOIL_DAMAGE_ATTRIBUTE, 0);
         this.setSkullTimer(0);
         this.setSkullType(SkullType.WHITE_SKULL);
         WeaponInterfaceManager.assign(this);
@@ -296,7 +249,6 @@ export class Player extends Mobile {
         return this.getSkillManager().getCurrentLevel(Skill.HITPOINTS);
     }
 
-
     public getAttackAnim(): number {
         const fightType = FightType.resolve(this.getFightType()) ?? FightType.UNARMED_KICK;
         return WeaponProfiles.attackAnimation(this, fightType.getAnimation());
@@ -319,7 +271,7 @@ export class Player extends Mobile {
             return this;
         }
 
-        if (this.infiniteHealth) {
+        if (this.getAttribute(Player.INFINITE_HEALTH_ATTRIBUTE) === true) {
             if (this.getSkillManager().getCurrentLevel(Skill.HITPOINTS) > hitpoints) {
                 return this;
             }
@@ -339,7 +291,6 @@ export class Player extends Mobile {
             this.setHitpoints(this.getSkillManager().getCurrentLevel(Skill.HITPOINTS) + amount);
         }
     }
-
 
     public getBaseAttack(type: CombatType): number {
         if (type == CombatType.RANGED)
@@ -392,6 +343,25 @@ export class Player extends Mobile {
         return 1;
     }
 
+    /** An arrival-step animation held for one cycle (see performAnimation). */
+    private arrivalAnimation: Animation | null = null;
+
+    /**
+     * OSRS p_arrivedelay, applied globally: the client drops a priority-1 seq
+     * (skilling loops) that lands in the same update as a step, so one started on
+     * the tick the player stepped is held a tick. A further step drops it, as the
+     * client would.
+     */
+    override performAnimation(animation: Animation) {
+        if (animation != null && this.getMovementQueue().steppedThisWorldCycle() &&
+            getSequencePriority(animation.getId()) === 1) {
+            this.arrivalAnimation = animation;
+            return;
+        }
+        this.arrivalAnimation = null;
+        super.performAnimation(animation);
+    }
+
     public process() {
         const isBot = this.isPlayerBot();
         const timed = <T>(phase: string, fn: () => T): T =>
@@ -413,6 +383,7 @@ export class Player extends Mobile {
             timed("combat_pre_movement", () => combat.preMovementProcess());
         }
 
+        movement.processEntityPursuit();
         // Process walking queue only when movement/follow state exists.
         if (movement.hasPendingWork()) {
             timed("movement", () => movement.process());
@@ -425,12 +396,18 @@ export class Player extends Mobile {
             timed("combat_post_movement", () => combat.postMovementProcess());
         }
 
+        // Release last cycle's held arrival animation, unless this cycle stepped again.
+        const held = this.arrivalAnimation;
+        this.arrivalAnimation = null;
+        if (held && !movement.didMoveThisCycle()) super.performAnimation(held);
+
         // Reach checks for walk-to interactions run here, after this cycle's steps,
         // so arriving at an object/npc/ground item resolves on the same cycle.
         timed("walk_to_interaction", () => TaskManager.processWalkTo(this.getIndex()));
 
         // Process aggression
         if (!isBot) {
+            this.aggressionTolerance.update(this.getLocation());
             timed("npc_aggression", () => NpcAggression.process(this));
         }
 
@@ -446,33 +423,11 @@ export class Player extends Mobile {
             timed("area", () => AreaManager.process(this));
         }
 
-        // Updates inventory if an update
-        // has been requested
-        if (this.isUpdateInventory()) {
-            if (!isBot) {
-                this.getInventory().refreshItems();
-            }
-            this.setUpdateInventory(false);
-        }
-
         // Updates appearance if an update
         // has been requested
         // or if skull timer hits 0.
         if (this.isSkulled() && this.getAndDecrementSkullTimer() == 0 && !isBot) {
             this.getUpdateFlag().flag(Flag.APPEARANCE);
-        }
-
-        // Send queued chat messages
-        if (this.getChatMessageQueue().length > 0) {
-            if (!isBot) {
-                this.setCurrentChatMessage(this.getChatMessageQueue().shift());
-                this.getUpdateFlag().flag(Flag.CHAT);
-            } else {
-                this.getChatMessageQueue().shift();
-                this.setCurrentChatMessage(null);
-            }
-        } else {
-            this.setCurrentChatMessage(null);
         }
 
         // Increase run energy
@@ -542,12 +497,6 @@ export class Player extends Mobile {
         }
     }
 
-
-    // Construction
-    /*
-     
-    public loadingHouse: boolean; public portalSelected: number; public inBuildingMode: boolean; public toConsCoords: number[]; public buildFurnitureId: number; public buildFurnitureX: number; public buildFurnitureY: number; public houseRooms: Room[][][] = new Array(5).fill(new Array(13).fill(new Array(13).fill(new Room()))); public playerFurniture: PlayerFurniture[] = []; public portals: Portal[] = [];
-    */
     /**
      
     Can the player logout?
@@ -605,7 +554,7 @@ export class Player extends Mobile {
         this.setHasVengeance(false);
         this.getVengeanceTimer().stop();
         if (this.getAttribute?.(ATTR_SKIP_PERSISTENCE) !== true) {
-            GameConstants.PLAYER_PERSISTENCE.save(this);
+            GameConstants.PLAYER_PERSISTENCE.save(this, "logout");
         }
 
         const ch: any = this.getSession()?.getChannel();
@@ -678,6 +627,17 @@ export class Player extends Mobile {
         return false;
     }
 
+    /**
+     * OSRS hard interruption for item actions inside the inventory: clears the queued
+     * interaction (combat target or walk-to callback) but leaves the walk queue intact,
+     * so the player keeps walking to the clicked destination without completing the
+     * action. osrs-docs: Entity Interactions - Interruptions.
+     */
+    clearPendingAction(): void {
+        this.getCombat().clearInteraction();
+        TaskManager.cancelWalkToTasks(this.getIndex());
+    }
+
     isStaff(): boolean {
         return this.rights !== PlayerRights.NONE;
     }
@@ -685,20 +645,9 @@ export class Player extends Mobile {
     isDonator(): boolean {
         return (this.donatorRights != DonatorRights.NONE);
     }
-
-
-    isPacketsBlocked(): boolean {
-        return this.packetsBlocked;
-    }
-
-    setPacketsBlocked(blocked: boolean) {
-        this.packetsBlocked = blocked;
-    }
     /*
          * Getters/Setters
          */
-    public static Data = new Date();
-
     public getCreationDate(): Date {
         return this.creationDate;
     }
@@ -757,14 +706,6 @@ export class Player extends Mobile {
         this.longUsername = longUsername;
         return this;
     }
-
-    public castlewarsKills: number;
-    castlewarsDeaths: number;
-    castlewarsIdleTime: number;
-
-    public resetCastlewarsIdleTime(): void {
-		this.castlewarsIdleTime = 200;
-	}
 
     public getPasswordHashWithSalt(): string {
         return this.passwordHashWithSalt || "";
@@ -835,6 +776,26 @@ export class Player extends Mobile {
         return this.viewDistance;
     }
 
+    /** How far away NPCs (and their projectiles) are seen; 15 unless an area widens it. */
+    private npcViewDistance = Player.NPC_VIEW_DISTANCE;
+    private static readonly NPC_VIEW_DISTANCE = 15;
+    /** NPC positions are sent as signed 8-bit offsets from the player. */
+    private static readonly MAX_NPC_VIEW_DISTANCE = 127;
+
+    public getNpcViewDistance(): number {
+        return this.npcViewDistance;
+    }
+
+    /**
+     * Widens how far NPCs are seen, as OSRS does in some large arenas (the Doom of Mokhaiotl's
+     * fight uses the large NPC update throughout). null puts it back to 15.
+     */
+    public setNpcViewDistance(distance: number | null): void {
+        this.npcViewDistance = distance == null
+            ? Player.NPC_VIEW_DISTANCE
+            : Math.max(1, Math.min(Player.MAX_NPC_VIEW_DISTANCE, Math.trunc(distance)));
+    }
+
     public resizeViewDistance(localPlayerCount: number): void {
         if (localPlayerCount >= Player.PREFERRED_LOCAL_PLAYERS) {
             if (this.viewDistance > 1) this.viewDistance--;
@@ -864,24 +825,8 @@ export class Player extends Mobile {
         return this;
     }
 
-    public experienceLockedReturn(): boolean {
-        return this.experienceLocked;
-    }
-
-    public setExperienceLocked(experienceLocked: boolean) {
-        this.experienceLocked = experienceLocked;
-    }
-
     public getRelations(): PlayerRelations {
         return this.relations;
-    }
-
-    public getWalkableInterfaceId(): number {
-        return this.walkableInterfaceId;
-    }
-
-    public setWalkableInterfaceId(interfaceId: number) {
-        this.walkableInterfaceId = interfaceId;
     }
 
     public isRunningReturn(): boolean {
@@ -890,15 +835,6 @@ export class Player extends Mobile {
 
     public setRunning(isRunning: boolean): this {
         this.isRunning = isRunning;
-        return this;
-    }
-
-    public getPlayerInteractingOption(): PlayerInteractingOption {
-        return this.playerInteractingOption;
-    }
-
-    public setPlayerInteractingOption(playerInteractingOption: PlayerInteractingOption): Player {
-        this.playerInteractingOption = playerInteractingOption;
         return this;
     }
 
@@ -1009,14 +945,6 @@ export class Player extends Mobile {
         this.combatSpecial = combatSpecial;
     }
 
-    public getRecoilDamage(): number {
-        return this.recoilDamage;
-    }
-
-    public setRecoilDamage(recoilDamage: number) {
-        this.recoilDamage = recoilDamage;
-    }
-
     public getSpellbook() {
         return this.spellbook;
     }
@@ -1037,14 +965,6 @@ export class Player extends Mobile {
         this.wildernessLevel = wildernessLevel;
     }
 
-    public getDestroyItem(): number {
-        return this.destroyItem;
-    }
-
-    public setDestroyItem(destroyItem: number) {
-        this.destroyItem = destroyItem;
-    }
-
     public isSkulled(): boolean {
         return this.skullTimer > 0;
     }
@@ -1061,37 +981,8 @@ export class Player extends Mobile {
         this.skullTimer = skullTimer;
     }
 
-    public getPoints(): number {
-        return this.points;
-    }
-
-    public setPoints(points: number): void {
-        this.points = points;
-    }
-
-    public incrementPoints(points: number): void {
-        this.points += points;
-    }
-
-    public isUpdateInventory(): boolean {
-        return this.updateInventory;
-    }
-
-    public setUpdateInventory(updateInventory: boolean): void {
-        this.updateInventory = updateInventory;
-    }
-
     public getClickDelay(): Stopwatch {
         return this.clickDelay;
-    }
-
-    public getShop(): any {
-        return this.shop;
-    }
-
-    public setShop(shop: any): Player {
-        this.shop = shop;
-        return this;
     }
 
     public getStatus(): PlayerStatus {
@@ -1173,14 +1064,6 @@ export class Player extends Mobile {
         return this;
     }
 
-    public isNewPlayer(): boolean {
-        return this.newPlayer;
-    }
-
-    public setNewPlayer(newPlayer: boolean): void {
-        this.newPlayer = newPlayer;
-    }
-
     public isSearchingBank(): boolean {
         return this.searchingBank;
     }
@@ -1195,55 +1078,6 @@ export class Player extends Mobile {
 
     public setSearchSyntax(searchSyntax: string): void {
         this.searchSyntax = searchSyntax;
-    }
-
-    public isPreserveUnlocked(): boolean {
-        return this.preserveUnlocked;
-    }
-
-    public getPreserveUnlocked(): boolean {
-        return this.preserveUnlocked;
-    }
-
-    public setPreserveUnlocked(preserveUnlocked: boolean): void {
-        this.preserveUnlocked = preserveUnlocked;
-    }
-
-    public isRigourUnlocked(): boolean {
-        return this.rigourUnlocked;
-    }
-
-    public getRigourUnlocked(): boolean {
-        return this.rigourUnlocked;
-    }
-
-    public setRigourUnlocked(rigourUnlocked: boolean): void {
-        this.rigourUnlocked = rigourUnlocked;
-    }
-
-
-    public getAuguryUnlocked(): boolean {
-        return this.auguryUnlocked;
-    }
-
-    public setAuguryUnlocked(auguryUnlocked: boolean): void {
-        this.auguryUnlocked = auguryUnlocked;
-    }
-
-    public getCurrentClanChat(): any {
-        return this.currentClanChat;
-    }
-
-    public setCurrentClanChat(currentClanChat: any): void {
-        this.currentClanChat = currentClanChat;
-    }
-
-    public getClanChatName(): string {
-        return this.clanChatName;
-    }
-
-    public setClanChatName(clanChatName: string): void {
-        this.clanChatName = clanChatName;
     }
 
     public getTrading(): Trading {
@@ -1262,96 +1096,12 @@ export class Player extends Mobile {
         return this.quickPrayers;
     }
 
-    public isTargetTeleportUnlocked(): boolean {
-        return this.targetTeleportUnlocked;
-    }
-
-
-    public getTargetTeleportUnlocked(): boolean {
-        return this.targetTeleportUnlocked;
-    }
-
-    public setTargetTeleportUnlocked(targetTeleportUnlocked: boolean): void {
-        this.targetTeleportUnlocked = targetTeleportUnlocked;
-    }
-
-    public getYellDelay(): SecondsTimer {
-        return this.yellDelay;
-    }
-
-    public getAmountDonated(): number {
-        return this.amountDonated;
-    }
-
-    public setAmountDonated(amountDonated: number): void {
-        this.amountDonated = amountDonated;
-    }
-
     public isPlayerBot(): boolean {
         return this.playerBot;
     }
 
     public setPlayerBot(playerBot: boolean): void {
         this.playerBot = playerBot;
-    }
-
-    public incrementAmountDonated(amountDonated: number): void {
-        this.amountDonated += amountDonated;
-    }
-
-    public getTotalKills(): number {
-        return this.totalKills;
-    }
-
-    public setTotalKills(totalKills: number): void {
-        this.totalKills = totalKills;
-    }
-
-    public incrementTotalKills(): void {
-        this.totalKills++;
-    }
-
-    public incrementDeaths(): void {
-        this.deaths++;
-    }
-
-    public getDeaths(): number {
-        return this.deaths;
-    }
-
-    public setDeaths(deaths: number): void {
-        this.deaths = deaths;
-    }
-
-    public getHighestKillstreak(): number {
-        return this.highestKillstreak;
-    }
-
-    public setHighestKillstreak(highestKillstreak: number): void {
-        this.highestKillstreak = highestKillstreak;
-    }
-
-    public getKillstreak(): number {
-        return this.killstreak;
-    }
-
-    public setKillstreak(killstreak: number): void {
-        this.killstreak = killstreak;
-    }
-
-    public incrementKillstreak() {
-        this.killstreak++;
-    }
-
-    public getKillDeathRatio(): string {
-        const deaths = this.deaths || 0;
-        const kills = this.totalKills || 0;
-        const ratio = deaths === 0 ? kills : kills / deaths;
-        return isFinite(ratio) ? Misc.FORMATTER.format(ratio) : "0";
-    }
-
-    public getRecentKills(): string[] {
-        return this.recentKills;
     }
 
     public getSpecialAttackRestore(): SecondsTimer {
@@ -1384,40 +1134,8 @@ export class Player extends Mobile {
         return this.dueling;
     }
 
-    public getCrystalBowShotsInStage(): number {
-        return this.crystalBowShotsInStage;
-    }
-
-    public setCrystalBowShotsInStage(crystalBowShotsInStage: number) {
-        this.crystalBowShotsInStage = crystalBowShotsInStage;
-    }
-
-    public getCrystalBowTrackedStageItemId(): number {
-        return this.crystalBowTrackedStageItemId;
-    }
-
-    public setCrystalBowTrackedStageItemId(crystalBowTrackedStageItemId: number) {
-        this.crystalBowTrackedStageItemId = crystalBowTrackedStageItemId;
-    }
-
-    public getCurrentPet(): NPC {
-        return this.currentPet;
-    }
-
-    public setCurrentPet(currentPet: NPC) {
-        this.currentPet = currentPet;
-    }
-
-    public getAggressionTolerance(): SecondsTimer {
+    public getAggressionTolerance(): AggressionTolerance {
         return this.aggressionTolerance;
-    }
-
-    public getCachedUpdateBlock(): Buffer {
-        return this.cachedUpdateBlock;
-    }
-
-    public setCachedUpdateBlock(cachedUpdateBlock: Buffer) {
-        this.cachedUpdateBlock = cachedUpdateBlock;
     }
 
     public getSkill(): any {
@@ -1436,31 +1154,6 @@ export class Player extends Mobile {
         this.creationMenu = creationMenu;
     }
 
-    public getPouches(): any[] {
-        return this.pouches;
-    }
-
-    public setPouches(pouches: any[]): void {
-        this.pouches = pouches;
-    }
-
-    public getLoyaltyTitle(): string {
-        return this.loyaltyTitle;
-    }
-
-    public setLoyaltyTitle(loyaltyTitle: string): void {
-        this.loyaltyTitle = loyaltyTitle;
-        this.getUpdateFlag().flag(Flag.APPEARANCE);
-    }
-
-    public hasInfiniteHealth(): boolean {
-        return this.infiniteHealth;
-    }
-
-    public setInfiniteHealth(infiniteHealth: boolean): void {
-        this.infiniteHealth = infiniteHealth;
-    }
-
     public getDonatorRights(): DonatorRights {
         return this.donatorRights;
     }
@@ -1477,45 +1170,8 @@ export class Player extends Mobile {
         this.placeholders = placeholders;
     }
 
-    public getCurrentPreset(): Presetable {
-        return this.currentPreset;
-    }
-
-    public setCurrentPreset(currentPreset: Presetable): void {
-        this.currentPreset = currentPreset;
-    }
-
-    public getChatMessageQueue(): Array<ChatMessage> {
-        return this.chatMessageQueue;
-    }
-
-    public getCurrentChatMessage(): ChatMessage {
-        return this.currentChatMessage;
-    }
-
-    public setCurrentChatMessage(currentChatMessage: ChatMessage): void {
-        this.currentChatMessage = currentChatMessage;
-    }
-
-    public sendChat(message: string, colour: number = 0, effect: number = 0) {
-        if (!message) {
-            return;
-        }
-        const packed = Misc.textPack(message);
-        this.getChatMessageQueue().push(new ChatMessage(colour, effect, packed));
-        this.getUpdateFlag().flag(Flag.CHAT);
-    }
-
     public manipulateHit(hit: PendingHit): PendingHit {
         return hit;
-    }
-
-    public getOldPosition(): Location {
-        return this.oldPosition;
-    }
-
-    public setOldPosition(oldPosition: Location): void {
-        this.oldPosition = oldPosition;
     }
 
     public getEnteredAmountAction(): EnteredAmountAction {

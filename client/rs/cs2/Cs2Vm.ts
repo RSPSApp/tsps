@@ -426,10 +426,6 @@ export class Cs2Vm {
     itemSearchResults: number[] = [];
     itemSearchIndex: number = 0;
 
-    // Widget children iteration state (for IF/CC_CHILDREN_FIND/FINDNEXTID)
-    childrenIterWidget: WidgetNode | null = null;
-    childrenIterIndices: number[] = [];
-    childrenIterIndex: number = 0;
 
     // Event context (for magic argument substitution)
     eventContext = {
@@ -686,6 +682,24 @@ export class Cs2Vm {
         return this.intStack[--this.intStackSize];
     }
 
+    /** Push a 64-bit value onto the long stack, growing if needed */
+    pushLong(value: bigint): void {
+        if (this.longStackSize >= this.longStack.length) {
+            const grown = new BigInt64Array(this.longStack.length * 2);
+            grown.set(this.longStack);
+            this.longStack = grown;
+        }
+        this.longStack[this.longStackSize++] = BigInt.asIntN(64, value);
+    }
+
+    /** Pop a 64-bit value from the long stack */
+    popLong(): bigint {
+        if (this.longStackSize <= 0) {
+            throw new Error("RuntimeException");
+        }
+        return this.longStack[--this.longStackSize];
+    }
+
     /** Peek at the top integer without popping */
     peekInt(): number {
         if (this.intStackSize <= 0) {
@@ -815,6 +829,8 @@ export class Cs2Vm {
             peekInt: vm.peekInt.bind(vm),
             pushString: vm.pushString.bind(vm),
             popString: vm.popString.bind(vm),
+            pushLong: vm.pushLong.bind(vm),
+            popLong: vm.popLong.bind(vm),
 
             // Active widget
             get activeWidget() {
@@ -962,26 +978,6 @@ export class Cs2Vm {
             },
             set itemSearchIndex(v: number) {
                 vm.itemSearchIndex = v;
-            },
-
-            // Widget children iteration state (for IF/CC_CHILDREN_FIND/FINDNEXTID)
-            get childrenIterWidget() {
-                return vm.childrenIterWidget;
-            },
-            set childrenIterWidget(v: WidgetNode | null) {
-                vm.childrenIterWidget = v;
-            },
-            get childrenIterIndices() {
-                return vm.childrenIterIndices;
-            },
-            set childrenIterIndices(v: number[]) {
-                vm.childrenIterIndices = v;
-            },
-            get childrenIterIndex() {
-                return vm.childrenIterIndex;
-            },
-            set childrenIterIndex(v: number) {
-                vm.childrenIterIndex = v;
             },
 
             // Script invocation (stub - handled in main loop)

@@ -39,13 +39,13 @@ Bold values are captured; the rest are OpenRune's. OpenRune had mine 3's crab at
   3. **Tick 2:** the player is moved to the landing, facing north.
   4. **Tick 3:** fade in (`[0, 0, 0, 255, 50]`), then the minimap and `busy` are reset.
 - **The crab's animations:** idle 12480, spawn 12481, burrow 12482, attack 12483, shell disintegrate 12484, shell idle 12485. It has no block animation: while being hit it played only its attack.
-- **The boss HUD** is interface 303 `hpbar_hud`, opened at login into the toplevel's `hpbar_hud` pane (161/164 child 2, 165 child 10).
+- **The boss HUD** is sent by the `BossHud` plugin ([boss-hud.md](boss-hud.md)). It is interface 303 `hpbar_hud`, opened at login into the toplevel's `hpbar_hud` pane (161/164 child 2, 165 child 10).
   - varp 1683 `hpbar_hud_npc` = the npc id;
   - varbit 6099 `hpbar_hud_hp` = time left;
   - varbit 6100 `hpbar_hud_basehp` = lifetime;
   - varbit 12401 `hpbar_hud_boss` = 1;
   - client script 2376 `hp_hud_open`, given 19 of its components;
-  - the fade scripts 2887 (in) and 2889 (out) take 14 of its components and a transparency (OpenRune: 255 and 0). Leaving the mine fades the HUD out and hides `hpbar_hud:hp` (303:5) 2 ticks later, as OpenRune does. Showing it fades it back in (2887 from 254) before 2376: a finished fade-out leaves the bar's parts at transparency 255, 2376 doesn't reset them, and 2887 (via 2888) returns at once when told to start from the transparency they already have. OpenRune also runs 2287 and 2102 on open, but with arguments those scripts don't take (2287 is a 2-int helper, 2102 takes 12), so they're left out;
+  - the fade scripts 2887 (in) and 2889 (out) take 14 of its components and a transparency (255 and 0). Leaving the mine fades the HUD out and hides `hpbar_hud:hp` (303:5) 2 ticks later. Showing it fades it back in (2887 from 254) after 2376: a finished fade-out leaves the bar's parts at transparency 255, 2376 doesn't reset them, and 2887 (via 2888) returns at once when told to start from the transparency they already have;
   - the bar's colours (303:13, :14 and :15 set to 25600, 576 and 800).
 
 ### The crab burrowing at mine 2 and rising at mine 1

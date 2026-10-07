@@ -29,6 +29,7 @@ export const enum ServerPacketId {
     VARP_LARGE = 41, // varp with value outside byte range
     VARBIT = 42,
     VARP_BATCH = 43, // multiple varps in one packet
+    VARP_LONG = 44, // 64-bit varp (rev 241: GE offer price)
 
     // ========================================
     // INVENTORY/ITEMS (50-69)
@@ -59,6 +60,7 @@ export const enum ServerPacketId {
     DESTINATION = 87,
     PLAYER_OPTION = 88,
     HINT_ARROW = 89,
+    ATTACK_TIMER = 90, // ticks until the local player's next attack (not an OSRS packet)
 
     // ========================================
     // INTERFACES/WIDGETS (100-119)
@@ -80,12 +82,14 @@ export const enum ServerPacketId {
     WIDGET_SET_QUEST_LIST = 116,
     WIDGET_SET_MODEL = 117,
     WIDGET_SET_POSITION = 118,
+    WIDGET_SET_COLOUR = 119,
 
     // ========================================
     // CHAT/MESSAGES (120-129)
     // ========================================
     CHAT_MESSAGE = 120,
     FRIENDS_CHAT_UPDATE = 121,
+    CHAT_FILTER_SETTINGS = 122,
 
     // ========================================
     // WORLD UPDATES (130-149)
@@ -176,6 +180,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.VARP_LARGE]: 6, // varpId(2) + value(4)
     [ServerPacketId.VARBIT]: 6, // varbitId(2) + value(4)
     [ServerPacketId.VARP_BATCH]: -1,
+    [ServerPacketId.VARP_LONG]: 10, // varpId(2) + value(8)
 
     [ServerPacketId.INVENTORY_SNAPSHOT]: -2,
     // Quantity is encoded OSRS-style: 1 byte, or 255 + int (variable length).
@@ -198,6 +203,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.PLAYER_OPTION]: -1,
     [ServerPacketId.DESTINATION]: 4, // worldX(2) + worldY(2)
     [ServerPacketId.HINT_ARROW]: 6, // type(1) + a(2) + b(2) + c(1)
+    [ServerPacketId.ATTACK_TIMER]: 1, // ticks(1)
 
     [ServerPacketId.WIDGET_OPEN]: 3, // groupId(2) + modal(1)
     [ServerPacketId.WIDGET_CLOSE]: 2, // groupId(2)
@@ -208,6 +214,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.WIDGET_SET_TEXT]: -2,
     [ServerPacketId.WIDGET_SET_MODEL]: 8, // uid(4) + raw modelId(4)
     [ServerPacketId.WIDGET_SET_POSITION]: 8, // uid(4) + x(2) + y(2)
+    [ServerPacketId.WIDGET_SET_COLOUR]: 6, // uid(4) + 15-bit rgb colour(2)
     [ServerPacketId.WIDGET_SET_HIDDEN]: 5, // uid(4) + hidden(1)
     [ServerPacketId.WIDGET_SET_ITEM]: 10, // uid(4) + itemId(2) + quantity(4)
     [ServerPacketId.WIDGET_SET_NPC_HEAD]: 6, // uid(4) + npcId(2)
@@ -220,6 +227,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
 
     [ServerPacketId.CHAT_MESSAGE]: -2, // var-short: tutorial/quest game messages exceed 255 bytes
     [ServerPacketId.FRIENDS_CHAT_UPDATE]: -2,
+    [ServerPacketId.CHAT_FILTER_SETTINGS]: 3, // public(1) + private(1) + trade(1)
 
     [ServerPacketId.LOC_CHANGE]: -1,
     [ServerPacketId.LOC_ADD_CHANGE]: -1,

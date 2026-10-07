@@ -4,6 +4,9 @@ const { Equipment } = require("../../src/main/typescript/elvarg/game/model/conta
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 
 const TWISTED_BOW_ID = ItemIdentifiers.TWISTED_BOW;
+const MAGIC_CAP = 250;
+/** Chambers of Xeric monsters (the "xerician" attribute) raise the cap to 350. */
+const XERICIAN_MAGIC_CAP = 350;
 
 function getEquippedWeaponId(player) {
   return Number(player?.getEquipment?.()?.get?.(Equipment.WEAPON_SLOT)?.getId?.() ?? -1);
@@ -29,21 +32,36 @@ function getTargetMagicLevel(target) {
   return 0;
 }
 
+/** Players' worn magic attack bonus; NPCs' magic accuracy is stats[7]. */
 function getTargetMagicAccuracy(target) {
-  if (!target?.isPlayer?.()) {
-    return 0;
+  if (target?.isPlayer?.()) {
+    return Number(
+      target.getAsPlayer()?.getBonusManager?.()?.getAttackBonus?.()?.[BonusManager.ATTACK_MAGIC] ?? 0
+    );
   }
-  return Number(
-    target.getAsPlayer()?.getBonusManager?.()?.getAttackBonus?.()?.[BonusManager.ATTACK_MAGIC] ?? 0
-  );
+  if (target?.isNpc?.()) {
+    return Number(target.getAsNpc()?.getCurrentDefinition?.()?.getStats?.()?.[7] ?? 0);
+  }
+  return 0;
 }
 
+function isXerician(target) {
+  return target?.isNpc?.() === true
+    && target.getAsNpc()?.getCurrentDefinition?.()?.hasAttribute?.("xerician") === true;
+}
+
+/**
+ * The target's Magic level or magic accuracy, whichever is higher, capped at 250,
+ * or 350 against Chambers of Xeric monsters (Wiki: Twisted bow).
+ */
 function getTwistedBowScaleValue(target) {
-  return Math.max(0, Math.floor(Math.max(getTargetMagicLevel(target), getTargetMagicAccuracy(target))));
+  const cap = isXerician(target) ? XERICIAN_MAGIC_CAP : MAGIC_CAP;
+  const scale = Math.max(getTargetMagicLevel(target), getTargetMagicAccuracy(target));
+  return Math.max(0, Math.min(cap, Math.floor(scale)));
 }
 
 function twistedBowDamagePercent(scale) {
-  const x = Math.min(250, Math.max(0, scale));
+  const x = Math.max(0, scale);
   const value =
     250 +
     ((3 * x - 14) / 100) -
@@ -52,7 +70,7 @@ function twistedBowDamagePercent(scale) {
 }
 
 function twistedBowAccuracyPercent(scale) {
-  const x = Math.min(350, Math.max(0, scale));
+  const x = Math.max(0, scale);
   const value =
     140 +
     ((3 * x - 10) / 100) -
@@ -68,6 +86,8 @@ let BonusManager;
 
 module.exports = {
   name: "TwistedBow",
+  _test: { twistedBowDamagePercent, twistedBowAccuracyPercent, getTwistedBowScaleValue },
+  members: true,
   register(api) {
     BonusManager = api.getBonusManager();
     api.registerRangedCombatModifier({

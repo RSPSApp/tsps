@@ -21,6 +21,8 @@ type CombatStats = {
     poisonous?: boolean;
     venomous?: boolean;
     demon?: boolean;
+    attributes?: string[];
+    members?: boolean;
     attackType?: CombatType;
     slayerLevel?: number;
     attackBonuses?: {
@@ -41,6 +43,8 @@ type CombatAnimation = {
     anims?: { spawn?: number | null; attack?: number; block?: number; death?: number };
     sounds?: { death?: number };
     projectile?: number;
+    /** Ticks from the death animation to the death itself; 2 when absent. */
+    deathTicks?: number;
 };
 
 type CombatAnimationRole = "attack" | "block" | "death";
@@ -81,6 +85,8 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             poisonous: monster.poisonous === true,
             venomous: monster.venomous === true,
             demon: Array.isArray(monster.attributes) && monster.attributes.includes("demon"),
+            attributes: Array.isArray(monster.attributes) ? monster.attributes.map(String) : undefined,
+            members: monster.members === true,
             attackType: NpcDefinitionLoader.resolveAttackType(monster.attack_type),
             slayerLevel:
                 monster.slayer_monster === true && monster.slayer_level > 0
@@ -229,6 +235,8 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     poisonous: stat.poisonous ?? definition.isPoisonous(),
                     venomous: stat.venomous ?? definition.isVenomous(),
                     demon: stat.demon ?? definition.isDemon(),
+                    attributes: stat.attributes ?? definition.getAttributes(),
+                    members: stat.members ?? definition.isMembers(),
                     attackType: stat.attackType ?? definition.getAttackType(),
                     slayerLevel: stat.slayerLevel ?? definition.getSlayerLevel(),
                 });
@@ -249,10 +257,11 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     deathAnim: animation.anims?.death ?? definition.getDeathAnim(),
                     spawnAnim: animation.anims?.spawn ?? definition.getSpawnAnim(),
                     deathSound: animation.sounds?.death ?? definition.getDeathSound(),
+                    deathTicks: Number.isInteger(animation.deathTicks) ? animation.deathTicks : definition.getDeathTicks(),
                 });
             }
         }
-        console.info(
+        (mismatched > 0 ? console.warn : console.debug)(
             `[npc-definitions] cache-backed; configured stats applied=${applied}, mismatched=${mismatched}, ` +
             `service animations inferred=${inferredAnimations}, guessed=${guessedAnimations}`
         );

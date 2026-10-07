@@ -8,7 +8,7 @@ const { ObjectIdentifiers } = require("../../src/main/typescript/elvarg/util/Obj
 const RING_OF_WEALTH_SCROLL = 12783;
 const IMBUE_COST = 50000;
 const COINS = 995;
-const AUTO_COLLECT_ATTRIBUTE = "ringOfWealthAutoCollect";
+const AUTO_COLLECT_ATTRIBUTE = "ring-of-wealth-auto-collect";
 const INVENTORY_INTERFACE_ID = 3214;
 const CHARGED_RINGS = new Map([
   [11980, { charges: 5, nextId: 11982, imbuedId: 20786 }],
@@ -223,6 +223,7 @@ function removeImbueOnDeath(event, itemOnGroundManager) {
 
 module.exports = {
   name: "RingOfWealth",
+  members: true,
   ACTIONS,
   register(api) {
     const itemOnGroundManager = api.getItemOnGroundManager();

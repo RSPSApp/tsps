@@ -243,8 +243,8 @@ export function registerSocialOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.CLAN_SORT_ADD_WORLD, (ctx) => {
         ctx.intStackSize--;
     });
-    handlers.set(Opcodes.CLAN_SORT_APPLY, () => {
-        /* no-op */
+    handlers.set(Opcodes.FRIENDLIST_SORT_RANK, (ctx) => {
+        ctx.intStackSize--; // ascending
     });
 
     // === Friends Chat Sorting (different from friend list sorting) ===
@@ -262,7 +262,6 @@ export function registerSocialOps(handlers: HandlerMap): void {
 
     // === Clan Profile ===
     handlers.set(Opcodes.CLANPROFILE_FIND, (ctx) => {
-        ctx.intStackSize -= 2; // pop hash1, hash0
         ctx.pushInt(0); // not found
     });
 }

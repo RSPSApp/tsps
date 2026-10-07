@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "about": "Crabs that sit disguised as scenery and wake when a player steps next to them. Pairs and animations are from the cache (every crab shares one skeleton: 1314 sinks it, 1316 is 1314 reversed; 1316 lasts 74 client cycles, so a crab rises for 3 ticks before it can move or attack); behaviour from the OSRS Wiki (Sand Crab, Rock Crab, Tolerance). restTicks isn't documented anywhere and is an estimate."
+  },
+  "wakeRange": 1,
+  "revealAnim": 1316,
+  "revealTicks": 3,
+  "hideAnim": 1314,
+  "restTicks": 20,
+  "returnGraceTicks": 10,
+  "families": [
+    { "name": "Rock Crab", "dormant": [101, 103], "awake": { "101": 100, "103": 102 } },
+    { "name": "Giant Rock Crab", "dormant": [2262, 5941], "awake": { "2262": 2261, "5941": 5940 } },
+    { "name": "Sand Crab", "dormant": [5936, 7207], "awake": { "5936": 5935, "7207": 7206 } },
+    { "name": "Ammonite Crab", "dormant": [7800], "awake": { "7800": 7799 } },
+    { "name": "Swamp Crab", "dormant": [8299], "awake": { "8299": 8297 } },
+    { "name": "King Sand Crab", "dormant": [7267], "awake": { "7267": 7266 } }
+  ],
+  "diary": [
+    { "name": "Sand Crab", "diary": "kourend", "task": "kill-a-sandcrab", "count": 1 },
+    { "name": "Rock Crab", "diary": "fremennik", "task": "kill-5-rock-crabs", "count": 5 }
+  ]
+}

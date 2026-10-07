@@ -14,7 +14,7 @@ const SPAWN_TICKS = 6;
 const ATTACK_TICKS = 8;
 /** "It will despawn if not defeated within five minutes." */
 const LIFETIME_TICKS = 500;
-const LOST_ARMOUR_ATTRIBUTE = "warriorsGuild:lostArmour";
+const LOST_ARMOUR_ATTRIBUTE = "warriors-guild:lost-armour";
 const SHANOMI_LOST_VARIANT = "standard-dialogue-if-the-animated-armour-despawns-after-5-minutes-of-not-being-killed";
 const SHANOMI_WRONG_ITEM_VARIANT = "using-any-item-that-isn-t-a-standard-metal-full-helm-platebody-or-platelegs-on-the-animator";
 

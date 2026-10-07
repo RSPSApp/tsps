@@ -10,7 +10,6 @@ const SIDE_JOURNAL_TAB_CONTAINER_UID =
 const INTERFACE_CHARACTER_SUMMARY_ID = 712;
 const INTERFACE_QUEST_LIST_ID = 399;
 const INTERFACE_ACHIEVEMENT_DIARY_ID = 259;
-const COLLECTION_LOG_GROUP_ID = 621;
 
 // Tab-selection state, drives which tab icon is shown highlighted. Packed
 // into varp 1141 bits 4-6, but the client exposes it as varbit 8168.
@@ -22,6 +21,8 @@ const SIDE_JOURNAL_ACHIEVEMENT_DIARY_TAB = 2;
 const SIDE_JOURNAL_SUMMARY_ICON_UID = (SIDE_JOURNAL_GROUP_ID << 16) | 2;
 const SIDE_JOURNAL_QUEST_ICON_UID = (SIDE_JOURNAL_GROUP_ID << 16) | 10;
 const SIDE_JOURNAL_DIARY_ICON_UID = (SIDE_JOURNAL_GROUP_ID << 16) | 18;
+const ACHIEVEMENT_DIARY_TASKBOX_UID = (INTERFACE_ACHIEVEMENT_DIARY_ID << 16) | 2;
+const ACHIEVEMENT_DIARY_COUNT = 12;
 
 const ROOT_INTERFACE_ID = 161;
 const QUEST_TAB_ICON_UID = (ROOT_INTERFACE_ID << 16) | 61;
@@ -44,10 +45,6 @@ const FLAGS_OP1 = 1 << 1;
 const FLAGS_OP1_4 = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4);
 const FLAGS_OP1_2 = (1 << 1) | (1 << 2);
 
-// Collection log close button (childId 1, confirmed from click logs: uid
-// matches exactly (COLLECTION_LOG_GROUP_ID<<16)|1, and transmits by default
-// unlike our custom widgets - real cache-defined button).
-const COLLECTION_LOG_CLOSE_BUTTON_UID = (COLLECTION_LOG_GROUP_ID << 16) | 1;
 
 const SCRIPT_ACCOUNT_SUMMARY_SET_TIME_ID = 3970;
 const VARBIT_ACCOUNT_SUMMARY_DISPLAY_PLAYTIME = 12933;
@@ -62,6 +59,10 @@ function mountSideJournalContent(player, groupId, tabIndex) {
     // The client renders the quest list only while 399 is mounted and purges the
     // row flags on unmount, so the quest runtime repopulates on every open.
     pluginApi?.emitCustomEvent("quest:list-refresh", { player });
+  }
+  if (groupId === INTERFACE_ACHIEVEMENT_DIARY_ID) {
+    // As captured: the diary rows (one per diary) take Open and Wiki each time the tab mounts.
+    player.getPacketSender().sendInterfaceFlagsRange(ACHIEVEMENT_DIARY_TASKBOX_UID, 0, ACHIEVEMENT_DIARY_COUNT - 1, FLAGS_OP1_2);
   }
   if (groupId === INTERFACE_CHARACTER_SUMMARY_ID) {
     // Re-send row flags every time 712 comes back - the client drops them
@@ -129,30 +130,10 @@ module.exports = {
         case ROW_ACHIEVEMENTS:
           mountSideJournalContent(player, INTERFACE_ACHIEVEMENT_DIARY_ID, SIDE_JOURNAL_ACHIEVEMENT_DIARY_TAB);
           return true;
-        case ROW_COLLECTION_LOG: {
-          // sendInterface/WIDGET_OPEN only creates a client-side bookkeeping
-          // session - it never actually renders anything (confirmed against
-          // this codebase's own working Bank.open()). Bank mounts into
-          // root:16 (main) via sendSubInterface - same mechanism as our
-          // quest journal fix. Explicit type 0 matches hasInterruptibleInterface()
-          // in Player.ts, so movement correctly auto-closes this the same
-          // way it closes Bank.
-          //
-          // Bank ALSO mounts an inventory side-panel at root:74 (type 3),
-          // which this used to copy - but subInterfaceTargets in
-          // PacketSender.ts is keyed by groupId alone, so mounting the
-          // MAIN_INVENTORY_GROUP_ID (149) a second time there silently
-          // overwrote the tracking entry for the player's real sidebar
-          // inventory tab (root:79, set at login), breaking it after this
-          // interface closed. Not worth the side panel until there's a
-          // safe way to do it - removed.
-          //
-          // Content still renders empty: nothing tracks item acquisitions
-          // server-side yet.
-          const root = 161;
-          player.getPacketSender().sendSubInterface((root << 16) | 16, COLLECTION_LOG_GROUP_ID, 0);
+        case ROW_COLLECTION_LOG:
+          // The collection log plugin owns the log (plugins/collectionlog/).
+          pluginApi?.emitCustomEvent("collection-log:open", { player });
           return true;
-        }
         case ROW_PLAYTIME: {
           const revealed = !playtimeRevealedByPlayer.get(player);
           playtimeRevealedByPlayer.set(player, revealed);
@@ -169,15 +150,6 @@ module.exports = {
         default:
           return false;
       }
-    });
-
-    // Collection log close button. closeInterface() is the same mechanism
-    // sendWidgetClose (client) -> "widget"/action:"close" (server) uses -
-    // it looks up the tracked target for this group and sends the correct
-    // close_sub, same as walking away does via closeInterruptibleInterfaces().
-    api.onInterfaceActionButton(COLLECTION_LOG_CLOSE_BUTTON_UID, ({ player }) => {
-      player.getPacketSender().closeInterface(COLLECTION_LOG_GROUP_ID);
-      return true;
     });
 
     api.log("registered");

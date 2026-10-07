@@ -36,16 +36,25 @@ export class SpotAnimGpuCache {
         transparent: boolean,
         programKey: string,
         program: any,
+        frameCycle: number = 0,
     ): SpotAnimGpuRecord | undefined {
         if (!program) return undefined;
 
-        const key = `${spotId | 0}|${frameIdx | 0}|${transparent ? 1 : 0}|${SPOT_ANIM_GPU_CACHE_VERSION}`;
+        const cycleKey = frameCycle > 0 ? `~${frameCycle | 0}` : "";
+        const frame = `${frameIdx | 0}${cycleKey}`;
+        const pass = transparent ? 1 : 0;
+        const key = `${spotId | 0}|${frame}|${pass}|${SPOT_ANIM_GPU_CACHE_VERSION}`;
         let entry = this.entries.get(key);
         if (entry) {
             this.entries.delete(key);
             this.entries.set(key, entry);
         } else {
-            const geom = this.cache.ensureFrameGeometry(spotId | 0, frameIdx | 0, transparent);
+            const geom = this.cache.ensureFrameGeometry(
+                spotId | 0,
+                frameIdx | 0,
+                transparent,
+                frameCycle | 0,
+            );
             if (!geom || (geom.indices.length | 0) <= 0) return undefined;
 
             const app = (this.renderer as any).app;

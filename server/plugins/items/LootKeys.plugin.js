@@ -8,10 +8,7 @@ const Food = require("./Food.plugin");
 const Potions = require("./Potions.plugin");
 const { GameObject } = require("../../src/main/typescript/elvarg/game/entity/impl/object/GameObject");
 const { ObjectManager } = require("../../src/main/typescript/elvarg/game/entity/impl/object/ObjectManager");
-const { MapObjects } = require("../../src/main/typescript/elvarg/game/entity/impl/object/MapObjects");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
-const { ForceMovement } = require("../../src/main/typescript/elvarg/game/model/ForceMovement");
-const { ForceMovementTask } = require("../../src/main/typescript/elvarg/game/task/impl/ForceMovementTask");
 const { ObjectIdentifiers } = require("../../src/main/typescript/elvarg/util/ObjectIdentifiers");
 
 const KEY_IDS = Object.freeze([ItemIdentifiers.LOOT_KEY, ItemIdentifiers.LOOT_KEY_2, ItemIdentifiers.LOOT_KEY_3, ItemIdentifiers.LOOT_KEY_4, ItemIdentifiers.LOOT_KEY_5]);
@@ -19,11 +16,11 @@ const KEY_ID_SET = new Set(KEY_IDS);
 const KEY_DATA = "lootKey";
 const MAX_KEYS = 5;
 const LOOT_KEY_SKULL_ICON_BASE = 7;
-const UNLOCK_ATTRIBUTE = "lootKeysUnlocked";
-const ENABLED_ATTRIBUTE = "lootKeysEnabled";
-const SETTINGS_ATTRIBUTE = "lootKeySettings";
-const CHEST_ATTRIBUTE = "lootChestContents";
-const CHEST_TAB_ATTRIBUTE = "lootChestTab";
+const UNLOCK_ATTRIBUTE = "loot-keys-unlocked";
+const ENABLED_ATTRIBUTE = "loot-keys-enabled";
+const SETTINGS_ATTRIBUTE = "loot-key-settings";
+const CHEST_ATTRIBUTE = "loot-chest-contents";
+const CHEST_TAB_ATTRIBUTE = "loot-chest-tab";
 
 const validItem = (item) => Number.isInteger(item?.id) && item.id > 0 && Number.isInteger(item?.amount) && item.amount > 0;
 const isLootKey = (item) => KEY_ID_SET.has(item?.getId?.());
@@ -68,7 +65,9 @@ function isEligibleKill(killer, victim) {
 }
 
 function itemValue(item) {
-  return (ItemDefinition.forId(item?.id ?? item?.getId?.())?.getValue?.() ?? 0) * (item?.amount ?? item?.getAmount?.() ?? 0);
+  // Loot wealth reads as market value, falling back to the store value.
+  const price = ItemDefinition.forId(item?.id ?? item?.getId?.())?.getGrandExchangeValue?.() ?? 0;
+  return price * (item?.amount ?? item?.getAmount?.() ?? 0);
 }
 
 const totalValue = (items) => items.reduce((total, item) => total + itemValue(item), 0);
@@ -307,7 +306,6 @@ const FEROX_CHEST = { x: 3138, y: 3626, z: 0, type: 10, face: 2 };
 const FEROX_REGION_ID = ((FEROX_CHEST.x >> 6) << 8) | (FEROX_CHEST.y >> 6);
 const uiState = new WeakMap();
 let feroxChestInstalled = false;
-let TaskManager;
 
 function installFeroxChest({ regionId }) {
   if (regionId !== FEROX_REGION_ID || feroxChestInstalled) return;
@@ -433,91 +431,12 @@ function handleChestInterfaceAction(player, event) {
   return true;
 }
 
-// Ferox Enclave
-const BARRIER_IDS = [39652, 39653];
-const BOUNDARY = [[3126,3618],[3130,3618],[3131,3617],[3139,3617],[3140,3618],[3144,3618],[3144,3620],[3150,3626],[3153,3626],[3154,3627],[3156,3627],[3156,3634],[3155,3634],[3155,3636],[3156,3636],[3156,3647],[3148,3647],[3147,3646],[3139,3646],[3138,3645],[3138,3640],[3125,3640],[3125,3633],[3123,3631],[3123,3623],[3124,3622],[3126,3622]];
-
-function tile(location) {
-  const value = Location.readTile(location);
-  return value && value.z === 0 ? value : null;
-}
-
-function isInsideEnclave(location) {
-  const point = tile(location);
-  if (!point) return false;
-  let inside = false;
-  for (let index = 0, previous = BOUNDARY.length - 1; index < BOUNDARY.length; previous = index++) {
-    const [x, y] = BOUNDARY[index];
-    const [lastX, lastY] = BOUNDARY[previous];
-    if ((y > point.y) !== (lastY > point.y) && point.x < ((lastX - x) * (point.y - y)) / (lastY - y) + x) inside = !inside;
-  }
-  return inside;
-}
-
-function isSafeLocation(location) {
-  const point = tile(location);
-  if (isInsideEnclave(point)) return true;
-  if (!point) return false;
-  for (let x = point.x - 1; x <= point.x + 1; x++) {
-    for (let y = point.y - 1; y <= point.y + 1; y++) {
-      if ((MapObjects.mapObjects.get(MapObjects.getHash(x, y, point.z)) ?? []).some((object) => BARRIER_IDS.includes(object.getId()))) return true;
-    }
-  }
-  return false;
-}
-
-function isTeleblocked(player) {
-  return player?.getCombat?.()?.getTeleblockTimer?.()?.finished?.() === false;
-}
-
-function crossingTarget(playerLocation, object) {
-  const source = tile(playerLocation);
-  const barrier = tile(object?.getLocation?.());
-  const face = object?.getFace?.();
-  if (!source || !barrier || !Number.isInteger(face)) return null;
-
-  // These are type-0 walls. Their map face is the authoritative crossing axis.
-  // Use the routed player's current tile: sourceLocation is captured before routing.
-  const delta = face === 0 ? { x: source.x < barrier.x ? 1 : -1, y: 0 }
-    : face === 2 ? { x: source.x > barrier.x ? -1 : 1, y: 0 }
-    : face === 1 ? { x: 0, y: source.y > barrier.y ? -1 : 1 }
-    : face === 3 ? { x: 0, y: source.y < barrier.y ? 1 : -1 }
-    : null;
-  if (!delta) return null;
-  const target = { x: source.x + delta.x, y: source.y + delta.y, z: source.z };
-  return { entering: isInsideEnclave(target), target, delta };
-}
-
-function passThrough({ player, object }) {
-  const current = tile(player.getLocation?.());
-  const crossing = crossingTarget(current, object);
-  if (!crossing) return true;
-  if (crossing.entering && isTeleblocked(player)) {
-    player.sendMessage("A magical force prevents you from entering the Ferox Enclave while teleblocked.");
-    return true;
-  }
-  if (current && TaskManager && player.getForceMovement?.() == null) {
-    const direction = crossing.delta.y > 0 ? 0 : crossing.delta.y < 0 ? 2 : crossing.delta.x > 0 ? 1 : 3;
-    TaskManager.submit(new ForceMovementTask(player, 1, new ForceMovement(
-      player.getLocation().clone(), new Location(crossing.delta.x, crossing.delta.y), 0, 30, direction, -1,
-    )));
-  }
-  return true;
-}
-
-function denySafeZoneAttack(event) {
-  if (event.allow !== null || event.attacker?.isPlayer?.() !== true || event.target?.isPlayer?.() !== true) return;
-  if (!isSafeLocation(event.attacker.getLocation()) && !isSafeLocation(event.target.getLocation())) return;
-  if (!isTeleblocked(event.attacker) && !isTeleblocked(event.target)) event.allow = false;
-}
-
 module.exports = {
   name: "LootKeys",
   // Potions is read-only classification data; depending on its lifecycle would
   // defer this named Talk-to handler behind the generic NpcDialogues fallback.
   dependsOn: ["Wilderness", "Food"],
   register(api) {
-    TaskManager = api.getTaskManager();
     api.persistAttribute(LootKeys.UNLOCK_ATTRIBUTE);
     api.persistAttribute(LootKeys.ENABLED_ATTRIBUTE);
     api.persistAttribute(LootKeys.SETTINGS_ATTRIBUTE);
@@ -555,11 +474,7 @@ module.exports = {
     api.onInterfaceActionClick((event) => {
       if (handleChestInterfaceAction(event.player, event)) event.handled = true;
     });
-    api.onObjectFirstClick(BARRIER_IDS, passThrough);
-    api.onCanAttack(denySafeZoneAttack);
   },
   ...LootKeys,
-  isSafeLocation,
-  isInsideEnclave,
-  _test: { createLootKey, queueDrop, handleInterfaceAction: handleChestInterfaceAction, nativeInventories, open: openChest, openKeySelection, crossingTarget, denySafeZoneAttack, isInsideEnclave, isSafeLocation, passThrough },
+  _test: { createLootKey, queueDrop, handleInterfaceAction: handleChestInterfaceAction, nativeInventories, open: openChest, openKeySelection },
 };

@@ -101,6 +101,7 @@ export const state = {
               chatIcons?: number[];
               chatPrefix?: string;
               isAdmin?: boolean;
+              membersWorld?: boolean;
           }
         | undefined,
     lastInventorySnapshot: undefined as InventorySlotMessage[] | undefined,
@@ -164,6 +165,7 @@ export const state = {
             chatIcons?: number[];
             chatPrefix?: string;
             isAdmin?: boolean;
+            membersWorld?: boolean;
         }) => void
     >(),
     inventoryListeners: new Set<(update: InventoryServerUpdate) => void>(),

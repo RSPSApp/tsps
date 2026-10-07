@@ -78,7 +78,8 @@ export class ShopManager {
     private static readonly QUANTITY_VARBIT = 6348;
     private static readonly QUANTITY_MODE_BY_BUTTON = new Map([[5, 0], [8, 1], [10, 2], [12, 3], [14, 4]]);
     private static readonly QUANTITY_BY_MODE = [0, 1, 5, 10, 50];
-    private static readonly QUANTITY_MODE_ATTRIBUTE = "shop:quantityMode";
+    private static readonly QUANTITY_MODE_ATTRIBUTE = "shop:quantity-mode";
+    private static readonly POINTS_ATTRIBUTE = "shop:points";
     private static readonly shopsById = new Map<number, RuntimeShop>();
     private static readonly activeShopByPlayer = new WeakMap<object, number>();
     private static readonly activeTargetByPlayer = new WeakMap<object, number>();
@@ -321,6 +322,21 @@ export class ShopManager {
             return true;
         }
         return false;
+    }
+
+    /** The player's open shop; `stock` is in display order, so an entry's index is its display slot. */
+    public static getOpenShop(player: any): {
+        name: string; currency: string; stock: Array<{ itemId: number; amount: number; price: number }>;
+    } | null {
+        const shop = this.currentShop(player);
+        if (!shop) return null;
+        return {
+            name: shop.definition.getName(),
+            currency: this.currencyName(shop.definition.getCurrency()),
+            stock: this.displayEntries(shop).map((entry) => ({
+                ...entry, price: this.itemPrice(shop, ItemDefinition.forId(entry.itemId)),
+            })),
+        };
     }
 
     private static quantityMode(player: any): number {
@@ -831,7 +847,7 @@ export class ShopManager {
         const handler = this.currencyHandlers.get(currency);
         if (handler) return Math.max(0, handler.amount(player) | 0);
         if (currency === "POINTS") {
-            return Number(player.getPoints?.() ?? 0);
+            return Number(player.getAttribute(this.POINTS_ATTRIBUTE) ?? 0);
         }
         const itemId = this.currencyItemId(currency);
         return itemId > 0
@@ -854,7 +870,7 @@ export class ShopManager {
             return;
         }
         if (currency === "POINTS") {
-            player.setPoints((player.getPoints?.() ?? 0) + quantity);
+            player.setAttribute(this.POINTS_ATTRIBUTE, this.currencyAmount(player, currency) + quantity);
             return;
         }
         const itemId = this.currencyItemId(currency);
@@ -878,7 +894,7 @@ export class ShopManager {
             return;
         }
         if (currency === "POINTS") {
-            player.setPoints(Math.max(0, (player.getPoints?.() ?? 0) - quantity));
+            player.setAttribute(this.POINTS_ATTRIBUTE, Math.max(0, this.currencyAmount(player, currency) - quantity));
             return;
         }
         const itemId = this.currencyItemId(currency);

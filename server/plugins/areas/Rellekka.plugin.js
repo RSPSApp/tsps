@@ -20,6 +20,7 @@ function enterTunnel(event) {
 
 module.exports = {
   name: "Rellekka",
+  members: true,
   register(api) {
     api.onObjectInteraction("Tunnel", { Enter: enterTunnel });
   },

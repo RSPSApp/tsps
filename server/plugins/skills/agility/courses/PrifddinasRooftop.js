@@ -90,6 +90,7 @@ module.exports = {
   key: "prifddinas",
   name: "Prifddinas Agility",
   lapXp: 1337,
+  petBase: 25146, // Giant squirrel base chance (Wiki)
   obstacles: [
     obstacle(ObjectIds.LADDER_392, 1, 11.5, [3253, 6109, 0], climb([3255, 6109, 2]), {
       onSuccess: choosePortal,

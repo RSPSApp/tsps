@@ -1,0 +1,275 @@
+{
+  "templates": {
+    "chop_trees": {
+      "mode": "woodcutting",
+      "repeat": true,
+      "requires": [
+        {
+          "skill": {
+            "id": "woodcutting",
+            "min": "$level"
+          }
+        }
+      ],
+      "setup": [],
+      "produces": [
+        "logs",
+        "woodcutting"
+      ],
+      "actions": [
+        {
+          "type": "equipTool",
+          "tool": "axe"
+        },
+        {
+          "type": "interactObject",
+          "catalog": "tree",
+          "tier": "$tier",
+          "option": "Chop down",
+          "until": {
+            "inventoryFull": true
+          },
+          "stallSeconds": 120
+        },
+        {
+          "type": "bank"
+        }
+      ]
+    },
+    "mine_rocks": {
+      "mode": "mining",
+      "repeat": true,
+      "requires": [
+        {
+          "skill": {
+            "id": "mining",
+            "min": "$level"
+          }
+        }
+      ],
+      "setup": [],
+      "actions": [
+        {
+          "type": "equipTool",
+          "tool": "pickaxe"
+        },
+        {
+          "type": "interactObject",
+          "catalog": "rock",
+          "tier": "$tier",
+          "option": "Mine",
+          "until": {
+            "inventoryFull": true
+          },
+          "stallSeconds": 120
+        },
+        {
+          "type": "bank"
+        }
+      ]
+    },
+    "burn_logs": {
+      "mode": "firemaking",
+      "repeat": true,
+      "requires": [
+        {
+          "skill": {
+            "id": "firemaking",
+            "min": "$level"
+          }
+        }
+      ],
+      "setup": [],
+      "actions": [
+        {
+          "type": "ensureItem",
+          "item": "tinderbox"
+        },
+        {
+          "type": "ensureItem",
+          "item": "$log",
+          "amount": "$logs"
+        },
+        {
+          "type": "lightFire"
+        }
+      ]
+    },
+    "smelt_bar": {
+      "mode": "smelting",
+      "repeat": true,
+      "requires": [
+        {
+          "skill": {
+            "id": "smithing",
+            "min": "$level"
+          }
+        }
+      ],
+      "setup": [],
+      "actions": [
+        {
+          "type": "ensureItem",
+          "item": "$ore1",
+          "amount": "$oreAmount"
+        },
+        {
+          "type": "ensureItem",
+          "item": "$ore2",
+          "amount": "$oreAmount"
+        },
+        {
+          "type": "smelt",
+          "bar": "$bar"
+        },
+        {
+          "type": "bank"
+        }
+      ]
+    }
+  },
+  "resolvers": [
+    {
+      "id": "withdraw_axe",
+      "resolves": "item:axe",
+      "actions": [
+        {
+          "type": "bank",
+          "withdraw": [
+            {
+              "item": "bronze_axe",
+              "amount": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "return_to_site",
+      "resolves": "area",
+      "actions": [
+        {
+          "type": "walkTo",
+          "x": 3147,
+          "y": 3230,
+          "z": 0,
+          "radius": 6
+        }
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "id": "lumbridge_normal_trees",
+      "template": "chop_trees",
+      "capacity": 64,
+      "fields": {
+        "level": 1,
+        "tier": "normal",
+        "log": "logs"
+      }
+    },
+    {
+      "id": "copper_rocks",
+      "template": "mine_rocks",
+      "capacity": 32,
+      "fields": {
+        "level": 1,
+        "tier": "copper"
+      }
+    },
+    {
+      "id": "burn_normal_logs",
+      "template": "burn_logs",
+      "capacity": 16,
+      "fields": {
+        "level": 1,
+        "log": "logs",
+        "logs": 20
+      }
+    },
+    {
+      "id": "smelt_bronze",
+      "template": "smelt_bar",
+      "capacity": 8,
+      "fields": {
+        "level": 1,
+        "ore1": "copper_ore",
+        "ore2": "tin_ore",
+        "oreAmount": 10,
+        "bar": "Bronze bar"
+      }
+    },
+    {
+      "id": "pvp",
+      "mode": "pvp",
+      "capacity": 64,
+      "repeat": true,
+      "failureCooldownSeconds": 5,
+      "actions": [
+        {
+          "type": "pvpCombat"
+        }
+      ]
+    },
+    {
+      "id": "pvp_engage",
+      "mode": "pvp",
+      "capacity": 64,
+      "repeat": false,
+      "ephemeral": true,
+      "failureCooldownSeconds": 5,
+      "actions": [
+        {
+          "type": "pvpCombat",
+          "exitWhenIdle": true
+        }
+      ]
+    },
+    {
+      "id": "roam",
+      "mode": "roaming",
+      "capacity": 1024,
+      "repeat": true,
+      "failureCooldownSeconds": 5,
+      "actions": [
+        {
+          "type": "wander"
+        }
+      ]
+    },
+    {
+      "id": "follow_owner",
+      "mode": "follow_owner",
+      "capacity": 64,
+      "repeat": false,
+      "ephemeral": true,
+      "manual": true,
+      "failureCooldownSeconds": 5,
+      "actions": [
+        {
+          "type": "followOwner"
+        }
+      ]
+    },
+    {
+      "id": "bank_trip",
+      "mode": "bank_run",
+      "capacity": 64,
+      "repeat": false,
+      "ephemeral": true,
+      "manual": true,
+      "failureCooldownSeconds": 5,
+      "actions": [
+        {
+          "type": "bank",
+          "until": {
+            "inventoryFull": false
+          },
+          "suppressAutoRetaliate": true
+        }
+      ]
+    }
+  ],
+  "sites": []
+}

@@ -1,0 +1,56 @@
+{
+  "$comment": "Pickable scenery, by object name: what one pick gives and how the plant depletes. 'deplete' is the chance a pick removes it (or turns it into its 'empty' object), 'respawnTicks' how long until it is back, counted from the tick the pick starts (a number, or [min, max]). Sources per entry: 'capture' (rsprox), 'wiki', or 'estimated'.",
+  "pickables": [
+    {
+      "name": "Wheat",
+      "item": 1947, "itemName": "Grain",
+      "message": "You pick some grain.",
+      "deplete": 1, "respawnTicks": 20,
+      "source": "capture (Varrock wheat field: removed on every pick, back 20 ticks after the pick started)"
+    },
+    {
+      "name": "Potato",
+      "item": 1942, "itemName": "Potato",
+      "message": "You pick a potato.",
+      "deplete": 1, "respawnTicks": 50,
+      "source": "capture (Lumbridge: back 50 ticks after the pick started); wiki: Potato (scenery), 50 ticks"
+    },
+    {
+      "name": "Onion",
+      "item": 1957, "itemName": "Onion",
+      "message": "You pick an onion.",
+      "deplete": 1, "respawnTicks": 50,
+      "source": "wiki: Onion (scenery), respawn after 50 ticks; message unverified"
+    },
+    {
+      "name": "Cabbage",
+      "item": 1965, "itemName": "Cabbage",
+      "message": "You pick a cabbage.",
+      "deplete": 1, "respawnTicks": [40, 80],
+      "source": "wiki: Cabbage (scenery), respawn after 40 to 80 ticks depending on world population; message unverified"
+    },
+    {
+      "name": "Sweetcorn",
+      "item": 5986, "itemName": "Sweetcorn",
+      "message": "You pick some sweetcorn.",
+      "deplete": 1, "respawnTicks": 20,
+      "empty": { "51829": 51831, "51830": 51832 },
+      "source": "wiki: Sweetcorn (scenery), turns empty temporarily (its Empty 1/2 versions); respawn time estimated (as wheat); message unverified; the rare sweetcorn seed not modelled"
+    },
+    {
+      "name": "Flax",
+      "item": 1779, "itemName": "Flax",
+      "message": "You pick some flax.",
+      "deplete": 0.1875, "respawnTicks": 10,
+      "source": "wiki: Flax (plant), 3/16 chance to disappear, back after 10 ticks (Mod Ash)"
+    },
+    {
+      "name": "Nettles",
+      "item": 4241, "itemName": "Nettles",
+      "message": "You pick the nettles.",
+      "deplete": 0,
+      "needsGloves": true,
+      "source": "wiki: Nettles, gloves are needed (not Beekeeper's); without them no nettles and up to 2 damage; depletion not documented"
+    }
+  ]
+}

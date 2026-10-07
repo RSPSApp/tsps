@@ -187,6 +187,7 @@ let TaskManager;
 
 module.exports = {
   name: "CrazyArchaeologist",
+  members: true,
   register(api) {
     TaskManager = api.getTaskManager();
     api.registerNpcCombatMethodProvider(

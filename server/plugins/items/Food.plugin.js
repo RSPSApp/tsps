@@ -5,21 +5,44 @@ const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
 const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/definition/ItemDefinition");
 let pluginApi;
+const { restoreRunEnergy, curePoisonAndVenom } = require("./ConsumableEffects");
 const { ItemIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
+const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 
 const EAT_ANIMATION = new Animation(829);
+// Ticks eating adds to the attack timer; combo foods add 2 (Wiki: Food).
+const ATTACK_DELAY = 3;
+const COMBO_ATTACK_DELAY = 2;
 
 const FOOD = new Map([
   [ItemIds.KEBAB, { heal: 4 }],
+  [ItemIdentifiers.BAGUETTE, { heal: 6 }],
+  [ItemIdentifiers.TRIANGLE_SANDWICH, { heal: 6 }],
+  [ItemIdentifiers.SQUARE_SANDWICH, { heal: 6 }],
+  [ItemIdentifiers.ROLL, { heal: 6 }],
+  [ItemIdentifiers.CHOCOLATE_BAR, { heal: 3 }],
+  [ItemIdentifiers.SPINACH_ROLL, { heal: 2 }],
+  [ItemIdentifiers.STRANGE_FRUIT, { heal: 0, energy: 30, poisonProtection: 18,
+    message: "You eat the fruit. It tastes great, some of your energy is restored!" }],
+  [ItemIdentifiers.MEAT_PIE, { heal: 6, replacementId: ItemIdentifiers.HALF_A_MEAT_PIE }],
+  [ItemIdentifiers.HALF_A_MEAT_PIE, { heal: 6, replacementId: ItemIdentifiers.PIE_DISH }],
   [ItemIds.CHEESE, { heal: 4 }],
   [ItemIds.CAKE, { heal: 5, replacementId: ItemIds._2_3_CAKE }],
   [ItemIds._2_3_CAKE, { heal: 5, replacementId: ItemIds.SLICE_OF_CAKE }],
   [ItemIds.SLICE_OF_CAKE, { heal: 5 }],
   [ItemIds.NULL_2422, { heal: 12, verb: "use" }],
   [ItemIds.JANGERBERRIES, { heal: 2 }],
-  [ItemIds.WORM_CRUNCHIES, { heal: 7 }],
+  [ItemIds.WORM_CRUNCHIES, { heal: 8, karambwan: true }],
+  [ItemIdentifiers.CHOCCHIP_CRUNCHIES, { heal: 7, karambwan: true }],
+  [ItemIdentifiers.SPICY_CRUNCHIES, { heal: 7, karambwan: true }],
+  [ItemIdentifiers.TOAD_CRUNCHIES, { heal: 8, karambwan: true }],
+  [ItemIdentifiers.WORM_BATTA, { heal: 11, karambwan: true }],
+  [ItemIdentifiers.TOAD_BATTA, { heal: 11, karambwan: true }],
+  [ItemIdentifiers.CHEESE_TOM_BATTA, { heal: 11, karambwan: true }],
+  [ItemIdentifiers.FRUIT_BATTA, { heal: 11, karambwan: true }],
+  [ItemIdentifiers.VEGETABLE_BATTA, { heal: 11, karambwan: true }],
   [ItemIds.EDIBLE_SEAWEED, { heal: 4 }],
   [ItemIds.ANCHOVIES, { heal: 1 }],
   [ItemIds.SHRIMPS, { heal: 3 }],
@@ -45,6 +68,10 @@ const FOOD = new Map([
   [ItemIds.MANTA_RAY, { heal: 22 }],
   [ItemIdentifiers.MARLIN, { heal: 24 }],
   [ItemIds.COOKED_KARAMBWAN, { heal: 18, karambwan: true }],
+  // The Gauntlet: crystal and corrupted paddlefish combo-eat like karambwan (Wiki).
+  [ItemIdentifiers.PADDLEFISH, { heal: 20 }],
+  [ItemIdentifiers.CRYSTAL_PADDLEFISH, { heal: 16, karambwan: true }],
+  [ItemIdentifiers.CORRUPTED_PADDLEFISH, { heal: 16, karambwan: true }],
   [ItemIds.ANGLERFISH, { heal: 22, anglerfish: true }],
   [ItemIdentifiers.BLIGHTED_MANTA_RAY, { heal: 22 }],
   [ItemIdentifiers.BLIGHTED_ANGLERFISH, { heal: 22, anglerfish: true }],
@@ -77,7 +104,7 @@ const FOOD = new Map([
   [ItemIdentifiers.CHOCOLATE_CAKE, { heal: 5, replacementId: ItemIdentifiers._2_3_CHOCOLATE_CAKE }],
   [ItemIdentifiers._2_3_CHOCOLATE_CAKE, { heal: 5, replacementId: ItemIdentifiers.CHOCOLATE_SLICE }],
   [ItemIdentifiers.CHOCOLATE_SLICE, { heal: 5 }],
-  [ItemIdentifiers.STRAWBERRY, { heal: 1 }],
+  [ItemIdentifiers.STRAWBERRY, { heal: 1, strawberry: true }],
   [ItemIdentifiers.COOKED_SWEETCORN, { heal: 0, sweetcorn: true }],
 ]);
 
@@ -94,17 +121,38 @@ function getAnglerfishHeal(currentHp) {
   return Math.min(22, heal);
 }
 
+/** Wiki: 1 + 6% of the player's maximum hitpoints, capped at 6. */
+function getStrawberryHeal(maxHp) {
+  return Math.min(6, 1 + Math.floor(maxHp * 0.06));
+}
+
 function canEat(player, itemId) {
   return pluginApi.emitCanEat(player, itemId) !== false;
+}
+
+/**
+ * Wiki: anglerfish cannot overheal while its eater is in combat in a PvP
+ * area, with either a player or an NPC; everywhere else the heal may raise
+ * Hitpoints above the base maximum.
+ */
+function canAnglerfishOverheal(player) {
+  if (!Wilderness.isPvpArea(player?.getLocation?.())) {
+    return true;
+  }
+  const combat = player.getCombat?.();
+  return combat?.getTarget?.() == null && combat?.getAttacker?.() == null;
 }
 
 module.exports = {
   name: "Food",
   FOOD,
   FOOD_ITEM_IDS,
+  ATTACK_DELAY,
+  COMBO_ATTACK_DELAY,
   isFoodItem(itemId) {
-    return FOOD.has(itemId);
+    return Number.isInteger(itemId) && FOOD.has(itemId);
   },
+  _test: { getAnglerfishHeal, getStrawberryHeal, canAnglerfishOverheal },
   register(api) {
     pluginApi = api;
     api.onItemFirstAction((event) => {
@@ -143,7 +191,7 @@ module.exports = {
       }
 
       timers.extendOrRegister(TimerKey.FOOD, 3);
-      player.getCombat().extendAttackDelay(5);
+      player.getCombat().delayAttack(food.karambwan ? COMBO_ATTACK_DELAY : ATTACK_DELAY);
       if (food.karambwan) {
         timers.registers(TimerKey.KARAMBWAN, 3);
         timers.registers(TimerKey.POTION, 3);
@@ -166,17 +214,27 @@ module.exports = {
 
       if (food.anglerfish) {
         healAmount = getAnglerfishHeal(currentHp);
-        maxHp += healAmount;
+        if (canAnglerfishOverheal(player)) {
+          maxHp += healAmount;
+        }
       } else if (food.sweetcorn) {
         healAmount = Math.floor(maxHp / 10) + 1;
+      } else if (food.strawberry) {
+        healAmount = getStrawberryHeal(maxHp);
       }
 
-      const nextHp = Math.min(currentHp + healAmount, maxHp);
-      player.setHitpoints(Math.max(0, nextHp));
+      if (healAmount > 0) player.setHitpoints(Math.max(0, Math.min(currentHp + healAmount, maxHp)));
+      if (food.energy) restoreRunEnergy(player, food.energy);
+      if (food.poisonProtection) {
+        curePoisonAndVenom(player);
+        const immunity = player.getCombat().getPoisonImmunityTimer();
+        if (immunity.secondsRemaining() < food.poisonProtection) immunity.start(food.poisonProtection);
+      }
 
       const verb = food.verb || "eat";
       const itemName = ItemDefinition.forId(itemId).getName().toLowerCase();
-      player.sendMessage(`You ${verb} the ${itemName}.`);
+      player.sendMessage(food.message ?? `You ${verb} the ${itemName}.`);
+      api.emitCustomEvent("food:eaten", { player, itemId, heal: healAmount });
       return true;
     });
 

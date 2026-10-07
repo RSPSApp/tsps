@@ -1,3 +1,15 @@
+/**
+ * How the skillmulti menu shows: per-item labels (default: the item names), the most that can be
+ * chosen and the amount it opens on (default: the menu maximum), and clientscript 2046's first
+ * argument (default 13; the sawmill sends 0).
+ */
+export interface CreationMenuOptions {
+    labels?: string[];
+    maxAmount?: number;
+    lastAmount?: number;
+    mode?: number;
+}
+
 export class CreationMenu {
     /**
     * The title of this {@link CreationMenu}.
@@ -23,10 +35,14 @@ export class CreationMenu {
      * @param title  The title.
      * @param action The action to execute upon selecting amount.
      */
-    constructor(title: string, items: number[], action: CreationMenuAction) {
+    constructor(title: string, items: number[], action: CreationMenuAction, private readonly options: CreationMenuOptions = {}) {
         this.title = title;
         this.items = items;
         this.action = action;
+    }
+
+    public getOptions(): CreationMenuOptions {
+        return this.options;
     }
 
     /**

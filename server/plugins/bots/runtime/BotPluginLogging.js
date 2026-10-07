@@ -8,9 +8,6 @@ const HOT_EVENT_THROTTLES_MS = Object.freeze({
   bot_movement_node_dispatch: 3000,
   path_blocked_retarget: 2500,
   path_blocked_backoff_applied: 1500,
-  bank_run_target_booth_selected: 2000,
-  bank_run_blocked_no_traversal_object: 2500,
-  bank_run_heartbeat: 3000,
   ditch_post_delay_retry_waiting: 2500,
 });
 

@@ -350,21 +350,21 @@ function consumeLockpick(player) {
   const inventory = player.getInventory();
   const item = inventory.getItems().find((entry) => entry.getId() === Items.STRANGE_OLD_LOCKPICK || entry.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_);
   if (!item) return false;
-  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : Number(item.getMetaValue("barrows:lockpickCharges") ?? 50);
+  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : Number(item.getMetaValue("barrows:lockpick-charges") ?? 50);
   if (!Number.isInteger(charges) || charges < 1 || charges > 50) return false;
   if (charges === 1) {
     inventory.deleteItem(item, inventory.getItems().indexOf(item));
     player.sendMessage("Your strange old lockpick crumbles to dust.");
   } else {
     item.setId(Items.STRANGE_OLD_LOCKPICK);
-    item.setMetaValue("barrows:lockpickCharges", charges - 1);
+    item.setMetaValue("barrows:lockpick-charges", charges - 1);
     inventory.refreshItems();
   }
   return true;
 }
 
 function inspectLockpick({ player, item }) {
-  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : item.getMetaValue("barrows:lockpickCharges") ?? 50;
+  const charges = item.getId() === Items.STRANGE_OLD_LOCKPICK_FULL_ ? 50 : item.getMetaValue("barrows:lockpick-charges") ?? 50;
   player.sendMessage(`Your strange old lockpick has ${charges} charges remaining.`);
 }
 
@@ -700,6 +700,7 @@ function playerDeath(event) {
 
 module.exports = {
   name: "Barrows",
+  members: true,
   register(api) {
     World = api.getWorld();
     RegionManager = api.getRegionManager();

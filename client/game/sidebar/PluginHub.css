@@ -1,0 +1,222 @@
+/* The plugin hub: its list, the on/off switch, and a plugin's settings view, after RuneLite's
+   plugin list. Colours and fonts are Sidebar.css's variables. */
+
+/* Plugin hub list (PluginListPanel / PluginListItem) */
+.rl-plugin-list {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.rl-plugin-search {
+    margin: 8px 8px 6px;
+    padding: 4px 6px;
+    border: 1px solid var(--rl-medium-gray);
+    background: var(--rl-dark-gray);
+    color: var(--rl-text);
+    outline: none;
+}
+
+.rl-plugin-search::placeholder {
+    color: var(--rl-light-gray);
+}
+
+.rl-plugin-search:focus {
+    border-color: var(--rl-orange);
+}
+
+.rl-plugin-list-items {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 0 0 8px 8px;
+}
+
+.rl-plugin-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 34px;
+    margin-right: 6px;
+    padding: 0 4px 0 8px;
+    background: var(--rl-dark-gray);
+}
+
+.rl-plugin-item:hover {
+    background: var(--rl-hover);
+}
+
+.rl-plugin-item-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 3px 0;
+    border: none;
+    background: none;
+    color: inherit;
+    text-align: left;
+}
+
+button.rl-plugin-item-main {
+    cursor: pointer;
+}
+
+.rl-plugin-item-name {
+    color: var(--rl-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rl-plugin-item.off .rl-plugin-item-name {
+    color: var(--rl-light-gray);
+}
+
+.rl-plugin-item-desc {
+    font-family: var(--rl-font-small);
+    color: var(--rl-light-gray);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rl-plugin-item-failure {
+    font-family: var(--rl-font-small);
+    color: var(--rl-error);
+}
+
+.rl-plugin-item-cog {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--rl-light-gray);
+    cursor: pointer;
+}
+
+.rl-plugin-item-cog:hover {
+    color: var(--rl-orange);
+}
+
+.rl-plugin-item-icon {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* On/off switch: orange when on, as RuneLite's */
+.rl-switch {
+    position: relative;
+    width: 26px;
+    height: 14px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: none;
+    border-radius: 7px;
+    background: var(--rl-medium-gray);
+    cursor: pointer;
+    transition: background 120ms ease;
+}
+
+.rl-switch-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--rl-light-gray);
+    transition:
+        transform 120ms ease,
+        background 120ms ease;
+}
+
+.rl-switch.on {
+    background: var(--rl-orange-soft);
+}
+
+.rl-switch.on .rl-switch-knob {
+    transform: translateX(12px);
+    background: var(--rl-orange);
+}
+
+.rl-switch:focus-visible,
+.rl-plugin-item-cog:focus-visible,
+.rl-plugin-item-main:focus-visible,
+.rl-plugin-config-back:focus-visible {
+    outline: 1px solid var(--rl-orange);
+    outline-offset: 1px;
+}
+
+/* One plugin's settings (PluginConfigView) */
+.rl-plugin-config {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.rl-plugin-config-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--rl-dark-gray);
+}
+
+.rl-plugin-config-back {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--rl-light-gray);
+    cursor: pointer;
+}
+
+.rl-plugin-config-back:hover {
+    color: var(--rl-orange);
+}
+
+.rl-plugin-config-back svg {
+    width: 9px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.rl-plugin-config-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--rl-font-bold);
+    color: var(--rl-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rl-plugin-config-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 2px 10px 10px;
+}

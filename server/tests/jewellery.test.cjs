@@ -20,10 +20,18 @@ TeleportHandler.teleport = (player, target, type, warning, onArrival) => onArriv
 
 let prompts = [];
 let itemAction;
+let itemOnObject;
+const completeQuests = new Set();
+require("../plugins/quests/QuestRuntime").getRegisteredQuests = () =>
+  ["Heroes' Quest", "Legends' Quest"].map((name) => ({ name, isComplete: () => completeQuests.has(name) }));
+const { ObjectIdentifiers } = require("../dist/util/ObjectIdentifiers");
+const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const Jewellery = require("../plugins/items/Jewellery.plugin");
 Jewellery.register({
   getBonusManager: () => ({ update() {} }),
+  core: { ObjectIdentifiers, ItemIdentifiers },
   onItemAction: (handler) => { itemAction = handler; },
+  onItemOnObject: (handler) => { itemOnObject = handler; },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
     for (let i = 0; i < pairs.length; i += 2) options.push({ text: pairs[i], pick: pairs[i + 1] });
@@ -107,6 +115,33 @@ test("a glory's last charge leaves an uncharged amulet that can no longer telepo
   prompts = [];
   inventoryClick(player, glory, "Rub");
   assert.equal(prompts.length, 0);
+  assert.equal(player.messages.at(-1), "Your amulet hasn't got any charges left.");
+});
+
+test("a refused teleport (teleblock or over-level) keeps the charge", () => {
+  const player = createPlayer();
+  const glory = new Item(ItemIds.AMULET_OF_GLORY_4_, 1);
+  player.inventory.setItem(0, glory);
+
+  TeleportHandler.checkReqs = () => false;
+  try {
+    inventoryClick(player, glory, "Rub");
+    pick("Edgeville");
+  } finally {
+    TeleportHandler.checkReqs = (p, target, wildernessLevel) => {
+      teleports.push({ target: [target.getX(), target.getY(), target.getZ()], wildernessLevel });
+      return true;
+    };
+  }
+  assert.equal(glory.getId(), ItemIds.AMULET_OF_GLORY_4_, "the rejected teleport consumed no charge");
+});
+
+test("an uncharged piece never teleports from a direct worn option", () => {
+  const player = createPlayer();
+  const glory = new Item(ItemIds.AMULET_OF_GLORY, 1);
+  player.equipment.setItem(Equipment.AMULET_SLOT, glory);
+  assert.equal(equippedClick(player, glory, 2, "Edgeville").handled, true);
+  assert.equal(teleports.length, 0);
   assert.equal(player.messages.at(-1), "Your amulet hasn't got any charges left.");
 });
 
@@ -249,4 +284,70 @@ test("the ring of dueling's fourth destination is the Fortis Colosseum", () => {
   player.inventory.setItem(0, ring);
   inventoryClick(player, ring, "Rub", { subOpId: 4 });
   assert.deepEqual(teleports.at(-1).target, [1793, 3107, 0]);
+});
+
+function useOnObject(player, item, objectId) {
+  const event = { player, item, itemId: item.getId(), objectId, handled: false };
+  itemOnObject(event);
+  return event;
+}
+
+test("the Fountain of Rune recharges glories to 6 but not skills necklaces", () => {
+  completeQuests.clear();
+  completeQuests.add("Heroes' Quest").add("Legends' Quest");
+  const player = createPlayer();
+  const glory = new Item(ItemIds.AMULET_OF_GLORY, 1);
+  const skills = new Item(ItemIds.SKILLS_NECKLACE_2_, 1);
+  const worn = new Item(ItemIds.AMULET_OF_GLORY_1_, 1);
+  player.inventory.setItem(0, glory);
+  player.inventory.setItem(1, skills);
+  player.equipment.setItem(Equipment.AMULET_SLOT, worn);
+  const event = useOnObject(player, glory, ObjectIdentifiers.FOUNTAIN_OF_RUNE);
+  assert.equal(event.handled, true);
+  assert.ok([ItemIds.AMULET_OF_GLORY_6_, ItemIdentifiers.AMULET_OF_ETERNAL_GLORY].includes(glory.getId()));
+  assert.equal(skills.getId(), ItemIds.SKILLS_NECKLACE_2_, "the fountain does not recharge a skills necklace");
+  assert.ok([ItemIds.AMULET_OF_GLORY_6_, ItemIdentifiers.AMULET_OF_ETERNAL_GLORY].includes(worn.getId()));
+});
+
+test("the Legends' Guild totem pole recharges skills necklaces and combat bracelets to 6", () => {
+  completeQuests.clear();
+  completeQuests.add("Legends' Quest");
+  const player = createPlayer();
+  const skills = new Item(ItemIds.SKILLS_NECKLACE_1_, 1);
+  const combat = new Item(ItemIds.COMBAT_BRACELET, 1);
+  const glory = new Item(ItemIds.AMULET_OF_GLORY_1_, 1);
+  player.inventory.setItem(0, skills);
+  player.inventory.setItem(1, combat);
+  player.inventory.setItem(2, glory);
+  const event = useOnObject(player, skills, ObjectIdentifiers.TOTEM_POLE_2);
+  assert.equal(event.handled, true);
+  assert.equal(skills.getId(), ItemIds.SKILLS_NECKLACE_6_);
+  assert.equal(combat.getId(), ItemIds.COMBAT_BRACELET_6_);
+  assert.equal(glory.getId(), ItemIds.AMULET_OF_GLORY_1_, "the totem does not recharge glories");
+  assert.equal(player.messages.at(-1), "The totem pole recharges your jewellery.");
+});
+
+test("the Fountain of Heroes recharges glories to 4 but not skills necklaces", () => {
+  completeQuests.clear();
+  completeQuests.add("Heroes' Quest").add("Legends' Quest");
+  const player = createPlayer();
+  const glory = new Item(ItemIds.AMULET_OF_GLORY_2_, 1);
+  const skills = new Item(ItemIds.SKILLS_NECKLACE, 1);
+  player.inventory.setItem(0, glory);
+  player.inventory.setItem(1, skills);
+  useOnObject(player, glory, ObjectIdentifiers.FOUNTAIN_OF_HEROES);
+  assert.equal(glory.getId(), ItemIds.AMULET_OF_GLORY_4_);
+  assert.equal(skills.getId(), ItemIds.SKILLS_NECKLACE);
+  assert.equal(useOnObject(player, skills, ObjectIdentifiers.FOUNTAIN_OF_HEROES).handled, true);
+  assert.equal(skills.getId(), ItemIds.SKILLS_NECKLACE);
+});
+
+test("the fountains need the jewellery's quest", () => {
+  completeQuests.clear();
+  const player = createPlayer();
+  const glory = new Item(ItemIds.AMULET_OF_GLORY, 1);
+  player.inventory.setItem(0, glory);
+  useOnObject(player, glory, ObjectIdentifiers.FOUNTAIN_OF_RUNE);
+  assert.equal(glory.getId(), ItemIds.AMULET_OF_GLORY);
+  assert.equal(player.messages.at(-1), "Nothing interesting happens.");
 });

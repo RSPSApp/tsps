@@ -1,7 +1,8 @@
 "use strict";
 
 const { getPvpProfile, listPvpProfiles } = require("./PvpProfileRegistry");
-const { getPvpLoadout, listPvpLoadouts } = require("./PvpLoadoutRegistry");
+const { getPvpLoadout, isLoadoutAvailable, listPvpLoadouts } = require("./PvpLoadoutRegistry");
+const { isMembersWorld } = require("../../../../src/main/typescript/elvarg/game/definition/WorldDefinition");
 const {
   getEnabledWildernessHotspots,
   getWildernessHotspot,
@@ -77,7 +78,7 @@ function resolveHotspotId(config, profileId) {
   const configured = buildWeightTable(
     config?.pvp?.hotspotWeights,
     enabledHotspots.map((hotspot) => hotspot.id)
-  ).filter((entry) => getWildernessHotspot(entry.value)?.enabled === true);
+  ).filter((entry) => enabledHotspots.some((hotspot) => hotspot.id === entry.value));
   if (configured.length === 0) {
     return enabledHotspots[0].id;
   }
@@ -89,8 +90,9 @@ function resolveHotspotId(config, profileId) {
 }
 
 function resolveLoadoutId(config, hotspotId) {
-  const fallbackIds = listPvpLoadouts().map((loadout) => loadout.id);
-  const configured = buildWeightTable(config?.pvp?.loadoutWeights, fallbackIds);
+  const fallbackIds = listPvpLoadouts().map((loadout) => loadout.id).filter(isLoadoutAvailable);
+  const configured = buildWeightTable(config?.pvp?.loadoutWeights, fallbackIds)
+    .filter((entry) => isLoadoutAvailable(entry.value));
   const hotspot = hotspotId ? getWildernessHotspot(hotspotId) : null;
   const filtered = configured.filter((entry) => {
     const loadout = getPvpLoadout(entry.value);
@@ -102,23 +104,27 @@ function resolveLoadoutId(config, hotspotId) {
     }
     return true;
   });
-  return weightedPick(filtered) ?? hotspot?.allowedLoadouts?.[0] ?? weightedPick(configured) ?? fallbackIds[0];
+  return weightedPick(filtered) ?? hotspot?.allowedLoadouts?.find(isLoadoutAvailable) ?? weightedPick(configured) ?? fallbackIds[0];
 }
 
 function resolveRoamingLoadoutId(config, options = {}) {
   const excludeF2p = options.excludeF2p !== false;
+  // Members worlds keep roamers off f2p gear by default; free worlds only have f2p gear.
+  const allowed = (loadoutId) =>
+    isLoadoutAvailable(loadoutId) && (!isMembersWorld() || !excludeF2p || !loadoutId.startsWith("f2p_"));
   const fallbackIds = listPvpLoadouts()
     .map((loadout) => loadout.id)
-    .filter((loadoutId) => (excludeF2p ? !loadoutId.startsWith("f2p_") : true));
+    .filter(allowed);
   const configured = buildWeightTable(config?.pvp?.loadoutWeights, fallbackIds).filter((entry) =>
-    excludeF2p ? !entry.value.startsWith("f2p_") : true
+    allowed(entry.value)
   );
   return weightedPick(configured.length > 0 ? configured : fallbackIds.map((value) => ({ value, weight: 1 }))) ?? fallbackIds[0];
 }
 
 function resolveAlternativeLoadoutId(config, hotspotId, currentLoadoutId) {
-  const fallbackIds = listPvpLoadouts().map((loadout) => loadout.id);
-  const configured = buildWeightTable(config?.pvp?.loadoutWeights, fallbackIds);
+  const fallbackIds = listPvpLoadouts().map((loadout) => loadout.id).filter(isLoadoutAvailable);
+  const configured = buildWeightTable(config?.pvp?.loadoutWeights, fallbackIds)
+    .filter((entry) => isLoadoutAvailable(entry.value));
   const hotspot = hotspotId ? getWildernessHotspot(hotspotId) : null;
   const filtered = configured.filter((entry) => {
     const loadout = getPvpLoadout(entry.value);
@@ -134,7 +140,7 @@ function resolveAlternativeLoadoutId(config, hotspotId, currentLoadoutId) {
   if (alternatives.length > 0) {
     return weightedPick(alternatives) ?? currentLoadoutId ?? alternatives[0]?.value ?? null;
   }
-  return weightedPick(filtered) ?? hotspot?.allowedLoadouts?.[0] ?? weightedPick(configured) ?? currentLoadoutId ?? fallbackIds[0];
+  return weightedPick(filtered) ?? hotspot?.allowedLoadouts?.find(isLoadoutAvailable) ?? weightedPick(configured) ?? currentLoadoutId ?? fallbackIds[0];
 }
 
 function buildRoamingPvpMetadata({

@@ -8,6 +8,7 @@ import {
     requireCs2ArrayObject,
 } from "../Cs2ArrayObject";
 import { Opcodes } from "../Opcodes";
+import { javaRandom } from "../JavaRandom";
 import type { HandlerMap } from "./HandlerTypes";
 
 export function registerVarOps(handlers: HandlerMap): void {
@@ -111,12 +112,17 @@ export function registerVarOps(handlers: HandlerMap): void {
         primary.sortAllWith(secondaryArray);
     });
 
-    handlers.set(Opcodes.ARRAY_SORT_BY, (ctx) => {
-        const start = ctx.intStack[ctx.intStackSize - 2];
-        const end = ctx.intStack[ctx.intStackSize - 1];
-        ctx.intStackSize -= 2;
+    // array_randomise(array, seed1, seed2): Collections.shuffle with a java.util.Random seeded
+    // (seed1 << 32) | seed2; both 0 means an unseeded (random) shuffle.
+    handlers.set(Opcodes.ARRAY_RANDOMISE, (ctx) => {
+        const seed2 = ctx.intStack[--ctx.intStackSize];
+        const seed1 = ctx.intStack[--ctx.intStackSize];
         const arrayObj = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
-        arrayObj.sortRange(start, end);
+        const seed =
+            seed1 === 0 && seed2 === 0
+                ? BigInt(Math.floor(Math.random() * 2 ** 48))
+                : (BigInt(seed1) << 32n) | BigInt(seed2 >>> 0);
+        arrayObj.shuffle(javaRandom(seed));
     });
 
     handlers.set(Opcodes.ARRAY_IS_NULL, (ctx) => {
@@ -155,6 +161,29 @@ export function registerVarOps(handlers: HandlerMap): void {
 
     // The cargo hold's grid (script 8872) calls it as (array, 0, -1, -1) to fill a list of slot
     // indices before sorting it by each slot's key; 8871 then draws slot array[i] at position i.
+    // array_swap(array, index1, index2) (rev 241).
+    handlers.set(Opcodes.ARRAY_SWAP, (ctx) => {
+        const second = ctx.intStack[--ctx.intStackSize];
+        const first = ctx.intStack[--ctx.intStackSize];
+        const array = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
+        const held = array.getRaw(first);
+        array.setAt(first, array.getRaw(second));
+        array.setAt(second, held);
+    });
+
+    // array_copy(src, dst, src_pos, dst_pos, length) (rev 241); overlapping copies read first.
+    handlers.set(Opcodes.ARRAY_COPY, (ctx) => {
+        const length = ctx.intStack[--ctx.intStackSize];
+        const dstPos = ctx.intStack[--ctx.intStackSize];
+        const srcPos = ctx.intStack[--ctx.intStackSize];
+        const dst = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
+        const src = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
+        if (length < 0) throw new Error("RuntimeException");
+        const values = [];
+        for (let i = 0; i < length; i++) values.push(src.getRaw(srcPos + i));
+        values.forEach((value, i) => dst.setAt(dstPos + i, value));
+    });
+
     handlers.set(Opcodes.ARRAY_FILL_SEQUENCE, (ctx) => {
         const end = ctx.intStack[--ctx.intStackSize];
         const start = ctx.intStack[--ctx.intStackSize];
@@ -190,37 +219,14 @@ export function registerVarOps(handlers: HandlerMap): void {
         ctx.pushString(parts.join(separator));
     });
 
-    handlers.set(Opcodes.ENUM_TO_ARRAY, (ctx) => {
-        const enumId = ctx.intStack[ctx.intStackSize - 1];
-        const expectedType = ctx.intStack[ctx.intStackSize - 2];
-        ctx.intStackSize -= 2;
-
-        const enumType = ctx.enumTypeLoader?.load(enumId);
-        if (!enumType?.outputType) {
-            throw new Error("RuntimeException");
-        }
-        const outputTypeCode = enumType.outputType.charCodeAt(0) | 0;
-        if (expectedType !== outputTypeCode) {
-            throw new Error("RuntimeException");
-        }
-
-        const count = enumType.outputCount | 0;
-        if (enumType.outputType === "s") {
-            const arrayObj = new Cs2ArrayObject("object", "", count, count, false);
-            const values = enumType.stringValues ?? [];
-            for (let i = 0; i < count; i++) {
-                arrayObj.setAt(i, values[i] ?? "");
-            }
-            ctx.pushString(arrayObj);
-            return;
-        }
-
-        const arrayObj = new Cs2ArrayObject("int", -1, count, count, false);
-        const values = enumType.intValues ?? [];
-        for (let i = 0; i < count; i++) {
-            arrayObj.setAt(i, values[i] ?? -1);
-        }
-        ctx.pushString(arrayObj);
+    // enum_getinputs(type $inputtype, enum)(array): every key of the enum, in order.
+    handlers.set(Opcodes.ENUM_GETINPUTS, (ctx) => {
+        const enumId = ctx.intStack[--ctx.intStackSize];
+        const inputType = ctx.intStack[--ctx.intStackSize];
+        const keys = ctx.enumTypeLoader?.load(enumId)?.keys ?? [];
+        const array = createTypedArrayFromCode(inputType, keys.length);
+        keys.forEach((key, index) => array.setAt(index, key));
+        ctx.pushString(array);
     });
 
     handlers.set(Opcodes.ARRAY_NEW, (ctx) => {
@@ -232,16 +238,75 @@ export function registerVarOps(handlers: HandlerMap): void {
         ctx.pushString(createTypedArrayFromCode(typeCode, length, capacity));
     });
 
+    const popValue = (ctx: any, valueType: number) =>
+        popTypedValue(valueType, () => ctx.intStack[--ctx.intStackSize], () => ctx.stringStack[--ctx.stringStackSize]);
+    const popArray = (ctx: any) => requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
+
+    // array_push(array, value, type) (osrs-cache 8024).
+    handlers.set(Opcodes.ARRAY_PUSH, (ctx) => {
+        const value = popValue(ctx, ctx.intStack[--ctx.intStackSize]);
+        popArray(ctx).push(value);
+    });
+
+    // array_insert(array, value, index, type) (8025).
     handlers.set(Opcodes.ARRAY_INSERT, (ctx) => {
-        const valueType = ctx.intStack[ctx.intStackSize - 1];
-        const index = ctx.intStack[ctx.intStackSize - 2];
-        ctx.intStackSize -= 2;
-        const value = popTypedValue(
-            valueType,
-            () => ctx.intStack[--ctx.intStackSize],
-            () => ctx.stringStack[--ctx.stringStackSize],
-        );
-        const arrayObj = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
-        arrayObj.insertAt(index, value);
+        const valueType = ctx.intStack[--ctx.intStackSize];
+        const index = ctx.intStack[--ctx.intStackSize];
+        const value = popValue(ctx, valueType);
+        popArray(ctx).insertAt(index, value);
+    });
+
+    // array_indexof / array_fill(array, value, start, end, type) (8005 / 8010).
+    handlers.set(Opcodes.ARRAY_INDEXOF, (ctx) => {
+        const valueType = ctx.intStack[--ctx.intStackSize];
+        const end = ctx.intStack[--ctx.intStackSize];
+        const start = ctx.intStack[--ctx.intStackSize];
+        const value = popValue(ctx, valueType);
+        ctx.pushInt(popArray(ctx).indexOf(value, start, end));
+    });
+    handlers.set(Opcodes.ARRAY_FILL, (ctx) => {
+        const valueType = ctx.intStack[--ctx.intStackSize];
+        const end = ctx.intStack[--ctx.intStackSize];
+        const start = ctx.intStack[--ctx.intStackSize];
+        const value = popValue(ctx, valueType);
+        popArray(ctx).fill(value, start, end);
+    });
+
+    handlers.set(Opcodes.ARRAY_REVERSE, (ctx) => {
+        popArray(ctx).reverse();
+    });
+
+    // array_resize(array, size) (8023).
+    handlers.set(Opcodes.ARRAY_RESIZE, (ctx) => {
+        const size = ctx.intStack[--ctx.intStackSize];
+        popArray(ctx).resize(size);
+    });
+
+    // array_delete(array, index)(value) (8026).
+    handlers.set(Opcodes.ARRAY_DELETE, (ctx) => {
+        const index = ctx.intStack[--ctx.intStackSize];
+        const array = popArray(ctx);
+        const removed = array.deleteAt(index);
+        if (array.valueType === "int") ctx.pushInt(removed | 0);
+        else ctx.pushString(removed);
+    });
+
+    // array_pushall(array, other) (8027).
+    handlers.set(Opcodes.ARRAY_PUSHALL, (ctx) => {
+        const other = popArray(ctx);
+        const array = popArray(ctx);
+        const values = [];
+        for (let i = 0; i < other.length; i++) values.push(other.getRaw(i));
+        for (const value of values) array.push(value);
+    });
+
+    // string_split(string, separator)(stringarray) (8018).
+    handlers.set(Opcodes.STRING_SPLIT, (ctx) => {
+        const separator = String(ctx.stringStack[--ctx.stringStackSize] ?? "");
+        const text = String(ctx.stringStack[--ctx.stringStackSize] ?? "");
+        const parts = separator === "" ? [text] : text.split(separator);
+        const array = new Cs2ArrayObject("object", "", parts.length, parts.length);
+        parts.forEach((part, i) => array.setAt(i, part));
+        ctx.pushString(array);
     });
 }

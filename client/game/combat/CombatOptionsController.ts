@@ -84,7 +84,8 @@ export class CombatOptionsController {
     }
 
     updateSpecialEnergy(percent: number): void {
-        this.specialEnergyPercent = Math.max(0, Math.min(100, Math.floor(percent)));
+        const value = Number.isFinite(percent) ? Math.floor(percent) : 0;
+        this.specialEnergyPercent = Math.max(0, Math.min(100, value));
         // CS2 reads %sa_energy (varp 300) which stores 0-1000 (divides by 10 for percentage display)
         this.deps.getVarManager()?.setVarp(300, this.specialEnergyPercent * 10);
     }
@@ -100,7 +101,6 @@ export class CombatOptionsController {
         opts: { fromServer?: boolean; category?: number } = {},
     ): void {
         const normalized = Math.max(0, style | 0);
-        const _category = opts.category ?? this.deps.getCombatWeaponCategory();
         this.combatStyleSlot = normalized;
         // CRITICAL: Update varp 43 so CS2 scripts know the selected combat style
         // This affects which button is highlighted in the combat options interface

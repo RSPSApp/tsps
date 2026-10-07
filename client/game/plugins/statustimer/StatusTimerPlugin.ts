@@ -1,3 +1,5 @@
+import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+
 export interface StatusTimerPluginConfig {
     enabled: boolean;
 }
@@ -10,22 +12,16 @@ export interface StatusTimerPluginState {
     version: number;
 }
 
-export interface StatusTimerPluginPersistence {
-    load(): Partial<StatusTimerPluginConfig> | undefined;
-    save(config: StatusTimerPluginConfig): void;
-}
-
 type Listener = () => void;
 
-export class StatusTimerPlugin {
+export class StatusTimerPlugin extends Plugin {
     private readonly listeners = new Set<Listener>();
-    private config: StatusTimerPluginConfig;
-    private state: StatusTimerPluginState;
-
-    constructor(private readonly persistence?: StatusTimerPluginPersistence) {
-        this.config = { enabled: persistence?.load()?.enabled ?? true };
-        this.state = { active: false, config: this.config, endsAt: null, type: 0, version: 0 };
-    }
+    private active = false;
+    private config: StatusTimerPluginConfig = { enabled: true };
+    private endsAt: number | null = null;
+    private type = 0;
+    private version = 0;
+    private state: StatusTimerPluginState = this.createState();
 
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
@@ -37,38 +33,81 @@ export class StatusTimerPlugin {
     }
 
     setConfig(config: Partial<StatusTimerPluginConfig>): void {
-        this.config = { enabled: config.enabled ?? this.config.enabled };
-        this.commit(true, { ...this.state, config: this.config });
+        if (config.enabled !== undefined) {
+            void this.setPluginEnabled(config.enabled);
+        }
+        this.config = { enabled: this.isEnabled() };
+        this.commit();
     }
 
     sync(seconds: number, type: number, now = Date.now()): void {
         if (seconds === 0) {
-            if (this.state.active) this.commit(false, { ...this.state, active: false, endsAt: null, type: 0 });
+            if (this.active) {
+                this.active = false;
+                this.endsAt = null;
+                this.type = 0;
+                this.commit();
+            }
             return;
         }
 
         if (seconds < 0) {
-            if (!this.state.active || this.state.endsAt !== null || this.state.type !== type) {
-                this.commit(false, { ...this.state, active: true, endsAt: null, type });
+            if (!this.active || this.endsAt !== null || this.type !== type) {
+                this.active = true;
+                this.endsAt = null;
+                this.type = type;
+                this.commit();
             }
             return;
         }
 
         const nextEndsAt = now + seconds * 1000;
-        const shouldRestart = !this.state.active || this.state.type !== type || this.getRemainingSeconds(now) < seconds - 1;
-        const endsAt = shouldRestart ? nextEndsAt : Math.min(this.state.endsAt ?? nextEndsAt, nextEndsAt);
-        if (shouldRestart || this.state.endsAt !== endsAt) {
-            this.commit(false, { ...this.state, active: true, endsAt, type });
+        const shouldRestart =
+            !this.active || this.type !== type || this.getRemainingSeconds(now) < seconds - 1;
+        const endsAt = shouldRestart ? nextEndsAt : Math.min(this.endsAt ?? nextEndsAt, nextEndsAt);
+        if (shouldRestart || this.endsAt !== endsAt) {
+            this.active = true;
+            this.endsAt = endsAt;
+            this.type = type;
+            this.commit();
         }
     }
 
     getRemainingSeconds(now = Date.now()): number {
-        return this.state.endsAt === null ? 0 : Math.max(0, Math.ceil((this.state.endsAt - now) / 1000));
+        return this.endsAt === null ? 0 : Math.max(0, Math.ceil((this.endsAt - now) / 1000));
     }
 
-    private commit(persist: boolean, state: StatusTimerPluginState): void {
-        this.state = { ...state, version: state.version + 1 };
-        if (persist) this.persistence?.save(this.config);
+    private commit(): void {
+        this.version++;
+        this.state = this.createState();
         for (const listener of this.listeners) listener();
     }
+
+    private createState(): StatusTimerPluginState {
+        return {
+            active: this.active,
+            config: { enabled: this.isEnabled() },
+            endsAt: this.endsAt,
+            type: this.type,
+            version: this.version,
+        };
+    }
+}
+
+export class PoisonTimerPlugin extends StatusTimerPlugin {
+    static descriptor: PluginDescriptor = {
+        name: "Poison Timer",
+        description: "Shows poison or venom duration and type.",
+        tags: ["combat", "timer"],
+        configKey: "poisontimerplugin",
+    };
+}
+
+export class FreezeTimerPlugin extends StatusTimerPlugin {
+    static descriptor: PluginDescriptor = {
+        name: "Freeze Timer",
+        description: "Shows the spell that froze you and its duration.",
+        tags: ["combat", "timer"],
+        configKey: "freezetimerplugin",
+    };
 }

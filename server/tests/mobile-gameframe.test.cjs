@@ -13,20 +13,20 @@ const {
 const player = (attrs) => ({ getAttribute: (key) => attrs[key] });
 
 test('desktop clients boot their saved layout root', () => {
-  assert.equal(resolveGameframeRoot(player({ clientLayoutRoot: 548 })), 548);
-  assert.equal(resolveGameframeRoot(player({ clientLayoutRoot: 164 })), 164);
-  assert.equal(resolveGameframeRoot(player({ clientLayoutRoot: 161 })), 161);
+  assert.equal(resolveGameframeRoot(player({ 'client-layout-root': 548 })), 548);
+  assert.equal(resolveGameframeRoot(player({ 'client-layout-root': 164 })), 164);
+  assert.equal(resolveGameframeRoot(player({ 'client-layout-root': 161 })), 161);
 });
 
 test('missing or unknown saved roots fall back to 161', () => {
   assert.equal(resolveGameframeRoot(player({})), 161);
-  assert.equal(resolveGameframeRoot(player({ clientLayoutRoot: 601 })), 161);
+  assert.equal(resolveGameframeRoot(player({ 'client-layout-root': 601 })), 161);
 });
 
 test('mobile clients are locked to the mobile gameframe', () => {
   assert.equal(MOBILE_GAMEFRAME_ROOT, 601);
-  assert.equal(resolveGameframeRoot(player({ [MOBILE_CLIENT_ATTRIBUTE]: true, clientLayoutRoot: 548 })), 601);
-  assert.equal(resolveGameframeRoot(player({ [MOBILE_CLIENT_ATTRIBUTE]: true, clientLayoutRoot: 164 })), 601);
+  assert.equal(resolveGameframeRoot(player({ [MOBILE_CLIENT_ATTRIBUTE]: true, 'client-layout-root': 548 })), 601);
+  assert.equal(resolveGameframeRoot(player({ [MOBILE_CLIENT_ATTRIBUTE]: true, 'client-layout-root': 164 })), 601);
 });
 
 test('handshake decodes the mobile client type byte', () => {

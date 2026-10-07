@@ -214,7 +214,7 @@ export class PlayerRelations {
 
     sendPrivateStatus() {
         const privateChat = this.status === PrivateChatStatus.OFF ? 2 : this.status === PrivateChatStatus.FRIENDS_ONLY ? 1 : 0;
-        this.player.getPacketSender().sendChatOptions(0, privateChat, 0);
+        this.player.getPacketSender().sendChatOptions(this.publicChatMode, privateChat, this.tradeChatMode);
     }
 
     sendFriends() {

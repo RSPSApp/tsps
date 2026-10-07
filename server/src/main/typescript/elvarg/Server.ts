@@ -132,6 +132,10 @@ export class Server {
     process.on("SIGTERM", () => {
       void Server.gracefulShutdown("SIGTERM");
     });
+    // Closing the terminal the server runs in.
+    process.on("SIGHUP", () => {
+      void Server.gracefulShutdown("SIGHUP");
+    });
     process.once("SIGUSR2", () => {
       void Server.gracefulShutdown("SIGUSR2", "restart");
     });
@@ -153,7 +157,7 @@ export class Server {
         `[shutdown] ${reason} received. Persisting ${onlinePlayers} online players...`
       );
       PluginManager.emitServerShutdown({ timestamp: Date.now() });
-      World.savePlayers();
+      World.savePlayers("shutdown");
       await GameConstants.PLAYER_PERSISTENCE.flush();
       console.info("[shutdown] Player persistence completed.");
     } catch (err) {
@@ -210,10 +214,10 @@ export class Server {
 
       PluginManager.loadFromDirectory(path.join(process.cwd(), "plugins"));
 
-      console.info(
-        `Initializing Name in ${
-          Server.PRODUCTION ? "production" : "non-production"
-        } mode..`
+      console.debug(
+        `[server] initializing in ${
+          Server.PRODUCTION ? "production" : "development"
+        } mode`
       );
       // Start game logic (schedules GameEngine ticks, loads definitions, etc.)
       new GameBuilder().initialize();

@@ -6,6 +6,7 @@ module.exports = {
   key: "pollnivneach",
   name: "Pollnivneach Rooftop",
   lapXp: 890,
+  petBase: 33422, // Giant squirrel base chance (Wiki)
   marks: {
     level: 70,
     tiles: [[3346, 2968, 1], [3354, 2974, 1], [3361, 2993, 2]],

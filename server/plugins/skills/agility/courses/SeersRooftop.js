@@ -6,6 +6,7 @@ module.exports = {
   key: "seers",
   name: "Seers' Village Rooftop",
   lapXp: 570,
+  petBase: 35205, // Giant squirrel base chance (Wiki)
   marks: {
     level: 60,
     tiles: [[2725, 3494, 3], [2708, 3492, 2], [2712, 3478, 2], [2702, 3473, 3], [2699, 3462, 2]],

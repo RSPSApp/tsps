@@ -238,6 +238,7 @@ function finishRun(player, wavesCleared, wonJad) {
   give(player, Items.TOKKUL, wavesCleared * (wavesCleared + 1) + (wonJad ? JAD_KILL_BONUS : 0));
   if (wonJad) {
     give(player, Items.FIRE_CAPE, 1);
+    api.emitCustomEvent("collection-log:obtain", { player, itemId: Items.FIRE_CAPE, amount: 1 });
     say(player, "You even defeated TzTok-Jad, I am most impressed! Please accept this gift. Give cape back to me if you not want it.");
   } else if (wavesCleared === 0) {
     say(player, "Well I suppose you tried... better luck next time.");
@@ -334,6 +335,7 @@ function splitTzKek(player, session, npc) {
 
 module.exports = {
   name: "TzhaarFightCaves",
+  members: true,
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;

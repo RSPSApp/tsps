@@ -34,7 +34,7 @@ function spokenLine(player) {
 }
 
 function captureApi() {
-  const api = { log() {}, onNpcDeath() {}, persisted: [], events: {}, anyNpc: {}, currencies: {} };
+  const api = { log() {}, onNpcDeath() {}, persisted: [], events: {}, emitted: [], anyNpc: {}, currencies: {} };
   Slayer.register({
     ...api,
     persistAttribute: (key) => api.persisted.push(key),
@@ -42,9 +42,20 @@ function captureApi() {
     onNpcInteraction: (handler) => { api.npcClick = handler; },
     onAnyNpcInteraction: (registered) => { api.anyNpc = registered; },
     onCustomEvent: (name, handler) => { api.events[name] = handler; },
+    emitCustomEvent: (name, payload) => { api.emitted.push([name, payload]); },
   });
   return api;
 }
+
+test('a new assignment tells other plugins who gave it (diary tasks such as Vannaka\'s)', () => {
+  const api = captureApi();
+  const player = fakePlayer();
+  assignTask(player, MASTER);
+  const [name, payload] = api.emitted.at(-1);
+  assert.equal(name, 'slayer:task-assigned');
+  assert.equal(payload.player, player);
+  assert.equal(payload.master, MASTER.id);
+});
 
 test('a new assignment is stored as a persisted attribute snapshot', () => {
   const player = fakePlayer();
@@ -139,6 +150,22 @@ test('the assignment event fills the line and ignores non-masters', () => {
   const outsider = { player: fakePlayer(), npcId: 999, line: null };
   api.events['slayer:assignment'](outsider);
   assert.equal(outsider.line, null);
+});
+
+test('a transformed npc counts as what it is now (a woken crab, not its disguise)', () => {
+  const api = captureApi();
+  const player = fakePlayer({ 'slayer:task': { masterId: 403, slug: 'crabs', remaining: 10 } });
+  const sandCrab = (current) => ({
+    getDefinition: () => ({ getName: () => 'Sandy rocks' }),
+    getCurrentDefinition: () => ({ getName: () => current }),
+  });
+  const onTask = (npc) => {
+    const request = { player, npc, onTask: null };
+    api.events['slayer:on-task'](request);
+    return request.onTask;
+  };
+  assert.equal(onTask(sandCrab('Sand Crab')), true);
+  assert.equal(onTask(sandCrab('Sandy rocks')), false);
 });
 
 test('the task-tip event reports the active task location', () => {

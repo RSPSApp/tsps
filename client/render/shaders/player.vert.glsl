@@ -34,6 +34,19 @@ uniform mat4 u_worldEntityTransform;
 
 layout(location = 0) in uvec3 a_vertex;
 layout(location = 1) in int a_playerSlot;
+// GPU-animated geometry: the vertex's label (vertex group) + 1, or 0 for geometry posed on the
+// CPU. Float so geometry without the attribute reads the default 0.
+layout(location = 2) in float a_label;
+
+// One row per animated batch: 3 texels per label, the rows of its 3x4 pose matrix.
+uniform highp sampler2D u_poseTexture;
+uniform int u_poseRow;
+
+// The posed vertex's rotation, for normals (117 HD lighting).
+mat3 g_skinLinear = mat3(1.0);
+vec3 skinNormal(vec3 n) {
+    return normalize(g_skinLinear * n);
+}
 
 uniform bool u_usePlayerSlotAttribute;
 
@@ -105,6 +118,15 @@ mat4 rotationY( in float angle ) {
 void main() {
     PlayerInfo playerInfo = decodePlayerInfo(getDrawId() + u_npcDataOffset);
     Vertex vertex = decodeVertex(a_vertex.x, a_vertex.y, a_vertex.z, u_brightness, playerInfo.hslOverride);
+    if (a_label > 0.5) {
+        int texel = (int(a_label + 0.5) - 1) * 3;
+        vec4 r0 = texelFetch(u_poseTexture, ivec2(texel, u_poseRow), 0);
+        vec4 r1 = texelFetch(u_poseTexture, ivec2(texel + 1, u_poseRow), 0);
+        vec4 r2 = texelFetch(u_poseTexture, ivec2(texel + 2, u_poseRow), 0);
+        vec3 p = vertex.pos;
+        vertex.pos = vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w);
+        g_skinLinear = transpose(mat3(r0.xyz, r1.xyz, r2.xyz));
+    }
 
     v_color = vertex.color;
 

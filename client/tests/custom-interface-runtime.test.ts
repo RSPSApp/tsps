@@ -39,7 +39,9 @@ const declaration = {
     status: {
         component: 5,
         idle: "idle",
+        loading: "searching...",
         empty: "no matches",
+        error: "search unavailable",
         matches: "Matches: %total",
         truncated: "Matches: %total (showing %shown)",
     },
@@ -164,10 +166,89 @@ async function main(): Promise<void> {
         "a truncated result set says so",
     );
 
+    // A slow request shows the loading row until the results arrive.
+    let resolveSlow: ((value: any) => void) | undefined;
+    (globalThis as any).fetch = async () =>
+        await new Promise((resolve) => {
+            resolveSlow = resolve;
+        });
+    runtime.handleSetText(uid(4), "slow");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(widgets.get(uid(5)).text, "searching...", "an in-flight fetch shows the loading row");
+    resolveSlow!({ ok: true, json: async () => ({ total: 1, rows: [{ id: 1, name: "One" }] }) });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(widgets.get(uid(5)).text, "Matches: 1", "loading clears when the fetch resolves");
+
+    // A failed request clears stale rows and explains the failure.
+    (globalThis as any).fetch = async () => {
+        throw new Error("boom");
+    };
+    runtime.handleSetText(uid(4), "fail");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(widgets.get(uid(5)).text, "search unavailable", "a failed fetch shows the error row");
+    assert.equal(widgets.get(uid(100)).hidden, true, "stale rows are cleared on failure");
+
     // Closing releases the interface.
     runtime.onInterfaceClosed(GROUP_ID);
     assert.equal(runtime.isSearchFocused(), false);
     assert.equal(runtime.handleSearchKeyEvents([{ keyTyped: 0, keyPressed: 97 }]), false);
+
+    // Use the actual Commands declaration with private rows sent over the game socket.
+    const Commands = require("../../server/plugins/interface/Commands.plugin.js");
+    let commandsDefinition: any;
+    Commands.register({
+        registerCustomInterface: (definition: any) => { commandsDefinition = definition; },
+        registerCommand() {},
+    });
+    setCustomInterface(commandsDefinition);
+    for (const widget of commandsDefinition.widgets) {
+        widgets.set(widget.uid, { ...widget });
+    }
+    const { COMPONENT, uid: commandUid } = Commands._test;
+    for (const component of [COMPONENT.SEARCH_BOX, COMPONENT.SEARCH_INPUT]) {
+        assert.deepEqual(widgets.get(commandUid(component)).actions, ["Search"]);
+        assert.ok(widgets.get(commandUid(component)).flags & (1 << 1), "search widgets accept a native menu click");
+    }
+    requestedUrl = "";
+    runtime.onInterfaceOpened(commandsDefinition.groupId);
+    const commandRows = Array.from({ length: 300 }, (_, index) => ({
+        id: index + 1, name: `::test${index} - ${index === 299 ? "Teleport to coordinates" : "Plugin command"}`,
+    }));
+    runtime.handleSetText(commandUid(COMPONENT.DATA), JSON.stringify(commandRows));
+    assert.equal(widgets.get(commandUid(COMPONENT.STATUS)).text, "Commands: 300");
+    assert.equal(widgets.get(commandUid(COMPONENT.ROW_START)).text, "::test0 - Plugin command");
+    assert.equal(widgets.get(commandUid(COMPONENT.ROW_START)).itemId, -1, "text results are not inventory items");
+    const commandsView = widgets.get(commandUid(COMPONENT.LIST_VIEW));
+    assert.equal(commandsView.scrollHeight, 300 * 16);
+    commandsView.scrollY = 280 * 16;
+    runtime.tick();
+    assert.equal(widgets.get(commandUid(COMPONENT.ROW_START)).text, "::test280 - Plugin command",
+        "virtual rows allow scrolling past the old 128-row limit");
+    runtime.handleSetText(commandUid(COMPONENT.SEARCH_INPUT), "  TELEPORT  ");
+    assert.equal(widgets.get(commandUid(COMPONENT.ROW_START)).text, "::test299 - Teleport to coordinates",
+        "the prefill searches descriptions without case sensitivity");
+    assert.equal(commandsView.scrollY, 0, "filtering resets scroll");
+    runtime.handleSetText(commandUid(COMPONENT.SEARCH_INPUT), "test29");
+    assert.equal(widgets.get(commandUid(COMPONENT.STATUS)).text, "Commands: 11", "names are searchable too");
+    runtime.handleWidgetClick(commandsDefinition.groupId, COMPONENT.LIST_VIEW);
+    assert.equal(runtime.isSearchFocused(), false);
+    runtime.handleWidgetClick(commandsDefinition.groupId, COMPONENT.SEARCH_BOX);
+    assert.equal(runtime.isSearchFocused(), true, "clicking the box resumes filtering");
+    type("z");
+    assert.equal(widgets.get(commandUid(COMPONENT.STATUS)).text, "No matching commands.");
+    assert.equal(widgets.get(commandUid(COMPONENT.ROW_START)).hidden, true);
+    runtime.handleSearchKeyEvents([{ keyTyped: 85, keyPressed: 0 }]);
+    assert.equal(widgets.get(commandUid(COMPONENT.STATUS)).text, "Commands: 11");
+    runtime.handleSetText(commandUid(COMPONENT.SEARCH_INPUT), "");
+    assert.equal(widgets.get(commandUid(COMPONENT.STATUS)).text, "Commands: 300", "clearing restores the full catalog");
+    runtime.handleSetText(commandUid(COMPONENT.DATA), "invalid JSON");
+    assert.equal(widgets.get(commandUid(COMPONENT.ROW_START)).hidden, true, "bad data clears old rows");
+    runtime.handleSetText(commandUid(COMPONENT.DATA), JSON.stringify(commandRows));
+    runtime.onInterfaceClosed(commandsDefinition.groupId);
+    runtime.onInterfaceOpened(commandsDefinition.groupId);
+    assert.equal(widgets.get(commandUid(COMPONENT.ROW_START)).hidden, true, "reopening awaits the new player's catalog");
+    assert.equal(requestedUrl, "", "private command rows never use a public HTTP endpoint");
+    runtime.onInterfaceClosed(commandsDefinition.groupId);
 
     console.log("custom-interface-runtime.test.ts: all tests passed");
 }

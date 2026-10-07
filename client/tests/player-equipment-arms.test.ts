@@ -12,6 +12,7 @@ import { IndexModelLoader } from "../rs/model/ModelLoader";
 import { EquipmentSlot } from "../rs/config/player/Equipment";
 import { Gender, PlayerAppearance } from "../rs/config/player/PlayerAppearance";
 import { PlayerModelLoader } from "../rs/config/player/PlayerModelLoader";
+import { PlayerChatheadFactory } from "../render/PlayerChatheadFactory";
 
 function composedKits(wearPos: number, wearPos2: number, wearPos3 = -1): number[] {
     const item = { wearPos, wearPos2, wearPos3 };
@@ -156,6 +157,16 @@ for (const gender of [Gender.MALE, Gender.FEMALE]) {
         "both genders must load the external equipped model");
 }
 assert.equal(cacheReads, 0, "custom assets must never require cache packing");
+const headParts: number[] = [];
+const chathead = new PlayerChatheadFactory({
+    getModel(id: number) { headParts.push(id); return modelLoader.getModel(custom.model!); },
+} as any, {} as any, {
+    getCount: () => 15,
+    load: (id: number) => id === 0 ? { ifModelIds: [custom.model!], modelIds: [999] }
+        : { ifModelIds: [-1, -1, -1, -1, -1], modelIds: [246] },
+} as any);
+assert.ok(chathead.get(new PlayerAppearance(Gender.MALE, [0, 0, 0, 0, 0], [0, 14, 12, 13, 14, 15, 16], [])));
+assert.deepEqual(headParts, [custom.model!], "clean-shaven chat heads must never include the floating wearable jaw model");
 CustomItemRegistry.register({ ...definition, objType: { ...definition.objType, name: "Updated katana" } });
 assert.equal(itemLoader.load(definition.id).name, "Updated katana", "definition replacement invalidates cached items");
 loadFromPayload({ gamemodeId: "other-world", datasets: [

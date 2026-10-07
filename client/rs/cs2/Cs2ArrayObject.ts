@@ -147,19 +147,6 @@ export class Cs2ArrayObject {
         }
     }
 
-    sortRange(start: number, end: number): void {
-        if (this._length <= 1) return;
-        this.ensureWritable();
-        if (start < 0 || end < 0 || start >= this._length || end >= this._length || start > end) {
-            throw new Error("RuntimeException");
-        }
-        const segment = this.values.slice(start, end + 1);
-        segment.sort((a, b) => this.compare(a, b));
-        for (let i = start; i <= end; i++) {
-            this.values[i] = segment[i - start];
-        }
-    }
-
     getArgMax(): number {
         if (this._length <= 0) return -1;
         let index = 0;
@@ -214,6 +201,79 @@ export class Cs2ArrayObject {
             }
         }
         return matches;
+    }
+
+    /** The value at `index`, whatever the array's type. */
+    getRaw(index: number): any {
+        this.checkIndex(index);
+        return this.values[index];
+    }
+
+    private range(start: number, end: number): [number, number] {
+        return [start < 0 ? 0 : start, end < 0 || end > this._length ? this._length : end];
+    }
+
+    private same(a: any, b: any): boolean {
+        return this.valueType === "int" ? ((a as number) | 0) === ((b as number) | 0) : a === b;
+    }
+
+    /** array_indexof: the first index in [start, end) holding `value`, or -1. */
+    indexOf(value: any, start: number, end: number): number {
+        const [from, to] = this.range(start, end);
+        for (let i = from; i < to; i++) if (this.same(this.values[i], value)) return i;
+        return -1;
+    }
+
+    /** array_fill: `value` into [start, end). */
+    fill(value: any, start: number, end: number): void {
+        this.ensureWritable();
+        this.ensureType(value);
+        const [from, to] = this.range(start, end);
+        for (let i = from; i < to; i++) this.values[i] = value;
+    }
+
+    reverse(): void {
+        this.ensureWritable();
+        for (let i = 0, j = this._length - 1; i < j; i++, j--) {
+            const held = this.values[i];
+            this.values[i] = this.values[j];
+            this.values[j] = held;
+        }
+    }
+
+    /** array_resize: a new length; new slots take the default value. */
+    resize(length: number): void {
+        this.ensureWritable();
+        if (length < 0) throw new Error("RuntimeException");
+        this.ensureCapacity(length);
+        for (let i = this._length; i < length; i++) this.values[i] = this.defaultValue;
+        this._length = length;
+    }
+
+    /** array_randomise: Collections.shuffle, `nextInt(bound)` from a java.util.Random. */
+    shuffle(nextInt: (bound: number) => number): void {
+        this.ensureWritable();
+        for (let i = this._length - 1; i > 0; i--) {
+            const j = nextInt(i + 1);
+            const held = this.values[i];
+            this.values[i] = this.values[j];
+            this.values[j] = held;
+        }
+    }
+
+    push(value: any): void {
+        this.insertAt(this._length, value);
+    }
+
+    /** array_delete: removes and returns the value at `index`. */
+    deleteAt(index: number): any {
+        this.ensureWritable();
+        this.checkIndex(index);
+        const removed = this.values[index];
+        for (let i = index; i < this._length - 1; i++) this.values[i] = this.values[i + 1];
+        this._length--;
+        this.values[this._length] = this.defaultValue;
+        return removed;
     }
 
     getAtOrDefault(index: number): any {

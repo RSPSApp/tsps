@@ -1644,7 +1644,7 @@ module.exports = {
       }
 
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Load generated region");
 
     api.registerCommand("procregionhere", ({ player, parts }) => {
       const location = player.getLocation();
@@ -1661,7 +1661,7 @@ module.exports = {
       }
 
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Generate current region");
 
     api.registerCommand("cleargen", ({ player }) => {
       const restoredCacheObjects = clearProceduralClippingForPlayer(player);
@@ -1670,7 +1670,7 @@ module.exports = {
         `[proc-region] cleargen requested: client procedural overrides cleared and region reload forced (cache object clips restored=${restoredCacheObjects}).`
       );
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Clear generated region");
 
     api.registerCommand("procregscan", ({ player, parts }) => {
       const radius = parseIntArg(parts[1] ?? "1");
@@ -1683,7 +1683,7 @@ module.exports = {
         player.sendMessage(`[proc-region] structure scan failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Scan region");
 
     api.registerCommand("procreglearn", ({ player, parts }) => {
       const radius = parseIntArg(parts[1] ?? "2");
@@ -1703,7 +1703,7 @@ module.exports = {
         player.sendMessage(`[proc-region] learn failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Learn region style");
 
     api.registerCommand("dumphouse", ({ player, parts }) => {
       if (parts.length < 2 || parts.length > 3) {
@@ -1729,7 +1729,7 @@ module.exports = {
         player.sendMessage(`[proc-region] dumphouse failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Save house example");
 
     api.registerCommand("dumpterrain", ({ player, parts }) => {
       if (parts.length !== 2) {
@@ -1757,7 +1757,7 @@ module.exports = {
         player.sendMessage(`[proc-region] dumpterrain failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Save terrain data");
 
     api.registerCommand("genterrain", ({ player, parts }) => {
       if (parts.length < 2 || parts.length > 3) {
@@ -1789,7 +1789,7 @@ module.exports = {
         player.sendMessage(`[proc-region] genterrain failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Generate terrain");
 
     api.registerCommand("buildhouse", ({ player, parts }) => {
       if (parts.length < 2 || parts.length > 3) {
@@ -1820,7 +1820,7 @@ module.exports = {
         player.sendMessage(`[proc-region] buildhouse failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Build saved house");
 
     api.registerCommand("genhouse", ({ player, parts }) => {
       if (parts.length < 2 || parts.length > 4) {
@@ -1864,7 +1864,7 @@ module.exports = {
         player.sendMessage(`[proc-region] genhouse failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Generate house");
 
     api.registerCommand("genstreet", ({ player, parts }) => {
       if (parts.length > 4) {
@@ -1916,7 +1916,7 @@ module.exports = {
         player.sendMessage(`[proc-region] genstreet failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Generate street");
 
     api.registerCommand("checkhouse", ({ player }) => {
       try {
@@ -1929,6 +1929,6 @@ module.exports = {
         player.sendMessage(`[proc-region] checkhouse failed: ${reason}`);
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Check house bounds");
   },
 };

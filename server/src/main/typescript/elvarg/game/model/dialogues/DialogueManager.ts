@@ -50,6 +50,11 @@ export class DialogueManager {
         return this.dialogues.has(this.index);
     }
 
+    /** The dialogue entry currently shown, if any. */
+    public getCurrent(): Dialogue | undefined {
+        return this.isActive() ? this.dialogues.get(this.index) : undefined;
+    }
+
     public canContinue(widgetId: number): boolean {
         return this.isActive() && this.player.getPacketSender().isChatboxInterface(widgetId >>> 16);
     }

@@ -2,6 +2,7 @@ import { RegionManager } from "../../collision/RegionManager";
 import type { Mobile } from "../../entity/impl/Mobile";
 import { Location } from "../../model/Location";
 import { PathFinder } from "../../model/movement/path/PathFinder";
+import { PluginManager } from "../../../plugins/PluginManager";
 import { CombatType } from "./CombatType";
 import type { CombatMethod } from "./method/CombatMethod";
 
@@ -22,7 +23,7 @@ export class CombatRange {
 
         const attackerBounds = this.bounds(attacker);
         const targetBounds = this.bounds(target);
-        const range = Math.max(1, method.attackDistance(attacker) | 0);
+        const range = this.attackDistance(attacker, method, target);
         if (this.overlaps(attackerBounds, targetBounds) || this.distance(attackerBounds, targetBounds) > range) {
             return false;
         }
@@ -40,6 +41,20 @@ export class CombatRange {
         const forward = this.hasProjectileLine(attackerBounds, targetBounds, attacker, attackerLocation.getZ());
         return forward && (!target.isPlayer() ||
             this.hasProjectileLine(targetBounds, attackerBounds, target, attackerLocation.getZ()));
+    }
+
+    /** The method's reach, as plugins adjust it (a minigame shortening every attack, say). */
+    static attackDistance(attacker: Mobile, method: CombatMethod, target: Mobile): number {
+        const combatType = method.type();
+        const combat = attacker.isPlayer() ? attacker.getCombat() : null;
+        const castSpell = combat?.getCastSpell() ?? null;
+        return PluginManager.emitCombatAttackDistance({
+            attacker,
+            target,
+            combatType,
+            manualCast: combatType === CombatType.MAGIC && castSpell != null && castSpell !== combat?.getAutocastSpell(),
+            distance: Math.max(1, method.attackDistance(attacker) | 0),
+        });
     }
 
     static route(attacker: Mobile, method: CombatMethod, target: Mobile): boolean {
@@ -76,6 +91,13 @@ export class CombatRange {
             return false;
         }
         return this.hasProjectileLine(sourceBounds, destinationBounds, source, sourceLocation.getZ());
+    }
+
+    /** Their footprints touch without overlapping. */
+    static beside(a: Mobile, b: Mobile): boolean {
+        const first = this.bounds(a);
+        const second = this.bounds(b);
+        return !this.overlaps(first, second) && this.distance(first, second) <= 1;
     }
 
     static overlapsEntities(a: Mobile, b: Mobile): boolean {

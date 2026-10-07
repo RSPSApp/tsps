@@ -109,6 +109,49 @@ test("depositing items keeps each one's metadata", () => {
   assert.equal(player.getInventory().getValidItems().length, 0);
 });
 
+test("inventory bank options count matching unnoted items across slots", () => {
+  for (const [buttonNum, option, custom, mode, expected] of [
+    [8, "Deposit-All", 0, 0, 4],
+    [7, "Deposit-X", 3, 0, 3],
+    [7, undefined, 3, 0, 3],
+    [4, "Deposit-5", 0, 0, 4],
+    [5, "Deposit-10", 0, 0, 4],
+    [2, undefined, 3, 3, 3],
+    [2, undefined, 0, 4, 4],
+    [1, "Deposit-1", 0, 0, 1],
+  ]) {
+    const player = createPlayer();
+    player.getBankCustomQuantity = () => custom;
+    player.getBankQuantityMode = () => mode;
+    for (const charges of [5, 20, 100, 1200]) {
+      player.getInventory().add(new Item(TRIDENT, 1, { charges }), false);
+    }
+    player.getInventory().add(new Item(LAVA_BATTLESTAFF, 1), false);
+
+    Bank.handleWidgetAction(player, {
+      groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_ITEMS_CHILD,
+      buttonNum, option, slot: 3, itemId: TRIDENT,
+    });
+
+    assert.equal(player.getBank().getAmount(TRIDENT), expected);
+    assert.equal(player.getInventory().getAmount(TRIDENT), 4 - expected);
+    assert.equal(player.getInventory().getAmount(LAVA_BATTLESTAFF), 1);
+    assert.deepEqual(player.getBank().getValidItems()[0].getMeta(), { charges: 1200 });
+  }
+});
+
+test("Deposit-X still moves a partial noted stack", () => {
+  const player = createPlayer();
+  player.getBankCustomQuantity = () => 3;
+  player.getInventory().add(new Item(LAVA_BATTLESTAFF_NOTE, 7), false);
+  Bank.handleWidgetAction(player, {
+    groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_ITEMS_CHILD,
+    buttonNum: 7, option: "Deposit-X", slot: 0, itemId: LAVA_BATTLESTAFF_NOTE,
+  });
+  assert.equal(player.getBank().getAmount(LAVA_BATTLESTAFF), 3);
+  assert.equal(player.getInventory().getAmount(LAVA_BATTLESTAFF_NOTE), 4);
+});
+
 test("withdrawing an item keeps its metadata", () => {
   const player = createPlayer();
   player.getBank(0).add(new Item(TRIDENT, 1, { charges: 1200 }), false);
@@ -358,4 +401,62 @@ test("dragging onto the empty space after a tab's items moves the item to the en
   drag(player, BANK_ITEMS, 2, C, BANK_ITEMS, Bank.TAB_DROP_SLOT_OFFSET + 1);
 
   assert.deepEqual(tabsOf(player), [[1, A, 1], [1, B, 1], [1, C, 1]]);
+});
+
+/** A player whose packet sender records client scripts. */
+function recordingPlayer() {
+  const player = createPlayer();
+  const scripts = [];
+  const sender = new Proxy({}, {
+    get: (_target, name) => (...args) => {
+      if (name === "sendClientScript") scripts.push(args);
+      return sender;
+    },
+  });
+  player.getPacketSender = () => sender;
+  player.scripts = scripts;
+  return player;
+}
+
+test("as captured: picking a tab, on the tab bar or a tab heading, ends the bank search", () => {
+  const player = recordingPlayer();
+  for (const tab of [1, 2, 3]) player.getBank(tab).add(new Item(TRIDENT, 1), false);
+  clickTab(player, 1, 1, "View tab");
+  assert.equal(player.getCurrentBankTab(), 1);
+  assert.deepEqual(player.scripts, [[101, 11]], "meslayer_close for the bank search input");
+  // The all-items view's tab headings are bankmain:items slots 1419-1427 (tabs 1-9).
+  player.scripts.length = 0;
+  Bank.handleWidgetAction(player, { groupId: Bank.MAIN_INTERFACE_ID, childId: 12, buttonNum: 1, slot: 1421 });
+  assert.equal(player.getCurrentBankTab(), 3);
+  assert.deepEqual(player.scripts, [[101, 11]]);
+});
+
+test("as captured: Search switches to the main tab", () => {
+  const player = recordingPlayer();
+  player.getBank(1).add(new Item(TRIDENT, 1), false);
+  clickTab(player, 1, 1, "View tab");
+  Bank.handleWidgetAction(player, { groupId: Bank.MAIN_INTERFACE_ID, childId: Bank.SEARCH_CHILD, buttonNum: 1 });
+  assert.equal(player.getCurrentBankTab(), 0);
+});
+
+test("as captured: closing the bank by any route ends a bank search; closing anything else does not", () => {
+  const { PacketSender } = require("../dist/net/packet/PacketSender");
+  // sendInterfaceRemoval: the bank's own close; closeInterruptibleInterfaces: the X (IF_CLOSE)
+  // and walking away.
+  for (const route of ["sendInterfaceRemoval", "closeInterruptibleInterfaces"]) {
+    const close = (interfaceId) => {
+      const player = recordingPlayer();
+      PacketSender.prototype[route].call({
+        player,
+        resetInterfaceState: () => interfaceId,
+        closeTrackedInterfaces: () => true,
+        sendSubInterface: () => {},
+        endBankSearch: PacketSender.prototype.endBankSearch,
+        emitInterfaceClosed: () => {},
+      });
+      return player.scripts;
+    };
+    assert.deepEqual(close(Bank.MAIN_INTERFACE_ID), [[101, 11]], route);
+    assert.deepEqual(close(300), [], route);
+  }
 });

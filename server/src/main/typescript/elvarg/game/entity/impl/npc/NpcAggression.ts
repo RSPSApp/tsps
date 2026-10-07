@@ -8,7 +8,6 @@ import { NPC } from "./NPC";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
 export class NpcAggression {
-    public static NPC_TOLERANCE_SECONDS = 600; // 10 mins (Accurate to OSRS)
 
     public static process(player: Player) {
         // Make sure we can attack the player
@@ -24,6 +23,7 @@ export class NpcAggression {
     }
 
     private static runAggression(player: Player, npcs: NPC[]) {
+        const area = player.getArea();
         for (let npc of npcs) {
             if (npc == null) {
                 continue;
@@ -40,7 +40,8 @@ export class NpcAggression {
             }
 
             if (npcDefinition.buildsAggressionTolerance() && player.getAggressionTolerance().finished()
-                && PluginManager.emitNpcAggressionTolerance(player, npc) !== true) {
+                && ((area ? PluginManager.callArea(area, "npcAggressionTolerance", player, npc) : null)
+                    ?? PluginManager.emitNpcAggressionTolerance(player, npc)) !== true) {
                 // If Player has obtained tolerance to this NPC, don't be aggressive.
                 // Tolerance is per-npc, so skip just this one - the rest of the
                 // list may still contain npcs the player isn't tolerant to.

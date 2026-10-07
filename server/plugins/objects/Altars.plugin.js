@@ -29,12 +29,12 @@ function handleAncientAltar(player) {
   return true;
 }
 
-function handlePrayerAltar(player) {
+function handlePrayerAltar(player, fullMessage = "You already have full Prayer points.") {
   const skillManager = player.getSkillManager();
   const currentPrayer = skillManager.getCurrentLevel(Skill.PRAYER);
   const maxPrayer = skillManager.getMaxLevel(Skill.PRAYER);
   if (currentPrayer >= maxPrayer) {
-    player.sendMessage("You already have full Prayer points.");
+    player.sendMessage(fullMessage);
     return true;
   }
 
@@ -69,6 +69,11 @@ function prayerAltar({ player }) {
   return handlePrayerAltar(player);
 }
 
+/** Shrines restore Prayer as altars do; the Woodcutting Guild's full-Prayer line, as captured. */
+function prayAtShrine({ player }) {
+  return handlePrayerAltar(player, "You already have full Prayer Points.");
+}
+
 function venerateOccultAltar({ player, objectId }) {
   const spellbook = OCCULT_ALTAR_SPELLBOOKS.get(objectId);
   return spellbook ? handleOccultAltar(player, spellbook) : false;
@@ -97,6 +102,7 @@ module.exports = {
     api.onObjectInteraction("Lunar Altar", { Venerate: lunarAltar });
     api.onObjectInteraction("Dark Altar", { Venerate: darkAltar });
     api.onObjectInteraction("Altar", { "Pray-at": prayerAltar, Pray: prayerAltar });
+    api.onObjectInteraction("Shrine", { "Pray-at": prayAtShrine });
     api.onObjectInteraction("Altar of the Occult", {
       Venerate: venerateOccultAltar,
       Standard: standardSpellbook,

@@ -1,10 +1,20 @@
-import { getConfiguredServers, getWebRtcRelayConfig } from "../../../config/clientEnv";
+import {
+    getConfiguredDefaultServer,
+    getConfiguredServers,
+    getWebRtcRelayConfig,
+} from "../../../config/clientEnv";
 import { SERVER_LIST_URL } from "./constants";
 import type { LoginRendererHost } from "./host";
 import type { ServerListEntry } from "./types";
 
 function filterServersForCurrentHost(servers: ServerListEntry[]) {
 
+        // The default server is always pickable, even when the list doesn't name it, so
+        // choosing another world never strands the player away from it.
+        const preferred = getConfiguredDefaultServer();
+        if (preferred && !servers.some((s) => s.address === preferred.address)) {
+            servers = [serverEntry(preferred), ...servers];
+        }
         if (typeof window === "undefined") return servers;
         const pageHost = window.location.hostname.toLowerCase();
         const pageIsLocal =
@@ -69,28 +79,37 @@ export function relayWorldEntries(
     const relayUrl = new URL(signalUrl);
     return worlds
         .filter((world: any) => typeof world?.worldId === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(world.worldId))
-        .map((world: any) => ({
-            name:
-                validPublicText(world.name, 64) && world.name === world.name.trim()
-                    ? world.name
-                    : world.worldId,
-            address: relayUrl.host,
-            secure: relayUrl.protocol === "wss:",
-            playerCount:
-                Number.isInteger(world.playerCount) && world.playerCount >= 0 && world.playerCount <= 2047
-                    ? world.playerCount
-                    : -1,
-            maxPlayers: 2047,
-            transport: "webrtc" as const,
-            signalUrl,
-            worldId: world.worldId,
-            ownerUsername:
-                validPublicText(world.ownerUsername, 100)
-                    ? world.ownerUsername
-                    : undefined,
-            iceServers,
-            relayDiscovered: true,
-        }));
+        .flatMap((world: any): ServerListEntry[] => {
+            let endpoint = relayUrl;
+            if (world.transport === "websocket") {
+                try {
+                    endpoint = new URL(world.webSocketUrl);
+                    if (!["ws:", "wss:"].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash) return [];
+                } catch { return []; }
+            }
+            return [{
+                name:
+                    validPublicText(world.name, 64) && world.name === world.name.trim()
+                        ? world.name
+                        : world.worldId,
+                address: endpoint.host + (world.transport === "websocket" ? endpoint.pathname + endpoint.search : ""),
+                secure: endpoint.protocol === "wss:",
+                playerCount:
+                    Number.isInteger(world.playerCount) && world.playerCount >= 0 && world.playerCount <= 2047
+                        ? world.playerCount
+                        : -1,
+                maxPlayers: 2047,
+                transport: world.transport === "websocket" ? "websocket" : "webrtc",
+                signalUrl,
+                worldId: world.worldId,
+                ownerUsername:
+                    validPublicText(world.ownerUsername, 100)
+                        ? world.ownerUsername
+                        : undefined,
+                iceServers,
+                relayDiscovered: true,
+            }];
+        });
 }
 
 export function forumProfileUrl(ownerUsername: string): string {
@@ -104,7 +123,7 @@ export function replaceRelayWorlds(
     const permanent = current.filter((server) => !server.relayDiscovered);
     const configured = new Set(
         permanent
-            .filter((server) => server.transport === "webrtc" && server.signalUrl && server.worldId)
+            .filter((server) => server.signalUrl && server.worldId)
             .map((server) => `${server.signalUrl}|${server.worldId}`),
     );
     return [
@@ -113,8 +132,7 @@ export function replaceRelayWorlds(
     ];
 }
 
-async function discoverRelayWorlds(): Promise<ServerListEntry[]> {
-    const relay = getWebRtcRelayConfig();
+export async function discoverRelayWorlds(relay = getWebRtcRelayConfig()): Promise<ServerListEntry[]> {
     if (!relay) return [];
     try {
         const url = new URL(relay.signalUrl);
@@ -198,7 +216,7 @@ export function refreshServerList(host: LoginRendererHost) {
 
         const visibleServers = host.serverList.filter((server) => !server.relayDiscovered);
         const promises = visibleServers.map(async (server) => {
-            if (server.transport === "webrtc" && server.signalUrl && server.worldId) {
+            if (server.signalUrl && server.worldId) {
                 try {
                     const statusUrl = new URL(server.signalUrl);
                     statusUrl.protocol = statusUrl.protocol === "wss:" ? "https:" : "http:";
@@ -206,6 +224,8 @@ export function refreshServerList(host: LoginRendererHost) {
                     const response = await fetch(statusUrl, { signal: AbortSignal.timeout(8000) });
                     const data = response.ok ? await response.json() : undefined;
                     const world = data?.worlds?.find((entry: any) => entry?.worldId === server.worldId);
+                    const entry = relayWorldEntries(server.signalUrl, server.iceServers ?? [], { worlds: world ? [world] : [] })[0];
+                    if (entry) Object.assign(server, entry, { name: server.name, relayDiscovered: false });
                     server.playerCount = Number.isInteger(world?.playerCount) ? world.playerCount : world ? -1 : null;
                 } catch {
                     server.playerCount = null;

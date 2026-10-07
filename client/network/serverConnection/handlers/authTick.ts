@@ -1,5 +1,7 @@
 import { ClientState } from "../../../game/ClientState";
 import { clearHintArrow, setHintArrowNpc, setHintArrowTile } from "../../../game/HintArrow";
+import { clearAttackTimer, setAttackTimer } from "../../../game/plugins/attacktimer/attackTimerState";
+import { loadItemPrices } from "../domain/itemPrices";
 import { state } from "../state";
 
 export function handleAuthTickMessage(msg: any): boolean {
@@ -19,6 +21,10 @@ export function handleAuthTickMessage(msg: any): boolean {
     }
     if (msg.type === "login_response") {
         console.log(`[ws] login_response success=${msg.payload.success}`);
+        if (msg.payload.success) {
+            clearAttackTimer();
+            loadItemPrices();
+        }
         for (const cb of state.loginResponseListeners) {
             try {
                 cb(msg.payload);
@@ -78,13 +84,18 @@ export function handleAuthTickMessage(msg: any): boolean {
         ClientState.destinationWorldY = worldY;
         return true;
     }
+    if (msg.type === "attack_timer") {
+        // Sent while the server processes a tick, so it arrives just before that tick's TICK
+        // packet: it counts from the tick about to begin.
+        setAttackTimer(Number(msg.payload?.ticks) | 0, (state.currentTick | 0) + 1);
+        return true;
+    }
     if (msg.type === "hint_arrow") {
         const arrowType = Number(msg.payload?.arrowType) | 0;
         const a = Number(msg.payload?.a) | 0;
         const b = Number(msg.payload?.b) | 0;
-        const c = Number(msg.payload?.c) | 0;
         if (arrowType === 1) setHintArrowNpc(a);
-        else if (arrowType === 2) setHintArrowTile(a, b, c);
+        else if (arrowType === 2) setHintArrowTile(a, b, Number(msg.payload?.c) | 0);
         else clearHintArrow();
         return true;
     }

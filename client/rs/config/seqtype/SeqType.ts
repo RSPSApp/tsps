@@ -13,6 +13,9 @@ export interface SeqSoundEffect {
 }
 
 export class SeqType extends Type {
+    /** Opcode 19: its sounds are heard across worlds (the cache's `crossworldsound`). */
+    crossWorldSound: boolean = false;
+
     frameIds!: number[];
     chatFrameIds?: number[];
     frameLengths!: number[];
@@ -205,6 +208,9 @@ export class SeqType extends Type {
             }
         } else if (opcode === 18) {
             buffer.readString();
+        } else if (opcode === 19) {
+            // `crossworldsound=yes` (no payload).
+            this.crossWorldSound = true;
         } else if (opcode === 100) {
             // Parsing to avoid crash, but not used.
             const count = buffer.readUnsignedByte();

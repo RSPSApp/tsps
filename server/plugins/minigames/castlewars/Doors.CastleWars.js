@@ -105,7 +105,7 @@ function breakDoor(owner) {
   });
 }
 
-function swingAtDoor({ player }) {
+function swingAtDoor(player) {
   const attack = attackers.get(player);
   if (!attack) {
     return;
@@ -208,5 +208,5 @@ module.exports = function attachCastleWarsDoors(api, castleWars) {
   api.onObjectInteraction("Large door", { Attack: attackDoor });
   api.onObjectInteraction("Broken door", { Repair: repairDoor });
   api.onObjectInteraction("Door", { Unlock: unlockSideDoor, Lock: lockSideDoor });
-  api.onPlayerProcess(swingAtDoor);
+  game.inGameProcessors.push(swingAtDoor);
 };

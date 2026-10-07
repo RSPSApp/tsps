@@ -47,6 +47,12 @@ export class SpotAnimType extends Type {
             this.ambient = buffer.readUnsignedByte();
         } else if (opcode === 8) {
             this.contrast = buffer.readUnsignedByte();
+        } else if (opcode === 9) {
+            buffer.readString(); // debug name, rev 230 only
+        } else if (opcode === 10) {
+            // Rev 241 rotate=no: no payload.
+        } else if (opcode === 42) {
+            buffer.readUnsignedShort(); // rev 241 recolall (unused by the 241 cache)
         } else if (opcode === 40) {
             const count = buffer.readUnsignedByte();
             this.recolorFrom = new Array<number>(count);
@@ -63,6 +69,8 @@ export class SpotAnimType extends Type {
                 this.retextureFrom[i] = buffer.readUnsignedShort();
                 this.retextureTo[i] = buffer.readUnsignedShort();
             }
+        } else {
+            throw new Error("SpotAnimType: Opcode " + opcode + " not implemented.");
         }
     }
 }

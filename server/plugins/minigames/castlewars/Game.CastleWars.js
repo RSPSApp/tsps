@@ -24,6 +24,8 @@ const PHASE = { IDLE: "idle", STARTING: "starting", ACTIVE: "active", ENDING: "e
 // Player attribute keys (objects, so they can't collide with anyone else's).
 const BOT_KEY = {};
 const TRANSITION_KEY = {};
+const IDLE_TICKS_KEY = "castlewars:idle-ticks";
+const SPAWN_IDLE_TICKS = 200;
 
 const teamByPlayer = new WeakMap();
 const sentVars = new WeakMap();
@@ -141,6 +143,10 @@ function isPlaying(player) {
 }
 
 /** For castle-only objects: refuses out loud instead of letting the click fall through silently. */
+function resetIdleTicks(player) {
+  player.setAttribute(IDLE_TICKS_KEY, SPAWN_IDLE_TICKS);
+}
+
 function requirePlaying(player) {
   if (isPlaying(player)) {
     return true;
@@ -294,7 +300,8 @@ function removeDroppedFlagObject(flagTeam) {
 }
 
 function updateFlagStand(flagTeam, objectId) {
-  ObjectManager.register(new core.GameObject(objectId, getTeamData(flagTeam).standLocation, 10, 2, null), true);
+  const team = getTeamData(flagTeam);
+  ObjectManager.register(new core.GameObject(objectId, team.standLocation, team.standType, team.standFace, null), true);
 }
 
 function restoreFlagToBase(flagTeam) {
@@ -480,7 +487,7 @@ function startGame() {
   resetMatchState();
   for (const teamId of Object.values(data.TEAM)) {
     for (const player of [...game.waitingAreas[teamId].getPlayers()]) {
-      player.resetCastlewarsIdleTime();
+      resetIdleTicks(player);
       chargeBracelet(player);
       player.setAttribute(TRANSITION_KEY, true);
       closeOverlay(player);
@@ -503,7 +510,7 @@ function endGame() {
     clearCastleWarsItems(player);
     setTeamId(player, null);
     closeOverlay(player);
-    player.getPacketSender().sendInteractionOption("null", 2, true);
+    player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "", false);
     returnToLobby(player);
   }
   resetMatchState();
@@ -519,6 +526,33 @@ function checkTeamsRemain() {
   if (game.gameArea.getPlayers().length < 2 || getTeamMembersInGame(SARADOMIN).length === 0 || getTeamMembersInGame(ZAMORAK).length === 0) {
     endGame();
   }
+}
+
+/**
+ * Dev-seeded bots only exist for real players. Once no real player is left in the lobby, a
+ * waiting room or the game, the bots log out; an active bot-only match ends instead of running
+ * out the clock.
+ */
+function releaseSeededBots() {
+  const waitingAreas = Object.values(game.waitingAreas ?? {});
+  const areas = [game.lobbyArea, ...waitingAreas, game.gameArea].filter(Boolean);
+  if (areas.some((area) => area.getPlayers().some((player) => player.getAttribute(BOT_KEY) !== true))) {
+    return false;
+  }
+  if (phase === PHASE.ACTIVE) {
+    endGame();
+    return true;
+  }
+  let released = false;
+  for (const area of [game.lobbyArea, ...waitingAreas].filter(Boolean)) {
+    for (const bot of [...area.getPlayers()]) {
+      if (bot.getAttribute(BOT_KEY) === true) {
+        returnToLobby(bot);
+        released = true;
+      }
+    }
+  }
+  return released;
 }
 
 function later(ticks, callback) {
@@ -548,6 +582,7 @@ module.exports = function createCastleWarsGame(registry) {
     PHASE,
     BOT_KEY,
     TRANSITION_KEY,
+    IDLE_TICKS_KEY,
     AreaManager,
     // Filled in by Areas.CastleWars.js.
     lobbyArea: null,
@@ -573,6 +608,7 @@ module.exports = function createCastleWarsGame(registry) {
     setTeamVar,
     isPlaying,
     requirePlaying,
+    resetIdleTicks,
     swapObject,
     climbTo,
     refreshPlayerAppearance,
@@ -597,6 +633,7 @@ module.exports = function createCastleWarsGame(registry) {
     beginStartCountdown,
     checkStartCountdown,
     checkTeamsRemain,
+    releaseSeededBots,
     resetMatchState,
     returnToLobby,
     later,

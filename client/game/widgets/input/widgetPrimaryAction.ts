@@ -37,13 +37,9 @@ export function createPrimaryWidgetActionResolver(
     ): { option: string; target: string; slot?: number; itemId?: number; opIndex?: number } => {
         const uid = typeof w?.uid === "number" ? w.uid | 0 : 0;
         const ids = resolveWidgetIdentifiers(widgetManager, w);
-        const resolvedWidgetId = (ids?.widgetId ?? uid) | 0;
         const resolvedGroupId =
             (ids?.groupId ??
                 (typeof w?.groupId === "number" ? w.groupId | 0 : (uid >>> 16) | 0)) | 0;
-        // For dynamic children (fileId === -1), widgetId refers to the PARENT widget id.
-        const resolvedFileId = resolvedWidgetId & 0xffff;
-
         // Prefer deriving options from the parent widget for dynamic children only when the parent
         // holds the ops (e.g., equipped item icons inside equipment slot components).
         // For dynamic children (fileId=-1), check if parent has menu ops.

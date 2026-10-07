@@ -219,4 +219,6 @@ for (const maybeSpell of Object.values(EffectSpells)) {
     }
 }
 EffectSpells.map.set(3280, EffectSpells.BONES_TO_BANANAS);
+// Bones to Peaches is the standard book's members-only bones spell.
+EffectSpells.BONES_TO_PEACHES.members = true;
 EffectSpells.map.set(6884, EffectSpells.BONES_TO_PEACHES);

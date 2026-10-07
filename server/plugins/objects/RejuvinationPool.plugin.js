@@ -3,7 +3,7 @@ const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 
-const ATTR_BLEED_TASK_KEY = "combat:bleed:taskKey";
+const ATTR_BLEED_TASK_KEY = "combat:bleed:task-key";
 const POOL_USE_DELAY_MS = 1000;
 const nextPoolUseAt = new WeakMap();
 

@@ -7,7 +7,7 @@ export class NullPlayerPersistence extends PlayerPersistence {
     return null as any;
   }
 
-  save(player: Player): void {
+  save(player: Player, _reason?: string): void {
     // no persistence during debugging
   }
 

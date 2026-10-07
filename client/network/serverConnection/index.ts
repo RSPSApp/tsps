@@ -22,3 +22,4 @@ export * from "./subscriptions/sync";
 export * from "./subscriptions/ui";
 export * from "./subscriptions/audio";
 export * from "./subscriptions/connection";
+export * from "./domain/itemPrices";

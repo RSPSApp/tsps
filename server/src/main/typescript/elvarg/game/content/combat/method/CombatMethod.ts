@@ -16,6 +16,11 @@ export abstract class CombatMethod {
     public onCombatEnded(character: Mobile, target: Mobile): void {
     }
 
+    /** False when the attack gives the target its own animation instead of a block (a knockback). */
+    public playsBlockAnimation(): boolean {
+        return true;
+    }
+
     public handleAfterHitEffects(hit: PendingHit): void {
     }
 

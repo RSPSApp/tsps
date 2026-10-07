@@ -147,6 +147,7 @@ function revealBuriedMole({ npc }) {
 
 module.exports = {
   name: "GiantMole",
+  members: true,
   register(api) {
     const core = api.core;
     TaskManager = api.getTaskManager();

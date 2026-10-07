@@ -174,7 +174,7 @@ module.exports = {
                 }
             }
         };
-        api.registerCommand("gameUpdate", gameUpdateCommand, PlayerRights.OWNER);
+        api.registerCommand("gameUpdate", gameUpdateCommand, PlayerRights.OWNER, "Schedule a server update");
         api.onPlayerLogin(pushCountdownToLogin);
         api.onServerShutdown(onShutdownCleanup);
     },

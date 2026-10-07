@@ -1079,7 +1079,12 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                                     onClick:
                                         option.toLowerCase() === "take"
                                             ? () => host.osrsClient.takeGroundItem(capturedStack)
-                                            : () => host.osrsClient.closeMenu(),
+                                            : () =>
+                                                  host.osrsClient.groundItemOption(
+                                                      capturedStack,
+                                                      option,
+                                                      actionIdx + 1,
+                                                  ),
                                 });
                             } else if (actionIdx === 2) {
                                 const capturedStack = stack;

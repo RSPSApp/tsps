@@ -7,8 +7,10 @@
  *
  * This plugin supplies the variant selector, the condition answers, the start
  * hook, the amulet hand-over actions and the coffin / skull-altar interactions.
- * The ghost and skeleton NPCs, their spawns and the graveyard coffin placement
- * are server content added separately (the reference spawns them at runtime).
+ * The ghost is not a static world spawn: it rises from the graveyard coffin
+ * when the player opens or searches it and vanishes when the skull is returned,
+ * matching the reference's runtime spawn. The coffin placement and the
+ * attacking skeleton are server content added separately.
  *
  * Gaps (no transcript support, see summary):
  *   - Aereck while carrying the skull but without it (reference has a lost-skull
@@ -42,8 +44,25 @@ module.exports = function registerRestlessGhostQuest(api) {
   const URHNEY_GIVE_AMULET_MESSAGE_ID = "Nn953X";
   /** Lost-amulet "ghostspeak amulet" action, on both Urhney pages. */
   const URHNEY_GIVE_AMULET_ACTION_IDS = new Set(["TkNeQZ", "z2bQM2"]);
+  /** Where the ghost rises: the tile just south of the graveyard coffin (3249, 3192). */
+  const GHOST_SPAWN_X = 3249;
+  const GHOST_SPAWN_Y = 3194;
+  const GHOST_WANDER_RADIUS = 2;
+  /** Accepting the skull task sets the spoken-to-ghost stage (the reference's stage write). */
+  const GHOST_SKULL_TASK_LINE =
+    "Ok. I will try and get the skull back for you, then you can rest in peace.";
+  /**
+   * The "No, you sound like..." and "Wow, this amulet works!" branches commit to
+   * the explanation through these nested choices; their transcript jumps replay
+   * the option body instead of reaching the task text, so the stage is set here.
+   */
+  const GHOST_SKULL_TASK_CHOICES = new Set([
+    "Yes, ok. Do you know WHY you're a ghost?",
+    "Yes, ok. Do you know why you're a ghost?",
+  ]);
 
   let quest;
+  const ghostByPlayer = new Map();
 
   const ownsGhostspeakAmulet = (player) => {
     if (player.getInventory().getAmount(GHOSTSPEAK_AMULET_ID) > 0) return true;
@@ -61,6 +80,34 @@ module.exports = function registerRestlessGhostQuest(api) {
     }
     player.getInventory().adds(GHOSTSPEAK_AMULET_ID, 1);
     player.sendMessage("Father Urhney hands you an amulet.");
+  }
+
+  /** Rise the ghost from the coffin for this player, once, until the quest ends. */
+  function ensureGhost(player) {
+    if (quest.getStage(player) >= STAGE_COMPLETE) return;
+    if (ghostByPlayer.has(player)) return;
+    const npc = api.spawnNpc({
+      id: NpcIdentifiers.RESTLESS_GHOST,
+      x: GHOST_SPAWN_X,
+      y: GHOST_SPAWN_Y,
+      z: 0,
+      wanderRadius: GHOST_WANDER_RADIUS,
+      owner: player,
+      ownerOnly: true,
+    });
+    if (npc) ghostByPlayer.set(player, npc);
+  }
+
+  function removeGhost(player) {
+    const npc = ghostByPlayer.get(player);
+    if (!npc) return;
+    ghostByPlayer.delete(player);
+    api.removeNpc(npc);
+  }
+
+  /** The private ghost follows its owner; drop it on logout like the other quest NPCs. */
+  function handleLogout({ player }) {
+    if (player) removeGhost(player);
   }
 
   /** Swap a coffin object for another id in place (the reference's loc change). */
@@ -240,12 +287,32 @@ module.exports = function registerRestlessGhostQuest(api) {
     }
   }
 
+  /** The skull conversation is the only write to the spoken-to-ghost stage. */
+  function advanceToSpokenGhost(player) {
+    if (quest.getStage(player) !== STAGE_SPOKEN_URHNEY) return;
+    quest.setStage(player, STAGE_SPOKEN_GHOST);
+  }
+
+  function handleDialogueLine(event) {
+    if (event.npcId !== NpcIdentifiers.RESTLESS_GHOST) return;
+    if (event.text !== GHOST_SKULL_TASK_LINE) return;
+    advanceToSpokenGhost(event.player);
+  }
+
+  function handleDialogueChoice(event) {
+    if (event.npcId !== NpcIdentifiers.RESTLESS_GHOST) return;
+    if (!GHOST_SKULL_TASK_CHOICES.has(event.option)) return;
+    advanceToSpokenGhost(event.player);
+  }
+
   function openCoffin(event) {
+    ensureGhost(event.player);
     event.player.sendMessage("You open the coffin.");
     replaceObject(event.object, ObjectIdentifiers.COFFIN_12);
   }
 
   function searchOpenCoffin(event) {
+    ensureGhost(event.player);
     const stage = quest.getStage(event.player);
     if (stage >= STAGE_COMPLETE) {
       event.player.sendMessage("There's a nice and complete skeleton in here!");
@@ -300,6 +367,7 @@ module.exports = function registerRestlessGhostQuest(api) {
     replaceObject(event.object, ObjectIdentifiers.COFFIN_13);
     event.player.sendMessage("The spirit flies into the River Lum.");
     quest.complete(event.player);
+    removeGhost(event.player);
     event.handled = true;
   }
 
@@ -328,6 +396,9 @@ module.exports = function registerRestlessGhostQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
+  api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
+  api.onPlayerLogout(handleLogout);
   api.onObjectFirstClick(ObjectIdentifiers.COFFIN_4, openCoffin);
   api.onObjectFirstClick(ObjectIdentifiers.COFFIN_12, searchOpenCoffin);
   api.onObjectSecondClick(ObjectIdentifiers.COFFIN_12, closeCoffin);

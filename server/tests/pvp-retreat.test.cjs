@@ -11,14 +11,16 @@ const { Location } = require('../dist/game/model/Location');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { TeleportHandler } = require('../dist/game/model/teleportation/TeleportHandler');
 const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
+const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 const filename = path.resolve(__dirname, '../plugins/bots/behaviours/nodes/pvp/PvpDefensiveActionNode.js');
 const localRequire = createRequire(filename);
 
-test('PvP retreat waits for no food and low HP, runs first, then respects depth/teleblock/freeze', () => {
+test('PvP retreat starts when actual food runs out at any HP, runs first, then respects depth/teleblock/freeze', () => {
   const RETREAT_RUN_GRACE_MS = 5000;
   let routes = [], teleports = [], loads = 0, blocked = false, frozen = false;
   let allowed = true, hp = 10, teleporting = false, retaliate = true, globalPvp = false;
   let nowMs = 1000;
+  let inventoryItems = [{ getId: () => ItemIdentifiers.SHARK }];
   let location = new Location(3100, 3600, 0), target = {}, attacker = { getLocation: () => new Location(3100, 3601, 0) };
   const originalCheck = TeleportHandler.checkReqs;
   const originalTeleport = TeleportHandler.teleport;
@@ -46,6 +48,7 @@ test('PvP retreat waits for no food and low HP, runs first, then respects depth/
   };
   const player = {
     getHitpoints: () => hp, getSkillManager: () => ({ getMaxLevel: () => 99 }),
+    getInventory: () => ({ getItems: () => inventoryItems }),
     autoRetaliateReturn: () => retaliate, setAutoRetaliate: (value) => { retaliate = value; },
     getCombat: () => combat, getLocation: () => location,
     get isTeleporting() { return teleporting; },
@@ -67,20 +70,21 @@ test('PvP retreat waits for no food and low HP, runs first, then respects depth/
     Wilderness.isIn = () => true;
     TeleportHandler.checkReqs = () => allowed;
     TeleportHandler.teleport = (_, destination) => { teleports.push(destination); teleporting = true; };
-    assert.equal(tick().handled, false, 'uninitialized food counter uses the full profile supply');
+    assert.equal(tick().handled, false, 'inventory food prevents retreat with an uninitialized counter');
     state.virtualFoodChargesRemaining = 3;
     assert.equal(tick().handled, false, 'low HP alone never triggers retreat with food remaining');
     assert.equal(retaliate, true);
 
-    // No food left, but still healthy: keep fighting.
+    // A stale virtual counter must not hide real food, even at low HP.
     state.virtualFoodChargesRemaining = 0;
-    hp = 80;
-    assert.equal(tick().handled, false, 'no food with healthy HP does not retreat');
+    assert.equal(tick().handled, false, 'actual food prevents retreat despite exhausted virtual charges');
     assert.equal(retaliate, true);
 
-    // No food and low HP: the only trigger. Run first, do not teleport immediately.
-    hp = 10;
-    assert.equal(tick().handled, true, 'no food at low HP starts a retreat');
+    // Inventory is empty but the virtual counter still reports meals: run at high HP.
+    inventoryItems = [null, { getId: () => ItemIdentifiers.COINS }, { getId: () => ItemIdentifiers.SHARK_2 }];
+    state.virtualFoodChargesRemaining = 10;
+    hp = 80;
+    assert.equal(tick().handled, true, 'no actual food at healthy HP starts a retreat');
     assert.equal(retaliate, false);
     assert.equal(teleports.length, 0, 'retreat runs before teleporting');
     nowMs += 1000;
@@ -184,28 +188,30 @@ test('PvP retreat waits for no food and low HP, runs first, then respects depth/
 });
 
 test('retreat blocks southbound ditch crossings, including queued crossings, but allows returning north', () => {
-  const { DitchTraversalService } = require('../plugins/bots/behaviours/traversal/DitchTraversalService');
+  const { maybeCrossDitch } = require('../plugins/bots/brain/DitchCrossing');
   let location = new Location(3100, 3525, 0), pending, crossings = 0;
   const player = {
     getLocation: () => location, getUsername: () => 'retreat-test', setPositionToFace: () => {},
+    getForceMovement: () => null,
     getMovementQueue: () => ({ walkToObject: (_, action) => { pending = action; }, reset: () => {} }),
   };
-  const state = { pvp: { retreat: {} }, roaming: { target: { x: 3100, y: 3518, z: 0 } } };
   const ditch = { getLocation: () => new Location(3100, 3521, 0), getId: () => 23271 };
-  const service = new DitchTraversalService({
-    api: { log: () => {} }, options: { ditchAttemptCooldownMs: 0 },
+  const world = {
+    ditch: { objectId: 23271, attemptCooldownMs: 0 },
+    objectSearch: { findObjectOnRoute: () => ditch },
     emitObjectInteraction: () => { crossings++; return true; },
-  });
-  assert.equal(service.requestCross(player, state, ditch), false);
+  };
+  const state = { pvp: { retreat: {} } };
+  const south = { x: 3100, y: 3518, z: 0 };
+  assert.equal(maybeCrossDitch({ player, state, world, request: south }), false);
   assert.equal(pending, undefined);
   state.pvp.retreat = null;
-  assert.equal(service.requestCross(player, state, ditch), true);
+  assert.equal(maybeCrossDitch({ player, state, world, request: south }), true);
   state.pvp.retreat = {};
   pending.execute();
   assert.equal(crossings, 0, 'queued southbound crossing is cancelled when retreat begins');
   location = new Location(3100, 3518, 0);
-  state.roaming.target.y = 3550;
-  assert.equal(service.requestCross(player, state, ditch), true);
+  assert.equal(maybeCrossDitch({ player, state, world, request: { x: 3100, y: 3550, z: 0 } }), true);
   pending.execute();
   assert.equal(crossings, 1, 'returning to the Wilderness is allowed');
 });
@@ -229,9 +235,10 @@ test('PvP worlds add 15 to the shared Wilderness level for players and bots', ()
         hasGlobalWorldTag: () => globalPvp, WORLD_ZONE_BOUNDARIES: { safe: [] },
       };
       if (name.endsWith('/wilderness/Wilderness')) return { Wilderness: {
-        levelAt, isInLocation: () => true, isInSafeBuilding: () => false,
+        levelAt, isPvpArea: () => true, isInLocation: () => true,
+        isInSafeBuilding: () => false, isMulti: () => false,
       } };
-      if (name.endsWith('/LootKeys.plugin')) return { isSafeLocation: () => false };
+      if (name.endsWith('/ferox/Bounds.FeroxEnclave')) return { isSafeLocation: () => false };
       return local(name);
     },
   }, { filename: file });

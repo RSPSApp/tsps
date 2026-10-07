@@ -110,6 +110,7 @@ function removeFacility(player, { visit, boat, hotspot }) {
 
 module.exports = {
   name: "SailingShipyardFacilities",
+  members: true,
   register(api) {
     pluginApi = api;
     api.onObjectInteraction("Facility hotspot", { Build: openHotspot });

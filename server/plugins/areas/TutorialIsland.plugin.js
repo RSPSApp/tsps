@@ -86,7 +86,6 @@ const MAX_PROGRESS = STAGE.HOME_TELE;
 
 /** Tutorial Island start tile (Gielinor Guide room) and mainland destination. */
 const TUTORIAL_SPAWN = Object.freeze({ x: 3094, y: 3104, z: 0 });
-const LUMBRIDGE_SPAWN = Object.freeze({ x: 3221, y: 3218, z: 0 });
 
 /** Cache "Tutorial Island Progress" overlay (group 649) and its progress varp. */
 const OVERLAY_GROUP = 649;
@@ -456,9 +455,9 @@ const HINT_NPC = Object.freeze({
 });
 
 let pluginApi;
-let Items, Objects, Location, World, PlayerRights, Server, PluginManager;
+let Items, Objects, Location, World, PlayerRights, Server, PluginManager, GameConstants;
 let npcSet, gielinor, survival, chef, quest, mining, combat, magic, account, prayer;
-let treeIds, doorIds, gateIds, cageIds, ladderIds;
+let treeIds, doorIds, cageIds, ladderIds;
 
 function initialize(api) {
   pluginApi = api;
@@ -470,6 +469,7 @@ function initialize(api) {
     PlayerRights,
     Server,
     PluginManager,
+    GameConstants,
   } = api.core);
   npcSet = new Set(
     Object.values(IDS).filter((value) => Array.isArray(value)).flat()
@@ -497,12 +497,8 @@ function initialize(api) {
     Objects.DOOR_24, // 1535
     Objects.GATE_92, // 9717 mining exit (double gate)
     Objects.GATE_93, // 9718 mining exit (double gate)
-  ]);
-  // ponytail: double gates still pass the player through; the Doors plugin's double-door
-  // families don't cover these ids yet.
-  gateIds = new Set([
-    Objects.GATE_90, // 9470 survival gate
-    Objects.GATE_91, // 9708 survival gate
+    Objects.GATE_90, // 9470 survival gate (wooden gate)
+    Objects.GATE_91, // 9708 survival gate (wooden gate)
   ]);
   cageIds = new Set([Objects.GATE_94, Objects.GATE_95]); // 9719, 9720
   ladderIds = new Set([
@@ -642,20 +638,73 @@ function applyHint(player, value) {
         return;
       }
     }
-    // Rat ranging needs the bow from the Combat Instructor first.
-    const needsBow = value === STAGE.COMBAT_RANGE && !hasItem(player, Items.SHORTBOW);
-    const npcId = needsBow ? 3307 : HINT_NPC[value];
+    const npcId = hintNpcIdFor(player, value);
     if (npcId !== undefined) {
       const npc = findNpc(npcId, player);
       if (npc) {
-        sender.sendEntityHint(npc);
+        sendNpcHint(player, value, npc);
         return;
       }
     }
     const target = HINTS[value];
-    if (target) sender.sendPositionalHint(new Location(target.x, target.y, 0), 2);
+    if (target) {
+      sender.sendPositionalHint(new Location(target.x, target.y, 0), 2, HINT_LIFT[value] ?? 0);
+    }
   } catch {
     /* ignore */
+  }
+}
+
+/**
+ * A hint target farther than this is not in the client's local NPC list yet, so
+ * an entity hint draws no arrow (and no minimap marker) until you can see the
+ * NPC. Until then point at its tile; the minimap edge arrow works at any range.
+ */
+const HINT_FOLLOW_TILES = 14;
+/** Lift (in tiles) for tile hints that sit on tall scenery, like the tutorial tree. */
+const HINT_LIFT = Object.freeze({ [STAGE.SURVIVAL_WC]: 2 });
+/** Player -> last NPC hint, for the per-tick close/far switch. */
+const hintFollow = new WeakMap();
+
+function hintNpcIdFor(player, value) {
+  // Rat ranging needs the bow from the Combat Instructor first.
+  if (value === STAGE.COMBAT_RANGE && !hasItem(player, Items.SHORTBOW)) return 3307;
+  return HINT_NPC[value];
+}
+
+function isFarHint(player, npc) {
+  const from = player.getLocation();
+  const at = npc.getLocation();
+  return from.getZ() !== at.getZ() ||
+    Math.max(Math.abs(at.getX() - from.getX()), Math.abs(at.getY() - from.getY())) > HINT_FOLLOW_TILES;
+}
+
+function sendNpcHint(player, value, npc) {
+  const far = isFarHint(player, npc);
+  if (far) {
+    player.getPacketSender().sendPositionalHint(npc.getLocation(), 2);
+  } else {
+    player.getPacketSender().sendEntityHint(npc);
+  }
+  const at = npc.getLocation();
+  hintFollow.set(player, { value, far, x: at.getX(), y: at.getY(), index: npc.getIndex() });
+}
+
+/** Switch between the NPC-follow and tile hints as the player moves. */
+function refreshNpcHint(player) {
+  const value = stage(player);
+  if (HINT_NPC[value] === undefined && value !== STAGE.COMBAT_RANGE) return;
+  const state = hintFollow.get(player);
+  const npc = state ? World.getNpcs().get(state.index) : null;
+  if (!state || state.value !== value || !npc || npc.getHitpoints?.() <= 0) {
+    applyHint(player, value);
+    return;
+  }
+  const far = isFarHint(player, npc);
+  const at = npc.getLocation();
+  if (state.far !== far || (far && (state.x !== at.getX() || state.y !== at.getY()))) {
+    player.getPacketSender().sendEntityHintRemoval(false);
+    sendNpcHint(player, value, npc);
   }
 }
 
@@ -1113,10 +1162,11 @@ function giveLeaveKit(player) {
   const coins = bank.getAmount(Items.COINS);
   if (coins < 25) bank.adds(Items.COINS, 25 - coins);
 
-  player.moveTo(new Location(LUMBRIDGE_SPAWN.x, LUMBRIDGE_SPAWN.y, LUMBRIDGE_SPAWN.z));
+  // The world's home spawn (world.json), not Lumbridge: servers choose where new players land.
+  player.moveTo(GameConstants.DEFAULT_LOCATION.clone());
   setStage(player, STAGE.COMPLETED);
   hideOverlay(player);
-  player.sendMessage("Welcome to Lumbridge!");
+  player.sendMessage("Welcome to Gielinor!");
 }
 
 /** Gate the trees by stage; chopping itself runs through the Woodcutting skill loop. */
@@ -1125,7 +1175,9 @@ function chop(player, event) {
   if (current < STAGE.SURVIVAL_WC) {
     player.sendMessage("You cannot cut down this tree yet. You must progress further in the tutorial.");
     event.handled = true;
-  } else if (current > STAGE.SURVIVAL_FM) {
+  } else if (current > STAGE.SURVIVAL_GATE) {
+    // LostCity tut_woodcut: trees stay open until the survival section is done, so
+    // lost logs (or a fire that burned out before the shrimp) can be replaced.
     player.sendMessage("Perhaps you've done enough woodcutting now.");
     event.handled = true;
   }
@@ -1222,31 +1274,15 @@ function ladder(player, event) {
   event.handled = true;
 }
 
-/**
- * Moves the player through a doorway/gate. The island's doors are one-way
- * "Open" locs with no paired close id, so the generic Doors plugin cannot
- * open them; mirror the player across the door's dominant axis instead.
- */
-function passThrough(player, event) {
-  const door = event.location;
-  const from = event.sourceLocation ?? {
-    x: player.getLocation().getX(),
-    y: player.getLocation().getY(),
-  };
-  const dx = door.x - from.x;
-  const dy = door.y - from.y;
-  if (dx === 0 && dy === 0) return;
-  const destination =
-    Math.abs(dx) >= Math.abs(dy)
-      ? new Location(door.x + Math.sign(dx), door.y, door.z ?? 0)
-      : new Location(door.x, door.y + Math.sign(dy), door.z ?? 0);
-  player.moveTo(destination);
-  event.handled = true;
-}
-
 /** Advances the stage a door/gate transition completes. */
-function passDoor(player) {
+function passDoor(player, location) {
   const current = stage(player);
+  // Only the door/gate this stage points at completes it: re-toggling a door already
+  // passed would otherwise advance the next stage too. Gates have a leaf beside the arrow.
+  const target = HINTS[current];
+  const x = location?.getX?.() ?? location?.x;
+  const y = location?.getY?.() ?? location?.y;
+  if (!target || Math.abs(x - target.x) > 1 || Math.abs(y - target.y) > 1) return;
   switch (current) {
     case STAGE.GIELINOR_DOOR:
       setStage(player, STAGE.SURVIVAL_TALK);
@@ -1278,11 +1314,6 @@ function passDoor(player) {
     default:
       break;
   }
-}
-
-function applyGate(player, event) {
-  passDoor(player);
-  passThrough(player, event);
 }
 
 function applyCage(player, event) {
@@ -1319,7 +1350,6 @@ function handleObject(event) {
   if (id === Objects.BANK_BOOTH_7) return openBank(player, event);
   if (ladderIds.has(id)) return ladder(player, event);
   if (cageIds.has(id)) return applyCage(player, event);
-  if (gateIds.has(id)) return applyGate(player, event);
 }
 
 /** Gate the pond until the net stage; catching itself runs through the Fishing skill loop. */
@@ -1338,9 +1368,14 @@ function handleCanAttack(event) {
   if (!attacker || !attacker.isPlayer?.() || !isActive(attacker)) return;
   const targetId = target?.getId?.();
   if (targetId === IDS.RAT) {
-    if (stage(attacker) < STAGE.COMBAT_MELEE) {
+    const current = stage(attacker);
+    if (current < STAGE.COMBAT_MELEE) {
       event.allow = false;
       attacker.sendMessage("Oi! Get away from there. Only enter the rat cage when I say so.");
+    } else if (current === STAGE.COMBAT_RANGE && !worn(attacker, Items.SHORTBOW)) {
+      // One melee kill only: the second rat must fall to the shortbow.
+      event.allow = false;
+      attacker.sendMessage("Equip the shortbow and arrows to kill a rat from a distance.");
     }
   } else if (targetId === IDS.CHICKEN) {
     const current = stage(attacker);
@@ -1395,6 +1430,7 @@ function handleProcess(event) {
     overlayShown.add(player);
     applyTutorialUi(player);
   }
+  refreshNpcHint(player);
   const current = stage(player);
   if (current === STAGE.COMBAT_DAGGER && worn(player, Items.BRONZE_DAGGER)) {
     advance(player, STAGE.COMBAT_GEAR);
@@ -1490,7 +1526,7 @@ function onMiningSuccess({ player }) {
 // Doors.plugin.js emits this before opening/closing a door.
 function onDoorToggle({ player, objectId, location }) {
   if (!doorIds.has(objectId) || !isActive(player) || !inTutorial(location)) return;
-  passDoor(player);
+  passDoor(player, location);
 }
 
 function onSmeltingSuccess({ player, itemId }) {
@@ -1503,8 +1539,29 @@ function onSmithingSuccess({ player, itemId }) {
   if (stage(player) >= STAGE.MINE_DAGGER) advance(player, STAGE.MINE_GATE);
 }
 
-function onFishingSuccess({ player }) {
-  if (isActive(player) && stage(player) <= STAGE.SURVIVAL_FISH) advance(player, STAGE.SURVIVAL_SKILLS);
+function onFishingSuccess(event) {
+  const player = event.player;
+  if (!player || !isActive(player) || !atTutorial(player)) return;
+  // One catch per click, like the tutorial's single shrimp.
+  event.stop = true;
+  if (stage(player) <= STAGE.SURVIVAL_FISH) advance(player, STAGE.SURVIVAL_SKILLS);
+}
+
+/** Tutorial food never burns: a burnt shrimp/bread leaves a dead end. */
+function onCookingBurn(event) {
+  const player = event.player;
+  if (!player || !isActive(player) || !atTutorial(player)) return;
+  if (event.rawId === Items.RAW_SHRIMPS || event.rawId === Items.BREAD_DOUGH) {
+    event.burn = false;
+  }
+}
+
+/** Home teleport (and any other teleport) must not skip the island. */
+function blockTutorialTeleport(event) {
+  const player = event.player;
+  if (!player || !isActive(player)) return;
+  event.allow = false;
+  player.sendMessage("You can't leave Tutorial Island yet.");
 }
 
 // The welcome screen's Play button re-sends the gameframe bootstrap, which
@@ -1557,13 +1614,14 @@ module.exports = {
   register(api) {
     initialize(api);
     api.persistAttribute(STAGE_ATTR);
-    api.registerCommand("tutnext", onTutNext, PlayerRights.NONE);
-    api.registerCommand("tutlast", onTutLast, PlayerRights.NONE);
+    api.registerCommand("tutnext", onTutNext, PlayerRights.NONE, "Advance to the next tutorial step");
+    api.registerCommand("tutlast", onTutLast, PlayerRights.NONE, "Return to the previous tutorial step");
     api.onNpcInteraction("Gielinor Guide", { "Talk-to": talkToGielinorGuide });
     api.onPlayerLogin(handleLogin);
     api.onPlayerProcess(handleProcess);
     api.onCustomEvent("woodcutting:success", onWoodcuttingSuccess);
     api.onCustomEvent("cooking:success", onCookingSuccess);
+    api.onCustomEvent("cooking:burn", onCookingBurn);
     api.onCustomEvent("mining:success", onMiningSuccess);
     api.onCustomEvent("door:toggle", onDoorToggle);
     api.onCustomEvent("smelting:success", onSmeltingSuccess);
@@ -1578,6 +1636,7 @@ module.exports = {
     api.onNpcClick([IDS.FISHING_SPOT], 1, handleFishing);
     api.onNpcClick([IDS.FISHING_SPOT], 2, handleFishing);
     api.onCanAttack(handleCanAttack);
+    api.onCanTeleport(blockTutorialTeleport);
     api.onNpcDeath(handleNpcDeath);
     api.onItemOnItem("Tinderbox", "Logs", onTinderboxLogs, { noted: false });
     api.onItemOnItem("Pot of flour", "Bucket of water", onFlourWater, { noted: false });

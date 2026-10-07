@@ -123,7 +123,7 @@ function normalizeSelectedSpellState(): void {
  */
 export function inferMenuAction(
     option: string | undefined,
-    _targetType?: MenuTargetType,
+    targetType?: MenuTargetType,
 ): MenuAction | undefined {
     if (!option) return undefined;
     const s = String(option).trim().toLowerCase();
@@ -135,8 +135,10 @@ export function inferMenuAction(
         case "walk here":
             return MenuAction.WalkHere;
         case "examine":
-        case "inspect":
             return MenuAction.Examine;
+        case "inspect":
+            // Inspect is a real object operation (e.g. the ToA grouping obelisk).
+            return targetType === MenuTargetType.LOC ? undefined : MenuAction.Examine;
         case "cancel":
             return MenuAction.Cancel;
         case "follow":

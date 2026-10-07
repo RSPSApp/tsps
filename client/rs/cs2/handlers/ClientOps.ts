@@ -1,6 +1,7 @@
 /**
  * Client operations: stats, inventory, world info, viewport, camera, settings
  */
+import { PostProcessedObjTypeLoader } from "../../config/objtype/ObjTypeLoader";
 import {
     ClientState,
     DEFAULT_SCREEN_HEIGHT,
@@ -8,6 +9,7 @@ import {
 } from "../../../game/ClientState";
 import { getClientClock } from "../../../game/TransmitCycles";
 import { getSafeAreaBounds, isTouchDevice } from "../../../common/utils/DeviceUtil";
+import { isMobileClient, reportedClientType } from "../ClientType";
 import { VARBIT_ROOF_REMOVAL } from "../../../common/vars";
 import { MenuTargetType } from "../../MenuEntry";
 import { chatHistory } from "../ChatHistory";
@@ -36,6 +38,9 @@ function normalizeUiZoomPercent(percent: number, minPercent: number): number {
     if (!Number.isFinite(percent)) return minPercent;
     return Math.round(Math.max(minPercent, Math.min(UIZOOM_MAX_PERCENT, percent)));
 }
+
+/** Rev 241 translations_set/clear: key -> text. */
+const TRANSLATIONS = new Map<string, string>();
 
 export function registerClientOps(handlers: HandlerMap): void {
     // === Clock ===
@@ -232,7 +237,7 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.MAP_MEMBERS, (ctx) => {
-        ctx.pushInt(1);
+        ctx.pushInt(PostProcessedObjTypeLoader.membersWorld ? 1 : 0);
     });
 
     handlers.set(Opcodes.STAFFMODLEVEL, (ctx) => {
@@ -476,12 +481,6 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.pushInt(camera ? (camera.yaw | 0) & 2047 : 0);
     });
 
-    handlers.set(Opcodes.CAM_GETYAW, (ctx) => {
-        const osrsClient = (ctx.widgetManager as any).osrsClient;
-        const camera = osrsClient?.camera;
-        ctx.pushInt(camera ? (camera.yaw | 0) & 2047 : 0);
-    });
-
     handlers.set(Opcodes.CAM_SETFOLLOWHEIGHT, (ctx) => {
         let followHeight = ctx.intStack[--ctx.intStackSize] | 0;
         if (followHeight < 0) {
@@ -509,18 +508,17 @@ export function registerClientOps(handlers: HandlerMap): void {
         // [proc,on_mobile] checks:
         // 1. %osm_simulate = 1 (desktop mobile simulation)
         // 2. clienttype = 7 (mobile client type)
-        // 3. on_mobile opcode (touch device check)
+        // 3. on_mobile opcode (mobile layout check)
         const wm = ctx.widgetManager as any;
-        const isMobileInterface = wm?.rootInterface === 601;
 
         // Check osm_simulate varbit for desktop mobile simulation
         const osmSimulate = ctx.varManager?.getVarbit(OSM_SIMULATE_VARBIT) ?? 0;
 
-        const result = osmSimulate === 1 || isMobileInterface || isTouchDevice ? 1 : 0;
+        const result = osmSimulate === 1 || isMobileClient(wm?.rootInterface) ? 1 : 0;
         if (!loggedOnMobile) {
             loggedOnMobile = true;
             console.log(
-                `[ON_MOBILE] result=${result} (osmSimulate=${osmSimulate}, rootInterface=${wm?.rootInterface}, isTouchDevice=${isTouchDevice})`,
+                `[ON_MOBILE] result=${result} (osmSimulate=${osmSimulate}, rootInterface=${wm?.rootInterface}, isMobileClient=${isMobileClient(wm?.rootInterface)})`,
             );
         }
         ctx.pushInt(result);
@@ -535,15 +533,14 @@ export function registerClientOps(handlers: HandlerMap): void {
         // 5 = mac
         // 7 = mobile (generic - used by ~on_mobile proc)
         // 10 = steam/enhanced variant
-        // Return 2 (android) for mobile interface or touch devices, 10 otherwise.
+        // Return 2 (android) on the mobile layout, 10 otherwise; see isMobileClient.
         // [proc,on_mobile] checks `clienttype = 7` as one condition.
         const wm = ctx.widgetManager as any;
-        const isMobileInterface = wm?.rootInterface === 601;
-        const result = isMobileInterface || isTouchDevice ? 2 : 10;
+        const result = reportedClientType(wm?.rootInterface);
         if (!loggedClientType) {
             loggedClientType = true;
             console.log(
-                `[CLIENTTYPE] result=${result} (isMobileInterface=${isMobileInterface}, isTouchDevice=${isTouchDevice})`,
+                `[CLIENTTYPE] result=${result} (rootInterface=${wm?.rootInterface}, isMobileClient=${isMobileClient(wm?.rootInterface)})`,
             );
         }
         ctx.pushInt(result);
@@ -664,10 +661,10 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     // Mobile feedback sprite configuration
-    // setfeedbacksprite(graphic, showRipple) - sets click feedback sprite
+    // setfeedbacksprite(graphic, transparency) - sets click feedback sprite
     handlers.set(Opcodes.SETFEEDBACKSPRITE, (ctx) => {
         const showRipple = ctx.intStack[--ctx.intStackSize] === 1;
-        ctx.stringStackSize--; // pop sprite graphic name
+        ctx.intStackSize--; // graphic
         // Store the feedback sprite settings
         const osrsClient = (ctx.widgetManager as any).osrsClient;
         if (osrsClient) {
@@ -706,10 +703,6 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.intStackSize--; // pop enabled
     });
 
-    handlers.set(Opcodes.SETKEYINPUTENABLED, (ctx) => {
-        ctx.intStackSize--; // pop enabled
-    });
-
     // Key input mode control opcodes ()
     // These opcodes control the key input state for chatbox dialogs
     // Type 0 = no dialog active (all widgets can receive input)
@@ -737,15 +730,6 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.pushInt(ctx.cs2Vm.inputDialogType);
     });
 
-    handlers.set(Opcodes.SETFPSINTERFACEOVERLAY, (ctx) => {
-        ctx.intStackSize--; // pop enabled
-    });
-
-    handlers.set(Opcodes.SETHIDETOOLTIP, (ctx) => {
-        // Pop one int, no side effects.
-        --ctx.intStackSize;
-    });
-
     handlers.set(Opcodes.SETHIDEUSERNAME, (ctx) => {
         ctx.intStackSize--; // pop enabled
     });
@@ -764,36 +748,6 @@ export function registerClientOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.SHOW_IOS_REVIEW, () => {
         // No-op
-    });
-
-    // === Mobile Local Notifications ===
-    // local_notification(id, delayMs, title, body) - schedules a push notification
-    // Used by [proc,local_notification] (script 5360)
-    handlers.set(Opcodes.LOCAL_NOTIFICATION, (ctx) => {
-        const body = ctx.stringStack[--ctx.stringStackSize];
-        const title = ctx.stringStack[--ctx.stringStackSize];
-        const delayMs = ctx.intStack[--ctx.intStackSize];
-        const id = ctx.intStack[--ctx.intStackSize];
-        // No-op on web - would schedule a mobile push notification
-        void id;
-        void delayMs;
-        void title;
-        void body;
-    });
-
-    // local_notification_cancel(id) - cancels a scheduled notification
-    handlers.set(Opcodes.LOCAL_NOTIFICATION_CANCEL, (ctx) => {
-        ctx.intStackSize--; // pop id
-    });
-
-    // local_notification_cancelall() - cancels all scheduled notifications
-    handlers.set(Opcodes.LOCAL_NOTIFICATION_CANCELALL, () => {
-        // No-op
-    });
-
-    // local_notification_supported() -> boolean - checks if notifications are supported
-    handlers.set(Opcodes.LOCAL_NOTIFICATION_SUPPORTED, (ctx) => {
-        ctx.pushInt(0); // Not supported on web
     });
 
     // === Mouse position ===
@@ -1335,12 +1289,6 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.pushInt(getSafeBounds(ctx).maxY | 0);
     });
 
-    // Alternative safe area opcode (6231) - same as SAFEAREA_GETMAXY
-    // Used in some mobile scripts (e.g., script 5355)
-    handlers.set(Opcodes.SAFEAREA_GETMAXY_ALT, (ctx) => {
-        ctx.pushInt(getSafeBounds(ctx).maxY | 0);
-    });
-
     // Enhanced client-side context menu hooks.
     // These install/remove transient client-owned ops (Tag, Lookup, Mark tile, etc.).
     // We do not surface the enhanced desktop/mobile menu entries yet, but the cache relies on
@@ -1495,6 +1443,11 @@ export function registerClientOps(handlers: HandlerMap): void {
         return values.some((candidate) => normalizeVectorValue(candidate, ignoreCase) === needle);
     };
 
+    handlers.set(Opcodes.STRINGVECTOR_ADD, (ctx) => {
+        const value = String(ctx.popString() ?? "");
+        getStringVector(ctx.popInt() | 0).push(value);
+    });
+
     handlers.set(Opcodes.STRINGVECTOR_ADDUNIQUE, (ctx) => {
         const ignoreCase = ctx.popInt() !== 0;
         const vectorId = ctx.popInt() | 0;
@@ -1544,27 +1497,6 @@ export function registerClientOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.STRINGVECTOR_CLEAR, (ctx) => {
         const vectorId = ctx.popInt() | 0;
         getStringVector(vectorId).length = 0;
-    });
-
-    // === Notification System ===
-    // NOTIFICATIONS_SENDLOCAL (6800): Display a notification using the authentic OSRS CS2 system
-    // Stack: pops 2 ints (unused args), 2 strings (body, title) in reverse order
-    // Returns: notification ID (always 0 for now)
-    handlers.set(Opcodes.NOTIFICATIONS_SENDLOCAL, (ctx) => {
-        // Pop 2 unused int args (arg1, arg2)
-        ctx.intStackSize -= 2;
-        // Pop body and title strings
-        const body = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        const title = ctx.stringStack[--ctx.stringStackSize] ?? "";
-
-        // Default notification color (orange, same as loot notifications)
-        const color = 0xff981f;
-
-        // Trigger the notification via callback
-        ctx.onNotificationDisplay?.(title, body, color);
-
-        // Return notification ID (always 0 for now)
-        ctx.pushInt(0);
     });
 
     // === Loot Tracker ===
@@ -1727,6 +1659,13 @@ export function registerClientOps(handlers: HandlerMap): void {
         chatHistory.addMessage(0, text);
     });
 
+    // mes_typed(chattype, string): a message in the given chat channel.
+    handlers.set(Opcodes.MES_TYPED, (ctx) => {
+        const text = ctx.stringStack[--ctx.stringStackSize];
+        const type = ctx.intStack[--ctx.intStackSize];
+        chatHistory.addMessage(type | 0, text);
+    });
+
     handlers.set(Opcodes.ANIM, (ctx) => {
         ctx.intStackSize -= 2; // pop delay, animId
     });
@@ -1738,6 +1677,38 @@ export function registerClientOps(handlers: HandlerMap): void {
 
     // RESUME_COUNTDIALOG (3104): Completes a numeric input dialog
     // Pops string from stack, converts to int, sends to server
+    // resume_longdialog(string) (rev 241): a count dialog for values past the int range. This
+    // server takes counts as ints, so the value is clamped like resume_countdialog's.
+    handlers.set(Opcodes.RESUME_LONGDIALOG, (ctx) => {
+        const text = String(ctx.stringStack[--ctx.stringStackSize] ?? "").trim();
+        let value = 0;
+        if (/^-?\d+$/.test(text)) {
+            const parsed = BigInt(text);
+            value = Number(parsed > 2147483647n ? 2147483647n : parsed < -2147483648n ? -2147483648n : parsed);
+        }
+        ctx.cs2Vm.onInputDialogComplete?.("count", value);
+        ctx.cs2Vm.inputDialogType = 0;
+        ctx.cs2Vm.inputDialogWidgetId = -1;
+        ctx.cs2Vm.inputDialogString = "";
+    });
+
+    // translations_set(key, string) / translations_clear (rev 241): the client's translation
+    // table. This client shows the English text, so they are kept but unused.
+    handlers.set(Opcodes.TRANSLATIONS_SET, (ctx) => {
+        const text = ctx.stringStack[--ctx.stringStackSize];
+        const key = ctx.stringStack[--ctx.stringStackSize];
+        TRANSLATIONS.set(String(key), String(text));
+    });
+    handlers.set(Opcodes.TRANSLATIONS_CLEAR, () => {
+        TRANSLATIONS.clear();
+    });
+
+    // client_version()(int, int): the revision and its minor build (rev 241).
+    handlers.set(Opcodes.CLIENT_VERSION, (ctx) => {
+        ctx.pushInt(ctx.clientRevision | 0);
+        ctx.pushInt(0);
+    });
+
     handlers.set(Opcodes.RESUME_COUNTDIALOG, (ctx) => {
         const inputString = ctx.stringStack[--ctx.stringStackSize] ?? "";
         const trimmed = inputString.trim();
@@ -1795,7 +1766,8 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.RESUME_OBJDIALOG, (ctx) => {
-        ctx.cs2Vm.onInputDialogComplete?.("obj", ctx.popInt());
+        const obj = ctx.popInt(); // popped even with no dialog listener
+        ctx.cs2Vm.onInputDialogComplete?.("obj", obj);
     });
 
     handlers.set(Opcodes.OPPLAYER, (ctx) => {
@@ -1811,7 +1783,9 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.stringStackSize--; // pop url
     });
 
+    // bug_report(template, string, string)
     handlers.set(Opcodes.BUG_REPORT, (ctx) => {
-        ctx.intStackSize--; // pop type
+        ctx.intStackSize--;
+        ctx.stringStackSize -= 2;
     });
 }

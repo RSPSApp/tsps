@@ -22,6 +22,8 @@ Open <http://localhost:3000>. The first start downloads the game cache automatic
 
 If setup is interrupted, run `npm run setup` again.
 
+Running several branches at once, one worktree each on its own ports: see [docs/worktrees.md](docs/worktrees.md).
+
 ## Publish your world
 
 Create a server token at [RSPS.app](https://rsps.app/) under **Settings → Server tokens**, then add it to `.env` in the repository root:
@@ -33,9 +35,14 @@ WEBRTC_WORLD_TOKEN=paste-your-token-here
 
 Run `yarn start`. Your world appears in the World list once it registers. Keep the token private.
 
+## Links
+
+- [Progress](https://rsps.app/progress) — how much of OSRS is implemented, by category
+- [Host a world](https://rsps.app/host)
+
 ## Credits
 
-We want to thank Astrul, Detuks and all the contributers of both the legacy Java project and the TypeScript continuation.
+We want to thank Astrul, Detuks, Vexus and all the contributors of both the legacy Java project and the TypeScript continuation.
 
 ## Legal
 

@@ -220,8 +220,10 @@ export function registerChatOps(handlers: HandlerMap): void {
         const command = ctx.stringStack[--ctx.stringStackSize];
         const trimmed = typeof command === "string" ? command.trim() : "";
         if (!trimmed) return;
-        // Client plugins may claim a command (e.g. ::317) and consume it locally.
         const osrsClient = (globalThis as any)?.osrsClient;
+        // RuneLite-shaped event for plugins; then the legacy engine hook, then the server.
+        osrsClient?.runeLite?.postCommandExecuted?.(trimmed);
+        // Client plugins may claim a command (e.g. ::317) and consume it locally.
         if (osrsClient?.clientPlugins?.handleClientCommand?.(trimmed)) {
             return;
         }

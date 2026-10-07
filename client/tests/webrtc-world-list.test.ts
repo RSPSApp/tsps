@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 
 import { getBrowserHostWorldConfig, getCacheBaseUrl, getServerListUrl, getWebRtcRelayConfig } from "../config/clientEnv";
 import { handleServerListClick } from "../game/login/renderer/input/mouseClick";
-import { forumProfileUrl, relayWorldEntries, replaceRelayWorlds } from "../game/login/renderer/serverList";
-import { setServerUrl } from "../network/serverConnection/outgoing/connectionInfo";
+import { forumProfileUrl, refreshServerList, relayWorldEntries, replaceRelayWorlds } from "../game/login/renderer/serverList";
+import { resolveServerTransport, setServerUrl } from "../network/serverConnection/outgoing/connectionInfo";
 import { state as connectionState } from "../network/serverConnection/state";
 
 assert.deepEqual(getWebRtcRelayConfig(), {
@@ -73,3 +73,48 @@ assert.deepEqual(refreshed.map((world) => world.worldId), ["toby", "alice"]);
 assert.equal(refreshed[0].name, "Toby's World");
 
 console.log("WebRTC relay world discovery test passed");
+
+async function checkDedicatedWorld(): Promise<void> {
+    const payload = { worlds: [
+        { worldId: "world-1", name: "World 1", transport: "websocket", webSocketUrl: "wss://game.example.com/game?world=1", playerCount: 4 },
+        { worldId: "bad-url", transport: "websocket", webSocketUrl: "https://example.com" },
+        { worldId: "bad-auth", transport: "websocket", webSocketUrl: "wss://user:pass@example.com" },
+    ] };
+    const entries = relayWorldEntries("wss://worlds.rsps.app", [], payload);
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].transport, "websocket");
+    assert.equal(entries[0].address, "game.example.com/game?world=1");
+    assert.equal(entries[0].secure, true);
+    assert.equal(entries[0].playerCount, 4);
+    assert.equal(replaceRelayWorlds([{ ...entries[0], relayDiscovered: false }], entries).length, 1);
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => ({ ok: true, json: async () => payload })) as any;
+    (globalThis as any).window = { location: { search: "", pathname: "/play/world-1" } };
+    try {
+        const host = { serverList: [{ ...entries[0], relayDiscovered: false, playerCount: -1 }], probing: false } as any;
+        refreshServerList(host);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(host.serverList.length, 1);
+        assert.equal(host.serverList[0].playerCount, 4);
+        assert.equal(host.serverList[0].transport, "websocket");
+        setServerUrl("wss://worlds.rsps.app", { signalUrl: "wss://worlds.rsps.app", worldId: "world-1", iceServers: [] });
+        assert.equal(await resolveServerTransport(), true);
+        assert.equal(connectionState.lastUrl, "wss://game.example.com/game?world=1");
+        assert.equal(connectionState.webRtcConfig, undefined);
+        // Explicit selections must override the world in the URL path.
+        setServerUrl("wss://other.example.com", null);
+        assert.equal(connectionState.webRtcConfig, undefined);
+        const pending = resolveServerTransport();
+        assert.equal(await pending, true);
+        setServerUrl("wss://worlds.rsps.app", { signalUrl: "wss://worlds.rsps.app", worldId: "world-1", iceServers: [] });
+        const resolving = resolveServerTransport();
+        setServerUrl("wss://other.example.com", null);
+        assert.equal(await resolving, false);
+        assert.equal(connectionState.lastUrl, "wss://other.example.com");
+    } finally {
+        globalThis.fetch = originalFetch;
+        delete (globalThis as any).window;
+    }
+}
+void checkDedicatedWorld().then(() => console.log("Dedicated WebSocket world discovery test passed"));

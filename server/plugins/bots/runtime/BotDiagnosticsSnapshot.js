@@ -1,10 +1,11 @@
 const { readPoint, readTile, formatPoint } = require("../lib/BotValueUtils");
 
+const CURRENT_PRESET_ATTRIBUTE = "pvp:current-preset";
+
 const STUCK_THRESHOLDS_MS = Object.freeze({
   ditchTransition: 10000,
   pendingMove: 12000,
   overdueAction: 12000,
-  bankRunPhase: 20000,
 });
 
 const HISTORY_LOOP_THRESHOLDS = Object.freeze({
@@ -71,19 +72,7 @@ function resolveModeActionAt(state) {
   switch (state?.mode) {
     case "roaming":
       return state?.roaming?.nextWalkAt ?? null;
-    case "woodcutting":
-      return state?.woodcutting?.nextActionAt ?? null;
-    case "mining":
-      return state?.mining?.nextActionAt ?? null;
-    case "firemaking":
-      return state?.firemaking?.nextActionAt ?? null;
-    case "smelting":
-      return state?.smelting?.nextActionAt ?? null;
-    case "bank_run":
-      return state?.bankRun?.nextActionAt ?? null;
     case "pvp":
-      return state?.pvp?.nextActionAt ?? null;
-    case "sparring":
       return state?.pvp?.nextActionAt ?? null;
     default:
       return null;
@@ -167,9 +156,6 @@ function getHistorySignals(recentHistory) {
       }
       continue;
     }
-    if (event === "bank_run_blocked_no_traversal_object") {
-      signals.bankBlockedNoTraversal += 1;
-    }
   }
 
   return signals;
@@ -223,20 +209,6 @@ function buildStuckDiagnosis(snapshot) {
     };
   }
 
-  if (state?.mode === "bank_run") {
-    const phase = state?.bankRun?.phase ?? "n/a";
-    const phaseStartedAt = Number(state?.bankRun?.phaseStartedAt ?? 0);
-    if (phaseStartedAt > 0) {
-      const phaseElapsedMs = nowMs - phaseStartedAt;
-      if (!moving && phaseElapsedMs >= STUCK_THRESHOLDS_MS.bankRunPhase) {
-        return {
-          stuck: true,
-          reason: `bank-run phase '${phase}' running ${phaseElapsedMs}ms with no movement`,
-        };
-      }
-    }
-  }
-
   const signals = getHistorySignals(recentHistory);
   if (signals.ditchTimeoutSeen) {
     return {
@@ -260,16 +232,6 @@ function buildStuckDiagnosis(snapshot) {
       reason: `ditch loop detected (requests=${signals.ditchRequested}, completed=${signals.ditchCompleted}, retargets=${signals.ditchRetargets})`,
     };
   }
-  if (
-    state?.mode === "bank_run" &&
-    signals.bankBlockedNoTraversal >= HISTORY_LOOP_THRESHOLDS.bankBlockedNoTraversal
-  ) {
-    return {
-      stuck: true,
-      reason: `bank run repeatedly blocked (no traversal object x${signals.bankBlockedNoTraversal})`,
-    };
-  }
-
   const nextActionAt = Number(resolveModeActionAt(state));
   if (Number.isFinite(nextActionAt) && nextActionAt > 0) {
     if (nowMs < nextActionAt) {
@@ -305,6 +267,26 @@ function buildStuckDiagnosis(snapshot) {
   return { stuck: false, reason: "no stuck indicators detected" };
 }
 
+/** One line of "what is it waiting on" so a standstill is readable, not guessed. */
+function describeModeState(state, nowMs) {
+  if (!state?.mode) {
+    return null;
+  }
+  const next = (value) => `next=${msRemainingLabel(value, nowMs)}`;
+  if (state.mode === "roaming" && state.roaming) {
+    return `target=${formatPoint(state.roaming.target)} nextWalk=${msRemainingLabel(
+      state.roaming.nextWalkAt,
+      nowMs
+    )}`;
+  }
+  if (state.mode === "pvp" && state.pvp) {
+    return `phase=${state.pvp.phase ?? "n/a"} target=${
+      state.pvp.targetUsername ?? "none"
+    } ${next(state.pvp.nextActionAt)}`;
+  }
+  return null;
+}
+
 function createBotDiagnosticsSnapshot({
   bot,
   state,
@@ -322,7 +304,7 @@ function createBotDiagnosticsSnapshot({
   const currentTile = readTile(bot?.getLocation?.());
   const faceTile = readTile(bot?.getPositionToFace?.());
   const followUsername = bot?.getFollowing?.()?.getUsername?.() ?? null;
-  const recruitOwnerUsername = bot?.getAttribute?.("botRecruitOwnerUsername") ?? null;
+  const recruitOwnerUsername = bot?.getAttribute?.("bot-recruit-owner-username") ?? null;
   const queueSize = resolveQueueSize(queue);
   const moving = isQueueMoving(queue);
   const recentHistory =
@@ -388,6 +370,11 @@ function renderBotDiagnosticsLines({
       } ${statusLabel}`
     )
   );
+  lines.push(chatTrim(`[Bot Status] Position: ${formatPoint(currentTile)}`));
+  const modeDetail = describeModeState(state, nowMs);
+  if (modeDetail) {
+    lines.push(chatTrim(`[Bot Status] Mode: ${modeDetail}`));
+  }
   const pvpLoadoutId = state?.pvp?.loadoutId ?? "n/a";
   const equipmentItems = bot?.getEquipment?.()?.getCopiedItems?.() ?? [];
   const equipped = Array.isArray(equipmentItems)
@@ -396,7 +383,7 @@ function renderBotDiagnosticsLines({
   lines.push(
     chatTrim(
       `[Bot Status] Loadout: pvp=${pvpLoadoutId} preset=${
-        bot?.getCurrentPreset?.()?.getName?.() ?? "none"
+        bot?.getAttribute?.(CURRENT_PRESET_ATTRIBUTE)?.getName?.() ?? "none"
       } equipped=${equipped.length} primaryWeaponId=${
         state?.pvp?.generatedPrimaryWeaponId ?? "n/a"
       }`

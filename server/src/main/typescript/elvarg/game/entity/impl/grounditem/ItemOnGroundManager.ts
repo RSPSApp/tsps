@@ -147,7 +147,6 @@ export class ItemOnGroundManager {
     }
 
     public static pickup(player: Player, groundItem: ItemOnGround): void {
-        const privateAreaPickup = player.getPrivateArea() != null;
         if (!World.getItems().includes(groundItem) || groundItem.isPendingRemoval() || groundItem.getPrivateArea() !== player.getPrivateArea()) {
             return;
         }
@@ -161,7 +160,7 @@ export class ItemOnGroundManager {
             return;
         }
 
-        if (!privateAreaPickup && PluginManager.emitGroundItemPickup({
+        if (PluginManager.emitGroundItemPickup({
             player,
             groundItem,
             groundItemId: itemId,

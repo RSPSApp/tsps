@@ -10,8 +10,8 @@
  * 3 complete.
  *
  * Supporting state kept in attributes (the reference's varps 33/34):
- *   ernestTheChicken.fountain  1 = piranhas poisoned
- *   ernestTheChicken.levers    the 6-bit basement lever/pulley puzzle
+ *   ernest-the-chicken.fountain  1 = piranhas poisoned
+ *   ernest-the-chicken.levers    the 6-bit basement lever/pulley puzzle
  *
  * Gaps (no dump support, see summary):
  *   - Oddenstein before the quest has no "busy" line; the standard machine
@@ -103,8 +103,8 @@ module.exports = function registerErnestTheChickenQuest(api) {
     for (const leverId of PUZZLE_LEVER_IDS[index]) LEVER_IDS.set(leverId, index);
   }
 
-  const FOUNTAIN_ATTRIBUTE = "ernestTheChicken.fountain";
-  const LEVERS_ATTRIBUTE = "ernestTheChicken.levers";
+  const FOUNTAIN_ATTRIBUTE = "ernest-the-chicken.fountain";
+  const LEVERS_ATTRIBUTE = "ernest-the-chicken.levers";
   const START_HOOK = "quest:ernest-the-chicken:start";
   /** "Congratulations! Quest complete!" on the shared finishing-up page. */
   const COMPLETE_ACTION_ID = "2wle32";

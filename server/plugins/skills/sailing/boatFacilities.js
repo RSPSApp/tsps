@@ -1,5 +1,5 @@
 // A boat's facility hotspots and what is built on them, read from the cache's sailing tables:
-// each boat type's row (table 166, column 31) lists its hotspots as [template tile, a, b,
+// each boat type's row (table 166, column 32) lists its hotspots as [template tile, a, b,
 // hotspot row]; a hotspot row (table 175) lists the facilities it allows; a facility row (table
 // 176) gives its loc, levels and materials. A boat stores, per hotspot, the facility's 1-based
 // position in that list (0 = empty), which is also what the hotspot varbits hold. Facts and
@@ -8,7 +8,8 @@ const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/c
 const { boatType } = require("./sailingContent");
 
 const FACILITIES_TABLE = 176;
-const TYPE_HOTSPOTS = 31;
+/** Table 166's `hotspot` column (31 before rev 241 added sail_pattern_option at 27). */
+const TYPE_HOTSPOTS = 32;
 const HOTSPOT_FACILITIES = 2;
 const FACILITY = { name: 0, loc: 6, sailing: 12, construction: 13, materials: 17, category: 22, overSide: 23 };
 const HOTSPOT_TUPLE = 4;
@@ -150,6 +151,9 @@ function hotspotLocs(boat, placeholders = false) {
 }
 
 module.exports = {
+  TYPE_HOTSPOTS,
+  HOTSPOT_FACILITIES,
+  FACILITY,
   hotspotsOf,
   facilitiesOf,
   facilitiesUnaltered,

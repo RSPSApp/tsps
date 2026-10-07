@@ -1,32 +1,33 @@
-import type {
-    VengeanceTimerPluginConfig,
-    VengeanceTimerPluginPersistence,
-    VengeanceTimerPluginState,
-} from "./types";
-
-type VengeanceTimerPluginListener = () => void;
+import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 
 export const VENGEANCE_TIME_LIMIT_VARBIT = 2451;
 export const VENGEANCE_COOLDOWN_MS = 30_000;
 
-const DEFAULT_CONFIG: VengeanceTimerPluginConfig = Object.freeze({
-    enabled: true,
-});
+export interface VengeanceTimerPluginConfig {
+    enabled: boolean;
+}
 
-export class VengeanceTimerPlugin {
+export interface VengeanceTimerPluginState {
+    config: VengeanceTimerPluginConfig;
+    cooldownEndsAt: number | null;
+    version: number;
+}
+
+type VengeanceTimerPluginListener = () => void;
+
+export class VengeanceTimerPlugin extends Plugin {
+    static descriptor: PluginDescriptor = {
+        name: "Vengeance Timer",
+        description: "Shows the 30-second Vengeance cooldown.",
+        tags: ["combat", "timer"],
+        configKey: "vengeancetimerplugin",
+    };
+
     private readonly listeners = new Set<VengeanceTimerPluginListener>();
-    private readonly persistence?: VengeanceTimerPluginPersistence;
-    private config: VengeanceTimerPluginConfig;
     private cooldownActive = false;
     private cooldownEndsAt: number | null = null;
-    private state: VengeanceTimerPluginState;
     private version = 0;
-
-    constructor(persistence?: VengeanceTimerPluginPersistence) {
-        this.persistence = persistence;
-        this.config = this.sanitizeConfig(persistence?.load());
-        this.state = this.createState();
-    }
+    private state: VengeanceTimerPluginState = this.createState();
 
     subscribe(listener: VengeanceTimerPluginListener): () => void {
         this.listeners.add(listener);
@@ -38,8 +39,10 @@ export class VengeanceTimerPlugin {
     }
 
     setConfig(nextConfig: Partial<VengeanceTimerPluginConfig>): void {
-        this.config = this.sanitizeConfig({ ...this.config, ...nextConfig });
-        this.commit(true);
+        if (nextConfig.enabled !== undefined) {
+            void this.setPluginEnabled(nextConfig.enabled);
+            this.commit();
+        }
     }
 
     syncCooldownVarbit(value: number, now = Date.now()): void {
@@ -50,7 +53,7 @@ export class VengeanceTimerPlugin {
 
         this.cooldownActive = active;
         this.cooldownEndsAt = active ? now + VENGEANCE_COOLDOWN_MS : null;
-        this.commit(false);
+        this.commit();
     }
 
     getRemainingSeconds(now = Date.now()): number {
@@ -60,34 +63,23 @@ export class VengeanceTimerPlugin {
         return Math.max(0, Math.ceil((this.cooldownEndsAt - now) / 1000));
     }
 
-    private sanitizeConfig(
-        input: Partial<VengeanceTimerPluginConfig> | undefined,
-    ): VengeanceTimerPluginConfig {
-        return {
-            enabled: input?.enabled ?? DEFAULT_CONFIG.enabled,
-        };
-    }
-
-    private createState(): VengeanceTimerPluginState {
-        return {
-            config: this.config,
-            cooldownEndsAt: this.cooldownEndsAt,
-            version: this.version,
-        };
-    }
-
-    private commit(persist: boolean): void {
+    private commit(): void {
         this.version++;
         this.state = this.createState();
-        if (persist) {
-            this.persistence?.save(this.config);
-        }
-        for (const listener of this.listeners) {
+        for (const listener of [...this.listeners]) {
             try {
                 listener();
             } catch (err) {
                 console.log("[vengeance-timer-plugin] listener failed", err);
             }
         }
+    }
+
+    private createState(): VengeanceTimerPluginState {
+        return {
+            config: { enabled: this.isEnabled() },
+            cooldownEndsAt: this.cooldownEndsAt,
+            version: this.version,
+        };
     }
 }

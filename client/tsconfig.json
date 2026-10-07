@@ -15,7 +15,13 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "@runelite/api/*": ["./runelite/api/*"],
+      "@runelite/awt/*": ["./runelite/awt/*"],
+      "@runelite/client/*": ["./runelite/client/*"],
+      "@runelite/impl/*": ["./runelite/impl/*"]
+    }
   },
   "include": [
     "common",
@@ -28,6 +34,7 @@
     "picogl",
     "render",
     "rs",
+    "runelite",
     "ui",
     "widgets",
     "*.ts",

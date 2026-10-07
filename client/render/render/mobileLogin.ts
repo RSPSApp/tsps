@@ -193,7 +193,6 @@ export function shouldUseMobileLoginInput(host: WebGLOsrsRendererHost, ): boolea
 
         const state = host.osrsClient.loginState;
         return (
-            isMobileMode &&
             host.osrsClient.isOnLoginScreen() &&
             state.loginIndex === LoginIndex.LOGIN_FORM &&
             state.virtualKeyboardVisible === true
@@ -430,8 +429,6 @@ export function setActiveLoginFieldValue(host: WebGLOsrsRendererHost, raw: strin
 }
 
 export function ensureMobileLoginInput(host: WebGLOsrsRendererHost, ): HTMLInputElement | undefined {
-
-        if (!isMobileMode) return undefined;
 
         const existing = host.mobileLoginInput;
         if (existing && existing.isConnected) {

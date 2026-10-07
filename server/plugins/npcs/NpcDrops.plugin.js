@@ -5,7 +5,7 @@
  *   docs/drops-json/npc-drops.json -> data/definitions/npc-drops.json
  *   docs/drops-json/subtables.json -> data/definitions/npc-drop-subtables.json
  *
- * Shape: { tables: { "<tableId>": { label, main_max_roll, entries[], tertiary[] } },
+ * Shape: { tables: { "<tableId>": { label, main_max_roll, rolls?, entries[], tertiary[] } },
  *           npcs:   { "<npcId>": { name, tables: ["<tableId>"] } } }
  * Entries carry `weight` out of `out_of`; `shared_table` entries roll one of the shared tables
  * (rare drop table, gem, herb, seed) held in the subtables file.
@@ -97,6 +97,11 @@ function applyWikiCorrections(tableById) {
       Object.assign(entry, { separate_roll: true, weight: 9, out_of: 10 });
     }
   }
+  // Zulrah: two rolls on its table per kill, tertiary drops excluded (Wiki, Drops).
+  if (tableById.zulrah) {
+    tableById.zulrah.rolls = 2;
+  }
+  correctMadAngel(tableById.mad_angel);
   const kalphiteQueen = tableById.kalphite_queen;
   if (!kalphiteQueen) {
     return;
@@ -109,6 +114,35 @@ function applyWikiCorrections(tableById) {
       entry.roll_group = "kalphite_queen_consumable";
     }
   }
+}
+
+const MAD_ANGEL_SUNSTONE_CRYSTAL = 34032;
+const MAD_ANGEL_TELEPORT = 34033;
+const MAD_ANGEL_SUPPLY_FISH = new Set([385, 32328]);
+/** Super combat potion(3), raw monkfish, emerald and sapphire: "(noted)" on the Wiki, lost by the export. */
+const MAD_ANGEL_NOTED = new Set([12697, 7944, 1605, 1607]);
+const MAD_ANGEL_SUPPLY_BONUS = [
+  { item_id: 141, name: "Prayer potion(2)", quantity: [1, 1] },
+  { item_id: 12701, name: "Super combat potion(1)", quantity: [1, 1] },
+];
+
+/**
+ * The Mad Angel (Wiki, Drops): the sunstone crystal belongs to Fallen From Grace (not on this
+ * server); the Ardeaglais teleport pre-roll is 1/25; and a supply batch (16/150) is either
+ * sharks or yellowfins, bundled with a prayer potion(2) and a super combat potion(1) - the
+ * export listed the four as separate rolls on a 182 table.
+ */
+function correctMadAngel(table) {
+  if (!table) return;
+  table.entries = (table.entries || []).filter((entry) => entry.item_id !== MAD_ANGEL_SUNSTONE_CRYSTAL
+    && !(entry.section === "Supply batch" && !MAD_ANGEL_SUPPLY_FISH.has(entry.item_id)));
+  for (const entry of table.entries) {
+    if (entry.item_id === MAD_ANGEL_TELEPORT) entry.out_of = 25;
+    if (entry.section === "Supply batch") entry.bonus_drops = MAD_ANGEL_SUPPLY_BONUS;
+    if (MAD_ANGEL_NOTED.has(entry.item_id)) entry.noted = true;
+    if (Number.isInteger(entry.out_of) && entry.out_of === table.main_max_roll) entry.out_of = 150;
+  }
+  table.main_max_roll = 150;
 }
 
 function loadDrops() {
@@ -275,21 +309,16 @@ function resolveEntry(entry, player) {
   return drops;
 }
 
-/**
- * One kill: guaranteed drops, then a pre-roll (which replaces the main roll when it hits),
- * then a single weighted main-table roll, then independent separate/tertiary rolls.
- */
-function rollTable(table, player, npc) {
+/** One roll on a table: its pre-roll, main roll and separate rolls. */
+function rollOnce(table, entries, player) {
   const drops = [];
-  const entries = Array.isArray(table.entries) ? table.entries : [];
-
   const main = [];
   const separateGroups = new Map();
   let preRollHit = false;
 
   for (const entry of entries) {
     if (entry.always) {
-      drops.push(...resolveEntry(entry, player));
+      continue;
     } else if (entry.pre_roll) {
       if (!preRollHit && hits(entry)) {
         drops.push(...resolveEntry(entry, player));
@@ -334,6 +363,27 @@ function rollTable(table, player, npc) {
     }
   }
 
+  return drops;
+}
+
+/**
+ * One kill: guaranteed drops, then a pre-roll (which replaces the main roll when it hits),
+ * then a single weighted main-table roll, then independent separate/tertiary rolls. A table
+ * with `rolls` repeats everything but the guaranteed and tertiary drops that many times.
+ */
+function rollTable(table, player, npc) {
+  const drops = [];
+  const entries = Array.isArray(table.entries) ? table.entries : [];
+  for (const entry of entries) {
+    if (entry.always) {
+      drops.push(...resolveEntry(entry, player));
+    }
+  }
+  const rolls = Number.isInteger(table.rolls) && table.rolls > 1 ? table.rolls : 1;
+  for (let roll = 0; roll < rolls; roll++) {
+    drops.push(...rollOnce(table, entries, player));
+  }
+
   for (const entry of table.tertiary || []) {
     // A tertiary at 1/1 is a conditional drop, not a guaranteed one: the wiki writes
     // "Always" for things that always drop *given* a condition (an active clue step, a quest,
@@ -376,6 +426,10 @@ function dropFor(player, npc, npcId, location) {
   const event = { player, npc, npcId, drops, handled: false };
   pluginApi.emitCustomEvent("npc-drops:generated", event);
   if (event.handled) return drops.length;
+  // Where the loot lands; a boss whose body is out of reach (Zulrah) moves it under the killer.
+  const where = { player, npc, npcId, location };
+  pluginApi.emitCustomEvent("npc-drops:location", where);
+  location = where.location;
   for (const drop of drops) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
       continue;
@@ -421,6 +475,13 @@ module.exports = {
       return stats;
     };
 
+    // "npc-drops:roll-table" { player, table, drops }: a table outside an NPC's own (a boss's
+    // chest) rolled with the same roller and shared tables; the drops are pushed onto `drops`.
+    api.onCustomEvent("npc-drops:roll-table", (request) => {
+      ensureDrops();
+      request.drops.push(...rollTable(request.table, request.player, null));
+    });
+
     api.onNpcDeath(({ killer, npc, npcId }) => {
       if (!killer || !npc) {
         return;
@@ -448,7 +509,7 @@ module.exports = {
         player.sendMessage("Error reloading npc drops.");
       }
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Reload NPC drops");
 
     api.log("registered", { lazy: true });
   },

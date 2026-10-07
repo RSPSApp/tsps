@@ -2,6 +2,21 @@ const fs = require("fs");
 const path = require("path");
 const { MapObjects } = require("../../../src/main/typescript/elvarg/game/entity/impl/object/MapObjects");
 
+// Bump when the dump shape or its inputs change; older dumps are rescanned.
+const INDEX_FORMAT_VERSION = 2;
+
+/**
+ * The cache revision the server loaded, so a dump from another cache is rebuilt.
+ * `target.txt` sits beside the server process, and is packaged into browser worlds.
+ */
+function readCacheTarget() {
+  try {
+    return fs.readFileSync(path.join(process.cwd(), "target.txt"), "utf8").trim();
+  } catch (_) {
+    return null;
+  }
+}
+
 function regionBounds(regionId) {
   return {
     absX: (regionId >> 8) * 64,
@@ -33,12 +48,18 @@ function createTraversalAssist(api, options = {}) {
   const RegionManager = api.getRegionManager();
   const trackedObjectIds = new Set(options.objectIds ?? []);
   const objectsByRegion = new Map();
+  const cacheTarget = readCacheTarget();
   let indexInitialized = false;
   let nextInitAttemptAtMs = 0;
   const INIT_RETRY_BACKOFF_MS = 5000;
   const persistentIndexPath =
     options.cachePath ??
     path.join(process.cwd(), "plugins", "bots", "data", "object-index.json");
+
+  /** Sorted id list: a dump built for a different set of tracked kinds is rejected. */
+  function trackedIdsFingerprint() {
+    return [...trackedObjectIds].sort((a, b) => a - b).join(",");
+  }
 
   function parseNumber(value) {
     const parsed = Number(value);
@@ -87,28 +108,32 @@ function createTraversalAssist(api, options = {}) {
     }
 
     return {
+      v: INDEX_FORMAT_VERSION,
       t: Date.now(),
+      cache: cacheTarget,
+      ids: trackedIdsFingerprint(),
       r: regions,
     };
   }
 
+  /** Returns counts, or null when the dump is from another format/cache/id set. */
   function loadIndexData(data) {
-    objectsByRegion.clear();
-    if (!data || typeof data !== "object") {
-      return {
-        regionCount: 0,
-        objectCount: 0,
-      };
+    if (!data || typeof data !== "object" || data.v !== INDEX_FORMAT_VERSION) {
+      return null;
+    }
+    if (data.cache !== cacheTarget) {
+      return null;
+    }
+    if (data.ids !== trackedIdsFingerprint()) {
+      return null;
     }
 
-    const regions = data.r ?? data.regions;
+    const regions = data.r;
     if (!regions || typeof regions !== "object") {
-      return {
-        regionCount: 0,
-        objectCount: 0,
-      };
+      return null;
     }
 
+    objectsByRegion.clear();
     let objectCount = 0;
     for (const [rawRegionId, byId] of Object.entries(regions)) {
       const regionId = parseNumber(rawRegionId);
@@ -131,21 +156,15 @@ function createTraversalAssist(api, options = {}) {
           const x = parseNumber(entry[0]);
           const y = parseNumber(entry[1]);
           const z = parseNumber(entry[2]);
-          if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+          if (
+            !Number.isFinite(x) ||
+            !Number.isFinite(y) ||
+            !Number.isFinite(z) ||
+            x < 0 || x > 63 || y < 0 || y > 63
+          ) {
             continue;
           }
-          let localX = x;
-          let localY = y;
-          if (x > 63 || y > 63) {
-            // Backward-compat: old cache used absolute world x/y.
-            const { absX, absY } = regionBounds(regionId);
-            localX = x - absX;
-            localY = y - absY;
-          }
-          if (localX < 0 || localX > 63 || localY < 0 || localY > 63) {
-            continue;
-          }
-          addIndexedLocation(regionId, objectId, localX, localY, z);
+          addIndexedLocation(regionId, objectId, x, y, z);
           objectCount++;
         }
       }
@@ -166,18 +185,13 @@ function createTraversalAssist(api, options = {}) {
     return loadIndexData(parsed);
   }
 
-  function scanRegion(regionId) {
+  /** Indexes a region that is already loaded; appends to whatever is there. */
+  function scanLoadedRegion(regionId) {
     const region = RegionManager.getRegionid(regionId);
-    if (!region) {
+    if (!region?.isLoaded?.()) {
       return 0;
     }
     const { absX, absY } = regionBounds(regionId);
-    RegionManager.loadMapFiles(absX, absY);
-
-    const loadedRegion = RegionManager.getRegionid(regionId);
-    if (!loadedRegion?.isLoaded?.()) {
-      return 0;
-    }
 
     let matches = 0;
     for (let z = 0; z < 4; z++) {
@@ -224,6 +238,24 @@ function createTraversalAssist(api, options = {}) {
     return matches;
   }
 
+  function scanRegion(regionId) {
+    const region = RegionManager.getRegionid(regionId);
+    if (!region) {
+      return 0;
+    }
+    if (!region.isLoaded?.()) {
+      const { absX, absY } = regionBounds(regionId);
+      RegionManager.loadMapFiles(absX, absY);
+    }
+    return scanLoadedRegion(regionId);
+  }
+
+  /** Region loads replace its entries, so late maps and region packs are indexed. */
+  function indexLoadedRegion(regionId) {
+    objectsByRegion.delete(regionId);
+    scanLoadedRegion(regionId);
+  }
+
   function buildPersistentIndexByScanningMap() {
     objectsByRegion.clear();
     const regionIds = [...RegionManager.regions.keys()].sort((a, b) => a - b);
@@ -253,40 +285,25 @@ function createTraversalAssist(api, options = {}) {
       return false;
     }
 
-    if (RegionManager.regions.size === 0) {
-      nextInitAttemptAtMs = nowMs + INIT_RETRY_BACKOFF_MS;
-      api?.log?.("object_index_init_deferred", {
-        reason: "regions_not_initialized",
-        retryAfterMs: INIT_RETRY_BACKOFF_MS,
-      });
-      return false;
-    }
-
     const startedAt = Date.now();
 
+    // The dump needs no regions, so load it before core has initialized them; a
+    // missing or stale dump falls through to the post-startup scan below.
     if (!forceRescan) {
       try {
-        // Startup fast-path: use cached object coordinates if the file exists.
         const loaded = loadPersistentIndexFromFile();
-        if (loaded) {
-          if (trackedObjectIds.size > 0 && loaded.objectCount === 0) {
-            api?.log?.("object_index_cache_invalid", {
-              path: persistentIndexPath,
-              reason: "zero_coordinates",
-            });
-          } else {
-            indexInitialized = true;
-            nextInitAttemptAtMs = 0;
-            api?.log?.("object_index_loaded", {
-              source: "cache",
-              path: persistentIndexPath,
-              regionCount: loaded.regionCount,
-              objectCount: loaded.objectCount,
-              trackedObjectIds: trackedObjectIds.size,
-              durationMs: Date.now() - startedAt,
-            });
-            return true;
-          }
+        if (loaded && loaded.objectCount > 0) {
+          indexInitialized = true;
+          nextInitAttemptAtMs = 0;
+          api?.log?.("object_index_loaded", {
+            source: "cache",
+            path: persistentIndexPath,
+            regionCount: loaded.regionCount,
+            objectCount: loaded.objectCount,
+            trackedObjectIds: trackedObjectIds.size,
+            durationMs: Date.now() - startedAt,
+          });
+          return true;
         }
       } catch (error) {
         api?.log?.("object_index_load_failed", {
@@ -294,6 +311,15 @@ function createTraversalAssist(api, options = {}) {
           message: error?.message ?? String(error),
         });
       }
+    }
+
+    if (RegionManager.regions.size === 0) {
+      nextInitAttemptAtMs = nowMs + INIT_RETRY_BACKOFF_MS;
+      api?.log?.("object_index_init_deferred", {
+        reason: "regions_not_initialized",
+        retryAfterMs: INIT_RETRY_BACKOFF_MS,
+      });
+      return false;
     }
 
     try {
@@ -332,13 +358,18 @@ function createTraversalAssist(api, options = {}) {
       ? Math.max(0, Math.floor(delayMs))
       : 0;
     setTimeout(() => {
+      let initialized = false;
       try {
-        initializePersistentIndex();
+        initialized = initializePersistentIndex();
       } catch (error) {
         api?.log?.("object_index_schedule_init_failed", {
           path: persistentIndexPath,
           message: error?.message ?? String(error),
         });
+      }
+      // Regions may not exist yet on the first pass; retry until indexing lands.
+      if (!initialized) {
+        schedulePersistentIndexInitialization(INIT_RETRY_BACKOFF_MS);
       }
     }, normalizedDelay);
   }
@@ -397,6 +428,11 @@ function createTraversalAssist(api, options = {}) {
       return;
     }
     trackedObjectIds.add(objectId);
+    if (indexInitialized) {
+      // A new id kind changes the fingerprint; rebuild on the next index use.
+      indexInitialized = false;
+      nextInitAttemptAtMs = 0;
+    }
   }
 
   function trackObjectIds(objectIds = []) {
@@ -658,6 +694,18 @@ function createTraversalAssist(api, options = {}) {
     }
 
     return candidates;
+  }
+
+  // Keep the index authoritative: a region loaded after startup (lazy region, region
+  // pack, edited map) replaces its entries, so searches never read stale coordinates.
+  if (typeof api?.onRegionLoaded === "function") {
+    api.onRegionLoaded((event) => {
+      const regionId = Number(event?.regionId);
+      if (!Number.isFinite(regionId)) {
+        return;
+      }
+      indexLoadedRegion(Math.floor(regionId));
+    });
   }
 
   return {

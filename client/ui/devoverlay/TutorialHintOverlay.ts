@@ -141,8 +141,9 @@ export class TutorialHintOverlay implements Overlay {
         } else {
             worldX = hintArrow.x + 0.5;
             worldY = hintArrow.y + 0.5;
-            plane = hintArrow.z | 0;
-            heightOffsetTiles = 0.7;
+            // Tile hints have no plane of their own; the arrow rides the local plane.
+            plane = args?.state.playerLevel ?? 0;
+            heightOffsetTiles = 0.7 + (hintArrow.height | 0);
         }
 
         // Scene Y points down, so "up" is ground minus the offset.

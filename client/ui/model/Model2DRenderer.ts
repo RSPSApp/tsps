@@ -474,6 +474,30 @@ export class Model2DRenderer {
             typeof frame?.centerY === "number" ? frame.centerY | 0 : osrsExact ? 16 : (sh / 2) | 0;
         Rasterizer3D.setViewport(centerX, centerY);
         for (let i = 0; i < zbuf.length; i++) zbuf[i] = 1e30;
+        // Coverage per pixel. OSRS draws widget models straight into the frame, so a translucent
+        // face (the fairy ring dials' windows) blends with what is behind the widget. Drawn into
+        // its own texture here, such a face must stay translucent rather than blend with black.
+        const abuf = new Uint8Array(sw * sh);
+        function plot(idx: number, R: number, G: number, B: number, ai: number) {
+            const aD = abuf[idx];
+            let r = R,
+                g = G,
+                b = B,
+                a = ai;
+            if (ai < 255 && aD > 0) {
+                const dst = buf[idx] >>> 0;
+                const below = (aD * (255 - ai)) / 255;
+                a = ai + below;
+                r = (R * ai + ((dst >> 16) & 255) * below) / a;
+                g = (G * ai + ((dst >> 8) & 255) * below) / a;
+                b = (B * ai + (dst & 255) * below) / a;
+            }
+            // sprite pixel 0 is treated as transparent; never write 0 for drawn pixels.
+            let outRgb = ((r | 0) << 16) | ((g | 0) << 8) | (b | 0);
+            if (outRgb === 0) outRgb = 1;
+            buf[idx] = outRgb;
+            abuf[idx] = Math.min(255, Math.round(a));
+        }
 
         model.calculateBoundsCylinder?.();
 
@@ -656,27 +680,10 @@ export class Model2DRenderer {
                         G = (((src >> 8) & 255) * shade) | 0,
                         B = ((src & 255) * shade) | 0;
                     const ai = Math.max(0, Math.min(255, faceAlpha & 255));
-                    if (ai >= 255) {
-                        // sprite pixel 0 is treated as transparent; never write 0 for drawn pixels.
-                        let outRgb = (R << 16) | (G << 8) | B;
-                        if (outRgb === 0) outRgb = 1;
-                        buf[idx] = outRgb;
+                    // ai == 0 means fully transparent face
+                    if (ai > 0) {
+                        plot(idx, R, G, B, ai);
                         if (!disableZbuf) zbuf[idx] = effZ - zBias;
-                    } else if (ai > 0) {
-                        const dst = buf[idx] >>> 0;
-                        const dR = (dst >> 16) & 255,
-                            dG = (dst >> 8) & 255,
-                            dB = dst & 255;
-                        const outR = ((R * ai + dR * (255 - ai)) / 255) | 0;
-                        const outG = ((G * ai + dG * (255 - ai)) / 255) | 0;
-                        const outB = ((B * ai + dB * (255 - ai)) / 255) | 0;
-                        // avoid writing 0 (transparent) for blended-but-visible pixels.
-                        let outRgb = (outR << 16) | (outG << 8) | outB;
-                        if (outRgb === 0) outRgb = 1;
-                        buf[idx] = outRgb;
-                        if (!disableZbuf) zbuf[idx] = effZ - zBias;
-                    } else {
-                        // ai == 0 means fully transparent face
                     }
                 }
             }
@@ -744,18 +751,8 @@ export class Model2DRenderer {
                     const R = (w0 * r0 + w1 * r1 + w2 * r2) | 0;
                     const G = (w0 * g0 + w1 * g1 + w2 * g2) | 0;
                     const B = (w0 * b0 + w1 * b1 + w2 * b2) | 0;
-                    const dst = buf[idx] >>> 0;
-                    const dR = (dst >> 16) & 255,
-                        dG = (dst >> 8) & 255,
-                        dB = dst & 255;
-                    const aComb = ai;
-                    const outR = ((R * aComb + dR * (255 - aComb)) / 255) | 0;
-                    const outG = ((G * aComb + dG * (255 - aComb)) / 255) | 0;
-                    const outB = ((B * aComb + dB * (255 - aComb)) / 255) | 0;
-                    // sprite pixel 0 is transparent; keep visible pixels non-zero.
-                    let outRgb = (outR << 16) | (outG << 8) | outB;
-                    if (aComb > 0 && outRgb === 0) outRgb = 1;
-                    buf[idx] = outRgb;
+                    if (ai === 0) continue;
+                    plot(idx, R, G, B, ai);
                     if (!disableZbuf) zbuf[idx] = effZ;
                 }
             }
@@ -1284,7 +1281,7 @@ export class Model2DRenderer {
             out[p] = (rgb >> 16) & 255;
             out[p + 1] = (rgb >> 8) & 255;
             out[p + 2] = rgb & 255;
-            const a = rgb === 0 ? 0 : 255;
+            const a = rgb === 0 ? 0 : abuf[i];
             out[p + 3] = a;
             if (a) nonZero++;
         }

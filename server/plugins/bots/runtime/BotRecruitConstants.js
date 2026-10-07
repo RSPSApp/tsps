@@ -1,10 +1,10 @@
 "use strict";
 
-const ATTR_RECRUIT_OWNER_USERNAME = "botRecruitOwnerUsername";
-const ATTR_RECRUIT_RETURN_AFTER_DEATH_AT = "botRecruitReturnAfterDeathAt";
-const ATTR_BOT_PVP_PROFILE_ID = "botPvpProfileId";
-const ATTR_RECRUIT_OWNER_MISSING_SINCE = "botRecruitOwnerMissingSince";
-const ATTR_CUSTOM_DEATH_LOOT_DROPPED = "botCustomDeathLootDropped";
+const ATTR_RECRUIT_OWNER_USERNAME = "bot-recruit-owner-username";
+const ATTR_RECRUIT_RETURN_AFTER_DEATH_AT = "bot-recruit-return-after-death-at";
+const ATTR_BOT_PVP_PROFILE_ID = "bot-pvp-profile-id";
+const ATTR_RECRUIT_OWNER_MISSING_SINCE = "bot-recruit-owner-missing-since";
+const ATTR_CUSTOM_DEATH_LOOT_DROPPED = "bot-custom-death-loot-dropped";
 
 const BOT_PROFILE_RETURN_DELAY_MS = Object.freeze({
   novice: 30000,

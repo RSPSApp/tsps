@@ -1245,7 +1245,7 @@ test("::sailingtools shows every tool, and the hold keeps sending it after a rel
     persistAttribute: (key) => persisted.push(key),
   });
   assert.equal(rights.sailingtools, PlayerRights.DEVELOPER);
-  assert.ok(persisted.includes("sailing:toolsUnlocked"));
+  assert.ok(persisted.includes("sailing:tools-unlocked"));
 
   const h = holdHarness();
   try {

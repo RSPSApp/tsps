@@ -338,6 +338,7 @@ const worker = {
         mapY: number,
         maxLevel: number,
         loadedTextureIds: number[],
+        renderBaseTile?: { x: number; y: number },
     ): Promise<TransferDescriptor<NpcGeometryData>> {
         const workerState = await workerStatePromise;
         if (!workerState) {
@@ -350,6 +351,7 @@ const worker = {
                 mapY,
                 maxLevel,
                 loadedTextureIds: new Set(loadedTextureIds),
+                renderBaseTile,
             }),
         );
 

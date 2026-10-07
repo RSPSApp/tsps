@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ClientPacket - Re-exports shared packet definitions for client use
  *
  * All packet IDs are now defined in src/common/network/ClientPacketId.ts

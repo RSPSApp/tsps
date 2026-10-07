@@ -1,4 +1,5 @@
 import { BIT_MASKS } from "../../MathConstants";
+import { Cs2ArrayObject } from "../../cs2/Cs2ArrayObject";
 import { VarcIntTypeLoader } from "./VarcIntTypeLoader";
 import { VarBitTypeLoader } from "./bit/VarBitTypeLoader";
 
@@ -16,6 +17,9 @@ export interface PersistedVarcsState {
     strings: Array<[number, string]>;
 }
 
+/** ScriptVarType id of string (zwyz/osrs-cache Type.byID). */
+const STRING_TYPE_ID = 36;
+
 export class VarManager {
     // OSRS array limits: Interpreter_arrayLengths = new int[5], Interpreter_arrays = new int[5][5000]
     static readonly MAX_ARRAY_SLOTS = 5;
@@ -26,6 +30,10 @@ export class VarManager {
     values: Int32Array;
     varcInts: Map<number, number> = new Map();
     varcStrings: Map<number, string> = new Map();
+    /** 64-bit client variables (rev 241 push/pop_varc_long). */
+    varcLongs: Map<number, bigint> = new Map();
+    /** 64-bit player variables (rev 241 push/pop_var_long); this server sends none yet. */
+    varpLongs: Map<number, bigint> = new Map();
     arrays: Int32Array[] = new Array(VarManager.MAX_ARRAY_SLOTS);
     stringArrays: string[][] = new Array(VarManager.MAX_ARRAY_SLOTS);
     arrayLengths: Int32Array = new Int32Array(VarManager.MAX_ARRAY_SLOTS);
@@ -48,6 +56,8 @@ export class VarManager {
     onVarcStringChange?: (varcId: number, oldValue: string, newValue: string) => void;
 
     private persistentVarcs: boolean[] = [];
+    /** Varcs that hold an array, by their element type (ScriptVarType id). */
+    private arrayVarcs = new Map<number, number>();
 
     constructor(
         varbitLoader: VarBitTypeLoader,
@@ -74,7 +84,9 @@ export class VarManager {
         const count = this.varcIntTypeLoader.getCount() | 0;
         this.persistentVarcs = new Array<boolean>(count);
         for (let i = 0; i < count; i++) {
-            this.persistentVarcs[i] = this.varcIntTypeLoader.load(i).persist === true;
+            const type = this.varcIntTypeLoader.load(i);
+            this.persistentVarcs[i] = type.persist === true;
+            if (type.arrayType >= 0) this.arrayVarcs.set(i, type.arrayType);
         }
     }
 
@@ -124,6 +136,8 @@ export class VarManager {
         this.values.fill(0);
         this.varcInts.clear();
         this.varcStrings.clear();
+        this.varcLongs.clear();
+        this.varpLongs.clear();
         // Clear arrays like OSRS
         for (let i = 0; i < VarManager.MAX_ARRAY_SLOTS; i++) {
             this.arrays[i].fill(0);
@@ -168,7 +182,7 @@ export class VarManager {
         }
 
         for (const [id, value] of this.varcStrings.entries()) {
-            if (this.isPersistentVarc(id)) {
+            if (this.isPersistentVarc(id) && typeof value === "string") {
                 strings.push([id | 0, value]);
             }
         }
@@ -196,6 +210,20 @@ export class VarManager {
         }
     }
 
+    /**
+     * Back to the login screen: every varp (and so every varbit) goes back to 0, as the server
+     * only sends a player's non-zero values when they log in, and transient varcs are cleared.
+     * Persistent varcs (client preferences) stay. No change callbacks fire: nothing should react
+     * to a logged-out player's vars, and the next login's values arrive as changes from 0.
+     */
+    resetForLogout(): void {
+        this.values.fill(0);
+        // Long varps (rev 241: the GE offer price) and long varcs have no persistence either.
+        this.varpLongs.clear();
+        this.varcLongs.clear();
+        this.clearTransientVarcs();
+    }
+
     set(values: Int32Array): void {
         this.values.set(values);
     }
@@ -217,6 +245,15 @@ export class VarManager {
         if (this.onVarpChange) {
             this.onVarpChange(id, oldValue, value);
         }
+        return true;
+    }
+
+    /** A 64-bit varp (push_var_long); fires the same change callback as setVarp. */
+    setVarpLong(id: number, value: bigint): boolean {
+        const old = this.varpLongs.get(id) ?? 0n;
+        if (old === value) return false;
+        this.varpLongs.set(id, value);
+        this.onVarpChange?.(id, Number(BigInt.asIntN(32, old)), Number(BigInt.asIntN(32, value)));
         return true;
     }
 
@@ -261,12 +298,13 @@ export class VarManager {
         return true;
     }
 
+    /** An unset varc int reads -1, as in the OSRS client (bank tags test for -1 to find free slots). */
     getVarcInt(id: number): number {
-        return this.varcInts.get(id) ?? 0;
+        return this.varcInts.get(id) ?? -1;
     }
 
     setVarcInt(id: number, value: number): void {
-        const oldValue = this.varcInts.get(id) ?? 0;
+        const oldValue = this.varcInts.get(id) ?? -1;
         if (oldValue === value) return;
         this.varcInts.set(id, value);
         // Fire change callback for onMiscTransmit handling
@@ -275,8 +313,19 @@ export class VarManager {
         }
     }
 
-    getVarcString(id: number): string {
-        return this.varcStrings.get(id) ?? "";
+    /** A varc on the object stack: a string, or for an array varc (rev 231+) its array. */
+    getVarcString(id: number): any {
+        const value = this.varcStrings.get(id);
+        if (value !== undefined) return value;
+        const arrayType = this.arrayVarcs.get(id);
+        if (arrayType === undefined) return "";
+        // An array varc starts as an empty array of its type (scripts take its length at once).
+        const array =
+            arrayType === STRING_TYPE_ID
+                ? new Cs2ArrayObject("object", "", 0, 0)
+                : new Cs2ArrayObject("int", arrayType === 0 || arrayType === 1 ? 0 : -1, 0, 0);
+        this.varcStrings.set(id, array as any);
+        return array;
     }
 
     setVarcString(id: number, value: string): void {
@@ -445,68 +494,5 @@ export class VarManager {
             return 0;
         }
         return this.arrayLengths[id];
-    }
-
-    /**
-     * Shuffle array using Fisher-Yates with Java-compatible seeded RNG.
-     * Used by ARRAY_SORT_BY opcode.
-     */
-    shuffleArray(id: number, seedHigh: number, seedLow: number): void {
-        if (id < 0 || id >= VarManager.MAX_ARRAY_SLOTS) {
-            return;
-        }
-        const length = this.arrayLengths[id];
-        if (length <= 1) {
-            return;
-        }
-
-        const array = this.arrays[id];
-
-        // Create seed: if both 0, use random seed (matching Java behavior)
-        let seedHighVal = seedHigh;
-        let seedLowVal = seedLow;
-        if (seedHigh === 0 && seedLow === 0) {
-            seedHighVal = Math.floor(Math.random() * 0x7fffffff);
-            seedLowVal = Math.floor(Math.random() * 0x7fffffff);
-        }
-
-        // Combine to 64-bit seed: (seedHigh << 32) | seedLow
-        const seed = (BigInt(seedHighVal) << 32n) | BigInt(seedLowVal >>> 0);
-
-        // Java-compatible seeded Random (48-bit LCG)
-        // Java's seed initialization: (seed ^ 0x5DEECE66DL) & ((1L << 48) - 1)
-        let rngSeed = (seed ^ 0x5deece66dn) & ((1n << 48n) - 1n);
-
-        const nextInt = (bound: number): number => {
-            // Advance seed: seed = (seed * 0x5DEECE66DL + 0xBL) & ((1L << 48) - 1)
-            rngSeed = (rngSeed * 0x5deece66dn + 0xbn) & ((1n << 48n) - 1n);
-            // Get upper 31 bits as signed int
-            const bits = Number(rngSeed >> 17n);
-
-            // For power of 2 bounds, simple mask works
-            if ((bound & (bound - 1)) === 0) {
-                return (bits >>> 0) % bound;
-            }
-
-            // General case - rejection sampling for uniform distribution
-            let val: number;
-            let u = bits;
-            while (u - (val = u % bound) + (bound - 1) < 0) {
-                rngSeed = (rngSeed * 0x5deece66dn + 0xbn) & ((1n << 48n) - 1n);
-                u = Number(rngSeed >> 17n);
-            }
-            return val;
-        };
-
-        // Fisher-Yates shuffle - iterate backwards
-        for (let i = length - 1; i > 0; i--) {
-            const j = nextInt(i + 1);
-            if (i !== j) {
-                // Swap elements
-                const temp = array[i];
-                array[i] = array[j];
-                array[j] = temp;
-            }
-        }
     }
 }

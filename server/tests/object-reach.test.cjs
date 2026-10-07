@@ -68,7 +68,7 @@ test('ladder click waits for arrival before animating and changes plane one tick
     getSkillManager: () => ({ stopSkillable: noop }),
     setFollowing: noop, setCombatFollowing: noop, setPositionToFace: noop,
     setDirection: noop, setWalkingDirection: noop, setRunningDirection: noop,
-    setOldPosition: noop, isRunningReturn: () => false, sendMessage: noop,
+    isRunningReturn: () => false, sendMessage: noop,
     performAnimation: (animation) => events.push(['anim', World.getProcessCycle(), animation.getId()]),
     moveTo: (destination) => { queue.reset(); location = destination.clone(); events.push(['tele', World.getProcessCycle()]); },
   };
@@ -144,4 +144,62 @@ test('ladder click waits for arrival before animating and changes plane one tick
   assert.equal(queue.hasPendingWork(), false);
   forceMovement = null;
   assert.equal(queue.getMobility().canMove(), true);
+});
+
+test('an inventory item action cancels the queued object op but keeps the walk', (t) => {
+  const events = [];
+  let location = new Location(100, 97, 0);
+  const noop = () => {};
+  const combat = { clearInteraction: () => events.push('clear-interaction'), setCastSpell: noop, reset: noop };
+  const player = {
+    isPlayer: () => true, isNpc: () => false, isPlayerBot: () => true, getAsPlayer() { return this; },
+    getIndex: () => 1, getUsername: () => 'tester', getSize: () => 1,
+    getLocation: () => location, setLocation: (value) => { location = value; },
+    getPrivateArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
+    getForceMovement: () => null,
+    getTimers: () => ({ has: () => false }), getFollowing: () => null,
+    getDueling: () => ({ getButtonDelay: () => ({ finished: () => true }), inDuel: () => false }),
+    getTrading: () => ({ getButtonDelay: () => ({ finished: () => true }) }),
+    getCombat: () => combat,
+    getSkillManager: () => ({ stopSkillable: noop }),
+    setFollowing: noop, setCombatFollowing: noop, setPositionToFace: noop,
+    setDirection: noop, setWalkingDirection: noop, setRunningDirection: noop,
+    isRunningReturn: () => false, sendMessage: noop, performAnimation: noop,
+    moveTo: (destination) => { queue.reset(); location = destination.clone(); },
+  };
+  const queue = new MovementQueue(player);
+  player.getMovementQueue = () => queue;
+  queue.handleRegionChange = noop;
+  queue.syncWildernessStateForMovedPlayer = noop;
+  queue.drainRunEnergy = noop;
+  queue.canWalkTo = (next) => !(next.x === 100 && next.y === 100);
+  const route = new RsmodRouteFinding((x, y) => x === 100 && y === 100 ? 0x100 : 0);
+  const oldRoute = PathFinder.rsmodRouteFinding;
+  const oldCycle = World.processCycle;
+  PathFinder.rsmodRouteFinding = route;
+  t.after(() => { PathFinder.rsmodRouteFinding = oldRoute; World.processCycle = oldCycle; TaskManager.cancelTasks(1); });
+  t.mock.method(ObjectDefinition, 'forId', () => ({ getSizeX: () => 1, getSizeY: () => 1, getBlockingMask: () => 27 }));
+  World.processCycle = 100;
+  const tick = () => {
+    World.processCycle++;
+    TaskManager.process();
+    queue.beginCycle();
+    if (queue.hasPendingWork()) queue.process();
+    TaskManager.processWalkTo(1);
+  };
+
+  queue.walkToObject(new GameObject(132, new Location(100, 100, 0), 10, 0, null), { execute: () => events.push('op') });
+  tick();
+  assert.equal(location.y, 98, 'the red click walks toward the object');
+
+  // What an Eat/Drink click does before the plugin runs: clear the interaction, keep walking.
+  require('../dist/game/entity/impl/player/Player').Player.prototype.clearPendingAction.call(player);
+  assert.ok(events.includes('clear-interaction'), 'the item action cleared the combat interaction');
+  assert.ok(queue.hasRoute() || queue.points.length > 0, 'the walk queue survives the item action');
+
+  tick();
+  tick();
+  tick();
+  assert.equal(location.y, 99, 'the player walks on to the clicked object');
+  assert.equal(events.includes('op'), false, 'the queued object op never runs');
 });

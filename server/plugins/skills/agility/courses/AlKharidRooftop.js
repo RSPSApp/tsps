@@ -6,6 +6,7 @@ module.exports = {
   key: "alkharid",
   name: "Al Kharid Rooftop",
   lapXp: 216,
+  petBase: 26648, // Giant squirrel base chance (Wiki)
   marks: {
     level: 20,
     tiles: [[3275, 3186, 3], [3267, 3170, 3], [3290, 3162, 3], [3317, 3161, 1], [3317, 3177, 2], [3303, 3189, 3]],

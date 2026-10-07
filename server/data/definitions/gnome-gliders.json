@@ -1,0 +1,14 @@
+{
+  "$comment": "Gnome glider network. 'index' is the destination's number in the cache's glider scripts (pilot_journey varp 153 = from << 14 | to; pilot_previous_destination varbit 9584), 'button' its component on the glider map (interface 138), 'x/y/z' the arrival tile and 'pilots' who flies from there (by name, standing within 16 tiles of it). 'multinpcVar': its pilot shows by pilot_multinpc_var (varbit 9567: visible 9576, dest 9575), set on landing there. Indices, buttons and arrival tiles are from an rsprox capture of a flight to every destination; requirements from the Wiki. Lemanto Andra is arrival-only: its glider crashes, and its pilot has no Glider option.",
+  "source": "https://oldschool.runescape.wiki/w/Gnome_glider",
+  "requires": "The Grand Tree",
+  "destinations": [
+    { "index": 0, "name": "Ta Quir Priw", "area": "Gnome Stronghold", "button": 4, "x": 2465, "y": 3500, "z": 3, "pilots": ["Captain Errdo"] },
+    { "index": 1, "name": "Gandius", "area": "Karamja", "button": 16, "x": 2971, "y": 2968, "z": 0, "pilots": ["Captain Klemfoodle"] },
+    { "index": 2, "name": "Kar-Hewo", "area": "Al Kharid", "button": 13, "x": 3284, "y": 3210, "z": 0, "pilots": ["Captain Dalbur"] },
+    { "index": 3, "name": "Lemanto Andra", "area": "Digsite", "button": 10, "x": 3320, "y": 3430, "z": 0, "pilots": [], "arrivalOnly": true },
+    { "index": 4, "name": "Sindarpos", "area": "White Wolf Mountain", "button": 7, "x": 2850, "y": 3498, "z": 0, "pilots": ["Captain Bleemadge"] },
+    { "index": 5, "name": "Lemantolly Undri", "area": "Feldip Hills", "button": 21, "x": 2549, "y": 2972, "z": 0, "pilots": ["Gnormadium Avlafrim"], "multinpcVar": true, "requires": "One Small Favour" },
+    { "index": 6, "name": "Ookookolly Undri", "area": "Ape Atoll", "button": 25, "x": 2711, "y": 2802, "z": 0, "pilots": ["Captain Shoracks"], "multinpcVar": true, "requires": "Monkey Madness II" }
+  ]
+}

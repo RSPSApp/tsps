@@ -13,7 +13,7 @@ import type { TextureLoader } from "../texture/TextureLoader";
 import { ByteBuffer } from "../io/ByteBuffer";
 import type { IndexedSprite } from "../sprite/IndexedSprite";
 import { HSL_RGB_MAP, adjustOverlayLight, packHsl } from "../util/ColorUtil";
-import { WorldMapArea } from "./WorldMapArea";
+import { WorldMapArea, compositeMapFileFor, worldMapGroupId } from "./WorldMapArea";
 
 export type WorldMapRenderIcon = {
     localX: number;
@@ -67,6 +67,8 @@ type WorldMapDataBase = {
     regionY: number;
     groupId: number;
     fileId: number;
+    /** Rev 241 format: no geography reference in the composite map, no header in the file. */
+    headerless?: boolean;
     floorUnderlayIds?: Uint16Array;
     floorOverlayIds?: Uint16Array[];
     overlayShapes?: Uint8Array[];
@@ -129,12 +131,29 @@ function getTileIndex(tileX: number, tileY: number): number {
     return ((tileX & 63) << 6) | (tileY & 63);
 }
 
-function readWorldMapData0(buffer: ByteBuffer): WorldMapData0Record {
+/**
+ * Rev 241 dropped each entry's geography reference: the geography and ground indexes are keyed
+ * by region, `(regionX << 8) | regionY`, with one file per map area that shows the region (its
+ * whole grid, as that area draws it).
+ */
+function geographyRef<T extends WorldMapDataBase>(record: T, buffer: ByteBuffer, withRefs: boolean, areaId: number): T {
+    if (withRefs) {
+        record.groupId = buffer.readBigSmart();
+        record.fileId = buffer.readBigSmart();
+    } else {
+        record.groupId = ((record.regionX & 0xff) << 8) | (record.regionY & 0xff);
+        record.fileId = areaId;
+        record.headerless = true;
+    }
+    return record;
+}
+
+function readWorldMapData0(buffer: ByteBuffer, withRefs = true, areaId = 0): WorldMapData0Record {
     const marker = buffer.readUnsignedByte();
     if (marker !== WORLD_MAP_DATA0) {
         throw new Error(`Invalid world map data0 marker ${marker}`);
     }
-    return {
+    const record: WorldMapData0Record = {
         kind: 0,
         minPlane: buffer.readUnsignedByte(),
         planes: buffer.readUnsignedByte(),
@@ -142,18 +161,19 @@ function readWorldMapData0(buffer: ByteBuffer): WorldMapData0Record {
         regionYLow: buffer.readUnsignedShort(),
         regionX: buffer.readUnsignedShort(),
         regionY: buffer.readUnsignedShort(),
-        groupId: buffer.readBigSmart(),
-        fileId: buffer.readBigSmart(),
+        groupId: -1,
+        fileId: -1,
         geographyLoaded: false,
     };
+    return geographyRef(record, buffer, withRefs, areaId);
 }
 
-function readWorldMapData1(buffer: ByteBuffer): WorldMapData1Record {
+function readWorldMapData1(buffer: ByteBuffer, withRefs = true, areaId = 0): WorldMapData1Record {
     const marker = buffer.readUnsignedByte();
     if (marker !== WORLD_MAP_DATA1) {
         throw new Error(`Invalid world map data1 marker ${marker}`);
     }
-    return {
+    const record: WorldMapData1Record = {
         kind: 1,
         minPlane: buffer.readUnsignedByte(),
         planes: buffer.readUnsignedByte(),
@@ -165,13 +185,23 @@ function readWorldMapData1(buffer: ByteBuffer): WorldMapData1Record {
         regionY: buffer.readUnsignedShort(),
         chunkX: buffer.readUnsignedByte(),
         chunkY: buffer.readUnsignedByte(),
-        groupId: buffer.readBigSmart(),
-        fileId: buffer.readBigSmart(),
+        groupId: -1,
+        fileId: -1,
         geographyLoaded: false,
     };
+    return geographyRef(record, buffer, withRefs, areaId);
 }
 
-function readCompositeMap(data: Int8Array, includeHiddenIcons: boolean) {
+/** A composite map, in whichever format it is (rev 241 dropped the geography references). */
+function readCompositeMap(data: Int8Array, includeHiddenIcons: boolean, areaId = 0) {
+    try {
+        return readCompositeMapAs(data, includeHiddenIcons, true, areaId);
+    } catch {
+        return readCompositeMapAs(data, includeHiddenIcons, false, areaId);
+    }
+}
+
+function readCompositeMapAs(data: Int8Array, includeHiddenIcons: boolean, withRefs: boolean, areaId: number) {
     const buffer = new ByteBuffer(data);
     const data0: WorldMapData0Record[] = [];
     const data1: WorldMapData1Record[] = [];
@@ -179,16 +209,12 @@ function readCompositeMap(data: Int8Array, includeHiddenIcons: boolean) {
 
     const data0Count = buffer.readUnsignedShort();
     for (let i = 0; i < data0Count; i++) {
-        try {
-            data0.push(readWorldMapData0(buffer));
-        } catch {}
+        data0.push(readWorldMapData0(buffer, withRefs, areaId));
     }
 
     const data1Count = buffer.readUnsignedShort();
     for (let i = 0; i < data1Count; i++) {
-        try {
-            data1.push(readWorldMapData1(buffer));
-        } catch {}
+        data1.push(readWorldMapData1(buffer, withRefs, areaId));
     }
 
     const iconCount = buffer.readUnsignedShort();
@@ -203,6 +229,9 @@ function readCompositeMap(data: Int8Array, includeHiddenIcons: boolean) {
             x: (packedCoord >>> 14) & 0x3fff,
             y: packedCoord & 0x3fff,
         });
+    }
+    if (buffer.offset !== data.length) {
+        throw new Error("World map composite map: format mismatch");
     }
 
     return { data0, data1, icons };
@@ -277,7 +306,8 @@ function readComplexTile(
             if (decorationCount === 0) continue;
             const decorations: WorldMapDecoration[] = [];
             for (let i = 0; i < decorationCount; i++) {
-                const objectDefinitionId = buffer.readBigSmart();
+                // Rev 241 writes the loc id as a plain int; before, as a large smart.
+                const objectDefinitionId = data.headerless ? buffer.readInt() : buffer.readBigSmart();
                 const decorationInfo = buffer.readUnsignedByte();
                 decorations.push({
                     objectDefinitionId,
@@ -292,7 +322,23 @@ function readComplexTile(
     }
 }
 
+/** Rev 241 geography for a whole region: no header, then its 64x64 tiles. */
+function decodeHeaderlessGeography(data: WorldMapDataBase, bytes: Int8Array): void {
+    const buffer = new ByteBuffer(bytes);
+    createWorldMapDataArrays(data);
+    for (let tileX = 0; tileX < TILE_COUNT; tileX++) {
+        for (let tileY = 0; tileY < TILE_COUNT; tileY++) {
+            readTile(data, tileX, tileY, buffer);
+        }
+    }
+    if (buffer.offset !== bytes.length) {
+        throw new Error(`World map geography ${data.regionX},${data.regionY}: ${bytes.length - buffer.offset} bytes left`);
+    }
+    data.geographyLoaded = true;
+}
+
 function decodeWorldMapData0Geography(data: WorldMapData0Record, bytes: Int8Array): void {
+    if (data.headerless) return decodeHeaderlessGeography(data, bytes);
     const buffer = new ByteBuffer(bytes);
     createWorldMapDataArrays(data);
     const marker = buffer.readUnsignedByte();
@@ -313,6 +359,7 @@ function decodeWorldMapData0Geography(data: WorldMapData0Record, bytes: Int8Arra
 }
 
 function decodeWorldMapData1Geography(data: WorldMapData1Record, bytes: Int8Array): void {
+    if (data.headerless) return decodeHeaderlessGeography(data, bytes);
     const buffer = new ByteBuffer(bytes);
     createWorldMapDataArrays(data);
     const marker = buffer.readUnsignedByte();
@@ -337,6 +384,34 @@ function decodeWorldMapData1Geography(data: WorldMapData1Record, bytes: Int8Arra
         }
     }
     data.geographyLoaded = true;
+}
+
+/**
+ * Rev 241: a region of chunks is one file per map area, holding only the chunks that area has
+ * entries for, chunk by chunk (x, then y), each chunk's 8x8 tiles read with its own planes.
+ */
+function decodeHeaderlessChunkRegion(entries: WorldMapData1Record[], bytes: Int8Array): void {
+    const buffer = new ByteBuffer(bytes);
+    const byChunk = new Map<number, WorldMapData1Record>();
+    for (const entry of entries) {
+        createWorldMapDataArrays(entry);
+        byChunk.set((entry.chunkX << 3) | entry.chunkY, entry);
+    }
+    for (let chunkX = 0; chunkX < 8; chunkX++) {
+        for (let chunkY = 0; chunkY < 8; chunkY++) {
+            const entry = byChunk.get((chunkX << 3) | chunkY);
+            if (!entry) continue;
+            for (let x = 0; x < 8; x++) {
+                for (let y = 0; y < 8; y++) {
+                    readTile(entry, chunkX * 8 + x, chunkY * 8 + y, buffer);
+                }
+            }
+        }
+    }
+    if (buffer.offset !== bytes.length) {
+        throw new Error(`World map geography ${entries[0]?.regionX},${entries[0]?.regionY}: format mismatch`);
+    }
+    for (const entry of entries) entry.geographyLoaded = true;
 }
 
 class WorldMapScaleHandler {
@@ -436,7 +511,7 @@ export class WorldMapArchiveRenderer {
     private readonly geographyIndex: CacheIndex;
     private readonly groundIndex: CacheIndex;
     private readonly areaCache = new Map<number, WorldMapAreaDataRecord | undefined>();
-    private readonly groundSpriteCache = new Map<number, Promise<Int32Array>>();
+    private readonly groundSpriteCache = new Map<string, Promise<Int32Array>>();
     private readonly scaleHandlers = new Map<number, WorldMapScaleHandler>();
     private readonly renderedRegionCache = new Map<string, WorldMapRenderedTile>();
     private renderedRegionCacheBytes = 0;
@@ -493,7 +568,9 @@ export class WorldMapArchiveRenderer {
         const width = clampedPixelsPerTile * TILE_COUNT;
         const height = width;
         const rgbPixels = new Int32Array(width * height);
-        const groundColors = await this.getGroundColors(region.data0?.groupId ?? region.data1[0]?.groupId ?? -1);
+        const source = region.data0 ?? region.data1[0];
+        // Rev 241 keeps one ground image per map area in the region's group; before, file 0.
+        const groundColors = await this.getGroundColors(source?.groupId ?? -1, source?.headerless ? source.fileId : 0);
         const scaleHandler = this.getScaleHandler(clampedPixelsPerTile);
 
         if (region.data0) {
@@ -530,18 +607,18 @@ export class WorldMapArchiveRenderer {
         if (this.areaCache.has(area.id)) return this.areaCache.get(area.id);
         let result: WorldMapAreaDataRecord | undefined;
         try {
-            const compositeMapArchiveId = this.worldMapIndex.getArchiveId("compositemap");
+            const compositeMapArchiveId = worldMapGroupId(this.worldMapIndex, "compositemap");
             if (compositeMapArchiveId < 0) {
                 this.areaCache.set(area.id, undefined);
                 return undefined;
             }
             const compositeMapArchive = this.worldMapIndex.getArchive(compositeMapArchiveId);
-            const compositeMapFile = compositeMapArchive.getFileNamed(area.internalName);
+            const compositeMapFile = compositeMapFileFor(compositeMapArchive, area);
             if (!compositeMapFile) {
                 this.areaCache.set(area.id, undefined);
                 return undefined;
             }
-            const composite = readCompositeMap(compositeMapFile.data, true);
+            const composite = readCompositeMap(compositeMapFile.data, true, area.id);
             result = {
                 area,
                 data0: composite.data0,
@@ -628,14 +705,32 @@ export class WorldMapArchiveRenderer {
             return true;
         }
 
-        for (const data of region.data1) {
-            if (!this.loadWorldMapDataGeography(data)) return false;
+        if (region.data1[0]?.headerless) {
+            if (!this.loadChunkRegionGeography(region.data1)) return false;
+        } else {
+            for (const data of region.data1) {
+                if (!this.loadWorldMapDataGeography(data)) return false;
+            }
         }
         for (const data of region.data1) {
             this.buildIcons(region, data, data.chunkX * 8, data.chunkY * 8, 8, 8);
         }
         region.geographyLoaded = true;
         return true;
+    }
+
+    /** Rev 241: all of a region's chunk entries come from one file. */
+    private loadChunkRegionGeography(entries: WorldMapData1Record[]): boolean {
+        if (entries.every((entry) => entry.geographyLoaded)) return true;
+        try {
+            const file = this.geographyIndex.getFile(entries[0].groupId, entries[0].fileId);
+            if (!file) return false;
+            decodeHeaderlessChunkRegion(entries, file.data);
+            return true;
+        } catch (error) {
+            console.warn("[WorldMap] chunk region geography", entries[0].regionX, entries[0].regionY, error);
+            return false;
+        }
     }
 
     private loadWorldMapDataGeography(data: WorldMapData0Record | WorldMapData1Record): boolean {
@@ -1161,20 +1256,21 @@ export class WorldMapArchiveRenderer {
         return HSL_RGB_MAP[adjustOverlayLight(hsl, 96)] ?? defaultColor;
     }
 
-    private getGroundColors(groupId: number): Promise<Int32Array> {
-        const cached = this.groundSpriteCache.get(groupId);
+    private getGroundColors(groupId: number, fileId = 0): Promise<Int32Array> {
+        const key = `${groupId}/${fileId}`;
+        const cached = this.groundSpriteCache.get(key);
         if (cached) return cached;
-        const colors = this.loadGroundColors(groupId);
-        this.groundSpriteCache.set(groupId, colors);
+        const colors = this.loadGroundColors(groupId, fileId);
+        this.groundSpriteCache.set(key, colors);
         return colors;
     }
 
-    private async loadGroundColors(groupId: number): Promise<Int32Array> {
+    private async loadGroundColors(groupId: number, fileId: number): Promise<Int32Array> {
         try {
             // Waits for the group to stream in when the cache is sparse.
             const archive = await retryOnMissingGroup(() => this.groundIndex.getArchive(groupId));
             if (archive) {
-                const file = archive.getFile(0) ?? archive.files[0];
+                const file = archive.getFile(fileId) ?? archive.getFile(0) ?? archive.files[0];
                 if (file) return await this.decodeWorldMapSprite(file.data);
             }
         } catch (error) {
@@ -1184,7 +1280,7 @@ export class WorldMapArchiveRenderer {
             });
         }
         // Don't keep the blank result cached; a later view retries the load.
-        this.groundSpriteCache.delete(groupId);
+        this.groundSpriteCache.delete(`${groupId}/${fileId}`);
         return new Int32Array(TILE_AREA);
     }
 
@@ -1308,3 +1404,6 @@ export class WorldMapArchiveRenderer {
         }
     }
 }
+
+/** For tests: the cache-format decoders. */
+export const worldMapFormatForTests = { readCompositeMap, decodeWorldMapData0Geography, decodeHeaderlessChunkRegion };

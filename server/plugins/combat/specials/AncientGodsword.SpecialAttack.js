@@ -69,7 +69,7 @@ module.exports = function registerAncientGodswordSpecialAttack(api) {
             attacker.heal(heal);
           }
 
-          target.getCombat().getHitQueue().addPendingDamage([new HitDamage(BLOOD_SACRIFICE_DAMAGE, HitMask.RED)]);
+          target.getCombat().getHitQueue().addPendingDamage([new HitDamage(BLOOD_SACRIFICE_DAMAGE, HitMask.RED).setSource(attacker)]);
           this.stop();
         }
       })());

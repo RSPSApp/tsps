@@ -59,6 +59,13 @@ export class WebRtcGameConnector {
       return undefined;
     }
     try {
+      const webSocketUrl = process.env.WORLD_WEBSOCKET_URL?.trim();
+      if (webSocketUrl) {
+        const url = new URL(webSocketUrl);
+        if (!["ws:", "wss:"].includes(url.protocol) || url.username || url.password || url.hash) {
+          throw new Error("WORLD_WEBSOCKET_URL must be a public ws:// or wss:// URL without credentials or a fragment");
+        }
+      }
       const connector = new WebRtcGameConnector(
         signallingEndpoint(signalUrl),
         worldId,
@@ -66,7 +73,8 @@ export class WebRtcGameConnector {
         token,
         parseIceServers(process.env.WEBRTC_ICE_SERVERS),
         accept,
-        playerCount
+        playerCount,
+        webSocketUrl
       );
       connector.connect();
       return connector;
@@ -83,7 +91,8 @@ export class WebRtcGameConnector {
     private readonly token: string,
     private readonly iceServers: RTCIceServer[],
     private readonly accept: (channel: BinaryChannel) => void,
-    private readonly playerCount: () => number
+    private readonly playerCount: () => number,
+    private readonly webSocketUrl?: string
   ) {}
 
   public connect(): void {
@@ -98,6 +107,7 @@ export class WebRtcGameConnector {
         worldId: this.worldId,
         name: this.worldName,
         playerCount: this.playerCount(),
+        ...(this.webSocketUrl ? { webSocketUrl: this.webSocketUrl } : {}),
         token: this.token,
       });
     });
@@ -144,6 +154,10 @@ export class WebRtcGameConnector {
     const sessionId = typeof message.sessionId === "string" ? message.sessionId : "";
     if (!sessionId) return;
     if (message.type === "session-open") {
+      if (this.webSocketUrl) {
+        this.failSession(sessionId, "websocket_required");
+        return;
+      }
       this.openPeer(sessionId);
       return;
     }

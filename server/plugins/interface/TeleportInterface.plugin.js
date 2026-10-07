@@ -81,17 +81,23 @@ const DESTINATIONS = {
     teleport("Count Draynor", location(3077, 9772), TeleportType.NORMAL),
     teleport("Elvarg", location(2852, 9637), TeleportType.NORMAL),
     teleport("Kalphite Queen", location(3508, 9494), TeleportType.NORMAL),
+    teleport("Corporeal Beast", location(2966, 4252, 2), TeleportType.NORMAL),
+    teleport("Zulrah", location(2196, 3056), TeleportType.NORMAL),
+    teleport("Doom of Mokhaiotl", location(1311, 9531, 1), TeleportType.NORMAL),
   ],
   [TAB.MINIGAMES]: [
     teleport("Barrows", location(3565, 3315), TeleportType.NORMAL),
     teleport("Blast Furnace", location(1939, 4958), TeleportType.NORMAL),
     teleport("Castle Wars", location(2440, 3089), TeleportType.NORMAL),
     teleport("Duel Arena", location(3366, 3266), TeleportType.NORMAL),
+    teleport("Fortis Colosseum", location(1799, 9506), TeleportType.NORMAL),
     teleport("Pest Control", location(2657, 2639), TeleportType.NORMAL),
     teleport("TzHaar Fight Caves", location(2438, 5168), TeleportType.NORMAL),
     teleport("TzHaar Fight Pits", location(2399, 5177), TeleportType.NORMAL),
+    teleport("The Gauntlet", location(3032, 6127, 1), TeleportType.NORMAL),
     teleport("The Inferno", location(2495, 5111), TeleportType.NORMAL),
     teleport("Warriors' Guild", location(2876, 3546), TeleportType.NORMAL),
+    teleport("Wintertodt", location(1630, 3955), TeleportType.NORMAL),
   ],
 };
 
@@ -177,7 +183,7 @@ module.exports = {
   name: "TeleportInterface",
   register(api) {
     api.registerCustomInterface(INTERFACE_DEFINITION);
-    api.registerCommand("teleports", ({ player }) => (open(player), true));
+    api.registerCommand("teleports", ({ player }) => (open(player), true), undefined, "Browse teleport destinations");
     api.onInterfaceActionButton(TAB_UIDS, ({ player, buttonId }) => {
       const index = TAB_UIDS.indexOf(buttonId);
       if (index >= 0) render(player, TAB_ORDER[index]);

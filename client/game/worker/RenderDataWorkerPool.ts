@@ -78,6 +78,7 @@ export class RenderDataWorkerPool {
         mapY: number,
         maxLevel: number,
         loadedTextureIds: number[],
+        renderBaseTile?: { x: number; y: number },
     ): QueuedTask<RenderDataWorkerThread, NpcGeometryData> {
         return this.pool.queue(
             (w) =>
@@ -86,6 +87,7 @@ export class RenderDataWorkerPool {
                     mapY,
                     maxLevel,
                     loadedTextureIds,
+                    renderBaseTile,
                 ) as ObservablePromise<NpcGeometryData>,
         );
     }

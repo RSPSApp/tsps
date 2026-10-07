@@ -19,6 +19,7 @@ export interface CombatNormalSpellOptions {
     itemsRequired?:(player: Player) => Item[]
     levelRequired?:() => number
     spellEffect?:(cast: Mobile, castOn: Mobile) => void 
+    members?: boolean
   }
 
 export class CombatNormalSpell extends CombatSpell {
@@ -27,6 +28,7 @@ export class CombatNormalSpell extends CombatSpell {
     }
     constructor(private readonly options: CombatNormalSpellOptions){
         super();
+        this.members = options.members === true;
     }
 
     spellId(): number {

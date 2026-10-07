@@ -3,6 +3,7 @@
     "node": ">=22.5.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@types/async-lock": "^1.4.2",
     "adm-zip": "^0.5.18",
     "async-lock": "^1.4.1",
@@ -13,7 +14,8 @@
     "reflect-metadata": "^0.1.13",
     "require-all": "^3.0.0",
     "socket.io-client": "^4.8.1",
-    "ws": "^8.13.0"
+    "ws": "^8.13.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",
@@ -33,6 +35,7 @@
     "dev:stress": "SERVER_PERF_PERIODIC_ENABLED=1 SERVER_PERF_PERIODIC_INTERVAL_MS=10000 SERVER_PERF_PERIODIC_SUMMARY_TICKS=30 node ../scripts/run-with-env.mjs - ./node_modules/nodemon/bin/nodemon.js --ext ts,json,js ./src/main/typescript/elvarg/Server.ts 0 --stressTest",
     "test:player-punishment": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/player-punishment-smoke.ts",
     "test:password": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/password-util-smoke.ts",
+    "saves:rollback": "node ./scripts/rollback-saves.mjs",
     "ensure-cache": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/ensure-cache.ts",
     "test:login": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/login-smoke.ts",
     "test:developer-rights": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/developer-rights-smoke.ts",
@@ -45,8 +48,6 @@
     "test:spell-cooldown": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/spell-cooldown-smoke.ts",
     "test:bones-fruit": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/bones-fruit-smoke.ts",
     "test:protocol": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/login-protocol-harness.ts",
-    "test:client-protocol": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/client-protocol-smoke.ts",
-    "test:webrtc": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/webrtc-loopback-smoke.ts",
     "test:pathfinding": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/pathfinding-smoke.ts",
     "test:combat-pathing": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/combat-pathing-smoke.ts",
     "test:quest-list": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/quest-list-smoke.ts",
@@ -68,7 +69,6 @@
     "test:smelting-quantity": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/smelting-quantity-smoke.ts",
     "test:bank-deposit-box": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2022\"}' ts-node ./scripts/bank-deposit-box-smoke.ts",
     "test:stress-bot-bounds": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2022\"}' ts-node ./scripts/stress-bot-bounds-smoke.ts",
-    "test:bot-recruit-option": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/bot-recruit-option-smoke.ts",
     "test:region-loading": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2022\"}' ts-node ./scripts/region-loading-smoke.ts",
     "test:duel-arena": "ts-node ./scripts/duel-arena-smoke.ts",
     "test:wilderness": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/wilderness-plugin-smoke.ts",
@@ -101,13 +101,16 @@
     "test:pest-control": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/pest-control-smoke.ts",
     "test:bot-pvp-loadout": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/bot-pvp-loadout-smoke.ts",
     "test:mobile-list-hooks": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2022\"}' ts-node ./scripts/mobile-list-hooks-smoke.ts",
+    "test:agent-mcp": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2022\"}' ts-node ./scripts/agent-mcp-smoke.ts",
     "dump:cs2": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-cs2.ts",
     "dump:enum": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-enum.ts",
     "dump:seq": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-seq.ts",
+    "dump:loc": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-loc.ts",
     "dump:spotanim": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-spotanim.ts",
     "dump:widget": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-widget.ts",
     "dump:item-combat-styles": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-item-combat-styles.ts",
-    "fetch:prices": "node ./scripts/fetch-prices.mjs"
+    "fetch:prices": "node ./scripts/fetch-prices.mjs",
+    "compare:cache": "tsx scripts/compare-cache.ts"
   },
   "packageManager": "yarn@4.12.0+sha512.f45ab632439a67f8bc759bf32ead036a1f413287b9042726b7cc4818b7b49e14e9423ba49b18f9e06ea4941c1ad062385b1d8760a8d5091a1a31e5f6219afca8"
 }

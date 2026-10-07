@@ -107,6 +107,15 @@ module.exports = {
                 }
             }
 
+            // Worktrees symlink client/node_modules here, so they share
+            // node_modules/.cache. Webpack caches asset paths relative to the
+            // checkout ("../../tsps/client/..."), and a cache written by another
+            // checkout fails with "conflicting asset info for sourceFilename".
+            if (webpackConfig.cache) {
+                const checkout = require("crypto").createHash("md5").update(appRoot).digest("hex").slice(0, 8);
+                webpackConfig.cache.name = `${webpackConfig.mode}-${checkout}`;
+            }
+
             webpackConfig.module.rules.push({
                 resourceQuery: /url/,
                 type: "asset/resource",
@@ -122,6 +131,12 @@ module.exports = {
             };
 
             webpackConfig.resolve.extensions = [".web.js", ...webpackConfig.resolve.extensions];
+
+            // RuneLite-shaped plugin API lives in runelite/ (mirrors the Java packages).
+            webpackConfig.resolve.alias = {
+                ...(webpackConfig.resolve.alias ?? {}),
+                "@runelite": path.resolve(appRoot, "runelite"),
+            };
 
             webpackConfig.optimization.minimizer.push(new JsonMinimizerPlugin());
             webpackConfig.ignoreWarnings = [

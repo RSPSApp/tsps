@@ -1,6 +1,7 @@
 import { PlayerPunishment } from "../../../util/PlayerPunishment";
 import { Misc } from "../../../util/Misc";
 import { World } from "../../../game/World";
+import { PluginManager } from "../../../plugins/PluginManager";
 import { CommandPacketListener } from "./CommandPacketListener";
 
 export class ChatPacketListener {
@@ -29,6 +30,14 @@ export class ChatPacketListener {
       return;
     }
     if (!ChatPacketListener.allowChat(player, text)) return;
+    // Let plugins observe or intercept public chat (e.g. NPC dialogue
+    // systems). A plugin that marks the event handled suppresses the broadcast.
+    const intercepted = PluginManager.emitSocialPacket({
+      player,
+      packet: { type: "public_chat", text },
+      handled: false,
+    });
+    if (intercepted) return;
     const iconPrefix = (player.getChatIcons?.() ?? [])
       .map((icon: number) => `<img=${icon}>`)
       .join("");

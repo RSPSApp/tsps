@@ -7,6 +7,7 @@ const { createRequire } = require('node:module');
 const path = require('node:path');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
+const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 
 const filename = path.resolve(__dirname, '../plugins/bots/behaviours/nodes/actions/EatFoodActionNode.js');
 const localRequire = createRequire(filename);
@@ -19,7 +20,6 @@ function loadNode() {
       if (name.endsWith('/PvpAssignment')) {
         return { getPvpProfile: () => ({ id: 'standard', foodCharges: 10, eatAtHpRatio: 0.45, comboEatChance: 0 }) };
       }
-      if (name.endsWith('/Food.plugin')) return { isFoodItem: () => false };
       if (name.endsWith('/state/PlayerBotState')) return {
         computeEatThreshold: (maxHp, ratio, f2p) =>
           f2p ? Math.min(24, Math.max(1, maxHp - 1)) : Math.max(1, Math.ceil(maxHp * ratio)),
@@ -36,16 +36,21 @@ function buildHarness() {
   let target = {};
   let attacker = null;
   let following = null;
-  const combat = { getTarget: () => target, getAttacker: () => attacker };
+  let foodItems = [];
+  const combat = { getTarget: () => target, getAttacker: () => attacker, delayAttack: () => {} };
   const player = {
     getSkillManager: () => ({ getCurrentLevel: () => hp, getMaxLevel: () => 60 }),
     getCombat: () => combat,
     getCombatFollowing: () => following,
-    getInventory: () => ({ getItems: () => [], deleteAtSlot: () => {}, refreshItems: () => {} }),
+    getInventory: () => ({
+      getItems: () => foodItems,
+      deleteAtSlot: (slot) => { foodItems[slot] = null; },
+      refreshItems: () => {},
+    }),
     getTimers: () => ({ has: () => false, extendOrRegister: () => {} }),
     getPacketSender: () => ({ sendInterfaceRemoval: () => {} }),
     performAnimation: () => {},
-    heal: () => {},
+    heal: (amount) => { hp += amount; },
     getUsername: () => 'f2p-test',
   };
   const state = {
@@ -61,6 +66,8 @@ function buildHarness() {
   const node = new (loadNode().EatFoodActionNode)(null, { log: () => {} }, {});
   return {
     setHp: (value) => { hp = value; },
+    getHp: () => hp,
+    setFood: (count) => { foodItems = Array.from({ length: count }, () => ({ getId: () => ItemIdentifiers.SHARK })); },
     engage: (value) => { target = value ? {} : null; attacker = null; following = null; },
     tick: () => node.tick({ player, state, nowMs: 1000 }),
     state,
@@ -102,4 +109,20 @@ test('non-F2P bots never touch the F2P pending flag', () => {
   assert.equal(h.tick(), 'failure', 'below the member threshold with no food');
   assert.equal(h.state.pvp.f2pFoodPending, false);
   assert.equal(h.state.pvp.f2pFoodPendingHp, null);
+});
+
+test('PvP bots consume actual remaining food after virtual charges run out', () => {
+  const h = buildHarness();
+  h.state.pvp.loadoutId = 'edge_main_melee';
+  h.state.virtualFoodChargesRemaining = 0;
+  h.setHp(20);
+  h.setFood(2);
+  assert.equal(h.tick(), 'success', 'real meals are usable despite a stale counter');
+  assert.equal(h.state.virtualFoodChargesRemaining, 1);
+  h.setHp(20);
+  assert.equal(h.tick(), 'success', 'the last real meal is usable with a consumed empty slot');
+  assert.ok(h.getHp() > 20, 'the final meal heals the bot');
+  assert.equal(h.state.virtualFoodChargesRemaining, 0, 'the remaining supply now matches the empty inventory');
+  h.setHp(20);
+  assert.equal(h.tick(), 'failure', 'no food is invented after the last real meal');
 });

@@ -1,8 +1,26 @@
 import assert from "node:assert/strict";
+import { MenuTargetType } from "../rs/MenuEntry";
+import { worldEntriesToSimple } from "../ui/menu/MenuBridge";
+import { chooseDefaultMenuEntry } from "../ui/menu/MenuEngine";
+import { MenuOpcode, MenuState } from "../ui/menu/MenuState";
 import { ClickMode } from "../game/InputManager";
 import { shouldSkipWidgetClickInput } from "../game/widgets/input/widgetClickGuard";
 import { drawChooseOptionMenu } from "../widgets/gl/choose-option";
 import { UIInputBridge } from "../widgets/gl/ui-input";
+
+// Inspect on the ToA obelisk must send object option 1, not an examine packet.
+const obeliskMenu = new MenuState();
+const obeliskEntries = worldEntriesToSimple([
+    { option: "Examine", targetType: MenuTargetType.LOC, targetId: 46068,
+      targetName: "Grouping Obelisk", targetLevel: -1, mapX: 30, mapY: 31 },
+    { option: "Inspect", targetType: MenuTargetType.LOC, targetId: 46068,
+      targetName: "Grouping Obelisk", targetLevel: -1, mapX: 30, mapY: 31, actionIndex: 0 },
+], { menuState: obeliskMenu });
+const inspectObelisk = obeliskEntries.find((entry) => entry.option === "Inspect")!;
+const examineObelisk = obeliskEntries.find((entry) => entry.option === "Examine")!;
+assert.equal(obeliskMenu.opcodes[inspectObelisk.menuStateIndex!], MenuOpcode.GameObjectFirstOption);
+assert.equal(obeliskMenu.opcodes[examineObelisk.menuStateIndex!], MenuOpcode.ExamineObject);
+assert.equal(chooseDefaultMenuEntry(obeliskEntries, {}), inspectObelisk);
 
 let clickThroughs = 0;
 const inputBridge = new UIInputBridge();

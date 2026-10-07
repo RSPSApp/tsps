@@ -125,6 +125,15 @@ export class Boat {
         return this.deckRegionY * 8;
     }
 
+    /** The boat's own main-world tile: where its world entity is, the tile its fine position lies in. */
+    worldTile(): { x: number; y: number; level: number } {
+        return {
+            x: Math.floor(this.fineX / FINE_UNITS_PER_TILE),
+            y: Math.floor(this.fineY / FINE_UNITS_PER_TILE),
+            level: this.level,
+        };
+    }
+
     /** Main-world tile under the centre of a deck tile, given the boat's position and angle. */
     deckTileToWorld(x: number, y: number): { x: number; y: number } {
         const localX = (x - this.deckBaseX) * FINE_UNITS_PER_TILE + 64 - this.deckCentreX;

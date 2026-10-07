@@ -7,7 +7,7 @@ const { CombatSpells } = require("../../../src/main/typescript/elvarg/game/conte
 const { Autocasting } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/Autocasting");
 const { Presetable } = require("../../../src/main/typescript/elvarg/game/content/presets/Presetable");
 const { Wilderness } = require("../../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
-const { isSafeLocation: isFeroxSafeLocation } = require("../../items/LootKeys.plugin");
+const { isSafeLocation: isFeroxSafeLocation } = require("../../areas/ferox/Bounds.FeroxEnclave");
 const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
 const { MagicSpellbook } = require("../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
@@ -36,9 +36,11 @@ const {
   buildPresetsInterfaceDefinition,
 } = require("./presetsWidget");
 
-const OPEN_ON_DEATH_ATTRIBUTE = "pvp:openPresetsOnDeath";
-const CUSTOM_PRESETS_ATTRIBUTE = "pvp:customPresets";
-const CUSTOM_PRESET_SLOT_ATTRIBUTE = "pvp:selectedCustomPresetSlot";
+const CURRENT_PRESET_ATTRIBUTE = "pvp:current-preset";
+
+const OPEN_ON_DEATH_ATTRIBUTE = "pvp:open-presets-on-death";
+const CUSTOM_PRESETS_ATTRIBUTE = "pvp:custom-presets";
+const CUSTOM_PRESET_SLOT_ATTRIBUTE = "pvp:selected-custom-preset-slot";
 let presetsEnabled = false;
 
 function shouldOpenOnDeath(player) {
@@ -377,7 +379,7 @@ function renderPresetLists(player) {
   const sender = player.getPacketSender();
   const pool = getGlobalPresetPool();
   const presets = customPresets(player);
-  const selected = player.getCurrentPreset?.() ?? null;
+  const selected = player.getAttribute?.(CURRENT_PRESET_ATTRIBUTE) ?? null;
   for (let row = 0; row < PRESET_ROW_COUNT; row++) {
     const custom = row >= GLOBAL_ROW_COUNT;
     const preset = custom ? presets[row - GLOBAL_ROW_COUNT] : pool[row];
@@ -398,7 +400,7 @@ function renderPresetLists(player) {
 
 function renderButtons(player) {
   const sender = player.getPacketSender();
-  const selected = player.getCurrentPreset?.() ?? null;
+  const selected = player.getAttribute?.(CURRENT_PRESET_ATTRIBUTE) ?? null;
   const isCustom = selected != null && !selected.getIsGlobal?.();
   sender
     .sendString(
@@ -456,7 +458,7 @@ function renderSelectedPreset(player, preset) {
 }
 
 function selectPreset(player, preset, customSlot = -1) {
-  player.setCurrentPreset(preset ?? null);
+  player.setAttribute(CURRENT_PRESET_ATTRIBUTE, preset ?? null);
   player.setAttribute(CUSTOM_PRESET_SLOT_ATTRIBUTE, customSlot);
   renderPresetLists(player);
   renderSelectedPreset(player, preset ?? null);
@@ -610,7 +612,7 @@ function applyRandomGlobalPreset(player, options = {}) {
   if (!preset) {
     return null;
   }
-  player.setCurrentPreset?.(preset);
+  player.setAttribute?.(CURRENT_PRESET_ATTRIBUTE, preset);
   if (!applyPreset(player, preset)) {
     return null;
   }
@@ -624,7 +626,7 @@ function promptSavePreset(player, index) {
       const input = Misc.formatText(rawInput ?? "");
       if (!Misc.isValidName(input)) {
         player.sendMessage("Invalid name for preset.");
-        player.setCurrentPreset(null);
+        player.setAttribute(CURRENT_PRESET_ATTRIBUTE, null);
         openPresetInterface(player, null);
         return;
       }
@@ -709,7 +711,7 @@ function handlePresetActionButton(player, buttonId) {
       return true;
 
     case uid(COMPONENT.LOAD_BUTTON): {
-      const preset = player.getCurrentPreset();
+      const preset = player.getAttribute(CURRENT_PRESET_ATTRIBUTE);
       if (!preset) {
         player.sendMessage("You haven't selected any preset yet.");
         return true;
@@ -721,7 +723,7 @@ function handlePresetActionButton(player, buttonId) {
     case uid(COMPONENT.SAVE_BUTTON): {
       // Saving over a selected custom preset edits it in place; otherwise it fills the
       // first free slot, which is the only way to create one.
-      const selected = player.getCurrentPreset();
+      const selected = player.getAttribute(CURRENT_PRESET_ATTRIBUTE);
       const selectedIndex = selected ? selectedCustomPresetSlot(player) : -1;
       const index = selectedIndex >= 0 ? selectedIndex : firstFreePresetSlot(player);
       if (index < 0) {

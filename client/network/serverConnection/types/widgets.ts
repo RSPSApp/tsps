@@ -84,6 +84,12 @@ export type WidgetServerPayload =
           y: number;
       }
     | {
+          /** IF_SETCOLOUR, already widened to 24-bit RGB. */
+          action: "set_colour";
+          uid: number;
+          colour: number;
+      }
+    | {
           action: "set_model";
           uid: number;
           modelId?: number;

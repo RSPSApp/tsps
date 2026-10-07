@@ -14,6 +14,7 @@ const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/ri
 
 module.exports = {
   name: "Inferno",
+  members: true,
   register(api) {
     const { ObjectIdentifiers: Objects } = api.core;
     const combat = registerInfernoMonsters(api, { tryRevive: run.tryRevive });
@@ -40,6 +41,6 @@ module.exports = {
     api.onCanAttack(run.guardPassives);
     api.onNpcBeforeDeath(run.supportsCollapse);
     api.onCombatHitResolved(zuk.provoke);
-    api.registerCommand("infernowave", run.setNextWave, PlayerRights.DEVELOPER);
+    api.registerCommand("infernowave", run.setNextWave, PlayerRights.DEVELOPER, "Set the next Inferno wave");
   },
 };

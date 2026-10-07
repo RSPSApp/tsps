@@ -21,6 +21,9 @@ export type ObjTypeLoader = TypeLoader<ObjType>;
  * to other ObjTypes to apply these transforms, so we wrap the loader instead.
  */
 export class PostProcessedObjTypeLoader implements ObjTypeLoader {
+    /** Set from the login handshake; false hides members items like an OSRS F2P world. */
+    static membersWorld = true;
+
     constructor(private readonly base: ObjTypeLoader) {}
 
     load(id: number): ObjType {
@@ -54,6 +57,13 @@ export class PostProcessedObjTypeLoader implements ObjTypeLoader {
                 );
             }
         } catch {}
+
+        if (!PostProcessedObjTypeLoader.membersWorld && obj.isMembers) {
+            obj.name = "Members object";
+            obj.groundActions = [null, null, "Take", null, null];
+            obj.inventoryActions = [null, null, null, null, "Drop"];
+            obj.shiftClickIndex = -2;
+        }
 
         return obj;
     }

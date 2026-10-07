@@ -1,0 +1,144 @@
+{
+ "$comment": "Ornament kit transformations transcribed from https://oldschool.runescape.wiki/w/Ornament_kit. Applying a kit consumes it and swaps the base item id for the ornamented id.",
+ "source": "https://oldschool.runescape.wiki/w/Ornament_kit",
+ "kits": [
+  {
+   "kit": 23227,
+   "base": 8850,
+   "result": 23230,
+   "name": "Rune defender ornament kit"
+  },
+  {
+   "kit": 12538,
+   "base": 11335,
+   "result": 12417,
+   "name": "Dragon full helm ornament kit"
+  },
+  {
+   "kit": 12534,
+   "base": 3140,
+   "result": 12414,
+   "name": "Dragon chainbody ornament kit"
+  },
+  {
+   "kit": 22236,
+   "base": 21892,
+   "result": 22242,
+   "name": "Dragon platebody ornament kit"
+  },
+  {
+   "kit": 22236,
+   "base": 4087,
+   "result": 12415,
+   "name": "Dragon platebody ornament kit"
+  },
+  {
+   "kit": 22231,
+   "base": 11840,
+   "result": 22234,
+   "name": "Dragon boots ornament kit"
+  },
+  {
+   "kit": 12532,
+   "base": 1187,
+   "result": 12418,
+   "name": "Dragon sq shield ornament kit"
+  },
+  {
+   "kit": 22239,
+   "base": 21895,
+   "result": 22244,
+   "name": "Dragon kiteshield ornament kit"
+  },
+  {
+   "kit": 20002,
+   "base": 4587,
+   "result": 20000,
+   "name": "Dragon scimitar ornament kit"
+  },
+  {
+   "kit": 20143,
+   "base": 23597,
+   "result": 19722,
+   "name": "Dragon defender ornament kit"
+  },
+  {
+   "kit": 20068,
+   "base": 11802,
+   "result": 20368,
+   "name": "Armadyl godsword ornament kit"
+  },
+  {
+   "kit": 20071,
+   "base": 11804,
+   "result": 20370,
+   "name": "Bandos godsword ornament kit"
+  },
+  {
+   "kit": 20074,
+   "base": 11806,
+   "result": 20372,
+   "name": "Saradomin godsword ornament kit"
+  },
+  {
+   "kit": 20077,
+   "base": 11808,
+   "result": 20374,
+   "name": "Zamorak godsword ornament kit"
+  },
+  {
+   "kit": 23232,
+   "base": 6528,
+   "result": 23235,
+   "name": "Tzhaar-ket-om ornament kit"
+  },
+  {
+   "kit": 23237,
+   "base": 11128,
+   "result": 23240,
+   "name": "Berserker necklace ornament kit"
+  },
+  {
+   "kit": 12526,
+   "base": 6585,
+   "result": 12436,
+   "name": "Fury ornament kit"
+  },
+  {
+   "kit": 20062,
+   "base": 19553,
+   "result": 20366,
+   "name": "Torture ornament kit"
+  },
+  {
+   "kit": 22246,
+   "base": 19547,
+   "result": 22249,
+   "name": "Anguish ornament kit"
+  },
+  {
+   "kit": 23348,
+   "base": 19544,
+   "result": 23444,
+   "name": "Tormented ornament kit"
+  },
+  {
+   "kit": 20065,
+   "base": 12002,
+   "result": 19720,
+   "name": "Occult ornament kit"
+  },
+  {
+   "kit": 20065,
+   "base": 6918,
+   "result": 12457,
+   "name": "Occult ornament kit"
+  },
+  {
+   "kit": 20065,
+   "base": 6918,
+   "result": 12419,
+   "name": "Occult ornament kit"
+  }
+ ]
+}

@@ -120,6 +120,20 @@ module.exports = function registerInfernoMonsters(api, hooks) {
     }
   }
 
+  // Jal-Nib: they only turn on the player once every support is down, and then every attack
+  // lands, whatever the player wears (Wiki: Jal-Nib). On a support the hit is rolled as usual.
+  class JalNibCombat extends InfernoCombat {
+    constructor() {
+      super({ melee: 7574 });
+    }
+
+    hits(npc, target) {
+      if (!target.isPlayer()) return super.hits(npc, target);
+      npc.performAnimation(this.meleeAnim);
+      return [new PendingHit(npc, target, STYLES[CombatType.MELEE], { delay: 0, rollAccuracy: false })];
+    }
+  }
+
   // Jal-MejRah: a short-range ranged bat whose hits sap run energy.
   class JalMejRahCombat extends InfernoCombat {
     constructor() {
@@ -235,6 +249,7 @@ module.exports = function registerInfernoMonsters(api, hooks) {
     }
   };
 
+  api.registerNpcCombatMethodProvider(Npcs.JAL_NIB, JalNibCombat);
   api.registerNpcCombatMethodProvider(Npcs.JAL_MEJRAH, JalMejRahCombat);
   api.registerNpcCombatMethodProvider(Npcs.JAL_AK, JalAkCombat);
   api.registerNpcCombatMethodProvider(Npcs.JAL_AKREK_MEJ, class extends InfernoCombat {

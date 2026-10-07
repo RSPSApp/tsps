@@ -48,6 +48,8 @@ export type WidgetInputControllerDeps = {
     getCs2Vm: () => Cs2Vm;
     getVarManager: () => VarManager;
     getWorldMap: () => WorldMapController;
+    /** Soft keyboard for chat (the hidden input the mobile layout's keyboard button uses). */
+    getChatKeyboard: () => { show(): void; hide(): void };
     getCustomInterfaces: () => CustomInterfaceRuntime;
     getPlayerDesign: () => PlayerDesignController;
     getObjTypeLoader: () => ObjTypeLoader | undefined;

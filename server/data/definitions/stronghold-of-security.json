@@ -1,0 +1,699 @@
+{
+ "$comment": "The Stronghold of Security. Object ids, positions and destinations: rsprox capture of a full run, plus the cache's map positions where it went unvisited (the up-ladders land next to the ladder above; floor 4's portal lands at the Cradle). Rewards and portal combat levels: Wiki. Questions: the Wiki's Doors table, with the capture's wording where it showed them (every answer passes; the response teaches). Boots ids: capture. A door speaks as its floor's door NPC (doorHead, with the door_chathead animation 4281) under doorSpeaker: captured for Rickety Door and Portal of Death; floors 1 and 3 use their NPC's name (unverified).",
+ "source": "https://oldschool.runescape.wiki/w/Stronghold_of_Security",
+ "entrance": {
+  "object": 20790,
+  "to": [
+   1859,
+   5243,
+   0
+  ],
+  "message": "You squeeze through the hole and find a ladder a few feet down leading into the Stronghold of Security."
+ },
+ "surface": [
+  3081,
+  3421,
+  0
+ ],
+ "floors": [
+  {
+   "name": "Vault of War",
+   "door": "Gate of War",
+   "arrival": [
+    1859,
+    5243,
+    0
+   ],
+   "up": [
+    20784
+   ],
+   "upTo": "surface",
+   "down": 20785,
+   "portal": 20786,
+   "treasure": [
+    1914,
+    5222,
+    0
+   ],
+   "portalCombat": 26,
+   "reward": {
+    "name": "Gift of Peace",
+    "option": "Open",
+    "coins": 2000,
+    "emoteVarbit": 2309,
+    "emote": "Flap",
+    "opening": "The box hinges creak and appear to be forming audible words....",
+    "jingle": 157
+   },
+   "doorHead": 2494,
+   "doorSpeaker": "Gate of War"
+  },
+  {
+   "name": "Catacomb of Famine",
+   "door": "Rickety door",
+   "arrival": [
+    2042,
+    5245,
+    0
+   ],
+   "up": [
+    19003
+   ],
+   "upTo": [
+    1902,
+    5221,
+    0
+   ],
+   "down": 19004,
+   "portal": 19005,
+   "treasure": [
+    2021,
+    5223,
+    0
+   ],
+   "portalCombat": 51,
+   "reward": {
+    "name": "Grain of Plenty",
+    "option": "Search",
+    "coins": 3000,
+    "emoteVarbit": 2310,
+    "emote": "Slap Head",
+    "opening": "The grain shifts in the sack, sighing audible words....",
+    "jingle": 179
+   },
+   "doorHead": 2495,
+   "doorSpeaker": "Rickety Door"
+  },
+  {
+   "name": "Pit of Pestilence",
+   "door": "Oozing barrier",
+   "arrival": [
+    2123,
+    5252,
+    0
+   ],
+   "up": [
+    23705
+   ],
+   "upTo": [
+    2025,
+    5218,
+    0
+   ],
+   "down": 23706,
+   "portal": 23707,
+   "treasure": [
+    2146,
+    5287,
+    0
+   ],
+   "portalCombat": 76,
+   "reward": {
+    "name": "Box of Health",
+    "option": "Open",
+    "coins": 5000,
+    "emoteVarbit": 2311,
+    "emote": "Idea",
+    "opening": "The box hinges creak and appear to be forming audible words....",
+    "jingle": 177,
+    "restore": true
+   },
+   "doorHead": 2496,
+   "doorSpeaker": "Oozing barrier"
+  },
+  {
+   "name": "Sepulchre of Death",
+   "door": "Portal of Death",
+   "arrival": [
+    2358,
+    5215,
+    0
+   ],
+   "up": [
+    23732
+   ],
+   "upTo": "surface",
+   "portal": 23922,
+   "treasure": [
+    2343,
+    5214,
+    0
+   ],
+   "portalCombat": null,
+   "reward": {
+    "name": "Cradle of Life",
+    "option": "Search",
+    "emoteVarbit": 2312,
+    "emote": "Stamp Foot",
+    "jingle": 158
+   },
+   "doorHead": 2497,
+   "doorSpeaker": "Portal of Death"
+  }
+ ],
+ "boots": [
+  {
+   "item": 9005,
+   "name": "Fancy boots"
+  },
+  {
+   "item": 9006,
+   "name": "Fighting boots"
+  },
+  {
+   "item": 28672,
+   "name": "Fancier boots"
+  }
+ ],
+ "questions": [
+  {
+   "question": "What do you do if someone asks you for your password or bank PIN to make you a member for free?",
+   "options": [
+    {
+     "text": "Give them the information they asked for.",
+     "response": "Wrong! Membership requires a subscription paid or a bond to be redeemed - they are trying to trick you. Never give your account details to anyone. Press the 'Report Abuse' button and fill in the offending player's name and the correct category."
+    },
+    {
+     "text": "Don't tell them anything and ignore them.",
+     "response": "Quite good. But we should try to stop scammers. So please report them using the 'Report Abuse' button."
+    },
+    {
+     "text": "Don't tell them anything and click the 'Report Abuse' button.",
+     "response": "Correct! Press the 'Report Abuse' Button and fill in the offending player's name and correct category."
+    }
+   ]
+  },
+  {
+   "question": "You have been offered a free giveaway or double XP invitation via in-game chat or email. What should you do?",
+   "options": [
+    {
+     "text": "Report the incident and do not click any links.",
+     "response": "Correct! This is an attempt to obtain your account details. If it happened in the game, report it via the Report Abuse option."
+    },
+    {
+     "text": "Respond quickly so as not to miss the offer.",
+     "response": "Wrong! Jagex will NEVER make offers like this - it is an attempt to obtain your account details. If it happnes in the game, report via the Report Abuse option."
+    }
+   ]
+  },
+  {
+   "question": "You have been offered a free giveaway or double XP invitation via social media or a livestream. What should you do?",
+   "options": [
+    {
+     "text": "Respond quickly so as not to miss the offer.",
+     "response": "Wrong! Jagex will NEVER make offers like this - it is an attempt to obtain your account details. Please report the incident using whatever reporting methods offered by the site you are on."
+    },
+    {
+     "text": "Report the incident and do not click any links.",
+     "response": "Correct! This is an attempt to obtain your account details and should be reported to the relevant organisations via their own reporting systems."
+    }
+   ]
+  },
+  {
+   "question": "Is it safe to get someone to level your account?",
+   "options": [
+    {
+     "text": "Yes, so long as you change your password when they have finished.",
+     "response": "Wrong! If you allow someone to use your account they may steal it. Alternatively they may use macros/bots to increase your level, and thus get the account banned."
+    },
+    {
+     "text": "Yes, so long as they don't raise it's levels by too much.",
+     "response": "Wrong! If you allow someone to use your account they may steal it. Alternatively they may use macros/bots to increase your level, and thus get the account banned."
+    },
+    {
+     "text": "No, you should never allow anyone to use your account.",
+     "response": "Correct! Allowing someone else to use your account means they may steal it, or may get it banned by cheating on it."
+    }
+   ]
+  },
+  {
+   "question": "Hey adventurer! You've been randomly selected for a prize of 1 year of free membership! I'm just going to need some of your account details so I can pu",
+   "options": [
+    {
+     "text": "Wowee! Let me just write those down for you.",
+     "response": "Incorrect! Do not trust anybody claiming you have won a prize and asking for your account details."
+    },
+    {
+     "text": "No way! I'm reporting you to Jagex!",
+     "response": "Correct! Make sure to report anybody asking for your account login details."
+    },
+    {
+     "text": "I'm not sure about this... let me get back to you on it.",
+     "response": "Incorrect! Well done for declining to offer but make sure to report players asking for your account details."
+    }
+   ]
+  },
+  {
+   "question": "What is the best security step you can take to keep your registered email secure?",
+   "options": [
+    {
+     "text": "Set up two-factor authentication with my email provider.",
+     "response": "Correct! Enabling two-factor authentication on your email account wil help protect your email account from hijackers."
+    },
+    {
+     "text": "Have a complicated password set to my email.",
+     "response": "Wrong! Complicated passwords are always a good idea but they are not the very best security step you can take to keep your email secure."
+    },
+    {
+     "text": "Use an email address just for Old School RuneScape.",
+     "response": "Wrong! Even if you don't use your email address elsewhere there is still a risk that somebody could access it."
+    }
+   ]
+  },
+  {
+   "question": "What is the best way to secure your account?",
+   "options": [
+    {
+     "text": "A long and complicated password because you have a good memory.",
+     "response": "Incorrect! While a strong password is recommended, two-factor authentication adds extra levels of security."
+    },
+    {
+     "text": "Two-factor authentication on your account and your registered email.",
+     "response": "Correct! Using each of these features will maximise your account security!"
+    }
+   ]
+  },
+  {
+   "question": "How do I set a bank PIN?",
+   "options": [
+    {
+     "text": "Talk to any banker.",
+     "response": "Correct! Simply talking to a banker will give you the option to set a bank PIN. Never use personal details for passwords or bank PINs!"
+    },
+    {
+     "text": "Use the account managment section on the website.",
+     "response": "Wrong! Your password can be changed from the account management section, but you must talk to a banker to set a bank PIN. Never use personal details for passwords or bank PINs!"
+    }
+   ]
+  },
+  {
+   "question": "What should I do if I receive an email asking me to verify my identity or account details due to suspicious activity?",
+   "options": [
+    {
+     "text": "Email them back with the information it asks for.",
+     "response": "Wrong! Jagex will NEVER email to ask for account details, so don't send any info back."
+    },
+    {
+     "text": "Click the links in the email to visit the website.",
+     "response": "Wrong! Jagex will NEVER email to ask for account details, and the links may lead to a fake website."
+    },
+    {
+     "text": "Delete it - it is fake!",
+     "response": "Correct! Jagex will NEVER email you unless you've used the website to change your account. Account details can only be verified through using account recovery systems on the Old School RuneScape website, NOT through responding  to emails."
+    }
+   ]
+  },
+  {
+   "question": "Who can I give my password to?",
+   "options": [
+    {
+     "text": "My friends.",
+     "response": "Wrong! Your password should be kept secret from everyone. You should *never* give it out under any circumstances."
+    },
+    {
+     "text": "My brother or sister.",
+     "response": "Wrong! Your password should be kept secret from everyone. You should *never* give it out under any circumstances."
+    },
+    {
+     "text": "Nobody.",
+     "response": "Correct! Your password should be kept secret from everyone. You should *never* give it out under any circumstances."
+    }
+   ]
+  },
+  {
+   "question": "What do I do if my account is compromised?",
+   "options": [
+    {
+     "text": "Post on social media about it.",
+     "response": "Wrong! Social media will often not solve the problem directly. You'd eventually need to go to the Old School RuneScape website to regain access to your account."
+    },
+    {
+     "text": "Secure my device and reset my password.",
+     "response": "Correct! Securing your systems with virus and malware scans is important before resetting your account password to ensure your details are not compromised again. Don't forget to secure your email account too!"
+    }
+   ]
+  },
+  {
+   "question": "What do I do if a moderator asks me for my account details?",
+   "options": [
+    {
+     "text": "Tell them whatever they want to know.",
+     "response": "Wrong! Never give your account details to anyone! This includes things like account creation details, contact details and passwords. Never use personal details for passwords or bank PINs!"
+    },
+    {
+     "text": "Politely thell them no, and ignore them.",
+     "response": "Okay! Don't just tell them the details. But reporting the incident to Jagex would help. Use the Report Abuse button. Never use personal details for passwords or bank PINs!"
+    },
+    {
+     "text": "Politely tell them no, then use the 'Report Abuse' button.",
+     "response": "Correct! Report any attempt to gain your account details as it is a very serious breach of Old School RuneScape's rules. Never use personal details for passwords or bank PINs!"
+    }
+   ]
+  },
+  {
+   "question": "A player trades you some valuable items, provides you with a bond, then asks if you want to share your account so he can help you make progress. How do you respond?",
+   "options": [
+    {
+     "text": "Decline the offer and report that player.",
+     "response": "Correct! Never share your login details with another player."
+    },
+    {
+     "text": "Give the player access since they are a higher level.",
+     "response": "Incorrect! Never share your login details with another player."
+    },
+    {
+     "text": "Tell them you'll trade your account info for theirs.",
+     "response": "Incorrect! This option still puts your account and items at risk!"
+    }
+   ]
+  },
+  {
+   "question": "Where is it safe to use my Old School RuneScape password?",
+   "options": [
+    {
+     "text": "On Old School RuneScape and all fansites.",
+     "response": "Wrong! Always use a unique password purely for your Old School RuneScape account."
+    },
+    {
+     "text": "Only on the Old School RuneScape website.",
+     "response": "Correct! Always make sure you are entering your password only on the Old School RuneScape website as other sites may try to steal it."
+    },
+    {
+     "text": "On all websites I visit.",
+     "response": "Wrong! This is very insecure and will may lead to your account being stolen."
+    }
+   ]
+  },
+  {
+   "question": "Whose responsibility is it to keep your account secure?",
+   "options": [
+    {
+     "text": "Me.",
+     "response": "Correct! Make sure to use the tools Jagex recommend, such as two-factor authentication options."
+    },
+    {
+     "text": "Jagex.",
+     "response": "Incorrect! Jagex can offer tools such as two-factor authentication options, but you must make sure you use them correctly to keep your info safe!"
+    },
+    {
+     "text": "My internet provider.",
+     "response": "Incorrect! Your internet service provider may offer security advice, but use the tips on the Old School RuneScape website to stay secure."
+    }
+   ]
+  },
+  {
+   "question": "Psst! Adventurer! I've got a special offer for you, but you're going to have to trust me. If you give me some gold coins, I'll give you back twice whatever you gave me! How does that sound?",
+   "options": [
+    {
+     "text": "No way! You'll just take my gold for your own! Reported!",
+     "response": "Correct! If it sounds too good to be true, it probably is! Be wary of these types of scams."
+    },
+    {
+     "text": "I'm not sure... but giving a few coins to test it won't hurt.",
+     "response": "Incorrect! Do not trust players asking for gold offering to return a higher amount."
+    },
+    {
+     "text": "WoW! You're so generous, thank you! Here's all my gold.",
+     "response": "Incorrect! Do not trust players asking for gold offering to return a higher amount."
+    }
+   ]
+  },
+  {
+   "question": "Is it okay to buy an Old School RuneScape account?",
+   "options": [
+    {
+     "text": "Yes if it is from someone you know.",
+     "response": "Wrong! If you buy an account, the person who originally made it may take it back, and you will lose anything you paid for it."
+    },
+    {
+     "text": "Yes if you pay for it with GP.",
+     "response": "Wrong! If you buy an account, the person who originally made it may take it back, and you will lose anything you paid for it."
+    },
+    {
+     "text": "No, you should never buy an account.",
+     "response": "Correct! Buying accounts is against the rules. Also you could lose the account if the original owner takes it back."
+    }
+   ]
+  },
+  {
+   "question": "My friend asks me to for my password so that he can do a difficult quest for me. Do I give it to him?",
+   "options": [
+    {
+     "text": "Yes. He is my best friends and I've already spent ages trying this quest.",
+     "response": "Wrong! Don't give your password to anyone otherwise you can lose everything you have worked so hard for."
+    },
+    {
+     "text": "Don't give them my password.",
+     "response": "Correct! You can make it alone and the success will taste even better. Don't forget you can ask people for advice too!"
+    },
+    {
+     "text": "Let them do the quest, but in the same room the whole time.",
+     "response": "Wrong! Never let anyone use your account for any reason - they might try to keep it by changing the password! You'd be held responsible if they broke the rules on your account too."
+    }
+   ]
+  },
+  {
+   "question": "A player tells you to search for a video online, click the link in the description and comment on the forum post to win a cash prize. What do you do?",
+   "options": [
+    {
+     "text": "Do what they ask, using the provided link in the video description.",
+     "response": "Incorrect! Don't trust these types of link even if they look similar to the Old School RuneScape website."
+    },
+    {
+     "text": "Report the player for phishing.",
+     "response": "Correct! Always be wary of these links and double check you are on the official Old School RuneScape website before entering your login details!"
+    },
+    {
+     "text": "Tell your friends so they can get free gold too.",
+     "response": "Incorrect! Don't trust these types of link even if they look similar to the Old School RuneScape website."
+    }
+   ]
+  },
+  {
+   "question": "Adventurer, I'll trade items with you for an amazing price, but you've got to come immediately to a particular place on a different game world. Hurry up! Come now before you lose out! What do you say?",
+   "options": [
+    {
+     "text": "Okay, I'll take my valuables there now so we can trade.",
+     "response": "Incorrect! Do not trust players trying to rush you into going somewhere unfamiliar. It's often an attempt to lure you into taking items somewhere dangerous, where you'll lose them."
+    },
+    {
+     "text": "Nope, you're tricking me into going somewhere dangerous.",
+     "response": "Correct! If it sounds too good to be true, it probably is! Be wary of these types of scams."
+    }
+   ]
+  },
+  {
+   "question": "Which of these is an important characteristic of a secure password?",
+   "options": [
+    {
+     "text": "It incorporates your real name or birthday.",
+     "response": "Incorrect! Using personal details as your password makes it easier to guess!"
+    },
+    {
+     "text": "It's never used on other websites or accounts.",
+     "response": "Correct! Make sure to use a unique password to keep your account secure."
+    },
+    {
+     "text": "It's never changed over many months or years.",
+     "response": "Incorrect! You should change your password frequently."
+    }
+   ]
+  },
+  {
+   "question": "You're watching a stream by someone claiming to be Jagex offering double XP. What do you do?",
+   "options": [
+    {
+     "text": "Click the link! I love double XP!",
+     "response": "Incorrect! This is a common phishing method and puts your account at risk!"
+    },
+    {
+     "text": "Report the stream. Real Jagex streams have a 'varified' mark.",
+     "response": "Correct! This is a common phishing method and puts your account at risk!"
+    },
+    {
+     "text": "Ignore it.",
+     "response": "Incorrect! Well done for avoiding the phishing attempt but make sure to report these wherever possible to help other players."
+    }
+   ]
+  },
+  {
+   "question": "Will Jagex prevent me from saying my PIN in game?",
+   "options": [
+    {
+     "text": "Yes.",
+     "response": "Wrong! Jagex does NOT block your PIN so don't type it! Anyone asking you to say your PIN is trying to trick you."
+    },
+    {
+     "text": "No.",
+     "response": "Correct! Jagex will not block your PIN so don't type it! Anyone asking you to say your PIN is trying to trick you."
+    }
+   ]
+  },
+  {
+   "question": "A website claims that they can make me a player moderator. What should I do?",
+   "options": [
+    {
+     "text": "Nothing, it's a fake.",
+     "response": "Correct! Remember that moderators are hand picked by Jagex and contact is made through the game inbox only."
+    },
+    {
+     "text": "Give them my account info and password.",
+     "response": "Wrong! This will almost certainly lead to your account being hijacked. No wabsite can make you a moderator as tehy are hand picked by Jagex."
+    }
+   ]
+  },
+  {
+   "question": "What do I do if I think I have a keylogger or virus?",
+   "options": [
+    {
+     "text": "Virus scan my device then change my password.",
+     "response": "Correct! Removing the keylogger must be the priority, otherwise anything you type can be given away. Remember to change your password and bank PIN afterwards."
+    },
+    {
+     "text": "Change my password then virus scan my device.",
+     "response": "Wrong! If you change your password while you still have the keylogger, it will still be insecure. Remove the keylogger first. Never use personal details for passwords or bank PINs!"
+    },
+    {
+     "text": "Nothing, it will go away on its own.",
+     "response": "Wrong! This could mean your account may be accessed by someone else. Remove the keylogger then change your password. Never use personal details for passwords or bank PINs!"
+    }
+   ]
+  },
+  {
+   "question": "What should you do if another player messages you recommending a website to purchase items and/or gold?",
+   "options": [
+    {
+     "text": "Check out the website, it never huts to look around!",
+     "response": "Incorrect! Websites offering these services should not be trusted!"
+    },
+    {
+     "text": "Visit the website in a private browser for added security.",
+     "response": "Incorrect! Websites offering these services should not be trusted!"
+    },
+    {
+     "text": "Do not visit the website and report the player who messaged you.",
+     "response": "Correct! Buying and selling items and gold is against the rules and results in a permanent ban!"
+    }
+   ]
+  },
+  {
+   "question": "Can I leave my account logged in while I'm out of the room?",
+   "options": [
+    {
+     "text": "Yes, for up to an hour.",
+     "response": "Wrong! you should log out in case you are attacked. Leaving  your character logged in can also allow someone to steal your items or your entire account!"
+    },
+    {
+     "text": "No.",
+     "response": "Correct! This is the safest, both in terms of security and keeping your items! Leaving your character loged in can also allow someone to steal your items or your entire account!"
+    },
+    {
+     "text": "Yes, if I'll only be a minute or two.",
+     "response": "Wrong! you should log out in case you are attacked. Leaving  your character logged in can also allow someone to steal your items or your entire account!"
+    }
+   ]
+  },
+  {
+   "question": "What do you do if someone asks you for your password or bank PIN to make you a player moderator?",
+   "options": [
+    {
+     "text": "Don't give them the information and send an 'Abuse report'",
+     "response": "Correct! Press the 'Report Abuse' button and fill in the offenfing player's name and the correct category."
+    },
+    {
+     "text": "Don't tell them anything and ignore them.",
+     "response": "Quite good. But we should try to stop scammers. So please report them using the 'Report Abuse' button."
+    },
+    {
+     "text": "Give them the information they asked for.",
+     "response": "Wrong! Jagex never ask for your account informaiton - especially to become a player moderator. Press the 'Report Abuse' button and fill in the offending player's name and the correct category."
+    }
+   ]
+  },
+  {
+   "question": "What is an example of a good bank PIN?",
+   "options": [
+    {
+     "text": "Who are you?",
+     "response": "This is a bad idea as if someone happens to find out your bank PIN on Old School RuneScape, they then have your real life bank PIN! Never use personal details for passwords or bank PINs!"
+    },
+    {
+     "text": "Why are you here?",
+     "response": "Not a good idea. You know how many presents you get for your birthday, so you can imagine how many people know this date. Never use personal details for passwords or bank PINs."
+    },
+    {
+     "text": "Bye!",
+     "response": "Well done! Unless you tell someone, they are unlikely to guess who or what you have chosen, and you can always look it up. Never use personal details for passwords or bank PINs!"
+    }
+   ]
+  },
+  {
+   "question": "What should you do if your real-life friend asks for your password so he can check your stats?",
+   "options": [
+    {
+     "text": "Give them your password since they're a friend in real life.",
+     "response": "Incorrect! Don't trust anybody with your account login details!"
+    },
+    {
+     "text": "Don't give out your password to anyone. Not even close friends.",
+     "response": "Correct! Doing so could result in losing your items and gold and puts your account at risk."
+    },
+    {
+     "text": "Log in for your friend and let them play.",
+     "response": "Incorrect! Never allow anybody access to your account."
+    }
+   ]
+  },
+  {
+   "question": "A player starts asking you about very specific details linked to your account, such as when you created your account, your birthday date, internet provider etc. How should you react?",
+   "options": [
+    {
+     "text": "Be friendly and asnwer the questions.",
+     "response": "Incorrect! These details can be used within the account recovery system and possibly compromise your account."
+    },
+    {
+     "text": "Don't share your information and report the player.",
+     "response": "Correct! These details could've been used within the account recovery system and possibly compromise your account."
+    },
+    {
+     "text": "Answer questions and ask the player back for their details.",
+     "response": "Incorrect! These details can be used within the account recovery system and possibly compromise your account. If you're asking the player back, your're unknowinlgly commiting the same offence."
+    }
+   ]
+  },
+  {
+   "question": "How do I remove a hijacker from my account?",
+   "options": [
+    {
+     "text": "Ask on social media.",
+     "response": "Wrong! Visiting oldschool.runescape.com and using the account recovery system will allow you to kick hijackers off your account by locking it as stolen."
+    },
+    {
+     "text": "Email Old School RuneScape.",
+     "response": "Wrong! Visiting oldschool.runescape.com and using the account recovery system will allow you to kick hijackers off your account by locking it as stolen."
+    },
+    {
+     "text": "Use the Account Recovery system.",
+     "response": "Correct! Visiting oldschool.runescape.com and using the account recovery system will allow you to kick hijackers off your account by locking it as stolen."
+    }
+   ]
+  },
+  {
+   "question": "You are part way through the Stronghold of Security when you have to answer another question. After you answer the question, you should...",
+   "options": [
+    {
+     "text": "Click through the text as fast as possible to get your reward sooner.",
+     "response": "Incorrect! You should read the text and follow the advice to keep your account as secure as possible."
+    },
+    {
+     "text": "Read the text, but forget the info moments later.",
+     "response": "Incorrect! You should always remember this info so your account is as safe as possible."
+    },
+    {
+     "text": "Read the text and follow the advice given.",
+     "response": "Correct! As tempting as it is to click through all the text and get your reward as soon as possible, it's important to know these security tips."
+    }
+   ]
+  }
+ ]
+}

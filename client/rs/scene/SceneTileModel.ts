@@ -44,6 +44,7 @@ const tileShapeFaces = [
 ];
 
 type SceneTileFace = {
+    isOverlay: boolean;
     vertices: [SceneTileVertex, SceneTileVertex, SceneTileVertex];
 };
 
@@ -58,6 +59,8 @@ type SceneTileVertex = {
 };
 
 export class SceneTileModel {
+    underlayId = 0;
+    overlayId = 0;
     underlayHslSw: number;
     underlayHslSe: number;
     underlayHslNe: number;
@@ -438,6 +441,7 @@ export class SceneTileModel {
             const v2 = (this.vertexZ[c] - tileY) / TILE_SIZE;
 
             (isHiddenFace ? this.hiddenFaces : this.faces).push({
+                isOverlay,
                 vertices: [
                     {
                         x: this.vertexX[a],

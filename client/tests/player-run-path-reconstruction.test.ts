@@ -215,3 +215,35 @@ for (const forced of [false, true]) {
     assert.equal(ecs.isMoving(index), false);
 }
 console.log("player relocation and forced movement checks passed");
+
+// Appearance updates between movement and render ticks must preserve the active pose.
+for (const running of [false, true]) {
+    const ecs = new PlayerEcs();
+    const index = ecs.allocatePlayer(1);
+    ecs.teleport(index, 100, 100);
+    ecs.setRotationImmediate(index, 1024);
+    const animations = { idle: 808, walk: 819, run: 824 };
+    ecs.setAnimSet(index, animations);
+    assert.equal(ecs.getAnimMovementSeqId(index), animations.idle,
+        "a stationary player initializes to idle");
+    ecs.setServerPos(index, fine(100), fine(101), running ? 2 : 1);
+    ecs.updateClient();
+    const sequence = running ? animations.run : animations.walk;
+    assert.equal(ecs.getAnimMovementSeqId(index), sequence);
+    const position = [ecs.getX(index), ecs.getY(index)];
+    ecs.setAnimSet(index, animations);
+    assert.equal(ecs.getAnimMovementSeqId(index), sequence,
+        "an appearance refresh between ticks preserves the walking/running pose");
+    assert.deepEqual([ecs.getX(index), ecs.getY(index)], position);
+    ecs.setAnimSet(index, { ...animations, walk: 820, run: 825 });
+    assert.equal(ecs.getAnimMovementSeqId(index), sequence,
+        "equipment animation changes wait for the next movement tick");
+    ecs.updateClient();
+    assert.equal(ecs.getAnimMovementSeqId(index), running ? 825 : 820);
+    ecs.updateClient(100);
+    assert.equal(ecs.isMoving(index), false);
+    ecs.setAnimSet(index, { ...animations, idle: 809 });
+    assert.equal(ecs.getAnimMovementSeqId(index), 809,
+        "a stationary appearance refresh still applies the new idle animation");
+}
+console.log("appearance refresh movement animation checks passed");

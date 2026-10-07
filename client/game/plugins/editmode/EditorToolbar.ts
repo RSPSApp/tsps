@@ -12,6 +12,39 @@ export interface EditorTool {
     dividerBefore?: boolean;
 }
 
+/**
+ * The editor's dark hover tooltip, beside (`right`) or under (`below`) its anchor.
+ * Shared by the tool rail and the top bar; remove the returned element to hide it.
+ */
+export function showEditorTooltip(anchor: HTMLElement, label: string, side: "right" | "below" = "right"): HTMLDivElement {
+    const bounds = anchor.getBoundingClientRect();
+    const tooltip = document.createElement("div");
+    tooltip.textContent = label;
+    Object.assign(tooltip.style, {
+        position: "fixed",
+        ...(side === "right"
+            ? { left: `${bounds.right + 8}px`, top: `${bounds.top + bounds.height / 2}px`, transform: "translateY(-50%)" }
+            : { left: `${bounds.left + bounds.width / 2}px`, top: `${bounds.bottom + 8}px`, transform: "translateX(-50%)" }),
+        zIndex: "10003",
+        padding: "5px 8px",
+        border: "1px solid rgba(255, 255, 255, 0.18)",
+        borderRadius: "4px",
+        color: "#eef4ff",
+        background: "rgba(18, 20, 24, 0.97)",
+        boxShadow: "0 6px 18px rgba(0, 0, 0, 0.35)",
+        font: "12px sans-serif",
+        whiteSpace: "nowrap",
+        pointerEvents: "none",
+    });
+    document.body.appendChild(tooltip);
+    return tooltip;
+}
+
+// Matches /host's panel headings (57px, 12px padding) so the editor sits flush in it.
+export const EDITOR_TOP_BAR_HEIGHT = 56;
+/** Where floating chrome starts: the top bar plus an 8px gap. The rail and right panels share it. */
+export const EDITOR_TOP_BAR_CLEARANCE = `${EDITOR_TOP_BAR_HEIGHT + 8}px`;
+
 export class EditorToolbar {
     private readonly element: HTMLDivElement;
     private readonly buttons = new Map<string, HTMLButtonElement>();
@@ -28,8 +61,8 @@ export class EditorToolbar {
         Object.assign(this.element.style, {
             position: "fixed",
             left: "12px",
-            // Clear the editor's top bar (48px) with an 8px gap.
-            top: "56px",
+            // Level with the right-hand panels, below the top bar.
+            top: EDITOR_TOP_BAR_CLEARANCE,
             zIndex: "10001",
             display: "flex",
             flexDirection: "column",
@@ -122,27 +155,7 @@ export class EditorToolbar {
 
     private showTooltip(button: HTMLButtonElement, label: string): void {
         this.hideTooltip();
-        const bounds = button.getBoundingClientRect();
-        const tooltip = document.createElement("div");
-        tooltip.textContent = label;
-        Object.assign(tooltip.style, {
-            position: "fixed",
-            left: `${bounds.right + 8}px`,
-            top: `${bounds.top + bounds.height / 2}px`,
-            transform: "translateY(-50%)",
-            zIndex: "10003",
-            padding: "5px 8px",
-            border: "1px solid rgba(255, 255, 255, 0.18)",
-            borderRadius: "4px",
-            color: "#eef4ff",
-            background: "rgba(18, 20, 24, 0.97)",
-            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.35)",
-            font: "12px sans-serif",
-            whiteSpace: "nowrap",
-            pointerEvents: "none",
-        });
-        document.body.appendChild(tooltip);
-        this.tooltip = tooltip;
+        this.tooltip = showEditorTooltip(button, label);
     }
 
     private hideTooltip(): void {
@@ -199,18 +212,26 @@ const createActionIcon = (pathData: string, fill = "none"): SVGElement => {
     return svg;
 };
 
-export const createSearchIcon = (): SVGElement => createActionIcon("M11 5a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm4.5 10.5L20 20");
+// Lucide icons (ISC, https://lucide.dev/icons/<name>), each element joined into one path with
+// circles drawn as arcs: person-standing, box, settings, map, refresh-ccw, store.
+export const createNpcIcon = (): SVGElement =>
+    createActionIcon("M13 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 20l3-6 3 6M6 8l6 2 6-2M12 10v4");
+
+export const createObjectIcon = (): SVGElement =>
+    createActionIcon(
+        "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16ZM3.3 7l8.7 5 8.7-5M12 22V12",
+    );
 
 export const createConfigIcon = (): SVGElement =>
     createActionIcon(
-        "M12 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Zm8 3.3-2-.7a6.2 6.2 0 0 0-.5-1.2l.9-1.9-1.7-1.7-1.9.9a6.2 6.2 0 0 0-1.2-.5L13 5h-2l-.6 1.9a6.2 6.2 0 0 0-1.2.5l-1.9-.9-1.7 1.7.9 1.9a6.2 6.2 0 0 0-.5 1.2l-2 .7v2.4l2 .7a6.2 6.2 0 0 0 .5 1.2l-.9 1.9 1.7 1.7 1.9-.9a6.2 6.2 0 0 0 1.2.5L11 21h2l.6-1.9a6.2 6.2 0 0 0 1.2-.5l1.9.9 1.7-1.7-.9-1.9a6.2 6.2 0 0 0 .5-1.2l2-.7v-2.4Z",
+        "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
     );
 
 export const createCloseIcon = (): SVGElement => createActionIcon("M6 6l12 12M18 6 6 18");
 
 export const createWorldMapIcon = (): SVGElement =>
     createActionIcon(
-        "M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2V5Zm6-2v16m6-14v16",
+        "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0zM15 5.764v15M9 3.236v15",
     );
 
 export const createSpawnIcon = (): SVGElement =>
@@ -226,7 +247,7 @@ export const createSaveIcon = (): SVGElement =>
     createActionIcon("M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2ZM17 21v-8H7v8M7 3v5h8V3");
 
 export const createRefreshIcon = (): SVGElement =>
-    createActionIcon("M20 11a8 8 0 0 0-14.7-4L3 10m0 0V4m0 6h6M4 13a8 8 0 0 0 14.7 4L21 14m0 0v6m0-6h-6");
+    createActionIcon("M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16M16 16h5v5");
 
 export const createRotateIcon = (): SVGElement =>
     createActionIcon("M20 11a8 8 0 0 0-14.8-4L3 9m0 0V4m0 5h5M4 13a8 8 0 0 0 14.8 4L21 15m0 0v5m0-5h-5");
@@ -263,6 +284,8 @@ export const createOverlayIcon = (colorRgb = 0x64748b): SVGElement => {
 export const createPathIcon = (): SVGElement => createActionIcon("M5 19c2.5-6 5-9 9-9 2.2 0 3.8-1.7 5-5M5 19h5m-5 0v-5M19 5h-5m5 0v5");
 
 export const createShopIcon = (): SVGElement =>
-    createActionIcon("M5 10v10h14V10M4 10h16l-2-6H6l-2 6Zm5 10v-6h6v6M7 10v2m5-2v2m5-2v2");
+    createActionIcon(
+        "M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05",
+    );
 
 export const createTrashIcon = (): SVGElement => createActionIcon("M5 7h14M10 11v6m4-6v6M9 7V4h6v3m-9 0 1 14h10l1-14", "none");

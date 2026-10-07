@@ -1,3 +1,4 @@
+import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import type { ChatMessageEvent } from "../../../network/serverConnection/types/messages";
 import { sanitizeText } from "../../../widgets/menu/utils";
 
@@ -30,7 +31,15 @@ function isOutgoingPrivateMessage(message: ChatMessageEvent): boolean {
     return message.chatType === 6 || message.messageType === "private_out";
 }
 
-export class SplitPrivateChatPlugin {
+export class SplitPrivateChatPlugin extends Plugin {
+    static descriptor: PluginDescriptor = {
+        name: "Split Private Chat",
+        description: "Shows private messages above the chatbox.",
+        tags: ["chat"],
+        hidden: true,
+        configKey: "splitprivatechatplugin",
+    };
+
     private readonly listeners = new Set<SplitPrivateChatListener>();
     private state: SplitPrivateChatState = { messages: [] };
 

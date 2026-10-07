@@ -1,0 +1,16 @@
+{
+  "about": "Wyrmscraig (https://oldschool.runescape.wiki/w/Wyrmscraig), as captured: the open-access quest state, the cave under Ardeaglais, and the Mad Angel. See docs/wyrmscraig.md.",
+  "openAccess": {
+    "about": "Fallen From Grace isn't on this server: every player gets its finished state, which the cache's own multilocs read (the post-quest Mad Angel, the powered golem, the mined rocks at the top of the cliff shortcut).",
+    "varbits": [
+      { "id": 15759, "name": "ffg", "value": 20 },
+      { "id": 15720, "name": "wyrmscraig_cliff_shortcut", "value": 1 }
+    ]
+  },
+  "cave": {
+    "anim": 2796,
+    "sound": { "id": 2454, "loops": 3, "delay": 4 },
+    "entrance": { "object": "Cave", "option": "Enter", "id": 62219, "to": [2564, 8630, 0], "face": [2565, 8630] },
+    "exit": { "object": "Cave", "option": "Exit", "id": 62220, "to": [2530, 2205, 0], "face": [2530, 2204] }
+  }
+}

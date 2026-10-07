@@ -3,12 +3,20 @@ import PicoGL, { DrawCall, Texture } from "picogl";
 
 import { WebGLMapSquare } from "../WebGLMapSquare";
 import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
-import { GfxCache } from "./GfxCache";
+import { GfxCache, graphicFrameCycle } from "./GfxCache";
 import { GfxManager } from "./GfxManager";
 import type { GfxInstance } from "./GfxManager";
 import { SpotAnimGpuCache } from "./SpotAnimGpuCache";
 
 type Pass = "opaque" | "alpha";
+
+/**
+ * How far a graphic played on a tile is drawn above it, in model units (a tile is 128). The game
+ * paints those after the floor's flat decorations - marble patterns (1 unit up), the light rays
+ * falling through a window (4 up) - so a falling rock's shadow always shows on top of them; with
+ * depth testing it would sink under them instead.
+ */
+const TILE_GFX_LIFT_UNITS = 8;
 
 export class GfxRenderer {
     private cache: GfxCache;
@@ -154,7 +162,16 @@ export class GfxRenderer {
                     } catch {}
                     inst.lastSoundFrame = frameIdx | 0;
                 }
-                const key = `${inst.spotId}|${frameIdx}`;
+                const frameCycle = this.cache.smoothingCycle(
+                    inst.spotId,
+                    frameIdx,
+                    graphicFrameCycle(
+                        this.getFrameOffsets(inst.spotId),
+                        Math.floor(ageMs),
+                        frameIdx,
+                    ),
+                );
+                const key = `${inst.spotId}|${frameIdx}|${frameCycle}`;
                 const arr = groups.get(key) ?? [];
                 const yOffUnits = resolveYOffset(entry) | 0;
                 arr.push({ slot, yOffUnits });
@@ -163,15 +180,17 @@ export class GfxRenderer {
 
             for (const [key, instances] of groups) {
                 if (instances.length === 0) continue;
-                const [spotStr, frameStr] = key.split("|");
+                const [spotStr, frameStr, cycleStr] = key.split("|");
                 const spotId = parseInt(spotStr, 10) | 0;
                 const frameIdx = parseInt(frameStr, 10) | 0;
+                const frameCycle = parseInt(cycleStr, 10) | 0;
                 const vaoRec = this.gpuCache.getOrCreate(
                     spotId,
                     frameIdx,
                     transparent,
                     programKey,
                     prog,
+                    frameCycle,
                 );
                 if (!vaoRec) continue;
                 const dc: DrawCall = this.renderer
@@ -246,9 +265,9 @@ export class GfxRenderer {
                 if (inst.anchor === "offset") {
                     const tiles = inst.yOffsetTiles ?? inst.world?.heightOffsetTiles ?? 0;
                     const units = Math.round(tiles * 128);
-                    return units;
+                    return units + TILE_GFX_LIFT_UNITS;
                 }
-                return 0;
+                return TILE_GFX_LIFT_UNITS;
             });
         }
     }

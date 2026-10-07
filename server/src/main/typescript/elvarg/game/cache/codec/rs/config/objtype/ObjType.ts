@@ -77,6 +77,8 @@ export class ObjType extends Type {
     team: number;
 
     isTradable: boolean;
+    /** Rev 241 opcode 251: the obj can be unlocked (the cache's `unlockable=yes`). */
+    isUnlockable: boolean;
 
     weight: number;
 
@@ -136,6 +138,7 @@ export class ObjType extends Type {
         this.contrast = 0;
         this.team = 0;
         this.isTradable = false;
+        this.isUnlockable = false;
         this.weight = 0;
         this.unnotedId = -1;
         this.notedId = -1;
@@ -195,6 +198,9 @@ export class ObjType extends Type {
             this.wearPos = buffer.readUnsignedByte();
         } else if (opcode === 14) {
             this.wearPos2 = buffer.readUnsignedByte();
+        } else if (opcode === 15) {
+            // Rev 241: explicitly not tradeable (`tradeable=no`).
+            this.isTradable = false;
         } else if (opcode === 16) {
             this.isMembers = true;
         } else if (opcode === 23) {
@@ -296,6 +302,11 @@ export class ObjType extends Type {
             this.femaleHeadModel2 = buffer.readInt();
         } else if (opcode === 65) {
             this.isTradable = true;
+        } else if (opcode === 160) {
+            // Rev 241: `stackable=never`.
+            this.stackability = ObjStackability.NEVER;
+        } else if (opcode === 251) {
+            this.isUnlockable = true;
         } else if (opcode === 69) {
             // OSRS newer: small flag; consume a byte to maintain alignment.
             buffer.readUnsignedByte();

@@ -51,7 +51,7 @@ module.exports = {
   register(api) {
     TaskManager = api.getTaskManager();
     Presets.register(api);
-    api.registerCommand("presets", openPresets);
+    api.registerCommand("presets", openPresets, undefined, "Open the presets interface");
     api.onPlayerDefeated(openPresetsAfterDeath);
   },
 };

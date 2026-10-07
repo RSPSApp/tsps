@@ -1,0 +1,37 @@
+{
+  "$comment": "Minigame Teleport destinations and requirements by the cache's minigame name (db table 214, the list interface 951 shows). From https://oldschool.runescape.wiki/w/Minigame_Teleport; Nightmare Zone and the Ardougne rat pit are where live captures landed (docs/minigame-teleports.md). 'notes' are requirements the server does not track.",
+  "source": "https://oldschool.runescape.wiki/w/Minigame_Teleport",
+  "minigames": {
+    "Barbarian Assault": { "x": 2521, "y": 3570, "members": true, "notes": "Barbarian Assault tutorial" },
+    "Blast Furnace": { "x": 2930, "y": 10193, "members": true, "notes": "visited Keldagrim" },
+    "Bounty Hunter": { "x": 3140, "y": 3626, "members": true },
+    "Burthorpe Games Room": { "x": 2899, "y": 3553, "members": true },
+    "Castle Wars": { "x": 2442, "y": 3093 },
+    "Clan Wars": { "x": 3149, "y": 3634 },
+    "Fishing Trawler": { "x": 2658, "y": 3157, "members": true, "skills": { "FISHING": 15 } },
+    "Giants' Foundry": { "x": 3361, "y": 3149, "members": true, "skills": { "SMITHING": 15 } },
+    "Guardians of the Rift": { "x": 3615, "y": 9477, "members": true, "quests": ["Temple of the Eye"] },
+    "Last Man Standing": { "x": 3149, "y": 3634 },
+    "Mage Training Arena": { "x": 3363, "y": 3295, "members": true, "notes": "spoken to the Entrance Guardian" },
+    "Mastering Mixology": { "x": 1388, "y": 2918, "members": true, "quests": ["Children of the Sun"], "skills": { "HERBLORE": 60 } },
+    "Nightmare Zone": { "x": 2609, "y": 3121, "members": true, "notes": "five eligible quests with boss fights" },
+    "Pest Control": { "x": 2658, "y": 2663, "members": true, "combat": 40 },
+    "Rat Pits": {
+      "members": true,
+      "quests": ["Ratcatchers"],
+      "prompt": "Which rat pit would you like to visit?",
+      "choices": [
+        { "option": "Ardougne (kittens)", "x": 2565, "y": 3320 },
+        { "option": "Varrock (grown cats)", "x": 3267, "y": 3400 },
+        { "option": "Keldagrim (overgrown cats)", "x": 2914, "y": 10193 },
+        { "option": "Port Sarim (wily cats)", "x": 3018, "y": 3232 }
+      ]
+    },
+    "Shades of Mort'ton": { "x": 3506, "y": 3304, "members": true, "quests": ["Shades of Mort'ton"] },
+    "Sorceress's Garden": { "x": 3321, "y": 3138, "members": true, "quests": ["Prince Ali Rescue"], "notes": "spoken to Osman or Selim" },
+    "Soul Wars": { "x": 2018, "y": 5929, "members": true },
+    "Tithe Farm": { "x": 1792, "y": 3501, "members": true, "skills": { "FARMING": 34 }, "notes": "entered the Tithe Farm once" },
+    "Trouble Brewing": { "x": 3801, "y": 3015, "members": true, "quests": ["Cabin Fever"], "skills": { "COOKING": 40 } },
+    "TzHaar Fight Pit": { "x": 2399, "y": 5177, "members": true }
+  }
+}

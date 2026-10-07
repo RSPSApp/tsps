@@ -185,7 +185,7 @@ module.exports = {
     api.registerCommand("shops", ({ player }) => {
       if (canUseShops(player)) open(player);
       return true;
-    });
+    }, undefined, "Browse custom shops");
     api.onInterfaceActionButton(LEFT_ROW_UIDS, ({ player, buttonId }) => selectShop(player, LEFT_ROW_UIDS.indexOf(buttonId)));
   },
 };

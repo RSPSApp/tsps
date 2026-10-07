@@ -21,6 +21,7 @@ module.exports = {
   key: "gnome",
   name: "Gnome Stronghold Agility",
   lapXp: 110.5,
+  petBase: 35609, // Giant squirrel base chance (Wiki)
   obstacles: [
     {
       object: ObjectIds.LOG_BALANCE_21,

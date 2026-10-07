@@ -22,6 +22,7 @@ export default defineConfig({
                 items: [
                     { text: 'Setup', link: '/setup' },
                     { text: 'FAQ', link: '/faq' },
+                    { text: 'Worktrees', link: '/worktrees' },
                 ],
             },
             {

@@ -21,6 +21,7 @@ module.exports = {
   key: "barbarian",
   name: "Barbarian Outpost",
   lapXp: 153.2,
+  petBase: 44376, // Giant squirrel base chance (Wiki)
   obstacles: [
     {
       object: ObjectIds.ROPESWING_5,

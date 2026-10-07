@@ -1,10 +1,13 @@
 import { MAX_GAME_MESSAGE_BYTES } from "./BinaryChannel";
 import { BoatManager } from "../game/content/sailing/BoatManager";
+import { TemplatedInstanceArea } from "../game/model/areas/impl/TemplatedInstanceArea";
 import { WorldEntitySync } from "../game/content/sailing/WorldEntitySync";
 import { Packet } from "./packet/Packet";
 import { PacketBuilder } from "./packet/PacketBuilder";
 import { NetworkConstants } from "./NetworkConstants";
 import type { Player } from "../game/entity/impl/player/Player";
+import type { NpcExactMove } from "../game/entity/impl/npc/NPC";
+import type { Location } from "../game/model/Location";
 import { Appearance } from "../game/model/Appearance";
 import { Flag } from "../game/model/Flag";
 import {
@@ -19,6 +22,8 @@ import {
   encodePlayerSync,
   encodeRebuildNormal,
   encodeTick,
+  ForcedMovementView,
+  GraphicView,
   NpcSyncState,
   PlayerSyncState,
   PlayerView,
@@ -68,6 +73,7 @@ export class PlayerSession {
   private replayedSceneBaseY = -1;
   private replayedSceneLevel = -1;
   private replayedPrivateArea: PrivateArea | null = null;
+  private replayedSceneVersion = 0;
   private hasReplayedScene = false;
   private playerSyncState?: PlayerSyncState;
   private npcSyncState: NpcSyncState = createNpcSyncState();
@@ -240,22 +246,25 @@ export class PlayerSession {
       if (localY < 16 || localY >= 88) this.sceneBaseY = Math.max(0, (sceneTile.y - 48) & ~7);
     }
     const privateArea = BoatManager.syncArea(player);
+    // A templated instance is drawn from its own palette, streamed like the normal map.
+    const templated = privateArea instanceof TemplatedInstanceArea ? privateArea : null;
+    const sceneVersion = templated?.getSceneVersion() ?? 0;
     const sceneChanged = !this.hasReplayedScene
       || this.replayedSceneBaseX !== this.sceneBaseX
       || this.replayedSceneBaseY !== this.sceneBaseY
       || this.replayedSceneLevel !== sceneTile.level
-      || this.replayedPrivateArea !== privateArea;
-    const normalRebuildNeeded = privateArea == null && (
+      || this.replayedPrivateArea !== privateArea
+      || this.replayedSceneVersion !== sceneVersion;
+    const rebuildNeeded = (privateArea == null || templated != null) && (
       !this.hasReplayedScene
       || this.replayedSceneBaseX !== this.sceneBaseX
       || this.replayedSceneBaseY !== this.sceneBaseY
       || this.replayedPrivateArea !== privateArea
+      || this.replayedSceneVersion !== sceneVersion
     );
-    if (normalRebuildNeeded && !this.sendRebuildNormal(
-      sceneTile.x >> 3,
-      sceneTile.y >> 3,
-      this.replayedPrivateArea != null,
-    )) {
+    if (rebuildNeeded && !(templated
+      ? this.sendClientPacket(templated.encodeScene(sceneTile.x >> 3, sceneTile.y >> 3))
+      : this.sendRebuildNormal(sceneTile.x >> 3, sceneTile.y >> 3, this.replayedPrivateArea != null))) {
       return;
     }
     const replacementWindowChanged = !this.hasReplayedScene
@@ -276,7 +285,7 @@ export class PlayerSession {
     // xrsps replays the initial scene during login; later scene replays follow
     // the authoritative player-sync base below.
     if (initialSync && sceneChanged) {
-      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY, sceneTile.level);
+      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);
       if (!this.isBinaryChannelOpen()) return;
     }
 
@@ -317,12 +326,17 @@ export class PlayerSession {
           interactionIndex: this.interactionIndex(npc.getInteractingMobile()),
           index: npc.getIndex(),
           typeId: npc.getId(),
+          headIcon: npc.getHeadIcon(),
           x: location.getX(),
           y: location.getY(),
           level: location.getZ(),
           rotation: this.clientDirection(face),
           walkDirection: this.clientDirection(npc.getWalkingDirection()),
           runDirection: this.clientDirection(npc.getRunningDirection()),
+          exactMove: this.exactMoveView(npc.getExactMove?.(), location),
+          bars: npc.getHeadbars?.().length ? npc.getHeadbars() : undefined,
+          faceTile: npc.getFaceTile?.() ?? undefined,
+          crawl: npc.isCrawling?.() || undefined,
         };
       })
     );
@@ -364,7 +378,7 @@ export class PlayerSession {
     if (!syncSent) return;
 
     if (!initialSync && sceneChanged) {
-      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY, sceneTile.level);
+      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);
       if (!this.isBinaryChannelOpen()) return;
     }
     if (sceneChanged) {
@@ -372,6 +386,7 @@ export class PlayerSession {
       this.replayedSceneBaseY = this.sceneBaseY;
       this.replayedSceneLevel = sceneTile.level;
       this.replayedPrivateArea = privateArea;
+      this.replayedSceneVersion = sceneVersion;
       this.hasReplayedScene = true;
     }
   }
@@ -472,6 +487,7 @@ export class PlayerSession {
       appearance: payload,
       worldView: BoatManager.getBoatAboard(player)?.entityIndex,
       resetPath: player.isNeedsPlacement(),
+      tint: player.getTint?.() ?? undefined,
       movementType: player.getRunningDirection().getId() >= 0
         ? 2
         : player.getWalkingDirection().getId() >= 0 ? 1 : undefined,
@@ -500,11 +516,23 @@ export class PlayerSession {
     };
   }
 
+  /** An NPC's glide, from the tile it left to the one it stands on. */
+  private exactMoveView(move: NpcExactMove | null | undefined, location: Location): ForcedMovementView | undefined {
+    if (!move) return undefined;
+    return {
+      startDeltaX: move.fromX - location.getX(),
+      startDeltaY: move.fromY - location.getY(),
+      endDeltaX: 0,
+      endDeltaY: 0,
+      startCycleOffset: move.startCycles,
+      endCycleOffset: move.endCycles,
+      direction: move.angle,
+    };
+  }
+
   private createActorUpdates(actor: any, maxHitpoints: number, mine: boolean): ActorUpdateView {
     const flags = actor.getUpdateFlag();
-    const hits = [];
-    if (flags.flagged(Flag.SINGLE_HIT) && actor.getPrimaryHit()) hits.push(actor.getPrimaryHit());
-    if (flags.flagged(Flag.DOUBLE_HIT) && actor.getSecondaryHit()) hits.push(actor.getSecondaryHit());
+    const hits = flags.flagged(Flag.HIT) ? actor.getTickHits() : [];
     const interaction = actor.getInteractingMobile();
     const animation = actor.getAnimation();
     const graphic = actor.getGraphic();
@@ -520,18 +548,39 @@ export class PlayerSession {
       animation: flags.flagged(Flag.ANIMATION) && animation
         ? { id: animation.getId(), delay: animation.getDelay() }
         : undefined,
-      graphic: flags.flagged(Flag.GRAPHIC) && graphic
-        ? { id: graphic.getId(), height: graphic.getHeight(), delay: graphic.getDelay() }
-        : undefined,
+      graphics: flags.flagged(Flag.GRAPHIC) ? this.graphicViews(graphic, actor.getSlotGraphics?.()) : undefined,
       hits: hits.length > 0
-        ? hits.map((hit: any) => ({
-            type: this.hitsplatType(hit.getHitmask(), mine),
-            damage: hit.getDamage(),
-          }))
+        ? hits.map((hit: any) => this.hitView(hit, mine))
         : undefined,
       health: hits.length > 0
-        ? { current: actor.getHitpoints(), max: maxHitpoints, bar: actor.getHealthBar?.() ?? undefined }
+        ? actor.getDisplayedHealth?.()
+          ?? { current: actor.getHitpoints(), max: maxHitpoints, bar: actor.getHealthBar?.() ?? undefined }
         : undefined,
+    };
+  }
+
+  /** Slot 0's graphic and any in other slots; a cleared slot is id -1. */
+  private graphicViews(graphic: any, slots?: ReadonlyMap<number, any>): GraphicView[] | undefined {
+    const views: GraphicView[] = [];
+    if (graphic) views.push({ slot: 0, id: graphic.getId(), height: graphic.getHeight(), delay: graphic.getDelay() });
+    for (const [slot, slotGraphic] of slots ?? []) {
+      views.push(slotGraphic
+        ? { slot, id: slotGraphic.getId(), height: slotGraphic.getHeight(), delay: slotGraphic.getDelay() }
+        : { slot, id: -1, height: 0, delay: 0 });
+    }
+    return views.length > 0 ? views : undefined;
+  }
+
+  /**
+   * A hitsplat as this player sees it: their own (bright) type for hits on them
+   * and hits they dealt, the darker "other" type for everyone else's (RuneLite
+   * HitsplatID DAMAGE_ME / DAMAGE_OTHER).
+   */
+  private hitView(hit: any, onMe: boolean): { type: number; damage: number } {
+    const own = onMe || (this.player != null && hit.getSource?.() === this.player);
+    return {
+      type: hit.getSplatType?.(own) ?? this.hitsplatType(hit.getHitmask(), own),
+      damage: hit.getDamage(),
     };
   }
 

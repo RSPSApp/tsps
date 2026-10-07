@@ -244,6 +244,19 @@ export function handleInboundWorld(msg: any): boolean {
         }
         return true;
     }
+    if (msg.type === "varp_long") {
+        const mv: any = ((typeof window !== "undefined" ? window : globalThis) as any)?.__osrsClient;
+        if (mv?.varManager) {
+            const payload = msg.payload as { varpId: number; value: bigint };
+            mv._serverVarpSync = true;
+            try {
+                mv.varManager.setVarpLong(payload.varpId | 0, payload.value);
+            } finally {
+                mv._serverVarpSync = false;
+            }
+        }
+        return true;
+    }
     if (msg.type === "varp") {
         // Server-pushed varp update
         try {

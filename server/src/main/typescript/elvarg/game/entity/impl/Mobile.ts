@@ -1,7 +1,8 @@
 import { Entity } from "../Entity";
 import { Sound } from "../../Sound";
 import type { CombatType } from "../../content/combat/CombatType";
-import type { HitDamage } from "../../content/combat/hit/HitDamage";
+import { HitDamage } from "../../content/combat/hit/HitDamage";
+import { HitMask } from "../../content/combat/hit/HitMask";
 import type { PendingHit } from "../../content/combat/hit/PendingHit";
 import type { NPC } from "./npc/NPC";
 import type { Player } from "./player/Player";
@@ -45,6 +46,18 @@ class MobileTask extends Task {
     }
 
 }
+
+/** An actor tint: cycles from now, HSL (-1 keeps the model's own) and how strongly (0-255). */
+export type ActorTint = {
+    startCycle: number;
+    endCycle: number;
+    hue: number;
+    saturation: number;
+    lightness: number;
+    weight: number;
+};
+
+export const ACTOR_TINT_NONE: ActorTint = { startCycle: 0, endCycle: 0, hue: -1, saturation: -1, lightness: -1, weight: 0 };
 
 export abstract class Mobile extends Entity {
     private index: number;
@@ -93,8 +106,8 @@ export abstract class Mobile extends Entity {
     specialActivated = false;
     recoveringSpecialAttack = false;
     isTeleporting = false;
-    primaryHit: any;
-    secondaryHit: any;
+    /** Every hitsplat shown this tick, in the order the hits landed. */
+    private readonly tickHits: HitDamage[] = [];
 
     private registred: boolean
 
@@ -215,6 +228,7 @@ export abstract class Mobile extends Entity {
      */
     resetUpdating() {
         this.getUpdateFlag().reset();
+        this.tickHits.length = 0;
         this.walkingDirection = Direction.NONE;
         this.runningDirection = Direction.NONE;
         this.needsPlacement = false;
@@ -222,6 +236,55 @@ export abstract class Mobile extends Entity {
         this.forcedChat = null;
         this.animation = null;
         this.graphic = null;
+        this.slotGraphics.clear();
+        this.displayedHealth = null;
+        this.tintState = null;
+    }
+
+    /** This tick's tint (OSRS actor tinting), sent with the update and cleared after it. */
+    private tintState: ActorTint | null = null;
+
+    /**
+     * Tints the actor's model towards an HSL colour over client cycles (OSRS tinting): `weight`
+     * is how strongly, 0-255. `ActorTint.NONE` takes a tint away. Only players send it so far.
+     */
+    tint(tint: ActorTint): void {
+        this.tintState = tint;
+    }
+
+    getTint(): ActorTint | null {
+        return this.tintState;
+    }
+
+    /** What the health bar shows with this tick's hits, when it is not the actor's hitpoints. */
+    private displayedHealth: { current: number; max: number; bar?: { id: number; width: number } } | null = null;
+
+    /**
+     * Shows a hitsplat that changes nothing - a meter other than hitpoints, such as the
+     * Wintertodt's cold on the warmth meter. `splat` is the cache hitsplat for the target and
+     * for everyone else; `health`, when given, is what the health bar shows with it.
+     */
+    showHitsplat(
+        damage: number,
+        splat: { mine: number; others: number },
+        health?: { current: number; max: number; bar?: { id: number; width: number } },
+    ): void {
+        const hit = new HitDamage(Math.max(0, Math.trunc(damage)), HitMask.RED).setSplatTypes(splat.mine, splat.others);
+        this.addTickHit(hit);
+        if (health) this.displayedHealth = health;
+    }
+
+    getDisplayedHealth(): { current: number; max: number; bar?: { id: number; width: number } } | null {
+        return this.displayedHealth;
+    }
+
+    /**
+     * What the health bar shows with this tick's hits instead of the actor's hitpoints (a
+     * shield's points on the shield's bar).
+     */
+    setDisplayedHealth(health: { current: number; max: number; bar?: { id: number; width: number } } | null): Mobile {
+        this.displayedHealth = health;
+        return this;
     }
 
     forceChat(message: string): Mobile {
@@ -258,6 +321,35 @@ export abstract class Mobile extends Entity {
 
         this.graphic = graphic;
         this.getUpdateFlag().flag(Flag.GRAPHIC);
+    }
+
+    /** This tick's graphics in spotanim slots other than 0; null clears a slot. */
+    private readonly slotGraphics = new Map<number, Graphic | null>();
+
+    /**
+     * Plays a graphic in one of the actor's spotanim slots, which show at once - a Manticore's
+     * three charged orbs, say. Slot 0 is performGraphic's; a null graphic clears the slot.
+     */
+    performGraphicInSlot(slot: number, graphic: Graphic | null): void {
+        const index = Math.trunc(slot) & 0xff;
+        if (index === 0) {
+            if (graphic) this.performGraphic(graphic);
+            return;
+        }
+        this.slotGraphics.set(index, graphic);
+        this.getUpdateFlag().flag(Flag.GRAPHIC);
+    }
+
+    /**
+     * Takes back a graphic queued this tick in a slot other than 0, so none is sent there: a boss's
+     * per-tick charge graphic on the tick a hit (processed after plugin tasks) cancels the charge.
+     */
+    withdrawGraphicInSlot(slot: number): void {
+        this.slotGraphics.delete(Math.trunc(slot) & 0xff);
+    }
+
+    getSlotGraphics(): ReadonlyMap<number, Graphic | null> {
+        return this.slotGraphics;
     }
 
     delayedAnimation(animation: Animation, ticks: number) {
@@ -523,20 +615,17 @@ export abstract class Mobile extends Entity {
         this.setHitpoints(outcome);
         return hit;
     }
-    getPrimaryHit(): HitDamage {
-        return this.primaryHit;
+    /**
+     * Queues a hitsplat for this tick's update. Every hit is sent; the client keeps
+     * four on screen and its hitsplat definitions decide which one a fifth replaces.
+     */
+    addTickHit(hit: HitDamage): void {
+        this.tickHits.push(hit);
+        this.getUpdateFlag().flag(Flag.HIT);
     }
 
-    setPrimaryHit(hit: HitDamage): void {
-        this.primaryHit = hit;
-    }
-
-    getSecondaryHit(): HitDamage {
-        return this.secondaryHit;
-    }
-
-    setSecondaryHit(hit: HitDamage): void {
-        this.secondaryHit = hit;
+    getTickHits(): readonly HitDamage[] {
+        return this.tickHits;
     }
 
     getWalkingDirection(): Direction {

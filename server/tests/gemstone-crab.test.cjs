@@ -43,7 +43,16 @@ function fakeNpc(id, x, y, z) {
 const spawned = [];
 const hooks = { npc: [], objects: {}, zonesEnter: [], zonesExit: [], dealt: [], commands: {} };
 const GemstoneCrab = require("../plugins/bosses/GemstoneCrab.plugin");
+// The HUD is the BossHud plugin's, reached through custom events.
+const customHandlers = new Map();
+const events = {
+  core: require("../dist/plugins/PluginManager").PluginManager.getCoreApi(),
+  onCustomEvent: (name, handler) => customHandlers.set(name, [...(customHandlers.get(name) ?? []), handler]),
+  emitCustomEvent: (name, payload) => { for (const handler of customHandlers.get(name) ?? []) handler(payload); },
+};
+require("../plugins/interface/BossHud.plugin").register(events);
 GemstoneCrab.register({
+  emitCustomEvent: events.emitCustomEvent,
   getItemOnGroundManager: () => ({ registerNonGlobals() {} }),
   onServerStartup() {},
   onPlayerDealtDamage: (handler) => hooks.dealt.push(handler),
@@ -76,6 +85,7 @@ function player(name, x, y, z = 0) {
         sendConfig: (id, value) => { varbits.set(`varp${id}`, value); return sender; },
         sendInterfaceScript: (id, args = []) => { scripts.push([id, args]); return sender; },
         sendInterfaceDisplayState: (uid, hide) => { hidden.set(uid, hide); return sender; },
+        sendInterfaceColour: () => sender,
       };
       return sender;
     },
@@ -237,9 +247,9 @@ test("leaving its mine fades the HUD out (script 2889 with its 14 components) an
   const p = player("p", x - 1, y);
   zone(hooks.zonesEnter).handler({ player: p });
   const HP = (303 << 16) | 5;
-  assert.equal(p.hidden.get(HP), false, "shown on arrival");
-  assert.deepEqual(p.scripts.slice(-2).map(([id, args]) => [id, args.length, args.at(-1)]), [[2887, 15, 254], [2376, 19, (303 << 16) | 3]],
-    "faded back in (an earlier fade-out leaves the bar transparent), then opened");
+  assert.deepEqual(p.scripts.slice(-2).map(([id, args]) => [id, args.length, args.at(-1)]), [[2376, 19, (303 << 16) | 3], [2887, 15, 254]],
+    "opened, then faded back in (an earlier fade-out leaves the bar transparent), as captured");
+  assert.equal(p.varbits.get("varp1683"), 14779, "shown on arrival (the crab)");
   zone(hooks.zonesExit).handler({ player: p });
   const [id, args] = p.scripts.at(-1);
   assert.equal(id, 2889);

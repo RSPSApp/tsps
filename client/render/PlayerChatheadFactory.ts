@@ -120,14 +120,10 @@ export class PlayerChatheadFactory {
             const kit = this.idkLoader.load(kitId);
             if (!kit) return;
 
-            // Use ifModelIds (chathead models) if available and valid; otherwise fallback to body models
-            let sourceIds = kit.ifModelIds;
-            if (!sourceIds || !sourceIds.some((id) => id >= 0)) {
-                sourceIds = kit.modelIds;
-            }
-
-            if (Array.isArray(sourceIds)) {
-                pushModels(sourceIds);
+            // An empty chat-head list is intentional (e.g. a clean-shaven jaw).
+            // Wearable body models use different coordinates and create floating fragments.
+            if (Array.isArray(kit.ifModelIds)) {
+                pushModels(kit.ifModelIds);
             }
         };
 

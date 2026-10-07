@@ -112,7 +112,7 @@ const Patches = require("./Patches.Farming");
 const Services = require("./Services.Farming");
 const hooks = {};
 Patches.attach(new Proxy({}, { get: (_, name) => (...args) => (hooks[name] ??= []).push(args[0]) }));
-const login = hooks.onPlayerLogin[0], processPlayer = hooks.onPlayerProcess[0], logout = hooks.onPlayerLogout[0];
+const login = hooks.onPlayerLogin[0], logout = hooks.onPlayerLogout[0], mapSquareChanged = hooks.onPlayerMapSquareChange[0];
 function testPlayer() {
     const attributes = new Map(), varbits = new Map();
     const inventory = { items: [], scans: 0, refreshes: 0,
@@ -136,21 +136,44 @@ try {
     for (let tick = 1; tick <= 8; tick++) {
         clock = now + tick * 600;
         player.location.setX(3200 + tick);
-        processPlayer({ player });
+        Patches.tick();
     }
     assert.equal(growthCalls, 1, "movement must not restart growth each tick");
-    assert.equal(player.inventory.scans, 1, "bank and inventory scans keep the five-second cadence");
-    clock = now + 5400;
-    processPlayer({ player });
-    assert.equal(growthCalls, 2);
+    assert.equal(player.inventory.scans, 1, "nothing due means no bank and inventory scans");
+    clock = now + 5 * Model.MINUTE + 600;
+    Patches.tick();
+    assert.equal(growthCalls, 2, "the five-minute farming tick still checks everyone");
     logout({ player });
     login({ player });
-    assert.equal(growthCalls, 3, "relogin resets the growth timestamp");
+    assert.equal(growthCalls, 3, "relogin grows straight away");
+
+    // A planted patch grows on its own farming tick, not on a poll.
+    const farmer = testPlayer();
+    const herbFarm = planted();
+    const herbState = herbFarm.patches[Data.patchKey(herb)];
+    herbState.nextAt = Model.nextGrowth(clock, Data.CROPS.get("RANARR").minutes, herbFarm.offset);
+    farmer.setAttribute(Patches.FARM_ATTRIBUTE, herbFarm);
+    login({ player: farmer });
+    const stage = herbState.stage, dueAt = herbState.nextAt;
+    clock = dueAt - 600;
+    Patches.tick();
+    assert.equal(herbState.stage, stage, "nothing grows before its farming tick");
+    clock = dueAt + 600;
+    Patches.tick();
+    assert.equal(herbState.stage, stage + 1, "growth lands on the farming tick");
+
+    // advance_time skips the farming clock forward and grows as normal.
+    const skip = { player: farmer, ms: 3 * Data.CROPS.get("RANARR").minutes * Model.MINUTE, handledBy: [] };
+    Patches.advanceTime(skip);
+    assert.deepEqual(skip.handledBy, ["Farming"]);
+    assert.ok(herbState.stage >= stage + 3 || herbState.status !== "growing", "three growth cycles applied");
+    assert.ok(herbState.nextAt > clock, "the next stage is scheduled after the skip");
+    logout({ player: farmer });
 
     // Movement must use the region index, not iterate the entire patch table.
     const iterator = Data.CACHE.patches[Symbol.iterator];
     Data.CACHE.patches[Symbol.iterator] = () => { throw new Error("full patch scan on movement"); };
-    try { player.location.setX(3200); processPlayer({ player }); }
+    try { player.location.setX(3200); mapSquareChanged({ player }); Patches.tick(); }
     finally { Data.CACHE.patches[Symbol.iterator] = iterator; }
 
     // Compare the indexed selection to the original full scan, including reused varbits.
@@ -173,17 +196,17 @@ try {
     const crop = { wateredSeedling: core.ItemIdentifiers.OAK_SEEDLING_W_, sapling: core.ItemIdentifiers.OAK_SAPLING };
     Data.WATERED_SEEDLINGS.set(crop.wateredSeedling, crop);
     const fresh = new core.Item(crop.wateredSeedling);
-    const mature = new core.Item(crop.wateredSeedling).setMetaValue("farming:saplingAt", clock - 1);
-    const future = new core.Item(crop.wateredSeedling).setMetaValue("farming:saplingAt", clock + Model.MINUTE);
-    const placeholder = new core.Item(crop.wateredSeedling, 0).setMetaValue("farming:saplingAt", clock - 1);
+    const mature = new core.Item(crop.wateredSeedling).setMetaValue("farming:sapling-at", clock - 1);
+    const future = new core.Item(crop.wateredSeedling).setMetaValue("farming:sapling-at", clock + Model.MINUTE);
+    const placeholder = new core.Item(crop.wateredSeedling, 0).setMetaValue("farming:sapling-at", clock - 1);
     const bank = { ...player.inventory, items: [mature, future, placeholder], refreshes: 0 };
     player.inventory.items = [null, fresh];
     player.banks[1] = bank;
     Services.humidified({ player });
-    const deadline = fresh.getMetaValue("farming:saplingAt");
+    const deadline = fresh.getMetaValue("farming:sapling-at");
     assert.equal(deadline, Model.nextGrowth(clock, 5, Patches.farmFor(player).offset));
     assert.equal(mature.getId(), crop.sapling, "seedlings mature in initialized bank tabs");
-    assert.equal(mature.getMetaValue("farming:saplingAt"), undefined);
+    assert.equal(mature.getMetaValue("farming:sapling-at"), undefined);
     assert.equal(bank.refreshes, 1);
     assert.equal(future.getId(), crop.wateredSeedling);
     assert.equal(placeholder.getId(), crop.wateredSeedling, "bank placeholders must stay unchanged");

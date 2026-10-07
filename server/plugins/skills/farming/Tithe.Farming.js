@@ -14,6 +14,13 @@ const REWARDS = [["Farmer's strawhat", 75], ["Farmer's jacket", 150], ["Farmer's
     ["Gricoller's can", 200], ["Seed box", 250], ["Herb sack", 250], ["Herb box", 30], ["Seed pack", 30], ["Bologa's blessing", 1, 20]];
 class TitheArea extends core.PrivateArea {
     constructor() { super([new core.Boundary(1805, 1840, 3485, 3518, 0)]); }
+    process(mobile) { if (mobile.isPlayer?.()) titheProcess({ player: mobile.getAsPlayer() }); }
+    postLeave(mobile, logout) {
+        super.postLeave(mobile, logout);
+        // Logging out keeps the run's items; titheLogout has already ended the game.
+        const player = mobile.isPlayer?.() ? mobile.getAsPlayer() : null;
+        if (player && !logout && GAMES.has(player)) leave(player);
+    }
 }
 const GAMES = new WeakMap();
 function scoreFor(player) { return Patches.farmFor(player).tithe ??= { points: 0, score: 0 }; }

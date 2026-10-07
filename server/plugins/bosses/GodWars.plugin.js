@@ -7,6 +7,7 @@
  */
 module.exports = {
   name: "GodWars",
+  members: true,
   register(api) {
     require("./godwars/GodWarsAccess")(api);
     require("./godwars/GodWarsEncounters")(api);

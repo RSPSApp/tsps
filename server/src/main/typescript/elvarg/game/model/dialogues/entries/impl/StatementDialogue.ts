@@ -13,6 +13,10 @@ export class StatementDialogue extends Dialogue {
         this.text = text;
     }
 
+    public getText(): string {
+        return this.text;
+    }
+
     send(player: Player) {
         StatementDialogue.send(player, this.text);
     }

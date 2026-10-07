@@ -38,7 +38,7 @@ const VARIANT_AFTER_QUEST = "after-completing-prince-ali-rescue-quest";
 const PAY_AND_CROSS_STEP = "hyXjU_";
 const FREE_CROSS_STEP = "jt5lUt";
 
-const GATE_ATTRIBUTE = "alkharidGate:leaf";
+const GATE_ATTRIBUTE = "alkharid-gate:leaf";
 
 let api;
 let core;

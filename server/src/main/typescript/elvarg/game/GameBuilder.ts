@@ -1,3 +1,5 @@
+import { CacheDefinitions } from "./cache/CacheDefinitions";
+import { preloadSequences } from "./cache/NpcAnimationScanner";
 import { CombatPoisonData } from '../game/task/impl/CombatPoisonEffect'
 import { Sailing } from "./content/sailing/Sailing";
 import { PlayerPunishment } from "../util/PlayerPunishment";
@@ -33,6 +35,9 @@ export class GameBuilder {
     }
     
     private loadStartupData(): void {
+        // Archives read during play, decoded now rather than on their first use mid-tick.
+        preloadSequences();
+        CacheDefinitions.preloadEnums();
         CombatPoisonData.init();
         PlayerPunishment.init();
         new NpcInteractionDefinitionLoader().load();

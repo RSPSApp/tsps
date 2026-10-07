@@ -1,0 +1,238 @@
+/* Shared styles for what sidebar panels draw: text, form fields, the generated settings
+   (ConfigPanel). Colours and fonts are Sidebar.css's variables. */
+.rl-sidebar-panel-content {
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+.rl-sidebar-scrollable {
+    overflow-y: auto;
+}
+
+.rl-sidebar-panel-title {
+    font-family: var(--rl-font-bold);
+    color: var(--rl-text);
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--rl-medium-gray);
+}
+
+.rl-sidebar-panel-copy {
+    margin: 0;
+    font-family: var(--rl-font-small);
+    color: var(--rl-light-gray);
+}
+
+.rl-sidebar-notes-input {
+    width: 100%;
+    min-height: 150px;
+    resize: vertical;
+    flex: 1 1 auto;
+    padding: 6px;
+    box-sizing: border-box;
+    border: 1px solid var(--rl-medium-gray);
+    background: var(--rl-dark-gray);
+    color: var(--rl-text);
+    outline: none;
+}
+
+.rl-sidebar-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    color: var(--rl-text);
+}
+
+.rl-sidebar-field input,
+.rl-sidebar-field select,
+.rl-sidebar-field textarea {
+    padding: 4px 6px;
+    border: 1px solid var(--rl-medium-gray);
+    background: var(--rl-dark-gray);
+    color: var(--rl-text);
+    outline: none;
+}
+
+.rl-sidebar-notes-input:focus,
+.rl-sidebar-field input:focus,
+.rl-sidebar-field select:focus,
+.rl-sidebar-field textarea:focus {
+    border-color: var(--rl-orange);
+}
+
+.rl-sidebar-row {
+    display: flex;
+    gap: 6px;
+}
+
+.rl-sidebar-row .rl-sidebar-field {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.rl-sidebar-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--rl-text);
+}
+
+.rl-sidebar-check input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: var(--rl-orange);
+}
+
+/* Name / detail rows with a button (Menu Entry Swapper's saved swaps) */
+.rl-sidebar-plugin-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--rl-dark-gray);
+}
+
+.rl-sidebar-plugin-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.rl-sidebar-plugin-name {
+    color: var(--rl-text);
+}
+
+.rl-sidebar-plugin-desc {
+    font-family: var(--rl-font-small);
+    color: var(--rl-light-gray);
+}
+
+.rl-sidebar-text-button {
+    flex: 0 0 auto;
+    padding: 2px 8px;
+    border: 1px solid var(--rl-medium-gray);
+    background: var(--rl-dark-gray);
+    color: var(--rl-text);
+    cursor: pointer;
+}
+
+.rl-sidebar-text-button:hover {
+    background: var(--rl-hover);
+}
+
+.rl-sidebar-text-button:focus-visible {
+    outline: 1px solid var(--rl-orange);
+}
+
+/* Generated settings (ConfigPanel) */
+.rl-config-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rl-config-label {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.rl-config-description,
+.rl-config-units {
+    font-family: var(--rl-font-small);
+    color: var(--rl-light-gray);
+}
+
+.rl-config-warning {
+    font-family: var(--rl-font-small);
+    color: var(--rl-orange);
+}
+
+.rl-config-section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin: 8px 0 2px;
+    padding: 0 0 3px;
+    border: none;
+    border-bottom: 1px solid var(--rl-medium-gray);
+    background: none;
+    font-family: var(--rl-font-bold);
+    color: var(--rl-text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.rl-config-section-title::before {
+    content: "";
+    border: 4px solid transparent;
+    border-top-color: var(--rl-orange);
+    margin-top: 4px;
+}
+
+.rl-config-section-title.closed::before {
+    border-top-color: transparent;
+    border-left-color: var(--rl-light-gray);
+    margin: 0 0 0 2px;
+}
+
+.rl-config-section-title:hover {
+    color: var(--rl-orange);
+}
+
+.rl-sidebar-textarea {
+    min-height: 64px;
+    resize: vertical;
+}
+
+.rl-sidebar-color-input {
+    width: 34px;
+    min-width: 34px;
+    height: 24px;
+    padding: 2px;
+    box-sizing: border-box;
+    border: 1px solid var(--rl-medium-gray);
+    background: var(--rl-dark-gray);
+    cursor: pointer;
+}
+
+.rl-sidebar-color-full {
+    width: 100%;
+    min-width: 0;
+    height: 24px;
+}
+
+.rl-sidebar-value-row {
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Scrollbars, as RuneLite's */
+.rl-sidebar-scrollable {
+    scrollbar-color: var(--rl-scroll-thumb) var(--rl-scroll-track);
+    scrollbar-width: thin;
+}
+
+.rl-sidebar-scrollable::-webkit-scrollbar {
+    width: 7px;
+}
+
+.rl-sidebar-scrollable::-webkit-scrollbar-track {
+    background: var(--rl-scroll-track);
+}
+
+.rl-sidebar-scrollable::-webkit-scrollbar-thumb {
+    background: var(--rl-scroll-thumb);
+}
+
+.rl-sidebar-scrollable::-webkit-scrollbar-thumb:hover {
+    background: var(--rl-scroll-thumb-hover);
+}

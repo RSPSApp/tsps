@@ -1,5 +1,9 @@
 import { ClientState } from "../../../game/ClientState";
-import { deriveMenuEntriesForWidget as UI_deriveMenuEntriesForWidget } from "../../../widgets/menu/utils";
+import {
+    deriveMenuEntriesForWidget as UI_deriveMenuEntriesForWidget,
+    deriveRawMenuEntriesForWidget,
+    transformWidgetMenuEntries,
+} from "../../../widgets/menu/utils";
 type WidgetMenuDeriveCacheEntry = {
     revision: number;
     flagsVersion: number;
@@ -281,10 +285,11 @@ export function deriveMenuEntriesForWidgetCached(
         cached.hasOnOpArray === hasOnOpArray &&
         cached.hasOnOpHandler === hasOnOpHandler
     ) {
-        return cached.entries;
+        return transformWidgetMenuEntries(w, cached.entries);
     }
 
-    const entries = UI_deriveMenuEntriesForWidget(w as any, false, getWidgetFlags) || [];
+    // The cache keeps the menu as the widget defines it; plugins reorder it on every use.
+    const entries = deriveRawMenuEntriesForWidget(w as any, false, getWidgetFlags) || [];
     const next: WidgetMenuDeriveCacheEntry = {
         revision,
         flagsVersion,
@@ -306,6 +311,6 @@ export function deriveMenuEntriesForWidgetCached(
         if (firstKey !== undefined) widgetMenuDeriveCache.delete(firstKey);
     }
     widgetMenuDeriveCache.set(uid, next);
-    return entries;
+    return transformWidgetMenuEntries(w, entries);
 }
 

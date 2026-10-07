@@ -1,0 +1,185 @@
+/* The sidebar beside the game: a rail of icons that's always there, and the open panel,
+   docked (the game view narrows) or over the game. Panel content styles: SidebarPanels.css
+   and PluginHub.css. Every colour and font is a variable here, from RuneLite's ColorScheme
+   and FontManager. */
+@font-face {
+    font-family: "OSRS Plain";
+    src: url(../../media/RuneScape-Plain-12.ttf);
+}
+
+.rl-sidebar {
+    /* RuneLite's ColorScheme */
+    --rl-darker-gray: #1e1e1e; /* DARKER_GRAY_COLOR: panel background */
+    --rl-dark-gray: #282828; /* DARK_GRAY_COLOR: rail, rows, inputs */
+    --rl-hover: #3c3c3c; /* DARKER_GRAY_HOVER_COLOR */
+    --rl-medium-gray: #4d4d4d; /* MEDIUM_GRAY_COLOR: borders, inactive controls */
+    --rl-light-gray: #a5a5a5; /* LIGHT_GRAY_COLOR: secondary text */
+    --rl-text: #ffffff;
+    --rl-orange: #dc8a00; /* BRAND_ORANGE: on, selected, focus */
+    --rl-orange-soft: rgba(220, 138, 0, 0.47); /* BRAND_ORANGE_TRANSPARENT */
+    --rl-scroll-track: #191919; /* SCROLL_TRACK_COLOR */
+    --rl-scroll-thumb: #4d4d4d;
+    --rl-scroll-thumb-hover: #5f5f5f;
+    --rl-error: #e61e1e; /* PROGRESS_ERROR_COLOR */
+    --rl-shadow: rgba(0, 0, 0, 0.5);
+
+    /* RuneLite's FontManager: the RuneScape fonts at their pixel size */
+    --rl-font: "OSRS Plain", "OSRS Small", sans-serif;
+    --rl-font-small: "OSRS Small", sans-serif;
+    --rl-font-bold: "OSRS Bold", sans-serif;
+    --rl-font-size: 16px;
+
+    --sidebar-rail-width: 36px;
+    --sidebar-panel-width: 250px;
+
+    position: relative;
+    z-index: 24;
+    flex: 0 0 auto;
+    display: flex;
+    height: 100%;
+    color: var(--rl-text);
+    font-family: var(--rl-font);
+    font-size: var(--rl-font-size);
+    line-height: 1.15;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.rl-sidebar button,
+.rl-sidebar input,
+.rl-sidebar select,
+.rl-sidebar textarea {
+    font: inherit;
+}
+
+.rl-sidebar.mobile {
+    --sidebar-rail-width: 30px;
+    --sidebar-panel-width: min(260px, calc(100vw - 48px));
+}
+
+/* Rail */
+.rl-sidebar-rail {
+    width: var(--sidebar-rail-width);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 0;
+    box-sizing: border-box;
+    border-left: 1px solid var(--rl-darker-gray);
+    background: var(--rl-dark-gray);
+    overflow-y: auto;
+}
+
+.rl-sidebar-rail-button {
+    width: calc(var(--sidebar-rail-width) - 6px);
+    height: calc(var(--sidebar-rail-width) - 6px);
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--rl-light-gray);
+    cursor: pointer;
+}
+
+.rl-sidebar-rail-button:hover {
+    color: var(--rl-text);
+    background: var(--rl-hover);
+}
+
+.rl-sidebar-rail-button.active {
+    color: var(--rl-orange);
+    background: var(--rl-darker-gray);
+}
+
+.rl-sidebar-rail-button:focus-visible,
+.rl-sidebar-panel-close:focus-visible {
+    outline: 1px solid var(--rl-orange);
+    outline-offset: -1px;
+}
+
+.rl-sidebar-icon-svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.rl-sidebar-icon-fallback {
+    font-family: var(--rl-font-bold);
+}
+
+/* Panel: in the row beside the rail when docked, over the game when overlaid. */
+.rl-sidebar-panel {
+    width: var(--sidebar-panel-width);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--rl-darker-gray);
+}
+
+.rl-sidebar.overlay .rl-sidebar-panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: var(--sidebar-rail-width);
+    box-shadow: -8px 0 20px var(--rl-shadow);
+}
+
+.rl-sidebar-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 6px 7px 10px;
+    background: var(--rl-dark-gray);
+}
+
+.rl-sidebar-panel-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--rl-font-bold);
+    color: var(--rl-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rl-sidebar-panel-close {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--rl-light-gray);
+    cursor: pointer;
+}
+
+.rl-sidebar-panel-close:hover {
+    color: var(--rl-text);
+    background: var(--rl-hover);
+}
+
+.rl-sidebar-panel-close svg {
+    width: 10px;
+    height: 10px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+}
+
+.rl-sidebar-panel-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}

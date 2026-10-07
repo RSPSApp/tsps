@@ -4,6 +4,7 @@
  */
 module.exports = {
   name: "Farming",
+  members: true,
   register(api) {
     require("./farming/Core.Farming").init(api);
     require("./farming/Patches.Farming").attach(api);

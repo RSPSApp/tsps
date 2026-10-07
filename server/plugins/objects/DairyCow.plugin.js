@@ -76,7 +76,7 @@ function stealCowbell(event) {
           player.sendMessage("The cow kicks you and stuns you.");
           player.sendMessage("MOO");
           Sounds.sendSound(player, Sound.THIEVING_STUNNED);
-          CombatFactory.stun(player, STEAL_STUN_TICKS, true);
+          CombatFactory.stunTicks(player, STEAL_STUN_TICKS, true);
           player.getMovementQueue().reset();
         }
       }

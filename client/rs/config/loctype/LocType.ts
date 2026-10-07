@@ -328,6 +328,8 @@ export class LocType extends Type {
             buffer.readUnsignedShort();
         } else if (opcode === 60) {
             this.mapFunctionId = buffer.readUnsignedShort();
+        } else if (opcode === 42) {
+            buffer.readUnsignedShort(); // rev 241 recolall (unused by the 241 cache)
         } else if (opcode === 61) {
             buffer.readUnsignedShort();
         } else if (opcode === 62) {

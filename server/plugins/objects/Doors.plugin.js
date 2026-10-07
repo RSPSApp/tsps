@@ -34,7 +34,7 @@ const DOOR_NAMES = new Set([
 // leaves nameless have no property; those stay numeric, marked "nameless". The tables need
 // api.core, so register() builds them.
 let SELF_OPENING_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, WOODEN_GATES, WOODEN_GATE_BY_ID;
-let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_LEFT_IDS;
+let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
 
 function defineDoorData({ ObjectIdentifiers: O }) {
@@ -71,12 +71,16 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     woodenGate(O.GATE_140, O.GATE_142, O.GATE_137, O.GATE_139),
     woodenGate(O.GATE_243, O.GATE_244, O.GATE_245, O.GATE_246),
     woodenGate(O.GATE_322, O.GATE_319, O.GATE_320, O.GATE_321),
+    // Tutorial Island survival gate: swings open into 8810/8811's open panels (Zenyte Gate.java).
+    woodenGate(O.GATE_90, O.GATE_91, O.GATE_85, O.GATE_86),
   ]);
 
   WOODEN_GATE_BY_ID = new Map();
   for (const gate of WOODEN_GATES) {
+    // Open panels can be shared (the survival gate opens into 8812/8813); the first
+    // gate keeps them, and closing restores the remembered closed panels anyway.
     for (const id of [gate.closed.hinge, gate.closed.extension, gate.opened.hinge, gate.opened.extension]) {
-      WOODEN_GATE_BY_ID.set(id, gate);
+      if (!WOODEN_GATE_BY_ID.has(id)) WOODEN_GATE_BY_ID.set(id, gate);
     }
   }
 
@@ -103,7 +107,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // Large doors sharing model 639 with 1521/1524; they open into that family's 1522/1525.
     Object.freeze([O.LARGE_DOOR_98, O.LARGE_DOOR_99, O.LARGE_DOOR_16, O.LARGE_DOOR_18]),
   ]);
-  SPECIAL_DOUBLE_DOOR_LEFT_IDS = new Set([O.GATE_26, O.GATE_29, O.GATE_33, O.DOOR_354, O.DOOR_356, O.GATE_40, O.GATE_92, O.GATE_94, O.LARGE_DOOR_24, O.LARGE_DOOR_26, O.LARGE_DOOR_29, O.LARGE_DOOR_31, O.LARGE_DOOR_98, O.LARGE_DOOR_16, O.LARGE_DOOR_7, O.LARGE_DOOR_8]);
   // Both leaves of each pair are partners of the other.
   SPECIAL_DOUBLE_DOOR_PAIRS = Object.freeze([
     [O.GATE_26, O.GATE_27],
@@ -446,6 +449,18 @@ function handleWoodenGate(player, object, objectId, location) {
 
   const privateArea = player?.getPrivateArea?.() ?? null;
   const isClosed = objectId === gate.closed.hinge || objectId === gate.closed.extension;
+  // Closing a gate this plugin opened puts back exactly the panels it replaced.
+  if (!isClosed) {
+    const key = locationKey(location);
+    for (const [anchorKey, state] of OPEN_OBJECT_STATES) {
+      if (anchorKey.startsWith("wooden-gate:") &&
+          state.current.some((snapshot) => snapshot.id === objectId && locationKey(snapshot.location) === key)) {
+        core.TaskManager.cancelTasks(anchorKey);
+        autoCloseDoor(anchorKey);
+        return true;
+      }
+    }
+  }
   const isHinge = objectId === gate.closed.hinge || objectId === gate.opened.hinge;
 
   const oldHingeId = isClosed ? gate.closed.hinge : gate.opened.hinge;
@@ -509,7 +524,7 @@ function handleWoodenGate(player, object, objectId, location) {
   // Anchor on the CLOSED hinge tile so open and close compute the same key for auto-close.
   const closedHingeX = isClosed ? hingeOld.x : transform.hinge[0];
   const closedHingeY = isClosed ? hingeOld.y : transform.hinge[1];
-  const anchorKey = `woodenGate:${gate.closed.hinge}:${closedHingeX},${closedHingeY},${z}`;
+  const anchorKey = `wooden-gate:${gate.closed.hinge}:${closedHingeX},${closedHingeY},${z}`;
   if (isClosed) {
     const closedHinge = new core.GameObject(
       gate.closed.hinge,
@@ -719,9 +734,13 @@ function resolveDoubleDoorPair(clicked) {
         if (!partner) {
           continue;
         }
-        return SPECIAL_DOUBLE_DOOR_LEFT_IDS.has(clicked.currentId)
-          ? [clicked, partner]
-          : [partner, clicked];
+        // The cache places these pairs in both leaf orders (1728 west of 1727 on some
+        // walls), so the left leaf comes from the closed layout, never from the id.
+        // Closed positions keep this right while the leaves are swung open too.
+        const [leftDx, leftDy] = LEFT_LEAF_OFFSETS[clicked.originalFace];
+        const partnerIsLeft = partner.originalX - clicked.originalX === leftDx &&
+          partner.originalY - clicked.originalY === leftDy;
+        return partnerIsLeft ? [partner, clicked] : [clicked, partner];
       }
     }
   }

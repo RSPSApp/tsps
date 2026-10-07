@@ -71,6 +71,7 @@ function forgetPending({ player }) {
 
 module.exports = {
   name: "SailingBoatSelection",
+  members: true,
   MODE,
   openBoatSelection,
   register(api) {

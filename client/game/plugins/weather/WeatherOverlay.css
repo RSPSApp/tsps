@@ -1,0 +1,25 @@
+.weather-overlay {
+    position: absolute;
+    right: 12px;
+    bottom: 48px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    pointer-events: none;
+}
+
+.weather-overlay img {
+    display: block;
+    max-width: 240px;
+    image-rendering: pixelated;
+}
+
+.weather-lightning-flash {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: #fff;
+    pointer-events: none;
+}

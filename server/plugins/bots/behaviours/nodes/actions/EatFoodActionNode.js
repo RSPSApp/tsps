@@ -2,7 +2,7 @@ const { Animation } = require("../../../../../src/main/typescript/elvarg/game/mo
 const { Skill } = require("../../../../../src/main/typescript/elvarg/game/model/Skill");
 const { TimerKey } = require("../../../../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { getPvpProfile } = require("../../pvp/PvpAssignment");
-const { isFoodItem } = require("../../../../items/Food.plugin");
+const { isFoodItem, ATTACK_DELAY, COMBO_ATTACK_DELAY } = require("../../../../items/Food.plugin");
 const { computeEatThreshold } = require("../../state/PlayerBotState");
 const { resolveBotNodeContext } = require("../context/BotNodeContext");
 
@@ -106,7 +106,12 @@ class EatFoodActionNode {
       }
     }
 
-    if (!Number.isFinite(state.virtualFoodChargesRemaining)) {
+    const inventory = player.getInventory?.();
+    const foodSlots = findFoodSlots(inventory);
+    // PvP loadouts have real food; a profile budget must not hide remaining meals.
+    if (pvpProfile) {
+      state.virtualFoodChargesRemaining = foodSlots.length;
+    } else if (!Number.isFinite(state.virtualFoodChargesRemaining)) {
       const profileCharges = Number(pvpProfile?.foodCharges);
       state.virtualFoodChargesRemaining = Number.isFinite(profileCharges)
         ? Math.max(1, Math.floor(profileCharges))
@@ -128,8 +133,6 @@ class EatFoodActionNode {
       return "failure";
     }
 
-    const inventory = player.getInventory?.();
-    const foodSlots = findFoodSlots(inventory);
     if (foodSlots.length === 0) {
       if (Number(state.virtualFoodChargesRemaining) > 0) {
         state.virtualFoodChargesRemaining = 0;
@@ -143,7 +146,6 @@ class EatFoodActionNode {
     }
 
     timers.extendOrRegister?.(TimerKey.FOOD, 3);
-    player.getCombat?.().extendAttackDelay?.(5);
     player.getPacketSender?.().sendInterfaceRemoval?.();
     skillManager.stopSkillable?.();
     player.performAnimation?.(EAT_ANIMATION);
@@ -163,6 +165,7 @@ class EatFoodActionNode {
       }
     }
     const foodItemsConsumed = comboEatTriggered ? 2 : 1;
+    player.getCombat?.().delayAttack?.(ATTACK_DELAY + (comboEatTriggered ? COMBO_ATTACK_DELAY : 0));
     for (const slot of foodSlots.slice(0, foodItemsConsumed)) {
       inventory.deleteAtSlot?.(slot, 1, false);
     }

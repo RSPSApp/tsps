@@ -61,6 +61,9 @@ function open(player) {
 }
 
 function deposit(player, slot, itemId, amount) {
+  // Single choke point: even an amount entered after the prompt was opened
+  // must re-check the bank veto before anything moves.
+  if (pluginApi.emitCanBank(player) === false) return false;
   const inv = player?.getInventory?.();
   const slotItem = inv?.forSlot?.(slot);
   if (!inv || !slotItem || slotItem.getId() !== itemId) return false;
@@ -77,6 +80,9 @@ function deposit(player, slot, itemId, amount) {
 }
 
 function promptAmount(player, callback) {
+  // Never overwrite a prompt that is still open: two in-flight X prompts would
+  // let the later one deposit against the stale slot.
+  if (player.getEnteredAmountAction?.() != null) return;
   player.setEnteredAmountAction({ execute: callback });
   player.getPacketSender().sendEnterAmountPrompt("How many would you like to deposit?");
 }

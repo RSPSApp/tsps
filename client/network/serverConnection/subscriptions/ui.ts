@@ -64,6 +64,7 @@ export function subscribeHandshake(
         chatIcons?: number[];
         chatPrefix?: string;
         isAdmin?: boolean;
+        membersWorld?: boolean;
     }) => void,
 ): () => void {
     state.handshakeListeners.add(cb);

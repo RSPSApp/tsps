@@ -35,6 +35,8 @@ export class WidgetInteractionController {
     clickedWidgetHandled: boolean = false;
 
     widgetDragDuration: number = 0;
+    /** Client cycle (20ms) at which the current press started; drag dead time counts from it. */
+    dragClickCycle: number = 0;
     isDraggingWidget: boolean = false;
     dragClickX: number = 0;
     dragClickY: number = 0;

@@ -19,6 +19,7 @@ module.exports = {
   key: "wilderness",
   name: "Wilderness Agility",
   lapXp: 571.4,
+  petBase: 34666, // Giant squirrel base chance (Wiki)
   obstacles: [
     {
       object: ObjectIds.OBSTACLE_PIPE_9,

@@ -7,6 +7,7 @@ import { Priority } from "../../model/Priority";
 import { TaskManager } from "../TaskManager";
 import { NPCRespawnTask } from '../impl/NPCRespawnTask'
 import { PluginManager } from "../../../plugins/PluginManager";
+import type { PluginNpcDeathEvent } from "../../../plugins/PluginTypes";
 import { Sound } from "../../Sound";
 import { Sounds } from "../../Sounds";
 import { ArceuusSpells } from "../../content/combat/magic/ArceuusSpells";
@@ -17,6 +18,7 @@ export class NPCDeathTask extends Task {
     private npc: NPC
     private ticks: number;
     private killer: Player | null;
+    private remains: { ticks: number; respawnTicks?: number } | null = null;
     
     /**
      * The NPCDeathTask constructor.
@@ -40,11 +42,11 @@ export class NPCDeathTask extends Task {
                 this.npc.getCombat().reset();
                 this.npc.getCombat().setUnderAttack(null);
                 this.npc.setMobileInteraction(null);
-                this.setDelay(2);
+                this.setDelay(Math.max(1, this.npc.getCurrentDefinition().getDeathTicks()));
                 break;
             case 0:
                 if (this.killer != null) {
-                    PluginManager.emitNpcDeath({
+                    const event: PluginNpcDeathEvent = {
                         killer: this.killer,
                         npc: this.npc,
                         npcId: this.npc.getId(),
@@ -53,8 +55,11 @@ export class NPCDeathTask extends Task {
                             y: this.npc.getLocation().getY(),
                             z: this.npc.getLocation().getZ(),
                         },
-                    });
-                    if (ArceuusSpells.hasDeathCharge(this.killer)) {
+                        remains: null,
+                    };
+                    PluginManager.emitNpcDeath(event);
+                    if (event.remains && event.remains.ticks > 0) this.remains = event.remains;
+                    if (ArceuusSpells.useDeathCharge(this.killer)) {
                         this.killer.setSpecialPercentage(Math.min(100, this.killer.getSpecialPercentage() + 15));
                         CombatSpecial.updateBar(this.killer);
                     }
@@ -67,6 +72,19 @@ export class NPCDeathTask extends Task {
     
     public stop(): void {
         super.stop();
+        if (this.remains) {
+            // Left in the world for a while (a plugin's remains); removed and respawned after.
+            const remains = this.remains;
+            this.remains = null;
+            this.npc.setDying(false);
+            TaskManager.submit(new NPCRemainsTask(this, remains.ticks, remains.respawnTicks));
+            return;
+        }
+        this.remove();
+    }
+
+    /** Takes the npc out of the world and queues its respawn. */
+    public remove(respawnTicks?: number): void {
         const skipDefaultRespawn = (this.npc as any).__skipDefaultRespawn === true;
         (this.npc as any).__skipDefaultRespawn = false;
 
@@ -79,9 +97,22 @@ export class NPCDeathTask extends Task {
         }
         this.npc.setDying(false);
         this.npc.setNpcTransformationId(-1);
-        if (!skipDefaultRespawn && this.npc.getDefinition().getRespawn() > 0) {
-            TaskManager.submit(new NPCRespawnTask(this.npc, this.npc.getDefinition().getRespawn()));
+        const respawn = respawnTicks ?? this.npc.getDefinition().getRespawn();
+        if (!skipDefaultRespawn && respawn > 0) {
+            TaskManager.submit(new NPCRespawnTask(this.npc, respawn));
         }
         World.getRemoveNPCQueue().push(this.npc);
+    }
+}
+
+/** An npc's remains: removed (and its respawn queued) once their time is up. */
+class NPCRemainsTask extends Task {
+    constructor(private readonly death: NPCDeathTask, ticks: number, private readonly respawnTicks?: number) {
+        super(Math.max(1, Math.trunc(ticks)));
+    }
+
+    public execute(): void {
+        this.stop();
+        this.death.remove(this.respawnTicks);
     }
 }

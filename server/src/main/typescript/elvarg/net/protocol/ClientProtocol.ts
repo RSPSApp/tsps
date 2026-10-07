@@ -59,8 +59,15 @@ export type Tile = { x: number; y: number; level: number };
 export type HitsplatView = { type: number; damage: number; delay?: number };
 /** An actor's headbar: its HP and, when not the default (config 0, 30 wide), which bar. */
 export type HealthView = { current: number; max: number; bar?: { id: number; width: number } };
+/**
+ * A headbar other than the hitpoints one (a charge bar, a shield): `fill` to `endFill` (in the
+ * bar definition's width) over `duration` client cycles, starting `delay` cycles from now; or
+ * `remove` to take it away.
+ */
+export type HeadbarView = { id: number; fill?: number; endFill?: number; duration?: number; delay?: number; remove?: boolean };
 export type AnimationView = { id: number; delay: number };
-export type GraphicView = { id: number; height: number; delay: number };
+/** A spotanim on an actor, in one of its slots (0 unless the actor shows several at once). */
+export type GraphicView = { id: number; height: number; delay: number; slot?: number };
 export type ForcedMovementView = {
   startDeltaX: number;
   startDeltaY: number;
@@ -75,9 +82,11 @@ export type ActorUpdateView = {
   forcedChat?: string;
   interactionIndex?: number;
   animation?: AnimationView;
-  graphic?: GraphicView;
+  graphics?: GraphicView[];
   hits?: HitsplatView[];
   health?: HealthView;
+  /** NPCs only: headbars besides the hitpoints one, sent with the hit block. */
+  bars?: HeadbarView[];
 };
 
 export type PlayerView = Tile & ActorUpdateView & {
@@ -89,6 +98,8 @@ export type PlayerView = Tile & ActorUpdateView & {
   faceDirection?: number;
   forcedMovement?: ForcedMovementView;
   forcedMovementEnd?: Tile;
+  /** OSRS tinting: an HSL tint over client cycles; hue/saturation/lightness -1 keep the model's own. */
+  tint?: { startCycle: number; endCycle: number; hue: number; saturation: number; lightness: number; weight: number };
   /** The world entity (boat) whose deck the player stands on; the coordinates are deck coordinates. */
   worldView?: number;
 };
@@ -117,6 +128,14 @@ export type PlayerSyncState = {
 export type NpcView = Tile & ActorUpdateView & {
   index: number;
   typeId: number;
+  /** The overhead prayer icon (an index in headicons_prayer: 0 melee, 1 ranged, 2 magic), -1 none. */
+  headIcon?: number;
+  /** A glide from the tile it left to where it stands (OSRS npc exact_move), relative to its tile. */
+  exactMove?: ForcedMovementView;
+  /** A tile to turn to once (OSRS npc face coord). */
+  faceTile?: { x: number; y: number };
+  /** Its walk step is sent as a crawl (half walking speed on the client). */
+  crawl?: boolean;
   rotation: number;
   walkDirection: number;
   runDirection: number;
@@ -126,6 +145,7 @@ export type NpcSyncState = {
   indices: number[];
   lastTiles: Map<number, Tile>;
   typeIds: Map<number, number>;
+  headIcons: Map<number, number>;
   interactionIndices: Map<number, number>;
 };
 
@@ -195,7 +215,8 @@ export type FriendsChatSnapshot = {
 };
 
 export type ClientMessage =
-  | { type: "move"; worldX: number; worldY: number; modifierFlags: number }
+  /** modifierFlags is the click's key byte (OSRS: 1 Ctrl, 2 Ctrl+Shift); run forces running. */
+  | { type: "move"; worldX: number; worldY: number; modifierFlags: number; run?: boolean }
   | { type: "npc_option"; index: number; clickType: number }
   | { type: "object_option"; id: number; x: number; y: number; clickType?: number; action?: string }
   | { type: "chat"; text: string; messageType: "public" | "game" | "friends_chat" }
@@ -650,7 +671,7 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
     }
     case HighClientPacket.WALK: {
       const worldX = reader.short(), worldY = reader.short(), flags = reader.byte();
-      return { type: "move", worldX, worldY, modifierFlags: (flags & 1) !== 0 ? 2 : flags >> 1 };
+      return { type: "move", worldX, worldY, modifierFlags: flags >> 1, run: (flags & 1) !== 0 };
     }
     case ClientPacket.FACE: {
       const rotation = reader.byte() ? reader.short() : undefined;
@@ -953,6 +974,14 @@ export function encodeVarp(id: number, value: number): Buffer {
   return encodeServerPacket(payload.length === 3 ? ServerPacketId.VARP_SMALL : ServerPacketId.VARP_LARGE, payload);
 }
 
+/** A 64-bit varp (rev 241 reads the GE offer price from one). */
+export function encodeVarpLong(id: number, value: bigint): Buffer {
+  const payload = Buffer.alloc(10);
+  payload.writeUInt16BE(id & 0xffff);
+  payload.writeBigInt64BE(BigInt.asIntN(64, value), 2);
+  return encodeServerPacket(ServerPacketId.VARP_LONG, payload);
+}
+
 export function encodeVarbit(id: number, value: number): Buffer {
   const payload = Buffer.alloc(6);
   payload.writeUInt16BE(id & 0xffff);
@@ -981,6 +1010,23 @@ export function encodeInventorySnapshot(slots: Array<{ slot: number; itemId: num
 
 export function encodeInventorySlot(slot: number, itemId: number, quantity: number): Buffer {
   return encodeServerPacket(ServerPacketId.INVENTORY_SLOT, encodeItemSlot(slot, itemId, quantity));
+}
+
+/**
+ * The collection log is client-side CS2 backed by the `collection_transmit` inventory (620);
+ * a snapshot of what the player owns drives its "collected" ticks.
+ */
+export function encodeCollectionLogSnapshot(slots: Array<{ slot: number; itemId: number; quantity: number }>): Buffer {
+  const body = Buffer.alloc(2 + slots.length * 8);
+  body.writeUInt16BE(slots.length, 0);
+  let offset = 2;
+  for (const { slot, itemId, quantity } of slots) {
+    body.writeUInt16BE(slot & 0xffff, offset);
+    body.writeUInt16BE(itemId & 0xffff, offset + 2);
+    body.writeInt32BE(quantity | 0, offset + 4);
+    offset += 8;
+  }
+  return encodeServerPacket(ServerPacketId.COLLECTION_LOG_SNAPSHOT, body);
 }
 
 export type BankSlotView = { slot: number; itemId: number; quantity: number; placeholder?: boolean; tab?: number };
@@ -1067,6 +1113,41 @@ export function encodeLocAnim(id: number, x: number, y: number, level: number, s
   payload[7] = (shape << 2) | (rotation & 3);
   payload.writeUInt16BE(animationId & 0xffff, 8);
   return encodeServerPacket(ServerPacketId.LOC_ANIM, payload);
+}
+
+/**
+ * Encodes a spot animation on a world tile rather than an actor: SPOT_ANIM target type 2,
+ * which the client hands to its world spot-animation renderer.
+ */
+export function encodeTileSpotAnim(spotId: number, x: number, y: number, level: number, height: number, delay: number): Buffer {
+  const payload = Buffer.alloc(11);
+  payload.writeUInt16BE(spotId & 0xffff);
+  payload[2] = 2;
+  payload.writeUInt16BE(x & 0xffff, 3);
+  payload.writeUInt16BE(y & 0xffff, 5);
+  payload[7] = level & 0xff;
+  payload[8] = height & 0xff;
+  payload.writeUInt16BE(delay & 0xffff, 9);
+  return encodeServerPacket(ServerPacketId.SPOT_ANIM, payload);
+}
+
+/**
+ * Shakes the camera on one axis (slot: 0 left-right, 1 up-down, 2 forwards-backwards, ...),
+ * as OSRS's cam_shake does: a random wobble plus a sine of the given amplitude and frequency.
+ */
+export function encodeCameraShake(slot: number, randomAmplitude: number, sineAmplitude: number, sineFrequency: number): Buffer {
+  const payload = Buffer.alloc(8);
+  payload[0] = 3;
+  payload[1] = slot & 0xff;
+  payload.writeUInt16BE(randomAmplitude & 0xffff, 2);
+  payload.writeUInt16BE(sineAmplitude & 0xffff, 4);
+  payload.writeUInt16BE(sineFrequency & 0xffff, 6);
+  return encodeServerPacket(ServerPacketId.CAMERA_CONTROL, payload);
+}
+
+/** Puts the camera back on the player and stops any shake (cam_reset). */
+export function encodeCameraReset(): Buffer {
+  return encodeServerPacket(ServerPacketId.CAMERA_CONTROL, Buffer.from([0]));
 }
 
 export function encodeRebuildNormal(regionX: number, regionY: number, forceReload: boolean, xteaKeys: number[][]): Buffer {
@@ -1367,6 +1448,10 @@ export function encodeSkillsDelta(skills: SkillView[], totalLevel: number, comba
   return encodeSkills(ServerPacketId.SKILLS_DELTA, skills, totalLevel, combatLevel);
 }
 
+export function encodeChatFilterSettings(publicMode: number, privateMode: number, tradeMode: number): Buffer {
+  return encodeServerPacket(ServerPacketId.CHAT_FILTER_SETTINGS, Buffer.from([publicMode & 0xff, privateMode & 0xff, tradeMode & 0xff]));
+}
+
 export function encodeRunEnergy(percent: number, running: boolean): Buffer {
   return encodeServerPacket(ServerPacketId.RUN_ENERGY, Buffer.from([Math.max(0, Math.min(100, percent)), running ? 1 : 0]));
 }
@@ -1386,9 +1471,9 @@ export function encodeDestination(x: number, y: number): Buffer {
 }
 
 /**
- * Hint arrow (type: 0 clear, 1 npc/a=npcIndex, 2 tile/a=x,b=y,c=z). Mirrors the
- * OSRS 6-byte hint-arrow shape so the client can render the native
- * `headicons_hint` sprite above the target.
+ * Hint arrow (type: 0 clear, 1 npc/a=npcIndex, 2 tile/a=x,b=y,c=height in
+ * tiles). Mirrors the OSRS 6-byte hint-arrow shape so the client can render the
+ * native `headicons_hint` sprite above the target.
  */
 export function encodeHintArrow(type: number, a: number, b: number, c: number): Buffer {
   const payload = Buffer.alloc(6);
@@ -1501,6 +1586,22 @@ export function encodeWidgetSetModel(uid: number, modelId: number): Buffer {
   payload.writeInt32BE(uid | 0, 0);
   payload.writeInt32BE(modelId | 0, 4);
   return encodeServerPacket(ServerPacketId.WIDGET_SET_MODEL, payload);
+}
+
+/**
+ * IF_SETCOLOUR: a text or rectangle component's colour, as the game sends it: 15-bit RGB, five
+ * bits each of red, green and blue (the client widens it).
+ */
+export function encodeWidgetSetColour(uid: number, colour: number): Buffer {
+  const payload = Buffer.alloc(6);
+  payload.writeInt32BE(uid | 0, 0);
+  payload.writeUInt16BE(colour & 0x7fff, 4);
+  return encodeServerPacket(ServerPacketId.WIDGET_SET_COLOUR, payload);
+}
+
+/** The ticks until the player's next attack, for the client's attack timer (not an OSRS packet). */
+export function encodeAttackTimer(ticks: number): Buffer {
+  return encodeServerPacket(ServerPacketId.ATTACK_TIMER, Buffer.from([Math.max(0, Math.min(255, ticks | 0))]));
 }
 
 /** IF_SETPOSITION: move a component within its parent, keeping its position modes. */
@@ -1721,9 +1822,16 @@ const ACCOUNT_SUMMARY_COMBAT_TASKS_ROW = 5; // op1-4 Overview/Bosses/Tasks/Rewar
 const ACCOUNT_SUMMARY_COLLECTION_LOG_ROW = 6; // op1 "Collection Log", op2 "Collection Overview"
 const ACCOUNT_SUMMARY_PLAYTIME_ROW = 7; // op1 "Reveal"
 
+// The worn equipment tab's quiver slot (387:28): script 5026 gives it Quiver-Remove (op1),
+// Fill/Swap (op2) and Examine (op10) with if_setop, and the client only sends ops the server has
+// enabled. Static component, so slots -1..-1.
+const EQUIPMENT_QUIVER_SLOT_UID = (387 << 16) | 28;
+const EQUIPMENT_QUIVER_SLOT_FLAGS = (1 << 1) | (1 << 2) | (1 << 10);
+
 export function encodeGameframeFlags(root: number = 161): Buffer[] {
   const questTabChild = QUEST_TAB_ICON_CHILD_BY_ROOT[root] ?? QUEST_TAB_ICON_CHILD_ID;
   return [
+    encodeWidgetSetFlagsRange(EQUIPMENT_QUIVER_SLOT_UID, -1, -1, EQUIPMENT_QUIVER_SLOT_FLAGS),
     encodeWidgetSetFlagsRange(MAIN_INVENTORY_WIDGET_UID, 0, 27, MAIN_INVENTORY_SLOT_FLAGS),
     encodeWidgetSetFlags((root << 16) | questTabChild, QUEST_TAB_ICON_FLAGS),
     encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_QUESTS_ROW, ACCOUNT_SUMMARY_ACHIEVEMENTS_ROW, 1 << 1),
@@ -1735,7 +1843,7 @@ export function encodeGameframeFlags(root: number = 161): Buffer[] {
 }
 
 // Transient player attribute set from the handshake's clientType byte.
-export const MOBILE_CLIENT_ATTRIBUTE = "mobileClient";
+export const MOBILE_CLIENT_ATTRIBUTE = "mobile-client";
 // Mobile clients boot the Stock mobile toplevel (toplevel_osm); the client maps
 // the standard 161 mounts onto it via cache enum 1745.
 export const MOBILE_GAMEFRAME_ROOT = 601;
@@ -1751,7 +1859,7 @@ export function resolveGameframeRoot(
   fallback: number = 161
 ): number {
   if (player.getAttribute(MOBILE_CLIENT_ATTRIBUTE) === true) return MOBILE_GAMEFRAME_ROOT;
-  const saved = Number(player.getAttribute("clientLayoutRoot"));
+  const saved = Number(player.getAttribute("client-layout-root"));
   return STANDARD_GAMEFRAME_ROOTS.has(saved) ? saved : fallback;
 }
 
@@ -1866,7 +1974,8 @@ export function encodeHandshake(
   name: string,
   isAdmin: boolean,
   appearance?: PlayerAppearance,
-  chatIcons: readonly number[] = []
+  chatIcons: readonly number[] = [],
+  membersWorld: boolean = true
 ): Buffer {
   const idBuffer = Buffer.alloc(4);
   idBuffer.writeInt32BE(id, 0);
@@ -1896,6 +2005,7 @@ export function encodeHandshake(
       Buffer.from([icons.length, ...icons]),
       string(""),
       Buffer.from([isAdmin ? 1 : 0]),
+      Buffer.from([membersWorld ? 1 : 0]),
     ])
   );
 }
@@ -1978,7 +2088,7 @@ export function createPlayerSyncState(
 }
 
 export function createNpcSyncState(): NpcSyncState {
-  return { indices: [], lastTiles: new Map(), typeIds: new Map(), interactionIndices: new Map() };
+  return { indices: [], lastTiles: new Map(), typeIds: new Map(), headIcons: new Map(), interactionIndices: new Map() };
 }
 
 export function encodePlayerAppearance(
@@ -2069,6 +2179,7 @@ const PLAYER_MASK = {
   FACE_ENTITY: 0x40,
   FORCE_MOVEMENT: 0x400,
   MOVEMENT_TYPE: 0x1000,
+  TINT: 0x200,
   MOVEMENT_FLAG: 0x2000,
   SPOT_ANIM: 0x10000,
 } as const;
@@ -2078,8 +2189,14 @@ const NPC_MASK = {
   ANIMATION: 0x10,
   HIT: 0x20,
   FORCED_CHAT: 0x40,
+  HEAD_ICONS: 0x200,
+  EXACT_MOVE: 0x400,
+  FACE_TILE: 0x800,
   SPOT_ANIM: 0x20000,
 } as const;
+
+/** Overhead prayer icons (sprite group headicons_prayer); an NPC's head icon is an index in it. */
+const HEADICONS_PRAYER_ARCHIVE = 440;
 
 function writeMask(bytes: number[], rawMask: number): void {
   const third = (rawMask & 0xffff0000) !== 0;
@@ -2148,7 +2265,8 @@ function writeHits(bytes: number[], view: ActorUpdateView, npc: boolean): void {
     smart(bytes, hit.delay ?? 0);
   }
   const health = view.health;
-  const count = health ? 1 : 0;
+  const bars = npc ? view.bars ?? [] : [];
+  const count = Math.min(255, (health ? 1 : 0) + bars.length);
   if (npc) byteA(bytes, count);
   else byteC(bytes, count);
   if (health) {
@@ -2159,6 +2277,21 @@ function writeHits(bytes: number[], view: ActorUpdateView, npc: boolean): void {
     if (npc) byteC(bytes, value);
     else bytes.push(value);
   }
+  for (const bar of bars.slice(0, count - (health ? 1 : 0))) writeHeadbar(bytes, bar);
+}
+
+/** One NPC headbar: id, duration (32767 removes it), delay, fill and, when it moves, its end. */
+function writeHeadbar(bytes: number[], bar: HeadbarView): void {
+  smart(bytes, bar.id);
+  if (bar.remove) {
+    smart(bytes, 32767);
+    return;
+  }
+  const duration = Math.max(0, Math.min(32766, bar.duration ?? 0));
+  smart(bytes, duration);
+  smart(bytes, Math.max(0, bar.delay ?? 0));
+  byteC(bytes, (bar.fill ?? 0) & 0xff);
+  if (duration > 0) byteS(bytes, (bar.endFill ?? bar.fill ?? 0) & 0xff);
 }
 
 function playerUpdateMask(
@@ -2176,15 +2309,29 @@ function playerUpdateMask(
     (view.forcedMovement ? PLAYER_MASK.FORCE_MOVEMENT : 0) |
     (writeMovementType ? PLAYER_MASK.MOVEMENT_TYPE : 0) |
     (view.resetPath ? PLAYER_MASK.MOVEMENT_FLAG : 0) |
-    (view.graphic ? PLAYER_MASK.SPOT_ANIM : 0);
+    (view.tint ? PLAYER_MASK.TINT : 0) |
+    (view.graphics?.length ? PLAYER_MASK.SPOT_ANIM : 0);
 }
 
-function npcUpdateMask(view: NpcView, writeInteraction: boolean): number {
+function npcUpdateMask(view: NpcView, writeInteraction: boolean, writeHeadIcon = false): number {
   return (writeInteraction ? NPC_MASK.FACE_ENTITY : 0) |
+    (writeHeadIcon ? NPC_MASK.HEAD_ICONS : 0) |
     (view.animation ? NPC_MASK.ANIMATION : 0) |
-    (view.hits ? NPC_MASK.HIT : 0) |
+    (view.hits || view.bars?.length ? NPC_MASK.HIT : 0) |
     (view.forcedChat !== undefined ? NPC_MASK.FORCED_CHAT : 0) |
-    (view.graphic ? NPC_MASK.SPOT_ANIM : 0);
+    (view.exactMove ? NPC_MASK.EXACT_MOVE : 0) |
+    (view.faceTile ? NPC_MASK.FACE_TILE : 0) |
+    (view.graphics?.length ? NPC_MASK.SPOT_ANIM : 0);
+}
+
+/** The forced-movement fields, as players' forced movement writes them. */
+function writeForcedMovement(bytes: number[], movement: ForcedMovementView): void {
+  byteS(bytes, movement.startDeltaX);
+  bytes.push(movement.startDeltaY & 0xff, movement.endDeltaX & 0xff);
+  byteA(bytes, movement.endDeltaY);
+  shortBEA(bytes, movement.startCycleOffset);
+  shortBE(bytes, movement.endCycleOffset);
+  shortLEA(bytes, movement.direction & 2047);
 }
 
 function writePlayerUpdateBlock(
@@ -2215,45 +2362,63 @@ function writePlayerUpdateBlock(
     byteC(bytes, length);
     bytes.push(...view.appearance.subarray(0, length));
   }
-  if (view.forcedMovement) {
-    const movement = view.forcedMovement;
-    byteS(bytes, movement.startDeltaX);
-    bytes.push(movement.startDeltaY & 0xff, movement.endDeltaX & 0xff);
-    byteA(bytes, movement.endDeltaY);
-    shortBEA(bytes, movement.startCycleOffset);
-    shortBE(bytes, movement.endCycleOffset);
-    shortLEA(bytes, movement.direction & 2047);
-  }
+  if (view.forcedMovement) writeForcedMovement(bytes, view.forcedMovement);
   if (view.resetPath) byteS(bytes, 127);
-  if (view.graphic) {
-    byteA(bytes, 1);
-    bytes.push(0);
-    shortBE(bytes, view.graphic.id < 0 ? 0xffff : view.graphic.id);
-    intME(bytes, ((view.graphic.height & 0xffff) << 16) | (view.graphic.delay & 0xffff));
+  if (view.graphics?.length) {
+    byteA(bytes, view.graphics.length);
+    for (const graphic of view.graphics) {
+      bytes.push((graphic.slot ?? 0) & 0xff);
+      shortBE(bytes, graphic.id < 0 ? 0xffff : graphic.id);
+      intME(bytes, ((graphic.height & 0xffff) << 16) | (graphic.delay & 0xffff));
+    }
+  }
+  if (view.tint) {
+    shortLE(bytes, view.tint.startCycle & 0xffff);
+    shortLE(bytes, view.tint.endCycle & 0xffff);
+    byteS(bytes, view.tint.hue);
+    bytes.push(view.tint.saturation & 0xff);
+    byteA(bytes, view.tint.lightness);
+    byteC(bytes, view.tint.weight);
   }
   return Buffer.from(bytes);
 }
 
-function writeNpcUpdateBlock(view: NpcView, writeInteraction: boolean): Buffer {
+function writeNpcUpdateBlock(view: NpcView, writeInteraction: boolean, writeHeadIcon = false): Buffer {
   const bytes: number[] = [];
-  const mask = npcUpdateMask(view, writeInteraction);
+  const mask = npcUpdateMask(view, writeInteraction, writeHeadIcon);
   writeMask(bytes, mask);
   if (writeInteraction) {
     const target = (view.interactionIndex ?? -1) < 0 ? 0xffffff : view.interactionIndex! & 0xffffff;
     shortLEA(bytes, target);
     byteA(bytes, target >>> 16);
   }
-  if (view.hits) writeHits(bytes, view, true);
+  if (view.hits || view.bars?.length) writeHits(bytes, view, true);
   if (view.forcedChat !== undefined) writeText(bytes, view.forcedChat);
-  if (view.graphic) {
-    bytes.push(1);
-    byteA(bytes, 0);
-    shortLE(bytes, view.graphic.id < 0 ? 0xffff : view.graphic.id);
-    intME(bytes, ((view.graphic.height & 0xffff) << 16) | (view.graphic.delay & 0xffff));
+  if (view.graphics?.length) {
+    bytes.push(view.graphics.length);
+    for (const graphic of view.graphics) {
+      byteA(bytes, (graphic.slot ?? 0) & 0xff);
+      shortLE(bytes, graphic.id < 0 ? 0xffff : graphic.id);
+      intME(bytes, ((graphic.height & 0xffff) << 16) | (graphic.delay & 0xffff));
+    }
   }
   if (view.animation) {
     shortBE(bytes, view.animation.id < 0 ? 0xffff : view.animation.id);
     bytes.push(view.animation.delay & 0xff);
+  }
+  if (writeHeadIcon) {
+    // A count of icons, each a sprite group and an index in it (none clears them).
+    const icon = view.headIcon ?? -1;
+    bytes.push(icon >= 0 ? 1 : 0);
+    if (icon >= 0) {
+      shortBE(bytes, HEADICONS_PRAYER_ARCHIVE);
+      bytes.push(icon & 0xff);
+    }
+  }
+  if (view.exactMove) writeForcedMovement(bytes, view.exactMove);
+  if (view.faceTile) {
+    shortBE(bytes, view.faceTile.x & 0xffff);
+    shortBE(bytes, view.faceTile.y & 0xffff);
   }
   return Buffer.from(bytes);
 }
@@ -2533,13 +2698,22 @@ export function encodeNpcSync(
       continue;
     }
     const writeInteraction = state.interactionIndices.get(index) !== (view.interactionIndex ?? -1);
-    const block = npcUpdateMask(view, writeInteraction) !== 0;
+    const writeHeadIcon = (state.headIcons.get(index) ?? -1) !== (view.headIcon ?? -1);
+    const block = npcUpdateMask(view, writeInteraction, writeHeadIcon) !== 0;
     if (view.runDirection >= 0 && view.walkDirection >= 0) {
       writer.writeBits(1, 1);
       writer.writeBits(2, 2);
       writer.writeBits(1, 1);
       writer.writeBits(3, view.walkDirection);
       writer.writeBits(3, view.runDirection);
+      writer.writeBits(1, block ? 1 : 0);
+      nextIndices.push(index);
+    } else if (view.walkDirection >= 0 && view.crawl) {
+      // A crawl: the run form of the step with its run flag clear (half walking speed).
+      writer.writeBits(1, 1);
+      writer.writeBits(2, 2);
+      writer.writeBits(1, 0);
+      writer.writeBits(3, view.walkDirection);
       writer.writeBits(1, block ? 1 : 0);
       nextIndices.push(index);
     } else if (view.walkDirection >= 0) {
@@ -2562,7 +2736,7 @@ export function encodeNpcSync(
       readd.add(index);
     }
     if (block && nextIndices[nextIndices.length - 1] === index) {
-      updateBlocks.push(writeNpcUpdateBlock(view, writeInteraction));
+      updateBlocks.push(writeNpcUpdateBlock(view, writeInteraction, writeHeadIcon));
     }
   }
 
@@ -2578,7 +2752,8 @@ export function encodeNpcSync(
     if (nextIndices.length >= 255 || view.level !== local.level) break;
     writer.writeBits(16, view.index);
     const writeInteraction = (view.interactionIndex ?? -1) >= 0;
-    const block = npcUpdateMask(view, writeInteraction) !== 0;
+    const writeHeadIcon = (view.headIcon ?? -1) >= 0;
+    const block = npcUpdateMask(view, writeInteraction, writeHeadIcon) !== 0;
     writer.writeBits(1, block ? 1 : 0);
     writer.writeBits(1, 0); // no world view
     writer.writeBits(1, readd.has(view.index) ? 1 : 0);
@@ -2588,19 +2763,21 @@ export function encodeNpcSync(
     writer.writeBits(14, view.typeId & 0x3fff);
     nextIndices.push(view.index);
     nextSet.add(view.index);
-    if (block) updateBlocks.push(writeNpcUpdateBlock(view, writeInteraction));
+    if (block) updateBlocks.push(writeNpcUpdateBlock(view, writeInteraction, writeHeadIcon));
   }
   writer.writeBits(16, 0xffff);
 
   state.indices = nextIndices;
   state.lastTiles.clear();
   state.typeIds.clear();
+  state.headIcons.clear();
   state.interactionIndices.clear();
   for (const index of nextIndices) {
     const view = desired.get(index);
     if (view) {
       state.lastTiles.set(index, { x: view.x, y: view.y, level: view.level });
       state.typeIds.set(index, view.typeId);
+      state.headIcons.set(index, view.headIcon ?? -1);
       state.interactionIndices.set(index, view.interactionIndex ?? -1);
     }
   }

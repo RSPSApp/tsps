@@ -11,14 +11,19 @@ import { Wilderness } from "../../content/wilderness/Wilderness";
 import { PlayerRights } from "../rights/PlayerRights";
 import { hasGlobalWorldTag } from "../../definition/WorldDefinition";
 
+/** Varbit busy: set while a teleport tablet works (OSRS capture). */
+const BUSY_VARBIT = 12393;
+
 class TeleportTask extends Task {
     private teleportTick = 0;
+    private released = false;
 
     constructor(
         private readonly player: Player,
         private readonly targetLocation: Location,
         private readonly teleportType: TeleportType,
-        private readonly onArrival?: () => void
+        private readonly onArrival?: () => void,
+        private readonly onMiddle?: () => void
     ) {
         super(1, player, true);
     }
@@ -31,14 +36,26 @@ class TeleportTask extends Task {
             if (this.teleportType.getMiddleGraphic()) {
                 this.player.performGraphic(this.teleportType.getMiddleGraphic());
             }
+            this.onMiddle?.();
         } else if (this.teleportTick === this.teleportType.getStartTick()) {
             TeleportHandler.onTeleporting(this.player);
             this.player.performAnimation(this.teleportType.getEndAnimation());
             this.player.performGraphic(this.teleportType.getEndGraphic());
+            if (this.teleportType.getOptions().busy) {
+                this.player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+            }
             this.player.moveTo(this.targetLocation);
+            // The player is free on landing (OSRS clears varbit busy that tick): walking, being
+            // attacked and clicking work again at once.
+            this.release();
             this.onArrival?.();
-        } else if (this.teleportTick === this.teleportType.getStartTick() + 2) {
-            this.player.getMovementQueue().setBlockMovement(false).reset();
+            if (!this.teleportType.getOptions().repeatEndAnimation) {
+                this.stop();
+                return;
+            }
+        } else if (this.teleportTick === this.teleportType.getStartTick() + 1) {
+            // Only reached with repeatEndAnimation: the reset is sent again the tick after.
+            this.player.performAnimation(this.teleportType.getEndAnimation());
             this.stop();
             return;
         }
@@ -48,6 +65,14 @@ class TeleportTask extends Task {
 
     stop(): void {
         super.stop();
+        this.release();
+    }
+
+    /** Ends the teleport's hold on the player; also runs if the task is stopped early. */
+    private release(): void {
+        if (this.released) return;
+        this.released = true;
+        this.player.getMovementQueue().setBlockMovement(false).reset();
         this.player.getClickDelay().reset(0);
         this.player.setUntargetable(false);
         this.player.setTeleporting(false);
@@ -66,7 +91,7 @@ export class TeleportHandler {
      * @param teleportType
      *            The type of teleport.
      */
-    public static teleport(player: Player, targetLocation: Location, teleportType: TeleportType, wildernessWarning: boolean, onArrival?: () => void): void {
+    public static teleport(player: Player, targetLocation: Location, teleportType: TeleportType, wildernessWarning: boolean, onArrival?: () => void, onMiddle?: () => void): void {
         if (wildernessWarning) {
             let warning = "";
             const wilderness = Wilderness.isInLocation(targetLocation);
@@ -75,7 +100,7 @@ export class TeleportHandler {
                 warning += "Are you sure you want to teleport there? ";
                 if (wildernessLevel > 0) {
                     warning += "It's in level @red@" + wildernessLevel + "@bla@ wilderness! ";
-                    if (Wilderness.isMulti(targetLocation.getX(), targetLocation.getY())) {
+                    if (Wilderness.isMulti(targetLocation.getX(), targetLocation.getY(), targetLocation.getZ())) {
                         warning += "Additionally, @red@it's a multi zone@bla@. Other players may attack you simultaneously.";
                     } else {
                         warning += "Other players will be able to attack you.";
@@ -93,8 +118,10 @@ export class TeleportHandler {
         player.performGraphic(teleportType.getStartGraphic());
         player.setUntargetable(true);
         player.setTeleporting(true);
-        Sounds.sendSound(player, Sound.TELEPORT);
-        TaskManager.submit(new TeleportTask(player, targetLocation, teleportType, onArrival));
+        const options = teleportType.getOptions();
+        Sounds.sendSound(player, options.sound ?? Sound.TELEPORT);
+        if (options.busy) player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+        TaskManager.submit(new TeleportTask(player, targetLocation, teleportType, onArrival, onMiddle));
         player.getClickDelay().reset();
     }
 
@@ -130,7 +157,10 @@ export class TeleportHandler {
             return false;
         }
 
-        if (PluginManager.emitCanTeleport(player, wildernessLevelLimit) === false) {
+        const area = player.getArea();
+        const canTeleport = (area ? PluginManager.callArea(area, "canTeleport", player, wildernessLevelLimit, targetLocation) : null)
+            ?? PluginManager.emitCanTeleport(player, wildernessLevelLimit, targetLocation);
+        if (canTeleport === false) {
             return false;
         }
 

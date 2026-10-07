@@ -112,6 +112,13 @@ export class ServerPacketReader {
         );
     }
 
+    /** A signed 64-bit big-endian value. */
+    readLong(): bigint {
+        const high = BigInt(this.readInt());
+        const low = BigInt(this.readInt() >>> 0);
+        return BigInt.asIntN(64, (high << 32n) | low);
+    }
+
     readBoolean(): boolean {
         return this.readByte() !== 0;
     }
@@ -340,6 +347,9 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                     worldY: reader.readShort(),
                 },
             };
+
+        case ServerPacketId.ATTACK_TIMER:
+            return { type: "attack_timer", payload: { ticks: reader.readByte() } };
 
         case ServerPacketId.HINT_ARROW:
             return {
@@ -604,6 +614,7 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             let chatIcons: number[] | undefined = undefined;
             let chatPrefix: string | undefined = undefined;
             let isAdmin: boolean | undefined = undefined;
+            let membersWorld: boolean | undefined = undefined;
             if (reader.remaining > 0) {
                 const iconCount = reader.readByte() | 0;
                 const icons: number[] = [];
@@ -618,10 +629,13 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 if (reader.remaining > 0) {
                     isAdmin = reader.readBoolean();
                 }
+                if (reader.remaining > 0) {
+                    membersWorld = reader.readBoolean();
+                }
             }
             return {
                 type: "handshake",
-                payload: { id, name: name || undefined, appearance, chatIcons, chatPrefix, isAdmin },
+                payload: { id, name: name || undefined, appearance, chatIcons, chatPrefix, isAdmin, membersWorld },
             };
         }
 
@@ -640,6 +654,15 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 payload: {
                     varpId: reader.readShort(),
                     value: reader.readInt(),
+                },
+            };
+
+        case ServerPacketId.VARP_LONG:
+            return {
+                type: "varp_long",
+                payload: {
+                    varpId: reader.readShort(),
+                    value: reader.readLong(),
                 },
             };
 
@@ -746,16 +769,19 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             const targetType = reader.readByte();
             let playerId: number | undefined;
             let npcId: number | undefined;
+            let tile: { x: number; y: number; level: number } | undefined;
             if (targetType === 0) {
                 playerId = reader.readShort();
             } else if (targetType === 1) {
                 npcId = reader.readShort();
+            } else if (targetType === 2) {
+                tile = { x: reader.readShort(), y: reader.readShort(), level: reader.readByte() };
             }
             const height = reader.readByte();
             const delay = reader.readShort();
             return {
                 type: "spot",
-                payload: { spotId, playerId, npcId, height, delay },
+                payload: { spotId, playerId, npcId, tile, height, delay },
             };
         }
 
@@ -885,6 +911,14 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 type: "widget",
                 payload: { action: "set_model", uid: reader.readInt(), modelId: reader.readInt() },
             };
+
+        case ServerPacketId.WIDGET_SET_COLOUR: {
+            // IF_SETCOLOUR: 15-bit RGB widened as the game's client does.
+            const uid = reader.readInt();
+            const rgb15 = reader.readShort() & 0x7fff;
+            const colour = (((rgb15 >> 10) & 31) << 19) | (((rgb15 >> 5) & 31) << 11) | ((rgb15 & 31) << 3);
+            return { type: "widget", payload: { action: "set_colour", uid, colour } };
+        }
 
         case ServerPacketId.WIDGET_SET_POSITION:
             return {
@@ -1124,6 +1158,16 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             }
             return { type: "friends_chat", payload: { channel, friends, ignores } };
         }
+
+        case ServerPacketId.CHAT_FILTER_SETTINGS:
+            return {
+                type: "chat_filter_settings",
+                payload: {
+                    publicMode: reader.readByte(),
+                    privateMode: reader.readByte(),
+                    tradeMode: reader.readByte(),
+                },
+            };
 
         case ServerPacketId.SOUND: {
             const soundId = reader.readShort();

@@ -234,6 +234,8 @@ export class NpcType extends Type {
                 this.retextureFrom[i] = buffer.readUnsignedShort();
                 this.retextureTo[i] = buffer.readUnsignedShort();
             }
+        } else if (opcode === 42) {
+            buffer.readUnsignedShort(); // rev 241 recolall (unused by the 241 cache)
         } else if (opcode === 44 || opcode === 45) {
             buffer.readUnsignedShort();
         } else if (opcode === 60) {

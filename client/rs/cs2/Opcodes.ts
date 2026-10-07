@@ -53,16 +53,17 @@ export enum Opcodes {
     CC_CREATESIBLING = 107,
     CC_FIND = 200,
     IF_FIND = 201,
-    /** Traverses up to the parent widget, sets it as active, returns true if found. */
-    CC_FINDROOT = 202,
-    /** Starts iteration over children of activeWidget. Args: (intOp, startIndex) */
-    CC_CHILDREN_FIND = 203,
-    /** Returns the next child index from iteration, or -1 if done. */
-    CC_CHILDREN_FINDNEXTID = 204,
-    /** Starts iteration over children of widget from stack. Args: (startIndex) */
-    IF_CHILDREN_FIND = 205,
-    /** Returns the next child index from iteration, or -1 if done. Same as CC variant. */
-    IF_CHILDREN_FINDNEXTID = 206,
+    /** if_find_entityoverlay(overlay)(boolean); this client has no entity overlays. */
+    IF_FIND_ENTITYOVERLAY = 202,
+    /** cc_find_entityoverlay(overlay, subid)(boolean); this client has no entity overlays. */
+    CC_FIND_ENTITYOVERLAY = 203,
+    /** cc_find_parent()(boolean): the active component becomes its parent. */
+    CC_FIND_PARENT = 204,
+    /** cc_find_layer()(boolean): the active component becomes its layer. */
+    CC_FIND_LAYER = 205,
+    /** cc_find_next_sibling()(boolean) / cc_find_prev_sibling()(boolean). */
+    CC_FIND_NEXT_SIBLING = 206,
+    CC_FIND_PREV_SIBLING = 207,
     /** Returns the PARENT's childIndex if parent is dynamic, or -1 if parent is static/missing. */
     CC_PARENTSUBID = 209,
     /**
@@ -124,20 +125,20 @@ export enum Opcodes {
     CC_SETMODELTRANSPARENT = 1127,
     CC_SETARC = 1128,
     // Input field opcodes (type 16 = inputfield)
-    CC_INPUT_SETSUBMITMODE = 1133,
-    CC_INPUT_SETSELECTCOLOUR = 1134,
-    CC_INPUT_SETACCEPTMODE = 1135,
-    CC_INPUT_SETWRAPMODE = 1136,
+    CC_INPUT_SETSELECTCOLOUR = 1133,
+    CC_INPUT_SETSELECTBGCOLOUR = 1134,
+    CC_INPUT_SETPLACEHOLDERTEXT = 1135,
+    CC_INPUT_SETPLACEHOLDERTEXTCOLOUR = 1136,
     CC_INPUT_SETLINEWRAPPINGWIDTH = 1137,
-    CC_INPUT_SETSELECTBGCOLOUR = 1138,
-    CC_INPUT_SETLINECOUNTLIMIT = 1139,
-    CC_INPUT_SETCURSORCOLOUR = 1140,
-    CC_INPUT_SETCURSORTRANS = 1141,
-    CC_INPUT_SETCURSORWIDTH = 1142,
-    CC_INPUT_SETCURSORHEIGHT = 1143,
-    CC_INPUT_SETCURSOROFFSET = 1144,
-    CC_INPUT_SETLINEWIDTHLIMIT = 1145,
-    CC_INPUT_SETCHARFILTER = 1146,
+    CC_INPUT_SETLINECOUNTLIMIT = 1138,
+    CC_INPUT_SETLINEWIDTHLIMIT = 1139,
+    CC_INPUT_SETFOCUS = 1140,
+    CC_INPUT_SETFOCUSABLE = 1141,
+    CC_INPUT_SETSELECTION = 1142,
+    CC_INPUT_SETCARET = 1143,
+    CC_INPUT_SETWRAPMODE = 1144,
+    CC_INPUT_SETSUBMITMODE = 1145,
+    CC_INPUT_SETACCEPTMODE = 1146,
     CC_SETOBJECT = 1200,
     CC_SETNPCHEAD = 1201,
     CC_SETPLAYERHEAD_SELF = 1202,
@@ -396,15 +397,13 @@ export enum Opcodes {
     SETSHOWMOUSEOVERTEXT = 3118,
     RENDERSELF = 3119,
     /** Sets the feedback sprite shown on click (cross graphic, etc.) */
-    SETFEEDBACKSPRITE = 3120,
+    SETFEEDBACKSPRITE = 3130,
     /** Enables/disables popup text on feedback (mobile) */
-    SETFEEDBACKSHOWPOPUPTEXT = 3121,
+    SETFEEDBACKSHOWPOPUPTEXT = 3131,
     SETSHOWMOUSECROSS = 3125,
     SETSHOWLOADINGMESSAGES = 3126,
     SETTAPTODROP = 3127,
     GETTAPTODROP = 3128,
-    SETKEYINPUTENABLED = 3129,
-    SETFPSINTERFACEOVERLAY = 3130,
     /** Sets key input mode to all keys (used by world map search). */
     SETKEYINPUTMODE_ALL = 3138,
     /** Sets key input mode to keyboard only (filtered input). */
@@ -412,23 +411,17 @@ export enum Opcodes {
     /** Gets the current key input mode. */
     GETKEYINPUTMODE = 3140,
     /** Pops one int; no observable client-side effect. */
-    SETHIDETOOLTIP = 3131,
     GETCANVASSIZE = 3132,
     MOBILE_SETFPS = 3133,
     MOBILE_OPENSTORE = 3134,
     MOBILE_OPENSTORECATEGORY = 3135,
     CLIENT_SET_SIDE_PANEL = 3136,
-    IF_OPENSUB = 3137,
     SETHIDEUSERNAME = 3141,
     GETHIDEUSERNAME = 3142,
     SETREMEMBERUSERNAME = 3143,
     GETREMEMBERUSERNAME = 3144,
     SHOW_IOS_REVIEW = 3145,
     // Mobile local notification opcodes (3170-3173) - schedule push notifications
-    LOCAL_NOTIFICATION = 3170,
-    LOCAL_NOTIFICATION_CANCEL = 3171,
-    LOCAL_NOTIFICATION_CANCELALL = 3172,
-    LOCAL_NOTIFICATION_SUPPORTED = 3173,
     SOUND_SYNTH = 3200,
     SOUND_SONG = 3201,
     SOUND_JINGLE = 3202,
@@ -522,7 +515,7 @@ export enum Opcodes {
     CLAN_SORT_ADD_WORLD = 3647,
     FRIENDSCHAT_SORT_ADD = 3654,
     FRIENDSCHAT_SORT = 3655,
-    CLAN_SORT_APPLY = 3656,
+    FRIENDLIST_SORT_RANK = 3656,
     FRIENDSCHAT_SORT_ADD_RANK = 3657,
     KEYHELD = 3500,
     KEYPRESSED = 3501,
@@ -708,8 +701,6 @@ export enum Opcodes {
     SAFEAREA_GETMAXX = 6222, // Right edge of safe area (canvas width for no notch)
     SAFEAREA_GETMAXY = 6223, // Bottom edge of safe area (canvas height for no home indicator)
     // Note: 6231 is an alternative safe area opcode used in some contexts
-    SAFEAREA_GETMAXY_ALT = 6231,
-    CAM_GETYAW = 6232,
     WORLDLIST_FETCH = 6500,
     WORLDLIST_START = 6501,
     WORLDLIST_NEXT = 6502,
@@ -877,6 +868,7 @@ export enum Opcodes {
     MINIMENU_ISOPEN = 7108, // push 1 boolean - is right-click menu open?
     MINIMENU_FINDCOMPONENT = 7109, // push 1 boolean - is component under cursor?
     MINIMENU_NUMOPS = 7110, // push 1 int - number of menu options
+    STRINGVECTOR_ADD = 7400,
     STRINGVECTOR_ADDUNIQUE = 7401,
     STRINGVECTOR_REMOVE = 7404,
     STRINGVECTOR_GET = 7406,
@@ -913,7 +905,7 @@ export enum Opcodes {
 
     // Array operations
     ARRAY_SORT = 8000,
-    ARRAY_SORT_BY = 8001,
+    ARRAY_RANDOMISE = 8001,
     ARRAY_IS_NULL = 8002,
     ARRAY_LENGTH = 8003,
     ARRAY_COUNT_MATCHES = 8007,
@@ -921,9 +913,22 @@ export enum Opcodes {
     // Unnamed upstream; name and signature inferred from the cargo hold's grid (script 8872).
     ARRAY_FILL_SEQUENCE = 8011,
     ARRAY_JOIN = 8019,
-    ENUM_TO_ARRAY = 8020,
+    ENUM_GETINPUTS = 8020,
     ARRAY_NEW = 8022,
-    ARRAY_INSERT = 8024,
+    /** array_push(array, value, type); was registered as an insert, which read one value too many. */
+    CC_CHILDCOUNT = 208,
+    MES_TYPED = 3102,
+    STOCKMARKET_SELLABLE = 3931,
+    STOCKMARKET_VALUE = 3932,
+    ARRAY_PUSH = 8024,
+    ARRAY_INSERT = 8025,
+    ARRAY_INDEXOF = 8005,
+    ARRAY_FILL = 8010,
+    ARRAY_REVERSE = 8012,
+    STRING_SPLIT = 8018,
+    ARRAY_RESIZE = 8023,
+    ARRAY_DELETE = 8026,
+    ARRAY_PUSHALL = 8027,
 
     // Volume control opcodes (direct setters, not through gameoption)
     SETVOLUMEMUSIC = 3203,
@@ -950,7 +955,6 @@ export enum Opcodes {
     // Notification system (enhanced client)
     // notifications_sendlocal(title, body, arg1, arg2) -> notificationId
     // Triggers the authentic OSRS notification display via CS2 script 3343
-    NOTIFICATIONS_SENDLOCAL = 6800,
 
     // Loot tracker (enhanced client)
     LOOTTRACKER_SOURCEADD = 7600,
@@ -979,4 +983,38 @@ export enum Opcodes {
     LOOTTRACKER_IGNORESOURCECLEAR = 7627,
     LOOTTRACKER_LOOTADD = 7628,
     LOOTTRACKER_SOURCEDROPNAME = 7630,
+
+    // Rev 241 (names and signatures from zwyz/osrs-cache data/commands).
+    PUSH_VARC_LONG = 51,
+    POP_VARC_LONG = 52,
+    PUSH_VAR_LONG = 64,
+    POP_VAR_LONG = 65,
+    CC_FIND_CHILD = 217,
+    CC_ASSERT = 222,
+    IF_SETNPCMODEL = 2215,
+    RESUME_LONGDIALOG = 3114,
+    TRANSLATIONS_SET = 3228,
+    TRANSLATIONS_CLEAR = 3229,
+    LONG_ADD = 4037,
+    LONG_SUB = 4038,
+    LONG_MULTIPLY = 4039,
+    LONG_DIVIDE = 4040,
+    LONG_MIN = 4041,
+    LONG_MAX = 4042,
+    LONG_SCALE = 4043,
+    INT_TO_LONG = 4044,
+    LONG_MODULO = 4055,
+    LONG_PACK = 4060,
+    LONG_UNPACK = 4061,
+    LONG_LOW = 4062,
+    TOSTRING_LONG = 4125,
+    TOSTRING_SPACER_LONG = 4126,
+    SAFEPARSEINT = 4127,
+    OC_CATEGORY = 4219,
+    OC_ID = 4223,
+    OC_BYID = 4224,
+    CLIENT_VERSION = 6531,
+    ARRAY_SWAP = 8014,
+    ARRAY_COPY = 8015,
+    ENUM_GETOUTPUTS = 8021,
 }

@@ -65,7 +65,7 @@ function passEnergyBarrier(player, object, barrier) {
     player.sendMessage(data.ENEMY_SPAWN_MESSAGE);
     return;
   }
-  player.resetCastlewarsIdleTime();
+  game.resetIdleTicks(player);
   const tile = game.getLocationTile(player);
   const crossing = barrier.crossings.find(([at, from]) => game.isAt(object, at[0], at[1], at[2]) && game.isAt(tile, from[0], from[1], from[2]));
   if (crossing && !ObstacleRunner.isBusy(player)) {

@@ -15,6 +15,7 @@
 const { getRegisteredQuests } = require("../quests/QuestRuntime");
 
 const CLAIM_ATTRIBUTE = "tutors.combat_claim_at";
+const AUTO_EQUIP_ATTRIBUTE = "ranged:equip-ammo-on-pickup";
 const CLAIM_COOLDOWN_MS = 30 * 60 * 1000;
 const TRAINING_ARROW_COUNT = 25;
 const RUNE_COUNT = 30;
@@ -377,6 +378,32 @@ function claimRunes({ player, npc, npcId }) {
   return true;
 }
 
+// --- Ammo pickup toggle.
+
+/** "Can you toggle my ammo to equip when I pick it up please?" on the Ranged combat tutor. */
+function handleAmmoToggleChoice({ player, npcId, option }) {
+  if (npcId !== NPC.RANGED) return;
+  if (option === "Automatically equip it.") player.setAttribute(AUTO_EQUIP_ATTRIBUTE, true);
+  else if (option === "Place it in my inventory.") player.setAttribute(AUTO_EQUIP_ATTRIBUTE, false);
+}
+
+/** With the toggle on, ground ammo matching the worn ammo slot stacks there, not in the bag. */
+function autoEquipPickedUpAmmo(event) {
+  const player = event.player;
+  if (player?.getAttribute?.(AUTO_EQUIP_ATTRIBUTE) !== true) return;
+  const equipment = player.getEquipment();
+  const worn = equipment.get(core.Equipment.AMMUNITION_SLOT);
+  if (!worn || worn.getId() !== event.groundItemId) return;
+  const item = event.groundItem?.getItem?.();
+  if (!item || item.getAmount() <= 0) return;
+  core.ItemOnGroundManager.deregister(event.groundItem);
+  worn.incrementAmountBy(item.getAmount());
+  equipment.refreshItems();
+  core.Sounds.sendSound(player, core.Sound.PICK_UP_ITEM);
+  player.getLastItemPickup?.().reset?.();
+  event.handled = true;
+}
+
 // --- Using items on the tutors.
 
 function handleItemOnNpc(event) {
@@ -403,11 +430,14 @@ module.exports = {
   register(api) {
     init(api);
     api.persistAttribute(CLAIM_ATTRIBUTE);
+    api.persistAttribute(AUTO_EQUIP_ATTRIBUTE);
     api.onNpcDialogueVariant(selectVariant);
     api.onNpcDialogueCondition(answerCondition);
     api.onCustomEvent("npc-dialogue:action", handleAction);
     api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
     api.onCustomEvent("npc-dialogue:line", handleLine);
+    api.onCustomEvent("npc-dialogue:choice", handleAmmoToggleChoice);
+    api.onGroundItemPickup(autoEquipPickedUpAmmo);
     api.onNpcInteraction("Ranged combat tutor", { Claim: claimArrows });
     api.onNpcInteraction("Magic combat tutor", { Claim: claimRunes });
     api.onItemOnNpc(handleItemOnNpc);

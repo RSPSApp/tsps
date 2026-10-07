@@ -243,6 +243,12 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public instanceRegionX: number = 0;
     public instanceRegionY: number = 0;
     public instanceLocRebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Bumped per instance scene build; only the latest build's result is applied. */
+    public instanceBuildSeq: number = 0;
+    /** A built instance scene waiting in mapsToLoad; it replaces the drawn scene when applied. */
+    public pendingInstanceScene: SdMapData | null = null;
+    /** The map square the drawn instance scene is built as; it owns every NPC in the scene. */
+    public instanceSceneMap: { mapX: number; mapY: number } | null = null;
     /** Active world entity overlays (rendered on top of normal world). */
     public worldEntityOverlays: Map<
         number,
@@ -324,10 +330,6 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public pendingStreamMapsByGeneration: Map<number, StreamMapBatch> = new Map();
     // Coalesce back-to-back loc changes (e.g. 2-piece gates) to avoid transient half-updates/flicker.
     public static readonly LOC_RELOAD_FLUSH_DELAY_MS = 25;
-    public static readonly MOBILE_GAMEPLAY_UI_MIN_SCALE = 1.25;
-    public static readonly MOBILE_GAMEPLAY_UI_MAX_SCALE = 1.5;
-    public static readonly MOBILE_GAMEPLAY_UI_PHONE_EDGE = 390;
-    public static readonly MOBILE_GAMEPLAY_UI_TABLET_EDGE = 768;
     app!: PicoApp;
     gl!: WebGL2RenderingContext;
 
@@ -374,6 +376,11 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     colorTarget?: Renderbuffer;
     depthTarget?: Renderbuffer;
     framebuffer?: Framebuffer;
+    /**
+     * Desktop 3D scene resolution as a share of the canvas (0.5-1), set in the debug panel. The
+     * scene is drawn smaller and scaled up; the interface stays at full resolution.
+     */
+    public sceneResolutionScale: number = 1;
     public sceneRenderWidth: number = 1;
     public sceneRenderHeight: number = 1;
 
@@ -531,13 +538,16 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     // Settings
     maxLevel: number = Scene.MAX_LEVELS - 1;
 
-    // 117HD blue skybox (#B9D6FF). Clear color + fog tint share this.
+    // Clear color + fog tint. Starts as 117HD's blue sky (#B9D6FF); updateSkyColor follows the
+    // area's environment each frame (render/environment.ts).
     skyColor: vec4 = vec4.fromValues(
         HD_SKY_COLOR_VEC4[0],
         HD_SKY_COLOR_VEC4[1],
         HD_SKY_COLOR_VEC4[2],
         HD_SKY_COLOR_VEC4[3],
     );
+    /** Set once a sky colour is picked in the dev panel; otherwise the area's environment decides. */
+    skyColorOverride: boolean = false;
     fogDepth: number = 24; // Manual fog start (tiles); used only when autoFogDepth is off
     /** Dynamic fog: fog start tracks render distance each frame. */
     autoFogDepth: boolean = true;
@@ -663,6 +673,8 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     playerIndexBufferAlpha?: VertexBuffer;
     playerInterleavedBufferAlpha?: VertexBuffer;
     playerSlotBuffer?: VertexBuffer;
+    /** Player pose matrices for GPU animation (PlayerRenderer); every player draw binds it. */
+    playerPoseTexture?: Texture;
     playerDrawCall?: DrawCall;
     playerDrawCallAlpha?: DrawCall;
     playerDrawRanges?: DrawRange[];
@@ -786,6 +798,15 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
             this.getWorldEntityTransformForMap(map);
         this.sceneRaycaster.deckToWorldProvider = (entityIndex, fineX, fineY) =>
             this.projectDeckToWorld(entityIndex, fineX, fineY);
+        this.sceneRaycaster.npcHeightProvider = (npcTypeId) => this.getNpcDefaultHeight(npcTypeId);
+        this.sceneRaycaster.npcTrianglesProvider = (ecsId, serverId) =>
+            this.buildNpcModelHighlightTriangles({
+                kind: "npc",
+                ecsId,
+                serverId,
+                npcTypeId: this.osrsClient.npcEcs.getNpcTypeId(ecsId),
+                plane: 0,
+            });
         const previousOnMapRemoved = this.mapManager.onMapRemoved;
         this.mapManager.onMapRemoved = (mapX: number, mapY: number) => {
             this.clearMinimapIconsForMap(mapX | 0, mapY | 0);
@@ -1334,6 +1355,11 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         return render.resolveUnbatchedNpcGeometry(this, ecsId);
     }
 
+    /** Animation smoothing draws this NPC via the unbatched path, not the map's baked frames. */
+    public isNpcSmoothed(ecsId: number): boolean {
+        return render.npcSmoothingCycle(this, ecsId) >= 0;
+    }
+
     initFramebuffers(): void {
         return render.initFramebuffers(this);
     }
@@ -1489,6 +1515,10 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
 
     public scheduleInstanceLocRebuild(): void {
         return render.scheduleInstanceLocRebuild(this);
+    }
+
+    public replaceSceneWithInstance(mapData: SdMapData): void {
+        return render.replaceSceneWithInstance(this, mapData);
     }
 
     clearInstance(): void {

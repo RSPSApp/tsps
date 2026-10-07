@@ -26,9 +26,6 @@ const TRACKED_EVENTS = new Set<string>([
   "path_blocked_retarget",
   "path_blocked_retarget_failed",
   "path_blocked_backoff_applied",
-  "bank_run_target_booth_selected",
-  "bank_run_no_route_to_booth",
-  "bank_run_stuck_warning",
   "ditch_cross_requested",
   "ditch_cross_execute",
   "ditch_cross_waiting_force_movement",
@@ -50,8 +47,6 @@ const TRACK_REASON_EVENTS = new Set<string>([
   "path_blocked_retarget",
   "path_blocked_retarget_failed",
   "path_blocked_backoff_applied",
-  "bank_run_no_route_to_booth",
-  "bank_run_stuck_warning",
   "ditch_cross_timeout_delay_retry_walk",
   "bot_mode_switch",
 ]);
@@ -59,8 +54,6 @@ const TRACK_REASON_EVENTS = new Set<string>([
 const TRACK_USER_EVENTS = new Set<string>([
   "ditch_cross_requested",
   "path_blocked_retarget",
-  "bank_run_no_route_to_booth",
-  "bank_run_stuck_warning",
   "bot_mode_switch",
 ]);
 

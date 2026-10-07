@@ -12,7 +12,7 @@ import { Misc } from "../../util/Misc";
 import { PluginManager } from "../../plugins/PluginManager";
 import { encodeChatMessage, encodeTradeClose, encodeTradeOpen, encodeTradeRequest, encodeTradeUpdate, TradePartyView } from "../../net/protocol/ClientProtocol";
 
-const ATTR_SKIP_PERSISTENCE = "botSkipPersistence";
+const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 
 class PlayerItemContainer extends ItemContainer {
     constructor(player, private readonly execFunc: Function) {
@@ -439,7 +439,7 @@ export class Trading {
     private static save(player: Player): void {
         if (player.getAttribute?.(ATTR_SKIP_PERSISTENCE) === true) return;
         try {
-            GameConstants.PLAYER_PERSISTENCE.save(player);
+            GameConstants.PLAYER_PERSISTENCE.save(player, "trade");
         } catch (err) {
             console.error(`[trade] Failed to save ${player.getUsername()} after a trade`, err);
         }

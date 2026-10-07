@@ -27,6 +27,7 @@ class SkillEntered implements EnteredAmountAction {
 export class SkillManager {
     public static readonly AMOUNT_OF_SKILLS: number = Skill.values().length;
     public static readonly MAX_EXPERIENCE: number = 1000000000;
+    public static readonly XP_LOCKED_ATTRIBUTE = "skills:xp-locked";
     public static readonly EXPERIENCE_FOR_99: number = 13034431;
     public static readonly EXP_ARRAY: number[] = [0, 83, 174, 276, 388, 512, 650, 801, 969, 1154, 1358, 1584, 1833, 2107,
         2411, 2746, 3115, 3523, 3973, 4470, 5018, 5624, 6291, 7028, 7842, 8740, 9730, 10824, 12031, 13363, 14833,
@@ -129,6 +130,9 @@ export class SkillManager {
         if (!Number.isFinite(experience) || experience <= 0) {
             return this;
         }
+        if (PluginManager.emitCanGainExperience(this.player, skill, experience) === false) {
+            return this;
+        }
 
         // Multipliers...
         if (multipliers) {
@@ -139,7 +143,7 @@ export class SkillManager {
         this.player.getPacketSender().sendExpDrop(skill, experience);
 
         // Don't add the experience if it has been locked..
-        if (this.player.experienceLockedReturn())
+        if (this.player.getAttribute(SkillManager.XP_LOCKED_ATTRIBUTE) === true)
             return this;
 
         // If we already have max exp, don't add any more.
@@ -442,7 +446,26 @@ export class SkillManager {
         const fromExp = Math.max(1, SkillManager.getLevelForExperience(this.getExperience(skill)));
         // Don't write this back: mid-way through setMaxLevel(...).setExperience(...) the old
         // experience would pin the max level at its old value (issue #101).
-        return Math.max(fromArray, fromExp);
+        const level = Math.max(fromArray, fromExp);
+        const cap = this.levelCaps.get(idx);
+        return cap === undefined ? level : Math.max(1, Math.min(level, cap));
+    }
+
+    /** Temporary, unsaved caps on base levels, by skill index (a minigame's handicap, say). */
+    private readonly levelCaps = new Map<number, number>();
+
+    /**
+     * Caps a skill's base level until cleared with `null`. Nothing is saved: the cap is gone
+     * on the next login. The current level is lowered to the cap if above it.
+     */
+    public setMaxLevelCap(skill: Skill, cap: number | null): SkillManager {
+        if (cap == null) this.levelCaps.delete(skill.getIndex());
+        else this.levelCaps.set(skill.getIndex(), Math.max(1, Math.floor(cap)));
+        if (cap != null && this.getCurrentLevel(skill) > this.getMaxLevel(skill)) {
+            this.setCurrentLevel(skill, this.getMaxLevel(skill), false);
+        }
+        this.updateSkill(skill);
+        return this;
     }
 
     /**

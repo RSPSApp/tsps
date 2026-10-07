@@ -215,6 +215,7 @@ function start() {
 
 module.exports = {
   name: "MotherlodeMine",
+  members: true,
   _test: { tick, start, crawl, climb, squeezeThrough, percyCondition, percyPays, enterMine },
   register(api) {
     Machine.init(api);
@@ -237,6 +238,6 @@ module.exports = {
     api.onObjectInteraction("Broken strut", { Hammer: Machine.hammerStrut });
     api.onNpcDialogueCondition(percyCondition);
     api.onCustomEvent("npc-dialogue:action", percyPays);
-    api.registerCommand("mlmstrut", Machine.forceBreak, PlayerRights.DEVELOPER);
+    api.registerCommand("mlmstrut", Machine.forceBreak, PlayerRights.DEVELOPER, "Break a Motherlode Mine strut");
   },
 };

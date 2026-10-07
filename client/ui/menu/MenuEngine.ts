@@ -20,6 +20,7 @@ export type SimpleMenuEntry = {
     shiftClick?: boolean; // Whether this entry can be executed via shift-click (bypasses menu)
     forceLeftClick?: boolean; // Forces left-click execution even when the menu would open
     subEntries?: SimpleMenuEntry[]; // Nested submenu entries (rendered as a child menu)
+    swapPinned?: boolean; // A plugin's chosen left-click (a shift-click swap); after Cast/Use
 };
 
 export type MenuClickContext = {
@@ -317,6 +318,13 @@ export function chooseDefaultMenuEntry(
         }
     }
 
+    // A client plugin pinned this entry as the left-click (e.g. a custom shift-click swap).
+    const pinned = entries.find((e) => e.swapPinned && !e.deprioritized);
+    if (pinned) {
+        if (!pinned.action) pinned.action = inferMenuAction(pinned.option, pinned.targetType);
+        return pinned;
+    }
+
     // Shift-click: find the entry matching shiftClickActionIndex
     if (
         state.isShiftHeld &&
@@ -343,14 +351,15 @@ export function chooseDefaultMenuEntry(
     }
 
     // Priority 4: First non-deprioritized actionable entry (excluding Walk here/Examine/Cancel)
-    const skippedOptions = new Set(["walk here", "examine", "inspect", "cancel"]);
+    const skippedOptions = new Set(["walk here", "examine", "cancel"]);
     const actionableEntry = entries.find((e) => {
         const lower = String(e.option || "").toLowerCase();
-        return !e.deprioritized && !skippedOptions.has(lower);
+        const action = e.action ?? inferMenuAction(e.option, e.targetType);
+        return !e.deprioritized && !skippedOptions.has(lower) && action !== MenuAction.Examine;
     });
     if (actionableEntry) {
         if (!actionableEntry.action)
-            actionableEntry.action = inferMenuAction(actionableEntry.option);
+            actionableEntry.action = inferMenuAction(actionableEntry.option, actionableEntry.targetType);
         return actionableEntry;
     }
 

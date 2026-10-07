@@ -48,8 +48,10 @@ import { PoisonType } from "../../task/impl/CombatPoisonEffect";
 import { CombatConstants } from "./CombatConstants";
 import { Wilderness } from "../wilderness/Wilderness";
 import { PluginManager } from "../../../plugins/PluginManager";
+import { applyIncomingDamageModifiers } from "./EquipmentEffects";
 import { ServerPerf } from "../../../util/ServerPerf";
 import { World } from "../../World";
+import { ItemOnGroundManager } from "../../entity/impl/grounditem/ItemOnGroundManager";
 import { WeaponProfiles } from "./WeaponProfile";
 import { Barrows } from "./Barrows";
 import {
@@ -95,6 +97,9 @@ const isDeveloperQueuedAttackSpec = (entity: Mobile): entity is Player => {
 
 export class CombatFactory {
     private static readonly RANDOM = new RandomGen();
+    public static readonly RECOIL_DAMAGE_ATTRIBUTE = "ring-of-recoil:damage";
+    public static readonly CRYSTAL_BOW_SHOTS_ATTRIBUTE = "crystal-bow:shots-in-stage";
+    public static readonly CRYSTAL_BOW_ITEM_ATTRIBUTE = "crystal-bow:tracked-item";
     /**
      * The default melee combat method.
      */
@@ -191,17 +196,17 @@ export class CombatFactory {
                 if (damageRange) {
                     damage = Math.max(damageRange.minimum, Math.min(damageRange.maximum, damage));
                 }
-                if (profile?.boltEffects && CombatFactory.boltEffectTriggered(entity)) {
-                    let multiplier = RangedData.getSpecialEffectsMultiplier(player, victim, damage);
-                    damage *= multiplier;
-                }
+                // Enchanted-bolt activation is applied exactly once, by
+                // applyExtraHitRolls after the accuracy roll. Rolling it here as
+                // well let a bolt fire twice on one shot.
             }
         } else if (type == CombatType.MAGIC) {
             damage = CombatFactory.rollSpecialDamage(entity, DamageFormulas.sourceMaxHit(entity, CombatType.MAGIC), boundsOverride);
         }
 
+        // Wiki (Ward of Arceuus): demons hit 10% less, that 10% rounded down first.
         if (entity.isNpc() && victim.isPlayer() && ArceuusSpells.hasWard(victim)) {
-            if (entity.getAsNpc().getCurrentDefinition()?.isDemon?.()) damage = Math.floor(damage * 0.9);
+            if (entity.getAsNpc().getCurrentDefinition()?.isDemon?.()) damage -= Math.floor(damage / 10);
         }
 
         // Do magic effects with the calculated damage..
@@ -227,11 +232,20 @@ export class CombatFactory {
                 }
             }
         }
-        if (victim.isPlayer() && Misc.getRandom(100) <= 70) {
+        // The Elysian spirit shield cuts damage by 25% 70% of the time (Wiki).
+        if (victim.isPlayer() && Math.random() < CombatConstants.ELYSIAN_ACTIVATION_CHANCE) {
             if (victim.getAsPlayer().getEquipment().getItems()[Equipment.SHIELD_SLOT].getId() == 12817) {
                 hitDamage.multiplyDamage(CombatConstants.ELYSIAN_DAMAGE_REDUCTION);
                 victim.performGraphic(new Graphic(321, 40)); // Elysian spirit shield effect gfx
             }
+        }
+
+        // Plugin-owned reactions to a landed hit (crystal armour charges, Justiciar reduction).
+        if (victim.isPlayer() && hitDamage.getDamage() > 0) {
+            const meleeAttackBonusIndex = type == CombatType.MELEE && entity.isPlayer()
+                ? entity.getAsPlayer().getFightType().getBonusType()
+                : undefined;
+            applyIncomingDamageModifiers(victim, hitDamage, { type, attacker: entity, meleeAttackBonusIndex });
         }
 
         if (type == CombatType.MELEE && isDeveloperQueuedAttackSpec(entity)) {
@@ -320,6 +334,7 @@ export class CombatFactory {
      */
     private static applyResolvedHitDamage(target: Mobile, resolvedHit: PendingHit): void {
         const hits = resolvedHit.getHits();
+        for (const hit of hits) if (hit.getSource() == null) hit.setSource(resolvedHit.getAttacker());
         const delays = resolvedHit.getHitDelays();
         if (!delays || delays.length <= 1 || delays.length !== hits.length) {
             target.getCombat().getHitQueue().addPendingDamage(hits);
@@ -513,6 +528,12 @@ export class CombatFactory {
         return CanAttackResponse.CAN_ATTACK;
     }
 
+    /** Multi-combat rules apply: both stand in multi, or either is an NPC that is always multi. */
+    public static multiCombatBetween(attacker: Mobile, target: Mobile): boolean {
+        const alwaysMulti = (mobile: Mobile) => mobile.isNpc() && mobile.getAsNpc().isMultiCombat();
+        return alwaysMulti(attacker) || alwaysMulti(target) || (AreaManager.inMulti(attacker) && AreaManager.inMulti(target));
+    }
+
     /** Target/area ownership checks safe to run before pursuit; no ammo or runes are consumed. */
     public static canAttackPermission(
         attacker: Mobile,
@@ -545,7 +566,7 @@ export class CombatFactory {
         // Only check if we aren't in multi.
         if (!ServerPerf.measurePhase(
             "combat.process.can_attack.multi_check",
-            () => AreaManager.inMulti(attacker) && AreaManager.inMulti(target)
+            () => CombatFactory.multiCombatBetween(attacker, target)
         )) {
             if (
                 ServerPerf.measurePhase("combat.process.can_attack.attacker_busy", () =>
@@ -636,7 +657,11 @@ export class CombatFactory {
             (Wilderness.isInSafeBuilding(attacker.getLocation()) || Wilderness.isInSafeBuilding(target.getLocation()))) {
             return CanAttackResponse.CANT_ATTACK_IN_AREA;
         }
-        const pluginCanAttack = PluginManager.emitCanAttack(attacker, target, method);
+        const attackerArea = attacker.getArea();
+        const targetArea = target.getArea();
+        const pluginCanAttack = (attackerArea ? PluginManager.callArea(attackerArea, "canAttack", attacker, target, method) : null)
+            ?? (targetArea && targetArea !== attackerArea ? PluginManager.callArea(targetArea, "canAttack", attacker, target, method) : null)
+            ?? PluginManager.emitCanAttack(attacker, target, method);
         if (pluginCanAttack === true) {
             return CanAttackResponse.CAN_ATTACK;
         }
@@ -659,6 +684,11 @@ export class CombatFactory {
         spellRadius: number
     ): boolean {
         if (!candidate || candidate === attacker || candidate === primaryTarget) {
+            return false;
+        }
+        // Registered/untargetable/needsPlacement/dying guards, so a splash can
+        // never land on a corpse or an actor that has left the area.
+        if (!CombatFactory.validTarget(attacker, candidate)) {
             return false;
         }
         // Duel damage is restricted to the agreed opponent, including spell splashes.
@@ -704,7 +734,7 @@ export class CombatFactory {
             });
 
             // Reward the player experience after plugins have finalized this hit.
-            CombatFactory.rewardExp(attacker.getAsPlayer(), qHit);
+            if (qHit.rewardsExperience()) CombatFactory.rewardExp(attacker.getAsPlayer(), qHit);
 
             // Java parity: apply skull at hit-queue time, before executeHit mutates
             // attacker/retaliation state (which can otherwise suppress skulling).
@@ -716,9 +746,20 @@ export class CombatFactory {
         // Add this hit to the target's hitQueue.
         target.getCombat().getHitQueue().addPendingHit(
             qHit,
-            World.getProcessCycle() + qHit.getDelay() +
-                (attacker.isPlayer() && qHit.getCombatType() === CombatType.MELEE ? 1 : 0),
+            World.getProcessCycle() + qHit.getDelay() + CombatFactory.hitProcessingDelay(qHit),
         );
+    }
+
+    /**
+     * OSRS processes NPCs before players each tick, so a hit queued against an NPC lands
+     * one tick after the distance table (Wiki: Hit delay). Player melee keeps its tick too:
+     * the target's queue drains at the start of its own turn, which has already passed.
+     */
+    public static hitProcessingDelay(hit: PendingHit): number {
+        const targetIsNpc = hit.getTarget()?.isNpc?.() === true;
+        const meleePlayerAttack = hit.getAttacker()?.isPlayer?.() === true
+            && hit.getCombatType() === CombatType.MELEE;
+        return targetIsNpc || meleePlayerAttack ? 1 : 0;
     }
 
     public static executeHit(qHit: PendingHit) {
@@ -761,6 +802,7 @@ export class CombatFactory {
         if (
             combatType !== CombatType.MELEE &&
             target.getBlockAnim() >= 0 &&
+            method?.playsBlockAnimation?.() !== false &&
             target.getHitpoints() >
                 target.getCombat().getHitQueue().getQueuedDamage() + damage
         ) {
@@ -782,10 +824,8 @@ export class CombatFactory {
             }
 
             // Prayer effects.
+            // Redemption checks after the damage lands (HitQueue -> handleRedemption).
             if (resolvedHit.isAccurate()) {
-                if (PrayerHandler.isActivated(playerTarget, PrayerHandler.REDEMPTION)) {
-                    CombatFactory.handleRedemption(attacker, playerTarget, damage);
-                }
                 if (PrayerHandler.isActivated(attacker, PrayerHandler.SMITE)) {
                     CombatFactory.handleSmite(attacker, playerTarget, damage);
                 }
@@ -859,10 +899,7 @@ export class CombatFactory {
 
         // Handle ring of recoil and vengeance for target.
         if (damage > 0) {
-            if (
-                target.isPlayer() &&
-                target.getAsPlayer().getEquipment().get(Equipment.RING_SLOT).getId() == ItemIdentifiers.RING_OF_RECOIL
-            ) {
+            if (target.isPlayer() && CombatFactory.wearingRecoilRing(target.getAsPlayer())) {
                 CombatFactory.handleRecoil(target.getAsPlayer(), attacker, damage);
             }
             if (target.hasVengeanceReturn()) {
@@ -904,7 +941,10 @@ export class CombatFactory {
         // Add magic exp, even if total damage is 0.
         // Since spells have a base exp reward
         if (hit.getCombatType() === CombatType.MAGIC) {
-            if (player.getCombat().getPreviousCast() != null) {
+            // The hit is queued before MagicCombatMethod.finished() moves the
+            // active cast into previousCast, so the first cast of a session
+            // must read castSpell or it would award no Magic XP at all.
+            if ((player.getCombat().getCastSpell() ?? player.getCombat().getPreviousCast()) != null) {
                 if (hit.isAccurate()) {
                     if (!defensiveMagicSplit) {
                         player.getSkillManager().addExperience(
@@ -1005,30 +1045,49 @@ export class CombatFactory {
         if (!player.getCombat().getPrayerBlockTimer().finished()) {
             return;
         }
-        player.getCombat().getPrayerBlockTimer().start(200);
+        // OSRS: the dragon scimitar's Sever blocks protection prayers for 8
+        // ticks (4.8s). The shared timer counts whole seconds, so use 5.
+        player.getCombat().getPrayerBlockTimer().start(5);
         PrayerHandler.resetPrayers(player, PrayerHandler.PROTECTION_PRAYERS);
         player.sendMessage("You have been disabled and can no longer use protection prayers.");
     }
 
+    /** Damage a ring of recoil holds before it shatters (Wiki: Ring of recoil). */
+    public static readonly RECOIL_RING_CHARGES = 40;
+
+    /** A ring of recoil; a charged ring of suffering recoils from the RingOfSuffering plugin. */
+    public static wearingRecoilRing(player: Player): boolean {
+        return player.getEquipment().get(Equipment.RING_SLOT).getId() === ItemIdentifiers.RING_OF_RECOIL;
+    }
+
+    /** 10% + 1 of the damage taken, rounded down (Wiki: Ring of recoil). */
+    public static recoilDamage(damage: number): number {
+        return damage > 0 ? Math.floor(damage / 10) + 1 : 0;
+    }
+
+    /**
+     * Rebounds ring of recoil damage to the attacker. The ring's 40 charges are
+     * tracked per player and its last recoil deals only what is left.
+     */
     public static handleRecoil(player: Player, attacker: Mobile, damage: number) {
-        if (damage == 0) {
+        let returnDmg = CombatFactory.recoilDamage(damage);
+        if (returnDmg <= 0) {
             return;
         }
-        const RECOIL_DMG_MULTIPLIER = 0.1;
-        let returnDmg = Math.floor(Math.random() * 3) + 1 === 2 ? 0 : (damage * RECOIL_DMG_MULTIPLIER) + 1;
+        const used = Math.max(0, Number(player.getAttribute(CombatFactory.RECOIL_DAMAGE_ATTRIBUTE) ?? 0) || 0);
+        returnDmg = Math.min(returnDmg, Math.max(0, CombatFactory.RECOIL_RING_CHARGES - used));
+        if (returnDmg <= 0) {
+            return;
+        }
+        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED).markReflected().setSource(player)]);
 
-        // Increase recoil damage for a player.
-        player.setRecoilDamage(player.getRecoilDamage() + returnDmg);
-
-        // Deal damage back to attacker
-        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED)]);
-
-        // Degrading ring of recoil for a player.
-        if (player.getRecoilDamage() >= 40) {
+        if (used + returnDmg >= CombatFactory.RECOIL_RING_CHARGES) {
             player.getEquipment().set(Equipment.RING_SLOT, new Item(-1));
             player.getEquipment().refreshItems();
-            player.sendMessage("Your ring of recoil has degraded.");
-            player.setRecoilDamage(0);
+            player.sendMessage("<col=7f007f>Your Ring of Recoil has shattered.</col>");
+            player.setAttribute(CombatFactory.RECOIL_DAMAGE_ATTRIBUTE, 0);
+        } else {
+            player.setAttribute(CombatFactory.RECOIL_DAMAGE_ATTRIBUTE, used + returnDmg);
         }
     }
 
@@ -1037,7 +1096,7 @@ export class CombatFactory {
             return;
         }
         const returnDmg = Math.max(1, Math.floor(damage * 0.75));
-        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED)]);
+        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(returnDmg, HitMask.RED).markReflected().setSource(character)]);
         character.forceChat("Taste Vengeance!");
         character.setHasVengeance(false);
     }
@@ -1084,8 +1143,11 @@ export class CombatFactory {
             return;
         }
 
-        CombatFactory.skull(attacker, SkullType.WHITE_SKULL, 300);
+        // Wiki: a white skull lasts 30 minutes after attacking a player.
+        CombatFactory.skull(attacker, SkullType.WHITE_SKULL, CombatFactory.PVP_SKULL_SECONDS);
     }
+
+    public static readonly PVP_SKULL_SECONDS = 30 * 60;
 
     static skull(player: Player, type: SkullType, seconds: number) {
         player.setSkullType(type);
@@ -1101,6 +1163,20 @@ export class CombatFactory {
     }
 
     static stun(character: Mobile, seconds: number, force: boolean) {
+        CombatFactory.stunTicks(character, Misc.getTicks(seconds), force);
+    }
+
+    /**
+     * A stun of a whole number of ticks (seconds don't divide into ticks exactly: 5.4 s is 9.000…02).
+     * `graphic` replaces the default stun graphic (null for none); `message: false` leaves the
+     * "You've been stunned!" message to the caller, for stuns whose message comes later.
+     */
+    static stunTicks(
+        character: Mobile,
+        ticks: number,
+        force: boolean,
+        options: { graphic?: Graphic | null; message?: boolean } = {}
+    ) {
         // OSRS grants a 1-tick grace period after a stun wears off during
         // which the target can't be re-stunned - always enforced (unlike
         // the "already stunned" guard below, `force` never bypasses this).
@@ -1113,14 +1189,14 @@ export class CombatFactory {
             }
         }
 
-        const ticks = Misc.getTicks(seconds);
         character.getTimers().registers(TimerKey.STUN, ticks);
         character.getTimers().registers(TimerKey.STUN_IMMUNITY, ticks + 1);
         character.getCombat().reset();
         character.getMovementQueue().reset();
-        character.performGraphic(new Graphic(348, GraphicHeight.HIGH));
+        const graphic = options.graphic === undefined ? new Graphic(348, GraphicHeight.HIGH) : options.graphic;
+        if (graphic) character.performGraphic(graphic);
 
-        if (character.isPlayer()) {
+        if (character.isPlayer() && options.message !== false) {
             character.getAsPlayer().sendMessage("You've been stunned!");
         }
     }
@@ -1150,9 +1226,11 @@ export class CombatFactory {
         if (!hasActiveDifferentTarget || npcCanRetargetInMulti) {
             let auto_ret = false;
             if (target.isPlayer()) {
+                // combat:no-retaliate: a player mid-action that ignores hits (chopping an Ent trunk).
                 auto_ret =
                     target.getAsPlayer().autoRetaliateReturn() &&
-                    !playerIsBusy();
+                    !playerIsBusy() &&
+                    target.hasFlag?.("combat:no-retaliate") !== true;
             } else if (target.isNpc()) {
                 auto_ret = target.hasFlag?.("combat:no-retaliate") !== true
                     && target.getAsNpc().getMovementCoordinator().getCoordinateState() == CoordinateState.HOME;
@@ -1183,7 +1261,8 @@ export class CombatFactory {
             }
             TaskManager.submit(new CombatFactoryTask(1, target, false, () => {
                 if (target.isPlayer() &&
-                    (!target.getAsPlayer().autoRetaliateReturn() || playerIsBusy())) {
+                    (!target.getAsPlayer().autoRetaliateReturn() || playerIsBusy()
+                        || target.hasFlag?.("combat:no-retaliate") === true)) {
                     return;
                 }
                 target.getCombat().attack(attacker, true);
@@ -1211,26 +1290,50 @@ export class CombatFactory {
         }
     }
 
-    private static handleRedemption(attacker: Mobile, victim: Player, damage: number) {
-        if ((victim.getHitpoints() - damage) <= (victim.getSkillManager().getMaxLevel(Skill.HITPOINTS) / 10)) {
-            const amountToHeal = (victim.getSkillManager().getMaxLevel(Skill.PRAYER) * .25);
-            victim.performGraphic(new Graphic(436));
-            victim.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
-            victim.getSkillManager().setCurrentLevels(Skill.HITPOINTS, victim.getHitpoints() + amountToHeal);
-            victim.sendMessage("You've run out of prayer points!");
-            PrayerHandler.deactivatePrayers(victim);
+    /**
+     * Redemption, run after a hit has been applied: a living player under 10% of
+     * their Hitpoints (9 or below at 99) has their prayer drained to 0 and heals
+     * a quarter of their base Prayer level, rounded down. It fires on any hit,
+     * including 0s, but can't save a player from a lethal one (Wiki: Redemption).
+     */
+    public static handleRedemption(victim: Mobile) {
+        if (!victim.isPlayer()) {
+            return;
+        }
+        const player = victim.getAsPlayer();
+        const hitpoints = player.getHitpoints();
+        if (hitpoints <= 0 || !PrayerHandler.isActivated(player, PrayerHandler.REDEMPTION)) {
+            return;
+        }
+        const skills = player.getSkillManager();
+        if (hitpoints * 10 >= skills.getMaxLevel(Skill.HITPOINTS)) {
+            return;
+        }
+        player.performGraphic(new Graphic(436));
+        skills.setCurrentLevels(Skill.PRAYER, 0);
+        skills.setCurrentLevels(Skill.HITPOINTS, hitpoints + Math.floor(skills.getMaxLevel(Skill.PRAYER) / 4));
+        player.sendMessage("You have run out of Prayer points!");
+        PrayerHandler.deactivatePrayers(player);
+    }
+
+    /** Smite drains a quarter of the damage dealt from the target's Prayer, rounded down (Wiki: Smite). */
+    public static handleSmite(attacker: Mobile, victim: Player, damage: number) {
+        const drain = Math.floor(damage / 4);
+        if (drain > 0) {
+            victim.getSkillManager().decreaseCurrentLevel(Skill.PRAYER, drain, 0);
         }
     }
 
-    private static handleSmite(attacker: Mobile, victim: Player, damage: number) {
-        victim.getSkillManager().decreaseCurrentLevel(Skill.PRAYER, (damage / 4), 0);
-    }
-
+    /**
+     * Retribution: on death, hits the killer if they're next to the dying player
+     * for up to a quarter of the dying player's base Prayer level (Wiki: Retribution).
+     */
     static handleRetribution(killed: Player, killer: Player) {
         killed.performGraphic(new Graphic(437));
-        if (killer.getLocation().isWithinDistance(killer.getLocation(), CombatConstants.RETRIBUTION_RADIUS)) {
+        if (killer.getLocation().isWithinDistance(killed.getLocation(), CombatConstants.RETRIBUTION_RADIUS)) {
+            const maxHit = Math.floor(killed.getSkillManager().getMaxLevel(Skill.PRAYER) / 4);
             killer.getCombat().getHitQueue().addPendingDamage([
-                new HitDamage(Misc.getRandom(CombatConstants.MAXIMUM_RETRIBUTION_DAMAGE), HitMask.RED)]);
+                new HitDamage(Misc.randomInclusive(0, maxHit), HitMask.RED).markReflected().setSource(killed)]);
         }
     }
 
@@ -1305,26 +1408,20 @@ export class CombatFactory {
         return true;
     }
 
-    public static decrementAmmo(player: Player, pos: Location, amount: number) {
+    /** Fired ammunition has a 20% chance to break on impact; the rest lands on the floor. */
+    private static readonly AMMO_BREAK_CHANCE = 20;
+
+    /**
+     * @param delayTicks the shot's flight time in ticks. The outcome is rolled now but the
+     *   count and the floor drop only apply when the projectile lands, so the quiver matches
+     *   the hitsplat instead of emptying at the bowstring.
+     */
+    public static decrementAmmo(player: Player, pos: Location, amount: number, delayTicks = 0) {
         // Get the ranged weapon data
         const rangedWeapon = player.getCombat().getRangedWeapon();
 
-        // Determine which slot we are decrementing ammo from.
-        let slot = Equipment.AMMUNITION_SLOT;
-
-        // Thrown weapons consume ammunition from the weapon slot.
-        if (CombatFactory.usesWeaponSlotAmmo(rangedWeapon)) {
-            slot = Equipment.WEAPON_SLOT;
-        }
-
-        let accumalator = player.getEquipment().get(Equipment.CAPE_SLOT).getId() == 10499;
-        if (accumalator) {
-            if (Misc.getRandom(12) <= 9) {
-                return;
-            }
-        }
-
-        if (PluginManager.decrementRangedAmmo(player, pos, amount)) {
+        // Plugin-owned ammunition (toxic blowpipe scales, the Gauntlet's bows) consumes itself.
+        if (PluginManager.decrementRangedAmmo(player, pos, amount, delayTicks)) {
             return;
         }
 
@@ -1343,12 +1440,9 @@ export class CombatFactory {
             if (!isChargedCrystalBow(weaponId)) {
                 return;
             }
-            if (player.getCrystalBowTrackedStageItemId() !== weaponId) {
-                player.setCrystalBowTrackedStageItemId(weaponId);
-                player.setCrystalBowShotsInStage(0);
-            }
-
-            let shotsInStage = Number(player.getCrystalBowShotsInStage() ?? 0);
+            let shotsInStage = player.getAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE) === weaponId
+                ? Number(player.getAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE) ?? 0)
+                : 0;
             let currentWeaponId = weaponId;
             for (let shot = 0; shot < amount; shot++) {
                 shotsInStage += 1;
@@ -1364,8 +1458,8 @@ export class CombatFactory {
                 weaponItem.setId(nextWeaponId);
             }
 
-            player.setCrystalBowTrackedStageItemId(currentWeaponId);
-            player.setCrystalBowShotsInStage(shotsInStage);
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_ITEM_ATTRIBUTE, currentWeaponId);
+            player.setAttribute(CombatFactory.CRYSTAL_BOW_SHOTS_ATTRIBUTE, shotsInStage);
             player.getEquipment().refreshItems();
             BonusManager.update(player);
             player.getUpdateFlag().flag(Flag.APPEARANCE);
@@ -1376,34 +1470,73 @@ export class CombatFactory {
             return;
         }
 
-        player.getEquipment().get(slot).decrementAmountBy(amount);
+        // Determine which slot we are decrementing ammo from.
+        // Thrown weapons consume ammunition from the weapon slot.
+        let slot = Equipment.AMMUNITION_SLOT;
+        if (CombatFactory.usesWeaponSlotAmmo(rangedWeapon)) {
+            slot = Equipment.WEAPON_SLOT;
+        }
+        const ammoItem = player.getEquipment().get(slot);
 
-        // Drop arrows if the player isn't using an accumalator
-        if (player.getCombat().getAmmunition().dropOnFloor()) {
-            if (!accumalator) {
-                /*
-                for(let i = 0; i < amount; i++) {
-                    GroundItemManager.spawnGroundItem(player,
-                    new GroundItem(new Item(player.getEquipment().get(slot).getId()), pos,
-                    player.getUsername(), false, 120, true, 120));
+        // Per shot: 20% break, (80 - recovery)% land on the floor where the target stood,
+        // the rest is recovered by a plugin (Ava's devices).
+        const recovery = PluginManager.rangedAmmoRecovery(player);
+        const dropChance = 80 - recovery;
+        let lost = 0;
+        let dropped = 0;
+        for (let shot = 0; shot < amount; shot++) {
+            const roll = Misc.getRandom(99); // 0..99
+            if (roll < CombatFactory.AMMO_BREAK_CHANCE) {
+                lost++;
+            } else if (roll < CombatFactory.AMMO_BREAK_CHANCE + dropChance) {
+                dropped++;
+            }
+            // Otherwise the device recovered it before it hit the floor.
+        }
+
+        const apply = () => {
+            // A swap mid-flight moved this stack out of the slot; don't touch the new one.
+            if (player.getEquipment().get(slot) !== ammoItem) {
+                return;
+            }
+
+            if (dropped > 0 && pos) {
+                ItemOnGroundManager.registerLocation(player, new Item(ammoItem.getId(), dropped), pos);
+            }
+
+            const consumed = lost + dropped;
+            if (consumed > 0) {
+                ammoItem.decrementAmountBy(consumed);
+            }
+
+            // If we are at 0 ammo remove the item from the equipment completely.
+            if (ammoItem.getAmount() == 0) {
+                player.sendMessage("You have run out of ammunition!");
+                player.getEquipment().set(slot, new Item(-1));
+
+                if (slot == Equipment.WEAPON_SLOT) {
+                    WeaponInterfaceManager.assign(player);
+                    player.getUpdateFlag().flag(Flag.APPEARANCE);
                 }
-                */
             }
+
+            // Refresh the equipment interface.
+            player.getEquipment().refreshItems();
+        };
+
+        if (delayTicks > 0) {
+            TaskManager.submit(new (class extends Task {
+                constructor() {
+                    super(delayTicks);
+                }
+                execute(): void {
+                    apply();
+                    this.stop();
+                }
+            })());
+        } else {
+            apply();
         }
-
-        // If we are at 0 ammo remove the item from the equipment completely.
-        if (player.getEquipment().get(slot).getAmount() == 0) {
-            player.sendMessage("You have run out of ammunition!");
-            player.getEquipment().set(slot, new Item(-1));
-
-            if (slot == Equipment.WEAPON_SLOT) {
-                WeaponInterfaceManager.assign(player);
-                player.getUpdateFlag().flag(Flag.APPEARANCE);
-            }
-        }
-
-        // Refresh the equipment interface.
-        player.getEquipment().refreshItems();
     }
 
     private static usesWeaponSlotAmmo(rangedWeapon: RangedWeapon): boolean {

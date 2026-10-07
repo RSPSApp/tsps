@@ -97,6 +97,7 @@ function disembarkBoat({ player, location }) {
 
 module.exports = {
   name: "SailingGangplank",
+  members: true,
   register(api) {
     content();
     api.onObjectInteraction("Gangplank", { Board: boardBoat, Disembark: disembarkBoat });

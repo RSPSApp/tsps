@@ -142,17 +142,18 @@ function heading({ player, parts }) {
 
 module.exports = {
   name: "SailingCommands",
+  members: true,
   register(api) {
     content();
-    api.registerCommand("raft", giveRaft, PlayerRights.DEVELOPER);
-    api.registerCommand("skiff", giveSkiff, PlayerRights.DEVELOPER);
-    api.registerCommand("sloop", giveSloop, PlayerRights.DEVELOPER);
+    api.registerCommand("raft", giveRaft, PlayerRights.DEVELOPER, "Moor a new raft at The Pandemonium");
+    api.registerCommand("skiff", giveSkiff, PlayerRights.DEVELOPER, "Moor a new skiff at The Pandemonium");
+    api.registerCommand("sloop", giveSloop, PlayerRights.DEVELOPER, "Moor a new sloop at The Pandemonium");
     api.persistAttribute(TOOLS_UNLOCKED_ATTRIBUTE);
-    api.registerCommand("pandemonium", toPandemonium, PlayerRights.DEVELOPER);
-    api.registerCommand("sailingtools", unlockSailingTools, PlayerRights.DEVELOPER);
-    api.registerCommand("boatmats", spawnPartMaterials, PlayerRights.DEVELOPER);
-    api.registerCommand("boatinfo", boatInfo, PlayerRights.DEVELOPER);
-    api.registerCommand("sailmode", sailMode, PlayerRights.DEVELOPER);
-    api.registerCommand("heading", heading, PlayerRights.DEVELOPER);
+    api.registerCommand("pandemonium", toPandemonium, PlayerRights.DEVELOPER, "Teleport to The Pandemonium");
+    api.registerCommand("sailingtools", unlockSailingTools, PlayerRights.DEVELOPER, "Unlock cargo-hold tools");
+    api.registerCommand("boatmats", spawnPartMaterials, PlayerRights.DEVELOPER, "Spawn boat-building materials");
+    api.registerCommand("boatinfo", boatInfo, PlayerRights.DEVELOPER, "Show your boats and sailing state");
+    api.registerCommand("sailmode", sailMode, PlayerRights.DEVELOPER, "Set boat movement mode");
+    api.registerCommand("heading", heading, PlayerRights.DEVELOPER, "Set boat heading");
   },
 };

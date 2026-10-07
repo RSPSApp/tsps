@@ -42,7 +42,42 @@ export class Autocasting {
         [41, CombatSpells.BLOOD_BLITZ], [42, CombatSpells.ICE_BLITZ],
         [43, CombatSpells.SMOKE_BARRAGE], [44, CombatSpells.SHADOW_BARRAGE],
         [45, CombatSpells.BLOOD_BARRAGE], [46, CombatSpells.ICE_BARRAGE],
+        // Arceuus (cache script 4133: 53-55 the top row, 56-58 the bottom; enum 1986's icons):
+        // the demonbanes on top, the grasps below.
+        [53, CombatSpells.INFERIOR_DEMONBANE], [54, CombatSpells.SUPERIOR_DEMONBANE],
+        [55, CombatSpells.DARK_DEMONBANE], [56, CombatSpells.GHOSTLY_GRASP],
+        [57, CombatSpells.SKELETAL_GRASP], [58, CombatSpells.UNDEAD_GRASP],
     ]);
+
+    /** Wiki (Autocast): the weapons that can autocast Arceuus spells, by name (any charge or degrade). */
+    private static readonly ARCEUUS_AUTOCAST_WEAPONS = [
+        "ahrim's staff", "blue moon spear", "kodai wand", "master wand", "purging staff", "skull sceptre",
+        "slayer's staff", "staff of the dead", "toxic staff of the dead",
+    ];
+
+    /**
+     * Varp 664 picks the autocast selector's spell list (cache scripts 2098 and 243): -1 the standard
+     * spellbook, 4675 the ancient one, 4170 the Slayer's staff's waves, surges, Crumble Undead and
+     * Magic Dart, and 9013 (the skull sceptre's entry) the Arceuus one.
+     */
+    private static readonly SELECTOR_STANDARD = -1;
+    private static readonly SELECTOR_SLAYERS_STAFF = ItemIdentifiers.SLAYERS_STAFF;
+    private static readonly SELECTOR_ARCEUUS = ItemIdentifiers.SKULL_SCEPTRE;
+
+    public static canAutocastArceuus(weaponName: string): boolean {
+        const name = weaponName.trim().toLowerCase();
+        return this.ARCEUUS_AUTOCAST_WEAPONS.some((weapon) => name === weapon || name.startsWith(`${weapon} `));
+    }
+
+    /** What varp 664 is set to when the selector opens, for this spellbook and weapon. */
+    public static selectorList(spellbook: MagicSpellbook, weaponId: number): number {
+        if (spellbook === MagicSpellbook.ANCIENT) return weaponId;
+        if (spellbook === MagicSpellbook.ARCEUUS) return this.SELECTOR_ARCEUUS;
+        if (weaponId === ItemIdentifiers.SLAYERS_STAFF || weaponId === ItemIdentifiers.SLAYERS_STAFF_E_) {
+            return this.SELECTOR_SLAYERS_STAFF;
+        }
+        return this.SELECTOR_STANDARD;
+    }
 
     public static autocastSpell(index: number): CombatSpell | null {
         return this.AUTOCAST_SPELLS.get(index) ?? null;
@@ -89,12 +124,17 @@ export class Autocasting {
             player.sendMessage("You can only autocast ancient magicks with that.");
             return true;
         }
+        if (player.getSpellbook() === MagicSpellbook.ARCEUUS &&
+            !this.canAutocastArceuus(player.getEquipment().getWeapon().getDefinition().getName())) {
+            player.sendMessage("You can only autocast regular offensive spells with this staff.");
+            return true;
+        }
 
         const fightType = defensive ? FightType.STAFF_FOCUS : FightType.STAFF_POUND;
         player.setFightType(fightType);
         player.getPacketSender()
             .sendConfig(fightType.getParentId(), fightType.getChildId())
-            .sendConfig(664, player.getSpellbook() === MagicSpellbook.ANCIENT ? weaponId : -1)
+            .sendConfig(664, this.selectorList(player.getSpellbook(), weaponId))
             .sendSubInterface((161 << 16) | 76, this.AUTOCAST_INTERFACE)
             .sendInterfaceFlagsRange((this.AUTOCAST_INTERFACE << 16) | this.AUTOCAST_CONTAINER, 0, 64, 1 << 1)
             .sendMessage("You can set a default autocast spell any time from the magic tab.");

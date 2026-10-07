@@ -100,7 +100,7 @@ function skipNullableLargeSmart(buffer: ByteBuffer): void {
     buffer.readBigSmart();
 }
 
-function skipWorldMapData0(buffer: ByteBuffer): void {
+function skipWorldMapData0(buffer: ByteBuffer, withRefs: boolean): void {
     buffer.readUnsignedByte();
     buffer.readUnsignedByte();
     buffer.readUnsignedByte();
@@ -108,11 +108,13 @@ function skipWorldMapData0(buffer: ByteBuffer): void {
     buffer.readUnsignedShort();
     buffer.readUnsignedShort();
     buffer.readUnsignedShort();
-    skipNullableLargeSmart(buffer);
-    skipNullableLargeSmart(buffer);
+    if (withRefs) {
+        skipNullableLargeSmart(buffer);
+        skipNullableLargeSmart(buffer);
+    }
 }
 
-function skipWorldMapData1(buffer: ByteBuffer): void {
+function skipWorldMapData1(buffer: ByteBuffer, withRefs: boolean): void {
     buffer.readUnsignedByte();
     buffer.readUnsignedByte();
     buffer.readUnsignedByte();
@@ -124,20 +126,31 @@ function skipWorldMapData1(buffer: ByteBuffer): void {
     buffer.readUnsignedShort();
     buffer.readUnsignedByte();
     buffer.readUnsignedByte();
-    skipNullableLargeSmart(buffer);
-    skipNullableLargeSmart(buffer);
+    if (withRefs) {
+        skipNullableLargeSmart(buffer);
+        skipNullableLargeSmart(buffer);
+    }
 }
 
+/** The composite map's icons, in either format (rev 241 dropped the entries' geography refs). */
 function decodeCompositeMapIcons(data: Int8Array, includeHidden: boolean): WorldMapIconEntry[] {
+    try {
+        return decodeCompositeMapIconsAs(data, includeHidden, true);
+    } catch {
+        return decodeCompositeMapIconsAs(data, includeHidden, false);
+    }
+}
+
+function decodeCompositeMapIconsAs(data: Int8Array, includeHidden: boolean, withRefs: boolean): WorldMapIconEntry[] {
     const buffer = new ByteBuffer(data);
     const data0Count = buffer.readUnsignedShort();
     for (let i = 0; i < data0Count; i++) {
-        skipWorldMapData0(buffer);
+        skipWorldMapData0(buffer, withRefs);
     }
 
     const data1Count = buffer.readUnsignedShort();
     for (let i = 0; i < data1Count; i++) {
-        skipWorldMapData1(buffer);
+        skipWorldMapData1(buffer, withRefs);
     }
 
     const iconCount = buffer.readUnsignedShort();
@@ -155,6 +168,9 @@ function decodeCompositeMapIcons(data: Int8Array, includeHidden: boolean): World
                 displayCoord: coord,
             });
         }
+    }
+    if (buffer.offset !== data.length) {
+        throw new Error("World map composite map: format mismatch");
     }
     return icons;
 }
@@ -484,6 +500,25 @@ function readWorldMapSection(buffer: ByteBuffer): WorldMapSection {
     return section;
 }
 
+/**
+ * The world map index's groups (zwyz/osrs-cache Js5WorldMapGroup). Rev 241 dropped the group and
+ * file names from this index, so a name lookup falls back to these ids; before, the names
+ * resolved to the same ids.
+ */
+export const WORLD_MAP_GROUP = { details: 0, compositemap: 1, compositetexture: 2, area: 3, labels: 4 } as const;
+
+export function worldMapGroupId(index: any, name: keyof typeof WORLD_MAP_GROUP): number {
+    const byName = index.getArchiveId(name);
+    if (byName >= 0) return byName;
+    const id = WORLD_MAP_GROUP[name];
+    return index.archiveExists(id) ? id : -1;
+}
+
+/** An area's composite map: by the area's name, else the file with its details file's id. */
+export function compositeMapFileFor(archive: any, area: { id: number; internalName: string }): any {
+    return archive.getFileNamed(area.internalName) ?? archive.getFile?.(area.id) ?? archive.files?.find((file: any) => file.id === area.id);
+}
+
 export class WorldMapArea {
     id = -1;
     internalName = "";
@@ -630,13 +665,13 @@ export class WorldMapState {
             return state;
         }
 
-        const detailsArchiveId = index.getArchiveId("details");
+        const detailsArchiveId = worldMapGroupId(index, "details");
         if (detailsArchiveId < 0 || !index.archiveExists(detailsArchiveId)) {
             return state;
         }
 
         const archive = index.getArchive(detailsArchiveId);
-        const compositeMapArchiveId = index.getArchiveId("compositemap");
+        const compositeMapArchiveId = worldMapGroupId(index, "compositemap");
         const compositeMapArchive =
             compositeMapArchiveId >= 0 && index.archiveExists(compositeMapArchiveId)
                 ? index.getArchive(compositeMapArchiveId)
@@ -649,7 +684,7 @@ export class WorldMapState {
                 if (area.isMain) {
                     state.mainArea = area;
                 }
-                const compositeMapFile = compositeMapArchive?.getFileNamed(area.internalName);
+                const compositeMapFile = compositeMapArchive && compositeMapFileFor(compositeMapArchive, area);
                 if (compositeMapFile) {
                     state.addStaticIcons(area.id, decodeCompositeMapIcons(compositeMapFile.data, true));
                 }

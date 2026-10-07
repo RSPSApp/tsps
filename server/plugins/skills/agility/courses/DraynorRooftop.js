@@ -6,6 +6,7 @@ module.exports = {
   key: "draynor",
   name: "Draynor Village Rooftop",
   lapXp: 120,
+  petBase: 33005, // Giant squirrel base chance (Wiki)
   marks: {
     level: 10,
     tiles: [[3101, 3278, 3], [3091, 3275, 3], [3093, 3266, 3], [3098, 3259, 3]],

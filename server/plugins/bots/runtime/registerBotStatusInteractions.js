@@ -4,9 +4,7 @@ const {
 const {
   ATTR_RECRUIT_OWNER_USERNAME,
 } = require("./BotRecruitConstants");
-const {
-  recallRecruitedBot,
-} = require("./BotRecruitRuntime");
+const { startRecruit } = require("../brain/BrainActivities");
 
 function registerBotStatusInteractions(options = {}) {
   const {
@@ -24,7 +22,7 @@ function registerBotStatusInteractions(options = {}) {
   const getOwnedClan = (player) => FriendsChatManager.getOwnedChannel(player);
   const signalClanBotsToFollowOwner = (owner) => {
     const clan = getOwnedClan(owner);
-    if (!clan || !runtime || !behaviorMode) {
+    if (!clan || !runtime) {
       return;
     }
     for (const member of clan.members.values()) {
@@ -46,7 +44,7 @@ function registerBotStatusInteractions(options = {}) {
         member.setPositionToFace?.(owner.getLocation?.());
         continue;
       }
-      recallRecruitedBot(member, owner, botState, behaviorMode);
+      startRecruit(member, botState, owner);
     }
   };
   const shouldShowRecruitOption = (player) => player?.isPlayerBot?.() !== true;
@@ -70,8 +68,8 @@ function registerBotStatusInteractions(options = {}) {
       ? runtime?.botStatesByName?.get?.(botUsername) ??
         runtime?.entriesByUsername?.get?.(botUsername)?.state
       : null;
-    if (botState && behaviorMode) {
-      recallRecruitedBot(bot, owner, botState, behaviorMode);
+    if (botState) {
+      startRecruit(bot, botState, owner);
     } else {
       bot.setAttribute?.(ATTR_RECRUIT_OWNER_USERNAME, owner.getUsername?.() ?? null);
       bot.setFollowing?.(owner);

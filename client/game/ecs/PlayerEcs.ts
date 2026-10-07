@@ -1201,11 +1201,12 @@ export class PlayerEcs {
         this.resetAnimSet(i);
         if (opts.mergeWithDefault !== false) this.applyAnimSetValues(i, this.defaultAnimSet);
         this.applyAnimSetValues(i, set);
-        // Ensure movementSequence starts at idle immediately (OSRS resets this every cycle).
-        try {
+        // Appearance metadata can arrive between movement and render ticks.
+        // Preserve the active pose; the next movement tick selects the new sequence.
+        if (!this.isMoving(i)) {
             const idle = this.animIdleSeq[i] | 0;
             if (idle >= 0) this.animMovementSeqId[i] = idle | 0;
-        } catch {}
+        }
     }
 
     setDefaultAnimSet(set: PlayerAnimSet): void {

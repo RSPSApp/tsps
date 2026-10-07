@@ -47,7 +47,7 @@ export class MapFileLoader {
         }
     }
 
-    getLocData(mapX: number, mapY: number, xteasMap: XteaMap): Int8Array | undefined {
+    getLocData(mapX: number, mapY: number, xteasMap?: XteaMap): Int8Array | undefined {
         const replacement = this.regionReplacements.get((mapX << 8) | mapY);
         if (replacement) return replacement.objectData;
         const archiveId = this.mapFileIndex.getLocArchiveId(mapX, mapY);
@@ -55,7 +55,7 @@ export class MapFileLoader {
             return undefined;
         }
         const fileId = this.mapFileIndex.getLocFileId(mapX, mapY);
-        const key = xteasMap.get(archiveId);
+        const key = xteasMap?.get(archiveId);
         try {
             const file = this.mapIndex.getFile(archiveId, fileId, key);
             return file?.data;
@@ -87,7 +87,7 @@ export class LegacyMapFileLoader extends MapFileLoader {
         }
     }
 
-    override getLocData(mapX: number, mapY: number, xteasMap: XteaMap): Int8Array | undefined {
+    override getLocData(mapX: number, mapY: number, xteasMap?: XteaMap): Int8Array | undefined {
         const data = super.getLocData(mapX, mapY, xteasMap);
         if (!data) {
             return undefined;

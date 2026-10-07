@@ -56,14 +56,8 @@ export function processWidgetReleaseInput(
     const { mx, my } = frame;
     // Release
     if (widgetInteraction.clickedWidget && !isHolding) {
-        // A short drag can be released before the drag delay expires. Never
-        // reinterpret a displaced release as the item's primary action (Drop).
-        if (!widgetInteraction.isDraggingWidget && widgetInteraction.isWidgetDraggable(widgetInteraction.clickedWidget)
-            && Math.max(Math.abs(mx - widgetInteraction.dragClickX), Math.abs(my - widgetInteraction.dragClickY))
-                > (widgetInteraction.clickedWidget.dragZoneSize ?? 0)) {
-            widgetInteraction.clearWidgetInteractionState();
-            return;
-        }
+        // OSRS: a release before the drag has started (inside its dead time) is a click, even
+        // if the mouse already moved on - which is how fast dropping works.
         // Drag complete
         if (widgetInteraction.isDraggingWidget) {
             const w = widgetInteraction.clickedWidget;

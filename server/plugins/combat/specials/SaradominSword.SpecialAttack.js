@@ -41,7 +41,7 @@ module.exports = function registerSaradominSwordSpecialAttack(api) {
             this.stop();
             return;
           }
-          target.getCombat().getHitQueue().addPendingDamage([new HitDamage(lightningDamage, HitMask.RED)]);
+          target.getCombat().getHitQueue().addPendingDamage([new HitDamage(lightningDamage, HitMask.RED).setSource(hit.getAttacker())]);
           this.stop();
         }
       })());

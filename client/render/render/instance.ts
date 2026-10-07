@@ -197,6 +197,7 @@ export async function loadInstanceScene(host: WebGLOsrsRendererHost,
 
         if (!host.osrsClient.loadedCache) return;
 
+        // The server replays its spawned locs after every rebuild.
         host.addedLocs.clear();
         host.locOverrides.clear();
         host.locSpawns.clear();
@@ -216,18 +217,18 @@ export async function loadInstanceScene(host: WebGLOsrsRendererHost,
             `[WebGLOsrsRenderer] Loading instance scene at map (${playerMapX}, ${playerMapY}) from region (${regionX}, ${regionY})...`,
         );
 
-        // Clear existing maps so the instance scene is the only one rendered.
-        host.osrsClient.clearMinimapImageUrls();
-        host.clearMaps();
+        // The current scene stays drawn while the new one builds; it is swapped out in the
+        // same frame the new one is loaded (replaceSceneWithInstance), so nothing flashes.
+        // LOC_ADD_CHANGE packets arrive right after REBUILD_REGION in the same batch: start
+        // once they are in, so the scene is built once, with them.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (!host.instanceActive || host.instanceTemplateChunks !== templateChunks) return;
+        if (host.instanceLocRebuildTimer !== null) {
+            clearTimeout(host.instanceLocRebuildTimer);
+            host.instanceLocRebuildTimer = null;
+        }
 
         await host.doInstanceSceneBuild(templateChunks, regionX, regionY, playerMapX, playerMapY);
-
-        // LOC_ADD_CHANGE packets arrive after REBUILD_REGION on the same socket.
-        // By now they are stored in addedLocs. Schedule a deferred rebuild to
-        // include them; the short delay batches any remaining in-flight packets.
-        if (host.addedLocs.size > 0) {
-            host.scheduleInstanceLocRebuild();
-        }
     
 }
 
@@ -239,6 +240,8 @@ export async function doInstanceSceneBuild(host: WebGLOsrsRendererHost,
         playerMapY: number,
     ): Promise<void> {
 
+        // Only the latest build is applied: a newer rebuild (or loc rebuild) supersedes this one.
+        const build = ++host.instanceBuildSeq;
         const extraLocs = host.getInstanceExtraLocs(playerMapX, playerMapY);
 
         const input: SdMapLoaderInput = {
@@ -262,6 +265,8 @@ export async function doInstanceSceneBuild(host: WebGLOsrsRendererHost,
             SdMapDataLoader
         >(host.dataLoader, input);
 
+        if (build !== host.instanceBuildSeq || !host.instanceActive) return;
+
         if (mapData) {
             console.log(
                 `[WebGLOsrsRenderer] Instance scene loaded: vertices=${
@@ -274,12 +279,31 @@ export async function doInstanceSceneBuild(host: WebGLOsrsRendererHost,
             host.mapsToLoad.clear();
             host.pendingStreamMapsByGeneration.clear();
             // Bypass grid/generation checks — instance scenes are always valid
+            host.pendingInstanceScene = mapData;
             host.mapsToLoad.push(mapData);
             // Register the map in MapManager so it isn't pruned
             host.mapManager.loadingMapIds.add(getMapSquareId(playerMapX, playerMapY));
         } else {
             console.warn("[WebGLOsrsRenderer] Instance scene load returned no data");
         }
+    
+}
+
+/**
+ * Called as a built instance scene is applied: drops whatever was drawn before (the previous
+ * instance scene or the normal map) in the same step, and loads the new one without the
+ * fog fade-in, so the swap happens between two frames.
+ */
+export function replaceSceneWithInstance(host: WebGLOsrsRendererHost, mapData: SdMapData): void {
+
+        host.pendingInstanceScene = null;
+        host.osrsClient.clearMinimapImageUrls();
+        host.clearMaps();
+        host.skipMapFadeIn = true;
+        host.mapManager.loadingMapIds.add(getMapSquareId(mapData.mapX, mapData.mapY));
+        // Its NPCs belong to this one square now, wherever in the scene they stand.
+        host.instanceSceneMap = { mapX: mapData.mapX | 0, mapY: mapData.mapY | 0 };
+        host.osrsClient.rehomeNpcs?.(getMapSquareId(mapData.mapX, mapData.mapY));
     
 }
 
@@ -341,6 +365,8 @@ export function scheduleInstanceLocRebuild(host: WebGLOsrsRendererHost, ): void 
 export function clearInstance(host: WebGLOsrsRendererHost, ): void {
 
         host.instanceActive = false;
+        host.pendingInstanceScene = null;
+        host.instanceSceneMap = null;
         host.osrsClient.clearMinimapImageUrls();
         host.instanceTemplateChunks = null;
         if (host.instanceLocRebuildTimer !== null) {
@@ -351,6 +377,7 @@ export function clearInstance(host: WebGLOsrsRendererHost, ): void {
         host.locOverrides.clear();
         host.locSpawns.clear();
         host.clearMaps();
+        host.osrsClient.rehomeNpcs?.();
         console.log("[WebGLOsrsRenderer] Instance cleared, normal map streaming resumed");
     
 }

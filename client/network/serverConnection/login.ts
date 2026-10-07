@@ -4,6 +4,7 @@ import { initServerConnection } from "./connection/init";
 import { send } from "./connection/send";
 import { state } from "./state";
 import type { GameSocket } from "./connection/GameSocket";
+import { resolveServerTransport } from "./outgoing/connectionInfo";
 
 export function setAutoSendHandshake(auto: boolean): void {
     state.autoSendHandshake = auto;
@@ -35,12 +36,14 @@ export function subscribeLogoutResponse(
  * Send login credentials to server.
  * If the state.socket isn't open (e.g., after logout), this will reconnect first.
  */
-export function sendLogin(username: string, password: string, revision: number = 0): void {
+export async function sendLogin(username: string, password: string, revision: number = 0): Promise<void> {
     // Store credentials for session resumption on reconnect
     state.sessionUsername = username;
     state.sessionPassword = password;
     state.sessionRevision = revision;
     const attemptId = ++state.loginConnectAttemptId;
+    if (state.webRtcConfig && !await resolveServerTransport()) return;
+    if (attemptId !== state.loginConnectAttemptId) return;
 
     // Clear suppress flag - user is intentionally logging in
     try {

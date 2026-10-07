@@ -63,7 +63,7 @@ function readTriggers(buf: ByteBuffer): number[] | null {
     return triggers;
 }
 
-function decodeIf3(uid: number, data: Int8Array): any {
+function decodeIf3(uid: number, data: Int8Array, revision: number): any {
     const buf = new ByteBuffer(data);
     buf.readByte();
     const type = buf.readByte();
@@ -87,7 +87,9 @@ function decodeIf3(uid: number, data: Int8Array): any {
         buf.readUnsignedByte(); buf.readUnsignedByte(); buf.readInt();
         buf.readUnsignedByte(); buf.readUnsignedByte();
     } else if (type === 6) {
-        buf.readUnsignedShort();
+        // Model IDs widened in cache 237; the wrong width also shifts flags/actions.
+        if (revision >= 237) buf.readInt();
+        else buf.readUnsignedShort();
         buf.readShort(); buf.readShort();
         buf.readUnsignedShort(); buf.readUnsignedShort(); buf.readUnsignedShort(); buf.readUnsignedShort();
         buf.readUnsignedShort();
@@ -160,8 +162,9 @@ async function main() {
             continue;
         }
         try {
-            const w = decodeIf3((groupId << 16) | fileId, data);
+            const w = decodeIf3((groupId << 16) | fileId, data, CachePipeline.getActive().revision);
             const bits: string[] = [`type=${w.type}`];
+            if (w.flags) bits.push(`flags=${w.flags}`);
             if (w.text) bits.push(`text=${JSON.stringify(w.text)}`);
             if (w.spriteId !== undefined) bits.push(`sprite=${w.spriteId}`);
             if (w.hidden) bits.push("hidden");

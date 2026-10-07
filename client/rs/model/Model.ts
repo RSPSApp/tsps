@@ -51,6 +51,9 @@ type SkeletalCompositeOptions = {
 
 const scaleVector = vec3.create();
 
+/** One transform of a frame, for blending two frames (animation smoothing). */
+type BlendEntry = { group: number; x: number; y: number; z: number };
+
 export class Model extends Entity {
     static animateOriginX: number = 0;
     static animateOriginY: number = 0;
@@ -1006,6 +1009,13 @@ export class Model extends Entity {
         this.postAnimate();
     }
 
+    /**
+     * Applies `frame`, or with a `nextFrame` and `alpha` > 0 a blend of the two (animation
+     * smoothing): every skeleton group either frame transforms is moved `alpha` of the way from
+     * its value in `frame` to its value in `nextFrame` (a group a frame leaves out counts as
+     * neutral: 0, or 128 for scales). Rotations take the short way round; alpha transforms are
+     * not blended.
+     */
     transformInterpolated(
         base: SeqBase,
         frame: SeqFrame,
@@ -1016,29 +1026,11 @@ export class Model extends Entity {
         mask: number,
         alpha: number,
     ): void {
-        void nextFrame;
-        void alpha;
-        for (let i = 0; i < frame.transformCount; i++) {
-            const group = frame.transformGroups[i];
-            const type = base.types[group];
-            if (
-                !animateLabels ||
-                animateLabels[group] === condition ||
-                type === SeqTransformType.ORIGIN
-            ) {
-                const resetOriginGroup = frame.resetOriginGroups[i];
-                if (resetOriginGroup !== -1) {
-                    this.transform(
-                        SeqTransformType.ORIGIN,
-                        base.labels[resetOriginGroup],
-                        0,
-                        0,
-                        0,
-                        op14,
-                        base.masks[resetOriginGroup] & mask,
-                    );
-                }
-
+        if (!nextFrame || !(alpha > 0)) {
+            for (let i = 0; i < frame.transformCount; i++) {
+                const group = frame.transformGroups[i];
+                if (!this.isAnimatedGroup(base, group, animateLabels, condition)) continue;
+                this.resetOrigin(base, frame.resetOriginGroups[i], op14, mask);
                 this.transform(
                     base.types[group],
                     base.labels[group],
@@ -1049,7 +1041,112 @@ export class Model extends Entity {
                     base.masks[group] & mask,
                 );
             }
+            return;
         }
+
+        // Walk both frames' transforms by skeleton group, side by side. An origin reset counts as
+        // an origin transform of 0 at its own group (as the game client stores it), so each
+        // origin is applied once, blended between the two frames.
+        const from = Model.blendEntries(frame);
+        const to = Model.blendEntries(nextFrame);
+        let i = 0;
+        let n = 0;
+        while (i < from.length || n < to.length) {
+            const group = Math.min(from[i]?.group ?? Infinity, to[n]?.group ?? Infinity);
+            const current = from[i]?.group === group ? from[i++] : undefined;
+            const next = to[n]?.group === group ? to[n++] : undefined;
+            if (!this.isAnimatedGroup(base, group, animateLabels, condition)) continue;
+
+            const type = base.types[group];
+            const neutral =
+                type === SeqTransformType.SCALE || type === SeqTransformType.TYPE_10 ? 128 : 0;
+            const x0 = current?.x ?? neutral;
+            const y0 = current?.y ?? neutral;
+            const z0 = current?.z ?? neutral;
+            const x1 = next?.x ?? neutral;
+            const y1 = next?.y ?? neutral;
+            const z1 = next?.z ?? neutral;
+
+            let x: number;
+            let y: number;
+            let z: number;
+            if (type === SeqTransformType.ROTATE) {
+                x = (x0 + Math.trunc(Model.angleDelta(x0, x1) * alpha)) & 0xff;
+                y = (y0 + Math.trunc(Model.angleDelta(y0, y1) * alpha)) & 0xff;
+                z = (z0 + Math.trunc(Model.angleDelta(z0, z1) * alpha)) & 0xff;
+            } else if (type === SeqTransformType.ALPHA) {
+                x = x0;
+                y = 0;
+                z = 0;
+            } else {
+                x = x0 + Math.trunc((x1 - x0) * alpha);
+                y = y0 + Math.trunc((y1 - y0) * alpha);
+                z = z0 + Math.trunc((z1 - z0) * alpha);
+            }
+            this.transform(type, base.labels[group], x, y, z, op14, base.masks[group] & mask);
+        }
+    }
+
+    private static readonly blendEntryCache = new WeakMap<SeqFrame, BlendEntry[]>();
+
+    /** A frame's transforms with its origin resets as origin transforms, ordered by group. */
+    private static blendEntries(frame: SeqFrame): BlendEntry[] {
+        let entries = Model.blendEntryCache.get(frame);
+        if (entries) return entries;
+        entries = [];
+        for (let i = 0; i < frame.transformCount; i++) {
+            const reset = frame.resetOriginGroups[i];
+            if (reset !== -1 && reset !== undefined) {
+                entries.push({ group: reset, x: 0, y: 0, z: 0 });
+            }
+            entries.push({
+                group: frame.transformGroups[i],
+                x: frame.transformX[i],
+                y: frame.transformY[i],
+                z: frame.transformZ[i],
+            });
+        }
+        // Stable: a reset can follow an alpha or colour transform of a higher group.
+        entries.sort((a, b) => a.group - b.group);
+        Model.blendEntryCache.set(frame, entries);
+        return entries;
+    }
+
+    /** The signed shortest step from one 0-255 angle to another. */
+    private static angleDelta(from: number, to: number): number {
+        const delta = (to - from) & 0xff;
+        return delta >= 128 ? delta - 256 : delta;
+    }
+
+    private isAnimatedGroup(
+        base: SeqBase,
+        group: number,
+        animateLabels: boolean[] | undefined,
+        condition: boolean,
+    ): boolean {
+        return (
+            !animateLabels ||
+            animateLabels[group] === condition ||
+            base.types[group] === SeqTransformType.ORIGIN
+        );
+    }
+
+    private resetOrigin(
+        base: SeqBase,
+        resetOriginGroup: number,
+        op14: boolean,
+        mask: number,
+    ): void {
+        if (resetOriginGroup === -1 || resetOriginGroup === undefined) return;
+        this.transform(
+            SeqTransformType.ORIGIN,
+            base.labels[resetOriginGroup],
+            0,
+            0,
+            0,
+            op14,
+            base.masks[resetOriginGroup] & mask,
+        );
     }
 
     transform(

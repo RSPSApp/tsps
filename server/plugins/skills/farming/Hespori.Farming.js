@@ -9,6 +9,16 @@ const PROJECTILE = { RANGE: 1639, MAGIC: 1640, VINES: 1642 };
 const EXIT = new core.Location(1232, 3728, 0);
 class HesporiArea extends core.PrivateArea {
     constructor() { super([new core.Boundary(1216, 1279, 10048, 10111, 0)]); }
+    process(mobile) { if (mobile.isPlayer?.()) hesporiProcess({ player: mobile.getAsPlayer() }); }
+    postLeave(mobile, logout) {
+        if (mobile.isPlayer?.()) hesporiLogout({ player: mobile.getAsPlayer() });
+        super.postLeave(mobile, logout);
+    }
+    canAttack(attacker, target) {
+        const event = { attacker, target, allow: null };
+        hesporiCanAttack(event);
+        return event.allow;
+    }
 }
 const FIGHTS = new WeakMap();
 const NPC_FIGHTS = new WeakMap();

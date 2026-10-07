@@ -4,7 +4,7 @@ const { ItemDefinition } = require("../../src/main/typescript/elvarg/game/defini
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const Food = require("./Food.plugin");
 const Potions = require("./Potions.plugin");
-const LootKeys = require("./LootKeys.plugin");
+const { isInsideEnclave } = require("../areas/ferox/Bounds.FeroxEnclave");
 
 const BAG_DATA = "lootingBag";
 const DEPOSIT_RESTRICTION = "You can only deposit items into the looting bag in the wilderness";
@@ -28,7 +28,7 @@ const setBagItems = (bag, items) => bag.setMetaValue(BAG_DATA, items);
 const bagFor = (player) => player.getInventory().getValidItems().find(isBag);
 const itemKey = (item) => `${item.getId()}:${JSON.stringify(item.getMeta?.() ?? null)}`;
 const isSupply = (id) => Food.isFoodItem(id) || Potions.isPotionItem(id);
-const canUseBag = (player) => Wilderness.isIn(player) || LootKeys.isInsideEnclave(player.getLocation?.());
+const canUseBag = (player) => Wilderness.isIn(player) || isInsideEnclave(player.getLocation?.());
 const copyItem = (item, amount = item.getAmount()) => ({
   id: item.getId(), amount, meta: item.getMeta?.() ?? null,
 });
@@ -201,6 +201,7 @@ function handleItemOnItem(event) {
 
 module.exports = {
   name: "LootingBag",
+  members: true,
   dependsOn: ["Wilderness", "Food", "Potions", "LootKeys"],
   register(api) {
     api.onGroundItemPickup((event) => {

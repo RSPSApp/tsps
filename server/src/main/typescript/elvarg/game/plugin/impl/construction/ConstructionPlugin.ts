@@ -129,6 +129,11 @@ export function releaseHouse(player: ConstructionPlayer, restoreLocation: boolea
   if (restoreLocation && PlayerHouseInstance.isAllocationLocation(player.getLocation())) player.moveTo(houseExit(houseStateFor(player)));
 }
 
+/** "construction:owns-house" { player, owns }: whether the player has bought a house. */
+function ownsHouse(request: { player: ConstructionPlayer; owns?: boolean }): void {
+  if (request?.player) request.owns = houseStateFor(request.player).owned !== false;
+}
+
 function enterHouse(player: ConstructionPlayer, buildingMode: boolean): boolean {
   if (houseStateFor(player).owned === false) {
     player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
@@ -501,6 +506,23 @@ function houseTeleportArrival({ player, name }: { player: Player; name: string }
   const saved = houseStateFor(player);
   if (saved.teleportOutside) player.moveTo(houseExit(saved));
   else enterHouse(player, saved.defaultBuildingMode);
+}
+
+/**
+ * "construction:house-tablet": where a Teleport to house tablet goes. Break follows the
+ * house's teleport setting, Inside/Outside override it; without a house it's refused
+ * (no destination) so the tablet is kept.
+ */
+function houseTablet(request: { player: Player; option: string; destination: Location | null; onArrival: (() => void) | null }): void {
+  const { player } = request;
+  const saved = houseStateFor(player);
+  if (saved.owned === false) {
+    player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
+    return;
+  }
+  const outside = request.option === "outside" || (request.option === "break" && !!saved.teleportOutside);
+  request.destination = houseExit(saved);
+  request.onArrival = outside ? null : () => { enterHouse(player, saved.defaultBuildingMode); };
 }
 
 const HOUSE_VIEWER_INTERFACE = 422;
@@ -988,6 +1010,7 @@ const furnitureObjectIds = [...new Set(CONSTRUCTION_BUILDABLES.flatMap(buildable
 
 export const ConstructionPlugin = {
   name: "Construction",
+  members: true,
   register(api: PluginApi): void {
     EstateAgentPlugin.register(api);
     ConstructionServants.register(api);
@@ -1017,6 +1040,8 @@ export const ConstructionPlugin = {
     api.onCustomEvent("door:toggle", openHouseDoor);
     api.onCustomEvent("interface:close", closeHouseSettings);
     api.onCustomEvent("spell:teleport-arrival", houseTeleportArrival);
+    api.onCustomEvent("construction:house-tablet", houseTablet);
+    api.onCustomEvent("construction:owns-house", ownsHouse);
     api.onPlayerLogin(loginHouse);
     api.onPlayerProcess(processHouse);
     api.onPlayerDisconnect(logoutHouse);

@@ -1,0 +1,187 @@
+{
+  "meta": {
+    "about": "Obor's and Bryophyta's lairs. Positions, ids, timings and messages are from rsprox captures and the cache's map; stats and the chest tables are from the OSRS Wiki (Obor, Bryophyta, Growthling, Chest (Obor's lair), Chest (Bryophyta's lair)). Chest tables use the npc-drops table format.",
+    "license": "Chest tables: CC BY-NC-SA 3.0, content from the Old School RuneScape Wiki"
+  },
+  "lairs": {
+    "obor": {
+      "name": "Obor",
+      "lairName": "Obor's Lair",
+      "boss": 7416,
+      "key": 20754,
+      "keyName": "Giant key",
+      "area": { "minX": 3072, "maxX": 3106, "minY": 9786, "maxY": 9817 },
+      "gates": [29486, 29487],
+      "outside": { "x": 3095, "y": 9833, "z": 0 },
+      "inside": { "x": 3091, "y": 9815, "z": 0 },
+      "spawn": { "x": 3092, "y": 9799, "z": 0 },
+      "exits": [29488, 29489],
+      "chest": { "closed": 56380, "open": 56381, "x": 3085, "y": 9797, "z": 0, "type": 10, "face": 2 },
+      "loot": { "x": 3085, "y": 9798, "z": 0 },
+      "countVarp": 1529,
+      "music": 26,
+      "fade": true,
+      "enter": {
+        "question": "Enter Obor's Lair?",
+        "yes": "Yes.",
+        "no": "No."
+      },
+      "leave": {
+        "question": "Are you sure you want to leave Obor's Lair?",
+        "yes": "Exit the lair.",
+        "no": "Stay."
+      },
+      "messages": {
+        "locked": "The gate is locked shut.",
+        "unlocked": "Your key fits the gate, causing it to swing open.",
+        "chestStir": "You hear the ground rumble...",
+        "attacking": "You can't loot the chest whilst Obor is still attacking you!",
+        "needKey": "You need a Giant key to open this chest.",
+        "spill": "The loot spills out as you open the chest.",
+        "count": "Your Obor chests opened count is: <col=ff0000>{count}</col>."
+      },
+      "chestTable": {
+        "table_id": "obor_chest",
+        "wiki_page": "Chest (Obor's lair)",
+        "main_max_roll": 118,
+        "entries": [
+          { "item_id": 23182, "name": "Clue scroll (beginner)", "quantity": [1, 1], "always": true },
+          { "item_id": 13475, "name": "Ensouled giant head", "quantity": [1, 1], "always": true },
+          { "item_id": 20756, "name": "Hill giant club", "quantity": [1, 1], "weight": 1 },
+          { "item_id": 1201, "name": "Rune kiteshield", "quantity": [1, 1], "weight": 3 },
+          { "item_id": 1163, "name": "Rune full helm", "quantity": [1, 1], "weight": 5 },
+          { "item_id": 1147, "name": "Rune med helm", "quantity": [1, 1], "weight": 6 },
+          { "item_id": 1113, "name": "Rune chainbody", "quantity": [1, 1], "weight": 3 },
+          { "item_id": 1079, "name": "Rune platelegs", "quantity": [1, 1], "weight": 3 },
+          { "item_id": 1093, "name": "Rune plateskirt", "quantity": [1, 1], "weight": 3 },
+          { "item_id": 1373, "name": "Rune battleaxe", "quantity": [1, 1], "weight": 4 },
+          { "item_id": 1303, "name": "Rune longsword", "quantity": [1, 1], "weight": 5 },
+          { "item_id": 1319, "name": "Rune 2h sword", "quantity": [1, 1], "weight": 3 },
+          { "item_id": 563, "name": "Law rune", "quantity": [50, 99], "weight": 12 },
+          { "item_id": 564, "name": "Cosmic rune", "quantity": [60, 119], "weight": 12 },
+          { "item_id": 562, "name": "Chaos rune", "quantity": [100, 199], "weight": 10 },
+          { "item_id": 560, "name": "Death rune", "quantity": [40, 79], "weight": 10 },
+          { "item_id": 561, "name": "Nature rune", "quantity": [40, 79], "weight": 7 },
+          { "item_id": 995, "name": "Coins", "quantity": [10000, 15000], "weight": 6 },
+          { "item_id": 995, "name": "Coins", "quantity": [12000, 20000], "weight": 4 },
+          { "item_id": 225, "name": "Limpwurt root", "quantity": [20, 20], "noted": true, "weight": 8 },
+          { "item_id": 532, "name": "Big bones", "quantity": [50, 50], "noted": true, "weight": 8 },
+          {
+            "item_id": 1619, "name": "Uncut ruby", "quantity": [5, 5], "noted": true, "weight": 5,
+            "bonus_drops": [{ "item_id": 1617, "name": "Uncut diamond", "quantity": [5, 5], "noted": true }]
+          }
+        ],
+        "tertiary": [
+          { "item_id": 20754, "name": "Giant key", "quantity": [1, 1], "weight": 1, "out_of": 16 }
+        ]
+      }
+    },
+    "bryophyta": {
+      "name": "Bryophyta",
+      "lairName": "Bryophyta's Lair",
+      "boss": 8195,
+      "key": 22374,
+      "keyName": "Mossy key",
+      "area": { "minX": 3204, "maxX": 3238, "minY": 9922, "maxY": 9947 },
+      "gates": [32534],
+      "outside": { "x": 3174, "y": 9900, "z": 0 },
+      "inside": { "x": 3214, "y": 9937, "z": 0 },
+      "spawn": { "x": 3220, "y": 9933, "z": 0 },
+      "exits": [32535],
+      "chest": { "closed": 56378, "open": 56379, "x": 3229, "y": 9934, "z": 0, "type": 10, "face": 1 },
+      "loot": { "x": 3228, "y": 9934, "z": 0 },
+      "countVarp": 1733,
+      "fade": false,
+      "attackOnEntry": true,
+      "warning": "<col=7f0000>Warning!</col> You're about to enter an instanced area. Anything left on the ground when you leave will be lost. Would you like to continue?",
+      "enter": {
+        "question": "Are you sure you wish to open it?",
+        "yes": "Yes, let's go!",
+        "no": "I don't think I'm quite ready yet."
+      },
+      "leave": {
+        "question": "Are you sure you want to leave Bryophyta's Lair?",
+        "yes": "Exit the lair.",
+        "no": "Stay."
+      },
+      "messages": {
+        "locked": "It's locked!",
+        "unlocked": "Your key fits the gate, causing it to swing open.",
+        "chestStir": "You hear the leaves stir...",
+        "attacking": "You can't loot the chest whilst Bryophyta is still attacking you!",
+        "needKey": "You need a Mossy key to open this chest.",
+        "spill": "The loot spills out as you open the chest.",
+        "count": "Your Bryophyta chests opened count is: <col=ff0000>{count}</col>."
+      },
+      "chestTable": {
+        "table_id": "bryophyta_chest",
+        "wiki_page": "Chest (Bryophyta's lair)",
+        "main_max_roll": 118,
+        "entries": [
+          { "item_id": 23182, "name": "Clue scroll (beginner)", "quantity": [1, 1], "always": true },
+          { "item_id": 1303, "name": "Rune longsword", "quantity": [1, 1], "weight": 6 },
+          { "item_id": 1147, "name": "Rune med helm", "quantity": [2, 2], "weight": 6 },
+          { "item_id": 1113, "name": "Rune chainbody", "quantity": [1, 1], "weight": 6 },
+          { "item_id": 1093, "name": "Rune plateskirt", "quantity": [1, 1], "weight": 6 },
+          { "item_id": 1079, "name": "Rune platelegs", "quantity": [1, 1], "weight": 6 },
+          { "item_id": 1185, "name": "Rune sq shield", "quantity": [1, 1], "weight": 6 },
+          { "item_id": 1289, "name": "Rune sword", "quantity": [2, 2], "weight": 5 },
+          { "item_id": 1123, "name": "Adamant platebody", "quantity": [5, 5], "noted": true, "weight": 3 },
+          { "item_id": 1391, "name": "Battlestaff", "quantity": [3, 3], "noted": true, "weight": 3 },
+          { "item_id": 1199, "name": "Adamant kiteshield", "quantity": [3, 3], "weight": 1 },
+          { "item_id": 561, "name": "Nature rune", "quantity": [100, 100], "weight": 8 },
+          { "item_id": 564, "name": "Cosmic rune", "quantity": [100, 100], "weight": 6 },
+          { "item_id": 563, "name": "Law rune", "quantity": [100, 100], "weight": 6 },
+          { "item_id": 560, "name": "Death rune", "quantity": [100, 100], "weight": 5 },
+          { "item_id": 562, "name": "Chaos rune", "quantity": [200, 200], "weight": 6 },
+          { "item_id": 562, "name": "Chaos rune", "quantity": [100, 100], "weight": 5 },
+          { "item_id": 565, "name": "Blood rune", "quantity": [100, 100], "weight": 1 },
+          { "item_id": 890, "name": "Adamant arrow", "quantity": [100, 100], "weight": 1 },
+          { "shared_table": "herb", "weight": 5 },
+          { "shared_table": "uncommonSeed", "weight": 6 },
+          { "item_id": 2363, "name": "Runite bar", "quantity": [2, 2], "weight": 6 },
+          {
+            "item_id": 1619, "name": "Uncut ruby", "quantity": [5, 5], "noted": true, "weight": 4,
+            "bonus_drops": [{ "item_id": 1617, "name": "Uncut diamond", "quantity": [5, 5], "noted": true }]
+          },
+          { "item_id": 2353, "name": "Steel bar", "quantity": [25, 25], "noted": true, "weight": 3 },
+          { "item_id": 995, "name": "Coins", "quantity": [10000, 10000], "weight": 5 },
+          { "item_id": 995, "name": "Coins", "quantity": [8000, 8000], "weight": 2 },
+          { "item_id": 22372, "name": "Bryophyta's essence", "quantity": [1, 1], "weight": 1 }
+        ]
+      }
+    }
+  },
+  "obor": {
+    "pitRocks": 29491,
+    "pitTopY": 9807,
+    "pitBottomY": 9804,
+    "maxHit": { "melee": 22, "ranged": 26 },
+    "anim": { "melee": 4666, "stamp": 7183, "death": 4653 },
+    "knockback": { "chance": 4, "tiles": 5, "anim": 12212, "cycles": [20, 40] },
+    "stampChance": { "adjacent": 3, "distant": 2 },
+    "rockfall": { "graphic": 60, "height": 96, "cyclesPerTile": 6, "origin": 140, "originDelay": 40, "playerAnim": 7212, "sounds": [860, 1464] },
+    "rangedImpact": { "graphic": 98, "height": 160, "delay": 20, "playerAnim": 7210, "sound": 2841 },
+    "climb": { "anim": 1148, "sound": 2454, "cycles": [10, 90], "in": "You climb into the pit.", "out": "You climb out of the pit." }
+  },
+  "bryophyta": {
+    "growthling": 8194,
+    "maxHit": { "melee": 16, "magic": 10 },
+    "anim": { "melee": 4658, "magic": 7173 },
+    "projectile": { "id": 139, "startCycle": 51, "startHeight": 43, "endHeight": 31, "curve": 16, "sound": 128, "impactGraphic": 140, "impactHeight": 124, "impactSound": 129 },
+    "poison": { "damage": 8, "chance": 4 },
+    "growthlings": { "chance": 5, "count": 3, "cooldown": 20, "radius": 5 },
+    "pruneMessage": "You prune the Growthling.",
+    "noAxeMessage": "Cut the growthling down with an axe or secateurs.",
+    "logs": { "withAxe": 32536, "withoutAxe": 5582, "x": 3228, "y": 9932, "z": 0, "type": 10, "face": 0, "axe": 1351, "returnTicks": 49, "take": "You take a bronze axe from the logs.", "haveAxe": "You already have an axe." }
+  },
+  "giantBones": {
+    "item": 30898,
+    "question": "Bury the bones? (This grants Prayer XP)",
+    "options": ["Yes.", "Yes, and don't ask again.", "No."],
+    "anim": 827,
+    "sound": 2738,
+    "xp": 150,
+    "noRoom": "I don't think those will fit in my backpack..."
+  }
+}

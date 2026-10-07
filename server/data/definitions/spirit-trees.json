@@ -1,0 +1,14 @@
+{
+  "$comment": "Spirit tree network, transcribed from https://oldschool.runescape.wiki/w/Spirit_tree. Quest-locked entries only enforce when the quest is registered in this server.",
+  "source": "https://oldschool.runescape.wiki/w/Spirit_tree",
+  "destinations": [
+    {"name": "Tree Gnome Village", "x": 2539, "y": 3166, "z": 0},
+    {"name": "Gnome Stronghold", "x": 2460, "y": 3446, "z": 0, "requires": "The Grand Tree"},
+    {"name": "Battlefield of Khazard", "x": 2555, "y": 3259, "z": 0},
+    {"name": "Grand Exchange", "x": 3185, "y": 3510, "z": 0},
+    {"name": "Feldip Hills", "x": 2486, "y": 2850, "z": 0},
+    {"name": "Incomitatus", "x": 2339, "y": 3111, "z": 0, "requires": "The Path of Glouphrie"},
+    {"name": "Prifddinas", "x": 3275, "y": 6124, "z": 0, "requires": "Song of the Elves"},
+    {"name": "Laguna Aurorae", "x": 1202, "y": 2786, "z": 0, "requires": "Pandemonium"}
+  ]
+}

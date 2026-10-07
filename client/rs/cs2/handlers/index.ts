@@ -7,11 +7,13 @@ import { registerClientOps } from "./ClientOps";
 import { registerConfigOps } from "./ConfigOps";
 import { registerCoreOps } from "./CoreOps";
 import { registerDbOps } from "./DbOps";
+import { registerLongOps } from "./LongOps";
 import type { HandlerMap } from "./HandlerTypes";
 import { registerMarketOps } from "./MarketOps";
 import { registerMathOps } from "./MathOps";
 import { registerSocialOps } from "./SocialOps";
 import { registerStringOps } from "./StringOps";
+import { registerUnsupportedOps } from "./UnsupportedOps";
 import { registerVarOps } from "./VarOps";
 import { registerWidgetEventOps } from "./WidgetEventOps";
 import { registerWidgetOps } from "./WidgetOps";
@@ -26,6 +28,7 @@ export function createHandlerMap(): HandlerMap {
 
     registerCoreOps(handlers);
     registerMathOps(handlers);
+    registerLongOps(handlers);
     registerStringOps(handlers);
     registerVarOps(handlers);
     registerWidgetOps(handlers);
@@ -39,6 +42,8 @@ export function createHandlerMap(): HandlerMap {
     registerMarketOps(handlers);
     registerDbOps(handlers);
     registerWorldListOps(handlers);
+    // Last: only fills opcodes nothing above handles.
+    registerUnsupportedOps(handlers);
 
     return handlers;
 }

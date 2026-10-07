@@ -61,6 +61,11 @@ export class Projectile {
 
     animationFrame: number = 0;
     private frameCycle: number = 0;
+
+    /** Cycles into the current animation frame (1..its length), for animation smoothing. */
+    getFrameCycle(): number {
+        return this.frameCycle;
+    }
     private readonly frameLengths?: number[];
     private readonly frameCount: number;
 

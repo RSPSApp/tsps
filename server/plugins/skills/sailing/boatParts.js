@@ -6,12 +6,17 @@
 const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
 const { content, boatType } = require("./sailingContent");
 
-/** Where each part's option list and fields are, per part table. */
+/**
+ * Where each part's option list and fields are, per part table. The lists are table 166's
+ * keel_option (24), hull_option (25), sail_option (26) and steering_option (28; rev 241 added
+ * sail_pattern_option at 27).
+ */
 const PART_COLUMNS = {
   hull: { list: 25, sailing: 7, construction: 8, materials: 12, stats: 13 },
   keel: { list: 24, sailing: 6, construction: 7, materials: 11, stats: 12, loc: [3, 1] },
-  sails: { list: 26, sailing: 6, construction: 7, materials: 11, stats: 16, loc: [15, 0] },
-  helm: { list: 27, sailing: 9, construction: 10, materials: 14, stats: 15, loc: [6, 1] },
+  // Table 179 lost its three interact_* columns in rev 241: loc 15 -> 12, facility_stats 16 -> 13.
+  sails: { list: 26, sailing: 6, construction: 7, materials: 11, stats: 13, loc: [12, 0] },
+  helm: { list: 28, sailing: 9, construction: 10, materials: 14, stats: 15, loc: [6, 1] },
 };
 const PARTS = Object.keys(PART_COLUMNS);
 /** Boat type row column: the recovery fee. */
@@ -139,6 +144,9 @@ function constructionXp(type, part, tier) {
 
 module.exports = {
   PARTS,
+  PART_COLUMNS,
+  STAT,
+  TYPE_RECOVERY_FEE,
   partOptions,
   boatStats,
   partTiers,

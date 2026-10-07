@@ -52,8 +52,9 @@ export class Wilderness {
         return 0;
     }
 
-    public static isMulti(x: number, y: number): boolean {
-        const location = new Location(x, y, 0);
+    /** Multi-combat zones are per plane (world.json `z`); the plane defaults to the surface. */
+    public static isMulti(x: number, y: number, z: number = 0): boolean {
+        const location = new Location(x, y, z);
         return WORLD_ZONE_BOUNDARIES["multi-combat"].some((boundary) => boundary.inside(location));
     }
 

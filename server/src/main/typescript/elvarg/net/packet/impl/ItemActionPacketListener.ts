@@ -11,6 +11,8 @@ const getEquipPacketListener = () =>
   require("./EquipPacketListener")
     .EquipPacketListener as typeof import("./EquipPacketListener").EquipPacketListener;
 
+const DROP_OPTIONS = new Set(["drop", "destroy", "discard", "release"]);
+
 export class ItemActionPacketListener {
   /** Cache script 7779 uses enum 4303: inventory actions 1..5 occupy widget ops 2,3,4,6,7. */
   public static resolveInventoryWidgetAction(itemId: number, widgetOp: number): { optionIndex: number; option: string } | null {
@@ -22,7 +24,27 @@ export class ItemActionPacketListener {
     return option ? { optionIndex: index + 1, option } : null;
   }
 
+  /**
+   * Whether an inventory click drops (or destroys) the item. The fifth option is Drop or Destroy
+   * on most items, but not all (the Revenant cave teleport's is "Config", charged items'
+   * "Uncharge"), so the option's name decides; the slot alone only when the click carries no
+   * option text. "Discard" (Nightmare Zone) and "Release" (toads, chinchompas) still drop, as
+   * nothing handles them yet.
+   */
+  public static isDropOption(option: string, optionIndex: number): boolean {
+    if (option) return DROP_OPTIONS.has(option);
+    return optionIndex === 5;
+  }
+
   public static handleAction(player: any, interfaceId: number, itemId: number, slot: number, clickType: number, option?: string): boolean {
+    if (PluginManager.emitCanUseItem(player, itemId, "action", option) === false) return true;
+    // OSRS: an item action inside the inventory is a hard interruption. It clears the
+    // current interaction (a queued walk-to op or a combat target) but leaves the walk
+    // queue, so the player keeps walking without completing the clicked action. The
+    // equipment tab is exempt (osrs-docs: Entity Interactions - Interruptions).
+    if (this.itemContainer(player, interfaceId) === player?.getInventory?.()) {
+      player.clearPendingAction?.();
+    }
     if (clickType === 1) return this.handleFirstAction(player, interfaceId, itemId, slot, option);
     const item = this.itemContainer(player, interfaceId)?.getItems?.()[slot];
     if (!item || item.getId() !== itemId) return false;
@@ -111,9 +133,9 @@ export class ItemActionPacketListener {
           return true;
         }
         if (
-          (itemId == 2542 && player.isPreserveUnlocked()) ||
-          (itemId == 2543 && player.isRigourUnlocked()) ||
-          (itemId == 2544 && player.getAuguryUnlocked())
+          (itemId == 2542 && player.getAttribute("prayer:preserve-unlocked") === true) ||
+          (itemId == 2543 && player.getAttribute("prayer:rigour-unlocked") === true) ||
+          (itemId == 2544 && player.getAttribute("prayer:augury-unlocked") === true)
         ) {
           player.sendMessage("You have already unlocked that prayer.");
           return true;
@@ -125,7 +147,7 @@ export class ItemActionPacketListener {
           player.sendMessage("You cannot do that right now.");
           return true;
         }
-        if (player.isTargetTeleportUnlocked()) {
+        if (player.getAttribute("bounty-hunter:target-teleport-unlocked") === true) {
           player.sendMessage("You have already unlocked that teleport.");
           return true;
         }

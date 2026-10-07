@@ -261,13 +261,19 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
             if ((shape | 0) < 0) return;
             const exactKey = `${tile.x | 0},${tile.y | 0},${level | 0},${locId | 0}`;
             const matchKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
+            // A loc the server added is found by its own id. The tile-wide key there holds
+            // the removal of the map's loc it replaced, which must survive the animation.
+            const added = host.addedLocs.get(`${tile.x | 0},${tile.y | 0},${level | 0},${shape | 0}`);
+            const onAddedLoc = added !== undefined && (added.locId | 0) === (locId | 0);
+            const keys = onAddedLoc ? [exactKey] : [exactKey, matchKey];
             // A boat deck rebuilds its whole scene for an animation, so the same animation
             // sent again while it plays (a salvaging hook's idle, every tick) only extends it.
+            const loops = locAnimationLoops(host, animId);
             const repeating =
                 deckViewAt(host, tile) !== undefined &&
                 host.locOverrides.get(exactKey)?.seqId === (animId | 0) &&
-                host.locAnimTimers.has(exactKey);
-            for (const key of [exactKey, matchKey]) {
+                (loops || host.locAnimTimers.has(exactKey));
+            for (const key of keys) {
                 const existingTimer = host.locAnimTimers.get(key);
                 if (existingTimer) {
                     clearTimeout(existingTimer);
@@ -298,20 +304,25 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
                 seqId: animId | 0,
                 seqRandomStart: false,
             });
-            host.locOverrides.set(matchKey, {
-                newId: -1,
-                newRotation: rotation & 0x3,
-                seqId: animId | 0,
-                seqRandomStart: false,
-                matchType: shape as LocModelType,
-                matchRotation: rotation & 0x3,
-            });
+            if (!onAddedLoc) {
+                host.locOverrides.set(matchKey, {
+                    newId: -1,
+                    newRotation: rotation & 0x3,
+                    seqId: animId | 0,
+                    seqRandomStart: false,
+                    matchType: shape as LocModelType,
+                    matchRotation: rotation & 0x3,
+                });
+            }
             if (!repeating) host.reloadLocAnimationTile(tile, locId);
 
+            // As in OSRS, a sequence with a frame step loops (or holds its last frames) until
+            // the loc is animated again or changed; only one without plays once and reverts.
+            if (loops) return;
             const durationMs = host.getLocAnimationDurationMs(animId);
             const timer = setTimeout(() => {
                 let changed = false;
-                for (const key of [exactKey, matchKey]) {
+                for (const key of keys) {
                     const current = host.locOverrides.get(key);
                     if (
                         current &&
@@ -327,8 +338,7 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
                     host.reloadLocAnimationTile(tile, locId);
                 }
             }, durationMs);
-            host.locAnimTimers.set(exactKey, timer);
-            host.locAnimTimers.set(matchKey, timer);
+            for (const key of keys) host.locAnimTimers.set(key, timer);
         } catch (err) {
             console.warn("onLocAnim error", err);
         }
@@ -336,6 +346,16 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
 }
 
 /** The boat (world entity) whose deck scene holds a tile, if any. */
+/** Whether a loc animation keeps going: its sequence has a frame step to loop back by. */
+function locAnimationLoops(host: WebGLOsrsRendererHost, seqId: number): boolean {
+    try {
+        const seqType = host.osrsClient?.seqTypeLoader?.load(seqId | 0) as { frameStep?: number } | undefined;
+        return (seqType?.frameStep ?? -1) > 0;
+    } catch {
+        return false;
+    }
+}
+
 function deckViewAt(host: WebGLOsrsRendererHost, tile: { x: number; y: number }): number | undefined {
     const view = host.osrsClient?.worldViewManager?.findWorldViewAt(tile.x | 0, tile.y | 0);
     return view && host.worldEntityOverlays?.has(view.id) ? view.id : undefined;

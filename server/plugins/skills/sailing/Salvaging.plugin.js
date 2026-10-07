@@ -16,6 +16,8 @@ const { content, setVarbit, playSound, animateDeckLoc } = require("./sailingCont
 const facilities = require("./boatFacilities");
 const shipwrecks = require("./shipwrecks");
 
+let pluginApi = null;
+
 const SEQ_CAST = 13576;
 const SEQ_HOOK_IDLE = 13577;
 const LOC_ANIM_CAST = 13573;
@@ -179,6 +181,10 @@ function salvageTick(player, session) {
   player.getInventory().addItem(new Item(type.salvage, 1));
   player.sendMessage(REELED);
   player.getSkillManager().addExperiences(Skill.SAILING, type.xp);
+  if (type.petChance) {
+    // Soup's chance is per wreck type, not level-scaled (Wiki, Soup#Drop rates).
+    pluginApi?.emitCustomEvent("sailing:success", { player, skill: Skill.SAILING, petChance: type.petChance });
+  }
 }
 
 /** Rolls a salvage's loot: its pre-rolls first, then its main table; undefined is nothing. */
@@ -260,11 +266,13 @@ function forgetSession({ player }) {
 
 module.exports = {
   name: "SailingSalvaging",
+  members: true,
   hookTierOf,
   successChance,
   rollLoot,
   outwardFrom,
   register(api) {
+    pluginApi = api;
     api.onServerStartup(startShipwrecks);
     api.onObjectInteraction(deployHook);
     api.onObjectInteraction("Salvaging station", { "Sort-salvage": sortSalvage });

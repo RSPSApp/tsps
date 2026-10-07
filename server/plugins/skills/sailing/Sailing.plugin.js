@@ -152,6 +152,7 @@ function describeBoatsOnLogin({ player }) {
 
 module.exports = {
   name: "Sailing",
+  members: true,
   register(api) {
     content();
     api.onCustomEvent("sailing:boarded", onBoarded);

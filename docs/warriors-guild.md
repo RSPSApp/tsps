@@ -7,7 +7,7 @@ The plugin lives under `areas/` so that its door and ladder handlers run before 
 ## How it works
 
 - **Entry:** Ghommal's door (24318) lets in a combined base Attack and Strength of 130, or 99 in either. Boosts don't count.
-- **Tokens:** the dummy, catapult and shot put rooms write tokens into the guild ledger (`warriorsGuild:tokens`). Staff pay them out through "May I claim my tokens please?" or their Claim-Tokens option: Gamfred, Ajjat, Kamfreena, Shanomi, both Refs, Lorelai and Sloane. Animated armour drops its tokens on the ground instead.
+- **Tokens:** the dummy, catapult and shot put rooms write tokens into the guild ledger (`warriors-guild:tokens`). Staff pay them out through "May I claim my tokens please?" or their Claim-Tokens option: Gamfred, Ajjat, Kamfreena, Shanomi, both Refs, Lorelai and Sloane. Animated armour drops its tokens on the ground instead.
 - **Animation room:** a plain full helm, platebody and platelegs of one metal on a magical animator becomes animated armour.
   - It drops tokens and the armour from `npc-drops.json`. Bronze pieces each come back 9 times in 10 (a correction in `NpcDrops`), iron loses its legs 1 time in 10, and steel its helm 1 time in 10.
   - Armour left alive for five minutes, or whose owner dies or logs out, goes to Shanomi. Her "armour disappeared" transcript gives it back.
@@ -28,7 +28,7 @@ The plugin lives under `areas/` so that its door and ladder handlers run before 
   - Jimmy writes the keg tokens into the ledger.
 - **Cyclopes:** Kamfreena's room (top floor) and Lorelai's (basement, down the ladder behind the guild) need 100 tokens. They take 10 on entry and 10 each minute, then allow one minute's grace before moving the player out. An Attack or max cape gets in free, and must stay on.
   - Top-floor cyclopes drop, at 1/50, the defender after the best one the player owned when they walked in, up to rune. Owned means carried, worn or banked.
-  - The basement door needs a rune defender shown to Lorelai once (`warriorsGuild:basementUnlocked`). Its cyclopes drop the dragon defender at 1/100.
+  - The basement door needs a rune defender shown to Lorelai once (`warriors-guild:basement-unlocked`). Its cyclopes drop the dragon defender at 1/100.
   - `NpcDrops` emits `npc-drops:roll`, and the plugin removes the dump's flat defender entries and adds the right one.
   - Ranged and magic do no damage to the guild's cyclopes or animated armour.
 - **Skillcapes:** Ajjat (Attack) and Sloane (Strength) sell their cape and hood for 99,000 coins at 99. The cape is trimmed with more than one 99.

@@ -27,6 +27,10 @@ export class NpcDefinition {
     private poisonous: boolean = false;
     private venomous: boolean = false;
     private demon: boolean = false;
+    /** The Wiki's monster attributes: undead, demon, dragon, kalphite, ... */
+    private attributes: readonly string[] = [];
+    /** Wiki "members" flag from monsters-complete.json; false for NPCs not in the dump. */
+    private members: boolean = false;
     /** Which default CombatMethod this NPC fights with; see NPC.getCombatMethod(). */
     private attackType: CombatType = CombatType.MELEE;
     /** Projectile graphic for ranged/magic attacks; -1 falls back to the generic one. */
@@ -41,6 +45,8 @@ export class NpcDefinition {
     private deathAnim: number = 836;
     private spawnAnim: number | null = null;
     private deathSound: number = -1;
+    /** Ticks from the death animation to the death itself (drops, removal). */
+    private deathTicks: number = 2;
     private combatLevel: number = 0;
     private stats: number[] = [...NpcDefinition.DEFAULT_STATS];
     private slayerLevel: number = 0;
@@ -186,6 +192,10 @@ export class NpcDefinition {
         return this.deathSound;
     }
 
+    public getDeathTicks(): number {
+        return this.deathTicks;
+    }
+
     public getCombatLevel(): number {
         return this.combatLevel;
     }
@@ -204,6 +214,22 @@ export class NpcDefinition {
 
     public isDemon(): boolean {
         return this.demon;
+    }
+
+    public isUndead(): boolean {
+        return this.hasAttribute("undead");
+    }
+
+    public getAttributes(): readonly string[] {
+        return this.attributes;
+    }
+
+    public hasAttribute(attribute: string): boolean {
+        return this.attributes.includes(attribute);
+    }
+
+    public isMembers(): boolean {
+        return this.members;
     }
 
     public getAttackType(): CombatType {

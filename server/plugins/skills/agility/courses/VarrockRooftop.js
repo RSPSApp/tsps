@@ -34,6 +34,7 @@ module.exports = {
   key: "varrock",
   name: "Varrock Rooftop",
   lapXp: 270,
+  petBase: 24410, // Giant squirrel base chance (Wiki)
   marks: {
     level: 30,
     tiles: [[3215, 3410, 3], [3195, 3416, 1], [3193, 3395, 3], [3222, 3402, 3], [3237, 3406, 3]],

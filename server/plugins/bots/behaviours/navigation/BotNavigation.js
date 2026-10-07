@@ -3,6 +3,8 @@ const { PathFinder } = require("../../../../src/main/typescript/elvarg/game/mode
 const { isOutsideWildernessHotspots } = require("../pvp/WildernessHotspotRegistry");
 
 const MAX_ROUTE_SEGMENT_TILES = 24;
+// Objects farther than this are approached in segments; see approachObject.
+const MAX_OBJECT_DIRECT_ROUTE_TILES = 20;
 const PATH_BLOCKED_LOG_THROTTLE_MS = 2500;
 const NO_PATH_RETRY_BASE_MS = 1200;
 const NO_PATH_RETRY_MAX_MS = 6000;
@@ -358,6 +360,40 @@ function requestMovement(player, targetX, targetY, options = {}) {
   return true;
 }
 
+/**
+ * The pathfinder only routes inside a 128-tile window around the player, so an object
+ * farther than `maxDirectTiles` must be approached in segments before the final
+ * walkToObject route. Returns true when a segmented approach was queued (the caller
+ * should wait); false when the object is close enough to route to directly.
+ */
+function approachObject(player, object, options = {}) {
+  const objectLoc = object?.getLocation?.();
+  const playerLoc = player?.getLocation?.();
+  if (!objectLoc || !playerLoc) {
+    return false;
+  }
+  const maxDirectTiles =
+    Number.isFinite(options.maxDirectTiles) && options.maxDirectTiles > 0
+      ? Math.floor(options.maxDirectTiles)
+      : MAX_OBJECT_DIRECT_ROUTE_TILES;
+  const distance = Math.max(
+    Math.abs(playerLoc.getX() - objectLoc.getX()),
+    Math.abs(playerLoc.getY() - objectLoc.getY())
+  );
+  if (distance <= maxDirectTiles) {
+    return false;
+  }
+  queueRouteAndFlagAppearance(player, objectLoc.getX(), objectLoc.getY(), {
+    nowMs: options.nowMs,
+    reason: options.reason ?? "object_approach",
+    // moveNear: an exact-tile route keeps failing on the last segment before water,
+    // which stalls the whole approach; the caller only needs progress.
+    basicPather: options.basicPather !== false,
+    maxRouteSegmentTiles: options.maxRouteSegmentTiles,
+  });
+  return true;
+}
+
 function peekMovementRequest(player) {
   if (!player) {
     return null;
@@ -500,87 +536,8 @@ function dispatchMovementRequest(player, request, state = request?.state) {
   };
 }
 
-function retargetAfterBlocked(
-  player,
-  state,
-  api,
-  reason,
-  event,
-  nowMs = Date.now(),
-  blockedRetargetMinDelayMs = 0,
-  blockedRetargetMaxDelayMs = 0,
-  botWalkRadius = 0,
-  chooseOptions = null
-) {
-  if (!player || !state) {
-    return false;
-  }
-  if (!state.roaming) {
-    return false;
-  }
-  const username = player.getUsername?.();
-  const logBudget = consumePathBlockedLogBudget(username, nowMs);
-
-  const previousTarget = state.roaming.target
-    ? {
-        x: state.roaming.target.x,
-        y: state.roaming.target.y,
-        z: state.roaming.target.z,
-      }
-    : null;
-
-  state.roaming.endpointPauseUntil = 0;
-  const nextTarget = chooseNextTarget(
-    player,
-    state,
-    botWalkRadius,
-    chooseOptions ?? {}
-  );
-  if (!nextTarget) {
-    state.roaming.target = null;
-    state.roaming.nextWalkAt = nowMs + blockedRetargetMaxDelayMs;
-    if (logBudget.shouldLog) {
-      api.log("path_blocked_retarget_failed", {
-        username,
-        reason,
-        previousTarget,
-        from: event?.from ?? null,
-        to: event?.to ?? null,
-        suppressed: logBudget.suppressedCount,
-      });
-    }
-    return false;
-  }
-
-  state.roaming.target = nextTarget;
-  const retryInMs = randomInRange(
-    blockedRetargetMinDelayMs,
-    blockedRetargetMaxDelayMs
-  );
-  state.roaming.nextWalkAt = nowMs + retryInMs;
-  requestMovement(player, nextTarget.x, nextTarget.y, {
-    nowMs,
-    reason: `blocked_retarget:${reason}`,
-    basicPather: true,
-    nextDispatchAtMs: nowMs + retryInMs,
-    z: nextTarget.z,
-  });
-  if (logBudget.shouldLog) {
-    api.log("path_blocked_retarget", {
-      username,
-      reason,
-      previousTarget,
-      nextTarget,
-      retryInMs,
-      from: event?.from ?? null,
-      to: event?.to ?? null,
-      suppressed: logBudget.suppressedCount,
-    });
-  }
-  return true;
-}
-
 module.exports = {
+  approachObject,
   calculateStrictWalkRoute,
   chooseNextTarget,
   clearMovementRequest,
@@ -591,5 +548,4 @@ module.exports = {
   randomInRange,
   requestMovement,
   resolveSegmentTarget,
-  retargetAfterBlocked,
 };

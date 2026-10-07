@@ -30,7 +30,7 @@ plugin.setEnabled(false);
 assert.equal(saved?.username, "");
 assert.equal(saved?.password, "");
 
-const disabledByDefault = new RememberLoginPlugin();
-assert.equal(disabledByDefault.getConfig().enabled, false);
+const enabledByDefault = new RememberLoginPlugin();
+assert.equal(enabledByDefault.getConfig().enabled, true);
 
 console.log("Remember Login plugin tests passed");

@@ -22,7 +22,7 @@ const OTHER_INVENTORY = 32768;
  * `::sailingtools` sets them, for the player's own client.
  */
 const TOOL_UNLOCK_VARBITS = { 18314: 50, 18282: 40, 18317: 20, 1895: 40 };
-const TOOLS_UNLOCKED_ATTRIBUTE = "sailing:toolsUnlocked";
+const TOOLS_UNLOCKED_ATTRIBUTE = "sailing:tools-unlocked";
 
 const categoryCache = new Map();
 

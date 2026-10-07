@@ -39,6 +39,7 @@ function handleCombine({ player }) {
 
 module.exports = {
   name: "PegasianBoots",
+  members: true,
   register(api) {
     api.onItemOnItem("Pegasian crystal", "Ranger boots", handleCombine, { noted: false });
   },

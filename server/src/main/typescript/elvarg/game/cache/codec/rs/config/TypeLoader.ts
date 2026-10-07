@@ -97,8 +97,12 @@ export class ArchiveTypeLoader<T extends Type> extends BaseTypeLoader<T> {
         return this.archive.getFile(id)?.getDataAsBuffer();
     }
 
+    /**
+     * One past the highest id, as the game sizes its type lists. The archive's file count is
+     * smaller when ids have gaps (items do), which hid the last ids from loops over 0..count.
+     */
     override getCount(): number {
-        return this.archive.fileCount;
+        return this.archive.lastFileId + 1;
     }
 }
 

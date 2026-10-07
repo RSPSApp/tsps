@@ -68,7 +68,6 @@ export class LunarSpells {
     ]);
 
     private static readonly TELEPORTS = new Map<string, LunarTeleport>([
-        ["lunar home teleport", teleport(0, 0, [], 2113, 3917)],
         ["moonclan teleport", teleport(69, 66, [rune(9075, 2), rune(557, 2), rune(563)], 2113, 3917)],
         ["ourania teleport", teleport(71, 69, [rune(9075, 6), rune(557, 2), rune(563)], 2468, 3248)],
         ["waterbirth teleport", teleport(72, 71, [rune(9075), rune(555, 2), rune(563)], 2548, 3758)],
@@ -216,7 +215,7 @@ export class LunarSpells {
             } else if (key === "hunter kit") {
                 inventory.adds(946, 1).adds(303, 1).adds(954, 2).adds(10029, 1).adds(10008, 1);
             } else if (key === "magic imbue") {
-                player.setAttribute("lunar:magicImbueUntil", Date.now() + 12 * 60_000);
+                player.setAttribute("lunar:magic-imbue-until", Date.now() + 12 * 60_000);
             } else if (key === "spin flax") {
                 for (const item of inventory.getValidItems()) if (item.getId() === 1779) item.setId(1777);
             } else if (key === "superglass make") {
@@ -356,7 +355,7 @@ export class LunarSpells {
     }
 
     private static acceptsAid(player: Player): boolean {
-        return player.getAttribute("acceptAid") !== false;
+        return player.getAttribute("accept-aid") !== false;
     }
 
     public static expireSpellbookSwap(player: Player): void {

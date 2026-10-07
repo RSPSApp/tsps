@@ -1,0 +1,305 @@
+[
+  {
+    "name": "Tropical wagtail",
+    "npc": "TROPICAL_WAGTAIL",
+    "level": 19,
+    "part": "TAILFEATHERS",
+    "masters": [
+      0
+    ]
+  },
+  {
+    "name": "Wild kebbit",
+    "npc": "WILD_KEBBIT",
+    "level": 23,
+    "part": "KEBBITY_TUFT",
+    "masters": [
+      0
+    ]
+  },
+  {
+    "name": "Sapphire glacialis",
+    "npc": "SAPPHIRE_GLACIALIS",
+    "level": 25,
+    "part": "BLUE_BUTTERFLY_WING",
+    "masters": [
+      0
+    ]
+  },
+  {
+    "name": "Swamp lizard",
+    "npc": "SWAMP_LIZARD",
+    "level": 29,
+    "part": "SWAMP_LIZARD_CLAW",
+    "masters": [
+      0,
+      1
+    ]
+  },
+  {
+    "name": "Spined larupia",
+    "npc": "SPINED_LARUPIA",
+    "level": 31,
+    "part": "LARUPIA_EAR",
+    "masters": [
+      0,
+      2
+    ]
+  },
+  {
+    "name": "Barb-tailed kebbit",
+    "npc": "BARB_TAILED_KEBBIT",
+    "level": 33,
+    "part": "KEBBITY_TUFT",
+    "masters": [
+      0
+    ]
+  },
+  {
+    "name": "Snowy knight",
+    "npc": "SNOWY_KNIGHT",
+    "level": 35,
+    "part": "WHITE_BUTTERFLY_WING",
+    "masters": [
+      0,
+      2
+    ]
+  },
+  {
+    "name": "Prickly kebbit",
+    "npc": "PRICKLY_KEBBIT",
+    "level": 37,
+    "part": "KEBBITY_TUFT",
+    "masters": [
+      0
+    ]
+  },
+  {
+    "name": "Embertailed jerboa",
+    "npc": "EMBERTAILED_JERBOA",
+    "level": 39,
+    "part": "LARGE_JERBOA_TAIL",
+    "masters": [
+      0,
+      2
+    ]
+  },
+  {
+    "name": "Horned graahk",
+    "npc": "HORNED_GRAAHK",
+    "level": 41,
+    "part": "GRAAHK_HORN_SPUR",
+    "masters": [
+      0,
+      1
+    ]
+  },
+  {
+    "name": "Spotted kebbit",
+    "npc": "SPOTTED_KEBBIT",
+    "level": 43,
+    "part": "KEBBITY_TUFT",
+    "masters": [
+      0,
+      1,
+      2
+    ]
+  },
+  {
+    "name": "Black warlock",
+    "npc": "BLACK_WARLOCK",
+    "level": 45,
+    "part": "BLACK_BUTTERFLY_WING",
+    "masters": [
+      0,
+      1
+    ]
+  },
+  {
+    "name": "Orange salamander",
+    "npc": "ORANGE_SALAMANDER",
+    "level": 47,
+    "part": "ORANGE_SALAMANDER_CLAW",
+    "masters": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  {
+    "name": "Razor-backed kebbit",
+    "npc": "RAZOR_BACKED_KEBBIT",
+    "level": 49,
+    "part": "KEBBITY_TUFT",
+    "masters": [
+      0,
+      1
+    ]
+  },
+  {
+    "name": "Sabre-toothed kebbit",
+    "npc": "SABRE_TOOTHED_KEBBIT",
+    "level": 51,
+    "part": "KEBBITY_TUFT",
+    "masters": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ]
+  },
+  {
+    "name": "Grey chinchompa",
+    "npc": "CHINCHOMPA",
+    "level": 53,
+    "part": "CHINCHOMPA_TUFT",
+    "masters": [
+      0,
+      1,
+      3,
+      4
+    ]
+  },
+  {
+    "name": "Sabre-toothed kyatt",
+    "npc": "SABRE_TOOTHED_KYATT",
+    "level": 55,
+    "part": "KYATT_TOOTH_CHIP",
+    "masters": [
+      0,
+      2,
+      3,
+      4
+    ]
+  },
+  {
+    "name": "Dark kebbit",
+    "npc": "DARK_KEBBIT",
+    "level": 57,
+    "part": "KEBBITY_TUFT",
+    "masters": [
+      0,
+      1,
+      3,
+      4
+    ]
+  },
+  {
+    "name": "Pyre fox",
+    "npc": "PYRE_FOX",
+    "level": 57,
+    "part": "FOX_FLUFF",
+    "masters": [
+      0,
+      1,
+      2
+    ]
+  },
+  {
+    "name": "Red salamander",
+    "npc": "RED_SALAMANDER",
+    "level": 59,
+    "part": "RED_SALAMANDER_CLAW",
+    "masters": [
+      0,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  {
+    "name": "Red chinchompa",
+    "npc": "CARNIVOROUS_CHINCHOMPA",
+    "level": 63,
+    "part": "RED_CHINCHOMPA_TUFT",
+    "masters": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  {
+    "name": "Dashing kebbit",
+    "npc": "DASHING_KEBBIT",
+    "level": 69,
+    "part": "KEBBITY_TUFT",
+    "masters": [
+      0,
+      3,
+      4,
+      5
+    ]
+  },
+  {
+    "name": "Sunlight antelope",
+    "npc": "SUNLIGHT_ANTELOPE",
+    "level": 72,
+    "part": "ANTELOPE_HOOF_SHARD",
+    "masters": [
+      0,
+      3,
+      4,
+      5
+    ]
+  },
+  {
+    "name": "Sunlight Moth",
+    "npc": "SUNLIGHT_MOTH",
+    "level": 75,
+    "part": "SUNLIGHT_MOTH_WING",
+    "masters": [
+      0,
+      1,
+      4
+    ]
+  },
+  {
+    "name": "Tecu salamander",
+    "npc": "TECU_SALAMANDER",
+    "level": 79,
+    "part": "SALAMANDER_CLAW",
+    "masters": [
+      0,
+      3,
+      5
+    ]
+  },
+  {
+    "name": "Herbiboar",
+    "npc": "HERBIBOAR",
+    "level": 80,
+    "part": "HERBY_TUFT",
+    "masters": [
+      0,
+      4,
+      5
+    ]
+  },
+  {
+    "name": "Moonlight moth",
+    "npc": "MOONLIGHT_MOTH",
+    "level": 85,
+    "part": "MOONLIGHT_MOTH_WING",
+    "masters": [
+      0,
+      3,
+      5
+    ]
+  },
+  {
+    "name": "Moonlight antelope",
+    "npc": "MOONLIGHT_ANTELOPE",
+    "level": 91,
+    "part": "ANTELOPE_HOOF_SHARD_2",
+    "masters": [
+      0,
+      5
+    ]
+  }
+]

@@ -194,6 +194,7 @@ function raiseSailForHeading(player, boat) {
 
 module.exports = {
   name: "SailingHelm",
+  members: true,
   sailButtonTransition,
   register(api) {
     content();

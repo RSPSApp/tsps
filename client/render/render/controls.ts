@@ -327,6 +327,16 @@ export function getControls(host: WebGLOsrsRendererHost, ): Schema {
                 },
                 { collapsed: false },
             ),
+            "Scene Resolution": {
+                value: Math.round(host.sceneResolutionScale * 100),
+                min: 50,
+                max: 100,
+                step: 5,
+                label: "Scene resolution (%)",
+                onChange: (v: number) => {
+                    host.sceneResolutionScale = Math.max(0.5, Math.min(1, v / 100));
+                },
+            },
             "Max Level": {
                 value: host.maxLevel,
                 min: 0,

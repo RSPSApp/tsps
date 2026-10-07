@@ -14,11 +14,10 @@
  * Iorwerth, 14 Arianwyn meeting, 15 complete.
  *
  * Source: LostCityRS/Content quest_regicide (varp/regicide_quest stages, item
- * and object ids). Gaps: Underground Pass is required per OSRS, but no
- * Underground Pass quest exists in this repo to read, so the requirement is
- * journal-only and the messenger spawns regardless; the Regicide NPCs are not in
- * npc-spawns.json, so the King's Messenger is owner-spawned on login while the
- * rest must be spawned by content/admin tools; the Isafdar traps, the Tyras
+ * and object ids). Gaps: the Regicide NPCs are not in npc-spawns.json, so the
+ * King's Messenger is owner-spawned on login, only once Underground Pass is
+ * complete and Regicide has not started, while the rest must be spawned by
+ * content/admin tools; the Isafdar traps, the Tyras
  * guard fight and the fractionalising still minigame are not simulated (a
  * crossing advances the guard stage and a barrel of coal tar on the still gives
  * naphtha directly); Arianwyn is met by talking to him rather than a zone
@@ -33,7 +32,7 @@ module.exports = function registerRegicideQuest(api) {
     NpcIdentifiers,
     ObjectIdentifiers,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests } = require("../QuestRuntime");
 
   const KING_LATHAS_IDS = new Set([
     NpcIdentifiers.KING_LATHAS,
@@ -737,9 +736,15 @@ module.exports = function registerRegicideQuest(api) {
     messengerByPlayer.delete(player);
   }
 
+  function undergroundPassComplete(player) {
+    const undergroundPass = getRegisteredQuests().find((entry) => entry.key === "underground_pass");
+    return Boolean(undergroundPass && undergroundPass.isComplete(player));
+  }
+
   function ensureMessenger(player) {
     if (!player || player.isPlayerBot?.() === true) return;
     if (quest.getStage(player) !== STAGE_NOT_STARTED) return;
+    if (!undergroundPassComplete(player)) return;
     if (trackedMessenger(player)) return;
     const pos = player.getLocation();
     const npc = api.spawnNpc({

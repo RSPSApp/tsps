@@ -13,6 +13,7 @@ export class OverlayManager {
     private overlays: Overlay[] = [];
     private unclipped = new Set<Overlay>();
     private app?: OverlayInitArgs["app"];
+    private readonly clip = [0, 0, 0, 0];
 
     add(overlay: Overlay, clipToViewport = true): this {
         this.overlays.push(overlay);
@@ -78,10 +79,17 @@ export class OverlayManager {
             overlay.draw(phase);
             return;
         }
+        const clip = this.clip;
+        clip[0] = viewport.x;
+        clip[1] = app.height - viewport.y - viewport.height;
+        clip[2] = viewport.width;
+        clip[3] = viewport.height;
         app.enable(PicoGL.SCISSOR_TEST);
-        app.scissor(viewport.x, app.height - viewport.y - viewport.height, viewport.width, viewport.height);
+        app.scissor(clip[0], clip[1], clip[2], clip[3]);
         try {
-            overlay.draw(phase);
+            // Overlays get the clip rather than reading it back: getParameter(SCISSOR_BOX)
+            // stalls on the GPU each call.
+            overlay.draw(phase, clip);
         } finally {
             app.disable(PicoGL.SCISSOR_TEST);
         }

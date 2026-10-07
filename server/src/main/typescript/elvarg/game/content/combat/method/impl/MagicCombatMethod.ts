@@ -33,6 +33,8 @@ export class MagicCombatMethod extends CombatMethod {
         12901: 6589, 12911: 6589, 12919: 6589, 12929: 6589, 12939: 6589,
         12951: 6589, 12963: 6589, 12975: 6589, 12987: 6589, 12999: 6589,
         13011: 6589, 13023: 6589,
+        // Capture: Undead Grasp.
+        21832: 5030,
     };
     private static readonly IMPACT_SOUNDS: Readonly<Record<number, number>> = {
         1: 1460,
@@ -45,16 +47,52 @@ export class MagicCombatMethod extends CombatMethod {
         12901: 110, 12911: 104, 12919: 105, 12929: 102, 12939: 185,
         12951: 181, 12963: 182, 12975: 180, 12987: 179, 12999: 176,
         13011: 177, 13023: 175,
+        // Capture: Undead Grasp (an area sound at the target).
+        21832: 5055,
     };
 
     public type(): CombatType {
         return CombatType.MAGIC;
     }
 
-    public hits(character: Mobile, target: Mobile): PendingHit[] {
-        let hits: PendingHit[] = [new PendingHit(character, target, this, 3)];
+    /** NPC casters keep their old fixed delay; their attacks are tuned around it. */
+    private static readonly NPC_HIT_DELAY = 3;
 
+    /**
+     * Wiki (Hit delay): a player's magic lands 1 + (1 + distance) / 3 ticks after the cast, the
+     * distance measured edge to edge (to the target's nearest tile); barrage spells measure to
+     * its south-west tile. A spell with a fixed delay of its own keeps it.
+     */
+    public static hitDelay(attacker: Mobile, target: Mobile, spell?: any): number {
+        const own = spell?.hitDelay?.();
+        if (typeof own === "number") return own;
+        if (!attacker.isPlayer()) return MagicCombatMethod.NPC_HIT_DELAY;
+        const distance = MagicCombatMethod.isBarrage(spell)
+            ? attacker.getLocation().getDistance(target.getLocation())
+            : MagicCombatMethod.edgeDistance(attacker, target);
+        return 1 + Math.floor((1 + distance) / 3);
+    }
+
+    /** Chebyshev distance from the attacker's tile to the nearest tile of the target. */
+    private static edgeDistance(attacker: Mobile, target: Mobile): number {
+        const from = attacker.getLocation();
+        const to = target.getLocation();
+        const size = Math.max(1, target.getSize?.() ?? 1);
+        const dx = Math.max(0, to.getX() - from.getX(), from.getX() - (to.getX() + size - 1));
+        const dy = Math.max(0, to.getY() - from.getY(), from.getY() - (to.getY() + size - 1));
+        return Math.max(dx, dy);
+    }
+
+    /** Barrages are the only area spells from level 86 (bursts go up to 70). */
+    private static isBarrage(spell: any): boolean {
+        return typeof spell?.spellRadius === "function" && spell.spellRadius() > 0 &&
+            (spell.levelRequired?.() ?? 0) >= 86;
+    }
+
+    public hits(character: Mobile, target: Mobile): PendingHit[] {
         let spell = character.getCombat().getSelectedSpell();
+        let hits: PendingHit[] = [new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell))];
+
 
         if (!spell) {
             return hits;
@@ -89,7 +127,7 @@ export class MagicCombatMethod extends CombatMethod {
                 if (!CombatFactory.canAttackSecondaryTarget(character, target, next, spellRadius)) {
                     continue;
                 }
-                let pendingHit: PendingHit = new PendingHit(character, next, this, 3, false);
+                let pendingHit: PendingHit = new PendingHit(character, next, this, MagicCombatMethod.hitDelay(character, next, spell), false);
                 multiCombatHits.push(pendingHit);
                 spell.onHitCalc(pendingHit);
             }
@@ -194,7 +232,8 @@ export class MagicCombatMethod extends CombatMethod {
         const current = character.getCombat().getCastSpell();
         character.getCombat().setCastSpell(null);
         if (character.getCombat().getAutocastSpell() === null) {
-            character.getCombat().reset();
+            // The same tick as the cast: keep its animation, which the reset would replace.
+            character.getCombat().reset(false);
             // reset() clears the interaction; a resolved manual cast still faces its target.
             character.setMobileInteraction(target);
         }
@@ -216,7 +255,8 @@ export class MagicCombatMethod extends CombatMethod {
         if (previousSpell) {
             if (accurate) {
                 const endGraphic = previousSpell.endGraphic();
-                target.performGraphic(endGraphic);
+                // A spell with no impact graphic (a grasp shows its own at the cast) sends none.
+                if (endGraphic) target.performGraphic(endGraphic);
                 const impactSound = previousSpell.impactSound()
                     ?? MagicCombatMethod.resolveImpactSound(previousSpell.spellId());
                 Sounds.sendSound(target, impactSound);

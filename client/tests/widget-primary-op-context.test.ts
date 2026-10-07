@@ -28,6 +28,7 @@ const deps = {
     handleTradeWidgetAction: () => false,
     buildWidgetActionPayload: () => null,
     executeScriptListener: () => undefined,
+    getTransmitCycles: () => ({ cycleCntr: 0 }),
 } as any;
 const state = { cachedHoverHits: null } as any;
 const frame = {

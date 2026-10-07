@@ -13,7 +13,7 @@ const {
 const { Obelisks } = require("../../src/main/typescript/elvarg/game/content/Obelisks");
 const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
-const { isSafeLocation: isFeroxSafeLocation } = require("../items/LootKeys.plugin");
+const { isSafeLocation: isFeroxSafeLocation } = require("./ferox/Bounds.FeroxEnclave");
 
 // Everything this plugin asks of a tile. The safe test alone checks building roofs, Ferox's
 // polygon and nine map-object buckets, and the attack hook asks it several times per
@@ -48,7 +48,7 @@ function tileFactsOf(player) {
     inWilderness: pvpArea && !safe,
     pvpOverlay: needsPvpOverlay(tile),
     level: Wilderness.levelAt(tile.x, tile.y),
-    multiIcon: Wilderness.isMulti(tile.x, tile.y) ? 1 : 0,
+    multiIcon: Wilderness.isMulti(tile.x, tile.y, tile.getZ()) ? 1 : 0,
   };
   tileFacts.set(player, facts);
   return facts;
@@ -154,11 +154,6 @@ function canAttackByWildernessLevel(attacker, target) {
   return Math.abs(combatLevelOf(attacker) - combatLevelOf(target)) <= range;
 }
 
-function denyAttack(event, messages) {
-  event.allow = false;
-  sendThrottled(event.attacker, messages);
-}
-
 function sendThrottled(player, messages) {
   if (!player || player?.isPlayerBot?.() === true) {
     return;
@@ -174,12 +169,14 @@ function sendThrottled(player, messages) {
   }
 }
 
+const CLAN_CHAT_ATTRIBUTE = "clan-chat:channel";
+
 function shareClanChat(attacker, target) {
   if (!attacker || !target || attacker === target) {
     return false;
   }
-  const attackerClan = attacker.getCurrentClanChat?.();
-  const targetClan = target.getCurrentClanChat?.();
+  const attackerClan = attacker.getAttribute?.(CLAN_CHAT_ATTRIBUTE);
+  const targetClan = target.getAttribute?.(CLAN_CHAT_ATTRIBUTE);
   return attackerClan != null && attackerClan === targetClan;
 }
 
@@ -191,8 +188,6 @@ function createState() {
   return {
     // player -> tile facts as of their last process tick, for entry/exit edges
     tiles: new Map(),
-    // player -> ticks left before the login mount is re-sent
-    pendingMount: new Map(),
   };
 }
 
@@ -347,11 +342,13 @@ function refreshWildernessUi(player, facts, inWilderness) {
 // Hook handlers
 // ---------------------------------------------------------------------------
 
-// World only emits this for real players - bots never reach any of it, which is why the
-// combat rules derive a level from the tile instead of trusting the stored one.
-function onPlayerProcess(state, player) {
-  retryPendingMount(state, player);
+function isRealPlayer(mobile) {
+  return mobile?.isPlayer?.() === true && mobile.isPlayerBot?.() !== true;
+}
 
+// Only real players in the area get here - bots never reach any of it, which is why the
+// combat rules derive a level from the tile instead of trusting the stored one.
+function processPlayer(state, player) {
   const facts = tileFactsOf(player);
   if (!facts) {
     return;
@@ -402,26 +399,32 @@ function leaveWilderness(player, facts, wasInWilderness) {
   lastPvpLayoutState.delete(player);
 }
 
-function retryPendingMount(state, player) {
-  const retryIn = state.pendingMount.get(player);
-  if (retryIn === undefined) {
-    return;
+// What a player off PvP ground sees: no overlay, no level, no Attack option.
+const OFF_PVP_FACTS = Object.freeze({ pvpOverlay: false, safe: false, level: 0, multiIcon: 0, inWilderness: false });
+
+// Leaving the area is the exit edge. It is judged off the area, not the tile: an instance can
+// claim a player before moving them, so the tile may still be in the wild.
+function playerLeft(state, player, logout) {
+  const previous = state.tiles.get(player);
+  state.tiles.delete(player);
+  if (!logout) {
+    leaveWilderness(player, OFF_PVP_FACTS, previous?.inWilderness === true);
   }
-  if (retryIn > 0) {
-    state.pendingMount.set(player, retryIn - 1);
-    return;
-  }
-  state.pendingMount.delete(player);
-  mountPvpIcons(player);
 }
 
-function onPlayerLogin(state, player) {
+function remountIfOnline(player) {
+  if (player.isRegistered?.() !== false) {
+    mountPvpIcons(player);
+  }
+}
+
+function onPlayerLogin(state, api, player) {
   if (player?.isPlayerBot?.() === true) {
     return;
   }
   // The mount is sent twice: now, and again once the client has had time to build its
   // gameframe - a login inside the wilderness otherwise shows no overlay at all.
-  state.pendingMount.set(player, MOUNT_RETRY_TICKS);
+  api.getTaskManager().submit(new api.core.CountdownTask({}, MOUNT_RETRY_TICKS, () => remountIfOnline(player)));
 
   const facts = tileFactsOf(player);
   if (!facts) {
@@ -434,7 +437,6 @@ function onPlayerLogin(state, player) {
 
 function onPlayerDisconnect(state, player) {
   state.tiles.delete(player);
-  state.pendingMount.delete(player);
   lastIconsVisible.delete(player);
   lastWildernessState.delete(player);
   lastPvpLayoutState.delete(player);
@@ -442,21 +444,13 @@ function onPlayerDisconnect(state, player) {
   lastLevelRowVisible.delete(player);
 }
 
-function onCanAttack(state, event) {
-  const { attacker, target } = event;
+function canAttack(attacker, target) {
   if (!attacker?.isPlayer?.() || !target?.isPlayer?.()) {
-    return;
+    return null;
   }
 
   if (tileFactsOf(attacker)?.safeBuilding || tileFactsOf(target)?.safeBuilding) {
-    event.allow = false;
-    return;
-  }
-  if (event.allow !== null) return;
-
-  if (shareClanChat(attacker, target)) {
-    denyAttack(event, CLAN_CHAT_MESSAGES);
-    return;
+    return false;
   }
 
   const attackerInWild = isInWilderness(attacker);
@@ -464,29 +458,27 @@ function onCanAttack(state, event) {
   if (!attackerInWild || !targetInWild) {
     // One side in the Wilderness and one outside is never a fight; neither side in it is
     // somebody else's rule to make (duel arena, minigames).
-    if (attackerInWild || targetInWild) {
-      event.allow = false;
-    }
-    return;
+    return attackerInWild || targetInWild ? false : null;
+  }
+
+  if (shareClanChat(attacker, target)) {
+    sendThrottled(attacker, CLAN_CHAT_MESSAGES);
+    return false;
   }
 
   if (!canAttackByWildernessLevel(attacker, target)) {
-    denyAttack(event, LEVEL_DIFFERENCE_MESSAGES);
-    return;
+    sendThrottled(attacker, LEVEL_DIFFERENCE_MESSAGES);
+    return false;
   }
 
-  event.allow = true;
+  return true;
 }
 
-function onCanTeleport(state, event) {
-  if (event.allow !== null) {
-    return;
-  }
-  const { player } = event;
+function canTeleport(player, wildernessLevelLimit) {
   if (!isInWilderness(player)) {
-    return;
+    return null;
   }
-  const levelLimit = event.wildernessLevelLimit ?? TELEPORT_BLOCK_LEVEL;
+  const levelLimit = wildernessLevelLimit ?? TELEPORT_BLOCK_LEVEL;
   if (
     wildernessLevelOf(player) > levelLimit &&
     player.getRights() !== PlayerRights.DEVELOPER &&
@@ -496,17 +488,53 @@ function onCanTeleport(state, event) {
     player.sendMessage(
       `You must be below level ${levelLimit} of Wilderness to use teleportation spells.`
     );
-    event.allow = false;
+    return false;
   }
+  return null;
 }
 
-function onNpcAggressionTolerance(state, event) {
-  if (event.override !== null) {
-    return;
+function npcAggressionTolerance(player) {
+  return isInWilderness(player) ? true : null;
+}
+
+// ---------------------------------------------------------------------------
+// Area
+// ---------------------------------------------------------------------------
+
+// PvP ground plus the duel arena, whose zones share the pvp_icons block (see needsPvpOverlay).
+// Its rules still read the tile, so membership only decides who is asked: anyone standing
+// elsewhere costs this plugin nothing.
+// ponytail: an actor holds one area, so a private instance built on PvP ground would skip
+// these rules; give that instance its own rules if one is ever placed there.
+function createWildernessArea(api, state) {
+  class WildernessArea extends api.core.Area {
+    process(mobile) {
+      if (isRealPlayer(mobile)) processPlayer(state, mobile);
+    }
+
+    postLeave(mobile, logout) {
+      if (isRealPlayer(mobile)) playerLeft(state, mobile, logout);
+    }
+
+    canAttack(attacker, target) {
+      return canAttack(attacker, target);
+    }
+
+    canTeleport(player, wildernessLevelLimit) {
+      return canTeleport(player, wildernessLevelLimit);
+    }
+
+    npcAggressionTolerance(player) {
+      return npcAggressionTolerance(player);
+    }
   }
-  if (isInWilderness(event.player)) {
-    event.override = true;
-  }
+  return new WildernessArea([...WORLD_ZONE_BOUNDARIES.pvp, ...WORLD_ZONE_BOUNDARIES.duel]);
+}
+
+// Pushed at startup, after every plugin has pushed its own areas at load: an actor holds the
+// first area that matches, so the map-wide zone of a PvP world must not shadow a minigame's.
+function registerWildernessArea(api, state) {
+  api.registerArea(createWildernessArea(api, state));
 }
 
 // https://oldschool.runescape.wiki/w/Web — use the item's bonus, not total equipment bonuses.
@@ -579,12 +607,9 @@ module.exports = {
   register(api) {
     const state = createState();
 
-    api.onPlayerProcess(({ player }) => onPlayerProcess(state, player));
-    api.onPlayerLogin(({ player }) => onPlayerLogin(state, player));
+    api.onServerStartup(() => registerWildernessArea(api, state));
+    api.onPlayerLogin(({ player }) => onPlayerLogin(state, api, player));
     api.onPlayerDisconnect(({ player }) => onPlayerDisconnect(state, player));
-    api.onCanAttack((event) => onCanAttack(state, event));
-    api.onCanTeleport((event) => onCanTeleport(state, event));
-    api.onNpcAggressionTolerance((event) => onNpcAggressionTolerance(state, event));
     api.onObjectFirstClick(Obelisks.OBELISK_IDS, onObeliskClick);
     api.onObjectInteraction("Lever", { Pull: (event) => pullLever(api, event) });
     api.onObjectInteraction("Web", { Slash: (event) => slashWeb(api, event) });

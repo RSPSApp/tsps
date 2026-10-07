@@ -34,3 +34,25 @@ test('sendSystemUpdate emits the SYSTEM_UPDATE packet (opcode 220, big-endian se
   assert.equal(frames.length, 1);
   assert.deepEqual(Buffer.from(frames[0]), Buffer.from([220, 0, 0, 0, 125]));
 });
+
+test('sendCollectionLogSnapshot emits opcode 190 with the owned collection_log items', () => {
+  let frame;
+  const fake = {
+    player: { getSession: () => ({ sendClientPacket: (bytes) => { frame = bytes; return true; } }) },
+  };
+  const result = PacketSender.prototype.sendCollectionLogSnapshot.call(fake, [
+    { slot: 0, itemId: 13247, quantity: 1 },
+    { slot: 1, itemId: 20659, quantity: 1 },
+  ]);
+  assert.equal(result, fake);
+  const buf = Buffer.from(frame);
+  assert.equal(buf[0], 190);
+  assert.equal(buf.readUInt16BE(1), 18);
+  assert.equal(buf.readUInt16BE(3), 2);
+  assert.equal(buf.readUInt16BE(5), 0);
+  assert.equal(buf.readUInt16BE(7), 13247);
+  assert.equal(buf.readInt32BE(9), 1);
+  assert.equal(buf.readUInt16BE(13), 1);
+  assert.equal(buf.readUInt16BE(15), 20659);
+  assert.equal(buf.readInt32BE(17), 1);
+});

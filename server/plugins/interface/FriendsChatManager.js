@@ -18,6 +18,9 @@ const FriendsChatRank = {
 const MAX_CHANNEL_MEMBERS = 500;
 const KICK_BAN_MS = 60 * 60 * 1000;
 const FRIENDS_CHAT_MESSAGE_TYPE = 9;
+/** [public, private, trade] chat filter modes, saved so they survive a relog. */
+const CHAT_FILTERS_ATTRIBUTE = "chat.filters";
+const CLAN_CHAT_ATTRIBUTE = "clan-chat:channel";
 const FRIENDS_CHAT_NOTIFICATION_TYPE = 11;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 const SOCIAL_TAB_TARGET_UID = (161 << 16) | 85;
@@ -103,6 +106,9 @@ class FriendsChatManager {
     static offlinePlayerIds = new Set();
     static onLogin(player) {
         this.offlinePlayerIds.delete(player.getIndex());
+        const filters = player.getAttribute(CHAT_FILTERS_ATTRIBUTE);
+        if (Array.isArray(filters) && filters.length === 3)
+            player.getRelations().setChatModes(filters[0], filters[1], filters[2]);
         player.getRelations().onLogin(player);
         this.refreshOwnedChannel(player);
         this.sendSnapshot(player);
@@ -156,13 +162,18 @@ class FriendsChatManager {
             return;
         }
         if (player.getRelations().getStatus() === 2) {
-            player.getRelations().setStatus(1, false);
+            // OSRS forces private chat to Friends when you send a PM; route
+            // through setChatFilters so the change survives a relog.
+            const relations = player.getRelations();
+            this.setChatFilters(player, relations.getPublicChatMode(), 1, relations.getTradeChatMode());
         }
         recipient.getSession().sendClientPacket(encodeChatMessage("private_in", text, player.getUsername(), "", player.getIndex(), 3));
         player.getSession().sendClientPacket(encodeChatMessage("private_out", text, recipient.getUsername(), "", recipient.getIndex(), 6));
     }
     static setChatFilters(player, publicMode, privateMode, tradeMode) {
         player.getRelations().setChatModes(publicMode, privateMode, tradeMode);
+        const relations = player.getRelations();
+        player.setAttribute(CHAT_FILTERS_ATTRIBUTE, [relations.getPublicChatMode(), relations.getStatus(), relations.getTradeChatMode()]);
         this.sendSnapshot(player);
         this.refreshFriendWatchers(player.getLongUsername(), player);
     }
@@ -324,7 +335,6 @@ class FriendsChatManager {
                 const member = channel && Array.from(channel.members.values()).find((candidate) => candidate.getLongUsername() === target.encoded);
                 if (member) {
                     member.getRelations().setFriendsChatLastOwner("");
-                    member.setClanChatName("");
                     this.removeMember(ownerKey, member.getIndex());
                     this.sendSnapshot(member);
                 }
@@ -385,16 +395,14 @@ class FriendsChatManager {
                 return false;
             }
             candidate.getRelations().setFriendsChatLastOwner("");
-            candidate.setClanChatName("");
             this.removeMember(ownerName.key, candidate.getIndex());
             this.sendSnapshot(candidate);
             this.notification(candidate, "You have been removed from this chat-channel.");
         }
         channel.members.set(player.getIndex(), player);
-        player.setCurrentClanChat(channel);
+        player.setAttribute(CLAN_CHAT_ATTRIBUTE, channel);
         this.membershipByPlayer.set(player.getIndex(), ownerName.key);
         player.getRelations().setFriendsChatLastOwner(profile.ownerName);
-        player.setClanChatName(profile.ownerName);
         this.persist(player);
         if (notify) {
             this.notification(player, `Now talking in chat-channel ${profile.channelName}`);
@@ -406,7 +414,6 @@ class FriendsChatManager {
     static leave(player, notify) {
         const ownerKey = this.membershipByPlayer.get(player.getIndex());
         player.getRelations().setFriendsChatLastOwner("");
-        player.setClanChatName("");
         this.persist(player);
         if (!ownerKey) {
             this.sendSnapshot(player);
@@ -441,7 +448,6 @@ class FriendsChatManager {
         }
         bans.set(targetName.key, Date.now() + KICK_BAN_MS);
         target.getRelations().setFriendsChatLastOwner("");
-        target.setClanChatName("");
         this.persist(target);
         this.removeMember(ownerKey, target.getIndex());
         this.sendSnapshot(target);
@@ -451,7 +457,7 @@ class FriendsChatManager {
         const channel = this.channels.get(ownerKey);
         if (!channel)
             return;
-        channel.members.get(playerId)?.setCurrentClanChat(null);
+        channel.members.get(playerId)?.setAttribute(CLAN_CHAT_ATTRIBUTE, null);
         channel.members.delete(playerId);
         this.membershipByPlayer.delete(playerId);
         if (channel.members.size === 0) {
@@ -493,10 +499,9 @@ class FriendsChatManager {
             this.channels.delete(owner.key);
             this.temporaryBans.delete(owner.key);
             for (const member of members) {
-                member.setCurrentClanChat(null);
+                member.setAttribute(CLAN_CHAT_ATTRIBUTE, null);
                 this.membershipByPlayer.delete(member.getIndex());
                 member.getRelations().setFriendsChatLastOwner("");
-                member.setClanChatName("");
                 this.persist(member);
                 this.sendSnapshot(member);
                 this.notification(member, "This chat-channel has been disabled.");
@@ -652,4 +657,4 @@ class FriendsChatManager {
     }
 }
 
-module.exports = { FriendsChatManager };
+module.exports = { FriendsChatManager, CHAT_FILTERS_ATTRIBUTE, CLAN_CHAT_ATTRIBUTE };

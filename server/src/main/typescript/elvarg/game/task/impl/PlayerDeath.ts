@@ -222,8 +222,10 @@ export class PlayerDeathTask extends Task {
                     // Perform death animation..
                     this.player.performAnimation(new Animation(836));
 
-                    // Handle retribution prayer effect on our killer, if present..
-                    if (PrayerHandler.isActivated(this.player, PrayerHandler.RETRIBUTION)) {
+                    // Retribution hits our killer, unless the killing blow was rebounded
+                    // damage - recoil, vengeance or another Retribution (Wiki: Retribution).
+                    const killingBlow = this.player.getCombat().getHitQueue().getLastAppliedHit();
+                    if (PrayerHandler.isActivated(this.player, PrayerHandler.RETRIBUTION) && !killingBlow?.isReflected()) {
                         if (typeof this.killer !== 'undefined' && this.killer !== null) {
                             CombatFactory.handleRetribution(this.player, this.killer);
                         }

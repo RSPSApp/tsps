@@ -30,6 +30,8 @@ const JEWELLERY = [
     ],
     spent: ItemIds.AMULET_OF_GLORY,
     rechargeable: true,
+    // Fountain of Heroes: 4 charges; Fountain of Rune: 6 (Wiki). Both need Heroes' Quest.
+    recharge: { heroes: true, quest: "Heroes' Quest", eternalChance: 25000 },
     eternal: [ItemIds.AMULET_OF_ETERNAL_GLORY],
     wildernessLevel: DRAGONSTONE_WILDERNESS_LEVEL,
     rubMessage: "You rub the amulet...",
@@ -55,6 +57,7 @@ const JEWELLERY = [
     ],
     spent: ItemIds.AMULET_OF_GLORY_T_,
     rechargeable: true,
+    recharge: { heroes: true, quest: "Heroes' Quest" },
     wildernessLevel: DRAGONSTONE_WILDERNESS_LEVEL,
     rubMessage: "You rub the amulet...",
     emptyMessage: "Your amulet hasn't got any charges left.",
@@ -124,6 +127,8 @@ const JEWELLERY = [
     ],
     spent: ItemIds.SKILLS_NECKLACE,
     rechargeable: true,
+    // Legends' Guild totem pole: 6 charges once Legends' Quest is complete (Wiki).
+    recharge: { totem: true, quest: "Legends' Quest" },
     wildernessLevel: DRAGONSTONE_WILDERNESS_LEVEL,
     emptyMessage: "You will need to recharge your skills necklace before you can use it again.",
     lastChargeMessage: "You use your skills necklace's last charge.",
@@ -155,6 +160,8 @@ const JEWELLERY = [
     ],
     spent: ItemIds.COMBAT_BRACELET,
     rechargeable: true,
+    // Legends' Guild totem pole (Wiki).
+    recharge: { totem: true, quest: "Legends' Quest" },
     wildernessLevel: DRAGONSTONE_WILDERNESS_LEVEL,
     rubMessage: "You rub the bracelet...",
     emptyMessage: "You will need to recharge your combat bracelet before you can use it again.",

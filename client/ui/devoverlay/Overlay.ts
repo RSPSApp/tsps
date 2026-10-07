@@ -193,6 +193,7 @@ export interface OverlayUpdateArgs {
 export interface Overlay {
     init(args: OverlayInitArgs): void;
     update(args: OverlayUpdateArgs): void;
-    draw(phase: RenderPhase): void;
+    /** `clip` is the scissor box (x, y, w, h) already applied for a viewport-clipped overlay. */
+    draw(phase: RenderPhase, clip?: readonly number[]): void;
     dispose(): void;
 }

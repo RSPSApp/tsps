@@ -69,6 +69,8 @@ export type GroundItemActionPayload = {
     itemId: number;
     quantity?: number;
     option?: string;
+    /** The option's number (1-5) for an option other than Take, such as giant bones' Bury. */
+    opNum?: number;
 };
 
 export type ShopServerPayload =

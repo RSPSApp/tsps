@@ -61,13 +61,25 @@ export function getCacheBaseUrl(): string {
     return fromEnv.endsWith("/") ? fromEnv : `${fromEnv}/`;
 }
 
+const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/i;
+
+/**
+ * A localhost default only means "this machine" when the page is too. Opened from another
+ * device (a tablet at http://192.168.x.x:3000), it must point at the host serving the page.
+ */
+function withPageHost(address: string): string {
+    const pageHost = typeof window !== "undefined" ? window.location?.hostname : "";
+    if (!pageHost || LOOPBACK_HOST.test(pageHost)) return address;
+    return address.replace(/^(wss?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/i, `$1${pageHost}`);
+}
+
 /** Default WebSocket URL used before the player picks a server. */
 export function getDefaultWsUrl(): string {
-    return read(process.env.REACT_APP_DEFAULT_WS_URL) ?? "ws://localhost:43594";
+    return withPageHost(read(process.env.REACT_APP_DEFAULT_WS_URL) ?? "ws://localhost:43594");
 }
 
 export function getDefaultServerAddress(): string {
-    return read(process.env.REACT_APP_DEFAULT_SERVER_ADDRESS) ?? "localhost:43594";
+    return withPageHost(read(process.env.REACT_APP_DEFAULT_SERVER_ADDRESS) ?? "localhost:43594");
 }
 
 export function getDefaultServerName(): string {
@@ -81,12 +93,26 @@ export function getDefaultServerSecure(): boolean {
     return getDefaultWsUrl().startsWith("wss://");
 }
 
+/** The server this build logs into by default, when the env names one (e.g. a worktree's own). */
+export function getConfiguredDefaultServer(): ConfiguredServer | undefined {
+    if (!read(process.env.REACT_APP_DEFAULT_SERVER_ADDRESS)) return undefined;
+    return {
+        name: getDefaultServerName(),
+        address: getDefaultServerAddress(),
+        secure: getDefaultServerSecure(),
+        maxPlayers: 2047,
+    };
+}
+
 /**
- * Debug "ID:" labels on examine/menu targets are disabled by default.
- * Set `REACT_APP_DISABLE_DEBUG_ID=false` at build time to enable them.
+ * Debug "ID:" labels on examine/menu targets (object ids and tile coords).
+ * Enabled by default in development; set `REACT_APP_DISABLE_DEBUG_ID=true`
+ * to turn them off (production builds do this) or `=false` to force them on.
  */
 export function isDebugIdEnabled(): boolean {
-    return !readBoolean(process.env.REACT_APP_DISABLE_DEBUG_ID, true);
+    const override = read(process.env.REACT_APP_DISABLE_DEBUG_ID);
+    if (override !== undefined) return !readBoolean(override, false);
+    return process.env.NODE_ENV !== "production";
 }
 
 /**

@@ -196,6 +196,10 @@ export class CombatSpecial {
             CombatSpecial.updateBar(player);
         } else {
             const spec = player.getCombatSpecial();
+            if (spec.getTraits()?.skipAttack === true) {
+                CombatSpecial.activateUtility(player, spec);
+                return;
+            }
             const queuedAttack = spec.getTraits()?.queuedAttack === true;
             const developerQueuedAttackSpam =
                 queuedAttack && player.getRights?.() === PlayerRights.DEVELOPER;
@@ -236,6 +240,26 @@ export class CombatSpecial {
             }
         }
 
+    }
+
+    /**
+     * Instant utility specials (skipAttack) resolve on the button press, the way
+     * OSRS does it: no target and no attack swing (Lumber Up, Rock Knocker,
+     * Fishstabber, Rampage, Sanctuary, Power of Death, Virulence, Entice, ...).
+     * The plugin's start() owns the drain and the effect, so core only gates on
+     * energy and finishes by clearing the activated state.
+     */
+    private static activateUtility(player: Player, spec: CombatSpecial): void {
+        const equippedWeaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
+        const drainAmount = spec.getDrainAmountForWeaponId(equippedWeaponId);
+        if (player.getSpecialPercentage() < drainAmount) {
+            player.sendMessage("You do not have enough special attack energy left!");
+            return;
+        }
+
+        spec.getCombatMethod().start(player, player);
+        player.setSpecialActivated(false);
+        CombatSpecial.updateBar(player);
     }
 
     public getId(): string {

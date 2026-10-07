@@ -581,6 +581,26 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.pushInt(w ? 1 : 0);
     });
 
+    // cc_find_child(int $index)(boolean): the active component's child at `index` becomes
+    // the active component (rev 241); like cc_find, a miss keeps the old target.
+    handlers.set(Opcodes.CC_FIND_CHILD, (ctx, intOp) => {
+        const childIndex = ctx.intStack[--ctx.intStackSize];
+        const parent = getTargetWidget(ctx, intOp);
+        const w = parent ? (parent.children?.[childIndex] ?? findNestedDynamicChild(parent, childIndex)) : null;
+        if (w) {
+            setTargetWidget(ctx, intOp, w);
+        }
+        ctx.pushInt(w ? 1 : 0);
+    });
+
+    // cc_childcount()(int): how many children the active component has.
+    handlers.set(Opcodes.CC_CHILDCOUNT, (ctx, intOp) => {
+        ctx.pushInt(getTargetWidget(ctx, intOp)?.children?.length ?? 0);
+    });
+
+    // cc_assert (rev 241): a debug check that there is an active component; no effect here.
+    handlers.set(Opcodes.CC_ASSERT, () => {});
+
     handlers.set(Opcodes.IF_FIND, (ctx, intOp) => {
         const uid = ctx.intStack[--ctx.intStackSize];
         const w = ctx.widgetManager.getWidgetByUid(uid);
@@ -591,93 +611,55 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.pushInt(w ? 1 : 0);
     });
 
-    // CC_CHILDREN_FIND: Starts iteration over dynamic children of activeWidget
-    // Args: intOp (0=activeWidget, 1=dotWidget), startIndex from stack
-    handlers.set(Opcodes.CC_CHILDREN_FIND, (ctx, intOp) => {
-        const startIndex = ctx.intStack[--ctx.intStackSize];
+    // Entity overlays (if/cc_find_entityoverlay): this client has none, so none is found.
+    handlers.set(Opcodes.IF_FIND_ENTITYOVERLAY, (ctx) => {
+        ctx.popInt();
+        ctx.pushInt(0);
+    });
+
+    handlers.set(Opcodes.CC_FIND_ENTITYOVERLAY, (ctx) => {
+        ctx.intStackSize -= 2;
+        ctx.pushInt(0);
+    });
+
+    // cc_find_parent / cc_find_layer: the active component becomes its parent (the layer a
+    // dynamic child was created in, or a static component's parent). False at the root.
+    // Script 8308 walks up a component tree with it.
+    const findParent = (ctx: HandlerContext, intOp: number) => {
         const w = getTargetWidget(ctx, intOp);
-
-        // Collect dynamic child indices that exist
-        const indices: number[] = [];
-        if (w && w.children) {
-            for (let i = 0; i < w.children.length; i++) {
-                if (w.children[i] && i > startIndex) {
-                    indices.push(i);
-                }
-            }
-        }
-        indices.sort((a, b) => a - b);
-
-        ctx.childrenIterWidget = w;
-        ctx.childrenIterIndices = indices;
-        ctx.childrenIterIndex = 0;
-    });
-
-    // CC_CHILDREN_FINDNEXTID: Returns the next child index from iteration, or -1 if done
-    handlers.set(Opcodes.CC_CHILDREN_FINDNEXTID, (ctx) => {
-        if (ctx.childrenIterIndex < ctx.childrenIterIndices.length) {
-            ctx.pushInt(ctx.childrenIterIndices[ctx.childrenIterIndex++]);
-        } else {
-            ctx.pushInt(-1);
-        }
-    });
-
-    // IF_CHILDREN_FIND: Starts iteration over children of widget from stack
-    // Args: widgetUid and startIndex from stack
-    handlers.set(Opcodes.IF_CHILDREN_FIND, (ctx, intOp) => {
-        const startIndex = ctx.intStack[--ctx.intStackSize];
-        const uid = ctx.intStack[--ctx.intStackSize];
-        const w = ctx.widgetManager.getWidgetByUid(uid);
-
-        // Collect dynamic child indices that exist
-        const indices: number[] = [];
-        if (w && w.children) {
-            for (let i = 0; i < w.children.length; i++) {
-                if (w.children[i] && i > startIndex) {
-                    indices.push(i);
-                }
-            }
-        }
-        indices.sort((a, b) => a - b);
-
-        ctx.childrenIterWidget = w ?? null;
-        ctx.childrenIterIndices = indices;
-        ctx.childrenIterIndex = 0;
-        setTargetWidget(ctx, intOp, w ?? null);
-    });
-
-    // IF_CHILDREN_FINDNEXTID: Same as CC variant - returns next child index or -1
-    handlers.set(Opcodes.IF_CHILDREN_FINDNEXTID, (ctx) => {
-        if (ctx.childrenIterIndex < ctx.childrenIterIndices.length) {
-            ctx.pushInt(ctx.childrenIterIndices[ctx.childrenIterIndex++]);
-        } else {
-            ctx.pushInt(-1);
-        }
-    });
-
-    // CC_FINDROOT: Traverses up to the parent widget, sets it as active widget.
-    // Used by scripts like script8308/8309 to traverse up the widget hierarchy.
-    // Reference: cc_findroot in cs2-scripts - returns true if parent found, false at root
-    handlers.set(Opcodes.CC_FINDROOT, (ctx, intOp) => {
-        const w = getTargetWidget(ctx, intOp);
-        if (!w) {
+        const parent =
+            w?.parentUid !== undefined ? ctx.widgetManager.getWidgetByUid(w.parentUid) : null;
+        if (!parent) {
             ctx.pushInt(0);
             return;
         }
+        setTargetWidget(ctx, intOp, parent);
+        ctx.pushInt(1);
+    };
+    handlers.set(Opcodes.CC_FIND_PARENT, findParent);
+    handlers.set(Opcodes.CC_FIND_LAYER, findParent);
 
-        // Get the parent widget using parentUid
-        const parent =
-            w.parentUid !== undefined ? ctx.widgetManager.getWidgetByUid(w.parentUid) : null;
-
-        if (parent) {
-            // Set the parent as the new active widget
-            setTargetWidget(ctx, intOp, parent);
-            ctx.pushInt(1);
-        } else {
-            // Already at root or no parent
-            ctx.pushInt(0);
+    // cc_find_next_sibling / cc_find_prev_sibling: the next (previous) dynamic child of the
+    // active component's layer becomes active. False when there is none.
+    const findSibling = (step: number) => (ctx: HandlerContext, intOp: number) => {
+        const w = getTargetWidget(ctx, intOp);
+        const layer =
+            w?.parentUid !== undefined ? ctx.widgetManager.getWidgetByUid(w.parentUid) : null;
+        const siblings = layer?.children;
+        const index = (w as any)?.childIndex ?? -1;
+        if (siblings && index >= 0) {
+            for (let i = index + step; i >= 0 && i < siblings.length; i += step) {
+                if (siblings[i]) {
+                    setTargetWidget(ctx, intOp, siblings[i]);
+                    ctx.pushInt(1);
+                    return;
+                }
+            }
         }
-    });
+        ctx.pushInt(0);
+    };
+    handlers.set(Opcodes.CC_FIND_NEXT_SIBLING, findSibling(1));
+    handlers.set(Opcodes.CC_FIND_PREV_SIBLING, findSibling(-1));
 
     // CC_PARENTSUBID: Returns the PARENT widget's childIndex, but ONLY if the parent is DYNAMIC.
     // Used by scripts like script8217 to traverse up nested dynamic widget hierarchies.
@@ -925,6 +907,9 @@ export function registerWidgetOps(handlers: HandlerMap): void {
             if (ctx.widgetManager.isServerOwnedWidget(uid)) {
                 return;
             }
+            // Scripts often rebuild the same children right after (every cycle, for timers):
+            // the redraw waits to see whether anything changed.
+            ctx.widgetManager.beginChildRebuild(w);
             // Unregister all dynamic children first
             if (w.children) {
                 for (const child of w.children) {
@@ -1228,9 +1213,12 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.pushInt(query.widgets.length);
     });
 
+    // if_query_next()(boolean): the next match becomes active; false when the query is done.
     handlers.set(Opcodes.WIDGET_QUERY_NEXT, (ctx, intOp) => {
         const query = getWidgetQuery(ctx);
-        setTargetWidget(ctx, intOp, query.widgets[query.cursor++] ?? null);
+        const next = query.widgets[query.cursor++] ?? null;
+        setTargetWidget(ctx, intOp, next);
+        ctx.pushInt(next ? 1 : 0);
     });
 
     handlers.set(Opcodes.WIDGET_QUERY_NEXTINDEX, (ctx) => {
@@ -2298,6 +2286,18 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         }
     });
 
+    // if_setnpcmodel(npc, component) (rev 241): the NPC's full model (model type 6), where
+    // if_setnpchead shows its chathead.
+    handlers.set(Opcodes.IF_SETNPCMODEL, (ctx) => {
+        const w = getWidgetFromStack(ctx);
+        const npcId = ctx.intStack[--ctx.intStackSize];
+        if (w) {
+            w.modelType = 6;
+            w.modelId = npcId;
+            invalidateWidgetRender(ctx, w);
+        }
+    });
+
     handlers.set(Opcodes.IF_SETNPCHEAD, (ctx) => {
         // Pop order: widget first (top), then npcId
         const w = getWidgetFromStack(ctx);
@@ -3361,11 +3361,12 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.forwardCCTriggerOpLocal();
     });
 
-    handlers.set(Opcodes.CC_RESUME_PAUSEBUTTON, (ctx) => {
+    handlers.set(Opcodes.CC_RESUME_PAUSEBUTTON, (ctx, intOp) => {
         // Resume paused button - signals that a dialog continue button was clicked.
-        // Uses activeWidget.id (parent UID), not activeWidget.uid.
-        // resumePauseWidget
-        const w = ctx.activeWidget;
+        // Uses the widget's id (parent UID), not its uid. Like the other cc_ ops, the operand
+        // picks the widget: 1 is the one found with cc_find 1 (the ToA party panel's applicant
+        // and invocation buttons resume their pausebuttons child that way).
+        const w = getTargetWidget(ctx, intOp);
         if (w && ctx.sendResumePauseButton) {
             const widgetUid =
                 (typeof (w as any).id === "number" ? (w as any).id : (w.uid ?? 0)) | 0;
@@ -3455,117 +3456,41 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     });
 
     // === Input Field Opcodes (type 16 = inputfield) ===
-    // These opcodes configure input field widgets used in hiscores, search boxes, etc.
+    // cc_input_set*: properties of input fields (hiscores, search boxes). Stored on the
+    // component; this client doesn't draw or edit input fields yet. Order and names from
+    // zwyz/osrs-cache (1133-1146).
+    const INPUT_INT_PROPERTIES: Array<[Opcodes, string]> = [
+        [Opcodes.CC_INPUT_SETSELECTCOLOUR, "inputSelectColour"],
+        [Opcodes.CC_INPUT_SETSELECTBGCOLOUR, "inputSelectBgColour"],
+        [Opcodes.CC_INPUT_SETPLACEHOLDERTEXTCOLOUR, "inputPlaceholderTextColour"],
+        [Opcodes.CC_INPUT_SETLINEWRAPPINGWIDTH, "inputLineWrappingWidth"],
+        [Opcodes.CC_INPUT_SETLINECOUNTLIMIT, "inputLineCountLimit"],
+        [Opcodes.CC_INPUT_SETLINEWIDTHLIMIT, "inputLineWidthLimit"],
+        [Opcodes.CC_INPUT_SETFOCUS, "inputFocus"],
+        [Opcodes.CC_INPUT_SETFOCUSABLE, "inputFocusable"],
+        [Opcodes.CC_INPUT_SETCARET, "inputCaret"],
+        [Opcodes.CC_INPUT_SETWRAPMODE, "inputWrapMode"],
+        [Opcodes.CC_INPUT_SETSUBMITMODE, "inputSubmitMode"],
+        [Opcodes.CC_INPUT_SETACCEPTMODE, "inputAcceptMode"],
+    ];
+    for (const [opcode, property] of INPUT_INT_PROPERTIES) {
+        handlers.set(opcode, (ctx, intOp) => {
+            const value = ctx.intStack[--ctx.intStackSize];
+            const w = getTargetWidget(ctx, intOp);
+            if (w) (w as any)[property] = value;
+        });
+    }
 
-    handlers.set(Opcodes.CC_INPUT_SETSUBMITMODE, (ctx, intOp) => {
-        // Sets submit mode for input field (0=no submit, 1=submit on enter)
-        const mode = ctx.intStack[--ctx.intStackSize];
+    handlers.set(Opcodes.CC_INPUT_SETPLACEHOLDERTEXT, (ctx, intOp) => {
+        const text = ctx.stringStack[--ctx.stringStackSize];
         const w = getTargetWidget(ctx, intOp);
-        if (w) {
-            (w as any).inputSubmitMode = mode;
-        }
+        if (w) (w as any).inputPlaceholderText = text;
     });
 
-    handlers.set(Opcodes.CC_INPUT_SETSELECTCOLOUR, (ctx, intOp) => {
-        // Sets the text selection color for input field
-        const color = ctx.intStack[--ctx.intStackSize];
+    handlers.set(Opcodes.CC_INPUT_SETSELECTION, (ctx, intOp) => {
+        ctx.intStackSize -= 2;
         const w = getTargetWidget(ctx, intOp);
-        if (w) {
-            (w as any).inputSelectColour = color;
-        }
+        if (w) (w as any).inputSelection = [ctx.intStack[ctx.intStackSize], ctx.intStack[ctx.intStackSize + 1]];
     });
 
-    handlers.set(Opcodes.CC_INPUT_SETACCEPTMODE, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputAcceptMode = val;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETWRAPMODE, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputWrapMode = val;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETLINEWRAPPINGWIDTH, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputLineWrappingWidth = val;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETSELECTBGCOLOUR, (ctx, intOp) => {
-        const color = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputSelectBgColour = color;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETLINECOUNTLIMIT, (ctx, intOp) => {
-        const limit = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputLineCountLimit = limit;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETCURSORCOLOUR, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputCursorColour = val;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETCURSORTRANS, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputCursorTrans = val;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETCURSORWIDTH, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputCursorWidth = val;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETCURSORHEIGHT, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputCursorHeight = val;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETCURSOROFFSET, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputCursorOffset = val;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETLINEWIDTHLIMIT, (ctx, intOp) => {
-        const limit = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputLineWidthLimit = limit;
-    });
-
-    handlers.set(Opcodes.CC_INPUT_SETCHARFILTER, (ctx, intOp) => {
-        const val = ctx.intStack[--ctx.intStackSize];
-        const w = getTargetWidget(ctx, intOp);
-        if (w) (w as any).inputCharFilter = val;
-    });
-
-    handlers.set(Opcodes.IF_OPENSUB, (ctx) => {
-        // 3 args read as array: [componentUid, interfaceId, type]
-        ctx.intStackSize -= 3;
-        const componentUid = ctx.intStack[ctx.intStackSize];
-        const interfaceId = ctx.intStack[ctx.intStackSize + 1];
-        const type = ctx.intStack[ctx.intStackSize + 2];
-
-        console.log(
-            `[IF_OPENSUB] Opening interface ${interfaceId} into component ${componentUid} (type=${type})`,
-        );
-
-        ctx.widgetManager.openSubInterface(componentUid, interfaceId, type);
-
-        // PERF: Clear CS2 handler caches when opening sub-interfaces (e.g., tab switches)
-        // openSubInterface internally closes any existing interface, so we need to clear
-        // stale cached widget references from the closed interface
-        ctx.cs2Vm?.clearHandlerCaches();
-
-        // Trigger initial onVarTransmit handlers for the opened interface
-        ctx.onSubInterfaceOpened?.(interfaceId);
-    });
 }

@@ -1,14 +1,18 @@
 import type { ClientGroundItemStack } from "../../data/ground/GroundItemStore";
-import type {
-    GroundItemEvaluation,
-    GroundItemsDespawnTimerMode,
-    GroundItemsOwnershipFilterMode,
-    GroundItemsPluginConfig,
-    GroundItemsPluginPersistence,
-    GroundItemsPluginState,
-    GroundItemsTimingContext,
-    GroundItemsValueCalculationMode,
-} from "./types";
+import { ConfigChanged } from "@runelite/api/events";
+import { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+import { inject } from "@runelite/client/plugins/PluginInjector";
+import {
+    GroundItemsConfig,
+    readGroundItemsConfig,
+    type GroundItemEvaluation,
+    type GroundItemsOwnershipFilterMode,
+    type GroundItemsPluginConfig,
+    type GroundItemsPluginState,
+    type GroundItemsTimingContext,
+    type GroundItemsValueCalculationMode,
+} from "./GroundItemsConfig";
 
 type GroundItemsListener = () => void;
 
@@ -21,86 +25,12 @@ type CompiledPattern = {
     quantityValue?: number;
 };
 
-const DEFAULT_CONFIG: GroundItemsPluginConfig = Object.freeze({
-    enabled: true,
-    highlightedItems: "",
-    hiddenItems: "Vial, Ashes, Coins, Bones, Bucket, Jug, Seaweed",
-    showHighlightedOnly: false,
-    rightClickHidden: false,
-    recolorMenuHiddenItems: false,
-    showMenuItemQuantities: true,
-    dontHideUntradeables: true,
-    hideUnderValue: 0,
-    priceDisplayMode: "both",
-    valueCalculationMode: "highest",
-    defaultColor: 0xffffff,
-    highlightedColor: 0xaa00ff,
-    hiddenColor: 0x808080,
-    lowValueColor: 0x66b2ff,
-    lowValuePrice: 20_000,
-    mediumValueColor: 0x99ff99,
-    mediumValuePrice: 100_000,
-    highValueColor: 0xff9600,
-    highValuePrice: 1_000_000,
-    insaneValueColor: 0xff66b2,
-    insaneValuePrice: 10_000_000,
-    ownershipFilterMode: "all",
-    despawnTimerMode: "off",
-});
-
 const COINS_ITEM_ID = 995;
 const TILE_ITEM_OWNERSHIP_OTHER = 2;
 const ACCOUNT_TYPE_MAIN = 0;
 const TIMER_COLOR_PUBLIC = 0xffff00;
 const TIMER_COLOR_PRIVATE = 0x00ff00;
 
-function sanitizeNumber(value: unknown, fallback: number): number {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return fallback;
-    return Math.max(0, Math.floor(numeric));
-}
-
-function sanitizeColor(value: unknown, fallback: number): number {
-    const numeric = sanitizeNumber(value, fallback);
-    return numeric & 0xffffff;
-}
-
-function sanitizeMode(value: unknown, fallback: GroundItemsPluginConfig["priceDisplayMode"]) {
-    if (value === "ha" || value === "ge" || value === "both" || value === "off") {
-        return value;
-    }
-    return fallback;
-}
-
-function sanitizeValueMode(
-    value: unknown,
-    fallback: GroundItemsValueCalculationMode,
-): GroundItemsValueCalculationMode {
-    if (value === "ha" || value === "ge" || value === "highest") {
-        return value;
-    }
-    return fallback;
-}
-
-function sanitizeOwnershipFilterMode(
-    value: unknown,
-    fallback: GroundItemsOwnershipFilterMode,
-): GroundItemsOwnershipFilterMode {
-    if (value === "all" || value === "takeable" || value === "drops") {
-        return value;
-    }
-    return fallback;
-}
-
-function sanitizeDespawnTimerMode(
-    value: unknown,
-    fallback: GroundItemsDespawnTimerMode,
-): GroundItemsDespawnTimerMode {
-    if (value === "off" || value === "ticks" || value === "seconds") {
-        return value;
-    }
-    return fallback;
-}
 
 function normalizeName(name: string): string {
     return name.trim().toLowerCase().replace(/\s+/g, " ");
@@ -321,9 +251,19 @@ function shouldDisplayByOwnership(
     return true;
 }
 
-export class GroundItemsPlugin {
+export class GroundItemsPlugin extends Plugin {
+    static descriptor: PluginDescriptor = {
+        name: "Ground Items",
+        description: "Highlights, filters, and recolors item labels.",
+        tags: ["items", "overlay"],
+        enabledByDefault: false,
+        configKey: "grounditemsplugin",
+    };
+
+    static config = GroundItemsConfig;
+
     private readonly listeners: Set<GroundItemsListener> = new Set();
-    private readonly persistence?: GroundItemsPluginPersistence;
+    private readonly configManager = inject(ConfigManager);
 
     private highlightedPatterns: CompiledPattern[] = [];
     private hiddenPatterns: CompiledPattern[] = [];
@@ -331,16 +271,19 @@ export class GroundItemsPlugin {
     private state: GroundItemsPluginState;
     private version = 0;
 
-    constructor(persistence?: GroundItemsPluginPersistence) {
-        this.persistence = persistence;
-        const loaded = persistence?.load();
-        this.config = this.sanitizeConfig(loaded);
+    constructor() {
+        super();
+        this.config = readGroundItemsConfig(this.configManager, this.isEnabled());
         this.highlightedPatterns = compileCsvList(this.config.highlightedItems);
         this.hiddenPatterns = compileCsvList(this.config.hiddenItems);
         this.state = {
             config: this.config,
             version: this.version,
         };
+    }
+
+    onConfigChanged(event: ConfigChanged): void {
+        if (event.getGroup() === GroundItemsConfig.group) this.refresh();
     }
 
     subscribe(listener: GroundItemsListener): () => void {
@@ -355,7 +298,7 @@ export class GroundItemsPlugin {
     }
 
     getConfig(): GroundItemsPluginConfig {
-        return this.state.config;
+        return { ...this.state.config, enabled: this.isEnabled() };
     }
 
     getVersion(): number {
@@ -363,10 +306,19 @@ export class GroundItemsPlugin {
     }
 
     setConfig(nextConfig: Partial<GroundItemsPluginConfig>): void {
-        this.config = this.sanitizeConfig({
-            ...this.config,
-            ...nextConfig,
-        });
+        for (const [property, value] of Object.entries(nextConfig)) {
+            if (value === undefined || property === "enabled") continue;
+            this.configManager.setConfigValue(
+                GroundItemsConfig,
+                property,
+                value,
+            );
+        }
+        this.refresh();
+    }
+
+    private refresh(): void {
+        this.config = readGroundItemsConfig(this.configManager, this.isEnabled());
         this.highlightedPatterns = compileCsvList(this.config.highlightedItems);
         this.hiddenPatterns = compileCsvList(this.config.hiddenItems);
         this.commit();
@@ -465,7 +417,7 @@ export class GroundItemsPlugin {
             accountType?: number;
         },
     ): boolean {
-        if (!this.config.enabled) return false;
+        if (!this.isEnabled()) return false;
         const evalResult = this.evaluateStack(stack, { accountType: options?.accountType });
         if (!evalResult.highlighted) {
             if (evalResult.hidden) return false;
@@ -483,7 +435,7 @@ export class GroundItemsPlugin {
 
     getMenuTargetName(stack: ClientGroundItemStack, baseName?: string): string {
         const name = typeof baseName === "string" && baseName.length > 0 ? baseName : stack.name;
-        if (!this.config.enabled) {
+        if (!this.isEnabled()) {
             return name;
         }
         if (!this.config.showMenuItemQuantities) {
@@ -496,7 +448,7 @@ export class GroundItemsPlugin {
     }
 
     getMenuTargetColorized(stack: ClientGroundItemStack, targetName: string): string {
-        if (!this.config.enabled) {
+        if (!this.isEnabled()) {
             return targetName;
         }
         if (!this.config.recolorMenuHiddenItems) {
@@ -510,7 +462,7 @@ export class GroundItemsPlugin {
     }
 
     shouldDeprioritizeInMenu(stack: ClientGroundItemStack): boolean {
-        if (!this.config.enabled) {
+        if (!this.isEnabled()) {
             return false;
         }
         if (!this.config.rightClickHidden) {
@@ -559,62 +511,12 @@ export class GroundItemsPlugin {
         return false;
     }
 
-    private sanitizeConfig(
-        input: Partial<GroundItemsPluginConfig> | undefined,
-    ): GroundItemsPluginConfig {
-        const src = input ? input : {};
-        return {
-            enabled: src.enabled !== false,
-            highlightedItems:
-                typeof src.highlightedItems === "string"
-                    ? src.highlightedItems
-                    : DEFAULT_CONFIG.highlightedItems,
-            hiddenItems:
-                typeof src.hiddenItems === "string" ? src.hiddenItems : DEFAULT_CONFIG.hiddenItems,
-            showHighlightedOnly:
-                src.showHighlightedOnly === true ? true : DEFAULT_CONFIG.showHighlightedOnly,
-            rightClickHidden:
-                src.rightClickHidden === true ? true : DEFAULT_CONFIG.rightClickHidden,
-            recolorMenuHiddenItems:
-                src.recolorMenuHiddenItems === true ? true : DEFAULT_CONFIG.recolorMenuHiddenItems,
-            showMenuItemQuantities: src.showMenuItemQuantities !== false,
-            dontHideUntradeables:
-                src.dontHideUntradeables !== false ? true : DEFAULT_CONFIG.dontHideUntradeables,
-            hideUnderValue: sanitizeNumber(src.hideUnderValue, DEFAULT_CONFIG.hideUnderValue),
-            priceDisplayMode: sanitizeMode(src.priceDisplayMode, DEFAULT_CONFIG.priceDisplayMode),
-            valueCalculationMode: sanitizeValueMode(
-                src.valueCalculationMode,
-                DEFAULT_CONFIG.valueCalculationMode,
-            ),
-            defaultColor: sanitizeColor(src.defaultColor, DEFAULT_CONFIG.defaultColor),
-            highlightedColor: sanitizeColor(src.highlightedColor, DEFAULT_CONFIG.highlightedColor),
-            hiddenColor: sanitizeColor(src.hiddenColor, DEFAULT_CONFIG.hiddenColor),
-            lowValueColor: sanitizeColor(src.lowValueColor, DEFAULT_CONFIG.lowValueColor),
-            lowValuePrice: sanitizeNumber(src.lowValuePrice, DEFAULT_CONFIG.lowValuePrice),
-            mediumValueColor: sanitizeColor(src.mediumValueColor, DEFAULT_CONFIG.mediumValueColor),
-            mediumValuePrice: sanitizeNumber(src.mediumValuePrice, DEFAULT_CONFIG.mediumValuePrice),
-            highValueColor: sanitizeColor(src.highValueColor, DEFAULT_CONFIG.highValueColor),
-            highValuePrice: sanitizeNumber(src.highValuePrice, DEFAULT_CONFIG.highValuePrice),
-            insaneValueColor: sanitizeColor(src.insaneValueColor, DEFAULT_CONFIG.insaneValueColor),
-            insaneValuePrice: sanitizeNumber(src.insaneValuePrice, DEFAULT_CONFIG.insaneValuePrice),
-            ownershipFilterMode: sanitizeOwnershipFilterMode(
-                src.ownershipFilterMode,
-                DEFAULT_CONFIG.ownershipFilterMode,
-            ),
-            despawnTimerMode: sanitizeDespawnTimerMode(
-                src.despawnTimerMode,
-                DEFAULT_CONFIG.despawnTimerMode,
-            ),
-        };
-    }
-
     private commit(): void {
         this.version++;
         this.state = {
-            config: this.config,
+            config: this.getConfig(),
             version: this.version,
         };
-        this.persistence?.save(this.config);
         for (const listener of this.listeners) {
             try {
                 listener();

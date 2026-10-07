@@ -216,10 +216,11 @@ export async function loadWorldEntityScene(host: WebGLOsrsRendererHost,
         const loadToken = host.nextWorldEntityLoadToken++;
         host.worldEntityLoadTokens.set(entityIndex, loadToken);
         const existingEntity = host.osrsClient.worldViewManager.getWorldEntity(entityIndex);
-        if (host.worldEntityOverlays.has(entityIndex)) {
-            host.clearWorldEntity(entityIndex);
-            host.worldEntityLoadTokens.set(entityIndex, loadToken);
-        }
+        // A rebuild (a facility built, deck locs changed) keeps the current deck drawn, placed
+        // and animating until the new one replaces it in place (MapManager.addMap), so the
+        // boat doesn't vanish while the new scene builds.
+        const previous = host.worldEntityOverlays.get(entityIndex);
+        const rebuilding = previous !== undefined;
 
         const sceneTilesX = (templateChunks[0]?.length ?? 13) * 8;
         const sceneTilesY = (templateChunks[0]?.[0]?.length ?? 13) * 8;
@@ -268,7 +269,7 @@ export async function loadWorldEntityScene(host: WebGLOsrsRendererHost,
             extraNpcs,
         }, existingEntity);
 
-        if (configId >= 0) {
+        if (configId >= 0 && (!rebuilding || previous.configId !== configId)) {
             host.ensureWorldEntityAnimator();
             host.worldEntityAnimator?.addEntity(entityIndex, configId, host.lastTick);
         }

@@ -1,7 +1,6 @@
 "use strict";
 
 const { Location } = require("../../../../../src/main/typescript/elvarg/game/model/Location");
-const { Skill } = require("../../../../../src/main/typescript/elvarg/game/model/Skill");
 const { hasGlobalWorldTag } = require("../../../../../src/main/typescript/elvarg/game/definition/WorldDefinition");
 const { TeleportHandler } = require("../../../../../src/main/typescript/elvarg/game/model/teleportation/TeleportHandler");
 const { TeleportType } = require("../../../../../src/main/typescript/elvarg/game/model/teleportation/TeleportType");
@@ -11,6 +10,7 @@ const { CanAttackResponse } = require("../../../../../src/main/typescript/elvarg
 const { queueRouteAndFlagAppearance, clearMovementRequest, peekMovementRequest } = require("../../navigation/BotNavigation");
 const { applyGeneratedPvpLoadout } = require("../../policies/PvpLoadoutPolicy");
 const { getEnabledWildernessHotspots, createHotspotAnchorLocation } = require("../../pvp/WildernessHotspotRegistry");
+const { isFoodItem } = require("../../../../items/Food.plugin");
 
 const RETREAT_STEP_TILES = 12;
 const RETREAT_TELEPORT_LEVEL = 20;
@@ -23,7 +23,6 @@ class PvpDefensiveActionNode {
     this.setPhase = options.setPhase;
     this.stopPvp = options.stopPvp;
     this.api = options.api;
-    this.getProfile = options.getProfile;
     this.pvpPhase = options.pvpPhase;
   }
 
@@ -38,7 +37,7 @@ class PvpDefensiveActionNode {
     if (currentHp <= 0 || player.isDyingReturn()) {
       return { handled: true, status: "failure" };
     }
-    if (!pvp.retreat && this.shouldRetreat(player, state)) {
+    if (!pvp.retreat && this.shouldRetreat(player)) {
       pvp.retreat = {
         autoRetaliate: player.autoRetaliateReturn(),
         teleportStarted: false,
@@ -61,25 +60,10 @@ class PvpDefensiveActionNode {
     return { handled: false, status: "running" };
   }
 
-  // Retreat is a last resort: it only fires once the bot has no food left *and* is at
-  // or below its retreat HP ratio. Running the food down to a random early threshold
-  // made bots bolt while they still had the supplies to win.
-  shouldRetreat(player, state) {
-    const foodCharges = state.virtualFoodChargesRemaining ?? this.getProfile(state).foodCharges;
-    if (!(Number(foodCharges) <= 0)) {
-      return false;
-    }
-    const currentHp = Number(player.getHitpoints?.() ?? 0);
-    const maxHp = Number(
-      player.getSkillManager?.()?.getMaxLevel?.(Skill.HITPOINTS) ?? currentHp
-    );
-    if (!(maxHp > 0)) {
-      return false;
-    }
-    const threshold = Number(
-      state?.pvp?.escapeThreshold ?? this.getProfile(state)?.retreatHpRatio ?? 0.24
-    );
-    return currentHp / maxHp <= threshold;
+  // The actual supplies decide when to flee, even if the last meal left high HP.
+  shouldRetreat(player) {
+    return !(player.getInventory()?.getItems() ?? [])
+      .some((item) => isFoodItem(item?.getId?.()));
   }
 
   retreat(player, state, nowMs, target) {

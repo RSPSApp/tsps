@@ -291,10 +291,17 @@ function awardConditionalDrops({ killer, npc }) {
   }
 }
 
+/** The collection log's "Kalphite Queen kills" are this plugin's own count. */
+function collectionLogCount(request) {
+  if (request.category === "Kalphite Queen") request.count = Math.max(0, Number(request.player.getAttribute(KILL_COUNT_ATTRIBUTE)) || 0);
+}
+
 module.exports = {
   name: "KalphiteQueen",
+  members: true,
   register(api) {
     TaskManager = api.getTaskManager();
+    api.onCustomEvent("collection-log:category-count", collectionLogCount);
     ItemOnGroundManager = api.getItemOnGroundManager();
     World = api.getWorld();
     configureAggression();

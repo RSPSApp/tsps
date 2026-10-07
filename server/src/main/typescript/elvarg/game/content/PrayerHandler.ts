@@ -9,6 +9,7 @@ import { BonusManager } from "../model/equipment/BonusManager";
 import { Sound } from "../Sound";
 import { Sounds } from "../Sounds";
 import { Misc } from "../../util/Misc";
+import { PluginManager } from "../../plugins/PluginManager";
 
 export class PrayerHandler {
 
@@ -225,6 +226,14 @@ export class PrayerHandler {
     }
 
     public static canUse(player: Player, prayer: PrayerData, msg: boolean): boolean {
+        const disabledMessage = PluginManager.emitPrayerDisabled(player, prayer);
+        if (disabledMessage !== null) {
+            if (msg) {
+                player.getPacketSender().sendVarbit(prayer.configId, 0);
+                player.sendMessage(disabledMessage);
+            }
+            return false;
+        }
         if (player.getSkillManager().getMaxLevel(Skill.PRAYER) < (prayer.requirement)) {
             if (msg) {
                 player.getPacketSender().sendVarbit(prayer.configId, 0);

@@ -15,6 +15,10 @@ import {
 import { CachePipeline } from "./CachePipeline";
 import { ObjType } from "./codec/rs/config/objtype/ObjType";
 import { DbRowType } from "./codec/rs/config/dbrow/DbRowType";
+import { ByteBuffer } from "./codec/rs/io/ByteBuffer";
+import { Type } from "./codec/rs/config/Type";
+
+const STRUCT_PARAMS_OPCODE = 249;
 
 export interface ServerCustomItem {
     id: number;
@@ -28,6 +32,7 @@ export class CacheDefinitions {
     private static readonly SPELL_WIDGET_PARAM_ID = 596;
     private static readonly SPELL_NAME_PARAM_ID = 601;
     private static spellNamesByWidget?: Map<number, string>;
+    private static spellsByName?: Map<string, { widgetId: number; itemId: number }>;
     private static state?: {
         npcs: ArchiveNpcTypeLoader;
         varbits: ArchiveVarBitTypeLoader;
@@ -39,6 +44,11 @@ export class CacheDefinitions {
     private static customItemTypes = new Map<number, ObjType>();
     private static customModels?: Array<{ id: number; data: string }>;
     private static dbRows?: { byId: Map<number, DbRowType>; byTable: Map<number, DbRowType[]> };
+    private static structParams = new Map<number, ReadonlyMap<number, number | string>>();
+    private static enumValues = new Map<number, ReadonlyMap<number, number | string>>();
+    /** The struct archive, read once: re-reading it per struct took ~75 ms each. */
+    private static structArchive?: ReturnType<ReturnType<typeof CacheIndexDat2.fromStore>["getArchive"]>;
+    private static enumArchive?: ReturnType<ReturnType<typeof CacheIndexDat2.fromStore>["getArchive"]>;
 
     private static getState() {
         if (this.state) return this.state;
@@ -63,7 +73,7 @@ export class CacheDefinitions {
             objects: new ArchiveLocTypeLoader(info, configs.getArchive(ConfigType.DAT2.locs)),
             info,
         };
-        console.info(
+        console.debug(
             `[cache] definitions npc=${this.state.npcs.getCount()} item=${this.state.items.getCount()} object=${this.state.objects.getCount()}`,
         );
         return this.state;
@@ -100,6 +110,76 @@ export class CacheDefinitions {
     /** Every row of a cache database table, in id order. */
     static getDbTableRows(tableId: number): readonly DbRowType[] {
         return this.getDbRows().byTable.get(tableId) ?? [];
+    }
+
+    /**
+     * A cache struct's params (config archive 34), the key -> value records cache scripts read
+     * with struct_param. Empty when the struct does not exist.
+     */
+    static getStructParams(id: number): ReadonlyMap<number, number | string> {
+        const cached = this.structParams.get(id);
+        if (cached) return cached;
+        const params = new Map<number, number | string>();
+        this.structArchive ??= CacheIndexDat2.fromStore(IndexType.DAT2.configs, CachePipeline.getStore())
+            .getArchive(ConfigType.OSRS.struct);
+        const file = this.structArchive.getFile(id);
+        if (file) {
+            const buffer = new ByteBuffer(new Int8Array(file.data));
+            for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
+                if (opcode !== STRUCT_PARAMS_OPCODE) break; // the only struct opcode
+                Type.readParamsMap(buffer, params);
+            }
+        }
+        this.structParams.set(id, params);
+        return params;
+    }
+
+    /**
+     * A cache enum's key -> value entries (config archive 8), the tables cache scripts read with
+     * enum. Empty when the enum does not exist. The default value is not included.
+     */
+    /** Decodes the enums archive at startup, so no enum's first lookup does it mid-tick. */
+    static preloadEnums(): void {
+        try {
+            this.enumArchive ??= CacheIndexDat2.fromStore(IndexType.DAT2.configs, CachePipeline.getStore())
+                .getArchive(ConfigType.DAT2.enums);
+        } catch {
+            // No cache (tests, tools): looked up lazily instead.
+        }
+    }
+
+    static getEnumValues(id: number): ReadonlyMap<number, number | string> {
+        const cached = this.enumValues.get(id);
+        if (cached) return cached;
+        const values = new Map<number, number | string>();
+        // The enums archive is decoded once; decompressing it for each new enum caused a hitch.
+        this.enumArchive ??= CacheIndexDat2.fromStore(IndexType.DAT2.configs, CachePipeline.getStore())
+            .getArchive(ConfigType.DAT2.enums);
+        const file = this.enumArchive.getFile(id);
+        if (file) {
+            const buffer = new ByteBuffer(new Int8Array(file.data));
+            for (let opcode = buffer.readUnsignedByte(); opcode !== 0; opcode = buffer.readUnsignedByte()) {
+                if (opcode === 1 || opcode === 2) buffer.readUnsignedByte(); // key / value type
+                else if (opcode === 3) buffer.readString(); // default string
+                else if (opcode === 4) buffer.readInt(); // default int
+                else if (opcode === 5 || opcode === 6) {
+                    const size = buffer.readUnsignedShort();
+                    for (let i = 0; i < size; i++) {
+                        const key = buffer.readInt();
+                        values.set(key, opcode === 5 ? buffer.readString() : buffer.readInt());
+                    }
+                } else if (opcode === 7 || opcode === 8) {
+                    buffer.readUnsignedShort(); // the dense table's size
+                    const size = buffer.readUnsignedShort();
+                    for (let i = 0; i < size; i++) {
+                        const key = buffer.readUnsignedShort();
+                        values.set(key, opcode === 7 ? buffer.readString() : buffer.readInt());
+                    }
+                } else break;
+            }
+        }
+        this.enumValues.set(id, values);
+        return values;
     }
 
     static getVarbit(id: number) {
@@ -256,5 +336,21 @@ export class CacheDefinitions {
             }
         }
         return this.spellNamesByWidget.get(widgetId);
+    }
+
+    /** The spellbook widget and spell item a client sends for the spell with this name. */
+    static getSpellByName(name: string): { widgetId: number; itemId: number } | undefined {
+        if (!this.spellsByName) {
+            this.spellsByName = new Map();
+            for (let id = 0; id < this.getState().items.getCount(); id++) {
+                const params = this.getItem(id).params;
+                const widgetId = params?.get(this.SPELL_WIDGET_PARAM_ID);
+                const spellName = params?.get(this.SPELL_NAME_PARAM_ID);
+                if (typeof widgetId === "number" && typeof spellName === "string" && !this.spellsByName.has(spellName.toLowerCase())) {
+                    this.spellsByName.set(spellName.toLowerCase(), { widgetId, itemId: id });
+                }
+            }
+        }
+        return this.spellsByName.get(name.trim().toLowerCase());
     }
 }

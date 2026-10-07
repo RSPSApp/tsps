@@ -2,6 +2,8 @@
 
 const { GameConstants } = require("../../../../src/main/typescript/elvarg/game/GameConstants");
 const { Location } = require("../../../../src/main/typescript/elvarg/game/model/Location");
+const { isMembersArea, isMembersWorld } = require("../../../../src/main/typescript/elvarg/game/definition/WorldDefinition");
+const { isLoadoutAvailable } = require("./PvpLoadoutRegistry");
 const fs = require("fs");
 const path = require("path");
 
@@ -23,6 +25,7 @@ function freezeHotspot(hotspot) {
   return Object.freeze({
     ...hotspot,
     area: freezeArea(hotspot.area),
+    combatLevelRange: isMembersWorld() ? hotspot.combatLevelRange : hotspot.freeCombatLevelRange,
     anchor: Object.freeze({ ...(hotspot.anchor ?? {}) }),
     roamRadius: Number.isFinite(hotspot.roamRadius) ? Math.max(1, Math.floor(hotspot.roamRadius)) : 3,
     lingerMs: Number.isFinite(hotspot.lingerMs) ? Math.max(0, Math.floor(hotspot.lingerMs)) : 10000,
@@ -30,7 +33,11 @@ function freezeHotspot(hotspot) {
       ? Math.max(1, Math.floor(hotspot.maxSimultaneousFights))
       : null,
     allowedProfiles: Object.freeze([...(hotspot.allowedProfiles ?? [])]),
-    allowedLoadouts: Object.freeze([...(hotspot.allowedLoadouts ?? [])]),
+    // freeWorldLoadouts only join the pool on a free-to-play world (world.json membersWorld false).
+    allowedLoadouts: Object.freeze([
+      ...(hotspot.allowedLoadouts ?? []),
+      ...(isMembersWorld() ? [] : hotspot.freeWorldLoadouts ?? []),
+    ]),
     styleWeights: Object.freeze({ ...(hotspot.styleWeights ?? {}) }),
     activityWeights: Object.freeze({ ...(hotspot.activityWeights ?? {}) }),
   });
@@ -51,7 +58,9 @@ function loadWildernessHotspots() {
       throw new Error("[pvp bot loadouts] hotspot ids must be unique");
     }
     if (!Array.isArray(definition.allowedLoadouts) ||
-        !definition.allowedLoadouts.every((loadoutId) => loadoutIds.has(loadoutId))) {
+        (definition.freeWorldLoadouts !== undefined && !Array.isArray(definition.freeWorldLoadouts)) ||
+        ![...definition.allowedLoadouts, ...(definition.freeWorldLoadouts ?? [])]
+          .every((loadoutId) => loadoutIds.has(loadoutId))) {
       throw new Error("[pvp bot loadouts] " + definition.id + " has an unknown loadout");
     }
     hotspots[definition.id] = freezeHotspot(definition);
@@ -70,8 +79,21 @@ function listWildernessHotspots() {
   return WILDERNESS_HOTSPOT_IDS.map((hotspotId) => WILDERNESS_HOTSPOTS[hotspotId]);
 }
 
+// On a free-to-play world a hotspot also needs an f2p loadout and an anchor in free land.
+function isHotspotUsable(hotspot) {
+  return hotspot.enabled === true &&
+    hotspot.allowedLoadouts.some(isLoadoutAvailable) &&
+    !isMembersArea(hotspot.anchor.x, hotspot.anchor.y);
+}
+
+// The world type is fixed at startup, so resolve the usable set once: bot navigation
+// asks for it inside its tile loops.
+const ENABLED_WILDERNESS_HOTSPOTS = Object.freeze(
+  WILDERNESS_HOTSPOT_IDS.map((hotspotId) => WILDERNESS_HOTSPOTS[hotspotId]).filter(isHotspotUsable)
+);
+
 function getEnabledWildernessHotspots() {
-  return listWildernessHotspots().filter((hotspot) => hotspot.enabled === true);
+  return ENABLED_WILDERNESS_HOTSPOTS.slice();
 }
 
 function hotspotContainsLocation(hotspot, location) {
@@ -90,7 +112,7 @@ function createHotspotAnchorLocation(hotspot) {
 }
 
 function isOutsideWildernessHotspots(location) {
-  return !getEnabledWildernessHotspots().some((hotspot) => hotspotContainsLocation(hotspot, location));
+  return !ENABLED_WILDERNESS_HOTSPOTS.some((hotspot) => hotspotContainsLocation(hotspot, location));
 }
 
 module.exports = {

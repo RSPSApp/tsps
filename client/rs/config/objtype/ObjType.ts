@@ -82,6 +82,10 @@ export class ObjType extends Type {
     team: number;
 
     isTradable: boolean;
+    /** Rev 241 opcode 251: the obj can be unlocked (the cache's `unlockable=yes`). */
+    isUnlockable: boolean;
+    /** Opcode 94: the obj's category (oc_category), -1 when unset. */
+    category: number = -1;
 
     weight: number;
 
@@ -141,6 +145,7 @@ export class ObjType extends Type {
         this.contrast = 0;
         this.team = 0;
         this.isTradable = false;
+        this.isUnlockable = false;
         this.weight = 0;
         this.unnotedId = -1;
         this.notedId = -1;
@@ -200,6 +205,9 @@ export class ObjType extends Type {
             this.wearPos = buffer.readUnsignedByte();
         } else if (opcode === 14) {
             this.wearPos2 = buffer.readUnsignedByte();
+        } else if (opcode === 15) {
+            // Rev 241: explicitly not tradeable (`tradeable=no`).
+            this.isTradable = false;
         } else if (opcode === 16) {
             this.isMembers = true;
         } else if (opcode === 23) {
@@ -301,6 +309,15 @@ export class ObjType extends Type {
             this.femaleHeadModel2 = buffer.readInt();
         } else if (opcode === 65) {
             this.isTradable = true;
+        } else if (opcode === 160) {
+            // Rev 241: `stackable=never`.
+            this.stackability = ObjStackability.NEVER;
+        } else if (opcode === 161) {
+            // Rev 241: a list of ids (unused by the 241 cache).
+            const count = buffer.readUnsignedShort();
+            for (let i = 0; i < count; i++) buffer.readUnsignedShort();
+        } else if (opcode === 251) {
+            this.isUnlockable = true;
         } else if (opcode === 69) {
             // OSRS newer: small flag; consume a byte to maintain alignment.
             buffer.readUnsignedByte();
@@ -372,8 +389,8 @@ export class ObjType extends Type {
             // OSRS newer: small flag; consume a byte to maintain alignment.
             buffer.readUnsignedByte();
         } else if (opcode === 99) {
-            // OSRS newer: small flag; consume a byte to maintain alignment.
-            buffer.readUnsignedByte();
+            // Rev 241 recolall: one colour for the whole model (unused by the 241 cache).
+            buffer.readUnsignedShort();
         } else if (opcode === 75) {
             this.weight = buffer.readShort();
         } else if (opcode === 78) {
@@ -389,7 +406,7 @@ export class ObjType extends Type {
         } else if (opcode === 93) {
             this.femaleHeadModel2 = this.readModelId(buffer);
         } else if (opcode === 94) {
-            buffer.readUnsignedShort();
+            this.category = buffer.readUnsignedShort();
         } else if (opcode === 95) {
             this.zan2d = buffer.readUnsignedShort();
         } else if (opcode === 96) {

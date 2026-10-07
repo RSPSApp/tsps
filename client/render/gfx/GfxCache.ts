@@ -7,6 +7,26 @@ import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
 type FrameKey = string; // `${spotId}|${frameIdx}|${pass}|${version}` where pass is 0=opaque,1=alpha
 const FRAME_GEOMETRY_VERSION = 2;
 
+/**
+ * Cycles into `frameIdx` (1..its length) for a graphic `ageMs` old (20 ms per cycle), as the game
+ * counts them; `offsets` are the frames' cumulative lengths. 0 when unknown.
+ */
+export function graphicFrameCycle(
+    offsets: number[] | null,
+    ageMs: number,
+    frameIdx: number,
+): number {
+    if (!offsets || offsets.length === 0 || frameIdx >= offsets.length) return 0;
+    const total = offsets[offsets.length - 1];
+    if (!(total > 0)) return 0;
+    const t = Math.max(0, Math.floor((ageMs | 0) / 20)) % total;
+    const start = frameIdx > 0 ? offsets[frameIdx - 1] : 0;
+    return Math.max(0, t - start + 1);
+}
+
+/** Cached graphic frame geometries (CPU side); the GPU cache holds its own, smaller set. */
+const MAX_FRAME_GEOMETRIES = 1024;
+
 export class GfxCache {
     private baseBySpot = new Map<number, Model>();
     private frameGeom = new Map<FrameKey, { vertices: Uint8Array; indices: Int32Array }>();
@@ -120,15 +140,18 @@ export class GfxCache {
         spotId: number,
         frameIdx: number,
         transparent: boolean,
+        frameCycle: number = 0,
     ): { vertices: Uint8Array; indices: Int32Array } | undefined {
         const pass = transparent ? 1 : 0;
-        const key = `${spotId | 0}|${frameIdx | 0}|${pass}|${FRAME_GEOMETRY_VERSION}` as FrameKey;
+        const cycleKey = frameCycle > 0 ? `~${frameCycle | 0}` : "";
+        const frame = `${frameIdx | 0}${cycleKey}`;
+        const key = `${spotId | 0}|${frame}|${pass}|${FRAME_GEOMETRY_VERSION}` as FrameKey;
         const existing = this.frameGeom.get(key);
         if (existing) return existing;
 
         const base = this.ensureBase(spotId);
         if (!base) return undefined;
-        const model = this.applyFrame(base, spotId, frameIdx);
+        const model = this.applyFrame(base, spotId, frameIdx, frameCycle);
         if (!model) return undefined;
 
         // Collect textures to ensure on GPU
@@ -175,10 +198,38 @@ export class GfxCache {
             indices: new Int32Array(sceneBuf.indices),
         };
         this.frameGeom.set(key, out);
+        // Smoothed frames add an entry per cycle: keep the oldest from piling up.
+        while (this.frameGeom.size > MAX_FRAME_GEOMETRIES) {
+            const oldest = this.frameGeom.keys().next().value;
+            if (oldest === undefined) break;
+            this.frameGeom.delete(oldest);
+        }
         return out;
     }
 
-    private applyFrame(base: Model, spotId: number, frameIdx: number): Model | undefined {
+    /**
+     * Cycles into `frameIdx` (1..length) when animation smoothing blends this graphic's frame
+     * toward the next one, else 0: keyframe animations only, and not their last frame.
+     */
+    smoothingCycle(spotId: number, frameIdx: number, frameCycle: number): number {
+        if (!(frameCycle > 0)) return 0;
+        const mv: any = this.renderer.osrsClient as any;
+        if (!mv.animationSmoothingPlugin?.smoothsGraphics?.()) return 0;
+        const spot = this.getSpotType(spotId);
+        const seqId: number = typeof spot?.sequenceId === "number" ? spot.sequenceId | 0 : -1;
+        if (seqId < 0) return 0;
+        const seq = mv.seqTypeLoader?.load?.(seqId | 0);
+        const frames = seq?.frameIds?.length | 0;
+        if (!seq || seq.isSkeletalSeq?.() || (frameIdx | 0) + 1 >= frames) return 0;
+        return frameCycle | 0;
+    }
+
+    private applyFrame(
+        base: Model,
+        spotId: number,
+        frameIdx: number,
+        frameCycle: number = 0,
+    ): Model | undefined {
         try {
             const spot = this.getSpotType(spotId);
             if (!spot) return undefined;
@@ -207,7 +258,18 @@ export class GfxCache {
                         !seqFrame.hasAlphaTransform,
                         !seqFrame.hasColorTransform,
                     );
-                    out.animate(seqFrame, undefined, !!seq.op14);
+                    // Animation smoothing: blend `frameCycle` cycles toward the next frame.
+                    const next =
+                        frameCycle > 0 && idx + 1 < ids.length
+                            ? mv.seqFrameLoader?.load?.(ids[idx + 1] | 0)
+                            : undefined;
+                    const length = next ? seq.getFrameLength(mv.seqFrameLoader, idx) | 0 : 0;
+                    if (next && length > 0) {
+                        const alpha = Math.min(1, frameCycle / length);
+                        out.animateInterpolated(seqFrame, next, alpha, !!seq.op14);
+                    } else {
+                        out.animate(seqFrame, undefined, !!seq.op14);
+                    }
                     return out;
                 }
                 return undefined;

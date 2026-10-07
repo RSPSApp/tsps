@@ -1,4 +1,4 @@
-import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
+import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
 
 export function shouldSkipWidgetClickInput(
     deps: WidgetInputControllerDeps,

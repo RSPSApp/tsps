@@ -13,9 +13,13 @@ const KING_BLACK_DRAGON_IDS = [
   NpcIdentifiers.KING_BLACK_DRAGON_2,
   NpcIdentifiers.KING_BLACK_DRAGON_3,
 ];
+// Lava Maze ladder (3017, 3849) leads straight into the lair; the lair's lever (2271, 4680)
+// sends the player back to the tile north of that ladder.
 const KBD_LADDER_DOWN_OBJECT_ID = 18987;
+const KBD_LAIR_LEVER_OBJECT_ID = 1817;
 
 const KingBlackDragonLairLocation = new Location(2271, 4680, 0);
+const KingBlackDragonLadderLocation = new Location(3017, 3850, 0);
 
 const Breath = {
   DRAGON: 0,
@@ -151,12 +155,17 @@ let CombatFactory;
 
 module.exports = {
   name: "KingBlackDragon",
+  members: true,
   register(api) {
     PrayerHandler = api.getPrayerHandler();
     CombatFactory = api.getCombatFactory();
 
     api.onObjectFirstClick(KBD_LADDER_DOWN_OBJECT_ID, ({ player }) => {
-      player.moveTo(KingBlackDragonLairLocation);
+      api.emitCustomEvent("ladders:climbDown", { player, destination: KingBlackDragonLairLocation.clone() });
+      return true;
+    });
+    api.onObjectFirstClick(KBD_LAIR_LEVER_OBJECT_ID, ({ player }) => {
+      api.emitCustomEvent("lever:teleport", { player, destination: KingBlackDragonLadderLocation.clone() });
       return true;
     });
 

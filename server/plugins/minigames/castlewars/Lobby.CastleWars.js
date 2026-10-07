@@ -2,8 +2,9 @@
 
 /**
  * Castle Wars lobby: the team portals (Guthix balances the teams), the lobby bank chest, and the
- * portals back out of the waiting rooms and the game. A real player joining seeds bots so a game
- * can start.
+ * portals back out of the waiting rooms and the game. In development a real player joining seeds
+ * bots so a game can start; production worlds leave that off (world.json pluginConfig
+ * "CastleWars:seedBots").
  */
 
 const FoodPlugin = require("../../items/Food.plugin");
@@ -12,6 +13,7 @@ const { ATTR_SKIP_PERSISTENCE } = require("../../bots/runtime/BotPersistenceCons
 const { ShopManager } = require("../../../src/main/typescript/elvarg/game/model/container/shop/ShopManager");
 
 const CASTLE_WARS_TICKET_EXCHANGE_SHOP = 1432;
+const SEED_BOTS_CONFIG_KEY = "CastleWars:seedBots";
 
 const FOOD_ITEM_IDS = Array.isArray(FoodPlugin.FOOD_ITEM_IDS) ? FoodPlugin.FOOD_ITEM_IDS : [];
 
@@ -47,6 +49,21 @@ function seedCastleWarsBots(teamId) {
   spawnCastleWarsBot(opposingTeam);
 }
 
+/** Dev-only bot seeding: off unless world.json turns it on, so production lobbies are players only. */
+function seedsBots(registry = api) {
+  return registry.getPluginConfig(SEED_BOTS_CONFIG_KEY, false) === true;
+}
+
+/** The team a joiner lands on, or null when the requested team is already the bigger one. */
+function chooseTeam(sizes, requestedTeam) {
+  const { SARADOMIN, ZAMORAK } = data.TEAM;
+  const other = (team) => (team === SARADOMIN ? ZAMORAK : SARADOMIN);
+  if (requestedTeam == null) {
+    return sizes[ZAMORAK] > sizes[SARADOMIN] ? SARADOMIN : ZAMORAK;
+  }
+  return sizes[requestedTeam] > sizes[other(requestedTeam)] ? null : requestedTeam;
+}
+
 function joinWaitingRoom(player, requestedTeam) {
   const phase = game.getPhase();
   if (phase === game.PHASE.ACTIVE || phase === game.PHASE.ENDING) {
@@ -58,23 +75,21 @@ function joinWaitingRoom(player, requestedTeam) {
     player.sendMessage("You can't wear hats, capes, or helms in Castle Wars.");
     return;
   }
-  if (FOOD_ITEM_IDS.length > 0 && player.getEquipment().containsAny(FOOD_ITEM_IDS)) {
+  if (FOOD_ITEM_IDS.length > 0 && player.getInventory().containsAny(FOOD_ITEM_IDS)) {
     player.sendMessage("You may not bring your own consumables inside Castle Wars.");
     return;
   }
 
-  const { SARADOMIN, ZAMORAK } = data.TEAM;
-  const sizes = game.queueCounts();
-  const teamId = requestedTeam ?? (sizes[ZAMORAK] > sizes[SARADOMIN] ? SARADOMIN : ZAMORAK);
-  if (sizes[teamId] > sizes[game.opposingTeam(teamId)]) {
-    const team = game.getTeamData(teamId).name;
-    const other = game.getTeamData(game.opposingTeam(teamId)).name;
+  const teamId = chooseTeam(game.queueCounts(), requestedTeam);
+  if (!teamId) {
+    const team = game.getTeamData(requestedTeam).name;
+    const other = game.getTeamData(game.opposingTeam(requestedTeam)).name;
     player.sendMessage(`The ${team} team is full, try ${other}.`);
     return;
   }
 
   moveToWaitingRoom(player, teamId);
-  if (player.isPlayerBot() !== true) {
+  if (player.isPlayerBot() !== true && seedsBots()) {
     seedCastleWarsBots(teamId);
   }
 }
@@ -124,3 +139,5 @@ module.exports = function attachCastleWarsLobby(registry, castleWars) {
   registry.onObjectInteraction(useCastleWarsPortal);
   registry.onNpcInteraction("Lanthus", { Trade: ({ player }) => ShopManager.open(player, CASTLE_WARS_TICKET_EXCHANGE_SHOP) });
 };
+
+module.exports._test = { chooseTeam, seedsBots, SEED_BOTS_CONFIG_KEY, FOOD_ITEM_IDS };

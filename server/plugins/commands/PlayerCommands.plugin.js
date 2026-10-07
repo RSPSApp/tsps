@@ -7,6 +7,9 @@ const { DonatorRights } = require("../../src/main/typescript/elvarg/game/model/r
 const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 
 const INAPPROPRIATE_TITLES = ["nigger", "ass", "boobs"];
+const XP_LOCKED_ATTRIBUTE = "skills:xp-locked";
+const LOYALTY_TITLE_ATTRIBUTE = "loyalty:title";
+const YELL_UNTIL_ATTRIBUTE = "yell:until";
 
 function commandTail(raw, parts) {
   return raw.substring(parts[0].length).trim();
@@ -104,42 +107,37 @@ module.exports = {
     api.registerCommand("players", ({ player }) => {
       sendOnlinePlayers(player);
       return true;
-    });
+    }, undefined, "List online players");
 
     api.registerCommand("online", ({ player }) => {
       sendOnlinePlayers(player);
       return true;
-    });
+    }, undefined, "List online players");
 
     api.registerCommand("who", ({ player }) => {
       sendOnlinePlayers(player);
       return true;
-    });
+    }, undefined, "List online players");
 
     api.registerCommand("claim", ({ player }) => {
       player.sendMessage("To claim purchased items, please talk to the Financial Advisor at home.");
       return true;
-    });
+    }, undefined, "Purchase-claim information");
 
     api.registerCommand("store", ({ player }) => {
       player.getPacketSender().sendURL("http://www.deadlypkers.net");
       return true;
-    });
+    }, undefined, "Open the store");
 
     api.registerCommand("donate", ({ player }) => {
       player.getPacketSender().sendURL("http://www.deadlypkers.net");
       return true;
-    });
-
-    api.registerCommand("kdr", ({ player }) => {
-      player.forceChat(`I currently have ${player.getKillDeathRatio()} kdr!`);
-      return true;
-    });
+    }, undefined, "Open the store");
 
     api.registerCommand("timeplayed", ({ player }) => {
       player.forceChat(`I've been playing for ${Misc.getFormattedPlayTime(player)}.`);
       return true;
-    });
+    }, undefined, "Say your play time");
 
     api.registerCommand("creationdate", ({ player }) => {
       const calendar = new Date(player.getCreationDate().getTime());
@@ -161,7 +159,7 @@ module.exports = {
         }).format(calendar)}, ${calendar.getFullYear()}!`
       );
       return true;
-    });
+    }, undefined, "Say your account creation date");
 
     api.registerCommand("changepassword", async ({ player, raw, parts }) => {
       if (raw.includes("\r") || raw.includes("\n")) {
@@ -181,13 +179,14 @@ module.exports = {
         player.sendMessage("An error occurred while changing your password.");
       }
       return true;
-    });
+    }, undefined, "Change password");
 
     api.registerCommand("lockxp", ({ player }) => {
-      player.setExperienceLocked(!player.experienceLockedReturn());
-      player.sendMessage(`Lock: ${player.experienceLockedReturn()}`);
+      const locked = player.getAttribute(XP_LOCKED_ATTRIBUTE) !== true;
+      player.setAttribute(XP_LOCKED_ATTRIBUTE, locked);
+      player.sendMessage(`Lock: ${locked}`);
       return true;
-    });
+    }, undefined, "Toggle experience lock");
 
     api.registerCommand("thread", async ({ player, parts }) => {
       if (parts.length !== 2) {
@@ -210,7 +209,7 @@ module.exports = {
         console.error(error);
       }
       return true;
-    });
+    }, undefined, "Open a forum thread");
 
     api.registerCommand("title", ({ player, parts }) => {
       if (parts.length < 2) {
@@ -222,9 +221,9 @@ module.exports = {
         player.sendMessage("You're not allowed to have that in your title.");
         return true;
       }
-      player.setLoyaltyTitle(`@blu@${nextTitle}`);
+      player.setAttribute(LOYALTY_TITLE_ATTRIBUTE, `@blu@${nextTitle}`);
       return true;
-    });
+    }, undefined, "Set your title");
 
     api.registerCommand("skull", ({ player }) => {
       confirmSkull(
@@ -235,7 +234,7 @@ module.exports = {
         "Skulling yourself can make you lose every carried item. Are you sure?"
       );
       return true;
-    });
+    }, undefined, "Apply a white skull");
 
     api.registerCommand("redskull", ({ player }) => {
       confirmSkull(
@@ -246,7 +245,7 @@ module.exports = {
         "A red skull makes you lose every carried item and disables Protect Item. Continue?"
       );
       return true;
-    });
+    }, undefined, "Apply a red skull");
 
     // Stays inline: donator is a separate rights ladder, so no PlayerRights array covers it.
     api.registerCommand("yell", ({ player, raw }) => {
@@ -258,9 +257,9 @@ module.exports = {
         player.sendMessage("You are muted and cannot yell.");
         return true;
       }
-      if (!player.getYellDelay().finished()) {
-        player
-          .sendMessage(`You must wait another ${player.getYellDelay().secondsRemaining()} seconds to do that.`);
+      const yellWaitMs = Number(player.getAttribute(YELL_UNTIL_ATTRIBUTE) ?? 0) - Date.now();
+      if (yellWaitMs > 0) {
+        player.sendMessage(`You must wait another ${Math.ceil(yellWaitMs / 1000)} seconds to do that.`);
         return true;
       }
 
@@ -281,16 +280,16 @@ module.exports = {
 
       const delaySeconds = yellDelaySeconds(player);
       if (delaySeconds > 0) {
-        player.getYellDelay().start(delaySeconds);
+        player.setAttribute(YELL_UNTIL_ATTRIBUTE, Date.now() + delaySeconds * 1000);
       }
       return true;
-    });
+    }, undefined, "Staff and donors only");
 
     // Legacy owner-only test command from the TS command package.
     api.registerCommand("ground", ({ player }) => {
       ItemOnGroundManager.registers(player, new Item(995, 10000));
       player.sendMessage("Spawned ground item..");
       return true;
-    }, PlayerRights.OWNER);
+    }, PlayerRights.OWNER, "Spawn ground coins");
   },
 };

@@ -115,6 +115,12 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
         npcEntityIds: [] as number[],
         drawCallNpc: undefined,
         getLocalTileSpan: () => 64,
+        getRenderBaseTileX() {
+            return this.mapX * 64;
+        },
+        getRenderBaseTileY() {
+            return this.mapY * 64;
+        },
     };
     const existingMap = {
         mapX: 51,
@@ -122,11 +128,18 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
         npcEntityIds: [2, 3],
         drawCallNpc: {},
         getLocalTileSpan: () => 64,
+        getRenderBaseTileX() {
+            return this.mapX * 64;
+        },
+        getRenderBaseTileY() {
+            return this.mapY * 64;
+        },
     };
     const mapByNpc = new Map<number, any>([
         [1, unbatchedMap],
         [2, existingMap],
-        [3, existingMap],
+        // NPC 3 walked into the unbatched map; the existing map's batch still lists it.
+        [3, unbatchedMap],
     ]);
     const ecs = {
         getServerLinkedEcsIds: () => [1, 2, 3],
@@ -134,8 +147,9 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
         getNpcTypeId: (id: number) => 100 + id,
         getMapX: (id: number) => mapByNpc.get(id).mapX,
         getMapY: (id: number) => mapByNpc.get(id).mapY,
-        getLocalXForMap: (id: number) => 64 + id * 128,
-        getLocalYForMap: (id: number) => 192 + id * 128,
+        // World positions, 1/128 tile: (64 + id * 128, 192 + id * 128) inside the owning map.
+        getWorldX: (id: number) => mapByNpc.get(id).mapX * 64 * 128 + 64 + id * 128,
+        getWorldY: (id: number) => mapByNpc.get(id).mapY * 64 * 128 + 192 + id * 128,
         getLevel: () => 0,
         getRotation: () => 0,
         getServerId: (id: number) => 500 + id,
@@ -160,9 +174,14 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
             visibleMaps: [unbatchedMap, existingMap],
         },
         getEffectiveNpcType: () => ({}),
-        // NPC 2 already has a valid map draw entry. NPC 3 is present in that
-        // batch but currently suppressed, so it must use the immediate path.
-        shouldRenderNpcFromMap: (_map: any, id: number) => id === 2,
+        // As in the renderer, a map draws an NPC only when it owns it: NPC 2 has a
+        // valid map draw entry, while NPC 3's stale batch entry is suppressed, so
+        // NPCs 1 and 3 must use the immediate path from the map that owns them.
+        shouldRenderNpcFromMap: (map: any, id: number) => mapByNpc.get(id) === map,
+        smoothed: new Set<number>(),
+        isNpcSmoothed(id: number) {
+            return this.smoothed.has(id);
+        },
     };
 
     addUnbatchedNpcRenderData(host as any);
@@ -176,10 +195,78 @@ function serverSpawnRendersBeforeMapBatchRefresh(): void {
         host.unbatchedNpcRenderEntries.map((entry) => entry.dataOffset),
         [0, 1],
     );
+
+    // Animation smoothing draws NPC 2 through this path too, though its map's batch has it.
+    host.smoothed.add(2);
+    host.actorRenderCount = 0;
+    addUnbatchedNpcRenderData(host as any);
+    assert.deepEqual(
+        host.unbatchedNpcRenderEntries.map((entry) => entry.ecsId),
+        [1, 2, 3],
+    );
+}
+
+/**
+ * An instance scene is one map that isn't streamed: the map manager has no current map and
+ * the scene's map is never "in the grid". Its NPCs must still be refreshed into it, or they
+ * are never in its update list (no animation or facing) - the Gauntlet's monsters.
+ */
+async function instanceSceneNpcsAreRefreshed(): Promise<void> {
+    const applied: number[] = [];
+    const map = { refreshNpcGeometry: () => applied.push(1), getRenderBaseTileX: () => 8160, getRenderBaseTileY: () => 1600 };
+    let renderBase: unknown;
+    const renderer = {
+        app: {}, npcProgram: {}, textureArray: {}, textureMaterials: {}, waterTextures: {}, sceneUniformBuffer: {},
+        instanceActive: true,
+        instanceSceneMap: { mapX: 128, mapY: 25 },
+        mapManager: {
+            currentMapX: -1,
+            currentMapY: -1,
+            worldEntityMapIds: new Set<number>(),
+            isMapInCurrentGrid: () => false,
+            getMap: () => map,
+            loadMap: () => undefined,
+        },
+        maxLevel: 3,
+        loadedTextureIds: new Set<number>(),
+        updateTextureArray: () => undefined,
+    };
+    const controller = new NpcInstanceFlushController({
+        getRenderer: () => renderer,
+        workerPool: {
+            setNpcInstances: async () => undefined,
+            queueNpcGeometry: (...args: any[]) => {
+                renderBase = args[4];
+                return Promise.resolve({ mapX: 128, mapY: 25, loadedTextures: new Map(), vertices: new Uint8Array(), indices: new Int32Array(), npcs: [] });
+            },
+        },
+        getSeqTypeLoader: () => ({}),
+        getSeqFrameLoader: () => ({}),
+        getNpcTypeLoader: () => ({ load: () => ({}) }),
+        getBasTypeLoader: () => ({}),
+    } as any);
+    controller.instanceMap.set("sid:7", { serverId: 7, typeId: 9028, x: 8250, y: 1700, level: 1, ownerMapId: (128 << 8) | 25 });
+    controller.markMapPendingReload((128 << 8) | 25);
+    controller.scheduleFlush();
+    await waitFor(() => applied.length === 1);
+    assert.deepEqual(renderBase, { x: 8160, y: 1600 }, "built from where the scene is drawn");
+}
+
+/** Deleting an instance scene map keeps its server NPCs for the rebuilt copy. */
+function instanceSceneRebuildKeepsServerNpcs(): void {
+    const ecs = new NpcEcs();
+    const id = ecs.createNpc(128, 25, 9028, 2, 0, 0, 1, 0, 0, 0);
+    ecs.setServerMapping(id, 7);
+    ecs.destroyNpcsForMap(128, 25, true);
+    assert.ok(ecs.isActive(id) && ecs.getEcsIdForServer(7) === id, "kept for the rebuilt scene");
+    ecs.destroyNpcsForMap(128, 25);
+    assert.ok(!ecs.isActive(id), "a world square unloading still takes its NPCs");
 }
 
 async function run(): Promise<void> {
     await staleAppearanceRefreshIsNeverApplied();
+    await instanceSceneNpcsAreRefreshed();
+    instanceSceneRebuildKeepsServerNpcs();
     serverSpawnRendersBeforeMapBatchRefresh();
 }
 

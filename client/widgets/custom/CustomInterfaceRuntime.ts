@@ -31,7 +31,9 @@ export type CustomInterfaceDeclaration = {
         blurColor?: number;
         blurHoverColor?: number;
         /** Content endpoint path, e.g. "/api/content/items". */
-        endpoint: string;
+        endpoint?: string;
+        /** Hidden text component receiving JSON rows over the authenticated game socket. */
+        dataComponent?: number;
         queryParam?: string;
         limit?: number;
         debounceMs?: number;
@@ -48,6 +50,8 @@ export type CustomInterfaceDeclaration = {
         backgroundBaseY?: number;
         /** "%name" and "%id" are replaced per row. */
         itemLabel?: string;
+        /** Text lists have no inventory item associated with each row. */
+        textOnly?: boolean;
     };
     /**
      * Containers that scroll their own children. The rows are part of the definition, so
@@ -61,7 +65,9 @@ export type CustomInterfaceDeclaration = {
     status?: {
         component: number;
         idle?: string;
+        loading?: string;
         empty?: string;
+        error?: string;
         /** "%shown" and "%total" are replaced. */
         matches?: string;
         truncated?: string;
@@ -113,6 +119,7 @@ export class CustomInterfaceRuntime {
     private focused = false;
     private query = "";
     private rows: CustomInterfaceRow[] = [];
+    private sourceRows: CustomInterfaceRow[] = [];
     private total = 0;
     private renderedVersion = -1;
     private version = 0;
@@ -120,6 +127,7 @@ export class CustomInterfaceRuntime {
     private scrollbarState = new Map<number, string>();
     private fetchTimer: ReturnType<typeof setTimeout> | undefined;
     private fetchSequence = 0;
+    private fetchState: "idle" | "loading" | "error" = "idle";
 
     constructor(private readonly deps: CustomInterfaceRuntimeDeps) {}
 
@@ -152,6 +160,18 @@ export class CustomInterfaceRuntime {
     /** The server can drive the query too - prefill, clear, or correct it. */
     handleSetText(uid: number, text: string): boolean {
         const search = this.declaration?.search;
+        if (search?.dataComponent !== undefined && uid === this.uid(search.dataComponent)) {
+            try {
+                const rows = JSON.parse(text);
+                this.sourceRows = Array.isArray(rows)
+                    ? rows.filter((row) => Number.isInteger(row?.id) && row.id > 0 && typeof row.name === "string")
+                    : [];
+            } catch {
+                this.sourceRows = [];
+            }
+            this.scheduleFetch();
+            return true;
+        }
         if (!search || uid !== this.uid(search.inputComponent)) {
             return false;
         }
@@ -189,7 +209,7 @@ export class CustomInterfaceRuntime {
         if (!search || !this.focused) {
             return false;
         }
-        if (!this.isMounted()) {
+        if (!this.isAttached()) {
             this.reset();
             return false;
         }
@@ -234,7 +254,7 @@ export class CustomInterfaceRuntime {
     }
 
     tick(): void {
-        if (!this.declaration || !this.isMounted()) {
+        if (!this.declaration || !this.isAttached()) {
             return;
         }
         this.initializeScrollView();
@@ -248,10 +268,12 @@ export class CustomInterfaceRuntime {
             this.fetchTimer = undefined;
         }
         this.fetchSequence++;
+        this.fetchState = "idle";
         this.declaration = undefined;
         this.focused = false;
         this.query = "";
         this.rows = [];
+        this.sourceRows = [];
         this.total = 0;
         this.version = 0;
         this.renderedVersion = -1;
@@ -267,7 +289,7 @@ export class CustomInterfaceRuntime {
         return this.deps.widgetManager.getWidgetByUid(this.uid(component));
     }
 
-    private isMounted(): boolean {
+    private isAttached(): boolean {
         const groupId = this.declaration?.groupId;
         if (groupId === undefined) {
             return false;
@@ -279,7 +301,7 @@ export class CustomInterfaceRuntime {
     }
 
     private setFocus(focused: boolean): void {
-        this.focused = !!focused && this.isMounted();
+        this.focused = !!focused && this.isAttached();
         this.syncInput();
     }
 
@@ -341,9 +363,18 @@ export class CustomInterfaceRuntime {
             clearTimeout(this.fetchTimer);
         }
         const query = this.query;
+        if (search.dataComponent !== undefined) {
+            const term = query.trim().toLowerCase();
+            this.rows = this.sourceRows.filter((row) => row.name.toLowerCase().includes(term));
+            this.total = this.rows.length;
+            this.version++;
+            this.renderRows(true);
+            return;
+        }
         if (query.trim().length === 0) {
             this.rows = [];
             this.total = 0;
+            this.fetchState = "idle";
             this.version++;
             this.renderRows(true);
             return;
@@ -356,19 +387,22 @@ export class CustomInterfaceRuntime {
 
     private async fetchRows(query: string): Promise<void> {
         const search = this.declaration?.search;
-        if (!search) {
+        if (!search?.endpoint) {
             return;
         }
         const sequence = ++this.fetchSequence;
         const url = `${search.endpoint}?${search.queryParam ?? "q"}=${encodeURIComponent(
             query,
         )}&limit=${search.limit ?? DEFAULT_LIMIT}`;
+        this.fetchState = "loading";
+        this.applyStatus();
         try {
             const payload = (await this.deps.fetchContent(url)) as { total?: number; rows?: unknown[] };
             // A slower earlier request must not overwrite a newer one's results.
             if (sequence !== this.fetchSequence || query !== this.query) {
                 return;
             }
+            this.fetchState = "idle";
             this.rows = Array.isArray(payload.rows)
                 ? (payload.rows as any[])
                       .map((row) => ({ id: row?.id | 0, name: String(row?.name ?? "") }))
@@ -378,13 +412,21 @@ export class CustomInterfaceRuntime {
             this.version++;
             this.renderRows(true);
         } catch (error) {
+            if (sequence !== this.fetchSequence || query !== this.query) {
+                return;
+            }
             console.warn("[custom-interface] content fetch failed", error);
+            this.fetchState = "error";
+            this.rows = [];
+            this.total = 0;
+            this.version++;
+            this.renderRows(true);
         }
     }
 
     private renderRows(resetScroll: boolean): void {
         const declaration = this.declaration;
-        if (!declaration || !this.isMounted()) {
+        if (!declaration || !this.isAttached()) {
             return;
         }
         this.applyStatus();
@@ -415,15 +457,27 @@ export class CustomInterfaceRuntime {
         if (!status) {
             return;
         }
+
+        if (this.fetchState === "error" && status.error) {
+            this.setText(status.component, status.error);
+            return;
+        }
+        if (this.fetchState === "loading" && status.loading) {
+            this.setText(status.component, status.loading);
+            return;
+        }
+        if (this.query.trim().length === 0 && this.declaration?.search?.dataComponent === undefined) {
+            this.setText(status.component, status.idle ?? "");
+            return;
+        }
+
         const shown = this.rows.length;
-        const text =
-            this.query.trim().length === 0
-                ? status.idle ?? ""
-                : shown === 0
-                  ? status.empty ?? ""
-                  : (this.total > shown ? status.truncated ?? status.matches ?? "" : status.matches ?? "")
-                        .replace("%shown", String(shown))
-                        .replace("%total", String(this.total));
+        if (shown === 0) {
+            this.setText(status.component, status.empty ?? "");
+            return;
+        }
+        const template = this.total > shown ? status.truncated ?? status.matches ?? "" : status.matches ?? "";
+        const text = template.replace("%shown", String(shown)).replace("%total", String(this.total));
         this.setText(status.component, text);
     }
 
@@ -467,9 +521,9 @@ export class CustomInterfaceRuntime {
             icon.isHidden = hidden;
 
             if (row) {
-                icon.itemId = row.id | 0;
-                icon.itemQuantity = 1;
-                icon.itemAmount = 1;
+                icon.itemId = list.textOnly ? -1 : row.id | 0;
+                icon.itemQuantity = list.textOnly ? 0 : 1;
+                icon.itemAmount = list.textOnly ? 0 : 1;
                 icon.text = label
                     .replace("%name", sanitize(row.name))
                     .replace("%id", String(row.id | 0));

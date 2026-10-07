@@ -190,7 +190,7 @@ export class OverheadTextOverlay implements Overlay {
         this.lastArgs = args;
     }
 
-    draw(phase: RenderPhase): void {
+    draw(phase: RenderPhase, sceneClip?: readonly number[]): void {
         if (phase !== RenderPhase.ToFrameTexture) return;
         if (!this.drawCall || !this.positions || !this.uvs) return;
         const args = this.lastArgs;
@@ -203,10 +203,7 @@ export class OverheadTextOverlay implements Overlay {
         this.app.enable(PicoGL.BLEND);
         this.app.disable(PicoGL.DEPTH_TEST);
         // Text effects narrow the scene clip, never replace it.
-        const clipped = this.app.gl.isEnabled(PicoGL.SCISSOR_TEST);
-        const clip: number[] | Int32Array = clipped
-            ? this.app.gl.getParameter(PicoGL.SCISSOR_BOX)
-            : [0, 0, this.app.width, this.app.height];
+        const clip = sceneClip ?? [0, 0, this.app.width, this.app.height];
         this.app.enable(PicoGL.SCISSOR_TEST);
         this.app.scissor(clip[0], clip[1], clip[2], clip[3]);
 
@@ -369,7 +366,7 @@ export class OverheadTextOverlay implements Overlay {
                 } catch {}
             }
         }
-        if (!clipped) this.app.disable(PicoGL.SCISSOR_TEST);
+        if (!sceneClip) this.app.disable(PicoGL.SCISSOR_TEST);
     }
 
     dispose(): void {

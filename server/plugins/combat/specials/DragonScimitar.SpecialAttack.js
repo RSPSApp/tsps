@@ -19,8 +19,8 @@ module.exports = function registerDragonScimitarSpecialAttack(api) {
       if (!hit.isAccurate() || !hit.getTarget().isPlayer()) {
         return;
       }
-      // TODO: xrsps locks protection prayers for 8 ticks; the core
-      // CombatFactory.disableProtectionPrayers uses its own fixed block timer.
+      // Wiki: Sever blocks protection prayers for 8 ticks (4.8s); the core
+      // block timer is second-granular and starts 5.
       CombatFactory.disableProtectionPrayers(hit.getTarget().getAsPlayer());
       hit.getAttacker().getAsPlayer().sendMessage("Your target can no longer use protection prayers.");
     }

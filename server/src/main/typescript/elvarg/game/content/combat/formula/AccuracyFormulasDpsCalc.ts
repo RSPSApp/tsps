@@ -5,10 +5,9 @@ import { Misc } from "../../../../util/Misc";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { BonusManager } from "../../../model/equipment/BonusManager";
 import { Skill } from "../../../model/Skill";
-import { applyMeleeAttackAccuracyModifiers, applyRangedAttackAccuracyModifiers, applyMagicAttackAccuracyModifiers, applyMeleeDefenseModifiers, applyRangedDefenseModifiers, applyMagicDefenseModifiers } from "../EquipmentEffects";
+import { applyCombatEffectiveLevelModifiers, applyMeleeAttackAccuracyModifiers, applyRangedAttackAccuracyModifiers, applyMagicAttackAccuracyModifiers, applyMeleeDefenseModifiers, applyRangedDefenseModifiers, applyMagicDefenseModifiers } from "../EquipmentEffects";
 import type { Player } from '../../../entity/impl/player/Player';
 import { World } from "../../../World";
-import { CombatEquipment } from "../CombatEquipment";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CombatSpecial } from "../CombatSpecial";
 import { resolveSpecialAttackType, WeaponSpecialTraits } from "../WeaponSpecialTraits";
@@ -111,6 +110,27 @@ export class AccuracyFormulasDpsCalc {
             return 120;
         }
         return 100;
+    }
+
+    /**
+     * Invisible Defence levels from the selected stance: Defensive and Longrange +3,
+     * Controlled +1. Autocasting gives no invisible bonuses (Wiki: Combat Options).
+     */
+    private static defenceStanceBonus(player: Player): number {
+        if (player.getCombat().getAutocastSpell() != null) {
+            return 0;
+        }
+        const fightStyle = player.getFightType().getStyle();
+        if (fightStyle == FightStyle.DEFENSIVE) return 3;
+        if (fightStyle == FightStyle.CONTROLLED) return 1;
+        return 0;
+    }
+
+    /** A powered staff's Accurate style: a magic attack style, not a staff's melee bash. */
+    private static usingPoweredStaffAccurate(player: Player): boolean {
+        const fightType = player.getFightType();
+        return fightType.getBonusType() === BonusManager.ATTACK_MAGIC
+            && fightType.getStyle() == FightStyle.ACCURATE;
     }
 
     private static defencePrayerPercent(player: Player): number {
@@ -232,6 +252,12 @@ export class AccuracyFormulasDpsCalc {
         if (traits?.defenceRollMultiplier !== undefined) {
             defRoll = Math.floor(defRoll * traits.defenceRollMultiplier);
         }
+        if (entity.isNpc()) {
+            attRoll = Math.floor(attRoll * entity.getAsNpc().getRollFactor());
+        }
+        if (enemy.isNpc()) {
+            defRoll = Math.floor(defRoll * enemy.getAsNpc().getRollFactor());
+        }
 
         return { attack: attRoll, defence: defRoll };
     }
@@ -310,12 +336,7 @@ export class AccuracyFormulasDpsCalc {
             att += 1;
         att += 8;
 
-        if (CombatEquipment.wearingVoid(player, CombatType.MELEE)
-            || CombatEquipment.wearingEliteVoid(player, CombatType.MELEE)) {
-            att = AccuracyFormulasDpsCalc.scalePercent(att, 110);
-        }
-
-        att = Math.floor(applyMeleeAttackAccuracyModifiers(player, att));
+        att = applyCombatEffectiveLevelModifiers(entity, att, { combatType: CombatType.MELEE, purpose: "accuracy" });
 
         cache.effectiveAttackLevel = att;
         return att;
@@ -358,6 +379,8 @@ export class AccuracyFormulasDpsCalc {
                 attRoll *= maxAtt + 64;
         }
 
+        // Gear bonuses (salve, slayer helm, ...) scale the finished roll (Wiki DPS calculator).
+        attRoll = Math.floor(applyMeleeAttackAccuracyModifiers(player, attRoll));
         attRoll = AccuracyFormulasDpsCalc.applyAccuracyTraits(attRoll, entity, CombatType.MELEE, traits);
 
         cache.attackMeleeRoll = Math.floor(attRoll);
@@ -380,12 +403,7 @@ export class AccuracyFormulasDpsCalc {
             AccuracyFormulasDpsCalc.defencePrayerPercent(player)
         );
 
-        let fightStyle = player.getFightType().getStyle();
-        if (fightStyle == FightStyle.DEFENSIVE)
-            def += 3;
-        else if (fightStyle == FightStyle.CONTROLLED)
-            def += 1;
-        def += 8;
+        def += AccuracyFormulasDpsCalc.defenceStanceBonus(player) + 8;
 
         def = Math.floor(applyMeleeDefenseModifiers(player, def));
 
@@ -470,13 +488,7 @@ export class AccuracyFormulasDpsCalc {
             rngStrength += 3;
         rngStrength += 8;
 
-        if (CombatEquipment.wearingEliteVoid(player, CombatType.RANGED)) {
-            rngStrength = AccuracyFormulasDpsCalc.scaleRatio(rngStrength, 1125, 1000);
-        } else if (CombatEquipment.wearingVoid(player, CombatType.RANGED)) {
-            rngStrength = AccuracyFormulasDpsCalc.scalePercent(rngStrength, 110);
-        }
-
-        rngStrength = Math.floor(applyRangedAttackAccuracyModifiers(player, rngStrength));
+        rngStrength = applyCombatEffectiveLevelModifiers(entity, rngStrength, { combatType: CombatType.RANGED, purpose: "accuracy" });
 
         //    if (dragonHunter(input))
         //        rngStrength =
@@ -496,6 +508,9 @@ export class AccuracyFormulasDpsCalc {
         let attRoll = AccuracyFormulasDpsCalc.effectiveRangedAttack(entity);
 
         attRoll *= (accuracyBonus + 64);
+        if (entity.isPlayer()) {
+            attRoll = Math.floor(applyRangedAttackAccuracyModifiers(entity, attRoll));
+        }
 
         attRoll = AccuracyFormulasDpsCalc.applyAccuracyTraits(
             attRoll,
@@ -526,18 +541,15 @@ export class AccuracyFormulasDpsCalc {
             AccuracyFormulasDpsCalc.magicAttackPrayerPercent(player)
         );
 
-        // +8 base, +1 style. Magic's style bonus is always 1 regardless of the
-        // weapon's selected melee stance - a caster's FightType is still their
-        // staff's bash/pound/focus, so reading it here handed staves left on
-        // Accurate a free +3 magic attack.
+        // +8 base and +1 for every cast; a powered staff on Accurate adds 2 more
+        // (the Wiki DPS calculator). A staff's own bash/pound/focus stances are
+        // melee styles and give magic nothing.
         mag += 9;
-
-        if (CombatEquipment.wearingVoid(player, CombatType.MAGIC)
-            || CombatEquipment.wearingEliteVoid(player, CombatType.MAGIC)) {
-            mag = AccuracyFormulasDpsCalc.scalePercent(mag, 145);
+        if (AccuracyFormulasDpsCalc.usingPoweredStaffAccurate(player)) {
+            mag += 2;
         }
 
-        mag = Math.floor(applyMagicAttackAccuracyModifiers(player, mag));
+        mag = applyCombatEffectiveLevelModifiers(entity, mag, { combatType: CombatType.MAGIC, purpose: "accuracy" });
 
         cache.effectiveMagicLevel = mag;
         return mag;
@@ -562,11 +574,12 @@ export class AccuracyFormulasDpsCalc {
                 player.getSkillManager().getCurrentLevel(Skill.DEFENCE),
                 AccuracyFormulasDpsCalc.defencePrayerPercent(player)
             );
-            defLevel = AccuracyFormulasDpsCalc.scaleRatio(
-                magicLevel * 7 + defenceLevel * 3,
-                1,
-                10
-            ) + 8;
+            // 70% Magic and 30% Defence, each rounded down, then the Defence
+            // stance bonus and +8 (the Wiki DPS calculator's player defence roll).
+            defLevel = AccuracyFormulasDpsCalc.scaleRatio(magicLevel, 7, 10)
+                + AccuracyFormulasDpsCalc.scaleRatio(defenceLevel, 3, 10)
+                + AccuracyFormulasDpsCalc.defenceStanceBonus(player)
+                + 8;
             defLevel = applyMagicDefenseModifiers(player, defLevel);
         }
 
@@ -589,6 +602,9 @@ export class AccuracyFormulasDpsCalc {
 
         let attRoll = AccuracyFormulasDpsCalc.effectiveMagicLevel(entity);
         attRoll *= (accuracyBonus + 64);
+        if (entity.isPlayer()) {
+            attRoll = Math.floor(applyMagicAttackAccuracyModifiers(entity, attRoll));
+        }
 
         attRoll = AccuracyFormulasDpsCalc.applyAccuracyTraits(
             attRoll,

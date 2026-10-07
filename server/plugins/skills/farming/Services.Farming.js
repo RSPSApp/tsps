@@ -158,7 +158,9 @@ function farmingItemPair(event) {
         event.handled = true;
         if (!Patches.water(player, can)) return;
         const slot = a === seedling.seedling ? event.usedItemSlot : event.usedWithItemSlot;
-        inventory.forSlot(slot).setId(seedling.wateredSeedling).setMetaValue("farming:saplingAt", Model.nextGrowth(Date.now(), 5, Patches.farmFor(player).offset));
+        const saplingAt = Model.nextGrowth(Date.now(), 5, Patches.farmFor(player).offset);
+        inventory.forSlot(slot).setId(seedling.wateredSeedling).setMetaValue("farming:sapling-at", saplingAt);
+        Patches.noteSeedling(player, saplingAt);
         inventory.refreshItems();
         return;
     }
@@ -201,19 +203,26 @@ function farmingItemPair(event) {
         return;
     }
 }
+/** Turns due watered seedlings into saplings; returns when the next one is due, or Infinity. */
 function growSeedlings(player, now) {
+    let next = Infinity;
     for (const container of [player.getInventory(), ...player.getBanks()]) {
         if (!container) continue; // Bank tabs are created lazily, including for bots.
         let changed = false;
         for (const item of container.getItems()) {
             const crop = item && item.getAmount() > 0 && Data.WATERED_SEEDLINGS.get(item.getId());
             if (!crop) continue;
-            const at = item.getMetaValue("farming:saplingAt");
-            if (!at) item.setMetaValue("farming:saplingAt", Model.nextGrowth(now, 5, Patches.farmFor(player).offset));
-            else if (now >= at) { item.setId(crop.sapling).setMetaValue("farming:saplingAt", undefined); changed = true; }
+            const at = item.getMetaValue("farming:sapling-at");
+            if (!at) {
+                const due = Model.nextGrowth(now, 5, Patches.farmFor(player).offset);
+                item.setMetaValue("farming:sapling-at", due);
+                next = Math.min(next, due);
+            } else if (now >= at) { item.setId(crop.sapling).setMetaValue("farming:sapling-at", undefined); changed = true; }
+            else next = Math.min(next, at);
         }
         if (changed) container.refreshItems();
     }
+    return next;
 }
 function waterContainers({ containers }) {
     for (const crop of Data.CROPS.values()) if (crop.seedling) containers.set(crop.seedling, crop.wateredSeedling);
@@ -221,7 +230,7 @@ function waterContainers({ containers }) {
 }
 function humidified({ player }) {
     // Assign the same persistent farming-clock deadline used for hand-watered seedlings.
-    growSeedlings(player, Date.now());
+    Patches.noteSeedling(player, growSeedlings(player, Date.now()));
 }
 function withdrawTools(player, npc) {
     const stored = Patches.farmFor(player).tools;
@@ -413,7 +422,7 @@ function farmingItemAction(event) {
         player.sendMessage("You learn to use two volcanic ash with Fertile Soil to apply ultracompost.");
         return;
     }
-    if (name === "Amulet of nature" && action === "rub") {
+    if (name === "Amulet of Nature" && action === "rub") {
         event.handled = true;
         const bound = Patches.farmFor(player).boundPatch;
         const patch = Data.CACHE.patches.find(p => Data.patchKey(p) === bound);

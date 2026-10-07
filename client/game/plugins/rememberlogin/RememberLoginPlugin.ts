@@ -1,3 +1,5 @@
+import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+import { createBrowserRememberLoginPluginPersistence } from "./BrowserRememberLoginPluginPersistence";
 import type {
     LoginCredentialsTarget,
     RememberLoginPluginConfig,
@@ -13,17 +15,27 @@ const DEFAULT_CONFIG: RememberLoginPluginConfig = Object.freeze({
     password: "",
 });
 
-export class RememberLoginPlugin {
+const STORAGE_KEY = "osrs.plugin.remember_login.v1";
+
+export class RememberLoginPlugin extends Plugin {
+    static descriptor: PluginDescriptor = {
+        name: "Remember Login",
+        description: "Restores credentials stored unencrypted in this browser.",
+        tags: ["login"],
+        configKey: "rememberloginplugin",
+    };
+
     private readonly listeners = new Set<RememberLoginPluginListener>();
     private readonly persistence?: RememberLoginPluginPersistence;
     private config: RememberLoginPluginConfig;
-    private state: RememberLoginPluginState;
     private version = 0;
 
     constructor(persistence?: RememberLoginPluginPersistence) {
-        this.persistence = persistence;
-        this.config = this.sanitizeConfig(persistence?.load());
-        this.state = { config: this.config, version: this.version };
+        super();
+        this.persistence = persistence ?? createBrowserRememberLoginPluginPersistence(STORAGE_KEY);
+        const loaded = this.persistence?.load();
+        if (typeof loaded?.enabled === "boolean") this.setEnabledState(loaded.enabled);
+        this.config = this.sanitizeConfig(loaded);
     }
 
     subscribe(listener: RememberLoginPluginListener): () => void {
@@ -32,37 +44,54 @@ export class RememberLoginPlugin {
     }
 
     getState(): RememberLoginPluginState {
-        return this.state;
+        return { config: this.getConfig(), version: this.version };
     }
 
     getConfig(): RememberLoginPluginConfig {
-        return this.state.config;
+        return { ...this.config, enabled: this.isEnabled() };
     }
 
     setConfig(nextConfig: Partial<RememberLoginPluginConfig>): void {
-        this.config = this.sanitizeConfig({ ...this.config, ...nextConfig });
+        if (nextConfig.enabled !== undefined) {
+            void this.setPluginEnabled(nextConfig.enabled);
+            if (!nextConfig.enabled) this.clearCredentials();
+        }
+        this.config = this.sanitizeConfig({ ...this.config, ...nextConfig, enabled: this.isEnabled() });
         this.commit();
     }
 
     setEnabled(enabled: boolean, username = "", password = ""): void {
+        void this.setPluginEnabled(enabled);
         if (!enabled) {
-            this.setConfig({ enabled: false, username: "", password: "" });
+            this.clearCredentials();
+            this.commit();
             return;
         }
-        this.setConfig({ enabled: true });
+        this.config = { ...this.config, enabled: true };
         this.remember(username, password);
     }
 
     remember(username: string, password: string): void {
-        if (!this.config.enabled || username.trim().length === 0 || password.length === 0) return;
-        this.setConfig({ username, password });
+        if (!this.isEnabled() || username.trim().length === 0 || password.length === 0) return;
+        this.config = this.sanitizeConfig({ ...this.config, username, password });
+        this.commit();
     }
 
     restore(target: LoginCredentialsTarget): void {
-        if (!this.config.enabled || !this.config.username || !this.config.password) return;
+        if (!this.isEnabled() || !this.config.username || !this.config.password) return;
         target.username = this.config.username;
         target.password = this.config.password;
         target.currentLoginField = 1;
+    }
+
+    protected async shutDown(): Promise<void> {
+        this.clearCredentials();
+        this.commit();
+    }
+
+    private clearCredentials(): void {
+        this.config = { ...this.config, username: "", password: "" };
+        this.persistence?.save(this.config);
     }
 
     private sanitizeConfig(
@@ -83,7 +112,6 @@ export class RememberLoginPlugin {
 
     private commit(): void {
         this.version++;
-        this.state = { config: this.config, version: this.version };
         this.persistence?.save(this.config);
         for (const listener of this.listeners) {
             try {

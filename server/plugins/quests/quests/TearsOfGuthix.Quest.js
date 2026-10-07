@@ -2,38 +2,34 @@
  * Tears of Guthix (members).
  *
  * Words come from the "Tears of Guthix" transcript page; this plugin supplies the
- * variant selector for Juna, the start hook, the prose-condition answers, the
- * magic-stone/stone-bowl crafting and the tear-collection reward.
+ * variant selector for Juna, the start hook, the prose-condition answers and the
+ * magic-stone/stone-bowl crafting.
  *
  * Stages (varp 449, the storage behind varbit 451 "TOG_JUNA_BOWL"; confirmed
  * against the cache): 0 not started, 1 told Juna a story / make the bowl,
- * 2 complete. 449 is the real OSRS varp and is unused elsewhere in the repo.
+ * 2 complete. The minigame keeps its own varbits in the higher bits of 449.
  *
  * Flow: talk to Juna (43 Quest Points) -> the start hook sets stage 1 -> mine
  * Magical rocks (20 Mining, pickaxe) -> chisel the Magic stone into a Stone bowl
  * -> talk to Juna with the bowl ("returning-with-a-stone-bowl") -> the completion
  * action takes the bowl and completes (1 QP, 1000 Crafting XP, minigame access).
  *
- * Post-quest activity: "Collect-from" the Weeping wall, or use the bowl on the
- * blue/green tear objects, to bank tears; leaving the chasm (tunnels / climb
- * rocks) or logging out converts them into XP in the player's lowest skill at the
- * reference's rate (10 + floor(lowestXp / 270) / 10, capped at 60 per tear).
+ * The minigame after the quest (Juna's eligibility, the cave and the tears) is
+ * plugins/minigames/TearsOfGuthix.plugin.js. This file routes Juna's loc to her
+ * transcripts, keeps varbit 451 (her multiloc: "Story" appears once the quest is
+ * done) in step with the stage, and plays the random story she is told, out of the
+ * stories for quests the player has completed.
  *
  * Source: https://github.com/GregHib/void/blob/2b8e267836a8469757c73694ea4d57f2f1c28458/game/src/main/kotlin/content/area/misthalin/lumbridge/swamp/chams_of_tears/Juna.kt
- * (plus LightCreature.kt, WeepingWall.kt and quest/member/tears_of_guthix/TearsOfGuthix.kt).
+ * (plus quest/member/tears_of_guthix/TearsOfGuthix.kt).
  *
  * Gaps (no dump/index support): the sapphire-lantern / light-creature travel to
- * the chasm and the water-bowl minigame interface + timer are not reproduced
- * (collection is a plain accumulate-then-settle); the seven-day cooldown and the
- * reminder toggle are not modelled; the tear streams do not drift, a wall click
- * always yields a blue tear and green only drains through the bowl on a green
- * tears object; Temple of Ikov does not track the Lucien choice, so both Lucien
- * story conditions answer false; Juna's post-quest minigame words are not on the
- * transcript page, so the default "starting-off" variant plays.
+ * the chasm; Temple of Ikov does not track the Lucien choice, so both Lucien
+ * story conditions answer false.
  */
 module.exports = function registerTearsOfGuthixQuest(api) {
   const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, getRegisteredQuests, loadTranscripts } = require("../QuestRuntime");
   const mining = require("../../skills/Mining.plugin.js");
 
   const JUNA_NPC_ID = NpcIdentifiers.JUNA;
@@ -56,63 +52,28 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     ObjectIdentifiers.MAGICAL_ROCKS_2,
     ObjectIdentifiers.MAGICAL_ROCKS_3,
   ]);
-  const BLUE_TEAR_IDS = new Set([
-    ObjectIdentifiers.BLUE_TEARS,
-    ObjectIdentifiers.BLUE_TEARS_2,
-  ]);
-  const GREEN_TEAR_IDS = new Set([
-    ObjectIdentifiers.GREEN_TEARS,
-    ObjectIdentifiers.GREEN_TEARS_2,
-  ]);
-  const CHASM_EXIT_IDS = new Set([
-    ObjectIdentifiers.TUNNEL_12,
-    ObjectIdentifiers.TUNNEL_13,
-    ObjectIdentifiers.ROCKS_27,
-    ObjectIdentifiers.ROCKS_28,
-  ]);
+  /** Juna is a loc; her name carries the cache's colour tags. */
+  const JUNA_LOC_NAME = "<col=ffff00>Juna</col>";
+  /** tog_juna_bowl: the quest stage as Juna's multiloc reads it (bits 0-1 of varp 449). */
+  const JUNA_BOWL_VARBIT = 451;
 
   const START_HOOK = "quest:tears-of-guthix:start";
   const COMPLETE_ACTION_ID = "BitWHU";
-  const TEARS_ATTRIBUTE = "quest.tears_of_guthix.tears";
+  /** "(A random story is selected from below.)" in the quest, and Juna's own "List of stories". */
+  const RANDOM_STORY_STEP_IDS = new Set(["s6cYli", "nBzoOC"]);
+  /** Juna's "You tell Juna some stories of your adventures." box, which the export lost. */
+  const TELL_STORIES_STEP_ID = "0upJBS";
+  const TELL_STORIES_MESSAGE = "You tell Juna some stories of your adventures.";
+  const RANDOM_STORIES_VARIANT = "starting-off-random-stories";
 
   const HAZEEL_SIDE_ATTRIBUTE = "quest.hazeel_cult.side";
   const SIDE_CARNILLEAN = 0;
   const SIDE_HAZEEL = 1;
   const HAZEEL_CULT_COMPLETE = 9;
-  const DRUIDIC_RITUAL_COMPLETE = 4;
-  const RUNE_MYSTERIES_COMPLETE = 6;
-
-  /** The reference's per-skill "lowest skill" lines (tears_of_guthix_messages table). */
-  const TEAR_MESSAGES = new Map([
-    [Skill.ATTACK.getIndex(), "You feel a brief surge of aggression!"],
-    [Skill.DEFENCE.getIndex(), "You feel very defensive!"],
-    [Skill.STRENGTH.getIndex(), "Your muscles bulge!"],
-    [Skill.HITPOINTS.getIndex(), "You feel more healthy."],
-    [Skill.RANGED.getIndex(), "Your aim improves."],
-    [Skill.PRAYER.getIndex(), "You suddenly feel very close to the gods."],
-    [Skill.MAGIC.getIndex(), "You feel magical power coursing through your body."],
-    [Skill.COOKING.getIndex(), "You have a brief urge to cook some food."],
-    [Skill.WOODCUTTING.getIndex(), "You gain a deep understanding of the trees in the forest."],
-    [Skill.FLETCHING.getIndex(), "You gain a deep understanding of wooden sticks."],
-    [Skill.FISHING.getIndex(), "You gain a deep understanding of the creatures of the sea."],
-    [Skill.FIREMAKING.getIndex(), "You have a brief urge to set light to something!"],
-    [Skill.CRAFTING.getIndex(), "Your fingers feel nimble and suited to delicate work."],
-    [Skill.SMITHING.getIndex(), "You gain a deep understanding of metal."],
-    [Skill.MINING.getIndex(), "You gain a deep understanding of the stones of the earth."],
-    [Skill.HERBLORE.getIndex(), "You gain a deep understanding of all kinds of strange plants."],
-    [Skill.AGILITY.getIndex(), "You feel very nimble."],
-    [Skill.THIEVING.getIndex(), "You feel your respect for others' property slipping away."],
-    [Skill.SLAYER.getIndex(), "You gain a deep understanding of many strange creatures."],
-    [Skill.FARMING.getIndex(), "You gain a deep understanding of the cycles of nature."],
-    [Skill.RUNECRAFTING.getIndex(), "You gain a deep understanding of runes."],
-    [Skill.CONSTRUCTION.getIndex(), "You feel homesick."],
-    [Skill.HUNTER.getIndex(), "You briefly experience the joy of the hunt."],
-  ]);
 
   let quest;
 
   const attr = (player, key) => Number(player.getAttribute(key)) || 0;
-  const setAttr = (player, key, value) => player.setAttribute(key, value | 0);
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
   function questPoints(player) {
@@ -188,6 +149,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   /** Answer Juna's story-picker prose conditions. */
   function answerCondition({ npcId, player, text }) {
     if (npcId !== JUNA_NPC_ID) return null;
+    const story = storyCondition(player, text);
+    if (story !== null) return story;
     const value = String(text).toLowerCase();
     if (value.includes("stopped the cultists")) {
       return (
@@ -300,98 +263,42 @@ module.exports = function registerTearsOfGuthixQuest(api) {
     startTranscript(api, event.player, JUNA_NPC_ID, PAGE, "starting-off-using-the-magic-stone-on-juna");
   }
 
-  function addTears(player, amount) {
-    setAttr(player, TEARS_ATTRIBUTE, Math.max(0, attr(player, TEARS_ATTRIBUTE) + amount));
+  /** Talk-to on Juna's loc plays her transcript; the variant selectors pick the page. */
+  function talkToJuna({ player }) {
+    api.emitCustomEvent("npc-dialogue:start", { player, npcId: JUNA_NPC_ID });
   }
 
-  /** "Collect-from" on the weeping wall: a blue stream banks a tear. */
-  function collectTearFromWall(event) {
-    const { player } = event;
+  /** "If Animal Magnetism is completed:" guards each of the stories Juna can be told. */
+  function storyCondition(player, text) {
+    const match = /^If (.+?) is complete(?:d:| \()/.exec(String(text));
+    if (!match) return null;
+    const told = getRegisteredQuests().find((registered) => registered.name === match[1]);
+    return told ? told.isComplete(player) : false;
+  }
+
+  /** The random story the player tells, and the box the export lost before it. */
+  function handleStoryActions(event) {
+    if (event.npcId !== JUNA_NPC_ID) return;
+    if (event.stepId === TELL_STORIES_STEP_ID) {
+      event.player.sendMessage(TELL_STORIES_MESSAGE);
+      event.handled = true;
+      return;
+    }
+    if (!RANDOM_STORY_STEP_IDS.has(event.stepId)) return;
+    const stories = loadTranscripts(api)?.[PAGE]?.variants?.[RANDOM_STORIES_VARIANT];
+    event.steps = Array.isArray(stories) ? stories : [];
     event.handled = true;
-    if (!quest.isComplete(player)) {
-      player.sendMessage("You need Juna's blessing before you can collect the tears.");
-      return;
-    }
-    addTears(player, 1);
-    player.sendMessage("You catch a blue tear.");
-  }
-
-  /** The bowl on a tear object: blue banks a tear, green dilutes the bowl. */
-  function handleBowlOnTears(event) {
-    if (event.itemId !== STONE_BOWL_ITEM_ID) return;
-    const blue = BLUE_TEAR_IDS.has(event.objectId);
-    const green = GREEN_TEAR_IDS.has(event.objectId);
-    if (!blue && !green) return;
-    event.handled = true;
-    const { player } = event;
-    if (!quest.isComplete(player)) {
-      player.sendMessage("You need Juna's blessing before you can collect the tears.");
-      return;
-    }
-    if (green) {
-      const drained = attr(player, TEARS_ATTRIBUTE) > 0;
-      addTears(player, -1);
-      player.sendMessage(drained ? "The green tears dilute your bowl." : "The green tears fill your bowl with nothing.");
-      return;
-    }
-    addTears(player, 1);
-    player.sendMessage("You catch a blue tear.");
-  }
-
-  /** The lowest skill the tears empower (Herblore/Runecrafting need their quests). */
-  function lowestSkill(player) {
-    const manager = player.getSkillManager();
-    let skill;
-    let xp = Infinity;
-    for (const candidate of Skill.values()) {
-      if (candidate === Skill.SAILING) continue;
-      if (candidate === Skill.HERBLORE && otherQuestStage(player, "druidic_ritual") < DRUIDIC_RITUAL_COMPLETE) {
-        continue;
-      }
-      if (candidate === Skill.RUNECRAFTING && otherQuestStage(player, "rune_mysteries") < RUNE_MYSTERIES_COMPLETE) {
-        continue;
-      }
-      const value = manager.getExperience(candidate);
-      if (value < xp) {
-        xp = value;
-        skill = candidate;
-      }
-    }
-    return { skill, xp };
-  }
-
-  /** Convert banked tears into XP in the player's weakest skill. */
-  function settleTears(player) {
-    const points = attr(player, TEARS_ATTRIBUTE);
-    if (points <= 0) {
-      setAttr(player, TEARS_ATTRIBUTE, 0);
-      return;
-    }
-    setAttr(player, TEARS_ATTRIBUTE, 0);
-    if (!quest.isComplete(player)) return;
-    const { skill, xp } = lowestSkill(player);
-    if (!skill) return;
-    const rate = Math.min(60, 10 + Math.floor(Math.floor(xp / 10) / 27) / 10);
-    player.getSkillManager().addExperiences(skill, Math.floor(rate * points));
-    const message = TEAR_MESSAGES.get(skill.getIndex());
-    if (message) player.sendMessage(message);
-  }
-
-  /** Tunnels and climb rocks are the way out of the chasm; settle on the way. */
-  function handleChasmExit(event) {
-    if (!CHASM_EXIT_IDS.has(event.objectId)) return;
-    settleTears(event.player);
-  }
-
-  function handleLogout({ player }) {
-    if (player) settleTears(player);
   }
 
   function handleLogin({ player }) {
+    syncJuna(player);
     refreshQuestList(player);
   }
 
-  api.persistAttribute(TEARS_ATTRIBUTE);
+  /** setStage writes the whole of varp 449; Juna's multiloc only needs its low bits. */
+  function syncJuna(player) {
+    player.getPacketSender().sendVarbit(JUNA_BOWL_VARBIT, quest.getStage(player));
+  }
 
   quest = registerQuest(api, {
     key: "tears_of_guthix",
@@ -413,10 +320,8 @@ module.exports = function registerTearsOfGuthixQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onItemOnItem(handleChiselOnStone);
   api.onItemOnNpc(handleStoneOnJuna);
-  api.onItemOnObject(handleBowlOnTears, { noted: false });
-  api.onObjectInteraction("Weeping wall", { "Collect-from": collectTearFromWall });
+  api.onCustomEvent("npc-dialogue:action", handleStoryActions);
+  api.onObjectInteraction(JUNA_LOC_NAME, { "Talk-to": talkToJuna });
   api.onObjectInteraction("Magical rocks", { Mine: mineMagicStone });
-  api.onObjectInteraction(handleChasmExit);
-  api.onPlayerLogout(handleLogout);
   api.onPlayerLogin(handleLogin);
 };

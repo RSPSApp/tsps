@@ -72,6 +72,17 @@ export class NpcEcs {
     private targetX: Int16Array;
     private targetY: Int16Array;
     private targetRot: Uint16Array; // desired orientation (0..2047)
+    // Exact moves (OSRS npc exact_move): a glide between two tiles in world sub-tile units,
+    // timed against `cycle`, which counts this ECS's client cycles.
+    private exactActive: Uint8Array;
+    private exactStart: Int32Array;
+    private exactEnd: Int32Array;
+    private exactFromX: Int32Array;
+    private exactFromY: Int32Array;
+    private exactToX: Int32Array;
+    private exactToY: Int32Array;
+    private exactRot: Uint16Array;
+    private cycle = 0;
     private baseSpeed: Uint8Array; // sub-tile units per client tick
     private animTick: Uint16Array; // accumulator for frame stepping
     private loopCount: Uint16Array; // loop counter for current animation
@@ -165,6 +176,14 @@ export class NpcEcs {
         this.targetX = new Int16Array(this.capacity);
         this.targetY = new Int16Array(this.capacity);
         this.targetRot = new Uint16Array(this.capacity);
+        this.exactActive = new Uint8Array(this.capacity);
+        this.exactStart = new Int32Array(this.capacity);
+        this.exactEnd = new Int32Array(this.capacity);
+        this.exactFromX = new Int32Array(this.capacity);
+        this.exactFromY = new Int32Array(this.capacity);
+        this.exactToX = new Int32Array(this.capacity);
+        this.exactToY = new Int32Array(this.capacity);
+        this.exactRot = new Uint16Array(this.capacity);
         this.baseSpeed = new Uint8Array(this.capacity);
         this.animTick = new Uint16Array(this.capacity);
         this.loopCount = new Uint16Array(this.capacity);
@@ -247,6 +266,14 @@ export class NpcEcs {
         this.targetX = grow(this.targetX, newCap);
         this.targetY = grow(this.targetY, newCap);
         this.targetRot = grow(this.targetRot, newCap);
+        this.exactActive = grow(this.exactActive, newCap);
+        this.exactStart = grow(this.exactStart, newCap);
+        this.exactEnd = grow(this.exactEnd, newCap);
+        this.exactFromX = grow(this.exactFromX, newCap);
+        this.exactFromY = grow(this.exactFromY, newCap);
+        this.exactToX = grow(this.exactToX, newCap);
+        this.exactToY = grow(this.exactToY, newCap);
+        this.exactRot = grow(this.exactRot, newCap);
         this.baseSpeed = grow(this.baseSpeed, newCap);
         this.animTick = grow(this.animTick, newCap);
         this.loopCount = grow(this.loopCount, newCap);
@@ -359,6 +386,7 @@ export class NpcEcs {
         this.currentStepSpeed[id] = 0;
         this.currentStepRot[id] = 0xffff;
         this.movementDelayCounter[id] = 0;
+        this.exactActive[id] = 0;
 
         let list = this.perMap.get(mid);
         if (!list) {
@@ -390,13 +418,99 @@ export class NpcEcs {
         this.interactionIndex[id] = NO_INTERACTION;
         this.clipped[id] = 0;
         this.worldViewId[id] = -1;
+        this.exactActive[id] = 0;
     }
 
-    destroyNpcsForMap(mapX: number, mapY: number): void {
+    /**
+     * Starts a glide from one world sub-tile position to another: it leaves the start
+     * `startDelay` client cycles from now and reaches the end at `endDelay`, facing `rotation`
+     * (OSRS npc exact_move). Path steps already queued are dropped.
+     */
+    startExactMove(
+        id: number,
+        startDelay: number,
+        endDelay: number,
+        fromX: number,
+        fromY: number,
+        toX: number,
+        toY: number,
+        rotation: number,
+    ): void {
+        this.clearStepQueue(id);
+        this.clearServerPath(id);
+        const start = this.cycle + Math.max(0, startDelay | 0);
+        this.exactActive[id] = 1;
+        this.exactStart[id] = start | 0;
+        this.exactEnd[id] = Math.max(start, this.cycle + (endDelay | 0)) | 0;
+        this.exactFromX[id] = fromX | 0;
+        this.exactFromY[id] = fromY | 0;
+        this.exactToX[id] = toX | 0;
+        this.exactToY[id] = toY | 0;
+        this.exactRot[id] = (rotation | 0) & 2047;
+        const base = this.mapBase(id);
+        this.targetX[id] = (toX - base.x) | 0;
+        this.targetY[id] = (toY - base.y) | 0;
+        this.targetRot[id] = (rotation | 0) & 2047;
+        // The teleport that comes with it has already put the NPC at the end; it is shown at the
+        // start until the glide begins, so no frame draws it at its destination first.
+        this.setXY(id, (fromX - base.x) | 0, (fromY - base.y) | 0);
+    }
+
+    isExactMoveActive(id: number): boolean {
+        return this.exactActive[id] === 1;
+    }
+
+    private mapBase(id: number): { x: number; y: number } {
+        return { x: this.getMapX(id) << 13, y: this.getMapY(id) << 13 };
+    }
+
+    /**
+     * One client cycle of a glide, as OSRS plays exact moves: ease to the start position until
+     * the start cycle, then interpolate to the end, facing the move's rotation.
+     */
+    private stepExactMove(id: number): void {
+        const base = this.mapBase(id);
+        const now = this.cycle;
+        const start = this.exactStart[id] | 0;
+        const end = this.exactEnd[id] | 0;
+        const fromX = (this.exactFromX[id] - base.x) | 0;
+        const fromY = (this.exactFromY[id] - base.y) | 0;
+        const toX = (this.exactToX[id] - base.x) | 0;
+        const toY = (this.exactToY[id] - base.y) | 0;
+        this.targetRot[id] = this.exactRot[id];
+        if (now >= end) {
+            this.setXY(id, toX, toY);
+            this.rotation[id] = this.exactRot[id];
+            this.exactActive[id] = 0;
+            return;
+        }
+        if (now <= start) {
+            const remaining = Math.max(1, start - now);
+            const cx = this.x[id] | 0;
+            const cy = this.y[id] | 0;
+            this.setXY(id, cx + Math.trunc((fromX - cx) / remaining), cy + Math.trunc((fromY - cy) / remaining));
+            return;
+        }
+        const total = end - start;
+        const elapsed = now - start;
+        this.setXY(
+            id,
+            Math.trunc((elapsed * toX + fromX * (total - elapsed)) / total),
+            Math.trunc((elapsed * toY + fromY * (total - elapsed)) / total),
+        );
+        this.rotation[id] = this.exactRot[id];
+    }
+
+    destroyNpcsForMap(mapX: number, mapY: number, keepServerNpcs = false): void {
         const mid = getMapSquareId(mapX, mapY);
         const list = this.perMap.get(mid);
         if (!list) return;
+        const kept: number[] = [];
         for (const id of list) {
+            if (keepServerNpcs && (this.serverId[id] | 0) > 0) {
+                kept.push(id);
+                continue;
+            }
             this.active[id] = 0;
             this.freeList.push(id);
             this.interactionIndex[id] = NO_INTERACTION;
@@ -408,7 +522,11 @@ export class NpcEcs {
             this.serverId[id] = 0;
             this.hasServerState[id] = 0;
         }
-        this.perMap.delete(mid);
+        if (kept.length > 0) {
+            this.perMap.set(mid, kept);
+        } else {
+            this.perMap.delete(mid);
+        }
     }
 
     /**
@@ -768,10 +886,18 @@ export class NpcEcs {
         const total = Math.max(0, ticks | 0);
         if (total === 0) return;
         for (let t = 0; t < total; t++) {
+            this.cycle = (this.cycle + 1) | 0;
             for (const idRaw of this.serverIdLookup.values()) {
                 const id = idRaw | 0;
                 if (!this.isActive(id)) continue;
                 this.tickOverheadText(id);
+                // A glide replaces path stepping until it ends.
+                if (this.exactActive[id] === 1) {
+                    this.stepExactMove(id);
+                    this.useWalkAnim[id] = 0;
+                    this.advanceSequence(id);
+                    continue;
+                }
                 if (!this.isStepActive(id) && !this.ensureActiveStep(id)) {
                     this.useWalkAnim[id] = 0;
                     this.movementDelayCounter[id] = 0;

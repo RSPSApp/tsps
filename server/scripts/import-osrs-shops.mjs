@@ -141,7 +141,10 @@ function main() {
   }
   rebuilt.sort((a, b) => a.id - b.id);
 
-  const output = `${JSON.stringify(rebuilt, null, 2)}\n`;
+  // Bulk data files keep one record per line so diffs stay readable.
+  const output = `[\n${rebuilt
+    .map((shop) => `  ${JSON.stringify(shop)}`)
+    .join(",\n")}\n]\n`;
   const current = fs.readFileSync(shopsFile, "utf8");
 
   if (check) {

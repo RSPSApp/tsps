@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Client-to-Server Packet IDs - Binary protocol for JSON message replacement
  *
  * These opcodes are separate from OSRS-style packets (in client/common/network/ClientPacketId.ts).

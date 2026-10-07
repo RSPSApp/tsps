@@ -1,0 +1,267 @@
+// Ported to TypeScript from ScreteMonge/3D-Weather (BSD-2-Clause).
+import { ConfigGroup, ConfigItem } from "@runelite/client/config/ConfigItem";
+
+export enum WeatherType {
+    DYNAMIC = "DYNAMIC",
+    ASHFALL = "ASHFALL",
+    CLEAR = "CLEAR",
+    CLOUDY = "CLOUDY",
+    FOGGY = "FOGGY",
+    PARTLY_CLOUDY = "PARTLY_CLOUDY",
+    RAINY = "RAINY",
+    SNOWY = "SNOWY",
+    STARRY = "STARRY",
+    STORMY = "STORMY",
+}
+
+export enum SeasonType {
+    DYNAMIC = "DYNAMIC",
+    HD_117 = "HD_117",
+    SPRING = "SPRING",
+    SUMMER = "SUMMER",
+    AUTUMN = "AUTUMN",
+    WINTER = "WINTER",
+}
+
+/** RuneLite's `@ConfigGroup("3Dweather")`; storage keys stay compatible. */
+export const WeatherConfig = ConfigGroup(
+    "3Dweather",
+    {
+        weatherType: ConfigItem({
+            name: "Weather Type",
+            description:
+                "Determines the current Weather (Dynamic automatically cycles based on Season and Biome)",
+            section: "generalSettings",
+            position: 1,
+            enum: {
+                Dynamic: WeatherType.DYNAMIC,
+                Ashfall: WeatherType.ASHFALL,
+                Clear: WeatherType.CLEAR,
+                Cloudy: WeatherType.CLOUDY,
+                Foggy: WeatherType.FOGGY,
+                "Partly Cloudy": WeatherType.PARTLY_CLOUDY,
+                Raining: WeatherType.RAINY,
+                Snowing: WeatherType.SNOWY,
+                Otherworldly: WeatherType.STARRY,
+                Stormy: WeatherType.STORMY,
+            },
+            default: WeatherType.DYNAMIC,
+        }),
+        seasonType: ConfigItem({
+            name: "Season Type",
+            description:
+                "Determines the current Season and its Weather cycle (only relevant if Weather Type is Dynamic)",
+            section: "generalSettings",
+            position: 2,
+            enum: {
+                Dynamic: SeasonType.DYNAMIC,
+                "117 HD": SeasonType.HD_117,
+                Spring: SeasonType.SPRING,
+                Summer: SeasonType.SUMMER,
+                Autumn: SeasonType.AUTUMN,
+                Winter: SeasonType.WINTER,
+            },
+            default: SeasonType.DYNAMIC,
+        }),
+        toggleOverlay: ConfigItem({
+            name: "Enable Overlay",
+            description: "Displays an overlay indicating Weather, Biome, and Season",
+            section: "generalSettings",
+            position: 3,
+            default: true,
+        }),
+        miniOverlay: ConfigItem({
+            name: "Enable Mini Overlay",
+            description: "Displays a mini overlay indicating Weather, Biome, and Season",
+            section: "generalSettings",
+            position: 4,
+            default: false,
+        }),
+        disableWeatherUnderground: ConfigItem({
+            name: "Disable Weather Underground",
+            description:
+                "Prevents Weather from occurring while in Cave or Lava Cave Biomes, regardless of the set Weather Type",
+            section: "generalSettings",
+            position: 5,
+            default: true,
+        }),
+        toggleAmbience: ConfigItem({
+            name: "Enable Ambience",
+            description: "Toggles ambient Weather sounds on/off",
+            section: "audioSettings",
+            position: 7,
+            default: true,
+        }),
+        ambientVolume: ConfigItem({
+            name: "Ambient Volume",
+            description: "Sets the volume of ambient Weather sounds",
+            section: "audioSettings",
+            position: 8,
+            units: "%",
+            range: { min: 0, max: 100 },
+            default: 50,
+        }),
+        useAreaSoundsVolume: ConfigItem({
+            name: "Use Area Sounds Volume",
+            description:
+                'Use the in-game "Area Sounds" audio setting, overriding the "Ambient Volume" setting',
+            section: "audioSettings",
+            position: 9,
+            default: false,
+        }),
+        muffledVolume: ConfigItem({
+            name: "Muffled Volume",
+            description: "Sets the volume of muffled Weather sounds while indoors",
+            section: "audioSettings",
+            position: 10,
+            units: "%",
+            range: { min: 0, max: 100 },
+            default: 50,
+        }),
+        disableIndoorMuffling: ConfigItem({
+            name: "Disable Indoor Muffling",
+            description: "Prevents ambience sound from being muffled while standing indoors.",
+            section: "audioSettings",
+            position: 11,
+            default: false,
+        }),
+        enableRain: ConfigItem({
+            name: "Rain Enabled",
+            description: "Allows Rain objects to appear while Rainy or Stormy",
+            section: "weatherToggles",
+            position: 13,
+            default: true,
+        }),
+        rainDensity: ConfigItem({
+            name: "Rain Density",
+            description: "Sets the number of Rain objects that spawn while Rainy. Max = 2000",
+            section: "weatherToggles",
+            position: 14,
+            range: { min: 0, max: 2000 },
+            default: 400,
+        }),
+        stormDensity: ConfigItem({
+            name: "Storm Density",
+            description: "Sets the number of Rain objects that spawn while Stormy. Max = 3000",
+            section: "weatherToggles",
+            position: 15,
+            range: { min: 0, max: 3000 },
+            default: 600,
+        }),
+        enableSnow: ConfigItem({
+            name: "Snow Enabled",
+            description: "Allows Snow objects to appear while Snowy",
+            section: "weatherToggles",
+            position: 16,
+            default: true,
+        }),
+        snowDensity: ConfigItem({
+            name: "Snow Density",
+            description: "Sets the number of Snow objects that spawn while Snowy. Max = 2000",
+            section: "weatherToggles",
+            position: 17,
+            range: { min: 0, max: 2000 },
+            default: 400,
+        }),
+        enableClouds: ConfigItem({
+            name: "Clouds Enabled",
+            description: "Allows Cloud objects to appear while Cloudy or Partly Cloudy",
+            section: "weatherToggles",
+            position: 18,
+            default: true,
+        }),
+        cloudyDensity: ConfigItem({
+            name: "Cloud Density",
+            description: "Sets the number of Cloud objects that spawn while Cloudy. Max = 1000",
+            section: "weatherToggles",
+            position: 19,
+            range: { min: 0, max: 1000 },
+            default: 200,
+        }),
+        partlyCloudyDensity: ConfigItem({
+            name: "Partly Cloudy Density",
+            description: "Sets the number of Cloud objects that spawn while Partly Cloudy. Max = 300",
+            section: "weatherToggles",
+            position: 20,
+            range: { min: 0, max: 300 },
+            default: 50,
+        }),
+        enableAsh: ConfigItem({
+            name: "Ash Enabled",
+            description: "Allows Ash objects to appear while in Ashfall",
+            section: "weatherToggles",
+            position: 21,
+            default: false,
+        }),
+        ashfallDensity: ConfigItem({
+            name: "Ashfall Density",
+            description: "Sets the number of Ash objects that spawn while in Ashfall. Max = 1200",
+            section: "weatherToggles",
+            position: 22,
+            range: { min: 0, max: 1200 },
+            default: 200,
+        }),
+        enableFog: ConfigItem({
+            name: "Fog Enabled",
+            description: "Allows Fog objects to appear while Foggy",
+            section: "weatherToggles",
+            position: 23,
+            default: false,
+        }),
+        foggyDensity: ConfigItem({
+            name: "Fog Density",
+            description: "Sets the number of Fog objects that spawn while Foggy. Max = 1800",
+            section: "weatherToggles",
+            position: 24,
+            range: { min: 0, max: 1800 },
+            default: 500,
+        }),
+        enableStars: ConfigItem({
+            name: "Stars Enabled",
+            description: "Allows Star objects to appear while in other Realms",
+            section: "weatherToggles",
+            position: 25,
+            default: true,
+        }),
+        starryDensity: ConfigItem({
+            name: "Stars Density",
+            description: "Sets the number of Star objects that spawn while Starry. Max = 2000",
+            section: "weatherToggles",
+            position: 26,
+            range: { min: 0, max: 2000 },
+            default: 400,
+        }),
+        enableWintertodtSnow: ConfigItem({
+            name: "Enable Wintertodt Snow",
+            description:
+                "Allows Snow objects to appear at Wintertodt while Snowing (may make it difficult to see incoming attacks)",
+            section: "weatherToggles",
+            position: 27,
+            default: true,
+        }),
+        enableLightning: ConfigItem({
+            name: "Enable Lightning",
+            description:
+                "PHOTOSENSITIVITY WARNING - Allows Lightning flashes to occur during Stormy weather",
+            section: "weatherToggles",
+            position: 28,
+            default: false,
+        }),
+    },
+    {
+        sections: {
+            generalSettings: {
+                name: "General",
+                position: 0,
+            },
+            audioSettings: {
+                name: "Audio",
+                position: 6,
+            },
+            weatherToggles: {
+                name: "Weathers",
+                position: 12,
+            },
+        },
+    },
+);

@@ -10,8 +10,8 @@ export class VertexBuffer extends DataBuffer {
     // unrelated vertices, creating stray stretched triangles in the scene.
     vertexIndices: Map<string, number>;
 
-    constructor(count: number) {
-        super(VertexBuffer.STRIDE, count);
+    constructor(count: number, stride: number = VertexBuffer.STRIDE) {
+        super(stride, count);
         this.vertexIndices = new Map();
     }
 
@@ -37,6 +37,7 @@ export class VertexBuffer extends DataBuffer {
         reuseVertex: boolean = true,
         priority: number = 0,
         priorityIsPacked: boolean = false,
+        actorData: number = 0,
     ) {
         if (textureId >= 1024) {
             textureId = -1;
@@ -73,7 +74,7 @@ export class VertexBuffer extends DataBuffer {
             (uPacked >> 6);
 
         if (reuseVertex) {
-            const key = `${v0 >>> 0}:${v1 >>> 0}:${v2 >>> 0}`;
+            const key = `${v0 >>> 0}:${v1 >>> 0}:${v2 >>> 0}` + (this.stride > VertexBuffer.STRIDE ? `:${actorData >>> 0}` : "");
             const cachedIndex = this.vertexIndices.get(key);
             if (cachedIndex !== undefined) {
                 return cachedIndex;
@@ -87,6 +88,7 @@ export class VertexBuffer extends DataBuffer {
         this.view.setUint32(byteOffset, v0, true);
         this.view.setUint32(byteOffset + 4, v1, true);
         this.view.setUint32(byteOffset + 8, v2, true);
+        if (this.stride > VertexBuffer.STRIDE) this.view.setUint32(byteOffset + 12, actorData, true);
 
         return this.offset++;
     }

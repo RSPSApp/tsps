@@ -348,7 +348,6 @@ export class HealthBarOverlay implements Overlay {
 
                 const backW = back.w * visualScale;
                 const backH = back.h * visualScale;
-                const frontW = front.w * visualScale;
                 const padS = pad * visualScale;
                 const usableS = usable * visualScale;
                 const fillS = fill * visualScale;

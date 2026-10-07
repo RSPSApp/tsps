@@ -51,6 +51,7 @@ module.exports = {
   key: "falador",
   name: "Falador Rooftop",
   lapXp: 586,
+  petBase: 26806, // Giant squirrel base chance (Wiki)
   marks: {
     level: 50,
     tiles: [[3046, 3345, 3], [3046, 3365, 3], [3036, 3363, 3], [3015, 3355, 3], [3011, 3339, 3], [3023, 3334, 3]],

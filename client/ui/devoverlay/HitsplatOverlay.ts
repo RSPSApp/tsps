@@ -67,10 +67,9 @@ export class HitsplatOverlay implements Overlay {
         }>;
     };
     private fontBmp?: BitmapFont;
-    private textTex?: Texture;
-    private textTexW: number = 0;
-    private textTexH: number = 0;
-    private lastTextKey?: string;
+    // Hitsplat numbers, by font/colour/text. A crowd shows many different numbers each
+    // frame; a single slot rebuilt a canvas texture for nearly every splat drawn.
+    private textTextures = new Map<string, { tex: Texture; w: number; h: number }>();
     // Runtime uniforms
     private tint: Float32Array = new Float32Array([1, 1, 1, 1]);
     private screenSize: Float32Array = new Float32Array(2);
@@ -942,12 +941,12 @@ export class HitsplatOverlay implements Overlay {
         this.spriteTextures.clear();
         this.bgParts = undefined;
         this.digits = undefined;
-        try {
-            this.textTex?.delete?.();
-        } catch {}
-        this.textTex = undefined;
-        this.textTexW = this.textTexH = 0;
-        this.lastTextKey = undefined;
+        for (const entry of this.textTextures.values()) {
+            try {
+                entry.tex.delete?.();
+            } catch {}
+        }
+        this.textTextures.clear();
         this.spriteIndex = undefined;
         // Clear cached state so initAssetsFromCache reloads everything
         this.defs = undefined;
@@ -964,14 +963,8 @@ export class HitsplatOverlay implements Overlay {
         const activeFontId =
             (this.type?.fontId ?? -1) >= 0 ? this.type!.fontId | 0 : this.fontId | 0;
         const key = `${activeFontId}|${bmp.ascent}|${color >>> 0}|${text}`;
-        if (this.lastTextKey === key && this.textTex) {
-            return {
-                tex: this.textTex,
-                w: this.textTexW,
-                h: this.textTexH,
-                ascent: bmp.maxAscent | 0,
-            };
-        }
+        const cached = this.textTextures.get(key);
+        if (cached) return { ...cached, ascent: bmp.maxAscent | 0 };
         try {
             const w = Math.max(1, bmp.measure(text) | 0);
             const h = Math.max(1, (bmp.maxAscent + bmp.maxDescent) | 0 || bmp.ascent | 0 || 12);
@@ -986,21 +979,23 @@ export class HitsplatOverlay implements Overlay {
             const baseline = bmp.maxAscent | 0;
             const cssColor = `#${(color >>> 0).toString(16).padStart(6, "0")}`;
             bmp.draw(ctx2, text, 0, baseline, cssColor);
-            // upload
-            try {
-                this.textTex?.delete?.();
-            } catch {}
-            this.textTex = this.app.createTexture2D(can as any, {
+            const tex = this.app.createTexture2D(can as any, {
                 flipY: false,
                 minFilter: PicoGL.NEAREST,
                 magFilter: PicoGL.NEAREST,
                 wrapS: PicoGL.CLAMP_TO_EDGE,
                 wrapT: PicoGL.CLAMP_TO_EDGE,
             });
-            this.textTexW = w;
-            this.textTexH = h;
-            this.lastTextKey = key;
-            return { tex: this.textTex, w, h, ascent: bmp.maxAscent | 0 };
+            // ponytail: oldest-first eviction at 256 entries; LRU if big hits thrash it.
+            if (this.textTextures.size >= 256) {
+                const [oldestKey, oldest] = this.textTextures.entries().next().value!;
+                this.textTextures.delete(oldestKey);
+                try {
+                    oldest.tex.delete?.();
+                } catch {}
+            }
+            this.textTextures.set(key, { tex, w, h });
+            return { tex, w, h, ascent: bmp.maxAscent | 0 };
         } catch {
             return undefined;
         }

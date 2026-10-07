@@ -13,6 +13,8 @@ import { LocAnimatedData } from "../loc/LocAnimatedData";
 import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
 import { VertexBuffer } from "./VertexBuffer";
+import { hdGroundMaterial } from "../../game/plugins/hd/HdGroundMaterials";
+import { ACTOR_VERTEX_STRIDE, buildActorNormals } from "./ActorNormals";
 
 export enum ContourGroundType {
     CENTER_TILE = 0,
@@ -22,6 +24,8 @@ export enum ContourGroundType {
 }
 
 export type ModelInfo = {
+    // Roof undersides must occlude the sky when viewed below the eaves.
+    doubleSided?: boolean;
     sceneX: number;
     sceneZ: number;
     heightOffset: number;
@@ -77,8 +81,9 @@ export class SceneBuffer {
         readonly textureLoader: TextureLoader,
         readonly textureIdIndexMap: Map<number, number>,
         initVertexCount: number,
+        readonly smoothActor: boolean = false,
     ) {
-        this.vertexBuf = new VertexBuffer(initVertexCount);
+        this.vertexBuf = new VertexBuffer(initVertexCount, smoothActor ? ACTOR_VERTEX_STRIDE : VertexBuffer.STRIDE);
     }
 
     vertexCount(): number {
@@ -144,6 +149,11 @@ export class SceneBuffer {
             return;
         }
         for (const face of tileModel.faces) {
+            const groundMaterial = hdGroundMaterial(
+                face.isOverlay ? tileModel.overlayId : tileModel.underlayId,
+                face.isOverlay,
+                face.isOverlay ? tileModel.overlayHsl : tileModel.blendUnderlayHslSw,
+            );
             for (const vertex of face.vertices) {
                 const textureIndex = this.textureIdIndexMap.get(vertex.textureId) ?? -1;
 
@@ -157,7 +167,9 @@ export class SceneBuffer {
                     vertex.z + offsetY,
                     vertex.hsl,
                     0xff,
-                    vertex.u,
+                    // Untextured terrain never samples its cache UVs. Negative
+                    // U encodes the HD recipe without changing HSL or priorities.
+                    vertex.textureId === -1 ? -groundMaterial / 64 : vertex.u,
                     vertex.v,
                     textureIndex,
                 );
@@ -253,12 +265,17 @@ export class SceneBuffer {
         return this.vertexCount() - terrainStartVertexCount;
     }
 
-    addModelAnimFrame(model: Model, transparent: boolean): DrawRange {
+    addModelAnimFrame(
+        model: Model,
+        transparent: boolean,
+        actorNormals?: Uint16Array,
+        doubleSided: boolean = false,
+    ): DrawRange {
         // Optimized: filter transparency in single pass instead of getModelFaces() + filter()
         const faces = getModelFacesFiltered(model, this.textureLoader, transparent);
 
         const offset = this.indexByteOffset();
-        this.addModel(model, faces);
+        this.addModel(model, faces, undefined, true, actorNormals, doubleSided);
         const elements = (this.indexByteOffset() - offset) / 4;
 
         return newDrawRange(offset, elements, 1);
@@ -393,7 +410,7 @@ export class SceneBuffer {
                 vertexOffset[1] = -sceneModel.heightOffset;
             }
             const offset = this.indexByteOffset();
-            this.addModel(model, faces, vertexOffset);
+            this.addModel(model, faces, vertexOffset, true, undefined, sceneModel.doubleSided);
             const elements = (this.indexByteOffset() - offset) / 4;
 
             const drawCommand: DrawCommand = {
@@ -461,7 +478,14 @@ export class SceneBuffer {
         }
     }
 
-    addModel(model: Model, faces: ModelFace[], offset?: vec3, reuseVertices: boolean = true): void {
+    addModel(
+        model: Model,
+        faces: ModelFace[],
+        offset?: vec3,
+        reuseVertices: boolean = true,
+        actorNormals?: Uint16Array,
+        doubleSided: boolean = false,
+    ): void {
         if (faces.length === 0) {
             return;
         }
@@ -469,6 +493,7 @@ export class SceneBuffer {
         const verticesX = model.verticesX;
         let verticesY = model.verticesY;
         const verticesZ = model.verticesZ;
+        const normals = this.smoothActor ? actorNormals ?? buildActorNormals(model) : undefined;
 
         let sceneX = 0;
         let sceneZ = 0;
@@ -542,6 +567,11 @@ export class SceneBuffer {
             const fa = facesA[index];
             const fb = facesB[index];
             const fc = facesC[index];
+            // Keep vanilla shaded colours in the original words. HD actors use
+            // the unshaded colour in the fourth word, with live tint overrides.
+            let baseHsl = model.faceColors?.[index] ?? (hslA & 0xffff);
+            if (model.overrideAmount !== 0) baseHsl = this.applyColorOverride(baseHsl, model);
+            baseHsl &= 0xffff;
 
             const vxa = sceneX + verticesX[fa];
             const vxb = sceneX + verticesX[fb];
@@ -571,6 +601,7 @@ export class SceneBuffer {
                 reuseVertices,
                 renderLayer ?? priority,
                 renderLayer !== undefined,
+                normals ? (normals[fa] << 16) | baseHsl : 0,
             );
             const index1 = this.vertexBuf.addVertex(
                 vxb,
@@ -584,6 +615,7 @@ export class SceneBuffer {
                 reuseVertices,
                 renderLayer ?? priority,
                 renderLayer !== undefined,
+                normals ? (normals[fb] << 16) | baseHsl : 0,
             );
             const index2 = this.vertexBuf.addVertex(
                 vxc,
@@ -597,9 +629,13 @@ export class SceneBuffer {
                 reuseVertices,
                 renderLayer ?? priority,
                 renderLayer !== undefined,
+                normals ? (normals[fc] << 16) | baseHsl : 0,
             );
 
             this.indices.push(index0, index1, index2);
+            // Only roofs need an underside. Reuse their packed vertices/UVs;
+            // global culling still keeps actors and other scenery single-sided.
+            if (doubleSided) this.indices.push(index2, index1, index0);
         }
     }
 }

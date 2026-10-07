@@ -8,4 +8,4 @@ export const GAMEFRAME_317_FIXED_OPTION = 4;
 export const GAMEFRAME_317_FIXED_LABEL = "Fixed - 317 layout";
 export const GAMEFRAME_LAYOUT_DROPDOWN = (116 << 16) | 40;
 /** Custom server-backed flag; mirrored in Settings.plugin.js. */
-export const VARP_GAMEFRAME_317 = 7997;
+export const VARP_GAMEFRAME_317 = 7995;

@@ -1,4 +1,5 @@
 
+import { PendingHit } from "../hit/PendingHit";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { Player } from "../../../entity/impl/player/Player";
 import { Animation } from "../../../model/Animation";
@@ -27,7 +28,7 @@ import { Spell } from "./Spell";
  * the weapon simply can't cast once depleted. See plugins/items/Trident.plugin.js
  * for the charging interaction; both sides share state via TRIDENT_CHARGE_META_KEY.
  */
-export const TRIDENT_CHARGE_META_KEY = "tridentCharges";
+export const TRIDENT_CHARGE_META_KEY = "trident-charges";
 export const TRIDENT_MAX_CHARGES = 2500;
 
 class TridentSpell extends CombatNormalSpell {
@@ -91,12 +92,52 @@ class ChargeSpell extends Spell {
     }
 }
 
+/** A grasp's bind (Wiki): its chance (doubled by Mark of Darkness), length, and target graphics. */
+type GraspBind = { chance: number; ticks: number; bound: number; unbound: number };
+
+/** Grasp binds rolled at the cast, applied when each hit lands (first in, first out). */
+const pendingBinds = new WeakMap<Mobile, boolean[]>();
+
 class CombatArceuusSpell extends CombatNormalSpell {
     constructor(
         options: CombatNormalSpellOptions,
         private readonly demonbane = false,
+        private readonly grasp: GraspBind | null = null,
     ) {
         super(options);
+    }
+
+    /** Wiki (Hit delay): grasps land after 1 tick and demonbanes after 2, whatever the distance. */
+    public hitDelay(): number {
+        return this.demonbane ? 2 : 1;
+    }
+
+    /**
+     * A grasp that hits rolls its bind at the cast and shows it on the target 30 cycles later
+     * (capture, Undead Grasp: the bind graphic or the plain impact, sent with the cast).
+     */
+    public onHitCalc(hit: PendingHit): void {
+        super.onHitCalc(hit);
+        const grasp = this.grasp;
+        if (!grasp || !hit.isAccurate()) return;
+        const caster = hit.getAttacker();
+        const target = hit.getTarget();
+        const marked = caster.isPlayer() && hasArceuusMark(caster);
+        const binds = Math.random() * 100 < (marked ? grasp.chance * 2 : grasp.chance);
+        target.performGraphic(new Graphic(binds ? grasp.bound : grasp.unbound, GRASP_IMPACT_DELAY));
+        const queue = pendingBinds.get(target) ?? [];
+        queue.push(binds);
+        pendingBinds.set(target, queue);
+    }
+
+    /** The bind takes hold when the hit lands: its ticks, 1 against Ward of Arceuus. */
+    public finishCast(cast: Mobile, castOn: Mobile, accurate: boolean, damage: number): void {
+        super.finishCast(cast, castOn, accurate, damage);
+        if (!this.grasp || !accurate) return;
+        const binds = pendingBinds.get(castOn)?.shift() ?? false;
+        if (!binds) return;
+        const ticks = castOn.isPlayer() && hasArceuusWard(castOn) ? 1 : this.grasp.ticks;
+        getCombatFactory().freeze(castOn, ticks * 0.6);
     }
 
     public getSpellbook(): MagicSpellbook {
@@ -107,12 +148,19 @@ class CombatArceuusSpell extends CombatNormalSpell {
         return 4;
     }
 
+    /**
+     * Wiki (demonbane spells, which only demons can be hit with): +20% accuracy; with Mark of Darkness
+     * +40% accuracy and +25% damage, doubled to +80% and +50% with a purging staff.
+     */
     public demonbaneDamageMultiplier(caster: Mobile | null): number {
-        return this.demonbane && caster?.isPlayer() && hasArceuusMark(caster) ? 1.25 : 1;
+        if (!this.demonbane || !caster?.isPlayer() || !hasArceuusMark(caster)) return 1;
+        return wieldsPurgingStaff(caster) ? 1.5 : 1.25;
     }
 
     public demonbaneAccuracyMultiplier(caster: Mobile | null): number {
-        return this.demonbane && caster?.isPlayer() && hasArceuusMark(caster) ? 1.25 : 1;
+        if (!this.demonbane || !caster?.isPlayer()) return 1;
+        if (!hasArceuusMark(caster)) return 1.2;
+        return wieldsPurgingStaff(caster) ? 1.8 : 1.4;
     }
 
     public canCastOnTarget(cast: Mobile, target: Mobile): boolean {
@@ -144,12 +192,29 @@ class CombatArceuusEffectSpell extends CombatEffectSpell {
     }
 }
 
-const ARCEUUS_MARK_UNTIL = "arceuus:markUntil";
+/** Wiki: Dark Lure has a 10.2-second cooldown. */
+class DarkLureSpell extends CombatArceuusEffectSpell {
+    protected getCastCooldown() {
+        return { attribute: "arceuus:dark-lure-cooldown", duration: 10_200 };
+    }
+}
+
+const ARCEUUS_MARK_UNTIL = "arceuus:mark-until";
 
 const hasArceuusMark = (target: Mobile): boolean =>
     Number(target.getAttribute(ARCEUUS_MARK_UNTIL) ?? 0) > Date.now();
 const hasArceuusWard = (target: Mobile): boolean =>
-    Number(target.getAttribute("arceuus:wardUntil") ?? 0) > Date.now();
+    Number(target.getAttribute("arceuus:ward-until") ?? 0) > Date.now();
+const PURGING_STAFFS = new Set([29594, 29595]);
+const wieldsPurgingStaff = (caster: Mobile): boolean =>
+    PURGING_STAFFS.has(caster.getAsPlayer().getEquipment().getWeapon()?.getId?.() ?? -1);
+
+/** The cache's Arceuus combat-spell animations (human_spellcast_grasp / _demonbane). */
+const GRASP_ANIMATION = 8972;
+const DEMONBANE_ANIMATION = 8977;
+
+/** Capture (Undead Grasp): the target's graphic is sent with the cast, 30 cycles on. */
+const GRASP_IMPACT_DELAY = 30;
 
 const getCombatFactory = () =>
     require("../CombatFactory").CombatFactory as typeof import("../CombatFactory").CombatFactory;
@@ -865,6 +930,7 @@ export class CombatSpells {
     });
 
     public static IBAN_BLAST = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(708);
         },
@@ -898,6 +964,7 @@ export class CombatSpells {
     });
 
     public static SNARE = new CombatEffectSpell({
+        members: true,
         castAnimation() {
             return new Animation(710);
         },
@@ -928,6 +995,7 @@ export class CombatSpells {
     });
 
     public static MAGIC_DART = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(1576);
         },
@@ -1027,6 +1095,7 @@ export class CombatSpells {
     });
 
     public static SARADOMIN_STRIKE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => {
             return new Animation(811);
         },
@@ -1060,6 +1129,7 @@ export class CombatSpells {
     });
 
     public static CLAWS_OF_GUTHIX = new CombatNormalSpell({
+        members: true,
         castAnimation: () => {
             return new Animation(811);
         },
@@ -1093,6 +1163,7 @@ export class CombatSpells {
     });
 
     public static FLAMES_OF_ZAMORAK = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(811);
         },
@@ -1126,6 +1197,7 @@ export class CombatSpells {
     });
 
     public static WIND_WAVE = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(727);
         },
@@ -1159,6 +1231,7 @@ export class CombatSpells {
     });
 
     public static WATER_WAVE = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(727);
         },
@@ -1192,6 +1265,7 @@ export class CombatSpells {
     });
 
     public static VULNERABILITY = new CombatEffectSpell({
+        members: true,
         castAnimation() {
             return new Animation(729);
         },
@@ -1248,6 +1322,7 @@ export class CombatSpells {
     });
 
     public static EARTH_WAVE = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(727);
         },
@@ -1281,6 +1356,7 @@ export class CombatSpells {
     });
 
     public static ENFEEBLE = new CombatEffectSpell({
+        members: true,
         castAnimation: function () {
             return new Animation(729);
         },
@@ -1333,6 +1409,7 @@ export class CombatSpells {
     });
 
     public static FIRE_WAVE = new CombatNormalSpell({
+        members: true,
         castAnimation() {
             return new Animation(727);
         },
@@ -1376,6 +1453,7 @@ export class CombatSpells {
     });
 
     public static WIND_SURGE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => new Animation(7855),
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1456, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1457, GraphicHeight.HIGH),
@@ -1388,6 +1466,7 @@ export class CombatSpells {
     });
 
     public static WATER_SURGE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => new Animation(7855),
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1459, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1460, GraphicHeight.HIGH),
@@ -1400,6 +1479,7 @@ export class CombatSpells {
     });
 
     public static EARTH_SURGE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => new Animation(7855),
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1462, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1463, GraphicHeight.HIGH),
@@ -1412,6 +1492,7 @@ export class CombatSpells {
     });
 
     public static FIRE_SURGE = new CombatNormalSpell({
+        members: true,
         castAnimation: () => new Animation(7855),
         castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1465, 0, 20, 43, 31),
         endGraphic: () => new Graphic(1466, GraphicHeight.HIGH),
@@ -1424,26 +1505,23 @@ export class CombatSpells {
     });
 
     public static GHOSTLY_GRASP = new CombatArceuusSpell({
-        castAnimation: () => new Animation(711),
+        castAnimation: () => new Animation(GRASP_ANIMATION),
         castProjectile: () => null,
         endGraphic: () => null,
         maximumHit: () => 12,
-        startGraphic: () => null,
+        startGraphic: () => new Graphic(1856),
         baseExperience: () => 22.5,
         itemsRequired: () => [new Item(556, 4), new Item(562)],
         levelRequired: () => 35,
         spellId: () => 21826,
-        finishCast: (_cast, target, accurate, damage) => {
-            if (accurate && damage > 0) getCombatFactory().freeze(target, hasArceuusWard(target) ? 0.6 : hasArceuusMark(_cast) ? 2.4 : 1.2);
-        },
-    });
+    }, false, { chance: 10, ticks: 2, bound: 1857, unbound: 1858 });
 
     public static INFERIOR_DEMONBANE = new CombatArceuusSpell({
-        castAnimation: () => new Animation(711),
+        castAnimation: () => new Animation(DEMONBANE_ANIMATION),
         castProjectile: () => null,
-        endGraphic: () => null,
+        endGraphic: () => new Graphic(1866),
         maximumHit: () => 16,
-        startGraphic: () => null,
+        startGraphic: () => new Graphic(1865),
         baseExperience: () => 27,
         itemsRequired: () => [new Item(554, 3), new Item(566)],
         levelRequired: () => 44,
@@ -1451,26 +1529,23 @@ export class CombatSpells {
     }, true);
 
     public static SKELETAL_GRASP = new CombatArceuusSpell({
-        castAnimation: () => new Animation(711),
+        castAnimation: () => new Animation(GRASP_ANIMATION),
         castProjectile: () => null,
         endGraphic: () => null,
         maximumHit: () => 17,
-        startGraphic: () => null,
+        startGraphic: () => new Graphic(1859),
         baseExperience: () => 33,
         itemsRequired: () => [new Item(557, 8), new Item(560)],
         levelRequired: () => 56,
         spellId: () => 21829,
-        finishCast: (_cast, target, accurate, damage) => {
-            if (accurate && damage > 0) getCombatFactory().freeze(target, hasArceuusWard(target) ? 0.6 : hasArceuusMark(_cast) ? 3.6 : 1.8);
-        },
-    });
+    }, false, { chance: 25, ticks: 3, bound: 1860, unbound: 1861 });
 
     public static SUPERIOR_DEMONBANE = new CombatArceuusSpell({
-        castAnimation: () => new Animation(711),
+        castAnimation: () => new Animation(DEMONBANE_ANIMATION),
         castProjectile: () => null,
-        endGraphic: () => null,
+        endGraphic: () => new Graphic(1868),
         maximumHit: () => 23,
-        startGraphic: () => null,
+        startGraphic: () => new Graphic(1867),
         baseExperience: () => 36,
         itemsRequired: () => [new Item(554, 5), new Item(566)],
         levelRequired: () => 62,
@@ -1478,26 +1553,23 @@ export class CombatSpells {
     }, true);
 
     public static UNDEAD_GRASP = new CombatArceuusSpell({
-        castAnimation: () => new Animation(711),
+        castAnimation: () => new Animation(GRASP_ANIMATION),
         castProjectile: () => null,
         endGraphic: () => null,
         maximumHit: () => 24,
-        startGraphic: () => null,
+        startGraphic: () => new Graphic(1862),
         baseExperience: () => 46.5,
         itemsRequired: () => [new Item(554, 12), new Item(565)],
         levelRequired: () => 79,
         spellId: () => 21832,
-        finishCast: (_cast, target, accurate, damage) => {
-            if (accurate && damage > 0) getCombatFactory().freeze(target, hasArceuusWard(target) ? 0.6 : hasArceuusMark(_cast) ? 4.8 : 2.4);
-        },
-    });
+    }, false, { chance: 50, ticks: 4, bound: 1863, unbound: 1864 });
 
     public static DARK_DEMONBANE = new CombatArceuusSpell({
-        castAnimation: () => new Animation(711),
+        castAnimation: () => new Animation(DEMONBANE_ANIMATION),
         castProjectile: () => null,
-        endGraphic: () => null,
+        endGraphic: () => new Graphic(1870),
         maximumHit: () => 30,
-        startGraphic: () => null,
+        startGraphic: () => new Graphic(1869),
         baseExperience: () => 43.5,
         itemsRequired: () => [new Item(554, 7), new Item(566, 2)],
         levelRequired: () => 82,
@@ -1548,11 +1620,12 @@ export class CombatSpells {
         },
     });
 
-    public static DARK_LURE = new CombatArceuusEffectSpell({
-        castAnimation: () => new Animation(711),
-        castProjectile: () => null,
-        endGraphic: () => null,
-        startGraphic: () => null,
+    // The cache's Dark Lure animation (human_cast_vicious_strike) and graphics (cast, travel, hit).
+    public static DARK_LURE = new DarkLureSpell({
+        castAnimation: () => new Animation(8974),
+        castProjectile: (cast, castOn) => Projectile.createProjectile(cast, castOn, 1883, 0, 20, 43, 31),
+        endGraphic: () => new Graphic(1884, GraphicHeight.HIGH),
+        startGraphic: () => new Graphic(1882),
         baseExperience: () => 60,
         itemsRequired: () => [new Item(560), new Item(561)],
         levelRequired: () => 50,
@@ -1560,12 +1633,13 @@ export class CombatSpells {
         spellEffect: (_cast, target) => {
             if (!target.isNpc()) return;
             target.getMovementQueue().reset();
-            target.setAttribute("arceuus:darkLureUntil", Date.now() + 20_000);
+            target.setAttribute("arceuus:dark-lure-until", Date.now() + 20_000);
             target.getCombat().attack(_cast);
         },
     });
 
     public static ENTANGLE = new CombatEffectSpell({
+        members: true,
         castAnimation() {
             return new Animation(710);
         },
@@ -1596,6 +1670,7 @@ export class CombatSpells {
     });
 
     public static STUN = new CombatEffectSpell({
+        members: true,
         castAnimation() {
             return new Animation(729);
         },
@@ -1671,7 +1746,8 @@ export class CombatSpells {
                     }
                     return;
                 }
-                const seconds = player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MAGIC] ? 300 : 600;
+                // Wiki: 5 minutes, halved when Protect from Magic was already up.
+                const seconds = player.getPrayerActive()[PrayerHandler.PROTECT_FROM_MAGIC] ? 150 : 300;
                 player.getCombat().getTeleblockTimer().start(seconds);
                 player.getPacketSender().sendEffectTimer(seconds, EffectTimer.TELE_BLOCK)
                     .sendMessage("You have just been teleblocked!");

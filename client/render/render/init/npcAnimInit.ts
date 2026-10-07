@@ -16,6 +16,7 @@ import {
     VertexBuffer,
 } from "picogl";
 
+import { ACTOR_VERTEX_STRIDE } from "../../buffer/ActorNormals";
 import {
     getClientCycle,
     getCurrentTick,
@@ -215,6 +216,8 @@ export function disposeDynamicNpcAnimState(host: WebGLOsrsRendererHost, ): void 
 export function clearPlayerGeometryRuntimeState(host: WebGLOsrsRendererHost): void {
         host.playerDrawCall = undefined;
         host.playerDrawCallAlpha = undefined;
+        host.playerPoseTexture?.delete();
+        host.playerPoseTexture = undefined;
         host.playerDrawRanges = undefined;
         host.playerDrawRangesAlpha = undefined;
         host.playerVertexArray?.delete();
@@ -264,8 +267,18 @@ export async function initPlayerGeometry(host: WebGLOsrsRendererHost, ): Promise
         clearPlayerGeometryRuntimeState(host);
         // Prepare empty dynamic GPU resources for player rendering. Base-model building is
         // handled in PlayerEcs and PlayerRenderer uploads per-frame geometry.
-        const interleavedBuffer = host.app.createInterleavedBuffer(12, new Int32Array(0));
+        const interleavedBuffer = host.app.createInterleavedBuffer(ACTOR_VERTEX_STRIDE, new Int32Array(0));
         const indexBuffer = host.app.createIndexBuffer(PicoGL.UNSIGNED_INT, new Int32Array(0));
+        // 255 labels x 3 texels per row, a row per GPU-animated batch. PicoGL binds every sampler
+        // a program declares, so each player draw call binds this one.
+        const poseTexture = host.app.createTexture2D(255 * 3, 256, {
+            internalFormat: PicoGL.RGBA32F,
+            minFilter: PicoGL.NEAREST,
+            magFilter: PicoGL.NEAREST,
+            wrapS: PicoGL.CLAMP_TO_EDGE,
+            wrapT: PicoGL.CLAMP_TO_EDGE,
+        });
+        host.playerPoseTexture = poseTexture;
         const playerSlotBuffer = host.app.createVertexBuffer(
             PicoGL.INT,
             1,
@@ -276,8 +289,8 @@ export async function initPlayerGeometry(host: WebGLOsrsRendererHost, ): Promise
             .createVertexArray()
             .vertexAttributeBuffer(0, interleavedBuffer, {
                 type: PicoGL.UNSIGNED_INT,
-                size: 3,
-                stride: 12,
+                size: 4,
+                stride: ACTOR_VERTEX_STRIDE,
                 integer: true as any,
             })
             .instanceAttributeBuffer(1, playerSlotBuffer, {
@@ -293,17 +306,18 @@ export async function initPlayerGeometry(host: WebGLOsrsRendererHost, ): Promise
             .uniform("u_timeLoaded", -1.0)
             .uniform("u_usePlayerSlotAttribute", false)
             .texture("u_textures", host.textureArray!)
-            .texture("u_textureMaterials", host.textureMaterials!);
+            .texture("u_textureMaterials", host.textureMaterials!)
+            .texture("u_poseTexture", poseTexture);
 
         // Transparent path: keep separate buffers (initially empty)
-        const interleavedBufferAlpha = host.app.createInterleavedBuffer(12, new Int32Array(0));
+        const interleavedBufferAlpha = host.app.createInterleavedBuffer(ACTOR_VERTEX_STRIDE, new Int32Array(0));
         const indexBufferAlpha = host.app.createIndexBuffer(PicoGL.UNSIGNED_INT, new Int32Array(0));
         const vertexArrayAlpha = host.app
             .createVertexArray()
             .vertexAttributeBuffer(0, interleavedBufferAlpha, {
                 type: PicoGL.UNSIGNED_INT,
-                size: 3,
-                stride: 12,
+                size: 4,
+                stride: ACTOR_VERTEX_STRIDE,
                 integer: true as any,
             })
             .instanceAttributeBuffer(1, playerSlotBuffer, {
@@ -318,7 +332,8 @@ export async function initPlayerGeometry(host: WebGLOsrsRendererHost, ): Promise
             .uniform("u_timeLoaded", -1.0)
             .uniform("u_usePlayerSlotAttribute", false)
             .texture("u_textures", host.textureArray!)
-            .texture("u_textureMaterials", host.textureMaterials!);
+            .texture("u_textureMaterials", host.textureMaterials!)
+            .texture("u_poseTexture", poseTexture);
 
         host.playerVertexArray = vertexArray;
         host.playerInterleavedBuffer = interleavedBuffer as any;

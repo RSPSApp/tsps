@@ -208,9 +208,9 @@ export function registerClanOps(handlers: HandlerMap): void {
     });
 
     // Add user to ban list from channel (action - no return)
-    // Pops: userSlot (in channel)
+    // Pops: clan, userSlot (in channel)
     handlers.set(Opcodes.AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL, (ctx) => {
-        ctx.intStackSize--; // Pop userSlot
+        ctx.intStackSize -= 2;
         // This would send a server request to ban the user
         // Implementation depends on server protocol
     });
@@ -229,9 +229,9 @@ export function registerClanOps(handlers: HandlerMap): void {
     });
 
     // Set affined member muted status from channel (action - no return)
-    // Pops: userSlot, muted (1 = mute, 0 = unmute)
+    // Pops: clan, userSlot, muted (1 = mute, 0 = unmute)
     handlers.set(Opcodes.AFFINEDCLANSETTINGS_SETMUTED_FROMCHANNEL, (ctx) => {
-        ctx.intStackSize -= 2; // Pop userSlot and muted flag
+        ctx.intStackSize -= 3;
         // This would send a server request to mute/unmute the user
         // Implementation depends on server protocol
     });

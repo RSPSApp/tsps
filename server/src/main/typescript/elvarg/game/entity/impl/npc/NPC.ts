@@ -22,6 +22,25 @@ import { GameConstants } from "../../../GameConstants";
 import { Animation } from "../../../model/Animation";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
+/**
+ * A headbar besides the hitpoints one, for this tick's update: `fill` to `endFill` (in the
+ * bar definition's width) over `duration` client cycles from `delay` cycles on, or `remove`.
+ */
+export type NpcHeadbar = { id: number; fill?: number; endFill?: number; duration?: number; delay?: number; remove?: boolean };
+
+/**
+ * A glide the client plays between two tiles (OSRS npc exact_move): from the tile the NPC left
+ * to where it now stands, from `startCycles` to `endCycles` client cycles into the tick, facing
+ * `angle` (0 south, 512 west, 1024 north, 1536 east).
+ */
+export type NpcExactMove = {
+    fromX: number;
+    fromY: number;
+    startCycles: number;
+    endCycles: number;
+    angle: number;
+};
+
 export class NPC extends Mobile {
     private static sameLocation(a: Location | null | undefined, b: Location | null | undefined): boolean {
         if (a == null && b == null) {
@@ -95,11 +114,23 @@ export class NPC extends Mobile {
     private id: number;
     private movementCoordinator: NPCMovementCoordinator = new NPCMovementCoordinator(this);
     private hitpoints: number;
+    private maxHitpointsOverride = -1;
+    /** Multiplies this NPC's attack and defence rolls (raid scaling); 1 leaves them alone. */
+    private rollFactor = 1;
     private spawnPosition: Location;
     private headIcon = -1;
+    /** This tick's glide, sent with the NPC's update and cleared after it. */
+    private exactMoveState: NpcExactMove | null = null;
+    /** This tick's headbars besides the hitpoints one, sent with the NPC's update and cleared after it. */
+    private headbars: NpcHeadbar[] = [];
+    /** Its steps are sent as crawls (half walking speed on the client) rather than walks. */
+    private crawling = false;
+    /** A tile to turn to this tick (OSRS npc face coord), sent with the NPC's update and cleared after it. */
+    private faceTileState: { x: number; y: number } | null = null;
     private isDying: boolean;
     private owner: Player;
     private ownerOnly: boolean = false;
+    private multiCombat: boolean = false;
     private visible: boolean = true;
     private face: FacingDirection = FacingDirection.SOUTH;
     private pet: boolean;
@@ -107,8 +138,6 @@ export class NPC extends Mobile {
     private scriptedMovement: boolean = false;
     /** Hits show their damage but never lower this NPC's hitpoints (a boss whose HP is a timer). */
     private hitpointsLocked: boolean = false;
-    /** This NPC's maximum hitpoints when it differs from its definition's. */
-    private maxHitpointsOverride: number | null = null;
     /** The headbar (healthbar config id and its width) shown over this NPC, when not the default. */
     private healthBarOverride: { id: number; width: number } | null = null;
     /** Scales the combat XP players get for damaging this NPC (OSRS gives some bosses less). */
@@ -117,6 +146,8 @@ export class NPC extends Mobile {
     private defenceRestoreCycle = 0;
     // ponytail: standard regeneration; add encounter-specific rates/caps with those bosses.
     private static readonly STAT_RESTORE_TICKS = 100;
+    /** Ticks per level a drained stat comes back; a boss can restore faster (the Corporeal Beast). */
+    private statRestoreTicks = NPC.STAT_RESTORE_TICKS;
 
     constructor(id: number, position: Location) {
         super(position)
@@ -155,8 +186,11 @@ export class NPC extends Mobile {
      * Can this npc walk through other NPCs?
      * @return
      */
+    /** Flag for an NPC that, like a pet, is not stopped by other NPCs or players. */
+    public static readonly WALK_THROUGH_ENTITIES_FLAG = "movement:walk-through-entities";
+
     public canWalkThroughNPCs(): boolean {
-        if (this.pet) {
+        if (this.pet || this.hasFlag(NPC.WALK_THROUGH_ENTITIES_FLAG)) {
             return true;
         }
         return false;
@@ -225,10 +259,13 @@ export class NPC extends Mobile {
                 // the same target via follow/combat. Without this guard, pets can oscillate:
                 // follow sets face-to-player, then NPC.process clears interaction for range
                 // and resets face back to spawn direction in the same cycle.
+                // "interaction:keep": a scripted NPC (a boss whose attacks a plugin drives) keeps
+                // facing its target at any range.
                 const trackingInteractionTarget =
                     this.getFollowing() === interactingMobile
                     || this.getCombatFollowing() === interactingMobile
-                    || this.getCombat().getTarget() === interactingMobile;
+                    || this.getCombat().getTarget() === interactingMobile
+                    || this.hasFlag("interaction:keep");
                 const targetUnregistered =
                     typeof interactingMobile.isRegistered === "function"
                     && !interactingMobile.isRegistered();
@@ -312,9 +349,29 @@ export class NPC extends Mobile {
         return this;
     }
 
+    /** Full health: the definition's hitpoints unless this NPC was scaled (raids). */
+    public getMaxHitpoints(): number {
+        return this.maxHitpointsOverride >= 0 ? this.maxHitpointsOverride : this.getDefinition().getHitpoints();
+    }
+
+    /** Scales this one NPC's full health, e.g. by raid level or party size; -1 restores the definition's. */
+    public getRollFactor(): number {
+        return this.rollFactor;
+    }
+
+    public setRollFactor(factor: number): NPC {
+        this.rollFactor = Number.isFinite(factor) && factor > 0 ? factor : 1;
+        return this;
+    }
+
+    public setMaxHitpoints(maxHitpoints: number): NPC {
+        this.maxHitpointsOverride = Math.trunc(maxHitpoints);
+        return this;
+    }
+
     public heal(heal: number) {
-        if ((this.hitpoints + heal) > this.getDefinition().getHitpoints()) {
-            this.setHitpoints(this.getDefinition().getHitpoints());
+        if ((this.hitpoints + heal) > this.getMaxHitpoints()) {
+            this.setHitpoints(this.getMaxHitpoints());
             return;
         }
         this.setHitpoints(this.hitpoints + heal);
@@ -370,13 +427,17 @@ export class NPC extends Mobile {
     public getDefenceLevel(): number {
         const base = this.getCurrentDefinition().getStats()[2];
         if (this.defenceLevel === null) return base;
-        const restored = Math.floor((World.getProcessCycle() - this.defenceRestoreCycle) / NPC.STAT_RESTORE_TICKS);
+        const restored = Math.floor((World.getProcessCycle() - this.defenceRestoreCycle) / this.statRestoreTicks);
         if (restored > 0) {
             this.defenceLevel = Math.min(base, this.defenceLevel + restored);
-            this.defenceRestoreCycle += restored * NPC.STAT_RESTORE_TICKS;
+            this.defenceRestoreCycle += restored * this.statRestoreTicks;
             if (this.defenceLevel === base) this.defenceLevel = null;
         }
         return this.defenceLevel ?? base;
+    }
+
+    public setStatRestoreTicks(ticks: number): void {
+        this.statRestoreTicks = Math.max(1, Math.trunc(ticks));
     }
 
     public setDefenceLevel(level: number): void {
@@ -462,6 +523,20 @@ export class NPC extends Mobile {
         return this;
     }
 
+    /**
+     * Fights with this NPC follow multi-combat rules wherever it stands: any number of players
+     * may attack it, and it may attack them all (the Revenant maledictus in the singles-plus
+     * Revenant Caves).
+     */
+    public isMultiCombat(): boolean {
+        return this.multiCombat;
+    }
+
+    public setMultiCombat(multiCombat: boolean): NPC {
+        this.multiCombat = multiCombat;
+        return this;
+    }
+
     public getMovementCoordinator(): NPCMovementCoordinator {
         return this.movementCoordinator;
     }
@@ -498,6 +573,103 @@ export class NPC extends Mobile {
     public setHeadIcon(headIcon: number): void {
         this.headIcon = headIcon;
         // getUpdateFlag().flag(Flag.NPC_APPEARANCE);
+    }
+
+    /**
+     * Moves the NPC to `destination` at once and has clients glide it there from where it
+     * stood, as OSRS does with a teleport and an exact_move in the same tick. By default the
+     * glide takes the whole tick (cycles 0 to 30) and faces the way it travels.
+     */
+    public exactMove(
+        destination: Location,
+        options: { startCycles?: number; endCycles?: number; angle?: number } = {}
+    ): NPC {
+        const from = this.getLocation();
+        const dx = destination.getX() - from.getX();
+        const dy = destination.getY() - from.getY();
+        this.moveTo(destination);
+        this.exactMoveState = {
+            fromX: from.getX(),
+            fromY: from.getY(),
+            startCycles: Math.max(0, Math.trunc(options.startCycles ?? 0)),
+            endCycles: Math.max(0, Math.trunc(options.endCycles ?? 30)),
+            angle: (options.angle ?? NPC.travelAngle(dx, dy)) & 2047,
+        };
+        return this;
+    }
+
+    public getExactMove(): NpcExactMove | null {
+        return this.exactMoveState;
+    }
+
+    /** The orientation facing along (dx, dy): 0 south, 512 west, 1024 north, 1536 east. */
+    public static travelAngle(dx: number, dy: number): number {
+        if (dx === 0 && dy === 0) return 0;
+        return Math.round((Math.atan2(-dx, -dy) * 1024) / Math.PI) & 2047;
+    }
+
+    /**
+     * Shows a headbar over the NPC besides its hitpoints bar (a charge bar, a shield): at `fill`,
+     * moving to `endFill` over `duration` client cycles (20ms each) from `delay` cycles on. Fills
+     * are in the bar definition's width (headbar 20 is 120 wide, 81 is 100).
+     */
+    public showHeadbar(
+        id: number,
+        options: { fill: number; endFill?: number; duration?: number; delay?: number }
+    ): NPC {
+        this.headbars = this.headbars.filter((bar) => bar.id !== id);
+        this.headbars.push({
+            id,
+            fill: Math.max(0, Math.trunc(options.fill)),
+            endFill: Math.max(0, Math.trunc(options.endFill ?? options.fill)),
+            duration: Math.max(0, Math.trunc(options.duration ?? 0)),
+            delay: Math.max(0, Math.trunc(options.delay ?? 0)),
+        });
+        return this;
+    }
+
+    /** Takes a headbar shown with showHeadbar away. */
+    public removeHeadbar(id: number): NPC {
+        this.headbars = this.headbars.filter((bar) => bar.id !== id);
+        this.headbars.push({ id, remove: true });
+        return this;
+    }
+
+    public getHeadbars(): NpcHeadbar[] {
+        return this.headbars;
+    }
+
+    /**
+     * Sends this NPC's steps as crawls: clients move it at half walking speed, so a step every
+     * two ticks looks continuous (a boss's larvae).
+     */
+    public setCrawling(crawling: boolean): NPC {
+        this.crawling = crawling;
+        return this;
+    }
+
+    public isCrawling(): boolean {
+        return this.crawling;
+    }
+
+    /**
+     * Turns the NPC to face a tile once (OSRS npc face coord), as opposed to following an entity
+     * with setMobileInteraction. Clients turn it at its turn speed and it keeps that facing.
+     */
+    public faceTile(location: Location): NPC {
+        this.faceTileState = { x: location.getX(), y: location.getY() };
+        return this;
+    }
+
+    public getFaceTile(): { x: number; y: number } | null {
+        return this.faceTileState;
+    }
+
+    public resetUpdating() {
+        super.resetUpdating();
+        this.exactMoveState = null;
+        this.headbars = [];
+        this.faceTileState = null;
     }
 
     public getCombatMethod(): CombatMethod {
@@ -590,14 +762,6 @@ export class NPC extends Mobile {
 
     public isHitpointsLocked(): boolean {
         return this.hitpointsLocked;
-    }
-
-    public setMaxHitpoints(max: number | null): void {
-        this.maxHitpointsOverride = max;
-    }
-
-    public getMaxHitpoints(): number {
-        return this.maxHitpointsOverride ?? this.getDefinition().getHitpoints();
     }
 
     public setHealthBar(bar: { id: number; width: number } | null): void {

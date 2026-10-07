@@ -11,21 +11,22 @@ export interface HintArrowState {
     npcId: number;
     x: number;
     y: number;
-    z: number;
+    /** Height above the tile in tiles for type 2 hints (0 = ground level). */
+    height: number;
 }
 
-export const hintArrow: HintArrowState = { type: 0, npcId: 0, x: 0, y: 0, z: 0 };
+export const hintArrow: HintArrowState = { type: 0, npcId: 0, x: 0, y: 0, height: 0 };
 
 export function setHintArrowNpc(npcId: number): void {
     hintArrow.type = 1;
     hintArrow.npcId = npcId | 0;
 }
 
-export function setHintArrowTile(x: number, y: number, z: number): void {
+export function setHintArrowTile(x: number, y: number, height: number): void {
     hintArrow.type = 2;
     hintArrow.x = x | 0;
     hintArrow.y = y | 0;
-    hintArrow.z = z | 0;
+    hintArrow.height = height | 0;
 }
 
 export function clearHintArrow(): void {

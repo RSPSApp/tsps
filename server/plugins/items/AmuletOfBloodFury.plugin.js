@@ -8,7 +8,7 @@ const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
 const AMULET_OF_FURY_ID = ItemIdentifiers.AMULET_OF_FURY;
 const AMULET_OF_BLOOD_FURY_ID = ItemIdentifiers.AMULET_OF_BLOOD_FURY;
 const BLOOD_SHARD_ID = ItemIdentifiers.BLOOD_SHARD;
-const BLOOD_FURY_META_KEY = "bloodFury";
+const BLOOD_FURY_META_KEY = "blood-fury";
 const BLOOD_FURY_CHARGES_PER_SHARD = 10000;
 const BLOOD_FURY_MAX_CHARGES = 30000;
 
@@ -209,6 +209,7 @@ function chargeFromShard({ player, usedItem, usedWithItem }) {
 
 module.exports = {
   name: "AmuletOfBloodFury",
+  members: true,
   register(api) {
     BonusManager = api.getBonusManager();
     CombatFactory = api.getCombatFactory();

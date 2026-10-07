@@ -106,9 +106,14 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
             e.setRegistered(false);
             this.characters[e.getIndex()] = null;
             this.slotQueue.push(e.getIndex());
-            this.onRemoved?.(e);
-            e.onRemove();
-            this.size--;
+            try {
+                this.onRemoved?.(e);
+                e.onRemove();
+            } finally {
+                // A throwing removal hook (for example a failed save on logout) must not
+                // leave the list reporting a size it no longer holds or a leaked slot.
+                this.size--;
+            }
             return true;
         }
         return false;
@@ -187,9 +192,13 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
             item.setRegistered(false);
             this.characters[item.getIndex()] = null as any;
             this.slotQueue.push(item.getIndex());
-            this.onRemoved?.(item);
-            item.onRemove();
-            this.size--;
+            try {
+                this.onRemoved?.(item);
+                item.onRemove();
+            } finally {
+                // See removes(): keep the size honest when a removal hook throws.
+                this.size--;
+            }
         }
     }
 }

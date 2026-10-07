@@ -68,6 +68,9 @@ export class GraphicsDefaults extends Type {
                 buffer.readMedium();
                 break;
             case 2:
+            // Rev 241 sends the sprites as opcode 6, with a twelfth (unnamed) sprite at the end
+            // (zwyz/osrs-cache GraphicsDefaultsUnpacker).
+            case 6:
                 this.compass = buffer.readBigSmart();
                 this.mapEdge = buffer.readBigSmart();
                 this.mapScenes = buffer.readBigSmart();
@@ -79,6 +82,20 @@ export class GraphicsDefaults extends Type {
                 this.mapDots = buffer.readBigSmart();
                 this.scrollBars = buffer.readBigSmart();
                 this.modIcons = buffer.readBigSmart();
+                if (opcode === 6) buffer.readBigSmart();
+                break;
+            case 3:
+                // Three flame palettes of five colours.
+                for (let i = 0; i < 15; i++) buffer.readMedium();
+                break;
+            case 4:
+                // Heading indicator models.
+                buffer.readBigSmart();
+                buffer.readBigSmart();
+                break;
+            case 5:
+                buffer.readInt();
+                buffer.readInt();
                 break;
         }
     }

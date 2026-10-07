@@ -193,6 +193,8 @@ export interface HandlerContext {
     peekInt(): number;
     pushString(value: any): void;
     popString(): any;
+    pushLong(value: bigint): void;
+    popLong(): bigint;
 
     // Active widget (used by regular cc_* ops when intOp=0)
     activeWidget: WidgetNode | null;
@@ -313,9 +315,6 @@ export interface HandlerContext {
     itemSearchIndex: number;
 
     // Widget children iteration state (for IF/CC_CHILDREN_FIND/FINDNEXTID)
-    childrenIterWidget: WidgetNode | null;
-    childrenIterIndices: number[];
-    childrenIterIndex: number;
 
     // Script invocation (for INVOKE opcode)
     invokeScript(scriptId: number): void;

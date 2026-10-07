@@ -52,9 +52,9 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const CHEST_ID = ObjectIdentifiers.CHEST_4;
   const TREASURE_TILE = { x: 2999, y: 3383, z: 0 };
 
-  const EMPLOYMENT_ATTRIBUTE = "piratesTreasure.employment";
-  const BANANA_ATTRIBUTE = "piratesTreasure.bananas";
-  const RUM_ATTRIBUTE = "piratesTreasure.rum";
+  const EMPLOYMENT_ATTRIBUTE = "pirates-treasure.employment";
+  const BANANA_ATTRIBUTE = "pirates-treasure.bananas";
+  const RUM_ATTRIBUTE = "pirates-treasure.rum";
 
   const START_HOOK = "quest:pirate-s-treasure:start";
   const EMPLOYMENT_CHOICE = "Could you offer me employment on your plantation?";

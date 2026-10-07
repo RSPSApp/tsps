@@ -1,12 +1,3 @@
-const { Task } = require("../../../src/main/typescript/elvarg/game/task/Task");
-const { Location } = require("../../../src/main/typescript/elvarg/game/model/Location");
-const { Animation } = require("../../../src/main/typescript/elvarg/game/model/Animation");
-const { Graphic } = require("../../../src/main/typescript/elvarg/game/model/Graphic");
-const { Direction } = require("../../../src/main/typescript/elvarg/game/model/Direction");
-const { Flag } = require("../../../src/main/typescript/elvarg/game/model/Flag");
-const { ForceMovement } = require("../../../src/main/typescript/elvarg/game/model/ForceMovement");
-const { HitDamage } = require("../../../src/main/typescript/elvarg/game/content/combat/hit/HitDamage");
-const { HitMask } = require("../../../src/main/typescript/elvarg/game/content/combat/hit/HitMask");
 
 /**
  * Plays an agility obstacle as a list of steps, one game tick at a time.
@@ -28,7 +19,7 @@ const { HitMask } = require("../../../src/main/typescript/elvarg/game/content/co
  *   { face: [x, y] } | { faceDir: "north" | ... }
  *   { hit: n | [min, max] }           damage the player
  *   { msg: text } | { say: text }     game message / overhead text
- *   { sound: id }                     sound effect
+ *   { sound: id, loops?, delay? }     sound effect (delay in client cycles)
  *   { gfx: id }                       play a graphic on the player
  *   { objAnim: id }                   animate the obstacle object
  *   { run: (ctx) => void }            escape hatch for one-off behaviour
@@ -56,9 +47,21 @@ const MAX_WALK_TILES = 64;
 const BUSY_ATTRIBUTE = "agility.obstacle";
 
 let TaskManager;
+let Location;
+let Animation;
+let Graphic;
+let Direction;
+let Flag;
+let ForceMovement;
+let HitDamage;
+let HitMask;
+/** The obstacle task class, made in `init` once `api.core` gives it `Task` to extend. */
+let ObstacleTask = null;
 
 function init(api) {
   TaskManager = api.getTaskManager();
+  ({ Location, Animation, Graphic, Direction, Flag, ForceMovement, HitDamage, HitMask } = api.core);
+  ObstacleTask = createObstacleTask(api.core.Task);
 }
 
 function isBusy(player) {
@@ -133,157 +136,160 @@ function expandSteps(steps) {
   return expanded;
 }
 
-class ObstacleTask extends Task {
-  constructor(context, steps, onFinish) {
-    super(1, context.player, true);
-    this.context = context;
-    this.player = context.player;
-    this.steps = expandSteps(steps);
-    this.onFinish = onFinish;
-    this.index = 0;
-    this.delay = 0;
-    this.walkPath = null;
-    this.walkedTiles = 0;
-    this.finished = false;
-  }
+function createObstacleTask(Task) {
+  return class ObstacleTask extends Task {
+    constructor(context, steps, onFinish) {
+      super(1, context.player, true);
+      this.context = context;
+      this.player = context.player;
+      this.steps = expandSteps(steps);
+      this.onFinish = onFinish;
+      this.index = 0;
+      // Not `delay`: that is Task's own interval between executes.
+      this.waitTicks = 0;
+      this.walkPath = null;
+      this.walkedTiles = 0;
+      this.finished = false;
+    }
 
-  execute() {
-    if (this.finished) {
-      this.stop();
-      return;
-    }
-    if (!this.player.isRegistered?.() || this.player.getHitpoints() <= 0) {
-      this.finish(false);
-      return;
-    }
-    if (this.walkPath) {
-      this.advanceWalk();
-      if (this.walkPath) return;
-    }
-    if (this.delay > 0 && --this.delay > 0) {
-      return;
-    }
-    while (this.index < this.steps.length) {
-      this.applyStep(this.steps[this.index++]);
-      if (this.walkPath || this.delay > 0 || this.finished) return;
-    }
-    this.finish(true);
-  }
-
-  advanceWalk() {
-    while (this.walkPath.length > 0) {
-      if (this.walkedTiles++ < MAX_WALK_TILES && stepTowards(this.player, this.walkPath[0])) {
+    execute() {
+      if (this.finished) {
+        this.stop();
         return;
       }
-      this.walkPath.shift();
-    }
-    this.walkPath = null;
-  }
-
-  applyStep(step) {
-    const player = this.player;
-    if (step.wait != null) {
-      this.delay = step.wait;
-    } else if (step.anim != null) {
-      animate(player, step.anim, step.delay ?? 0);
-    } else if ("render" in step) {
-      setRender(player, step.render);
-    } else if (step.walk) {
-      this.walkPath = step.walk.map((tile) => [tile[0], tile[1]]);
-      this.walkedTiles = 0;
-      this.advanceWalk();
-    } else if (step.moveStart) {
-      this.startMove(step.moveStart);
-    } else if (step.land) {
-      player.setForceMovement(null);
-      player.moveTo(toLocation(player, step.land));
-    } else if (step.tele) {
-      player.setForceMovement(null);
-      player.moveTo(toLocation(player, step.tele));
-    } else if (step.face) {
-      player.setPositionToFace(toLocation(player, step.face));
-    } else if (step.faceDir) {
-      const [dx, dy] = DIRECTION_VECTORS[step.faceDir];
-      const location = player.getLocation();
-      player.setPositionToFace(new Location(location.getX() + dx, location.getY() + dy, location.getZ()));
-    } else if (step.hit != null) {
-      hit(player, step.hit);
-    } else if (step.msg) {
-      player.sendMessage(step.msg);
-    } else if (step.say) {
-      player.forceChat(step.say);
-    } else if (step.sound != null) {
-      player.getPacketSender().sendSound(step.sound, 1, 0);
-    } else if (step.gfx != null) {
-      player.performGraphic(new Graphic(step.gfx));
-    } else if (step.objAnim != null) {
-      if (this.context.object) {
-        player.getPacketSender().sendObjectAnimation(this.context.object, new Animation(step.objAnim));
+      if (!this.player.isRegistered?.() || this.player.getHitpoints() <= 0) {
+        this.finish(false);
+        return;
       }
-    } else if (step.run) {
-      step.run(this.context);
+      if (this.walkPath) {
+        this.advanceWalk();
+        if (this.walkPath) return;
+      }
+      if (this.waitTicks > 0 && --this.waitTicks > 0) {
+        return;
+      }
+      while (this.index < this.steps.length) {
+        this.applyStep(this.steps[this.index++]);
+        if (this.walkPath || this.waitTicks > 0 || this.finished) return;
+      }
+      this.finish(true);
     }
-  }
 
-  startMove(step) {
-    const player = this.player;
-    const current = player.getLocation().clone();
-    const target = toLocation(player, step.move);
-    const [startCycle, endCycle] = step.speed ?? [0, DEFAULT_MOVE_CYCLES];
-    const direction = step.dir
-      ?? directionBetween(current.getX(), current.getY(), target.getX(), target.getY());
-    // PlayerSession sends the start relative to the current tile and the end as an
-    // offset; starting on the current tile keeps both relative to the same origin.
-    const forceMovement = new ForceMovement(
-      current,
-      new Location(target.getX() - current.getX(), target.getY() - current.getY()),
-      startCycle,
-      endCycle,
-      FORCE_DIRECTION[direction] ?? direction,
-      step.anim ?? -1
-    );
-    player.getMovementQueue().reset();
-    if (step.anim != null) {
-      animate(player, step.anim, step.delay ?? 0);
+    advanceWalk() {
+      while (this.walkPath.length > 0) {
+        if (this.walkedTiles++ < MAX_WALK_TILES && stepTowards(this.player, this.walkPath[0])) {
+          return;
+        }
+        this.walkPath.shift();
+      }
+      this.walkPath = null;
     }
-    player.setForceMovement(forceMovement);
-  }
 
-  /** Applies every remaining tile change at once, for logouts mid-obstacle. */
-  fastForward() {
-    if (this.finished) return;
-    if (this.walkPath && this.walkPath.length > 0) {
-      const last = this.walkPath[this.walkPath.length - 1];
-      this.player.setLocation(toLocation(this.player, last));
-    }
-    this.walkPath = null;
-    while (this.index < this.steps.length) {
-      const step = this.steps[this.index++];
-      const tile = step.land ?? step.tele ?? (step.walk ? step.walk[step.walk.length - 1] : null);
-      if (tile) {
-        this.player.setForceMovement(null);
-        this.player.setLocation(toLocation(this.player, tile));
+    applyStep(step) {
+      const player = this.player;
+      if (step.wait != null) {
+        this.waitTicks = step.wait;
+      } else if (step.anim != null) {
+        animate(player, step.anim, step.delay ?? 0);
+      } else if ("render" in step) {
+        setRender(player, step.render);
+      } else if (step.walk) {
+        this.walkPath = step.walk.map((tile) => [tile[0], tile[1]]);
+        this.walkedTiles = 0;
+        this.advanceWalk();
+      } else if (step.moveStart) {
+        this.startMove(step.moveStart);
+      } else if (step.land) {
+        player.setForceMovement(null);
+        player.moveTo(toLocation(player, step.land));
+      } else if (step.tele) {
+        player.setForceMovement(null);
+        player.moveTo(toLocation(player, step.tele));
+      } else if (step.face) {
+        player.setPositionToFace(toLocation(player, step.face));
+      } else if (step.faceDir) {
+        const [dx, dy] = DIRECTION_VECTORS[step.faceDir];
+        const location = player.getLocation();
+        player.setPositionToFace(new Location(location.getX() + dx, location.getY() + dy, location.getZ()));
+      } else if (step.hit != null) {
+        hit(player, step.hit);
+      } else if (step.msg) {
+        player.sendMessage(step.msg);
+      } else if (step.say) {
+        player.forceChat(step.say);
+      } else if (step.sound != null) {
+        player.getPacketSender().sendSoundEffect(step.sound, step.loops ?? 1, step.delay ?? 0);
+      } else if (step.gfx != null) {
+        player.performGraphic(new Graphic(step.gfx));
+      } else if (step.objAnim != null) {
+        if (this.context.object) {
+          player.getPacketSender().sendObjectAnimation(this.context.object, new Animation(step.objAnim));
+        }
+      } else if (step.run) {
+        step.run(this.context);
       }
     }
-    this.finish(true);
-  }
 
-  finish(completed) {
-    if (this.finished) return;
-    this.finished = true;
-    super.stop();
-    release(this.player);
-    this.onFinish?.(completed);
-  }
-
-  /** Anything that cancels this task (teleports, logout sweeps) must still unlock the player. */
-  stop() {
-    if (!this.finished) {
-      this.finish(false);
-      return;
+    startMove(step) {
+      const player = this.player;
+      const current = player.getLocation().clone();
+      const target = toLocation(player, step.move);
+      const [startCycle, endCycle] = step.speed ?? [0, DEFAULT_MOVE_CYCLES];
+      const direction = step.dir
+        ?? directionBetween(current.getX(), current.getY(), target.getX(), target.getY());
+      // PlayerSession sends the start relative to the current tile and the end as an
+      // offset; starting on the current tile keeps both relative to the same origin.
+      const forceMovement = new ForceMovement(
+        current,
+        new Location(target.getX() - current.getX(), target.getY() - current.getY()),
+        startCycle,
+        endCycle,
+        FORCE_DIRECTION[direction] ?? direction,
+        step.anim ?? -1
+      );
+      player.getMovementQueue().reset();
+      if (step.anim != null) {
+        animate(player, step.anim, step.delay ?? 0);
+      }
+      player.setForceMovement(forceMovement);
     }
-    super.stop();
-  }
+
+    /** Applies every remaining tile change at once, for logouts mid-obstacle. */
+    fastForward() {
+      if (this.finished) return;
+      if (this.walkPath && this.walkPath.length > 0) {
+        const last = this.walkPath[this.walkPath.length - 1];
+        this.player.setLocation(toLocation(this.player, last));
+      }
+      this.walkPath = null;
+      while (this.index < this.steps.length) {
+        const step = this.steps[this.index++];
+        const tile = step.land ?? step.tele ?? (step.walk ? step.walk[step.walk.length - 1] : null);
+        if (tile) {
+          this.player.setForceMovement(null);
+          this.player.setLocation(toLocation(this.player, tile));
+        }
+      }
+      this.finish(true);
+    }
+
+    finish(completed) {
+      if (this.finished) return;
+      this.finished = true;
+      super.stop();
+      release(this.player);
+      this.onFinish?.(completed);
+    }
+
+    /** Anything that cancels this task (teleports, logout sweeps) must still unlock the player. */
+    stop() {
+      if (!this.finished) {
+        this.finish(false);
+        return;
+      }
+      super.stop();
+    }
+  };
 }
 
 function lock(player, task) {

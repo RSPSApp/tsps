@@ -11,6 +11,7 @@ module.exports = {
   key: "ardougne",
   name: "Ardougne Rooftop",
   lapXp: 889,
+  petBase: 34440, // Giant squirrel base chance (Wiki)
   marks: {
     level: 90,
     tiles: [[2657, 3318, 3]],

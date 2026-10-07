@@ -101,16 +101,18 @@ assert.equal(interaction.deferredWidgetAction, null);
 assert.equal(source._isDragActive, undefined);
 assert.equal(source._dragVisualX, undefined);
 
-// Releasing a short drag before its dead-time expires must not become Drop.
+// OSRS: releasing before the drag's dead time is up is a click, even if the mouse already
+// moved on (fast dropping) - it fires once.
 events.length = 0;
 Object.assign(interaction, { clickedWidget: source, dragClickX: 5, dragClickY: 5,
     deferredWidgetAction: { widget: source, option: "Drop" } });
 processWidgetReleaseInput(deps, { mx: 50, my: 10 } as any, manager, interaction,
     () => ({ option: "Drop", target: "Plank" }), false);
-assert.deepEqual(events, []);
+assert.deepEqual(events, ["Drop"]);
 assert.equal(interaction.clickedWidget, null);
 
 // A deliberate click still fires once, even if an earlier handler deferred it.
+events.length = 0;
 Object.assign(interaction, { clickedWidget: source, dragClickX: 5, dragClickY: 5,
     deferredWidgetAction: { widget: source, option: "Drop" } });
 processWidgetReleaseInput(deps, { mx: 5, my: 5 } as any, manager, interaction,

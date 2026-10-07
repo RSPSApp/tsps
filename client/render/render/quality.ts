@@ -96,7 +96,6 @@ import {
     getCanvasCssSize,
     isIos,
     isMobileMode,
-    isTouchDevice,
     isWebGL2Supported,
 } from "../../common/utils/DeviceUtil";
 import { clamp } from "../../common/utils/MathUtil";
@@ -223,22 +222,13 @@ export function getMobileGameplayUiScale(host: WebGLOsrsRendererHost,
         _bufH: number,
     ): number {
 
-        const safeCssW = Math.max(1, cssW);
-        const safeCssH = Math.max(1, cssH);
-        const shortestCssEdge = Math.max(1, Math.min(safeCssW, safeCssH));
-        const viewportT = clamp(
-            (shortestCssEdge - RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_PHONE_EDGE) /
-            (RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_TABLET_EDGE -
-                RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_PHONE_EDGE),
-            0,
-            1,
+        // Layout px per CSS px. Any screen bigger than a phone keeps the phone's layout size, so
+        // the gameframe grows with the screen instead of staying phone-sized on a tablet.
+        const shortestCssEdge = Math.max(1, Math.min(cssW, cssH));
+        const phoneEdge = RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_PHONE_EDGE;
+        return (
+            (RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_SCALE * phoneEdge) / Math.max(phoneEdge, shortestCssEdge)
         );
-        const desiredUiScale =
-            RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_MIN_SCALE +
-            (RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_MAX_SCALE -
-                RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_MIN_SCALE) *
-            viewportT;
-        return Math.max(1, desiredUiScale);
     
 }
 
@@ -373,7 +363,7 @@ export function getCanvasResolutionScale(host: WebGLOsrsRendererHost, cssWidth: 
 
         const safeCssWidth = Number.isFinite(cssWidth) ? Math.max(1, cssWidth) : 1;
         const safeCssHeight = Number.isFinite(cssHeight) ? Math.max(1, cssHeight) : 1;
-        const maxPixelCount = isTouchDevice ? 6_000_000 : 12_000_000;
+        const maxPixelCount = isMobileMode ? 6_000_000 : 12_000_000;
         const targetPixelCount = safeCssWidth * safeCssHeight * targetScale * targetScale;
         if (targetPixelCount <= maxPixelCount) {
             return targetScale;
@@ -386,7 +376,9 @@ export function getCanvasResolutionScale(host: WebGLOsrsRendererHost, cssWidth: 
 
 export function resolveBrowserQualityProfile(host: WebGLOsrsRendererHost, ): BrowserQualityProfile {
 
-        if (!isTouchDevice) {
+        // The platform, not touch hardware: a touchscreen laptop on the desktop layout is a
+        // desktop (#358), and must not get the handheld profile's half-resolution scene.
+        if (!isMobileMode) {
             return DESKTOP_QUALITY_PROFILE;
         }
         if (isIos) {
@@ -423,9 +415,10 @@ export function getActiveQualityProfileLabel(host: WebGLOsrsRendererHost, ): str
 
 export function getSceneResolutionScale(host: WebGLOsrsRendererHost, ): number {
 
-        if (!isTouchDevice || host.osrsClient.isOnLoginScreen()) {
+        if (!isMobileMode || host.osrsClient.isOnLoginScreen()) {
             host.osrsClient.mobileEffectiveResolutionScale = 1;
-            return 1;
+            if (host.osrsClient.isOnLoginScreen()) return 1;
+            return Math.max(0.5, Math.min(1, host.sceneResolutionScale || 1));
         }
         const profile = host.syncBrowserQualityProfile();
         const scale = Math.max(0.5, Math.min(1, profile.defaultSceneScale || 1));

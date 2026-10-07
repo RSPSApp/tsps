@@ -178,6 +178,7 @@ function repairEquipment(event) {
 
 module.exports = {
   name: "BarrowsEquipment",
+  members: true,
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
@@ -225,7 +226,7 @@ module.exports = {
       if (!hit.getHandleAfterHitEffects() || !hit.isAccurate()) return;
       const damage = hit.getTotalDamage();
       if (target.isPlayer?.() && damage > 0 && Barrows.hasDamnedSet(target.getAsPlayer(), "dharoks") && chance()) {
-        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(Math.floor(damage * 0.15), HitMask.RED)]);
+        attacker.getCombat().getHitQueue().addPendingDamage([new HitDamage(Math.floor(damage * 0.15), HitMask.RED).setSource(target)]);
       }
       if (!chance(attacker.isNpc() && CombatFactory.fullAhrims(attacker) ? 0.2 : 0.25)) return;
       const player = attacker.isPlayer() ? attacker.getAsPlayer() : null;

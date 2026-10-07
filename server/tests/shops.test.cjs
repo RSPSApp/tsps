@@ -201,8 +201,8 @@ test("the quantity buttons set what an item's left-click buys, and the choice is
 
   clickButton(10); // Buy-5
   assert.equal(player.varbits.get(6348), 2);
-  assert.equal(player.getAttribute("shop:quantityMode"), 2);
-  assert.ok(PlayerSave.persistentAttributeKeys.has("shop:quantityMode"));
+  assert.equal(player.getAttribute("shop:quantity-mode"), 2);
+  assert.ok(PlayerSave.persistentAttributeKeys.has("shop:quantity-mode"));
 
   ShopManager.handleWidgetAction(player, {
     groupId: ShopManager.MAIN_INTERFACE_ID, childId: 16, buttonNum: 1, slot: 1, itemId: BRONZE_AXE,

@@ -17,6 +17,7 @@ interface CombatEffectSpellInterface {
     levelRequired: () => number;
     spellId: () => number;
     getSpellbook?: () => any;
+    members?: boolean;
 }
 
 
@@ -37,6 +38,7 @@ export class  CombatEffectSpell extends CombatSpell {
 
     constructor(private readonly options: CombatEffectSpellInterface) {
         super();
+        this.members = options.members === true;
     }
 
     spellId(): number {

@@ -26,6 +26,7 @@ import { WorkerState } from "../../game/worker/RenderDataWorker";
 import { AnimationFrames } from "../AnimationFrames";
 import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../DrawRange";
 import { ModelHashBuffer, getModelHash } from "../buffer/ModelHashBuffer";
+import { buildActorNormals } from "../buffer/ActorNormals";
 import {
     DrawCommand,
     ModelFace,
@@ -38,12 +39,13 @@ import {
 } from "../buffer/SceneBuffer";
 import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
-import { getSceneLocs, isDoorLocType, isLowDetail } from "../loc/SceneLocs";
+import { getSceneLocs, isDoorLocType, isLowDetail, isRoofLocModelType } from "../loc/SceneLocs";
 import { createNpcDatas } from "../npc/NpcData";
-import type {
-    NpcInstance,
-    NpcRenderBundle,
-    NpcRenderTemplate,
+import {
+    type NpcInstance,
+    type NpcRenderBundle,
+    type NpcRenderTemplate,
+    npcOwnerMapId,
 } from "../npc/NpcRenderTemplate";
 import { isKnownWaterTextureId } from "../water/WaterTextureIds";
 import { NpcGeometryData } from "./NpcGeometryData";
@@ -609,6 +611,36 @@ function createModelGroups(
     }
 }
 
+/**
+ * Repeated scenery merges into the map square's shared geometry when its copies total fewer
+ * faces than this; above it, the model is drawn instanced. Each instanced model is a draw of
+ * its own, and where multi-draw is emulated (ANGLE on D3D11) every one costs a real draw call:
+ * at 100 faces, Edgeville drew ~1,000 per frame. 3,000 merges ~9/10 of them for ~12 MB per
+ * six map squares; big clusters (a forest of one tree) stay instanced.
+ */
+const MERGE_INSTANCED_FACES = 3000;
+
+/** Instances by level and plane-cull level (key: level | planeCull << 8), one draw per group. */
+function groupByLevelAndPlane(models: SceneModel[]): Map<number, SceneModel[]> {
+    const groups = new Map<number, SceneModel[]>();
+    for (const sm of models) {
+        const planeCull = sm.planeCullLevel ?? sm.level;
+        const key = sm.level | (planeCull << 8);
+        const list = groups.get(key);
+        if (list) list.push(sm);
+        else groups.set(key, [sm]);
+    }
+    return groups;
+}
+
+/** Whether every level/plane group would draw one copy: then merging costs no duplication. */
+function onlySingleCopyGroups(models: SceneModel[]): boolean {
+    for (const group of groupByLevelAndPlane(models).values()) {
+        if (group.length > 1) return false;
+    }
+    return true;
+}
+
 function addSceneModels(
     modelHashBuf: ModelHashBuffer,
     textureLoader: TextureLoader,
@@ -616,10 +648,10 @@ function addSceneModels(
     sceneModels: SceneModel[],
     minimizeDrawCalls: boolean,
 ): void {
-    const groupedModels = new Map<number, SceneModel[]>();
+    const groupedModels = new Map<string, SceneModel[]>();
     for (const sceneModel of sceneModels) {
         const model = sceneModel.model;
-        const hash = getModelHash(modelHashBuf, model);
+        const hash = `${getModelHash(modelHashBuf, model)}:${Number(!!sceneModel.doubleSided)}`;
         const locs = groupedModels.get(hash);
         if (locs) {
             locs.push(sceneModel);
@@ -631,6 +663,7 @@ function addSceneModels(
     const modelGroupMap: Map<number, ModelMergeGroup> = new Map();
     for (const sceneModels of groupedModels.values()) {
         const model = sceneModels[0].model;
+        const doubleSided = sceneModels[0].doubleSided;
         const faces = getModelFaces(model);
 
         const opaqueFaces: ModelFace[] = [];
@@ -663,12 +696,19 @@ function addSceneModels(
         }
 
         const instanceCount = instancedModels.length;
+        const singleCopies = instanceCount > 1 && onlySingleCopyGroups(instancedModels);
         const mergeOpaque =
-            instanceCount === 1 || instanceCount * opaqueFaces.length < 100 || minimizeDrawCalls;
+            instanceCount === 1 ||
+            singleCopies ||
+            instanceCount * opaqueFaces.length < MERGE_INSTANCED_FACES ||
+            minimizeDrawCalls;
         const mergeTransparent =
             instanceCount === 1 ||
-            instanceCount * transparentFaces.length < 100 ||
+            singleCopies ||
+            instanceCount * transparentFaces.length < MERGE_INSTANCED_FACES ||
             minimizeDrawCalls;
+        const singleOpaque: SceneModel[] = [];
+        const singleTransparent: SceneModel[] = [];
 
         // mergeOpaque = false;
         // mergeTransparent = false;
@@ -677,7 +717,7 @@ function addSceneModels(
             createModelGroups(modelGroupMap, instancedModels, false);
         } else if (opaqueFaces.length > 0) {
             const indexOffset = sceneBuf.indexByteOffset();
-            sceneBuf.addModel(model, opaqueFaces);
+            sceneBuf.addModel(model, opaqueFaces, undefined, true, undefined, doubleSided);
             const elementCount = (sceneBuf.indexByteOffset() - indexOffset) / 4;
 
             // Group instanced models by level AND planeCullLevel to keep CPU plane-culling accurate per draw range
@@ -700,6 +740,11 @@ function addSceneModels(
             }
 
             for (const [key, models] of byLevelAndPlane.entries()) {
+                // One copy on this level/plane: merged, it's no extra geometry and no extra draw.
+                if (models.length === 1) {
+                    singleOpaque.push(models[0]);
+                    continue;
+                }
                 const lvl = key & 0xff;
                 const drawCommand: DrawCommand = {
                     offset: indexOffset,
@@ -725,7 +770,7 @@ function addSceneModels(
             createModelGroups(modelGroupMap, instancedModels, true);
         } else if (transparentFaces.length > 0) {
             const indexOffset = sceneBuf.indexByteOffset();
-            sceneBuf.addModel(model, transparentFaces);
+            sceneBuf.addModel(model, transparentFaces, undefined, true, undefined, doubleSided);
             const elementCount = (sceneBuf.indexByteOffset() - indexOffset) / 4;
 
             // Group instanced models by level AND planeCullLevel for transparent path as well
@@ -748,6 +793,10 @@ function addSceneModels(
             }
 
             for (const [key, models] of byLevelAndPlane.entries()) {
+                if (models.length === 1) {
+                    singleTransparent.push(models[0]);
+                    continue;
+                }
                 const lvl = key & 0xff;
                 const drawCommand: DrawCommand = {
                     offset: indexOffset,
@@ -769,6 +818,8 @@ function addSceneModels(
                 }
             }
         }
+        if (singleOpaque.length > 0) createModelGroups(modelGroupMap, singleOpaque, false);
+        if (singleTransparent.length > 0) createModelGroups(modelGroupMap, singleTransparent, true);
     }
 
     for (const group of modelGroupMap.values()) {
@@ -839,6 +890,7 @@ function addLocAnimationFrames(
     if (frameCount === 0) {
         return undefined;
     }
+    const doubleSided = isRoofLocModelType(entity.type);
     const frames = new Array<DrawRange>(frameCount);
     const framesAlpha = new Array<DrawRange>(frameCount);
     let alphaFrameCount = 0;
@@ -851,8 +903,8 @@ function addLocAnimationFrames(
             i,
         );
         if (model) {
-            frames[i] = sceneBuf.addModelAnimFrame(model, false);
-            framesAlpha[i] = sceneBuf.addModelAnimFrame(model, true);
+            frames[i] = sceneBuf.addModelAnimFrame(model, false, undefined, doubleSided);
+            framesAlpha[i] = sceneBuf.addModelAnimFrame(model, true, undefined, doubleSided);
             if (framesAlpha[i][1] > 0) {
                 alphaFrameCount++;
             }
@@ -868,7 +920,7 @@ function addLocAnimationFrames(
     };
 }
 
-function addLocEntities(
+export function addLocEntities(
     centerLocHeightWithSize: boolean,
     locModelLoader: LocModelLoader,
     varManager: VarManager,
@@ -920,15 +972,10 @@ function addLocEntities(
             endY = tileY + 1;
         }
 
-        // Sample heights from the effective surface for bridge-promoted columns.
-        // Keep the render level unchanged (objects remain on their plane),
-        // but when a base tile was shifted down from level 1 (bridge flag at [1]),
-        // use level 1 heights for centerHeight and contouring so objects sit on the
-        // visible walkway rather than the original base below.
-        let heightLevel = level;
-        if (level === 0 && (scene.tileRenderFlags[1][tileX][tileY] & 0x2) === 2) {
-            heightLevel = 1;
-        }
+        // Sample heights on the plane the map stores the loc on, as SceneBuilder.addLoc
+        // does. Bridge demotion moves tiles, not heights, so a bridge's locs (map plane 1,
+        // drawn on 0) sit on the walkway and the locs under it (map plane 0) stay below.
+        const heightLevel = entity.level;
         const heightMap = scene.tileHeights[heightLevel];
         let heightMapAbove: Int32Array[] | undefined;
         if (heightLevel < scene.levels - 1) {
@@ -1056,8 +1103,9 @@ function addNpcAnimationFrames(
     for (let i = 0; i < frameCount; i++) {
         const model = npcModelLoader.getModel(npcType, seqId, i);
         if (model) {
-            frames[i] = sceneBuf.addModelAnimFrame(model, false);
-            framesAlpha[i] = sceneBuf.addModelAnimFrame(model, true);
+            const normals = buildActorNormals(model, npcModelLoader.modelCache.get(npcType.id) ?? model);
+            frames[i] = sceneBuf.addModelAnimFrame(model, false, normals);
+            framesAlpha[i] = sceneBuf.addModelAnimFrame(model, true, normals);
             if (framesAlpha[i][1] > 0) {
                 alphaFrameCount++;
             }
@@ -1088,8 +1136,9 @@ function addNpcStaticFrame(
         return undefined;
     }
 
-    const frame = sceneBuf.addModelAnimFrame(model, false);
-    const alphaFrame = sceneBuf.addModelAnimFrame(model, true);
+    const normals = buildActorNormals(model, npcModelLoader.modelCache.get(npcType.id) ?? model);
+    const frame = sceneBuf.addModelAnimFrame(model, false, normals);
+    const alphaFrame = sceneBuf.addModelAnimFrame(model, true, normals);
     return {
         frames: [frame],
         framesAlpha: alphaFrame[1] > 0 ? [alphaFrame] : undefined,
@@ -1195,7 +1244,7 @@ function buildNpcGeometry(
     baseTileX: number,
     baseTileY: number,
 ) {
-    const npcSceneBuf = new SceneBuffer(textureLoader, textureIdIndexMap, 20000);
+    const npcSceneBuf = new SceneBuffer(textureLoader, textureIdIndexMap, 20000, true);
     const npcRenderBundles = createNpcRenderBundles(
         npcModelLoader,
         basTypeLoader,
@@ -1597,9 +1646,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                     const overlayMapY = 200 + (worldViewId | 0);
                     return getMapSquareId(overlayMapX, overlayMapY) === currentMapId;
                 }
-                const npcMapX = getMapIndexFromTile(instance.x);
-                const npcMapY = getMapIndexFromTile(instance.y);
-                return npcMapX === mapX && npcMapY === mapY;
+                return npcOwnerMapId(instance) === currentMapId;
             });
         }
         if (!shouldLoadPartial && extraNpcsInput) {
@@ -1613,7 +1660,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             }
         }
         const { npcSceneBuf, npcs } = shouldLoadPartial
-            ? { npcSceneBuf: new SceneBuffer(textureLoader, textureIdIndexMap, 1), npcs: [] }
+            ? { npcSceneBuf: new SceneBuffer(textureLoader, textureIdIndexMap, 1, true), npcs: [] }
             : buildNpcGeometry(
                   npcModelLoader,
                   basTypeLoader,
@@ -2279,11 +2326,14 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             mapY,
             maxLevel,
             loadedTextureIds,
+            renderBaseTile,
         }: {
             mapX: number;
             mapY: number;
             maxLevel: number;
             loadedTextureIds: Set<number>;
+            /** Where the map is drawn from, when not its corner (an instance's scene base). */
+            renderBaseTile?: { x: number; y: number };
         },
     ): Promise<RenderDataResult<NpcGeometryData>> {
         this.init();
@@ -2301,11 +2351,10 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
         const borderSize = 6;
         const maxPlane = Math.max(0, maxLevel | 0);
+        const ownerMapId = getMapSquareId(mapX, mapY);
         const npcInstances = state.npcInstances.filter((instance) => {
             if ((instance.level | 0) > maxPlane) return false;
-            const npcMapX = getMapIndexFromTile(instance.x);
-            const npcMapY = getMapIndexFromTile(instance.y);
-            return npcMapX === mapX && npcMapY === mapY;
+            return npcOwnerMapId(instance) === ownerMapId;
         });
 
         const { npcSceneBuf, npcs } = buildNpcGeometry(
@@ -2314,8 +2363,8 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             textureLoader,
             textureIdIndexMap,
             npcInstances,
-            mapX * Scene.MAP_SQUARE_SIZE,
-            mapY * Scene.MAP_SQUARE_SIZE,
+            renderBaseTile ? renderBaseTile.x | 0 : mapX * Scene.MAP_SQUARE_SIZE,
+            renderBaseTile ? renderBaseTile.y | 0 : mapY * Scene.MAP_SQUARE_SIZE,
         );
 
         const vertices = npcSceneBuf.vertexBuf.byteArray();

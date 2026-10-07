@@ -8,12 +8,16 @@ import { PlayerStatus } from "../../game/model/PlayerStatus";
 import { Flag } from "../../game/model/Flag";
 import { Skill } from "../../game/model/Skill";
 import { Location } from "../../game/model/Location";
+import { BoatManager } from "../../game/content/sailing/BoatManager";
+import { Graphic } from "../../game/model/Graphic";
+import { World } from "../../game/World";
 import { DonatorRights } from "../../game/model/rights/DonatorRights";
 import { InterfaceLayoutRegistry } from "../../game/definition/InterfaceLayoutDefinition";
 import { Misc } from "../../util/Misc";
 import {
   encodeBankSnapshot,
   encodeChatMessage,
+  encodeCollectionLogSnapshot,
   encodeContentData,
   encodeDestination,
   encodeHintArrow,
@@ -21,6 +25,7 @@ import {
   encodeGroundItemsDelta,
   encodeLocAddChange,
   encodeLocAnim,
+  encodeTileSpotAnim,
   encodeLocDel,
   encodeInventorySlot,
   encodeInventorySnapshot,
@@ -28,6 +33,10 @@ import {
   encodePlaySong,
   encodeProjectiles,
   encodeRunClientScript,
+  encodeCameraShake,
+  encodeWidgetSetColour, encodeAttackTimer,
+  encodeCameraReset,
+  encodeChatFilterSettings,
   encodeRunEnergy,
   encodeSkillsDelta,
   encodeSkillsSnapshot,
@@ -35,6 +44,7 @@ import {
   encodeSystemUpdate,
   encodeVarbit,
   encodeVarp,
+  encodeVarpLong,
   encodeWidgetClose,
   encodeWidgetCloseSub,
   encodeWidgetOpen,
@@ -67,7 +77,7 @@ import {
   WORLD_MAP_TARGET_UID,
 } from "../protocol/WorldMapProtocol";
 import { CacheDefinitions } from "../../game/cache/CacheDefinitions";
-const CHATBOX_MODAL_TARGET_UID = (162 << 16) | 567;
+const CHATBOX_MODAL_TARGET_UID = (162 << 16) | 568;
 const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
 const VARBIT_MULTICOMBAT_AREA = 4605;
 // Quest completion states consulted by spellbook CS2 scripts. Keep these client
@@ -114,6 +124,10 @@ export const CREATION_MENU_GROUP_ID = 270;
 export const CREATION_MENU_FIRST_ITEM_COMPONENT = 15;
 export const CREATION_MENU_MAX_QUANTITY = 28;
 export const CREATION_MENU_CHATMODAL_UNCLAMP_VARBIT = 10670;
+// The menu's script gives the space key to the item at this varp's position: the one chosen
+// last (clientscript 2046 reads it for every menu whose enum 3623 entry is 1, the default).
+export const CREATION_MENU_LAST_ITEM_VARP = 2673;
+export const CREATION_MENU_LAST_ITEM_ATTRIBUTE = "creation-menu:last-item";
 // Widget transmit flags: bit (opIndex+1) must be set for that op to reach the server (see
 // WidgetActionRouter.shouldTransmitAction on the client) - ops 1-5 are Make 1/5/10/X/All.
 const CREATION_MENU_OP_FLAGS = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
@@ -218,6 +232,12 @@ export class PacketSender {
     return (this.getVarp(baseVar) >> startBit) & BIT_MASKS[endBit - startBit];
   }
 
+  /** A 64-bit varp; the client's scripts read it with push_var_long. */
+  sendVarpLong(id: number, value: bigint | number): this {
+    this.player.getSession().sendClientPacket(encodeVarpLong(id, BigInt(value)));
+    return this;
+  }
+
   sendConfig(id: number, state: number): this {
     this.varps.set(id, state | 0);
     this.player.getSession().sendClientPacket(encodeVarp(id, state));
@@ -239,9 +259,7 @@ export class PacketSender {
     privateChat: number,
     tradeChat: number
   ): this {
-    const out = new PacketBuilder(206);
-    out.put(publicChat).put(privateChat).put(tradeChat);
-    this.player.getSession().write(out);
+    this.player.getSession().sendClientPacket(encodeChatFilterSettings(publicChat, privateChat, tradeChat));
     return this;
   }
 
@@ -287,7 +305,6 @@ export class PacketSender {
   }
 
   sendWalkableInterface(interfaceId: number): this {
-    this.player.setWalkableInterfaceId(interfaceId);
     if (this.player.getSession().sendClientPacket(encodeWidgetOpen(interfaceId, false))) return this;
   }
 
@@ -496,10 +513,12 @@ export class PacketSender {
   }
 
   /**
-   * Points the native hint arrow at a tile. `tilePosition` is kept for signature
-   * compatibility; the client always centres the 6-byte marker on the tile.
+   * Points the native hint arrow at a tile. The arrow follows the player's
+   * plane; `height` lifts it above the tile (in tiles) for targets on tall
+   * scenery, like the tutorial tree. `tilePosition` is kept for signature
+   * compatibility.
    */
-  public sendPositionalHint(position: any, tilePosition = 2): this {
+  public sendPositionalHint(position: any, _tilePosition = 2, height = 0): this {
     if (
       !position ||
       typeof position.getX !== "function" ||
@@ -507,10 +526,9 @@ export class PacketSender {
     ) {
       return this;
     }
-    const z = typeof position.getZ === "function" ? position.getZ() : 0;
     this.player
       .getSession()
-      .sendClientPacket(encodeHintArrow(2, position.getX(), position.getY(), z));
+      .sendClientPacket(encodeHintArrow(2, position.getX(), position.getY(), height));
     return this;
   }
 
@@ -611,6 +629,12 @@ export class PacketSender {
     return this;
   }
 
+  /** Ticks the collection log's collected entries (the collection_transmit inventory, 620). */
+  sendCollectionLogSnapshot(slots: Array<{ slot: number; itemId: number; quantity: number }>): this {
+    this.player.getSession().sendClientPacket(encodeCollectionLogSnapshot(slots));
+    return this;
+  }
+
   private resetInterfaceState(): number {
     const interfaceId = this.player.getInterfaceId?.() ?? -1;
     if (interfaceId === 12) {
@@ -627,13 +651,30 @@ export class PacketSender {
     this.player.setEnteredAmountAction?.(null);
     this.player.setEnteredSyntaxAction?.(null);
     this.player.getDialogueManager?.()?.reset?.();
-    this.player.setDestroyItem?.(-1);
+    this.player.setAttribute?.("destroy-item:pending", -1);
     this.player.setInterfaceId?.(-1);
     this.player.setCreationMenu?.(null);
     this.player.setSearchingBank?.(false);
     this.player.setTeleportInterfaceOpen?.(false);
     this.player.getAppearance?.()?.setCanChangeAppearance?.(false);
     return interfaceId;
+  }
+
+  /** Capture (bank search): once the bank closes, by any route, a search typed in the chatbox ends too. */
+  private endBankSearch(closedInterfaceId: number): void {
+    if (closedInterfaceId !== 12) return;
+    const { Bank } = require("../../game/model/container/impl/Bank") as typeof import("../../game/model/container/impl/Bank");
+    Bank.closeSearch(this.player);
+  }
+
+  /**
+   * "interface:closed" { player, interfaceId }: the player's main interface closed, by any route
+   * (its own close, the client's IF_CLOSE, walking away), so content can undo what it set up.
+   */
+  private emitInterfaceClosed(interfaceId: number): void {
+    if (interfaceId < 0) return;
+    const { PluginManager } = require("../../plugins/PluginManager") as typeof import("../../plugins/PluginManager");
+    PluginManager.emitCustomEvent("interface:closed", { player: this.player, interfaceId });
   }
 
   private closeTrackedInterfaces(): boolean {
@@ -652,6 +693,10 @@ export class PacketSender {
     return true;
   }
 
+  public getChatboxGroupId(): number {
+    return this.chatboxGroupId;
+  }
+
   public isChatboxInterface(groupId: number): boolean {
     return groupId === this.chatboxGroupId;
   }
@@ -663,7 +708,10 @@ export class PacketSender {
 
   closeInterruptibleInterfaces(): this {
     const interfaceId = this.resetInterfaceState();
-    if (this.closeTrackedInterfaces()) {
+    const closed = this.closeTrackedInterfaces();
+    this.endBankSearch(interfaceId);
+    this.emitInterfaceClosed(interfaceId);
+    if (closed) {
       if (interfaceId === 300 || interfaceId === 334 || interfaceId === 335) {
         this.sendSubInterface((161 << 16) | 79, MAIN_INVENTORY_GROUP_ID, 1);
       }
@@ -693,7 +741,10 @@ export class PacketSender {
 
   sendInterfaceRemoval(): this {
     const interfaceId = this.resetInterfaceState();
-    if (this.closeTrackedInterfaces()) {
+    const closed = this.closeTrackedInterfaces();
+    this.endBankSearch(interfaceId);
+    this.emitInterfaceClosed(interfaceId);
+    if (closed) {
       if (interfaceId === 300 || interfaceId === 334 || interfaceId === 335) {
         this.sendSubInterface((161 << 16) | 79, MAIN_INVENTORY_GROUP_ID, 1);
       }
@@ -760,11 +811,50 @@ export class PacketSender {
     return this;
   }
 
-  sendGraphic(..._args: any[]): this {
+  /** Shakes the camera on one axis; slot 0 left-right, 1 up-down, 2 forwards-backwards. */
+  /**
+   * Recolours a text or rectangle component (IF_SETCOLOUR). `colour` is 15-bit RGB as the game
+   * sends it - five bits each of red, green and blue, as rsprox logs it.
+   */
+  /** The ticks until the player's next attack, for the client's attack timer. */
+  sendAttackTimer(ticks: number): this {
+    this.player.getSession().sendClientPacket(encodeAttackTimer(ticks));
     return this;
   }
 
-  sendGlobalGraphic(..._args: any[]): this {
+  sendInterfaceColour(uid: number, colour: number): this {
+    this.player.getSession().sendClientPacket(encodeWidgetSetColour(uid, colour));
+    return this;
+  }
+
+  sendCameraShake(slot: number, randomAmplitude: number, sineAmplitude = 0, sineFrequency = 0): this {
+    this.player.getSession().sendClientPacket(encodeCameraShake(slot, randomAmplitude, sineAmplitude, sineFrequency));
+    return this;
+  }
+
+  /** Resets the camera, ending any shake. */
+  sendCameraReset(): this {
+    this.player.getSession().sendClientPacket(encodeCameraReset());
+    return this;
+  }
+
+  /** Plays a graphic on a world tile for this player only. */
+  sendGraphic(graphic: Graphic, location: Location): this {
+    if (!graphic || !location) return this;
+    this.player.getSession().sendClientPacket(encodeTileSpotAnim(
+      graphic.id, location.getX(), location.getY(), location.getZ(), graphic.height ?? 0, graphic.delay ?? 0
+    ));
+    return this;
+  }
+
+  /** Plays a graphic on a world tile for everyone in this player's instance who can see it. */
+  sendGlobalGraphic(graphic: Graphic, location: Location): this {
+    if (!graphic || !location) return this;
+    const area = this.player.getPrivateArea();
+    World.forEachNetworkPlayer((viewer) => {
+      if (viewer.getPrivateArea() !== area || !location.isViewableFrom(viewer.getLocation())) return;
+      viewer.getPacketSender().sendGraphic(graphic, location);
+    });
     return this;
   }
 
@@ -896,7 +986,13 @@ export class PacketSender {
     }
 
     this.player.setCreationMenu?.(menu);
-    const names = items.map((id: number) => CacheDefinitions.hasItem(id) ? CacheDefinitions.getItem(id).name : "null");
+    const options = menu.getOptions?.() ?? {};
+    const names = items.map((id: number, index: number) => options.labels?.[index]
+      ?? (CacheDefinitions.hasItem(id) ? CacheDefinitions.getItem(id).name : "null"));
+    const maxAmount = Number.isInteger(options.maxAmount)
+      ? Math.max(0, Math.min(options.maxAmount, CREATION_MENU_MAX_QUANTITY))
+      : CREATION_MENU_MAX_QUANTITY;
+    const lastAmount = Number.isInteger(options.lastAmount) ? Math.max(0, Math.min(options.lastAmount, maxAmount)) : maxAmount;
     const paddedIds = [...items];
     while (paddedIds.length < 18) paddedIds.push(-1);
 
@@ -908,12 +1004,14 @@ export class PacketSender {
       const buttonId = (CREATION_MENU_GROUP_ID << 16) | (CREATION_MENU_FIRST_ITEM_COMPONENT + i);
       this.sendInterfaceFlagsRange(buttonId, 0, CREATION_MENU_MAX_QUANTITY, CREATION_MENU_OP_FLAGS);
     }
+    const lastItem = this.player.getAttribute?.(CREATION_MENU_LAST_ITEM_ATTRIBUTE);
+    if (Number.isInteger(lastItem)) this.sendConfig(CREATION_MENU_LAST_ITEM_VARP, lastItem);
     this.sendInterfaceScript(2046, [
-      13,
+      Number.isInteger(options.mode) ? options.mode : 13,
       [String(menu.getTitle() ?? "What would you like to make?"), ...names].join("|"),
-      CREATION_MENU_MAX_QUANTITY,
+      maxAmount,
       ...paddedIds,
-      CREATION_MENU_MAX_QUANTITY,
+      lastAmount,
     ]);
     return this;
   }
@@ -1067,14 +1165,40 @@ export class PacketSender {
     return this;
   }
 
+  isWorldMapOpen(): boolean {
+    return this.subInterfaceTargets.has(WORLD_MAP_GROUP_ID);
+  }
+
+  /** The last position sendWorldMapPosition sent, packed; -1 before any. */
+  private worldMapPosition = -1;
+
+  getWorldMapPosition(): number {
+    return this.worldMapPosition;
+  }
+
+  /** worldmap_transmitdata (1749): where the world map marks the player. */
+  sendWorldMapPosition(location: Location): this {
+    this.worldMapPosition = packWorldMapCoord(location.getX(), location.getY(), location.getZ());
+    return this.sendInterfaceScript(1749, [this.worldMapPosition, -1, -1]);
+  }
+
+  /**
+   * Where the world map marks the player: their tile, or aboard a boat the boat's own tile (its
+   * world entity's coordinate, as an OSRS capture of a player sailing shows; docs/world-map.md).
+   */
+  worldMapLocation(): Location {
+    const boat = BoatManager.getBoatAboard(this.player);
+    if (!boat) return this.player.getLocation();
+    const tile = boat.worldTile();
+    return new Location(tile.x, tile.y, tile.level);
+  }
+
   toggleWorldMap(): this {
-    if (this.subInterfaceTargets.has(WORLD_MAP_GROUP_ID)) {
+    if (this.isWorldMapOpen()) {
       return this.closeSubInterface(WORLD_MAP_TARGET_UID);
     }
-    const location = this.player.getLocation();
-    const packed = packWorldMapCoord(location.getX(), location.getY(), location.getZ());
     return this
-      .sendInterfaceScript(1749, [packed, -1, -1])
+      .sendWorldMapPosition(this.worldMapLocation())
       .sendSubInterface(WORLD_MAP_TARGET_UID, WORLD_MAP_GROUP_ID)
       .sendInterfaceFlagsRange((WORLD_MAP_GROUP_ID << 16) | 21, 0, 4, 1 << 1);
   }

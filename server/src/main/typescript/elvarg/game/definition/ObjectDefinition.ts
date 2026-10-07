@@ -17,6 +17,8 @@ export class ObjectDefinition extends ObjectIdentifiers {
     private readonly interactive: boolean;
     private readonly interactions: string[] | null;
     private readonly minimapFunction: number;
+    /** Multi-loc: what a player sees depends on a varbit/varp (forPlayer resolves it). */
+    private readonly multiLoc: boolean;
 
     private constructor(id: number) {
         super();
@@ -32,6 +34,7 @@ export class ObjectDefinition extends ObjectIdentifiers {
         this.interactive = cached.isInteractive === 1;
         this.interactions = cached.actions?.some(Boolean) ? [...cached.actions] : null;
         this.minimapFunction = cached.mapFunctionId;
+        this.multiLoc = !!cached.transforms;
     }
 
     static init(): void {
@@ -49,14 +52,22 @@ export class ObjectDefinition extends ObjectIdentifiers {
         return definition;
     }
 
+    /**
+     * A floor decoration (shape 22) blocks movement only when its blockWalk is 1, as in the OSRS
+     * client and rsmod. Being interactive doesn't make it block: ToA's pressure plates and the
+     * POH's build spaces are walked on.
+     */
     isClippedDecoration(): boolean {
-        return this.interactive || this.clipType === 1;
+        return this.clipType === 1;
     }
 
     /** Resolve the same per-player loc variant that the client displays. */
     static forPlayer(id: number, player: { getPacketSender(): { getVarbit(id: number): number; getVarp(id: number): number } }): ObjectDefinition | null {
+        // Most locs are not multi-locs: answer from the kept definition, without
+        // re-decoding the cache type (its LRU churns when bots scan wide areas).
+        const definition = this.forId(id);
+        if (!definition?.multiLoc) return definition ?? null;
         const cached = CacheDefinitions.getObject(id);
-        if (!cached.transforms) return this.forId(id);
         const vars = player.getPacketSender();
         const index = cached.transformVarbit !== -1 ? vars.getVarbit(cached.transformVarbit)
             : cached.transformVarp !== -1 ? vars.getVarp(cached.transformVarp) : -1;

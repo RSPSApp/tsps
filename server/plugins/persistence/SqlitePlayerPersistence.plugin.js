@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { DatabaseSync } = require("node:sqlite");
+const { Worker } = require("worker_threads");
 const { PrayerData } = require("../../src/main/typescript/elvarg/game/content/PrayerHandler");
 const { FightType } = require("../../src/main/typescript/elvarg/game/content/combat/FightType");
 const { Skills } = require("../../src/main/typescript/elvarg/game/content/skill/SkillManager");
@@ -14,6 +15,11 @@ const { SkullType } = require("../../src/main/typescript/elvarg/game/model/Skull
 const { DonatorRights } = require("../../src/main/typescript/elvarg/game/model/rights/DonatorRights");
 const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
+const { SqliteSaveHistory, PRE_ROLLBACK_REASON, ROLLBACK_REASON } = require("./SqliteSaveHistory");
+const { createWriter } = require("./SqliteSaveWorker");
+
+/** Writer threads that die before they're ready, in a row, before saves fall back to the game thread. */
+const MAX_WRITER_FAILURES = 3;
 
 function legacyJsonImportEnabled() {
   const value = String(process.env.PLAYER_SAVE_IMPORT_LEGACY_JSON ?? "0")
@@ -55,46 +61,183 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     this.findSave = this.database.prepare(
       "SELECT save_json AS saveJson FROM player_saves WHERE username = ?"
     );
-    this.savePlayer = this.database.prepare(`
-      INSERT INTO player_saves (username, save_json, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(username) DO UPDATE SET
-        save_json = excluded.save_json,
-        updated_at = excluded.updated_at
-    `);
+    // This connection only reads once the writer starts (SqliteSaveWorker.js owns the writes).
+    this.history = new SqliteSaveHistory(this.database);
+    this.markInUse();
+    /** Restores waiting for an online player's next save: username -> { json, recorded }. */
+    this.pendingRestores = new Map();
     if (SqlitePlayerPersistence.IMPORT_LEGACY_JSON) {
       this.importLegacySaves();
     } else {
-      console.info("[persistence] legacy JSON import is disabled");
+      console.debug("[persistence] legacy JSON import is disabled");
     }
+    /** Saves sent to the writer and not yet committed: username -> { seq, json }. Loads read these first. */
+    this.unwritten = new Map();
+    /** Messages the writer hasn't answered, by seq, to resend if it dies. */
+    this.inFlight = new Map();
+    this.failedWrites = new Map();
+    this.idleWaiters = [];
+    this.sequence = 0;
+    this.writerFailures = 0;
+    this.writeHere = null;
+    this.startWriter();
+  }
+
+  /**
+   * Starts the writer thread. It is only kept referenced while it has work, so an idle writer
+   * doesn't hold the process open. If it dies, a new one gets every unanswered message again;
+   * if it keeps dying before it's ready, saves are written on the game thread instead.
+   */
+  startWriter() {
+    const writer = new Worker(path.join(__dirname, "SqliteSaveWorker.js"), {
+      workerData: { databasePath: SqlitePlayerPersistence.DATABASE_PATH, skillCount: SkillManager.AMOUNT_OF_SKILLS },
+    });
+    this.writer = writer;
+    writer.on("message", (answer) => {
+      if (answer.ready) this.writerFailures = 0;
+      else this.onWritten(answer);
+    });
+    writer.on("error", (error) => console.error("[persistence] SQLite save writer failed", error));
+    writer.on("exit", (code) => {
+      if (this.writer !== writer) return;
+      this.writerFailures++;
+      if (this.writerFailures >= MAX_WRITER_FAILURES) {
+        console.error(`[persistence] SQLite save writer keeps failing (exit ${code}); writing saves on the game thread`);
+        this.writeHere = createWriter(this.database, SkillManager.AMOUNT_OF_SKILLS);
+        this.writer = null;
+        for (const message of [...this.inFlight.values()]) this.onWritten(this.writeHere(message));
+        return;
+      }
+      console.error(`[persistence] SQLite save writer exited (${code}); restarting it with ${this.inFlight.size} unwritten save(s)`);
+      this.startWriter();
+      for (const message of this.inFlight.values()) this.writer.postMessage(message);
+    });
+    if (this.inFlight.size === 0) writer.unref();
+  }
+
+  /** Sends one player's writes to the writer; a row write is what load() returns until it's committed. */
+  enqueue(username, writes) {
+    const seq = ++this.sequence;
+    const message = { seq, username, savedAt: new Date().toISOString(), writes };
+    const row = writes.find((write) => write.kind === "row");
+    if (row) this.unwritten.set(username, { seq, json: row.json });
+    this.inFlight.set(seq, message);
+    if (this.writeHere) {
+      this.onWritten(this.writeHere(message));
+      return;
+    }
+    if (this.inFlight.size === 1) this.writer.ref();
+    this.writer.postMessage(message);
+  }
+
+  onWritten({ seq, username, ok, error }) {
+    this.inFlight.delete(seq);
+    if (this.unwritten.get(username)?.seq === seq) this.unwritten.delete(username);
+    if (ok) {
+      this.failedWrites.delete(username);
+    } else {
+      // Nothing of this save was written: the player's previous save stays.
+      console.error(`[persistence] Failed to save ${username}: ${error}`);
+      this.failedWrites.set(username, new Error(error));
+    }
+    if (this.inFlight.size === 0) {
+      this.writer?.unref();
+      for (const resolve of this.idleWaiters.splice(0)) resolve();
+    }
+  }
+
+  /** Waits until the writer has committed everything sent so far (shutdown awaits this). */
+  async flush() {
+    if (this.inFlight.size > 0) await new Promise((resolve) => this.idleWaiters.push(resolve));
+    if (this.failedWrites.size > 0) throw this.failedWrites.values().next().value;
+  }
+
+  /** The player's newest save JSON: one waiting for the writer, else the stored one. */
+  currentJson(username) {
+    return this.unwritten.get(username)?.json ?? this.findSave.get(username)?.saveJson;
   }
 
   load(username) {
-    const row = this.findSave.get(this.normalizeUsername(username));
-    if (!row || typeof row.saveJson !== "string") {
+    // Logging back in after a rollback: the restored save is in place.
+    this.pendingRestores.delete(this.normalizeUsername(username));
+    const json = this.currentJson(this.normalizeUsername(username));
+    if (typeof json !== "string") {
       return null;
     }
-    const parsed = JSON.parse(row.saveJson, this.reviver.bind(this));
+    const parsed = JSON.parse(json, this.reviver.bind(this));
     return this.hydratePlayerSave(parsed);
   }
 
-  save(player) {
+  /**
+   * Writes the player's save and, for a real player, a copy in the save history. A player with a
+   * restore waiting (rolled back while online) gets the restored save instead, until they log
+   * back in; their own state goes in the history first as "pre-rollback". Only the JSON is made
+   * here, on the tick: the writer thread validates and stores it.
+   */
+  save(player, reason = "save") {
     if (!player || !player.getUsername()) {
       return;
     }
 
+    const username = this.normalizeUsername(player.getUsername());
     const save = PlayerSave.fromPlayer(player);
-    const serialized = JSON.stringify(save, this.replacer.bind(this), 2);
-    this.validateSerializedSave(serialized, player.getUsername());
-    this.savePlayer.run(
-      this.normalizeUsername(player.getUsername()),
-      serialized,
-      new Date().toISOString()
-    );
+    const serialized = JSON.stringify(save, this.replacer.bind(this));
+    const pending = this.pendingRestores.get(username);
+    if (pending) {
+      const writes = pending.recorded ? [] : [{ kind: "history", json: serialized, reason: PRE_ROLLBACK_REASON }];
+      pending.recorded = true;
+      this.enqueue(username, [...writes, { kind: "row", json: pending.json }, { kind: "history", json: pending.json, reason: ROLLBACK_REASON }]);
+      return;
+    }
+    const keepHistory = player.isPlayerBot?.() !== true;
+    this.enqueue(username, [{ kind: "row", json: serialized }, ...(keepHistory ? [{ kind: "history", json: serialized, reason }] : [])]);
+  }
+
+  /**
+   * Writes `<database>.pid` while this server has the database open, so the rollback script
+   * (scripts/rollback-saves.mjs) can refuse to run under it.
+   */
+  markInUse() {
+    const pidFile = `${SqlitePlayerPersistence.DATABASE_PATH}.pid`;
+    fs.writeFileSync(pidFile, String(process.pid));
+    process.once("exit", () => {
+      try {
+        if (fs.readFileSync(pidFile, "utf8") === String(process.pid)) fs.unlinkSync(pidFile);
+      } catch {
+        // Already gone.
+      }
+    });
+  }
+
+  supportsHistory() {
+    return true;
+  }
+
+  listSnapshots(username, limit = 15) {
+    return this.history.list(this.normalizeUsername(username), limit);
+  }
+
+  /** See PlayerPersistence.restoreSnapshot. An offline player's current save goes in the history first. */
+  restoreSnapshot(username, id, { online = false } = {}) {
+    const name = this.normalizeUsername(username);
+    const copy = this.history.get(name, id);
+    if (!copy) return null;
+    if (online) {
+      this.pendingRestores.set(name, { json: copy.json, recorded: false });
+      return { snapshot: copy.snapshot, pending: true };
+    }
+    const current = this.currentJson(name);
+    this.enqueue(name, [
+      ...(typeof current === "string" ? [{ kind: "history", json: current, reason: PRE_ROLLBACK_REASON }] : []),
+      { kind: "row", json: copy.json },
+      { kind: "history", json: copy.json, reason: ROLLBACK_REASON },
+    ]);
+    return { snapshot: copy.snapshot, pending: false };
   }
 
   exists(username) {
-    return this.findSave.get(this.normalizeUsername(username)) !== undefined;
+    const name = this.normalizeUsername(username);
+    return this.unwritten.has(name) || this.findSave.get(name) !== undefined;
   }
 
   normalizeUsername(username) {
@@ -206,21 +349,11 @@ class SqlitePlayerPersistence extends PlayerPersistence {
         passwordHashWithSalt: "",
         isDiscordLogin: false,
         cachedDiscordAccessToken: "",
-        title: "",
         autoRetaliate: true,
-        xpLocked: false,
-        clanChat: "",
-        targetTeleportUnlocked: false,
-        preserveUnlocked: false,
-        rigourUnlocked: false,
-        auguryUnlocked: false,
         hasVengeance: false,
         lastVengeanceTimer: 0,
         specPercentage: 100,
-        recoilDamage: 0,
         poisonDamage: 0,
-        crystalBowShotsInStage: 0,
-        crystalBowTrackedStageItemId: -1,
         barrowsCrypt: 0,
         barrowsChests: 0,
         killedBrothers: [],
@@ -232,13 +365,6 @@ class SqlitePlayerPersistence extends PlayerPersistence {
         skullTimer: 0,
         running: false,
         runEnergy: 100,
-        totalKills: 0,
-        killstreak: 0,
-        highestKillstreak: 0,
-        recentKills: [],
-        deaths: 0,
-        points: 0,
-        pouches: [],
         inventory: [],
         equipment: [],
         appearance: [],
@@ -261,7 +387,6 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     save.quickPrayers = this.hydrateQuickPrayers(parsed.quickPrayers);
     save.friends = this.hydrateRelationArray(parsed.friends, { max: 200 });
     save.ignores = this.hydrateRelationArray(parsed.ignores, { max: 100 });
-    save.recentKills = this.hydrateStringArray(parsed.recentKills);
     save.flags = this.hydrateFlags(parsed.flags);
     save.banks = this.hydrateBanks(parsed.banks);
     return save;
@@ -559,77 +684,6 @@ class SqlitePlayerPersistence extends PlayerPersistence {
     return fallback;
   }
 
-  validateSerializedSave(serialized, username) {
-    let parsed;
-    try {
-      parsed = JSON.parse(serialized);
-    } catch (error) {
-      throw new Error(
-        `Refusing to save invalid JSON for ${username}: ${error?.message ?? error}`
-      );
-    }
-
-    const assertFiniteNumber = (value, pathLabel) => {
-      if (typeof value !== "number" || !Number.isFinite(value)) {
-        throw new Error(
-          `Refusing to save ${username}: ${pathLabel} must be a finite number`
-        );
-      }
-    };
-
-    const assertObject = (value, pathLabel) => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error(`Refusing to save ${username}: ${pathLabel} must be an object`);
-      }
-    };
-
-    const assertItemArray = (value, expectedLength, pathLabel) => {
-      if (!Array.isArray(value) || value.length !== expectedLength) {
-        throw new Error(
-          `Refusing to save ${username}: ${pathLabel} must be an array of length ${expectedLength}`
-        );
-      }
-      for (let i = 0; i < value.length; i++) {
-        const entry = value[i];
-        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-          throw new Error(
-            `Refusing to save ${username}: ${pathLabel}[${i}] must be an object`
-          );
-        }
-        assertFiniteNumber(entry.id, `${pathLabel}[${i}].id`);
-        assertFiniteNumber(entry.amount, `${pathLabel}[${i}].amount`);
-      }
-    };
-
-    const assertNumericArray = (value, expectedLength, pathLabel) => {
-      if (!Array.isArray(value) || value.length !== expectedLength) {
-        throw new Error(
-          `Refusing to save ${username}: ${pathLabel} must be an array of length ${expectedLength}`
-        );
-      }
-      for (let i = 0; i < value.length; i++) {
-        assertFiniteNumber(value[i], `${pathLabel}[${i}]`);
-      }
-    };
-
-    assertObject(parsed, "root");
-    assertObject(parsed.position, "position");
-    assertFiniteNumber(parsed.position.x, "position.x");
-    assertFiniteNumber(parsed.position.y, "position.y");
-    assertFiniteNumber(parsed.position.z, "position.z");
-
-    assertItemArray(parsed.inventory, 28, "inventory");
-    assertItemArray(parsed.equipment, 14, "equipment");
-
-    assertObject(parsed.skills, "skills");
-    assertNumericArray(parsed.skills.level, SkillManager.AMOUNT_OF_SKILLS, "skills.level");
-    assertNumericArray(parsed.skills.maxLevel, SkillManager.AMOUNT_OF_SKILLS, "skills.maxLevel");
-    assertNumericArray(
-      parsed.skills.experience,
-      SkillManager.AMOUNT_OF_SKILLS,
-      "skills.experience"
-    );
-  }
 }
 
 let SkillManager;

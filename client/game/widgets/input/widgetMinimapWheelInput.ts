@@ -1,4 +1,4 @@
-import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
+import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
 import type { WidgetInteractionController } from "../WidgetInteractionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 

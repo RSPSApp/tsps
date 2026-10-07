@@ -52,6 +52,15 @@ export function registerStringOps(handlers: HandlerMap): void {
         ctx.pushString(val !== undefined && val !== null ? val.toString() : "0");
     });
 
+    // safeparseint(string)(int, boolean): the value and whether it parsed (rev 241).
+    handlers.set(Opcodes.SAFEPARSEINT, (ctx) => {
+        const text = String(ctx.stringStack[--ctx.stringStackSize] ?? "").trim();
+        const value = /^-?\d+$/.test(text) ? Number(text) : NaN;
+        const ok = Number.isSafeInteger(value) && value >= -2147483648 && value <= 2147483647;
+        ctx.pushInt(ok ? value : 0);
+        ctx.pushInt(ok ? 1 : 0);
+    });
+
     handlers.set(Opcodes.COMPARE, (ctx) => {
         const str2 = ctx.stringStack[--ctx.stringStackSize] ?? "";
         const str1 = ctx.stringStack[--ctx.stringStackSize] ?? "";

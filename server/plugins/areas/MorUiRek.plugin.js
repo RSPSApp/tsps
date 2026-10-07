@@ -21,6 +21,7 @@ function exitToKaramja(event) {
 
 module.exports = {
   name: "MorUiRek",
+  members: true,
   register(api) {
     api.onObjectInteraction("Cave exit", { Enter: exitToKaramja });
   },

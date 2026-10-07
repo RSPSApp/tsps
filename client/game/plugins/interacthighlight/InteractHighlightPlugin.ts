@@ -1,41 +1,41 @@
-import type {
-    InteractHighlightPluginConfig,
-    InteractHighlightPluginPersistence,
-    InteractHighlightPluginState,
-} from "./types";
+import { ConfigChanged } from "@runelite/api/events";
+import { ConfigManager } from "@runelite/client/config/ConfigManager";
+import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+import { inject } from "@runelite/client/plugins/PluginInjector";
+import {
+    InteractHighlightConfig,
+    readInteractHighlightConfig,
+    type InteractHighlightPluginConfig,
+    type InteractHighlightPluginState,
+} from "./InteractHighlightConfig";
 
 type InteractHighlightPluginListener = () => void;
 
-const DEFAULT_CONFIG: InteractHighlightPluginConfig = Object.freeze({
-    enabled: true,
-    showHover: true,
-    showInteract: true,
-    hoverColor: 0x00ffff,
-    interactColor: 0xff0000,
-});
+export class InteractHighlightPlugin extends Plugin {
+    static descriptor: PluginDescriptor = {
+        name: "Interact Highlight",
+        description: "Highlights hovered and interacted world objects.",
+        tags: ["overlay"],
+        configKey: "interacthighlightplugin",
+    };
 
-function sanitizeColor(value: unknown, fallback: number): number {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return fallback & 0xffffff;
-    return (Math.floor(numeric) & 0xffffff) >>> 0;
-}
+    static config = InteractHighlightConfig;
 
-export class InteractHighlightPlugin {
     private readonly listeners: Set<InteractHighlightPluginListener> = new Set();
-    private readonly persistence?: InteractHighlightPluginPersistence;
+    private readonly configManager = inject(ConfigManager);
 
     private config: InteractHighlightPluginConfig;
     private state: InteractHighlightPluginState;
     private version = 0;
 
-    constructor(persistence?: InteractHighlightPluginPersistence) {
-        this.persistence = persistence;
-        const loaded = persistence?.load();
-        this.config = this.sanitizeConfig(loaded);
-        this.state = {
-            config: this.config,
-            version: this.version,
-        };
+    constructor() {
+        super();
+        this.config = readInteractHighlightConfig(this.configManager, this.isEnabled());
+        this.state = { config: this.config, version: this.version };
+    }
+
+    onConfigChanged(event: ConfigChanged): void {
+        if (event.getGroup() === InteractHighlightConfig.group) this.refresh();
     }
 
     subscribe(listener: InteractHighlightPluginListener): () => void {
@@ -50,37 +50,21 @@ export class InteractHighlightPlugin {
     }
 
     getConfig(): InteractHighlightPluginConfig {
-        return this.state.config;
+        return { ...this.state.config, enabled: this.isEnabled() };
     }
 
     setConfig(nextConfig: Partial<InteractHighlightPluginConfig>): void {
-        this.config = this.sanitizeConfig({
-            ...this.config,
-            ...nextConfig,
-        });
-        this.commit();
+        for (const [property, value] of Object.entries(nextConfig)) {
+            if (value === undefined || property === "enabled") continue;
+            this.configManager.setConfigValue(InteractHighlightConfig, property, value);
+        }
+        this.refresh();
     }
 
-    private sanitizeConfig(
-        input: Partial<InteractHighlightPluginConfig> | undefined,
-    ): InteractHighlightPluginConfig {
-        const src = input ? input : {};
-        return {
-            enabled: src.enabled !== false,
-            showHover: src.showHover !== false,
-            showInteract: src.showInteract !== false,
-            hoverColor: sanitizeColor(src.hoverColor, DEFAULT_CONFIG.hoverColor),
-            interactColor: sanitizeColor(src.interactColor, DEFAULT_CONFIG.interactColor),
-        };
-    }
-
-    private commit(): void {
+    private refresh(): void {
+        this.config = readInteractHighlightConfig(this.configManager, this.isEnabled());
         this.version++;
-        this.state = {
-            config: this.config,
-            version: this.version,
-        };
-        this.persistence?.save(this.config);
+        this.state = { config: this.config, version: this.version };
         for (const listener of this.listeners) {
             try {
                 listener();

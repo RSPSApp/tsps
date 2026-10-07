@@ -1,5 +1,6 @@
 const { Location } = require("../../../src/main/typescript/elvarg/game/model/Location");
 const { Wilderness } = require("../../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
+const { isMembersArea } = require("../../../src/main/typescript/elvarg/game/definition/WorldDefinition");
 const {
   getEnabledWildernessHotspots,
   getWildernessHotspot,
@@ -38,8 +39,9 @@ function createBotRegistry(options) {
     assignPvpMetadata: assignPvpMetadataFn,
     applyInitialPvpLoadout: applyInitialPvpLoadoutFn,
     applyForcedModeForDiagnosis: applyForcedModeForDiagnosisFn,
-    createController,
     ensureBehaviorTaskStarted,
+    attachWildernessBrain,
+    attachAssistantBrain,
     emitPlayerLogin,
     worldGetPlayerByName,
     formatText,
@@ -535,7 +537,13 @@ function createBotRegistry(options) {
     if (!state.autonomy) {
       state.autonomy = {};
     }
-    primePvpOnlyStartupState(state, nowMs);
+    // A requested non-PvP mode (::bot woodcutting) starts ungeared and unlocked, so
+    // the behavior's own tooling applies instead of a PvP preset and seeking state.
+    const requestedMode = plan.mode ?? null;
+    const wantsPvpPriming = requestedMode == null || requestedMode === behaviorMode.PVP;
+    if (wantsPvpPriming) {
+      primePvpOnlyStartupState(state, nowMs);
+    }
     if (!state.roaming) {
       state.roaming = {};
     }
@@ -550,20 +558,22 @@ function createBotRegistry(options) {
         z: assignedBounds.z ?? assignedHotspot?.area?.z ?? botSpawn.getZ(),
       };
     }
-    const pvpMetadata =
-      assignedHotspotId != null
-        ? buildHotspotPvpMetadata({
-            hotspotId: assignedHotspotId,
-          })
-        : buildRoamingPvpMetadata({
-            excludeF2p: true,
-          });
-    assignPvpMetadata(state, {
-      metadata: pvpMetadata,
-    });
-    state.pvp.presetPoolEnabled = true;
-    syncBotProfileAttribute(bot, state);
-    if (!applyInitialPvpLoadout(bot, state)) state.pvp.loadoutPending = true;
+    if (wantsPvpPriming) {
+      const pvpMetadata =
+        assignedHotspotId != null
+          ? buildHotspotPvpMetadata({
+              hotspotId: assignedHotspotId,
+            })
+          : buildRoamingPvpMetadata({
+              excludeF2p: true,
+            });
+      assignPvpMetadata(state, {
+        metadata: pvpMetadata,
+      });
+      state.pvp.presetPoolEnabled = true;
+      syncBotProfileAttribute(bot, state);
+      if (!applyInitialPvpLoadout(bot, state)) state.pvp.loadoutPending = true;
+    }
     applyForcedModeForDiagnosis(bot, state);
     bot.setLocation?.(botSpawn.clone());
     bot.setLastKnownRegion?.(botSpawn.clone());
@@ -571,15 +581,12 @@ function createBotRegistry(options) {
     playerBotUsernames.add(username);
     assignmentMap?.set(username, assignmentValue);
 
-    addEntry(username, {
-      player: bot,
-      state,
-      controller: createController(
-        bot,
-        botSpawn,
-        0
-      ),
-    });
+    const entry = { player: bot, state };
+    addEntry(username, entry);
+    // Managed wilderness bots run the pvp brain activity.
+    if (assignmentMap && typeof attachWildernessBrain === "function") {
+      attachWildernessBrain({ entry, bot, state, plan, hotspotId: assignedHotspotId });
+    }
     emitPlayerLogin({
       player: bot,
       username,
@@ -892,15 +899,7 @@ function createBotRegistry(options) {
         botStatesByName.set(username, state);
         playerBotUsernames.add(username);
 
-        addEntry(username, {
-          player: bot,
-          state,
-          controller: createController(
-            bot,
-            botSpawn,
-            0
-          ),
-        });
+        addEntry(username, { player: bot, state });
         emitPlayerLogin({
           player: bot,
           username,
@@ -982,6 +981,7 @@ function createBotRegistry(options) {
       const offsetY = Math.floor(tileIndex / width);
       const candidate = new Location(minX + offsetX, minY + offsetY, z);
       if (Wilderness.isInLocation(candidate) && isOutsideWildernessHotspots(candidate) &&
+          !isMembersArea(candidate.getX(), candidate.getY()) &&
           !RegionManager.blocked(candidate, null) && !RegionManager.isWater(candidate)) {
         return candidate;
       }
@@ -1018,22 +1018,28 @@ function createBotRegistry(options) {
     if (totalTiles <= 0) {
       return RegionManager.blocked(anchor, null) || RegionManager.isWater(anchor) ? null : anchor;
     }
-    const seedBase =
-      Math.imul(index + 1, 1103515245) ^
-      Math.imul(hotspotId.length + 17, 12345) ^
-      Math.imul(minX + maxY + (anchor.getZ?.() ?? 0), 2654435761);
-    const startIndex = Math.abs(seedBase) % totalTiles;
-    const rawStep = Math.abs(Math.imul(seedBase ^ 0x9e3779b9, 48271)) % totalTiles;
-    const step = rawStep === 0 ? 1 : rawStep;
+    // Randomize both axes independently; a sequential spawn index must not
+    // produce a repeatable row or column. Probe every tile at most once.
+    const tileIndices = Array.from({ length: totalTiles }, (_, tileIndex) => tileIndex);
+    for (let i = tileIndices.length - 1; i > 0; i -= 1) {
+      const j = randomInRange(0, i);
+      [tileIndices[i], tileIndices[j]] = [tileIndices[j], tileIndices[i]];
+    }
     const z = Math.floor(area.z ?? anchor.getZ?.() ?? 0);
     const attempts = Math.min(totalTiles, WILDERNESS_SPAWN_TILE_PROBE_LIMIT);
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const tileIndex = (startIndex + attempt * step) % totalTiles;
+      const tileIndex = tileIndices[attempt];
       const offsetX = tileIndex % width;
       const offsetY = Math.floor(tileIndex / width);
       const candidate = new Location(minX + offsetX, minY + offsetY, z);
+      const occupied = entries.some((entry) => {
+        const location = entry.player?.getLocation?.();
+        return location?.getX() === candidate.getX() && location?.getY() === candidate.getY() &&
+          location?.getZ() === z;
+      });
       if (
-        Wilderness.isInLocation(candidate) &&
+        !occupied && Wilderness.isInLocation(candidate) &&
+        !isMembersArea(candidate.getX(), candidate.getY()) &&
         !RegionManager.blocked(candidate, null) &&
         !RegionManager.isWater(candidate)
       ) {
@@ -1075,11 +1081,11 @@ function createBotRegistry(options) {
     botStatesByName.set(username, state);
     botmeUsernames.add(username);
     player.setPlayerBot?.(true);
-    addEntry(username, {
-      player,
-      state,
-      controller: createController(player, location, 0),
-    });
+    const entry = { player, state };
+    addEntry(username, entry);
+    if (typeof attachAssistantBrain === "function") {
+      attachAssistantBrain({ entry, player, state });
+    }
     resetMovementState(player);
     ensureBehaviorTaskStarted();
     return { ok: true };
@@ -1092,6 +1098,11 @@ function createBotRegistry(options) {
     player.setPlayerBot?.(false);
     const username = player.getUsername();
     const state = username ? botStatesByName.get(username) : null;
+    const entry = username ? entriesByUsername.get(username) : null;
+    if (entry?.brain) {
+      entry.brain.reset();
+      entry.brain = null;
+    }
     clearFollowState(player, state);
     if (username) {
       botStatesByName.delete(username);
@@ -1131,11 +1142,15 @@ function createBotRegistry(options) {
     hasControllerForPlayer,
     resolveControlledPlayer,
     spawnConfiguredBots,
-    spawnPvpBot(location) {
+    spawnPvpBot(location, options = {}) {
       let username;
       do { username = `DevBot${++developerBotId}`; }
       while (entriesByUsername.has(username) || worldGetPlayerByName(username));
-      return spawnWildernessBot({ username, spawnLocation: location });
+      return spawnWildernessBot({
+        username,
+        spawnLocation: location,
+        mode: options.mode ?? null,
+      });
     },
     scheduleInitialSpawn,
     enableControllerForPlayer,

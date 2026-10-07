@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Run several worktrees side by side, each on its own ports. See docs/worktrees.md.
+#
+#   scripts/wt new <branch> [base]   create ../<repo>-<branch>, give it a slot, copy deps
+#   scripts/wt slot [path]           give an existing worktree a slot (default: this one)
+#   scripts/wt ls                    every worktree with its branch, URL and ports
+#   scripts/wt rm <path|branch>      remove a worktree
+#
+# Slot N (1-9) uses client 3100+N, game 43700+N and agent MCP 49800+N. The main
+# checkout keeps the defaults (3000, 43594, 49700) and has no slot.
+set -euo pipefail
+
+MAIN=$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)
+BEGIN="# >>> wt slot"
+END="# <<< wt slot"
+
+env_of() { sed -n "s/^$2=//p" "$1/.env" 2>/dev/null | tail -1 || true; }
+slot_of() { env_of "$1" WT_SLOT; }
+worktrees() { git worktree list --porcelain | sed -n 's/^worktree //p'; }
+
+free_slot() {
+  local used
+  used=$(for dir in $(worktrees); do slot_of "$dir"; done)
+  for n in 1 2 3 4 5 6 7 8 9; do
+    grep -qx "$n" <<<"$used" || { echo "$n"; return; }
+  done
+  echo "wt: all 9 slots are taken; remove a worktree first" >&2
+  exit 1
+}
+
+write_slot() {
+  local dir=$1 n branch
+  [ "$dir" != "$MAIN" ] || { echo "wt: the main checkout keeps the default ports" >&2; exit 1; }
+  n=$(slot_of "$dir")
+  n=${n:-$(free_slot)}
+  branch=$(git -C "$dir" branch --show-current)
+  touch "$dir/.env"
+  sed -i.bak "/^$BEGIN/,/^$END/d" "$dir/.env" && rm "$dir/.env.bak"
+  cat >>"$dir/.env" <<EOF
+$BEGIN (written by scripts/wt, do not edit)
+WT_SLOT=$n
+PORT=$((3100 + n))
+WEBSOCKET_PORT=$((43700 + n))
+AGENT_MCP_PORT=$((49800 + n))
+VOICE_SIGNAL_PORT=0
+BROWSER=none
+REACT_APP_DEFAULT_WS_URL=ws://localhost:$((43700 + n))
+REACT_APP_DEFAULT_SERVER_ADDRESS=localhost:$((43700 + n))
+REACT_APP_DEFAULT_SERVER_NAME=${branch:-slot $n}
+$END
+EOF
+  # Point this worktree's agents at its own agent MCP, not the main checkout's.
+  if command -v claude >/dev/null; then
+    (cd "$dir" && claude mcp remove tsps -s local >/dev/null 2>&1 || true
+     claude mcp add -s local --transport http tsps "http://127.0.0.1:$((49800 + n))/mcp" >/dev/null)
+  fi
+  echo "$dir: slot $n, http://localhost:$((3100 + n))"
+}
+
+# Copy-on-write clones on APFS/btrfs, so 2.5 GB of node_modules costs nothing until it changes.
+copy_deps() {
+  local dir=$1 sub
+  for sub in node_modules server/node_modules client/node_modules server/caches; do
+    [ -d "$MAIN/$sub" ] && [ ! -e "$dir/$sub" ] || continue
+    cp -cR "$MAIN/$sub" "$dir/$sub" 2>/dev/null || cp -R --reflink=auto "$MAIN/$sub" "$dir/$sub"
+  done
+}
+
+case "${1:-ls}" in
+  new)
+    branch=${2:?usage: wt new <branch> [base]}
+    dir="$(dirname "$MAIN")/$(basename "$MAIN")-${branch//\//-}"
+    if git show-ref -q --verify "refs/heads/$branch"; then
+      git worktree add "$dir" "$branch"
+    else
+      git fetch -q origin
+      git worktree add -b "$branch" "$dir" "${3:-origin/main}"
+    fi
+    copy_deps "$dir"
+    write_slot "$dir"
+    ;;
+  slot)
+    write_slot "$(cd "${2:-.}" && git rev-parse --show-toplevel)"
+    ;;
+  ls)
+    printf '%-4s %-36s %-24s %-6s %-6s %s\n' SLOT BRANCH CLIENT GAME MCP STATE
+    for dir in $(worktrees); do
+      n=$(slot_of "$dir")
+      client=$(env_of "$dir" PORT) game=$(env_of "$dir" WEBSOCKET_PORT) mcp=$(env_of "$dir" AGENT_MCP_PORT)
+      client=${client:-3000} game=${game:-43594} mcp=${mcp:-49700}
+      branch=$(git -C "$dir" branch --show-current) state=stopped
+      lsof -nP -iTCP:"$game" -sTCP:LISTEN >/dev/null 2>&1 && state=running
+      if [ -z "$n" ] && [ "$dir" != "$MAIN" ]; then
+        printf '%-4s %-36s %s\n' - "${branch:-detached}" "no slot: scripts/wt slot $dir"
+        continue
+      fi
+      printf '%-4s %-36s %-24s %-6s %-6s %s\n' "${n:-main}" "${branch:-detached}" \
+        "http://localhost:$client" "$game" "$mcp" "$state"
+    done
+    ;;
+  rm)
+    target=${2:?usage: wt rm <path|branch>}
+    dir=$(git worktree list --porcelain | awk -v t="$target" '
+      /^worktree /{d=substr($0,10)} /^branch /{b=substr($0,19); if (b==t || d==t) print d}')
+    dir=${dir:-$target}
+    (cd "$dir" && command -v claude >/dev/null && claude mcp remove tsps -s local >/dev/null 2>&1 || true)
+    git worktree remove "$dir"
+    ;;
+  *)
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+    ;;
+esac

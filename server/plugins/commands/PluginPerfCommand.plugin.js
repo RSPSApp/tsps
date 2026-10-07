@@ -201,13 +201,13 @@ module.exports = {
 
       player.sendMessage("Usage: ::pluginperf [once|on|off|reset] [limit] [intervalMs]");
       return true;
-    }, PlayerRights.ADMINISTRATOR);
+    }, PlayerRights.ADMINISTRATOR, "Inspect plugin performance");
 
     api.registerCommand("serverperf", ({ player, parts }) => {
       const ticksArg = parseIntArg(parts[1]);
       const ticks = ticksArg && ticksArg > 0 ? Math.min(ticksArg, 300) : 60;
       streamServerPerfToPlayer(player, ticks);
       return true;
-    }, PlayerRights.ADMINISTRATOR);
+    }, PlayerRights.ADMINISTRATOR, "Show server performance");
   },
 };

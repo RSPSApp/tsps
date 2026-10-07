@@ -3,6 +3,7 @@
  */
 import { Opcodes } from "../Opcodes";
 import type { HandlerContext, HandlerMap } from "./HandlerTypes";
+import { PRICE_LOADING, PRICE_READY, guidePrice } from "../../../network/ServerConnection";
 
 export function registerMarketOps(handlers: HandlerMap): void {
     const state = (ctx: HandlerContext, slot: number, field: number) =>
@@ -10,6 +11,30 @@ export function registerMarketOps(handlers: HandlerMap): void {
     const slot = (ctx: HandlerContext) => ctx.popInt();
 
     // === Stock Market ===
+    // stockmarket_sellable(obj)(boolean): whether it can go on the Grand Exchange.
+    handlers.set(Opcodes.STOCKMARKET_SELLABLE, (ctx) => {
+        const itemId = ctx.intStack[--ctx.intStackSize];
+        ctx.pushInt(ctx.objTypeLoader?.load(itemId)?.isTradable ? 1 : 0);
+    });
+
+    // stockmarket_value(obj)(status, long price), rev 241: the guide price. Status 2 is ready;
+    // the GE scripts retry on a timer otherwise. Unquoted items show their store value, as
+    // the server's GE charges them.
+    handlers.set(Opcodes.STOCKMARKET_VALUE, (ctx) => {
+        const itemId = ctx.popInt();
+        const obj = ctx.objTypeLoader?.load(itemId);
+        const unnoted = obj && obj.noteTemplate >= 0 && obj.note >= 0 ? obj.note : itemId;
+        const price = guidePrice(unnoted);
+        if (price === undefined) {
+            ctx.pushInt(PRICE_LOADING);
+            ctx.pushLong(0n);
+            return;
+        }
+        const storeValue = ctx.objTypeLoader?.load(unnoted)?.price ?? 1;
+        ctx.pushInt(PRICE_READY);
+        ctx.pushLong(BigInt(Math.max(1, price || storeValue)));
+    });
+
     handlers.set(Opcodes.STOCKMARKET_GETOFFERTYPE, (ctx) => {
         const index = slot(ctx);
         ctx.pushInt(state(ctx, index, 4));
@@ -20,9 +45,10 @@ export function registerMarketOps(handlers: HandlerMap): void {
         ctx.pushInt(state(ctx, index, 6));
     });
 
+    // Rev 241: offer prices and gold are longs (stockmarket_getofferprice/completedgold).
     handlers.set(Opcodes.STOCKMARKET_GETOFFERPRICE, (ctx) => {
         const index = slot(ctx);
-        ctx.pushInt(state(ctx, index, 0));
+        ctx.pushLong(BigInt(state(ctx, index, 0)));
     });
 
     handlers.set(Opcodes.STOCKMARKET_GETOFFERCOUNT, (ctx) => {
@@ -37,7 +63,7 @@ export function registerMarketOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.STOCKMARKET_GETOFFERCOMPLETEDGOLD, (ctx) => {
         const index = slot(ctx);
-        ctx.pushInt(state(ctx, index, 3));
+        ctx.pushLong(BigInt(state(ctx, index, 3)));
     });
 
     handlers.set(Opcodes.STOCKMARKET_ISOFFEREMPTY, (ctx) => {
@@ -102,7 +128,7 @@ export function registerMarketOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.TRADINGPOST_GETOFFERAGE, (ctx) => {
         ctx.intStackSize--; // pop index
-        ctx.pushInt(0);
+        ctx.pushString("");
     });
 
     handlers.set(Opcodes.TRADINGPOST_GETOFFERCOUNT, (ctx) => {
@@ -112,7 +138,7 @@ export function registerMarketOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.TRADINGPOST_GETOFFERPRICE, (ctx) => {
         ctx.intStackSize--; // pop index
-        ctx.pushInt(0);
+        ctx.pushLong(0n);
     });
 
     handlers.set(Opcodes.TRADINGPOST_GETOFFERITEM, (ctx) => {

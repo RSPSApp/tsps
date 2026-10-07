@@ -8,9 +8,12 @@ const { MagicSpellbook } = require("../../../../src/main/typescript/elvarg/game/
 const { ItemIdentifiers } = require("../../../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { Equipment } = require("../../../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 const { getPvpProfile } = require("../pvp/PvpAssignment");
-const { getPvpLoadout, PVP_LOADOUT_DEFINITIONS } = require("../pvp/PvpLoadoutRegistry");
+const { getPvpLoadout, isLoadoutAvailable, PVP_LOADOUT_DEFINITIONS } = require("../pvp/PvpLoadoutRegistry");
+const { getWildernessHotspot } = require("../pvp/WildernessHotspotRegistry");
 const { SPEC_WEAPON_IDS } = require("./PvpCombatRuntimeCache");
 const { isFoodItem } = require("../../../items/Food.plugin");
+
+const CURRENT_PRESET_ATTRIBUTE = "pvp:current-preset";
 
 const ICE_BARRAGE_SPELL_ID = 12891;
 const ICE_BLITZ_SPELL_ID = CombatSpells.ICE_BLITZ.spellId();
@@ -104,15 +107,37 @@ const BOT_PRESET_GROUPS = Object.freeze(BOT_LOADOUT_DEFINITIONS.presetGroups.map
   Object.freeze({ ...group, presetKeys: Object.freeze([...group.presetKeys]) })
 ));
 
+function matchesHotspotCombatBand(stats, state) {
+  const hotspot = getWildernessHotspot(state?.pvp?.hotspotId);
+  const band = hotspot?.combatLevelRange;
+  if (!band) return true;
+  // Match SkillManager.getCombatLevel, using the preset's seven combat stats.
+  const [attack, defence, strength, hp, ranged, prayer, magic] = stats;
+  const base = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
+  const level = Math.min(126, Math.max(3, Math.floor(base + Math.max(
+    (attack + strength) * 0.325,
+    Math.floor(ranged * 1.5) * 0.325,
+    Math.floor(magic * 1.5) * 0.325
+  ))));
+  return level >= band.min && level <= band.max;
+}
+
 function selectBotPreset(state, rng = Math.random) {
   const pvp = state?.pvp;
   // F2P assignments must use their generated F2P gear, including after respawn.
   if (pvp?.presetPoolEnabled !== true || pvp.loadoutId?.startsWith("f2p_")) {
     return null;
   }
+  const groups = !getWildernessHotspot(pvp.hotspotId)?.combatLevelRange ? BOT_PRESET_GROUPS : BOT_PRESET_GROUPS.map((group) => ({
+    ...group,
+    presetKeys: group.presetKeys.filter((key) => {
+      const preset = getGlobalPresetByKey(key);
+      return preset && matchesHotspotCombatBand(preset.getStats(), state);
+    }),
+  })).filter((group) => group.id === "random" || group.presetKeys.length > 0);
   const group =
-    BOT_PRESET_GROUPS.find((entry) => entry.id === pvp.presetPoolGroup) ??
-    weightedPick(BOT_PRESET_GROUPS, rng);
+    groups.find((entry) => entry.id === pvp.presetPoolGroup) ??
+    weightedPick(groups, rng);
   if (!group) {
     return null;
   }
@@ -345,11 +370,21 @@ function buildRandomPvpPreset(player, state) {
   // Loadout and profile are drawn independently at spawn. If no archetype is
   // valid for the selected profile, use a cheap generated fallback instead of
   // bypassing the profile gate and handing low-tier bots expensive gear.
+  const eligible = (entry) => {
+    const stats = [...entry.stats];
+    if ((profile?.confidenceTier ?? 2) <= 1) stats[3] = Math.max(80, stats[3] - 5);
+    return profileAllowedForArchetype(entry, profile) && matchesHotspotCombatBand(stats, state);
+  };
   const allChoices = getArchetypeChoices(loadoutId);
   const gatedChoices = allChoices.filter((entry) =>
-    profileAllowedForArchetype(entry, profile)
+    eligible(entry)
   );
-  const choices = gatedChoices.length > 0 ? gatedChoices : getArchetypeChoices("budget_pk");
+  const hotspot = getWildernessHotspot(state?.pvp?.hotspotId);
+  const fallbackChoices = hotspot
+    ? [...new Set(hotspot.allowedLoadouts.filter(isLoadoutAvailable)
+      .flatMap((id) => getArchetypeChoices(id)))].filter(eligible)
+    : getArchetypeChoices("budget_pk");
+  const choices = gatedChoices.length > 0 ? gatedChoices : fallbackChoices;
   const savedArchetypeId = state?.pvp?.generatedArchetypeId ?? null;
   const archetype =
     choices.find((entry) => entry.id === savedArchetypeId) ?? weightedPick(choices);
@@ -418,7 +453,7 @@ function applyGeneratedPvpLoadout(player, state, options = {}) {
     });
     return false;
   }
-  player.setCurrentPreset?.(generated.preset);
+  player.setAttribute?.(CURRENT_PRESET_ATTRIBUTE, generated.preset);
   let applied = false;
   try {
     applied = applyPreset(player, generated.preset);
@@ -484,5 +519,5 @@ module.exports = {
   BOT_PRESET_GROUPS,
   selectBotPreset,
   applyGeneratedPvpLoadout,
-  __testing: { buildGeneratedPreset },
+  __testing: { buildGeneratedPreset, matchesHotspotCombatBand },
 };

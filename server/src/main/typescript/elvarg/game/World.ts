@@ -22,7 +22,7 @@ import { BoatManager } from "./content/sailing/BoatManager";
 import type { Mobile } from "./entity/impl/Mobile";
 import { HitQueue } from './content/combat/hit/HitQueue';
 
-const ATTR_SKIP_PERSISTENCE = "botSkipPersistence";
+const ATTR_SKIP_PERSISTENCE = "bot-skip-persistence";
 
 export class World {
     // 2048 leaves headroom above the 2000-bot stress-test mode (see
@@ -195,7 +195,8 @@ export class World {
     /**
     * Saves all players in the game.
     */
-    public static savePlayers() {
+    /** Saves every online player (except those marked to skip persistence), recording `reason`. */
+    public static savePlayers(reason: string = "save") {
         let saved = 0;
         let failed = 0;
         this.players.forEach(player => {
@@ -206,7 +207,7 @@ export class World {
                 return;
             }
             try {
-                GameConstants.PLAYER_PERSISTENCE.save(player);
+                GameConstants.PLAYER_PERSISTENCE.save(player, reason);
                 saved++;
             } catch (err) {
                 failed++;
@@ -299,6 +300,11 @@ export class World {
         if (!player || !previousLocation || !nextLocation || previousLocation.equals(nextLocation)) return;
         World.removePlayerFromTileOccupants(player, previousLocation);
         World.addPlayerToTileOccupants(player, nextLocation);
+        if ((previousLocation.getX() >> 6) !== (nextLocation.getX() >> 6)
+            || (previousLocation.getY() >> 6) !== (nextLocation.getY() >> 6)
+            || previousLocation.getZ() !== nextLocation.getZ()) {
+            PluginManager.emitPlayerMapSquareChange({ player, previous: previousLocation, location: nextLocation });
+        }
     }
 
     public static isPlayerOccupyingTile(
@@ -613,7 +619,8 @@ export class World {
     }
 
     public static getNearbyNpcsForUpdate(player: Player): NPC[] {
-        const nearby = World.collectFromBuckets(World.npcUpdateBuckets, BoatManager.rootLocation(player));
+        const radius = Math.max(World.UPDATE_BUCKET_RADIUS, Math.ceil(World.npcViewDistance(player) / 8));
+        const nearby = World.collectFromBuckets(World.npcUpdateBuckets, BoatManager.rootLocation(player), radius);
         nearby.sort((a, b) => a.getIndex() - b.getIndex());
         return nearby;
     }
@@ -671,8 +678,22 @@ export class World {
 
     // Maintains player.getLocalNpcs() - the per-tick sync path (PlayerSession.flushClient)
     // reads this list directly to know which NPCs to include in the player's view.
+    /**
+     * A teleported NPC leaves the local list for its teleport tick, except one gliding there
+     * (npc.exactMove): the glide has to reach clients in that very tick, with the teleport.
+     */
+    private static isExactMoving(npc: NPC): boolean {
+        return npc.getExactMove?.() != null;
+    }
+
+    /** How far the player sees NPCs (15 unless an area widens it). */
+    private static npcViewDistance(player: Player): number {
+        return player.getNpcViewDistance?.() ?? 15;
+    }
+
     private static updateLocalNpcs(player: Player, nearbyNpcs: NPC[]): void {
         const localNpcs = player.getLocalNpcs();
+        const viewDistance = World.npcViewDistance(player);
         const origin = BoatManager.rootLocation(player);
         const privateArea = BoatManager.syncArea(player);
         for (let index = 0; index < localNpcs.length;) {
@@ -681,8 +702,8 @@ export class World {
                 World.getNpcs().get(npc.getIndex()) != null &&
                 npc.isRegistered() &&
                 npc.isVisible() &&
-                origin.isViewableFrom(BoatManager.rootLocation(npc)) &&
-                !npc.isNeedsPlacement() &&
+                origin.isViewableFromWithin(BoatManager.rootLocation(npc), viewDistance) &&
+                (!npc.isNeedsPlacement() || World.isExactMoving(npc)) &&
                 BoatManager.syncArea(npc) === privateArea &&
                 (!npc.isOwnerOnly?.() || npc.getOwner?.() === player)
             ) {
@@ -696,7 +717,7 @@ export class World {
 
         // Keep the owner's active pet in their local NPC list even when normal candidate
         // scans are noisy, to avoid a "spawned but invisible" pet.
-        const currentPet = player.getCurrentPet?.();
+        const currentPet = player.getAttribute("pets:current") as NPC | undefined;
         if (currentPet != null && currentPet.isRegistered() && currentPet.isVisible()) {
             if (currentPet.getPrivateArea() !== player.getPrivateArea()) {
                 currentPet.setArea(player.getArea());
@@ -713,10 +734,11 @@ export class World {
 
         for (const npc of nearbyNpcs) {
             if (localNpcs.length >= World.MAX_LOCAL_NPCS) break;
-            if (npc == null || localIndexes.has(npc.getIndex()) || !npc.isVisible() || npc.isNeedsPlacement()) continue;
+            if (npc == null || localIndexes.has(npc.getIndex()) || !npc.isVisible()) continue;
+            if (npc.isNeedsPlacement() && !World.isExactMoving(npc)) continue;
             if (BoatManager.syncArea(npc) !== privateArea) continue;
             if (npc.isOwnerOnly?.() && npc.getOwner?.() !== player) continue;
-            if (!BoatManager.rootLocation(npc).isViewableFrom(origin)) continue;
+            if (!BoatManager.rootLocation(npc).isViewableFromWithin(origin, viewDistance)) continue;
             localNpcs.push(npc);
             localIndexes.add(npc.getIndex());
         }
@@ -1057,7 +1079,13 @@ export class World {
                     if (player.isPlayerBot?.() !== true) {
                         activeRegionsChanged = true;
                     }
-                    World.players.remove(player);
+                    try {
+                        World.players.remove(player);
+                    } catch (e) {
+                        // A removal hook (logout/save) threw: the player is already deregistered,
+                        // so keep the tick alive and leave the failure observable.
+                        console.error(`[world] Failed to remove player ${player.getUsername?.() ?? "unknown"}`, e);
+                    }
                     World.removePlayerQueue.splice(index, 1);
                 }
                 amount++;
@@ -1108,7 +1136,12 @@ export class World {
                 const wasRegistered =
                     typeof npc.isRegistered === "function" ? npc.isRegistered() : null;
                 const indexBefore = typeof npc.getIndex === "function" ? npc.getIndex() : null;
-                World.npcs.remove(npc);
+                try {
+                    World.npcs.remove(npc);
+                } catch (e) {
+                    // Same contract as players: a throwing removal hook must not abort the tick.
+                    console.error("[world] Failed to remove npc", indexBefore, e);
+                }
                 if (typeof npc.isPet === "function" && npc.isPet()) {
                     const owner: any = typeof npc.getOwner === "function" ? npc.getOwner() : null;
                     const ownerName = owner && typeof owner.getUsername === "function"
@@ -1210,7 +1243,6 @@ export class World {
             World.players.forEach((player) => {
                 try {
                     player.resetUpdating();
-                    player.setCachedUpdateBlock(null);
                 } catch (e) {
                     console.log(e);
                     player.requestLogout();

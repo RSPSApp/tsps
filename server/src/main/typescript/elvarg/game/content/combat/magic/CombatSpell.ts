@@ -87,4 +87,9 @@ export abstract class CombatSpell extends Spell {
   public impactSound(): Sound {
     return null;
   }
+
+  /** Ticks until the hit lands, when the spell has its own (null: the usual magic delay). */
+  public hitDelay(): number | null {
+    return null;
+  }
 }

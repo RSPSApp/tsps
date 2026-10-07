@@ -34,7 +34,6 @@ type LocModelMesh = {
     indices1: Int32Array;
     indices2: Int32Array;
     indices3: Int32Array;
-    faceAlphas?: Int8Array;
     faceColors3?: Int32Array;
     faceCount: number;
     minX: number;
@@ -81,6 +80,13 @@ export class SceneRaycaster {
         fineX: number,
         fineY: number,
     ) => { x: number; y: number } | undefined;
+    /** Scaled model height of an NPC type, in model units. */
+    npcHeightProvider?: (npcTypeId: number) => number;
+    /** World-space triangles (three points each) of an NPC's current pose. */
+    npcTrianglesProvider?: (
+        ecsId: number,
+        serverId: number,
+    ) => ReadonlyArray<readonly [number, number, number]> | undefined;
 
     constructor(
         private readonly mapManager: MapManager<WebGLMapSquare>,
@@ -662,9 +668,7 @@ export class SceneRaycaster {
             if (typeof basePlane === "number" && (npcPlane | 0) !== (basePlane | 0)) {
                 continue;
             }
-            let resizeX = 1.0;
-            let resizeY = 1.0;
-            let resizeZ = 1.0;
+            let heightTiles = 0;
             try {
                 let npcType: NpcType | undefined = this.osrsClient.npcTypeLoader.load(interactId);
                 while (npcType?.transforms) {
@@ -672,36 +676,42 @@ export class SceneRaycaster {
                 }
                 // Model-less NPC spawns must not intercept objects behind their bounding box.
                 if (!npcType?.modelIds?.length) continue;
-                if (npcType) {
-                    if (typeof npcType.widthScale === "number") {
-                        resizeX = Math.max(0.25, npcType.widthScale / 128);
-                    }
-                    if (typeof npcType.widthScale === "number") {
-                        resizeY = Math.max(0.25, npcType.widthScale / 128);
-                    }
-                    if (typeof npcType.heightScale === "number") {
-                        resizeZ = Math.max(0.25, npcType.heightScale / 128);
-                    }
-                }
+                // The scaled model's height; size is already the scaled footprint in tiles.
+                heightTiles = (this.npcHeightProvider?.(npcType.id) ?? 200) / 128;
             } catch {
                 // Retry after streamed definitions become available.
                 continue;
             }
-            const horizScale = Math.max(resizeX, resizeY);
-            const half = Math.max(0.32, size * 0.42 * horizScale);
             const groundY = this.sampleHeightAt(worldX, worldZ, npcPlane | 0);
-            const height = Math.max(1.55, size * 1.1 * resizeZ);
-            const min: [number, number, number] = [worldX - half, groundY - height, worldZ - half];
-            const max: [number, number, number] = [worldX + half, groundY - 0.05, worldZ + half];
+            // ponytail: coarse cull before posing the model; assumes no animation reaches
+            // further than the model's height past its footprint or above 1.5x its height.
+            const reach = size * 0.5 + heightTiles;
+            const coarse = rayIntersectsBox(
+                ray,
+                [worldX - reach, groundY - heightTiles * 1.5 - 0.5, worldZ - reach],
+                [worldX + reach, groundY + 0.5, worldZ + reach],
+            );
+            if (!coarse || coarse.tMin > maxDistance) continue;
 
-            const boxHit = rayIntersectsBox(ray, min, max);
-            if (!boxHit) continue;
-            const tHit = Math.max(boxHit.tMin, 0);
-            if (tHit < 0 || tHit > maxDistance) continue;
+            const serverId = npcEcs.getServerId(ecsId) | 0;
+            const triangles = this.npcTrianglesProvider?.(ecsId, serverId);
+            let tHit: number | undefined;
+            if (triangles && triangles.length >= 3) {
+                tHit = this.intersectNpcModel(ray, maxDistance, triangles, size === 1);
+            } else {
+                // Model still streaming: its footprint up to its height.
+                const half = Math.max(0.32, size * 0.42);
+                const height = Math.max(0.5, heightTiles);
+                const boxHit = rayIntersectsBox(
+                    ray,
+                    [worldX - half, groundY - height, worldZ - half],
+                    [worldX + half, groundY - 0.05, worldZ + half],
+                );
+                if (boxHit && boxHit.tMin <= maxDistance) tHit = Math.max(boxHit.tMin, 0);
+            }
+            if (tHit === undefined) continue;
 
             // Include server ID and ECS ID for efficient lookup in menu building
-            const serverId = npcEcs.getServerId(ecsId) | 0;
-
             hits.push({
                 t: tHit,
                 interactType: InteractType.NPC,
@@ -909,7 +919,16 @@ export class SceneRaycaster {
             return undefined;
         }
 
-        const model = locModelLoader.getModelAnimated(locType, modelType, modelRotation, -1, -1);
+        // Animated locs can park parts of their base model far from where they draw
+        // (the Colosseum reward chest reaches 6 tiles out), so test the first frame.
+        const seqId = locType.seqId;
+        const model = locModelLoader.getModelAnimated(
+            locType,
+            modelType,
+            modelRotation,
+            seqId,
+            seqId !== -1 ? 0 : -1,
+        );
         if (
             !model ||
             !model.verticesX ||
@@ -968,8 +987,6 @@ export class SceneRaycaster {
             model.faceColors3 && model.faceColors3.length >= faceCount
                 ? model.faceColors3
                 : undefined;
-        const faceAlphas =
-            model.faceAlphas && model.faceAlphas.length >= faceCount ? model.faceAlphas : undefined;
 
         return {
             verticesX,
@@ -979,7 +996,6 @@ export class SceneRaycaster {
             indices2,
             indices3,
             faceColors3,
-            faceAlphas,
             faceCount,
             minX,
             maxX,
@@ -1020,11 +1036,103 @@ export class SceneRaycaster {
         const tBoxMin = Math.max(boxHit.tMin, 0);
         if (tBoxMin > maxDistance) return undefined;
 
-        // OSRS (RSModel.drawFaces) tests the mouse against each face's projected 2D
-        // bounding box padded by 5px, not the triangle itself, so gaps in ladders,
-        // fences etc. are still clickable. Emulate it in a ray-aligned frame: project
-        // each vertex onto a plane perpendicular to the ray (x/z, y/z) where the mouse
-        // ray sits at (0, 0).
+        const frame = this.mouseFrame(ray);
+        const vertexCount = mesh.verticesX.length;
+        const proj = new Float32Array(vertexCount * 3);
+        for (let v = 0; v < vertexCount; v++) {
+            projectToMouseFrame(
+                frame,
+                baseX + mesh.verticesX[v] * MODEL_WORLD_SCALE,
+                groundY + mesh.verticesY[v] * MODEL_WORLD_SCALE,
+                baseZ + mesh.verticesZ[v] * MODEL_WORLD_SCALE,
+                proj,
+                v,
+            );
+        }
+
+        let bestT = Number.POSITIVE_INFINITY;
+        let hasVisibleFace = false;
+        for (let i = 0; i < mesh.faceCount; i++) {
+            // Fully transparent faces still click in OSRS: a fairy ring's centre is one.
+            if (mesh.faceColors3 && mesh.faceColors3[i] === -2) continue;
+            hasVisibleFace = true;
+
+            const a = mesh.indices1[i] | 0;
+            const b = mesh.indices2[i] | 0;
+            const c = mesh.indices3[i] | 0;
+            if (a < 0 || b < 0 || c < 0 || a >= vertexCount || b >= vertexCount || c >= vertexCount) {
+                continue;
+            }
+            const t = paddedFaceDepth(proj, frame.pad, a, b, c);
+            if (t === undefined || t > maxDistance || t >= bestT) continue;
+            bestT = t;
+        }
+
+        // Models whose faces are all hidden use the AABB hit distance so they remain clickable.
+        if (!hasVisibleFace && Number.isFinite(tBoxMin)) {
+            return tBoxMin;
+        }
+
+        return Number.isFinite(bestT) ? bestT : undefined;
+    }
+
+    /**
+     * OSRS NPC picking (RSModel.draw, computeAabbForOrientation): the posed model's AABB,
+     * at least 32 units each side across; size-1 NPCs click on that box padded by 8,
+     * larger ones (useBoundingBox off) still need a face under the mouse.
+     */
+    private intersectNpcModel(
+        ray: Ray,
+        maxDistance: number,
+        triangles: ReadonlyArray<readonly [number, number, number]>,
+        boxOnly: boolean,
+    ): number | undefined {
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        for (const [x, y, z] of triangles) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            if (z < minZ) minZ = z;
+            if (z > maxZ) maxZ = z;
+        }
+        const pad = boxOnly ? 8 * MODEL_WORLD_SCALE : 0;
+        const halfX = Math.max((maxX - minX) / 2, 32 * MODEL_WORLD_SCALE) + pad;
+        const halfZ = Math.max((maxZ - minZ) / 2, 32 * MODEL_WORLD_SCALE) + pad;
+        const midX = (minX + maxX) / 2;
+        const midZ = (minZ + maxZ) / 2;
+        const boxHit = rayIntersectsBox(
+            ray,
+            [midX - halfX, minY, midZ - halfZ],
+            [midX + halfX, maxY, midZ + halfZ],
+        );
+        if (!boxHit) return undefined;
+        const tBox = Math.max(boxHit.tMin, 0);
+        if (tBox > maxDistance) return undefined;
+        if (boxOnly) return tBox;
+
+        const frame = this.mouseFrame(ray);
+        const proj = new Float32Array(triangles.length * 3);
+        for (let i = 0; i < triangles.length; i++) {
+            const p = triangles[i];
+            projectToMouseFrame(frame, p[0], p[1], p[2], proj, i);
+        }
+        let bestT = Number.POSITIVE_INFINITY;
+        for (let i = 0; i + 2 < triangles.length; i += 3) {
+            const t = paddedFaceDepth(proj, frame.pad, i, i + 1, i + 2);
+            if (t !== undefined && t <= maxDistance && t < bestT) bestT = t;
+        }
+        return Number.isFinite(bestT) ? bestT : undefined;
+    }
+
+    /**
+     * OSRS (RSModel.drawFaces) tests the mouse against each face's projected 2D bounding
+     * box padded by 5px, not the triangle itself, so gaps in ladders, fences etc. are still
+     * clickable. Emulate it in a ray-aligned frame: project each vertex onto a plane
+     * perpendicular to the ray (x/z, y/z) where the mouse ray sits at (0, 0).
+     */
+    private mouseFrame(ray: Ray): MouseFrame {
         const dx = ray.direction[0];
         const dy = ray.direction[1];
         const dz = ray.direction[2];
@@ -1039,68 +1147,82 @@ export class SceneRaycaster {
             rx /= rLen;
             rz /= rLen;
         }
-        // up = cross(right, dir)
-        const ux = -rz * dy;
-        const uy = rz * dx - rx * dz;
-        const uz = rx * dy;
         const camera = this.osrsClient.camera;
         const focalPx =
             camera && camera.projectionMatrix[5] > 0 && camera.screenHeight > 0
                 ? (camera.projectionMatrix[5] * camera.screenHeight) / 2
                 : 512;
-        const pad = 5 / focalPx;
-        const ox = ray.origin[0];
-        const oy = ray.origin[1];
-        const oz = ray.origin[2];
-        const vertexCount = mesh.verticesX.length;
-        const projX = new Float32Array(vertexCount);
-        const projY = new Float32Array(vertexCount);
-        const depth = new Float32Array(vertexCount);
-        for (let v = 0; v < vertexCount; v++) {
-            const px = baseX + mesh.verticesX[v] * MODEL_WORLD_SCALE - ox;
-            const py = groundY + mesh.verticesY[v] * MODEL_WORLD_SCALE - oy;
-            const pz = baseZ + mesh.verticesZ[v] * MODEL_WORLD_SCALE - oz;
-            const z = px * dx + py * dy + pz * dz;
-            depth[v] = z;
-            projX[v] = (px * rx + pz * rz) / z;
-            projY[v] = (px * ux + py * uy + pz * uz) / z;
-        }
-
-        let bestT = Number.POSITIVE_INFINITY;
-        let hasVisibleFace = false;
-        for (let i = 0; i < mesh.faceCount; i++) {
-            if (mesh.faceColors3 && mesh.faceColors3[i] === -2) continue;
-            if (mesh.faceAlphas && (mesh.faceAlphas[i] & 0xff) >= 254) continue;
-            hasVisibleFace = true;
-
-            const a = mesh.indices1[i] | 0;
-            const b = mesh.indices2[i] | 0;
-            const c = mesh.indices3[i] | 0;
-            if (a < 0 || b < 0 || c < 0 || a >= vertexCount || b >= vertexCount || c >= vertexCount) {
-                continue;
-            }
-            // Faces crossing the near plane are clipped in OSRS; skip them.
-            if (depth[a] <= 0 || depth[b] <= 0 || depth[c] <= 0) continue;
-            if (
-                Math.min(projX[a], projX[b], projX[c]) > pad ||
-                Math.max(projX[a], projX[b], projX[c]) < -pad ||
-                Math.min(projY[a], projY[b], projY[c]) > pad ||
-                Math.max(projY[a], projY[b], projY[c]) < -pad
-            ) {
-                continue;
-            }
-
-            const t = (depth[a] + depth[b] + depth[c]) / 3;
-            if (t > maxDistance || t >= bestT) continue;
-            bestT = t;
-        }
-
-        // Invisible interaction volumes (all faces fully transparent) use AABB
-        // hit distance so they remain clickable.
-        if (!hasVisibleFace && Number.isFinite(tBoxMin)) {
-            return tBoxMin;
-        }
-
-        return Number.isFinite(bestT) ? bestT : undefined;
+        return {
+            ox: ray.origin[0],
+            oy: ray.origin[1],
+            oz: ray.origin[2],
+            dx,
+            dy,
+            dz,
+            rx,
+            rz,
+            // up = cross(right, dir)
+            ux: -rz * dy,
+            uy: rz * dx - rx * dz,
+            uz: rx * dy,
+            pad: 5 / focalPx,
+        };
     }
+}
+
+type MouseFrame = {
+    ox: number;
+    oy: number;
+    oz: number;
+    dx: number;
+    dy: number;
+    dz: number;
+    rx: number;
+    rz: number;
+    ux: number;
+    uy: number;
+    uz: number;
+    pad: number;
+};
+
+/** Writes [x, y, depth] of a world point in the mouse frame to out[i * 3]. */
+function projectToMouseFrame(
+    f: MouseFrame,
+    x: number,
+    y: number,
+    z: number,
+    out: Float32Array,
+    i: number,
+): void {
+    const px = x - f.ox;
+    const py = y - f.oy;
+    const pz = z - f.oz;
+    const depth = px * f.dx + py * f.dy + pz * f.dz;
+    out[i * 3] = (px * f.rx + pz * f.rz) / depth;
+    out[i * 3 + 1] = (px * f.ux + py * f.uy + pz * f.uz) / depth;
+    out[i * 3 + 2] = depth;
+}
+
+/** Mean depth of face a-b-c if its padded projected bounds contain the mouse. */
+function paddedFaceDepth(
+    proj: Float32Array,
+    pad: number,
+    a: number,
+    b: number,
+    c: number,
+): number | undefined {
+    const ax = proj[a * 3], ay = proj[a * 3 + 1], az = proj[a * 3 + 2];
+    const bx = proj[b * 3], by = proj[b * 3 + 1], bz = proj[b * 3 + 2];
+    const cx = proj[c * 3], cy = proj[c * 3 + 1], cz = proj[c * 3 + 2];
+    // Faces crossing the near plane are clipped in OSRS; skip them.
+    if (az <= 0 || bz <= 0 || cz <= 0) return undefined;
+    if (
+        Math.min(ax, bx, cx) > pad ||
+        Math.max(ax, bx, cx) < -pad ||
+        Math.min(ay, by, cy) > pad ||
+        Math.max(ay, by, cy) < -pad
+    ) {
+        return undefined;
+    }
+    return (az + bz + cz) / 3;
 }

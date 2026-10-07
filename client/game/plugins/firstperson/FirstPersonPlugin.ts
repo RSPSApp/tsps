@@ -1,3 +1,6 @@
+import type { OsrsClient } from "../../OsrsClient";
+import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import type { Camera } from "../../Camera";
 import type { InputKeyHandler, InputManager, InputMouseHandler } from "../../InputManager";
 import type { CameraFollowContext, CameraInputContext, ClientPlugin } from "../ClientPluginManager";
@@ -20,7 +23,15 @@ type CursorMode = "none" | "alt" | "menu";
 const MENU_ANCHOR_Y_OFFSET = 12;
 const CONTROLS_HINT = "Press Alt for mouse look. Press Insert to hide arm visibility.";
 
-export class FirstPersonPlugin implements ClientPlugin, InputKeyHandler, InputMouseHandler {
+export class FirstPersonPlugin extends Plugin implements ClientPlugin, InputKeyHandler, InputMouseHandler {
+    static descriptor: PluginDescriptor = {
+        name: "First Person",
+        description: "First-person camera with mouse look.",
+        tags: ["camera"],
+        hidden: true,
+        configKey: "firstpersonplugin",
+    };
+
     private enabled = false;
     private cursorMode: CursorMode = "none";
     private awaitingMenuOpen = false;
@@ -30,10 +41,13 @@ export class FirstPersonPlugin implements ClientPlugin, InputKeyHandler, InputMo
     private restoreRenderSelf?: boolean;
     private restoreFollowPlayerCamera?: boolean;
     private controlsHintShown = false;
+    private readonly client: FirstPersonClient;
 
-    constructor(private readonly client: FirstPersonClient) {
-        client.inputManager.addKeyHandler(this);
-        client.inputManager.addMouseHandler(this);
+    constructor(client?: FirstPersonClient) {
+        super();
+        this.client = client ?? inject<OsrsClient>(CLIENT_TOKEN);
+        this.client.inputManager.addKeyHandler(this);
+        this.client.inputManager.addMouseHandler(this);
     }
 
     onKeyDown(event: KeyboardEvent): boolean {
@@ -67,7 +81,7 @@ export class FirstPersonPlugin implements ClientPlugin, InputKeyHandler, InputMo
     }
 
     onMouseDown(event: MouseEvent): void {
-        if (!this.enabled || event.button !== 0 && event.button !== 2) return;
+        if (!this.enabled || (event.button !== 0 && event.button !== 2)) return;
         if (event.button === 2 && this.cursorMode === "none") {
             this.awaitingMenuOpen = true;
             this.menuOpenChecked = false;

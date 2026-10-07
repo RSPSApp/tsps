@@ -1,3 +1,4 @@
+const { restoreRunEnergy, curePoisonAndVenom } = require("./ConsumableEffects");
 const { TimerKey } = require("../../src/main/typescript/elvarg/util/timers/TimerKey");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
@@ -20,6 +21,7 @@ let pluginApi;
 
 const DRINK_ANIMATION = new Animation(829);
 const DEFAULT_EMPTY_ITEM = ItemIds.VIAL;
+const NO_EMPTY_ITEM = -1;
 const STAMINA_DURATION_MS = 2 * 60 * 1000;
 const DIVINE_DURATION_MS = 5 * 60 * 1000;
 const OVERLOAD_DURATION_MS = 5 * 60 * 1000;
@@ -30,6 +32,20 @@ const ATTR_STAMINA_END = "potions:stamina:end";
 const ATTR_STAMINA_ACC = "potions:stamina:acc";
 const ATTR_DIVINE_STATE = "potions:divine:state";
 const ATTR_OVERLOAD_STATE = "potions:overload:state";
+const ATTR_MENAPHITE_STATE = "potions:menaphite:state";
+const ATTR_PRAYER_REGEN_STATE = "potions:prayer-regen:state";
+/** Shared 60-second cycle that decays every temporary skill boost by one (Wiki). */
+const ATTR_BOOST_CYCLE = "potions:boost-cycle";
+/** When the player logged out; timed effects are paused while offline. */
+const ATTR_PAUSED_AT = "potions:paused-at";
+const PERSISTED_ATTRIBUTES = [ATTR_STAMINA_END, ATTR_STAMINA_ACC, ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE, ATTR_BOOST_CYCLE, ATTR_PAUSED_AT];
+
+const BOOST_DECAY_MS = 60 * 1000;
+const MENAPHITE_DURATION_MS = 5 * 60 * 1000;
+const MENAPHITE_RESTORE_INTERVAL_MS = 15 * 1000;
+const PRAYER_REGEN_DURATION_MS = 8 * 60 * 1000;
+/** Wiki: one Prayer point every 12 ticks (7.2s) for 8 minutes, 66 points total. */
+const PRAYER_REGEN_INTERVAL_MS = 12 * 600;
 
 const POTION_BY_ITEM_ID = new Map();
 const REGISTERED_POTIONS = [];
@@ -118,25 +134,17 @@ function damageButKeepAlive(player, amount) {
   player.setHitpoints(next);
 }
 
-function restoreRunEnergy(player, amount) {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return;
-  }
-  const next = clamp(Math.floor(player.getRunEnergy() + amount), 0, 100);
-  player.setRunEnergy(next);
-  player.getPacketSender().sendRunEnergy();
-}
-
-function curePoisonAndVenom(player) {
-  player.setPoisonDamage(0);
-  player.getPacketSender().sendPoisonType(0);
-}
-
 function applyPoisonImmunity(player, seconds, message = true) {
   curePoisonAndVenom(player);
-  player.getCombat().getPoisonImmunityTimer().start(seconds);
+  // Wiki (7 April 2016): drinking any kind of antipoison will no longer
+  // decrease your poison immunity, so a weaker dose never shortens the timer.
+  const timer = player.getCombat().getPoisonImmunityTimer();
+  const remaining = timer.secondsRemaining();
+  if (remaining < seconds) {
+    timer.start(seconds);
+  }
   if (message) {
-    player.sendMessage(`You are now immune to poison for another ${seconds} seconds.`);
+    player.sendMessage(`You are now immune to poison for another ${Math.max(remaining, seconds)} seconds.`);
   }
 }
 
@@ -145,11 +153,39 @@ function applyAntifire(player, seconds, tier = DragonfireProtectionTier.ANTIFIRE
   player.getPacketSender().sendEffectTimer(seconds, EffectTimer.ANTIFIRE);
 }
 
+const PRAYER_BONUS_WORN = [
+  Items.PRAYER_CAPE, Items.PRAYER_CAPE_T_, Items.PRAYER_CAPE_2, Items.PRAYER_CAPE_T__2,
+  Items.RING_OF_THE_GODS_I_, Items.RING_OF_THE_GODS_I__2, Items.RING_OF_THE_GODS_I__3,
+  Items.RING_OF_THE_GODS_I__4, Items.RING_OF_THE_GODS_I__5, Items.RING_OF_THE_GODS_I__6,
+];
+
+/** Wiki: a worn prayer cape or ring of the gods (i), or a carried holy wrench, boosts prayer restores. */
+function hasPrayerRestoreBonus(player) {
+  return player.getInventory?.()?.contains?.(Items.HOLY_WRENCH) === true ||
+    PRAYER_BONUS_WORN.some((itemId) => player.getEquipment?.()?.contains?.(itemId) === true);
+}
+
+/** Prayer potion: 7 + 25% (27% with the bonus); super restore: 8 + 25% (27%). */
 function applyPrayerRestore(player, isSuperRestore) {
+  restorePrayer(player, isSuperRestore ? 8 : 7, hasPrayerRestoreBonus(player) ? 0.27 : 0.25);
+}
+
+function restorePrayer(player, flat, percent) {
   const max = getMaxLevel(player, Skill.PRAYER);
-  const restored = Math.floor((isSuperRestore ? 8 : 7) + max / 4);
+  const restored = Math.floor(flat + max * percent);
   getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, max);
   Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
+}
+
+/** Sanfew serum (Wiki): 4 + 30% to every stat, prayer 4 + 30% (32% with the bonus). */
+function applySanfewRestore(player) {
+  restorePrayer(player, 4, hasPrayerRestoreBonus(player) ? 0.32 : 0.3);
+  for (const skill of Skill.values()) {
+    if (skill === Skill.HITPOINTS || skill === Skill.PRAYER) {
+      continue;
+    }
+    restoreSkillToBaseWithFormula(player, skill, 4, 0.3);
+  }
 }
 
 function applyRestorePotion(player) {
@@ -204,14 +240,161 @@ function applyGuthixRest(player) {
   curePoisonAndVenom(player);
 }
 
+/** Prayer restore that may over-heal by up to `overPercent` above base (ancient/forgotten brew). */
+function restorePrayerOverheal(player, flat, percent, overPercent = 0.05) {
+  const max = getMaxLevel(player, Skill.PRAYER);
+  const cap = max + Math.floor(max * overPercent);
+  const restored = Math.floor(flat + max * percent);
+  getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, restored, cap);
+  Sounds.sendSound(player, Sound.PRAYER_RECHARGE);
+}
+
+/** Ancient brew / forgotten brew (Wiki): Magic boost, prayer restore and an Attack/Strength/Defence drain. */
+function applyAncientBrew(player, magicFlat, magicPercent) {
+  boostSkill(player, Skill.MAGIC, magicFlat, magicPercent);
+  restorePrayerOverheal(player, 2, 0.1);
+  for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) {
+    lowerSkillByCurrent(player, skill, 2, 0.1);
+  }
+}
+
+const MENAPHITE_SKILLS = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC, Skill.HITPOINTS];
+
+/** Menaphite remedy (Wiki): 6 + 16% of every combat stat, never above base. */
+function restoreCombatStats(player) {
+  for (const skill of MENAPHITE_SKILLS) {
+    const max = getMaxLevel(player, skill);
+    if (getCurrentLevel(player, skill) >= max) {
+      continue;
+    }
+    getSkillManager(player).increaseCurrentLevel(skill, Math.floor(max * 0.16) + 6, max);
+  }
+}
+
+function applyMenaphiteRemedy(player) {
+  // Dispels locked divine boosts so they decay normally (Wiki).
+  player.setAttribute(ATTR_DIVINE_STATE, null);
+  restoreCombatStats(player);
+  const now = Date.now();
+  player.setAttribute(ATTR_MENAPHITE_STATE, {
+    endsAt: now + MENAPHITE_DURATION_MS,
+    nextRestoreAt: now + MENAPHITE_RESTORE_INTERVAL_MS,
+  });
+}
+
+function processMenaphite(player) {
+  const state = player.getAttribute(ATTR_MENAPHITE_STATE);
+  if (!state) {
+    return;
+  }
+  const now = Date.now();
+  if (now >= state.endsAt) {
+    player.setAttribute(ATTR_MENAPHITE_STATE, null);
+    return;
+  }
+  if (now >= state.nextRestoreAt) {
+    restoreCombatStats(player);
+    state.nextRestoreAt = now + MENAPHITE_RESTORE_INTERVAL_MS;
+    player.setAttribute(ATTR_MENAPHITE_STATE, state);
+  }
+}
+
+/** Wiki: restores one Prayer point every 12 ticks for 8 minutes; never over max. */
+function applyPrayerRegeneration(player) {
+  const now = Date.now();
+  player.setAttribute(ATTR_PRAYER_REGEN_STATE, {
+    endsAt: now + PRAYER_REGEN_DURATION_MS,
+    nextRestoreAt: now + PRAYER_REGEN_INTERVAL_MS,
+  });
+}
+
+function clearPrayerRegeneration({ player }) {
+  player.setAttribute(ATTR_PRAYER_REGEN_STATE, null);
+}
+
+function processPrayerRegeneration(player) {
+  const state = player.getAttribute(ATTR_PRAYER_REGEN_STATE);
+  if (!state) {
+    return;
+  }
+  const now = Date.now();
+  if (now >= state.endsAt) {
+    player.setAttribute(ATTR_PRAYER_REGEN_STATE, null);
+    return;
+  }
+  if (now < state.nextRestoreAt) {
+    return;
+  }
+  const max = getMaxLevel(player, Skill.PRAYER);
+  getSkillManager(player).increaseCurrentLevel(Skill.PRAYER, 1, max);
+  state.nextRestoreAt = now + PRAYER_REGEN_INTERVAL_MS;
+  player.setAttribute(ATTR_PRAYER_REGEN_STATE, state);
+}
+
+/** Skills pinned by an active overload/divine state; their controllers reset them every tick. */
+function timedEffectSkillIndexes(player) {
+  const pinned = new Set();
+  if (player.getAttribute(ATTR_OVERLOAD_STATE)) {
+    for (const skill of OVERLOAD_SKILLS) {
+      pinned.add(skill.getIndex());
+    }
+  }
+  const divine = player.getAttribute(ATTR_DIVINE_STATE);
+  if (divine && Array.isArray(divine.targets)) {
+    for (const entry of divine.targets) {
+      if (Number.isInteger(entry?.skillIndex)) {
+        pinned.add(entry.skillIndex);
+      }
+    }
+  }
+  return pinned;
+}
+
+/**
+ * Wiki: temporary boosts and drains move one point toward base every minute on a
+ * continuous cycle. Prayer points and Hitpoints are not covered.
+ */
+function processBoostDecay(player) {
+  const now = Date.now();
+  const nextDecayAt = Number(player.getAttribute(ATTR_BOOST_CYCLE));
+  if (!Number.isFinite(nextDecayAt) || nextDecayAt <= 0) {
+    player.setAttribute(ATTR_BOOST_CYCLE, now + BOOST_DECAY_MS);
+    return;
+  }
+  if (now < nextDecayAt) {
+    return;
+  }
+  const elapsed = now - nextDecayAt;
+  player.setAttribute(ATTR_BOOST_CYCLE, nextDecayAt + BOOST_DECAY_MS * (Math.floor(elapsed / BOOST_DECAY_MS) + 1));
+
+  const pinned = timedEffectSkillIndexes(player);
+  for (const skill of Skill.values()) {
+    const index = skill.getIndex();
+    if (index === Skill.HITPOINTS.getIndex() || index === Skill.PRAYER.getIndex() || pinned.has(index)) {
+      continue;
+    }
+    const current = getCurrentLevel(player, skill);
+    const base = getMaxLevel(player, skill);
+    if (current > base) {
+      setCurrentLevel(player, skill, current - 1);
+    } else if (current < base) {
+      setCurrentLevel(player, skill, current + 1);
+    }
+  }
+}
+
 function startStamina(player) {
   player.setAttribute(ATTR_STAMINA_END, Date.now() + STAMINA_DURATION_MS);
   player.setAttribute(ATTR_STAMINA_ACC, 0);
 }
 
 function applyStamina(player) {
-  restoreRunEnergy(player, 20);
-  startStamina(player);
+  // Ring of endurance doubles this by mutating the payload (Wiki).
+  const request = { player, energy: 20, durationMs: STAMINA_DURATION_MS };
+  pluginApi.emitCustomEvent("potions:stamina-effect", request);
+  restoreRunEnergy(player, request.energy);
+  player.setAttribute(ATTR_STAMINA_END, Date.now() + request.durationMs);
+  player.setAttribute(ATTR_STAMINA_ACC, 0);
 }
 
 function applyDivine(player, baseEffect, affectedSkills) {
@@ -221,7 +404,7 @@ function applyDivine(player, baseEffect, affectedSkills) {
   const targets = affectedSkills
     .filter(Boolean)
     .map((skill) => ({
-      skill,
+      skillIndex: skill.getIndex(),
       target: getCurrentLevel(player, skill),
     }));
 
@@ -252,10 +435,11 @@ function applyOverload(player, flat = 5, percent = 0.15) {
   });
 }
 
-function applyMix(baseEffect) {
+/** Barbarian mixes heal 6 Hitpoints, except antipoison and restore mixes which heal 3 (Wiki). */
+function applyMix(baseEffect, healAmount = 6) {
   return (player) => {
     baseEffect(player);
-    heal(player, 3);
+    heal(player, healAmount);
   };
 }
 
@@ -277,9 +461,13 @@ function registerPotion(definition) {
     effect: definition.effect,
     canUse: typeof definition.canUse === "function" ? definition.canUse : null,
     requiresFoodPermission: Boolean(definition.requiresFoodPermission),
-    emptyItemId: isItemId(definition.emptyItemId)
-      ? definition.emptyItemId
-      : DEFAULT_EMPTY_ITEM,
+    shareable: definition.shareable !== false,
+    // null: nothing is left once the last dose is drunk.
+    emptyItemId: definition.emptyItemId === null
+      ? NO_EMPTY_ITEM
+      : isItemId(definition.emptyItemId)
+        ? definition.emptyItemId
+        : DEFAULT_EMPTY_ITEM,
     entries: [],
   };
 
@@ -301,6 +489,8 @@ function registerPotion(definition) {
       const entry = {
         potion: normalized,
         itemId,
+        chain,
+        doses: chain.length - index,
         replacementId: isItemId(replacementId)
           ? replacementId
           : normalized.emptyItemId,
@@ -316,6 +506,14 @@ function registerPotion(definition) {
   }
 }
 
+// https://oldschool.runescape.wiki/w/Free-to-play_Ironman_guide#Boosts
+registerPotion({ name: "Beer", chains: [[Items.BEER]], emptyItemId: Items.BEER_GLASS,
+  requiresFoodPermission: true, shareable: false, effect: (player) => {
+    heal(player, 1);
+    boostSkill(player, Skill.STRENGTH, 1, 0.02);
+    lowerSkillByCurrent(player, Skill.ATTACK, 1, 0.06);
+  } });
+
 // POH refreshments use the same consumption, cooldown and stat-boost rules as potions.
 for (const [id, cup, boost] of [[Items.CUP_OF_TEA_9, Items.EMPTY_CUP_3, 1],
   [Items.CUP_OF_TEA_11, Items.PORCELAIN_CUP_2, 2], [Items.CUP_OF_TEA_13, Items.PORCELAIN_CUP_3, 3]]) {
@@ -329,10 +527,38 @@ for (const [id, effect] of [
   [Items.GREENMANS_ALE_3, player => { boostSkill(player, Skill.HERBLORE, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0); }],
   [Items.DRAGON_BITTER_3, player => { boostSkill(player, Skill.STRENGTH, 2, 0); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); }],
   [Items.CHEFS_DELIGHT_3, player => { boostSkill(player, Skill.COOKING, 1, 0.05); lowerSkillByCurrent(player, Skill.ATTACK, 2, 0.05); lowerSkillByCurrent(player, Skill.STRENGTH, 2, 0.05); }],
+  // Wiki: Wizard's mind bomb +2/+3 Magic, -1/-5 Attack, Strength and Defence.
+  [Items.WIZARDS_MIND_BOMB, player => { boostSkill(player, Skill.MAGIC, 2, 0.02); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 1, 0.05); }],
+  // Wiki: Dwarven stout +1 Mining and Smithing, -4% - 2 Attack, Strength and Defence.
+  [Items.DWARVEN_STOUT, player => { boostSkill(player, Skill.MINING, 1, 0); boostSkill(player, Skill.SMITHING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 2, 0.04); }],
+  // Wiki: Axeman's folly +1 Woodcutting, -3 Attack and Strength.
+  [Items.AXEMANS_FOLLY, player => { boostSkill(player, Skill.WOODCUTTING, 1, 0); for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 3, 0); }],
+  // Wiki: Bandit's brew +1 Thieving and Attack, -6% - 3 Strength and Defence.
+  [Items.BANDITS_BREW, player => { boostSkill(player, Skill.THIEVING, 1, 0); boostSkill(player, Skill.ATTACK, 1, 0); for (const skill of [Skill.STRENGTH, Skill.DEFENCE]) lowerSkillByCurrent(player, skill, 3, 0.06); }],
 ]) {
   registerPotion({ name: "House ale", chains: [[id]], emptyItemId: Items.BEER_GLASS_4,
     requiresFoodPermission: true, effect: player => { heal(player, 1); effect(player); } });
 }
+
+// Wiki: Moonlight mead heals 4 (mature 6) with no boosts or drains.
+registerPotion({ name: "Moonlight mead", chains: [[Items.MOONLIGHT_MEAD]], emptyItemId: Items.BEER_GLASS_4,
+  requiresFoodPermission: true, effect: (player) => heal(player, 4) });
+registerPotion({ name: "Moonlight mead(m)", chains: [[Items.MOONLIGHT_MEAD_M_]], emptyItemId: Items.BEER_GLASS_4,
+  requiresFoodPermission: true, effect: (player) => heal(player, 6) });
+// Wiki: Slayer's respite boosts Slayer by 2 (mature 4) and drains Attack and
+// Strength by floor(current * 0.02) + 2 (mature + 3); it heals 1 (mature 2).
+registerPotion({ name: "Slayer's respite", chains: [[Items.SLAYERS_RESPITE]], emptyItemId: Items.BEER_GLASS_4,
+  requiresFoodPermission: true, effect: (player) => {
+    heal(player, 1);
+    boostSkill(player, Skill.SLAYER, 2, 0);
+    for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 2, 0.02);
+  } });
+registerPotion({ name: "Slayer's respite(m)", chains: [[Items.SLAYERS_RESPITE_M_]], emptyItemId: Items.BEER_GLASS_4,
+  requiresFoodPermission: true, effect: (player) => {
+    heal(player, 2);
+    boostSkill(player, Skill.SLAYER, 4, 0);
+    for (const skill of [Skill.ATTACK, Skill.STRENGTH]) lowerSkillByCurrent(player, skill, 3, 0.02);
+  } });
 
 // Core combat/stat potions.
 registerPotion({
@@ -354,7 +580,7 @@ registerPotion({
   name: "Combat potion",
   chains: [
     doseChain("COMBAT_POTION_4_", "COMBAT_POTION_3_", "COMBAT_POTION_2_", "COMBAT_POTION_1_"),
-    doseChain("COMBAT_POTION_4_3", "COMBAT_POTION_3_3", "COMBAT_POTION_2_3", "COMBAT_POTION_1_3"),
+    doseChain("COMBAT_POTION_4__2", "COMBAT_POTION_3__2", "COMBAT_POTION_2__2", "COMBAT_POTION_1__2"),
   ],
   effect: (player) => {
     boostSkill(player, Skill.ATTACK, 3, 0.1);
@@ -380,7 +606,7 @@ registerPotion({
   name: "Super combat potion",
   chains: [
     doseChain("SUPER_COMBAT_POTION_4_", "SUPER_COMBAT_POTION_3_", "SUPER_COMBAT_POTION_2_", "SUPER_COMBAT_POTION_1_"),
-    doseChain("SUPER_COMBAT_POTION_4_3", "SUPER_COMBAT_POTION_3_3", "SUPER_COMBAT_POTION_2_3", "SUPER_COMBAT_POTION_1_3"),
+    doseChain("SUPER_COMBAT_POTION_4__2", "SUPER_COMBAT_POTION_3__2", "SUPER_COMBAT_POTION_2__2", "SUPER_COMBAT_POTION_1__2"),
   ],
   effect: (player) => {
     boostSkill(player, Skill.ATTACK, 5, 0.15);
@@ -392,7 +618,7 @@ registerPotion({
   name: "Ranging potion",
   chains: [
     doseChain("RANGING_POTION_4_", "RANGING_POTION_3_", "RANGING_POTION_2_", "RANGING_POTION_1_"),
-    doseChain("RANGING_POTION_4_3", "RANGING_POTION_3_3", "RANGING_POTION_2_3", "RANGING_POTION_1_3"),
+    doseChain("RANGING_POTION_4__2", "RANGING_POTION_3__2", "RANGING_POTION_2__2", "RANGING_POTION_1__2"),
   ],
   effect: (player) => boostSkill(player, Skill.RANGED, 4, 0.1),
 });
@@ -432,10 +658,22 @@ registerPotion({
   name: "Prayer potion",
   chains: [
     doseChain("PRAYER_POTION_4_", "PRAYER_POTION_3_", "PRAYER_POTION_2_", "PRAYER_POTION_1_"),
-    doseChain("PRAYER_POTION_4_3", "PRAYER_POTION_3_3", "PRAYER_POTION_2_3", "PRAYER_POTION_1_3"),
-    doseChain("PRAYER_POTION_4_4", "PRAYER_POTION_3_4", "PRAYER_POTION_2_4", "PRAYER_POTION_1_4"),
+    doseChain("PRAYER_POTION_4__2", "PRAYER_POTION_3__2", "PRAYER_POTION_2__2", "PRAYER_POTION_1__2"),
+    doseChain("PRAYER_POTION_4__3", "PRAYER_POTION_3__3", "PRAYER_POTION_2__3", "PRAYER_POTION_1__3"),
   ],
   effect: (player) => applyPrayerRestore(player, false),
+});
+// Wiki: one Prayer point every 12 ticks for 8 minutes; cannot be shared or mixed.
+registerPotion({
+  name: "Prayer regeneration potion",
+  chains: [[
+    Items.PRAYER_REGENERATION_POTION_4_,
+    Items.PRAYER_REGENERATION_POTION_3_,
+    Items.PRAYER_REGENERATION_POTION_2_,
+    Items.PRAYER_REGENERATION_POTION_1_,
+  ]],
+  shareable: false,
+  effect: applyPrayerRegeneration,
 });
 registerPotion({
   name: "Restore potion",
@@ -446,7 +684,7 @@ registerPotion({
   name: "Super restore",
   chains: [
     doseChain("SUPER_RESTORE_4_", "SUPER_RESTORE_3_", "SUPER_RESTORE_2_", "SUPER_RESTORE_1_"),
-    doseChain("SUPER_RESTORE_4_3", "SUPER_RESTORE_3_3", "SUPER_RESTORE_2_3", "SUPER_RESTORE_1_3"),
+    doseChain("SUPER_RESTORE_4__2", "SUPER_RESTORE_3__2", "SUPER_RESTORE_2__2", "SUPER_RESTORE_1__2"),
     doseChain("BLIGHTED_SUPER_RESTORE_4_", "BLIGHTED_SUPER_RESTORE_3_", "BLIGHTED_SUPER_RESTORE_2_", "BLIGHTED_SUPER_RESTORE_1_"),
   ],
   effect: applySuperRestore,
@@ -455,7 +693,7 @@ registerPotion({
   name: "Saradomin brew",
   chains: [
     doseChain("SARADOMIN_BREW_4_", "SARADOMIN_BREW_3_", "SARADOMIN_BREW_2_", "SARADOMIN_BREW_1_"),
-    doseChain("SARADOMIN_BREW_4_3", "SARADOMIN_BREW_3_3", "SARADOMIN_BREW_2_3", "SARADOMIN_BREW_1_3"),
+    doseChain("SARADOMIN_BREW_4__2", "SARADOMIN_BREW_3__2", "SARADOMIN_BREW_2__2", "SARADOMIN_BREW_1__2"),
   ],
   requiresFoodPermission: true,
   effect: applySaradominBrew,
@@ -467,7 +705,8 @@ registerPotion({
 });
 registerPotion({
   name: "Guthix rest",
-  chains: [doseChain("GUTHIX_REST_4_", "GUTHIX_REST_3_", "GUTHIX_REST_2_", "GUTHIX_REST_1_", "GUTHIX_REST")],
+  chains: [doseChain("GUTHIX_REST_4_", "GUTHIX_REST_3_", "GUTHIX_REST_2_", "GUTHIX_REST_1_")],
+  emptyItemId: Items.EMPTY_CUP,
   requiresFoodPermission: true,
   effect: applyGuthixRest,
 });
@@ -496,9 +735,21 @@ registerPotion({
   name: "Super energy",
   chains: [
     doseChain("SUPER_ENERGY_4_", "SUPER_ENERGY_3_", "SUPER_ENERGY_2_", "SUPER_ENERGY_1_"),
-    doseChain("SUPER_ENERGY_4_3", "SUPER_ENERGY_3_3", "SUPER_ENERGY_2_3", "SUPER_ENERGY_1_3"),
+    doseChain("SUPER_ENERGY_4__2", "SUPER_ENERGY_3__2", "SUPER_ENERGY_2__2", "SUPER_ENERGY_1__2"),
   ],
   effect: (player) => restoreRunEnergy(player, 20),
+});
+// The Gauntlet's potion (Wiki): restores prayer like a prayer potion, 40% run energy, and works
+// as a stamina potion. Made with 3 doses; the guides' one vial per potion suggests no vial is left.
+registerPotion({
+  name: "Egniol potion",
+  chains: [doseChain("EGNIOL_POTION_4_", "EGNIOL_POTION_3_", "EGNIOL_POTION_2_", "EGNIOL_POTION_1_")],
+  emptyItemId: null,
+  effect: (player) => {
+    applyPrayerRestore(player, false);
+    restoreRunEnergy(player, 40);
+    startStamina(player);
+  },
 });
 registerPotion({
   name: "Stamina potion",
@@ -518,34 +769,34 @@ registerPotion({
 });
 registerPotion({
   name: "Antidote+",
-  chains: [doseChain("ANTIDOTE_PLUS_4_", "ANTIDOTE_PLUS_3_", "ANTIDOTE_PLUS_2_", "ANTIDOTE_PLUS_1_")],
-  effect: (player) => applyPoisonImmunity(player, 600),
+  chains: [doseChain("ANTIDOTE_4_", "ANTIDOTE_3_", "ANTIDOTE_2_", "ANTIDOTE_1_")],
+  effect: (player) => applyPoisonImmunity(player, 540),
 });
 registerPotion({
   name: "Antidote++",
-  chains: [doseChain("ANTIDOTE_PLUS_PLUS_4_", "ANTIDOTE_PLUS_PLUS_3_", "ANTIDOTE_PLUS_PLUS_2_", "ANTIDOTE_PLUS_PLUS_1_")],
+  chains: [doseChain("ANTIDOTE_4__3", "ANTIDOTE_3__3", "ANTIDOTE_2__3", "ANTIDOTE_1__3")],
   effect: (player) => applyPoisonImmunity(player, 720),
 });
 registerPotion({
   name: "Sanfew serum",
   chains: [
     doseChain("SANFEW_SERUM_4_", "SANFEW_SERUM_3_", "SANFEW_SERUM_2_", "SANFEW_SERUM_1_"),
-    doseChain("SANFEW_SERUM_4_3", "SANFEW_SERUM_3_3", "SANFEW_SERUM_2_3", "SANFEW_SERUM_1_3"),
+    doseChain("SANFEW_SERUM_4__2", "SANFEW_SERUM_3__2", "SANFEW_SERUM_2__2", "SANFEW_SERUM_1__2"),
   ],
   effect: (player) => {
-    applySuperRestore(player);
+    applySanfewRestore(player);
     applyPoisonImmunity(player, 360, false);
   },
 });
 registerPotion({
   name: "Anti-venom",
   chains: [doseChain("ANTI_VENOM_4_", "ANTI_VENOM_3_", "ANTI_VENOM_2_", "ANTI_VENOM_1_")],
-  effect: (player) => applyPoisonImmunity(player, 180),
+  effect: (player) => applyPoisonImmunity(player, 720),
 });
 registerPotion({
   name: "Anti-venom+",
-  chains: [doseChain("ANTI_VENOM_PLUS_4_", "ANTI_VENOM_PLUS_3_", "ANTI_VENOM_PLUS_2_", "ANTI_VENOM_PLUS_1_")],
-  effect: (player) => applyPoisonImmunity(player, 360),
+  chains: [doseChain("ANTI_VENOM_4__3", "ANTI_VENOM_3__3", "ANTI_VENOM_2__3", "ANTI_VENOM_1__3")],
+  effect: (player) => applyPoisonImmunity(player, 900),
 });
 
 registerPotion({
@@ -573,13 +824,13 @@ registerPotion({
   name: "Antipoison mix",
   chains: [doseChain("ANTIPOISON_MIX_2_", "ANTIPOISON_MIX_1_")],
   requiresFoodPermission: true,
-  effect: applyMix((player) => applyPoisonImmunity(player, 90, false)),
+  effect: applyMix((player) => applyPoisonImmunity(player, 90, false), 3),
 });
 registerPotion({
   name: "Restore mix",
   chains: [doseChain("RESTORE_MIX_2_", "RESTORE_MIX_1_")],
   requiresFoodPermission: true,
-  effect: applyMix(applyRestorePotion),
+  effect: applyMix(applyRestorePotion, 3),
 });
 registerPotion({
   name: "Super energy mix",
@@ -595,9 +846,9 @@ registerPotion({
 });
 registerPotion({
   name: "Antidote+ mix",
-  chains: [doseChain("ANTIDOTE_PLUS_MIX_2_", "ANTIDOTE_PLUS_MIX_1_")],
+  chains: [doseChain("ANTIDOTE_MIX_2_", "ANTIDOTE_MIX_1_")],
   requiresFoodPermission: true,
-  effect: applyMix((player) => applyPoisonImmunity(player, 600, false)),
+  effect: applyMix((player) => applyPoisonImmunity(player, 540, false)),
 });
 registerPotion({
   name: "Antifire mix",
@@ -708,6 +959,22 @@ registerPotion({
   effect: (player) => applyOverload(player, 6, 0.16),
 });
 
+registerPotion({
+  name: "Ancient brew",
+  chains: [doseChain("ANCIENT_BREW_4_", "ANCIENT_BREW_3_", "ANCIENT_BREW_2_", "ANCIENT_BREW_1_")],
+  effect: (player) => applyAncientBrew(player, 2, 0.05),
+});
+registerPotion({
+  name: "Forgotten brew",
+  chains: [doseChain("FORGOTTEN_BREW_4_", "FORGOTTEN_BREW_3_", "FORGOTTEN_BREW_2_", "FORGOTTEN_BREW_1_")],
+  effect: (player) => applyAncientBrew(player, 3, 0.08),
+});
+registerPotion({
+  name: "Menaphite remedy",
+  chains: [doseChain("MENAPHITE_REMEDY_4_", "MENAPHITE_REMEDY_3_", "MENAPHITE_REMEDY_2_", "MENAPHITE_REMEDY_1_")],
+  effect: applyMenaphiteRemedy,
+});
+
 function processStamina(player) {
   const endsAt = player.getAttribute(ATTR_STAMINA_END);
   if (!Number.isFinite(endsAt)) {
@@ -755,8 +1022,9 @@ function processDivine(player) {
   if (Date.now() >= state.endsAt) {
     player.setAttribute(ATTR_DIVINE_STATE, null);
     for (const entry of state.targets) {
-      if (entry?.skill) {
-        setCurrentLevel(player, entry.skill, getMaxLevel(player, entry.skill));
+      const skill = Skill.values()[entry?.skillIndex];
+      if (skill) {
+        setCurrentLevel(player, skill, getMaxLevel(player, skill));
       }
     }
     player.sendMessage("Your divine potion effect has worn off.");
@@ -764,10 +1032,10 @@ function processDivine(player) {
   }
 
   for (const entry of state.targets) {
-    if (!entry || !entry.skill) {
-      continue;
+    const skill = Skill.values()[entry?.skillIndex];
+    if (skill) {
+      setCurrentLevel(player, skill, entry.target);
     }
-    setCurrentLevel(player, entry.skill, entry.target);
   }
 }
 
@@ -844,15 +1112,14 @@ function handlePotionDrink(player, itemId, slot) {
   timers.extendOrRegister(TimerKey.FOOD, 3);
 
   player.getPacketSender().sendInterfaceRemoval();
-  player.getCombat().reset();
   player.performAnimation(DRINK_ANIMATION);
   Sounds.sendSound(player, Sound.DRINK);
 
-  inventory.setItem(slot, new Item(entry.replacementId)).refreshItems();
+  inventory.setItem(slot, new Item(entry.replacementId, entry.replacementId === NO_EMPTY_ITEM ? 0 : 1)).refreshItems();
   entry.potion.effect(player);
 
   const share = player.getAttribute("lunar:potion-share");
-  if (share && Date.now() < share.expiresAt) {
+  if (share && entry.potion.shareable && Date.now() < share.expiresAt) {
     const restorative = /restore|prayer|energy|stamina|antipoison|antidote|antifire|guthix rest/i.test(entry.potion.name);
     if ((share.type === "restore") === restorative) {
       entry.potion.effect(share.target);
@@ -868,10 +1135,66 @@ function handlePotionDrink(player, itemId, slot) {
   return true;
 }
 
+/** Pour matching four-dose drinks into the target, leaving excess in the source. */
+function combinePotionDoses(event) {
+  const { player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot } = event;
+  const source = POTION_BY_ITEM_ID.get(usedItemId);
+  const target = POTION_BY_ITEM_ID.get(usedWithItemId);
+  if (!source || !target || source.chain !== target.chain || source.chain.length !== 4 ||
+      source.potion.emptyItemId <= 0 || usedItemSlot === usedWithItemSlot) return;
+
+  const inventory = player.getInventory();
+  const sourceItem = inventory.getItems()[usedItemSlot];
+  const targetItem = inventory.getItems()[usedWithItemSlot];
+  if (sourceItem?.getId() !== usedItemId || targetItem?.getId() !== usedWithItemId ||
+      sourceItem.getAmount() !== 1 || targetItem.getAmount() !== 1) return;
+
+  event.handled = true;
+  const transferred = Math.min(source.doses, source.chain.length - target.doses);
+  if (transferred === 0) return;
+  const remaining = source.doses - transferred;
+  const { Item } = pluginApi.core;
+  inventory.setItem(usedItemSlot, new Item(remaining > 0
+    ? source.chain[source.chain.length - remaining] : source.potion.emptyItemId, 1));
+  inventory.setItem(usedWithItemSlot, new Item(target.chain[target.chain.length - target.doses - transferred], 1));
+  inventory.refreshItems();
+  player.sendMessage("You pour from one container into the other.");
+}
+
+function pauseTimedEffects({ player }) {
+  player.setAttribute(ATTR_PAUSED_AT, Date.now());
+}
+
+/** Shifts every running effect by the time spent offline, so a relog resumes it. */
+function resumeTimedEffects({ player }) {
+  const pausedAt = Number(player.getAttribute(ATTR_PAUSED_AT));
+  player.setAttribute(ATTR_PAUSED_AT, null);
+  if (!Number.isFinite(pausedAt) || pausedAt <= 0) return;
+  const offline = Math.max(0, Date.now() - pausedAt);
+  const staminaEnd = Number(player.getAttribute(ATTR_STAMINA_END));
+  if (Number.isFinite(staminaEnd) && staminaEnd > 0) player.setAttribute(ATTR_STAMINA_END, staminaEnd + offline);
+  const boostCycle = Number(player.getAttribute(ATTR_BOOST_CYCLE));
+  if (Number.isFinite(boostCycle) && boostCycle > 0) player.setAttribute(ATTR_BOOST_CYCLE, boostCycle + offline);
+  for (const key of [ATTR_DIVINE_STATE, ATTR_OVERLOAD_STATE, ATTR_MENAPHITE_STATE, ATTR_PRAYER_REGEN_STATE]) {
+    const state = player.getAttribute(key);
+    if (!state || typeof state !== "object") continue;
+    for (const field of ["endsAt", "nextBoostAt", "nextDamageAt", "nextRestoreAt"]) {
+      if (Number.isFinite(state[field])) state[field] += offline;
+    }
+    player.setAttribute(key, state);
+  }
+}
+
 module.exports = {
   name: "Potions",
   isPotionItem(itemId) {
     return POTION_BY_ITEM_ID.has(itemId);
+  },
+  _test: {
+    applyPrayerRestore, applySanfewRestore, applyAncientBrew, restorePrayerOverheal, applyDivine, processDivine,
+    applyMenaphiteRemedy, processMenaphite, applyPrayerRegeneration, processPrayerRegeneration, clearPrayerRegeneration,
+    processBoostDecay, curePoisonAndVenom, pauseTimedEffects, resumeTimedEffects,
+    findPotionEntry: (itemId) => POTION_BY_ITEM_ID.get(itemId) ?? null,
   },
   getPotionName(itemId) {
     return POTION_BY_ITEM_ID.get(itemId)?.potion?.name ?? null;
@@ -879,6 +1202,11 @@ module.exports = {
   register(api) {
     pluginApi = api;
     initDragonfireProtectionCoreAccess(api);
+    PERSISTED_ATTRIBUTES.forEach((key) => api.persistAttribute(key));
+    api.onPlayerLogout(pauseTimedEffects);
+    api.onPlayerLogin(resumeTimedEffects);
+    api.onPlayerDeath(clearPrayerRegeneration);
+    api.onItemOnItem(combinePotionDoses, { noted: false });
     api.onItemFirstAction((event) => {
       const { player, itemId, slot } = event;
       return handlePotionDrink(player, itemId, slot);
@@ -891,6 +1219,9 @@ module.exports = {
       processStamina(player);
       processDivine(player);
       processOverload(player);
+      processMenaphite(player);
+      processPrayerRegeneration(player);
+      processBoostDecay(player);
       processDragonfireProtection(player);
     });
 

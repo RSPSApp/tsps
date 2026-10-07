@@ -317,19 +317,18 @@ export function drawWithRoofPlaneFilter(host: WebGLOsrsRendererHost,
             return;
         }
 
-        if (!drawRangePlanes || roofPlaneLimit >= 3) {
-            host.draw(drawCall, drawRanges);
-            return;
-        }
-
+        const cullPlanes = !!drawRangePlanes && roofPlaneLimit < 3;
         const cullLimit = roofPlaneLimit | 0;
         const filtered = host.roofFilteredDrawIndices;
         filtered.length = 0;
 
         for (let i = 0; i < totalRanges; i++) {
+            // An empty range (an animated loc on an empty frame) is still a draw call where
+            // multi-draw is emulated (ANGLE on D3D11).
+            if (((drawRanges[i]?.[1] ?? 0) | 0) === 0) continue;
             // Missing plane metadata should never happen, but default to visible to avoid
             // accidentally dropping geometry.
-            const plane = i < drawRangePlanes.length ? drawRangePlanes[i] : 0;
+            const plane = cullPlanes && i < drawRangePlanes!.length ? drawRangePlanes![i] : 0;
             if (plane <= cullLimit) {
                 filtered.push(i);
             }

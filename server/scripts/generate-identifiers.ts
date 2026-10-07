@@ -93,11 +93,18 @@ function parseNameToId(source: string): Map<string, number> {
 
 /** Reads the last git-committed version of a file, or null if there isn't one (new file / no git). */
 function loadCommittedNameToId(filePath: string): Map<string, number> {
+    // `HEAD:./file` resolves against git's working directory (the file's own folder), so this
+    // works from any cwd. The item and object files are over 1 MB, past execFileSync's default
+    // buffer. Without the committed names every constant is renamed, so say so if it fails.
     try {
-        const relative = path.relative(process.cwd(), filePath);
-        const source = execFileSync("git", ["show", `HEAD:${relative}`], { encoding: "utf8" });
+        const source = execFileSync("git", ["show", `HEAD:./${path.basename(filePath)}`], {
+            cwd: path.dirname(filePath),
+            encoding: "utf8",
+            maxBuffer: 64 * 1024 * 1024,
+        });
         return parseNameToId(source);
-    } catch {
+    } catch (error) {
+        console.warn(`  could not read the committed ${path.basename(filePath)}; names will not be kept stable (${(error as Error).message.split("\n")[0]})`);
         return new Map();
     }
 }
@@ -129,6 +136,15 @@ function generateEntries(
     const entries: GeneratedEntry[] = [];
     const usedNames = new Set<string>();
 
+    // A committed constant stays on its id when that id still exists but has lost its display
+    // name (rev 241 blanked Morgan, some walls...: same thing, transformed or renamed to null).
+    // Following the name instead would move the constant onto a different object.
+    for (const [name, id] of previousNameToId) {
+        if (id < 0 || id >= count || toConstName(lookup(id)?.name)) continue;
+        usedNames.add(name);
+        entries.push({ id, constName: name, rawName: "(no name in this revision)" });
+    }
+
     for (const [base, members] of groups) {
         // Pass 1: honor any id in this group that the previous file already
         // named consistently with this base (NAME, NAME_2, NAME_3, ...).
@@ -142,12 +158,14 @@ function generateEntries(
                 entries.push({ id: member.id, constName: match, rawName: member.rawName });
             }
         }
-        // Pass 2: assign fresh names (lowest free slot) to whatever's left.
+        // Pass 2: assign fresh names (lowest free slot) to whatever's left. A name the committed
+        // file gave another id is never reused: a renamed id drops its constant (a compile
+        // error to fix) rather than the constant silently pointing at something else.
         for (const member of members) {
             if (claimedIds.has(member.id)) continue;
             let constName = base;
             let suffix = 1;
-            while (usedNames.has(constName)) {
+            while (usedNames.has(constName) || previousNameToId.has(constName)) {
                 suffix++;
                 constName = `${base}_${suffix}`;
             }

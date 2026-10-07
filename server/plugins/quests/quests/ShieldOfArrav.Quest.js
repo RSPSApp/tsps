@@ -83,9 +83,9 @@ module.exports = function registerShieldOfArravQuest(api) {
   const GANG_PHOENIX = 1;
   const GANG_BLACKARM = 2;
 
-  const GANG_ATTRIBUTE = "shieldOfArrav.gang";
-  const PHOENIX_LOCATION_ATTRIBUTE = "shieldOfArrav.phoenixLocationKnown";
-  const CHARLIE_PAID_ATTRIBUTE = "shieldOfArrav.charliePaid";
+  const GANG_ATTRIBUTE = "shield-of-arrav.gang";
+  const PHOENIX_LOCATION_ATTRIBUTE = "shield-of-arrav.phoenix-location-known";
+  const CHARLIE_PAID_ATTRIBUTE = "shield-of-arrav.charlie-paid";
 
   const PAGE = "Shield of Arrav";
   const START_HOOK = "quest:shield-of-arrav:start";

@@ -14,8 +14,8 @@ const TOKENS_PER_MINUTE = 10;
 const MINUTE_TICKS = 100;
 const DEFENDER_CHANCE = 50;
 const DRAGON_DEFENDER_CHANCE = 100;
-const EARNED_ATTRIBUTE = "warriorsGuild:defender";
-const LORELAI_ATTRIBUTE = "warriorsGuild:basementUnlocked";
+const EARNED_ATTRIBUTE = "warriors-guild:defender";
+const LORELAI_ATTRIBUTE = "warriors-guild:basement-unlocked";
 
 /** Kamfreena's double door on the top floor (west edge of x 2847) and her lobby beside it. */
 const TOP_DOORS = { x: 2847, ys: [3540, 3541], z: 2 };

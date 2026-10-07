@@ -15,7 +15,8 @@ import { OsrsClient } from "./OsrsClient";
 import { SplitPrivateChatOverlay } from "./plugins/splitprivatechat/SplitPrivateChatOverlay";
 import { VengeanceTimerOverlay } from "./plugins/vengeancetimer/VengeanceTimerOverlay";
 import { FreezeTimerOverlay, PoisonTimerOverlay } from "./plugins/statustimer/StatusTimerOverlay";
-import { SidebarShell } from "./sidebar/SidebarShell";
+import { WeatherOverlay } from "./plugins/weather/WeatherOverlay";
+import { Sidebar } from "./sidebar/Sidebar";
 
 interface OsrsContainerProps {
     osrsClient: OsrsClient;
@@ -373,6 +374,8 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
 
                         {!hideUi && <FreezeTimerOverlay osrsClient={osrsClient} />}
 
+                        {!hideUi && <WeatherOverlay plugin={osrsClient.weatherPlugin} />}
+
                         {!hideUi && <SplitPrivateChatOverlay osrsClient={osrsClient} />}
 
                         <div className="hud right-top">
@@ -439,11 +442,18 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                         {/* OSRS tabs moved into WebGL devoverlay */}
                     </span>
                 )}
-
-                {!hideUi && !osrsClient.isOnLoginScreen() && (
-                    <SidebarShell osrsClient={osrsClient} store={osrsClient.sidebar} />
-                )}
             </div>
+
+            {/* Beside the game view, so a docked panel narrows it. Only in game: not while the
+                cache downloads (DOWNLOADING) or on the login screen. */}
+            {!hideUi && osrsClient.isLoggedIn() && (
+                <Sidebar
+                    toolbar={osrsClient.runeLite.clientToolbar}
+                    store={osrsClient.sidebar}
+                    configManager={osrsClient.runeLite.configManager}
+                    mobile={isMobileMode}
+                />
+            )}
 
             {/* Debug controls sidebar (Leva) - top-left corner, ?debug only */}
 

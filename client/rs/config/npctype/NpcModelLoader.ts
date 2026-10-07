@@ -31,13 +31,21 @@ export class NpcModelLoader {
         frame: number,
         movementSeqId: number = -1,
         movementFrame: number = -1,
+        frameCycle: number = 0,
     ): Model | undefined {
         if (npcType.transforms) {
             const transformed = npcType.transform(this.varManager, this.npcTypeLoader);
             if (!transformed) {
                 return undefined;
             }
-            return this.getModel(transformed, seqId, frame, movementSeqId | 0, movementFrame | 0);
+            return this.getModel(
+                transformed,
+                seqId,
+                frame,
+                movementSeqId | 0,
+                movementFrame | 0,
+                frameCycle | 0,
+            );
         }
 
         // NPC has no model IDs defined (opcode 1 was never decoded)
@@ -109,6 +117,7 @@ export class NpcModelLoader {
                 movementSeqType,
                 movementSeqId | 0,
                 movementFrame | 0,
+                frameCycle | 0,
             );
         } else if (hasScale) {
             model = Model.copyAnimated(model, true, true);
@@ -129,6 +138,7 @@ export class NpcModelLoader {
         overlayType: SeqType | undefined,
         overlaySeqId: number,
         overlayFrame: number,
+        frameCycle: number = 0,
     ): void {
         if (!baseType) {
             if (overlayType) {
@@ -137,12 +147,19 @@ export class NpcModelLoader {
                     overlayType,
                     overlaySeqId | 0,
                     overlayFrame | 0,
+                    frameCycle | 0,
                 );
             }
             return;
         }
         if (!overlayType) {
-            this.applySingleSequenceToModel(model, baseType, baseSeqId | 0, baseFrame | 0);
+            this.applySingleSequenceToModel(
+                model,
+                baseType,
+                baseSeqId | 0,
+                baseFrame | 0,
+                frameCycle | 0,
+            );
             return;
         }
 
@@ -261,6 +278,7 @@ export class NpcModelLoader {
         seqType: SeqType,
         seqId: number,
         frame: number,
+        frameCycle: number = 0,
     ): void {
         if (seqType.isSkeletalSeq()) {
             const skeletalSeq = this.skeletalSeqLoader?.load(seqType.skeletalId);
@@ -280,7 +298,17 @@ export class NpcModelLoader {
         const frameIds = seqType.frameIds as number[];
         const idx = Math.max(0, frame | 0) % (frameIds.length | 0);
         const seqFrame = this.seqFrameLoader.load(frameIds[idx] | 0);
-        if (seqFrame) {
+        if (!seqFrame) return;
+        // Animation smoothing: blend `frameCycle` cycles of the way toward the next frame.
+        const nextFrame =
+            frameCycle > 0 && idx + 1 < frameIds.length
+                ? this.seqFrameLoader.load(frameIds[idx + 1] | 0)
+                : undefined;
+        const length = nextFrame ? seqType.getFrameLength(this.seqFrameLoader, idx) | 0 : 0;
+        if (nextFrame && length > 0) {
+            const alpha = Math.min(1, frameCycle / length);
+            model.animateInterpolated(seqFrame, nextFrame, alpha, !!seqType.op14);
+        } else {
             model.animate(seqFrame, undefined, !!seqType.op14);
         }
     }

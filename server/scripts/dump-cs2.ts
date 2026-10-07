@@ -5,7 +5,7 @@ import path = require("path");
 import { CachePipeline } from "../src/main/typescript/elvarg/game/cache/CachePipeline";
 import { CacheIndexDat2 } from "../src/main/typescript/elvarg/game/cache/codec/rs/cache/CacheIndex";
 import { IndexType } from "../src/main/typescript/elvarg/game/cache/codec/rs/cache/IndexType";
-import { ByteBuffer } from "../src/main/typescript/elvarg/game/cache/codec/rs/io/ByteBuffer";
+import { SCONST, SWITCH, hasLongCounts, readScript } from "./cs2-reader";
 
 const OPCODES_TS = path.resolve(__dirname, "../../client/rs/cs2/Opcodes.ts");
 const opNames = new Map<number, string>();
@@ -14,59 +14,20 @@ for (const line of fs.readFileSync(OPCODES_TS, "utf8").split("\n")) {
     if (m) opNames.set(Number(m[2]), m[1].toLowerCase());
 }
 
-const SCONST = 3, RETURN = 21, POP_INT = 38, POP_OBJECT = 39, LCONST = 61, POP_LONG = 62, PUSH_NULL = 63, SWITCH = 60;
-
-function disassemble(id: number, data: Int8Array): string {
-    const buf = new ByteBuffer(data);
-    buf.offset = buf.length - 2;
-    const switchLength = buf.readUnsignedShort();
-    const endIdx = buf.length - 2 - switchLength - 12;
-    buf.offset = endIdx;
-    const numOpcodes = buf.readInt();
-    const localIntCount = buf.readUnsignedShort();
-    const localObjCount = buf.readUnsignedShort();
-    const intArgCount = buf.readUnsignedShort();
-    const objArgCount = buf.readUnsignedShort();
-
-    const switches: Map<number, number>[] = [];
-    const numSwitches = buf.readUnsignedByte();
-    for (let i = 0; i < numSwitches; ++i) {
-        const m = new Map<number, number>();
-        let count = buf.readUnsignedShort();
-        while (count-- > 0) m.set(buf.readInt(), buf.readInt());
-        switches.push(m);
-    }
-
-    buf.offset = 0;
-    const name = buf.readNullString();
-
+function disassemble(id: number, data: Int8Array, longCounts: boolean): string {
+    const { header, instructions } = readScript(data, longCounts);
     const out: string[] = [
-        `; script ${id} name=${name} ops=${numOpcodes} localInt=${localIntCount} localObj=${localObjCount} intArgs=${intArgCount} objArgs=${objArgCount}`,
+        `; script ${id} name=${header.name} ops=${header.opcodes} localInt=${header.localInts} localObj=${header.localObjs} localLong=${header.localLongs} intArgs=${header.intArgs} objArgs=${header.objArgs} longArgs=${header.longArgs}`,
     ];
-    for (let i = 0; buf.offset < endIdx; ++i) {
-        const opcode = buf.readUnsignedShort();
-        let operand: string;
-        switch (opcode) {
-            case SCONST:
-                operand = JSON.stringify(buf.readString());
-                break;
-            case LCONST:
-                operand = `${buf.readInt()}:${buf.readInt()}`;
-                break;
-            case RETURN: case POP_INT: case POP_OBJECT: case POP_LONG: case PUSH_NULL:
-                operand = String(buf.readUnsignedByte());
-                break;
-            default:
-                operand = String(opcode < 100 ? buf.readInt() : buf.readUnsignedByte());
-                break;
-        }
-        let line = `${String(i).padStart(5)}  ${(opNames.get(opcode) ?? `op${opcode}`).padEnd(24)} ${operand}`;
+    instructions.forEach(({ opcode, operand }, i) => {
+        const shown = typeof operand === "string" && opcode === SCONST ? JSON.stringify(operand) : String(operand);
+        let line = `${String(i).padStart(5)}  ${(opNames.get(opcode) ?? `op${opcode}`).padEnd(24)} ${shown}`;
         if (opcode === SWITCH) {
-            const table = switches[Number(operand)];
+            const table = header.switches[Number(operand)];
             if (table) line += `  { ${[...table].map(([k, v]) => `${k} -> ${i + 1 + v}`).join(", ")} }`;
         }
         out.push(line);
-    }
+    });
     return out.join("\n");
 }
 
@@ -80,7 +41,7 @@ async function main() {
             console.log(`; script ${id} MISSING`);
             continue;
         }
-        console.log(disassemble(id, new Int8Array(file.data)));
+        console.log(disassemble(id, new Int8Array(file.data), hasLongCounts(CachePipeline.getActive().revision)));
         console.log("");
     }
 }

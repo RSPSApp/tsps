@@ -48,7 +48,6 @@ const teleport = (spellbook: MagicSpellbook, level: number, experience: number, 
 /** Normal and Ancient spellbook teleports not handled by the combat spell engine. */
 export class SpellTeleports {
     private static readonly SPELLS = new Map<string, TeleportSpell>([
-        ["lumbridge home teleport", teleport(MagicSpellbook.NORMAL, 0, 0, [], 3222, 3218)],
         ["varrock teleport", teleport(MagicSpellbook.NORMAL, 25, 35, [rune(563), rune(556, 3), rune(554)], 3213, 3424)],
         ["lumbridge teleport", teleport(MagicSpellbook.NORMAL, 31, 41, [rune(563), rune(556, 3), rune(557)], 3222, 3218)],
         ["falador teleport", teleport(MagicSpellbook.NORMAL, 37, 48, [rune(563), rune(556, 3), rune(555)], 2964, 3378)],
@@ -60,7 +59,6 @@ export class SpellTeleports {
         ["watchtower teleport", teleport(MagicSpellbook.NORMAL, 58, 68, [rune(563, 2), rune(557, 2)], 2549, 3112, 2)],
         ["trollheim teleport", teleport(MagicSpellbook.NORMAL, 61, 68, [rune(563, 2), rune(554, 2)], 2891, 3678)],
         ["ape atoll teleport", teleport(MagicSpellbook.NORMAL, 64, 74, [rune(563, 2), rune(555, 2), rune(554, 2), rune(1963)], 2796, 2798)],
-        ["edgeville home teleport", teleport(MagicSpellbook.ANCIENT, 0, 0, [], 3087, 3496)],
         ["paddewwa teleport", teleport(MagicSpellbook.ANCIENT, 54, 64, [rune(563, 2), rune(556), rune(554)], 3097, 9880)],
         ["senntisten teleport", teleport(MagicSpellbook.ANCIENT, 60, 70, [rune(563, 2), rune(566)], 3320, 3338)],
         ["kharyrll teleport", teleport(MagicSpellbook.ANCIENT, 66, 76, [rune(563, 2), rune(565)], 3492, 3471)],

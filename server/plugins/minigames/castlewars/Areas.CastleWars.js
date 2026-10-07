@@ -41,6 +41,9 @@ function defineAreas() {
       if (!player) {
         return;
       }
+      if (player.isPlayerBot?.() === true && game.releaseSeededBots()) {
+        return;
+      }
       game.setTeamId(player, this.teamId);
       game.equipTeamColours(player, this.teamId);
       player.getPacketSender().sendSubInterface(data.OVERLAY_HUD_UID, data.WAITING_ROOM_INTERFACE, 1);
@@ -67,6 +70,9 @@ function defineAreas() {
       player.resetAttributes();
       game.setTeamId(player, null);
       game.closeOverlay(player);
+      if (player.isPlayerBot?.() !== true) {
+        game.releaseSeededBots();
+      }
       game.checkStartCountdown();
     }
 
@@ -98,7 +104,7 @@ function defineAreas() {
       }
       player.setAttribute(game.TRANSITION_KEY, false);
       player.getPacketSender().sendSubInterface(data.OVERLAY_HUD_UID, data.STATUS_OVERLAY_INTERFACE[game.getTeamId(player)], 1);
-      player.getPacketSender().sendInteractionOption("Attack", 2, true);
+      player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "Attack", true);
     }
 
     postLeave(character, logout) {
@@ -106,7 +112,7 @@ function defineAreas() {
       if (!player) {
         return;
       }
-      player.getPacketSender().sendInteractionOption("null", 2, true);
+      player.getPacketSender().sendPlayerOption(data.ATTACK_OPTION_SLOT, "", false);
       game.closeOverlay(player);
       player.getPacketSender().sendEntityHintRemoval(true);
       game.clearCastleWarsItems(player);
@@ -115,6 +121,9 @@ function defineAreas() {
         game.returnToLobby(player);
       }
       game.setTeamId(player, null);
+      if (player.isPlayerBot?.() !== true) {
+        game.releaseSeededBots();
+      }
       game.checkTeamsRemain();
     }
 
@@ -126,6 +135,18 @@ function defineAreas() {
       }
       sendGameVars(player, teamId);
       ejectIdlersFromSpawn(player, teamId);
+      for (const processor of game.inGameProcessors) {
+        processor(player);
+      }
+    }
+
+    canAttack(attacker, target) {
+      return friendlyFireVerdict(attacker, target);
+    }
+
+    canTeleport(player) {
+      player.sendMessage("You can't leave just like that!");
+      return false;
     }
   }
 
@@ -158,28 +179,34 @@ function formatTicks(ticks) {
 
 function ejectIdlersFromSpawn(player, teamId) {
   const inSpawn = game.getTeamData(teamId).respawnBounds.inside(player.getLocation());
+  let idleTicks = player.getAttribute(game.IDLE_TICKS_KEY) | 0;
   player.getPacketSender().sendString(
-    inSpawn ? `You have ${formatTicks(player.castlewarsIdleTime | 0)} to leave the respawn room.` : "",
+    inSpawn ? `You have ${formatTicks(idleTicks)} to leave the respawn room.` : "",
     data.EJECT_TEXT_UID[teamId]
   );
   if (!inSpawn || player.isPlayerBot?.() === true) {
     return;
   }
-  if (player.castlewarsIdleTime > 0) {
-    player.castlewarsIdleTime--;
+  if (idleTicks > 0) {
+    player.setAttribute(game.IDLE_TICKS_KEY, --idleTicks);
   }
-  if (player.castlewarsIdleTime <= 0) {
+  if (idleTicks <= 0) {
     player.sendMessage("You idled too long in the respawn room.");
     game.returnToLobby(player);
   }
 }
 
-function registerAreas() {
+function registerAreas(api) {
   const areas = defineAreas();
   Object.assign(game, areas, {
     castleWarsAreas: new Set([areas.gameArea, ...Object.values(areas.waitingAreas)]),
+    // Per-tick work for players in the game, added by the other unit files; the game area
+    // runs it, so nobody outside Castle Wars pays for it.
+    inGameProcessors: [],
   });
-  game.AreaManager.areas.push(areas.lobbyArea, ...Object.values(areas.waitingAreas), areas.gameArea);
+  for (const area of [areas.lobbyArea, ...Object.values(areas.waitingAreas), areas.gameArea]) {
+    api.registerArea(area);
+  }
 }
 
 function setUpCastle() {
@@ -207,41 +234,29 @@ function protectTeamColours(event) {
   event.allow = false;
 }
 
-function blockFriendlyFire(event) {
-  const attacker = event.attacker?.getAsPlayer?.();
-  const target = event.target?.getAsPlayer?.();
+/** Inside the game only the other team is fair game; null leaves anyone else to other rules. */
+function friendlyFireVerdict(attackerMobile, targetMobile) {
+  const attacker = attackerMobile?.getAsPlayer?.();
+  const target = targetMobile?.getAsPlayer?.();
   if (attacker?.getArea?.() !== game.gameArea || target?.getArea?.() !== game.gameArea) {
-    return;
+    return null;
   }
   if (game.getTeamId(attacker) === game.getTeamId(target)) {
     attacker.sendMessage("You can't attack your own team in Castle Wars.");
-    event.allow = false;
-    return;
+    return false;
   }
-  event.allow = true;
-}
-
-function blockTeleport(event) {
-  if (event.player?.getArea?.() !== game.gameArea) {
-    return;
-  }
-  event.player.sendMessage("You can't leave just like that!");
-  event.allow = false;
+  return true;
 }
 
 function respawnInStartRoom(event) {
-  const { player, killer } = event;
+  const { player } = event;
   const teamId = player?.getArea?.() === game.gameArea ? game.getTeamId(player) : null;
   if (!teamId) {
     return;
   }
   game.dropCarriedFlag(player);
-  player.resetCastlewarsIdleTime();
+  game.resetIdleTicks(player);
   player.smartMoves(game.getTeamData(teamId).respawnBounds);
-  player.castlewarsDeaths = (player.castlewarsDeaths | 0) + 1;
-  if (killer?.isPlayer?.() === true) {
-    killer.castlewarsKills = (killer.castlewarsKills | 0) + 1;
-  }
   event.handled = true;
 }
 
@@ -263,13 +278,11 @@ module.exports = function attachCastleWarsAreas(api, castleWars) {
   game = castleWars;
   core = api.core;
   data = castleWars.data;
-  registerAreas();
+  registerAreas(api);
   api.onServerStartup(setUpCastle);
   api.onPlayerLogin(restoreLoginInsideCastleWars);
   api.onCanEquip(protectTeamColours);
   api.onCanUnequip(protectTeamColours);
-  api.onCanAttack(blockFriendlyFire);
-  api.onCanTeleport(blockTeleport);
   api.onPlayerDeath(respawnInStartRoom);
   api.onPlayerDeathItemDrop(keepGameItemsOffTheFloor);
 };

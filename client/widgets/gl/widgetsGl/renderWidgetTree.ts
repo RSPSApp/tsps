@@ -1473,10 +1473,11 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     let primaryOptionText = primary?.option ?? "";
                     let primaryTarget = primary?.target;
 
-                    // For inventory items, use the widget's actions array to find the primary action
-                    // The CS2 scripts set actions on inventory widgets from the item definition
-                    // We need to find the first non-empty, non-Drop, non-Examine action
-                    if (interaction.isInventoryItem && widgetActions) {
+                    // Inventory items: the menu's top entry is the primary action. OSRS lists ops 1-3
+                    // above "Use" and ops 4-5 below it, so an item whose only op is its fourth
+                    // (the 2026-03 Revenant cave teleport's "Teleport") left-clicks "Use". Only when
+                    // no entries were derived, fall back to the first named action.
+                    if (interaction.isInventoryItem && widgetActions && !primary) {
                         const clickInventoryPrimaryStartMs = profileWidgetRender
                             ? performance.now()
                             : 0;
@@ -1758,7 +1759,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 (r.group === undefined || r.group === (w.uid >>> 16)) &&
                 (r.type === undefined || r.type === w.type) &&
                 (r.contentType === undefined || r.contentType === contentType) &&
-                (r.item === undefined || r.item === ((w as any).itemId ?? -1) >= 0) &&
+                (r.item === undefined || r.item === (((w as any).itemId ?? -1) >= 0)) &&
                 (r.colour === undefined || r.colour === ((w as any).color ?? 0)),
         );
         if (hiddenRule) return;
@@ -3870,6 +3871,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         } catch {}
         // Temple Trekking outlines left as-is for now
     }
+
+    opts.drawAboveWidgets?.();
 
     // GL-based context menu (Choose Option) devoverlay via component
     try {

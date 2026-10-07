@@ -81,6 +81,9 @@ export function sendGroundItemAction(payload: GroundItemActionPayload): void {
     if (payload.option) {
         clean.option = String(payload.option);
     }
+    if (payload.opNum !== undefined) {
+        clean.opNum = Math.max(1, Math.min(5, payload.opNum | 0));
+    }
     send({ type: "ground_item_action", payload: clean } as any);
 }
 

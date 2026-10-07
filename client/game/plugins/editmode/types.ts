@@ -83,8 +83,11 @@ export interface EditModeWorldDefinition {
     zones: EditModeWorldZone[];
     disabledPlugins: string[];
     experienceMultiplier: number;
-    /** Opaque to the editor; kept so saving world.json does not drop the forced layout. */
-    gameframe?: string;
+    /**
+     * Every other world.json key (pluginConfig, gameframe, membersWorld, ...) is opaque to
+     * the editor and carried through unchanged so saving never drops it.
+     */
+    [key: string]: unknown;
 }
 
 export interface EditModeTile {
@@ -151,6 +154,7 @@ export interface EditModePluginConfig {
     showPvpZones: boolean;
     showDuelZones: boolean;
     showSafeZones: boolean;
+    showF2pZones: boolean;
     showMultiCombatZones: boolean;
     edits: EditModeEdit[];
 }

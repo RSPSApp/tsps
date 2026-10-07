@@ -1,9 +1,12 @@
 const { PlayerRights } = require("../../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 const { FriendsChatManager } = require("../../interface/FriendsChatManager");
-const { recallRecruitedBot } = require("./BotRecruitRuntime");
-const { callModeHook } = require("../behaviours/hooks/ModeHookContract");
 const { isPvpOnlyBotState } = require("../behaviours/state/PlayerBotState");
 const { ATTR_RECRUIT_OWNER_USERNAME } = require("./BotRecruitConstants");
+const {
+  startActivity,
+  startBrainRoam,
+  startRecruit,
+} = require("../brain/BrainActivities");
 
 function registerBotCommands(options) {
   const {
@@ -11,66 +14,175 @@ function registerBotCommands(options) {
     botApi,
     runtime,
     behaviorMode,
-    assignableBehaviors,
-    modeHandlers,
     resetMovementState,
     taskManager,
     flashHintArrowTaskFactory,
+    brainRegistry,
   } = options;
 
-  const activateMode = (target, state, mode, reason) =>
-    callModeHook({
-      modeHandlers,
-      mode,
-      hookName: "activateMode",
-      payload: {
-        player: target,
-        state,
-        nowMs: Date.now(),
-        reason,
-      },
-      fallback: false,
-      api: botApi,
-      errorEvent: "bot_mode_activation_error",
-    }) === true;
+  const brainModes = [
+    ...new Set(
+      brainRegistry.activities
+        .map((activity) => activity.mode)
+        .filter(Boolean)
+    ),
+  ];
   const supportedBehaviorList = [
-    ...Object.keys(assignableBehaviors ?? {}).sort((a, b) => a.localeCompare(b)),
+    ...new Set(brainModes),
+    "recruit",
     "auto",
-  ].join("|");
+  ].sort((a, b) => a.localeCompare(b)).join("|");
+
+  /** Brain activity for a requested behavior name, or null when unknown. */
+  const findBrainActivity = (requested) => {
+    if (requested === "pvp" || requested === "sparring") {
+      return brainRegistry.byId?.get("pvp") ?? null;
+    }
+    if (
+      requested === "recruit" ||
+      requested === "follow" ||
+      requested === "follow_owner"
+    ) {
+      return brainRegistry.byId?.get("follow_owner") ?? null;
+    }
+    const mode = requested;
+    return (
+      brainRegistry.activities?.find((activity) => activity.mode === mode) ?? null
+    );
+  };
+
+  /** Swaps a controlled bot onto a brain activity, replacing its current one. */
+  const assignBrainActivity = (target, state, activity) => {
+    if (state.autonomy) {
+      state.autonomy.manualMode = activity.mode;
+      state.autonomy.modeEndsAt = Number.MAX_SAFE_INTEGER;
+      state.autonomy.nextDecisionAt = Number.MAX_SAFE_INTEGER;
+    }
+    return startActivity(target, activity.id, {
+      home: state.home ?? target.getLocation?.(),
+    });
+  };
+
+  /** Hands a bot back to autonomous behavior: the brain roam activity. */
+  const assignAutoBehavior = (target, state) => {
+    if (!state.autonomy) {
+      state.autonomy = {};
+    }
+    state.autonomy.manualMode = null;
+    state.autonomy.modeEndsAt = 0;
+    state.autonomy.nextDecisionAt = 0;
+    if (!startBrainRoam(target, state)) {
+      return false;
+    }
+    resetMovementState(target);
+    return true;
+  };
 
   const pendingRecruits = new Map();
-  api.registerCommand("bot", ({ player }) => {
-    const bot = runtime.spawnPvpBot(player.getLocation());
-    if (!bot) {
-      player.sendMessage("Unable to spawn a PvP bot right now.");
+  api.registerCommand("bot", ({ player, parts }) => {
+    const requested = (parts[1] ?? "recruit").toLowerCase();
+    const wantsAuto = requested === "auto";
+    const isRecruitRequest =
+      requested === "recruit" ||
+      requested === "follow" ||
+      requested === "follow_owner";
+    const activity = findBrainActivity(requested);
+    const normalizedBehavior = activity?.mode ?? (wantsAuto ? "auto" : null);
+    if (!activity && !wantsAuto) {
+      player.sendMessage(`Usage: ::bot [${supportedBehaviorList}] (default pvp)`);
       return true;
     }
-    // The factory queues a world login. Clan membership needs the assigned player index.
-    pendingRecruits.set(bot, player);
+    // Recruits spawn geared (pvp priming applies the generated loadout) and
+    // follow the owner through the follow_owner brain; the clan-chat join waits
+    // for the bot session in the drain below.
+    if (isRecruitRequest) {
+      const recruitActivity = findBrainActivity("recruit");
+      if (!recruitActivity) {
+        player.sendMessage("Recruit activity is unavailable.");
+        return true;
+      }
+      const recruit = runtime.spawnPvpBot(player.getLocation(), {
+        mode: behaviorMode.PVP,
+      });
+      if (!recruit) {
+        player.sendMessage("Unable to spawn a bot right now.");
+        return true;
+      }
+      const recruitUsername = recruit.getUsername?.();
+      const recruitState = recruitUsername
+        ? runtime.botStatesByName.get(recruitUsername)
+        : null;
+      const started =
+        recruitState && startRecruit(recruit, recruitState, player);
+      player.sendMessage(
+        started
+          ? `${recruitUsername} is geared and following you.`
+          : `Unable to start following for ${recruitUsername}.`
+      );
+      if (started) {
+        pendingRecruits.set(recruit, { owner: player, behavior: "recruit" });
+      }
+      return true;
+    }
+    const bot = runtime.spawnPvpBot(player.getLocation(), {
+      mode: activity?.mode ?? normalizedBehavior,
+    });
+    if (!bot) {
+      player.sendMessage("Unable to spawn a bot right now.");
+      return true;
+    }
+    if (activity) {
+      const attached = startActivity(bot, activity.id, { home: player.getLocation() });
+      player.sendMessage(
+        attached
+          ? `${bot.getUsername()} spawned as ${activity.mode} (brain).`
+          : `Unable to attach the brain to ${bot.getUsername()}.`
+      );
+      return true;
+    }
+    // The factory queues a world login. Clan membership and mode activation need the bot registered.
+    pendingRecruits.set(bot, { owner: player, behavior: normalizedBehavior });
     return true;
-  }, PlayerRights.DEVELOPER);
+  }, PlayerRights.DEVELOPER, "Manage player bots");
   api.onPlayerProcess(({ player: owner }) => {
     if (owner.isPlayerBot?.()) return;
-    for (const [bot, pendingOwner] of pendingRecruits) {
-      if (pendingOwner !== owner || !bot.isRegistered()) continue;
+    for (const [bot, pending] of pendingRecruits) {
+      if (pending.owner !== owner || !bot.isRegistered()) continue;
       pendingRecruits.delete(bot);
       if (!owner.isRegistered()) continue;
-      if (!owner.getRelations().getFriendsChatChannelName()) {
-        FriendsChatManager.setOwnChannelName(owner, owner.getUsername());
+      const username = bot.getUsername?.();
+      const state = username ? runtime.botStatesByName.get(username) : null;
+      if (pending.behavior === "recruit") {
+        if (!owner.getRelations().getFriendsChatChannelName()) {
+          FriendsChatManager.setOwnChannelName(owner, owner.getUsername());
+        }
+        const recruited = FriendsChatManager.recruitBot(owner, bot);
+        bot.setArea(owner.getArea());
+        bot.moveTo(owner.getLocation().clone());
+        owner.sendMessage(
+          recruited
+            ? `${username} is geared, in your clan chat, and following you.`
+            : `${username} is geared and following you, but could not join your clan chat.`
+        );
+        continue;
       }
-      const recruited = FriendsChatManager.recruitBot(owner, bot);
-      const state = runtime.botStatesByName.get(bot.getUsername());
-      if (recruited && !recallRecruitedBot(bot, owner, state, behaviorMode)) {
-        bot.setAttribute?.(ATTR_RECRUIT_OWNER_USERNAME, owner.getUsername());
-        bot.setFollowing?.(owner);
-        bot.setMobileInteraction?.(owner);
-        bot.setPositionToFace?.(owner.getLocation?.());
+      if (pending.behavior === "auto") {
+        if (!state) {
+          owner.sendMessage(`Unable to start auto for ${username}: missing bot state.`);
+          continue;
+        }
+        if (state.autonomy) state.autonomy.allowedAutonomousModes = null;
+        const assigned = assignAutoBehavior(bot, state);
+        owner.sendMessage(assigned
+          ? `${username} spawned as auto.`
+          : `Unable to start auto for ${username}.`);
+        botApi.log("bot_spawn_behavior_assigned", {
+          assignedBy: owner.getUsername(),
+          target: username,
+          behavior: "auto",
+          assigned,
+        });
       }
-      bot.setArea(owner.getArea());
-      bot.moveTo(owner.getLocation().clone());
-      owner.sendMessage(recruited
-        ? `${bot.getUsername()} is geared, in your clan chat, and ready beside you.`
-        : `${bot.getUsername()} is geared and beside you, but could not join your clan chat.`);
     }
   });
 
@@ -119,7 +231,7 @@ function registerBotCommands(options) {
 
     player.sendMessage("Usage: ::botme [on|off|toggle|status]");
     return true;
-  }, PlayerRights.ADMINISTRATOR);
+  }, PlayerRights.ADMINISTRATOR, "Control yourself as a bot");
 
   api.registerCommand("bh", ({ player, parts }) => {
     const usernameArg = parts[1];
@@ -130,10 +242,8 @@ function registerBotCommands(options) {
     }
 
     const wantsAuto = behaviorArg === "auto";
-    const normalizedBehavior =
-      assignableBehaviors[behaviorArg] ??
-      (behaviorArg === "sparring" ? assignableBehaviors.pvp : null);
-    if (!normalizedBehavior && !wantsAuto) {
+    const activity = findBrainActivity(behaviorArg);
+    if (!activity && !wantsAuto) {
       player.sendMessage(`Unknown behaviour. Supported: ${supportedBehaviorList}`);
       return true;
     }
@@ -157,17 +267,10 @@ function registerBotCommands(options) {
     }
 
     if (wantsAuto) {
-      if (!state.autonomy) {
-        state.autonomy = {};
-      }
-      state.autonomy.manualMode = null;
-      state.autonomy.modeEndsAt = 0;
-      state.autonomy.nextDecisionAt = 0;
-      if (!activateMode(target, state, behaviorMode.ROAMING, "manual_override_auto")) {
+      if (!assignAutoBehavior(target, state)) {
         player.sendMessage(`bh: failed to switch ${targetUsername} to auto`);
         return true;
       }
-      resetMovementState(target);
       taskManager.submit(flashHintArrowTaskFactory(player, target));
 
       player.sendMessage(`bh: ${targetUsername} -> auto`);
@@ -179,41 +282,34 @@ function registerBotCommands(options) {
       return true;
     }
 
-    const activated = activateMode(
-      target,
-      state,
-      normalizedBehavior,
-      "manual_override_assign"
-    );
-    if (!activated) {
-      player.sendMessage(`bh: failed to activate mode for ${targetUsername}`);
-      return true;
+    if (activity) {
+      if (activity.id === "follow_owner") {
+        target.setAttribute?.(
+          ATTR_RECRUIT_OWNER_USERNAME,
+          player.getUsername?.() ?? null
+        );
+      }
+      if (!assignBrainActivity(target, state, activity)) {
+        player.sendMessage(`bh: failed to attach ${activity.id} to ${targetUsername}`);
+        return true;
+      }
+    } else {
+      if (!assignAutoBehavior(target, state)) {
+        player.sendMessage(`bh: failed to switch ${targetUsername} to auto`);
+        return true;
+      }
     }
-    const currentLoc = target.getLocation?.();
-    if (currentLoc) {
-      state.home = {
-        x: currentLoc.getX(),
-        y: currentLoc.getY(),
-        z: currentLoc.getZ(),
-      };
-    }
-    if (!state.autonomy) {
-      state.autonomy = {};
-    }
-    state.autonomy.manualMode = normalizedBehavior;
-    state.autonomy.modeEndsAt = Number.MAX_SAFE_INTEGER;
-    state.autonomy.nextDecisionAt = Number.MAX_SAFE_INTEGER;
-    resetMovementState(target);
     taskManager.submit(flashHintArrowTaskFactory(player, target));
 
-    player.sendMessage(`bh: ${targetUsername} -> ${normalizedBehavior}`);
+    const assigned = activity ? activity.mode : "auto";
+    player.sendMessage(`bh: ${targetUsername} -> ${assigned}`);
     botApi.log("bot_behavior_assigned", {
       assignedBy: player.getUsername(),
       target: targetUsername,
-      behavior: normalizedBehavior,
+      behavior: assigned,
     });
     return true;
-  }, PlayerRights.ADMINISTRATOR);
+  }, PlayerRights.ADMINISTRATOR, "Set bot behaviour");
 
   api.registerCommand("bothotspots", ({ player }) => {
     const countsByHotspot = new Map();
@@ -249,7 +345,7 @@ function registerBotCommands(options) {
       `profiles ${formatCounts(countsByProfile) || "none"}`
     );
     return true;
-  }, PlayerRights.ADMINISTRATOR);
+  }, PlayerRights.ADMINISTRATOR, "Show bot hotspot counts");
 }
 
 module.exports = {

@@ -15,6 +15,7 @@ import { handleShopPayload } from "../domain/shop";
 import { handleSmithingPayload } from "../domain/smithing";
 import { emitPlayerSync, emitSkills } from "../domain/skills";
 import { handleTradePayload } from "../domain/trade";
+import { markChatTransmit } from "../../../game/TransmitCycles";
 import { getClientCycle } from "../timing";
 import { cloneRunEnergyState, state } from "../state";
 import {
@@ -227,6 +228,19 @@ export function handleInboundUi(msg: any): boolean {
         } catch (err) {
             console.warn("chat listener error", err);
         }
+        return true;
+    }
+    if (msg.type === "chat_filter_settings") {
+        // The server's saved filters; the chatbox buttons redraw on the chat transmit.
+        const payload = msg.payload as { publicMode: number; privateMode: number; tradeMode: number };
+        const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
+        const vm = g?.__osrsClient?.cs2Vm;
+        if (vm) {
+            vm.publicChatMode = payload.publicMode | 0;
+            vm.privateChatMode = payload.privateMode | 0;
+            vm.tradeChatMode = payload.tradeMode | 0;
+        }
+        markChatTransmit();
         return true;
     }
     if (msg.type === "friends_chat") {

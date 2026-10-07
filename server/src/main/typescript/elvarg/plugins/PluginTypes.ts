@@ -1,11 +1,19 @@
 import type { NpcDefinition } from "../game/definition/NpcDefinition";
 import type { ObjectDefinition } from "../game/definition/ObjectDefinition";
+import type { Item } from "../game/model/Item";
 import type { WeaponCombatProfile } from "../game/content/combat/WeaponProfile";
 import type { PlayerPersistence } from "../game/entity/impl/player/persistence/PlayerPersistence";
 import type { ActiveRegionSnapshot } from "../game/ActiveRegionIndex";
 import type { DefinitionSource } from "../game/definition/loader/DefinitionLoader";
 import type { FriendsChatAction } from "../net/protocol/ClientProtocol";
 import type { PlayerRights } from "../game/model/rights/PlayerRights";
+
+/** A player entered a different 64x64 map square (or plane), by walking or teleporting. */
+export interface PluginPlayerMapSquareChangeEvent {
+  player: any;
+  previous: any;
+  location: any;
+}
 
 export interface PluginPlayerLoginEvent {
   player: any;
@@ -32,7 +40,8 @@ export type PluginSocialPacketEvent = {
     | { type: "friends_chat_action"; action: FriendsChatAction }
     | { type: "private_message"; recipient: string; text: string }
     | { type: "chat_filter"; publicMode: number; privateMode: number; tradeMode: number }
-    | { type: "chat"; text: string; messageType: "friends_chat" };
+    | { type: "chat"; text: string; messageType: "friends_chat" }
+    | { type: "public_chat"; text: string };
 };
 
 export interface PluginServerLifecycleEvent {
@@ -166,6 +175,12 @@ export interface PluginNpcDeathEvent {
   npc: any;
   npcId: number;
   location: { x: number; y: number; z: number };
+  /**
+   * Set by a handler to leave the npc in the world after it dies (an Ent's trunk): it stays
+   * `ticks` ticks before it is removed, then respawns `respawnTicks` later (default: its
+   * definition's respawn).
+   */
+  remains?: { ticks: number; respawnTicks?: number } | null;
 }
 
 /** Fired before an NPC enters its death task. Set preventDeath for phase changes. */
@@ -220,7 +235,49 @@ export interface PluginCanAttackEvent {
 export interface PluginCanTeleportEvent {
   player: any;
   wildernessLevelLimit?: number;
+  /** Where the teleport lands, when the caller knows it. */
+  destination?: any;
   allow: boolean | null;
+}
+
+/** Inventory item click, item-on-X use or spell-on-item; allow=false drops the packet. */
+export interface PluginCanUseItemEvent {
+  player: any;
+  itemId: number;
+  /** "action", "use", "magic", or "bonus" (worn item's stats being counted; no message expected). */
+  action: string;
+  /** The clicked menu option for "action" (e.g. "Drop", "Examine"). */
+  option?: string;
+  allow: boolean | null;
+}
+
+export interface PluginCanGainExperienceEvent {
+  player: any;
+  skill: any;
+  experience: number;
+  allow: boolean | null;
+}
+
+/** Fired per npc-spawns definition at load; allow=false skips the spawn. */
+export interface PluginCanSpawnNpcEvent {
+  npcId: number;
+  location: any;
+  allow: boolean | null;
+}
+
+/** Fired per shop stock entry at load; allow=false drops it from the shop. */
+export interface PluginCanStockItemEvent {
+  shopId: number;
+  itemId: number;
+  allow: boolean | null;
+}
+
+export interface PluginPrayerDisabledEvent {
+  player: any;
+  prayer: any;
+  disabled: boolean | null;
+  /** Shown to the player when disabled is true. */
+  message?: string;
 }
 
 export interface PluginCanLogoutEvent {
@@ -363,12 +420,43 @@ export interface PluginPlayerDealtDamageEvent {
   hit: any;
 }
 
+/**
+ * Asked before an attack: `ignoreDelay` lets it happen though the attacker's attack timer hasn't
+ * run out, and `keepDelay` leaves that timer as it was afterwards (a boss's larvae that may be hit
+ * on cooldown, some weapons adding no delay). `newTarget` says whether the target differs from the
+ * attacker's last attacked one (a fresh click rather than a repeat). With `keepDelay`, `minimumDelay` still makes the
+ * next attack wait at least that many ticks.
+ */
+export interface PluginAttackTimingEvent {
+  attacker: any;
+  target: any;
+  method: any;
+  ignoreDelay: boolean;
+  keepDelay: boolean;
+  minimumDelay?: number;
+  newTarget: boolean;
+}
+
 export interface PluginCombatHitRollEvent {
   attacker: any;
   target: any;
   combatType: any;
   forceAccurate: boolean;
+  /** Set to make an accurate roll land on the maximum hit. */
+  forceMaxHit?: boolean;
   bypassProtectionPrayer: boolean;
+}
+
+/**
+ * Fired whenever combat asks how far an attacker reaches. Handlers may lower or raise
+ * `distance`; it never goes below 1. `manualCast` is a player's single click-cast spell.
+ */
+export interface PluginCombatAttackDistanceEvent {
+  attacker: any;
+  target: any;
+  combatType: any;
+  manualCast: boolean;
+  distance: number;
 }
 
 export interface PluginCombatHitResolvedEvent {
@@ -381,6 +469,8 @@ export interface PluginSpellDisabledEvent {
   player: any;
   spellbook: any;
   spellId: number;
+  /** The Spell being cast, when the caller has it (e.g. spell.isMembers()). */
+  spell?: any;
   disabled: boolean | null;
 }
 
@@ -617,7 +707,22 @@ export interface PluginRangedAmmoResolver {
 
 export interface PluginRangedAmmoHandler {
   checkAmmo(player: any, amountRequired: number, silent?: boolean): boolean | null;
-  decrementAmmo(player: any, pos: any, amount: number): boolean;
+  /** `delayTicks`: the shot's flight time; floor drops and the count apply as it lands. */
+  decrementAmmo(player: any, pos: any, amount: number, delayTicks?: number): boolean;
+}
+
+/** A container that can supply runes the inventory cannot, e.g. a rune pouch. */
+export interface PluginSpellRuneSource {
+  /** True when this source holds every item in `missingItems` in full. */
+  check(player: any, missingItems: Item[]): boolean;
+  /** Deducts `missingItems` from this source; only called after check() returned true. */
+  consume(player: any, missingItems: Item[]): void;
+}
+
+/** A share of fired ammunition recovered before it lands, e.g. by an Ava's device. */
+export interface PluginRangedAmmoRecovery {
+  /** Percentage (0-100) recovered for this player, or null to fall through. */
+  recovery(player: any): number | null;
 }
 
 export interface PluginRangedCombatModifier {
@@ -627,6 +732,9 @@ export interface PluginRangedCombatModifier {
 
 export interface PluginApi {
   onPlayerLogin(handler: (event: PluginPlayerLoginEvent) => void): void;
+  /** Fires per map square crossed, not per tile: content spread over the map (patches, bird
+   * houses) syncs here instead of checking every player every tick. */
+  onPlayerMapSquareChange(handler: (event: PluginPlayerMapSquareChangeEvent) => void): void;
   onPlayerDisconnect(handler: (event: PluginPlayerDisconnectEvent) => void): void;
   onPlayerLogout(handler: (event: PluginPlayerLogoutEvent) => void): void;
   onSocialPacket(handler: (event: PluginSocialPacketEvent) => void): void;
@@ -721,6 +829,11 @@ export interface PluginApi {
     handler: (event: PluginPlayerDeathItemDropEvent) => void
   ): void;
   onCanEquip(handler: (event: PluginCanEquipEvent) => void): void;
+  onCanUseItem(handler: (event: PluginCanUseItemEvent) => void): void;
+  onCanGainExperience(handler: (event: PluginCanGainExperienceEvent) => void): void;
+  onCanSpawnNpc(handler: (event: PluginCanSpawnNpcEvent) => void): void;
+  onCanStockItem(handler: (event: PluginCanStockItemEvent) => void): void;
+  onPrayerDisabled(handler: (event: PluginPrayerDisabledEvent) => void): void;
   onCanUnequip(handler: (event: PluginCanUnequipEvent) => void): void;
   onPlayerDeath(handler: (event: PluginPlayerDeathEvent) => void): void;
   onPlayerOption(handler: (event: PluginPlayerOptionEvent) => void): void;
@@ -728,7 +841,10 @@ export interface PluginApi {
     handler: (event: PluginPlayerDealtDamageEvent) => void
   ): void;
   onCombatHitRoll(handler: (event: PluginCombatHitRollEvent) => void): void;
+  /** Lets an attack ignore the attack timer, or leave it untouched (see PluginAttackTimingEvent). */
+  onAttackTiming(handler: (event: PluginAttackTimingEvent) => void): void;
   onCombatHitResolved(handler: (event: PluginCombatHitResolvedEvent) => void): void;
+  onCombatAttackDistance(handler: (event: PluginCombatAttackDistanceEvent) => void): void;
   onSpellDisabled(handler: (event: PluginSpellDisabledEvent) => void): void;
   onSpellRuneBypass(handler: (event: PluginSpellRuneBypassEvent) => void): void;
   onNpcAggressionTolerance(
@@ -818,12 +934,16 @@ export interface PluginApi {
    * Registers a command handler. `minimumRights` is the lowest rank that may run it -
    * the core denies everyone below before the handler is called, so handlers never
    * check rights themselves. Omitted means any player may run it.
+   * `description` is shown and searched in the Commands interface.
    */
   registerCommand(
     command: string,
     handler: (event: PluginCommandEvent) => void | boolean,
-    minimumRights?: PluginCommandRights
+    minimumRights?: PluginCommandRights,
+    description?: string
   ): void;
+  /** Registered commands this player can run, including world/plugin rank overrides. */
+  getRegisteredCommands(player: any): Array<{ command: string; description: string }>;
   /**
    * Overrides the rank a command requires, whoever registered it. `PlayerRights.NONE`
    * opens the command to every player - e.g. a spawn-mode plugin granting ::items.
@@ -911,6 +1031,8 @@ export interface PluginApi {
   getRegionManager(): any;
   getCombatFactory(): any;
   getAreaManager(): any;
+  /** Adds an Area to AreaManager; its methods are timed and reported under this plugin. */
+  registerArea(area: any): void;
   getPrayerHandler(): any;
   getBonusManager(): any;
   getItemOnGroundManager(): any;
@@ -940,6 +1062,10 @@ export interface PluginApi {
   resetPluginPerformanceStats(): void;
   setPluginPerformanceProfilingEnabled(enabled: boolean): void;
   isPluginPerformanceProfilingEnabled(): boolean;
+  /** Adjusts effective levels after prayers/stance, before equipment bonuses and special multipliers. */
+  registerCombatEffectiveLevelModifier(
+    modifier: (entity: any, level: number, context: import("../game/content/combat/EquipmentEffects").CombatEffectiveLevelContext) => number
+  ): void;
   registerMeleeHitModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;
@@ -949,6 +1075,18 @@ export interface PluginApi {
   registerMagicHitModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;
+  /**
+   * Adds to the magic damage bonus, in tenths of a percent, before it scales the
+   * spell's base max hit - for effects the Wiki counts as magic damage %, like the
+   * salve amulet (i)'s 15% against the undead.
+   */
+  registerMagicDamageBonusModifier(
+    modifier: (entity: any, permille: number) => number
+  ): void;
+  /**
+   * Accuracy modifiers scale the finished attack roll - effective level times
+   * (bonus + 64) - where the Wiki applies gear bonuses such as the salve amulet.
+   */
   registerMeleeAttackAccuracyModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;
@@ -967,11 +1105,19 @@ export interface PluginApi {
   registerMagicDefenseModifier(
     modifier: (entity: any, baseHit: number) => number
   ): void;
+  registerRunEnergyRestoreModifier(
+    modifier: (entity: any, delayMs: number) => number
+  ): void;
+  registerIncomingDamageModifier(
+    modifier: (entity: any, hitDamage: any) => void
+  ): void;
   setCombatEngine(engine: PluginCombatEngine): void;
   setCombatDamageProvider(provider: PluginCombatDamageProvider): void;
   registerBonusProvider(provider: PluginBonusProvider): void;
   registerRangedAmmoResolver(resolver: PluginRangedAmmoResolver): void;
   registerRangedAmmoHandler(handler: PluginRangedAmmoHandler): void;
+  registerRangedAmmoRecovery(recovery: PluginRangedAmmoRecovery): void;
+  registerSpellRuneSource(source: PluginSpellRuneSource): void;
   registerRangedCombatModifier(modifier: PluginRangedCombatModifier): void;
   registerWeaponProfile(profile: WeaponCombatProfile): void;
   /**
@@ -1001,12 +1147,16 @@ export interface PluginApi {
 export interface PluginCoreApi {
   MeleeCombatMethod: any;
   RangedCombatMethod: any;
+  MagicCombatMethod: any;
   CombatMethod: any;
   CombatSpecial: any;
   CombatFactory: any;
+  CanAttackResponse: any;
   CombatType: any;
+  SkullType: any;
   CombatConstants: any;
   DamageFormulas: any;
+  AccuracyFormulasDpsCalc: any;
   PendingHit: any;
   HitDamage: any;
   HitMask: any;
@@ -1035,6 +1185,7 @@ export interface PluginCoreApi {
   ForceMovementTask: any;
   TaskManager: any;
   ItemIdentifiers: any;
+  ItemIds: any;
   NpcIdentifiers: any;
   ObjectIdentifiers: any;
   ShopIdentifiers: any;
@@ -1046,10 +1197,21 @@ export interface PluginCoreApi {
   Boundary: any;
   PolygonalBoundary: any;
   Area: any;
+  ServerPerf: any;
+  /** The ::pluginperf data: per-plugin hook and area timings, collected only while enabled. */
+  PluginPerf: {
+    snapshot(limit?: number): any[];
+    reset(): void;
+    setEnabled(enabled: boolean): void;
+    isEnabled(): boolean;
+  };
   World: any;
   GameObject: any;
   PrivateArea: any;
+  TemplatedInstanceArea: any;
   ObjectManager: any;
+  OperationType: any;
+  LocModelType: any;
   MapObjects: any;
   ItemOnGroundManager: any;
   ItemDefinition: any;
@@ -1059,9 +1221,13 @@ export interface PluginCoreApi {
   ObjectDefinition: any;
   MagicSpellbook: any;
   Spell: any;
+  CombatNormalSpell: any;
   NPC: any;
   GameConstants: any;
+  Music: any;
+  WorldDefinition: any;
   TeleportHandler: any;
+  TeleportType: any;
   DialogueChainBuilder: any;
   NpcDialogue: any;
   PlayerDialogue: any;
@@ -1074,10 +1240,16 @@ export interface PluginCoreApi {
   PlayerRights: any;
   Server: any;
   PluginManager: any;
+  ShopManager: any;
+  MultiChatboxPrompt: any;
+  dispatchClientMessages: (player: any, messages: any[]) => boolean;
+  connectHeadlessClient: (username: string, password: string) => Promise<{ player?: any; error?: string }>;
 }
 
 export interface PluginModule {
   name: string;
   dependsOn?: string[];
+  /** Members content: not loaded when world.json sets membersWorld false. */
+  members?: boolean;
   register(api: PluginApi): void;
 }

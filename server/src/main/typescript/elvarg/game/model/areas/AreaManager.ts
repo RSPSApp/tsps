@@ -2,10 +2,12 @@ import { Location } from "../Location";
 import { Mobile } from "../../entity/impl/Mobile";
 import { Area } from "./Area";
 import { Wilderness } from "../../content/wilderness/Wilderness";
+import { PluginManager } from "../../../plugins/PluginManager";
 
 export class AreaManager {
     public static areas: Area[] = [];
     private static readonly AREA_INDEX_BUCKET_SIZE = 64;
+    private static readonly MAX_INDEXED_BUCKETS = 1024;
     private static readonly areaHints = new WeakMap<Mobile, AreaHint>();
     private static areaSearchIndex: AreaSearchIndexState | null = null;
     /**
@@ -24,7 +26,7 @@ export class AreaManager {
         if (area != null) {
             boundaryIndex = AreaManager.findBoundaryIndex(position, area, hint != null && hint.area === area ? hint.boundaryIndex : -1);
             if (boundaryIndex === -1) {
-                area.leave(c, false);
+                PluginManager.callArea(area, "leave", c, false);
                 previousArea = area;
                 area = null;
             }
@@ -43,7 +45,7 @@ export class AreaManager {
                 boundaryIndex = resolved.boundaryIndex;
             }
             if (area != null) {
-                area.enter(c);
+                PluginManager.callArea(area, "enter", c);
             }
         }
 
@@ -53,7 +55,7 @@ export class AreaManager {
             // (Pest Control), which is only detectable against what was recorded.
             c.setArea(area);
             const processedArea = area;
-            area.process(c);
+            PluginManager.callArea(area, "process", c);
             if (c.getArea() !== processedArea) {
                 area = c.getArea();
                 boundaryIndex = area == null
@@ -90,7 +92,7 @@ export class AreaManager {
             return true;
         }
         const location = c.getLocation();
-        return Wilderness.isMulti(location.getX(), location.getY());
+        return Wilderness.isMulti(location.getX(), location.getY(), location.getZ());
     }
 
     /**
@@ -229,6 +231,12 @@ export class AreaManager {
                 const maxBucketX = AreaManager.toAreaBucketCoordinate(maxX);
                 const minBucketY = AreaManager.toAreaBucketCoordinate(minY);
                 const maxBucketY = AreaManager.toAreaBucketCoordinate(maxY);
+                // A map-wide boundary (a PvP world's zone) would fill ~65k buckets per plane;
+                // one rectangle test on the fallback path is cheaper than indexing it.
+                if ((maxBucketX - minBucketX + 1) * (maxBucketY - minBucketY + 1) > AreaManager.MAX_INDEXED_BUCKETS) {
+                    fallback.push(entry);
+                    continue;
+                }
 
                 for (let bucketX = minBucketX; bucketX <= maxBucketX; bucketX++) {
                     for (let bucketY = minBucketY; bucketY <= maxBucketY; bucketY++) {

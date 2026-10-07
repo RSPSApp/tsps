@@ -1,3 +1,5 @@
+import { appendAttackTimerOverhead } from "../../../game/plugins/attacktimer/AttackTimerOverhead";
+import { updateSkyColor } from "../environment";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -195,6 +197,8 @@ const SCENE_PREVIEW_HALF_TILES = MapManager.SCENE_STREAM_HALF_TILES;
 const WELCOME_SCREEN_GROUP_ID = 378;
 
 export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: number, resized: boolean): void {
+
+        host.osrsClient.runeLite?.postBeforeRender();
 
         profiler.startFrame();
 
@@ -579,6 +583,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
             sceneViewport.width,
             sceneViewport.height,
         );
+        updateSkyColor(host);
         host.clearSceneFramebuffer(sceneFramebufferViewport);
         // keep CS2-visible viewport zoom in sync with the viewport widget size
         // (Client.viewportZoom; i.e., Rasterizer3D.get3dZoom()) so scripts and widget models scale correctly.
@@ -810,6 +815,10 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         transparentPlayerBatches = Math.max(0, host._frameBatches - passStartBatches);
         profiler.endPhase();
 
+        profiler.startPhase("afterScene");
+        host.osrsClient.clientPlugins.afterSceneRender(host);
+        profiler.endPhase();
+
         try {
             host.drawSceneTileOverlays(time, deltaTime);
         } catch {}
@@ -1031,6 +1040,16 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                     );
                 }
             } catch {}
+            // The attack timer plugin's countdown, with the local player's text.
+            try {
+                appendAttackTimerOverhead(
+                    host,
+                    localPlayerTextIdx,
+                    overheadTexts,
+                    overheadTextMaxEntries,
+                    playerDefaultHeightTiles,
+                );
+            } catch {}
 
             // Render overhead skull and prayer icons for all players.
             try {
@@ -1078,12 +1097,14 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                 ne.forEachActive((ecsId: number) => {
                     if (overheadPrayers.length >= overheadPrayerMaxEntries) return;
                     const type = host.getEffectiveNpcType(ne.getNpcTypeId(ecsId) | 0);
+                    // Icons the server set (the Hunllef's protection) win over the type's own.
+                    const serverIcons = host.osrsClient.npcHeadIcons?.get(ne.getServerId(ecsId) | 0);
                     const archives = type?.headIconSpriteIds;
                     const sprites = type?.headIconSpriteIndices;
-                    if (!archives || !sprites) return;
+                    if (!serverIcons && (!archives || !sprites)) return;
 
-                    const npcHeadIcons = archives
-                        .map((archiveId, index) => ({ archiveId, spriteId: sprites[index] ?? -1 }))
+                    const npcHeadIcons = (serverIcons ?? archives!
+                        .map((archiveId, index) => ({ archiveId, spriteId: sprites![index] ?? -1 })))
                         .filter((icon) => icon.archiveId >= 0 && icon.spriteId >= 0);
                     if (npcHeadIcons.length === 0) return;
 
@@ -1680,6 +1701,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                     `[WebGLOsrsRenderer] mapsToLoad applying: mapX=${pendingMap.mapX} mapY=${pendingMap.mapY} verts=${pendingMap.vertices?.length}`,
                 );
                 mapApplyCount++;
+                if (pendingMap === host.pendingInstanceScene) host.replaceSceneWithInstance(pendingMap);
                 host.loadMap(
                     host.mainProgram,
                     host.mainAlphaProgram,

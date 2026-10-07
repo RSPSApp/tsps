@@ -170,7 +170,13 @@ export class MapObjects {
         RegionManager.removeClipping(position.getX(), position.getY(), position.getZ(), clipShift, null);
     }
 
+    /**
+     * One key per tile. JavaScript shifts use only the low five bits of the count and wrap at
+     * 32 bits, so the old `z + (x << 24) + (y << 48)` gave far-apart tiles the same key (a
+     * Lumbridge cellar tile looked up the castle's first floor). Map coordinates stay below
+     * 16384, so this product is unique and well within the exact integer range.
+     */
     static getHash(x: number, y: number, z: number): number {
-        return z + (x << 24) + (y << 48);
+        return (z * 16384 + x) * 16384 + y;
     }
 }

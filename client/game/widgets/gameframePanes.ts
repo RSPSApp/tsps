@@ -26,8 +26,8 @@ const PANE_REDIRECT_ENUM_BY_ROOT: Readonly<Record<number, number>> = {
 // login never drops an interface (tabs 76-89, main modal 16, orbs 33, ...).
 const MOBILE_PANE_FALLBACK: ReadonlyArray<readonly [number, number]> = [
     [96, 49],  // chatbox
-    [9, 21],   // username
-    [33, 22],  // minimap/orbs
+    [9, 15],   // username
+    [33, 37],  // minimap/orbs
     [7, 30],   // xp counter
     [6, 12],   // buff bar
     [16, 27],  // main modal

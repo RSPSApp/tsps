@@ -1,6 +1,4 @@
-import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
-import type { WidgetInteractionController } from "../WidgetInteractionController";
-import type { WidgetManager } from "../../../widgets/WidgetManager";
+import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
 
 export function processWidgetMenuWheelInput(
     deps: WidgetInputControllerDeps,

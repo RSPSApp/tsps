@@ -3,9 +3,15 @@ const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wi
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
-const GLOW_PRESET_ATTRIBUTE = "visual:glowPreset";
-const GLOW_INTENSITY_ATTRIBUTE = "visual:glowIntensity";
-const LAST_GLOW_PRESET_ATTRIBUTE = "killstreaks:lastGlowPreset";
+const GLOW_PRESET_ATTRIBUTE = "visual:glow-preset";
+const GLOW_INTENSITY_ATTRIBUTE = "visual:glow-intensity";
+const LAST_GLOW_PRESET_ATTRIBUTE = "killstreaks:last-glow-preset";
+const TOTAL_KILLS_ATTRIBUTE = "killstreaks:total-kills";
+const STREAK_ATTRIBUTE = "killstreaks:streak";
+const HIGHEST_STREAK_ATTRIBUTE = "killstreaks:highest-streak";
+const DEATHS_ATTRIBUTE = "killstreaks:deaths";
+const RECENT_KILLS_ATTRIBUTE = "killstreaks:recent-kills";
+const RATIO_FORMAT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 const BASE_BLOOD_MONEY_REWARD = 150;
 const STREAK_STEP = 5;
@@ -79,8 +85,32 @@ function parseAttributeInt(value, fallback = 0) {
 }
 
 function normalizeKillstreak(player) {
-  const streak = parseAttributeInt(player?.getKillstreak?.(), 0);
+  const streak = parseAttributeInt(player?.getAttribute?.(STREAK_ATTRIBUTE), 0);
   return streak > 0 ? streak : 0;
+}
+
+function incrementAttribute(player, attribute) {
+  player.setAttribute(attribute, parseAttributeInt(player.getAttribute(attribute), 0) + 1);
+}
+
+function killDeathRatio(player) {
+  const deaths = parseAttributeInt(player.getAttribute(DEATHS_ATTRIBUTE), 0);
+  const kills = parseAttributeInt(player.getAttribute(TOTAL_KILLS_ATTRIBUTE), 0);
+  return RATIO_FORMAT.format(deaths === 0 ? kills : kills / deaths);
+}
+
+function recentKills(player) {
+  let kills = player.getAttribute(RECENT_KILLS_ATTRIBUTE);
+  if (!Array.isArray(kills)) {
+    kills = [];
+    player.setAttribute(RECENT_KILLS_ATTRIBUTE, kills);
+  }
+  return kills;
+}
+
+function sayKillDeathRatio({ player }) {
+  player.forceChat(`I currently have ${killDeathRatio(player)} kdr!`);
+  return true;
 }
 
 function isEligibleKillstreakPlayer(player) {
@@ -195,21 +225,21 @@ function updatePvpInterface(player) {
   player
     .getPacketSender?.()
     .sendString?.(`@or1@Killstreak: ${normalizeKillstreak(player)}`, 52029)
-    ?.sendString?.(`@or1@Kills: ${parseAttributeInt(player.getTotalKills?.(), 0)}`, 52030)
-    ?.sendString?.(`@or1@Deaths: ${parseAttributeInt(player.getDeaths?.(), 0)}`, 52031)
-    ?.sendString?.(`@or1@K/D Ratio: ${player.getKillDeathRatio?.() ?? "0"}`, 52033);
+    ?.sendString?.(`@or1@Kills: ${parseAttributeInt(player.getAttribute(TOTAL_KILLS_ATTRIBUTE), 0)}`, 52030)
+    ?.sendString?.(`@or1@Deaths: ${parseAttributeInt(player.getAttribute(DEATHS_ATTRIBUTE), 0)}`, 52031)
+    ?.sendString?.(`@or1@K/D Ratio: ${killDeathRatio(player)}`, 52033);
 }
 
 function trackRecentKill(killer, victim) {
-  const recentKills = killer?.getRecentKills?.();
   const victimHost = victim?.getHostAddress?.();
-  if (!Array.isArray(recentKills) || !victimHost) {
+  if (!killer || !victimHost) {
     return;
   }
-  if (recentKills.length >= RECENT_KILL_TARGET_LIMIT) {
-    recentKills.shift();
+  const kills = recentKills(killer);
+  if (kills.length >= RECENT_KILL_TARGET_LIMIT) {
+    kills.shift();
   }
-  recentKills.push(victimHost);
+  kills.push(victimHost);
 }
 
 function shouldRewardPlayerKill(killer, victim) {
@@ -223,8 +253,7 @@ function shouldRewardPlayerKill(killer, victim) {
     return false;
   }
 
-  const recentKills = killer.getRecentKills?.();
-  if (Array.isArray(recentKills) && victimHost && recentKills.includes(victimHost)) {
+  if (victimHost && recentKills(killer).includes(victimHost)) {
     return false;
   }
 
@@ -275,12 +304,12 @@ function applyKillstreakProgress(player) {
     };
   }
 
-  player.incrementKillstreak?.();
+  incrementAttribute(player, STREAK_ATTRIBUTE);
   const streak = normalizeKillstreak(player);
-  const highest = parseAttributeInt(player.getHighestKillstreak?.(), 0);
+  const highest = parseAttributeInt(player.getAttribute(HIGHEST_STREAK_ATTRIBUTE), 0);
   const newHighest = streak > highest;
   if (newHighest) {
-    player.setHighestKillstreak?.(streak);
+    player.setAttribute(HIGHEST_STREAK_ATTRIBUTE, streak);
   }
 
   const glowOutcome = syncKillstreakGlow(player);
@@ -299,11 +328,11 @@ function handleVictimDefeat(victim, options = {}) {
   }
 
   if (options.countDeath === true) {
-    victim.incrementDeaths?.();
+    incrementAttribute(victim, DEATHS_ATTRIBUTE);
   }
   const previousStreak = normalizeKillstreak(victim);
   if (previousStreak > 0) {
-    victim.setKillstreak?.(0);
+    victim.setAttribute(STREAK_ATTRIBUTE, 0);
     victim
       .getPacketSender?.()
       .sendMessage?.(`Your ${previousStreak} killstreak has ended.`);
@@ -404,7 +433,7 @@ function handlePlayerKill(killer, victim) {
   }
 
   trackRecentKill(killer, victim);
-  killer.incrementTotalKills?.();
+  incrementAttribute(killer, TOTAL_KILLS_ATTRIBUTE);
 
   const progress = applyKillstreakProgressAndAnnouncements(killer);
   awardKillstreakScaledReward(killer, victim, progress.streak, {
@@ -421,6 +450,7 @@ module.exports = {
   register(api) {
     World = api.getWorld();
     ItemOnGroundManager = api.getItemOnGroundManager();
+    api.registerCommand("kdr", sayKillDeathRatio, undefined, "Say your kill/death ratio");
     api.onPlayerLogin(({ player }) => {
       syncKillstreakGlow(player);
       updatePvpInterface(player);

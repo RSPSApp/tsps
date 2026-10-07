@@ -27,7 +27,7 @@ The dwarven furnace under Keldagrim (`server/plugins/minigames/BlastFurnace.plug
   - The temperature gauge opens interface 30.
   - The machinery's looping animations (belt 2435, cogs 2436) are sent when you enter.
   - The anvil gate (9141) needs 60 Smithing; below that, Jorzik's transcript line plays instead.
-  - The coffer, ore, bars and permit are saved on the `blastFurnace` attribute.
+  - The coffer, ore, bars and permit are saved on the `blast-furnace` attribute.
 
 ## Not done
 

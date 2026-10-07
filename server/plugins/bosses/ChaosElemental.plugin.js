@@ -252,6 +252,7 @@ let TaskManager;
 
 module.exports = {
   name: "ChaosElemental",
+  members: true,
   register(api) {
     BonusManager = api.getBonusManager();
     RegionManager = api.getRegionManager();

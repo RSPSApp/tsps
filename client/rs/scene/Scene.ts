@@ -874,44 +874,25 @@ export class Scene {
         }
     }
 
-    private lightTileGeometry(
+    private mergeTileGeometryNormals(
         tile: SceneTile,
         level: number,
         tileX: number,
         tileY: number,
-        textureLoader: TextureLoader,
-        lightX: number,
-        lightY: number,
-        lightZ: number,
     ): void {
         const wall = tile.wall;
         if (wall) {
-            if (wall.entity0 instanceof ModelData) {
-                const model0 = wall.entity0;
+            const model0 = wall.entity0 instanceof ModelData ? wall.entity0 : undefined;
+            const model1 = wall.entity1 instanceof ModelData ? wall.entity1 : undefined;
+
+            if (model0) {
                 this.mergeLargeLocNormals(model0, level, tileX, tileY, 1, 1);
-
-                if (wall.entity1 instanceof ModelData) {
-                    const model1 = wall.entity1;
-                    this.mergeLargeLocNormals(model1, level, tileX, tileY, 1, 1);
-                    ModelData.mergeNormals(model0, model1, 0, 0, 0, false);
-                    wall.entity1 = model1.light(
-                        textureLoader,
-                        model1.ambient,
-                        model1.contrast,
-                        lightX,
-                        lightY,
-                        lightZ,
-                    );
-                }
-
-                wall.entity0 = model0.light(
-                    textureLoader,
-                    model0.ambient,
-                    model0.contrast,
-                    lightX,
-                    lightY,
-                    lightZ,
-                );
+            }
+            if (model1) {
+                this.mergeLargeLocNormals(model1, level, tileX, tileY, 1, 1);
+            }
+            if (model0 && model1) {
+                ModelData.mergeNormals(model0, model1, 0, 0, 0, false);
             }
         }
 
@@ -925,10 +906,56 @@ export class Scene {
                     loc.endX - loc.startX + 1,
                     loc.endY - loc.startY + 1,
                 );
-                loc.entity = loc.entity.light(
+            }
+        }
+
+        const floorDecoration = tile.floorDecoration;
+        if (floorDecoration && floorDecoration.entity instanceof ModelData) {
+            this.mergeFloorNormals(floorDecoration.entity, level, tileX, tileY);
+        }
+    }
+
+    private lightTileGeometry(
+        tile: SceneTile,
+        textureLoader: TextureLoader,
+        lightX: number,
+        lightY: number,
+        lightZ: number,
+    ): void {
+        const wall = tile.wall;
+        if (wall) {
+            if (wall.entity0 instanceof ModelData) {
+                const model0 = wall.entity0;
+                wall.entity0 = model0.light(
                     textureLoader,
-                    loc.entity.ambient,
-                    loc.entity.contrast,
+                    model0.ambient,
+                    model0.contrast,
+                    lightX,
+                    lightY,
+                    lightZ,
+                );
+            }
+
+            if (wall.entity1 instanceof ModelData) {
+                const model1 = wall.entity1;
+                wall.entity1 = model1.light(
+                    textureLoader,
+                    model1.ambient,
+                    model1.contrast,
+                    lightX,
+                    lightY,
+                    lightZ,
+                );
+            }
+        }
+
+        for (const loc of tile.locs) {
+            if (loc.entity instanceof ModelData) {
+                const model = loc.entity;
+                loc.entity = model.light(
+                    textureLoader,
+                    model.ambient,
+                    model.contrast,
                     lightX,
                     lightY,
                     lightZ,
@@ -938,11 +965,11 @@ export class Scene {
 
         const floorDecoration = tile.floorDecoration;
         if (floorDecoration && floorDecoration.entity instanceof ModelData) {
-            this.mergeFloorNormals(floorDecoration.entity, level, tileX, tileY);
-            floorDecoration.entity = floorDecoration.entity.light(
+            const model = floorDecoration.entity;
+            floorDecoration.entity = model.light(
                 textureLoader,
-                floorDecoration.entity.ambient,
-                floorDecoration.entity.contrast,
+                model.ambient,
+                model.contrast,
                 lightX,
                 lightY,
                 lightZ,
@@ -950,7 +977,19 @@ export class Scene {
         }
     }
 
-    light(textureLoader: TextureLoader, lightX: number, lightY: number, lightZ: number): void {
+    private forEachLightingTile(
+        visitor: (tile: SceneTile, level: number, tileX: number, tileY: number) => void,
+    ): void {
+        const visited = new Set<SceneTile>();
+
+        const visit = (tile: SceneTile, level: number, tileX: number, tileY: number) => {
+            if (visited.has(tile)) {
+                return;
+            }
+            visited.add(tile);
+            visitor(tile, level, tileX, tileY);
+        };
+
         for (let level = 0; level < this.levels; level++) {
             for (let tileX = 0; tileX < this.sizeX; tileX++) {
                 for (let tileY = 0; tileY < this.sizeY; tileY++) {
@@ -958,46 +997,34 @@ export class Scene {
                     if (!tile) {
                         continue;
                     }
-                    this.lightTileGeometry(
-                        tile,
-                        level,
-                        tileX,
-                        tileY,
-                        textureLoader,
-                        lightX,
-                        lightY,
-                        lightZ,
-                    );
+
+                    visit(tile, level, tileX, tileY);
 
                     const replicaTile = this.getBridgeReplicaTile(level, tileX, tileY);
                     if (replicaTile) {
-                        this.lightTileGeometry(
-                            replicaTile,
-                            replicaTile.level,
-                            tileX,
-                            tileY,
-                            textureLoader,
-                            lightX,
-                            lightY,
-                            lightZ,
-                        );
+                        visit(replicaTile, replicaTile.level, tileX, tileY);
                     }
 
-                    // Also light contents of the original base tile linked below a bridge-promoted column
+                    // Also process the original base tile linked below a bridge-promoted column.
                     if (level === 0 && tile.linkedBelow) {
-                        this.lightTileGeometry(
-                            tile.linkedBelow,
-                            level,
-                            tileX,
-                            tileY,
-                            textureLoader,
-                            lightX,
-                            lightY,
-                            lightZ,
-                        );
+                        visit(tile.linkedBelow, level, tileX, tileY);
                     }
                 }
             }
         }
     }
+
+    light(textureLoader: TextureLoader, lightX: number, lightY: number, lightZ: number): void {
+        // Keep every ModelData alive until all cross-tile normal merges are complete.
+        // Lighting a tile converts ModelData to Model, which otherwise prevents later
+        // tiles from merging normals against already-lit neighbors.
+        this.forEachLightingTile((tile, level, tileX, tileY) => {
+            this.mergeTileGeometryNormals(tile, level, tileX, tileY);
+        });
+
+        this.forEachLightingTile((tile) => {
+            this.lightTileGeometry(tile, textureLoader, lightX, lightY, lightZ);
+        });
+    }
+
 }

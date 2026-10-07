@@ -5,14 +5,17 @@ const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
 const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
 const { Task } = require("../../src/main/typescript/elvarg/game/task/Task");
 const { ItemIds, ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
+const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
 
 const SMELT_ANIMATION = new Animation(899);
 const SMITH_ANIMATION = new Animation(898);
+// Wiki: goldsmith gauntlets (or the Smithing cape) raise gold bar XP from 22.5 to 56.2.
+const GOLDSMITH_GAUNTLETS_BONUS_XP = 33.7;
 
 const SMELTING_SKILLMULTI_GROUP_ID = 270;
 const SMELTING_SKILLMULTI_FIRST_ITEM_COMPONENT = 15;
 const SMELTING_SKILLMULTI_MAX_QUANTITY = 28;
-const SMELTING_SKILLMULTI_TARGET_UID = (162 << 16) | 567;
+const SMELTING_SKILLMULTI_TARGET_UID = (162 << 16) | 568;
 const SMELTING_CHATMODAL_UNCLAMP_VARBIT = 10670;
 // OpenRune cache names: interface.smithing and varbit.smithing_bar_type.
 const SMITHING_INTERFACE_ID = 312;
@@ -449,6 +452,16 @@ function closeSmeltingInterface(player) {
     .sendInterfaceDisplayState(SMELTING_SKILLMULTI_TARGET_UID, true);
 }
 
+function smeltingXp(player, recipe) {
+  if (recipe.barId !== ItemIds.GOLD_BAR) return recipe.xp;
+  const gloves = player.getEquipment().get(Equipment.HANDS_SLOT)?.getId?.();
+  const cape = player.getEquipment().get(Equipment.CAPE_SLOT)?.getId?.();
+  const boosted = gloves === ItemIds.GOLDSMITH_GAUNTLETS
+    || cape === ItemIds.SMITHING_CAPE
+    || cape === ItemIds.SMITHING_CAPE_T_;
+  return boosted ? recipe.xp + GOLDSMITH_GAUNTLETS_BONUS_XP : recipe.xp;
+}
+
 function performSmeltAction(player, recipe) {
   const inventory = player.getInventory();
   const smithingLevel = getSmithingLevel(player);
@@ -472,7 +485,7 @@ function performSmeltAction(player, recipe) {
   const successChance = recipe.successChance ?? 1;
   if (Math.random() <= successChance) {
     inventory.addItem(new Item(recipe.barId, 1));
-    player.getSkillManager().addExperiences(Skill.SMITHING, recipe.xp);
+    player.getSkillManager().addExperiences(Skill.SMITHING, smeltingXp(player, recipe));
     player.sendMessage("You retrieve a bar of metal.");
     pluginApi?.emitCustomEvent("smelting:success", { player, skill: Skill.SMITHING, itemId: recipe.barId });
   } else {

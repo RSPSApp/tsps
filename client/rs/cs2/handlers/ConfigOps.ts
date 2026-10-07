@@ -2,11 +2,6 @@
  * Config operations: ObjType, NpcType, LocType, Struct, Enum parameters
  */
 import {
-    getCollectionLogEnumCountOverride,
-    getCollectionLogEnumValueOverride,
-    getCollectionLogStructParamOverride,
-} from "../../../common/collectionlog/custom";
-import {
     getCustomEnumCountOverride,
     getCustomEnumValueOverride,
     getCustomStructParam,
@@ -15,6 +10,7 @@ import {
     getReplacedChallengeStructIds,
 } from "../../../common/gamemode/GamemodeContentStore";
 import { isNpcSearch, isNpcSearchResult, setNpcSearchResults } from "../spawnSearch";
+import { createTypedArrayFromCode } from "../Cs2ArrayObject";
 import { Opcodes } from "../Opcodes";
 import type { HandlerContext, HandlerMap } from "./HandlerTypes";
 import { GAMEFRAME_LAYOUT_ENUM, GAMEFRAME_317_OPTION, GAMEFRAME_317_LABEL, GAMEFRAME_317_FIXED_OPTION, GAMEFRAME_317_FIXED_LABEL } from "../../../common/ui/gameframeLayout";
@@ -121,7 +117,8 @@ export function registerConfigOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.OC_FIND, (ctx) => {
-        // Start item search - searches item names containing the query string
+        // oc_find(string, boolean)(count): starts an item search by name
+        ctx.intStackSize--; // the boolean (tradeable items only in the cache scripts' use)
         const query = ctx.stringStack[--ctx.stringStackSize].toLowerCase();
 
         // Clear previous search results
@@ -196,6 +193,29 @@ export function registerConfigOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.OC_WEIGHT, (ctx) => {
         const itemId = ctx.intStack[--ctx.intStackSize];
         ctx.pushInt(ctx.objTypeLoader?.load(itemId)?.weight ?? 0);
+    });
+
+    // Rev 241: an obj's category, and obj <-> int (the same id either way).
+    handlers.set(Opcodes.OC_CATEGORY, (ctx) => {
+        const itemId = ctx.intStack[--ctx.intStackSize];
+        ctx.pushInt(ctx.objTypeLoader?.load(itemId)?.category ?? -1);
+    });
+    handlers.set(Opcodes.OC_ID, (ctx) => {
+        ctx.pushInt(ctx.intStack[--ctx.intStackSize]);
+    });
+    handlers.set(Opcodes.OC_BYID, (ctx) => {
+        ctx.pushInt(ctx.intStack[--ctx.intStackSize]);
+    });
+
+    // enum_getoutputs(type $outputtype, enum)(array): every output value, in key order (rev 241).
+    handlers.set(Opcodes.ENUM_GETOUTPUTS, (ctx) => {
+        const enumId = ctx.intStack[--ctx.intStackSize];
+        const outputType = ctx.intStack[--ctx.intStackSize];
+        const enumType = loadEnum(ctx, enumId);
+        const values: any[] = enumType?.stringValues ?? enumType?.intValues ?? [];
+        const array = createTypedArrayFromCode(outputType, values.length);
+        values.forEach((value, index) => array.setAt(index, value));
+        ctx.pushString(array);
     });
 
     handlers.set(Opcodes.OC_EXAMINE, (ctx) => {
@@ -311,17 +331,6 @@ export function registerConfigOps(handlers: HandlerMap): void {
         const structId = ctx.intStack[--ctx.intStackSize];
         const param = ctx.paramTypeLoader?.load(paramId);
 
-        // Collection log definitions are data-driven and override cache struct params.
-        const collectionLogOverride = getCollectionLogStructParamOverride(structId, paramId);
-        if (collectionLogOverride !== undefined) {
-            if (typeof collectionLogOverride === "string") {
-                ctx.pushString(collectionLogOverride);
-            } else {
-                ctx.pushInt(collectionLogOverride | 0);
-            }
-            return;
-        }
-
         // Check for custom content override first (centralized registry)
         let overrideVal = getCustomStructParam(structId, paramId);
         // Then check for cache league task data
@@ -361,19 +370,14 @@ export function registerConfigOps(handlers: HandlerMap): void {
     });
 
     // === EnumType ===
-    // enum(outputType, inputType, enumId, key) - pops 4 values
     handlers.set(Opcodes.ENUM, (ctx) => {
         let key = ctx.intStack[--ctx.intStackSize];
         const enumId = ctx.intStack[--ctx.intStackSize];
-        const inputType = ctx.intStack[--ctx.intStackSize]; // type code (not used, but must pop)
-        const outputType = ctx.intStack[--ctx.intStackSize]; // type code (not used, but must pop)
-
-        // Collection log enums are server-configurable and override cache enum values.
-        const collectionLogEnumValue = getCollectionLogEnumValueOverride(enumId, key);
-        if (collectionLogEnumValue !== undefined) {
-            ctx.pushInt(collectionLogEnumValue | 0);
-            return;
-        }
+        // enum(inputtype, outputtype, enum, key): the requested output type picks the stack, as in
+        // the real client, even when the enum is missing or declares another type.
+        const outputType = ctx.intStack[--ctx.intStackSize];
+        ctx.intStackSize--; // input type
+        const wantsString = outputType === 115; // 's'
 
         const enumType = loadEnum(ctx, enumId);
         const baseCount = enumType?.outputCount ?? 0;
@@ -410,14 +414,14 @@ export function registerConfigOps(handlers: HandlerMap): void {
             }
         }
 
-        if (enumType?.outputType === "s") {
-            if (enumType.stringValues) {
+        if (wantsString) {
+            if (enumType?.stringValues) {
                 const idx = enumType.keys?.indexOf(key) ?? -1;
                 const result =
                     idx >= 0 ? enumType.stringValues[idx] : (enumType.defaultString ?? "null");
                 ctx.pushString(result);
             } else {
-                ctx.pushString(enumType.defaultString ?? "null");
+                ctx.pushString(enumType?.defaultString ?? "null");
             }
         } else {
             if (enumType?.intValues) {
@@ -434,12 +438,6 @@ export function registerConfigOps(handlers: HandlerMap): void {
         const key = ctx.intStack[--ctx.intStackSize];
         const enumId = ctx.intStack[--ctx.intStackSize];
 
-        const collectionLogEnumValue = getCollectionLogEnumValueOverride(enumId, key);
-        if (collectionLogEnumValue !== undefined) {
-            ctx.pushString(String(collectionLogEnumValue | 0));
-            return;
-        }
-
         const enumType = loadEnum(ctx, enumId);
         if (enumType && enumType.stringValues) {
             const idx = enumType.keys?.indexOf(key) ?? -1;
@@ -453,12 +451,6 @@ export function registerConfigOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.ENUM_GETOUTPUTCOUNT, (ctx) => {
         const enumId = ctx.intStack[--ctx.intStackSize];
-
-        const collectionLogCount = getCollectionLogEnumCountOverride(enumId);
-        if (collectionLogCount !== undefined) {
-            ctx.pushInt(collectionLogCount);
-            return;
-        }
 
         const enumType = loadEnum(ctx, enumId);
         const baseCount = enumType?.outputCount ?? 0;

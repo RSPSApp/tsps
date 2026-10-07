@@ -22,8 +22,10 @@ const DEFINITIONS = {
   [COINS]: { value: 1 },
   [LOBSTER]: { value: 150 },
 };
+const MARKET_VALUES = new Map();
 ItemDefinition.forId = (id) => ({
   getValue: () => DEFINITIONS[id]?.value ?? 0,
+  getGrandExchangeValue: () => MARKET_VALUES.get(id) || DEFINITIONS[id]?.value || 0,
   isNoted: () => false,
 });
 
@@ -134,7 +136,7 @@ function registerBonds() {
 
 test("Bonds plugin registers its hooks and persists the membership expiry", () => {
   const handlers = registerBonds();
-  assert.deepEqual(handlers.persisted, ["bondMembershipExpiry"]);
+  assert.deepEqual(handlers.persisted, ["bond-membership-expiry"]);
   assert.ok(handlers.itemActions.has("Old school bond"));
   assert.ok(handlers.itemActions.has("Old school bond (untradeable)"));
   assert.equal(handlers.tradeCompleted.length, 1);
@@ -212,6 +214,25 @@ test("converting without enough coins refuses and keeps the untradeable bond", (
   assert.ok(player.messages.some((message) => message.includes("You need 200,000 coins")));
 });
 
+test("a market quote replaces the cache guide value for the conversion fee", () => {
+  MARKET_VALUES.set(TRADEABLE_BOND, 1000000);
+  try {
+    const handlers = registerBonds();
+    const convert = handlers.itemActions.get("Old school bond (untradeable)").Convert;
+    const player = makePlayer("alice");
+    player.getInventory().adds(COINS, 100000);
+    const bond = new Item(UNTRADEABLE_BOND, 1);
+    player.getInventory().setItem(1, bond);
+
+    convert({ player, item: bond, slot: 1, itemId: UNTRADEABLE_BOND, handled: false });
+
+    assert.equal(player.getInventory().getAmount(COINS), 0);
+    assert.equal(player.getInventory().getAmount(TRADEABLE_BOND), 1);
+  } finally {
+    MARKET_VALUES.delete(TRADEABLE_BOND);
+  }
+});
+
 test("redeeming two bonds grants the 29-day package and consumes both", () => {
   const handlers = registerBonds();
   const redeem = handlers.itemActions.get("Old school bond").Redeem;
@@ -229,7 +250,7 @@ test("redeeming two bonds grants the 29-day package and consumes both", () => {
 
   assert.equal(player.getInventory().getAmount(TRADEABLE_BOND), 0);
   assert.equal(player.getInventory().getAmount(UNTRADEABLE_BOND), 0);
-  const remainingDays = (player.getAttribute("bondMembershipExpiry") - Date.now()) / (24 * 60 * 60 * 1000);
+  const remainingDays = (player.getAttribute("bond-membership-expiry") - Date.now()) / (24 * 60 * 60 * 1000);
   assert.ok(remainingDays > 28.9 && remainingDays <= 29);
 });
 
@@ -256,6 +277,68 @@ test("bonds cannot be dropped and are always kept on death", () => {
   const lobster = { player, item: new Item(LOBSTER, 1), keep: null };
   handlers.keepOnDeath[0](lobster);
   assert.equal(lobster.keep, null);
+});
+
+test("confirming destroy re-checks the drop policy and refuses an untradeable bond", () => {
+  const handlers = registerBonds();
+
+  let destroyPolicy;
+  let yesHandler;
+  const emitItemDropPolicy = (event) => {
+    for (const hook of [destroyPolicy, ...handlers.dropPolicy]) hook(event);
+    return event.handled === true;
+  };
+  delete require.cache[require.resolve("../plugins/interface/DestroyItem.plugin")];
+  require("../plugins/interface/DestroyItem.plugin").register({
+    core: { PluginManager: { emitItemDropPolicy } },
+    registerCustomInterface() {},
+    onItemDropPolicy: (handler) => {
+      destroyPolicy = handler;
+    },
+    onInterfaceActionButton: (_button, handler) => {
+      yesHandler = handler;
+    },
+  });
+
+  const player = makePlayer("alice");
+  const inventory = player.getInventory();
+  const item = new Item(UNTRADEABLE_BOND, 1);
+  item.isDropable = () => false;
+  item.getDefinition = () => ({ getName: () => "Old school bond (untradeable)" });
+  inventory.setItem(0, item);
+  let deleted = 0;
+  inventory.deleteAtSlot = () => {
+    deleted++;
+  };
+  const sender = {
+    isChatboxInterface: () => true,
+    sendChatboxInterface() {
+      return this;
+    },
+    sendItemOnInterface() {
+      return this;
+    },
+    sendString() {
+      return this;
+    },
+    sendInterfaceRemoval() {},
+  };
+  player.getPacketSender = () => sender;
+
+  const drop = {
+    player,
+    item,
+    itemId: UNTRADEABLE_BOND,
+    slot: 0,
+    interfaceId: 3214,
+    dropToGround: true,
+    handled: false,
+  };
+  assert.equal(emitItemDropPolicy(drop), true, "dropping opens the destroy confirmation");
+
+  yesHandler({ player });
+  assert.equal(deleted, 0, "the confirmed destroy must not delete the bond");
+  assert.ok(player.messages.some((message) => message.includes("cannot be dropped or destroyed")));
 });
 
 test("the Grand Exchange refuses untradeable bond sales and delivers bought bonds untradeable", () => {

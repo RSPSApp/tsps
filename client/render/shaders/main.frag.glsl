@@ -308,10 +308,12 @@ void main() {
     vec3 paletteColor = round(v_color.rgb * banding) / banding;
     vec3 surface;
     // Water shading is floor-only; water textures on models (fountains,
-    // waterfalls) keep the vanilla texture path like OSRS.
+    // waterfalls) keep the vanilla texture path like OSRS. It is 117 HD's
+    // water, so it stays off unless the 117 HD plugin rewrites this flag.
+    const bool hdWater = false;
     bool isFloorWater = false;
     WaterMaskSample waterMask = WaterMaskSample(0.0, 0.0, 0.0, vec3(0.0));
-    if ((mat.flags & MATERIAL_FLAG_WATER) != 0) {
+    if (hdWater && (mat.flags & MATERIAL_FLAG_WATER) != 0) {
         waterMask = sampleWaterMask(v_worldUv, v_plane);
         isFloorWater = waterMask.water > 0.5;
     }

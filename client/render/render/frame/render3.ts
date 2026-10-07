@@ -253,7 +253,7 @@ export function renderTransparentNpcPass(host: WebGLOsrsRendererHost,
 
                 for (let j = 0; j < npcCount; j++) {
                     const id = ids[j] | 0;
-                    if (!host.shouldRenderNpcFromMap(map, id)) {
+                    if (!host.shouldRenderNpcFromMap(map, id) || host.isNpcSmoothed(id)) {
                         (drawCall as any).offsets[j] = 0;
                         (drawCall as any).numElements[j] = 0;
                         drawRanges[j] = NULL_DRAW_RANGE;

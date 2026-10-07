@@ -11,6 +11,7 @@ const Guild = require("./warriors-guild/Common.WarriorsGuild");
 
 module.exports = {
   name: "WarriorsGuild",
+  members: true,
   register(api) {
     Guild.init(api);
     require("./warriors-guild/Tokens.WarriorsGuild")(api);

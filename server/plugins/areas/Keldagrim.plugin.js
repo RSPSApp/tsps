@@ -100,6 +100,7 @@ function travel({ player, npcId }) {
 
 module.exports = {
   name: "Keldagrim",
+  members: true,
   register(api) {
     init(api);
     api.onObjectInteraction("Tunnel", { Enter: goThrough });

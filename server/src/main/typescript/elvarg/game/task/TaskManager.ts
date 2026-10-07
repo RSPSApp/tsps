@@ -129,6 +129,24 @@ export class TaskManager {
                 console.error(e);
             }
     }
+
+    /**
+     * Stops every WALK_TO interaction task for a key without touching the movement
+     * queue. OSRS item interactions cancel the queued walk-to action this way:
+     * the player keeps walking the route it already has, without operating.
+     */
+    public static cancelWalkToTasks(key: Object): void {
+        for (const task of TaskManager.pendingTasks.toArray()) {
+            if (task.key === key && task.type === TaskType.WALK_TO) {
+                task.stop();
+            }
+        }
+        for (const task of TaskManager.activeTasks) {
+            if (task.key === key && task.type === TaskType.WALK_TO) {
+                task.stop();
+            }
+        }
+    }
         
     public static getTaskAmount(): number {
             return (TaskManager.pendingTasks.length + TaskManager.activeTasks.length);

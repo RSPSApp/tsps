@@ -52,7 +52,7 @@ const POINT_CURRENCIES = [
 ];
 
 function registerPointCurrency(api, name, aliases = []) {
-  const attribute = `shopCurrency:${name}`;
+  const attribute = `shop-currency:${name}`;
   api.persistAttribute(attribute);
   const amount = (player) => {
     const value = Number(player?.getAttribute?.(attribute));

@@ -4,6 +4,8 @@ import { MenuAction, inferMenuAction } from "./MenuAction";
 import type { MenuClickContext, SimpleMenuEntry } from "./MenuEngine";
 import { normalizeMenuEntries } from "./MenuEngine";
 import { MenuState } from "./MenuState";
+import { applyMenuTransform } from "./menuTransforms";
+import { transformWidgetMenuEntries } from "../../widgets/menu/utils";
 
 type WidgetMenuEntryInput = {
     option: string;
@@ -241,7 +243,11 @@ export function worldEntriesToSimple(
             },
         };
     });
-    const list = normalizeMenuEntries(intermediate);
+    // Client plugins (e.g. the menu entry swapper) reorder the sorted menu before it is used.
+    const list = applyMenuTransform(normalizeMenuEntries(intermediate), {
+        surface: "world",
+        menu: true,
+    });
     if (register && opts.menuState) {
         const state = opts.menuState;
         for (const entry of list) {
@@ -424,6 +430,6 @@ export function widgetEntriesToSimple(
     // Widget-derived menu entries are already provided in OSRS display order (top-to-bottom).
     // normalizeMenuEntries expects OSRS insertion order (reverse-render semantics) and would invert
     // widget ops like minimap orbs.
-    const ordered = list;
-    return ordered;
+    // Client plugins reorder an inventory item's menu and may add to it (e.g. "Swap left click").
+    return transformWidgetMenuEntries(chosenWidget, list, true);
 }

@@ -1,4 +1,3 @@
-import { isMobileMode } from "../../common/utils/DeviceUtil";
 import { GameRenderer } from "../../game/GameRenderer";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import {
@@ -13,7 +12,8 @@ import {
 
 export function onCanvasTouchStart(host: WebGLOsrsRendererHost, event: TouchEvent): void {
     if (!host.osrsClient.isOnLoginScreen()) return;
-    if (!isMobileMode) return;
+    // A touch here is a finger, whatever the layout: a tablet on "desktop site" sends a
+    // desktop user agent but still needs the soft keyboard. Mouse clicks never fire this.
     const touch = event.changedTouches[0] ?? event.touches[0];
     if (!touch) return;
     const { x, y } = getCanvasTouchPos(host, touch);

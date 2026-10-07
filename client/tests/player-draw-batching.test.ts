@@ -216,25 +216,45 @@ async function main(): Promise<void> {
         vertsA: new Uint8Array(12),
         indsA: new Int32Array(3),
     });
-    const firstGeometry = playerRenderer.getPlayerGpuGeometry("appearance:0", "frame:0");
-    const reusedGeometry = playerRenderer.getPlayerGpuGeometry("appearance:0", "frame:0");
+    const firstGeometry = playerRenderer.getPlayerGpuGeometry("frame:0");
+    const reusedGeometry = playerRenderer.getPlayerGpuGeometry("frame:0");
     assert.equal(reusedGeometry, firstGeometry);
     assert.equal(bufferCreates, 4);
     assert.equal(bufferUpdates, 0);
 
+    // Each frame keeps its own GPU geometry: uploaded once, never rewritten as frames change.
     playerRenderer.geomCache.set("frame:1", {
         verts: new Uint8Array(12),
         inds: new Int32Array(3),
         vertsA: new Uint8Array(12),
         indsA: new Int32Array(3),
     });
-    const nextFrameGeometry = playerRenderer.getPlayerGpuGeometry("appearance:0", "frame:1");
-    assert.equal(nextFrameGeometry, firstGeometry);
-    assert.equal(bufferCreates, 4);
-    assert.equal(bufferUpdates, 4);
-    playerRenderer.cleanupAppearanceCache();
+    const nextFrameGeometry = playerRenderer.getPlayerGpuGeometry("frame:1");
+    assert.notEqual(nextFrameGeometry, firstGeometry);
+    assert.equal(bufferCreates, 8);
+    assert.equal(bufferUpdates, 0);
+    assert.equal(playerRenderer.getPlayerGpuGeometry("frame:0"), firstGeometry);
+    assert.equal(bufferCreates, 8, "returning to a cached frame uploads nothing");
+
+    // Over the byte budget, the least recently used frame goes first (frame:1 here).
+    const Renderer = PlayerRenderer as any;
+    const budget = Renderer.GPU_GEOMETRY_BUDGET_BYTES;
+    Renderer.GPU_GEOMETRY_BUDGET_BYTES = firstGeometry.bytes + nextFrameGeometry.bytes;
+    playerRenderer.geomCache.set("frame:2", {
+        verts: new Uint8Array(12),
+        inds: new Int32Array(3),
+        vertsA: new Uint8Array(12),
+        indsA: new Int32Array(3),
+    });
+    playerRenderer.getPlayerGpuGeometry("frame:2");
+    Renderer.GPU_GEOMETRY_BUDGET_BYTES = budget;
+    assert.deepEqual([...playerRenderer.playerGpuGeometryCache.keys()], ["frame:0", "frame:2"]);
     assert.equal(bufferDeletes, 4);
-    assert.equal(vertexArrayDeletes, 2);
+
+    playerRenderer.cleanupAppearanceCache();
+    assert.equal(bufferDeletes, 12);
+    assert.equal(vertexArrayDeletes, 6);
+    assert.equal(playerRenderer.playerGpuGeometryBytes, 0);
     console.log("Player draw batching regression test passed");
 }
 

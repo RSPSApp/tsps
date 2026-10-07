@@ -31,6 +31,10 @@ export interface WorldDefinitionData {
     experienceMultiplier: number;
     /** Optional: when set, players are switched to this layout on login. */
     gameframe?: WorldGameframe;
+    /** False makes this a free-to-play world (FreeToPlay plugin); needs zones tagged "f2p". */
+    membersWorld: boolean;
+    /** Per-plugin settings, read by PluginManager.getPluginConfig; carried for /api/world. */
+    pluginConfig?: Record<string, unknown>;
 }
 
 export class WorldDefinitionValidationError extends Error {}
@@ -122,6 +126,12 @@ export function parseWorldZone(value: unknown, label = "world zone"): WorldZone 
     return parsed;
 }
 
+/** True when the zone covers (x, y) on any plane; a zone without bounds covers everything. */
+export function zoneContains(zone: WorldZone, x: number, y: number): boolean {
+    return zone.minX === undefined ||
+        (x >= zone.minX && x <= zone.maxX! && y >= zone.minY! && y <= zone.maxY!);
+}
+
 export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     const world = object(value, "world.json");
     if (!Array.isArray(world.zones)) {
@@ -138,14 +148,28 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     if (world.gameframe !== undefined && !WORLD_GAMEFRAMES.includes(world.gameframe as WorldGameframe)) {
         throw new WorldDefinitionValidationError(`world.json gameframe must be one of ${WORLD_GAMEFRAMES.join(", ")}`);
     }
+    if (world.membersWorld !== undefined && typeof world.membersWorld !== "boolean") {
+        throw new WorldDefinitionValidationError("world.json membersWorld must be a boolean");
+    }
+    const membersWorld = world.membersWorld !== false;
+    const zones = world.zones.map((zone, index) =>
+        parseWorldZone(zone, `world.json zones[${index}]`)
+    );
+    const spawn = parseWorldPosition(world.spawn, "world.json spawn");
+    // Players outside free land are sent to the spawn, so it must be inside.
+    if (!membersWorld && !zones.some((zone) => zone.tags.includes("f2p") && zoneContains(zone, spawn.x, spawn.y))) {
+        throw new WorldDefinitionValidationError("world.json membersWorld false needs the spawn inside a zone tagged \"f2p\"");
+    }
     return {
-        spawn: parseWorldPosition(world.spawn, "world.json spawn"),
-        zones: world.zones.map((zone, index) =>
-            parseWorldZone(zone, `world.json zones[${index}]`)
-        ),
+        spawn,
+        zones,
         disabledPlugins: world.disabledPlugins.map((pluginName) => pluginName.trim()),
         experienceMultiplier,
+        membersWorld,
         ...(world.gameframe !== undefined && { gameframe: world.gameframe as WorldGameframe }),
+        // Malformed config is ignored here as in PluginManager.loadPluginConfig, not fatal.
+        ...(world.pluginConfig && typeof world.pluginConfig === "object" && !Array.isArray(world.pluginConfig) &&
+            { pluginConfig: world.pluginConfig as Record<string, unknown> }),
     };
 }
 
@@ -174,13 +198,48 @@ function zoneBoundaries(zone: WorldZone): Boundary[] {
     return [new Boundary(zone.minX, zone.maxX!, zone.minY!, zone.maxY!, zone.z!)];
 }
 
+// Free land per 64x64 map square: true when one "f2p" zone covers the whole square,
+// otherwise the "f2p" zones overlapping it. isMembersArea runs per player per tick,
+// so this keeps it to one map lookup instead of a scan of every zone.
+const freeLandBySquare = new Map<number, true | WorldZone[]>();
+let freeEverywhere = false;
+
+function indexFreeLand(): void {
+    freeLandBySquare.clear();
+    freeEverywhere = false;
+    for (const zone of definition.zones) {
+        if (!zone.tags.includes("f2p")) continue;
+        if (zone.minX === undefined) {
+            freeEverywhere = true;
+            continue;
+        }
+        for (let squareX = zone.minX >> 6; squareX <= zone.maxX! >> 6; squareX++) {
+            for (let squareY = zone.minY! >> 6; squareY <= zone.maxY! >> 6; squareY++) {
+                const key = (squareX << 8) | squareY;
+                const entry = freeLandBySquare.get(key);
+                if (entry === true) continue;
+                const coversSquare = zone.minX <= squareX << 6 && zone.maxX! >= (squareX << 6) + 63 &&
+                    zone.minY! <= squareY << 6 && zone.maxY! >= (squareY << 6) + 63;
+                if (coversSquare) freeLandBySquare.set(key, true);
+                else if (entry) entry.push(zone);
+                else freeLandBySquare.set(key, [zone]);
+            }
+        }
+    }
+}
+
 function syncRuntime(): void {
     WORLD_SPAWN.set(definition.spawn.x, definition.spawn.y, definition.spawn.z);
     for (const boundaries of Object.values(WORLD_ZONE_BOUNDARIES)) boundaries.length = 0;
     for (const zone of definition.zones) {
         const boundaries = zoneBoundaries(zone);
-        for (const tag of zone.tags) (WORLD_ZONE_BOUNDARIES[tag] ??= []).push(...boundaries);
+        for (const tag of zone.tags) {
+            // "f2p" zones are matched on x/y across all planes via the freeLandBySquare index,
+            // so single-plane Boundary objects for them would only mislead.
+            if (tag !== "f2p") (WORLD_ZONE_BOUNDARIES[tag] ??= []).push(...boundaries);
+        }
     }
+    indexFreeLand();
 }
 
 function copyWorldDefinition(): WorldDefinitionData {
@@ -189,12 +248,28 @@ function copyWorldDefinition(): WorldDefinitionData {
         zones: definition.zones.map((zone) => ({ ...zone, tags: [...zone.tags] })),
         disabledPlugins: [...definition.disabledPlugins],
         experienceMultiplier: definition.experienceMultiplier,
+        membersWorld: definition.membersWorld,
         ...(definition.gameframe !== undefined && { gameframe: definition.gameframe }),
+        ...(definition.pluginConfig !== undefined && { pluginConfig: structuredClone(definition.pluginConfig) }),
     };
 }
 
 export function getWorldDefinition(): WorldDefinitionData {
     return copyWorldDefinition();
+}
+
+export function isMembersWorld(): boolean {
+    return definition.membersWorld;
+}
+
+/**
+ * True on a free-to-play world for tiles outside every "f2p" zone. Zones match on
+ * x/y only, so one box covers every plane.
+ */
+export function isMembersArea(x: number, y: number): boolean {
+    if (definition.membersWorld || freeEverywhere) return false;
+    const entry = freeLandBySquare.get(((x >> 6) << 8) | (y >> 6));
+    return entry !== true && !entry?.some((zone) => zoneContains(zone, x, y));
 }
 
 export function hasGlobalWorldTag(tag: WorldZoneTag): boolean {

@@ -18,7 +18,7 @@ const BALANCE_ANIMATIONS = [4179, 823, 4178, 820, 821, 822, 4178];
 const FALL_GRAPHIC_BASE = 689;
 const DRAIN_EVERY = 10;
 const DRAIN = 9;
-const KEG_LEDGER_ATTRIBUTE = "warriorsGuild:kegTokens";
+const KEG_LEDGER_ATTRIBUTE = "warriors-guild:keg-tokens";
 
 /** player -> { kegs, ticks, taken: keg loc ids }. */
 const balancing = new Map();

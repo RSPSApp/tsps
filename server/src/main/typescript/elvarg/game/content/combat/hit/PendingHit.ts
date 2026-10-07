@@ -19,6 +19,8 @@ type PendingHitConfig = {
     handleAfterHitEffects?: boolean;
     hitAmount?: number;
     rollAccuracy?: boolean;
+    /** False for damage that pays its own XP (or none), skipping the usual combat XP. */
+    experience?: boolean;
 };
 
 export class PendingHit {
@@ -31,6 +33,7 @@ export class PendingHit {
     private readonly delay: number;
     private accurate: boolean;
     private handleAfterHitEffects: boolean;
+    private experience = true;
     /** Optional per-hitsplat extra reveal delays (from `hitDelayTicks`). */
     private hitDelays?: number[];
 
@@ -63,6 +66,9 @@ export class PendingHit {
             if (typeof delayOrConfig.rollAccuracy === "boolean") {
                 resolvedRollAccuracy = delayOrConfig.rollAccuracy;
             }
+            if (delayOrConfig.experience === false) {
+                this.experience = false;
+            }
         }
 
         this.hits = this.prepareHits(resolvedHitAmount, resolvedRollAccuracy);
@@ -92,6 +98,11 @@ export class PendingHit {
 
     public getTotalDamage(): number {
         return this.totalDamage;
+    }
+
+    /** Whether the attacker gets the usual combat XP for this hit. */
+    public rewardsExperience(): boolean {
+        return this.experience;
     }
 
     public isAccurate(): boolean {
@@ -167,9 +178,9 @@ export class PendingHit {
         };
 
         if (hitAmount === 1) {
-            const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, bypassProtectionPrayer: false };
+            const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer: false };
             PluginManager.emitCombatHitRoll(roll);
-            const resolved = this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, 0);
+            const resolved = PendingHit.withForcedMax(this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, 0), roll.forceMaxHit);
             this.accurate = resolved.accurate;
             const damage: HitDamage = this.accurate
                 ? ServerPerf.measurePhase(
@@ -207,13 +218,13 @@ export class PendingHit {
         let firstAccurate: boolean | undefined;
         let firstBounds: SpecialDamageBounds | undefined;
         for (let i = 0; i < hits.length; i++) {
-            const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, bypassProtectionPrayer: false };
+            const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer: false };
             PluginManager.emitCombatHitRoll(roll);
             let resolved: { accurate: boolean; bounds?: SpecialDamageBounds };
             if (i > 0 && traits?.sharedAccuracyRollAcrossHits === true) {
                 resolved = { accurate: firstAccurate === true, bounds: firstBounds };
             } else {
-                resolved = this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, i);
+                resolved = PendingHit.withForcedMax(this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, i), roll.forceMaxHit);
                 if (i === 0) {
                     firstAccurate = resolved.accurate;
                     firstBounds = resolved.bounds;
@@ -250,6 +261,15 @@ export class PendingHit {
      * (accuracy roll count, guaranteed rolls, fixed execute-window accuracy)
      * and derives the per-hit damage bounds for indexed damage ranges.
      */
+    /** A plugin's forceMaxHit: the roll lands on the maximum (a minimum multiplier of 1). */
+    private static withForcedMax(
+        resolved: { accurate: boolean; bounds?: SpecialDamageBounds },
+        forceMaxHit: boolean
+    ): { accurate: boolean; bounds?: SpecialDamageBounds } {
+        if (!forceMaxHit || !resolved.accurate) return resolved;
+        return { ...resolved, bounds: { ...(resolved.bounds ?? {}), minimumMultiplier: 1 } };
+    }
+
     private rollSpecialTraits(
         traits: WeaponSpecialTraits | null,
         forceAccurate: boolean,

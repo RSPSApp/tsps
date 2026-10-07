@@ -149,6 +149,10 @@ const environments = new Map<number, HdEnvironment>();
 for (const [environment, ids] of regions) {
     for (const id of ids) environments.set(id, environment);
 }
+export function resolveHdEnvironmentForRegion(regionId: number): HdEnvironment {
+    return environments.get(regionId) ?? DEFAULT_ENVIRONMENT;
+}
+
 export function resolveHdEnvironment(worldX: number, worldZ: number): HdEnvironment {
-    return environments.get(((Math.floor(worldX) >> 6) << 8) | (Math.floor(worldZ) >> 6)) ?? DEFAULT_ENVIRONMENT;
+    return resolveHdEnvironmentForRegion(((Math.floor(worldX) >> 6) << 8) | (Math.floor(worldZ) >> 6));
 }

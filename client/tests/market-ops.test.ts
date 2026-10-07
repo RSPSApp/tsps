@@ -9,6 +9,8 @@ const ctx: any = {
     intStackSize: 0,
     pushInt(value: number) { this.intStack[this.intStackSize++] = value; },
     popInt() { return this.intStack[--this.intStackSize]; },
+    longs: [] as bigint[],
+    pushLong(value: bigint) { this.longs.push(value); },
     varManager: { getVarp: (id: number) => values[id] },
 };
 const handlers = new Map<any, any>();
@@ -17,6 +19,12 @@ const run = (opcode: Opcodes, slot = 0) => {
     ctx.pushInt(slot);
     handlers.get(opcode)(ctx, 0, null);
     return ctx.popInt();
+};
+// Rev 241: offer price and gold are longs.
+const runLong = (opcode: Opcodes, slot = 0) => {
+    ctx.pushInt(slot);
+    handlers.get(opcode)(ctx, 0, null);
+    return ctx.longs.pop();
 };
 
 assert.equal(run(Opcodes.STOCKMARKET_ISOFFEREMPTY), 1);
@@ -31,10 +39,10 @@ values[7904] = 1;
 values[7905] = 5;
 assert.equal(run(Opcodes.STOCKMARKET_ISOFFEREMPTY), 0);
 assert.equal(run(Opcodes.STOCKMARKET_GETOFFERITEM), 4151);
-assert.equal(run(Opcodes.STOCKMARKET_GETOFFERPRICE), 1200000);
+assert.equal(runLong(Opcodes.STOCKMARKET_GETOFFERPRICE), 1200000n);
 assert.equal(run(Opcodes.STOCKMARKET_GETOFFERCOUNT), 2);
 assert.equal(run(Opcodes.STOCKMARKET_GETOFFERCOMPLETEDCOUNT), 2);
-assert.equal(run(Opcodes.STOCKMARKET_GETOFFERCOMPLETEDGOLD), 2400000);
+assert.equal(runLong(Opcodes.STOCKMARKET_GETOFFERCOMPLETEDGOLD), 2400000n);
 assert.equal(run(Opcodes.STOCKMARKET_GETOFFERTYPE), 1);
 assert.equal(run(Opcodes.STOCKMARKET_ISOFFERFINISHED), 1);
 

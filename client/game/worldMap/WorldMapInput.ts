@@ -24,21 +24,6 @@ export function resetWorldMapClick(state: WorldMapStateHolder): void {
     state.worldMapClickStartTimeMs = 0;
 }
 
-function findWorldMapHit(
-    hits: any[],
-    isWidgetEffectivelyHidden: (uid: number) => boolean,
-): any | null {
-    for (let i = hits.length - 1; i >= 0; i--) {
-        const w = hits[i];
-        if (!w) continue;
-        const uid = (w.uid ?? 0) | 0;
-        if (uid !== 0 && isWidgetEffectivelyHidden(uid)) continue;
-        if (w.hidden || w.hide) continue;
-        if (((w.contentType ?? 0) | 0) === 1400) return w;
-    }
-    return null;
-}
-
 function findWorldMapClickHit(
     hits: any[],
     isWidgetEffectivelyHidden: (uid: number) => boolean,
@@ -171,7 +156,10 @@ export function handleWorldMapDragInput(
     }
 
     if (isNewClick) {
-        const worldMapHit = findWorldMapHit(hits, isHidden);
+        // Only a press on the map itself drags it. A press on something drawn over the map (the
+        // edge arrows' "Focus on", icons, buttons) is that thing's op, and a drag started under
+        // it would pin the view while the op's script pans away (and snap it back).
+        const worldMapHit = findWorldMapClickHit(hits, isHidden);
         if (!worldMapHit) {
             resetWorldMapDrag(state);
             return false;
@@ -191,6 +179,8 @@ export function handleWorldMapDragInput(
 
     const deltaX = (mouseX | 0) - state.worldMapDragStartMouseX;
     const deltaY = (mouseY | 0) - state.worldMapDragStartMouseY;
+    // Until the mouse moves there is nothing to drag: leave the view to anything else moving it.
+    if (deltaX === 0 && deltaY === 0) return true;
     const nextX =
         state.worldMapDragStartDisplayX - Math.trunc(deltaX / state.worldMapDragPixelsPerTileX);
     const nextY =

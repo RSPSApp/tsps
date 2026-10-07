@@ -1,3 +1,4 @@
+import { PluginManager } from "../../../plugins/PluginManager";
 import { HitDamageCache } from "../../content/combat/hit/HitDamageCache";
 import { HitQueue } from "../../content/combat/hit/HitQueue";
 import type { Mobile } from "../../entity/impl/Mobile";
@@ -230,8 +231,14 @@ export class Combat {
 
         if (CombatRange.canReach(this.character, method, target)) {
             this.trace("inRange", target);
-            this.character.getMovementQueue().reset();
-            return;
+            // An NPC flagged combat:close-in (ToA's Akkha) keeps walking in while it attacks
+            // from range, until it stands beside its target.
+            const closesIn = this.character.isNpc() && this.character.hasFlag?.("combat:close-in") === true
+                && !CombatRange.beside(this.character, target);
+            if (!closesIn) {
+                this.character.getMovementQueue().reset();
+                return;
+            }
         }
 
         const movement = this.character.getMovementQueue();
@@ -330,7 +337,7 @@ export class Combat {
         }
 
         this.character.getMovementQueue().reset();
-        if (cycle < this.nextAttackCycle) {
+        if (cycle < this.nextAttackCycle && !this.attackTiming(method, target).ignoreDelay) {
             this.trace(`cooldown next=${this.nextAttackCycle} in=${this.nextAttackCycle - cycle}`, target);
             this.renewInteraction(target, generation);
             return;
@@ -374,12 +381,52 @@ export class Combat {
         return CombatRange.canReach(this.character, method, target);
     }
 
+    /** What plugins say about the attack timer for an attack on `target` (PluginAttackTimingEvent). */
+    /** Who the last attack went at (PluginAttackTimingEvent.newTarget). */
+    private lastAttackTarget: Mobile | null = null;
+
+    private attackTiming(method: CombatMethod, target: Mobile): { ignoreDelay: boolean; keepDelay: boolean; minimumDelay: number } {
+        const event = {
+            attacker: this.character, target, method, ignoreDelay: false, keepDelay: false, minimumDelay: 0,
+            newTarget: target !== this.lastAttackTarget,
+        };
+        PluginManager.emitAttackTiming(event);
+        return event;
+    }
+
     public setAttackDelay(ticks: number): void {
         this.nextAttackCycle = World.getProcessCycle() + Math.max(0, ticks | 0);
+        this.sendAttackTimer();
     }
 
     public extendAttackDelay(ticks: number): void {
         this.nextAttackCycle = Math.max(this.nextAttackCycle, World.getProcessCycle() + Math.max(0, ticks | 0));
+        this.sendAttackTimer();
+    }
+
+    /** The next-attack tick last sent to the player's client (its attack timer). */
+    private sentAttackCycle = 0;
+
+    /**
+     * Tells the player's client how many ticks remain until their next attack, whenever that
+     * changes and lies ahead (an attack, eating, a special). The client counts it down.
+     */
+    private sendAttackTimer(): void {
+        if (!this.character.isPlayer() || this.nextAttackCycle === this.sentAttackCycle) return;
+        const remaining = this.getAttackDelay();
+        if (remaining <= 0 && this.sentAttackCycle <= World.getProcessCycle()) return;
+        this.sentAttackCycle = this.nextAttackCycle;
+        this.character.getAsPlayer?.()?.getPacketSender?.()?.sendAttackTimer?.(remaining);
+    }
+
+    /**
+     * Adds ticks to the attack timer as OSRS does when eating. The timer keeps
+     * counting down past zero while idle, so a delay only blocks an attack when
+     * it outlasts the time already waited (Wiki: Food).
+     */
+    public delayAttack(ticks: number): void {
+        this.nextAttackCycle += Math.max(0, ticks | 0);
+        this.sendAttackTimer();
     }
 
     public getAttackDelay(): number {
@@ -390,7 +437,18 @@ export class Combat {
         return this.getAttackDelay() <= Math.max(0, ticks | 0);
     }
 
-    public reset(): void {
+    /** `resetAnimation` false keeps this tick's animation (a manual spell's cast after it resolves). */
+    public reset(resetAnimation = true): void {
+        this.clearInteraction(resetAnimation);
+        this.character.getMovementQueue().reset();
+    }
+
+    /**
+     * Clears the current interaction but leaves the walk queue intact, matching the
+     * OSRS rule that an inventory item action is a hard interruption which does not
+     * stop queued movement (osrs-docs: Entity Interactions).
+     */
+    public clearInteraction(resetAnimation = true): void {
         this.manualMovementUntilCycle = -1;
         const previousTarget = this.target;
         this.generation++;
@@ -399,11 +457,10 @@ export class Combat {
         this.cycleState = null;
         if (previousTarget && this.method) this.method.onCombatEnded(this.character, previousTarget);
         this.method = null;
-        this.character.getMovementQueue().reset();
         this.character.setMobileInteraction(null);
         this.character.setPositionToFace(null);
         if (this.character.isPlayer()) {
-            if (previousTarget) this.character.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+            if (previousTarget && resetAnimation) this.character.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
             this.character.getAsPlayer().getPacketSender().sendConfig(COMBAT_TARGET_PLAYER_VARP, -1);
         }
         this.specialAttackQueued = false;
@@ -496,7 +553,7 @@ export class Combat {
     private shouldRetreat(): boolean {
         if (!this.character.isNpc()) return false;
         const npc = this.character.getAsNpc();
-        if (Number(npc.getAttribute("arceuus:darkLureUntil") ?? 0) > Date.now()) return false;
+        if (Number(npc.getAttribute("arceuus:dark-lure-until") ?? 0) > Date.now()) return false;
         if (!npc.getCurrentDefinition().doesRetreat()) return false;
         const coordinator = npc.getMovementCoordinator();
         if (coordinator.getCoordinateState() === CoordinateState.RETREATING ||
@@ -535,7 +592,8 @@ export class Combat {
             ? CombatSpecial.activeTraitsFor(this.character)
             : null;
         const bypass = bypassDelay || specialTraits?.bypassAttackDelay === true;
-        if (!bypass && cycle < this.nextAttackCycle) {
+        const timing = this.attackTiming(method, target);
+        if (!bypass && !timing.ignoreDelay && cycle < this.nextAttackCycle) {
             if (renew) this.renewInteraction(target, generation);
             return false;
         }
@@ -551,10 +609,15 @@ export class Combat {
         if (target.getCombat().getAttacker() == null) {
             CombatFactory.getMethod(target).onCombatBegan(target, this.character);
         }
-        if (!bypass) {
+        if (!bypass && !timing.keepDelay) {
             const speed = specialTraits?.attackSpeedTicks ?? method.attackSpeed(this.character);
             this.nextAttackCycle = cycle + Math.max(1, speed | 0);
+            this.sendAttackTimer();
+        } else if (!bypass && timing.minimumDelay > 0) {
+            this.nextAttackCycle = Math.max(this.nextAttackCycle, cycle + (timing.minimumDelay | 0));
+            this.sendAttackTimer();
         }
+        this.lastAttackTarget = target;
 
         method.start(this.character, target);
         const hits = method.hits(this.character, target);
@@ -564,7 +627,7 @@ export class Combat {
         }
         this.trace(`hits=${hits.length} dmg=[${hits.map((h: any) => h?.getTotalDamage?.()).join(",")}]`, target);
         // A block animation of -1 means the target doesn't block (e.g. the Gemstone Crab).
-        if (hits.length > 0 && method.type() === CombatType.MELEE && target.getBlockAnim() >= 0) {
+        if (hits.length > 0 && method.type() === CombatType.MELEE && target.getBlockAnim() >= 0 && method.playsBlockAnimation?.() !== false) {
             target.performAnimation(new Animation(target.getBlockAnim()));
         }
         for (const hit of hits) CombatFactory.addPendingHit(hit);

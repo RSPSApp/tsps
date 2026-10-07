@@ -162,7 +162,11 @@ function createWorld() {
     ObjectIdentifiers: Objects,
     CombatType,
     CombatMethod: class {},
-    PendingHit: class { constructor(attacker, target, method) { Object.assign(this, { attacker, target, style: method.type() }); } },
+    PendingHit: class {
+      constructor(attacker, target, method, config) {
+        Object.assign(this, { attacker, target, style: method.type(), rollAccuracy: config?.rollAccuracy ?? true });
+      }
+    },
     CombatFactory: { addPendingHit: (hit) => world.hits.push(hit) },
     PrayerHandler: { PROTECT_FROM_MAGIC: 16, PROTECT_FROM_MISSILES: 17, isActivated: (mob, prayer) => mob.prayers?.has(prayer) === true },
     Projectile: class {
@@ -213,6 +217,7 @@ function createWorld() {
     registerNpcCombatMethodProvider: (ids, ctor) => { for (const id of [ids].flat()) world.providers.set(id, ctor); },
     persistAttribute: hook('persist'),
     sendMultiChatboxPrompt: (player, title, ...pairs) => { world.prompt = { title, pairs }; return true; },
+    emitCustomEvent: () => {},
   };
   for (const name of ['onNpcDialogueCondition', 'onCustomEvent', 'onObjectFirstClick', 'onObjectSecondClick', 'onObjectRoute', 'onPlayerLogin', 'onPlayerLogout', 'onPlayerProcess',
     'onPlayerDeath', 'onShouldDropItemsOnDeath', 'onCanTeleport', 'onCanAttack', 'onNpcBeforeDeath', 'onCombatHitResolved',
@@ -380,9 +385,11 @@ test('a meleer that cannot land a hit burrows up beside the player', () => {
   assert.equal(meleer.untargetable, true);
   assert.ok(meleer.animations.includes(7600));
   tick(player, 4);
+  assert.equal(meleer.calculateDistance(player), 1, 'moved beside the player');
+  assert.ok(!meleer.animations.includes(7601), 'not on the tick it teleports: it is out of view then');
+  tick(player, 1);
   assert.equal(meleer.untargetable, false);
-  assert.equal(meleer.calculateDistance(player), 1);
-  assert.ok(meleer.animations.includes(7601));
+  assert.ok(meleer.animations.includes(7601), 'it rises the tick after');
   run.leave(player);
 });
 
@@ -580,7 +587,7 @@ test('the chasm is jumped into from the tip of the walkway, as its pit has no wa
   assert.equal(other.destination, undefined);
 });
 
-test('Jal-Nib never go for the player: not when hit, and not once every support is down', () => {
+test('Jal-Nib leave the player alone while a support stands, then always hit them', () => {
   const { player, session } = startAt(1);
   tick(player, 20);
   const nibblers = [...session.npcs].filter((npc) => npc.id === Npcs.JAL_NIB);
@@ -598,9 +605,23 @@ test('Jal-Nib never go for the player: not when hit, and not once every support 
   assert.ok(session.supports.some((support) => support.npc === nibblers[0].target), 'back onto a support');
 
   session.supports.length = 0;
-  nibblers[0].target = player;
+  nibblers[0].target = null;
   tick(player);
-  assert.equal(nibblers[0].target, null, 'with no support left it stays idle');
+  assert.equal(nibblers[0].target, player, 'with no support left it goes for the player');
+  assert.equal(deny(nibblers[0], player), null);
+  tick(player);
+  assert.equal(nibblers[0].target, player, 'and stays on them');
+
+  const method = new (world.providers.get(Npcs.JAL_NIB))();
+  const strike = (target) => {
+    method.start(nibblers[0], target);
+    return method.hits(nibblers[0], target)[0];
+  };
+  const onPlayer = strike(player);
+  assert.equal(onPlayer.style, CombatType.MELEE);
+  assert.equal(onPlayer.rollAccuracy, false, 'every attack on the player lands');
+  const support = new FakeNpc(Npcs.COL_00FFFF_ROCKY_SUPPORT_COL, new Location(2257, 5349, 0));
+  assert.equal(strike(support).rollAccuracy, true, 'on a support it is rolled');
   run.leave(player);
 });
 

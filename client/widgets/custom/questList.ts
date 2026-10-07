@@ -38,6 +38,16 @@ function resolveQuestColor(status: number): number {
     return COLOR_NOT_STARTED;
 }
 
+// Server content is rendered into fixed cache widgets, so bound and strip any
+// markup from names/titles before they reach the text renderer.
+const MAX_QUEST_TEXT_LENGTH = 80;
+
+function boundedQuestText(value: unknown): string {
+    return String(value ?? "")
+        .replace(/[<>]/g, "")
+        .slice(0, MAX_QUEST_TEXT_LENGTH);
+}
+
 function createDynamicTextWidget(
     widgetManager: WidgetManager,
     parent: WidgetNode,
@@ -142,63 +152,69 @@ export function applyQuestListWidgetGroups(
 
     let y = 0;
     for (const group of Array.isArray(groups) ? groups : []) {
-        const title = String(group.title ?? "").trim();
-        const quests = Array.isArray(group.quests) ? group.quests : [];
-        if (quests.length === 0) continue;
+        // One malformed group must not abort the list or skip the sizing below.
+        try {
+            const title = boundedQuestText(group.title).trim();
+            const quests = Array.isArray(group.quests) ? group.quests : [];
+            if (quests.length === 0) continue;
 
-        if (title.length > 0) {
-            const headerSlot = Math.max(0, (quests[0]?.slot ?? 1) - 1);
-            registerChild(
-                widgetManager,
-                list,
-                createDynamicTextWidget(widgetManager, list, headerSlot, {
-                    rawX: 0,
-                    rawY: y + HEADER_Y_OFFSET,
-                    rawWidth: 0,
-                    rawHeight: HEADER_HEIGHT,
-                    widthMode: 1,
-                    heightMode: 0,
-                    xPositionMode: 1,
-                    yPositionMode: 0,
-                    text: title,
-                    fontId: FONT_BOLD_12,
-                    textColor: COLOR_HEADER,
-                    color: COLOR_HEADER,
-                    xTextAlignment: 0,
-                    yTextAlignment: 0,
-                    actions: [],
-                }),
-            );
-            y += HEADER_ADVANCE;
-        }
+            if (title.length > 0) {
+                const headerSlot = Math.max(0, (quests[0]?.slot ?? 1) - 1);
+                registerChild(
+                    widgetManager,
+                    list,
+                    createDynamicTextWidget(widgetManager, list, headerSlot, {
+                        rawX: 0,
+                        rawY: y + HEADER_Y_OFFSET,
+                        rawWidth: 0,
+                        rawHeight: HEADER_HEIGHT,
+                        widthMode: 1,
+                        heightMode: 0,
+                        xPositionMode: 1,
+                        yPositionMode: 0,
+                        text: title,
+                        fontId: FONT_BOLD_12,
+                        textColor: COLOR_HEADER,
+                        color: COLOR_HEADER,
+                        xTextAlignment: 0,
+                        yTextAlignment: 0,
+                        actions: [],
+                    }),
+                );
+                y += HEADER_ADVANCE;
+            }
 
-        for (const quest of quests) {
-            const color = resolveQuestColor(quest.status);
-            registerChild(
-                widgetManager,
-                list,
-                createDynamicTextWidget(widgetManager, list, quest.slot, {
-                    rawX: 0,
-                    rawY: y,
-                    rawWidth: 0,
-                    rawHeight: ROW_HEIGHT,
-                    widthMode: 1,
-                    heightMode: 0,
-                    xPositionMode: 1,
-                    yPositionMode: 0,
-                    text: quest.displayName,
-                    fontId: FONT_PLAIN_11,
-                    textColor: color,
-                    color,
-                    mouseOverColor: COLOR_HOVER,
-                    xTextAlignment: 0,
-                    yTextAlignment: 1,
-                    lineHeight: ROW_LINE_HEIGHT,
-                    actions: ["", "Read journal:", "", "", "", "Pin journal:"],
-                    opBase: `<col=ff9040>${quest.displayName}</col>`,
-                }),
-            );
-            y += ROW_HEIGHT;
+            for (const quest of quests) {
+                const color = resolveQuestColor(quest.status);
+                const rowText = boundedQuestText(quest.displayName);
+                registerChild(
+                    widgetManager,
+                    list,
+                    createDynamicTextWidget(widgetManager, list, quest.slot, {
+                        rawX: 0,
+                        rawY: y,
+                        rawWidth: 0,
+                        rawHeight: ROW_HEIGHT,
+                        widthMode: 1,
+                        heightMode: 0,
+                        xPositionMode: 1,
+                        yPositionMode: 0,
+                        text: rowText,
+                        fontId: FONT_PLAIN_11,
+                        textColor: color,
+                        color,
+                        mouseOverColor: COLOR_HOVER,
+                        xTextAlignment: 0,
+                        yTextAlignment: 1,
+                        lineHeight: ROW_LINE_HEIGHT,
+                        actions: ["", "Read journal:", "", "", "", "Pin journal:"],
+                        opBase: `<col=ff9040>${rowText}</col>`,
+                    }),
+                );
+                y += ROW_HEIGHT;
+            }
+        } catch (error) {
+            console.warn("[quest-list] skipping malformed group", error);
         }
     }
 

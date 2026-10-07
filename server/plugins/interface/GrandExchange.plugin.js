@@ -18,7 +18,8 @@ const SIDE_ITEMS = SIDE << 16;
 const SELECTED_SLOT = 4439;
 const SELL = 4397;
 const QUANTITY = 4396;
-const PRICE = 4398;
+// The new offer's price: a long varp from rev 241 (it was varbit 4398).
+const PRICE_LONG = 5753;
 const SELECTED_ITEM = 1151;
 // Cache script 5733 reads pending client requests here, not accepted offers.
 // Keep them separate from the stockmarket opcode data.
@@ -30,6 +31,8 @@ const FINISHED = 5;
 const OFFER_DELAY_MS = 5000;
 const MAX = 0x7fffffff;
 const COINS = ItemIdentifiers.COINS;
+// OSRS: members get all 8 offer slots, free-to-play worlds the first 3.
+const usableSlots = () => (pluginApi.core.WorldDefinition.isMembersWorld() ? 8 : 3);
 const offers = new WeakMap();
 const completionTimers = new WeakMap();
 const viewing = new WeakMap();
@@ -43,9 +46,28 @@ function validItem(id) {
 }
 
 function price(id) {
-  // ponytail: fixed cache values, minimum 1 gp; replace with market prices if needed.
+  // OSRS market quote from item-prices.json; store value for unquoted/custom items.
   const base = ItemDefinition.forId(id).unNote();
-  return Math.max(1, Math.min(MAX, Math.floor(ItemDefinition.forId(base).getValue()) || 1));
+  return Math.max(1, Math.min(MAX, Math.floor(ItemDefinition.forId(base).getGrandExchangeValue()) || 1));
+}
+
+let quotedPrices;
+
+/**
+ * /api/item-prices: the guide price of every quoted item, as the GE charges it. The rev 241
+ * client reads guide prices with stockmarket_value from a table it loads itself; items not
+ * listed fall back to their store value there, as price() does here.
+ */
+function itemPricesResource() {
+  if (quotedPrices) return quotedPrices;
+  quotedPrices = {};
+  const count = CacheDefinitions.getCounts().items;
+  for (let id = 0; id < count; id++) {
+    const definition = ItemDefinition.forId(id);
+    if (definition.isNoted() || !(definition.grandExchangeValue > 0)) continue;
+    quotedPrices[id] = price(id);
+  }
+  return quotedPrices;
 }
 
 function active(player, offer) {
@@ -53,13 +75,13 @@ function active(player, offer) {
 }
 
 function completedOffers(player) {
-  let slots = player.getAttribute("grandExchangeOffers");
-  if (!slots) player.setAttribute("grandExchangeOffers", slots = {});
+  let slots = player.getAttribute("grand-exchange-offers");
+  if (!slots) player.setAttribute("grand-exchange-offers", slots = {});
   return slots;
 }
 
 function saveOffers(player) {
-  GameConstants.PLAYER_PERSISTENCE.save(player);
+  GameConstants.PLAYER_PERSISTENCE.save(player, "grand-exchange");
 }
 
 function scheduleCompletion(player, offer) {
@@ -69,6 +91,9 @@ function scheduleCompletion(player, offer) {
   const timer = setTimeout(() => {
     timers.delete(timer);
     if (completedOffers(player)[offer.slot] !== offer) return;
+    // A second timer for the same offer (e.g. rescheduled on login) must not
+    // re-save and re-announce an already-completed offer.
+    if (offer.finished) return;
     offer.finished = true;
     saveOffers(player);
     refreshCollectionBox(player);
@@ -90,8 +115,9 @@ function marketVarps(slot, offer) {
     [base + 6]: offer?.itemId ?? -1,
     [base]: offer ? price(offer.itemId) : 0,
     [base + 1]: offer?.quantity ?? 0,
-    [base + 2]: offer?.finished ? offer.quantity : 0,
-    [base + 3]: offer?.finished ? offer.total : 0,
+    // An aborted offer traded nothing (the client draws its bar red).
+    [base + 2]: offer?.finished && !offer.aborted ? offer.quantity : 0,
+    [base + 3]: offer?.finished && !offer.aborted ? offer.total : 0,
     [base + 4]: offer?.sell ? 1 : 0,
     [base + 5]: offer ? (offer.finished ? FINISHED : 2) : 0,
     [OFFER_ITEMS[slot] + 1]: 0,
@@ -105,14 +131,16 @@ function allMarketVarps(player) {
   return varps;
 }
 
+/** What a finished offer hands over: the trade's result, or for an aborted offer what was put in. */
+function payout(offer) {
+  const coins = offer.sell !== Boolean(offer.aborted);
+  return { coins, itemId: coins ? COINS : offer.itemId, amount: coins ? offer.total : offer.quantity };
+}
+
 function collection(offer) {
   return {
     capacity: 2,
-    slots: offer?.finished ? [{
-      slot: 0,
-      itemId: offer.sell ? COINS : offer.itemId,
-      quantity: offer.sell ? offer.total : offer.quantity,
-    }] : [],
+    slots: offer?.finished ? [{ slot: 0, itemId: payout(offer).itemId, quantity: payout(offer).amount }] : [],
   };
 }
 
@@ -135,7 +163,7 @@ function refresh(player, offer) {
     .sendConfig(SELECTED_ITEM, offer.itemId)
     .sendVarbit(SELL, offer.sell ? 1 : 0)
     .sendVarbit(QUANTITY, offer.quantity)
-    .sendVarbit(PRICE, offer.itemId > 0 ? price(offer.itemId) : 1)
+    .sendVarpLong(PRICE_LONG, offer.itemId > 0 ? price(offer.itemId) : 1)
     .sendVarbit(SELECTED_SLOT, offer.slot + 1);
 }
 
@@ -149,7 +177,7 @@ function home(player) {
     .sendConfig(SELECTED_ITEM, -1)
     .sendVarbit(SELL, 0)
     .sendVarbit(QUANTITY, 1)
-    .sendVarbit(PRICE, 1)
+    .sendVarpLong(PRICE_LONG, 1)
     .sendVarbit(SELECTED_SLOT, 0);
 }
 
@@ -190,8 +218,12 @@ function chooseItem(player, offer) {
 }
 
 function start(player, sell, slot = 0, itemId = -1) {
+  if (slot >= usableSlots()) {
+    player.sendMessage("You need to be on a members' world to use this slot.");
+    return;
+  }
   if (Object.hasOwn(completedOffers(player), slot)) {
-    const free = Array.from({ length: 8 }, (_, i) => i).find((i) => !Object.hasOwn(completedOffers(player), i));
+    const free = Array.from({ length: usableSlots() }, (_, i) => i).find((i) => !Object.hasOwn(completedOffers(player), i));
     if (free == null) {
       player.sendMessage("Collect an offer before creating another one.");
       return;
@@ -256,10 +288,11 @@ function confirm(player, offer) {
 function collect(player, action, slot = viewing.get(player)) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
-  const baseId = offer.sell ? COINS : ItemDefinition.forId(offer.itemId).unNote();
+  const paid = payout(offer);
+  const baseId = paid.coins ? COINS : ItemDefinition.forId(paid.itemId).unNote();
   const noteId = ItemDefinition.forId(baseId).getNoteId();
   const outputId = action === 1 && noteId >= 0 && ItemDefinition.forId(noteId).isNoted() ? noteId : baseId;
-  const outputAmount = offer.sell ? offer.total : offer.quantity;
+  const outputAmount = paid.amount;
   const inventory = player.getInventory();
   const destination = action === 3 ? player.getBank(Bank.getTabForItem(player, baseId)) : inventory;
   const result = action === 3 ? new Bank(player) : new Inventory(player);
@@ -295,6 +328,30 @@ function collect(player, action, slot = viewing.get(player)) {
   sender.sendMessage(`Collected ${outputAmount.toLocaleString("en-US")} x ${ItemDefinition.forId(outputId).getName()}.`);
 }
 
+/** Abort offer (465:23, dynamic child 0): an offer still trading stops; its input waits in the collection. */
+function abort(player, slot = viewing.get(player)) {
+  const offer = completedOffers(player)[slot];
+  if (!offer || offer.finished) {
+    player.sendMessage("That offer has already completed.");
+    return;
+  }
+  offer.finished = true;
+  offer.aborted = true;
+  saveOffers(player);
+  const sender = player.getPacketSender();
+  sender.sendInterfaceScript(786, [], marketVarps(slot, offer), undefined,
+    { [COLLECTIONS[slot]]: collection(offer) });
+  refreshCollectionBox(player);
+  sender.sendVarbit(SELECTED_SLOT, 0).sendVarbit(SELECTED_SLOT, slot + 1);
+  sender.sendMessage("Abort request acknowledged. Please be aware that your offer may have already been completed.");
+}
+
+/** The Collect button (465:6, dynamic child 0): op 1 to the inventory (as notes), op 2 to the bank. */
+function collectAll(player, action) {
+  const to = action === 2 ? 3 : 1;
+  for (const slot of Object.keys(completedOffers(player)).map(Number)) collect(player, to, slot);
+}
+
 function openGrandExchange({ player }) {
   if ([GE, GE_COLLECT].includes(player.getInterfaceId())) player.getPacketSender().sendInterfaceRemoval();
   if (player.busy()) {
@@ -307,12 +364,13 @@ function openGrandExchange({ player }) {
   const sender = player.getPacketSender();
   player.setInterfaceId(GE);
   sender.sendVarbit(13139, 0)
+    .sendVarpLong(PRICE_LONG, 1)
     // The GE on-load script reads these before it creates offer widgets.
     // Varp 1151=0 is a real item (Dwarf remains), so clearing it later is
     // visibly too late.
     .sendSubInterface(MAIN_MODAL, GE, 0, {
       varps: { [SELECTED_ITEM]: -1, ...allMarketVarps(player) },
-      varbits: { [SELL]: 0, [QUANTITY]: 1, [PRICE]: 1, [SELECTED_SLOT]: 0 },
+      varbits: { [SELL]: 0, [QUANTITY]: 1, [SELECTED_SLOT]: 0 },
     })
     .sendSubInterface(SIDE_MODAL, SIDE, 3);
   // Keep the server value in sync for clients that process transmitters
@@ -330,6 +388,9 @@ function openGrandExchange({ player }) {
     // Script 816 creates backgrounds at 0/1 and collection items at 2/3.
     // Bits 1-3 enable Collect-notes, Collect-items, and Bank.
     .sendInterfaceFlagsRange(uid(24), 2, 3, 14)
+    // Scripts 793/819 create the Collect button under 6 (ops 1-2) and Abort/Modify under 23.
+    .sendInterfaceFlagsRange(uid(6), 0, 1, 6)
+    .sendInterfaceFlagsRange(uid(23), 0, 1, 2)
     // Same item operations as the normal inventory panel.
     .sendInterfaceFlagsRange(SIDE_ITEMS, 0, 27, 1086);
   sender.sendMessage("Instant GE: search for an item to buy, or sell from your inventory. Fixed guide prices; no fees.");
@@ -354,6 +415,10 @@ function openCollectionBox({ player }) {
     sender.sendInterfaceFlagsRange(collectUid(child), 3, 4, 14);
   }
   sender.sendInterfaceFlags(collectUid(3), 2).sendInterfaceFlags(collectUid(4), 2);
+  // Children 5-12 are slots 1-8; script 789 draws all of them, so hide the members-only ones.
+  for (let child = 5; child <= 12; child++) {
+    sender.sendInterfaceDisplayState(collectUid(child), child - 5 >= usableSlots());
+  }
   return true;
 }
 
@@ -383,6 +448,13 @@ function handleInventoryItem(event) {
 function handleExchangeButton({ player, buttonId, slot, action }) {
   if (player.getInterfaceId() !== GE) return true;
   if (buttonId === uid(24) && action >= 1 && action <= 3) { collect(player, action); return true; }
+  // Child 1 of 465:6 is Repeat Offer (script 793), not handled here.
+  if (buttonId === uid(6) && slot === 0 && (action === 1 || action === 2)) { collectAll(player, action); return true; }
+  if (buttonId === uid(23) && action === 1) {
+    if (slot === 0) abort(player);
+    else player.sendMessage("To change an offer, abort it, collect, and place a new one.");
+    return true;
+  }
   if (action !== 1) return true;
   if (buttonId === uid(4)) { home(player); return true; }
   const child = buttonId & 0xffff;
@@ -420,13 +492,13 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
 }
 
 const COLLECTION_BUTTONS = Array.from({ length: 10 }, (_, i) => collectUid(i + 3));
-const EXCHANGE_BUTTONS = [uid(4), uid(24), uid(26), uid(30), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
+const EXCHANGE_BUTTONS = [uid(4), uid(6), uid(23), uid(24), uid(26), uid(30), ...Array.from({ length: 8 }, (_, i) => uid(i + 7))];
 
 module.exports = {
   name: "GrandExchange",
   register(api) {
     pluginApi = api;
-    api.persistAttribute("grandExchangeOffers");
+    api.persistAttribute("grand-exchange-offers");
     api.onPlayerLogin(({ player }) => {
       for (const offer of Object.values(completedOffers(player))) scheduleCompletion(player, offer);
     });
@@ -438,8 +510,9 @@ module.exports = {
       for (const timer of completionTimers.get(player) ?? []) clearTimeout(timer);
       completionTimers.delete(player);
     });
-    api.registerCommand("ge", openGrandExchange);
-    api.registerCommand("gecollect", openCollectionBox);
+    api.registerContentEndpoint("item-prices", itemPricesResource);
+    api.registerCommand("ge", openGrandExchange, undefined, "Open the Grand Exchange");
+    api.registerCommand("gecollect", openCollectionBox, undefined, "Open the Grand Exchange collection box");
 
     api.onNpcInteraction("Grand Exchange Clerk", { "Exchange": openGrandExchange });
     api.onNpcInteraction("Banker", { "Collect": openCollectionBox });

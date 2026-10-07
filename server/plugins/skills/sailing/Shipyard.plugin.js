@@ -357,6 +357,7 @@ function returnFromShipyard({ player }) {
 
 module.exports = {
   name: "SailingShipyard",
+  members: true,
   readOptionRow,
   beginVisit,
   visitedBoat,

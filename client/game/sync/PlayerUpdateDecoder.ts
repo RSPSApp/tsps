@@ -6,12 +6,12 @@ import {
 } from "../../common/Direction";
 import { ClientState } from "../ClientState";
 import { BitStream } from "./BitStream";
+import { readForcedMovement } from "./ForcedMovementReader";
 import { getPlayerSyncHuffman } from "./HuffmanProvider";
 import { PlayerSyncContext, type PlayerSyncState } from "./PlayerSyncContext";
 import {
     type AnimationUpdate,
     type ChatUpdate,
-    type ForcedMovementUpdate,
     type HealthBarUpdate,
     type HitsplatUpdate,
     MovementMode,
@@ -596,7 +596,7 @@ export class PlayerUpdateDecoder {
                     update.actions = this.readActions(stream);
                 }
                 if ((mask & PlayerUpdateMask.ForceMovement) !== 0) {
-                    const fm = this.readForcedMovement(stream, clientCycle);
+                    const fm = readForcedMovement(stream, clientCycle);
                     // A teleport in the same update (such as climbing onto a roof, then a forced
                     // move along it) still has to land first, or the level change is lost and
                     // the player is drawn on the old plane until they next move.
@@ -798,25 +798,6 @@ export class PlayerUpdateDecoder {
             subX: toSubCoord(state.tileX),
             subY: toSubCoord(state.tileY),
         });
-    }
-
-    private readForcedMovement(stream: BitStream, cycleBase: number): ForcedMovementUpdate {
-        const startDX = toSignedByte(stream.readUnsignedByteS()); // readByteSub
-        const startDY = stream.readByte() | 0; // readByte
-        const endDX = stream.readByte() | 0; // readByte
-        const endDY = toSignedByte(stream.readUnsignedByteA()); // readByteAdd
-        const startCycle = (cycleBase + (stream.readUnsignedShortBEA() | 0)) | 0; // readUnsignedShortAdd
-        const endCycle = (cycleBase + (stream.readUnsignedShortBE() | 0)) | 0; // readUnsignedShort
-        const direction = stream.readUnsignedShortLEA() | 0; // readUnsignedShortAddLE
-        return {
-            startDeltaX: startDX,
-            startDeltaY: startDY,
-            endDeltaX: endDX,
-            endDeltaY: endDY,
-            startCycle,
-            endCycle,
-            direction,
-        };
     }
 
     private readSpotAnimations(stream: BitStream, cycleBase: number): SpotAnimationUpdate[] {

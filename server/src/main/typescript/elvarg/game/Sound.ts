@@ -133,6 +133,9 @@ export class Sound {
     public static GENIE_LAMP = new Sound(430, 1, 0, 0)
     public static BURY_BONES = new Sound(2738, 1, 0, 0)
     public static WILDERNESS_DITCH_JUMP = new Sound(2462, 1, 0, 0)
+    public static THIEVING_PICKPOCKET = new Sound(2581, 1, 0, 0)
+    /** Picking from scenery (crops, flax): the same sound as a pickpocket's. */
+    public static PICK = new Sound(2581, 1, 0, 0)
     public static THIEVING_STUNNED = new Sound(2727, 1, 0, 0)
     public static LEVEL_UP = new Sound(2396, 1, 0, 0)
     public static GEM_CUTTING = new Sound(2586, 1, 0, 0)
@@ -158,6 +161,10 @@ export class Sound {
     public static PRAYER_RAPID_RESTORE = new Sound(2679, 1, 0, 0)
     public static RUNECRAFTING = Sound.CRAFT_RUNES
     public static HOME_TELEPORT = new Sound(193, 1, 0, 0)
+    /** A new item in the collection log (with its notification popup, as captured). */
+    public static COLLECTION_LOG_NEW_ITEM = new Sound(2304, 1, 0, 0)
+    /** An experience reward granted (genie's lamp, as captured). */
+    public static XP_REWARD = new Sound(2655, 1, 0, 0)
     public static HOME_TELEPORT_ALT = Sound.HOME_TELEPORT
 
     public id: number;

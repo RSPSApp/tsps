@@ -1,15 +1,4 @@
-/** Every agility shortcut, grouped by region. */
-const SHORTCUTS = [
-  ...require("./CourseEntrances"),
-  ...require("./Misthalin"),
-  ...require("./Asgarnia"),
-  ...require("./Kandarin"),
-  ...require("./Karamja"),
-  ...require("./Desert"),
-  ...require("./Morytania"),
-  ...require("./Fremennik"),
-  ...require("./Kourend"),
-  ...require("./Wilderness"),
-];
+/** Every agility shortcut, from data/definitions/agility-shortcuts.json (ShortcutData). */
+const { SHORTCUTS } = require("./ShortcutData");
 
 module.exports = { SHORTCUTS };

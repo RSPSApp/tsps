@@ -1,0 +1,5227 @@
+{
+ "$comment": "Achievement diaries. Per diary: 'index' (diary tab row, cache enum 595), the varbits the cache's diary scripts read (56: started/complete, 2200: count/total/reward; Karamja's legacy easy-hard tiers are complete at 2), each tier's tasks exactly as OSRS writes them in the journal (with its line wrapping), the literal journal lines around them, the reward items and lamp, and the claim conversation from the Wiki transcript ('reward' marks when the items are given). 'npcAt' is how messages name the reward NPC; only Ardougne's and the captured reminder lines are verified, the rest follow the Wiki's location. Task text and layout: rsprox capture of every diary's journal; varbits: cache; rewards: Wiki.",
+ "lamps": {
+  "13145": {
+   "xp": 2500,
+   "minLevel": 30
+  },
+  "13146": {
+   "xp": 7500,
+   "minLevel": 40
+  },
+  "13147": {
+   "xp": 15000,
+   "minLevel": 50
+  },
+  "13148": {
+   "xp": 50000,
+   "minLevel": 70
+  },
+  "11137": {
+   "xp": 1000,
+   "minLevel": 1
+  },
+  "11139": {
+   "xp": 5000,
+   "minLevel": 30
+  },
+  "11141": {
+   "xp": 10000,
+   "minLevel": 40
+  }
+ },
+ "diaries": [
+  {
+   "key": "karamja",
+   "name": "Karamja",
+   "index": 0,
+   "header": "Karamja Area Tasks",
+   "afterHeader": [
+    ""
+   ],
+   "startedVarbit": 3576,
+   "npc": "Pirate Jackie the Fruit",
+   "npcAt": "Pirate Jackie the Fruit in Brimhaven",
+   "itemNoun": "Karamja gloves",
+   "tiers": {
+    "easy": {
+     "countVarbit": 2423,
+     "completeVarbit": 3578,
+     "completeValue": 2,
+     "rewardVarbit": 3577,
+     "rewardItems": [
+      11136,
+      11137
+     ],
+     "journalBefore": [
+      "<col=000000>"
+     ],
+     "journalAfter": [
+      ""
+     ],
+     "tasks": [
+      {
+       "key": "pick-5-bananas-from-the-plantation-located-east",
+       "lines": [
+        "Pick 5 bananas from the plantation located east of the",
+        "volcano."
+       ]
+      },
+      {
+       "key": "use-the-rope-swing-to-travel-to-the-small-island",
+       "lines": [
+        "Use the rope swing to travel to the small island north-west",
+        "of Karamja, where the moss giants are."
+       ]
+      },
+      {
+       "key": "mine-some-gold-from-the-rocks-on-the-north-west",
+       "lines": [
+        "Mine some gold from the rocks on the north-west",
+        "peninsula of Karamja."
+       ]
+      },
+      {
+       "key": "travel-to-port-sarim-via-the-dock-east-of-musa-p",
+       "lines": [
+        "Travel to Port Sarim via the dock, east of Musa Point."
+       ]
+      },
+      {
+       "key": "travel-to-ardougne-via-the-port-near-brimhaven",
+       "lines": [
+        "Travel to Ardougne via the port near Brimhaven."
+       ]
+      },
+      {
+       "key": "explore-cairn-island-to-the-west-of-karamja",
+       "lines": [
+        "Explore Cairn Island to the west of Karamja."
+       ]
+      },
+      {
+       "key": "use-the-fishing-spots-north-of-the-banana-planta",
+       "lines": [
+        "Use the Fishing spots north of the banana plantation."
+       ]
+      },
+      {
+       "key": "collect-5-seaweed-from-anywhere-on-karamja",
+       "lines": [
+        "Collect 5 seaweed from anywhere on Karamja."
+       ]
+      },
+      {
+       "key": "attempt-the-tzhaar-fight-pits-or-fight-cave",
+       "lines": [
+        "Attempt the TzHaar Fight Pits or Fight Cave."
+       ]
+      },
+      {
+       "key": "kill-a-jogre-in-the-pothole-dungeon",
+       "lines": [
+        "Kill a jogre in the Pothole dungeon."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've done all the easy tasks in my Karamja Achievement Diary."
+      },
+      {
+       "npc": "Arr, ye have that, I see yer list. I s'pose ye'll be wantin' yer reward then!"
+      },
+      {
+       "player": "Yes please."
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "These 'ere Karamja gloves be a symbol of yer explorin' on the island. I'll 'ave a word with some of the seafarin' folk who sail to Port Sarim and Ardougne, so they'll take ye on board half price if ye be wearin' them."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6288,
+     "completeVarbit": 3599,
+     "completeValue": 2,
+     "rewardVarbit": 3598,
+     "rewardItems": [
+      11138,
+      11139
+     ],
+     "journalBefore": [
+      "<col=000000>"
+     ],
+     "journalAfter": [
+      ""
+     ],
+     "tasks": [
+      {
+       "key": "claim-a-ticket-from-the-agility-arena-in-brimhav",
+       "lines": [
+        "Claim a ticket from the Agility Arena in Brimhaven."
+       ]
+      },
+      {
+       "key": "discover-hidden-wall-in-the-dungeon-below-the-vo",
+       "lines": [
+        "Discover hidden wall in the dungeon below the volcano."
+       ]
+      },
+      {
+       "key": "visit-the-isle-of-crandor-via-the-dungeon-below",
+       "lines": [
+        "Visit the Isle of Crandor via the dungeon below the",
+        "volcano."
+       ]
+      },
+      {
+       "key": "use-vigroy-and-hajedy-s-cart-service",
+       "lines": [
+        "Use Vigroy and Hajedy's cart service."
+       ]
+      },
+      {
+       "key": "earn-100-favour-in-the-village-of-tai-bwo-wannai",
+       "lines": [
+        "Earn 100% favour in the village of Tai Bwo Wannai."
+       ]
+      },
+      {
+       "key": "cook-a-spider-on-a-stick",
+       "lines": [
+        "Cook a spider on a stick."
+       ]
+      },
+      {
+       "key": "charter-the-lady-of-the-waves-from-cairn-isle-to",
+       "lines": [
+        "Charter the Lady of the Waves from Cairn Isle to Port",
+        "Khazard."
+       ]
+      },
+      {
+       "key": "cut-a-log-from-a-teak-tree",
+       "lines": [
+        "Cut a log from a teak tree."
+       ]
+      },
+      {
+       "key": "cut-a-log-from-a-mahogany-tree",
+       "lines": [
+        "Cut a log from a mahogany tree."
+       ]
+      },
+      {
+       "key": "catch-a-karambwan",
+       "lines": [
+        "Catch a karambwan."
+       ]
+      },
+      {
+       "key": "exchange-gems-for-a-machete",
+       "lines": [
+        "Exchange gems for a machete."
+       ]
+      },
+      {
+       "key": "use-the-gnome-glider-to-travel-to-karamja",
+       "lines": [
+        "Use the gnome glider to travel to Karamja."
+       ]
+      },
+      {
+       "key": "grow-a-healthy-fruit-tree-in-the-patch-near-brim",
+       "lines": [
+        "Grow a healthy fruit tree in the patch near Brimhaven."
+       ]
+      },
+      {
+       "key": "trap-a-horned-graahk",
+       "lines": [
+        "Trap a horned graahk."
+       ]
+      },
+      {
+       "key": "chop-the-vines-to-gain-deeper-access-to-brimhave",
+       "lines": [
+        "Chop the vines to gain deeper access to Brimhaven",
+        "Dungeon."
+       ]
+      },
+      {
+       "key": "cross-the-lava-using-the-stepping-stones-within",
+       "lines": [
+        "Cross the lava using the stepping stones within Brimhaven",
+        "Dungeon."
+       ]
+      },
+      {
+       "key": "climb-the-stairs-within-brimhaven-dungeon",
+       "lines": [
+        "Climb the stairs within Brimhaven Dungeon."
+       ]
+      },
+      {
+       "key": "charter-a-ship-from-the-shipyard-in-the-far-east",
+       "lines": [
+        "Charter a ship from the shipyard in the far east of",
+        "Karamja."
+       ]
+      },
+      {
+       "key": "mine-a-red-topaz-from-a-gem-rock",
+       "lines": [
+        "Mine a red topaz from a gem rock."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've done all the medium tasks in my Karamja Achievement Diary."
+      },
+      {
+       "npc": "Arr, so ye have. I s'pose ye'll be wantin' yer reward upgraded then!"
+      },
+      {
+       "player": "Yes please."
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "The enchantment on these 'ere Karamja gloves be a symbol of yer further explorin' on the island. They'll take ye to an underground mine in Shilo, Cap'n Izzy's arranged it so ye gets a little extra benefit in our"
+      },
+      {
+       "npc": "Agility Arena. Ye can have this lamp too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6289,
+     "completeVarbit": 3611,
+     "completeValue": 2,
+     "rewardVarbit": 3610,
+     "rewardItems": [
+      11140,
+      11141
+     ],
+     "journalBefore": [
+      "<col=000000>"
+     ],
+     "journalAfter": [
+      ""
+     ],
+     "tasks": [
+      {
+       "key": "become-the-champion-of-the-fight-pits",
+       "lines": [
+        "Become the Champion of the Fight Pits."
+       ]
+      },
+      {
+       "key": "successfully-kill-a-ket-zek-in-the-fight-caves",
+       "lines": [
+        "Successfully kill a Ket-Zek in the Fight Caves."
+       ]
+      },
+      {
+       "key": "eat-an-oomlie-wrap",
+       "lines": [
+        "Eat an oomlie wrap."
+       ]
+      },
+      {
+       "key": "craft-some-nature-runes-from-essence",
+       "lines": [
+        "Craft some nature runes from Essence."
+       ]
+      },
+      {
+       "key": "cook-a-karambwan-thoroughly",
+       "lines": [
+        "Cook a karambwan thoroughly."
+       ]
+      },
+      {
+       "key": "kill-a-deathwing-in-the-dungeon-under-the-kharaz",
+       "lines": [
+        "Kill a deathwing in the dungeon under the Kharazi Jungle."
+       ]
+      },
+      {
+       "key": "use-the-crossbow-shortcut-south-of-the-volcano",
+       "lines": [
+        "Use the crossbow shortcut south of the volcano."
+       ]
+      },
+      {
+       "key": "collect-5-palm-leaves",
+       "lines": [
+        "Collect 5 palm leaves."
+       ]
+      },
+      {
+       "key": "be-assigned-a-slayer-task-by-the-slayer-master-i",
+       "lines": [
+        "Be assigned a Slayer task by the Slayer Master in Shilo",
+        "Village."
+       ]
+      },
+      {
+       "key": "kill-a-metal-dragon-in-brimhaven-dungeon",
+       "lines": [
+        "Kill a metal dragon in Brimhaven Dungeon."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've done all the hard tasks in my Karamja Achievement Diary."
+      },
+      {
+       "npc": "Arr, so ye have. I s'pose ye'll be wantin' yer reward upgraded again!"
+      },
+      {
+       "player": "Yes please."
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "The enchantment on these 'ere Karamja gloves be a symbol of yer exhaustive explorin'. They'll take ye to a mine under Shilo Village now infinitely, an' all the merchants will give ye discounts. Ye can have this lamp"
+      },
+      {
+       "npc": "too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6290,
+     "completeVarbit": 4566,
+     "rewardVarbit": 4567,
+     "rewardItems": [
+      13103,
+      13148
+     ],
+     "journalBefore": [
+      "<col=000000>"
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "craft-56-nature-runes-simultaneously-from-essenc",
+       "lines": [
+        "Craft 56 Nature runes simultaneously from Essence",
+        "without the use of Extracts."
+       ]
+      },
+      {
+       "key": "equip-a-fire-cape-or-infernal-cape-in-mor-ul-rek",
+       "lines": [
+        "Equip a Fire Cape or Infernal Cape in Mor Ul Rek."
+       ]
+      },
+      {
+       "key": "check-the-health-of-a-palm-tree-in-brimhaven",
+       "lines": [
+        "Check the health of a palm tree in Brimhaven."
+       ]
+      },
+      {
+       "key": "create-an-antivenom-potion-whilst-standing-in-th",
+       "lines": [
+        "Create an antivenom potion whilst standing in the horse",
+        "shoe mine."
+       ]
+      },
+      {
+       "key": "check-the-health-of-your-calquat-tree-patch",
+       "lines": [
+        "Check the health of your Calquat tree patch."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've done all the elite tasks in my Karamja Achievement Diary."
+      },
+      {
+       "npc": "Arr, that be an incredible achievement, so it be! I suppose ye'll be wanting yer reward upgraded again."
+      },
+      {
+       "player": "Yes please."
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "The enchantment on these 'ere Karamja gloves be the ultimate symbol of yer exhaustive explorin'. Ye'll now get double TokKul from the Fight Cave, Inferno an' TzHaar-Ket-Rak's Challenges."
+      },
+      {
+       "npc": "Ye'll have a chance for double tickets in our Agility Arena 'ere. Ye can resurrect in the Fight Cave once per day, an' even enter some places fer free."
+      },
+      {
+       "npc": "I can make the metal dragons under Brimhaven give ye bars as banknotes too, if ye likes."
+      },
+      {
+       "npc": "Ye can have that lamp too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ],
+     "npcAt": "the Pirate Jackie the Fruit in Brimhaven"
+    }
+   }
+  },
+  {
+   "key": "ardougne",
+   "name": "Ardougne",
+   "index": 1,
+   "header": "Ardougne Area Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4448,
+   "npc": "Two-pints",
+   "npcAt": "Two-pints at the Flying Horse Inn in Ardougne",
+   "itemNoun": "Ardougne cloak",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6291,
+     "completeVarbit": 4458,
+     "rewardVarbit": 4499,
+     "rewardItems": [
+      13121,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " ",
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "have-wizard-cromperty-teleport-you-to-the-rune-e",
+       "lines": [
+        "Have Wizard Cromperty teleport you to the Rune Essence",
+        "mine."
+       ]
+      },
+      {
+       "key": "steal-a-cake-from-the-ardougne-market-stalls",
+       "lines": [
+        "Steal a cake from the Ardougne market stalls."
+       ]
+      },
+      {
+       "key": "sell-silk-to-silk-trader-in-ardougne-for-60-coin",
+       "lines": [
+        "Sell Silk to Silk trader in Ardougne for 60 coins each."
+       ]
+      },
+      {
+       "key": "use-the-altar-in-east-ardougne-s-church",
+       "lines": [
+        "Use the altar in East Ardougne's church."
+       ]
+      },
+      {
+       "key": "go-out-fishing-on-the-fishing-trawler",
+       "lines": [
+        "Go out fishing on the Fishing Trawler."
+       ]
+      },
+      {
+       "key": "enter-the-combat-training-camp-north-of-w-ardoug",
+       "lines": [
+        "Enter the Combat Training Camp north of W. Ardougne."
+       ]
+      },
+      {
+       "key": "have-tindel-marchant-identify-a-rusted-sword-for",
+       "lines": [
+        "Have Tindel Marchant identify a Rusted Sword for you."
+       ]
+      },
+      {
+       "key": "use-the-ardougne-lever-to-teleport-to-the-wilder",
+       "lines": [
+        "Use the Ardougne Lever to teleport to the Wilderness."
+       ]
+      },
+      {
+       "key": "view-aleck-s-hunter-emporium-in-yanille",
+       "lines": [
+        "View Aleck's Hunter Emporium in Yanille."
+       ]
+      },
+      {
+       "key": "check-what-pets-you-have-insured-with-probita-in",
+       "lines": [
+        "Check what pets you have Insured with Probita in",
+        "Ardougne."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Ardougne achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This cloak is a symbol of your exploration of Ardougne. The Citizen in West Ardougne will buy cats for 200 death runes each, some drops in the Tower of Life will be noted and the cape can teleport you to the"
+      },
+      {
+       "npc": "Monastery south of Ardougne too."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your cloak, come back to me to reclaim it."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6292,
+     "completeVarbit": 4459,
+     "rewardVarbit": 4500,
+     "rewardItems": [
+      13122,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " ",
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "enter-the-unicorn-pen-in-ardougne-zoo-using-fair",
+       "lines": [
+        "Enter the Unicorn pen in Ardougne zoo using Fairy rings."
+       ]
+      },
+      {
+       "key": "grapple-over-yanille-s-south-wall",
+       "lines": [
+        "Grapple over Yanille's south wall."
+       ]
+      },
+      {
+       "key": "harvest-some-strawberries-from-the-ardougne-farm",
+       "lines": [
+        "Harvest some strawberries from the Ardougne farming",
+        "patch."
+       ]
+      },
+      {
+       "key": "cast-the-ardougne-teleport-spell",
+       "lines": [
+        "Cast the Ardougne Teleport spell."
+       ]
+      },
+      {
+       "key": "travel-to-castlewars-by-hot-air-balloon",
+       "lines": [
+        "Travel to Castlewars by Hot Air Balloon."
+       ]
+      },
+      {
+       "key": "claim-buckets-of-sand-from-bert-in-yanille",
+       "lines": [
+        "Claim buckets of sand from Bert in Yanille."
+       ]
+      },
+      {
+       "key": "catch-any-fish-on-the-fishing-platform",
+       "lines": [
+        "Catch any fish on the Fishing Platform."
+       ]
+      },
+      {
+       "key": "pickpocket-the-master-farmer-north-of-ardougne",
+       "lines": [
+        "Pickpocket the master farmer north of Ardougne."
+       ]
+      },
+      {
+       "key": "collect-some-nightshade-from-the-skavid-caves",
+       "lines": [
+        "Collect some Nightshade from the Skavid Caves."
+       ]
+      },
+      {
+       "key": "kill-a-swordchick-in-the-tower-of-life",
+       "lines": [
+        "Kill a swordchick in the Tower of Life."
+       ]
+      },
+      {
+       "key": "equip-iban-s-upgraded-staff-or-upgrade-an-iban-s",
+       "lines": [
+        "Equip Iban's upgraded staff or upgrade an Iban staff."
+       ]
+      },
+      {
+       "key": "visit-the-island-east-of-the-necromancer-s-tower",
+       "lines": [
+        "Visit the Island East of the Necromancer's tower."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Ardougne achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Ardougne cloak for you. Wizard Cromperty will give you 100 noted pure essence each day, even more drops will be noted in the Tower of Life, you've got a 10% better chance at pickpocketing in"
+      },
+      {
+       "npc": "Ardougne, you can toggle the ring of life to teleport to Ardougne, you get three teleports each day to the Ardougne farming patch and you can hold up to 56 coin pouches whilst pickpocketing."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6293,
+     "completeVarbit": 4460,
+     "rewardVarbit": 4501,
+     "rewardItems": [
+      13123,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " ",
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "recharge-some-jewellery-at-the-totem-in-the-lege",
+       "lines": [
+        "Recharge some Jewellery at the Totem in the Legends",
+        "Guild."
+       ]
+      },
+      {
+       "key": "enter-the-magic-guild",
+       "lines": [
+        "Enter the Magic Guild."
+       ]
+      },
+      {
+       "key": "steal-from-a-chest-in-ardougne-castle",
+       "lines": [
+        "Steal from a chest in Ardougne Castle."
+       ]
+      },
+      {
+       "key": "have-a-zookeeper-put-you-in-ardougne-zoo-s-monke",
+       "lines": [
+        "Have a zookeeper put you in Ardougne Zoo's monkey",
+        "cage."
+       ]
+      },
+      {
+       "key": "teleport-to-the-watchtower",
+       "lines": [
+        "Teleport to the Watchtower."
+       ]
+      },
+      {
+       "key": "catch-a-red-salamander",
+       "lines": [
+        "Catch a Red Salamander."
+       ]
+      },
+      {
+       "key": "check-the-health-of-a-palm-tree-near-tree-gnome",
+       "lines": [
+        "Check the health of a Palm tree near tree gnome village."
+       ]
+      },
+      {
+       "key": "pick-some-poison-ivy-berries-from-the-patch-sout",
+       "lines": [
+        "Pick some Poison Ivy berries from the patch south of",
+        "Ardougne."
+       ]
+      },
+      {
+       "key": "smith-a-mithril-platebody-near-ardougne",
+       "lines": [
+        "Smith a Mithril platebody near Ardougne."
+       ]
+      },
+      {
+       "key": "enter-your-poh-from-yanille",
+       "lines": [
+        "Enter your POH from Yanille."
+       ]
+      },
+      {
+       "key": "smith-a-dragon-sq-shield-in-west-ardougne",
+       "lines": [
+        "Smith a Dragon sq shield in West Ardougne."
+       ]
+      },
+      {
+       "key": "craft-some-death-runes-from-essence",
+       "lines": [
+        "Craft some Death runes from Essence."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Ardougne achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Ardougne cloak for you. Wizard Cromperty will give you 150 pure essence each day, you can toggle the Watchtower teleport to the centre of Yanille, claim further drops as notes in the Tower of"
+      },
+      {
+       "npc": "Life, teleports to the farming patch increased to five per day, have a 10% better chance at pickpocketing everywhere and you can hold up to 84 coin pouches whilst pickpocketing."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6294,
+     "completeVarbit": 4461,
+     "rewardVarbit": 4502,
+     "rewardItems": [
+      13124,
+      13148
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "catch-a-manta-ray-in-the-fishing-trawler-and-coo",
+       "lines": [
+        "Catch a Manta ray in the Fishing Trawler and cook it in Port",
+        "Khazard."
+       ]
+      },
+      {
+       "key": "picklock-the-door-to-the-basement-of-yanille-agi",
+       "lines": [
+        "Picklock the door to the basement of Yanille Agility",
+        "Dungeon."
+       ]
+      },
+      {
+       "key": "pickpocket-a-hero",
+       "lines": [
+        "Pickpocket a Hero."
+       ]
+      },
+      {
+       "key": "make-a-rune-crossbow-yourself-from-scratch-withi",
+       "lines": [
+        "Make a rune crossbow yourself from scratch within",
+        "Witchaven or Yanille."
+       ]
+      },
+      {
+       "key": "imbue-a-salve-amulet-at-nightmare-zone-or-equip",
+       "lines": [
+        "Imbue a Salve amulet at Nightmare Zone, or equip a Salve",
+        "amulet that was imbued there."
+       ]
+      },
+      {
+       "key": "pick-some-torstol-from-the-patch-north-of-ardoug",
+       "lines": [
+        "Pick some Torstol from the patch north of Ardougne."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-ardougne-s-rooftop-agility-cou",
+       "lines": [
+        "Complete a lap of Ardougne's rooftop agility course."
+       ]
+      },
+      {
+       "key": "cast-ice-barrage-on-another-player-within-castle",
+       "lines": [
+        "Cast Ice Barrage on another player within Castle Wars."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Ardougne achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in Ardougne! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Ardougne cloak for you. Wizard Cromperty will give you 250 pure essence every day, you will catch 50% more fish from the Fishing Trawler and receive 25% more marks of grace on the"
+      },
+      {
+       "npc": "Ardougne agility course. Your cape will have unlimited teleports to the Ardougne farming patch, Bert will automatically deliver your daily sand and you can hold up to 140 coin pouches whilst pickpocketing."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ],
+     "requirement": {
+      "skill": "Smithing",
+      "level": 91,
+      "refusal": [
+       "What, with your stats? I don't believe you. You'd need a Smithing level of 91. Ask me again when you've got your Smithing level up."
+      ]
+     }
+    }
+   }
+  },
+  {
+   "key": "falador",
+   "name": "Falador",
+   "index": 2,
+   "header": "Falador Area Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4449,
+   "npc": "Sir Rebral",
+   "npcAt": "Sir Rebral in the courtyard of the White Knights' Castle in Falador",
+   "npcAtUnverified": true,
+   "itemNoun": "Falador shield",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6299,
+     "completeVarbit": 4462,
+     "rewardVarbit": 4503,
+     "rewardItems": [
+      13117,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "find-out-what-your-family-crest-is-from-sir-reni",
+       "lines": [
+        "Find out what your family crest is from Sir Renitee."
+       ]
+      },
+      {
+       "key": "climb-over-the-western-falador-wall",
+       "lines": [
+        "Climb over the western Falador wall."
+       ]
+      },
+      {
+       "key": "browse-sarah-s-farm-shop",
+       "lines": [
+        "Browse Sarah's farm shop."
+       ]
+      },
+      {
+       "key": "get-a-haircut-or-a-shave-from-the-falador-hairdr",
+       "lines": [
+        "Get a Haircut or a Shave from the Falador Hairdresser."
+       ]
+      },
+      {
+       "key": "fill-a-bucket-from-the-pump-north-of-falador-wes",
+       "lines": [
+        "Fill a bucket from the pump north of Falador west bank."
+       ]
+      },
+      {
+       "key": "kill-a-duck-in-falador-park",
+       "lines": [
+        "Kill a duck in Falador park."
+       ]
+      },
+      {
+       "key": "make-a-mind-tiara",
+       "lines": [
+        "Make a mind tiara."
+       ]
+      },
+      {
+       "key": "take-the-boat-to-entrana",
+       "lines": [
+        "Take the boat to Entrana."
+       ]
+      },
+      {
+       "key": "repair-a-broken-strut-in-the-motherlode-mine",
+       "lines": [
+        "Repair a broken strut in the Motherlode Mine."
+       ]
+      },
+      {
+       "key": "claim-a-security-book-from-the-security-guard-at",
+       "lines": [
+        "Claim a security book from the Security guard at Port",
+        "Sarim jail."
+       ]
+      },
+      {
+       "key": "smith-some-blurite-limbs-on-doric-s-anvil",
+       "lines": [
+        "Smith some Blurite Limbs on Doric's Anvil."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Falador Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This shield is a symbol of your exploration of Falador. It can restore one quarter of your prayer points once per day and you can now access a shortcut to the Chaos temple from Burthorpe."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your shield, come back to me to reclaim it."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6300,
+     "completeVarbit": 4463,
+     "rewardVarbit": 4504,
+     "rewardItems": [
+      13118,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "light-a-bullseye-lantern-at-the-chemist-s-in-rim",
+       "lines": [
+        "Light a Bullseye lantern at the Chemist's in Rimmington."
+       ]
+      },
+      {
+       "key": "telegrab-some-wine-of-zamorak-at-the-chaos-templ",
+       "lines": [
+        "Telegrab some Wine of Zamorak at the Chaos Temple by",
+        "the Wilderness."
+       ]
+      },
+      {
+       "key": "unlock-the-crystal-chest-in-taverley",
+       "lines": [
+        "Unlock the Crystal chest in Taverley"
+       ]
+      },
+      {
+       "key": "place-a-scarecrow-in-the-falador-farming-patch",
+       "lines": [
+        "Place a Scarecrow in the Falador farming patch."
+       ]
+      },
+      {
+       "key": "kill-a-mogre-at-mudskipper-point",
+       "lines": [
+        "Kill a Mogre at Mudskipper Point."
+       ]
+      },
+      {
+       "key": "visit-the-port-sarim-rat-pits",
+       "lines": [
+        "Visit the Port Sarim Rat Pits."
+       ]
+      },
+      {
+       "key": "grapple-up-and-then-jump-off-the-north-falador-w",
+       "lines": [
+        "Grapple up and then jump off the north Falador wall."
+       ]
+      },
+      {
+       "key": "pickpocket-a-falador-guard",
+       "lines": [
+        "Pickpocket a Falador guard."
+       ]
+      },
+      {
+       "key": "pray-at-the-altar-of-guthix-in-taverley-whilst-w",
+       "lines": [
+        "Pray at the Altar of Guthix in Taverley whilst wearing full",
+        "Initiate."
+       ]
+      },
+      {
+       "key": "mine-some-gold-ore-at-the-crafting-guild",
+       "lines": [
+        "Mine some Gold ore at the Crafting Guild."
+       ]
+      },
+      {
+       "key": "squeeze-through-the-crevice-in-the-dwarven-mines",
+       "lines": [
+        "Squeeze through the crevice in the Dwarven mines."
+       ]
+      },
+      {
+       "key": "chop-and-burn-some-willow-logs-in-taverley",
+       "lines": [
+        "Chop and burn some Willow logs in Taverley"
+       ]
+      },
+      {
+       "key": "craft-a-fruit-basket-on-the-falador-farm-loom",
+       "lines": [
+        "Craft a fruit basket on the Falador Farm loom."
+       ]
+      },
+      {
+       "key": "teleport-to-falador",
+       "lines": [
+        "Teleport to Falador."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Falador achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Falador shield for you. It can restore half of your prayer points once per day and provides a 10% experience boost at Falador farm. You've got an increased chance of finding a clue scroll"
+      },
+      {
+       "npc": "from a Guard and can access a shortcut within the Motherlode Mine."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6301,
+     "completeVarbit": 4464,
+     "rewardVarbit": 4505,
+     "rewardItems": [
+      13119,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "craft-140-mind-runes-simultaneously-from-essence",
+       "lines": [
+        "Craft 140 Mind runes simultaneously from Essence",
+        "without the use of Extracts."
+       ]
+      },
+      {
+       "key": "change-your-family-crest-to-the-saradomin-symbol",
+       "lines": [
+        "Change your family crest to the Saradomin symbol."
+       ]
+      },
+      {
+       "key": "kill-the-giant-mole-beneath-falador-park",
+       "lines": [
+        "Kill the Giant Mole beneath Falador park."
+       ]
+      },
+      {
+       "key": "kill-a-skeletal-wyvern-in-the-asgarnia-ice-dunge",
+       "lines": [
+        "Kill a Skeletal Wyvern in the Asgarnia Ice Dungeon."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-falador-rooftop-agility-co",
+       "lines": [
+        "Complete a lap of the Falador rooftop agility course."
+       ]
+      },
+      {
+       "key": "enter-the-mining-guild-wearing-a-prospector-helm",
+       "lines": [
+        "Enter the mining guild wearing a Prospector helmet."
+       ]
+      },
+      {
+       "key": "kill-the-blue-dragon-under-the-heroes-guild",
+       "lines": [
+        "Kill the Blue Dragon under the Heroes' Guild."
+       ]
+      },
+      {
+       "key": "crack-a-wall-safe-within-rogues-den",
+       "lines": [
+        "Crack a wall safe within Rogues Den."
+       ]
+      },
+      {
+       "key": "recharge-your-prayer-in-the-port-sarim-church-wh",
+       "lines": [
+        "Recharge your prayer in the Port Sarim church while",
+        "wearing full Proselyte."
+       ]
+      },
+      {
+       "key": "enter-the-warriors-guild",
+       "lines": [
+        "Enter the Warriors' Guild."
+       ]
+      },
+      {
+       "key": "equip-a-dwarven-helmet-within-the-dwarven-mines",
+       "lines": [
+        "Equip a dwarven helmet within the dwarven mines."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Falador achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Falador shield for you. It will restore all of your prayer points once per day, you can now access a bank deposit box at the crafting guild and a shortcut to the Heroes' Guild fountain. The Giant"
+      },
+      {
+       "npc": "mole should now be easier to locate and it will drop noted skins and claws."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6302,
+     "completeVarbit": 4465,
+     "rewardVarbit": 4506,
+     "rewardItems": [
+      13120,
+      13148
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "craft-252-air-runes-simultaneously-from-essence",
+       "lines": [
+        "Craft 252 Air Runes simultaneously from Essence without",
+        "the use of Extracts."
+       ]
+      },
+      {
+       "key": "purchase-a-white-2h-sword-from-sir-vyvin",
+       "lines": [
+        "Purchase a White 2h Sword from Sir Vyvin."
+       ]
+      },
+      {
+       "key": "find-at-least-3-magic-roots-at-once-when-digging",
+       "lines": [
+        "Find at least 3 magic roots at once when digging up your",
+        "magic tree in Falador."
+       ]
+      },
+      {
+       "key": "perform-a-skillcape-or-quest-cape-emote-at-the-t",
+       "lines": [
+        "Perform a skillcape or quest cape emote at the top of",
+        "Falador Castle."
+       ]
+      },
+      {
+       "key": "jump-over-the-strange-floor-in-taverley-dungeon",
+       "lines": [
+        "Jump over the strange floor in Taverley dungeon."
+       ]
+      },
+      {
+       "key": "mix-a-saradomin-brew-in-falador-east-bank",
+       "lines": [
+        "Mix a Saradomin brew in Falador east bank."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Falador achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in Falador! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Falador shield for you. The tree patch in Falador park will now never become diseased and the shield will restore all of your prayer points twice per day in addition to an increased chance at"
+      },
+      {
+       "npc": "higher level ores from cleaning Pay-dirt."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "fremennik",
+   "name": "Fremennik",
+   "index": 3,
+   "header": "Fremennik Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4450,
+   "npc": "Thorodin",
+   "npcAt": "Thorodin just south of Rellekka",
+   "npcAtUnverified": true,
+   "itemNoun": "Fremennik sea boots",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6303,
+     "completeVarbit": 4491,
+     "rewardVarbit": 4531,
+     "rewardItems": [
+      13129,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "catch-a-cerulean-twitch",
+       "lines": [
+        "Catch a Cerulean twitch."
+       ]
+      },
+      {
+       "key": "change-your-boots-at-yrsa-s-shoe-store",
+       "lines": [
+        "Change your boots at Yrsa's Shoe Store."
+       ]
+      },
+      {
+       "key": "kill-5-rock-crabs",
+       "lines": [
+        "Kill 5 Rock crabs."
+       ]
+      },
+      {
+       "key": "craft-a-tiara-from-scratch-in-rellekka",
+       "lines": [
+        "Craft a tiara from scratch in Rellekka."
+       ]
+      },
+      {
+       "key": "browse-the-stonemasons-shop",
+       "lines": [
+        "Browse the Stonemasons shop."
+       ]
+      },
+      {
+       "key": "collect-5-snape-grass-on-waterbirth-island",
+       "lines": [
+        "Collect 5 Snape grass on Waterbirth Island."
+       ]
+      },
+      {
+       "key": "steal-from-the-keldagrim-crafting-or-baker-s-sta",
+       "lines": [
+        "Steal from the Keldagrim crafting or baker's stall."
+       ]
+      },
+      {
+       "key": "fill-a-bucket-with-water-at-the-rellekka-well",
+       "lines": [
+        "Fill a bucket with water at the Rellekka well."
+       ]
+      },
+      {
+       "key": "enter-the-troll-stronghold",
+       "lines": [
+        "Enter the Troll Stronghold."
+       ]
+      },
+      {
+       "key": "chop-and-burn-some-oak-logs-in-the-fremennik-pro",
+       "lines": [
+        "Chop and burn some oak logs in the Fremennik Province."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Fremennik Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "These boots are a symbol of your exploration of the Fremennik lands. They can teleport you here once per day, Peer the Seer can now bank items for you at all times and your enchanted lyre can hold an extra"
+      },
+      {
+       "npc": "charge."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your boots, come back to me to reclaim them."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6304,
+     "completeVarbit": 4492,
+     "rewardVarbit": 4532,
+     "rewardItems": [
+      13130,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "slay-a-brine-rat",
+       "lines": [
+        "Slay a Brine rat."
+       ]
+      },
+      {
+       "key": "travel-to-the-snowy-hunter-area-via-eagle",
+       "lines": [
+        "Travel to the Snowy Hunter Area via Eagle."
+       ]
+      },
+      {
+       "key": "mine-some-coal-in-rellekka",
+       "lines": [
+        "Mine some coal in Rellekka."
+       ]
+      },
+      {
+       "key": "steal-from-the-rellekka-fish-stalls",
+       "lines": [
+        "Steal from the Rellekka Fish stalls."
+       ]
+      },
+      {
+       "key": "travel-to-miscellania-by-fairy-ring",
+       "lines": [
+        "Travel to Miscellania by Fairy ring."
+       ]
+      },
+      {
+       "key": "catch-a-snowy-knight",
+       "lines": [
+        "Catch a Snowy knight."
+       ]
+      },
+      {
+       "key": "pick-up-your-pet-rock-from-your-poh-menagerie",
+       "lines": [
+        "Pick up your Pet Rock from your POH Menagerie."
+       ]
+      },
+      {
+       "key": "visit-the-lighthouse-from-waterbirth-island",
+       "lines": [
+        "Visit the Lighthouse from Waterbirth island."
+       ]
+      },
+      {
+       "key": "mine-some-gold-at-the-arzinian-mine",
+       "lines": [
+        "Mine some gold at the Arzinian mine."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Fremennik achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Fremennik sea boots for you. They can now teleport you here three times per day and have an increased rate of gaining approval with your subjects."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6305,
+     "completeVarbit": 4493,
+     "rewardVarbit": 4533,
+     "rewardItems": [
+      13131,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "teleport-to-trollheim",
+       "lines": [
+        "Teleport to Trollheim."
+       ]
+      },
+      {
+       "key": "catch-a-sabre-toothed-kyatt",
+       "lines": [
+        "Catch a Sabre-toothed Kyatt."
+       ]
+      },
+      {
+       "key": "mix-a-super-defence-potion-in-the-fremennik-prov",
+       "lines": [
+        "Mix a super defence potion in the Fremennik province."
+       ]
+      },
+      {
+       "key": "steal-from-the-keldagrim-gem-stall",
+       "lines": [
+        "Steal from the Keldagrim Gem Stall."
+       ]
+      },
+      {
+       "key": "craft-a-neitiznot-shield-on-neitiznot",
+       "lines": [
+        "Craft a Neitiznot shield on Neitiznot."
+       ]
+      },
+      {
+       "key": "mine-5-adamantite-ores-on-jatizso",
+       "lines": [
+        "Mine 5 Adamantite ores on Jatizso."
+       ]
+      },
+      {
+       "key": "obtain-100-support-from-your-kingdom-subjects",
+       "lines": [
+        "Obtain 100% support from your kingdom subjects."
+       ]
+      },
+      {
+       "key": "teleport-to-waterbirth-island",
+       "lines": [
+        "Teleport to Waterbirth Island."
+       ]
+      },
+      {
+       "key": "obtain-the-blast-furnace-foreman-s-permission-to",
+       "lines": [
+        "Obtain the Blast Furnace Foreman's permission to use the",
+        "Blast Furnace for free."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Fremennik achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Fremennik sea boots for you. They can now teleport you here five times per day, you can now change your lyre teleport location to Waterbirth Island, access two new Lunar spells and you'll receive"
+      },
+      {
+       "npc": "extra Agility experience from the Rellekka rooftop course."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6306,
+     "completeVarbit": 4494,
+     "rewardVarbit": 4534,
+     "rewardItems": [
+      13132,
+      13148
+     ],
+     "journalBefore": [
+      "<str>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "kill-each-of-the-dagannoth-kings",
+       "lines": [
+        "Kill each of the Dagannoth Kings."
+       ]
+      },
+      {
+       "key": "craft-56-astral-runes-simultaneously-from-essenc",
+       "lines": [
+        "Craft 56 astral runes simultaneously from Essence",
+        "without the use of Extracts."
+       ]
+      },
+      {
+       "key": "create-a-dragonstone-amulet-in-the-neitiznot-fur",
+       "lines": [
+        "Create a dragonstone amulet in the Neitiznot furnace."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-rellekka-agility-course",
+       "lines": [
+        "Complete a lap of the Rellekka agility course."
+       ]
+      },
+      {
+       "key": "kill-the-generals-of-armadyl-bandos-saradomin-an",
+       "lines": [
+        "Kill the generals of Armadyl, Bandos, Saradomin and",
+        "Zamorak in the God Wars Dungeon."
+       ]
+      },
+      {
+       "key": "slay-a-spiritual-mage-within-the-godwars-dungeon",
+       "lines": [
+        "Slay a Spiritual mage within the Godwars Dungeon."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Fremennik achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in the Fremennik Province! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Fremennik sea boots for you. In addition to all of the previous benefits, your boots now have unlimited teleports to Rellekka, your lyre can now teleport you to Jatiszo or Neitiznot, you'll no longer"
+      },
+      {
+       "npc": "need a seal of passage on Lunar Isle, Dagannoth bones will be dropped as notes and your subjects will approve of your kingdom management even faster than before."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "kandarin",
+   "name": "Kandarin",
+   "index": 4,
+   "header": "Kandarin Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4451,
+   "npc": "The 'Wedge'",
+   "npcAt": "the 'Wedge' outside the entrance to Camelot",
+   "npcAtUnverified": true,
+   "itemNoun": "Kandarin headgear",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6307,
+     "completeVarbit": 4475,
+     "rewardVarbit": 4515,
+     "rewardItems": [
+      13137,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "catch-a-mackerel-at-catherby",
+       "lines": [
+        "Catch a Mackerel at Catherby."
+       ]
+      },
+      {
+       "key": "buy-a-candle-from-the-chandler-in-catherby",
+       "lines": [
+        "Buy a candle from the Chandler in Catherby."
+       ]
+      },
+      {
+       "key": "collect-five-flax-from-the-seers-flax-fields",
+       "lines": [
+        "Collect five Flax from the Seers' flax fields."
+       ]
+      },
+      {
+       "key": "play-the-organ-in-seers-church",
+       "lines": [
+        "Play the Organ in Seers' Church."
+       ]
+      },
+      {
+       "key": "plant-some-jute-seeds-in-the-patch-north-of-mcgr",
+       "lines": [
+        "Plant some Jute seeds in the patch north of McGrubor's",
+        "Wood."
+       ]
+      },
+      {
+       "key": "have-galahad-make-you-a-cup-of-tea",
+       "lines": [
+        "Have Galahad make you a cup of tea."
+       ]
+      },
+      {
+       "key": "defeat-one-of-each-elemental-in-the-workshop",
+       "lines": [
+        "Defeat one of each elemental in the workshop."
+       ]
+      },
+      {
+       "key": "get-a-pet-fish-from-harry-in-catherby",
+       "lines": [
+        "Get a pet fish from Harry in Catherby."
+       ]
+      },
+      {
+       "key": "buy-a-stew-from-the-seers-pub",
+       "lines": [
+        "Buy a Stew from the Seers' pub."
+       ]
+      },
+      {
+       "key": "speak-to-sherlock",
+       "lines": [
+        "Speak to Sherlock."
+       ]
+      },
+      {
+       "key": "cross-the-coal-truck-log-shortcut",
+       "lines": [
+        "Cross the Coal truck log shortcut."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Kandarin Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This headgear is a symbol of your exploration of Kandarin. It functions as a light source and you now have a chance of receiving an extra log when cutting normal trees. You can get the flax keeper to convert"
+      },
+      {
+       "npc": "30 flax to bowstrings each day, coal trucks now hold up to 140 coal and you'll find 5% more marks of grace on Seers' rooftop agility course."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your headgear, come back to me to reclaim it."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6308,
+     "completeVarbit": 4476,
+     "rewardVarbit": 4516,
+     "rewardItems": [
+      13138,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "complete-a-lap-of-the-barbarian-agility-course",
+       "lines": [
+        "Complete a lap of the Barbarian agility course."
+       ]
+      },
+      {
+       "key": "create-a-super-antipoison-potion-from-scratch-in",
+       "lines": [
+        "Create a Super Antipoison potion from scratch in the",
+        "Seers/Catherby Area."
+       ]
+      },
+      {
+       "key": "enter-the-ranging-guild",
+       "lines": [
+        "Enter the Ranging guild."
+       ]
+      },
+      {
+       "key": "use-the-grapple-shortcut-to-get-from-the-water-o",
+       "lines": [
+        "Use the grapple shortcut to get from the water obelisk to",
+        "Catherby shore."
+       ]
+      },
+      {
+       "key": "catch-and-cook-a-bass-in-catherby",
+       "lines": [
+        "Catch and cook a Bass in Catherby."
+       ]
+      },
+      {
+       "key": "teleport-to-camelot",
+       "lines": [
+        "Teleport to Camelot."
+       ]
+      },
+      {
+       "key": "string-a-maple-shortbow-in-seers-village-bank",
+       "lines": [
+        "String a Maple shortbow in Seers' Village bank."
+       ]
+      },
+      {
+       "key": "pick-some-limpwurt-root-from-the-farming-patch-i",
+       "lines": [
+        "Pick some Limpwurt root from the farming patch in",
+        "Catherby."
+       ]
+      },
+      {
+       "key": "create-a-mind-helmet",
+       "lines": [
+        "Create a Mind helmet."
+       ]
+      },
+      {
+       "key": "kill-a-fire-giant-inside-baxtorian-waterfall",
+       "lines": [
+        "Kill a Fire Giant inside Baxtorian Waterfall."
+       ]
+      },
+      {
+       "key": "complete-a-wave-of-barbarian-assault",
+       "lines": [
+        "Complete a wave of Barbarian Assault."
+       ]
+      },
+      {
+       "key": "steal-from-the-chest-in-hemenster",
+       "lines": [
+        "Steal from the chest in Hemenster."
+       ]
+      },
+      {
+       "key": "travel-to-mcgrubor-s-wood-by-fairy-ring",
+       "lines": [
+        "Travel to McGrubor's Wood by Fairy Ring."
+       ]
+      },
+      {
+       "key": "mine-some-coal-near-the-coal-trucks",
+       "lines": [
+        "Mine some coal near the coal trucks."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Kandarin achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Kandarin headgear for you. Cutting maples in Seers' village now provide 10% more experience. You can now spin materials 33% faster at the spinning wheel, get the flax keeper to convert 60"
+      },
+      {
+       "npc": "flax to bowstrings each day, and the Catherby herb patch provides a 5% higher crop yield. Coal trucks will hold up to 280 coal now too. You can also use the rope I left at Baxtorian falls, instead of bringing your own,"
+      },
+      {
+       "npc": "as long as you have completed the Waterfall quest."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6309,
+     "completeVarbit": 4477,
+     "rewardVarbit": 4517,
+     "rewardItems": [
+      13139,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "catch-a-leaping-sturgeon",
+       "lines": [
+        "Catch a Leaping Sturgeon."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-seers-village-agility-cour",
+       "lines": [
+        "Complete a lap of the Seers' Village agility course."
+       ]
+      },
+      {
+       "key": "create-a-yew-longbow-from-scratch-around-seers-v",
+       "lines": [
+        "Create a Yew Longbow from scratch around Seers' Village."
+       ]
+      },
+      {
+       "key": "enter-the-seers-village-courthouse-with-piety-tu",
+       "lines": [
+        "Enter the Seers' Village courthouse with piety turned on."
+       ]
+      },
+      {
+       "key": "charge-a-water-orb",
+       "lines": [
+        "Charge a Water Orb."
+       ]
+      },
+      {
+       "key": "burn-some-maple-logs-with-a-bow-in-seers-village",
+       "lines": [
+        "Burn some Maple logs with a bow in Seers' Village."
+       ]
+      },
+      {
+       "key": "kill-a-shadow-hound-in-the-shadow-dungeon",
+       "lines": [
+        "Kill a Shadow Hound in the Shadow dungeon."
+       ]
+      },
+      {
+       "key": "kill-a-mithril-dragon",
+       "lines": [
+        "Kill a Mithril Dragon."
+       ]
+      },
+      {
+       "key": "purchase-and-equip-a-granite-body-from-barbarian",
+       "lines": [
+        "Purchase and equip a granite body from Barbarian",
+        "Assault."
+       ]
+      },
+      {
+       "key": "have-the-seers-estate-agent-decorate-your-house",
+       "lines": [
+        "Have the Seers' estate agent decorate your house with",
+        "Fancy Stone."
+       ]
+      },
+      {
+       "key": "smith-an-adamant-spear-at-otto-s-grotto",
+       "lines": [
+        "Smith an Adamant spear at Otto's Grotto."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Kandarin achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Kandarin headgear for you. Thormac will now enchant battlestaves for 30,000 gold and you can move the Camelot teleport location to outside of Seers' bank. You'll now find 15% more"
+      },
+      {
+       "npc": "marks of grace on Seers' rooftop, receive 10% higher yield from Catherby farming patch, get the flax keeper to convert 120 flax to bowstrings each day and get 10% more points from Barbarian Assault, as well one"
+      },
+      {
+       "npc": "free daily teleport to Sherlock. Your chances of having an enchanted bolt use its special attack has increased by 10% too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6310,
+     "completeVarbit": 4478,
+     "rewardVarbit": 4518,
+     "rewardItems": [
+      13140,
+      13148
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "read-the-blackboard-at-barbarian-assault-after-r",
+       "lines": [
+        "Read the Blackboard at Barbarian Assault after reaching",
+        "level 5 in every role."
+       ]
+      },
+      {
+       "key": "pick-some-dwarf-weed-from-the-herb-patch-at-cath",
+       "lines": [
+        "Pick some Dwarf weed from the herb patch at Catherby."
+       ]
+      },
+      {
+       "key": "fish-and-cook-5-sharks-in-catherby-using-the-coo",
+       "lines": [
+        "Fish and Cook 5 Sharks in Catherby using the Cooking",
+        "gauntlets."
+       ]
+      },
+      {
+       "key": "mix-a-stamina-mix-on-top-of-the-seers-village-ba",
+       "lines": [
+        "Mix a Stamina Mix on top of the Seers' Village bank."
+       ]
+      },
+      {
+       "key": "smith-a-rune-hasta-at-otto-s-grotto",
+       "lines": [
+        "Smith a Rune Hasta at Otto's Grotto."
+       ]
+      },
+      {
+       "key": "construct-a-pyre-ship-from-magic-logs-col-800000",
+       "lines": [
+        "Construct a Pyre ship from Magic Logs.<col=800000>(Requires Chewed",
+        "<col=800000>Bones.)<col=000000>"
+       ]
+      },
+      {
+       "key": "teleport-to-catherby",
+       "lines": [
+        "Teleport to Catherby."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Kandarin achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in Kandarin! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Kandarin headgear for you. Thormac now enchants battlestaves for 20,000 gold, Otto will provide a 50% discount when converting Zamorakian spears into hastae. You've now got"
+      },
+      {
+       "npc": "unlimited daily teleports to Sherlock and 15% increased yield from Catherby herb patch and can get the flax keeper to convert 250 flax to bowstrings every day. The first 200 coal placed in coal trucks every day will"
+      },
+      {
+       "npc": "now be automatically transported to your bank too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "desert",
+   "name": "Desert",
+   "index": 5,
+   "header": "Desert Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4452,
+   "npc": "Jarr",
+   "npcAt": "Jarr at the Shantay Pass",
+   "npcAtUnverified": true,
+   "itemNoun": "Desert amulet",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6295,
+     "completeVarbit": 4483,
+     "rewardVarbit": 4523,
+     "rewardItems": [
+      13133,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "catch-a-golden-warbler",
+       "lines": [
+        "Catch a Golden Warbler."
+       ]
+      },
+      {
+       "key": "mine-5-clay-in-the-north-eastern-desert",
+       "lines": [
+        "Mine 5 clay in the north-eastern desert."
+       ]
+      },
+      {
+       "key": "enter-the-kalphite-hive",
+       "lines": [
+        "Enter the Kalphite Hive."
+       ]
+      },
+      {
+       "key": "enter-the-desert-with-a-set-of-desert-robes-equi",
+       "lines": [
+        "Enter the Desert with a set of Desert robes equipped."
+       ]
+      },
+      {
+       "key": "kill-a-vulture",
+       "lines": [
+        "Kill a Vulture."
+       ]
+      },
+      {
+       "key": "have-the-nardah-herbalist-clean-a-herb-for-you",
+       "lines": [
+        "Have the Nardah Herbalist clean a Herb for you."
+       ]
+      },
+      {
+       "key": "collect-5-potato-cactus-from-the-kalphite-hive",
+       "lines": [
+        "Collect 5 Potato Cactus from the Kalphite Hive."
+       ]
+      },
+      {
+       "key": "sell-some-artefacts-to-simon-templeton",
+       "lines": [
+        "Sell some artefacts to Simon Templeton."
+       ]
+      },
+      {
+       "key": "open-the-sarcophagus-in-the-first-room-of-pyrami",
+       "lines": [
+        "Open the Sarcophagus in the first room of Pyramid",
+        "Plunder."
+       ]
+      },
+      {
+       "key": "cut-a-desert-cactus-open-to-fill-a-waterskin",
+       "lines": [
+        "Cut a desert cactus open to fill a waterskin."
+       ]
+      },
+      {
+       "key": "travel-from-the-shantay-pass-to-pollnivneach-by",
+       "lines": [
+        "Travel from the Shantay Pass to Pollnivneach by Magic",
+        "Carpet."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Desert Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This amulet is a symbol of your exploration of the Kharidian Desert. You can now charge a Pharaoh's sceptre with 10 charges, Simon Templeton will purchase artefacts in banknote form and Desert goat horns are"
+      },
+      {
+       "npc": "dropped as notes."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your amulet, come back to me to reclaim it."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6296,
+     "completeVarbit": 4484,
+     "rewardVarbit": 4524,
+     "rewardItems": [
+      13134,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "climb-to-the-summit-of-the-agility-pyramid",
+       "lines": [
+        "Climb to the summit of the Agility Pyramid."
+       ]
+      },
+      {
+       "key": "slay-a-desert-lizard",
+       "lines": [
+        "Slay a desert lizard."
+       ]
+      },
+      {
+       "key": "catch-an-orange-salamander",
+       "lines": [
+        "Catch an Orange Salamander."
+       ]
+      },
+      {
+       "key": "steal-a-feather-from-the-desert-phoenix",
+       "lines": [
+        "Steal a feather from the Desert Phoenix."
+       ]
+      },
+      {
+       "key": "travel-to-uzer-via-magic-carpet",
+       "lines": [
+        "Travel to Uzer via Magic Carpet."
+       ]
+      },
+      {
+       "key": "travel-to-the-desert-via-eagle",
+       "lines": [
+        "Travel to the Desert via Eagle."
+       ]
+      },
+      {
+       "key": "pray-at-the-elidinis-statuette-in-nardah",
+       "lines": [
+        "Pray at the Elidinis statuette in Nardah."
+       ]
+      },
+      {
+       "key": "create-a-combat-potion-in-the-desert",
+       "lines": [
+        "Create a combat potion in the desert."
+       ]
+      },
+      {
+       "key": "teleport-to-enakhra-s-temple-with-the-camulet",
+       "lines": [
+        "Teleport to Enakhra's Temple with the Camulet."
+       ]
+      },
+      {
+       "key": "visit-the-genie",
+       "lines": [
+        "Visit the Genie."
+       ]
+      },
+      {
+       "key": "teleport-to-pollnivneach-with-a-redirected-telep",
+       "lines": [
+        "Teleport to Pollnivneach with a redirected teleport to",
+        "house tablet."
+       ]
+      },
+      {
+       "key": "chop-some-teak-logs-near-uzer",
+       "lines": [
+        "Chop some Teak logs near Uzer."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Desert achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Desert amulet for you. You can now charge a Pharaoh's sceptre with 25 charges and the amulet will teleport you to Nardah once per day."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6297,
+     "completeVarbit": 4485,
+     "rewardVarbit": 4525,
+     "rewardItems": [
+      13135,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "knock-out-and-pickpocket-a-menaphite-thug",
+       "lines": [
+        "Knock out and pickpocket a Menaphite Thug."
+       ]
+      },
+      {
+       "key": "mine-some-granite",
+       "lines": [
+        "Mine some Granite."
+       ]
+      },
+      {
+       "key": "refill-your-waterskins-in-the-desert-using-lunar",
+       "lines": [
+        "Refill your waterskins in the Desert using Lunar magic."
+       ]
+      },
+      {
+       "key": "kill-the-kalphite-queen",
+       "lines": [
+        "Kill the Kalphite Queen."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-pollnivneach-agility-cours",
+       "lines": [
+        "Complete a lap of the Pollnivneach agility course."
+       ]
+      },
+      {
+       "key": "slay-a-dust-devil-in-the-desert-cave-with-a-slay",
+       "lines": [
+        "Slay a Dust Devil in the desert cave with a Slayer helmet",
+        "equipped."
+       ]
+      },
+      {
+       "key": "activate-ancient-magicks-at-the-altar-in-the-jal",
+       "lines": [
+        "Activate Ancient Magicks at the altar in the Jaldraocht",
+        "Pyramid."
+       ]
+      },
+      {
+       "key": "defeat-a-locust-rider-with-keris",
+       "lines": [
+        "Defeat a Locust Rider with Keris."
+       ]
+      },
+      {
+       "key": "burn-some-yew-logs-on-the-nardah-mayor-s-balcony",
+       "lines": [
+        "Burn some yew logs on the Nardah Mayor's balcony."
+       ]
+      },
+      {
+       "key": "create-a-mithril-platebody-in-nardah",
+       "lines": [
+        "Create a Mithril Platebody in Nardah."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Desert achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Desert amulet for you. You can now charge a Pharaoh's sceptre with 50 charges, you can adjust your Camulet to teleport you above the temple and the Nardah herbalist will create unfinished"
+      },
+      {
+       "npc": "potions for you."
+      },
+      {
+       "npc": "All rides on a magic carpet are now free and you'll receive extra Agility experience from the Pollnivneach rooftop course."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6298,
+     "completeVarbit": 4486,
+     "rewardVarbit": 4526,
+     "rewardItems": [
+      13136,
+      13148
+     ],
+     "journalBefore": [
+      "<str>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "bake-a-wild-pie-at-the-nardah-clay-oven",
+       "lines": [
+        "Bake a wild pie at the Nardah Clay Oven."
+       ]
+      },
+      {
+       "key": "cast-ice-barrage-against-a-foe-in-the-desert",
+       "lines": [
+        "Cast Ice Barrage against a foe in the Desert."
+       ]
+      },
+      {
+       "key": "fletch-some-dragon-darts-at-the-bedabin-camp",
+       "lines": [
+        "Fletch some Dragon darts at the Bedabin Camp."
+       ]
+      },
+      {
+       "key": "speak-to-the-kq-head-in-your-poh",
+       "lines": [
+        "Speak to the KQ head in your POH."
+       ]
+      },
+      {
+       "key": "steal-from-the-grand-gold-chest-in-the-final-roo",
+       "lines": [
+        "Steal from the Grand Gold Chest in the final room of",
+        "Pyramid Plunder."
+       ]
+      },
+      {
+       "key": "restore-at-least-85-prayer-points-when-praying-a",
+       "lines": [
+        "Restore at least 85 Prayer points when praying at the",
+        "Altar in Sophanem."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Desert achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in the Kharidian Desert! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Desert amulet for you. You can now charge a Pharaoh's sceptre with 100 charges, the amulet will protect you from desert heat at all times, a shortcut has been opened in the Kalphite hive and the"
+      },
+      {
+       "npc": "amulet will teleport you to Nardah and the kalphite hive to the East of the Shantay Pass as much as you desire. I've also negotiated completely free passage through the Shantay passes here and at the Ruins of"
+      },
+      {
+       "npc": "Unkah."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "lumbridge",
+   "name": "Lumbridge & Draynor",
+   "index": 6,
+   "header": "Lumbridge & Draynor Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4453,
+   "npc": "Hatius Cosaintus",
+   "npcAt": "Hatius Cosaintus east of Lumbridge Castle",
+   "npcAtUnverified": true,
+   "itemNoun": "Explorer's ring",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6311,
+     "completeVarbit": 4495,
+     "rewardVarbit": 4535,
+     "rewardItems": [
+      13125,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "complete-a-lap-of-the-draynor-village-agility-co",
+       "lines": [
+        "Complete a lap of the Draynor Village agility course."
+       ]
+      },
+      {
+       "key": "slay-a-cave-bug-beneath-lumbridge-swamp",
+       "lines": [
+        "Slay a Cave bug beneath Lumbridge Swamp."
+       ]
+      },
+      {
+       "key": "have-sedridor-teleport-you-to-the-essence-mine",
+       "lines": [
+        "Have Sedridor teleport you to the Essence Mine."
+       ]
+      },
+      {
+       "key": "craft-some-water-runes-from-essence",
+       "lines": [
+        "Craft some water runes from Essence."
+       ]
+      },
+      {
+       "key": "learn-your-age-from-hans-in-lumbridge",
+       "lines": [
+        "Learn your age from Hans in Lumbridge."
+       ]
+      },
+      {
+       "key": "pickpocket-a-man-or-woman-in-lumbridge",
+       "lines": [
+        "Pickpocket a man or woman in Lumbridge."
+       ]
+      },
+      {
+       "key": "chop-and-burn-some-oak-logs-in-lumbridge",
+       "lines": [
+        "Chop and burn some oak logs in Lumbridge."
+       ]
+      },
+      {
+       "key": "kill-a-zombie-in-draynor-sewers",
+       "lines": [
+        "Kill a Zombie in Draynor Sewers."
+       ]
+      },
+      {
+       "key": "catch-some-anchovies-in-al-kharid",
+       "lines": [
+        "Catch some Anchovies in Al Kharid."
+       ]
+      },
+      {
+       "key": "bake-some-bread-on-the-lumbridge-kitchen-range",
+       "lines": [
+        "Bake some Bread on the Lumbridge kitchen range."
+       ]
+      },
+      {
+       "key": "mine-some-iron-ore-at-the-al-kharid-mine",
+       "lines": [
+        "Mine some Iron ore at the Al Kharid mine."
+       ]
+      },
+      {
+       "key": "enter-the-h-a-m-hideout",
+       "lines": [
+        "Enter the H.A.M. Hideout."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Lumbridge & Draynor Achievement Diary!"
+      },
+      {
+       "npc": "Quite... You'll be wanting a reward then."
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This ring is a symbol of your exploration of Lumbridge and Draynor. It can recharge half of your run energy twice per day and cast low level alchemy without runes 30 times per day."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your ring, come back to me to reclaim it."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6312,
+     "completeVarbit": 4496,
+     "rewardVarbit": 4536,
+     "rewardItems": [
+      13126,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "complete-a-lap-of-the-al-kharid-agility-course",
+       "lines": [
+        "Complete a lap of the Al Kharid agility course."
+       ]
+      },
+      {
+       "key": "grapple-across-the-river-lum",
+       "lines": [
+        "Grapple across the River Lum."
+       ]
+      },
+      {
+       "key": "purchase-an-upgraded-device-from-ava",
+       "lines": [
+        "Purchase an upgraded device from Ava."
+       ]
+      },
+      {
+       "key": "travel-to-the-wizards-tower-by-fairy-ring",
+       "lines": [
+        "Travel to the Wizards' Tower by Fairy ring."
+       ]
+      },
+      {
+       "key": "cast-the-teleport-to-lumbridge-spell",
+       "lines": [
+        "Cast the teleport to Lumbridge spell."
+       ]
+      },
+      {
+       "key": "catch-some-salmon-in-lumbridge",
+       "lines": [
+        "Catch some Salmon in Lumbridge."
+       ]
+      },
+      {
+       "key": "craft-a-coif-in-the-lumbridge-cow-pen",
+       "lines": [
+        "Craft a coif in the Lumbridge cow pen."
+       ]
+      },
+      {
+       "key": "chop-some-willow-logs-in-draynor-village",
+       "lines": [
+        "Chop some willow logs in Draynor Village."
+       ]
+      },
+      {
+       "key": "pickpocket-martin-the-master-gardener",
+       "lines": [
+        "Pickpocket Martin the Master Gardener."
+       ]
+      },
+      {
+       "key": "get-a-slayer-task-from-chaeldar",
+       "lines": [
+        "Get a slayer task from Chaeldar."
+       ]
+      },
+      {
+       "key": "catch-an-essence-or-eclectic-impling-in-puro-pur",
+       "lines": [
+        "Catch an Essence or Eclectic impling in Puro-Puro."
+       ]
+      },
+      {
+       "key": "craft-some-lava-runes-at-the-fire-altar-in-al-kh",
+       "lines": [
+        "Craft some Lava runes at the fire altar in Al Kharid."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Lumbridge & Draynor achievement diary!"
+      },
+      {
+       "npc": "Quite... You'll be wanting a reward then."
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Explorer's ring for you. It can restore half of your run energy and teleport you to the Draynor cabbage patch three times per day."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6313,
+     "completeVarbit": 4497,
+     "rewardVarbit": 4537,
+     "rewardItems": [
+      13127,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "cast-bones-to-peaches-in-al-kharid-palace",
+       "lines": [
+        "Cast Bones to Peaches in Al Kharid palace."
+       ]
+      },
+      {
+       "key": "squeeze-past-the-jutting-wall-on-your-way-to-the",
+       "lines": [
+        "Squeeze past the jutting wall on your way to the cosmic",
+        "altar."
+       ]
+      },
+      {
+       "key": "craft-56-cosmic-runes-simultaneously-from-essenc",
+       "lines": [
+        "Craft 56 Cosmic runes simultaneously from Essence",
+        "without the use of Extracts."
+       ]
+      },
+      {
+       "key": "travel-from-lumbridge-to-edgeville-on-a-waka-can",
+       "lines": [
+        "Travel from Lumbridge to Edgeville on a Waka Canoe."
+       ]
+      },
+      {
+       "key": "collect-at-least-100-tears-of-guthix-in-one-visi",
+       "lines": [
+        "Collect at least 100 Tears of Guthix in one visit."
+       ]
+      },
+      {
+       "key": "take-the-train-from-dorgesh-kaan-to-keldagrim",
+       "lines": [
+        "Take the train from Dorgesh-Kaan to Keldagrim."
+       ]
+      },
+      {
+       "key": "purchase-some-barrows-gloves-from-the-lumbridge",
+       "lines": [
+        "Purchase some Barrows gloves from the Lumbridge bank",
+        "chest."
+       ]
+      },
+      {
+       "key": "pick-some-belladonna-from-the-farming-patch-at-d",
+       "lines": [
+        "Pick some Belladonna from the farming patch at Draynor",
+        "Manor."
+       ]
+      },
+      {
+       "key": "light-your-mining-helmet-in-the-lumbridge-castle",
+       "lines": [
+        "Light your mining helmet in the Lumbridge castle",
+        "basement."
+       ]
+      },
+      {
+       "key": "recharge-your-prayer-at-the-emir-s-arena-with-sm",
+       "lines": [
+        "Recharge your prayer at the Emir's Arena with Smite",
+        "activated."
+       ]
+      },
+      {
+       "key": "craft-string-and-enchant-an-amulet-of-power-in-l",
+       "lines": [
+        "Craft, string and enchant an Amulet of Power in",
+        "Lumbridge."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Lumbridge & Draynor achievement diary!"
+      },
+      {
+       "npc": "Quite... You'll be wanting a reward then."
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Explorer's ring for you. It now has unlimited cabbage teleports and four charges to restore half your run energy. Collecting Tears of Guthix will now provide increased experience."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6314,
+     "completeVarbit": 4498,
+     "rewardVarbit": 4538,
+     "rewardItems": [
+      13128,
+      13148
+     ],
+     "journalBefore": [
+      "<str>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "steal-from-a-dorgesh-kaan-rich-chest",
+       "lines": [
+        "Steal from a Dorgesh-Kaan rich chest."
+       ]
+      },
+      {
+       "key": "grapple-across-a-pylon-on-the-dorgesh-kaan-agili",
+       "lines": [
+        "Grapple across a pylon on the Dorgesh-Kaan Agility",
+        "Course."
+       ]
+      },
+      {
+       "key": "chop-some-magic-logs-at-the-mage-training-arena",
+       "lines": [
+        "Chop some magic logs at the Mage Training Arena."
+       ]
+      },
+      {
+       "key": "smith-an-adamant-platebody-down-draynor-sewer",
+       "lines": [
+        "Smith an Adamant platebody down Draynor sewer."
+       ]
+      },
+      {
+       "key": "craft-140-or-more-water-runes-simultaneously-fro",
+       "lines": [
+        "Craft 140 or more Water runes simultaneously from",
+        "Essence without the use of Extracts."
+       ]
+      },
+      {
+       "key": "perform-the-quest-cape-emote-in-the-wise-old-man",
+       "lines": [
+        "Perform the Quest cape emote in the Wise Old Man's",
+        "house."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Lumbridge & Draynor achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in the Lumbridge & Draynor diary! You've earned another reward."
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Explorer's ring for you. In addition to the previous benefits you can now block an additional slayer target with slayer masters, recharge all of your run energy three times per day and cast high"
+      },
+      {
+       "npc": "level alchemy thirty times per day. The Culinaromancer's chest is now 20% cheaper and you'll receive double wire when thieving in Dorgesh-Kaan."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "morytania",
+   "name": "Morytania",
+   "index": 7,
+   "header": "Morytania Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4454,
+   "npc": "Le-sabrè",
+   "npcAt": "Le-sabrè in Canifis",
+   "itemNoun": "Morytania legs",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6315,
+     "completeVarbit": 4487,
+     "rewardVarbit": 4527,
+     "rewardItems": [
+      13112,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "craft-any-snelm-from-scratch-in-morytania",
+       "lines": [
+        "Craft any Snelm from scratch in Morytania."
+       ]
+      },
+      {
+       "key": "cook-a-thin-snail-on-the-port-phasmatys-range",
+       "lines": [
+        "Cook a thin Snail on the Port Phasmatys range."
+       ]
+      },
+      {
+       "key": "get-a-slayer-task-from-the-slayer-master-in-cani",
+       "lines": [
+        "Get a slayer task from the Slayer Master in Canifis."
+       ]
+      },
+      {
+       "key": "kill-a-banshee-in-the-slayer-tower",
+       "lines": [
+        "Kill a Banshee in the Slayer Tower."
+       ]
+      },
+      {
+       "key": "have-sbott-in-canifis-tan-something-for-you",
+       "lines": [
+        "Have Sbott in Canifis tan something for you."
+       ]
+      },
+      {
+       "key": "enter-mort-myre-swamp",
+       "lines": [
+        "Enter Mort Myre Swamp."
+       ]
+      },
+      {
+       "key": "kill-a-ghoul",
+       "lines": [
+        "Kill a Ghoul."
+       ]
+      },
+      {
+       "key": "place-a-scarecrow-in-the-morytania-flower-patch",
+       "lines": [
+        "Place a Scarecrow in the Morytania flower patch."
+       ]
+      },
+      {
+       "key": "offer-some-bonemeal-at-the-ectofuntus",
+       "lines": [
+        "Offer some bonemeal at the Ectofuntus."
+       ]
+      },
+      {
+       "key": "kill-a-werewolf-in-its-human-form-using-the-wolf",
+       "lines": [
+        "Kill a werewolf in its human form using the Wolfbane",
+        "Dagger."
+       ]
+      },
+      {
+       "key": "restore-your-prayer-points-at-the-nature-altar",
+       "lines": [
+        "Restore your prayer points at the nature altar."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Morytania Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "These platelegs are a symbol of your exploration of Morytania. You can use them to teleport to the Slime pit beneath the Ectofuntus twice a day, there's a chance Ghasts will ignore you in the swamp, and you'll receive"
+      },
+      {
+       "npc": "a 2.5% increase in Slayer XP when on assignment in the Slayer Tower too."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose them, come back to me to reclaim them."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6316,
+     "completeVarbit": 4488,
+     "rewardVarbit": 4528,
+     "rewardItems": [
+      13113,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "catch-a-swamp-lizard",
+       "lines": [
+        "Catch a swamp lizard."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-canifis-agility-course",
+       "lines": [
+        "Complete a lap of the Canifis agility course."
+       ]
+      },
+      {
+       "key": "obtain-some-bark-from-a-hollow-tree",
+       "lines": [
+        "Obtain some Bark from a Hollow tree."
+       ]
+      },
+      {
+       "key": "travel-to-dragontooth-isle",
+       "lines": [
+        "Travel to Dragontooth Isle."
+       ]
+      },
+      {
+       "key": "kill-a-terror-dog",
+       "lines": [
+        "Kill a Terror Dog."
+       ]
+      },
+      {
+       "key": "complete-a-game-of-trouble-brewing",
+       "lines": [
+        "Complete a game of trouble brewing."
+       ]
+      },
+      {
+       "key": "board-the-swampy-boat-at-the-hollows",
+       "lines": [
+        "Board the Swampy boat at the Hollows."
+       ]
+      },
+      {
+       "key": "make-a-batch-of-steel-cannonballs-at-the-port-ph",
+       "lines": [
+        "Make a batch of steel cannonballs at the Port Phasmatys",
+        "furnace."
+       ]
+      },
+      {
+       "key": "kill-a-fever-spider-on-braindeath-island",
+       "lines": [
+        "Kill a Fever Spider on Braindeath Island."
+       ]
+      },
+      {
+       "key": "use-an-ectophial-to-return-to-port-phasmatys",
+       "lines": [
+        "Use an ectophial to return to Port Phasmatys."
+       ]
+      },
+      {
+       "key": "mix-a-guthix-balance-potion-while-in-morytania",
+       "lines": [
+        "Mix a Guthix Balance potion while in Morytania."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Morytania achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Morytania legs for you. They've now got 5 daily slime pit teleports and a built-in ghostspeak amulet. Robin in Port Phasmatys will exchange some bonemeal for bones for you, and you'll"
+      },
+      {
+       "npc": "receive a 5% increase in Slayer XP when on assignment in the Slayer Tower too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6317,
+     "completeVarbit": 4489,
+     "rewardVarbit": 4529,
+     "rewardItems": [
+      13114,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "enter-the-kharyrll-portal-in-your-poh",
+       "lines": [
+        "Enter the Kharyrll portal in your POH."
+       ]
+      },
+      {
+       "key": "climb-the-advanced-spike-chain-within-slayer-tow",
+       "lines": [
+        "Climb the advanced spike chain within Slayer Tower."
+       ]
+      },
+      {
+       "key": "harvest-some-watermelon-from-the-allotment-patch",
+       "lines": [
+        "Harvest some Watermelon from the Allotment patch on",
+        "Harmony Island."
+       ]
+      },
+      {
+       "key": "chop-and-burn-some-mahogany-logs-on-mos-le-harml",
+       "lines": [
+        "Chop and burn some mahogany logs on Mos Le'Harmless."
+       ]
+      },
+      {
+       "key": "complete-a-temple-trek-with-a-hard-companion",
+       "lines": [
+        "Complete a temple trek with a hard companion."
+       ]
+      },
+      {
+       "key": "kill-a-cave-horror",
+       "lines": [
+        "Kill a Cave Horror."
+       ]
+      },
+      {
+       "key": "harvest-some-bittercap-mushrooms-from-the-patch",
+       "lines": [
+        "Harvest some Bittercap Mushrooms from the patch in",
+        "Canifis."
+       ]
+      },
+      {
+       "key": "pray-at-the-altar-of-nature-with-piety-activated",
+       "lines": [
+        "Pray at the Altar of Nature with Piety activated."
+       ]
+      },
+      {
+       "key": "use-the-shortcut-to-get-to-the-bridge-over-the-s",
+       "lines": [
+        "Use the shortcut to get to the bridge over the Salve."
+       ]
+      },
+      {
+       "key": "mine-some-mithril-ore-in-the-abandoned-mine",
+       "lines": [
+        "Mine some Mithril ore in the Abandoned Mine."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Morytania achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Morytania legs for you. You can now pick double Mort Myre Fungi in the swamp, get more experience from burning shades, receive more runes from Barrows, Robin will exchange more"
+      },
+      {
+       "npc": "bonemeal for bones each day and you'll receive a 7.5% increase in Slayer XP when on assignment in the Slayer Tower. The disciples at the Ectofuntus have something for you too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6318,
+     "completeVarbit": 4490,
+     "rewardVarbit": 4530,
+     "rewardItems": [
+      13115,
+      13148
+     ],
+     "journalBefore": [
+      "<str>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "catch-a-shark-in-burgh-de-rott-with-your-bare-ha",
+       "lines": [
+        "Catch a shark in Burgh de Rott with your bare hands."
+       ]
+      },
+      {
+       "key": "cremate-any-shade-remains-on-a-magic-or-redwood",
+       "lines": [
+        "Cremate any Shade remains on a Magic or Redwood pyre."
+       ]
+      },
+      {
+       "key": "fertilize-the-morytania-herb-patch-using-lunar-m",
+       "lines": [
+        "Fertilize the Morytania herb patch using Lunar Magic."
+       ]
+      },
+      {
+       "key": "craft-a-black-dragonhide-body-in-canifis-bank",
+       "lines": [
+        "Craft a Black dragonhide body in Canifis bank."
+       ]
+      },
+      {
+       "key": "kill-an-abyssal-demon-in-the-slayer-tower",
+       "lines": [
+        "Kill an Abyssal demon in the Slayer Tower."
+       ]
+      },
+      {
+       "key": "loot-the-barrows-chest-while-wearing-any-complet",
+       "lines": [
+        "Loot the Barrows chest while wearing any complete",
+        "barrows set."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Morytania achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in Morytania! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Morytania legs for you. Robin will exchange even more bonemeal for bones, you'll receive a 10% increase in Slayer XP when on assignment in the Slayer Tower, there's a new herb farming patch on"
+      },
+      {
+       "npc": "Harmony Island, you'll receive 50% more experience when cremating shade remains and the experience provided by the Bonecrusher has been increased too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "varrock",
+   "name": "Varrock",
+   "index": 8,
+   "header": "Varrock Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4455,
+   "npc": "Toby",
+   "npcAt": "Toby behind the general store in Varrock",
+   "npcAtUnverified": true,
+   "itemNoun": "Varrock armour",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6319,
+     "completeVarbit": 4479,
+     "rewardVarbit": 4519,
+     "rewardItems": [
+      13104,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "browse-thessalia-s-store",
+       "lines": [
+        "Browse Thessalia's store."
+       ]
+      },
+      {
+       "key": "have-aubury-teleport-you-to-the-essence-mine",
+       "lines": [
+        "Have Aubury teleport you to the Essence mine."
+       ]
+      },
+      {
+       "key": "mine-some-iron-in-the-south-east-mining-patch-ne",
+       "lines": [
+        "Mine some Iron in the south east mining patch near",
+        "Varrock."
+       ]
+      },
+      {
+       "key": "make-a-normal-plank-at-the-sawmill",
+       "lines": [
+        "Make a normal plank at the Sawmill."
+       ]
+      },
+      {
+       "key": "enter-the-second-level-of-the-stronghold-of-secu",
+       "lines": [
+        "Enter the second level of the Stronghold of Security."
+       ]
+      },
+      {
+       "key": "jump-over-the-fence-south-of-varrock",
+       "lines": [
+        "Jump over the fence south of Varrock."
+       ]
+      },
+      {
+       "key": "chop-down-a-dying-tree-in-the-lumber-yard",
+       "lines": [
+        "Chop down a dying tree in the Lumber Yard."
+       ]
+      },
+      {
+       "key": "buy-a-newspaper",
+       "lines": [
+        "Buy a newspaper."
+       ]
+      },
+      {
+       "key": "give-a-dog-a-bone",
+       "lines": [
+        "Give a dog a bone!"
+       ]
+      },
+      {
+       "key": "spin-a-bowl-on-the-pottery-wheel-and-fire-it-in",
+       "lines": [
+        "Spin a bowl on the pottery wheel and fire it in the oven in",
+        "Barb Village."
+       ]
+      },
+      {
+       "key": "speak-to-haig-halen-after-obtaining-at-least-50",
+       "lines": [
+        "Speak to Haig Halen after obtaining at least 50 Kudos."
+       ]
+      },
+      {
+       "key": "craft-some-earth-runes-from-essence",
+       "lines": [
+        "Craft some Earth runes from Essence."
+       ]
+      },
+      {
+       "key": "catch-some-trout-in-the-river-lum-at-barbarian-v",
+       "lines": [
+        "Catch some trout in the River Lum at Barbarian Village."
+       ]
+      },
+      {
+       "key": "steal-from-the-tea-stall-in-varrock",
+       "lines": [
+        "Steal from the Tea stall in Varrock."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Varrock Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This armour is a symbol of your exploration of Varrock. You now have a 10% chance of mining two ores at once up to coal and a 10% chance of smelting 2 bars at once up to steel, when using the Edgeville"
+      },
+      {
+       "npc": "furnace. Zaff will stock 15 Battlestaves per day."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6320,
+     "completeVarbit": 4480,
+     "rewardVarbit": 4520,
+     "rewardItems": [
+      13105,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "have-the-apothecary-in-varrock-make-you-a-streng",
+       "lines": [
+        "Have the Apothecary in Varrock make you a strength",
+        "potion."
+       ]
+      },
+      {
+       "key": "enter-the-champions-guild",
+       "lines": [
+        "Enter the Champions' Guild."
+       ]
+      },
+      {
+       "key": "select-a-colour-for-your-kitten",
+       "lines": [
+        "Select a colour for your kitten."
+       ]
+      },
+      {
+       "key": "use-the-spirit-tree-north-of-varrock",
+       "lines": [
+        "Use the spirit tree north of Varrock."
+       ]
+      },
+      {
+       "key": "perform-the-4-emotes-from-the-stronghold-of-secu",
+       "lines": [
+        "Perform the 4 emotes from the Stronghold of Security."
+       ]
+      },
+      {
+       "key": "enter-the-tolna-dungeon-after-completing-a-soul",
+       "lines": [
+        "Enter the Tolna dungeon after completing A Soul's Bane."
+       ]
+      },
+      {
+       "key": "teleport-to-the-digsite-using-a-digsite-pendant",
+       "lines": [
+        "Teleport to the digsite using a Digsite pendant."
+       ]
+      },
+      {
+       "key": "cast-the-teleport-to-varrock-spell",
+       "lines": [
+        "Cast the teleport to Varrock spell."
+       ]
+      },
+      {
+       "key": "get-a-slayer-task-from-vannaka",
+       "lines": [
+        "Get a Slayer task from Vannaka."
+       ]
+      },
+      {
+       "key": "make-20-mahogany-planks-in-one-go",
+       "lines": [
+        "Make 20 Mahogany Planks in one go."
+       ]
+      },
+      {
+       "key": "pick-a-white-tree-fruit",
+       "lines": [
+        "Pick a White tree fruit."
+       ]
+      },
+      {
+       "key": "use-the-balloon-to-travel-from-varrock",
+       "lines": [
+        "Use the balloon to travel from Varrock."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-varrock-agility-course",
+       "lines": [
+        "Complete a lap of the Varrock Agility course."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Varrock achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Varrock armour for you. You now have a 10% chance of mining two ores at once up to mithril and a 10% chance of smelting 2 bars at once up to mithril, when using the Edgeville furnace. Zaff will"
+      },
+      {
+       "npc": "stock 30 Battlestaves per day."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6321,
+     "completeVarbit": 4481,
+     "rewardVarbit": 4521,
+     "rewardItems": [
+      13106,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "trade-furs-with-the-fancy-dress-seller-for-a-spo",
+       "lines": [
+        "Trade furs with the Fancy Dress Seller for a spottier cape",
+        "and equip it."
+       ]
+      },
+      {
+       "key": "speak-to-orlando-smith-when-you-have-achieved-15",
+       "lines": [
+        "Speak to Orlando Smith when you have achieved 153",
+        "Kudos."
+       ]
+      },
+      {
+       "key": "make-a-waka-canoe-near-edgeville",
+       "lines": [
+        "Make a Waka Canoe near Edgeville."
+       ]
+      },
+      {
+       "key": "teleport-to-paddewwa",
+       "lines": [
+        "Teleport to Paddewwa."
+       ]
+      },
+      {
+       "key": "teleport-to-barbarian-village-with-a-skull-scept",
+       "lines": [
+        "Teleport to Barbarian Village with a skull sceptre."
+       ]
+      },
+      {
+       "key": "chop-some-yew-logs-in-varrock-and-burn-them-at-t",
+       "lines": [
+        "Chop some yew logs in Varrock and burn them at the top of",
+        "the Varrock church."
+       ]
+      },
+      {
+       "key": "have-the-varrock-estate-agent-decorate-your-hous",
+       "lines": [
+        "Have the Varrock estate agent decorate your house with",
+        "Fancy Stone."
+       ]
+      },
+      {
+       "key": "collect-at-least-2-yew-roots-from-the-tree-patch",
+       "lines": [
+        "Collect at least 2 yew roots from the Tree patch in Varrock",
+        "Palace."
+       ]
+      },
+      {
+       "key": "pray-at-the-altar-in-varrock-palace-with-smite-a",
+       "lines": [
+        "Pray at the altar in Varrock palace with Smite active."
+       ]
+      },
+      {
+       "key": "squeeze-through-an-obstacle-pipe-in-edgeville-du",
+       "lines": [
+        "Squeeze through an obstacle pipe in Edgeville dungeon."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Varrock achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Varrock armour for you. You now have a 10% chance of mining two ores at once up to adamant and a 10% chance of smelting 2 bars at once up to adamant, when using the Edgeville furnace. Zaff"
+      },
+      {
+       "npc": "will stock 60 Battlestaves per day and you can now access the bank at the Cooking guild."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6322,
+     "completeVarbit": 4482,
+     "rewardVarbit": 4522,
+     "rewardItems": [
+      13107,
+      13148
+     ],
+     "journalBefore": [
+      "<str>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "create-a-super-combat-potion-in-varrock-west-ban",
+       "lines": [
+        "Create a super combat potion in Varrock west bank."
+       ]
+      },
+      {
+       "key": "use-lunar-magic-to-make-20-mahogany-planks-at-th",
+       "lines": [
+        "Use Lunar magic to make 20 mahogany planks at the",
+        "Lumberyard."
+       ]
+      },
+      {
+       "key": "bake-a-summer-pie-in-the-cooking-guild",
+       "lines": [
+        "Bake a summer pie in the Cooking Guild."
+       ]
+      },
+      {
+       "key": "smith-and-fletch-ten-rune-darts-within-varrock",
+       "lines": [
+        "Smith and fletch ten rune darts within Varrock."
+       ]
+      },
+      {
+       "key": "craft-100-or-more-earth-runes-simultaneously-fro",
+       "lines": [
+        "Craft 100 or more earth runes simultaneously from",
+        "Essence without the use of Extracts."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Varrock achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in the Varrock area! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Varrock armour for you. You now have a 10% chance of mining two ores at once up to runite and a 10% chance of smelting 2 bars at once up to runite, when using the Edgeville furnace. Zaff will"
+      },
+      {
+       "npc": "stock 120 Battlestaves per day and the plate functions as a Prospector top."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "wilderness",
+   "name": "Wilderness",
+   "index": 9,
+   "header": "Wilderness Area Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4457,
+   "npc": "Lesser Fanatic",
+   "npcAt": "the Lesser Fanatic east of the Edgeville jailhouse",
+   "npcAtUnverified": true,
+   "itemNoun": "Wilderness sword",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6323,
+     "completeVarbit": 4466,
+     "rewardVarbit": 4507,
+     "rewardItems": [
+      13108,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "cast-low-alchemy-at-the-fountain-of-rune",
+       "lines": [
+        "Cast Low Alchemy at the Fountain of Rune."
+       ]
+      },
+      {
+       "key": "enter-the-wilderness-from-the-ardougne-or-edgevi",
+       "lines": [
+        "Enter the Wilderness from the Ardougne or Edgeville lever."
+       ]
+      },
+      {
+       "key": "pray-at-the-chaos-altar-in-western-wilderness",
+       "lines": [
+        "Pray at the Chaos Altar in Western Wilderness."
+       ]
+      },
+      {
+       "key": "enter-the-chaos-runecrafting-temple",
+       "lines": [
+        "Enter the Chaos Runecrafting temple."
+       ]
+      },
+      {
+       "key": "kill-a-mammoth-in-the-wilderness",
+       "lines": [
+        "Kill a Mammoth in the Wilderness."
+       ]
+      },
+      {
+       "key": "kill-an-earth-warrior-in-the-wilderness-beneath",
+       "lines": [
+        "Kill an Earth Warrior in the Wilderness beneath Edgeville."
+       ]
+      },
+      {
+       "key": "restore-some-prayer-points-at-the-demonic-ruins",
+       "lines": [
+        "Restore some prayer points at the demonic ruins."
+       ]
+      },
+      {
+       "key": "enter-the-king-black-dragon-s-lair",
+       "lines": [
+        "Enter the King Black Dragon's lair."
+       ]
+      },
+      {
+       "key": "collect-5-red-spiders-eggs-from-the-wilderness",
+       "lines": [
+        "Collect 5 Red spiders' eggs from the Wilderness."
+       ]
+      },
+      {
+       "key": "mine-some-iron-ore-in-the-wilderness",
+       "lines": [
+        "Mine some Iron ore in the Wilderness."
+       ]
+      },
+      {
+       "key": "have-the-mage-of-zamorak-teleport-you-to-the-aby",
+       "lines": [
+        "Have the Mage of Zamorak teleport you to the Abyss."
+       ]
+      },
+      {
+       "key": "equip-any-team-cape-in-the-wilderness",
+       "lines": [
+        "Equip any team cape in the Wilderness."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Wilderness Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This sword is a symbol of your exploration of the Wilderness. Speak to Lundail at the Mage Arena every day to receive 40 free runes and you can teleport to either Edgeville or Ardougne from the Wilderness lever."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your sword, come back to me to reclaim it."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6324,
+     "completeVarbit": 4467,
+     "rewardVarbit": 4508,
+     "rewardItems": [
+      13109,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "mine-some-mithril-ore-in-the-wilderness",
+       "lines": [
+        "Mine some Mithril ore in the wilderness."
+       ]
+      },
+      {
+       "key": "chop-some-yew-logs-from-a-fallen-ent",
+       "lines": [
+        "Chop some yew logs from a fallen Ent."
+       ]
+      },
+      {
+       "key": "enter-the-wilderness-godwars-dungeon",
+       "lines": [
+        "Enter the Wilderness Godwars Dungeon."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-wilderness-agility-course",
+       "lines": [
+        "Complete a lap of the Wilderness Agility course."
+       ]
+      },
+      {
+       "key": "kill-a-green-dragon",
+       "lines": [
+        "Kill a Green Dragon."
+       ]
+      },
+      {
+       "key": "kill-an-ankou-in-the-wilderness",
+       "lines": [
+        "Kill an Ankou in the Wilderness."
+       ]
+      },
+      {
+       "key": "charge-an-earth-orb",
+       "lines": [
+        "Charge an Earth Orb."
+       ]
+      },
+      {
+       "key": "kill-a-bloodveld-in-the-wilderness-godwars-dunge",
+       "lines": [
+        "Kill a Bloodveld in the Wilderness Godwars Dungeon."
+       ]
+      },
+      {
+       "key": "talk-to-the-emblem-trader-in-edgeville-about-emb",
+       "lines": [
+        "Talk to the Emblem Trader in Edgeville about emblems."
+       ]
+      },
+      {
+       "key": "smith-a-golden-helmet-in-the-resource-area",
+       "lines": [
+        "Smith a Golden helmet in the Resource Area."
+       ]
+      },
+      {
+       "key": "open-the-muddy-chest-in-the-lava-maze",
+       "lines": [
+        "Open the Muddy Chest in the lava maze."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Wilderness Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Wilderness Sword for you. Mandrith will give you a 20% discount off entry to the Resource Area, you'll cut Ents faster, you can access a shortcut in the deep Wilderness dungeon. You'll also"
+      },
+      {
+       "npc": "receive increase rewards from the chests in Rogues' Castle, and you can also now own 4 ecumenical keys and receive 80 runes a day from Lundail."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6325,
+     "completeVarbit": 4468,
+     "rewardVarbit": 4509,
+     "rewardItems": [
+      13110,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "cast-one-of-the-3-god-spells-against-another-pla",
+       "lines": [
+        "Cast one of the 3 God spells against another player in the",
+        "Wilderness."
+       ]
+      },
+      {
+       "key": "charge-an-air-orb",
+       "lines": [
+        "Charge an Air Orb."
+       ]
+      },
+      {
+       "key": "catch-a-black-salamander-in-the-wilderness",
+       "lines": [
+        "Catch a Black Salamander in the Wilderness."
+       ]
+      },
+      {
+       "key": "smith-an-adamant-scimitar-in-the-resource-area",
+       "lines": [
+        "Smith an Adamant scimitar in the Resource Area."
+       ]
+      },
+      {
+       "key": "kill-a-lava-dragon",
+       "lines": [
+        "Kill a Lava Dragon."
+       ]
+      },
+      {
+       "key": "kill-the-chaos-elemental",
+       "lines": [
+        "Kill the Chaos Elemental."
+       ]
+      },
+      {
+       "key": "kill-the-crazy-arc-chaos-fanatic-scorpia",
+       "lines": [
+        "Kill the Crazy Arc. Chaos Fanatic & Scorpia."
+       ]
+      },
+      {
+       "key": "take-the-agility-shortcut-from-trollheim-into-th",
+       "lines": [
+        "Take the agility shortcut from Trollheim into the",
+        "Wilderness."
+       ]
+      },
+      {
+       "key": "kill-a-spiritual-warrior-in-the-wilderness-godwa",
+       "lines": [
+        "Kill a Spiritual warrior in the Wilderness Godwars Dungeon."
+       ]
+      },
+      {
+       "key": "fish-some-raw-lava-eel-in-the-wilderness",
+       "lines": [
+        "Fish some Raw Lava Eel in the Wilderness."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Wilderness Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Wilderness Sword for you. It can now teleport you to the Fountain of Rune once per day."
+      },
+      {
+       "npc": "You'll also get 50% more lava shards when grinding scales and even cheaper access to the Resource Area."
+      },
+      {
+       "npc": "You can now own 5 ecumenical keys, and Lundail will give you 120 free runes each day."
+      },
+      {
+       "npc": "You can also telegrab Wine of Zamorak from spanws in the Wilderness in banknote for, and control which Obelisk you want to travel to."
+      },
+      {
+       "npc": "You'll also receive further increased rewards from the chests in Rogues' Castle. Finally, I'll be willing to buy ecumenical keys off you for 61,500 coins each."
+      },
+      {
+       "npc": "Finally, you can now access the lairs of Artio, Spindel and Calvar'ion, three fearsome Wilderness bosses, without requiring a Slayer assignment."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6326,
+     "completeVarbit": 4469,
+     "rewardVarbit": 4510,
+     "rewardItems": [
+      13111,
+      13148
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "kill-callisto-venenatis-vet-ion",
+       "lines": [
+        "Kill Callisto, Venenatis & Vet'ion."
+       ]
+      },
+      {
+       "key": "teleport-to-ghorrock",
+       "lines": [
+        "Teleport to Ghorrock."
+       ]
+      },
+      {
+       "key": "fish-and-cook-a-dark-crab-in-the-resource-area",
+       "lines": [
+        "Fish and Cook a Dark Crab in the Resource Area."
+       ]
+      },
+      {
+       "key": "smith-a-rune-scimitar-from-scratch-in-the-resour",
+       "lines": [
+        "Smith a rune scimitar from scratch in the Resource Area."
+       ]
+      },
+      {
+       "key": "steal-from-the-rogues-chest",
+       "lines": [
+        "Steal from the Rogues' chest."
+       ]
+      },
+      {
+       "key": "slay-a-spiritual-mage-inside-the-wilderness-godw",
+       "lines": [
+        "Slay a spiritual mage inside the wilderness Godwars",
+        "Dungeon."
+       ]
+      },
+      {
+       "key": "cut-and-burn-some-magic-logs-in-the-resource-are",
+       "lines": [
+        "Cut and burn some magic logs in the Resource Area."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Wilderness achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in the Wilderness! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Wilderness Sword for you. Access to the Resource Area is now free and the sword will now give you unlimited teleports to the Fountain of Rune. All dragon bone drops in the Wilderness are now"
+      },
+      {
+       "npc": "noted and Lundail will give you 200 free runes per day and the rate at which you catch Dark Crabs has been increased."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "western",
+   "name": "Western Provinces",
+   "index": 10,
+   "header": "Western Area Tasks",
+   "afterHeader": [
+    " "
+   ],
+   "startedVarbit": 4456,
+   "npc": "Elder Gnome child",
+   "npcAt": "the Elder Gnome Child north at the Gnome Stronghold",
+   "itemNoun": "Western banner",
+   "tiers": {
+    "easy": {
+     "countVarbit": 6327,
+     "completeVarbit": 4471,
+     "rewardVarbit": 4511,
+     "rewardItems": [
+      13141,
+      13145
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "catch-a-copper-longtail",
+       "lines": [
+        "Catch a Copper Longtail."
+       ]
+      },
+      {
+       "key": "complete-a-novice-game-of-pest-control",
+       "lines": [
+        "Complete a novice game of Pest Control."
+       ]
+      },
+      {
+       "key": "mine-some-iron-ore-near-piscatoris",
+       "lines": [
+        "Mine some Iron Ore near Piscatoris."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-gnome-agility-course",
+       "lines": [
+        "Complete a lap of the Gnome agility course."
+       ]
+      },
+      {
+       "key": "score-a-goal-in-a-gnomeball-match",
+       "lines": [
+        "Score a goal in a Gnomeball match."
+       ]
+      },
+      {
+       "key": "claim-any-chompy-bird-hat-from-rantz",
+       "lines": [
+        "Claim any Chompy bird hat from Rantz."
+       ]
+      },
+      {
+       "key": "teleport-to-pest-control-using-the-minigame-tele",
+       "lines": [
+        "Teleport to Pest Control using the Minigame teleports."
+       ]
+      },
+      {
+       "key": "collect-a-swamp-toad-at-the-gnome-stronghold",
+       "lines": [
+        "Collect a swamp toad at the Gnome Stronghold."
+       ]
+      },
+      {
+       "key": "have-brimstail-teleport-you-to-the-essence-mine",
+       "lines": [
+        "Have Brimstail teleport you to the Essence Mine."
+       ]
+      },
+      {
+       "key": "fletch-an-oak-shortbow-in-the-gnome-stronghold",
+       "lines": [
+        "Fletch an Oak Shortbow in the Gnome Stronghold."
+       ]
+      },
+      {
+       "key": "kill-a-terrorbird-in-the-terrorbird-enclosure",
+       "lines": [
+        "Kill a Terrorbird in the Terrorbird enclosure."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Western Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This banner is a symbol of your exploration of the Western Provinces. You now have a 25% chance of 2 Chompy birds appearing when hunting and Rantz will provide you with 25 free ogre arrows every day."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your banner, come back to me to reclaim it."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 6328,
+     "completeVarbit": 4472,
+     "rewardVarbit": 4512,
+     "rewardItems": [
+      13142,
+      13146
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "take-the-agility-shortcut-from-the-grand-tree-to",
+       "lines": [
+        "Take the agility shortcut from the Grand Tree to Otto's",
+        "Grotto."
+       ]
+      },
+      {
+       "key": "travel-to-the-gnome-stronghold-by-spirit-tree",
+       "lines": [
+        "Travel to the Gnome Stronghold by Spirit Tree."
+       ]
+      },
+      {
+       "key": "trap-a-spined-larupia",
+       "lines": [
+        "Trap a Spined Larupia."
+       ]
+      },
+      {
+       "key": "fish-some-bass-on-ape-atoll",
+       "lines": [
+        "Fish some Bass on Ape Atoll."
+       ]
+      },
+      {
+       "key": "chop-and-burn-some-teak-logs-on-ape-atoll",
+       "lines": [
+        "Chop and burn some teak logs on Ape Atoll."
+       ]
+      },
+      {
+       "key": "complete-an-intermediate-game-of-pest-control",
+       "lines": [
+        "Complete an intermediate game of Pest Control."
+       ]
+      },
+      {
+       "key": "travel-to-the-feldip-hills-by-gnome-glider",
+       "lines": [
+        "Travel to the Feldip Hills by Gnome Glider."
+       ]
+      },
+      {
+       "key": "claim-a-chompy-bird-hat-from-rantz-after-registe",
+       "lines": [
+        "Claim a Chompy bird hat from Rantz after registering at",
+        "least 125 kills."
+       ]
+      },
+      {
+       "key": "travel-from-eagles-peak-to-the-feldip-hills-by-e",
+       "lines": [
+        "Travel from Eagles' Peak to the Feldip Hills by Eagle."
+       ]
+      },
+      {
+       "key": "make-a-chocolate-bomb-at-the-grand-tree",
+       "lines": [
+        "Make a Chocolate Bomb at the Grand Tree."
+       ]
+      },
+      {
+       "key": "complete-a-delivery-for-the-gnome-restaurant",
+       "lines": [
+        "Complete a delivery for the Gnome Restaurant."
+       ]
+      },
+      {
+       "key": "turn-your-small-crystal-seed-into-a-crystal-saw",
+       "lines": [
+        "Turn your small crystal seed into a Crystal saw."
+       ]
+      },
+      {
+       "key": "mine-some-gold-ore-underneath-the-grand-tree",
+       "lines": [
+        "Mine some Gold ore underneath the Grand Tree."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Western achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Western banner for you. The Crystal saw will now last for twice as long before reverting to seed, you now have a 50% chance of 2 Chompy birds appearing when hunting and Rantz will"
+      },
+      {
+       "npc": "provide you with 50 free ogre arrows every day."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 6329,
+     "completeVarbit": 4473,
+     "rewardVarbit": 4513,
+     "rewardItems": [
+      13143,
+      13147
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [
+      " "
+     ],
+     "tasks": [
+      {
+       "key": "kill-an-elf-with-a-crystal-bow",
+       "lines": [
+        "Kill an Elf with a Crystal bow."
+       ]
+      },
+      {
+       "key": "catch-and-cook-a-monkfish-in-piscatoris",
+       "lines": [
+        "Catch and cook a Monkfish in Piscatoris."
+       ]
+      },
+      {
+       "key": "complete-a-veteran-game-of-pest-control",
+       "lines": [
+        "Complete a Veteran game of Pest Control."
+       ]
+      },
+      {
+       "key": "catch-a-dashing-kebbit",
+       "lines": [
+        "Catch a Dashing Kebbit."
+       ]
+      },
+      {
+       "key": "complete-a-lap-of-the-ape-atoll-agility-course",
+       "lines": [
+        "Complete a lap of the Ape Atoll agility course."
+       ]
+      },
+      {
+       "key": "chop-and-burn-some-mahogany-logs-on-ape-atoll",
+       "lines": [
+        "Chop and burn some Mahogany logs on Ape Atoll."
+       ]
+      },
+      {
+       "key": "mine-some-adamantite-ore-in-tirannwn",
+       "lines": [
+        "Mine some Adamantite ore in Tirannwn."
+       ]
+      },
+      {
+       "key": "check-the-health-of-your-palm-tree-in-lletya",
+       "lines": [
+        "Check the health of your Palm tree in Lletya."
+       ]
+      },
+      {
+       "key": "claim-a-chompy-bird-hat-from-rantz-after-registe-2",
+       "lines": [
+        "Claim a Chompy bird hat from Rantz after registering at",
+        "least 300 kills."
+       ]
+      },
+      {
+       "key": "build-an-isafdar-painting-in-your-poh-quest-hall",
+       "lines": [
+        "Build an Isafdar painting in your POH Quest hall."
+       ]
+      },
+      {
+       "key": "kill-zulrah",
+       "lines": [
+        "Kill Zulrah."
+       ]
+      },
+      {
+       "key": "teleport-to-ape-atoll",
+       "lines": [
+        "Teleport to Ape Atoll."
+       ]
+      },
+      {
+       "key": "pickpocket-a-gnome",
+       "lines": [
+        "Pickpocket a Gnome."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Western achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Western banner for you. Ilfeen of the Elves can now enchant your crystal seed into a Halberd, a locked door under Ape Atoll has been unlocked, The Void Knights can now upgrade your"
+      },
+      {
+       "npc": "Void armour, the Hunter master in the Feldip hills will allow you to hunt in his private hunting ground, teleport crystals can now hold 5 charges, Rantz will provide you with 100 ogre arrows every day and the banner will"
+      },
+      {
+       "npc": "teleport you to Piscatoris once per day."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 6330,
+     "completeVarbit": 4474,
+     "rewardVarbit": 4514,
+     "rewardItems": [
+      13144,
+      13148
+     ],
+     "journalBefore": [
+      "<col=000000>",
+      " "
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "fletch-a-magic-longbow-in-tirannwn",
+       "lines": [
+        "Fletch a Magic Longbow in Tirannwn."
+       ]
+      },
+      {
+       "key": "kill-the-thermonuclear-smoke-devil-col-800000-do",
+       "lines": [
+        "Kill the Thermonuclear Smoke devil <col=800000>(Does not require task)<col=000000>."
+       ]
+      },
+      {
+       "key": "have-prissy-scilla-protect-your-magic-tree",
+       "lines": [
+        "Have Prissy Scilla protect your Magic tree."
+       ]
+      },
+      {
+       "key": "use-the-elven-overpass-advanced-cliffside-shortc",
+       "lines": [
+        "Use the Elven overpass advanced cliffside shortcut."
+       ]
+      },
+      {
+       "key": "equip-any-complete-void-set",
+       "lines": [
+        "Equip any complete void set."
+       ]
+      },
+      {
+       "key": "claim-a-chompy-bird-hat-from-rantz-after-registe-3",
+       "lines": [
+        "Claim a Chompy bird hat from Rantz after registering at",
+        "least 1000 kills."
+       ]
+      },
+      {
+       "key": "pickpocket-an-elf",
+       "lines": [
+        "Pickpocket an Elf."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Western achievement diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in the Western Provinces! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Western banner for you. Two Chompy birds will now always appear and they have a chance of dropping a pet, [Nieve/Steve] will reward your slayer assignments with more points and Rantz will provide"
+      },
+      {
+       "npc": "you with 150 free ogre arrows every day. The banner will teleport you to Piscatoris as much as you desire and you may resurrect once per day while battling Zulrah."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "key": "kourend",
+   "name": "Kourend & Kebos",
+   "index": 11,
+   "header": "Kourend & Kebos Tasks",
+   "afterHeader": [
+    ""
+   ],
+   "openSuffix": "</col>",
+   "startedVarbit": 7924,
+   "npc": "Elise",
+   "npcAt": "Elise in the courtyard of Kourend Castle",
+   "npcAtUnverified": true,
+   "itemNoun": "Rada's blessing",
+   "tiers": {
+    "easy": {
+     "countVarbit": 7933,
+     "completeVarbit": 7925,
+     "rewardVarbit": 7929,
+     "rewardItems": [
+      22941,
+      13145
+     ],
+     "journalBefore": [
+      ""
+     ],
+     "journalAfter": [
+      ""
+     ],
+     "tasks": [
+      {
+       "key": "mine-some-iron-at-the-mount-karuulm-mine",
+       "lines": [
+        "Mine some Iron at the Mount Karuulm mine."
+       ]
+      },
+      {
+       "key": "kill-a-sandcrab",
+       "lines": [
+        "Kill a Sandcrab."
+       ]
+      },
+      {
+       "key": "hand-in-a-book-at-the-arceuus-library",
+       "lines": [
+        "Hand in a book at the Arceuus Library."
+       ]
+      },
+      {
+       "key": "steal-from-a-hosidius-food-stall",
+       "lines": [
+        "Steal from a Hosidius Food Stall."
+       ]
+      },
+      {
+       "key": "browse-the-warrens-general-store",
+       "lines": [
+        "Browse the Warrens General Store."
+       ]
+      },
+      {
+       "key": "take-a-boat-to-land-s-end",
+       "lines": [
+        "Take a boat to Land's End."
+       ]
+      },
+      {
+       "key": "pray-at-the-altar-in-kourend-castle",
+       "lines": [
+        "Pray at the Altar in Kourend Castle."
+       ]
+      },
+      {
+       "key": "dig-up-some-saltpetre",
+       "lines": [
+        "Dig up some Saltpetre."
+       ]
+      },
+      {
+       "key": "enter-your-player-owned-house-from-hosidius",
+       "lines": [
+        "Enter your Player Owned House from Hosidius."
+       ]
+      },
+      {
+       "key": "do-a-lap-of-either-tier-of-the-shayzien-agility",
+       "lines": [
+        "Do a lap of either tier of the Shayzien Agility Course."
+       ]
+      },
+      {
+       "key": "create-a-strength-potion-in-the-lovakengj-pub",
+       "lines": [
+        "Create a Strength potion in the Lovakengj Pub."
+       ]
+      },
+      {
+       "key": "fish-a-trout-from-the-river-molch",
+       "lines": [
+        "Fish a Trout from the River Molch."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the easy tasks in my Kourend & Kebos Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "This blessing is a symbol of your exploration of Great Kourend and the Kebos Lowlands. You now have a 2% chance of catching two fish at once while using the blessing. It also provides 3 daily teleports to the"
+      },
+      {
+       "npc": "Kourend Woodland. On top of that, you can access Crabclaw Island for half the price, lizardmen are more likely to drop a Xeric's talisman, the people of Hosidius will protect your farming patches for free, you'll be able"
+      },
+      {
+       "npc": "to use the Hosidius Kitchens and Eodan in the Forthos Dungeon will now tan hide for you at 8 times the normal price down from 10 times."
+      },
+      {
+       "player": "Wow, thanks!"
+      },
+      {
+       "npc": "If you ever lose your blessing, come back to me to reclaim it."
+      }
+     ]
+    },
+    "medium": {
+     "countVarbit": 7934,
+     "completeVarbit": 7926,
+     "rewardVarbit": 7930,
+     "rewardItems": [
+      22943,
+      13146
+     ],
+     "journalBefore": [
+      ""
+     ],
+     "journalAfter": [
+      ""
+     ],
+     "tasks": [
+      {
+       "key": "travel-to-the-fairy-ring-south-of-mount-karuulm",
+       "lines": [
+        "Travel to the Fairy Ring south of Mount Karuulm."
+       ]
+      },
+      {
+       "key": "kill-a-lizardman",
+       "lines": [
+        "Kill a Lizardman."
+       ]
+      },
+      {
+       "key": "use-kharedst-s-memoirs-to-teleport-to-all-five-c",
+       "lines": [
+        "Use Kharedst's memoirs to teleport to all five cities in",
+        "Great Kourend."
+       ]
+      },
+      {
+       "key": "mine-some-volcanic-sulphur",
+       "lines": [
+        "Mine some Volcanic sulphur."
+       ]
+      },
+      {
+       "key": "enter-the-farming-guild",
+       "lines": [
+        "Enter the Farming Guild."
+       ]
+      },
+      {
+       "key": "switch-to-the-necromancy-spellbook-at-tyss",
+       "lines": [
+        "Switch to the Necromancy Spellbook at Tyss."
+       ]
+      },
+      {
+       "key": "repair-a-piscarilius-crane",
+       "lines": [
+        "Repair a Piscarilius crane."
+       ]
+      },
+      {
+       "key": "deliver-some-intelligence-to-captain-ginea",
+       "lines": [
+        "Deliver some intelligence to Captain Ginea."
+       ]
+      },
+      {
+       "key": "catch-a-bluegill-on-molch-island",
+       "lines": [
+        "Catch a Bluegill on Molch Island."
+       ]
+      },
+      {
+       "key": "use-the-boulder-leap-in-the-arceuus-essence-mine",
+       "lines": [
+        "Use the boulder leap in the Arceuus essence mine."
+       ]
+      },
+      {
+       "key": "subdue-the-wintertodt",
+       "lines": [
+        "Subdue the Wintertodt."
+       ]
+      },
+      {
+       "key": "catch-a-chinchompa-in-the-kourend-woodland",
+       "lines": [
+        "Catch a Chinchompa in the Kourend Woodland."
+       ]
+      },
+      {
+       "key": "chop-some-mahogany-logs-north-of-the-farming-gui",
+       "lines": [
+        "Chop some Mahogany logs north of the Farming Guild."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the medium tasks in my Kourend & Kebos Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Rada's blessing for you. You now have a 4% chance of catching two fish at once while using the blessing. It also provides 5 daily teleports to the Kourend Woodland. On top of that, you'll have a"
+      },
+      {
+       "npc": "5% chance to mine two dense essence blocks at once, Thirus will give you 20 free Dynamite per day and Eodan in the Forthos Dungeon will now tan hide for you at 6 times the normal price down from 8 times."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "hard": {
+     "countVarbit": 7935,
+     "completeVarbit": 7927,
+     "rewardVarbit": 7931,
+     "rewardItems": [
+      22945,
+      13147
+     ],
+     "journalBefore": [
+      ""
+     ],
+     "journalAfter": [
+      ""
+     ],
+     "tasks": [
+      {
+       "key": "enter-the-woodcutting-guild",
+       "lines": [
+        "Enter the Woodcutting Guild."
+       ]
+      },
+      {
+       "key": "smelt-an-adamantite-bar-in-the-forsaken-tower",
+       "lines": [
+        "Smelt an Adamantite bar in The Forsaken Tower."
+       ]
+      },
+      {
+       "key": "kill-a-lizardman-shaman-in-the-lizardman-temple",
+       "lines": [
+        "Kill a Lizardman Shaman in the Lizardman Temple."
+       ]
+      },
+      {
+       "key": "mine-some-lovakite",
+       "lines": [
+        "Mine some Lovakite."
+       ]
+      },
+      {
+       "key": "plant-some-logavano-seeds-at-the-tithe-farm",
+       "lines": [
+        "Plant some Logavano seeds at the Tithe Farm."
+       ]
+      },
+      {
+       "key": "kill-a-zombie-in-the-shayzien-crypts",
+       "lines": [
+        "Kill a Zombie in the Shayzien Crypts."
+       ]
+      },
+      {
+       "key": "teleport-to-xeric-s-heart-using-xeric-s-talisman",
+       "lines": [
+        "Teleport to Xeric's Heart using Xeric's Talisman."
+       ]
+      },
+      {
+       "key": "deliver-an-artefact-to-captain-khaled",
+       "lines": [
+        "Deliver an artefact to Captain Khaled."
+       ]
+      },
+      {
+       "key": "kill-a-wyrm-in-the-karuulm-slayer-dungeon",
+       "lines": [
+        "Kill a Wyrm in the Karuulm Slayer Dungeon."
+       ]
+      },
+      {
+       "key": "cast-monster-examine-on-a-troll-south-of-mount-q",
+       "lines": [
+        "Cast Monster Examine on a Troll south of Mount",
+        "Quidamortem."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the hard tasks in my Kourend & Kebos Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You'll be wanting your reward then!"
+      },
+      {
+       "player": "Yes please!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Rada's blessing for you. You now have a 6% chance of catching two fish at once while using the blessing. It also provides unlimited teleports to the Kourend Woodland and 3 daily teleports to Mount"
+      },
+      {
+       "npc": "Karuulm. On top of that, Captain Cleive will show you how to use a Slayer helmet in place of a Shayzien helm, you'll get a 5% increase in yield from the Hosidius and Farming Guild Herb patches, Thirus will give you 40"
+      },
+      {
+       "npc": "free Dynamite per day, Eodan in the Forthos Dungeon will now tan hide for you at 4 times the normal price down from 6 times and Tyss at the Dark Altar will give you an ash sanctifier too."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    },
+    "elite": {
+     "countVarbit": 7936,
+     "completeVarbit": 7928,
+     "rewardVarbit": 7932,
+     "rewardItems": [
+      22947,
+      13148
+     ],
+     "journalBefore": [
+      ""
+     ],
+     "journalAfter": [],
+     "tasks": [
+      {
+       "key": "craft-one-or-more-blood-runes-from-dark-essence",
+       "lines": [
+        "Craft one or more Blood runes from Dark essence",
+        "fragments."
+       ]
+      },
+      {
+       "key": "chop-some-redwood-logs",
+       "lines": [
+        "Chop some Redwood logs."
+       ]
+      },
+      {
+       "key": "defeat-skotizo-in-the-catacombs-of-kourend",
+       "lines": [
+        "Defeat Skotizo in the Catacombs of Kourend."
+       ]
+      },
+      {
+       "key": "catch-an-anglerfish-and-cook-it-whilst-in-great",
+       "lines": [
+        "Catch an Anglerfish and cook it whilst in Great Kourend."
+       ]
+      },
+      {
+       "key": "kill-a-hydra-in-the-karuulm-slayer-dungeon",
+       "lines": [
+        "Kill a Hydra in the Karuulm Slayer Dungeon."
+       ]
+      },
+      {
+       "key": "create-an-ape-atoll-teleport-tablet",
+       "lines": [
+        "Create an Ape Atoll teleport tablet."
+       ]
+      },
+      {
+       "key": "complete-a-raid-in-the-chambers-of-xeric",
+       "lines": [
+        "Complete a Raid in the Chambers of Xeric."
+       ]
+      },
+      {
+       "key": "create-your-own-battlestaff-from-scratch-within",
+       "lines": [
+        "Create your own Battlestaff from scratch within the",
+        "Farming Guild."
+       ]
+      }
+     ],
+     "claim": [
+      {
+       "player": "I've completed all of the elite tasks in my Kourend & Kebos Achievement Diary!"
+      },
+      {
+       "npc": "I can see that, well done! You've completed all of the tasks in the Kourend & Kebos area! Here's your reward!"
+      },
+      {
+       "reward": true
+      },
+      {
+       "npc": "I've upgraded your Rada's blessing for you. You now have an 8% chance of catching two fish at once while using the blessing. It also provides unlimited teleports to the Kourend Woodland and to Mount Karuulm. On"
+      },
+      {
+       "npc": "top of that, Konar quo Maten will give you 20 Slayer Points per task rather than 18, you'll be 10% less likely to burn food at the Hosidius City Kitchens, you'll get 10% more Blood runes when Runecrafting, you'll no"
+      },
+      {
+       "npc": "longer need to wear heat protection inside the Karuulm Slayer Dungeon, Thirus will give you 80 free Dynamite per day, Eodan in the Forthos Dungeon will now tan hide for you at 2 times the normal price down"
+      },
+      {
+       "npc": "from 4 times and the experience provided by the ash sanctifier is increased too, and finally you'll be more likely to gain higher tiered ores from Blast Mining."
+      },
+      {
+       "player": "Wow, thanks!"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

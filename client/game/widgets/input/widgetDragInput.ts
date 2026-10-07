@@ -14,12 +14,17 @@ export function processWidgetDragInput(
     const { mx, my, allRoots, visibleMap, getStaticChildren, getInterfaceParentRoots } = frame;
     // Drag handling - drag only initiates for widgets with drag capability
     if (widgetInteraction.clickedWidget && isHolding && widgetInteraction.isWidgetDraggable(widgetInteraction.clickedWidget)) {
-        widgetInteraction.widgetDragDuration++;
+        // OSRS counts drag dead time in 20ms client cycles, not render frames; counting
+        // frames made the dead time ~40ms at 144Hz and turned fast clicks into drags.
+        widgetInteraction.widgetDragDuration =
+            ((deps.getTransmitCycles().cycleCntr | 0) - widgetInteraction.dragClickCycle) | 0;
 
         // Check for drag initiation if not yet dragging
         if (!widgetInteraction.isDraggingWidget) {
-            const dx = mx - widgetInteraction.dragClickX;
-            const dy = my - widgetInteraction.dragClickY;
+            // Dead zone is in logical UI pixels; mouse coords are canvas buffer pixels.
+            const [renderScaleX, renderScaleY] = widgetInteraction.getUiRenderScale();
+            const dx = (mx - widgetInteraction.dragClickX) / renderScaleX;
+            const dy = (my - widgetInteraction.dragClickY) / renderScaleY;
             const dist = Math.max(Math.abs(dx), Math.abs(dy));
             const zone = widgetInteraction.clickedWidget.dragZoneSize ?? 0;
             const threshold = widgetInteraction.clickedWidget.dragThreshold ?? 0;

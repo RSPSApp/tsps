@@ -21,6 +21,14 @@ export class ItemStatementDialogue extends Dialogue {
         this.text = text;
     }
 
+    public getItemId(): number {
+        return this.itemId;
+    }
+
+    public getText(): string {
+        return this.text;
+    }
+
     send(player: Player) {
         ItemStatementDialogue.send(player, this.itemId, this.text);
     }

@@ -61,9 +61,8 @@ function insertTopCandidate(pool, candidate, maxSize) {
 
 function pickPvpOpponent({
   sourceEntry,
-  entries,
   candidateEntries,
-  pvpIndex,
+  index,
   nowMs,
   pvpMaxDistanceTiles,
   isInCombat,
@@ -71,7 +70,7 @@ function pickPvpOpponent({
 }) {
   const sourcePlayer = sourceEntry?.player;
   const sourceState = sourceEntry?.state;
-  const pool = Array.isArray(candidateEntries) ? candidateEntries : entries;
+  const pool = candidateEntries;
   if (!sourcePlayer || !sourceState || !Array.isArray(pool)) {
     return null;
   }
@@ -86,8 +85,7 @@ function pickPvpOpponent({
       !isPvpCandidate({
         sourceEntry,
         candidateEntry: other,
-        entries,
-        pvpIndex,
+        index,
         nowMs,
         isInCombat,
       })

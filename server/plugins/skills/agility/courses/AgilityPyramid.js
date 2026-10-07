@@ -238,6 +238,7 @@ module.exports = {
   key: "pyramid",
   name: "Agility Pyramid",
   lapXp: 0,
+  petBase: 9901, // Giant squirrel base chance (Wiki)
   obstacles: [
     stairs(ObjectIds.STAIRS_50, 1),
     stairs(ObjectIds.STAIRS_51, -1),

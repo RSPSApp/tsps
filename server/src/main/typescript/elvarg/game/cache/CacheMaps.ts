@@ -1,5 +1,3 @@
-import fs = require("fs");
-import path = require("path");
 import { CacheIndexDat2 } from "./codec/rs/cache/CacheIndex";
 import { IndexType } from "./codec/rs/cache/IndexType";
 import { CachePipeline } from "./CachePipeline";
@@ -9,20 +7,13 @@ type MapData = { terrainData: Uint8Array; objectData?: Uint8Array };
 export class CacheMaps {
   private static state?: {
     maps: CacheIndexDat2;
-    keys: Map<number, number[]>;
     named: boolean;
   };
 
   private static getState() {
     if (this.state) return this.state;
-    const active = CachePipeline.getActive();
     const maps = CacheIndexDat2.fromStore(IndexType.DAT2.maps, CachePipeline.getStore());
-    const keys = JSON.parse(fs.readFileSync(path.join(active.directory, "keys.json"), "utf8"));
-    return this.state = {
-      maps,
-      named: maps.table.named,
-      keys: new Map(Object.entries(keys).map(([id, key]) => [Number(id), key as number[]])),
-    };
+    return this.state = { maps, named: maps.table.named };
   }
 
   public static getArchiveIds(regionId: number): { terrainFile: number; objectFile: number } | null {
@@ -60,7 +51,7 @@ export class CacheMaps {
       const objectData = state.maps.getFile(
           ids.objectFile,
           objectFileId,
-          state.keys.get(ids.objectFile),
+          CachePipeline.getXtea(ids.objectFile),
         )?.data;
       return {
         terrainData: new Uint8Array(terrainData.buffer, terrainData.byteOffset, terrainData.byteLength),

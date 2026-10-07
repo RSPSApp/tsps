@@ -119,6 +119,7 @@ function recoverBoat({ player, npc }) {
 
 module.exports = {
   name: "SailingShipwright",
+  members: true,
   recoverSlot,
   register(api) {
     pluginApi = api;

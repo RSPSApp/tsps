@@ -1606,6 +1606,8 @@ export class SceneBuilder {
                         );
                     }
 
+                    tileModel.underlayId = underlayIds[level][x][y];
+                    tileModel.overlayId = overlayIds[level][x][y] & 0x7fff;
                     scene.newTileModel(level, x, y, tileModel);
                 }
             }

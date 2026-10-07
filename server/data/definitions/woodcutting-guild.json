@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "about": "The Woodcutting Guild's gates, cave, roots, Ent trunks and shrine. Ids, tiles, timing and messages are from rsprox captures (rsprox/wcguild) and the cache's map; rules from the OSRS Wiki (Ent, Bird's egg, Woodcutting Guild). The trunk's success chart and log weights are estimates: the Wiki gives the log rarity only as 'Varies'."
+  },
+  "gates": {
+    "ids": [28851, 28852],
+    "open": { "28851": 28853, "28852": 28854 },
+    "openFace": { "28851": 1, "28852": 3 },
+    "invisibleWall": 38848,
+    "face": 2,
+    "sound": 62,
+    "shutTicks": 2,
+    "guard": 7235,
+    "welcome": "Welcome to the Woodcutting Guild, adventurer.",
+    "pairs": [
+      { "name": "east", "x": 1657, "halves": [{ "id": 28852, "y": 3504 }, { "id": 28851, "y": 3505 }], "insideX": 1657, "outsideX": 1658, "openX": 1658 },
+      { "name": "west", "x": 1562, "halves": [{ "id": 28852, "y": 3487 }, { "id": 28851, "y": 3488 }], "insideX": 1563, "outsideX": 1562, "openX": 1563 }
+    ]
+  },
+  "cave": { "id": 28855, "to": { "x": 1596, "y": 9900, "z": 0 } },
+  "vine": { "id": 28856, "anim": 828, "to": { "x": 1606, "y": 3508, "z": 0 } },
+  "roots": { "ids": [26720, 26721], "anim": 1603, "sound": 2461, "cycles": [15, 30] },
+  "ents": {
+    "npcs": {
+      "7234": { "where": "Woodcutting Guild", "logsPerSuccess": 1, "respawnTicks": 50 },
+      "6594": { "where": "Wilderness", "logsPerSuccess": 2, "respawnTicks": 15 }
+    },
+    "trunk": 9474,
+    "transformTicks": 4,
+    "trunkTicks": 101,
+    "chopTicks": 3,
+    "xp": 25,
+    "cutChance": [[12, 37], [18, 56], [24, 75], [27, 84], [30, 94], [36, 112], [42, 131], [45, 140]],
+    "logs": [
+      { "id": 1511, "name": "Logs", "minLevel": 1, "maxLevel": 44, "weight": 4 },
+      { "id": 1521, "name": "Oak logs", "minLevel": 15, "weight": 4 },
+      { "id": 1519, "name": "Willow logs", "minLevel": 30, "weight": 1 },
+      { "id": 1517, "name": "Maple logs", "minLevel": 45, "weight": 1 },
+      { "id": 1515, "name": "Yew logs", "minLevel": 61, "weight": 1 },
+      { "id": 1513, "name": "Magic logs", "minLevel": 75, "weight": 1, "weightPerAxeTier": 1 }
+    ],
+    "messages": {
+      "swing": "You swing your axe at the Ent trunk.",
+      "noAxe": "You don't have an axe which you can use.",
+      "full": "Your inventory is too full to carry any more logs.",
+      "yield": "The ent carcass yields: {amount} x {log}"
+    }
+  },
+  "shrine": {
+    "id": 29088,
+    "fullPrayer": "You already have full Prayer Points.",
+    "anim": 3705,
+    "xp": 100,
+    "nest": 22798,
+    "projectile": { "from": [1, 1], "to": [2, 1], "startCycle": 0, "endCycle": 140, "angle": 50, "startHeight": 25, "endHeight": 112 },
+    "eggs": {
+      "5076": { "colour": "red", "projectile": 1308, "sound": 3047 },
+      "5077": { "colour": "blue", "projectile": 1307, "sound": 1984 },
+      "5078": { "colour": "green", "projectile": 1309, "sound": 1986 }
+    },
+    "evilChicken": { "chance": 1200, "pieces": [20433, 20436, 20439, 20442] },
+    "messages": {
+      "offer": "You offer your bird's egg to the shrine and receive a reward.",
+      "countOne": "You have made <col=ff0000>one</col> offering.",
+      "count": "You have made <col=ff0000>{count}</col> offerings."
+    }
+  },
+  "diary": {
+    "enter": { "diary": "kourend", "task": "enter-the-woodcutting-guild" },
+    "redwood": { "diary": "kourend", "task": "chop-some-redwood-logs", "logId": 19669 }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "about": "The Edgeville Dungeon's brass key door and the area's diary tasks. The door's ids, tiles, timing and messages are from an rsprox capture and the cache's map."
+  },
+  "brassKeyDoor": {
+    "door": 1804,
+    "key": 983,
+    "tile": { "x": 3115, "y": 3450, "z": 0 },
+    "face": 3,
+    "outside": { "x": 3115, "y": 3449, "z": 0 },
+    "inside": { "x": 3115, "y": 3450, "z": 0 },
+    "invisibleWall": 38848,
+    "openDoor": 1539,
+    "openDoorTile": { "x": 3115, "y": 3449, "z": 0 },
+    "openDoorFace": 0,
+    "unlockSound": 2402,
+    "openSound": 62,
+    "shutTicks": 2,
+    "messages": { "locked": "The door is locked.", "unlock": "You unlock the door." }
+  },
+  "diary": {
+    "pipe": { "object": 16511, "minX": 3149, "maxX": 3155, "y": 9906, "diary": "varrock", "task": "squeeze-through-an-obstacle-pipe-in-edgeville-du" },
+    "vannaka": { "master": 403, "diary": "varrock", "task": "get-a-slayer-task-from-vannaka" },
+    "earthWarrior": { "name": "Earth warrior", "area": { "minX": 3100, "maxX": 3140, "minY": 9970, "maxY": 10010 }, "diary": "wilderness", "task": "kill-an-earth-warrior-in-the-wilderness-beneath" }
+  }
+}

@@ -22,6 +22,7 @@ module.exports = {
   key: "rellekka",
   name: "Rellekka Rooftop",
   lapXp: 780,
+  petBase: 31063, // Giant squirrel base chance (Wiki)
   marks: {
     level: 80,
     tiles: [

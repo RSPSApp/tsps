@@ -777,6 +777,7 @@ let TaskManager;
 
 module.exports = {
   name: "Fletching",
+  members: true,
   register(api) {
     TaskManager = api.getTaskManager();
     const activeSessions = new Map();

@@ -26,8 +26,12 @@ let RUNE_ESSENCE_MINE;
 let ABYSS_INNER_RING;
 
 const RUNE_MYSTERIES_STAGE_ATTRIBUTE = "quest.rune_mysteries.stage";
+const POUCHES_ATTRIBUTE = "runecrafting:pouches";
 const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
 const ABYSS_OBSTACLE_XP = 25;
+const ABYSS_SKULL_SECONDS = 10 * 60;
+const RIFT_GUARDIAN_BASE = 1795758;
+const BLOOD_RIFT_GUARDIAN_BASE = 804984;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
 const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek"]);
 
@@ -204,7 +208,7 @@ function requestTeleport(player, destination) {
 }
 
 function ensurePouchArray(player) {
-  const existing = player.getPouches?.();
+  const existing = player.getAttribute(POUCHES_ATTRIBUTE);
   const containers = Array.isArray(existing) ? existing : [];
 
   const byItemId = new Map();
@@ -230,7 +234,7 @@ function ensurePouchArray(player) {
     });
   }
 
-  player.setPouches?.(normalized);
+  player.setAttribute(POUCHES_ATTRIBUTE, normalized);
   return normalized;
 }
 
@@ -384,7 +388,14 @@ function handleCraftRunes(event) {
     player
       .getSkillManager()
       .addExperiences(Skill.RUNECRAFTING, craftedEssence * runeData.xp);
-    pluginApi.emitCustomEvent("runecrafting:success", { player, skill: Skill.RUNECRAFTING });
+    // The rift guardian rolls per essence (Wiki).
+    pluginApi.emitCustomEvent("runecrafting:success", {
+      player,
+      skill: Skill.RUNECRAFTING,
+      petBase: runeData.runeId === ItemIdentifiers.BLOOD_RUNE ? BLOOD_RIFT_GUARDIAN_BASE : RIFT_GUARDIAN_BASE,
+      rolls: craftedEssence,
+      runeId: runeData.runeId,
+    });
   }
 
   event.handled = true;
@@ -439,6 +450,8 @@ function teleportToAbyss(player) {
     return;
   }
   player.getSkillManager().setCurrentLevels(Skill.PRAYER, 0);
+  // The Mage of Zamorak skulls the player for 10 minutes (Wiki).
+  pluginApi.core.CombatFactory.skull(player, pluginApi.core.SkullType.WHITE_SKULL, ABYSS_SKULL_SECONDS);
   requestTeleport(player, ABYSS_INNER_RING);
 }
 

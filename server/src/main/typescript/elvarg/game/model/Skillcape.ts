@@ -29,7 +29,7 @@ export class Skillcape {
     public static readonly HUNTER = new Skillcape ([9948, 9949, 10646], 5158, 907, 14);
     public static readonly QUEST_POINT = new Skillcape ([9813, 9814, 10662], 4945, 816, 19);
 
-    // TODO - Populate map for Skillcapes
+    // Populated from the cape list below so Skillcape.forId resolves every variant.
     private static dataMap = new Map<number, Skillcape>();
 
     private readonly item: Item[];
@@ -59,5 +59,20 @@ export class Skillcape {
 
     public getDelay(): number {
         return this.delay;
+    }
+
+    static {
+        for (const cape of [
+            Skillcape.ATTACK, Skillcape.DEFENCE, Skillcape.STRENGTH, Skillcape.CONSTITUTION,
+            Skillcape.RANGED, Skillcape.PRAYER, Skillcape.MAGIC, Skillcape.COOKING,
+            Skillcape.WOODCUTTING, Skillcape.FLETCHING, Skillcape.FISHING, Skillcape.FIREMAKING,
+            Skillcape.CRAFTING, Skillcape.SMITHING, Skillcape.MINING, Skillcape.HERBLORE,
+            Skillcape.AGILITY, Skillcape.THIEVING, Skillcape.SLAYER, Skillcape.FARMING,
+            Skillcape.RUNECRAFTING, Skillcape.CONSTRUCTION, Skillcape.HUNTER, Skillcape.QUEST_POINT,
+        ]) {
+            for (const item of cape.item) {
+                Skillcape.dataMap.set(item.getId(), cape);
+            }
+        }
     }
 }

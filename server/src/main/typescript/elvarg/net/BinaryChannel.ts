@@ -1,9 +1,10 @@
-import { Socket } from "net";
+import { isIP, Socket } from "net";
+import type { IncomingMessage } from "http";
 import { RawData, WebSocket } from "ws";
 
 export const MAX_GAME_MESSAGE_BYTES = 64 * 1024;
 
-export type BinaryChannelKind = "websocket" | "webrtc" | "tcp";
+export type BinaryChannelKind = "websocket" | "webrtc" | "tcp" | "headless";
 
 export interface BinaryChannel {
   readonly kind: BinaryChannelKind;
@@ -23,10 +24,15 @@ export class WebSocketBinaryChannel implements BinaryChannel {
   public readonly kind = "websocket" as const;
   public readonly binaryTransport = true as const;
 
-  constructor(private readonly socket: WebSocket) {}
+  constructor(private readonly socket: WebSocket, private readonly request?: IncomingMessage) {}
 
   public get remoteAddress(): string {
-    return (this.socket as any)?._socket?.remoteAddress ?? "";
+    const address = this.request?.socket.remoteAddress ?? (this.socket as any)?._socket?.remoteAddress ?? "";
+    const realIp = this.request?.headers["x-real-ip"];
+    // nginx overwrites this header; only a local proxy may supply player identity.
+    if (["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(address)
+      && typeof realIp === "string" && isIP(realIp)) return realIp;
+    return address;
   }
 
   public get bufferedAmount(): number {
@@ -102,5 +108,38 @@ export class TcpBinaryChannel implements BinaryChannel {
 
   public isOpen(): boolean {
     return !this.socket.destroyed && this.socket.writable;
+  }
+}
+
+/** A client with no socket: everything sent to it is dropped. Lets the server drive a login without a real client. */
+export class HeadlessBinaryChannel implements BinaryChannel {
+  public readonly kind = "headless" as const;
+  public readonly binaryTransport = true as const;
+  public readonly remoteAddress = "headless";
+  private open = true;
+  private readonly closeHandlers: Array<() => void> = [];
+
+  public get readyState(): number {
+    return this.open ? 1 : 3;
+  }
+
+  public send(): void {}
+
+  public close(): void {
+    if (!this.open) return;
+    this.open = false;
+    for (const handler of this.closeHandlers) handler();
+  }
+
+  public onData(): void {}
+
+  public onClose(handler: () => void): void {
+    this.closeHandlers.push(handler);
+  }
+
+  public onError(): void {}
+
+  public isOpen(): boolean {
+    return this.open;
   }
 }

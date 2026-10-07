@@ -1,34 +1,16 @@
-export type SidebarEntryId = string;
-
-export interface SidebarEntryDefinition<TData = unknown> {
-    id: SidebarEntryId;
-    title: string;
-    tooltip?: string;
-    priority?: number;
-    data?: TData;
-}
-
-export interface SidebarEntry<TData = unknown> {
-    id: SidebarEntryId;
-    title: string;
-    tooltip?: string;
-    priority: number;
-    data?: TData;
-}
-
-export interface SidebarState<TData = unknown> {
-    open: boolean;
-    selectedId: SidebarEntryId | null;
-    entries: ReadonlyArray<SidebarEntry<TData>>;
-    version: number;
-}
-
+/** What the sidebar remembers between visits: whether a panel was open, and which. */
 export interface SidebarPersistedState {
     open: boolean;
-    selectedId: SidebarEntryId | null;
+    /** The open panel's button tooltip. */
+    selectedId: string | null;
 }
 
 export interface SidebarPersistence {
     load(): SidebarPersistedState | undefined;
     save(state: SidebarPersistedState): void;
+}
+
+export interface SidebarState {
+    /** The open panel's button tooltip, or null when no panel is open. */
+    selected: string | null;
 }

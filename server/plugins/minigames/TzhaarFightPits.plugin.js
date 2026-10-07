@@ -15,6 +15,8 @@ const CITY_SIDE = { x: 2399, y: 5177 };
 const ARENA_SIDE = { x: 2399, y: 5167 };
 
 const OVERLAY_HUD_UID = (161 << 16) | 8;
+/** The client shows "Attack" on players from player option slot 1 (sendPlayerOption). */
+const ATTACK_OPTION_SLOT = 1;
 const OVERLAY = 373;
 const CHAMPION_TEXT_UID = (OVERLAY << 16) | 3;
 const FOES_VARP = 560;
@@ -194,11 +196,11 @@ function leavePit({ player }) {
 
 function enterArena(event) {
   enterPit(event);
-  event.player.getPacketSender().sendInteractionOption("Attack", 2, true);
+  event.player.getPacketSender().sendPlayerOption(ATTACK_OPTION_SLOT, "Attack", true);
 }
 
 function leaveArena(event) {
-  event.player.getPacketSender().sendInteractionOption("null", 2, true);
+  event.player.getPacketSender().sendPlayerOption(ATTACK_OPTION_SLOT, "", false);
   leavePit(event);
 }
 
@@ -255,6 +257,8 @@ function leaveArenaOnLogout({ player }) {
 
 module.exports = {
   name: "TzhaarFightPits",
+  members: true,
+  _test: { enterArena, leaveArena, ATTACK_OPTION_SLOT },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;

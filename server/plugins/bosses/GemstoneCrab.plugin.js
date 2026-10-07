@@ -71,30 +71,8 @@ const GRAPHIC = { burrowOrRise: 3454, shellIdle: 3452 };
 /** An invisible 5x5 blocking loc under the shell. */
 const SHELL_BLOCKER = 32740;
 
-/** The boss HUD (interface 303), as captured: npc, time left and lifetime, boss mode. */
-const HUD = {
-  npcVarp: 1683, hpVarbit: 6099, baseHpVarbit: 6100, bossVarbit: 12401,
-  openScript: 2376, fadeInScript: 2887, fadeOutScript: 2889,
-  components: [0, 2, 4, 5, 8, 10, 20, 13, 14, 15, 9, 6, 7, 11, 18, 19, 16, 17, 3].map((child) => (303 << 16) | child),
-  /**
-   * The fade scripts take 14 components and a transparency (OpenRune's hpbar plugin): hp,
-   * name_area, outer_border, name_backing, creature_name, inner_border, the bar's back,
-   * sliding and remaining parts, its text, its thresholds and hp_bar_1/2. They did nothing
-   * when sent without them.
-   */
-  fadeComponents: [5, 8, 6, 7, 9, 11, 13, 14, 15, 20, 18, 19, 16, 17].map((child) => (303 << 16) | child),
-  fadeInFrom: 255,
-  fadeOutFrom: 0,
-  /**
-   * 2887 (via 2888) returns at once if told to start from the transparency the HUD already has,
-   * and a finished fade-out leaves it at 255. So showing it starts from 254: the script then
-   * shows its parts (2103) and fades them in.
-   */
-  showFadeFrom: 254,
-  /** hpbar_hud:hp, hidden once the HUD has faded (OpenRune hides it 2 ticks after the fade-out). */
-  hp: (303 << 16) | 5,
-  hideAfterFadeTicks: 2,
-};
+/** The boss HUD (the BossHud plugin): faded out on leaving the mine, then hidden 2 ticks later. */
+const HUD = { hideAfterFadeTicks: 2 };
 
 const CRAWL = { anim: 11580, sound: 2454, soundLoops: 3, soundDelay: 4, fadeCycles: 50 };
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
@@ -335,18 +313,18 @@ function recordDamage({ player, target, hit }) {
 
 // --- The HUD: the crab's time left, for players at its mine.
 
-function showHud(player) {
-  updateHud(player);
-  const sender = player.getPacketSender();
-  sender.sendInterfaceDisplayState(HUD.hp, false);
-  // Fade the bar back in: an earlier fade-out (leaving, or the last crab burrowing) left its
-  // parts at 255, and the open script doesn't reset that.
-  fadeHud(player, true, HUD.showFadeFrom);
-  sender.sendInterfaceScript(HUD.openScript, HUD.components);
+/** The crab's time left against its lifetime: an NPC set to 0 hitpoints dies, so a burrow shows 0. */
+function hudValues(player) {
+  return { player, npcId: CRAB, current: state.burrow ? 0 : Math.max(0, state.crab.getHitpoints()), maximum: state.lifetime };
 }
 
-function fadeHud(player, fadeIn, from = fadeIn ? HUD.fadeInFrom : HUD.fadeOutFrom) {
-  player.getPacketSender().sendInterfaceScript(fadeIn ? HUD.fadeInScript : HUD.fadeOutScript, [...HUD.fadeComponents, from]);
+function showHud(player) {
+  if (hudSpot() < 0) return;
+  pluginApi.emitCustomEvent("boss-hud:show", hudValues(player));
+}
+
+function fadeHud(player, fadeIn) {
+  pluginApi.emitCustomEvent("boss-hud:fade", { player, fadeIn });
 }
 
 /** The mine whose players see the HUD: the crab's, until it fades after the crab burrows. */
@@ -357,20 +335,11 @@ function hudSpot() {
 
 function updateHud(player) {
   if (hudSpot() < 0) return;
-  const sender = player.getPacketSender();
-  sender.sendConfig(HUD.npcVarp, CRAB);
-  sender.sendVarbit(HUD.hpVarbit, state.burrow ? 0 : Math.max(0, state.crab.getHitpoints()));
-  sender.sendVarbit(HUD.baseHpVarbit, state.lifetime);
-  sender.sendVarbit(HUD.bossVarbit, 1);
+  pluginApi.emitCustomEvent("boss-hud:update", hudValues(player));
 }
 
 function hideHud(player) {
-  const sender = player.getPacketSender();
-  sender.sendInterfaceDisplayState(HUD.hp, true);
-  sender.sendConfig(HUD.npcVarp, -1);
-  sender.sendVarbit(HUD.hpVarbit, 0);
-  sender.sendVarbit(HUD.baseHpVarbit, 0);
-  sender.sendVarbit(HUD.bossVarbit, 0);
+  pluginApi.emitCustomEvent("boss-hud:hide", { player, fade: false, afterTicks: 0 });
 }
 
 /** Each mine's area, entered and left (players there see the crab's HUD). */
@@ -389,10 +358,8 @@ function enterArea(spot, player) {
 function leaveArea(spot, player) {
   inArea[spot].delete(player);
   if (hudSpot() !== spot) return;
-  fadeHud(player, false);
-  later(player, HUD.hideAfterFadeTicks, () => {
-    if (!SPOTS.some((_, index) => inArea[index].has(player) && hudSpot() === index)) hideHud(player);
-  });
+  // Coming back (or into another crab's mine) shows it again, which cancels the hide.
+  pluginApi.emitCustomEvent("boss-hud:hide", { player, afterTicks: HUD.hideAfterFadeTicks });
 }
 
 // --- Mining the shell.
@@ -500,6 +467,7 @@ function forceBurrow({ player }) {
 
 module.exports = {
   name: "GemstoneCrab",
+  members: true,
   _test: { state, tick, attack, inReach, rollGem, spawnCrab, startBurrow, topDealers, recordDamage, SPOTS },
   register(api) {
     pluginApi = api;
@@ -512,6 +480,6 @@ module.exports = {
       api.onZoneEnter(zone, enter);
       api.onZoneExit(zone, exit);
     }
-    api.registerCommand("gemstonecrab", forceBurrow, PlayerRights.DEVELOPER);
+    api.registerCommand("gemstonecrab", forceBurrow, PlayerRights.DEVELOPER, "Force the gemstone crab to burrow");
   },
 };

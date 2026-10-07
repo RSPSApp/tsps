@@ -72,7 +72,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     ObjectIdentifiers.SITHIK_INTS_2,
     6887, // ponytail: unnamed bed entity, no ObjectIdentifiers entry
   ]);
-  const BROKEN_LECTERN_ID = ObjectIdentifiers.BROKEN_LECTURN;
+  const BROKEN_LECTERN_ID = ObjectIdentifiers.BROKEN_LECTERN;
   const OUTDOOR_BELL_ID = ObjectIdentifiers.BELL_2;
   const SITHIKS_DRAWERS_ID = ObjectIdentifiers.DRAWERS_11;
   const SITHIKS_CUPBOARD_ID = ObjectIdentifiers.CUPBOARD_30;

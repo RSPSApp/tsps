@@ -34,7 +34,7 @@ const FREEZE_SPELLS = Object.freeze({
 let PrayerHandler = null;
 let ServerPerf = null;
 
-/** Called once from PvpBehavior.js's constructor, before any tick() runs. */
+/** Called once from PvpController's constructor, before any tick() runs. */
 function initPvpPressureCombatPolicyCoreAccess(api) {
   PrayerHandler = api.getPrayerHandler();
   ServerPerf = api.getServerPerf();

@@ -46,6 +46,8 @@ export type GLRenderOpts = {
     // Access to cache for plugin-driven child loading
     getCacheSystem?: () => CacheSystem;
     widgetManager?: WidgetManager;
+    // Drawn after the widgets, before the right-click menu.
+    drawAboveWidgets?: () => void;
     // Optional: request a full repaint from the host overlay when any widget input mutates state.
     requestRepaintAll?: () => void;
     steelFrame?: {

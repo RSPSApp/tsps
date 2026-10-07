@@ -245,11 +245,17 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   const { NpcIdentifiers: N } = require('../dist/util/NpcIdentifiers');
   const hooks = {};
   require('../plugins/npcs/Tutors.plugin').register({
-    core: { Skill, ItemIdentifiers: I, NpcIdentifiers: N, ItemDefinition: { forId: () => ({ getName: () => 'Thing' }) } },
+    core: {
+      Skill, ItemIdentifiers: I, NpcIdentifiers: N, ItemDefinition: { forId: () => ({ getName: () => 'Thing' }) },
+      Equipment: require('../dist/game/model/container/impl/Equipment').Equipment,
+      Sounds: { sendSound() {} }, Sound: { PICK_UP_ITEM: 0 },
+      ItemOnGroundManager: { deregister(groundItem) { groundItem.deregistered = true; } },
+    },
     persistAttribute() {}, onNpcDialogueVariant() {}, onItemOnNpc() {},
     onNpcDialogueCondition(handler) { hooks.condition = handler; },
     onCustomEvent(name, handler) { hooks[name] = handler; },
     onNpcInteraction(name, actions) { hooks[name] = actions; },
+    onGroundItemPickup(handler) { hooks.pickup = handler; },
     emitCustomEvent(_name, request) { hooks.started = request.variant; },
   });
   const container = (items = {}) => {
@@ -303,4 +309,110 @@ test('Lumbridge tutors hand out what their transcripts say', () => {
   play(ranger, N.RANGED_COMBAT_TUTOR, transcript('Ranged combat tutor', hooks.started));
   assert.equal(ranger.inventory.getAmount(I.TRAINING_BOW), 1);
   assert.equal(ranger.inventory.getAmount(I.TRAINING_ARROWS), 25);
+
+  // The ranged tutor's pickup toggle: same ammo as the worn slot goes to the slot, not the bag.
+  hooks['npc-dialogue:choice']({ player: ranger, npcId: N.RANGED_COMBAT_TUTOR, option: 'Automatically equip it.' });
+  assert.equal(ranger.getAttribute('ranged:equip-ammo-on-pickup'), true);
+  const { Equipment } = require('../dist/game/model/container/impl/Equipment');
+  const { Item } = require('../dist/game/model/Item');
+  const ammoSlot = new Item(I.BRONZE_ARROW, 5);
+  ranger.getEquipment = () => ({
+    get: (slot) => slot === Equipment.AMMUNITION_SLOT ? ammoSlot : new Item(-1, 0),
+    refreshItems() {},
+  });
+  const matching = { player: ranger, groundItemId: I.BRONZE_ARROW, groundItem: { getItem: () => new Item(I.BRONZE_ARROW, 3) }, handled: false };
+  hooks.pickup(matching);
+  assert.equal(matching.handled, true);
+  assert.equal(matching.groundItem.deregistered, true);
+  assert.equal(ammoSlot.getAmount(), 8);
+  const wrongAmmo = { player: ranger, groundItemId: I.IRON_ARROW, groundItem: { getItem: () => new Item(I.IRON_ARROW, 1) }, handled: false };
+  hooks.pickup(wrongAmmo);
+  assert.equal(wrongAmmo.handled, false, 'different ammo stays on the normal inventory pickup path');
+  hooks['npc-dialogue:choice']({ player: ranger, npcId: N.RANGED_COMBAT_TUTOR, option: 'Place it in my inventory.' });
+  assert.equal(ranger.getAttribute('ranged:equip-ammo-on-pickup'), false);
+  const disabled = { player: ranger, groundItemId: I.BRONZE_ARROW, groundItem: { getItem: () => new Item(I.BRONZE_ARROW, 3) }, handled: false };
+  hooks.pickup(disabled);
+  assert.equal(disabled.handled, false);
+});
+
+test('"same as above" after an NPC line carries on as that line does elsewhere, never looping', () => {
+  const { collectPageLines, collectPageOptions } = require('../plugins/npcs/NpcDialogues.plugin');
+  // Bryn's page: the first-time answer says the opening line, then "jump above".
+  const record = data.Bryn;
+  const options = collectPageOptions(record);
+  const context = { pages: [], pageLines: collectPageLines(record), pageOptions: options.byText, pageOptionList: options.list };
+  const said = [];
+  let steps = 0;
+  const player = {
+    getDialogueManager: () => ({
+      reset() {},
+      startDialogues(chain) {
+        assert.ok(++steps < 20, 'dialogue looped');
+        const entries = [...chain.getDialogues().values()].sort((a, b) => a.getIndex() - b.getIndex());
+        for (const entry of entries) {
+          if (entry.constructor.name === 'ActionDialogue') return entry.send(player);
+          said.push(String(entry.text ?? ''));
+        }
+      },
+    }),
+    getPacketSender: () => ({ sendInterfaceRemoval() { said.push('<closed>'); } }),
+    sendMessage() {},
+  };
+  const definition = { getName: () => 'Bryn', getId: () => 9020 };
+  const api = {
+    emitCustomEvent() {},
+    sendMultiChatboxPrompt(_player, _title, ...pairs) { pairs[1](); return true; }, // "What is this place?"
+  };
+  const event = { player, npc: { getId: () => 9020 }, npcId: 9020, definition };
+  startDialogue(api, event, record.variants['first-time-talking-to-him'], {}, { ...context, player, npc: event.npc, npcId: 9020, definition });
+  assert.ok(said.includes('Train?'), 'the full explanation follows');
+  assert.equal(said.filter((line) => line.startsWith('This here is the Gauntlet')).length, 1, 'said once');
+  assert.equal(said.at(-1), '<closed>');
+});
+
+test('a random story skips alternatives a plugin rules out, and an action can splice in steps', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const condition = { pluginName: 'test', handler: ({ text }) => (text === 'If done:' ? true : text === 'If not done:' ? false : null) };
+  PluginManager.npcDialogueConditionHooks.unshift(condition);
+  const said = [];
+  const player = {
+    getDialogueManager: () => ({
+      reset() {},
+      startDialogues(chain) {
+        for (const entry of [...chain.getDialogues().values()].sort((a, b) => a.getIndex() - b.getIndex())) {
+          if (entry.text) said.push(entry.text);
+          try { entry.send(player); } catch { /* unwired dialogue entries are fine here */ }
+        }
+      },
+    }),
+    getPacketSender: () => ({ sendInterfaceRemoval() {} }),
+    sendMessage() {},
+  };
+  const story = {
+    type: 'random',
+    options: [
+      { text: 'a', condition: 'If not done:', steps: [{ player: 'Never happened.' }] },
+      { text: 'b', condition: 'If done:', steps: [{ player: 'It happened.' }] },
+    ],
+  };
+  const api = {
+    emitCustomEvent(name, payload) {
+      if (name === 'npc-dialogue:action' && payload.stepId === 'pick') {
+        payload.steps = [story];
+        payload.handled = true;
+      }
+    },
+  };
+  const definition = { getName: () => 'Juna', getId: () => 5785 };
+  const event = { player, npc: null, npcId: 5785, definition };
+  try {
+    for (let i = 0; i < 10; i++) {
+      startDialogue(api, event, [{ type: 'reference', id: 'pick' }, { npc: 'Your stories have entertained me.' }], {}, { player, npc: null, npcId: 5785, definition, pages: [] });
+    }
+  } finally {
+    PluginManager.npcDialogueConditionHooks.splice(PluginManager.npcDialogueConditionHooks.indexOf(condition), 1);
+  }
+  assert.equal(said.filter((line) => line === 'Never happened.').length, 0);
+  assert.equal(said.filter((line) => line === 'It happened.').length, 10);
+  assert.equal(said.filter((line) => line === 'Your stories have entertained me.').length, 10);
 });

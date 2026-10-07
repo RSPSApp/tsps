@@ -21,6 +21,7 @@ import { GameConstants } from "../../GameConstants";
 import { FastDeque } from "../../../util/FastDeque";
 import { ServerPerf } from "../../../util/ServerPerf";
 import { Wilderness } from "../../content/wilderness/Wilderness";
+import { applyRunEnergyRestoreModifiers } from "../../content/combat/EquipmentEffects";
 import * as fs from "fs";
 import * as path from "path";
 export class MovementQueue {
@@ -96,6 +97,7 @@ export class MovementQueue {
     private blockedByDynamicOccupancy = false;
     private routeEvaluated = false;
     private alternativeRoute = false;
+    private entityPursuit: (() => void) | null = null;
     /**
      * Set when a step toward the head checkpoint was rejected, plus whether an
      * entity was the reason. Both survive beginCycle() so the next cycle's
@@ -395,6 +397,11 @@ export class MovementQueue {
         return this.movedThisCycle;
     }
 
+    /** Stepped during the current world cycle (unlike didMoveThisCycle, never stale before this actor's turn). */
+    public steppedThisWorldCycle(): boolean {
+        return this.lastMoveCycle === World.getProcessCycle();
+    }
+
     public didMovePreviousCycle(): boolean {
         return this.lastMoveCycle === World.getProcessCycle() - 1;
     }
@@ -516,7 +523,6 @@ export class MovementQueue {
                 this.handleRegionChange();
                 this.syncWildernessStateForMovedPlayer();
                 this.drainRunEnergy();
-                this.character.getAsPlayer().setOldPosition(previous);
             }
         }
 
@@ -559,9 +565,11 @@ export class MovementQueue {
     }
 
     /**
-     * Occupancy the static clipping map cannot know about. A player marks its tile
-     * as blocking NPCs but never as blocking players, so NPCs are stopped by both
-     * NPCs and players while players walk freely through each other.
+     * Occupancy the static clipping map cannot know about. The NPC flag is set and
+     * checked by NPCs only; players pass over it (and clear it in OSRS, which is
+     * the entity-stacking mechanic) - osrs-docs: Entity Collision, NPC flag
+     * "Checked by: all NPCs but the excluded NPCs". Only the separate "full" flag
+     * (gorillas, Vanstrom) blocks players, and no NPC here sets it yet.
      *
      * Upstream splits the two opt-outs (walk-through-NPCs and walk-through-players
      * are separate NPC properties). Pets are this server's only walk-through NPC
@@ -569,9 +577,9 @@ export class MovementQueue {
      * ever needs to pass NPCs but not players.
      */
     private isDynamicallyOccupied(next: Location): boolean {
+        const size = this.character.getSize();
+        const privateArea = this.character.getPrivateArea();
         if (this.character.isNpc() && !(this.character as NPC).canWalkThroughNPCs()) {
-            const size = this.character.getSize();
-            const privateArea = this.character.getPrivateArea();
             if (World.isNpcOccupyingTile(next, this.character as NPC, size, privateArea)) {
                 return true;
             }
@@ -679,7 +687,7 @@ export class MovementQueue {
 
         if (inWilderness) {
             const wildernessLevel = Wilderness.levelAt(location.getX(), location.getY());
-            const multiIcon = Wilderness.isMulti(location.getX(), location.getY()) ? 1 : 0;
+            const multiIcon = Wilderness.isMulti(location.getX(), location.getY(), location.getZ()) ? 1 : 0;
             player.setWildernessLevel(wildernessLevel);
             player.setMultiIcon(multiIcon);
             // The pvp_icons overlay (and its level text) is owned by the Wilderness plugin.
@@ -693,7 +701,8 @@ export class MovementQueue {
     }
 
     public static runEnergyRestoreDelay(p: Player) {
-        return 1700 - (p.getSkillManager().getCurrentLevel(Skill.AGILITY) * 10);
+        const delay = 1700 - (p.getSkillManager().getCurrentLevel(Skill.AGILITY) * 10);
+        return Math.max(1, Math.round(applyRunEnergyRestoreModifiers(p, delay)));
     }
 
     public reset(clearDestination = true): MovementQueue {
@@ -724,6 +733,14 @@ export class MovementQueue {
             return;
         }
         const nowMs = Date.now();
+
+        // A pet waits out its owner's death and catches up once they respawn.
+        const npcCharacter = this.character.isNpc() ? this.character.getAsNpc() : null;
+        if (npcCharacter?.isPet() && npcCharacter.getOwner() === following && following.isRegistered()
+            && (following.getHitpoints() <= 0 || following.getAsPlayer()?.isDyingReturn?.() === true)) {
+            this.reset();
+            return;
+        }
 
         if (
             following === this.character ||
@@ -1144,9 +1161,11 @@ export class MovementQueue {
             return;
         }
 
-        let routedX = entity.getLocation().getX();
-        let routedY = entity.getLocation().getY();
-        TaskManager.submit(new MovementTask(this.player.getIndex(), (task: MovementTask) => {
+        // OSRS order (LostCity Player.processInteraction): before stepping, try the
+        // op, then re-path to where the target stands now if on the last waypoint;
+        // step; try the op again. Re-pathing after the step instead leaves the
+        // player a tick behind a walking NPC, trailing it before the op fires.
+        const task = new MovementTask(this.player.getIndex(), (task: MovementTask) => {
             if (!this.isInteractionTargetValid(entity)) {
                 this.reset();
                 task.stop();
@@ -1155,37 +1174,52 @@ export class MovementQueue {
             this.player.setMobileInteraction(entity);
 
             if (reached()) {
-                this.player.getMovementQueue().reset();
+                this.reset();
                 runnable?.();
                 task.stop();
                 return;
-            }
-
-            const queue = this.player.getMovementQueue();
-            const location = entity.getLocation();
-            // Only the final stretch is rebuilt, and only when the target actually
-            // moved - the turning points behind it are still good. A step the clipping
-            // map rejected invalidates the corridor wherever we are standing.
-            const targetMoved = routedX !== location.getX() || routedY !== location.getY();
-            if (queue.size() === 0 || queue.wasRouteInvalidated() || (queue.size() === 1 && targetMoved)) {
-                routedX = location.getX();
-                routedY = location.getY();
-                PathFinder.calculateEntityRoute(this.player, entity);
             }
 
             if (this.canInteractWithUnreachableNpc(entity)) {
-                queue.reset();
+                this.reset();
                 task.stop();
                 runnable?.();
                 return;
             }
-            if (queue.points.length || queue.isMovings()) {
+            if (this.points.length || this.isMovings()) {
                 return;
             }
-            queue.reset();
+            this.reset();
             task.stop();
             this.player.sendMessage("I can't reach that!");
-        }));
+        });
+        this.entityPursuit = () => {
+            if (!task.isRunning()) {
+                this.entityPursuit = null;
+                return;
+            }
+            if (!this.isInteractionTargetValid(entity)) {
+                return; // the post-step check ends it
+            }
+            if (reached()) {
+                this.entityPursuit = null;
+                this.reset();
+                this.player.setMobileInteraction(entity);
+                runnable?.();
+                task.stop();
+                return;
+            }
+            // A step the clipping map rejected invalidates the corridor wherever we stand.
+            if (this.points.length <= 1 || this.wasRouteInvalidated()) {
+                PathFinder.calculateEntityRoute(this.player, entity);
+            }
+        };
+        TaskManager.submit(task);
+    }
+
+    /** Pre-step half of an NPC walk-to; called from the player's turn before movement. */
+    public processEntityPursuit(): void {
+        this.entityPursuit?.();
     }
 
     /**
@@ -1264,9 +1298,10 @@ export class MovementQueue {
         //System.err.println("RequestedX=" + objectX + " requestedY=" + objectY + " givenX=" + finalDestinationX + " givenY=" + finalDestinationY);
 
         this.player.setPositionToFace(new Location(objectX, objectY));
+        const interactionArea = this.player.getPrivateArea();
         let repathAttempts = 0;
         TaskManager.submit(new MovementTask(this.player.getIndex(), (task) => {
-            if (!this.isInteractionObjectValid(object, id, type)) {
+            if (this.player.getPrivateArea() !== interactionArea || !this.isInteractionObjectValid(object, id, type)) {
                 this.reset();
                 task.stop();
                 return;
@@ -1319,17 +1354,21 @@ export class MovementQueue {
             MovementQueue.log(
                 `[walkToObject] ${this.ownerLabel()} failed route=${this.player.getMovementQueue().hasRoute()} current=${this.player.getLocation().getX()},${this.player.getLocation().getY()} expected=${finalDestinationX},${finalDestinationY}`
             );
-            console.warn("[object-route] unreachable", {
-                objectId: id,
-                shape: type,
-                rotation: direction,
-                target: [objectX, objectY],
-                player: [this.player.getLocation().getX(), this.player.getLocation().getY(), this.player.getLocation().getZ()],
-                routeEnd: [this.pathX, this.pathY],
-                accessMask: routeSpec.reachBlockAccessFlags,
-                routeInvalidated: this.wasRouteInvalidated(),
-                blockedByEntity: this.wasBlockedByDynamicOccupancy(),
-            });
+            // Bots record unreachable objects themselves (once per object), so
+            // only warn for real players instead of once per bot click.
+            if (!this.player.isPlayerBot()) {
+                console.warn("[object-route] unreachable", {
+                    objectId: id,
+                    shape: type,
+                    rotation: direction,
+                    target: [objectX, objectY],
+                    player: [this.player.getLocation().getX(), this.player.getLocation().getY(), this.player.getLocation().getZ()],
+                    routeEnd: [this.pathX, this.pathY],
+                    accessMask: routeSpec.reachBlockAccessFlags,
+                    routeInvalidated: this.wasRouteInvalidated(),
+                    blockedByEntity: this.wasBlockedByDynamicOccupancy(),
+                });
+            }
             this.player.sendMessage("You can't reach that!");
             task.stop();
             TaskManager.cancelTasks(this.player.getIndex());
@@ -1350,8 +1389,10 @@ export class MovementQueue {
     }
 
     private canInteractWithUnreachableNpc(entity: Mobile): boolean {
-        // Prefer adjacent reach. Counters may leave an NPC visible but no adjacent tile reachable.
-        return entity.isNpc() && (this.alternativeRoute || this.points.length === 0) && !this.isMovings() &&
+        // Prefer adjacent reach. Counters (or water, for fishing spots) may leave an NPC
+        // visible but no adjacent tile reachable: interact once the nearest-tile route
+        // has been walked, on the arrival tick like a normal reach.
+        return entity.isNpc() && this.points.length === 0 &&
             this.isWithinEntityInteractionDistance(entity.getLocation()) &&
             RegionManager.canProjectileAttack(this.player, this.player.getLocation(), entity.getLocation());
     }

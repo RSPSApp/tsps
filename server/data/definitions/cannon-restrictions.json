@@ -1,0 +1,2258 @@
+{
+ "_description": "Where a dwarf multicannon can't be set up: the OSRS Wiki's 'Prohibited areas' list (Dwarf multicannon), with its messages. 'areas' are polygons of [x, y] tile corners (z: all planes unless given). 'source' says where an area's outline comes from; entries without 'areas' are listed but not bounded yet. Instanced content (a private area) is refused with the default message.",
+ "default": "You can't set up a cannon here.",
+ "restrictions": [
+  {
+   "name": "Abyssal Area",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Abyssal Nexus",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2944,
+       4736
+      ],
+      [
+       3008,
+       4736
+      ],
+      [
+       3008,
+       4800
+      ],
+      [
+       2944,
+       4800
+      ]
+     ]
+    },
+    {
+     "points": [
+      [
+       3072,
+       4800
+      ],
+      [
+       3136,
+       4800
+      ],
+      [
+       3136,
+       4864
+      ],
+      [
+       3072,
+       4864
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Ancient Cavern",
+   "message": "It's far too damp for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1590,
+       5390
+      ],
+      [
+       1590,
+       5294
+      ],
+      [
+       1807,
+       5294
+      ],
+      [
+       1807,
+       5390
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Ancient Guthixian Temple",
+   "message": "A strange magical force won't let you set up a cannon here"
+  },
+  {
+   "name": "Ancient Prison",
+   "message": "An ancient power won't let you set up a cannon here."
+  },
+  {
+   "name": "Barbarian Assault",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Black Knights' Fortress",
+   "message": "It is not permitted to set up a cannon this close to the Dwarf Black Guard.",
+   "areas": [
+    {
+     "points": [
+      [
+       3003,
+       3520
+      ],
+      [
+       3003,
+       3498
+      ],
+      [
+       3038,
+       3498
+      ],
+      [
+       3038,
+       3520
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Brutus arena",
+   "message": "It's far too muddy for you to set up a cannon here."
+  },
+  {
+   "name": "Bryophyta's lair",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Callisto's Den",
+   "message": "It doesn't seem safe to set up a cannon here."
+  },
+  {
+   "name": "Castle Wars",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2368,
+       3136
+      ],
+      [
+       2368,
+       3088
+      ],
+      [
+       2384,
+       3072
+      ],
+      [
+       2432,
+       3072
+      ],
+      [
+       2432,
+       3120
+      ],
+      [
+       2416,
+       3136
+      ]
+     ]
+    },
+    {
+     "points": [
+      [
+       2376,
+       9535
+      ],
+      [
+       2403,
+       9519
+      ],
+      [
+       2436,
+       9487
+      ],
+      [
+       2430,
+       9475
+      ],
+      [
+       2425,
+       9475
+      ],
+      [
+       2389,
+       9497
+      ],
+      [
+       2365,
+       9513
+      ],
+      [
+       2368,
+       9529
+      ]
+     ]
+    },
+    {
+     "points": [
+      [
+       2377,
+       9499
+      ],
+      [
+       2381,
+       9498
+      ],
+      [
+       2384,
+       9494
+      ],
+      [
+       2390,
+       9494
+      ],
+      [
+       2394,
+       9486
+      ],
+      [
+       2393,
+       9480
+      ],
+      [
+       2369,
+       9480
+      ],
+      [
+       2370,
+       9496
+      ]
+     ]
+    },
+    {
+     "points": [
+      [
+       2410,
+       9513
+      ],
+      [
+       2430,
+       9513
+      ],
+      [
+       2430,
+       9535
+      ],
+      [
+       2410,
+       9535
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Catacombs of Kourend",
+   "message": "An ancient power won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1585,
+       10950
+      ],
+      [
+       1585,
+       9975
+      ],
+      [
+       1751,
+       9975
+      ],
+      [
+       1751,
+       10950
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Cerberus' Lair",
+   "message": "Your cannon would melt if you set it up here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1200,
+       1340
+      ],
+      [
+       1200,
+       1220
+      ],
+      [
+       1280,
+       1220
+      ],
+      [
+       1280,
+       1281
+      ],
+      [
+       1343,
+       1281
+      ],
+      [
+       1343,
+       1220
+      ],
+      [
+       1403,
+       1220
+      ],
+      [
+       1403,
+       1340
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Chambers of Xeric",
+   "message": "An ancient power won't let you set up a cannon here."
+  },
+  {
+   "name": "Clan Hall",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Dwarven Mine",
+   "message": "The dwarves won't be happy if you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2992,
+       9854
+      ],
+      [
+       2955,
+       9806
+      ],
+      [
+       2987,
+       9800
+      ],
+      [
+       3019,
+       9785
+      ],
+      [
+       3001,
+       9710
+      ],
+      [
+       3025,
+       9692
+      ],
+      [
+       3067,
+       9715
+      ],
+      [
+       3071,
+       9850
+      ],
+      [
+       3033,
+       9860
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Enchanted Valley",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3010,
+       4540
+      ],
+      [
+       3011,
+       4484
+      ],
+      [
+       3072,
+       4484
+      ],
+      [
+       3071,
+       4541
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Entrana",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2801,
+       3392
+      ],
+      [
+       2801,
+       3328
+      ],
+      [
+       2880,
+       3328
+      ],
+      [
+       2880,
+       3392
+      ],
+      [
+       2847,
+       3392
+      ],
+      [
+       2847,
+       3394
+      ],
+      [
+       2836,
+       3394
+      ],
+      [
+       2836,
+       3392
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Feldip Hills jungle hunter area",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Fight Arena interior",
+   "message": "The dwarves won't be happy if you set up a cannon here."
+  },
+  {
+   "name": "Forthos Dungeon",
+   "message": "A mysterious presence won't let you set up a cannon here."
+  },
+  {
+   "name": "Fossil Island bank chest island",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Fremennik Slayer Dungeon",
+   "message": "The air is too dank for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2686,
+       10048
+      ],
+      [
+       2686,
+       9945
+      ],
+      [
+       2728,
+       9945
+      ],
+      [
+       2728,
+       9984
+      ],
+      [
+       2816,
+       9984
+      ],
+      [
+       2816,
+       10048
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Near Gilbert",
+   "message": "A colourful magical force won't let you set up a cannon here."
+  },
+  {
+   "name": "Gemstone Crab",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1258,
+       3158
+      ],
+      [
+       1285,
+       3158
+      ],
+      [
+       1285,
+       3185
+      ],
+      [
+       1258,
+       3185
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       1338,
+       3096
+      ],
+      [
+       1365,
+       3096
+      ],
+      [
+       1365,
+       3125
+      ],
+      [
+       1338,
+       3125
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       1224,
+       3029
+      ],
+      [
+       1251,
+       3029
+      ],
+      [
+       1251,
+       3056
+      ],
+      [
+       1224,
+       3056
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "plugins/bosses/GemstoneCrab.plugin.js (all three locations)"
+  },
+  {
+   "name": "Grand Exchange",
+   "message": "The Grand Exchange staff prefer not to have heavy artillery operated around their premises.",
+   "areas": [
+    {
+     "points": [
+      [
+       3139,
+       3473
+      ],
+      [
+       3144,
+       3468
+      ],
+      [
+       3163,
+       3468
+      ],
+      [
+       3163,
+       3467
+      ],
+      [
+       3167,
+       3467
+      ],
+      [
+       3167,
+       3468
+      ],
+      [
+       3187,
+       3468
+      ],
+      [
+       3187,
+       3476
+      ],
+      [
+       3190,
+       3479
+      ],
+      [
+       3190,
+       3497
+      ],
+      [
+       3196,
+       3503
+      ],
+      [
+       3196,
+       3504
+      ],
+      [
+       3198,
+       3506
+      ],
+      [
+       3198,
+       3508
+      ],
+      [
+       3189,
+       3517
+      ],
+      [
+       3171,
+       3517
+      ],
+      [
+       3168,
+       3514
+      ],
+      [
+       3161,
+       3514
+      ],
+      [
+       3158,
+       3517
+      ],
+      [
+       3143,
+       3517
+      ],
+      [
+       3139,
+       3513
+      ],
+      [
+       3139,
+       3495
+      ],
+      [
+       3142,
+       3492
+      ],
+      [
+       3142,
+       3485
+      ],
+      [
+       3139,
+       3482
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Hair of the Dog",
+   "message": "Roavar won't be happy if you set up a cannon here."
+  },
+  {
+   "name": "Hespori",
+   "message": "It's far too damp down here to set up a cannon.",
+   "areas": [
+    {
+     "points": [
+      [
+       1235,
+       10099
+      ],
+      [
+       1235,
+       10074
+      ],
+      [
+       1259,
+       10074
+      ],
+      [
+       1259,
+       10099
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Ice Mountain",
+   "message": "The dwarves won't be happy if you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2993,
+       3513
+      ],
+      [
+       3009,
+       3512
+      ],
+      [
+       3017,
+       3513
+      ],
+      [
+       3024,
+       3506
+      ],
+      [
+       3030,
+       3493
+      ],
+      [
+       3028,
+       3484
+      ],
+      [
+       3036,
+       3473
+      ],
+      [
+       3034,
+       3462
+      ],
+      [
+       3030,
+       3456
+      ],
+      [
+       3019,
+       3439
+      ],
+      [
+       2995,
+       3439
+      ],
+      [
+       2978,
+       3466
+      ],
+      [
+       2987,
+       3485
+      ],
+      [
+       2991,
+       3498
+      ],
+      [
+       2988,
+       3502
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Jiggig",
+   "message": "The ogres won't be happy if you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2456,
+       3058
+      ],
+      [
+       2452,
+       3050
+      ],
+      [
+       2452,
+       3043
+      ],
+      [
+       2464,
+       3037
+      ],
+      [
+       2491,
+       3035
+      ],
+      [
+       2494,
+       3043
+      ],
+      [
+       2491,
+       3059
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Jiggig Dungeon",
+   "message": "The ground is too soft for you to set up a cannon here."
+  },
+  {
+   "name": "Jormungand's Prison basilisk areas",
+   "message": "The ground is too soft for you to set up a cannon here."
+  },
+  {
+   "name": "Karuulm Slayer Dungeon",
+   "message": "The electricity bursting through this part of the cavern would render the cannon useless."
+  },
+  {
+   "name": "Killerwatt Plane",
+   "message": "The electricity is too powerful for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2636,
+       5188
+      ],
+      [
+       2636,
+       5246
+      ],
+      [
+       2686,
+       5246
+      ],
+      [
+       2686,
+       5188
+      ]
+     ],
+     "z": 2
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Kraken Cove",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Lair of Tarn Razorlor",
+   "message": "This temple is ancient and would probably collapse if you started firing a cannon.",
+   "areas": [
+    {
+     "points": [
+      [
+       3121,
+       4673
+      ],
+      [
+       3121,
+       4537
+      ],
+      [
+       3204,
+       4537
+      ],
+      [
+       3204,
+       4673
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Lizardman Caves",
+   "message": "The ground is too marshy here."
+  },
+  {
+   "name": "Lizardman Temple",
+   "message": "This ancient structure is too unstable to handle the idea of a cannon firing at its walls.",
+   "areas": [
+    {
+     "points": [
+      [
+       1280,
+       10112
+      ],
+      [
+       1280,
+       10048
+      ],
+      [
+       1343,
+       10048
+      ],
+      [
+       1343,
+       10112
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Mogre Camp",
+   "message": "It's just a little too damp for you to set up a cannon here."
+  },
+  {
+   "name": "Nightmare Zone",
+   "message": "Dominic won't be happy if you set up a cannon here."
+  },
+  {
+   "name": "Ourania Cave bank area",
+   "message": "Eniola won't be happy if you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3006,
+       5632
+      ],
+      [
+       3006,
+       5616
+      ],
+      [
+       3028,
+       5616
+      ],
+      [
+       3028,
+       5632
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Pest Control",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2616,
+       2556
+      ],
+      [
+       2692,
+       2556
+      ],
+      [
+       2692,
+       2625
+      ],
+      [
+       2616,
+       2625
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "plugins/minigames/PestControl.plugin.js GAME_BOUNDS"
+  },
+  {
+   "name": "Player-owned houses",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Realm of Memories",
+   "message": "The archaic atmosphere won't let you set up a cannon here"
+  },
+  {
+   "name": "Red chinchompa hunting ground",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2509,
+       9308
+      ],
+      [
+       2509,
+       9285
+      ],
+      [
+       2535,
+       9285
+      ],
+      [
+       2535,
+       9308
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Revenant Caves",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3136,
+       10036
+      ],
+      [
+       3272,
+       10036
+      ],
+      [
+       3272,
+       10250
+      ],
+      [
+       3136,
+       10250
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "world.json Revenant Caves zone"
+  },
+  {
+   "name": "Ruins of Tapoyauik",
+   "message": "An ancient magical force won't let you set up a cannon here."
+  },
+  {
+   "name": "Sailing boats",
+   "message": "The boat is too damp and unstable for you to set up a cannon here."
+  },
+  {
+   "name": "Scabaras Dungeon",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Scurrius' Lair",
+   "message": "It's far too damp for you to set up a cannon here."
+  },
+  {
+   "name": "Sorceress's Garden",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Mort'ton and Shades of Mort'ton",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Shellbane Gryphon Cave",
+   "message": "The ground is too unstable to set up a cannon here."
+  },
+  {
+   "name": "Silk Chasm",
+   "message": "It doesn't seem safe to set up a cannon here."
+  },
+  {
+   "name": "Slayer Tower",
+   "message": "A strange magical force won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3405,
+       3539
+      ],
+      [
+       3405,
+       3535
+      ],
+      [
+       3409,
+       3531
+      ],
+      [
+       3413,
+       3531
+      ],
+      [
+       3416,
+       3534
+      ],
+      [
+       3419,
+       3534
+      ],
+      [
+       3420,
+       3533
+      ],
+      [
+       3424,
+       3533
+      ],
+      [
+       3426,
+       3535
+      ],
+      [
+       3426,
+       3536
+      ],
+      [
+       3432,
+       3536
+      ],
+      [
+       3432,
+       3535
+      ],
+      [
+       3434,
+       3533
+      ],
+      [
+       3438,
+       3533
+      ],
+      [
+       3439,
+       3534
+      ],
+      [
+       3442,
+       3534
+      ],
+      [
+       3445,
+       3531
+      ],
+      [
+       3449,
+       3531
+      ],
+      [
+       3453,
+       3535
+      ],
+      [
+       3453,
+       3539
+      ],
+      [
+       3449,
+       3543
+      ],
+      [
+       3449,
+       3547
+      ],
+      [
+       3450,
+       3548
+      ],
+      [
+       3450,
+       3552
+      ],
+      [
+       3449,
+       3553
+      ],
+      [
+       3449,
+       3558
+      ],
+      [
+       3450,
+       3559
+      ],
+      [
+       3450,
+       3563
+      ],
+      [
+       3449,
+       3564
+      ],
+      [
+       3449,
+       3568
+      ],
+      [
+       3453,
+       3572
+      ],
+      [
+       3453,
+       3576
+      ],
+      [
+       3449,
+       3580
+      ],
+      [
+       3445,
+       3580
+      ],
+      [
+       3442,
+       3577
+      ],
+      [
+       3439,
+       3577
+      ],
+      [
+       3438,
+       3578
+      ],
+      [
+       3434,
+       3578
+      ],
+      [
+       3433,
+       3577
+      ],
+      [
+       3425,
+       3577
+      ],
+      [
+       3424,
+       3578
+      ],
+      [
+       3420,
+       3578
+      ],
+      [
+       3419,
+       3577
+      ],
+      [
+       3416,
+       3577
+      ],
+      [
+       3413,
+       3580
+      ],
+      [
+       3409,
+       3580
+      ],
+      [
+       3405,
+       3576
+      ],
+      [
+       3405,
+       3572
+      ],
+      [
+       3409,
+       3568
+      ],
+      [
+       3409,
+       3564
+      ],
+      [
+       3408,
+       3563
+      ],
+      [
+       3408,
+       3559
+      ],
+      [
+       3409,
+       3558
+      ],
+      [
+       3409,
+       3553
+      ],
+      [
+       3408,
+       3552
+      ],
+      [
+       3408,
+       3548
+      ],
+      [
+       3409,
+       3547
+      ],
+      [
+       3409,
+       3543
+      ]
+     ]
+    },
+    {
+     "points": [
+      [
+       3396,
+       9978
+      ],
+      [
+       3396,
+       9924
+      ],
+      [
+       3450,
+       9924
+      ],
+      [
+       3450,
+       9978
+      ]
+     ],
+     "z": 3
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Smoke Dungeon",
+   "message": "Dusty Aliv won't be happy if you set up a cannon here."
+  },
+  {
+   "name": "Theatre of Blood",
+   "message": "The vampyres won't be happy if you set up a cannon here."
+  },
+  {
+   "name": "Tombs of Amascut",
+   "message": "An ancient power won't let you set up a cannon here."
+  },
+  {
+   "name": "Tonali Cavern",
+   "message": "An ancient magical force won't let you set up a cannon here."
+  },
+  {
+   "name": "Tower of Magic",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Mor Ul Rek, TzHaar Fight Cave, TzHaar Fight Pit",
+   "message": "The TzHaar won't be happy if you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2492,
+       5180
+      ],
+      [
+       2493,
+       5179
+      ],
+      [
+       2493,
+       5176
+      ],
+      [
+       2494,
+       5175
+      ],
+      [
+       2494,
+       5174
+      ],
+      [
+       2493,
+       5173
+      ],
+      [
+       2493,
+       5172
+      ],
+      [
+       2492,
+       5171
+      ],
+      [
+       2492,
+       5170
+      ],
+      [
+       2493,
+       5163
+      ],
+      [
+       2494,
+       5162
+      ],
+      [
+       2494,
+       5159
+      ],
+      [
+       2495,
+       5158
+      ],
+      [
+       2495,
+       5157
+      ],
+      [
+       2494,
+       5156
+      ],
+      [
+       2494,
+       5153
+      ],
+      [
+       2493,
+       5152
+      ],
+      [
+       2478,
+       5139
+      ],
+      [
+       2476,
+       5139
+      ],
+      [
+       2475,
+       5138
+      ],
+      [
+       2474,
+       5138
+      ],
+      [
+       2473,
+       5139
+      ],
+      [
+       2472,
+       5139
+      ],
+      [
+       2472,
+       5138
+      ],
+      [
+       2465,
+       5122
+      ],
+      [
+       2460,
+       5121
+      ],
+      [
+       2459,
+       5121
+      ],
+      [
+       2458,
+       5120
+      ],
+      [
+       2457,
+       5120
+      ],
+      [
+       2455,
+       5122
+      ],
+      [
+       2453,
+       5122
+      ],
+      [
+       2452,
+       5121
+      ],
+      [
+       2450,
+       5121
+      ],
+      [
+       2449,
+       5122
+      ],
+      [
+       2448,
+       5122
+      ],
+      [
+       2447,
+       5123
+      ],
+      [
+       2439,
+       5123
+      ],
+      [
+       2437,
+       5121
+      ],
+      [
+       2436,
+       5121
+      ],
+      [
+       2434,
+       5123
+      ],
+      [
+       2433,
+       5123
+      ],
+      [
+       2433,
+       5106
+      ],
+      [
+       2455,
+       5079
+      ],
+      [
+       2498,
+       5055
+      ],
+      [
+       2545,
+       5072
+      ],
+      [
+       2560,
+       5134
+      ],
+      [
+       2523,
+       5179
+      ]
+     ]
+    },
+    {
+     "points": [
+      [
+       2405,
+       5169
+      ],
+      [
+       2400,
+       5169
+      ],
+      [
+       2400,
+       5168
+      ],
+      [
+       2399,
+       5168
+      ],
+      [
+       2399,
+       5169
+      ],
+      [
+       2372,
+       5169
+      ],
+      [
+       2372,
+       5123
+      ],
+      [
+       2423,
+       5124
+      ],
+      [
+       2423,
+       5169
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Ungael",
+   "message": "The intense cold threatens to crack the metal of your cannon. You probably shouldn't put it down here."
+  },
+  {
+   "name": "Uzer Mastaba",
+   "message": "An ancient magical force won't let you set up a cannon here."
+  },
+  {
+   "name": "Vanstrom Klause",
+   "message": "You can't set up a cannon here."
+  },
+  {
+   "name": "Vet'ion's Rest",
+   "message": "It doesn't seem safe to set up a cannon here."
+  },
+  {
+   "name": "Water mill cellar",
+   "message": "It is too damp for the cannon to function here."
+  },
+  {
+   "name": "Warriors' Guild",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2838,
+       3556
+      ],
+      [
+       2838,
+       3537
+      ],
+      [
+       2839,
+       3537
+      ],
+      [
+       2840,
+       3536
+      ],
+      [
+       2841,
+       3536
+      ],
+      [
+       2842,
+       3537
+      ],
+      [
+       2845,
+       3537
+      ],
+      [
+       2846,
+       3536
+      ],
+      [
+       2847,
+       3536
+      ],
+      [
+       2848,
+       3537
+      ],
+      [
+       2849,
+       3537
+      ],
+      [
+       2849,
+       3534
+      ],
+      [
+       2860,
+       3534
+      ],
+      [
+       2860,
+       3537
+      ],
+      [
+       2865,
+       3537
+      ],
+      [
+       2866,
+       3536
+      ],
+      [
+       2867,
+       3536
+      ],
+      [
+       2868,
+       3537
+      ],
+      [
+       2871,
+       3537
+      ],
+      [
+       2872,
+       3536
+      ],
+      [
+       2873,
+       3536
+      ],
+      [
+       2874,
+       3537
+      ],
+      [
+       2876,
+       3537
+      ],
+      [
+       2876,
+       3539
+      ],
+      [
+       2877,
+       3540
+      ],
+      [
+       2877,
+       3541
+      ],
+      [
+       2876,
+       3542
+      ],
+      [
+       2876,
+       3544
+      ],
+      [
+       2877,
+       3545
+      ],
+      [
+       2877,
+       3548
+      ],
+      [
+       2876,
+       3549
+      ],
+      [
+       2876,
+       3551
+      ],
+      [
+       2877,
+       3552
+      ],
+      [
+       2877,
+       3553
+      ],
+      [
+       2876,
+       3554
+      ],
+      [
+       2876,
+       3556
+      ],
+      [
+       2874,
+       3556
+      ],
+      [
+       2873,
+       3557
+      ],
+      [
+       2872,
+       3557
+      ],
+      [
+       2871,
+       3556
+      ],
+      [
+       2868,
+       3556
+      ],
+      [
+       2867,
+       3557
+      ],
+      [
+       2866,
+       3557
+      ],
+      [
+       2865,
+       3556
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       2905,
+       9974
+      ],
+      [
+       2905,
+       9966
+      ],
+      [
+       2912,
+       9966
+      ],
+      [
+       2912,
+       9974
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       2838,
+       3543
+      ],
+      [
+       2838,
+       3537
+      ],
+      [
+       2839,
+       3537
+      ],
+      [
+       2840,
+       3536
+      ],
+      [
+       2841,
+       3536
+      ],
+      [
+       2842,
+       3537
+      ],
+      [
+       2845,
+       3537
+      ],
+      [
+       2846,
+       3536
+      ],
+      [
+       2847,
+       3536
+      ],
+      [
+       2848,
+       3537
+      ],
+      [
+       2848,
+       3538
+      ],
+      [
+       2847,
+       3538
+      ],
+      [
+       2847,
+       3543
+      ]
+     ],
+     "z": 2
+    },
+    {
+     "points": [
+      [
+       2905,
+       9966
+      ],
+      [
+       2905,
+       9957
+      ],
+      [
+       2941,
+       9957
+      ],
+      [
+       2941,
+       9974
+      ],
+      [
+       2912,
+       9974
+      ],
+      [
+       2912,
+       9966
+      ]
+     ]
+    },
+    {
+     "points": [
+      [
+       2838,
+       3556
+      ],
+      [
+       2838,
+       3543
+      ],
+      [
+       2847,
+       3543
+      ],
+      [
+       2847,
+       3538
+      ],
+      [
+       2848,
+       3538
+      ],
+      [
+       2848,
+       3537
+      ],
+      [
+       2849,
+       3537
+      ],
+      [
+       2849,
+       3534
+      ],
+      [
+       2860,
+       3534
+      ],
+      [
+       2860,
+       3537
+      ],
+      [
+       2865,
+       3537
+      ],
+      [
+       2866,
+       3536
+      ],
+      [
+       2867,
+       3536
+      ],
+      [
+       2868,
+       3537
+      ],
+      [
+       2871,
+       3537
+      ],
+      [
+       2872,
+       3536
+      ],
+      [
+       2873,
+       3536
+      ],
+      [
+       2874,
+       3537
+      ],
+      [
+       2876,
+       3537
+      ],
+      [
+       2876,
+       3539
+      ],
+      [
+       2877,
+       3540
+      ],
+      [
+       2877,
+       3541
+      ],
+      [
+       2876,
+       3542
+      ],
+      [
+       2876,
+       3545
+      ],
+      [
+       2877,
+       3546
+      ],
+      [
+       2877,
+       3547
+      ],
+      [
+       2876,
+       3548
+      ],
+      [
+       2876,
+       3551
+      ],
+      [
+       2877,
+       3552
+      ],
+      [
+       2877,
+       3553
+      ],
+      [
+       2876,
+       3554
+      ],
+      [
+       2876,
+       3556
+      ],
+      [
+       2874,
+       3556
+      ],
+      [
+       2873,
+       3557
+      ],
+      [
+       2872,
+       3557
+      ],
+      [
+       2871,
+       3556
+      ],
+      [
+       2868,
+       3556
+      ],
+      [
+       2867,
+       3557
+      ],
+      [
+       2866,
+       3557
+      ],
+      [
+       2865,
+       3556
+      ],
+      [
+       2862,
+       3556
+      ],
+      [
+       2861,
+       3557
+      ],
+      [
+       2860,
+       3557
+      ],
+      [
+       2859,
+       3556
+      ],
+      [
+       2856,
+       3556
+      ],
+      [
+       2855,
+       3557
+      ],
+      [
+       2854,
+       3557
+      ],
+      [
+       2853,
+       3556
+      ]
+     ],
+     "z": 2
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Wintertodt",
+   "message": "It's far too cold for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1624,
+       3968
+      ],
+      [
+       1636,
+       3968
+      ],
+      [
+       1643,
+       3985
+      ],
+      [
+       1653,
+       3996
+      ],
+      [
+       1653,
+       4019
+      ],
+      [
+       1642,
+       4031
+      ],
+      [
+       1619,
+       4031
+      ],
+      [
+       1607,
+       4018
+      ],
+      [
+       1607,
+       3995
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Wyvern Cave",
+   "message": "Fungi start eating into the legs of your cannon; you quickly decide not to set it up here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3584,
+       10240
+      ],
+      [
+       3584,
+       10176
+      ],
+      [
+       3648,
+       10176
+      ],
+      [
+       3648,
+       10240
+      ]
+     ]
+    },
+    {
+     "points": [
+      [
+       3584,
+       10304
+      ],
+      [
+       3584,
+       10240
+      ],
+      [
+       3648,
+       10240
+      ],
+      [
+       3648,
+       10304
+      ]
+     ]
+    }
+   ],
+   "source": "Near-Reality's area (unverified)"
+  },
+  {
+   "name": "Zemouregal's Base",
+   "message": "A strange magical force won't let you set up a cannon here."
+  },
+  {
+   "name": "Zulrah's Shrine",
+   "message": "It's far too damp for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2250,
+       3055
+      ],
+      [
+       2286,
+       3055
+      ],
+      [
+       2286,
+       3086
+      ],
+      [
+       2250,
+       3086
+      ]
+     ]
+    }
+   ],
+   "source": "plugins/bosses/zulrah/ZulrahShared.js SHRINE"
+  }
+ ]
+}

@@ -39,6 +39,25 @@ export const CRYSTAL_BOW_ALL_WEAPON_IDS: number[] = [
 ];
 
 export const CRYSTAL_BOW_SHOTS_PER_STAGE = 250;
+
+/**
+ * Bows of Faerdhinen fire their own crystal arrows, each version its own colour
+ * (RuneLite SpotanimID SP_ATTACK_ARROW_TRAVEL/LAUNCH_FAERDHINEN_*).
+ */
+export const BOW_OF_FAERDHINEN_ARROWS: { bow: number; travel: number; launch: number }[] = [
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN, travel: 1887, launch: 1888 },
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__18, travel: 1887, launch: 1888 }, // Bounty Hunter
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C_, travel: 1922, launch: 1923 }, // infinite
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__4, travel: 1924, launch: 1925 }, // Ithell
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__6, travel: 1926, launch: 1927 }, // Iorwerth
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__8, travel: 1928, launch: 1929 }, // Trahaearn
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__10, travel: 1930, launch: 1931 }, // Cadarn
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__12, travel: 1932, launch: 1933 }, // Crwys
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__14, travel: 1922, launch: 1923 }, // Meilyr: no arrow of its own
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__16, travel: 1934, launch: 1935 }, // Amlodd
+    { bow: ItemIdentifiers.BOW_OF_FAERDHINEN_C__19, travel: 1922, launch: 1923 }, // Deadman
+];
+export const BOW_OF_FAERDHINEN_IDS: number[] = BOW_OF_FAERDHINEN_ARROWS.map(({ bow }) => bow);
 export const CRYSTAL_BOW_PROJECTILE_ID = 249; // SP_ATTACK_GLOW_ARROW_TRAVEL
 
 export function isCrystalBow(itemId: number): boolean {

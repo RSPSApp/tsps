@@ -30,8 +30,8 @@ const VARP_CARGO_INVENTORY = 5204;
 const VARP_SIDE_WHITELIST = 5205;
 const VARBIT_QUANTITY_MODE = 4430;
 const VARBIT_WARNING_DISMISSED = 19123;
-const QUANTITY_ATTRIBUTE = "sailing:cargoQuantityMode";
-const WARNING_ATTRIBUTE = "sailing:cargoWarningDismissed";
+const QUANTITY_ATTRIBUTE = "sailing:cargo-quantity-mode";
+const WARNING_ATTRIBUTE = "sailing:cargo-warning-dismissed";
 
 const SOUND_OPEN = 10907;
 const SOUND_DEPOSIT_ALL = 10905;
@@ -265,6 +265,7 @@ function depositAllFromLoc({ player }) {
 
 module.exports = {
   name: "SailingCargoHold",
+  members: true,
   opAmount,
   register(api) {
     content();

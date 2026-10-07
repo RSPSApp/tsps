@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "about": "Sawmill operators' Buy-plank, as captured (rsprox/sawmill): the skillmulti menu (2046 mode 0), plank-by-plank conversion and the operator's two refusals. Vouchers from the OSRS Wiki (Sawmill, Sawmill voucher)."
+  },
+  "operators": ["Sawmill operator", "Sawmill Operator"],
+  "title": "How many do you wish to make?",
+  "menuMode": 0,
+  "planks": [
+    { "name": "Wood", "log": 1511, "plank": 960, "cost": 100 },
+    { "name": "Oak", "log": 1521, "plank": 8778, "cost": 250 },
+    { "name": "Teak", "log": 6333, "plank": 8780, "cost": 500 },
+    { "name": "Mahogany", "log": 6332, "plank": 8782, "cost": 1500 },
+    { "name": "Camphor", "log": 32904, "plank": 31432, "cost": 2500 },
+    { "name": "Ironwood", "log": 32907, "plank": 31435, "cost": 5000 },
+    { "name": "Rosewood", "log": 32910, "plank": 31438, "cost": 7500 }
+  ],
+  "coins": 995,
+  "voucher": 28628,
+  "messages": {
+    "noLogs": "You'll need to bring me some more logs.",
+    "noCoins": "Those planks cost {cost} coins. You don't have enough money for all of them."
+  },
+  "diary": {
+    "anyPlank": { "plank": 960, "diary": "varrock", "task": "make-a-normal-plank-at-the-sawmill" },
+    "mahogany": { "plank": 8782, "count": 20, "diary": "varrock", "task": "make-20-mahogany-planks-in-one-go" }
+  }
+}

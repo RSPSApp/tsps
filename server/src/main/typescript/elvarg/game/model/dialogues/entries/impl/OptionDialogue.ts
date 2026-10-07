@@ -15,6 +15,14 @@ export class OptionDialogue extends Dialogue {
         this.options = options;
     }
 
+    public getTitle(): string {
+        return this.title;
+    }
+
+    public getOptions(): string[] {
+        return this.options;
+    }
+
     public execute(option: DialogueOption): void {
         if (this.action == null) {
             return;

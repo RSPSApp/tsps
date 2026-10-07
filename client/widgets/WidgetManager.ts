@@ -36,6 +36,24 @@ export interface InterfaceParent {
     isModal?: boolean; // true if this interface captures all input
 }
 
+/**
+ * Fields a rebuilt widget gets anew every time (runtime ids, computed layout, animation state),
+ * left out when comparing a rebuild with what it replaced. So are underscore fields: the
+ * renderer's own per-widget caches (_absX, __interactionRevision...).
+ */
+const REBUILD_SIGNATURE_SKIP = new Set([
+    "uid",
+    "cycle",
+    "rootIndex",
+    "isLayoutValid",
+    "x",
+    "y",
+    "width",
+    "height",
+    "modelFrame",
+    "modelFrameCycle",
+]);
+
 export class WidgetManager {
     private loader: WidgetLoader;
     private groups: Map<number, WidgetGroupInstance> = new Map();
@@ -118,6 +136,8 @@ export class WidgetManager {
     onLoadListener?: (scriptId: number, sourceWidget: WidgetNode) => void;
     /** Invoker for runtime-set onLoad handlers (set via IF_SETONLOAD/CC_SETONLOAD) */
     onLoadInvoker?: (sourceWidget: WidgetNode) => void;
+    /** Called once a group has been loaded (its widgets now exist). */
+    onGroupLoaded?: (groupId: number) => void;
     /** Callback fired when an interface closes - used to clean up click targets */
     onInterfaceClose?: (groupId: number) => void;
     onResizeListener?: (scriptId: number, sourceWidget: WidgetNode) => void;
@@ -308,10 +328,77 @@ export class WidgetManager {
     private _invalidateSources: Map<string, number> = new Map();
 
     /**
+     * Dynamic children a script deleted (CC_DELETEALL) and is rebuilding, with how they looked
+     * before. Scripts like the enhanced client's mouseover text (4726) rebuild the same
+     * widgets every client cycle; the redraw waits until the rebuild is compared.
+     */
+    private readonly childRebuilds = new Map<number, { parent: WidgetNode; before: string }>();
+
+    /** Called before a script clears a widget's dynamic children. */
+    beginChildRebuild(parent: WidgetNode): void {
+        const uid = (parent.uid ?? -1) | 0;
+        if (uid < 0 || this.childRebuilds.has(uid)) return;
+        this.childRebuilds.set(uid, { parent, before: this.rebuildSignature(parent) });
+    }
+
+    /** Redraws the rebuilt widgets that came out different. Runs before the UI is drawn. */
+    flushChildRebuilds(): void {
+        if (this.childRebuilds.size === 0) return;
+        const rebuilds = [...this.childRebuilds.values()];
+        this.childRebuilds.clear();
+        for (const { parent, before } of rebuilds) {
+            if (this.rebuildSignature(parent) !== before) {
+                this.invalidateWidgetRender(parent, "dynamic-children");
+            }
+        }
+    }
+
+    private isInChildRebuild(w: WidgetNode): boolean {
+        // Dynamic children sit directly (or a few levels) under the widget being rebuilt.
+        let node: WidgetNode | undefined = w;
+        for (let depth = 0; node && depth < 4; depth++) {
+            if (this.childRebuilds.has((node.uid ?? -1) | 0)) return true;
+            const parentUid: number | undefined = node.parentUid;
+            node = typeof parentUid === "number" ? this.widgetByUid.get(parentUid | 0) : undefined;
+        }
+        return false;
+    }
+
+    /** What a widget and its dynamic children draw: their own settings, not computed layout. */
+    private rebuildSignature(w: WidgetNode): string {
+        const parts: string[] = [];
+        const visit = (node: any) => {
+            for (const key of Object.keys(node)) {
+                if (key.charCodeAt(0) === 95 /* _ */ || REBUILD_SIGNATURE_SKIP.has(key)) continue;
+                const value = node[key];
+                const kind = typeof value;
+                if (kind === "number" || kind === "string" || kind === "boolean") {
+                    parts.push(key, String(value));
+                } else if (Array.isArray(value) && key !== "children") {
+                    parts.push(key, value.join(","));
+                }
+            }
+            parts.push("|");
+            if (Array.isArray(node.children)) {
+                for (const child of node.children) {
+                    if (child) visit(child);
+                    else parts.push("-");
+                }
+            }
+            parts.push("^");
+        };
+        visit(w);
+        return parts.join(";");
+    }
+
+    /**
      * Mark a widget's root region as needing redraw.
      */
     invalidateWidgetRender(w: WidgetNode | null | undefined, source?: string): void {
         if (!w) return;
+        if (this.childRebuilds.size > 0 && source !== "dynamic-children" && this.isInChildRebuild(w)) {
+            return;
+        }
 
         // PERF: Count invalidations by source
         this._invalidateCount++;
@@ -354,10 +441,17 @@ export class WidgetManager {
         const delta = Math.max(0, graphicsCycle | 0);
         if (delta === 0) return;
 
-        // Iterate all loaded widgets; OSRS only processes those in the active interface tree
-        // during drawWidgets(), but maintaining state for offscreen widgets is harmless.
+        // OSRS only animates the widgets it draws (the open interface tree). Closed interfaces stay
+        // loaded here and keep their old root index: the welcome screen (378) animated on after
+        // login and redrew the UI ~95 times a second.
+        const openGroups = new Set<number>([this.rootInterface | 0]);
+        for (const parent of this.interfaceParents.values()) {
+            if (parent) openGroups.add(parent.group | 0);
+        }
         for (const w of this.widgetByUid.values()) {
             if (!w || ((w.type ?? 0) | 0) !== 6) continue;
+            const groupId = typeof w.groupId === "number" ? w.groupId | 0 : ((w.uid ?? 0) >>> 16) & 0xffff;
+            if (!openGroups.has(groupId)) continue;
             const seqId0 = (w.sequenceId ?? -1) | 0;
             const seqId2 = (w.sequenceId2 ?? -1) | 0;
             if (seqId0 === -1 && seqId2 === -1) continue;
@@ -1239,6 +1333,7 @@ export class WidgetManager {
 
             // Mark as loaded
             this.loadedGroups[groupId] = true;
+            this.onGroupLoaded?.(groupId);
 
             return instance;
         } catch {
@@ -2035,5 +2130,16 @@ export class WidgetManager {
             // Mark compass widget as dirty for redraw
             this.invalidateWidgetRender(this.compassWidget, "compass");
         }
+    }
+
+    /**
+     * Redraws the minimap every frame it is on screen, as OSRS draws it: its zoom, the player,
+     * the dots and the destination flag all change it, and none of them marks a widget dirty.
+     * Only the minimap's own rectangle is redrawn.
+     */
+    updateMinimap(): void {
+        const minimap = this.minimapWidget;
+        if (!minimap || this.isEffectivelyHidden(minimap.uid)) return;
+        this.invalidateWidgetRect(minimap);
     }
 }

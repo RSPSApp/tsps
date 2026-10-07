@@ -10,6 +10,8 @@ import { ActorAnimationClip } from "../../game/actor/ActorAnimation";
 import type { PlayerAnimKey } from "../../game/ecs/PlayerEcs";
 import { resolveHeightSamplePlaneForLocal } from "../../game/scene/PlaneResolver";
 import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../DrawRange";
+import { ACTOR_VERTEX_STRIDE, buildActorNormals } from "../buffer/ActorNormals";
+import { LabelPose, LabelRig, POSE_FLOATS_PER_LABEL } from "./LabelPose";
 import { WebGLMapSquare } from "../WebGLMapSquare";
 import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
 
@@ -64,12 +66,15 @@ type PlayerGpuPass = {
     vao: any;
     vb: VertexBuffer;
     ib: VertexBuffer;
+    /** Per-vertex labels of GPU-animated (rest-pose) geometry. */
+    lb?: VertexBuffer;
     drawCall: DrawCall;
     count: number;
 };
 
 type PlayerGpuGeometry = {
     geometryKey: string;
+    bytes: number;
     opaque?: PlayerGpuPass;
     alpha?: PlayerGpuPass;
 };
@@ -91,6 +96,8 @@ export class PlayerRenderer {
             appearance: PlayerAppearance;
             seqId: number;
             frameIdx: number;
+            /** Cycles into the frame when animation smoothing blends it; 0 otherwise. */
+            frameCycle: number;
             overlaySeqId?: number;
             overlayFrameIdx?: number;
             instances: Array<{ slot: number; pid: number; mode: "idle" | "walk" | "run" }>;
@@ -104,6 +111,8 @@ export class PlayerRenderer {
             appearance: PlayerAppearance;
             seqId: number;
             frameIdx: number;
+            /** Cycles into the frame when animation smoothing blends it; 0 otherwise. */
+            frameCycle: number;
             overlaySeqId?: number;
             overlayFrameIdx?: number;
             instances: Array<{ slot: number; pid: number; mode: "idle" | "walk" | "run" }>;
@@ -324,6 +333,9 @@ export class PlayerRenderer {
         { verts: Uint8Array; inds: Int32Array; vertsA: Uint8Array; indsA: Int32Array }
     > = new Map();
     private playerGpuGeometryCache: Map<string, PlayerGpuGeometry> = new Map();
+    private playerGpuGeometryBytes = 0;
+    /** ~1,600 frames at the ~40 KB a player frame measures; a crowd of ~25 fits. */
+    private static readonly GPU_GEOMETRY_BUDGET_BYTES = 64 * 1024 * 1024;
 
     private ensureBaseForAppearance(
         app: PlayerAppearance,
@@ -424,77 +436,78 @@ export class PlayerRenderer {
         );
     }
 
-    private getPlayerGpuGeometry(ownerKey: string, geometryKey: string): PlayerGpuGeometry | undefined {
-        let geometry = this.playerGpuGeometryCache.get(ownerKey);
-        if (geometry?.geometryKey === geometryKey) {
-            this.playerGpuGeometryCache.delete(ownerKey);
-            this.playerGpuGeometryCache.set(ownerKey, geometry);
-            return geometry;
+    /**
+     * GPU geometry for one animation frame (appearance|seq|frame...), uploaded once and kept.
+     * Crowds cycle through thousands of frames; keeping one slot per appearance+animation
+     * re-uploaded nearly every frame step, and the 384-entry CPU cache thrashed behind it.
+     */
+    private getPlayerGpuGeometry(geometryKey: string): PlayerGpuGeometry | undefined {
+        const hit = this.playerGpuGeometryCache.get(geometryKey);
+        if (hit) {
+            this.playerGpuGeometryCache.delete(geometryKey);
+            this.playerGpuGeometryCache.set(geometryKey, hit);
+            return hit;
         }
 
         const cached = this.geomCache.get(geometryKey);
         if (!cached) return undefined;
 
-        geometry ??= { geometryKey };
-        geometry.opaque = this.updatePlayerGpuPass(
-            geometry.opaque,
-            cached.verts,
-            cached.inds,
-            (this.renderer as any).playerProgramOpaque ?? (this.renderer as any).playerProgram,
-        );
-        geometry.alpha = this.updatePlayerGpuPass(
-            geometry.alpha,
-            cached.vertsA,
-            cached.indsA,
-            (this.renderer as any).playerProgram,
-        );
-        geometry.geometryKey = geometryKey;
-        this.playerGpuGeometryCache.delete(ownerKey);
-        this.playerGpuGeometryCache.set(ownerKey, geometry);
-
-        while (this.playerGpuGeometryCache.size > PlayerRenderer.GEOM_CACHE_MAX_ENTRIES) {
-            const oldest = this.playerGpuGeometryCache.keys().next().value as string | undefined;
-            if (oldest === undefined) break;
-            const evicted = this.playerGpuGeometryCache.get(oldest);
-            if (evicted) this.deletePlayerGpuGeometry(evicted);
-            this.playerGpuGeometryCache.delete(oldest);
-        }
+        const r: any = this.renderer as any;
+        const geometry: PlayerGpuGeometry = {
+            geometryKey,
+            bytes:
+                cached.verts.byteLength +
+                cached.inds.byteLength +
+                cached.vertsA.byteLength +
+                cached.indsA.byteLength,
+            opaque: this.createPlayerGpuPass(
+                cached.verts,
+                cached.inds,
+                r.playerProgramOpaque ?? r.playerProgram,
+            ),
+            alpha: this.createPlayerGpuPass(cached.vertsA, cached.indsA, r.playerProgram),
+        };
+        this.addPlayerGpuGeometry(geometry);
         return geometry;
     }
 
-    private updatePlayerGpuPass(
-        pass: PlayerGpuPass | undefined,
+    private addPlayerGpuGeometry(geometry: PlayerGpuGeometry): void {
+        this.playerGpuGeometryCache.set(geometry.geometryKey, geometry);
+        this.playerGpuGeometryBytes += geometry.bytes;
+
+        // ponytail: one VAO + buffer pair per frame; pack frames into shared arenas if the
+        // object count ever shows up in profiles.
+        while (
+            this.playerGpuGeometryBytes > PlayerRenderer.GPU_GEOMETRY_BUDGET_BYTES &&
+            this.playerGpuGeometryCache.size > 1
+        ) {
+            const [oldestKey, oldest] = this.playerGpuGeometryCache.entries().next().value!;
+            this.playerGpuGeometryCache.delete(oldestKey);
+            this.deletePlayerGpuGeometry(oldest);
+        }
+    }
+
+    private createPlayerGpuPass(
         vertices: Uint8Array,
         indices: Int32Array,
         program: any,
+        labels?: Uint8Array,
     ): PlayerGpuPass | undefined {
-        if (!program) return undefined;
-        if (
-            pass &&
-            pass.vb.byteLength >= vertices.byteLength &&
-            pass.ib.byteLength >= indices.byteLength
-        ) {
-            if (vertices.byteLength > 0) pass.vb.data(vertices);
-            if (indices.byteLength > 0) pass.ib.data(indices);
-            pass.count = indices.length | 0;
-            return pass;
-        }
-        if (pass) this.deletePlayerGpuPass(pass);
-        if (indices.length <= 0) return undefined;
+        if (!program || indices.length <= 0) return undefined;
 
         const r: any = this.renderer as any;
-        const vb = r.app.createInterleavedBuffer(12, vertices, PicoGL.DYNAMIC_DRAW);
+        const vb = r.app.createInterleavedBuffer(ACTOR_VERTEX_STRIDE, vertices, PicoGL.STATIC_DRAW);
         const ib = r.app.createIndexBuffer(
             PicoGL.UNSIGNED_INT as number,
             indices,
-            PicoGL.DYNAMIC_DRAW,
+            PicoGL.STATIC_DRAW,
         );
         const vao = r.app
             .createVertexArray()
             .vertexAttributeBuffer(0, vb, {
                 type: PicoGL.UNSIGNED_INT,
-                size: 3,
-                stride: 12,
+                size: 4,
+                stride: ACTOR_VERTEX_STRIDE,
                 integer: true as any,
             })
             .instanceAttributeBuffer(1, r.playerSlotBuffer, {
@@ -503,14 +516,20 @@ export class PlayerRenderer {
                 integer: true as any,
             })
             .indexBuffer(ib);
+        const lb = labels
+            ? r.app.createVertexBuffer(PicoGL.UNSIGNED_BYTE, 1, labels, PicoGL.STATIC_DRAW)
+            : undefined;
+        // Read as a float (a_label): PicoGL would otherwise pass byte buffers as integers.
+        if (lb) vao.vertexAttributeBuffer(2, lb, { type: PicoGL.UNSIGNED_BYTE, size: 1, integer: false as any });
         const drawCall = r.app
             .createDrawCall(program, vao)
             .uniformBlock("SceneUniforms", r.sceneUniformBuffer)
             .uniform("u_timeLoaded", -1.0)
             .uniform("u_usePlayerSlotAttribute", false)
             .texture("u_textures", r.textureArray)
-            .texture("u_textureMaterials", r.textureMaterials);
-        return { vao, vb, ib, drawCall, count: indices.length | 0 };
+            .texture("u_textureMaterials", r.textureMaterials)
+            .texture("u_poseTexture", r.playerPoseTexture);
+        return { vao, vb, ib, lb, drawCall, count: indices.length | 0 };
     }
 
     private deletePlayerGpuPass(pass: PlayerGpuPass): void {
@@ -518,10 +537,12 @@ export class PlayerRenderer {
             pass.vao.delete();
             pass.vb.delete();
             pass.ib.delete();
+            pass.lb?.delete();
         } catch {}
     }
 
     private deletePlayerGpuGeometry(geometry: PlayerGpuGeometry): void {
+        this.playerGpuGeometryBytes -= geometry.bytes;
         if (geometry.opaque) this.deletePlayerGpuPass(geometry.opaque);
         if (geometry.alpha) this.deletePlayerGpuPass(geometry.alpha);
     }
@@ -531,6 +552,190 @@ export class PlayerRenderer {
             this.deletePlayerGpuGeometry(geometry);
         }
         this.playerGpuGeometryCache.clear();
+        this.playerGpuGeometryBytes = 0;
+    }
+
+    // GPU animation: players posed by one matrix per label in the vertex shader, from a rest-pose
+    // mesh per appearance, instead of a CPU-built mesh per animation frame. Poses that need the
+    // CPU (skeletal animations, alpha/colour transforms) fall back to the per-frame cache above.
+    private static readonly POSE_ROWS = 256;
+    private static readonly POSE_CACHE_MAX_ENTRIES = 4096;
+    private poseUpload = new Float32Array(0);
+    private readonly poseRows = new Map<string, { geometry: PlayerGpuGeometry; row: number }>();
+    private readonly poseRowMatrices: Float32Array[] = [];
+    private readonly poseCache = new Map<string, Float32Array | null>();
+    private readonly rigs = new WeakMap<object, LabelRig | null>();
+    private readonly restMeshIds = new WeakMap<object, number>();
+    private nextRestMeshId = 0;
+
+    private rigFor(baseModel: any): LabelRig | undefined {
+        let rig = this.rigs.get(baseModel);
+        if (rig === undefined) {
+            rig = LabelRig.of(baseModel) ?? null;
+            this.rigs.set(baseModel, rig);
+        }
+        return rig ?? undefined;
+    }
+
+    /** The group's pose matrices, or undefined when it must be posed on the CPU. */
+    private poseFor(batchKey: string, baseRec: any, group: any): Float32Array | undefined {
+        const cached = this.poseCache.get(batchKey);
+        if (cached !== undefined) {
+            this.poseCache.delete(batchKey);
+            this.poseCache.set(batchKey, cached);
+            return cached ?? undefined;
+        }
+        let matrices: Float32Array | null = null;
+        try {
+            const rig = this.rigFor(baseRec.baseModel);
+            // The CPU path re-centres the posed model on the base centre; GPU poses assume none.
+            if (rig && (baseRec.baseCenterX | 0) === 0 && (baseRec.baseCenterZ | 0) === 0) {
+                const mv: any = this.renderer.osrsClient;
+                const seqType = group.seqId >= 0 ? mv.seqTypeLoader.load(group.seqId | 0) : undefined;
+                const overlayType =
+                    typeof group.overlaySeqId === "number" && typeof group.overlayFrameIdx === "number"
+                        ? mv.seqTypeLoader.load(group.overlaySeqId | 0)
+                        : undefined;
+                if (!seqType?.isSkeletalSeq?.() && !overlayType?.isSkeletalSeq?.()) {
+                    const pose = new LabelPose(rig);
+                    this.applySequenceTransformationsToModel(
+                        pose,
+                        seqType,
+                        group.seqId | 0,
+                        group.frameIdx | 0,
+                        overlayType,
+                        (group.overlaySeqId ?? -1) | 0,
+                        (group.overlayFrameIdx ?? -1) | 0,
+                        mv,
+                        group.frameCycle | 0,
+                    );
+                    if (!pose.needsCpu) matrices = pose.finish(0, 0);
+                }
+            }
+        } catch {
+            matrices = null;
+        }
+        this.poseCache.set(batchKey, matrices);
+        while (this.poseCache.size > PlayerRenderer.POSE_CACHE_MAX_ENTRIES) {
+            this.poseCache.delete(this.poseCache.keys().next().value as string);
+        }
+        return matrices ?? undefined;
+    }
+
+    /** The appearance's rest-pose mesh with per-vertex labels, built once. */
+    private restMeshFor(baseModel: any, rig: LabelRig): PlayerGpuGeometry | undefined {
+        let id = this.restMeshIds.get(baseModel);
+        if (id === undefined) {
+            id = this.nextRestMeshId++;
+            this.restMeshIds.set(baseModel, id);
+        }
+        const key = `rest:${id}`;
+        const hit = this.playerGpuGeometryCache.get(key);
+        if (hit) {
+            this.playerGpuGeometryCache.delete(key);
+            this.playerGpuGeometryCache.set(key, hit);
+            return hit;
+        }
+
+        const r: any = this.renderer;
+        const textureLoader = r.osrsClient.textureLoader;
+        const textureIdIndexMap = r.textureIdIndexMap ?? new Map<number, number>();
+        const SceneBufferMod = require("../buffer/SceneBuffer");
+        const isTrans = SceneBufferMod.isModelFaceTransparent;
+        const faces = SceneBufferMod.getModelFaces(baseModel);
+        const vertexLabel = rig.vertexLabelOf();
+        const normals = buildActorNormals(baseModel);
+        const build = (passFaces: any[]) => {
+            // Unshared vertices: each face corner is its own vertex, so it carries its label.
+            const sceneBuf = new SceneBufferMod.SceneBuffer(
+                textureLoader,
+                textureIdIndexMap,
+                passFaces.length * 3 + 16,
+                true,
+            );
+            if (passFaces.length > 0) sceneBuf.addModel(baseModel, passFaces, undefined, false, normals);
+            const labels = new Uint8Array(passFaces.length * 3);
+            for (let i = 0; i < passFaces.length; i++) {
+                const face = passFaces[i].index;
+                labels[i * 3] = vertexLabel[baseModel.indices1[face]] + 1;
+                labels[i * 3 + 1] = vertexLabel[baseModel.indices2[face]] + 1;
+                labels[i * 3 + 2] = vertexLabel[baseModel.indices3[face]] + 1;
+            }
+            return {
+                verts: sceneBuf.vertexBuf.byteArray() as Uint8Array,
+                inds: Int32Array.from(sceneBuf.indices as number[]),
+                labels,
+            };
+        };
+        const opaque = build(faces.filter((f: any) => !isTrans(textureLoader, f)));
+        const alpha = build(faces.filter((f: any) => isTrans(textureLoader, f)));
+        const geometry: PlayerGpuGeometry = {
+            geometryKey: key,
+            bytes:
+                opaque.verts.byteLength + opaque.inds.byteLength + opaque.labels.byteLength +
+                alpha.verts.byteLength + alpha.inds.byteLength + alpha.labels.byteLength,
+            opaque: this.createPlayerGpuPass(
+                opaque.verts,
+                opaque.inds,
+                r.playerProgramOpaque ?? r.playerProgram,
+                opaque.labels,
+            ),
+            alpha: this.createPlayerGpuPass(alpha.verts, alpha.inds, r.playerProgram, alpha.labels),
+        };
+        this.addPlayerGpuGeometry(geometry);
+        return geometry;
+    }
+
+    /**
+     * Poses this pass's GPU-animatable groups and uploads them, one texture row each.
+     * Returns the rest mesh and row per batch key; groups left out draw from the frame cache.
+     */
+    private preparePoses(groups: Map<string, any>): Map<string, { geometry: PlayerGpuGeometry; row: number }> {
+        const out = this.poseRows;
+        out.clear();
+        const rows = this.poseRowMatrices;
+        rows.length = 0;
+        let maxLabels = 0;
+        for (const [batchKey, group] of groups) {
+            if (out.size >= PlayerRenderer.POSE_ROWS) break;
+            const baseRec = this.ensureBaseForAppearance(group.appearance);
+            if (!baseRec) continue;
+            const matrices = this.poseFor(batchKey, baseRec, group);
+            if (!matrices) continue;
+            const geometry = this.restMeshFor(baseRec.baseModel, this.rigFor(baseRec.baseModel)!);
+            if (!geometry) continue;
+            out.set(batchKey, { geometry, row: rows.length });
+            rows.push(matrices);
+            maxLabels = Math.max(maxLabels, matrices.length / POSE_FLOATS_PER_LABEL);
+        }
+        if (rows.length === 0) return out;
+
+        const r: any = this.renderer;
+        if (!r.playerPoseTexture) {
+            out.clear();
+            return out;
+        }
+        const width = maxLabels * 3;
+        const rowFloats = width * 4;
+        if (this.poseUpload.length < rowFloats * rows.length) {
+            this.poseUpload = new Float32Array(rowFloats * PlayerRenderer.POSE_ROWS);
+        }
+        for (let i = 0; i < rows.length; i++) this.poseUpload.set(rows[i], i * rowFloats);
+        const gl: WebGL2RenderingContext = r.app.gl;
+        const texture: any = r.playerPoseTexture;
+        texture.bind(Math.max(0, texture.currentUnit | 0));
+        gl.texSubImage2D(
+            gl.TEXTURE_2D,
+            0,
+            0,
+            0,
+            width,
+            rows.length,
+            gl.RGBA,
+            gl.FLOAT,
+            this.poseUpload.subarray(0, rowFloats * rows.length),
+        );
+        return out;
     }
 
     // ==== Spot GFX helpers (id 833) ====
@@ -1018,6 +1223,7 @@ export class PlayerRenderer {
         seqId: number,
         frameIdx: number,
         mv: any,
+        frameCycle: number = 0,
     ): boolean {
         if (!seqType) return false;
         if (seqType.isSkeletalSeq?.()) {
@@ -1036,11 +1242,47 @@ export class PlayerRenderer {
             const key = ids[idx] | 0;
             const frame0 = mv.seqFrameLoader.load(key);
             if (frame0) {
-                model.animate(frame0, undefined, !!seqType.op14);
+                const next = frameCycle > 0 ? this.smoothingTarget(seqType, idx, mv) : undefined;
+                if (next) {
+                    const alpha = Math.min(1, frameCycle / next.length);
+                    model.animateInterpolated(frame0, next.frame, alpha, !!seqType.op14);
+                } else {
+                    model.animate(frame0, undefined, !!seqType.op14);
+                }
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Cycles into the current frame when animation smoothing blends this player's animation
+     * toward its next frame, else 0. Only a single keyframe animation is blended (not skeletal
+     * ones, which already move every cycle, nor an action layered over movement).
+     */
+    private smoothingCycle(
+        seqId: number,
+        overlaySeqId: number | undefined,
+        frameCycle: number,
+    ): number {
+        if (!(frameCycle > 0) || seqId < 0 || overlaySeqId !== undefined) return 0;
+        if (!this.renderer.osrsClient.animationSmoothingPlugin?.smoothsPlayer(seqId)) return 0;
+        const seqType: any = this.renderer.osrsClient.seqTypeLoader.load(seqId | 0);
+        if (!seqType || seqType.isSkeletalSeq?.() || !(seqType.frameIds?.length > 1)) return 0;
+        return frameCycle | 0;
+    }
+
+    /** The frame after `idx` and the current frame's length; none for the last frame. */
+    private smoothingTarget(
+        seqType: any,
+        idx: number,
+        mv: any,
+    ): { frame: any; length: number } | undefined {
+        const ids = seqType.frameIds as number[];
+        if (idx + 1 >= ids.length) return undefined;
+        const frame = mv.seqFrameLoader.load(ids[idx + 1] | 0);
+        const length = seqType.getFrameLength(mv.seqFrameLoader, idx) | 0;
+        return frame && length > 0 ? { frame, length } : undefined;
     }
 
     private applySequenceTransformationsToModel(
@@ -1052,6 +1294,7 @@ export class PlayerRenderer {
         overlaySeqId: number,
         overlayFrameIdx: number,
         mv: any,
+        frameCycle: number = 0,
     ): boolean {
         if (!baseType) return false;
         if (!overlayType) {
@@ -1061,6 +1304,7 @@ export class PlayerRenderer {
                 baseSeqId | 0,
                 baseFrameIdx | 0,
                 mv,
+                frameCycle | 0,
             );
         }
 
@@ -1220,6 +1464,7 @@ export class PlayerRenderer {
         overlaySeqId?: number,
         overlayFrameIdx?: number,
         uploadTarget: "both" | "opaqueOnly" | "alphaOnly" | "cacheOnly" = "both",
+        frameCycle: number = 0,
     ): { countOpaque: number; countAlpha: number } {
         const r: any = this.renderer as any;
         if (!r.playerInterleavedBuffer || !r.playerIndexBuffer)
@@ -1304,6 +1549,7 @@ export class PlayerRenderer {
                     overlayId | 0,
                     overlayFrame | 0,
                     mv,
+                    frameCycle | 0,
                 );
             }
         } catch {}
@@ -1410,14 +1656,15 @@ export class PlayerRenderer {
         };
 
         // Build opaque geometry. For local player, reuse SceneBuffer + typed index arrays.
+        const actorNormals = buildActorNormals(model, baseModel);
         let vertices: Uint8Array;
         let indices: Int32Array;
         if (controlled) {
             if (!this.localSceneBuf) {
-                this.localSceneBuf = new SceneBufferCls(textureLoader, textureIdIndexMap, 0);
+                this.localSceneBuf = new SceneBufferCls(textureLoader, textureIdIndexMap, 0, true);
             }
             resetSceneBuf(this.localSceneBuf);
-            if (facesOpaque.length > 0) this.localSceneBuf.addModel(model, facesOpaque);
+            if (facesOpaque.length > 0) this.localSceneBuf.addModel(model, facesOpaque, undefined, true, actorNormals);
             vertices = this.localSceneBuf.vertexBuf.byteArray();
             indices = fillScratch(this.localSceneBuf.indices, false);
         } else {
@@ -1425,8 +1672,9 @@ export class PlayerRenderer {
                 textureLoader,
                 textureIdIndexMap,
                 model.verticesCount + 16,
+                true,
             );
-            if (facesOpaque.length > 0) sceneBuf.addModel(model, facesOpaque);
+            if (facesOpaque.length > 0) sceneBuf.addModel(model, facesOpaque, undefined, true, actorNormals);
             vertices = sceneBuf.vertexBuf.byteArray();
             indices = new Int32Array(sceneBuf.indices);
         }
@@ -1473,10 +1721,10 @@ export class PlayerRenderer {
         if (facesAlpha.length > 0) {
             if (controlled) {
                 if (!this.localSceneBuf) {
-                    this.localSceneBuf = new SceneBufferCls(textureLoader, textureIdIndexMap, 0);
+                    this.localSceneBuf = new SceneBufferCls(textureLoader, textureIdIndexMap, 0, true);
                 }
                 resetSceneBuf(this.localSceneBuf);
-                this.localSceneBuf.addModel(model, facesAlpha);
+                this.localSceneBuf.addModel(model, facesAlpha, undefined, true, actorNormals);
                 verticesAlpha = this.localSceneBuf.vertexBuf.byteArray();
                 indicesAlpha = fillScratch(this.localSceneBuf.indices, true);
             } else {
@@ -1484,8 +1732,9 @@ export class PlayerRenderer {
                     textureLoader,
                     textureIdIndexMap,
                     model.verticesCount + 16,
+                    true,
                 );
-                sceneBufA.addModel(model, facesAlpha);
+                sceneBufA.addModel(model, facesAlpha, undefined, true, actorNormals);
                 verticesAlpha = sceneBufA.vertexBuf.byteArray();
                 indicesAlpha = new Int32Array(sceneBufA.indices);
             }
@@ -1563,7 +1812,7 @@ export class PlayerRenderer {
             return n;
         };
 
-        const strideBytes = 12;
+        const strideBytes = ACTOR_VERTEX_STRIDE;
 
         if (needGrowVB) {
             const oldBuf = r.playerInterleavedBuffer;
@@ -1574,7 +1823,7 @@ export class PlayerRenderer {
             // Rebind VAO attribute 0 to new buffer
             r.playerVertexArray = vao.vertexAttributeBuffer(0, newBuf, {
                 type: PicoGL.UNSIGNED_INT,
-                size: 3,
+                size: 4,
                 stride: strideBytes,
                 integer: true as any,
             });
@@ -1590,7 +1839,8 @@ export class PlayerRenderer {
                     .uniform("u_timeLoaded", -1.0)
                     .uniform("u_usePlayerSlotAttribute", false)
                     .texture("u_textures", r.textureArray)
-                    .texture("u_textureMaterials", r.textureMaterials);
+                    .texture("u_textureMaterials", r.textureMaterials)
+            .texture("u_poseTexture", r.playerPoseTexture);
                 // Keep alpha draw call bound to the dedicated alpha VAO; see ensurePlayerGpuCapacityAlpha().
                 this.drawCall = r.playerDrawCall;
             }
@@ -1614,7 +1864,8 @@ export class PlayerRenderer {
                     .uniform("u_timeLoaded", -1.0)
                     .uniform("u_usePlayerSlotAttribute", false)
                     .texture("u_textures", r.textureArray)
-                    .texture("u_textureMaterials", r.textureMaterials);
+                    .texture("u_textureMaterials", r.textureMaterials)
+            .texture("u_poseTexture", r.playerPoseTexture);
                 // Keep alpha draw call bound to the dedicated alpha VAO; see ensurePlayerGpuCapacityAlpha().
                 this.drawCall = r.playerDrawCall;
             }
@@ -1642,7 +1893,7 @@ export class PlayerRenderer {
             while (n < Math.max(1, v)) n <<= 1;
             return n;
         };
-        const strideBytes = 12;
+        const strideBytes = ACTOR_VERTEX_STRIDE;
 
         if (needGrowVB) {
             const oldBuf = r.playerInterleavedBufferAlpha;
@@ -1652,7 +1903,7 @@ export class PlayerRenderer {
             const newBuf = app.createInterleavedBuffer(strideBytes, capBytes);
             r.playerVertexArrayAlpha = vao.vertexAttributeBuffer(0, newBuf, {
                 type: PicoGL.UNSIGNED_INT,
-                size: 3,
+                size: 4,
                 stride: strideBytes,
                 integer: true as any,
             });
@@ -1666,7 +1917,8 @@ export class PlayerRenderer {
                     .uniform("u_timeLoaded", -1.0)
                     .uniform("u_usePlayerSlotAttribute", false)
                     .texture("u_textures", r.textureArray)
-                    .texture("u_textureMaterials", r.textureMaterials);
+                    .texture("u_textureMaterials", r.textureMaterials)
+            .texture("u_poseTexture", r.playerPoseTexture);
                 this.drawCallAlpha = r.playerDrawCallAlpha;
             }
         }
@@ -1687,7 +1939,8 @@ export class PlayerRenderer {
                     .uniform("u_timeLoaded", -1.0)
                     .uniform("u_usePlayerSlotAttribute", false)
                     .texture("u_textures", r.textureArray)
-                    .texture("u_textureMaterials", r.textureMaterials);
+                    .texture("u_textureMaterials", r.textureMaterials)
+            .texture("u_poseTexture", r.playerPoseTexture);
                 this.drawCallAlpha = r.playerDrawCallAlpha;
             }
         }
@@ -1956,13 +2209,18 @@ export class PlayerRenderer {
 
             let movementFrameIdx = 0;
             let actionFrameIdx = 0;
+            let movementFrameCycle = 0;
+            let actionFrameCycle = 0;
             if (!unanimatedIdle) {
                 const controller = this.renderer.osrsClient.playerAnimController;
                 const serverId = this.renderer.osrsClient.playerEcs.getServerIdForIndex(pid);
                 if (controller && serverId !== undefined) {
-                    movementFrameIdx =
-                        (controller.getMovementSequenceState(serverId)?.frame ?? 0) | 0;
-                    actionFrameIdx = (controller.getSequenceState(serverId)?.frame ?? 0) | 0;
+                    const movementState = controller.getMovementSequenceState(serverId);
+                    const actionState = controller.getSequenceState(serverId);
+                    movementFrameIdx = (movementState?.frame ?? 0) | 0;
+                    actionFrameIdx = (actionState?.frame ?? 0) | 0;
+                    movementFrameCycle = (movementState?.frameCycle ?? 0) | 0;
+                    actionFrameCycle = (actionState?.frameCycle ?? 0) | 0;
                 }
             }
 
@@ -2077,7 +2335,16 @@ export class PlayerRenderer {
                 typeof overlaySeqId === "number" && typeof overlayFrameIdx === "number"
                     ? `|${overlaySeqId | 0}|${overlayFrameIdx | 0}`
                     : "";
-            const batchKey = `${appKey}|${seqId}|${frameIdx}${overlayKey}`;
+            const frameCycle =
+                forcedSeq !== undefined || unanimatedIdle
+                    ? 0
+                    : this.smoothingCycle(
+                          seqId,
+                          overlaySeqId,
+                          useActionSequence ? actionFrameCycle : movementFrameCycle,
+                      );
+            const cycleKey = frameCycle > 0 ? `~${frameCycle}` : "";
+            const batchKey = `${appKey}|${seqId}|${frameIdx}${cycleKey}${overlayKey}`;
 
             // Add player to batch group
             let group = this.batchGroups.get(batchKey);
@@ -2086,6 +2353,7 @@ export class PlayerRenderer {
                     appearance: effectiveApp,
                     seqId: seqId | 0,
                     frameIdx: frameIdx | 0,
+                    frameCycle,
                     overlaySeqId: overlaySeqId,
                     overlayFrameIdx: overlayFrameIdx,
                     instances: [],
@@ -2115,6 +2383,8 @@ export class PlayerRenderer {
         if (r.cullBackFace) r.app.enable(PicoGL.CULL_FACE);
         else r.app.disable(PicoGL.CULL_FACE);
 
+        const poses = this.preparePoses(this.batchGroups);
+
         // Process each batch group
         for (const [batchKey, group] of this.batchGroups) {
             // The first-person camera can look at the reverse side of an arm,
@@ -2140,10 +2410,8 @@ export class PlayerRenderer {
             }
 
             if (batchSource) {
-                const gpuOwnerKey = `${this.getAppearanceCacheKey(group.appearance)}|seq:${
-                    group.seqId | 0
-                }|overlay:${group.overlaySeqId ?? -1}`;
-                let gpuGeometry = this.getPlayerGpuGeometry(gpuOwnerKey, batchKey);
+                const posed = poses.get(batchKey);
+                let gpuGeometry = posed?.geometry ?? this.getPlayerGpuGeometry(batchKey);
                 if (!gpuGeometry) {
                     this.dynamicUpdateBuffersFor(
                         baseRec.baseModel,
@@ -2157,8 +2425,9 @@ export class PlayerRenderer {
                         group.overlaySeqId,
                         group.overlayFrameIdx,
                         "cacheOnly",
+                        group.frameCycle,
                     );
-                    gpuGeometry = this.getPlayerGpuGeometry(gpuOwnerKey, batchKey);
+                    gpuGeometry = this.getPlayerGpuGeometry(batchKey);
                 }
                 const counts = gpuGeometry
                     ? {
@@ -2177,6 +2446,7 @@ export class PlayerRenderer {
                           group.overlaySeqId,
                           group.overlayFrameIdx,
                           "opaqueOnly",
+                          group.frameCycle,
                       );
                 for (const inst of group.instances) {
                     if (this.canBatchPlayer(inst.pid, playerEcs)) {
@@ -2195,6 +2465,9 @@ export class PlayerRenderer {
                               .texture("u_heightMap", map.heightMapTexture)
                               .uniform("u_sceneBorderSize", map.borderSize)
                         : draw;
+                    if (posed) {
+                        playerDraw.uniform("u_poseRow", posed.row);
+                    }
                     drawPlayerSlots(
                         playerDraw,
                         r.playerSlotBuffer!,
@@ -2215,12 +2488,13 @@ export class PlayerRenderer {
                     baseRec.baseCenterZ,
                     group.seqId,
                     group.frameIdx,
-                    this.isControlledPid(inst.pid) ? undefined : batchKey,
+                    batchKey,
                     inst.pid,
                     inst.mode,
                     group.overlaySeqId,
                     group.overlayFrameIdx,
                     "opaqueOnly",
+                    group.frameCycle,
                 );
                 this.framePlayerAlphaCounts.set(inst.pid | 0, counts.countAlpha | 0);
 
@@ -2329,13 +2603,18 @@ export class PlayerRenderer {
 
                 let movementFrameIdx = 0;
                 let actionFrameIdx = 0;
+                let movementFrameCycle = 0;
+                let actionFrameCycle = 0;
                 if (!unanimatedIdle) {
                     const controller = this.renderer.osrsClient.playerAnimController;
                     const serverId = this.renderer.osrsClient.playerEcs.getServerIdForIndex(pid);
                     if (controller && serverId !== undefined) {
-                        movementFrameIdx =
-                            (controller.getMovementSequenceState(serverId)?.frame ?? 0) | 0;
-                        actionFrameIdx = (controller.getSequenceState(serverId)?.frame ?? 0) | 0;
+                        const movementState = controller.getMovementSequenceState(serverId);
+                        const actionState = controller.getSequenceState(serverId);
+                        movementFrameIdx = (movementState?.frame ?? 0) | 0;
+                        actionFrameIdx = (actionState?.frame ?? 0) | 0;
+                        movementFrameCycle = (movementState?.frameCycle ?? 0) | 0;
+                        actionFrameCycle = (actionState?.frameCycle ?? 0) | 0;
                     }
                 }
 
@@ -2424,7 +2703,16 @@ export class PlayerRenderer {
                     typeof overlaySeqId === "number" && typeof overlayFrameIdx === "number"
                         ? `|${overlaySeqId | 0}|${overlayFrameIdx | 0}`
                         : "";
-                const batchKey = `${appKey}|${seqId}|${frameIdx}${overlayKey}`;
+                const frameCycle =
+                    forcedSeq !== undefined || unanimatedIdle
+                        ? 0
+                        : this.smoothingCycle(
+                              seqId,
+                              overlaySeqId,
+                              useActionSequence ? actionFrameCycle : movementFrameCycle,
+                          );
+                const cycleKey = frameCycle > 0 ? `~${frameCycle}` : "";
+                const batchKey = `${appKey}|${seqId}|${frameIdx}${cycleKey}${overlayKey}`;
 
                 // Add to alpha batch group
                 let group = alphaBatchGroups.get(batchKey);
@@ -2433,6 +2721,7 @@ export class PlayerRenderer {
                         appearance: effectiveApp,
                         seqId: seqId | 0,
                         frameIdx: frameIdx | 0,
+                        frameCycle,
                         overlaySeqId: overlaySeqId,
                         overlayFrameIdx: overlayFrameIdx,
                         instances: [],
@@ -2444,6 +2733,7 @@ export class PlayerRenderer {
             if (alphaBatchGroups.size === 0) continue;
 
             // Render batched alpha groups.
+            const alphaPoses = this.preparePoses(alphaBatchGroups);
             const draw = r.configureDrawCall(this.drawCallAlpha as any as DrawCall);
             const playerEcsAlpha = r.osrsClient?.playerEcs;
             const alphaDeckH = r.getWorldEntityDeckHeight(0, 0);
@@ -2474,10 +2764,8 @@ export class PlayerRenderer {
                 }
 
                 if (batchSource) {
-                    const gpuOwnerKey = `${this.getAppearanceCacheKey(group.appearance)}|seq:${
-                        group.seqId | 0
-                    }|overlay:${group.overlaySeqId ?? -1}`;
-                    let gpuGeometry = this.getPlayerGpuGeometry(gpuOwnerKey, batchKey);
+                    const posed = alphaPoses.get(batchKey);
+                    let gpuGeometry = posed?.geometry ?? this.getPlayerGpuGeometry(batchKey);
                     if (!gpuGeometry) {
                         this.dynamicUpdateBuffersFor(
                             baseRec.baseModel,
@@ -2491,8 +2779,9 @@ export class PlayerRenderer {
                             group.overlaySeqId,
                             group.overlayFrameIdx,
                             "cacheOnly",
+                            group.frameCycle,
                         );
-                        gpuGeometry = this.getPlayerGpuGeometry(gpuOwnerKey, batchKey);
+                        gpuGeometry = this.getPlayerGpuGeometry(batchKey);
                     }
                     const counts = gpuGeometry
                         ? { countAlpha: gpuGeometry.alpha?.count ?? 0 }
@@ -2508,6 +2797,7 @@ export class PlayerRenderer {
                               group.overlaySeqId,
                               group.overlayFrameIdx,
                               "alphaOnly",
+                              group.frameCycle,
                           );
                     if ((counts.countAlpha | 0) > 0) {
                         const playerDraw = gpuGeometry?.alpha
@@ -2521,6 +2811,9 @@ export class PlayerRenderer {
                                   .texture("u_heightMap", map.heightMapTexture)
                                   .uniform("u_sceneBorderSize", map.borderSize)
                             : draw;
+                        if (posed) {
+                            playerDraw.uniform("u_poseRow", posed.row);
+                        }
                         drawPlayerSlots(
                             playerDraw,
                             r.playerSlotBuffer!,
@@ -2541,12 +2834,13 @@ export class PlayerRenderer {
                         baseRec.baseCenterZ,
                         group.seqId,
                         group.frameIdx,
-                        this.isControlledPid(inst.pid) ? undefined : batchKey,
+                        batchKey,
                         inst.pid,
                         inst.mode,
                         group.overlaySeqId,
                         group.overlayFrameIdx,
                         "alphaOnly",
+                        group.frameCycle,
                     );
 
                     if ((counts.countAlpha | 0) <= 0) continue;

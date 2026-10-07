@@ -7,6 +7,6 @@ export enum Flag {
     APPEARANCE,
     ANIMATION,
     GRAPHIC,
-    SINGLE_HIT,
-    DOUBLE_HIT,
+    /** One or more hitsplats this tick; the list is Mobile.getTickHits(). */
+    HIT,
 }

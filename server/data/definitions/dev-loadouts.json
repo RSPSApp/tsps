@@ -1,0 +1,45 @@
+{
+  "_comment": "Gear for the developer command ::maxgear <melee|range|mage> [void]. Items are ItemIdentifiers names; [name, amount] for a stack, {\"item\", \"amount\", \"meta\"} for item meta such as charges. \"void\" replaces those slots of the style's set.",
+  "styles": {
+    "melee": {
+      "head": "TORVA_FULL_HELM",
+      "cape": "INFERNAL_CAPE",
+      "amulet": "AMULET_OF_TORTURE",
+      "weapon": "GHRAZI_RAPIER",
+      "body": "TORVA_PLATEBODY",
+      "shield": "AVERNIC_DEFENDER",
+      "legs": "TORVA_PLATELEGS",
+      "hands": "FEROCIOUS_GLOVES",
+      "feet": "PRIMORDIAL_BOOTS",
+      "ring": "ULTOR_RING"
+    },
+    "range": {
+      "head": "MASORI_MASK_F_",
+      "cape": "DIZANAS_QUIVER",
+      "amulet": "NECKLACE_OF_ANGUISH",
+      "weapon": "TWISTED_BOW",
+      "body": "MASORI_BODY_F_",
+      "legs": "MASORI_CHAPS_F_",
+      "hands": "ZARYTE_VAMBRACES",
+      "feet": "PEGASIAN_BOOTS",
+      "ring": "VENATOR_RING",
+      "ammo": ["DRAGON_ARROW", 5000]
+    },
+    "mage": {
+      "head": "ANCESTRAL_HAT",
+      "cape": "IMBUED_SARADOMIN_CAPE",
+      "amulet": "OCCULT_NECKLACE",
+      "weapon": { "item": "TUMEKENS_SHADOW", "meta": { "tumekens-shadow-charges": 20000 } },
+      "body": "ANCESTRAL_ROBE_TOP",
+      "legs": "ANCESTRAL_ROBE_BOTTOM",
+      "hands": "TORMENTED_BRACELET",
+      "feet": "ETERNAL_BOOTS",
+      "ring": "MAGUS_RING"
+    }
+  },
+  "void": {
+    "melee": { "head": "VOID_MELEE_HELM", "body": "ELITE_VOID_TOP", "legs": "ELITE_VOID_ROBE", "hands": "VOID_KNIGHT_GLOVES" },
+    "range": { "head": "VOID_RANGER_HELM", "body": "ELITE_VOID_TOP", "legs": "ELITE_VOID_ROBE", "hands": "VOID_KNIGHT_GLOVES" },
+    "mage": { "head": "VOID_MAGE_HELM", "body": "ELITE_VOID_TOP", "legs": "ELITE_VOID_ROBE", "hands": "VOID_KNIGHT_GLOVES" }
+  }
+}

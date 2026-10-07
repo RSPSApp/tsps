@@ -21,6 +21,8 @@ const SLAYER_MASTERS = Object.freeze(Object.fromEntries(
 ));
 
 const TASK_ATTRIBUTE = "slayer:task";
+
+let pluginApi = null;
 const POINTS_ATTRIBUTE = "slayer:points";
 const STREAK_ATTRIBUTE = "slayer:streak";
 
@@ -147,6 +149,7 @@ function assignTask(player, masterData) {
     wrapTask(selected),
     remaining
   ));
+  pluginApi?.emitCustomEvent("slayer:task-assigned", { player, master: masterData.id, task: selected.slug });
   return `Your new task is to kill ${remaining} ${selected.name.toLowerCase()}.`;
 }
 
@@ -182,28 +185,33 @@ function taskTip(player) {
     : "You're on a Slayer task; check your task list for the details.";
 }
 
-function onNpcKilled(player, npc) {
-  const task = getActiveTask(player);
-  if (!task) {
-    return;
-  }
-
-  const npcName = npc?.getDefinition?.()?.getName?.();
-  if (!npcName) {
-    return;
+function isTaskNpc(task, npc) {
+  // A transformed npc counts as what it is now (a woken Sand Crab, not its Sandy rocks).
+  const npcName = npc?.getCurrentDefinition?.()?.getName?.() ?? npc?.getDefinition?.()?.getName?.();
+  if (!task || !npcName) {
+    return false;
   }
   const normalized = npcName.toLowerCase();
-  const isTaskNpc = task
+  return task
     .getTask()
     .getNpcNames()
     .some((name) => name === normalized);
-  if (!isTaskNpc) {
+}
+
+/** "slayer:on-task": is this NPC the player's current assignment? */
+function onTaskEvent(request) {
+  request.onTask = isTaskNpc(getActiveTask(request.player), request.npc);
+}
+
+function onNpcKilled(player, npc) {
+  const task = getActiveTask(player);
+  if (!isTaskNpc(task, npc)) {
     return;
   }
 
   player
     .getSkillManager()
-    .addExperiences(Skill.SLAYER, npc.getDefinition().getHitpoints());
+    .addExperiences(Skill.SLAYER, (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getHitpoints());
   task.setRemaining(task.getRemaining() - 1);
 
   if (task.getRemaining() > 0) {
@@ -308,12 +316,14 @@ function slayerPointsCurrency() {
 
 module.exports = {
   name: "Slayer",
+  members: true,
   // Exported for tests/slayer-assign.test.cjs; nothing else reads them.
   assignTask,
   assignTaskForNpc,
   getActiveTask,
   taskTip,
   register(api) {
+    pluginApi = api;
     api.persistAttribute(TASK_ATTRIBUTE);
     api.persistAttribute(POINTS_ATTRIBUTE);
     api.persistAttribute(STREAK_ATTRIBUTE);
@@ -324,6 +334,7 @@ module.exports = {
     // Cross-plugin events: the dialogue emitter fills in the line it should speak.
     api.onCustomEvent("slayer:assignment", assignFromNpcEvent);
     api.onCustomEvent("slayer:task-tip", taskTipEvent);
+    api.onCustomEvent("slayer:on-task", onTaskEvent);
 
     // The "Assignment" click (slot 3) on any NPC; the master check lives in the
     // handler rather than the NPC's name or the option label.

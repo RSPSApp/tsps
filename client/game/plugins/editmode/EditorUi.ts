@@ -12,6 +12,9 @@ import {
     createCameraIcon,
     createConfigIcon,
     EditorToolbar,
+    EDITOR_TOP_BAR_CLEARANCE,
+    EDITOR_TOP_BAR_HEIGHT,
+    showEditorTooltip,
     type EditorTool,
     createCloseIcon,
     createDuplicateIcon,
@@ -23,7 +26,8 @@ import {
     createPointerIcon,
     createRotateIcon,
     createRefreshIcon,
-    createSearchIcon,
+    createNpcIcon,
+    createObjectIcon,
     createSaveIcon,
     createShopIcon,
     createSpawnIcon,
@@ -70,9 +74,9 @@ const INPUT_STYLE: Partial<CSSStyleDeclaration> = {
     font: "13px sans-serif",
 };
 
-const TOP_BAR_HEIGHT = 48;
+const TOP_BAR_HEIGHT = EDITOR_TOP_BAR_HEIGHT;
 /** Gap below the top bar where floating panels and toasts start. */
-const TOP_BAR_CLEARANCE = `${TOP_BAR_HEIGHT + 8}px`;
+const TOP_BAR_CLEARANCE = EDITOR_TOP_BAR_CLEARANCE;
 
 function npcClickKey(opcode: number): "first_click" | "second_click" | "third_click" | "fourth_click" | undefined {
     switch (opcode) {
@@ -177,6 +181,7 @@ class EditorChrome {
     private readonly pvpZonesInput: HTMLInputElement;
     private readonly duelZonesInput: HTMLInputElement;
     private readonly safeZonesInput: HTMLInputElement;
+    private readonly f2pZonesInput: HTMLInputElement;
     private readonly multiCombatZonesInput: HTMLInputElement;
     private readonly unsubscribe: () => void;
     private readonly canvasShell?: HTMLElement;
@@ -191,6 +196,10 @@ class EditorChrome {
     private shopsLoaded = false;
     private shopsLoading = false;
     private shopsDirty = false;
+    private saveButton?: HTMLButtonElement;
+    private saveTooltip?: HTMLDivElement;
+    /** Custom NPC spawns stay in the edit list after saving, so compare against the last save. */
+    private savedNpcSpawnsKey = "";
     private npcInteractions: EditModeNpcInteractions = {};
     private npcInteractionsLoaded = false;
     private npcInteractionsLoading = false;
@@ -221,10 +230,16 @@ class EditorChrome {
         const tools: EditorTool[] = [
             { id: "select", label: "Selection tool", icon: createPointerIcon },
             {
-                id: "cache-search",
-                label: "Search NPCs / Objects / Items",
-                icon: createSearchIcon,
-                action: () => this.togglePalette(),
+                id: "search-npcs",
+                label: "NPCs",
+                icon: createNpcIcon,
+                action: () => this.toggleSearch("npc"),
+            },
+            {
+                id: "search-objects",
+                label: "Objects",
+                icon: createObjectIcon,
+                action: () => this.toggleSearch("loc"),
             },
             {
                 id: "overlay",
@@ -307,7 +322,7 @@ class EditorChrome {
             display: "flex",
             alignItems: "center",
             gap: "12px",
-            padding: "10px 12px 10px 20px",
+            padding: "12px 16px 12px 24px",
             borderBottom: "1px solid rgba(255,255,255,0.16)",
             color: "#eef4ff",
             background: "#121418",
@@ -417,21 +432,23 @@ class EditorChrome {
         this.safeZonesInput = zoneToggle("Safe", "#86efac", (checked) =>
             this.plugin.setConfig({ showSafeZones: checked }),
         );
+        this.f2pZonesInput = zoneToggle("F2P", "#93c5fd", (checked) =>
+            this.plugin.setConfig({ showF2pZones: checked }),
+        );
         this.topBar.append(
             heightLabel,
             decrement,
             this.heightInput,
             increment,
         );
+        this.savedNpcSpawnsKey = this.npcSpawnsKey();
         if (browserHostWindow()) {
             const save = document.createElement("button");
             save.type = "button";
-            save.title = "Save world and map edits";
-            save.setAttribute("aria-label", save.title);
+            save.setAttribute("aria-label", "Save world and map edits");
             save.replaceChildren(createSaveIcon(), document.createTextNode("Save changes"));
             Object.assign(save.style, {
                 height: "28px",
-                marginRight: "16px",
                 padding: "0 12px 0 16px",
                 display: "inline-flex",
                 alignItems: "center",
@@ -444,7 +461,25 @@ class EditorChrome {
                 font: "13px sans-serif",
             });
             save.addEventListener("click", () => this.exportRegions());
-            this.topBar.prepend(save);
+            // A disabled button gets no mouse events, so the tooltip hangs off a wrapper.
+            const saveWrapper = document.createElement("span");
+            Object.assign(saveWrapper.style, { display: "inline-flex", marginRight: "16px" });
+            saveWrapper.append(save);
+            const showSaveTooltip = () => {
+                this.saveTooltip?.remove();
+                this.saveTooltip = showEditorTooltip(saveWrapper,
+                    save.disabled ? "No changes to save yet" : "Save world and map edits", "below");
+            };
+            const hideSaveTooltip = () => {
+                this.saveTooltip?.remove();
+                this.saveTooltip = undefined;
+            };
+            saveWrapper.addEventListener("mouseenter", showSaveTooltip);
+            saveWrapper.addEventListener("mouseleave", hideSaveTooltip);
+            save.addEventListener("focus", showSaveTooltip);
+            save.addEventListener("blur", hideSaveTooltip);
+            this.saveButton = save;
+            this.topBar.prepend(saveWrapper);
         }
 
         const viewport = document.querySelector<HTMLElement>(".game-viewport");
@@ -468,6 +503,7 @@ class EditorChrome {
         this.toolbar.remove();
         this.palette.remove();
         this.selectionDetails.remove();
+        this.saveTooltip?.remove();
         this.topBar.remove();
         this.closeSettings();
         if (this.canvasShell) this.canvasShell.style.top = this.previousCanvasTop;
@@ -526,8 +562,15 @@ class EditorChrome {
         this.palette.setVisible(false);
     }
 
-    private togglePalette(): void {
-        this.palette.toggle();
+    /** NPC/Object rail buttons open the search panel on their tab; clicking the open tab's button closes it. */
+    private toggleSearch(mode: PaletteMode): void {
+        const sameTab = this.currentSearchMode() === mode;
+        if (this.palette.isVisible() && sameTab) {
+            this.palette.setVisible(false);
+            return;
+        }
+        if (!sameTab) this.search(mode);
+        this.palette.setVisible(true);
     }
 
     private overlayColor(id: number): number {
@@ -587,13 +630,41 @@ class EditorChrome {
         panel.appendChild(swatches);
     }
 
+    private npcSpawnsKey(): string {
+        return JSON.stringify(this.plugin.getConfig().edits
+            .filter((edit) => edit.kind === "npc")
+            .map((edit) => [edit.locId, edit.tileX, edit.tileY, edit.plane, edit.rotation]));
+    }
+
+    /** Cheap check run on every editor update; the save itself builds the exports. */
+    private hasUnsavedChanges(): boolean {
+        return this.shopsDirty || this.npcInteractionsDirty ||
+            this.plugin.getWorldDefinitionForSave() !== undefined ||
+            this.plugin.getConfig().edits.some((edit) => edit.kind !== "npc") ||
+            this.npcSpawnsKey() !== this.savedNpcSpawnsKey;
+    }
+
+    private syncSaveButton(): void {
+        const save = this.saveButton;
+        if (!save) return;
+        const disabled = !this.hasUnsavedChanges();
+        if (save.disabled === disabled) return;
+        save.disabled = disabled;
+        Object.assign(save.style, disabled
+            ? { opacity: "0.45", cursor: "default", pointerEvents: "none" }
+            : { opacity: "", cursor: "pointer", pointerEvents: "" });
+    }
+
     private sync(): void {
+        this.syncSaveButton();
         const state = this.plugin.getState();
         this.toolbar.setDisabled("shops", !state.world.definition);
         this.pvpZonesInput.disabled = !state.world.definition;
         this.safeZonesInput.disabled = !state.world.definition;
         this.duelZonesInput.checked = state.config.showDuelZones;
         this.safeZonesInput.checked = state.config.showSafeZones;
+        this.f2pZonesInput.disabled = !state.world.definition;
+        this.f2pZonesInput.checked = state.config.showF2pZones;
         this.multiCombatZonesInput.disabled = !state.world.definition;
         this.heightInput.value = String(state.config.heightLevel);
         this.renderAllInput.checked = state.config.renderAllHeightLevels;
@@ -1078,6 +1149,7 @@ class EditorChrome {
         const key = Object.hasOwn(bindings, camelNpcClickKey(clickKey)) ? camelNpcClickKey(clickKey) : clickKey;
         bindings[key] = { method: "core.shops.open", args: { shopId } };
         this.npcInteractionsDirty = true;
+        this.syncSaveButton();
     }
 
     private itemName(id: number): string {
@@ -1207,6 +1279,7 @@ class EditorChrome {
         if (existing) existing.amount = Math.min(0x7fffffff, existing.amount + 1);
         else shop.originalStock.push({ id, amount: 1 });
         this.shopsDirty = true;
+        this.syncSaveButton();
         this.renderShopEditor();
     }
 
@@ -1214,6 +1287,7 @@ class EditorChrome {
         if (!Number.isInteger(amount) || amount < 1 || amount > 0x7fffffff) return;
         entry.amount = amount;
         this.shopsDirty = true;
+        this.syncSaveButton();
         this.renderShopEditor();
     }
 
@@ -1222,6 +1296,7 @@ class EditorChrome {
         if (!shop) return;
         shop.originalStock.splice(shop.originalStock.indexOf(entry), 1);
         this.shopsDirty = true;
+        this.syncSaveButton();
         this.renderShopEditor();
     }
 
@@ -1282,6 +1357,7 @@ class EditorChrome {
                     shopsDirty ? "shops" : "",
                     npcInteractionsDirty ? "NPC shop actions" : "",
                 ].filter(Boolean).join(" and ");
+                this.savedNpcSpawnsKey = this.npcSpawnsKey();
                 this.plugin.markMapEditsSaved(exported, objectSpawns);
                 this.toast(`Saved ${saved}`);
                 return;
@@ -1316,6 +1392,7 @@ class EditorChrome {
                     "npc-spawns-custom.json",
                 );
             }
+            this.savedNpcSpawnsKey = this.npcSpawnsKey();
             this.plugin.markMapEditsSaved(exported, objectSpawns);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

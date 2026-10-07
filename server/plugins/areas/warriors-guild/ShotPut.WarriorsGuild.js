@@ -27,7 +27,7 @@ const LAND_MESSAGES = [
   "The shot falls from the air like a brick, landing with a sickening thud.",
 ];
 const DUSTED_BONUS = 5;
-const DUSTED_ATTRIBUTE = "warriorsGuild:dustedHands";
+const DUSTED_ATTRIBUTE = "warriors-guild:dusted-hands";
 
 let api;
 let LANES = [];

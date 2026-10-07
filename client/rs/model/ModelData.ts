@@ -14,6 +14,7 @@ export class ModelData extends Entity {
 
     private static mergedNormalsModel0Cache: Int32Array = new Int32Array(10000);
     private static mergedNormalsModel1Cache: Int32Array = new Int32Array(10000);
+    private static readonly MERGE_NORMAL_Y_TOLERANCE = 2;
 
     version: number;
 
@@ -165,7 +166,10 @@ export class ModelData extends Entity {
             if (normal1.magnitude === 0) {
                 continue;
             }
-            const key = `${model1.verticesX[v1]},${verticesY1[v1]},${model1.verticesZ[v1]}`;
+            // Cache-authored wall models can differ vertically by one or two units while
+            // still sharing the same geometric boundary. Hash X/Z exactly, then apply
+            // a narrow Y tolerance when comparing candidates.
+            const key = `${model1.verticesX[v1]},${model1.verticesZ[v1]}`;
             let indices = vertexMap.get(key);
             if (!indices) {
                 indices = [];
@@ -180,7 +184,7 @@ export class ModelData extends Entity {
                 continue;
             }
             const y = verticesY0[v0] - offsetY;
-            if (y > model1.minHeight) {
+            if (y > model1.minHeight + ModelData.MERGE_NORMAL_Y_TOLERANCE) {
                 continue;
             }
             const x = model0.verticesX[v0] - offsetX;
@@ -192,14 +196,19 @@ export class ModelData extends Entity {
                 continue;
             }
 
-            // OPTIMIZATION: Hash lookup instead of nested loop
-            const key = `${x},${y},${z}`;
+            // OPTIMIZATION: Hash lookup instead of nested loop. Y is checked separately
+            // so tiny cache-authored vertical offsets do not break seam merging.
+            const key = `${x},${z}`;
             const matchingIndices = vertexMap.get(key);
             if (!matchingIndices) {
                 continue;
             }
 
             for (const v1 of matchingIndices) {
+                if (Math.abs(y - verticesY1[v1]) > ModelData.MERGE_NORMAL_Y_TOLERANCE) {
+                    continue;
+                }
+
                 const normal1 = model1.normals[v1];
 
                 if (!model0.mergedNormals) {

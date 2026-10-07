@@ -56,7 +56,7 @@ export class RegionManager {
                 }
             }
         }
-        console.info(`[collision] indexed ${RegionManager.regions.size} cache regions`);
+        console.debug(`[collision] indexed ${RegionManager.regions.size} cache regions`);
     }
 
     public static getRegionid(regionId: number): Region | undefined {
@@ -310,7 +310,7 @@ export class RegionManager {
         if (objectId === -1) {
             MapObjects.clear(position, type);
         } else {
-            MapObjects.add(new GameObject(objectId, position, type, direction, null));
+            MapObjects.add(new GameObject(objectId, position, type, direction, null).markMapOriginal());
         }
     }
     public static addObjectClipping(object: GameObject) {

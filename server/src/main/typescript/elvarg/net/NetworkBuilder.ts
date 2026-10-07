@@ -8,10 +8,11 @@ import { Flag } from "../game/model/Flag";
 import { Location } from "../game/model/Location";
 import { PlayerStatus } from "../game/model/PlayerStatus";
 import { PlayerRights } from "../game/model/rights/PlayerRights";
+import { isMembersWorld } from "../game/definition/WorldDefinition";
 import { PluginManager } from "../plugins/PluginManager";
 import { Misc } from "../util/Misc";
 import { PlayerPunishment } from "../util/PlayerPunishment";
-import { BinaryChannel, MAX_GAME_MESSAGE_BYTES, WebSocketBinaryChannel } from "./BinaryChannel";
+import { BinaryChannel, HeadlessBinaryChannel, MAX_GAME_MESSAGE_BYTES, WebSocketBinaryChannel } from "./BinaryChannel";
 import { BrowserHostHttpBridge, BROWSER_HOST_BRIDGE_HTML } from "./BrowserHostHttpBridge";
 import { PlayerSession } from "./PlayerSession";
 import { CachePipeline } from "../game/cache/CachePipeline";
@@ -21,6 +22,7 @@ import {
   CREATION_MENU_GROUP_ID,
   CREATION_MENU_FIRST_ITEM_COMPONENT,
   CREATION_MENU_MAX_QUANTITY,
+  CREATION_MENU_LAST_ITEM_ATTRIBUTE,
 } from "./packet/PacketSender";
 import { MapRegionReplacementManager } from "../game/collision/MapRegionReplacementManager";
 import {
@@ -79,6 +81,29 @@ import { SpellTeleports } from "../game/content/combat/magic/SpellTeleports";
 const OBJECT_ACTIONS = new ObjectActionPacketListener();
 const NPC_ACTIONS = new NPCOptionPacketListener();
 const MAGIC_ITEMS = new MagicOnItemPacketListener();
+type ClientMessages = ReturnType<typeof decodeClientPackets>;
+const CONNECTIONS = new WeakMap<Player, ClientConnection>();
+
+/** Runs already-decoded messages through a logged-in player's own dispatch, as if their client sent them. */
+export function dispatchClientMessages(player: Player, messages: ClientMessages): boolean {
+  const connection = CONNECTIONS.get(player);
+  if (!connection) return false;
+  connection.inject(messages);
+  return true;
+}
+
+/** Logs a player in through the normal login path with no client attached. Closing their session logs them out. */
+export async function connectHeadlessClient(username: string, password: string): Promise<{ player?: Player; error?: string }> {
+  const connection = new ClientConnection(new HeadlessBinaryChannel());
+  connection.inject([
+    { type: "login", username, password, revision: CachePipeline.getActive().revision },
+    { type: "handshake", name: username, clientType: 0 },
+  ]);
+  await connection.idle();
+  const player = connection.getPlayer();
+  return player ? { player } : { error: connection.getLoginFailure() ?? "Login did not complete." };
+}
+
 const CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE = "interface:close-on-interface-close";
 const WORLD_INTERACTIONS = new Set([
   "move",
@@ -161,7 +186,7 @@ export class NetworkBuilder {
       perMessageDeflate: false,
       maxPayload: MAX_GAME_MESSAGE_BYTES,
     });
-    server.on("connection", (socket) => new ClientConnection(new WebSocketBinaryChannel(socket)));
+    server.on("connection", (socket, request) => new ClientConnection(new WebSocketBinaryChannel(socket, request)));
     server.on("listening", () => console.info(`[network] client websocket listening on ${port}`));
     server.on("error", (error) => console.error("[network] websocket error", error));
     http.listen(port);
@@ -178,12 +203,13 @@ export class NetworkBuilder {
   }
 }
 
-class ClientConnection {
+export class ClientConnection {
   private static readonly pendingNames = new Set<string>();
   private pending?: PendingLogin;
   private reservedName?: string;
   private player?: Player;
   private closed = false;
+  private loginFailure?: string;
   private input = Promise.resolve();
 
   constructor(private readonly channel: BinaryChannel) {
@@ -208,7 +234,32 @@ class ClientConnection {
       console.warn("[network] rejected malformed client packet", (error as Error).message);
       return;
     }
+    await this.dispatch(packets);
+  }
 
+  public inject(messages: ClientMessages): void {
+    this.input = this.input.then(() => this.dispatch(messages)).catch((error) => {
+      console.warn("[network] injected client packet rejected", error);
+    });
+  }
+
+  public idle(): Promise<void> {
+    return this.input;
+  }
+
+  public getPlayer(): Player | undefined {
+    return this.player;
+  }
+
+  public getLoginFailure(): string | undefined {
+    return this.loginFailure;
+  }
+
+  private async dispatch(packets: ClientMessages): Promise<void> {
+    // Frames already queued on the input chain can outlive the socket (a handshake
+    // buffered before a disconnect, for example). A closed connection must not act
+    // on them or build a player for a socket that is already gone.
+    if (this.closed) return;
     for (const packet of packets) {
       if (this.player) LunarSpells.expireSpellbookSwap(this.player);
       if (this.player && WORLD_INTERACTIONS.has(packet.type)) {
@@ -225,7 +276,7 @@ class ClientConnection {
       }
       switch (packet.type) {
         case "move":
-          this.walk(packet.worldX, packet.worldY, packet.modifierFlags);
+          this.walk(packet.worldX, packet.worldY, packet.modifierFlags, packet.run === true);
           continue;
         case "set_heading":
           if (this.player) BoatManager.setHelmHeading(this.player, packet.heading);
@@ -359,7 +410,9 @@ class ClientConnection {
             if (packet.messageType === "public") {
               ChatPacketListener.handleText(this.player, packet.text);
             } else if (packet.messageType === "friends_chat") {
-              PluginManager.emitSocialPacket({ player: this.player, packet, handled: false });
+              PluginManager.emitSocialPacket({
+                player: this.player, packet: packet as typeof packet & { messageType: "friends_chat" }, handled: false,
+              });
             }
           }
           continue;
@@ -384,9 +437,12 @@ class ClientConnection {
           ) {
             const itemId = creationMenu.getItems()[creationChildId - CREATION_MENU_FIRST_ITEM_COMPONENT];
             if (Number.isInteger(itemId)) {
+              const limit = creationMenu.getOptions?.()?.maxAmount;
               const amount = Number.isInteger(packet.childIndex) && packet.childIndex > 0
-                ? Math.min(packet.childIndex, CREATION_MENU_MAX_QUANTITY)
+                ? Math.min(packet.childIndex, Number.isInteger(limit) ? limit : CREATION_MENU_MAX_QUANTITY)
                 : 1;
+              // Remembered for the space key next time (CREATION_MENU_LAST_ITEM_VARP).
+              this.player.setAttribute(CREATION_MENU_LAST_ITEM_ATTRIBUTE, creationChildId - CREATION_MENU_FIRST_ITEM_COMPONENT);
               this.player.getPacketSender().closeCreationMenu();
               creationMenu.execute(itemId, amount);
               continue;
@@ -409,7 +465,10 @@ class ClientConnection {
         }
         case "dialogue_amount": {
           const action = this.player?.getEnteredAmountAction();
-          if (action && packet.amount > 0) action.execute(packet.amount);
+          // 0 is dropped unless the prompt takes it (a setting where 0 means off).
+          if (action && (packet.amount > 0 || (packet.amount === 0 && (action as { acceptsZero?: boolean }).acceptsZero === true))) {
+            action.execute(packet.amount);
+          }
           else if (this.player && Bank.isOpen(this.player) && packet.amount > 0) {
             this.player.setBankCustomQuantity(packet.amount);
             this.player.getPacketSender().sendVarbit(3960, packet.amount);
@@ -420,7 +479,11 @@ class ClientConnection {
         case "dialogue_input": {
           const action = this.player?.getEnteredSyntaxAction();
           if (action) action.execute(packet.value);
-          this.player?.setEnteredSyntaxAction(null);
+          // A handler may keep the input open (e.g. the ::items spawn search, which stays
+          // armed for repeat picks); only clear the action when it did not re-arm itself.
+          if (this.player?.getEnteredSyntaxAction() === action) {
+            this.player?.setEnteredSyntaxAction(null);
+          }
           continue;
         }
         case "widget_action":
@@ -829,6 +892,12 @@ class ClientConnection {
       return;
     }
 
+    // encryptPassword/checkPassword are async; the socket can close while they run.
+    // Do not leave a pending login behind for a connection cleanup already released.
+    if (this.closed) {
+      this.releasePendingName();
+      return;
+    }
     this.pending = { username, passwordHash, save };
     this.send(encodeLoginResponse(true, -1, "", username));
     console.info(`[login] accepted ${username} from ${this.channel.remoteAddress}`);
@@ -836,6 +905,10 @@ class ClientConnection {
 
   private enterWorld(clientType: number = 0): void {
     if (!this.pending || this.player) return;
+    if (this.closed) {
+      this.releasePendingName();
+      return;
+    }
     const pending = this.pending;
     const session = new PlayerSession(this.channel);
     const player = new Player(session, GameConstants.DEFAULT_LOCATION.clone());
@@ -853,11 +926,13 @@ class ClientConnection {
     player.getUpdateFlag().flag(Flag.APPEARANCE);
 
     if (!World.getPlayers().add(player)) {
+      this.releasePendingName();
       this.failLogin(2, "This world is full.");
       this.channel.close(1013, "world full");
       return;
     }
     this.player = player;
+    CONNECTIONS.set(player, this);
     this.releasePendingName();
     // Back aboard a boat they logged out on at sea.
     Sailing.onLogin(player);
@@ -873,7 +948,8 @@ class ClientConnection {
         player.getUsername(),
         PlayerRights.hasAdminRights(player),
         this.getPlayerAppearance(player),
-        player.getChatIcons()
+        player.getChatIcons(),
+        isMembersWorld()
       )
     );
     this.send(encodeDefaultAnimations());
@@ -887,6 +963,9 @@ class ClientConnection {
       // varbit 4070, so the cache scripts would draw the standard book for everyone.
       // sendTabInterface(6) is the one place that publishes the spellbook varbit.
       .sendTabInterface(6, player.getSpellbook().getInterfaceId())
+      // Cache script 828 sets varc 103 (account is a member), which the GE, collection box
+      // and membership panels read; everyone on a members world is a member.
+      .sendInterfaceScript(828, [isMembersWorld() ? 1 : 0])
       .sendItemContainer(player.getInventory(), 3214)
       .sendSkillsSnapshot()
       .sendRunEnergy()
@@ -898,14 +977,16 @@ class ClientConnection {
     player.getQuickPrayers().sync();
   }
 
-  private walk(x: number, y: number, modifierFlags: number): void {
+  private walk(x: number, y: number, modifierFlags: number, forceRun = false): void {
     const player = this.player;
     if (!player) return;
     // At a boat's helm a click sets the heading (the client normally sends SET_HEADING).
     if (BoatManager.steerToward(player, x, y)) return;
     player.getCombat().reset();
-    const run = modifierFlags === 2 ||
-      ((modifierFlags & 1) !== 0 ? !player.isRunningReturn() : player.isRunningReturn());
+    // Ctrl (1) inverts the run toggle for this walk; Ctrl+Shift (2) is a staff teleport that
+    // plugins take over, and walks like a Ctrl-click for everyone else.
+    const invert = modifierFlags === 2 || (modifierFlags & 1) !== 0;
+    const run = forceRun || (invert ? !player.isRunningReturn() : player.isRunningReturn());
     player.setRunning(run);
     player.getMovementQueue().requestWalk(
       new Location(x, y, player.getLocation().getZ())
@@ -927,7 +1008,7 @@ class ClientConnection {
     if (optionIndex === 0) return;
     if (/^(wield|wear|equip)$/.test(option)) {
       EquipPacketListener.equip(player, packet.itemId, packet.slot, 3214);
-    } else if (option === "drop" || option === "destroy" || optionIndex === 5) {
+    } else if (ItemActionPacketListener.isDropOption(option, optionIndex)) {
       DropItemPacketListener.drop(player, packet.itemId, 3214, packet.slot);
     } else if (option === "examine") {
       const definition = ItemDefinition.forId(packet.itemId);
@@ -968,7 +1049,9 @@ class ClientConnection {
     if (option === "examine") {
       const definition = ItemDefinition.forId(packet.itemId);
       player.sendMessage(definition.getExamine() || definition.getName());
-    } else if (player.getPrivateArea() || option === "take" || packet.optionIndex === 3 || packet.optionIndex == null) {
+    } else if (option === "take" || (!option && (player.getPrivateArea() || packet.optionIndex === 3 || packet.optionIndex == null))) {
+      // A named option other than Take is the item's own, even in a private area (giant
+      // bones' "Bury" is their op3, where Take usually sits).
       PickupItemPacketListener.pickup(player, packet.itemId, packet.x, packet.y, packet.stackId);
     } else {
       SecondGroundItemOptionPacketListener.interact(
@@ -1025,6 +1108,7 @@ class ClientConnection {
   }
 
   private failLogin(code: number, message: string): void {
+    this.loginFailure = message;
     this.send(encodeLoginResponse(false, code, message));
   }
 

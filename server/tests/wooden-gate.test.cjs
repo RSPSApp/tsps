@@ -32,13 +32,24 @@ function buildHarness() {
   CacheDefinitions.getCounts = () => ({ npcs: 0, items: 0, objects: 0 });
 
   const handlers = new Map();
+  const objectManager = {
+    register: (o) => ops.push(['register', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
+    deregister: (o) => ops.push(['deregister', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
+  };
+  const taskManager = { submit: () => {}, cancelTasks: () => {} };
   const api = {
-    core: {},
-    getObjectManager: () => ({
-      register: (o) => ops.push(['register', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
-      deregister: (o) => ops.push(['deregister', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
-    }),
-    getTaskManager: () => ({ submit: () => {}, cancelTasks: () => {} }),
+    // The plugin reads its engine classes from api.core; MapObjects/Sounds/CacheDefinitions
+    // are the real classes with the static methods patched above.
+    core: {
+      CacheDefinitions, GameObject, Location, MapObjects, Sounds,
+      ObjectIdentifiers: require('../dist/util/ObjectIdentifiers').ObjectIdentifiers,
+      Sound: require('../dist/game/Sound').Sound,
+      Task: require('../dist/game/task/Task').Task,
+      ObjectManager: objectManager,
+      TaskManager: taskManager,
+    },
+    getObjectManager: () => objectManager,
+    getTaskManager: () => taskManager,
     emitCustomEvent: () => {},
     onObjectInteraction: (name, actions) => handlers.set(name, actions),
     onRegionLoaded: () => {},
@@ -245,6 +256,58 @@ test('Castle Wars large doors swing both leaves to the open ids and back', () =>
       ['deregister', 4429, 2373, 3120, 2],
       ['register', 4428, 2372, 3119, 1],
       ['register', 4427, 2373, 3119, 1],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
+
+test('1727/1728 metal gates open from either leaf order (west leaf is left)', () => {
+  // Both open into the shared 1571/1572 leaves.
+  const h = buildHarness();
+  try {
+    // Usual order: 1727 west of 1728.
+    h.place(1727, 3100, 3500, 1);
+    h.place(1728, 3101, 3500, 1);
+    assert.deepEqual(h.click(1728, 3101, 3500, 1), [
+      ['deregister', 1727, 3100, 3500, 1],
+      ['deregister', 1728, 3101, 3500, 1],
+      ['register', 1571, 3100, 3501, 0],
+      ['register', 1572, 3101, 3501, 2],
+    ]);
+
+    // Reversed: 1728 west of 1727 must still swing the west leaf as the left one, open and closed.
+    h.place(1728, 3200, 3500, 1);
+    h.place(1727, 3201, 3500, 1);
+    assert.deepEqual(h.click(1727, 3201, 3500, 1), [
+      ['deregister', 1728, 3200, 3500, 1],
+      ['deregister', 1727, 3201, 3500, 1],
+      ['register', 1572, 3200, 3501, 0],
+      ['register', 1571, 3201, 3501, 2],
+    ]);
+    h.place(1572, 3200, 3501, 0);
+    h.place(1571, 3201, 3501, 2);
+    assert.deepEqual(h.click(1571, 3201, 3501, 2, 'Close'), [
+      ['deregister', 1572, 3200, 3501, 0],
+      ['deregister', 1571, 3201, 3501, 2],
+      ['register', 1728, 3200, 3500, 1],
+      ['register', 1727, 3201, 3500, 1],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
+
+test('reversed large doors (1513 south of 1511, as cached at 3287,3172) pick the left leaf by position', () => {
+  const h = buildHarness();
+  try {
+    h.place(1511, 3287, 3172, 0);
+    h.place(1513, 3287, 3171, 0);
+    assert.deepEqual(h.click(1511, 3287, 3172, 0, 'Open', 'Large door'), [
+      ['deregister', 1513, 3287, 3171, 0],
+      ['deregister', 1511, 3287, 3172, 0],
+      ['register', 1516, 3286, 3171, 3],
+      ['register', 1512, 3286, 3172, 1],
     ]);
   } finally {
     h.restore();
@@ -540,3 +603,26 @@ test('clicking Pay-toll pays directly and refuses when the backpack is short', (
   }
 });
 
+
+test('the Tutorial Island survival gate swings open and closes back to its own panels', () => {
+  const h = buildHarness();
+  try {
+    // 9470/9708 open into 8812/8813, the same open panels as the 8810/8811 gate.
+    h.place(9470, 200, 200, 0);
+    h.place(9708, 200, 201, 0);
+    assert.deepEqual(h.click(9470, 200, 200, 0), [
+      ['deregister', 9470, 200, 200, 0],
+      ['deregister', 9708, 200, 201, 0],
+      ['register', 8812, 199, 200, 3],
+      ['register', 8813, 198, 200, 3],
+    ]);
+    assert.deepEqual(h.click(8812, 199, 200, 3, 'Close'), [
+      ['deregister', 8812, 199, 200, 3],
+      ['deregister', 8813, 198, 200, 3],
+      ['register', 9470, 200, 200, 0],
+      ['register', 9708, 200, 201, 0],
+    ], 'not 8810/8811');
+  } finally {
+    h.restore();
+  }
+});

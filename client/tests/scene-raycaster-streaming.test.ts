@@ -71,6 +71,34 @@ npcType = { transforms: [1], transform: () => ({ modelIds: [123] }) };
 assert.equal(pickNpc().length, 1, "visible transformed NPC remains selectable");
 console.log("Scene raycaster invisible NPC regression passed");
 
+// Sol Heredit (#372): size 5 is already the scaled footprint, and the box must stop at the
+// scaled model's height (843 units), not size * scale again (13 tiles tall, 10 wide).
+npcType = { id: 12821, modelIds: [1], widthScale: 300, heightScale: 300 };
+raycaster.osrsClient.npcEcs.getSize = () => 5;
+raycaster.npcHeightProvider = (id: number) => (id === 12821 ? 843 : 200);
+const pickSol = (x: number, y: number) => {
+    const hits: any[] = [];
+    raycaster.collectNpcHitsForMap(
+        { id: 12342, mapX: 48, mapY: 54 },
+        { origin: [3090 + x, y, 3480], direction: [0, 0, 1] },
+        30, hits, 0,
+    );
+    return hits.length;
+};
+assert.equal(pickSol(0, -6), 1, "Sol is hit within his model");
+assert.equal(pickSol(0, -8), 0, "Sol is not hit above his model");
+assert.equal(pickSol(3, -1), 0, "Sol is not hit beyond his footprint");
+
+// With his posed model (RSModel.draw): two faces with a gap between them at x = 3090.
+const face = (x: number) => [[x, 0, 3494], [x + 1, 0, 3494], [x, -6, 3494]] as const;
+raycaster.npcTrianglesProvider = () => [...face(3088), ...face(3091)];
+assert.equal(pickSol(-1.5, -1), 1, "a face of a large NPC is clickable");
+assert.equal(pickSol(0, -1), 0, "a large NPC needs a face under the mouse, not just its box");
+raycaster.osrsClient.npcEcs.getSize = () => 1;
+assert.equal(pickSol(0, -1), 1, "a size-1 NPC is clicked anywhere in its model's box");
+assert.equal(pickSol(-2.1, -1), 0, "outside the box plus 8 units");
+console.log("Scene raycaster large NPC bounds regression passed");
+
 // A house is a single 104-tile scene with an origin that need not align to 64 tiles.
 const { MapManager } = require("../game/MapManager");
 const { WebGLMapSquare } = require("../render/WebGLMapSquare");

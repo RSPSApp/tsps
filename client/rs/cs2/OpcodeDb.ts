@@ -90,6 +90,7 @@ export function loadOpcodeDbOsrs(_baseDir: string): OpcodeDb {
     add(204, "cc_children_findnextid");
     add(205, "if_children_find");
     add(206, "if_children_findnextid");
+    add(837, "cc_triggeroplocal");
     add(1000, "cc_setposition");
     add(1001, "cc_setsize");
     add(1003, "cc_sethide");
@@ -312,6 +313,7 @@ export function loadOpcodeDbOsrs(_baseDir: string): OpcodeDb {
     add(2802, "if_getopbase");
     add(2927, "if_callonresize");
     add(2928, "if_triggerop");
+    add(2929, "if_triggeroplocal");
     add(3100, "mes");
     add(3101, "anim");
     add(3103, "if_close");

@@ -548,7 +548,6 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     //          lum (-1=no override, 0-127), amount (0-255, 0=disabled)]
     sceneHslOverride: vec4 = vec4.fromValues(-1, -1, -1, 0);
 
-    brightness: number = 0.8;
     colorBanding: number = 255;
 
     smoothTerrain: boolean = false;

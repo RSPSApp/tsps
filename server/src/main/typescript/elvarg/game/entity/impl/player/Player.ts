@@ -210,6 +210,8 @@ export class Player extends Mobile {
     public weapon: WeaponInterfaces = WeaponInterfaces.UNARMED;
     private autoRetaliate = true;
     private audioSettings: Record<number, number> = { ...DEFAULT_AUDIO_SETTINGS };
+    /** Settings "Screen Brightness" slider value (0..BRIGHTNESS_MAX), synced via VARP_BRIGHTNESS. */
+    private brightness: number = GameConstants.DEFAULT_BRIGHTNESS;
 
     // Rights
     public rights = PlayerRights.NONE;
@@ -718,6 +720,16 @@ export class Player extends Mobile {
         const maximum = varpId === 18 ? 2 : 100;
         this.audioSettings[varpId] = Math.max(0, Math.min(maximum, Math.trunc(value)));
         return true;
+    }
+
+    /** Set the Settings "Screen Brightness" value, clamped to the client slider range. */
+    public setBrightness(value: number): void {
+        if (!Number.isFinite(value)) return;
+        this.brightness = Math.max(0, Math.min(GameConstants.BRIGHTNESS_MAX, Math.trunc(value)));
+    }
+
+    public getBrightness(): number {
+        return this.brightness;
     }
 
     public setCreationDate(timestamp: Date) {

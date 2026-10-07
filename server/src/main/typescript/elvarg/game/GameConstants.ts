@@ -35,6 +35,18 @@ export class GameConstants {
     public static readonly DEBUG_NPC_FACE_POSITION_CHANGES: boolean = false;
     public static readonly TELEPORT_INTERFACE_ENABLED: boolean = false;
 
+    // ===== Client display settings (synced via varp_transmit, persisted per player) =====
+    // Settings "Screen Brightness" value. Cache-derived: the OSRS client stores
+    // brightness as device option 6 (0-50), which the client transmits/persists
+    // under this config id - the group 116 slider re-renders on it (script 381,
+    // trigger 2856), and the server echoes it back on login (sendConfig).
+    public static readonly VARP_BRIGHTNESS: number = 2856;
+    // Device option 6 range (0 = black/darkest .. max = full brightness),
+    // matching the client's renderer mapping (u_brightness = value / 50).
+    public static readonly BRIGHTNESS_MAX: number = 50;
+    // Default matching the client renderer's default brightness (0.8 = 40 / 50).
+    public static readonly DEFAULT_BRIGHTNESS: number = 40;
+
     public static ALLOWED_SPAWNS = new Set([
         13441, 3144, 391, 397, 385, 7946, 2436, 145, 147, 149, 2440, 157, 159, 161,
         2442, 163, 165, 167, 9739, 2444, 169, 171, 173, // potions and food

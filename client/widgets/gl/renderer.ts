@@ -19,19 +19,23 @@ export class GLRenderer {
     uTintColor_tex!: WebGLUniformLocation;
     uTintStrength_tex!: WebGLUniformLocation;
     uAlpha_tex!: WebGLUniformLocation;
+    uBrightness_tex!: WebGLUniformLocation;
     aPos_col = -1;
     aColor_col = -1;
     uProj_col!: WebGLUniformLocation;
+    uBrightness_col!: WebGLUniformLocation;
     // Gradient uniforms
     uProj_grad!: WebGLUniformLocation;
     uColorTop_grad!: WebGLUniformLocation;
     uColorBot_grad!: WebGLUniformLocation;
+    uBrightness_grad!: WebGLUniformLocation;
     vaoGrad!: WebGLVertexArrayObject;
     // Masked texture uniforms
     uProj_masked!: WebGLUniformLocation;
     uContent_masked!: WebGLUniformLocation;
     uMask_masked!: WebGLUniformLocation;
     uMaskBounds_masked!: WebGLUniformLocation;
+    uBrightness_masked!: WebGLUniformLocation;
     // Buffers
     vbo!: WebGLBuffer;
     ibo!: WebGLBuffer;
@@ -41,6 +45,11 @@ export class GLRenderer {
     width = 1;
     height = 1;
     proj = new Float32Array(16);
+    // Screen brightness (0..1) applied to every 2D UI pixel (sprites, text,
+    // solid/gradient rects, compass). Set per frame from the renderer's
+    // brightness (Settings "Screen Brightness" slider) so the whole screen —
+    // not just the 3D scene — responds to it. 1 = no change.
+    brightness = 1;
     // Simple texture cache (key: string)
     textures = new Map<string, Texture>();
     // PERF: Cached arrays to avoid per-call allocations
@@ -91,6 +100,7 @@ uniform vec2 uTexSize;
 uniform vec3 uTintColor;
 uniform float uTintStrength;
 uniform float uAlpha;
+uniform float uBrightness;
 out vec4 o;
 vec2 texelAaUv(vec2 uv) {
     if (uTexSize.x < 0.5 || uTexSize.y < 0.5) return uv;
@@ -104,6 +114,9 @@ void main(){
     vec4 c = texture(uSampler, texelAaUv(vUV));
     c.rgb /= max(c.a, 1e-4);
     c.rgb = mix(c.rgb, uTintColor, clamp(uTintStrength, 0.0, 1.0));
+    // Screen brightness (Settings slider) — same multiplier as the scene's
+    // u_brightness so the UI dims/brightens with the world.
+    c.rgb *= uBrightness;
     c.a *= uAlpha;
     o = c;
 }`;
@@ -120,12 +133,13 @@ void main(){
         const fsCol = `#version 300 es
 precision mediump float;
 in vec4 vColor;
+uniform float uBrightness;
 out vec4 o;
-void main(){ o = vColor; }`;
+void main(){ o = vec4(vColor.rgb * uBrightness, vColor.a); }`;
         // Vertical gradient shader for fillMode=1 (GRADIENT_VERTICAL)
         // Reference: Rasterizer2D.Rasterizer2D_fillRectangleGradient
         const vsGrad = `#version 300 es\nprecision mediump float; layout(location=0) in vec2 aPos; layout(location=1) in float aT; uniform mat4 uProj; out float vT; void main(){ vT=aT; gl_Position=uProj*vec4(aPos,0.0,1.0);} `;
-        const fsGrad = `#version 300 es\nprecision mediump float; in float vT; uniform vec4 uColorTop; uniform vec4 uColorBot; out vec4 o; void main(){ o = mix(uColorTop, uColorBot, vT); }`;
+        const fsGrad = `#version 300 es\nprecision mediump float; in float vT; uniform vec4 uColorTop; uniform vec4 uColorBot; uniform float uBrightness; out vec4 o; void main(){ vec4 c = mix(uColorTop, uColorBot, vT); o = vec4(c.rgb * uBrightness, c.a); }`;
         // Masked texture shader for compass (contentType 1339)
         // Reference: SpritePixels.drawRotatedMaskedCenteredAround
         // Content is sampled with rotated UVs, mask is sampled based on screen position
@@ -149,11 +163,14 @@ in vec2 vScreenPos;
 uniform sampler2D uContent;
 uniform sampler2D uMask;
 uniform vec4 uMaskBounds; // x, y, width, height
+uniform float uBrightness;
 out vec4 o;
 void main(){
     vec4 content = texture(uContent, vContentUV);
     // Textures upload premultiplied; return to straight alpha for blending.
     content.rgb /= max(content.a, 1e-4);
+    // Screen brightness (Settings slider), matching the scene and other UI shaders.
+    content.rgb *= uBrightness;
     // Compute mask UV from screen position (axis-aligned to widget bounds)
     vec2 maskUV = (vScreenPos - uMaskBounds.xy) / uMaskBounds.zw;
     // Clamp to valid UV range and discard if outside
@@ -178,16 +195,20 @@ void main(){
         this.uTintColor_tex = gl.getUniformLocation(this.progTex, "uTintColor")!;
         this.uTintStrength_tex = gl.getUniformLocation(this.progTex, "uTintStrength")!;
         this.uAlpha_tex = gl.getUniformLocation(this.progTex, "uAlpha")!;
+        this.uBrightness_tex = gl.getUniformLocation(this.progTex, "uBrightness")!;
         this.uProj_col = gl.getUniformLocation(this.progSolid, "uProj")!;
+        this.uBrightness_col = gl.getUniformLocation(this.progSolid, "uBrightness")!;
         // Gradient program uniforms
         this.uProj_grad = gl.getUniformLocation(this.progGrad, "uProj")!;
         this.uColorTop_grad = gl.getUniformLocation(this.progGrad, "uColorTop")!;
         this.uColorBot_grad = gl.getUniformLocation(this.progGrad, "uColorBot")!;
+        this.uBrightness_grad = gl.getUniformLocation(this.progGrad, "uBrightness")!;
         // Masked texture program uniforms
         this.uProj_masked = gl.getUniformLocation(this.progMasked, "uProj")!;
         this.uContent_masked = gl.getUniformLocation(this.progMasked, "uContent")!;
         this.uMask_masked = gl.getUniformLocation(this.progMasked, "uMask")!;
         this.uMaskBounds_masked = gl.getUniformLocation(this.progMasked, "uMaskBounds")!;
+        this.uBrightness_masked = gl.getUniformLocation(this.progMasked, "uBrightness")!;
 
         // Buffers and VAOs
         this.vbo = gl.createBuffer()!;
@@ -318,6 +339,7 @@ void main(){
         gl.uniformMatrix4fv(this.uProj_grad, false, this.proj);
         gl.uniform4fv(this.uColorTop_grad, colorTop);
         gl.uniform4fv(this.uColorBot_grad, colorBot);
+        gl.uniform1f(this.uBrightness_grad, this.brightness);
         gl.bindVertexArray(this.vaoGrad);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
         gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
@@ -453,6 +475,7 @@ void main(){
         gl.uniform3f(this.uTintColor_tex, tintColor[0], tintColor[1], tintColor[2]);
         gl.uniform1f(this.uTintStrength_tex, tintStrength);
         gl.uniform1f(this.uAlpha_tex, alpha);
+        gl.uniform1f(this.uBrightness_tex, this.brightness);
 
         // Convert OSRS angle to radians
         // OSRS uses angle / 326.11 for 2048 scale (camera yaw)
@@ -554,6 +577,7 @@ void main(){
 
         // Pass mask bounds for screen-space UV calculation
         gl.uniform4f(this.uMaskBounds_masked, x, y, w, h);
+        gl.uniform1f(this.uBrightness_masked, this.brightness);
 
         // Convert OSRS angle to radians
         const radians = (angle * Math.PI * 2) / angleScale;
@@ -794,6 +818,7 @@ void main(){
         const gl = this.gl;
         gl.useProgram(this.progSolid);
         gl.uniformMatrix4fv(this.uProj_col, false, this.proj);
+        gl.uniform1f(this.uBrightness_col, this.brightness);
         gl.bindVertexArray(this.vaoCol);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
         gl.bufferData(
@@ -825,6 +850,7 @@ void main(){
         );
         gl.uniform1f(this.uTintStrength_tex, this.textureBatchTintStrength);
         gl.uniform1f(this.uAlpha_tex, this.textureBatchAlpha);
+        gl.uniform1f(this.uBrightness_tex, this.brightness);
         gl.bindVertexArray(this.vaoTex);
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
 

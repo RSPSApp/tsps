@@ -78,6 +78,7 @@ export class PlayerSave {
     private autocastSpellId: number;
     private autoRetaliate: boolean;
     private audioSettings: Record<number, number>;
+    private brightness: number;
     private xpLocked: boolean;
     private clanChat: string;
     private targetTeleportUnlocked: boolean;
@@ -662,6 +663,7 @@ export class PlayerSave {
         player.getCombat().setCastSpell(null);
         player.setAutoRetaliate(this.autoRetaliate);
         player.setAudioSettings(this.audioSettings);
+        if (this.brightness !== undefined) player.setBrightness(this.brightness);
         player.setExperienceLocked(this.xpLocked);
         player.setClanChatName(this.clanChat);
         player.setTargetTeleportUnlocked(this.targetTeleportUnlocked);
@@ -768,6 +770,7 @@ export class PlayerSave {
         playerSave.autocastSpellId = player.getCombat().getAutocastSpell()?.spellId?.() ?? -1;
         playerSave.autoRetaliate = player.autoRetaliateReturn();
         playerSave.audioSettings = { ...player.getAudioSettings() };
+        playerSave.brightness = player.getBrightness();
         playerSave.xpLocked = player.experienceLockedReturn();
         playerSave.clanChat = player.getClanChatName();
         playerSave.targetTeleportUnlocked = player.isTargetTeleportUnlocked();

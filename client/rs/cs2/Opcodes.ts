@@ -240,6 +240,13 @@ export enum Opcodes {
     CC_GETOPBASE = 1802,
     CC_CALLONRESIZE = 1927,
     CC_TRIGGEROP = 1928,
+    /**
+     * cc_triggeroplocal — the cc-context variant of IF_TRIGGEROPLOCAL (2929).
+     * Cache scripts (settings "Adjust Brightness"/volume sliders, e.g. script 526)
+     * invoke 837 with a fixed arg shape (int, int, int, string, int, int) and no
+     * signature string; the 2929 handler's signature parsing does not apply here.
+     */
+    CC_TRIGGEROPLOCAL = 837,
     IF_SETPOSITION = 2000,
     IF_SETSIZE = 2001,
     IF_SETHIDE = 2003,

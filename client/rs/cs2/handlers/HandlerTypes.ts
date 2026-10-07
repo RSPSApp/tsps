@@ -338,6 +338,8 @@ export interface HandlerContext {
 
     // IF_TRIGGEROPLOCAL (2929) forwarding
     forwardIfTriggerOpLocal(): void;
+    // CC_TRIGGEROPLOCAL (837) forwarding — fixed arg shape, no signature parsing
+    forwardCCTriggerOpLocal(): void;
 
     // Drag operations
     setDragSource(widget: WidgetNode): void;

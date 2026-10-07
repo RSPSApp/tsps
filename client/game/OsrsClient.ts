@@ -14,6 +14,12 @@ import {
 import { isMobileMode, isTouchDevice } from "../common/utils/DeviceUtil";
 import { clamp } from "../common/utils/MathUtil";
 import {
+    BRIGHTNESS_LEVELS,
+    BRIGHTNESS_SCRIPT_SPACE_MAX,
+    BRIGHTNESS_SNAP_HALF_WIDTH,
+    BRIGHTNESS_SNAP_VALUES,
+    brightnessScriptValue,
+    snapBrightnessValue,
     TRANSMIT_VARPS,
     VARBIT_COMBATLEVEL_TRANSMIT,
     VARBIT_LEAGUE_MAGIC_MASTERY,
@@ -33,9 +39,8 @@ import {
     VARC_ACTIVE_TAB,
     VARP_AREA_SOUNDS_VOLUME,
     VARP_ATTACK_STYLE,
+    VARP_BRIGHTNESS,
     VARP_MAP_FLAGS_CACHED,
-    VARP_MASTER_VOLUME,
-    VARP_MUSIC_VOLUME,
     VARP_OPTION_ATTACK_PRIORITY_NPC,
     VARP_OPTION_ATTACK_PRIORITY_PLAYER,
     VARP_OPTION_RUN,
@@ -345,6 +350,13 @@ import { WorldMapController, type WorldMapRenderedIcon } from "./worldMap/WorldM
 import { WorldViewManager } from "./worldview/WorldViewManager";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
+// Screen brightness (OSRS device option 6, range 0-50; 0 = darkest, 50 = full
+// brightness). The Settings slider reads/writes this device option and the
+// client snaps it to 5 discrete levels (BRIGHTNESS_LEVELS in common/vars.ts,
+// the single place to edit the scaling range); the snapped value is
+// transmitted/persisted as VARP_BRIGHTNESS.
+const DEVICE_OPTION_BRIGHTNESS = 6;
+const DEVICE_OPTION_BRIGHTNESS_MAX = 50;
 
 // Escape selects the inventory side panel separately; it is not exposed as a
 // configurable keybinding, so it stays hardcoded.
@@ -522,6 +534,10 @@ export class OsrsClient {
     clientOptions: Map<number, number> = new Map();
     gameOptions: Map<number, number> = new Map();
     deviceOptions: Map<number, number> = new Map();
+    // Last VARP_BRIGHTNESS value the server is known to hold (login echo or a
+    // varp_transmit we sent). Guards against re-sending the same brightness on
+    // every slider drag tick.
+    private lastTransmittedBrightness: number | null = null;
 
     // Client-side gameplay/UI preferences that affect input semantics.
     // Exposed for UI semantics (e.g., Shift-click Drop, tap-to-drop, left-click menu).
@@ -2086,19 +2102,27 @@ export class OsrsClient {
                 return self.deviceOptions.get(optionId) ?? 0;
             },
             setDeviceOption: (optionId: number, value: number) => {
-                const storedValue = value;
-                self.deviceOptions.set(optionId, storedValue);
+                // Brightness (option 6) must not be pre-stored: applyBrightnessDeviceOption
+                // compares against deviceOptions to detect a change and only then syncs
+                // renderer.brightness. Pre-storing here would make it see no change and
+                // leave u_brightness frozen while deviceoption_get(6) already reports the
+                // new value (the slider handle tracks it, the scene does not).
+                if (optionId === DEVICE_OPTION_BRIGHTNESS) {
+                    self.applyBrightnessDeviceOption(value);
+                    return;
+                }
+                self.deviceOptions.set(optionId, value);
                 // Handle specific device options
                 switch (optionId) {
                     case 19: // Master volume (enhanced client, 0-100 from enum_981)
                         // Master volume acts as a multiplier for all audio
                         // When master is 0, all audio should be muted
-                        const masterVol = Math.max(0, Math.min(1, storedValue / 100));
+                        const masterVol = Math.max(0, Math.min(1, value / 100));
                         self.masterVolume = masterVol;
                         self.audioVarp.applyMasterVolume();
                         break;
                     case DEVICE_OPTION_INTERFACE_SCALING:
-                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue);
+                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(value);
                         break;
                 }
             },
@@ -2141,6 +2165,13 @@ export class OsrsClient {
                 opcodeParam: number,
                 args: any[],
             ) => {
+                // In-game Settings sliders ("Adjust Brightness" etc.) reach here via
+                // cc_triggeroplocal (837, e.g. script 526). The slider's cache script
+                // has already written the pointer-derived value via
+                // deviceoption_set(6, v); this only persists it as VARP_BRIGHTNESS
+                // (the bridge must not invent a competing pointer-derived value —
+                // that is what pinned the slider to one direction).
+                self.applySettingsSliderAdjust(widgetUid, args?.[0]);
                 sendIfTriggerOpLocal(widgetUid, childIndex, itemId, opcodeParam, args);
             },
             // Callback for notification display (NOTIFICATIONS_SENDLOCAL opcode)
@@ -3994,6 +4025,160 @@ export class OsrsClient {
 
     private applyAudioVarpChange(varpId: number, value: number): void {
         this.audioVarp.applyAudioVarpChange(varpId, value);
+    }
+
+    /**
+     * Central choke point for every write of device option 6 (brightness).
+     * Sources: the in-game Settings slider's cache scripts (script 3966
+     * writes 5·v clamped to 0..100 via deviceoption_set), the 837
+     * "Adjust Brightness" bridge, and the login varp echo. All values are
+     * normalized into the 0..50 stored space and snapped to the nearest
+     * BRIGHTNESS_SNAP_VALUES dot, so the stored value is never in between.
+     *
+     * The renderer's u_brightness is driven from the 0..50 snap value and is
+     * applied to BOTH the 3D scene and the 2D UI (widget/minimap shaders).
+     * When `transmitToServer` is set and a session is active, the snapped
+     * value is transmitted as VARP_BRIGHTNESS (2856) so the server persists
+     * it and re-sends it on login.
+     *
+     * The cache scripts are read-only, so two space conversions keep the
+     * script math in sync with our 0..50 stored space:
+     * - IN: 3966 writes up to 100, so script-space input is scaled by
+     *   50/100 before snapping (100 → 50 = max level).
+     * - OUT: 3961 feeds the handle script 3941 with `deviceoption_get(6) / 5`,
+     *   normalized against a max of 20. Storing the value in the 0..100
+     *   script space (brightnessScriptValue: 0/26/50/76/100 for the default
+     *   levels) makes 3941 place the handle exactly on the 5 dots.
+     *
+     * `snapSpace` selects the input space: false (default) for cache-script
+     * writes (3966 via setDeviceOption, 0..100), true for VARP_BRIGHTNESS
+     * echoes, which are already 0..50 (our own setVarp after an accepted
+     * change and the login sendConfig value). Halving those would corrupt
+     * them (e.g. the login echo of a persisted max, 50, would collapse to
+     * level 3).
+     *
+     * Pointer-driven writes (transmitToServer=false) use hysteresis in
+     * script space: the stored value only changes when the pointer-derived
+     * value is farther from the current dot than BRIGHTNESS_SNAP_HALF_WIDTH
+     * (scaled to the 0..100 script space). This keeps the handle (which the
+     * varp-2856 re-render chain places from the stored value) on a snap dot
+     * instead of resting between dots. After any accepted change we set
+     * VARP_BRIGHTNESS locally, which fires the onVarTransmit(2856) chain
+     * (scripts 381/3939) to re-render the slider from the stored value.
+     * Returns true if the value changed.
+     */
+    private applyBrightnessDeviceOption(
+        value: number,
+        transmitToServer: boolean = false,
+        snapSpace: boolean = false,
+    ): boolean {
+        const current = this.deviceOptions.get(DEVICE_OPTION_BRIGHTNESS);
+        // Normalize the input into the 0..50 snap space:
+        // - script space (0..100, from 3966/pointer): scale by 50/100
+        // - snap space (0..50, from varp echoes): use as-is
+        const inSnapSpace = snapSpace
+            ? clamp(value, 0, DEVICE_OPTION_BRIGHTNESS_MAX)
+            : clamp(
+                  Math.trunc((value * DEVICE_OPTION_BRIGHTNESS_MAX) / BRIGHTNESS_SCRIPT_SPACE_MAX),
+                  0,
+                  DEVICE_OPTION_BRIGHTNESS_MAX,
+              );
+        const v = snapBrightnessValue(inSnapSpace);
+        // Hysteresis for pointer-driven writes: both the incoming value and
+        // the stored device option 6 are in 0..100 script space, so compare
+        // them directly. The dot spacing is 25 in 0..100 space (50 in
+        // 0..50), so half a dot is BRIGHTNESS_SNAP_HALF_WIDTH (6.25) · 2 =
+        // 12.5. Ignoring pointer values inside that band keeps the handle on
+        // a dot instead of resting between two snap points. The first write
+        // (current === undefined) and varp-echoed values (transmitToServer
+        // or snapSpace) bypass the guard.
+        if (
+            !transmitToServer &&
+            !snapSpace &&
+            current !== undefined &&
+            Math.abs(value - current) <= BRIGHTNESS_SNAP_HALF_WIDTH * 2
+        ) {
+            return false;
+        }
+        const nextScript = brightnessScriptValue(v);
+        if (current !== undefined && current === nextScript) {
+            return false;
+        }
+        // Store in script space (0..100) so deviceoption_get(6) feeds 3941's
+        // (do6/5)/20 handle math with values that land exactly on the 5 dots.
+        this.deviceOptions.set(DEVICE_OPTION_BRIGHTNESS, nextScript);
+        if (this.renderer) {
+            const level = BRIGHTNESS_SNAP_VALUES.indexOf(v);
+            this.renderer.brightness = BRIGHTNESS_LEVELS[level] ?? BRIGHTNESS_LEVELS[0];
+        }
+        // Fire the varp-2856 onVarTransmit chain (scripts 381/3939) so the
+        // settings slider re-renders and its handle snaps to the stored value.
+        // 2856 is not a transmit varp, so this does not re-send to the server.
+        // The echo comes back through the snapSpace path, which is a no-op
+        // (same snapped value → same script value), so there is no loop.
+        try {
+            this.varManager?.setVarp?.(VARP_BRIGHTNESS, v);
+        } catch {}
+        if (transmitToServer && isServerConnected()) {
+            try {
+                sendVarpTransmit(VARP_BRIGHTNESS, v);
+            } catch {}
+        }
+        return true;
+    }
+
+    /**
+     * Handle the cc_triggeroplocal / opcode 837 bridge for in-game Settings
+     * sliders (e.g. "Adjust Brightness"). The slider's cache scripts already
+     * compute the pointer-derived value and write it via deviceoption_set(6, v)
+     * (routed through applyBrightnessDeviceOption). This bridge used to
+     * re-derive its own value from eventContext.mouseX + _absX rebasing against
+     * the track's scaled width, and run second — whenever its computation
+     * disagreed (a stale _absX on the moving handle, or a UI-zoom scale that
+     * does not match the pointer's buffer-pixel space) it overwrote the
+     * script's pointer-accurate value, pinning the slider to one direction
+     * (left-drag changed the value, right-drag computed value <= current and
+     * became a no-op). The bridge now only keeps the label-based routing: the
+     * authoritative value comes from the cache script, and server persistence
+     * happens on the bridge path via varp_transmit (deviceoption_set alone does
+     * not transmit).
+     */
+    private applySettingsSliderAdjust(widgetUid: number, label: unknown): void {
+        const text = typeof label === "string" ? label : "";
+        // Only the brightness slider (and camera zoom, handled natively) use the
+        // 837 bridge; the volume sliders run their own cache scripts
+        // (313/2257/3927/3928) that write their device options directly.
+        if (!text.startsWith("Adjust Brightness")) {
+            return;
+        }
+        // The value itself is written by the slider's cache script (path:
+        // deviceoption_set(6, v) -> applyBrightnessDeviceOption). Persist the
+        // slider's backing device option as VARP_BRIGHTNESS so the server
+        // re-sends it on the next login. device option 6 is stored in the
+        // 0..100 script space (see BRIGHTNESS_SCRIPT_SPACE_MAX), but the
+        // server persists 0..50, so convert back to snap space first.
+        const scriptValue = this.deviceOptions.get(DEVICE_OPTION_BRIGHTNESS);
+        if (typeof scriptValue === "number") {
+            const value = snapBrightnessValue(
+                Math.trunc((scriptValue * DEVICE_OPTION_BRIGHTNESS_MAX) / BRIGHTNESS_SCRIPT_SPACE_MAX),
+            );
+            if (value !== this.lastTransmittedBrightness) {
+                // Persist as VARP_BRIGHTNESS. applyBrightnessDeviceOption would
+                // be a no-op here (the script already stored the value this
+                // tick), so transmit it explicitly — without this the value
+                // would never reach the server and login would re-echo a stale
+                // brightness. Only send values the server does not already
+                // know (lastTransmittedBrightness is set from the login echo
+                // and from prior successful sends) so a long drag does not
+                // flood the server with identical packets.
+                if (isServerConnected()) {
+                    try {
+                        sendVarpTransmit(VARP_BRIGHTNESS, value);
+                        this.lastTransmittedBrightness = value;
+                    } catch {}
+                }
+            }
+        }
     }
 
     triggerInitialVarTransmitForGroup(groupId: number): void {
@@ -6369,6 +6554,15 @@ export class OsrsClient {
                     markVarTransmit(varpId);
                 }
                 this.applyAudioVarpChange(varpId, newValue);
+                if (varpId === VARP_BRIGHTNESS) {
+                    // Server echo of the persisted brightness (login sendConfig 2856):
+                    // restore device option 6 so the renderer and the group 116
+                    // slider handle (script 3939 reads deviceoption 6) both update.
+                    // The value is already in 0..50 snap space (the server
+                    // clamps/persists it there), so pass snapSpace=true — it
+                    // must not be treated as a 0..100 script-space write.
+                    this.applyBrightnessDeviceOption(newValue, false, true);
+                }
                 if (!this._serverVarpSync && TRANSMIT_VARPS.has(varpId) && isServerConnected()) {
                     try {
                         sendVarpTransmit(varpId, newValue);

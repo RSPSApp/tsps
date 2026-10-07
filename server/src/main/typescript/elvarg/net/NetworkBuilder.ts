@@ -568,6 +568,8 @@ class ClientConnection {
               this.player.getPacketSender().sendRunStatus();
             } else if (packet.varpId === 301 && (packet.value !== 0) !== this.player.isSpecialActivated()) {
               CombatSpecial.activate(this.player);
+            } else if (packet.varpId === GameConstants.VARP_BRIGHTNESS) {
+              this.player.setBrightness(packet.value);
             }
             this.player.setAudioSetting(packet.varpId, packet.value);
           }
@@ -887,7 +889,12 @@ class ClientConnection {
       .sendTabInterface(6, player.getSpellbook().getInterfaceId())
       .sendItemContainer(player.getInventory(), 3214)
       .sendSkillsSnapshot()
-      .sendRunEnergy();
+      .sendRunEnergy()
+      // Restores the Settings "Screen Brightness" value persisted by the client
+      // (device option 6, 0..50, transmitted under VARP_BRIGHTNESS). The client
+      // maps the config to device option 6, which drives the renderer's
+      // u_brightness and re-renders the group 116 slider handle.
+      .sendConfig(GameConstants.VARP_BRIGHTNESS, player.getBrightness());
     player.getQuickPrayers().sync();
   }
 

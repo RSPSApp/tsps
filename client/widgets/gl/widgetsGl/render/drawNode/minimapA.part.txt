@@ -21,6 +21,8 @@
                     canvasAny.__minimapRenderer = minimapRenderer;
                 }
                 minimapRenderer.updateProj(glr.proj);
+                // Screen brightness (Settings slider) so the minimap dims with the UI/scene.
+                minimapRenderer.brightness = glr.brightness;
 
                 const renderMaskSpriteId =
                     typeof w.spriteId === "number" && (w.spriteId | 0) >= 0 ? w.spriteId | 0 : -1;

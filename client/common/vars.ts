@@ -40,8 +40,102 @@ export const VARP_LAST_HOME_TELEPORT = 892;
  */
 export const VARP_LAST_MINIGAME_TELEPORT = 888;
 
-/** Brightness setting (1-4) */
-export const VARP_BRIGHTNESS = 166;
+/**
+ * Wire id (config/varp) for the Settings "Screen Brightness" device option
+ * (device option 6, value 0-50, 0 = black/darkest, 50 = full brightness). The
+ * in-game slider reads/writes device option 6 natively (cache scripts
+ * 3961/3966); the client snaps the value to one of the 5 BRIGHTNESS_LEVELS
+ * below, transmits the snapped value here when it changes and the server
+ * persists it and re-sends it on login (sendConfig), which the client maps
+ * back to device option 6. The group 116 slider re-renders on this id
+ * (script 381, trigger 2856).
+ * (Was 166 — a 317-era relic not referenced by any cache script.)
+ */
+export const VARP_BRIGHTNESS = 2856;
+
+/** Device option id for screen brightness (OSRS device option 6, range 0-50). */
+export const DEVICE_OPTION_BRIGHTNESS = 6;
+
+/** Max value of DEVICE_OPTION_BRIGHTNESS (50 = full brightness). */
+export const DEVICE_OPTION_BRIGHTNESS_MAX = 50;
+
+/**
+ * BRIGHTNESS SCALING RANGE — edit here to retune the Settings slider.
+ *
+ * The slider has 5 discrete levels (it snaps to these, never in between).
+ * BRIGHTNESS_LEVELS[i] is the renderer's u_brightness multiplier for level i
+ * (low → high); 1.0 = full brightness. The corresponding slider positions in
+ * device-option-6 snap space (0..50) are even steps, derived below.
+ *
+ * The cache is read-only and the handle is positioned by script 3941, which
+ * normalizes `deviceoption_get(6) / 5` (script 3961) against a max of 20 —
+ * see BRIGHTNESS_SCRIPT_SPACE_MAX. If you change BRIGHTNESS_LEVELS, the snap
+ * values and the script-space values stay in lockstep (both derive from
+ * BRIGHTNESS_LEVELS); the script space is 0..100, so every level maps to an
+ * exact multiple of 20 and the handle lands exactly on the dots.
+ */
+export const BRIGHTNESS_LEVELS: readonly number[] = [0.5, 0.6, 0.7, 0.8, 0.9];
+
+/**
+ * Slider snap points in device-option-6 space, even steps across 0..50:
+ * [0, 13, 25, 38, 50]. Derived from BRIGHTNESS_LEVELS so the two can never
+ * drift apart.
+ */
+export const BRIGHTNESS_SNAP_VALUES: readonly number[] = BRIGHTNESS_LEVELS.map(
+    (_, i) => Math.round((i * DEVICE_OPTION_BRIGHTNESS_MAX) / (BRIGHTNESS_LEVELS.length - 1)),
+);
+
+/** Snap any 0..50 value to the nearest brightness slider snap point. */
+export function snapBrightnessValue(value: number): number {
+    let best = BRIGHTNESS_SNAP_VALUES[0];
+    let bestDist = Infinity;
+    for (const snap of BRIGHTNESS_SNAP_VALUES) {
+        const dist = Math.abs(value - snap);
+        if (dist < bestDist) {
+            best = snap;
+            bestDist = dist;
+        }
+    }
+    return best;
+}
+
+/**
+ * Half the distance between adjacent snap points in device-option-6 space
+ * (6.25 for the default 5 levels). A pointer-derived brightness value must be
+ * at least this far from the currently stored dot before the slider moves to
+ * the next one. Hysteresis keeps the stored value (and the handle the re-render
+ * chain places from it) on a dot even when the pointer-derived value wobbles
+ * or is under-scaled; the stored value itself only ever equals a snap point.
+ */
+export const BRIGHTNESS_SNAP_HALF_WIDTH =
+    DEVICE_OPTION_BRIGHTNESS_MAX / (BRIGHTNESS_LEVELS.length - 1) / 2;
+
+/**
+ * Script-space max of the brightness slider (cache scripts, not editable).
+ *
+ * The handle is positioned by cache script 3941, which normalizes the value
+ * fed by script 3961 — `deviceoption_get(6) / 5` — against a max of 20
+ * (`x = trackWidth · (do6/5) / 20`, clamped to 0..100). So device option 6
+ * must be able to reach 100 (= 20 · 5) for the handle to reach the last dot.
+ * The cache is read-only, so the client stores device option 6 in this 0..100
+ * space (see brightnessScriptValue) while the persisted VARP_BRIGHTNESS stays
+ * in 0..50 snap space. 100 also keeps the 3966 write path
+ * (`clamp(5·v, 0, 100)`) lossless for every snap point.
+ */
+export const BRIGHTNESS_SCRIPT_SPACE_MAX = 100;
+
+/**
+ * Convert a stored 0..50 snap value to the 0..100 script space the cache
+ * scripts read from device option 6. For the default 5 levels this yields
+ * [0, 26, 50, 76, 100]; after 3961's `/5` those become 0/5/10/15/20 and
+ * 3941's `/20` normalization places the handle exactly on the 5 dots.
+ *
+ * For persistence/wire values convert back with the inverse
+ * (round(stored · 50 / 100)) — see OsrsClient.applySettingsSliderAdjust.
+ */
+export function brightnessScriptValue(stored: number): number {
+    return Math.round((stored * BRIGHTNESS_SCRIPT_SPACE_MAX) / DEVICE_OPTION_BRIGHTNESS_MAX);
+}
 
 /** Music volume (0-100) */
 export const VARP_MUSIC_VOLUME = 168;

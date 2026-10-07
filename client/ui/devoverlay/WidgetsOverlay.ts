@@ -92,6 +92,10 @@ export class WidgetsOverlay implements Overlay {
     private lastTradeAmountOverlaySignature: string = "";
     private lastMouseOverTextSignature: string = "";
     private lastMouseOverTextRect?: DirtyRect;
+    // Last brightness pushed into the widget shaders. A change (slider drag or
+    // server varp echo) requires a full overlay redraw because every UI pixel
+    // depends on it; until then the cached canvas is still valid.
+    private lastPushedBrightness: number = -1;
 
     // Public property to enable/disable the overlay
     public enabled: boolean = true;
@@ -133,6 +137,7 @@ export class WidgetsOverlay implements Overlay {
         this.lastTradeAmountOverlaySignature = "";
         this.lastMouseOverTextSignature = "";
         this.lastMouseOverTextRect = undefined;
+        this.lastPushedBrightness = -1;
     }
 
     clearAndHide(): void {
@@ -674,6 +679,21 @@ export class WidgetsOverlay implements Overlay {
 
         if (!this.glRenderer || !this.overlayCanvas) {
             return;
+        }
+
+        // Screen brightness (Settings "Screen Brightness" slider, VARP_BRIGHTNESS):
+        // the 2D UI renders in its own GL context and cannot see the scene's
+        // u_brightness, so push the same value into the widget/minimap shaders.
+        // (The minimap renderer copies this from glRenderer on each minimap draw.)
+        // A change invalidates the cached overlay so the next pass repaints the
+        // whole screen — otherwise the UI keeps its previous brightness until an
+        // unrelated dirty rect happens to repaint it.
+        const uiBrightness =
+            this.ctx.getGameContext?.()?.osrsClient?.renderer?.brightness ?? 1;
+        if (uiBrightness !== this.lastPushedBrightness) {
+            this.lastPushedBrightness = uiBrightness;
+            this.glRenderer.brightness = uiBrightness;
+            this.hasPresentedFrame = false;
         }
 
         // A plugin may supply an alternate gameframe (e.g. the classic 317 frame).

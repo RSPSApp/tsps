@@ -1107,6 +1107,9 @@ export class Cs2Vm {
             forwardIfTriggerOpLocal: () => {
                 vm.forwardIfTriggerOpLocal();
             },
+            forwardCCTriggerOpLocal: () => {
+                vm.forwardCCTriggerOpLocal();
+            },
 
             // Input manager for keyboard state queries (KEYHELD, KEYPRESSED)
             inputManager: vm.context.inputManager,
@@ -1406,6 +1409,40 @@ export class Cs2Vm {
         }
         const itemId = (widget.itemId ?? -1) | 0;
         this.context.onIfTriggerOpLocal?.(widgetUid, childIndex, itemId, opcodeParam, argsArray);
+    }
+
+    /**
+     * cc_triggeroplocal (837) — cc-context variant of if_triggeroplocal (2929).
+     * Cache scripts (settings "Adjust Brightness"/volume sliders, e.g. script 526)
+     * push a fixed shape — (widgetUid, childIndex, opcodeParam, label, a, b) —
+     * with the label on the object/string stack and no signature string, so the
+     * 2929 handler's signature parsing does not apply here.
+     */
+    forwardCCTriggerOpLocal(): void {
+        if (this.intStackSize < 5 || this.stringStackSize < 1) {
+            throw new Error("RuntimeException");
+        }
+        const b = this.intStack[--this.intStackSize] | 0;
+        const a = this.intStack[--this.intStackSize] | 0;
+        const label = this.stringStack[--this.stringStackSize];
+        const opcodeParam = this.intStack[--this.intStackSize] | 0;
+        const childIndex = this.intStack[--this.intStackSize] | 0;
+        const widgetUid = this.intStack[--this.intStackSize] | 0;
+
+        const groupId = (widgetUid >>> 16) & 0xffff;
+        this.context.widgetManager.getGroup(groupId);
+        const parent = this.context.widgetManager.getWidgetByUid(widgetUid);
+        const widget =
+            childIndex !== -1
+                ? parent?.children && childIndex >= 0 && childIndex < parent.children.length
+                    ? parent.children[childIndex]
+                    : null
+                : parent;
+        if (!widget) {
+            throw new Error("RuntimeException");
+        }
+        const itemId = (widget.itemId ?? -1) | 0;
+        this.context.onIfTriggerOpLocal?.(widgetUid, childIndex, itemId, opcodeParam, [label, a, b]);
     }
 
     /** Execute a script - internal method that supports nesting */

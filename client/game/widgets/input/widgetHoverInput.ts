@@ -43,13 +43,26 @@ export function processWidgetHoverInput(
         }
 
         // Create mouse event context - relative to widget's absolute screen position
-        // Uses _absX/_absY set by collectWidgetsAtPoint, falls back to relative x/y.
+        // Uses _absX/_absY set by collectWidgetsAtPoint (canvas buffer pixels),
+        // falling back to relative x/y.
+        //
+        // CS2 scripts (including the settings sliders' pointer->value math)
+        // expect LOGICAL widget coordinates, not buffer pixels: on a high-DPI
+        // screen the buffer is a scaled-up copy of the logical layout, so a raw
+        // buffer-pixel offset is inflated by the UI render scale and biases the
+        // value one direction (the brightness slider could only be nudged). The
+        // onDrag / onDragComplete paths already divide by getUiRenderScale() to
+        // produce logical coords; do the same here so every mouse event reports
+        // the same space the scripts were written for.
+        const [renderScaleX, renderScaleY] = widgetInteraction.getUiRenderScale();
+        const invScaleX = renderScaleX > 0 ? 1 / renderScaleX : 1;
+        const invScaleY = renderScaleY > 0 ? 1 / renderScaleY : 1;
         const createMouseEventContext = (widget: any): Partial<ScriptEvent> => {
             const widgetX = widget._absX ?? widget.x ?? 0;
             const widgetY = widget._absY ?? widget.y ?? 0;
             return {
-                mouseX: mx - widgetX,
-                mouseY: my - widgetY,
+                mouseX: Math.round((mx - widgetX) * invScaleX),
+                mouseY: Math.round((my - widgetY) * invScaleY),
             };
         };
 
@@ -81,18 +94,27 @@ export function processWidgetHoverInput(
             }
         }
 
-        // onMouseRepeat fires once per client cycle while hovered.
-        for (let i = 0; i < hits.length; i++) {
-            const w = hits[i];
-            if (!hasHoverHandlers(w)) continue;
-            const uid = (w.uid ?? 0) | 0;
-            if (uid === 0) continue;
-            if (!nextHoveredUids.has(uid)) continue;
-            const eventCtx = createMouseEventContext(w);
-            if (w.eventHandlers?.onMouseRepeat) {
-                deps.getCs2Vm().invokeEventHandler(w, "onMouseRepeat", eventCtx);
-            } else if (Array.isArray(w.onMouseRepeat) && w.onMouseRepeat.length > 0) {
-                deps.executeScriptListener(w, w.onMouseRepeat, eventCtx);
+        // onMouseRepeat fires once per client cycle while hovered AND the left
+        // mouse button is held (OSRS semantics - how the settings sliders are
+        // adjusted: press and move over the slider). onMouseOver/onMouseLeave
+        // remain hover-only.
+        const mouseDown =
+            !!frame.input && typeof frame.input.isDragging === "function" && frame.input.isDragging();
+
+        // Fire mouseRepeat for hovered widgets only while the button is held.
+        if (mouseDown) {
+            for (let i = 0; i < hits.length; i++) {
+                const w = hits[i];
+                if (!hasHoverHandlers(w)) continue;
+                const uid = (w.uid ?? 0) | 0;
+                if (uid === 0) continue;
+                if (!nextHoveredUids.has(uid)) continue;
+                const eventCtx = createMouseEventContext(w);
+                if (w.eventHandlers?.onMouseRepeat) {
+                    deps.getCs2Vm().invokeEventHandler(w, "onMouseRepeat", eventCtx);
+                } else if (Array.isArray(w.onMouseRepeat) && w.onMouseRepeat.length > 0) {
+                    deps.executeScriptListener(w, w.onMouseRepeat, eventCtx);
+                }
             }
         }
 

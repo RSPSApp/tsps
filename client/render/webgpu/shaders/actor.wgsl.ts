@@ -61,8 +61,13 @@ struct ActorUniforms {
     u_sceneBorderSize: i32,     // 32
     u_worldEntityOpacity: f32,  // 36
     u_poseRow: i32,             // 40 GPU pose row, -1 when posed on the CPU
-    u_pad1: f32,                // 44
+    // 1 when this draw is placed through u_worldEntityTransform (a boat deck): its local
+    // coordinates can't be measured against the player, so fog is skipped like main.vert.wgsl.
+    u_isWorldEntity: u32,       // 44
     u_pad2: vec4<f32>,          // 48..64
+    // View-space deck placement for actors aboard a world entity (identity for normal maps):
+    // the map-side twin of main.vert.wgsl's mapU.u_worldEntityTransform.
+    u_worldEntityTransform: mat4x4<f32>, // 64..128
 };
 
 @group(2) @binding(0) var<uniform> actorU: ActorUniforms;
@@ -390,6 +395,9 @@ fn actorTextureAnimation(vertex: Vertex) -> vec2<f32> {
 }
 
 fn actorFogAmount(localPos: vec4<f32>) -> f32 {
+    if (actorU.u_isWorldEntity != 0u) {
+        return 0.0;
+    }
     let loadAlpha = smoothstep(0.0, 1.0, min(scene.u_currentTime - actorU.u_timeLoaded, 1.0));
     let isLoading = when_neq(loadAlpha, 1.0);
     let playerOffset = vec2<f32>(localPos.x - scene.u_playerPos.x, localPos.z - scene.u_playerPos.y);
@@ -458,7 +466,7 @@ function placement(kind: ActorKind): string {
     localPos /= vec4<f32>(128.0, 128.0, 128.0, 1.0);
     localPos += vec4<f32>(actorU.u_mapPos.x * 64.0, 0.0, actorU.u_mapPos.y * 64.0, 0.0);
 
-    var viewPos = scene.u_viewMatrix * localPos;
+    var viewPos = actorU.u_worldEntityTransform * (scene.u_viewMatrix * localPos);
     viewPos.z += f32(info.plane) * PLANE_LAYER_EPSILON;${clip}`;
 }
 

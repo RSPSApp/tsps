@@ -85,8 +85,9 @@ interface MapActorState {
  * Deviations from the WebGL path:
  * - The WebGPU map stream loads squares with `loadNpcs: false`, so there is no baked per-map
  *   NPC geometry; every NPC goes through DynamicNpcAnimLoader current-frame geometry.
- * - Instances/world entities and first-person arm rendering are not ported (instanceActive is
- *   false under WebGPU), and actor frame sounds are not dispatched.
+ * - Instances and first-person arm rendering are not ported (instanceActive is false under
+ *   WebGPU), and actor frame sounds are not dispatched. World entity decks are: their actors are
+ *   packed from the ECS worldViewId (packDeckActors) and placed by the map's deck transform.
  */
 export class WebGPUActors {
     private readonly writer = new ActorDataWriter();
@@ -142,7 +143,7 @@ export class WebGPUActors {
                 {
                     binding: 0,
                     visibility: GPU_SHADER_STAGE.VERTEX | GPU_SHADER_STAGE.FRAGMENT,
-                    buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: 64 },
+                    buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: 128 },
                 },
                 {
                     binding: 1,
@@ -415,14 +416,22 @@ export class WebGPUActors {
             const map = visible[i];
             const state = this.mapStates.get(getMapSquareId(map.mapX, map.mapY));
             if (!state) continue;
+            const deck = this.renderer.worldEntityForMap(map);
             state.uniforms.reset();
+            state.uniforms.setWorldEntityTransform(deck?.transform);
             state.npcByEcsId.clear();
             state.playerByPid.clear();
-            if (!this.isMapWithinRenderDistance(map, cullTile, renderDistanceTiles)) {
+            // A world entity deck lives in its own coordinates (far from its drawn position),
+            // so the world-tile cull never applies to it.
+            if (!deck && !this.isMapWithinRenderDistance(map, cullTile, renderDistanceTiles)) {
                 continue;
             }
             this.packMapNpcs(state, map);
             this.packMapPlayers(state, map);
+            if (deck) {
+                // Before attached GFX: its lookups read this state's actor maps.
+                this.packDeckActors(state, map, deck.entityIndex, deck.overlay.deckHeight ?? 0);
+            }
             this.packMapProjectiles(state, map);
             this.packMapWorldGfx(state, map);
             this.packMapAttachedGfx(state, map);
@@ -661,67 +670,89 @@ export class WebGPUActors {
 
     private packMapNpcs(state: MapActorState, map: WebGPUMapSquare): void {
         const client = this.renderer.osrsClient;
-        const loader = this.dynamicNpcLoader;
-        if (!loader) return;
         const ids = client.npcEcs.queryByMap(map.mapX, map.mapY);
         for (let i = 0; i < ids.length; i++) {
             const ecsId = ids[i] | 0;
             if (!this.tileSelection.shouldRenderNpc(client, map, ecsId)) continue;
-            const dataIndex = packNpcActorData(client, this.writer, map, ecsId);
-            if (dataIndex < 0) continue;
-            state.npcByEcsId.set(ecsId, dataIndex);
+            this.packNpc(state, map, ecsId, NPC_MODEL_Y_OFFSET);
+        }
+    }
 
-            const geometry = resolveUnbatchedNpcGeometry(client, loader, ecsId);
-            if (!geometry) continue;
-            const timeLoaded = map.timeLoaded;
-            const opaque = this.geometry?.getOrCreate(
-                `${geometry.key}|o`,
-                geometry.opaqueVertices,
-                geometry.opaqueIndices,
-            );
-            if (opaque && this.pipelines.get("npc")?.[0]) {
-                state.opaque.push({
-                    pipeline: this.pipelines.get("npc")![0],
-                    geometry: opaque,
-                    entry: this.actorEntry(
-                        state,
-                        map,
-                        timeLoaded,
-                        NPC_MODEL_Y_OFFSET,
-                        dataIndex,
-                        0,
-                        0,
-                        0,
-                    ),
-                });
-            }
-            const alpha = this.geometry?.getOrCreate(
-                `${geometry.key}|a`,
-                geometry.alphaVertices,
-                geometry.alphaIndices,
-            );
-            if (alpha && this.pipelines.get("npc")?.[1]) {
-                state.alpha.push({
-                    pipeline: this.pipelines.get("npc")![1],
-                    geometry: alpha,
-                    entry: this.actorEntry(
-                        state,
-                        map,
-                        timeLoaded,
-                        NPC_MODEL_Y_OFFSET,
-                        dataIndex,
-                        0,
-                        0,
-                        0,
-                    ),
-                });
-            }
+    /** Packs one NPC's data, geometry and draw entries onto `map`'s state. */
+    private packNpc(
+        state: MapActorState,
+        map: WebGPUMapSquare,
+        ecsId: number,
+        modelYOffset: number,
+    ): void {
+        const client = this.renderer.osrsClient;
+        const loader = this.dynamicNpcLoader;
+        if (!loader) return;
+        const dataIndex = packNpcActorData(client, this.writer, map, ecsId);
+        if (dataIndex < 0) return;
+        state.npcByEcsId.set(ecsId, dataIndex);
+
+        const geometry = resolveUnbatchedNpcGeometry(client, loader, ecsId);
+        if (!geometry) return;
+        const timeLoaded = map.timeLoaded;
+        const opaque = this.geometry?.getOrCreate(
+            `${geometry.key}|o`,
+            geometry.opaqueVertices,
+            geometry.opaqueIndices,
+        );
+        if (opaque && this.pipelines.get("npc")?.[0]) {
+            state.opaque.push({
+                pipeline: this.pipelines.get("npc")![0],
+                geometry: opaque,
+                entry: this.actorEntry(
+                    state,
+                    map,
+                    timeLoaded,
+                    modelYOffset,
+                    dataIndex,
+                    0,
+                    0,
+                    0,
+                ),
+            });
+        }
+        const alpha = this.geometry?.getOrCreate(
+            `${geometry.key}|a`,
+            geometry.alphaVertices,
+            geometry.alphaIndices,
+        );
+        if (alpha && this.pipelines.get("npc")?.[1]) {
+            state.alpha.push({
+                pipeline: this.pipelines.get("npc")![1],
+                geometry: alpha,
+                entry: this.actorEntry(
+                    state,
+                    map,
+                    timeLoaded,
+                    modelYOffset,
+                    dataIndex,
+                    0,
+                    0,
+                    0,
+                ),
+            });
         }
     }
 
     private packMapPlayers(state: MapActorState, map: WebGPUMapSquare): void {
         const client = this.renderer.osrsClient;
         const pids = getRenderPlayersForMap(client, map, this.tileSelection);
+        this.packPlayers(state, map, pids, PLAYER_MODEL_Y_OFFSET);
+    }
+
+    /** Packs each player's data, pose and draw entries onto `map`'s state. */
+    private packPlayers(
+        state: MapActorState,
+        map: WebGPUMapSquare,
+        pids: readonly number[],
+        modelYOffset: number,
+    ): void {
+        const client = this.renderer.osrsClient;
         let indexInMap = 0;
         for (const pid of pids) {
             const dataIndex = packPlayerActorData(client, this.writer, map, pid, indexInMap++);
@@ -753,10 +784,39 @@ export class WebGPUActors {
                 items.push({
                     pipeline,
                     geometry,
-                    entry: this.actorEntry(state, map, timeLoaded, PLAYER_MODEL_Y_OFFSET, dataIndex, 0, 0, 0, poseRow),
+                    entry: this.actorEntry(state, map, timeLoaded, modelYOffset, dataIndex, 0, 0, 0, poseRow),
                 });
             }
         }
+    }
+
+    /**
+     * Actors aboard a world entity: their ECS tiles are deck coordinates and their worldViewId
+     * names the entity, so the world-tile selection and cull do not apply. The map's uniform
+     * world-entity transform places them with the deck (WebGL draws these in a second per-map
+     * pass with the same transform).
+     */
+    private packDeckActors(
+        state: MapActorState,
+        map: WebGPUMapSquare,
+        entityIndex: number,
+        deckHeight: number,
+    ): void {
+        const client = this.renderer.osrsClient;
+        // The ECS worldViewId is authoritative; WorldViewManager's player/NPC sets are only
+        // populated while a sync packet is being applied, so enumerate the streams instead.
+        const pids: number[] = [];
+        const pe = client.playerEcs;
+        for (const pid of pe.getAllActiveIndices()) {
+            if ((pe.getWorldViewId(pid) | 0) === entityIndex) pids.push(pid | 0);
+        }
+        this.packPlayers(state, map, pids, PLAYER_MODEL_Y_OFFSET + deckHeight);
+
+        const npcEcs = client.npcEcs;
+        npcEcs.forEachActive((ecsId) => {
+            if ((npcEcs.getWorldViewId(ecsId) | 0) !== entityIndex) return;
+            this.packNpc(state, map, ecsId | 0, NPC_MODEL_Y_OFFSET - deckHeight);
+        });
     }
 
     /** The frame's pose texture row for a GPU pose, shared by players in the same pose; -1 when full. */

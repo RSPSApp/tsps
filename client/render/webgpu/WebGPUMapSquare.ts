@@ -24,6 +24,8 @@ const MODEL_INFO_WIDTH = 16;
 const MODEL_INFO_COMPONENTS = 4;
 const MODEL_INFO_BYTES_PER_ROW = MODEL_INFO_WIDTH * MODEL_INFO_COMPONENTS * 2;
 const MAP_UNIFORM_USED_BYTES = 96;
+const MAP_UNIFORM_TRANSFORM_OFFSET = 92;
+const WORLD_ENTITY_ENABLED = new Uint32Array([1]);
 
 type MapDrawBatch = {
     vertexBuffer: GPUBuffer;
@@ -48,6 +50,9 @@ type GeometryGroup = {
     alpha?: MapDrawBatch;
     buffers: GPUBuffer[];
     textures: GPUTexture[];
+    /** This group's MapUniforms buffer (one entry per range) and its entry count. */
+    uniformBuffer?: GPUBuffer;
+    uniformEntries?: number;
 };
 
 type GeometryInput = {
@@ -311,7 +316,7 @@ export class WebGPUMapSquare implements MapSquare {
 
     /** Stable map-square id, same value the WebGL map and MapManager key use. */
     readonly id: number;
-    /** Interaction/deck plane; -1 for normal maps (WebGPU has no world-entity overlays). */
+    /** Interaction/deck plane; -1 for normal maps. Deck maps set it to the deck's plane. */
     interactionPlane: number = -1;
 
     /** CPU-side height/flag data other systems sample (bridge camera, route finding). */
@@ -521,6 +526,8 @@ export class WebGPUMapSquare implements MapSquare {
                 });
                 this.device.queue.writeBuffer(uniformBuffer, 0, arrayBuffer);
                 group.buffers.push(uniformBuffer);
+                group.uniformBuffer = uniformBuffer;
+                group.uniformEntries = entries;
                 const uniformsBindGroup = this.device.createBindGroup({
                     layout: this.resources.mapUniformsLayout,
                     entries: [
@@ -783,6 +790,35 @@ export class WebGPUMapSquare implements MapSquare {
         } catch {
             out.length = 0;
             return out;
+        }
+    }
+
+    /**
+     * Writes this deck map's view-space placement matrix (WorldEntityAnimator.getTransform)
+     * into every MapUniforms entry and flags the draw as a world entity, matching the WebGL
+     * u_worldEntityTransform/u_isWorldEntity uniforms. Normal maps never call it.
+     */
+    setWorldEntityTransform(transform: Float32Array | undefined): void {
+        if (!transform) return;
+        for (const group of this.groups.values()) {
+            const buffer = group.uniformBuffer;
+            const entries = group.uniformEntries ?? 0;
+            if (!buffer || entries <= 0) continue;
+            for (let i = 0; i < entries; i++) {
+                const offset = i * MAP_UNIFORM_STRIDE;
+                this.device.queue.writeBuffer(
+                    buffer,
+                    offset,
+                    transform.buffer,
+                    transform.byteOffset,
+                    64,
+                );
+                this.device.queue.writeBuffer(
+                    buffer,
+                    offset + MAP_UNIFORM_TRANSFORM_OFFSET,
+                    WORLD_ENTITY_ENABLED,
+                );
+            }
         }
     }
 

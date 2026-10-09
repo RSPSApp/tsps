@@ -7,6 +7,7 @@ import { ProjectionType } from "../../game/Camera";
 import { sampleBridgeHeightForWorldTile } from "../../game/scene/BridgeHeightSampler";
 import { BridgePlaneStrategy } from "../../game/scene/PlaneResolver";
 import { LoadingRequirement } from "../../game/state/LoadingTracker";
+import { projectDeckToWorld } from "../render/worldEntityMotion";
 import type { WebGPURenderer } from "./WebGPURenderer";
 
 // 117 HD follow-camera feel. The zoom multiplier is applied to the follow distance, so it is
@@ -59,8 +60,17 @@ export function getControlledPlayerEcsIndex(renderer: WebGPURenderer): number | 
 }
 
 /**
- * Port of updateCameraFollow (render/render/camera2.ts) without world entities (boats) and
- * terrain pitch pressure, which stage 2 does not model. Follow focal smoothing and the orbit
+ * The world view (boat) the controlled player stands in, or -1 (port of
+ * getControlledPlayerWorldViewId in render/render/camera/roof.ts).
+ */
+export function getControlledPlayerWorldViewId(renderer: WebGPURenderer): number {
+    const idx = getControlledPlayerEcsIndex(renderer);
+    return idx !== undefined ? renderer.osrsClient.playerEcs.getWorldViewId(idx) | 0 : -1;
+}
+
+/**
+ * Port of updateCameraFollow (render/render/camera2.ts), including the world-entity deck
+ * projection. Terrain pitch pressure is not modelled. Follow focal smoothing and the orbit
  * are identical so the camera tracks the player the same way WebGL does.
  */
 export function updateFollowCamera(
@@ -73,8 +83,16 @@ export function updateFollowCamera(
     const playerEcsIndex = getControlledPlayerEcsIndex(renderer);
     if (playerEcsIndex === undefined) return;
 
-    const px = playerEcs.getX(playerEcsIndex) | 0;
-    const py = playerEcs.getY(playerEcsIndex) | 0;
+    let px = playerEcs.getX(playerEcsIndex) | 0;
+    let py = playerEcs.getY(playerEcsIndex) | 0;
+    // On a boat the player stands in deck coordinates; follow where the deck is drawn.
+    const worldViewId = getControlledPlayerWorldViewId(renderer);
+    if (worldViewId >= 0) {
+        const projected = projectDeckToWorld(renderer, worldViewId, px, py);
+        if (!projected) return; // not placed yet: keep the camera where it is
+        px = Math.round(projected.x);
+        py = Math.round(projected.y);
+    }
     const playerX = px / 128;
     const playerZ = py / 128;
 

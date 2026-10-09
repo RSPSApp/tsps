@@ -14,7 +14,7 @@ import {
     MOBILE_TOUCH_QUALITY_PROFILE,
     type BrowserQualityProfile,
 } from "../render/constants";
-import { getControlledPlayerEcsIndex } from "./camera";
+import { getControlledPlayerEcsIndex, getControlledPlayerWorldViewId } from "./camera";
 import type { WebGPURenderer } from "./WebGPURenderer";
 
 interface TilePoint {
@@ -56,9 +56,8 @@ function resolveQualityProfile(): BrowserQualityProfile {
  * Field substitutions while WebGPURenderer lacks the WebGL host state:
  * - `host.maxLevel` -> Scene.MAX_LEVELS - 1. WebGPU never changes maxLevel and
  *   its map loader builds every square at Scene.MAX_LEVELS - 1.
- * - `host.worldEntityOverlays` -> worldViewManager.getWorldEntity, since the
- *   overlay map is WebGL-only. The WebGL deck plane is
- *   `overlay.basePlane || worldEntityTypeLoader.load(overlay.configId)?.basePlane`,
+ * - The deck plane comes from the world view's entity rather than a WebGL overlay record.
+ *   The WebGL deck plane is `overlay.basePlane || worldEntityTypeLoader.load(overlay.configId)?.basePlane`,
  *   and the REBUILD_WORLDENTITY payload never carries basePlane (the client
  *   reads `payload.basePlane ?? 0`), so the effective input is the type loader's
  *   basePlane; this port reads that directly.
@@ -86,14 +85,6 @@ export function computeWebGPURoofPlaneLimit(renderer: WebGPURenderer): number {
         playerTile,
         targetTile: renderer.osrsClient.followPlayerCamera ? playerTile : cameraTile,
     });
-}
-
-/** Port of getControlledPlayerWorldViewId (render/render/camera/roof.ts). */
-function getControlledPlayerWorldViewId(renderer: WebGPURenderer): number {
-    const idx = renderer.osrsClient.playerEcs.getIndexForServerId(
-        renderer.osrsClient.controlledPlayerServerId,
-    );
-    return idx !== undefined ? renderer.osrsClient.playerEcs.getWorldViewId(idx) | 0 : -1;
 }
 
 /** Port of getCameraTileXY (render/render/camera/roof.ts). */

@@ -9,7 +9,7 @@ import type { TileMarkersPluginConfig } from "../../../game/plugins/tilemarkers/
 import type { Model } from "../../../rs/model/Model";
 import type { OsrsMenuEntry } from "../../../rs/MenuEntry";
 import type { LocModelLoader } from "../../../rs/config/loctype/LocModelLoader";
-import type { Ray } from "../../../game/math/Raycast";
+import { Ray } from "../../../game/math/Raycast";
 import type { MapManager } from "../../../game/MapManager";
 import { SceneRaycaster } from "../../../game/scene/SceneRaycaster";
 import type { SimpleMenuEntry } from "../../../ui/menu/MenuEngine";
@@ -256,6 +256,14 @@ export class OverlayHost {
 
     private get typedHost(): WebGLOsrsRendererHost {
         return this as unknown as WebGLOsrsRendererHost;
+    }
+
+    /**
+     * Deck placement read by the shared overlay pop helpers (projectDeckToWorld): an actor
+     * aboard a boat has deck coordinates, so their labels are anchored where the deck is drawn.
+     */
+    get worldEntityAnimator(): WebGPURenderer["worldEntityAnimator"] {
+        return this.renderer.worldEntityAnimator;
     }
 
     // ── Pools ────────────────────────────────────────────────────────────────────────────────
@@ -760,9 +768,33 @@ export class OverlayHost {
         );
     }
 
-    /** WebGPU has no world-entity overlay maps, so the terrain ray needs no deck transform. */
-    getWorldEntityAdjustedTerrainRay(ray: Ray, _map?: unknown): Ray {
-        return ray;
+    /**
+     * Port of getWorldEntityAdjustedTerrainRay (render/worldEntity2.ts): a ray that hits the sea
+     * is moved into a deck map's own coordinates before its pick triangles are tested.
+     */
+    getWorldEntityAdjustedTerrainRay(ray: Ray, map?: unknown): Ray {
+        if (!map) return ray;
+        const deck = this.renderer.worldEntityForMap(map as WebGPUMapSquare);
+        if (!deck) return ray;
+
+        const viewMatrix = this.osrsClient.camera?.viewMatrix as Float32Array | undefined;
+        if (!viewMatrix) return ray;
+
+        const weInv = mat4.invert(mat4.create(), deck.transform);
+        if (!weInv) return ray;
+        const viewInv = mat4.invert(mat4.create(), viewMatrix);
+        if (!viewInv) return ray;
+
+        const transformInv = mat4.create();
+        mat4.multiply(transformInv, weInv, viewMatrix);
+        mat4.multiply(transformInv, viewInv, transformInv);
+
+        const newOrigin = vec3.transformMat4(vec3.create(), ray.origin, transformInv);
+        const farPoint = vec3.scaleAndAdd(vec3.create(), ray.origin, ray.direction, 1.0);
+        const newFar = vec3.transformMat4(vec3.create(), farPoint, transformInv);
+        const newDir = vec3.subtract(vec3.create(), newFar, newOrigin);
+        vec3.normalize(newDir, newDir);
+        return new Ray(newOrigin, newDir);
     }
 
     getRoofPlaneLimit(): number {

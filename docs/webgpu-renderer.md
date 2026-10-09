@@ -221,9 +221,26 @@ Scope is the pass `renderOpaquePass` + `renderTransparentPass` covers for terrai
   start at NDC y = +1, so a GL-style lookup mirrors every shadow.
 - Weather (the other plugin with WebGL render hooks) is not ported.
 
+### Stage 5.6 — world entity decks (boats) (done)
+
+- `client/render/webgpu/worldEntity.ts` is the port of `render/render/worldEntity.ts`:
+  REBUILD_WORLDENTITY builds the deck as an instance-style square under a reserved map id
+  (200 + entityIndex) and registers it with MapManager as a world-entity map (never pruned,
+  always visible, excluded from world-tile lookups).
+- The shared `WorldEntityAnimator` places each deck: `render/render/worldEntityMotion.ts` is
+  called each frame and composed with the camera view matrix.
+- `WebGPUMapSquare.setWorldEntityTransform` writes that matrix and `u_isWorldEntity` into every
+  MapUniforms entry, so the deck draws at the boat as WebGL does.
+- The actor uniforms take the same matrix and the world-entity fog bypass; deck players and NPCs
+  are packed from the ECS `worldViewId` (`WebGPUActors.packDeckActors`).
+- `updateFollowCamera` projects the controlled player's deck coordinates to the boat
+  (`projectDeckToWorld`), and `OverlayHost` exposes the animator so deck overhead text, the
+  click cross and terrain picks (`getWorldEntityAdjustedTerrainRay`) anchor at the drawn deck.
+- Not ported: deck hitsplats/health bars (WebGL does not project those either).
+
 ### Stage 6 — streaming and polish
 
-Loc/door/ground-item geometry refreshes, world entities/instances, map square GC, quality
+Loc/door/ground-item geometry refreshes, instances, map square GC, quality
 profiles (MSAA, resolution scale), profiler/GPU timing, `DrawBackend` equivalent (multi-draw
 via indirect or instanced, only if measured), FXAA/blit if wanted. Exit: parity checklist for
 streaming parity with WebGL.

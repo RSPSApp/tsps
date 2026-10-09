@@ -8,10 +8,11 @@ export const ACTOR_DATA_WIDTH = 16;
 export const ACTOR_MAX = 8192;
 const ACTOR_DATA_ROWS = ACTOR_MAX / 8;
 const ACTOR_DATA_BYTES_PER_ROW = ACTOR_DATA_WIDTH * 4 * 2;
-export const ACTOR_UNIFORM_BYTES = 64;
+export const ACTOR_UNIFORM_BYTES = 128;
 /** GPU player poses: 3 RGBA32F texels per label (LabelRig allows 255), one row per pose. */
 export const POSE_ROWS = 256;
 export const POSE_WIDTH = 255 * 3;
+const IDENTITY_MAT4 = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
 /** Dynamic-offset stride; 256 matches bindings.ts, grown if the device needs more. */
 export function actorUniformStride(device: GPUDevice): number {
@@ -123,6 +124,8 @@ export class MapActorUniforms {
     private bindGroup: GPUBindGroup | undefined;
     private scratch: Float32Array;
     private view: DataView;
+    /** View-space deck placement, shared by every entry on this map (identity otherwise). */
+    private worldEntityTransform: Float32Array = IDENTITY_MAT4;
 
     entryCount = 0;
 
@@ -145,6 +148,11 @@ export class MapActorUniforms {
 
     reset(): void {
         this.entryCount = 0;
+    }
+
+    /** Deck placement for this frame's entries; undefined puts every entry back to identity. */
+    setWorldEntityTransform(transform: Float32Array | undefined): void {
+        this.worldEntityTransform = transform ?? IDENTITY_MAT4;
     }
 
     /** Appends one draw entry and returns its index. */
@@ -176,6 +184,12 @@ export class MapActorUniforms {
         this.view.setInt32(base * 4 + 32, this.borderSize | 0, true);
         f[base + 9] = 1.0;
         this.view.setInt32(base * 4 + 40, poseRow | 0, true);
+        this.view.setUint32(
+            base * 4 + 44,
+            this.worldEntityTransform === IDENTITY_MAT4 ? 0 : 1,
+            true,
+        );
+        f.set(this.worldEntityTransform, base + 16);
         return entry;
     }
 

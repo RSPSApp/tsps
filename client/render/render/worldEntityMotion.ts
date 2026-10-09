@@ -1,8 +1,21 @@
 import { mat4, vec3 } from "gl-matrix";
 
+import type { OsrsClient } from "../../game/OsrsClient";
+import type { WorldEntityAnimator } from "../WorldEntityAnimator";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 
 const FINE_UNITS_PER_TILE = 128;
+
+/**
+ * The host surface these helpers need, shared by the WebGL and WebGPU renderers: the animator
+ * placing decks and the overlay records keyed by entity index (see WebGLOsrsRenderer for the
+ * WebGL host, client/render/webgpu/worldEntity.ts for the WebGPU one).
+ */
+export interface WorldEntityMotionHost {
+    worldEntityAnimator?: WorldEntityAnimator;
+    worldEntityOverlays: Map<number, { configId: number; regionX: number; regionY: number; sizeX: number; sizeZ: number }>;
+    osrsClient: OsrsClient;
+}
 const RS_ANGLE_TO_RADIANS = Math.PI / 1024;
 const scratchTranslation = vec3.create();
 const scratchPoint = vec3.create();
@@ -15,7 +28,7 @@ const scratchPoint = vec3.create();
  * rotates the deck about that centre (0 = template orientation, 512 = a quarter turn
  * clockwise seen from above). Call after `WorldViewManager.interpolateEntities`.
  */
-export function updateWorldEntityMotion(host: WebGLOsrsRendererHost): void {
+export function updateWorldEntityMotion(host: WorldEntityMotionHost): void {
     const animator = host.worldEntityAnimator;
     if (!animator) return;
     const worldViews = host.osrsClient.worldViewManager;
@@ -53,7 +66,7 @@ export function updateWorldEntityMotion(host: WebGLOsrsRendererHost): void {
  * entity isn't placed yet.
  */
 export function projectDeckToWorld(
-    host: WebGLOsrsRendererHost,
+    host: Pick<WorldEntityMotionHost, "worldEntityAnimator">,
     entityIndex: number,
     fineX: number,
     fineY: number,

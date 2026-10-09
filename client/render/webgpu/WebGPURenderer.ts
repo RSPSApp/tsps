@@ -21,11 +21,26 @@ import type { MinimapIcon } from "../loader/SdMapData";
 import { SdMapData } from "../loader/SdMapData";
 import { SdMapDataLoader } from "../loader/SdMapDataLoader";
 import { SdMapLoaderInput } from "../loader/SdMapLoaderInput";
+import type { WorldEntityAnimator } from "../WorldEntityAnimator";
+import { updateWorldEntityMotion } from "../render/worldEntityMotion";
+import { getServerTickPhaseNow } from "../../network/serverConnection/timing";
 import { WebGPUMapSquare } from "./WebGPUMapSquare";
 import { resolveFogRange } from "../RenderDistancePolicy";
 import { WorldResources } from "./WorldResources";
 import { WebGPUActors } from "./actors/WebGPUActors";
 import { WebGPUInstances } from "./instances";
+import {
+    clearWorldEntities,
+    clearWorldEntity,
+    clearWorldEntityLocs,
+    configureWorldEntityOverlayMap,
+    ensureWorldEntityOverlaysLoaded,
+    getOverlayMapForEntity,
+    getWorldEntityIndexForMapId,
+    loadWorldEntityScene,
+    scheduleWorldEntityLocRebuild,
+    type WorldEntityOverlay,
+} from "./worldEntity";
 import { environmentAt } from "../render/environment";
 import { GPU_TEXTURE_USAGE, SCENE_DEPTH_FORMAT, SCENE_GROUP, WORLD_TEXTURES_GROUP } from "./bindings";
 import { getControlledPlayerEcsIndex, updateFollowCamera } from "./camera";
@@ -128,6 +143,16 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     instanceTemplateChunks: number[][][] | null = null;
     instanceRegionX = 0;
     instanceRegionY = 0;
+
+    /** World entity deck scenes (boats), see ./worldEntity.ts. */
+    readonly worldEntityOverlays = new Map<number, WorldEntityOverlay>();
+    worldEntityAnimator?: WorldEntityAnimator;
+    worldEntityLocRebuildTimer: ReturnType<typeof setTimeout> | null = null;
+    nextWorldEntityLoadToken: number = 1;
+    readonly worldEntityLoadTokens = new Map<number, number>();
+    readonly worldEntityReloadAfterMs = new Map<number, number>();
+    /** 0..1 within the active client simulation tick; decks interpolate between tiles with it. */
+    clientTickPhase: number = 0;
 
     constructor(osrsClient: OsrsClient) {
         super(osrsClient);
@@ -326,6 +351,96 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.osrsClient.rehomeNpcs?.();
     }
 
+    // ── World entity deck scenes (boats); see ./worldEntity.ts ────────────────────────────────
+
+    /** Called by OsrsClient on REBUILD_WORLDENTITY; the deck is queued like any map build. */
+    async loadWorldEntityScene(
+        entityIndex: number,
+        templateChunks: number[][][],
+        regionX: number,
+        regionY: number,
+        worldX: number,
+        worldY: number,
+        sizeX: number,
+        sizeZ: number,
+        extraLocs: WorldEntityOverlay["extraLocs"],
+        configId: number = -1,
+        extraNpcs?: WorldEntityOverlay["extraNpcs"],
+        basePlane: number = 0,
+    ): Promise<void> {
+        return loadWorldEntityScene(
+            this,
+            entityIndex,
+            templateChunks,
+            regionX,
+            regionY,
+            worldX,
+            worldY,
+            sizeX,
+            sizeZ,
+            extraLocs,
+            configId,
+            extraNpcs,
+            basePlane,
+        );
+    }
+
+    /** Deck locs arrive right after the first build; debounce a rebuild that includes them. */
+    scheduleWorldEntityLocRebuild(entityIndex: number): void {
+        scheduleWorldEntityLocRebuild(this, entityIndex);
+    }
+
+    /** The applied deck map for an entity, once built. */
+    getOverlayMapForEntity(entityIndex: number): WebGPUMapSquare | undefined {
+        return getOverlayMapForEntity(this, entityIndex);
+    }
+
+    clearWorldEntity(entityIndex: number): void {
+        clearWorldEntity(this, entityIndex);
+    }
+
+    clearWorldEntityLocs(entityIndex: number): void {
+        clearWorldEntityLocs(this, entityIndex);
+    }
+
+    /** A deck build the worker finished, applied with the normal map batch (applyReadyMaps). */
+    queueWorldEntityMapData(mapData: SdMapData): void {
+        this.mapsToLoad.push({ mapData });
+    }
+
+    /** Deck info for a visible map: its entity, overlay record and this frame's transform. */
+    worldEntityForMap(
+        map: WebGPUMapSquare,
+    ): { entityIndex: number; overlay: WorldEntityOverlay; transform: Float32Array } | undefined {
+        if (!this.mapManager.worldEntityMapIds.has(map.id)) return undefined;
+        const entityIndex = getWorldEntityIndexForMapId(this, map.id);
+        if (entityIndex === undefined) return undefined;
+        const overlay = this.worldEntityOverlays.get(entityIndex);
+        const transform = this.worldEntityAnimator?.getTransform(entityIndex);
+        if (!overlay || !transform) return undefined;
+        return { entityIndex, overlay, transform };
+    }
+
+    /** Server tick phase mapped onto the local client tick, for deck interpolation. */
+    private updateClientTickPhase(timeSec: number): void {
+        let phaseFromServer = Number.NaN;
+        try {
+            const { phase, tickMs } = getServerTickPhaseNow();
+            const tickLengthMs = Math.max(1, tickMs | 0);
+            const clampedPhase = Math.max(0, Math.min(1, phase));
+            const msIntoServerTick = clampedPhase * tickLengthMs;
+            const clientTickMs = 20;
+            phaseFromServer = (msIntoServerTick % clientTickMs) / clientTickMs;
+        } catch {
+            phaseFromServer = Number.NaN;
+        }
+        if (!Number.isFinite(phaseFromServer)) {
+            const ticksF = timeSec / 0.02;
+            phaseFromServer = ticksF - Math.floor(ticksF);
+        }
+        this.clientTickPhase = Math.max(0, Math.min(1, phaseFromServer));
+    }
+
     /** Builds a scene in the map worker (instances build theirs through here). */
     async loadSceneData(input: Omit<SdMapLoaderInput, "loadedTextureIds">): Promise<SdMapData | undefined> {
         return await this.osrsClient.workerPool.queueLoad<SdMapLoaderInput, SdMapData | undefined, SdMapDataLoader>(
@@ -414,6 +529,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             square.initAnimatedLocs(mapData, this.osrsClient.seqTypeLoader, getClientCycle() | 0);
             world.uploadMapTextures(mapData.loadedTextures);
             this.mapManager.addMap(mapX, mapY, square);
+            configureWorldEntityOverlayMap(this, square);
             this.actors?.onMapAdded(square, mapData);
             this.overlays?.onMapAdded(square, mapData);
             this.ui?.registerMinimapData(mapData);
@@ -491,8 +607,20 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 this.followCamWheel += inputManager.wheelDeltaY;
             }
             this.handleInput(deltaTime);
+            // Deck interpolation runs before the camera: it projects the deck coordinates the
+            // player stands in to their world position (camera.ts) and places each deck.
+            const cycle = getClientCycle() | 0;
+            this.updateClientTickPhase(timeSec);
+            this.worldEntityAnimator?.tick(cycle);
+            this.osrsClient.worldViewManager.interpolateEntities(cycle, this.clientTickPhase);
+            updateWorldEntityMotion(this);
+            ensureWorldEntityOverlaysLoaded(this, performance.now());
             updateFollowCamera(this, timeSec, deltaTime);
             this.osrsClient.camera.update(width, height, 0, 0, width, height);
+            // The deck placement matrices are view-space, so they are rebuilt per camera frame.
+            this.worldEntityAnimator?.compose(
+                this.osrsClient.camera.viewMatrix as Float32Array,
+            );
             // Swap in built squares before the visible list is made: replacing a square (a door
             // or loc rebuild) destroys the old one's buffers, and a frame that still draws it
             // fails as a whole, flashing the clear colour.
@@ -509,9 +637,19 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 this.osrsClient.expandedMapLoading | 0,
             );
             this.updateSkyColor();
-            const cycle = getClientCycle() | 0;
             for (const map of this.mapManager.visibleMaps) {
                 map.updateAnimatedLocs(this.osrsClient.seqFrameLoader, cycle);
+            }
+            // World entity decks are drawn from their own coordinate space; hand each map this
+            // frame's placement matrix (identity maps are left untouched).
+            for (const map of this.mapManager.visibleMaps) {
+                if (!this.mapManager.worldEntityMapIds.has(map.id)) continue;
+                const entityIndex = getWorldEntityIndexForMapId(this, map.id);
+                const transform =
+                    entityIndex !== undefined
+                        ? this.worldEntityAnimator?.getTransform(entityIndex)
+                        : undefined;
+                map.setWorldEntityTransform(transform);
             }
         }
 
@@ -758,6 +896,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.terrainOverrides.clear();
         this.mapRegionReplacements.clear();
         this.mapsToLoad.clear();
+        clearWorldEntities(this);
         this.followCamFocalInitialized = false;
         this.followCamFocalLastClientCycle = -1;
         this.followCamZoomTarget = 1;

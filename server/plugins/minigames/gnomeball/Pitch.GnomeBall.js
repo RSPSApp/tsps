@@ -14,15 +14,29 @@
  * - Tackle: a successful player tackle knocks a baller out for a few seconds;
  *   P = lerp(31/256, 201/256, (Agility - 1) / 98), or 221/256 against a baller holding the
  *   ball (this implementation does not track a baller in possession, so it uses 201/256).
- *   A baller that tackles the carrier deals 1-2 damage and takes the ball. The Wiki does
- *   not document the baller's roll, so the chosen default is a low one per check: 12% at
- *   level 1 falling to 2% at 99, better agility dodging more tackles. Checks run every 3
+ *   A baller that tackles the carrier deals damage (the Wiki says 1-2; the capture shows 1)
+ *   and takes the ball. The Wiki does not document the baller's roll, so the chosen default
+ *   is a low one per check: 12% at level 1 falling to 2% at 99, better agility dodging more
+ *   tackles. Checks run every 3
  *   ticks against an adjacent baller, never on the tick(s) after a Shoot click, so a shot
  *   cannot be pre-empted by the tackle that the shot itself triggered. UNDOCUMENTED: the
  *   ball goes back to the referee (ask for a new one) rather than being carried by the baller.
  * - Pass: passing to the gnome wingers is not implemented (needs their pass-back timing).
  *
  * Dropping a gnome ball never puts one on the floor: it "magically returns to the ref".
+ *
+ * From rsprox captures (rev 234, the one recorded game):
+ * - Through the gate, the weapon and shield go to the inventory and the Gnome Ball HUD (139)
+ *   opens in the overlay slot; it closes on leaving the pitch.
+ * - Shoot says "You throw the ball at the goal..." on the click; the next tick the player
+ *   throws (783, area sound 1576) and the ball flies at the goal (projectile 55, 5 client
+ *   cycles a tile); three ticks after that comes "... and miss.". A scored goal was not
+ *   recorded, so its "You score a goal!" is ours. With no ball: "You need a ball in your hand
+ *   to throw."
+ * - Tackle: 778 and sound 1571 with the baller going down (203) on a hit, 780 and 1572 with
+ *   the baller dodging (204) on a miss; no message. A baller already down answers "That gnome
+ *   is being tackled.". A baller tackling the carrier plays 210, the player falls (779,
+ *   sounds 1574 and 518) and takes 1 damage.
  */
 
 const BALLER_NAME = "Gnome baller";
@@ -43,16 +57,32 @@ const TACKLE_KNOCKOUT_TICKS = 5; // "knocking them out for a few seconds"
 const BALLER_TACKLE_CHECK_TICKS = 3;
 const BALLER_TACKLE_RANGE = 1;
 const BALLER_HIT_STUN_TICKS = 3;
+/** The baller's damage on the carrier, as captured (the Wiki says 1-2). */
+const BALLER_TACKLE_DAMAGE = 1;
 /** A Shoot click pauses baller checks for this many ticks so the shot resolves first. */
 const SHOT_GRACE_TICKS = 3;
-/** Observed on the baller NPCs (npc-animations.json); the exact roles are not documented. */
+/** gnome_human_tackle, gnome_tackled and gnome_dodge_tackle on the ballers (captured). */
 const BALLER_TACKLE_ANIMATION = 210;
-const BALLER_DOWN_ANIMATION = 207;
+const BALLER_DOWN_ANIMATION = 203;
+const BALLER_DODGE_ANIMATION = 204;
+const PLAYER = Object.freeze({
+  TACKLE: 778, TACKLE_FAIL: 780, TACKLED: 779, THROW: 783,
+});
+const SOUND = Object.freeze({
+  TACKLE: 1571, TACKLE_FAIL: 1572, TACKLED: 1574, TACKLED_THUD: 518, THROW: 1576,
+});
+const BALL_PROJECTILE = 55;
+/** The Gnome Ball HUD, in the toplevel's overlay slot (as Corp's). */
+const HUD_INTERFACE = 139;
+const OVERLAY_HUD_UID = (161 << 16) | 8;
 const DIARY = Object.freeze({ diary: "western", task: "score-a-goal-in-a-gnomeball-match" });
 /** The player had no room for a ball the referee owed them; give it on login. */
 const OWED_BALL_ATTRIBUTE = "gnomeball:owed-ball";
 const BALL_RETURNS_MESSAGE = "The ball magically returns to the ref as you put it down.";
-const NO_BALL_MESSAGE = "You need a gnome ball to shoot.";
+const NO_BALL_MESSAGE = "You need a ball in your hand to throw.";
+const THROW_MESSAGE = "You throw the ball at the goal...";
+const MISS_MESSAGE = "... and miss.";
+const BEING_TACKLED_MESSAGE = "That gnome is being tackled.";
 
 let api;
 let core;
@@ -105,17 +135,19 @@ function flagAppearance(player) {
   player.getUpdateFlag().flag(core.Flag.APPEARANCE);
 }
 
-/** Wiki: weapons are automatically unequipped and placed in the inventory. */
+/** Wiki: weapons are automatically unequipped; the capture moves the shield too. */
 function unequipWeapon(player) {
   const equipment = player.getEquipment();
-  const weapon = equipment.getItems()[core.Equipment.WEAPON_SLOT];
-  if (!weapon || weapon.getId() <= 0) return true;
-  if (player.getInventory().getFreeSlots() <= 0) {
-    player.sendMessage("You need a free inventory slot to unequip your weapon.");
-    return false;
+  for (const slot of [core.Equipment.WEAPON_SLOT, core.Equipment.SHIELD_SLOT]) {
+    const item = equipment.getItems()[slot];
+    if (!item || item.getId() <= 0 || item.getId() === GNOMEBALL) continue;
+    if (player.getInventory().getFreeSlots() <= 0) {
+      player.sendMessage("You need a free inventory slot to unequip your weapon.");
+      return false;
+    }
+    equipment.setItem(slot, new core.Item(-1, 0));
+    player.getInventory().addItem(item);
   }
-  equipment.setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
-  player.getInventory().addItem(weapon);
   equipment.refreshItems();
   flagAppearance(player);
   return true;
@@ -182,6 +214,30 @@ function routeShot(event) {
   session.shotGrace = SHOT_GRACE_TICKS;
 }
 
+/** Runs `action` after `ticks` game ticks. */
+function later(ticks, action) {
+  const { Task } = core;
+  api.getTaskManager().submit(new (class extends Task {
+    constructor() {
+      super(ticks);
+    }
+    execute() {
+      this.stop();
+      action();
+    }
+  })());
+}
+
+/** The throw a tick after the click: animation, sound, and the ball flying at the goal. */
+function throwBall(player, goal) {
+  const from = player.getLocation();
+  const flight = 41 + 5 * Math.max(1, from.getDistance(goal));
+  player.performAnimation(new core.Animation(PLAYER.THROW));
+  player.getPacketSender()
+    .sendAreaSound(SOUND.THROW, from.getX(), from.getY(), from.getZ(), 1, 10, 5)
+    .sendProjectile(from, goal, 0, flight, BALL_PROJECTILE, 163, 10, null, 41, 15, 11);
+}
+
 function shootGoal(event) {
   const { player } = event;
   const session = sessions.get(player);
@@ -191,14 +247,18 @@ function shootGoal(event) {
   }
   // The clicked shot wins over the ballers: no stun may swallow the throw.
   player.getTimers().cancel(core.TimerKey.STUN);
-  const distance = player.getLocation().getDistance(tile(event.location.x, event.location.y, event.location.z));
+  const goal = tile(event.location.x, event.location.y, event.location.z);
+  const distance = player.getLocation().getDistance(goal);
   const ranged = player.getSkillManager().getCurrentLevel(core.Skill.RANGED);
   const scored = random() < shotChance(distance, ranged);
   clearCarriedBall(player);
-  if (!scored) {
-    player.sendMessage("You miss the goal.");
-    return true;
-  }
+  player.sendMessage(THROW_MESSAGE);
+  later(1, () => throwBall(player, goal));
+  later(4, () => (scored ? scoreGoal(player, session) : player.sendMessage(MISS_MESSAGE)));
+  return true;
+}
+
+function scoreGoal(player, session) {
   session.goals += 1;
   const xp = GOAL_XP[session.goals - 1];
   player.getSkillManager().addExperiences(core.Skill.RANGED, xp);
@@ -218,13 +278,22 @@ function shootGoal(event) {
 function tackleBaller(event) {
   const { player, npc } = event;
   if (!npc) return true;
+  if (npc.getTimers().has(core.TimerKey.STUN)) {
+    player.sendMessage(BEING_TACKLED_MESSAGE);
+    return true;
+  }
+  player.setPositionToFace(npc.getLocation());
+  npc.setPositionToFace(player.getLocation());
   const agility = player.getSkillManager().getCurrentLevel(core.Skill.AGILITY);
   if (random() < tackleChance(agility)) {
-    npc.performAnimation(new core.Animation(BALLER_DOWN_ANIMATION));
+    player.performAnimation(new core.Animation(PLAYER.TACKLE, 33));
+    player.getPacketSender().sendSoundEffect(SOUND.TACKLE, 1, 0);
+    npc.performAnimation(new core.Animation(BALLER_DOWN_ANIMATION, 30));
     npc.getTimers().registers(core.TimerKey.STUN, TACKLE_KNOCKOUT_TICKS);
-    player.sendMessage("You tackle the gnome baller to the ground.");
   } else {
-    player.sendMessage("You fail to tackle the gnome baller.");
+    player.performAnimation(new core.Animation(PLAYER.TACKLE_FAIL, 33));
+    player.getPacketSender().sendSoundEffect(SOUND.TACKLE_FAIL, 1, 0);
+    npc.performAnimation(new core.Animation(BALLER_DODGE_ANIMATION, 33));
   }
   return true;
 }
@@ -233,12 +302,12 @@ function ballerTackle(player, ballers) {
   const agility = player.getSkillManager().getCurrentLevel(core.Skill.AGILITY);
   const baller = ballers[Math.floor(random() * ballers.length)];
   if (random() >= ballerTackleChance(agility)) return;
-  const damage = 1 + Math.floor(random() * 2);
-  player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+  player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(BALLER_TACKLE_DAMAGE, core.HitMask.RED)]);
   player.getTimers().registers(core.TimerKey.STUN, BALLER_HIT_STUN_TICKS);
   baller.performAnimation(new core.Animation(BALLER_TACKLE_ANIMATION));
+  player.performAnimation(new core.Animation(PLAYER.TACKLED));
+  player.getPacketSender().sendSoundEffect(SOUND.TACKLED, 1, 0).sendSoundEffect(SOUND.TACKLED_THUD, 1, 20);
   clearCarriedBall(player);
-  player.sendMessage("The gnome baller tackles you and takes the ball!");
 }
 
 function createPitch() {
@@ -264,9 +333,17 @@ function createPitch() {
       if (ballers.length) ballerTackle(player, ballers);
     }
 
+    postEnter(mobile) {
+      if (!mobile.isPlayer()) return;
+      const player = mobile.getAsPlayer();
+      unequipWeapon(player);
+      player.getPacketSender().sendSubInterface(OVERLAY_HUD_UID, HUD_INTERFACE, 1);
+    }
+
     postLeave(mobile, logout) {
       if (!mobile.isPlayer()) return;
       const player = mobile.getAsPlayer();
+      if (!logout) player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID);
       if (!sessions.has(player)) return;
       // A win pays out only when the player walks off the pitch, not on logout.
       endSession(player, { reward: !logout });
@@ -339,6 +416,8 @@ module.exports = {
     ballerTackleChance,
     routeShot,
     shootGoal,
+    scoreGoal,
+    throwBall,
     tackleBaller,
     dropBall,
     dropPolicy,

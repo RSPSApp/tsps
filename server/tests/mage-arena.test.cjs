@@ -103,12 +103,24 @@ test("a locked god spell is cancelled outside the arena; inside or unlocked it i
   assert.equal(otherSpell.disabled, null, "non god spells are not touched");
 });
 
-test("register persists one counter per god and wires the hooks", () => {
+/** Records every packet-sender call; each returns the sender, so chains keep working. */
+function recordingSender(calls = []) {
+  const sender = new Proxy({}, {
+    get: (_target, name) => (...args) => {
+      calls.push([name, ...args]);
+      return sender;
+    },
+  });
+  return { sender, calls };
+}
+
+test("register persists one counter per god and the first cape, and wires the hooks", () => {
   const persisted = [];
   const hooks = [];
   const api = {
     core,
     persistAttribute: (key) => persisted.push(key),
+    getTaskManager: () => ({ submit() {} }),
     onSpellDisabled: () => hooks.push("onSpellDisabled"),
     onCombatHitResolved: () => hooks.push("onCombatHitResolved"),
     onObjectInteraction: (name) => hooks.push(`onObjectInteraction:${name}`),
@@ -120,79 +132,104 @@ test("register persists one counter per god and wires the hooks", () => {
 
   assert.deepEqual(
     persisted.sort(),
-    ["mage-arena:charge:guthix", "mage-arena:charge:saradomin", "mage-arena:charge:zamorak"]
+    ["mage-arena:cape-received", "mage-arena:charge:guthix", "mage-arena:charge:saradomin", "mage-arena:charge:zamorak"]
   );
   assert.ok(hooks.includes("onSpellDisabled"));
   assert.ok(hooks.includes("onCombatHitResolved"));
   assert.ok(hooks.includes("onObjectInteraction:Lever"));
   assert.ok(hooks.includes("onObjectInteraction:Sparkling pool"));
   assert.ok(hooks.includes("onObjectInteraction:Statue of Saradomin"));
-  assert.ok(hooks.includes("onPlayerProcess"));
-  assert.deepEqual(
-    hooks.filter((hook) => hook.startsWith("combatMethod:")).sort(),
-    ["combatMethod:1610", "combatMethod:1611", "combatMethod:1612"]
-  );
 });
 
-test("the arena levers teleport through the wall; the bank lever falls through", () => {
-  const events = [];
+test("the arena levers play the captured pull and cast, landing on the captured tiles", () => {
+  const steps = levers.leverSteps(levers.LEVERS[9706], [3105, 3953]);
+  const waits = steps.filter((step) => step.wait != null).map((step) => step.wait);
+  assert.deepEqual(waits, [1, 1, 3], "pull a tick after arrival, cast a tick later, land three after that");
+  assert.ok(steps.some((step) => step.anim === 2710));
+  assert.ok(steps.some((step) => step.objAnim === 2711));
+  assert.ok(steps.some((step) => step.anim === 714));
+  assert.ok(steps.some((step) => step.gfx === 111 && step.height === 92));
+  assert.ok(steps.some((step) => step.sound === 200));
+  assert.deepEqual(steps.find((step) => step.tele).tele, [3105, 3951, 0]);
+  assert.deepEqual(
+    steps.filter((step) => step.msg).map((step) => step.msg),
+    ["You pull the lever...", "... and get teleported into the arena!"]
+  );
+  const out = levers.leverSteps(levers.LEVERS[9707], [3105, 3953]);
+  assert.deepEqual(out.find((step) => step.tele).tele, [3105, 3956, 0]);
+  assert.equal(out.at(-1).msg, "... and get teleported out of the arena!");
+
   const caster = player();
-  levers.setApi({ emitCustomEvent: (name, payload) => events.push({ name, payload }) });
-  levers.setCore(core);
-
-  levers.pullLever({ objectId: 9706, player: caster });
-  levers.pullLever({ objectId: 9707, player: caster });
-  assert.equal(events.length, 2);
-  assert.equal(events[0].name, "lever:teleport");
-  assert.deepEqual(
-    [events[0].payload.destination.getX(), events[0].payload.destination.getY(), events[0].payload.destination.getZ()],
-    [3106, 3952, 0]
-  );
-  assert.deepEqual(
-    [events[1].payload.destination.getX(), events[1].payload.destination.getY(), events[1].payload.destination.getZ()],
-    [3105, 3956, 0]
-  );
-
-  assert.equal(levers.pullLever({ objectId: 5959, player: caster }), false);
-  assert.equal(levers.pullLever({ objectId: 5960, player: caster }), false);
-  assert.equal(events.length, 2, "the bank lever pair stays with Wilderness.plugin");
+  assert.equal(levers.pullLever({ objectId: 5959, player: caster, location: { x: 3090, y: 3956, z: 0 } }), false);
+  assert.equal(levers.pullLever({ objectId: 5960, player: caster, location: { x: 2539, y: 4712, z: 0 } }), false);
 });
 
-test("the sparkling pools move between the bank and the statue chamber", () => {
+test("the sparkling pools jump onto the pool's centre and land beside the other pool", () => {
+  // Captured: from 2878 at (2541, 4719) the jump lands on (2542, 4720), then (2509, 4689);
+  // from 2879 at (2508, 4686) on (2509, 4687), then (2542, 4718).
+  const bank = levers.poolSteps(2878, [2541, 4719]);
+  assert.deepEqual(bank.find((step) => step.move).move, [2542, 4720]);
+  assert.deepEqual(bank.find((step) => step.tele).tele, [2509, 4689, 0]);
+  const chamber = levers.poolSteps(2879, [2508, 4686]);
+  assert.deepEqual(chamber.find((step) => step.move).move, [2509, 4687]);
+  assert.deepEqual(chamber.find((step) => step.tele).tele, [2542, 4718, 0]);
+  assert.ok(bank.some((step) => step.gfx === 68) && bank.some((step) => step.anim === 804));
+
   const caster = player();
-  levers.setCore(core);
-
-  levers.stepIntoPool({ objectId: 2878, player: caster });
-  levers.stepIntoPool({ objectId: 2879, player: caster });
-  assert.deepEqual(caster.moved, [[2509, 4689], [2542, 4718]]);
-  assert.equal(levers.stepIntoPool({ objectId: 1000, player: caster }), false);
-  assert.equal(caster.moved.length, 2);
+  assert.equal(levers.stepIntoPool({ objectId: 1000, player: caster, location: { x: 0, y: 0, z: 0 } }), false);
 });
 
-test("praying at a statue spawns that god's cape on the open tile in front", () => {
+function statuePlayer({ received = false, freeSlots = 28 } = {}) {
+  const base = player({ attributes: received ? { [statues.CAPE_RECEIVED_ATTRIBUTE]: true } : {} });
+  const { sender, calls } = recordingSender();
+  const added = [];
+  return Object.assign(base, {
+    calls,
+    added,
+    getPacketSender: () => sender,
+    getInventory: () => ({ getFreeSlots: () => freeSlots, adds: (id, amount) => added.push([id, amount]) }),
+  });
+}
+
+test("the first cape lands on the statue's tile with the full message", () => {
   const spawned = [];
+  statues.setApi({ getTaskManager: () => ({ submit: (task) => task.execute() }) });
   statues.setCore({
     ...core,
     ItemOnGroundManager: {
       registerLocation: (owner, item, location) =>
-        spawned.push({ owner, id: item.getId(), x: location.getX(), y: location.getY(), z: location.getZ() }),
+        spawned.push({ owner, id: item.getId(), x: location.getX(), y: location.getY() }),
     },
   });
-  const caster = player();
+  const caster = statuePlayer();
+  statues.capeOnFloor(caster, statues.STATUES[2874]);
 
-  statues.prayAt({ player: caster, objectId: 2873 });
-  statues.prayAt({ player: caster, objectId: 2874 });
-  statues.prayAt({ player: caster, objectId: 2875 });
+  assert.deepEqual(spawned.map(({ id, x, y }) => [id, x, y]), [[2414, 2516, 4720]], "captured at the statue's own tile");
+  assert.equal(spawned[0].owner, caster);
+  assert.equal(caster.getAttribute(statues.CAPE_RECEIVED_ATTRIBUTE), true);
+  assert.ok(caster.calls.some(([name, graphic]) => name === "sendGraphic" && graphic.getId() === 188));
+  assert.ok(caster.calls.some(([name, text]) => name === "sendString"
+    && text === "You kneel and chant to Zamorak... You feel a rush of energy charge through your veins. Suddenly a cape appears before you."));
+});
 
-  assert.deepEqual(
-    spawned.map(({ id, x, y, z }) => [id, x, y, z]),
-    [[2412, 2500, 4719, 0], [2414, 2516, 4719, 0], [2413, 2507, 4722, 0]],
-    "one matching cape per prayer, in front of each statue"
-  );
-  assert.ok(spawned.every((entry) => entry.owner === caster));
+test("later prayers ask how many and put the capes in the pack", () => {
+  statues.setCore(core);
+  const caster = statuePlayer({ received: true, freeSlots: 3 });
+  statues.askHowMany(caster, statues.STATUES[2875]);
+  const menu = caster.calls.find(([name]) => name === "sendCreationMenu")[1];
+  assert.equal(menu.getTitle(), "How many would you like to take?");
+  assert.deepEqual(menu.getItems(), [2413]);
+  assert.deepEqual(menu.getOptions(), { mode: 23, maxAmount: 3, lastAmount: 1 });
 
-  assert.equal(statues.prayAt({ player: caster, objectId: 1000 }), undefined);
-  assert.equal(spawned.length, 3);
+  statues.capesToPack(caster, statues.STATUES[2875], 2);
+  assert.deepEqual(caster.added, [[2413, 2]]);
+  assert.equal(statues.packLine(statues.STATUES[2875]),
+    "You kneel and chant to Guthix... You feel a rush of energy charge through your veins. Suddenly a cape appears in your pack.");
+
+  const full = statuePlayer({ received: true, freeSlots: 0 });
+  statues.askHowMany(full, statues.STATUES[2873]);
+  assert.ok(!full.calls.some(([name]) => name === "sendCreationMenu"));
+  assert.equal(statues.prayAt({ player: full, objectId: 1000 }), undefined);
 });
 
 test("each battle mage casts its own god spell at 4 ticks", () => {

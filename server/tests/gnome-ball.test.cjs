@@ -33,7 +33,20 @@ const api = {
   onNpcDialogueVariant: (handler) => registered.push({ kind: "dialogueVariant", handler }),
   onNpcDialogueCondition: (handler) => registered.push({ kind: "dialogueCondition", handler }),
   onCustomEvent: (name, handler) => registered.push({ kind: "customEvent", name, handler }),
+  // Delayed steps (the throw, the result) run at once here.
+  getTaskManager: () => ({ submit: (task) => task.execute() }),
 };
+
+/** Records every packet-sender call; each returns the sender, so chains keep working. */
+function recordingSender(calls) {
+  const sender = new Proxy({}, {
+    get: (_target, name) => (...args) => {
+      calls.push([name, ...args]);
+      return sender;
+    },
+  });
+  return sender;
+}
 
 plugin.register(api);
 Pitch._test.setApi(api);
@@ -91,12 +104,19 @@ function fakePlayer({ x = 2390, y = 3488, agility = 1, ranged = 1, items = {}, w
     cancel: (key) => cancels.push(key),
     has: () => false,
   };
+  const packets = [];
+  const animations = [];
+  const sender = recordingSender(packets);
   const p = {
     messages,
     hits,
     stuns,
     cancels,
     xp,
+    packets,
+    animations,
+    getPacketSender: () => sender,
+    setPositionToFace: () => {},
     location: new core.Location(x, y, 0),
     getLocation: () => p.location,
     getAttribute: (key) => attributes.get(key),
@@ -108,7 +128,7 @@ function fakePlayer({ x = 2390, y = 3488, agility = 1, ranged = 1, items = {}, w
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage) }) }),
     getUpdateFlag: () => ({ flag: () => {} }),
     sendMessage: (message) => messages.push(message),
-    performAnimation: () => {},
+    performAnimation: (animation) => animations.push(animation.getId()),
   };
   return p;
 }
@@ -133,7 +153,9 @@ function baller(x, y) {
     getDefinition: () => ({ getName: () => Pitch.BALLER_NAME }),
     getHitpoints: () => 10,
     performAnimation: (animation) => npc.animations.push(animation),
-    getTimers: () => ({ registers: (key, ticks) => npc.stuns.push({ key, ticks }), has: () => false }),
+    setPositionToFace: () => {},
+    // Knocked down while a stun is registered (the fake never expires it).
+    getTimers: () => ({ registers: (key, ticks) => npc.stuns.push({ key, ticks }), has: () => npc.stuns.length > 0 }),
   };
   const mobile = {
     isPlayer: () => false,
@@ -251,26 +273,38 @@ test("a miss consumes the ball and pays nothing; shooting without a ball does no
   assert.equal(p.xp.AGILITY, 0);
   assert.equal(Pitch._test.sessions.get(p).goals, 0);
   assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), -1);
+  assert.deepEqual(p.messages, ["You throw the ball at the goal...", "... and miss."]);
+  assert.deepEqual(p.animations, [783], "the captured throw");
+  assert.ok(p.packets.some(([name, , , , , projectile]) => name === "sendProjectile" && projectile === 55));
   Pitch._test.shootGoal(shootEvent(p));
-  assert.ok(p.messages.includes("You need a gnome ball to shoot."));
+  assert.equal(p.messages.at(-1), "You need a ball in your hand to throw.");
 });
 
-test("a successful tackle knocks the baller down and grants nothing", () => {
+test("a tackle knocks the baller down or is dodged, with the captured animations", () => {
   const p = fakePlayer();
   const target = baller(2390, 3488);
+  Pitch._test.setRandom(() => 0.999);
+  Pitch._test.tackleBaller({ player: p, npc: target.npc });
+  assert.equal(target.npc.stuns.length, 0, "a failed tackle knocks nobody down");
+  assert.deepEqual(p.animations, [780]);
+  assert.deepEqual(target.npc.animations.map((animation) => animation.getId()), [204]);
+
   Pitch._test.setRandom(() => 0);
   Pitch._test.tackleBaller({ player: p, npc: target.npc });
   assert.equal(target.npc.stuns.length, 1);
   assert.equal(target.npc.stuns[0].ticks, 5);
-  assert.equal(target.npc.animations.length, 1);
+  assert.deepEqual(p.animations, [780, 778]);
+  assert.deepEqual(target.npc.animations.map((animation) => animation.getId()), [204, 203]);
   assert.equal(p.xp.RANGED, 0);
   assert.equal(p.xp.AGILITY, 0);
-  Pitch._test.setRandom(() => 0.999);
+  assert.deepEqual(p.messages, [], "no message either way");
+
   Pitch._test.tackleBaller({ player: p, npc: target.npc });
-  assert.equal(target.npc.stuns.length, 1, "a failed tackle does nothing");
+  assert.deepEqual(p.messages, ["That gnome is being tackled."]);
+  assert.equal(target.npc.stuns.length, 1);
 });
 
-test("an adjacent baller tackles the carrier every third tick for 1-2 damage", () => {
+test("an adjacent baller tackles the carrier every third tick for 1 damage", () => {
   const p = fakePlayer();
   Pitch.beginGame(p);
   const area = Pitch._test.createPitch();
@@ -289,7 +323,7 @@ test("an adjacent baller tackles the carrier every third tick for 1-2 damage", (
   assert.equal(Pitch.isCarrying(p), false, "the carrier loses the ball");
   assert.ok(Pitch.isPlaying(p), "the session stays open for a new ball");
   assert.ok(p.stuns.length >= 1, "the carrier is knocked down");
-  assert.ok(p.messages.some((message) => message.includes("tackles you")));
+  assert.ok(p.animations.includes(779), "the carrier falls");
 });
 
 test("leaving the pitch removes the carried ball and only a won game pays out", () => {
@@ -368,4 +402,20 @@ test("the referee's conditions and hand-outs follow the transcript", () => {
   Pitch._test.sessions.set(outOfPlay, { goals: 0, won: false, ownBall: false, ticks: 0 });
   Referee._test.handleLine({ player: outOfPlay, npcId: REFEREE, text: "Have a new ball!" });
   assert.equal(outOfPlay.getEquipment().getSlot(WEAPON_SLOT), Pitch.GNOMEBALL);
+});
+
+test("entering the pitch moves the weapon and shield to the pack and opens the HUD", () => {
+  const SHIELD_SLOT = core.Equipment.SHIELD_SLOT;
+  const p = fakePlayer({ weapon: 1277 });
+  p.getEquipment().items[SHIELD_SLOT] = new core.Item(1171, 1);
+  const area = Pitch._test.createPitch();
+  const mobile = playerMobile(p);
+  area.enter(mobile);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), -1);
+  assert.equal(p.getEquipment().getSlot(SHIELD_SLOT), -1);
+  assert.equal(p.getInventory().getAmount(1277), 1);
+  assert.equal(p.getInventory().getAmount(1171), 1);
+  assert.ok(p.packets.some(([name, , group]) => name === "sendSubInterface" && group === 139));
+  area.leave(mobile, false);
+  assert.ok(p.packets.some(([name]) => name === "closeSubInterface"));
 });

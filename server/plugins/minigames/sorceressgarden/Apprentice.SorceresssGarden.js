@@ -8,11 +8,18 @@
  * Wiki's line. The Wiki also requires having asked Osman about the garden first, which
  * this plugin folds into the quest requirement (noted in the PR).
  *
- * Her right-click Teleport and the Talk-to conversation both end in the overheard
- * "Seventior Disthinte Molesko!" and a teleport to (2912,5472). A follower stops the
- * teleport with the Wiki's pet line; the only follower state readable from another plugin
- * is the Pets plugin's `pets:current` attribute. Drinking from the fountain (12941) sends
- * the player back to the Apprentice's house.
+ * Talk-to plays her Wiki transcript (npc-dialogues.json): this unit picks the variant by
+ * whether she has teleported the player before, answers its Osman and follower conditions
+ * and casts after "Okay, here goes!..." (first visit) or for the "teleported" action. Her
+ * right-click Teleport only works once she has (the transcript's right-click variant
+ * refuses before that). A follower stops the teleport with the Wiki's pet line; the only
+ * follower state readable from another plugin is the Pets plugin's `pets:current`
+ * attribute. Drinking from the fountain (12941) sends the player back to her house.
+ *
+ * The cast is from rsprox captures (rev 227): she says "Senventior Disthinte Molesko!" (sic)
+ * overhead at once; a tick later she casts Curse at the player (108 on her, projectile 109,
+ * 110 on the player, area sounds 127 and 126), and three ticks after that the player lands
+ * on (2912, 5474).
  *
  * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) are already walkable
  * in the cache, so opening one only checks the level; a low-level player who walks through
@@ -24,7 +31,6 @@ const Gardens = require("./Gardens.SorceresssGarden");
 
 const {
   APPRENTICE_TILE,
-  CENTRAL_GARDEN,
   FOUNTAIN_ID,
   PLANE,
   SEASONS,
@@ -42,13 +48,22 @@ const PAR_QUEST_KEY = "prince_ali_rescue";
 const REFUSAL_LINE = "I can't do that now, I'm far too busy sweeping.";
 const PET_LINE =
   "Oh, I'm sorry, could you pick up your follower first? I'm really not sure that I could teleport the both of you.";
-const SPELL_LINE = "Seventior Disthinte Molesko!";
+/** As OSRS says it overhead; the transcript's chat line spells it "Seventior". */
+const SPELL_LINE = "Senventior Disthinte Molesko!";
+const TRANSCRIPT_SPELL_LINE = "Seventior Disthinte Molesko!";
+const FIRST_VISIT_LAST_LINE = "Okay, here goes! Remember, to return, just drink from the fountain.";
+const APPRENTICE_ID = 1808;
+const VARIANT = Object.freeze({
+  FIRST: "standard-dialogue-if-the-player-has-not-been-teleported-to-the-sorceress-s-garden-before",
+  AGAIN: "standard-dialogue-if-the-player-has-been-teleported-to-the-sorceress-s-garden-before",
+});
+const LANDING = Object.freeze({ x: 2912, y: 5474 });
+const CURSE = Object.freeze({ CAST: 108, PROJECTILE: 109, IMPACT: 110, SOUND_CAST: 127, SOUND_IMPACT: 126 });
 const GATE_IDS = Object.values(SEASONS).map((season) => season.gateId);
 
 let api;
 let core;
 
-const centralGarden = () => new core.Location(CENTRAL_GARDEN.x, CENTRAL_GARDEN.y, PLANE);
 const apprenticeHouse = () => new core.Location(APPRENTICE_TILE.x, APPRENTICE_TILE.y, PLANE);
 const thievingLevel = (player) => player.getSkillManager().getCurrentLevel(core.Skill.THIEVING);
 
@@ -80,39 +95,85 @@ function conversation(player, npcId, lines, onDone) {
   player.getDialogueManager().startDialogues(builder);
 }
 
-function teleportIn(player, npc) {
-  npc?.forceChat?.(SPELL_LINE);
-  player.moveTo(centralGarden());
-  player.setAttribute(TELEPORTED_ATTRIBUTE, true);
+/** Runs `action` after `ticks` game ticks. */
+function later(ticks, action) {
+  const { Task } = core;
+  api.getTaskManager().submit(new (class extends Task {
+    constructor() {
+      super(ticks);
+    }
+    execute() {
+      this.stop();
+      action();
+    }
+  })());
 }
 
-function talkToApprentice(event) {
-  const { player, npc, npcId } = event;
-  if (!isUnlocked(player)) {
-    conversation(player, npcId, [["npc", REFUSAL_LINE]]);
-    return;
+/** The captured cast: overhead line now, Curse a tick later, the landing three after that. */
+function teleportIn(player, npc) {
+  player.getPacketSender().sendInterfaceRemoval();
+  npc?.forceChat?.(SPELL_LINE);
+  npc?.setPositionToFace?.(player.getLocation());
+  player.getMovementQueue().reset();
+  player.getMovementQueue().setBlockMovement(true);
+  later(1, () => {
+    const at = player.getLocation();
+    if (npc) {
+      npc.performGraphic(new core.Graphic(CURSE.CAST, 0, 92));
+      player.getPacketSender().sendProjectile(npc.getLocation(), at, 0, 100, CURSE.PROJECTILE, 31, 31, player, 61, 16, 128);
+    }
+    player.performGraphic(new core.Graphic(CURSE.IMPACT, 100, 124));
+    player.getPacketSender()
+      .sendAreaSound(CURSE.SOUND_CAST, at.getX(), at.getY(), at.getZ())
+      .sendAreaSound(CURSE.SOUND_IMPACT, at.getX(), at.getY(), at.getZ());
+    later(3, () => {
+      player.getMovementQueue().setBlockMovement(false);
+      player.moveTo(new core.Location(LANDING.x, LANDING.y, PLANE));
+      player.setAttribute(TELEPORTED_ATTRIBUTE, true);
+    });
+  });
+}
+
+function isApprentice(event) {
+  return event?.player != null && event.npcId === APPRENTICE_ID;
+}
+
+function selectVariant(event) {
+  if (!isApprentice(event)) return null;
+  return event.player.getAttribute(TELEPORTED_ATTRIBUTE) ? VARIANT.AGAIN : VARIANT.FIRST;
+}
+
+function answerCondition(event) {
+  if (!isApprentice(event)) return null;
+  const text = String(event.text ?? "");
+  if (text.startsWith("If the player has not talked to Osman")) return !isUnlocked(event.player);
+  if (text.startsWith("If the player has talked to Osman")) return isUnlocked(event.player);
+  if (text.startsWith("If the player does not have a pet following")) return !hasFollower(event.player);
+  if (text.startsWith("If the player has a pet following")) return hasFollower(event.player);
+  return null;
+}
+
+/** The transcript's spell line is said overhead instead; the first visit casts after its last line. */
+function handleLine(event) {
+  if (!isApprentice(event)) return;
+  if (event.text === TRANSCRIPT_SPELL_LINE) {
+    event.skip = true;
+  } else if (event.text === FIRST_VISIT_LAST_LINE) {
+    event.after = () => teleportIn(event.player, event.npc);
   }
-  if (hasFollower(player)) {
-    conversation(player, npcId, [["npc", PET_LINE]]);
-    return;
-  }
-  const firstVisit = !player.getAttribute(TELEPORTED_ATTRIBUTE);
-  const lines = firstVisit
-    ? [
-        ["npc", "Oh you wouldn't mind?"],
-        ["player", "Of course not. I'd be glad to help."],
-        ["npc", "Okay, here goes! Remember, to return, just drink from the fountain."],
-      ]
-    : [
-        ["player", "Hey apprentice, do you want to try out your teleport skills again?"],
-        ["npc", "Okay, here goes - and remember, to return just drink from the fountain."],
-      ];
-  conversation(player, npcId, lines, () => teleportIn(player, npc));
+}
+
+/** "The player is teleported to the Sorceress's Garden" (returning visits). */
+function handleAction(event) {
+  if (!isApprentice(event) || event.handled || event.action !== "teleport") return;
+  event.handled = true;
+  event.end = true;
+  teleportIn(event.player, event.npc);
 }
 
 function teleportByApprentice(event) {
   const { player, npc, npcId } = event;
-  if (!isUnlocked(player)) {
+  if (!player.getAttribute(TELEPORTED_ATTRIBUTE) || !isUnlocked(player)) {
     conversation(player, npcId, [["npc", REFUSAL_LINE]]);
     return;
   }
@@ -142,10 +203,11 @@ module.exports = function registerApprentice(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   api.persistAttribute(TELEPORTED_ATTRIBUTE);
-  api.onNpcInteraction(APPRENTICE_NAME, {
-    "Talk-to": talkToApprentice,
-    Teleport: teleportByApprentice,
-  });
+  api.onNpcInteraction(APPRENTICE_NAME, { Teleport: teleportByApprentice });
+  api.onNpcDialogueVariant(selectVariant);
+  api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onObjectClick(GATE_IDS, 1, openGate);
   api.onObjectInteraction("Fountain", { "Drink-from": drinkFromFountain });
 };
@@ -161,8 +223,12 @@ module.exports._test = {
   PET_ATTRIBUTE,
   isUnlocked,
   hasFollower,
+  LANDING,
   teleportIn,
-  talkToApprentice,
+  selectVariant,
+  answerCondition,
+  handleLine,
+  handleAction,
   teleportByApprentice,
   openGate,
   drinkFromFountain,

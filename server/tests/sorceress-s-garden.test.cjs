@@ -25,6 +25,8 @@ plugin._test.setApi({
   emitCustomEvent(name, request) {
     if (name === "quest:is-complete") request.complete = questComplete;
   },
+  // The Apprentice's cast is delayed; here it lands at once.
+  getTaskManager: () => ({ submit: (task) => task.execute() }),
 });
 
 beforeEach(() => {
@@ -66,6 +68,9 @@ function player({ level = 99, items = {}, name = "tester" } = {}) {
     setAttribute: (key, value) => attributes.set(key, value),
     getUsername: () => name,
     isRegistered: () => true,
+    getLocation: () => new core.Location(3321, 3139, 0),
+    getMovementQueue: () => ({ reset() {}, setBlockMovement() {} }),
+    performGraphic: () => {},
   };
   return p;
 }
@@ -75,14 +80,6 @@ const dialogueText = (p) => [...(p.builder?.getDialogues().values() ?? [])]
   .map((entry) => entry.getText?.())
   .filter(Boolean)
   .join("\n");
-
-/** Plays a captured dialogue chain's action steps (sending chat needs the cache). */
-function runDialogue(p) {
-  if (!p.builder) return;
-  for (const entry of p.builder.getDialogues().values()) {
-    if (typeof entry.getText !== "function") entry.send(p);
-  }
-}
 
 test("the seasonal XP, fruit and level tables match the Wiki", () => {
   const expected = {
@@ -161,7 +158,7 @@ test("brewing consumes the season's fruit and a beer glass, once", () => {
   // No fruit left: repeating the interaction cannot duplicate the glass.
   assert.equal(plugin._test.brew({ player: winter, usedItemId: WINTER_FRUIT, usedWithItemId: PESTLE }), true);
   assert.equal(winter.inventory.get(WINTER_JUICE), 1);
-  assert.match(winter.messages.at(-1), /need 5 winter sq'irks/);
+  assert.match(dialogueText(winter), /wait until I have enough fruit to make a full glass/);
 
   const spring = player({ items: { [10844]: 3, [BEER_GLASS]: 1 } });
   plugin._test.brew({ player: spring, usedItemId: PESTLE, usedWithItemId: 10844 });
@@ -193,40 +190,78 @@ test("Osman takes one glass per hand-in for its Thieving XP", () => {
   assert.match(winter.messages[0], /350 Thieving experience points/);
 });
 
-test("the apprentice refuses before Prince Ali Rescue, blocks followers, then teleports", () => {
+function apprenticeNpc() {
+  return {
+    chats: [],
+    forceChat(line) { this.chats.push(line); },
+    setPositionToFace() {},
+    performGraphic() {},
+    getLocation: () => new core.Location(3321, 3140, 0),
+  };
+}
+
+test("the apprentice's transcript: variant by past teleports, Osman and follower conditions", () => {
+  const t = plugin._test;
+  const fresh = player();
+  assert.match(t.selectVariant({ player: fresh, npcId: 1808 }), /has-not-been-teleported/);
+  fresh.setAttribute(t.TELEPORTED_ATTRIBUTE, true);
+  assert.match(t.selectVariant({ player: fresh, npcId: 1808 }), /has-been-teleported/);
+  assert.equal(t.selectVariant({ player: fresh, npcId: 1 }), null, "other Apprentices keep theirs");
+
   questComplete = false;
   const locked = player();
-  plugin._test.talkToApprentice({ player: locked, npc: { forceChat() {} }, npcId: 1808 });
-  assert.match(dialogueText(locked), /far too busy sweeping/);
-  assert.equal(locked.moves.length, 0);
-
+  assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has not talked to Osman about the Sorceress's Garden:" }), true);
+  assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has talked to Osman about the Sorceress's Garden:" }), false);
   questComplete = true;
-  const followed = player();
-  followed.setAttribute(plugin._test.PET_ATTRIBUTE, { isRegistered: () => true });
-  plugin._test.talkToApprentice({ player: followed, npc: { forceChat() {} }, npcId: 1808 });
-  assert.match(dialogueText(followed), /pick up your follower first/);
-  assert.equal(followed.moves.length, 0);
+  assert.equal(t.answerCondition({ player: locked, npcId: 1808, text: "If the player has talked to Osman about the Sorceress's Garden:" }), true);
 
-  const ready = player();
-  const npc = { chats: [], forceChat(line) { this.chats.push(line); } };
-  plugin._test.talkToApprentice({ player: ready, npc, npcId: 1808 });
-  runDialogue(ready);
-  assert.deepEqual(npc.chats, ["Seventior Disthinte Molesko!"]);
-  assert.deepEqual(ready.moves.map((at) => [at.getX(), at.getY()]), [[2912, 5472]]);
-  assert.equal(ready.getAttribute(plugin._test.TELEPORTED_ATTRIBUTE), true);
+  const followed = player();
+  followed.setAttribute(t.PET_ATTRIBUTE, { isRegistered: () => true });
+  assert.equal(t.answerCondition({ player: followed, npcId: 1808, text: "If the player has a pet following them" }), true);
+  assert.equal(t.answerCondition({ player: followed, npcId: 1808, text: "If the player does not have a pet following them" }), false);
 });
 
-test("the Teleport option skips the conversation and the fountain goes back home", () => {
+test("the apprentice casts after her first-visit line and for the returning teleport action", () => {
+  const t = plugin._test;
+  const first = player();
+  const npc = apprenticeNpc();
+  const line = { player: first, npc, npcId: 1808, text: "Okay, here goes! Remember, to return, just drink from the fountain." };
+  t.handleLine(line);
+  assert.equal(first.moves.length, 0, "nothing until the player continues");
+  line.after();
+  assert.deepEqual(npc.chats, ["Senventior Disthinte Molesko!"], "captured overhead, sic");
+  assert.deepEqual(first.moves.map((at) => [at.getX(), at.getY()]), [[2912, 5474]]);
+  assert.equal(first.getAttribute(t.TELEPORTED_ATTRIBUTE), true);
+
+  const spell = { player: first, npcId: 1808, text: "Seventior Disthinte Molesko!", skip: false };
+  t.handleLine(spell);
+  assert.equal(spell.skip, true, "said overhead instead of in the chatbox");
+
+  const again = player();
+  const action = { player: again, npc: apprenticeNpc(), npcId: 1808, action: "teleport", handled: false };
+  t.handleAction(action);
+  assert.equal(action.handled, true);
+  assert.deepEqual(again.moves.map((at) => [at.getX(), at.getY()]), [[2912, 5474]]);
+});
+
+test("the Teleport option works once she has teleported you, and the fountain goes back home", () => {
+  const t = plugin._test;
+  const fresh = player();
+  t.teleportByApprentice({ player: fresh, npc: apprenticeNpc(), npcId: 1808 });
+  assert.match(dialogueText(fresh), /far too busy sweeping/);
+  assert.equal(fresh.moves.length, 0);
+
   const p = player();
-  const npc = { chats: [], forceChat(line) { this.chats.push(line); } };
-  plugin._test.teleportByApprentice({ player: p, npc, npcId: 1808 });
-  assert.deepEqual(npc.chats, ["Seventior Disthinte Molesko!"]);
-  assert.deepEqual(p.moves.map((at) => [at.getX(), at.getY()]), [[2912, 5472]]);
+  p.setAttribute(t.TELEPORTED_ATTRIBUTE, true);
+  const npc = apprenticeNpc();
+  t.teleportByApprentice({ player: p, npc, npcId: 1808 });
+  assert.deepEqual(npc.chats, ["Senventior Disthinte Molesko!"]);
+  assert.deepEqual(p.moves.map((at) => [at.getX(), at.getY()]), [[2912, 5474]]);
 
   const leaver = player();
-  plugin._test.drinkFromFountain({ player: leaver, objectId: FOUNTAIN });
+  t.drinkFromFountain({ player: leaver, objectId: FOUNTAIN });
   assert.deepEqual(leaver.moves.map((at) => [at.getX(), at.getY()]), [[3321, 3139]]);
-  assert.equal(plugin._test.drinkFromFountain({ player: leaver, objectId: 12940 }), false);
+  assert.equal(t.drinkFromFountain({ player: leaver, objectId: 12940 }), false);
 });
 
 test("gates check the maze's level before opening", () => {

@@ -30,6 +30,7 @@ module.exports = {
     DEFAULT_FIELD: Entry.DEFAULT_FIELD,
     gift: Elnock.gift,
     trade: Elnock.trade,
+    elnock: Elnock._test,
     GIFT_ATTRIBUTE: Elnock.GIFT_ATTRIBUTE,
     fastChance: Wheat.fastChance,
     mediumChance: Wheat.mediumChance,

@@ -16,6 +16,7 @@ const {
   tagXp, trapDamage, trapAt, isBladeHit, isInArena, CYCLE_TICKS, DISPENSER_TILES, OBSTACLE_XP,
   ENTRY, HUT, createArea, processPlayer, stepTrap, stepBlades,
   enterArena, leaveArena, tagDispenser, logout, death,
+  PAID_ATTRIBUTE, payIzzy, climbDown, hasPaid, answerCondition, transcriptPayment,
   obstacleXp, familyAt, crossingTarget,
 } = plugin._test;
 
@@ -28,13 +29,17 @@ const COINS = ItemIds.COINS;
 function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z = 3 } = {}) {
   const inventory = new Map();
   if (coins > 0) inventory.set(COINS, coins);
+  const attributes = new Map();
   const p = {
     messages: [], xp: 0, hits: [], levels: {}, hints: [], hintCleared: false,
+    varbits: new Map(), dialogues: [], animations: [],
     x, y, z,
     getLocation: () => ({ getX: () => p.x, getY: () => p.y, getZ: () => p.z }),
     moveTo: (loc) => { p.x = loc.getX(); p.y = loc.getY(); p.z = loc.getZ(); },
     setLocation: (loc) => { p.x = loc.getX(); p.y = loc.getY(); p.z = loc.getZ(); },
-    getAttribute: () => undefined,
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    performAnimation: (animation) => p.animations.push(animation.getId()),
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
       deleteNumber: (id, n) => inventory.set(id, (inventory.get(id) ?? 0) - n),
@@ -50,8 +55,9 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
     getPacketSender: () => ({
       sendPositionalHint: (loc) => p.hints.push(loc),
       clearHintArrow: () => { p.hintCleared = true; },
+      sendVarbit: (id, value) => p.varbits.set(id, value),
     }),
-    getDialogueManager: () => ({ startDialogues: () => {} }),
+    getDialogueManager: () => ({ startDialogues: (builder) => p.dialogues.push(builder) }),
     sendMessage: (message) => p.messages.push(message),
     inventory,
   };
@@ -62,18 +68,48 @@ function player({ agility = 50, coins = 0, hitpoints = 99, x = 2804, y = 9590, z
 const tileOfId = (id) => DISPENSER_TILES.find((tile) => tile.id === id);
 const setActive = (tile) => { cycle.active = tile; cycle.nextAt = cycle.tick + CYCLE_TICKS; };
 
-test("Cap'n Izzy takes 200 coins before every entry", () => {
-  const paying = player({ coins: 250 });
-  assert.equal(enterArena(paying), true);
+test("paying Cap'n Izzy takes 200 coins once and only unlocks the ladder", () => {
+  const paying = player({ coins: 250, x: 2808, y: 3193, z: 0 });
+  payIzzy({ player: paying });
   assert.equal(paying.inventory.get(COINS), 50);
-  assert.ok(paying.messages.includes("You give Cap'n Izzy the 200 coin entrance fee."));
-  assert.deepEqual([paying.x, paying.y, paying.z], [ENTRY.x, ENTRY.y, ENTRY.z]);
+  assert.equal(hasPaid(paying), true);
+  assert.equal(paying.varbits.get(5964), 1, "agilityarena_canenter");
+  assert.deepEqual([paying.x, paying.y, paying.z], [2808, 3193, 0], "paying does not move the player");
 
-  const broke = player({ coins: 199 });
-  assert.equal(enterArena(broke), false);
+  payIzzy({ player: paying });
+  assert.equal(paying.inventory.get(COINS), 50, "a paid fee is not taken twice");
+
+  const broke = player({ coins: 199, x: 2808, y: 3193, z: 0 });
+  payIzzy({ player: broke });
   assert.equal(broke.inventory.get(COINS), 199);
-  assert.equal(broke.x, 2804);
-  assert.ok(broke.messages.some((message) => message.includes("200 coins")));
+  assert.equal(hasPaid(broke), false);
+});
+
+test("the hut ladder needs the fee; unpaid, the Parrot speaks first", () => {
+  const unpaid = player({ coins: 500, x: 2808, y: 3193, z: 0 });
+  climbDown(unpaid);
+  assert.equal(unpaid.dialogues.length, 1, "Clap 'em in irons!");
+  assert.equal(unpaid.animations.length, 0);
+  assert.equal(unpaid.inventory.get(COINS), 500, "the fee is taken on continuing, not before");
+
+  const paid = player({ coins: 500, x: 2808, y: 3193, z: 0 });
+  payIzzy({ player: paid });
+  climbDown(paid);
+  assert.deepEqual(paid.animations, [827]);
+});
+
+test("Izzy's transcript takes the fee on its hand-over line", () => {
+  const izzy = { getName: () => "Cap'n Izzy No-Beard" };
+  const rich = player({ coins: 300 });
+  assert.equal(answerCondition({ player: rich, definition: izzy, text: "If the player has enough coins:" }), true);
+  assert.equal(answerCondition({ player: rich, definition: izzy, text: "If the player doesn't have enough coins:" }), false);
+  assert.equal(answerCondition({ player: rich, definition: { getName: () => "Hans" }, text: "If the player has enough coins:" }), null);
+
+  const event = { player: rich, kind: "message", stepId: "geqhzb" };
+  transcriptPayment(event);
+  assert.equal(rich.inventory.get(COINS), 100);
+  assert.equal(hasPaid(rich), true);
+  assert.deepEqual(event.box, { items: [COINS] });
 });
 
 test("exactly one dispenser is active and the cycle moves on after 100 ticks", () => {
@@ -156,15 +192,16 @@ test("logging out in the arena ejects to the hut and forgets the tag lock", () =
   tagDispenser({ player: p, objectId: 3608, location: { x: cycle.active.x, y: cycle.active.y, z: 3 } });
   assert.ok(hasSession(p));
 
+  p.setAttribute(PAID_ATTRIBUTE, true);
   logout({ player: p });
   assert.equal(hasSession(p), false, "the one-tag flag does not survive a logout");
   assert.deepEqual([p.x, p.y, p.z], [HUT.x, HUT.y, HUT.z]);
-  assert.equal(p.hintCleared, true);
+  assert.equal(p.getAttribute(PAID_ATTRIBUTE), null, "the fee is spent");
   assert.equal(p.inventory.get(TICKET), 1, "the tag already paid stays paid");
 });
 
 test("death outside the arena leaves the tag lock alone", () => {
-  const p = player({ agility: 50, x: 2808, y: 3194, z: 0 });
+  const p = player({ agility: 50, x: 2808, y: 3193, z: 0 });
   stateOf(p);
   death({ player: p, handled: false });
   assert.equal(hasSession(p), true, "not in the arena, nothing to clean");

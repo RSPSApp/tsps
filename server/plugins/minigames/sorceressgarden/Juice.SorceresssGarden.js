@@ -27,6 +27,8 @@ const {
 
 const SPYMASTER_NAMES = ["Osman", "Selim"];
 
+const TOO_FEW_FRUIT_LINE = "I think I should wait until I have enough fruit to make a full glass.";
+
 let api;
 let core;
 
@@ -52,7 +54,11 @@ function brew(event) {
   const player = event.player;
   const inventory = player.getInventory();
   if (inventory.getAmount(season.fruitId) < season.fruits) {
-    player.sendMessage(`You need ${season.fruits} ${season.name} sq'irks to make a glass of juice.`);
+    // rsprox captures (rev 227): the player says it, for every season.
+    const { DialogueChainBuilder, PlayerDialogue } = core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new PlayerDialogue(0, TOO_FEW_FRUIT_LINE),
+    ));
     return true;
   }
   if (!inventory.contains(BEER_GLASS_ID)) {

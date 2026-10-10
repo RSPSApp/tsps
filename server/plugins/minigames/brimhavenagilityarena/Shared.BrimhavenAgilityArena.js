@@ -13,10 +13,12 @@ const CYCLE_TASK_KEY = "brimhaven-agility-arena:cycle";
 /** The arena is its own plane under the Brimhaven hut. */
 const ARENA_PLANE = 3;
 const ARENA = { minX: 2759, maxX: 2806, minY: 9544, maxY: 9592 };
-/** The entrance hut: logging out in the arena lands the player here. */
-const HUT = { x: 2808, y: 3194, z: 0 };
-/** Arrival tile beside the exit ladder (3618). */
-const ENTRY = { x: 2804, y: 9590, z: 3 };
+/** The entrance hut, where the exit ladder lands (rsprox captures); logging out inside too. */
+const HUT = { x: 2808, y: 3193, z: 0 };
+/** Centre of the 3x3 the hut ladder lands on, beside the exit ladder (3618) (rsprox captures). */
+const ENTRY = { x: 2805, y: 9590, z: 3 };
+/** Fee paid and not yet spent (OSRS keeps it in varbit agilityarena_canenter). */
+const PAID_ATTRIBUTE = "brimhaven-agility-arena:paid";
 const ENTRY_FEE = 200;
 
 const NPC = { IZZY: "Cap'n Izzy No-Beard" };
@@ -89,7 +91,6 @@ const INACTIVE_MESSAGE = "You can only get a ticket when the flashing arrow is a
 const BLADES_FAIL_MESSAGE = "You were hit by the spinning blades!";
 const DARTS_FAIL_MESSAGE = "You were hit by some darts, something on them makes you feel dizzy!";
 const FEE_MESSAGE = "You give Cap'n Izzy the 200 coin entrance fee.";
-const NO_COINS_MESSAGE = "You need 200 coins to enter the arena.";
 
 const TRAPS = new Map();
 for (const [x, y] of FLOOR_SPIKE_TILES) TRAPS.set(tileKey(x, y), "FLOOR_SPIKES");
@@ -215,7 +216,8 @@ function sendArrow(player) {
   const tile = activeTile();
   if (!tile) return;
   const sender = player.getPacketSender();
-  sender.sendPositionalHint(new core.Location(tile.x, tile.y, ARENA_PLANE), 2, 100, ARENA_PLANE);
+  // Centre of the tile at height 60, as captured.
+  sender.sendPositionalHint(new core.Location(tile.x, tile.y, ARENA_PLANE), 2, 60, ARENA_PLANE);
 }
 
 function isInArena(player) {
@@ -249,12 +251,12 @@ module.exports = {
   init,
   core: () => core,
   setRandom: (fn) => { random = fn; },
-  CYCLE_TICKS, CYCLE_TASK_KEY, ARENA_PLANE, ARENA, HUT, ENTRY, ENTRY_FEE, NPC,
+  CYCLE_TICKS, CYCLE_TASK_KEY, ARENA_PLANE, ARENA, HUT, ENTRY, ENTRY_FEE, PAID_ATTRIBUTE, NPC,
   OBSTACLE_IDS, OBJECTS, DISPENSER_TILES, BLADE_TILES, OBSTACLE_XP, OBSTACLE_LEVEL,
   DARTS_SUCCESS, FLOOR_SPIKES_NEVER_FAIL,
   PRESSURE_PAD_COOLDOWN_TICKS, PRESSURE_PAD_USES, BLADE_COOLDOWN_TICKS,
   RECEIVED_MESSAGE, REPEAT_MESSAGE, INACTIVE_MESSAGE, BLADES_FAIL_MESSAGE,
-  DARTS_FAIL_MESSAGE, FEE_MESSAGE, NO_COINS_MESSAGE,
+  DARTS_FAIL_MESSAGE, FEE_MESSAGE,
   cycle, sessions, tileKey, stateOf, hasSession, clearState, agilityLevel, tagXp, addXp,
   trapDamage, hit, drainAgility, successChance, roll, levelRefusal, activeTile, advanceCycle,
   tick, sendArrow, isInArena, rewardTag, trapAt, isBladeHit,

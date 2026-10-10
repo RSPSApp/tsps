@@ -47,6 +47,16 @@ function player({ hunter = 17, boost = 0, strength = 1, items = {} } = {}) {
     moveTo: (destination) => { p.moved.push(destination); p.location = destination; },
     setLocation: (destination) => { p.location = destination; },
     performAnimation() {},
+    varbits: new Map(),
+    getPacketSender() {
+      const sender = new Proxy({}, {
+        get: (_target, name) => (...args) => {
+          if (name === "sendVarbit") p.varbits.set(args[0], args[1]);
+          return sender;
+        },
+      });
+      return sender;
+    },
   };
   return p;
 }
@@ -132,40 +142,57 @@ test("Elnock's gift is once per account and needs room", () => {
   assert.equal(full.getInventory().getAmount(ItemIds.BUTTERFLY_NET), 0);
 });
 
-test("Elnock trades jars for jars, repellent, a magic net and a jar generator", () => {
-  const jars = player({ items: { [ItemIds.BABY_IMPLING_JAR]: 1 } });
-  assert.equal(plugin._test.trade(jars, "jars"), true);
-  assert.equal(jars.getInventory().getAmount(ItemIds.BABY_IMPLING_JAR), 0);
+test("each Elnock offer takes any one of its three jar stacks (cache enum 2752)", () => {
+  const jars = player({ items: { [ItemIds.NINJA_IMPLING_JAR]: 1 } });
+  assert.equal(plugin._test.trade(jars, "jars"), true, "one jar of any impling");
+  assert.equal(jars.getInventory().getAmount(ItemIds.NINJA_IMPLING_JAR), 0);
   assert.equal(jars.getInventory().getAmount(ItemIds.IMPLING_JAR), 3);
 
-  const repellent = player({ items: {
-    [ItemIds.BABY_IMPLING_JAR]: 3, [ItemIds.YOUNG_IMPLING_JAR]: 2, [ItemIds.GOURMET_IMPLING_JAR]: 1,
-  } });
-  assert.equal(plugin._test.trade(repellent, "repellent"), true);
-  assert.equal(repellent.getInventory().getAmount(ItemIds.IMP_REPELLENT), 1);
-  assert.equal(repellent.getInventory().getAmount(ItemIds.BABY_IMPLING_JAR), 0);
+  const young = player({ items: { [ItemIds.YOUNG_IMPLING_JAR]: 2, [ItemIds.BABY_IMPLING_JAR]: 1 } });
+  assert.equal(plugin._test.trade(young, "repellent"), true, "two young pay without any gourmet");
+  assert.equal(young.getInventory().getAmount(ItemIds.IMP_REPELLENT), 1);
+  assert.equal(young.getInventory().getAmount(ItemIds.YOUNG_IMPLING_JAR), 0);
+  assert.equal(young.getInventory().getAmount(ItemIds.BABY_IMPLING_JAR), 1, "the short baby stack is left");
 
-  const net = player({ items: {
+  const all = player({ items: {
     [ItemIds.GOURMET_IMPLING_JAR]: 3, [ItemIds.EARTH_IMPLING_JAR]: 2, [ItemIds.ESSENCE_IMPLING_JAR]: 1,
   } });
-  assert.equal(plugin._test.trade(net, "net"), true);
-  assert.equal(net.getInventory().getAmount(ItemIds.MAGIC_BUTTERFLY_NET), 1);
+  assert.equal(plugin._test.trade(all, "net"), true);
+  assert.equal(all.getInventory().getAmount(ItemIds.MAGIC_BUTTERFLY_NET), 1);
+  assert.equal(all.getInventory().getAmount(ItemIds.GOURMET_IMPLING_JAR), 0, "only the first full stack is paid");
+  assert.equal(all.getInventory().getAmount(ItemIds.EARTH_IMPLING_JAR), 2);
+  assert.equal(all.getInventory().getAmount(ItemIds.ESSENCE_IMPLING_JAR), 1);
 
-  const generator = player({ items: {
-    [ItemIds.ESSENCE_IMPLING_JAR]: 3, [ItemIds.ECLECTIC_IMPLING_JAR]: 2, [ItemIds.NATURE_IMPLING_JAR]: 1,
-  } });
-  assert.equal(plugin._test.trade(generator, "generator"), true);
-  assert.equal(generator.getInventory().getAmount(ItemIds.JAR_GENERATOR), 1);
+  const nature = player({ items: { [ItemIds.NATURE_IMPLING_JAR]: 1 } });
+  assert.equal(plugin._test.trade(nature, "generator"), true);
+  assert.equal(nature.getInventory().getAmount(ItemIds.JAR_GENERATOR), 1);
 });
 
 test("a failed trade consumes nothing", () => {
-  const p = player({ items: { [ItemIds.GOURMET_IMPLING_JAR]: 3, [ItemIds.EARTH_IMPLING_JAR]: 2 } });
+  const p = player({ items: { [ItemIds.GOURMET_IMPLING_JAR]: 2, [ItemIds.EARTH_IMPLING_JAR]: 1 } });
   assert.equal(plugin._test.trade(p, "net"), false);
-  assert.equal(p.getInventory().getAmount(ItemIds.GOURMET_IMPLING_JAR), 3);
-  assert.equal(p.getInventory().getAmount(ItemIds.EARTH_IMPLING_JAR), 2);
-  assert.match(p.messages.at(-1), /implings/);
+  assert.equal(p.getInventory().getAmount(ItemIds.GOURMET_IMPLING_JAR), 2);
+  assert.equal(p.getInventory().getAmount(ItemIds.EARTH_IMPLING_JAR), 1);
+  assert.equal(p.messages.at(-1), "You don't have the required implings in jars to trade for this.");
 
   const noJars = player();
   assert.equal(plugin._test.trade(noJars, "jars"), false);
-  assert.match(noJars.messages.at(-1), /impling jars/);
 });
+
+test("Elnock's Exchange: a shop_frame slot selects ii_elnex, Confirm trades it", () => {
+  const elnock = plugin._test.elnock;
+  const p = player({ items: { [ItemIds.ESSENCE_IMPLING_JAR]: 1 } });
+  elnock.openExchange({ player: p });
+  assert.equal(p.varbits.get(elnock.SELECTED_VARBIT), 0);
+  elnock.selectOffer({ player: p, slot: 6 });
+  assert.equal(p.varbits.get(elnock.SELECTED_VARBIT), 3, "captured: slot 6 -> 3");
+  elnock.confirmOffer({ player: p });
+  assert.equal(p.getInventory().getAmount(ItemIds.JAR_GENERATOR), 0, "slot 6 is the third offer, not the net");
+  elnock.selectOffer({ player: p, slot: 3 });
+  elnock.confirmOffer({ player: p });
+  assert.equal(p.getInventory().getAmount(ItemIds.MAGIC_BUTTERFLY_NET), 1, "slot 3: the net, for one essence");
+
+  elnock.selectOffer({ player: p, slot: 4 });
+  assert.equal(p.varbits.get(elnock.SELECTED_VARBIT), 2, "only the offers' own slots select");
+});
+

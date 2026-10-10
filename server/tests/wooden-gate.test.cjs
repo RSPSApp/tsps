@@ -20,6 +20,7 @@ function buildHarness() {
   const world = new Map();
   const ops = [];
   const sounds = [];
+  const submitted = [];
 
   const originalGet = MapObjects.get;
   const originalSound = Sounds.sendSound;
@@ -38,7 +39,7 @@ function buildHarness() {
     register: (o) => ops.push(['register', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
     deregister: (o) => ops.push(['deregister', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
   };
-  const taskManager = { submit: () => {}, cancelTasks: () => {} };
+  const taskManager = { submit: (task) => submitted.push(task), cancelTasks: () => {} };
   const api = {
     // The plugin reads its engine classes from api.core; MapObjects/Sounds/CacheDefinitions
     // are the real classes with the static methods patched above.
@@ -64,8 +65,8 @@ function buildHarness() {
     world.set(tileKey(id, x, y, 0), object);
   };
 
-  const click = (id, x, y, face, action = 'Open', name = 'Gate') => {
-    const object = new GameObject(id, new Location(x, y, 0), 0, face, null);
+  const click = (id, x, y, face, action = 'Open', name = 'Gate', type = 0) => {
+    const object = new GameObject(id, new Location(x, y, 0), type, face, null);
     const location = object.getLocation();
     const player = {
       getUsername: () => 'tester',
@@ -90,8 +91,44 @@ function buildHarness() {
     CacheDefinitions.getCounts = originalGetCounts;
   };
 
-  return { place, click, sounds, restore };
+  return { place, click, sounds, ops, submitted, restore };
 }
+
+test('Tree Gnome Stronghold doors use their nameless open variants and restore on auto-close', () => {
+  const h = buildHarness();
+  try {
+    for (const [closed, open, x, face, openX, openFace] of [
+      [1967, 1969, 2464, 0, 2463, 1], [1968, 1970, 2466, 2, 2467, 3],
+    ]) {
+      assert.deepEqual(h.click(closed, x, 3492, face, 'Open', 'Tree Door', 10), [
+        ['register', open, openX, 3492, openFace], ['deregister', closed, x, 3492, face],
+      ]);
+      h.submitted.at(-1).execute();
+      assert.deepEqual(h.ops.splice(0), [
+        ['deregister', open, openX, 3492, openFace], ['register', closed, x, 3492, face],
+      ]);
+    }
+  } finally {
+    h.restore();
+  }
+});
+
+test('Tree Gnome Stronghold main gate opens both leaves with a one-tile gap and auto-closes', () => {
+  const h = buildHarness();
+  try {
+    assert.deepEqual(h.click(190, 2459, 3383, 2, 'Open', 'Gate', 10), [
+      ['deregister', 190, 2459, 3383, 2],
+      ['register', 191, 2459, 3383, 2], ['register', 192, 2462, 3383, 0],
+    ]);
+    h.submitted.at(-1).execute();
+    assert.deepEqual(h.ops.splice(0), [
+      ['deregister', 191, 2459, 3383, 2], ['deregister', 192, 2462, 3383, 0],
+      ['register', 190, 2459, 3383, 2],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
 
 test('wooden gate swings hinge + extension panels open from a closed hinge click', () => {
   const h = buildHarness();

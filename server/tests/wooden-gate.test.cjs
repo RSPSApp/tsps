@@ -20,6 +20,7 @@ function buildHarness() {
   const world = new Map();
   const ops = [];
   const sounds = [];
+  const submitted = [];
 
   const originalGet = MapObjects.get;
   const originalSound = Sounds.sendSound;
@@ -28,15 +29,17 @@ function buildHarness() {
   MapObjects.get = (id, location) =>
     world.get(tileKey(id, location.getX(), location.getY(), location.getZ())) ?? null;
   Sounds.sendSound = (...args) => sounds.push(args);
-  CacheDefinitions.getObject = () => ({ name: 'Gate' });
-  CacheDefinitions.getCounts = () => ({ npcs: 0, items: 0, objects: 0 });
+  CacheDefinitions.getObject = (id) => (id === 2394
+    ? { name: 'Gate', actions: ['Open'], models: [[1298]] }
+    : { name: 'Gate' });
+  CacheDefinitions.getCounts = () => ({ npcs: 0, items: 0, objects: 2395 });
 
   const handlers = new Map();
   const objectManager = {
     register: (o) => ops.push(['register', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
     deregister: (o) => ops.push(['deregister', o.getId(), o.getLocation().getX(), o.getLocation().getY(), o.getFace()]),
   };
-  const taskManager = { submit: () => {}, cancelTasks: () => {} };
+  const taskManager = { submit: (task) => submitted.push(task), cancelTasks: () => {} };
   const api = {
     // The plugin reads its engine classes from api.core; MapObjects/Sounds/CacheDefinitions
     // are the real classes with the static methods patched above.
@@ -62,8 +65,8 @@ function buildHarness() {
     world.set(tileKey(id, x, y, 0), object);
   };
 
-  const click = (id, x, y, face, action = 'Open', name = 'Gate') => {
-    const object = new GameObject(id, new Location(x, y, 0), 0, face, null);
+  const click = (id, x, y, face, action = 'Open', name = 'Gate', type = 0) => {
+    const object = new GameObject(id, new Location(x, y, 0), type, face, null);
     const location = object.getLocation();
     const player = {
       getUsername: () => 'tester',
@@ -77,7 +80,7 @@ function buildHarness() {
       getPacketSender: () => ({}),
     };
     ops.length = 0;
-    handlers.get(name)[action]({ player, object, objectId: id, location });
+    handlers.get(name)[action]({ player, object, objectId: id, location: { x, y, z: 0 } });
     return ops.splice(0);
   };
 
@@ -88,8 +91,44 @@ function buildHarness() {
     CacheDefinitions.getCounts = originalGetCounts;
   };
 
-  return { place, click, sounds, restore };
+  return { place, click, sounds, ops, submitted, restore };
 }
+
+test('Tree Gnome Stronghold doors use their nameless open variants and restore on auto-close', () => {
+  const h = buildHarness();
+  try {
+    for (const [closed, open, x, face, openX, openFace] of [
+      [1967, 1969, 2464, 0, 2463, 1], [1968, 1970, 2466, 2, 2467, 3],
+    ]) {
+      assert.deepEqual(h.click(closed, x, 3492, face, 'Open', 'Tree Door', 10), [
+        ['register', open, openX, 3492, openFace], ['deregister', closed, x, 3492, face],
+      ]);
+      h.submitted.at(-1).execute();
+      assert.deepEqual(h.ops.splice(0), [
+        ['deregister', open, openX, 3492, openFace], ['register', closed, x, 3492, face],
+      ]);
+    }
+  } finally {
+    h.restore();
+  }
+});
+
+test('Tree Gnome Stronghold main gate handles packet coordinates, opens both leaves and auto-closes', () => {
+  const h = buildHarness();
+  try {
+    assert.deepEqual(h.click(190, 2459, 3383, 2, 'Open', 'Gate', 10), [
+      ['deregister', 190, 2459, 3383, 2],
+      ['register', 191, 2459, 3383, 2], ['register', 192, 2462, 3383, 0],
+    ]);
+    h.submitted.at(-1).execute();
+    assert.deepEqual(h.ops.splice(0), [
+      ['deregister', 191, 2459, 3383, 2], ['deregister', 192, 2462, 3383, 0],
+      ['register', 190, 2459, 3383, 2],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
 
 test('wooden gate swings hinge + extension panels open from a closed hinge click', () => {
   const h = buildHarness();
@@ -639,6 +678,25 @@ test('the Tutorial Island survival gate swings open and closes back to its own p
       ['register', 9470, 200, 200, 0],
       ['register', 9708, 200, 201, 0],
     ], 'not 8810/8811');
+  } finally {
+    h.restore();
+  }
+});
+
+test('the Gnome Ball pitch gate 2394 rotates in place and closes back onto its wall', () => {
+  const h = buildHarness();
+  try {
+    // No open variant is placed (2395/193 are nameless, action-less locs), so the door
+    // catalog self-pairs it and the panel swings one tile with the rotation.
+    h.place(2394, 2383, 3488, 0);
+    assert.deepEqual(h.click(2394, 2383, 3488, 0), [
+      ['register', 2394, 2382, 3488, 1],
+      ['deregister', 2394, 2383, 3488, 0],
+    ], 'the closed gate opens');
+    assert.deepEqual(h.click(2394, 2382, 3488, 1, 'Close'), [
+      ['register', 2394, 2383, 3488, 0],
+      ['deregister', 2394, 2382, 3488, 1],
+    ], 'it closes back onto the pitch wall');
   } finally {
     h.restore();
   }

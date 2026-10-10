@@ -21,7 +21,7 @@
  *   { msg: text } | { say: text }     game message / overhead text
  *   { varbit: [id, value] }           set a player varbit (a multiloc's side, say)
  *   { sound: id, loops?, delay? }     sound effect (delay in client cycles)
- *   { gfx: id }                       play a graphic on the player
+ *   { gfx: id, delay?, height? }      play a graphic on the player (delay in client cycles)
  *   { objAnim: id }                   animate the obstacle object
  *   { run: (ctx) => void }            escape hatch for one-off behaviour
  *
@@ -223,7 +223,10 @@ function createObstacleTask(Task) {
       } else if (step.sound != null) {
         player.getPacketSender().sendSoundEffect(step.sound, step.loops ?? 1, step.delay ?? 0);
       } else if (step.gfx != null) {
-        player.performGraphic(new Graphic(step.gfx));
+        // Graphic reads a third argument of 0-2 as a Priority, so a height is only passed when set.
+        player.performGraphic(step.height
+          ? new Graphic(step.gfx, step.delay ?? 0, step.height)
+          : new Graphic(step.gfx, step.delay ?? 0));
       } else if (step.objAnim != null) {
         if (this.context.object) {
           player.getPacketSender().sendObjectAnimation(this.context.object, new Animation(step.objAnim));

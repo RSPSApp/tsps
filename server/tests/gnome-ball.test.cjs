@@ -1,0 +1,798 @@
+// Run after `yarn build`: node --test tests/gnome-ball.test.cjs
+const assert = require("node:assert/strict");
+const { test, beforeEach } = require("node:test");
+
+const { Server } = require("../dist/Server");
+Server.installProductionPathResolver();
+const { PluginManager } = require("../dist/plugins/PluginManager");
+
+const plugin = require("../plugins/minigames/GnomeBall.plugin");
+const Pitch = require("../plugins/minigames/gnomeball/Pitch.GnomeBall");
+const Referee = require("../plugins/minigames/gnomeball/Referee.GnomeBall");
+
+const core = PluginManager.getCoreApi();
+const REFEREE = core.NpcIdentifiers.GNOME_BALL_REFEREE;
+const WEAPON_SLOT = core.Equipment.WEAPON_SLOT;
+
+const events = [];
+const registered = [];
+const api = {
+  core,
+  emitCustomEvent: (name, payload) => events.push({ name, payload }),
+  persistAttribute: (key) => registered.push({ kind: "persist", key }),
+  registerArea: (area) => registered.push({ kind: "area", area }),
+  onObjectInteraction: (name, actions) => registered.push({ kind: "object", name, actions }),
+  onObjectRoute: (handler) => registered.push({ kind: "objectRoute", handler }),
+  onNpcInteraction: (name, actions) => registered.push({ kind: "npc", name, actions }),
+  onNpcRoute: (handler) => registered.push({ kind: "npcRoute", handler }),
+  onItemAction: (name, actions) => registered.push({ kind: "itemAction", name, actions }),
+  onItemDropPolicy: (handler) => registered.push({ kind: "itemDrop", handler }),
+  onPlayerLogout: (handler) => registered.push({ kind: "logout", handler }),
+  onPlayerDisconnect: (handler) => registered.push({ kind: "disconnect", handler }),
+  onPlayerDeath: (handler) => registered.push({ kind: "death", handler }),
+  onPlayerLogin: (handler) => registered.push({ kind: "login", handler }),
+  onNpcDialogueVariant: (handler) => registered.push({ kind: "dialogueVariant", handler }),
+  onNpcDialogueCondition: (handler) => registered.push({ kind: "dialogueCondition", handler }),
+  onCustomEvent: (name, handler) => registered.push({ kind: "customEvent", name, handler }),
+  // Delayed steps (the throw, the result) run at once here.
+  getTaskManager: () => ({ submit: (task) => task.execute() }),
+};
+
+/** Records every packet-sender call; each returns the sender, so chains keep working. */
+function recordingSender(calls) {
+  const sender = new Proxy({}, {
+    get: (_target, name) => (...args) => {
+      calls.push([name, ...args]);
+      return sender;
+    },
+  });
+  return sender;
+}
+
+plugin.register(api);
+Pitch._test.setApi(api);
+
+beforeEach(() => {
+  Pitch._test.sessions.clear();
+  events.length = 0;
+  Pitch._test.resetRandom();
+});
+
+function fakePlayer({ x = 2390, y = 3488, agility = 1, ranged = 1, items = {}, weapon = -1, freeSlots = 20 } = {}) {
+  const attributes = new Map();
+  const counts = new Map(Object.entries(items).map(([id, amount]) => [Number(id), amount]));
+  const equipmentItems = new Array(14).fill(null);
+  if (weapon >= 0) equipmentItems[WEAPON_SLOT] = new core.Item(weapon, 1);
+  const messages = [];
+  const hits = [];
+  const stuns = [];
+  const cancels = [];
+  const xp = { RANGED: 0, AGILITY: 0 };
+  const inventory = {
+    counts,
+    getAmount: (id) => counts.get(id) ?? 0,
+    contains: (id) => inventory.getAmount(id) > 0,
+    deleteNumber: (id, amount) => counts.set(id, inventory.getAmount(id) - amount),
+    addItem: (item) => {
+      counts.set(item.getId(), inventory.getAmount(item.getId()) + item.getAmount());
+      return inventory;
+    },
+    adds(id, amount) {
+      return inventory.addItem(new core.Item(id, amount));
+    },
+    getFreeSlots: () => freeSlots,
+  };
+  const equipment = {
+    items: equipmentItems,
+    getItems: () => equipment.items,
+    getSlot: (slot) => equipment.items[slot]?.getId?.() ?? -1,
+    setItem: (slot, item) => {
+      equipment.items[slot] = item?.getId?.() >= 0 ? item : null;
+    },
+    refreshItems: () => equipment,
+  };
+  const skills = {
+    levels: { RANGED: ranged, AGILITY: agility },
+    getCurrentLevel: (skill) =>
+      skill === core.Skill.RANGED ? skills.levels.RANGED : skill === core.Skill.AGILITY ? skills.levels.AGILITY : 1,
+    addExperiences: (skill, amount) => {
+      if (skill === core.Skill.RANGED) xp.RANGED += amount;
+      else if (skill === core.Skill.AGILITY) xp.AGILITY += amount;
+    },
+  };
+  const timers = {
+    registers: (key, ticks) => stuns.push({ key, ticks }),
+    cancel: (key) => cancels.push(key),
+    has: () => false,
+  };
+  const packets = [];
+  const animations = [];
+  const sender = recordingSender(packets);
+  const p = {
+    messages,
+    hits,
+    stuns,
+    cancels,
+    xp,
+    localNpcs: [],
+    getLocalNpcs: () => p.localNpcs,
+    packets,
+    animations,
+    getPacketSender: () => sender,
+    setPositionToFace: () => {},
+    location: new core.Location(x, y, 0),
+    getLocation: () => p.location,
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getInventory: () => inventory,
+    getEquipment: () => equipment,
+    getSkillManager: () => skills,
+    getTimers: () => timers,
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage) }) }),
+    getUpdateFlag: () => ({ flag: () => {} }),
+    sendMessage: (message) => messages.push(message),
+    performAnimation: (animation) => animations.push(animation.getId()),
+  };
+  return p;
+}
+
+function playerMobile(player) {
+  return {
+    isPlayer: () => true,
+    isNpc: () => false,
+    getIndex: () => 9001,
+    getAsPlayer: () => player,
+    getLocation: () => player.getLocation(),
+    getArea: () => null,
+  };
+}
+
+let npcIndex = 0;
+function baller(x, y, id = core.NpcIdentifiers.GNOME_BALLER) {
+  const npc = {
+    animations: [],
+    stuns: [],
+    transformations: [],
+    setNpcTransformationId: (id) => npc.transformations.push(id),
+    getRealId: () => id,
+    getLocation: () => new core.Location(x, y, 0),
+    getDefinition: () => ({ getName: () => Pitch.BALLER_NAME }),
+    getId: () => npc.transformations.at(-1) > 0 ? npc.transformations.at(-1) : id,
+    getHitpoints: () => 10,
+    performAnimation: (animation) => npc.animations.push(animation),
+    setPositionToFace: () => {},
+    // Knocked down while a stun is registered (the fake never expires it).
+    getTimers: () => ({ registers: (key, ticks) => npc.stuns.push({ key, ticks }), has: () => npc.stuns.length > 0 }),
+  };
+  const mobile = {
+    isPlayer: () => false,
+    isNpc: () => true,
+    getIndex: () => ++npcIndex,
+    getAsNpc: () => npc,
+    getLocation: () => npc.getLocation(),
+    getArea: () => null,
+  };
+  return { mobile, npc };
+}
+
+const shootEvent = (player, x = 2404, y = 3488) => ({ player, location: { x, y, z: 0 } });
+
+test("the plugin declares itself members content and wires the pitch hooks", () => {
+  assert.equal(plugin.name, "GnomeBall");
+  assert.equal(plugin.members, true);
+  assert.ok(registered.some((entry) => entry.kind === "area"));
+  assert.ok(registered.some((entry) => entry.kind === "object" && entry.name === "Gnome goal"));
+  assert.ok(registered.some((entry) => entry.kind === "objectRoute"));
+  assert.ok(registered.some((entry) => entry.kind === "npc" && entry.name === "Gnome baller"));
+  assert.ok(registered.some((entry) => entry.kind === "npc" && entry.name === "Gnome winger" && entry.actions["Pass-to"]));
+  assert.ok(registered.some((entry) => entry.kind === "npcRoute"));
+  assert.ok(registered.some((entry) => entry.kind === "itemAction" && entry.name === "Gnomeball"));
+  assert.ok(registered.some((entry) => entry.kind === "itemDrop"));
+  assert.ok(registered.some((entry) => entry.kind === "death"));
+});
+
+test("shoot chance follows the wiki's rounded inclusive roll and clamps distance and probability", () => {
+  const { shotChance } = Pitch._test;
+  assert.equal(shotChance(1, 99), 1);
+  assert.equal(shotChance(11, 1), 27 / 256);
+  assert.equal(shotChance(11, 99), 246 / 256);
+  assert.equal(shotChance(11, 50), 137 / 256, '135.5 rounds up before adding one');
+  assert.equal(shotChance(5, 42), 133 / 256, '132.132... rounds down before adding one');
+  assert.equal(shotChance(11, 110), 1, 'boosted Ranged may exceed level 99');
+  assert.equal(shotChance(11, -20), 0);
+  assert.equal(shotChance(30, 1), shotChance(11, 1), "distance clamps at 11");
+});
+
+test("shooting uses current Ranged and the exact 137-of-256 boundary at level 50, distance 11", () => {
+  for (const [roll, xp] of [[136 / 256, 4], [137 / 256, 0]]) {
+    const p = fakePlayer({ x: 2393, ranged: 1 });
+    p.getSkillManager().levels.RANGED = 50;
+    Pitch.beginGame(p);
+    Pitch._test.setRandom(() => roll);
+    Pitch._test.shootGoal(shootEvent(p));
+    assert.equal(p.xp.RANGED, xp);
+  }
+});
+
+test("shots stay at the clicked tile and winger passes can reach across the pitch", () => {
+  const p = fakePlayer();
+  Pitch.beginGame(p);
+  const sourceLocation = { x: 2390, y: 3488, z: 0 };
+  const shot = { player: p, definition: { getName: () => 'Gnome goal', getInteractions: () => ['Shoot'] },
+    object: { getLocation: () => new core.Location(2404, 3488, 0) },
+    clickType: 1, sourceLocation, destination: null };
+  Pitch._test.routeShot(shot);
+  assert.deepEqual(shot.destination, sourceLocation, 'a shot from 14 tiles away does not walk to the net');
+  Pitch._test.setRandom(() => 0);
+  Pitch._test.shootGoal(shootEvent(p));
+  assert.equal(Pitch.isCarrying(p), false);
+  shot.destination = null;
+  Pitch._test.routeShot(shot);
+  assert.deepEqual(shot.destination, sourceLocation, 'another click after shooting cannot walk to the net');
+  Pitch._test.sessions.delete(p);
+  shot.destination = null;
+  Pitch._test.routeShot(shot);
+  assert.deepEqual(shot.destination, sourceLocation, 'a player without a session also stays put');
+  const pass = { player: p, npc: baller(2403, 3492).npc,
+    definition: { getName: () => 'Gnome winger', getActions: () => ['Pass-to', 'Talk-to'] },
+    clickType: 1, range: 1 };
+  Pitch._test.routePass(pass);
+  assert.equal(pass.range, 25);
+  pass.range = 1;
+  pass.clickType = 2;
+  Pitch._test.routePass(pass);
+  assert.equal(pass.range, 1, 'talking keeps its close range');
+  p.location = new core.Location(2380, 3488, 0);
+  shot.destination = null;
+  Pitch._test.routeShot(shot);
+  assert.equal(shot.destination, null, 'players outside the pitch cannot shoot remotely');
+  pass.clickType = 1;
+  Pitch._test.routePass(pass);
+  assert.equal(pass.range, 1, 'players outside the pitch cannot pass remotely');
+});
+
+test("a distant shot uses the return throw's arc and resolves after the ball arrives", () => {
+  const p = fakePlayer({ ranged: 99 });
+  Pitch.beginGame(p);
+  const tasks = [];
+  Pitch._test.setApi({ ...api, getTaskManager: () => ({ submit: (task) => tasks.push(task) }) });
+  Pitch._test.setRandom(() => 0.2);
+  try {
+    Pitch._test.shootGoal(shootEvent(p));
+    assert.equal(p.xp.RANGED, 0);
+    assert.equal(tasks[0].getDelay(), 1);
+    tasks.shift().execute();
+    const projectile = p.packets.find(([name]) => name === 'sendProjectile');
+    assert.equal(projectile[6], 40);
+    assert.equal(projectile[7], 40);
+    assert.equal(projectile[10], 15);
+    assert.equal(projectile[9], 49, 'the projectile waits until the 48-cycle drawback finishes');
+    assert.equal(projectile[4] - projectile[9], 70, 'the flight still takes five cycles per tile');
+    assert.equal(tasks[0].getDelay(), Math.ceil(projectile[4] / 30));
+    assert.equal(p.xp.RANGED, 0, 'the score waits for the long flight');
+    tasks.shift().execute();
+    assert.equal(p.xp.RANGED, 4, 'a distant shot can score');
+  } finally {
+    Pitch._test.setApi(api);
+  }
+});
+
+test("tackle chance lerps 31/256 to 201/256, or 221/256 against a ball carrier", () => {
+  const { tackleChance } = Pitch._test;
+  assert.equal(tackleChance(1), 31 / 256);
+  assert.equal(tackleChance(99), 201 / 256);
+  assert.equal(tackleChance(99, true), 221 / 256);
+  assert.ok(Math.abs(tackleChance(50) - (31 / 256 + (201 / 256 - 31 / 256) * (49 / 98))) < 1e-12);
+});
+
+test("baller tackle chance is the restored chosen default, falling with agility", () => {
+  const { ballerTackleChance } = Pitch._test;
+  assert.ok(Math.abs(ballerTackleChance(1) - 0.5) < 1e-12);
+  assert.ok(Math.abs(ballerTackleChance(99) - 0.2) < 1e-12);
+  assert.ok(Math.abs(ballerTackleChance(50) - (0.5 + (0.2 - 0.5) * (49 / 98))) < 1e-12);
+});
+
+test("a clicked Shoot is not pre-empted: ballers pause and the adjacent shot still scores", () => {
+  const p = fakePlayer();
+  Pitch.beginGame(p);
+  const area = Pitch._test.createPitch();
+  const target = baller(2390, 3488);
+  area.enter(target.mobile);
+  p.localNpcs = [target.npc];
+  const mobile = playerMobile(p);
+  area.enter(mobile);
+  const goal = { getName: () => "Gnome goal", getInteractions: () => ["Shoot"] };
+  Pitch._test.routeShot({ player: p, definition: goal, clickType: 1,
+    object: { getLocation: () => new core.Location(2404, 3488, 0) },
+    sourceLocation: { x: 2390, y: 3488, z: 0 },
+  });
+  Pitch._test.setRandom(() => 0); // a tackle would otherwise fire on the next check
+  for (let tick = 0; tick < 3; tick++) area.process(mobile);
+  assert.equal(p.hits.length, 0, "the tackle wait covers the shot");
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), Pitch.GNOMEBALL);
+  Pitch._test.shootGoal(shootEvent(p));
+  assert.equal(p.xp.RANGED, 4, "the shot resolves while a baller is adjacent");
+  assert.equal(p.cancels.length, 1, "a stun cannot swallow the throw");
+});
+
+test("starting a game unequips the weapon, equips the ball, and never doubles up", () => {
+  const p = fakePlayer({ weapon: 4151 });
+  assert.equal(Pitch.beginGame(p), true);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), Pitch.GNOMEBALL);
+  assert.equal(p.getInventory().getAmount(4151), 1, "weapon moved to the inventory");
+  assert.equal(Pitch.beginGame(p), false, "a player cannot carry two balls");
+  assert.ok(p.messages.some((message) => message.includes("already have a ball")));
+});
+
+test("a goal pays 4 XP in both skills exactly once and consumes the ball", () => {
+  const p = fakePlayer({ items: { [Pitch.GNOMEBALL]: 1 } });
+  assert.equal(Pitch.beginGame(p), true);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 0, "the player's own ball waits with the ref");
+  Pitch._test.setRandom(() => 0);
+  Pitch._test.shootGoal(shootEvent(p));
+  assert.equal(p.xp.RANGED, 4);
+  assert.equal(p.xp.AGILITY, 4);
+  assert.equal(Pitch._test.sessions.get(p).goals, 1);
+  assert.deepEqual(p.packets.filter(([name]) => name === 'sendVarbit'), [['sendVarbit', 8387, 1]]);
+  assert.equal(Pitch.isCarrying(p), false, "the ball is consumed by the shot");
+  assert.ok(events.some((event) => event.name === "diary:task" && event.payload.task === "score-a-goal-in-a-gnomeball-match"));
+});
+
+test("five goals update the HUD, pay 4/5/6/7/30, reset the score, and award one ball on exit", () => {
+  const p = fakePlayer();
+  const area = Pitch._test.createPitch();
+  const mobile = playerMobile(p);
+  area.enter(mobile);
+  Pitch._test.setRandom(() => 0);
+  const perGoal = [];
+  let previous = 0;
+  for (let goal = 0; goal < 5; goal++) {
+    assert.equal(Pitch.beginGame(p), true);
+    Pitch._test.shootGoal(shootEvent(p));
+    perGoal.push(p.xp.RANGED - previous);
+    previous = p.xp.RANGED;
+  }
+  assert.deepEqual(perGoal, [4, 5, 6, 7, 30]);
+  assert.equal(p.xp.AGILITY, 52);
+  const session = Pitch._test.sessions.get(p);
+  assert.equal(session.goals, 0, "the score resets on the fifth goal");
+  assert.equal(session.won, true);
+  assert.deepEqual(p.packets.filter(([name, id]) => name === 'sendVarbit' && id === 8387)
+    .map(([, , value]) => value), [0, 1, 2, 3, 4, 0]);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 0, 'the reward waits until leaving');
+  Pitch.beginGame(p);
+  area.leave(mobile, false);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), -1);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 1, 'getting another ball after winning preserves the reward');
+  area.leave(mobile, false);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 1, 'the reward cannot be claimed twice');
+});
+
+test("a miss consumes the ball and pays nothing; shooting without a ball does nothing", () => {
+  const p = fakePlayer({ ranged: 1 });
+  Pitch.beginGame(p);
+  Pitch._test.setRandom(() => 0.999);
+  Pitch._test.shootGoal(shootEvent(p, 2404, 3488));
+  assert.equal(p.xp.RANGED, 0);
+  assert.equal(p.xp.AGILITY, 0);
+  assert.equal(Pitch._test.sessions.get(p).goals, 0);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), -1);
+  assert.deepEqual(p.messages, ["You throw the ball at the goal...", "... and miss."]);
+  assert.deepEqual(p.animations, [783], "the captured throw");
+  assert.ok(p.packets.some(([name, , , , , projectile]) => name === "sendProjectile" && projectile === 55));
+  Pitch._test.shootGoal(shootEvent(p));
+  assert.equal(p.messages.at(-1), "You need a ball in your hand to throw.");
+});
+
+test("a tackle knocks the baller down or is dodged, with the captured animations", () => {
+  const p = fakePlayer();
+  const target = baller(2390, 3488);
+  Pitch._test.setRandom(() => 0.999);
+  Pitch._test.tackleBaller({ player: p, npc: target.npc });
+  assert.equal(target.npc.stuns.length, 0, "a failed tackle knocks nobody down");
+  assert.deepEqual(p.animations, [780]);
+  assert.deepEqual(target.npc.animations.map((animation) => animation.getId()), [204]);
+
+  Pitch._test.setRandom(() => 0);
+  Pitch._test.tackleBaller({ player: p, npc: target.npc });
+  assert.equal(target.npc.stuns.length, 1);
+  assert.equal(target.npc.stuns[0].ticks, 5);
+  assert.deepEqual(p.animations, [780, 778]);
+  assert.deepEqual(target.npc.animations.map((animation) => animation.getId()), [204, 203]);
+  assert.equal(p.xp.RANGED, 0);
+  assert.equal(p.xp.AGILITY, 0);
+  assert.deepEqual(p.messages, [], "no message either way");
+
+  Pitch._test.tackleBaller({ player: p, npc: target.npc });
+  assert.deepEqual(p.messages, ["That gnome is being tackled."]);
+  assert.equal(target.npc.stuns.length, 1);
+});
+
+test("an adjacent baller tackles the carrier every second tick for 1 damage", () => {
+  const p = fakePlayer();
+  Pitch.beginGame(p);
+  const area = Pitch._test.createPitch();
+  const target = baller(2390, 3488);
+  area.enter(target.mobile);
+  p.localNpcs = [target.npc];
+  const mobile = playerMobile(p);
+  area.enter(mobile);
+  Pitch._test.setRandom(() => 0);
+  area.process(mobile);
+  assert.equal(p.hits.length, 0, "the roll is periodic, not every tick");
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), Pitch.GNOMEBALL);
+  area.process(mobile);
+  assert.equal(p.hits.length, 1);
+  assert.equal(p.hits[0].getDamage(), 1);
+  assert.equal(Pitch.isCarrying(p), false, "the carrier loses the ball");
+  assert.ok(Pitch.isPlaying(p), "the session stays open for a new ball");
+  assert.ok(p.stuns.length >= 1, "the carrier is knocked down");
+  assert.ok(p.animations.includes(779), "the carrier falls");
+  assert.equal(target.npc.getId(), core.NpcIdentifiers.GNOME_BALLER_2);
+  assert.equal(Pitch._test.sessions.get(p).ballHolder, target.npc);
+});
+
+test("leaving the pitch removes the carried ball and only a won game pays out", () => {
+  const p = fakePlayer();
+  const area = Pitch._test.createPitch();
+  const mobile = playerMobile(p);
+  Pitch.beginGame(p);
+  area.enter(mobile);
+  area.leave(mobile, false);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), -1);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 0);
+  assert.equal(Pitch.isPlaying(p), false);
+
+  Pitch.beginGame(p);
+  Pitch._test.sessions.get(p).won = true;
+  area.enter(mobile);
+  area.leave(mobile, false);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 1, "the win hands out a ball");
+});
+
+test("leaving after a win with an own ball returns the own ball instead of a reward", () => {
+  const p = fakePlayer({ items: { [Pitch.GNOMEBALL]: 1 } });
+  const area = Pitch._test.createPitch();
+  const mobile = playerMobile(p);
+  Pitch.beginGame(p);
+  Pitch._test.sessions.get(p).won = true;
+  area.enter(mobile);
+  area.leave(mobile, false);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 1);
+});
+
+test("a dropped gnomeball returns to the ref with no ground item", () => {
+  const p = fakePlayer({ items: { [Pitch.GNOMEBALL]: 2 } });
+  const event = { player: p, itemId: Pitch.GNOMEBALL, item: new core.Item(Pitch.GNOMEBALL, 1), handled: false, dropToGround: true };
+  Pitch._test.dropPolicy(event);
+  assert.equal(event.handled, true);
+  assert.equal(event.dropToGround, false);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 1);
+  assert.ok(p.messages.includes(Pitch.BALL_RETURNS_MESSAGE));
+  assert.equal(Pitch._test.dropBall({ player: p, itemId: 752 }), false, "notes drop normally");
+});
+
+test("death clears the session and the carried ball", () => {
+  const p = fakePlayer();
+  Pitch.beginGame(p);
+  Pitch._test.endOnDeath({ player: p });
+  assert.equal(Pitch.isPlaying(p), false);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), -1);
+});
+
+test("the referee picks the transcript variant from the ball state", () => {
+  const p = fakePlayer();
+  assert.equal(Referee._test.selectVariant({ player: p, npcId: REFEREE }), Referee.variants.FIRST_TALK);
+  assert.equal(Referee._test.selectVariant({ player: p, npcId: REFEREE }), null, "the default takes over");
+  Pitch.beginGame(p);
+  assert.equal(Referee._test.selectVariant({ player: p, npcId: REFEREE }), Referee.variants.WITH_BALL);
+  Pitch._test.endSession(p);
+  Pitch._test.sessions.set(p, { goals: 1, won: false, ownBall: true, ticks: 0 });
+  assert.equal(Referee._test.selectVariant({ player: p, npcId: REFEREE }), Referee.variants.OUT_OF_PLAY);
+});
+
+test("the referee's conditions and hand-outs follow the transcript", () => {
+  const p = fakePlayer({ items: { [Pitch.GNOMEBALL]: 1 } });
+  assert.equal(
+    Referee._test.answerCondition({ player: p, npcId: REFEREE, text: "If the player has a gnomeball in their inventory:" }),
+    true
+  );
+  assert.equal(Referee._test.answerCondition({ player: fakePlayer(), npcId: REFEREE, text: "If the player has a gnomeball in their inventory:" }), false);
+  const receive = { player: p, npcId: REFEREE, action: "receive", handled: false };
+  Referee._test.handleAction(receive);
+  assert.equal(receive.handled, true);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), Pitch.GNOMEBALL);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 0, "the own ball is held by the ref");
+
+  const outOfPlay = fakePlayer();
+  Pitch._test.sessions.set(outOfPlay, { goals: 0, won: false, ownBall: false, ticks: 0 });
+  Referee._test.handleLine({ player: outOfPlay, npcId: REFEREE, text: "Have a new ball!" });
+  assert.equal(outOfPlay.getEquipment().getSlot(WEAPON_SLOT), Pitch.GNOMEBALL);
+});
+
+test("entering the pitch moves the weapon and shield to the pack and opens the HUD", () => {
+  const SHIELD_SLOT = core.Equipment.SHIELD_SLOT;
+  const p = fakePlayer({ weapon: 1277 });
+  p.getEquipment().items[SHIELD_SLOT] = new core.Item(1171, 1);
+  const area = Pitch._test.createPitch();
+  const mobile = playerMobile(p);
+  area.enter(mobile);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), -1);
+  assert.equal(p.getEquipment().getSlot(SHIELD_SLOT), -1);
+  assert.equal(p.getInventory().getAmount(1277), 1);
+  assert.equal(p.getInventory().getAmount(1171), 1);
+  assert.deepEqual(p.packets.filter(([name]) => name === 'sendVarbit'), [['sendVarbit', 8387, 0]],
+    'entry clears the score left by an earlier game');
+  assert.ok(p.packets.some(([name, , group]) => name === "sendSubInterface" && group === 139));
+  area.leave(mobile, false);
+  assert.ok(p.packets.some(([name]) => name === "closeSubInterface"));
+});
+
+test("the gnome gate swings the closed panel onto its open tile and crosses to the far side", () => {
+  const Gate = require("../plugins/minigames/gnomeball/Gate.GnomeBall");
+  assert.deepEqual(Gate._test.openPanelPose(2383, 3488, 0), { x: 2382, y: 3488, face: 1 });
+  const west = { getX: () => 2381, getY: () => 3488 };
+  assert.deepEqual(Gate._test.destinationFor(west, { x: 2383, y: 3488, z: 0 }, 0), { x: 2383, y: 3488, z: 0 });
+  const east = { getX: () => 2385, getY: () => 3488 };
+  assert.deepEqual(Gate._test.destinationFor(east, { x: 2383, y: 3488, z: 0 }, 0), { x: 2382, y: 3488, z: 0 });
+  const north = { getX: () => 100, getY: () => 99 };
+  assert.deepEqual(Gate._test.destinationFor(north, { x: 100, y: 100, z: 0 }, 1), { x: 100, y: 100, z: 0 });
+  assert.equal(Gate._test.atGate({ getX: () => 2384, getY: () => 3488, getZ: () => 0 }, { x: 2383, y: 3488, z: 0 }), true);
+  assert.equal(Gate._test.atGate({ getX: () => 2390, getY: () => 3488, getZ: () => 0 }, { x: 2383, y: 3488, z: 0 }), false);
+});
+
+test("winger passing throws both ways and equips the ball only after the return arrives", () => {
+  const p = fakePlayer();
+  const npc = baller(2394, 3492).npc;
+  const tasks = [];
+  Pitch.beginGame(p);
+  Pitch._test.setApi({ ...api, getTaskManager: () => ({ submit: (task) => tasks.push(task) }) });
+  try {
+    Pitch._test.passToWinger({ player: p, npc });
+    assert.equal(Pitch.isCarrying(p), false);
+    assert.equal(p.animations.at(-1), 783);
+    const outbound = p.packets.find((packet) => packet[0] === "sendProjectile");
+    assert.equal(outbound[5], 55);
+    assert.equal(outbound[6], 40, "outgoing passes use the working return throw's launch height");
+    assert.equal(outbound[7], 40);
+    assert.equal(outbound[8], npc);
+    assert.equal(outbound[9], 49, 'passes use the same player drawback timing as shots');
+    assert.equal(tasks[0].getDelay(), Math.ceil(outbound[4] / 30));
+    tasks.shift().execute();
+    assert.equal(npc.animations.at(-1).getId(), 200);
+    assert.deepEqual(npc.transformations, [core.NpcIdentifiers.GNOME_WINGER_2]);
+    assert.equal(tasks[0].getDelay(), 5);
+    p.location = new core.Location(2400, 3488, 0);
+    tasks.shift().execute();
+    assert.equal(npc.animations.at(-1).getId(), 201);
+    assert.deepEqual(npc.transformations, [core.NpcIdentifiers.GNOME_WINGER_2, -1]);
+    const inbound = p.packets.filter((packet) => packet[0] === "sendProjectile").at(-1);
+    assert.equal(inbound[2], p.getLocation());
+    assert.equal(inbound[5], 55);
+    assert.equal(inbound[8], p);
+    assert.equal(inbound[9], 41, 'the winger return keeps its existing timing');
+    assert.equal(Pitch.isCarrying(p), false, "the return ball is still in flight");
+    tasks.shift().execute();
+    assert.equal(p.animations.at(-1), 782);
+    assert.equal(Pitch.isCarrying(p), true);
+    assert.equal(Pitch._test.sessions.get(p).passTask, undefined);
+    assert.equal(p.xp.RANGED, 0, "passing does not score or grant XP");
+  } finally {
+    Pitch._test.setApi(api);
+  }
+});
+
+test("leaving or taking a new referee ball cancels a pass at every stage", () => {
+  Pitch._test.setApi({ ...api, getTaskManager: () => ({ submit: () => {} }) });
+  try {
+    for (const stage of [0, 1, 2]) {
+      for (const replaceBall of [false, true]) {
+        const p = fakePlayer();
+        Pitch.beginGame(p);
+        const npc = baller(2394, 3492).npc;
+        Pitch._test.passToWinger({ player: p, npc });
+        const session = Pitch._test.sessions.get(p);
+        for (let i = 0; i < stage; i++) session.passTask.execute();
+        const pending = session.passTask;
+        pending.setRunning(true);
+        if (replaceBall) Pitch.beginGame(p);
+        else Pitch.endSession(p);
+        assert.equal(pending.isRunning(), false);
+        assert.equal(session.passTask, undefined);
+        assert.equal(session.ballHolder, undefined);
+        assert.equal(npc.transformations.at(-1), -1);
+      }
+    }
+  } finally {
+    Pitch._test.setApi(api);
+  }
+});
+
+test("passing needs a session and a ball, and login cleans up only marked game balls", () => {
+  const p = fakePlayer();
+  const npc = baller(2394, 3492).npc;
+  Pitch._test.passToWinger({ player: p, npc });
+  assert.ok(p.messages.at(-1).includes("referee first"));
+  Pitch.beginGame(p);
+  Pitch._test.shootGoal(shootEvent(p));
+  Pitch._test.passToWinger({ player: p, npc });
+  assert.ok(p.messages.at(-1).includes("ball to pass"));
+  assert.equal(p.packets.filter((packet) => packet[0] === "sendProjectile").length, 1);
+  const saved = fakePlayer();
+  Pitch.beginGame(saved);
+  const savedBall = saved.getEquipment().getItems()[WEAPON_SLOT];
+  assert.equal(savedBall.getMetaValue('gnomeball:in-play'), true);
+  const serialized = JSON.parse(JSON.stringify(savedBall));
+  saved.getEquipment().setItem(WEAPON_SLOT, new core.Item(serialized.id, serialized.amount, serialized.meta));
+  Pitch._test.sessions.delete(saved);
+  Pitch._test.login({ player: saved });
+  assert.equal(Pitch.isPlaying(saved), true);
+  assert.equal(Pitch.isCarrying(saved), true);
+  const outside = fakePlayer({ x: 2380, weapon: Pitch.GNOMEBALL });
+  outside.getEquipment().getItems()[WEAPON_SLOT].setMeta(savedBall.getMeta());
+  Pitch._test.login({ player: outside });
+  assert.equal(Pitch.isPlaying(outside), false);
+  assert.equal(Pitch.isCarrying(outside), false);
+});
+
+test("an awarded ball stays owned when equipped through logout and login, inside or outside the pitch", () => {
+  const p = fakePlayer();
+  const inventory = p.getInventory();
+  const addItem = inventory.addItem;
+  let reward;
+  inventory.addItem = (item) => { reward = item; return addItem(item); };
+  Pitch.beginGame(p);
+  Pitch._test.setRandom(() => 0);
+  for (let goal = 0; goal < 5; goal++) {
+    if (goal > 0) Pitch.beginGame(p);
+    Pitch._test.shootGoal(shootEvent(p));
+  }
+  Pitch._test.createPitch().postLeave(playerMobile(p), false);
+  assert.equal(reward.getId(), Pitch.GNOMEBALL);
+  assert.equal(reward.getMetaValue('gnomeball:in-play'), undefined);
+  inventory.deleteNumber(Pitch.GNOMEBALL, 1);
+  p.getEquipment().setItem(WEAPON_SLOT, reward);
+  for (const x of [2380, 2390]) {
+    p.location = new core.Location(x, 3488, 0);
+    Pitch._test.endOnLogout({ player: p });
+    Pitch._test.login({ player: p });
+    assert.equal(Pitch.isCarrying(p), true);
+    assert.equal(Pitch.isPlaying(p), false, 'a reward is not adopted as a temporary game ball');
+  }
+});
+
+test("ballers run at the carrier from up to eight tiles away", () => {
+  const p = fakePlayer();
+  Pitch.beginGame(p);
+  const area = Pitch._test.createPitch();
+  const chases = [];
+  const chaser = (x, y) => {
+    const b = baller(x, y);
+    b.npc.setPositionToFace = (target) => chases.push(["face", b.npc === target ? "self" : "player"]);
+    b.npc.getMovementQueue = () => ({
+      getMobility: () => ({ canMove: () => true }),
+      setPursuitCheckpoint: (destination) => chases.push(["pursuit", destination]),
+    });
+    return b;
+  };
+  const far = chaser(2398, 3488);
+  area.enter(far.mobile);
+  const distant = chaser(2400, 3488);
+  area.enter(distant.mobile);
+  p.localNpcs = [far.npc, distant.npc];
+  const mobile = playerMobile(p);
+  area.enter(mobile);
+  const original = core.PathFinder.naiveEntityDestination;
+  core.PathFinder.naiveEntityDestination = (npc, target) => ({ npc, target });
+  try {
+    area.process(mobile);
+    area.process(mobile);
+    Pitch.endSession(p);
+    area.process(mobile);
+    area.process(mobile);
+  } finally {
+    core.PathFinder.naiveEntityDestination = original;
+  }
+  assert.equal(chases.length, 2, "only the nearby baller chases, and only while the player has a ball");
+  assert.equal(chases[0][0], "face");
+  assert.equal(chases[1][0], "pursuit");
+});
+
+test("a winger can receive only one player's ball at a time and is released on cancellation", () => {
+  const first = fakePlayer();
+  const second = fakePlayer();
+  const npc = baller(2394, 3492).npc;
+  Pitch.beginGame(first);
+  Pitch.beginGame(second);
+  Pitch._test.setApi({ ...api, getTaskManager: () => ({ submit: () => {} }) });
+  try {
+    Pitch._test.passToWinger({ player: first, npc });
+    Pitch._test.passToWinger({ player: second, npc });
+    assert.equal(Pitch.isCarrying(second), true, "the refused pass keeps the second player's ball");
+    assert.ok(second.messages.at(-1).includes("already has a ball"));
+    assert.equal(second.packets.filter((packet) => packet[0] === "sendProjectile").length, 0);
+    Pitch.endSession(first);
+    Pitch._test.passToWinger({ player: second, npc });
+    assert.equal(Pitch.isCarrying(second), false);
+    assert.equal(Pitch._test.sessions.get(second).ballHolder, npc);
+  } finally {
+    Pitch.endSession(first);
+    Pitch.endSession(second);
+    Pitch._test.setApi(api);
+  }
+});
+
+test("each opposing team holds a stolen ball and a successful tackle recovers it", () => {
+  const N = core.NpcIdentifiers;
+  for (const [empty, holding] of [[N.GNOME_BALLER, N.GNOME_BALLER_2], [N.GNOME_BALLER_5, N.GNOME_BALLER_6], [N.GNOME_BALLER_9, N.GNOME_BALLER_10]]) {
+    const p = fakePlayer({ agility: 99 });
+    const npc = baller(2390, 3488, empty).npc;
+    Pitch.beginGame(p);
+    p.localNpcs = [npc];
+    const area = Pitch._test.createPitch();
+    const mobile = playerMobile(p);
+    Pitch._test.setRandom(() => 0);
+    area.process(mobile);
+    area.process(mobile);
+    assert.equal(Pitch.isCarrying(p), false);
+    assert.equal(npc.getId(), holding);
+    Pitch._test.setRandom(() => 0.999);
+    Pitch._test.tackleBaller({ player: p, npc });
+    assert.equal(Pitch.isCarrying(p), false, "a missed tackle leaves the ball with the gnome");
+    assert.equal(npc.getId(), holding);
+    // Between the empty-handed (201/256) and ball-holder (221/256) chances at level 99.
+    Pitch._test.setRandom(() => 210 / 256);
+    Pitch._test.tackleBaller({ player: p, npc });
+    assert.equal(Pitch.isCarrying(p), true);
+    assert.equal(npc.getId(), empty);
+    assert.equal(Pitch._test.sessions.get(p).ballHolder, undefined);
+    assert.equal(p.xp.RANGED, 0);
+    Pitch.endSession(p);
+  }
+});
+
+test("opposing ballers release possession on leaving or taking a replacement ball", () => {
+  for (const replaceBall of [false, true]) {
+    const p = fakePlayer();
+    const npc = baller(2390, 3488).npc;
+    Pitch.beginGame(p);
+    p.localNpcs = [npc];
+    const area = Pitch._test.createPitch();
+    const mobile = playerMobile(p);
+    Pitch._test.setRandom(() => 0);
+    area.process(mobile);
+    area.process(mobile);
+    assert.equal(npc.getId(), core.NpcIdentifiers.GNOME_BALLER_2);
+    if (replaceBall) Pitch.beginGame(p);
+    else Pitch.endSession(p);
+    assert.equal(npc.getId(), core.NpcIdentifiers.GNOME_BALLER);
+    assert.equal(Pitch.isCarrying(p), replaceBall);
+    Pitch.endSession(p);
+  }
+});
+
+test("a gnome holding one ball cannot take a second player's ball", () => {
+  const first = fakePlayer();
+  const second = fakePlayer();
+  const npc = baller(2390, 3488).npc;
+  Pitch.beginGame(first);
+  Pitch.beginGame(second);
+  first.localNpcs = [npc];
+  second.localNpcs = [npc];
+  const area = Pitch._test.createPitch();
+  Pitch._test.setRandom(() => 0);
+  for (const player of [first, second]) {
+    const mobile = playerMobile(player);
+    area.process(mobile);
+    area.process(mobile);
+  }
+  assert.equal(Pitch.isCarrying(first), false);
+  assert.equal(Pitch.isCarrying(second), true);
+  assert.equal(Pitch._test.sessions.get(first).ballHolder, npc);
+  assert.equal(Pitch._test.sessions.get(second).ballHolder, undefined);
+  Pitch._test.tackleBaller({ player: second, npc });
+  assert.equal(Pitch.isCarrying(second), true, "an already equipped ball is not overwritten");
+  assert.equal(npc.getId(), core.NpcIdentifiers.GNOME_BALLER_2);
+  Pitch.endSession(first);
+  Pitch.endSession(second);
+});

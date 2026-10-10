@@ -2,6 +2,7 @@ const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wi
 const {
   encodeGameframeBootstrap,
   MOBILE_CLIENT_ATTRIBUTE,
+  XPDROPS_ENABLED_ATTRIBUTE,
   resolveGameframeRoot,
 } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
 
@@ -24,7 +25,7 @@ function showGameframe(player) {
   // client maps the standard mounts onto the chosen layout. Mobile clients
   // are locked to the stock mobile toplevel (601).
   const layoutRoot = resolveGameframeRoot(player);
-  for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot)) {
+  for (const packet of encodeGameframeBootstrap(player.getUsername(), layoutRoot, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true)) {
     player.getSession().sendClientPacket(packet);
   }
 }

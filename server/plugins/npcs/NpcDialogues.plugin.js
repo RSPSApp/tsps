@@ -8,9 +8,10 @@
  * ("npc-dialogue:choice" / "npc-dialogue:condition") so quests can run their own
  * game logic (set stage, hand in items) without re-authoring the words, and each
  * speech line emits "npc-dialogue:line" with a mutable `skip` so a quest can drop
- * lines that no longer apply (e.g. handing over an item the player does not have) and a
- * mutable `text` to fill in blanks. A message step's "npc-dialogue:action" (`kind: "message"`)
- * can set `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
+ * lines that no longer apply (e.g. handing over an item the player does not have), a
+ * mutable `text` to fill in blanks and an `after` callback run once the player continues
+ * past it. A message step's "npc-dialogue:action" (`kind: "message"`) can set
+ * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message. "npc-dialogue:start" plays a named variant on demand.
  * Speech, choices, random alternatives and named shops run through existing systems.
  */
@@ -631,8 +632,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
             ? new PlayerDialogue(index++, text)
             : new NpcDialogue(index++, speakerId, text));
         }
-        if (step.steps?.length) {
-          chain.add(new ActionDialogue(index++, { execute: () => run(rest, currentRecord) }));
+        // `after` (set by a line handler) runs once the player continues past the line,
+        // before the conversation carries on: a teleport the wiki only narrates, say.
+        if (step.steps?.length || typeof request.after === "function") {
+          chain.add(new ActionDialogue(index++, { execute: () => {
+            request.after?.();
+            run(rest, currentRecord);
+          } }));
           manager.startDialogues(chain);
           return;
         }

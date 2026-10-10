@@ -47,13 +47,15 @@ test('search results number rows across every category, so the keybinds come aft
 function registered() {
   const buttons = new Map();
   const events = new Map();
+  const logins = [];
   const ids = (id) => (Array.isArray(id) ? id : [id]);
   const api = {
     onInterfaceActionButton: (id, handler) => ids(id).forEach((one) => buttons.set(one, handler)),
     onCustomEvent: (name, handler) => events.set(name, handler),
+    onPlayerLogin: (handler) => logins.push(handler),
   };
   Settings.register(new Proxy(api, { get: (target, prop) => (prop in target ? target[prop] : () => {}) }));
-  return { buttons, events };
+  return { buttons, events, logins };
 }
 
 function recordingPlayer() {
@@ -77,6 +79,34 @@ test('as captured: the search bar takes the keyboard, and closing All Settings b
   player.sent.length = 0;
   events.get('interface:closed')({ player, interfaceId: 12 });
   assert.deepEqual(player.sent, [], 'closing anything else leaves them alone');
+});
+
+test('XP orb mounts the counter only while enabled, and Setup opens the cached settings', () => {
+  const { buttons, logins } = registered();
+  const player = recordingPlayer();
+  const sender = player.getPacketSender();
+  sender.sendSubInterface = (uid, group, type) => { player.sent.push(`open ${uid}:${group}:${type}`); return sender; };
+  sender.closeSubInterface = (uid) => { player.sent.push(`close ${uid}`); return sender; };
+  const click = buttons.get((160 << 16) | 6);
+  logins[0]({ player });
+  assert.deepEqual(player.sent, ['varbit 4702=0'], 'fresh accounts have XP drops off');
+  player.sent.length = 0;
+  click({ player, opId: 1 });
+  assert.equal(player.getAttribute('xp-drops:enabled'), true);
+  assert.deepEqual(player.sent, ['varbit 4702=1', `open ${(161 << 16) | 7}:122:1`]);
+  player.sent.length = 0;
+  logins[0]({ player });
+  assert.deepEqual(player.sent, ['varbit 4702=1'], 'login restores the saved toggle before bootstrap');
+  player.sent.length = 0;
+  click({ player, opId: 1 });
+  assert.deepEqual(player.sent, ['varbit 4702=0', `close ${(161 << 16) | 7}`]);
+  player.sent.length = 0;
+  click({ player, opId: 2 });
+  assert.deepEqual(player.sent, [`open ${(161 << 16) | 16}:137:0`]);
+  assert.equal(player.getAttribute('xp-drops:enabled'), false);
+  player.sent.length = 0;
+  assert.equal(click({ player, opId: 3 }), false);
+  assert.deepEqual(player.sent, []);
 });
 
 test('both close routes announce interface:closed with the interface that closed', () => {

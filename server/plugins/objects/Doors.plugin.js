@@ -26,14 +26,14 @@ const DOOR_AUTO_CLOSE_TICKS = 500;
 const DOOR_NAMES = new Set([
   "Door", "Doors", "Large door", "Castle door", "Cell Door", "Cell door",
   "Glass door", "Magic door", "Metal door", "Mind Door", "Tent door",
-  "Gate", "Metal gate", "Doorway",
+  "Gate", "Metal gate", "Doorway", "Tree Door",
 ]);
 
 // Always name locs by their core.ObjectIdentifiers property (O.DOOR_358), never a raw id: the
 // generated enum follows the cache, so ids stay right when it changes. Only locs the cache
 // leaves nameless have no property; those stay numeric, marked "nameless". The tables need
 // api.core, so register() builds them.
-let SELF_OPENING_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, WOODEN_GATES, WOODEN_GATE_BY_ID;
+let SELF_OPENING_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
 
@@ -43,7 +43,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // model, so the same-model pairing below must not pair them. Tutorial Island:
   // start house, chef entry/exit, quest guide, and the bank/prayer area doors. DOOR_358: a single
   // door whose same-model "Close" locs (5245, 11617, 15205, 17115) all belong to other doors.
-  SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231, O.DOOR_358]);
+  // GATE_52 (Gnome Ball pitch and Tree Gnome Village): its same-model open variants (193, 2395)
+  // are nameless with no actions and are never placed, so the pairing below cannot find them.
+  SELF_OPENING_DOOR_IDS = new Set([O.DOOR_223, O.DOOR_225, O.DOOR_226, O.DOOR_227, O.DOOR_228, O.DOOR_229, O.DOOR_230, O.DOOR_231, O.DOOR_358, O.GATE_52]);
 
   // Single doors the pairing below can't find: the open variant is not closedId + 1 (e.g. Large
   // door 1517 -> 1520, same models), or it has no "Close" (DOOR_181, the open Keldagrim door on
@@ -54,6 +56,15 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_11, O.LARGE_DOOR_14],
     [O.DOOR_180, O.DOOR_181],
     [O.DOOR_499, O.DOOR_498],
+    // Tree Gnome Stronghold doors: 1967/1968 open into the cache's nameless 1969/1970.
+    [O.TREE_DOOR, 1969],
+    [O.TREE_DOOR_2, 1970],
+  ]);
+
+  // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
+  // nameless 2x2 leaves (191/192), leaving the centre tile clear.
+  COMPOSITE_DOOR_OPENINGS = new Map([
+    [O.GATE_16, [[191, 0, 0, 2], [192, 3, 0, 0]]],
   ]);
 
   // OSRS wooden gates are two locs that pivot together around the hinge post: a hinge panel
@@ -562,6 +573,23 @@ function handleWoodenGate(player, object, objectId, location) {
   return true;
 }
 
+function handleCompositeDoor(player, object, objectId) {
+  const opening = COMPOSITE_DOOR_OPENINGS.get(objectId);
+  if (!opening) return false;
+  const location = object.getLocation();
+  const privateArea = player.getPrivateArea?.() ?? null;
+  const opened = opening.map(([id, dx, dy, face]) => new core.GameObject(
+    id,
+    cloneLocation(location.getX() + dx, location.getY() + dy, location.getZ()),
+    object.getType(), face, privateArea
+  ));
+  core.ObjectManager.deregister(object, true);
+  for (const leaf of opened) core.ObjectManager.register(leaf, true);
+  rememberOpenObjects(locationKey(location), [object], opened);
+  core.Sounds.sendSound(player, doorSound(objectId, true));
+  return true;
+}
+
 function handleMappedDoor(player, object, objectId, location) {
   if (!object || !location) {
     return false;
@@ -814,6 +842,7 @@ function toggleDoor({ player, object, objectId, location }) {
   const request = { player, object, objectId, location, handled: false };
   api.emitCustomEvent("door:toggle", request);
   if (request.handled) return true;
+  if (handleCompositeDoor(player, object, objectId)) return true;
   if (handleWoodenGate(player, object, objectId, location)) return true;
   if (handleDoubleDoor(player, object, objectId, location)) return true;
   return handleMappedDoor(player, object, objectId, location);

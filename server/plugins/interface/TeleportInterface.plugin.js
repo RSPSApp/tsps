@@ -74,6 +74,7 @@ const DESTINATIONS = {
     teleport("Chaos Elemental", location(3261, 3927), TeleportType.NORMAL),
     teleport("Chaos Fanatic", location(2979, 3846), TeleportType.NORMAL),
     teleport("Crazy Archaeologist", location(2977, 3702), TeleportType.NORMAL),
+    teleport("Deranged Archaeologist", location(3682, 3700), TeleportType.NORMAL),
     teleport("King Black Dragon", location(3010, 3849), TeleportType.NORMAL),
     teleport("Scorpia", location(3233, 10341), TeleportType.NORMAL),
     teleport("Venenatis", location(3332, 3734), TeleportType.NORMAL),

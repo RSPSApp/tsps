@@ -1884,6 +1884,7 @@ export function encodeGameframeFlags(root: number = 161): Buffer[] {
 
 // Transient player attribute set from the handshake's clientType byte.
 export const MOBILE_CLIENT_ATTRIBUTE = "mobile-client";
+export const XPDROPS_ENABLED_ATTRIBUTE = "xp-drops:enabled";
 // Mobile clients boot the Stock mobile toplevel (toplevel_osm); the client maps
 // the standard 161 mounts onto it via cache enum 1745.
 export const MOBILE_GAMEFRAME_ROOT = 601;
@@ -1903,9 +1904,9 @@ export function resolveGameframeRoot(
   return STANDARD_GAMEFRAME_ROOTS.has(saved) ? saved : fallback;
 }
 
-export function encodeGameframeBootstrap(playerName: string, root: number = 161): Buffer[] {
+export function encodeGameframeBootstrap(playerName: string, root: number = 161, xpDropsEnabled = false): Buffer[] {
   const mounts = [
-    [96, 162], [9, 163], [33, 160], [7, 122], [6, 651, 5929],
+    [96, 162], [9, 163], [33, 160], ...(xpDropsEnabled ? [[7, 122]] : []), [6, 651, 5929],
     [76, 593], [77, 320], [78, 629], [79, MAIN_INVENTORY_GROUP_ID], [80, 387], [81, 541],
     [82, 218], [83, 7], [84, 109], [85, 429], [86, 182], [87, 116],
     [88, 216], [89, 239],

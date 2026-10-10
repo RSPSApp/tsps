@@ -52,6 +52,15 @@ assert.equal(mobile.get(16), 27, "mobile main modal");
 assert.equal(mobile.get(76), 116, "mobile combat tab");
 
 // Server mounts must address panes present in the cache's layout redirects.
+for (const root of [161, 164, 548, 601]) {
+    for (const enabled of [false, true]) {
+        const xpCounter = encodeGameframeBootstrap("Headless", root, enabled).find(packet =>
+            packet[0] === ServerPacket.WIDGET_OPEN_SUB && packet.readUInt16BE(7) === 122);
+        assert.equal(Boolean(xpCounter), enabled, "XP overlay follows the saved Show/Hide setting");
+        if (xpCounter) assert.equal(xpCounter.readInt32BE(3), (161 << 16) | 7);
+    }
+}
+
 for (const [root, expectedChild] of [[161, 33], [164, 33], [548, 25]]) {
     const orbs = encodeGameframeBootstrap("Headless", root).find(packet =>
         packet[0] === ServerPacket.WIDGET_OPEN_SUB && packet.readUInt16BE(7) === 160);

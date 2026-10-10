@@ -7,6 +7,7 @@ const {
   encodeGameframeFlags,
   MOBILE_CLIENT_ATTRIBUTE,
   MOBILE_GAMEFRAME_ROOT,
+  XPDROPS_ENABLED_ATTRIBUTE,
   resolveGameframeRoot,
   DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID,
 } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
@@ -15,6 +16,11 @@ const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cach
 
 const ROOT_INTERFACE = 161;
 const MAIN_MODAL_UID = (ROOT_INTERFACE << 16) | 16;
+const XPDROPS_ORB_UID = (160 << 16) | 6;
+const XPDROPS_OVERLAY_UID = (ROOT_INTERFACE << 16) | 7;
+const XPDROPS_INTERFACE_ID = 122;
+const XPDROPS_SETUP_INTERFACE_ID = 137;
+const XPDROPS_ENABLED_VARBIT = 4702;
 
 // Settings > Display: "Game client layout" dropdown. The row label is built by
 // cache script 7992 from entry enum 3509 and its option rows are dynamic
@@ -304,6 +310,28 @@ function openKeybindings(player) {
   return true;
 }
 
+function syncXpDrops({ player }) {
+  player.getPacketSender().sendVarbit(XPDROPS_ENABLED_VARBIT, player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) === true ? 1 : 0);
+}
+
+function clickXpDrops({ player, opId, action }) {
+  const op = opId ?? action;
+  const sender = player.getPacketSender();
+  if (op === 2) {
+    sender.sendSubInterface(MAIN_MODAL_UID, XPDROPS_SETUP_INTERFACE_ID, 0);
+  } else if (op === 1) {
+    const enabled = player.getAttribute(XPDROPS_ENABLED_ATTRIBUTE) !== true;
+    player.setAttribute(XPDROPS_ENABLED_ATTRIBUTE, enabled);
+    syncXpDrops({ player });
+    // The cache layout reserves counter space only while xpdrops_enabled is set.
+    if (enabled) sender.sendSubInterface(XPDROPS_OVERLAY_UID, XPDROPS_INTERFACE_ID, 1);
+    else sender.closeSubInterface(XPDROPS_OVERLAY_UID);
+  } else {
+    return false;
+  }
+  return true;
+}
+
 module.exports = {
   name: "Settings",
   applyDefaultKeybindings,
@@ -312,6 +340,9 @@ module.exports = {
   openKeybindings,
   keybindVarbitForRow,
   register(api) {
+    api.persistAttribute(XPDROPS_ENABLED_ATTRIBUTE);
+    api.onPlayerLogin(syncXpDrops);
+    api.onInterfaceActionButton(XPDROPS_ORB_UID, clickXpDrops);
     for (const tab of TAB_VARBIT_MAP) {
       api.persistAttribute(keybindAttribute(tab.varbit));
     }

@@ -137,6 +137,8 @@ function inPitch(actor) {
 function cancelPendingPass(session) {
   session.passTask?.stop();
   delete session.passTask;
+  session.winger?.setNpcTransformationId(-1);
+  delete session.winger;
 }
 
 function sessionFor(player) {
@@ -308,6 +310,12 @@ function passToWinger({ player, npc }) {
     return true;
   }
   if (!npc || !inPitch(player) || !inPitch(npc)) return true;
+  for (const other of sessions.values()) {
+    if (other.winger !== npc) continue;
+    player.sendMessage("That gnome winger already has a ball in play.");
+    return true;
+  }
+  session.winger = npc;
   player.getTimers().cancel(core.TimerKey.STUN);
   player.setPositionToFace(npc.getLocation());
   clearCarriedBall(player);
@@ -315,16 +323,25 @@ function passToWinger({ player, npc }) {
   const travelTicks = throwBall(player, npc.getLocation(), npc);
   const canReturn = () => sessions.get(player) === session && !isCarrying(player) && inPitch(player);
   session.passTask = later(travelTicks, () => {
-    if (!canReturn()) return;
+    if (!canReturn()) {
+      cancelPendingPass(session);
+      return;
+    }
+    npc.setNpcTransformationId(core.NpcIdentifiers.GNOME_WINGER_2);
     npc.setPositionToFace(player.getLocation());
     npc.performAnimation(new core.Animation(WINGER_CATCH_ANIMATION));
     session.passTask = later(WINGER_RETURN_TICKS, () => {
-      if (!canReturn()) return;
+      if (!canReturn()) {
+        cancelPendingPass(session);
+        return;
+      }
       const from = npc.getLocation();
       const to = player.getLocation();
       const flight = 41 + 5 * Math.max(1, from.getDistance(to));
       npc.setPositionToFace(to);
       npc.performAnimation(new core.Animation(WINGER_THROW_ANIMATION));
+      npc.setNpcTransformationId(-1);
+      delete session.winger;
       player.getPacketSender().sendProjectile(from, to, 0, flight, BALL_PROJECTILE, 40, 40, player, 41, 15, 11);
       session.passTask = later(Math.ceil(flight / 30), () => {
         if (!canReturn()) return;

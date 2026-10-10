@@ -151,6 +151,8 @@ function baller(x, y) {
   const npc = {
     animations: [],
     stuns: [],
+    transformations: [],
+    setNpcTransformationId: (id) => npc.transformations.push(id),
     getLocation: () => new core.Location(x, y, 0),
     getDefinition: () => ({ getName: () => Pitch.BALLER_NAME }),
     getHitpoints: () => 10,
@@ -452,10 +454,12 @@ test("winger passing throws both ways and equips the ball only after the return 
     assert.equal(outbound[8], npc);
     tasks.shift().execute();
     assert.equal(npc.animations.at(-1).getId(), 200);
+    assert.deepEqual(npc.transformations, [core.NpcIdentifiers.GNOME_WINGER_2]);
     assert.equal(tasks[0].getDelay(), 5);
     p.location = new core.Location(2400, 3488, 0);
     tasks.shift().execute();
     assert.equal(npc.animations.at(-1).getId(), 201);
+    assert.deepEqual(npc.transformations, [core.NpcIdentifiers.GNOME_WINGER_2, -1]);
     const inbound = p.packets.filter((packet) => packet[0] === "sendProjectile").at(-1);
     assert.equal(inbound[2], p.getLocation());
     assert.equal(inbound[5], 55);
@@ -478,7 +482,8 @@ test("leaving or taking a new referee ball cancels a pass at every stage", () =>
       for (const replaceBall of [false, true]) {
         const p = fakePlayer();
         Pitch.beginGame(p);
-        Pitch._test.passToWinger({ player: p, npc: baller(2394, 3492).npc });
+        const npc = baller(2394, 3492).npc;
+        Pitch._test.passToWinger({ player: p, npc });
         const session = Pitch._test.sessions.get(p);
         for (let i = 0; i < stage; i++) session.passTask.execute();
         const pending = session.passTask;
@@ -487,6 +492,8 @@ test("leaving or taking a new referee ball cancels a pass at every stage", () =>
         else Pitch.endSession(p);
         assert.equal(pending.isRunning(), false);
         assert.equal(session.passTask, undefined);
+        assert.equal(session.winger, undefined);
+        assert.equal(npc.transformations.at(-1), -1);
       }
     }
   } finally {
@@ -551,3 +558,27 @@ test("ballers run at the carrier from up to eight tiles away", () => {
   assert.equal(chases[1][0], "pursuit");
 });
 
+
+test("a winger can receive only one player's ball at a time and is released on cancellation", () => {
+  const first = fakePlayer();
+  const second = fakePlayer();
+  const npc = baller(2394, 3492).npc;
+  Pitch.beginGame(first);
+  Pitch.beginGame(second);
+  Pitch._test.setApi({ ...api, getTaskManager: () => ({ submit: () => {} }) });
+  try {
+    Pitch._test.passToWinger({ player: first, npc });
+    Pitch._test.passToWinger({ player: second, npc });
+    assert.equal(Pitch.isCarrying(second), true, "the refused pass keeps the second player's ball");
+    assert.ok(second.messages.at(-1).includes("already has a ball"));
+    assert.equal(second.packets.filter((packet) => packet[0] === "sendProjectile").length, 0);
+    Pitch.endSession(first);
+    Pitch._test.passToWinger({ player: second, npc });
+    assert.equal(Pitch.isCarrying(second), false);
+    assert.equal(Pitch._test.sessions.get(second).winger, npc);
+  } finally {
+    Pitch.endSession(first);
+    Pitch.endSession(second);
+    Pitch._test.setApi(api);
+  }
+});

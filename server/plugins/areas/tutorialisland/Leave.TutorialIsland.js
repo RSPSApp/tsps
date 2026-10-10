@@ -23,7 +23,15 @@ function clearItems(player) {
     const item = inv.getItems()[slot];
     if (item && item.getId() > 0) inv.deleteAtSlot(slot, item.getAmount());
   }
-  player.getEquipment().resetItems().refreshItems();
+  // Emptying the slots isn't enough: the weapon interface (which drives combat), the bonuses and
+  // the worn look follow the equipment, so refresh them as any equipment change does.
+  const equipment = player.getEquipment();
+  equipment.resetItems();
+  player.setSpecialActivated?.(false);
+  core.WeaponInterfaceManager.assign(player);
+  pluginApi.getBonusManager().update(player);
+  equipment.refreshItems();
+  player.getUpdateFlag().flag(core.Flag.APPEARANCE);
 }
 
 /** The starter kit, as captured on arrival in Lumbridge. */

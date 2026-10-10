@@ -412,3 +412,18 @@ test("the combat tab stays locked when a weapon is wielded, then opens (after th
   const opened = calls.findIndex(([key, tab]) => key === "sendTabInterface" && tab === 0);
   assert.ok(flash >= 0 && opened > flash, "flash first, then the combat tab opens with its weapon interface");
 });
+
+test("arriving in Lumbridge clears the worn items completely: the weapon interface goes back to unarmed", () => {
+  const { WeaponInterfaces } = require("../dist/game/content/combat/WeaponInterfaces");
+  const { player } = tutorialPlayer(680, 3222, 3218); // the Home Teleport landed off the island
+  const equipment = player.getEquipment();
+  equipment.getItems()[core.Equipment.WEAPON_SLOT] = new core.Item(841, 1); // shortbow
+  equipment.getItems()[core.Equipment.AMMUNITION_SLOT] = new core.Item(882, 47); // bronze arrows
+  core.WeaponInterfaceManager.assign(player);
+  assert.notEqual(player.getWeapon(), WeaponInterfaces.UNARMED, "the bow's interface while worn");
+
+  PluginManager.emitPlayerProcess({ player });
+  assert.equal(progress(player), 1000);
+  assert.equal(equipment.getValidItems().length, 0, "nothing worn");
+  assert.equal(player.getWeapon(), WeaponInterfaces.UNARMED, "fights unarmed, not with the bow");
+});

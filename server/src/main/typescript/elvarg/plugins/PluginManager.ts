@@ -2056,7 +2056,6 @@ export class PluginManager {
       ItemOnGroundManager: require("../game/entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager,
       ItemDefinition: require("../game/definition/ItemDefinition").ItemDefinition,
       CacheDefinitions: require("../game/cache/CacheDefinitions").CacheDefinitions,
-      Wilderness: require("../game/content/wilderness/Wilderness").Wilderness,
       PathFinder: require(`${model}/movement/path/PathFinder`).PathFinder,
       RsmodRouteFinding: require(`${model}/movement/path/RsmodRouteFinding`).RsmodRouteFinding,
       NpcDefinition: require("../game/definition/NpcDefinition").NpcDefinition,

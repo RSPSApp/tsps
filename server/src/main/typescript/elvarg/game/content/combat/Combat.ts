@@ -224,7 +224,10 @@ export class Combat {
             return;
         }
 
-        if (this.character.isNpc() && CombatRange.overlapsEntities(this.character, target)) {
+        // An overlapped NPC that can still reach its target (a large NPC fighting
+        // underfoot) attacks in place; one that cannot steps aside below.
+        if (this.character.isNpc() && CombatRange.overlapsEntities(this.character, target)
+            && !CombatRange.canReach(this.character, method, target)) {
             this.processNpcUnderTarget(state);
             return;
         }
@@ -574,9 +577,11 @@ export class Combat {
         state.skipPost = true;
         const movement = this.character.getMovementQueue();
         movement.reset();
+        // Busy means actually moving away (following or walking): merely having a combat
+        // target must not count, or a stationary stacked fighter freezes the NPC forever -
+        // canReach fails while overlapped, so neither side could ever attack again.
         const targetBusy = state.target.isPlayer() &&
-            (state.target.getCombat().getTarget() != null ||
-                state.target.getFollowing?.() != null ||
+            (state.target.getFollowing?.() != null ||
                 TaskManager.hasActiveTask(state.target.getIndex?.(), "MovementTask") ||
                 TaskManager.wasTaskActiveThisCycle(state.target.getIndex?.(), "MovementTask"));
         if (targetBusy) return;

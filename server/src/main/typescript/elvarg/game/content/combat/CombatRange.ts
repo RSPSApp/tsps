@@ -24,11 +24,17 @@ export class CombatRange {
         const attackerBounds = this.bounds(attacker);
         const targetBounds = this.bounds(target);
         const range = this.attackDistance(attacker, method, target);
-        if (this.overlaps(attackerBounds, targetBounds) || this.distance(attackerBounds, targetBounds) > range) {
+        const overlapped = this.overlaps(attackerBounds, targetBounds);
+        // A large NPC fights on while its target stands inside its footprint: it cannot
+        // vacate in a step, so overlap only stops 1x1 attackers (and players, who route out).
+        const overlapBlocks = !attacker.isNpc() || Math.max(1, attacker.getSize() | 0) <= 1;
+        if ((overlapBlocks && overlapped) || this.distance(attackerBounds, targetBounds) > range) {
             return false;
         }
 
         if (method.type() === CombatType.MELEE) {
+            // Only large NPC attackers reach here overlapped: distance 0 is in range.
+            if (overlapped) return true;
             return range === 1
                 ? this.hasOpenSharedEdge(attackerBounds, targetBounds, attackerLocation.getZ(), attacker.getPrivateArea())
                 : this.hasMeleeLine(attackerBounds, targetBounds, attackerLocation.getZ(), attacker.getPrivateArea());

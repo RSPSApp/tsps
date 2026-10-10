@@ -608,7 +608,7 @@ test("leaving or taking a new referee ball cancels a pass at every stage", () =>
   }
 });
 
-test("passing needs a session and a ball, and login adopts a saved ball only on the pitch", () => {
+test("passing needs a session and a ball, and login cleans up only marked game balls", () => {
   const p = fakePlayer();
   const npc = baller(2394, 3492).npc;
   Pitch._test.passToWinger({ player: p, npc });
@@ -618,14 +618,47 @@ test("passing needs a session and a ball, and login adopts a saved ball only on 
   Pitch._test.passToWinger({ player: p, npc });
   assert.ok(p.messages.at(-1).includes("ball to pass"));
   assert.equal(p.packets.filter((packet) => packet[0] === "sendProjectile").length, 1);
-  const saved = fakePlayer({ weapon: Pitch.GNOMEBALL });
+  const saved = fakePlayer();
+  Pitch.beginGame(saved);
+  const savedBall = saved.getEquipment().getItems()[WEAPON_SLOT];
+  assert.equal(savedBall.getMetaValue('gnomeball:in-play'), true);
+  const serialized = JSON.parse(JSON.stringify(savedBall));
+  saved.getEquipment().setItem(WEAPON_SLOT, new core.Item(serialized.id, serialized.amount, serialized.meta));
+  Pitch._test.sessions.delete(saved);
   Pitch._test.login({ player: saved });
   assert.equal(Pitch.isPlaying(saved), true);
   assert.equal(Pitch.isCarrying(saved), true);
   const outside = fakePlayer({ x: 2380, weapon: Pitch.GNOMEBALL });
+  outside.getEquipment().getItems()[WEAPON_SLOT].setMeta(savedBall.getMeta());
   Pitch._test.login({ player: outside });
   assert.equal(Pitch.isPlaying(outside), false);
   assert.equal(Pitch.isCarrying(outside), false);
+});
+
+test("an awarded ball stays owned when equipped through logout and login, inside or outside the pitch", () => {
+  const p = fakePlayer();
+  const inventory = p.getInventory();
+  const addItem = inventory.addItem;
+  let reward;
+  inventory.addItem = (item) => { reward = item; return addItem(item); };
+  Pitch.beginGame(p);
+  Pitch._test.setRandom(() => 0);
+  for (let goal = 0; goal < 5; goal++) {
+    if (goal > 0) Pitch.beginGame(p);
+    Pitch._test.shootGoal(shootEvent(p));
+  }
+  Pitch._test.createPitch().postLeave(playerMobile(p), false);
+  assert.equal(reward.getId(), Pitch.GNOMEBALL);
+  assert.equal(reward.getMetaValue('gnomeball:in-play'), undefined);
+  inventory.deleteNumber(Pitch.GNOMEBALL, 1);
+  p.getEquipment().setItem(WEAPON_SLOT, reward);
+  for (const x of [2380, 2390]) {
+    p.location = new core.Location(x, 3488, 0);
+    Pitch._test.endOnLogout({ player: p });
+    Pitch._test.login({ player: p });
+    assert.equal(Pitch.isCarrying(p), true);
+    assert.equal(Pitch.isPlaying(p), false, 'a reward is not adopted as a temporary game ball');
+  }
 });
 
 test("ballers run at the carrier from up to eight tiles away", () => {

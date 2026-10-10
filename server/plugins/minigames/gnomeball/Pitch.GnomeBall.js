@@ -89,6 +89,7 @@ const OVERLAY_HUD_UID = (161 << 16) | 8;
 const DIARY = Object.freeze({ diary: "western", task: "score-a-goal-in-a-gnomeball-match" });
 /** The player had no room for a ball the referee owed them; give it on login. */
 const OWED_BALL_ATTRIBUTE = "gnomeball:owed-ball";
+const IN_PLAY_BALL_META = "gnomeball:in-play";
 const BALL_RETURNS_MESSAGE = "The ball magically returns to the ref as you put it down.";
 const NO_BALL_MESSAGE = "You need a ball in your hand to throw.";
 const THROW_MESSAGE = "You throw the ball at the goal...";
@@ -107,6 +108,11 @@ const tile = (x, y, z) => new core.Location(x, y, z);
 
 function isCarrying(player) {
   return player.getEquipment().getSlot(core.Equipment.WEAPON_SLOT) === GNOMEBALL;
+}
+
+function isCarryingGameBall(player) {
+  return isCarrying(player)
+    && player.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getMetaValue(IN_PLAY_BALL_META) === true;
 }
 
 function isPlaying(player) {
@@ -188,14 +194,15 @@ function unequipWeapon(player) {
 }
 
 function equipBall(player) {
-  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(GNOMEBALL, 1));
+  player.getEquipment().setItem(core.Equipment.WEAPON_SLOT,
+    new core.Item(GNOMEBALL, 1).setMetaValue(IN_PLAY_BALL_META, true));
   player.getEquipment().refreshItems();
   flagAppearance(player);
 }
 
 function clearCarriedBall(player) {
   const equipment = player.getEquipment();
-  if (equipment.getSlot(core.Equipment.WEAPON_SLOT) !== GNOMEBALL) return;
+  if (!isCarryingGameBall(player)) return;
   equipment.setItem(core.Equipment.WEAPON_SLOT, new core.Item(-1, 0));
   equipment.refreshItems();
   flagAppearance(player);
@@ -524,8 +531,8 @@ function endOnDeath({ player }) {
 
 function login({ player }) {
   if (!player) return;
-  // A restart loses the session, so adopt a saved ball on the pitch.
-  if (isCarrying(player)) {
+  // Recover only marked game balls; an equipped reward belongs to the player.
+  if (isCarryingGameBall(player)) {
     if (inPitch(player)) sessionFor(player);
     else clearCarriedBall(player);
   }

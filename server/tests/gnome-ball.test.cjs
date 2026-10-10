@@ -419,3 +419,17 @@ test("entering the pitch moves the weapon and shield to the pack and opens the H
   area.leave(mobile, false);
   assert.ok(p.packets.some(([name]) => name === "closeSubInterface"));
 });
+
+test("the gnome gate swings the closed panel onto its open tile and crosses to the far side", () => {
+  const Gate = require("../plugins/minigames/gnomeball/Gate.GnomeBall");
+  assert.deepEqual(Gate._test.openPanelPose(2383, 3488, 0), { x: 2382, y: 3488, face: 1 });
+  const west = { getX: () => 2381, getY: () => 3488 };
+  assert.deepEqual(Gate._test.destinationFor(west, { x: 2383, y: 3488, z: 0 }, 0), { x: 2383, y: 3488, z: 0 });
+  const east = { getX: () => 2385, getY: () => 3488 };
+  assert.deepEqual(Gate._test.destinationFor(east, { x: 2383, y: 3488, z: 0 }, 0), { x: 2382, y: 3488, z: 0 });
+  const north = { getX: () => 100, getY: () => 99 };
+  assert.deepEqual(Gate._test.destinationFor(north, { x: 100, y: 100, z: 0 }, 1), { x: 100, y: 100, z: 0 });
+  assert.equal(Gate._test.atGate({ getX: () => 2384, getY: () => 3488, getZ: () => 0 }, { x: 2383, y: 3488, z: 0 }), true);
+  assert.equal(Gate._test.atGate({ getX: () => 2390, getY: () => 3488, getZ: () => 0 }, { x: 2383, y: 3488, z: 0 }), false);
+});
+

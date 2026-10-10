@@ -28,8 +28,10 @@ function buildHarness() {
   MapObjects.get = (id, location) =>
     world.get(tileKey(id, location.getX(), location.getY(), location.getZ())) ?? null;
   Sounds.sendSound = (...args) => sounds.push(args);
-  CacheDefinitions.getObject = () => ({ name: 'Gate' });
-  CacheDefinitions.getCounts = () => ({ npcs: 0, items: 0, objects: 0 });
+  CacheDefinitions.getObject = (id) => (id === 2394
+    ? { name: 'Gate', actions: ['Open'], models: [[1298]] }
+    : { name: 'Gate' });
+  CacheDefinitions.getCounts = () => ({ npcs: 0, items: 0, objects: 2395 });
 
   const handlers = new Map();
   const objectManager = {
@@ -639,6 +641,25 @@ test('the Tutorial Island survival gate swings open and closes back to its own p
       ['register', 9470, 200, 200, 0],
       ['register', 9708, 200, 201, 0],
     ], 'not 8810/8811');
+  } finally {
+    h.restore();
+  }
+});
+
+test('the Gnome Ball pitch gate 2394 rotates in place and closes back onto its wall', () => {
+  const h = buildHarness();
+  try {
+    // No open variant is placed (2395/193 are nameless, action-less locs), so the door
+    // catalog self-pairs it and the panel swings one tile with the rotation.
+    h.place(2394, 2383, 3488, 0);
+    assert.deepEqual(h.click(2394, 2383, 3488, 0), [
+      ['register', 2394, 2382, 3488, 1],
+      ['deregister', 2394, 2383, 3488, 0],
+    ], 'the closed gate opens');
+    assert.deepEqual(h.click(2394, 2382, 3488, 1, 'Close'), [
+      ['register', 2394, 2383, 3488, 0],
+      ['deregister', 2394, 2382, 3488, 1],
+    ], 'it closes back onto the pitch wall');
   } finally {
     h.restore();
   }

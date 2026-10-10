@@ -191,12 +191,27 @@ test("the plugin declares itself members content and wires the pitch hooks", () 
   assert.ok(registered.some((entry) => entry.kind === "death"));
 });
 
-test("shoot chance follows the wiki curve and is capped at 1", () => {
+test("shoot chance follows the wiki's rounded inclusive roll and clamps distance and probability", () => {
   const { shotChance } = Pitch._test;
   assert.equal(shotChance(1, 99), 1);
-  assert.ok(Math.abs(shotChance(11, 1) - 26 / 256) < 1e-12);
-  assert.ok(Math.abs(shotChance(11, 99) - 245 / 256) < 1e-12);
+  assert.equal(shotChance(11, 1), 27 / 256);
+  assert.equal(shotChance(11, 99), 246 / 256);
+  assert.equal(shotChance(11, 50), 137 / 256, '135.5 rounds up before adding one');
+  assert.equal(shotChance(5, 42), 133 / 256, '132.132... rounds down before adding one');
+  assert.equal(shotChance(11, 110), 1, 'boosted Ranged may exceed level 99');
+  assert.equal(shotChance(11, -20), 0);
   assert.equal(shotChance(30, 1), shotChance(11, 1), "distance clamps at 11");
+});
+
+test("shooting uses current Ranged and the exact 137-of-256 boundary at level 50, distance 11", () => {
+  for (const [roll, xp] of [[136 / 256, 4], [137 / 256, 0]]) {
+    const p = fakePlayer({ x: 2393, ranged: 1 });
+    p.getSkillManager().levels.RANGED = 50;
+    Pitch.beginGame(p);
+    Pitch._test.setRandom(() => roll);
+    Pitch._test.shootGoal(shootEvent(p));
+    assert.equal(p.xp.RANGED, xp);
+  }
 });
 
 test("shots stay at the clicked tile and winger passes can reach across the pitch", () => {
@@ -208,6 +223,16 @@ test("shots stay at the clicked tile and winger passes can reach across the pitc
     clickType: 1, sourceLocation, destination: null };
   Pitch._test.routeShot(shot);
   assert.deepEqual(shot.destination, sourceLocation, 'a shot from 14 tiles away does not walk to the net');
+  Pitch._test.setRandom(() => 0);
+  Pitch._test.shootGoal(shootEvent(p));
+  assert.equal(Pitch.isCarrying(p), false);
+  shot.destination = null;
+  Pitch._test.routeShot(shot);
+  assert.deepEqual(shot.destination, sourceLocation, 'another click after shooting cannot walk to the net');
+  Pitch._test.sessions.delete(p);
+  shot.destination = null;
+  Pitch._test.routeShot(shot);
+  assert.deepEqual(shot.destination, sourceLocation, 'a player without a session also stays put');
   const pass = { player: p, npc: baller(2403, 3492).npc,
     definition: { getName: () => 'Gnome winger', getActions: () => ['Pass-to', 'Talk-to'] },
     clickType: 1, range: 1 };
@@ -241,6 +266,8 @@ test("a distant shot uses the return throw's arc and resolves after the ball arr
     assert.equal(projectile[6], 40);
     assert.equal(projectile[7], 40);
     assert.equal(projectile[10], 15);
+    assert.equal(projectile[9], 49, 'the projectile waits until the 48-cycle drawback finishes');
+    assert.equal(projectile[4] - projectile[9], 70, 'the flight still takes five cycles per tile');
     assert.equal(tasks[0].getDelay(), Math.ceil(projectile[4] / 30));
     assert.equal(p.xp.RANGED, 0, 'the score waits for the long flight');
     tasks.shift().execute();
@@ -514,6 +541,8 @@ test("winger passing throws both ways and equips the ball only after the return 
     assert.equal(outbound[6], 40, "outgoing passes use the working return throw's launch height");
     assert.equal(outbound[7], 40);
     assert.equal(outbound[8], npc);
+    assert.equal(outbound[9], 49, 'passes use the same player drawback timing as shots');
+    assert.equal(tasks[0].getDelay(), Math.ceil(outbound[4] / 30));
     tasks.shift().execute();
     assert.equal(npc.animations.at(-1).getId(), 200);
     assert.deepEqual(npc.transformations, [core.NpcIdentifiers.GNOME_WINGER_2]);
@@ -526,6 +555,7 @@ test("winger passing throws both ways and equips the ball only after the return 
     assert.equal(inbound[2], p.getLocation());
     assert.equal(inbound[5], 55);
     assert.equal(inbound[8], p);
+    assert.equal(inbound[9], 41, 'the winger return keeps its existing timing');
     assert.equal(Pitch.isCarrying(p), false, "the return ball is still in flight");
     tasks.shift().execute();
     assert.equal(p.animations.at(-1), 782);

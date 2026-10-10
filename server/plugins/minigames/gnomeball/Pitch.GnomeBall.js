@@ -7,7 +7,8 @@
  * Sessions live here; Referee.GnomeBall.js hands the ball over through `beginGame`.
  * The Wiki's three mechanics:
  * - Shoot: d = min(distance to the goal, 11); low = 48 - 2d, high = 278 - 3d;
- *   P = (low + (high - low) * (Ranged - 1) / 98) / 256, capped at 1. A goal scores a point
+ *   P = (round(low * (99 - Ranged) / 98 + high * (Ranged - 1) / 98) + 1) / 256,
+ *   clamped to 0-1 (Wiki Module:Skilling_success_chart). A goal scores a point
  *   and gives 4/5/6/7 XP in Ranged and Agility on goals 1-4 and 30 XP on goal 5 (that 30
  *   carries the 25-XP win bonus; 52 XP per skill per won game). The fifth goal resets the
  *   score. Hit or miss, the ball is lost and a new one must be asked from the referee.
@@ -75,6 +76,8 @@ const SOUND = Object.freeze({
 });
 const BALL_PROJECTILE = 55;
 const BALL_THROW_HEIGHT = 40;
+// Animation 783 lasts 48 client cycles; release after its final frame advances.
+const BALL_THROW_RELEASE_CYCLES = 49;
 const WINGER_CATCH_ANIMATION = 200; // cache: gnome_catch
 const WINGER_THROW_ANIMATION = 201; // cache: gnome_throw
 // shortcut: five ticks stands in for the Wiki's "a few seconds", use captures for exact timing.
@@ -109,12 +112,13 @@ function isPlaying(player) {
   return sessions.has(player);
 }
 
-/** Wiki: P = (low + (high - low) * (Ranged - 1) / 98) / 256, capped at 1. */
+/** Wiki Gnome goal bounds with Module:Skilling_success_chart's rounded inclusive roll. */
 function shotChance(distance, rangedLevel) {
   const d = Math.min(distance, MAX_SHOT_DISTANCE);
   const low = 48 - 2 * d;
   const high = 278 - 3 * d;
-  return Math.min(1, (low + (high - low) * (rangedLevel - 1) / 98) / 256);
+  const threshold = Math.floor(low * (99 - rangedLevel) / 98 + high * (rangedLevel - 1) / 98 + 0.5) + 1;
+  return Math.min(1, Math.max(0, threshold / 256));
 }
 
 /** Wiki: lerp(31/256, 201/256, (Agility - 1) / 98); 221/256 while the baller holds the ball. */
@@ -237,15 +241,14 @@ function endSession(player, { reward = false } = {}) {
 
 /** A Shoot click on the goal buys the shot a few ticks before ballers may tackle. */
 function routeShot(event) {
-  const session = sessions.get(event.player);
-  if (!session || !isCarrying(event.player)) return;
   if (event.definition?.getName?.() !== GOAL_NAME) return;
   const option = event.definition.getInteractions?.()?.[event.clickType - 1];
   if (option && option !== "Shoot") return;
   if (!inPitch(event.player) || !inPitch(event.object)) return;
-  // Shoot from the clicked position instead of routing to the goal's pole.
+  // Repeated clicks after releasing the ball must not start a walk to the goal either.
   event.destination = event.sourceLocation;
-  session.shotGrace = SHOT_GRACE_TICKS;
+  const session = sessions.get(event.player);
+  if (session && isCarrying(event.player)) session.shotGrace = SHOT_GRACE_TICKS;
 }
 
 function routePass(event) {
@@ -274,11 +277,11 @@ function later(ticks, action) {
 /** Animation, sound, and a ball flying at a goal or winger. Returns its travel ticks. */
 function throwBall(player, goal, target = null) {
   const from = player.getLocation();
-  const flight = 41 + 5 * Math.max(1, from.getDistance(goal));
+  const flight = BALL_THROW_RELEASE_CYCLES + 5 * Math.max(1, from.getDistance(goal));
   player.performAnimation(new core.Animation(PLAYER.THROW));
   player.getPacketSender()
     .sendAreaSound(SOUND.THROW, from.getX(), from.getY(), from.getZ(), 1, 10, 5)
-    .sendProjectile(from, goal, 0, flight, BALL_PROJECTILE, BALL_THROW_HEIGHT, BALL_THROW_HEIGHT, target, 41, 15, 11);
+    .sendProjectile(from, goal, 0, flight, BALL_PROJECTILE, BALL_THROW_HEIGHT, BALL_THROW_HEIGHT, target, BALL_THROW_RELEASE_CYCLES, 15, 11);
   return Math.ceil(flight / 30);
 }
 

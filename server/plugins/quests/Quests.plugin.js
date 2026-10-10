@@ -63,6 +63,27 @@ const F2P_QUESTS = new Set([
   "XMarksTheSpot",
 ]);
 
+/**
+ * The api the quests get: their login hooks skip bots. A bot has no client to send quest progress
+ * to and does no quests, and running every quest's login hook (about 160 of them) cost a bot
+ * ~85 ms to log in: a minute of startup with the bot population, and a frozen tick when Pest
+ * Control fills a lander with bots.
+ */
+function forPlayers(api) {
+  return new Proxy(api, {
+    get(target, property) {
+      if (property === "onPlayerLogin") {
+        return (handler) => target.onPlayerLogin((event) => {
+          if (event?.player?.isPlayerBot?.() === true) return;
+          return handler(event);
+        });
+      }
+      const value = target[property];
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 function questsForWorld({ WorldDefinition }) {
   return WorldDefinition.isMembersWorld() ? QUESTS : QUESTS.filter((quest) => F2P_QUESTS.has(quest));
 }
@@ -70,6 +91,7 @@ function questsForWorld({ WorldDefinition }) {
 module.exports = {
   name: "Quests",
   register(api) {
-    for (const quest of questsForWorld(api.core)) require(`./quests/${quest}.Quest`)(api);
+    const questApi = forPlayers(api);
+    for (const quest of questsForWorld(api.core)) require(`./quests/${quest}.Quest`)(questApi);
   },
 };

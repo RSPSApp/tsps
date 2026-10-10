@@ -103,3 +103,39 @@ test("the menu identifies the current port and lists the others with fares", () 
   assert.ok(!labels.some((label) => label.startsWith("Brimhaven")));
   assert.equal(npcHooks.filter((hook) => hook.name.toLowerCase().includes("trader")).length >= 2, true);
 });
+
+test("the chatbox's five-option limit pages the ports with More...", () => {
+  quests = [];
+  prompt = null;
+  const { ports } = CharterShips._test.loadData();
+  const brimhaven = ports.find((port) => port.name === "Brimhaven");
+  const expected = ports.filter((port) => port.name !== "Brimhaven").map((port) => port.name);
+  CharterShips._test.openMenu({ player: createPlayer(), object: { getLocation: () => brimhaven.destination } });
+
+  const seen = [];
+  for (let page = 0; page < 4; page++) {
+    const labels = prompt.options.filter((option) => typeof option === "string");
+    assert.ok(labels.length <= 5, "at most five chatbox options");
+    for (const label of labels) {
+      if (label !== "More...") seen.push(label.split(" (")[0]);
+    }
+    if (labels.at(-1) !== "More...") break;
+    prompt.options.at(-1)();
+  }
+  assert.deepEqual(seen, expected, "every other port is reachable across the pages");
+});
+
+test("the Charter option opens the same destination menu from the NPC's own tile", () => {
+  quests = [];
+  prompt = null;
+  const brimhaven = CharterShips._test.loadData().ports.find((port) => port.name === "Brimhaven");
+  const hook = npcHooks.find((entry) => entry.name === "Trader Crewmember");
+  assert.ok(hook.actions.Charter, "the Charter option is hooked");
+  hook.actions.Charter({
+    player: createPlayer(),
+    npc: { getLocation: () => brimhaven.destination },
+  });
+  const labels = prompt.options.filter((option) => typeof option === "string");
+  assert.ok(labels.some((label) => label.startsWith("Catherby (480 coins)")));
+  assert.ok(!labels.some((label) => label.startsWith("Brimhaven")), "the current port is not offered");
+});

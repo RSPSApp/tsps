@@ -22,7 +22,7 @@ const KHALED = core.NpcIdentifiers.CAPTAIN_KHALED;
 const T = StealingArtefacts._test;
 T.bind({ core });
 
-function player({ thieving = 99, items = {}, attributes = {} } = {}) {
+function player({ thieving = 99, items = { [Items.LOCKPICK]: 1 }, attributes = {} } = {}) {
   const attrs = new Map(Object.entries(attributes));
   const inventory = new Map(Object.entries(items).map(([id, amount]) => [Number(id), amount]));
   const p = {
@@ -83,6 +83,21 @@ test("only the assigned drawer yields 750 XP and one random artefact", () => {
   assert.equal(p.xp, 750);
   assert.equal(artefactsHeld(p), 1);
   assert.ok(T.carriedArtefactId(p) !== 0);
+});
+
+test("a lockpick or hair clip is required and is not consumed", () => {
+  const bare = player({ thieving: 60, items: {} });
+  T.assignTask(bare, T.HOUSES[0]);
+  T.pickLock({ player: bare, objectId: T.HOUSES[0].drawer });
+  assert.deepEqual(bare.messages, [T.MESSAGES.noLockpick]);
+  assert.equal(bare.xp, 0);
+  assert.equal(artefactsHeld(bare), 0);
+
+  const clip = player({ thieving: 60, items: { [Items.HAIR_CLIP]: 1 } });
+  T.assignTask(clip, T.HOUSES[0]);
+  T.pickLock({ player: clip, objectId: T.HOUSES[0].drawer });
+  assert.equal(artefactsHeld(clip), 1, "a hair clip picks the lock");
+  assert.equal(clip.inventory.get(Items.HAIR_CLIP), 1, "the tool is not consumed");
 });
 
 test("a second artefact cannot be carried", () => {

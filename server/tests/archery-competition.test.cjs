@@ -246,6 +246,22 @@ test("the judge's finishing dialogue pays once and offers the replay", () => {
   assert.equal(p.items.get(ItemIds.ARCHERY_TICKET), 100, "re-opening the line pays nothing more");
 });
 
+test("a replay without 200 coins uses the wiki's 'I haven't got the money.' line", () => {
+  Session._test.setAttackRoll(() => 16000);
+  Session._test.setRandom(() => 0);
+  const p = player({ coins: 200 });
+  Session.startRound(p);
+  for (let i = 0; i < 10; i++) Session.takeShot(p);
+  Judge._test.talkTo({ player: p });
+  assert.equal(p.items.get(ItemIds.ARCHERY_TICKET), 100);
+  Judge._test.talkTo({ player: p });
+  chooseOption(p, 0);
+  const texts = dialogueTexts(p);
+  assert.ok(texts.includes("I haven't got the money."));
+  assert.ok(!texts.includes("Oops, I don't have enough coins on me..."));
+  assert.equal(Session.sessionOf(p).finished, true, "no new round starts without the fee");
+});
+
 test("starting without 200 coins is refused with the wiki lines", () => {
   const p = player({ coins: 0 });
   Judge._test.talkTo({ player: p });

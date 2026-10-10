@@ -116,9 +116,15 @@ function wieldsFairyMagic(player) {
   return weapon === core.ItemIdentifiers.DRAMEN_STAFF || weapon === core.ItemIdentifiers.LUNAR_STAFF;
 }
 
+/** Fairytale II's "fairyring_permission": 2 once the Godfather gives it (stage 40). */
+const FAIRY_RING_PERMISSION_VARBIT = 2329;
+
 function questAllows(player) {
   const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.name === FAIRYQUEST_NAME);
-  return quest ? quest.isComplete(player) : true;
+  if (!quest) return true;
+  if (quest.isComplete(player)) return true;
+  // The rings unlock when the Godfather grants permission, not at the quest's end.
+  return player.getPacketSender().getVarbit(FAIRY_RING_PERMISSION_VARBIT) === 2;
 }
 
 function canUse(player) {

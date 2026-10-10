@@ -8,13 +8,12 @@
  * (winter/spring/autumn/summer). Talking to Osman or Selim while carrying a glass gives
  * the Wiki's hand-in - one glass is taken and 350/1,350/2,350/3,000 Thieving XP is
  * granted - and then the normal conversation runs. Without a glass the handler falls
- * through to the NPC's regular transcript.
- *
- * Wiki quirk the plugin cannot reach: sq'irkjuice has no Drink option in the cache's item
- * definitions, so the documented Thieving boost and run-energy restore are not wired.
+ * through to the NPC's regular transcript. Drinking a glass applies the Wiki's boost
+ * (winter +0, spring +1, autumn +2, summer +3 Thieving) and run-energy restore (5-20%).
  */
 
 const Gardens = require("./Gardens.SorceresssGarden");
+const { boostSkill, restoreRunEnergy } = require("../../items/ConsumableEffects");
 
 const {
   BEER_GLASS_ID,
@@ -98,11 +97,24 @@ function talkToSpymaster(event) {
   return true;
 }
 
+/** The juice's Drink option: the Wiki's Thieving boost and run-energy restore. */
+function drinkJuice(event) {
+  const season = Gardens.seasonForJuice(event.itemId);
+  if (!season) return false;
+  const { player } = event;
+  player.getInventory().delete(season.juiceId, 1);
+  player.getInventory().refreshItems();
+  if (season.boost > 0) boostSkill(player, core.Skill.THIEVING, season.boost, 0);
+  restoreRunEnergy(player, season.energy);
+  return true;
+}
+
 module.exports = function registerJuice(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   for (const key of SEASON_ORDER) {
     api.onItemOnItem("Pestle and mortar", SEASONS[key].fruitName, brew);
+    api.onItemAction(SEASONS[key].juiceName, { Drink: drinkJuice });
   }
   api.onNpcsInteraction(SPYMASTER_NAMES, { "Talk-to": talkToSpymaster });
 };
@@ -116,6 +128,7 @@ module.exports._test = {
   brew,
   handIn,
   talkToSpymaster,
+  drinkJuice,
   _setApi(value) {
     api = value;
   },

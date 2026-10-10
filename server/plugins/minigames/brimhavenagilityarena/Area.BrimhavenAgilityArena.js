@@ -91,7 +91,7 @@ function stepBlades(player) {
     player.sendMessage(Shared.levelRefusal(Shared.OBSTACLE_LEVEL.SPINNING_BLADES));
     return;
   }
-  const success = Shared.roll(Shared.successChance(Shared.DARTS_SUCCESS.low, Shared.DARTS_SUCCESS.high, level));
+  const success = Shared.roll(Shared.successChance(Shared.BLADES_SUCCESS.low, Shared.BLADES_SUCCESS.high, level));
   if (success) {
     Shared.addXp(player, Shared.OBSTACLE_XP.SPINNING_BLADES);
   } else {

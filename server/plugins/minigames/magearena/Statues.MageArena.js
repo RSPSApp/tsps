@@ -9,9 +9,11 @@
  *   smoke puff (188, height 60) and sound 1930 there, and a tick later the full message
  *   "...Suddenly a cape appears before you." (OSRS moves the Mage Arena varp from 6 to 7 here;
  *   tsps has no Kolodion fight, so a persisted attribute stands in for it);
- * - every later prayer asks "How many would you like to take?" (skillmulti mode 23, opening on
- *   1, at most the free inventory slots) and puts the capes straight in the pack with
- *   "...Suddenly a cape appears in your pack.", the puff one tile south of the statue.
+ * - every later prayer with one free slot puts the cape straight in the pack, and with more asks
+ *   "How many would you like to take?" (skillmulti mode 23, opening on 1, at most the free
+ *   inventory slots) and puts the capes straight in the pack with
+ *   "...Suddenly a cape appears in your pack." ("...N capes appears..." when taking more),
+ *   the puff one tile south of the statue.
  *
  * Cape ids: 2412 Saradomin, 2413 Guthix, 2414 Zamorak.
  */
@@ -29,6 +31,7 @@ const SMOKE_HEIGHT = 60;
 const CAPE_SOUND = 1930;
 const TAKE_MENU_MODE = 23;
 const CHANTED = "You feel a rush of energy charge through your veins.";
+const NO_SPACE_LINE = "... but there is no response. You feel that making space in your inventory could help.";
 
 let api;
 let core;
@@ -39,7 +42,9 @@ function statueFor(objectId) {
 
 const chantLine = (statue) => `You kneel and chant to ${statue.name}...`;
 const floorLine = (statue) => `${chantLine(statue)} ${CHANTED} Suddenly a cape appears before you.`;
-const packLine = (statue) => `${chantLine(statue)} ${CHANTED} Suddenly a cape appears in your pack.`;
+const packLine = (statue, count = 1) => count > 1
+  ? `${chantLine(statue)} ${CHANTED} Suddenly ${count} capes appears in your pack.`
+  : `${chantLine(statue)} ${CHANTED} Suddenly a cape appears in your pack.`;
 
 /** Runs `action` after `ticks` game ticks. */
 function later(ticks, action) {
@@ -81,14 +86,18 @@ function capesToPack(player, statue, amount) {
   if (count <= 0) return;
   player.getInventory().adds(statue.capeId, count);
   smoke(player, statue, -1);
-  core.StatementDialogue.send(player, packLine(statue));
+  core.StatementDialogue.send(player, packLine(statue, count));
 }
 
 function askHowMany(player, statue) {
   const free = player.getInventory().getFreeSlots();
   if (free <= 0) {
     player.getPacketSender().sendInterfaceRemoval();
-    player.sendMessage("You don't have enough inventory space.");
+    player.sendMessage(NO_SPACE_LINE);
+    return;
+  }
+  if (free === 1) {
+    capesToPack(player, statue, 1);
     return;
   }
   player.getPacketSender().sendCreationMenu(new core.CreationMenu(

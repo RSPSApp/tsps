@@ -40,8 +40,10 @@ function player({ level = 99, items = {}, name = "tester" } = {}) {
     messages: [],
     xp: [],
     moves: [],
+    boosts: [],
     builder: null,
     inventory,
+    energy: 0,
     getInventory: () => ({
       getAmount: (id) => inventory.get(id) ?? 0,
       contains: (id) => (inventory.get(id) ?? 0) > 0,
@@ -51,8 +53,12 @@ function player({ level = 99, items = {}, name = "tester" } = {}) {
     }),
     getSkillManager: () => ({
       getCurrentLevel: () => level,
+      getMaxLevel: () => level,
+      increaseCurrentLevel: (skill, amount) => p.boosts.push([skill, amount]),
       addExperiences: (skill, amount) => p.xp.push([skill, amount]),
     }),
+    getRunEnergy: () => p.energy,
+    setRunEnergy: (value) => { p.energy = value; },
     getDialogueManager: () => ({
       startDialogues: (builder) => {
         p.builder = builder;
@@ -188,6 +194,22 @@ test("Osman takes one glass per hand-in for its Thieving XP", () => {
   plugin._test.talkToSpymaster({ player: winter, npcId: 4286 });
   assert.equal(xpOf(winter, core.Skill.THIEVING), 350);
   assert.match(winter.messages[0], /350 Thieving experience points/);
+});
+
+test("drinking the juice applies the Wiki's Thieving boost and run energy", () => {
+  const drink = plugin._test.drinkJuice;
+  const summer = player({ level: 50, items: { [10849]: 1 } });
+  assert.equal(drink({ player: summer, itemId: 10849 }), true);
+  assert.equal(summer.inventory.get(10849), 0, "the glass is drunk");
+  assert.deepEqual(summer.boosts, [[core.Skill.THIEVING, 3]]);
+  assert.equal(summer.energy, 20);
+
+  const winter = player({ level: 50, items: { [WINTER_JUICE]: 1 } });
+  drink({ player: winter, itemId: WINTER_JUICE });
+  assert.deepEqual(winter.boosts, [], "winter gives no boost");
+  assert.equal(winter.energy, 5);
+
+  assert.equal(drink({ player: summer, itemId: 995 }), false, "not a juice falls through");
 });
 
 function apprenticeNpc() {

@@ -2,8 +2,9 @@
 
 /**
  * The assigned house's drawers (loc ids 27771-27776, first click "Pick-lock"). A task for
- * another house, an artefact already carried, a Thieving level under 49 or a full pack leaves
- * the drawer shut; otherwise it gives 750 XP and one of the five artefacts at 1/5.
+ * another house, an artefact already carried, a Thieving level under 49, no lockpick/hair clip
+ * or a full pack leaves the drawer shut; otherwise it gives 750 XP and one of the five
+ * artefacts at 1/5. The tool is not consumed.
  *
  * Wiki: https://oldschool.runescape.wiki/w/Drawers_(stealing_artefacts)
  */
@@ -19,6 +20,10 @@ function pickLock({ player, objectId }) {
   }
   if (Common.thievingLevel(player) < Common.THIEVING_LEVEL) {
     player.sendMessage(Common.MESSAGES.level);
+    return;
+  }
+  if (!Common.hasLockpick(player)) {
+    player.sendMessage(Common.MESSAGES.noLockpick);
     return;
   }
   if (player.getInventory().getFreeSlots() <= 0) {

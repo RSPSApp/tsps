@@ -14,6 +14,9 @@
  *
  * The Wiki does not document the guards' sight or catch chance. They pursue a carrier within
  * SIGHT_RADIUS tiles and an adjacent guard catches deterministically, with no roll.
+ *
+ * The Wiki requires a lockpick ("A lockpick or hair clip is required to steal artefacts"), so
+ * the drawer gate needs one in the inventory; a hair clip works too and neither is consumed.
  */
 
 const TASK_ATTRIBUTE = "stealing-artefacts:task";
@@ -36,6 +39,7 @@ const MESSAGES = {
   unbankable: "You can't bank stolen artefacts.",
   noSpace: "You don't have enough inventory space.",
   level: `You need a Thieving level of ${THIEVING_LEVEL} to steal artefacts.`,
+  noLockpick: "You need a lockpick or hair clip to pick the lock.",
 };
 
 /** The six houses Khaled assigns, and the drawer each holds. */
@@ -63,7 +67,7 @@ const VARIANT = {
   standard: "standard-dialogue",
 };
 
-const state = { api: null, core: null, artefacts: [], artefactIds: new Set(), guardIds: new Set(), khaledIds: new Set() };
+const state = { api: null, core: null, artefacts: [], artefactIds: new Set(), lockpickIds: [], guardIds: new Set(), khaledIds: new Set() };
 
 /** player -> { house, artefactId }: the live run, dropped when it ends. */
 const sessions = new Map();
@@ -78,6 +82,8 @@ function bind(api) {
     Items.STOLEN_FAMILY_HEIRLOOM, Items.STOLEN_JEWELRY_BOX,
   ];
   state.artefactIds = new Set(state.artefacts);
+  // Hair clip: "It can be used just like a lockpick" (it does not work with chests, these are drawers).
+  state.lockpickIds = [Items.LOCKPICK, Items.HAIR_CLIP];
   const Npcs = api.core.NpcIdentifiers;
   state.guardIds = new Set([
     Npcs.PATROLMAN, Npcs.PATROLMAN_2, Npcs.PATROLMAN_3, Npcs.PATROLWOMAN,
@@ -94,6 +100,12 @@ const isKhaled = (npcId) => state.khaledIds.has(npcId);
 
 function thievingLevel(player) {
   return player.getSkillManager().getCurrentLevel(getCore().Skill.THIEVING);
+}
+
+/** A lockpick or hair clip in the pack; neither is consumed by picking the lock. */
+function hasLockpick(player) {
+  const inventory = player.getInventory();
+  return state.lockpickIds.some((id) => inventory.getAmount(id) > 0);
 }
 
 function taskOf(player) {
@@ -245,6 +257,7 @@ module.exports = {
   isGuard,
   isKhaled,
   thievingLevel,
+  hasLockpick,
   taskOf,
   failedOf,
   houseByName,
@@ -287,4 +300,5 @@ module.exports._test = {
   guardCatch,
   variantFor,
   thievingLevel,
+  hasLockpick,
 };

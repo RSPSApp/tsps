@@ -98,6 +98,13 @@ function pickOption(text) {
   return prompt.options.find((option) => option.text === text);
 }
 
+/** Runs the pending ActionDialogue of the last chain (the harness doesn't play it itself). */
+function flushActions(p) {
+  for (const dialogue of [...(p.builder?.getDialogues?.().values() ?? [])]) {
+    if (dialogue.constructor?.name === "ActionDialogue") dialogue.send(p);
+  }
+}
+
 /** An rng that lands inside the weight of one named tip entry for this customer. */
 function fixedRng(npcName, itemName) {
   const entries = eligibleRewards(npcName);
@@ -135,6 +142,32 @@ test("declining a tier locks it for five minutes and hides it from the choice", 
   talkTo({ player: cook });
   assert.equal(pickOption("I think I'll warm up with an easy one."), undefined);
   assert.ok(pickOption("The edge of the world is no limit for Aluft Aloft Food Deliveries!"));
+});
+
+test("the hard offer and its refusal use the Wiki's transcript lines", () => {
+  const cook = player();
+  talkTo({ player: cook });
+  pickOption("The edge of the world is no limit for Aluft Aloft Food Deliveries!").pick();
+  flushActions(cook);
+  const lines = dialogueTexts(cook);
+  assert.ok(lines.includes("That's the spirit!"));
+  assert.ok(lines.some((line) => line.startsWith("Are you willing to take this order on?")));
+  assert.ok(pickOption("I won't be able to do this order."), "the hard refusal option");
+  assert.equal(pickOption("I don't think I can complete this one."), undefined);
+  pickOption("I won't be able to do this order.").pick();
+  flushActions(cook);
+  assert.ok(dialogueTexts(cook).some((line) => line.includes("you'll have to wait 5 minutes for another hard order")));
+  pickOption("Yes I'm sure.").pick();
+  assert.equal(isLocked(cook, "hard"), true);
+  assert.ok(dialogueTexts(cook).some((line) => line.includes("you chickened out of that one")));
+});
+
+test("accepting plays the player's line then Gianne's start line", () => {
+  const cook = player();
+  acceptOrder(cook, orderFor("easy", "Burkor"));
+  const lines = dialogueTexts(cook);
+  assert.equal(lines[0], "Easy-peasy! I'll get started.");
+  assert.equal(lines[1], "You'd better get a move on then. The clock is already running!");
 });
 
 test("a quest-owned Gianne dialogue falls through to the transcript runtime", () => {

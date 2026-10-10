@@ -225,10 +225,18 @@ test("later prayers ask how many and put the capes in the pack", () => {
   assert.deepEqual(caster.added, [[2413, 2]]);
   assert.equal(statues.packLine(statues.STATUES[2875]),
     "You kneel and chant to Guthix... You feel a rush of energy charge through your veins. Suddenly a cape appears in your pack.");
+  assert.equal(statues.packLine(statues.STATUES[2875], 2),
+    "You kneel and chant to Guthix... You feel a rush of energy charge through your veins. Suddenly 2 capes appears in your pack.");
+
+  const one = statuePlayer({ received: true, freeSlots: 1 });
+  statues.askHowMany(one, statues.STATUES[2875]);
+  assert.ok(!one.calls.some(([name]) => name === "sendCreationMenu"), "one free slot skips the menu");
+  assert.deepEqual(one.added, [[2413, 1]]);
 
   const full = statuePlayer({ received: true, freeSlots: 0 });
   statues.askHowMany(full, statues.STATUES[2873]);
   assert.ok(!full.calls.some(([name]) => name === "sendCreationMenu"));
+  assert.ok(full.messages.includes("... but there is no response. You feel that making space in your inventory could help."));
   assert.equal(statues.prayAt({ player: full, objectId: 1000 }), undefined);
 });
 

@@ -21,10 +21,13 @@
  * 110 on the player, area sounds 127 and 126), and three ticks after that the player lands
  * on (2912, 5474).
  *
- * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) are already walkable
- * in the cache, so opening one only checks the level; a low-level player who walks through
- * anyway is turned back by the maze's Area.postEnter. Entry is checked against the current
- * (boosted) Thieving level, per the Wiki.
+ * The gates (12617 winter, 12639 autumn, 12719 spring, 11987 summer) are wall locs whose
+ * clipping seals each maze, so opening one checks the level and then swings it open the
+ * way Doors.plugin.js opens mapped doors: deregister the closed wall and register its
+ * nameless open variant (closed id + 1) one quarter-turn on, with the same 500-tick
+ * auto-close and region-load reapply. Entry is checked against the current (boosted)
+ * Thieving level, per the Wiki; a low-level player who gets in anyway is turned back by
+ * the maze's Area.postEnter.
  */
 
 const Gardens = require("./Gardens.SorceresssGarden");
@@ -61,8 +64,21 @@ const LANDING = Object.freeze({ x: 2912, y: 5474 });
 const CURSE = Object.freeze({ CAST: 108, PROJECTILE: 109, IMPACT: 110, SOUND_CAST: 127, SOUND_IMPACT: 126 });
 const GATE_IDS = Object.values(SEASONS).map((season) => season.gateId);
 
+/**
+ * Each closed gate's open variant is the next cache id (same model, rotated, unnamed and
+ * optionless); verified for all four with scripts/dump-loc.ts. Doors.plugin.js's wall
+ * transform opens a closed shape-0 wall by turning it one quarter and stepping it one
+ * tile, and its gates swing shut again after 500 untouched ticks.
+ */
+const GATE_OPEN_ID_OFFSET = 1;
+const COORD_OFFSETS = Object.freeze([[-1, 0], [0, 1], [1, 0], [0, -1]]);
+const GATE_OPEN_TICKS = 500;
+
 let api;
 let core;
+
+/** key -> { closed, open } for every gate this plugin has swung open. */
+const openGates = new Map();
 
 const apprenticeHouse = () => new core.Location(APPRENTICE_TILE.x, APPRENTICE_TILE.y, PLANE);
 const thievingLevel = (player) => player.getSkillManager().getCurrentLevel(core.Skill.THIEVING);
@@ -191,7 +207,61 @@ function openGate(event) {
     event.player.sendMessage(`You need a Thieving level of ${season.level} to enter this garden.`);
     return;
   }
+  const location = event.object?.getLocation?.() ?? gateLocation(event.location);
+  if (location && !openGates.has(gateKey(event.objectId, location))) {
+    swingGateOpen(event.object, event.objectId, location);
+  }
   event.player.sendMessage("You open the gate.");
+}
+
+function gateLocation(location) {
+  if (!Number.isInteger(location?.x) || !Number.isInteger(location?.y)) return null;
+  return new core.Location(location.x, location.y, location.z ?? PLANE);
+}
+
+function gateKey(objectId, location) {
+  return `${objectId}:${location.getX()},${location.getY()},${location.getZ()}`;
+}
+
+function regionIdOf(location) {
+  return ((location.getX() >> 6) << 8) | (location.getY() >> 6);
+}
+
+/** Deregisters the closed wall and registers the open variant, per Doors.plugin.js. */
+function swingGateOpen(object, objectId, location) {
+  if (!object) return;
+  const type = Number(object.getType?.() ?? 0);
+  const rotation = Number(object.getFace?.() ?? 0) & 0x3;
+  const openRotation = (rotation + 1) & 0x3;
+  const [dx, dy] = COORD_OFFSETS[type === 9 ? ((openRotation + 1) & 0x3) : openRotation];
+  const open = new core.GameObject(
+    objectId + GATE_OPEN_ID_OFFSET,
+    new core.Location(location.getX() + dx, location.getY() + dy, location.getZ()),
+    type,
+    openRotation,
+    null
+  );
+  core.ObjectManager.register(open, true);
+  core.ObjectManager.deregister(object, true);
+  openGates.set(gateKey(objectId, location), { closed: object, open });
+  later(GATE_OPEN_TICKS, () => swingGateShut(gateKey(objectId, location)));
+}
+
+function swingGateShut(key) {
+  const state = openGates.get(key);
+  if (!state) return;
+  openGates.delete(key);
+  core.ObjectManager.deregister(state.open, true);
+  core.ObjectManager.register(state.closed, true);
+}
+
+/** Scene reloads resend the map's closed gate, so put the open one back. */
+function reapplyOpenGates({ regionId }) {
+  for (const state of openGates.values()) {
+    if (regionIdOf(state.open.getLocation()) !== regionId) continue;
+    core.MapObjects.remove(state.closed);
+    core.MapObjects.add(state.open);
+  }
 }
 
 function drinkFromFountain(event) {
@@ -209,6 +279,7 @@ module.exports = function registerApprentice(pluginApi) {
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onObjectClick(GATE_IDS, 1, openGate);
+  api.onRegionLoaded(reapplyOpenGates);
   api.onObjectInteraction("Fountain", { "Drink-from": drinkFromFountain });
 };
 
@@ -231,6 +302,11 @@ module.exports._test = {
   handleAction,
   teleportByApprentice,
   openGate,
+  swingGateOpen,
+  swingGateShut,
+  reapplyOpenGates,
+  gateKey,
+  openGates,
   drinkFromFountain,
   _setApi(value) {
     api = value;

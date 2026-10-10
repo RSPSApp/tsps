@@ -84,6 +84,8 @@ const FLOOR_SPIKES_NEVER_FAIL = 50;
 
 /** OSRS success-chart endpoints for dodging the darts: ~70.7% at 40, always at 99. */
 const DARTS_SUCCESS = { low: 130, high: 255 };
+/** The blades chart the Wiki publishes (drop-rate project): ~76.2% at 40, always at 99. */
+const BLADES_SUCCESS = { low: 155, high: 255 };
 
 const RECEIVED_MESSAGE = "You have received an Agility Arena Ticket and Brimhaven Voucher!";
 const REPEAT_MESSAGE = "You can only get one ticket at a time, wait till the arrow moves again.";
@@ -253,7 +255,7 @@ module.exports = {
   setRandom: (fn) => { random = fn; },
   CYCLE_TICKS, CYCLE_TASK_KEY, ARENA_PLANE, ARENA, HUT, ENTRY, ENTRY_FEE, PAID_ATTRIBUTE, NPC,
   OBSTACLE_IDS, OBJECTS, DISPENSER_TILES, BLADE_TILES, OBSTACLE_XP, OBSTACLE_LEVEL,
-  DARTS_SUCCESS, FLOOR_SPIKES_NEVER_FAIL,
+  DARTS_SUCCESS, BLADES_SUCCESS, FLOOR_SPIKES_NEVER_FAIL,
   PRESSURE_PAD_COOLDOWN_TICKS, PRESSURE_PAD_USES, BLADE_COOLDOWN_TICKS,
   RECEIVED_MESSAGE, REPEAT_MESSAGE, INACTIVE_MESSAGE, BLADES_FAIL_MESSAGE,
   DARTS_FAIL_MESSAGE, FEE_MESSAGE,

@@ -15,6 +15,7 @@ const RULES_LINES = [
 ];
 const NO_MONEY_LINE = "Oops, I don't have enough coins on me...";
 const COME_BACK_LINE = "Never mind, come back when you've got enough.";
+const REPLAY_NO_MONEY_LINE = "I haven't got the money.";
 
 let api;
 let core;
@@ -115,20 +116,27 @@ function scoreCheck(player) {
   ]);
 }
 
-/** Accepting an offer, first time or replay: pay only when the round can actually start. */
-function accept(player) {
+/** Accepting an offer, first time or replay: pay only when the round can actually start.
+ *  A replay without the coins uses the wiki's shorter refusal (Transcript: Competition Judge). */
+function accept(player, replay = false) {
   if (!Session.canStart(player)) {
     const inventory = player.getInventory();
     if (inventory.getFreeSlots() === 0 && !inventory.contains(core.ItemIdentifiers.BRONZE_ARROW)) {
       player.sendMessage("You don't have enough inventory space.");
       return;
     }
-    show(player, [
-      ["player", "Sure, I'll give it a go."],
-      ["npc", "Great! That will be 200 coins then please."],
-      ["player", NO_MONEY_LINE],
-      ["npc", COME_BACK_LINE],
-    ]);
+    show(player, replay
+      ? [
+        ["player", "Sure, I'll give it a go."],
+        ["npc", "Great! That will be 200 coins then please."],
+        ["player", REPLAY_NO_MONEY_LINE],
+      ]
+      : [
+        ["player", "Sure, I'll give it a go."],
+        ["npc", "Great! That will be 200 coins then please."],
+        ["player", NO_MONEY_LINE],
+        ["npc", COME_BACK_LINE],
+      ]);
     return;
   }
   show(player, [
@@ -145,7 +153,7 @@ function finishing(player, session) {
     "npc",
     `Well done. Your score is: ${session.score}. For that score you will receive ${Session.ticketsFor(session.score)} Archery tickets. Would you like to try again for another 200 coins?`,
   ]], [
-    ["Sure, I'll give it a go.", () => accept(player)],
+    ["Sure, I'll give it a go.", () => accept(player, true)],
     ["No thanks.", () => show(player, [["player", "No thanks."]])],
   ]);
 }

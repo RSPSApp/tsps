@@ -7,9 +7,9 @@
  * Gianne jnr. hands out an easy (6 minutes, coins tip) or hard (11 minutes, item tip) order:
  * a random gnome dish or cocktail and a random customer, plus an Aluft Aloft box carrying the
  * details. The dish is handed over with item-on-NPC (Delivery.GnomeRestaurant.js) within the
- * limit; the box must be held. Declining a tier locks it for 5 minutes (the wiki says 5:30,
- * the task 5:00). 12 credits earn a reward token. Only one order at a time; logout, death and
- * disconnection abandon it with no reward.
+ * limit; the box must be held. Declining a tier is confirmed first, then locks it for 5
+ * minutes and 30 seconds (the Wiki's waiting penalty). 12 credits earn a reward token. Only
+ * one order at a time; logout, death and disconnection abandon it with no reward.
  *
  * The wiki tutorial (Aluft Gianne snr. + Blurberry recommendations) is not implemented, so
  * the gate is just the documented 29 Cooking.
@@ -22,7 +22,8 @@ const BOX_NAME = "Aluft Aloft box";
 const TIER_EASY = "easy";
 const TIER_HARD = "hard";
 const MIN_COOKING = 29;
-const LOCKOUT_MS = 300_000;
+/** The Wiki's waiting penalty after refusing an order. */
+const LOCKOUT_MS = 330_000;
 const CREDITS_PER_TOKEN = 12;
 const MAX_CREDITS = 120;
 const CREDITS_ATTRIBUTE = "gnome-restaurant:credits";
@@ -31,7 +32,7 @@ const MS_PER_MINUTE = 60_000;
 
 const ALREADY_LINE = "You already have a delivery on the go. Check your Aluft Aloft box if you've forgotten the details.";
 const REFUSAL_LINE = "I'm afraid you don't have the required cooking experience for this job. If you want to work for me you'll have to train up to level 29 Cooking.";
-const NO_ORDERS_LINE = "I'm afraid I have no orders for you at the moment - come back in";
+const NO_ORDERS_LINE = "Since you've refused both the last hard and easy job I've offered you, you'll have to wait for new orders to come through - come back in";
 const OFFER_TITLE = "Do you want to take on an easy or a hard delivery?";
 const TAKE_TITLE = "Take this order?";
 const EASY_OPTION = "I think I'll warm up with an easy one.";
@@ -39,8 +40,17 @@ const HARD_OPTION = "The edge of the world is no limit for Aluft Aloft Food Deli
 const CHANGED_MIND = "I've changed my mind, there's something else I need to do now.";
 const TAKE_EASY = "Easy-peasy! I'll get started.";
 const TAKE_HARD = "Easy-peasy! I'm on the job.";
-const DECLINE_OPTION = "I don't think I can complete this one.";
+const DECLINE_EASY = "I don't think I can complete this one.";
+const DECLINE_HARD = "I won't be able to do this order.";
 const START_LINE = "You'd better get a move on then. The clock is already running!";
+const START_HARD_LINE = "You'd better get started, you have a long way to go...";
+const HARD_SPIRIT_LINE = "That's the spirit!";
+const HARD_WILLING_LINE = "Are you willing to take this order on? If you turn it down you'll have to wait five minutes for another hard delivery.";
+const CONFIRM_TITLE = "Do you want to refuse this order";
+const CONFIRM_TAKE = "I'll take this order then!";
+const CONFIRM_YES = "Yes I'm sure.";
+const CONFIRM_EASY_LINE = "Are you sure you want to turn this order down, you'll have to wait 5 minutes before I can give you another easy order. I may have a hard one available for you though...";
+const CONFIRM_HARD_LINE = "Are you sure you want to turn this order down, you'll have to wait 5 minutes for another hard order, although I may be able to give you an easy one.";
 
 let api;
 let core;
@@ -129,6 +139,16 @@ function npcSays(player, text) {
   player.getDialogueManager().startDialogues(builder);
 }
 
+/** The player's line, then Gianne's. */
+function playerThenNpc(player, playerLine, npcLine) {
+  const { DialogueChainBuilder, PlayerDialogue, NpcDialogue, EndDialogue } = core;
+  const builder = new DialogueChainBuilder();
+  builder.add(new PlayerDialogue(0, playerLine));
+  builder.add(new NpcDialogue(1, core.NpcIdentifiers.GIANNE_JNR_, npcLine));
+  builder.add(new EndDialogue(2));
+  player.getDialogueManager().startDialogues(builder);
+}
+
 /** Gianne's lines, then a multi-chatbox choice (the client's OptionDialogue is not wired). */
 function npcThenPrompt(player, lines, title, pairs) {
   const { DialogueChainBuilder, NpcDialogue, ActionDialogue } = core;
@@ -185,17 +205,37 @@ function getJob({ player }, tier) {
   offerOrder(player, tier);
 }
 
+/** The Wiki's order line: easy has the article and no full stop, hard has it the other way. */
+function orderLine(order) {
+  return order.tier === TIER_EASY
+    ? `${order.npcName} wants a ${order.itemName}`
+    : `${order.npcName} wants ${order.itemName}.`;
+}
+
 function offerOrder(player, tier, rng = Math.random) {
   if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
   if (isLocked(player, tier)) return npcSays(player, lockedLine(player, tier));
   const order = rollOrder(tier, rng);
-  npcThenPrompt(player, [`${order.npcName} wants a ${order.itemName}.`, order.hint], TAKE_TITLE, [
+  const lines = tier === TIER_HARD
+    ? [HARD_SPIRIT_LINE, orderLine(order), order.hint, HARD_WILLING_LINE]
+    : [orderLine(order), order.hint];
+  npcThenPrompt(player, lines, TAKE_TITLE, [
     [tier === TIER_EASY ? TAKE_EASY : TAKE_HARD, () => acceptOrder(player, order)],
-    [DECLINE_OPTION, () => declineOrder(player, tier)],
+    [tier === TIER_EASY ? DECLINE_EASY : DECLINE_HARD, () => confirmDecline(player, order)],
   ]);
 }
 
-function acceptOrder(player, order) {
+/** Refusing is confirmed first; only the confirmation locks the tier. */
+function confirmDecline(player, order) {
+  const tier = order.tier;
+  npcThenPrompt(player, [tier === TIER_EASY ? CONFIRM_EASY_LINE : CONFIRM_HARD_LINE], CONFIRM_TITLE, [
+    [CONFIRM_TAKE, () => acceptOrder(player, order, true)],
+    [CONFIRM_YES, () => declineOrder(player, tier)],
+  ]);
+}
+
+/** The Wiki flows: the player's accept line plays before Gianne's start line. */
+function acceptOrder(player, order, confirmed = false) {
   if (sessions.has(player)) return npcSays(player, ALREADY_LINE);
   const inventory = player.getInventory();
   if (inventory.getFreeSlots() < 1) {
@@ -207,30 +247,44 @@ function acceptOrder(player, order) {
     itemId: order.itemId,
     itemName: order.itemName,
     npcName: order.npcName,
+    hint: order.hint,
     deadline: Date.now() + DATA.tiers[order.tier].seconds * 1000,
   });
   inventory.adds(BOX_ID, 1);
-  npcSays(player, START_LINE);
+  const hard = order.tier === TIER_HARD;
+  const playerLine = hard ? TAKE_HARD : confirmed ? CONFIRM_TAKE : TAKE_EASY;
+  playerThenNpc(player, playerLine, hard ? START_HARD_LINE : START_LINE);
 }
 
 function declineOrder(player, tier) {
   const lockouts = { ...lockoutsOf(player), [tier]: Date.now() + LOCKOUT_MS };
   player.setAttribute(LOCKOUTS_ATTRIBUTE, lockouts);
   const line = tier === TIER_EASY
-    ? "Fine, your loss. If you want another easy job, come back in five minutes and maybe I'll be able to find you one."
-    : "Fine, your loss. I may have an easier job for you. If you want another hard one, come back in five minutes and maybe I'll be able to find you something.";
+    ? "Fine, your loss. If you want another easy job one come back in five minutes and maybe I'll be able to find you one."
+    : "Fine, your loss. I may have an easier job for you, since you chickened out of that one, If you want another hard one come back in five minutes and maybe I'll be able to find you a something.";
   npcSays(player, line);
 }
 
-/** The box's Check option: the order and the time left. */
+/** The box's Check option: the Wiki's message box and its "where do I go" prompt. */
 function checkBox({ player }) {
   const session = sessions.get(player);
+  const inventory = player.getInventory();
   if (!session) {
-    player.sendMessage("You have no delivery to check.");
+    if (inventory.contains(BOX_ID)) {
+      inventory.deleteNumber(BOX_ID, 1);
+      inventory.refreshItems();
+    }
+    player.sendMessage("You are not currently playing the game, so you don't need this box!");
     return;
   }
-  player.sendMessage(`Your delivery box says: ${session.npcName} wants a ${session.itemName}.`);
-  player.sendMessage(`You have ${waitText(session.deadline - Date.now())} left to deliver it.`);
+  const minutes = Math.max(1, Math.round((session.deadline - Date.now()) / MS_PER_MINUTE));
+  const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = core;
+  const builder = new DialogueChainBuilder();
+  builder.add(new StatementDialogue(0, `Your current customer is: ${session.npcName}\n   Your current order is: ${session.itemName}\n   You have about ${minutes} minutes to make your delivery.`));
+  builder.add(new ActionDialogue(1, {
+    execute: () => api.sendMultiChatboxPrompt(player, "Do you want details of where to find your customer?", "Yes.", () => npcSays(player, session.hint), "No.", () => {}),
+  }));
+  player.getDialogueManager().startDialogues(builder);
 }
 
 // --- Time limit
@@ -335,6 +389,8 @@ Object.assign(module.exports, {
     getHardJob,
     offerOrder,
     acceptOrder,
+    confirmDecline,
+    orderLine,
     declineOrder,
     checkBox,
     abandon,

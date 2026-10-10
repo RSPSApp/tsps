@@ -203,6 +203,19 @@ function leaveMess({ player }) {
   Shared.cleanUp(player);
 }
 
+function insideMess(player) {
+  const at = player.getLocation();
+  return at.getZ() === 0
+    && at.getX() >= Shared.MESS_ZONE.minX && at.getX() <= Shared.MESS_ZONE.maxX
+    && at.getY() >= Shared.MESS_ZONE.minY && at.getY() <= Shared.MESS_ZONE.maxY;
+}
+
+/** Logging in inside the Mess reopens the HUD the logout cleanup closed; the login
+ *  hook runs before the gameframe bootstrap, so the overlay waits two ticks. */
+function login({ player }) {
+  if (player && insideMess(player)) Recipes.later(2, () => enterMess({ player }));
+}
+
 function logout({ player }) {
   Shared.cleanUp(player);
 }
@@ -224,6 +237,7 @@ module.exports = function registerStations(api) {
   api.onNpcDialogueCondition(eweseyCondition);
   api.onZoneEnter(Shared.MESS_ZONE, enterMess);
   api.onZoneExit(Shared.MESS_ZONE, leaveMess);
+  api.onPlayerLogin(login);
   api.onPlayerLogout(logout);
   api.onPlayerDisconnect(disconnect);
   api.onServerStartup(Shared.startDecay);
@@ -246,4 +260,5 @@ module.exports._test = {
   eweseyCondition,
   enterMess,
   leaveMess,
+  login,
 };

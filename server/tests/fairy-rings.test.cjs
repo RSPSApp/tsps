@@ -109,6 +109,23 @@ test("a fairy ring needs fairy magic wielded, not carried", () => {
   assert.deepEqual(carried.ticks.flat(), ["The fairy ring only works for those who wield fairy magic."]);
 });
 
+test("the rings unlock with FT2's permission, before the quest completes", () => {
+  const QuestRuntime = require("../plugins/quests/QuestRuntime");
+  const original = QuestRuntime.getRegisteredQuests;
+  QuestRuntime.getRegisteredQuests = () => [{ name: "Fairytale II - Cure a Queen", isComplete: () => false }];
+  try {
+    const denied = player();
+    assert.equal(T.canUse(denied.p), false);
+    assert.deepEqual(denied.ticks.flat(), ["You need to have started Fairytale II - Cure a Queen to use the fairy rings."]);
+
+    const granted = player();
+    granted.varbits.set(2329, 2);
+    assert.equal(T.canUse(granted.p), true);
+  } finally {
+    QuestRuntime.getRegisteredQuests = original;
+  }
+});
+
 test("Configure: the travel log with the codes used, the backdrop, both interfaces, busy a tick later", () => {
   const rec = player();
   rec.p.setAttribute(T.USED_CODES_ATTRIBUTE, "AIQ");

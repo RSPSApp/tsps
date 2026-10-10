@@ -121,12 +121,12 @@ function sail(player, port, fare) {
   core.TeleportHandler.teleport(player, port.destination, core.TeleportType.NORMAL, false);
 }
 
-function openMenu(event) {
-  const { player, object } = event;
-  const from = currentPort(object);
-  const destinations = [...portsByName.values()].filter((port) => port.name !== from?.name);
+/** The chatbox takes five options at most, so the ports are paged four + "More...". */
+const MENU_PAGE_SIZE = 4;
+
+function showPage(player, from, destinations, start) {
   const options = [];
-  for (const port of destinations) {
+  for (const port of destinations.slice(start, start + MENU_PAGE_SIZE)) {
     const fare = fareFor(player, from?.name, port.name);
     options.push(`${port.name}${fare == null ? "" : ` (${fare} coins)`}`, () => {
       if (fare == null) {
@@ -136,10 +136,17 @@ function openMenu(event) {
       sail(player, port, fare);
     });
   }
-  // Return the prompt's success: when the destination list is too long for the
-  // chatbox the click is not handled, so another plugin (a quest's Trader
-  // Crewmember) can own the Talk-to instead.
+  if (start + MENU_PAGE_SIZE < destinations.length) {
+    options.push("More...", () => showPage(player, from, destinations, start + MENU_PAGE_SIZE));
+  }
   return pluginApi.sendMultiChatboxPrompt(player, "Where would you like to sail to?", ...options);
+}
+
+function openMenu(event) {
+  const { player } = event;
+  const from = currentPort(event.object ?? event.npc);
+  const destinations = [...portsByName.values()].filter((port) => port.name !== from?.name);
+  return showPage(player, from, destinations, 0);
 }
 module.exports = {
   name: "CharterShips",
@@ -151,9 +158,9 @@ module.exports = {
     const data = loadData();
     portsByName = new Map(data.ports.map((port) => [port.name, port]));
     fares = data.fares;
-    api.onNpcInteraction("Trader Crewmember", { "Talk-to": openMenu });
-    api.onNpcInteraction("Trader crewmember", { "Talk-to": openMenu });
-    api.onNpcInteraction("Trader Stan", { "Talk-to": openMenu });
+    api.onNpcInteraction("Trader Crewmember", { "Talk-to": openMenu, Charter: openMenu });
+    api.onNpcInteraction("Trader crewmember", { "Talk-to": openMenu, Charter: openMenu });
+    api.onNpcInteraction("Trader Stan", { "Talk-to": openMenu, Charter: openMenu });
     api.log("registered", { ports: portsByName.size, routes: Object.keys(fares).length });
   },
 };

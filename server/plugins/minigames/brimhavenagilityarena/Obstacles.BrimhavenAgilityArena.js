@@ -106,12 +106,8 @@ function useObstacle(event) {
   return true;
 }
 
-/** Clicks from far away walk to the obstacle first; the obstacle claims only its own tiles. */
-function routeToObstacle(event) {
-  if (event.clickType !== 1 || !familyAt(event.objectId)) return;
-  const at = event.object.getLocation();
-  event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
-}
+// The obstacle's own tile is not walkable for walls, so routing is left to the core's
+// walkToObject reach logic; setting a destination to the object tile hangs the walk.
 
 module.exports = (api) => {
   ObstacleRunner.init(api);
@@ -124,11 +120,9 @@ module.exports = (api) => {
   api.onObjectInteraction("Plank", { "Walk-on": useObstacle });
   api.onObjectInteraction("Pillar", { "Jump-on": useObstacle });
   api.onObjectInteraction("Hand holds", { "Climb-across": useObstacle });
-  api.onObjectRoute(routeToObstacle);
 };
 
 module.exports.useObstacle = useObstacle;
-module.exports.routeToObstacle = routeToObstacle;
 module.exports.crossingTarget = crossingTarget;
 module.exports.familyAt = familyAt;
 module.exports.obstacleXp = obstacleXp;

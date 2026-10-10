@@ -42,6 +42,8 @@ const WINGER_NAME = "Gnome winger";
 const GOAL_NAME = "Gnome goal";
 const GNOMEBALL = 751; // ItemIdentifiers.GNOMEBALL
 const PITCH = { minX: 2383, maxX: 2408, minY: 3481, maxY: 3496, plane: 0 };
+// shortcut: throws reach across the pitch, narrow this if live captures establish a shorter range.
+const PITCH_THROW_RANGE = Math.max(PITCH.maxX - PITCH.minX, PITCH.maxY - PITCH.minY);
 const MAX_SHOT_DISTANCE = 11;
 const GOALS_PER_GAME = 5;
 /** Goals 1-5: the Wiki's 4/5/6/7 and the 30 that carries the win bonus. */
@@ -72,6 +74,7 @@ const SOUND = Object.freeze({
   TACKLE: 1571, TACKLE_FAIL: 1572, TACKLED: 1574, TACKLED_THUD: 518, THROW: 1576,
 });
 const BALL_PROJECTILE = 55;
+const BALL_THROW_HEIGHT = 40;
 const WINGER_CATCH_ANIMATION = 200; // cache: gnome_catch
 const WINGER_THROW_ANIMATION = 201; // cache: gnome_throw
 // shortcut: five ticks stands in for the Wiki's "a few seconds", use captures for exact timing.
@@ -239,7 +242,17 @@ function routeShot(event) {
   if (event.definition?.getName?.() !== GOAL_NAME) return;
   const option = event.definition.getInteractions?.()?.[event.clickType - 1];
   if (option && option !== "Shoot") return;
+  if (!inPitch(event.player) || !inPitch(event.object)) return;
+  // Shoot from the clicked position instead of routing to the goal's pole.
+  event.destination = event.sourceLocation;
   session.shotGrace = SHOT_GRACE_TICKS;
+}
+
+function routePass(event) {
+  if (event.definition?.getName?.() !== WINGER_NAME) return;
+  if (event.definition.getActions?.()?.[event.clickType - 1] !== "Pass-to") return;
+  if (!inPitch(event.player) || !inPitch(event.npc)) return;
+  event.range = PITCH_THROW_RANGE;
 }
 
 /** Runs `action` after `ticks` game ticks. */
@@ -265,7 +278,7 @@ function throwBall(player, goal, target = null) {
   player.performAnimation(new core.Animation(PLAYER.THROW));
   player.getPacketSender()
     .sendAreaSound(SOUND.THROW, from.getX(), from.getY(), from.getZ(), 1, 10, 5)
-    .sendProjectile(from, goal, 0, flight, BALL_PROJECTILE, 163, 10, target, 41, 15, 11);
+    .sendProjectile(from, goal, 0, flight, BALL_PROJECTILE, BALL_THROW_HEIGHT, BALL_THROW_HEIGHT, target, 41, 15, 11);
   return Math.ceil(flight / 30);
 }
 
@@ -284,8 +297,15 @@ function shootGoal(event) {
   const scored = random() < shotChance(distance, ranged);
   clearCarriedBall(player);
   player.sendMessage(THROW_MESSAGE);
-  later(1, () => throwBall(player, goal));
-  later(4, () => (scored ? scoreGoal(player, session) : player.sendMessage(MISS_MESSAGE)));
+  later(1, () => {
+    if (sessions.get(player) !== session || !inPitch(player)) return;
+    const travelTicks = throwBall(player, goal);
+    later(travelTicks, () => {
+      if (sessions.get(player) !== session || !inPitch(player)) return;
+      if (scored) scoreGoal(player, session);
+      else player.sendMessage(MISS_MESSAGE);
+    });
+  });
   return true;
 }
 
@@ -348,7 +368,7 @@ function passToWinger({ player, npc }) {
       npc.performAnimation(new core.Animation(WINGER_THROW_ANIMATION));
       npc.setNpcTransformationId(-1);
       delete session.ballHolder;
-      player.getPacketSender().sendProjectile(from, to, 0, flight, BALL_PROJECTILE, 40, 40, player, 41, 15, 11);
+      player.getPacketSender().sendProjectile(from, to, 0, flight, BALL_PROJECTILE, BALL_THROW_HEIGHT, BALL_THROW_HEIGHT, player, 41, 15, 11);
       session.passTask = later(Math.ceil(flight / 30), () => {
         if (!canReturn()) return;
         delete session.passTask;
@@ -523,6 +543,7 @@ function attach(pluginApi) {
   api.onObjectRoute(routeShot);
   api.onNpcInteraction(BALLER_NAME, { Tackle: tackleBaller });
   api.onNpcInteraction(WINGER_NAME, { "Pass-to": passToWinger });
+  api.onNpcRoute(routePass);
   api.onItemAction("Gnomeball", { Drop: dropBall });
   api.onItemDropPolicy(dropPolicy);
   api.onPlayerLogout(endOnLogout);
@@ -547,6 +568,7 @@ module.exports = {
     tackleChance,
     ballerTackleChance,
     routeShot,
+    routePass,
     shootGoal,
     scoreGoal,
     throwBall,

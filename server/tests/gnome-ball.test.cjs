@@ -24,6 +24,7 @@ const api = {
   onObjectInteraction: (name, actions) => registered.push({ kind: "object", name, actions }),
   onObjectRoute: (handler) => registered.push({ kind: "objectRoute", handler }),
   onNpcInteraction: (name, actions) => registered.push({ kind: "npc", name, actions }),
+  onNpcRoute: (handler) => registered.push({ kind: "npcRoute", handler }),
   onItemAction: (name, actions) => registered.push({ kind: "itemAction", name, actions }),
   onItemDropPolicy: (handler) => registered.push({ kind: "itemDrop", handler }),
   onPlayerLogout: (handler) => registered.push({ kind: "logout", handler }),
@@ -184,6 +185,7 @@ test("the plugin declares itself members content and wires the pitch hooks", () 
   assert.ok(registered.some((entry) => entry.kind === "objectRoute"));
   assert.ok(registered.some((entry) => entry.kind === "npc" && entry.name === "Gnome baller"));
   assert.ok(registered.some((entry) => entry.kind === "npc" && entry.name === "Gnome winger" && entry.actions["Pass-to"]));
+  assert.ok(registered.some((entry) => entry.kind === "npcRoute"));
   assert.ok(registered.some((entry) => entry.kind === "itemAction" && entry.name === "Gnomeball"));
   assert.ok(registered.some((entry) => entry.kind === "itemDrop"));
   assert.ok(registered.some((entry) => entry.kind === "death"));
@@ -195,6 +197,57 @@ test("shoot chance follows the wiki curve and is capped at 1", () => {
   assert.ok(Math.abs(shotChance(11, 1) - 26 / 256) < 1e-12);
   assert.ok(Math.abs(shotChance(11, 99) - 245 / 256) < 1e-12);
   assert.equal(shotChance(30, 1), shotChance(11, 1), "distance clamps at 11");
+});
+
+test("shots stay at the clicked tile and winger passes can reach across the pitch", () => {
+  const p = fakePlayer();
+  Pitch.beginGame(p);
+  const sourceLocation = { x: 2390, y: 3488, z: 0 };
+  const shot = { player: p, definition: { getName: () => 'Gnome goal', getInteractions: () => ['Shoot'] },
+    object: { getLocation: () => new core.Location(2404, 3488, 0) },
+    clickType: 1, sourceLocation, destination: null };
+  Pitch._test.routeShot(shot);
+  assert.deepEqual(shot.destination, sourceLocation, 'a shot from 14 tiles away does not walk to the net');
+  const pass = { player: p, npc: baller(2403, 3492).npc,
+    definition: { getName: () => 'Gnome winger', getActions: () => ['Pass-to', 'Talk-to'] },
+    clickType: 1, range: 1 };
+  Pitch._test.routePass(pass);
+  assert.equal(pass.range, 25);
+  pass.range = 1;
+  pass.clickType = 2;
+  Pitch._test.routePass(pass);
+  assert.equal(pass.range, 1, 'talking keeps its close range');
+  p.location = new core.Location(2380, 3488, 0);
+  shot.destination = null;
+  Pitch._test.routeShot(shot);
+  assert.equal(shot.destination, null, 'players outside the pitch cannot shoot remotely');
+  pass.clickType = 1;
+  Pitch._test.routePass(pass);
+  assert.equal(pass.range, 1, 'players outside the pitch cannot pass remotely');
+});
+
+test("a distant shot uses the return throw's arc and resolves after the ball arrives", () => {
+  const p = fakePlayer({ ranged: 99 });
+  Pitch.beginGame(p);
+  const tasks = [];
+  Pitch._test.setApi({ ...api, getTaskManager: () => ({ submit: (task) => tasks.push(task) }) });
+  Pitch._test.setRandom(() => 0.2);
+  try {
+    Pitch._test.shootGoal(shootEvent(p));
+    assert.equal(p.xp.RANGED, 0);
+    assert.equal(tasks[0].getDelay(), 1);
+    tasks.shift().execute();
+    const projectile = p.packets.find(([name]) => name === 'sendProjectile');
+    assert.equal(projectile[6], 40);
+    assert.equal(projectile[7], 40);
+    assert.equal(projectile[10], 15);
+    assert.equal(tasks[0].getDelay(), Math.ceil(projectile[4] / 30));
+    assert.equal(p.xp.RANGED, 0, 'the score waits for the long flight');
+    tasks.shift().execute();
+    assert.equal(p.xp.RANGED, 4, 'a distant shot can score');
+  } finally {
+    Pitch._test.setApi(api);
+  }
 });
 
 test("tackle chance lerps 31/256 to 201/256, or 221/256 against a ball carrier", () => {
@@ -222,7 +275,10 @@ test("a clicked Shoot is not pre-empted: ballers pause and the adjacent shot sti
   const mobile = playerMobile(p);
   area.enter(mobile);
   const goal = { getName: () => "Gnome goal", getInteractions: () => ["Shoot"] };
-  Pitch._test.routeShot({ player: p, definition: goal, clickType: 1 });
+  Pitch._test.routeShot({ player: p, definition: goal, clickType: 1,
+    object: { getLocation: () => new core.Location(2404, 3488, 0) },
+    sourceLocation: { x: 2390, y: 3488, z: 0 },
+  });
   Pitch._test.setRandom(() => 0); // a tackle would otherwise fire on the next check
   for (let tick = 0; tick < 3; tick++) area.process(mobile);
   assert.equal(p.hits.length, 0, "the tackle wait covers the shot");
@@ -455,6 +511,8 @@ test("winger passing throws both ways and equips the ball only after the return 
     assert.equal(p.animations.at(-1), 783);
     const outbound = p.packets.find((packet) => packet[0] === "sendProjectile");
     assert.equal(outbound[5], 55);
+    assert.equal(outbound[6], 40, "outgoing passes use the working return throw's launch height");
+    assert.equal(outbound[7], 40);
     assert.equal(outbound[8], npc);
     tasks.shift().execute();
     assert.equal(npc.animations.at(-1).getId(), 200);

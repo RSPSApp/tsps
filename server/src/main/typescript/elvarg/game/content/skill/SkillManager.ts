@@ -298,13 +298,25 @@ export class SkillManager {
      * @return The average of the player's combat skills.
      */
     public getCombatLevel(): number {
-        const attack = this.skills.maxLevel[Skill.ATTACK.getIndex()];
-        const defence = this.skills.maxLevel[Skill.DEFENCE.getIndex()];
-        const strength = this.skills.maxLevel[Skill.STRENGTH.getIndex()];
-        const hp = this.skills.maxLevel[Skill.HITPOINTS.getIndex()];
-        const prayer = this.skills.maxLevel[Skill.PRAYER.getIndex()];
-        const ranged = this.skills.maxLevel[Skill.RANGED.getIndex()];
-        const magic = this.skills.maxLevel[Skill.MAGIC.getIndex()];
+        return SkillManager.calculateCombatLevel(this.skills.maxLevel);
+    }
+
+    /**
+     * The combat level for a set of base levels, indexed by {@link Skill}'s ordinal.
+     * Lets a caller value a loadout it has not put on a player yet, such as a preset's
+     * own declared stats.
+     *
+     * @param levels Base levels by skill index.
+     * @return The combat level, clamped to the 3-126 range a player can have.
+     */
+    public static calculateCombatLevel(levels: number[]): number {
+        const attack = levels[Skill.ATTACK.getIndex()];
+        const defence = levels[Skill.DEFENCE.getIndex()];
+        const strength = levels[Skill.STRENGTH.getIndex()];
+        const hp = levels[Skill.HITPOINTS.getIndex()];
+        const prayer = levels[Skill.PRAYER.getIndex()];
+        const ranged = levels[Skill.RANGED.getIndex()];
+        const magic = levels[Skill.MAGIC.getIndex()];
         let combatLevel = 3;
         combatLevel = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
         const melee = (attack + strength) * 0.325;

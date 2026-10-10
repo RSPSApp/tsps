@@ -16,6 +16,7 @@ const commands = new Map();
 
 function fakePlayer() {
   const worn = new Array(14).fill(null);
+  const inventory = Array.from({ length: 28 }, () => new Item(-1, 0));
   const banked = [];
   const messages = [];
   const equipment = {
@@ -23,17 +24,26 @@ function fakePlayer() {
     resetItems() { worn.fill(null); return equipment; },
     setItem(slot, item) { worn[slot] = item; return equipment; },
     refreshItems() { return equipment; },
+    forSlot: (slot) => worn[slot] ?? new Item(-1, 0),
   };
   return {
     worn,
+    inventory,
     banked,
     messages,
     getEquipment: () => equipment,
+    getInventory: () => ({
+      capacity: () => inventory.length,
+      getItems: () => inventory,
+      refreshItems() { return inventory; },
+    }),
+    getInterfaceId: () => require('../dist/game/model/container/impl/Inventory').Inventory.INTERFACE_ID,
+    getHitpoints: () => 30,
     getBank: () => ({ add: (item) => banked.push(item.getId()), contains: () => false, getAmount: () => 0, getFreeSlots: () => 800 }),
     getCurrentBankTab: () => 0,
-    getPacketSender: () => ({ sendSpecialAttackState() {} }),
+    getPacketSender: () => ({ sendSpecialAttackState() {}, sendInterfaceRemoval() {} }),
     getUpdateFlag: () => ({ flag() {} }),
-    getSkillManager: () => ({ getMaxLevel: () => 99 }),
+    getSkillManager: () => ({ getMaxLevel: () => 99, getCombatLevel: () => 126, stopSkillable() {} }),
     setSpecialActivated() {},
     sendMessage: (message) => messages.push(message),
   };
@@ -109,4 +119,53 @@ test('a wrong style or flag only explains the usage', () => {
     assert.match(player.messages.at(-1), /::maxgear <melee\|range\|mage> \[void\]/);
     assert.ok(player.worn.every((item) => item == null), 'nothing put on');
   }
+});
+
+test('gear the player has not trained for is refused and stays in their inventory', () => {
+  // item-gameplay.json is where the requirements come from, so load it the way the server does
+  require('../plugins/items/ItemDefinitionLoader.plugin').register({
+    log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
+  });
+  const { EquipPacketListener } = require('../dist/net/packet/impl/EquipPacketListener');
+  const { Inventory } = require('../dist/game/model/container/impl/Inventory');
+  const player = fakePlayer();
+  const levels = new Map([[core.Skill.RANGED, 74], [core.Skill.DEFENCE, 79]]);
+  let combatLevel = 126;
+  player.getSkillManager = () => ({
+    getMaxLevel: (skill) => levels.get(skill) ?? 99,
+    getCombatLevel: () => combatLevel,
+    stopSkillable() {},
+  });
+
+  player.inventory[0] = new Item(I.TWISTED_BOW, 1);
+  EquipPacketListener.equip(player, I.TWISTED_BOW, 0, Inventory.INTERFACE_ID);
+  assert.equal(player.messages.at(-1), 'You need a Ranged level of at least 75 to wear this.');
+  assert.equal(player.worn[Equipment.WEAPON_SLOT], null, 'not wielded');
+  assert.equal(player.inventory[0].getId(), I.TWISTED_BOW, 'still in the inventory');
+
+  player.inventory[0] = new Item(I.TORVA_FULL_HELM, 1);
+  EquipPacketListener.equip(player, I.TORVA_FULL_HELM, 0, Inventory.INTERFACE_ID);
+  assert.equal(player.messages.at(-1), 'You need a Defence level of at least 80 to wear this.');
+  assert.equal(player.worn[Equipment.HEAD_SLOT], null, 'not worn');
+
+  // A Black mask gates on combat level, which has no Skill of its own.
+  levels.clear();
+  combatLevel = 39;
+  player.inventory[0] = new Item(I.BLACK_MASK, 1);
+  EquipPacketListener.equip(player, I.BLACK_MASK, 0, Inventory.INTERFACE_ID);
+  assert.equal(player.messages.at(-1), 'You need a combat level of at least 40 to wear this.');
+  assert.equal(player.worn[Equipment.HEAD_SLOT], null, 'not worn');
+
+  // Only the gate is under test, so everything past it is stubbed away.
+  require('../dist/game/model/equipment/BonusManager').BonusManager.update = () => {};
+  core.WeaponInterfaceManager.assign = () => {};
+  combatLevel = 40;
+  player.messages.length = 0;
+  try {
+    EquipPacketListener.equip(player, I.BLACK_MASK, 0, Inventory.INTERFACE_ID);
+  } catch {
+    /* the containers here are not a real player's */
+  }
+  assert.ok(!player.messages.some((message) => /to wear this/.test(message)),
+    'the same mask goes on once the combat level is there');
 });

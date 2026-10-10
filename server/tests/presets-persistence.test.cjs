@@ -212,6 +212,97 @@ test("loading a preset banks carried items but leaves preset items behind", () =
   }
 });
 
+test("loading a preset only puts on what the preset's own levels can wear", () => {
+  const { Bank } = require("../dist/game/model/container/impl/Bank");
+  const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+  const { PrayerHandler } = require("../dist/game/content/PrayerHandler");
+  const { CombatSpecial } = require("../dist/game/content/combat/CombatSpecial");
+  // applyPreset reads requirements off ItemDefinition, which only the loader fills in.
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({
+    log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
+  });
+
+  const preset = presets.getGlobalPresetByName("Obby Mauler");
+  assert.ok(preset, "1 Attack/1 Magic/60 Ranged: two of its pieces are unwearable");
+
+  const messages = [];
+  const worn = new Map();
+  const sender = {
+    closeSubInterface() { return sender; },
+    sendString() { return sender; },
+    sendItemOnInterfaces() { return sender; },
+    sendInterfaceDisplayState() { return sender; },
+    sendTabInterface() { return sender; },
+    sendConfig() { return sender; },
+    sendTotalExp() { return sender; },
+    sendMessage: (message) => messages.push(message),
+  };
+  const container = (onSet) => {
+    const items = [];
+    const api = {
+      getCopiedItems: () => items,
+      getAmount: () => 0,
+      containsItem: () => false,
+      deletes: () => {},
+      addItem: (item) => items.push(item),
+      resetItems: () => api,
+      refreshItems: () => api,
+      setItem: (slot, item) => { onSet(slot, item); return api; },
+    };
+    return api;
+  };
+  const skillManager = {
+    setCurrentLevels: () => skillManager,
+    setMaxLevel: () => skillManager,
+    setExperience: () => skillManager,
+    getMaxLevel: () => 99,
+    getCombatLevel: () => 126,
+  };
+  const player = {
+    getInterfaceId: () => -1,
+    getPacketSender: () => sender,
+    sendMessage: (message) => messages.push(message),
+    getInventory: () => container(() => assert.fail("preset gear must not land in the inventory")),
+    getEquipment: () => container((slot, item) => worn.set(slot, item)),
+    getBank: () => ({ add: () => {}, getAmount: () => 0, deletes: () => {} }),
+    getSkillManager: () => skillManager,
+    getSpellbook: () => MagicSpellbook.NORMAL,
+    setSpellbook: () => {},
+    getLocation: () => null,
+    getUpdateFlag: () => ({ flag: () => {} }),
+    isPlayerBot: () => false,
+    setAttribute: () => {},
+    getAttribute: () => null,
+    setSpecialPercentage: () => {},
+    resetAttributes: () => {},
+  };
+
+  const patched = [
+    [Bank, "getTabForItem", () => 0],
+    [PrayerHandler, "canUse", () => false],
+    [CombatSpecial, "updateBar", () => {}],
+  ];
+  patched.forEach(([owner, name]) => owner[`_${name}_original`] = owner[name]);
+  patched.forEach(([owner, name, replacement]) => { owner[name] = replacement; });
+  let loaded;
+  try {
+    loaded = presets.applyPreset(player, preset);
+  } finally {
+    patched.forEach(([owner, name]) => { owner[name] = owner[`_${name}_original`]; delete owner[`_${name}_original`]; });
+  }
+
+  assert.equal(loaded, true, "the preset still loads");
+  assert.deepEqual(messages.filter((message) => /to wear/.test(message)), [
+    "You need a Magic level of at least 60 to wear your Zamorak cape.",
+    "You need a Ranged level of at least 70 to wear your Black d'hide chaps.",
+  ]);
+  assert.ok(!worn.has(Equipment.CAPE_SLOT), "no cape at 1 Magic");
+  assert.ok(!worn.has(Equipment.LEG_SLOT), "no chaps at 60 Ranged");
+  assert.equal(worn.size, preset.getEquipment().length - 2, "everything else goes on");
+  assert.ok(worn.get(Equipment.WEAPON_SLOT).isPresetItem(), "the spawned gear keeps its preset meta");
+  assert.ok(messages.includes("Preset loaded!"));
+});
+
 test("dropping a preset item destroys it without the confirmation interface", () => {
   const destroy = require("../plugins/interface/DestroyItem.plugin");
   let onDrop;

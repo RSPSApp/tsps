@@ -10,6 +10,7 @@ const { Wilderness } = require("../../../src/main/typescript/elvarg/game/content
 const { isSafeLocation: isFeroxSafeLocation } = require("../../areas/ferox/Bounds.FeroxEnclave");
 const { Item } = require("../../../src/main/typescript/elvarg/game/model/Item");
 const { Skill } = require("../../../src/main/typescript/elvarg/game/model/Skill");
+const { EquipmentRequirements } = require("../../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
 const { MagicSpellbook } = require("../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { Flag } = require("../../../src/main/typescript/elvarg/game/model/Flag");
 const { Bank } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Bank");
@@ -341,6 +342,25 @@ function captureCombatStats(player) {
   return COMBAT_SKILLS.map((skill) => skills.getMaxLevel(skill));
 }
 
+/**
+ * A stand-in wearer built from a preset's own declared levels. Loading a preset writes
+ * these stats onto the player, so gear those levels cannot wear must not go on either.
+ */
+function presetWearer(preset) {
+  const levels = new Array(Skill.values().length).fill(1);
+  const stats = Array.isArray(preset.getStats()) ? preset.getStats() : [];
+  COMBAT_SKILLS.forEach((skill, index) => {
+    levels[skill.getIndex()] = Math.max(1, Math.floor(Number(stats[index]) || 1));
+  });
+  const combatLevel = SkillManager.calculateCombatLevel(levels);
+  return {
+    getSkillManager: () => ({
+      getMaxLevel: (skill) => levels[skill.getIndex()],
+      getCombatLevel: () => combatLevel,
+    }),
+  };
+}
+
 function resolvePresetAutocastSpellId(preset) {
   const value =
     preset?.getAutocastSpellId?.() ??
@@ -603,6 +623,7 @@ function applyPreset(player, preset) {
     player.getInventory().addItem(next);
   }
 
+  const wearer = presetWearer(preset);
   for (const item of preset.getEquipment() ?? []) {
     const next = spawnPresetItem(item, preset);
     if (!next) {
@@ -610,6 +631,14 @@ function applyPreset(player, preset) {
     }
     const slot = equipmentSlotOf(next.getId());
     if (slot < 0) {
+      continue;
+    }
+    // Writing the slots directly would wear past this preset's own levels.
+    const unmet = EquipmentRequirements.getUnmet(wearer, next.getDefinition());
+    if (unmet != null) {
+      sender.sendMessage(
+        EquipmentRequirements.message(unmet, `your ${next.getDefinition().getName()}`)
+      );
       continue;
     }
     player.getEquipment().setItem(slot, next);

@@ -40,11 +40,6 @@ const AVERNIC_TREADS_BONUSES = [
   21, 25, 25, 10, 10,
   4, 2, 1, 0,
 ];
-const AVERNIC_TREADS_REQUIREMENTS = [0, 80, 80, 0, 80, 0, 80];
-const PEGASIAN_BOOTS_REQUIREMENTS = [0, 75, 0, 0, 75];
-const ANCESTRAL_ROBES_REQUIREMENTS = [0, 65, 0, 0, 0, 0, 75];
-const AHRIMS_STAFF_REQUIREMENTS = [70, 0, 0, 0, 0, 0, 70];
-const TORAGS_HAMMERS_REQUIREMENTS = [70, 0, 70];
 const BARROWS_BASE_ITEMS = [
   4708, 4710, 4712, 4714, 4716, 4718, 4720, 4722,
   4724, 4726, 4728, 4730, 4732, 4734, 4736, 4738,
@@ -158,7 +153,7 @@ function loadItemDefinitions() {
       "doubleHanded", "sellable", "bloodMoneyValue", "highAlch",
       "lowAlch", "dropValue", "blockAnim", "standAnim", "walkAnim", "runAnim",
       "standTurnAnim", "turn180Anim", "turn90CWAnim", "turn90CCWAnim", "attackAnim", "equipSound", "bonuses",
-      "requirements", "deathComponents",
+      "requirements", "deathComponents", "combatRequirement",
     ]) {
       if (rawDef[property] !== undefined) def[property] = rawDef[property];
     }
@@ -171,18 +166,6 @@ function loadItemDefinitions() {
 
   const ItemIdentifiers = getItemIdentifiers();
   ItemDefinition.forId(ItemIdentifiers.AVERNIC_TREADS).bonuses = AVERNIC_TREADS_BONUSES;
-  ItemDefinition.forId(ItemIdentifiers.AVERNIC_TREADS).requirements = AVERNIC_TREADS_REQUIREMENTS;
-  ItemDefinition.forId(ItemIdentifiers.PEGASIAN_BOOTS).requirements = PEGASIAN_BOOTS_REQUIREMENTS;
-  for (const id of [
-    ItemIdentifiers.ANCESTRAL_HAT,
-    ItemIdentifiers.ANCESTRAL_ROBE_TOP,
-    ItemIdentifiers.ANCESTRAL_ROBE_BOTTOM,
-  ]) {
-    ItemDefinition.forId(id).requirements = ANCESTRAL_ROBES_REQUIREMENTS;
-  }
-
-  ItemDefinition.forId(ItemIdentifiers.AHRIMS_STAFF).requirements = AHRIMS_STAFF_REQUIREMENTS;
-  ItemDefinition.forId(ItemIdentifiers.TORAGS_HAMMERS).requirements = TORAGS_HAMMERS_REQUIREMENTS;
   for (const baseId of BARROWS_BASE_ITEMS) {
     const base = ItemDefinition.forId(baseId);
     if (AHRIMS_ARMOUR.has(baseId)) {

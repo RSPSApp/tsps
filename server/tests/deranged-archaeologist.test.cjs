@@ -130,7 +130,7 @@ test('register wires the provider for 7806 as a per-npc instance plus the death 
   Plugin.register({
     core: Core,
     registerNpcCombatMethodProvider: (ids, ctor, options) => calls.push({ ids, ctor, options }),
-    onNpcDeath: (handler) => { deathHandler = handler; },
+    onNpcBeforeDeath: (handler) => { deathHandler = handler; },
   });
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].ids, [7806]);

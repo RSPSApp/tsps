@@ -242,6 +242,8 @@ function combatClass(apiCore) {
 function derangedDeath({ npc }) {
   if (!npc || typeof npc.getId !== "function") return;
   if (npc.getId() !== core.NpcIdentifiers.DERANGED_ARCHAEOLOGIST) return;
+  // Before-death, not on death: onNpcDeath fires on the removal tick, after
+  // which the NPC gets no more update cycles and the chat never renders.
   npc.forceChat(DEATH_LINE);
 }
 
@@ -250,7 +252,7 @@ module.exports = {
   members: true,
   register(api) {
     attachCombat(api);
-    api.onNpcDeath(derangedDeath);
+    api.onNpcBeforeDeath(derangedDeath);
   },
   _test: { chooseAttack, combatClass, scatterTiles, initialSpecialTiles, burstSpecialTiles, explosionDamage, Attack },
 };

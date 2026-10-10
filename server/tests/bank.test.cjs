@@ -501,3 +501,13 @@ test("collapsing the viewed tab sends the main tab", () => {
   assert.equal(player.getCurrentBankTab(), 0);
   assert.deepEqual(bankTabsSent(player), [[4150, 0]]);
 });
+
+test("bank item slots get the captured events: ops 1-10, depth 2, drag target, target, and no pause button", () => {
+  const flags = Bank.ITEM_SLOT_FLAGS;
+  assert.equal(flags & 1, 0, "no pause button: an empty slot must not offer Continue");
+  for (let op = 1; op <= 10; op++) assert.ok(flags & (1 << op), `op${op}`);
+  assert.equal((flags >> 17) & 7, 2, "depth 2");
+  assert.ok(flags & (1 << 20), "drag target");
+  assert.ok(flags & (1 << 21), "target");
+  assert.equal(flags, 3409918);
+});

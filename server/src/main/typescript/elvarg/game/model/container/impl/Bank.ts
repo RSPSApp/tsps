@@ -57,6 +57,11 @@ export class Bank extends ItemContainer {
     public static readonly DEPOSIT_WORN_CHILD = 49; // bankmain:depositworn
     /** Drops on the empty space after tab N's items report item-grid slot 1428 + N. */
     public static readonly TAB_DROP_SLOT_OFFSET = 1410 + 9 * 2;
+    /**
+     * bankmain:items slots 0-1409, as captured (rsprox, rev 239): OP1-OP10 (bits 1-10), DEPTH2,
+     * DRAGTARGET and TARGET. No pause button (bit 0): with it, an empty slot offered "Continue".
+     */
+    public static readonly ITEM_SLOT_FLAGS = 0x7fe | (2 << 17) | (1 << 20) | (1 << 21);
 
     constructor(public player: Player) {
         super(player);
@@ -942,7 +947,7 @@ export class Bank extends ItemContainer {
         sender.sendInterfaceScript(917, [-1, -2])
             .sendSubInterface((161 << 16) | 16, Bank.MAIN_INTERFACE_ID, 0, { varps, varbits })
             .sendSubInterface((161 << 16) | 74, Bank.SIDE_INTERFACE_ID, 3, { varps, varbits })
-            .sendInterfaceFlagsRange((Bank.MAIN_INTERFACE_ID << 16) | 12, 0, 1409, 3409919)
+            .sendInterfaceFlagsRange((Bank.MAIN_INTERFACE_ID << 16) | Bank.ITEMS_CHILD, 0, 1409, Bank.ITEM_SLOT_FLAGS)
             // The empty space after each tab's items is a drop target (one per tab).
             .sendInterfaceFlagsRange((Bank.MAIN_INTERFACE_ID << 16) | Bank.ITEMS_CHILD,
                 Bank.TAB_DROP_SLOT_OFFSET, Bank.TAB_DROP_SLOT_OFFSET + 9, 1 << 20)

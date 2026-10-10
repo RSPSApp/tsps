@@ -4,26 +4,23 @@
  * Trader crewmembers (and Trader Stan at Port Sarim) sell passage between the
  * ports in plugins/world/data/charter-ships.json. Fares are halved by a worn
  * ring of charos(a) or by Cabin Fever; with both they are a quarter. Destination
- * quest gates only block quests that are registered here, so the ones this
- * server does not have (Cabin Fever, Song of the Elves, Great Kourend) are
- * offered rather than silently locked.
+ * quest requirements fail closed when their quest is unavailable.
  */
 const fs = require("fs");
 const path = require("path");
-const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
-const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
-const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
-const QuestRuntime = require("../quests/QuestRuntime");
-
 const CABIN_FEVER = "Cabin Fever";
-const CHAROS_IDS = new Set([
-  ItemIdentifiers.RING_OF_CHAROS,
-  ItemIdentifiers.RING_OF_CHAROS_A_,
-]);
+const QUEST_KEYS = {
+  "Cabin Fever": "cabin_fever",
+  "Priest in Peril": "priest_in_peril",
+  Regicide: "regicide",
+  "Song of the Elves": "song_of_the_elves",
+  "The Grand Tree": "grand_tree",
+};
 const PORT_TOLERANCE = 12;
 
 let core = null;
 let pluginApi = null;
+let charosIds = new Set();
 let portsByName = new Map();
 let fares = null;
 
@@ -32,24 +29,23 @@ function loadData() {
   const data = JSON.parse(fs.readFileSync(file, "utf8"));
   const ports = (data.ports ?? []).map((entry) => ({
     name: entry.name,
-    destination: new Location(entry.x, entry.y, entry.z ?? 0),
+    destination: new core.Location(entry.x, entry.y, entry.z ?? 0),
     requires: entry.requires ?? null,
   }));
   return { ports, fares: data.fares ?? {} };
 }
 
 function questComplete(player, name) {
-  if (!name || name === "Great Kourend") {
-    return true;
-  }
-  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.name === name);
-  return quest ? quest.isComplete(player) : true;
+  if (!name) return true;
+  const request = { player, key: QUEST_KEYS[name], complete: false };
+  if (!request.key) return false;
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
 }
 
 /** Benefits (the Cabin Fever discount) only count an implemented, completed quest. */
 function questCompletedOnly(player, name) {
-  const quest = QuestRuntime.getRegisteredQuests().find((entry) => entry.name === name);
-  return quest ? quest.isComplete(player) : false;
+  return questComplete(player, name);
 }
 
 function currentPort(object) {
@@ -69,8 +65,8 @@ function currentPort(object) {
 }
 
 function wearingCharosRing(player) {
-  const ringId = Number(player.getEquipment?.()?.get?.(Equipment.RING_SLOT)?.getId?.() ?? -1);
-  return CHAROS_IDS.has(ringId);
+  const ringId = Number(player.getEquipment?.()?.get?.(core.Equipment.RING_SLOT)?.getId?.() ?? -1);
+  return charosIds.has(ringId);
 }
 
 /** Base fare between two ports; returns null when no route exists. */
@@ -108,14 +104,14 @@ function sail(player, port, fare) {
     return;
   }
   const inventory = player.getInventory();
-  if (inventory.getAmount(ItemIdentifiers.COINS) < fare) {
+  if (inventory.getAmount(core.ItemIdentifiers.COINS) < fare) {
     player.sendMessage("You don't have enough coins for that fare.");
     return;
   }
   if (!core.TeleportHandler.checkReqs(player, port.destination)) {
     return;
   }
-  inventory.deleteNumber(ItemIdentifiers.COINS, fare);
+  inventory.deleteNumber(core.ItemIdentifiers.COINS, fare);
   inventory.refreshItems();
   player.sendMessage(`You pay ${fare} coins and board the ship.`);
   core.TeleportHandler.teleport(player, port.destination, core.TeleportType.NORMAL, false);
@@ -148,6 +144,7 @@ module.exports = {
   register(api) {
     core = api.core;
     pluginApi = api;
+    charosIds = new Set([core.ItemIdentifiers.RING_OF_CHAROS, core.ItemIdentifiers.RING_OF_CHAROS_A_]);
     const data = loadData();
     portsByName = new Map(data.ports.map((port) => [port.name, port]));
     fares = data.fares;

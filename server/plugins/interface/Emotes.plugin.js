@@ -52,7 +52,7 @@ const EMOTES = [
     { sequence: 1708 },
     { sequence: 7131, loop: 12062 },
     { skillcape: true },
-    { sequence: 4751 },
+    { airGuitar: true },
     { sequence: 7278 },
     { sequence: 7533 },
     { variants: [7536, 7537] },
@@ -90,7 +90,6 @@ const SKILLCAPE_ROWS = [
     [[9807, 9808], 4957, 822],
     [[9810, 9811], 4963, 825],
     [[9948, 9949], 5158, 907],
-    [[9813, 13068], 4945, 816],
     [[13069, 19476], 2709],
     [[13221, 13222, 14204, 14205], 4751],
     [[13280, 13342, 13329, 21186, 13331, 13333, 13335, 13337, 20760, 21284,
@@ -116,19 +115,41 @@ function enableEmoteActions(player) {
     );
 }
 
-function resolveSkillcapeEmote(player) {
-    const cape = player.getEquipment().getItems()[Equipment.CAPE_SLOT];
-    return cape ? SKILLCAPE_EMOTES.get(cape.getId()) : undefined;
+function questCapeReady(player, api) {
+    const request = { player, canUse: false };
+    api.emitCustomEvent("quest-cape:can-use", request);
+    return request.canUse === true;
 }
 
-function resolveEmote(player, slot, action) {
+function resolveSkillcapeEmote(player, api) {
+    const cape = player.getEquipment().getItems()[Equipment.CAPE_SLOT];
+    if (!cape) return undefined;
+    const items = api.core.ItemIdentifiers;
+    if (cape.getId() === items.QUEST_POINT_CAPE || cape.getId() === items.QUEST_POINT_CAPE_T_) {
+        return questCapeReady(player, api) ? { sequence: 4945, graphic: 816 } : undefined;
+    }
+    if ([items.MUSIC_CAPE, items.MUSIC_CAPE_T_, items.MUSIC_CAPE_2, items.MUSIC_CAPE_T__2].includes(cape.getId())) {
+        const request = { player, unlocked: false };
+        api.emitCustomEvent("music:air-guitar-unlocked", request);
+        return request.unlocked === true ? { sequence: 4751, graphic: 1239 } : undefined;
+    }
+    return SKILLCAPE_EMOTES.get(cape.getId());
+}
+
+function resolveEmote(player, slot, action, api) {
     const emote = EMOTES[slot];
     if (!emote) {
         return undefined;
     }
 
     if (emote.skillcape) {
-        return resolveSkillcapeEmote(player);
+        return resolveSkillcapeEmote(player, api);
+    }
+
+    if (emote.airGuitar) {
+        const request = { player, unlocked: false };
+        api.emitCustomEvent("music:air-guitar-unlocked", request);
+        return request.unlocked === true ? { sequence: 4751, graphic: 1239 } : undefined;
     }
 
     if (emote.variants) {
@@ -143,6 +164,7 @@ function resolveEmote(player, slot, action) {
 
 module.exports = {
     name: "Emotes",
+    _test: { questCapeReady, resolveSkillcapeEmote, resolveEmote },
     register(api) {
         const CombatFactory = api.getCombatFactory();
 
@@ -169,8 +191,18 @@ module.exports = {
                 return true;
             }
 
-            const emote = resolveEmote(player, slot, action);
+            const emote = resolveEmote(player, slot, action, api);
             if (!emote) {
+                if (EMOTES[slot].airGuitar) {
+                    player.sendMessage("You need the Music cape to perform Air Guitar.");
+                    return true;
+                }
+                const cape = player.getEquipment().getItems()[Equipment.CAPE_SLOT];
+                const items = api.core.ItemIdentifiers;
+                if (cape && (cape.getId() === items.QUEST_POINT_CAPE || cape.getId() === items.QUEST_POINT_CAPE_T_)) {
+                    player.sendMessage("You need to complete every quest before performing the Quest point cape emote.");
+                    return true;
+                }
                 player.sendMessage(
                     "You need to be wearing a skillcape in order to perform that emote.",
                 );

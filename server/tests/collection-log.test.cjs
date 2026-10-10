@@ -216,3 +216,54 @@ test("pets report through the event", () => {
   assert.equal(Progress.obtained(player, 13181), 1);
   assert.ok(!player.log.some((line) => line.startsWith("New item")), "silent, and ensured only once");
 });
+
+test("reward-shop purchases log quantities, but unrelated shops and resold stock do not", () => {
+  const player = createPlayer();
+  const purchase = { player, shopName: "Mahogany Homes Reward Shop", itemId: CARPENTERS_BOOTS, amount: 2, originalStock: true };
+  emit("shop:purchase", purchase);
+  assert.equal(Progress.obtained(player, CARPENTERS_BOOTS), 2);
+  emit("shop:purchase", { ...purchase, amount: 1 });
+  assert.equal(Progress.obtained(player, CARPENTERS_BOOTS), 3);
+  assert.equal(player.log.filter((line) => line.startsWith("New item")).length, 1);
+  emit("shop:purchase", { ...purchase, shopName: "General Store" });
+  emit("shop:purchase", { ...purchase, originalStock: false });
+  assert.equal(Progress.obtained(player, CARPENTERS_BOOTS), 3);
+});
+
+test("every configured reward shop exists in canonical shop data", () => {
+  const shops = require("../data/definitions/shops.json");
+  for (const name of require("../plugins/collectionlog/data/reward-shops.json")) {
+    assert.ok(shops.some((shop) => shop.name === name), name);
+  }
+});
+
+test("Barrows logs its chest rewards once, including overflow, and uses its persisted chest tally", (t) => {
+  const Barrows = require("../plugins/minigames/Barrows.plugin");
+  Barrows.register(new Proxy({
+    getRegionManager: () => ({ getRegionid: () => ({}) }),
+    onCustomEvent: (name, handler) => customEvents.set(name, [...(customEvents.get(name) ?? []), handler]),
+    emitCustomEvent: emit,
+  }, { get: (target, key) => target[key] ?? (() => {}) }));
+  const player = createPlayer();
+  const delivered = [];
+  player.getInventory = () => ({ forceAdd: (_player, item) => { delivered.push(item); return false; } });
+  const sender = player.getPacketSender();
+  sender.sendObject = sender.sendObjectRemoval = () => sender;
+  sender.sendMessage = player.sendMessage;
+  const run = { tunnel: 0, killed: [0, 1, 2, 3, 4, 5], points: 1000, kills: 6, chests: 8, chestOpen: true, looted: false };
+  player.setAttribute("barrows", run);
+  t.mock.method(Math, "random", () => 0);
+  Barrows._test.searchChest(player, 1);
+  assert.ok(delivered.length > 0);
+  for (const item of delivered.filter((item) => Data.isLogged(item.getId()))) {
+    assert.equal(Progress.obtained(player, item.getId()), item.getAmount());
+  }
+  assert.equal(Progress.categoryCount(player, named(0, "Barrows Chests")), 9);
+  const firstDelivery = delivered.length;
+  Barrows._test.searchChest(player, 1);
+  assert.equal(delivered.length, firstDelivery, "an empty chest cannot deliver or log a second reward");
+  assert.equal(Progress.categoryCount(player, named(0, "Barrows Chests")), 9);
+  const restored = createPlayer();
+  restored.setAttribute("barrows", JSON.parse(JSON.stringify(run)));
+  assert.equal(Progress.categoryCount(restored, named(0, "Barrows Chests")), 9);
+});

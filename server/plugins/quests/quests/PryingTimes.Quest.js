@@ -31,10 +31,8 @@
  * the crate of crowbars.
  *
  * Gaps/approximations:
- * - The Pandemonium quest and the free port-task slot are not enforced (no such quest
- *   or task system exists here); Smithing 30, Sailing 12 and The Knight's Sword are.
- * - OSRS carries the crate in the boat's cargo hold; with no cargo MCP the crate goes
- *   straight from the Port Sarim ledger to the Pandemonium ledger.
+ * - The quest's cargo moves directly between its ledgers; it uses the existing port-task
+ *   slot ledger for the start requirement but does not create a generic courier task row.
  * - The floating crate sits on the north-west shore so it is reachable on foot; "on
  *   deck" is standing near it, as a boat cannot be boarded there (no Sailing API in
  *   api.core either, so `Sailing.instanceAboard` is out of reach).
@@ -214,12 +212,21 @@ module.exports = function registerPryingTimesQuest(api) {
     return request.complete === true;
   }
 
+  function hasOpenPortTaskSlot(player) {
+    const request = { player, available: false };
+    api.emitCustomEvent("sailing:has-port-task-slot", request);
+    return request.available === true;
+  }
+
   function meetsStartRequirements(player) {
     const skills = player.getSkillManager();
+    const pandemonium = { player, key: "pandemonium", complete: false };
+    api.emitCustomEvent("quest:is-complete", pandemonium);
     return (
       skills.getMaxLevel(Skill.SMITHING) >= START_LEVEL_SMITHING &&
       skills.getMaxLevel(Skill.SAILING) >= START_LEVEL_SAILING &&
-      knightsSwordComplete(player)
+      knightsSwordComplete(player) &&
+      pandemonium.complete === true
     );
   }
 
@@ -303,7 +310,7 @@ module.exports = function registerPryingTimesQuest(api) {
         return !held(player, CAPTAINS_LOG_ITEM_ID);
       case START_MAX_TASKS_CONDITION_ID:
       case START_MAX_TASKS_AGAIN_CONDITION_ID:
-        return false; // no port-task system here, so the log is never full
+        return !hasOpenPortTaskSlot(player);
       case FINAL_NO_CROWBAR_CONDITION_ID:
         return !held(player, CROWBAR_ITEM_ID);
       case FINAL_HAS_SPACE_CONDITION_ID:

@@ -64,17 +64,14 @@ test('quest keys, names and varps are unique', () => {
 test('Quests.plugin lists every quest file on disk', () => {
   const fs = require('node:fs');
   const path = require('node:path');
+  const { QUESTS } = require('../plugins/quests/Quests.plugin');
   const dir = path.join(__dirname, '../plugins/quests/quests');
   const onDisk = fs
     .readdirSync(dir)
     .filter((f) => f.endsWith('.Quest.js'))
     .map((f) => f.replace(/\.Quest\.js$/, ''))
     .sort();
-  const src = fs.readFileSync(path.join(__dirname, '../plugins/quests/Quests.plugin.js'), 'utf8');
-  const listed = [...src.matchAll(/require\("\.\/quests\/([^"]+)\.Quest"\)/g)]
-    .map((m) => m[1])
-    .sort();
-  assert.deepEqual(listed, onDisk, 'Quests.plugin.js must require every quests/*.Quest.js');
+  assert.deepEqual([...QUESTS].sort(), onDisk, 'Quests.plugin must register every quests/*.Quest.js');
 });
 
 test('each quest varp is sent again on login, so quest-gated locs show after a relog', () => {
@@ -140,4 +137,39 @@ test("Tree Gnome Village sends King Bolren's orbs (varbit 598): the village's sp
     try { login({ player }); } catch (error) { /* other login hooks want a real player */ }
   }
   assert.equal(varbits.get(598), 2, "and on every login");
+});
+
+test('Current Affairs and Prying Times start gates require every registered prerequisite', () => {
+  const conditions = [];
+  const completeQuests = new Set();
+  let hasPortTaskSlot = false;
+  const { api: base } = mockApi();
+  const api = new Proxy(base, {
+    get: (target, prop) => {
+      if (prop === 'onNpcDialogueCondition') return (handler) => conditions.push(handler);
+      if (prop === 'emitCustomEvent') return (name, request) => {
+        if (name === 'quest:is-complete') request.complete = completeQuests.has(request.key);
+        if (name === 'sailing:has-port-task-slot') request.available = hasPortTaskSlot;
+      };
+      return target[prop];
+    },
+  });
+  require('../plugins/quests/quests/CurrentAffairs.Quest')(api);
+  require('../plugins/quests/quests/PryingTimes.Quest')(api);
+  const [currentAffairs, pryingTimes] = conditions;
+  const player = { getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99 }) };
+  assert.equal(currentAffairs({ npcId: api.core.NpcIdentifiers.ARHEIN, player, stepId: 'mNhEI-' }), true,
+    'missing Pandemonium blocks Current Affairs');
+  assert.equal(pryingTimes({ npcId: api.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, player, stepId: 'aifq0J' }), true,
+    'missing quests and an unavailable task slot block Prying Times');
+  completeQuests.add('pandemonium');
+  assert.equal(currentAffairs({ npcId: api.core.NpcIdentifiers.ARHEIN, player, stepId: 'mNhEI-' }), false);
+  completeQuests.add('the_knights_sword');
+  assert.equal(pryingTimes({ npcId: api.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, player, stepId: 'aifq0J' }), false,
+    'high skills and both required quests satisfy the quest prerequisites');
+  assert.equal(pryingTimes({ npcId: api.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, player, stepId: 'PSw89b' }), true,
+    'a full task ledger blocks starting Prying Times');
+  hasPortTaskSlot = true;
+  assert.equal(pryingTimes({ npcId: api.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, player, stepId: 'PSw89b' }), false,
+    'an available task slot clears the full-ledger condition');
 });

@@ -19,6 +19,7 @@ const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cach
 const Data = require("./ClogData");
 const Progress = require("./ClogProgress");
 const Interface = require("./ClogInterface");
+const REWARD_SHOPS = new Set(require("./data/reward-shops.json"));
 
 const USAGE = "Usage: ::clog <item name|id> [amount] | ::clog count <category> <n> | ::clog reset";
 
@@ -49,6 +50,11 @@ function onObtain(request) {
 function onCount(request) {
   if (!request?.player) return;
   for (const category of categoriesNamed(request.category)) Progress.addCategoryCount(request.player, category, Number(request.amount ?? 1));
+}
+
+function onPurchase(event) {
+  if (!REWARD_SHOPS.has(event.shopName) || !event.originalStock) return;
+  Progress.obtain(event.player, event.itemId, event.amount);
 }
 
 function findItem(text) {
@@ -99,9 +105,10 @@ module.exports = {
     api.onCustomEvent("npc-drops:roll", onLoot);
     api.onCustomEvent("collection-log:obtain", onObtain);
     api.onCustomEvent("collection-log:count", onCount);
+    api.onCustomEvent("shop:purchase", onPurchase);
     api.onCustomEvent("collection-log:open", ({ player }) => Interface.open(player));
     api.onInterfaceActionClick(Interface.click);
     api.registerCommand("clog", clogCommand, PlayerRights.ADMINISTRATOR, "Collection log: ::clog <item> [amount] | count <category> <n> | reset");
   },
-  _test: { onLoot, onObtain, onCount, clogCommand, findItem },
+  _test: { onLoot, onObtain, onCount, onPurchase, clogCommand, findItem },
 };

@@ -12,8 +12,6 @@
 
 const fs = require("fs");
 const path = require("path");
-const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
-const QuestRuntime = require("../quests/QuestRuntime");
 const { startHomeTeleport, dateMinutes, BUSY_VARBIT } = require("../combat/HomeTeleportSequence");
 
 const SPELL_NAME = "minigame teleport";
@@ -24,6 +22,20 @@ const NAME_COLUMN = 1;
 const COOLDOWN_MINUTES = 20;
 const LAST_MINIGAME_TELEPORT_VARP = 888;
 const LAST_MINIGAME_TELEPORT_ATTRIBUTE = "minigame-teleport:last-minute";
+const VISITED_KELDAGRIM_ATTRIBUTE = "minigame-teleport:visited-keldagrim";
+const VISITED_TITHE_FARM_ATTRIBUTE = "minigame-teleport:visited-tithe-farm";
+const QUEST_KEYS = {
+  "Temple of the Eye": "temple_of_the_eye",
+  "Children of the Sun": "children_of_the_sun",
+  Ratcatchers: "ratcatchers",
+  "Shades of Mort'ton": "shades_of_mort_ton",
+  "Prince Ali Rescue": "prince_ali_rescue",
+  "Cabin Fever": "cabin_fever",
+};
+const VISITED_ATTRIBUTES = {
+  Keldagrim: VISITED_KELDAGRIM_ATTRIBUTE,
+  "Tithe Farm": VISITED_TITHE_FARM_ATTRIBUTE,
+};
 
 let core;
 let pluginApi;
@@ -39,18 +51,18 @@ function spellName(event) {
   const packed = Number.isInteger(event.groupId) && Number.isInteger(event.childId)
     ? (event.groupId << 16) | (event.childId & 0xffff)
     : -1;
-  return (CacheDefinitions.getSpellName(event.buttonId, itemId)
-    ?? CacheDefinitions.getSpellName(packed, itemId)
+  return (core.CacheDefinitions.getSpellName(event.buttonId, itemId)
+    ?? core.CacheDefinitions.getSpellName(packed, itemId)
     ?? "").toLowerCase();
 }
 
 /** The minigame a component of interface 951 shows, by its cache name; undefined if none. */
 function minigameAt(childId) {
   const component = (MINIGAMES_INTERFACE << 16) | (childId & 0xffff);
-  for (const [position, value] of CacheDefinitions.getEnumValues(COMPONENT_BY_POSITION_ENUM)) {
+  for (const [position, value] of core.CacheDefinitions.getEnumValues(COMPONENT_BY_POSITION_ENUM)) {
     if (value !== component) continue;
-    const rowId = CacheDefinitions.getEnumValues(ROW_BY_POSITION_ENUM).get(position);
-    const name = typeof rowId === "number" ? CacheDefinitions.getDbRow(rowId)?.columns.get(NAME_COLUMN)?.[0] : undefined;
+    const rowId = core.CacheDefinitions.getEnumValues(ROW_BY_POSITION_ENUM).get(position);
+    const name = typeof rowId === "number" ? core.CacheDefinitions.getDbRow(rowId)?.columns.get(NAME_COLUMN)?.[0] : undefined;
     return typeof name === "string" ? name : undefined;
   }
   return undefined;
@@ -61,7 +73,7 @@ function minutesLeft(lastMinute, now = dateMinutes()) {
   return Math.max(0, COOLDOWN_MINUTES - (now - lastMinute));
 }
 
-/** Why the player can't go to this minigame yet, or null. Unregistered quests don't block. */
+/** Why the player can't go to this minigame yet, or null. */
 function refusal(player, minigame) {
   if (minigame.members && !core.WorldDefinition.isMembersWorld()) {
     return "You need to be on a members' world to go there.";
@@ -75,12 +87,26 @@ function refusal(player, minigame) {
   if (minigame.combat && player.getSkillManager().getCombatLevel() < minigame.combat) {
     return `You need a combat level of ${minigame.combat} to go there.`;
   }
-  const quests = QuestRuntime.getRegisteredQuests();
   for (const questName of minigame.quests ?? []) {
-    const quest = quests.find((entry) => entry.name === questName);
-    if (quest && !quest.isComplete(player)) return `You need to complete ${questName} to go there.`;
+    const request = { player, key: QUEST_KEYS[questName], complete: false };
+    if (request.key) pluginApi.emitCustomEvent("quest:is-complete", request);
+    if (request.complete !== true) return `You need to complete ${questName} to go there.`;
+  }
+  for (const place of minigame.visited ?? []) {
+    const attribute = VISITED_ATTRIBUTES[place];
+    if (!attribute || player.getAttribute(attribute) !== true) {
+      return `You need to have visited ${place} to go there.`;
+    }
   }
   return null;
+}
+
+function markVisitedKeldagrim({ player }) {
+  player.setAttribute(VISITED_KELDAGRIM_ATTRIBUTE, true);
+}
+
+function markVisitedTitheFarm({ player }) {
+  player.setAttribute(VISITED_TITHE_FARM_ATTRIBUTE, true);
 }
 
 function castMinigameTeleport(event) {
@@ -151,6 +177,10 @@ function attach(api) {
   core = api.core;
   pluginApi = api;
   minigames = loadMinigames();
+  api.persistAttribute(VISITED_KELDAGRIM_ATTRIBUTE);
+  api.persistAttribute(VISITED_TITHE_FARM_ATTRIBUTE);
+  api.onCustomEvent("keldagrim:entered-city", markVisitedKeldagrim);
+  api.onCustomEvent("tithe-farm:entered", markVisitedTitheFarm);
 }
 
 module.exports = {
@@ -172,4 +202,8 @@ module.exports._test = {
   minutesLeft,
   refusal,
   LAST_MINIGAME_TELEPORT_ATTRIBUTE,
+  VISITED_KELDAGRIM_ATTRIBUTE,
+  VISITED_TITHE_FARM_ATTRIBUTE,
+  markVisitedKeldagrim,
+  markVisitedTitheFarm,
 };

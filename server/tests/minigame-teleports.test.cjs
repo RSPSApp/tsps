@@ -74,6 +74,7 @@ const core = {
     TeleportHandler,
     Location,
     WorldDefinition,
+  CacheDefinitions,
     Skill: require('../dist/game/model/Skill').Skill,
     GameConstants: require('../dist/game/GameConstants').GameConstants,
 };
@@ -139,6 +140,7 @@ test('once the teleporting animation starts, walking no longer interrupts it', (
 
 test('interface 951 maps its components to the cache minigames, and every one has a destination', async () => {
     await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  attachPlugins([]);
     const { minigameAt } = MinigameTeleports._test;
     assert.equal(minigameAt(13), 'Nightmare Zone', 'as captured: 951:13');
     assert.equal(minigameAt(11), 'Rat Pits', 'as captured: 951:11');
@@ -149,18 +151,54 @@ test('interface 951 maps its components to the cache minigames, and every one ha
     assert.deepEqual(names.filter((name) => !data[name]), [], 'missing from minigame-teleports.json');
 });
 
-function attachPlugins(prompts) {
+function attachPlugins(prompts, quests = [], zones = [], customHooks = []) {
     const api = {
         core,
         persistAttribute: () => {},
-        onInterfaceActionClick: () => {},
-        onCustomEvent: () => {},
+    onInterfaceActionClick: () => {},
+    onCustomEvent: (name, handler) => customHooks.push({ name, handler }),
+    emitCustomEvent: (name, request) => {
+      if (name !== 'quest:is-complete') return;
+      const quest = quests.find((entry) => entry.key === request.key);
+      if (quest) request.complete = quest.isComplete(request.player);
+    },
+    onZoneEnter: (zone, handler) => zones.push({ zone, handler }),
         onPlayerLogin: () => {},
         sendMultiChatboxPrompt: (player, title, ...pairs) => (prompts.push({ title, pairs }), true),
     };
     HomeTeleports.register(api);
     MinigameTeleports.register(api);
 }
+
+test('known missing quest gates and unvisited destinations fail closed', async (t) => {
+  stubWorld(t)(() => {});
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  const customHooks = [];
+  attachPlugins([], [], [], customHooks);
+  const playerRecord = recordingPlayer();
+  const { refusal, VISITED_KELDAGRIM_ATTRIBUTE, VISITED_TITHE_FARM_ATTRIBUTE } = MinigameTeleports._test;
+  assert.match(refusal(playerRecord.player, { quests: ['Temple of the Eye'] }), /Temple of the Eye/);
+  assert.match(refusal(playerRecord.player, { visited: ['Keldagrim'] }), /visited Keldagrim/);
+  assert.match(refusal(playerRecord.player, { visited: ['Tithe Farm'] }), /visited Tithe Farm/);
+  const blastFurnaceChild = Array.from({ length: 21 }, (_, index) => index + 5)
+    .find((child) => MinigameTeleports._test.minigameAt(child) === 'Blast Furnace');
+  MinigameTeleports._test.chooseMinigame({
+    player: playerRecord.player, groupId: MINIGAMES_WIDGET, childId: blastFurnaceChild, handled: false,
+  });
+  assert.equal(playerRecord.player.getAttribute(MinigameTeleports._test.LAST_MINIGAME_TELEPORT_ATTRIBUTE), undefined,
+    'rejection does not start a cooldown');
+
+  const enteredKeldagrim = customHooks.find(({ name }) => name === 'keldagrim:entered-city');
+  assert.ok(enteredKeldagrim, 'Keldagrim entry is tracked through the shared event');
+  enteredKeldagrim.handler({ player: playerRecord.player });
+  const enteredTitheFarm = customHooks.find(({ name }) => name === 'tithe-farm:entered');
+  assert.ok(enteredTitheFarm, 'Tithe Farm entry is tracked by its real game-entry event');
+  enteredTitheFarm.handler({ player: playerRecord.player });
+  assert.equal(playerRecord.player.getAttribute(VISITED_KELDAGRIM_ATTRIBUTE), true);
+  assert.equal(playerRecord.player.getAttribute(VISITED_TITHE_FARM_ATTRIBUTE), true);
+  assert.equal(refusal(playerRecord.player, { visited: ['Keldagrim', 'Tithe Farm'] }), null);
+
+});
 
 test('cooldowns: the captured messages, and the varps set on landing', async (t) => {
     stubWorld(t)(() => {});
@@ -198,7 +236,7 @@ test('the spell opens the minigame list with busy set; Rat Pits asks which pit',
     stubWorld(t)(() => {});
     await CachePipeline.initialize(path.resolve(__dirname, '..'));
     const prompts = [];
-    attachPlugins(prompts);
+    attachPlugins(prompts, [{ key: 'ratcatchers', isComplete: () => true }]);
     const { player, ticks } = recordingPlayer();
     const spell = CacheDefinitions.getSpellByName('Minigame Teleport');
     MinigameTeleports._test.castMinigameTeleport({ player, buttonId: spell.widgetId, itemId: spell.itemId, handled: false });

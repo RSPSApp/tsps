@@ -69,6 +69,7 @@ function questsForWorld({ WorldDefinition }) {
 
 module.exports = {
   name: "Quests",
+  QUESTS,
   register(api) {
     for (const quest of questsForWorld(api.core)) require(`./quests/${quest}.Quest`)(api);
   },

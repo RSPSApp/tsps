@@ -39,6 +39,7 @@ function enter(player) {
     const plots = new Map();
     for (const base of Data.CACHE.scenery.filter(p => p.id === core.ObjectIdentifiers.TITHE_PATCH && p.y >= 3485)) plots.set(`${base.x}:${base.y}`, { base });
     GAMES.set(player, { area, plots });
+    core.PluginManager.emitCustomEvent("tithe-farm:entered", { player });
     player.getPacketSender().sendVarbit(4909, 1);
     sync(player);
 }
@@ -211,7 +212,14 @@ function titheNpc(event) {
         if (score.points < cost) { player.sendMessage("You do not have enough points."); return; }
         if (name === "Herb sack" && player.getSkillManager().getCurrentLevel(core.Skill.HERBLORE) < 58) { player.sendMessage("You need level 58 Herblore."); return; }
         if (name === "Bologa's blessing" && !score.bologa) { player.sendMessage("First arrange for Bologa to bless your grapes."); return; }
-        if (name === "Seed pack" ? Guild.giveSeedPack(player, 3, true) : Patches.give(player, Data.itemId(name), amount ?? 1)) { score.points -= cost; sync(player); }
+        const itemId = Data.itemId(name);
+        const received = name === "Seed pack"
+            ? Guild.giveSeedPack(player, 3, true)
+            : Patches.give(player, itemId, amount ?? 1);
+        if (!received) return;
+        score.points -= cost;
+        sync(player);
+        core.PluginManager.emitCustomEvent("collection-log:obtain", { player, itemId, amount: amount ?? 1 });
     }]);
     entries.push([score.autoWeedUnlocked ? "Toggle Auto-weed" : "Unlock Auto-weed (50 points)", () => {
         if (!player.getLocation().isWithinDistance(event.npc.getLocation(), 5)) return;

@@ -9,12 +9,19 @@ function sendState({ player }) {
   if (completed) player.getPacketSender().sendConfig(common.VARP_TASKS_COMPLETED, completed.total ?? 0);
 }
 
+function answerOpenSlot(request) {
+  const { player } = request;
+  const slots = common.slots(player);
+  request.available = slots.slice(0, common.slotLimit(player)).some((slot) => !slot);
+}
+
 module.exports = {
   name: "SailingPortTasks",
   members: true,
   register(api) {
     common.init(api);
     api.persistAttribute(common.SLOTS_ATTRIBUTE);
+    api.onCustomEvent("sailing:has-port-task-slot", answerOpenSlot);
     api.onPlayerLogin(sendState);
     require("./porttasks/Board.PortTasks")(api);
     require("./porttasks/Ledger.PortTasks")(api);

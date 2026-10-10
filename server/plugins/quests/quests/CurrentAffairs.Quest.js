@@ -22,8 +22,6 @@
  * of Catherby and unlocks sea charting/current. XP is granted in onReward.
  *
  * Gaps/approximations:
- * - Pandemonium completion (a start requirement) is not enforced: no quest with
- *   that key exists here, only Sailing 22 (unboosted) and Fishing 10 are checked.
  * - Form cr-4p is filled through the transcript's chatbox questions and the
  *   answers are replayed from the persisted attribute; the quiz with Catherine
  *   resolves *after* the questions, which the transcript flatten cannot do
@@ -189,9 +187,12 @@ module.exports = function registerCurrentAffairsQuest(api) {
 
   function meetsRequirements(player) {
     const skills = player.getSkillManager();
+    const pandemonium = { player, key: "pandemonium", complete: false };
+    api.emitCustomEvent("quest:is-complete", pandemonium);
     return (
       skills.getMaxLevel(Skill.SAILING) >= SAILING_LEVEL &&
-      skills.getCurrentLevel(Skill.FISHING) >= FISHING_LEVEL
+      skills.getCurrentLevel(Skill.FISHING) >= FISHING_LEVEL &&
+      pandemonium.complete === true
     );
   }
 

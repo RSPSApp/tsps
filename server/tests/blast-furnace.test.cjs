@@ -11,7 +11,8 @@ const { ItemIds, NpcIds } = require("../dist/util/IdEnums");
 
 const spawned = [];
 const BlastFurnace = require("../plugins/minigames/BlastFurnace.plugin");
-const { init, tick, stateOf, putOre, takeBars, take, foremanCondition, foremanPaid, coolWithWater } = BlastFurnace._test;
+let giantDwarfStarted = false;
+const { init, tick, stateOf, putOre, takeBars, take, foremanCondition, foremanPaid, coolWithWater, stairs } = BlastFurnace._test;
 init({
   core: PluginManager.getCoreApi(),
   spawnNpc: ({ id }) => {
@@ -20,7 +21,7 @@ init({
     return npc;
   },
   removeNpc: (npc) => { npc.removed = true; },
-  emitCustomEvent() {},
+  emitCustomEvent(name, request) { if (name === "quest:is-started") request.started = giantDwarfStarted; },
 });
 
 const DISPENSER = 936;
@@ -163,4 +164,21 @@ test("the foreman's conditions and fee", () => {
   foremanPaid({ player: p, npcId: NpcIds.BLAST_FURNACE_FOREMAN, text: "Okay, you can use the furnace for ten minutes. Remember, you only need half as much coal as with a regular furnace." });
   assert.equal(p.inventory.get(ItemIds.COINS), 500);
   assert.ok(stateOf(p).permitUntil > Date.now());
+});
+
+test("the Furnace stairs gate entry but always allow the exit", () => {
+  const locations = [];
+  const messages = [];
+  const p = { moveTo: (location) => locations.push([location.getX(), location.getY()]), sendMessage: (message) => messages.push(message) };
+  giantDwarfStarted = false;
+  stairs({ player: p, objectId: 9084 });
+  assert.deepEqual(locations, [], "unstarted players cannot enter the Furnace");
+  assert.match(messages[0], /start The Giant Dwarf/);
+
+  stairs({ player: p, objectId: 9138 });
+  assert.deepEqual(locations, [[2931, 10196]], "players can leave the Furnace without the quest");
+  giantDwarfStarted = true;
+  stairs({ player: p, objectId: 9084 });
+  assert.deepEqual(locations.at(-1), [1939, 4958], "starting The Giant Dwarf permits entry");
+  giantDwarfStarted = false;
 });

@@ -551,9 +551,12 @@ function searchChest(player, clickType) {
     return;
   }
   const rewards = rollRewards(run);
-  for (const item of rewards) player.getInventory().forceAdd(player, item);
   run.chests++;
   run.looted = true;
+  for (const item of rewards) {
+    player.getInventory().forceAdd(player, item);
+    pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: item.getId(), amount: item.getAmount() });
+  }
   randomiseLayout(run);
   syncTunnels(player, run);
   showRewards(player, rewards);
@@ -702,6 +705,10 @@ function playerDeath(event) {
   if (run?.looted) event.player.setAttribute(ATTRIBUTE, freshRun(run.chests));
 }
 
+function chestCount(request) {
+  if (request.category === "Barrows Chests") request.count = Number(request.player.getAttribute(ATTRIBUTE)?.chests) || 0;
+}
+
 module.exports = {
   name: "Barrows",
   members: true,
@@ -728,10 +735,12 @@ module.exports = {
       }
     });
     api.onNpcDeath(handleNpcDeath);
+    api.onCustomEvent("collection-log:category-count", chestCount);
     api.onPlayerProcess(processPlayer);
     api.onPlayerDeath(playerDeath);
     api.onPlayerDisconnect(cleanupPlayer);
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
+  _test: { searchChest, chestCount },
 };

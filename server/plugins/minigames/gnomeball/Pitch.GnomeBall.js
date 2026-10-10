@@ -84,6 +84,7 @@ const WINGER_THROW_ANIMATION = 201; // cache: gnome_throw
 const WINGER_RETURN_TICKS = 5;
 /** The Gnome Ball HUD, in the toplevel's overlay slot (as Corp's). */
 const HUD_INTERFACE = 139;
+const SCORE_VARBIT = 8387; // HUD scripts 574/882 read this; 2533 watches its backing varp 143.
 const OVERLAY_HUD_UID = (161 << 16) | 8;
 const DIARY = Object.freeze({ diary: "western", task: "score-a-goal-in-a-gnomeball-match" });
 /** The player had no room for a ball the referee owed them; give it on login. */
@@ -325,6 +326,7 @@ function scoreGoal(player, session) {
   } else {
     player.sendMessage("You score a goal!");
   }
+  player.getPacketSender().sendVarbit(SCORE_VARBIT, session.goals);
   return true;
 }
 
@@ -479,7 +481,9 @@ function createPitch() {
       if (!mobile.isPlayer()) return;
       const player = mobile.getAsPlayer();
       unequipWeapon(player);
-      player.getPacketSender().sendSubInterface(OVERLAY_HUD_UID, HUD_INTERFACE, 1);
+      player.getPacketSender()
+        .sendVarbit(SCORE_VARBIT, sessions.get(player)?.goals ?? 0)
+        .sendSubInterface(OVERLAY_HUD_UID, HUD_INTERFACE, 1);
     }
 
     postLeave(mobile, logout) {

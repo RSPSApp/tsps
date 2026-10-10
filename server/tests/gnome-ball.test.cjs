@@ -333,12 +333,16 @@ test("a goal pays 4 XP in both skills exactly once and consumes the ball", () =>
   assert.equal(p.xp.RANGED, 4);
   assert.equal(p.xp.AGILITY, 4);
   assert.equal(Pitch._test.sessions.get(p).goals, 1);
+  assert.deepEqual(p.packets.filter(([name]) => name === 'sendVarbit'), [['sendVarbit', 8387, 1]]);
   assert.equal(Pitch.isCarrying(p), false, "the ball is consumed by the shot");
   assert.ok(events.some((event) => event.name === "diary:task" && event.payload.task === "score-a-goal-in-a-gnomeball-match"));
 });
 
-test("five goals pay 4/5/6/7/30 and reset the score with a win", () => {
+test("five goals update the HUD, pay 4/5/6/7/30, reset the score, and award one ball on exit", () => {
   const p = fakePlayer();
+  const area = Pitch._test.createPitch();
+  const mobile = playerMobile(p);
+  area.enter(mobile);
   Pitch._test.setRandom(() => 0);
   const perGoal = [];
   let previous = 0;
@@ -353,6 +357,15 @@ test("five goals pay 4/5/6/7/30 and reset the score with a win", () => {
   const session = Pitch._test.sessions.get(p);
   assert.equal(session.goals, 0, "the score resets on the fifth goal");
   assert.equal(session.won, true);
+  assert.deepEqual(p.packets.filter(([name, id]) => name === 'sendVarbit' && id === 8387)
+    .map(([, , value]) => value), [0, 1, 2, 3, 4, 0]);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 0, 'the reward waits until leaving');
+  Pitch.beginGame(p);
+  area.leave(mobile, false);
+  assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), -1);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 1, 'getting another ball after winning preserves the reward');
+  area.leave(mobile, false);
+  assert.equal(p.getInventory().getAmount(Pitch.GNOMEBALL), 1, 'the reward cannot be claimed twice');
 });
 
 test("a miss consumes the ball and pays nothing; shooting without a ball does nothing", () => {
@@ -508,6 +521,8 @@ test("entering the pitch moves the weapon and shield to the pack and opens the H
   assert.equal(p.getEquipment().getSlot(SHIELD_SLOT), -1);
   assert.equal(p.getInventory().getAmount(1277), 1);
   assert.equal(p.getInventory().getAmount(1171), 1);
+  assert.deepEqual(p.packets.filter(([name]) => name === 'sendVarbit'), [['sendVarbit', 8387, 0]],
+    'entry clears the score left by an earlier game');
   assert.ok(p.packets.some(([name, , group]) => name === "sendSubInterface" && group === 139));
   area.leave(mobile, false);
   assert.ok(p.packets.some(([name]) => name === "closeSubInterface"));

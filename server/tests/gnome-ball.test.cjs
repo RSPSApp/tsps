@@ -147,14 +147,16 @@ function playerMobile(player) {
 }
 
 let npcIndex = 0;
-function baller(x, y) {
+function baller(x, y, id = core.NpcIdentifiers.GNOME_BALLER) {
   const npc = {
     animations: [],
     stuns: [],
     transformations: [],
     setNpcTransformationId: (id) => npc.transformations.push(id),
+    getRealId: () => id,
     getLocation: () => new core.Location(x, y, 0),
     getDefinition: () => ({ getName: () => Pitch.BALLER_NAME }),
+    getId: () => npc.transformations.at(-1) > 0 ? npc.transformations.at(-1) : id,
     getHitpoints: () => 10,
     performAnimation: (animation) => npc.animations.push(animation),
     setPositionToFace: () => {},
@@ -330,6 +332,8 @@ test("an adjacent baller tackles the carrier every second tick for 1 damage", ()
   assert.ok(Pitch.isPlaying(p), "the session stays open for a new ball");
   assert.ok(p.stuns.length >= 1, "the carrier is knocked down");
   assert.ok(p.animations.includes(779), "the carrier falls");
+  assert.equal(target.npc.getId(), core.NpcIdentifiers.GNOME_BALLER_2);
+  assert.equal(Pitch._test.sessions.get(p).ballHolder, target.npc);
 });
 
 test("leaving the pitch removes the carried ball and only a won game pays out", () => {
@@ -492,7 +496,7 @@ test("leaving or taking a new referee ball cancels a pass at every stage", () =>
         else Pitch.endSession(p);
         assert.equal(pending.isRunning(), false);
         assert.equal(session.passTask, undefined);
-        assert.equal(session.winger, undefined);
+        assert.equal(session.ballHolder, undefined);
         assert.equal(npc.transformations.at(-1), -1);
       }
     }
@@ -558,7 +562,6 @@ test("ballers run at the carrier from up to eight tiles away", () => {
   assert.equal(chases[1][0], "pursuit");
 });
 
-
 test("a winger can receive only one player's ball at a time and is released on cancellation", () => {
   const first = fakePlayer();
   const second = fakePlayer();
@@ -575,10 +578,85 @@ test("a winger can receive only one player's ball at a time and is released on c
     Pitch.endSession(first);
     Pitch._test.passToWinger({ player: second, npc });
     assert.equal(Pitch.isCarrying(second), false);
-    assert.equal(Pitch._test.sessions.get(second).winger, npc);
+    assert.equal(Pitch._test.sessions.get(second).ballHolder, npc);
   } finally {
     Pitch.endSession(first);
     Pitch.endSession(second);
     Pitch._test.setApi(api);
   }
+});
+
+test("each opposing team holds a stolen ball and a successful tackle recovers it", () => {
+  const N = core.NpcIdentifiers;
+  for (const [empty, holding] of [[N.GNOME_BALLER, N.GNOME_BALLER_2], [N.GNOME_BALLER_5, N.GNOME_BALLER_6], [N.GNOME_BALLER_9, N.GNOME_BALLER_10]]) {
+    const p = fakePlayer({ agility: 99 });
+    const npc = baller(2390, 3488, empty).npc;
+    Pitch.beginGame(p);
+    p.localNpcs = [npc];
+    const area = Pitch._test.createPitch();
+    const mobile = playerMobile(p);
+    Pitch._test.setRandom(() => 0);
+    area.process(mobile);
+    area.process(mobile);
+    assert.equal(Pitch.isCarrying(p), false);
+    assert.equal(npc.getId(), holding);
+    Pitch._test.setRandom(() => 0.999);
+    Pitch._test.tackleBaller({ player: p, npc });
+    assert.equal(Pitch.isCarrying(p), false, "a missed tackle leaves the ball with the gnome");
+    assert.equal(npc.getId(), holding);
+    // Between the empty-handed (201/256) and ball-holder (221/256) chances at level 99.
+    Pitch._test.setRandom(() => 210 / 256);
+    Pitch._test.tackleBaller({ player: p, npc });
+    assert.equal(Pitch.isCarrying(p), true);
+    assert.equal(npc.getId(), empty);
+    assert.equal(Pitch._test.sessions.get(p).ballHolder, undefined);
+    assert.equal(p.xp.RANGED, 0);
+    Pitch.endSession(p);
+  }
+});
+
+test("opposing ballers release possession on leaving or taking a replacement ball", () => {
+  for (const replaceBall of [false, true]) {
+    const p = fakePlayer();
+    const npc = baller(2390, 3488).npc;
+    Pitch.beginGame(p);
+    p.localNpcs = [npc];
+    const area = Pitch._test.createPitch();
+    const mobile = playerMobile(p);
+    Pitch._test.setRandom(() => 0);
+    area.process(mobile);
+    area.process(mobile);
+    assert.equal(npc.getId(), core.NpcIdentifiers.GNOME_BALLER_2);
+    if (replaceBall) Pitch.beginGame(p);
+    else Pitch.endSession(p);
+    assert.equal(npc.getId(), core.NpcIdentifiers.GNOME_BALLER);
+    assert.equal(Pitch.isCarrying(p), replaceBall);
+    Pitch.endSession(p);
+  }
+});
+
+test("a gnome holding one ball cannot take a second player's ball", () => {
+  const first = fakePlayer();
+  const second = fakePlayer();
+  const npc = baller(2390, 3488).npc;
+  Pitch.beginGame(first);
+  Pitch.beginGame(second);
+  first.localNpcs = [npc];
+  second.localNpcs = [npc];
+  const area = Pitch._test.createPitch();
+  Pitch._test.setRandom(() => 0);
+  for (const player of [first, second]) {
+    const mobile = playerMobile(player);
+    area.process(mobile);
+    area.process(mobile);
+  }
+  assert.equal(Pitch.isCarrying(first), false);
+  assert.equal(Pitch.isCarrying(second), true);
+  assert.equal(Pitch._test.sessions.get(first).ballHolder, npc);
+  assert.equal(Pitch._test.sessions.get(second).ballHolder, undefined);
+  Pitch._test.tackleBaller({ player: second, npc });
+  assert.equal(Pitch.isCarrying(second), true, "an already equipped ball is not overwritten");
+  assert.equal(npc.getId(), core.NpcIdentifiers.GNOME_BALLER_2);
+  Pitch.endSession(first);
+  Pitch.endSession(second);
 });

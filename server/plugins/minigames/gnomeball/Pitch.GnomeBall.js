@@ -13,13 +13,12 @@
  *   score. Hit or miss, the ball is lost and a new one must be asked from the referee.
  * - Tackle: a successful player tackle knocks a baller out for a few seconds;
  *   P = lerp(31/256, 201/256, (Agility - 1) / 98), or 221/256 against a baller holding the
- *   ball (this implementation does not track a baller in possession, so it uses 201/256).
+ *   ball. A successful tackle transfers the held ball back to the player.
  *   A baller that tackles the carrier deals damage (the Wiki says 1-2; the capture shows 1)
  *   and takes the ball. Ballers chase carriers within eight tiles and check for a tackle
  *   every two ticks on contact. The chosen roll is 50% at level 1 falling to 20% at 99.
  *   Checks pause after a Shoot click, so a shot
- *   cannot be pre-empted by the tackle that the shot itself triggered. UNDOCUMENTED: the
- *   ball goes back to the referee (ask for a new one) rather than being carried by the baller.
+ *   cannot be pre-empted by the tackle that the shot itself triggered.
  * - Pass: wingers catch the ball, hold it a few seconds, then throw it back.
  *
  * Dropping a gnome ball never puts one on the floor: it "magically returns to the ref".
@@ -91,6 +90,7 @@ const BEING_TACKLED_MESSAGE = "That gnome is being tackled.";
 
 let api;
 let core;
+let ballerHoldingIds;
 let random = Math.random;
 
 /** player -> { goals, won, ownBall, ticks } */
@@ -134,11 +134,18 @@ function inPitch(actor) {
     && at.getY() >= PITCH.minY && at.getY() <= PITCH.maxY;
 }
 
-function cancelPendingPass(session) {
+function sessionHoldingBall(npc) {
+  for (const session of sessions.values()) {
+    if (session.ballHolder === npc) return session;
+  }
+  return null;
+}
+
+function clearNpcBall(session) {
   session.passTask?.stop();
   delete session.passTask;
-  session.winger?.setNpcTransformationId(-1);
-  delete session.winger;
+  session.ballHolder?.setNpcTransformationId(-1);
+  delete session.ballHolder;
 }
 
 function sessionFor(player) {
@@ -194,7 +201,7 @@ function beginGame(player) {
   }
   const session = sessionFor(player);
   if (!unequipWeapon(player)) return false;
-  cancelPendingPass(session);
+  clearNpcBall(session);
   if (player.getInventory().getAmount(GNOMEBALL) > 0) {
     player.getInventory().deleteNumber(GNOMEBALL, 1);
     session.ownBall = true;
@@ -218,7 +225,7 @@ function giveBall(player) {
 function endSession(player, { reward = false } = {}) {
   const session = sessions.get(player);
   if (!session) return;
-  cancelPendingPass(session);
+  clearNpcBall(session);
   sessions.delete(player);
   clearCarriedBall(player);
   if (session.ownBall) giveBall(player);
@@ -310,12 +317,11 @@ function passToWinger({ player, npc }) {
     return true;
   }
   if (!npc || !inPitch(player) || !inPitch(npc)) return true;
-  for (const other of sessions.values()) {
-    if (other.winger !== npc) continue;
+  if (sessionHoldingBall(npc)) {
     player.sendMessage("That gnome winger already has a ball in play.");
     return true;
   }
-  session.winger = npc;
+  session.ballHolder = npc;
   player.getTimers().cancel(core.TimerKey.STUN);
   player.setPositionToFace(npc.getLocation());
   clearCarriedBall(player);
@@ -324,7 +330,7 @@ function passToWinger({ player, npc }) {
   const canReturn = () => sessions.get(player) === session && !isCarrying(player) && inPitch(player);
   session.passTask = later(travelTicks, () => {
     if (!canReturn()) {
-      cancelPendingPass(session);
+      clearNpcBall(session);
       return;
     }
     npc.setNpcTransformationId(core.NpcIdentifiers.GNOME_WINGER_2);
@@ -332,7 +338,7 @@ function passToWinger({ player, npc }) {
     npc.performAnimation(new core.Animation(WINGER_CATCH_ANIMATION));
     session.passTask = later(WINGER_RETURN_TICKS, () => {
       if (!canReturn()) {
-        cancelPendingPass(session);
+        clearNpcBall(session);
         return;
       }
       const from = npc.getLocation();
@@ -341,7 +347,7 @@ function passToWinger({ player, npc }) {
       npc.setPositionToFace(to);
       npc.performAnimation(new core.Animation(WINGER_THROW_ANIMATION));
       npc.setNpcTransformationId(-1);
-      delete session.winger;
+      delete session.ballHolder;
       player.getPacketSender().sendProjectile(from, to, 0, flight, BALL_PROJECTILE, 40, 40, player, 41, 15, 11);
       session.passTask = later(Math.ceil(flight / 30), () => {
         if (!canReturn()) return;
@@ -355,7 +361,7 @@ function passToWinger({ player, npc }) {
   return true;
 }
 
-/** Tackle on a baller: knocks them out for a few seconds; no XP or score. */
+/** Tackle knocks a baller down; a held ball changes hands, with no XP or score. */
 function tackleBaller(event) {
   const { player, npc } = event;
   if (!npc) return true;
@@ -363,10 +369,26 @@ function tackleBaller(event) {
     player.sendMessage(BEING_TACKLED_MESSAGE);
     return true;
   }
+  const holderSession = sessionHoldingBall(npc);
+  const playerSession = sessions.get(player);
+  if (holderSession && !playerSession) {
+    player.sendMessage("Talk to the gnome ball referee first.");
+    return true;
+  }
+  if (holderSession && isCarrying(player)) {
+    player.sendMessage("You already have a ball in play.");
+    return true;
+  }
   player.setPositionToFace(npc.getLocation());
   npc.setPositionToFace(player.getLocation());
   const agility = player.getSkillManager().getCurrentLevel(core.Skill.AGILITY);
-  if (random() < tackleChance(agility)) {
+  if (random() < tackleChance(agility, holderSession !== null)) {
+    if (holderSession) {
+      if (!unequipWeapon(player)) return true;
+      clearNpcBall(holderSession);
+      if (playerSession !== holderSession) clearNpcBall(playerSession);
+      equipBall(player);
+    }
     player.performAnimation(new core.Animation(PLAYER.TACKLE, 33));
     player.getPacketSender().sendSoundEffect(SOUND.TACKLE, 1, 0);
     npc.performAnimation(new core.Animation(BALLER_DOWN_ANIMATION, 30));
@@ -399,6 +421,8 @@ function ballerTackle(player, ballers) {
   player.performAnimation(new core.Animation(PLAYER.TACKLED));
   player.getPacketSender().sendSoundEffect(SOUND.TACKLED, 1, 0).sendSoundEffect(SOUND.TACKLED_THUD, 1, 20);
   clearCarriedBall(player);
+  sessions.get(player).ballHolder = baller;
+  baller.setNpcTransformationId(ballerHoldingIds.get(baller.getRealId()));
 }
 
 function createPitch() {
@@ -420,6 +444,7 @@ function createPitch() {
         if (!npc || !npc.getHitpoints || npc.getHitpoints() <= 0) return false;
         if (npc.getDefinition?.()?.getName?.() !== BALLER_NAME) return false;
         if (npc.getTimers?.().has?.(core.TimerKey.STUN)) return false;
+        if (!ballerHoldingIds.has(npc.getRealId()) || sessionHoldingBall(npc)) return false;
         return inPitch(npc);
       });
       for (const npc of ballers) stepToward(npc, player);
@@ -486,6 +511,12 @@ function login({ player }) {
 function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
+  const N = core.NpcIdentifiers;
+  ballerHoldingIds = new Map([
+    [N.GNOME_BALLER, N.GNOME_BALLER_2],
+    [N.GNOME_BALLER_5, N.GNOME_BALLER_6],
+    [N.GNOME_BALLER_9, N.GNOME_BALLER_10],
+  ]);
   api.persistAttribute(OWED_BALL_ATTRIBUTE);
   api.registerArea(createPitch());
   api.onObjectInteraction(GOAL_NAME, { Shoot: shootGoal });

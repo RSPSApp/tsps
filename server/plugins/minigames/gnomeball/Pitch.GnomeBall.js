@@ -21,7 +21,7 @@
  *   ticks against an adjacent baller, never on the tick(s) after a Shoot click, so a shot
  *   cannot be pre-empted by the tackle that the shot itself triggered. UNDOCUMENTED: the
  *   ball goes back to the referee (ask for a new one) rather than being carried by the baller.
- * - Pass: passing to the gnome wingers is not implemented (needs their pass-back timing).
+ * - Pass: wingers catch the ball, hold it a few seconds, then throw it back.
  *
  * Dropping a gnome ball never puts one on the floor: it "magically returns to the ref".
  *
@@ -40,6 +40,7 @@
  */
 
 const BALLER_NAME = "Gnome baller";
+const WINGER_NAME = "Gnome winger";
 const GOAL_NAME = "Gnome goal";
 const GNOMEBALL = 751; // ItemIdentifiers.GNOMEBALL
 const PITCH = { minX: 2383, maxX: 2408, minY: 3481, maxY: 3496, plane: 0 };
@@ -66,12 +67,16 @@ const BALLER_TACKLE_ANIMATION = 210;
 const BALLER_DOWN_ANIMATION = 203;
 const BALLER_DODGE_ANIMATION = 204;
 const PLAYER = Object.freeze({
-  TACKLE: 778, TACKLE_FAIL: 780, TACKLED: 779, THROW: 783,
+  TACKLE: 778, TACKLE_FAIL: 780, TACKLED: 779, CATCH: 782, THROW: 783,
 });
 const SOUND = Object.freeze({
   TACKLE: 1571, TACKLE_FAIL: 1572, TACKLED: 1574, TACKLED_THUD: 518, THROW: 1576,
 });
 const BALL_PROJECTILE = 55;
+const WINGER_CATCH_ANIMATION = 200; // cache: gnome_catch
+const WINGER_THROW_ANIMATION = 201; // cache: gnome_throw
+// shortcut: five ticks stands in for the Wiki's "a few seconds", use captures for exact timing.
+const WINGER_RETURN_TICKS = 5;
 /** The Gnome Ball HUD, in the toplevel's overlay slot (as Corp's). */
 const HUD_INTERFACE = 139;
 const OVERLAY_HUD_UID = (161 << 16) | 8;
@@ -120,6 +125,18 @@ function tackleChance(agilityLevel, ballerHasBall = false) {
 function ballerTackleChance(agilityLevel) {
   const t = Math.max(0, Math.min(1, (agilityLevel - 1) / 98));
   return BALLER_TACKLE_AT_1 + (BALLER_TACKLE_AT_99 - BALLER_TACKLE_AT_1) * t;
+}
+
+function inPitch(actor) {
+  const at = actor.getLocation();
+  return at.getZ() === PITCH.plane
+    && at.getX() >= PITCH.minX && at.getX() <= PITCH.maxX
+    && at.getY() >= PITCH.minY && at.getY() <= PITCH.maxY;
+}
+
+function cancelPendingPass(session) {
+  session.passTask?.stop();
+  delete session.passTask;
 }
 
 function sessionFor(player) {
@@ -175,6 +192,7 @@ function beginGame(player) {
   }
   const session = sessionFor(player);
   if (!unequipWeapon(player)) return false;
+  cancelPendingPass(session);
   if (player.getInventory().getAmount(GNOMEBALL) > 0) {
     player.getInventory().deleteNumber(GNOMEBALL, 1);
     session.ownBall = true;
@@ -198,6 +216,7 @@ function giveBall(player) {
 function endSession(player, { reward = false } = {}) {
   const session = sessions.get(player);
   if (!session) return;
+  cancelPendingPass(session);
   sessions.delete(player);
   clearCarriedBall(player);
   if (session.ownBall) giveBall(player);
@@ -217,7 +236,7 @@ function routeShot(event) {
 /** Runs `action` after `ticks` game ticks. */
 function later(ticks, action) {
   const { Task } = core;
-  api.getTaskManager().submit(new (class extends Task {
+  const task = new (class extends Task {
     constructor() {
       super(ticks);
     }
@@ -225,17 +244,20 @@ function later(ticks, action) {
       this.stop();
       action();
     }
-  })());
+  })();
+  api.getTaskManager().submit(task);
+  return task;
 }
 
-/** The throw a tick after the click: animation, sound, and the ball flying at the goal. */
-function throwBall(player, goal) {
+/** Animation, sound, and a ball flying at a goal or winger. Returns its travel ticks. */
+function throwBall(player, goal, target = null) {
   const from = player.getLocation();
   const flight = 41 + 5 * Math.max(1, from.getDistance(goal));
   player.performAnimation(new core.Animation(PLAYER.THROW));
   player.getPacketSender()
     .sendAreaSound(SOUND.THROW, from.getX(), from.getY(), from.getZ(), 1, 10, 5)
-    .sendProjectile(from, goal, 0, flight, BALL_PROJECTILE, 163, 10, null, 41, 15, 11);
+    .sendProjectile(from, goal, 0, flight, BALL_PROJECTILE, 163, 10, target, 41, 15, 11);
+  return Math.ceil(flight / 30);
 }
 
 function shootGoal(event) {
@@ -271,6 +293,48 @@ function scoreGoal(player, session) {
   } else {
     player.sendMessage("You score a goal!");
   }
+  return true;
+}
+
+/** Pass-to throws to the winger; each pending step is cancelled on leaving or a new ball. */
+function passToWinger({ player, npc }) {
+  const session = sessions.get(player);
+  if (!session) {
+    player.sendMessage("Talk to the gnome ball referee first.");
+    return true;
+  }
+  if (!isCarrying(player)) {
+    player.sendMessage("You need a gnome ball to pass.");
+    return true;
+  }
+  if (!npc || !inPitch(player) || !inPitch(npc)) return true;
+  player.getTimers().cancel(core.TimerKey.STUN);
+  player.setPositionToFace(npc.getLocation());
+  clearCarriedBall(player);
+  player.sendMessage("You pass the ball to the gnome winger.");
+  const travelTicks = throwBall(player, npc.getLocation(), npc);
+  const canReturn = () => sessions.get(player) === session && !isCarrying(player) && inPitch(player);
+  session.passTask = later(travelTicks, () => {
+    if (!canReturn()) return;
+    npc.setPositionToFace(player.getLocation());
+    npc.performAnimation(new core.Animation(WINGER_CATCH_ANIMATION));
+    session.passTask = later(WINGER_RETURN_TICKS, () => {
+      if (!canReturn()) return;
+      const from = npc.getLocation();
+      const to = player.getLocation();
+      const flight = 41 + 5 * Math.max(1, from.getDistance(to));
+      npc.setPositionToFace(to);
+      npc.performAnimation(new core.Animation(WINGER_THROW_ANIMATION));
+      player.getPacketSender().sendProjectile(from, to, 0, flight, BALL_PROJECTILE, 40, 40, player, 41, 15, 11);
+      session.passTask = later(Math.ceil(flight / 30), () => {
+        if (!canReturn()) return;
+        delete session.passTask;
+        player.performAnimation(new core.Animation(PLAYER.CATCH));
+        equipBall(player);
+        player.sendMessage("The gnome winger passes the ball back to you.");
+      });
+    });
+  });
   return true;
 }
 
@@ -377,7 +441,13 @@ function endOnDeath({ player }) {
 }
 
 function login({ player }) {
-  if (player && player.getAttribute(OWED_BALL_ATTRIBUTE) === true && player.getInventory().getFreeSlots() > 0) {
+  if (!player) return;
+  // A restart loses the session, so adopt a saved ball on the pitch.
+  if (isCarrying(player)) {
+    if (inPitch(player)) sessionFor(player);
+    else clearCarriedBall(player);
+  }
+  if (player.getAttribute(OWED_BALL_ATTRIBUTE) === true && player.getInventory().getFreeSlots() > 0) {
     player.setAttribute(OWED_BALL_ATTRIBUTE, null);
     giveBall(player);
   }
@@ -391,6 +461,7 @@ function attach(pluginApi) {
   api.onObjectInteraction(GOAL_NAME, { Shoot: shootGoal });
   api.onObjectRoute(routeShot);
   api.onNpcInteraction(BALLER_NAME, { Tackle: tackleBaller });
+  api.onNpcInteraction(WINGER_NAME, { "Pass-to": passToWinger });
   api.onItemAction("Gnomeball", { Drop: dropBall });
   api.onItemDropPolicy(dropPolicy);
   api.onPlayerLogout(endOnLogout);
@@ -418,6 +489,7 @@ module.exports = {
     shootGoal,
     scoreGoal,
     throwBall,
+    passToWinger,
     tackleBaller,
     dropBall,
     dropPolicy,

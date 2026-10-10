@@ -177,6 +177,7 @@ test("the plugin declares itself members content and wires the pitch hooks", () 
   assert.ok(registered.some((entry) => entry.kind === "object" && entry.name === "Gnome goal"));
   assert.ok(registered.some((entry) => entry.kind === "objectRoute"));
   assert.ok(registered.some((entry) => entry.kind === "npc" && entry.name === "Gnome baller"));
+  assert.ok(registered.some((entry) => entry.kind === "npc" && entry.name === "Gnome winger" && entry.actions["Pass-to"]));
   assert.ok(registered.some((entry) => entry.kind === "itemAction" && entry.name === "Gnomeball"));
   assert.ok(registered.some((entry) => entry.kind === "itemDrop"));
   assert.ok(registered.some((entry) => entry.kind === "death"));
@@ -433,3 +434,79 @@ test("the gnome gate swings the closed panel onto its open tile and crosses to t
   assert.equal(Gate._test.atGate({ getX: () => 2390, getY: () => 3488, getZ: () => 0 }, { x: 2383, y: 3488, z: 0 }), false);
 });
 
+test("winger passing throws both ways and equips the ball only after the return arrives", () => {
+  const p = fakePlayer();
+  const npc = baller(2394, 3492).npc;
+  const tasks = [];
+  Pitch.beginGame(p);
+  Pitch._test.setApi({ ...api, getTaskManager: () => ({ submit: (task) => tasks.push(task) }) });
+  try {
+    Pitch._test.passToWinger({ player: p, npc });
+    assert.equal(Pitch.isCarrying(p), false);
+    assert.equal(p.animations.at(-1), 783);
+    const outbound = p.packets.find((packet) => packet[0] === "sendProjectile");
+    assert.equal(outbound[5], 55);
+    assert.equal(outbound[8], npc);
+    tasks.shift().execute();
+    assert.equal(npc.animations.at(-1).getId(), 200);
+    assert.equal(tasks[0].getDelay(), 5);
+    p.location = new core.Location(2400, 3488, 0);
+    tasks.shift().execute();
+    assert.equal(npc.animations.at(-1).getId(), 201);
+    const inbound = p.packets.filter((packet) => packet[0] === "sendProjectile").at(-1);
+    assert.equal(inbound[2], p.getLocation());
+    assert.equal(inbound[5], 55);
+    assert.equal(inbound[8], p);
+    assert.equal(Pitch.isCarrying(p), false, "the return ball is still in flight");
+    tasks.shift().execute();
+    assert.equal(p.animations.at(-1), 782);
+    assert.equal(Pitch.isCarrying(p), true);
+    assert.equal(Pitch._test.sessions.get(p).passTask, undefined);
+    assert.equal(p.xp.RANGED, 0, "passing does not score or grant XP");
+  } finally {
+    Pitch._test.setApi(api);
+  }
+});
+
+test("leaving or taking a new referee ball cancels a pass at every stage", () => {
+  Pitch._test.setApi({ ...api, getTaskManager: () => ({ submit: () => {} }) });
+  try {
+    for (const stage of [0, 1, 2]) {
+      for (const replaceBall of [false, true]) {
+        const p = fakePlayer();
+        Pitch.beginGame(p);
+        Pitch._test.passToWinger({ player: p, npc: baller(2394, 3492).npc });
+        const session = Pitch._test.sessions.get(p);
+        for (let i = 0; i < stage; i++) session.passTask.execute();
+        const pending = session.passTask;
+        pending.setRunning(true);
+        if (replaceBall) Pitch.beginGame(p);
+        else Pitch.endSession(p);
+        assert.equal(pending.isRunning(), false);
+        assert.equal(session.passTask, undefined);
+      }
+    }
+  } finally {
+    Pitch._test.setApi(api);
+  }
+});
+
+test("passing needs a session and a ball, and login adopts a saved ball only on the pitch", () => {
+  const p = fakePlayer();
+  const npc = baller(2394, 3492).npc;
+  Pitch._test.passToWinger({ player: p, npc });
+  assert.ok(p.messages.at(-1).includes("referee first"));
+  Pitch.beginGame(p);
+  Pitch._test.shootGoal(shootEvent(p));
+  Pitch._test.passToWinger({ player: p, npc });
+  assert.ok(p.messages.at(-1).includes("ball to pass"));
+  assert.equal(p.packets.filter((packet) => packet[0] === "sendProjectile").length, 1);
+  const saved = fakePlayer({ weapon: Pitch.GNOMEBALL });
+  Pitch._test.login({ player: saved });
+  assert.equal(Pitch.isPlaying(saved), true);
+  assert.equal(Pitch.isCarrying(saved), true);
+  const outside = fakePlayer({ x: 2380, weapon: Pitch.GNOMEBALL });
+  Pitch._test.login({ player: outside });
+  assert.equal(Pitch.isPlaying(outside), false);
+  assert.equal(Pitch.isCarrying(outside), false);
+});

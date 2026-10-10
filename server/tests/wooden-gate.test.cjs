@@ -80,7 +80,7 @@ function buildHarness() {
       getPacketSender: () => ({}),
     };
     ops.length = 0;
-    handlers.get(name)[action]({ player, object, objectId: id, location });
+    handlers.get(name)[action]({ player, object, objectId: id, location: { x, y, z: 0 } });
     return ops.splice(0);
   };
 
@@ -113,7 +113,7 @@ test('Tree Gnome Stronghold doors use their nameless open variants and restore o
   }
 });
 
-test('Tree Gnome Stronghold main gate opens both leaves with a one-tile gap and auto-closes', () => {
+test('Tree Gnome Stronghold main gate handles packet coordinates, opens both leaves and auto-closes', () => {
   const h = buildHarness();
   try {
     assert.deepEqual(h.click(190, 2459, 3383, 2, 'Open', 'Gate', 10), [

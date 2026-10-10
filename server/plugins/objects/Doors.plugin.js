@@ -573,9 +573,10 @@ function handleWoodenGate(player, object, objectId, location) {
   return true;
 }
 
-function handleCompositeDoor(player, object, objectId, location) {
+function handleCompositeDoor(player, object, objectId) {
   const opening = COMPOSITE_DOOR_OPENINGS.get(objectId);
   if (!opening) return false;
+  const location = object.getLocation();
   const privateArea = player.getPrivateArea?.() ?? null;
   const opened = opening.map(([id, dx, dy, face]) => new core.GameObject(
     id,
@@ -841,7 +842,7 @@ function toggleDoor({ player, object, objectId, location }) {
   const request = { player, object, objectId, location, handled: false };
   api.emitCustomEvent("door:toggle", request);
   if (request.handled) return true;
-  if (handleCompositeDoor(player, object, objectId, location)) return true;
+  if (handleCompositeDoor(player, object, objectId)) return true;
   if (handleWoodenGate(player, object, objectId, location)) return true;
   if (handleDoubleDoor(player, object, objectId, location)) return true;
   return handleMappedDoor(player, object, objectId, location);

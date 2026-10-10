@@ -87,3 +87,36 @@ test("all thrownaxe tiers and composite bows resolve a ranged weapon type", () =
   assert.equal(RangedWeaponType.CHINCHOMPA.getDefaultDistance(), 9);
   assert.equal(RangedWeaponType.SALAMANDER.getDefaultDistance(), 1);
 });
+
+test("chinchompas throw and block with their own animations", async () => {
+  // attackAnimation reads the items cache, so the pipeline has to be up first.
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const { WeaponProfiles } = require("../dist/game/content/combat/WeaponProfile");
+  const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+  const { Item } = require("../dist/game/model/Item");
+  const wielded = (weaponId) => {
+    const items = Array.from({ length: 14 }, () => new Item(-1, 0));
+    items[Equipment.WEAPON_SLOT] = new Item(weaponId, 1);
+    return {
+      getEquipment: () => ({ getItems: () => items }),
+      getWeapon: () => WeaponInterfaces.CHINCHOMPA,
+      // WeaponProfiles.attackAnimation resolves the fight type to pick the items per-attack-type anim.
+      getFightType: () => FightType.CHINCHOMPA_MEDIUM_FUSE,
+    };
+  };
+
+  // seq 2779 human_chinchompa_attack, the same throw for every fuse length
+  for (const style of ["CHINCHOMPA_SHORT_FUSE", "CHINCHOMPA_MEDIUM_FUSE", "CHINCHOMPA_LONG_FUSE"]) {
+    assert.equal(FightType[style].getAnimation(), 2779, `${style} throws human_chinchompa_attack`);
+  }
+  // ...except the black chinchompa, which has its own seq 7618 human_chinchompa_attack_pvn
+  assert.equal(WeaponProfiles.attackAnimation(wielded(ItemIdentifiers.BLACK_CHINCHOMPA), 2779), 7618);
+  for (const id of [ItemIdentifiers.CHINCHOMPA_2, ItemIdentifiers.RED_CHINCHOMPA_2]) {
+    assert.equal(WeaponProfiles.attackAnimation(wielded(id), 2779), 2779, `item ${id} throws the style animation`);
+  }
+  // seq 3176 human_chinchompa_defend, the block anim Player.getBlockAnim reads off the weapon
+  for (const id of [ItemIdentifiers.CHINCHOMPA_2, ItemIdentifiers.RED_CHINCHOMPA_2, ItemIdentifiers.BLACK_CHINCHOMPA]) {
+    assert.equal(byId.get(id).blockAnim, 3176, `item ${id} blocks with human_chinchompa_defend`);
+  }
+});

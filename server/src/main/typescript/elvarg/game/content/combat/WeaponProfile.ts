@@ -330,8 +330,7 @@ export class WeaponProfiles {
             fireSound: Sound.SHOOT_BOW_QUIET,
         });
         // Chinchompas (Wiki): thrown, 3-tick medium fuse / 4-tick otherwise, 9-tile range.
-        this.register({
-            itemIds: [10033, 10034, 11959],
+        const chinchompa = {
             attackSpeed: 4,
             attackDistance: 9,
             longRangeDistance: 9,
@@ -339,7 +338,11 @@ export class WeaponProfiles {
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
             projectiles: [THROWN_PROJECTILE],
             fireSound: Sound.THROW_DART,
-        });
+        };
+        // The others throw with their fight type's human_chinchompa_attack, but black
+        // chinchompas have their own seq (human_chinchompa_attack_pvn).
+        this.register({ itemIds: [ItemIdentifiers.CHINCHOMPA_2, ItemIdentifiers.RED_CHINCHOMPA_2], ...chinchompa });
+        this.register({ itemIds: [ItemIdentifiers.BLACK_CHINCHOMPA], ...chinchompa, attackAnimation: 7618 });
         return true;
     })();
 }

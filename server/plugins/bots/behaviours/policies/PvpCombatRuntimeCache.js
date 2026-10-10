@@ -7,6 +7,7 @@ const { ItemIdentifiers } = require("../../../../src/main/typescript/elvarg/util
 
 const { MagicSpellbook } = require("../../../../src/main/typescript/elvarg/game/model/MagicSpellbook");
 const { Skill } = require("../../../../src/main/typescript/elvarg/game/model/Skill");
+const { EquipmentRequirements } = require("../../../../src/main/typescript/elvarg/game/model/equipment/EquipmentRequirements");
 const { PVP_LOADOUT_DEFINITIONS } = require("../pvp/PvpLoadoutRegistry");
 
 const CURRENT_PRESET_ATTRIBUTE = "pvp:current-preset";
@@ -45,9 +46,9 @@ function equipStyleGear(player, combatType) {
     const slot = definition.getEquipmentType().getSlot();
     if (slot < 0 || slot === Equipment.WEAPON_SLOT || slot === Equipment.AMMUNITION_SLOT ||
         (slot === Equipment.SHIELD_SLOT && twoHanded)) continue;
-    const requirements = definition.getRequirements();
-    if (requirements && Skill.values().some((skill) =>
-      (requirements[skill.getIndex()] ?? 0) > player.getSkillManager().getMaxLevel(skill))) continue;
+    // Only consider gear the player could actually put on; the equip itself goes
+    // through the same gate in EquipPacketListener.
+    if (EquipmentRequirements.getUnmet(player, definition) != null) continue;
     const best = bestBySlot.get(slot);
     if (!best || score(item) > score(best)) bestBySlot.set(slot, item);
   }

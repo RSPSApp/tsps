@@ -120,6 +120,8 @@ export interface CustomItemDefProps {
     // Combat stats
     bonuses?: ItemBonuses;
     requirements?: ItemRequirements;
+    /** Combat level needed to wear this; combat has no skill index of its own. */
+    combatRequirement?: number;
 }
 
 /**

@@ -1,10 +1,10 @@
 import { WeaponInterfaceManager } from "../../../game/content/combat/WeaponInterfaceManager";
-import { Misc } from "../../../util/Misc";
 import { Server } from "../../../Server";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { EquipmentSounds } from "../../../game/definition/EquipmentSounds";
 import { Sounds } from "../../../game/Sounds";
 import { Wilderness } from "../../../game/content/wilderness/Wilderness";
+import { EquipmentRequirements } from "../../../game/model/equipment/EquipmentRequirements";
 
 const getInventoryCtor = () =>
   require("../../../game/model/container/impl/Inventory")
@@ -15,9 +15,6 @@ const getEquipmentCtor = () =>
 const getItemCtor = () =>
   require("../../../game/model/Item")
     .Item as typeof import("../../../game/model/Item").Item;
-const getSkillCtor = () =>
-  require("../../../game/model/Skill")
-    .Skill as typeof import("../../../game/model/Skill").Skill;
 const getFlagEnum = () =>
   require("../../../game/model/Flag")
     .Flag as typeof import("../../../game/model/Flag").Flag;
@@ -88,7 +85,6 @@ export class EquipPacketListener {
     const Inventory = getInventoryCtor();
     const Equipment = getEquipmentCtor();
     const Item = getItemCtor();
-    const Skill = getSkillCtor();
     const Flag = getFlagEnum();
 
     if (slot < 0 || slot >= player.getInventory().capacity()) {
@@ -117,19 +113,10 @@ export class EquipPacketListener {
     }
 
     const item = itemInSlot.clone();
-    const requirements = item.getDefinition().getRequirements();
-    if (requirements != null) {
-      for (const skill of Skill.values()) {
-        const requiredLevel = requirements[skill.getIndex()] ?? 0;
-        if (requiredLevel > player.getSkillManager().getMaxLevel(skill)) {
-          const skillName = Misc.formatText(skill.getName());
-          const vowel = /^[aeiou]/i.test(skillName) ? "an" : "a";
-          player.sendMessage(
-            `You need ${vowel} ${skillName} level of at least ${requiredLevel} to wear this.`
-          );
-          return;
-        }
-      }
+    const unmetRequirement = EquipmentRequirements.getUnmet(player, item.getDefinition());
+    if (unmetRequirement != null) {
+      player.sendMessage(EquipmentRequirements.message(unmetRequirement));
+      return;
     }
 
     const equipmentSlot = item.getDefinition().getEquipmentType().getSlot();

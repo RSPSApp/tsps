@@ -27,7 +27,8 @@ export class ItemDefinition {
         for (const key of ["equipmentType", "weaponInterface", "doubleHanded", "stackable",
             "tradeable", "dropable", "sellable", "value", "grandExchangeValue", "highAlch", "lowAlch", "dropValue",
             "bloodMoneyValue", "blockAnim", "standAnim", "walkAnim", "runAnim", "standTurnAnim",
-            "turn180Anim", "turn90CWAnim", "turn90CCWAnim", "attackAnim", "equipSound", "bonuses", "requirements"]) {
+            "turn180Anim", "turn90CWAnim", "turn90CCWAnim", "attackAnim", "equipSound", "bonuses",
+            "requirements", "combatRequirement"]) {
             const value = raw[key];
             if (value !== undefined) {
                 (definition as any)[key] = Array.isArray(value) ? [...value] : value;
@@ -78,6 +79,7 @@ export class ItemDefinition {
     private weight: number;
     private bonuses: number[];
     private requirements: number[];
+    private combatRequirement: number;
     private cacheHydrated: boolean = false;
 
     public static forId(item: number) {
@@ -229,6 +231,11 @@ export class ItemDefinition {
 
     public getRequirements(): number[] {
         return this.requirements;
+    }
+
+    /** Combat level needed to wear this, from data/definitions/item-gameplay.json. */
+    public getCombatRequirement(): number {
+        return this.combatRequirement ?? 0;
     }
 
     /** This weapon's own animation for an attack of `attackType`, or -1 for its type's. */

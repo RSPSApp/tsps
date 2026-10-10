@@ -113,6 +113,8 @@ function fakePlayer({ x = 2390, y = 3488, agility = 1, ranged = 1, items = {}, w
     stuns,
     cancels,
     xp,
+    localNpcs: [],
+    getLocalNpcs: () => p.localNpcs,
     packets,
     animations,
     getPacketSender: () => sender,
@@ -199,11 +201,11 @@ test("tackle chance lerps 31/256 to 201/256, or 221/256 against a ball carrier",
   assert.ok(Math.abs(tackleChance(50) - (31 / 256 + (201 / 256 - 31 / 256) * (49 / 98))) < 1e-12);
 });
 
-test("baller tackle chance is the low chosen default, falling with agility", () => {
+test("baller tackle chance is the restored chosen default, falling with agility", () => {
   const { ballerTackleChance } = Pitch._test;
-  assert.ok(Math.abs(ballerTackleChance(1) - 0.12) < 1e-12);
-  assert.ok(Math.abs(ballerTackleChance(99) - 0.02) < 1e-12);
-  assert.ok(Math.abs(ballerTackleChance(50) - (0.12 + (0.02 - 0.12) * (49 / 98))) < 1e-12);
+  assert.ok(Math.abs(ballerTackleChance(1) - 0.5) < 1e-12);
+  assert.ok(Math.abs(ballerTackleChance(99) - 0.2) < 1e-12);
+  assert.ok(Math.abs(ballerTackleChance(50) - (0.5 + (0.2 - 0.5) * (49 / 98))) < 1e-12);
 });
 
 test("a clicked Shoot is not pre-empted: ballers pause and the adjacent shot still scores", () => {
@@ -212,6 +214,7 @@ test("a clicked Shoot is not pre-empted: ballers pause and the adjacent shot sti
   const area = Pitch._test.createPitch();
   const target = baller(2390, 3488);
   area.enter(target.mobile);
+  p.localNpcs = [target.npc];
   const mobile = playerMobile(p);
   area.enter(mobile);
   const goal = { getName: () => "Gnome goal", getInteractions: () => ["Shoot"] };
@@ -305,16 +308,16 @@ test("a tackle knocks the baller down or is dodged, with the captured animations
   assert.equal(target.npc.stuns.length, 1);
 });
 
-test("an adjacent baller tackles the carrier every third tick for 1 damage", () => {
+test("an adjacent baller tackles the carrier every second tick for 1 damage", () => {
   const p = fakePlayer();
   Pitch.beginGame(p);
   const area = Pitch._test.createPitch();
   const target = baller(2390, 3488);
   area.enter(target.mobile);
+  p.localNpcs = [target.npc];
   const mobile = playerMobile(p);
   area.enter(mobile);
   Pitch._test.setRandom(() => 0);
-  area.process(mobile);
   area.process(mobile);
   assert.equal(p.hits.length, 0, "the roll is periodic, not every tick");
   assert.equal(p.getEquipment().getSlot(WEAPON_SLOT), Pitch.GNOMEBALL);
@@ -510,3 +513,41 @@ test("passing needs a session and a ball, and login adopts a saved ball only on 
   assert.equal(Pitch.isPlaying(outside), false);
   assert.equal(Pitch.isCarrying(outside), false);
 });
+
+test("ballers run at the carrier from up to eight tiles away", () => {
+  const p = fakePlayer();
+  Pitch.beginGame(p);
+  const area = Pitch._test.createPitch();
+  const chases = [];
+  const chaser = (x, y) => {
+    const b = baller(x, y);
+    b.npc.setPositionToFace = (target) => chases.push(["face", b.npc === target ? "self" : "player"]);
+    b.npc.getMovementQueue = () => ({
+      getMobility: () => ({ canMove: () => true }),
+      setPursuitCheckpoint: (destination) => chases.push(["pursuit", destination]),
+    });
+    return b;
+  };
+  const far = chaser(2398, 3488);
+  area.enter(far.mobile);
+  const distant = chaser(2400, 3488);
+  area.enter(distant.mobile);
+  p.localNpcs = [far.npc, distant.npc];
+  const mobile = playerMobile(p);
+  area.enter(mobile);
+  const original = core.PathFinder.naiveEntityDestination;
+  core.PathFinder.naiveEntityDestination = (npc, target) => ({ npc, target });
+  try {
+    area.process(mobile);
+    area.process(mobile);
+    Pitch.endSession(p);
+    area.process(mobile);
+    area.process(mobile);
+  } finally {
+    core.PathFinder.naiveEntityDestination = original;
+  }
+  assert.equal(chases.length, 2, "only the nearby baller chases, and only while the player has a ball");
+  assert.equal(chases[0][0], "face");
+  assert.equal(chases[1][0], "pursuit");
+});
+

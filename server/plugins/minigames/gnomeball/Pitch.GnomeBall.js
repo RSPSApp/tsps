@@ -15,10 +15,9 @@
  *   P = lerp(31/256, 201/256, (Agility - 1) / 98), or 221/256 against a baller holding the
  *   ball (this implementation does not track a baller in possession, so it uses 201/256).
  *   A baller that tackles the carrier deals damage (the Wiki says 1-2; the capture shows 1)
- *   and takes the ball. The Wiki does not document the baller's roll, so the chosen default
- *   is a low one per check: 12% at level 1 falling to 2% at 99, better agility dodging more
- *   tackles. Checks run every 3
- *   ticks against an adjacent baller, never on the tick(s) after a Shoot click, so a shot
+ *   and takes the ball. Ballers chase carriers within eight tiles and check for a tackle
+ *   every two ticks on contact. The chosen roll is 50% at level 1 falling to 20% at 99.
+ *   Checks pause after a Shoot click, so a shot
  *   cannot be pre-empted by the tackle that the shot itself triggered. UNDOCUMENTED: the
  *   ball goes back to the referee (ask for a new one) rather than being carried by the baller.
  * - Pass: wingers catch the ball, hold it a few seconds, then throw it back.
@@ -51,12 +50,13 @@ const GOAL_XP = [4, 5, 6, 7, 30];
 const TACKLE_MIN = 31 / 256;
 const TACKLE_MAX = 201 / 256;
 const TACKLE_HOLDING_MAX = 221 / 256;
-/** Baller -> carrier (Wiki undocumented): 12% per check at Agility 1 down to 2% at 99. */
-const BALLER_TACKLE_AT_1 = 0.12;
-const BALLER_TACKLE_AT_99 = 0.02;
+// shortcut: the restored 50%-20% tackle roll is undocumented, replace with captures when available.
+const BALLER_TACKLE_AT_1 = 0.5;
+const BALLER_TACKLE_AT_99 = 0.2;
 const TACKLE_KNOCKOUT_TICKS = 5; // "knocking them out for a few seconds"
-const BALLER_TACKLE_CHECK_TICKS = 3;
+const BALLER_TACKLE_CHECK_TICKS = 2;
 const BALLER_TACKLE_RANGE = 1;
+const BALLER_CHASE_RANGE = 8;
 const BALLER_HIT_STUN_TICKS = 3;
 /** The baller's damage on the carrier, as captured (the Wiki says 1-2). */
 const BALLER_TACKLE_DAMAGE = 1;
@@ -121,7 +121,7 @@ function tackleChance(agilityLevel, ballerHasBall = false) {
   return TACKLE_MIN + (top - TACKLE_MIN) * t;
 }
 
-/** Baller -> carrier. The Wiki documents no formula; chosen default: 12% -> 2% with Agility. */
+/** Baller -> carrier: the restored chosen roll falls with Agility. */
 function ballerTackleChance(agilityLevel) {
   const t = Math.max(0, Math.min(1, (agilityLevel - 1) / 98));
   return BALLER_TACKLE_AT_1 + (BALLER_TACKLE_AT_99 - BALLER_TACKLE_AT_1) * t;
@@ -362,6 +362,16 @@ function tackleBaller(event) {
   return true;
 }
 
+/** Pursue the carrier using the existing NPC movement queue. */
+function stepToward(npc, target) {
+  const at = npc.getLocation();
+  if (at.getDistance(target.getLocation()) > BALLER_CHASE_RANGE) return;
+  const movement = npc.getMovementQueue?.();
+  if (!movement?.getMobility?.().canMove()) return;
+  npc.setPositionToFace(target.getLocation());
+  movement.setPursuitCheckpoint(core.PathFinder.naiveEntityDestination(npc, target));
+}
+
 function ballerTackle(player, ballers) {
   const agility = player.getSkillManager().getCurrentLevel(core.Skill.AGILITY);
   const baller = ballers[Math.floor(random() * ballers.length)];
@@ -388,13 +398,16 @@ function createPitch() {
       }
       if (++session.ticks % BALLER_TACKLE_CHECK_TICKS !== 0) return;
       const here = player.getLocation();
-      const ballers = this.getNpcs().filter((npc) => {
+      // Static ballers may never enter the area NPC index; the player's local list has them.
+      const ballers = player.getLocalNpcs().filter((npc) => {
         if (!npc || !npc.getHitpoints || npc.getHitpoints() <= 0) return false;
         if (npc.getDefinition?.()?.getName?.() !== BALLER_NAME) return false;
         if (npc.getTimers?.().has?.(core.TimerKey.STUN)) return false;
-        return npc.getLocation().isWithinDistance(here, BALLER_TACKLE_RANGE);
+        return inPitch(npc);
       });
-      if (ballers.length) ballerTackle(player, ballers);
+      for (const npc of ballers) stepToward(npc, player);
+      const adjacent = ballers.filter((npc) => npc.getLocation().isWithinDistance(here, BALLER_TACKLE_RANGE));
+      if (adjacent.length) ballerTackle(player, adjacent);
     }
 
     postEnter(mobile) {

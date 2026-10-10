@@ -12,6 +12,7 @@ const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
 const { Inventory } = require("../dist/game/model/container/impl/Inventory");
 const { ShopManager } = require("../dist/game/model/container/shop/ShopManager");
 const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+const { PluginManager } = require("../dist/plugins/PluginManager");
 
 const COINS = 995;
 const BRONZE_AXE = 1351;
@@ -135,6 +136,22 @@ test("a click whose item no longer matches the slot buys nothing", () => {
 
   assert.equal(player.getInventory().getAmount(BRONZE_AXE), 0);
   assert.equal(player.getInventory().getAmount(STEEL_AXE), 0);
+});
+
+test("shop:purchase reports only paid, delivered quantities", (t) => {
+  const purchases = [];
+  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => {
+    if (name === "shop:purchase") purchases.push(event);
+  });
+  const player = openShop();
+  buy(player, 0, BRONZE_AXE, "Buy 5");
+  assert.deepEqual(purchases, [{ player, shopId: AXE_SHOP, shopName: "Bob's Brilliant Axes", itemId: BRONZE_AXE, amount: 2, originalStock: true }]);
+  buy(player, 0, BRONZE_AXE);
+  buy(player, 1, BRONZE_AXE);
+  assert.equal(purchases.length, 1, "sold-out and stale requests do not report a purchase");
+  const broke = openShop(0);
+  buy(broke, 0, BRONZE_AXE);
+  assert.equal(purchases.length, 1, "an unaffordable purchase does not report acquisition");
 });
 
 function sell(player, slot, option = "Sell 1") {

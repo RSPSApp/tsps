@@ -638,6 +638,10 @@ export class ShopManager {
             removed * price
         );
         inventory.adds(itemId, removed);
+        PluginManager.emitCustomEvent("shop:purchase", {
+            player, shopId: shop.definition.getId(), shopName: shop.definition.getName(),
+            itemId, amount: removed, originalStock: (shop.originalAmounts.get(itemId) ?? 0) > 0,
+        });
         Sounds.sendSound(player, Sound.PICK_UP_ITEM);
         this.refresh(shop.definition.getId());
         this.ensureRestockTask();

@@ -15,6 +15,8 @@ The collection log lives in `server/plugins/collectionlog/`. What it holds (tabs
     ToA, Wintertodt, the Colosseum and the Inferno roll only their pets through `npc-drops:roll` (Pets takes them from there), so no loot is counted twice.
 - **Kills tally the category of the same name,** e.g. killing Zulrah adds to "Zulrah". Plugins that keep their own count answer for it instead (Zulrah, the Kalphite Queen).
 - **Pets** report through the log (owned pets are synced silently on login).
+- **Barrows:** each chest's rolled loot is logged once, even when it overflows onto the ground. The category's chest count comes from Barrows' existing saved tally.
+- **Reward shops:** successful purchases of original stock in the shops listed in `plugins/collectionlog/data/reward-shops.json` log their trackable items through `shop:purchase`. General-store resale and unrelated shops do not grant collection credit. The event reports the quantity actually paid for and delivered.
 
 From another plugin:
 
@@ -92,5 +94,5 @@ The client reads the log straight from its cache too. It used to override these 
 - **The Combat Achievements button** on a boss page (621:21); there's no combat achievement system.
 - **The burger menu's other slots** (10, 11).
 - **The per-item varbits** OSRS sends at login for a few items (`collection_item_*`, e.g. Zulrah's scales) and the `collection_other_*_completed` flags.
-- **Loot that doesn't go through `npc-drops:roll` yet:** shops, Barrows, raids chests, clue caskets and others. Each needs a `collection-log:obtain` in a follow-up.
+- **Loot that doesn't go through `npc-drops:roll` yet:** additional reward sources, raids chests and clue caskets. Each needs a `collection-log:obtain` in a follow-up; unimplemented content has no acquisition route yet.
 - **"Opened" and "completed" counts** for chests and minigames; they come with those follow-ups.

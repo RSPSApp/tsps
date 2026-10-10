@@ -512,5 +512,5 @@ export const MUSIC_UNLOCK_VARPS = [
     4066,
     4411,
     4944,
-    4945,
+    5238,
 ] as const;

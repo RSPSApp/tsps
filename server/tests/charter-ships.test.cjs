@@ -8,11 +8,14 @@ Server.installProductionPathResolver();
 
 const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
-const QuestRuntime = require("../plugins/quests/QuestRuntime");
 const CharterShips = require("../plugins/world/CharterShips.plugin");
 
 let quests = [];
-QuestRuntime.getRegisteredQuests = () => quests;
+function emitCustomEvent(name, request) {
+  if (name !== "quest:is-complete") return;
+  const quest = quests.find((entry) => entry.key === request.key);
+  if (quest) request.complete = quest.isComplete(request.player);
+}
 
 const teleports = [];
 let prompt = null;
@@ -20,7 +23,9 @@ const npcHooks = [];
 CharterShips.register({
   core: {
     GameConstants: { DEFINITIONS_DIRECTORY: path.join(__dirname, "..", "data", "definitions") },
+    Location: require("../dist/game/model/Location").Location,
     ItemIdentifiers,
+    Equipment,
     TeleportHandler: {
       checkReqs: () => true,
       teleport: (player, destination, type) => teleports.push({ destination, type }),
@@ -29,6 +34,7 @@ CharterShips.register({
   },
   sendMultiChatboxPrompt: (player, title, ...options) => { prompt = { title, options }; },
   onNpcInteraction: (name, actions) => npcHooks.push({ name, actions }),
+  emitCustomEvent,
   log() {},
 });
 
@@ -63,20 +69,25 @@ test("a ring of charos(a) and Cabin Fever halve the fare, stacking to a quarter"
   quests = [];
   assert.equal(CharterShips._test.fareFor(createPlayer(), "Brimhaven", "Catherby"), 480);
   assert.equal(CharterShips._test.fareFor(createPlayer({ ring: ItemIdentifiers.RING_OF_CHAROS_A_ }), "Brimhaven", "Catherby"), 240);
-  quests = [{ name: "Cabin Fever", isComplete: () => true }];
+  quests = [{ key: "cabin_fever", isComplete: () => true }];
   assert.equal(CharterShips._test.fareFor(createPlayer({ ring: ItemIdentifiers.RING_OF_CHAROS_A_ }), "Brimhaven", "Catherby"), 120);
   assert.equal(CharterShips._test.fareFor(createPlayer(), "Brimhaven", "Catherby"), 240);
 });
 
-test("sailing pays the fare and teleports; a registered incomplete quest blocks", () => {
+test("sailing fails closed on missing or incomplete required quests and charges only on transit", () => {
   teleports.length = 0;
-  quests = [{ name: "Regicide", isComplete: () => false }];
+  quests = [];
   const player = createPlayer();
   const tyras = CharterShips._test.loadData().ports.find((port) => port.name === "Port Tyras");
   CharterShips._test.sail(player, tyras, 3200);
   assert.equal(teleports.length, 0);
   assert.equal(player.balance, 10000);
   assert.match(player.messages.at(-1), /Regicide/);
+
+  quests = [{ key: "regicide", isComplete: () => false }];
+  CharterShips._test.sail(player, tyras, 3200);
+  assert.equal(player.balance, 10000);
+  assert.equal(teleports.length, 0);
 
   quests = [];
   const sarim = CharterShips._test.loadData().ports.find((port) => port.name === "Port Sarim");

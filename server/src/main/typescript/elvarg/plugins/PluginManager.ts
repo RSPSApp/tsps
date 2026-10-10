@@ -2055,6 +2055,7 @@ export class PluginManager {
       MapObjects: require("../game/entity/impl/object/MapObjects").MapObjects,
       ItemOnGroundManager: require("../game/entity/impl/grounditem/ItemOnGroundManager").ItemOnGroundManager,
       ItemDefinition: require("../game/definition/ItemDefinition").ItemDefinition,
+      EquipPacketListener: require("../net/packet/impl/EquipPacketListener").EquipPacketListener,
       CacheDefinitions: require("../game/cache/CacheDefinitions").CacheDefinitions,
       PathFinder: require(`${model}/movement/path/PathFinder`).PathFinder,
       RsmodRouteFinding: require(`${model}/movement/path/RsmodRouteFinding`).RsmodRouteFinding,

@@ -62,7 +62,8 @@ const MACHINERY = [
 ];
 
 /** The stairs between Keldagrim and the furnace. */
-const STAIRS = new Map([[9084, [1939, 4958]], [9138, [2931, 10196]]]);
+const FURNACE_ENTRANCE_STAIRS = 9084;
+const STAIRS = new Map([[FURNACE_ENTRANCE_STAIRS, [1939, 4958]], [9138, [2931, 10196]]]);
 const ANVIL_GATE = 9141;
 const JORZIK_GATE_VARIANT = "sometimes-when-attempting-to-open-the-gate-to-the-anvils-with-less-than-60-smithing";
 
@@ -223,6 +224,14 @@ function logout({ player }) {
 function stairs({ player, objectId }) {
   const to = STAIRS.get(objectId);
   if (!to) return false;
+  if (objectId === FURNACE_ENTRANCE_STAIRS) {
+    const request = { player, key: "giant_dwarf", started: false };
+    pluginApi.emitCustomEvent("quest:is-started", request);
+    if (request.started !== true) {
+      player.sendMessage("You need to start The Giant Dwarf to enter Keldagrim.");
+      return;
+    }
+  }
   player.moveTo(new core.Location(to[0], to[1], 0));
 }
 
@@ -534,7 +543,7 @@ function start() {
 module.exports = {
   name: "BlastFurnace",
   members: true,
-  _test: { init, tick, stateOf, putOre, smelt, takeBars, take, foremanCondition, foremanPaid, enterRoom, coolWithWater },
+  _test: { init, tick, stateOf, putOre, smelt, takeBars, take, foremanCondition, foremanPaid, enterRoom, coolWithWater, stairs },
   register(api) {
     init(api);
     api.persistAttribute(STATE_ATTRIBUTE);

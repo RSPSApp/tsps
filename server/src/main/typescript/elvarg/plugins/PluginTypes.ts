@@ -1243,6 +1243,7 @@ export interface PluginCoreApi {
   MapObjects: any;
   ItemOnGroundManager: any;
   ItemDefinition: any;
+  EquipPacketListener: any;
   CacheDefinitions: any;
   PathFinder: any;
   RsmodRouteFinding: any;

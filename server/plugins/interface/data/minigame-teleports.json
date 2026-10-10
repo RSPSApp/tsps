@@ -3,7 +3,7 @@
   "source": "https://oldschool.runescape.wiki/w/Minigame_Teleport",
   "minigames": {
     "Barbarian Assault": { "x": 2521, "y": 3570, "members": true, "notes": "Barbarian Assault tutorial" },
-    "Blast Furnace": { "x": 2930, "y": 10193, "members": true, "notes": "visited Keldagrim" },
+    "Blast Furnace": { "x": 2930, "y": 10193, "members": true, "visited": ["Keldagrim"] },
     "Bounty Hunter": { "x": 3140, "y": 3626, "members": true },
     "Burthorpe Games Room": { "x": 2899, "y": 3553, "members": true },
     "Castle Wars": { "x": 2442, "y": 3093 },
@@ -30,7 +30,7 @@
     "Shades of Mort'ton": { "x": 3506, "y": 3304, "members": true, "quests": ["Shades of Mort'ton"] },
     "Sorceress's Garden": { "x": 3321, "y": 3138, "members": true, "quests": ["Prince Ali Rescue"], "notes": "spoken to Osman or Selim" },
     "Soul Wars": { "x": 2018, "y": 5929, "members": true },
-    "Tithe Farm": { "x": 1792, "y": 3501, "members": true, "skills": { "FARMING": 34 }, "notes": "entered the Tithe Farm once" },
+    "Tithe Farm": { "x": 1792, "y": 3501, "members": true, "skills": { "FARMING": 34 }, "visited": ["Tithe Farm"] },
     "Trouble Brewing": { "x": 3801, "y": 3015, "members": true, "quests": ["Cabin Fever"], "skills": { "COOKING": 40 } },
     "TzHaar Fight Pit": { "x": 2399, "y": 5177, "members": true }
   }

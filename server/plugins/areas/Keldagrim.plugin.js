@@ -4,8 +4,8 @@
  * their Wiki transcript or the Travel option). The way in from Rellekka is in Rellekka.plugin.js
  * and the Blast Furnace stairs are in minigames/BlastFurnace.plugin.js.
  *
- * Tiles are Offline_Scape's (RSPS); the locs are the cache's. OSRS needs The Giant Dwarf started
- * to get in, but that quest isn't in this server, so nothing here is gated.
+ * Tiles are Offline_Scape's (RSPS); the locs are the cache's. OSRS requires starting The Giant
+ * Dwarf to enter Keldagrim, so the cave-to-city passage is gated on that quest state.
  */
 
 /** Loc id -> where it takes you. */
@@ -19,6 +19,7 @@ const FERRY_FARE = 2;
 const FERRY_MESSAGE = "The dwarf ferries you across the river.";
 /** The transcript's [Charm] crossings, which are free. */
 const CHARM_CROSSINGS = new Set(["d9TbkS", "PJ6RxL"]);
+const CITY_ZONE = { minX: 2790, maxX: 2940, minY: 10100, maxY: 10215, levels: [0] };
 
 let core;
 let pluginApi;
@@ -43,7 +44,21 @@ function init(api) {
 function goThrough(event) {
   const to = PASSAGES.get(event.objectId);
   if (!to) return false;
+  if (event.objectId === core.ObjectIdentifiers.CAVE_ENTRANCE_29 && !hasStartedGiantDwarf(event.player)) {
+    event.player.sendMessage("You need to start The Giant Dwarf to enter Keldagrim.");
+    return;
+  }
   event.player.moveTo(new core.Location(to[0], to[1], 0));
+}
+
+function hasStartedGiantDwarf(player) {
+  const request = { player, key: "giant_dwarf", started: false };
+  pluginApi.emitCustomEvent("quest:is-started", request);
+  return request.started === true;
+}
+
+function markKeldagrimVisited({ player }) {
+  pluginApi.emitCustomEvent("keldagrim:entered-city", { player });
 }
 
 /** Hands the stairs to the generic ladder climb, which needs their pair on the next floor. */
@@ -101,11 +116,13 @@ function travel({ player, npcId }) {
 module.exports = {
   name: "Keldagrim",
   members: true,
+  _test: { init, goThrough },
   register(api) {
     init(api);
     api.onObjectInteraction("Tunnel", { Enter: goThrough });
     api.onObjectInteraction("Cave entrance", { "Go-through": goThrough });
     api.onObjectInteraction("Entrance", { "Go-through": goThrough });
+    api.onZoneEnter(CITY_ZONE, markKeldagrimVisited);
     api.onObjectInteraction("Stairs", { "Climb-up": climbStairsUp, "Climb-down": climbStairsDown });
     api.onNpcInteraction("Dwarven Ferryman", { Travel: travel });
     api.onNpcDialogueVariant(ferrymanVariant);

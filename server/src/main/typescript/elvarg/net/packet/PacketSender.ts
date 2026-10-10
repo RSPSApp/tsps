@@ -176,7 +176,11 @@ export class PacketSender {
   }
 
   sendSong(id: number): this {
-    if (this.player.getSession().sendClientPacket(encodePlaySong(id))) return this;
+    if (this.player.getSession().sendClientPacket(encodePlaySong(id))) {
+      const { PluginManager } = require("../../plugins/PluginManager") as typeof import("../../plugins/PluginManager");
+      PluginManager.emitCustomEvent("audio:play-song", { player: this.player, trackId: id });
+    }
+    return this;
   }
 
   sendJingle(id: number, delayTicks: number): this {

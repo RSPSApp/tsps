@@ -409,6 +409,7 @@ function registerQuest(api, def) {
       player.getPacketSender().sendJingle(QUEST_COMPLETE_JINGLE, 0);
       player.sendMessage(`Congratulations, you've completed a quest: ${def.name}`);
       showCompletedScroll(player, quest, points | 0);
+      api.emitCustomEvent?.("quest:completed", { player, key: def.key, quest });
       return true;
     },
   };

@@ -27,8 +27,8 @@
  *
  * Gaps/approximations:
  * - Requirements (62 Sailing, 60 Crafting, 47 Runecraft, 53 Mining and Pandemonium) are
- *   not enforced: the wiki's start choice carries no condition to answer, and Pandemonium
- *   is not a registered quest here. They are listed in the not-started journal.
+ *   not enforced: the wiki's start choice carries no condition to answer. They are listed
+ *   in the not-started journal.
  * - The cathedral fight uses the MadAngel plugin's per-player Ardeaglais instance, opened
  *   from the basement stairs: the world's ffg multi-NPC (16320 -> 16321/16322 and
  *   16313 -> 16315/16314) has no Attack option on the quest angel, so the player wakes the

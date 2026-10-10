@@ -8,7 +8,7 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 
-const hooks = { objects: {}, npcs: {}, items: {}, clicks: [], login: [] };
+const hooks = { objects: {}, npcs: {}, items: {}, clicks: [], login: [], custom: {} };
 let common;
 let board;
 let ledger;
@@ -25,6 +25,7 @@ before(async () => {
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onItemAction: (name, actions) => { hooks.items[name] = actions; },
     onInterfaceActionClick: (handler) => hooks.clicks.push(handler),
+    onCustomEvent: (name, handler) => { hooks.custom[name] = handler; },
     sendMultiChatboxPrompt: (player, title, ...pairs) => { hooks.prompt = { title, pairs }; },
   };
   require("../plugins/skills/sailing/PortTasks.plugin").register(api);
@@ -147,6 +148,16 @@ test("accepting fills a slot and redraws the board; the limits refuse (slots by 
   assert.match(board.refusal(novice, common.taskById(JEWELLERY_TASK)), /any more port tasks/, "one slot at level 1");
   assert.match(board.refusal(createPlayer(1), common.taskById(16)), /Sailing level of 20/);
   assert.match(board.refusal(createPlayer(), common.taskById(445)), /Bounty/);
+});
+
+test('the Prying Times prerequisite can query an available port-task slot', () => {
+  const player = createPlayer();
+  const request = { player, available: false };
+  hooks.custom['sailing:has-port-task-slot'](request);
+  assert.equal(request.available, true);
+  player.setAttribute(common.SLOTS_ATTRIBUTE, Array.from({ length: 5 }, (_, id) => ({ id, taken: 0, delivered: 0 })));
+  hooks.custom['sailing:has-port-task-slot'](request);
+  assert.equal(request.available, false);
 });
 
 test("the ledger table: a crate in both hands at the cargo port, then delivered at the destination (rsprox)", () => {

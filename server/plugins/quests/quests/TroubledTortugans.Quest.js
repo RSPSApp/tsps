@@ -29,8 +29,8 @@
  * to the Great Conch and the ability to fight gryphons.
  *
  * Gaps/approximations:
- * - Pandemonium (a start requirement) is not a quest here, so only the six
- *   skill levels are enforced (all unboosted, as the wiki marks them).
+ * - Pandemonium completion is listed as a start requirement by the wiki but is not
+ *   checked by the start gate; the six skill levels are enforced unboosted.
  * - The boat journey's at-sea Floopa variants (whilst-at-sea, when-close-to-the
  *   island, near-the-gangplank) are not played: a plugin file cannot hook the
  *   Sailing boats. Arrival is detected at the Great Conch dock zone instead.
@@ -148,7 +148,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
   const SAILING_REWARD_XP = 10000; // OSRS Wiki
   const SLAYER_REWARD_XP = 8000; // OSRS Wiki
 
-  // Start requirements (all unboosted, OSRS Wiki). Pandemonium is not a quest here.
+  // Start skill requirements (all unboosted, OSRS Wiki); Pandemonium completion is separate.
   const REQUIREMENTS = [
     [Skill.SLAYER, 51],
     [Skill.CONSTRUCTION, 48],

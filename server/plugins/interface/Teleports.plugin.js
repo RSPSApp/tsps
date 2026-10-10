@@ -30,8 +30,9 @@ const TRAINING_TELEPORT_DESTINATION = new Location(2955, 3816, 0);
 // Count Draynor lives in Draynor Manor's basement (OSRS).
 const COUNT_DRAYNOR_TELEPORT_DESTINATION = new Location(3077, 9772, 0);
 // Deranged archaeologist lives at the south end of the Tar Swamp (3683, 3706);
-// this tile south of him is walkable and connected, verified live.
-const DERANGED_ARCHAEOLOGIST_TELEPORT_DESTINATION = new Location(3682, 3700, 0);
+// the path reaches him over the decaying trunk at 3682,3716, so land just north
+// of it: walkable, connected and beside the trunk's Climb side.
+const DERANGED_ARCHAEOLOGIST_TELEPORT_DESTINATION = new Location(3682, 3718, 0);
 // Elvarg lives in the Crandor/Karamja dungeon lair (OSRS).
 const ELVARG_TELEPORT_DESTINATION = new Location(2852, 9637, 0);
 const BOSS_TELEPORT_DESTINATIONS = new Map([

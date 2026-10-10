@@ -43,6 +43,7 @@ import {
     shouldProbeWidgetInteractionShallow,
 } from "./interactionMenuCache";
 import type { CachedClickTarget, WidgetClickMeta } from "./clickTypes";
+import { dropStaleClickTarget } from "./clickTypes";
 import type { GLRenderOpts } from "./glRenderOpts";
 import { drawLine, drawThickLine } from "./drawLines";
 import { renderArcWidget } from "./arcWidget";
@@ -1422,6 +1423,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             }
             if (!shouldProbeInteraction) {
                 // Continue with normal widget rendering; this widget does not participate in UI hit logic.
+                dropStaleClickTarget(clickTargetCache, clicks, w);
             } else {
                 const clickProbeStartMs = profileWidgetRender ? performance.now() : 0;
                 const interaction = getWidgetInteractionSnapshot(
@@ -1688,6 +1690,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     if (profileWidgetRender) {
                         clickRegisterMs += performance.now() - clickRegisterStartMs;
                     }
+                } else {
+                    // Nothing to offer any more (an emptied equipment slot): no stale hover text.
+                    dropStaleClickTarget(clickTargetCache, clicks, w);
                 }
             }
         } catch {}

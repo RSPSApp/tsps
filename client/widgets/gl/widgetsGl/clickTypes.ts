@@ -27,3 +27,21 @@ type CachedClickTarget = {
     persist?: boolean; // If true, survives beginFrame() clearing
 };
 export type { WidgetClickMeta, CachedClickTarget };
+
+/**
+ * A widget's click target persists between frames, hover text included, until it is
+ * unregistered. Once the widget has nothing to offer any more (an emptied worn-equipment slot,
+ * say), drop it: otherwise hovering it keeps showing its old option ("Remove Bronze arrow")
+ * until relog, though its menu, rebuilt on each right-click, is already empty.
+ */
+export function dropStaleClickTarget(
+    cache: Map<number, CachedClickTarget>,
+    clicks: { unregister(id: string): void },
+    widget: { uid: number },
+): void {
+    const stale = cache.get(widget.uid);
+    if (!stale) return;
+    clicks.unregister(stale.id);
+    cache.delete(widget.uid);
+    (widget as any).__clickTargetId = undefined;
+}

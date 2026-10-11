@@ -1,6 +1,11 @@
 {
   "disabledPlugins": ["VoiceChat", "TutorialIsland"],
   "experienceMultiplier": 1,
+  "rareCutoff": 0.01,
+  "rareMultiplier": 1,
+  "stackablesQuantityMultiplier": 1,
+  "autoCollectStackablesAlways": true,
+  "runDrainRate": 1,
   "spawn": {
     "x": 3089,
     "y": 3524,

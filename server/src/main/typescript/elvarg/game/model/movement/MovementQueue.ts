@@ -681,7 +681,7 @@ export class MovementQueue {
             return;
         }
         if (player.isRunningReturn()) {
-            player.setRunEnergy(player.getRunEnergy() - 1);
+            player.setRunEnergy(player.getRunEnergy() - GameConstants.RUN_DRAIN_RATE);
             if (player.getRunEnergy() <= 0) {
                 player.setRunEnergy(0);
                 player.setRunning(false);

@@ -29,6 +29,11 @@ export interface WorldDefinitionData {
     zones: WorldZone[];
     disabledPlugins: string[];
     experienceMultiplier: number;
+    rareCutoff: number;
+    rareMultiplier: number;
+    stackablesQuantityMultiplier: number;
+    autoCollectStackablesAlways: boolean;
+    runDrainRate: number;
     /** Optional: when set, players are switched to this layout on login. */
     gameframe?: WorldGameframe;
     /** False makes this a free-to-play world (FreeToPlay plugin); needs zones tagged "f2p". */
@@ -87,6 +92,22 @@ function positiveNumber(source: JsonObject, key: string, label: string): number 
     const value = source[key];
     if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
         throw new WorldDefinitionValidationError(`${label}.${key} must be a positive number`);
+    }
+    return value;
+}
+
+function decimalNumber(source: JsonObject, key: string, label: string): number {
+    const value = source[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new WorldDefinitionValidationError(`${label}.${key} must be a number`);
+    }
+    return value;
+}
+
+function booleanValue(source: JsonObject, key: string, label: string): boolean {
+    const value = source[key];
+    if (typeof value !== "boolean") {
+        throw new WorldDefinitionValidationError(`${label}.${key} must be a boolean`);
     }
     return value;
 }
@@ -170,6 +191,27 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
     const experienceMultiplier = world.experienceMultiplier === undefined
         ? 1
         : positiveNumber(world, "experienceMultiplier", "world.json");
+
+    const rareCutoff = world.rareCutoff === undefined
+        ? 0.01
+        : decimalNumber(world, "rareCutoff", "world.json");
+
+    const rareMultiplier = world.rareMultiplier === undefined
+        ? 1
+        : positiveNumber(world, "rareMultiplier", "world.json");
+
+    const stackablesQuantityMultiplier = world.stackablesQuantityMultiplier === undefined
+        ? 1
+        : positiveNumber(world, "stackablesQuantityMultiplier", "world.json");        
+
+    const autoCollectStackablesAlways = world.autoCollectStackablesAlways === undefined
+        ? false
+        : booleanValue(world, "autoCollectStackablesAlways", "world.json");  
+
+    const runDrainRate = world.runDrainRate === undefined
+        ? 1
+        : integer(world, "runDrainRate", "world.json");                
+
     if (world.gameframe !== undefined && !WORLD_GAMEFRAMES.includes(world.gameframe as WorldGameframe)) {
         throw new WorldDefinitionValidationError(`world.json gameframe must be one of ${WORLD_GAMEFRAMES.join(", ")}`);
     }
@@ -191,10 +233,16 @@ export function parseWorldDefinition(value: unknown): WorldDefinitionData {
         disabledPlugins: world.disabledPlugins.map((pluginName) => pluginName.trim()),
         experienceMultiplier,
         membersWorld,
+        rareCutoff,
+        rareMultiplier,
+        stackablesQuantityMultiplier,
+        autoCollectStackablesAlways,
+        runDrainRate,        
         ...(world.gameframe !== undefined && { gameframe: world.gameframe as WorldGameframe }),
         // Malformed config is ignored here as in PluginManager.loadPluginConfig, not fatal.
-        ...(world.pluginConfig && typeof world.pluginConfig === "object" && !Array.isArray(world.pluginConfig) &&
-            { pluginConfig: world.pluginConfig as Record<string, unknown> }),
+        ...(world.pluginConfig !== undefined && {
+            pluginConfig: world.pluginConfig as Record<string, unknown>,
+        }),
     };
 }
 
@@ -271,6 +319,11 @@ function copyWorldDefinition(): WorldDefinitionData {
         zones: definition.zones.map((zone) => ({ ...zone, tags: [...zone.tags] })),
         disabledPlugins: [...definition.disabledPlugins],
         experienceMultiplier: definition.experienceMultiplier,
+        rareCutoff: definition.rareCutoff,
+        rareMultiplier: definition.rareMultiplier,
+        stackablesQuantityMultiplier: definition.stackablesQuantityMultiplier,
+        autoCollectStackablesAlways: definition.autoCollectStackablesAlways,
+        runDrainRate: definition.runDrainRate,
         membersWorld: definition.membersWorld,
         ...(definition.gameframe !== undefined && { gameframe: definition.gameframe }),
         ...(definition.pluginConfig !== undefined && { pluginConfig: structuredClone(definition.pluginConfig) }),

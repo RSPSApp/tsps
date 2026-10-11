@@ -22,7 +22,7 @@ class TeleportSpell extends Spell {
     spellId(): number { return 0; }
     levelRequired(): number { return this.data.level; }
     baseExperience(): number { return this.data.experience; }
-    itemsRequired(): Item[] { return this.data.runes; }
+    itemsRequired(): Item[] { return []; }
     equipmentRequired(): Item[] { return []; }
     startCast(): void { }
     getSpellbook(): MagicSpellbook { return this.data.spellbook; }

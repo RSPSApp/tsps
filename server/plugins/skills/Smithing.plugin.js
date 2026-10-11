@@ -894,13 +894,20 @@ function handleSmithingItemOnObject(event) {
     return;
   }
 
-  if (name === "Anvil" || name === "An experimental anvil") {
+ if (name === "Anvil" || name === "An experimental anvil" || name === "Rusted anvil") {
+    if (name === "Rusted anvil" && itemId !== 2349) {
+      player.sendMessage("You can only use bronze bars to smith on this anvil.");
+      event.handled = true;
+      return;
+    }
+
     if (SMITHABLE_EQUIPMENT_BY_BAR.has(itemId)) {
       openEquipmentCreationInterface(player, itemId);
       event.handled = true;
       return;
     }
   }
+
 }
 
 module.exports = {
@@ -932,6 +939,28 @@ module.exports = {
     api.onObjectInteraction("Small furnace", { Smelt: handleSmelt });
     api.onObjectInteraction("Anvil", { Smith: handleSmith });
     api.onObjectInteraction("An experimental anvil", { Use: handleSmith });
+
+    // Rusted anvil in lumbridge only works for bronze bars
+    api.onObjectInteraction("Rusted anvil", {
+      Smith: ({ player }) => {
+        const inventory = player.getInventory();
+        
+        // 1. Check for a hammer
+        if (!inventory.contains(ItemIds.HAMMER)) {
+          player.sendMessage("You need a hammer to work metal bars.");
+          return;
+        }
+
+        // 2. Check explicitly for bronze bars (Item ID: 2349)
+        if (!inventory.contains(2349)) {
+          player.sendMessage("You need a bronze bar to smith equipment on this anvil.");
+          return;
+        }
+
+        // 3. Open interface tailored explicitly for Bronze bars
+        openEquipmentCreationInterface(player, 2349);
+      }
+    });
 
     api.onInterfaceActionButton(
       SMELTING_SKILLMULTI_BUTTON_IDS,

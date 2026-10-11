@@ -1,14 +1,14 @@
 {
-  "disabledPlugins": ["VoiceChat", "TutorialIsland"],
-  "experienceMultiplier": 1,
+  "disabledPlugins": ["VoiceChat", "TutorialIsland", "DuelStaking", "FreezeTimer", "FriendsChatManager", "FriendsList", "GrandExchange", "IgnoreList", "VengeanceTimer"],
+  "experienceMultiplier": 3,
   "rareCutoff": 0.01,
-  "rareMultiplier": 1,
-  "stackablesQuantityMultiplier": 1,
+  "rareMultiplier": 3,
+  "stackablesQuantityMultiplier": 3,
   "autoCollectStackablesAlways": true,
-  "runDrainRate": 1,
+  "runDrainRate": 0,
   "spawn": {
-    "x": 3089,
-    "y": 3524,
+    "x": 3222,
+    "y": 3218,
     "z": 0
   },
   "zones": [

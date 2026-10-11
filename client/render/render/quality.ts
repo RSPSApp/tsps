@@ -361,6 +361,15 @@ export function getCanvasResolutionScale(host: WebGLOsrsRendererHost, cssWidth: 
         // NEAREST-sampled sprites and bitmap fonts stay pixel-perfect.
         // Handhelds cap at 2 for fill-rate/memory; the iOS scene framebuffer is
         // compensated via its quality profile so 3D cost stays flat.
+        const configuredScale = Number(
+            import.meta.env.VITE_RENDER_SCALE ?? "0.25",
+        );
+
+        const renderScale =
+            Number.isFinite(configuredScale) && configuredScale > 0
+                ? Math.min(configuredScale, 3)
+                : 1;
+
         const maxScale = isLoginLikeState ? 3 : isMobileMode ? 2 : 3;
         const targetScale = Math.min(dpr, maxScale);
 

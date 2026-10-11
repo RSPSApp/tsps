@@ -81,13 +81,13 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
 
     protected override getEffectiveFpsLimit(): number {
         let limit = super.getEffectiveFpsLimit();
-        let target = Number(this.osrsClient.targetFps) | 0;
+        let target = 10;
         // Never honor CS2 mobile battery caps (~20) on desktop.
         if (!isMobileMode && target > 0 && target < 60) {
-            target = 0;
-            this.osrsClient.targetFps = 0;
+            target = 10;
+            this.osrsClient.targetFps = 10;
             if (this.fpsLimit > 0 && this.fpsLimit < 60) {
-                this.fpsLimit = 0;
+                this.fpsLimit = 10;
             }
         }
         if (target > 0) {

@@ -36,6 +36,95 @@ const KALPHITE_QUEEN_NOTED_ITEMS = new Set([
   1391, 3049, 207, 3051, 219, 2363, 1783, 444, 1513, 1621, 1619, 1617, 245, 3138, 1987, 5940, 6016,
 ]);
 
+
+/** Whether an item stacks in the inventory (runes, arrows, seeds, coins...). */
+function isStackableItem(itemId) {
+  try {
+    return ItemDefinition.forId(itemId)?.isStackable() === true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/** Currency, stackables (runes, ammo, seeds...) and noted items drop in 3x the amount. */
+function scaleAmount(itemId, amount, noted) {
+  return CURRENCY_IDS.has(itemId) || noted === true || isStackableItem(itemId)
+    ? amount * GameConstants.STACKABLES_QUANTITY_MULTIPLIER
+    : amount;
+}
+
+/**
+ * Makes rare slots RARE_MULTIPLIER times heavier in a single shared roll space of `total`.
+ * The extra room comes from the empty part of the pool first (the "nothing" slots), and only
+ * then from common entries, which are scaled down together. `items` are the real entries
+ * ({ weight }), `nothings` the explicit empty ones. Weights may become fractional.
+ */
+function rebalanceRolls(items, nothings, total) {
+  if (!(total > 0)) return;
+  let rareSum = 0;
+  let commonSum = 0;
+  for (const item of items) {
+    if (item.weight / total < GameConstants.RARE_CUTOFF) rareSum += item.weight;
+    else commonSum += item.weight;
+  }
+  if (rareSum === 0) return;
+  const extra = rareSum * (GameConstants.RARE_MULTIPLIER - 1);
+  const empty = Math.max(0, total - rareSum - commonSum);
+  const fromCommon = Math.max(0, extra - empty);
+  let rareFactor = GameConstants.RARE_MULTIPLIER;
+  let commonFactor = 1;
+  if (fromCommon > commonSum) {
+    commonFactor = 0;
+    rareFactor = Math.min(GameConstants.RARE_MULTIPLIER, total / rareSum);
+  } else if (commonSum > 0) {
+    commonFactor = (commonSum - fromCommon) / commonSum;
+  }
+  for (const item of items) {
+    item.weight *= item.weight / total < GameConstants.RARE_CUTOFF ? rareFactor : commonFactor;
+  }
+  // Empty slots are now whatever is left of `total`, so the explicit ones stop taking room.
+  for (const nothing of nothings) nothing.weight = 0;
+}
+
+function applyDropRates(tableById) {
+  for (const table of Object.values(tableById)) {
+    const entries = Array.isArray(table.entries) ? table.entries : [];
+    const main = entries.filter(
+      (e) => !e.always && !e.pre_roll && !e.separate_roll && Number.isInteger(e.weight)
+    );
+    if (main.length > 0) {
+      const total = Number.isInteger(table.main_max_roll)
+        ? table.main_max_roll
+        : main.reduce((sum, e) => sum + e.weight, 0);
+      table.main_max_roll = total;
+      rebalanceRolls(main.filter((e) => !e.nothing), main.filter((e) => e.nothing), total);
+    }
+    const boost = (entry) => {
+      const outOf = Number(entry.out_of);
+      if (!Number.isInteger(outOf) || outOf <= 1 || !Number.isInteger(entry.weight)) return;
+      if (entry.weight / outOf < GameConstants.RARE_CUTOFF) {
+        entry.weight = Math.min(outOf, entry.weight * GameConstants.RARE_MULTIPLIER);
+      }
+    };
+    // Grouped separate rolls share one pool, so they are left alone.
+    for (const entry of entries) {
+      if ((entry.pre_roll || entry.separate_roll) && !entry.roll_group) boost(entry);
+    }
+    for (const entry of table.tertiary || []) boost(entry);
+  }
+}
+
+function applySharedTableRates() {
+  for (const entries of sharedTables.values()) {
+    if (entries.length === 0) continue;
+    rebalanceRolls(
+      entries.filter((e) => !e.nothing),
+      entries.filter((e) => e.nothing),
+      entries[0].outOf
+    );
+  }
+}
+
 /** npcId -> array of shared table objects (one instance per distinct table) */
 const tablesByNpc = new Map();
 /** shared table name -> [{ itemId, quantity, weight }] */
@@ -196,6 +285,7 @@ function loadDrops() {
   const subtables = readJson(SUBTABLES_FILE) || {};
   applyOverrides(dump, subtables, readJson(OVERRIDES_FILE) || {});
   applyWikiCorrections(tableById);
+  applyDropRates(tableById);
 
   for (const [npcId, npc] of Object.entries(dump.npcs)) {
     const id = Number(npcId);
@@ -248,6 +338,8 @@ function loadDrops() {
     }
   }
 
+  applySharedTableRates();
+
   return {
     npcs: tablesByNpc.size,
     tables: tableCount,
@@ -299,7 +391,7 @@ function rollSharedTable(name, player, depth = 0) {
   const outOf = pool === entries
     ? entries[0].outOf
     : pool.reduce((sum, entry) => sum + entry.weight, 0);
-  let roll = randomInt(Math.max(1, outOf));
+  let roll = Math.random() * Math.max(1, outOf);
   for (const entry of pool) {
     roll -= entry.weight;
     if (roll < 0) {
@@ -312,7 +404,7 @@ function rollSharedTable(name, player, depth = 0) {
       const [min, max] = entry.quantity;
       return [{
         itemId: entry.itemId,
-        amount: min + randomInt(Math.max(1, max - min + 1)),
+        amount: scaleAmount(entry.itemId, min + randomInt(Math.max(1, max - min + 1)), entry.noted),
         noted: entry.noted === true,
       }];
     }
@@ -330,10 +422,18 @@ function resolveEntry(entry, player) {
   if (!Number.isInteger(entry.item_id)) {
     return [];
   }
-  const drops = [{ itemId: entry.item_id, amount: rollQuantity(entry), noted: entry.noted === true }];
+  const drops = [{
+    itemId: entry.item_id,
+    amount: scaleAmount(entry.item_id, rollQuantity(entry), entry.noted),
+    noted: entry.noted === true,
+  }];
   for (const bonus of entry.bonus_drops || []) {
     if (Number.isInteger(bonus.item_id)) {
-      drops.push({ itemId: bonus.item_id, amount: rollQuantity(bonus), noted: bonus.noted === true });
+      drops.push({
+        itemId: bonus.item_id,
+        amount: scaleAmount(bonus.item_id, rollQuantity(bonus), bonus.noted),
+        noted: bonus.noted === true,
+      });
     }
   }
   return drops;
@@ -362,7 +462,7 @@ function rollOnce(table, entries, player) {
       } else if (hits(entry)) {
         drops.push(...resolveEntry(entry, player));
       }
-    } else if (Number.isInteger(entry.weight)) {
+    } else if (Number.isFinite(entry.weight)) {
       main.push(entry);
     }
   }
@@ -383,7 +483,7 @@ function rollOnce(table, entries, player) {
     const maxRoll = Number.isInteger(table.main_max_roll)
       ? table.main_max_roll
       : main.reduce((sum, entry) => sum + entry.weight, 0);
-    let roll = randomInt(Math.max(1, maxRoll));
+    let roll = Math.random() * Math.max(1, maxRoll);
     for (const entry of main) {
       roll -= entry.weight;
       if (roll < 0) {
@@ -465,13 +565,6 @@ function dropFor(player, npc, npcId, location, damagers = []) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
       continue;
     }
-    if (CURRENCY_IDS.has(drop.itemId) && autoCollectCurrencies(player)) {
-      const inventory = player.getInventory();
-      if (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0) {
-        inventory.adds(drop.itemId, drop.amount);
-        continue;
-      }
-    }
     const definition = ItemDefinition.forId(drop.itemId);
     const noteId = definition.getNoteId();
     const itemId = drop.noted && noteId >= 0 && ItemDefinition.forId(noteId).isNoted()
@@ -481,6 +574,17 @@ function dropFor(player, npc, npcId, location, damagers = []) {
     const stackable = item.getDefinition && item.getDefinition()
       ? item.getDefinition().isStackable()
       : false;
+    // Currency and every stackable (runes, ammo, seeds, noted items...) goes straight to the
+    // inventory under the same condition coins always used. Falls through to the ground when
+    // the inventory has no room for it.
+    if ((CURRENCY_IDS.has(drop.itemId) || stackable)
+        && (GameConstants.AUTO_COLLECT_STACKABLES_ALWAYS || autoCollectCurrencies(player))) {
+      const inventory = player.getInventory();
+      if (inventory.contains(itemId) || inventory.getFreeSlots() > 0) {
+        inventory.adds(itemId, drop.amount);
+        continue;
+      }
+    }
     if (stackable) {
       itemOnGroundManager.registerLocation(player, item, location);
     } else {

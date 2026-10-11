@@ -30,6 +30,20 @@ export class GameConstants {
     // so combat and skilling share a single rate here. Raise it for faster
     // progression; it is the only experience knob.
     public static EXPERIENCE_MULTIPLIER: number = getWorldDefinition().experienceMultiplier;
+    /** A drop rarer than this (as a probability) counts as "rare" and is boosted. 1/100 = Wiki "Rare". */
+    public static RARE_CUTOFF: number = getWorldDefinition().rareCutoff;
+    /** Rare drops become this many times more likely. */
+    public static RARE_MULTIPLIER: number = getWorldDefinition().rareMultiplier;
+    /** Currency, stackable and noted-item drops give this many times the quantity. */
+    public static STACKABLES_QUANTITY_MULTIPLIER: number = getWorldDefinition().stackablesQuantityMultiplier;
+    /**
+     * false: stackables are auto-collected under the same condition as coins (autoCollectCurrencies).
+     * true: always auto-collect them, regardless of that condition.
+     */
+    public static AUTO_COLLECT_STACKABLES_ALWAYS: boolean = getWorldDefinition().autoCollectStackablesAlways;
+    // 1 for normal run energy drain rate. 0 will not drain run energy.
+    public static RUN_DRAIN_RATE: number = getWorldDefinition().runDrainRate;
+
     public static readonly DEBUG_ATTACK_DISTANCE: boolean = false;
     // Verbose NPC face-change debug is expensive in large fights; keep off unless diagnosing.
     public static readonly DEBUG_NPC_FACE_POSITION_CHANGES: boolean = false;

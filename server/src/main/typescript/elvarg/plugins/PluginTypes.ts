@@ -568,6 +568,20 @@ export interface PluginSpellOnObjectEvent {
   handled: boolean;
 }
 
+export interface PluginSpellOnItemEvent {
+  player: any;
+  /** Spellbook name of the cast spell, e.g. "Lvl-1 Enchant"; undefined if the cache has none. */
+  spellName: string | undefined;
+  spellWidget: number;
+  spellItemId: number;
+  /** The inventory item the spell was cast on. */
+  itemId: number;
+  slot: number;
+  /** The core's item-use check for magic; handlers call it before using anything up. */
+  canUse: () => boolean;
+  handled: boolean;
+}
+
 export interface PluginItemOnGroundItemEvent {
   player: any;
   inventoryItem: any;
@@ -919,6 +933,7 @@ export interface PluginApi {
   onItemOnNpc(handler: (event: PluginItemOnNpcEvent) => void, filter?: PluginItemUseFilter): void;
   onItemOnGroundItem(handler: (event: PluginItemOnGroundItemEvent) => void, filter?: PluginItemUseFilter): void;
   onSpellOnObject(handler: (event: PluginSpellOnObjectEvent) => void): void;
+  onSpellOnItem(handler: (event: PluginSpellOnItemEvent) => void): void;
   onItemAction(handler: (event: PluginItemActionEvent) => void): void;
   /** Exact item name and inventory option matching. Return false to fall through. */
   onItemAction(itemName: string, actions: Record<string, (event: PluginItemActionEvent) => void | boolean>): void;

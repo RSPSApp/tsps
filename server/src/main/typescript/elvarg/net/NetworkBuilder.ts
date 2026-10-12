@@ -652,7 +652,16 @@ export class ClientConnection {
             packet.targetItemId,
             packet.targetSlot,
             CacheDefinitions.getSpellName(packet.sourceWidgetId, packet.sourceItemId),
-          ) && !MAGIC_ITEMS.castOnItem(
+          ) && !PluginManager.emitSpellOnItem({
+            player: this.player,
+            spellName: CacheDefinitions.getSpellName(packet.sourceWidgetId, packet.sourceItemId),
+            spellWidget: packet.sourceWidgetId,
+            spellItemId: packet.sourceItemId,
+            itemId: packet.targetItemId,
+            slot: packet.targetSlot,
+            canUse: () => PluginManager.emitCanUseItem(this.player as Player, packet.targetItemId, "magic") !== false,
+            handled: false,
+          }) && !MAGIC_ITEMS.castOnItem(
             this.player,
             this.resolveClientCombatSpellId(
               packet.sourceWidgetId,

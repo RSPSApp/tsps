@@ -40,6 +40,7 @@
   "scripts": {
     "start": "tsx ../server/scripts/ensure-cache.ts && node ../scripts/run-with-env.mjs development ./node_modules/@craco/craco/dist/bin/craco.js start",
     "dev": "yarn start",
+    "serve": "node scripts/serve-build.mjs",
     "build": "node ../scripts/run-with-env.mjs production ./node_modules/@craco/craco/dist/bin/craco.js build",
     "test": "node scripts/run-tests.mjs",
     "test:vengeance-timer": "tsx tests/vengeance-timer-plugin.test.ts",

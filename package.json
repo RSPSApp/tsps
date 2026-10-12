@@ -7,9 +7,12 @@
   },
   "scripts": {
     "setup": "npm exec --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn install --immutable && npm exec --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn --cwd server install --immutable && npm exec --yes --package @yarnpkg/cli-dist@4.12.0 -- yarn --cwd client install --immutable",
-    "start": "yarn --cwd server ensure-cache && yarn concurrently --kill-others --names server,client \"yarn --cwd server dev\" \"yarn --cwd client start\"",
+    "start": "node -e \"process.exit(require('fs').existsSync('client/build/index.html')?0:1)\" || yarn cbuild && yarn --cwd server ensure-cache && yarn concurrently --kill-others --names server,client \"yarn --cwd server start:prod\" \"yarn --cwd client serve\"",
+    "start:dev": "yarn --cwd server ensure-cache && yarn concurrently --kill-others --names server,client \"yarn --cwd server start:prod\" \"yarn --cwd client start\"",
     "server": "yarn --cwd server dev",
-    "client": "yarn --cwd client start"
+    "client": "yarn --cwd client start",
+    "cbuild": "yarn --cwd client build",
+    "sbuild": "yarn --cwd server build"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

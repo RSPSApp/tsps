@@ -16,12 +16,16 @@ module.exports = function registerGraniteMaulSpecialAttack(api) {
     }
   }
 
+  // ItemIdentifiers names are positional; these are the cache gamevals granite_maul (4153),
+  // granite_maul_pretty (12848, clamp applied), granite_maul_plus (24225, handle applied) and
+  // granite_maul_pretty_plus (24227, both applied). Only the two with a handle cost 50%.
   api.registerCombatSpecial({
     id: "granite_maul",
     itemIds: [
       ItemIdentifiers.GRANITE_MAUL,
       ItemIdentifiers.GRANITE_MAUL_3,
       ItemIdentifiers.GRANITE_MAUL_5,
+      ItemIdentifiers.GRANITE_MAUL_7,
     ],
     drainAmount: STANDARD_DRAIN,
     strengthMultiplier: 1,
@@ -36,6 +40,7 @@ module.exports = function registerGraniteMaulSpecialAttack(api) {
     },
     drainAmountByItemId: {
       [ItemIdentifiers.GRANITE_MAUL_5]: ORNATE_DRAIN,
+      [ItemIdentifiers.GRANITE_MAUL_7]: ORNATE_DRAIN,
     },
     combatMethod: new GraniteMaulCombatMethod(),
   });

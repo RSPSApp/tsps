@@ -36,7 +36,6 @@ const KALPHITE_QUEEN_NOTED_ITEMS = new Set([
   1391, 3049, 207, 3051, 219, 2363, 1783, 444, 1513, 1621, 1619, 1617, 245, 3138, 1987, 5940, 6016,
 ]);
 
-<<<<<<< HEAD
 
 /** Whether an item stacks in the inventory (runes, arrows, seeds, coins...). */
 function isStackableItem(itemId) {
@@ -124,7 +123,6 @@ function applySharedTableRates() {
       entries[0].outOf
     );
   }
-=======
 /**
  * Wiki, Looting bag: "obtained as a drop from any monster in the Wilderness, excluding aviansie,
  * abyssal demons, and Black chinchompas". The tables list it on monsters found everywhere (rats,
@@ -137,7 +135,6 @@ function lootingBagDrops(npc) {
   if (!Wilderness.isInLocation(npc?.getLocation?.())) return false;
   const name = (npc.getCurrentDefinition?.() ?? npc.getDefinition?.())?.getName?.();
   return !LOOTING_BAG_EXCLUDED.has(name);
->>>>>>> ea8f1cac47c98dbc21804b7124a1e15aba40bc0d
 }
 
 /** npcId -> array of shared table objects (one instance per distinct table) */

@@ -123,6 +123,8 @@ function applySharedTableRates() {
       entries[0].outOf
     );
   }
+}
+  
 /**
  * Wiki, Looting bag: "obtained as a drop from any monster in the Wilderness, excluding aviansie,
  * abyssal demons, and Black chinchompas". The tables list it on monsters found everywhere (rats,

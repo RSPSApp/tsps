@@ -492,6 +492,21 @@ export interface PluginSpellRuneBypassEvent {
   bypass: boolean | null;
 }
 
+/**
+ * Asked while a spell works out what a cast consumes. A handler may pay the cost with items the
+ * caster carries instead of the spell's own runes, which is how a blighted spell sack (or any
+ * future whole-cost substitute) is honoured without core knowing the feature.
+ */
+export interface PluginSpellCostEvent {
+  player: any;
+  spellbook: any;
+  spellId: number;
+  /** What the spell asks for, already filtered by the rune bypasses. */
+  items: Item[];
+  /** Set to what this cast should consume instead. The first handler that answers wins. */
+  cost: Item[] | null;
+}
+
 export interface PluginNpcAggressionToleranceEvent {
   player: any;
   npc: any;
@@ -881,6 +896,8 @@ export interface PluginApi {
   onCombatAttackDistance(handler: (event: PluginCombatAttackDistanceEvent) => void): void;
   onSpellDisabled(handler: (event: PluginSpellDisabledEvent) => void): void;
   onSpellRuneBypass(handler: (event: PluginSpellRuneBypassEvent) => void): void;
+  /** Pays a spell's cost with items the caster carries; see PluginSpellCostEvent. */
+  onSpellCost(handler: (event: PluginSpellCostEvent) => void): void;
   onNpcAggressionTolerance(
     handler: (event: PluginNpcAggressionToleranceEvent) => void
   ): void;

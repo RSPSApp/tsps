@@ -17,14 +17,17 @@ import { OptionDialogue } from "../../../model/dialogues/entries/impl/OptionDial
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
-type SpellData = { level: number; experience: number; runes: Item[] };
+// WHY [Prompt: "ensure they can cast their appropriate spells"]: a Lunar spell could not be
+// addressed by any spell-keyed plugin hook while every one reported id 0; the id is optional so
+// the table stays as it is, and the cache ids are the ones EffectSpells already uses for them.
+type SpellData = { spellId?: number; level: number; experience: number; runes: Item[] };
 type TeleportData = SpellData & { destination: Location };
 
 const rune = (id: number, amount = 1) => new Item(id, amount);
 
 class LunarSpell extends Spell {
     constructor(readonly data: SpellData) { super(); }
-    spellId(): number { return 0; }
+    spellId(): number { return this.data.spellId ?? 0; }
     levelRequired(): number { return this.data.level; }
     baseExperience(): number { return this.data.experience; }
     itemsRequired(): Item[] { return this.data.runes; }
@@ -61,7 +64,7 @@ export class LunarSpells {
     private static readonly SELF = new Map<string, LunarSpell>([
         ["cure me", new LunarSpell({ level: 71, experience: 69, runes: [rune(9075, 2), rune(564, 2), rune(563)] })],
         ["cure group", new LunarSpell({ level: 74, experience: 74, runes: [rune(9075, 2), rune(564, 2), rune(563, 2)] })],
-        ["vengeance", new LunarSpell({ level: 94, experience: 112, runes: [rune(9075, 4), rune(557, 10), rune(560, 2)] })],
+        ["vengeance", new LunarSpell({ spellId: 9136, level: 94, experience: 112, runes: [rune(9075, 4), rune(557, 10), rune(560, 2)] })],
         ["dream", new LunarSpell({ level: 79, experience: 82, runes: [rune(9075, 2), rune(556, 5), rune(563)] })],
         ["heal group", new LunarSpell({ level: 95, experience: 124, runes: [rune(9075, 4), rune(557, 15), rune(565, 3)] })],
         ["spellbook swap", new LunarSpell({ level: 96, experience: 130, runes: [rune(9075, 3), rune(563, 2), rune(560)] })],
@@ -245,7 +248,7 @@ export class LunarSpells {
             "cure other": { level: 68, experience: 65, runes: [rune(9075), rune(557, 10), rune(563)] },
             "energy transfer": { level: 91, experience: 100, runes: [rune(9075, 3), rune(557, 2), rune(563)] },
             "heal other": { level: 92, experience: 101, runes: [rune(9075, 3), rune(557), rune(565, 3)] },
-            "vengeance other": { level: 93, experience: 108, runes: [rune(9075, 3), rune(557, 10), rune(560, 2)] },
+            "vengeance other": { spellId: 9135, level: 93, experience: 108, runes: [rune(9075, 3), rune(557, 10), rune(560, 2)] },
             "stat spy": { level: 75, experience: 76, runes: [rune(9075, 2), rune(557, 5), rune(563)] },
             "stat restore pot share": { level: 81, experience: 84, runes: [rune(9075, 2), rune(555, 10), rune(561, 2)] },
             "boost potion share": { level: 84, experience: 88, runes: [rune(9075, 3), rune(555, 12), rune(557, 10)] },

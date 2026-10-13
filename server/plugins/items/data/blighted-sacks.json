@@ -1,0 +1,55 @@
+{
+  "_source": "https://oldschool.runescape.wiki/w/Blighted_rune_sack",
+  "_rule": "A sack in the inventory covers the whole rune cost of the spells it lists and one of it is spent per cast, only where other players can be attacked. Spell ids are the engine's (CombatSpells / EffectSpells spellId()), with the OSRS name beside each for review.",
+  "areas": ["Castle Wars", "FreeForAllArena"],
+  "sacks": [
+    {
+      "item": "Blighted ancient ice sack",
+      "wiki": "https://oldschool.runescape.wiki/w/Blighted_ancient_ice_sack",
+      "spells": [
+        { "name": "Ice Rush", "id": 12861 },
+        { "name": "Ice Burst", "id": 12881 },
+        { "name": "Ice Blitz", "id": 12871 },
+        { "name": "Ice Barrage", "id": 12891 }
+      ]
+    },
+    {
+      "item": "Blighted entangle sack",
+      "wiki": "https://oldschool.runescape.wiki/w/Blighted_entangle_sack",
+      "spells": [
+        { "name": "Bind", "id": 1572 },
+        { "name": "Snare", "id": 1582 },
+        { "name": "Entangle", "id": 1592 }
+      ]
+    },
+    {
+      "item": "Blighted surge sack",
+      "wiki": "https://oldschool.runescape.wiki/w/Blighted_surge_sack",
+      "spells": [
+        { "name": "Wind Wave", "id": 1183 },
+        { "name": "Water Wave", "id": 1185 },
+        { "name": "Earth Wave", "id": 1188 },
+        { "name": "Fire Wave", "id": 1189 },
+        { "name": "Wind Surge", "id": 21876 },
+        { "name": "Water Surge", "id": 21877 },
+        { "name": "Earth Surge", "id": 21878 },
+        { "name": "Fire Surge", "id": 21879 }
+      ]
+    },
+    {
+      "item": "Blighted teleport spell sack",
+      "wiki": "https://oldschool.runescape.wiki/w/Blighted_teleport_spell_sack",
+      "spells": [
+        { "name": "Tele Block", "id": 12445 }
+      ]
+    },
+    {
+      "item": "Blighted vengeance sack",
+      "wiki": "https://oldschool.runescape.wiki/w/Blighted_vengeance_sack",
+      "spells": [
+        { "name": "Vengeance", "id": 9136 },
+        { "name": "Vengeance Other", "id": 9135 }
+      ]
+    }
+  ]
+}

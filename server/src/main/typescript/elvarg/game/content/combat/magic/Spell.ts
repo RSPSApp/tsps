@@ -45,9 +45,17 @@ export abstract class Spell {
         ) === true) {
             return [];
         }
-        return items.filter((item) => item != null && PluginManager.emitSpellRuneBypass(
+        const cost = items.filter((item) => item != null && PluginManager.emitSpellRuneBypass(
             player, this.getSpellbook(), this.spellId(), item.id
         ) !== true);
+        // WHY [Prompt: "All Spell sacks do not work... ensure they can cast their appropriate
+        // spells"]: the one list every cast path reads to learn what a spell costs (canCast's own
+        // delete loop, EffectSpells.handleSpell's self-casts, the bot PvP policy), so a plugin
+        // answering here pays the whole cost and nothing else is consumed. A pure question: it is
+        // asked on the del=false checks too, so it must stay free of side effects.
+        return cost.length === 0
+            ? cost
+            : PluginManager.emitSpellCost(player, this.getSpellbook(), this.spellId(), cost) ?? cost;
     }
 
     /** The part of `items` the inventory cannot fully supply, aggregated per item. */

@@ -72,6 +72,9 @@ import {
   PluginRegionLoadedEvent,
   PluginSpellDisabledEvent,
   PluginSpellRuneBypassEvent,
+  // WHY [Prompt: "ensure they can cast their appropriate spells"]: payload for the generic
+  // onSpellCost seam added in Spell.itemsToConsume; core stays free of the blighted-sack feature.
+  PluginSpellCostEvent,
   PluginCanTradeEvent,
   PluginTradeRequestEvent,
   PluginTradeCompletedEvent,
@@ -253,6 +256,8 @@ export class PluginManager {
   private static combatAttackDistanceHooks: PluginHook<PluginCombatAttackDistanceEvent>[] = [];
   private static spellDisabledHooks: PluginHook<PluginSpellDisabledEvent>[] = [];
   private static spellRuneBypassHooks: PluginHook<PluginSpellRuneBypassEvent>[] = [];
+  /** Plugins that can pay a spell's cost with items the caster carries instead of its runes. */
+  private static spellCostHooks: PluginHook<PluginSpellCostEvent>[] = [];
   private static npcAggressionToleranceHooks: PluginHook<PluginNpcAggressionToleranceEvent>[] = [];
   private static playerDefeatedHooks: PluginHook<PluginPlayerDefeatedEvent>[] = [];
   private static itemOnObjectHooks: PluginHook<PluginItemOnObjectEvent>[] = [];
@@ -1481,6 +1486,38 @@ export class PluginManager {
       );
       if (event.bypass !== null) {
         return event.bypass;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * WHY [Prompt: "All Spell sacks do not work... ensure they can cast their appropriate spells"]:
+   * what a cast actually consumes, when a plugin pays for it with an item the caster carries
+   * instead of the spell's own runes (a blighted spell sack). Generic seam only: the spell list
+   * and every rule about which sack covers which spell live in plugins/items/BlightedSacks.
+   * The first handler that answers wins, like emitSpellRuneBypass.
+   */
+  public static emitSpellCost(
+    player: any,
+    spellbook: any,
+    spellId: number,
+    items: any[]
+  ): any[] | null {
+    if (PluginManager.spellCostHooks.length === 0) {
+      return null;
+    }
+    const event: PluginSpellCostEvent = {
+      player,
+      spellbook,
+      spellId,
+      items,
+      cost: null,
+    };
+    for (const hook of PluginManager.spellCostHooks) {
+      PluginManager.executeHook(hook, event, "spell_cost", "spell_cost");
+      if (Array.isArray(event.cost)) {
+        return event.cost;
       }
     }
     return null;
@@ -3224,6 +3261,28 @@ export class PluginManager {
               !event ||
               !event.player ||
               !Number.isInteger(event.spellId)
+            ) {
+              return;
+            }
+            handler(event);
+          },
+        });
+      },
+      // WHY [Prompt: "ensure they can cast their appropriate spells"]: registration for the
+      // generic emitSpellCost seam; the guard matches onSpellRuneBypass so a handler only ever
+      // sees a cast it can identify.
+      onSpellCost: (handler) => {
+        if (typeof handler !== "function") {
+          return;
+        }
+        PluginManager.spellCostHooks.push({
+          pluginName,
+          handler: (event) => {
+            if (
+              !event ||
+              !event.player ||
+              !Number.isInteger(event.spellId) ||
+              !Array.isArray(event.items)
             ) {
               return;
             }

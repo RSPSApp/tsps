@@ -334,6 +334,18 @@ test("anglerfish cannot over-heal while in combat in a PvP area", () => {
   assert.equal(Food._test.getAnglerfishHeal(99), 22);
 });
 
+test("anglerfish heals off the Hitpoints level levelled up to, not the health left", () => {
+  const low = createPlayer({ hp: 20, maxHp: 99 });
+  low.give(0, id("ANGLERFISH"));
+  low.eat(0);
+  assert.equal(low.hp, 42, "the level-99 heal of 22, at 20 health");
+
+  const shallow = createPlayer({ hp: 20, maxHp: 40 });
+  shallow.give(0, id("ANGLERFISH"));
+  shallow.eat(0);
+  assert.equal(shallow.hp, 28, "a level-40 eater gets the level-40 heal of 8");
+});
+
 test("strange fruit restores energy and cures poison, without healing", () => {
   const player = createPlayer({ hp: 40 });
   player.give(0, id("STRANGE_FRUIT"));

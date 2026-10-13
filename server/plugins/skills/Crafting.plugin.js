@@ -92,15 +92,15 @@ const JEWELLERY_TYPES = [
       [ItemIds.DIAMOND_AMULET_U_, 70, 100],
       [ItemIds.DRAGONSTONE_AMULET_U_, 80, 150],
       [ItemIds.ONYX_AMULET_U_, 90, 165],
-      [ItemIds.ZENYTE_AMULET_U_, 98, 180],
+      [ItemIds.ZENYTE_AMULET_U_, 98, 200],
     ],
   },
   {
     name: "bracelet",
     mouldId: ItemIds.BRACELET_MOULD,
     products: [
-      [ItemIds.GOLD_BRACELET, 7, 25],
-      [ItemIds.SAPPHIRE_BRACELET, 23, 60],
+      [ItemIds.GOLD_BRACELET_2, 7, 25],
+      [ItemIds.SAPPHIRE_BRACELET_2, 23, 60],
       [ItemIds.EMERALD_BRACELET, 30, 65],
       [ItemIds.RUBY_BRACELET, 42, 80],
       [ItemIds.DIAMOND_BRACELET, 58, 95],

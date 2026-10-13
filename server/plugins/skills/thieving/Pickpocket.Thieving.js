@@ -27,6 +27,10 @@ const { ItemIdentifiers } = require("../../../src/main/typescript/elvarg/util/It
 const { Bank } = require("../../../src/main/typescript/elvarg/game/model/container/impl/Bank");
 const { ArceuusSpells } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/ArceuusSpells");
 
+// Everything a successful pickpocket gives is multiplied by this (clue scrolls and scroll boxes are not).
+const scaled = (amount) => Math.max(1, Math.round(amount * GameConstants.STACKABLES_QUANTITY_MULTIPLIER));
+const isStackable = (itemId) => ItemDefinition.forId(itemId)?.isStackable?.() === true;
+const scaledIfStackable = (itemId, amount) => (isStackable(itemId) ? scaled(amount) : amount);
 const THIEVING_ANIMATION = new Animation(881);
 const PICKPOCKET_COOLDOWN_MS = 1200;
 const PICKPOCKET_STUN_TICKS = 9;
@@ -210,10 +214,14 @@ function giveLoot(player, target, loot, random = Math.random) {
     if (id === ItemIdentifiers.COINS && target.coinPouch) {
       player.getInventory().adds(target.coinPouch.id, 1);
       // Wiki (Coin pouch): a doubled pouch gives one pouch plus its coins directly.
-      if (doubled) player.getInventory().adds(ItemIdentifiers.COINS, Array.isArray(target.coinPouch.coins) ? target.coinPouch.coins[0] : target.coinPouch.coins);
+      if (doubled) {
+        const coins = Array.isArray(target.coinPouch.coins) ? target.coinPouch.coins[0] : target.coinPouch.coins;
+        player.getInventory().adds(ItemIdentifiers.COINS, scaled(coins));
+      }
       continue;
     }
-    player.getInventory().adds(id, doubled && !clue ? amount * 2 : amount);
+    const base = doubled && !clue ? amount * 2 : amount;
+    player.getInventory().adds(id, scaledIfStackable(id, base));
   }
 }
 
@@ -388,7 +396,7 @@ function pickpocket(event) {
 /** Coins in one pouch of this kind (a range rolls per pouch). */
 function pouchCoins(pouchId, random = Math.random) {
   const coins = POUCH_COINS.get(pouchId);
-  return coins === undefined ? 0 : roll(coins, random);
+  return coins === undefined ? 0 : scaled(roll(coins, random));
 }
 
 function register(api) {

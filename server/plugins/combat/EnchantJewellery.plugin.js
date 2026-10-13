@@ -30,7 +30,7 @@ const ENCHANT_SPELLS = [
     items: [
       [ItemIds.EMERALD_RING, ItemIds.RING_OF_DUELING_8_],
       [ItemIds.EMERALD_NECKLACE, ItemIds.BINDING_NECKLACE],
-      [ItemIds.EMERALD_AMULET, ItemIds.AMULET_OF_DEFENCE],
+      [ItemIds.EMERALD_AMULET_2, ItemIds.AMULET_OF_DEFENCE],
     ],
   },
   {
@@ -39,7 +39,7 @@ const ENCHANT_SPELLS = [
     items: [
       [ItemIds.RUBY_RING, ItemIds.RING_OF_FORGING],
       [ItemIds.RUBY_NECKLACE, ItemIds.DIGSITE_PENDANT_5_],
-      [ItemIds.RUBY_AMULET, ItemIds.AMULET_OF_STRENGTH],
+      [ItemIds.RUBY_AMULET_2, ItemIds.AMULET_OF_STRENGTH],
     ],
   },
   {
@@ -48,7 +48,7 @@ const ENCHANT_SPELLS = [
     items: [
       [ItemIds.DIAMOND_RING, ItemIds.RING_OF_LIFE],
       [ItemIds.DIAMOND_NECKLACE, ItemIds.NECKLACE_OF_PASSAGE_5_],
-      [ItemIds.DIAMOND_AMULET, ItemIds.AMULET_OF_POWER],
+      [ItemIds.DIAMOND_AMULET_2, ItemIds.AMULET_OF_POWER],
     ],
   },
   {
@@ -56,7 +56,7 @@ const ENCHANT_SPELLS = [
     runes: [[ItemIds.COSMIC_RUNE, 1], [ItemIds.WATER_RUNE, 15], [ItemIds.EARTH_RUNE, 15]],
     items: [
       [ItemIds.DRAGONSTONE_RING, ItemIds.RING_OF_WEALTH],
-      [ItemIds.DRAGONSTONE_NECKLACE, ItemIds.SKILLS_NECKLACE_4_],
+      [ItemIds.DRAGON_NECKLACE, ItemIds.SKILLS_NECKLACE_4_],
       [ItemIds.DRAGONSTONE_AMULET, ItemIds.AMULET_OF_GLORY],
     ],
   },
@@ -64,18 +64,18 @@ const ENCHANT_SPELLS = [
     name: "Lvl-6 Enchant", level: 87, xp: 97,
     runes: [[ItemIds.COSMIC_RUNE, 1], [ItemIds.FIRE_RUNE, 20], [ItemIds.EARTH_RUNE, 20]],
     items: [
-      [ItemIds.ONYX_RING, ItemIds.RING_OF_STONE],
-      [ItemIds.ONYX_NECKLACE, ItemIds.BERSERKER_NECKLACE],
-      [ItemIds.ONYX_AMULET, ItemIds.AMULET_OF_FURY],
+      [ItemIds.ONYX_RING_2, ItemIds.RING_OF_STONE],
+      [ItemIds.ONYX_NECKLACE_2, ItemIds.BERSERKER_NECKLACE],
+      [ItemIds.ONYX_AMULET_2, ItemIds.AMULET_OF_FURY],
     ],
   },
   {
     name: "Lvl-7 Enchant", level: 93, xp: 110,
     runes: [[ItemIds.COSMIC_RUNE, 1], [ItemIds.BLOOD_RUNE, 20], [ItemIds.SOUL_RUNE, 20]],
     items: [
-      [ItemIds.ZENYTE_RING, ItemIds.RING_OF_SUFFERING],
-      [ItemIds.ZENYTE_NECKLACE, ItemIds.NECKLACE_OF_ANGUISH],
-      [ItemIds.ZENYTE_AMULET, ItemIds.AMULET_OF_TORTURE],
+      [ItemIds.ZENYTE_RING_2, ItemIds.RING_OF_SUFFERING],
+      [ItemIds.ZENYTE_NECKLACE_2, ItemIds.NECKLACE_OF_ANGUISH],
+      [ItemIds.ZENYTE_AMULET_2, ItemIds.AMULET_OF_TORTURE],
     ],
   },
 ];

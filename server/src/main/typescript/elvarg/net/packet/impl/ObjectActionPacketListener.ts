@@ -86,6 +86,63 @@ export class ObjectActionPacketListener {
         return;
       }
 
+      // --- ADD YOUR LOG RAFT SHORTCUT HERE ---
+      if (object.getId() === 1987) {
+        player.getPacketSender().sendMessage("You board the log raft and navigate the falls...");
+        player.moveTo(new Location(2512, 3476, 0)); 
+        return;
+      }
+      if (object.getId() === 10283) {
+        player.getPacketSender().sendMessage("You attempt to swim across the rushing river...");
+        // Teleports the player to the central rock in the river
+        player.moveTo(new Location(2512, 3467, 0)); 
+        return;
+      }
+      if (object.getId() === 2020) {
+        player.getPacketSender().sendMessage("You tie a rope to the dead tree and lower yourself down...");
+        // Teleports you safely onto the lower ledge by the waterfall door
+        player.moveTo(new Location(2511, 3463, 0)); 
+        return;
+      }
+      if (object.getId() === 2010) {
+        player.getPacketSender().sendMessage("You open the door and step through the waterfall...");
+        // Teleports the player to the standard start of the Waterfall Dungeon cave
+        player.moveTo(new Location(2575, 9861, 0)); 
+        return;
+      }
+      // --- 1. THE CRATE (Finding the Key) ---
+      if (object.getId() === 1990) {
+        player.getPacketSender().sendMessage("You search the crate...");
+        
+        if (player.getInventory().isFull()) {
+          player.getPacketSender().sendMessage("Your inventory is too full to carry the key.");
+          return;
+        }
+        
+        player.getPacketSender().sendMessage("You find a small key hidden inside!");
+        return;
+        }
+
+        // --- 2. THE INNER GATES (Unlocking the Statue Room) ---
+        if (object.getId() === 1991 || object.getId() === 1992) {    
+          player.getPacketSender().sendMessage("You unlock the gate and step inside.");
+          // Teleports the player past the gate line into the inner room
+          player.moveTo(new Location(2569, 9893, 0)); 
+          return;
+        }
+
+        // --- 3. THE CHALICE OF ETERNITY (Quest Completion Shortcut) ---
+        if (object.getId() === 1996 || object.getId() === 2004 || object.getId() === 2000) { // Chalice object IDs
+          player.getPacketSender().sendMessage("You approach the Chalice of Eternity...");
+          
+          // Teleport the player safely back out to the waterfall house
+          player.moveTo(new Location(2534, 3511, 0)); 
+          return;
+        }
+
+
+      // ---------------------------------------
+
       if (option === "bank") {
         player.getBank(player.getCurrentBankTab()).open();
         return;

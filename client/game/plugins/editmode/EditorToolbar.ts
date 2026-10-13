@@ -252,6 +252,9 @@ export const createRefreshIcon = (): SVGElement =>
 export const createRotateIcon = (): SVGElement =>
     createActionIcon("M20 11a8 8 0 0 0-14.8-4L3 9m0 0V4m0 5h5M4 13a8 8 0 0 0 14.8 4L21 15m0 0v5m0-5h-5");
 
+export const createMoveIcon = (): SVGElement =>
+    createActionIcon("M12 3v18M3 12h18M8 7l4-4 4 4M8 17l4 4 4-4M7 8l-4 4 4 4M17 8l4 4-4 4");
+
 export const createDuplicateIcon = (): SVGElement =>
     createActionIcon("M8 8h11v11H8zM5 16H4V4h12v1", "none");
 
@@ -261,7 +264,7 @@ export const createLayersIcon = (): SVGElement =>
 export const createPaintIcon = (): SVGElement =>
     createActionIcon("M14 4.5 19.5 10l-9.8 9.8a3 3 0 0 1-4.2-4.2L15.3 5.8M4 20h5");
 
-export const createOverlayIcon = (colorRgb = 0x64748b): SVGElement => {
+export const createOverlayIcon = (colorRgb = 0x64748b, texture?: string): SVGElement => {
     const namespace = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(namespace, "svg");
     svg.setAttribute("viewBox", "0 0 24 24");
@@ -277,6 +280,16 @@ export const createOverlayIcon = (colorRgb = 0x64748b): SVGElement => {
     rect.setAttribute("fill", `#${(colorRgb & 0xffffff).toString(16).padStart(6, "0")}`);
     rect.setAttribute("stroke", "currentColor");
     rect.setAttribute("stroke-width", "1.5");
+    if (texture) {
+        const image = document.createElementNS(namespace, "image");
+        image.setAttribute("x", "4");
+        image.setAttribute("y", "4");
+        image.setAttribute("width", "16");
+        image.setAttribute("height", "16");
+        image.setAttribute("href", texture);
+        svg.appendChild(image);
+        rect.setAttribute("fill", "none");
+    }
     svg.appendChild(rect);
     return svg;
 };

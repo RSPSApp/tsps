@@ -19,5 +19,6 @@ module.exports = {
     Fight.attachFight(api);
     require("./madangel/Kills.MadAngel")(api);
     require("./madangel/Commands.MadAngel")(api);
+    require("./madangel/CombatAchievements.MadAngel")(api);
   },
 };

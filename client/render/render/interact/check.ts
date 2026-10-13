@@ -1,3 +1,4 @@
+import { buildPlayerActionEntries } from "./playerMenu";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -556,103 +557,32 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     return;
                 }
 
-                // No selection: insert player actions in 7..0 order.
-                for (let actionIdx = 7; actionIdx >= 0; actionIdx--) {
-                    const customOption = ClientState.playerOptions.get(actionIdx + 1);
-                    if (actionIdx >= 3 && customOption) {
-                        menuEntries.push({
-                            option: customOption.option,
-                            targetId: sid | 0,
-                            targetType: MenuTargetType.PLAYER,
-                            targetName: playerLabel,
-                            targetLevel: targetCombatLevel,
-                            mapX: localX,
-                            mapY: localY,
-                            playerServerId: sid | 0,
-                            actionIndex: actionIdx,
-                            deprioritized: !customOption.priority,
-                            onClick: () => sendPlayerOption(sid | 0, actionIdx + 1),
-                        });
-                    } else if (actionIdx === 2) {
-                        menuEntries.push({
-                            option: "Follow",
-                            targetId: sid | 0,
-                            targetType: MenuTargetType.PLAYER,
-                            targetName: playerLabel,
-                            targetLevel: targetCombatLevel,
-                            mapX: localX,
-                            mapY: localY,
-                            playerServerId: sid | 0,
-                            actionIndex: 2, // OPPLAYER3 - Follow
-                            onClick: () => {
-                                try {
-                                    host.osrsClient.playerInteractionSystem.beginFollow(sid | 0);
-                                    if (isServerConnected()) sendInteractFollow(sid | 0, "follow");
-                                } catch {}
-                            },
-                        });
-                    } else if (actionIdx === 1) {
-                        // OSRS: Trade is typically a low-priority player option from the server.
-                        menuEntries.push({
-                            option: "Trade with",
-                            targetId: sid | 0,
-                            targetType: MenuTargetType.PLAYER,
-                            targetName: playerLabel,
-                            targetLevel: targetCombatLevel,
-                            mapX: localX,
-                            mapY: localY,
-                            playerServerId: sid | 0,
-                            actionIndex: 1, // OPPLAYER2 - Trade with
-                            deprioritized: true,
-                            onClick: () => {
-                                try {
-                                    host.osrsClient.playerInteractionSystem.beginTrade(sid | 0);
-                                    if (isServerConnected()) sendInteractFollow(sid | 0, "trade");
-                                } catch {}
-                            },
-                        });
-                    } else if (actionIdx === 0) {
-                        // Attack visibility follows the server's current permission.
-                        if (!canAttackPlayers) continue;
-                        const attackOption = ClientState.playerAttackOption | 0;
-                        if (attackOption === 3) continue;
-
-                        let deprioritized = false;
-                        if (attackOption === 1) {
-                            deprioritized = true;
-                        } else if (attackOption === 0) {
-                            deprioritized = targetCombatLevel > localCombatLevel;
-                        } else if (attackOption === 4) {
-                            deprioritized = targetIsClanMember;
-                        }
-
-                        // Team logic overrides attack option priority when both players have teams.
-                        if (localTeam !== 0 && targetTeam !== 0) {
-                            deprioritized = localTeam === targetTeam;
-                        }
-
-                        menuEntries.push({
-                            option: "Attack",
-                            targetId: sid | 0,
-                            targetType: MenuTargetType.PLAYER,
-                            targetName: playerLabel,
-                            targetLevel: targetCombatLevel,
-                            mapX: localX,
-                            mapY: localY,
-                            playerServerId: sid | 0,
-                            actionIndex: 0, // OPPLAYER1 - Attack
-                            deprioritized,
-                            onClick: () => {
-                                try {
-                                    host.osrsClient.playerInteractionSystem.beginCombat(sid | 0, {
-                                        targetType: "player",
-                                        tile: { x: localX | 0, y: localY | 0 },
-                                    });
-                                } catch {}
-                            },
-                        });
-                    }
-                }
+                menuEntries.push(...buildPlayerActionEntries({
+                    sid, playerLabel, targetCombatLevel, localCombatLevel, targetTeam, localTeam,
+                    targetIsClanMember, canAttackPlayers, localX, localY,
+                    actions: {
+                        option: sendPlayerOption,
+                        follow: (serverId) => {
+                            try {
+                                host.osrsClient.playerInteractionSystem.beginFollow(serverId);
+                                if (isServerConnected()) sendInteractFollow(serverId, "follow");
+                            } catch {}
+                        },
+                        trade: (serverId) => {
+                            try {
+                                host.osrsClient.playerInteractionSystem.beginTrade(serverId);
+                                if (isServerConnected()) sendInteractFollow(serverId, "trade");
+                            } catch {}
+                        },
+                        attack: (serverId, x, y) => {
+                            try {
+                                host.osrsClient.playerInteractionSystem.beginCombat(serverId, {
+                                    targetType: "player", tile: {x: x | 0, y: y | 0},
+                                });
+                            } catch {}
+                        },
+                    },
+                }));
             };
 
             const addNpcMenuEntries = (

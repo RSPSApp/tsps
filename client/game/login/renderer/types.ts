@@ -22,6 +22,11 @@ export interface WorldHoverResult {
     y: number; // Y position of hovered cell
 }
 
+/** How the login scene may grow past 1:1 on large viewports (Stretched Mode). */
+export interface LoginStretch {
+    integerScaling: boolean;
+}
+
 export interface LoginLayoutConfig {
     /** Scale factor for all positions/sizes (1.0 = desktop baseline) */
     scale: number;

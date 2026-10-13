@@ -237,7 +237,7 @@ export function resolveNpcMovementSequenceIds(host: WebGLOsrsRendererHost,
                 return { movementSeqId, idleSeqId, walkSeqId };
             }
 
-            const movementSet = npcType.getMovementSeqSet(host.osrsClient.basTypeLoader);
+            const movementSet = Object.assign(npcType.getMovementSeqSet(host.osrsClient.basTypeLoader), ecs.getMovementOverrides(ecsId));
             idleSeqId = movementSet.idle | 0;
             walkSeqId = movementSet.walk | 0;
             const pathLength = ecs.getPathLengthLike?.(ecsId) | 0;

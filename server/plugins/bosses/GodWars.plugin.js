@@ -1,19 +1,30 @@
 "use strict";
 
 /**
- * God Wars Dungeon: entrance access and essence gates, the private boss rooms
- * with their generals and bodyguards, and one combat unit per general. Each
- * unit lives in ./godwars/; add one line per unit.
+ * God Wars Dungeon: the dungeon and its essence, the camp crossings, the generals' chambers
+ * (shared, or a private instance) and the generals' and bodyguards' fights. Each unit lives in
+ * ./godwars/; add one line per unit. See docs/god-wars-dungeon.md.
  */
+const Common = require("./godwars/Common.GodWars");
+const { attachDungeon } = require("./godwars/Dungeon.GodWars");
+const { attachChambers } = require("./godwars/Chambers.GodWars");
+const { attachCrossings } = require("./godwars/Crossings.GodWars");
+const { attachBandos } = require("./godwars/Bandos.GodWars");
+const { attachArmadyl } = require("./godwars/Armadyl.GodWars");
+const { attachSaradomin } = require("./godwars/Saradomin.GodWars");
+const { attachZamorak } = require("./godwars/Zamorak.GodWars");
+
 module.exports = {
   name: "GodWars",
   members: true,
   register(api) {
-    require("./godwars/GodWarsAccess")(api);
-    require("./godwars/GodWarsEncounters")(api);
-    require("./godwars/GeneralGraardor.GodWars")(api);
-    require("./godwars/KreeArra.GodWars")(api);
-    require("./godwars/CommanderZilyana.GodWars")(api);
-    require("./godwars/KrilTsutsaroth.GodWars")(api);
+    Common.init(api);
+    attachDungeon(api);
+    attachChambers(api);
+    attachCrossings(api);
+    attachBandos(api);
+    attachArmadyl(api);
+    attachSaradomin(api);
+    attachZamorak(api);
   },
 };

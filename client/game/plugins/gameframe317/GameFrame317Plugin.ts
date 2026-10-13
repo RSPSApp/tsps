@@ -82,7 +82,8 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
             this.osrsClient.varManager?.getVarp(VARP_GAMEFRAME_317) === 1;
     }
     private ready = false;
-    private renderScale = 0;
+    private scaleX = 0;
+    private scaleY = 0;
     private renderOffsetX = 0;
     private renderOffsetY = 0;
     private readonly canvases = new Map<string, HTMLCanvasElement>();
@@ -194,23 +195,23 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
     private drawFixed(context: GameFrameDrawContext): void {
         if (!this.prepare(context)) return;
         const renderer = context.renderer;
-        const scale = this.renderScale;
+        const { scaleX, scaleY } = this;
         for (const [name, x, y] of FIXED_BACKGROUND) {
-            this.drawNamed(renderer, name, x, y, scale, false, false);
+            this.drawNamed(renderer, name, x, y, false, false);
         }
         // The chat sprite is translucent; hide the old parchment baked into the borders.
-        renderer.drawRect(this.renderOffsetX, this.renderOffsetY + 338 * scale, 519 * scale, 165 * scale, [0, 0, 0, 1]);
-        this.drawChat(renderer, 0, 338, 519, 165, scale);
+        renderer.drawRect(this.renderOffsetX, this.renderOffsetY + 338 * scaleY, 519 * scaleX, 165 * scaleY, [0, 0, 0, 1]);
+        this.drawChat(renderer, 0, 338, 519, 165);
         const compass = this.textures.get("compass");
         const mask = this.textures.get("compass_mask");
         if (compass && mask) {
             renderer.drawTextureRotatedMasked(
-                compass, mask, this.renderOffsetX + 550 * scale, this.renderOffsetY + 4 * scale,
-                33 * scale, 33 * scale, -this.osrsClient.camera.yaw, 2048,
+                compass, mask, this.renderOffsetX + 550 * scaleX, this.renderOffsetY + 4 * scaleY,
+                33 * scaleX, 33 * scaleY, -this.osrsClient.camera.yaw, 2048,
                 9 / 51, 9 / 51, 42 / 51, 42 / 51,
             );
         }
-        this.drawTabs(context, renderer, scale, (x) => x, (y) => y);
+        this.drawTabs(context, renderer, (x) => x, (y) => y);
     }
 
     /**
@@ -220,17 +221,16 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
     private drawResizable(context: GameFrameDrawContext): void {
         if (!this.prepare(context)) return;
         const renderer = context.renderer;
-        const scale = this.renderScale;
 
         // Resizable draws the 317 sidebar block (which covers the OSRS sidebar
         // edges) and the chatbox. The 317 mapback is deliberately not drawn.
-        this.drawSidebarBlock(context, renderer, scale);
+        this.drawSidebarBlock(context, renderer);
 
-        this.drawChatSection(renderer, context.anchors.chat, scale);
+        this.drawChatSection(renderer, context.anchors.chat);
     }
 
     /** Draws the chat section sprite anchored so its parchment fills the chat rect. */
-    private drawChatSection(renderer: GLRenderer, chat: { x: number; y: number; width: number; height: number } | undefined, scale: number): void {
+    private drawChatSection(renderer: GLRenderer, chat: { x: number; y: number; width: number; height: number } | undefined): void {
         if (!chat) return;
         const s = chat.width / CHAT_SPRITE.backW;
         this.drawChat(
@@ -239,20 +239,20 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
             chat.y - CHAT_SPRITE.backTop * s,
             CHAT_SPRITE.width * s,
             CHAT_SPRITE.height * s,
-            scale,
         );
     }
 
-    private drawChat(renderer: GLRenderer, x: number, y: number, width: number, height: number, scale: number): void {
+    private drawChat(renderer: GLRenderer, x: number, y: number, width: number, height: number): void {
         const chat = this.textures.get("chat_section");
         if (!chat?.tex) return;
-        const x0 = this.renderOffsetX + x * scale;
-        const x1 = x0 + width * scale;
-        const y0 = this.renderOffsetY + y * scale;
+        const { scaleX, scaleY } = this;
+        const x0 = this.renderOffsetX + x * scaleX;
+        const x1 = x0 + width * scaleX;
+        const y0 = this.renderOffsetY + y * scaleY;
         const split = 600 / CHAT_SPRITE.height;
         // Fixed reserves 28px for the stones and omits unused bottom padding.
-        const y1 = y0 + (this.fixed ? height - 28 : height * split) * scale;
-        const y2 = y0 + height * scale;
+        const y1 = y0 + (this.fixed ? height - 28 : height * split) * scaleY;
+        const y2 = y0 + height * scaleY;
         const bottom = this.fixed ? 705 / CHAT_SPRITE.height : 1;
         renderer.drawTextureQuads(chat, new Float32Array([
             x0, y0, 0, 0, x1, y0, 1, 0, x1, y1, 1, split, x0, y1, 0, split,
@@ -268,8 +268,8 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
             const texture = this.textures.get(`chat_${state}`) ?? chat;
             const u0 = CHAT_COLUMNS[i] / 519;
             const u1 = CHAT_COLUMNS[i + 1] / 519;
-            const left = x0 + width * scale * u0;
-            const right = x0 + width * scale * u1;
+            const left = x0 + width * scaleX * u0;
+            const right = x0 + width * scaleX * u1;
             renderer.drawTextureQuads(texture, new Float32Array([
                 left, y1, u0, split, right, y1, u1, split,
                 right, y2, u1, bottom, left, y2, u0, bottom,
@@ -283,7 +283,7 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
      * (fixed 553,205,190x261) is mapped onto the OSRS sidebar content rect, then
      * the tab icons and the selected-tab redstone are drawn over it.
      */
-    private drawSidebarBlock(context: GameFrameDrawContext, renderer: GLRenderer, scale: number): void {
+    private drawSidebarBlock(context: GameFrameDrawContext, renderer: GLRenderer): void {
         const tb = context.anchors.tabContent;
         if (!tb) return;
         // Map the sprite's panel area onto the OSRS sidebar content rect.
@@ -298,22 +298,21 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
             tb.y - SIDEBAR_SPRITE.panelTop * sy,
             SIDEBAR_SPRITE.width * sx,
             SIDEBAR_SPRITE.height * sy,
-            scale,
         );
 
-        this.drawTabs(context, renderer, scale, X, Y);
+        this.drawTabs(context, renderer, X, Y);
     }
 
-    private drawTabs(context: GameFrameDrawContext, renderer: GLRenderer, scale: number, X: (x: number) => number, Y: (y: number) => number): void {
+    private drawTabs(context: GameFrameDrawContext, renderer: GLRenderer, X: (x: number) => number, Y: (y: number) => number): void {
         // The 317 redstone marks the selected tab only.
         const activeTab = this.osrsClient?.varManager?.getVarcInt?.(171) ?? 0;
         if (activeTab >= 0 && activeTab < 7) {
             const [name, x, y, fh, fv] = TOP_STONE[activeTab];
-            this.drawNamed(renderer, name, X(x), Y(y), scale, fh, fv);
+            this.drawNamed(renderer, name, X(x), Y(y), fh, fv);
         } else if (activeTab >= 7 && activeTab <= 13) {
             const [name, x, y, fh, fv] = BOTTOM_STONE[activeTab - 7];
             const bx = activeTab === 7 ? BOTTOM_ICON_POS[0][0] - 29 : x;
-            this.drawNamed(renderer, name, X(bx), Y(y), scale, fh, fv);
+            this.drawNamed(renderer, name, X(bx), Y(y), fh, fv);
         }
 
         // Tab icons the server has not revealed yet have no mounted content
@@ -325,23 +324,23 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
         for (let i = 0; i < TOP_ICON_POS.length; i++) {
             if (!this.tabVisible(i)) continue;
             const [x, y] = TOP_ICON_POS[i];
-            this.drawIcon(renderer, i, X(x), Y(y), scale, alphaFor(i));
-            this.registerTab(context, i, X(x), Y(y), scale);
+            this.drawIcon(renderer, i, X(x), Y(y), alphaFor(i));
+            this.registerTab(context, i, X(x), Y(y));
         }
         const clanX = BOTTOM_ICON_POS[0][0] - 29;
         const clanY = BOTTOM_ICON_POS[0][1];
         if (this.tabVisible(7)) {
-            this.drawOsrsIcon(renderer, "osrs_clan", X(clanX), Y(clanY), scale, alphaFor(7));
-            this.registerTab(context, 7, X(clanX), Y(clanY), scale);
+            this.drawOsrsIcon(renderer, "osrs_clan", X(clanX), Y(clanY), alphaFor(7));
+            this.registerTab(context, 7, X(clanX), Y(clanY));
         }
         for (let i = 0; i < BOTTOM_ICON_POS.length; i++) {
             const tab = i + 8;
             if (!this.tabVisible(tab)) continue;
             const [x, y] = BOTTOM_ICON_POS[i];
-            if (i === 0) this.drawOsrsIcon(renderer, "osrs_account", X(x), Y(y), scale, alphaFor(tab));
-            else if (i === 1) this.drawOsrsIcon(renderer, "osrs_friends", X(x), Y(y), scale, alphaFor(tab));
-            else this.drawIcon(renderer, i + 7, X(x), Y(y), scale, alphaFor(tab));
-            this.registerTab(context, tab, X(x), Y(y), scale);
+            if (i === 0) this.drawOsrsIcon(renderer, "osrs_account", X(x), Y(y), alphaFor(tab));
+            else if (i === 1) this.drawOsrsIcon(renderer, "osrs_friends", X(x), Y(y), alphaFor(tab));
+            else this.drawIcon(renderer, i + 7, X(x), Y(y), alphaFor(tab));
+            this.registerTab(context, tab, X(x), Y(y));
         }
     }
 
@@ -351,15 +350,15 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
     }
 
     /** Stretch a sprite to fill a logical rect (no tiling). */
-    private drawStretched(renderer: GLRenderer, name: string, x: number, y: number, width: number, height: number, scale: number): void {
+    private drawStretched(renderer: GLRenderer, name: string, x: number, y: number, width: number, height: number): void {
         const texture = this.textures.get(name);
         if (!texture?.tex) return;
         renderer.drawTexture(
             texture,
-            this.renderOffsetX + x * scale,
-            this.renderOffsetY + y * scale,
-            width * scale,
-            height * scale,
+            this.renderOffsetX + x * this.scaleX,
+            this.renderOffsetY + y * this.scaleY,
+            width * this.scaleX,
+            height * this.scaleY,
             1, 1, 0, [0, 0, 0], false, false, 1,
         );
     }
@@ -383,28 +382,29 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
     /** Sets the per-frame transform and lazily uploads textures. */
     private prepare(context: GameFrameDrawContext): boolean {
         if (!this.enabled || !this.ready) return false;
-        this.renderScale = context.renderScaleX || window.devicePixelRatio || 1;
+        this.scaleX = context.renderScaleX || window.devicePixelRatio || 1;
+        this.scaleY = context.renderScaleY || this.scaleX;
         this.renderOffsetX = context.renderOffsetX || 0;
         this.renderOffsetY = context.renderOffsetY || 0;
         if (this.textures.size === 0) this.buildTextures(context.renderer);
         return this.textures.size > 0;
     }
 
-    private drawNamed(renderer: GLRenderer, name: string, x: number, y: number, scale: number, flipH: boolean, flipV: boolean): void {
+    private drawNamed(renderer: GLRenderer, name: string, x: number, y: number, flipH: boolean, flipV: boolean): void {
         const texture = this.textures.get(name);
         if (!texture?.tex) return;
         renderer.drawTexture(
             texture,
-            this.renderOffsetX + x * scale,
-            this.renderOffsetY + y * scale,
-            texture.w * scale,
-            texture.h * scale,
+            this.renderOffsetX + x * this.scaleX,
+            this.renderOffsetY + y * this.scaleY,
+            texture.w * this.scaleX,
+            texture.h * this.scaleY,
             1, 1, 0, [0, 0, 0], flipH, flipV, 1,
         );
     }
 
     /** OSRS side icons are smaller than the 317 slots, so centre them; tune per icon. */
-    private drawOsrsIcon(renderer: GLRenderer, name: string, x: number, y: number, scale: number, alpha = 1): void {
+    private drawOsrsIcon(renderer: GLRenderer, name: string, x: number, y: number, alpha = 1): void {
         const texture = this.textures.get(name);
         if (!texture?.tex) return;
         const tune = OSRS_ICON_TUNE[name] ?? {};
@@ -415,35 +415,35 @@ export class GameFrame317Plugin extends Plugin implements ClientPlugin {
         const dy = y + (OSRS_SLOT_H - h) / 2 + (tune.dy ?? 0);
         renderer.drawTexture(
             texture,
-            this.renderOffsetX + dx * scale,
-            this.renderOffsetY + dy * scale,
-            w * scale,
-            h * scale,
+            this.renderOffsetX + dx * this.scaleX,
+            this.renderOffsetY + dy * this.scaleY,
+            w * this.scaleX,
+            h * this.scaleY,
             1, 1, 0, [0, 0, 0], false, false, alpha,
         );
     }
 
-    private drawIcon(renderer: GLRenderer, index: number, x: number, y: number, scale: number, alpha = 1): void {
+    private drawIcon(renderer: GLRenderer, index: number, x: number, y: number, alpha = 1): void {
         const texture = this.iconTextures[index];
         if (!texture?.tex) return;
         renderer.drawTexture(
             texture,
-            this.renderOffsetX + x * scale,
-            this.renderOffsetY + y * scale,
-            texture.w * scale,
-            texture.h * scale,
+            this.renderOffsetX + x * this.scaleX,
+            this.renderOffsetY + y * this.scaleY,
+            texture.w * this.scaleX,
+            texture.h * this.scaleY,
             1, 1, 0, [0, 0, 0], false, false, alpha,
         );
     }
 
-    private registerTab(context: GameFrameDrawContext, tab: number, x: number, y: number, scale: number): void {
+    private registerTab(context: GameFrameDrawContext, tab: number, x: number, y: number): void {
         context.clicks?.register({
             id: `gameframe317:tab:${tab}`,
             rect: {
-                x: this.renderOffsetX + (x - 2) * scale,
-                y: this.renderOffsetY + (y - 2) * scale,
-                w: (ICON_SIZE + 4) * scale,
-                h: (ICON_SIZE + 4) * scale,
+                x: this.renderOffsetX + (x - 2) * this.scaleX,
+                y: this.renderOffsetY + (y - 2) * this.scaleY,
+                w: (ICON_SIZE + 4) * this.scaleX,
+                h: (ICON_SIZE + 4) * this.scaleY,
             },
             priority: 200,
             onClick: () => context.switchTab(tab),

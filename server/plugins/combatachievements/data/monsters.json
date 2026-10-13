@@ -1,0 +1,61 @@
+{
+  "countedByEvent": [
+    "Barrows",
+    "Bryophyta",
+    "Obor",
+    "Wintertodt",
+    "Tempoross",
+    "TzTok-Jad",
+    "TzKal-Zuk",
+    "TzHaar-Ket-Rak",
+    "Crystalline Hunllef",
+    "Corrupted Hunllef",
+    "Fortis Colosseum",
+    "Doom of Mokhaiotl", "Araxxor",
+    "Moons of Peril",
+    "Royal Titans",
+    "Chambers of Xeric",
+    "CM: Chambers of Xeric",
+    "Theatre of Blood",
+    "EM: Theatre of Blood",
+    "HM: Theatre of Blood",
+    "Tombs of Amascut",
+    "EM: Tombs of Amascut",
+    "XM: Tombs of Amascut",
+    "Giants",
+    "Other"
+  ],
+  "npcs": {
+    "Grotesque Guardians": [
+      "Dusk"
+    ]
+  },
+  "collectionLog": {
+    "Barrows": "Barrows Chests",
+    "Dagannoth Prime": "Dagannoth Kings",
+    "Dagannoth Rex": "Dagannoth Kings",
+    "Dagannoth Supreme": "Dagannoth Kings",
+    "Callisto": "Callisto and Artio",
+    "Venenatis": "Venenatis and Spindel",
+    "Vet'ion": "Vet'ion and Calvar'ion",
+    "TzTok-Jad": "The Fight Caves",
+    "TzKal-Zuk": "The Inferno",
+    "Crystalline Hunllef": "The Gauntlet",
+    "Corrupted Hunllef": "The Gauntlet",
+    "Phosanis Nightmare": "The Nightmare",
+    "Chambers of Xeric: Challenge Mode": "Chambers of Xeric",
+    "Theatre of Blood: Entry Mode": "Theatre of Blood",
+    "Theatre of Blood: Hard Mode": "Theatre of Blood",
+    "Tombs of Amascut: Entry Mode": "Tombs of Amascut",
+    "Tombs of Amascut: Expert Mode": "Tombs of Amascut",
+    "The Royal Titans": "Royal Titans"
+  },
+  "ownRules": [
+    "Zulrah",
+    "Grotesque Guardians",
+    "Royal Titans",
+    "Nightmare, The",
+    "Phosani's Nightmare",
+    "Vorkath"
+  ]
+}

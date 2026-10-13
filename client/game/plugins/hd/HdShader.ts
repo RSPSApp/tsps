@@ -95,6 +95,7 @@ void main()`);
     if (v_texId == 0u && v_hdGroundMaterial > 0u) hdMaterialIndex = 1024 + int(v_hdGroundMaterial);
     vec4 hdMaterial = u_hdEnabled ? texelFetch(u_hdMaterials, ivec2(hdMaterialIndex, 0), 0) : vec4(0.0, 1.0, 1.0, 1.0);
     vec4 hdMetadata = u_hdEnabled ? texelFetch(u_hdMaterials, ivec2(hdMaterialIndex, 1), 0) : vec4(0.0, 0.0, 0.0, 1.0);
+    ${terrain ? "if (u_hdEnabled && v_texId == 0u && v_hdTerrain < 0.5 && v_texCoord.y == -1.0) hdMetadata.y = 5.0;" : ""}
     float hdLayer = hdMetadata.x;
     vec2 scale = hdMaterial.zw;
     scale = mix(vec2(1.0), scale, greaterThan(abs(scale), vec2(0.001)));

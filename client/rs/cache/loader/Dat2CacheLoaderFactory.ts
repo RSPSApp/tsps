@@ -1,4 +1,5 @@
 import { CustomObjTypeLoader } from "../../../custom/items/CustomObjTypeLoader";
+import { CustomNpcTypeLoader } from "../../../custom/npcs/CustomNpcTypeLoader";
 import {
     ArchiveBasTypeLoader,
     BasTypeLoader,
@@ -139,14 +140,17 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     }
 
     getNpcTypeLoader(): NpcTypeLoader {
+        let baseLoader: NpcTypeLoader;
         if (this.isIndexConfigs()) {
             const npcIndex = this.cacheSystem.getIndex(IndexType.RS2.npcs);
-            return new IndexNpcTypeLoader(this.cacheInfo, npcIndex);
+            baseLoader = new IndexNpcTypeLoader(this.cacheInfo, npcIndex);
         } else {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const npcsArchive = configIndex.getArchive(ConfigType.DAT2.npcs);
-            return new ArchiveNpcTypeLoader(this.cacheInfo, npcsArchive);
+            baseLoader = new ArchiveNpcTypeLoader(this.cacheInfo, npcsArchive);
         }
+        // Wrap to resolve the server's npc model customisations (synthetic type ids).
+        return new CustomNpcTypeLoader(baseLoader);
     }
 
     getObjTypeLoader(): ObjTypeLoader {

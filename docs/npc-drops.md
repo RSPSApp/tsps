@@ -34,6 +34,7 @@ cp docs/drops-json/subtables.json ../tsps/server/data/definitions/npc-drop-subta
 | `removeNpcs` | NPC ids that drop nothing themselves | the Ents (6594, 7234, 9474): their trunk gives the loot |
 | `addNpcs` | NPC ids mapped to a table the dumper doesn't map them to | 110 variants and versions (Phosani's Nightmare, the Nightmare, Ghast, Kalphite Guardian, Slagilith…), added by hand in September |
 | `tables.<id>.addEntries` / `addTertiary` | entries added to a table | the Abyssal Sire's pet, the Abyssal orphan |
+| `tables.<id>.removeSections` | sections of a table left out of every roll | Yama's Contract section (what his contracts reward, not a normal kill) |
 | `subtables` | shared tables the dumper doesn't export | the uncommon seed table (Obor, Bryophyta) |
 
 ## The 2026-10-07 refresh

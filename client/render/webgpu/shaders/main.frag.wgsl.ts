@@ -310,8 +310,8 @@ fn sampleModelTexture(textureId: u32, texCoord: vec2<f32>) -> vec4<f32> {
 
 @fragment
 fn fs_main(input: VertexOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
-    var textureColor = sampleModelTexture(input.v_texId, input.v_texCoord);
-${slots?.textureSample ?? ""}
+    var textureColor = vec4<f32>(1.0);
+${slots?.textureSample ?? "    textureColor = sampleModelTexture(input.v_texId, input.v_texCoord);"}
     var alpha = textureColor.a * input.v_color.a;
 ${discardBlock}
     // Only fetch material and do animation if texture is animated

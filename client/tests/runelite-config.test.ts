@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 
+import { HdConfig } from "../game/plugins/hd/HdConfig";
 import { ConfigChanged } from "@runelite/api/events";
 import { ConfigGroup, ConfigItem } from "@runelite/client/config/ConfigItem";
 import type { ConfigStorage } from "@runelite/client/config/ConfigStorage";
@@ -108,5 +109,16 @@ runLegacyConfigMigrations(
 );
 assert.equal(notes.notes(), "remember the milk");
 
+const hd = manager.getConfig(HdConfig);
+for (const key of ["textureFiltering", "antiAliasing", "depthAwareAo"] as const) {
+    assert.equal(hd[key](), true, `${key} is on for existing and new installs`);
+    manager.setConfigValue(HdConfig, key, false);
+    assert.equal(hd[key](), false, `${key} can be disabled independently`);
+    const reloaded = new ConfigManager(undefined, storage);
+    assert.equal(reloaded.getConfig(HdConfig)[key](), false, `${key} survives reload`);
+    reloaded.destroy();
+    manager.unsetConfiguration(HdConfig.group, key);
+    assert.equal(hd[key](), true, `${key} reset restores its default`);
+}
 manager.destroy();
 console.log("runelite config tests passed");

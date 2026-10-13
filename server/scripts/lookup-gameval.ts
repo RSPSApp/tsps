@@ -10,6 +10,8 @@ const kinds: Record<string, GamevalKind> = {
   npc: GamevalKind.NPC,
   obj: GamevalKind.OBJ,
   loc: GamevalKind.LOC,
+  seq: GamevalKind.SEQ,
+  spotanim: GamevalKind.SPOTANIM,
 };
 const kind = kinds[(kindArg ?? "varp").toLowerCase()] ?? GamevalKind.VARP;
 const query = (queryArg ?? "").toLowerCase();

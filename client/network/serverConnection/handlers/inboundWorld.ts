@@ -46,6 +46,7 @@ export function handleInboundWorld(msg: any): boolean {
         if (Number.isInteger(slot) && slot >= 1 && slot <= 8) {
             if (option) ClientState.playerOptions.set(slot, { option, priority });
             else ClientState.playerOptions.delete(slot);
+            for (const listener of ClientState.playerOptionsChangedListeners) listener(slot - 1);
         }
         return true;
     }
@@ -200,13 +201,13 @@ export function handleInboundWorld(msg: any): boolean {
                 // Apply varp updates
                 if (payload.varps) {
                     for (const [id, value] of Object.entries(payload.varps)) {
-                        vm.setVarp?.(Number(id), Number(value));
+                        vm.setServerVarp?.(Number(id), Number(value));
                     }
                 }
                 // Apply varbit updates
                 if (payload.varbits) {
                     for (const [id, value] of Object.entries(payload.varbits)) {
-                        vm.setVarbit?.(Number(id), Number(value));
+                        vm.setServerVarbit?.(Number(id), Number(value));
                     }
                 }
             }
@@ -251,7 +252,7 @@ export function handleInboundWorld(msg: any): boolean {
             const payload = msg.payload as { varpId: number; value: bigint };
             mv._serverVarpSync = true;
             try {
-                mv.varManager.setVarpLong(payload.varpId | 0, payload.value);
+                mv.varManager.setServerVarpLong(payload.varpId | 0, payload.value);
             } finally {
                 mv._serverVarpSync = false;
             }
@@ -270,7 +271,7 @@ export function handleInboundWorld(msg: any): boolean {
                 // Use _serverVarpSync flag to prevent sending back to server
                 mv._serverVarpSync = true;
                 try {
-                    mv.varManager.setVarp?.(varpId, value);
+                    mv.varManager.setServerVarp?.(varpId, value);
                 } finally {
                     mv._serverVarpSync = false;
                 }
@@ -345,7 +346,7 @@ export function handleInboundWorld(msg: any): boolean {
                 // Use _serverVarpSync flag to prevent sending back to server
                 mv._serverVarpSync = true;
                 try {
-                    const result = mv.varManager.setVarbit?.(
+                    const result = mv.varManager.setServerVarbit?.(
                         payload.varbitId | 0,
                         payload.value | 0,
                     );

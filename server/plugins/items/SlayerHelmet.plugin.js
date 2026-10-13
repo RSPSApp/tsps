@@ -10,9 +10,8 @@
  * them all in the inventory (a charged mask loses its charges), and Disassemble
  * turns it back into its parts.
  *
- * ponytail: the Malevolent masquerade unlock (400 Slayer points) is not checked
- * because the Slayer rewards have no unlock store yet; Reinforced goggles are not
- * required because A Porcine of Interest is not implemented.
+ * Assembling needs the Malevolent masquerade unlock (varbit slayer_helm_unlocked, bought
+ * in the Slayer Rewards interface). Reinforced goggles are not required.
  */
 const CRAFTING_LEVEL = 55;
 const MELEE_NUMERATOR = 7;
@@ -105,6 +104,14 @@ function findMask(inventory) {
   return inventory.getItems().find((item) => item && maskId(item.getId()) != null) ?? null;
 }
 
+/** Ours: the Wiki gives no message for assembling without the unlock. */
+const HELM_LOCKED = "You need to unlock the Malevolent masquerade from a Slayer master to make a Slayer helmet.";
+
+function helmUnlocked(player) {
+  const id = pluginApi.core.CacheDefinitions.getVarbitId("slayer_helm_unlocked");
+  return id != null && player.getPacketSender().getVarbit(id) === 1;
+}
+
 function assemble(event) {
   const { player, usedItemId, usedWithItemId } = event;
   if (!isPart(usedItemId) || !isPart(usedWithItemId) || usedItemId === usedWithItemId) return;
@@ -112,6 +119,10 @@ function assemble(event) {
   const mask = findMask(inventory);
   if (!mask || PARTS.some((part) => !inventory.contains(part))) return;
   event.handled = true;
+  if (!helmUnlocked(player)) {
+    player.sendMessage(HELM_LOCKED);
+    return;
+  }
   if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < CRAFTING_LEVEL) {
     player.sendMessage(`You need a Crafting level of ${CRAFTING_LEVEL} to make a Slayer helmet.`);
     return;
@@ -121,6 +132,16 @@ function assemble(event) {
   for (const part of PARTS) inventory.deleteNumber(part, 1);
   inventory.adds(imbued ? ItemIdentifiers.SLAYER_HELMET_I_ : ItemIdentifiers.SLAYER_HELMET, 1);
   player.sendMessage("You combine the items into a Slayer helmet.");
+}
+
+/** Check (inventory or worn): the task, as the enchanted gem inside it shows (Slayer.plugin.js). */
+function check({ player }) {
+  pluginApi.emitCustomEvent("slayer:check", { player, handled: false });
+  return true;
+}
+
+function notBuilt() {
+  return true;
 }
 
 function disassemble(event) {
@@ -159,8 +180,11 @@ module.exports = {
     api.registerMagicHitModifier(magicBoost);
     api.onCustomEvent("slayer:imbued-active", imbuedActive);
     api.onItemOnItem(assemble, { noted: false });
-    api.onItemAction("Slayer helmet", { Disassemble: disassemble });
-    api.onItemAction("Slayer helmet (i)", { Disassemble: disassemble });
+    // Worn Partner and Log aren't built; handling them keeps an unhandled worn click from
+    // taking the helmet off.
+    const actions = { Disassemble: disassemble, Check: check, Partner: notBuilt, Log: notBuilt };
+    api.onItemAction("Slayer helmet", actions);
+    api.onItemAction("Slayer helmet (i)", actions);
   },
   _test: { slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost },
 };

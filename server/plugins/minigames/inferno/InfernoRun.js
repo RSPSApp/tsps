@@ -5,6 +5,7 @@
 // Arena tiles (spawn points, supports, Jad and revival spots) follow the Near-Reality
 // behaviour reference; this server has no capture of them. They sit in region 9043.
 const { FINAL_WAVE, JAD_WAVE, TRIPLE_JAD_WAVE, ZUK_WAVE, waveAt } = require("./InfernoWaves");
+const CombatAchievements = require("./CombatAchievements.Inferno");
 
 let api;
 let core;
@@ -162,6 +163,8 @@ function startRun(player, wave, supportHitpoints) {
   };
   sessions.set(player, session);
   player.setAttribute(ATTR_WAVE, wave);
+  // A run resumed after a logout is not watched from its start.
+  if (wave === 1) CombatAchievements.start(player);
   if (wave < JAD_WAVE) raiseSupports(session, supportHitpoints);
   else SUPPORTS.forEach((support) => removeSupport(session, support));
   return session;
@@ -224,6 +227,7 @@ function collapse(session, support, crush) {
   session.supports = session.supports.filter((other) => other !== support);
   ObjectManager.deregister(support.object, true);
   if (crush) {
+    CombatAchievements.pillarFell(session.player, session.wave);
     for (const victim of [session.player, ...session.npcs]) {
       if (victim.getHitpoints() <= 0 || victim.calculateDistance(support.npc) > SUPPORT_REACH) continue;
       const damage = victim.isNpc() && victim.getId() === Npcs.JAL_NIB
@@ -389,6 +393,7 @@ function tendMeleers(session) {
     if (npc.getId() !== Npcs.JAL_IMKOT || npc.getHitpoints() <= 0 || npc.__infernoDigging) continue;
     if (now - npc.__infernoLastStrike < MELEER_DIG_AFTER_TICKS) continue;
     npc.__infernoDigging = true;
+    CombatAchievements.dug(session.player);
     npc.setUntargetable(true);
     npc.setScriptedMovement(true);
     npc.getMovementQueue().reset();
@@ -514,6 +519,7 @@ function processRun({ player }) {
   tendNibblers(session);
   tendMeleers(session);
   tendJads(session);
+  CombatAchievements.tick(player, session.wave);
   if (session.zuk) {
     if (zuk.tend(session)) session.exitAt = now + EXIT_DELAY_TICKS;
     return;
@@ -567,6 +573,7 @@ function finishRun(player, wavesCleared, won) {
   const keh = TZHAAR_KET_KEH;
   if (won) {
     player.setAttribute(ATTR_COMPLETIONS, Number(player.getAttribute(ATTR_COMPLETIONS) ?? 0) + 1);
+    CombatAchievements.finish(player, true, Number(player.getAttribute(ATTR_COMPLETIONS)));
     give(player, Items.INFERNAL_CAPE, 1);
     api.emitCustomEvent("collection-log:obtain", { player, itemId: Items.INFERNAL_CAPE, amount: 1 });
     give(player, Items.TOKKUL, COMPLETION_TOKKUL);
@@ -583,6 +590,7 @@ function finishRun(player, wavesCleared, won) {
     player.sendMessage(`TzHaar-Ket-Keh hands you an Infernal cape and ${COMPLETION_TOKKUL} TokKul.`);
     return;
   }
+  CombatAchievements.finish(player, false);
   const tokkul = failedRunTokkul(wavesCleared);
   give(player, Items.TOKKUL, tokkul);
   if (tokkul > 0) {

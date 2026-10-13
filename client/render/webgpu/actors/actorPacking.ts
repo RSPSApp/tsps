@@ -98,7 +98,7 @@ export function resolveNpcMovementSequenceIds(
         const npcType = client.npcTypeLoader.load(npcTypeId | 0);
         if (!npcType) return { movementSeqId, idleSeqId, walkSeqId };
 
-        const movementSet = npcType.getMovementSeqSet(client.basTypeLoader);
+        const movementSet = Object.assign(npcType.getMovementSeqSet(client.basTypeLoader), ecs.getMovementOverrides(ecsId));
         idleSeqId = movementSet.idle | 0;
         walkSeqId = movementSet.walk | 0;
         const pathLength = ecs.getPathLengthLike?.(ecsId) | 0;

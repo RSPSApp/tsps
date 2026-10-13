@@ -27,6 +27,10 @@ for (const kind of ["main", "npc", "projectile", "player"]) {
         assert.match(result[0], /flat out float v_hdTerrain;/);
         assert.match(result[1], /flat in float v_hdTerrain;/);
         if (kind === "main") assert.match(result[0], /if \(modelInfo.contourGround < CONTOUR_GROUND_NONE\) \{\s*localPos.y -= getHeightInterp/);
+        if (kind === "main") {
+            assert.match(result[1], /hdMetadata\.y = 5\.0/);
+            assert.match(result[1], /\(int\(metadata\.y\) & 4\) != 0/);
+        }
         assert.match(result[1], /if \(u_hdEnabled &&/);
         assert.ok(result[1].indexOf("if (hdDistanceFog >= 1.0) discard;") < result[1].indexOf("vec4 textureColor ="),
             "Fully fogged fragments must skip texture and material work");

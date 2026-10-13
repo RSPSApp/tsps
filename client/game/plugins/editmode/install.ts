@@ -1,9 +1,11 @@
 import { OBJECT_SPAWNS_MESSAGE, OBJECT_SPAWNS_REQUEST_MESSAGE, parseObjectSpawns, type ObjectSpawn, type ObjectSpawnsMessage } from "./hostProtocol/objectSpawnsMessage";
 import { isKnownWaterTextureId } from "../../../render/water/WaterTextureIds";
 import { getContentApiBase } from "../../../network/serverConnection/contentApi";
+import { TILE_FLAG_UNDER_ROOF } from "../../scene/TileRenderFlags";
 import { ClientState } from "../../ClientState";
 import { GameState } from "../../login/GameState";
 import { setAudioSuspended } from "../../audio/audioContext";
+import type { EditorOverlays } from "../../../render/webgpu/overlays/EditorOverlays";
 import type { App as PicoApp, UniformBuffer } from "picogl";
 import type { Ray } from "../../math/Raycast";
 import type { SceneRaycastHit, SceneRaycaster } from "../../scene/SceneRaycaster";
@@ -56,6 +58,7 @@ import {
 import type { OsrsClient } from "../../OsrsClient";
 import { createBrowserEditModePluginPersistence } from "./BrowserEditModePluginPersistence";
 import { detectRectangularBuilding, type DetectedBuilding } from "./BuildingDetector";
+import { pickEditorTile, type EditorPickMap } from "./EditorTilePicking";
 import { EditModePlugin } from "./EditModePlugin";
 import { mountEditorUi } from "./EditorUi";
 import { EditorWorldMap } from "./EditorWorldMap";
@@ -533,6 +536,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     const plugin = new EditModePlugin(
         createBrowserEditModePluginPersistence("osrs.plugin.edit_mode.v1"),
     );
+    client.editorCameraInput = (deltaTime) => plugin.handleCameraInput(client.camera, deltaTime);
     const editorWorldMap = new EditorWorldMap(
         client,
         (tile) => frameCameraOnTile(client, tile, false),
@@ -547,6 +551,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         (index, tag) => plugin.setWorldZoneType(index, tag),
         (index) => plugin.deleteWorldZone(index),
     );
+    const overlayTexturePreviews = new Map<number, string>();
     let previewNpc = false;
     let previewNpcType = -1;
     let previewNpcRotation = -1;
@@ -560,6 +565,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         | {
               renderer: TerrainHost;
               frame: number;
+              plane: number;
               x: number;
               y: number;
               pick: { tile: EditModeTile; target?: InteractHighlightTarget } | undefined;
@@ -567,17 +573,17 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         | undefined;
     let mapIconFrame: number | undefined;
     let mapIconTargets = new Map<string, LocHighlightTarget>();
-    let mapIconGroundOverlay: MapIconGroundOverlay | undefined;
+    let mapIconGroundOverlay: Pick<MapIconGroundOverlay, "setEntries"> | undefined;
     let mapIconGroundManager: TerrainHost["overlayManager"];
-    let locPlacementPreviewOverlay: LocPlacementPreviewOverlay | undefined;
+    let locPlacementPreviewOverlay: Pick<LocPlacementPreviewOverlay, "setPreview" | "setPreviews" | "clear"> | undefined;
     let locPlacementPreviewManager: TerrainHost["overlayManager"];
     let modelImageCaptureOverlay: ModelImageCaptureOverlay | undefined;
     let modelImageCaptureManager: TerrainHost["overlayManager"];
     let selectedModelTarget: InteractHighlightTarget | undefined;
-    let wallGroundOverlay: ZoneGroundOverlay | undefined;
+    let wallGroundOverlay: Pick<ZoneGroundOverlay, "setRects" | "invalidate"> | undefined;
     let wallGroundManager: TerrainHost["overlayManager"];
     let zoneFrame: number | undefined;
-    let zoneGroundOverlay: ZoneGroundOverlay | undefined;
+    let zoneGroundOverlay: Pick<ZoneGroundOverlay, "setRects" | "invalidate"> | undefined;
     let zoneGroundManager: TerrainHost["overlayManager"];
     const editorRegionReplacements = new Map<number, EditorRegionReplacement>();
     let objectSpawns: ObjectSpawn[] | undefined = browserHostWindow() ? undefined : [];
@@ -725,7 +731,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     };
     const ensureMapIconGroundOverlay = (
         renderer: TerrainHost,
-    ): MapIconGroundOverlay | undefined => {
+    ): Pick<MapIconGroundOverlay, "setEntries"> | undefined => {
+        if (renderer.editorOverlays) return mapIconGroundOverlay = renderer.editorOverlays.icons;
         if (!renderer.overlayManager || !renderer.app || !renderer.sceneUniformBuffer) {
             return undefined;
         }
@@ -739,7 +746,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     };
     const ensureLocPlacementPreviewOverlay = (
         renderer: TerrainHost,
-    ): LocPlacementPreviewOverlay | undefined => {
+    ): Pick<LocPlacementPreviewOverlay, "setPreview" | "setPreviews" | "clear"> | undefined => {
+        if (renderer.editorOverlays) return locPlacementPreviewOverlay = renderer.editorOverlays.preview;
         if (!renderer.overlayManager || !renderer.app || !renderer.sceneUniformBuffer) return undefined;
         if (locPlacementPreviewManager === renderer.overlayManager) return locPlacementPreviewOverlay;
         const overlay = new LocPlacementPreviewOverlay();
@@ -773,7 +781,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         if (renderer) {
             const entries: MapIconGroundEntry[] = [];
             const targets = new Map<string, LocHighlightTarget>();
-            const maxPlane = state.config.renderAllHeightLevels ? 3 : state.config.heightLevel;
+            const maxPlane = renderer.getRoofPlaneLimit();
             const cullTile = renderer.getRenderCullTile();
             const renderDistance = renderer.getFrameRenderDistanceTiles();
             for (let plane = 0; plane <= maxPlane; plane++) {
@@ -822,7 +830,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     };
     const ensureZoneGroundOverlay = (
         renderer: TerrainHost,
-    ): ZoneGroundOverlay | undefined => {
+    ): Pick<ZoneGroundOverlay, "setRects" | "invalidate"> | undefined => {
+        if (renderer.editorOverlays) return zoneGroundOverlay = renderer.editorOverlays.zones;
         if (!renderer.overlayManager || !renderer.app || !renderer.sceneUniformBuffer) {
             return undefined;
         }
@@ -836,7 +845,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     };
     const ensureWallGroundOverlay = (
         renderer: TerrainHost,
-    ): ZoneGroundOverlay | undefined => {
+    ): Pick<ZoneGroundOverlay, "setRects" | "invalidate"> | undefined => {
+        if (renderer.editorOverlays) return wallGroundOverlay = renderer.editorOverlays.wall;
         if (!renderer.overlayManager || !renderer.app || !renderer.sceneUniformBuffer) return undefined;
         if (wallGroundManager === renderer.overlayManager) return wallGroundOverlay;
         const overlay = new ZoneGroundOverlay(false);
@@ -983,12 +993,19 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             tileEndY: endY,
         };
     };
+    const getEditorPointerTile = (renderer: TerrainHost) => {
+        if (client.inputManager.mouseX < 0 || client.inputManager.mouseY < 0) return undefined;
+        const ray = renderer.screenToRay(client.inputManager.mouseX, client.inputManager.mouseY);
+        return ray ? pickEditorTile(ray, plugin.getConfig().heightLevel,
+            renderer.mapManager.visibleMaps.slice(0, renderer.mapManager.visibleMapCount)) : undefined;
+    };
     const resolveEditScenePick = (renderer: TerrainHost) => {
         const x = client.inputManager.mouseX;
         const y = client.inputManager.mouseY;
         if (
             editorPickCache?.renderer === renderer &&
             editorPickCache.frame === renderer.currentFrameCount &&
+            editorPickCache.plane === plugin.getConfig().heightLevel &&
             editorPickCache.x === x &&
             editorPickCache.y === y
         ) {
@@ -1042,7 +1059,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             }
         }
         if (!pick && plugin.getConfig().showMapIcons) {
-            const tile = renderer.computeTileAt(x, y);
+            const tile = getEditorPointerTile(renderer);
             const plane = plugin.getConfig().heightLevel;
             const iconTarget = tile && mapIconTargets.get(`${tile.tileX}:${tile.tileY}:${plane}`);
             if (iconTarget) {
@@ -1052,7 +1069,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 };
             }
         }
-        editorPickCache = { renderer, frame: renderer.currentFrameCount, x, y, pick };
+        editorPickCache = { renderer, frame: renderer.currentFrameCount, plane: plugin.getConfig().heightLevel, x, y, pick };
         return pick;
     };
     const resolvePointerTarget = () => {
@@ -1087,46 +1104,49 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         if (heightLevelRenderer === renderer) return;
         heightLevelRenderer = renderer;
         const getBasePlane = renderer.getPlayerRawPlane.bind(renderer);
+        const getBaseEffectivePlane = renderer.getEffectivePlaneForTile.bind(renderer);
         const getBaseRoofPlaneLimit = renderer.getRoofPlaneLimit.bind(renderer);
         const shouldRenderNpc = renderer.shouldRenderNpcFromMap.bind(renderer);
         const shouldRenderPlayer = renderer.shouldRenderPlayerIndex.bind(renderer);
-        const drawBase = renderer.drawWithRoofPlaneFilter.bind(renderer);
-        const visiblePlaneRanges: PlaneDrawRange[] = [];
+        let hoveredRoofFrame = -1;
+        let hoverHidesUpperFloors = false;
         const isEditing = () => {
             const state = plugin.getState();
             return state.config.enabled && (state.config.active || state.scenePreview);
         };
+        renderer.getEffectivePlaneForTile = (x, y, plane) =>
+            isEditing() ? plane : getBaseEffectivePlane(x, y, plane);
         renderer.getPlayerRawPlane = () =>
             isEditing() ? plugin.getConfig().heightLevel : getBasePlane();
-        renderer.getRoofPlaneLimit = () =>
-            isEditing()
-                ? plugin.getConfig().renderAllHeightLevels
-                    ? 3
-                    : plugin.getConfig().heightLevel
-                : getBaseRoofPlaneLimit();
+        renderer.getRoofPlaneLimit = () => {
+            if (!isEditing()) return getBaseRoofPlaneLimit();
+            const config = plugin.getConfig();
+            if (!config.renderAllHeightLevels) return config.heightLevel;
+            if (config.heightLevel === 0) {
+                const selection = plugin.getState().selection;
+                if (selection?.plane === 0 && (selection.kind === "loc" || selection.kind === "npc") &&
+                    (renderer.getTileRenderFlagAt(0, selection.tileX, selection.tileY) & TILE_FLAG_UNDER_ROOF) !== 0) {
+                    return 0;
+                }
+                if (hoveredRoofFrame !== renderer.currentFrameCount) {
+                    hoveredRoofFrame = renderer.currentFrameCount;
+                    // Pick the ground heightfield even while a roof covers it, avoiding hover flicker.
+                    const tile = getEditorPointerTile(renderer);
+                    hoverHidesUpperFloors = !!tile &&
+                        (renderer.getTileRenderFlagAt(0, tile.tileX, tile.tileY) & TILE_FLAG_UNDER_ROOF) !== 0;
+                }
+                if (hoverHidesUpperFloors) return 0;
+            }
+            return 3;
+        };
         renderer.shouldRenderNpcFromMap = (map, ecsId) =>
             shouldRenderNpc(map, ecsId) &&
             (!isEditing() ||
                 (client.npcEcs.getLevel(ecsId) | 0) === plugin.getConfig().heightLevel);
         renderer.shouldRenderPlayerIndex = (ecsId) =>
             shouldRenderPlayer(ecsId) &&
-            (plugin.getConfig().renderAllHeightLevels ||
-                !isEditing() ||
-                (client.playerEcs.getLevel(ecsId) | 0) <= plugin.getConfig().heightLevel);
-        renderer.drawWithRoofPlaneFilter = (drawCall, drawRanges, drawRangePlanes, limit) => {
-            const config = plugin.getConfig();
-            if (!isEditing() || config.renderAllHeightLevels || !drawRangePlanes) {
-                drawBase(drawCall, drawRanges, drawRangePlanes, limit);
-                return;
-            }
-            visiblePlaneRanges.length = 0;
-            for (let i = 0; i < drawRanges.length; i++) {
-                if ((drawRangePlanes[i] | 0) <= config.heightLevel) {
-                    visiblePlaneRanges.push(drawRanges[i]);
-                }
-            }
-            drawBase(drawCall, visiblePlaneRanges, undefined, 3);
-        };
+            (!isEditing() ||
+                (client.playerEcs.getLevel(ecsId) | 0) <= renderer.getRoofPlaneLimit());
     };
     const analyseBuilding = (tile: EditModeTile) => {
         const renderer = terrainHost(client);
@@ -1319,17 +1339,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         getPointerTile: () => {
             const renderer = terrainHost(client);
             if (renderer) ensureHeightLevelRenderer(renderer);
-            // Fresh terrain fallback: hoveredTile can lag a frame after camera movement.
-            const tile =
-                renderer?.computeTileAt?.(client.inputManager.mouseX, client.inputManager.mouseY) ??
-                client.hoveredTile;
-            if (tile) {
-                return {
-                    tileX: tile.tileX | 0,
-                    tileY: tile.tileY | 0,
-                    plane: plugin.getConfig().heightLevel,
-                };
-            }
+            const tile = renderer && getEditorPointerTile(renderer);
+            if (tile) return tile;
             // Terrain picking has gaps where a loc is the only clickable surface.
             return renderer ? resolveEditScenePick(renderer)?.tile : undefined;
         },
@@ -1471,7 +1482,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             const target = selectedModelTarget;
             if (!renderer || !target) return Promise.resolve(undefined);
             const triangles = renderer.buildHighlightTrianglePoints(target);
-            return ensureModelImageCaptureOverlay(renderer)?.capture(triangles ?? []) ?? Promise.resolve(undefined);
+            return renderer.editorOverlays?.capture(triangles ?? [])
+                ?? ensureModelImageCaptureOverlay(renderer)?.capture(triangles ?? []) ?? Promise.resolve(undefined);
         },
         afterNextSceneFrame: (callback) => {
             if (typeof requestAnimationFrame !== "function") {
@@ -1579,12 +1591,12 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         },
         onLocAddChange: (locId, tile, level, shape, rotation) => {
             const renderer = terrainHost(client);
-            renderer?.pendingLocUpdates.add(renderer.getMapIdForWorldTile(tile.x, tile.y));
+            renderer?.pendingLocUpdates?.add(renderer.getMapIdForWorldTile(tile.x, tile.y));
             client.onLocAddChange(locId, tile, level, shape, rotation);
         },
         onLocDel: (tile, level, shape, rotation) => {
             const renderer = terrainHost(client);
-            renderer?.pendingLocUpdates.add(renderer.getMapIdForWorldTile(tile.x, tile.y));
+            renderer?.pendingLocUpdates?.add(renderer.getMapIdForWorldTile(tile.x, tile.y));
             client.onLocDel(tile, level, shape, rotation);
         },
         getLocPlacementShape: (locId) => {
@@ -1616,16 +1628,46 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             const overlay = id > 0 ? client.loaderFactory?.getOverlayTypeLoader?.().load(id - 1) : undefined;
             return !!overlay && overlay.textureId !== 91 && isKnownWaterTextureId(overlay.textureId);
         },
+        getOverlayTexture: (textureId) => {
+            const cached = overlayTexturePreviews.get(textureId);
+            if (cached) return cached;
+            if (!client.textureLoader) return undefined;
+            try {
+                const size = 128;
+                const pixels = client.textureLoader.getPixelsArgb(textureId, size, true, 1);
+                const canvas = document.createElement("canvas");
+                canvas.width = canvas.height = size;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return undefined;
+                const image = ctx.createImageData(size, size);
+                for (let i = 0; i < pixels.length; i++) {
+                    image.data[i * 4] = (pixels[i] >>> 16) & 255;
+                    image.data[i * 4 + 1] = (pixels[i] >>> 8) & 255;
+                    image.data[i * 4 + 2] = pixels[i] & 255;
+                    image.data[i * 4 + 3] = pixels[i] >>> 24;
+                }
+                ctx.putImageData(image, 0, 0);
+                const url = canvas.toDataURL();
+                overlayTexturePreviews.set(textureId, url);
+                return url;
+            } catch {
+                // Sparse-cache textures may still be downloading; the palette retries them.
+                return undefined;
+            }
+        },
         getOverlaySwatches: () => {
             const loader = client.loaderFactory?.getOverlayTypeLoader?.();
             if (!loader) return [];
             const swatches = [];
-            for (let id = 1; id < loader.getCount(); id++) {
+            for (let id = 1; id <= loader.getCount(); id++) {
                 try {
-                    const overlay = loader.load(id);
+                    // Tile overlay IDs are one-based; cache definitions are zero-based.
+                    const overlay = loader.load(id - 1);
                     swatches.push({
                         id,
                         colorRgb: overlay.primaryRgb & 0xffffff,
+                        textureId: overlay.textureId >= 0 && client.textureLoader?.isSd(overlay.textureId)
+                            ? overlay.textureId : undefined,
                         name: overlay.name,
                     });
                 } catch {
@@ -1637,16 +1679,22 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         loadWorldDefinition,
         spawnNpc: (npcTypeId, tile, rotation) => spawnEditorNpc(client, npcTypeId, tile, rotation),
         setFreeCamera: (enabled) => {
-            // The client already flies the camera with WASD/QE whenever it is
-            // not following the player (GameRenderer.handleKeyInput).
-            // ponytail: map streaming still centres on the player, so flying
-            // past the loaded radius shows empty space.
+            if (enabled) {
+                for (const code of ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
+                    client.inputManager.keys?.delete(code);
+                }
+                client.stopKeyboardMovement?.(true);
+            }
             client.followPlayerCamera = !enabled;
         },
         setScenePreview: (enabled, spawn) => {
             client.scenePreviewEnabled = enabled;
             client.scenePreviewLoadingStartedAt = enabled ? performance.now() : undefined;
-            if (!enabled) return;
+            if (!enabled) {
+                client.editorLaunching = false;
+                document.body.classList.remove("map-editor-launching");
+                return;
+            }
             // Logged out the camera still holds the title-screen angles and sits
             // 26 tiles up with nothing framed, which reads as a skewed world.
             frameCameraOnTile(
@@ -1747,6 +1795,17 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             renderer.terrainOverrides.delete(`${tile.tileX},${tile.tileY},${tile.plane}`);
             reloadTile(renderer, tile);
             zoneGroundOverlay?.invalidate();
+        },
+        getTerrainOverlay: (tile) => {
+            const renderer = terrainHost(client);
+            if (!renderer) return undefined;
+            const override = renderer.terrainOverrides.get(`${tile.tileX},${tile.tileY},${tile.plane}`)?.overlay;
+            if (override !== undefined) return override;
+            const map = renderer.getPreferredMapForWorldTile(tile.tileX, tile.tileY);
+            if (!map?.tileOverlays) return undefined;
+            const x = Math.floor(tile.tileX - map.getRenderBaseWorldX()) + map.borderSize;
+            const y = Math.floor(tile.tileY - map.getRenderBaseWorldY()) + map.borderSize;
+            return (map.tileOverlays[tile.plane]?.[x]?.[y] ?? 0) & 0x7fff;
         },
         getTerrainHeight: (tile) => {
             const renderer = terrainHost(client);
@@ -1906,8 +1965,11 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             }, 100);
         }
         const active = !loading && state.config.enabled && (state.scenePreview || state.config.active);
-        if (active && !teardownEditorUi) teardownEditorUi = mountEditorUi(plugin);
-        else if (!active && teardownEditorUi) {
+        if (active && !teardownEditorUi) {
+            teardownEditorUi = mountEditorUi(plugin);
+            client.editorLaunching = false;
+            document.body.classList.remove("map-editor-launching");
+        } else if (!active && teardownEditorUi) {
             teardownEditorUi();
             teardownEditorUi = undefined;
         }
@@ -1937,25 +1999,21 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
  */
 type TerrainHost = {
     currentFrameCount: number;
+    editorOverlays?: EditorOverlays;
     app?: PicoApp;
     sceneUniformBuffer?: UniformBuffer;
     overlayManager?: { add(overlay: Overlay): unknown };
     mapManager: {
         visibleMapCount: number;
-        visibleMaps: Array<{
+        visibleMaps: Array<EditorPickMap & {
             mapX: number;
             mapY: number;
-            getRenderBaseWorldX?(): number;
-            getRenderBaseWorldY?(): number;
         }>;
     };
     screenToRay(mouseX: number, mouseY: number): Ray | null;
-    computeTileAt(
-        mouseX: number,
-        mouseY: number,
-    ): { tileX: number; tileY: number; plane: number } | undefined;
     sceneRaycaster: Pick<SceneRaycaster, "raycast"> | null;
     getPlayerRawPlane(): number;
+    getEffectivePlaneForTile(x: number, y: number, plane: number): number;
     getRenderCullTile(): { x: number; y: number };
     getFrameRenderDistanceTiles(): number;
     isMapWithinRenderDistance(
@@ -1968,14 +2026,9 @@ type TerrainHost = {
     getMinimapIcons(mapX: number, mapY: number, level?: number): MinimapIcon[] | undefined;
     sampleHeightAtExactPlane(worldX: number, worldY: number, plane: number): number;
     getRoofPlaneLimit(): number;
+    getTileRenderFlagAt(level: number, tileX: number, tileY: number): number;
     shouldRenderNpcFromMap(map: unknown, ecsId: number): boolean;
     shouldRenderPlayerIndex(ecsId: number): boolean;
-    drawWithRoofPlaneFilter(
-        drawCall: unknown,
-        drawRanges: PlaneDrawRange[],
-        drawRangePlanes: Uint8Array | undefined,
-        roofPlaneLimit: number,
-    ): void;
     getInteractHighlightDrawTargets(): ReadonlyArray<InteractHighlightDrawTarget>;
     buildHighlightTrianglePoints(
         target: InteractHighlightTarget,
@@ -2011,23 +2064,22 @@ type TerrainHost = {
         number,
         { terrainData: Int8Array; objectData?: Int8Array }
     >;
-    getPreferredMapForWorldTile(tileX: number, tileY: number): unknown;
+    getPreferredMapForWorldTile(tileX: number, tileY: number): (EditorPickMap & { tileOverlays?: Int16Array[][] }) | undefined;
     getTileHeightAtPlane(tileX: number, tileY: number, plane: number): number;
-    pendingLocUpdates: Set<number>;
+    pendingLocUpdates?: Set<number>;
     getMapIdForWorldTile(x: number, y: number): number;
     scheduleLocReload(mapX: number, mapY: number): void;
 };
 
-type PlaneDrawRange = [number, number, number];
-
 function terrainHost(client: OsrsClient): TerrainHost | undefined {
-    const renderer = client.renderer as unknown as TerrainHost | undefined;
+    const backend = client.renderer as unknown as { interactionHost?: TerrainHost };
+    const renderer = (backend.interactionHost ?? client.renderer) as unknown as TerrainHost | undefined;
     return renderer && renderer.terrainOverrides ? renderer : undefined;
 }
 
 function reloadTile(renderer: TerrainHost, tile: EditModeTile): void {
     const mapId = renderer.getMapIdForWorldTile(tile.tileX, tile.tileY);
-    renderer.pendingLocUpdates.add(mapId);
+    renderer.pendingLocUpdates?.add(mapId);
     renderer.scheduleLocReload(mapId >> 8, mapId & 0xff);
 }
 

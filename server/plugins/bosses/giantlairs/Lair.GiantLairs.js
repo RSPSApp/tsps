@@ -12,6 +12,7 @@
 const Common = require("./Common.GiantLairs");
 
 const { later, toLocation, UNLOCKED_ATTRIBUTE, CHESTS_ATTRIBUTE } = Common;
+const CombatAchievements = require("./CombatAchievements.GiantLairs");
 
 const BUSY_VARBIT = 12393;
 const OVERLAY_ATMOSPHERE_UID = (161 << 16) | 1;
@@ -317,6 +318,7 @@ function openChest(event) {
     player.getPacketSender().sendConfig(lair.countVarp, opened);
     player.sendMessage(lair.messages.spill);
     player.sendMessage(lair.messages.count.replace("{count}", String(opened)));
+    CombatAchievements.chestOpened(player, lair, opened);
     const request = { player, table: lair.chestTable, drops: [] };
     api.emitCustomEvent("npc-drops:roll-table", request);
     dropLoot(session, request.drops);
@@ -331,6 +333,7 @@ function onBossDeath({ npc }) {
   if (!session || npc !== session.boss) return;
   session.boss = null;
   session.killed = true;
+  CombatAchievements.bossKilled(session.player, session.lair);
   session.respawning = false;
 }
 

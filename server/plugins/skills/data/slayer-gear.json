@@ -1,0 +1,17 @@
+{
+  "_description": "Slayer monsters that punish a player without protective equipment (OSRS Wiki, each monster's page and Slayer equipment). Any equipped item whose name starts with one of `protection` protects; every Slayer helmet covers the head pieces. Unprotected, the monster's hits land (and through protection prayers where `bypassPrayer`), hit for `hit`, and drain `drain`: stat names to amounts, 'all' to 0 or 'half' to half. Where the Wiki gives no drain amount ('greatly reduced'), `drainPercent` of the stat's level per hit is ours.",
+  "monsters": [
+    { "names": ["Banshee", "Twisted Banshee", "Screaming banshee", "Screaming twisted banshee"], "protection": ["Earmuffs", "Slayer helmet"], "hit": 6, "drainPercent": 10, "drain": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "PRAYER", "AGILITY"] },
+    { "names": ["Aberrant spectre", "Deviant spectre", "Abhorrent spectre", "Repugnant spectre"], "protection": ["Nose peg", "Slayer helmet"], "hit": 14, "bypassPrayer": true, "drainPercent": 10, "drain": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "PRAYER", "AGILITY"] },
+    { "names": ["Dust devil", "Choke devil"], "protection": ["Facemask", "Gas mask", "Slayer helmet"], "hit": 16, "drainTo": { "ATTACK": "all", "STRENGTH": "all", "RANGED": "all", "MAGIC": "all", "AGILITY": "half", "DEFENCE": "half", "PRAYER": "half" } },
+    { "names": ["Basilisk", "Basilisk Youngling", "Basilisk Knight", "Basilisk Sentinel", "Monstrous basilisk", "Monstrous Basilisk", "Cockatrice", "Cockathrice", "Moonlight Cockatrice"], "protection": ["Mirror shield", "V's shield"], "drainPercent": 10, "drain": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC"] },
+    { "names": ["Wall beast"], "protection": ["Spiny helmet", "Slayer helmet"], "hit": 18 }
+  ],
+  "_immune": "Monsters only some attacks hurt (Wiki, Kurask and Turoth): leaf-bladed melee weapons, broad arrows and bolts, and Magic Dart.",
+  "immune": {
+    "names": ["Kurask", "Turoth", "King kurask", "Spiked Turoth"],
+    "weapons": ["Leaf-bladed"],
+    "ammo": ["broad"],
+    "spells": ["MAGIC_DART"]
+  }
+}

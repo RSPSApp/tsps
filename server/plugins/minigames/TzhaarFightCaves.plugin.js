@@ -6,6 +6,7 @@ let core;
 let api;
 let FightCaveArea = null;
 const sessions = new WeakMap();
+const CombatAchievements = require("./tzhaar/CombatAchievements.TzhaarFightCaves");
 
 const ATTR_WAVE = "tzhaar:fight-cave-wave";
 const ATTR_ROTATION = "tzhaar:fight-cave-rotation";
@@ -121,6 +122,8 @@ function startRun(player, wave, rotation, at) {
     healerWaves: 0,
     jadHealedToFull: false,
   });
+  // A run resumed after a logout is not watched from its start.
+  if (wave === 1) CombatAchievements.start(player);
 }
 
 function spawn(session, player, id, at, attack = true) {
@@ -173,6 +176,7 @@ function tendJad(player, session) {
         healer.setMobileInteraction?.(jad);
         jad.performGraphic(new Graphic(HEAL_GRAPHIC));
         jad.heal(HEALER_HEAL);
+        CombatAchievements.jadHealed(player);
       }
     } else if (!fighting) {
       PathFinder.calculateWalkRoute(healer, jad.getLocation().getX(), jad.getLocation().getY());
@@ -196,6 +200,7 @@ function processRun({ player }) {
     return;
   }
   tendJad(player, session);
+  CombatAchievements.tick(player);
   for (const npc of session.npcs) {
     if (npc.getHitpoints() > 0) continue;
     session.npcs.delete(npc);
@@ -235,6 +240,7 @@ function finishRun(player, wavesCleared, wonJad) {
   }
   player.getCombat().reset();
   player.moveTo(tile(EXIT));
+  CombatAchievements.finish(player, wonJad);
   give(player, Items.TOKKUL, wavesCleared * (wavesCleared + 1) + (wonJad ? JAD_KILL_BONUS : 0));
   if (wonJad) {
     give(player, Items.FIRE_CAPE, 1);
@@ -340,6 +346,7 @@ module.exports = {
     api = pluginApi;
     core = pluginApi.core;
     require("./tzhaar/TzhaarMonsters")(pluginApi);
+    CombatAchievements(pluginApi);
     pluginApi.persistAttribute(ATTR_WAVE);
     pluginApi.persistAttribute(ATTR_ROTATION);
     pluginApi.persistAttribute(ATTR_LEFT_AT);

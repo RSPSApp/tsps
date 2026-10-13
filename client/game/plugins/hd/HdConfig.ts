@@ -1,6 +1,6 @@
 import { ConfigGroup, ConfigItem } from "@runelite/client/config/ConfigItem";
 
-/** 117 HD's extras, each on by default. Grass, HDR and the post effects are WebGPU only. */
+/** 117 HD's extras. Rendering quality and post effects are WebGPU only. */
 export const HdConfig = ConfigGroup("hd", {
     grass: ConfigItem({
         name: "Grass",
@@ -32,6 +32,24 @@ export const HdConfig = ConfigGroup("hd", {
         position: 5,
         default: true,
     }),
+    textureFiltering: ConfigItem({
+        name: "Texture filtering",
+        description: "Mipmaps, 8x anisotropic filtering and higher-detail textures reduce shimmer (WebGPU)",
+        position: 7,
+        default: true,
+    }),
+    antiAliasing: ConfigItem({
+        name: "Anti-aliasing",
+        description: "Smooths jagged scene edges with FXAA while keeping the interface sharp (WebGPU)",
+        position: 8,
+        default: true,
+    }),
+    depthAwareAo: ConfigItem({
+        name: "Depth-aware AO",
+        description: "Keeps ambient occlusion from blurring across object edges; requires ambient occlusion (WebGPU)",
+        position: 9,
+        default: true,
+    }),
     depthOfField: ConfigItem({
         name: "Depth of field",
         description: "Blurs the distance when the camera is zoomed in close (WebGPU)",
@@ -48,4 +66,7 @@ export interface HdOptions {
     bloom: boolean;
     ambientOcclusion: boolean;
     depthOfField: boolean;
+    textureFiltering: boolean;
+    antiAliasing: boolean;
+    depthAwareAo: boolean;
 }

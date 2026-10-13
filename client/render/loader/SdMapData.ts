@@ -91,6 +91,7 @@ export type SdMapData = {
     renderPosY?: number;
 
     tileRenderFlags: Uint8Array[][];
+    tileOverlays?: Int16Array[][];
     /** Per-level, per-tile HD ground recipe grid, same [level][x][y] indexing as tileRenderFlags. */
     groundMaterials?: Uint8Array[][];
     /** Per-level, per-tile ground colour (0xRRGGBB, 0 = none), same indexing as groundMaterials. */
@@ -200,6 +201,7 @@ export type SdMapData = {
     // - ids[level]: Int32Array concatenating all loc ids for that level
     // - typeRots[level]: Uint8Array parallel to ids, packed as:
     //   bits 0..5 = LocModelType, bits 6..7 = rotation (0..3)
+    tilePresenceByLevel?: Uint8Array[];
     tileLocOffsetsByLevel: Uint32Array[];
     tileLocIdsByLevel: Int32Array[];
     tileLocTypeRotByLevel: Uint8Array[];

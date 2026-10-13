@@ -10,7 +10,7 @@
  *
  * With a `depth` shader the core also builds depth-only pipelines. They place geometry exactly
  * like the scene entries and call the extension's `sceneDepthPosition(viewPos)` for the clip
- * position; `beforeScene` records its own pass and fills it with `renderer.drawSceneDepth(pass)`.
+ * position; `beforeScene` records its own passes through `drawWorldDepth` and `drawActorDepth`.
  */
 import type { WebGPURenderer } from "./WebGPURenderer";
 
@@ -34,7 +34,7 @@ export interface WgslSceneSlots {
     varyings: string;
     /** Statements at the end of the vertex entry. */
     vertex: string;
-    /** Statements after the base texture sample; may replace `textureColor`. */
+    /** Statements that fill `textureColor` (initially white), including the cache fallback. */
     textureSample: string;
     /** WGSL bool: whether the cache's animated texture frames apply. */
     animateTexture: string;

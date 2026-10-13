@@ -191,7 +191,7 @@ import { projectDeckToWorld } from "../worldEntityMotion";
 import { RENDER_CONSTANTS, InteractHighlightTarget } from "../constants";
 
 export function resolveInteractHighlightTargetFromEntry(host: WebGLOsrsRendererHost, 
-        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY"> | undefined,
+        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId"> | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): InteractHighlightTarget | undefined {
 

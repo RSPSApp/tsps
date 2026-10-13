@@ -194,7 +194,9 @@ module.exports = function registerPrinceAliRescueQuest(api) {
         "I should speak to <col=800000>Leela</col> near Draynor Village.",
         held(player, BRONZE_KEY_ITEM_ID)
           ? "<str>I have the duplicate bronze key.</str>"
-          : "I need a key print, a bronze bar, and a duplicate key.",
+          : stage < STAGE_KEY_MADE
+            ? "I must give <col=800000>Osman</col> the key print and a bronze bar."
+            : "I should collect the bronze key from <col=800000>Leela</col>.",
         held(player, ROPE_ITEM_ID) ? "<str>I have rope for Lady Keli.</str>" : "I need rope to tie Lady Keli up.",
         held(player, SKIN_PASTE_ITEM_ID)
           ? "<str>I have skin paste.</str>"

@@ -965,20 +965,35 @@ void main(){
 
     /**
      * Update an existing texture from a canvas, or create if it doesn't exist.
-     * Unlike createTextureFromCanvas, this will re-upload the canvas data every call.
+     * Unlike createTextureFromCanvas, this re-uploads the canvas, or the supplied damage region.
      * Use for dynamic textures like minimap that change every frame.
      */
-    updateTextureFromCanvas(key: string, canvas: HTMLCanvasElement): Texture {
+    updateTextureFromCanvas(key: string, canvas: HTMLCanvasElement, damage?: { x: number; y: number; w: number; h: number }): Texture {
         const gl = this.gl;
         const existing = this.textures.get(key);
 
         if (existing && existing.tex) {
-            // Update existing texture
+            const resized = existing.w !== canvas.width || existing.h !== canvas.height;
+            const x = damage && !resized ? Math.max(0, Math.floor(damage.x)) : 0;
+            const y = damage && !resized ? Math.max(0, Math.floor(damage.y)) : 0;
+            const w = damage && !resized ? Math.min(canvas.width, Math.ceil(damage.x + damage.w)) - x : canvas.width;
+            const h = damage && !resized ? Math.min(canvas.height, Math.ceil(damage.y + damage.h)) - y : canvas.height;
+            if (w <= 0 || h <= 0) return existing;
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, existing.tex);
             gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+            try {
+                if (resized) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                else {
+                    gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x);
+                    gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y);
+                    gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                }
+            } finally {
+                gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0);
+                gl.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+                gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+            }
             existing.w = canvas.width;
             existing.h = canvas.height;
             return existing;

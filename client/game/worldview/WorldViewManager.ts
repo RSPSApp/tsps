@@ -3,6 +3,11 @@ import { WorldEntity } from "./WorldEntity";
 import { WorldView } from "./WorldView";
 
 export class WorldViewManager {
+    readonly entityLoadedListeners = new Set<(entity: WorldEntity) => void>();
+    readonly entityUnloadedListeners = new Set<(entity: WorldEntity) => void>();
+    readonly viewLoadedListeners = new Set<(view: WorldView) => void>();
+    readonly viewUnloadedListeners = new Set<(view: WorldView) => void>();
+
     primaryWorldView: WorldView | null = null;
     private readonly worldViews: Map<number, WorldView> = new Map();
     private readonly worldEntities: Map<number, WorldEntity> = new Map();
@@ -11,6 +16,7 @@ export class WorldViewManager {
         const view = new WorldView(-1, sizeX, sizeY);
         this.primaryWorldView = view;
         this.worldViews.set(-1, view);
+        for (const listener of this.viewLoadedListeners) listener(view);
         return view;
     }
 
@@ -29,11 +35,17 @@ export class WorldViewManager {
         entity.ownerWorldViewId = -1;
         entity.configId = opts.configId ?? -1;
         this.worldEntities.set(id, entity);
+        if (!existingEntity) for (const listener of this.entityLoadedListeners) listener(entity);
 
+        for (const listener of this.viewLoadedListeners) listener(view);
         return view;
     }
 
     removeWorldView(id: number): void {
+        const view = this.worldViews.get(id);
+        if (view) for (const listener of this.viewUnloadedListeners) listener(view);
+        const entity = this.worldEntities.get(id);
+        if (entity) for (const listener of this.entityUnloadedListeners) listener(entity);
         this.worldViews.delete(id);
         this.worldEntities.delete(id);
     }
@@ -112,8 +124,7 @@ export class WorldViewManager {
     clear(): void {
         for (const [id] of this.worldViews) {
             if (id !== -1) {
-                this.worldViews.delete(id);
-                this.worldEntities.delete(id);
+                this.removeWorldView(id);
             }
         }
     }

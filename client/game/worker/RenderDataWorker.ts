@@ -55,6 +55,7 @@ import { LoadedCache } from "../Caches";
 import { NpcGeometryData } from "../../render/loader/NpcGeometryData";
 import { SdMapDataLoader } from "../../render/loader/SdMapDataLoader";
 import type { NpcInstance } from "../../render/npc/NpcRenderTemplate";
+import { registerNpcModelOverrideWithId } from "../../custom/npcs/NpcModelOverrideRegistry";
 import { createNpcData } from "../../render/npc/NpcData";
 import { squareNpcInstances } from "../../render/loader/SdMapDataLoader";
 import { Scene } from "../../rs/scene/Scene";
@@ -127,6 +128,21 @@ function requiredIndexIds(cache: LoadedCache): number[] {
         );
     }
     return ids;
+}
+
+/**
+ * The worker is its own thread with its own copy of the override registry: the synthetic
+ * ids the main thread minted ride here on the instances and are re-registered before any
+ * square resolves them.
+ */
+function registerInstanceModelOverrides(instances: NpcInstance[] | undefined): void {
+    for (const instance of instances ?? []) {
+        const override = instance?.modelOverride;
+        if (override) {
+            console.info("[npc-models] worker registers", instance.typeId, "models", override.models.length);
+            registerNpcModelOverrideWithId(instance.typeId | 0, override.baseId | 0, override.models);
+        }
+    }
 }
 
 async function initWorker(cache: LoadedCache, npcInstances: NpcInstance[]): Promise<WorkerState> {
@@ -373,6 +389,7 @@ const worker = {
         void workerStatePromise?.then((state) => state.objTypeLoader.clearCache());
     },
     initCache(cache: LoadedCache, npcInstances: NpcInstance[]) {
+        registerInstanceModelOverrides(npcInstances);
         workerStatePromise = initWorker(cache, npcInstances);
     },
     initDataLoader<I, D>(dataLoader: RenderDataLoader<I, D>) {
@@ -495,6 +512,7 @@ const worker = {
             throw new Error("Worker not initialized");
         }
         workerState.npcInstances = Array.isArray(instances) ? instances.slice() : [];
+        registerInstanceModelOverrides(workerState.npcInstances);
     },
     async setVars(values: Int32Array): Promise<void> {
         const workerState = await workerStatePromise;

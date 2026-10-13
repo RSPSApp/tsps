@@ -14,6 +14,11 @@ export type NpcInstance = {
      * scene is built as a single map square, so every NPC in it belongs to that square.
      */
     ownerMapId?: number;
+    /**
+     * Server model customisation riding this NPC: when typeId is a synthetic id, the worker
+     * (a separate thread) registers it from here before resolving the type.
+     */
+    modelOverride?: { baseId: number; models: Array<{ slot: number; modelId: number }> };
 };
 
 /** The map square that owns (draws, picks) an NPC instance. */

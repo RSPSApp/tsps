@@ -108,14 +108,16 @@ export function buildGroundItemGeometry(
     }
 
     const sceneBuf = new SceneBuffer(textureLoader, textureIdIndexMap, filtered.length * 64);
-    const mapBaseX = map.mapX * Scene.MAP_SQUARE_SIZE;
-    const mapBaseY = map.mapY * Scene.MAP_SQUARE_SIZE;
+    // Relative to where the map is drawn (an instance scene's base), matching u_mapPos.
+    const mapBaseX = map.getRenderBaseTileX?.() ?? map.mapX * Scene.MAP_SQUARE_SIZE;
+    const mapBaseY = map.getRenderBaseTileY?.() ?? map.mapY * Scene.MAP_SQUARE_SIZE;
+    const span = map.getLocalTileSpan?.() || Scene.MAP_SQUARE_SIZE;
 
     for (const stack of filtered) {
         const localX = (stack.tile.x | 0) - mapBaseX;
         const localY = (stack.tile.y | 0) - mapBaseY;
-        if (localX < 0 || localX >= Scene.MAP_SQUARE_SIZE) continue;
-        if (localY < 0 || localY >= Scene.MAP_SQUARE_SIZE) continue;
+        if (localX < 0 || localX >= span) continue;
+        if (localY < 0 || localY >= span) continue;
 
         const model = objModelLoader.getModel(stack.itemId | 0, stack.quantity | 0);
         if (!model) continue;

@@ -93,25 +93,25 @@ export class Gamevals {
     /** Every interface by group id. */
     public allInterfaces(): Map<number, GamevalInterface> {
         if (this.interfaces) return this.interfaces;
-        this.interfaces = new Map();
+        const interfaces = new Map<number, GamevalInterface>();
         const archive = CacheIndexDat2.fromStore(GAMEVAL_INDEX, this.store).getArchive(GamevalKind.INTERFACE);
         for (const group of archive.fileIds) {
             const data = archive.getFile(group)?.data;
-            if (data) this.interfaces.set(group, decodeGamevalInterface(data));
+            if (data) interfaces.set(group, decodeGamevalInterface(data));
         }
-        return this.interfaces;
+        return this.interfaces = interfaces;
     }
 
     /** Every DB table by id, with its column names. */
     public allTables(): Map<number, GamevalTable> {
         if (this.tables) return this.tables;
-        this.tables = new Map();
+        const tables = new Map<number, GamevalTable>();
         const archive = CacheIndexDat2.fromStore(GAMEVAL_INDEX, this.store).getArchive(GamevalKind.DBTABLE);
         for (const id of archive.fileIds) {
             const data = archive.getFile(id)?.data;
-            if (data) this.tables.set(id, decodeGamevalTable(data));
+            if (data) tables.set(id, decodeGamevalTable(data));
         }
-        return this.tables;
+        return this.tables = tables;
     }
 
     /** A DB table column's id by name, or null when the table has no such column. */

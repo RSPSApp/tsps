@@ -201,6 +201,19 @@ export class PlayerAnimController {
         return s;
     }
 
+    setAnimation(serverId:number,sequence:number):void {
+        const index=this.playerEcs.getIndexForServerId(serverId);if(index===undefined)return;
+        const state=this.stateFor(serverId);state.seqId=sequence|0;
+        state.frame=this.playerEcs.getAnimSeqFrame(index);state.frameCycle=this.playerEcs.getAnimSeqFrameCycle(index);state.delay=this.playerEcs.getAnimSeqDelay(index);
+        this.playerEcs.setAnimActionSeqId(index,sequence);
+    }
+    setActionFrame(serverId:number,frame:number):void {
+        const state=this.stateFor(serverId); state.frame=frame|0;
+        const index=this.playerEcs.getIndexForServerId(serverId);
+        if(index!==undefined)this.playerEcs.setAnimSeqFrame(index,frame);
+    }
+    setMovementFrame(serverId:number,frame:number):void { const state=this.movementStateFor(serverId),index=this.playerEcs.getIndexForServerId(serverId);if(index!==undefined)state.seqId=this.playerEcs.getAnimMovementSeqId(index);state.frame=frame|0; }
+
     release(serverId: number): void {
         if (!(serverId >= 0)) return;
         const state = this.states.get(serverId);

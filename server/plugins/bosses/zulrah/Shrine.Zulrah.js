@@ -19,6 +19,7 @@
  */
 
 const Shared = require("./ZulrahShared");
+const CombatAchievements = require("./CombatAchievements.Zulrah");
 const Fight = require("./ZulrahFight");
 const { MeleeSnakeling, MagicSnakeling } = require("./ZulrahHazards");
 
@@ -145,6 +146,7 @@ function onZulrahDeath({ npc }) {
   const kills = (Number(player.getAttribute(Shared.ATTR.KILLS)) || 0) + 1;
   player.setAttribute(Shared.ATTR.KILLS, kills);
   const ticks = fight.duration();
+  CombatAchievements.killed(player, fight, kills, ticks);
   const best = Number(player.getAttribute(Shared.ATTR.BEST_TIME)) || 0;
   player.sendMessage(`Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);
   if (!best || ticks < best) {

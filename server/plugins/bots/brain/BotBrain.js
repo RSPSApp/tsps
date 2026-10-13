@@ -77,14 +77,34 @@ class BotBrain {
     // Without a rotation the bot only ever returns to the activity it was given: a
     // wilderness bot whose pvp activity ends goes back to pvp, not to a random skill.
     this.rootActivityId = options.activity?.id ?? null;
+    // Optional: picks the next root activity instead of the registry (an AI bot's own plan).
+    // Returns an activity, "wait" to stay idle until it has one, or null for the usual pick.
+    this.chooseNext = typeof options.chooseNext === "function" ? options.chooseNext : null;
+    // A paused brain does nothing at all (a bot in a trade must not walk off or close it).
+    this.paused = false;
+    // Optional human pacing (AI bots): { actionPauseMs, activityPauseMs, walkPauseChance,
+    // walkPauseMs, dropsPerTick }, each range [min, max]. Without it a bot acts every tick.
+    this.pacing = options.pacing ?? null;
+    // Nothing happens before this time: a pause between actions, or while typing.
+    this.restUntil = 0;
+    // When the next walk leg may go out (0: not decided for this gap yet).
+    this.walkGapUntil = 0;
     this.switchAt = 0;
     if (options.activity) {
       this.pushRoot(options.activity, options.nowMs ?? Date.now());
     }
   }
 
+  /** Rests for a random time in `range` ([min, max] ms), unless already resting longer. */
+  rest(range, nowMs = Date.now()) {
+    if (!range) return;
+    const [min, max] = range;
+    this.restUntil = Math.max(this.restUntil, nowMs + min + Math.random() * Math.max(0, max - min));
+  }
+
   /** Starts a bottom-of-stack activity and schedules its rotation switch. */
   pushRoot(activity, nowMs) {
+    this.rest(this.pacing?.activityPauseMs, nowMs);
     this.pushActivity(activity, nowMs);
     const span = this.rotation?.switchAfterMs;
     this.switchAt = span ? nowMs + span.min + Math.random() * (span.max - span.min) : 0;
@@ -170,7 +190,22 @@ class BotBrain {
     }
   }
 
+  /** Drops everything the brain is doing and starts `activity` as its root. */
+  replaceRoot(activity, nowMs = Date.now()) {
+    this.reset();
+    this.rootActivityId = activity.id;
+    this.pushRoot(activity, nowMs);
+  }
+
   assignNext(nowMs) {
+    const chosen = this.chooseNext?.(nowMs) ?? null;
+    if (chosen === "wait") {
+      return false;
+    }
+    if (chosen) {
+      this.pushRoot(chosen, nowMs);
+      return true;
+    }
     const activity = this.registry?.pickActivity?.(this.player, nowMs, this.rotation
       ? { allowed: this.rotation.activityIds, weights: this.rotation.weights }
       : { own: this.rootActivityId });
@@ -323,8 +358,24 @@ class BotBrain {
     };
   }
 
+  /**
+   * With pacing, a walk leg sometimes waits a moment before the next goes out, as a player
+   * pauses between clicks. Decided once per gap; returns true while the bot should wait.
+   */
+  holdWalk(nowMs) {
+    const pacing = this.pacing;
+    if (!pacing) return false;
+    if (this.walkGapUntil === 0) {
+      const [min, max] = pacing.walkPauseMs ?? [0, 0];
+      this.walkGapUntil = Math.random() < (pacing.walkPauseChance ?? 0)
+        ? nowMs + min + Math.random() * Math.max(0, max - min)
+        : nowMs;
+    }
+    return nowMs < this.walkGapUntil;
+  }
+
   /** Dispatches the bot's pending movement request (ditch crossings and doors included). */
-  dispatchMovement() {
+  dispatchMovement(nowMs = Date.now()) {
     const player = this.player;
     if (!player || player.getForceMovement?.() != null) {
       return;
@@ -336,6 +387,10 @@ class BotBrain {
     if (!request) {
       return;
     }
+    if (this.holdWalk(nowMs)) {
+      return;
+    }
+    this.walkGapUntil = 0;
     if (maybeOpenDoor({ player, state: this.state ?? null, world: this.world, request })) {
       return;
     }
@@ -407,7 +462,15 @@ class BotBrain {
   /** @returns {"running"|"idle"} */
   tick(nowMs = Date.now()) {
     this.lastTickAt = nowMs;
-    this.dispatchMovement();
+    if (this.paused) {
+      return "running";
+    }
+    // A pause (between actions, while typing) holds walking and the activity, never the
+    // support below: a resting bot still eats and defends itself.
+    const resting = nowMs < this.restUntil;
+    if (!resting) {
+      this.dispatchMovement(nowMs);
+    }
     // Support runs before the activity action: boosts, defensive/retreat,
     // then eating.
     const support = this.world?.supportTick?.({
@@ -415,7 +478,7 @@ class BotBrain {
       state: this.ensureState(),
       nowMs,
     });
-    if (support?.skip === true) {
+    if (support?.skip === true || resting) {
       return "running";
     }
     this.maybeSwitchActivity(nowMs);
@@ -452,6 +515,7 @@ class BotBrain {
         }
         if (result === "success") {
           this.stopAction(action, ctx);
+          this.rest(this.pacing?.actionPauseMs, nowMs);
           this.nextAction(nowMs);
         } else if (result === "failed") {
           this.stopAction(action, ctx);

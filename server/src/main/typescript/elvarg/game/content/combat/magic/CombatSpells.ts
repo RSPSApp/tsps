@@ -154,13 +154,13 @@ class CombatArceuusSpell extends CombatNormalSpell {
      */
     public demonbaneDamageMultiplier(caster: Mobile | null): number {
         if (!this.demonbane || !caster?.isPlayer() || !hasArceuusMark(caster)) return 1;
-        return wieldsPurgingStaff(caster) ? 1.5 : 1.25;
+        return scaledDemonbane(caster, wieldsPurgingStaff(caster) ? 1.5 : 1.25);
     }
 
     public demonbaneAccuracyMultiplier(caster: Mobile | null): number {
         if (!this.demonbane || !caster?.isPlayer()) return 1;
-        if (!hasArceuusMark(caster)) return 1.2;
-        return wieldsPurgingStaff(caster) ? 1.8 : 1.4;
+        if (!hasArceuusMark(caster)) return scaledDemonbane(caster, 1.2);
+        return scaledDemonbane(caster, wieldsPurgingStaff(caster) ? 1.8 : 1.4);
     }
 
     public canCastOnTarget(cast: Mobile, target: Mobile): boolean {
@@ -205,6 +205,18 @@ const hasArceuusMark = (target: Mobile): boolean =>
     Number(target.getAttribute(ARCEUUS_MARK_UNTIL) ?? 0) > Date.now();
 const hasArceuusWard = (target: Mobile): boolean =>
     Number(target.getAttribute("arceuus:ward-until") ?? 0) > Date.now();
+/**
+ * A demon's demonbane vulnerability other than 100% (Wiki: Yama 120%, his void flares 200%), set by
+ * the content that spawns it on the NPC's DEMONBANE_VULNERABILITY_ATTRIBUTE: the bonus scales with it.
+ */
+export const DEMONBANE_VULNERABILITY_ATTRIBUTE = "combat:demonbane-vulnerability";
+
+function scaledDemonbane(caster: Mobile, multiplier: number): number {
+    const target: any = (caster as any).getCombat?.()?.getTarget?.();
+    const vulnerability = Number(target?.getAttribute?.(DEMONBANE_VULNERABILITY_ATTRIBUTE));
+    return vulnerability > 0 ? 1 + (multiplier - 1) * vulnerability : multiplier;
+}
+
 const PURGING_STAFFS = new Set([29594, 29595]);
 const wieldsPurgingStaff = (caster: Mobile): boolean =>
     PURGING_STAFFS.has(caster.getAsPlayer().getEquipment().getWeapon()?.getId?.() ?? -1);

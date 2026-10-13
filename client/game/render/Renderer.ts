@@ -30,6 +30,7 @@ function resizeCanvas(renderer: Renderer) {
     if (changed) {
         canvas.width = width;
         canvas.height = height;
+        for (const listener of renderer.canvasResizeListeners) listener();
         return true;
     }
 
@@ -37,6 +38,7 @@ function resizeCanvas(renderer: Renderer) {
 }
 
 export abstract class Renderer {
+    readonly canvasResizeListeners = new Set<() => void>();
     canvas: HTMLCanvasElement;
     animationId: number | undefined;
     running: boolean = false;

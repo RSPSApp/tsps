@@ -1,0 +1,60 @@
+"use strict";
+
+// Pure access rules, kept free of game objects so an existing smoke can assert them.
+const REQUIRED_KILL_COUNT = 40;
+const TROLL_STRONGHOLD_DAD_STAGE = 20;
+
+function canMoveBoulder(questStage, strength, agility) {
+  if (!Number.isFinite(questStage) || questStage < TROLL_STRONGHOLD_DAD_STAGE) {
+    return {
+      ok: false,
+      reason: "You need to have helped the Troll Stronghold before venturing further.",
+    };
+  }
+  if (strength < 60 && agility < 60) {
+    return {
+      ok: false,
+      reason: "You need a Strength or Agility level of 60 to move this boulder.",
+    };
+  }
+  return { ok: true };
+}
+
+function canClimbEntrance(questStage, hasRope, roped) {
+  if (!Number.isFinite(questStage) || questStage < TROLL_STRONGHOLD_DAD_STAGE) {
+    return {
+      ok: false,
+      reason: "You need to have helped the Troll Stronghold before venturing down there.",
+    };
+  }
+  if (roped) {
+    return { ok: true, tiesRope: false };
+  }
+  if (!hasRope) {
+    return { ok: false, reason: "You need a rope to climb down this hole." };
+  }
+  return { ok: true, tiesRope: true };
+}
+
+/**
+ * A boss door: enough essence is spent first, else an ecumenical key melts into it (Wiki: the
+ * essence takes priority over the key).
+ */
+function canOpenBossDoor(input) {
+  const required = input.required ?? REQUIRED_KILL_COUNT;
+  if (input.killCount >= required) {
+    return { ok: true, spendsEssence: required };
+  }
+  if (input.hasKey) {
+    return { ok: true, consumesKey: true };
+  }
+  return { ok: false, required };
+}
+
+module.exports = {
+  REQUIRED_KILL_COUNT,
+  TROLL_STRONGHOLD_DAD_STAGE,
+  canMoveBoulder,
+  canClimbEntrance,
+  canOpenBossDoor,
+};

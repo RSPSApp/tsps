@@ -490,7 +490,7 @@ export function addWorldGfxRenderData(host: WebGLOsrsRendererHost, map: WebGLMap
         const overlayView = host.osrsClient.worldViewManager.getWorldViewByOverlayMapId(map.id);
         const instances = overlayView
             ? host.gfxManager.listWorldInstancesInView(overlayView)
-            : host.gfxManager.listWorldInstancesForMap(map.mapX, map.mapY);
+            : host.gfxManager.listWorldInstancesForDrawnMap(map);
         // Always use slot 0 for double-buffered actor data
         const sampleIdx = 0;
         if (instances.length === 0) {
@@ -505,9 +505,10 @@ export function addWorldGfxRenderData(host: WebGLOsrsRendererHost, map: WebGLMap
             host.actorRenderData = newData;
         }
         map.worldGfxDataTextureOffsets[sampleIdx] = baseOffset;
-        const mapBaseX = overlayView ? map.getRenderBaseTileX() : map.mapX * 64;
-        const mapBaseY = overlayView ? map.getRenderBaseTileY() : map.mapY * 64;
-        const maxLocal = overlayView ? Math.max(0, map.getLocalTileSpan() - 1) : 63;
+        // Relative to where the map is drawn (an instance scene's base), matching u_mapPos.
+        const mapBaseX = map.getRenderBaseTileX();
+        const mapBaseY = map.getRenderBaseTileY();
+        const maxLocal = Math.max(0, (map.getLocalTileSpan() || 64) - 1);
         for (let i = 0; i < instances.length; i++) {
             const inst = instances[i];
             const world = inst.world;

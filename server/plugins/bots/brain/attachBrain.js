@@ -4,7 +4,7 @@ const { BotBrain, restoreMode } = require("./BotBrain");
 
 /** Wires a spawned bot's entry to a brain running `activity`. Shared by sites, bench and ::bot. */
 function attachBrain(options = {}) {
-  const { runtime, registry, world, bot, activity, rotation, home, resetMovementState, nowMs } = options;
+  const { runtime, registry, world, bot, activity, rotation, home, resetMovementState, nowMs, chooseNext, pacing } = options;
   if (!runtime || !registry || !bot || !activity) {
     return false;
   }
@@ -29,6 +29,8 @@ function attachBrain(options = {}) {
     world,
     activity,
     rotation: rotation ?? null,
+    chooseNext,
+    pacing,
     ephemeral: activity.ephemeral === true,
     nowMs: nowMs ?? Date.now(),
   });

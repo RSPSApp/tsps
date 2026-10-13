@@ -1,9 +1,20 @@
+import fs = require("fs");
+import path = require("path");
 import { CacheDefinitions } from "../cache/CacheDefinitions";
 import { ObjectIdentifiers } from "../../util/ObjectIdentifiers";
 import { Misc } from "../../util/Misc";
 
+/**
+ * Examine text by object id: the Wiki's (osrsreboxed-db's `scripts.examines` dump), with the
+ * examines captured live over it - they are what the server sent, and cover ids the Wiki's
+ * pages do not list. The dump is regenerated; the overrides are kept by hand.
+ */
+const EXAMINES_FILE = "data/definitions/object-examines.json";
+const EXAMINE_OVERRIDES_FILE = "data/definitions/object-examine-overrides.json";
+
 export class ObjectDefinition extends ObjectIdentifiers {
     private static readonly definitions = new Map<number, ObjectDefinition>();
+    private static examines: Record<string, string> | null = null;
     static totalObjects = 0;
 
     id: number;
@@ -80,14 +91,26 @@ export class ObjectDefinition extends ObjectIdentifiers {
 
     /**
      * OSRS sends loc examine text from the server, so the cache has none of it
-     * (`desc` only ever gets set on older caches). Without a dump to link up,
-     * unknown locs get a generic line instead of the bare name the examine
-     * packet used to echo back.
+     * (`desc` only ever gets set on older caches). It comes from object-examines.json; a loc
+     * it doesn't cover gets a generic line instead of the bare name the examine packet used
+     * to echo back.
      */
     getExamine(): string {
+        const examine = ObjectDefinition.examineText(this.id);
+        if (examine) return examine;
         if (this.description) return this.description;
         if (!this.name || this.name === "null") return "It's nothing special.";
         return `It's ${Misc.anOrA(this.name)} ${this.name}.`;
+    }
+
+    /** The examine text recorded for an object id, or null. */
+    static examineText(id: number): string | null {
+        // Read on the first examine, not at boot.
+        ObjectDefinition.examines ??= {
+            ...JSON.parse(fs.readFileSync(path.resolve(EXAMINES_FILE), "utf8")),
+            ...JSON.parse(fs.readFileSync(path.resolve(EXAMINE_OVERRIDES_FILE), "utf8")),
+        } as Record<string, string>;
+        return ObjectDefinition.examines[String(id)] ?? null;
     }
 
     getSizeX(): number { return this.sizeX; }

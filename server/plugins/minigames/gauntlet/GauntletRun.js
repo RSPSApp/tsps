@@ -119,6 +119,8 @@ class GauntletRun {
     this.points = 0;
     this.strongFrame = false;
     this.components = new Set();
+    // What the player made, for the Combat Achievements that limit it.
+    this.made = { armour: 0, attunedWeapons: 0, egniol: 0 };
     runs.set(player.getUsername(), this);
   }
 

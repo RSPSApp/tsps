@@ -26,6 +26,8 @@ const KEYS_LAST = 70;
 const SEARCH_BUTTON = 75;
 const SEARCH_TOGGLE = 76;
 const SEARCH_RESULTS = 84;
+/** A boss category's "Combat Achievements" button (op1 in the cache); opens its boss page there. */
+const COMBAT_ACHIEVEMENTS_BUTTON = 21;
 const OVERVIEW_BURGER = 7;
 const OVERVIEW_CLOSE = 9;
 const COLLECTION_TRANSMIT = 620;
@@ -44,6 +46,12 @@ const TAB_COMPONENTS = [
 ];
 
 const uid = (group, child) => (group << 16) | child;
+
+let pluginApi;
+
+function bind(api) {
+  pluginApi = api;
+}
 
 function currentTab(player) {
   return Data.tabs()[Number(player.getAttribute(TAB_ATTRIBUTE)) || 0] ?? Data.tabs()[0];
@@ -88,7 +96,13 @@ function showCategory(player, tab, category) {
   draw(player, tab, category);
 }
 
-function open(player) {
+/** Opens the log, at the category of that name when one is given (a Combat Achievements boss page's link). */
+function open(player, categoryName = null) {
+  const named = categoryName ? Data.tabs().flatMap((tab) => tab.categories).find((category) => category.name === categoryName) : null;
+  if (named) {
+    player.setAttribute(TAB_ATTRIBUTE, named.tab.index);
+    player.setAttribute(CATEGORY_ATTRIBUTE, named.key);
+  }
   const sender = player.getPacketSender();
   const tab = currentTab(player);
   const category = currentCategory(player, tab);
@@ -182,6 +196,10 @@ function click(event) {
     openOverview(player);
   } else if (child >= KEYS_FIRST && child <= KEYS_LAST) {
     sendSearch(player);
+  } else if (child === COMBAT_ACHIEVEMENTS_BUTTON) {
+    const category = currentCategory(player, currentTab(player));
+    close(player, COLLECTION);
+    pluginApi?.emitCustomEvent("combat-achievements:open", { player, collectionLogCategory: category.name });
   } else {
     const tab = currentTab(player);
     if (child !== TAB_COMPONENTS[tab.index].background) return;
@@ -191,4 +209,4 @@ function click(event) {
   event.handled = true;
 }
 
-module.exports = { COLLECTION, OVERVIEW, TAB_COMPONENTS, TAB_ATTRIBUTE, CATEGORY_ATTRIBUTE, open, click, selectTab, showCategory, sendSearch };
+module.exports = { COLLECTION, OVERVIEW, TAB_COMPONENTS, TAB_ATTRIBUTE, CATEGORY_ATTRIBUTE, bind, open, click, selectTab, showCategory, sendSearch };

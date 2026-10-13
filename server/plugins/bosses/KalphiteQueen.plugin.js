@@ -42,8 +42,10 @@ const MOLT_GRAPHIC = new Graphic(1055);
 const MAGIC_PROJECTILE = 280;
 const MAGIC_IMPACT = new Graphic(281);
 const RANGED_PROJECTILE = 289;
+let pluginApi = null;
 const KILL_COUNT_ATTRIBUTE = "boss:kalphite-queen:kills";
-const KONAR_ID = 8623;
+/** Konar's master id (the slayer_master varbit). */
+const KONAR_MASTER = 8;
 const COCOONS = [
   [3502, 9501, 0, -2, 0], [3502, 9504, 0, -2, 0], [3482, 9502, 0, -2, 0],
   [3486, 9498, 0, 0, -2], [3486, 9518, 0, 0, -2], [3488, 9518, 0, 0, -2],
@@ -267,8 +269,9 @@ function enterChamber({ player }) { player.moveTo(CHAMBER_ENTRANCE); }
 function leaveChamber({ player }) { player.moveTo(CHAMBER_EXIT); }
 
 function isKonarKalphiteTask(player) {
-  const task = player.getAttribute("slayer:task");
-  return task?.masterId === KONAR_ID && task?.slug === "kalphite";
+  const request = { player, task: null };
+  pluginApi.emitCustomEvent("slayer:current-task", request);
+  return request.task?.master === KONAR_MASTER && request.task?.name === "kalphites";
 }
 
 function awardConditionalDrops({ killer, npc }) {
@@ -296,12 +299,20 @@ function collectionLogCount(request) {
   if (request.category === "Kalphite Queen") request.count = Math.max(0, Number(request.player.getAttribute(KILL_COUNT_ATTRIBUTE)) || 0);
 }
 
+/** Combat Achievements at login: the kill count kept here (plugins/combatachievements/). */
+function combatAchievementsKillCount({ player, counts }) {
+  const kills = Math.max(0, Number(player.getAttribute(KILL_COUNT_ATTRIBUTE)) || 0);
+  if (kills > 0) counts["Kalphite Queen"] = kills;
+}
+
 module.exports = {
   name: "KalphiteQueen",
   members: true,
   register(api) {
+    pluginApi = api;
     TaskManager = api.getTaskManager();
     api.onCustomEvent("collection-log:category-count", collectionLogCount);
+    api.onCustomEvent("combat-achievements:kill-count", combatAchievementsKillCount);
     ItemOnGroundManager = api.getItemOnGroundManager();
     World = api.getWorld();
     configureAggression();

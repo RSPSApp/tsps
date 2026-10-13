@@ -3,6 +3,7 @@ import { strict as assert } from "node:assert";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { inject } from "@runelite/client/plugins/PluginInjector";
 import { MenuTargetType } from "../rs/MenuEntry";
+import { PLAYER_INDEX_OFFSET } from "../rs/interaction/InteractionIndex";
 import type { SimpleMenuEntry } from "../ui/menu/MenuEngine";
 import { OpponentInfoConfig, OpponentInfoPlugin } from "../game/plugins/opponentinfo/OpponentInfoPlugin";
 import {
@@ -54,7 +55,7 @@ const NPC_TYPES: Record<number, { id: number; name: string; hitpoints: number; p
     2266: { id: 2266, name: "Dagannoth Prime", hitpoints: 255, params: new Map([[510, "Dagannoth Kings (Echo)"]]) },
 };
 const npcs = new Map<number, { type: number; interacting: number }>([
-    [7, { type: 655, interacting: 0x8000 + 1 }],
+    [7, { type: 655, interacting: PLAYER_INDEX_OFFSET + 1 }],
     [8, { type: 2266, interacting: -1 }],
 ]);
 let playerTarget = 7;

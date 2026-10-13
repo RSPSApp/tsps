@@ -82,7 +82,7 @@ export class AccuracyFormulasDpsCalc {
      */
     private static defenceBonus(entity: Mobile, bonusIndex: number): number {
         if (entity.isNpc()) {
-            return entity.getAsNpc().getCurrentDefinition().getStats()[10 + bonusIndex] ?? 0;
+            return entity.getAsNpc().getDefenceBonus(bonusIndex);
         }
         return entity.getAsPlayer().getBonusManager().getDefenceBonus()[bonusIndex] ?? 0;
     }

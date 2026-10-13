@@ -1,0 +1,28 @@
+{
+  "firstNames": [
+    "Dave", "Mike", "Tom", "Chris", "Sam", "Alex", "Jordan", "Kev", "Rob", "Ben", "Luke", "Dan",
+    "Matt", "Josh", "Ryan", "Nick", "Joe", "Jake", "Emma", "Sarah", "Jess", "Lucy", "Amy", "Kate",
+    "Ella", "Mia", "Zoe", "Liam", "Noah", "Finn", "Leo", "Max", "Oli", "Jay", "Nate", "Tim",
+    "Kenny", "Gary", "Steve", "Barry", "Derek", "Nigel", "Craig", "Darren", "Wes", "Rick", "Bart",
+    "Sven", "Lars", "Timo", "Joost", "Bram", "Pieter", "Mateo", "Diego", "Kai", "Ash", "Billy",
+    "Tyler", "Dylan", "Kyle", "Shane", "Brad", "Chad", "Erik", "Jonas", "Felix", "Hugo", "Ruby"
+  ],
+  "nouns": [
+    "Toast", "Potato", "Pickle", "Nugget", "Waffle", "Taco", "Badger", "Panda", "Moose", "Goose",
+    "Llama", "Walrus", "Viking", "Ninja", "Pirate", "Muffin", "Noodle", "Pancake", "Bagel", "Biscuit",
+    "Cabbage", "Turnip", "Onion", "Sausage", "Gravy", "Crumpet", "Goblin", "Gnome", "Troll", "Imp",
+    "Lobster", "Shrimp", "Shark", "Manta", "Tuna", "Trout", "Chin", "Cannon", "Spade", "Bucket",
+    "Dharok", "Torag", "Guthan", "Ahrim", "Karil", "Verac", "Zulrah", "Vorki", "Jad", "Bandos",
+    "Zammy", "Sara", "Guthix", "Whip", "Dds", "Tbow", "Scythe", "Rune", "Addy", "Mith", "Yew",
+    "Willow", "Maple", "Slayer", "Herb", "Cowhide", "Feather", "Bones", "Pking", "Skiller", "Pure",
+    "Tank", "Noob", "Grinder", "Scaper", "Wizard", "Ranger", "Mage", "Knight", "Druid", "Monk"
+  ],
+  "adjectives": [
+    "Moist", "Salty", "Spicy", "Crispy", "Soggy", "Angry", "Sleepy", "Lazy", "Lucky", "Silent",
+    "Swift", "Feral", "Cursed", "Humble", "Dank", "Tiny", "Big", "Lil", "Old", "Mad", "Sneaky",
+    "Grumpy", "Rusty", "Wild", "Shady", "Bald", "Sweaty", "Toxic", "Smelly", "Chunky", "Frosty",
+    "Saucy", "Dizzy", "Fuzzy", "Jolly", "Rogue", "Noble", "Hasty", "Clumsy", "Shiny", "Ancient"
+  ],
+  "titles": ["Its", "Mr", "Lord", "Sir", "Not", "Captain", "Dr", "King", "Uncle", "Big", "Only", "Just", "Real", "Yaboi"],
+  "suffixes": ["07", "04", "05", "2007", "99", "x", "xd", "pk", "btw", "irl", "ftw", "rs", "lol", "ok"]
+}

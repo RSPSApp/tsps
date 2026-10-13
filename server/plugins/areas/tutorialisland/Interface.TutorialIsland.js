@@ -88,6 +88,10 @@ function syncTabs(player, value) {
       // The combat tab opens with the wielded weapon's interface (title, category), as captured.
       if (tab === COMBAT_TAB) T.core.WeaponInterfaceManager.assign(player);
       else sender(player).sendSubInterface(TAB_CONTENT_CHILD(tab), TAB_GROUP[tab], 1);
+      // Closing the tab dropped the flags the login gave it (the client clears a closed
+      // interface's flags): send them again, and let the plugins that add their own do so.
+      sender(player).sendGameframeTabSetup(TAB_GROUP[tab]);
+      T.api.emitCustomEvent("gameframe:tab-mounted", { player, group: TAB_GROUP[tab] });
       tracked.add(tab);
     } else if (!unlocked.has(tab) && tracked.has(tab)) {
       sender(player).closeSubInterface(TAB_CONTENT_CHILD(tab));

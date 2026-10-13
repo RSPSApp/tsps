@@ -1,0 +1,15 @@
+[
+  {"name": "Air", "ruinsId": 34813, "talismanId": 1438, "tiaraId": 5527, "elemental": true},
+  {"name": "Mind", "ruinsId": 34814, "talismanId": 1448, "tiaraId": 5529, "elemental": false},
+  {"name": "Water", "ruinsId": 34815, "talismanId": 1444, "tiaraId": 5531, "elemental": true},
+  {"name": "Earth", "ruinsId": 34816, "talismanId": 1440, "tiaraId": 5535, "elemental": true},
+  {"name": "Fire", "ruinsId": 34817, "talismanId": 1442, "tiaraId": 5537, "elemental": true},
+  {"name": "Body", "ruinsId": 34818, "talismanId": 1446, "tiaraId": 5533, "elemental": false},
+  {"name": "Cosmic", "ruinsId": 34819, "talismanId": 1454, "tiaraId": 5539, "elemental": false},
+  {"name": "Law", "ruinsId": 34820, "talismanId": 1458, "tiaraId": 5545, "elemental": false},
+  {"name": "Nature", "ruinsId": 34821, "talismanId": 1462, "tiaraId": 5541, "elemental": false},
+  {"name": "Chaos", "ruinsId": 34822, "talismanId": 1452, "tiaraId": 5543, "elemental": false},
+  {"name": "Death", "ruinsId": 34823, "talismanId": 1456, "tiaraId": 5547, "elemental": false},
+  {"name": "Blood", "ruinsId": 25380, "talismanId": 1450, "tiaraId": 5549, "elemental": false, "destination": [3239, 4832, 0]},
+  {"name": "Wrath", "ruinsId": 34824, "talismanId": 22118, "tiaraId": 22121, "elemental": false, "destination": [2335, 4826, 0]}
+]

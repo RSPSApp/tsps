@@ -1,6 +1,7 @@
 import { hintArrow } from "../../../game/HintArrow";
 import { appendAttackTimerOverhead } from "../../../game/plugins/attacktimer/AttackTimerOverhead";
 import { updateSkyColor } from "../environment";
+import { syncCameraViewportUnitScale } from "../quality";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -494,7 +495,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
 
         // ========== Game Resource Checks ==========
         host.syncSceneFramebufferSize();
-        if (host.needsFramebufferUpdate) {
+        if (host.needsFramebufferUpdate || host.getRequestedMsaaSamples() !== host.msaaSamplesRequested) {
             host.initFramebuffer();
         }
 
@@ -574,6 +575,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         // Ensure camera uses valid dimensions
         const camWidth = Math.max(1, host.app.width || host.canvas.width || 1);
         const camHeight = Math.max(1, host.app.height || host.canvas.height || 1);
+        syncCameraViewportUnitScale(host);
         const sceneViewport = host.getSceneViewportWidgetRect();
         const sceneFramebufferViewport = host.scaleViewportRectToSceneBuffer(sceneViewport);
         camera.update(
@@ -706,7 +708,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
             .set(8, fogDepth as any)
             .set(9, timeSec as any)
             .set(10, host.brightness as any)
-            .set(11, host.colorBanding as any)
+            .set(11, (host.osrsClient.gpuPlugin?.settings()?.colorBanding ?? host.colorBanding) as any)
             .set(12, host.osrsClient.isNewTextureAnim as any)
             .update();
         profiler.endPhase();
@@ -1008,12 +1010,16 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                     const mid = (ne as any).mapId?.[ecsId] ?? 0;
                     const mapX = (mid >> 8) & 0xff;
                     const mapY = mid & 0xff;
-                    const worldX = mapX * 64 + localX / 128.0;
-                    const worldZ = mapY * 64 + localY / 128.0;
+                    const baseWorldX = mapX * 64 + localX / 128.0;
+                    const baseWorldZ = mapY * 64 + localY / 128.0;
                     const plane = ne.getLevel(ecsId) | 0;
+                    // Same anchor as hitsplats and health bars: the posed model's
+                    // height, not the static bounds (see OverlayHost for details).
+                    const npcTypeId = ne.getNpcTypeId(ecsId) | 0;
+                    const anchor = host.resolveNpcOverlayAnchor(ecsId, baseWorldX, baseWorldZ, npcTypeId);
                     const overhead = host.acquireOverheadTextEntry();
-                    overhead.worldX = worldX;
-                    overhead.worldZ = worldZ;
+                    overhead.worldX = anchor.worldX;
+                    overhead.worldZ = anchor.worldZ;
                     overhead.plane = plane;
                     overhead.text = text;
                     overhead.color = host.mapOverheadColor(0);
@@ -1026,11 +1032,9 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                     overhead.duration = duration;
                     overhead.remaining = remaining;
                     overhead.life = host.computeOverheadAlpha(overhead);
-                    const npcTypeId = ne.getNpcTypeId(ecsId) | 0;
-                    const npcHeight = npcTypeId > 0 ? host.getNpcDefaultHeight(npcTypeId) : 200;
                     overhead.footprintRadius = host.getNpcFootprintRadius(npcTypeId);
                     overhead.groupKey = host.makeActorGroupKey(true, ne.getServerId(ecsId) | 0);
-                    overhead.heightOffsetTiles = npcHeight / 128.0;
+                    overhead.heightOffsetTiles = anchor.logicalHeightTiles + 15 / 128;
                     overheadTexts.push(overhead);
                 });
             } catch {}
@@ -1067,11 +1071,12 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         if (!host.shouldRenderPlayerIndex(i)) continue;
                         const headIconPk = pe.getHeadIconPk(i);
                         const headIconPrayer = pe.getHeadIconPrayer(i);
+                        const customHeadIcons = host.osrsClient.clientPlugins.playerHeadIcons(pe.getServerIdForIndex(i) ?? -1);
                         // The yellow Castle Wars flag arrow rides the carrier as a head icon.
                         const isHinted =
                             hintArrow.type === 3 &&
                             (pe.getServerIdForIndex?.(i) ?? -1) === hintArrow.playerId;
-                        if (headIconPk < 0 && headIconPrayer < 0 && !isHinted) continue;
+                        if (headIconPk < 0 && headIconPrayer < 0 && !isHinted && customHeadIcons.length === 0) continue;
 
                         const px = pe.getX(i) | 0;
                         const py = pe.getY(i) | 0;
@@ -1091,6 +1096,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         entry.headIconPk = headIconPk;
                         entry.headIconPrayer = headIconPrayer;
                         entry.headIconHint = isHinted;
+                        entry.customHeadIcons = customHeadIcons;
                         // Position above the player head, above any health bars/hitsplats
                         entry.heightOffsetTiles = host.resolvePlayerHeadIconOffset(
                             i,
@@ -1122,12 +1128,16 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                     const mid = (ne as any).mapId?.[ecsId] ?? 0;
                     const npcTypeId = ne.getNpcTypeId(ecsId) | 0;
                     const entry = host.acquireOverheadPrayerEntry();
-                    entry.worldX = ((mid >> 8) & 0xff) * 64 + (ne.getX(ecsId) | 0) / 128.0;
-                    entry.worldZ = (mid & 0xff) * 64 + (ne.getY(ecsId) | 0) / 128.0;
+                    const baseWorldX = ((mid >> 8) & 0xff) * 64 + (ne.getX(ecsId) | 0) / 128.0;
+                    const baseWorldZ = (mid & 0xff) * 64 + (ne.getY(ecsId) | 0) / 128.0;
+                    // Posed-model anchor like the health bar, not the raw model bounds.
+                    const anchor = host.resolveNpcOverlayAnchor(ecsId, baseWorldX, baseWorldZ, npcTypeId);
+                    entry.worldX = anchor.worldX;
+                    entry.worldZ = anchor.worldZ;
                     entry.plane = ne.getLevel(ecsId) | 0;
                     entry.footprintRadius = host.getNpcFootprintRadius(npcTypeId);
                     entry.groupKey = host.makeActorGroupKey(true, ne.getServerId(ecsId) | 0);
-                    entry.heightOffsetTiles = host.getNpcDefaultHeight(npcTypeId) / 128.0;
+                    entry.heightOffsetTiles = anchor.logicalHeightTiles + 15 / 128;
                     entry.headIconPk = -1;
                     entry.headIconPrayer = -1;
                     entry.npcHeadIcons = npcHeadIcons;
@@ -1451,7 +1461,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         host.app.clearColor(host.skyColor[0], host.skyColor[1], host.skyColor[2], host.skyColor[3]);
         host.app.defaultDrawFramebuffer().clear();
 
-        if (host.frameFxaaDrawCall && host.fxaaEnabled) {
+        if (host.frameFxaaDrawCall && (host.osrsClient.gpuPlugin?.settings()?.fxaa ?? host.fxaaEnabled)) {
             host.frameFxaaDrawCall.uniform("u_resolution", host.resolutionUni);
             host.frameFxaaDrawCall.texture("u_frame", host.textureFramebuffer.colorAttachments[0]);
             host.frameFxaaDrawCall.draw();

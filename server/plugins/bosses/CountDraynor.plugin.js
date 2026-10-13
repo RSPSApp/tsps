@@ -182,11 +182,27 @@ function exitInstanceToHome(player, area) {
 }
 
 let World;
+let pluginApi;
+
+function climbManorStairs(request) {
+  if (request.handled) return;
+  const { STAIRS_11, STAIRS_12 } = pluginApi.core.ObjectIdentifiers;
+  if (request.objectId !== STAIRS_11 && request.objectId !== STAIRS_12) return;
+  const entering = request.objectId === STAIRS_11;
+  if (entering) request.player.setAttribute(ATTR_PENDING_INSTANCE, true);
+  pluginApi.emitCustomEvent(entering ? "ladders:climbDown" : "ladders:climbUp", {
+    player: request.player,
+    destination: entering ? COUNT_DRAYNOR_TELEPORT_LOCATION : new Location(3116, 3356, 0),
+  });
+  request.handled = true;
+}
 
 module.exports = {
   name: "CountDraynor",
   register(api) {
+    pluginApi = api;
     World = api.getWorld();
+    api.onCustomEvent("ladders:climb", climbManorStairs);
     api.onPlayerProcess(({ player }) => {
       if (!player) {
         return;

@@ -84,6 +84,7 @@ export class HdPlugin extends Plugin {
         return {
             grass: c.grass(), surfaceFog: c.surfaceFog(), hdr: c.hdr(), bloom: c.bloom(),
             ambientOcclusion: c.ambientOcclusion(), depthOfField: c.depthOfField(),
+            textureFiltering: c.textureFiltering(), antiAliasing: c.antiAliasing(), depthAwareAo: c.depthAwareAo(),
         };
     }
 

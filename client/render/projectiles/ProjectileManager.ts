@@ -236,6 +236,9 @@ export class ProjectileManager implements IProjectileManager {
             endHeight: launch.endHeight,
             slope: launch.slope,
             plane: launch.source.plane,
+            targetPlane: launch.target.plane,
+            sourceActor: launch.source.actor,
+            targetActor: launch.target.actor,
             ...this.getGfxFrameData(launch.projectileId),
         };
 
@@ -445,6 +448,8 @@ export class ProjectileManager implements IProjectileManager {
     // =========================================================================
     //  Lifecycle & cleanup
     // =========================================================================
+
+    public getProjectiles(): readonly Projectile[] { return [...this.projectiles.values()]; }
 
     public remove(id: number): void {
         this.removeProjectile(id);

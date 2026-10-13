@@ -16,12 +16,65 @@ export type WidgetTransmitProcessorDeps = {
 };
 
 /**
+ * Timer scripts that rebuild a box at the mouse: 4725, the enhanced client's mouseover text
+ * (set by 4726, built by 4728). These also run every frame the mouse moves. Other timers that
+ * read the mouse stay on the client tick, since some of them count cycles.
+ */
+const MOUSE_FOLLOWING_TIMERS = new Set<number>([4725]);
+
+/** The script event for a widget's onTimer handler, or undefined if it has none. */
+function createTimerEvent(node: any): ScriptEvent | undefined {
+    let args: any[] | undefined;
+    if (Array.isArray(node.onTimer) && node.onTimer.length > 0) {
+        args = node.onTimer;
+    } else {
+        const handler = node.eventHandlers?.onTimer;
+        if (!handler || !(handler.scriptId > 0)) return undefined;
+        const handlerObjectArgs =
+            handler.objectArgs ?? (handler.stringArgs ? [...handler.stringArgs] : []);
+        args = [handler.scriptId, ...handler.intArgs, ...handlerObjectArgs];
+    }
+    const event = createScriptEvent({ widget: node, args });
+    (event as any).timerArgsSnapshot = node.onTimer;
+    return event;
+}
+
+/**
  * Processes widget onTimer and transmit handlers at the engine level.
  */
 export class WidgetTransmitProcessor {
+    /** Widgets whose timer is one of MOUSE_FOLLOWING_TIMERS, as of the last timer pass. */
+    private mouseFollowingTimers = new Set<any>();
+    private mouseFollowingX = -1;
+    private mouseFollowingY = -1;
+
     constructor(private readonly deps: WidgetTransmitProcessorDeps) {}
 
+    /**
+     * Re-runs the mouse-following timers when the mouse has moved since they last ran. Called
+     * every frame: on the 20ms client tick alone the cursor box sits still between ticks and
+     * trails the pointer on any display faster than 50Hz.
+     */
+    runMouseFollowingTimers(mouseX: number, mouseY: number): void {
+        if (mouseX === this.mouseFollowingX && mouseY === this.mouseFollowingY) return;
+        this.mouseFollowingX = mouseX;
+        this.mouseFollowingY = mouseY;
+        const cs2Vm = this.deps.getCs2Vm();
+        if (!cs2Vm) return;
+        for (const node of this.mouseFollowingTimers) {
+            if (node.hidden) continue;
+            const event = createTimerEvent(node);
+            if (event && MOUSE_FOLLOWING_TIMERS.has(event.args[0] as number)) {
+                cs2Vm.runScriptEvent(event);
+            }
+        }
+    }
+
     processWidgetTimers(): void {
+        this.mouseFollowingTimers.clear();
+        // The tick's own run picks up this position; the next frame only re-runs on a move.
+        this.mouseFollowingX = -1;
+        this.mouseFollowingY = -1;
         const widgetManager = this.deps.getWidgetManager();
         if (!widgetManager || widgetManager.rootInterface === -1) return;
         const allRoots = widgetManager.getAllGroupRoots(widgetManager.rootInterface);
@@ -47,35 +100,12 @@ export class WidgetTransmitProcessor {
             visited.add(uid);
             if (node.hidden) continue;
 
-            if (node.eventHandlers?.onTimer) {
-                if (Array.isArray(node.onTimer) && node.onTimer.length > 0) {
-                    const event = createScriptEvent({
-                        widget: node,
-                        args: node.onTimer,
-                    });
-                    (event as any).timerArgsSnapshot = node.onTimer;
-                    this.deps.queueScriptEvent(event, 1);
-                } else {
-                    const handler = node.eventHandlers.onTimer;
-                    if (handler && handler.scriptId > 0) {
-                        const handlerObjectArgs =
-                            handler.objectArgs ??
-                            (handler.stringArgs ? [...handler.stringArgs] : []);
-                        const event = createScriptEvent({
-                            widget: node,
-                            args: [handler.scriptId, ...handler.intArgs, ...handlerObjectArgs],
-                        });
-                        (event as any).timerArgsSnapshot = node.onTimer;
-                        this.deps.queueScriptEvent(event, 1);
-                    }
-                }
-            } else if (Array.isArray(node.onTimer) && node.onTimer.length > 0) {
-                const event = createScriptEvent({
-                    widget: node,
-                    args: node.onTimer,
-                });
-                (event as any).timerArgsSnapshot = node.onTimer;
+            const event = createTimerEvent(node);
+            if (event) {
                 this.deps.queueScriptEvent(event, 1);
+                if (MOUSE_FOLLOWING_TIMERS.has(event.args[0] as number)) {
+                    this.mouseFollowingTimers.add(node);
+                }
             }
 
             const staticChildren = widgetManager.getStaticChildrenByParentUid(uid);

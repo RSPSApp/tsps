@@ -1,10 +1,8 @@
 import { Skill } from "../../model/Skill";
 import { Player } from "../../entity/impl/player/Player";
-import { Graphic } from "../../model/Graphic";
 import { GameConstants } from "../../GameConstants";
 import { PlayerRights } from "../../model/rights/PlayerRights";
 import { Flag } from "../../model/Flag";
-import { World } from "../../World";
 import { PrayerData, PrayerHandler } from "../PrayerHandler";
 import { WeaponInterfaceManager } from "../combat/WeaponInterfaceManager";
 import { BonusManager } from "../../model/equipment/BonusManager";
@@ -12,8 +10,6 @@ import { GameObject } from "../../entity/impl/object/GameObject";
 import { EnteredAmountAction } from "../../model/EnteredAmountAction";
 import { Wilderness } from "../wilderness/Wilderness";
 import { PluginManager } from "../../../plugins/PluginManager";
-import { Sound } from "../../Sound";
-import { Sounds } from "../../Sounds";
 
 
 class SkillEntered implements EnteredAmountAction {
@@ -37,8 +33,6 @@ export class SkillManager {
         1096278, 1210421, 1336443, 1475581, 1629200, 1798808, 1986068, 2192818, 2421087, 2673114, 2951373, 3258594,
         3597792, 3972294, 4385776, 4842295, 5346332, 5902831, 6517253, 7195629, 7944614, 8771558, 9684577, 10692629,
         11805606, 13034431];
-    // Explicit 0 delay so the client renders the level-up fireworks immediately.
-    public static readonly LEVEL_UP_GRAPHIC: Graphic = new Graphic(199, 0);
     private static readonly BASE_COMBAT_SKILLS = [
         Skill.ATTACK,
         Skill.DEFENCE,
@@ -170,10 +164,9 @@ export class SkillManager {
         // Handle level up..
         if (newLevel > startingLevel) {
             let level = newLevel - startingLevel;
-            let skillName = skill.getName();
             this.skills.maxLevel[skill.getIndex()] += level;
-            this.stopSkillable(); // Stop skilling on level up like osrs
-            // Publish the new current level and native stats before feedback hooks run.
+            // Publish the new current level and native stats before feedback hooks run. The
+            // message, graphic, pop-up and whether skilling stops belong to the SkillLevelUp plugin.
             this.setCurrentLevels(skill, this.skills.maxLevel[skill.getIndex()]);
             PluginManager.emitPlayerLevelUp({
                 player: this.player,
@@ -181,14 +174,6 @@ export class SkillManager {
                 oldLevel: startingLevel,
                 newLevel: this.skills.maxLevel[skill.getIndex()],
             });
-            this.player.performGraphic(SkillManager.LEVEL_UP_GRAPHIC);
-            Sounds.sendSound(this.player, Sound.LEVEL_UP);
-            this.player.sendMessage("You've just advanced " + skillName + " level! You have reached level " + newLevel);
-            if (this.skills.maxLevel[skill.getIndex()] == SkillManager.getMaxAchievingLevel(skill)) {
-                this.player.sendMessage("Well done! You've achieved the highest possible level in this skill!");
-                World.sendMessage("<shad=15536940>News: " + this.player.getUsername()
-                    + " has just achieved the highest possible level in " + skillName + "!");
-            }
             this.player.getUpdateFlag().flag(Flag.APPEARANCE);
         }
         if (newLevel <= startingLevel) this.updateSkill(skill);

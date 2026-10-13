@@ -72,6 +72,15 @@ const CHATDEFAULT_STOPINPUT_SCRIPT = 4020;
 const CHATDEFAULT_RESTOREINPUT_SCRIPT = 2158;
 // The category shown: scripts 3837/3840 draw the category list and its settings from it.
 const SETTINGS_CATEGORY_VARBIT = 9656;
+// The setting last clicked (settings_selected_setting). Capture: a row click sets it to that
+// setting's id; choosing a dropdown option, closing the dropdown or changing category clears it.
+const SETTINGS_SELECTED_SETTING_VARBIT = 9657;
+const ALL_SETTINGS_DROPDOWN_CLOSE = (ALL_SETTINGS_INTERFACE_ID << 16) | 26;
+const SELECTED_SETTING_ATTRIBUTE = "settings:selected";
+// The values the player chose for the rows in data/settings.json, and the category shown
+// ({ "varbit:<id>": value, "varp:<id>": value }), restored on login as live does.
+const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
+const SETTINGS = require("./data/settings.json").settings;
 // Rows and dropdown options that may reach us (0..512). Search
 // results number rows across every category, so they run far past one category's length.
 const ALL_SETTINGS_LAST_SLOT = 511;
@@ -123,6 +132,11 @@ const SEARCH_CATEGORIES_ENUM = 422;
 const PARAM_CATEGORY_ID = 743;
 const PARAM_CATEGORY_SETTINGS = 745;
 const PARAM_SETTING_ID = 1077;
+// A setting struct's type (0 = toggle, 2 = dropdown) and its dropdown's option enum.
+const PARAM_SETTING_TYPE = 1078;
+const PARAM_SETTING_OPTIONS = 1091;
+const SETTING_TYPE_TOGGLE = 0;
+const SETTING_TYPE_DROPDOWN = 2;
 const SEARCH_VIEW = -1;
 
 // The keybind settings (ids 16..29, All Settings > Controls) and the varbit each drives
@@ -133,22 +147,37 @@ const KEYBIND_VARBIT_BY_SETTING = new Map([
 ]);
 
 let settingsCatalog = null;
+let pluginApi = null;
 
-/** { byCategory: Map<category id, setting ids in row order>, all: every setting id in turn }. */
+/**
+ * { byCategory: Map<category id, setting ids in row order>, all: every setting id in turn,
+ *   settings: Map<setting id, { category, type, optionCount }> }.
+ */
 function catalog() {
   if (settingsCatalog) return settingsCatalog;
   const byCategory = new Map();
   const all = [];
+  const settings = new Map();
   const categories = [...CacheDefinitions.getEnumValues(SEARCH_CATEGORIES_ENUM)].sort(([a], [b]) => a - b);
   for (const [, structId] of categories) {
     const category = CacheDefinitions.getStructParams(Number(structId));
-    const rows = [...CacheDefinitions.getEnumValues(Number(category.get(PARAM_CATEGORY_SETTINGS)))]
-      .sort(([a], [b]) => a - b)
-      .map(([, settingStruct]) => CacheDefinitions.getStructParams(Number(settingStruct)).get(PARAM_SETTING_ID));
-    byCategory.set(Number(category.get(PARAM_CATEGORY_ID)), rows);
+    const categoryId = Number(category.get(PARAM_CATEGORY_ID));
+    const rows = [];
+    for (const [, settingStruct] of [...CacheDefinitions.getEnumValues(Number(category.get(PARAM_CATEGORY_SETTINGS)))].sort(([a], [b]) => a - b)) {
+      const params = CacheDefinitions.getStructParams(Number(settingStruct));
+      const settingId = params.get(PARAM_SETTING_ID);
+      const options = params.get(PARAM_SETTING_OPTIONS);
+      rows.push(settingId);
+      settings.set(Number(settingId), {
+        category: categoryId,
+        type: Number(params.get(PARAM_SETTING_TYPE) ?? SETTING_TYPE_TOGGLE),
+        optionCount: options === undefined ? 0 : CacheDefinitions.getEnumValues(Number(options)).size,
+      });
+    }
+    byCategory.set(categoryId, rows);
     all.push(...rows);
   }
-  settingsCatalog = { byCategory, all };
+  settingsCatalog = { byCategory, all, settings };
   return settingsCatalog;
 }
 
@@ -165,10 +194,121 @@ function keybindVarbitForRow(player, slot) {
   return KEYBIND_VARBIT_BY_SETTING.get(settingForRow(player, slot)) ?? -1;
 }
 
+function selectSetting(player, settingId) {
+  player.setAttribute(SELECTED_SETTING_ATTRIBUTE, settingId);
+  player.getPacketSender().sendVarbit(SETTINGS_SELECTED_SETTING_VARBIT, settingId);
+}
+
+/**
+ * A category clicked. Capture: it ends a search (the same varbits and script as closing All
+ * Settings), then shows the category and clears the selected setting.
+ */
 function showCategory(player, category) {
+  const searching = player.getAttribute("settings-view") === SEARCH_VIEW;
+  const sender = player.getPacketSender();
+  if (searching) {
+    sender.sendVarbit(FLOATER_IS_SEARCHING_VARBIT, 0).sendVarbit(FLOATER_SEARCH_LISTEN_FOR_KEYBOARD_VARBIT, 0);
+  }
   player.setAttribute("settings-view", category);
-  player.setAttribute("settings-keybind-varbit", -1);
-  player.getPacketSender().sendVarbit(SETTINGS_CATEGORY_VARBIT, category);
+  setSettingVar(player, `varbit:${SETTINGS_CATEGORY_VARBIT}`, category);
+  selectSetting(player, 0);
+  if (searching) sender.sendClientScript(CHATDEFAULT_RESTOREINPUT_SCRIPT);
+}
+
+const varKey = (row) => (row.varp !== undefined ? `varp:${row.varp}` : `varbit:${row.varbit}`);
+
+function savedSettings(player) {
+  const saved = player.getAttribute(SETTINGS_VALUES_ATTRIBUTE);
+  return saved && typeof saved === "object" ? saved : {};
+}
+
+/** Sends a setting's var and remembers it for the next login. */
+function setSettingVar(player, key, value) {
+  const [kind, id] = key.split(":");
+  const sender = player.getPacketSender();
+  if (kind === "varp") sender.sendConfig(Number(id), value);
+  else sender.sendVarbit(Number(id), value);
+  player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, { ...savedSettings(player), [key]: value });
+}
+
+function getSettingVar(player, row) {
+  const sender = player.getPacketSender();
+  return row.varp !== undefined ? sender.getVarp(row.varp) : sender.getVarbit(row.varbit);
+}
+
+/** A toggle row clicked: flip its var (and run its script). False for anything else. */
+function toggleSetting(player, settingId) {
+  const row = SETTINGS[settingId];
+  if (!row || catalog().settings.get(settingId)?.type !== SETTING_TYPE_TOGGLE) return false;
+  setSettingVar(player, varKey(row), getSettingVar(player, row) ? 0 : 1);
+  if (row.script !== undefined) player.getPacketSender().sendClientScript(row.script);
+  return true;
+}
+
+/** A dropdown option chosen: set the option's vars, or the one var to the option's index. */
+function chooseSettingOption(player, settingId, option) {
+  const row = SETTINGS[settingId];
+  const setting = catalog().settings.get(settingId);
+  if (!row || setting?.type !== SETTING_TYPE_DROPDOWN || option < 0 || option >= setting.optionCount) return false;
+  if (!row.options) {
+    setSettingVar(player, varKey(row), option);
+    return true;
+  }
+  const entry = row.options[option];
+  if (!entry) return false;
+  for (const [id, value] of Object.entries(entry.varbits ?? {})) setSettingVar(player, `varbit:${id}`, value);
+  for (const [id, value] of Object.entries(entry.varps ?? {})) setSettingVar(player, `varp:${id}`, value);
+  return true;
+}
+
+/** Login: the client starts from zero, so send every setting the player changed. */
+function restoreSettings({ player }) {
+  for (const [key, value] of Object.entries(savedSettings(player))) {
+    if (Number.isInteger(value)) setSettingVar(player, key, value);
+  }
+}
+
+/**
+ * A row clicked. Capture: it becomes the selected setting and, in search results, its category
+ * is shown behind them; a toggle then flips. Other plugins own their settings first:
+ * "settings:setting-clicked" { player, settingId, handled }.
+ */
+function clickSetting({ player, slot }) {
+  const settingId = Number.isInteger(slot) ? settingForRow(player, slot) : -1;
+  if (settingId < 0) return false;
+  selectSetting(player, settingId);
+  if (player.getAttribute("settings-view") === SEARCH_VIEW) {
+    setSettingVar(player, `varbit:${SETTINGS_CATEGORY_VARBIT}`, catalog().settings.get(settingId).category);
+  }
+  const request = { player, settingId, handled: false };
+  pluginApi.emitCustomEvent("settings:setting-clicked", request);
+  return request.handled || toggleSetting(player, settingId);
+}
+
+/**
+ * A dropdown option chosen, for the selected setting. Option buttons sit three components
+ * apart in the dropdown panel. Capture: the vars change, then the selection clears.
+ */
+function clickDropdownOption({ player, slot }) {
+  const settingId = player.getAttribute(SELECTED_SETTING_ATTRIBUTE);
+  const option = Math.floor(slot / 3);
+  if (!Number.isInteger(settingId) || !Number.isInteger(option)) return false;
+  const keybindVarbit = KEYBIND_VARBIT_BY_SETTING.get(settingId);
+  const applied = keybindVarbit !== undefined
+    ? option >= KEY_NONE && option <= MAX_KEY_VALUE && applyKeybind(player, keybindVarbit, option)
+    : chooseSettingOption(player, settingId, option);
+  if (applied) selectSetting(player, 0);
+  return applied;
+}
+
+function closeDropdown({ player }) {
+  selectSetting(player, 0);
+  return true;
+}
+
+function clickCategory({ player, slot }) {
+  if (Number.isInteger(slot)) showCategory(player, slot);
+  return false;
 }
 
 const BUTTON_TO_SLOT = new Map(
@@ -275,14 +415,13 @@ function openAllSettings(player) {
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_SETTINGS_CLICKZONE, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_DROPDOWN_BUTTONS, 0, ALL_SETTINGS_LAST_SLOT, TRANSMIT_OP1);
-  // It opens on the first category.
-  showCategory(player, 0);
+  // It opens on the category shown last; live sends nothing for it.
+  player.setAttribute("settings-view", sender.getVarbit(SETTINGS_CATEGORY_VARBIT));
   return true;
 }
 
 function startSettingsSearch({ player }) {
   player.setAttribute("settings-view", SEARCH_VIEW);
-  player.setAttribute("settings-keybind-varbit", -1);
   player.getPacketSender()
     .sendVarbit(FLOATER_IS_SEARCHING_VARBIT, 1)
     .sendVarbit(FLOATER_SEARCH_LISTEN_FOR_KEYBOARD_VARBIT, 1)
@@ -355,38 +494,16 @@ module.exports = {
       return true;
     });
 
-    // Changing category, or searching, changes what a row's slot means and clears the
-    // tracked keybind, otherwise a later dropdown elsewhere edits it.
-    api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, ({ player, slot }) => {
-      if (Number.isInteger(slot)) showCategory(player, slot);
-      return false;
-    });
+    pluginApi = api;
+    api.persistAttribute(SETTINGS_VALUES_ATTRIBUTE);
+    api.onPlayerLogin(restoreSettings);
+    // Changing category, or searching, changes what a row's slot means.
+    api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, clickCategory);
     api.onInterfaceActionButton(ALL_SETTINGS_SEARCH_BAR, startSettingsSearch);
     api.onCustomEvent("interface:closed", endSettingsSearch);
-
-    // A keybind row remembers which varbit its dropdown will edit. The server is
-    // authoritative, so we only track.
-    api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, ({ player, slot }) => {
-      player.setAttribute("settings-keybind-varbit", Number.isInteger(slot) ? keybindVarbitForRow(player, slot) : -1);
-      // Other plugins own their settings: "settings:setting-clicked" { player, settingId, handled }.
-      const settingId = Number.isInteger(slot) ? settingForRow(player, slot) : -1;
-      if (settingId < 0) return false;
-      const request = { player, settingId, handled: false };
-      api.emitCustomEvent("settings:setting-clicked", request);
-      return request.handled;
-    });
-
-    // All Settings dropdown option selected: apply it to the tracked keybind.
-    // Option buttons sit three components apart in the dropdown panel.
-    api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, ({ player, slot }) => {
-      const varbit = player.getAttribute("settings-keybind-varbit");
-      if (!Number.isInteger(varbit) || varbit < 0) return false;
-      const option = Math.floor(slot / 3);
-      if (!Number.isInteger(option) || option < KEY_NONE || option > MAX_KEY_VALUE) {
-        return false;
-      }
-      return applyKeybind(player, varbit, option);
-    });
+    api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
+    api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);
+    api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_CLOSE, closeDropdown);
 
     // Settings > Display: "Game client layout" dropdown. Its rows are the
     // dropdown panel's dynamic children, one per option (the row at child 0 is

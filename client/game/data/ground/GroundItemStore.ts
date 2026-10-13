@@ -38,7 +38,22 @@ const DEFAULT_METADATA_RESOLVER: ResolveMetadata = (itemId: number) => ({
     tradeable: false,
 });
 
+export type GroundItemMutation = {
+    kind: "spawn" | "despawn" | "quantity";
+    stack: ClientGroundItemStack;
+    oldQuantity?: number;
+};
 export class GroundItemStore {
+    readonly mutationListeners = new Set<(event: GroundItemMutation) => void>();
+    private emitMutation(event: GroundItemMutation): void {
+        for (const listener of this.mutationListeners) listener(event);
+    }
+    private clearEntries(): void {
+        for (const stack of this.stacksById.values()) this.emitMutation({ kind: "despawn", stack });
+        this.stacksByTile.clear();
+        this.stacksById.clear();
+    }
+
     private stacksByTile = new Map<string, ClientGroundItemStack[]>();
     private stacksById = new Map<number, ClientGroundItemStack>();
     private listeners = new Set<() => void>();
@@ -107,18 +122,23 @@ export class GroundItemStore {
         if (list) list.push(entry);
         else this.stacksByTile.set(key, [entry]);
         this.stacksById.set(entry.id | 0, entry);
+        if (!existing) this.emitMutation({ kind: "spawn", stack: entry });
+        else if (existing.itemId !== entry.itemId || existing.tile.x !== entry.tile.x || existing.tile.y !== entry.tile.y || existing.tile.level !== entry.tile.level) {
+            this.emitMutation({ kind: "despawn", stack: existing });
+            this.emitMutation({ kind: "spawn", stack: entry });
+        } else if (existing.quantity !== entry.quantity) {
+            this.emitMutation({ kind: "quantity", stack: entry, oldQuantity: existing.quantity });
+        }
     }
 
     update(payload: GroundItemsServerPayload | undefined): void {
         if (!payload) {
-            this.stacksByTile.clear();
-            this.stacksById.clear();
+            this.clearEntries();
             this.notify();
             return;
         }
         if (payload.kind === "snapshot") {
-            this.stacksByTile.clear();
-            this.stacksById.clear();
+            this.clearEntries();
             for (const stack of payload.stacks) {
                 const entry = this.normalizeStack(stack);
                 if (!entry) continue;
@@ -134,6 +154,7 @@ export class GroundItemStore {
             if (!existing) continue;
             this.removeEntry(existing);
             this.stacksById.delete(stackId | 0);
+            this.emitMutation({ kind: "despawn", stack: existing });
         }
         const upserts = Array.isArray(payload.upserts) ? payload.upserts : [];
         for (const stack of upserts) {
@@ -163,8 +184,7 @@ export class GroundItemStore {
      * Clear all ground items - used on disconnect/logout.
      */
     clear(): void {
-        this.stacksByTile.clear();
-        this.stacksById.clear();
+        this.clearEntries();
         this.notify();
     }
 

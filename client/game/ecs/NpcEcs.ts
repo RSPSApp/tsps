@@ -1,3 +1,4 @@
+import type { ActorMutation } from "./ActorMutation";
 // Minimal specialized ECS for NPCs using a dense id space and typed arrays.
 // Focused on providing fast, GC-light storage for per-frame render data.
 import type { SeqTypeLoader } from "../../rs/config/seqtype/SeqTypeLoader";
@@ -28,6 +29,21 @@ function grow<T extends NumericTypedArray>(arr: T, newCapacity: number): T {
 }
 
 export class NpcEcs {
+    readonly mutationListeners = new Set<(event: ActorMutation) => void>();
+    private notifyMutation(event: ActorMutation): void {
+        for (const listener of this.mutationListeners) listener(event);
+    }
+    private readonly modelHeightOverrides=new Map<number,number>();
+    getModelHeightOverride(index:number):number|undefined { return this.modelHeightOverrides.get(index); }
+    setModelHeightOverride(index:number,height:number):void { this.modelHeightOverrides.set(index,height|0); }
+    private readonly movementOverrides=new Map<number, Partial<Record<string,number>>>();
+    getMovementOverrides(id:number):Partial<Record<string,number>>|undefined { return this.movementOverrides.get(id); }
+    setMovementOverride(id:number,key:string,sequence:number):void { let values=this.movementOverrides.get(id); if(!values){values={};this.movementOverrides.set(id,values);} values[key]=sequence|0; }
+    getOverheadTextRaw(index:number):string|undefined { return this.overheadText[index]; }
+    setOverheadTextRaw(index:number,text:string|undefined):void { const old=this.overheadText[index];this.overheadText[index]=text;if(old!==text)this.notifyMutation({kind:"overhead",index,text:text ?? ""}); }
+    setSequenceId(index:number,sequence:number):void { const old=this.seqId[index];this.seqId[index]=sequence|0;if(old!==sequence)this.notifyMutation({kind:"animation",index}); }
+    getOverheadCycle(id:number):number { return this.overheadCycle[id]; }
+    setOverheadCycle(id:number,cycles:number):void { this.overheadCycle[id]=Math.max(0,cycles|0); }
     private capacity: number;
     private freeList: number[] = [];
     private nextId: number = 1; // 0 = invalid
@@ -345,6 +361,7 @@ export class NpcEcs {
     ): number {
         const id = this.allocId();
         const mid = getMapSquareId(mapX, mapY);
+        this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);
         this.active[id] = 1;
         this.mapId[id] = mid;
         this.npcTypeId[id] = npcTypeId | 0;
@@ -399,6 +416,7 @@ export class NpcEcs {
 
     destroyNpc(id: number): void {
         if (!id || !this.active[id]) return;
+        this.notifyMutation({ kind: "despawn", index: id });
         const mid = this.mapId[id];
         const list = this.perMap.get(mid);
         if (list) {
@@ -406,6 +424,7 @@ export class NpcEcs {
             if (idx !== -1) list.splice(idx, 1);
             if (list.length === 0) this.perMap.delete(mid);
         }
+        this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);
         this.active[id] = 0;
         this.freeList.push(id);
         const sid = this.serverId[id] | 0;
@@ -511,6 +530,8 @@ export class NpcEcs {
                 kept.push(id);
                 continue;
             }
+            this.notifyMutation({ kind: "despawn", index: id });
+            this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);
             this.active[id] = 0;
             this.freeList.push(id);
             this.interactionIndex[id] = NO_INTERACTION;
@@ -609,7 +630,7 @@ export class NpcEcs {
             this.rotation[id] = (n.rotation | 0) as number;
             // npc type might be swapped at runtime; keep it in sync
             const typeId = n.npcType?.id;
-            if (typeof typeId === "number") this.npcTypeId[id] = typeId | 0;
+            if (typeof typeId === "number") this.setNpcTypeId(id, typeId);
             // animation state from legacy controller
             const frame: number = (n.movementFrame as number) | 0;
             if (frame >= 0) this.movementFrameIndex[id] = frame & 0xffff;
@@ -640,9 +661,17 @@ export class NpcEcs {
     getNpcTypeId(id: number): number {
         return this.npcTypeId[id] | 0;
     }
+    /** Re-points the render type (server transform, or a model customisation's synthetic id). */
+    setNpcTypeId(id: number, typeId: number): void {
+        const oldId = this.npcTypeId[id] | 0;
+        this.npcTypeId[id] = typeId | 0;
+        if (oldId !== (typeId | 0)) this.notifyMutation({ kind: "composition", index: id, oldId });
+    }
     setOverheadText(id: number, text: string, durationCycles: number = 100): void {
+        const old = this.overheadText[id];
         this.overheadText[id] = text;
         this.overheadCycle[id] = durationCycles | 0;
+        if (old !== text) this.notifyMutation({ kind: "overhead", index: id, text });
     }
     getOverheadText(id: number): { text: string; remaining: number } | undefined {
         const text = this.overheadText[id];
@@ -656,6 +685,7 @@ export class NpcEcs {
             this.overheadCycle[id]--;
             if ((this.overheadCycle[id] | 0) <= 0) {
                 this.overheadText[id] = undefined;
+                this.notifyMutation({ kind: "overhead", index: id, text: "" });
             }
         }
     }
@@ -1059,6 +1089,7 @@ export class NpcEcs {
             this.getSeqForcedPriority(nextSeq) >= this.getSeqForcedPriority(currentSeq)
         ) {
             this.seqId[id] = nextSeq;
+            this.notifyMutation({ kind: "animation", index: id });
             this.seqDelay[id] = nextDelay;
             this.seqPathLength[id] = Math.min(255, this.getPathLengthLike(id)) & 0xff;
             this.animTick[id] = 0;
@@ -1067,7 +1098,9 @@ export class NpcEcs {
         }
     }
     clearSeq(id: number): void {
+        const changed = this.seqId[id] !== -1;
         this.seqId[id] = -1;
+        if (changed) this.notifyMutation({ kind: "animation", index: id });
         this.seqDelay[id] = 0;
         this.seqPathLength[id] = 0;
         // Reset animTick and frameIndex so next animation starts from frame 0
@@ -1092,11 +1125,13 @@ export class NpcEcs {
         return this.targetRot[id] | 0;
     }
     setInteractionIndex(id: number, index: number | undefined): void {
+        const old = this.interactionIndex[id];
         this.interactionIndex[id] =
             typeof index === "number" && index >= 0 ? index | 0 : NO_INTERACTION;
+        if (old !== this.interactionIndex[id]) this.notifyMutation({ kind: "interacting", index: id });
     }
     clearInteraction(id: number): void {
-        this.interactionIndex[id] = NO_INTERACTION;
+        this.setInteractionIndex(id, undefined);
     }
     getInteractionIndex(id: number): number {
         return this.interactionIndex[id] | 0;
@@ -1210,6 +1245,7 @@ export class NpcEcs {
         if ((prev | 0) === (sid | 0)) return;
 
         if (prev > 0) {
+            this.notifyMutation({ kind: "despawn", index: id });
             this.serverIdLookup.delete(prev);
             this.onServerUnmapped?.(prev);
             this.hasServerState[id] = 0;
@@ -1218,6 +1254,7 @@ export class NpcEcs {
         if (sid > 0) {
             const existing = this.serverIdLookup.get(sid);
             if (existing !== undefined && (existing | 0) !== (id | 0)) {
+                this.notifyMutation({ kind: "despawn", index: existing });
                 // Transfer mapping ownership without treating this server id as "unmapped".
                 this.serverId[existing | 0] = 0;
                 this.hasServerState[existing | 0] = 0;
@@ -1225,6 +1262,7 @@ export class NpcEcs {
             this.serverIdLookup.set(sid, id | 0);
         }
         this.serverId[id] = sid;
+        if (sid > 0) this.notifyMutation({ kind: "spawn", index: id });
     }
 
     /**

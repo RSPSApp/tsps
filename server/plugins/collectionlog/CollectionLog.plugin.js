@@ -9,6 +9,7 @@
  *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, ensure?, silent? })
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count } with a kept count
+ *   api.emitCustomEvent("collection-log:open", { player, category? })  open it, at a category by name
  *
  *   ::clog <item name|id> [amount]   obtain through the real path
  *   ::clog count <category> <n>      set a category's count
@@ -98,6 +99,7 @@ module.exports = {
   name: "CollectionLog",
   register(api) {
     Progress.bind(api);
+    Interface.bind(api);
     for (const key of [Progress.ITEMS_ATTRIBUTE, Progress.COUNTS_ATTRIBUTE, Progress.RECENT_ATTRIBUTE, Interface.TAB_ATTRIBUTE, Interface.CATEGORY_ATTRIBUTE]) {
       api.persistAttribute(key);
     }
@@ -106,7 +108,7 @@ module.exports = {
     api.onCustomEvent("collection-log:obtain", onObtain);
     api.onCustomEvent("collection-log:count", onCount);
     api.onCustomEvent("shop:purchase", onPurchase);
-    api.onCustomEvent("collection-log:open", ({ player }) => Interface.open(player));
+    api.onCustomEvent("collection-log:open", ({ player, category }) => Interface.open(player, category));
     api.onInterfaceActionClick(Interface.click);
     api.registerCommand("clog", clogCommand, PlayerRights.ADMINISTRATOR, "Collection log: ::clog <item> [amount] | count <category> <n> | reset");
   },

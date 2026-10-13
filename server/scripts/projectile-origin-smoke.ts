@@ -39,7 +39,7 @@ console.info("projectile origin smoke passed");
 
 // --- God Wars Dungeon access rules and drop fixtures ---
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const gwdRules = require("../plugins/bosses/godwars/GodWarsRules");
+const gwdRules = require("../plugins/bosses/godwars/Rules.GodWars");
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const dropDefinitions = require("../data/definitions/npc-drops.json");
 
@@ -55,20 +55,10 @@ assert.equal(gwdRules.canClimbEntrance(20, false, false).ok, false);
 assert.equal(gwdRules.canClimbEntrance(20, true, false).tiesRope, true);
 assert.equal(gwdRules.canClimbEntrance(20, false, true).ok, true);
 
-// God item, then 40 essence; an ecumenical key skips the essence only.
-assert.equal(
-  gwdRules.canOpenBossDoor({ hasGodItem: false, killCount: 40, hasKey: false }).ok,
-  false
-);
-assert.equal(
-  gwdRules.canOpenBossDoor({ hasGodItem: true, killCount: 39, hasKey: false }).ok,
-  false
-);
-assert.equal(
-  gwdRules.canOpenBossDoor({ hasGodItem: true, killCount: 40, hasKey: false }).ok,
-  true
-);
-assert.deepEqual(gwdRules.canOpenBossDoor({ hasGodItem: true, killCount: 0, hasKey: true }), {
+// 40 essence, spent first; an ecumenical key only when the essence is short.
+assert.equal(gwdRules.canOpenBossDoor({ killCount: 39, hasKey: false }).ok, false);
+assert.deepEqual(gwdRules.canOpenBossDoor({ killCount: 40, hasKey: true }), { ok: true, spendsEssence: 40 });
+assert.deepEqual(gwdRules.canOpenBossDoor({ killCount: 0, hasKey: true }), {
   ok: true,
   consumesKey: true,
 });

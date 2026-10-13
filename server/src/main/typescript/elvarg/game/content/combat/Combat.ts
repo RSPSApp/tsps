@@ -210,7 +210,7 @@ export class Combat {
         if (permission !== CanAttackResponse.CAN_ATTACK) {
             this.trace(`bail=permission:${CanAttackResponse[permission]}`, target);
             this.handleAttackDenied(permission, target, generation);
-            if (!Combat.isTransientDenial(permission) ||
+            if (!this.isTransientDenial(permission) ||
                 this.target !== target || this.generation !== generation) {
                 return;
             }
@@ -685,9 +685,11 @@ export class Combat {
      * the attack resumes once it lands - cancelling here throws the click away, which
      * is what made attacking a new npc feel unresponsive after a kill.
      */
-    private static isTransientDenial(response: CanAttackResponse): boolean {
+    private isTransientDenial(response: CanAttackResponse): boolean {
         return response === CanAttackResponse.ALREADY_UNDER_ATTACK ||
-            response === CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED;
+            response === CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED ||
+            // An npc waits its turn; a player is turned away on the spot.
+            (response === CanAttackResponse.TARGET_IN_COMBAT && !this.character.isPlayer());
     }
 
     private cancelIfCurrent(target: Mobile, generation: number): void {
@@ -711,9 +713,15 @@ export class Combat {
                 // Once per interaction: this is re-checked twice a cycle while pursuing.
                 if (this.deniedNoticeGeneration !== generation) {
                     this.deniedNoticeGeneration = generation;
-                    player?.sendMessage("You are already under attack!");
+                    player?.sendMessage("I'm already under attack.");
                 }
                 return;
+            case CanAttackResponse.TARGET_IN_COMBAT:
+                if (!player) return;
+                player.sendMessage(target.isPlayer()
+                    ? `Someone else is already fighting ${target.getAsPlayer().getUsername()}.`
+                    : "Someone else is fighting that.");
+                break;
             case CanAttackResponse.LEVEL_DIFFERENCE_TOO_GREAT:
                 player?.sendMessage("Your level difference is too great.");
                 player?.sendMessage("You need to move deeper into the Wilderness.");

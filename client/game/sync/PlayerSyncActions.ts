@@ -1,6 +1,5 @@
 import {
     NO_INTERACTION,
-    encodeInteractionIndex,
     isValidInteractionIndex,
 } from "../../rs/interaction/InteractionIndex";
 import type { MovementUpdate } from "../movement/MovementSyncTypes";
@@ -156,19 +155,6 @@ export function frameToActions(frame: PlayerSyncFrame): PlayerSyncActions {
 function normalizeFaceEntity(face: number | undefined): number | undefined {
     if (typeof face !== "number" || !Number.isFinite(face)) return undefined;
     const raw = face | 0;
-    if (raw < 0) return NO_INTERACTION;
-
-    // Already in our interaction encoding (player offset 0x8000)?
-    if (isValidInteractionIndex(raw)) {
-        return raw;
-    }
-
-    // OSRS faceEntity uses bit 15 to distinguish NPC (bit set) vs player (bit clear).
-    if ((raw & 0x8000) !== 0) {
-        const npcId = raw & 0x7fff;
-        return encodeInteractionIndex("npc", npcId);
-    }
-
-    // Player targets come through as zero-based indices; encode with the player offset.
-    return encodeInteractionIndex("player", raw);
+    // The server sends our interaction encoding already (players offset by PLAYER_INDEX_OFFSET).
+    return raw < 0 || !isValidInteractionIndex(raw) ? NO_INTERACTION : raw;
 }

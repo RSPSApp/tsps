@@ -25,12 +25,15 @@ struct HdUniforms {
     u_hdLightPositions: array<vec4<f32>, 16>,
     u_hdLightColors: array<vec4<f32>, 16>,
     u_hdMist: vec4<f32>,         // mist level (tiles, y down), strength, wind x, wind z (HdMist.ts)
+    u_hdQuality: vec4<f32>,      // x = mipmapped anisotropic filtering
 };
 
 @group(1) @binding(6) var<uniform> hd: HdUniforms;
 @group(1) @binding(7) var u_hdMaterials: texture_2d<f32>;
 @group(1) @binding(8) var u_hdTextures: texture_2d_array<f32>;
 @group(1) @binding(9) var u_hdShadowMap: texture_depth_2d;
+@group(1) @binding(10) var u_hdDetailTextures: texture_2d_array<f32>;
+@group(1) @binding(11) var u_hdSampler: sampler;
 `;
 
 /**
@@ -72,6 +75,17 @@ export const HD_LIGHTING_WGSL = `
 // Unlit HD materials (lava, fire, the infernal cape) are emissive: they bypass lighting and
 // feed the HDR target above 1 so bloom catches them.
 const HD_EMISSIVE_GAIN: f32 = 2.2;
+
+fn hdSampleTexture(layer: f32, uv: vec2<f32>, dx: vec2<f32>, dy: vec2<f32>) -> vec4<f32> {
+    if (layer < 0.0) {
+        return textureSampleGrad(u_hdDetailTextures, u_hdSampler, uv, i32(-layer), dx, dy);
+    }
+    if (hd.u_hdQuality.x > 0.5) {
+        return textureSampleGrad(u_hdTextures, u_hdSampler, uv, i32(layer), dx, dy);
+    }
+    return textureSampleLevel(u_hdTextures, u_sampler, uv, i32(layer), 0.0);
+}
+
 
 fn hdFogAmount(position: vec2<f32>) -> f32 {
     let delta = abs(position - scene.u_playerPos);
@@ -128,7 +142,7 @@ fn hdMappedNormal(
         return normal;
     }
     // 117 HD maps encode signed tangent X/Y, with an unsigned normal Z.
-    var detail = textureSampleLevel(u_hdTextures, u_sampler, uv, i32(layer), 0.0).xyz;
+    var detail = hdSampleTexture(layer, uv, ux, uy).xyz;
     detail = vec3<f32>(detail.xy * 2.0 - 1.0, detail.z);
     return normalize(normalize(tangent) * detail.x + normalize(bitangent) * detail.y + normal * detail.z);
 }
@@ -141,12 +155,12 @@ fn hdShade(
     metadata: vec4<f32>,
     uv: vec2<f32>,
     frontFacing: bool,
+    dx: vec3<f32>, dy: vec3<f32>, ux: vec2<f32>, uy: vec2<f32>,
 ) -> vec3<f32> {
-    // Derivatives must be evaluated in uniform control flow, before any material branch.
-    let dx = dpdx(position);
-    let dy = dpdy(position);
-    let ux = dpdx(uv);
-    let uy = dpdy(uv);
+    // Bit 2 marks the source faces of lamps/torches, separate from their lit frames.
+    if ((i32(metadata.y) & 4) != 0) {
+        return pow(max(surfaceIn, vec3<f32>(0.0)), vec3<f32>(2.2)) * 6.0;
+    }
     // metadata.y is a bitfield (HdMaterials.ts): bit 0 unlit, bit 1 worldUv.
     if ((i32(metadata.y) & 1) != 0) {
         // Linear HDR, no lighting. The gain only lifts near-white emissive cores (lava, the
@@ -178,12 +192,20 @@ fn hdShade(
             normal = -normal;
         }
     }
-    let shadow = hdShadow(position, faceNormal);
-    if (metadata.x > 0.0 && metadata.z > 0.0) {
-        normal = hdMappedNormal(normal, uv, metadata.z, dx, dy, ux, uy);
+    let offset = abs(position.xz - scene.u_playerPos);
+    let detail = 1.0 - smoothstep(24.0, 48.0, max(offset.x, offset.y));
+    var shadow = 1.0;
+    if (detail > 0.0) {
+        shadow = mix(1.0, hdShadow(position, faceNormal), detail);
+        if (metadata.x != 0.0 && metadata.z > 0.0) {
+            normal = normalize(mix(normal, hdMappedNormal(normal, uv, metadata.z, dx, dy, ux, uy), detail));
+        }
     }
     let base = pow(max(surfaceIn, vec3<f32>(0.0)), vec3<f32>(2.2));
     let diffuse = max(dot(normal, hd.u_hdLightDirection.xyz), 0.0);
+    if (detail <= 0.0) {
+        return base * (hd.u_hdAmbient.xyz + hd.u_hdDirectional.xyz * diffuse);
+    }
     var pointLight = vec3<f32>(0.0);
     for (var i = 0; i < 16; i++) {
         if (i >= hd.u_hdLightCount) {
@@ -200,7 +222,7 @@ fn hdShade(
         let attenuation = max(1.0 - distance / radius, 0.0);
         pointLight += hd.u_hdLightColors[i].rgb * hd.u_hdLightColors[i].w * attenuation * attenuation * max(dot(normal, delta / distance), 0.0);
     }
-    pointLight *= 1.1;
+    pointLight *= 1.1 * detail;
     let baseLuma = dot(base, vec3<f32>(0.2126, 0.7152, 0.0722));
     let additiveFloor = mix(0.035, 0.085, smoothstep(0.10, 0.45, baseLuma));
     var color = base * (hd.u_hdAmbient.xyz + hd.u_hdDirectional.xyz * diffuse * shadow + pointLight) + pointLight * additiveFloor;
@@ -225,7 +247,7 @@ fn hdShade(
         // Schlick Fresnel with a dielectric F0.
         let f = vec3<f32>(0.04) + vec3<f32>(0.96) * pow(1.0 - max(dot(viewDir, half), 0.0), 5.0);
         let specular = d * gv * gl * f / max(4.0 * ndv * ndl, 1e-4);
-        color += hd.u_hdDirectional.xyz * specular * ndl * material.x * hd.u_hdSpecular * shadow;
+        color += hd.u_hdDirectional.xyz * specular * ndl * material.x * hd.u_hdSpecular * shadow * detail;
     }
     color += vec3<f32>(pow(1.0 - max(dot(normal, viewDir), 0.0), 2.0) * hd.u_hdGrading.w);
     // Linear HDR: saturation/contrast/exposure and the display encode moved to the HDR

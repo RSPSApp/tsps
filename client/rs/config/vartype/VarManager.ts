@@ -28,6 +28,8 @@ export class VarManager {
     varbitLoader: VarBitTypeLoader;
 
     values: Int32Array;
+    readonly serverValues = new Int32Array(8000);
+    varbitDefinitionRevision = 0;
     varcInts: Map<number, number> = new Map();
     varcStrings: Map<number, string> = new Map();
     /** 64-bit client variables (rev 241 push/pop_varc_long). */
@@ -45,6 +47,10 @@ export class VarManager {
      * These are used as fallbacks when the cache loader returns undefined.
      */
     customVarbits: Map<number, CustomVarbitDef> = new Map();
+
+    readonly varpChangeListeners = new Set<(id: number, oldValue: number, value: number) => void>();
+    readonly varcIntChangeListeners = new Set<(id: number, oldValue: number, value: number) => void>();
+    readonly varcStringChangeListeners = new Set<(id: number, oldValue: string, value: string) => void>();
 
     // Callback when a varp changes - used for onVarTransmit events
     onVarpChange?: (varpId: number, oldValue: number, newValue: number) => void;
@@ -96,6 +102,7 @@ export class VarManager {
      */
     registerVarbit(id: number, baseVar: number, startBit: number, endBit: number): void {
         this.customVarbits.set(id, { baseVar, startBit, endBit });
+        this.varbitDefinitionRevision++;
     }
 
     /**
@@ -134,6 +141,7 @@ export class VarManager {
 
     clear(): void {
         this.values.fill(0);
+        this.serverValues.fill(0);
         this.varcInts.clear();
         this.varcStrings.clear();
         this.varcLongs.clear();
@@ -218,6 +226,7 @@ export class VarManager {
      */
     resetForLogout(): void {
         this.values.fill(0);
+        this.serverValues.fill(0);
         // Long varps (rev 241: the GE offer price) and long varcs have no persistence either.
         this.varpLongs.clear();
         this.varcLongs.clear();
@@ -232,10 +241,35 @@ export class VarManager {
         return this.values[id];
     }
 
+    /** Packet writes keep the server mirror distinct from CS2's predicted client values. */
+    setServerVarp(id: number, value: number): boolean {
+        if (!Number.isInteger(id) || id < 0 || id >= this.serverValues.length) return false;
+        this.serverValues[id] = value | 0;
+        return this.setVarp(id, value);
+    }
+    setServerVarpLong(id: number, value: bigint): boolean {
+        if (!Number.isInteger(id) || id < 0 || id >= this.serverValues.length) return false;
+        this.serverValues[id] = Number(BigInt.asIntN(32, value));
+        return this.setVarpLong(id, value);
+    }
+    setServerVarbit(id: number, value: number): boolean {
+        const definition = this.getVarbitDef(id);
+        if (!definition) return false;
+        const { baseVar, startBit, endBit } = definition;
+        if (baseVar < 0 || baseVar >= this.serverValues.length) return false;
+        const valueMask = BIT_MASKS[endBit - startBit];
+        if (value < 0 || (valueMask !== -1 && value > valueMask)) value = 0;
+        const mask = valueMask << startBit;
+        this.serverValues[baseVar] = ((value << startBit) & mask) | (this.serverValues[baseVar] & ~mask);
+        return this.setVarbit(id, value);
+    }
+
     setVarp(id: number, value: number): boolean {
         if (id >= this.values.length) {
             return false;
         }
+        if (id < 0 || !Number.isInteger(id)) return false;
+        value |= 0;
         const oldValue = this.values[id];
         if (oldValue === value) {
             return false;
@@ -245,6 +279,7 @@ export class VarManager {
         if (this.onVarpChange) {
             this.onVarpChange(id, oldValue, value);
         }
+        for (const listener of this.varpChangeListeners) listener(id, oldValue, value);
         return true;
     }
 
@@ -295,6 +330,7 @@ export class VarManager {
         if (this.onVarpChange) {
             this.onVarpChange(baseVar, oldVarpValue, this.values[baseVar]);
         }
+        for (const listener of this.varpChangeListeners) listener(baseVar, oldVarpValue, this.values[baseVar]);
         return true;
     }
 
@@ -311,6 +347,7 @@ export class VarManager {
         if (this.onVarcIntChange) {
             this.onVarcIntChange(id, oldValue, value);
         }
+        for (const listener of this.varcIntChangeListeners) listener(id, oldValue, value);
     }
 
     /** A varc on the object stack: a string, or for an array varc (rev 231+) its array. */
@@ -336,6 +373,7 @@ export class VarManager {
         if (this.onVarcStringChange) {
             this.onVarcStringChange(id, oldValue, value);
         }
+        for (const listener of this.varcStringChangeListeners) listener(id, oldValue, value);
     }
 
     /**

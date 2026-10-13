@@ -13,5 +13,6 @@ module.exports = {
     require("./gauntlet/Prep.Gauntlet")(api);
     require("./gauntlet/Weapons.Gauntlet")(api);
     require("./gauntlet/Commands.Gauntlet")(api);
+    require("./gauntlet/CombatAchievements.Gauntlet")(api);
   },
 };

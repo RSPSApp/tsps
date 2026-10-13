@@ -1,0 +1,87 @@
+{
+  "$comment": "God Wars Dungeon data. Tiles are [x, y, plane]. Ids from the cache; message texts, animations, sounds and tile moves from rsprox captures (https://rsprox.net/database) unless marked otherwise; rules from the OSRS Wiki. See docs/god-wars-dungeon.md.",
+  "dungeon": { "minX": 2816, "maxX": 2943, "minY": 5248, "maxY": 5375, "planes": [0, 1, 2] },
+  "entrance": {
+    "hole": 26419,
+    "boulder": 26415,
+    "crack": 26382,
+    "rope": 26370,
+    "landing": [2882, 5311, 2],
+    "surface": [2916, 3745, 0],
+    "ropeVarbit": 3966,
+    "climbAnim": 828
+  },
+  "overlay": { "group": 406, "fader": 19, "faderScript": 343 },
+  "instanceVarbit": 11709,
+  "privateDoorVarbit": 11708,
+  "essence": { "required": 40, "max": 4000 },
+  "instanceCost": 150000,
+  "respawnTicks": 150,
+  "altarCooldownMs": 600000,
+  "altarPrayAnim": 645,
+  "factions": {
+    "bandos": {
+      "name": "Bandos",
+      "general": 2215,
+      "bodyguards": [2216, 2217, 2218],
+      "followers": [[2215, 2218], [2233, 2249]],
+      "itemKeywords": ["bandos", "ancient mace"],
+      "essenceVarbit": 3975,
+      "killsVarp": 1504,
+      "door": { "id": 26503, "tile": [2863, 5354, 2], "outside": [2862, 5354, 2], "inside": [2864, 5354, 2], "open": [26506, 10, 0], "openWall": [26507, 0, 1] },
+      "altar": 26366,
+      "room": { "minX": 2864, "maxX": 2877, "minY": 5351, "maxY": 5373, "z": 2 },
+      "instance": { "chunkX": 352, "chunkY": 663, "width": 13, "height": 9 }
+    },
+    "armadyl": {
+      "name": "Armadyl",
+      "general": 3162,
+      "bodyguards": [3163, 3164, 3165],
+      "followers": [[3162, 3183]],
+      "itemKeywords": ["armadyl"],
+      "essenceVarbit": 3973,
+      "killsVarp": 1503,
+      "door": { "id": 26502, "tile": [2839, 5295, 2], "outside": [2839, 5294, 2], "inside": [2839, 5296, 2], "open": [26506, 10, 3], "openWall": [26507, 0, 0] },
+      "altar": 26365,
+      "room": { "minX": 2821, "maxX": 2843, "minY": 5296, "maxY": 5309, "z": 2 },
+      "instance": { "chunkX": 348, "chunkY": 658, "width": 13, "height": 9 }
+    },
+    "saradomin": {
+      "name": "Saradomin",
+      "general": 2205,
+      "bodyguards": [2206, 2207, 2208],
+      "followers": [[2205, 2214]],
+      "itemKeywords": ["saradomin"],
+      "essenceVarbit": 3972,
+      "killsVarp": 1505,
+      "door": { "id": 26504, "tile": [2908, 5265, 0], "outside": [2909, 5265, 0], "inside": [2907, 5265, 0], "open": [26506, 10, 2], "openWall": [26507, 0, 3] },
+      "altar": 26364,
+      "room": { "minX": 2885, "maxX": 2907, "minY": 5256, "maxY": 5277, "z": 0 },
+      "instance": { "chunkX": 356, "chunkY": 655, "width": 13, "height": 9 }
+    },
+    "zamorak": {
+      "name": "Zamorak",
+      "general": 3129,
+      "bodyguards": [3130, 3131, 3132],
+      "followers": [[3129, 3141], [3159, 3161]],
+      "itemKeywords": ["zamorak", "unholy"],
+      "essenceVarbit": 3976,
+      "killsVarp": 1506,
+      "door": { "id": 26505, "tile": [2925, 5332, 2], "outside": [2925, 5333, 2], "inside": [2925, 5331, 2], "open": [26506, 10, 1], "openWall": [26507, 0, 2] },
+      "altar": 26363,
+      "room": { "minX": 2916, "maxX": 2941, "minY": 5317, "maxY": 5331, "z": 2 },
+      "instance": { "chunkX": 360, "chunkY": 661, "width": 13, "height": 9 }
+    }
+  },
+  "crossings": {
+    "bandosDoor": { "id": 26461, "tile": [2851, 5333, 2], "east": [2851, 5333, 2], "west": [2850, 5333, 2], "strength": 70, "anim": 7214, "sound": 71 },
+    "armadylPillar": { "id": 26380, "north": [2872, 5279, 2], "middle": [2872, 5274, 2], "south": [2872, 5269, 2], "ranged": 70, "grapple": 9419, "anim": 6067, "gfx": 1036, "gfxHeight": 82, "objAnim": 6072, "sounds": [[2928, 0], [3503, 6]], "landSound": 2455 },
+    "saradominRopes": [
+      { "id": 26561, "varbit": 3967, "down": [2914, 5300, 1] },
+      { "id": 26562, "varbit": 3968, "down": [2920, 5274, 0] }
+    ],
+    "ropeAgility": 70,
+    "ropeTieSound": 2548,
+    "zamorakBridge": { "id": 26518, "south": [2885, 5333, 2], "southWater": [2885, 5334, 2], "north": [2885, 5345, 2], "northWater": [2885, 5344, 2], "hitpoints": 70, "anim": 6993, "sound": 3862 }
+  }
+}

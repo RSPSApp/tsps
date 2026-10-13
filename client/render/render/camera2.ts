@@ -1,4 +1,5 @@
 import Denque from "denque";
+import { syncCameraViewportUnitScale } from "./quality";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
 import { Schema } from "leva/dist/declarations/src/types";
@@ -306,10 +307,11 @@ export function updateCameraFollow(host: WebGLOsrsRendererHost, deltaTime?: numb
         }
         // OSRS uses the effective viewport height after viewport-shape clamping,
         // not the raw canvas height, to derive follow-camera distance.
+        syncCameraViewportUnitScale(host);
         const sceneViewport = host.getSceneViewportWidgetRect();
         const viewportWidth = sceneViewport.width || camera.viewportWidth || host.app.width;
         const viewportHeight = sceneViewport.height || camera.viewportHeight || host.app.height;
-        const { viewportHeight: effectiveViewportHeight } = camera.computeViewportMetricsForSize(
+        const { unitViewportHeight: effectiveViewportHeight } = camera.computeViewportMetricsForSize(
             viewportWidth,
             viewportHeight,
         );
@@ -374,6 +376,7 @@ export function updateCameraFollow(host: WebGLOsrsRendererHost, deltaTime?: numb
 
         const focusHeightTiles = (host.osrsClient.camFollowHeight | 0) / 128.0;
         const targetY = playerHeightSample.height - focusHeightTiles;
+        camera.setFocalPoint(targetX, targetY, targetZ);
         // Camera Y is purely the orbit position around the focal point; terrain clipping is
         // handled by the pitch clamp pressure, never by raising the camera off its orbit.
         const desiredPosY = Math.round((targetY - forward[1] * dist) * 128) / 128;

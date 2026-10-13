@@ -24,6 +24,7 @@ export class PluginManager {
     private readonly pluginClasses = new Map<Plugin, PluginClass>();
     private readonly enabled = new Map<PluginClass, boolean>();
     private readonly failures = new Map<PluginClass, string>();
+    private readonly lifecycleVersions = new Map<PluginClass, number>();
     private readonly listeners = new Set<() => void>();
     private readonly injector: PluginInjector;
 
@@ -75,8 +76,11 @@ export class PluginManager {
         this.configManager.setConfiguration(ENABLED_GROUP, this.keyOf(pluginClass), String(enabled));
         const plugin = this.plugins.get(pluginClass);
         if (plugin) plugin.setEnabledState(enabled);
-        if (enabled) await this.startPlugin(pluginClass);
-        else await this.stopPlugin(pluginClass);
+        this.notify();
+        const operation = enabled ? this.startPlugin(pluginClass) : this.stopPlugin(pluginClass);
+        const version = this.lifecycleVersions.get(pluginClass);
+        await operation;
+        if (this.lifecycleVersions.get(pluginClass) !== version || this.enabled.get(pluginClass) !== enabled) return;
         this.eventBus.post(new PluginChanged(plugin as Plugin, enabled));
         this.notify();
     }
@@ -137,11 +141,15 @@ export class PluginManager {
     private async startPlugin(pluginClass: PluginClass): Promise<void> {
         const plugin = this.plugins.get(pluginClass);
         if (!plugin || plugin.isStarted()) return;
+        const version = (this.lifecycleVersions.get(pluginClass) ?? 0) + 1;
+        this.lifecycleVersions.set(pluginClass, version);
         try {
             await plugin.start();
+            if (this.lifecycleVersions.get(pluginClass) !== version || !plugin.isStarted() || !this.isEnabled(pluginClass)) return;
             this.eventBus.register(plugin);
             this.failures.delete(pluginClass);
         } catch (error) {
+            if (this.lifecycleVersions.get(pluginClass) !== version) return;
             this.failures.set(
                 pluginClass,
                 error instanceof Error ? error.message : String(error),
@@ -154,6 +162,7 @@ export class PluginManager {
     private async stopPlugin(pluginClass: PluginClass): Promise<void> {
         const plugin = this.plugins.get(pluginClass);
         if (!plugin || !plugin.isStarted()) return;
+        this.lifecycleVersions.set(pluginClass, (this.lifecycleVersions.get(pluginClass) ?? 0) + 1);
         this.eventBus.unregister(plugin);
         try {
             await plugin.stop();

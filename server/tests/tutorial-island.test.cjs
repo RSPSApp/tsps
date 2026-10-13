@@ -427,3 +427,37 @@ test("arriving in Lumbridge clears the worn items completely: the weapon interfa
   assert.equal(equipment.getValidItems().length, 0, "nothing worn");
   assert.equal(player.getWeapon(), WeaponInterfaces.UNARMED, "fights unarmed, not with the bow");
 });
+
+test("skipping the island as an Ironman opens the setup with every mode; declining does not", () => {
+  const Leave = require("../plugins/areas/tutorialisland/Leave.TutorialIsland");
+  const { STEP } = require("../plugins/areas/tutorialisland/Common.TutorialIsland");
+
+  const { player } = tutorialPlayer(STEP.GIELINOR_TALK, 3094, 3104);
+  Leave.finishSkip(player, true);
+  assert.equal(progress(player), STEP.COMPLETED, "the tutorial ends first");
+  ticks(2);
+  click(player, IRONMAN_SETUP_HARDCORE);
+  player.getEnteredAmountAction().execute(1);
+  assert.equal(player.getAttribute("ironman:mode"), "hardcore", "an upgrade is allowed, as on the island");
+
+  const { player: declined } = tutorialPlayer(STEP.GIELINOR_TALK, 3094, 3104);
+  Leave.finishSkip(declined, false);
+  ticks(2);
+  assert.equal(progress(declined), STEP.COMPLETED);
+  click(declined, IRONMAN_SETUP_HARDCORE);
+  assert.notEqual(declined.getAttribute("ironman:mode"), "hardcore", "no setup was opened");
+});
+
+test("the setup's None button leaves Ironman mode, after its own confirmation", () => {
+  const IRONMAN_SETUP_NONE = (890 << 16) | 21;
+  const { player, sent } = tutorialPlayer(1000, 3229, 3228);
+  player.setAttribute("ironman:mode", "hardcore");
+  PluginManager.emitCustomEvent("ironman:open-setup", { player, upgrades: false, handled: false });
+  click(player, IRONMAN_SETUP_NONE);
+  assert.ok(sent.scripts.some((args) => String(args[1]).includes("stop being<br>a <col=ffb83f>Hardcore Ironman")));
+  player.getEnteredAmountAction().execute(1);
+  assert.equal(player.getAttribute("ironman:mode"), null);
+  const query = { player };
+  PluginManager.emitCustomEvent("ironman:mode", query);
+  assert.equal(query.mode, "none");
+});

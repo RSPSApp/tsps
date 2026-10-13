@@ -345,7 +345,6 @@ export class LunarSpells {
         player.setPoisonDamage(0);
         player.setVenomed(false);
         player.getCombat().getPoisonImmunityTimer().start(12);
-        player.getPacketSender().sendPoisonType(0);
     }
 
     private static forNearbyPlayers(player: Player, effect: (target: Player) => void): void {

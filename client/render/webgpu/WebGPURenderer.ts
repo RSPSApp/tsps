@@ -13,6 +13,7 @@ import type {
 import { OsrsRendererType, WEBGPU } from "../../game/GameRenderers";
 import type { IProjectileManager } from "../../game/interfaces/IProjectileManager";
 import type { Ray } from "../../game/math/Raycast";
+import type { Frustum } from "../../game/Frustum";
 import type { OsrsClient } from "../../game/OsrsClient";
 import type { PlayerSpotAnimationEvent } from "../../game/sync/PlayerSyncTypes";
 import { flushPackets } from "../../network/packet";
@@ -25,7 +26,7 @@ import { SdMapLoaderInput } from "../loader/SdMapLoaderInput";
 import type { WorldEntityAnimator } from "../WorldEntityAnimator";
 import { pickSeaPoint, projectDeckToWorld, updateWorldEntityMotion } from "../render/worldEntityMotion";
 import { getServerTickPhaseNow } from "../../network/serverConnection/timing";
-import { WebGPUMapSquare } from "./WebGPUMapSquare";
+import { WebGPUMapSquare, type SceneryDrawContext } from "./WebGPUMapSquare";
 import { resolveFogRange } from "../RenderDistancePolicy";
 import { WorldResources } from "./WorldResources";
 import { WebGPUActors } from "./actors/WebGPUActors";
@@ -43,9 +44,15 @@ import {
     type WorldEntityOverlay,
 } from "./worldEntity";
 import { environmentAt } from "../render/environment";
+import { getCanvasResolutionScale, syncCameraViewportUnitScale } from "../render/quality";
 import { GPU_TEXTURE_USAGE, SCENE_DEPTH_FORMAT, SCENE_GROUP, WORLD_TEXTURES_GROUP } from "./bindings";
 import { getControlledPlayerEcsIndex, updateFollowCamera } from "./camera";
-import { computeWebGPURoofPlaneLimit, resolveWebGPURenderDistance } from "./frameConfig";
+import { resolveWebGPULodDistance, resolveWebGPURenderDistance } from "./frameConfig";
+import { FxaaPass } from "./fxaa";
+import { SceneMsaaTargets } from "./msaaTargets";
+import { WEBGPU_MSAA_SAMPLES } from "./multisample";
+import { EditorOverlays } from "./overlays/EditorOverlays";
+import { OverlayHost } from "./overlays/OverlayHost";
 import { WebGPUOverlays } from "./overlays/WebGPUOverlays";
 import { LocUpdates, type LocReloadGroup } from "./locUpdates";
 import { getClientCycle } from "../../network/ServerConnection";
@@ -76,9 +83,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     format!: GPUTextureFormat;
 
     private world?: WorldResources;
-    /** This frame's visible maps and roof limit, for drawSceneDepth during beforeScene. */
-    private frameVisibleMaps: readonly WebGPUMapSquare[] = [];
+    /** This frame's roof limit and culling inputs, reused by scene and shadow draws. */
     private frameRoofPlaneLimit = 3;
+    private frameScenery?: SceneryDrawContext;
     private depthTexture?: GPUTexture;
     private depthView?: GPUTextureView;
     private depthWidth: number = 0;
@@ -88,6 +95,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     private sceneColorView?: GPUTextureView;
     private sceneColorWidth: number = 0;
     private sceneColorHeight: number = 0;
+    /** The GPU plugin's anti-aliasing: multisampled world-pass targets, or FXAA on the base path. */
+    private msaaTargets?: SceneMsaaTargets;
+    private fxaa?: FxaaPass;
 
     private dataLoader = new SdMapDataLoader();
 
@@ -136,6 +146,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     followCamDistance: number = 12;
 
     /** Stage 3/4/5 systems, owned by client/render/webgpu/{actors,overlays,ui}/. */
+    readonly interactionHost: OverlayHost;
+    readonly editorOverlays: EditorOverlays;
     actors?: WebGPUActors;
     overlays?: WebGPUOverlays;
     ui?: WebGPUUi;
@@ -157,6 +169,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
     constructor(osrsClient: OsrsClient) {
         super(osrsClient);
+        this.interactionHost = new OverlayHost(this);
+        this.editorOverlays = new EditorOverlays(this);
         this.mapManager.onMapRemoved = (mapX, mapY) => {
             this.actors?.onMapRemoved(mapX, mapY);
             this.overlays?.onMapRemoved(mapX, mapY);
@@ -204,6 +218,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             device: this.device,
             format: this.format,
             alphaMode: "premultiplied",
+            usage: GPU_TEXTURE_USAGE.RENDER_ATTACHMENT | GPU_TEXTURE_USAGE.COPY_SRC,
         });
 
         this.ensureDepthTexture(this.canvas.width, this.canvas.height);
@@ -235,6 +250,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         } catch (error) {
             console.error("[webgpu] world resources init failed", error);
         }
+    }
+
+    override getCanvasResolutionScale(cssWidth: number, cssHeight: number): number {
+        return getCanvasResolutionScale(this, cssWidth, cssHeight);
     }
 
     override onResize(width: number, height: number): void {
@@ -576,7 +595,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         data[61] = fogDepth;
         data[62] = timeSec;
         data[63] = this.brightness;
-        data[64] = 255.0; // colorBanding (WebGL default; shader divides by 255)
+        // colorBanding: the GPU plugin's, else WebGL's default (the shader divides by it).
+        data[64] = this.osrsClient.gpuPlugin?.settings()?.colorBanding ?? 255.0;
         data[65] = this.osrsClient.isNewTextureAnim ? 1.0 : 0.0;
         this.world.flushSceneUniforms();
     }
@@ -590,8 +610,12 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
         const timeSec = time / 1000;
         const loggedIn = this.osrsClient.isLoggedIn();
+        const scenePreview = !loggedIn && this.osrsClient.scenePreviewEnabled && !!this.osrsClient.loadedCache;
+        const drawScene = loggedIn || scenePreview;
+        const sceneViewport = this.getSceneViewportWidgetRect();
 
-        if (loggedIn) {
+        if (drawScene) {
+            syncCameraViewportUnitScale(this);
             // 117 HD camera feel: the scene-viewport widget consumes wheel input before the
             // camera could see it, so capture the raw wheel while the pointer is over the 3D
             // viewport (the UI keeps its own scroll everywhere else). updateFollowCamera
@@ -616,8 +640,14 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             this.osrsClient.worldViewManager.interpolateEntities(cycle, this.clientTickPhase);
             updateWorldEntityMotion(this);
             ensureWorldEntityOverlaysLoaded(this, performance.now());
-            updateFollowCamera(this, timeSec, deltaTime);
-            this.osrsClient.camera.update(width, height, 0, 0, width, height);
+            if (scenePreview) {
+                this.playerPosUni[0] = this.osrsClient.camera.getPosX();
+                this.playerPosUni[1] = this.osrsClient.camera.getPosZ();
+            } else updateFollowCamera(this, timeSec, deltaTime);
+            this.osrsClient.camera.update(
+                width, height,
+                sceneViewport.x, sceneViewport.y, sceneViewport.width, sceneViewport.height,
+            );
             // The deck placement matrices are view-space, so they are rebuilt per camera frame.
             this.worldEntityAnimator?.compose(
                 this.osrsClient.camera.viewMatrix as Float32Array,
@@ -632,10 +662,12 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 this.osrsClient.camera.getPosZ(),
                 this.osrsClient.camera,
                 this.stats.frameCount,
-                this.osrsClient.mapRadius,
+                Math.max(this.osrsClient.mapRadius, Math.ceil((resolveWebGPURenderDistance(this) + 32) / 64)),
                 -1,
                 -1,
-                this.osrsClient.expandedMapLoading | 0,
+                Math.max(this.osrsClient.expandedMapLoading | 0,
+                    this.osrsClient.hdPlugin?.isEnabled() ? Math.ceil((resolveWebGPURenderDistance(this) - 25) / 8) : 0),
+                resolveWebGPURenderDistance(this),
             );
             this.updateSkyColor();
             for (const map of this.mapManager.visibleMaps) {
@@ -659,7 +691,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         // A scene extension (e.g. 117 HD) is a runtime toggle: pick the pipeline pair once per
         // frame, before any map draw.
         const extension = world.extension;
-        world.selectExtension(!!extension?.isActive());
+        const gpu = this.osrsClient.gpuPlugin?.settings();
+        const sampleCount = gpu && gpu.msaaSamples > 0 ? WEBGPU_MSAA_SAMPLES : 1;
+        world.selectExtension(!!extension?.isActive(), sampleCount);
 
         // Same point the WebGL frame loop flushes queued client packets (render.ts login
         // early-out and in-game path).
@@ -669,18 +703,30 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.ui?.update(time, deltaTime);
 
         const encoder = this.device.createCommandEncoder();
-        const visible = loggedIn ? this.mapManager.visibleMaps : [];
-        const roofPlaneLimit = loggedIn ? computeWebGPURoofPlaneLimit(this) : 3;
-        this.frameVisibleMaps = visible;
+        const visible = drawScene ? this.mapManager.visibleMaps : [];
+        const roofPlaneLimit = drawScene ? this.interactionHost.getRoofPlaneLimit() : 3;
         this.frameRoofPlaneLimit = roofPlaneLimit;
+        const camera = this.osrsClient.camera;
+        const bounds = this.mapManager.getGridTileBounds();
+        const tileX = bounds ? Math.max(bounds.minX, Math.min(bounds.maxX - 1, Math.floor(camera.getPosX())))
+            : Math.floor(camera.getPosX());
+        const tileZ = bounds ? Math.max(bounds.minY, Math.min(bounds.maxY - 1, Math.floor(camera.getPosZ())))
+            : Math.floor(camera.getPosZ());
+        this.frameScenery = {
+            tileX, tileZ,
+            distance: world.sceneData[60] + Math.max(Math.abs(tileX - this.playerPosUni[0]),
+                Math.abs(tileZ - this.playerPosUni[1])),
+            lodDistance: resolveWebGPULodDistance(this), camera: camera.frustum,
+        };
 
         // The extension's own passes (117 HD: uniforms, lights, shadow map) go in the same
         // encoder, before the scene pass that samples them.
-        if (world.extensionActive && loggedIn) {
+        if (world.extensionActive && drawScene) {
             extension!.beforeScene?.(this, encoder);
         }
 
-        const canvasView = this.context.getCurrentTexture().createView();
+        const canvasTexture = this.context.getCurrentTexture();
+        const canvasView = canvasTexture.createView();
         // An active extension that declares sceneColorFormat renders the world into the HDR
         // target and composites to the canvas in afterScene (HDR tonemapping, bloom, SSAO).
         const sceneExtension = world.extension;
@@ -691,13 +737,26 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             this.sceneColorView
                 ? this.sceneColorView
                 : undefined;
+        // Without the extension's target, FXAA has the world drawn into its own and presents it.
+        const fxaa = !hdrTarget && gpu?.fxaa ? (this.fxaa ??= new FxaaPass(this.device, this.format)) : undefined;
+        const sceneTarget = hdrTarget ?? fxaa?.ensure(width, height) ?? canvasView;
+        // MSAA draws into multisampled targets that resolve into sceneTarget as the pass ends.
+        let msaa: SceneMsaaTargets | undefined;
+        if (sampleCount > 1) {
+            msaa = this.msaaTargets ??= new SceneMsaaTargets(this.device);
+            msaa.ensure(width, height, hdrTarget ? sceneExtension!.sceneColorFormat! : this.format);
+        } else if (this.msaaTargets) {
+            this.msaaTargets.destroy();
+            this.msaaTargets = undefined;
+        }
         // The HDR target holds linear light, so the display-referred sky clear is linearised;
         // the tonemap pass re-encodes it.
         const toLinear = (value: number) => Math.pow(Math.max(value, 0), 2.2);
         const pass = encoder.beginRenderPass({
             colorAttachments: [
                 {
-                    view: hdrTarget ?? canvasView,
+                    view: msaa?.colorView ?? sceneTarget,
+                    resolveTarget: msaa ? sceneTarget : undefined,
                     clearValue: hdrTarget
                         ? {
                               r: toLinear(this.skyColor[0]),
@@ -712,34 +771,47 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                               a: 1,
                           },
                     loadOp: "clear",
-                    storeOp: "store",
+                    storeOp: msaa ? "discard" : "store",
                 },
             ],
             depthStencilAttachment: {
-                view: this.depthView,
+                view: msaa?.depthView ?? this.depthView,
                 depthClearValue: 1.0,
                 depthLoadOp: "clear",
-                depthStoreOp: "store",
+                // Multisampled depth is only read again to resolve it for the extension.
+                depthStoreOp: msaa && !hdrTarget ? "discard" : "store",
             },
         });
 
-        if (loggedIn) {
+        if (drawScene) {
+            const clipX = Math.max(0, Math.min(width, Math.floor(sceneViewport.x)));
+            const clipY = Math.max(0, Math.min(height, Math.floor(sceneViewport.y)));
+            pass.setScissorRect(
+                clipX, clipY,
+                Math.max(0, Math.min(width, Math.ceil(sceneViewport.x + sceneViewport.width)) - clipX),
+                Math.max(0, Math.min(height, Math.ceil(sceneViewport.y + sceneViewport.height)) - clipY),
+            );
             for (let i = 0; i < visible.length; i++) {
                 if (visible[i].canRender(this.stats.frameCount)) {
-                    visible[i].drawOpaque(pass, roofPlaneLimit);
+                    visible[i].drawOpaque(pass, roofPlaneLimit, this.frameScenery);
                 }
             }
             this.actors?.drawOpaque(pass);
             for (let i = visible.length - 1; i >= 0; i--) {
                 if (visible[i].canRender(this.stats.frameCount)) {
-                    visible[i].drawAlpha(pass, roofPlaneLimit);
+                    visible[i].drawAlpha(pass, roofPlaneLimit, this.frameScenery);
                 }
             }
             this.actors?.drawAlpha(pass);
             this.overlays?.drawWorld(pass);
+            this.editorOverlays.draw(pass, this.frameScenery);
         }
 
         pass.end();
+
+        // The extension's post passes read and depth-test against the single-sampled depth.
+        if (msaa && hdrTarget) msaa.resolveDepth(encoder, this.depthView);
+        fxaa?.encode(encoder, canvasView);
 
         if (hdrTarget) {
             sceneExtension!.afterScene!(this, encoder, {
@@ -756,32 +828,45 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const screenPass = encoder.beginRenderPass({
             colorAttachments: [{ view: canvasView, loadOp: "load", storeOp: "store" }],
         });
-        if (loggedIn) {
+        if (drawScene) {
             this.overlays?.drawScreen(screenPass);
         }
         this.ui?.draw(screenPass);
         screenPass.end();
 
+        this.editorOverlays.encodeCapture(encoder, canvasTexture);
         this.device.queue.submit([encoder.finish()]);
     }
 
     /**
-     * Draws this frame's world and actors with the scene extension's depth pipelines into
-     * `pass` (a depth-only pass the extension began), in the WebGL drawActors order: world
-     * opaque, world alpha, actors. A no-op without a depth shader.
+     * Draws full-detail loaded scenery into the extension's cached world-shadow target.
      */
-    drawSceneDepth(pass: GPURenderPassEncoder): void {
+    drawWorldDepth(pass: GPURenderPassEncoder, shadow: Frustum): void {
+        const world = this.world;
+        if (!world?.depthTextureBindGroup || !this.frameScenery) return;
+        pass.setBindGroup(SCENE_GROUP, world.sceneBindGroup);
+        pass.setBindGroup(WORLD_TEXTURES_GROUP, world.depthTextureBindGroup);
+        const visibility = { ...this.frameScenery, shadow };
+        const cycle = getClientCycle() | 0;
+        // Loaded off-screen geometry can still cast into the light's view.
+        for (const map of this.mapManager.mapSquares.values()) {
+            if (map.canRender(this.stats.frameCount)) {
+                map.updateAnimatedLocs(this.osrsClient.seqFrameLoader, cycle);
+                map.drawDepth(pass, this.frameRoofPlaneLimit, visibility);
+            }
+        }
+    }
+
+    drawActorDepth(pass: GPURenderPassEncoder): void {
         const world = this.world;
         if (!world?.depthTextureBindGroup) return;
         pass.setBindGroup(SCENE_GROUP, world.sceneBindGroup);
         pass.setBindGroup(WORLD_TEXTURES_GROUP, world.depthTextureBindGroup);
-        const visible = this.frameVisibleMaps;
-        for (let i = 0; i < visible.length; i++) {
-            if (visible[i].canRender(this.stats.frameCount)) {
-                visible[i].drawDepth(pass, this.frameRoofPlaneLimit);
-            }
-        }
         this.actors?.drawDepth(pass);
+    }
+
+    getRoofPlaneLimit(): number {
+        return this.frameRoofPlaneLimit;
     }
 
     hasPendingMapStreamingWork(): boolean {
@@ -837,6 +922,15 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.actors?.registerSpotAnimation(event);
     }
 
+    override getCollisionFlagAt(plane: number, tileX: number, tileY: number): number {
+        const view = this.osrsClient.worldViewManager.findWorldViewAt(tileX, tileY);
+        const map = view && !view.isTopLevel()
+            ? this.osrsClient.worldViewManager.getOverlayMapSquare(view.id, this.mapManager)
+            : this.mapManager.getMapForWorldTile(tileX, tileY);
+        if (!map) return 0x100;
+        return map.getCollisionFlag(plane, tileX - map.getRenderBaseTileX(), tileY - map.getRenderBaseTileY());
+    }
+
     override registerNpcSpotAnimation(event: NpcSpotAnimationEvent): void {
         this.actors?.registerNpcSpotAnimation(event);
     }
@@ -863,6 +957,11 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
     override refreshGamemodeWorldLocs(): void {
         this.locUpdates.refreshGamemodeWorldLocs();
+    }
+
+    protected override reloadMultiLocSquare(mapX: number, mapY: number): void {
+        if (this.instanceActive) this.scheduleInstanceLocRebuild();
+        else this.locUpdates.scheduleReload(mapX, mapY, "full");
     }
 
     override onRegionReplacement(payload: RegionReplacementEvent): void {
@@ -938,6 +1037,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.locUpdates.dispose();
         this.actors?.dispose();
         this.overlays?.dispose();
+        this.interactionHost.dispose();
+        this.editorOverlays.dispose();
         this.ui?.dispose();
         this.actors = undefined;
         this.overlays = undefined;
@@ -951,5 +1052,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.sceneColorTexture?.destroy();
         this.sceneColorTexture = undefined;
         this.sceneColorView = undefined;
+        this.msaaTargets?.destroy();
+        this.msaaTargets = undefined;
+        this.fxaa?.dispose();
+        this.fxaa = undefined;
     }
 }

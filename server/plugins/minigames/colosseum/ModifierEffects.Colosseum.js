@@ -135,7 +135,6 @@ function cureVenom(player) {
   if (!player.isVenomed?.()) return;
   player.setPoisonDamage(0);
   player.setVenomed(false);
-  player.getPacketSender().sendPoisonType(0);
 }
 
 /** A wave completed: Doom's stacks and Mantimayhem's venom go. */

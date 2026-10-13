@@ -33,7 +33,7 @@ export function drawSpriteWithOverlay(host: LoginRendererHost, ctx: RenderContex
 
 export function drawLogoToCtx(host: LoginRendererHost, ctx: RenderContext): void {
 
-        withContentTransform(host, ctx, () => {
+        withContentTransform(host, ctx, (ctx) => {
             const logoY = 18;
             if (host.logoImageLoaded && host.logoImage) {
                 const logoX = host.LOGIN_BOX_CENTER - Math.floor(host.logoImage.width / 2);

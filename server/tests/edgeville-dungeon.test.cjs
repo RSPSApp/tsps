@@ -462,8 +462,8 @@ test("the area's diary tasks: the obstacle pipe, a task from Vannaka, an Earth w
   const player = createPlayer();
   const tasks = () => events.filter((event) => event.name === "diary:task").map((event) => `${event.diary}:${event.task}`);
   for (const handler of customHandlers.get("agility:obstacle")) handler({ player, objectId: 16511, location: { x: 3150, y: 9906, z: 0 } });
-  for (const handler of customHandlers.get("slayer:task-assigned")) handler({ player, master: 403, task: "hill-giants" });
-  for (const handler of customHandlers.get("slayer:task-assigned")) handler({ player, master: 401, task: "hill-giants" });
+  for (const handler of customHandlers.get("slayer:task-assigned")) handler({ player, master: 3, task: "hill giants" });
+  for (const handler of customHandlers.get("slayer:task-assigned")) handler({ player, master: 1, task: "hill giants" });
   const warrior = (x, y) => deathHandlers[0]({ killer: player, npc: createNpc({ id: 2840, x, y }) });
   warrior(3120, 9990);
   warrior(3220, 3420);

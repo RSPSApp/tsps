@@ -12,6 +12,34 @@ export class ItemDefinition {
     /** The cache's item param for a weapon's attack speed in ticks (the "attack rate"). */
     public static readonly ATTACK_SPEED_PARAM = 14;
 
+    /**
+     * The cache's equipment stat params, in getBonuses() order: stab/slash/crush/magic/ranged
+     * attack (0-4), the same defences (5-9) and melee strength (10). Ranged strength is param 12
+     * (ammunition) or 189 (other gear), magic damage param 299 in tenths of a percent, prayer 11.
+     */
+    private static readonly STAT_PARAMS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    private static readonly RANGED_STRENGTH_PARAMS = [12, 189];
+    private static readonly MAGIC_DAMAGE_PARAM = 299;
+    private static readonly PRAYER_PARAM = 11;
+
+    /** An item's equipment stats from its cache params, or null when it has none of them. */
+    public static bonusesFromParams(params: Map<number, unknown> | null | undefined): number[] | null {
+        if (!params) return null;
+        const value = (param: number) => {
+            const raw = params.get(param);
+            return typeof raw === "number" ? raw : 0;
+        };
+        const all = [...ItemDefinition.STAT_PARAMS, ...ItemDefinition.RANGED_STRENGTH_PARAMS,
+            ItemDefinition.MAGIC_DAMAGE_PARAM, ItemDefinition.PRAYER_PARAM];
+        if (!all.some((param) => params.has(param))) return null;
+        return [
+            ...ItemDefinition.STAT_PARAMS.map(value),
+            ItemDefinition.RANGED_STRENGTH_PARAMS.reduce((sum, param) => sum + value(param), 0),
+            value(ItemDefinition.MAGIC_DAMAGE_PARAM) / 10,
+            value(ItemDefinition.PRAYER_PARAM),
+        ];
+    }
+
     public static definitions: Map<number, ItemDefinition> = new Map<number, ItemDefinition>();
     public static DEFAULT = new ItemDefinition();
 
@@ -81,6 +109,8 @@ export class ItemDefinition {
     private requirements: number[];
     private combatRequirement: number;
     private cacheHydrated: boolean = false;
+    /** Whether the bonuses are the cache's own; item-gameplay.json then doesn't replace them. */
+    private cacheBonuses: boolean = false;
 
     public static forId(item: number) {
         if (!Number.isInteger(item) || item < 0 || item >= CacheDefinitions.getCounts().items) {
@@ -111,6 +141,11 @@ export class ItemDefinition {
         this.placeholderId = cached.placeholderTemplate === -1 ? cached.placeholder : -1;
         this.value = cached.price;
         this.weight = cached.weight;
+        const bonuses = ItemDefinition.bonusesFromParams(cached.params);
+        if (bonuses) {
+            this.bonuses = bonuses;
+            this.cacheBonuses = true;
+        }
         const attackSpeed = cached.params?.get(ItemDefinition.ATTACK_SPEED_PARAM);
         this.attackSpeed = typeof attackSpeed === "number" && attackSpeed > 0 ? attackSpeed : -1;
         if (this.equipmentType.getSlot() === -1 && EQUIPMENT_SLOTS.has(cached.wearPos)) {
@@ -227,6 +262,11 @@ export class ItemDefinition {
 
     public getBonuses(): number[] {
         return this.bonuses;
+    }
+
+    /** Whether getBonuses() comes from the cache's stat params (the current game's stats). */
+    public hasCacheBonuses(): boolean {
+        return this.cacheBonuses;
     }
 
     public getRequirements(): number[] {

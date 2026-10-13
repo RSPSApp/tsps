@@ -206,6 +206,8 @@ function subOp(player, item, entry, action) {
     rub(player, item);
   } else if (action === "check") {
     player.sendMessage(checkMessage(entry.piece, entry.charges));
+    // The slayer ring's Check also shows the task (Slayer.plugin.js).
+    if (entry.piece.key === "slayer") pluginApi.emitCustomEvent("slayer:check", { player, handled: false });
   } else {
     player.sendMessage("Nothing interesting happens.");
   }

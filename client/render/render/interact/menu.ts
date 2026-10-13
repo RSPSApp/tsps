@@ -214,6 +214,7 @@ export function performWorldEntryAction(host: WebGLOsrsRendererHost,
             {
                 option: e.option,
                 targetType: e.targetType,
+                npcServerId: e.npcServerId,
                 targetId: typeof e.targetId === "number" ? e.targetId | 0 : undefined,
                 mapX: typeof e.mapX === "number" ? e.mapX | 0 : undefined,
                 mapY: typeof e.mapY === "number" ? e.mapY | 0 : undefined,

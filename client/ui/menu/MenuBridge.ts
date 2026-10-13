@@ -5,6 +5,7 @@ import type { MenuClickContext, SimpleMenuEntry } from "./MenuEngine";
 import { normalizeMenuEntries } from "./MenuEngine";
 import { MenuState } from "./MenuState";
 import { applyMenuTransform } from "./menuTransforms";
+import { preparePluginMenu } from "./menuEvents";
 import { transformWidgetMenuEntries } from "../../widgets/menu/utils";
 
 type WidgetMenuEntryInput = {
@@ -229,6 +230,7 @@ export function worldEntriesToSimple(
             actionIndex:
                 typeof e.actionIndex === "number" && e.actionIndex >= 0 ? e.actionIndex : undefined,
             opcode: typeof e.opcode === "number" ? e.opcode : undefined,
+            deprioritized: e.deprioritized,
             playerServerId:
                 typeof e.playerServerId === "number"
                     ? e.playerServerId
@@ -244,10 +246,12 @@ export function worldEntriesToSimple(
         };
     });
     // Client plugins (e.g. the menu entry swapper) reorder the sorted menu before it is used.
-    const list = applyMenuTransform(normalizeMenuEntries(intermediate), {
+    const context = {
         surface: "world",
         menu: true,
-    });
+    } as const;
+    const prepared = preparePluginMenu([...intermediate].reverse(), context);
+    const list = applyMenuTransform(normalizeMenuEntries([...prepared].reverse()), context, true);
     if (register && opts.menuState) {
         const state = opts.menuState;
         for (const entry of list) {
@@ -269,7 +273,10 @@ export function worldEntriesToSimple(
                 action: entry.action,
                 targetType: entry.targetType,
                 targetId: entry.targetId,
-                arg0: npcArg0 ?? playerArg0,
+                arg0: entry.identifier ?? npcArg0 ?? playerArg0,
+                arg1: entry.param0,
+                arg2: entry.param1,
+                itemId: entry.itemId,
                 mapX: entry.mapX,
                 mapY: entry.mapY,
                 playerServerId: entry.playerServerId,
@@ -413,6 +420,10 @@ export function widgetEntriesToSimple(
             action: inferMenuAction(e.option),
             targetType: target ? MenuTargetType.ITEM : MenuTargetType.NONE,
             opcode: e.opcode,
+            identifier: e.opIndex ?? (e.opcode === 25 ? 0 : 1),
+            param0: e.widgetAction?.slot ?? chosenWidget?.childIndex ?? -1,
+            param1: chosenWidget?.uid ?? -1,
+            itemId: resolveWidgetItemId(e) ?? -1,
             forceLeftClick: e.forceLeftClick,
             onClick: buildOnClick(e, e.option, target),
         };

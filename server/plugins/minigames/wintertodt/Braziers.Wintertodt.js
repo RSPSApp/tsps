@@ -17,6 +17,7 @@
 const Shared = require("./WintertodtShared");
 const Round = require("./WintertodtRound");
 const Corners = require("./WintertodtCorners");
+const CombatAchievements = require("./CombatAchievements.Wintertodt");
 
 const LIGHT_TICKS = 2;
 const FIX_TICKS = 2;
@@ -154,6 +155,7 @@ function finishFixing(player, index) {
   if (c.brazier === Shared.BRAZIER.BROKEN) {
     Corners.setBrazier(index, Shared.BRAZIER.UNLIT);
     Round.broadcast();
+    CombatAchievements.fixedBrokenBrazier(player);
   }
   player.sendMessage("You fix the brazier.");
   Round.addPoints(player, POINTS.FIX);

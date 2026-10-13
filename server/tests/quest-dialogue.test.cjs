@@ -25,7 +25,7 @@ const index = JSON.parse(
   fs.readFileSync(path.join(serverRoot, 'data/definitions/npc-dialogue-index.json'), 'utf8')
 );
 
-const STAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 25, 30, 35, 40, 50, 60, 70, 80, 100];
+const STAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 25, 30, 35, 40, 50, 55, 60, 65, 70, 72, 73, 75, 77, 78, 80, 100];
 
 function pageVariants(page) {
   const record = data[page];

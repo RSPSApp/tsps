@@ -20,7 +20,7 @@ function drawProgressBarRect(ctx: RenderContext, barX: number, barY: number, fil
 }
 
 export function drawLoadingBarToCtx(host: LoginRendererHost, ctx: RenderContext, state: LoginState): void {
-    withContentTransform(host, ctx, () => {
+    withContentTransform(host, ctx, (ctx) => {
         const centerX = host.LOGIN_BOX_CENTER;
         const barY = 245;
         const barX = centerX - LOADING_BAR.WIDTH / 2;
@@ -43,7 +43,7 @@ export function drawLoadingBarToCtx(host: LoginRendererHost, ctx: RenderContext,
 }
 
 export function drawDownloadBarToCtx(host: LoginRendererHost, ctx: RenderContext, state: LoginState): void {
-    withContentTransform(host, ctx, () => {
+    withContentTransform(host, ctx, (ctx) => {
         const centerX = host.LOGIN_BOX_CENTER;
         const barY = 245;
         const barX = centerX - LOADING_BAR.WIDTH / 2;

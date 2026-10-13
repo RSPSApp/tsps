@@ -173,7 +173,10 @@
     overflow: hidden;
 }
 
-/* Leva is a debug panel; hide it entirely while the map editor is open. */
-.map-editor-active .leva-left {
+/* Give the map editor the full viewport while its tools are active. */
+.map-editor-launching .leva-left,
+.map-editor-launching .rl-sidebar,
+.map-editor-active .leva-left,
+.map-editor-active .rl-sidebar {
     display: none !important;
 }

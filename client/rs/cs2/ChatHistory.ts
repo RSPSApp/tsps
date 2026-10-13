@@ -20,6 +20,7 @@ export interface ChatMessage {
     prefix: string;
     text: string;
     timestamp: number;
+    runeLiteFormatMessage?: string | null;
     /** Cycle counter (used by OSRS for message ordering) */
     cycle: number;
     /** True if sender is on friend list */
@@ -48,7 +49,13 @@ const MESSAGE_TYPE_MAP: Record<string, number> = {
     broadcast: 0,
 };
 
-class ChatHistoryStore {
+export class ChatHistoryStore {
+    readonly beforeInsertListeners = new Set<(message: ChatMessage) => void>();
+    private messagesByHash = new Map<bigint, ChatMessage>();
+    private hashes = new WeakMap<ChatMessage, bigint>();
+    private links = new WeakMap<ChatMessage, { previous: ChatMessage | null; next: ChatMessage | null }>();
+    private firstMessage: ChatMessage | null = null;
+    private lastMessage: ChatMessage | null = null;
     // Store messages by type
     private messagesByType = new Map<number, ChatMessage[]>();
     // Global UID counter for messages
@@ -67,6 +74,7 @@ class ChatHistoryStore {
         prefix = "",
         isFromFriend = false,
         isFromIgnored = false,
+        postEvent = true,
     ): number {
         // Convert string type to number
         const type =
@@ -87,18 +95,21 @@ class ChatHistoryStore {
             isFromIgnored,
         };
 
-        let list = this.messagesByType.get(type);
+        if (postEvent) for (const listener of this.beforeInsertListeners) listener(msg);
+        let list = this.messagesByType.get(msg.type);
         if (!list) {
             list = [];
-            this.messagesByType.set(type, list);
+            this.messagesByType.set(msg.type, list);
         }
 
         // Add at the end (newest)
         list.push(msg);
+        this.putMessageHash(msg, BigInt(uid));
 
         // Trim old messages
         while (list.length > MAX_MESSAGES_PER_TYPE) {
-            list.shift();
+            const removed = list.shift()!;
+            this.removeMessageHash(removed);
         }
 
         // PERF: Invalidate sorted messages cache when messages change
@@ -144,7 +155,7 @@ class ChatHistoryStore {
 
         // Convert line index: line 0 = last element, line 1 = second-to-last, etc.
         const arrayIndex = list.length - 1 - line;
-        return list[arrayIndex].text;
+        return list[arrayIndex].runeLiteFormatMessage ?? list[arrayIndex].text;
     }
 
     /**
@@ -176,7 +187,7 @@ class ChatHistoryStore {
             cycle: msg.cycle,
             sender: msg.from,
             prefix: msg.prefix,
-            text: msg.text,
+            text: msg.runeLiteFormatMessage ?? msg.text,
             friendStatus: msg.isFromFriend ? 1 : msg.isFromIgnored ? 2 : 0,
         };
     }
@@ -203,18 +214,48 @@ class ChatHistoryStore {
         // Convert line index: line 0 = last element (newest), line N = oldest
         const arrayIndex = list.length - 1 - line;
         const msg = list[arrayIndex];
-        return [msg.uid, 0, msg.from, msg.prefix, msg.text, 0, "", msg.timestamp];
+        return [msg.uid, 0, msg.from, msg.prefix, msg.runeLiteFormatMessage ?? msg.text, 0, "", msg.timestamp];
     }
 
     /**
      * Get message by UID
      */
     getByUid(uid: number): ChatMessage | undefined {
-        for (const list of this.messagesByType.values()) {
-            const msg = list.find((m) => m.uid === uid);
-            if (msg) return msg;
+        return this.messagesByHash.get(BigInt(uid));
+    }
+    getMessageByHash(hash: bigint): ChatMessage | undefined { return this.messagesByHash.get(hash); }
+    getMessageHash(message: ChatMessage): bigint { return this.hashes.get(message) ?? BigInt(message.uid); }
+    getMessageNext(message: ChatMessage): ChatMessage | null { return this.links.get(message)?.next ?? null; }
+    getMessagePrevious(message: ChatMessage): ChatMessage | null { return this.links.get(message)?.previous ?? null; }
+    getAllMessageNodes(): ChatMessage[] { const messages: ChatMessage[] = []; for (let message = this.firstMessage; message; message = this.getMessageNext(message)) messages.push(message); return messages; }
+    getMessageTypes(): number[] { return [...this.messagesByType.keys()]; }
+    getMessagesOfType(type: number): ChatMessage[] { return (this.messagesByType.get(type) ?? []).slice().reverse(); }
+    putMessageHash(message: ChatMessage, hash: bigint): void {
+        this.removeMessageHash(message);
+        this.messagesByHash.set(hash, message); this.hashes.set(message, hash);
+        this.links.set(message, { previous: this.lastMessage, next: null });
+        if (this.lastMessage) this.links.get(this.lastMessage)!.next = message;
+        else this.firstMessage = message;
+        this.lastMessage = message;
+    }
+    private removeMessageHash(message: ChatMessage): void {
+        const hash = this.getMessageHash(message);
+        const link = this.links.get(message);
+        if (!link) return;
+        if (this.messagesByHash.get(hash) === message) {
+            let previous = link.previous;
+            while (previous && this.getMessageHash(previous) !== hash) previous = this.getMessagePrevious(previous);
+            if (previous) this.messagesByHash.set(hash, previous); else this.messagesByHash.delete(hash);
         }
-        return undefined;
+        if (link.previous) this.links.get(link.previous)!.next = link.next; else this.firstMessage = link.next;
+        if (link.next) this.links.get(link.next)!.previous = link.previous; else this.lastMessage = link.previous;
+        this.links.delete(message);
+    }
+    removeMessage(message: ChatMessage): void {
+        const list = this.messagesByType.get(message.type), index = list?.indexOf(message) ?? -1;
+        if (list && index >= 0) list.splice(index, 1);
+        this.removeMessageHash(message);
+        this.sortedMessagesCache.valid = false;
     }
 
     /**
@@ -281,6 +322,9 @@ class ChatHistoryStore {
      */
     clear(): void {
         this.messagesByType.clear();
+        this.messagesByHash.clear();
+        this.links = new WeakMap();
+        this.firstMessage = this.lastMessage = null;
         // PERF: Clear and invalidate the sorted messages cache
         this.sortedMessagesCache.messages = [];
         this.sortedMessagesCache.valid = false;

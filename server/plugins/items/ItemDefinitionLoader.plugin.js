@@ -30,22 +30,14 @@ const getEquipmentType = () =>
 const getWeaponInterfaces = () =>
   requireGameModule(path.join("game", "content", "combat", "WeaponInterfaces"))
     .WeaponInterfaces;
-const getItemIdentifiers = () =>
-  requireGameModule(path.join("util", "ItemIdentifiers")).ItemIdentifiers;
 const { CacheDefinitions } = requireGameModule("game/cache/CacheDefinitions");
 const { encodeContentData } = requireGameModule("net/protocol/ClientProtocol");
 
-const AVERNIC_TREADS_BONUSES = [
-  5, 5, 5, 11, 15,
-  21, 25, 25, 10, 10,
-  4, 2, 1, 0,
-];
 const BARROWS_BASE_ITEMS = [
   4708, 4710, 4712, 4714, 4716, 4718, 4720, 4722,
   4724, 4726, 4728, 4730, 4732, 4734, 4736, 4738,
   4745, 4747, 4749, 4751, 4753, 4755, 4757, 4759,
 ];
-const AHRIMS_ARMOUR = new Set([4708, 4712, 4714]);
 
 function hydrateEquipmentType(raw) {
   const EquipmentType = getEquipmentType();
@@ -155,7 +147,11 @@ function loadItemDefinitions() {
       "standTurnAnim", "turn180Anim", "turn90CWAnim", "turn90CCWAnim", "attackAnim", "equipSound", "bonuses",
       "requirements", "deathComponents", "combatRequirement",
     ]) {
-      if (rawDef[property] !== undefined) def[property] = rawDef[property];
+      if (rawDef[property] === undefined) continue;
+      // The cache's stat params are the current game's; the export's bonuses only fill items
+      // the cache has none for.
+      if (property === "bonuses" && def.hasCacheBonuses()) continue;
+      def[property] = rawDef[property];
     }
     if (rawDef.weaponInterface != null && def.weaponInterface == null) {
       unresolvedWeaponInterfaces++;
@@ -164,14 +160,10 @@ function loadItemDefinitions() {
     loaded += 1;
   }
 
-  const ItemIdentifiers = getItemIdentifiers();
-  ItemDefinition.forId(ItemIdentifiers.AVERNIC_TREADS).bonuses = AVERNIC_TREADS_BONUSES;
+  // Degraded Barrows pieces wear as their base piece. The cache gives them its stats, and the
+  // broken ("0") pieces none, which item-gameplay.json would otherwise fill.
   for (const baseId of BARROWS_BASE_ITEMS) {
     const base = ItemDefinition.forId(baseId);
-    if (AHRIMS_ARMOUR.has(baseId)) {
-      base.bonuses = [...base.bonuses];
-      base.bonuses[12] = 1;
-    }
     const index = BARROWS_BASE_ITEMS.indexOf(baseId);
     for (let stage = 0; stage < 5; stage++) {
       const variant = ItemDefinition.forId(4856 + index * 6 + stage);
@@ -179,7 +171,7 @@ function loadItemDefinitions() {
       variant.weaponInterface = base.weaponInterface;
       variant.doubleHanded = base.doubleHanded;
       variant.requirements = [...base.requirements];
-      variant.bonuses = stage === 4 ? new Array(14).fill(0) : [...base.bonuses];
+      if (stage === 4) variant.bonuses = new Array(14).fill(0);
     }
   }
 

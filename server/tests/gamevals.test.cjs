@@ -61,3 +61,31 @@ test("sailing reads its DB tables at the columns the cache names", () => {
   assert.equal(parts.PART_COLUMNS.sails.loc[0], column(179, "loc"));
   assert.equal(parts.PART_COLUMNS.sails.stats, column(179, "facility_stats"));
 });
+
+test("a failed gameval read is retried, not remembered as an empty table list (#559)", () => {
+  const store = CachePipeline.getStore();
+  let fail = true;
+  const flaky = new Gamevals({
+    read: (index, archive) => {
+      if (fail) throw new Error("Invalid ptr");
+      return store.read(index, archive);
+    },
+  });
+  assert.throws(() => flaky.allTables(), /Invalid ptr/);
+  assert.throws(() => flaky.allInterfaces(), /Invalid ptr/);
+  fail = false;
+  assert.equal(flaky.allTables().get(166).name, "sailing_boat");
+  assert.equal(flaky.componentId("chatbox:chatmodal"), (162 << 16) | 568);
+});
+
+test("a cache whose index list stops short of the gamevals is re-downloaded (#559)", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cache-"));
+  for (const file of ["main_file_cache.dat2", "info.json", "keys.json"]) fs.writeFileSync(path.join(dir, file), "");
+  fs.writeFileSync(path.join(dir, "main_file_cache.idx255"), Buffer.alloc(36));
+  assert.equal(CachePipeline.isValid(dir), false);
+  fs.writeFileSync(path.join(dir, "main_file_cache.idx255"), Buffer.alloc(150));
+  assert.equal(CachePipeline.isValid(dir), true);
+  fs.rmSync(dir, { recursive: true });
+});

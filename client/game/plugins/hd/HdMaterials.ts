@@ -5,7 +5,7 @@ export const HD_TEXTURE_SIZE = 256;
 export const HD_DETAIL_TEXTURE_SIZE = 512;
 export const HD_LOOKUP_WIDTH = 1024 + HD_GROUND_MATERIALS.length + 1;
 export const HD_TEXTURE_FILES = [...new Set([...HD_MATERIALS, ...HD_GROUND_MATERIALS].flatMap(m => [m.file, m.normal]).filter((file): file is string => !!file))];
-// WebGL loads detail textures into their own 512px array; WebGPU keeps them all at 256px.
+// Detail textures use their own small 512px array in both backends.
 const files = HD_TEXTURE_FILES.filter(file => !HD_DETAIL_TEXTURES.includes(file));
 
 export class HdMaterials {

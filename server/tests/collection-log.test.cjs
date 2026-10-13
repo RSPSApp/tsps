@@ -21,11 +21,15 @@ const named = (tab, name) => Data.tabs()[tab].categories.find((category) => cate
 const customEvents = new Map();
 const sounds = [];
 Sounds.sendSound = (_player, sound) => sounds.push(sound.getId?.() ?? sound.id);
-Clog.register(new Proxy({
+const fakeApi = new Proxy({
   getTaskManager: () => ({ submit: (task) => { task.setRunning(true); tasks.push(task); } }),
   onCustomEvent: (name, handler) => customEvents.set(name, [...(customEvents.get(name) ?? []), handler]),
   emitCustomEvent: (name, request) => (customEvents.get(name) ?? []).forEach((handler) => handler(request)),
-}, { get: (target, key) => target[key] ?? (() => {}) }));
+  core: { Task: require("../dist/game/task/Task").Task },
+}, { get: (target, key) => target[key] ?? (() => {}) });
+Clog.register(fakeApi);
+// The popup goes through the shared notifications queue.
+require("../plugins/interface/Notifications.plugin").register(fakeApi);
 const emit = (name, request) => (customEvents.get(name) ?? []).forEach((handler) => handler(request));
 
 before(async () => {

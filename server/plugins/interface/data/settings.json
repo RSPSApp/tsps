@@ -1,0 +1,40 @@
+{
+  "//": "All Settings rows the server applies, by setting id (cache struct param 1077). A toggle flips its varbit or varp between 0 and 1. A dropdown option sets 'varbit' to the option's index, or sets every var in that option's entry of 'options'. 'script' runs after the change. From an rsprox capture of live OSRS; see docs/settings.md.",
+  "settings": {
+    "5": { "name": "Hitsplat tinting", "varbit": 10236 },
+    "10": { "name": "Show boss health overlay", "varbit": 12389 },
+    "13": { "name": "Scroll wheel can change zoom distance", "varbit": 6357 },
+    "34": { "name": "Show chat effects", "varp": 171 },
+    "35": { "name": "Split friends private chat", "varp": 287, "script": 83 },
+    "37": { "name": "Enable profanity filter", "varp": 1074 },
+    "54": { "name": "Modern Layout - Side panel can be closed by the hotkeys", "varbit": 4611 },
+    "81": { "name": "Last Man Standing fog colour", "varbit": 11865 },
+    "82": { "name": "Enable precise timing", "varbit": 11866 },
+    "160": { "name": "Combat Achievement Tasks - Repeat completion", "varbit": 12456 },
+    "279": { "name": "Max hit hitsplats", "varbit": 14196 },
+    "299": { "name": "Show enemy name on health overlay", "varbit": 14706 },
+    "300": { "name": "Compact boss health overlay", "varbit": 14707 },
+    "301": { "name": "Health overlay display type", "varbit": 14708 },
+    "312": { "name": "Player Trade options", "varbit": 6580 },
+    "315": {
+      "name": "Level-up pop-up notifications",
+      "options": [
+        { "varbits": { "20157": 1, "4371": 0 } },
+        { "varbits": { "20157": 0, "4371": 0 } },
+        { "varbits": { "20157": 0, "4371": 1 } }
+      ]
+    },
+    "372": { "name": "Player Report options", "varbit": 1334 },
+    "374": { "name": "Beginner clue scroll warning", "varbit": 10693 },
+    "375": { "name": "Easy clue scroll warning", "varbit": 10694 },
+    "376": { "name": "Medium clue scroll warning", "varbit": 10695 },
+    "377": { "name": "Hard clue scroll warning", "varbit": 10723 },
+    "378": { "name": "Elite clue scroll warning", "varbit": 10724 },
+    "431": { "name": "Update clan 'last seen' records", "varbit": 16118 },
+    "433": { "name": "'Did you know?' tips", "varbit": 16235 },
+    "451": { "name": "STASH units take equipped items", "varbit": 17938 },
+    "454": { "name": "Sailing side panel", "varbit": 18131 },
+    "493": { "name": "Level-up chatbox list", "varbit": 20158 },
+    "494": { "name": "Level-up guide list", "varbit": 20159 }
+  }
+}

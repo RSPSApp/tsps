@@ -62,7 +62,7 @@
     "SWORD_BLOCK": {"name":"Block","animation":412,"childId":3,"attackType":"STAB","style":"DEFENSIVE","sound":"WEAPON_SWORD_STAB"},
     "SCIMITAR_CHOP": {"name":"Chop","animation":390,"childId":0,"attackType":"SLASH","style":"ACCURATE","sound":"WEAPON_SCIMITAR"},
     "SCIMITAR_SLASH": {"name":"Slash","animation":390,"childId":1,"attackType":"SLASH","style":"AGGRESSIVE","sound":"WEAPON_SCIMITAR"},
-    "SCIMITAR_LUNGE": {"name":"Lunge","animation":390,"childId":2,"attackType":"STAB","style":"CONTROLLED","sound":"WEAPON_SCIMITAR"},
+    "SCIMITAR_LUNGE": {"name":"Lunge","animation":386,"childId":2,"attackType":"STAB","style":"CONTROLLED","sound":"WEAPON_SCIMITAR"},
     "SCIMITAR_BLOCK": {"name":"Block","animation":390,"childId":3,"attackType":"SLASH","style":"DEFENSIVE","sound":"WEAPON_SCIMITAR"},
     "LONGSWORD_CHOP": {"name":"Chop","animation":390,"childId":0,"attackType":"SLASH","style":"ACCURATE","sound":"WEAPON_SWORD_SLASH"},
     "LONGSWORD_SLASH": {"name":"Slash","animation":390,"childId":1,"attackType":"SLASH","style":"AGGRESSIVE","sound":"WEAPON_SWORD_SLASH"},

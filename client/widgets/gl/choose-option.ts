@@ -7,6 +7,7 @@ import type { MenuClickContext } from "../../ui/menu/MenuEngine";
 import { MenuState } from "../../ui/menu/MenuState";
 import { drawTextGL as UI_drawTextGL } from "../../widgets/components/TextRenderer";
 import { GLRenderer } from "./renderer";
+import { openPluginMenu } from "../../ui/menu/menuEvents";
 
 type FontLoader = (id: number) => BitmapFont | undefined;
 
@@ -480,6 +481,7 @@ export function drawChooseOptionMenu(
               follow?: boolean;
               menuState?: MenuState;
               onEntryInvoke?: (entry: MenuEntryLike) => void;
+              pluginOpened?: boolean;
           }
         | undefined;
     // Cleanup any previously registered menu click targets when the menu is closed.
@@ -510,6 +512,10 @@ export function drawChooseOptionMenu(
         unregisterMenuTargets(prevCount, prevSubCount);
         ui.__menuRt = undefined;
         return;
+    }
+    if (!menu.follow && !menu.pluginOpened) {
+        menu.entries = openPluginMenu(menu.entries);
+        menu.pluginOpened = true;
     }
 
     const globalClient: any =

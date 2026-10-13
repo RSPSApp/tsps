@@ -146,7 +146,9 @@ module.exports = {
           return true;
         }
         case ROW_COMBAT_TASKS:
-          return false;
+          // Combat Achievements own their screens (plugins/combatachievements/).
+          pluginApi?.emitCustomEvent("combat-achievements:open", { player });
+          return true;
         default:
           return false;
       }

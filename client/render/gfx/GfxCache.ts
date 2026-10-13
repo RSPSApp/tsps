@@ -136,6 +136,7 @@ export class GfxCache {
     }
 
     /** Build and cache geometry arrays for (spot, frame, pass). */
+    getModel(spotId:number,frame:number,cycle=0):Model|undefined { const base=this.ensureBase(spotId);return base ? this.applyFrame(base,spotId,frame,cycle):undefined; }
     ensureFrameGeometry(
         spotId: number,
         frameIdx: number,

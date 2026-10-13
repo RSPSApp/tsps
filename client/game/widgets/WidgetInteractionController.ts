@@ -27,6 +27,8 @@ export type WidgetInteractionControllerDeps = {
  * Widget drag, click-state, and UI click-probe helpers extracted from OsrsClient.
  */
 export class WidgetInteractionController {
+    static readonly dragListeners = new Set<() => void>();
+
     dragSourceWidget: any = null;
     clickedWidget: any = null;
     clickedWidgetParent: any = null;
@@ -75,6 +77,12 @@ export class WidgetInteractionController {
     getUiRenderScale(): [number, number] {
         const canvas = this.deps.getInputManager()?.element as HTMLCanvasElement | undefined;
         const widgetManager = this.deps.getWidgetManager();
+        // The renderer records the scale it drew the gameframe at on its root. Canvas over
+        // layout size is not that in fixed mode, which is centred and can stretch unevenly.
+        const root = widgetManager?.getAllGroupRoots?.(widgetManager.rootInterface)?.[0] as any;
+        const rootScaleX = Number(root?.__widgetRenderScaleX);
+        const rootScaleY = Number(root?.__widgetRenderScaleY);
+        if (rootScaleX > 0 && rootScaleY > 0) return [rootScaleX, rootScaleY];
         const layoutW = widgetManager?.canvasWidth || 0;
         const layoutH = widgetManager?.canvasHeight || 0;
         const bufW = canvas?.width || 0;

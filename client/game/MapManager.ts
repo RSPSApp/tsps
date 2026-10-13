@@ -30,7 +30,13 @@ export interface MapSquare {
     delete(): void;
 }
 
+type MapListener<T> = { changed(map: T, replaced?: T): void }["changed"];
+
 export class MapManager<T extends MapSquare> {
+    readonly preMapLoadListeners = new Set<MapListener<T>>();
+    readonly mapAddedListeners = new Set<MapListener<T>>();
+    readonly mapRemovedListeners = new Set<MapListener<T>>();
+
     static readonly MAX_MAP_X = 100;
     static readonly MAX_MAP_Y = 200;
     // OSRS top-level scene window is 104x104 tiles, rebased by server packets.
@@ -194,6 +200,7 @@ export class MapManager<T extends MapSquare> {
         this.activeExpandedMapLoading = 0;
         this.gridTransitionPending = false;
         for (const map of this.mapSquares.values()) {
+            for (const listener of this.mapRemovedListeners) listener(map);
             map.delete();
             try {
                 this.onMapRemoved?.(map.mapX | 0, map.mapY | 0);
@@ -316,7 +323,9 @@ export class MapManager<T extends MapSquare> {
         this.mapLoadRetryAfter.delete(mapId);
         this.invalidMapIds.delete(mapId);
         const prev = this.mapSquares.get(mapId);
+        for (const listener of this.preMapLoadListeners) listener(mapSquare, prev);
         this.mapSquares.set(mapId, mapSquare);
+        for (const listener of this.mapAddedListeners) listener(mapSquare, prev);
         this._lastUsed.set(mapId, this._useCounter++);
         if (prev && prev !== mapSquare) {
             try {
@@ -344,6 +353,7 @@ export class MapManager<T extends MapSquare> {
         const mapId = getMapSquareId(mapX, mapY);
         const map = this.mapSquares.get(mapId);
         if (map) {
+            for (const listener of this.mapRemovedListeners) listener(map);
             map.delete();
             this.mapSquares.delete(mapId);
             this._lastUsed.delete(mapId);
@@ -417,6 +427,7 @@ export class MapManager<T extends MapSquare> {
             const map = this.mapSquares.get(mapId);
             if (!map) continue;
             try {
+                for (const listener of this.mapRemovedListeners) listener(map);
                 map.delete();
             } catch (error) {
                 console.log("[MapManager] Failed to delete pruned map", {

@@ -194,7 +194,14 @@ export class LoginState {
     // ========== Credentials ==========
 
     /** Player account name input */
-    username: string = "";
+    private usernameValue = "";
+    readonly usernameChangedListeners = new Set<() => void>();
+    get username(): string { return this.usernameValue; }
+    set username(value: string) {
+        if (this.usernameValue === value) return;
+        this.usernameValue = value;
+        for (const listener of this.usernameChangedListeners) listener();
+    }
 
     /** Password input */
     password: string = "";

@@ -121,7 +121,18 @@ export class NpcDefinition {
     }
     
     public isAttackable(): boolean {
-        return this.attackable;
+        return this.attackable || (this.actions ?? []).some((action) => NpcDefinition.isCombatOption(action));
+    }
+
+    /** Menu options that start a fight, as "Attack" does: ones plugins add, such as the Nightmare's totems' "Charge". */
+    private static combatOptions = new Set<string>(["attack"]);
+
+    public static addCombatOption(option: string): void {
+        if (option) NpcDefinition.combatOptions.add(option.toLowerCase());
+    }
+
+    public static isCombatOption(option: string | null | undefined): boolean {
+        return option != null && NpcDefinition.combatOptions.has(option.toLowerCase());
     }
 
     public getActions(): string[] {

@@ -1,4 +1,5 @@
 import { getClientCycle } from "../../../network/ServerConnection";
+import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import { mat4, vec3, vec4 } from "gl-matrix";
 import { Scene } from "../../../rs/scene/Scene";
 import type { HitsplatEventPayload } from "../../../game/GameRenderer";
@@ -123,7 +124,9 @@ import type {
 import type { WebGPUMapSquare } from "../WebGPUMapSquare";
 import type { WebGPURenderer } from "../WebGPURenderer";
 import type { WebGLMapSquare } from "../../WebGLMapSquare";
-import { computeWebGPURoofPlaneLimit } from "../frameConfig";
+import { shouldRenderServerNpc } from "../actors/actorPacking";
+import { isMapWithinRenderDistance, getMapZoneDistanceFromPoint } from "../../render/draw2";
+import { computeWebGPURoofPlaneLimit, resolveWebGPURenderDistance } from "../frameConfig";
 
 const PLAYER_DEFAULT_HEIGHT_FALLBACK = 200 / 128;
 
@@ -266,11 +269,31 @@ export class OverlayHost {
                 kind: "npc",
                 ecsId,
                 serverId,
-                npcTypeId: this.osrsClient.npcEcs.getNpcTypeId(ecsId),
+                // The pick type is the cache's (a model customisation's synthetic id
+                // only changes rendering, never what the interaction path reads).
+                npcTypeId: baseNpcTypeId(this.osrsClient.npcEcs.getNpcTypeId(ecsId)),
                 plane: 0,
             });
         this.boundToCssEvent = (gx?: number, gy?: number) =>
             this.toCssEvent(gx, gy, this.currentFrameCount);
+    }
+
+    get editorOverlays() { return this.renderer.editorOverlays; }
+    get terrainOverrides() { return this.renderer.terrainOverrides; }
+    get mapRegionReplacements() { return this.renderer.mapRegionReplacements; }
+    getMapIdForWorldTile(x: number, y: number): number { return this.renderer.locUpdates.getMapIdForWorldTile(x, y); }
+    scheduleLocReload(mapX: number, mapY: number): void { this.renderer.locUpdates.scheduleReload(mapX, mapY, "full"); }
+    getMinimapIcons(mapX: number, mapY: number, plane = 0) { return this.renderer.getMinimapIcons(mapX, mapY, plane); }
+    getRenderCullTile() { return this.getPlayerTileXY(); }
+    getFrameRenderDistanceTiles() { return resolveWebGPURenderDistance(this.renderer); }
+    getMapZoneDistanceFromPoint(map: WebGPUMapSquare, x: number, y: number) {
+        return getMapZoneDistanceFromPoint(this.typedHost, map as unknown as WebGLMapSquare, x, y);
+    }
+    isMapWithinRenderDistance(map: WebGPUMapSquare, x: number, y: number, distance: number, pad: number) {
+        return isMapWithinRenderDistance(this.typedHost, map as unknown as WebGLMapSquare, x, y, distance, pad);
+    }
+    shouldRenderNpcFromMap(map: WebGPUMapSquare, ecsId: number) {
+        return shouldRenderServerNpc(this.osrsClient, map, ecsId);
     }
 
     private get typedHost(): WebGLOsrsRendererHost {
@@ -357,6 +380,7 @@ export class OverlayHost {
             entry.headIconPk = -1;
             entry.headIconPrayer = -1;
             entry.npcHeadIcons = undefined;
+            entry.customHeadIcons = undefined;
             entry.heightOffsetTiles = 0.9;
             this.overheadPrayerPool.push(entry);
         }
@@ -762,7 +786,8 @@ export class OverlayHost {
         // As WebGL's frame does: plugins (the backquote crosshair) move the interaction point
         // first, so hover, the mouseover text and clicks use it rather than a pointer-locked mouse.
         this.osrsClient.clientPlugins.updateInteractionPointer(this.osrsClient.camera);
-        if (!this.osrsClient.isLoggedIn()) return;
+        this.currentFrameCount = this.renderer.stats.frameCount;
+        if (!this.osrsClient.isLoggedIn() && !this.osrsClient.scenePreviewEnabled) return;
         try {
             updateHoveredTileViaHost(this.typedHost);
         } catch (error) {
@@ -917,7 +942,7 @@ export class OverlayHost {
 
     resolveNpcHighlightTargetFromEntry(
         entry:
-            | Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY">
+            | Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId">
             | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): NpcHighlightTarget | undefined {
@@ -926,7 +951,7 @@ export class OverlayHost {
 
     resolveInteractHighlightTargetFromEntry(
         entry:
-            | Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY">
+            | Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId">
             | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): InteractHighlightTarget | undefined {
@@ -1239,12 +1264,18 @@ export class OverlayHost {
                 const mid = ne.getMapId(ecsId) | 0;
                 const mapX = (mid >> 8) & 0xff;
                 const mapY = mid & 0xff;
-                const worldX = mapX * 64 + localX / 128.0;
-                const worldZ = mapY * 64 + localY / 128.0;
+                const baseWorldX = mapX * 64 + localX / 128.0;
+                const baseWorldZ = mapY * 64 + localY / 128.0;
                 const plane = ne.getLevel(ecsId) | 0;
+                // Same anchor as hitsplats and health bars: the posed model's
+                // height, not the static model bounds. A few NPC models (Araxxor)
+                // are authored hanging far below the origin and are re-posed by
+                // their idle animation, so raw bounds float text screens too high.
+                const npcTypeId = ne.getNpcTypeId(ecsId) | 0;
+                const anchor = this.resolveNpcOverlayAnchor(ecsId, baseWorldX, baseWorldZ, npcTypeId);
                 const overhead = this.acquireOverheadTextEntry();
-                overhead.worldX = worldX;
-                overhead.worldZ = worldZ;
+                overhead.worldX = anchor.worldX;
+                overhead.worldZ = anchor.worldZ;
                 overhead.plane = plane;
                 overhead.text = text;
                 overhead.color = this.mapOverheadColor(0);
@@ -1257,11 +1288,9 @@ export class OverlayHost {
                 overhead.duration = duration;
                 overhead.remaining = remaining;
                 overhead.life = this.computeOverheadAlpha(overhead);
-                const npcTypeId = ne.getNpcTypeId(ecsId) | 0;
-                const npcHeight = npcTypeId > 0 ? this.getNpcDefaultHeight(npcTypeId) : 200;
                 overhead.footprintRadius = this.getNpcFootprintRadius(npcTypeId);
                 overhead.groupKey = this.makeActorGroupKey(true, ne.getServerId(ecsId) | 0);
-                overhead.heightOffsetTiles = npcHeight / 128.0;
+                overhead.heightOffsetTiles = anchor.logicalHeightTiles + 15 / 128;
                 overheadTexts.push(overhead);
             });
         } catch {}
@@ -1297,7 +1326,8 @@ export class OverlayHost {
                     if (!this.shouldRenderPlayerIndex(i)) continue;
                     const headIconPk = pe.getHeadIconPk(i);
                     const headIconPrayer = pe.getHeadIconPrayer(i);
-                    if (headIconPk < 0 && headIconPrayer < 0) continue;
+                    const customHeadIcons = osrsClient.clientPlugins.playerHeadIcons(pe.getServerIdForIndex(i) ?? -1);
+                    if (headIconPk < 0 && headIconPrayer < 0 && customHeadIcons.length === 0) continue;
 
                     const px = pe.getX(i) | 0;
                     const py = pe.getY(i) | 0;
@@ -1316,6 +1346,7 @@ export class OverlayHost {
                     );
                     entry.headIconPk = headIconPk;
                     entry.headIconPrayer = headIconPrayer;
+                    entry.customHeadIcons = customHeadIcons;
                     entry.heightOffsetTiles = this.resolvePlayerHeadIconOffset(
                         i,
                         playerDefaultHeightTiles,
@@ -1348,12 +1379,16 @@ export class OverlayHost {
                 const mid = ne.getMapId(ecsId) | 0;
                 const npcTypeId = ne.getNpcTypeId(ecsId) | 0;
                 const entry = this.acquireOverheadPrayerEntry();
-                entry.worldX = ((mid >> 8) & 0xff) * 64 + (ne.getX(ecsId) | 0) / 128.0;
-                entry.worldZ = (mid & 0xff) * 64 + (ne.getY(ecsId) | 0) / 128.0;
+                const baseWorldX = ((mid >> 8) & 0xff) * 64 + (ne.getX(ecsId) | 0) / 128.0;
+                const baseWorldZ = (mid & 0xff) * 64 + (ne.getY(ecsId) | 0) / 128.0;
+                // Posed-model anchor like the health bar, not the raw model bounds.
+                const anchor = this.resolveNpcOverlayAnchor(ecsId, baseWorldX, baseWorldZ, npcTypeId);
+                entry.worldX = anchor.worldX;
+                entry.worldZ = anchor.worldZ;
                 entry.plane = ne.getLevel(ecsId) | 0;
                 entry.footprintRadius = this.getNpcFootprintRadius(npcTypeId);
                 entry.groupKey = this.makeActorGroupKey(true, ne.getServerId(ecsId) | 0);
-                entry.heightOffsetTiles = this.getNpcDefaultHeight(npcTypeId) / 128.0;
+                entry.heightOffsetTiles = anchor.logicalHeightTiles + 15 / 128;
                 entry.headIconPk = -1;
                 entry.headIconPrayer = -1;
                 entry.npcHeadIcons = npcHeadIcons;

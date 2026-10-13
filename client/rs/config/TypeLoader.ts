@@ -34,6 +34,7 @@ export class DummyTypeLoader<T extends Type> implements TypeLoader<T> {
 }
 
 export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
+    static readonly typeDecodedListeners = new Set<(type: Type) => void>();
     // LRU-bounded cache to avoid unbounded memory growth
     cache: Map<number, T> = new Map();
     // Conservative default; can be tuned per loader if needed
@@ -67,6 +68,7 @@ export abstract class BaseTypeLoader<T extends Type> implements TypeLoader<T> {
             console.error("Failed loading type " + id, e);
         }
         this.cache.set(id, type);
+        for (const listener of BaseTypeLoader.typeDecodedListeners) listener(type);
         this.evictIfNeeded();
         return type;
     }

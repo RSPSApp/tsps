@@ -75,7 +75,6 @@ function restoreRunEnergy(player) {
 function clearPoisonAndVenom(player) {
   player.setPoisonDamage?.(0);
   player.setVenomed?.(false);
-  player.getPacketSender?.().sendPoisonType?.(0);
 }
 
 function clearBleed(player) {

@@ -32,6 +32,9 @@
 module.exports = function registerMisthalinMysteryQuest(api) {
   const { Skill, Location, ObjectDefinition, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner");
+
+  ObstacleRunner.init(api);
 
   const PAGE = "Misthalin Mystery";
 
@@ -258,16 +261,22 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     );
   }
 
-  /** Move the player one tile past a wall-straight door, from their current side. */
-  function crossDoor(player, location) {
+  /** Cross the edge blocked by the door's face, between its tile and its neighbour. */
+  function crossDoor(event) {
+    const { player, object, location } = event;
+    if (ObstacleRunner.isBusy(player)) return;
     const position = player.getLocation();
-    const dx = position.getX() - location.x;
-    const dy = position.getY() - location.y;
-    let stepX = 0;
-    let stepY = 0;
-    if (Math.abs(dx) >= Math.abs(dy)) stepX = dx >= 0 ? 1 : -1;
-    else stepY = dy >= 0 ? 1 : -1;
-    player.moveTo(new Location(location.x - stepX, location.y - stepY, location.z ?? position.getZ()));
+    const face = Number(object.getFace()) & 0x3;
+    let x = position.getX();
+    let y = position.getY();
+    if (face === 0 || face === 2) {
+      const onNeighbour = face === 0 ? x < location.x : x > location.x;
+      x = onNeighbour ? location.x : location.x + (face === 0 ? -1 : 1);
+    } else {
+      const onNeighbour = face === 1 ? y > location.y : y < location.y;
+      y = onNeighbour ? location.y : location.y + (face === 1 ? 1 : -1);
+    }
+    ObstacleRunner.run(event, [{ wait: 1 }, { walk: [[x, y]] }]);
   }
 
   function buildJournal(player, questHandle) {
@@ -646,7 +655,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       player.getInventory().deleteNumber(MANOR_KEY_ITEM_ID, 1);
       quest.setStage(player, STAGE_INSIDE_MANOR);
     }
-    crossDoor(player, event.location);
+    crossDoor(event);
   }
 
   function colouredDoor(event, requiredKeyId, unlockedAt) {
@@ -664,7 +673,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
         PAGE,
         "the-first-riddle-opening-colourful-handle-doors"
       );
-      crossDoor(player, event.location);
+      crossDoor(event);
       return;
     }
     if (requiredKeyId === RUBY_KEY_ITEM_ID && stage === STAGE_FUSE_LIT) {
@@ -673,7 +682,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       player.sendMessage("You hear a muffled explosion as the damaged wall gives way.");
       return;
     }
-    crossDoor(player, event.location);
+    crossDoor(event);
   }
 
   function taytenDoor(event) {
@@ -688,7 +697,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       quest.setStage(player, STAGE_TAYTEN_DEAD);
       return;
     }
-    crossDoor(player, event.location);
+    crossDoor(event);
   }
 
   function diamondDoor(event) {
@@ -709,7 +718,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       quest.setStage(player, STAGE_MANDY_DEAD);
       return;
     }
-    crossDoor(player, event.location);
+    crossDoor(event);
   }
 
   function sapphireDoor(event) {
@@ -727,7 +736,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
         PAGE,
         "the-first-riddle-opening-colourful-handle-doors"
       );
-      crossDoor(player, event.location);
+      crossDoor(event);
       return;
     }
     if (stage < STAGE_BOSS_BEATEN) {
@@ -761,7 +770,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
       }
       ensureMandy(player);
     }
-    crossDoor(player, event.location);
+    crossDoor(event);
   }
 
   function takeTool(event, variant) {

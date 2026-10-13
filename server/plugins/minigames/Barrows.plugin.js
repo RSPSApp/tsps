@@ -174,7 +174,9 @@ function randomiseLayout(run) {
 
 function freshRun(chests = 0) {
   const run = { tunnel: randomInt(0, 5), killed: [], points: 0, kills: 0, chests,
-    chestOpen: false, looted: false, prayerTicks: PRAYER_DRAIN_TICKS };
+    chestOpen: false, looted: false, prayerTicks: PRAYER_DRAIN_TICKS,
+    // For the Combat Achievements: a brother's damage, a melee brother's attack, any prayer points.
+    brotherDamage: false, meleeBrotherAttacked: false, hadPrayer: false };
   randomiseLayout(run);
   return run;
 }
@@ -561,6 +563,37 @@ function searchChest(player, clickType) {
   syncTunnels(player, run);
   showRewards(player, rewards);
   sender.sendMessage(`You've looted ${run.chests} Barrows chests. The tunnels begin to collapse!`);
+  combatAchievementsAtChest(player, run);
+}
+
+// ------------------------------------------------------------------ Combat Achievements
+
+const MELEE_BROTHERS = new Set([1, 2, 4, 5]); // Dharok, Guthan, Torag and Verac
+const ALL_BROTHERS = BROTHERS.length;
+
+/** The chest looted: its count, and the run's tasks (plugins/combatachievements/). */
+function combatAchievementsAtChest(player, run) {
+  const complete = (task) => pluginApi.emitCustomEvent("combat-achievements:complete", { player, task });
+  pluginApi.emitCustomEvent("combat-achievements:kill", { player, monster: "Barrows", count: run.chests });
+  const killedAll = run.killed.length === ALL_BROTHERS;
+  if (killedAll && !run.brotherDamage) complete("Pray for Success");
+  if (killedAll && !run.hadPrayer) complete("Faithless Crypt Run");
+  if ([...MELEE_BROTHERS].every((index) => run.killed.includes(index)) && !run.meleeBrotherAttacked) complete("Can't Touch Me");
+}
+
+/** A brother's hit on the player, for the run's tasks. */
+function trackBrotherHit({ attacker, target, hit }) {
+  if (!target?.isPlayer?.() || !attacker?.isNpc?.()) return;
+  const index = BROTHERS.findIndex((brother) => brother.npcId === attacker.getId());
+  const run = index === -1 ? null : target.getAttribute(ATTRIBUTE);
+  if (!run || run.looted) return;
+  if (hit.getTotalDamage() > 0) run.brotherDamage = true;
+  if (MELEE_BROTHERS.has(index) && String(hit.getCombatType?.()) === "MELEE") run.meleeBrotherAttacked = true;
+}
+
+function answerKillCount({ player, counts }) {
+  const chests = Number(player.getAttribute(ATTRIBUTE)?.chests) || 0;
+  if (chests > 0) counts.Barrows = chests;
 }
 
 function handleObject(event) {
@@ -638,6 +671,8 @@ function drainPrayer(player, run) {
 
 function processPlayer({ player }) {
   if (!inBarrows(player) && !sessions.has(player)) return;
+  const current = player.getAttribute(ATTRIBUTE);
+  if (current && !current.looted && player.getSkillManager().getCurrentLevel(Skill.PRAYER) > 0) current.hadPrayer = true;
   const state = session(player);
   if (state.puzzle && !state.puzzle.from.equals(player.getLocation())) {
     state.puzzle = null;
@@ -736,6 +771,8 @@ module.exports = {
     });
     api.onNpcDeath(handleNpcDeath);
     api.onCustomEvent("collection-log:category-count", chestCount);
+    api.onCustomEvent("combat-achievements:kill-count", answerKillCount);
+    api.onCombatHitResolved(trackBrotherHit);
     api.onPlayerProcess(processPlayer);
     api.onPlayerDeath(playerDeath);
     api.onPlayerDisconnect(cleanupPlayer);

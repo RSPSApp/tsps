@@ -13,5 +13,6 @@ module.exports = {
     require("./wintertodt/Pyromancers.Wintertodt")(api);
     require("./wintertodt/Cart.Wintertodt")(api);
     require("./wintertodt/Commands.Wintertodt")(api);
+    require("./wintertodt/CombatAchievements.Wintertodt")(api);
   },
 };

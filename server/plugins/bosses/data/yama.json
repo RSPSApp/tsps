@@ -1,0 +1,1013 @@
+{
+  "about": "Yama (https://oldschool.runescape.wiki/w/Yama), as captured: the Voice of Yama at the bottom of the Chasm of Fire, Yama's Domain (an instance), the throne, the contract and the fight. Tiles are the cache map's (the instance copies them unturned). See docs/yama.md.",
+  "npcs": {
+    "voice": 7668,
+    "voiceVariants": [
+      14183,
+      14184,
+      14185
+    ],
+    "throne": 123,
+    "throneYama": 124,
+    "yama": 14176,
+    "judge": 14180,
+    "voidFlare": 14179
+  },
+  "varbits": {
+    "about": "chasm_voice_progress picks the Voice's variant (2: Talk-to, Travel, Join); yama_throne_state the throne's (0: Yama, Talk-to and Challenge; 1: the empty throne).",
+    "voiceProgress": 16284,
+    "voiceMet": 2,
+    "throneState": 16286,
+    "multiway": 4605
+  },
+  "voice": {
+    "respawn": [
+      1439,
+      10076,
+      0
+    ],
+    "noDuo": "Yama does not yet accept challengers in pairs. Return alone, mortal."
+  },
+  "instance": {
+    "about": "As captured (rebuild_region): 11x7 chunks from chunk (181, 1256), every chunk of plane 0 and the plane-1 chunks below, unturned. The plane-1 rows run north to south.",
+    "sourceChunkX": 181,
+    "sourceChunkY": 1256,
+    "width": 11,
+    "height": 7,
+    "plane1": [
+      "#####......",
+      "#####......",
+      "#####......",
+      "####.......",
+      "#####......",
+      "#####......",
+      "#######...."
+    ]
+  },
+  "domain": {
+    "arrival": [
+      1503,
+      10050,
+      0
+    ],
+    "portal": {
+      "id": 56249,
+      "tile": [
+        1502,
+        10049,
+        0
+      ]
+    },
+    "throne": {
+      "tile": [
+        1500,
+        10089,
+        0
+      ],
+      "face": "SOUTH"
+    },
+    "music": 280,
+    "enterMessage": "You enter Yama's Domain.",
+    "arrivalFace": [
+      1503,
+      10052
+    ],
+    "fade": {
+      "about": "As captured on the way in: the fade out with the message (no continue), the minimap off a tick later, the move two ticks in, then the fade back in with the message again; the fade and busy clear when the player continues. The way out (no capture) uses the same.",
+      "moveTicks": 2,
+      "inTicks": 3
+    }
+  },
+  "fight": {
+    "about": "As captured from the Challenge: the throne's summon at once (and the flames close the arena), Yama two ticks later, attackable (and the HUD) three ticks after that; the glyphs light two ticks after that and his first attack comes three ticks later. Ticks below count from that moment unless said.",
+    "yamaTile": [
+      1501,
+      10076,
+      0
+    ],
+    "yamaFace": "NORTH",
+    "summonTicks": 2,
+    "attackableTicks": 3,
+    "throneSummon": {
+      "anim": 12154,
+      "spot": 3278
+    },
+    "yamaSummon": {
+      "anim": 12156,
+      "spot": 3279
+    },
+    "flames": {
+      "id": 56264,
+      "open": 29733,
+      "tiles": [
+        [
+          1502,
+          10067,
+          0,
+          1
+        ],
+        [
+          1503,
+          10067,
+          0,
+          2
+        ],
+        [
+          1504,
+          10067,
+          0,
+          3
+        ]
+      ],
+      "flee": {
+        "about": "Pass and Quick Pass on the flames during a fight: through to the south side, and the fight ends as an escape (Yama back on his throne). No source has what OSRS does; the question and its answers are ours. Pass asks first, Quick Pass doesn't.",
+        "question": "Flee the fight? Yama will count it as an escape.",
+        "yes": "Yes, flee.",
+        "no": "No."
+      }
+    },
+    "glyphsAfterTicks": 2,
+    "firstAttackTicks": {
+      "1": 5,
+      "2": 4,
+      "3": 3
+    },
+    "phaseStartTicks": {
+      "about": "From the player landing back in the arena to Yama attackable again (as captured).",
+      "ticks": 3
+    },
+    "hp": 2500,
+    "thresholds": [
+      1666,
+      833
+    ],
+    "defence": {
+      "about": "Wiki: magic defence -30 against a melee user (he chases), +60 against a mage (he stands); phase 3 raises every bonus. Indexes stab, slash, crush, magic, ranged.",
+      "melee": [
+        100,
+        80,
+        333,
+        -30,
+        220
+      ],
+      "magic": [
+        100,
+        80,
+        333,
+        60,
+        220
+      ],
+      "phase3": [
+        135,
+        108,
+        449,
+        81,
+        297
+      ]
+    },
+    "demonbaneVulnerability": 1.2
+  },
+  "overheads": {
+    "about": "Yama's lines in a fight (Wiki transcript); captured: 'The deal is done.' on a first death, 'Lacking.' after, 'Enough.' at a phase change, 'Colabi, infernus' with a Meteor Strike.",
+    "firstDeath": "The deal is done.",
+    "death": [
+      "Lacking.",
+      "Pathetic.",
+      "The price is paid.",
+      "Another day, perhaps.",
+      "Another day, another soul.",
+      "Your soul was always mine."
+    ],
+    "rockfall": [
+      "Colabi, infernus",
+      "Ven, estella infernus",
+      "Colabesur infernus"
+    ],
+    "stomp": [
+      "Ven, umbra eclipta",
+      "Umbra, proriumpse",
+      "Umbra apprerendehe"
+    ],
+    "transition": [
+      "Begone",
+      "You bore me.",
+      "Enough."
+    ],
+    "aggro": [
+      "Your strike lacks bite.",
+      "A change of pace."
+    ],
+    "defeat": [
+      "Fair is fair.",
+      "Your reward, as agreed.",
+      "A satisfying warmup. Collect your loot and let us continue.",
+      "A passing performance."
+    ],
+    "defeatLow": [
+      "A close fight. Your nerve was well held.",
+      "A good risk, adequately rewarded.",
+      "Excellent performance. Again?"
+    ],
+    "defeatPerfect": [
+      "Effective, if a bit cowardly.",
+      "Risk averse, are we?"
+    ]
+  },
+  "retrieval": {
+    "about": "OSRS keeps a death here in a gravestone by the Voice; tsps has none, so the Voice holds the items. The gravestone's fee per item by value (Wiki: Gravestone), capped, halved for Ironmen, then 75% off until 10 kills (Wiki: Yama).",
+    "tiers": [
+      [
+        100000,
+        0
+      ],
+      [
+        1000000,
+        1000
+      ],
+      [
+        10000000,
+        10000
+      ],
+      [
+        null,
+        100000
+      ]
+    ],
+    "cap": 500000,
+    "ironmanFactor": 0.5,
+    "discountedKills": 10,
+    "discountFactor": 0.25,
+    "heldMessage": "The Voice of Yama holds what you dropped. Talk to him to get it back.",
+    "collectedMessage": "You successfully retrieved everything from the Voice of Yama.",
+    "partialMessage": "You don't have enough inventory space to collect all of your items.",
+    "feeLine": "My master's bargain has a price. [fee] coins, human, or begone.",
+    "lostMessage": "The Voice of Yama no longer holds your items."
+  },
+  "arena": {
+    "about": "The arena floor as one captured shadow wave covered it: rows of [y, [[minX, maxX], ...]].",
+    "centre": [
+      1503,
+      10078
+    ],
+    "rows": [
+      [
+        10093,
+        [
+          [
+            1499,
+            1507
+          ]
+        ]
+      ],
+      [
+        10092,
+        [
+          [
+            1499,
+            1507
+          ]
+        ]
+      ],
+      [
+        10091,
+        [
+          [
+            1499,
+            1507
+          ]
+        ]
+      ],
+      [
+        10090,
+        [
+          [
+            1500,
+            1507
+          ]
+        ]
+      ],
+      [
+        10088,
+        [
+          [
+            1498,
+            1507
+          ]
+        ]
+      ],
+      [
+        10087,
+        [
+          [
+            1497,
+            1510
+          ]
+        ]
+      ],
+      [
+        10086,
+        [
+          [
+            1492,
+            1492
+          ],
+          [
+            1495,
+            1515
+          ]
+        ]
+      ],
+      [
+        10085,
+        [
+          [
+            1490,
+            1516
+          ]
+        ]
+      ],
+      [
+        10084,
+        [
+          [
+            1491,
+            1516
+          ]
+        ]
+      ],
+      [
+        10083,
+        [
+          [
+            1490,
+            1515
+          ]
+        ]
+      ],
+      [
+        10082,
+        [
+          [
+            1490,
+            1515
+          ]
+        ]
+      ],
+      [
+        10081,
+        [
+          [
+            1490,
+            1515
+          ]
+        ]
+      ],
+      [
+        10080,
+        [
+          [
+            1491,
+            1515
+          ]
+        ]
+      ],
+      [
+        10079,
+        [
+          [
+            1491,
+            1515
+          ]
+        ]
+      ],
+      [
+        10078,
+        [
+          [
+            1491,
+            1514
+          ]
+        ]
+      ],
+      [
+        10077,
+        [
+          [
+            1490,
+            1514
+          ]
+        ]
+      ],
+      [
+        10076,
+        [
+          [
+            1490,
+            1514
+          ]
+        ]
+      ],
+      [
+        10075,
+        [
+          [
+            1490,
+            1514
+          ]
+        ]
+      ],
+      [
+        10074,
+        [
+          [
+            1489,
+            1516
+          ]
+        ]
+      ],
+      [
+        10073,
+        [
+          [
+            1491,
+            1515
+          ]
+        ]
+      ],
+      [
+        10072,
+        [
+          [
+            1490,
+            1514
+          ]
+        ]
+      ],
+      [
+        10071,
+        [
+          [
+            1490,
+            1513
+          ]
+        ]
+      ],
+      [
+        10070,
+        [
+          [
+            1490,
+            1513
+          ]
+        ]
+      ],
+      [
+        10069,
+        [
+          [
+            1493,
+            1512
+          ]
+        ]
+      ],
+      [
+        10068,
+        [
+          [
+            1500,
+            1506
+          ]
+        ]
+      ]
+    ]
+  },
+  "glyphs": {
+    "about": "Five 3x3 glyphs (captured). The three by the throne and to the south take the element of the phase's first special, the two at the sides the other; standing on a glyph's centre absorbs it a tick later (10 ticks of immunity to its element), and it goes out for the phase.",
+    "major": [
+      [
+        1497,
+        10084
+      ],
+      [
+        1507,
+        10084
+      ],
+      [
+        1502,
+        10072
+      ]
+    ],
+    "minor": [
+      [
+        1495,
+        10077
+      ],
+      [
+        1509,
+        10077
+      ]
+    ],
+    "rotation": 2,
+    "size": 3,
+    "ids": {
+      "fire": 56336,
+      "shadow": 56335,
+      "inactive": 56337,
+      "fireOut": 56339,
+      "shadowOut": 56338
+    },
+    "immunityTicks": 10,
+    "immunitySpot": {
+      "fire": 3280,
+      "shadow": 3281
+    },
+    "absorbSlot": 2,
+    "byYamaDistance": [
+      [
+        1,
+        12
+      ],
+      [
+        2,
+        9
+      ],
+      [
+        3,
+        6
+      ]
+    ],
+    "farValue": 2,
+    "messages": {
+      "absorb": {
+        "fire": "<col=ff8e32>You absorb a Glyph of Fire.",
+        "shadow": "<col=a53fff>You absorb a Glyph of Shadow."
+      },
+      "blocked": {
+        "fire": "<col=ff8e32>The Glyph of Fire absorbs the damage from the attack.",
+        "shadow": "<col=a53fff>The Glyph of Shadow absorbs the damage from the attack."
+      },
+      "fade": {
+        "fire": "<col=ff3045>The Glyph of Fire fades away.",
+        "shadow": "<col=ff3045>The Glyph of Shadow fades away."
+      }
+    }
+  },
+  "attacks": {
+    "about": "Standard attacks (captured: animations, spot animations, the hit 3 ticks after a cast and 1 after a swing). Wiki: 46 at most; Protect from Melee leaves 6 (phase 3: 22), the other prayers block magic and ranged (phase 3: 3 gets through); the swing hits everyone within three tiles of the target.",
+    "speed": {
+      "1": 8,
+      "2": 8,
+      "3": 7
+    },
+    "maxHit": 46,
+    "meleeThroughPrayer": {
+      "1": 6,
+      "2": 6,
+      "3": 22
+    },
+    "castThroughPrayer": {
+      "1": 0,
+      "2": 0,
+      "3": 3
+    },
+    "magic": {
+      "anim": 12144,
+      "animDelay": 30,
+      "spot": 3246,
+      "spotDelay": 30,
+      "impact": 3247,
+      "impactSlot": 2,
+      "hitDelay": 3
+    },
+    "ranged": {
+      "anim": 12144,
+      "animDelay": 30,
+      "spot": 3243,
+      "spotDelay": 30,
+      "impact": 3244,
+      "impactSlot": 2,
+      "hitDelay": 3
+    },
+    "melee": {
+      "anim": 12146,
+      "hitDelay": 1,
+      "radius": 3
+    },
+    "poison": {
+      "about": "Wiki: from 20. How often it poisons is an estimate.",
+      "damage": 20,
+      "chance": 0.25
+    }
+  },
+  "specials": {
+    "about": "Every fourth attack (Wiki, captured). Its element is the other one from the last; standard attacks then take that element. Void flares stand in for one shadow special a phase and keep the element (Wiki). Phase 1: the flaming rock and the shadow spike; phase 2: Meteor Strike and Shadow Stomp (captured).",
+    "rockfall": {
+      "anim": 12145,
+      "spot": 3253,
+      "message": "<col=ff8e32>Yama conjures a fire-based attack at you.",
+      "projectile": {
+        "id": 3254,
+        "start": 65,
+        "end": 180,
+        "angle": 60,
+        "progress": 100,
+        "startHeight": 2000,
+        "endHeight": 0
+      },
+      "impact": {
+        "id": 3255,
+        "delay": 180
+      },
+      "sound": {
+        "id": 10255,
+        "delay": 180
+      },
+      "hitDelay": 6,
+      "maxHit": 46,
+      "burn": 10
+    },
+    "spike": {
+      "anim": 12145,
+      "spot": 3256,
+      "message": "<col=a53fff>Yama launches a shadow-based attack at you.",
+      "projectile": {
+        "id": 3257,
+        "start": 65,
+        "end": 180,
+        "angle": 60,
+        "progress": 100,
+        "startHeight": 2000,
+        "endHeight": 0
+      },
+      "impact": {
+        "id": 3258,
+        "delay": 0
+      },
+      "sound": {
+        "id": 10246,
+        "delay": 180
+      },
+      "hitDelay": 6,
+      "maxHit": 46,
+      "prayerDrainShare": 0.33
+    },
+    "meteor": {
+      "anim": 12148,
+      "spot": 3270,
+      "warnTicks": 2,
+      "message": "<col=ff8e32>Yama conjures a fire-based attack at you.",
+      "npc": 14182,
+      "npcSize": 7,
+      "npcAnim": 12118,
+      "npcSpot": 3272,
+      "hitTicks": 6,
+      "byDistance": [
+        [
+          1,
+          "kill"
+        ],
+        [
+          2,
+          80
+        ],
+        [
+          3,
+          40
+        ]
+      ],
+      "burn": 8,
+      "sound": {
+        "id": 156,
+        "range": 15
+      }
+    },
+    "stomp": {
+      "anim": 12148,
+      "spot": 3259,
+      "warnTicks": 2,
+      "message": "<col=a53fff>Yama conjures a shadow-based attack at you.",
+      "projectile": {
+        "id": 3260,
+        "start": 0,
+        "end": 90,
+        "angle": 127,
+        "progress": 150,
+        "startHeight": 10,
+        "endHeight": 10
+      },
+      "sound": {
+        "id": 10270,
+        "delay": 6
+      },
+      "impact": {
+        "id": 3261,
+        "delay": 0
+      },
+      "hitTicks": 5,
+      "maxHit": 60,
+      "rootTicks": 2,
+      "prayerDrainShare": 0.33
+    },
+    "flares": {
+      "anim": 12144,
+      "spawnTicks": 2
+    }
+  },
+  "flares": {
+    "about": "Captured: a pair on one of two pairs of tiles, spawning with 12135, charging on headbar 75 from 3 ticks in over 630 cycles, exploding 26 ticks after spawning (12136 with a red or blue spot) and hitting a tick later; then gone. Wiki: 140 hitpoints (71 in phase 3), 42-45 at full health (23-25 in phase 3), less as they are hurt, healing Yama alike; a glyph of the flare's element blocks it. The heal per flare is an estimate from the captured heal splats.",
+    "npc": 14179,
+    "pairs": [
+      [
+        [
+          1495,
+          10081
+        ],
+        [
+          1507,
+          10073
+        ]
+      ],
+      [
+        [
+          1510,
+          10081
+        ],
+        [
+          1498,
+          10073
+        ]
+      ]
+    ],
+    "spawnAnim": 12135,
+    "chargeBar": {
+      "id": 75,
+      "afterTicks": 3,
+      "cycles": 630,
+      "fill": 30
+    },
+    "explodeTicks": 26,
+    "explodeAnim": 12136,
+    "explodeSpot": {
+      "fire": 3237,
+      "shadow": 3238
+    },
+    "playerImpact": {
+      "fire": 3241,
+      "shadow": 3242,
+      "delay": 30
+    },
+    "hitpoints": {
+      "1": 140,
+      "2": 140,
+      "3": 71
+    },
+    "damage": {
+      "1": [
+        42,
+        45
+      ],
+      "2": [
+        42,
+        45
+      ],
+      "3": [
+        23,
+        25
+      ]
+    },
+    "heal": {
+      "1": 36,
+      "2": 36,
+      "3": 18
+    },
+    "removeAfterTicks": 2,
+    "maxActive": 4,
+    "demonbaneVulnerability": 2
+  },
+  "hazards": {
+    "about": "Before every special but the phase's first, alternately a shadow wave (10 ticks before) and fire streaks (9 before), as captured. Phase 2 sends two waves and more streaks (Wiki).",
+    "wave": {
+      "about": "One wave sweeps the arena diagonally from the south-east or south-west, 2 tiles a tick: each tile shows its spot after 15 cycles per step (captured: vfx_shadow_wall_03 from the south-east, _02 from the south-west). A tile's step: south-east y - x - 8548, south-west x + y - 11552. Up to 20 and protection prayers off (Wiki).",
+      "spot": {
+        "southEast": 3266,
+        "southWest": 3265
+      },
+      "leadTicks": 10,
+      "maxHit": 20,
+      "from": {
+        "southEast": -8548,
+        "southWest": -11552
+      }
+    },
+    "streak": {
+      "about": "Captured: 8 streaks on random rows, each from the east or west edge: 3 ticks lit at the edge, then 2 tiles a tick across (vfx_fire_wall_01 at 15 and 30 cycles). Walking through is safe; standing in one burns and binds (Wiki). The damage and bind are estimates.",
+      "spot": 3267,
+      "leadTicks": 9,
+      "rows": {
+        "1": 8,
+        "2": 12
+      },
+      "warnTicks": 3,
+      "damage": 10,
+      "bindTicks": 2,
+      "sound": {
+        "id": 10215,
+        "delay": 3
+      }
+    }
+  },
+  "transition": {
+    "about": "Captured: at the next attack after a threshold Yama says one of his lines, 12147 with spot 3276; the fall starts two ticks later (12149), the HUD and glyphs go at four with a fade, and at six the player lands by the stepping stones (12152, spot 3275 in slot 5) and the Judge appears.",
+    "anim": 12147,
+    "spot": 3276,
+    "fallTicks": 2,
+    "fallAnim": 12149,
+    "fallAnimDelay": 5,
+    "fadeTicks": 4,
+    "landTicks": 6,
+    "landAnim": 12152,
+    "landSpot": {
+      "id": 3275,
+      "slot": 5,
+      "height": 638
+    },
+    "landing": [
+      1479,
+      10077,
+      0
+    ],
+    "phaseVarbit": 16550,
+    "damageVarbit": 16549,
+    "returnTo": [
+      1504,
+      10086,
+      0
+    ],
+    "yamaReturn": [
+      1501,
+      10076,
+      0
+    ]
+  },
+  "judge": {
+    "about": "Captured: the Judge at the corridor's far end, praying Melee and Missiles (head icon 7; 6 is Missiles and Magic), casting (69) every 4 ticks while the player crosses: two fire surges at its end walk a tile a tick down the corridor (up to 30, Wiki; spot 1466). On the platform it throws a fireball at the player's tile every 5 ticks (about 20 there, 13-18 to itself if it lands under it, Wiki) and the cavern shakes on its 5th and 13th (5-7). Hits on it always land at their max (Wiki).",
+    "npc": 14180,
+    "tile": [
+      1478,
+      10098,
+      0
+    ],
+    "face": "SOUTH",
+    "icons": {
+      "meleeRanged": 7,
+      "rangedMagic": 6
+    },
+    "castAnim": 69,
+    "surge": {
+      "npc": 13507,
+      "everyTicks": 4,
+      "columns": [
+        1477,
+        1478,
+        1479,
+        1480,
+        1481
+      ],
+      "startY": 10097,
+      "endY": 10070,
+      "maxHit": 30,
+      "spot": 1466,
+      "spotHeight": 120,
+      "waterAbout": "Wiki (Yama/Strategies): a fire spell can be attacked with water spells, which deal the player's max hit. It has no hitpoints in the cache: the pool is an estimate, big enough to show any max hit, and a water spell's hit puts it out. Other attacks are refused (estimate).",
+      "hitpoints": 100,
+      "waterOnly": "Only a water spell can put out a fire spell."
+    },
+    "platformY": 10096,
+    "fireball": {
+      "everyTicks": 5,
+      "warnSpot": 1446,
+      "warnDelay": 30,
+      "projectile": {
+        "id": 2855,
+        "start": 0,
+        "end": 120,
+        "angle": 30,
+        "progress": 128,
+        "startHeight": 345,
+        "endHeight": 0
+      },
+      "impact": {
+        "id": 2856,
+        "delay": 120,
+        "height": 30
+      },
+      "sounds": [
+        [
+          9221,
+          33
+        ],
+        [
+          9335,
+          3
+        ],
+        [
+          9215,
+          36
+        ]
+      ],
+      "hitTicks": 4,
+      "damage": [
+        18,
+        22
+      ],
+      "selfDamage": [
+        13,
+        18
+      ]
+    },
+    "shake": {
+      "attacks": [
+        5,
+        13
+      ],
+      "damage": [
+        5,
+        7
+      ],
+      "sound": 1678
+    },
+    "deathAnim": 9042,
+    "deathSound": 5023,
+    "returnTicks": 5,
+    "stones": {
+      "id": 56246,
+      "anim": 12196,
+      "cycles": 27,
+      "sound": {
+        "id": 2461,
+        "delay": 5
+      }
+    }
+  },
+  "phase3": {
+    "about": "Wiki: Yama stays in the centre, alternating ranged and magic every 7 ticks (melee only on an adjacent player), opening with the element of the glyphs that were more abundant in phase 2. Beats every 7 ticks from 4 ticks in, 10 a cycle: Shadow Crash on beats 0, 3 and 7 (when the player is out of melee reach), two flares on beat 8, and a flare with every swing (the scim.gg simulator; estimates). A crash: three falling rocks in a line through the player (3262, the sides 3 tiles away: cardinal, diagonal, cardinal, 3 ticks apart), whose shadows close in 3 ticks later (3252) for up to 20 (captured; Wiki).",
+    "beatStartTicks": 4,
+    "beatsPerCycle": 10,
+    "crashBeats": [
+      0,
+      3,
+      7
+    ],
+    "flareBeats": [
+      8
+    ],
+    "crash": {
+      "rock": 3262,
+      "shadow": 3252,
+      "reach": 3,
+      "spacingTicks": 3,
+      "shadowTicks": 3,
+      "maxHit": 20,
+      "sounds": [
+        [
+          9335,
+          3
+        ],
+        [
+          10255,
+          100
+        ],
+        [
+          10268,
+          105
+        ]
+      ]
+    },
+    "wavesAbout": "Captured (rsprox 799, 3285): a pair of waves (one from each corner) 9 ticks after the last Shadow Crash, and pairs 9 and 16 ticks after the flares - never closer than 7 ticks. The Wiki: the column where a set's 2nd and 3rd waves cross can shift a tile east or west.",
+    "waveAfterCrashTicks": 9,
+    "wavesAfterFlaresTicks": [
+      9,
+      16
+    ]
+  },
+  "kill": {
+    "about": "Captured: 12161 with spot 3284; five ticks later the success messages, Yama back on his throne (12165, spot 3286) and the victory jingle; his line four ticks after that; the loot two ticks later in front of the throne.",
+    "anim": 12161,
+    "spot": 3284,
+    "throneTicks": 5,
+    "throneAnim": 12165,
+    "throneSpot": 3286,
+    "jingle": 76,
+    "lineTicks": 9,
+    "lootTicks": 11,
+    "lootTile": [
+      1503,
+      10088,
+      0
+    ],
+    "lootSound": {
+      "id": 6765,
+      "delay": 30
+    }
+  }
+}

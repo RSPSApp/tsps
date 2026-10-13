@@ -1,5 +1,6 @@
 import type { MenuTargetType } from "../../rs/MenuEntry";
 import type { SimpleMenuEntry } from "./MenuEngine";
+import { buildPluginMenu, preparePluginMenu } from "./menuEvents";
 
 /**
  * Where a menu comes from. World menus mix several targets, each entry carrying its own
@@ -9,10 +10,12 @@ import type { SimpleMenuEntry } from "./MenuEngine";
  */
 export type MenuTransformContext =
     | { surface: "world"; menu: true }
+    | { surface: "widget"; menu: boolean; widgetId: number; childIndex: number; itemId: number }
     | {
           surface: "inventory";
           menu: boolean;
           target: { type: MenuTargetType; id: number; name: string };
+          widgetId?: number; childIndex?: number; itemId?: number;
       };
 
 /** Reorders or extends a menu (display order, top first) and returns the new list. */
@@ -35,10 +38,12 @@ export function setMenuTransform(next: MenuTransform | undefined): void {
 export function applyMenuTransform(
     entries: SimpleMenuEntry[],
     context: MenuTransformContext,
+    prepared: boolean = false,
 ): SimpleMenuEntry[] {
-    if (!transform || entries.length === 0) return entries;
+    if (!prepared) entries = preparePluginMenu(entries, context);
+    if (!transform || context.surface === "widget") return buildPluginMenu(entries, context);
     try {
-        return transform(entries, context);
+        return buildPluginMenu(transform(entries, context), context);
     } catch (err) {
         console.warn?.("[menu] transform failed", err);
         return entries;

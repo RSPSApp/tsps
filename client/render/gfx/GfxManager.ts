@@ -1,3 +1,4 @@
+import { notifyActorGraphic } from "../../game/ActorEventHooks";
 import { getClientCycle } from "../../network/ServerConnection";
 import type { WebGLMapSquare } from "../WebGLMapSquare";
 import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
@@ -39,10 +40,74 @@ export interface GfxInstance {
 export class GfxManager {
     private nextId = 1;
     private instances: Map<number, GfxInstance> = new Map();
+    private readonly actorInstances = {
+        player: new Map<number, Set<GfxInstance>>(),
+        npc: new Map<number, Set<GfxInstance>>(),
+    };
     // Reusable buffers (avoid per-call allocation)
     private worldInstancesBuffer: GfxInstance[] = [];
     private worldInstancesWithSlotBuffer: Array<{ inst: GfxInstance; slot: number }> = [];
     constructor(private renderer: WebGLOsrsRenderer) {}
+
+    private addInstance(id: number, instance: GfxInstance): void {
+        this.instances.set(id, instance);
+        for (const kind of ["player", "npc"] as const) {
+            const serverId = kind === "player" ? instance.attachPlayerServerId : instance.attachNpcServerId;
+            if (serverId === undefined) continue;
+            const index = this.actorInstances[kind];
+            let instances = index.get(serverId);
+            if (!instances) index.set(serverId, instances = new Set());
+            instances.add(instance);
+        }
+    }
+
+    /** The legacy graphic getter represents the default (slot zero) actor spot animation. */
+    private removeInstance(id: number): void {
+        const instance = this.instances.get(id);
+        if (!instance) return;
+        this.instances.delete(id);
+        for (const kind of ["player", "npc"] as const) {
+            const serverId = kind === "player" ? instance.attachPlayerServerId : instance.attachNpcServerId;
+            if (serverId === undefined) continue;
+            const index = this.actorInstances[kind];
+            const instances = index.get(serverId);
+            instances?.delete(instance);
+            if (instances?.size === 0) index.delete(serverId);
+        }
+        const player = instance.attachPlayerServerId;
+        const npc = instance.attachNpcServerId;
+        if (player !== undefined) notifyActorGraphic({ type: "player", serverId: player, graphic: this.getActorGraphic("player", player) });
+        if (npc !== undefined) notifyActorGraphic({ type: "npc", serverId: npc, graphic: this.getActorGraphic("npc", npc) });
+    }
+
+    getActorGraphic(kind: "player" | "npc", serverId: number): number {
+        const instances = this.actorInstances[kind].get(serverId);
+        if (instances) for (const instance of instances) {
+            if ((instance.slot ?? 0) === 0) return instance.spotId;
+        }
+        return -1;
+    }
+    *getActorInstances(kind:"player"|"npc",serverId:number):IterableIterator<GfxInstance> {
+        const instances = this.actorInstances[kind].get(serverId);
+        if (instances) yield* instances;
+    }
+    removeActorInstances(kind:"player"|"npc",serverId:number):void { for(const instance of this.getActorInstances(kind,serverId))this.removeInstance(instance.id); }
+    getActorFrame(instance:GfxInstance):{frame:number;cycle:number} {
+        if(instance.startTimeMs===undefined)return {frame:-1,cycle:0};
+        const cache=this.renderer.gfxRenderer?.getCache(),lengths=cache?.getFrameLengths(instance.spotId);
+        const cycles=Math.max(0,Math.floor((performance.now()-instance.startTimeMs)/20));
+        const total=lengths?.reduce((sum,value)=>sum+Math.max(1,value),0) ?? Math.max(1,cache?.getFrameCount(instance.spotId) ?? 1);
+        let remaining=cycles%total;
+        if(lengths){for(let frame=0;frame<lengths.length;frame++){const length=Math.max(1,lengths[frame]);if(remaining<length)return {frame,cycle:remaining};remaining-=length;}}
+        return {frame:remaining,cycle:0};
+    }
+    setActorFrame(instance:GfxInstance,frame:number,cycle=0):void {
+        if(frame<0){instance.startTimeMs=undefined;instance.endTimeMs=undefined;return;}
+        const lengths=this.renderer.gfxRenderer?.getCache()?.getFrameLengths(instance.spotId);
+        const elapsed=(lengths ? lengths.slice(0,Math.max(0,frame)).reduce((sum,value)=>sum+Math.max(1,value),0):Math.max(0,frame))+Math.max(0,cycle);
+        instance.startTimeMs=performance.now()-elapsed*20;
+        if(instance.durationMs!==undefined)instance.endTimeMs=instance.startTimeMs+instance.durationMs;
+    }
 
     update(): void {
         const nowCycle = getClientCycle() | 0;
@@ -56,7 +121,7 @@ export class GfxManager {
                 }
             }
             if (!inst.loop && typeof inst.endTimeMs === "number" && nowMs >= (inst.endTimeMs | 0)) {
-                this.instances.delete(id);
+                this.removeInstance(id);
             }
         }
     }
@@ -76,27 +141,23 @@ export class GfxManager {
     }
 
     private findAttachedInstanceKey(spotId: number, serverId: number): number | undefined {
-        for (const [id, inst] of this.instances) {
-            if (inst.spotId === spotId && inst.attachPlayerServerId === serverId) return id;
+        for (const inst of this.getActorInstances("player", serverId)) {
+            if (inst.spotId === spotId) return inst.id;
         }
         return undefined;
     }
 
     clearAttachedSlotPlayer(serverId: number, slotArg?: number): void {
         const slot = typeof slotArg === "number" ? (slotArg | 0) & 0xff : 0;
-        for (const [existingId, inst] of this.instances) {
-            if (inst.attachPlayerServerId === (serverId | 0) && inst.slot === slot) {
-                this.instances.delete(existingId);
-            }
+        for (const inst of this.getActorInstances("player", serverId | 0)) {
+            if ((inst.slot ?? 0) === slot) this.removeInstance(inst.id);
         }
     }
 
     clearAttachedSlotNpc(serverId: number, slotArg?: number): void {
         const slot = typeof slotArg === "number" ? (slotArg | 0) & 0xff : 0;
-        for (const [existingId, inst] of this.instances) {
-            if (inst.attachNpcServerId === (serverId | 0) && inst.slot === slot) {
-                this.instances.delete(existingId);
-            }
+        for (const inst of this.getActorInstances("npc", serverId | 0)) {
+            if ((inst.slot ?? 0) === slot) this.removeInstance(inst.id);
         }
     }
 
@@ -111,10 +172,8 @@ export class GfxManager {
     ): number {
         const slot = typeof slotArg === "number" ? (slotArg | 0) & 0xff : undefined;
         if (slot !== undefined) {
-            for (const [existingId, inst] of this.instances) {
-                if (inst.attachPlayerServerId === (serverId | 0) && inst.slot === slot) {
-                    this.instances.delete(existingId);
-                }
+            for (const inst of this.getActorInstances("player", serverId | 0)) {
+                if (inst.slot === slot) this.removeInstance(inst.id);
             }
         }
         const id = this.nextId++;
@@ -131,7 +190,7 @@ export class GfxManager {
             }
         } catch {}
 
-        this.instances.set(id, {
+        this.addInstance(id, {
             id,
             spotId: spotId | 0,
             attachPlayerServerId: serverId | 0,
@@ -160,10 +219,8 @@ export class GfxManager {
     ): number {
         const slot = typeof slotArg === "number" ? (slotArg | 0) & 0xff : undefined;
         if (slot !== undefined) {
-            for (const [existingId, inst] of this.instances) {
-                if (inst.attachNpcServerId === (serverId | 0) && inst.slot === slot) {
-                    this.instances.delete(existingId);
-                }
+            for (const inst of this.getActorInstances("npc", serverId | 0)) {
+                if (inst.slot === slot) this.removeInstance(inst.id);
             }
         }
         const id = this.nextId++;
@@ -179,7 +236,7 @@ export class GfxManager {
             }
         } catch {}
 
-        this.instances.set(id, {
+        this.addInstance(id, {
             id,
             spotId: spotId | 0,
             attachPlayerServerId: undefined,
@@ -215,7 +272,7 @@ export class GfxManager {
             }
         } catch {}
 
-        this.instances.set(id, {
+        this.addInstance(id, {
             id,
             spotId: spotId | 0,
             anchor: opts?.heightTiles ? "offset" : "ground",
@@ -237,7 +294,7 @@ export class GfxManager {
     }
 
     kill(id: number): void {
-        this.instances.delete(id);
+        this.removeInstance(id);
     }
 
     /**
@@ -259,8 +316,7 @@ export class GfxManager {
         for (let slot = 0; slot < pidsInMap.length; slot++) {
             const pid = pidsInMap[slot] | 0;
             const sid = pe.getServerIdForIndex?.(pid);
-            for (const inst of this.instances.values()) {
-                if (inst.attachPlayerServerId !== (sid | 0)) continue;
+            for (const inst of this.getActorInstances("player", sid | 0)) {
                 if ((inst.startCycle | 0) > nowCycle) continue; // honor start cycle delay
                 out.push({ inst, pid, slot });
             }
@@ -307,6 +363,29 @@ export class GfxManager {
                 inst.world.slot = undefined;
             }
         }
+    }
+
+    /**
+     * The world graphics drawn by a map square: those on the tiles it draws, from where it is
+     * drawn (an instance scene starts at its centre chunk less 6, not at its map square's start).
+     */
+    listWorldInstancesForDrawnMap(map: { mapX: number; mapY: number; getRenderBaseTileX?(): number; getRenderBaseTileY?(): number; getLocalTileSpan?(): number }): GfxInstance[] {
+        const baseX = map.getRenderBaseTileX?.() ?? map.mapX * 64;
+        const baseY = map.getRenderBaseTileY?.() ?? map.mapY * 64;
+        const span = map.getLocalTileSpan?.() || 64;
+        const out = this.worldInstancesBuffer;
+        out.length = 0;
+        const nowCycle = getClientCycle() | 0;
+        for (const inst of this.instances.values()) {
+            if (!inst.world) continue;
+            if ((inst.startCycle | 0) > nowCycle) continue;
+            const tileX = inst.world.tileX | 0;
+            const tileY = inst.world.tileY | 0;
+            if (tileX < baseX || tileX >= baseX + span) continue;
+            if (tileY < baseY || tileY >= baseY + span) continue;
+            out.push(inst);
+        }
+        return out;
     }
 
     listWorldInstancesForMap(mapX: number, mapY: number): GfxInstance[] {

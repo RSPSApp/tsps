@@ -3,6 +3,12 @@
 Opt in through **xRSPS → 117 HD**. Disabled on fresh installs; explicit choices
 persist in browser storage. No renderer restart is needed.
 
+Lamp glass and torch flames use emissive source faces while their frames retain normal
+lighting. Source glow and nearby light spill are 25% dimmer than the initial preview.
+WebGPU bloom picks up the bright source faces; WebGL keeps the same glowing cores
+and warm light spill. `SMOKE_HD_LIGHTS=1` checks live lantern uniforms and screenshots.
+Set the test account to `3092 3502 0` via the worktree's MCP to view Edgeville's lamps.
+
 The plugin adapts 117 HD lighting, regional environments, fog, material parameters,
 textures, normal maps, animated object lights and directional shadows to PicoGL.
 Current materials/assets come from `117HD/RLHD` at
@@ -103,10 +109,35 @@ radius. They include loaded off-screen casters and retain full geometry. The
 shadow projection remains capped at 48 tiles, with cached world depth and current
 actor poses as before.
 
+WebGPU's **117 HD** settings also include three independent switches, on by default:
+**Texture filtering** enables mipmaps, 8× anisotropic filtering and the 512px detail assets;
+turning it off restores 256px bilinear sampling. **Anti-aliasing** applies FXAA
+after tone mapping and before the HUD, with a shorter search span and half-strength blend
+to retain texture contrast. **Depth-aware AO** filters and upsamples
+half-resolution ambient occlusion using scene depth to preserve object edges; turning it off
+restores the original half-resolution box blur. It requires **Ambient occlusion** to be on.
+These switches apply immediately and persist with the other plugin settings.
+
+WebGPU also uses the same 8-tile chunk bounds, fog/camera culling, full/far scenery meshes,
+terrain draw coalescing and distant-lighting fade as WebGL. Full and far draws share the
+baked vertex/index buffers; animated objects update both tiers. Shadows cull full-detail
+loaded scenery against the light frustum, including off-screen casters. World depth refreshes
+at 15 Hz (or immediately after moving two tiles, changing plane/environment/distance/roofs),
+then copies to a target with current actor shadows each frame. Unchanged actor data skips
+the texture upload. Boat decks retain full geometry in their moving coordinate space.
+
 Run `yarn test:hd` in `client`. To generate the optional WebGL browser check:
 `yarn test:hd /tmp/elvarg-hd-shader-check.html`.
 The focused distance/mesh checks can be run with
 `node --import tsx tests/scenery-distance.test.ts` in `client`.
+
+The existing browser smoke test also checks these WebGPU paths, including GPU pixel fixtures,
+live toggle changes, camera motion and resize:
+`CLIENT_URL='http://localhost:<worktree-port>/?username=<name>&password=<pass>&mobile=1' SMOKE_ENABLE_HD=1 SMOKE_EXPECT_HD=1 SMOKE_EXPECT_WORLD=1 SMOKE_HD_QUALITY=1 node client/tests/webgpu-smoke.browser.cjs`.
+Screenshots are saved in `client/tests/artifacts/`.
+Add `SMOKE_HD_OPTIMISATIONS=1` on a desktop URL (omit `mobile=1`) to check default-detail
+scenery draw savings at 25/90/160 tiles and shadow-cache refreshes. Mobile profiles keep
+their existing distance caps.
 
 117HD-derived data/assets use the license at
 `textures/LICENSE-117HD.txt`; texture credits are in `textures/000_licenses.txt`.

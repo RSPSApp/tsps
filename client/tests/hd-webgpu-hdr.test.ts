@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { createMainFragmentWgsl } from "../render/webgpu/shaders/main.frag.wgsl";
 import { HD_SCENE_SHADERS } from "../game/plugins/hd/webgpu/hdSceneShaders";
+import { resolveWebGPULodDistance, resolveWebGPURenderDistance } from "../render/webgpu/frameConfig";
 
 test("extended world shader writes unclamped linear HDR into the offscreen target", () => {
     const base = createMainFragmentWgsl(false);
@@ -48,4 +49,33 @@ test("117HD metadata.y is read as the HdMaterials.ts bitfield", () => {
         /i32\(hdMetadata\.y\) & 2/,
         "world shaders must apply the worldUv masonry mapping to wall materials",
     );
+});
+
+test("lamp and torch source faces survive the untextured vertex path and emit HDR", () => {
+    assert.match(HD_SCENE_SHADERS.world.textureSample, /hdMetadata\.y = 5\.0/);
+    assert.match(HD_SCENE_SHADERS.world.declarations, /\(i32\(metadata\.y\) & 4\) != 0/);
+});
+
+test("WebGPU HD long views retain WebGL's 160-tile range and 48-tile detail cap", () => {
+    let enabled = true;
+    const renderer = { osrsClient: { renderDistance: 160, lodDistance: 160,
+        hdPlugin: { isEnabled: () => enabled } } } as any;
+    assert.equal(resolveWebGPURenderDistance(renderer), 160);
+    assert.equal(resolveWebGPULodDistance(renderer), 48);
+    enabled = false;
+    assert.equal(resolveWebGPURenderDistance(renderer), 90);
+    assert.equal(resolveWebGPULodDistance(renderer), 90);
+    renderer.osrsClient.lodDistance = 0;
+    assert.equal(resolveWebGPULodDistance(renderer), 0);
+});
+
+test("WebGPU HD discards obscured fragments after gradients and before texture samples", () => {
+    for (const slots of [HD_SCENE_SHADERS.world, HD_SCENE_SHADERS.actor]) {
+        const setup = slots.textureSample;
+        assert.ok(setup.indexOf("dpdy(hdUv)") < setup.indexOf("discard;"));
+        assert.ok(setup.indexOf("discard;") < setup.indexOf("hdSampleTexture(hdLayer"));
+        assert.match(setup, /else \{\s*textureColor = sampleModelTexture/);
+        assert.ok(!slots.declarations.includes("dpdx(position)"), "shade uses pre-discard gradients");
+        assert.match(slots.declarations, /detail <= 0.0/);
+    }
 });

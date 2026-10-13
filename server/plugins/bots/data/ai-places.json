@@ -1,0 +1,14 @@
+{
+  "places": [
+    { "id": "lumbridge", "name": "Lumbridge", "x": 3222, "y": 3218, "about": "castle where new players start; cows, goblins, trees, the river" },
+    { "id": "draynor_village", "name": "Draynor Village", "x": 3105, "y": 3251, "about": "bank, willow trees, shrimp fishing by the shore" },
+    { "id": "varrock", "name": "Varrock", "x": 3213, "y": 3424, "about": "big city with shops; mines south-east and south-west" },
+    { "id": "grand_exchange", "name": "Grand Exchange", "x": 3164, "y": 3486, "about": "where players meet to buy and sell" },
+    { "id": "edgeville", "name": "Edgeville", "x": 3087, "y": 3496, "about": "bank and yew trees next to the Wilderness" },
+    { "id": "falador", "name": "Falador", "x": 2964, "y": 3378, "about": "white city; bank, mines nearby" },
+    { "id": "falador_park", "name": "Falador Park", "x": 2994, "y": 3377, "about": "quiet park to hang out in" },
+    { "id": "seers_village", "name": "Seers' Village", "x": 2723, "y": 3484, "about": "bank, maple and yew trees, Camelot nearby" },
+    { "id": "catherby", "name": "Catherby", "x": 2809, "y": 3436, "about": "bank, lobster and harpoon fishing" },
+    { "id": "east_ardougne", "name": "East Ardougne", "x": 2661, "y": 3301, "about": "market square and bank" }
+  ]
+}

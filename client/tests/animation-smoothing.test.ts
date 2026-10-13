@@ -92,6 +92,13 @@ assert.deepEqual(
     animated(frame([0, 0, 0, 0], [1, 12, 0, 0], [2, 0, 253, 0], [3, 144, 128, 128])),
 );
 
+// A half turn has no short way round: it snaps (frame A held), or a part flipped every frame (the
+// demonbane cast's staff, seq 8977) spins the same way each time.
+const flipA = frame([0, 0, 0, 0], [2, 63, 0, 0]);
+const flipB = frame([0, 0, 0, 0], [2, 63, 128, 128]);
+assert.deepEqual(blended(flipA, flipB, 0.5), animated(flipA));
+assert.deepEqual(blended(flipB, flipA, 0.5), animated(flipB));
+
 // Origin resets. The decoder attaches a reset of an untransformed origin group to the first
 // transform after it. Here frame C attaches origin 0's reset to its rotation, frame D to its
 // translation (which also moves the rotation's vertices). Blended, the origin must be reset once,

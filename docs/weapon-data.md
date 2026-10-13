@@ -75,6 +75,7 @@ The weapon view of the capture index (attacks with each weapon equipped, special
 The captures also confirm, unchanged: the Abyssal whip, the two-handed swords' slash, the Elder maul, the Dragon dagger, Arkan blade, Thunder khopesh and Emberlight's slash, the Noxious halberd, the shortbows' and longbows' 426, and the Toxic blowpipe.
 
 **Inferred rather than captured:**
+- **Scimitars' Lunge:** 386 (`human_sword_stab`), seen in game (#461). It had been the slash, 390; the captures never had a scimitar on Lunge.
 - **Daggers' slash style:** 390 (`human_sword_slash`, as the stab-sword types' slash). Only their stab was in the captures.
 - **Stance sets from the cache's animation names:**
   - Soulreaper axe: `ancient_axe_idle` / `_walk` / `_run`;
@@ -82,7 +83,8 @@ The captures also confirm, unchanged: the Abyssal whip, the two-handed swords' s
   - Blisterwood flail: `ivandis_flail_*`;
   - Sunlight spear: `league_5_spear_shield_*`;
   - Hallowed flail: `human_weapons_hallowed_flail01_*`;
-  - Dinh's bulwarks: `human_dinhs_bulwark_*`.
+  - Dinh's bulwarks: `human_dinhs_bulwark_*`;
+  - Colossal blade: `human_weapon_giant01_ready` / `_walk` / `_run` (9460/9461/9459), added among the Giants' Foundry animations it was released with. It had been on the two-handed swords' stance (#461). Its attacks stay the two-handed sword's: the giant set has no attack or block of its own.
 
   Turn and side-step animations without their own name use the walk.
 - **Dinh's bulwark's Pummel:** `human_dinhs_bulwark_crush` 7507 (Pummel is a crush attack; `_bash` is its special).

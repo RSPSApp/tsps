@@ -86,7 +86,7 @@ fn hdActorColor(vertex: Vertex, hslOverride: vec4<f32>, normalWord: u32) -> vec3
  * near tile borders (117HD TerrainDataGenerator's overlay/underlay blending, done per-pixel
  * here): grass fades into dirt instead of swapping per tile. Water keeps its own path.
  */
-function materialSetup(groundUv: boolean): string {
+function materialSetup(groundUv: boolean, shadow = false): string {
     const index = groundUv
         ? `var hdMaterialIndex = i32(input.v_texId);
     if (input.v_texId == 0u && input.v_hdGroundMaterial > 0u) {
@@ -116,10 +116,10 @@ function materialSetup(groundUv: boolean): string {
     // Ground blend (terrain variant only): within a 0.35-tile band of the closest tile border,
     // mix the neighbouring tile's HD ground recipe into the albedo. The 0.5 border weight is
     // equal from both sides, so the seam stays continuous while grass fades into dirt.
-    // textureLoad/textureSampleLevel are branch-safe; no derivatives are added in here.
+    // Explicit gradients are evaluated before these per-material branches.
     const groundBlend = groundUv
         ? `
-    if (hd.u_hdEnabled > 0.5 && hdLayer > 0.0 && input.v_hdGroundMaterial > 0u) {
+    if (hd.u_hdEnabled > 0.5 && hdLayer != 0.0 && input.v_hdGroundMaterial > 0u) {
         let gmSize = vec2<i32>(textureDimensions(u_mapGroundMaterial, 0));
         let gmPos = input.v_hdPosition.xz - mapU.u_mapPos * 64.0 + vec2<f32>(f32(mapU.u_sceneBorderSize));
         let gmTexel = vec2<i32>(floor(gmPos));
@@ -144,12 +144,10 @@ function materialSetup(groundUv: boolean): string {
                 0,
             ).r;
             if (gmNeighborMaterial > 0u && gmNeighborMaterial != input.v_hdGroundMaterial) {
-                let gmNeighborLayer = i32(
-                    textureLoad(u_hdMaterials, vec2<i32>(1024 + i32(gmNeighborMaterial), 1), 0).x,
-                );
-                if (gmNeighborLayer > 0) {
+                let gmNeighborLayer = textureLoad(u_hdMaterials, vec2<i32>(1024 + i32(gmNeighborMaterial), 1), 0).x;
+                if (gmNeighborLayer != 0.0) {
                     let gmWeight = 0.5 * (1.0 - smoothstep(0.0, 0.35, gmDist));
-                    let gmNeighborColor = textureSampleLevel(u_hdTextures, u_sampler, hdUv, gmNeighborLayer, 0.0);
+                    let gmNeighborColor = hdSampleTexture(gmNeighborLayer, hdUv, hdUvDx, hdUvDy);
                     textureColor = vec4<f32>(mix(textureColor.rgb, gmNeighborColor.rgb, gmWeight), textureColor.a);
                 }
             }
@@ -164,6 +162,7 @@ function materialSetup(groundUv: boolean): string {
     if (hd.u_hdEnabled > 0.5) {
         hdMaterial = textureLoad(u_hdMaterials, vec2<i32>(hdMaterialIndex, 0), 0);
         hdMetadata = textureLoad(u_hdMaterials, vec2<i32>(hdMaterialIndex, 1), 0);
+        ${groundUv ? "if (input.v_texId == 0u && input.v_hdTerrain < 0.5 && input.v_texCoord.y == -1.0) { hdMetadata.y = 5.0; }" : ""}
     }
     let hdLayer = hdMetadata.x;
     var hdScale = hdMaterial.zw;
@@ -172,8 +171,19 @@ function materialSetup(groundUv: boolean): string {
         select(0.0, 1.0, abs(hdScale.y) > 0.001),
     ));
     var hdUv = ${uv};${masonry}
-    if (hdLayer > 0.0) {
-        textureColor = textureSampleLevel(u_hdTextures, u_sampler, hdUv, i32(hdLayer), 0.0);
+    let hdUvDx = ${shadow ? "vec2<f32>(0.0)" : "dpdx(hdUv)"};
+    let hdUvDy = ${shadow ? "vec2<f32>(0.0)" : "dpdy(hdUv)"};
+${shadow ? "" : `
+    // Evaluate gradients before discard; distant fog then skips all texture and lighting work.
+    let hdPositionDx = dpdx(input.v_hdPosition);
+    let hdPositionDy = dpdy(input.v_hdPosition);
+    let hdDistanceFog = select(0.0, hdFogAmount(input.v_hdPosition.xz), input.v_fogAmount > 0.0);
+    if (hd.u_hdEnabled > 0.5 && hdDistanceFog >= 1.0) { discard; }
+`}
+    if (hdLayer != 0.0) {
+        textureColor = hdSampleTexture(hdLayer, hdUv, hdUvDx, hdUvDy);
+    } else {
+        textureColor = sampleModelTexture(input.v_texId, input.v_texCoord);
     }
 ${groundBlend}
 `;
@@ -182,7 +192,7 @@ ${groundBlend}
 // Like 117 HD, replace baked directional shading on textured faces with neutral brightness.
 // Otherwise brick walls are lit twice and lose detail.
 const PALETTE = `
-    if (hd.u_hdEnabled > 0.5 && hdLayer > 0.0 && input.v_texId != 0u) {
+    if (hd.u_hdEnabled > 0.5 && hdLayer != 0.0 && input.v_texId != 0u) {
         paletteColor = vec3<f32>(90.0 / 127.0);
     }
 `;
@@ -195,11 +205,10 @@ const PALETTE = `
 function shade(skip: string): string {
     return `
     if (hd.u_hdEnabled > 0.5) {
-        // Called in uniform control flow (hdShade takes derivatives).
-        let hdSurface = hdShade(surface * hdMetadata.w, input.v_hdPosition, input.v_hdNormal, hdMaterial, hdMetadata, hdUv, front_facing);
         if (!(${skip})) {
-            surface = hdSurface;
-            let hdFog = hdFogAmount(input.v_hdPosition.xz);
+            surface = hdShade(surface * hdMetadata.w, input.v_hdPosition, input.v_hdNormal, hdMaterial, hdMetadata, hdUv, front_facing,
+                hdPositionDx, hdPositionDy, hdUvDx, hdUvDy);
+            let hdFog = hdDistanceFog;
             let groundFog = smoothstep(0.0, 1.0, (input.v_hdPosition.y - hd.u_hdGroundFog.x) / min(-0.001, hd.u_hdGroundFog.y - hd.u_hdGroundFog.x)) * hd.u_hdGroundFog.z;
             fog = max(fog, max(hdFog, groundFog));
             // The uniform is linearised on the CPU; the scene sky is display-referred.
@@ -228,8 +237,8 @@ function depth(alpha: boolean): string {
         }
         return;
     }
-    var textureColor = sampleModelTexture(input.v_texId, input.v_texCoord);
-${materialSetup(false)}
+    var textureColor = vec4<f32>(1.0);
+${materialSetup(false, true)}
     var alpha = textureColor.a * input.v_color.a;
     let material = getMaterial(input.v_texId);
     let frameCount = max(material.frameCount, 1);
@@ -276,11 +285,10 @@ export const HD_SCENE_SHADERS: WebGPUSceneShaders = {
         vertex: `
     out.v_hdTerrain = select(0.0, 1.0, modelInfo.contourGround == 3.0);
     out.v_hdGroundMaterial = select(0u, u32(max(round(-vertex.texCoord.x * 64.0), 0.0)), out.v_hdTerrain > 0.5 && vertex.textureId == 0u);
-    out.v_hdNormal = select(
-        vec3<f32>(0.0),
-        hdTerrainNormal(localPos.xz - mapU.u_mapPos * 64.0, modelInfo.plane),
-        hd.u_hdEnabled > 0.5 && out.v_hdTerrain > 0.5,
-    );
+    out.v_hdNormal = vec3<f32>(0.0);
+    if (hd.u_hdEnabled > 0.5 && out.v_hdTerrain > 0.5) {
+        out.v_hdNormal = hdTerrainNormal(localPos.xz - mapU.u_mapPos * 64.0, modelInfo.plane);
+    }
     out.v_hdPosition = select(vec3<f32>(0.0), (hd.u_hdInverseView * viewPos).xyz, hd.u_hdEnabled > 0.5);
 `,
         textureSample: materialSetup(true),
@@ -298,11 +306,10 @@ export const HD_SCENE_SHADERS: WebGPUSceneShaders = {
         vertex: `
     out.v_color = vec4<f32>(hdActorColor(vertex, actorHslOverride, extraWord), vertex.color.a);
     out.v_hdPosition = select(vec3<f32>(0.0), (hd.u_hdInverseView * viewPos).xyz, hd.u_hdEnabled > 0.5);
-    out.v_hdNormal = select(
-        vec3<f32>(0.0),
-        hdActorWorldNormal(poseLinear * hdActorNormal(extraWord), actorRotation),
-        hd.u_hdEnabled > 0.5 && (extraWord >> 16u) != 0u,
-    );
+    out.v_hdNormal = vec3<f32>(0.0);
+    if (hd.u_hdEnabled > 0.5 && (extraWord >> 16u) != 0u) {
+        out.v_hdNormal = hdActorWorldNormal(poseLinear * hdActorNormal(extraWord), actorRotation);
+    }
 `,
         textureSample: materialSetup(false),
         animateTexture: "hdLayer == 0.0",

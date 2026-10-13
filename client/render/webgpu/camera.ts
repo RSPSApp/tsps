@@ -238,9 +238,8 @@ export function updateFollowCamera(
         camera.setScenePitchOverride(camera.getControlPitchAngle());
     }
 
-    const viewportWidth = renderer.canvas.width || 1;
-    const viewportHeight = renderer.canvas.height || 1;
-    const { viewportHeight: effectiveViewportHeight } = camera.computeViewportMetricsForSize(
+    const { width: viewportWidth, height: viewportHeight } = renderer.getSceneViewportWidgetRect();
+    const { unitViewportHeight: effectiveViewportHeight } = camera.computeViewportMetricsForSize(
         viewportWidth,
         viewportHeight,
     );
@@ -282,6 +281,7 @@ export function updateFollowCamera(
 
     const focusHeightTiles = (osrsClient.camFollowHeight | 0) / 128.0;
     const targetY = playerHeightSample.height - focusHeightTiles;
+        camera.setFocalPoint(targetX, targetY, targetZ);
     const desiredPosY = Math.round((targetY - forward[1] * dist) * 128) / 128;
     camera.snapToPosition(undefined, desiredPosY, undefined);
 }

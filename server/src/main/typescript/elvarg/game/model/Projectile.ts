@@ -12,6 +12,8 @@ export class Projectile {
     private endHeight: number;
     private lockon: Mobile;
     private lockonTargetIndex: number;
+    /** The mobile firing it, when known: the client starts it from where that mobile is drawn. */
+    private sourceIndex = 0;
     private delay: number;
     private privateArea: PrivateArea;
     /** The arc's slope at launch (the packet's angle); 16 unless set. */
@@ -88,7 +90,17 @@ export class Projectile {
             startHeight,
             endHeight,
             source.getPrivateArea()
-        );
+        ).withSource(source);
+    }
+
+    /**
+     * Names the mobile firing it. Its tile is still the packet's source, but the client starts
+     * the projectile from where the mobile is drawn: a caster that attacks on the tick it steps
+     * into range is still walking there on screen.
+     */
+    public withSource(source: Mobile): Projectile {
+        this.sourceIndex = Projectile.resolveLockonTargetIndex(source);
+        return this;
     }
 
 
@@ -165,7 +177,8 @@ export class Projectile {
                     this.lockonTargetIndex,
                     resolvedDelay,
                     this.angle,
-                    this.progress
+                    this.progress,
+                    this.sourceIndex || null
                 );
         });
         if (process.env.PROJECTILE_DEBUG === "1") {

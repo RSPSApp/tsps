@@ -42,6 +42,7 @@ export const LOGIN_LAYOUT = {
     TITLEBOX_FALLBACK_WIDTH: 360,
     TITLEBOX_FALLBACK_HEIGHT: 200,
     BOTTOM_CONTROLS_RESERVE: 52,
+    BOTTOM_CONTROLS_Y: 463,
     CONTENT_WIDTH: 765,
     SCENE_WIDTH: 765,
     SCENE_HEIGHT: 503,
@@ -49,5 +50,8 @@ export const LOGIN_LAYOUT = {
     TITLE_BG_CROP_X: Math.floor((1089 - 765) / 2),
     MAX_BG_WIDTH: 765,
     MAX_BG_HEIGHT: 503,
+    // Viewport height (CSS px) at which the classic scene draws 1:1, about a maximised
+    // browser on a 1080p screen. Taller viewports grow the scene by the same ratio.
+    SCENE_REFERENCE_VIEWPORT_HEIGHT: 960,
     CARET_BLINK_INTERVAL_MS: 500,
 } as const;

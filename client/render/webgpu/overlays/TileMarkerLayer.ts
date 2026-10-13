@@ -1,5 +1,6 @@
 import type { TileHighlightRenderEntry } from "../../../game/highlights/TileHighlightManager";
 import { GPU_BUFFER_USAGE, GPU_SHADER_STAGE, SCENE_DEPTH_FORMAT } from "../bindings";
+import { createScenePipeline, withSampleCount } from "../multisample";
 import { WORLD_OVERLAY_WGSL } from "../shaders/overlay.wgsl";
 import type { OverlayHost } from "./OverlayHost";
 
@@ -126,7 +127,7 @@ export class TileMarkerLayer {
             depthCompare: "less-equal" as const,
         };
         const depthPipeline = (format: GPUTextureFormat, kind: "fill" | "line", label: string) =>
-            device.createRenderPipeline({
+            createScenePipeline(device, {
                 label,
                 layout,
                 vertex,
@@ -193,8 +194,8 @@ export class TileMarkerLayer {
         this.buildGeometry();
     }
 
-    drawWorld(pass: GPURenderPassEncoder, useExtensionFormat: boolean = false): void {
-        this.drawSegments(pass, this.worldSegments, true, useExtensionFormat);
+    drawWorld(pass: GPURenderPassEncoder, useExtensionFormat: boolean = false, sampleCount: number = 1): void {
+        this.drawSegments(pass, this.worldSegments, true, useExtensionFormat, sampleCount);
     }
 
     drawScreen(pass: GPURenderPassEncoder): void {
@@ -331,6 +332,7 @@ export class TileMarkerLayer {
         segments: DrawSegment[],
         withDepth: boolean,
         useExtensionFormat: boolean = false,
+        sampleCount: number = 1,
     ): void {
         if (segments.length === 0) return;
         const usedBytes = this.floats * 4;
@@ -367,7 +369,7 @@ export class TileMarkerLayer {
                       ? (extensionPipelines ? this.lineDepthPipelineExt : this.lineDepthPipeline) ??
                         this.lineDepthPipeline
                       : this.linePipeline;
-            pass.setPipeline(pipeline);
+            pass.setPipeline(withDepth ? withSampleCount(pipeline, sampleCount) : pipeline);
             pass.draw(segment.count, 1, segment.first, 0);
         }
     }

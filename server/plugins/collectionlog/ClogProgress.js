@@ -31,10 +31,6 @@ const NOTIFY_POPUP = 2;
 const RECENT_SIZE = 12;
 const EMPTY_RECENT = -1;
 const COUNTS_DELAY = 5;
-const POPUP_TICKS = 13;
-const NOTIFICATIONS_UID = (161 << 16) | 13;
-const NOTIFICATION_DISPLAY = 660;
-const SCRIPT_NOTIFICATION_INIT = 3343;
 /** OSRS's day number: days since 27 February 2002 (8986 on 2026-10-05, as captured). */
 const DAY_ZERO = Date.UTC(2002, 1, 27);
 
@@ -141,15 +137,11 @@ function itemName(itemId) {
 function announce(player, itemId) {
   const setting = notifySetting(player);
   const name = itemName(itemId);
-  const sender = player.getPacketSender();
   if (setting & NOTIFY_CHAT) player.sendMessage(`New item added to your collection log: <col=ff0000>${name}</col>`);
   if (!(setting & NOTIFY_POPUP)) return;
   Sounds.sendSound(player, Sound.COLLECTION_LOG_NEW_ITEM);
-  sender.sendSubInterface(NOTIFICATIONS_UID, NOTIFICATION_DISPLAY, 1);
-  sender.sendInterfaceScript(SCRIPT_NOTIFICATION_INIT, ["Collection Log", `New item:<br><br><col=ffffff>${name}</col>`, -1]);
-  TaskManager.submit(new LaterTask(POPUP_TICKS, () => {
-    if (player.isRegistered?.() !== false) sender.closeSubInterface(NOTIFICATIONS_UID);
-  }));
+  // The popup queues behind any other (plugins/interface/Notifications.plugin.js).
+  pluginApi?.emitCustomEvent("notification:show", { player, title: "Collection Log", text: `New item:<br><br><col=ffffff>${name}</col>`, colour: -1 });
 }
 
 /**
@@ -188,7 +180,7 @@ function reset(player) {
 }
 
 module.exports = {
-  VARP, ITEMS_ATTRIBUTE, COUNTS_ATTRIBUTE, RECENT_ATTRIBUTE, NOTIFICATIONS_UID,
+  VARP, ITEMS_ATTRIBUTE, COUNTS_ATTRIBUTE, RECENT_ATTRIBUTE,
   bind, today, items, obtained, uniqueCount, categoryCount, addCategoryCount, setCategoryCount,
   obtain, restore, reset,
 };

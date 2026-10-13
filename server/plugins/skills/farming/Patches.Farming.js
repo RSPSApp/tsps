@@ -659,7 +659,7 @@ function attach(api) {
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onPlayerLogout(logout);
     api.onPlayerLogout(Tithe.titheLogout);
-    api.onPlayerLevelUp(cancelWork);
+    api.onCustomEvent("level-up:popup-opened", cancelWork);
     api.onObjectInteraction(objectInteraction);
     api.onItemOnObject(itemOnObject, { noted: false });
     api.onItemOnItem(itemOnItem, { noted: false });

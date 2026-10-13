@@ -63,6 +63,7 @@ export class OverheadPrayerOverlay implements Overlay {
         hint: new Set<number>(),
     };
     private npcIconSprites = new Map<string, SpriteTexture>();
+    private customIconSprites = new Map<IndexedSprite, SpriteTexture>();
     private failedNpcIconKeys = new Set<string>();
     private archiveIds = { pk: -1, prayer: -1, hint: -1 };
 
@@ -116,6 +117,12 @@ export class OverheadPrayerOverlay implements Overlay {
         }
         this.npcIconSprites.clear();
         this.failedNpcIconKeys.clear();
+        for (const sprite of this.customIconSprites.values()) {
+            try {
+                sprite.tex.delete?.();
+            } catch {}
+        }
+        this.customIconSprites.clear();
     }
 
     dispose(): void {
@@ -260,6 +267,15 @@ export class OverheadPrayerOverlay implements Overlay {
         return { tex, w: width, h: height };
     }
 
+    private getCustomSprite(icon: IndexedSprite): SpriteTexture {
+        let sprite = this.customIconSprites.get(icon);
+        if (!sprite) {
+            sprite = this.createTextureFromIndexedSprite(icon);
+            this.customIconSprites.set(icon, sprite);
+        }
+        return sprite;
+    }
+
     update(args: OverlayUpdateArgs): void {
         this.lastArgs = args;
         // OverlayManager updates overlays multiple times per frame. Preserve the
@@ -300,6 +316,7 @@ export class OverheadPrayerOverlay implements Overlay {
                 this.getSprite("prayer", entry.headIconPrayer | 0),
                 entry.headIconHint && isHintArrowBlinkOn() ? this.getSprite("hint", 0) : undefined,
                 ...(entry.npcHeadIcons ?? []).map((icon) => this.getNpcSprite(icon.archiveId, icon.spriteId)),
+                ...(entry.customHeadIcons ?? []).map((icon) => this.getCustomSprite(icon)),
             ].filter((sprite): sprite is SpriteTexture => sprite !== undefined);
             if (sprites.length === 0) continue;
 

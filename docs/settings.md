@@ -1,0 +1,79 @@
+# Settings and level-up notifications
+
+`server/plugins/interface/Settings.plugin.js` applies clicks in the All Settings interface (`settings`, 134). `server/plugins/interface/SkillLevelUp.plugin.js` sends the level-up feedback and follows the "Level-up pop-up notifications" setting.
+
+The behaviour comes from rsprox captures of live OSRS: a capture of All Settings (every row below clicked through), and level-ups from the shared capture index (`levelup_display` in 70 recordings, revisions 223–235, for example recordings 907, 908, 944 and 379; pop-ups disabled in 23 rev 237 recordings, for example 1098, 1102, 1104, 4055). Ids are checked against the rev 241 cache.
+
+## All Settings
+
+The client only reports the click. The server sets the variable and sends it back.
+
+- **The setting list.** Enum 422 lists the categories, each category's param 745 its setting structs in row order. A setting struct carries its id (param 1077), its type (param 1078: 0 toggle, 2 dropdown, 3 key, 9 colour) and its dropdown's option enum (param 1091). A row's slot is its index in the category shown, or, in search results, its index across every category in turn (search result 301 is setting 315).
+- **Selected setting** (`settings_selected_setting`, varbit 9657). A row click sets it to the setting's id, toggles included. Choosing a dropdown option, closing the dropdown (`settings:dropdown_close`, 134:26) or clicking a category sets it to 0.
+- **A search result clicked** also sets `settings_category` (9656) to the setting's category. The search stays open.
+- **A category clicked while searching** ends the search: `floater_is_searching` and `floater_search_listen_for_keyboard` go to 0, the category and selection are sent, then script 2158 (`chatdefault_restoreinput`) runs, as when All Settings closes.
+- **Reopening** All Settings shows the category shown last; live sends nothing for it.
+- **A toggle** flips its variable between 0 and 1, on the same tick as the selection.
+- **A dropdown option** (`settings:dropdown_buttons`, 134:29, three components per option, so option = slot / 3) sets its variables, then clears the selection.
+
+`server/plugins/interface/data/settings.json` maps setting ids to their variables. A toggle or a dropdown with one varbit names it (a dropdown sets it to the option's index). A dropdown that sets several lists them per option. Every value chosen, and the category shown (`settings_category`, which live also keeps), is saved in the `settings:values` attribute and sent again on login. Another plugin can still claim a row first through `settings:setting-clicked` (RunAutoEnable does).
+
+| Setting | Id | Variable |
+| --- | --- | --- |
+| Hitsplat tinting | 5 | varbit 10236 `hitsplat_tint_disabled` |
+| Max hit hitsplats | 279 | varbit 14196 `hitsplat_maxhit_disabled` |
+| Show boss health overlay | 10 | varbit 12389 `hpbar_hud_boss_disabled` |
+| Show enemy name on health overlay | 299 | varbit 14706 `hpbar_hud_boss_name_disabled` |
+| Health overlay display type (dropdown) | 301 | varbit 14708 `hpbar_hud_boss_percentage_enabled` = option |
+| Compact boss health overlay | 300 | varbit 14707 `hpbar_hud_boss_compact_enabled` |
+| Last Man Standing fog colour (dropdown) | 81 | varbit 11865 `br_custom_fog_colour` = option |
+| Clue scroll warnings, Beginner to Elite | 374–378 | varbits 10693, 10694, 10695, 10723, 10724 |
+| STASH units take equipped items | 451 | varbit 17938 `option_hidey_holes_equipped` |
+| 'Did you know?' tips | 433 | varbit 16235 `settings_didyouknow_disabled` |
+| Update clan 'last seen' records | 431 | varbit 16118 `clan_disable_lastseen` |
+| Show chat effects | 34 | varp 171 `option_chat` |
+| Split friends private chat | 35 | varp 287 `option_pm`, then script 83 `splitpm_changed` |
+| Enable precise timing | 82 | varbit 11866 `option_precise_timing` |
+| Combat Achievement Tasks - Repeat completion | 160 | varbit 12456 |
+| Player Trade options | 312 | varbit 6580 `tradeoption_disabled` |
+| Player Report options | 372 | varbit 1334 `rightclick_report_abuse_disabled` |
+| Side panel can be closed by the hotkeys | 54 | varbit 4611 `hotkey_cannot_close_sidepanel` |
+| Scroll wheel can change zoom distance | 13 | varbit 6357 `camera_zoom_mouse_disabled` |
+| Enable profanity filter | 37 | varp 1074 `option_chatfilter_disabled` |
+| Sailing side panel (dropdown) | 454 | varbit 18131 `settings_sailing_side_panel_onlyonboat` = option |
+| Level-up pop-up notifications (dropdown) | 315 | see below |
+| Level-up chatbox list | 493 | varbit 20158 `option_level_up_chatbox_list` |
+| Level-up guide list | 494 | varbit 20159 `option_level_up_guide_list_disabled` |
+
+"Level-up pop-up notifications" (options from enum 2513):
+
+| Option | `option_level_up_message_disabled` (20157) | `option_level_up_popup_list` (4371) |
+| --- | --- | --- |
+| Disabled | 1 | 0 |
+| Show level only | 0 | 0 |
+| Show level & unlocks | 0 | 1 |
+
+The keybind dropdowns (ids 16–29) set their key varbits as before, then clear the selection.
+
+## Level-ups
+
+All on the tick the level is gained:
+
+1. **Message:** `Congratulations, you've just advanced your <Skill> level. You are now level <n>.` At 99 it is `Congratulations, you've reached the highest possible <Skill> level of 99.` instead.
+2. **Graphic:** `levelup_anim` (199), or `levelup_99_anim` (1388) at 99, at height 124.
+3. **Sounds:** area sounds 2396, then 2384 with a 25-cycle delay, at the player, range 1.
+4. **Total level:** on passing a multiple of 25, `Congratulations, you've reached a total level of <n>.`
+5. **Pop-up**, unless set to Disabled: script 2379 (`toplevel_chatbox_resetbackground`), then `levelup_display` (233) in the chatbox modal with `<col=000080>Congratulations, you just advanced a <Skill> level.`, `Your <Skill> level is now <n>.`, `Click here to continue`, and only that skill's icon shown.
+
+With pop-ups disabled, players kept skilling and fighting straight through their level-ups (one recording has 539 in a row). So skilling stops only when the pop-up opens: SkillLevelUp emits `level-up:popup-opened` `{ player, skill }` and the skilling plugins (Cooking, Farming, Firemaking, Fishing, Fletching, Mining, Smithing, Woodcutting) stop on it.
+
+**Combat level.** A tick after the skill's level-up: `Congratulations, you've just advanced your Combat level. You are now level <n>.` with the same graphic and sounds. With pop-ups on, its pop-up comes when the skill's is continued: `<col=000080>Congratulations, you just advanced a combat level.` (or `<n> combat levels.`), `Your combat level is now <n>.`, with the combat icon (233:55 in rev 241).
+
+## Not done yet
+
+- **"Show level & unlocks"** behaves as "Show level only". On live, continuing opens an `objectbox` or `objectbox_double` listing what the level unlocks, with item models (for example `Members can now wield <col=000080>Osmumten's Fang<col=000000>!`). The text is server-side and isn't in the cache.
+- **Level-up chatbox list and guide list**: the settings are stored, but no capture shows what they send.
+- **Jingles.** Live plays `midi_jingle` per skill, two per skill (Attack 29/30, Defence 37/38, Magic 51/52, combat 299 …). Which one plays depends on the level: Magic's second plays at levels that unlock a spell, while Hitpoints and Strength switch to it at 50. The rule per skill still needs working out.
+- **Player Trade and Report options**: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
+- **Sailing side panel**: live also sets `sailing_sidepanel_visible_from_combat_tab` (19153) from the option. Sailing sets that varbit itself when boarding and leaving.
+- **Colour pickers** (type 9, for example Public chat colour) are not handled.

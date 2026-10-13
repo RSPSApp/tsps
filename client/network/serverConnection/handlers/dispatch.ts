@@ -1,3 +1,4 @@
+import { emitPluginMessage } from "../domain/pluginMessages";
 import { ClientState } from "../../../game/ClientState";
 import {
     VARP_AREA_SOUNDS_VOLUME,
@@ -46,6 +47,10 @@ import { handleInboundUi } from "./inboundUi";
 import { handleInboundWorld } from "./inboundWorld";
 
 export function processServerMessage(msg: any): void {
+    if (msg.type === "plugin_message") {
+        emitPluginMessage(msg.payload);
+        return;
+    }
     if (handleAuthTickMessage(msg)) return;
     if (handleInboundSync(msg)) return;
     if (handleInboundUi(msg)) return;

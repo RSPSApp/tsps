@@ -89,9 +89,10 @@ The client reads the log straight from its cache too. It used to override these 
 | 5 ticks later | The total, highscore and tab counts, and the recent items shifted down |
 | 13 ticks after the popup opened | The popup is closed |
 
+A boss category's **Combat Achievements button** (621:21) closes the log and opens that boss's Combat Achievements page (`combat-achievements:open`; [combat-achievements.md](combat-achievements.md)).
+
 ## Not modelled
 
-- **The Combat Achievements button** on a boss page (621:21); there's no combat achievement system.
 - **The burger menu's other slots** (10, 11).
 - **The per-item varbits** OSRS sends at login for a few items (`collection_item_*`, e.g. Zulrah's scales) and the `collection_other_*_completed` flags.
 - **Loot that doesn't go through `npc-drops:roll` yet:** additional reward sources, raids chests and clue caskets. Each needs a `collection-log:obtain` in a follow-up; unimplemented content has no acquisition route yet.

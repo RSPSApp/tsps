@@ -194,7 +194,7 @@ export class ModelImageCaptureOverlay implements Overlay {
 
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 
-function findOpaqueBounds(pixels: Uint8Array, width: number, height: number): Bounds | undefined {
+export function findOpaqueBounds(pixels: Uint8Array, width: number, height: number): Bounds | undefined {
     let minX = width;
     let minY = height;
     let maxX = -1;
@@ -217,7 +217,7 @@ function findOpaqueBounds(pixels: Uint8Array, width: number, height: number): Bo
     };
 }
 
-function cropMaskedPixels(
+export function cropMaskedPixels(
     scene: Uint8Array,
     mask: Uint8Array,
     width: number,

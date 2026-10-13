@@ -11,6 +11,7 @@ module.exports = {
   register(api) {
     require("./toa/Lobby.TombsOfAmascut")(api);
     require("./toa/Raid.TombsOfAmascut")(api);
+    require("./toa/CombatAchievements.TombsOfAmascut")(api);
     require("./toa/Nexus.TombsOfAmascut")(api);
     require("./toa/Supplies.TombsOfAmascut")(api);
     require("./toa/Scabaras.TombsOfAmascut")(api);

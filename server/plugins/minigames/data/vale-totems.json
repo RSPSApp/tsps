@@ -1,0 +1,183 @@
+{
+  "$comment": "Vale Totems (docs/vale-totems.md). Names are cache gamevals. Sites from the Wiki's Totem site locations, matched to their site number by the captured loc ids; woods, xp and offerings from the Wiki's Vale Totem creation template and offering table; loot from the Wiki's Vale offerings page.",
+  "valley": { "$comment": "the map squares holding the totem sites", "minX": 1344, "maxX": 1535, "minY": 3264, "maxY": 3391 },
+  "cycleTicks": 80,
+  "offeringsLimit": 15000,
+  "runEnergyRestore": 15,
+  "rummageCost": 100,
+  "hastyRummages": 5,
+  "wrongAnimalXpPenalty": 0.25,
+  "wrongAnimalOfferingsPenalty": 0.4,
+  "sites": [
+    { "site": 1, "x": 1370, "y": 3375 },
+    { "site": 2, "x": 1346, "y": 3319 },
+    { "site": 3, "x": 1385, "y": 3274 },
+    { "site": 4, "x": 1413, "y": 3286 },
+    { "site": 5, "x": 1438, "y": 3305 },
+    { "site": 6, "x": 1477, "y": 3332 },
+    { "site": 7, "x": 1453, "y": 3341 },
+    { "site": 8, "x": 1398, "y": 3329 }
+  ],
+  "animals": [
+    { "key": "a", "name": "buffalo", "label": "Buffalo" },
+    { "key": "b", "name": "jaguar", "label": "Jaguar" },
+    { "key": "c", "name": "eagle", "label": "Eagle" },
+    { "key": "d", "name": "snake", "label": "Snake" },
+    { "key": "e", "name": "scorpion", "label": "Scorpion" }
+  ],
+  "woods": [
+    {
+      "name": "oak", "log": "oak_logs", "level": 20, "durability": 2,
+      "baseOfferings": 2, "decorationOfferings": 2, "carveXp": 12.5, "decorationXp": 51.2,
+      "decorations": ["unstrung_oak_shortbow", "oak_shortbow", "unstrung_oak_longbow", "oak_longbow", "oak_shield", "xbows_crossbow_stock_oak"]
+    },
+    {
+      "name": "willow", "log": "willow_logs", "level": 35, "durability": 3,
+      "baseOfferings": 2, "decorationOfferings": 2, "carveXp": 31.7, "decorationXp": 126.9,
+      "decorations": ["unstrung_willow_shortbow", "willow_shortbow", "unstrung_willow_longbow", "willow_longbow", "willow_shield", "xbows_crossbow_stock_willow"]
+    },
+    {
+      "name": "maple", "log": "maple_logs", "level": 50, "durability": 4,
+      "baseOfferings": 2, "decorationOfferings": 2, "carveXp": 50.8, "decorationXp": 201,
+      "decorations": ["unstrung_maple_shortbow", "maple_shortbow", "unstrung_maple_longbow", "maple_longbow", "maple_shield", "xbows_crossbow_stock_maple"]
+    },
+    {
+      "name": "yew", "log": "yew_logs", "level": 65, "durability": 5,
+      "baseOfferings": 3, "decorationOfferings": 2.5, "carveXp": 82.6, "decorationXp": 326.2,
+      "decorations": ["unstrung_yew_shortbow", "yew_shortbow", "unstrung_yew_longbow", "yew_longbow", "yew_shield", "xbows_crossbow_stock_yew"]
+    },
+    {
+      "name": "magic", "log": "magic_logs", "level": 80, "durability": 6,
+      "baseOfferings": 3, "decorationOfferings": 3, "carveXp": 156.1, "decorationXp": 619.8,
+      "decorations": ["unstrung_magic_shortbow", "magic_shortbow", "unstrung_magic_longbow", "magic_longbow", "magic_shield", "xbows_crossbow_stock_magic"]
+    },
+    {
+      "name": "redwood", "log": "redwood_logs", "level": 90, "durability": 7,
+      "baseOfferings": 3, "decorationOfferings": 3, "carveXp": 221.3, "decorationXp": 725.5,
+      "decorations": ["redwood_hiking_staff", "redwood_shield"]
+    }
+  ],
+  "loot": {
+    "uniqueChance": 100,
+    "uniques": [
+      { "item": "bowstring_spool", "weight": 5 },
+      { "item": "fletching_knife", "weight": 3 },
+      { "item": "greenman_mask", "weight": 2 }
+    ],
+    "collectionLog": ["bowstring_spool", "fletching_knife", "greenman_mask", "ent_branch"],
+    "table": [
+      { "weight": 80, "item": "dirty_arrowtips", "min": 26, "max": 32 },
+      { "weight": 65, "item": "ent_branch", "min": 1, "max": 1 },
+      { "weight": 50, "item": "flax_bale", "min": 5, "max": 6 },
+      { "weight": 35, "item": "blessed_bone_shard", "min": 70, "max": 90 },
+      { "weight": 25, "item": "forestry_currency", "min": 70, "max": 90 },
+      { "weight": 15, "item": "feather", "min": 400, "max": 500 },
+      { "weight": 24, "table": "roots" },
+      { "weight": 50, "table": "nests" },
+      { "weight": 55, "table": "seeds" }
+    ],
+    "roots": [
+      { "weight": 3, "item": "magic_roots", "min": 2, "max": 3 },
+      { "weight": 3, "item": "yew_roots", "min": 3, "max": 4 },
+      { "weight": 2, "item": "maple_roots", "min": 3, "max": 4 },
+      { "weight": 2, "item": "willow_roots", "min": 3, "max": 4 }
+    ],
+    "nestsDoubleLevel": 80,
+    "nests": [
+      { "weight": 65, "item": "bird_nest_seeds" },
+      { "weight": 32, "item": "bird_nest_ring" },
+      { "weight": 1, "item": "bird_nest_egg_red" },
+      { "weight": 1, "item": "bird_nest_egg_green" },
+      { "weight": 1, "item": "bird_nest_egg_blue" }
+    ],
+    "seedTiers": [
+      {
+        "level": 90,
+        "seeds": [
+          { "weight": 103420, "item": "willow_seed", "min": 1, "max": 2 },
+          { "weight": 68556, "item": "maple_seed", "min": 1, "max": 2 },
+          { "weight": 68471, "item": "papaya_tree_seed", "min": 1, "max": 2 },
+          { "weight": 41544, "item": "yew_seed", "min": 1, "max": 2 },
+          { "weight": 40942, "item": "palm_tree_seed", "min": 1, "max": 2 },
+          { "weight": 27786, "item": "limpwurt_seed", "min": 3, "max": 6 },
+          { "weight": 20912, "item": "acorn", "min": 3, "max": 6 },
+          { "weight": 20797, "item": "pineapple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 20736, "item": "magic_tree_seed", "min": 1, "max": 2 },
+          { "weight": 733, "item": "dragonfruit_tree_seed", "min": 1, "max": 2 },
+          { "weight": 328, "item": "watermelon_seed", "min": 5, "max": 8 },
+          { "weight": 318, "item": "apple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 39, "item": "cadavaberry_bush_seed", "min": 7, "max": 11 }
+        ]
+      },
+      {
+        "level": 80,
+        "seeds": [
+          { "weight": 81764, "item": "willow_seed", "min": 1, "max": 2 },
+          { "weight": 54436, "item": "papaya_tree_seed", "min": 1, "max": 2 },
+          { "weight": 54087, "item": "maple_seed", "min": 1, "max": 2 },
+          { "weight": 32739, "item": "palm_tree_seed", "min": 1, "max": 2 },
+          { "weight": 32536, "item": "yew_seed", "min": 1, "max": 2 },
+          { "weight": 24525, "item": "limpwurt_seed", "min": 3, "max": 6 },
+          { "weight": 18007, "item": "pineapple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 17949, "item": "acorn", "min": 3, "max": 6 },
+          { "weight": 16246, "item": "magic_tree_seed", "min": 1, "max": 2 },
+          { "weight": 4268, "item": "cadavaberry_bush_seed", "min": 7, "max": 11 },
+          { "weight": 3746, "item": "apple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 3034, "item": "watermelon_seed", "min": 5, "max": 8 },
+          { "weight": 557, "item": "dragonfruit_tree_seed", "min": 1, "max": 2 }
+        ]
+      },
+      {
+        "level": 65,
+        "seeds": [
+          { "weight": 72148, "item": "willow_seed", "min": 1, "max": 2 },
+          { "weight": 50564, "item": "papaya_tree_seed", "min": 1, "max": 2 },
+          { "weight": 47628, "item": "maple_seed", "min": 1, "max": 2 },
+          { "weight": 41411, "item": "limpwurt_seed", "min": 3, "max": 6 },
+          { "weight": 37383, "item": "cadavaberry_bush_seed", "min": 7, "max": 11 },
+          { "weight": 30304, "item": "apple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 29219, "item": "acorn", "min": 3, "max": 6 },
+          { "weight": 29040, "item": "pineapple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 28183, "item": "palm_tree_seed", "min": 1, "max": 2 },
+          { "weight": 28129, "item": "yew_seed", "min": 1, "max": 2 },
+          { "weight": 25261, "item": "watermelon_seed", "min": 5, "max": 8 },
+          { "weight": 14171, "item": "magic_tree_seed", "min": 1, "max": 2 },
+          { "weight": 464, "item": "dragonfruit_tree_seed", "min": 1, "max": 2 }
+        ]
+      },
+      {
+        "level": 50,
+        "seeds": [
+          { "weight": 30425, "item": "cadavaberry_bush_seed", "min": 7, "max": 11 },
+          { "weight": 24585, "item": "apple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 20472, "item": "limpwurt_seed", "min": 3, "max": 6 },
+          { "weight": 20400, "item": "watermelon_seed", "min": 5, "max": 8 },
+          { "weight": 13764, "item": "acorn", "min": 3, "max": 6 },
+          { "weight": 13646, "item": "pineapple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 9324, "item": "willow_seed", "min": 1, "max": 2 },
+          { "weight": 7993, "item": "papaya_tree_seed", "min": 1, "max": 2 },
+          { "weight": 5497, "item": "maple_seed", "min": 1, "max": 2 },
+          { "weight": 3142, "item": "palm_tree_seed", "min": 1, "max": 2 },
+          { "weight": 3135, "item": "yew_seed", "min": 1, "max": 2 },
+          { "weight": 1577, "item": "magic_tree_seed", "min": 1, "max": 2 },
+          { "weight": 63, "item": "dragonfruit_tree_seed", "min": 1, "max": 2 }
+        ]
+      },
+      {
+        "level": 1,
+        "seeds": [
+          { "weight": 6637, "item": "cadavaberry_bush_seed", "min": 7, "max": 11 },
+          { "weight": 5192, "item": "apple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 4289, "item": "watermelon_seed", "min": 5, "max": 8 },
+          { "weight": 3963, "item": "limpwurt_seed", "min": 3, "max": 6 },
+          { "weight": 2627, "item": "pineapple_tree_seed", "min": 1, "max": 2 },
+          { "weight": 2619, "item": "acorn", "min": 3, "max": 6 },
+          { "weight": 666, "item": "papaya_tree_seed", "min": 1, "max": 2 },
+          { "weight": 367, "item": "willow_seed", "min": 1, "max": 2 },
+          { "weight": 43, "item": "maple_seed", "min": 1, "max": 2 },
+          { "weight": 5, "item": "palm_tree_seed", "min": 1, "max": 2 }
+        ]
+      }
+    ]
+  }
+}

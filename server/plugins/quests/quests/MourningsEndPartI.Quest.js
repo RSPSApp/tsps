@@ -144,13 +144,13 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     ItemIdentifiers.TELEPORT_CRYSTAL_3_, // 6100
     ItemIdentifiers.TELEPORT_CRYSTAL_2_, // 6101
     ItemIdentifiers.TELEPORT_CRYSTAL_1_, // 6102
-    ItemIdentifiers.CRYSTAL_TELEPORT_SEED_2, // 6103
+    ItemIdentifiers.CRYSTAL_TELEPORT_SEED, // 6103
   ]);
   const GAS_MASK = ItemIdentifiers.GAS_MASK; // 1506
   const BLOODY_MOURNER_TOP = ItemIdentifiers.BLOODY_MOURNER_TOP; // 6064
   const MOURNER_TOP = ItemIdentifiers.MOURNER_TOP; // 6065
   const RIPPED_MOURNER_TROUSERS = ItemIdentifiers.RIPPED_MOURNER_TROUSERS; // 6066
-  const MOURNER_TROUSERS = ItemIdentifiers.MOURNER_TROUSERS_2; // 6067
+  const MOURNER_TROUSERS = ItemIdentifiers.MOURNER_TROUSERS; // 6067
   const MOURNER_GLOVES = ItemIdentifiers.MOURNER_GLOVES; // 6068
   const MOURNER_BOOTS = ItemIdentifiers.MOURNER_BOOTS; // 6069
   const MOURNER_CLOAK = ItemIdentifiers.MOURNER_CLOAK; // 6070

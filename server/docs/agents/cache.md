@@ -28,7 +28,9 @@ that the same script will overwrite a tick later.**
 Item/NPC/object constants are generated from the live cache - regenerate with
 `scripts/generate-identifiers.ts` rather than hand-editing (run `--dry-run` first: it reports
 added/changed/removed names and keeps existing names stable), and `scripts/audit-identifiers.ts`
-checks the names still match the cache.
+checks the names still match the cache. A bare item name (`EMERALD_AMULET`) is always the real item;
+its bank placeholder and noted copy get numbered names, so check the definition before using a
+`_2`-style constant.
 
 ## Gamevals
 

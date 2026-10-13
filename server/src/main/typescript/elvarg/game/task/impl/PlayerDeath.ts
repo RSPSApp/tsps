@@ -1,4 +1,5 @@
 import { GameConstants } from "../../GameConstants";
+import { MORTAL_DEVELOPER_ATTRIBUTE } from "../../entity/impl/Mobile";
 import { CombatFactory } from "../../content/combat/CombatFactory";
 import { ItemDefinition } from "../../definition/ItemDefinition";
 import { ItemOnGroundManager } from "../../entity/impl/grounditem/ItemOnGroundManager";
@@ -88,8 +89,7 @@ export class PlayerDeathTask extends Task {
                                 shouldDropItemsOnDeath &&
                                 (item.isTradeable() || (!item.isLostOnDeath() && Barrows.isBarrowsItem(item.getId()))) &&
                                 !this.itemsToKeep.includes(item) &&
-                                this.player.getRights() !== PlayerRights.OWNER &&
-                                this.player.getRights() !== PlayerRights.DEVELOPER;
+                                !PlayerDeathTask.keepsEverything(this.player);
                             const deathDropEvent = {
                                 player: this.player,
                                 killer: this.killer ?? null,
@@ -127,7 +127,7 @@ export class PlayerDeathTask extends Task {
                                 continue;
                             }
                             // Don't drop items if we're owner or dev
-                            if (this.player.getRights() === PlayerRights.OWNER || this.player.getRights() === PlayerRights.DEVELOPER) {
+                            if (PlayerDeathTask.keepsEverything(this.player)) {
                                 break;
                             }
 
@@ -263,9 +263,16 @@ export class PlayerDeathTask extends Task {
      * Nightmare staff: the staff and its orb, `deathComponents` in item-gameplay.json) drops as
      * those components for the killer, and the item itself is gone (Wiki).
      */
+    /** Owners and developers keep everything, unless they made themselves mortal (::mortal). */
+    private static keepsEverything(player: Player): boolean {
+        const rights = player.getRights();
+        return (rights === PlayerRights.OWNER || rights === PlayerRights.DEVELOPER)
+            && player.getAttribute(MORTAL_DEVELOPER_ATTRIBUTE) !== true;
+    }
+
     private static splitIntoComponents(player: Player, killer: Player | null | undefined, kept: Item[], items: Item[]): Item[] {
         if (!killer || killer === player || !Wilderness.isIn(player)) return items;
-        if (player.getRights() === PlayerRights.OWNER || player.getRights() === PlayerRights.DEVELOPER) return items;
+        if (PlayerDeathTask.keepsEverything(player)) return items;
         return items.flatMap((item) => {
             const components = item.getDefinition().getDeathComponents();
             if (components.length === 0 || kept.includes(item) || item.isLostOnDeath()) return [item];
@@ -273,7 +280,8 @@ export class PlayerDeathTask extends Task {
         });
     }
 
-    private static getItemsToKeep(player: Player): Item[] {
+    /** The items a death lets the player keep: the three most valuable (four with Protect Item, none skulled). */
+    public static getItemsToKeep(player: Player): Item[] {
         const items: Item[] = [];
         const alwaysKept: Item[] = [];
         for (const item of [...player.getInventory().getItems(), ...player.getEquipment().getItems()]) {

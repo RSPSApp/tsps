@@ -26,6 +26,7 @@ const Hazards = require("./ColosseumHazards");
 const Sol = require("./SolHeredit.Colosseum");
 const Rewards = require("./Rewards.Colosseum");
 const { ModifierSet, byKey } = require("./ColosseumModifiers");
+const CombatAchievements = require("./CombatAchievements.Colosseum");
 
 const ATTR_RUN = "colosseum:run";
 const WAVE_START_DELAY = 5;
@@ -105,6 +106,8 @@ class ColosseumRun {
     this.npcs = new Set();
     this.waveStart = 0;
     this.waveTicks = 0;
+    /** Every wave's time added up, the run's total (the speed tasks'). */
+    this.totalTicks = 0;
     this.reinforced = false;
     this.minimus = null;
     this.sol = null;
@@ -336,6 +339,8 @@ class ColosseumRun {
 
   completeWave() {
     this.wave++;
+    this.totalTicks += this.waveTicks;
+    CombatAchievements.waveCompleted(this, this.wave);
     this.stage = "intermission";
     Rewards.waveCompleted(this);
     Hazards.waveEnded(this);
@@ -354,6 +359,7 @@ class ColosseumRun {
   /** Sol Heredit is beaten: once he has fallen, the hazards go and the chest comes out. */
   defeatedSol() {
     Sol.defeated(this);
+    CombatAchievements.solDefeated(this);
     this.stage = "won";
     Shared.later(this, SOL_DEATH_TICKS, () => this.finish());
   }

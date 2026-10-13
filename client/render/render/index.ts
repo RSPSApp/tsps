@@ -169,6 +169,7 @@ export { setSceneHslOverrideFromPacked } from "./settings";
 export { clearSceneHslOverride } from "./settings";
 export { setSmoothTerrain } from "./settings";
 export { setMsaa } from "./settings";
+export { getRequestedMsaaSamples } from "./settings";
 export { setFxaa } from "./settings";
 export { finishRenderFrame } from "./settings";
 export { setLoadNpcs } from "./settings";

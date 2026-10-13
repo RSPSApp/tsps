@@ -39,6 +39,15 @@ export class Bank extends ItemContainer {
     public static readonly SEARCH_INPUT_MODE = 11;
     /** meslayer_close: closes the chatbox input, if it is in the given mode (or none is open). */
     private static readonly MESLAYER_CLOSE_SCRIPT = 101;
+    /** bank_viewcontainer / bank_viewcontainer_obj: which item's contents the bank side shows (a rune pouch's, ...). */
+    public static readonly VIEW_CONTAINER_VARBIT = 9727;
+    public static readonly VIEW_CONTAINER_OBJ_VARP = 4385;
+    /**
+     * Custom event for an op on an inventory item in the bank side panel, before it deposits:
+     * `{ player, item, slot, op, option, handled }`. A plugin sets `handled` for an item whose
+     * own bank ops (a rune pouch's View or Empty) are not deposits.
+     */
+    public static readonly INVENTORY_OP_EVENT = "bank:inventory-op";
 
     /** Ends the client's bank search, as OSRS does on closing the bank or picking a tab. */
     public static closeSearch(player: Player): void {
@@ -567,6 +576,9 @@ export class Bank extends ItemContainer {
             (packet.childId === 3 || packet.childId >= 0x8000) && packet.slot != null) {
             const item = player.getInventory().getItems()[packet.slot];
             if (!item || item.getId() < 0 || (packet.itemId != null && packet.itemId !== item.getId())) return true;
+            const event = { player, item, slot: packet.slot, op: packet.buttonNum, option: packet.option, handled: false };
+            getPluginManager().emitCustomEvent(Bank.INVENTORY_OP_EVENT, event);
+            if (event.handled) return true;
             const amount = Bank.actionAmount(
                 "deposit", packet.buttonNum, packet.option, player.getInventory().getAmount(item.getId()),
                 player.getBankCustomQuantity(), player.getBankQuantityMode(),
@@ -954,6 +966,10 @@ export class Bank extends ItemContainer {
             .sendInterfaceFlagsRange((Bank.SIDE_INTERFACE_ID << 16) | 3, 0, 27, 3278846)
             .sendVarbit(12393, 1)
             .sendString(`Bank of ${GameConstants.NAME}`, (Bank.MAIN_INTERFACE_ID << 16) | 3);
+        // Captured: the bank opens on the inventory, not a container left in view last time.
+        if (opening && sender.getVarbit(Bank.VIEW_CONTAINER_VARBIT) !== 0) {
+            sender.sendVarbit(Bank.VIEW_CONTAINER_VARBIT, 0).sendConfig(Bank.VIEW_CONTAINER_OBJ_VARP, -1);
+        }
         this.refreshItems();
         if (opening) Sounds.sendSound(this.getPlayer(), Sound.CONTAINER_OPEN);
 

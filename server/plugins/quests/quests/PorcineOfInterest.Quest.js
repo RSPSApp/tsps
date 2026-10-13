@@ -38,10 +38,8 @@
  *     npc-spawns.json edit.
  *   - The Pig Thing is not spawned; its cutscene narration is shown as game
  *     messages with each speaker keeping their own chathead.
- *   - The 30 Slayer reward points are written to the Slayer plugin's
- *     "slayer:points" attribute (no cross-plugin event exists); a
- *     "slayer:grant-points" event would be the shared fix. Sourhog tasks are
- *     not gated on quest completion for the same reason.
+ *   - The 30 Slayer reward points go to the Slayer plugin through
+ *     "slayer:grant-points". Sourhog tasks are not gated on quest completion.
  *   - Reinforced goggles are not folded into existing slayer helmets; the
  *     cleanup of the produce trail after the quest is not simulated.
  *   - The quest sourhog spawns at (3165,9677): the cache walls off the old
@@ -162,7 +160,6 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     [BIT_TASK_ACCEPTED, VARBIT_TASK_ACCEPTED],
   ]);
 
-  const SLAYER_POINTS_ATTRIBUTE = "slayer:points";
   const SLAYER_POINTS_REWARD = 30;
   const SLAYER_XP_REWARD = 1000;
 
@@ -997,8 +994,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
 
   function grantRewards(player) {
     player.getSkillManager().addExperiences(Skill.SLAYER, SLAYER_XP_REWARD);
-    const points = Number(player.getAttribute(SLAYER_POINTS_ATTRIBUTE)) || 0;
-    player.setAttribute(SLAYER_POINTS_ATTRIBUTE, points + SLAYER_POINTS_REWARD);
+    api.emitCustomEvent("slayer:grant-points", { player, points: SLAYER_POINTS_REWARD });
   }
 
   // ==========================================================================

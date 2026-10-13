@@ -115,10 +115,13 @@ export class NPC extends Mobile {
     private movementCoordinator: NPCMovementCoordinator = new NPCMovementCoordinator(this);
     private hitpoints: number;
     private maxHitpointsOverride = -1;
+    private combatOverride: { stats?: number[]; maxHit?: number } | null = null;
+    private readonly combatOverrideViews = new Map<NpcDefinition, NpcDefinition>();
     /** Multiplies this NPC's attack and defence rolls (raid scaling); 1 leaves them alone. */
     private rollFactor = 1;
     private spawnPosition: Location;
     private headIcon = -1;
+    private defenceBonusOverrides: Array<number | null> | null = null;
     /** This tick's glide, sent with the NPC's update and cleared after it. */
     private exactMoveState: NpcExactMove | null = null;
     /** This tick's headbars besides the hitpoints one, sent with the NPC's update and cleared after it. */
@@ -127,6 +130,13 @@ export class NPC extends Mobile {
     private crawling = false;
     /** A tile to turn to this tick (OSRS npc face coord), sent with the NPC's update and cleared after it. */
     private faceTileState: { x: number; y: number } | null = null;
+    /**
+     * Body-model overrides (OSRS npc model customisation): slot -> replacement model id. Sent
+     * with every update while set, so late viewers see it too; an empty list is a reset and
+     * keeps being sent for a few ticks before the field clears.
+     */
+    private modelCustomisation: { slot: number; modelId: number }[] | undefined = undefined;
+    private modelCustomisationResetUntil = 0;
     private isDying: boolean;
     private owner: Player;
     private ownerOnly: boolean = false;
@@ -349,9 +359,11 @@ export class NPC extends Mobile {
         return this;
     }
 
-    /** Full health: the definition's hitpoints unless this NPC was scaled (raids). */
+    /** Full health of the current form (transforms resolve first): the definition's
+     * hitpoints unless this NPC was scaled (raids). */
     public getMaxHitpoints(): number {
-        return this.maxHitpointsOverride >= 0 ? this.maxHitpointsOverride : this.getDefinition().getHitpoints();
+        if (this.maxHitpointsOverride >= 0) return this.maxHitpointsOverride;
+        return this.getCurrentDefinition()?.getHitpoints() ?? this.getDefinition().getHitpoints();
     }
 
     /** Scales this one NPC's full health, e.g. by raid level or party size; -1 restores the definition's. */
@@ -367,6 +379,30 @@ export class NPC extends Mobile {
     public setMaxHitpoints(maxHitpoints: number): NPC {
         this.maxHitpointsOverride = Math.trunc(maxHitpoints);
         return this;
+    }
+
+    /**
+     * Gives this one NPC its own combat stats (NpcDefinition.getStats layout) and/or max hit,
+     * e.g. a raid scaling its monsters by party; null restores the definition's.
+     */
+    public setCombatOverride(override: { stats?: number[]; maxHit?: number } | null): NPC {
+        this.combatOverride = override ? { stats: override.stats ? [...override.stats] : undefined, maxHit: override.maxHit } : null;
+        this.combatOverrideViews.clear();
+        return this;
+    }
+
+    /** The definition as this NPC sees it: a view with its combat override, if it has one. */
+    private withCombatOverride(definition: NpcDefinition): NpcDefinition {
+        if (!this.combatOverride || !definition) return definition;
+        let view = this.combatOverrideViews.get(definition);
+        if (!view) {
+            const { stats, maxHit } = this.combatOverride;
+            view = Object.create(definition) as NpcDefinition;
+            if (stats) view.getStats = () => stats;
+            if (maxHit != null) view.getMaxHit = () => maxHit;
+            this.combatOverrideViews.set(definition, view);
+        }
+        return view;
     }
 
     public heal(heal: number) {
@@ -404,17 +440,32 @@ export class NPC extends Mobile {
         // 4 = magic
     }
 
+    /**
+     * A defence bonus (BonusManager.DEFENCE_STAB..DEFENCE_RANGE) as this NPC has it now: the
+     * definition's, unless a fight has changed it for this NPC (setDefenceBonusOverrides).
+     */
+    public getDefenceBonus(index: number): number {
+        const override = this.defenceBonusOverrides?.[index];
+        if (typeof override === "number") return override;
+        return this.getCurrentDefinition().getStats()[10 + index] ?? 0;
+    }
+
+    /** Per-NPC defence bonuses by index (null entries keep the definition's); null clears them. */
+    public setDefenceBonusOverrides(bonuses: Array<number | null> | null): void {
+        this.defenceBonusOverrides = bonuses ? [...bonuses] : null;
+    }
+
     public getBaseDefence(type: CombatType): number {
         let base = 0;
         switch (type) {
             case CombatType.MAGIC:
-                base = this.getCurrentDefinition().getStats()[13];
+                base = this.getDefenceBonus(3);
                 break;
             case CombatType.MELEE:
-                base = this.getCurrentDefinition().getStats()[10];
+                base = this.getDefenceBonus(0);
                 break;
             case CombatType.RANGED:
-                base = this.getCurrentDefinition().getStats()[14];
+                base = this.getDefenceBonus(4);
                 break;
         }
         // 10,11,12 = melee
@@ -537,6 +588,33 @@ export class NPC extends Mobile {
         return this;
     }
 
+    /**
+     * Replaces body-model slots on every viewer's client (OSRS npc model customisation), e.g.
+     * Araxxor's venom-coated legs on enrage. Null resets to the cache's models.
+     */
+    public setModelCustomisation(models: { slot: number; modelId: number }[] | null): NPC {
+        if (models && models.length > 0) {
+            this.modelCustomisation = models.map((entry) => ({ slot: entry.slot | 0, modelId: entry.modelId | 0 }));
+            this.modelCustomisationResetUntil = 0;
+        } else {
+            this.modelCustomisation = [];
+            this.modelCustomisationResetUntil = World.getProcessCycle() + 5;
+        }
+        return this;
+    }
+
+    /** The customisation to send this update, or undefined when there is none (or a reset expired). */
+    public getModelCustomisationForUpdate(): { slot: number; modelId: number }[] | undefined {
+        if (this.modelCustomisation === undefined) {
+            return undefined;
+        }
+        if (this.modelCustomisation.length === 0 && World.getProcessCycle() > this.modelCustomisationResetUntil) {
+            this.modelCustomisation = undefined;
+            return undefined;
+        }
+        return this.modelCustomisation;
+    }
+
     public getMovementCoordinator(): NPCMovementCoordinator {
         return this.movementCoordinator;
     }
@@ -548,9 +626,9 @@ export class NPC extends Mobile {
      */
     public getCurrentDefinition(player?: Player): NpcDefinition {
         const id = this.getNpcTransformationId() !== -1 ? this.getNpcTransformationId() : this.id;
-        if (!player) return NpcDefinition.forId(id);
+        if (!player) return this.withCombatOverride(NpcDefinition.forId(id));
         const resolved = CacheDefinitions.resolveNpc(id, player.getPacketSender());
-        return resolved ? NpcDefinition.forId(resolved.id) : undefined;
+        return resolved ? this.withCombatOverride(NpcDefinition.forId(resolved.id)) : undefined;
     }
 
     /**
@@ -569,7 +647,7 @@ export class NPC extends Mobile {
      * @return
      */
     public getDefinition(): NpcDefinition {
-        return NpcDefinition.forId(this.id);
+        return this.withCombatOverride(NpcDefinition.forId(this.id));
     }
 
     public getSpawnPosition(): Location {

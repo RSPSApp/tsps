@@ -150,6 +150,10 @@ class HunllefFight {
     this.style = "ranged";
     this.attacks = 0;
     this.offPrayerHits = 0;
+    // For the Combat Achievements: damage taken off prayer, from tornadoes, the floor and the
+    // stomp, and the player's hits with a style it protects against.
+    this.taken = { offPrayer: 0, avoidable: 0 };
+    this.wrongStyleHits = 0;
     this.ticks = 0;
     this.nextAttack = 0;
     this.nextTornado = TORNADO_EVERY;
@@ -264,7 +268,10 @@ class HunllefFight {
     if (this.underneath(player)) {
       // The stomp is not one of the four attacks before a switch.
       this.npc.performAnimation(new Animation(ANIMATION.STOMP));
-      damage(player, randomInt(this.random, 0, MAX_HIT[this.mode].stomp));
+      const stomp = randomInt(this.random, 0, MAX_HIT[this.mode].stomp);
+      this.taken.avoidable += stomp;
+      this.taken.offPrayer += stomp;
+      damage(player, stomp);
       player.sendMessage(`You're trampled beneath the ${this.mode === "corrupted" ? "Corrupted" : "Crystalline"} Hunllef.`);
       return;
     }
@@ -291,8 +298,10 @@ class HunllefFight {
     const style = this.style;
     Shared.later(this, Math.max(1, Math.ceil(speed / 30)), () => {
       if (this.run.stage !== "boss") return;
-      const max = MAX_HIT[this.mode][protects(player, style) ? "prayed" : "unprayed"][tier];
-      damage(player, randomInt(this.random, 0, max));
+      const prayed = protects(player, style);
+      const amount = randomInt(this.random, 0, MAX_HIT[this.mode][prayed ? "prayed" : "unprayed"][tier]);
+      if (!prayed) this.taken.offPrayer += amount;
+      damage(player, amount);
       if (disable) {
         PrayerHandler.deactivatePrayers(player);
         player.sendMessage("<col=ff0000>Your prayers have been disabled!</col>");
@@ -334,7 +343,9 @@ class HunllefFight {
         continue;
       }
       if (tornado.npc.getLocation().equals(player.getLocation())) {
-        damage(player, randomInt(this.random, min, max));
+        const amount = randomInt(this.random, min, max);
+        this.taken.avoidable += amount;
+        damage(player, amount);
         player.performGraphic(new Graphic(TORNADO_HIT_GRAPHIC));
       }
       walkToward(tornado.npc, player.getLocation());
@@ -370,7 +381,9 @@ class HunllefFight {
         this.setFloor(tile.x, tile.y, 2);
       }
       if (tile.state === "orange" && this.arenaTile(tile.x, tile.y).equals(here)) {
-        damage(player, randomInt(this.random, ...FLOOR_DAMAGE));
+        const amount = randomInt(this.random, ...FLOOR_DAMAGE);
+        this.taken.avoidable += amount;
+        damage(player, amount);
       }
     }
   }
@@ -392,6 +405,7 @@ class HunllefFight {
   onHit(hit) {
     const style = styleOf(hit.getCombatType?.());
     if (style === this.protecting) {
+      this.wrongStyleHits++;
       for (const part of hit.getHits()) part.setDamage(0);
       hit.updateTotalDamage();
       return;

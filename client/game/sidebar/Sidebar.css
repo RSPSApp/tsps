@@ -29,8 +29,8 @@
     --rl-font-bold: "OSRS Bold", sans-serif;
     --rl-font-size: 16px;
 
-    --sidebar-rail-width: 36px;
-    --sidebar-panel-width: 250px;
+    --sidebar-rail-width: 46px;
+    --sidebar-panel-width: 290px;
 
     position: relative;
     z-index: 24;
@@ -53,8 +53,8 @@
 }
 
 .rl-sidebar.mobile {
-    --sidebar-rail-width: 30px;
-    --sidebar-panel-width: min(260px, calc(100vw - 48px));
+    --sidebar-rail-width: 40px;
+    --sidebar-panel-width: min(290px, calc(100vw - 56px));
 }
 
 /* Rail */
@@ -63,8 +63,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    padding: 4px 0;
+    gap: 4px;
+    padding: 6px 0;
     box-sizing: border-box;
     border-left: 1px solid var(--rl-darker-gray);
     background: var(--rl-dark-gray);
@@ -72,8 +72,8 @@
 }
 
 .rl-sidebar-rail-button {
-    width: calc(var(--sidebar-rail-width) - 6px);
-    height: calc(var(--sidebar-rail-width) - 6px);
+    width: 100%;
+    height: calc(var(--sidebar-rail-width) - 8px);
     flex: 0 0 auto;
     display: flex;
     align-items: center;
@@ -90,9 +90,11 @@
     background: var(--rl-hover);
 }
 
+/* Selected: an orange underline on the edge toward the panel, as RuneLite's tabs */
 .rl-sidebar-rail-button.active {
     color: var(--rl-orange);
     background: var(--rl-darker-gray);
+    box-shadow: inset 2px 0 var(--rl-orange);
 }
 
 .rl-sidebar-rail-button:focus-visible,
@@ -102,11 +104,11 @@
 }
 
 .rl-sidebar-icon-svg {
-    width: 17px;
-    height: 17px;
+    width: 22px;
+    height: 22px;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.8;
+    stroke-width: 1.6;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
@@ -136,7 +138,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 6px 7px 10px;
+    min-height: var(--sidebar-rail-width);
+    padding: 0 8px 0 14px;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--rl-darker-gray);
     background: var(--rl-dark-gray);
 }
 
@@ -151,14 +156,15 @@
 }
 
 .rl-sidebar-panel-close {
-    width: 22px;
-    height: 22px;
+    width: 30px;
+    height: 30px;
     flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     border: none;
+    border-radius: 4px;
     background: none;
     color: var(--rl-light-gray);
     cursor: pointer;
@@ -170,8 +176,8 @@
 }
 
 .rl-sidebar-panel-close svg {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     stroke: currentColor;
     stroke-width: 1.8;
     stroke-linecap: round;

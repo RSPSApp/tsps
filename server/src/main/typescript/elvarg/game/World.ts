@@ -29,7 +29,9 @@ export class World {
     // StressTestBots.plugin.js) plus real players; protocol player-index
     // encoding uses 16 bits, so this is nowhere near the wire limit.
     private static readonly MAX_PLAYERS = 2048;
-    private static readonly MAX_NPCS = 32768;
+    // As OSRS: NPC indices are 16 bits on the wire (npc info), with 0xffff ending the list, so
+    // indices run 1-65534. The map's own spawns alone are over 30,000.
+    private static readonly MAX_NPCS = 65534;
     private static readonly IDLE_BOT_PROCESS_STRIDE = 2;
     private static readonly BOT_PROCESS_LOD_CHUNK_SIZE_TILES = 32;
     private static readonly BOT_PROCESS_LOD_NEAR_DISTANCE_TILES = 15;

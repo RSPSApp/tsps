@@ -680,7 +680,7 @@ try {
     const nativeRenderer = {
         uiHidden: false,
         osrsClient: {
-            ...client, loginState: { serverListOpen: false }, updateWidgets() {},
+            ...client, loginState: { serverListOpen: false }, updateWidgets() {}, runMouseFollowingTimers() {},
             handleUiHover() { nativeHoverCalls++; },
             handleUiInput() {
                 nativeUiCalls++;

@@ -84,11 +84,34 @@ export class CombatPoisonEffect extends Task {
     this.entity.setPoisonDamage(0);
     this.entity.setVenomed(false);
 
-    if (this.entity.isPlayer()) {
-      this.entity.getAsPlayer().getPacketSender().sendPoisonType(0);
-    }
-
     super.stop();
+  }
+
+  /** varp `poison`: what the hitpoints orb and its "Cure" option read. */
+  public static readonly ORB_VARP = 102;
+  private static readonly ORB_VENOM_BASE = 1_000_000;
+  /** Antipoison immunity counts down in steps of 30 ticks (18 seconds). */
+  private static readonly ORB_IMMUNITY_STEP_SECONDS = 18;
+  /** Shorter immunity is a serpentine helm's refresh, not a dose: the orb leaves it out. */
+  private static readonly ORB_IMMUNITY_MIN_SECONDS = 2;
+
+  /**
+   * The orb's value, as rsprox captures show it: venom is 1,000,000 plus the hits it has
+   * dealt (dark green), poison its severity, dropping a step each hit (green), and antipoison
+   * immunity minus the 18-second steps left (-5 for 90 seconds, -20 for 6 minutes); 0 is none.
+   */
+  public static orbValue(entity: Mobile): number {
+    if (entity.isVenomed()) {
+      return CombatPoisonEffect.ORB_VENOM_BASE + Math.max(0, Math.round((entity.getPoisonDamage() - 6) / 2));
+    }
+    if (entity.isPoisoned()) {
+      return entity.getPoisonDamage();
+    }
+    const immunity = entity.getCombat().getPoisonImmunityTimer().secondsRemaining();
+    if (immunity > CombatPoisonEffect.ORB_IMMUNITY_MIN_SECONDS) {
+      return -Math.ceil(immunity / CombatPoisonEffect.ORB_IMMUNITY_STEP_SECONDS);
+    }
+    return 0;
   }
 
   public static damageFromSeverity(severity: number): number {

@@ -93,7 +93,8 @@ export class GfxRenderer {
 
         // A boat deck's overlay map is drawn where the boat is: its world graphics take the map's
         // render position, the boat's transform and the deck's height, as players aboard do.
-        const mapPos = vec2.fromValues(map.mapX, map.mapY);
+        // Where the map is drawn (an instance scene's base), as its actors are placed from.
+        const mapPos = vec2.fromValues(map.renderPosX, map.renderPosY);
         const r: any = this.renderer;
         const deckView = r.osrsClient?.worldViewManager?.getWorldViewByOverlayMapId?.(map.id);
         const deckEntity = deckView ? r.getWorldEntityIndexForMapId?.(map.id) : undefined;

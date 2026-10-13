@@ -5,7 +5,7 @@
  * fs_ssao reconstructs view positions from the scene depth32float texture (non-reverse [0,1]
  * NDC z, gl-matrix view space: camera at the origin looking down -Z, 1 unit = 1 tile) with the
  * inverse projection, then takes 12 golden-angle samples on a per-pixel interleaved-gradient
- * noise rotation; fs_blur box-filters the result. ssaoUv converts a top-left framebuffer pixel
+ * noise rotation; fs_blur filters and upsamples with depth weights. ssaoUv converts a top-left framebuffer pixel
  * to the y-up convention the projection expects (NDC y=+1 is the framebuffer's top row), which
  * is a y flip relative to the pixel coordinates; sampling itself uses textureLoad on pixels.
  */
@@ -15,7 +15,7 @@ struct SsaoUniforms {
     u_invProj: mat4x4<f32>, // inverse of the camera projection matrix (GL-style clip)
     u_params: vec4<f32>,    // x=radius (view units), y=maxRadius (view units), z=strength, w=bias
     u_screen: vec4<f32>,    // AO width, height, 1/width, 1/height (half the scene size)
-    u_focal: vec4<f32>,     // x=projection y scale (projectionMatrix[5])
+    u_focal: vec4<f32>,     // x=projection y scale, y=depth-aware filter enabled
     u_scene: vec4<f32>,     // scene width, height, 1/width, 1/height (the depth texture size)
 };
 
@@ -101,14 +101,36 @@ fn fs_ssao(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
 @fragment
 fn fs_blur(@builtin(position) pixel: vec4<f32>) -> @location(0) vec4<f32> {
     let size = vec2<i32>(textureDimensions(u_ao, 0));
-    let base = vec2<i32>(pixel.xy);
-    var color = vec4<f32>(0.0);
+    let depthAware = u_ssao.u_focal.y > 0.5;
+    let scale = u_ssao.u_scene.xy / u_ssao.u_screen.xy;
+    let aoPixel = select(pixel.xy, pixel.xy / scale, depthAware);
+    let base = vec2<i32>(floor(aoPixel));
+    let centerPixel = select(pixel.xy * scale, pixel.xy, depthAware);
+    let centerDepth = textureLoad(u_depth, vec2<i32>(floor(centerPixel)), 0);
+    if (depthAware && centerDepth >= 0.9999) {
+        return vec4<f32>(1.0);
+    }
+    let centerZ = ssaoViewPosition(ssaoUv(centerPixel), centerDepth).z;
+    var color = 0.0;
+    var weightSum = 0.0;
     for (var y = 0; y < 4; y++) {
         for (var x = 0; x < 4; x++) {
             let coord = clamp(base + vec2<i32>(x - 1, y - 1), vec2<i32>(0), size - vec2<i32>(1));
-            color += textureLoad(u_ao, coord, 0);
+            var weight = 1.0;
+            if (depthAware) {
+                let tapPixel = (vec2<f32>(coord) + 0.5) * scale;
+                let tapDepth = textureLoad(u_depth, vec2<i32>(floor(tapPixel)), 0);
+                let tapZ = ssaoViewPosition(ssaoUv(tapPixel), tapDepth).z;
+                let offset = vec2<f32>(coord) + 0.5 - aoPixel;
+                // Reject other surfaces in view-space units, independent of camera distance.
+                weight = exp(-abs(tapZ - centerZ) * 8.0 - dot(offset, offset) * 0.5);
+                if (tapDepth >= 0.9999) { weight = 0.0; }
+            }
+            color += textureLoad(u_ao, coord, 0).r * weight;
+            weightSum += weight;
         }
     }
-    return color / 16.0;
+    // Thin foreground objects may have no matching half-resolution depth sample.
+    return vec4<f32>(select(1.0, color / max(weightSum, 1e-5), weightSum > 1e-5));
 }
 `;

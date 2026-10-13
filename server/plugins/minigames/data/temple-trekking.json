@@ -1,0 +1,330 @@
+{
+  "$comment": "Temple Trekking and the Burgh de Rott Ramble (https://oldschool.runescape.wiki/w/Temple_Trekking). Ids are the rev 241 cache's, keyed or commented with their gamevals; tiles in rooms are the cache template's (the instance copies them unturned). Timings, messages and varbits are from rsprox captures; docs/temple-trekking.md lists them.",
+
+  "quests": { "temple": "in_aid_of_the_myreque", "ramble": "darkness_of_hallowvale" },
+
+  "varps": { "followerNpc": 447 },
+  "varbits": {
+    "templetrek_npcs_visible": 1954,
+    "templetrek_npc_point_value": 1955,
+    "templetrek_button_control": 1956,
+    "templetrek_last_event": 1957,
+    "templetrek_event_flash": 1958,
+    "templetrek_debug_room_id": 1960,
+    "templetrek_reward_token_slot": 2458,
+    "templetrek_reward_selected": 2459,
+    "ramble_npcs_visible": 3412,
+    "busy": 12393,
+    "minimap_state": 6719
+  },
+
+  "interfaces": {
+    "templetrek_map": 329,
+    "templetrek_map:templetrek_close_button": 3,
+    "templetrek_map:templetrek_route_1": 21,
+    "templetrek_map:templetrek_route_2": 25,
+    "templetrek_map:templetrek_route_3": 29,
+    "templetrek_map:templetrek_player_counters": 32,
+    "trek_rewards": 274,
+    "trek_rewards:icons": 6,
+    "trek_rewards:buybutton": 11
+  },
+
+  "sounds": { "fadeOut": 1815, "fadeIn": 1816, "mapStart": 2266 },
+  "jingles": { "event": 195, "success": 197, "evade": 196, "arrive": 194 },
+  "songs": { "walk": 147, "hub": 501 },
+
+  "hub": {
+    "$comment": "Between events the player waits in this one-chunk instance while the map plays (captured at 2052,5042).",
+    "source": [2048, 5040, 2055, 5047],
+    "planes": [0],
+    "player": [2052, 5042],
+    "follower": [2052, 5043],
+    "returnPath": { "tiles": [[2051, 5040, 3], [2052, 5040, 0]], "temple": 13868, "ramble": 22496 }
+  },
+
+  "directions": {
+    "temple": {
+      "$comment": "Burgh de Rott to Paterdomus.",
+      "visibleVarbit": "templetrek_npcs_visible",
+      "escort": "I can take you to Paterdomus.",
+      "destination": [3432, 3484],
+      "returnTo": [3477, 3235],
+      "thanks": "Many thanks for getting me safely to the temple. Here's your reward.",
+      "tokens": { "1": 10936, "2": 10934, "3": 10935 },
+      "tokenNames": { "10936": "templetrek_blue_token_var", "10934": "templetrek_yellow_token_var", "10935": "templetrek_red_token_var" }
+    },
+    "ramble": {
+      "$comment": "Paterdomus to Burgh de Rott.",
+      "visibleVarbit": "ramble_npcs_visible",
+      "escort": "I can take you to Burgh de Rott.",
+      "destination": [3483, 3242],
+      "returnTo": [3436, 3485],
+      "thanks": "Many thanks for getting me safely to the Burgh de Rott. Here's your reward.",
+      "tokens": { "1": 10944, "2": 10942, "3": 10943 },
+      "tokenNames": { "10944": "ramble_blue_token_var", "10942": "ramble_yellow_token_var", "10943": "ramble_red_token_var" }
+    }
+  },
+
+  "followers": [
+    { "id": 1567, "multi": 2939, "name": "Fyiona Fray (easy)", "short": "Fyiona Fray", "direction": "temple", "difficulty": "easy", "she": true },
+    { "id": 1566, "multi": 2938, "name": "Dalcian Fang (easy)", "short": "Dalcian Fang", "direction": "temple", "difficulty": "easy", "she": false },
+    { "id": 1564, "multi": 2936, "name": "Jayene Kliyn (medium)", "short": "Jayene Kliyn", "direction": "temple", "difficulty": "medium", "she": true },
+    { "id": 1565, "multi": 2937, "name": "Valantay Eppel (medium)", "short": "Valantay Eppel", "direction": "temple", "difficulty": "medium", "she": false },
+    { "id": 1563, "multi": 2935, "name": "Rolayne Twickit (hard)", "short": "Rolayne Twickit", "direction": "temple", "difficulty": "hard", "she": false },
+    { "id": 1562, "multi": 2934, "name": "Smiddi Ryak (hard)", "short": "Smiddi Ryak", "direction": "temple", "difficulty": "hard", "she": true },
+    { "id": 1578, "multi": 2945, "name": "Mage (easy)", "short": "The Mage", "direction": "ramble", "difficulty": "easy", "she": false },
+    { "id": 1577, "multi": 2944, "name": "Adventurer (easy)", "short": "The Adventurer", "direction": "ramble", "difficulty": "easy", "she": false },
+    { "id": 1576, "multi": 2943, "name": "Ranger (medium)", "short": "The Ranger", "direction": "ramble", "difficulty": "medium", "she": true },
+    { "id": 1575, "multi": 2942, "name": "Apprentice (medium)", "short": "The Apprentice", "direction": "ramble", "difficulty": "medium", "she": false },
+    { "id": 1574, "multi": 2941, "name": "Woman-at-arms (hard)", "short": "The Woman-at-arms", "direction": "ramble", "difficulty": "hard", "she": true },
+    { "id": 1573, "multi": 2940, "name": "Forester (hard)", "short": "The Forester", "direction": "ramble", "difficulty": "hard", "she": false }
+  ],
+
+  "difficulties": {
+    "$comment": "Monsters in a combat event (Wiki: easy 3, medium 4, hard 5-6; captures show 5 for hard). zombieTier picks the undead lumberjacks' level with the route.",
+    "easy": { "monsters": 3, "index": 0 },
+    "medium": { "monsters": 4, "index": 1 },
+    "hard": { "monsters": 5, "index": 2 }
+  },
+
+  "dialogue": {
+    "temple": {
+      "greeting": ["Hello there. What are you doing here?", "I'm waiting here hoping that someone can guide me to the Paterdomus, the temple on the Salve."],
+      "where": ["Where is Paterdomus?", "Oh, Paterdomus is that rather impressive looking temple on the Salve... I'm sure you must have passed it on your way into Morytania."],
+      "why": ["Why do you want to go to Paterdomus?", "I'm hoping to get back to civilisation and see what the lands of Misthalin look like."],
+      "defend": "Could you defend yourself if we met enemies on the route to Paterdomus?",
+      "defendAnswer": {
+        "easy": "Let's just say that I'm somewhat experienced and I'm happy to take on my fair share of bad guys. You don't need to worry about that.",
+        "medium": "I can defend myself somewhat if we run into trouble...yes, but let's hope that we don't, eh!",
+        "hard": "What sort of guide are you? I'm pretty healthy, but you'll have to protect me else I'll be sure to die... Oh, I do hope you can manage that."
+      },
+      "options": ["Where is Paterdomus?", "Why do you want to go to Paterdomus?", "Could you defend yourself if we met enemies...?", "I can take you to Paterdomus.", "Ok, thanks."],
+      "chatter": [
+        "Oh, I hate this trip, but it's better than staying in Burgh de Rott.",
+        "It's scary here...let's get going!",
+        "When are we going to get to Paterdomus?",
+        "We don't have all day to stand around chatting; let's press on.",
+        "Do you visit Paterdomus often? You seem to know the route well."
+      ],
+      "backTo": "Burgh de Rott"
+    },
+    "ramble": {
+      "greeting": ["Hello!", "Hello friend. I wish to slay evil and avail them of their loot! Take me to Burgh de Rott!"],
+      "why": ["Why do you want to go to Burgh de Rott?", "I'm going down there to teach those vampyres a lesson or two. I've heard about the terrible conditions down there and I intend to put a stop to it."],
+      "defend": "Could you defend yourself if we met enemies on the route to Burgh de Rott?",
+      "defendAnswer": {
+        "easy": "Let's just say that I'm somewhat experienced and I'm happy to take on my fair share of enemies. You don't need to worry about that.",
+        "medium": "Let's just say that I'm somewhat experienced and I'm happy to take on my fair share of enemies. You don't need to worry about that.",
+        "hard": "Let's just say that I'm somewhat experienced and I'm happy to take on my fair share of enemies. You don't need to worry about that."
+      },
+      "prepared": [
+        ["player", "Are you prepared enough to fight the evil down there?"],
+        ["npc", "I think so? At least my heart knows courage and that should be sufficient for the meantime. I expect that when we get to Burgh de Rott, we'll be able to purchase suitable provisions."],
+        ["player", "But you do realise that the vampyres in Morytania are immune to everything except silver?"],
+        ["npc", "Er...well, I've not heard mention of that fact, but I have faith that Saradomin will provide the means to furnish me with suitable weapons when I reach Burgh de Rott."],
+        ["player", "And if we happen to run into some vampyres on the journey down there?"],
+        ["npc", "I trust that you will help us to avoid them. You are a guide after all, aren't you? Anyway, you look like you can handle yourself. I presume you've fought such creatures before and won? How hard can it be?"],
+        ["player", "It can be pretty difficult, actually. But you're right, I'll be your guide so I should be able to handle the situation."]
+      ],
+      "options": ["Are you prepared enough to fight the evil down there?", "Why do you want to go to Burgh de Rott?", "Could you defend yourself if we met enemies...?", "I can take you to Burgh de Rott.", "Ok, thanks."],
+      "chatter": [
+        "This place is a bit grim. How can people live here?",
+        "Do you visit Burgh de Rott often? You seem to know the route well.",
+        "When are we going to get to Burgh de Rott?",
+        "We don't have all day to stand around chatting; let's press on. I have loot to get.",
+        "Oh, I hate this trip, but it's better than the opulet life styles forced on us adventurer types. I'd much rather be up to my eyes in mud and having a good fight!"
+      ],
+      "backTo": "Paterdomus"
+    },
+    "hasFollower": "Hmmm, it seems that you have a follower. I think it may get lost on this journey if it's left to wander on its own. Let's leave when your follower is safe.",
+    "accept": "Oh really? That would be great! I'll give you a small reward once we reach our destination.",
+    "whichRoute": "Okay, which route should we take?",
+    "okThanks": "Ok, thanks.",
+    "underAttack": "Can't you see I'm being attacked...?",
+    "supplies": "Ah, so you want to give me some supplies, eh? Let me just open me backpack.",
+    "eatsGiven": "Thanks, I'll get this down my neck."
+  },
+
+  "routes": {
+    "$comment": "flash: the map's '!' position (templetrek_event_flash, map components 34-58) for each trip end 1-10, going to Paterdomus; the Ramble uses trip 11 - n. killPoints, puzzle points and the 325-8000 range are the Wiki's 'Trek points'; maxEvents and eventChance are tuned to the Wiki's counts (route 1: 0-9, mostly 3; route 2: 0-4; route 3: 0-5, mostly 3).",
+    "1": { "message": "You choose the slow route through Mort Myre Swamp.", "flash": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "rooms": "swamp", "tier": 1, "killPoints": 325, "maxEvents": 9, "eventChance": 0.3, "evade": "always" },
+    "2": { "message": "You choose the moderate route through Mort Myre following the river.", "flash": [1, 2, 3, 11, 12, 13, 14, 15, 16, 10], "rooms": "swamp", "tier": 2, "killPoints": 625, "maxEvents": 4, "eventChance": 0.25, "evade": "half" },
+    "3": { "message": "You choose the fast route via the Hollows and Canifis.", "flash": [1, 17, 18, 19, 20, 21, 22, 23, 24, 25], "rooms": "hollows", "tier": 3, "killPoints": 1125, "maxEvents": 5, "eventChance": 0.35, "evade": "never" }
+  },
+  "chanceAfterEvade": 0.75,
+  "points": { "min": 325, "max": 8000, "puzzle": 500, "tentacles": 4000 },
+
+  "trips": {
+    "$comment": "Map sequences on templetrek_map:templetrek_player_counters. trip[n] walks to trip end n (1-11); start[n] stands at the stop before trip n (shown back from an event); 0 means none.",
+    "temple": {
+      "initial": 3748,
+      "trip": {
+        "1": [0, 3749, 3750, 3751, 3752, 3753, 3754, 3755, 3756, 3757, 3758, 3759],
+        "2": [0, 3749, 3750, 3751, 3760, 3761, 3762, 3763, 3764, 3765, 3766, 3759],
+        "3": [0, 3749, 3767, 3768, 3769, 3770, 3771, 3772, 3773, 3774, 3775, 3776]
+      },
+      "start": {
+        "1": [0, 0, 3778, 3779, 3780, 3781, 3782, 3783, 3784, 3785, 3786, 3787],
+        "2": [0, 0, 3778, 3779, 3780, 3788, 3789, 3790, 3791, 3792, 3793, 3787],
+        "3": [0, 0, 3794, 3795, 3796, 3797, 3798, 3799, 3800, 3801, 3802, 0]
+      }
+    },
+    "ramble": {
+      "initial": 5910,
+      "trip": {
+        "1": [0, 5937, 5938, 5939, 5940, 5941, 5942, 5943, 5944, 5945, 5946, 5947],
+        "2": [0, 5937, 5948, 5949, 5950, 5951, 5952, 5953, 5954, 5945, 5946, 5947],
+        "3": [0, 5955, 5956, 5957, 5958, 5959, 5960, 5961, 5962, 5963, 5964, 5947]
+      },
+      "start": {
+        "1": [0, 0, 5911, 5912, 5913, 5914, 5915, 5916, 5917, 5918, 5919, 5920],
+        "2": [0, 0, 5921, 5922, 5923, 5924, 5925, 5926, 5927, 5918, 5919, 5920],
+        "3": [0, 0, 5928, 5929, 5930, 5931, 5932, 5933, 5934, 5935, 5936, 5920]
+      }
+    }
+  },
+
+  "escapes": {
+    "$comment": "Where Escape leaves the player, by map position (1-25): the Wiki's escape pins, matched to the nearest stop. Position 14 to (3417,3402) is captured.",
+    "1": [3488, 3269], "2": [3429, 3295], "3": [3425, 3315], "4": [3422, 3338], "5": [3412, 3353],
+    "6": [3412, 3377], "7": [3417, 3402], "8": [3418, 3437], "9": [3438, 3424], "10": [3488, 3442],
+    "11": [3461, 3350], "12": [3478, 3368], "13": [3470, 3384], "14": [3417, 3402], "15": [3482, 3426], "16": [3488, 3442],
+    "17": [3499, 3349], "18": [3500, 3366], "19": [3488, 3376], "20": [3492, 3387], "21": [3509, 3396],
+    "22": [3453, 3407], "23": [3438, 3424], "24": [3530, 3437], "25": [3488, 3442]
+  },
+
+  "rooms": {
+    "$comment": "Template rooms as live copies them (build_area in the captures, rotation 0). source: x0, y0, x1, y1. entry: where the player lands; spawn: x0, y0, x1, y1 the monsters appear in. Rooms marked inferred share a captured room's layout but weren't captured themselves.",
+    "swamp": [
+      { "key": "swamp-1984", "source": [1984, 5024, 2015, 5055], "planes": [0], "entry": [2000, 5030], "spawn": [1992, 5037, 2003, 5047] },
+      { "key": "swamp-2016", "source": [2016, 5024, 2047, 5055], "planes": [0], "entry": [2032, 5030], "spawn": [2022, 5034, 2034, 5042], "inferred": true },
+      { "key": "swamp-2176", "source": [2176, 5024, 2207, 5055], "planes": [0], "entry": [2192, 5030], "spawn": [2184, 5037, 2195, 5047], "inferred": true },
+      { "key": "swamp-2208", "source": [2208, 5024, 2239, 5055], "planes": [0], "entry": [2224, 5030], "spawn": [2214, 5034, 2226, 5042] },
+      { "key": "swamp-2240", "source": [2240, 5024, 2271, 5055], "planes": [0], "entry": [2256, 5030], "spawn": [2249, 5034, 2257, 5043] },
+      { "key": "swamp-2272", "source": [2272, 5024, 2303, 5055], "planes": [0], "entry": [2288, 5030], "spawn": [2278, 5034, 2286, 5042] },
+      { "key": "swamp-2304", "source": [2304, 5024, 2335, 5055], "planes": [0], "entry": [2320, 5030], "spawn": [2314, 5034, 2321, 5043] },
+      { "key": "swamp-2336", "source": [2336, 5024, 2367, 5055], "planes": [0], "entry": [2352, 5030], "spawn": [2342, 5034, 2350, 5042], "inferred": true },
+      { "key": "swamp-2368", "source": [2368, 5024, 2399, 5055], "planes": [0], "entry": [2384, 5030], "spawn": [2378, 5035, 2388, 5042] },
+      { "key": "swamp-2400", "source": [2400, 5024, 2431, 5055], "planes": [0], "entry": [2416, 5030], "spawn": [2406, 5034, 2418, 5042], "inferred": true }
+    ],
+    "hollows": [
+      { "key": "hollows-2000", "source": [2000, 5000, 2023, 5023], "planes": [0], "entry": [2014, 5007], "spawn": [2007, 5009, 2018, 5019], "inferred": true },
+      { "key": "hollows-2192", "source": [2192, 5000, 2215, 5023], "planes": [0], "entry": [2206, 5007], "spawn": [2199, 5009, 2210, 5019], "inferred": true },
+      { "key": "hollows-2256", "source": [2256, 5000, 2279, 5023], "planes": [0], "entry": [2270, 5007], "spawn": [2263, 5009, 2274, 5019], "inferred": true },
+      { "key": "hollows-2320", "source": [2320, 5000, 2343, 5023], "planes": [0], "entry": [2334, 5006], "spawn": [2326, 5008, 2331, 5019] },
+      { "key": "hollows-2384", "source": [2384, 5000, 2407, 5023], "planes": [0], "entry": [2398, 5007], "spawn": [2392, 5009, 2399, 5019] }
+    ],
+    "shades": {
+      "key": "shades", "source": [2120, 4992, 2167, 5039], "planes": [0, 1],
+      "$comment": "Only room whose ends swap: towards Paterdomus you start by the south path (Escape) and leave north; towards Burgh you start north, Escape is placed on the north path and Continue-trek on the south one once the shades are dead.",
+      "entry": { "temple": [2144, 5004], "ramble": [2135, 5030] },
+      "spawn": { "temple": [2140, 5008, 2149, 5015], "ramble": [2129, 5019, 2138, 5027] },
+      "north": [[2134, 5032, 0], [2135, 5032, 3]],
+      "south": [[2143, 4999, 1], [2144, 4999, 0]]
+    },
+    "bridge": {
+      "key": "bridge", "source": [2080, 5032, 2103, 5047], "planes": [0, 1], "entry": [2083, 5041], "follower": [2082, 5040],
+      "bridge": [2090, 5039, 1], "across": [2091, 5039], "followerAcross": [2091, 5040],
+      "zombie": [2086, 5043], "trees": [[2081, 5036, 2], [2082, 5038, 1], [2083, 5035, 0]],
+      "lumberjackSpawns": [[2088, 5037], [2087, 5036], [2088, 5042], [2088, 5044], [2086, 5034]],
+      "$lumberjackSpawns": "Live raises them in the river (2091-2092, 5034-5044) and they wade ashore; river tiles are blocked here, so they rise on the west bank beside those spots."
+    },
+    "river": {
+      "key": "river", "source": [2080, 5000, 2103, 5031], "planes": [0, 1], "entry": [2090, 5005], "follower": [2090, 5006],
+      "rucksack": [2098, 5007, 0], "tree": [2095, 5010, 1], "branch": [2093, 5014, 2],
+      "swingFrom": [2093, 5013], "swingTo": [2093, 5017], "followerAcross": [2091, 5017]
+    },
+    "boat": {
+      "key": "boat", "source": [2056, 5024, 2071, 5047], "planes": [0, 1, 2], "entry": [2062, 5036, 2], "follower": [2063, 5035, 2],
+      "tentacles": [[2061, 5034], [2061, 5036], [2064, 5036], [2064, 5034]], "head": [2061, 5035]
+    }
+  },
+
+  "locs": {
+    "templetrek_swamp_evade_path": 13831,
+    "templetrek_swamp_success_path": 13832,
+    "templetrek_swamp_fail_path": 13833,
+    "templetrek_bridge_broken": 13834,
+    "templetrek_bridge_fixed": [13835, 13836, 13837],
+    "ramble_bridge_beam_fix": [22533, 22534, 22535],
+    "templetrek_swamptree_branch": 13845,
+    "templetrek_swamptree_branch_vine": 13846,
+    "templetrek_swamptree_small": [13847, 13848, 13849, 13850],
+    "templetrek_swing_rucksack": 13872,
+    "templetrek_boat_dummy_poly": 13864,
+    "templetrek_swamp_continue": [13866, 13867]
+  },
+
+  "events": {
+    "$comment": "last: the templetrek_last_event value live sends for it; weight: how often it comes up (Mod Ash: the events are weighted, not even); routes: where it can happen; rooms: the rooms the captures show it in (a 3x3 swamp snake doesn't fit through the narrow ways of some others); trips: the only trip ends it can happen at (shades at Mort'ton, the boat on route 3's crossing - both captured there).",
+    "ghasts":     { "last": 4,  "kind": "combat", "weight": 20, "routes": [1, 2, 3], "rooms": ["swamp-1984", "swamp-2208", "hollows-2320"], "npcs": [5622, 5623, 5624], "visible": [5625, 5626, 5627] },
+    "snails":     { "last": 5,  "kind": "combat", "weight": 16, "routes": [1, 2, 3], "rooms": ["swamp-2240", "hollows-2320"], "npcs": [5628, 5629, 5630] },
+    "snakes":     { "last": 6,  "kind": "combat", "weight": 16, "routes": [1, 2, 3], "rooms": ["swamp-2368", "hollows-2384"], "npcs": [5615, 5616, 5617], "corpses": [5619, 5620, 5621] },
+    "vampyres":   { "last": 3,  "kind": "combat", "weight": 14, "routes": [1, 2, 3], "rooms": ["swamp-2304", "hollows-2384"], "npcs": [5634, 5635, 5636] },
+    "nailBeasts": { "last": 12, "kind": "combat", "weight": 6,  "routes": [1, 2, 3], "rooms": ["swamp-2272", "swamp-2304", "hollows-2320"], "npcs": [2946, 2947, 2948] },
+    "shades":     { "last": 1,  "kind": "combat", "weight": 30, "routes": [1, 2, 3], "npcs": [5631, 5632, 5633], "trips": { "temple": [1], "ramble": [10] } },
+    "bridge":     { "last": 11, "kind": "puzzle", "weight": 12, "routes": [1, 2] },
+    "river":      { "last": 9,  "kind": "puzzle", "weight": 10, "routes": [1, 2] },
+    "boat":       { "last": 2,  "kind": "boat",   "weight": 20, "routes": [3], "trips": { "temple": [3], "ramble": [8] } },
+    "samaritan":  { "last": 10, "kind": "friendly", "weight": 6, "routes": [1, 2, 3], "rooms": ["swamp-1984", "hollows-2320"] }
+  },
+
+  "npcs": {
+    "templetrek_good_samaritan": 1568,
+    "templetrek_zombie": 5647,
+    "templetrek_tentacle_arm": 5643,
+    "templetrek_tentacle_head": 5644,
+    "templetrek_tentacle_head_spawning": 5645,
+    "templetrek_tentacle_arm_spawning": 5646,
+    "ttrek2_zombie_first": 5648,
+    "$zombies": "ttrek2_zombie_diff_<d>_ver_<v>_<stage>: 5648 + (d - 1) * 8 + (v - 1) * 4 + (stage - 1) for d 1-2, 5665 + (d - 3) * 8 + ... from d 3 (5664 is unused)."
+  },
+
+  "items": {
+    "knife": 946, "hammer": 2347, "plank": 960, "bronze_axe": 1351, "bones": 526, "big_bones": 532,
+    "druid_pouch_empty": 2957, "druid_pouch": 2958, "rotten_food": 2959, "stew": 2003,
+    "templetrek_short_vine": 7778, "templetrek_long_vine": 7777,
+    "templetrek_swamp_snake_hide": 7801, "nail_beast_nail": 10937,
+    "lumberjack": [10941, 10939, 10940, 10933],
+    "vampyre_ring": 21140,
+    "silverWeapons": {
+      "$comment": "What hurts a juvinate (Wiki, 'Silver weapons'), plus Efaritay's aid (vampyre_ring) worn.",
+      "weapons": [7639, 7640, 7641, 7642, 7643, 7644, 7645, 7646, 7647, 7648, 22398, 24699, 33718, 2952, 2963, 22435, 24695, 33711, 24697, 33713, 10491, 2402, 6745, 6746, 8279, 8281, 19675, 29589],
+      "ammo": [9145, 9292, 9299, 9306]
+    }
+  },
+
+  "food": {
+    "$comment": "What a follower takes into its pack (Wiki, 'Supplying your follower'), with what it heals. Food given during an event heals 10.",
+    "capacity": 15, "eventHeal": 10,
+    "items": {
+      "3369": 6, "3371": 7, "3373": 8, "329": 9, "2003": 11, "3381": 8, "2142": 3, "361": 10, "7530": 11, "379": 12,
+      "365": 13, "2325": 10, "2323": 14, "7178": 12, "7188": 12, "1891": 12, "1897": 15, "5988": 10, "6703": 14
+    }
+  },
+
+  "rewards": {
+    "$comment": "trek_rewards slots (enum 1382/1383) and the Wiki's ranges per token: [blue, yellow, red] as [low, high]. Reward count = low + floor((high - low) * (points - 325) / (8000 - 325)).",
+    "slots": [
+      { "name": "Pure essence", "item": 7936, "noted": true, "ranges": [[50, 150], [120, 380], [370, 660]] },
+      { "name": "Bow string", "item": 1777, "noted": true, "ranges": [[100, 200], [150, 250], [200, 300]] },
+      { "name": "Silver bar", "item": 2355, "noted": true, "ranges": [[5, 50], [50, 100], [100, 150]] },
+      { "name": "Herbs", "herbs": [203, 205], "high": 3049, "noted": true, "ranges": [[5, 15], [10, 20], [15, 30]] },
+      { "name": "Coal and Iron ore", "coal": 453, "iron": 440, "noted": true, "ranges": [[21, 72], [66, 165], [150, 216]] },
+      { "name": "Watermelon seed", "item": 5321, "noted": false, "ranges": [[10, 20], [15, 30], [20, 40]] },
+      { "name": "Raw lobster", "item": 377, "noted": true, "ranges": [[2, 35], [30, 65], [60, 80]] },
+      { "name": "XP tome", "tome": true },
+      { "name": "Random", "random": true }
+    ],
+    "tomes": {
+      "$comment": "templetrek_tome_<skill>_level_<tier>: [level 1, level 2, level 3]; XP per tier from the Wiki.",
+      "items": {
+        "FISHING": [7779, 7780, 7781], "AGILITY": [7782, 7783, 7784], "THIEVING": [7785, 7786, 7787], "SLAYER": [7788, 7789, 7790],
+        "MINING": [7791, 7792, 7793], "FIREMAKING": [7794, 7795, 7796], "WOODCUTTING": [7797, 7798, 7799]
+      },
+      "xp": [[1100, 1650], [2035, 3025], [4015, 5005]]
+    },
+    "none": 9
+  }
+}

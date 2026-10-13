@@ -1,10 +1,10 @@
 /* Shared styles for what sidebar panels draw: text, form fields, the generated settings
    (ConfigPanel). Colours and fonts are Sidebar.css's variables. */
 .rl-sidebar-panel-content {
-    padding: 8px 10px;
+    padding: 12px 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
     flex: 1 1 auto;
     min-height: 0;
     box-sizing: border-box;
@@ -17,7 +17,7 @@
 .rl-sidebar-panel-title {
     font-family: var(--rl-font-bold);
     color: var(--rl-text);
-    padding-bottom: 3px;
+    padding-bottom: 6px;
     border-bottom: 1px solid var(--rl-medium-gray);
 }
 
@@ -32,7 +32,7 @@
     min-height: 150px;
     resize: vertical;
     flex: 1 1 auto;
-    padding: 6px;
+    padding: 8px 10px;
     box-sizing: border-box;
     border: 1px solid var(--rl-medium-gray);
     background: var(--rl-dark-gray);
@@ -43,14 +43,14 @@
 .rl-sidebar-field {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 5px;
     color: var(--rl-text);
 }
 
 .rl-sidebar-field input,
 .rl-sidebar-field select,
 .rl-sidebar-field textarea {
-    padding: 4px 6px;
+    padding: 6px 8px;
     border: 1px solid var(--rl-medium-gray);
     background: var(--rl-dark-gray);
     color: var(--rl-text);
@@ -66,7 +66,7 @@
 
 .rl-sidebar-row {
     display: flex;
-    gap: 6px;
+    gap: 8px;
 }
 
 .rl-sidebar-row .rl-sidebar-field {
@@ -77,13 +77,13 @@
 .rl-sidebar-check {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     color: var(--rl-text);
 }
 
 .rl-sidebar-check input[type="checkbox"] {
-    width: 13px;
-    height: 13px;
+    width: 15px;
+    height: 15px;
     margin: 0;
     accent-color: var(--rl-orange);
 }
@@ -93,15 +93,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    padding: 6px 8px;
+    gap: 10px;
+    padding: 8px 10px;
     background: var(--rl-dark-gray);
 }
 
 .rl-sidebar-plugin-meta {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 3px;
     min-width: 0;
 }
 
@@ -116,7 +116,7 @@
 
 .rl-sidebar-text-button {
     flex: 0 0 auto;
-    padding: 2px 8px;
+    padding: 5px 10px;
     border: 1px solid var(--rl-medium-gray);
     background: var(--rl-dark-gray);
     color: var(--rl-text);
@@ -135,13 +135,13 @@
 .rl-config-panel {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
 }
 
 .rl-config-label {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 3px;
 }
 
 .rl-config-description,
@@ -160,8 +160,8 @@
     align-items: center;
     gap: 6px;
     width: 100%;
-    margin: 8px 0 2px;
-    padding: 0 0 3px;
+    margin: 12px 0 2px;
+    padding: 0 0 6px;
     border: none;
     border-bottom: 1px solid var(--rl-medium-gray);
     background: none;
@@ -194,9 +194,9 @@
 }
 
 .rl-sidebar-color-input {
-    width: 34px;
-    min-width: 34px;
-    height: 24px;
+    width: 40px;
+    min-width: 40px;
+    height: 28px;
     padding: 2px;
     box-sizing: border-box;
     border: 1px solid var(--rl-medium-gray);
@@ -207,7 +207,7 @@
 .rl-sidebar-color-full {
     width: 100%;
     min-width: 0;
-    height: 24px;
+    height: 28px;
 }
 
 .rl-sidebar-value-row {
@@ -222,7 +222,7 @@
 }
 
 .rl-sidebar-scrollable::-webkit-scrollbar {
-    width: 7px;
+    width: 8px;
 }
 
 .rl-sidebar-scrollable::-webkit-scrollbar-track {

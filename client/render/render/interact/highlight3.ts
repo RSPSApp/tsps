@@ -385,12 +385,15 @@ export function getNpcWorldTile(host: WebGLOsrsRendererHost, ecsId: number): { x
 }
 
 export function resolveNpcHighlightTargetFromEntry(host: WebGLOsrsRendererHost, 
-        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY"> | undefined,
+        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId"> | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): NpcHighlightTarget | undefined {
 
         if (!entry) return undefined;
         if (entry.targetType !== MenuTargetType.NPC) return undefined;
+        if (typeof entry.npcServerId === "number") {
+            return host.resolveNpcHighlightTargetFromServerId(entry.npcServerId);
+        }
         const desiredNpcTypeId =
             typeof entry.targetId === "number" ? entry.targetId | 0 : undefined;
         const npcEcs = host.osrsClient.npcEcs;

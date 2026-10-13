@@ -29,6 +29,7 @@ export interface EditModeDefinitionSummary {
 export interface EditModeOverlaySwatch {
     id: number;
     colorRgb: number;
+    textureId?: number;
     name?: string;
 }
 
@@ -263,9 +264,10 @@ export interface EditModeHost {
     loadShops?(): Promise<EditModeShop[]>;
     loadNpcInteractions?(): Promise<EditModeNpcInteractions>;
     getNpcMenuOptions?(npcTypeId: number): readonly EditModeNpcMenuOption[];
-    /** Cache-backed overlay colours for the terrain palette. */
+    /** Cache-backed overlay colours and textures for the terrain palette. */
     isWaterOverlay?(id: number): boolean;
     getOverlaySwatches?(): readonly EditModeOverlaySwatch[];
+    getOverlayTexture?(textureId: number): string | undefined;
     loadWorldDefinition?(): Promise<EditModeWorldDefinition>;
     /** Spawns a cache NPC client-side. Returns the synthetic server id used. */
     spawnNpc(npcTypeId: number, tile: EditModeTile, rotation: number): number | undefined;
@@ -277,6 +279,7 @@ export interface EditModeHost {
     setTerrainPreview?(edits: readonly EditModeEdit[]): void;
     clearTerrainPreview?(): void;
     /** Samples terrain at an exact tile vertex; undefined when its map is unavailable. */
+    getTerrainOverlay?(tile: EditModeTile): number | undefined;
     getTerrainHeight?(tile: EditModeTile): number | undefined;
     /** Rebuilds edited map squares from their persisted base data. */
     refreshEditedRegions?(regionIds: readonly number[], edits: readonly EditModeEdit[]): void;

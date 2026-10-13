@@ -11,6 +11,7 @@ import { isDebugMode, isIos, isMobileMode } from "../common/utils/DeviceUtil";
 import { DebugControls } from "./DebugControls";
 import "./GameContainer.css";
 import { GameRenderer } from "./GameRenderer";
+import { GameState } from "./login/GameState";
 import { OsrsClient } from "./OsrsClient";
 import { SplitPrivateChatOverlay } from "./plugins/splitprivatechat/SplitPrivateChatOverlay";
 import { VengeanceTimerOverlay } from "./plugins/vengeancetimer/VengeanceTimerOverlay";
@@ -444,9 +445,9 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                 )}
             </div>
 
-            {/* Beside the game view, so a docked panel narrows it. Only in game: not while the
-                cache downloads (DOWNLOADING) or on the login screen. */}
-            {!hideUi && osrsClient.isLoggedIn() && (
+            {/* Beside the game view, so a docked panel narrows it. From the login screen on: not
+                while the cache downloads or loads (DOWNLOADING, LOADING). */}
+            {!hideUi && osrsClient.gameState >= GameState.LOGIN_SCREEN && (
                 <Sidebar
                     toolbar={osrsClient.runeLite.clientToolbar}
                     store={osrsClient.sidebar}

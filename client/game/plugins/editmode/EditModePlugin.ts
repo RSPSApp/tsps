@@ -1,3 +1,4 @@
+import type { Camera } from "../../Camera";
 import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
 import { waterArea, generateIslandEdits } from "./IslandGenerator";
 import { buildPathCorners, createPathTiles } from "./PathGenerator";
@@ -59,6 +60,8 @@ const WALL_OBJECT_ID = 1902;
 const WALL_SHAPE = 0;
 /** Pointer travel past this is a camera drag, not a click on a tile. */
 const DRAG_THRESHOLD_PX = 4;
+const EDITOR_CAMERA_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]);
+const EDITOR_TYPING_SELECTOR = "input:not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable=true]";
 const PLACE_KINDS: ReadonlySet<string> = new Set<EditModePlaceKind>(["loc", "npc"]);
 
 /** Keys spawned NPCs by the edit that created them, so undo can despawn them. */
@@ -100,6 +103,7 @@ export class EditModePlugin {
     private config: EditModePluginConfig;
     private state: EditModePluginState;
     private selection?: EditModeSelection;
+    private movingSelection?: EditModeSelection;
     private search: EditModePluginState["search"] = {
         kind: "loc",
         query: "",
@@ -110,6 +114,9 @@ export class EditModePlugin {
     private wallStart?: EditModeTile;
     private wallRotationOverride?: number;
     private freeCamera = false;
+    private readonly cameraKeys = new Set<string>();
+    private cameraVelocityX = 0;
+    private cameraVelocityZ = 0;
     private pointer?: {
         x: number;
         y: number;
@@ -144,6 +151,7 @@ export class EditModePlugin {
             shape: LOC_SHAPE_NORMAL,
             rotation: 0,
             heightLevel: 0,
+            renderAllHeightLevels: true,
         });
         this.state = {
             config: this.config,
@@ -174,6 +182,10 @@ export class EditModePlugin {
 
     getOverlaySwatches() {
         return this.host?.getOverlaySwatches?.() ?? [];
+    }
+
+    getOverlayTexture(textureId: number): string | undefined {
+        return this.host?.getOverlayTexture?.(textureId);
     }
 
     /** Updates the world spawn from one selected tile; Save persists it to world.json. */
@@ -324,7 +336,13 @@ export class EditModePlugin {
     setConfig(nextConfig: Partial<EditModePluginConfig>): void {
         const wasActive = this.config.active;
         const previousTool = this.config.tool;
+        if (nextConfig.tool !== undefined || nextConfig.locId !== undefined || nextConfig.placeKind !== undefined) {
+            this.cancelMove();
+        }
         this.config = this.sanitizeConfig({ ...this.config, ...nextConfig });
+        if (nextConfig.heightLevel !== undefined && nextConfig.renderAllHeightLevels === undefined) {
+            this.config.renderAllHeightLevels = this.config.heightLevel === 0;
+        }
         if (nextConfig.tool !== undefined && this.config.tool !== previousTool) {
             this.pathStart = undefined;
             this.wallStart = undefined;
@@ -333,7 +351,7 @@ export class EditModePlugin {
         if (nextConfig.heightLevel !== undefined) {
             this.host?.setHeightLevel?.(this.config.heightLevel);
         }
-        if (nextConfig.renderAllHeightLevels !== undefined) {
+        if (nextConfig.heightLevel !== undefined || nextConfig.renderAllHeightLevels !== undefined) {
             this.host?.setRenderAllHeightLevels?.(this.config.renderAllHeightLevels);
         }
         this.syncListeners();
@@ -342,7 +360,7 @@ export class EditModePlugin {
         }
         this.commit();
         // Search results held focus; camera keys are listened for on the canvas.
-        if (nextConfig.tool === "place") this.host?.getCanvas?.()?.focus({ preventScroll: true });
+        if (nextConfig.tool !== undefined) this.host?.getCanvas?.()?.focus({ preventScroll: true });
         if (!wasActive && this.config.active && !this.world.loading) {
             this.refreshWorldDefinition();
         }
@@ -425,6 +443,7 @@ export class EditModePlugin {
     setFreeCamera(enabled: boolean): void {
         this.host?.setFreeCamera(enabled);
         this.freeCamera = enabled;
+        this.resetCameraInput();
         this.commit();
     }
 
@@ -497,6 +516,7 @@ export class EditModePlugin {
     }
 
     duplicateSelection(): void {
+        this.cancelMove();
         if (!this.selection || this.selection.kind === "npc" || this.selection.locId < 0) return;
         this.setConfig({
             tool: "place",
@@ -507,7 +527,32 @@ export class EditModePlugin {
         });
     }
 
+    moveSelection(): void {
+        const selection = this.selection;
+        if (!selection || selection.kind !== "loc" || selection.locId < 0) return;
+        this.duplicateSelection();
+        this.movingSelection = { ...selection, shape: this.config.shape, rotation: this.config.rotation };
+        this.host?.onLocDel(
+            { x: selection.tileX, y: selection.tileY }, selection.plane,
+            selection.shape ?? this.config.shape, selection.rotation ?? this.config.rotation,
+        );
+    }
+
+    private cancelMove(): void {
+        const moving = this.movingSelection;
+        if (!moving) return;
+        this.movingSelection = undefined;
+        // Preview removal never enters saved edits; cancellation restores the source.
+        this.host?.onLocAddChange(moving.locId,
+            { x: moving.tileX, y: moving.tileY }, moving.plane,
+            moving.shape ?? this.config.shape, moving.rotation ?? this.config.rotation);
+    }
+
     rotateSelection(): void {
+        if (this.movingSelection) {
+            this.rotate();
+            return;
+        }
         const selection = this.selection;
         if (!selection || selection.kind !== "loc" || selection.locId < 0) return;
         const shape = selection.shape ?? this.config.shape;
@@ -539,6 +584,7 @@ export class EditModePlugin {
 
     deleteSelection(): void {
         if (!this.selection || this.selection.kind === "npc" || this.selection.locId < 0) return;
+        if (this.movingSelection) this.setConfig({ tool: "select" });
         this.commitEdits([
             {
                 kind: "delete",
@@ -553,6 +599,20 @@ export class EditModePlugin {
         this.selection = undefined;
         this.host?.clearSelectionHighlight?.();
         this.commit();
+    }
+
+    getSelectionOverlay(): number | undefined {
+        const selection = this.selection;
+        if (!selection || selection.kind === "building" || selection.kind === "loc" || selection.kind === "npc" ||
+            (selection.tileEndX ?? selection.tileX) !== selection.tileX ||
+            (selection.tileEndY ?? selection.tileY) !== selection.tileY) return undefined;
+        const overlay = this.host?.getTerrainOverlay?.(selection);
+        return overlay !== undefined && overlay > 0 ? overlay : undefined;
+    }
+
+    useSelectionOverlay(): void {
+        const overlayId = this.getSelectionOverlay();
+        if (overlayId !== undefined) this.setConfig({ overlayId });
     }
 
     paintSelection(): void {
@@ -702,6 +762,7 @@ export class EditModePlugin {
      * ponytail: undo skips deletes, wire a real override-clear if that bites.
      */
     undo(): boolean {
+        if (this.movingSelection) this.setConfig({ tool: "select" });
         const edits = this.config.edits;
         let index = -1;
         for (let i = edits.length - 1; i >= 0; i--) {
@@ -721,6 +782,7 @@ export class EditModePlugin {
     }
 
     clearEdits(): void {
+        if (this.movingSelection) this.setConfig({ tool: "select" });
         const edits = this.config.edits;
         for (const edit of edits) {
             if (edit.kind === "npc" || edit.kind === "terrain") this.revert(edit);
@@ -807,7 +869,21 @@ export class EditModePlugin {
             shape: this.config.shape,
             rotation: this.config.rotation,
         };
-        this.commitEdits([edit]);
+        const moving = this.movingSelection;
+        if (moving && edit.kind === "place") {
+            this.movingSelection = undefined;
+            this.selection = undefined;
+            host.clearSelectionHighlight?.();
+            this.commitEdits([{
+                kind: "delete", locId: 0,
+                tileX: moving.tileX, tileY: moving.tileY, plane: moving.plane,
+                shape: moving.shape ?? this.config.shape,
+                rotation: moving.rotation ?? this.config.rotation,
+            }, edit]);
+            this.setConfig({ tool: "select" });
+        } else {
+            this.commitEdits([edit]);
+        }
     }
 
     /**
@@ -1157,11 +1233,30 @@ export class EditModePlugin {
 
     private readonly onKeyDown = (event: KeyboardEvent): void => {
         const target = event.target as HTMLElement | null;
-        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+        if (target?.closest?.(EDITOR_TYPING_SELECTOR)) return;
         if (this.host?.isEditorModalOpen?.()) return;
         // The login form is drawn on the canvas, so its typing would otherwise
         // lose every "r" to the rotate shortcut.
         if (!this.handlesCanvasInput()) return;
+        const key = event.key.toLowerCase();
+        if (this.selection?.kind === "loc" && (key === "c" || key === "m") &&
+            !event.ctrlKey && !event.metaKey && !event.altKey) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!event.repeat) {
+                if (key === "c") this.duplicateSelection();
+                else this.moveSelection();
+            }
+            return;
+        }
+        if (EDITOR_CAMERA_KEYS.has(event.code) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            this.cameraKeys.add(event.code);
+            this.host?.getCanvas()?.focus({ preventScroll: true });
+            // Editor keys never reach InputManager or first-person walking.
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.key !== "Shift") return;
+        }
         if (["e", "r", "f", "q", "c"].includes(event.key.toLowerCase())) {
             event.preventDefault();
             event.stopPropagation();
@@ -1171,14 +1266,19 @@ export class EditModePlugin {
             this.refreshPointerPreview();
             return;
         }
-        if (event.key === "r" || event.key === "R") {
+        if (key === "r" && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault();
+            if (event.repeat) return;
             if (this.config.tool === "select" && this.selection?.kind === "loc") {
                 this.rotateSelection();
             } else {
                 this.rotate();
             }
         } else if (event.key === "Escape") {
+            if (this.movingSelection) {
+                this.setConfig({ tool: "select" });
+                return;
+            }
             if (this.pathStart || this.wallStart) {
                 this.pathStart = undefined;
                 this.wallStart = undefined;
@@ -1191,6 +1291,10 @@ export class EditModePlugin {
     };
 
     private readonly onKeyUp = (event: KeyboardEvent): void => {
+        if (this.cameraKeys.delete(event.code)) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
         if (["e", "r", "f", "q", "c"].includes(event.key.toLowerCase())) {
             event.preventDefault();
             event.stopPropagation();
@@ -1198,6 +1302,41 @@ export class EditModePlugin {
         if (event.key !== "Shift") return;
         this.buildingSelect = false;
         this.refreshPointerPreview();
+    };
+
+    /** Separate from the normal camera and first-person walking controls. */
+    handleCameraInput(camera: Camera, deltaTime: number): boolean {
+        if (!this.handlesCanvasInput()) return false;
+        if (!this.freeCamera || this.host?.isEditorModalOpen?.() ||
+            document.activeElement?.closest(EDITOR_TYPING_SELECTOR)) {
+            this.resetCameraInput();
+            return true;
+        }
+        // Ignore long gaps after a stalled or backgrounded frame.
+        const dt = Math.max(0, Math.min(deltaTime, 50)) / 1000;
+        const speed = this.cameraKeys.has("ShiftLeft") || this.cameraKeys.has("ShiftRight") ? 192 : 48;
+        const x = Number(this.cameraKeys.has("KeyA")) - Number(this.cameraKeys.has("KeyD"));
+        const z = Number(this.cameraKeys.has("KeyS")) - Number(this.cameraKeys.has("KeyW"));
+        const length = Math.hypot(x, z) || 1;
+        const targetX = x / length * speed, targetZ = z / length * speed;
+        const blend = -Math.expm1(-12 * dt);
+        // Integrate the eased velocity so acceleration feels the same at different frame rates.
+        const dx = targetX * dt + (this.cameraVelocityX - targetX) * blend / 12;
+        const dz = targetZ * dt + (this.cameraVelocityZ - targetZ) * blend / 12;
+        this.cameraVelocityX += (targetX - this.cameraVelocityX) * blend;
+        this.cameraVelocityZ += (targetZ - this.cameraVelocityZ) * blend;
+        if (Math.abs(dx) + Math.abs(dz) > 1e-5) camera.move(dx, 0, dz);
+        const pitch = Number(this.cameraKeys.has("ArrowUp")) - Number(this.cameraKeys.has("ArrowDown"));
+        const yaw = Number(this.cameraKeys.has("ArrowLeft")) - Number(this.cameraKeys.has("ArrowRight"));
+        if (pitch) camera.updatePitch(camera.pitch, pitch * 512 * dt);
+        if (yaw) camera.updateYaw(camera.yaw, yaw * 512 * dt);
+        return true;
+    }
+
+    private readonly resetCameraInput = (): void => {
+        this.cameraKeys.clear();
+        this.cameraVelocityX = 0;
+        this.cameraVelocityZ = 0;
     };
 
     private syncListeners(): void {
@@ -1217,6 +1356,8 @@ export class EditModePlugin {
             this.host?.setFreeCamera(false);
             this.freeCamera = false;
         }
+        if (!shouldCapture) this.cancelMove();
+        if (!shouldCapture) this.resetCameraInput();
         if (!shouldCapture) this.clearPlacementPreview();
         if (!shouldCapture) this.host?.clearSelectionHighlight?.();
 
@@ -1231,6 +1372,7 @@ export class EditModePlugin {
             window.addEventListener("mousedown", this.onMouseDown);
             window.addEventListener("mousemove", this.onMouseMove);
             window.addEventListener("mouseup", this.onMouseUp);
+            window.addEventListener("blur", this.resetCameraInput);
             window.addEventListener("keydown", this.onKeyDown, true);
             window.addEventListener("keyup", this.onKeyUp, true);
         } else {
@@ -1240,6 +1382,7 @@ export class EditModePlugin {
             window.removeEventListener("mousedown", this.onMouseDown);
             window.removeEventListener("mousemove", this.onMouseMove);
             window.removeEventListener("mouseup", this.onMouseUp);
+            window.removeEventListener("blur", this.resetCameraInput);
             window.removeEventListener("keydown", this.onKeyDown, true);
             window.removeEventListener("keyup", this.onKeyUp, true);
         }

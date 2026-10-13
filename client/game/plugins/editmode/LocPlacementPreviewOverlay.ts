@@ -209,7 +209,7 @@ export class LocPlacementPreviewOverlay implements Overlay {
 
         const textureIds = textureLoader.getTextureIds().filter((id) => textureLoader.isSd(id)).slice(0, 2047);
         const textureIdIndexMap = new Map<number, number>();
-        textureIds.forEach((id, index) => textureIdIndexMap.set(id, index));
+        textureIds.forEach((id, index) => textureIdIndexMap.set(id, index + 1));
         const faces = getModelFacesFiltered(model, textureLoader, false);
         const alphaFaces = getModelFacesFiltered(model, textureLoader, true);
         this.opaque = this.createBatch(

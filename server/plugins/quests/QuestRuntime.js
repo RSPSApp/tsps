@@ -348,7 +348,7 @@ function sendQuestVarps({ player }) {
       continue;
     }
     if (!Number.isInteger(quest.varpId) || quest.varpId < 0) continue;
-    sender.sendConfig(quest.varpId, quest.getStage(player));
+    sender.sendConfig(quest.varpId, quest.varpValue(quest.getStage(player)));
   }
 }
 
@@ -362,7 +362,8 @@ function sendQuestVarps({ player }) {
  * @param api  the plugin api
  * @param def  { key, name, varpId, startedValue, completionValue, questPoints,
  *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?,
- *               buildJournal?(player, quest), onReward?(player, quest) }
+ *               buildJournal?(player, quest), onReward?(player, quest),
+ *               varpValue?(stage) }
  */
 function registerQuest(api, def) {
   if (!def || !def.key || !def.name) throw new Error("registerQuest requires a key and name");
@@ -373,6 +374,10 @@ function registerQuest(api, def) {
   const stageKey = stageAttribute(def.key);
   const quest = {
     ...def,
+    /** The varp value the client sees for a stage; def.varpValue maps stages the cache keys on. */
+    varpValue(stage) {
+      return def.varpValue ? def.varpValue(stage) | 0 : stage;
+    },
     getStage(player) {
       const value = Number(player.getAttribute(stageKey));
       return Number.isFinite(value) ? value | 0 : 0;
@@ -384,7 +389,7 @@ function registerQuest(api, def) {
       if (def.varbitId !== undefined) {
         player.getPacketSender().sendVarbit(def.varbitId, value | 0);
       } else {
-        player.getPacketSender().sendConfig(def.varpId, value | 0);
+        player.getPacketSender().sendConfig(def.varpId, quest.varpValue(value | 0));
       }
       refreshQuestList(player);
       // Quests whose progress shows in more than their varp (a varbit the cache reads) follow it.

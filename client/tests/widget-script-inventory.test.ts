@@ -119,3 +119,23 @@ processWidgetReleaseInput(deps, { mx: 5, my: 5 } as any, manager, interaction,
     () => ({ option: "Drop", target: "Plank" }), false);
 assert.deepEqual(events, ["Drop"]);
 console.log("inventory drag identity, ordering and release tests passed");
+
+// Rev 241's price-checker script takes 28 longs, including totals above 32 bits.
+{
+    const price = 12_345_678_901n;
+    const bytes = new Uint8Array(9);
+    bytes[0] = 2;
+    new DataView(bytes.buffer).setBigInt64(1, price);
+    const longBody = Uint8Array.from([0, 0, 3, 17, 1, ...bytes, 0, 0, 0, 0, 0]);
+    const decoded = decodeServerPacket(Uint8Array.from([
+        ServerPacketId.WIDGET_RUN_SCRIPT, 0, longBody.length, ...longBody,
+    ]));
+    assert.deepEqual((decoded?.payload as any).args, [price]);
+    const script = new Script();
+    script.id = 785;
+    script.localLongCount = script.longArgCount = 1;
+    script.instructions = Int32Array.from([Opcodes.LLOAD, Opcodes.RETURN]);
+    script.intOperands = Int32Array.from([0, 0]);
+    vm.run(script, [], [], undefined, (decoded?.payload as any).args);
+    assert.equal(vm.longStack[0], price);
+}

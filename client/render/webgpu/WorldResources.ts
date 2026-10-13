@@ -23,6 +23,7 @@ import {
     SCENE_UNIFORM_FLOATS,
     WORLD_TEXTURE_BINDINGS,
 } from "./bindings";
+import { createScenePipeline, withSampleCount } from "./multisample";
 import type { WebGPUSceneExtension } from "./sceneExtension";
 import {
     DEPTH_FRAGMENT_ENTRY,
@@ -521,7 +522,7 @@ export class WorldResources {
                 ext: mode === "base" ? undefined : extension!.shaders,
                 depth,
             });
-            return device.createRenderPipeline({
+            return createScenePipeline(device, {
                 label: `webgpu main${alpha ? " alpha" : ""} pipeline${mode === "base" ? "" : ` ${mode}`}`,
                 layout: mode === "base" ? pipelineLayout : extendedPipelineLayout!,
                 vertex: {
@@ -570,7 +571,6 @@ export class WorldResources {
                     depthWriteEnabled: true,
                     depthCompare: "less-equal",
                 },
-                multisample: { count: 1 },
             });
         };
 
@@ -614,6 +614,8 @@ export class WorldResources {
     readonly extension?: WebGPUSceneExtension;
     /** True while the extension's pipelines are selected; actor draws read this. */
     extensionActive = false;
+    /** The world pass's MSAA sample count this frame (1 or 4), set by `selectExtension`. */
+    sampleCount = 1;
     /** The extension's group(1) layout and bind group; extended actor pipelines use these. */
     readonly extensionTexturesLayout?: GPUBindGroupLayout;
     readonly extensionTextureBindGroup?: GPUBindGroup;
@@ -713,11 +715,17 @@ export class WorldResources {
         this.device.queue.writeBuffer(this.sceneUniformBuffer, 0, this.sceneData);
     }
 
-    /** Picks the extended or base pipeline pair before a frame's map draws. */
-    selectExtension(active: boolean): void {
+    /**
+     * Picks the extended or base pipeline pair before a frame's map draws, multisampled when
+     * the world pass is (see ./multisample.ts).
+     */
+    selectExtension(active: boolean, sampleCount: number = 1): void {
         const extended = active ? this.extendedPipelines : undefined;
         this.extensionActive = !!extended;
-        [this.opaquePipeline, this.alphaPipeline] = extended ?? this.basePipelines;
+        this.sampleCount = sampleCount;
+        const [opaque, alpha] = extended ?? this.basePipelines;
+        this.opaquePipeline = withSampleCount(opaque, sampleCount);
+        this.alphaPipeline = withSampleCount(alpha, sampleCount);
         this.mapWorldTextureBindGroup = extended
             ? this.extensionTextureBindGroup!
             : this.worldTextureBindGroup;

@@ -31,6 +31,15 @@ const SMITHING_BAR_TYPE_BY_ITEM_ID = new Map([
   [2363, 6], // Runite
   [13354, 7], // Blurite
 ]);
+// OSRS Wiki: Smithing#Smithing_tables - XP per bar consumed, not per item produced.
+const SMITHING_XP_PER_BAR = new Map([
+  [ItemIds.BRONZE_BAR, 12.5],
+  [ItemIds.IRON_BAR, 25],
+  [ItemIds.STEEL_BAR, 37.5],
+  [ItemIds.MITHRIL_BAR, 50],
+  [ItemIds.ADAMANTITE_BAR, 62.5],
+  [ItemIds.RUNITE_BAR, 75],
+]);
 const SMITHING_COMPONENT_BY_PRODUCT = new Map([
   ["Dagger", 9], ["Sword", 10], ["Scimitar", 11], ["Long sword", 12],
   ["2 hand sword", 13], ["Axe", 14], ["Mace", 15], ["Warhammer", 16],
@@ -68,7 +77,7 @@ const SMITHING_QUANTITY_MODE_BUTTON_IDS = new Set(
   )
 );
 const SMITHING_ALL_QUANTITY_CAP = 28;
-// player -> selected quantity ("all" or a number); defaults to 1 when unset.
+// player -> selected quantity ("all" or a number); kept until disconnect.
 const ACTIVE_SMITHING_QUANTITY = new Map();
 // Widget transmit flags: bit (opIndex+1) must be set for that right-click op to reach the
 // server (see WidgetActionRouter.shouldTransmitAction on the client). The skillmulti list
@@ -395,6 +404,7 @@ const SMITHABLE_EQUIPMENT = SMITHABLE_EQUIPMENT_DATA.map(
     requiredLevel,
     barsRequired,
     barFrame,
+    xp: SMITHING_XP_PER_BAR.get(barId) * barsRequired,
   })
 );
 
@@ -552,7 +562,7 @@ function performSmithAction(player, smithable) {
   inventory.deleteNumber(smithable.barId, smithable.barsRequired);
   inventory.addItem(new Item(smithable.itemId, smithable.amount));
   player.performAnimation(SMITH_ANIMATION);
-  player.getSkillManager().addExperiences(Skill.SMITHING, 10);
+  player.getSkillManager().addExperiences(Skill.SMITHING, smithable.xp);
 
   player.sendMessage("You hammer the metal and shape an item.");
   pluginApi?.emitCustomEvent("smithing:success", {
@@ -595,7 +605,6 @@ function closeSmithingInterface(player) {
     return;
   }
   ACTIVE_SMITHING_MENUS.delete(player);
-  ACTIVE_SMITHING_QUANTITY.delete(player);
   player.setInterfaceId(-1);
   player.getPacketSender().closeSubInterface(MAIN_MODAL_TARGET_UID);
 }
@@ -732,7 +741,6 @@ function openEquipmentCreationInterface(player, preferredBarId = null) {
   }
 
   ACTIVE_SMITHING_MENUS.set(player, selectedBar.barId);
-  ACTIVE_SMITHING_QUANTITY.delete(player);
   player.setInterfaceId(SMITHING_INTERFACE_ID);
   // Matches OpenRune's AnvilSmithingScript.openSmithingInterface: set the bar-type varbit,
   // then open the modal. Interface 312 populates its own product icons - its onLoad script
@@ -861,7 +869,6 @@ function handleSmithingInterfaceAction(activeSessions, player, buttonId) {
   const amount = selected === "all" ? SMITHING_ALL_QUANTITY_CAP : selected;
 
   ACTIVE_SMITHING_MENUS.delete(player);
-  ACTIVE_SMITHING_QUANTITY.delete(player);
   const started = startSmithingSession(activeSessions, player, smithable, amount);
   if (started) {
     closeSmithingInterfaceNextTick(player);
@@ -942,7 +949,7 @@ module.exports = {
       ACTIVE_SMITHING_MENUS.delete(player);
       ACTIVE_SMITHING_QUANTITY.delete(player);
     });
-    api.onPlayerLevelUp(({ player }) => {
+    api.onCustomEvent("level-up:popup-opened", ({ player }) => {
       stopSmithingSession(ACTIVE_SMITHING_SESSIONS, player, false);
     });
 

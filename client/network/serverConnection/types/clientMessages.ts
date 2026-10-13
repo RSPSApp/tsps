@@ -88,6 +88,7 @@ type ClientToServer =
               | { kind: "anim_request"; requestId?: number }
               | { kind: "anim_snapshot"; requestId: number; snapshot: any };
       }
+    | { type: "plugin_message"; payload: import("../../../common/network/PluginMessage").PluginMessagePayload }
     | { type: "logout"; payload?: Record<string, never> }
     | { type: "login"; payload: { username: string; password: string; revision: number } }
     | { type: "chat"; payload: Record<string, unknown> }

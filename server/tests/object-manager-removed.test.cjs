@@ -97,7 +97,7 @@ test('runtime objects are indexed by tile and region, in step with the world lis
     assert.ok(!World.getObjects().includes(fire) && !World.getObjects().includes(elsewhere));
 });
 
-test('a door closed again (Doors puts back a copy of the map door) restores the map too', () => {
+test('a closed door snapshot replays when a player returns after missing auto-close', () => {
     RegionManager.loadMapFiles(3226, 3214);
     const door = MapObjects.get(1535, new Location(3226, 3214, 0), null);
     assert.ok(door?.isMapOriginal(), 'the castle door is a map object');
@@ -114,7 +114,13 @@ test('a door closed again (Doors puts back a copy of the map door) restores the 
     ObjectManager.deregister(open, true);
     const closed = new GameObject(1535, new Location(3226, 3214, 0), door.getType(), door.getFace(), null);
     ObjectManager.register(closed, true);
-    assert.equal(objects(), before, 'the closed copy is the map again, not a runtime object');
+    assert.equal(objects(), before + 1, 'keep the closed snapshot for clients that missed it');
+    const sent = [];
+    ObjectManager.onRegionChange({
+        getPrivateArea: () => null,
+        getPacketSender: () => ({ sendObject: (object) => sent.push(object), sendObjectRemoval() {} }),
+    }, 3200, 3200);
+    assert.ok(sent.includes(closed), 'replay the closed door into a cached scene');
     assert.ok(!removed().some((entry) => entry.getLocation().equals(door.getLocation())), 'nothing remembered');
 
     // Opened again: still remembered as removed, so a scene reload hides it.

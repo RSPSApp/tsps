@@ -7,6 +7,7 @@ const { GameObject } = require("../../src/main/typescript/elvarg/game/entity/imp
 const { ItemIds, ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
 const InfernalPickaxe = require("./mining/InfernalPickaxe.Mining");
 const CrystalPickaxe = require("./mining/CrystalPickaxe.Mining");
+const ClueGeodes = require("./mining/ClueGeodes.Mining");
 
 const DEPLETED_ROCK_ID = 2704;
 const MINING_ANIMATION_INTERVAL_TICKS = 4;
@@ -77,6 +78,23 @@ function getMiningLevel(player) {
   return player.getSkillManager().getCurrentLevel(Skill.MINING);
 }
 
+/**
+ * The level the success rolls use: the visible level plus invisible boosts other plugins add
+ * ("mining:level-boost", the celestial ring's +4). Requirements still read the visible level.
+ */
+function getRollMiningLevel(player) {
+  const request = { player, boost: 0 };
+  pluginApi.emitCustomEvent("mining:level-boost", request);
+  return getMiningLevel(player) + Math.max(0, Number(request.boost) || 0);
+}
+
+/** "mining:best-pickaxe": the best pickaxe the player can use, for other mining content (stars). */
+function answerBestPickaxe(request) {
+  if (request && request.player && request.pickaxe == null) {
+    request.pickaxe = findBestPickaxe(request.player);
+  }
+}
+
 function findBestPickaxe(player) {
   const miningLevel = getMiningLevel(player);
   const weapon = player.getEquipment().getItems()[Equipment.WEAPON_SLOT];
@@ -95,7 +113,7 @@ function findBestPickaxe(player) {
 
 function cyclesRequired(player, rock, pickaxe) {
   let cycles = rock.cycles + Math.floor(Math.random() * 5);
-  cycles -= getMiningLevel(player) * 0.1;
+  cycles -= getRollMiningLevel(player) * 0.1;
   cycles -= cycles * pickaxe.speed;
   const tickBudget = Math.max(3, Math.floor(cycles));
   return Math.max(1, Math.ceil(tickBudget / pickaxe.attemptIntervalTicks));
@@ -239,6 +257,7 @@ class MiningTask extends Task {
       }
       CrystalPickaxe.tryUseCharge(player);
       player.getSkillManager().addExperiences(Skill.MINING, state.rock.xp);
+      mineExtraOre(player, state.rock);
       pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase });
       if (state.rock.infinite) {
         if (player.getInventory().isFull()) {
@@ -258,6 +277,23 @@ class MiningTask extends Task {
 let TaskManager;
 let ObjectManager;
 let pluginApi;
+
+/**
+ * "mining:extra-ore": a mining enhancer (the charged celestial ring) may grant a second ore with
+ * its experience. Without room for it, neither is given (Wiki, Mod Ash).
+ */
+function mineExtraOre(player, rock) {
+  if (rock.infinite) {
+    return;
+  }
+  const request = { player, oreId: rock.oreId, rockLevel: rock.level, extra: false };
+  pluginApi.emitCustomEvent("mining:extra-ore", request);
+  if (!request.extra || player.getInventory().isFull()) {
+    return;
+  }
+  player.getInventory().adds(rock.oreId, 1);
+  player.getSkillManager().addExperiences(Skill.MINING, rock.xp);
+}
 
 function handleMine(event) {
   const rock = ROCK_BY_NAME.get(event.definition.getName());
@@ -290,9 +326,10 @@ module.exports = {
     api.onPlayerDisconnect(({ player }) => {
       stopMining(activeSessions, player, false);
     });
-    api.onPlayerLevelUp(({ player }) => {
+    api.onCustomEvent("level-up:popup-opened", ({ player }) => {
       stopMining(activeSessions, player, false);
     });
+    api.onCustomEvent("mining:best-pickaxe", answerBestPickaxe);
 
     for (const rock of ALL_ROCKS) {
       api.onObjectInteraction(rock.objectName, { Mine: handleMine });
@@ -300,6 +337,7 @@ module.exports = {
 
     InfernalPickaxe.attach(api);
     CrystalPickaxe.attach(api);
+    ClueGeodes.attach(api);
 
     api.log("registered", {
       rocks: ROCKS.length,

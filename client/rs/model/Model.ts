@@ -1013,8 +1013,8 @@ export class Model extends Entity {
      * Applies `frame`, or with a `nextFrame` and `alpha` > 0 a blend of the two (animation
      * smoothing): every skeleton group either frame transforms is moved `alpha` of the way from
      * its value in `frame` to its value in `nextFrame` (a group a frame leaves out counts as
-     * neutral: 0, or 128 for scales). Rotations take the short way round; alpha transforms are
-     * not blended.
+     * neutral: 0, or 128 for scales). Rotations take the short way round, and a half turn snaps;
+     * alpha transforms are not blended.
      */
     transformInterpolated(
         base: SeqBase,
@@ -1076,9 +1076,16 @@ export class Model extends Entity {
             let y: number;
             let z: number;
             if (type === SeqTransformType.ROTATE) {
-                x = (x0 + Math.trunc(Model.angleDelta(x0, x1) * alpha)) & 0xff;
-                y = (y0 + Math.trunc(Model.angleDelta(y0, y1) * alpha)) & 0xff;
-                z = (z0 + Math.trunc(Model.angleDelta(z0, z1) * alpha)) & 0xff;
+                const dx = Model.angleDelta(x0, x1);
+                const dy = Model.angleDelta(y0, y1);
+                const dz = Model.angleDelta(z0, z1);
+                // A half turn has no short way round: blended, a part flipped back and forth
+                // every frame turns the same way each time and spins (the demonbane cast's
+                // staff). It snaps, as it does unblended.
+                const flip = dx === -128 || dy === -128 || dz === -128;
+                x = flip ? x0 : (x0 + Math.trunc(dx * alpha)) & 0xff;
+                y = flip ? y0 : (y0 + Math.trunc(dy * alpha)) & 0xff;
+                z = flip ? z0 : (z0 + Math.trunc(dz * alpha)) & 0xff;
             } else if (type === SeqTransformType.ALPHA) {
                 x = x0;
                 y = 0;

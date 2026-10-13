@@ -1,3 +1,4 @@
+import type { ActorMutation } from "./ActorMutation";
 import { PlayerAppearance } from "../../rs/config/player/PlayerAppearance";
 import type { SeqTypeLoader } from "../../rs/config/seqtype/SeqTypeLoader";
 import { NO_INTERACTION, decodeInteractionIndex } from "../../rs/interaction/InteractionIndex";
@@ -25,6 +26,10 @@ type InteractionOrientationProvider = (ecsIndex: number) => number | undefined;
 const FIRST_PERSON_ARMS_BACK_OFFSET = 32;
 
 export class PlayerEcs {
+    readonly mutationListeners = new Set<(event: ActorMutation) => void>();
+    private notifyMutation(event: ActorMutation): void {
+        for (const listener of this.mutationListeners) listener(event);
+    }
     private capacity = 0;
     private count = 0;
     private clientCycle = 0; // Game cycle counter (increments each client tick)
@@ -135,6 +140,9 @@ export class PlayerEcs {
 
     // Model cache for dynamic animation (stored as any to avoid circular deps)
     private baseModels: (any | undefined)[] = [];
+    private readonly modelHeightOverrides=new Map<number,number>();
+    getModelHeightOverride(index:number):number|undefined { return this.modelHeightOverrides.get(index); }
+    setModelHeightOverride(index:number,height:number):void { this.modelHeightOverrides.set(index,height|0); }
     private modelIndicesCount!: Int32Array;
     private modelIndicesCountAlpha!: Int32Array;
 
@@ -304,6 +312,7 @@ export class PlayerEcs {
         this.prevX[index] = 0;
         this.prevY[index] = 0;
         this.level[index] = 0;
+        this.modelHeightOverrides.delete(index);
         this.rotation[index] = 0;
         this.targetRot[index] = 0;
         this.faceSubX[index] = -1;
@@ -317,6 +326,8 @@ export class PlayerEcs {
 
         // Initialize animation state
         this.animSeqId[index] = -1;
+        this.animActionSeqId[index] = -1;
+        this.animMovementSeqId[index] = -1;
         this.animSeqFrame[index] = 0;
         this.animSeqFrameCycle[index] = 0;
         this.animFrameCount[index] = 1;
@@ -365,12 +376,14 @@ export class PlayerEcs {
         this.dwellTileY[index] = ty;
         this.dwellTicks[index] = 0;
 
+        this.notifyMutation({ kind: "spawn", index });
         return index;
     }
 
     deallocatePlayer(serverId: number): void {
         const index = this.serverIdToIndex.get(serverId);
         if (index === undefined) return;
+        this.notifyMutation({ kind: "despawn", index });
         this.setRotationOverride(index, undefined);
         this.continuousPositions.delete(index);
 
@@ -862,7 +875,9 @@ export class PlayerEcs {
     }
     setAnimSeqId(i: number, seqId: number): void {
         const next = seqId | 0;
+        const old = this.animSeqId[i];
         this.animSeqId[i] = next;
+        if (old !== next) this.notifyMutation({ kind: "animation", index: i });
         // Keep the action-channel mirror in sync; rendering uses action+movement layering.
         if (this.animActionSeqId) this.animActionSeqId[i] = next;
         // when assigning an action sequence, snapshot current pathLength.
@@ -942,7 +957,9 @@ export class PlayerEcs {
     }
     setAnimActionSeqId(i: number, seqId: number): void {
         const next = seqId | 0;
+        const old = this.animActionSeqId[i];
         this.animActionSeqId[i] = next;
+        if (old !== next) this.notifyMutation({ kind: "animation", index: i });
         // Keep legacy `animSeqId` (action `sequence`) in sync for movement blocking/parity logic.
         this.animSeqId[i] = next;
     }
@@ -1051,6 +1068,7 @@ export class PlayerEcs {
             pattern?: Int32Array | undefined;
         },
     ): void {
+        const old = this.overheadText[index];
         this.overheadText[index] = opts.text;
         const colorId = Math.max(0, Math.min(255, opts.color ?? 0)) | 0;
         const effectId = Math.max(0, Math.min(255, opts.effect ?? 0)) | 0;
@@ -1062,10 +1080,13 @@ export class PlayerEcs {
         this.overheadCycle[index] = duration;
         this.overheadModIcon[index] = modIcon;
         (this.overheadPattern ?? (this.overheadPattern = []))[index] = opts.pattern;
+        if (old !== opts.text) this.notifyMutation({ kind: "overhead", index, text: opts.text });
     }
 
     clearOverheadChat(index: number): void {
+        const old = this.overheadText[index];
         this.overheadText[index] = undefined;
+        if (old !== undefined) this.notifyMutation({ kind: "overhead", index, text: "" });
         if (this.overheadColorId) this.overheadColorId[index] = 0;
         if (this.overheadEffect) this.overheadEffect[index] = 0;
         if (this.overheadDuration) this.overheadDuration[index] = 0;
@@ -1227,6 +1248,18 @@ export class PlayerEcs {
             this.setAnimSet(i, undefined, { mergeWithDefault: true });
     }
 
+    setAnimSequence(i: number, key: PlayerAnimKey, value: number): void {
+        const arrays: Record<PlayerAnimKey, Int32Array> = { idle:this.animIdleSeq, walk:this.animWalkSeq, walkBack:this.animWalkBackSeq,
+            walkLeft:this.animWalkLeftSeq, walkRight:this.animWalkRightSeq, run:this.animRunSeq, runBack:this.animRunBackSeq,
+            runLeft:this.animRunLeftSeq, runRight:this.animRunRightSeq, crawl:this.animCrawlSeq, crawlBack:this.animCrawlBackSeq,
+            crawlLeft:this.animCrawlLeftSeq, crawlRight:this.animCrawlRightSeq, turnLeft:this.animTurnLeftSeq, turnRight:this.animTurnRightSeq };
+        arrays[key][i]=value|0;
+    }
+    getOverheadTextRaw(index:number):string|undefined { return this.overheadText[index]; }
+    setOverheadTextRaw(index:number,text:string|undefined):void { const old=this.overheadText[index];this.overheadText[index]=text;if(old!==text)this.notifyMutation({kind:"overhead",index,text:text ?? ""}); }
+    getOverheadCycle(i:number):number { return this.overheadCycle[i]; }
+    setOverheadCycle(i:number,cycles:number):void { this.overheadCycle[i]=Math.max(0,cycles|0); }
+
     getAnimSeq(i: number, key: PlayerAnimKey): number {
         if (!(i >= 0 && i < this.capacity)) return -1;
         switch (key) {
@@ -1285,6 +1318,7 @@ export class PlayerEcs {
     }
     setAppearance(i: number, appearance: PlayerAppearance | undefined): void {
         this.appearances[i] = appearance;
+        this.notifyMutation({ kind: "appearance", index: i });
     }
     getCombatLevel(i: number): number {
         if (!(i >= 0 && i < this.capacity)) return 0;
@@ -1313,6 +1347,7 @@ export class PlayerEcs {
         this.hidden[i] = isHidden ? 1 : 0;
     }
     getDefaultHeightTiles(i: number): number | undefined {
+        const height=this.modelHeightOverrides.get(i);if(height!==undefined)return height/128;
         const appearance = this.appearances[i];
         if (!appearance) return undefined;
         const key = this.getAppearanceCacheKey(appearance);
@@ -2869,7 +2904,9 @@ export class PlayerEcs {
     setInteractionIndex(i: number, index: number | undefined): void {
         if (!this.interactionIndex) return;
         const next = typeof index === "number" && index >= 0 ? index | 0 : NO_INTERACTION;
+        const old = this.interactionIndex[i];
         this.interactionIndex[i] = next;
+        if (old !== next) this.notifyMutation({ kind: "interacting", index: i });
     }
     getInteractionIndex(i: number): number {
         return this.interactionIndex ? this.interactionIndex[i] | 0 : NO_INTERACTION;

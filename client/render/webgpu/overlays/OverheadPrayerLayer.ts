@@ -25,6 +25,7 @@ export class OverheadPrayerLayer {
         prayer: new Set<number>(),
     };
     private npcIconSprites = new Map<string, ScreenTexture>();
+    private customIconSprites = new Map<IndexedSprite, ScreenTexture>();
     private failedNpcIconKeys = new Set<string>();
     private archiveIds = { pk: -1, prayer: -1 };
 
@@ -47,12 +48,14 @@ export class OverheadPrayerLayer {
         const stacks = args.state.actor2dStacks;
 
         for (const entry of entries) {
+            if ((entry.plane | 0) !== (args.state.playerLevel ?? 0)) continue;
             const sprites = [
                 this.getSprite("pk", entry.headIconPk | 0),
                 this.getSprite("prayer", entry.headIconPrayer | 0),
                 ...(entry.npcHeadIcons ?? []).map((icon) =>
                     this.getNpcSprite(icon.archiveId, icon.spriteId),
                 ),
+                ...(entry.customHeadIcons ?? []).map((icon) => this.getCustomSprite(icon)),
             ].filter((sprite): sprite is ScreenTexture => sprite !== undefined);
             if (sprites.length === 0) continue;
 
@@ -113,6 +116,8 @@ export class OverheadPrayerLayer {
         for (const sprite of this.npcIconSprites.values()) this.screen.releaseTexture(sprite);
         this.npcIconSprites.clear();
         this.failedNpcIconKeys.clear();
+        for (const sprite of this.customIconSprites.values()) this.screen.releaseTexture(sprite);
+        this.customIconSprites.clear();
     }
 
     private initAssetsFromCache(): void {
@@ -198,5 +203,14 @@ export class OverheadPrayerLayer {
     private createTextureFromIndexedSprite(spr: IndexedSprite): ScreenTexture {
         const { pixels, width, height } = indexedSpriteToPixels(spr);
         return this.screen.createPixelTexture(pixels, width, height);
+    }
+
+    private getCustomSprite(icon: IndexedSprite): ScreenTexture {
+        let sprite = this.customIconSprites.get(icon);
+        if (!sprite) {
+            sprite = this.createTextureFromIndexedSprite(icon);
+            this.customIconSprites.set(icon, sprite);
+        }
+        return sprite;
     }
 }

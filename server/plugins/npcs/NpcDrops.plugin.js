@@ -36,6 +36,7 @@ const KALPHITE_QUEEN_NOTED_ITEMS = new Set([
   1391, 3049, 207, 3051, 219, 2363, 1783, 444, 1513, 1621, 1619, 1617, 245, 3138, 1987, 5940, 6016,
 ]);
 
+<<<<<<< HEAD
 
 /** Whether an item stacks in the inventory (runes, arrows, seeds, coins...). */
 function isStackableItem(itemId) {
@@ -123,6 +124,20 @@ function applySharedTableRates() {
       entries[0].outOf
     );
   }
+=======
+/**
+ * Wiki, Looting bag: "obtained as a drop from any monster in the Wilderness, excluding aviansie,
+ * abyssal demons, and Black chinchompas". The tables list it on monsters found everywhere (rats,
+ * black demons...), so where the monster dies decides it.
+ */
+const LOOTING_BAG = "Looting bag";
+const LOOTING_BAG_EXCLUDED = new Set(["Aviansie", "Abyssal demon", "Black chinchompa"]);
+
+function lootingBagDrops(npc) {
+  if (!Wilderness.isInLocation(npc?.getLocation?.())) return false;
+  const name = (npc.getCurrentDefinition?.() ?? npc.getDefinition?.())?.getName?.();
+  return !LOOTING_BAG_EXCLUDED.has(name);
+>>>>>>> ea8f1cac47c98dbc21804b7124a1e15aba40bc0d
 }
 
 /** npcId -> array of shared table objects (one instance per distinct table) */
@@ -203,6 +218,14 @@ function applyOverrides(dump, subtables, overrides) {
         if (!table[field].some((existing) => existing.item_id === entry.item_id)) table[field].push(entry);
       }
     }
+    // Sections the Wiki lists on the page but that are not this table's normal kill (a boss's
+    // contract rewards, say): left out of every roll.
+    const removed = new Set(change.removeSections ?? []);
+    if (removed.size > 0) {
+      for (const field of ["entries", "tertiary"]) {
+        if (table[field]) table[field] = table[field].filter((entry) => !removed.has(entry.section));
+      }
+    }
   }
   for (const [name, table] of Object.entries(overrides.subtables ?? {})) subtables[name] ??= table;
 }
@@ -218,6 +241,10 @@ function applyWikiCorrections(tableById) {
   // Zulrah: two rolls on its table per kill, tertiary drops excluded (Wiki, Drops).
   if (tableById.zulrah) {
     tableById.zulrah.rolls = 2;
+  }
+  // Vorkath: two rolls on its table per kill, tertiary drops excluded (Wiki, Drops).
+  if (tableById.vorkath) {
+    tableById.vorkath.rolls = 2;
   }
   correctMadAngel(tableById.mad_angel);
   const kalphiteQueen = tableById.kalphite_queen;
@@ -524,6 +551,7 @@ function rollTable(table, player, npc) {
       conditionalTertiarySkipped++;
       continue;
     }
+    if (entry.name === LOOTING_BAG && !lootingBagDrops(npc)) continue;
     const wildernessClue = /^clue scroll \((?!beginner\))/i.test(entry.name || "") &&
       isWearingImbuedRingOfWealth(player) && Wilderness.isInLocation(npc?.getLocation?.());
     if (hits(entry, wildernessClue)) {
@@ -533,6 +561,21 @@ function rollTable(table, player, npc) {
 
   return drops;
 }
+
+/**
+ * Answers npc-drops:extra-rolls { player, npc, npcId, rolls, drops }: `rolls` more rolls of the
+ * NPC's table, without its always-drops, pushed onto `drops` (Chambers of Xeric scavenger beasts
+ * drop three items at a time).
+ */
+function extraRolls(event) {
+  ensureDropsLoaded?.();
+  const table = tableForNpc(event.npcId);
+  if (!table || !Array.isArray(event.drops)) return;
+  const rolling = { ...table, entries: (table.entries || []).filter((entry) => !entry.always), tertiary: [] };
+  for (let i = 0; i < (event.rolls ?? 0); i++) event.drops.push(...rollTable(rolling, event.player, event.npc));
+}
+
+let ensureDropsLoaded = null;
 
 function tableForNpc(npcId) {
   const tables = tablesByNpc.get(npcId);
@@ -609,12 +652,17 @@ module.exports = {
       if (!stats) stats = loadDrops();
       return stats;
     };
+    ensureDropsLoaded = ensureDrops;
+    api.onCustomEvent("npc-drops:extra-rolls", extraRolls);
 
     // "npc-drops:roll-table" { player, table, drops }: a table outside an NPC's own (a boss's
     // chest) rolled with the same roller and shared tables; the drops are pushed onto `drops`.
+    // { player, npcId, drops } rolls that NPC's own table instead, for a boss that rewards
+    // several players without dying to each (the Nightmare).
     api.onCustomEvent("npc-drops:roll-table", (request) => {
       ensureDrops();
-      request.drops.push(...rollTable(request.table, request.player, null));
+      const table = request.table ?? tableForNpc(request.npcId);
+      if (table) request.drops.push(...rollTable(table, request.player, null));
     });
 
     api.onNpcDeath(({ killer, npc, npcId, damagers }) => {

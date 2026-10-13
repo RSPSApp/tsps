@@ -102,10 +102,14 @@ function say(index, text) {
   state[index].chatterAt = now + random(CHATTER_TICKS.min, CHATTER_TICKS.max);
 }
 
+/** What happened this round, for the Combat Achievements read at its end. */
+const roundEvents = { pyromancerFell: false, allBrokenAtOnce: false };
+
 function setBrazier(index, brazier) {
   const c = state[index];
   if (c.brazier === brazier) return;
   c.brazier = brazier;
+  if (brazier === Shared.BRAZIER.BROKEN && state.every((each) => each.brazier === Shared.BRAZIER.BROKEN)) roundEvents.allBrokenAtOnce = true;
   setObject(BRAZIER_OBJECTS[brazier], c.corner.brazier);
   if (brazier === Shared.BRAZIER.LIT) c.resumeAt = now + random(RESUME_DELAY.min, RESUME_DELAY.max);
   if (c.pyromancerHealthy) say(index, BRAZIER_LINES[brazier]);
@@ -125,6 +129,7 @@ function damagePyromancer(index, damage) {
   showHit(npc, damage, c.pyromancerHp);
   if (c.pyromancerHp > 0) return false;
   c.pyromancerHealthy = false;
+  roundEvents.pyromancerFell = true;
   npc?.setNpcTransformationId(Shared.NPC.INCAPACITATED_PYROMANCER);
   if (npc) Shared.animate(npc, Shared.ANIM.PYROMANCER_FALL);
   say(index, "Arg, it got me!");
@@ -153,6 +158,8 @@ function resetAll() {
     if (!c.pyromancerHealthy) healPyromancer(index);
     c.pyromancerHp = PYROMANCER_HITPOINTS;
   });
+  roundEvents.pyromancerFell = false;
+  roundEvents.allBrokenAtOnce = false;
 }
 
 function chatter(index) {
@@ -198,6 +205,6 @@ function setNow(ticks) {
 
 module.exports = {
   PYROMANCER_HITPOINTS,
-  state, corner, indexOfBrazier, nearestCorner, litCount, isDraining,
+  state, roundEvents, corner, indexOfBrazier, nearestCorner, litCount, isDraining,
   setBrazier, damagePyromancer, healPyromancer, resetAll, pyromancerNpc, say, tick, setNow,
 };

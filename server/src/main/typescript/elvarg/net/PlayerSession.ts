@@ -58,6 +58,12 @@ const WS_CLOSE_BACKPRESSURE = 1013;
 const WS_CLOSE_SEND_FAILURE = 1011;
 
 export class PlayerSession {
+  /**
+   * The interacting-entity field (24 bits in npc/player info) marks a player by adding this to
+   * its index, as OSRS does. NPC indices run to 65534, so the marker sits above them; the client
+   * decodes it with the same offset (client/rs/interaction/InteractionIndex.ts).
+   */
+  public static readonly PLAYER_INTERACTION_OFFSET = 0x10000;
   private channel: SessionChannel;
   private pendingPackets: Buffer[] = [];
   private pendingPacketBytes = 0;
@@ -82,6 +88,7 @@ export class PlayerSession {
   private lastMusicTrack = -1;
   private lastMusicMode = -1;
   private lastGroundItemRegion = -1;
+  private lastGroundItemLevel = -1;
   // The first tick after login sends encodeInitialPlayerSync (no appearance/anim data at
   // all), but World's end-of-tick resetUpdating() still unconditionally clears
   // Flag.APPEARANCE for every player that tick - so by the next tick, when createPlayerView
@@ -224,8 +231,9 @@ export class PlayerSession {
       const musicRegion = privateArea instanceof TemplatedInstanceArea
         ? Music.regionForInstanceLocation(privateArea, current.x, current.y, current.level) ?? -1
         : groundItemRegion;
-      if (groundItemRegion !== this.lastGroundItemRegion) {
+      if (groundItemRegion !== this.lastGroundItemRegion || current.level !== this.lastGroundItemLevel) {
         this.lastGroundItemRegion = groundItemRegion;
+        this.lastGroundItemLevel = current.level;
         require("../game/entity/impl/grounditem/ItemOnGroundManager")
           .ItemOnGroundManager.onRegionChange(player);
       }
@@ -349,6 +357,7 @@ export class PlayerSession {
           bars: npc.getHeadbars?.().length ? npc.getHeadbars() : undefined,
           faceTile: npc.getFaceTile?.() ?? undefined,
           crawl: npc.isCrawling?.() || undefined,
+          modelCustomisation: npc.getModelCustomisationForUpdate?.() ?? undefined,
         };
       })
     );
@@ -606,7 +615,7 @@ export class PlayerSession {
   }
 
   private interactionIndex(target: any): number {
-    return target == null ? -1 : target.getIndex() + (target.isPlayer() ? 0x8000 : 0);
+    return target == null ? -1 : target.getIndex() + (target.isPlayer() ? PlayerSession.PLAYER_INTERACTION_OFFSET : 0);
   }
 
   private faceDirection(from: any, to: any): number {

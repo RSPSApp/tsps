@@ -1,0 +1,1140 @@
+[
+  {
+    "key": 13,
+    "name": "Chambers of Xeric",
+    "killVarps": [
+      {
+        "id": 1532,
+        "name": "total_completed_xericchambers"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12891,
+      "name": "ca_total_tasks_completed_xericchambers"
+    }
+  },
+  {
+    "key": 53,
+    "name": "EM: Theatre of Blood",
+    "killVarps": [
+      {
+        "id": 3058,
+        "name": "total_completed_theatreofblood_story"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12939,
+      "name": "ca_total_tasks_completed_theatreofblood_story"
+    }
+  },
+  {
+    "key": 54,
+    "name": "Theatre of Blood",
+    "killVarps": [
+      {
+        "id": 1748,
+        "name": "total_completed_theatreofblood"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12935,
+      "name": "ca_total_tasks_completed_theatreofblood"
+    }
+  },
+  {
+    "key": 55,
+    "name": "HM: Theatre of Blood",
+    "killVarps": [
+      {
+        "id": 3057,
+        "name": "total_completed_theatreofblood_hard"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12938,
+      "name": "ca_total_tasks_completed_theatreofblood_hard"
+    }
+  },
+  {
+    "key": 14,
+    "name": "CM: Chambers of Xeric",
+    "killVarps": [
+      {
+        "id": 1735,
+        "name": "total_completed_xericchambers_challenge"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12892,
+      "name": "ca_total_tasks_completed_xericchambers_challenge"
+    }
+  },
+  {
+    "key": 5,
+    "name": "Barrows",
+    "killVarps": [
+      {
+        "id": 1502,
+        "name": "total_barrows_chests"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12893,
+      "name": "ca_total_tasks_completed_barrows"
+    }
+  },
+  {
+    "key": 34,
+    "name": "Kree'arra",
+    "killVarps": [
+      {
+        "id": 1503,
+        "name": "total_armadyl_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12894,
+      "name": "ca_total_tasks_completed_armadyl"
+    }
+  },
+  {
+    "key": 26,
+    "name": "General Graardor",
+    "killVarps": [
+      {
+        "id": 1504,
+        "name": "total_bandos_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12895,
+      "name": "ca_total_tasks_completed_bandos"
+    }
+  },
+  {
+    "key": 16,
+    "name": "Commander Zilyana",
+    "killVarps": [
+      {
+        "id": 1505,
+        "name": "total_saradomin_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12896,
+      "name": "ca_total_tasks_completed_saradomin"
+    }
+  },
+  {
+    "key": 35,
+    "name": "K'ril Tsutsaroth",
+    "killVarps": [
+      {
+        "id": 1506,
+        "name": "total_zamorak_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12897,
+      "name": "ca_total_tasks_completed_zamorak"
+    }
+  },
+  {
+    "key": 19,
+    "name": "DK: Prime",
+    "killVarps": [
+      {
+        "id": 1507,
+        "name": "total_prime_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12898,
+      "name": "ca_total_tasks_completed_prime"
+    }
+  },
+  {
+    "key": 20,
+    "name": "DK: Rex",
+    "killVarps": [
+      {
+        "id": 1508,
+        "name": "total_rex_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12899,
+      "name": "ca_total_tasks_completed_rex"
+    }
+  },
+  {
+    "key": 21,
+    "name": "DK: Supreme",
+    "killVarps": [
+      {
+        "id": 1509,
+        "name": "total_supreme_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12900,
+      "name": "ca_total_tasks_completed_supreme"
+    }
+  },
+  {
+    "key": 8,
+    "name": "Callisto",
+    "killVarps": [
+      {
+        "id": 1510,
+        "name": "total_callisto_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12901,
+      "name": "ca_total_tasks_completed_callisto"
+    }
+  },
+  {
+    "key": 64,
+    "name": "Venenatis",
+    "killVarps": [
+      {
+        "id": 1511,
+        "name": "total_venenatis_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12902,
+      "name": "ca_total_tasks_completed_venenatis"
+    }
+  },
+  {
+    "key": 65,
+    "name": "Vet'ion",
+    "killVarps": [
+      {
+        "id": 1512,
+        "name": "total_vetion_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12903,
+      "name": "ca_total_tasks_completed_vetion"
+    }
+  },
+  {
+    "key": 10,
+    "name": "Chaos Elemental",
+    "killVarps": [
+      {
+        "id": 1513,
+        "name": "total_chaosele_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12904,
+      "name": "ca_total_tasks_completed_chaosele"
+    }
+  },
+  {
+    "key": 32,
+    "name": "King Black Dragon",
+    "killVarps": [
+      {
+        "id": 1514,
+        "name": "total_kbd_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12905,
+      "name": "ca_total_tasks_completed_kbd"
+    }
+  },
+  {
+    "key": 27,
+    "name": "Giant Mole",
+    "killVarps": [
+      {
+        "id": 1515,
+        "name": "total_mole_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12906,
+      "name": "ca_total_tasks_completed_mole"
+    }
+  },
+  {
+    "key": 31,
+    "name": "Kalphite Queen",
+    "killVarps": [
+      {
+        "id": 1516,
+        "name": "total_kalphite_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12907,
+      "name": "ca_total_tasks_completed_kalphite"
+    }
+  },
+  {
+    "key": 15,
+    "name": "Corporeal Beast",
+    "killVarps": [
+      {
+        "id": 1517,
+        "name": "total_corp_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12908,
+      "name": "ca_total_tasks_completed_corp"
+    }
+  },
+  {
+    "key": 71,
+    "name": "Zulrah",
+    "killVarps": [
+      {
+        "id": 1518,
+        "name": "total_snakeboss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12909,
+      "name": "ca_total_tasks_completed_snakeboss"
+    }
+  },
+  {
+    "key": 11,
+    "name": "Chaos Fanatic",
+    "killVarps": [
+      {
+        "id": 1519,
+        "name": "total_chaosfanatic_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12910,
+      "name": "ca_total_tasks_completed_chaosfanatic"
+    }
+  },
+  {
+    "key": 49,
+    "name": "Scorpia",
+    "killVarps": [
+      {
+        "id": 1520,
+        "name": "total_scorpia_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12911,
+      "name": "ca_total_tasks_completed_scorpia"
+    }
+  },
+  {
+    "key": 50,
+    "name": "Shellbane Gryphon",
+    "killVarps": [
+      {
+        "id": 4945,
+        "name": "total_gryphon_boss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 18145,
+      "name": "ca_total_tasks_completed_gryphon_boss"
+    }
+  },
+  {
+    "key": 12,
+    "name": "Crazy Archaeologist",
+    "killVarps": [
+      {
+        "id": 1521,
+        "name": "total_crazyarchaeologist_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12912,
+      "name": "ca_total_tasks_completed_crazyarchaeologist"
+    }
+  },
+  {
+    "key": 62,
+    "name": "TzTok-Jad",
+    "killVarps": [
+      {
+        "id": 1522,
+        "name": "total_jad_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12913,
+      "name": "ca_total_tasks_completed_jad"
+    }
+  },
+  {
+    "key": 33,
+    "name": "Kraken",
+    "killVarps": [
+      {
+        "id": 1523,
+        "name": "total_kraken_boss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12914,
+      "name": "ca_total_tasks_completed_kraken_boss"
+    }
+  },
+  {
+    "key": 56,
+    "name": "Thermonuclear Smoke Devil",
+    "killVarps": [
+      {
+        "id": 1524,
+        "name": "total_thermy_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12915,
+      "name": "ca_total_tasks_completed_thermy"
+    }
+  },
+  {
+    "key": 9,
+    "name": "Cerberus",
+    "killVarps": [
+      {
+        "id": 1525,
+        "name": "total_cerberus_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12916,
+      "name": "ca_total_tasks_completed_cerberus"
+    }
+  },
+  {
+    "key": 1,
+    "name": "Abyssal Sire",
+    "killVarps": [
+      {
+        "id": 1526,
+        "name": "total_abyssalsire_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12917,
+      "name": "ca_total_tasks_completed_abyssalsire"
+    }
+  },
+  {
+    "key": 51,
+    "name": "Skotizo",
+    "killVarps": [
+      {
+        "id": 1527,
+        "name": "total_cata_boss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12918,
+      "name": "ca_total_tasks_completed_cata_boss"
+    }
+  },
+  {
+    "key": 68,
+    "name": "Wintertodt",
+    "killVarps": [
+      {
+        "id": 1528,
+        "name": "total_wintertodt_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12919,
+      "name": "ca_total_tasks_completed_wintertodt"
+    }
+  },
+  {
+    "key": 44,
+    "name": "Obor",
+    "killVarps": [
+      {
+        "id": 1529,
+        "name": "total_hillgiant_boss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12920,
+      "name": "ca_total_tasks_completed_hillgiant_boss"
+    }
+  },
+  {
+    "key": 61,
+    "name": "TzKal-Zuk",
+    "killVarps": [
+      {
+        "id": 1585,
+        "name": "total_zuk_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12921,
+      "name": "ca_total_tasks_completed_zuk"
+    }
+  },
+  {
+    "key": 22,
+    "name": "Deranged Archaeologist",
+    "killVarps": [
+      {
+        "id": 1661,
+        "name": "total_derangedarchaeologist_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12922,
+      "name": "ca_total_tasks_completed_derangedarchaeologist"
+    }
+  },
+  {
+    "key": 28,
+    "name": "Grotesque Guardians",
+    "killVarps": [
+      {
+        "id": 1669,
+        "name": "total_gargboss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12923,
+      "name": "ca_total_tasks_completed_gargboss"
+    }
+  },
+  {
+    "key": 66,
+    "name": "Vorkath",
+    "killVarps": [
+      {
+        "id": 1691,
+        "name": "total_vorkath_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12924,
+      "name": "ca_total_tasks_completed_vorkath"
+    }
+  },
+  {
+    "key": 7,
+    "name": "Bryophyta",
+    "killVarps": [
+      {
+        "id": 1733,
+        "name": "total_bryophyta_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12925,
+      "name": "ca_total_tasks_completed_bryophyta"
+    }
+  },
+  {
+    "key": 2,
+    "name": "Alchemical Hydra",
+    "killVarps": [
+      {
+        "id": 2074,
+        "name": "total_hydraboss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12926,
+      "name": "ca_total_tasks_completed_hydraboss"
+    }
+  },
+  {
+    "key": 29,
+    "name": "Hespori",
+    "killVarps": [
+      {
+        "id": 2075,
+        "name": "total_hespori_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12927,
+      "name": "ca_total_tasks_completed_hespori"
+    }
+  },
+  {
+    "key": 39,
+    "name": "Mimic, The",
+    "killVarps": [
+      {
+        "id": 2221,
+        "name": "total_mimic_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12928,
+      "name": "ca_total_tasks_completed_mimic"
+    }
+  },
+  {
+    "key": 48,
+    "name": "Sarachnis",
+    "killVarps": [
+      {
+        "id": 2233,
+        "name": "total_sarachnis_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12929,
+      "name": "ca_total_tasks_completed_sarachnis"
+    }
+  },
+  {
+    "key": 70,
+    "name": "Zalcano",
+    "killVarps": [
+      {
+        "id": 2352,
+        "name": "total_zalcano_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12930,
+      "name": "ca_total_tasks_completed_zalcano"
+    }
+  },
+  {
+    "key": 17,
+    "name": "Crystalline Hunllef",
+    "killVarps": [
+      {
+        "id": 2353,
+        "name": "total_completed_gauntlet"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12931,
+      "name": "ca_total_tasks_completed_gauntlet"
+    }
+  },
+  {
+    "key": 18,
+    "name": "Corrupted Hunllef",
+    "killVarps": [
+      {
+        "id": 2354,
+        "name": "total_completed_gauntlet_hm"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12932,
+      "name": "ca_total_tasks_completed_gauntlet_hm"
+    }
+  },
+  {
+    "key": 52,
+    "name": "Tempoross",
+    "killVarps": [
+      {
+        "id": 2934,
+        "name": "total_tempoross_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12936,
+      "name": "ca_total_tasks_completed_tempoross"
+    }
+  },
+  {
+    "key": 42,
+    "name": "Nightmare, The",
+    "killVarps": [
+      {
+        "id": 2664,
+        "name": "total_nightmare_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12934,
+      "name": "ca_total_tasks_completed_nightmare"
+    }
+  },
+  {
+    "key": 43,
+    "name": "Phosani's Nightmare",
+    "killVarps": [
+      {
+        "id": 2671,
+        "name": "total_nightmare_challenge_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 13002,
+      "name": "ca_total_tasks_completed_phosanis"
+    }
+  },
+  {
+    "key": 60,
+    "name": "TzHaar-Ket-Rak",
+    "killVarps": [
+      {
+        "id": 2905,
+        "name": "jad_challenge_1_completions"
+      },
+      {
+        "id": 2906,
+        "name": "jad_challenge_2_completions"
+      },
+      {
+        "id": 2907,
+        "name": "jad_challenge_3_completions"
+      },
+      {
+        "id": 2908,
+        "name": "jad_challenge_4_completions"
+      },
+      {
+        "id": 2909,
+        "name": "jad_challenge_5_completions"
+      },
+      {
+        "id": 2910,
+        "name": "jad_challenge_6_completions"
+      },
+      {
+        "id": 4061,
+        "name": "jad_challenge_league_only_completions"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 12937,
+      "name": "ca_total_tasks_completed_tzhaarketrak"
+    }
+  },
+  {
+    "key": 72,
+    "name": "Fragment of Seren",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 73,
+    "name": "Glough",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 74,
+    "name": "Galvek",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 57,
+    "name": "EM: Tombs of Amascut",
+    "killVarps": [
+      {
+        "id": 3645,
+        "name": "total_completed_tombsofamascut_entry"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 14297,
+      "name": "ca_total_tasks_completed_tombsofamascut_entry"
+    }
+  },
+  {
+    "key": 58,
+    "name": "Tombs of Amascut",
+    "killVarps": [
+      {
+        "id": 3646,
+        "name": "total_completed_tombsofamascut"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 14298,
+      "name": "ca_total_tasks_completed_tombsofamascut"
+    }
+  },
+  {
+    "key": 59,
+    "name": "XM: Tombs of Amascut",
+    "killVarps": [
+      {
+        "id": 3647,
+        "name": "total_completed_tombsofamascut_expert"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 14299,
+      "name": "ca_total_tasks_completed_tombsofamascut_expert"
+    }
+  },
+  {
+    "key": 75,
+    "name": "Other",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 41,
+    "name": "Nex",
+    "killVarps": [
+      {
+        "id": 3269,
+        "name": "total_nex_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 13171,
+      "name": "ca_total_tasks_completed_nex"
+    }
+  },
+  {
+    "key": 45,
+    "name": "Phantom Muspah",
+    "killVarps": [
+      {
+        "id": 3752,
+        "name": "total_muspah_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 14712,
+      "name": "ca_total_tasks_completed_muspah"
+    }
+  },
+  {
+    "key": 24,
+    "name": "Duke Sucellus",
+    "killVarps": [
+      {
+        "id": 3967,
+        "name": "total_duke_sucellus_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 15024,
+      "name": "ca_total_tasks_completed_dukesucellus"
+    }
+  },
+  {
+    "key": 63,
+    "name": "Vardorvis",
+    "killVarps": [
+      {
+        "id": 3970,
+        "name": "total_vardorvis_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 15025,
+      "name": "ca_total_tasks_completed_vardorvis"
+    }
+  },
+  {
+    "key": 67,
+    "name": "Whisperer, The",
+    "killVarps": [
+      {
+        "id": 3969,
+        "name": "total_whisperer_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 15027,
+      "name": "ca_total_tasks_completed_whisperer"
+    }
+  },
+  {
+    "key": 36,
+    "name": "Leviathan, The",
+    "killVarps": [
+      {
+        "id": 3968,
+        "name": "total_leviathan_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 15026,
+      "name": "ca_total_tasks_completed_leviathan"
+    }
+  },
+  {
+    "key": 47,
+    "name": "Scurrius",
+    "killVarps": [
+      {
+        "id": 4079,
+        "name": "total_rat_boss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 9580,
+      "name": "ca_total_tasks_completed_rat_boss"
+    }
+  },
+  {
+    "key": 40,
+    "name": "Moons of Peril",
+    "killVarps": [
+      {
+        "id": 4186,
+        "name": "total_pmoon_chests"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 9777,
+      "name": "ca_total_tasks_completed_perilous_moons"
+    }
+  },
+  {
+    "key": 25,
+    "name": "Fortis Colosseum",
+    "killVarps": [
+      {
+        "id": 4187,
+        "name": "total_sol_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 9778,
+      "name": "ca_total_tasks_completed_colosseum"
+    }
+  },
+  {
+    "key": 4,
+    "name": "Araxxor",
+    "killVarps": [
+      {
+        "id": 4260,
+        "name": "total_araxxor_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 11010,
+      "name": "ca_total_tasks_completed_araxxor"
+    }
+  },
+  {
+    "key": 30,
+    "name": "Hueycoatl, The",
+    "killVarps": [
+      {
+        "id": 4404,
+        "name": "total_huey_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 11290,
+      "name": "ca_total_tasks_completed_hueycoatl"
+    }
+  },
+  {
+    "key": 3,
+    "name": "Amoxliatl",
+    "killVarps": [
+      {
+        "id": 4403,
+        "name": "total_amoxliatl_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 11291,
+      "name": "ca_total_tasks_completed_amoxliatl"
+    }
+  },
+  {
+    "key": 76,
+    "name": "Greater Demons",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 77,
+    "name": "Lizardman Shamans",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 78,
+    "name": "Wyrms",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 79,
+    "name": "Black Dragons",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 80,
+    "name": "Fire Giants",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 81,
+    "name": "Hellhounds",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 82,
+    "name": "Bloodvelds",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 83,
+    "name": "Aberrant Spectres",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 84,
+    "name": "Demonic Gorillas",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 85,
+    "name": "Basilisk Knights",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 86,
+    "name": "Gargoyles",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 87,
+    "name": "Skeletal Wyverns",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 88,
+    "name": "Kurasks",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 89,
+    "name": "Brutal Black Dragons",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 90,
+    "name": "Giants",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 91,
+    "name": "Tormented Demons",
+    "killVarps": [],
+    "tasksVarbit": null
+  },
+  {
+    "key": 46,
+    "name": "Royal Titans",
+    "killVarps": [
+      {
+        "id": 4648,
+        "name": "total_royal_titan_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 16088,
+      "name": "ca_total_tasks_completed_royal_titans"
+    }
+  },
+  {
+    "key": 69,
+    "name": "Yama",
+    "killVarps": [
+      {
+        "id": 4701,
+        "name": "total_yama_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 16255,
+      "name": "ca_total_tasks_completed_yama"
+    }
+  },
+  {
+    "key": 23,
+    "name": "Doom of Mokhaiotl",
+    "killVarps": [
+      {
+        "id": 4807,
+        "name": "total_dom_levels"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 3209,
+      "name": "ca_total_tasks_completed_dom"
+    }
+  },
+  {
+    "key": 6,
+    "name": "Brutus",
+    "killVarps": [
+      {
+        "id": 5407,
+        "name": "total_cowboss_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 20083,
+      "name": "ca_total_tasks_completed_cowboss"
+    }
+  },
+  {
+    "key": 38,
+    "name": "Maggot King",
+    "killVarps": [
+      {
+        "id": 5614,
+        "name": "total_maggot_king_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 15401,
+      "name": "ca_total_tasks_completed_maggotking"
+    }
+  },
+  {
+    "key": 37,
+    "name": "Mad Angel, The",
+    "killVarps": [
+      {
+        "id": 5712,
+        "name": "total_mad_angel_kills"
+      }
+    ],
+    "tasksVarbit": {
+      "id": 15718,
+      "name": "ca_total_tasks_completed_mad_angel"
+    }
+  }
+]

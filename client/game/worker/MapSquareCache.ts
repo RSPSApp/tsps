@@ -4,7 +4,7 @@ import type { SdMapLoaderInput } from "../../render/loader/SdMapLoaderInput";
 import type { VarManager } from "../../rs/config/vartype/VarManager";
 
 /** Bump when SdMapData or the geometry the loader emits changes, so old entries stop matching. */
-export const CACHE_FORMAT = 1;
+export const CACHE_FORMAT = 2;
 export const MAX_SQUARES = 64;
 
 const DB_NAME = "map-square-cache";

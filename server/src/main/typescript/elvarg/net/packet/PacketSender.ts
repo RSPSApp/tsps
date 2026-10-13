@@ -1,4 +1,4 @@
-import { encodePlayerOption } from "../protocol/ClientProtocol";
+import { encodeGameframeTabSetup, encodePlayerOption, resolveGameframeRoot } from "../protocol/ClientProtocol";
 import { BIT_MASKS } from "../../game/cache/codec/rs/MathConstants";
 import { PacketBuilder } from "./PacketBuilder";
 import { ValueType } from "./ValueType";
@@ -222,8 +222,11 @@ export class PacketSender {
     ))) return this;
   }
 
-  sendPoisonType(type: number): this {
-    this.player.getSession().write(new PacketBuilder(184).put(type));
+  /** Re-sends the login's setup for one side tab after it is mounted again (encodeGameframeTabSetup). */
+  sendGameframeTabSetup(group: number): this {
+    for (const packet of encodeGameframeTabSetup(group, resolveGameframeRoot(this.player))) {
+      this.player.getSession().sendClientPacket(packet);
+    }
     return this;
   }
 
@@ -895,7 +898,8 @@ export class PacketSender {
     lockon: any,
     delay: number,
     angle: number = 16,
-    distanceOffset: number = 64
+    distanceOffset: number = 64,
+    source: any = null
   ): this {
     if (
       !start ||
@@ -909,6 +913,7 @@ export class PacketSender {
     }
 
     const targetIndex = this.resolveProjectileTargetIndex(lockon);
+    const sourceIndex = source == null ? 0 : this.resolveProjectileTargetIndex(source);
     if (this.player.getSession().sendClientPacket(encodeProjectiles([{
       projectileId,
       source: { x: start.getX(), y: start.getY(), level: start.getZ?.() ?? 0 },
@@ -919,10 +924,16 @@ export class PacketSender {
       startPos: distanceOffset,
       startCycleOffset: delay,
       endCycleOffset: Math.max(delay + 1, speed),
-      targetActor: targetIndex < 0
-        ? { kind: "player", index: -targetIndex - 1 }
-        : targetIndex > 0 ? { kind: "npc", index: targetIndex - 1 } : undefined,
+      targetActor: PacketSender.projectileActor(targetIndex),
+      sourceActor: PacketSender.projectileActor(sourceIndex),
     }]))) return this;
+  }
+
+  /** A resolved lock-on index (players negative, NPCs positive, 0 none) as the packet's actor. */
+  private static projectileActor(index: number): { kind: "player" | "npc"; index: number } | undefined {
+    if (index < 0) return { kind: "player", index: -index - 1 };
+    if (index > 0) return { kind: "npc", index: index - 1 };
+    return undefined;
   }
 
   private resolveProjectileTargetIndex(lockon: any): number {
@@ -1259,7 +1270,7 @@ export class PacketSender {
 
   sendInterfaceScript(
     scriptId: number,
-    args: (number | string)[] = [],
+    args: (number | string | bigint)[] = [],
     varps?: Record<number, number>,
     varbits?: Record<number, number>,
     inventories?: Record<number, ScriptInventorySnapshot>

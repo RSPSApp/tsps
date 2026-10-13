@@ -455,7 +455,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
 
 // Exercise native feedback and the real plugin actions without a client or game loop.
 function feedbackPlayer(core) {
-  const counts = new Map(), sent = [], animations = [], attrs = new Map();
+  const counts = new Map(), sent = [], animations = [], attrs = new Map(), varbits = new Map(), messages = [], graphics = [];
   let location = new core.Location(3000, 3000, 0), menu, chatbox = -1;
   const inventory = {
     get: slot => [...counts].map(([id, n]) => new core.Item(id, n))[slot],
@@ -470,15 +470,17 @@ function feedbackPlayer(core) {
     sendChatboxInterface(id) { chatbox = id; sent.push(["chatbox", id]); return sender; },
     isChatboxInterface: id => chatbox === id,
     closeInterface(id) { if (chatbox === id) chatbox = -1; return sender; },
+    getVarbit: id => varbits.get(id) ?? 0,
+    sendVarbit(id, value) { varbits.set(id, value); sent.push(["sendVarbit", id, value]); return sender; },
   }, { get: (target, key) => target[key] ?? ((...args) => { sent.push([key, ...args]); return sender; }) });
   const p = {
-    counts, sent, animations, inventory, menu: () => menu,
+    counts, sent, animations, messages, graphics, inventory, menu: () => menu,
     getLocation: () => location, moveTo(value) { location = value; },
     getInventory: () => inventory, getPacketSender: () => sender,
     getMovementQueue: () => ({ size: () => 0 }), getForceMovement: () => null,
     isRegistered: () => true, getHitpoints: () => 99,
     getUsername: () => "feedback-test", isPlayerBot: () => false,
-    performAnimation: a => animations.push(a.getId()), performGraphic() {}, sendMessage() {},
+    performAnimation: a => animations.push(a.getId()), performGraphic: g => graphics.push(g.getId()), sendMessage: m => messages.push(m),
     getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
     getSkill: () => null, setSkill() {}, setCreationMenu() {},
     getUpdateFlag: () => ({ flag() {} }),
@@ -516,7 +518,12 @@ test("every skill gets native level-up text, its own model, stats before hooks, 
       p.sent.length = 0;
       p.skills.addExperience(skill, SkillManager.getExperienceForLevel(2), false);
       assert.ok(p.sent.some(([type, id]) => type === "chatbox" && id === 233), skill.getName());
-      assert.ok(p.sent.some(([type, text, id]) => type === "sendString" && id === ((233 << 16) | 2) && text.includes("2")));
+      assert.equal(p.messages[0], `Congratulations, you've just advanced your ${skill.getName()} level. You are now level 2.`);
+      assert.deepEqual(p.graphics, [199]);
+      assert.ok(p.sent.some(([type, text, id]) => type === "sendString" && id === ((233 << 16) | 1)
+        && text === `<col=000080>Congratulations, you just advanced a ${skill.getName()} level.`));
+      assert.ok(p.sent.some(([type, text, id]) => type === "sendString" && id === ((233 << 16) | 2)
+        && text === `Your ${skill.getName()} level is now 2.`));
       assert.deepEqual(p.sent.filter(([type, , hidden]) => type === "sendInterfaceDisplayState" && !hidden),
         [["sendInterfaceDisplayState", (233 << 16) | layers[skill.getIndex()], false]]);
       assert.equal(p.sent.filter(([type]) => type === "sendSkill").length, 1, "one stats update for the resolving tick");
@@ -526,6 +533,89 @@ test("every skill gets native level-up text, its own model, stats before hooks, 
       assert.equal(hooks.onInterfaceActionButton({ player: p }), false, "stale continue does not close another dialog");
     }
   } finally { PluginManager.emitPlayerLevelUp = emit; }
+});
+
+/** A player whose skill totals the level-up plugin reads are fixed. */
+function levelledPlayer(core, { total = 101, combat = 3 } = {}) {
+  const p = feedbackPlayer(core);
+  p.stopped = 0;
+  p.skills = { getTotalLevel: () => total, getCombatLevel: () => combat, stopSkillable() { p.stopped++; } };
+  p.setCombat = (level) => { combat = level; };
+  return p;
+}
+
+const POPUP_DISABLED = 20157;
+
+test("as captured: Disabled pop-ups keep the message and graphic, and interrupt nothing", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi(), emitted = [];
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core, { emitCustomEvent: (name) => emitted.push(name) });
+  const p = levelledPlayer(core);
+  p.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+  hooks.onPlayerLevelUp({ player: p, skill: Skill.DEFENCE, oldLevel: 80, newLevel: 81 });
+  assert.deepEqual(p.messages, ["Congratulations, you've just advanced your Defence level. You are now level 81."]);
+  assert.deepEqual(p.graphics, [199]);
+  assert.equal(p.sent.some(([type]) => type === "chatbox"), false);
+  assert.equal(p.stopped, 0);
+  assert.deepEqual(emitted, []);
+  assert.deepEqual(p.animations, []);
+});
+
+test("an open pop-up stops skilling and tells the skilling plugins", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi(), emitted = [];
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core, { emitCustomEvent: (name, event) => emitted.push([name, event.skill]) });
+  const p = levelledPlayer(core);
+  hooks.onPlayerLevelUp({ player: p, skill: Skill.FISHING, oldLevel: 66, newLevel: 67 });
+  assert.equal(p.stopped, 1);
+  assert.deepEqual(emitted, [["level-up:popup-opened", Skill.FISHING]]);
+});
+
+test("as captured: every 25 total levels, and level 99, have their own message", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+  const crossed = levelledPlayer(core, { total: 1350 });
+  crossed.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+  hooks.onPlayerLevelUp({ player: crossed, skill: Skill.FISHING, oldLevel: 62, newLevel: 63 });
+  assert.deepEqual(crossed.messages, [
+    "Congratulations, you've just advanced your Fishing level. You are now level 63.",
+    "Congratulations, you've reached a total level of 1350.",
+  ]);
+  const between = levelledPlayer(core, { total: 1351 });
+  between.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+  hooks.onPlayerLevelUp({ player: between, skill: Skill.FISHING, oldLevel: 63, newLevel: 64 });
+  assert.equal(between.messages.length, 1);
+  const maxed = levelledPlayer(core);
+  maxed.getPacketSender().sendVarbit(POPUP_DISABLED, 1);
+  hooks.onPlayerLevelUp({ player: maxed, skill: Skill.ATTACK, oldLevel: 98, newLevel: 99 });
+  assert.deepEqual(maxed.messages, ["Congratulations, you've reached the highest possible Attack level of 99."]);
+  assert.deepEqual(maxed.graphics, [1388]);
+});
+
+test("as captured: a combat level gained waits behind the skill's pop-up", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const core = PluginManager.getCoreApi();
+  const submit = core.TaskManager.submit, tasks = [];
+  core.TaskManager.submit = (task) => tasks.push(task);
+  try {
+    const hooks = registerFeedbackPlugin("interface/SkillLevelUp", core);
+    const p = levelledPlayer(core, { combat: 90 });
+    hooks.onPlayerLogin({ player: p });
+    p.setCombat(91);
+    hooks.onPlayerLevelUp({ player: p, skill: Skill.ATTACK, oldLevel: 83, newLevel: 84 });
+    assert.equal(tasks.length, 1, "the combat message comes a tick later");
+    tasks[0].execute();
+    assert.equal(p.messages.at(-1), "Congratulations, you've just advanced your Combat level. You are now level 91.");
+    p.sent.length = 0;
+    assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
+    assert.ok(p.sent.some(([type, text]) => type === "sendString" && text === "<col=000080>Congratulations, you just advanced a combat level."));
+    assert.ok(p.sent.some(([type, text]) => type === "sendString" && text === "Your combat level is now 91."));
+    assert.deepEqual(p.sent.filter(([type, , hidden]) => type === "sendInterfaceDisplayState" && !hidden),
+      [["sendInterfaceDisplayState", (233 << 16) | 55, false]]);
+    assert.equal(hooks.onInterfaceActionButton({ player: p }), true);
+    assert.equal(p.getPacketSender().isChatboxInterface(233), false);
+  } finally { core.TaskManager.submit = submit; }
 });
 
 test("burying resolves inventory and XP together on tick two; movement, logout and cancellation preserve the bone", () => {
@@ -560,15 +650,20 @@ test("Fletching cancels while waiting after movement and never restarts its anim
   const hooks = registerFeedbackPlugin("skills/Fletching", core, {
     getTaskManager: () => ({ submit: task => tasks.push(task) }),
   });
-  const feedback = registerFeedbackPlugin("interface/SkillLevelUp", core);
+  // The level-up pop-up is what stops Fletching: SkillLevelUp announces it as an event.
+  const feedback = registerFeedbackPlugin("interface/SkillLevelUp", core, {
+    emitCustomEvent: (name, event) => name === "level-up:popup-opened" && hooks.onCustomEvent(event),
+  });
   for (const mode of ["walk", "level-up"]) {
     const p = feedbackPlayer(core);
     let xp = 0;
-    p.skills = { getCurrentLevel: () => 99, addExperiences() {
-      xp++;
-      hooks.onPlayerLevelUp({ player: p });
-      feedback.onPlayerLevelUp({ player: p, skill: Skill.FLETCHING, newLevel: 2 });
-    } };
+    p.skills = {
+      getCurrentLevel: () => 99, getTotalLevel: () => 100, getCombatLevel: () => 3, stopSkillable() {},
+      addExperiences() {
+        xp++;
+        feedback.onPlayerLevelUp({ player: p, skill: Skill.FLETCHING, oldLevel: 1, newLevel: 2 });
+      },
+    };
     p.counts.set(core.ItemIdentifiers.KNIFE, 1); p.counts.set(core.ItemIdentifiers.LOGS, 2);
     hooks.onItemOnItem({ player: p, usedItemId: core.ItemIdentifiers.KNIFE, usedWithItemId: core.ItemIdentifiers.LOGS });
     const menu = p.menu(); assert.ok(menu);

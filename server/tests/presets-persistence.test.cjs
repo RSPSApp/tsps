@@ -41,6 +41,70 @@ function playerWithAttributes(attributes = new Map()) {
   return { attributes, player, strings };
 }
 
+test("disabled presets leave bot inventory and equipment lootable on the ground or in keys", () => {
+  const { Location } = require("../dist/game/model/Location");
+  const lootKeys = require("../plugins/items/LootKeys.plugin");
+  const botDeathLoot = require("../plugins/bots/runtime/BotDeathLoot");
+  const ground = [];
+  const location = new Location(3090, 3600);
+  botDeathLoot.initBotDeathLootCoreAccess({
+    getWorld: () => ({}),
+    getItemOnGroundManager: () => ({ registerNonGlobals: (_player, item) => ground.push(item) }),
+  });
+  assert.equal(presets.isEnabled(), false);
+  const preset = presets.getGlobalPresetPool()[0];
+  const items = [...preset.getInventory(), ...preset.getEquipment()].map((source) => {
+    const item = presets._test.spawnPresetItem(source, preset);
+    assert.notEqual(item, source);
+    assert.deepEqual(item.getMeta(), source.getMeta());
+    assert.equal(item.isLostOnDeath(), false);
+    assert.equal(item.isUnbankable(), false);
+    assert.equal(item.isPresetItem(), false);
+    return item;
+  });
+  const drops = items.filter((item) => item.isTradeable());
+  assert.ok(drops.length > 0);
+
+  for (const keysEnabled of [false, true]) {
+    ground.length = 0;
+    const received = [];
+    const attributes = new Map([[lootKeys.ENABLED_ATTRIBUTE, keysEnabled]]);
+    const killer = {
+      isPlayer: () => true, isPlayerBot: () => false, isRegistered: () => true,
+      getLocation: () => location,
+      getAttribute: (key) => attributes.get(key),
+      getInventory: () => ({
+        getValidItems: () => received, getFreeSlots: () => 28,
+        contains: () => false, adds() {}, addItem: (item) => received.push(item),
+      }),
+      getPacketSender: () => ({ sendMessage() {} }),
+      sendMessage: () => assert.ok(keysEnabled, "ground loot must not announce suppressed preset drops"),
+    };
+    const victim = {
+      isPlayer: () => true, isPlayerBot: () => true,
+      getLocation: () => location, setAttribute() {},
+    };
+    for (const item of drops) {
+      const event = { player: victim, killer, item, location, dropEligible: true, handled: false };
+      lootKeys._test.queueDrop(event);
+      botDeathLoot.handleBotDeathItemDrop(event);
+    }
+    lootKeys._test.createLootKey({ killer, victim });
+    if (keysEnabled) {
+      assert.equal(ground.length, 0);
+      assert.equal(received.length, 1);
+      assert.ok(lootKeys.isLootKey(received[0]));
+      assert.deepEqual(lootKeys.keyItems(received[0]), drops.map((item) => ({
+        id: item.getId(), amount: item.getAmount(), meta: item.getMeta(),
+      })));
+    } else {
+      assert.deepEqual(ground.map((item) => item.getId()), drops.map((item) => item.getId()));
+      assert.equal(received.length, 0);
+    }
+    botDeathLoot.clearBotDeathLootPlan(victim);
+  }
+});
+
 test("custom presets rehydrate from their persisted attribute", () => {
   let onButton;
   let onCanBankItem;

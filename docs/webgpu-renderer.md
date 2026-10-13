@@ -34,8 +34,8 @@ Rules that keep the port cheap:
    shared. Only uploads and draw dispatch differ per backend.
 2. **One backend at a time owns the canvas.** No mixed contexts. Stages that are not ported yet
    are simply unavailable under WebGPU, not silently broken.
-3. **Opt-in first, default last.** `?renderer=webgpu` selects the new backend until Stage 7.
-   `PREFER_WEBGPU_DEFAULT` in `GameRenderers.ts` flips the default when parity is reached.
+3. **WebGPU by default.** `PREFER_WEBGPU_DEFAULT` in `GameRenderers.ts` prefers WebGPU
+   when an adapter is available. `?renderer=webgl` forces the WebGL backend.
 4. **Fallback is serverless and automatic.** If WebGPU is requested (URL or default) but no
    adapter can be obtained, the client logs and uses WebGL.
 
@@ -160,8 +160,8 @@ Scope is the pass `renderOpaquePass` + `renderTransparentPass` covers for terrai
 ### Stage 3 — actors (done)
 
 - `client/render/webgpu/actors/`: actor data texture (RGBA16UI, 2 texels/actor), per-map NPC
-  geometry, NPC/player/GFX pipelines and WGSL (`shaders/actor.wgsl.ts`; projectiles draw
-  through the GFX pipeline), plus player posing (`actorPlayers.ts`). Keyframe poses that only
+  geometry, NPC/player/GFX/projectile pipelines and WGSL (`shaders/actor.wgsl.ts`; projectile
+  placement applies roll, pitch and yaw), plus player posing (`actorPlayers.ts`). Keyframe poses that only
   move whole labels are posed on the GPU, as in WebGL's `PlayerRenderer`: one rest mesh per
   appearance with a label per vertex, plus one row of 3x4 label matrices per distinct pose this
   frame (`u_poseTexture`, group(3) binding 1; `u_poseRow` per draw). Skeletal, alpha/colour and
@@ -209,8 +209,8 @@ Scope is the pass `renderOpaquePass` + `renderTransparentPass` covers for terrai
   twin of every world and actor pipeline and `WorldResources.selectExtension` picks per frame.
 - With a `depth` shader the core also builds depth pipelines: the same placement as the scene
   entries, then the extension's `sceneDepthPosition(viewPos)` and `fs_depth`.
-  `beforeScene(renderer, encoder)` records the extension's own pass and fills it with
-  `renderer.drawSceneDepth(pass)` (world opaque, world alpha, actors).
+  `beforeScene(renderer, encoder)` records the extension's own passes: `drawWorldDepth`
+  fills cached world depth; `drawActorDepth` adds current actors after copying that depth.
 - Only one extension is supported (the first offered); composing several needs per-extension
   binding/location ranges.
 - 117 HD is the only extension: `client/game/plugins/hd/webgpu/` holds the WGSL
@@ -242,13 +242,21 @@ Scope is the pass `renderOpaquePass` + `renderTransparentPass` covers for terrai
 
 Loc/door/ground-item geometry refreshes, instances, map square GC, quality
 profiles (MSAA, resolution scale), profiler/GPU timing, `DrawBackend` equivalent (multi-draw
-via indirect or instanced, only if measured), FXAA/blit if wanted. Exit: parity checklist for
+via indirect or instanced, only if measured). Exit: parity checklist for
 streaming parity with WebGL.
 
-### Stage 7 — default flip
+Scenery optimisation parity is implemented: existing worker-built full/far meshes share GPU
+vertex/index buffers, with 8-tile chunk LOD, camera/fog culling and contiguous terrain draw
+coalescing. HD views support 160 tiles with a 48-tile maximum detail radius and the existing
+device caps. Shadows use full-detail loaded geometry and light-frustum culling, with a 15 Hz
+world-depth cache copied before fresh actor shadows every frame. HD fragments skip fully
+fogged surfaces and redundant cache-albedo samples, and fade detail lighting from 24 to 48
+tiles. Unchanged actor data skips its texture upload. HD FXAA runs before the HUD.
 
-`PREFER_WEBGPU_DEFAULT = true`; keep `?renderer=webgl` as an escape hatch. Exit: a release
-with WebGPU default on Chrome/Edge/Safari 26+ and WebGL elsewhere.
+### Stage 7 — default flip (**done**)
+
+`PREFER_WEBGPU_DEFAULT = true`; `?renderer=webgl` remains an escape hatch. WebGPU is the
+default when an adapter is available, with automatic WebGL fallback otherwise.
 
 ## Verification
 

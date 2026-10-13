@@ -6,7 +6,7 @@ import type { LoginState } from "./LoginState";
 import { LOGIN_LAYOUT } from "./renderer/constants";
 import { FALLBACK_SERVERS } from "./renderer/constants";
 import type { LoginRendererHost } from "./renderer/host";
-import type { LoginLayoutConfig, ServerListEntry, World } from "./renderer/types";
+import type { LoginLayoutConfig, LoginStretch, ServerListEntry, World } from "./renderer/types";
 import * as assets from "./renderer/assets";
 import * as canvas from "./renderer/canvas";
 import * as controls from "./renderer/controls";
@@ -22,7 +22,7 @@ import * as sceneEntry from "./renderer/render/sceneEntry";
 import * as titleScene from "./renderer/render/titleScene";
 import { getMobileWorldIndexAtPosition } from "./renderer/world/worldSelectMobile";
 
-export type { LoginLayoutConfig, ServerListEntry, World } from "./renderer/types";
+export type { LoginLayoutConfig, LoginStretch, ServerListEntry, World } from "./renderer/types";
 export { WorldFlags } from "./renderer/types";
 
 /**
@@ -44,6 +44,8 @@ export class LoginRenderer implements LoginRendererHost {
     contentOriginY = 0;
     contentOriginX = 0;
     contentScale = 1;
+    contentSmoothing = false;
+    loginStretch: () => LoginStretch | null = () => null;
     containerX = 0;
     containerWidth = LOGIN_LAYOUT.MAX_BG_WIDTH;
     containerHeight = LOGIN_LAYOUT.MAX_BG_HEIGHT;

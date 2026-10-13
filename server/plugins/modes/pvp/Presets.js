@@ -211,7 +211,7 @@ function cloneItem(item) {
 
 function spawnPresetItem(item, preset) {
   const next = cloneItem(item);
-  if (next && (PLAYER_PRESETS.list.includes(preset) || (!preset.getIsGlobal?.() && isSpawnable(next.getId())))) {
+  if (next && presetsEnabled && (PLAYER_PRESETS.list.includes(preset) || (!preset.getIsGlobal?.() && isSpawnable(next.getId())))) {
     next.setMetaValue(Item.UNTRADEABLE_META, true);
     next.setMetaValue(Item.UNBANKABLE_META, true);
     next.setMetaValue(Item.PRESET_META, true);

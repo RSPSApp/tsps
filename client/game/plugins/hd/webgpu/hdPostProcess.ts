@@ -4,12 +4,13 @@
  *
  *   world (linear HDR, unclamped) -> SSAO (half-res, blurred) -> bloom mip chain -> depth of
  *   field (when the follow camera is zoomed in) -> tonemap (AO, bloom, ACES, grade, gamma
- *   encode) -> canvas
+ *   encode) -> optional FXAA -> canvas
  *
  * The screen/HUD pass runs after this and composites on top of the tonemapped canvas.
  */
 import { mat4 } from "gl-matrix";
 
+import { FxaaPass } from "../../../../render/webgpu/fxaa";
 import type { WebGPUSceneFrameTargets } from "../../../../render/webgpu/sceneExtension";
 import type { WebGPURenderer } from "../../../../render/webgpu/WebGPURenderer";
 import type { HdOptions } from "../HdConfig";
@@ -32,10 +33,11 @@ export class HdPostProcess {
     private readonly bloom: HdBloomPass;
     private readonly dof: HdDepthOfFieldPass;
     private readonly tonemap: HdTonemapPass;
+    private fxaa?: FxaaPass;
     private readonly inverseProjection = mat4.create() as Float32Array;
     private disposed = false;
 
-    constructor(device: GPUDevice, canvasFormat: GPUTextureFormat) {
+    constructor(private readonly device: GPUDevice, private readonly canvasFormat: GPUTextureFormat) {
         this.ssao = new HdSsaoPass(device);
         this.bloom = new HdBloomPass(device);
         this.dof = new HdDepthOfFieldPass(device);
@@ -48,7 +50,7 @@ export class HdPostProcess {
         if (this.disposed) return;
         const width = frame.colorTexture.width;
         const height = frame.colorTexture.height;
-        this.ssao.ensure(width, height);
+        this.ssao.ensure(width, height, options.depthAwareAo);
         this.bloom.ensure(width, height);
         this.dof.ensure(width, height);
 
@@ -79,7 +81,10 @@ export class HdPostProcess {
             focusDistance,
             strength,
         );
-        this.tonemap.encode(encoder, frame.canvasView, sceneView, bloomView, aoView, width, height, options.hdr);
+        const fxaa = options.antiAliasing ? (this.fxaa ??= new FxaaPass(this.device, this.canvasFormat)) : undefined;
+        this.tonemap.encode(encoder, fxaa?.ensure(width, height) ?? frame.canvasView,
+            sceneView, bloomView, aoView, width, height, options.hdr);
+        fxaa?.encode(encoder, frame.canvasView);
     }
 
     dispose(): void {
@@ -89,5 +94,6 @@ export class HdPostProcess {
         this.bloom.dispose();
         this.dof.dispose();
         this.tonemap.dispose();
+        this.fxaa?.dispose();
     }
 }

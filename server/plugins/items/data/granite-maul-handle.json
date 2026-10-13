@@ -1,0 +1,15 @@
+{
+ "$comment": "Ornate maul handle attachments, transcribed from https://oldschool.runescape.wiki/w/Ornate_maul_handle. Using the handle on a maul consumes it and swaps the maul for the `result` id; Revert swaps back to `base` and destroys the handle. The cache gamevals behind the ids: granite_maul_upgrade 24229 (the handle), granite_maul 4153 (plain), granite_maul_pretty 12848 (granite clamp applied), granite_maul_plus 24225 (handle applied), granite_maul_pretty_plus 24227 (handle and clamp applied). The 50% special attack cost these forms pay is the special's own data (plugins/combat/specials/GraniteMaul.SpecialAttack.js).",
+ "source": "https://oldschool.runescape.wiki/w/Ornate_maul_handle",
+ "handle": 24229,
+ "forms": [
+  {
+   "base": 4153,
+   "result": 24225
+  },
+  {
+   "base": 12848,
+   "result": 24227
+  }
+ ]
+}

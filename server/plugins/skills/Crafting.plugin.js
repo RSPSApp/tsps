@@ -37,9 +37,7 @@ const FURNACE_NAMES = new Set(["Furnace", "Small furnace"]);
  * Amulets are made unstrung, (u).
  *
  * Each product row is [itemId, Crafting level, XP], in the same order as JEWELLERY_GEMS.
- * ponytail: levels and XP are from the wiki's Crafting tables; opal, jade and red topaz
- * pieces, silver jewellery (holy and unholy symbols, tiaras) and the "make X" quantity prompt
- * are not here yet.
+ * shortcut: silver jewellery is not included; add it when extending the furnace recipes.
  */
 const JEWELLERY_GEMS = [
   { name: "gold", gemId: null },
@@ -63,8 +61,8 @@ const JEWELLERY_TYPES = [
       [ItemIds.RUBY_RING, 34, 70],
       [ItemIds.DIAMOND_RING, 43, 85],
       [ItemIds.DRAGONSTONE_RING, 55, 100],
-      [ItemIds.ONYX_RING_2, 67, 115],
-      [ItemIds.ZENYTE_RING_2, 89, 150],
+      [ItemIds.ONYX_RING, 67, 115],
+      [ItemIds.ZENYTE_RING, 89, 150],
     ],
   },
   {
@@ -77,8 +75,8 @@ const JEWELLERY_TYPES = [
       [ItemIds.RUBY_NECKLACE, 40, 75],
       [ItemIds.DIAMOND_NECKLACE, 56, 90],
       [ItemIds.DRAGON_NECKLACE, 72, 105],
-      [ItemIds.ONYX_NECKLACE_2, 82, 120],
-      [ItemIds.ZENYTE_NECKLACE_2, 92, 165],
+      [ItemIds.ONYX_NECKLACE, 82, 120],
+      [ItemIds.ZENYTE_NECKLACE, 92, 165],
     ],
   },
   {
@@ -118,20 +116,26 @@ const JEWELLERY_TYPES = [
 const STRING_AMULET_XP = 4;
 const STRUNG_AMULETS = new Map([
   [ItemIds.GOLD_AMULET_U_, ItemIds.GOLD_AMULET],
-  [ItemIds.SAPPHIRE_AMULET_U_, ItemIds.SAPPHIRE_AMULET_2],
-  [ItemIds.EMERALD_AMULET_U_, ItemIds.EMERALD_AMULET_2],
-  [ItemIds.RUBY_AMULET_U_, ItemIds.RUBY_AMULET_2],
-  [ItemIds.DIAMOND_AMULET_U_, ItemIds.DIAMOND_AMULET_2],
+  [ItemIds.SAPPHIRE_AMULET_U_, ItemIds.SAPPHIRE_AMULET],
+  [ItemIds.EMERALD_AMULET_U_, ItemIds.EMERALD_AMULET],
+  [ItemIds.RUBY_AMULET_U_, ItemIds.RUBY_AMULET],
+  [ItemIds.DIAMOND_AMULET_U_, ItemIds.DIAMOND_AMULET],
   [ItemIds.DRAGONSTONE_AMULET_U_, ItemIds.DRAGONSTONE_AMULET],
-  [ItemIds.ONYX_AMULET_U_, ItemIds.ONYX_AMULET_2],
-  [ItemIds.ZENYTE_AMULET_U_, ItemIds.ZENYTE_AMULET_2],
+  [ItemIds.ONYX_AMULET_U_, ItemIds.ONYX_AMULET],
+  [ItemIds.ZENYTE_AMULET_U_, ItemIds.ZENYTE_AMULET],
 ]);
 
 /** The furnace smelting animation, used for jewellery as well. */
 const FURNACE_ANIMATION = new Animation(899);
 
-/** A multi-choice chatbox prompt holds this many options; longer lists page through "More...". */
-const MAX_PROMPT_OPTIONS = 5;
+// crafting_gold components and quantity varp, verified in cache scripts 429 and 2928.
+const GOLD_CRAFTING_INTERFACE = 446;
+const MAIN_MODAL_TARGET_UID = (161 << 16) | 16;
+const JEWELLERY_FIRST_COMPONENTS = [8, 23, 37, 50];
+const JEWELLERY_QUANTITIES = new Map([[60, 1], [61, 5], [62, 10], [63, "x"], [64, 28]]);
+const MAKE_QUANTITY_VARP = 2224;
+const JEWELLERY_MENU_ATTRIBUTE = "crafting:jewellery-menu";
+const JEWELLERY_TASK_ATTRIBUTE = "crafting:jewellery-task";
 
 const POTTERY_WHEEL_ANIMATION = new Animation(883);
 
@@ -274,100 +278,101 @@ function handlePerfectJewellery(event) {
   );
 }
 
-function capitalize(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/**
- * Shows `choices` ({ label, run }) in a chatbox prompt. A list longer than the prompt holds
- * is split into pages, the last slot of each page being "More...".
- */
-function promptChoice(player, title, choices, start = 0) {
-  const hasMore = choices.length - start > MAX_PROMPT_OPTIONS;
-  const page = choices.slice(start, hasMore ? start + MAX_PROMPT_OPTIONS - 1 : undefined);
-  const options = page.flatMap((choice) => [choice.label, choice.run]);
-  if (hasMore) {
-    options.push("More...", () => promptChoice(player, title, choices, start + page.length));
-  }
-  pluginApi.sendMultiChatboxPrompt(player, title, ...options);
+function hasJewelleryMaterials(player, type, gemIndex) {
+  const gem = JEWELLERY_GEMS[gemIndex];
+  const inventory = player.getInventory();
+  return inventory.contains(ItemIds.GOLD_BAR) && inventory.contains(type.mouldId) &&
+    (gem.gemId === null || inventory.contains(gem.gemId));
 }
 
 function craftGoldJewellery(player, type, gemIndex) {
-  const gem = JEWELLERY_GEMS[gemIndex];
   const [itemId, level, xp] = type.products[gemIndex];
-  const inventory = player.getInventory();
   if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < level) {
     player.sendMessage(`You need a Crafting level of at least ${level} to craft this.`);
-    return;
+    return false;
   }
-  if (
-    !inventory.contains(ItemIds.GOLD_BAR) ||
-    !inventory.contains(type.mouldId) ||
-    (gem.gemId !== null && !inventory.contains(gem.gemId))
-  ) {
-    return;
-  }
-  player.performAnimation(FURNACE_ANIMATION);
+  if (!hasJewelleryMaterials(player, type, gemIndex) ||
+      pluginApi.core.PluginManager.emitCanUseItem(player, itemId, "craft") === false) return false;
+  const inventory = player.getInventory();
   inventory.deleteNumber(ItemIds.GOLD_BAR, 1);
-  if (gem.gemId !== null) {
-    inventory.deleteNumber(gem.gemId, 1);
-  }
+  const gem = JEWELLERY_GEMS[gemIndex];
+  if (gem.gemId !== null) inventory.deleteNumber(gem.gemId, 1);
   inventory.addItem(new Item(itemId, 1));
   player.getSkillManager().addExperiences(Skill.CRAFTING, xp);
-  const name = `${gem.name} ${type.name}`;
-  player.sendMessage(`You make ${/^[aeiou]/.test(name) ? "an" : "a"} ${name}.`);
+  Sounds.sendSound(player, Sound.SMELTING);
+  return true;
 }
 
-/** Second step: pick plain gold or any gem carried that the player's level allows. */
-function chooseGoldJewelleryGem(player, type) {
-  const inventory = player.getInventory();
-  const level = player.getSkillManager().getCurrentLevel(Skill.CRAFTING);
-  const available = JEWELLERY_GEMS
-    .map((gem, index) => ({ gem, index }))
-    .filter(({ gem }) => gem.gemId === null || inventory.contains(gem.gemId));
-  const craftable = available.filter(({ index }) => level >= type.products[index][1]);
-  if (craftable.length === 0) {
-    const lowest = Math.min(...available.map(({ index }) => type.products[index][1]));
-    player.sendMessage(`You need a Crafting level of at least ${lowest} to make a ${type.name}.`);
-    return;
+function startGoldJewellery(player, menu, type, gemIndex) {
+  if (!hasJewelleryMaterials(player, type, gemIndex)) return;
+  const { Task } = pluginApi.core;
+  const previous = player.getAttribute(JEWELLERY_TASK_ATTRIBUTE);
+  previous?.stop();
+  player.setAttribute(JEWELLERY_MENU_ATTRIBUTE, null);
+  player.setInterfaceId(-1);
+  player.getPacketSender().closeSubInterface(MAIN_MODAL_TARGET_UID);
+  class JewelleryTask extends Task {
+    constructor() {
+      super(1, player);
+      this.ticks = 0;
+      this.remaining = menu.amount;
+    }
+    execute() {
+      if (!player.isRegistered() || player.getHitpoints() <= 0 ||
+          player.getMovementQueue().size() > 0 || player.getForceMovement() != null ||
+          player.getLocation().getDistance(menu.location) > 2 ||
+          player.getInterfaceId() !== -1 || !hasJewelleryMaterials(player, type, gemIndex)) {
+        this.stop();
+        return;
+      }
+      this.ticks++;
+      if (this.ticks % 3 === 1) player.performAnimation(FURNACE_ANIMATION);
+      if (this.ticks % 3 === 0 && (!craftGoldJewellery(player, type, gemIndex) || --this.remaining <= 0)) this.stop();
+    }
+    stop() {
+      super.stop();
+      if (player.getAttribute(JEWELLERY_TASK_ATTRIBUTE) === this) player.setAttribute(JEWELLERY_TASK_ATTRIBUTE, null);
+      player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    }
   }
-  if (craftable.length === 1) {
-    craftGoldJewellery(player, type, craftable[0].index);
-    return;
-  }
-  promptChoice(
-    player,
-    `What kind of ${type.name} would you like to make?`,
-    craftable.map(({ gem, index }) => ({
-      label: capitalize(`${gem.name} ${type.name}`),
-      run: () => craftGoldJewellery(player, type, index),
-    }))
-  );
+  const task = new JewelleryTask();
+  player.setAttribute(JEWELLERY_TASK_ATTRIBUTE, task);
+  pluginApi.getTaskManager().submit(task);
 }
 
-/** A gold bar used on a furnace, with a mould (and optionally a cut gem), makes jewellery. */
+function handleGoldJewelleryButton(event) {
+  const { player, buttonId } = event;
+  if ((buttonId >>> 16) !== GOLD_CRAFTING_INTERFACE || player.getInterfaceId() !== GOLD_CRAFTING_INTERFACE) return;
+  const menu = player.getAttribute(JEWELLERY_MENU_ATTRIBUTE);
+  if (!menu || player.getLocation().getDistance(menu.location) > 2) return;
+  const component = buttonId & 0xffff;
+  const amount = JEWELLERY_QUANTITIES.get(component);
+  event.handled = true;
+  if (amount === "x") {
+    player.setEnteredAmountAction({ execute: (value) => {
+      if (!Number.isInteger(value) || value <= 0 || player.getAttribute(JEWELLERY_MENU_ATTRIBUTE) !== menu) return;
+      menu.amount = Math.min(value, 28);
+      player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, menu.amount);
+    } });
+    player.getPacketSender().sendEnterAmountPrompt("How many would you like to make?");
+  } else if (amount !== undefined) {
+    menu.amount = amount;
+    player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, amount === 28 ? 0 : amount);
+  } else {
+    const typeIndex = JEWELLERY_FIRST_COMPONENTS.findIndex(first => component >= first && component < first + JEWELLERY_GEMS.length);
+    if (typeIndex >= 0) startGoldJewellery(player, menu, JEWELLERY_TYPES[typeIndex], component - JEWELLERY_FIRST_COMPONENTS[typeIndex]);
+  }
+}
+
+/** Gold bar on a furnace opens the cache's complete gold jewellery menu. */
 function handleGoldJewellery(event) {
   const { player, object, itemId } = event;
-  if (itemId !== ItemIds.GOLD_BAR) return;
-  if (!FURNACE_NAMES.has(object?.getDefinition?.()?.getName?.())) return;
-
-  const inventory = player.getInventory();
-  const types = JEWELLERY_TYPES.filter((type) => inventory.contains(type.mouldId));
-  if (types.length === 0) return;
-
+  if (itemId !== ItemIds.GOLD_BAR || !FURNACE_NAMES.has(object?.getDefinition?.()?.getName?.())) return;
   event.handled = true;
-  if (types.length === 1) {
-    chooseGoldJewelleryGem(player, types[0]);
-    return;
-  }
-  promptChoice(
-    player,
-    "What would you like to make?",
-    types.map((type) => ({
-      label: capitalize(type.name),
-      run: () => chooseGoldJewelleryGem(player, type),
-    }))
-  );
+  player.getAttribute(JEWELLERY_TASK_ATTRIBUTE)?.stop();
+  player.setAttribute(JEWELLERY_MENU_ATTRIBUTE, { amount: 1, location: player.getLocation().clone() });
+  player.setInterfaceId(GOLD_CRAFTING_INTERFACE);
+  player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, 1).sendSubInterface(MAIN_MODAL_TARGET_UID, GOLD_CRAFTING_INTERFACE, 0);
 }
 
 /** A ball of wool used on an unstrung amulet, in either order. */
@@ -385,7 +390,7 @@ function stringAmulet(event) {
   inventory.deleteNumber(unstrungId, 1);
   inventory.addItem(new Item(strungId, 1));
   player.getSkillManager().addExperiences(Skill.CRAFTING, STRING_AMULET_XP);
-  player.sendMessage("You put some string on the amulet.");
+  player.sendMessage("You put some string on your amulet.");
 }
 
 /**
@@ -516,17 +521,11 @@ module.exports = {
     api.onItemOnItem(stringAmulet, { noted: false });
     api.onItemOnObject(handlePerfectJewellery, { noted: false });
     api.onItemOnObject(handleGoldJewellery, { noted: false });
+    api.onInterfaceActionClick(handleGoldJewelleryButton);
     api.onItemOnObject(handleSilverSickle, { noted: false });
     api.onItemOnObject(handlePotteryItemOnObject, { noted: false });
     api.onObjectInteraction("Potter's Wheel", { Use: usePotterWheel });
     api.onObjectInteraction("Potter's wheel", { Use: usePotterWheel });
     api.onObjectInteraction("Pottery Oven", { Fire: usePotteryOven });
-    api.log("registered", {
-      gems: GEMS.size,
-      perfectJewellery: PERFECT_JEWELLERY.length,
-      goldJewellery: JEWELLERY_TYPES.length * JEWELLERY_GEMS.length,
-      strungAmulets: STRUNG_AMULETS.size,
-      pottery: POTTERY.length,
-    });
   },
 };

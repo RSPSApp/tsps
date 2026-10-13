@@ -60,7 +60,11 @@ function choose(player, mode) {
   const setup = setupData();
   const popup = (setup.interface << 16) | setup.popupComponent;
   player.getPacketSender().sendSubInterface(popup, setup.popupInterface, 1);
-  player.getPacketSender().sendClientScript(setup.popupScript, Ironman.message("setupConfirm", { mode: Ironman.data.modes[mode].label }), popup);
+  // None leaves Ironman mode, so its popup names the mode being left.
+  const prompt = mode === "none"
+    ? Ironman.message("setupLeave", { mode: Ironman.data.modes[current].label })
+    : Ironman.message("setupConfirm", { mode: Ironman.data.modes[mode].label });
+  player.getPacketSender().sendClientScript(setup.popupScript, prompt, popup);
   // The popup answers through the count dialog: 1 is Proceed, 0 is Cancel.
   player.setEnteredAmountAction({
     acceptsZero: true,

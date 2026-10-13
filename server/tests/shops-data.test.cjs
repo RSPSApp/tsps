@@ -20,16 +20,12 @@ test('shop ids and names are unique', () => {
   assert.ok(shops.length > 400, 'the imported shop set is present');
 });
 
-test('the slayer shops bind the masters on the right click options', () => {
+test('the slayer equipment shop binds the masters on Trade; Rewards is an interface', () => {
   const equipment = shops.find((shop) => shop.name === 'Slayer Equipment (shop)');
-  const rewards = shops.find((shop) => shop.name === 'Slayer Rewards');
-  assert.ok(equipment && rewards, 'both slayer shops exist in shops.json');
+  assert.ok(equipment, 'the slayer equipment shop exists in shops.json');
   assert.equal(equipment.currency, 'COINS');
-  assert.equal(rewards.currency, 'SLAYER_POINTS');
-
-  for (const [shop, slot] of [[equipment, 4], [rewards, 5]]) {
-    const binding = shop.npcInteractions.find((entry) => entry.optionSlot === slot);
-    assert.ok(binding, `${shop.name} has a slot ${slot} binding`);
-    assert.ok(binding.npcIds.includes(7663), `${shop.name} is bound to Krystilia`);
-  }
+  const binding = equipment.npcInteractions.find((entry) => entry.optionSlot === 4);
+  assert.ok(binding?.npcIds.includes(7663), 'the shop is bound to Krystilia on slot 4');
+  // The Rewards option opens the slayer_rewards interface (Slayer.plugin.js), not a shop.
+  assert.equal(shops.some((shop) => shop.name === 'Slayer Rewards'), false);
 });

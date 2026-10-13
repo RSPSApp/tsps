@@ -23,6 +23,17 @@ test("the generated files hold no hand edits: each override changes something th
   const covered = Object.keys(overrides.addNpcs).filter((id) => id !== "$comment" && dump.npcs[id]);
   assert.deepEqual(covered, [], "the dump maps these itself now: remove them from the overrides");
   for (const name of Object.keys(overrides.subtables)) assert.equal(subtables[name], undefined, `${name} is in the dump now`);
+  for (const [id, change] of Object.entries(overrides.tables)) {
+    for (const section of change.removeSections ?? []) {
+      assert.ok(dump.tables[id].entries.some((entry) => entry.section === section), `${id} has no ${section} section in the dump now`);
+    }
+  }
+});
+
+test("Yama's normal kill leaves out what his contracts reward", () => {
+  const yama = _test.tablesByNpc.get(14176)[0];
+  assert.ok(!yama.entries.some((entry) => entry.section === "Contract"));
+  assert.ok(yama.entries.some((entry) => entry.item_id === 30803), "the dossier");
 });
 
 test("the Ents drop nothing themselves (their trunk does), and the Sire keeps its pet", () => {

@@ -1,7 +1,7 @@
 import type { BitmapFont } from "../../../rs/font/BitmapFont";
 import type { IndexedSprite } from "../../../rs/sprite/IndexedSprite";
 import type { LoginScreenAnimation } from "../LoginScreenAnimation";
-import type { LoginLayoutConfig, ServerListEntry, World, WorldGridLayout } from "./types";
+import type { LoginLayoutConfig, LoginStretch, ServerListEntry, World, WorldGridLayout } from "./types";
 
 export type RenderContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -19,6 +19,10 @@ export interface LoginRendererHost {
     contentOriginY: number;
     contentOriginX: number;
     contentScale: number;
+    /** Enlarged content is filtered (sharp bilinear) rather than drawn nearest-neighbour. */
+    contentSmoothing: boolean;
+    /** Stretched Mode's login settings, or null to draw the scene 1:1 as OSRS does. */
+    loginStretch: () => LoginStretch | null;
     containerX: number;
     containerWidth: number;
     containerHeight: number;

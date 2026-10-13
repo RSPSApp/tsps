@@ -1,7 +1,11 @@
 export type InteractionTargetType = "player" | "npc";
 
 export const NO_INTERACTION = -1;
-export const PLAYER_INDEX_OFFSET = 0x8000; // 32768
+/**
+ * A player is its index plus this, an NPC its index (as OSRS: NPC indices run to 65534, so the
+ * marker sits above them). Must match the server's PlayerSession.PLAYER_INTERACTION_OFFSET.
+ */
+export const PLAYER_INDEX_OFFSET = 0x10000; // 65536
 
 export type InteractionIndex = number;
 

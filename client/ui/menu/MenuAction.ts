@@ -10,6 +10,14 @@ import { ClientPacket, createPacket, queuePacket } from "../../network/packet";
 import { MenuTargetType } from "../../rs/MenuEntry";
 import { MODIFIER_FLAG_CTRL, MODIFIER_FLAG_CTRL_SHIFT } from "../../common/input/modifierFlags";
 import { MenuOpcode } from "./MenuState";
+import { dispatchMenuAction } from "./menuEvents";
+
+export function menuAction(param0: number, param1: number, opcode: number, identifier: number,
+    itemId: number, option: string, target: string, screenX: number, screenY: number): void {
+    dispatchMenuAction({ param0, param1, opcode, identifier, itemId, option, target, screenX, screenY }, (action) =>
+        nativeMenuAction(action.param0, action.param1, action.opcode, action.identifier, action.itemId,
+            action.option, action.target, action.screenX, action.screenY));
+}
 
 /**
  * OSRS deprioritization offset - added to opcodes to sort them below normal entries
@@ -206,7 +214,7 @@ export function inferMenuAction(
  * @param screenX - Screen X position of click
  * @param screenY - Screen Y position of click
  */
-export function menuAction(
+function nativeMenuAction(
     arg0: number,
     arg1: number,
     opcode: number,

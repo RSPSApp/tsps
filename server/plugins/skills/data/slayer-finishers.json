@@ -1,0 +1,32 @@
+{
+  "_description": "Monsters that can't die to ordinary hits: at 0 hitpoints they wait to be finished with an item used on them once at or below `threshold` (Wiki, each monster's page). With the matching unlock (slayer_unlock bit) and an item in the inventory, the killing hit finishes them on its own. `consumed` items are used up; a fungicide spray loses a charge. Messages: the gargoyle's and zygomite's are captured (rsprox captures), the others the Wiki's.",
+  "finishers": [
+    {
+      "names": ["Gargoyle", "Marble gargoyle"], "threshold": 9, "unlockBit": 0,
+      "items": [4162, 21742], "consumed": [21754], "animation": 401,
+      "finished": "The gargoyle cracks apart.",
+      "tooStrong": "The gargoyle isn't weak enough to be affected by the rock hammer."
+    },
+    {
+      "names": ["Rockslug", "Giant rockslug"], "threshold": 5, "unlockBit": 1,
+      "consumed": [4161], "weapons": [11037],
+      "finished": "The rockslug shrivels up and dies.",
+      "tooStrong": "The rockslug isn't weak enough to be affected by the salt."
+    },
+    {
+      "names": ["Lizard", "Small Lizard", "Desert Lizard"], "threshold": 4, "unlockBit": 2,
+      "consumed": [6696],
+      "finished": "The lizard shudders and collapses from the freezing water.",
+      "tooStrong": "The lizard isn't weak enough to be affected by the icy water."
+    },
+    {
+      "names": ["Zygomite", "Ancient Zygomite"], "threshold": 7, "unlockBit": 3,
+      "sprays": [7421, 7422, 7423, 7424, 7425, 7426, 7427, 7428, 7429, 7430], "emptySpray": 7431,
+      "finished": "The Zygomite is covered in fungicide. It bubbles away to nothing!",
+      "tooStrong": "The zygomite isn't weak enough to be affected by the fungicide.",
+      "lastLegs": "The Zygomite is on its last legs! Finish it quickly!",
+      "empty": "Your fungicide spray is currently empty."
+    }
+  ],
+  "fungicide": 7432
+}

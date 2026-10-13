@@ -66,6 +66,7 @@ export class Equipment extends ItemContainer {
 
     public refreshItems(): ItemContainer {
         this.getPlayer().getPacketSender().sendItemContainer(this, Equipment.INVENTORY_INTERFACE_ID);
+        require("../../../../plugins/PluginManager").PluginManager.emitCustomEvent("equipment:changed", { player: this.getPlayer() });
         return this;
     }
 

@@ -50,31 +50,53 @@ export function getVisibleLayoutRightEdge(host: LoginRendererHost) {
     
 }
 
-export function getBottomControlsY(host: LoginRendererHost) {
+/**
+ * The visible part of the viewport in content space. On desktop the whole 765x503
+ * scene fits; on short phones the mobile titlebox boost can push its edges off screen.
+ */
+function getVisibleContentBounds(host: LoginRendererHost) {
 
-        return Math.max(8, host.canvasHeight - 40);
-    
+        const scale = host.contentScale > 0 ? host.contentScale : 1;
+        const rightEdge = Math.min(
+            host.containerX + host.containerWidth,
+            getVisibleLayoutRightEdge(host),
+        );
+        return {
+            left: (host.containerX - host.contentOriginX) / scale,
+            right: (rightEdge - host.contentOriginX) / scale,
+            bottom: (host.canvasHeight - host.contentOriginY) / scale,
+        };
+
 }
 
+function getBottomControlsY(host: LoginRendererHost) {
+
+        // Classic client: both controls at y 463 of the scene, kept on screen.
+        const bounds = getVisibleContentBounds(host);
+        return Math.floor(Math.min(LOGIN_LAYOUT.BOTTOM_CONTROLS_Y, bounds.bottom - 40));
+
+}
+
+/** World switch button, in content space: the scene's bottom-left corner (xPadding + 5). */
 export function getServerListButtonPosition(host: LoginRendererHost) {
 
+        const bounds = getVisibleContentBounds(host);
         return {
-            x: host.containerX + 5,
+            x: Math.ceil(Math.max(5, bounds.left + 5)),
             y: getBottomControlsY(host),
         };
-    
+
 }
 
+/** Music mute button, in content space: the scene's bottom-right corner (xPadding + 765 - 40). */
 export function getTitleMuteDrawPosition(host: LoginRendererHost) {
 
-        // Anchor the music toggle to the visible right edge, same baseline as server button.
-        const defaultRightEdge = host.containerX + host.containerWidth;
-        const titleRightEdge = Math.min(defaultRightEdge, getVisibleLayoutRightEdge(host));
+        const bounds = getVisibleContentBounds(host);
         return {
-            x: Math.floor(titleRightEdge) - 40,
+            x: Math.floor(Math.min(host.SCENE_WIDTH - 40, bounds.right - 40)),
             y: getBottomControlsY(host),
         };
-    
+
 }
 
 function getTitleBoxLayout(host: LoginRendererHost) {
@@ -121,7 +143,35 @@ export function mapPointerToContent(host: LoginRendererHost, layoutX: number, la
     
 }
 
-export function withContentTransform(host: LoginRendererHost, ctx: RenderContext, drawFn: () => void): void {
+let upscaleBuffer: OffscreenCanvas | undefined;
+let upscaleCtx: OffscreenCanvasRenderingContext2D | undefined;
+
+function getUpscaleContext(width: number, height: number): OffscreenCanvasRenderingContext2D | undefined {
+
+        if (typeof OffscreenCanvas === "undefined") return undefined;
+        if (!upscaleBuffer || upscaleBuffer.width !== width || upscaleBuffer.height !== height) {
+            upscaleBuffer = new OffscreenCanvas(width, height);
+            upscaleCtx = upscaleBuffer.getContext("2d") ?? undefined;
+        }
+        return upscaleCtx;
+
+}
+
+/**
+ * Draws classic 765x503 content into the scaled content band. When Stretched Mode
+ * enlarges it without integer scaling, the content is drawn "sharp bilinear": nearest-neighbour up to the next whole multiple of
+ * the device scale in a buffer, then filtered down once to the exact size. Edges stay
+ * crisp without the uneven blocks of fractional nearest-neighbour or the blur and
+ * per-sprite fringes of filtering every sprite on its own.
+ */
+export function withContentTransform(host: LoginRendererHost, ctx: RenderContext, drawFn: (ctx: RenderContext) => void): void {
+
+        const deviceScale = host.contentScale * (host.renderScale > 0 ? host.renderScale : 1);
+        const factor = Math.ceil(deviceScale - 0.01);
+        const buffer =
+            host.contentSmoothing && factor > 1
+                ? getUpscaleContext(host.SCENE_WIDTH * factor, host.SCENE_HEIGHT * factor)
+                : undefined;
 
         ctx.save();
         ctx.translate(host.contentOriginX, host.contentOriginY);
@@ -129,9 +179,25 @@ export function withContentTransform(host: LoginRendererHost, ctx: RenderContext
             ctx.scale(host.contentScale, host.contentScale);
         }
         try {
-            drawFn();
+            if (!buffer) {
+                drawFn(ctx);
+                return;
+            }
+            buffer.setTransform(1, 0, 0, 1, 0, 0);
+            buffer.clearRect(0, 0, buffer.canvas.width, buffer.canvas.height);
+            buffer.save();
+            buffer.scale(factor, factor);
+            buffer.imageSmoothingEnabled = false;
+            try {
+                drawFn(buffer);
+            } finally {
+                buffer.restore();
+            }
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(buffer.canvas, 0, 0, host.SCENE_WIDTH, host.SCENE_HEIGHT);
         } finally {
             ctx.restore();
         }
-    
+
 }

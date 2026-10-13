@@ -27,6 +27,7 @@ import { AnimationFrames } from "../AnimationFrames";
 import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../DrawRange";
 import { ModelHashBuffer, getModelHash } from "../buffer/ModelHashBuffer";
 import { buildActorNormals } from "../buffer/ActorNormals";
+import { HD_OBJECT_LIGHTS_BY_ID } from "../../game/plugins/hd/hdObjectLightData";
 import {
     ContourGroundType,
     DrawCommand,
@@ -655,7 +656,8 @@ function addSceneModels(
     const groupedModels = new Map<string, SceneModel[]>();
     for (const sceneModel of sceneModels) {
         const model = sceneModel.model;
-        const hash = `${getModelHash(modelHashBuf, model)}:${Number(!!sceneModel.doubleSided)}:${Math.floor(sceneModel.sceneX / 1024)}:${Math.floor(sceneModel.sceneZ / 1024)}`;
+        const lightId = HD_OBJECT_LIGHTS_BY_ID[sceneModel.interactId] ? sceneModel.interactId : -1;
+        const hash = `${getModelHash(modelHashBuf, model)}:${lightId}:${Number(!!sceneModel.doubleSided)}:${Math.floor(sceneModel.sceneX / 1024)}:${Math.floor(sceneModel.sceneZ / 1024)}`;
         const locs = groupedModels.get(hash);
         if (locs) {
             locs.push(sceneModel);
@@ -721,7 +723,7 @@ function addSceneModels(
             createModelGroups(modelGroupMap, instancedModels, false);
         } else if (opaqueFaces.length > 0) {
             const indexOffset = sceneBuf.indexByteOffset();
-            sceneBuf.addModel(model, opaqueFaces, undefined, true, undefined, doubleSided);
+            sceneBuf.addModel(model, opaqueFaces, undefined, true, undefined, doubleSided, sceneModels[0].interactId);
             const elementCount = (sceneBuf.indexByteOffset() - indexOffset) / 4;
 
             // Group instanced models by level AND planeCullLevel to keep CPU plane-culling accurate per draw range
@@ -774,7 +776,7 @@ function addSceneModels(
             createModelGroups(modelGroupMap, instancedModels, true);
         } else if (transparentFaces.length > 0) {
             const indexOffset = sceneBuf.indexByteOffset();
-            sceneBuf.addModel(model, transparentFaces, undefined, true, undefined, doubleSided);
+            sceneBuf.addModel(model, transparentFaces, undefined, true, undefined, doubleSided, sceneModels[0].interactId);
             const elementCount = (sceneBuf.indexByteOffset() - indexOffset) / 4;
 
             // Group instanced models by level AND planeCullLevel for transparent path as well
@@ -844,7 +846,7 @@ function addSceneModels(
     }
 }
 
-function buildLocGeometryData(sceneBuf: SceneBuffer): LocGeometryData {
+export function buildLocGeometryData(sceneBuf: SceneBuffer): LocGeometryData {
     const drawRanges = (commands: DrawCommand[]): DrawRange[] =>
         commands.map((cmd) => sceneBuf.createDrawRange(cmd));
     const drawRangePlanes = (commands: DrawCommand[]): Uint8Array =>
@@ -920,8 +922,8 @@ function addLocAnimationFrames(
             i,
         );
         if (model) {
-            frames[i] = sceneBuf.addModelAnimFrame(model, false, undefined, doubleSided);
-            framesAlpha[i] = sceneBuf.addModelAnimFrame(model, true, undefined, doubleSided);
+            frames[i] = sceneBuf.addModelAnimFrame(model, false, undefined, doubleSided, locType.id);
+            framesAlpha[i] = sceneBuf.addModelAnimFrame(model, true, undefined, doubleSided, locType.id);
             if (framesAlpha[i][1] > 0) {
                 alphaFrameCount++;
             }
@@ -1709,6 +1711,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         const interiorMaxX = usedBorderSize + TILE_SIZE - 1;
         const interiorMaxY = usedBorderSize + TILE_SIZE - 1;
 
+        const tilePresenceByLevel: Uint8Array[] = Array.from({ length: Scene.MAX_LEVELS }, () => new Uint8Array(TILE_SIZE * TILE_SIZE));
         const tileLocOffsetsByLevel: Uint32Array[] = new Array(Scene.MAX_LEVELS);
         const tileLocIdsByLevel: Int32Array[] = new Array(Scene.MAX_LEVELS);
         const tileLocTypeRotByLevel: Uint8Array[] = new Array(Scene.MAX_LEVELS);
@@ -1724,6 +1727,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                     const sceneX = interiorMin + tx;
                     const sceneY = interiorMin + ty;
                     const tile = scene.tiles[lvl][sceneX]?.[sceneY];
+                    tilePresenceByLevel[lvl][ty * TILE_SIZE + tx] = tile ? 1 : 0;
                     const ids: number[] = [];
                     const typeRots: number[] = [];
                     const pushLoc = (id: number, flags: number): void => {
@@ -2110,6 +2114,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
         const transferables = [
             ...scene.tileRenderFlags.flat().map((buf) => buf.buffer),
+            ...scene.tileOverlays.flat().map((buf) => buf.buffer),
             ...(sceneBuf.groundMaterials?.flat().map((column) => column.buffer) ?? []),
             ...(sceneBuf.groundColors?.flat().map((column) => column.buffer) ?? []),
             ...scene.collisionMaps.map((map) => map.flags.buffer),
@@ -2186,6 +2191,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             doorDrawRangesInteractLodPlanes.buffer,
             doorDrawRangesInteractLodAlphaPlanes.buffer,
             ...bridgeSurfaceFlags.flat().map((column) => column.buffer),
+            ...tilePresenceByLevel.map((a) => a.buffer),
             ...tileLocOffsetsByLevel.map((a) => a.buffer),
             ...tileLocIdsByLevel.map((a) => a.buffer),
             ...tileLocTypeRotByLevel.map((a) => a.buffer),
@@ -2218,6 +2224,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 renderPosX,
                 renderPosY,
                 tileRenderFlags: scene.tileRenderFlags,
+                tileOverlays: scene.tileOverlays,
                 groundMaterials: sceneBuf.groundMaterials,
                 groundColors: sceneBuf.groundColors,
                 collisionDatas: scene.collisionMaps,
@@ -2311,6 +2318,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
                 bridgeSurfaceFlags,
 
+                tilePresenceByLevel,
                 tileLocOffsetsByLevel,
                 tileLocIdsByLevel,
                 tileLocTypeRotByLevel,

@@ -158,6 +158,8 @@ export type NpcView = Tile & ActorUpdateView & {
   exactMove?: ForcedMovementView;
   /** A tile to turn to once (OSRS npc face coord). */
   faceTile?: { x: number; y: number };
+  /** Body-model slot overrides (OSRS npc model customisation); an empty list resets them. */
+  modelCustomisation?: { slot: number; modelId: number }[];
   /** Its walk step is sent as a crawl (half walking speed on the client). */
   crawl?: boolean;
   rotation: number;
@@ -184,6 +186,11 @@ export type ProjectileView = {
   startCycleOffset: number;
   endCycleOffset: number;
   targetActor?: { kind: "player" | "npc"; index: number };
+  /**
+   * The actor it is fired by: the client starts it from where that actor is drawn until it
+   * launches, so a caster still walking onto its tile doesn't fire from ahead of itself.
+   */
+  sourceActor?: { kind: "player" | "npc"; index: number };
 };
 
 export type SkillView = {
@@ -239,6 +246,7 @@ export type FriendsChatSnapshot = {
 };
 
 export type ClientMessage =
+  | { type: "plugin_message"; channel: string; data: Record<string, unknown> }
   /** modifierFlags is the click's key byte (OSRS: 1 Ctrl, 2 Ctrl+Shift); run forces running. */
   | { type: "movement_input"; seq: number; dx: number; dy: number; rotation: number; duration: number; active: boolean; running: boolean }
   | { type: "move"; worldX: number; worldY: number; modifierFlags: number; run?: boolean }
@@ -425,6 +433,8 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
   }
 
   switch (opcode) {
+    case HighClientPacket.PLUGIN_MESSAGE:
+      return { type: "plugin_message", ...decodePluginMessagePayload(reader.bytes(reader.remaining)) };
     case NativeClientPacket.IF_BUTTON: {
       const widgetId = reader.int();
       return { type: "widget_action", widgetId, groupId: widgetId >>> 16, childId: widgetId & 0xffff, buttonNum: 1, simple: true };
@@ -879,6 +889,25 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
     default:
       return { type: "raw", opcode, payload: frame.subarray(frame.length - length) };
   }
+}
+
+// Mirrored by client/common/network/PluginMessage.ts.
+const MAX_PLUGIN_MESSAGE_BYTES = 16_384;
+
+export function decodePluginMessagePayload(bytes: Buffer): { channel: string; data: Record<string, unknown> } {
+  if (bytes.length > MAX_PLUGIN_MESSAGE_BYTES) throw new Error("Plugin message is too large");
+  const value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  if (!value || typeof value.channel !== "string" || !/^[a-z][a-z0-9:-]{0,63}$/.test(value.channel)
+    || !value.data || typeof value.data !== "object" || Array.isArray(value.data)) {
+    throw new Error("Invalid plugin message");
+  }
+  return value;
+}
+
+export function encodePluginMessage(channel: string, data: Record<string, unknown>): Buffer {
+  const bytes = Buffer.from(JSON.stringify({ channel, data }), "utf8");
+  decodePluginMessagePayload(bytes);
+  return encodeServerPacket(ServerPacketId.PLUGIN_MESSAGE, bytes);
 }
 
 export function encodeServerPacket(opcode: ServerPacketId, payload: Buffer): Buffer {
@@ -1753,7 +1782,7 @@ function scriptInventories(inventories?: Record<number, ScriptInventorySnapshot>
 
 export function encodeWidgetRunScript(
   scriptId: number,
-  args: (number | string)[] = [],
+  args: (number | string | bigint)[] = [],
   varps?: Record<number, number>,
   varbits?: Record<number, number>,
   inventories?: Record<number, ScriptInventorySnapshot>
@@ -1784,10 +1813,15 @@ export function encodeRunClientScript(scriptId: number, args: (number | string)[
   return encodeServerPacket(ServerPacketId.RUN_CLIENT_SCRIPT, Buffer.concat([id, scriptArgs(args)]));
 }
 
-function scriptArgs(args: (number | string)[]): Buffer {
+function scriptArgs(args: (number | string | bigint)[]): Buffer {
   const parts: Buffer[] = [Buffer.from([args.length])];
   for (const arg of args) {
-    if (typeof arg === "number") {
+    if (typeof arg === "bigint") {
+      const value = Buffer.alloc(9);
+      value[0] = 2;
+      value.writeBigInt64BE(arg, 1);
+      parts.push(value);
+    } else if (typeof arg === "number") {
       const value = Buffer.alloc(5);
       value[0] = 1;
       value.writeInt32BE(arg | 0, 1);
@@ -1858,7 +1892,7 @@ const QUEST_TAB_ICON_FLAGS = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4);
 const ACCOUNT_SUMMARY_ENTRY_LIST_UID = (INTERFACE_CHARACTER_SUMMARY_ID << 16) | 3;
 const ACCOUNT_SUMMARY_QUESTS_ROW = 3; // op1 "Quest List"
 const ACCOUNT_SUMMARY_ACHIEVEMENTS_ROW = 4; // op1 "Achievement Diaries"
-const ACCOUNT_SUMMARY_COMBAT_TASKS_ROW = 5; // op1-4 Overview/Bosses/Tasks/Rewards (Combat Achievements - not yet built)
+const ACCOUNT_SUMMARY_COMBAT_TASKS_ROW = 5; // op1 "Combat Achievements" (the last screen used; plugins/combatachievements/)
 const ACCOUNT_SUMMARY_COLLECTION_LOG_ROW = 6; // op1 "Collection Log", op2 "Collection Overview"
 const ACCOUNT_SUMMARY_PLAYTIME_ROW = 7; // op1 "Reveal"
 
@@ -1868,18 +1902,42 @@ const ACCOUNT_SUMMARY_PLAYTIME_ROW = 7; // op1 "Reveal"
 const EQUIPMENT_QUIVER_SLOT_UID = (387 << 16) | 28;
 const EQUIPMENT_QUIVER_SLOT_FLAGS = (1 << 1) | (1 << 2) | (1 << 10);
 
-export function encodeGameframeFlags(root: number = 161): Buffer[] {
+/** The login's widget flags, each with the component it is on (its interface is uid >>> 16). */
+function gameframeFlagEntries(root: number): Array<[number, Buffer]> {
   const questTabChild = QUEST_TAB_ICON_CHILD_BY_ROOT[root] ?? QUEST_TAB_ICON_CHILD_ID;
+  const questTabIcon = (root << 16) | questTabChild;
   return [
-    encodeWidgetSetFlagsRange(EQUIPMENT_QUIVER_SLOT_UID, -1, -1, EQUIPMENT_QUIVER_SLOT_FLAGS),
-    encodeWidgetSetFlagsRange(MAIN_INVENTORY_WIDGET_UID, 0, 27, MAIN_INVENTORY_SLOT_FLAGS),
-    encodeWidgetSetFlags((root << 16) | questTabChild, QUEST_TAB_ICON_FLAGS),
-    encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_QUESTS_ROW, ACCOUNT_SUMMARY_ACHIEVEMENTS_ROW, 1 << 1),
-    encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_COMBAT_TASKS_ROW, ACCOUNT_SUMMARY_COMBAT_TASKS_ROW, (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4)),
-    encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_COLLECTION_LOG_ROW, ACCOUNT_SUMMARY_COLLECTION_LOG_ROW, (1 << 1) | (1 << 2)),
-    encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_PLAYTIME_ROW, ACCOUNT_SUMMARY_PLAYTIME_ROW, 1 << 1),
-    encodeWidgetSetFlagsRange(DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID, 0, DISPLAY_SETTINGS_DROPDOWN_OPTION_SLOTS, FIRST_OPTION_FLAG),
+    [EQUIPMENT_QUIVER_SLOT_UID, encodeWidgetSetFlagsRange(EQUIPMENT_QUIVER_SLOT_UID, -1, -1, EQUIPMENT_QUIVER_SLOT_FLAGS)],
+    [MAIN_INVENTORY_WIDGET_UID, encodeWidgetSetFlagsRange(MAIN_INVENTORY_WIDGET_UID, 0, 27, MAIN_INVENTORY_SLOT_FLAGS)],
+    [questTabIcon, encodeWidgetSetFlags(questTabIcon, QUEST_TAB_ICON_FLAGS)],
+    [ACCOUNT_SUMMARY_ENTRY_LIST_UID, encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_QUESTS_ROW, ACCOUNT_SUMMARY_ACHIEVEMENTS_ROW, 1 << 1)],
+    [ACCOUNT_SUMMARY_ENTRY_LIST_UID, encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_COMBAT_TASKS_ROW, ACCOUNT_SUMMARY_COMBAT_TASKS_ROW, (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4))],
+    [ACCOUNT_SUMMARY_ENTRY_LIST_UID, encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_COLLECTION_LOG_ROW, ACCOUNT_SUMMARY_COLLECTION_LOG_ROW, (1 << 1) | (1 << 2))],
+    [ACCOUNT_SUMMARY_ENTRY_LIST_UID, encodeWidgetSetFlagsRange(ACCOUNT_SUMMARY_ENTRY_LIST_UID, ACCOUNT_SUMMARY_PLAYTIME_ROW, ACCOUNT_SUMMARY_PLAYTIME_ROW, 1 << 1)],
+    [DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID, encodeWidgetSetFlagsRange(DISPLAY_SETTINGS_DROPDOWN_BUTTONS_UID, 0, DISPLAY_SETTINGS_DROPDOWN_OPTION_SLOTS, FIRST_OPTION_FLAG)],
   ];
+}
+
+export function encodeGameframeFlags(root: number = 161): Buffer[] {
+  return gameframeFlagEntries(root).map(([, packet]) => packet);
+}
+
+/**
+ * What the login sends for one side tab, for mounting it again: the client drops an
+ * interface's flags when it closes, so a tab the tutorial kept closed needs its flags (and the
+ * quest tab its journal, with the character summary's) once more when it opens.
+ */
+export function encodeGameframeTabSetup(group: number, root: number = 161): Buffer[] {
+  const packets: Buffer[] = [];
+  const groups = [group];
+  if (group === SIDE_JOURNAL_GROUP_ID) {
+    packets.push(encodeOpenSub(SIDE_JOURNAL_GROUP_ID, SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID, INTERFACE_CHARACTER_SUMMARY_ID));
+    groups.push(INTERFACE_CHARACTER_SUMMARY_ID);
+  }
+  for (const [uid, packet] of gameframeFlagEntries(root)) {
+    if (groups.includes(uid >>> 16)) packets.push(packet);
+  }
+  return packets;
 }
 
 // Transient player attribute set from the handshake's clientType byte.
@@ -2233,6 +2291,7 @@ const NPC_MASK = {
   HEAD_ICONS: 0x200,
   EXACT_MOVE: 0x400,
   FACE_TILE: 0x800,
+  MODEL_CUSTOMISATION: 0x1000,
   SPOT_ANIM: 0x20000,
 } as const;
 
@@ -2362,6 +2421,7 @@ function npcUpdateMask(view: NpcView, writeInteraction: boolean, writeHeadIcon =
     (view.forcedChat !== undefined ? NPC_MASK.FORCED_CHAT : 0) |
     (view.exactMove ? NPC_MASK.EXACT_MOVE : 0) |
     (view.faceTile ? NPC_MASK.FACE_TILE : 0) |
+    (view.modelCustomisation ? NPC_MASK.MODEL_CUSTOMISATION : 0) |
     (view.graphics?.length ? NPC_MASK.SPOT_ANIM : 0);
 }
 
@@ -2460,6 +2520,13 @@ function writeNpcUpdateBlock(view: NpcView, writeInteraction: boolean, writeHead
   if (view.faceTile) {
     shortBE(bytes, view.faceTile.x & 0xffff);
     shortBE(bytes, view.faceTile.y & 0xffff);
+  }
+  if (view.modelCustomisation) {
+    bytes.push(view.modelCustomisation.length & 0xff);
+    for (const entry of view.modelCustomisation) {
+      bytes.push(entry.slot & 0xff);
+      shortLE(bytes, entry.modelId & 0xffff);
+    }
   }
   return Buffer.from(bytes);
 }
@@ -2855,8 +2922,9 @@ export function encodeProjectiles(projectiles: ProjectileView[]): Buffer {
     payload.writeUInt16BE(projectile.startPos & 0xffff, offset + 17);
     payload.writeUInt16BE(projectile.startCycleOffset & 0xffff, offset + 19);
     payload.writeUInt16BE(projectile.endCycleOffset & 0xffff, offset + 21);
-    payload[offset + 23] = 0;
-    payload.writeUInt16BE(0, offset + 24);
+    payload[offset + 23] = projectile.sourceActor?.kind === "player" ? 1
+      : projectile.sourceActor?.kind === "npc" ? 2 : 0;
+    payload.writeUInt16BE(projectile.sourceActor?.index ?? 0, offset + 24);
     payload[offset + 26] = projectile.targetActor?.kind === "player" ? 1
       : projectile.targetActor?.kind === "npc" ? 2 : 0;
     payload.writeUInt16BE(projectile.targetActor?.index ?? 0, offset + 27);

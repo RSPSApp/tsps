@@ -1,16 +1,17 @@
 import type { LoginRendererHost, RenderContext } from "./host";
-import { getTitleMuteDrawPosition } from "./layout/geometry";
+import { getTitleMuteDrawPosition, toContentPoint, withContentTransform } from "./layout/geometry";
 import { drawSprite } from "./render/drawUtils";
 
 export function isTitleMuteHit(host: LoginRendererHost, x: number, y: number) {
 
         const mutePos = getTitleMuteDrawPosition(host);
+        const content = toContentPoint(host, x, y);
         // Keep the original 50x50 hit area, anchored to the actual draw position.
         return (
-            x >= mutePos.x - 10 &&
-            y >= mutePos.y - 10 &&
-            x < mutePos.x + 40 &&
-            y < mutePos.y + 40
+            content.x >= mutePos.x - 10 &&
+            content.y >= mutePos.y - 10 &&
+            content.x < mutePos.x + 40 &&
+            content.y < mutePos.y + 40
         );
     
 }
@@ -27,6 +28,8 @@ export function drawTitleMuteButton(host: LoginRendererHost, ctx: RenderContext,
         }
 
         const mutePos = getTitleMuteDrawPosition(host);
-        drawSprite(host, ctx, muteSprite, mutePos.x, mutePos.y);
+        withContentTransform(host, ctx, (ctx) => {
+            drawSprite(host, ctx, muteSprite, mutePos.x, mutePos.y);
+        });
     
 }

@@ -8,11 +8,8 @@ export type OsrsRendererType = "webgl" | "webgpu";
 export const WEBGL: OsrsRendererType = "webgl";
 export const WEBGPU: OsrsRendererType = "webgpu";
 
-/**
- * Stage 7 flips this once every pass has a WebGPU path. Until then WebGPU is opt-in with
- * `?renderer=webgpu`, so an unfinished backend can never take over a normal session.
- */
-export const PREFER_WEBGPU_DEFAULT = false;
+// Prefer WebGPU when an adapter is available; otherwise use WebGL.
+export const PREFER_WEBGPU_DEFAULT = true;
 
 export function getRendererName(type: OsrsRendererType): string {
     switch (type) {

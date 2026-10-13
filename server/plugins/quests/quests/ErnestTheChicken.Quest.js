@@ -74,6 +74,8 @@ module.exports = function registerErnestTheChickenQuest(api) {
   const COMPOST = ObjectIdentifiers.COMPOST_HEAP;
   const FOUNTAIN = ObjectIdentifiers.FOUNTAIN;
   const CLOSET_DOOR = ObjectIdentifiers.DOOR_14;
+  const MANOR_ENTRANCE_DOORS = [ObjectIdentifiers.LARGE_DOOR_5, ObjectIdentifiers.LARGE_DOOR_6];
+  const MANOR_EXIT_DOOR = ObjectIdentifiers.DOOR_15;
   /** Door 131's alcove (the skeleton and rubber tube) is one tile east of it. */
   const CLOSET_THROUGH = { x: 1, y: 0 };
   const LADDER_UP = ObjectIdentifiers.LADDER_5;
@@ -264,6 +266,31 @@ module.exports = function registerErnestTheChickenQuest(api) {
     const from = event.sourceLocation ?? event.player.getLocation();
     const side = from.x > tile.getX() ? 1 : -1;
     event.destination = { x: tile.getX() + side, y: tile.getY(), z: tile.getZ() };
+  }
+
+  function useManorDoor({ player, objectId, location }) {
+    if (!MANOR_ENTRANCE_DOORS.includes(objectId) && objectId !== MANOR_EXIT_DOOR) return false;
+    if (MANOR_ENTRANCE_DOORS.includes(objectId) && player.getLocation().getY() >= location.y) {
+      player.sendMessage("The doors won't open. You need to find another way out.");
+      return true;
+    }
+    crossDoor(player, location, { x: 0, y: 1 });
+    if (MANOR_ENTRANCE_DOORS.includes(objectId)) player.sendMessage("The doors slam shut behind you.");
+    return true;
+  }
+
+  function routeManorDoor(event) {
+    const entrance = MANOR_ENTRANCE_DOORS.includes(event.objectId);
+    if (!entrance && event.objectId !== MANOR_EXIT_DOOR) return;
+    const tile = event.object.getLocation();
+    const north = event.sourceLocation.y >= tile.getY() + (entrance ? 1 : 0);
+    event.destination = { x: tile.getX(), y: tile.getY() + (north ? 1 : -1), z: tile.getZ() };
+  }
+
+  function handleManorDoorToggle(request) {
+    if (request.handled) return;
+    if (!MANOR_ENTRANCE_DOORS.includes(request.objectId) && request.objectId !== MANOR_EXIT_DOOR) return;
+    request.handled = useManorDoor(request);
   }
 
   /**
@@ -651,6 +678,11 @@ module.exports = function registerErnestTheChickenQuest(api) {
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
     const { player, objectId, location } = event;
 
+    if (option.includes("open") && useManorDoor(event)) {
+      event.handled = true;
+      return;
+    }
+
     if (LEVER_IDS.has(objectId)) {
       useLever(player, LEVER_IDS.get(objectId));
       event.handled = true;
@@ -708,9 +740,11 @@ module.exports = function registerErnestTheChickenQuest(api) {
   api.onCustomEvent("npc-dialogue:choice", handleOddensteinChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("ladders:climb", claimPuzzleLadder);
+  api.onCustomEvent("door:toggle", handleManorDoorToggle);
   api.onNpcInteraction(handleOddensteinTalk);
   api.onObjectRoute(routePuzzleDoor);
   api.onObjectRoute(routeClosetDoor);
+  api.onObjectRoute(routeManorDoor);
   api.onPlayerLogin(handleLogin);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject);

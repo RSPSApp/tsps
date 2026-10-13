@@ -38,6 +38,9 @@ const {
   ShopManager,
 } = require("../../src/main/typescript/elvarg/game/model/container/shop/ShopManager");
 
+/** Read by Mobile.ts and PlayerDeath.ts: a developer with it set takes damage and loses items on death. */
+const MORTAL_DEVELOPER_ATTRIBUTE = "dev:mortal";
+
 const ATTACK_RANGE_DEBUG_GRAPHIC = new Graphic(332, 0);
 const MAX_NPC_COMMAND_SPAWNS = 20;
 const INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
@@ -689,6 +692,16 @@ module.exports = {
       player.moveTo(new Location(x, y, z));
       return true;
     }, PlayerRights.ADMINISTRATOR, "Teleport to coordinates");
+
+    // Developers take no damage; this turns it on (and off again) to test fights for real.
+    api.registerCommand("mortal", ({ player }) => {
+      const mortal = player.getAttribute(MORTAL_DEVELOPER_ATTRIBUTE) !== true;
+      player.setAttribute(MORTAL_DEVELOPER_ATTRIBUTE, mortal ? true : null);
+      player.sendMessage(mortal
+        ? "You now take damage and lose items on death, like any player. ::mortal again to stop."
+        : "You no longer take damage, and keep everything on death.");
+      return true;
+    }, PlayerRights.DEVELOPER, "Toggle taking damage and losing items on death as a developer (this session)");
 
     api.registerCommand("coords", ({ player }) => {
       const location = player.getLocation();

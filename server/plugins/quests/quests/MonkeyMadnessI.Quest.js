@@ -209,7 +209,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   const MONKEY_ITEM = ItemIdentifiers.MONKEY; // 4033, the zoo monkey in the backpack
   const MONKEY_CORPSE_ITEM = ItemIdentifiers.MONKEY_CORPSE; // 3166
   const MONKEY_BONES_ITEMS = new Set([
-    ItemIdentifiers.MONKEY_BONES_5, // 3183
+    ItemIdentifiers.MONKEY_BONES, // 3183
     ItemIdentifiers.MONKEY_BONES_6, // 3184
   ]);
   const BANANA_ITEM = ItemIdentifiers.BANANA; // 1963

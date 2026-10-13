@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 
-import { PluginChanged } from "@runelite/api/events";
+import { ClientTick, PluginChanged } from "@runelite/api/events";
 import type { ConfigStorage } from "@runelite/client/config/ConfigStorage";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { EventBus } from "@runelite/client/eventbus/EventBus";
@@ -90,6 +90,31 @@ async function main(): Promise<void> {
 
     assert.equal(manager.getState(FailingPlugin), "failed");
     assert.equal(manager.getFailure(FailingPlugin), "nope");
+
+    const pendingStarts: Array<() => void> = [];
+    let ticks = 0;
+    class SlowPlugin extends Plugin {
+        static descriptor = { name: "Slow", enabledByDefault: false };
+        protected async startUp(): Promise<void> {
+            await new Promise<void>(resolve => pendingStarts.push(resolve));
+        }
+        onClientTick(): void { ticks++; }
+    }
+    manager.loadCorePlugins([SlowPlugin]);
+    const firstEnable = manager.setPluginEnabled(SlowPlugin, true);
+    await manager.setPluginEnabled(SlowPlugin, false);
+    const secondEnable = manager.setPluginEnabled(SlowPlugin, true);
+    pendingStarts[0]();
+    await firstEnable;
+    bus.post(new ClientTick());
+    assert.equal(ticks, 0, "a cancelled startup must not register events during a later enable");
+    pendingStarts[1]();
+    await secondEnable;
+    bus.post(new ClientTick());
+    assert.equal(ticks, 1, "only the current startup registers events");
+    await manager.setPluginEnabled(SlowPlugin, false);
+    bus.post(new ClientTick());
+    assert.equal(ticks, 1, "disable removes all event handlers");
 
     console.log("runelite plugin manager tests passed");
 }

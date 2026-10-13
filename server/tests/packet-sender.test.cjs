@@ -6,6 +6,8 @@ const { PacketSender } = require('../dist/net/packet/PacketSender');
 const sender = (interfaceId, tracked) => ({
   resetInterfaceState: () => interfaceId,
   closeTrackedInterfaces: () => tracked,
+  endBankSearch() {},
+  emitInterfaceClosed() {},
   sendSubInterface() {},
   player: { getSession: () => ({ sendClientPacket: () => true }) },
 });
@@ -80,4 +82,28 @@ test("a dialogue box opened again resends its texts: the client turns 'Click her
   // Without reopening, an unchanged text is still skipped.
   PacketSender.prototype.sendString.call(fake, 'Click here to continue', CONTINUE);
   assert.equal(sent(), 2);
+});
+
+
+test('interface script packets preserve 64-bit price totals', () => {
+  const { encodeWidgetRunScript } = require('../dist/net/protocol/ClientProtocol');
+  const frame = encodeWidgetRunScript(785, [12345678901n]);
+  assert.equal(frame[8], 2, 'long argument tag');
+  assert.equal(frame.readBigInt64BE(9), 12345678901n);
+});
+
+test('replacing a main interface emits its close event before changing its id', () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const original = PluginManager.emitCustomEvent;
+  const events = [];
+  PluginManager.emitCustomEvent = (name, event) => events.push([name, event.interfaceId, event.player.interfaceId]);
+  try {
+    const player = { interfaceId: 464 };
+    Player.prototype.setInterfaceId.call(player, 465);
+    Player.prototype.setInterfaceId.call(player, 465);
+    Player.prototype.setInterfaceId.call(player, -1);
+    assert.deepEqual(events, [['interface:closed', 464, 464]]);
+    assert.equal(player.interfaceId, -1);
+  } finally { PluginManager.emitCustomEvent = original; }
 });

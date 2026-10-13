@@ -3,6 +3,7 @@
     "node": ">=22.5.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "@types/async-lock": "^1.4.2",
     "adm-zip": "^0.5.18",
@@ -47,6 +48,7 @@
     "test:arceuus-spellbook": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/arceuus-spellbook-smoke.ts",
     "test:spell-cooldown": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/spell-cooldown-smoke.ts",
     "test:bones-fruit": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/bones-fruit-smoke.ts",
+    "test:voice-chat": "yarn build && node --test tests/voice-chat.test.cjs",
     "test:protocol": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/login-protocol-harness.ts",
     "test:pathfinding": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/pathfinding-smoke.ts",
     "test:combat-pathing": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/combat-pathing-smoke.ts",
@@ -108,6 +110,7 @@
     "dump:loc": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-loc.ts",
     "dump:spotanim": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-spotanim.ts",
     "dump:widget": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-widget.ts",
+    "dump:ca-bosses": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-ca-bosses.ts",
     "dump:item-combat-styles": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-item-combat-styles.ts",
     "refine:npc-spawns": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/refine-npc-spawns.ts",
     "sync:loc-teleports": "node ./scripts/sync-loc-teleports.cjs",

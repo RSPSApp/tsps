@@ -9,6 +9,8 @@ import { getMapSquareId } from "../../../rs/map/MapFileIndex";
 import type { SdMapData } from "../../loader/SdMapData";
 import { MAX_TEXTURES, RENDER_CONSTANTS } from "../../render/constants";
 import { GPU_SHADER_STAGE, SCENE_DEPTH_FORMAT } from "../bindings";
+import { resolveWebGPURenderDistance } from "../frameConfig";
+import { createScenePipeline, withSampleCount } from "../multisample";
 import type { WebGPUMapSquare } from "../WebGPUMapSquare";
 import type { WebGPURenderer } from "../WebGPURenderer";
 import type { WorldResources } from "../WorldResources";
@@ -43,7 +45,8 @@ import {
 } from "./actorPacking";
 import { PlayerPoseGeometry } from "./actorPlayers";
 import { DynamicNpcAnimLoader } from "../../npc/DynamicNpcAnimLoader";
-import type { GfxInstance } from "../../gfx/GfxManager";
+import type { GfxInstance, GfxManager } from "../../gfx/GfxManager";
+import type { GfxCache } from "../../gfx/GfxCache";
 
 /**
  * SceneUniforms is 66 f32 = 264 bytes, padded to 272 by the uniform buffer binding in
@@ -253,6 +256,7 @@ export class WebGPUActors {
         const KINDS: { kind: ActorKind; stride: number; cullMode: GPUCullMode }[] = [
             { kind: "npc", stride: 16, cullMode: "back" },
             { kind: "gfx", stride: 12, cullMode: "none" },
+            { kind: "projectile", stride: 12, cullMode: "none" },
             { kind: "player", stride: 16, cullMode: "back" },
         ];
         const createPipelines = (alpha: boolean, mode: Mode): Map<ActorKind, GPURenderPipeline> => {
@@ -278,7 +282,7 @@ export class WebGPUActors {
                         attributes: [{ shaderLocation: 1, offset: 0, format: "uint32" }],
                     });
                 }
-                out.set(kind, device.createRenderPipeline({
+                out.set(kind, createScenePipeline(device, {
                     label: `webgpu actor ${kind}${alpha ? " alpha" : ""}${mode === "base" ? "" : ` ${mode}`}`,
                     layout: mode === "base" ? pipelineLayout : extendedPipelineLayout!,
                     vertex: { module, entryPoint: actorVertexEntry(kind, depth), buffers },
@@ -303,7 +307,6 @@ export class WebGPUActors {
                         depthWriteEnabled: true,
                         depthCompare: "less-equal",
                     },
-                    multisample: { count: 1 },
                 }));
             }
             return out;
@@ -343,7 +346,7 @@ export class WebGPUActors {
             world,
             this.textureIdIndexMap,
             (map) => getRenderPlayersForMap(client, map, this.tileSelection),
-            (map, ecsId) => this.tileSelection.shouldRenderNpc(client, map, ecsId),
+            (map, ecsId) => (this.tileSelection.shouldRenderNpc(client, map, ecsId) && this.renderer.interactionHost.shouldRenderNpcFromMap(map, ecsId)),
         );
 
         this.playerPose = new PlayerPoseGeometry(
@@ -484,7 +487,7 @@ export class WebGPUActors {
             for (const item of alpha ? state.alpha : state.opaque) {
                 const variants = extended ? this.variants.get(item.pipeline) : undefined;
                 const pipeline = depth ? variants?.depth : variants?.extended ?? item.pipeline;
-                if (pipeline) this.dispatch(pass, state, item, pipeline);
+                if (pipeline) this.dispatch(pass, state, item, pipeline, depth ? 1 : world.sampleCount);
             }
         }
     }
@@ -494,10 +497,11 @@ export class WebGPUActors {
         state: MapActorState,
         item: ActorDrawItem,
         pipeline: GPURenderPipeline,
+        sampleCount: number,
     ): void {
         const bindGroup = state.uniforms.bindGroupFor(item.entry);
         if (!bindGroup) return;
-        pass.setPipeline(pipeline);
+        pass.setPipeline(withSampleCount(pipeline, sampleCount));
         pass.setBindGroup(2, bindGroup, [state.uniforms.offsetFor(item.entry)]);
         pass.setVertexBuffer(0, item.geometry.vertices);
         if (this.playerPipelines.has(pipeline)) {
@@ -536,6 +540,12 @@ export class WebGPUActors {
         state.uniforms.destroy();
         this.mapStates.delete(id);
     }
+
+    getActorGraphic(kind: "player" | "npc", serverId: number): number {
+        return this.gfx?.manager.getActorGraphic(kind, serverId) ?? -1;
+    }
+    getActorGfxManager():GfxManager|undefined { return this.gfx?.manager; }
+    getActorGfxCache():GfxCache|undefined { return this.gfx?.cache; }
 
     registerSpotAnimation(event: PlayerSpotAnimationEvent): void {
         try {
@@ -673,7 +683,8 @@ export class WebGPUActors {
         const ids = client.npcEcs.queryByMap(map.mapX, map.mapY);
         for (let i = 0; i < ids.length; i++) {
             const ecsId = ids[i] | 0;
-            if (!this.tileSelection.shouldRenderNpc(client, map, ecsId)) continue;
+            if (!this.tileSelection.shouldRenderNpc(client, map, ecsId) ||
+                !this.renderer.interactionHost.shouldRenderNpcFromMap(map, ecsId)) continue;
             this.packNpc(state, map, ecsId, NPC_MODEL_Y_OFFSET);
         }
     }
@@ -755,6 +766,7 @@ export class WebGPUActors {
         const client = this.renderer.osrsClient;
         let indexInMap = 0;
         for (const pid of pids) {
+            if (!this.renderer.interactionHost.shouldRenderPlayerIndex(pid)) continue;
             const dataIndex = packPlayerActorData(client, this.writer, map, pid, indexInMap++);
             if (dataIndex < 0) continue;
             state.playerByPid.set(pid, dataIndex);
@@ -887,6 +899,7 @@ export class WebGPUActors {
                 dataIndex,
                 subX,
                 subY,
+                "projectile",
             );
         }
     }
@@ -898,7 +911,7 @@ export class WebGPUActors {
         const overlayView = this.renderer.osrsClient?.worldViewManager?.getWorldViewByOverlayMapId?.(map.id);
         const instances = overlayView
             ? runtime.manager.listWorldInstancesInView(overlayView)
-            : runtime.manager.listWorldInstancesForMap(map.mapX, map.mapY);
+            : runtime.manager.listWorldInstancesForDrawnMap(map);
         for (const inst of instances) {
             const world = inst.world;
             if (!world) continue;
@@ -973,11 +986,12 @@ export class WebGPUActors {
         dataIndex: number,
         subX: number,
         subY: number,
+        kind: "gfx" | "projectile" = "gfx",
     ): void {
         const cache = this.gfx?.cache;
         if (!cache) return;
         const opaqueGeometry = cache.ensureFrameGeometry(spotId, frameIdx, false, frameCycle);
-        if (opaqueGeometry && this.pipelines.get("gfx")?.[0]) {
+        if (opaqueGeometry && this.pipelines.get(kind)?.[0]) {
             const gpu = this.geometry?.getOrCreate(
                 `s:${spotId}|${frameIdx}|${frameCycle}|o`,
                 opaqueGeometry.vertices,
@@ -985,7 +999,7 @@ export class WebGPUActors {
             );
             if (gpu) {
                 state.opaque.push({
-                    pipeline: this.pipelines.get("gfx")![0],
+                    pipeline: this.pipelines.get(kind)![0],
                     geometry: gpu,
                     entry: this.actorEntry(
                         state,
@@ -1001,7 +1015,7 @@ export class WebGPUActors {
             }
         }
         const alphaGeometry = cache.ensureFrameGeometry(spotId, frameIdx, true, frameCycle);
-        if (alphaGeometry && this.pipelines.get("gfx")?.[1]) {
+        if (alphaGeometry && this.pipelines.get(kind)?.[1]) {
             const gpu = this.geometry?.getOrCreate(
                 `s:${spotId}|${frameIdx}|${frameCycle}|a`,
                 alphaGeometry.vertices,
@@ -1009,7 +1023,7 @@ export class WebGPUActors {
             );
             if (gpu) {
                 state.alpha.push({
-                    pipeline: this.pipelines.get("gfx")![1],
+                    pipeline: this.pipelines.get(kind)![1],
                     geometry: gpu,
                     entry: this.actorEntry(
                         state,
@@ -1063,9 +1077,7 @@ export class WebGPUActors {
     }
 
     private resolveRenderDistanceTiles(): number {
-        const client = this.renderer.osrsClient;
-        const base = Math.max(0, Math.min(90, client.renderDistance | 0));
-        return Math.max(25, base);
+        return resolveWebGPURenderDistance(this.renderer);
     }
 
     /** Port of draw2.ts getMapZoneDistanceFromPoint / isMapWithinRenderDistance. */

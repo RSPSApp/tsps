@@ -13,3 +13,6 @@ logs/
 caches/
 Function
 Server
+
+# AI bots roster (plugins/bots/ai/AiBotRoster.js)
+data/saves/ai-bots.json

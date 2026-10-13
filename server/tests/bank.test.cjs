@@ -36,6 +36,9 @@ ItemDefinition.forId = (id) => {
     getNoteId: () => -1,
     getPlaceholderId: () => def.placeholder ?? -1,
     isTradeable: () => true,
+    isSellable: () => true,
+    getValue: () => 100,
+    getGrandExchangeValue: () => 500,
   };
 };
 
@@ -510,4 +513,64 @@ test("bank item slots get the captured events: ops 1-10, depth 2, drag target, t
   assert.ok(flags & (1 << 20), "drag target");
   assert.ok(flags & (1 << 21), "target");
   assert.equal(flags, 3409918);
+});
+
+
+test("price checking quantities and closing returns every item", () => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { Sounds } = require('../dist/game/Sounds');
+  const originalSound = Sounds.sendSound;
+  const originalEmit = PluginManager.emitCustomEvent;
+  Sounds.sendSound = () => {};
+  const buttons = new Map();
+  const custom = new Map();
+  require('../plugins/interface/PriceChecker.plugin').register({
+    onCustomEvent: (name, handler) => custom.set(name, handler),
+    onInterfaceActionButton: (ids, handler) => {
+      for (const id of Array.isArray(ids) ? ids : [ids]) buttons.set(id, handler);
+    },
+  });
+  const player = createPlayer();
+  let status = PlayerStatus.NONE;
+  player.interfaceId = -1;
+  player.getInterfaceId = () => player.interfaceId;
+  player.setInterfaceId = Player.prototype.setInterfaceId;
+  player.getStatus = () => status;
+  player.setStatus = (value) => { status = value; };
+  player.getMovementQueue = () => ({ reset() {} });
+  player.busy = () => false;
+  const snapshots = [];
+  const scripts = [];
+  const sender = new Proxy({}, { get: (_target, method) => (...args) => {
+    if (method === 'sendInterface') player.setInterfaceId(args[0]);
+    if (method === 'sendInventory') snapshots.push(args);
+    if (method === 'sendInterfaceScript') scripts.push(args);
+    return sender;
+  } });
+  player.getPacketSender = () => sender;
+  PluginManager.emitCustomEvent = (name, event) => custom.get(name)?.(event);
+  try {
+    player.inventory.add(new Item(LAVA_BATTLESTAFF_NOTE, 12), false);
+    player.inventory.add(new Item(TRIDENT, 3), false);
+    buttons.get((387 << 16) | 3)({ player, buttonId: (387 << 16) | 3 });
+    buttons.get(238 << 16)({ player, itemId: LAVA_BATTLESTAFF_NOTE, slot: 0, action: 2 });
+    assert.equal(player.inventory.getAmount(LAVA_BATTLESTAFF_NOTE), 7);
+    assert.equal(player.__priceCheckerContainer.getAmount(LAVA_BATTLESTAFF_NOTE), 5);
+    assert.equal(snapshots.at(-1)[0], 90);
+    assert.equal(snapshots.at(-1)[2][0].amount, 5);
+    assert.equal(scripts.at(-1)[1][0], 2500n, 'market price times quantity');
+    assert.ok(scripts.some(([id, args]) => id === 149 && args[0] === (238 << 16) && args[1] === 93), 'build the inventory side panel');
+    buttons.get(238 << 16)({ player, itemId: TRIDENT, slot: 1, action: 3 });
+    assert.equal(player.__priceCheckerContainer.getAmount(TRIDENT), 3, 'quantity operations include separate unstackable slots');
+    buttons.get((464 << 16) | 10)({ player, buttonId: (464 << 16) | 10 });
+    assert.equal(player.inventory.getValidItems().length, 0);
+    player.setInterfaceId(465);
+    assert.equal(player.inventory.getAmount(LAVA_BATTLESTAFF_NOTE), 12);
+    assert.equal(player.inventory.getAmount(TRIDENT), 3);
+    assert.equal(player.__priceCheckerContainer.getValidItems().length, 0);
+  } finally {
+    Sounds.sendSound = originalSound;
+    PluginManager.emitCustomEvent = originalEmit;
+  }
 });

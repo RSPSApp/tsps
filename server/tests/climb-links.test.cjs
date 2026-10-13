@@ -130,3 +130,34 @@ test('the plugin climbs the surveyed names and verbs, and leaves a claimed gangp
     api.emitCustomEvent('ladders:climb', other);
     assert.equal(other.handled, false, 'an ordinary gangplank is left to the generic crossing');
 });
+
+test('Draynor east stairs claim the Count room and return to the manor, leaving Ernest alone', () => {
+    const { PluginManager } = require('../dist/plugins/PluginManager');
+    const core = PluginManager.getCoreApi();
+    const listeners = new Map();
+    const climbs = [];
+    const api = new Proxy({
+        core,
+        onCustomEvent: (name, h) => listeners.set(name, h),
+        emitCustomEvent: (name, request) => climbs.push([name, request.destination]),
+    }, { get: (target, prop) => prop in target ? target[prop] : () => {} });
+    require('../plugins/bosses/CountDraynor.plugin').register(api);
+    const attrs = new Map();
+    const player = { setAttribute: (key, value) => attrs.set(key, value) };
+    for (const [id, expected, name] of [
+        [core.ObjectIdentifiers.STAIRS_11, [3077, 9772, 0], 'ladders:climbDown'],
+        [core.ObjectIdentifiers.STAIRS_12, [3116, 3356, 0], 'ladders:climbUp'],
+    ]) {
+        const request = { player, objectId: id, handled: false };
+        listeners.get('ladders:climb')(request);
+        assert.equal(request.handled, true);
+        const [event, at] = climbs.at(-1);
+        assert.equal(event, name);
+        assert.deepEqual([at.getX(), at.getY(), at.getZ()], expected);
+    }
+    assert.equal(attrs.get('count_draynor:pending_instance'), true);
+    const request = { player, objectId: core.ObjectIdentifiers.LADDER_6, handled: false };
+    listeners.get('ladders:climb')(request);
+    assert.equal(request.handled, false);
+    assert.equal(climbs.length, 2);
+});

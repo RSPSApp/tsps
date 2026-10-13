@@ -146,6 +146,17 @@ export class InputManager {
     enablePointerLock: boolean = false;
     private readonly keyHandlers = new Set<InputKeyHandler>();
     private readonly mouseHandlers = new Set<InputMouseHandler>();
+    private readonly inputFilters = new Set<(type: string, event: MouseEvent | KeyboardEvent) => boolean>();
+
+    addInputFilter(filter: (type: string, event: MouseEvent | KeyboardEvent) => boolean): () => void {
+        this.inputFilters.add(filter);
+        return () => { this.inputFilters.delete(filter); };
+    }
+
+    private filterInput(type: string, event: MouseEvent | KeyboardEvent): boolean {
+        for (const filter of this.inputFilters) if (filter(type, event)) return true;
+        return false;
+    }
     private interactionPointerOverride?: { x: number; y: number; widgets: boolean };
     private contextMenuAnchorOverride?: { x: number; y: number };
 
@@ -691,6 +702,7 @@ export class InputManager {
      * Mouse button pressed - OSRS GameApplet.mousePressed
      */
     private onMouseDown = (event: MouseEvent) => {
+        if (this.filterInput("mousePressed", event)) return;
         if (!this.element) return;
         if (this.shouldSuppressSyntheticMouse()) return;
 
@@ -743,6 +755,7 @@ export class InputManager {
      * Mouse released - OSRS GameApplet.mouseReleased
      */
     private onMouseUp = (event: MouseEvent) => {
+        if (this.filterInput("mouseReleased", event)) return;
         if (!this.element) return;
         if (this.shouldSuppressSyntheticMouse()) return;
 
@@ -764,6 +777,7 @@ export class InputManager {
      * Mouse moved - OSRS GameApplet.mouseMoved
      */
     private onMouseMove = (event: MouseEvent) => {
+        if (this.filterInput("mouseMoved", event)) return;
         if (!this.element) return;
         if (this.shouldSuppressSyntheticMouse()) return;
 
@@ -867,6 +881,7 @@ export class InputManager {
     };
 
     private onWheel = (event: WheelEvent) => {
+        if (this.filterInput("mouseWheelMoved", event)) { event.preventDefault(); return; }
         event.preventDefault();
         // mouse wheel input resets idle timer (prevents AFK logout while scrolling).
         this.idleTime = 0;
@@ -1019,6 +1034,7 @@ export class InputManager {
     // === Keyboard handlers - OSRS GameApplet.keyPressed/keyReleased ===
 
     onKeyDown = (event: KeyboardEvent, prioritizeChat = false) => {
+        if (this.filterInput("keyPressed", event)) return;
         event.preventDefault();
         this.idleTime = 0;
         this.lastInputTimeMs = this.nowMs();
@@ -1086,12 +1102,7 @@ export class InputManager {
     };
 
     private onKeyUp = (event: KeyboardEvent) => {
-        event.preventDefault();
-        this.idleTime = 0;
-        this.lastInputTimeMs = this.nowMs();
-
-        for (const handler of this.keyHandlers) if (handler.onKeyUp?.(event)) return;
-
+        // Consuming a release must not leave native camera, modifier or CS2 keys held.
         const keyCode = event.keyCode;
 
         // Clear shift state
@@ -1112,6 +1123,13 @@ export class InputManager {
         }
 
         this.keys.delete(event.code);
+
+        if (this.filterInput("keyReleased", event)) return;
+        event.preventDefault();
+        this.idleTime = 0;
+        this.lastInputTimeMs = this.nowMs();
+
+        for (const handler of this.keyHandlers) if (handler.onKeyUp?.(event)) return;
     };
 
     private onFocusOut = () => {

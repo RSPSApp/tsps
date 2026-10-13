@@ -1,3 +1,5 @@
+import { subscribePluginMessages } from "../../network/serverConnection/domain/pluginMessages";
+import { PluginMessage } from "@runelite/api/events/PluginMessage";
 import { GameStateChanged } from "@runelite/api/events";
 import { ClientTick } from "@runelite/api/events/ClientTick";
 import { CommandExecuted } from "@runelite/api/events/CommandExecuted";
@@ -68,6 +70,8 @@ export class RuneLite {
         this.client.stateMachine.subscribe((transition) => {
             this.eventBus.post(new GameStateChanged(toRuneLiteGameState(transition.to)));
         });
+
+        subscribePluginMessages(({ channel, data }) => this.eventBus.post(new PluginMessage(channel, data)));
 
         // state.tickListeners fire after the tick's packets are applied.
         subscribeTick(() => this.eventBus.post(new GameTick()));

@@ -186,6 +186,16 @@ test('demonbanes: +20% accuracy, +40% and +25% damage with the Mark, doubled wit
     assert.equal(CombatSpells.UNDEAD_GRASP.demonbaneAccuracyMultiplier(plain), 1, 'not a demonbane spell');
 });
 
+test('demonbanes against a more vulnerable demon: the bonus scales with it (Wiki: void flares 200%)', () => {
+    const { CombatSpells } = require('../dist/game/content/combat/magic/CombatSpells');
+    const spell = CombatSpells.DARK_DEMONBANE;
+    const flare = { getAttribute: (key) => (key === 'combat:demonbane-vulnerability' ? 2 : undefined) };
+    const purging = arceuusPlayer({ weapon: 29594 });
+    purging.setAttribute('arceuus:mark-until', Date.now() + 60_000);
+    purging.getCombat = () => ({ getTarget: () => flare });
+    assert.deepEqual([spell.demonbaneAccuracyMultiplier(purging), spell.demonbaneDamageMultiplier(purging)], [2.6, 2]);
+});
+
 test('Mark of Darkness: 3 ticks per base Magic level (x5 with a purging staff), a warning 10 ticks before, then it fades (Wiki)', () => {
     const { ArceuusSpells } = require('../dist/game/content/combat/magic/ArceuusSpells');
     const { TaskManager } = require('../dist/game/task/TaskManager');

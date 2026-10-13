@@ -12,5 +12,6 @@ module.exports = {
     require("./doom/Rewards.Doom")(api);
     require("./doom/Scoreboard.Doom")(api);
     require("./doom/Commands.Doom")(api);
+    require("./doom/CombatAchievements.Doom")(api);
   },
 };

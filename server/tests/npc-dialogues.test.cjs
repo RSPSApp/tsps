@@ -544,3 +544,13 @@ test('player-name and gendered placeholders resolve from the reader', () => {
   assert.equal(formatPlayerText('Kill [3/4/5] rats.', male), 'Kill [3/4/5] rats.');
   assert.equal(formatPlayerText('Sir Amik Varze hands you 2,500 coins.', female), 'Sir Amik Varze hands you 2,500 coins.');
 });
+
+
+test('Morgan warns low-combat players and still offers to start Vampyre Slayer', () => {
+  const steps = flatten(data['Vampyre Slayer'].variants['starting-off'], {
+    resolveCondition: () => true,
+  });
+  assert.ok(steps.some((step) => step.type === 'message' && step.id === 'KjL0_I'));
+  assert.ok(!steps.some((step) => step.type === 'unavailable'));
+  assert.ok(steps.some((step) => step.type === 'choice' && step.prompt === 'Start the Vampyre Slayer quest?'));
+});

@@ -120,3 +120,12 @@ test("one arrow drawn on a bow, two on the dark bow (the cache's launch graphics
   assert.equal(WeaponProfiles.get(wielding(11235, WeaponInterfaces.DARK_BOW)).doubleStartGraphic, true);
   assert.notEqual(WeaponProfiles.get(wielding(20997, WeaponInterfaces.SHORTBOW))?.doubleStartGraphic, true, "the twisted bow");
 });
+
+test("issue #461: scimitars stab on Lunge, and the Colossal blade has the giant weapon stance", () => {
+  // Seen in game: Lunge is human_sword_stab (386), as the swords' stab, not the slash.
+  assert.equal(styles.fightTypes.SCIMITAR_LUNGE.animation, 386);
+  assert.equal(styles.fightTypes.SCIMITAR_LUNGE.attackType, "STAB");
+  const blade = rows.find((row) => row.id === 27021);
+  // human_weapon_giant01_ready / _walk / _run, released with the blade (Giants' Foundry).
+  assert.deepEqual([blade.standAnim, blade.walkAnim, blade.runAnim], [9460, 9461, 9459]);
+});

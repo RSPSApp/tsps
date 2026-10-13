@@ -14,6 +14,7 @@ const Corners = require("./WintertodtCorners");
 const Effects = require("./WintertodtEffects");
 const Attacks = require("./WintertodtAttacks");
 const Warmth = require("./WintertodtWarmth");
+const CombatAchievements = require("./CombatAchievements.Wintertodt");
 
 const ATTR_KILLS = "wintertodt:kills";
 const ATTR_REWARDS = "wintertodt:rewards-owed";
@@ -175,6 +176,7 @@ function reward(player, points) {
   const kills = killsOf(player) + 1;
   player.setAttribute(ATTR_KILLS, kills);
   player.sendMessage(`Your subdued Wintertodt count is: <col=ff0000>${kills}</col>.`);
+  CombatAchievements.subdued(player, points, kills);
 
   const earned = rewardsFor(points);
   const owed = Math.min(Shared.MAX_REWARDS, rewardsOwed(player) + earned);

@@ -800,7 +800,9 @@ module.exports = {
     const resolveTranscript = (event) => {
       const { data, aliases, index, speakerIdByName } = load();
       const npcId = event.npcId;
-      const pages = (Array.isArray(index[String(npcId)]) ? index[String(npcId)] : [])
+      // A transform the index doesn't know (Dr Harlow 16277) falls back to the spawned parent (3480).
+      const entries = [npcId, event.npc?.getId?.()].map((id) => index[String(id)]).find(Array.isArray) ?? [];
+      const pages = entries
         .map((entry) => ({ page: String(entry.page ?? "").replace(/^Transcript:/, ""), variants: Array.isArray(entry.variants) ? entry.variants : [] }))
         .filter((entry) => Object.hasOwn(data, entry.page));
       const context = { player: event.player, npc: event.npc, npcId, definition: event.definition, pages, speakerIdByName };

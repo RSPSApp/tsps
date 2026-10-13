@@ -118,8 +118,16 @@ export function registerConfigOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.OC_FIND, (ctx) => {
         // oc_find(string, boolean)(count): starts an item search by name
-        ctx.intStackSize--; // the boolean (tradeable items only in the cache scripts' use)
+        const tradableOnly = ctx.popInt() === 1;
         const query = ctx.stringStack[--ctx.stringStackSize].toLowerCase();
+
+        ctx.itemSearchQuery = query;
+        ctx.itemSearchTradableOnly = tradableOnly;
+        // RuneLite plugins may supply the result array/count before vanilla search runs.
+        if (!isNpcSearch() && ctx.beforeItemSearch?.()) {
+            ctx.pushInt(ctx.itemSearchCount);
+            return;
+        }
 
         // Clear previous search results
         ctx.itemSearchResults = [];
@@ -140,7 +148,9 @@ export function registerConfigOps(handlers: HandlerMap): void {
             const maxItemId = 65535;
             for (let id = 0; id < maxItemId; id++) {
                 const obj = ctx.objTypeLoader.load(id);
-                if (obj && obj.name && obj.name !== "null") {
+                // Bank placeholders share their item's name but are never real items (a blank
+                // model): spawned and dropped, one is an invisible ground item.
+                if (obj && obj.name && obj.name !== "null" && obj.placeholderTemplate === -1) {
                     if (obj.name.toLowerCase().includes(query)) {
                         ctx.itemSearchResults.push(id);
                     }
@@ -148,11 +158,12 @@ export function registerConfigOps(handlers: HandlerMap): void {
             }
         }
 
-        ctx.pushInt(ctx.itemSearchResults.length);
+        ctx.itemSearchCount = ctx.itemSearchResults.length;
+        ctx.pushInt(ctx.itemSearchCount);
     });
 
     handlers.set(Opcodes.OC_FINDNEXT, (ctx) => {
-        if (ctx.itemSearchIndex < ctx.itemSearchResults.length) {
+        if (ctx.itemSearchIndex < ctx.itemSearchCount && ctx.itemSearchIndex < ctx.itemSearchResults.length) {
             ctx.pushInt(ctx.itemSearchResults[ctx.itemSearchIndex++]);
         } else {
             ctx.pushInt(-1); // no more results
@@ -161,6 +172,7 @@ export function registerConfigOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.OC_FINDRESET, (ctx) => {
         // Reset search state
+        ctx.itemSearchCount = 0;
         ctx.itemSearchResults = [];
         ctx.itemSearchIndex = 0;
         setNpcSearchResults([]);

@@ -254,3 +254,53 @@ test('a disconnect during login cannot build a half-logged-in player', async () 
   releaseSecond('hash');
   await second.idle();
 });
+
+test('changing floors in one map region refreshes ground items, including Draynor fish food', () => {
+  const { State } = require('../dist/game/entity/impl/grounditem/ItemOnGround');
+  const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+  const { MapRegionReplacementManager } = require('../dist/game/collision/MapRegionReplacementManager');
+  const oldItems = World.getItems;
+  const oldReplacements = MapRegionReplacementManager.sendVisibleReplacementsToPlayer;
+  const snapshots = [];
+  let location = new Location(3109, 3357, 0);
+  const fish = {
+    getPosition: () => new Location(3109, 3357, 1),
+    isPendingRemoval: () => false,
+    getPrivateArea: () => null,
+    getState: () => State.SEEN_BY_EVERYONE,
+    getOwner: () => undefined,
+    isStaticSpawn: () => true,
+    getItem: () => ({ getId: () => ItemIdentifiers.FISH_FOOD }),
+  };
+  World.getItems = () => [fish];
+  MapRegionReplacementManager.sendVisibleReplacementsToPlayer = () => {};
+  const channel = { isOpen: true };
+  const session = new PlayerSession(channel);
+  session.sendRebuildNormal = () => false; // Stop after the actual region/plane bookkeeping.
+  session.lastMusicRegion = ((3109 >> 6) << 8) | (3357 >> 6);
+  session.lastMusicMode = 1;
+  const player = {
+    getUsername: () => 'fish537',
+    getLocation: () => location,
+    getArea: () => null,
+    getPrivateArea: () => null,
+    getAudioSettings: () => ({ 18: 1 }),
+    getPacketSender: () => ({ sendGroundItems: (items) => snapshots.push(items) }),
+  };
+  session.setPlayer(player);
+  try {
+    session.flush();
+    assert.deepEqual(snapshots, [[]]);
+    location = new Location(3109, 3357, 1);
+    session.flush();
+    assert.deepEqual(snapshots, [[], [fish]], 'upper-floor spawns are sent without changing map square');
+    session.flush();
+    assert.equal(snapshots.length, 2, 'standing still does not resend');
+    location = new Location(3109, 3357, 0);
+    session.flush();
+    assert.deepEqual(snapshots.at(-1), [], 'upper-floor items clear on returning downstairs');
+  } finally {
+    World.getItems = oldItems;
+    MapRegionReplacementManager.sendVisibleReplacementsToPlayer = oldReplacements;
+  }
+});

@@ -2,6 +2,7 @@ import { App as PicoApp, UniformBuffer } from "picogl";
 
 import type { GroundItemOverlayEntry } from "../../game/data/ground/GroundItemStore";
 import type { TileHighlightRenderEntry } from "../../game/highlights/TileHighlightManager";
+import type { IndexedSprite } from "../../rs/sprite/IndexedSprite";
 
 export enum RenderPhase {
     ToSceneFramebuffer = "toSceneFramebuffer",
@@ -114,6 +115,7 @@ export interface OverheadPrayerEntry {
     headIconHint?: boolean;
     /** Cache-defined overhead sprites for NPCs, which may contain multiple icons. */
     npcHeadIcons?: { archiveId: number; spriteId: number }[];
+    customHeadIcons?: readonly IndexedSprite[];
 }
 
 export interface OverlayUpdateArgs {

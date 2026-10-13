@@ -11,7 +11,6 @@ function curePoisonAndVenom(player) {
   player.setPoisonDamage(0);
   // Venom remains sticky until explicitly cured.
   if (typeof player.setVenomed === "function") player.setVenomed(false);
-  player.getPacketSender().sendPoisonType(0);
 }
 
 /** Raises a skill to base + flat + percent of base, unless it is already there. */

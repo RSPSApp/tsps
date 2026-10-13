@@ -1,6 +1,7 @@
 /**
  * WGSL port of the WebGL actor shaders for the WebGPU backend:
- *   client/render/shaders/npc.vert.glsl        -> vs_npc, vs_gfx (spot animations and projectiles)
+ *   client/render/shaders/npc.vert.glsl        -> vs_npc, vs_gfx (spot animations)
+ *   client/render/shaders/projectile.vert.glsl -> vs_projectile
  *   client/render/shaders/player.vert.glsl     -> vs_player
  *   client/render/shaders/main.frag.glsl       -> fs_actor (water path omitted; actors never
  *                                                 take the floor-water branch)
@@ -331,6 +332,27 @@ fn decodeActorInfo(index: i32) -> ActorInfo {
     return info;
 }
 
+struct ProjectileInfo {
+    tilePos: vec2<f32>,
+    plane: u32,
+    yaw: u32,
+    pitch: u32,
+    roll: u32,
+};
+
+fn decodeProjectileInfo(index: i32) -> ProjectileInfo {
+    let data = textureLoad(u_actorData, getDataTexCoordFromIndex(index * 2), 0);
+    let pitchHi = (data.b >> 13u) & 0x7u;
+    let pitchLo = (data.a >> 9u) & 0xfu;
+    return ProjectileInfo(
+        vec2<f32>(decodeSignedU16(data.r), decodeSignedU16(data.g)) + actorU.u_subOffset,
+        data.b & 0x3u,
+        (data.b >> 2u) & 0x7ffu,
+        ((pitchHi << 4u) | pitchLo) << 4u,
+        ((data.a >> 13u) & 0x7u) << 8u,
+    );
+}
+
 // GLSL row-vector matrix multiply (v * M) reproduced with WGSL matrices, which are
 // also column-major: result[j] = dot(v, M[j]).
 fn glslRowMul(v: vec4<f32>, m: mat4x4<f32>) -> vec4<f32> {
@@ -407,7 +429,7 @@ fn actorFogAmount(localPos: vec4<f32>) -> f32 {
 }
 `;
 
-type ActorKind = "npc" | "gfx" | "player";
+type ActorKind = "npc" | "gfx" | "player" | "projectile";
 
 /** Kinds whose geometry is the 16-byte actor stride (4th word: HD normal + base HSL). */
 const WIDE_KINDS: ReadonlySet<ActorKind> = new Set(["npc", "player"]);
@@ -419,6 +441,20 @@ const WIDE_KINDS: ReadonlySet<ActorKind> = new Set(["npc", "player"]);
  */
 function placement(kind: ActorKind): string {
     const player = kind === "player";
+    const projectile = kind === "projectile";
+    const info = projectile
+        ? `
+    let info = decodeProjectileInfo(i32(actorU.u_dataOffset + actorU.u_drawId));
+    let actorRotation = info.yaw;
+    let actorHslOverride = vec4<f32>(-1.0, -1.0, -1.0, 0.0);`
+        : `
+    let info = decodeActorInfo(i32(actorU.u_dataOffset + actorU.u_drawId));
+    let actorRotation = info.rotation;
+    let actorHslOverride = info.hslOverride;`;
+    const localVertex = projectile
+        ? `glslRowMul(glslRowMul(vec4<f32>(vertex.pos, 1.0),
+            rotationZ(f32(info.roll) * RS_TO_RADIANS)), rotationX(f32(info.pitch) * RS_TO_RADIANS))`
+        : "vec4<f32>(vertex.pos, 1.0)";
     // player.vert.glsl: GPU-posed vertices are moved by their label's pose matrix, whose
     // rotation also turns their rest-pose normals (poseLinear).
     const pose = player
@@ -451,12 +487,10 @@ function placement(kind: ActorKind): string {
     let clip = scene.u_projectionMatrix * viewPos;
     let clipPosition = vec4<f32>(clip.x, clip.y, (clip.z + clip.w) * 0.5, clip.w);`;
     return `
-    let info = decodeActorInfo(i32(actorU.u_dataOffset + actorU.u_drawId));
-    let actorRotation = info.rotation;
-    let actorHslOverride = info.hslOverride;${pose}
+${info}${pose}
 
     var localPos = glslRowMul(
-        vec4<f32>(vertex.pos, 1.0),
+        ${localVertex},
         rotationY(f32(actorRotation) * RS_TO_RADIANS),
     ) + vec4<f32>(info.tilePos.x, 0.0, info.tilePos.y, 0.0);
 
@@ -538,8 +572,8 @@ fn sampleModelTexture(textureId: u32, texCoord: vec2<f32>) -> vec4<f32> {
 
 @fragment
 fn fs_actor(input: ActorVertexOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
-    var textureColor = sampleModelTexture(input.v_texId, input.v_texCoord);
-${slots?.textureSample ?? ""}
+    var textureColor = vec4<f32>(1.0);
+${slots?.textureSample ?? "    textureColor = sampleModelTexture(input.v_texId, input.v_texCoord);"}
     var alpha = textureColor.a * input.v_color.a;
 ${discardBlock}
     let material = getMaterial(input.v_texId);
@@ -574,7 +608,7 @@ ${slots?.shade ?? ""}
 `;
 }
 
-const ACTOR_KINDS: ActorKind[] = ["npc", "gfx", "player"];
+const ACTOR_KINDS: ActorKind[] = ["npc", "gfx", "player", "projectile"];
 
 export const ACTOR_FRAGMENT_ENTRY = "fs_actor";
 export const ACTOR_DEPTH_FRAGMENT_ENTRY = "fs_depth";

@@ -4,6 +4,7 @@
  * Replaces JSON.parse for server-to-client messages.
  * Returns the same message format as the JSON protocol for compatibility.
  */
+import { parsePluginMessage } from "../../common/network/PluginMessage";
 import {
     INSTANCE_CHUNK_COUNT,
     PLANE_COUNT,
@@ -990,6 +991,8 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 const argType = reader.readByte();
                 if (argType === 0) {
                     args.push(reader.readString());
+                } else if (argType === 2) {
+                    args.push(reader.readLong());
                 } else {
                     args.push(reader.readInt());
                 }
@@ -1986,6 +1989,9 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
         // ========================================
         // DEBUG
         // ========================================
+
+        case ServerPacketId.PLUGIN_MESSAGE:
+            return { type: "plugin_message", payload: parsePluginMessage(reader.readBytes(reader.remaining)) };
 
         case ServerPacketId.DEBUG_PACKET: {
             const jsonStr = reader.readString();

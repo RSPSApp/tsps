@@ -22,6 +22,7 @@ function cloneSlot(slot: InventorySlot): InventorySlot {
 }
 
 export class Inventory {
+    static readonly changeListeners = new Set<(inventory: Inventory, event: InventoryEvent) => void>();
     static readonly SLOT_COUNT = 28;
 
     private readonly slots: InventorySlot[];
@@ -169,6 +170,7 @@ export class Inventory {
     }
 
     private emit(event: InventoryEvent): void {
+        if (event.type !== "select") for (const listener of Inventory.changeListeners) listener(this, event);
         for (const listener of this.listeners) {
             try {
                 if (event.type === "snapshot") {

@@ -3,6 +3,7 @@ import { CombatSpells } from "../../../game/content/combat/magic/CombatSpells";
 import { NpcInteractionManager } from "../../../game/entity/impl/npc/NpcInteractionManager";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { Combat } from "../../../game/content/combat/Combat";
+import { NpcDefinition } from "../../../game/definition/NpcDefinition";
 
 export class NPCOptionPacketListener {
   public executeOption(player: any, index: number, clickType: number): void {
@@ -23,7 +24,7 @@ export class NPCOptionPacketListener {
 
     const definition = npc.getCurrentDefinition(player);
     const option = definition?.getActions()?.[clickType - 1]?.toLowerCase();
-    if (option === "attack") {
+    if (NpcDefinition.isCombatOption(option)) {
       if (!definition?.isAttackable() || npc.getHitpoints?.() <= 0) {
         trace("DROPPED: not attackable / hp<=0", npc);
         return;
@@ -46,7 +47,7 @@ export class NPCOptionPacketListener {
 
       const definition = npc.getCurrentDefinition(player);
       const option = definition?.getActions()?.[clickType - 1]?.toLowerCase();
-      if (option === "attack") return;
+      if (NpcDefinition.isCombatOption(option)) return;
 
       NPCOptionPacketListener.operate(player, npc, index, clickType, definition, option);
 

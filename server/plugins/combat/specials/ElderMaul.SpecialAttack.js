@@ -42,7 +42,7 @@ module.exports = function registerElderMaulSpecialAttack(api) {
 
   api.registerCombatSpecial({
     id: "elder_maul",
-    itemIds: [ItemIdentifiers.ELDER_MAUL_3, ItemIdentifiers.ELDER_MAUL, ItemIdentifiers.ELDER_MAUL_OR_],
+    itemIds: [ItemIdentifiers.ELDER_MAUL, ItemIdentifiers.ELDER_MAUL_OR_],
     drainAmount: DRAIN,
     strengthMultiplier: 1,
     accuracyMultiplier: 1,

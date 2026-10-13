@@ -27,11 +27,13 @@ require("../plugins/quests/QuestRuntime").getRegisteredQuests = () =>
 const { ObjectIdentifiers } = require("../dist/util/ObjectIdentifiers");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const Jewellery = require("../plugins/items/Jewellery.plugin");
+const customEvents = [];
 Jewellery.register({
   getBonusManager: () => ({ update() {} }),
   core: { ObjectIdentifiers, ItemIdentifiers },
   onItemAction: (handler) => { itemAction = handler; },
   onItemOnObject: (handler) => { itemOnObject = handler; },
+  emitCustomEvent: (name, payload) => customEvents.push([name, payload]),
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
     const options = [];
     for (let i = 0; i < pairs.length; i += 2) options.push({ text: pairs[i], pick: pairs[i + 1] });
@@ -264,6 +266,7 @@ test("the slayer ring's Rub submenu is its actions: Check, Teleport, then Master
 
   inventoryClick(player, ring, "Rub", { subOpId: 1 });
   assert.equal(player.messages.at(-1), "Your slayer ring has 8 charges left.");
+  assert.equal(customEvents.at(-1)[0], "slayer:check", "the Slayer plugin adds the task");
   assert.equal(teleports.length, 0, "Check doesn't teleport");
 
   inventoryClick(player, ring, "Rub", { subOpId: 2 });

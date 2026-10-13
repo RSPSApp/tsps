@@ -89,5 +89,8 @@ docs/node_modules/
 # WebGPU smoke-test screenshots
 client/tests/artifacts/
 
+# Agent vision captures (per-run exports: logs/screenshots/videos)
+/exports/
+
 # Per-deployment world overrides (WorldDefinition.readWorldConfig)
 server/data/definitions/world.local.json

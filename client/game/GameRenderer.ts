@@ -14,6 +14,7 @@ import { IProjectileManager } from "./interfaces/IProjectileManager";
 import type { PlayerSpotAnimationEvent } from "./sync/PlayerSyncTypes";
 import type { WidgetsOverlay } from "../ui/devoverlay/WidgetsOverlay";
 import { gammaFromScreenBrightness, loadScreenBrightness } from "../ui/ScreenBrightness";
+import { multiLocVarps } from "../render/loc/MultiLocVarps";
 
 /** Optional details of a LOC change (moves, rotations, shape changes). */
 export type LocChangeOptions = {
@@ -80,8 +81,10 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
     }
 
     protected override getEffectiveFpsLimit(): number {
-        let limit = super.getEffectiveFpsLimit();
-        let target = 10;
+        // The GPU plugin's cap replaces the client's own, mobile battery caps included.
+        const gpu = this.osrsClient.gpuPlugin?.settings();
+        let limit = gpu ? gpu.fpsLimit : super.getEffectiveFpsLimit();
+        let target = 15;
         // Never honor CS2 mobile battery caps (~20) on desktop.
         if (!isMobileMode && target > 0 && target < 60) {
             target = 10;
@@ -222,6 +225,7 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
             this.osrsClient.handleUiHover();
         }
         if (!this.uiHidden) {
+            this.osrsClient.runMouseFollowingTimers();
             // Update widget layout (CS2 positioning/sizing)
             this.osrsClient.updateWidgets();
         }
@@ -231,6 +235,7 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
     }
 
     handleKeyInput(deltaTime: number) {
+        if (this.osrsClient.editorCameraInput?.(deltaTime)) return;
         const deltaTimeSec = deltaTime / 1000;
 
         const inputManager = this.osrsClient.inputManager;
@@ -503,6 +508,36 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
     refreshGamemodeWorldLocs(): void {}
 
     onRegionReplacement(_payload: RegionReplacementEvent): void {}
+
+    private changedVarps = new Set<number>();
+
+    /**
+     * A varp (or a varbit on it) changed. A multiloc's look is baked into its square's build, so
+     * the loaded squares holding a multiloc that reads this varp are rebuilt; changes made together
+     * (one server tick's varbits) rebuild each square once.
+     */
+    onVarpChange(varpId: number): void {
+        if (this.changedVarps.size === 0) queueMicrotask(() => this.reloadMultiLocSquares());
+        this.changedVarps.add(varpId | 0);
+    }
+
+    private reloadMultiLocSquares(): void {
+        const changed = this.changedVarps;
+        this.changedVarps = new Set();
+        const client = this.osrsClient;
+        const varbitLoader = client.loaderFactory?.getVarBitTypeLoader?.();
+        // Builds read the workers' copy of the vars, squares loaded later too.
+        client.updateVars();
+        if (!client.locTypeLoader || !varbitLoader) return;
+        for (const map of this.mapManager.mapSquares.values()) {
+            const varps = multiLocVarps((map as { tileLocIdsByLevel?: Int32Array[] }).tileLocIdsByLevel, client.locTypeLoader, varbitLoader);
+            if (![...changed].some((varp) => varps.has(varp))) continue;
+            this.reloadMultiLocSquare(map.mapX, map.mapY);
+        }
+    }
+
+    /** Rebuilds one loaded square's locs (backends override). */
+    protected reloadMultiLocSquare(_mapX: number, _mapY: number): void {}
 
     // Instanced areas (REBUILD_REGION): the scene is one built map square while active.
     /** True while an instance scene replaces normal map streaming. */

@@ -31,7 +31,7 @@ test('an unknown gameframe is rejected', () => {
   assert.throws(() => parseWorldDefinition(world({ gameframe: 'classic-resizable' })), WorldDefinitionValidationError);
 });
 
-test('voice is disabled in the default world', () => {
+test('voice plugin is disabled in the default world', () => {
   assert.ok(require('../data/definitions/world.json').disabledPlugins.includes('VoiceChat'));
 });
 

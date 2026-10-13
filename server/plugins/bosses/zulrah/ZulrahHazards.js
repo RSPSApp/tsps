@@ -16,6 +16,7 @@
  */
 
 const Shared = require("./ZulrahShared");
+const CombatAchievements = require("./CombatAchievements.Zulrah");
 
 const CLOUD = { ticks: 30, damage: [1, 4] };
 const SNAKELING = {
@@ -129,6 +130,7 @@ class Hazards {
       if (Math.abs(here.getX() - cloud.centre.x) > 1 || Math.abs(here.getY() - cloud.centre.y) > 1) continue;
       const damage = Shared.randomInt(this.fight.random, ...CLOUD.damage);
       player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.GREEN)]);
+      CombatAchievements.avoidableDamage(this.fight, damage);
     }
   }
 

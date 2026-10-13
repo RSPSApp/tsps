@@ -39,6 +39,8 @@ export type NpcUpdateBlock = {
     exactMove?: ForcedMovementUpdate;
     /** A world tile to turn to once (OSRS npc face coord). */
     faceTile?: { x: number; y: number };
+    /** Body-model slot overrides (OSRS npc model customisation); an empty list resets them. */
+    modelCustomisation?: Array<{ slot: number; modelId: number }>;
     say?: string;
     colorOverride?: {
         startCycle: number;
@@ -388,6 +390,18 @@ export class NpcUpdateDecoder {
                 const x = stream.readUnsignedShortBE() | 0;
                 const y = stream.readUnsignedShortBE() | 0;
                 block.faceTile = { x, y };
+            }
+
+            // MODEL_CUSTOMISATION (0x1000): body-model slot replacements (empty = reset).
+            if ((mask & 0x1000) !== 0) {
+                const count = stream.readUnsignedByte() | 0;
+                const entries: Array<{ slot: number; modelId: number }> = [];
+                for (let i = 0; i < count; i++) {
+                    const slot = stream.readUnsignedByte() | 0;
+                    const modelId = stream.readUnsignedShortLE() | 0;
+                    entries.push({ slot, modelId });
+                }
+                block.modelCustomisation = entries;
             }
 
             if (Object.keys(block).length > 0) {

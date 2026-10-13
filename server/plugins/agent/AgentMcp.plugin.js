@@ -27,7 +27,8 @@ function mcpEnabled() {
  * keeps its real rank.
  */
 function grantDeveloperRights({ player }) {
-  if (!mcpEnabled()) return;
+  // Bots aren't driven through MCP; a shutdown save would keep the rank in their saves.
+  if (!mcpEnabled() || player?.isPlayerBot?.() === true) return;
   if (!savedRights.has(player)) savedRights.set(player, player.getRights());
   player.setRights(pluginApi.core.PlayerRights.DEVELOPER);
   // StaffCrowns may have read the rights before this hook ran.
@@ -52,6 +53,7 @@ function buildMcpServer(core) {
   require("./mcp/Testing.AgentMcp")(ctx);
   require("./mcp/Load.AgentMcp")(ctx);
   require("./mcp/Perf.AgentMcp")(ctx);
+  require("./mcp/Vision.AgentMcp")(ctx);
   return server;
 }
 

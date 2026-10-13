@@ -4,7 +4,9 @@
  * the transcripts' "brand new" or "played before" lines later on. The island ends as captured:
  * the Magic Instructor sends you off with the Home Teleport, and arriving in Lumbridge clears
  * your items, gives the starter kit and finishes the tutorial. The Gielinor Guide also offers to
- * skip the island (ours; `TutorialIsland:allowSkip` in world.json turns it off).
+ * skip the island (ours; `TutorialIsland:allowSkip` in world.json turns it off). Skipping misses
+ * the Ironman tutor, so it asks whether to become an Ironman first and, if so, opens his setup
+ * interface with every mode allowed, as on the island.
  */
 const T = require("./Common.TutorialIsland");
 const Interface = require("./Interface.TutorialIsland");
@@ -123,6 +125,34 @@ function onProcess({ player }) {
 // The first Talk-to with the Gielinor Guide offers to skip the island.
 const passedSkipOffer = new WeakSet();
 
+/** Whether the Ironman plugin is there to answer (a world may disable it). */
+function ironmanAvailable(player) {
+  const query = { player };
+  pluginApi.emitCustomEvent("ironman:mode", query);
+  return query.mode !== undefined;
+}
+
+/** "Yes, skip": the Ironman tutor is on the skipped part, so ask his question here (ours). */
+function skipTutorial(player) {
+  if (!ironmanAvailable(player)) {
+    complete(player);
+    return;
+  }
+  pluginApi.sendMultiChatboxPrompt(
+    player,
+    "Would you like to become an Ironman?",
+    "Yes, show me the Ironman modes.", () => finishSkip(player, true),
+    "No, thanks.", () => finishSkip(player, false),
+  );
+}
+
+/** Ends the tutorial; an Ironman choice then opens the setup, any mode allowed as on the island. */
+function finishSkip(player, ironman) {
+  complete(player);
+  if (!ironman) return;
+  T.later(1, () => pluginApi.emitCustomEvent("ironman:open-setup", { player, upgrades: true, handled: false }));
+}
+
 function talkToGielinorGuide(event) {
   const player = event.player;
   if (passedSkipOffer.delete(player)) return false;
@@ -131,7 +161,7 @@ function talkToGielinorGuide(event) {
   pluginApi.sendMultiChatboxPrompt(
     player,
     "Skip tutorial island?",
-    "Yes, skip", () => complete(player),
+    "Yes, skip", () => skipTutorial(player),
     "No, continue", () => {
       passedSkipOffer.add(player);
       core.PluginManager.emitNpcInteraction({ ...event, handled: false });
@@ -174,4 +204,4 @@ module.exports = function attach(api) {
   api.onPlayerProcess(onProcess);
 };
 
-Object.assign(module.exports, { complete });
+Object.assign(module.exports, { complete, skipTutorial, finishSkip });

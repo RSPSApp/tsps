@@ -501,16 +501,19 @@ function createBotRegistry(options) {
       return false;
     }
 
+    const persistent = plan.persistent === true;
     const bot = createBotPlayer(username, botSpawn, {
       api: botApi,
-      loadPersistence: false,
+      loadPersistence: persistent,
       saveRandomizedAppearance: false,
     });
     if (!bot) {
       return false;
     }
     bot.setPlayerBot?.(true);
-    bot.setAttribute?.(ATTR_SKIP_PERSISTENCE, true);
+    if (!persistent) {
+      bot.setAttribute?.(ATTR_SKIP_PERSISTENCE, true);
+    }
     setPersistentRespawnResolver(bot, () => {
       if (plan.spawnLocation) return botSpawn.clone();
       if (assignedHotspotId != null) {
@@ -1158,14 +1161,23 @@ function createBotRegistry(options) {
     hasControllerForPlayer,
     resolveControlledPlayer,
     spawnConfiguredBots,
+    /**
+     * `username` picks the bot's name (null when it is taken); `persistent` loads and keeps
+     * its save, so it carries its levels and items from one session to the next.
+     */
     spawnPvpBot(location, options = {}) {
-      let username;
-      do { username = `DevBot${++developerBotId}`; }
-      while (entriesByUsername.has(username) || worldGetPlayerByName(username));
+      let username = options.username ?? null;
+      if (username) {
+        if (entriesByUsername.has(username) || worldGetPlayerByName(username)) return null;
+      } else {
+        do { username = `DevBot${++developerBotId}`; }
+        while (entriesByUsername.has(username) || worldGetPlayerByName(username));
+      }
       return spawnWildernessBot({
         username,
         spawnLocation: location,
         mode: options.mode ?? null,
+        persistent: options.persistent === true,
       });
     },
     scheduleInitialSpawn,

@@ -1,6 +1,6 @@
 /**
- * 117 HD's WebGPU SSAO: a half-res HBAO/GTAO-lite pass over the world depth, followed by a 4x4
- * box blur.
+ * 117 HD's WebGPU SSAO: a half-res HBAO/GTAO-lite pass over the world depth, followed by a depth-aware
+ * blur and upsample (or the original half-resolution box blur).
  *
  * encode() reconstructs view positions from the scene's depth32float attachment with the inverse
  * projection, samples 12 golden-angle directions per pixel and returns the blurred r8unorm view
@@ -32,9 +32,10 @@ export class HdSsaoPass {
     private blurTexture?: GPUTexture;
     private aoView?: GPUTextureView;
     private blurView?: GPUTextureView;
-    private aoBindGroup?: GPUBindGroup;
     private depthBindGroup?: GPUBindGroup;
     private depthView?: GPUTextureView;
+    private blurBindGroup?: GPUBindGroup;
+    private depthAware = true;
     private width = 0;
     private height = 0;
     private sceneWidth = 0;
@@ -68,6 +69,7 @@ export class HdSsaoPass {
         this.textureLayout = device.createBindGroupLayout({
             label: "hd-ssao texture layout",
             entries: [
+                { binding: 0, visibility: FRAGMENT_STAGE, texture: { sampleType: "depth", viewDimension: "2d" } },
                 {
                     binding: 1,
                     visibility: FRAGMENT_STAGE,
@@ -113,8 +115,8 @@ export class HdSsaoPass {
         );
     }
 
-    /** (Re)creates half-res targets when the scene size changes. */
-    ensure(width: number, height: number): void {
+    /** Half-res AO; the depth-aware filter also upsamples to full resolution. */
+    ensure(width: number, height: number, depthAware = true): void {
         if (this.disposed || width < 1 || height < 1) return;
         const targetWidth = Math.max(1, Math.floor(width / 2));
         const targetHeight = Math.max(1, Math.floor(height / 2));
@@ -123,7 +125,8 @@ export class HdSsaoPass {
             this.width === targetWidth &&
             this.height === targetHeight &&
             this.sceneWidth === width &&
-            this.sceneHeight === height
+            this.sceneHeight === height &&
+            this.depthAware === depthAware
         ) {
             return;
         }
@@ -132,6 +135,7 @@ export class HdSsaoPass {
         this.height = targetHeight;
         this.sceneWidth = width;
         this.sceneHeight = height;
+        this.depthAware = depthAware;
 
         const usage = GPU_TEXTURE_USAGE.RENDER_ATTACHMENT | GPU_TEXTURE_USAGE.TEXTURE_BINDING;
         this.aoTexture = this.device.createTexture({
@@ -142,17 +146,12 @@ export class HdSsaoPass {
         });
         this.blurTexture = this.device.createTexture({
             label: "hd-ssao blur",
-            size: [targetWidth, targetHeight],
+            size: depthAware ? [width, height] : [targetWidth, targetHeight],
             format: AO_FORMAT,
             usage,
         });
         this.aoView = this.aoTexture.createView();
         this.blurView = this.blurTexture.createView();
-        this.aoBindGroup = this.device.createBindGroup({
-            label: "hd-ssao texture bind group",
-            layout: this.textureLayout,
-            entries: [{ binding: 1, resource: this.aoView }],
-        });
     }
 
     /** Records AO + blur passes and returns the blurred AO view (r8unorm), or undefined if not ready. */
@@ -161,8 +160,8 @@ export class HdSsaoPass {
         depthView: GPUTextureView,
         inverseProjection: Float32Array,
     ): GPUTextureView | undefined {
-        const { aoView, blurView, aoBindGroup } = this;
-        if (this.disposed || !aoView || !blurView || !aoBindGroup) return undefined;
+        const { aoView, blurView } = this;
+        if (this.disposed || !aoView || !blurView) return undefined;
 
         if (this.depthView !== depthView || !this.depthBindGroup) {
             this.depthBindGroup = this.device.createBindGroup({
@@ -170,12 +169,17 @@ export class HdSsaoPass {
                 layout: this.depthLayout,
                 entries: [{ binding: 0, resource: depthView }],
             });
+            this.blurBindGroup = this.device.createBindGroup({
+                label: "hd-ssao blur sources",
+                layout: this.textureLayout,
+                entries: [{ binding: 0, resource: depthView }, { binding: 1, resource: aoView }],
+            });
             this.depthView = depthView;
         }
 
         this.writeUniforms(inverseProjection);
         this.recordPass(encoder, this.ssaoPipeline, this.depthBindGroup, aoView);
-        this.recordPass(encoder, this.blurPipeline, aoBindGroup, blurView);
+        this.recordPass(encoder, this.blurPipeline, this.blurBindGroup!, blurView);
         return blurView;
     }
 
@@ -199,7 +203,7 @@ export class HdSsaoPass {
         data[23] = 1 / this.height;
         // gl-matrix ortho/perspective [5] is the reciprocal of its inverse's [5].
         data[24] = inverseProjection[5] !== 0 ? 1 / inverseProjection[5] : 1;
-        data[25] = 0;
+        data[25] = this.depthAware ? 1 : 0;
         data[26] = 0;
         data[27] = 0;
         data[28] = this.sceneWidth;
@@ -240,7 +244,7 @@ export class HdSsaoPass {
         this.blurTexture = undefined;
         this.aoView = undefined;
         this.blurView = undefined;
-        this.aoBindGroup = undefined;
+        this.blurBindGroup = undefined;
         this.depthBindGroup = undefined;
         this.depthView = undefined;
         this.width = 0;

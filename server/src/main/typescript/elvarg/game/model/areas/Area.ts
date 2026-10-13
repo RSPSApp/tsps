@@ -78,6 +78,15 @@ export abstract class Area {
         return null;
     }
 
+    /**
+     * Whether an aggressive `npc` starts a fight with `player`: false never (wearing its god's
+     * item in the God Wars Dungeon), true always (even if not aggressive elsewhere, past its
+     * combat-level and tolerance checks).
+     */
+    npcAggression(player: Player, npc: NPC): boolean | null {
+        return null;
+    }
+
     /** Whether this area is a multi-combat zone. Areas outside the Wilderness opt in here. */
     public isMulti(): boolean {
         return false;

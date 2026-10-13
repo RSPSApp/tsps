@@ -1,3 +1,4 @@
+import type { ProjectileActorRef } from "../../common/projectiles/ProjectileLaunch";
 import { RAD_TO_RS_UNITS } from "../../rs/utils/rotation";
 
 export interface ProjectileConfig {
@@ -17,6 +18,9 @@ export interface ProjectileConfig {
     endHeight: number;
     slope: number;
     plane: number;
+    targetPlane?: number;
+    sourceActor?: ProjectileActorRef;
+    targetActor?: ProjectileActorRef;
     frameLengths?: number[];
     frameCount?: number;
     impactSpotId?: number;
@@ -26,6 +30,11 @@ export interface ProjectileConfig {
  * Projectile runtime modeled after OSRS projectile semantics.
  */
 export class Projectile {
+    static readonly destinationListeners = new Set<(projectile: Projectile) => void>();
+    readonly sourceActor?: ProjectileActorRef;
+    readonly targetActor?: ProjectileActorRef;
+    readonly targetPlane: number;
+
     readonly projectileId: number;
     readonly debugId: number;
     readonly plane: number;
@@ -39,8 +48,8 @@ export class Projectile {
     private targetGroundZ: number;
 
     readonly startCycle: number;
-    readonly endCycle: number;
-    readonly endCycleExact: number;
+    endCycle: number;
+    endCycleExact: number;
 
     readonly slope: number;
     readonly impactSpotId?: number;
@@ -80,6 +89,9 @@ export class Projectile {
     private velocitiesInitialized: boolean = false;
 
     constructor(config: ProjectileConfig) {
+        this.sourceActor = config.sourceActor;
+        this.targetActor = config.targetActor;
+        this.targetPlane = config.targetPlane ?? config.plane;
         this.projectileId = config.projectileId;
         this.debugId = config.debugId ?? 0;
         this.plane = config.plane;
@@ -113,7 +125,13 @@ export class Projectile {
      * Calculate horizontal speeds and vertical kinematics to land at endCycle.
      * Mirrors OSRS Projectile.setDestination(): solve once per integer cycle.
      */
+    setEndCycle(cycle: number): void {
+        this.endCycle = cycle | 0;
+        this.endCycleExact = this.endCycle + 1;
+        this.needsVelocityRefresh = true;
+    }
     trackTarget(currentCycle: number): void {
+        for (const listener of Projectile.destinationListeners) listener(this);
         const nowFloat = currentCycle;
         const now = Math.floor(nowFloat);
 

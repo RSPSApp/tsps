@@ -20,7 +20,7 @@
   },
   "diary": {
     "pipe": { "object": 16511, "minX": 3149, "maxX": 3155, "y": 9906, "diary": "varrock", "task": "squeeze-through-an-obstacle-pipe-in-edgeville-du" },
-    "vannaka": { "master": 403, "diary": "varrock", "task": "get-a-slayer-task-from-vannaka" },
+    "vannaka": { "master": 3, "diary": "varrock", "task": "get-a-slayer-task-from-vannaka" },
     "earthWarrior": { "name": "Earth warrior", "area": { "minX": 3100, "maxX": 3140, "minY": 9970, "maxY": 10010 }, "diary": "wilderness", "task": "kill-an-earth-warrior-in-the-wilderness-beneath" }
   }
 }

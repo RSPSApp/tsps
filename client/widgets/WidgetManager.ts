@@ -143,6 +143,9 @@ export class WidgetManager {
     /** PERF: Reverse lookup - maps interface group ID -> container UID for O(1) visibility checks */
     private groupToContainerUid: Map<number, number> = new Map();
 
+    readonly groupLoadedListeners = new Set<(groupId: number) => void>();
+    readonly interfaceClosedListeners = new Set<(groupId: number, modalMode: number, unload: boolean) => void>();
+
     onLoadListener?: (scriptId: number, sourceWidget: WidgetNode) => void;
     /** Invoker for runtime-set onLoad handlers (set via IF_SETONLOAD/CC_SETONLOAD) */
     onLoadInvoker?: (sourceWidget: WidgetNode) => void;
@@ -177,6 +180,7 @@ export class WidgetManager {
         }
         for (const groupId of groupIds) {
             this.onInterfaceClose?.(groupId);
+            for (const listener of this.interfaceClosedListeners) listener(groupId, 0, includeLoadedGroups);
         }
     }
 
@@ -1377,6 +1381,7 @@ export class WidgetManager {
             // Mark as loaded
             this.loadedGroups[groupId] = true;
             this.onGroupLoaded?.(groupId);
+            for (const listener of this.groupLoadedListeners) listener(groupId);
 
             return instance;
         } catch {
@@ -1409,6 +1414,7 @@ export class WidgetManager {
 
         // Mark as unloaded
         this.loadedGroups[groupId] = false;
+        for (const listener of this.interfaceClosedListeners) listener(groupId, 0, true);
     }
 
     private makeWidgetFlagsKey(id: number, childIndex: number): bigint {
@@ -1883,6 +1889,7 @@ export class WidgetManager {
 
         // Notify listeners to clean up click targets for this interface
         this.onInterfaceClose?.(parent.group);
+        for (const listener of this.interfaceClosedListeners) listener(parent.group, parent.type, false);
     }
 
     /**

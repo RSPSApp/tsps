@@ -1,4 +1,17 @@
 import { HD_OBJECT_LIGHTS_BY_ID, type HdObjectLightDefinition } from "./hdObjectLightData";
+import type { Model } from "../../../rs/model/Model";
+
+/** Coloured flames/glass near a defined light's height; exclude dark wood and metal. */
+export function isHdLightSourceFace(locId: number, model: Model, face: number): boolean {
+    const lights = HD_OBJECT_LIGHTS_BY_ID[locId];
+    if (!lights || (model.faceTextures?.[face] ?? -1) >= 0) return false;
+    const hsl = model.faceColors[face];
+    // shortcut: grey source faces need explicit material tags if new lamps use them.
+    if (((hsl >> 7) & 7) < 3 || (hsl & 127) < 28) return false;
+    const y = (model.verticesY[model.indices1[face]] + model.verticesY[model.indices2[face]]
+        + model.verticesY[model.indices3[face]]) / 3;
+    return lights.some(light => Math.abs(y + light.height) <= 50);
+}
 
 /** The slice of a map square collectHdLights reads, shared by WebGLMapSquare and WebGPUMapSquare. */
 export interface HdLightsMap {
@@ -80,7 +93,7 @@ export function collectHdLights(host: HdLightsHost, positions: Float32Array, col
                     const animation = animateHdLight(light, ids[i] ^ (x << 7) ^ z, time);
                     candidates.push({
                         position: [lx, height - light.height / 128, lz, Math.max(0.5, light.radius / 128 * animation)],
-                        color: [...light.color, light.strength / 12 * animation],
+                        color: [...light.color, light.strength / 16 * animation],
                         distance: (lx - playerX) ** 2 + (lz - playerZ) ** 2,
                     });
                 }

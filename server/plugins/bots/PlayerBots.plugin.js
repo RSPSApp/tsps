@@ -17,6 +17,8 @@ const { PVP_BOT_SETTINGS } = require("./behaviours/pvp/WildernessHotspotRegistry
 const {
   registerBotStatusInteractions,
 } = require("./runtime/registerBotStatusInteractions");
+const { registerAiBots } = require("./ai/registerAiBots");
+const { AI_BOT_ATTRIBUTE } = require("./ai/AiBotConfig");
 
 const BOT_BEHAVIOR_MODE = Object.freeze({
   ROAMING: "roaming",
@@ -185,18 +187,23 @@ const BOT_CONFIG = Object.freeze({
   }),
 });
 
+/** Scripted bots accept every duel; AI bots aren't scripted, so they are left out. */
+function isScriptedBot(player) {
+  return player?.isPlayerBot?.() === true && player.getAttribute?.(AI_BOT_ATTRIBUTE) !== true;
+}
+
 function registerDuelBotAcceptance(api) {
   const accept = (event) => {
-    if (event?.player?.isPlayerBot?.() === true) event.accept = true;
+    if (isScriptedBot(event?.player)) event.accept = true;
   };
   for (const eventName of ["duelarena:request", "duelarena:rules-changed", "duelarena:accept", "duelarena:accept-clicked"]) {
     api.onCustomEvent(eventName, accept);
   }
   api.onCustomEvent("duelarena:validate-winnings", (event) => {
-    if (event?.player?.isPlayerBot?.() === true) event.handled = true;
+    if (isScriptedBot(event?.player)) event.handled = true;
   });
   api.onCustomEvent("duelarena:settle-winnings", (event) => {
-    if (event?.player?.isPlayerBot?.() === true) event.handled = true;
+    if (isScriptedBot(event?.player)) event.handled = true;
   });
 }
 
@@ -263,6 +270,15 @@ module.exports = {
       taskManager: api.getTaskManager(),
       flashHintArrowTaskFactory: boot.flashHintArrowTaskFactory,
       brainRegistry: boot.brainRegistry,
+    });
+
+    registerAiBots({
+      api,
+      botApi,
+      runtime: boot.runtime,
+      registry: boot.brainRegistry,
+      world: boot.brainWorld,
+      resetMovementState,
     });
 
     registerBotEvents({

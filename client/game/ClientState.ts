@@ -163,8 +163,11 @@ export class ClientState {
     /** All players in the scene (indexed by server index) */
     static players: (ClientEntity | null)[] = new Array(2048).fill(null);
 
+    /** NPC server indices run 1-65534 (16 bits, 0xffff ends the npc info list). */
+    static readonly MAX_NPCS = 65536;
+
     /** All NPCs in the scene (indexed by server index) */
-    static npcs: (ClientEntity | null)[] = new Array(32768).fill(null);
+    static npcs: (ClientEntity | null)[] = new Array(ClientState.MAX_NPCS).fill(null);
 
     /** Local player's server index */
     static localPlayerIndex: number = -1;
@@ -200,7 +203,8 @@ export class ClientState {
      * 3 = Hidden
      * 4 = Right-click where available for clan members
      */
-    static playerOptions = new Map<number, { option: string; priority: boolean }>();
+    static readonly playerOptionsChangedListeners = new Set<(index: number) => void>();
+    static playerOptions = new Map<number, { option: string; priority: boolean; opcode?: number }>();
     static playerAttackOption: number = 0; // Default: depends on combat levels
 
     /** Local player's combat level (used for depends-on-level comparison) */
@@ -372,7 +376,7 @@ export class ClientState {
         this.menuOptionsCount = 0;
         this.keybindStates.clear();
         this.players = new Array(2048).fill(null);
-        this.npcs = new Array(32768).fill(null);
+        this.npcs = new Array(ClientState.MAX_NPCS).fill(null);
         this.localPlayerIndex = -1;
         this.combatTargetPlayerIndex = -1;
     }

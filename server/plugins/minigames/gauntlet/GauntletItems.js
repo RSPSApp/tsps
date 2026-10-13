@@ -82,7 +82,7 @@ function bowlRecipes(mode, has) {
     const cost = ARMOUR_COST[piece][tier];
     const needs = [[I.ore, cost.each], [I.bark, cost.each], [I.linum, cost.each]];
     if (tier > 0) needs.unshift([I[piece][tier - 1], 1]);
-    recipes.push({ id: I[piece][tier], shards: cost.shards, xp: cost.xp, needs, gear: true, tier });
+    recipes.push({ id: I[piece][tier], shards: cost.shards, xp: cost.xp, needs, gear: true, kind: "armour", tier });
   }
   for (const weapon of ["halberd", "staff", "bow"]) {
     const tier = nextTier(has, I[weapon]);
@@ -90,7 +90,7 @@ function bowlRecipes(mode, has) {
     const needs = tier === 0 ? [[I.frame, 1]]
       : tier === 1 ? [[I[weapon][0], 1]]
         : [[I[weapon][1], 1], [I[WEAPON_COMPONENT[weapon]], 1]];
-    recipes.push({ id: I[weapon][tier], shards: tier === 1 ? 50 : 0, xp: tier === 0 ? 10 : tier === 1 ? 30 : 0, needs, gear: true, tier });
+    recipes.push({ id: I[weapon][tier], shards: tier === 1 ? 50 : 0, xp: tier === 0 ? 10 : tier === 1 ? 30 : 0, needs, gear: true, kind: "weapon", tier });
   }
   return recipes;
 }

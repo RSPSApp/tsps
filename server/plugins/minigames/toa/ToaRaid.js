@@ -8,6 +8,7 @@
 
 const Shared = require("./ToaShared");
 const Parties = require("./ToaParties");
+const CombatAchievements = require("./CombatAchievements.TombsOfAmascut");
 
 const { ROOMS, VARBIT, SCRIPT, INTERFACE } = Shared;
 
@@ -1007,6 +1008,7 @@ class Raid {
     player.sendMessage(`Tombs of Amascut: ${mode} Mode challenge completion time: <col=ef1020>${Shared.formatTicks(total)}</col>`);
     player.sendMessage(`Tombs of Amascut: ${mode} Mode total completion time: <col=ef1020>${Shared.formatTicks(this.totalTicks)}</col>`);
     const count = incrementKillCount(player, mode);
+    CombatAchievements.completed(this, player, mode, player.getAttribute(ATTR_KILL_COUNTS));
     recordBestTimes(player, mode, this.original.size, total, this.totalTicks);
     player.sendMessage(`Your completed Tombs of Amascut: ${mode} Mode count is: <col=ff0000>${count}</col>.`);
     if (this.timeLimitMinutes !== -1) {
@@ -1290,6 +1292,7 @@ function begin(leader) {
 }
 
 module.exports = {
+  ATTR_KILL_COUNTS,
   STAGE,
   ATTR_RAID,
   Room,

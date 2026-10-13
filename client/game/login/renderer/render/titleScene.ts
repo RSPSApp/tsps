@@ -4,7 +4,7 @@ import type { LoginRendererHost } from "../host";
 import { getCanvas, getContext, isCaretVisible } from "../canvas";
 import { withRenderTransform, getViewportTransformStateHash, getTitleAssetStateHash } from "../layout/config";
 import { updateLayout } from "../layout/updateLayout";
-import { getLogicalFirePositions, getServerListButtonPosition } from "../layout/geometry";
+import { getLogicalFirePositions, getServerListButtonPosition, withContentTransform } from "../layout/geometry";
 import { drawTitleBackgroundToCtx } from "./background";
 import { drawLoadingBarToCtx } from "./loadingBars";
 import { drawLoginScreenToCtx } from "./loginScreensRouter";
@@ -164,21 +164,20 @@ export function drawTitle(host: LoginRendererHost, state: LoginState, gameState:
                         host.fontPlain11
                     ) {
                         const buttonPos = getServerListButtonPosition(host);
-                        drawSprite(host, 
-                            cacheCtx,
-                            host.worldSelectButtonSprite,
-                            buttonPos.x,
-                            buttonPos.y,
-                        );
-                        drawCenteredText(host, 
-                            cacheCtx,
-                            host.fontPlain11,
-                            state.serverName,
-                            buttonPos.x + (host.worldSelectButtonSprite.subWidth >> 1),
-                            buttonPos.y + 22,
-                            0xffffff,
-                            true,
-                        );
+                        const buttonSprite = host.worldSelectButtonSprite;
+                        const buttonFont = host.fontPlain11;
+                        withContentTransform(host, cacheCtx, (ctx) => {
+                            drawSprite(host, ctx, buttonSprite, buttonPos.x, buttonPos.y);
+                            drawCenteredText(host,
+                                ctx,
+                                buttonFont,
+                                state.serverName,
+                                buttonPos.x + (buttonSprite.subWidth >> 1),
+                                buttonPos.y + 22,
+                                0xffffff,
+                                true,
+                            );
+                        });
                     }
 
                     // Server list overlay

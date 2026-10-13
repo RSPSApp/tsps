@@ -88,4 +88,19 @@ assert.equal(click([quiverSlot, withOp])[0], withOp);
 const flagsOnly = { ...boltPouchSlot, actions: undefined };
 assert.equal(click([quiverSlot, flagsOnly])[0], flagsOnly);
 
+// An op needs its transmit flag or an onOp handler, as in the right-click menu. The Slayer Rewards
+// Tasks tab's view_tasks layer (426:36) gets "View List" by script but no flag for its own slot,
+// and lies over the Cancel button (a script-run dynamic child of 426:29): Cancel takes the click.
+const cancelButton = {
+    uid: (426 << 16) | 29, groupId: 426, fileId: -1, childIndex: 12,
+    x: 0, y: 0, width: 57, height: 22, actions: ["Cancel"], eventHandlers: { onOp: {} },
+};
+const viewTasksLayer = {
+    uid: (426 << 16) | 36, groupId: 426, fileId: 36, childIndex: -1,
+    x: 0, y: 0, width: 468, height: 200, actions: ["View List"],
+};
+assert.equal(click([cancelButton, viewTasksLayer])[0], cancelButton);
+// With its flag, the same op takes the click.
+assert.equal(click([cancelButton, { ...viewTasksLayer, flags: 2 }])[0].fileId, 36);
+
 console.log("widget click cleared ops test passed");

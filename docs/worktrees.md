@@ -13,7 +13,7 @@ scripts/wt rm feat/my-change      # when the branch is merged
 
 ## Slots
 
-Each worktree gets a slot from 1 to 9, written into a marked block in its root `.env`:
+Each worktree gets a slot from 1 to 99, written into a marked block in its root `.env`:
 
 | | Client | Game (WebSocket) | Agent MCP |
 | --- | --- | --- | --- |
@@ -22,8 +22,7 @@ Each worktree gets a slot from 1 to 9, written into a marked block in its root `
 
 - **The client** connects to its own slot's server by default, under the branch's name on the
   login screen. Each port is its own browser origin, so each tab remembers its own login.
-- **Voice** signalling is off in slots (`VOICE_SIGNAL_PORT=0`); set a free port in `.env` below
-  the block to test it.
+- **Voice** signalling uses the authenticated game connection, so it needs no separate port.
 - **`BROWSER=none`** stops `yarn start` opening a tab per worktree.
 - **The agent MCP** is registered as `tsps` for that worktree only (`claude mcp add -s local`),
   so an agent there talks to its own server.

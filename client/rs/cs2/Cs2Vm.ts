@@ -384,6 +384,11 @@ export interface Cs2Context {
 }
 
 export class Cs2Vm {
+    readonly scriptCallbackListeners = new Set<(script: Script, eventName: string) => void>();
+    readonly scriptPreListeners = new Set<(id: number, event: ScriptEvent | null) => void>();
+    readonly scriptPostListeners = new Set<(id: number) => void>();
+    private sourceScriptEvent: ScriptEvent | null = null;
+
     // Configuration constants
     static readonly MAX_OPCOUNT = 500_000;
     static readonly ONLOAD_MAX_OPCOUNT = 5_000_000;
@@ -423,6 +428,10 @@ export class Cs2Vm {
     dbTableId: number = -1;
 
     // Item search state (for OC_FIND/FINDNEXT/FINDRESET)
+    readonly itemSearchListeners = new Set<() => boolean>();
+    itemSearchCount = 0;
+    itemSearchQuery = "";
+    itemSearchTradableOnly = false;
     itemSearchResults: number[] = [];
     itemSearchIndex: number = 0;
 
@@ -967,6 +976,13 @@ export class Cs2Vm {
             setDbTableId: vm.setDbTableId.bind(vm),
 
             // Item search state (for OC_FIND/FINDNEXT/FINDRESET)
+            beforeItemSearch: () => { let consumed = false; for (const listener of vm.itemSearchListeners) consumed = listener() || consumed; return consumed; },
+            get itemSearchCount() { return vm.itemSearchCount; },
+            set itemSearchCount(v: number) { vm.itemSearchCount = v; },
+            get itemSearchQuery() { return vm.itemSearchQuery; },
+            set itemSearchQuery(v: string) { vm.itemSearchQuery = v; },
+            get itemSearchTradableOnly() { return vm.itemSearchTradableOnly; },
+            set itemSearchTradableOnly(v: boolean) { vm.itemSearchTradableOnly = v; },
             get itemSearchResults() {
                 return vm.itemSearchResults;
             },
@@ -1213,6 +1229,7 @@ export class Cs2Vm {
         intArgs?: number[],
         objectArgs?: any[],
         maxOpcount: number = Cs2Vm.MAX_OPCOUNT,
+        longArgs?: bigint[],
     ): void {
         // For non-event top-level runs (no active widget context),
         // clear any previous event context so opcodes don't see stale event_* values.
@@ -1232,7 +1249,7 @@ export class Cs2Vm {
         this.context.widgetManager.beginBatch();
 
         try {
-            this.executeInternal(script, intArgs, objectArgs);
+            this.executeInternal(script, intArgs, objectArgs, longArgs);
         } finally {
             this.isExecuting = false;
             // PERF: Process batched invalidations
@@ -1405,7 +1422,8 @@ export class Cs2Vm {
     }
 
     /** Execute a script - internal method that supports nesting */
-    private executeInternal(script: Script, intArgs?: number[], objectArgs?: any[]): void {
+    private executeInternal(script: Script, intArgs?: number[], objectArgs?: any[], longArgs?: bigint[]): void {
+        for (const listener of this.scriptPreListeners) listener(script.id, this.sourceScriptEvent);
         this.traceScriptEnter(script);
         const rootScript = script;
         const prevLocalStrings = this.currentLocalStrings;
@@ -1479,6 +1497,7 @@ export class Cs2Vm {
         let pc = 0;
         let { localInts, localStrings, localLongs } = allocateFrameLocals(currentScript);
         loadArgsIntoLocals(localInts, localStrings, intArgs, objectArgs);
+        if (longArgs) localLongs.set(longArgs);
 
         this.currentScriptId = currentScript.id;
         this.currentLocalStrings = localStrings;
@@ -1495,6 +1514,7 @@ export class Cs2Vm {
             }
 
             this.context.onScriptFinished?.(currentScript.id);
+            for (const listener of this.scriptPostListeners) listener(currentScript.id);
             this.returnLocalArraysToPool(localInts, localStrings);
             const caller = this.callStack[--this.callStackDepth];
 
@@ -1517,6 +1537,7 @@ export class Cs2Vm {
 
         const finalizeSuccessfulTopLevel = (): void => {
             this.context.onScriptFinished?.(rootScript.id);
+            for (const listener of this.scriptPostListeners) listener(rootScript.id);
             this.flushDeferredActionsIfTopLevel();
             if (
                 this.callStackDepth === 0 &&
@@ -1749,10 +1770,17 @@ export class Cs2Vm {
                         pc = 0;
                         this.currentScriptId = currentScript.id;
                         this.currentLocalStrings = localStrings;
+                        for (const listener of this.scriptPreListeners) listener(currentScript.id, null);
                         this.traceScriptEnter(currentScript);
                         continue;
                     }
 
+                    case 6599: {
+                        const eventName = this.popString();
+                        if (typeof eventName !== "string") throw new Error("RuneLite callback name must be a string");
+                        for (const listener of this.scriptCallbackListeners) listener(currentScript, eventName);
+                        break;
+                    }
                     default: {
                         // PERF: Hybrid dispatch - fast array for low opcodes, Map for high opcodes
                         const handler =
@@ -1809,6 +1837,12 @@ export class Cs2Vm {
 
         if (this.executionState === ExecutionState.FINISHED) {
             finalizeSuccessfulTopLevel();
+        }
+        if (this.executionState === ExecutionState.ABORTED) {
+            for (const listener of this.scriptPostListeners) listener(currentScript.id);
+            for (let i = this.callStackDepth - 1; i >= 0; i--) {
+                for (const listener of this.scriptPostListeners) listener(this.callStack[i].script.id);
+            }
         }
         cleanupFrames();
     }
@@ -2383,6 +2417,8 @@ export class Cs2Vm {
         const prevField526 = this.eventContext.opSubIndex;
         this.applyEventContextFromScriptEvent(event);
 
+        const previousScriptEvent = this.sourceScriptEvent;
+        this.sourceScriptEvent = event;
         try {
             this.run(script, substituted.intArgs, substituted.objectArgs, Cs2Vm.MAX_OPCOUNT);
             return true;
@@ -2390,6 +2426,7 @@ export class Cs2Vm {
             console.error(`[Cs2Vm] Script ${scriptId} crashed:`, err);
             return false;
         } finally {
+            this.sourceScriptEvent = previousScriptEvent;
             // Restore previous widget context after event handler completes
             this.activeWidget = prevActiveWidget;
             this.dotWidget = prevDotWidget;

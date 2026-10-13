@@ -90,15 +90,16 @@ function onNpcDeath(event) {
   else if (current === STEP.RANGE_RAT || current === STEP.RANGING_RAT) T.setProgress(killer, STEP.COMBAT_LADDER);
 }
 
-/** The magic task completes on the first Wind Strike at a chicken, hit or splash; the quest a tick later. */
+/**
+ * The magic task completes on the first Wind Strike at a chicken, hit or splash. A tick
+ * later the step moves to LEAVE_TALK, the "Learning the Ropes" quest's completion value:
+ * the quest plugin's step listener completes it there (scroll, message and jingle).
+ */
 function onCombatHitRoll({ attacker, target, combatType }) {
   if (!attacker?.isPlayer?.() || !T.isActive(attacker)) return;
   if (target?.getId?.() !== IDS.CHICKEN || combatType !== core.CombatType.MAGIC) return;
   if (!T.advanceFrom(attacker, STEP.CAST_WIND_STRIKE, STEP.WIND_STRIKE_CAST)) return;
-  T.later(1, () => {
-    if (!T.advanceFrom(attacker, STEP.WIND_STRIKE_CAST, STEP.LEAVE_TALK)) return;
-    attacker.sendMessage(T.data.messages.questComplete);
-  });
+  T.later(1, () => T.advanceFrom(attacker, STEP.WIND_STRIKE_CAST, STEP.LEAVE_TALK));
 }
 
 function capTraining(event) {

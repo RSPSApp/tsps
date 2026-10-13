@@ -261,7 +261,7 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
                 // Fixed mode (548) is a fixed-size gameframe: interface scaling must
                 // not blow it up to the window, it renders at its exact size.
                 const isFixedGameframe = rootInterface === FIXED_GAMEFRAME_ROOT;
-                const desktopUiScale = isFixedGameframe ? 1 : getUiScale(cssW, cssH);
+                let desktopUiScale = isFixedGameframe ? 1 : getUiScale(cssW, cssH);
                 // RuneLite stretched mode reduces the logical resizable game size by the
                 // configured factor, then stretches that real size back to the window.
                 // The DPR component of the render scale is snapped to an integer so
@@ -272,6 +272,28 @@ export function computeUiRenderMetrics(host: WebGLOsrsRendererHost,
                 // at the right/bottom edge is clipped instead of letting the ratio
                 // drift fractional (which made glyph widths uneven by 1px).
                 const dprComponent = Math.max(1, Math.round(safeBufW / Math.max(1, cssW)));
+                // The Stretched Mode plugin draws resizable mode larger on top of interface scaling.
+                if (!isFixedGameframe && host.osrsClient.stretchedModePlugin) {
+                    desktopUiScale = host.osrsClient.stretchedModePlugin.resizableScale(
+                        desktopUiScale,
+                        safeBufW / dprComponent,
+                        safeBufH / dprComponent,
+                    );
+                }
+                // The Stretched Mode plugin scales the fixed gameframe up to fill the window.
+                const stretch = isFixedGameframe
+                    ? host.osrsClient.stretchedModePlugin?.fixedStretch(safeBufW, safeBufH, dprComponent)
+                    : null;
+                if (stretch) {
+                    return {
+                        layoutW: 765,
+                        layoutH: 503,
+                        renderScaleX: stretch.scaleX,
+                        renderScaleY: stretch.scaleY,
+                        renderOffsetX: stretch.offsetX,
+                        renderOffsetY: stretch.offsetY,
+                    };
+                }
                 const renderScale = dprComponent * desktopUiScale;
                 const layoutW = isFixedGameframe ? 765 : Math.max(1, Math.ceil(safeBufW / renderScale));
                 const layoutH = isFixedGameframe ? 503 : Math.max(1, Math.ceil(safeBufH / renderScale));
@@ -339,7 +361,7 @@ export function getUiRenderMetrics(host: WebGLOsrsRendererHost,
     
 }
 
-export function getCanvasResolutionScale(host: WebGLOsrsRendererHost, cssWidth: number, cssHeight: number): number {
+export function getCanvasResolutionScale(host: Pick<WebGLOsrsRendererHost, "osrsClient">, cssWidth: number, cssHeight: number): number {
 
         if (typeof window === "undefined") {
             return 1;
@@ -438,7 +460,8 @@ export function getSceneResolutionScale(host: WebGLOsrsRendererHost, ): number {
         if (!isMobileMode || host.osrsClient.isOnLoginScreen()) {
             host.osrsClient.mobileEffectiveResolutionScale = 1;
             if (host.osrsClient.isOnLoginScreen()) return 1;
-            return Math.max(0.5, Math.min(1, host.sceneResolutionScale || 1));
+            const pluginScale = host.osrsClient.stretchedModePlugin?.sceneResolutionScale() ?? 1;
+            return Math.max(0.5, Math.min(1, host.sceneResolutionScale || 1, pluginScale));
         }
         const profile = host.syncBrowserQualityProfile();
         const scale = Math.max(0.5, Math.min(1, profile.defaultSceneScale || 1));
@@ -496,6 +519,32 @@ export function shouldUseDirectTextureScenePass(host: WebGLOsrsRendererHost, ): 
 
         return false;
     
+}
+
+/**
+ * Fixed mode's viewport is 512x334 OSRS units at any size it is drawn, so the camera applies
+ * OSRS's viewport-size rules to that and scales up (stretched mode, HiDPI); stretched
+ * resizable mode does the same with its layout size. Elsewhere the viewport is measured in
+ * device pixels.
+ */
+export function syncCameraViewportUnitScale(
+    host: Pick<WebGLOsrsRendererHost, "osrsClient" | "canvas" | "computeUiRenderMetrics"> & {
+        app?: { width: number; height: number };
+    },
+): void {
+    const camera = host.osrsClient.camera;
+    // Stretched resizable mode sees its smaller layout too, as RuneLite's game does.
+    if (
+        host.osrsClient.widgetManager?.rootInterface !== FIXED_GAMEFRAME_ROOT &&
+        (isMobileMode || !host.osrsClient.stretchedModePlugin?.isStretchingResizable())
+    ) {
+        camera.setViewportUnitScale(1, 1);
+        return;
+    }
+    const width = (host.app?.width || host.canvas.width || 1) | 0;
+    const height = (host.app?.height || host.canvas.height || 1) | 0;
+    const metrics = host.computeUiRenderMetrics(width, height);
+    camera.setViewportUnitScale(metrics.renderScaleX, metrics.renderScaleY);
 }
 
 export function getSceneViewportWidgetRect(host: WebGLOsrsRendererHost, ): { x: number; y: number; width: number; height: number } {

@@ -32,14 +32,18 @@ export class NpcAggression {
             // Get the NPC's current definition (taking into account possible transformation)
             let npcDefinition: NpcDefinition = npc.getCurrentDefinition();
             if (npcDefinition == null || npc.getHitpoints() <= 0
-                || !npcDefinition.isAggressive()
                 || npc.getPrivateArea() != player.getPrivateArea()
                 || (npc.isOwnerOnly?.() && npc.getOwner?.() !== player)) {
                 // Make sure the npc is available to attack the player.
                 continue;
             }
 
-            if (npcDefinition.buildsAggressionTolerance() && player.getAggressionTolerance().finished()
+            const rule = area ? PluginManager.callArea(area, "npcAggression", player, npc) : null;
+            if (rule === false || (rule !== true && !npcDefinition.isAggressive())) {
+                continue;
+            }
+
+            if (rule !== true && npcDefinition.buildsAggressionTolerance() && player.getAggressionTolerance().finished()
                 && ((area ? PluginManager.callArea(area, "npcAggressionTolerance", player, npc) : null)
                     ?? PluginManager.emitNpcAggressionTolerance(player, npc)) !== true) {
                 // If Player has obtained tolerance to this NPC, don't be aggressive.
@@ -55,7 +59,7 @@ export class NpcAggression {
                 continue;
             }
 
-            if (!npc.isAggressiveTo(player)) {
+            if (rule !== true && !npc.isAggressiveTo(player)) {
                 // Ensure the NPC can be aggressive to this player.
                 continue;
             }

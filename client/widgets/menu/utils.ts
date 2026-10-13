@@ -242,10 +242,14 @@ export function transformWidgetMenuEntries<T extends { option: string }>(
 ): T[] {
     const itemId = typeof w?.itemId === "number" ? w.itemId | 0 : -1;
     const uid = typeof w?.uid === "number" ? w.uid | 0 : 0;
-    if (itemId <= 0 || uid >>> 16 !== INVENTORY_GROUP_ID) return entries;
+    if (itemId <= 0 || uid >>> 16 !== INVENTORY_GROUP_ID) {
+        return applyMenuTransform(entries as any, { surface: "widget", menu, widgetId: uid,
+            childIndex: w?.childIndex ?? -1, itemId }) as unknown as T[];
+    }
     return applyMenuTransform(entries as any, {
         surface: "inventory",
         menu,
+        widgetId: uid, childIndex: w?.childIndex ?? -1, itemId,
         target: { type: MenuTargetType.ITEM, id: itemId, name: getWidgetTargetLabel(w) },
     }) as unknown as T[];
 }

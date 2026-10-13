@@ -22,3 +22,31 @@ A plugin with timed state opts in to `advance_time` by listening for the
 
 What these can't check: how things look on screen, animation timing and feel, and anything
 that depends on the real client's own scripts running.
+
+## Seeing the screen (vision tools)
+
+Two tools close that gap by driving a real headless game client through the worktree's own
+client URL (PORT from the root `.env`; `VISION_CLIENT_URL` overrides). Every call boots its
+own browser, logs the named player in through it, captures, and shuts down; arrange the
+scene first with the tools above.
+
+| Step | Tool |
+| --- | --- |
+| Screenshot | `vision_screenshot { player, yaw?, pitch?, run?, label? }` returns the PNG path |
+| Clip | `vision_clip { player, seconds, yaw?, pitch?, run?, label?, }` returns the MP4 (10 fps screencast, ffmpeg) or JPEG frames when no encoder is available |
+
+- **Camera:** yaw 0-2047, pitch 0 (level) to 512 (down); omit both to keep the player's view.
+- **Runs:** pass the same `run` label across calls to group a session under
+  `exports/<run>/`; without one, each call gets its own `<timestamp>-<username>` folder.
+  Layout: `logs/run.log` (one tick-stamped line per call), `logs/harness-t<tick>-<label>.json`
+  (one per call, named like its media), `screenshots/t<tick>-<label>.png`,
+  `videos/t<tick>-<label>.mp4`. The tick ties media to the run.log lines.
+- **Inspect:** read the PNGs/videos back; screenshots are also the fastest way to verify
+  visual fixes a PR describes.
+- **Toggles:** `VISION_EXPORTS=0` sends captures to the OS temp dir and writes no logs (use
+  when probing without wanting to accumulate data); `VISION_KEEP_FRAMES=1` keeps clip frame
+  JPEGs after a video builds (they are deleted otherwise); `VISION_CHROME_PATH` picks a
+  specific Chromium (Chrome is preferred, Edge is the fallback).
+- **Requirements:** a running client stack (`yarn start`) and a logged-out bot account
+  (`VISION_BOT_PASSWORD`, default `vision1234`). A timed-out login (server restarting, ...)
+  fails the tool with the saved login-screen path instead of pretending it captured gameplay.

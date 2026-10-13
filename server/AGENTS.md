@@ -68,7 +68,7 @@ module.exports = {
 | Interfaces that don't exist in the cache | [docs/agents/interfaces.md](docs/agents/interfaces.md) |
 | Where behaviour comes from, packet captures, reference codebases | [docs/agents/sources.md](docs/agents/sources.md) |
 | Measuring performance before and after a change (MCP load + perf tools) | [docs/agents/perf.md](docs/agents/perf.md) |
-| Checking behaviour in-game without a client (MCP test tools) | [docs/agents/testing.md](docs/agents/testing.md) |
+| Checking behaviour in-game (MCP test tools, incl. headless screenshots/clips) | [docs/agents/testing.md](docs/agents/testing.md) |
 
 Project layout: [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Gamemode-independent
 modules: [`docs/extrascripts.md`](../docs/extrascripts.md).

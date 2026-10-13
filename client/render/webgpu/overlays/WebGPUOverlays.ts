@@ -40,6 +40,8 @@ export class WebGPUOverlays {
     private groundItemLabels?: GroundItemLabelLayer;
     private hitsplats?: HitsplatLayer;
 
+    getHost(): OverlayHost | undefined { return this.host; }
+
     /** Screen position to a world ray (HelmSteering), through the shared overlay host. */
     screenToRay(mouseX: number, mouseY: number): Ray | null {
         return this.host?.screenToRay(mouseX, mouseY) ?? null;
@@ -68,7 +70,7 @@ export class WebGPUOverlays {
         const world = getWorldResources(this.renderer);
         if (!device || !format || !world) return;
         try {
-            const host = new OverlayHost(this.renderer);
+            const host = this.renderer.interactionHost;
             const screen = new ScreenLayer(device, format);
             screen.init();
 
@@ -190,7 +192,7 @@ export class WebGPUOverlays {
         const hdrActive = !!world?.extensionActive && !!world.extension?.sceneColorFormat;
         try {
             this.groundMeshes?.drawWorld(pass);
-            this.tileMarker?.drawWorld(pass, hdrActive);
+            this.tileMarker?.drawWorld(pass, hdrActive, world?.sampleCount ?? 1);
         } catch (error) {
             console.warn("[webgpu] overlays world draw failed", error);
         }
@@ -252,7 +254,7 @@ export class WebGPUOverlays {
         this.interactHighlight?.dispose();
         this.groundMeshes?.dispose();
         this.screen?.destroy();
-        this.host?.dispose();
+
         this.host = undefined;
         this.screen = undefined;
         this.groundMeshes = undefined;

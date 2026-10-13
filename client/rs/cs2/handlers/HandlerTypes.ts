@@ -311,6 +311,10 @@ export interface HandlerContext {
     setDbTableId(tableId: number): void;
 
     // Item search state (for OC_FIND/FINDNEXT/FINDRESET)
+    beforeItemSearch?(): boolean;
+    itemSearchCount: number;
+    itemSearchQuery: string;
+    itemSearchTradableOnly: boolean;
     itemSearchResults: number[];
     itemSearchIndex: number;
 

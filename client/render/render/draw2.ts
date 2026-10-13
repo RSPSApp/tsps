@@ -438,7 +438,7 @@ export function isMapWithinRenderDistance(host: WebGLOsrsRendererHost,
 
 export function resolveEffectiveRenderDistanceTiles(host: WebGLOsrsRendererHost, frameId: number): number {
 
-        const base = clamp(host.osrsClient.renderDistance | 0, 25, host.osrsClient.hdPlugin?.isEnabled() ? 160 : 90);
+        const base = clamp((host.osrsClient.gpuPlugin?.settings()?.drawDistance ?? host.osrsClient.renderDistance) | 0, 25, host.osrsClient.hdPlugin?.isEnabled() ? 160 : 90);
         if ((host.effectiveRenderDistanceFrame | 0) === (frameId | 0)) {
             return host.effectiveRenderDistanceTiles | 0;
         }

@@ -28,6 +28,14 @@
  * get freshly assigned names. This keeps regeneration a targeted diff
  * instead of a full reshuffle.
  *
+ * One exception: a bare name belongs to a real item, never to a bank placeholder or noted
+ * copy of it. The first regeneration inherited hand-written names from an older cache, and
+ * where the old bare-name id no longer matched, the freed name went to the next unnamed id -
+ * often the placeholder - while the real item kept its old NAME_2. A bare name held by a
+ * placeholder or noted copy moves to the group's first real item; the copy and that item's
+ * old numbered name get fresh names, so a caller of the old name fails to compile instead of
+ * pointing at something else.
+ *
  * Usage:
  *   yarn ts-node scripts/generate-identifiers.ts             # regenerate all three
  *   yarn ts-node scripts/generate-identifiers.ts items        # just one
@@ -113,6 +121,7 @@ function generateEntries(
     count: number,
     lookup: (id: number) => { name?: string } | undefined,
     previousNameToId: Map<string, number>,
+    isCopy: (id: number) => boolean = () => false,
 ): GeneratedEntry[] {
     // Group every named cache entry by its mechanically-derived base name,
     // in ascending id order.
@@ -146,10 +155,22 @@ function generateEntries(
     }
 
     for (const [base, members] of groups) {
+        const firstReal = members.find((member) => !isCopy(member.id));
+        // A bare name a placeholder or noted copy holds moves to the first real item.
+        const bareHolder = members.find((member) => member.id === previousNameToId.get(base));
+        const repointBareTo =
+            bareHolder && firstReal && isCopy(bareHolder.id) && !usedNames.has(base) ? firstReal : undefined;
+
         // Pass 1: honor any id in this group that the previous file already
         // named consistently with this base (NAME, NAME_2, NAME_3, ...).
         const claimedIds = new Set<number>();
+        if (repointBareTo) {
+            usedNames.add(base);
+            claimedIds.add(repointBareTo.id);
+            entries.push({ id: repointBareTo.id, constName: base, rawName: repointBareTo.rawName });
+        }
         for (const member of members) {
+            if (claimedIds.has(member.id)) continue;
             const priorNames = previousIdToNames.get(member.id) ?? [];
             const match = priorNames.find((n) => n === base || n.startsWith(`${base}_`));
             if (match && !usedNames.has(match)) {
@@ -163,8 +184,9 @@ function generateEntries(
         // error to fix) rather than the constant silently pointing at something else.
         for (const member of members) {
             if (claimedIds.has(member.id)) continue;
-            let constName = base;
-            let suffix = 1;
+            // A copy never takes the bare name while the group has a real item.
+            let suffix = firstReal && isCopy(member.id) ? 2 : 1;
+            let constName = suffix === 1 ? base : `${base}_${suffix}`;
             while (usedNames.has(constName) || previousNameToId.has(constName)) {
                 suffix++;
                 constName = `${base}_${suffix}`;
@@ -218,6 +240,10 @@ async function main() {
             file: path.join(__dirname, "../src/main/typescript/elvarg/util/ItemIdentifiers.ts"),
             count: counts.items,
             lookup: (id: number) => CacheDefinitions.getItem(id),
+            isCopy: (id: number) => {
+                const item = CacheDefinitions.getItem(id);
+                return !!item && (item.placeholderTemplate >= 0 || item.noteTemplate >= 0);
+            },
         },
         {
             key: "npcs",
@@ -239,7 +265,7 @@ async function main() {
         if (only && !only.has(target.key)) continue;
 
         const previous = loadCommittedNameToId(target.file);
-        const entries = generateEntries(target.count, target.lookup, previous);
+        const entries = generateEntries(target.count, target.lookup, previous, target.isCopy);
         const stats = diffStats(previous, entries);
         console.log(
             `${target.key}: ${entries.length} named entries (of ${target.count} total) | ` +

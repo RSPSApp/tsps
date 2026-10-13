@@ -74,6 +74,10 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const SECRET_WALL_LOC_ID = ObjectIdentifiers.WALL_8;
   const LISTENING_GRILL_LOC_ID = ObjectIdentifiers.GRILL;
   const CABBAGE_HOLE_LOC_ID = ObjectIdentifiers.HOLE_2;
+  const PASSAGE_LOC_IDS = new Set([
+    FORTRESS_ENTRANCE_DOOR_LOC_ID, BANQUET_HALL_DOOR_LOC_ID,
+    GUARDED_STURDY_DOOR_LOC_ID, SECRET_WALL_LOC_ID,
+  ]);
 
   const START_HOOK = "quest:black-knights-fortress:start";
   const DOSSIER_ACTION_IDS = new Set(["RQQGDa", "kI0dT0"]);
@@ -209,6 +213,18 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     } else {
       player.moveTo(new Location(pos.getX(), location.y - Math.sign(dy), location.z ?? pos.getZ()));
     }
+  }
+
+  // These walls can be operated from their own tile; route to a side so crossing keeps its direction.
+  function routeFortressPassage(event) {
+    if (!PASSAGE_LOC_IDS.has(event.objectId)) return;
+    const tile = event.object.getLocation();
+    const face = event.object.getFace();
+    const axis = (face & 1) === 0 ? "x" : "y";
+    const from = event.sourceLocation;
+    const centre = axis === "x" ? tile.getX() : tile.getY();
+    const side = Math.sign(from[axis] - centre) || (face === 0 || face === 3 ? 1 : -1);
+    event.destination = { x: tile.getX(), y: tile.getY(), z: tile.getZ(), [axis]: centre + side };
   }
 
   // Sir Amik Varze's transcript variant by stage.
@@ -417,6 +433,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onItemAction(handleDossierRead);
+  api.onObjectRoute(routeFortressPassage);
   api.onObjectInteraction(handleFortressObjectInteraction);
   api.onCustomEvent("npc-dialogue:choice", handleBanquetChoice);
   api.onItemOnObject(handleItemOnHole);

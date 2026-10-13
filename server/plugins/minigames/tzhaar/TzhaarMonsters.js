@@ -2,6 +2,7 @@
 // Mechanics: https://oldschool.runescape.wiki/w/TzHaar_Fight_Cave#Monsters
 // Animation/spotanim ids: RuneLite gameval (MAGMAQURIS_* = Tok-Xil, IGNIFERUM_* = Ket-Zek,
 // LIZARD_CLERIC_* = Yt-MejKot, LORDMAGMUS_* = TzTok-Jad, TZHAAR_* spotanims).
+const CombatAchievements = require("./CombatAchievements.TzhaarFightCaves");
 module.exports = function registerTzhaarMonsters(api) {
   const {
     Animation, CombatFactory, CombatMethod, CombatType, Graphic, HitDamage, HitMask,
@@ -86,6 +87,7 @@ module.exports = function registerTzhaarMonsters(api) {
       npc.performAnimation(MEJKOT_HEAL_ANIM);
       this.patient.performGraphic(HEAL_GRAPHIC);
       this.patient.heal(Misc.randomInclusive(1, MEJKOT_MAX_HEAL));
+      if (target?.isPlayer?.()) CombatAchievements.mejKotHealed(target);
     }
 
     hits(npc, target) {

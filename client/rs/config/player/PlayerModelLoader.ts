@@ -64,6 +64,7 @@ export class PlayerModelLoader {
         appearance: PlayerAppearance,
         extraObjTypes?: ObjType[],
         extraRenderLayers?: number[],
+        extraCompositionSlots?: number[],
     ): Model | undefined {
         const missesBefore = this.modelLoader.missCount ?? 0;
         const modelDatas: ModelData[] = [];
@@ -141,12 +142,14 @@ export class PlayerModelLoader {
                     }
                     if (obj.recolorFrom) {
                         for (let r = 0; r < obj.recolorFrom.length; r++) {
-                            md.recolor(obj.recolorFrom[r], obj.recolorTo[r]);
+                            const override=appearance.colorTextureOverrides[extraCompositionSlots?.[objIndex] ?? -1];
+                            md.recolor(obj.recolorFrom[r], override?.colors?.[r] ?? obj.recolorTo[r]);
                         }
                     }
                     if (obj.retextureFrom) {
                         for (let r = 0; r < obj.retextureFrom.length; r++) {
-                            md.retexture(obj.retextureFrom[r], obj.retextureTo[r]);
+                            const override=appearance.colorTextureOverrides[extraCompositionSlots?.[objIndex] ?? -1];
+                            md.retexture(obj.retextureFrom[r], override?.textures?.[r] ?? obj.retextureTo[r]);
                         }
                     }
                     // Apply wearable offsets (male assumed for default appearance)
@@ -247,6 +250,8 @@ export class PlayerModelLoader {
         );
 
         const kits = workingAppearance.kits;
+        workingAppearance.colorTextureOverrides.push(...appearance.colorTextureOverrides);
+        for(const [slot,item] of appearance.compositionItems)workingAppearance.compositionItems.set(slot,item);
         if (kits.length < 7) kits.length = 7;
 
         const equippedSlots = new Set<EquipmentSlot>();
@@ -282,7 +287,12 @@ export class PlayerModelLoader {
             if (this.partCoveredByEquipment(part, equippedSlots, hiddenParts)) continue;
             if (fallbackKits[part] !== -1) kits[part] = fallbackKits[part];
         }
-        const extras: Array<{ obj: ObjType; slot: EquipmentSlot }> = [];
+        const extras: Array<{ obj: ObjType; slot: EquipmentSlot; compositionSlot?:number }> = [];
+        for(const [compositionSlot,itemId] of appearance.compositionItems) {
+            const part=({6:3,8:0,11:1} as Record<number,number>)[compositionSlot];
+            if(part!==undefined)kits[part]=-1;
+            extras.push({obj:this.objTypeLoader.load(itemId),slot:EquipmentSlot.HEAD2,compositionSlot});
+        }
         if (equippedItemIdsBySlot && equippedItemIdsBySlot.length > 0) {
             // Walk the equipped items and apply coverage/suppression based on metadata when available
             for (let slot = 0; slot < equippedItemIdsBySlot.length; slot++) {
@@ -340,6 +350,7 @@ export class PlayerModelLoader {
             workingAppearance,
             extras.map(({ obj }) => obj),
             extras.map(({ slot }) => equipmentRenderLayer(slot, kits)),
+            extras.map(({ slot,compositionSlot }) => compositionSlot ?? [0,1,2,3,4,5,7,9,10,12,13,11][slot]),
         );
     }
 
@@ -374,10 +385,12 @@ export class PlayerModelLoader {
             } catch {}
         }
         extras.sort((a, b) => equipmentModelRenderOrder(a.slot) - equipmentModelRenderOrder(b.slot));
+        armAppearance.colorTextureOverrides.push(...appearance.colorTextureOverrides);
         return this.buildStaticModel(
             armAppearance,
             extras.map(({ obj }) => obj),
             extras.map(({ slot }) => equipmentRenderLayer(slot, armAppearance.kits)),
+            extras.map(({ slot }) => [0,1,2,3,4,5,7,9,10,12,13,11][slot]),
         );
     }
 

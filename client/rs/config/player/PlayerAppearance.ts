@@ -7,6 +7,9 @@ export enum Gender {
 
 // Minimal OSRS-like appearance representation for Phase A
 export class PlayerAppearance {
+    readonly colorTextureOverrides: Array<{colors:number[]|null;textures:number[]|null}|undefined> = [];
+    /** Item replacements in body-kit-only composition slots (arms, hair and jaw). */
+    readonly compositionItems = new Map<number,number>();
     // 0 male, 1 female
     gender: Gender;
     // hair, torso, legs, feet, skin (indices into palettes; Phase A uses defaults)
@@ -58,6 +61,13 @@ export class PlayerAppearance {
             const v = BigInt((this.equip[i] ?? -1) + 1);
             h = (h * PRIME + v) & MASK_64;
         }
+        for (let slot=0;slot<this.colorTextureOverrides.length;slot++) {
+            const override=this.colorTextureOverrides[slot];if(!override)continue;
+            h=(h*PRIME+BigInt(slot+1))&MASK_64;
+            for(const value of override.colors ?? [])h=(h*PRIME+BigInt(value&0xffff))&MASK_64;
+            for(const value of override.textures ?? [])h=(h*PRIME+BigInt(value&0xffff))&MASK_64;
+        }
+        for(const [slot,item] of this.compositionItems)h=(h*PRIME+BigInt((slot<<20)+item))&MASK_64;
         return h;
     }
 

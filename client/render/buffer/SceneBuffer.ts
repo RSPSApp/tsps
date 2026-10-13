@@ -14,6 +14,7 @@ import { LocAnimatedGroup } from "../loc/LocAnimatedGroup";
 import { SceneLocEntity } from "../loc/SceneLocEntity";
 import { VertexBuffer } from "./VertexBuffer";
 import { hdGroundMaterial } from "../../game/plugins/hd/HdGroundMaterials";
+import { isHdLightSourceFace } from "../../game/plugins/hd/HdLights";
 import { ACTOR_VERTEX_STRIDE, buildActorNormals } from "./ActorNormals";
 
 export enum ContourGroundType {
@@ -289,12 +290,13 @@ export class SceneBuffer {
         transparent: boolean,
         actorNormals?: Uint16Array,
         doubleSided: boolean = false,
+        locId: number = -1,
     ): DrawRange {
         // Optimized: filter transparency in single pass instead of getModelFaces() + filter()
         const faces = getModelFacesFiltered(model, this.textureLoader, transparent);
 
         const offset = this.indexByteOffset();
-        this.addModel(model, faces, undefined, true, actorNormals, doubleSided);
+        this.addModel(model, faces, undefined, true, actorNormals, doubleSided, locId);
         const elements = (this.indexByteOffset() - offset) / 4;
 
         return newDrawRange(offset, elements, 1);
@@ -429,7 +431,7 @@ export class SceneBuffer {
                 vertexOffset[1] = -sceneModel.heightOffset;
             }
             const offset = this.indexByteOffset();
-            this.addModel(model, faces, vertexOffset, true, undefined, sceneModel.doubleSided);
+            this.addModel(model, faces, vertexOffset, true, undefined, sceneModel.doubleSided, sceneModel.interactId);
             const elements = (this.indexByteOffset() - offset) / 4;
 
             const drawCommand: DrawCommand = {
@@ -506,6 +508,7 @@ export class SceneBuffer {
         reuseVertices: boolean = true,
         actorNormals?: Uint16Array,
         doubleSided: boolean = false,
+        locId: number = -1,
     ): void {
         if (faces.length === 0) {
             return;
@@ -584,6 +587,9 @@ export class SceneBuffer {
                 // u1 = clamp(u1, 0.00390625 * 3, 1 - 0.00390625 * 3);
                 // u2 = clamp(u2, 0.00390625 * 3, 1 - 0.00390625 * 3);
             }
+
+            // Untextured faces have no UV use in vanilla; V=-1 marks HD light-source faces.
+            if (textureIndex === -1 && isHdLightSourceFace(locId, model, index)) v0 = v1 = v2 = -1;
 
             const fa = facesA[index];
             const fb = facesB[index];

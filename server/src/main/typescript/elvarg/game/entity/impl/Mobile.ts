@@ -48,6 +48,9 @@ class MobileTask extends Task {
 }
 
 /** An actor tint: cycles from now, HSL (-1 keeps the model's own) and how strongly (0-255). */
+/** Set (true) on a developer who takes damage and loses items on death after all; ::mortal toggles it. Not saved. */
+export const MORTAL_DEVELOPER_ATTRIBUTE = "dev:mortal";
+
 export type ActorTint = {
     startCycle: number;
     endCycle: number;
@@ -612,9 +615,11 @@ export abstract class Mobile extends Entity {
             return hit;
         }
         const PlayerRights = getPlayerRights();
+        // Developers take no damage unless they turned it on (::mortal, for this session).
         const protectedDeveloper =
           this.isPlayer() &&
-          this.getAsPlayer()?.getRights?.() === PlayerRights.DEVELOPER;
+          this.getAsPlayer()?.getRights?.() === PlayerRights.DEVELOPER &&
+          this.getAttribute?.(MORTAL_DEVELOPER_ATTRIBUTE) !== true;
         if (hit.getDamage() > this.getHitpoints())
             hit.setDamage(this.getHitpoints());
         if (hit.getDamage() < 0)

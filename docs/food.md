@@ -46,7 +46,7 @@ need no id lists. Tests: `server/tests/food-effects.test.cjs` and `eat-attack-de
 | `runEnergy`, `curePoison`, `poisonImmunity` | Run energy restored, poison and venom cured, seconds of poison immunity. |
 | `then` | A second heal `ticks` later, with its own effects (hunter meats, 7 ticks). A newer one replaces a pending one. |
 | `outcomes` | A table of results by `weight`, each with its heal, boosts, drains, `drainRandom` (a random skill but Hitpoints) and messages (kebabs). |
-| `special` | `anglerfish`: its Hitpoints-based heal and overheal (not in combat in a PvP area). |
+| `special` | `anglerfish`: its heal from the eater's Hitpoints level (the level levelled up to, not the health left) and its overheal (not in combat in a PvP area). |
 | `wildernessOnly` | Can only be eaten in the Wilderness (blighted food). |
 | `message`, `messages`, `healMessage`, `afterMessage` | The eat line (or one per bite), the heal line (`null` for none), and a line after it. |
 | `refuse` | The item can't be eaten; this is the message. |

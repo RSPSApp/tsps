@@ -600,6 +600,15 @@ function holdsPetItem(player, itemId) {
 }
 
 /** Probita's "Let's have a look...": every insured pet the player no longer has comes back. */
+/**
+ * "pets:current" { player, pet }: answers with the player's follower in the world, if any
+ * (Temple Trekking's followers won't leave while one wanders).
+ */
+function answerCurrentPet(request) {
+  const pet = request?.player?.getAttribute?.(CURRENT_PET_ATTRIBUTE);
+  if (pet?.isRegistered?.()) request.pet = pet;
+}
+
 function reclaimPets(event) {
   if (event.npcId !== NpcIdentifiers.PROBITA || event.action !== "open_interface" || event.target !== "Pet Insurance") {
     return;
@@ -1719,6 +1728,7 @@ module.exports = {
     }
     api.onCustomEvent("npc-drops:roll", awardDroppedPets);
     api.onCustomEvent("npc-dialogue:action", reclaimPets);
+    api.onCustomEvent("pets:current", answerCurrentPet);
     api.onItemDropPolicy(onPetItemDropPolicy);
     api.onItemOnNpc(handleItemOnCat);
     api.onItemOnNpc(handleGullFeed);

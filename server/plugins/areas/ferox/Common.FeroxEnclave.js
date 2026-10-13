@@ -36,7 +36,7 @@ function restore(player, { prayersOff }) {
   player.setVenomed(false);
   player.setRunEnergy(100);
   const sender = player.getPacketSender();
-  sender.sendPoisonType(0).sendRunEnergy().sendConfig(DISEASE_VARP, -1);
+  sender.sendRunEnergy().sendConfig(DISEASE_VARP, -1);
   if (prayersOff) core.PrayerHandler.deactivatePrayers(player);
 }
 

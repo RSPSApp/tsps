@@ -98,6 +98,24 @@ export class ItemIconRenderer {
         return canvas;
     }
 
+    /** The plugin API and widgets share the same software item sprite renderer. */
+    createSprite(itemId: number, quantity: number, outline: number, shadow: number, quantityMode: number, noted: boolean, scale: number): SpritePixels | undefined {
+        const mode = this.normalizeQuantityMode(quantity, quantityMode);
+        const entry = this.getItemSpriteEntry(itemId, quantity, outline, shadow, mode, noted, scale);
+        if (!entry) return undefined;
+        const canvas = this.pixelsToCanvas(entry.pixels);
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas2D is unavailable for item sprite rendering");
+        this.drawItemQuantity(context, quantity, mode, entry.isStackable);
+        const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        const pixels = new Int32Array(canvas.width * canvas.height);
+        for (let i = 0; i < pixels.length; i++) if (rgba[i * 4 + 3] !== 0) pixels[i] = (rgba[i * 4] << 16) | (rgba[i * 4 + 1] << 8) | rgba[i * 4 + 2];
+        return SpritePixels.fromPixels(pixels, canvas.width, canvas.height);
+    }
+
+    clearSpriteCache(): void { this.itemSpriteCache.clear(); }
+    clearModelCache(): void { this.objModel.clearCache(); }
+
     private normalizeQuantityMode(quantity: number, quantityMode: number): number {
         // Reference: UserComparator7.getItemSprite
         let mode = quantityMode | 0;
@@ -208,9 +226,10 @@ export class ItemIconRenderer {
         shadow: number,
         quantityMode: number,
         var5: boolean,
+        scale: number = 512,
     ): { pixels: Int32Array; isStackable: boolean; canvas?: HTMLCanvasElement } | undefined {
         const key = this.getItemSpriteKey(itemId, quantity, outline, shadow, quantityMode);
-        if (!var5) {
+        if (!var5 && scale === 512) {
             const cached = this.itemSpriteCache.get(key);
             if (cached) return cached;
         }
@@ -270,6 +289,7 @@ export class ItemIconRenderer {
         const zoomMultiplier = var5 ? 1.5 : outline === 2 ? 1.04 : 1;
         const modelPixels = this.renderModelSoftwareToPixels(model, obj, sw, sh, {
             zoomMultiplier,
+            projectionScale: scale,
         });
         this.blitTransBgAt(base, modelPixels);
 
@@ -294,7 +314,7 @@ export class ItemIconRenderer {
             isStackable: boolean;
             canvas?: HTMLCanvasElement;
         };
-        if (!var5) this.itemSpriteCache.set(key, entry);
+        if (!var5 && scale === 512) this.itemSpriteCache.set(key, entry);
         return entry;
     }
 
@@ -323,7 +343,7 @@ export class ItemIconRenderer {
         it: ObjType,
         sw: number,
         sh: number,
-        opts?: { zoomMultiplier?: number },
+        opts?: { zoomMultiplier?: number; projectionScale?: number },
     ): Int32Array {
         const buf = new Int32Array(sw * sh);
         const zbuf = new Float32Array(sw * sh);
@@ -374,7 +394,7 @@ export class ItemIconRenderer {
         const cxv = new Int32Array(vc);
         const cyv = new Int32Array(vc);
         // Use OSRS projection scaling for exact 36x32, else scale with output size
-        const zoom3d = osrsExact ? 512 : ((512 * sw) / 32) | 0;
+        const zoom3d = opts?.projectionScale ?? (osrsExact ? 512 : ((512 * sw) / 32) | 0);
 
         for (let i = 0; i < vc; i++) {
             let vx = model.verticesX[i] | 0;

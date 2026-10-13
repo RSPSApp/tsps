@@ -1,6 +1,7 @@
 import { MenuTargetType } from "../../rs/MenuEntry";
 import { MenuAction, menuAction } from "./MenuAction";
 import type { MenuClickContext } from "./MenuEngine";
+import { dispatchMenuAction } from "./menuEvents";
 
 /**
  * Menu opcodes
@@ -214,7 +215,7 @@ export type MenuStateRow = {
     handler?: (gx?: number, gy?: number, ctx?: MenuClickContext) => void;
 };
 
-function inferOpcode(row: MenuStateRow): number {
+export function inferMenuOpcode(row: MenuStateRow): number {
     if (typeof row.opcode === "number") return row.opcode;
     const { action, targetType, actionIndex } = row;
     // Rows carrying an op slot index are entity ops; their text never selects
@@ -458,7 +459,7 @@ export class MenuState {
         const idx = this.actions.length;
         this.actions.push(row.option);
         this.targets.push(row.target || "");
-        this.opcodes.push(inferOpcode(row));
+        this.opcodes.push(inferMenuOpcode(row));
         this.identifiers.push(row.arg0 ?? row.targetId ?? 0);
         this.argument1.push(row.arg1 ?? row.mapX ?? row.playerServerId ?? 0);
         this.argument2.push(row.arg2 ?? row.mapY ?? 0);
@@ -502,6 +503,21 @@ export class MenuState {
      */
     invoke(index: number, screenX?: number, screenY?: number, ctx?: MenuClickContext): void {
         if (index < 0 || index >= this.actions.length) return;
+
+        let dispatched = false;
+        try { dispatchMenuAction({ param0: this.argument1[index], param1: this.argument2[index],
+            opcode: this.opcodes[index], identifier: this.identifiers[index], itemId: this.itemIds[index],
+            option: this.actions[index], target: this.targets[index], screenX: screenX ?? 0, screenY: screenY ?? 0 },
+        (action) => {
+            dispatched = true;
+            this.argument1[index] = action.param0; this.argument2[index] = action.param1;
+            this.opcodes[index] = action.opcode; this.identifiers[index] = action.identifier;
+            this.itemIds[index] = action.itemId; this.actions[index] = action.option; this.targets[index] = action.target;
+            this.invokeNative(index, screenX, screenY, ctx);
+        }); } finally { if (!dispatched) ctx?.closeMenu?.(); }
+    }
+
+    private invokeNative(index: number, screenX?: number, screenY?: number, ctx?: MenuClickContext): void {
 
         try {
             const opcode = this.opcodes[index] | 0;

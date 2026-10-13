@@ -8,13 +8,13 @@
     "hardcore": { "label": "Hardcore Ironman", "varbit": 3, "icon": 10, "rank": 2, "armour": ["HARDCORE_IRONMAN_HELM", "HARDCORE_IRONMAN_PLATEBODY", "HARDCORE_IRONMAN_PLATELEGS"] }
   },
   "setup": {
-    "$comment": "The setup interface (ironman_setup 890) and its confirmation (popupoverlay 289 in 890:29, script 4212), as captured on Tutorial Island. The varps are sent before it opens.",
+    "$comment": "The setup interface (ironman_setup 890) and its confirmation (popupoverlay 289 in 890:29, script 4212), as captured on Tutorial Island. The varps are sent before it opens. Buttons 21-27 are modes 0-6 in the order the interface's script 519 lays them out (None, Ironman, Ultimate, Hardcore, then the three group modes).",
     "interface": 890,
     "popupComponent": 29,
     "popupInterface": 289,
     "popupScript": 4212,
     "varps": {"263": 0, "264": 1, "266": 1},
-    "buttons": {"22": "ironman", "23": "ultimate", "24": "hardcore", "25": "group"}
+    "buttons": {"21": "none", "22": "ironman", "23": "ultimate", "24": "hardcore", "25": "group", "26": "group", "27": "group"}
   },
   "messages": {
     "tradeSelf": { "text": "You are an Ironman. You stand alone.", "source": "capture" },
@@ -28,6 +28,7 @@
     "ultimateBank": { "text": "As an Ultimate Ironman, you cannot use the bank.", "source": "ours" },
     "hardcoreDeath": { "text": "You have fallen as a Hardcore Ironman. You are now a standard Ironman.", "source": "ours" },
     "setupConfirmCaptured": { "text": "Choosing an Ironman mode|To play as an Ironman, you'll need to <col=ffb83f>set a PIN</col> to protect your Ironman status.<br><br>Would you like to set a PIN now?|<col=ff0000>Cancel</col>|<col=0dc10d>Proceed</col>", "source": "capture (not used: this server has no bank PIN)" },
+    "setupLeave": { "text": "Leaving Ironman mode|Would you like to stop being<br>a <col=ffb83f>{mode}</col>?|<col=ff0000>Cancel</col>|<col=0dc10d>Proceed</col>", "source": "ours (the popup for the None button)" },
     "setupConfirm": { "text": "Choosing an Ironman mode|Would you like to become a<br><col=ffb83f>{mode}</col>?|<col=ff0000>Cancel</col>|<col=0dc10d>Proceed</col>", "source": "ours (the captured popup without the PIN)" },
     "modeUpdated": { "text": "Your Ironman mode has been updated.", "source": "capture, without its \", and your new PIN is now in effect.\"" },
     "modeAlready": { "text": "Your mode is already {mode}.", "source": "capture" },

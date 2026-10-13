@@ -1,3 +1,4 @@
+import type { WidgetActionEvent } from "../widgets/widgetActionPayload";
 import type { Camera } from "../Camera";
 import type { HitsplatEventPayload } from "../GameRenderer";
 import type { InputManager } from "../InputManager";
@@ -9,6 +10,7 @@ import type { ClickRegistry } from "../../widgets/gl/click-registry";
 import type { SimpleMenuEntry } from "../../ui/menu/MenuEngine";
 import type { MenuTransformContext } from "../../ui/menu/menuTransforms";
 import type { FontLoader } from "../../widgets/components/TextRenderer";
+import type { IndexedSprite } from "../../rs/sprite/IndexedSprite";
 import type {
     WebGPUSceneExtension,
     WebGPUSceneExtensionContext,
@@ -114,6 +116,8 @@ export type HealthBarEvent = {
 };
 
 export interface ClientPlugin {
+    /** Extra player headicons; return stable, immutable sprites so textures can be reused. */
+    getPlayerHeadIcons?(serverId: number): readonly IndexedSprite[] | undefined;
     transformSceneProgram?(source: ProgramSource): ProgramSource;
     sceneProgramsReady?(renderer: WebGLOsrsRenderer, programs: Program[]): void;
     beforeSceneRender?(renderer: WebGLOsrsRenderer, drawActors: () => void): void;
@@ -142,6 +146,8 @@ export interface ClientPlugin {
     widgetOverlay?: WidgetOverlay;
     /** Handle a client-side `::command`; return true to consume it (no server round trip). */
     handleClientCommand?(command: string): boolean;
+    /** Handle a widget action locally; return true to consume it before CS2 or network dispatch. */
+    handleWidgetAction?(event: WidgetActionEvent): boolean;
     /** Reorders or extends a menu (top first); its first eligible entry is the left-click. */
     transformMenuEntries?(
         entries: SimpleMenuEntry[],
@@ -154,6 +160,15 @@ export class ClientPluginManager {
 
     add(plugin: ClientPlugin): void {
         this.plugins.push(plugin);
+    }
+
+    playerHeadIcons(serverId: number): IndexedSprite[] {
+        const icons: IndexedSprite[] = [];
+        for (const plugin of this.plugins) {
+            const sprites = plugin.getPlayerHeadIcons?.(serverId);
+            if (sprites) icons.push(...sprites);
+        }
+        return icons;
     }
 
     transformSceneProgram(source: ProgramSource): ProgramSource {
@@ -254,6 +269,10 @@ export class ClientPluginManager {
         const overlays: WidgetOverlay[] = [];
         for (const plugin of this.plugins) if (plugin.widgetOverlay) overlays.push(plugin.widgetOverlay);
         return overlays;
+    }
+
+    handleWidgetAction(event: WidgetActionEvent): boolean {
+        return this.plugins.some(plugin => plugin.handleWidgetAction?.(event) === true);
     }
 
     handleClientCommand(command: string): boolean {

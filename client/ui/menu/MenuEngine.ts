@@ -1,6 +1,7 @@
 import { MenuTargetType, SpellCastMetadata } from "../../rs/MenuEntry";
 import { MENU_ACTION_DEPRIORITIZE_OFFSET, MenuAction, inferMenuAction } from "./MenuAction";
 import { MenuOpcode } from "./MenuState";
+import { pluginShouldOpenMenu } from "./menuEvents";
 
 export type SimpleMenuEntry = {
     option: string;
@@ -16,6 +17,11 @@ export type SimpleMenuEntry = {
     npcServerId?: number;
     actionIndex?: number; // 0-based option index for LOC/OBJ/NPC/PLAYER actions
     opcode?: number; // precomputed OSRS client opcode when known
+    identifier?: number;
+    param0?: number;
+    param1?: number;
+    itemId?: number;
+    worldViewId?: number;
     deprioritized?: boolean; // Whether this entry is deprioritized (sorted below normal entries)
     shiftClick?: boolean; // Whether this entry can be executed via shift-click (bypasses menu)
     forceLeftClick?: boolean; // Forces left-click execution even when the menu would open
@@ -89,7 +95,7 @@ export function shouldLeftClickOpenMenu(
         return false;
     }
 
-    return shouldOpen;
+    return pluginShouldOpenMenu(shouldOpen);
 }
 
 /**

@@ -15,5 +15,6 @@ module.exports = {
     require("./colosseum/SolHeredit.Colosseum")(api);
     require("./colosseum/Rewards.Colosseum")(api);
     require("./colosseum/Commands.Colosseum")(api);
+    require("./colosseum/CombatAchievements.Colosseum")(api);
   },
 };

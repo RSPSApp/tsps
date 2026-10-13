@@ -9,6 +9,11 @@ import { InputManager } from "../game/InputManager";
 import { processWidgetKeyboardInput } from "../game/widgets/input/widgetKeyboardInput";
 import { setPacketSocket, flushPackets } from "../network/packet";
 import { WidgetInputController } from "../game/widgets/WidgetInputController";
+import { ClientScriptLoader } from "../game/cs2/ClientScriptLoader";
+import { CacheSystem } from "../rs/cache/CacheSystem";
+import { Cs2Vm } from "../rs/cs2/Cs2Vm";
+import { Script } from "../rs/cs2/Script";
+import { loadCache, loadCacheInfos, loadCacheList } from "../scripts/cache/load-util";
 
 let sentPacket: Uint8Array | undefined;
 (globalThis as any).WebSocket = { OPEN: 1 };
@@ -116,6 +121,47 @@ assert.deepEqual(decodeClientPacket(Buffer.from(sentPacket)), {
     privateMode: 2,
     tradeMode: 0,
 });
+
+// Execute the real cache's bank/command branch: ::bank must reach DOCHEAT,
+// rather than sending the stock "something very silly" public chat line.
+const cacheInfo = loadCacheList(loadCacheInfos()).latest;
+const cache = CacheSystem.fromFiles(cacheInfo, loadCache(cacheInfo).files);
+const scripts = new ClientScriptLoader({ getCacheSystem: () => cache });
+let commandBuffer = "";
+const commandVm = new Cs2Vm({
+    loadScript: (id: number) => scripts.load(id),
+    varManager: {
+        getVarcString: () => commandBuffer,
+        setVarcString: (_id: number, value: string) => { commandBuffer = value; },
+    },
+    widgetManager: { beginBatch() {}, endBatch() {}, flushBatch() {} },
+} as any);
+for (const load of [() => scripts.load(73), () => scripts.loadIfExists(73)]) {
+    scripts.clear();
+    const chatScript = load();
+    assert.ok(chatScript);
+    const bankCheck = chatScript.stringOperands.indexOf("::bank");
+    assert.ok(bankCheck >= 0, "the cache still contains the bank command check");
+    const start = bankCheck - 1;
+    const end = chatScript.instructions.indexOf(Opcodes.DOCHEAT, start) + 1;
+    assert.ok(end > start, "the command branch ends at DOCHEAT");
+    const commandScript = Object.assign(new Script(), chatScript, {
+        instructions: Int32Array.from([...chatScript.instructions.slice(start, end), Opcodes.RETURN]),
+        intOperands: Int32Array.from([...chatScript.intOperands.slice(start, end), 0]),
+        stringOperands: [...chatScript.stringOperands.slice(start, end), null],
+    });
+    for (const text of ["::bank", "::bank ", "::BANK", "::bank 1", "::banker", "::players"]) {
+        sentPacket = undefined;
+        commandBuffer = text;
+        commandVm.execute(commandScript);
+        assert.ok(sentPacket, `${text} must send a command packet`);
+        assert.deepEqual(decodeClientPacket(Buffer.from(sentPacket)), {
+            type: "chat", text: text.trim(), messageType: "public",
+        });
+        assert.equal(commandVm.intStackSize, 0, "the command branch balances its integer stack");
+        assert.equal(commandVm.stringStackSize, 0, "the command branch balances its string stack");
+    }
+}
 
 // Construction must accept raw keys even when a plugin consumes keyboard input,
 // chat widgets are hidden, and a stale dialog/search still claims focus.

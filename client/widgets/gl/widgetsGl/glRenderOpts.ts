@@ -2,6 +2,7 @@ import { CacheIndex } from "../../../rs/cache/CacheIndex";
 import { CacheSystem } from "../../../rs/cache/CacheSystem";
 import { BitmapFont } from "../../../rs/font/BitmapFont";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
+import type { WidgetNode } from "../../../widgets/WidgetNode";
 import { ClipRect } from "../scissor";
 export type GLRenderOpts = {
     spriteIndex: CacheIndex;
@@ -48,6 +49,9 @@ export type GLRenderOpts = {
     widgetManager?: WidgetManager;
     // Drawn after the widgets, before the right-click menu.
     drawAboveWidgets?: () => void;
+    afterWidgetDrawn?: (uid: number, widget: WidgetNode) => void;
+    afterInterfaceDrawn?: (group: number) => void;
+    afterMenuDrawn?: () => void;
     /** Side-panel widget uids: the host draws its widget overlays right after one of these. */
     widgetOverlayAnchors?: ReadonlySet<number>;
     /** Called once per pass, right after an anchor widget's own content is drawn. */

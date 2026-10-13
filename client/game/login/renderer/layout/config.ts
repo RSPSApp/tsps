@@ -79,7 +79,9 @@ export function getViewportTransformStateHash(host: LoginRendererHost) {
 
         return `${host.mobileKeyboardFocusActive ? 1 : 0}|${host.mobileKeyboardFocusField}|${
             host.renderScale
-        }|${host.renderOffsetX}|${host.renderOffsetY}`;
+        }|${host.renderOffsetX}|${host.renderOffsetY}|${host.contentScale}|${
+            host.contentSmoothing ? 1 : 0
+        }`;
     
 }
 

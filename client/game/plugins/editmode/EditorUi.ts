@@ -18,6 +18,7 @@ import {
     type EditorTool,
     createCloseIcon,
     createDuplicateIcon,
+    createMoveIcon,
     createDownloadIcon,
     createLayersIcon,
     createOverlayIcon,
@@ -141,6 +142,7 @@ function createActionButton(
     title: string,
     icon: () => SVGElement,
     action: () => void,
+    shortcut?: string,
 ): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
@@ -163,6 +165,14 @@ function createActionButton(
         textAlign: "left",
     });
     button.append(" ", title);
+    if (shortcut) {
+        const hint = document.createElement("kbd");
+        hint.textContent = shortcut;
+        Object.assign(hint.style, { marginLeft: "auto", color: "#94a3b8", font: "12px sans-serif" });
+        button.appendChild(hint);
+        button.title = `${title} (${shortcut})`;
+        button.setAttribute("aria-keyshortcuts", shortcut.toLowerCase());
+    }
     button.addEventListener("click", action);
     return button;
 }
@@ -244,7 +254,7 @@ class EditorChrome {
             {
                 id: "overlay",
                 label: "Choose overlay",
-                icon: () => createOverlayIcon(this.overlayColor(plugin.getConfig().overlayId)),
+                icon: () => this.createOverlaySwatchIcon(plugin.getConfig().overlayId),
                 action: () => this.toggleOverlayPalette(),
             },
             { id: "path", label: "Draw path", icon: createPathIcon },
@@ -362,6 +372,7 @@ class EditorChrome {
         renderAllLabel.append("Render all Height Levels");
         this.renderAllInput = document.createElement("input");
         this.renderAllInput.type = "checkbox";
+        renderAllLabel.title = "Defaults on at HL 0 and off above it. Hover inside a building at HL 0 to reveal its contents.";
         this.renderAllInput.addEventListener("change", () =>
             this.plugin.setConfig({ renderAllHeightLevels: this.renderAllInput.checked }),
         );
@@ -577,6 +588,23 @@ class EditorChrome {
         return this.overlaySwatches.find((swatch) => swatch.id === id)?.colorRgb ?? 0x64748b;
     }
 
+    private createOverlaySwatchIcon(id: number): SVGElement {
+        const color = this.overlayColor(id);
+        const textureId = this.overlaySwatches.find((swatch) => swatch.id === id)?.textureId;
+        const texture = textureId === undefined ? undefined : this.plugin.getOverlayTexture(textureId);
+        const icon = createOverlayIcon(color, texture);
+        if (textureId !== undefined && !texture) {
+            const retry = (): void => {
+                if (!icon.isConnected) return;
+                const loaded = this.plugin.getOverlayTexture(textureId);
+                if (loaded) icon.replaceChildren(...createOverlayIcon(color, loaded).childNodes);
+                else window.setTimeout(retry, 250);
+            };
+            window.setTimeout(retry, 250);
+        }
+        return icon;
+    }
+
     private toggleOverlayPalette(): void {
         if (this.overlayPalette) {
             this.overlayPalette.remove();
@@ -600,7 +628,7 @@ class EditorChrome {
             gridTemplateColumns: "repeat(5, 1fr)",
             gap: "5px",
         });
-        const appendSwatch = (id: number, colorRgb: number, name?: string): void => {
+        const appendSwatch = (id: number, colorRgb: number, name?: string, textureId?: number): void => {
             const swatch = document.createElement("button");
             swatch.type = "button";
             swatch.textContent = String(id);
@@ -622,10 +650,24 @@ class EditorChrome {
                 this.toggleOverlayPalette();
             });
             swatches.appendChild(swatch);
+            if (textureId !== undefined) {
+                const showTexture = (): void => {
+                    const texture = this.plugin.getOverlayTexture(textureId);
+                    if (texture) {
+                        swatch.style.backgroundImage = `url("${texture}")`;
+                        swatch.style.backgroundSize = "cover";
+                    } else {
+                        window.setTimeout(() => {
+                            if (swatch.isConnected) showTexture();
+                        }, 250);
+                    }
+                };
+                showTexture();
+            }
         };
         appendSwatch(0, 0x27303a, "Clear");
         for (const swatch of this.overlaySwatches) {
-            appendSwatch(swatch.id, swatch.colorRgb, swatch.name);
+            appendSwatch(swatch.id, swatch.colorRgb, swatch.name, swatch.textureId);
         }
         panel.appendChild(swatches);
     }
@@ -672,7 +714,7 @@ class EditorChrome {
         this.saveObjectSpawnsInput.checked = state.config.saveObjectSpawns;
         this.pvpZonesInput.checked = state.config.showPvpZones;
         this.multiCombatZonesInput.checked = state.config.showMultiCombatZones;
-        this.toolbar.setIcon("overlay", () => createOverlayIcon(this.overlayColor(state.config.overlayId)));
+        this.toolbar.setIcon("overlay", () => this.createOverlaySwatchIcon(state.config.overlayId));
         this.toolbar.select(
             state.config.tool === "place"
                 ? "cache-search"
@@ -779,6 +821,18 @@ class EditorChrome {
         const actions = document.createElement("div");
         Object.assign(actions.style, { display: "grid", gap: "5px" });
         if (isGroundSelection) {
+            if (!hasTileRange) {
+                const overlay = this.plugin.getSelectionOverlay();
+                const useOverlay = createActionButton("Use overlay",
+                    () => this.createOverlaySwatchIcon(overlay ?? 0),
+                    () => this.plugin.useSelectionOverlay());
+                useOverlay.disabled = overlay === undefined;
+                if (useOverlay.disabled) {
+                    useOverlay.style.opacity = "0.45";
+                    useOverlay.style.cursor = "not-allowed";
+                }
+                actions.appendChild(useOverlay);
+            }
             actions.append(
                 createActionButton("Paint overlay", createPaintIcon, () =>
                     this.plugin.paintSelection(),
@@ -787,10 +841,11 @@ class EditorChrome {
         }
         if (selection.kind === "loc") {
             actions.append(
-                createActionButton("Rotate object", createRotateIcon, () => this.plugin.rotateSelection()),
+                createActionButton("Rotate object", createRotateIcon, () => this.plugin.rotateSelection(), "R"),
                 createActionButton("Duplicate object", createDuplicateIcon, () =>
-                    this.plugin.duplicateSelection(),
+                    this.plugin.duplicateSelection(), "C",
                 ),
+                createActionButton("Move object", createMoveIcon, () => this.plugin.moveSelection(), "M"),
                 createActionButton("Delete object", createTrashIcon, () =>
                     this.plugin.deleteSelection(),
                 ),

@@ -66,6 +66,7 @@ export type WidgetInputControllerDeps = {
         eventContext?: Partial<ScriptEvent>,
     ) => void;
     handleWidgetAction: (event: WidgetActionEvent) => void;
+    handlePluginWidgetAction?: (event: WidgetActionEvent) => boolean;
     handleTradeWidgetAction: (
         widget: any,
         event: { option?: string; slot?: number; itemId?: number },

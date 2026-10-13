@@ -1,7 +1,7 @@
 import type { ScriptEvent } from "../../../rs/cs2/Cs2Vm";
 import { findDropTarget } from "../../../widgets/menu/utils";
 import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
-import type { WidgetInteractionController } from "../WidgetInteractionController";
+import { WidgetInteractionController } from "../WidgetInteractionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 
 export function processWidgetDragInput(
@@ -76,6 +76,12 @@ export function processWidgetDragInput(
         // Execute onDrag if dragging is active
         if (widgetInteraction.isDraggingWidget) {
             const w = widgetInteraction.clickedWidget;
+            // UI input can run more often than the native 20 ms client cycle.
+            const cycle = deps.getTransmitCycles().cycleCntr | 0;
+            if ((w as any)._lastDragEventCycle !== cycle) {
+                (w as any)._lastDragEventCycle = cycle;
+                for (const listener of WidgetInteractionController.dragListeners) listener();
+            }
 
             // clickedWidgetParent defines clamp/coordinate space.
             // If null, widget can be dragged freely without clamping (like bank items).

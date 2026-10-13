@@ -92,6 +92,7 @@ vec3 hdMappedNormal(vec3 normal, vec2 uv, float layer, vec3 dx, vec3 dy, vec2 ux
 }
 
 vec3 hdShade(vec3 surface, vec3 position, vec4 material, vec4 metadata, vec2 uv) {
+    if ((int(metadata.y) & 4) != 0) return pow(pow(max(surface, vec3(0.0)), vec3(2.2)) * 6.0, vec3(1.0 / 2.2));
     if ((int(metadata.y) & 1) != 0) return surface;
     // Architecture/effects use face normals; actors and terrain interpolate
     // their own vertex normals to avoid visible triangle seams.

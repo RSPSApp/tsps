@@ -1381,9 +1381,13 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     }
   }
 
+  /** The NPCs whose lines carry this quest's blanks; "[amount]" is common to other pages. */
+  const BLANK_SPEAKERS = new Set(["King Sorvott IV", "Thorkel Silkbeard", "Mawnis Burowgar"]);
+
   function handleLine(event) {
     const { text } = event;
     const value = String(text ?? "");
+    if (!BLANK_SPEAKERS.has(event.definition?.getName?.())) return;
     if (
       value.includes("[six/seven/eight]") ||
       value.includes("[tin/coal/mithril]") ||

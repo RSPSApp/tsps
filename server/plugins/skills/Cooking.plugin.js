@@ -58,6 +58,21 @@ const COOKABLES = Object.freeze([
   { raw: ItemIds.RAW_ANGLERFISH, cooked: ItemIds.ANGLERFISH, burnt: ItemIds.BURNT_ANGLERFISH, level: 84, xp: 230, stopBurn: 98, name: "anglerfish" },
   { raw: ItemIds.RAW_DARK_CRAB, cooked: ItemIds.DARK_CRAB, burnt: ItemIds.BURNT_DARK_CRAB, level: 90, xp: 215, stopBurn: 99, name: "dark crab" },
   { raw: ItemIds.RAW_MANTA_RAY, cooked: ItemIds.MANTA_RAY, burnt: ItemIds.BURNT_MANTA_RAY, level: 91, xp: 216.2, stopBurn: 99, name: "manta ray" },
+  // Chambers of Xeric fish and bats (Wiki levels and XP; burn levels not on the Wiki).
+  { raw: 20855, cooked: 20856, burnt: 20854, level: 1, xp: 10, stopBurn: 21, name: "pysk fish" },
+  { raw: 20857, cooked: 20858, burnt: 20854, level: 15, xp: 13, stopBurn: 35, name: "suphi fish" },
+  { raw: 20859, cooked: 20860, burnt: 20854, level: 30, xp: 16, stopBurn: 50, name: "leckish fish" },
+  { raw: 20861, cooked: 20862, burnt: 20854, level: 45, xp: 19, stopBurn: 65, name: "brawk fish" },
+  { raw: 20863, cooked: 20864, burnt: 20854, level: 60, xp: 22, stopBurn: 75, name: "mycil fish" },
+  { raw: 20865, cooked: 20866, burnt: 20854, level: 75, xp: 25, stopBurn: 85, name: "roqed fish" },
+  { raw: 20867, cooked: 20868, burnt: 20854, level: 90, xp: 28, stopBurn: 97, name: "kyren fish" },
+  { raw: 20870, cooked: 20871, burnt: 20869, level: 1, xp: 10, stopBurn: 21, name: "guanic bat" },
+  { raw: 20872, cooked: 20873, burnt: 20869, level: 15, xp: 13, stopBurn: 35, name: "prael bat" },
+  { raw: 20874, cooked: 20875, burnt: 20869, level: 30, xp: 16, stopBurn: 50, name: "giral bat" },
+  { raw: 20876, cooked: 20877, burnt: 20869, level: 45, xp: 19, stopBurn: 65, name: "phluxia bat" },
+  { raw: 20878, cooked: 20879, burnt: 20869, level: 60, xp: 22, stopBurn: 75, name: "kryket bat" },
+  { raw: 20880, cooked: 20881, burnt: 20869, level: 75, xp: 25, stopBurn: 85, name: "murng bat" },
+  { raw: 20882, cooked: 20883, burnt: 20869, level: 90, xp: 28, stopBurn: 97, name: "psykk bat" },
 ]);
 
 const COOKABLE_BY_RAW = new Map(COOKABLES.map((cookable) => [cookable.raw, cookable]));
@@ -319,7 +334,7 @@ module.exports = {
     api.onPlayerDisconnect(({ player }) => {
       stopCooking(activeSessions, player, false);
     });
-    api.onPlayerLevelUp(({ player }) => {
+    api.onCustomEvent("level-up:popup-opened", ({ player }) => {
       stopCooking(activeSessions, player, false);
     });
 

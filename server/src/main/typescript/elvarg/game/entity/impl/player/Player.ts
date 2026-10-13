@@ -221,7 +221,6 @@ export class Player extends Mobile {
         this.getMovementQueue().setBlockMovement(false).reset();
         this.getPacketSender().sendEffectTimer(0, EffectTimer.ANTIFIRE).sendEffectTimer(0, EffectTimer.FREEZE)
             .sendEffectTimer(0, EffectTimer.VENGEANCE).sendEffectTimer(0, EffectTimer.TELE_BLOCK);
-        this.getPacketSender().sendPoisonType(0);
         this.getPacketSender().sendSpecialAttackState(false);
         this.setUntargetable(false);
         this.isDying = false;
@@ -364,6 +363,17 @@ export class Player extends Mobile {
         super.performAnimation(animation);
     }
 
+    /** The hitpoints orb's poison state as last sent (varp 102); undefined sends it on the first tick. */
+    private lastPoisonOrb: number | undefined = undefined;
+
+    /** Sends the orb's poison/venom/immunity value when it changes (CombatPoisonEffect.orbValue). */
+    private syncPoisonOrb(): void {
+        const value = CombatPoisonEffect.orbValue(this);
+        if (value === this.lastPoisonOrb) return;
+        this.lastPoisonOrb = value;
+        this.getPacketSender().sendConfig(CombatPoisonEffect.ORB_VARP, value);
+    }
+
     public process() {
         const isBot = this.isPlayerBot();
         const timed = <T>(phase: string, fn: () => T): T =>
@@ -376,6 +386,7 @@ export class Player extends Mobile {
 
         // Timers
         timed("timers", () => this.getTimers().process());
+        if (!isBot) this.syncPoisonOrb();
 
         const movement = this.getMovementQueue();
         const combat = this.getCombat();
@@ -809,6 +820,9 @@ export class Player extends Mobile {
     }
 
     public setInterfaceId(interfaceId: number): this {
+        if (this.interfaceId >= 0 && interfaceId >= 0 && this.interfaceId !== interfaceId) {
+            PluginManager.emitCustomEvent("interface:closed", { player: this, interfaceId: this.interfaceId });
+        }
         this.interfaceId = interfaceId;
         return this;
     }

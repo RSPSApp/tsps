@@ -4,6 +4,7 @@
  * Replaces JSON.stringify for client-to-server messages.
  * All encoding methods match OSRS buffer patterns.
  */
+import { encodePluginMessagePayload } from "../../common/network/PluginMessage";
 import { CLIENT_PACKET_LENGTHS, ClientPacketId } from "../../common/packets/ClientPacketId";
 import {
     FriendsChatActionCode,
@@ -540,6 +541,15 @@ export function encodeClientMessage(msg: { type: string; payload: any }): Uint8A
     const { type, payload } = msg;
 
     switch (type) {
+        case "plugin_message": {
+            const bytes = encodePluginMessagePayload(payload);
+            const result = new Uint8Array(bytes.length + 3);
+            result[0] = ClientPacketId.PLUGIN_MESSAGE;
+            result[1] = bytes.length >> 8;
+            result[2] = bytes.length & 255;
+            result.set(bytes, 3);
+            return result;
+        }
         case "movement_input":
             return clientEncoder.encodeMovementInput(payload);
 

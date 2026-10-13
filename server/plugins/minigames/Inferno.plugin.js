@@ -35,6 +35,7 @@ module.exports = {
     api.onPlayerLogin(run.resumeRun);
     api.onPlayerLogout(run.runLogout);
     api.onPlayerProcess(run.processRun);
+    require("./inferno/CombatAchievements.Inferno")(api);
     api.onPlayerDeath(run.runDeath);
     api.onShouldDropItemsOnDeath(run.keepItemsInRun);
     api.onCanTeleport(run.noTeleportOut);

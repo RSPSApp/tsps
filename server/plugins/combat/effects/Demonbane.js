@@ -5,9 +5,11 @@
  * - Arclight and Emberlight 70%, Silverlight and Darklight 60%, bone and burning claws 5%.
  * - Scorching bow 30% (ranged). Its damage bonus is additive with an imbued slayer helmet's on
  *   task (Wiki: 45% in total): the helmet's 23/20 becomes 29/20, through "slayer:imbued-ranged-bonus".
- * Not modelled: bosses with reduced demonbane effectiveness (Duke Sucellus takes 70% of it).
+ * Some demons are more or less vulnerable (Wiki): the weapon's percentage is scaled by the vulnerability
+ * the content that spawns them sets on the NPC's "combat:demonbane-vulnerability" attribute (Yama 1.2,
+ * his void flares 2), as demonbane spells are. Not modelled yet: Duke Sucellus's 70%.
  */
-const { asPlayer, weaponName, targetHasAttribute, addPercent } = require("./GearChecks");
+const { asPlayer, weaponName, targetNpc, targetHasAttribute, addPercent } = require("./GearChecks");
 
 const MELEE_PERCENT = new Map([
   ["arclight", 70],
@@ -20,13 +22,16 @@ const MELEE_PERCENT = new Map([
 ]);
 const RANGED_PERCENT = new Map([["scorching bow", 30]]);
 
+const VULNERABILITY_ATTRIBUTE = "combat:demonbane-vulnerability";
 let pluginApi;
 
 function percentFor(entity, table) {
   const player = asPlayer(entity);
   if (!player) return 0;
   const percent = table.get(weaponName(player)) ?? 0;
-  return percent > 0 && targetHasAttribute(entity, "demon") ? percent : 0;
+  if (percent <= 0 || !targetHasAttribute(entity, "demon")) return 0;
+  const vulnerability = Number(targetNpc(entity)?.getAttribute?.(VULNERABILITY_ATTRIBUTE));
+  return Math.floor(percent * (vulnerability > 0 ? vulnerability : 1));
 }
 
 function meleeDemonbane(entity, value) {

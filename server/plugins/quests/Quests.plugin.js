@@ -7,7 +7,11 @@
  * (King Roald, Reldo, ...) fall back to it after the other quests' handlers.
  */
 const QUESTS = [
-  "AnimalMagnetism", "AnotherSliceOfHAM", "ARuffSituation", "AscentOfArceuus",
+  // Sins of the Father is the last Myreque chapter, so it registers before the
+  // earlier ones (In Search of/In Aid/Darkness of Hallowvale, A Taste of Hope):
+  // its stage window wins the shared Myreque NPCs and it defers outside it.
+  "SinsOfTheFather",
+  "AKingdomDivided", "AnimalMagnetism", "AnotherSliceOfHAM", "ARuffSituation", "AscentOfArceuus",
   "AtFirstLight", "BelowIceMountain", "BeneathCursedSands", "BetweenARock",
   "BigChompyBirdHunting", "Biohazard", "BlackKnightsFortress", "BoneVoyage",
   "CabinFever", "ChildrenOfTheSun", "ClientOfKourend", "ClockTower",
@@ -27,7 +31,7 @@ const QUESTS = [
   "HauntedMine", "HazeelCult", "HeroesQuest", "HolyGrail",
   "HorrorFromTheDeep", "IcthlarinsLittleHelper", "IdesOfMilk", "ImpCatcher",
   "InAidOfTheMyreque", "InSearchOfTheMyreque", "JunglePotion", "KingsRansom",
-  "KnightsSword", "LandOfTheGoblins", "LegendsQuest", "LostCity",
+  "KnightsSword", "LandOfTheGoblins", "LearningTheRopes", "LegendsQuest", "LostCity",
   "LostTribe", "LunarDiplomacy", "MakingFriendsWithMyArm", "MakingHistory",
   "MeatAndGreet", "MerlinsCrystal", "MisthalinMystery", "MonkeyMadnessI",
   "MonkeyMadnessII", "MonksFriend", "MountainDaughter", "MourningsEndPartI",
@@ -43,7 +47,7 @@ const QUESTS = [
   "ShadowsOfCustodia", "SheepHerder", "SheepShearer", "ShieldOfArrav",
   "ShiloVillage", "SleepingGiants", "SlugMenace", "SoulsBane",
   "SpiritsOfTheElid", "SwanSong", "TaiBwoWannaiTrio", "TailOfTwoCats",
-  "TaleOfTheRighteous", "TearsOfGuthix", "TempleOfIkov", "TempleOfTheEye",
+  "TaleOfTheRighteous", "TasteOfHope", "TearsOfGuthix", "TempleOfIkov", "TempleOfTheEye",
   "TheFeud", "TheFinalDawn", "TheFremennikExiles", "TheFremennikIsles",
   "TheGolem", "TheHeartOfDarkness", "ThroneOfMiscellania", "TouristTrap",
   "TowerOfLife", "TreeGnomeVillage", "TribalTotem", "TrollRomance",
@@ -58,7 +62,7 @@ const F2P_QUESTS = new Set([
   "BelowIceMountain",
   "BlackKnightsFortress", "CooksAssistant", "CorsairCurse", "DemonSlayer", "DoricsQuest",
   "DragonSlayer", "ErnestTheChicken", "GoblinDiplomacy", "ImpCatcher", "KnightsSword",
-  "MisthalinMystery", "IdesOfMilk", "PiratesTreasure", "PrinceAliRescue", "RestlessGhost", "RomeoAndJuliet",
+  "LearningTheRopes", "MisthalinMystery", "IdesOfMilk", "PiratesTreasure", "PrinceAliRescue", "RestlessGhost", "RomeoAndJuliet",
   "RuneMysteries", "SheepShearer", "ShieldOfArrav", "VampyreSlayer", "WitchsPotion",
   "XMarksTheSpot",
 ]);

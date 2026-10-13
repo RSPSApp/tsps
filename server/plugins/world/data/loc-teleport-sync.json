@@ -2,6 +2,9 @@
   "$comment": "Lasting decisions for scripts/sync-loc-teleports.cjs (docs/loc-teleports.md): captured loc teleports to leave out, by tile (one placement of a name many locs share), exact gameval name or pattern, with the reason; and `requirements`, the gates live OSRS refused some players at, with the requirement (Wiki) and the captured refusal; and `dialogues`, locs whose option asks first, with the question and options as the game sends them (chatbox_multi_init in the recordings): `go` are the options that lead to the captured destination, `ladder` hands an uncaptured direction to Ladders, and `answer` has the ticks from the answer (the captured ticks count from arriving, and include reading the question). A requirement or dialogue without a tile applies to every placement of that name. `include` takes locs of other kinds that are a plain move (exits, lifts, wells), by name, with the reason.",
   "include": {
     "fossil_slayer_cave_task": "The Fossil Island Slayer cave's exit.",
+    "cof_over_falloff2_rope": "The way down into the Chasm of Fire.",
+    "cof_gibbet_lift_down": "A Chasm of Fire lift.",
+    "cof_gibbet_lift_up": "A Chasm of Fire lift.",
     "karam_dungeon_exit": "The Brimhaven Dungeon's exit.",
     "wild_boss_escape_cave_exit03": "A Wilderness boss escape cave's exit.",
     "royal_light_exit_multiloc": "The Lighthouse dungeon's exit.",
@@ -25,7 +28,7 @@
     },
     "patterns": [
       {"pattern": "^sailing_", "why": "Sailing content (boats, docks, the shipyard)."},
-      {"pattern": "^(tob|gotr|soul|sepulchre|roguesden|magearena|brimstone|cof|pmoon|bloodtemple|abyss|rcu|ntk)_", "why": "A minigame, raid or boss area; its plugin owns the way in and out."},
+      {"pattern": "^(tob|gotr|soul|sepulchre|roguesden|magearena|brimstone|pmoon|bloodtemple|abyss|rcu|ntk)_", "why": "A minigame, raid or boss area; its plugin owns the way in and out."},
       {"pattern": "^(tempoross|giants_foundry)_", "why": "A minigame; its plugin owns the way in and out."},
       {"pattern": "^(magictraining|zalcano|nex|toa|royal_titans)_", "why": "A minigame, raid or boss area; its plugin owns the way in and out."},
       {"pattern": "^kalphite_(burrow|chamber)_entrance", "why": "A rope used on it is used up and sets a varbit that shows the roped version; needs that state kept."},

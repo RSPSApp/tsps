@@ -24,6 +24,8 @@ export class ActorDataTexture {
     readonly texture: GPUTexture;
     readonly poseTexture: GPUTexture;
     readonly bindGroup: GPUBindGroup;
+    private uploaded = new Uint16Array(0);
+    private uploadedRows = 0;
 
     constructor(device: GPUDevice, layout: GPUBindGroupLayout, label: string) {
         this.texture = device.createTexture({
@@ -63,6 +65,16 @@ export class ActorDataTexture {
         if (count <= 0) return;
         const rows = Math.min(ACTOR_DATA_ROWS, Math.ceil((count * 2) / ACTOR_DATA_WIDTH));
         const u16Count = rows * ACTOR_DATA_WIDTH * 4;
+        if (rows === this.uploadedRows) {
+            let equal = true;
+            for (let i = 0; i < u16Count; i++) {
+                if (data[i] !== this.uploaded[i]) { equal = false; break; }
+            }
+            if (equal) return;
+        }
+        if (this.uploaded.length < u16Count) this.uploaded = new Uint16Array(u16Count);
+        this.uploaded.set(data.subarray(0, u16Count));
+        this.uploadedRows = rows;
         device.queue.writeTexture(
             { texture: this.texture },
             data.subarray(0, u16Count),
@@ -74,6 +86,7 @@ export class ActorDataTexture {
     destroy(): void {
         this.texture.destroy();
         this.poseTexture.destroy();
+        this.uploaded = new Uint16Array(0);
     }
 }
 

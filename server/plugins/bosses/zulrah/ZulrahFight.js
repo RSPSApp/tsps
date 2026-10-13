@@ -20,6 +20,7 @@
  */
 
 const Shared = require("./ZulrahShared");
+const CombatAchievements = require("./CombatAchievements.Zulrah");
 const { PhaseCursor } = require("./ZulrahRotations");
 const { Hazards, envenom } = require("./ZulrahHazards");
 
@@ -419,8 +420,9 @@ class ZulrahFight {
     player.setMobileInteraction?.(this.zulrah);
     CombatFactory.stun(player, TAIL.stunSeconds, true);
     player.sendMessage("You have been stunned!");
-    const damage = Shared.randomInt(this.random, ...TAIL.damage);
-    player.getCombat().getHitQueue().addPendingDamage([new HitDamage(Math.min(damage, player.getHitpoints()), HitMask.RED)]);
+    const damage = Math.min(Shared.randomInt(this.random, ...TAIL.damage), player.getHitpoints());
+    player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
+    CombatAchievements.avoidableDamage(this, damage);
     CombatFactory.poisonEntity(player, 6, 2);
   }
 

@@ -15,6 +15,7 @@ import {
 import { CachePipeline } from "./CachePipeline";
 import { ObjType } from "./codec/rs/config/objtype/ObjType";
 import { DbRowType } from "./codec/rs/config/dbrow/DbRowType";
+import { Gamevals, GamevalKind } from "./Gamevals";
 import { ByteBuffer } from "./codec/rs/io/ByteBuffer";
 import { Type } from "./codec/rs/config/Type";
 
@@ -110,6 +111,83 @@ export class CacheDefinitions {
     /** Every row of a cache database table, in id order. */
     static getDbTableRows(tableId: number): readonly DbRowType[] {
         return this.getDbRows().byTable.get(tableId) ?? [];
+    }
+
+    /** A cache database table's id by its gameval name (`slayer_task`), or null. */
+    static getDbTableId(name: string): number | null {
+        for (const [id, table] of this.getGamevals().allTables()) {
+            if (table.name === name) return id;
+        }
+        return null;
+    }
+
+    /** A database table column's id by its gameval name, or null; columns can move between revisions. */
+    static getDbColumn(tableId: number, column: string): number | null {
+        return this.getGamevals().tableColumn(tableId, column);
+    }
+
+    /** A database table's column names by column id (empty when the cache has no names for it). */
+    static getDbColumns(tableId: number): readonly string[] {
+        return this.getGamevals().allTables().get(tableId)?.columns ?? [];
+    }
+
+    /** A varbit's id by its gameval name (`slayer_points`), or null. */
+    static getVarbitId(name: string): number | null {
+        return this.idByName(GamevalKind.VARBIT).get(name) ?? null;
+    }
+
+    /** A varp's id by its gameval name (`slayer_count`), or null. */
+    static getVarpId(name: string): number | null {
+        return this.idByName(GamevalKind.VARP).get(name) ?? null;
+    }
+
+    /** A loc's id by its gameval name (`ent_totems_site_1_base`), or null. */
+    static getLocId(name: string): number | null {
+        return this.idByName(GamevalKind.LOC).get(name) ?? null;
+    }
+
+    /** An NPC's id by its gameval name (`ent_totems_ent`), or null. */
+    static getNpcId(name: string): number | null {
+        return this.idByName(GamevalKind.NPC).get(name) ?? null;
+    }
+
+    /** An obj's id by its gameval name (`oak_logs`), or null. */
+    static getObjId(name: string): number | null {
+        return this.idByName(GamevalKind.OBJ).get(name) ?? null;
+    }
+
+    /** An animation's id by its gameval name (`human_pickupfloor`), or null. */
+    static getSeqId(name: string): number | null {
+        return this.idByName(GamevalKind.SEQ).get(name) ?? null;
+    }
+
+    /** A graphic's id by its gameval name, or null. */
+    static getSpotanimId(name: string): number | null {
+        return this.idByName(GamevalKind.SPOTANIM).get(name) ?? null;
+    }
+
+    /** An interface component's packed id by its gameval name (`bankside:runepouch_top`), or null. */
+    static getComponentId(name: string): number | null {
+        return this.getGamevals().componentId(name);
+    }
+
+    private static idsByName = new Map<GamevalKind, Map<string, number>>();
+
+    private static idByName(kind: GamevalKind): Map<string, number> {
+        let ids = this.idsByName.get(kind);
+        if (!ids) {
+            ids = new Map();
+            for (const [id, name] of this.getGamevals().namesOf(kind)) ids.set(name, id);
+            this.idsByName.set(kind, ids);
+        }
+        return ids;
+    }
+
+    private static gamevals?: Gamevals;
+
+    private static getGamevals(): Gamevals {
+        this.gamevals ??= new Gamevals(CachePipeline.getStore());
+        return this.gamevals;
     }
 
     /**

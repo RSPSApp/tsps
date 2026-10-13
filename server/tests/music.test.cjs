@@ -152,6 +152,7 @@ test('PlayerSession unlocks the current region in manual mode without starting i
   session.setPlayer(player);
   // Region-item bookkeeping is independent from music and requires a fully initialized Player.
   session.lastGroundItemRegion = 12850;
+  session.lastGroundItemLevel = 0;
   const emit = PluginManager.emitCustomEvent;
   let unlock;
   const stopAtUnlock = new Error('captured region unlock');

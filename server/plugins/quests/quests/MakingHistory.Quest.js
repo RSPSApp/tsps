@@ -93,7 +93,7 @@ module.exports = function registerMakingHistoryQuest(api) {
   const SCROLL = ItemIdentifiers.SCROLL; // 6758
   const CHEST = ItemIdentifiers.CHEST; // 6759
   const GHOSTSPEAK_AMULET = ItemIdentifiers.GHOSTSPEAK_AMULET; // 552
-  const SAPPHIRE_AMULET = ItemIdentifiers.SAPPHIRE_AMULET_2; // 1694
+  const SAPPHIRE_AMULET = ItemIdentifiers.SAPPHIRE_AMULET; // 1694
   const SAPPHIRE_AMULET_U = ItemIdentifiers.SAPPHIRE_AMULET_U_; // 1675
   const COINS = ItemIdentifiers.COINS; // 995
 

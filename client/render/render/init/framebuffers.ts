@@ -206,10 +206,8 @@ export function initFramebuffer(host: WebGLOsrsRendererHost, ): void {
         host.sceneRenderWidth = sceneSize.width | 0;
         host.sceneRenderHeight = sceneSize.height | 0;
 
-        let samples = 0;
-        if (host.msaaEnabled) {
-            samples = host.gl.getParameter(PicoGL.MAX_SAMPLES);
-        }
+        host.msaaSamplesRequested = host.getRequestedMsaaSamples();
+        const samples = Math.min(host.msaaSamplesRequested, host.gl.getParameter(PicoGL.MAX_SAMPLES) | 0);
 
         host.colorTarget = host.app.createRenderbuffer(
             host.sceneRenderWidth,

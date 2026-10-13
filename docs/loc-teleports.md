@@ -151,6 +151,8 @@ Locs of other kinds that are a plain move are taken by name, under `include` in 
 
 **Runecrafting altars' exit portals** (11): "Use" inside an altar now leads back outside its ruins, with sound 200 and "You step through the portal...", in the Runecrafting plugin, which owns the altars. The landing tiles are its ruins tiles. They match the captured exits for the earth, fire, water, nature and cosmic altars exactly; the other six are walkable. The captures' other exits, to the Temple of the Eye, are Guardians of the Rift's.
 
+**Rune Essence mine portals** (loc 34825, Use): back to where the player stood when a wizard teleported them in (Wiki), which the Runecrafting plugin records on the way in (`runecrafting:essence-mine-return`, saved). As captured (rev 226-228): on arrival "You step through the portal..." with the portal casting Curse at the player (projectile 109, graphic 110), and the teleport and sound 200 a tick later. With nothing recorded, the landing is beside Aubury (3252, 3400), a captured exit. OSRS puts each player in their own copy of the mine and uses portal NPCs there (3087, 9411, shown through 3086 by varbit 2313); tsps keeps the shared mine and its portal locs.
+
 **Not taken, and why:**
 - **Owned by other systems:**
   - the cosmic altar's ruins need a talisman or tiara (Runecrafting's);

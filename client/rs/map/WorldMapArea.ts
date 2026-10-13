@@ -969,15 +969,14 @@ export class WorldMapState {
     }
 
     getIconsForTile(mapX: number, mapY: number, level: number): WorldMapIconEntry[] {
+        const areaId = this.currentArea?.id;
+        return areaId === undefined ? [] : this.getIconsForAreaTile(areaId, mapX, mapY, level);
+    }
+
+    getIconsForAreaTile(areaId: number, mapX: number, mapY: number, level: number): WorldMapIconEntry[] {
         const key = WorldMapState.getTileKey(mapX, mapY, level);
-        const staticIcons =
-            this.currentArea?.id !== undefined
-                ? this.staticIconsByAreaTile.get(this.currentArea.id)?.get(key)
-                : undefined;
-        const tileIcons =
-            this.currentArea?.id !== undefined
-                ? this.tileIconsByAreaTile.get(this.currentArea.id)?.get(key)
-                : undefined;
+        const staticIcons = this.staticIconsByAreaTile.get(areaId)?.get(key);
+        const tileIcons = this.tileIconsByAreaTile.get(areaId)?.get(key);
         if (!staticIcons || staticIcons.length === 0) return tileIcons ?? [];
         if (!tileIcons || tileIcons.length === 0) return staticIcons;
         return staticIcons.concat(tileIcons);

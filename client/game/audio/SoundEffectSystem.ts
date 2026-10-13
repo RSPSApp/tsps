@@ -129,7 +129,11 @@ type ActiveAmbientSound = {
 // Game cycle = 20ms (client runs at ~50fps). soundEffectMinDelay/MaxDelay are in game cycles.
 const CYCLE_LENGTH_SECONDS = 0.02;
 
+export type PendingSoundEffect = { soundId: number; options: PlaySoundOptions; consumed: boolean };
 export class SoundEffectSystem {
+    readonly beforePlayListeners = new Set<(sound: PendingSoundEffect) => void>();
+    readonly volumeChangedListeners = new Set<(type: "effects" | "area") => void>();
+
     private readonly decodedCache = new Map<string, DecodedSound>();
     private readonly loader: SoundEffectLoader;
     private context: AudioContext | undefined;
@@ -162,7 +166,9 @@ export class SoundEffectSystem {
     }
 
     setVolume(volume: number): void {
+        const previous = this.masterVolume;
         this.masterVolume = Math.max(0, Math.min(1, volume));
+        if (previous !== this.masterVolume) for (const listener of this.volumeChangedListeners) listener("effects");
         if (this.gainNode) {
             this.gainNode.gain.value = this.masterVolume;
         }
@@ -174,7 +180,9 @@ export class SoundEffectSystem {
      * @param volume Volume level from 0.0 to 1.0
      */
     setAmbientVolume(volume: number): void {
+        const previous = this.ambientVolume;
         this.ambientVolume = Math.max(0, Math.min(1, volume));
+        if (previous !== this.ambientVolume) for (const listener of this.volumeChangedListeners) listener("area");
         if (this.ambientGainNode) {
             this.ambientGainNode.gain.value = this.ambientVolume;
         }
@@ -403,7 +411,10 @@ export class SoundEffectSystem {
     }
 
     playSoundEffect(soundId: number, options: PlaySoundOptions = {}): void {
-        this.playSoundEffectInternal(soundId, options, 0);
+        if (this.disposed) return;
+        const pending = { soundId, options: { ...options }, consumed: false };
+        for (const listener of this.beforePlayListeners) listener(pending);
+        if (!pending.consumed) this.playSoundEffectInternal(pending.soundId, pending.options, 0);
     }
 
     private playSoundEffectInternal(

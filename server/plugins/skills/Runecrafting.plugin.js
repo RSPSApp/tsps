@@ -16,6 +16,9 @@ let TALISMANS;
 let ALTAR_DESTINATIONS;
 let EXIT_PORTALS;
 let RIFT_RUNES;
+let RUINS_BY_ID;
+const RUINS_DATA = require("./data/runecrafting-ruins.json");
+let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
 let POUCH_TIERS;
@@ -37,6 +40,17 @@ const RIFT_GUARDIAN_BASE = 1795758;
 const BLOOD_RIFT_GUARDIAN_BASE = 804984;
 const ABYSS_TELEPORT_STEP = "o8m7y6";
 const ESSENCE_TELEPORT_STEPS = new Set(["ILlRUH", "SvUvek"]);
+/** The Rune Essence mine's exit portals (loc 34825, "Portal", Use). */
+const ESSENCE_MINE_PORTAL = 34825;
+/** Where the player stood when a wizard teleported them into the mine: the portals return there. */
+const ESSENCE_MINE_RETURN_ATTRIBUTE = "runecrafting:essence-mine-return";
+/** Set for the tick between stepping into a portal and the teleport, so a second click waits. */
+const ESSENCE_MINE_LEAVING_ATTRIBUTE = "runecrafting:essence-mine-leaving";
+/** Without a recorded wizard, back beside Aubury (a captured landing tile). */
+const ESSENCE_MINE_DEFAULT_RETURN = Object.freeze([3252, 3400, 0]);
+/** The Curse the portal casts on the player: projectile 109, graphic 110 (rsprox captures). */
+const ESSENCE_PORTAL_PROJECTILE = 109;
+const ESSENCE_PORTAL_IMPACT = 110;
 
 const RUNE_ESSENCE_TELEPORT_NPCS = [
   "Aubury",
@@ -122,19 +136,33 @@ function initialize(api) {
   RUNES_BY_ALTAR_ID.set(ObjectIdentifiers.ALTAR_83, RUNES_BY_ALTAR_ID.get(ObjectIdentifiers.BLOOD_ALTAR));
 
   TALISMANS = new Map([
-    [ItemIdentifiers.AIR_TALISMAN, { name: "Air talisman", runeId: ItemIdentifiers.AIR_RUNE, x: 2841, y: 4828, ruinX: 2983, ruinY: 3288 }],
-    [ItemIdentifiers.MIND_TALISMAN, { name: "Mind talisman", runeId: ItemIdentifiers.MIND_RUNE, x: 2793, y: 4827, ruinX: 2980, ruinY: 3511 }],
+    [ItemIdentifiers.AIR_TALISMAN, { name: "Air talisman", runeId: ItemIdentifiers.AIR_RUNE, x: 2841, y: 4829, ruinX: 2983, ruinY: 3288 }],
+    [ItemIdentifiers.MIND_TALISMAN, { name: "Mind talisman", runeId: ItemIdentifiers.MIND_RUNE, x: 2793, y: 4828, ruinX: 2980, ruinY: 3511 }],
     [ItemIdentifiers.WATER_TALISMAN, { name: "Water talisman", runeId: ItemIdentifiers.WATER_RUNE, x: 2720, y: 4831, ruinX: 3182, ruinY: 3162 }],
-    [ItemIdentifiers.EARTH_TALISMAN, { name: "Earth talisman", runeId: ItemIdentifiers.EARTH_RUNE, x: 2655, y: 4829, ruinX: 3302, ruinY: 3477 }],
+    [ItemIdentifiers.EARTH_TALISMAN, { name: "Earth talisman", runeId: ItemIdentifiers.EARTH_RUNE, x: 2655, y: 4830, ruinX: 3302, ruinY: 3477 }],
     [ItemIdentifiers.FIRE_TALISMAN, { name: "Fire talisman", runeId: ItemIdentifiers.FIRE_RUNE, x: 2576, y: 4846, ruinX: 3310, ruinY: 3252 }],
     [ItemIdentifiers.BODY_TALISMAN, { name: "Body talisman", runeId: ItemIdentifiers.BODY_RUNE, x: 2522, y: 4833, ruinX: 3050, ruinY: 3442 }],
-    [ItemIdentifiers.COSMIC_TALISMAN, { name: "Cosmic talisman", runeId: ItemIdentifiers.COSMIC_RUNE, x: 2163, y: 4833, ruinX: 2405, ruinY: 4381 }],
-    [ItemIdentifiers.CHAOS_TALISMAN, { name: "Chaos talisman", runeId: ItemIdentifiers.CHAOS_RUNE, x: 2282, y: 4837, ruinX: 3060, ruinY: 3585 }],
-    [ItemIdentifiers.NATURE_TALISMAN, { name: "Nature talisman", runeId: ItemIdentifiers.NATURE_RUNE, x: 2400, y: 4834, ruinX: 2865, ruinY: 3022 }],
-    [ItemIdentifiers.LAW_TALISMAN, { name: "Law talisman", runeId: ItemIdentifiers.LAW_RUNE, x: 2464, y: 4817, ruinX: 2858, ruinY: 3378 }],
-    [ItemIdentifiers.DEATH_TALISMAN, { name: "Death talisman", runeId: ItemIdentifiers.DEATH_RUNE, x: 2208, y: 4829, ruinX: 1863, ruinY: 4639 }],
+    [ItemIdentifiers.COSMIC_TALISMAN, { name: "Cosmic talisman", runeId: ItemIdentifiers.COSMIC_RUNE, x: 2162, y: 4833, ruinX: 2405, ruinY: 4381 }],
+    [ItemIdentifiers.CHAOS_TALISMAN, { name: "Chaos talisman", runeId: ItemIdentifiers.CHAOS_RUNE, x: 2281, y: 4837, ruinX: 3060, ruinY: 3585 }],
+    [ItemIdentifiers.NATURE_TALISMAN, { name: "Nature talisman", runeId: ItemIdentifiers.NATURE_RUNE, x: 2400, y: 4835, ruinX: 2865, ruinY: 3022 }],
+    [ItemIdentifiers.LAW_TALISMAN, { name: "Law talisman", runeId: ItemIdentifiers.LAW_RUNE, x: 2464, y: 4818, ruinX: 2858, ruinY: 3378 }],
+    [ItemIdentifiers.DEATH_TALISMAN, { name: "Death talisman", runeId: ItemIdentifiers.DEATH_RUNE, x: 2208, y: 4830, ruinX: 1863, ruinY: 4639 }],
     [ItemIdentifiers.BLOOD_TALISMAN, { name: "Blood talisman", runeId: ItemIdentifiers.BLOOD_RUNE, x: 1722, y: 3826, locateMessage: "The talisman doesn't seem to work. Maybe the ruins are deep underground." }],
   ]);
+
+  // Ruins are unnamed base locs; the cache supplies their named variants and tiara varbits.
+  RUINS_BY_ID = new Map();
+  RUINS = RUINS_DATA.map((ruins) => {
+    const definition = api.core.CacheDefinitions.getObject(ruins.ruinsId);
+    const talisman = TALISMANS.get(ruins.talismanId);
+    return { ...ruins, varbit: definition.transformVarbit, destination: ruins.destination ?? [talisman.x, talisman.y, 0] };
+  });
+  for (const ruins of RUINS) {
+    const definition = api.core.CacheDefinitions.getObject(ruins.ruinsId);
+    for (const id of [ruins.ruinsId, ...definition.transforms]) {
+      if (id !== -1) RUINS_BY_ID.set(id, ruins);
+    }
+  }
 
   ALTAR_DESTINATIONS = new Map(
     [...TALISMANS.values()].map((talisman) => [
@@ -453,6 +481,45 @@ function handleTalismanLocate(event) {
   return true;
 }
 
+function matchesRuins(ruins, itemId, tiara) {
+  const specific = tiara ? ruins.tiaraId : ruins.talismanId;
+  const shared = ruins.elemental
+    ? tiara ? ItemIdentifiers.ELEMENTAL_TIARA : ItemIdentifiers.ELEMENTAL_TALISMAN
+    : tiara ? ItemIdentifiers.CATALYTIC_TIARA : ItemIdentifiers.CATALYTIC_TALISMAN;
+  return itemId === specific || itemId === shared;
+}
+
+function syncTiaraOptions({ player }) {
+  const headId = player.getEquipment().getItems()[Equipment.HEAD_SLOT]?.getId();
+  const sender = player.getPacketSender();
+  for (const ruins of RUINS) {
+    const enabled = matchesRuins(ruins, headId, true) ? 1 : 0;
+    if (sender.getVarbit(ruins.varbit) !== enabled) sender.sendVarbit(ruins.varbit, enabled);
+  }
+}
+
+function enterRuins(player, ruins) {
+  player.moveTo(new Location(...ruins.destination));
+  player.getPacketSender().sendSound(EXIT_PORTAL_SOUND, 1, 0);
+  player.sendMessage("You feel a powerful force take hold of you...");
+}
+
+function handleTalismanOnRuins(event) {
+  const ruins = RUINS_BY_ID.get(event.objectId);
+  if (!ruins || !matchesRuins(ruins, event.itemId, false)) return;
+  enterRuins(event.player, ruins);
+  event.handled = true;
+}
+
+function handleEnterRuins({ player, objectId }) {
+  const ruins = RUINS_BY_ID.get(objectId);
+  if (!ruins) return false;
+  const headId = player.getEquipment().getItems()[Equipment.HEAD_SLOT]?.getId();
+  if (!matchesRuins(ruins, headId, true)) return false;
+  enterRuins(player, ruins);
+  return true;
+}
+
 function handleRuneEssenceTeleport(event) {
   const player = event.player;
   if (!hasCompletedRuneMysteries(player)) {
@@ -460,8 +527,55 @@ function handleRuneEssenceTeleport(event) {
     return true;
   }
   player.sendMessage("Senventior disthine molenko!");
-  requestTeleport(player, RUNE_ESSENCE_MINE.clone());
+  teleportToEssenceMine(player);
   return true;
+}
+
+/** Into the mine, remembering where the player stood so the portals can send them back. */
+function teleportToEssenceMine(player) {
+  const at = player.getLocation();
+  player.setAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE, [at.getX(), at.getY(), at.getZ()]);
+  requestTeleport(player, RUNE_ESSENCE_MINE.clone());
+}
+
+/**
+ * A mine portal sends the player back to the wizard who teleported them in (Wiki: Rune
+ * Essence mine). As rsprox captures (rev 226-228) show it: on arrival "You step through the
+ * portal..." with the portal casting Curse at the player (projectile 109 over 30 cycles,
+ * graphic 110 after 30 cycles at height 124), then a tick later the teleport, with sound 200.
+ */
+function handleEssenceMinePortal(event) {
+  const { player, location } = event;
+  if (player.getAttribute(ESSENCE_MINE_LEAVING_ATTRIBUTE)) return true;
+  const saved = player.getAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE);
+  const [x, y, z] = Array.isArray(saved) && saved.length === 3 ? saved : ESSENCE_MINE_DEFAULT_RETURN;
+  const here = player.getLocation();
+  player.sendMessage("You step through the portal...");
+  player.getPacketSender().sendProjectile(
+    new Location(location.x, location.y, location.z), here, 0, 30, ESSENCE_PORTAL_PROJECTILE, 15, 31, player, 0, 16, 128
+  );
+  player.performGraphic(new Graphic(ESSENCE_PORTAL_IMPACT, 30, 124));
+  player.getMovementQueue().reset();
+  player.setAttribute(ESSENCE_MINE_LEAVING_ATTRIBUTE, true);
+  afterTicks(1, () => {
+    player.setAttribute(ESSENCE_MINE_LEAVING_ATTRIBUTE, null);
+    player.moveTo(new Location(x, y, z));
+    player.getPacketSender().sendSound(EXIT_PORTAL_SOUND, 1, 0);
+  });
+  return true;
+}
+
+function afterTicks(ticks, action) {
+  const { Task } = pluginApi.core;
+  pluginApi.getTaskManager().submit(new (class extends Task {
+    constructor() {
+      super(ticks);
+    }
+    execute() {
+      this.stop();
+      action();
+    }
+  })());
 }
 
 function teleportToAbyss(player) {
@@ -491,7 +605,7 @@ function handleDialogueAction(event) {
     if (!hasCompletedRuneMysteries(player)) {
       player.sendMessage("You need to complete Rune Mysteries before using this teleport.");
     } else {
-      requestTeleport(player, RUNE_ESSENCE_MINE);
+      teleportToEssenceMine(player);
     }
   } else {
     return;
@@ -538,6 +652,7 @@ function handleAbyssObstacle(event) {
  * minigame's.
  */
 function handleExitPortal(event) {
+  if (event.objectId === ESSENCE_MINE_PORTAL) return handleEssenceMinePortal(event);
   const talisman = EXIT_PORTALS.get(event.objectId);
   if (!talisman || talisman.ruinX === undefined) return false;
   const { player } = event;
@@ -563,7 +678,12 @@ module.exports = {
   name: "Runecrafting",
   register(api) {
     initialize(api);
+    api.persistAttribute(ESSENCE_MINE_RETURN_ATTRIBUTE);
 
+    api.onPlayerLogin(syncTiaraOptions);
+    api.onCustomEvent("equipment:changed", syncTiaraOptions);
+    api.onItemOnObject(handleTalismanOnRuins, { noted: false });
+    api.onObjectInteraction("Mysterious ruins", { Enter: handleEnterRuins });
     api.onObjectInteraction("Altar", { "Craft-rune": handleCraftRunes });
     api.onObjectInteraction("Blood Altar", { Bind: handleCraftRunes });
     api.onObjectInteraction("Portal", { Use: handleExitPortal });

@@ -23,6 +23,17 @@ export class Camera {
     private static readonly FOV_SCRIPT_SCALE = 256;
 
     pos: vec3;
+    readonly focalPoint: vec3 = vec3.create();
+
+    setFocalPoint(x: number, y: number, z: number): void {
+        vec3.set(this.focalPoint, x, y, z);
+    }
+
+    moveFocalPoint(x: number, y: number, z: number): void {
+        const dx = x - this.focalPoint[0], dy = y - this.focalPoint[1], dz = z - this.focalPoint[2];
+        this.setFocalPoint(x, y, z);
+        this.snapToPosition(this.pos[0] + dx, this.pos[1] + dy, this.pos[2] + dz);
+    }
 
     pitch: number;
     yaw: number;
@@ -63,6 +74,14 @@ export class Camera {
     viewportHeight: number = 0;
     viewportXOffset: number = 0;
     viewportYOffset: number = 0;
+    /**
+     * Device pixels per OSRS viewport unit. Fixed mode's viewport is 512x334 units however
+     * large it is drawn, so OSRS's viewport-size rules (FOV, zoom clamps) see that size and
+     * the result is scaled up; 1 means the viewport is measured in device pixels.
+     */
+    private viewportUnitScaleX: number = 1;
+    private viewportUnitScaleY: number = 1;
+    private viewportAspect: number = 1;
     screenWidth: number = 0;
     screenHeight: number = 0;
 
@@ -171,6 +190,15 @@ export class Camera {
 
     getViewZoomScale(): number {
         return this.viewZoomScale;
+    }
+
+    setViewportUnitScale(scaleX: number, scaleY: number): void {
+        const x = Number.isFinite(scaleX) && scaleX > 0 ? scaleX : 1;
+        const y = Number.isFinite(scaleY) && scaleY > 0 ? scaleY : 1;
+        if (x === this.viewportUnitScaleX && y === this.viewportUnitScaleY) return;
+        this.viewportUnitScaleX = x;
+        this.viewportUnitScaleY = y;
+        this.updated = true;
     }
 
     setViewZoomScale(scale: number): void {
@@ -316,6 +344,7 @@ export class Camera {
             (this.yaw - 1024) * RS_TO_RADIANS,
         );
 
+        vec3.add(this.focalPoint, this.focalPoint, Camera.deltaTemp);
         vec3.add(this.pos, this.pos, Camera.deltaTemp);
         vec3.copy(this.targetPos, this.pos);
         this.updated = true;
@@ -366,13 +395,14 @@ export class Camera {
         this.viewportHeight = viewportMetrics.viewportHeight;
         this.viewportXOffset = (viewportX | 0) + viewportMetrics.viewportXOffset;
         this.viewportYOffset = (viewportY | 0) + viewportMetrics.viewportYOffset;
+        this.viewportAspect = viewportMetrics.aspect;
 
         // Projection
         mat4.identity(this.projectionMatrix);
         if (this.projectionType === ProjectionType.PERSPECTIVE) {
             const fovY =
                 2 * Math.atan(this.viewportHeight / (2 * this.viewportZoom * this.viewZoomScale));
-            const aspect = this.viewportWidth / this.viewportHeight;
+            const aspect = this.viewportAspect;
             mat4.perspective(this.projectionMatrix, fovY, aspect, 0.1, 1024.0 * 4);
         } else {
             mat4.ortho(
@@ -414,15 +444,20 @@ export class Camera {
     computeViewportMetricsForSize(
         width: number,
         height: number,
-    ): { viewportZoom: number; viewportWidth: number; viewportHeight: number } {
-        const { viewportZoom, viewportWidth, viewportHeight } = this.computeOsrsViewportForSize(
-            width,
-            height,
-        );
+    ): {
+        viewportZoom: number;
+        viewportWidth: number;
+        viewportHeight: number;
+        /** The effective height in OSRS viewport units, for OSRS's own viewport-size rules. */
+        unitViewportHeight: number;
+    } {
+        const { viewportZoom, viewportWidth, viewportHeight, unitViewportHeight } =
+            this.computeOsrsViewportForSize(width, height);
         return {
             viewportZoom: Math.max(1, viewportZoom | 0),
             viewportWidth: Math.max(1, viewportWidth | 0),
             viewportHeight: Math.max(1, viewportHeight | 0),
+            unitViewportHeight,
         };
     }
 
@@ -472,8 +507,10 @@ export class Camera {
     }
 
     private computeOsrsViewportForSize(width: number, height: number) {
-        let viewportWidth = Math.max(1, width | 0);
-        let viewportHeight = Math.max(1, height | 0);
+        const unitX = this.viewportUnitScaleX;
+        const unitY = this.viewportUnitScaleY;
+        let viewportWidth = Math.max(1, Math.round(width / unitX));
+        let viewportHeight = Math.max(1, Math.round(height / unitY));
         let viewportXOffset = 0;
         let viewportYOffset = 0;
 
@@ -517,12 +554,16 @@ export class Camera {
         // Client.viewportZoom is an integer (var3 * var6 / 334).
         const viewportZoom = ((viewportHeight * fovScale) / 334) | 0;
 
+        // Back to device pixels; the aspect stays the unit one, so a viewport stretched
+        // unevenly shows the same scene stretched rather than more of it.
         return {
-            viewportZoom,
-            viewportWidth,
-            viewportHeight,
-            viewportXOffset,
-            viewportYOffset,
+            viewportZoom: (viewportZoom * unitY) | 0,
+            viewportWidth: Math.max(1, Math.round(viewportWidth * unitX)),
+            viewportHeight: Math.max(1, Math.round(viewportHeight * unitY)),
+            viewportXOffset: Math.round(viewportXOffset * unitX),
+            viewportYOffset: Math.round(viewportYOffset * unitY),
+            unitViewportHeight: viewportHeight,
+            aspect: viewportWidth / viewportHeight,
         };
     }
 
@@ -565,6 +606,9 @@ export class Camera {
     getMapY(): number {
         return this.getPosZ() >> 6;
     }
+
+    getTargetYaw(): number { return this.targetYaw; }
+    getTargetPitch(): number { return this.targetPitch; }
 
     getTargetPos(): vec3 {
         return this.targetPos;

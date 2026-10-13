@@ -65,4 +65,27 @@ assert.equal(eventContext?.targetName, friendName);
 assert.equal(eventContext?.opIndex, 2);
 assert.equal(widgetInteraction.clickedWidgetHandled, true);
 
+eventContext = undefined;
+widgetInteraction.clickedWidget = null;
+widgetInteraction.clickedWidgetHandled = false;
+let pluginAction: any;
+processWidgetClickInput(
+    {
+        ...deps,
+        handlePluginWidgetAction: (event: any) => { pluginAction = event; return true; },
+        buildWidgetActionPayload: () => { throw new Error("consumed actions must not send packets"); },
+    },
+    state,
+    frame,
+    widgetManager,
+    widgetInteraction,
+    () => ({ option: "Cycle voice mode", target: "", opIndex: 2 }),
+    true,
+);
+assert.equal(pluginAction.widget, widget);
+assert.equal(pluginAction.opIndex, 2);
+assert.equal(pluginAction.source, "primary");
+assert.equal(eventContext, undefined, "a plugin consumes the click before the cache onOp handler");
+assert.equal(widgetInteraction.clickedWidgetHandled, true, "release must not dispatch the same click again");
+
 console.log("widget primary operation context test passed");

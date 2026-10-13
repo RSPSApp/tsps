@@ -661,7 +661,7 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
         return;
       }
       player.getInventory().adds(ITEM.MONKEY_SKIN, 1);
-      player.getInventory().adds(ITEM.MONKEY_BONES_5, 1);
+      player.getInventory().adds(ITEM.MONKEY_BONES, 1);
       lastUsedItem.delete(player);
       return;
     }

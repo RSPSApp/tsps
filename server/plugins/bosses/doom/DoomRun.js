@@ -30,6 +30,7 @@ const { BurrowPhase } = require("./DoomBurrow");
 const Loot = require("./DoomLoot");
 const Records = require("./DoomRecords");
 const HolyWater = require("./DoomHolyWater");
+const CombatAchievements = require("./CombatAchievements.Doom");
 
 const ATTR = { RUN: "doom:run", UNCLAIMED: "doom:unclaimed", ...Records.ATTR };
 
@@ -346,6 +347,7 @@ class DoomRun {
     this.runTicks += ticks;
     this.completed.push({ level: this.level, ticks });
     this.announce(ticks);
+    CombatAchievements.defeated(this, ticks);
     const { items, unique } = Loot.roll(this.level, this.random);
     // Pets turns a rolled Dom into a follower/backpack item and removes it from the pile.
     Shared.api().emitCustomEvent("npc-drops:roll", { player: this.player, drops: items });

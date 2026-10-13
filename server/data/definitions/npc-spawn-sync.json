@@ -46,6 +46,7 @@
   ],
   "boxes": [
     {"box": "2624,2560,2687,2623,0", "label": "Spawned by a plugin", "skip": true, "why": "Pest Control's game island: PestControl.plugin.js spawns the Void Knight and the squire there."},
+    {"box": "3136,4224,3391,4479", "label": "Spawned by a plugin", "skip": true, "why": "The Theatre of Blood: TheatreOfBlood.plugin.js spawns each room's boss and Nylocas in the raid's instance."},
     {"box": "3072,3008,3135,3071,0", "label": "Group Ironman island", "skip": true, "why": "The Node, where Group Ironman accounts start; its tutors and fake players aren't for other accounts."}
   ],
   "pagePatterns": [

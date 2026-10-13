@@ -262,6 +262,10 @@ module.exports = {
     ]) api.persistAttribute(attribute);
     api.onPlayerLogin(onMusicLogin);
     api.onInterfaceActionButton(WELCOME_PLAY_BUTTON_UID, onMusicWelcomeAction);
+  // A tab mounted again later (Tutorial Island's unlocks) lost its flags too.
+  api.onCustomEvent("gameframe:tab-mounted", ({ player, group }) => {
+    if (group === MUSIC_GROUP_ID) queueMicrotask(() => enableMusicActions(player));
+  });
     api.onCustomEvent("audio:play-song", onTrackPlayed);
     api.onCustomEvent("music:unlock-track", unlockTrack);
     api.onCustomEvent("music:air-guitar-unlocked", answerAirGuitarUnlock);

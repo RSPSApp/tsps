@@ -18,7 +18,7 @@ const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wi
 const COINS = 995;
 const COINS_ICON = 1004;
 const SCROLL = 21802;
-const FEE = 100_000;
+const FEE = 1_000;
 
 const BUSY_VARBIT = 12393;
 const SINGLES_PLUS_VARBIT = 5961;

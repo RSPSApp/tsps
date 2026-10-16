@@ -1,9 +1,9 @@
 {
   "disabledPlugins": ["VoiceChat", "TutorialIsland", "DuelStaking", "FreezeTimer", "FriendsChatManager", "FriendsList", "GrandExchange", "IgnoreList", "VengeanceTimer"],
-  "experienceMultiplier": 5,
+  "experienceMultiplier": 6,
   "rareCutoff": 0.01,
-  "rareMultiplier": 5,
-  "stackablesQuantityMultiplier": 5,
+  "rareMultiplier": 6,
+  "stackablesQuantityMultiplier": 6,
   "autoCollectStackablesAlways": true,
   "runDrainRate": 0,
   "spawn": {

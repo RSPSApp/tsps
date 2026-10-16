@@ -124,7 +124,7 @@ function applySharedTableRates() {
     );
   }
 }
-  
+
 /**
  * Wiki, Looting bag: "obtained as a drop from any monster in the Wilderness, excluding aviansie,
  * abyssal demons, and Black chinchompas". The tables list it on monsters found everywhere (rats,
@@ -620,7 +620,7 @@ function dropFor(player, npc, npcId, location, damagers = []) {
     // inventory under the same condition coins always used. Falls through to the ground when
     // the inventory has no room for it.
     if ((CURRENCY_IDS.has(drop.itemId) || stackable)
-        && (GameConstants.AUTO_COLLECT_STACKABLES_ALWAYS || autoCollectCurrencies(player))) {
+      && (GameConstants.AUTO_COLLECT_STACKABLES_ALWAYS || autoCollectCurrencies(player))) {
       const inventory = player.getInventory();
       if (inventory.contains(itemId) || inventory.getFreeSlots() > 0) {
         inventory.adds(itemId, drop.amount);

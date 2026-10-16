@@ -9,6 +9,10 @@ const { rollDrops } = require("./Drops.Revenants");
 const Bracelet = require("./Bracelet.Revenants");
 const Maledictus = require("./Maledictus.Revenants");
 const Revenants = require("./Common.Revenants");
+// Utilities for auto‑collecting coins and stackables (same as NpcDrops.plugin)
+const { autoCollectCurrencies } = require("../../items/RingOfWealth.plugin");
+const CURRENCY_IDS = new Set([995, 6529, 21555]);
+const { GameConstants } = require("../../../src/main/typescript/elvarg/game/GameConstants");
 
 const AMULET_SLOT = 2;
 
@@ -41,14 +45,27 @@ function dropLoot({ killer, npc, npcId }) {
     let amount = drop.amount;
     if (drop.itemId === ITEMS.ETHER) amount = Bracelet.absorbEther(player, amount);
     if (amount <= 0) continue;
-    const definition = core.ItemDefinition.forId(drop.itemId);
-    const noteId = definition.getNoteId();
+    const origDef = core.ItemDefinition.forId(drop.itemId);
+    const noteId = origDef.getNoteId();
     const noted = (drop.noted || avarice) && noteId >= 0 && core.ItemDefinition.forId(noteId).isNoted();
     const itemId = noted ? noteId : drop.itemId;
-    if (noted || core.ItemDefinition.forId(itemId).isStackable()) {
+    const definition = core.ItemDefinition.forId(itemId);
+    const stackable = definition?.isStackable?.() ?? false;
+    // Auto‑collect coins and stackables under the same conditions as NpcDrops.
+    if ((CURRENCY_IDS.has(drop.itemId) || stackable) &&
+        (core.GameConstants.AUTO_COLLECT_STACKABLES_ALWAYS || autoCollectCurrencies(player))) {
+      const inventory = player.getInventory();
+      if (inventory.contains(itemId) || inventory.getFreeSlots() > 0) {
+        inventory.adds(itemId, amount);
+        continue;
+      }
+    }
+    if (stackable) {
       core.ItemOnGroundManager.registerLocation(player, new core.Item(itemId, amount), where);
     } else {
-      for (let i = 0; i < amount; i++) core.ItemOnGroundManager.registerLocation(player, new core.Item(itemId, 1), where);
+      for (let i = 0; i < amount; i++) {
+        core.ItemOnGroundManager.registerLocation(player, new core.Item(itemId, 1), where);
+      }
     }
   }
 }

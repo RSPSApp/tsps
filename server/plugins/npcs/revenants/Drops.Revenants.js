@@ -8,6 +8,9 @@
  * secondary (100/(250 - combat)), the tertiaries and the ether roll on their own.
  */
 const { REVENANTS, ITEMS } = require("./Data.Revenants");
+// Use generic scaling logic and game constants for multipliers.
+const { scaleAmount } = require("../NpcDrops.plugin");
+const { GameConstants } = require("../../../src/main/typescript/elvarg/game/GameConstants");
 
 /** Unique table: avarice 2/5, each weapon 1/5. */
 const UNIQUES = [
@@ -116,7 +119,8 @@ function rollDrops({ npcId, combat, skulled = false, onTask = false, random = Ma
   drops.push({ itemId: ITEMS.ETHER, amount: 2 * between(random, 1, sqrt + 1) });
 
   const { A, B } = thresholds(combat);
-  const uniqueOdds = A * UNIQUE_RATE * (skulled ? UNIQUE_SKULLED : 1) * (onTask ? UNIQUE_ON_TASK : 1);
+  // Apply the global rare multiplier to the unique drop odds.
+  const uniqueOdds = A * UNIQUE_RATE * (skulled ? UNIQUE_SKULLED : 1) * (onTask ? UNIQUE_ON_TASK : 1) * (GameConstants.RARE_MULTIPLIER ?? 1);
   if (random() * uniqueOdds < 1) {
     const [itemId] = pick(random, UNIQUES, 5, (row) => row[1]);
     drops.push({ itemId, amount: 1 });

@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "about": "Tanner operators' Tan-hide, as captured (rsprox/tanner): the skillmulti menu (2046 mode 0), hide-by-hide conversion and the operator's two refusals. Item IDs and costs sourced from the OSRS Wiki."
+  },
+  "tanners": ["Tanner", "Sura", "Ellis", "Debby", "Larry", "Jack", "Derrik"],
+  "title": "How many do you wish to make?",
+  "menuMode": 0,
+  "leathers": [
+    { "name": "Soft leather", "hide": 1739, "leather": 1741, "cost": 1 },
+    { "name": "Hard leather", "hide": 1739, "leather": 1743, "cost": 3 },
+    { "name": "Snakeskin", "hide": 6287, "leather": 6289, "cost": 15 },
+    { "name": "Green dragonhide", "hide": 1753, "leather": 1745, "cost": 20 },
+    { "name": "Blue dragonhide", "hide": 1751, "leather": 2505, "cost": 20 },
+    { "name": "Red dragonhide", "hide": 1749, "leather": 2507, "cost": 20 },
+    { "name": "Black dragonhide", "hide": 1747, "leather": 2509, "cost": 20 }
+  ],
+  "coins": 995,
+  "messages": {
+    "noHides": "You'll need to bring me some more hides.",
+    "noCoins": "Tanning those hides costs {cost} coins. You don't have enough money for all of them."
+  },
+  "diary": {
+    "anyLeather": { "leather": 1741, "diary": "al_kharid", "task": "tan-a-cow-hide-in-al-kharid" }
+  }
+}

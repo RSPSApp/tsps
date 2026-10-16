@@ -125,6 +125,26 @@ const STRUNG_AMULETS = new Map([
   [ItemIds.ZENYTE_AMULET_U_, ItemIds.ZENYTE_AMULET],
 ]);
 
+/**
+ * OSRS Leather Crafting Configuration.
+ * A needle is required along with 1 thread per item.
+ * The needle is kept, while the thread and leather are consumed.
+ */
+const LEATHER_TASK_ATTRIBUTE = "crafting:leather-task";
+
+const LEATHER_RECIPES = [
+  { name: "leather gloves", itemId: ItemIds.LEATHER_GLOVES, materialId: ItemIds.LEATHER, level: 1, xp: 13.8 },
+  { name: "leather boots", itemId: ItemIds.LEATHER_BOOTS, materialId: ItemIds.LEATHER, level: 7, xp: 16.25 },
+  { name: "leather cowl", itemId: ItemIds.LEATHER_COWL, materialId: ItemIds.LEATHER, level: 9, xp: 18.5 },
+  { name: "leather vambraces", itemId: ItemIds.LEATHER_VAMBRACES, materialId: ItemIds.LEATHER, level: 11, xp: 22 },
+  { name: "leather body", itemId: ItemIds.LEATHER_BODY, materialId: ItemIds.LEATHER, level: 14, xp: 25 },
+  { name: "leather chaps", itemId: ItemIds.LEATHER_CHAPS, materialId: ItemIds.LEATHER, level: 18, xp: 27 },
+  { name: "hardleather body", itemId: ItemIds.HARDLEATHER_BODY, materialId: ItemIds.HARD_LEATHER, level: 28, xp: 35 },
+];
+
+
+const LEATHER_CRAFTING_ANIMATION = new Animation(1249);
+
 /** The furnace smelting animation, used for jewellery as well. */
 const FURNACE_ANIMATION = new Animation(899);
 
@@ -170,6 +190,120 @@ const POTTER_WHEEL_NAMES = new Set(["Potter's Wheel", "Potter's wheel"]);
 const POTTERY_OVEN_NAMES = new Set(["Pottery Oven"]);
 
 let pluginApi;
+function hasLeatherMaterials(player, recipe) {
+  const inventory = player.getInventory();
+  return inventory.contains(ItemIds.NEEDLE) &&
+    inventory.contains(ItemIds.THREAD) &&
+    inventory.getAmount(recipe.materialId) > 0;
+}
+
+function craftLeatherItem(player, recipe) {
+  if (player.getSkillManager().getCurrentLevel(Skill.CRAFTING) < recipe.level) {
+    player.sendMessage(`You need a Crafting level of at least ${recipe.level} to make this.`);
+    return false;
+  }
+
+  if (!hasLeatherMaterials(player, recipe)) {
+    player.sendMessage("You do not have the required materials to sew this item.");
+    return false;
+  }
+
+  const inventory = player.getInventory();
+  inventory.deleteNumber(recipe.materialId, 1);
+  inventory.deleteNumber(ItemIds.THREAD, 1);
+  inventory.addItem(new Item(recipe.itemId, 1));
+  player.getSkillManager().addExperiences(Skill.CRAFTING, recipe.xp);
+  return true;
+}
+
+function startLeatherCraftingTask(player, recipe, amount) {
+  if (!hasLeatherMaterials(player, recipe)) return;
+  const { Task } = pluginApi.core;
+
+  player.getAttribute(LEATHER_TASK_ATTRIBUTE)?.stop();
+
+  // Close the chatbox interface safely
+  player.setInterfaceId(-1);
+  player.getPacketSender().closeInterface();
+
+  class LeatherCraftingTask extends Task {
+    constructor() {
+      super(1, player);
+      this.ticks = 0;
+      this.remaining = amount;
+    }
+    execute() {
+      if (!player.isRegistered() || player.getHitpoints() <= 0 ||
+        player.getMovementQueue().size() > 0 || player.getForceMovement() != null ||
+        player.getInterfaceId() !== -1 || !hasLeatherMaterials(player, recipe)) {
+        this.stop();
+        return;
+      }
+      this.ticks++;
+      // Sew action occurs every 3 game ticks (~1.8s)
+      if (this.ticks % 3 === 1) {
+        player.performAnimation(LEATHER_CRAFTING_ANIMATION);
+      }
+      if (this.ticks % 3 === 0) {
+        if (!craftLeatherItem(player, recipe) || --this.remaining <= 0) {
+          this.stop();
+        }
+      }
+    }
+    stop() {
+      super.stop();
+      if (player.getAttribute(LEATHER_TASK_ATTRIBUTE) === this) {
+        player.setAttribute(LEATHER_TASK_ATTRIBUTE, null);
+      }
+      player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    }
+  }
+
+  const task = new LeatherCraftingTask();
+  player.setAttribute(LEATHER_TASK_ATTRIBUTE, task);
+  pluginApi.getTaskManager().submit(task);
+}
+
+
+function handleNeedleOnLeather(event) {
+  const { player, usedItemId, usedWithItemId } = event;
+  const materialId = usedItemId === ItemIds.NEEDLE ? usedWithItemId : usedItemId;
+  if (
+    (usedItemId !== ItemIds.NEEDLE && usedWithItemId !== ItemIds.NEEDLE) ||
+    !LEATHER_RECIPES.some((recipe) => recipe.materialId === materialId)
+  ) return;
+  event.handled = true;
+
+  if (!player.getInventory().contains(ItemIds.THREAD)) {
+    player.sendMessage("You need some thread to sew leather.");
+    return;
+  }
+
+  // Clear any existing active processing loop tasks
+  player.getAttribute(LEATHER_TASK_ATTRIBUTE)?.stop();
+
+  const inventory = player.getInventory();
+  const recipes = LEATHER_RECIPES.filter((recipe) => recipe.materialId === materialId);
+  const maxAmount = Math.min(
+    inventory.getAmount(materialId),
+    inventory.getAmount(ItemIds.THREAD),
+    28
+  );
+  const recipeByItem = new Map(recipes.map((recipe) => [recipe.itemId, recipe]));
+  const menu = new pluginApi.core.CreationMenu(
+    "What would you like to make?",
+    recipes.map((recipe) => recipe.itemId),
+    {
+      execute: (itemId, amount) => {
+        const recipe = recipeByItem.get(itemId);
+        if (recipe) startLeatherCraftingTask(player, recipe, amount);
+      },
+    },
+    { maxAmount, lastAmount: Math.min(1, maxAmount) }
+  );
+  player.getPacketSender().sendCreationMenu(menu);
+}
+
 
 function cutGem(event) {
   const { player, usedItemId, usedWithItemId } = event;
@@ -292,7 +426,7 @@ function craftGoldJewellery(player, type, gemIndex) {
     return false;
   }
   if (!hasJewelleryMaterials(player, type, gemIndex) ||
-      pluginApi.core.PluginManager.emitCanUseItem(player, itemId, "craft") === false) return false;
+    pluginApi.core.PluginManager.emitCanUseItem(player, itemId, "craft") === false) return false;
   const inventory = player.getInventory();
   inventory.deleteNumber(ItemIds.GOLD_BAR, 1);
   const gem = JEWELLERY_GEMS[gemIndex];
@@ -319,9 +453,9 @@ function startGoldJewellery(player, menu, type, gemIndex) {
     }
     execute() {
       if (!player.isRegistered() || player.getHitpoints() <= 0 ||
-          player.getMovementQueue().size() > 0 || player.getForceMovement() != null ||
-          player.getLocation().getDistance(menu.location) > 2 ||
-          player.getInterfaceId() !== -1 || !hasJewelleryMaterials(player, type, gemIndex)) {
+        player.getMovementQueue().size() > 0 || player.getForceMovement() != null ||
+        player.getLocation().getDistance(menu.location) > 2 ||
+        player.getInterfaceId() !== -1 || !hasJewelleryMaterials(player, type, gemIndex)) {
         this.stop();
         return;
       }
@@ -349,11 +483,13 @@ function handleGoldJewelleryButton(event) {
   const amount = JEWELLERY_QUANTITIES.get(component);
   event.handled = true;
   if (amount === "x") {
-    player.setEnteredAmountAction({ execute: (value) => {
-      if (!Number.isInteger(value) || value <= 0 || player.getAttribute(JEWELLERY_MENU_ATTRIBUTE) !== menu) return;
-      menu.amount = Math.min(value, 28);
-      player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, menu.amount);
-    } });
+    player.setEnteredAmountAction({
+      execute: (value) => {
+        if (!Number.isInteger(value) || value <= 0 || player.getAttribute(JEWELLERY_MENU_ATTRIBUTE) !== menu) return;
+        menu.amount = Math.min(value, 28);
+        player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, menu.amount);
+      }
+    });
     player.getPacketSender().sendEnterAmountPrompt("How many would you like to make?");
   } else if (amount !== undefined) {
     menu.amount = amount;
@@ -519,6 +655,7 @@ module.exports = {
     api.onItemOnItem(makeSoftClay, { noted: false });
     api.onItemOnItem(blowGlass, { noted: false });
     api.onItemOnItem(stringAmulet, { noted: false });
+    api.onItemOnItem(handleNeedleOnLeather, { noted: false });
     api.onItemOnObject(handlePerfectJewellery, { noted: false });
     api.onItemOnObject(handleGoldJewellery, { noted: false });
     api.onInterfaceActionClick(handleGoldJewelleryButton);

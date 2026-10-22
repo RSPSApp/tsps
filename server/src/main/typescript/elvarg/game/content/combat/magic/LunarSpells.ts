@@ -17,10 +17,39 @@ import { OptionDialogue } from "../../../model/dialogues/entries/impl/OptionDial
 import { DialogueOption } from "../../../model/dialogues/DialogueOption";
 import { PluginManager } from "../../../../plugins/PluginManager";
 
-type SpellData = { level: number; experience: number; runes: Item[] };
+/** A cast's animation and graphic on the caster (cache ids). */
+type CastVisuals = { animation: number; graphic?: number };
+/**
+ * `cast` is what the caster plays, as in rsprox captures of live OSRS; null for a teleport, whose
+ * TeleportType animates it. Spells no capture shows yet keep the summon animation (4413) with the
+ * Lunar teleport graphic (747).
+ */
+type SpellData = { level: number; experience: number; runes: Item[]; cast?: CastVisuals | null };
 type TeleportData = SpellData & { destination: Location };
 
 const rune = (id: number, amount = 1) => new Item(id, amount);
+const UNCAPTURED: CastVisuals = { animation: 4413, graphic: 747 };
+/** The Lunar spells rsprox captures show, by cache name: the caster's animation, then graphic. */
+const CASTS = {
+    // lunar_human_magic_summon2, quest_lunar_bakepie_spotanim
+    "bake pie": { animation: 4413, graphic: 746 },
+    // quest_lunar_pushing_magic_animation, quest_lunar_cure_me_spot
+    "cure me": { animation: 4411, graphic: 742 },
+    // dream_player_humidify_spell, dream_humidify_spell_spotanim
+    "humidify": { animation: 6294, graphic: 1061 },
+    // dream_player_hunter_box_spell, dream_hunter_spell_spotanim
+    "hunter kit": { animation: 6303, graphic: 1074 },
+    // dream_player_make_plank_spell, dream_plank_make_spell_spotanim
+    "plank make": { animation: 6298, graphic: 1063 },
+    // dream_player_spellbook_swap, dream_spellbook_spotanim
+    "spellbook swap": { animation: 6299, graphic: 1062 },
+    // lunar_human_magic_summon1, quest_lunar_spellbook_string_jewelery_spot_anim
+    "string jewellery": { animation: 4412, graphic: 730 },
+    // quest_lunar_pushing_magic_animation; the target shows the Vengeance graphic (725)
+    "vengeance other": { animation: 4411 },
+} satisfies Record<string, CastVisuals>;
+/** A captured spell's cast: a misspelt name fails to compile instead of falling back to UNCAPTURED. */
+const castOf = (spell: keyof typeof CASTS): CastVisuals => CASTS[spell];
 
 class LunarSpell extends Spell {
     constructor(readonly data: SpellData) { super(); }
@@ -37,8 +66,11 @@ class LunarSpell extends Spell {
             return true;
         }
         if (!this.canCast(player, false) || !this.canCast(player, true)) return true;
-        player.performAnimation(new Animation(4413));
-        player.performGraphic(new Graphic(747));
+        const cast = this.data.cast === undefined ? UNCAPTURED : this.data.cast;
+        if (cast) {
+            player.performAnimation(new Animation(cast.animation));
+            if (cast.graphic !== undefined) player.performGraphic(new Graphic(cast.graphic));
+        }
         effect();
         player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
         return true;
@@ -46,7 +78,7 @@ class LunarSpell extends Spell {
 }
 
 class LunarTeleport extends LunarSpell {
-    constructor(readonly teleport: TeleportData) { super(teleport); }
+    constructor(readonly teleport: TeleportData) { super({ ...teleport, cast: null }); }
     castTeleport(player: Player): boolean {
         if (!TeleportHandler.checkReqs(player, this.teleport.destination)) return true;
         return this.cast(player, () => TeleportHandler.teleport(player, this.teleport.destination, TeleportType.LUNAR, false));
@@ -58,13 +90,14 @@ const teleport = (level: number, experience: number, runes: Item[], x: number, y
 
 /** Lunar spells that can be fulfilled by the current server primitives. */
 export class LunarSpells {
+    public static readonly CASTS = CASTS;
     private static readonly SELF = new Map<string, LunarSpell>([
-        ["cure me", new LunarSpell({ level: 71, experience: 69, runes: [rune(9075, 2), rune(564, 2), rune(563)] })],
+        ["cure me", new LunarSpell({ level: 71, experience: 69, runes: [rune(9075, 2), rune(564, 2), rune(563)], cast: castOf("cure me") })],
         ["cure group", new LunarSpell({ level: 74, experience: 74, runes: [rune(9075, 2), rune(564, 2), rune(563, 2)] })],
         ["vengeance", new LunarSpell({ level: 94, experience: 112, runes: [rune(9075, 4), rune(557, 10), rune(560, 2)] })],
         ["dream", new LunarSpell({ level: 79, experience: 82, runes: [rune(9075, 2), rune(556, 5), rune(563)] })],
         ["heal group", new LunarSpell({ level: 95, experience: 124, runes: [rune(9075, 4), rune(557, 15), rune(565, 3)] })],
-        ["spellbook swap", new LunarSpell({ level: 96, experience: 130, runes: [rune(9075, 3), rune(563, 2), rune(560)] })],
+        ["spellbook swap", new LunarSpell({ level: 96, experience: 130, runes: [rune(9075, 3), rune(563, 2), rune(560)], cast: castOf("spellbook swap") })],
     ]);
 
     private static readonly TELEPORTS = new Map<string, LunarTeleport>([
@@ -140,10 +173,10 @@ export class LunarSpells {
     private static handleUtility(player: Player, key: string): boolean {
         if (key === "astral contact") key = "npc contact";
         const definitions: Record<string, SpellData> = {
-            "bake pie": { level: 65, experience: 60, runes: [rune(9075), rune(554, 5), rune(555, 4)] },
-            "humidify": { level: 68, experience: 65, runes: [rune(9075), rune(555, 3), rune(563)] },
-            "hunter kit": { level: 71, experience: 70, runes: [rune(9075, 2), rune(554, 2), rune(563)] },
-            "plank make": { level: 86, experience: 90, runes: [rune(9075, 2), rune(557, 15), rune(561)] },
+            "bake pie": { level: 65, experience: 60, runes: [rune(9075), rune(554, 5), rune(555, 4)], cast: castOf("bake pie") },
+            "humidify": { level: 68, experience: 65, runes: [rune(9075), rune(555, 3), rune(563)], cast: castOf("humidify") },
+            "hunter kit": { level: 71, experience: 70, runes: [rune(9075, 2), rune(554, 2), rune(563)], cast: castOf("hunter kit") },
+            "plank make": { level: 86, experience: 90, runes: [rune(9075, 2), rune(557, 15), rune(561)], cast: castOf("plank make") },
             "magic imbue": { level: 82, experience: 86, runes: [rune(9075, 2), rune(554, 7), rune(556, 7)] },
             "npc contact": { level: 67, experience: 63, runes: [rune(9075), rune(564), rune(556, 2)] },
         };
@@ -219,7 +252,7 @@ export class LunarSpells {
             "cure other": { level: 68, experience: 65, runes: [rune(9075), rune(557, 10), rune(563)] },
             "energy transfer": { level: 91, experience: 100, runes: [rune(9075, 3), rune(557, 2), rune(563)] },
             "heal other": { level: 92, experience: 101, runes: [rune(9075, 3), rune(557), rune(565, 3)] },
-            "vengeance other": { level: 93, experience: 108, runes: [rune(9075, 3), rune(557, 10), rune(560, 2)] },
+            "vengeance other": { level: 93, experience: 108, runes: [rune(9075, 3), rune(557, 10), rune(560, 2)], cast: castOf("vengeance other") },
             "stat spy": { level: 75, experience: 76, runes: [rune(9075, 2), rune(557, 5), rune(563)] },
             "stat restore pot share": { level: 81, experience: 84, runes: [rune(9075, 2), rune(555, 10), rune(561, 2)] },
             "boost potion share": { level: 84, experience: 88, runes: [rune(9075, 3), rune(555, 12), rune(557, 10)] },
@@ -264,7 +297,6 @@ export class LunarSpells {
         return spell.cast(player, () => {
             target.setHasVengeance(true);
             target.getVengeanceTimer().start(30);
-            target.performAnimation(new Animation(4411));
             target.performGraphic(new Graphic(725, GraphicHeight.HIGH));
             target.getPacketSender().sendEffectTimer(30, EffectTimer.VENGEANCE)
                 .sendMessage("You now have Vengeance's effect.");
@@ -287,7 +319,7 @@ export class LunarSpells {
     public static handleItemTarget(player: Player, itemId: number, slot: number, name: string | undefined): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         const definitions: Record<string, SpellData> = {
-            "string jewellery": { level: 80, experience: 83, runes: [rune(9075, 2), rune(556, 5), rune(563)] },
+            "string jewellery": { level: 80, experience: 83, runes: [rune(9075, 2), rune(556, 5), rune(563)], cast: castOf("string jewellery") },
             "recharge dragonstone": { level: 89, experience: 97.5, runes: [rune(9075, 4), rune(557, 10), rune(563, 4)] },
         };
         const data = definitions[key];

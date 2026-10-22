@@ -3,7 +3,6 @@ import { NPC } from "../../../entity/impl/npc/NPC";
 import { Player } from "../../../entity/impl/player/Player";
 import { Animation } from "../../../model/Animation";
 import { Graphic } from "../../../model/Graphic";
-import { GraphicHeight } from "../../../model/GraphicHeight";
 import { Item } from "../../../model/Item";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { Skill } from "../../../model/Skill";
@@ -74,8 +73,10 @@ export class ArceuusItemSpells {
         (npc as any).__skipDefaultRespawn = true;
         npc.setOwner(player);
         World.getAddNPCQueue().push(npc);
-        player.performAnimation(new Animation(711));
-        player.performGraphic(new Graphic(187, GraphicHeight.HIGH));
+        // rsprox captures: arceuus_necromancy_playeranim with arceuus_necromancy_playerspot, not Wind
+        // Strike's animation and the Underground Pass claw.
+        player.performAnimation(new Animation(7198));
+        player.performGraphic(new Graphic(1288));
         player.getSkillManager().addExperiences(Skill.MAGIC, spell.baseExperience());
         return true;
     }

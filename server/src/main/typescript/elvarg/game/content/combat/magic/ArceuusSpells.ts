@@ -101,6 +101,15 @@ const rune = (id: number, amount = 1) => new Item(id, amount);
 const teleport = (level: number, experience: number, runes: Item[], x: number, y: number, z = 0, cooldown?: TeleportSpell["cooldown"]) =>
     new ArceuusTeleportSpell({ level, experience, runes, destination: new Location(x, y, z), cooldown });
 const THRALL_COOLDOWN = { attribute: "arceuus:thrall-until", duration: 30_000 };
+/**
+ * Resurrect, as in rsprox captures: the caster plays human_spellcast_resurrect with its kind's cast
+ * graphic, and the thrall rises with its kind's impact graphic and spawn animation, the *_raised ones
+ * since revision 237 (no capture has a zombie rising since then).
+ */
+const RESURRECT = 8973;
+const GHOST = { cast: 1873, impact: 1903, rise: 13683 };
+const SKELETON = { cast: 1874, impact: 1904, rise: 13684 };
+const ZOMBIE = { cast: 1875, impact: 1905, rise: 13685 };
 
 /** Self-cast Arceuus spells. Targeted spells remain in their respective packet handlers. */
 export class ArceuusSpells {
@@ -184,15 +193,15 @@ export class ArceuusSpells {
                 player.getPacketSender().sendRunEnergy();
             },
         })],
-        ["resurrect lesser ghost", new ArceuusSelfSpell({ id: 25511, level: 38, experience: 55, runes: [rune(558, 5), rune(556, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10878, 2, 1, 6) })],
-        ["resurrect superior ghost", new ArceuusSelfSpell({ id: 25506, level: 57, experience: 70, runes: [rune(560, 5), rune(557, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10879, 4, 2, 6) })],
-        ["resurrect greater ghost", new ArceuusSelfSpell({ id: 25507, level: 76, experience: 88, runes: [rune(565, 5), rune(554, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10880, 6, 3, 6) })],
-        ["resurrect lesser skeleton", new ArceuusSelfSpell({ id: 25509, level: 38, experience: 55, runes: [rune(558, 5), rune(556, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10881, 2, 1, 6) })],
-        ["resurrect superior skeleton", new ArceuusSelfSpell({ id: 25512, level: 57, experience: 70, runes: [rune(560, 5), rune(557, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10882, 4, 2, 6) })],
-        ["resurrect greater skeleton", new ArceuusSelfSpell({ id: 25510, level: 76, experience: 88, runes: [rune(565, 5), rune(554, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10883, 6, 3, 6) })],
-        ["resurrect lesser zombie", new ArceuusSelfSpell({ id: 25508, level: 38, experience: 55, runes: [rune(558, 5), rune(556, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10884, 2, 1, 1) })],
-        ["resurrect superior zombie", new ArceuusSelfSpell({ id: 25513, level: 57, experience: 70, runes: [rune(560, 5), rune(557, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10885, 4, 2, 1) })],
-        ["resurrect greater zombie", new ArceuusSelfSpell({ id: 25514, level: 76, experience: 88, runes: [rune(565, 5), rune(554, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, effect: (p) => ArceuusThralls.summon(p, 10886, 6, 3, 1) })],
+        ["resurrect lesser ghost", new ArceuusSelfSpell({ id: 25511, level: 38, experience: 55, runes: [rune(558, 5), rune(556, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: GHOST.cast, effect: (p) => ArceuusThralls.summon(p, 10878, 2, 1, 6, GHOST) })],
+        ["resurrect superior ghost", new ArceuusSelfSpell({ id: 25506, level: 57, experience: 70, runes: [rune(560, 5), rune(557, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: GHOST.cast, effect: (p) => ArceuusThralls.summon(p, 10879, 4, 2, 6, GHOST) })],
+        ["resurrect greater ghost", new ArceuusSelfSpell({ id: 25507, level: 76, experience: 88, runes: [rune(565, 5), rune(554, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: GHOST.cast, effect: (p) => ArceuusThralls.summon(p, 10880, 6, 3, 6, GHOST) })],
+        ["resurrect lesser skeleton", new ArceuusSelfSpell({ id: 25509, level: 38, experience: 55, runes: [rune(558, 5), rune(556, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: SKELETON.cast, effect: (p) => ArceuusThralls.summon(p, 10881, 2, 1, 6, SKELETON) })],
+        ["resurrect superior skeleton", new ArceuusSelfSpell({ id: 25512, level: 57, experience: 70, runes: [rune(560, 5), rune(557, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: SKELETON.cast, effect: (p) => ArceuusThralls.summon(p, 10882, 4, 2, 6, SKELETON) })],
+        ["resurrect greater skeleton", new ArceuusSelfSpell({ id: 25510, level: 76, experience: 88, runes: [rune(565, 5), rune(554, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: SKELETON.cast, effect: (p) => ArceuusThralls.summon(p, 10883, 6, 3, 6, SKELETON) })],
+        ["resurrect lesser zombie", new ArceuusSelfSpell({ id: 25508, level: 38, experience: 55, runes: [rune(558, 5), rune(556, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: ZOMBIE.cast, effect: (p) => ArceuusThralls.summon(p, 10884, 2, 1, 1, ZOMBIE) })],
+        ["resurrect superior zombie", new ArceuusSelfSpell({ id: 25513, level: 57, experience: 70, runes: [rune(560, 5), rune(557, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: ZOMBIE.cast, effect: (p) => ArceuusThralls.summon(p, 10885, 4, 2, 1, ZOMBIE) })],
+        ["resurrect greater zombie", new ArceuusSelfSpell({ id: 25514, level: 76, experience: 88, runes: [rune(565, 5), rune(554, 10), rune(564)], cooldown: THRALL_COOLDOWN, castDelay: true, animation: RESURRECT, graphic: ZOMBIE.cast, effect: (p) => ArceuusThralls.summon(p, 10886, 6, 3, 1, ZOMBIE) })],
     ]);
     private static readonly TELEPORTS = new Map<string, ArceuusTeleportSpell>([
         ["arceuus library teleport", teleport(6, 9, [rune(557, 2), rune(563)], 1632, 3838)],

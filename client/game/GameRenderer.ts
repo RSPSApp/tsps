@@ -742,5 +742,6 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
 
         this.osrsClient.inputManager.onFrameEnd();
         this.osrsClient.camera.onFrameEnd();
+        this.osrsClient.clientPlugins.afterFrame(this.canvas);
     }
 }

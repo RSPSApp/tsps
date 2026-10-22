@@ -1,4 +1,5 @@
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
+import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
 import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
 import { AnimationSmoothingPlugin } from "../../../game/plugins/animationsmoothing/AnimationSmoothingPlugin";
 import { AttackTimerPlugin } from "../../../game/plugins/attacktimer/AttackTimerPlugin";
@@ -58,6 +59,8 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     StretchedModePlugin,
     GpuPlugin,
     CameraPlugin,
+    // After VoiceChatPlugin: while voice chat holds the chatbox Report button, its clicks are voice's.
+    BugReportPlugin,
 ];
 
 /** Legacy `osrs.plugin.*.v1` localStorage blobs to fold into rl.config. */

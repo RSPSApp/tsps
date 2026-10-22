@@ -17,3 +17,6 @@ Server
 
 # AI bots roster (plugins/bots/ai/AiBotRoster.js)
 data/saves/ai-bots.json
+
+# In-game bug reports when no GitHub repository is configured (plugins/interface/BugReports.plugin.js)
+data/saves/bug-reports/

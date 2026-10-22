@@ -193,6 +193,18 @@
     resize: vertical;
 }
 
+/* Report a Bug (BugReportPanel) */
+.rl-bug-report-screenshot {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--rl-medium-gray);
+}
+
+.rl-bug-report-link {
+    color: var(--rl-orange);
+}
+
 .rl-sidebar-color-input {
     width: 40px;
     min-width: 40px;

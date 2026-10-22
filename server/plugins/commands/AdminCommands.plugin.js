@@ -44,10 +44,20 @@ const MORTAL_DEVELOPER_ATTRIBUTE = "dev:mortal";
 const ATTACK_RANGE_DEBUG_GRAPHIC = new Graphic(332, 0);
 const MAX_NPC_COMMAND_SPAWNS = 20;
 const INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
+const INFINITE_RUN_ENERGY_ATTRIBUTE = "admin:infinite-run-energy";
 const PRESERVE_UNLOCKED_ATTRIBUTE = "prayer:preserve-unlocked";
 const RIGOUR_UNLOCKED_ATTRIBUTE = "prayer:rigour-unlocked";
 const AUGURY_UNLOCKED_ATTRIBUTE = "prayer:augury-unlocked";
 const RUNE_IDS = [554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 9075, 21880, 28929];
+const FULL_RUN_ENERGY = 100;
+// Short forms ::setlevel takes that aren't the start of the skill's name (att, str, pray are).
+const SKILL_ALIASES = new Map([
+  ["hp", "hitpoints"],
+  ["rc", "runecrafting"],
+  ["wc", "woodcutting"],
+  ["fm", "firemaking"],
+  ["mage", "magic"],
+]);
 const NPC_SPAWN_FILE_CANDIDATES = [
   path.join(process.cwd(), "data", "definitions", "npc-spawns.json"),
 ];
@@ -246,7 +256,12 @@ function normalizePlayerCommandName(value) {
 }
 
 function resolvePlayerByCommandTail(raw, parts) {
-  const targetName = normalizePlayerCommandName(commandTail(raw, parts));
+  return findOnlinePlayer(commandTail(raw, parts));
+}
+
+/** The online player with this name, or else the only one whose name starts with it. */
+function findOnlinePlayer(name) {
+  const targetName = normalizePlayerCommandName(name);
   if (!targetName) {
     return null;
   }
@@ -411,6 +426,116 @@ function itemSearchCommand({ player }) {
 
 function npcSearchCommand({ player }) {
   openSpawnSearch(player, NPC_SEARCH_TITLE, (id, amount) => spawnSearchedNpc(player, id, amount));
+  return true;
+}
+
+/** ::infrun - run energy stays full until ::infrun again or logging out. */
+function infiniteRunEnergyCommand({ player }) {
+  const infinite = player.getAttribute(INFINITE_RUN_ENERGY_ATTRIBUTE) !== true;
+  player.setAttribute(INFINITE_RUN_ENERGY_ATTRIBUTE, infinite ? true : null);
+  keepRunEnergyFull({ player });
+  player.sendMessage(infinite
+    ? "Your run energy now stays full. ::infrun again to stop."
+    : "Your run energy drains as normal again.");
+  return true;
+}
+
+// Plugins process after the player's movement each tick, so this tops up what that step
+// drained before the tick's packets go out.
+function keepRunEnergyFull({ player }) {
+  if (player.getAttribute(INFINITE_RUN_ENERGY_ATTRIBUTE) === true && player.getRunEnergy() < FULL_RUN_ENERGY) {
+    player.setRunEnergy(FULL_RUN_ENERGY);
+    player.getPacketSender().sendRunEnergy();
+  }
+}
+
+/** ::give id [amount] player - puts items in an online player's inventory, as ::item does in yours. */
+function giveItemCommand({ player, parts }) {
+  const id = parseIntArg(parts[1]);
+  // A number before the name is the amount: ::give 4151 1 5 Guys gives one whip to "5 Guys".
+  const hasAmount = parts.length > 3 && /^\d+$/.test(parts[2]);
+  const amount = hasAmount ? Math.min(Number(parts[2]), MAX_SPAWN_AMOUNT) : 1;
+  const name = parts.slice(hasAmount ? 3 : 2).join(" ");
+  if (id === null || amount < 1 || !name) {
+    player.sendMessage("Usage: ::give id [amount] player");
+    return true;
+  }
+  if (!CacheDefinitions.hasItem(id)) {
+    player.sendMessage(`There is no item ${id}.`);
+    return true;
+  }
+  const target = findOnlinePlayer(name);
+  if (!target) {
+    player.sendMessage(`Player ${name} is not online.`);
+    return true;
+  }
+  const inventory = target.getInventory();
+  // Only what fits, as ::runes does, so the container never tells the target they
+  // "couldn't hold all those items" without saying who sent them.
+  const room = ItemDefinition.forId(id)?.isStackable?.()
+    ? (inventory.contains(id) || inventory.getFreeSlots() > 0 ? amount : 0)
+    : Math.min(amount, inventory.getFreeSlots());
+  const before = inventory.getAmount(id);
+  if (room > 0) {
+    inventory.adds(id, room);
+  }
+  const given = inventory.getAmount(id) - before;
+  if (given <= 0) {
+    player.sendMessage(`${target.getUsername()}'s inventory is full.`);
+    return true;
+  }
+  const gift = `${given} x ${ItemDefinition.forId(id)?.getName?.() ?? "item"}`;
+  if (target !== player) {
+    target.sendMessage(`${player.getUsername()} gave you ${gift}.`);
+  }
+  const fit = given < amount ? `; only ${given} of ${amount} fit` : "";
+  player.sendMessage(`Gave ${target.getUsername()} ${gift} (${id})${fit}.`);
+  return true;
+}
+
+/** A skill by name, by short form (hp, rc, wc, fm, mage) or by the start of one skill's name. */
+function findSkill(token) {
+  const wanted = String(token ?? "").toLowerCase();
+  const name = SKILL_ALIASES.get(wanted) ?? wanted;
+  if (!name) {
+    return null;
+  }
+  const matches = Skill.values().filter((skill) => skill.getName().toLowerCase().startsWith(name));
+  return matches.find((skill) => skill.getName().toLowerCase() === name) ?? (matches.length === 1 ? matches[0] : null);
+}
+
+/** ::setlevel skill level [player] - sets a skill's level and experience, yours or an online player's. */
+function setLevelCommand({ player, parts }) {
+  const skill = findSkill(parts[1]);
+  const level = parseIntArg(parts[2]);
+  const name = parts.slice(3).join(" ");
+  if (!skill || level === null) {
+    player.sendMessage("Usage: ::setlevel skill level [player]");
+    return true;
+  }
+  const minimum = skill === Skill.HITPOINTS ? 10 : 1;
+  const maximum = SkillManager.getMaxAchievingLevel(skill);
+  if (level < minimum || level > maximum) {
+    player.sendMessage(`${skill.getName()} can be set from ${minimum} to ${maximum}.`);
+    return true;
+  }
+  const target = name ? findOnlinePlayer(name) : player;
+  if (!target) {
+    player.sendMessage(`Player ${name} is not online.`);
+    return true;
+  }
+  // What ::master does to every skill, for this one: boosts and drains go too.
+  target
+    .getSkillManager()
+    .setCurrentLevels(skill, level)
+    .setMaxLevel(skill, level)
+    .setExperience(skill, SkillManager.getExperienceForLevel(level));
+  WeaponInterfaceManager.assign(target);
+  target.getUpdateFlag().flag(Flag.APPEARANCE);
+  if (target !== player) {
+    target.sendMessage(`${player.getUsername()} set your ${skill.getName()} level to ${level}.`);
+  }
+  player.sendMessage(`Set ${target.getUsername()}'s ${skill.getName()} level to ${level}.`);
   return true;
 }
 
@@ -901,6 +1026,8 @@ module.exports = {
       return true;
     }, PlayerRights.OWNER, "Reset skills");
 
+    api.registerCommand("setlevel", setLevelCommand, PlayerRights.OWNER, "Set a skill level (skill level [player])");
+
     api.registerCommand("pnpc", ({ player, parts }) => {
       const id = parseIntArg(parts[1]);
       if (id === null || id < -1 || id > 65535) {
@@ -1197,6 +1324,9 @@ module.exports = {
       return true;
     }, PlayerRights.OWNER, "Toggle infinite health");
 
+    api.registerCommand("infrun", infiniteRunEnergyCommand, PlayerRights.OWNER, "Toggle infinite run energy");
+    api.onPlayerProcess(keepRunEnergyFull);
+
     api.registerCommand("poisonme", ({ player, parts }) => {
       const typeToken = String(parts?.[1] ?? "super").trim().toLowerCase();
       const poisonSeverity =
@@ -1395,6 +1525,8 @@ module.exports = {
       player.sendMessage(`Spawned item ${id} x${cappedAmount}.`);
       return true;
     }, PlayerRights.ADMINISTRATOR, "Spawn an item");
+
+    api.registerCommand("give", giveItemCommand, PlayerRights.ADMINISTRATOR, "Give a player an item (id [amount] player)");
 
     api.registerCommand("clearinv", ({ player }) => {
       player.getInventory().resetItems().refreshItems();

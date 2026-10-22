@@ -41,13 +41,18 @@ export class TeleportType {
         { busy: true, repeatEndAnimation: true },
     );
     public static readonly ANCIENT = new TeleportType(5, new Animation(1979, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(392, GraphicHeight.LOW, Priority.HIGH), null, null);
-    public static readonly LUNAR = new TeleportType(4, new Animation(1816, Priority.HIGH), null, new Animation(715, Priority.HIGH), new Graphic(308, GraphicHeight.LOW, Priority.HIGH), null, null);
-    public static readonly ARCEUUS = new TeleportType(4, new Animation(1816, Priority.HIGH), null, new Animation(715, Priority.HIGH), new Graphic(747, GraphicHeight.HIGH, Priority.HIGH), null, null);
+    // Lunar and Arceuus spell teleports and the lever, as in rsprox captures: the Lunar teleport is
+    // human_teleport_other_impact (1816) with lunar_teleport_spotanim (747), the Arceuus one
+    // arceuus_necromancy_anim (3865) with arceuus_teleport_spotanim (1296), and a lever is pulled
+    // (2140) before the standard teleport's 714 and 111. None plays human_castteleport_reverse (715)
+    // on landing.
+    public static readonly LUNAR = new TeleportType(4, new Animation(1816, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(747, GraphicHeight.LOW, Priority.HIGH), null, null);
+    public static readonly ARCEUUS = new TeleportType(4, new Animation(3865, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(1296, GraphicHeight.HIGH, Priority.HIGH), null, null);
     // Ladders
     public static readonly LADDER_DOWN = new TeleportType(1, new Animation(827, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, null, null, null);
     public static readonly LADDER_UP = new TeleportType(1, new Animation(828, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, null, null, null);
     // Misc
-    public static readonly LEVER = new TeleportType(3, new Animation(2140, Priority.HIGH), new Animation(714), new Animation(715, Priority.HIGH), null, new Graphic(308, 0, GraphicHeight.HIGH), null);
+    public static readonly LEVER = new TeleportType(3, new Animation(2140, Priority.HIGH), new Animation(714), Animation.DEFAULT_RESET_ANIMATION, null, new Graphic(111, 0, 92 as GraphicHeight), null);
     /**
      * Teleport tablets, as in an OSRS capture (docs/teleport-tablets.md): the tablet is smashed
      * (4069, sound 965), absorbed two ticks later (4071 and spotanim 678), and the player lands

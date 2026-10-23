@@ -1,9 +1,10 @@
 # Beginner Treasure Trails
 
 Beginner clues use cache 241's `cluehelper_*` database catalogue. Nothing is fetched
-from the internet when the game starts or while playing. Higher clue tiers are unchanged.
+from the internet when the game starts or while playing. Guided clue routes in this
+plugin cover beginner clues; capacity and scroll cases use the shared ClueCapacity plugin.
 
-## Complete content checklist
+## Implemented clue catalogue
 
 The catalogue contains 26 initial clues:
 
@@ -58,18 +59,29 @@ consumes one casket, grants the actual rewards and increments the saved
 completion/collection-log count. Overflow uses the existing `forceAdd` ground
 reward path. Caskets cannot be opened on Entrana.
 
-**Intentional private-game exception:** the online game's anti-bot restriction
-on unique rewards for accounts under ten hours is omitted. Every local account
+Opening prepares normal and milestone rewards before consuming anything. Every
+base and credited note definition must resolve to its exact cache ID; the cache's
+DEFAULT fallback is rejected. Missing milestone service, invalid reward data or
+invalid saved progress leaves the casket and completion count unchanged. The
+clicked stack is rechecked after preparation callbacks, and recursive callbacks
+cannot open it twice.
+
+**Unresolved fidelity gap:** the online game's anti-bot restriction
+on unique rewards for accounts under ten hours is not implemented. Every local account
 uses the same complete published reward table from its first casket. The Wiki
 does not describe the online replacement policy, and this implementation does
 not invent one or silently discard a unique reward.
 
 Minor/major beginner scroll cases are awarded at 50/100 completions, and Explore
-unlocks at 600. Cases increase beginner capacity from two to three/four and are
-persisted. The capacity query counts carried and banked scrolls, boxes, bottles,
-nests and geodes; NPC drops, mining, woodcutting and impling ownership checks
-honor it. Other tiers retain their existing ownership checks. Scroll boxes open
-into independent generic scrolls without losing an unopened stack when full.
+unlocks at 600. The shared capacity service retains those saved upgrades. Before
+X Marks the Spot the receipt limit is one; afterward it starts at two and can
+increase to five with consumed minor, major and Mimic cases. It counts carried
+and banked clue forms across all six tiers. NPC drops and implemented skilling
+sources select boxes after the quest. Box opening refuses a second active clue
+in inventory, bank, grave, Death's Office or an implemented retrieval service.
+An unopened full stack is preserved when no slot is available. Ground/Telegrab
+capacity enforcement and its warnings remain pending; see
+`server/plugins/treasuretrails/ClueCapacity.md` for the exact implemented scope.
 
 ## Sources
 
@@ -93,6 +105,11 @@ targets, personal Uri, interrupted/stale dialogue, metadata serialization,
 rewards, Entrana, full inventory, capacity and Explore. Run after the server
 build. Natural world/browser evidence is recorded with the
 integration report; unit coverage alone does not establish visual parity.
+
+`tests/beginner-casket-safety.test.cjs` adds real cache/Inventory regressions for
+DEFAULT lookups, credited notes, milestone failure, stale/reentrant callbacks
+and invalid saved completion counts. `tests/clue-capacity.test.cjs` covers the
+shared capacity service and its real save/load path.
 
 The isolated slot-6 world (game 43706, MCP 49806) was exercised with a dedicated
 test account, using normal inventory, NPC, dialogue and emote packet paths.

@@ -23,8 +23,10 @@ Custom events:
   handled even when the clicked item is stale.
 - `treasure-trails:case-eligible`: `{player, itemId, eligible:null}` excludes
   consumed cases and copies held in inventory or bank.
-- `treasure-trails:milestone-rewards`: `{player, completed, milestones, drops}`
+- `treasure-trails:milestone-rewards`: `{player, completed, milestones, drops, handled:false, error:null}`
   adds eligible canonical milestone rows. It does not invent reward thresholds.
+  The service sets `handled` even when no case is eligible; callers can preserve
+  their casket if the service is missing or reports an error.
 
 Item IDs and case varbits come from the installed cache's named identifiers.
 The thirteen consumed flags are registered for persistence and sent on login.

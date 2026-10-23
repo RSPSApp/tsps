@@ -162,8 +162,11 @@ function milestoneRewards(player, completed, milestones) {
 }
 
 function queryMilestones(request) {
-  if (request?.player && Array.isArray(request.milestones) && Array.isArray(request.drops))
+  if (request?.handled) return;
+  if (request?.player && Array.isArray(request.milestones) && Array.isArray(request.drops)) {
     request.drops.push(...milestoneRewards(request.player, request.completed, request.milestones));
+    request.handled = true;
+  }
 }
 
 function sync({player}) {

@@ -27,13 +27,29 @@ function onEntrana(player) {
   return pos.getZ() === 0 && pos.getX() >= 2800 && pos.getX() <= 2879 && pos.getY() >= 3320 && pos.getY() <= 3391;
 }
 
+/** Resolve every credited definition before consumption, including milestone rewards. */
+function prepareDrops(drops) {
+  if (!Array.isArray(drops) || !drops.length) throw new Error("Missing beginner rewards");
+  return drops.map(drop => {
+    if (!Number.isSafeInteger(drop.itemId) || drop.itemId <= 0 ||
+        !Number.isSafeInteger(drop.amount) || drop.amount < 1 || typeof drop.noted !== "boolean")
+      throw new Error("Invalid beginner reward");
+    const definition = core.ItemDefinition.forId(drop.itemId);
+    if (!definition || definition === core.ItemDefinition.DEFAULT || definition.getId() !== drop.itemId)
+      throw new Error(`Missing beginner reward ${drop.itemId}`);
+    const creditId = drop.noted ? definition.getNoteId() : drop.itemId;
+    if (!Number.isSafeInteger(creditId) || creditId <= 0) throw new Error(`Missing credited beginner reward ${drop.itemId}`);
+    const credited = core.ItemDefinition.forId(creditId);
+    if (!credited || credited === core.ItemDefinition.DEFAULT || credited.getId() !== creditId)
+      throw new Error(`Missing credited beginner reward ${creditId}`);
+    return {...drop, creditId, stackable: credited.isStackable()};
+  });
+}
+
 function give(player, drops) {
   const credited = new Map();
   for (const drop of drops) {
-    const definition = core.ItemDefinition.forId(drop.itemId);
-    const id = drop.noted ? definition.getNoteId() : drop.itemId;
-    if (!(id > 0)) throw new Error(`Missing noted reward ${drop.itemId}`);
-    const stackable = core.ItemDefinition.forId(id).isStackable();
+    const {creditId: id, stackable} = drop;
     for (let i = 0; i < (stackable ? 1 : drop.amount); i++) player.getInventory().forceAdd(player, new core.Item(id, stackable ? drop.amount : 1));
     credited.set(id, (credited.get(id) || 0) + drop.amount);
     api.emitCustomEvent("collection-log:obtain", { player, itemId: drop.itemId, amount: drop.amount });
@@ -54,18 +70,27 @@ function open(event) {
   }
   player.setAttribute(OPENING_ATTRIBUTE, true);
   try {
-    // Intentional offline exception: the online anti-bot account-age gate has no
-    // place in a private game. Keep the published table intact from casket one.
-    const drops = roll();
-    // Validate every definition before consuming the casket; a bad import loses nothing.
-    for (const drop of drops) {
-      const definition = core.ItemDefinition.forId(drop.itemId);
-      if (!definition || drop.noted && !(definition.getNoteId() > 0)) throw new Error(`Invalid beginner reward ${drop.itemId}`);
+    // Known fidelity gap: early-account unique eligibility and the online
+    // replacement distribution still need a source-backed implementation.
+    let drops, count;
+    try {
+      const completed = Number(player.getAttribute(Runtime.COMPLETED_ATTRIBUTE) ?? 0);
+      if (!Number.isSafeInteger(completed) || completed < 0 || completed >= Number.MAX_SAFE_INTEGER)
+        throw new Error("Invalid beginner completion count");
+      count = completed + 1;
+      const request = {player, completed: count, milestones: TABLE.milestones, drops: roll(), handled: false, error: null};
+      api.emitCustomEvent("treasure-trails:milestone-rewards", request);
+      if (!request.handled || request.error) throw request.error ?? new Error("Beginner milestone service unavailable");
+      drops = prepareDrops(request.drops);
+    } catch (error) {
+      event.error = error;
+      player.sendMessage("You can't open this casket right now.");
+      return true;
     }
+    // A preparation callback may have moved or replaced the clicked stack.
+    if (inventory.getItems()[slot] !== item || item.getId() !== Runtime.data().casket || item.getAmount() < 1) return true;
     inventory.deleteAtSlot(slot, 1);
-    const count = (Number(player.getAttribute(Runtime.COMPLETED_ATTRIBUTE)) || 0) + 1;
     player.setAttribute(Runtime.COMPLETED_ATTRIBUTE, count);
-    api.emitCustomEvent("treasure-trails:milestone-rewards", {player, completed: count, milestones: TABLE.milestones, drops});
     const slots = give(player, drops);
     Runtime.restore({ player });
     const sender = player.getPacketSender();
@@ -86,4 +111,4 @@ module.exports = function attachRewards(pluginApi) {
   core = api.core;
   api.onItemAction("Reward casket (beginner)", { Open: open });
 };
-Object.assign(module.exports, { TABLE, roll, give, open, onEntrana });
+Object.assign(module.exports, { TABLE, roll, prepareDrops, give, open, onEntrana });

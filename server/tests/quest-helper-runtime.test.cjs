@@ -2,6 +2,12 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {QuestHelperRuntime}=require('../plugins/quests/questhelper/Runtime.QuestHelper');
 const {tutorialResult}=require('../plugins/quests/questhelper/Tutorial.QuestHelper');
+test('loopback bridge accepts bounded real-sized results and rejects oversized expansion',async()=>{
+ const {QuestHelperHttp}=require('../plugins/quests/questhelper/Http.QuestHelper');
+ const make=size=>new QuestHelperHttp({token:'x'.repeat(24),fetchImpl:async()=>new Response(JSON.stringify({value:'x'.repeat(size)}))});
+ assert.equal((await make(800000).catalog()).value.length,800000);
+ await assert.rejects(make(4*1024*1024).catalog(),/limit/);
+});
 test('helper plugin exposes the loader register contract',()=>{
  const plugin=require('../plugins/quests/QuestHelper.plugin');
  assert.equal(typeof plugin.register,'function');assert.equal(plugin.name,'OfflineQuestHelper');

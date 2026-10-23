@@ -16,6 +16,7 @@ const JekyllPlugin = require('../plugins/npcs/DrJekyll.plugin');
 const Gift = require('../plugins/npcs/random-events/GiftRewards.RandomEvents');
 const PlantPlugin = require('../plugins/npcs/StrangePlant.plugin');
 const { Animation } = require('../dist/game/model/Animation');
+const { Task } = require('../dist/game/task/Task');
 const { PlayerRights } = require('../dist/game/model/rights/PlayerRights');
 const { ItemOnGround, State } = require('../dist/game/entity/impl/grounditem/ItemOnGround');
 const { DialogueChainBuilder } = require('../dist/game/model/dialogues/builders/DialogueChainBuilder');
@@ -53,9 +54,10 @@ function harness(t, members = true) {
     existsLocation(location) { return this.objectsAt(location).length > 0; },
   };
   const persistedAttributes = new Map();
+  const tasks = [];
   const api = {
     core: { Item, ItemIdentifiers: I, NpcIdentifiers: N, Skill, Location, Wilderness: { isPvpArea: () => false },
-      WorldDefinition: { isMembersWorld: () => members }, Animation, PlayerRights,
+      WorldDefinition: { isMembersWorld: () => members }, Animation, Task, PlayerRights,
       DialogueChainBuilder, NpcDialogue, PlayerDialogue, StatementDialogue,
       ItemStatementDialogue, EndDialogue, ActionDialogue, GameObject: FakeGameObject, ObjectManager,
       MapObjects: { get: () => null } },
@@ -70,6 +72,7 @@ function harness(t, members = true) {
     } }),
     getRegionManager: () => ({ blocked: (...args) => blocked(...args), canMovestart: (...args) => movable(...args) }),
     getWorld: () => ({ getNpcsNear: () => npcs }),
+    getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
     registerCustomInterface(definition) { interfaces.push(definition); },
     spawnNpc(definition) {
       const npc = { definition, owner: definition.owner, location: new Location(definition.x, definition.y, definition.z),
@@ -127,7 +130,7 @@ function harness(t, members = true) {
   function player() {
     const slots = [], rewards = [], rewardItems = [], messages = [], xp = new Map(), levels = new Map();
     const p = { slots, rewards, rewardItems, messages, xp, levels, free: 28, online: true, hp: 10,
-      location: new Location(3222, 3222, 0), interfaceId: -1,
+      location: new Location(3222, 3222, 0), interfaceId: -1, chatboxGroupId: -1,
       attributes: new Map(),
       isRegistered: () => p.online, isPlayerBot: () => !!p.bot, getHitpoints: () => p.hp,
       getAttribute: key => p.attributes.get(key), setAttribute(key, value) {
@@ -163,13 +166,14 @@ function harness(t, members = true) {
           if (!p.blockXp) xp.set(skill, Math.min(200_000_000, (xp.get(skill) ?? 0) + amount));
         } }),
       getPacketSender: () => ({ sendInterface(id) { p.interfaceId = id; },
-        sendInterfaceRemoval() { p.interfaceId = -1; }, sendString(text, uid) {
+        sendInterfaceRemoval() { p.interfaceId = -1; p.chatboxGroupId = -1; }, sendString(text, uid) {
           p.trayTitle = text; (p.strings ??= new Map()).set(uid, text);
         },
         sendItemOnInterfaces(uid, id) { (p.tray ??= []).push([uid, id]); },
         sendInterfaceRawModel(uid, model) { (p.models ??= new Map()).set(uid, model); },
         sendInterfaceDisplayState() {}, sendSubInterface() {}, sendConfig() {},
-        sendInterfaceScript() {}, sendChatboxInterface() {}, sendClientScript() {},
+        sendInterfaceScript() {}, sendChatboxInterface(id) { p.chatboxGroupId = id; }, sendClientScript() {},
+        isChatboxInterface(id) { return p.chatboxGroupId === id; },
         sendInterfaceAnimation() {},
         sendInterfaceFlagsRange(uid, from, to, flags) { (p.flags ??= []).push([uid, from, to, flags]); } }),
     };
@@ -185,6 +189,9 @@ function harness(t, members = true) {
     return npcs.at(-1);
   }
   return { api, hooks, emit, npcs, prompts, drops, xpRewards, persistedAttributes, player, spawn,
+    tasks, ticks(count) { for (let i = 0; i < count; i++) {
+      for (const task of [...tasks]) if (task.isRunning()) task.tick();
+    } },
     advance: ms => { now += ms; }, random: value => { random = value; },
     collision: (b, m) => { blocked = b; movable = m; }, disable: () => { enabled = false; } };
 }
@@ -825,6 +832,7 @@ test('Beekeeper assembles the hive and rewards a lamp plus an outfit piece', t =
   assert.equal(p.location.getX(), 1926);
   const session = Teleports.sessionOf(p);
   assert.equal(session.kind, 'beekeeper');
+  assert.ok(session.keeper.getLocation().equals(new Location(1927, 5044, 0)), 'keeper spawns beside arrival, not invitation');
   for (const part of ['Lid', 'Body', 'Entrance', 'Legs']) {
     choose(h, p, openOptions(h, p).options.findIndex(entry => entry.label === part));
   }
@@ -1010,6 +1018,10 @@ test('Prison Pete pays out after three correct balloon keys', t => {
   for (let round = 0; round < 3; round++) {
     assert.equal(fireRaw(h, 'objectRaw', { player: p,
       object: { getId: () => 24296, getLocation: () => new Location(2094, 4464, 0) } }), true);
+    h.ticks(6);
+    assert.equal(p.interfaceId, 273, 'lever preview remains visible for six ticks');
+    h.ticks(1);
+    assert.equal(p.interfaceId, -1, 'session timer still closes the lever preview at seven ticks');
     const needed = session.data.required;
     const balloon = session.data.balloons.find(entry => entry.shape === needed.shape);
     assert.equal(fireNpcClick(h, balloon.id, 1, { player: p, npc: balloon.npc, npcId: balloon.id }), true);
@@ -1091,16 +1103,108 @@ test('Mime copies four performances, crying on the wrong emote', t => {
   h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
   const session = Teleports.sessionOf(p);
-  assert.equal(p.interfaceId, 188);
+  assert.notEqual(p.chatboxGroupId, 188, 'watch the performance before choosing');
+  const early = MIME_EMOTES.indexOf(session.data.emote.name);
+  h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + early), action: 1 });
+  assert.equal(session.data.correct, 0, 'early packets cannot answer');
+  h.ticks(3); // Cry: cache sequence 860 is 88 client cycles, rounded to 3 game ticks.
+  assert.equal(p.chatboxGroupId, 188);
+  assert.notEqual(p.interfaceId, 188, 'emote choices belong in the chatbox');
   const wrong = MIME_EMOTES.findIndex(name => name !== session.data.emote.name);
   h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + wrong), action: 1 });
   assert.equal(session.data.correct, 0);
+  assert.equal(p.animation, 860);
+  assert.notEqual(p.chatboxGroupId, 188, 'hide choices during the reaction');
+  h.ticks(3);
   for (let i = 0; i < 4; i++) {
     const index = MIME_EMOTES.indexOf(session.data.emote.name);
     h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + index), action: 1 });
+    h.emit('InterfaceActionClick', { player: p, buttonId: (188 << 16) | (2 + index), action: 1 });
+    assert.equal(session.data.correct, i + 1, 'one accepted answer per performance');
+    assert.equal(p.animation, 862);
+    assert.notEqual(p.chatboxGroupId, 188);
+    h.ticks(4); // Client advances after cycle > frame length, including at the final frame.
+    assert.equal(p.rewards.length, 0, 'finish waits until Cheer has ended');
+    assert.notEqual(p.chatboxGroupId, 188);
+    h.ticks(1);
+    if (i < 3) { assert.notEqual(p.chatboxGroupId, 188); h.ticks(3); }
   }
   assert.ok(p.rewards.includes(3057) || p.rewards.includes(I.LAMP));
   assert.equal(Teleports.sessionOf(p), undefined);
+  assert.equal(p.rewards.length, 1);
+  h.ticks(100);
+  assert.equal(p.rewards.length, 1);
+});
+
+test('Mime finds the stage NPC after arrival and waits for each cache animation', t => {
+  const h = harness(t), p = h.player();
+  const mime = h.api.spawnNpc({ id: N.MIME, x: 2011, y: 4762, z: 0 });
+  h.api.getWorld = () => ({ getNpcsNear(location, radius) {
+    return location.getDistance(mime.getLocation()) <= radius ? [mime] : [];
+  } });
+  // Cache 241 lengths in component order, rounded up from 30 client cycles per game tick.
+  for (const [index, animation, ticks] of [[0,857,4], [1,861,3], [2,1130,6], [3,1131,3],
+    [4,860,3], [5,866,7], [6,1129,6], [7,1128,7]]) {
+    const npc = h.spawn(p, 20);
+    h.random((index + 0.1) / 8);
+    h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
+    choose(h, p, 0);
+    assert.equal(mime.animation, animation, 'real stage NPC performs the chosen emote');
+    assert.ok(!p.messages.some(message => /The mime performs:/.test(message)));
+    h.ticks(ticks - 1);
+    assert.notEqual(p.chatboxGroupId, 188, 'prompt stays hidden until the final tick');
+    h.ticks(1);
+    assert.equal(p.chatboxGroupId, 188);
+    Teleports.finish(Teleports.sessionOf(p));
+  }
+});
+
+for (const exit of ['depart', 'logout', 'replacement', 'shutdown']) {
+  test(`Mime cancels a pending demonstration on ${exit}`, t => {
+    const h = harness(t), p = h.player(), npc = h.spawn(p, 20);
+    h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
+    choose(h, p, 0);
+    const session = Teleports.sessionOf(p);
+    assert.equal(h.tasks.filter(task => task.isRunning()).length, 1, 'demonstration owns a pending completion');
+    if (exit === 'depart') Teleports.departed(p, false);
+    if (exit === 'logout') h.emit('PlayerLogout', { player: p });
+    if (exit === 'shutdown') h.emit('ServerShutdown');
+    if (exit === 'replacement') {
+      Teleports.begin({ player: p, npc, definition: {} }, { kind: 'quiz', arrive: { x: 1953, y: 4768 } });
+    }
+    h.ticks(100);
+    assert.notEqual(p.chatboxGroupId, 188, 'stale task never reopens the prompt');
+    assert.ok(h.tasks.every(task => task.isStopped()), 'session stops its scheduled tasks');
+    assert.equal(session.data.correct, 0);
+    assert.deepEqual(p.rewards, []);
+  });
+}
+
+test('Mime closes an open answer on departure and cancels the final reward on logout', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 20);
+  h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  h.ticks(3);
+  assert.equal(p.chatboxGroupId, 188);
+  Teleports.departed(p, false);
+  assert.equal(p.chatboxGroupId, -1);
+
+  const q = h.player(), invitation = h.spawn(q, 20);
+  h.hooks['Mysterious Old Man']['Talk-to']({ player: q, npc: invitation, handled: false });
+  choose(h, q, 0);
+  const session = Teleports.sessionOf(q);
+  for (let round = 0; round < 4; round++) {
+    h.ticks(3);
+    const index = MIME_EMOTES.indexOf(session.data.emote.name);
+    h.emit('InterfaceActionClick', { player: q, buttonId: (188 << 16) | (2 + index), action: 1 });
+    if (round < 3) h.ticks(5);
+  }
+  assert.equal(session.data.correct, 4);
+  h.emit('PlayerLogout', { player: q });
+  h.ticks(100);
+  assert.equal(Teleports.sessionOf(q), undefined);
+  assert.deepEqual(q.rewards, [], 'logging out during the final reaction does not grant a stale reward');
+  assert.equal(q.chatboxGroupId, -1);
 });
 
 test('Pillory picks the matching key three times, wrong picks add locks', t => {

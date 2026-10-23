@@ -82,8 +82,8 @@ function begin(active, spec) {
   active.session = session;
   // The invitation lifecycle ends here: the follower NPC is removed without rewarding.
   Hook?.finish?.(active);
-  (spec.onStart ?? active.definition.enter)?.(session);
   player.moveTo(new Location(spec.arrive.x, spec.arrive.y, spec.arrive.z ?? 0));
+  (spec.onStart ?? active.definition.enter)?.(session);
   return session;
 }
 
@@ -111,13 +111,18 @@ function later(session, ticks, action) {
   const TaskManager = api.getTaskManager?.();
   const Task = api.core.Task;
   if (!TaskManager || !Task) return;
-  TaskManager.submit(new (class extends Task {
+  const task = new (class extends Task {
     constructor() { super(Math.max(1, ticks), session.player); }
     execute() {
-      if (!this.stopped) action();
+      const index = session.cleanup.indexOf(cancel);
+      if (index !== -1) session.cleanup.splice(index, 1);
       this.stop();
+      if (sessions.get(session.player) === session && !session.finishing && session.player.isRegistered()) action();
     }
-  })());
+  })();
+  const cancel = () => task.stop();
+  onEnd(session, cancel);
+  TaskManager.submit(task);
 }
 
 /** Swaps a registry/map object for another id at the same tile, as quests do. */

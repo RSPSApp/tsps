@@ -1,0 +1,15 @@
+import { strict as assert } from 'node:assert';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
+import { visibleHelperWidgetBounds, QuestHelperPanel } from '../game/plugins/questhelper/QuestHelperPanel';
+import { parseHelperResponse } from '../game/plugins/questhelper/QuestHelperProtocol';
+assert.deepEqual(visibleHelperWidgetBounds([{id:1,hidden:true,children:[{id:2,bounds:{x:10,y:20,width:3,height:4}}]},{id:3,itemId:1944,bounds:{x:30,y:40,width:32,height:32}}],new Set([2]),new Set([1944])),[{x:30,y:40,width:32,height:32}]);
+const result:any={protocol:1,session:'s',sequence:1,questKey:'cook',sourceCommit:'abc',status:'active',activeStep:{id:'puzzle',text:['<img src=x onerror=alert(1)>Talk to the cook.'],targets:[],requirements:[{name:'Egg',met:false,quantity:1}],dialogueChoices:[],widgets:[],overlays:[{kind:'path',path:[{op:'M',values:[0,1]},{op:'L',values:[2,3]}],stroke:'#ff0000',lineWidth:2},{kind:'image',dataUrl:'data:image/png;base64,AA==',x:0,y:0,width:1,height:1}]},panels:[],diagnostics:[]};
+assert.ok(parseHelperResponse(result),'portable puzzle paths and PNGs are supported');
+assert.equal(parseHelperResponse({...result,activeStep:{...result.activeStep,overlays:[{kind:'image',dataUrl:'data:image/svg+xml;base64,PHN2Zz4=',x:0,y:0,width:1,height:1}]}}),null);
+assert.equal(parseHelperResponse({...result,activeStep:{...result.activeStep,overlays:[{kind:'path',path:[{op:'M',values:[1]}]}]}}),null);
+const state:any={selected:'cook',status:'Guided route active',result,catalog:{sourceCommit:'abc',quests:[{questKey:'cook',name:'Cook',supported:true},{questKey:'unsupported',name:'Unsupported',supported:false}]}};
+const plugin:any={getState:()=>state,subscribe:()=>()=>{},selectQuest(){},retry(){}};
+const html=renderToStaticMarkup(createElement(QuestHelperPanel,{plugin}));
+assert.ok(html.includes('Not met'));assert.ok(html.includes('Egg'));assert.ok(html.includes('Unsupported route'));assert.ok(!html.includes('onerror'));
+console.log('quest helper rendering boundaries and portable overlays passed');

@@ -1,0 +1,15 @@
+import { clearHintArrow, setHintArrowNpc, setHintArrowTile } from "../game/HintArrow";
+import { strict as assert } from 'node:assert';
+import { collectQuestHelperSnapshot, collectWidgetTree } from '../game/plugins/questhelper/QuestHelperSnapshot';
+const parent:any={uid:1,x:0,y:0,width:400,height:300,isHidden:false,children:[]};
+const child:any={uid:2,id:1,parentUid:1,fileId:-1,childIndex:0,x:5,y:10,width:30,height:20,_absX:100,_absY:120,isHidden:false,text:'Choose',children:[]};
+parent.children.push(child); child.children.push(parent);
+const manager:any={getStaticChildrenByParentUid:()=>[],getDynamicChildrenByParent:(w:any)=>w.children ?? [],isEffectivelyHidden:()=>false};
+const tree=collectWidgetTree(parent,manager); assert.equal(tree.dynamicChildren?.[0]?.bounds?.x,100); assert.equal(tree.dynamicChildren?.[0]?.dynamicChildren?.length,1,'cycle does not recurse forever');
+const ecs:any={getIndexForServerId:()=>0,getLevel:()=>0,getAnimActionSeqId:()=>-1,getAnimMovementSeqId:()=>-1,getRotation:()=>0,getInteractionIndex:()=>-1};
+const client:any={getControlledPlayerMovementTile:()=>({tileX:3200,tileY:3200}),controlledPlayerServerId:1,localPlayerName:'Tester',playerEcs:ecs,varManager:{values:Int32Array.from([0,5]),customVarbits:new Map([[42,{baseVar:1,startBit:0,endBit:2}]]),varbitLoader:{load:()=>undefined},getVarbit:()=>5},inventory:{getSlots:()=>[{slot:0,itemId:1944,quantity:1}]},equipment:{getSlots:()=>[]},bankInventory:{getSlots:()=>[]},npcEcs:{forEachActive:()=>{}},renderer:{getLocIdsAtTileAllLevels:()=>[]},groundItems:{getAllStacks:()=>[]},widgetManager:{...manager,rootInterface:-1,interfaceParents:new Map(),getAllGroupRoots:()=>[]}};
+clearHintArrow();
+const result=collectQuestHelperSnapshot(client,3,{baseX:3150,baseY:3150,plane:0},[{id:0,baseLevel:4,currentLevel:3,xp:400}],new Set([42,43]));
+assert.equal(result.localPlayer.index,1,"local actor exposes its server identity");assert.deepEqual(result.varps,{'1':5}); assert.equal(result.varbits['42'],5); assert.equal(result.varbits['43'],undefined,'unknown varbit is not invented as zero'); assert.deepEqual(result.varbitDefinitions?.['42'],{varp:1,lsb:0,msb:2}); assert.equal(result.skills.ATTACK.real,4); assert.equal(result.inventory[0].id,1944); client.varManager.values[1]=99; assert.equal(result.varps['1'],5,'snapshot owns copied values');
+assert.equal(result.hintArrowNpcIndex,-1,"known no hint is explicit");setHintArrowNpc(42);assert.equal(collectQuestHelperSnapshot(client,4,{baseX:3150,baseY:3150,plane:0},[],new Set()).hintArrowNpcIndex,42,"NPC hint uses the native server index");setHintArrowTile(3200,3200,0,8);assert.equal(collectQuestHelperSnapshot(client,5,{baseX:3150,baseY:3150,plane:0},[],new Set()).hintArrowNpcIndex,-1,"tile hint does not reuse the prior NPC index");clearHintArrow();
+console.log('quest helper snapshot read-only boundaries passed');

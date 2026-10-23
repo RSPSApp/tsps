@@ -17,6 +17,8 @@ const QUEST_LIST_LIST_UID = (QUEST_LIST_GROUP_ID << 16) | QUEST_LIST_LIST_CHILD_
 const QUEST_LIST_TEXT_CONTAINER_UID =
     (QUEST_LIST_GROUP_ID << 16) | QUEST_LIST_TEXT_CONTAINER_CHILD_ID;
 const QUEST_LIST_SCROLLBAR_UID = (QUEST_LIST_GROUP_ID << 16) | QUEST_LIST_SCROLLBAR_CHILD_ID;
+const QUEST_LIST_ROOT_UID = (QUEST_LIST_GROUP_ID << 16) | 2;
+const QUEST_LIST_REBUILD_SCRIPT = 1340;
 
 export function questListPreferences(vars: { getVarbit(id: number): number; getVarp(id: number): number }) {
     // CS2 2633/4181: colours are stored as RGB+1, zero selects the cache default.
@@ -148,6 +150,19 @@ function registerChild(widgetManager: WidgetManager, parent: WidgetNode, child: 
     widgetManager.registerWidget(child);
 }
 
+/**
+ * The cache's quest-varp listener rebuilds rows with script2633. Once the server
+ * owns those rows, that rebuild measures an empty cache list and resets scroll.
+ * Adapted from Bandit-HaxUnit's upstream PR #825; retain unrelated listeners.
+ */
+function stopCacheListRebuilds(widgetManager: WidgetManager): void {
+    const root = widgetManager.getWidgetByUid(QUEST_LIST_ROOT_UID);
+    if (!root || root.onVarTransmit?.[0] !== QUEST_LIST_REBUILD_SCRIPT) return;
+    root.onVarTransmit = undefined;
+    root.varTransmitTriggers = undefined;
+    if (root.eventHandlers) delete root.eventHandlers.onVarTransmit;
+}
+
 export function applyQuestListWidgetGroups(
     widgetManager: WidgetManager,
     groups: QuestListWidgetGroup[],
@@ -163,6 +178,7 @@ export function applyQuestListWidgetGroups(
     widgetManager.setServerOwnedWidget(QUEST_LIST_LIST_UID, true);
     widgetManager.setServerOwnedWidget(QUEST_LIST_TEXT_CONTAINER_UID, true);
     widgetManager.setServerOwnedWidget(QUEST_LIST_SCROLLBAR_UID, false);
+    stopCacheListRebuilds(widgetManager);
     clearDynamicChildren(widgetManager, list);
 
     let y = 0;

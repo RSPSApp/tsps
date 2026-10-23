@@ -6,6 +6,7 @@ const GROUP_ID = 399;
 const LIST_UID = (GROUP_ID << 16) | 7;
 const VIEW_UID = (GROUP_ID << 16) | 6;
 const SCROLLBAR_UID = (GROUP_ID << 16) | 5;
+const ROOT_UID = (GROUP_ID << 16) | 2;
 
 type AnyWidget = any;
 
@@ -28,6 +29,13 @@ const makeRoot = (uid: number): AnyWidget => ({
 widgets.set(LIST_UID, makeRoot(LIST_UID));
 widgets.set(VIEW_UID, makeRoot(VIEW_UID));
 widgets.set(SCROLLBAR_UID, makeRoot(SCROLLBAR_UID));
+// Regression from Bandit-HaxUnit's upstream PR #825: cache quest-varp listener.
+widgets.set(ROOT_UID, {
+    ...makeRoot(ROOT_UID),
+    onVarTransmit: [1340, ROOT_UID],
+    varTransmitTriggers: [101, 130],
+    eventHandlers: { onVarTransmit: { scriptId: 1340, intArgs: [ROOT_UID] } },
+});
 
 let nextDynamicUid = 1;
 const manager = {
@@ -91,6 +99,30 @@ assert.ok(
     textWidgets.some((widget) => widget.text === "Members"),
     "groups after the malformed one are rendered",
 );
+
+const root = widgets.get(ROOT_UID);
+assert.equal(root.onVarTransmit, undefined, "quest varps cannot enqueue the cache list rebuild");
+assert.equal(root.varTransmitTriggers, undefined);
+assert.equal(root.eventHandlers.onVarTransmit, undefined, "the alternate event dispatch path is disabled too");
+
+const longList = [{ title: "Quests", quests: Array.from({ length: 30 }, (_, slot) => ({
+    slot, displayName: `Quest ${slot}`, status: 0,
+})) }];
+applyQuestListWidgetGroups(manager as any, longList);
+view.scrollY = 180;
+applyQuestListWidgetGroups(manager as any, longList);
+assert.equal(view.scrollY, 180, "a server quest update preserves a valid scroll position");
+
+// A later unrelated listener belongs to the cache and must keep working.
+root.onVarTransmit = [4030, ROOT_UID];
+root.varTransmitTriggers = [999];
+const otherHandler = { scriptId: 4030, intArgs: [ROOT_UID] };
+root.eventHandlers.onVarTransmit = otherHandler;
+applyQuestListWidgetGroups(manager as any, []);
+assert.deepEqual(root.onVarTransmit, [4030, ROOT_UID]);
+assert.deepEqual(root.varTransmitTriggers, [999]);
+assert.equal(root.eventHandlers.onVarTransmit, otherHandler);
+assert.equal(view.scrollY, 0, "a shorter list clamps an out-of-range scroll position");
 
 console.log("quest-list-render.test.ts: all tests passed");
 

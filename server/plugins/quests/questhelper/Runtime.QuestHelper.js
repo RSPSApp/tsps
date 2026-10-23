@@ -43,7 +43,7 @@ class QuestHelperRuntime {
     if(this.players.get(player)!==state||state.generation!==generation)return;
     const mapping=this.catalogData?.quests.find(q=>q.questKey===quest.key);
     if(data.helperVariant!==undefined&&(!mapping||![mapping.helperVariant,...(mapping.variants||[]).map(v=>v.helperVariant)].includes(data.helperVariant)))throw new Error('Unknown helper variant');
-    const snapshot=this.authoritative(player,data.snapshot);
+    const snapshot=this.authoritative(player,data.snapshot,quest.key);
     const request={protocol:1,session:state.engineSession,sequence:data.sequence,questKey:quest.key,helperVariant:data.helperVariant,snapshot,events:data.events};
     const response=quest.key==='learning_the_ropes'?tutorialResult(request,quest.getStage(player)):await this.bridge.evaluate(request);
     if(this.players.get(player)!==state||!state.active||state.generation!==generation)return;
@@ -51,7 +51,7 @@ class QuestHelperRuntime {
    }finally{if(state.generation===generation)state.busy=false;}
   }catch(error){if(this.players.get(player)===state)this.emit(player,{type:'error',protocol:1,session:state.session,code:'QUEST_HELPER_UNAVAILABLE',message:String(error.message).slice(0,1024)});}
  }
- authoritative(player,raw){
+ authoritative(player,raw,questKey){
   const snapshot={...raw,varps:record(raw.varps)?{...raw.varps}:{},varbits:record(raw.varbits)?{...raw.varbits}:{},questStates:{}};
   for(const q of this.getQuests()){
    const stage=q.getStage(player);snapshot.questStates[q.key]=status(q,player);
@@ -63,7 +63,7 @@ class QuestHelperRuntime {
   snapshot.inventory=items(player.getInventory());snapshot.equipment=items(player.getEquipment());
   const location=player.getLocation();snapshot.localPlayer={...raw.localPlayer,name:player.getUsername(),x:location.getX(),y:location.getY(),plane:location.getZ()};snapshot.plane=location.getZ();
   const delivered=Number(player.getAttribute('cooks-assistant:delivered-ingredients'))||0;
-  snapshot.dialogueHistory=["Here's a bucket of milk.","Here's a fresh egg.","Here's a pot of flour."].filter((_,bit)=>(delivered&(1<<bit))!==0);
+  snapshot.dialogueHistory=questKey==='cooks_assistant'?["Here's a bucket of milk.","Here's a fresh egg.","Here's a pot of flour."].filter((_,bit)=>(delivered&(1<<bit))!==0):[];
   return snapshot;
  }
 }

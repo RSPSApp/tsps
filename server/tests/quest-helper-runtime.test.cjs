@@ -23,6 +23,7 @@ test('catalog and results echo browser session but engine sessions are private',
  assert.equal(f.calls[0].snapshot.varps[29],1);assert.deepEqual(f.calls[0].snapshot.inventory,[{id:1933,quantity:1,slot:0}]);assert.equal(f.calls[0].snapshot.localPlayer.x,3206);
  assert.deepEqual(f.calls[0].snapshot.dialogueHistory,["Here's a bucket of milk.","Here's a pot of flour."]);
  assert.equal(f.calls[0].snapshot.questStates.cooks_assistant,'IN_PROGRESS');
+ assert.deepEqual(f.runtime.authoritative(f.player,{},'another_quest').dialogueHistory,[]);
 });
 test('unselected, duplicate and stale asynchronous evaluations cannot cross lifecycle',async()=>{
  const f=fixture();await f.evaluate();assert.equal(f.calls.length,0);await f.send({type:'select',questKey:f.quest.key});

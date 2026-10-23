@@ -2,6 +2,10 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {QuestHelperRuntime}=require('../plugins/quests/questhelper/Runtime.QuestHelper');
 const {tutorialResult}=require('../plugins/quests/questhelper/Tutorial.QuestHelper');
+test('helper plugin exposes the loader register contract',()=>{
+ const plugin=require('../plugins/quests/QuestHelper.plugin');
+ assert.equal(typeof plugin.register,'function');assert.equal(plugin.name,'OfflineQuestHelper');
+});
 
 function fixture() {
  const sent=[],calls=[],closed=[]; let pending;

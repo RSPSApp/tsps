@@ -3,6 +3,10 @@ import { VoiceChatPlugin } from "../../../game/plugins/voice/VoiceChatPlugin";
 import { AnimationSmoothingPlugin } from "../../../game/plugins/animationsmoothing/AnimationSmoothingPlugin";
 import { AttackTimerPlugin } from "../../../game/plugins/attacktimer/AttackTimerPlugin";
 import { CameraPlugin } from "../../../game/plugins/camera/CameraPlugin";
+import { QuestHelperPlugin } from "../../../game/plugins/questhelper/QuestHelperPlugin";
+import { NPCIndicatorsPlugin } from "../../../game/plugins/npcindicators/NPCIndicatorsPlugin";
+import { InventoryTagsPlugin } from "../../../game/plugins/inventorytags/InventoryTagsPlugin";
+import { XPTrackerPlugin } from "../../../game/plugins/xptracker/XPTrackerPlugin";
 import { FirstPersonPlugin } from "../../../game/plugins/firstperson/FirstPersonPlugin";
 import { GameFrame317Plugin } from "../../../game/plugins/gameframe317/GameFrame317Plugin";
 import { GpuPlugin } from "../../../game/plugins/gpu/GpuPlugin";
@@ -58,6 +62,10 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     StretchedModePlugin,
     GpuPlugin,
     CameraPlugin,
+    QuestHelperPlugin,
+    NPCIndicatorsPlugin,
+    InventoryTagsPlugin,
+    XPTrackerPlugin,
 ];
 
 /** Legacy `osrs.plugin.*.v1` localStorage blobs to fold into rl.config. */

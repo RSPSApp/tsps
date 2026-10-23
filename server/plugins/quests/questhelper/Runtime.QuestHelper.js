@@ -21,7 +21,7 @@ class QuestHelperRuntime {
    const data=state.assembler.accept(frame);if(!data)return;
    if(data.type==='close'){await this.close(player);return;}
    if(data.type==='catalog'){
-    const catalog=await this.bridge.catalog();if(this.players.get(player)!==state)return;this.catalogData=catalog;
+    this.catalogPromise=this.bridge.catalog();const catalog=await this.catalogPromise;if(this.players.get(player)!==state)return;this.catalogData=catalog;
     const mapped=new Map(catalog.quests.map(q=>[q.questKey,q]));
     this.emit(player,{...catalog,type:'catalog',protocol:1,session:state.session,quests:this.getQuests().map(q=>({...mapped.get(q.key),questKey:q.key,name:q.name,supported:mapped.get(q.key)?.supported===true,status:status(q,player),stage:q.getStage(player)}))});return;
    }
@@ -29,7 +29,7 @@ class QuestHelperRuntime {
    if(!quest)throw new Error('Unknown quest');
    if(data.type==='select'){
     const mapping=this.catalogData?.quests.find(q=>q.questKey===quest.key);
-    if(data.helperVariant!==undefined&&(!mapping||![mapping.helperVariant,...(mapping.variants||[]).map(v=>v.helperVariant)].includes(data.helperVariant)))throw new Error('Unknown helper variant');
+    if(data.helperVariant!==undefined&&mapping&&![mapping.helperVariant,...(mapping.variants||[]).map(v=>v.helperVariant)].includes(data.helperVariant))throw new Error('Unknown helper variant');
     const old=state.engineSession;state.engineSession=randomUUID();state.questKey=quest.key;state.helperVariant=data.helperVariant;state.sequence=0;state.generation=(state.generation||0)+1;state.busy=false;
     await this.bridge.close(old).catch(()=>{});return;
    }
@@ -38,9 +38,13 @@ class QuestHelperRuntime {
    if(data.helperVariant!==state.helperVariant)throw new Error('Helper variant changed without selecting');
    if(!record(data.snapshot)||!Array.isArray(data.events)||data.events.length>1024||!data.events.every(e=>record(e)&&typeof e.type==='string'&&e.type.length<=128))throw new Error('Invalid helper snapshot/events');
    state.sequence=data.sequence;state.busy=true;const generation=state.generation;
-   const snapshot=this.authoritative(player,data.snapshot);
-   const request={protocol:1,session:state.engineSession,sequence:data.sequence,questKey:quest.key,helperVariant:data.helperVariant,snapshot,events:data.events};
    try {
+    if(this.catalogPromise)this.catalogData=await this.catalogPromise;
+    if(this.players.get(player)!==state||state.generation!==generation)return;
+    const mapping=this.catalogData?.quests.find(q=>q.questKey===quest.key);
+    if(data.helperVariant!==undefined&&(!mapping||![mapping.helperVariant,...(mapping.variants||[]).map(v=>v.helperVariant)].includes(data.helperVariant)))throw new Error('Unknown helper variant');
+    const snapshot=this.authoritative(player,data.snapshot);
+    const request={protocol:1,session:state.engineSession,sequence:data.sequence,questKey:quest.key,helperVariant:data.helperVariant,snapshot,events:data.events};
     const response=quest.key==='learning_the_ropes'?tutorialResult(request,quest.getStage(player)):await this.bridge.evaluate(request);
     if(this.players.get(player)!==state||!state.active||state.generation!==generation)return;
     this.emit(player,{...response,type:'result',protocol:1,session:state.session,sequence:data.sequence,questKey:quest.key});

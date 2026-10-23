@@ -19,7 +19,8 @@ async function main(){
     const player:any={getIndexForServerId:()=>0,getLevel:()=>0,getAnimActionSeqId:()=>-1,getAnimMovementSeqId:()=>-1,getRotation:()=>0,getInteractionIndex:()=>-1};
     const client:any={stateMachine:{getState:()=>30},localPlayerName:"A",getControlledPlayerMovementTile:()=>({tileX:3200,tileY:3200}),controlledPlayerServerId:1,playerEcs:player,tileHighlightManager:new TileHighlightManager(),varManager:{values:new Int32Array(1),customVarbits:new Map(),varbitLoader:{load:()=>undefined},varpChangeListeners:new Set()},inventory:new Inventory(),equipment:new Inventory(14),bankInventory:new Inventory(1410),npcEcs:{forEachActive:()=>{},mutationListeners:new Set()},renderer:{getLocIdsAtTileAllLevels:()=>[],canvas:{width:765,height:503}},groundItems:{getAllStacks:()=>[],mutationListeners:new Set()},widgetManager:{rootInterface:-1,interfaceParents:new Map(),getAllGroupRoots:()=>[],groupLoadedListeners:new Set(),interfaceClosedListeners:new Set()}};
     manager.getInjector().provide(CLIENT_TOKEN,client);manager.loadCorePlugins([QuestHelperPlugin]); const plugin=manager.getPlugin(QuestHelperPlugin)!;
-    assert.equal(manager.isEnabled(QuestHelperPlugin),false);bus.post(new GameTick());assert.equal(requests.length,0);
+    assert.equal(manager.isEnabled(QuestHelperPlugin),true,"Quest Helper is enabled for a fresh profile");
+    await manager.setPluginEnabled(QuestHelperPlugin,false);bus.post(new GameTick());assert.equal(requests.length,0);
     await manager.setPluginEnabled(QuestHelperPlugin,true);assert.equal(manager.getInjector().get<ClientToolbar>(ClientToolbar).getNavigations().length,1);
     network.lastRunEnergyState={weight:2.5} as any;client.inputManager={mouseX:42,mouseY:43};client.playerEcs.getAppearance=()=>({gender:1});
     plugin.selectQuest("cook");bus.post(new GameTick());const request=requests.find(x=>x.type==="evaluate");assert.ok(request);assert.equal(request.snapshot.bank,undefined,"unknown bank must be omitted");

@@ -36,6 +36,13 @@ export function QuestHelperPanel({ plugin }: {
     const quests = useMemo(() => [...(state.catalog?.quests ?? [])].filter(quest => questLabel(quest,state.catalog?.quests ?? []).toLowerCase().includes(search.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name)), [state.catalog, search]);
     const step = state.result?.activeStep;
     const selected = state.catalog?.quests.find(quest => quest.questKey === state.selected && quest.helperVariant === state.variant);
+    const available = catalog.filter((quest, index) => quest.supported && quest.status !== "FINISHED" && catalog.findIndex(other => other.questKey === quest.questKey) === index);
+    const tutorial = available.find(quest => quest.questKey === "learning_the_ropes" && (quest.status === "NOT_STARTED" || quest.status === "IN_PROGRESS"));
+    const starters = ["cooks_assistant", "sheep_shearer", "rune_mysteries", "romeo_and_juliet"];
+    const recommendations = tutorial ? [tutorial] : [
+        ...available.filter(quest => quest.status === "IN_PROGRESS"),
+        ...starters.flatMap(key => available.filter(quest => quest.questKey === key && quest.status === "NOT_STARTED")),
+    ].slice(0, 5);
     const technicalStatus=/(?:\b[A-Za-z_$]\w*\.){2,}|\b[A-Z]\w*\.[A-Za-z_$]\w*/.test(state.status);
     return <div className="rl-sidebar-panel-content" style={{ padding: 12, color: "#ddd", fontSize: 13, overflowY: "auto" }}>
         <h2 style={{ fontSize: 18, margin: "0 0 12px" }}>Quest Helper</h2>
@@ -48,6 +55,14 @@ export function QuestHelperPanel({ plugin }: {
             {!!step.targets.length && <details><summary>Targets ({step.targets.length})</summary><ul>{step.targets.map((target, index) => <li key={index}>{target.label ? clean(target.label) : `${target.kind}${target.id !== undefined ? ` ${target.id}` : ""}`}{target.x !== undefined ? ` (${target.x}, ${target.y}, ${target.plane ?? "?"})` : ""}</li>)}</ul></details>}
         </section>}
         {state.result?.panels.map((panel, index) => <details key={index}><summary>{clean(panel.title)}</summary>{panel.text?.map((text, index) => <p key={index}>{clean(text)}</p>)}{panel.requirements && <Requirements items={panel.requirements}/>}</details>)}
+        {!!recommendations.length && <section aria-label="Recommended quests">
+            <h3>Recommended next</h3>
+            <p>{tutorial ? "Finish Tutorial Island first. The guide follows your progress through each lesson." : "Continue a quest in progress, or try one of these beginner quests. Select a guide for its next step and requirements."}</p>
+            {recommendations.map(quest => <button key={quest.questKey} style={row} onClick={() => plugin.selectQuest(quest.questKey, quest.helperVariant)}>
+                <strong>{questLabel(quest, catalog)}</strong>
+                <small style={{ display: "block", color: "#e4c27a", marginTop: 4 }}>{quest.status === "IN_PROGRESS" ? "Continue guide" : "Start guide"}</small>
+            </button>)}
+        </section>}
         {(state.catalog||state.result?.diagnostics.length||technicalStatus) && <details aria-label="Helper diagnostics"><summary>Helper diagnostics</summary>{technicalStatus&&<p style={{overflowWrap:"anywhere"}}>{state.status}</p>}{state.result?.diagnostics.map((diagnostic, index) => <p key={index} style={{ color: "#edb86d", overflowWrap: "anywhere" }}>{diagnostic.code}: {diagnostic.message}{diagnostic.method ? ` (${diagnostic.method})` : ""}{diagnostic.helper?` — ${diagnostic.helper}`:""}</p>)}{state.catalog&&<p style={{fontSize:10,color:"#999",overflowWrap:"anywhere"}}>Helper source: {state.catalog.sourceCommit}</p>}</details>}
         <button style={row} onClick={() => plugin.retry()}>Reconnect helper</button>
         <label htmlFor="quest-helper-search" style={{ display: "block", margin: "16px 0 6px" }}>Find a quest ({new Set(state.catalog?.quests.map(quest => quest.questKey)).size})</label>

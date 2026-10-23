@@ -21,7 +21,7 @@ import { createQuestHelperNavigationButton, QuestHelperOverlay } from "./QuestHe
 import { collectQuestHelperDefinitions } from "./QuestHelperDefinitions";
 import { collectQuestHelperGeometry } from "./QuestHelperGeometry";
 export class QuestHelperPlugin extends Plugin {
-    static descriptor: PluginDescriptor = { name: "Quest Helper", description: "Read-only guided quest steps, requirements and highlights from the local Quest Helper engine.", tags: ["quests", "guide", "offline"], enabledByDefault: false, configKey: "questhelperplugin" };
+    static descriptor: PluginDescriptor = { name: "Quest Helper", description: "Read-only guided quest steps, requirements and highlights from the local Quest Helper engine.", tags: ["quests", "guide", "offline"], enabledByDefault: true, configKey: "questhelperplugin" };
     static config = QuestHelperConfig;
     private readonly client = inject<OsrsClient>(CLIENT_TOKEN);
     private readonly configManager = inject(ConfigManager);
@@ -113,8 +113,11 @@ export class QuestHelperPlugin extends Plugin {
             const data = this.assembly.accept(event.data);
             if (!data)
                 return;
-            if (data.type === "catalog")
-                this.session.acceptCatalog(data);
+            if (data.type === "catalog") {
+                const previous = this.getState().selected;
+                if (this.session.acceptCatalog(data) && !previous && this.getState().selected === "learning_the_ropes" && this.nav)
+                    this.toolbar.openPanel(this.nav);
+            }
             else if (data.type === "result" && this.session.accept(data)) {
                 this.pendingSince = 0;
                 for (const request of this.getState().result?.requests ?? []) {

@@ -181,8 +181,8 @@ export function updateFollowCamera(
 
     if (hdCameraFeel) {
         // Eased zoom: the wheel moves a target multiplier, the current value chases it with
-        // frame-rate independent exponential smoothing. WebGPURenderer captured the wheel
-        // while the pointer was over the scene, before the viewport widget consumed it.
+        // frame-rate independent exponential smoothing. WebGPURenderer forwards only wheel
+        // accepted by the viewport, after foreground widgets have claimed their gestures.
         if (renderer.followCamWheel !== 0) {
             renderer.followCamZoomTarget = clamp(
                 renderer.followCamZoomTarget *

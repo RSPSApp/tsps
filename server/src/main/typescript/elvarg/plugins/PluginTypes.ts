@@ -1311,6 +1311,7 @@ export interface PluginCoreApi {
   Direction: any;
   Equipment: any;
   Bank: any;
+  PlayerStatus: any;
   Task: any;
   CountdownTask: any;
   ForceMovement: any;

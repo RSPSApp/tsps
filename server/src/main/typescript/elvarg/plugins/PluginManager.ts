@@ -2206,6 +2206,7 @@ export class PluginManager {
       Direction: require(`${model}/Direction`).Direction,
       Equipment: require(`${model}/container/impl/Equipment`).Equipment,
       Bank: require(`${model}/container/impl/Bank`).Bank,
+      PlayerStatus: require(`${model}/PlayerStatus`).PlayerStatus,
       Task: require("../game/task/Task").Task,
       CountdownTask: require("../game/task/impl/CountdownTask").CountdownTask,
       ForceMovement: require(`${model}/ForceMovement`).ForceMovement,

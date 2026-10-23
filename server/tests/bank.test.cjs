@@ -20,6 +20,8 @@ const LAVA_BATTLESTAFF_PLACEHOLDER = 90053;
 
 // Item definitions normally come from the cache; stub the few this test uses.
 const DEFINITIONS = {
+  995: { name: "Coins", stackable: true },
+  13204: { name: "Platinum token", stackable: true },
   [TRIDENT]: { name: "Trident of the seas" },
   [LAVA_BATTLESTAFF]: { name: "Lava battlestaff", placeholder: LAVA_BATTLESTAFF_PLACEHOLDER },
   [MYSTIC_LAVA_STAFF]: { name: "Mystic lava staff" },
@@ -472,6 +474,218 @@ test("as captured: closing the bank by any route ends a bank search; closing any
 });
 
 const bankTabsSent = (player) => player.varbits.filter(([id]) => id === 4150);
+
+// These exercise the registered gameplay handlers with real inventory/dialogue classes.
+function bankerHarness() {
+  const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+  const { DialogueChainBuilder } = require('../dist/game/model/dialogues/builders/DialogueChainBuilder');
+  const { OptionDialogue } = require('../dist/game/model/dialogues/entries/impl/OptionDialogue');
+  const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
+  const { startDialogue } = require('../plugins/npcs/NpcDialogues.plugin');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const transcript = require('../data/definitions/npc-dialogues.json').Banker;
+  const player = createPlayer();
+  const manager = new DialogueManager(player);
+  player.getDialogueManager = () => manager;
+  player.getAppearance = () => ({ isMale: () => true });
+  const scripts = [];
+  let chatbox = -1;
+  const sender = new Proxy({}, { get: (_target, method) => (...args) => {
+    if (method === 'sendInterfaceRemoval') { manager.reset(); chatbox = -1; }
+    if (method === 'sendChatboxInterface') chatbox = args[0];
+    if (method === 'isChatboxInterface') return chatbox === args[0];
+    if (method === 'sendClientScript') scripts.push(args);
+    return sender;
+  } });
+  player.getPacketSender = () => sender;
+  const custom = new Map();
+  const npc = new Map();
+  const object = new Map();
+  let useNpc;
+  const useObjects = [];
+  const api = {
+    core: { Bank, PlayerStatus, Item, ItemIdentifiers, DialogueChainBuilder, OptionDialogue },
+    onNpcInteraction: (name, handlers) => npc.set(name, handlers),
+    onObjectInteraction: (name, handlers) => object.set(name, handlers),
+    onItemOnNpc: (handler) => { useNpc = handler; },
+    onItemOnObject: (...args) => useObjects.push(args),
+    onButtonClick() {}, onInterfaceActionClick() {},
+    onCustomEvent: (name, handler) => custom.set(name, handler),
+    sendMultiChatboxPrompt: (p, title, ...pairs) => MultiChatboxPrompt.showPrompt('bank-test', p, title, pairs),
+    emitCustomEvent: (name, event) => {
+      if (name === 'npc-dialogue:start') {
+        startDialogue(api, { ...event, definition: { getId: () => event.npcId, getName: () => 'Banker' } },
+          transcript.variants[event.variant], transcript.branches);
+        event.handled = true;
+      } else custom.get(name)?.(event);
+    },
+  };
+  require('../plugins/objects/BankBooths.plugin').register(api);
+  const use = (id, route = 'Banker', slot = player.inventory.getItems().findIndex(item => item.getId() === id)) => {
+    const definition = { getName: () => route };
+    const event = { player, itemId: id, item: player.inventory.forSlot(slot), slot, itemSlot: slot,
+      npcId: 1633, target: { getDefinition: () => definition },
+      object: { getDefinition: () => definition }, handled: false };
+    if (route === 'Banker' || route === 'Man') useNpc?.(event);
+    else for (const args of useObjects) {
+      if (typeof args[0] === 'function') args[0](event);
+      else if (args[0] === DEFINITIONS[id]?.name && args[1] === route) args[2](event);
+    }
+    return event;
+  };
+  return { player, manager, scripts, npc, object, use };
+}
+
+test('banker Talk-to plays the canonical conversation and its account choice opens banking', () => {
+  const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+  const original = NpcDefinition.forId;
+  NpcDefinition.forId = id => ({ getId: () => id, getName: () => 'Banker' });
+  try {
+  const h = bankerHarness();
+  let opens = 0;
+  h.player.getBank = () => ({ open: () => opens++ });
+  h.player.getInterfaceId = () => -1;
+  h.player.getStatus = () => PlayerStatus.NONE;
+  const event = { player: h.player, npcId: 1633 };
+  h.npc.get('Banker')['Talk-to'](event);
+  assert.equal(opens, 0);
+  assert.ok(h.manager.isActive());
+  h.manager.advance();
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  assert.match(MultiChatboxPrompt.getPending(h.player).options[0], /access my bank account/);
+  MultiChatboxPrompt.handleInterfaceActionClick({ player: h.player, buttonId: (219 << 16) | 1, slot: 1 });
+  assert.equal(opens, 1);
+  } finally { NpcDefinition.forId = original; }
+});
+
+test('banker Bank keeps its direct bank shortcut', () => {
+  const h = bankerHarness();
+  let opens = 0;
+  h.player.getBank = () => ({ open: () => opens++ });
+  h.player.getInterfaceId = () => -1;
+  h.player.getStatus = () => PlayerStatus.NONE;
+  h.npc.get('Banker').Bank({ player: h.player });
+  assert.equal(opens, 1);
+  assert.equal(h.manager.isActive(), false);
+});
+
+test('native currency confirmation replaces a pending Talk menu without executing its stale choice', () => {
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const h = bankerHarness();
+  h.player.inventory.add(new Item(995, 2000), false);
+  let staleChoices = 0;
+  MultiChatboxPrompt.showPrompt('bank-test', h.player, 'Old talk menu', ['Bank', () => staleChoices++, 'Cancel', () => {}]);
+  h.use(995);
+  const packet = { player: h.player, buttonId: (219 << 16) | 1, action: 1, handled: false };
+  if (!PluginManager.emitInterfaceActionClick(packet)) h.manager.handleResume(packet.buttonId, packet.action);
+  assert.equal(staleChoices, 0);
+  assert.equal(h.player.inventory.getAmount(995), 0);
+  assert.equal(h.player.inventory.getAmount(13204), 2);
+  assert.equal(MultiChatboxPrompt.getPending(h.player), null);
+});
+
+test('closed multi prompts cannot consume a later resume or reappear on reopening chatbox', () => {
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const h = bankerHarness();
+  let selected = 0;
+  MultiChatboxPrompt.showPrompt('bank-test', h.player, 'Old menu', ['Yes', () => selected++, 'No', () => {}]);
+  h.player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: h.player, buttonId: (219 << 16) | 1, action: 1 }), false);
+  h.player.getPacketSender().sendChatboxInterface(219);
+  assert.equal(MultiChatboxPrompt.getPending(h.player), null);
+  assert.equal(selected, 0);
+});
+
+test('a multi prompt shown by an active dialogue takes ownership and remains selectable', () => {
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const h = bankerHarness();
+  h.player.inventory.add(new Item(995, 2000), false);
+  h.use(995);
+  assert.equal(h.manager.isActive(), true);
+  let selected = 0;
+  MultiChatboxPrompt.showPrompt('bank-test', h.player, 'New prompt', ['Yes', () => selected++, 'No', () => {}]);
+  assert.equal(h.manager.isActive(), false);
+  assert.equal(MultiChatboxPrompt.getPending(h.player).title, 'New prompt');
+  assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({ player: h.player, buttonId: (219 << 16) | 1, action: 1 }), true);
+  assert.equal(selected, 1);
+  assert.equal(h.player.inventory.getAmount(995), 2000);
+});
+
+for (const route of ['Banker', 'Bank booth', 'Bank chest', 'Bank Chest']) {
+  test(`coins used on ${route} exchange whole thousands only after confirmation`, () => {
+    const h = bankerHarness();
+    h.player.inventory.add(new Item(995, 2501), false);
+    assert.equal(h.use(995, route).handled, true);
+    assert.equal(h.player.inventory.getAmount(995), 2501);
+    assert.equal(h.manager.getCurrent().getTitle(), 'Exchange your coins for platinum tokens?');
+    h.manager.handleOption(1);
+    assert.equal(h.player.inventory.getAmount(995), 501);
+    assert.equal(h.player.inventory.getAmount(13204), 2);
+  });
+}
+
+for (const [coins, tokens, used, wantCoins, wantTokens] of [
+  [1000, 0, 995, 0, 1],
+  [999, 0, 995, 999, 0],
+  [0, 2, 13204, 2000, 0],
+  [2147483000, 10, 13204, 2147483000, 10],
+  [2147482000, 10, 13204, 2147483000, 9],
+  [2000, 2147483646, 995, 1000, 2147483647],
+  [2000, 2147483647, 995, 2000, 2147483647],
+  [0, 2147483647, 13204, 2147483000, 2145336164],
+]) {
+  test(`platinum exchange safely caps inventory ${coins} coins/${tokens} tokens using ${used}`, () => {
+    const h = bankerHarness();
+    if (coins) h.player.inventory.add(new Item(995, coins), false);
+    if (tokens) h.player.inventory.add(new Item(13204, tokens), false);
+    h.use(used);
+    if (h.manager.isActive()) h.manager.handleOption(1);
+    assert.equal(h.player.inventory.getAmount(995), wantCoins);
+    assert.equal(h.player.inventory.getAmount(13204), wantTokens);
+  });
+}
+
+for (const [coins, wantCoins, wantTokens] of [[2000, 0, 2], [2001, 2001, 0]]) {
+  test(`full inventory exchange handles ${coins} coins without losing its remainder`, () => {
+    const h = bankerHarness();
+    h.player.inventory.add(new Item(995, coins), false);
+    for (let n = 0; n < 27; n++) h.player.inventory.add(new Item(TRIDENT, 1, { charges: n }), false);
+    h.use(995);
+    if (h.manager.isActive()) h.manager.handleOption(1);
+    assert.equal(h.player.inventory.getAmount(995), wantCoins);
+    assert.equal(h.player.inventory.getAmount(13204), wantTokens);
+    assert.equal(h.player.inventory.getAmount(TRIDENT), 27);
+  });
+}
+
+test('exchange cancellation, closure, duplicate and replaced confirmation cannot spend again', () => {
+  for (const mode of ['cancel', 'closed', 'duplicate', 'replaced', 'inventory-changed']) {
+    const h = bankerHarness();
+    h.player.inventory.add(new Item(995, 2000), false);
+    h.use(995);
+    const old = h.manager.getCurrent();
+    assert.ok(old);
+    if (mode === 'cancel') old.execute(2);
+    if (mode === 'closed') h.manager.reset();
+    if (mode === 'duplicate') old.execute(1);
+    if (mode === 'replaced') h.use(995);
+    if (mode === 'inventory-changed') h.player.inventory.add(new Item(995, 1000), false);
+    old.execute(1);
+    assert.equal(h.player.inventory.getAmount(13204), mode === 'duplicate' ? 2 : 0, mode);
+    assert.equal(h.player.inventory.getAmount(995), mode === 'duplicate' ? 0 : mode === 'inventory-changed' ? 3000 : 2000, mode);
+  }
+});
+
+test('currency exchange ignores unrelated NPCs, objects, items and stale item slots', () => {
+  const h = bankerHarness();
+  h.player.inventory.add(new Item(995, 2000), false);
+  h.player.inventory.add(new Item(TRIDENT, 1), false);
+  for (const args of [[995, 'Man'], [995, 'Tree'], [TRIDENT, 'Banker'], [995, 'Banker', 1]]) {
+    assert.equal(h.use(...args).handled, false);
+    assert.equal(h.manager.isActive(), false);
+  }
+});
 
 test("moving items does not re-send the viewed tab, so the client's own tab stays", () => {
   const player = createPlayer();

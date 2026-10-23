@@ -349,270 +349,307 @@
     "name": "seed",
     "wiki_label": "general seed drop table",
     "wiki_page": "Drop table",
-    "entries": [
+    "entries": [],
+    "combat_level_multiplier": 10,
+    "categories": [
       {
-        "item_id": 5318,
-        "name": "Potato seed",
-        "quantity_raw": "4",
-        "rarity_raw": "368/1008"
+        "minimum": 0,
+        "entries": [
+          {
+            "item_id": 5318,
+            "name": "Potato seed",
+            "quantity_raw": "4",
+            "rarity_raw": "368/1008"
+          },
+          {
+            "item_id": 5319,
+            "name": "Onion seed",
+            "quantity_raw": "4",
+            "rarity_raw": "276/1008"
+          },
+          {
+            "item_id": 5324,
+            "name": "Cabbage seed",
+            "quantity_raw": "4",
+            "rarity_raw": "184/1008"
+          },
+          {
+            "item_id": 5322,
+            "name": "Tomato seed",
+            "quantity_raw": "3",
+            "rarity_raw": "92/1008"
+          },
+          {
+            "item_id": 5320,
+            "name": "Sweetcorn seed",
+            "quantity_raw": "3",
+            "rarity_raw": "46/1008"
+          },
+          {
+            "item_id": 5323,
+            "name": "Strawberry seed",
+            "quantity_raw": "2",
+            "rarity_raw": "23/1008"
+          },
+          {
+            "item_id": 5321,
+            "name": "Watermelon seed",
+            "quantity_raw": "2",
+            "rarity_raw": "11/1008"
+          },
+          {
+            "item_id": 22879,
+            "name": "Snape grass seed",
+            "quantity_raw": "2",
+            "rarity_raw": "8/1008"
+          }
+        ],
+        "maximum_exclusive": 485
       },
       {
-        "item_id": 5319,
-        "name": "Onion seed",
-        "quantity_raw": "4",
-        "rarity_raw": "276/1008"
+        "minimum": 485,
+        "entries": [
+          {
+            "item_id": 5305,
+            "name": "Barley seed",
+            "quantity_raw": "4",
+            "rarity_raw": "229/1000"
+          },
+          {
+            "item_id": 5307,
+            "name": "Hammerstone seed",
+            "quantity_raw": "3",
+            "rarity_raw": "228/1000"
+          },
+          {
+            "item_id": 5308,
+            "name": "Asgarnian seed",
+            "quantity_raw": "3",
+            "rarity_raw": "172/1000"
+          },
+          {
+            "item_id": 5306,
+            "name": "Jute seed",
+            "quantity_raw": "2",
+            "rarity_raw": "171/1000"
+          },
+          {
+            "item_id": 5309,
+            "name": "Yanillian seed",
+            "quantity_raw": "2",
+            "rarity_raw": "114/1000"
+          },
+          {
+            "item_id": 5310,
+            "name": "Krandorian seed",
+            "quantity_raw": "2",
+            "rarity_raw": "57/1000"
+          },
+          {
+            "item_id": 5311,
+            "name": "Wildblood seed",
+            "quantity_raw": "1",
+            "rarity_raw": "29/1000"
+          }
+        ],
+        "maximum_exclusive": 728
       },
       {
-        "item_id": 5324,
-        "name": "Cabbage seed",
-        "quantity_raw": "4",
-        "rarity_raw": "184/1008"
+        "minimum": 728,
+        "entries": [
+          {
+            "item_id": 5096,
+            "name": "Marigold seed",
+            "quantity_raw": "1",
+            "rarity_raw": "376/1000"
+          },
+          {
+            "item_id": 5098,
+            "name": "Nasturtium seed",
+            "quantity_raw": "1",
+            "rarity_raw": "249/1000"
+          },
+          {
+            "item_id": 5097,
+            "name": "Rosemary seed",
+            "quantity_raw": "1",
+            "rarity_raw": "161/1000"
+          },
+          {
+            "item_id": 5099,
+            "name": "Woad seed",
+            "quantity_raw": "1",
+            "rarity_raw": "119/1000"
+          },
+          {
+            "item_id": 5100,
+            "name": "Limpwurt seed",
+            "quantity_raw": "1",
+            "rarity_raw": "95/1000"
+          }
+        ],
+        "maximum_exclusive": 850
       },
       {
-        "item_id": 5322,
-        "name": "Tomato seed",
-        "quantity_raw": "3",
-        "rarity_raw": "92/1008"
+        "minimum": 850,
+        "entries": [
+          {
+            "item_id": 5101,
+            "name": "Redberry seed",
+            "quantity_raw": "1",
+            "rarity_raw": "400/1000"
+          },
+          {
+            "item_id": 5102,
+            "name": "Cadavaberry seed",
+            "quantity_raw": "1",
+            "rarity_raw": "280/1000"
+          },
+          {
+            "item_id": 5103,
+            "name": "Dwellberry seed",
+            "quantity_raw": "1",
+            "rarity_raw": "200/1000"
+          },
+          {
+            "item_id": 5104,
+            "name": "Jangerberry seed",
+            "quantity_raw": "1",
+            "rarity_raw": "80/1000"
+          },
+          {
+            "item_id": 5105,
+            "name": "Whiteberry seed",
+            "quantity_raw": "1",
+            "rarity_raw": "29/1000"
+          },
+          {
+            "item_id": 5106,
+            "name": "Poison ivy seed",
+            "quantity_raw": "1",
+            "rarity_raw": "11/1000"
+          }
+        ],
+        "maximum_exclusive": 947
       },
       {
-        "item_id": 5320,
-        "name": "Sweetcorn seed",
-        "quantity_raw": "3",
-        "rarity_raw": "46/1008"
+        "minimum": 947,
+        "entries": [
+          {
+            "item_id": 5291,
+            "name": "Guam seed",
+            "quantity_raw": "1",
+            "rarity_raw": "320/1000"
+          },
+          {
+            "item_id": 5292,
+            "name": "Marrentill seed",
+            "quantity_raw": "1",
+            "rarity_raw": "218/1000"
+          },
+          {
+            "item_id": 5293,
+            "name": "Tarromin seed",
+            "quantity_raw": "1",
+            "rarity_raw": "149/1000"
+          },
+          {
+            "item_id": 5294,
+            "name": "Harralander seed",
+            "quantity_raw": "1",
+            "rarity_raw": "101/1000"
+          },
+          {
+            "item_id": 5295,
+            "name": "Ranarr seed",
+            "quantity_raw": "1",
+            "rarity_raw": "69/1000"
+          },
+          {
+            "item_id": 5296,
+            "name": "Toadflax seed",
+            "quantity_raw": "1",
+            "rarity_raw": "47/1000"
+          },
+          {
+            "item_id": 5297,
+            "name": "Irit seed",
+            "quantity_raw": "1",
+            "rarity_raw": "32/1000"
+          },
+          {
+            "item_id": 5298,
+            "name": "Avantoe seed",
+            "quantity_raw": "1",
+            "rarity_raw": "22/1000"
+          },
+          {
+            "item_id": 5299,
+            "name": "Kwuarm seed",
+            "quantity_raw": "1",
+            "rarity_raw": "15/1000"
+          },
+          {
+            "item_id": 5300,
+            "name": "Snapdragon seed",
+            "quantity_raw": "1",
+            "rarity_raw": "10/1000"
+          },
+          {
+            "item_id": 5301,
+            "name": "Cadantine seed",
+            "quantity_raw": "1",
+            "rarity_raw": "7/1000"
+          },
+          {
+            "item_id": 5302,
+            "name": "Lantadyme seed",
+            "quantity_raw": "1",
+            "rarity_raw": "5/1000"
+          },
+          {
+            "item_id": 5303,
+            "name": "Dwarf weed seed",
+            "quantity_raw": "1",
+            "rarity_raw": "3/1000"
+          },
+          {
+            "item_id": 5304,
+            "name": "Torstol seed",
+            "quantity_raw": "1",
+            "rarity_raw": "2/1000"
+          }
+        ],
+        "maximum_exclusive": 995
       },
       {
-        "item_id": 5323,
-        "name": "Strawberry seed",
-        "quantity_raw": "2",
-        "rarity_raw": "23/1008"
-      },
-      {
-        "item_id": 5321,
-        "name": "Watermelon seed",
-        "quantity_raw": "2",
-        "rarity_raw": "11/1008"
-      },
-      {
-        "item_id": 22879,
-        "name": "Snape grass seed",
-        "quantity_raw": "2",
-        "rarity_raw": "8/1008"
-      },
-      {
-        "item_id": 5305,
-        "name": "Barley seed",
-        "quantity_raw": "4",
-        "rarity_raw": "229/1000"
-      },
-      {
-        "item_id": 5307,
-        "name": "Hammerstone seed",
-        "quantity_raw": "3",
-        "rarity_raw": "228/1000"
-      },
-      {
-        "item_id": 5308,
-        "name": "Asgarnian seed",
-        "quantity_raw": "3",
-        "rarity_raw": "172/1000"
-      },
-      {
-        "item_id": 5306,
-        "name": "Jute seed",
-        "quantity_raw": "2",
-        "rarity_raw": "171/1000"
-      },
-      {
-        "item_id": 5309,
-        "name": "Yanillian seed",
-        "quantity_raw": "2",
-        "rarity_raw": "114/1000"
-      },
-      {
-        "item_id": 5310,
-        "name": "Krandorian seed",
-        "quantity_raw": "2",
-        "rarity_raw": "57/1000"
-      },
-      {
-        "item_id": 5311,
-        "name": "Wildblood seed",
-        "quantity_raw": "1",
-        "rarity_raw": "29/1000"
-      },
-      {
-        "item_id": 5096,
-        "name": "Marigold seed",
-        "quantity_raw": "1",
-        "rarity_raw": "376/1000"
-      },
-      {
-        "item_id": 5098,
-        "name": "Nasturtium seed",
-        "quantity_raw": "1",
-        "rarity_raw": "249/1000"
-      },
-      {
-        "item_id": 5097,
-        "name": "Rosemary seed",
-        "quantity_raw": "1",
-        "rarity_raw": "161/1000"
-      },
-      {
-        "item_id": 5099,
-        "name": "Woad seed",
-        "quantity_raw": "1",
-        "rarity_raw": "119/1000"
-      },
-      {
-        "item_id": 5100,
-        "name": "Limpwurt seed",
-        "quantity_raw": "1",
-        "rarity_raw": "95/1000"
-      },
-      {
-        "item_id": 5101,
-        "name": "Redberry seed",
-        "quantity_raw": "1",
-        "rarity_raw": "400/1000"
-      },
-      {
-        "item_id": 5102,
-        "name": "Cadavaberry seed",
-        "quantity_raw": "1",
-        "rarity_raw": "280/1000"
-      },
-      {
-        "item_id": 5103,
-        "name": "Dwellberry seed",
-        "quantity_raw": "1",
-        "rarity_raw": "200/1000"
-      },
-      {
-        "item_id": 5104,
-        "name": "Jangerberry seed",
-        "quantity_raw": "1",
-        "rarity_raw": "80/1000"
-      },
-      {
-        "item_id": 5105,
-        "name": "Whiteberry seed",
-        "quantity_raw": "1",
-        "rarity_raw": "29/1000"
-      },
-      {
-        "item_id": 5106,
-        "name": "Poison ivy seed",
-        "quantity_raw": "1",
-        "rarity_raw": "11/1000"
-      },
-      {
-        "item_id": 5291,
-        "name": "Guam seed",
-        "quantity_raw": "1",
-        "rarity_raw": "320/1000"
-      },
-      {
-        "item_id": 5292,
-        "name": "Marrentill seed",
-        "quantity_raw": "1",
-        "rarity_raw": "218/1000"
-      },
-      {
-        "item_id": 5293,
-        "name": "Tarromin seed",
-        "quantity_raw": "1",
-        "rarity_raw": "149/1000"
-      },
-      {
-        "item_id": 5294,
-        "name": "Harralander seed",
-        "quantity_raw": "1",
-        "rarity_raw": "101/1000"
-      },
-      {
-        "item_id": 5295,
-        "name": "Ranarr seed",
-        "quantity_raw": "1",
-        "rarity_raw": "69/1000"
-      },
-      {
-        "item_id": 5296,
-        "name": "Toadflax seed",
-        "quantity_raw": "1",
-        "rarity_raw": "47/1000"
-      },
-      {
-        "item_id": 5297,
-        "name": "Irit seed",
-        "quantity_raw": "1",
-        "rarity_raw": "32/1000"
-      },
-      {
-        "item_id": 5298,
-        "name": "Avantoe seed",
-        "quantity_raw": "1",
-        "rarity_raw": "22/1000"
-      },
-      {
-        "item_id": 5299,
-        "name": "Kwuarm seed",
-        "quantity_raw": "1",
-        "rarity_raw": "15/1000"
-      },
-      {
-        "item_id": 5300,
-        "name": "Snapdragon seed",
-        "quantity_raw": "1",
-        "rarity_raw": "10/1000"
-      },
-      {
-        "item_id": 5301,
-        "name": "Cadantine seed",
-        "quantity_raw": "1",
-        "rarity_raw": "7/1000"
-      },
-      {
-        "item_id": 5302,
-        "name": "Lantadyme seed",
-        "quantity_raw": "1",
-        "rarity_raw": "5/1000"
-      },
-      {
-        "item_id": 5303,
-        "name": "Dwarf weed seed",
-        "quantity_raw": "1",
-        "rarity_raw": "3/1000"
-      },
-      {
-        "item_id": 5304,
-        "name": "Torstol seed",
-        "quantity_raw": "1",
-        "rarity_raw": "2/1000"
-      },
-      {
-        "item_id": 5282,
-        "name": "Mushroom spore",
-        "quantity_raw": "1",
-        "rarity_raw": "500/1100"
-      },
-      {
-        "item_id": 5281,
-        "name": "Belladonna seed",
-        "quantity_raw": "1",
-        "rarity_raw": "300/1100"
-      },
-      {
-        "item_id": 5280,
-        "name": "Cactus seed",
-        "quantity_raw": "1",
-        "rarity_raw": "200/1100"
-      },
-      {
-        "item_id": 22873,
-        "name": "Potato cactus seed",
-        "quantity_raw": "1",
-        "rarity_raw": "100/1100"
+        "minimum": 995,
+        "entries": [
+          {
+            "item_id": 5282,
+            "name": "Mushroom spore",
+            "quantity_raw": "1",
+            "rarity_raw": "500/1100"
+          },
+          {
+            "item_id": 5281,
+            "name": "Belladonna seed",
+            "quantity_raw": "1",
+            "rarity_raw": "300/1100"
+          },
+          {
+            "item_id": 5280,
+            "name": "Cactus seed",
+            "quantity_raw": "1",
+            "rarity_raw": "200/1100"
+          },
+          {
+            "item_id": 22873,
+            "name": "Potato cactus seed",
+            "quantity_raw": "1",
+            "rarity_raw": "100/1100"
+          }
+        ]
       }
     ]
   },

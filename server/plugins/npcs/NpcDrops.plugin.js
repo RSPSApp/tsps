@@ -286,9 +286,9 @@ function loadDrops() {
   }
   const tableCount = Object.keys(tableById).length;
 
-  for (const [name, table] of Object.entries(subtables)) {
+  function sharedEntries(rows) {
     const entries = [];
-    for (const entry of table.entries || []) {
+    for (const entry of rows || []) {
       const rarity = parseSharedRarity(entry.rarity_raw);
       if (!rarity) {
         unusableSubtableRows++;
@@ -312,8 +312,17 @@ function loadDrops() {
         unusableSubtableRows++;
       }
     }
-    if (entries.length > 0) {
-      sharedTables.set(name, entries);
+    return entries;
+  }
+  for (const [name, table] of Object.entries(subtables)) {
+    if (Array.isArray(table.categories)) {
+      sharedTables.set(name, {
+        combat_level_multiplier: table.combat_level_multiplier,
+        categories: table.categories.map(category => ({ ...category, entries: sharedEntries(category.entries) })),
+      });
+    } else {
+      const entries = sharedEntries(table.entries);
+      if (entries.length > 0) sharedTables.set(name, entries);
     }
   }
 
@@ -376,12 +385,21 @@ function tertiaryMultiplier(entry, rules) {
   return multiplier;
 }
 
-function rollSharedTable(name, player, depth = 0) {
+function rollSharedTable(name, player, depth = 0, npc = null) {
   // Shared tables reference each other (rare -> gem -> mega-rare), so cap the chain.
   if (depth > 4) {
     return [];
   }
-  const entries = sharedTables.get(name);
+  const table = sharedTables.get(name);
+  let entries = table;
+  if (table?.categories) {
+    const definition = npc?.getCurrentDefinition?.() ?? npc?.getDefinition?.();
+    const combatLevel = Math.max(0, Number(definition?.getCombatLevel?.()) || 0);
+    const bound = Math.max(1, Math.floor(combatLevel * table.combat_level_multiplier));
+    const categoryRoll = randomInt(bound);
+    entries = table.categories.find(category => categoryRoll >= category.minimum &&
+      (category.maximum_exclusive == null || categoryRoll < category.maximum_exclusive))?.entries;
+  }
   if (!entries || entries.length === 0) {
     return [];
   }
@@ -401,7 +419,7 @@ function rollSharedTable(name, player, depth = 0) {
         return [];
       }
       if (entry.ref) {
-        return rollSharedTable(entry.ref, player, depth + 1);
+        return rollSharedTable(entry.ref, player, depth + 1, npc);
       }
       const [min, max] = entry.quantity;
       return [{
@@ -414,12 +432,30 @@ function rollSharedTable(name, player, depth = 0) {
   return [];
 }
 
-function resolveEntry(entry, player) {
+function resolveEntry(entry, player, npc = null) {
   if (entry.nothing) {
     return [];
   }
   if (entry.shared_table) {
-    return rollSharedTable(entry.shared_table, player);
+    if (entry.unresolved_roll_count) return [];
+    let count = 1;
+    if (Array.isArray(entry.roll_count_weights)) {
+      const choices = entry.roll_count_weights;
+      if (!choices.length || choices.some(choice => !Number.isInteger(choice.rolls) || choice.rolls < 1 ||
+          !Number.isInteger(choice.weight) || choice.weight < 1)) return [];
+      let roll = randomInt(choices.reduce((sum, choice) => sum + choice.weight, 0));
+      for (const choice of choices) {
+        roll -= choice.weight;
+        if (roll < 0) { count = choice.rolls; break; }
+      }
+    } else if (Array.isArray(entry.roll_count)) {
+      if (!Number.isInteger(entry.roll_count[0]) || entry.roll_count[0] < 1 ||
+          entry.roll_count[0] !== entry.roll_count[1]) return [];
+      count = entry.roll_count[0];
+    }
+    const drops = [];
+    for (let i = 0; i < count; i++) drops.push(...rollSharedTable(entry.shared_table, player, 0, npc));
+    return drops;
   }
   if (!Number.isInteger(entry.item_id)) {
     return [];
@@ -437,18 +473,37 @@ function resolveEntry(entry, player) {
  * One roll on a table: its pre-roll, main roll and separate rolls. Separate rolls marked
  * `once_per_kill` are made on the first of a table's `rolls` only.
  */
-function rollOnce(table, entries, player, first = true) {
+function rollOnce(table, entries, player, first = true, npc = null) {
   const drops = [];
   const main = [];
   const separateGroups = new Map();
   let preRollHit = false;
 
+  // The exporter marks one mutually exclusive pre-roll pool; other denominators
+  // are explicitly separate rolls. Rolling each pool row independently would
+  // reduce every later outcome's published chance by the earlier miss chance.
+  const preRollPool = entries.filter(entry => entry.pre_roll && !entry.separate_roll);
+  if (preRollPool.length) {
+    const outOf = preRollPool[0].out_of;
+    if (Number.isInteger(outOf) && outOf > 0) {
+      let roll = randomInt(outOf);
+      for (const entry of preRollPool) {
+        roll -= entry.weight;
+        if (roll < 0) {
+          drops.push(...resolveEntry(entry, player, npc));
+          preRollHit = true;
+          break;
+        }
+      }
+    }
+  }
+
   for (const entry of entries) {
     if (entry.always) {
       continue;
     } else if (entry.pre_roll) {
-      if (!preRollHit && hits(entry)) {
-        drops.push(...resolveEntry(entry, player));
+      if (entry.separate_roll && !preRollHit && hits(entry)) {
+        drops.push(...resolveEntry(entry, player, npc));
         preRollHit = true;
       }
     } else if (entry.separate_roll) {
@@ -458,7 +513,7 @@ function rollOnce(table, entries, player, first = true) {
         group.push(entry);
         separateGroups.set(entry.roll_group, group);
       } else if (hits(entry)) {
-        drops.push(...resolveEntry(entry, player));
+        drops.push(...resolveEntry(entry, player, npc));
       }
     } else if (Number.isInteger(entry.weight)) {
       main.push(entry);
@@ -471,7 +526,7 @@ function rollOnce(table, entries, player, first = true) {
     for (const entry of group) {
       roll -= entry.weight;
       if (roll < 0) {
-        drops.push(...resolveEntry(entry, player));
+        drops.push(...resolveEntry(entry, player, npc));
         break;
       }
     }
@@ -485,7 +540,7 @@ function rollOnce(table, entries, player, first = true) {
     for (const entry of main) {
       roll -= entry.weight;
       if (roll < 0) {
-        drops.push(...resolveEntry(entry, player));
+        drops.push(...resolveEntry(entry, player, npc));
         break;
       }
     }
@@ -504,12 +559,12 @@ function rollTable(table, player, npc) {
   const entries = Array.isArray(table.entries) ? table.entries : [];
   for (const entry of entries) {
     if (entry.always) {
-      drops.push(...resolveEntry(entry, player));
+      drops.push(...resolveEntry(entry, player, npc));
     }
   }
   const rolls = Number.isInteger(table.rolls) && table.rolls > 1 ? table.rolls : 1;
   for (let roll = 0; roll < rolls; roll++) {
-    drops.push(...rollOnce(table, entries, player, roll === 0));
+    drops.push(...rollOnce(table, entries, player, roll === 0, npc));
   }
 
   const rules = table.tertiary?.length ? tertiaryRules(player, npc) : [];
@@ -525,7 +580,7 @@ function rollTable(table, player, npc) {
     }
     if (entry.name === LOOTING_BAG && !lootingBagDrops(npc)) continue;
     if (hits(entry, tertiaryMultiplier(entry, rules))) {
-      drops.push(...resolveEntry(entry, player));
+      drops.push(...resolveEntry(entry, player, npc));
     }
   }
 

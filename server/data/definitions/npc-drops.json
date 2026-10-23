@@ -1,15 +1,14 @@
 {
   "meta": {
-    "generated": "2026-10-07",
+    "generated": "2026-10-23",
     "source": "https://oldschool.runescape.wiki",
     "license": "CC BY-NC-SA 3.0 \u2014 content from the Old School RuneScape Wiki",
     "id_space": "osrs cache ids (item and npc ids from the osrsreboxed databases)",
-    "npc_count": 3092,
+    "npc_count": 3089,
     "table_count": 1112,
-    "table_refs": 3122,
+    "table_refs": 3119,
     "wiki_pages_scanned": 1659,
     "shared_tables": [
-      "",
       "combatHerb",
       "gem",
       "herb",
@@ -150,11 +149,25 @@
           "out_of": 128
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 78,
           "out_of": 128,
           "rarity": 0.609375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 11
+            },
+            {
+              "rolls": 2,
+              "weight": 11
+            },
+            {
+              "rolls": 3,
+              "weight": 4
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -332,11 +345,25 @@
           "out_of": 128
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 78,
           "out_of": 128,
           "rarity": 0.609375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 11
+            },
+            {
+              "rolls": 2,
+              "weight": 11
+            },
+            {
+              "rolls": 3,
+              "weight": 4
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -1695,7 +1722,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/100",
+          "out_of": 100,
+          "rarity": 0.01,
           "section": "Pre-roll"
         },
         {
@@ -3635,7 +3663,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/35",
+          "out_of": 35,
+          "rarity": 0.0285714,
           "section": "Pre-roll"
         },
         {
@@ -3964,7 +3993,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/181.1",
+          "out_of": 181,
+          "rarity": 0.0055249,
           "section": "Pre-roll",
           "notes": [
             "The order in which players receive the items is: Hydra's eye, Hydra's fang and finally Hydra's heart."
@@ -3979,7 +4009,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/181.1",
+          "out_of": 181,
+          "rarity": 0.0055249,
           "section": "Pre-roll",
           "notes": [
             "The order in which players receive the items is: Hydra's eye, Hydra's fang and finally Hydra's heart."
@@ -3994,7 +4025,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/181.1",
+          "out_of": 181,
+          "rarity": 0.0055249,
           "section": "Pre-roll",
           "notes": [
             "The order in which players receive the items is: Hydra's eye, Hydra's fang and finally Hydra's heart."
@@ -8848,7 +8880,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/3500",
+          "out_of": 3500,
+          "rarity": 0.0002857,
           "section": "Pre-roll",
           "notes": [
             "The rarity changes to 1/750 while on an Aquanite Slayer task."
@@ -10890,7 +10923,8 @@
           ],
           "pre_roll": true,
           "weight": 4,
-          "rarity_raw": "4/540",
+          "out_of": 540,
+          "rarity": 0.0074074,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is increased while on an armoured kraken bounty task."
@@ -10905,7 +10939,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/540",
+          "out_of": 540,
+          "rarity": 0.0018519,
           "section": "Pre-roll"
         },
         {
@@ -10917,7 +10952,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/540",
+          "out_of": 540,
+          "rarity": 0.0018519,
           "section": "Pre-roll"
         },
         {
@@ -14141,6 +14177,34 @@
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
+        },
+        {
+          "item_id": 4600,
+          "name": "Willow blackjack",
+          "quantity": [
+            1,
+            1
+          ],
+          "always": true,
+          "rarity_raw": "Always",
+          "section": "100%",
+          "notes": [
+            "Only if the player does not have a willow blackjack in their inventory."
+          ]
+        },
+        {
+          "item_id": 1331,
+          "name": "Adamant scimitar",
+          "quantity": [
+            1,
+            1
+          ],
+          "always": true,
+          "rarity_raw": "Always",
+          "section": "100%",
+          "notes": [
+            "Only if the player already has a willow blackjack in their inventory."
+          ]
         }
       ],
       "tertiary": []
@@ -22662,7 +22726,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/5",
+          "out_of": 5,
+          "rarity": 0.2,
           "section": "Pre-roll"
         },
         {
@@ -27052,7 +27117,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -27064,7 +27130,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -27313,7 +27380,21 @@
           "weight": 5,
           "out_of": 85,
           "rarity": 0.0588235,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 1
+            },
+            {
+              "rolls": 2,
+              "weight": 1
+            },
+            {
+              "rolls": 3,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -27686,7 +27767,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll"
         },
         {
@@ -28450,7 +28532,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/360.72",
+          "out_of": 361,
+          "rarity": 0.0027701,
           "section": "Pre-roll",
           "notes": [
             "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart."
@@ -28465,7 +28548,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/360.72",
+          "out_of": 361,
+          "rarity": 0.0027701,
           "section": "Pre-roll"
         },
         {
@@ -28477,7 +28561,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/360.72",
+          "out_of": 361,
+          "rarity": 0.0027701,
           "section": "Pre-roll"
         },
         {
@@ -28726,7 +28811,8 @@
           "weight": 4,
           "out_of": 128,
           "rarity": 0.03125,
-          "section": "Herbs"
+          "section": "Herbs",
+          "unresolved_roll_count": true
         },
         {
           "shared_table": "gem",
@@ -30050,7 +30136,13 @@
           "weight": 18,
           "out_of": 124,
           "rarity": 0.1451613,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 3,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -32542,11 +32634,21 @@
           "section": "Other"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 24,
           "out_of": 128,
           "rarity": 0.1875,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 4
+            },
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "rareDrop",
@@ -33479,11 +33581,21 @@
           "section": "Bloodthirsty"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 46,
           "out_of": 128,
           "rarity": 0.359375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 2,
+              "weight": 29
+            },
+            {
+              "rolls": 3,
+              "weight": 17
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -33647,7 +33759,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2000",
+          "out_of": 2000,
+          "rarity": 0.0005,
           "section": "Pre-roll"
         },
         {
@@ -33659,7 +33772,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2000",
+          "out_of": 2000,
+          "rarity": 0.0005,
           "section": "Pre-roll"
         },
         {
@@ -33671,7 +33785,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2000",
+          "out_of": 2000,
+          "rarity": 0.0005,
           "section": "Pre-roll"
         },
         {
@@ -33683,7 +33798,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2000",
+          "out_of": 2000,
+          "rarity": 0.0005,
           "section": "Pre-roll"
         },
         {
@@ -33908,7 +34024,13 @@
           "weight": 4,
           "out_of": 76,
           "rarity": 0.0526316,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -34480,11 +34602,21 @@
           "section": "Other"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 18,
           "out_of": 128,
           "rarity": 0.140625,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 2
+            },
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "rareDrop",
@@ -35028,11 +35160,25 @@
           "section": "Bloodthirsty"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 78,
           "out_of": 128,
           "rarity": 0.609375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 11
+            },
+            {
+              "rolls": 2,
+              "weight": 11
+            },
+            {
+              "rolls": 3,
+              "weight": 4
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -35129,7 +35275,8 @@
         {
           "nothing": true,
           "weight": 18,
-          "out_of": 128
+          "out_of": 128,
+          "separate_roll": true
         },
         {
           "item_id": 4103,
@@ -35325,11 +35472,25 @@
           "section": "Coins"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 31,
           "out_of": 128,
           "rarity": 0.2421875,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 15
+            },
+            {
+              "rolls": 2,
+              "weight": 10
+            },
+            {
+              "rolls": 3,
+              "weight": 6
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -35729,7 +35890,13 @@
           "weight": 34,
           "out_of": 128,
           "rarity": 0.265625,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 3,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -38058,7 +38225,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/75",
+          "out_of": 75,
+          "rarity": 0.0133333,
           "section": "Pre-roll"
         },
         {
@@ -38070,7 +38238,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/75",
+          "out_of": 75,
+          "rarity": 0.0133333,
           "section": "Pre-roll",
           "notes": [
             "No longer dropped after reading the scroll."
@@ -39561,7 +39730,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2048",
+          "out_of": 2048,
+          "rarity": 0.0004883,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is 1/2,048 for a specific dragon legging, or 1/1,024 for any dragon legging."
@@ -39576,7 +39746,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2048",
+          "out_of": 2048,
+          "rarity": 0.0004883,
           "section": "Pre-roll"
         },
         {
@@ -41901,7 +42072,8 @@
           ],
           "pre_roll": true,
           "weight": 5,
-          "rarity_raw": "5/150",
+          "out_of": 150,
+          "rarity": 0.0333333,
           "section": "Pre-roll"
         },
         {
@@ -41913,7 +42085,8 @@
           ],
           "pre_roll": true,
           "weight": 4,
-          "rarity_raw": "4/150",
+          "out_of": 150,
+          "rarity": 0.0266667,
           "section": "Pre-roll"
         },
         {
@@ -41925,7 +42098,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/150",
+          "out_of": 150,
+          "rarity": 0.0066667,
           "section": "Pre-roll"
         },
         {
@@ -43292,7 +43466,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/45",
+          "out_of": 45,
+          "rarity": 0.0222222,
           "section": "Pre-roll"
         },
         {
@@ -43408,7 +43583,8 @@
           "weight": 39,
           "out_of": 149,
           "rarity": 0.261745,
-          "section": "Herbs"
+          "section": "Herbs",
+          "unresolved_roll_count": true
         },
         {
           "shared_table": "combatHerb",
@@ -48293,7 +48469,17 @@
           "weight": 46,
           "out_of": 128,
           "rarity": 0.359375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 35
+            },
+            {
+              "rolls": 2,
+              "weight": 11
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -48561,11 +48747,21 @@
           "section": "Other"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 44,
           "out_of": 128,
           "rarity": 0.34375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 34
+            },
+            {
+              "rolls": 2,
+              "weight": 10
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -48919,7 +49115,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll"
         },
         {
@@ -49462,7 +49659,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is 1/256 for a specific shard, or 1/128 for any shard."
@@ -49477,7 +49675,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll"
         },
         {
@@ -52138,7 +52337,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/360.72",
+          "out_of": 361,
+          "rarity": 0.0027701,
           "section": "Pre-roll",
           "notes": [
             "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart."
@@ -52153,7 +52353,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/360.72",
+          "out_of": 361,
+          "rarity": 0.0027701,
           "section": "Pre-roll"
         },
         {
@@ -52165,7 +52366,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/360.72",
+          "out_of": 361,
+          "rarity": 0.0027701,
           "section": "Pre-roll"
         },
         {
@@ -52403,7 +52605,8 @@
           "weight": 4,
           "out_of": 128,
           "rarity": 0.03125,
-          "section": "Herbs"
+          "section": "Herbs",
+          "unresolved_roll_count": true
         },
         {
           "shared_table": "gem",
@@ -54872,7 +55075,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is 1/256 for a specific shard, or 1/128 for any shard."
@@ -54887,7 +55091,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll"
         },
         {
@@ -56607,7 +56812,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/100",
+          "out_of": 100,
+          "rarity": 0.01,
           "section": "Pre-roll"
         },
         {
@@ -61431,7 +61637,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -64728,11 +64935,21 @@
           "section": "Other"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 46,
           "out_of": 128,
           "rarity": 0.359375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 2,
+              "weight": 29
+            },
+            {
+              "rolls": 3,
+              "weight": 17
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -65267,7 +65484,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/1200",
+          "out_of": 1200,
+          "rarity": 0.0008333,
           "section": "Pre-roll"
         },
         {
@@ -66144,7 +66362,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2560",
+          "out_of": 2560,
+          "rarity": 0.0003906,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is increased to 1/512 while on a drake Slayer task."
@@ -66159,7 +66378,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2560",
+          "out_of": 2560,
+          "rarity": 0.0003906,
           "section": "Pre-roll"
         },
         {
@@ -68420,7 +68640,8 @@
         {
           "nothing": true,
           "weight": 255,
-          "out_of": 32768
+          "out_of": 32768,
+          "separate_roll": true
         }
       ],
       "tertiary": [],
@@ -68730,7 +68951,8 @@
         {
           "nothing": true,
           "weight": 255,
-          "out_of": 32256
+          "out_of": 32256,
+          "separate_roll": true
         }
       ],
       "tertiary": [
@@ -69068,7 +69290,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/50",
+          "out_of": 50,
+          "rarity": 0.02,
           "section": "Pre-roll"
         },
         {
@@ -69148,7 +69371,8 @@
           "weight": 35,
           "out_of": 150,
           "rarity": 0.2333333,
-          "section": "Herbs"
+          "section": "Herbs",
+          "unresolved_roll_count": true
         },
         {
           "shared_table": "combatHerb",
@@ -70861,11 +71085,29 @@
           ]
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 55,
           "out_of": 129,
           "rarity": 0.4263566,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 15
+            },
+            {
+              "rolls": 2,
+              "weight": 20
+            },
+            {
+              "rolls": 3,
+              "weight": 15
+            },
+            {
+              "rolls": 4,
+              "weight": 5
+            }
+          ]
         },
         {
           "shared_table": "rareDrop",
@@ -71249,7 +71491,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/75",
+          "out_of": 75,
+          "rarity": 0.0133333,
           "section": "Pre-roll"
         },
         {
@@ -71261,7 +71504,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/75",
+          "out_of": 75,
+          "rarity": 0.0133333,
           "section": "Pre-roll",
           "notes": [
             "No longer dropped after reading the scroll."
@@ -75811,7 +76055,13 @@
           "weight": 10,
           "out_of": 128,
           "rarity": 0.078125,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -79359,7 +79609,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/100",
+          "out_of": 100,
+          "rarity": 0.01,
           "section": "Pre-roll",
           "notes": [
             "Drop rate increased to 1/40 while on a frost dragon Slayer task."
@@ -80542,7 +80793,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/80",
+          "out_of": 80,
+          "rarity": 0.0125,
           "section": "Pre-roll"
         },
         {
@@ -80789,7 +81041,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/80",
+          "out_of": 80,
+          "rarity": 0.0125,
           "section": "Pre-roll"
         },
         {
@@ -81057,7 +81310,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll"
         },
         {
@@ -88191,7 +88445,8 @@
           ],
           "pre_roll": true,
           "weight": 4,
-          "rarity_raw": "4/720",
+          "out_of": 720,
+          "rarity": 0.0055556,
           "section": "Pre-roll"
         },
         {
@@ -88203,7 +88458,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/720",
+          "out_of": 720,
+          "rarity": 0.0013889,
           "section": "Pre-roll"
         },
         {
@@ -88215,7 +88471,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/720",
+          "out_of": 720,
+          "rarity": 0.0013889,
           "section": "Pre-roll"
         },
         {
@@ -95795,7 +96052,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -95807,7 +96065,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -97637,7 +97896,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -97649,7 +97909,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -98677,7 +98938,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/35",
+          "out_of": 35,
+          "rarity": 0.0285714,
           "section": "Pre-roll"
         },
         {
@@ -99213,7 +99475,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/128",
+          "out_of": 128,
+          "rarity": 0.0078125,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is doubled in the Wilderness."
@@ -100455,7 +100718,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/1800.72",
+          "out_of": 1801,
+          "rarity": 0.0005552,
           "section": "Pre-roll",
           "notes": [
             "The order players receive the items in are: Hydra's eye, Hydra's fang, and finally Hydra's heart.",
@@ -100472,7 +100736,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/1800.72",
+          "out_of": 1801,
+          "rarity": 0.0005552,
           "section": "Pre-roll"
         },
         {
@@ -100484,7 +100749,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/1800.72",
+          "out_of": 1801,
+          "rarity": 0.0005552,
           "section": "Pre-roll"
         },
         {
@@ -100722,7 +100988,8 @@
           "weight": 4,
           "out_of": 128,
           "rarity": 0.03125,
-          "section": "Herbs"
+          "section": "Herbs",
+          "unresolved_roll_count": true
         },
         {
           "shared_table": "gem",
@@ -105079,7 +105346,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -105091,7 +105359,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -106948,7 +107217,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/1024",
+          "out_of": 1024,
+          "rarity": 0.0009766,
           "section": "Pre-roll"
         },
         {
@@ -107684,7 +107954,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/1024",
+          "out_of": 1024,
+          "rarity": 0.0009766,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is 1/1,024 for a specific legging, or 1/512 for any leggings."
@@ -107699,7 +107970,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/1024",
+          "out_of": 1024,
+          "rarity": 0.0009766,
           "section": "Pre-roll"
         },
         {
@@ -112715,7 +112987,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/1000",
+          "out_of": 1000,
+          "rarity": 0.001,
           "section": "Pre-roll"
         },
         {
@@ -113277,7 +113550,13 @@
           "weight": 18,
           "out_of": 124,
           "rarity": 0.1451613,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 3,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -117033,7 +117312,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/115",
+          "out_of": 115,
+          "rarity": 0.0086957,
           "section": "Pre-roll",
           "notes": [
             "The drop rate increases to 1/45 while on a wyrm Slayer task."
@@ -121863,7 +122143,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/25",
+          "out_of": 25,
+          "rarity": 0.04,
           "section": "Pre-roll"
         },
         {
@@ -122244,7 +122525,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/340",
+          "out_of": 340,
+          "rarity": 0.0029412,
           "section": "Pre-roll"
         },
         {
@@ -124541,7 +124823,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/20",
+          "out_of": 20,
+          "rarity": 0.05,
           "section": "Pre-roll"
         },
         {
@@ -126076,7 +126359,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll"
         },
         {
@@ -128600,7 +128884,8 @@
           ],
           "pre_roll": true,
           "weight": 2,
-          "rarity_raw": "2/60",
+          "out_of": 60,
+          "rarity": 0.0333333,
           "section": "Pre-roll"
         },
         {
@@ -128612,7 +128897,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/60",
+          "out_of": 60,
+          "rarity": 0.0166667,
           "section": "Pre-roll"
         },
         {
@@ -128841,7 +129127,8 @@
           ],
           "pre_roll": true,
           "weight": 2,
-          "rarity_raw": "2/60",
+          "out_of": 60,
+          "rarity": 0.0333333,
           "section": "Pre-roll"
         },
         {
@@ -128853,7 +129140,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/60",
+          "out_of": 60,
+          "rarity": 0.0166667,
           "section": "Pre-roll"
         },
         {
@@ -134237,7 +134525,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/20",
+          "out_of": 20,
+          "rarity": 0.05,
           "section": "Pre-roll"
         },
         {
@@ -136151,7 +136440,7 @@
       "label": "Drops",
       "table_name": "Nex Drops",
       "wiki_page": "Nex",
-      "main_max_roll": 12,
+      "main_max_roll": 14,
       "entries": [
         {
           "item_id": 532,
@@ -136172,8 +136461,8 @@
             876
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136185,8 +136474,8 @@
             986
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136198,8 +136487,8 @@
             592
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136211,8 +136500,8 @@
             283
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136224,8 +136513,8 @@
             2252
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136237,8 +136526,8 @@
             100
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Resources",
           "noted": true,
           "assumed_rarity": true
@@ -136251,8 +136540,8 @@
             80
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Resources",
           "noted": true,
           "assumed_rarity": true
@@ -136265,8 +136554,8 @@
             64
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Resources",
           "noted": true,
           "assumed_rarity": true
@@ -136279,8 +136568,8 @@
             64
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Resources",
           "noted": true,
           "assumed_rarity": true
@@ -136293,23 +136582,26 @@
             10
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Consumables",
           "assumed_rarity": true,
           "notes": [
             "Sharks and Prayer potions are dropped together"
-          ],
-          "bonus_drops": [
-            {
-              "item_id": 2434,
-              "name": "Prayer potion(4)",
-              "quantity": [
-                3,
-                3
-              ]
-            }
           ]
+        },
+        {
+          "item_id": 2434,
+          "name": "Prayer potion(4)",
+          "quantity": [
+            3,
+            3
+          ],
+          "weight": 1,
+          "out_of": 14,
+          "rarity": 0.0714286,
+          "section": "Consumables",
+          "assumed_rarity": true
         },
         {
           "item_id": 6685,
@@ -136319,23 +136611,26 @@
             10
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Consumables",
           "assumed_rarity": true,
           "notes": [
             "Saradomin brews and Super restores are dropped together"
-          ],
-          "bonus_drops": [
-            {
-              "item_id": 3024,
-              "name": "Super restore(4)",
-              "quantity": [
-                1,
-                5
-              ]
-            }
           ]
+        },
+        {
+          "item_id": 3024,
+          "name": "Super restore(4)",
+          "quantity": [
+            1,
+            5
+          ],
+          "weight": 1,
+          "out_of": 14,
+          "rarity": 0.0714286,
+          "section": "Consumables",
+          "assumed_rarity": true
         },
         {
           "item_id": 26388,
@@ -136345,8 +136640,8 @@
             39
           ],
           "weight": 1,
-          "out_of": 12,
-          "rarity": 0.0833333,
+          "out_of": 14,
+          "rarity": 0.0714286,
           "section": "Other",
           "assumed_rarity": true
         },
@@ -136923,11 +137218,21 @@
           "section": "Other"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 24,
           "out_of": 128,
           "rarity": 0.1875,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 4
+            },
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "rareDrop",
@@ -138218,11 +138523,21 @@
           "section": "Other"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 18,
           "out_of": 128,
           "rarity": 0.140625,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 2
+            },
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "rareDrop",
@@ -140400,7 +140715,8 @@
           ],
           "pre_roll": true,
           "weight": 2,
-          "rarity_raw": "2/400",
+          "out_of": 400,
+          "rarity": 0.005,
           "section": "Pre-roll"
         },
         {
@@ -140412,7 +140728,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/400",
+          "out_of": 400,
+          "rarity": 0.0025,
           "section": "Pre-roll"
         },
         {
@@ -140424,7 +140741,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/400",
+          "out_of": 400,
+          "rarity": 0.0025,
           "section": "Pre-roll"
         },
         {
@@ -145250,7 +145568,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/3000",
+          "out_of": 3000,
+          "rarity": 0.0003333,
           "section": "Pre-roll"
         },
         {
@@ -147107,11 +147426,21 @@
           "section": "Other"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 46,
           "out_of": 128,
           "rarity": 0.359375,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 2,
+              "weight": 29
+            },
+            {
+              "rolls": 3,
+              "weight": 17
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -150417,7 +150746,8 @@
           ],
           "pre_roll": true,
           "weight": 2,
-          "rarity_raw": "2/384",
+          "out_of": 384,
+          "rarity": 0.0052083,
           "section": "Pre-roll"
         },
         {
@@ -150429,7 +150759,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/384",
+          "out_of": 384,
+          "rarity": 0.0026042,
           "section": "Pre-roll"
         },
         {
@@ -151911,7 +152242,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is 1/256 for a specific shard, or 1/128 for any shard."
@@ -151926,7 +152258,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/256",
+          "out_of": 256,
+          "rarity": 0.0039062,
           "section": "Pre-roll"
         },
         {
@@ -153016,7 +153349,13 @@
           "weight": 34,
           "out_of": 128,
           "rarity": 0.265625,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 3,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -154622,7 +154961,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -154634,7 +154974,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -155880,7 +156221,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2000",
+          "out_of": 2000,
+          "rarity": 0.0005,
           "section": "Pre-roll"
         },
         {
@@ -155892,7 +156234,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2000",
+          "out_of": 2000,
+          "rarity": 0.0005,
           "section": "Pre-roll"
         },
         {
@@ -155904,7 +156247,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2000",
+          "out_of": 2000,
+          "rarity": 0.0005,
           "section": "Pre-roll"
         },
         {
@@ -155916,7 +156260,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2000",
+          "out_of": 2000,
+          "rarity": 0.0005,
           "section": "Pre-roll"
         },
         {
@@ -156141,7 +156486,13 @@
           "weight": 4,
           "out_of": 76,
           "rarity": 0.0526316,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -156493,7 +156844,8 @@
         {
           "nothing": true,
           "weight": 1,
-          "out_of": 128
+          "out_of": 128,
+          "separate_roll": true
         },
         {
           "item_id": 395,
@@ -156885,7 +157237,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/75",
+          "out_of": 75,
+          "rarity": 0.0133333,
           "section": "Pre-roll"
         },
         {
@@ -158495,7 +158848,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -158507,7 +158861,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -158519,7 +158874,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -158895,7 +159251,13 @@
           "weight": 7,
           "out_of": 128,
           "rarity": 0.0546875,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 3,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "rareDrop",
@@ -167429,11 +167791,21 @@
           "section": "Other"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 18,
           "out_of": 128,
           "rarity": 0.140625,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 2
+            },
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "rareDrop",
@@ -170460,11 +170832,25 @@
           "section": "Coins"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 31,
           "out_of": 128,
           "rarity": 0.2421875,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 15
+            },
+            {
+              "rolls": 2,
+              "weight": 10
+            },
+            {
+              "rolls": 3,
+              "weight": 6
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -171085,7 +171471,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2500",
+          "out_of": 2500,
+          "rarity": 0.0004,
           "section": "Pre-roll"
         },
         {
@@ -173277,7 +173664,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is 1/512 for a specific legging, or 1/256 for any legging."
@@ -173292,7 +173680,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/512",
+          "out_of": 512,
+          "rarity": 0.0019531,
           "section": "Pre-roll"
         },
         {
@@ -173940,7 +174329,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/30",
+          "out_of": 30,
+          "rarity": 0.0333333,
           "section": "Pre-roll"
         },
         {
@@ -175102,7 +175492,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/450",
+          "out_of": 450,
+          "rarity": 0.0022222,
           "section": "Pre-roll"
         },
         {
@@ -175339,7 +175730,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/5",
+          "out_of": 5,
+          "rarity": 0.2,
           "section": "Pre-roll"
         },
         {
@@ -175742,7 +176134,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/2",
+          "out_of": 2,
+          "rarity": 0.5,
           "section": "Pre-roll",
           "notes": [
             "Quest requirement: WikiQuestDropRequirement(questKey=quest_lunardiplomacyafteraskingmeteoraaboutherheadgear, mode=RequiresDuring)"
@@ -179868,7 +180261,6 @@
       "label": "Elite drops",
       "table_name": "The Mimic Elite drops",
       "wiki_page": "The Mimic",
-      "main_max_roll": 1250,
       "entries": [
         {
           "item_id": 8782,
@@ -179880,381 +180272,6 @@
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
-        },
-        {
-          "item_id": 560,
-          "name": "Death rune",
-          "quantity": [
-            120,
-            600
-          ],
-          "weight": 243,
-          "out_of": 1250,
-          "rarity": 0.1944,
-          "section": "Consumables"
-        },
-        {
-          "item_id": 565,
-          "name": "Blood rune",
-          "quantity": [
-            100,
-            500
-          ],
-          "weight": 243,
-          "out_of": 1250,
-          "rarity": 0.1944,
-          "section": "Consumables"
-        },
-        {
-          "item_id": 207,
-          "name": "Grimy ranarr weed",
-          "quantity": [
-            5,
-            25
-          ],
-          "weight": 243,
-          "out_of": 1250,
-          "rarity": 0.1944,
-          "section": "Consumables",
-          "noted": true
-        },
-        {
-          "item_id": 245,
-          "name": "Wine of Zamorak",
-          "quantity": [
-            5,
-            25
-          ],
-          "weight": 243,
-          "out_of": 1250,
-          "rarity": 0.1944,
-          "section": "Consumables",
-          "noted": true
-        },
-        {
-          "item_id": 389,
-          "name": "Raw manta ray",
-          "quantity": [
-            3,
-            15
-          ],
-          "weight": 243,
-          "out_of": 1250,
-          "rarity": 0.1944,
-          "section": "Consumables",
-          "noted": true
-        },
-        {
-          "item_id": 23185,
-          "name": "Ring of 3rd age",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 6,
-          "out_of": 250,
-          "rarity": 0.024,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10350,
-          "name": "3rd Age full helmet",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10348,
-          "name": "3rd Age platebody",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10346,
-          "name": "3rd Age platelegs",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23242,
-          "name": "3rd Age plateskirt",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10352,
-          "name": "3rd Age kiteshield",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10334,
-          "name": "3rd Age range coif",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10330,
-          "name": "3rd Age range top",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10332,
-          "name": "3rd Age range legs",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10336,
-          "name": "3rd Age vambraces",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10342,
-          "name": "3rd Age mage hat",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10338,
-          "name": "3rd Age robe top",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10340,
-          "name": "3rd Age robe",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10344,
-          "name": "3rd Age amulet",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 12426,
-          "name": "3rd Age longsword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 12424,
-          "name": "3rd Age bow",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 12422,
-          "name": "3rd Age wand",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 12437,
-          "name": "3rd Age cloak",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23336,
-          "name": "3rd Age druidic robe top",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23339,
-          "name": "3rd Age druidic robe bottoms",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23345,
-          "name": "3rd Age druidic cloak",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23342,
-          "name": "3rd Age druidic staff",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 20014,
-          "name": "3rd Age pickaxe",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 20011,
-          "name": "3rd Age axe",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5750,
-          "rarity": 0.0001739,
-          "section": "Uniques",
-          "separate_roll": true
         }
       ],
       "tertiary": []
@@ -180264,7 +180281,6 @@
       "label": "Master drops",
       "table_name": "The Mimic Master drops",
       "wiki_page": "The Mimic",
-      "main_max_roll": 1140,
       "entries": [
         {
           "item_id": 8782,
@@ -180276,381 +180292,6 @@
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
-        },
-        {
-          "item_id": 560,
-          "name": "Death rune",
-          "quantity": [
-            100,
-            600
-          ],
-          "weight": 221,
-          "out_of": 1140,
-          "rarity": 0.1938596,
-          "section": "Consumables"
-        },
-        {
-          "item_id": 565,
-          "name": "Blood rune",
-          "quantity": [
-            83,
-            500
-          ],
-          "weight": 221,
-          "out_of": 1140,
-          "rarity": 0.1938596,
-          "section": "Consumables"
-        },
-        {
-          "item_id": 207,
-          "name": "Grimy ranarr weed",
-          "quantity": [
-            4,
-            25
-          ],
-          "weight": 221,
-          "out_of": 1140,
-          "rarity": 0.1938596,
-          "section": "Consumables",
-          "noted": true
-        },
-        {
-          "item_id": 245,
-          "name": "Wine of Zamorak",
-          "quantity": [
-            4,
-            25
-          ],
-          "weight": 221,
-          "out_of": 1140,
-          "rarity": 0.1938596,
-          "section": "Consumables",
-          "noted": true
-        },
-        {
-          "item_id": 389,
-          "name": "Raw manta ray",
-          "quantity": [
-            2,
-            15
-          ],
-          "weight": 221,
-          "out_of": 1140,
-          "rarity": 0.1938596,
-          "section": "Consumables",
-          "noted": true
-        },
-        {
-          "item_id": 23185,
-          "name": "Ring of 3rd age",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 6,
-          "out_of": 228,
-          "rarity": 0.0263158,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10350,
-          "name": "3rd Age full helmet",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10348,
-          "name": "3rd Age platebody",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10346,
-          "name": "3rd Age platelegs",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23242,
-          "name": "3rd Age plateskirt",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10352,
-          "name": "3rd Age kiteshield",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10334,
-          "name": "3rd Age range coif",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10330,
-          "name": "3rd Age range top",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10332,
-          "name": "3rd Age range legs",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10336,
-          "name": "3rd Age vambraces",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10342,
-          "name": "3rd Age mage hat",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10338,
-          "name": "3rd Age robe top",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10340,
-          "name": "3rd Age robe",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 10344,
-          "name": "3rd Age amulet",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 12426,
-          "name": "3rd Age longsword",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 12424,
-          "name": "3rd Age bow",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 12422,
-          "name": "3rd Age wand",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 12437,
-          "name": "3rd Age cloak",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23336,
-          "name": "3rd Age druidic robe top",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23339,
-          "name": "3rd Age druidic robe bottoms",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23345,
-          "name": "3rd Age druidic cloak",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 23342,
-          "name": "3rd Age druidic staff",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 20014,
-          "name": "3rd Age pickaxe",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
-        },
-        {
-          "item_id": 20011,
-          "name": "3rd Age axe",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 1,
-          "out_of": 5244,
-          "rarity": 0.0001907,
-          "section": "Uniques",
-          "separate_roll": true
         }
       ],
       "tertiary": []
@@ -181823,7 +181464,7 @@
           "pre_roll": true,
           "weight": 1,
           "out_of": 350,
-          "rarity_raw": "1/350",
+          "rarity": 0.0028571,
           "section": "Pre-roll"
         },
         {
@@ -186087,7 +185728,8 @@
         {
           "nothing": true,
           "weight": 2,
-          "out_of": 128
+          "out_of": 128,
+          "separate_roll": true
         }
       ],
       "tertiary": [
@@ -186397,7 +186039,8 @@
         {
           "nothing": true,
           "weight": 2,
-          "out_of": 128
+          "out_of": 128,
+          "separate_roll": true
         }
       ],
       "tertiary": [
@@ -187492,11 +187135,25 @@
           "section": "Coins"
         },
         {
-          "shared_table": "",
+          "shared_table": "herb",
           "weight": 31,
           "out_of": 128,
           "rarity": 0.2421875,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 15
+            },
+            {
+              "rolls": 2,
+              "weight": 10
+            },
+            {
+              "rolls": 3,
+              "weight": 6
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -188096,7 +187753,13 @@
           "weight": 34,
           "out_of": 128,
           "rarity": 0.265625,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 3,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -188540,7 +188203,8 @@
         {
           "nothing": true,
           "weight": 355,
-          "out_of": 2048
+          "out_of": 2048,
+          "separate_roll": true
         }
       ],
       "tertiary": []
@@ -188654,7 +188318,8 @@
         {
           "nothing": true,
           "weight": 1280,
-          "out_of": 2048
+          "out_of": 2048,
+          "separate_roll": true
         }
       ],
       "tertiary": [
@@ -188832,7 +188497,8 @@
         {
           "nothing": true,
           "weight": 1096,
-          "out_of": 2048
+          "out_of": 2048,
+          "separate_roll": true
         }
       ],
       "tertiary": [
@@ -189037,7 +188703,8 @@
         {
           "nothing": true,
           "weight": 707,
-          "out_of": 2048
+          "out_of": 2048,
+          "separate_roll": true
         }
       ],
       "tertiary": []
@@ -189684,7 +189351,21 @@
           "weight": 22,
           "out_of": 100,
           "rarity": 0.22,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 1,
+              "weight": 1
+            },
+            {
+              "rolls": 2,
+              "weight": 1
+            },
+            {
+              "rolls": 3,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -190227,7 +189908,8 @@
           ],
           "pre_roll": true,
           "weight": 2,
-          "rarity_raw": "2/320",
+          "out_of": 320,
+          "rarity": 0.00625,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is increased while on a vampyre kraken bounty task."
@@ -190242,7 +189924,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/320",
+          "out_of": 320,
+          "rarity": 0.003125,
           "section": "Pre-roll"
         },
         {
@@ -190254,7 +189937,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/320",
+          "out_of": 320,
+          "rarity": 0.003125,
           "section": "Pre-roll"
         },
         {
@@ -191381,7 +191065,8 @@
           ],
           "pre_roll": true,
           "weight": 2,
-          "rarity_raw": "2/360",
+          "out_of": 360,
+          "rarity": 0.0055556,
           "section": "Pre-roll",
           "notes": [
             "The drop rate is increased while on a veiled kraken bounty task."
@@ -191396,7 +191081,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/360",
+          "out_of": 360,
+          "rarity": 0.0027778,
           "section": "Pre-roll"
         },
         {
@@ -191408,7 +191094,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/360",
+          "out_of": 360,
+          "rarity": 0.0027778,
           "section": "Pre-roll"
         },
         {
@@ -191860,7 +191547,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/860",
+          "out_of": 860,
+          "rarity": 0.0011628,
           "section": "Pre-roll"
         },
         {
@@ -198229,7 +197917,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/3000",
+          "out_of": 3000,
+          "rarity": 0.0003333,
           "section": "Pre-roll"
         },
         {
@@ -201645,7 +201334,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/10000",
+          "out_of": 10000,
+          "rarity": 0.0001,
           "section": "Pre-roll",
           "notes": [
             "The rarity changes to 1/2,000 while on a wyrm Slayer task."
@@ -201660,7 +201350,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/10000",
+          "out_of": 10000,
+          "rarity": 0.0001,
           "section": "Pre-roll"
         },
         {
@@ -201672,7 +201363,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/10000",
+          "out_of": 10000,
+          "rarity": 0.0001,
           "section": "Pre-roll"
         },
         {
@@ -201684,7 +201376,8 @@
           ],
           "pre_roll": true,
           "weight": 1,
-          "rarity_raw": "1/10000",
+          "out_of": 10000,
+          "rarity": 0.0001,
           "section": "Pre-roll"
         },
         {
@@ -201909,7 +201602,13 @@
           "weight": 4,
           "out_of": 76,
           "rarity": 0.0526316,
-          "section": "Herbs"
+          "section": "Herbs",
+          "roll_count_weights": [
+            {
+              "rolls": 2,
+              "weight": 1
+            }
+          ]
         },
         {
           "shared_table": "gem",
@@ -231214,26 +230913,9 @@
         "rune_dragon"
       ]
     },
-    "8058": {
-      "npc_id": 8058,
-      "name": "Vorkath",
-      "wiki_page": "Vorkath",
-      "tables": [
-        "vorkath"
-      ]
-    },
     "8059": {
       "npc_id": 8059,
       "name": "Vorkath",
-      "wiki_page": "Vorkath",
-      "tables": [
-        "vorkath"
-      ]
-    },
-    "8060": {
-      "npc_id": 8060,
-      "name": "Vorkath",
-      "cache_name": "Vorkath",
       "wiki_page": "Vorkath",
       "tables": [
         "vorkath"
@@ -237250,13 +236932,6 @@
       "tables": [
         "amoxliatl"
       ]
-    },
-    "13686": {
-      "npc_id": 13686,
-      "name": "Amoxliatl",
-      "cache_name": "Amoxliatl",
-      "wiki_page": "Amoxliatl",
-      "tables": []
     },
     "13706": {
       "npc_id": 13706,

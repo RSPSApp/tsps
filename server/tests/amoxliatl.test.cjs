@@ -125,7 +125,7 @@ test("the spikes hurt a player still on one when they come up, not one who stepp
 });
 
 test('the quest guardian ends its chamber without regular loot, kill counts, personal bests or achievements', () => {
-  assert.deepEqual(require('../data/definitions/npc-drops.json').npcs['13686'].tables, []);
+  assert.deepEqual(require('../data/definitions/npc-drops.json').npcs['13686']?.tables ?? [], []);
   let death, ended = false, hidden = false;
   require('../plugins/bosses/amoxliatl/Kills.Amoxliatl')({
     persistAttribute() {}, onNpcBeforeDeath() {}, onNpcDeath(handler) { death = handler; },

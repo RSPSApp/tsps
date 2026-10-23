@@ -3,6 +3,7 @@ import { getVisibleWidgetSurfaceReason } from "../../../widgets/menu/utils";
 import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
 import type { WidgetInteractionController } from "../WidgetInteractionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
+import { SCROLL_WHEEL_ZOOM_SCRIPT } from "../../../rs/cs2/zoomCallbacks";
 
 export function processWidgetScrollWheelInput(
     deps: WidgetInputControllerDeps,
@@ -42,6 +43,9 @@ export function processWidgetScrollWheelInput(
                 continue;
             }
 
+            const isViewportZoom = (w.eventHandlers?.onScroll?.scriptId ?? w.onScroll?.[0]) === SCROLL_WHEEL_ZOOM_SCRIPT;
+            if (isViewportZoom && blockedByVisibleWidget) break;
+
             const wheelStep = wheelDelta > 0 ? 1 : -1;
             const scrollCtx: Partial<ScriptEvent> = {
                 mouseX: mx - (w._absX ?? w.x ?? 0),
@@ -55,6 +59,10 @@ export function processWidgetScrollWheelInput(
             }
 
             consumedWheel = true;
+            // Preserve the original delta only for a gesture that reached the viewport.
+            // HD applies its follow-camera feel after UI dispatch; settings/list listeners
+            // must never contribute to that separate camera path.
+            if (isViewportZoom) input.viewportWheelDeltaY = wheelDelta;
             break;
         }
 

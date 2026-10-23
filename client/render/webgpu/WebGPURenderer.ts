@@ -655,22 +655,23 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
         if (drawScene) {
             syncCameraViewportUnitScale(this);
-            // 117 HD camera feel: the scene-viewport widget consumes wheel input before the
-            // camera could see it, so capture the raw wheel while the pointer is over the 3D
-            // viewport (the UI keeps its own scroll everywhere else). updateFollowCamera
-            // consumes and clears it.
             const inputManager = this.osrsClient.inputManager;
+            this.handleInput(deltaTime);
+            // UI chooses the wheel owner first. The native viewport zoom listener keeps a
+            // copy for HD; foreground lists and modals consume theirs without forwarding it.
+            // A hidden HUD has no viewport listener, so its unclaimed world wheel still zooms.
+            const viewportWheel = inputManager.viewportWheelDeltaY || inputManager.wheelDeltaY;
             if (
                 this.osrsClient.clientPlugins.hdEnabled() === true &&
                 this.osrsClient.followPlayerCamera &&
-                inputManager.wheelDeltaY !== 0 &&
+                this.osrsClient.camera.getViewPitchOverride() === undefined &&
+                viewportWheel !== 0 &&
                 inputManager.mouseX >= 0 &&
                 inputManager.mouseY >= 0 &&
                 this.osrsClient.camera.containsScreenPoint(inputManager.mouseX, inputManager.mouseY)
             ) {
-                this.followCamWheel += inputManager.wheelDeltaY;
+                this.followCamWheel += viewportWheel;
             }
-            this.handleInput(deltaTime);
             // Deck interpolation runs before the camera: it projects the deck coordinates the
             // player stands in to their world position (camera.ts) and places each deck.
             const cycle = getClientCycle() | 0;

@@ -6,6 +6,7 @@ import { CameraConfig } from "../game/plugins/camera/CameraConfig";
 import { ControlsHelp } from "../game/controls/ControlsHelp";
 import { processWidgetScrollWheelInput } from "../game/widgets/input/widgetScrollWheelInput";
 import { buildWidgetInputFrame } from "../game/widgets/input/widgetInputSetup";
+import { InputManager } from "../game/InputManager";
 
 let invoked: number[] = [];
 const deps: any = { getCs2Vm: () => ({ invokeEventHandler: (widget: any) => invoked.push(widget.uid) }), executeScriptListener: (widget: any) => invoked.push(widget.uid) };
@@ -36,6 +37,24 @@ const pickingManager: any = { getInputRoots: () => [modal], getStaticChildrenByP
 const pickingState: any = { lastHoverHitX: 20, lastHoverHitY: 20, cachedHoverHits: [viewport] };
 const picked = buildWidgetInputFrame({} as any, pickingState, { mouseX: 20, mouseY: 20, wheelDeltaY: 120 } as any, pickingManager, {} as any)!;
 assert.ok(picked.hits.includes(modal), "wheel repicks a newly opened Settings modal at an unchanged pointer position");
+
+const input = new InputManager();
+input.viewportWheelDeltaY = 120; input.wheelDeltaY = 120;
+input.onFrameStart();
+assert.equal(input.viewportWheelDeltaY, 0, "viewport grant is local to the current UI dispatch");
+assert.equal(input.wheelDeltaY, 120, "incoming wheel survives frame start for UI ownership");
+input.viewportWheelDeltaY = 120; input.onFrameEnd();
+assert.equal(input.viewportWheelDeltaY, 0, "viewport grant cannot leak into a later frame");
+input.element = { width: 800, height: 400, getBoundingClientRect: () => ({ left: 10, top: 20, width: 400, height: 200 }) } as any;
+input.isPointerLock = () => false;
+input.mouseX = 40; input.mouseY = 50;
+input.setInteractionPointerOverride(40, 50, true);
+(input as any).onWheel({ clientX: 210, clientY: 120, deltaY: 120, preventDefault() {} });
+assert.deepEqual([input.mouseX, input.mouseY], [400, 200], "stationary wheel targets the physical cursor, not the close-camera keyboard selection");
+input.isPointerLock = () => true;
+input.mouseX = 40; input.mouseY = 50;
+(input as any).onWheel({ clientX: 210, clientY: 120, deltaY: 120, preventDefault() {} });
+assert.deepEqual([input.mouseX, input.mouseY], [40, 50], "captured mouse look keeps its world interaction pointer");
 
 const config = new ConfigManager(undefined);
 const props = { configManager: config, closeCameraActive: true, onExitCloseCamera() {} };

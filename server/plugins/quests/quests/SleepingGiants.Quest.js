@@ -162,6 +162,8 @@ module.exports = function registerSleepingGiantsQuest(api) {
   /** rsprox: entering the cave lands the player here. */
   const FOUNDRY_LANDING_TILE = { x: 3366, y: 11483 };
   const SURFACE_RETURN_TILE = { x: 3368, y: 3152 };
+  /** 33309 is also the My Arm throne room's pile (2867,3934); only this one is ours. */
+  const BUCKET_PILE_TILE = { x: 3361, y: 11483 };
 
   const REPAIR_VARIANT_BY_TOOL = new Map([
     [TRIP_HAMMER_OBJECT_ID, "what-is-this-a-workshop-for-giants-reparing-the-trip-hammer"],
@@ -626,7 +628,6 @@ module.exports = function registerSleepingGiantsQuest(api) {
       workshop.kovac.getMovementQueue().addSteps(new Location(3368, 11490, 0));
       workshop.kovac.getMovementQueue().addSteps(new Location(3365, 11493, 0));
     }
-    player.getPacketSender().sendVarbit(REPAIR_VARBIT_BY_TOOL.get(toolId), 1);
     repairTool.set(player, toolId);
     startTranscript(api, player, DIALOGUE_NPC_ID, PAGE, REPAIR_VARIANT_BY_TOOL.get(toolId));
   }
@@ -748,7 +749,7 @@ module.exports = function registerSleepingGiantsQuest(api) {
       return;
     }
     if (objectId === PILE_OF_BUCKETS_OBJECT_ID) {
-      if (clickType !== OP_1) return;
+      if (clickType !== OP_1 || event.location?.x !== BUCKET_PILE_TILE.x || event.location?.y !== BUCKET_PILE_TILE.y) return;
       event.handled = true;
       if (player.getInventory().getFreeSlots() < 1) {
         player.sendMessage("You need some free inventory space for a bucket.");

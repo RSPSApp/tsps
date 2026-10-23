@@ -9,7 +9,8 @@
  * game logic (set stage, hand in items) without re-authoring the words, and each
  * speech line emits "npc-dialogue:line" with a mutable `skip` so a quest can drop
  * lines that no longer apply (e.g. handing over an item the player does not have), a
- * mutable `text` to fill in blanks and an `after` callback run once the player continues
+ * mutable `text` to fill in blanks, an optional bound scene `actor` for overhead lines, and
+ * an `after` callback run once the player continues
  * past it. A message step's "npc-dialogue:action" (`kind: "message"`) can set
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message. "npc-dialogue:start" plays a named variant on demand.
@@ -33,6 +34,79 @@ const { ShopManager } = require("../../src/main/typescript/elvarg/game/model/con
 
 /** Jumps followed in one conversation before it is cut off (a transcript that loops on itself). */
 const MAX_JUMPS = 100;
+/** Explicit overhead lines wait this many game ticks before the next source step. */
+const OVERHEAD_CONTINUATION_TICKS = 2;
+const PLAYER_SPEAKER = /^(?:player|\[(?:player name|playername|player)\]|<player name>)$/i;
+
+function npcName(npc, player) {
+  if (!npc) return "";
+  if (typeof npc.getCurrentDefinition === "function") {
+    return npc.getCurrentDefinition(player)?.getName?.() ?? "";
+  }
+  return npc.getDefinition?.()?.getName?.() ?? "";
+}
+
+function isRegistered(actor) {
+  return typeof actor?.isRegistered === "function" && actor.isRegistered() === true;
+}
+
+/** Overhead actors only speak inside the player's own plane, area and owner-only context. */
+function sameActorContext(player, npc) {
+  const location = player?.getLocation?.();
+  const npcLocation = npc?.getLocation?.();
+  if (!location || !npcLocation || location.getZ() !== npcLocation.getZ()) return false;
+  if ((player.getPrivateArea?.() ?? null) !== (npc.getPrivateArea?.() ?? null)) return false;
+  return npc.isOwnerOnly?.() !== true || npc.getOwner?.() === player;
+}
+
+function actorAvailable(player, actor) {
+  if (!actor || typeof actor.forceChat !== "function" || !isRegistered(actor) || !isRegistered(player)) return false;
+  return actor === player || sameActorContext(player, actor);
+}
+
+function explicitlyBoundActorAvailable(player, actor) {
+  return actorAvailable(player, actor) && actor?.isVisible?.() === true
+    && (actor === player || localNpcs(player).includes(actor));
+}
+
+function localNpcs(player) {
+  const list = player?.getLocalNpcs?.();
+  return Array.isArray(list) ? list : list ? [...list.values()] : [];
+}
+
+/** The current NPC is usable only if it is really this local, visible, registered actor. */
+function currentNpcAvailable(player, npc, name) {
+  return !!name && actorAvailable(player, npc) && npc.isVisible?.() === true
+    && npcName(npc, player) === name && localNpcs(player).includes(npc);
+}
+
+/** Nearest registered, visible exact-name local NPC; lowest index then local order breaks ties. */
+function nearestNamedNpc(player, name) {
+  if (!name) return undefined;
+  const location = player?.getLocation?.();
+  if (!location?.getDistance) return undefined;
+  const matches = [];
+  localNpcs(player).forEach((npc, order) => {
+    if (!isRegistered(npc) || npc.isVisible?.() !== true || npcName(npc, player) !== name || !sameActorContext(player, npc)) return;
+    matches.push({ npc, distance: location.getDistance(npc.getLocation()), index: npc.getIndex?.() ?? Number.MAX_SAFE_INTEGER, order });
+  });
+  matches.sort((a, b) => a.distance - b.distance || a.index - b.index || a.order - b.order);
+  return matches[0]?.npc;
+}
+
+function overheadActor(step, event, typedLine, player, boundActor) {
+  if (boundActor) return explicitlyBoundActorAvailable(player, boundActor) ? boundActor : undefined;
+  if (typeof step.player === "string") return player;
+  if (typedLine && PLAYER_SPEAKER.test(step.speaker ?? "")) return player;
+  if (typeof step.npc === "string") {
+    const name = event.definition?.getName?.() ?? "";
+    return currentNpcAvailable(player, event.npc, name) ? event.npc : nearestNamedNpc(player, name);
+  }
+  if (!typedLine) return undefined;
+  const speaker = String(step.speaker ?? "");
+  if (!speaker) return undefined;
+  return currentNpcAvailable(player, event.npc, speaker) ? event.npc : nearestNamedNpc(player, speaker);
+}
 
 // These NPCs have executable plugin conversations, not an imported prose transcript.
 const SPECIAL_NPC_DIALOGUES = new Set(["Skully", "Estate agent", "Estate Agent", "Alwyn"]);
@@ -148,6 +222,15 @@ function continues(steps) {
     }
   }
   return false;
+}
+
+/** True for a linear condition body whose continuation is not controlled by menus or jumps. */
+function isLinearConditionBranch(steps) {
+  for (const step of steps ?? []) {
+    if (["choice", "condition", "jump"].includes(step.type)) return false;
+    if (!isLinearConditionBranch(step.steps)) return false;
+  }
+  return true;
 }
 
 /** True when a branch is only a navigation jump (no dialogue of its own). */
@@ -298,7 +381,7 @@ function chooseCondition(run, resolveCondition) {
     if (unknown === -1) return null;
     index = unknown;
   }
-  return { index, condition: run[index] };
+  return { index, condition: run[index], answer: answers[index] };
 }
 
 /**
@@ -564,7 +647,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // An option the wiki guards ("If the player is wearing the Ring of Charos(a):") is hidden
     // only once a plugin answers its condition false; unanswered ones still show.
     const options = (step.options || []).filter((option) =>
-      !option.condition || resolveCondition({ text: option.condition, id: option.id }) !== false);
+      !option.condition || resolveCondition({ text: option.condition, id: option.condition_id ?? option.id }) !== false);
     const more = options.length - offset > 5;
     const visible = options.slice(offset, offset + (more ? 4 : 5));
     // Record every option when the prompt is shown (not on selection) so that a
@@ -628,7 +711,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // this point have run and may have changed what the guards observe.
           const chosen = chooseCondition(step.run, resolveCondition);
           if (!chosen) return run(after, currentRecord);
-          const tail = continues(chosen.condition.steps) ? step.run.slice(chosen.index + 1) : [];
+          // A branch selected by an explicit true answer keeps the sibling conditions
+          // after it until the run actually ends: wiki tconds continue in order.
+          // An unknown fallback does not, so unrelated unknown branches stay unselected.
+          const tail = continues(chosen.condition.steps)
+            || (chosen.answer === true && isLinearConditionBranch(chosen.condition.steps))
+            ? step.run.slice(chosen.index + 1)
+            : [];
           run([
             { type: "condition_chosen", id: chosen.condition.id, text: chosen.condition.text },
             ...(chosen.condition.steps || []),
@@ -679,8 +768,54 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           continue;
         }
         // `text` is mutable too, so a plugin can fill in the wiki's "[number]"-style blanks.
-        const lines = Misc.wrapText(formatPlayerText(request.text, player), 53);
+        const formatted = formatPlayerText(request.text, player);
+        if (step.presentation === "overhead") {
+          // Before runs only once its own chain entry is reached, and a replacement
+          // dialogue stops this overhead from speaking or continuing.
+          if (typeof request.before === "function") {
+            chain.add(new ActionDialogue(index++, { execute: () => {
+              const current = manager.getCurrent?.();
+              request.before();
+              if (current && manager.getCurrent() !== current) return;
+              manager.advance();
+            } }));
+          }
+          const overheadAction = new ActionDialogue(index++, { execute: () => {
+            if (manager.getCurrent?.() !== overheadAction) return;
+            // Resolve here, after before and its identity check: ordinary speech
+            // earlier in the chain must already be showing before a miss stops it.
+            const actor = overheadActor(step, event, typedLine, player, request.actor);
+            if (!actorAvailable(player, actor)) {
+              unavailable();
+              manager.reset?.();
+              return;
+            }
+            playedAny = true;
+            actor.forceChat(formatted);
+            // shortcut: generic 2-tick cadence, not a captured OSRS overhead timing.
+            api.core.TaskManager.submit(new api.core.CountdownTask(player, OVERHEAD_CONTINUATION_TICKS, () => {
+              const current = manager.getCurrent?.();
+              // A replacement dialogue owns the chat now; never close or continue it.
+              if (current !== overheadAction) return;
+              if (!actorAvailable(player, actor)) {
+                unavailable();
+                manager.reset?.();
+                return;
+              }
+              request.after?.();
+              if (manager.getCurrent?.() !== current) return;
+              run(rest, currentRecord);
+              // run([]) plays the normal close action; clear it so the final
+              // overhead leaves no active ActionDialogue behind.
+              if (!rest.length) manager.reset?.();
+            }));
+          } });
+          chain.add(overheadAction);
+          manager.startDialogues(chain);
+          return;
+        }
         playedAny = true;
+        const lines = Misc.wrapText(formatted, 53);
         // A typed line spoken by someone other than the NPC being talked to (a
         // paired NPC talking to them, a cutscene actor) gets that speaker's head.
         const speakerId = request.speakerId ?? (!isPlayer && typedLine && step.speaker && step.speaker !== definition.getName()
@@ -782,7 +917,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // ("If Animal Magnetism is completed:") are left out once a plugin answers
           // their condition false, as menu options are.
           const options = (step.options ?? []).filter((option) =>
-            !option.condition || resolveCondition({ text: option.condition, id: option.id }) !== false);
+            !option.condition || resolveCondition({ text: option.condition, id: option.condition_id ?? option.id }) !== false);
           if (!options.length) return run(rest, currentRecord);
           const index = Math.floor(Math.random() * options.length);
           const option = options[index];
@@ -821,7 +956,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // direction ("The player lights a tinderbox.") has no further contract.
           return run(rest, currentRecord);
         }
-        // ponytail: unknown step type with no executable contract. Stop safely.
+        // shortcut: unknown step type with no executable contract. Stop safely.
         unavailable();
       } }));
       manager.startDialogues(chain);

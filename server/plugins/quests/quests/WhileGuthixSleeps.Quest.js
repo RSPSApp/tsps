@@ -8,7 +8,7 @@ module.exports = function registerWhileGuthixSleeps(api) {
   const BROAV_ATTRIBUTE = 'while-guthix-sleeps:broav-trained';
   const TRAIL_ATTRIBUTE = 'while-guthix-sleeps:broav-trail';
   const IVY = 13510, THAERISK = 13511, ASSASSINS = [13514,13515], LAUNDERER = 13516;
-  const HUNTER = 5529, BROAV = 13518;
+  const HUNTER = 1504, BROAV = 13518;
   const DIRTY_SHIRT = 29521, UNCONSCIOUS_BROAV = 29518, TRAINED_BROAV = 29519;
   const COINS = 995, FUNGUS = 2970;
   const TAVERLEY_UP = 53347, TAVERLEY_DOWN = 53348;
@@ -74,6 +74,7 @@ module.exports = function registerWhileGuthixSleeps(api) {
   }
   function launderer({player,npcId}) {
     if(stage(player)<40||stage(player)>=200)return false;
+    if(val(player,SHIRT_ATTRIBUTE)&&!held(player,DIRTY_SHIRT))give(player,DIRTY_SHIRT);
     play(player,npcId,val(player,SHIRT_ATTRIBUTE)?'monitoring-movario-talking-to-the-khazard-launderer-talking-to-the-khazard-launderer-again':'monitoring-movario-talking-to-the-khazard-launderer');return true;
   }
   function hunter({player,npcId}) {
@@ -144,7 +145,7 @@ module.exports = function registerWhileGuthixSleeps(api) {
     event.handled=true;
     const p=player.getLocation();
     if(Math.abs(p.getX()-2519)>15||Math.abs(p.getY()-3249)>15){player.sendMessage('The broav cannot pick up a scent here. Try the ruined building near the battlefield.');return true;}
-    npc.getMovementQueue().addSteps(new Location(2519,3248,0));player.setAttribute(TRAIL_ATTRIBUTE,1);player.sendMessage('Your broav follows the scent towards the broken table and squeals.');player.getPacketSender().sendVarbit(10840,1);return true;
+    npc.getMovementQueue().addSteps(new Location(2519,3248,0));player.getInventory().deleteNumber(DIRTY_SHIRT,1);player.setAttribute(TRAIL_ATTRIBUTE,1);player.sendMessage('Your broav follows the scent towards the broken table and squeals.');player.getPacketSender().sendVarbit(10840,1);return true;
   }
   function table({player,objectId,definition}){
     objectId=definition?.id??objectId;

@@ -6,6 +6,7 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+const { ActionDialogue } = require('../dist/game/model/dialogues/entries/impl/ActionDialogue');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
@@ -66,7 +67,16 @@ function harness(name) {
       const npc = {
         ...definition, index: nextIndex++, getId: () => definition.id, isRegistered: () => !npc.removed,
         getOwner: () => definition.owner, isDyingFunction: () => false, getHitpoints: () => 1, setArea: value => { npc.area = value; }, getArea: () => npc.area ?? null,
-        getPrivateArea: () => npc.area ?? null, isPlayer: () => false, isNpc: () => true,
+        getPrivateArea: () => npc.area ?? null, getCurrentDefinition: player => {
+          const vars = {
+            getVarbit: id => player?.varbits?.get(id) ?? 0,
+            getVarp: id => player?.configs?.get(id) ?? 0,
+          };
+          const resolved = CacheDefinitions.resolveNpc(definition.id, vars);
+          return NpcDefinition.forId(resolved?.id ?? definition.id);
+        },
+        isVisible: () => true, isOwnerOnly: () => definition.ownerOnly === true,
+        isPlayer: () => false, isNpc: () => true,
         getIndex: () => npc.index, getAsNpc: () => npc, setPositionToFace: noop,
         getLocation: () => tile, moveTo: value => { tile = value; }, forceChat: text => { npc.chat = text; },
         remove() { npc.removed = true; },
@@ -123,6 +133,7 @@ function harness(name) {
         for (const task of [...tasks]) task.tick();
       }
     },
+    login(player) { for (const fn of hooks.onPlayerLogin ?? []) fn({ player }); },
     advanceToPrompt(player, limit = 80) {
       while (!player.prompt) {
         assert.ok(limit-- > 0, 'dialogue stalled');
@@ -205,6 +216,20 @@ function player(level = 99, current = 99) {
   };
   p.manager = new DialogueManager(p);
   return p;
+}
+
+function advanceTranscript(h, p, keepGoing, limit = 200) {
+  while (limit-- > 0 && keepGoing() && p.manager.getCurrent()) {
+    const current = p.manager.getCurrent();
+    if (current instanceof ActionDialogue) {
+      h.tick(2);
+      if (p.manager.getCurrent() === current) p.manager.advance();
+    } else {
+      p.manager.advance();
+      h.tick(2);
+    }
+  }
+  assert.ok(limit > 0, 'transcript should finish without skipping overhead continuations');
 }
 
 function completeQuests(h, keys) {
@@ -563,10 +588,11 @@ test('The Final Dawn safehouse door is owner-scoped and clears both stair routes
 
 test('The Final Dawn stage-22 Vibia plays the sack and blackjack branches in one conversation', () => {
   const h = harness('TheFinalDawn'), p = player();
+  p.getLocalNpcs = () => [...h.npcs, ...(p.getArea()?.entities ?? [])];
   h.quest.setStage(p, 22);
   p.items.set(I.EMPTY_SACK, 1);
   p.items.set(I.MAKESHIFT_BLACKJACK, 1);
-  h.hooks.onPlayerLogin[0]({ player: p });
+  h.login(p);
   assert.ok(h.npcs.some(npc => npc.id === 14303 && !npc.removed), 'login restores Vibia');
 
   h.namedNpcs.get('Captain Vibia')['Talk-to']({ player: p, npcId: 14303 });
@@ -575,9 +601,7 @@ test('The Final Dawn stage-22 Vibia plays the sack and blackjack branches in one
   assert.ok(area?.entities.some(npc => npc.id === 14303), 'Vibia is present for the trap conversation');
   assert.ok(area?.entities.some(npc => npc.id === 14241), 'Janus is present for the trap conversation');
 
-  for (let step = 0; step < 200 && h.quest.getStage(p) === 22 && p.manager.getCurrent(); step++) {
-    p.manager.advance();
-  }
+  advanceTranscript(h, p, () => h.quest.getStage(p) === 22);
   assert.equal(h.quest.getStage(p), 23, 'the real XR0VTA action captures Janus');
   assert.ok(p.messages.includes('You give the sack to Captain Vibia.'), 'sack condition played');
   assert.ok(p.messages.includes('You show the makeshift blackjack to Captain Vibia.'),
@@ -590,15 +614,15 @@ test('The Final Dawn stage-22 Vibia plays the sack and blackjack branches in one
 
 test('The Final Dawn stage-22 Vibia accepts a blackjack once the sack was already given', () => {
   const h = harness('TheFinalDawn'), p = player();
+  p.getLocalNpcs = () => [...h.npcs, ...(p.getArea()?.entities ?? [])];
   h.quest.setStage(p, 22);
   p.attrs.set('quest.the_final_dawn.bits', 1 << 1); // BIT_SACK_GIVEN
   p.items.set(I.MAKESHIFT_BLACKJACK, 1);
+  h.login(p);
   h.namedNpcs.get('Captain Vibia')['Talk-to']({ player: p, npcId: 14303 });
   h.tick(3);
 
-  for (let step = 0; step < 200 && h.quest.getStage(p) === 22 && p.manager.getCurrent(); step++) {
-    p.manager.advance();
-  }
+  advanceTranscript(h, p, () => h.quest.getStage(p) === 22);
   assert.equal(h.quest.getStage(p), 23, 'already-given sack plus blackjack reaches XR0VTA');
   assert.ok(!p.messages.includes('You give the sack to Captain Vibia.'), 'the sack is not given twice');
   assert.ok(p.messages.includes('You show the makeshift blackjack to Captain Vibia.'));
@@ -614,7 +638,7 @@ test('The Final Dawn stage-22 blackjack without a sack or a given sack stays at 
   h.namedNpcs.get('Captain Vibia')['Talk-to']({ player: p, npcId: 14303 });
   h.tick(3);
 
-  for (let step = 0; step < 200 && p.manager.getCurrent(); step++) p.manager.advance();
+  advanceTranscript(h, p, () => true);
   assert.equal(h.quest.getStage(p), 22, 'Janus is not captured without a sack');
   assert.ok(!p.messages.includes('You show the makeshift blackjack to Captain Vibia.'),
     'the blackjack branch waits for the sack');
@@ -628,14 +652,15 @@ test('The Final Dawn stage23 reopens the owner door, reaches Janus and starts in
   RegionManager.init();
   RegionManager.loadMapFiles(1649, 3093, true);
   const h = harness('TheFinalDawn'), p = player();
+  p.getLocalNpcs = () => [...h.npcs, ...(p.getArea()?.entities ?? [])];
   h.quest.setStage(p, 22);
   p.attrs.set('quest.the_final_dawn.bits', 1 << 1); // BIT_SACK_GIVEN
   p.items.set(I.MAKESHIFT_BLACKJACK, 1);
   p.moveTo(new core.Location(1650, 3093, 0));
-  h.hooks.onPlayerLogin[0]({ player: p });
+  h.login(p);
   h.namedNpcs.get('Captain Vibia')['Talk-to']({ player: p, npcId: 14303 });
   h.tick(3);
-  for (let step = 0; step < 200 && h.quest.getStage(p) === 22 && p.manager.getCurrent(); step++) p.manager.advance();
+  advanceTranscript(h, p, () => h.quest.getStage(p) === 22);
   assert.equal(h.quest.getStage(p), 23);
 
   const area = p.getArea();

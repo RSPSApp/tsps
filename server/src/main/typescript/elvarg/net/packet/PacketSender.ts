@@ -842,7 +842,7 @@ export class PacketSender {
     for (const item of resolvedItems) {
       const id = item?.getId?.() ?? item?.id ?? -1;
       const amount = item?.getAmount?.() ?? item?.amount ?? 0;
-      if (id <= 0 || amount <= 0) {
+      if (id < 0 || amount <= 0) {
         out.putInt(-1);
         continue;
       }

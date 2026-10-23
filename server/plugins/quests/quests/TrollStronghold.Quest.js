@@ -9,14 +9,14 @@
  * Stages (varp 317): 10 started, 20 Dad killed, 30 prison key looted, 40 both
  * cell keys, 45 Godric and Eadgar freed, 50 complete.
  *
- * Requires Death Plateau. Gaps (no dump/index support): the rock climb and
- * Dad's arena fight are not simulated (his death advances the stage) and the
- * Troll Generals are not transcript-indexed (the prison key is granted on any
- * general kill). Dad's arena menu has a missing first option in the dump
- * ("Why are you called Dad?"), so his Talk-to is replayed with that text
- * patched in. Twig and Berry are pickpocketed (30 Thieving) through their
- * transcript variants; the cell doors unlock with Cell key 1 (Godric) and
- * Cell key 2 (Eadgar).
+ * Requires Death Plateau. Dad's arena fight is not simulated (his death
+ * advances the stage); the rock climb and stile are the shared Agility
+ * shortcuts. The arena gates, cave tunnel, stronghold door and stairs, and the
+ * prison door are reproduced as scene handoffs. Dad's arena menu has a missing
+ * first option in the dump ("Why are you called Dad?"), so his Talk-to is
+ * replayed with that text patched in. Twig and Berry can be pickpocketed
+ * (30 Thieving) through their transcript variants or killed for the keys; the
+ * cell doors unlock with Cell key 1 (Godric) and Cell key 2 (Eadgar).
  */
 module.exports = function registerTrollStrongholdQuest(api) {
   const { Skill, Location, GameObject, ObjectManager, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
@@ -38,6 +38,7 @@ module.exports = function registerTrollStrongholdQuest(api) {
   ]);
 
   const VARP_TROLL_STRONGHOLD = 317;
+  const VARBIT_EADGAR_FREED = 0;
   const STAGE_STARTED = 10;
   const STAGE_DAD_KILLED = 20;
   const STAGE_HAS_PRISON_KEY = 30;
@@ -60,8 +61,33 @@ module.exports = function registerTrollStrongholdQuest(api) {
   const CELL_DOOR_OPEN_ID = ObjectIdentifiers.CELL_DOOR_3;
   const GUARD_THIEVING_LEVEL = 30;
 
+  // Cache osrs-241 gameval: troll_stronghold_arena_entrance_inactive (3784)
+  // and troll_stronghold_arena_exit_inactive (3787). Opening a gate swaps the
+  // actionful leaf for its actionless, same-model static form.
+  const ARENA_ENTRANCE_IDS = new Set([ObjectIdentifiers.ARENA_ENTRANCE, ObjectIdentifiers.ARENA_ENTRANCE_2]);
+  const ARENA_ENTRANCE_OPEN_ID = 3784;
+  const ARENA_EXIT_IDS = new Set([ObjectIdentifiers.ARENA_EXIT, ObjectIdentifiers.ARENA_EXIT_2]);
+  const ARENA_EXIT_OPEN_ID = 3787;
+  const CAVE_ENTRANCE_ID = ObjectIdentifiers.CAVE_ENTRANCE_22;
+  const CAVE_EXIT_ID = ObjectIdentifiers.CAVE_EXIT_11;
+  const STRONGHOLD_ENTRANCE_ID = ObjectIdentifiers.STRONGHOLD;
+  const STRONGHOLD_EXIT_IDS = new Set([ObjectIdentifiers.EXIT_2, ObjectIdentifiers.EXIT_3, ObjectIdentifiers.EXIT_4]);
+  const PRISON_DOOR_ID = ObjectIdentifiers.PRISON_DOOR_9;
+  const PRISON_DOOR_OPEN_ID = 3781; // gameval troll_stronghold_prison_door_open
+  // Cache-map tiles: the entrance emerges on the top floor beside the exits;
+  // the cave tunnel's south and north mouths both surface beside the arena path.
+  const STRONGHOLD_INTERIOR = new Location(2836, 10090, 2);
+  const STRONGHOLD_SURFACE = new Location(2841, 3690, 0);
+  const CAVE_SOUTH_INTERIOR = new Location(2907, 10035, 0);
+  const CAVE_SOUTH_SURFACE = new Location(2904, 3643, 0);
+  const CAVE_NORTH_INTERIOR = new Location(2907, 10019, 0);
+  const CAVE_NORTH_SURFACE = new Location(2908, 3654, 0);
+  const LAW_TALISMAN_PRICE = 1000;
+  const BUY_LAW_TALISMAN_ACTION_ID = "JpNnpQ";
+
   const GODRIC_FREED_ATTRIBUTE = "troll-stronghold:godric-freed";
   const EADGAR_FREED_ATTRIBUTE = "troll-stronghold:eadgar-freed";
+  const PRISON_DOOR_ATTRIBUTE = "troll-stronghold:prison-door-unlocked";
 
   const PAGE = "Troll Stronghold";
   const TWIG_KEY_VARIANT = "entering-the-prison-retrieving-the-keys-from-twig";
@@ -87,6 +113,22 @@ module.exports = function registerTrollStrongholdQuest(api) {
   const agilityLevel = (player) => player.getSkillManager().getCurrentLevel(Skill.AGILITY);
   const godricFreed = (player) => player.getAttribute(GODRIC_FREED_ATTRIBUTE) === true;
   const eadgarFreed = (player) => player.getAttribute(EADGAR_FREED_ATTRIBUTE) === true;
+  const prisonDoorUnlocked = (player) => player.getAttribute(PRISON_DOOR_ATTRIBUTE) === true;
+
+  function syncFreedHelperState(player) {
+    player.getPacketSender().sendVarbit(VARBIT_EADGAR_FREED, eadgarFreed(player) ? 1 : 0);
+  }
+
+  /** Swaps a blocking loc for its actionless open form; ObjectManager register does not re-add clipping. */
+  function openLoc(object, openId) {
+    const location = object.getLocation();
+    ObjectManager.deregister(object, true);
+    ObjectManager.register(
+      new GameObject(openId, new Location(location.getX(), location.getY(), location.getZ()),
+        object.getType(), object.getFace(), object.getPrivateArea() ?? null),
+      true
+    );
+  }
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
@@ -139,24 +181,31 @@ module.exports = function registerTrollStrongholdQuest(api) {
     // Reward item (Law talisman) is granted by registerQuest.
   }
 
-  /** Pockets hold one key each; once both keys and the prison key are held, the stage moves on. */
+  /** Pockets hold one key each; once both cell keys are held, the stage moves on. */
   function addCellKey(player, itemId) {
-    if (!held(player, itemId)) player.getInventory().adds(itemId, 1);
-    if (quest.getStage(player) >= STAGE_HAS_CELL_KEYS) return;
-    if (held(player, PRISON_KEY_ITEM_ID) && hasBothCellKeys(player)) {
-      quest.setStage(player, STAGE_HAS_CELL_KEYS);
+    if (quest.getStage(player) < STAGE_HAS_PRISON_KEY) return;
+    if (!held(player, itemId)) {
+      const inventory = player.getInventory();
+      const before = inventory.getAmount(itemId);
+      inventory.adds(itemId, 1);
+      if (inventory.getAmount(itemId) <= before) {
+        inventory.full?.();
+        return;
+      }
     }
+    if (quest.getStage(player) >= STAGE_HAS_CELL_KEYS) return;
+    if (hasBothCellKeys(player)) quest.setStage(player, STAGE_HAS_CELL_KEYS);
   }
 
   /** After a key/door interaction, stage 45 once both prisoners have been freed. */
   function updateFreedStage(player) {
+    syncFreedHelperState(player);
     if (quest.getStage(player) >= STAGE_GODRIC_FREED) return;
     if (godricFreed(player) && eadgarFreed(player)) quest.setStage(player, STAGE_GODRIC_FREED);
   }
 
-  /** Talking to a prisoner with all three keys frees both cells at once. */
+  /** Talking to a prisoner with both cell keys frees both cells at once. */
   function freeBothCells(player) {
-    player.getInventory().deleteNumber(PRISON_KEY_ITEM_ID, 1);
     player.getInventory().deleteNumber(CELL_KEY_1_ITEM_ID, 1);
     player.getInventory().deleteNumber(CELL_KEY_2_ITEM_ID, 1);
     player.setAttribute(GODRIC_FREED_ATTRIBUTE, true);
@@ -168,6 +217,10 @@ module.exports = function registerTrollStrongholdQuest(api) {
   /** Wiki: 30 Thieving; the first successful pocket holds the key. */
   function pickpocketGuard(event, keyId, variant) {
     const { player, npcId } = event;
+    if (quest.getStage(player) < STAGE_HAS_PRISON_KEY) {
+      player.sendMessage("You pick the guard's pocket but find nothing.");
+      return;
+    }
     if (player.getSkillManager().getCurrentLevel(Skill.THIEVING) < GUARD_THIEVING_LEVEL) {
       player.sendMessage(`You need a Thieving level of at least ${GUARD_THIEVING_LEVEL} to do this.`);
       return;
@@ -189,6 +242,86 @@ module.exports = function registerTrollStrongholdQuest(api) {
 
   function pickpocketBerry(event) {
     pickpocketGuard(event, CELL_KEY_2_ITEM_ID, BERRY_KEY_VARIANT);
+  }
+
+  function openArenaGate(event) {
+    const { object, objectId } = event;
+    if (!object || !ARENA_ENTRANCE_IDS.has(objectId)) return false;
+    openLoc(object, ARENA_ENTRANCE_OPEN_ID);
+    event.handled = true;
+    return true;
+  }
+
+  function openArenaExit(event) {
+    const { object, objectId } = event;
+    if (!object || !ARENA_EXIT_IDS.has(objectId)) return false;
+    openLoc(object, ARENA_EXIT_OPEN_ID);
+    event.handled = true;
+    return true;
+  }
+
+  /** South mouth (arena side) and north mouth (Trollheim side) of the pass tunnel. */
+  function enterCave(event) {
+    const { player, object, objectId } = event;
+    if (objectId !== CAVE_ENTRANCE_ID || !object) return false;
+    const at = object.getLocation();
+    const south = at.getY() <= 3648;
+    player.moveTo(new Location(
+      south ? CAVE_SOUTH_INTERIOR.getX() : CAVE_NORTH_INTERIOR.getX(),
+      south ? CAVE_SOUTH_INTERIOR.getY() : CAVE_NORTH_INTERIOR.getY(),
+      south ? CAVE_SOUTH_INTERIOR.getZ() : CAVE_NORTH_INTERIOR.getZ()
+    ));
+    event.handled = true;
+    return true;
+  }
+
+  function exitCave(event) {
+    const { player, object, objectId } = event;
+    if (objectId !== CAVE_EXIT_ID || !object) return false;
+    const at = object.getLocation();
+    const north = at.getY() < 10030;
+    player.moveTo(new Location(
+      north ? CAVE_NORTH_SURFACE.getX() : CAVE_SOUTH_SURFACE.getX(),
+      north ? CAVE_NORTH_SURFACE.getY() : CAVE_SOUTH_SURFACE.getY(),
+      north ? CAVE_NORTH_SURFACE.getZ() : CAVE_SOUTH_SURFACE.getZ()
+    ));
+    event.handled = true;
+    return true;
+  }
+
+  function enterStronghold(event) {
+    const { player, objectId } = event;
+    if (objectId !== STRONGHOLD_ENTRANCE_ID) return false;
+    player.moveTo(new Location(STRONGHOLD_INTERIOR.getX(), STRONGHOLD_INTERIOR.getY(), STRONGHOLD_INTERIOR.getZ()));
+    event.handled = true;
+    return true;
+  }
+
+  function exitStronghold(event) {
+    const { player, objectId } = event;
+    if (!STRONGHOLD_EXIT_IDS.has(objectId)) return false;
+    player.moveTo(new Location(STRONGHOLD_SURFACE.getX(), STRONGHOLD_SURFACE.getY(), STRONGHOLD_SURFACE.getZ()));
+    event.handled = true;
+    return true;
+  }
+
+  /** The prison key opens the stronghold's prison door once; the unlock persists for the save. */
+  function unlockPrisonDoor(event) {
+    const { player, object, objectId } = event;
+    if (objectId !== PRISON_DOOR_ID) return false;
+    event.handled = true;
+    if (prisonDoorUnlocked(player)) {
+      if (object) openLoc(object, PRISON_DOOR_OPEN_ID);
+      return true;
+    }
+    if (!held(player, PRISON_KEY_ITEM_ID)) {
+      player.sendMessage("You need a key to unlock this door.");
+      return true;
+    }
+    player.setAttribute(PRISON_DOOR_ATTRIBUTE, true);
+    if (object) openLoc(object, PRISON_DOOR_OPEN_ID);
+    player.sendMessage("You unlock the door.");
+    return true;
   }
 
   /** Swings the locked cell door open into the cell, clearing its blocked tile. */
@@ -231,6 +364,7 @@ module.exports = function registerTrollStrongholdQuest(api) {
     }
     player.getInventory().deleteNumber(keyId, 1);
     player.setAttribute(isGodric ? GODRIC_FREED_ATTRIBUTE : EADGAR_FREED_ATTRIBUTE, true);
+    syncFreedHelperState(player);
     openCellDoor(event.object);
     player.sendMessage(`You unlock the cell and free ${prisoner}.`);
     updateFreedStage(player);
@@ -276,6 +410,9 @@ module.exports = function registerTrollStrongholdQuest(api) {
     if (DENULTH_NPC_IDS.has(npcId)) {
       if (stage === 0) return { page: "Troll Stronghold", variant: "getting-started-talking-to-denulth" }; // also on the Death Plateau page
       if (stage < STAGE_STARTED) return "getting-started-talking-to-denulth-after-starting-the-quest";
+      if (stage >= STAGE_COMPLETE) {
+        return { page: "Denulth", variant: "standard-dialogue-after-completing-troll-stronghold" };
+      }
       if (stage < STAGE_GODRIC_FREED) {
         return "entering-the-prison-talking-to-denulth-again-before-freeing-the-prisoners";
       }
@@ -283,15 +420,19 @@ module.exports = function registerTrollStrongholdQuest(api) {
     }
     if (npcId === TENZING_NPC_ID) return "getting-started-talking-to-tenzig";
     if (npcId === DUNSTAN_NPC_ID) {
+      // Post-quest Dunstan's own page carries the 1,000-coin Law talisman reclaim.
+      if (stage >= STAGE_COMPLETE) return null;
       if (stage >= STAGE_GODRIC_FREED) return "after-freeing-the-prisoners-talking-to-dunstan";
       return "getting-started-talking-to-dunstan";
     }
     if (npcId === DAD_NPC_ID) {
+      if (stage >= STAGE_COMPLETE) return null; // Dad's own post-quest page
       if (stage >= STAGE_DAD_KILLED) return "getting-started-after-dad-has-been-defeated";
       return DAD_ARENA_VARIANT;
     }
     if (TWIG_NPC_IDS.has(npcId)) return TWIG_KEY_VARIANT;
     if (BERRY_NPC_IDS.has(npcId)) return BERRY_KEY_VARIANT;
+    if (npcId === EADGAR_NPC_ID && stage >= STAGE_COMPLETE) return null; // Eadgar's Ruse / Eadgar's own page
     if (npcId === GODRIC_NPC_ID || npcId === EADGAR_NPC_ID) {
       if (stage >= STAGE_HAS_PRISON_KEY && stage < STAGE_GODRIC_FREED && hasBothCellKeys(player)) {
         freeBothCells(player);
@@ -306,7 +447,19 @@ module.exports = function registerTrollStrongholdQuest(api) {
     const value = String(text).toLowerCase();
     const has = (itemId, amount = 1) => held(player, itemId, amount);
     if (value.includes("combat level is lower than 50")) {
-      return player.getSkillManager().getCurrentLevel(Skill.HITPOINTS) < 50;
+      return player.getSkillManager().getCombatLevel() < 50;
+    }
+    // Post-quest Dunstan's own page: the 1,000-coin Law talisman reclaim.
+    if (value.includes("less than five law talismans")) {
+      const banked = (player.getBanks?.() ?? []).reduce(
+        (total, bank) => total + (bank?.getAmount?.(ItemIdentifiers.LAW_TALISMAN) ?? 0), 0);
+      return player.getInventory().getAmount(ItemIdentifiers.LAW_TALISMAN) + banked < 5;
+    }
+    if (npcId === DUNSTAN_NPC_ID && value.includes("does not have enough coins")) {
+      return !has(COINS_ITEM_ID, LAW_TALISMAN_PRICE);
+    }
+    if (npcId === DUNSTAN_NPC_ID && value.includes("does not have enough inventory space")) {
+      return player.getInventory().isFull();
     }
     if (value.includes("has 12 gp")) return has(COINS_ITEM_ID, 12);
     if (value.includes("does not have enough money")) return !has(COINS_ITEM_ID, 12);
@@ -352,22 +505,58 @@ module.exports = function registerTrollStrongholdQuest(api) {
   /** Dad's death opens the stronghold; a Troll General drops the prison key. */
   function handleNpcDeath({ killer, npcId }) {
     if (!killer) return;
-    if (npcId === DAD_NPC_ID && quest.getStage(killer) >= STAGE_STARTED) {
-      if (quest.getStage(killer) < STAGE_DAD_KILLED) quest.setStage(killer, STAGE_DAD_KILLED);
+    const stage = quest.getStage(killer);
+    if (npcId === DAD_NPC_ID && stage >= STAGE_STARTED) {
+      if (stage < STAGE_DAD_KILLED) quest.setStage(killer, STAGE_DAD_KILLED);
       return;
     }
-    if (TROLL_GENERAL_NPC_IDS.has(npcId) && quest.getStage(killer) >= STAGE_DAD_KILLED) {
-      if (quest.getStage(killer) < STAGE_HAS_PRISON_KEY) {
-        killer.getInventory().adds(PRISON_KEY_ITEM_ID, 1);
-        quest.setStage(killer, STAGE_HAS_PRISON_KEY);
+    if (TROLL_GENERAL_NPC_IDS.has(npcId) && stage >= STAGE_DAD_KILLED) {
+      // A lost key is re-obtainable from another general until the door is unlocked.
+      if (stage < STAGE_HAS_PRISON_KEY || (!prisonDoorUnlocked(killer) && !held(killer, PRISON_KEY_ITEM_ID))) {
+        if (!held(killer, PRISON_KEY_ITEM_ID)) {
+          const inventory = killer.getInventory();
+          const before = inventory.getAmount(PRISON_KEY_ITEM_ID);
+          inventory.adds(PRISON_KEY_ITEM_ID, 1);
+          if (inventory.getAmount(PRISON_KEY_ITEM_ID) <= before) {
+            inventory.full();
+            return;
+          }
+        }
+        if (quest.getStage(killer) < STAGE_HAS_PRISON_KEY) quest.setStage(killer, STAGE_HAS_PRISON_KEY);
       }
       if (quest.getStage(killer) < STAGE_HAS_CELL_KEYS && hasBothCellKeys(killer)) {
         quest.setStage(killer, STAGE_HAS_CELL_KEYS);
       }
+      return;
+    }
+    // QH supports killing Twig/Berry when the player lacks 30 Thieving.
+    if (TWIG_NPC_IDS.has(npcId) && stage >= STAGE_HAS_PRISON_KEY) {
+      addCellKey(killer, CELL_KEY_1_ITEM_ID);
+      return;
+    }
+    if (BERRY_NPC_IDS.has(npcId) && stage >= STAGE_HAS_PRISON_KEY) {
+      addCellKey(killer, CELL_KEY_2_ITEM_ID);
     }
   }
 
   function handleAction({ player, npcId, stepId }) {
+    if (npcId === DUNSTAN_NPC_ID && stepId === BUY_LAW_TALISMAN_ACTION_ID) {
+      if (quest.getStage(player) < STAGE_COMPLETE) return;
+      if (!held(player, COINS_ITEM_ID, LAW_TALISMAN_PRICE)) return;
+      if (player.getInventory().isFull()) {
+        player.getInventory().full();
+        return;
+      }
+      const inventory = player.getInventory();
+      const talismansBefore = inventory.getAmount(ItemIdentifiers.LAW_TALISMAN);
+      inventory.adds(ItemIdentifiers.LAW_TALISMAN, 1);
+      if (inventory.getAmount(ItemIdentifiers.LAW_TALISMAN) <= talismansBefore) {
+        inventory.full();
+        return;
+      }
+      inventory.deleteNumber(COINS_ITEM_ID, LAW_TALISMAN_PRICE);
+      return;
+    }
     if (npcId === DUNSTAN_NPC_ID && stepId === COMPLETE_ACTION_ID) {
       if (quest.getStage(player) >= STAGE_GODRIC_FREED && !quest.isComplete(player)) {
         quest.complete(player);
@@ -385,12 +574,14 @@ module.exports = function registerTrollStrongholdQuest(api) {
 
   function handleLogin({ player }) {
     refreshQuestList(player);
+    syncFreedHelperState(player);
   }
 
   quest = registerQuest(api, {
     key: "troll_stronghold",
     name: "Troll Stronghold",
     varpId: VARP_TROLL_STRONGHOLD,
+    varpValue: (stage) => stage === STAGE_GODRIC_FREED ? 40 : stage,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
@@ -404,6 +595,7 @@ module.exports = function registerTrollStrongholdQuest(api) {
 
   api.persistAttribute(GODRIC_FREED_ATTRIBUTE);
   api.persistAttribute(EADGAR_FREED_ATTRIBUTE);
+  api.persistAttribute(PRISON_DOOR_ATTRIBUTE, false);
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
@@ -411,6 +603,13 @@ module.exports = function registerTrollStrongholdQuest(api) {
   api.onNpcInteraction("Twig", { Pickpocket: pickpocketTwig });
   api.onNpcInteraction("Berry", { Pickpocket: pickpocketBerry });
   api.onObjectInteraction("Cell Door", { Unlock: unlockCellDoor });
+  api.onObjectInteraction("Arena Entrance", { Open: openArenaGate });
+  api.onObjectInteraction("Arena Exit", { Open: openArenaExit });
+  api.onObjectInteraction("Cave Entrance", { Enter: enterCave });
+  api.onObjectInteraction("Cave Exit", { Exit: exitCave });
+  api.onObjectInteraction("Stronghold", { Enter: enterStronghold });
+  api.onObjectInteraction("Exit", { Use: exitStronghold, Leave: exitStronghold });
+  api.onObjectInteraction("Prison Door", { Unlock: unlockPrisonDoor });
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onNpcDeath(handleNpcDeath);

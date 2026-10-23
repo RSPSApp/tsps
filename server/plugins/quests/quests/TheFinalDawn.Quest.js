@@ -617,6 +617,12 @@ module.exports = function registerTheFinalDawnQuest(api) {
     return request.complete === true;
   }
 
+  function twilightOwnsCrypt(player) {
+    const request = { player, key: "twilights_promise", stage: null };
+    api.emitCustomEvent("quest:get-stage", request);
+    return request.stage >= 8 && request.stage <= 12;
+  }
+
   function meetsRequirements(player) {
     const skills = player.getSkillManager();
     return (
@@ -637,8 +643,8 @@ module.exports = function registerTheFinalDawnQuest(api) {
     return body === ItemIdentifiers.EMISSARY_ROBE_TOP && legs === ItemIdentifiers.EMISSARY_ROBE_BOTTOM;
   }
 
-  function play(player, npcId, variant, select) {
-    return startTranscript(api, player, npcId, PAGE, variant, select);
+  function play(player, npcId, variant, select, npc = null) {
+    return startTranscript(api, player, npcId, PAGE, variant, select, npc);
   }
 
   function correctPassphrase(player) {
@@ -926,6 +932,9 @@ module.exports = function registerTheFinalDawnQuest(api) {
     const npcId = npcIdOf(event);
     if (!SERVIUS_IDS.has(npcId)) return false;
     const { player } = event;
+    // Yield only during Twilight's crypt conversation, preserving later quests'
+    // post-quest dialogue when the earlier quest is already complete.
+    if (npcId === NpcIdentifiers.SERVIUS_TEOKAN_OF_RALOS_2 && twilightOwnsCrypt(player)) return false;
     if (quest.isComplete(player)) {
       play(player, npcId, "post-quest-dialogue-talking-to-servius");
       return true;
@@ -934,6 +943,9 @@ module.exports = function registerTheFinalDawnQuest(api) {
       // Cache 14054 transforms to 13694/14377 on varbit 16668; all are the
       // same palace Servius and must be able to offer the start.
       if (!SERVIUS_IDS.has(npcId)) return false;
+      // The Heart of Darkness owns Servius for its own stage-74 hand-in; only
+      // offer the next quest's start once that quest is actually complete.
+      if (!questComplete(player, "the_heart_of_darkness")) return false;
       play(player, npcId, "infiltration-ii-talking-to-servius");
       return true;
     }
@@ -1375,7 +1387,8 @@ module.exports = function registerTheFinalDawnQuest(api) {
     }
     if (stage >= STAGE_TRAP && stage < STAGE_JANUS) {
       openSafehouseScene(player);
-      play(player, npcId, "home-invasion-talking-to-captain-vibia-2", selectTrapSteps(player, npcId));
+      play(player, npcId, "home-invasion-talking-to-captain-vibia-2", selectTrapSteps(player, npcId),
+        tracked(player, "vibia-house"));
       return true;
     }
     if (stage >= STAGE_JANUS && stage < STAGE_CAM_TORUM) {
@@ -2455,6 +2468,11 @@ module.exports = function registerTheFinalDawnQuest(api) {
   /** Captured stage changes that ride on the final archive dialogue lines. */
   function handleDialogueLine(event) {
     const { player, npcId, text } = event;
+    if (player && quest.getStage(player) === STAGE_TRAP && VIBIA_IDS.has(npcId) && event.step?.speaker === "Guard Dog"
+      && event.pages?.some(page => page.page === PAGE && page.variants?.includes("home-invasion-talking-to-captain-vibia-2"))
+      && Scenes.get(player)?.name === "safehouse-trap") {
+      event.actor = tracked(player, "guard-dog") ?? undefined;
+    }
     if (!player || !ITZLA_IDS.has(npcId)) return;
     const line = String(text ?? "");
     if (/Let's get after her/i.test(line) && quest.getStage(player) === STAGE_METZLI_DEAD) {

@@ -283,7 +283,6 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
   const V_SARIM_AGAIN = "clues-in-port-sarim-talking-to-a-trader-crewmember-in-port-sarim-again";
   const V_BETTY_FIRST = "clues-in-port-sarim-talking-to-betty";
   const V_BETTY_AGAIN = "clues-in-port-sarim-talking-to-betty-again";
-  const V_BETTY_AFTER_HAIG = "clues-in-port-sarim-talking-to-betty-again-after-visiting-curator-haig-halen";
   const V_NOTES_FIRST = "clues-in-port-sarim-inspecting-betty-s-notes-for-the-first-time";
   const V_HAIG_FIRST = "in-varrock-museum-talking-to-curtor-haig-halen";
   const V_HAIG_AGAIN = "in-varrock-museum-talking-to-curtor-haig-halen-talking-to-haig-again";
@@ -291,7 +290,6 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
   const V_HAIG_CRATE = "in-varrock-museum-searching-the-crate";
   const V_HAIG_CRATES = "in-varrock-museum-searching-the-two-crates";
   const V_HAIG_FOUND = "in-varrock-museum-talking-to-curator-haig-halen-after-finding-the-diadem";
-  const V_HAIG_RETURNED = "in-varrock-museum-talking-to-curator-haig-halen-after-arranging-the-diadem-s-return";
 
   // Step ids on the page.
   const SAILS_GIVEN_STEP_IDS = new Set(["1wx5TB", "-1DZ27", "123zW4"]);
@@ -330,15 +328,11 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
   const DISPLAY_AGAIN_LINE = "I don't think I'm going to find much more just lying around... Maybe I should try asking if anyone nearby saw anything.";
   const REGULUS_LEAD_LINE = "Yes, I thought it was quite strange. I told him no, and he made his way east, towards the Cothon.";
   const CREW_FAVOUR_LINE = "Although, we could use a hand... Think you could do us a small favour?";
-  const CREW_CASE_OPTION = "Have you seen a man with a case?";
-  const NON_OSF_CONDITION_ID = "LgTVfY";
-  const OSF_CONDITION_ID = "Vr0XnM";
   const ARTIMA_FAVOUR_LINE = "Oh, in that case, I'll help you out, just so long as you can do me a small favour.";
   const ARTIMA_STITCH_LINES = ["Let's see... Thread that through there...", "Grab some of that, then pull that through...", "Tie off the end there and..."];
   const ARTIMA_REPAIRED_LINE = "There we have it! They might not look the prettiest, but they'll be sturdy enough for the job at least.";
   const CREW_PORT_SARIM_LINE = "Well, we explained how it does work and he then asked us to take him to Port Sarim...";
   const SARIM_RUNES_LINE = "Wandered up north, I think. Said something about trying to get hold of some runes.";
-  const BETTY_NOTES_LINE = "I did take some notes. It was driving me crazy trying to make sense of it!";
   const HAIG_DENIAL_LINE = "What awful news! I'm not sure I can help you with that, though...";
   const HAIG_CONFRONTED_LINE = "Ah...";
   const HAIG_RETURN_LINE = "Okay... I'll have it sent back at once.";
@@ -487,15 +481,20 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
     return V_HERMINIUS_INTRO;
   }
 
+  // Shared NPCs are only claimed inside EAA's own mandatory dialogue window. Outside it
+  // (and after completion) the next quest's variant hook or the default page must run.
+
   function selectRegulusVariant(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_REGULUS) return null;
-    return stage >= STAGE_CREW ? V_REGULUS_AGAIN : V_REGULUS_FIRST;
+    // Twilight's Promise's quetzal keeper: stages 8-9.
+    if (stage < STAGE_REGULUS || stage >= STAGE_CREW || quest.isComplete(player)) return null;
+    return stage > STAGE_REGULUS ? V_REGULUS_AGAIN : V_REGULUS_FIRST;
   }
 
   function selectFortisCrewVariant(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_CREW || quest.isComplete(player)) return null;
+    // Cothon crew: stages 10-15.
+    if (stage < STAGE_CREW || stage >= STAGE_PORT_SARIM || quest.isComplete(player)) return null;
     if (stage >= STAGE_RETURN_SAILS) return V_FORTIS_RETURNED;
     if (stage >= STAGE_REPAIR) {
       return held(player, SAILS_ITEM_ID) ? V_FORTIS_WITH_SAILS : V_FORTIS_AGREED;
@@ -505,13 +504,17 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
 
   function selectSarimCrewVariant(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_PORT_SARIM || quest.isComplete(player)) return null;
-    return stage >= STAGE_BETTY ? V_SARIM_AGAIN : V_SARIM_FIRST;
+    // Port Sarim crew: stages 16-17.
+    if (stage < STAGE_PORT_SARIM || stage >= STAGE_BETTY || quest.isComplete(player)) return null;
+    return stage > STAGE_PORT_SARIM ? V_SARIM_AGAIN : V_SARIM_FIRST;
   }
 
   function selectArtimaVariant(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_REPAIR || stage >= STAGE_PORT_SARIM) return null;
+    // Artima: stages 12-13.
+    if (stage < STAGE_REPAIR || stage >= STAGE_RETURN_SAILS) return null;
+    // She can only replace sails from a tattered pair; without one the crew hands them out.
+    if (!held(player, TATTERED_SAILS_ITEM_ID)) return null;
     if (hasFlag(player, BIT_FIXED_SAILS)) return V_ARTIMA_LOST;
     if (hasFlag(player, BIT_CRAFTING_FAVOUR_ASKED)) return V_ARTIMA_DECLINED;
     return V_ARTIMA_FIRST;
@@ -519,16 +522,15 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
 
   function selectBettyVariant(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_BETTY) return null;
-    if (stage >= STAGE_STOREROOM) return V_BETTY_AFTER_HAIG;
-    if (stage >= STAGE_READ_NOTES) return V_BETTY_AGAIN;
-    return V_BETTY_FIRST;
+    // Hand in the Sand's Betty: stages 18-21.
+    if (stage < STAGE_BETTY || stage >= STAGE_HAIG || quest.isComplete(player)) return null;
+    return stage >= STAGE_READ_NOTES ? V_BETTY_AGAIN : V_BETTY_FIRST;
   }
 
   function selectHaigVariant(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_HAIG) return null;
-    if (stage >= STAGE_RETURN) return V_HAIG_RETURNED;
+    // Dig Site and Bone Voyage's Haig: stages 22-35, released with the return hand-in.
+    if (stage < STAGE_HAIG || stage >= STAGE_RETURN || quest.isComplete(player)) return null;
     if (stage >= STAGE_CONFRONT) return V_HAIG_FOUND;
     return stage >= STAGE_STOREROOM ? V_HAIG_AGAIN : V_HAIG_FIRST;
   }
@@ -572,7 +574,9 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
       case "t_CApx":
         return held(player, TATTERED_SAILS_ITEM_ID);
       case "QbESwT":
-        return !held(player, TATTERED_SAILS_ITEM_ID) && !held(player, SAILS_ITEM_ID);
+        return !held(player, TATTERED_SAILS_ITEM_ID)
+          && !held(player, SAILS_ITEM_ID)
+          && !player.getInventory().isFull();
       case "jcDmva":
         return player.getAttribute(PENDING_SAILS_ATTRIBUTE) === true;
       case "zMEiLB":
@@ -635,7 +639,7 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
       return;
     }
     if (npcId === NpcIdentifiers.BETTY) {
-      if (stage === STAGE_BETTY) at(BETTY_NOTES_LINE, () => advanceStage(player, STAGE_READ_NOTES));
+      // The notes action advances the stage, so a full bag cannot skip the hand-over.
       return;
     }
     if (isCrew(npcId)) {
@@ -680,6 +684,7 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
     }
     if (isCrew(npcId) && SAILS_GIVEN_STEP_IDS.has(stepId)) {
       if (!held(player, TATTERED_SAILS_ITEM_ID)) player.getInventory().adds(TATTERED_SAILS_ITEM_ID, 1);
+      if (!held(player, TATTERED_SAILS_ITEM_ID)) return;
       setFlag(player, BIT_GIVEN_SAILS, GIVEN_SAILS_VARBIT);
       player.setAttribute(PENDING_SAILS_ATTRIBUTE, false);
       advanceStage(player, STAGE_REPAIR);
@@ -814,30 +819,6 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
   // ==========================================================================
 
   /**
-   * The first-time Cothon variant's favour menu, as captured: the One Small Favour (or
-   * plain) acceptance beside "Not right now.", which the Wiki export split into a menu of
-   * its own. The plain acceptance ends in a "continues" jump the runtime cannot follow, so
-   * it gets the shared sails task from the One Small Favour branch.
-   */
-  function withCrewFavourMenu(player, variant, steps) {
-    if (variant !== V_FORTIS_FIRST || !Array.isArray(steps)) return steps;
-    const clone = JSON.parse(JSON.stringify(steps));
-    const menu = clone.find((step) => step.type === "choice" && step.options?.some((option) => option.text === CREW_CASE_OPTION));
-    const caseSteps = menu?.options.find((option) => option.text === CREW_CASE_OPTION)?.steps;
-    if (!Array.isArray(caseSteps)) return steps;
-    const osf = caseSteps.find((step) => step.type === "condition" && step.id === OSF_CONDITION_ID);
-    const decline = caseSteps.find((step) => step.type === "choice" && step.options?.some((option) => option.text === "Not right now."));
-    const branch = caseSteps.find((step) => step.type === "condition" && step.id === (isQuestComplete(player, "one_small_favour") ? OSF_CONDITION_ID : NON_OSF_CONDITION_ID));
-    const accept = branch?.steps?.find((step) => step.type === "choice")?.options?.[0];
-    if (!accept || !decline || !Array.isArray(osf?.steps)) return steps;
-    accept.steps = [...(accept.steps ?? []).filter((step) => step.type !== "jump"), ...osf.steps.slice(1)];
-    const favourAt = caseSteps.findIndex((step) => step.type === "choice" && !step.options?.length);
-    const head = caseSteps.slice(0, favourAt >= 0 ? favourAt : caseSteps.indexOf(branch));
-    menu.options.find((option) => option.text === CREW_CASE_OPTION).steps = [...head, { type: "choice", options: [accept, ...decline.options] }];
-    return clone;
-  }
-
-  /**
    * CharterShips claims the charter crew's Talk-to, so play the quest variant first while
    * EAA needs them: any crewmember at the Cothon, Trader Stan or a crewmember at the Port
    * Sarim dock. Everyone else, and completed quests, fall through to the charter menu.
@@ -849,7 +830,7 @@ module.exports = function registerEthicallyAcquiredAntiquitiesQuest(api) {
       : within(player, PORT_SARIM_DOCK) ? selectSarimCrewVariant(player) : null;
     if (!variant) return false;
     event.handled = true;
-    startTranscript(api, player, npcId, PAGE, variant, (steps) => withCrewFavourMenu(player, variant, steps), event.npc ?? null);
+    startTranscript(api, player, npcId, PAGE, variant, undefined, event.npc ?? null);
     return true;
   }
 

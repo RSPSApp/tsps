@@ -193,7 +193,7 @@ export function createPrimaryWidgetActionResolver(
             getWidgetTargetLabelForMenu(menuWidget) ??
             "";
         const slot = typeof w?.childIndex === "number" ? w.childIndex | 0 : undefined;
-        const itemId = typeof w?.itemId === "number" && w.itemId > 0 ? w.itemId | 0 : undefined;
+        const itemId = typeof w?.itemId === "number" && w.itemId >= 0 ? w.itemId | 0 : undefined;
         return { option, target, slot, itemId, opIndex: entryOpIndex };
     };
     return getPrimaryWidgetAction;

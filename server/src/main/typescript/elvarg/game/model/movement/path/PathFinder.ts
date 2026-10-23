@@ -262,13 +262,25 @@ export class PathFinder {
         player.setMobileInteraction(target);
     }
 
-    static calculateEntityRoute(player: Mobile, target: Mobile) {
-        return PathFinder.applyRsmodRoute(player, target.getLocation().getX(), target.getLocation().getY(), {
-            destWidth: Math.max(target.getSize(), 1),
-            destLength: Math.max(target.getSize(), 1),
-            locShape: -2,
-            moveNear: true,
-        });
+    static calculateEntityRoute(player: Mobile, target: Mobile, range = 1) {
+        const targetSize = Math.max(target.getSize(), 1);
+        const interactionRange = Math.max(1, Math.floor(range));
+        const extraReach = interactionRange - 1;
+        const destinationSize = interactionRange === 1 ? targetSize : interactionRange * 2 - 1;
+        return PathFinder.applyRsmodRoute(
+            player,
+            target.getLocation().getX() - extraReach,
+            target.getLocation().getY() - extraReach,
+            {
+                // Widen the destination area for plugin-approved long-range interactions. The
+                // route finder still walks only across collision-valid tiles; this lets an
+                // interaction reach an NPC across a blocked obstacle without walking through it.
+                destWidth: destinationSize,
+                destLength: destinationSize,
+                locShape: -2,
+                moveNear: true,
+            }
+        );
     }
 
     /** OpenRune's footprint-aware destination for one-step NPC pursuit. */

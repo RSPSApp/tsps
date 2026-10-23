@@ -320,7 +320,7 @@ export class Bank extends ItemContainer {
         const entries: Array<{ tab: number; slot: number; item: Item }> = [];
         for (const tab of [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]) {
             player.getBank(tab).getItems().forEach((item, slot) => {
-                if (item != null && item.getId() > 0 && item.getAmount() >= 0) {
+                if (item != null && item.getId() >= 0 && item.getAmount() >= 0) {
                     entries.push({ tab, slot, item });
                 }
             });
@@ -338,7 +338,7 @@ export class Bank extends ItemContainer {
     /** Removes the placeholder in `slot` of `tab`. */
     public static releasePlaceholder(player: Player, tab: number, slot: number): void {
         const item = player.getBank(tab).getItems()[slot];
-        if (!item || item.getId() <= 0 || item.getAmount() !== 0) return;
+        if (!item || item.getId() < 0 || item.getAmount() !== 0) return;
         item.setId(-1);
         item.setMeta(null);
         player.getBank(tab).refreshItems();
@@ -381,7 +381,7 @@ export class Bank extends ItemContainer {
         const tabs = tab === 0 ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] : [tab];
         for (const index of tabs) {
             for (const item of player.getBank(index).getItems()) {
-                if (item != null && item.getId() > 0 && item.getAmount() === 0) {
+                if (item != null && item.getId() >= 0 && item.getAmount() === 0) {
                     item.setId(-1);
                     item.setMeta(null);
                 }
@@ -432,7 +432,7 @@ export class Bank extends ItemContainer {
         const items = bank.getItems();
         let last = -1;
         items.forEach((item, slot) => {
-            if (item != null && item.getId() > 0) last = slot;
+            if (item != null && item.getId() >= 0) last = slot;
         });
         return last + 1 < bank.capacity() ? last + 1 : bank.getEmptySlot();
     }
@@ -449,7 +449,7 @@ export class Bank extends ItemContainer {
      */
     private static depositDragged(player: Player, slot: number, itemId: number, tab: number | undefined) {
         const item = player.getInventory().getItems()[slot];
-        if (!item || item.getId() <= 0 || item.getId() !== itemId) return;
+        if (!item || item.getId() < 0 || item.getId() !== itemId) return;
         if (getPluginManager().emitCanBankItem(player, item) === false) return;
         const unnoted = item.getDefinition().unNote();
         let target = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].find((index) => player.getBank(index).contains(unnoted));

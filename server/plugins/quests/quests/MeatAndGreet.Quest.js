@@ -289,7 +289,13 @@ module.exports = function registerMeatAndGreetQuest(api) {
     if (current === STAGE_TESTED) return "making-the-ultimate-kebab-talking-to-emelio-after-a-successful-taste-test";
     if (current === STAGE_MARKETING) return "making-the-ultimate-kebab-talking-to-emelio-again-after-a-successful-taste-test";
     if (current === STAGE_KEBABS) return "making-the-ultimate-kebab-talking-to-emelio-after-receiving-the-two-test-kebabs";
-    if (current < STAGE_FIGHT) return "guerilla-marketing-talking-to-emilio-after-giving-leila-a-test-kebab";
+    if (current < STAGE_FIGHT) {
+      // Quest Helper's getAnotherKebabFromEmelio leg applies once Lelia has eaten one:
+      // the restock dialogue is the stage-10/14 "two test kebabs" variant.
+      return heldCount(player, LELIA_KEBAB_ITEM_ID) === 0
+        ? "making-the-ultimate-kebab-talking-to-emelio-after-receiving-the-two-test-kebabs"
+        : "guerilla-marketing-talking-to-emilio-after-giving-leila-a-test-kebab";
+    }
     if (current === STAGE_FIGHT) return "guerilla-marketing-talking-to-emilio-after-leaving-the-fortis-colosseum-but-before-killing-the-minotaur";
     if (current < STAGE_COMPLETE) return "wrapping-up";
     return { page: "Emelio", variant: "standard-dialogue-after-meat-and-greet" };
@@ -298,7 +304,9 @@ module.exports = function registerMeatAndGreetQuest(api) {
   function selectSpiceMerchant(player) {
     if (stage(player) !== STAGE_DELIVERIES) return null;
     const spice = sub(player, "spice");
-    if (spice >= 3) return "searching-for-spices-talking-to-the-spice-merchant-after-unlocking-the-box";
+    // The unlock scene's final line sends the delivery; resume it if interrupted.
+    if (spice === 3) return "searching-for-spices-unlocking-the-box";
+    if (spice >= 4) return "searching-for-spices-talking-to-the-spice-merchant-after-unlocking-the-box";
     return spice === 2 ? "searching-for-spices-talking-to-the-spice-merchant-again" : "searching-for-spices";
   }
 
@@ -513,7 +521,8 @@ module.exports = function registerMeatAndGreetQuest(api) {
       });
       if (current === STAGE_INGREDIENTS) at(RECIPE_TASK_LINE, () => advance(player, STAGE_RECIPE));
       if (current === STAGE_TESTED) at(MARKETING_LINE, () => advance(player, STAGE_MARKETING));
-      if (current >= STAGE_MINOTAUR_DEAD && current < STAGE_COMPLETE && text === DONE_LINE) event.after = () => quest.complete(player);
+      // Stage 22 still owes Lelia's "tell Emelio" conversation (24); only the told stage hands in.
+      if (current >= STAGE_TOLD && current < STAGE_COMPLETE && text === DONE_LINE) event.after = () => quest.complete(player);
       return;
     }
     if (npcId === SPICE_MERCHANT_NPC_ID) {
@@ -591,12 +600,18 @@ module.exports = function registerMeatAndGreetQuest(api) {
     }
     if (npcId === LELIA_NPC_ID) {
       if (stepId === LELIA_EATS_STEP && stage(player) === STAGE_KEBABS) {
-        if (heldCount(player, LELIA_KEBAB_ITEM_ID) > 0) player.getInventory().deleteNumber(LELIA_KEBAB_ITEM_ID, 1);
+        // Without a kebab there is nothing to eat; the transcript's ready check then sends the
+        // player back to Emelio, whose restock dialogue covers the lost item.
+        if (heldCount(player, LELIA_KEBAB_ITEM_ID) === 0) return;
+        player.getInventory().deleteNumber(LELIA_KEBAB_ITEM_ID, 1);
         event.npc?.performAnimation?.(new Animation(EAT_ANIMATION));
         advance(player, STAGE_LELIA_ATE);
       }
       if (stepId === ADVERT_STEP) {
         event.handled = true;
+        // Returning to Lelia after she ate (stage 16) uses the short ready-check variant,
+        // which has no "Yup..." line; agreeing there must still mark the advert ready.
+        if (stage(player) === STAGE_LELIA_ATE) advance(player, STAGE_ADVERT);
         beginAdvert(player);
       }
       if (stepId === ADVERT_EAT_STEP) {

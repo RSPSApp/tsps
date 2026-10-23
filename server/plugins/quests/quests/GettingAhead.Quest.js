@@ -23,8 +23,10 @@ module.exports = function registerGettingAheadQuest(api) {
   const HEADLESS_BEAST_NPC_ID = NpcIdentifiers.HEADLESS_BEAST_2; // 10506, ga_beast
   const VARP_GETTING_AHEAD = 2851; // ga_main
   const VARBIT_GETTING_AHEAD = 693; // ga, bits 0-5
+  const VARBIT_COINS_RECEIVED = 694; // ga_reward, varp 2851 bit 6
   const STAGE_STARTED = 2;
   const STAGE_MARY_TALK = 4;
+  const LEGACY_STAGE_FLOUR_POURING = 6;
   const STAGE_FLOUR_POURED = 8;
   const STAGE_FLOUR_TRAIL = 10;
   const STAGE_LAIR_ENTERED = 12;
@@ -134,6 +136,7 @@ module.exports = function registerGettingAheadQuest(api) {
   ]);
   const MET_GORDON_ATTRIBUTE = "quest.getting_ahead.met-gordon";
   const COINS_PENDING_ATTRIBUTE = "quest.getting_ahead.coins-pending";
+  const COINS_CLAIMED_ATTRIBUTE = "getting-ahead:coins-claimed";
   const PICKAXE_TAKEN_ATTRIBUTE = "quest.getting_ahead.pickaxe-taken";
   const NAILS_TAKEN_ATTRIBUTE = "getting-ahead:nails-taken";
   const FINISH_PENDING_ATTRIBUTE = "getting-ahead:inspection-pending";
@@ -170,6 +173,10 @@ module.exports = function registerGettingAheadQuest(api) {
 
   function coinsPending(player) {
     return Number(player.getAttribute(COINS_PENDING_ATTRIBUTE)) === 1;
+  }
+
+  function coinsClaimed(player) {
+    return Number(player.getAttribute(COINS_CLAIMED_ATTRIBUTE)) === 1;
   }
   /** Monotonic stage advance; never moves a quest-complete player back. */
 
@@ -262,10 +269,12 @@ module.exports = function registerGettingAheadQuest(api) {
     const inventory = player.getInventory();
     if (inventory.getFreeSlots() === 0 && inventory.getAmount(COINS_ITEM_ID) === 0) {
       player.setAttribute(COINS_PENDING_ATTRIBUTE, 1);
+      player.setAttribute(COINS_CLAIMED_ATTRIBUTE, 0);
       return;
     }
     inventory.adds(COINS_ITEM_ID, COINS_REWARD);
     player.setAttribute(COINS_PENDING_ATTRIBUTE, 0);
+    player.setAttribute(COINS_CLAIMED_ATTRIBUTE, 1);
   }
 
   function reclaimCoins(player) {
@@ -279,7 +288,8 @@ module.exports = function registerGettingAheadQuest(api) {
     }
     inventory.adds(COINS_ITEM_ID, COINS_REWARD);
     player.setAttribute(COINS_PENDING_ATTRIBUTE, 0);
-    player.getPacketSender().sendVarbit(694, 1);
+    player.setAttribute(COINS_CLAIMED_ATTRIBUTE, 1);
+    player.getPacketSender().sendVarbit(VARBIT_COINS_RECEIVED, coinsClaimed(player) ? 1 : 0);
   }
 
   function selectGordonVariant(player) {
@@ -454,6 +464,7 @@ module.exports = function registerGettingAheadQuest(api) {
     }
     if (stepId === "7aXCpS") {
       event.handled = true;
+      event.end = true;
       waitOvernight(player);
       return;
     }
@@ -498,7 +509,7 @@ module.exports = function registerGettingAheadQuest(api) {
     inventory.deleteNumber(POT_OF_FLOUR_ITEM_ID, 1);
     inventory.adds(POT_ITEM_ID, 1);
     player.performAnimation(new Animation(8837));
-    quest.setStage(player, 6);
+    quest.setStage(player, STAGE_FLOUR_POURED);
     startTranscript(api, player, GORDON_NPC_ID, PAGE, "a-strange-event-pouring-the-flour-on-the-gate");
   }
 
@@ -512,7 +523,7 @@ module.exports = function registerGettingAheadQuest(api) {
   }
 
   function makeClayHead(player, inventory) {
-    if (quest.getStage(player) < STAGE_MARY_FAKE || quest.getStage(player) >= STAGE_CLAY_SHOWN || !held(player, SOFT_CLAY_ITEM_ID) || !held(player, KNIFE_ITEM_ID)) {
+    if (quest.getStage(player) < STAGE_MARY_FAKE || quest.getStage(player) >= STAGE_MOUNTED || !held(player, SOFT_CLAY_ITEM_ID) || !held(player, KNIFE_ITEM_ID)) {
       return;
     }
     player.performAnimation(new Animation(8838));
@@ -522,7 +533,7 @@ module.exports = function registerGettingAheadQuest(api) {
   }
 
   function makeFurHead(player, inventory) {
-    if (quest.getStage(player) < STAGE_CLAY_SHOWN || quest.getStage(player) >= STAGE_FUR_SHOWN || !held(player, CLAY_HEAD_ITEM_ID) || !hasTool(player, FUR_ITEM_IDS)) {
+    if (quest.getStage(player) < STAGE_CLAY_SHOWN || quest.getStage(player) >= STAGE_MOUNTED || !held(player, CLAY_HEAD_ITEM_ID) || !hasTool(player, FUR_ITEM_IDS)) {
       return;
     }
     if (!held(player, NEEDLE_ITEM_ID) || !held(player, THREAD_ITEM_ID)) {
@@ -539,7 +550,7 @@ module.exports = function registerGettingAheadQuest(api) {
   }
 
   function makeBloodyHead(player, inventory) {
-    if (quest.getStage(player) < STAGE_FUR_SHOWN || quest.getStage(player) >= STAGE_BLOODY_SHOWN || !held(player, FUR_HEAD_ITEM_ID) || !held(player, RED_DYE_ITEM_ID)) {
+    if (quest.getStage(player) < STAGE_FUR_SHOWN || quest.getStage(player) >= STAGE_MOUNTED || !held(player, FUR_HEAD_ITEM_ID) || !held(player, RED_DYE_ITEM_ID)) {
       return;
     }
     player.getPacketSender().sendSoundEffect(2392, 1, 0);
@@ -558,34 +569,34 @@ module.exports = function registerGettingAheadQuest(api) {
     const ids = new Set([usedItemId, usedWithItemId]);
     const inventory = player.getInventory();
     if (ids.has(KNIFE_ITEM_ID) && ids.has(SOFT_CLAY_ITEM_ID)) {
-      event.handled = true;
-      if (stage < STAGE_MARY_FAKE || stage >= STAGE_CLAY_SHOWN) {
+      if (stage < STAGE_MARY_FAKE || stage >= STAGE_MOUNTED) {
         return;
       }
+      event.handled = true;
       confirm(player, "Sculpt a clay head?", () => makeClayHead(player, inventory));
       return;
     }
     if (ids.has(CLAY_HEAD_ITEM_ID) && FUR_ITEM_IDS.some((itemId) => ids.has(itemId))) {
-      event.handled = true;
-      if (stage < STAGE_CLAY_SHOWN || stage >= STAGE_FUR_SHOWN) {
+      if (stage < STAGE_CLAY_SHOWN || stage >= STAGE_MOUNTED) {
         return;
       }
+      event.handled = true;
       confirm(player, "Attach the fur to the clay head?", () => makeFurHead(player, inventory));
       return;
     }
     if (ids.has(FUR_HEAD_ITEM_ID) && ids.has(RED_DYE_ITEM_ID)) {
-      event.handled = true;
-      if (stage < STAGE_FUR_SHOWN || stage >= STAGE_BLOODY_SHOWN) {
+      if (stage < STAGE_FUR_SHOWN || stage >= STAGE_MOUNTED) {
         return;
       }
+      event.handled = true;
       confirm(player, "Dye the fur head?", () => makeBloodyHead(player, inventory));
       return;
     }
     if (ids.has(FUR_HEAD_ITEM_ID) && BLOOD_ITEM_IDS.some((itemId) => ids.has(itemId))) {
-      event.handled = true;
       if (stage < STAGE_FUR_SHOWN || stage >= STAGE_BLOODY_SHOWN) {
         return;
       }
+      event.handled = true;
       startTranscript(api, player, GORDON_NPC_ID, PAGE, "a-strange-fake-using-a-vial-of-blood-or-a-blood-pint-on-the-fur-head");
     }
   }
@@ -705,13 +716,25 @@ module.exports = function registerGettingAheadQuest(api) {
     }
   }
 
+  function syncCoinReward({ player }) {
+    player.getPacketSender().sendVarbit(VARBIT_COINS_RECEIVED, coinsClaimed(player) ? 1 : 0);
+  }
+
   function handleLogin({ player }) {
     refreshQuestList(player);
+    if (quest.isComplete(player) && !coinsPending(player)) {
+      player.setAttribute(COINS_CLAIMED_ATTRIBUTE, 1);
+    }
+    syncCoinReward({ player });
     player.getPacketSender().sendVarbit(696, Number(player.getAttribute(TANNING_UNLOCKED_ATTRIBUTE) || 0));
     player.getPacketSender().sendVarbit(697, Number(player.getAttribute(MET_GORDON_ATTRIBUTE) || 0))
       .sendVarbit(9684, Number(player.getAttribute(NAILS_TAKEN_ATTRIBUTE) || 0));
     if (player.getAttribute(FINISH_PENDING_ATTRIBUTE) && quest.getStage(player) === STAGE_MOUNTED) {
       player.setAttribute(FINISH_PENDING_ATTRIBUTE, 0);
+    }
+    // Older builds saved 6 after consuming the flour, before its transcript moved to 8.
+    if (quest.getStage(player) === LEGACY_STAGE_FLOUR_POURING) {
+      quest.setStage(player, STAGE_FLOUR_POURED);
     }
     if (quest.getStage(player) === STAGE_FLOUR_POURED) {
       later(player, 1, () => { if (player.isRegistered()) waitOvernight(player); });
@@ -912,7 +935,6 @@ module.exports = function registerGettingAheadQuest(api) {
     const token = {};
     actions.set(player, token);
     player.getDialogueManager().reset();
-    StatementDialogue.send(player, "You head off for the night and come back the next day.", false);
     player.getMovementQueue().reset().setBlockMovement(true);
     fade(player, true);
     later(token, 2, () => {
@@ -1055,7 +1077,7 @@ module.exports = function registerGettingAheadQuest(api) {
         cancelAction(player);
         player.setAttribute(FINISH_PENDING_ATTRIBUTE, 0);
         quest.complete(player);
-        player.getPacketSender().sendVarbit(694, coinsPending(player) ? 0 : 1).closeSubInterface(FLOATER_UID);
+        player.getPacketSender().sendVarbit(VARBIT_COINS_RECEIVED, coinsClaimed(player) ? 1 : 0).closeSubInterface(FLOATER_UID);
       });
     });
   }
@@ -1071,6 +1093,7 @@ module.exports = function registerGettingAheadQuest(api) {
   }
   api.persistAttribute(MET_GORDON_ATTRIBUTE);
   api.persistAttribute(COINS_PENDING_ATTRIBUTE);
+  api.persistAttribute(COINS_CLAIMED_ATTRIBUTE, 0);
   api.persistAttribute(PICKAXE_TAKEN_ATTRIBUTE);
   api.persistAttribute(NAILS_TAKEN_ATTRIBUTE, 0);
   api.persistAttribute(FINISH_PENDING_ATTRIBUTE, 0);
@@ -1099,6 +1122,7 @@ module.exports = function registerGettingAheadQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:line", line);
+  api.onCustomEvent("player:bootstrap-complete", syncCoinReward);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);

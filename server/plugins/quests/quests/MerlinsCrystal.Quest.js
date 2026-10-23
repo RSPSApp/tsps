@@ -25,6 +25,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
+    Equipment,
     Location,
     CountdownTask,
     TaskManager,
@@ -45,6 +46,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const START_HOOK = "quest:merlin-s-crystal:start";
   /** Conversation actions: candle received, crate arrives, crystal shattered, quest finished. */
   const BLACK_CANDLE_ACTION_ID = "nlk77H";
+  const LADY_RECLAIM_ACTION_ID = "eytHdp";
   const CRATE_ARRIVED_STEP_ID = "X6UH6e";
   const CRYSTAL_SHATTERED_ACTION_ID = "q6WlmM";
   const COMPLETE_ACTION_ID = "pVUc-a";
@@ -69,6 +71,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const GIANT_CRYSTAL_OBJECT_ID = ObjectIdentifiers.GIANT_CRYSTAL; // 62
   const CHAOS_ALTAR_OBJECT_ID = ObjectIdentifiers.CHAOS_ALTAR; // 61
   const BEEHIVE_OBJECT_ID = ObjectIdentifiers.BEEHIVE; // 68
+  const JEWELLERS_DOOR_OBJECT_ID = ObjectIdentifiers.DOOR_5; // 59, Port Sarim 3016,3246
 
   const RITUAL_TILE = new Location(2780, 3515, 0);
   const RITUAL_TILE_RADIUS = 1;
@@ -76,6 +79,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const KEEP_CRATE_ARRIVAL = new Location(2779, 3400, 0);
   const MORGAN_TILE = { x: 2771, y: 3403, z: 2 };
   const BEGGAR_TILE = { x: 3016, y: 3247, z: 0 };
+  const JEWELLERS_DOOR_TILE = { x: 3016, y: 3246, z: 0 };
   const TOWER_ZONE = { minX: 2764, maxX: 2771, minY: 3489, maxY: 3496, levels: [2] };
   const SARIM_SHOP_ZONE = { minX: 3010, maxX: 3020, minY: 3242, maxY: 3254, levels: [0] };
 
@@ -119,6 +123,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   ]);
 
   const EXCALIBUR_ITEM_ID = ItemIdentifiers.EXCALIBUR;
+  const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const BLACK_CANDLE_ITEM_ID = ItemIdentifiers.BLACK_CANDLE;
   const LIT_BLACK_CANDLE_ITEM_ID = ItemIdentifiers.LIT_BLACK_CANDLE;
   const BUCKET_OF_WAX_ITEM_ID = ItemIdentifiers.BUCKET_OF_WAX;
@@ -135,6 +140,29 @@ module.exports = function registerMerlinsCrystalQuest(api) {
 
   const page = (variant) => ({ page: PAGE, variant });
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+  const banked = (player, itemId) => {
+    const banks = player.getBanks?.() ?? (player.getBank ? [player.getBank()] : []);
+    return banks.some((bank) => Number(bank?.getAmount?.(itemId) ?? 0) > 0);
+  };
+  const owns = (player, itemId) => has(player, itemId) || banked(player, itemId);
+  /** The equipped weapon also counts toward item ownership. */
+  const wielded = (player, itemId) => player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() === itemId;
+  /** Excalibur in the inventory, in the bank or in the weapon slot. */
+  const ownsExcalibur = (player) =>
+    owns(player, EXCALIBUR_ITEM_ID) || wielded(player, EXCALIBUR_ITEM_ID);
+  /** The sword in hand: the crystal is smashed with it, a banked sword does not count. */
+  const carriesExcalibur = (player) => has(player, EXCALIBUR_ITEM_ID) || wielded(player, EXCALIBUR_ITEM_ID);
+
+  /**
+   * Losing Excalibur must not strand the quest: while the sword is missing the
+   * Lady of the Lake's test can be repeated to get another one.
+   */
+  function canRepeatLadyTest(player) {
+    if (!quest.isStarted(player) || quest.isComplete(player)) return false;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_MORGAN || stage >= STAGE_MERLIN_FREED) return false;
+    return !ownsExcalibur(player);
+  }
 
   let quest;
   const npcsByPlayer = new Map();
@@ -193,13 +221,32 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   /** Which transcript variant the clicked NPC plays. */
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
-    if (ARTHUR_IDS.has(npcId)) return page(arthurVariant(stage));
+    if (ARTHUR_IDS.has(npcId)) {
+      // The quest page's "subsequent" opening is not King Arthur's post-quest
+      // dialogue; the named NPC page already carries the canonical variant.
+      if (quest.isComplete(player)) {
+        return { page: "King Arthur", variant: "standard-dialogue-after-completing-merlin-s-crystal" };
+      }
+      return page(arthurVariant(stage));
+    }
     const k = KNIGHTS.get(npcId);
-    if (k) return page(knightVariant(k, stage));
-    if (MORGAN_IDS.has(npcId)) return page("inside-keep-le-faye-defeating-sir-mordred");
+    if (k) {
+      // Before the start hook the knights belong to their own standard dialogue.
+      return stage < STAGE_STARTED ? null : page(knightVariant(k, stage));
+    }
+    if (MORGAN_IDS.has(npcId)) {
+      // Morgan Le Faye 4320 is also used by King's Ransom after this quest.
+      if (stage < STAGE_SPOKEN_LANCELOT || stage >= STAGE_EXCALIBUR_BOUND) return null;
+      return page("inside-keep-le-faye-defeating-sir-mordred");
+    }
     if (MORDRED_IDS.has(npcId)) return page("inside-keep-le-faye-encountering-sir-mordred");
     if (MERLIN_IDS.has(npcId)) {
-      return page(stage >= STAGE_MERLIN_FREED ? "smashing-talking-to-merlin-again" : "smashing");
+      // 4059 is the Merlin who speaks the Holy Grail / King's Ransom pages.
+      // The trapped Merlin is not a Talk-to shortcut: only the Giant crystal
+      // (Smash or Excalibur-on-crystal) advances stage 5. After he is freed the
+      // recorded "talking to Merlin again" page is legitimate.
+      if (npcId !== NpcIdentifiers.MERLIN || stage < STAGE_MERLIN_FREED) return null;
+      return page("smashing-talking-to-merlin-again");
     }
     if (npcId === NpcIdentifiers.THRANTAX_THE_MIGHTY) {
       return page(
@@ -207,6 +254,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
       );
     }
     if (npcId === NpcIdentifiers.CANDLE_MAKER) {
+      // The trade only exists while the ritual items are being gathered.
+      if (stage < STAGE_SPOKEN_MORGAN || stage >= STAGE_EXCALIBUR_BOUND) return null;
       return page(
         has(player, BUCKET_OF_WAX_ITEM_ID)
           ? "obtaining-the-black-candle-returning-to-the-candle-maker"
@@ -222,9 +271,21 @@ module.exports = function registerMerlinsCrystalQuest(api) {
         : null;
     }
     if (npcId === NpcIdentifiers.THE_LADY_OF_THE_LAKE) {
-      return page("searching-for-excalibur-the-lady-of-the-lake");
+      if (quest.isComplete(player)) {
+        return { page: "The Lady of the Lake", variant: "after-completing-merlin-s-crystal" };
+      }
+      if (stage >= STAGE_SPOKEN_MORGAN && stage < STAGE_EXCALIBUR_BOUND) {
+        return page("searching-for-excalibur-the-lady-of-the-lake");
+      }
+      // A sword lost before the crystal is broken reopens her test.
+      if (canRepeatLadyTest(player)) return page("searching-for-excalibur-the-lady-of-the-lake");
+      return null;
     }
     if (npcId === NpcIdentifiers.BEGGAR) {
+      if (!quest.isStarted(player) || quest.isComplete(player)) return null;
+      if (player.getAttribute(LADY_TEST_ATTRIBUTE) !== true) return null;
+      if (player.getAttribute(BEGGAR_DONE_ATTRIBUTE) === true && !canRepeatLadyTest(player)) return null;
+      if (stage < STAGE_SPOKEN_MORGAN || stage >= STAGE_MERLIN_FREED) return null;
       return page(
         has(player, BREAD_ITEM_ID)
           ? "searching-for-excalibur-attempting-to-enter-the-jewellery-shop"
@@ -242,15 +303,31 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (value.includes("has the bucket of wax")) return has(player, BUCKET_OF_WAX_ITEM_ID);
     if (value.includes("has no bread")) return !has(player, BREAD_ITEM_ID);
     if (value.includes("has bread")) return has(player, BREAD_ITEM_ID);
-    if (value.includes("doesn't have excalibur but has a hammer")) {
-      return !has(player, EXCALIBUR_ITEM_ID) && has(player, HAMMER_ITEM_ID);
+    if (value.includes("does not have excalibur in their bank or inventory")) {
+      return !ownsExcalibur(player);
     }
-    if (value.includes("doesn't have excalibur")) return !has(player, EXCALIBUR_ITEM_ID);
+    if (value.includes("has excalibur in their bank or inventory")) {
+      return ownsExcalibur(player);
+    }
+    if (value.includes("has at least 500 coins")) {
+      return has(player, COINS_ITEM_ID) && player.getInventory().getAmount(COINS_ITEM_ID) >= 500;
+    }
+    if (value.includes("does not have at least 500 coins")) {
+      return player.getInventory().getAmount(COINS_ITEM_ID) < 500;
+    }
+    if (value.includes("doesn't have excalibur but has a hammer")) {
+      return !carriesExcalibur(player) && has(player, HAMMER_ITEM_ID);
+    }
+    // The dump lists the plain no-Excalibur branch first; keep it from swallowing
+    // the more specific hammer branch.
+    if (value.includes("doesn't have excalibur")) {
+      return !carriesExcalibur(player) && !has(player, HAMMER_ITEM_ID);
+    }
     if (value.includes("excalibur but doesn't have thrantax")) {
-      return has(player, EXCALIBUR_ITEM_ID) && stage < STAGE_EXCALIBUR_BOUND;
+      return carriesExcalibur(player) && stage < STAGE_EXCALIBUR_BOUND;
     }
     if (value.includes("excalibur and thrantax")) {
-      return has(player, EXCALIBUR_ITEM_ID) && stage >= STAGE_EXCALIBUR_BOUND;
+      return carriesExcalibur(player) && stage >= STAGE_EXCALIBUR_BOUND;
     }
     return null;
   }
@@ -300,10 +377,11 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     npcsByPlayer.delete(player);
   }
 
-  /** Merlin sits inside the giant crystal until it shatters. */
+  /** The freed Merlin stands by the shattered crystal; the trapped one is not a
+   *  talk-to shortcut while the crystal must still be smashed. */
   function ensureTowerMerlin(player) {
     if (!player || player.isPlayerBot?.() === true) return;
-    if (!quest.isStarted(player) || quest.getStage(player) >= STAGE_MERLIN_FREED) {
+    if (!quest.isStarted(player) || quest.getStage(player) < STAGE_MERLIN_FREED) {
       removeTracked(player, "merlin");
       return;
     }
@@ -313,9 +391,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   /** The beggar exists while the Lady of the Lake's Port Sarim test is pending. */
   function ensureBeggar(player) {
     if (!player || player.isPlayerBot?.() === true) return;
-    if (player.getAttribute(LADY_TEST_ATTRIBUTE) !== true || player.getAttribute(BEGGAR_DONE_ATTRIBUTE) === true) {
-      return;
-    }
+    if (player.getAttribute(LADY_TEST_ATTRIBUTE) !== true) return;
+    if (player.getAttribute(BEGGAR_DONE_ATTRIBUTE) === true && !canRepeatLadyTest(player)) return;
     spawnTracked(player, "beggar", NpcIdentifiers.BEGGAR, BEGGAR_TILE);
   }
 
@@ -345,11 +422,10 @@ module.exports = function registerMerlinsCrystalQuest(api) {
       return;
     }
     if (MORGAN_IDS.has(npcId)) {
-      if (text === "Tell me how to untrap Merlin and I might.") {
-        advanceTo(player, STAGE_SPOKEN_MORGAN);
-        return;
-      }
+      // The first information choice alone must not persist the stage: closing
+      // the conversation there forces the player to fight Sir Mordred again.
       if (text === "OK I will do all that." || text === "Ok then.") {
+        advanceTo(player, STAGE_SPOKEN_MORGAN);
         removeTracked(player, "morgan");
       }
       return;
@@ -386,15 +462,31 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     const { player, npcId, stepId } = event;
     const text = String(event.text ?? "");
     if (stepId === BLACK_CANDLE_ACTION_ID && npcId === NpcIdentifiers.CANDLE_MAKER) {
-      if (has(player, BUCKET_OF_WAX_ITEM_ID)) {
-        player.getInventory().deleteNumber(BUCKET_OF_WAX_ITEM_ID, 1);
-        if (!has(player, BLACK_CANDLE_ITEM_ID)) player.getInventory().adds(BLACK_CANDLE_ITEM_ID, 1);
+      if (!has(player, BUCKET_OF_WAX_ITEM_ID)) return;
+      // Refuse rather than consume wax for a candle the player already holds.
+      if (has(player, BLACK_CANDLE_ITEM_ID) || has(player, LIT_BLACK_CANDLE_ITEM_ID)) {
+        player.sendMessage("You already have a black candle.");
+        return;
       }
+      player.getInventory().deleteNumber(BUCKET_OF_WAX_ITEM_ID, 1);
+      // Removing the wax frees the candle's slot; adds() returns the container.
+      player.getInventory().adds(BLACK_CANDLE_ITEM_ID, 1);
+      return;
+    }
+    if (stepId === LADY_RECLAIM_ACTION_ID && npcId === NpcIdentifiers.THE_LADY_OF_THE_LAKE) {
+      if (ownsExcalibur(player)) return;
+      const inventory = player.getInventory();
+      if (inventory.getAmount(COINS_ITEM_ID) < 500) return;
+      if (inventory.getFreeSlots() < 1 && inventory.getAmount(COINS_ITEM_ID) > 500) {
+        player.sendMessage("You need a free inventory space to receive Excalibur.");
+        return;
+      }
+      inventory.deleteNumber(COINS_ITEM_ID, 500);
+      inventory.adds(EXCALIBUR_ITEM_ID, 1);
       return;
     }
     if (stepId === CRYSTAL_SHATTERED_ACTION_ID) {
       advanceTo(player, STAGE_MERLIN_FREED);
-      if (has(player, BAT_BONES_ITEM_ID)) player.getInventory().deleteNumber(BAT_BONES_ITEM_ID, 1);
       removeTracked(player, "merlin");
       return;
     }
@@ -407,7 +499,14 @@ module.exports = function registerMerlinsCrystalQuest(api) {
       return;
     }
     if (EXCALIBUR_GIFT_STEP_IDS.has(stepId)) {
-      if (!has(player, EXCALIBUR_ITEM_ID)) player.getInventory().adds(EXCALIBUR_ITEM_ID, 1);
+      // Once-only delivery: a sword the player still owns is never duplicated.
+      if (!ownsExcalibur(player)) {
+        if (player.getInventory().getFreeSlots() < 1) {
+          player.sendMessage("You need a free inventory space for Excalibur.");
+          return;
+        }
+        player.getInventory().adds(EXCALIBUR_ITEM_ID, 1);
+      }
       player.setAttribute(BEGGAR_DONE_ATTRIBUTE, true);
       removeTracked(player, "beggar");
       return;
@@ -438,7 +537,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (!MORDRED_IDS.has(event.npcId)) return;
     const player = event.killer?.isPlayer?.() ? event.killer : null;
     if (!player || !quest.isStarted(player)) return;
-    if (quest.getStage(player) >= STAGE_SPOKEN_MORGAN) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_LANCELOT || stage >= STAGE_SPOKEN_MORGAN) return;
     const entry = trackedEntry(player);
     if (!entry.morgan) {
       const morgan = api.spawnNpc({
@@ -468,9 +568,44 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   function hideInCatherbyCrate(event) {
     if (event.objectId !== CATHERBY_CRATE_OBJECT_ID) return false;
     const { player } = event;
-    if (!quest.isStarted(player) || quest.isComplete(player)) return false;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_LANCELOT || stage >= STAGE_COMPLETE) return false;
     startTranscript(api, player, NpcIdentifiers.ARHEIN, PAGE, "infiltrating-the-keep-hiding-in-arhein-s-crate");
     return true;
+  }
+
+  /**
+   * Opening the Port Sarim jeweller's door during the Lady of the Lake's test
+   * makes the beggar appear and starts her plea. Doors.plugin claims the Open
+   * action first, so this listens on its door:toggle event and keeps the door
+   * shut until the test is passed.
+   */
+  function enterJewelleryShop(request) {
+    if (request.handled) return;
+    const objectId = request.objectId ?? request.object?.getId?.();
+    if (objectId !== JEWELLERS_DOOR_OBJECT_ID) return;
+    const option = request.option ?? request.definition?.getInteractions?.()[request.clickType - 1];
+    if (option !== "Open") return;
+    const at = request.location ?? request.object?.getLocation?.();
+    const x = typeof at?.getX === "function" ? at.getX() : at?.x;
+    const y = typeof at?.getY === "function" ? at.getY() : at?.y;
+    const z = typeof at?.getZ === "function" ? at.getZ() : at?.z;
+    if (x !== JEWELLERS_DOOR_TILE.x || y !== JEWELLERS_DOOR_TILE.y || z !== JEWELLERS_DOOR_TILE.z) return;
+    const { player } = request;
+    if (!player) return;
+    if (player.getAttribute(LADY_TEST_ATTRIBUTE) !== true) return;
+    if (player.getAttribute(BEGGAR_DONE_ATTRIBUTE) === true && !canRepeatLadyTest(player)) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_MORGAN || stage >= STAGE_MERLIN_FREED) return;
+    ensureBeggar(player);
+    startTranscript(
+      api,
+      player,
+      NpcIdentifiers.BEGGAR,
+      PAGE,
+      "searching-for-excalibur-attempting-to-enter-the-jewellery-shop"
+    );
+    request.handled = true;
   }
 
   function smashCrystal(player) {
@@ -494,6 +629,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   function checkChaosAltar(event) {
     if (event.objectId !== CHAOS_ALTAR_OBJECT_ID) return false;
     const { player } = event;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_MORGAN || stage >= STAGE_EXCALIBUR_BOUND) return false;
     player.setAttribute(READ_INCANTATION_ATTRIBUTE, true);
     startTranscript(api, player, NpcIdentifiers.THRANTAX_THE_MIGHTY, PAGE, "searching-the-altar-for-the-spell");
     return true;
@@ -525,7 +662,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   function repellentOnHive(event) {
     if (event.objectId !== BEEHIVE_OBJECT_ID) return false;
     const { player } = event;
-    player.getInventory().deleteNumber(event.itemId, 1);
+    // Insect repellent is reusable: the wiki says it must be used on the hive
+    // every time, but the can is not consumed.
     player.setAttribute(HIVE_REPELLED_ATTRIBUTE, true);
     player.sendMessage("You spray the beehive with the insect repellent. The bees calm down.");
     return true;
@@ -632,6 +770,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("door:toggle", enterJewelleryShop);
   api.onObjectInteraction("Crate", { "Hide-in": hideInCatherbyCrate });
   api.onObjectInteraction("Giant crystal", { Smash: smashGiantCrystal });
   api.onObjectInteraction("Chaos altar", { Check: checkChaosAltar });

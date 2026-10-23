@@ -32,7 +32,14 @@ function fakeApiBase() {
   return {
     core: PluginManager.getCoreApi(),
     getBonusManager: () => ({ update() {} }),
-    emitCustomEvent: (name, payload) => (hooks.custom ??= []).push({ name, payload }),
+    emitCustomEvent: (name, payload) => {
+      (hooks.custom ??= []).push({ name, payload });
+      for (const handler of hooks.customHandlers?.[name] ?? []) handler(payload);
+    },
+    onCustomEvent: (name, handler) => {
+      hooks.customHandlers ??= {};
+      hooks.customHandlers[name] = [...(hooks.customHandlers[name] ?? []), handler];
+    },
     persistAttribute() {},
     onObjectInteraction() {},
     onInterfaceActionButton() {},
@@ -170,10 +177,15 @@ before(() => {
   Lobby(api);
   RaidUnit(api);
   Retrieval(api);
+  require('../plugins/minigames/tob/Rewards.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Verzik.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Entry.TheatreOfBlood')(api);
+  hooks.api = api;
 });
 
 beforeEach(() => {
   hooks.prompts.length = 0;
+  hooks.custom = [];
 });
 
 // ------------------------------------------------------------------ the map
@@ -497,6 +509,42 @@ test('rewards: a unique replaces the commons; no contribution gets the cabbage; 
     assert.ok(definition.isStackable() || definition.isNoted(), `${entry.id} stacks or is noted`);
   }
   raid.dispose();
+});
+
+test('a normal-mode Verzik completion counts the raid, announces it and answers the completion query', () => {
+  const { raid, players: [solo] } = startRaid(['NormalClear']);
+  // The real Verzik room, won through the room's own completion path.
+  raid.buildRoom('VERZIK');
+  raid.room.complete();
+  assert.equal(solo.getAttribute('tob:completions'), 1, 'the completion is counted');
+  const announced = hooks.custom.filter(entry => entry.name === 'tob:completed');
+  assert.equal(announced.length, 1, 'one completion event');
+  assert.equal(announced[0].payload.player, solo);
+  assert.equal(announced[0].payload.mode, 'normal');
+  assert.equal(solo.getAttribute('tob:entry-completions'), undefined, 'the normal path leaves the entry count alone');
+
+  const request = { player: solo, complete: false };
+  hooks.api.emitCustomEvent('tob:has-completion', request);
+  assert.equal(request.complete, true, 'the query answers true for a normal completion');
+  const other = fakePlayer('NeverCleared');
+  const otherRequest = { player: other, complete: false };
+  hooks.api.emitCustomEvent('tob:has-completion', otherRequest);
+  assert.equal(otherRequest.complete, false, 'a player who never cleared has no completion');
+  raid.dispose();
+});
+
+test('Entry Mode still answers the completion query and never clears another provider\'s answer', () => {
+  const entry = fakePlayer('EntryRunner');
+  entry.setAttribute('tob:entry-completions', 1);
+  const request = { player: entry, complete: false };
+  hooks.api.emitCustomEvent('tob:has-completion', request);
+  assert.equal(request.complete, true, 'an Entry Mode clear answers the query');
+  // A normal-mode clear answered first must survive the Entry Mode provider.
+  const both = fakePlayer('BothModes');
+  both.setAttribute('tob:completions', 1);
+  const mixed = { player: both, complete: false };
+  hooks.api.emitCustomEvent('tob:has-completion', mixed);
+  assert.equal(mixed.complete, true, 'the normal-mode answer is not overwritten');
 });
 
 test('a death costs a fifth of a player\'s standing', () => {

@@ -500,6 +500,7 @@ module.exports = function registerContactQuest(api) {
 
   /** Talk across the chasm on Maisa's quiz stages; her real NPC alone gets this reach. */
   function widenMaisaTalkRange(event) {
+    if (event.clickType === 0) return;
     if (!MAISA_NPC_IDS.has(event.npcId) || event.npc?.getOwner?.()) return;
     const stage = quest.getStage(event.player);
     if (stage < STAGE_JEX_TOLD || stage > STAGE_MAISA_CONVINCED) return;

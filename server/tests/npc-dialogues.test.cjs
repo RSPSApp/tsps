@@ -847,22 +847,179 @@ test('an action that starts a new conversation does not resume the old transcrip
 });
 
 
-test('the Lassar vision uses the player head for copies speaking under the player placeholder', () => {
+test('the Lassar vision overhead copies speak through the player actor on the task cadence', () => {
+  const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+  const { ActionDialogue } = require('../dist/game/model/dialogues/entries/impl/ActionDialogue');
   const { PlayerDialogue } = require('../dist/game/model/dialogues/entries/impl/PlayerDialogue');
-  let chain;
-  const player = { getUsername: () => 'Test', getDialogueManager: () => ({
-    reset() {}, startDialogues(builder) { chain = builder; },
-  }) };
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const chats = [];
+  const sent = [];
+  const sender = new Proxy({}, {
+    get: (_target, key) => (...args) => { sent.push([key, ...args]); return sender; },
+  });
+  const player = {
+    getUsername: () => 'Test',
+    getAppearance: () => ({ isMale: () => true }),
+    isRegistered: () => true,
+    forceChat(text) { chats.push(text); },
+    getPacketSender: () => sender,
+    getDialogueManager() { return this.manager; },
+  };
+  player.manager = new DialogueManager(player);
   const cloneLine = data['Desert Treasure II - The Fallen Empire'].variants[
     'the-whisperer-inspecting-the-totem-in-the-cistern'].find(step => step.type === 'line' && step.speaker === '[player name]');
-  assert.ok(cloneLine);
-  startDialogue({ emitCustomEvent() {} }, {
+  assert.equal(cloneLine.presentation, 'overhead');
+  try {
+    startDialogue({ core: PluginManager.getCoreApi(), emitCustomEvent() {} }, {
+      player, npcId: 12232, definition: { getId: () => 12232, getName: () => 'Ketla' },
+    }, [cloneLine]);
+    assert.deepEqual(chats, [cloneLine.text], 'the current player is the real overhead actor');
+    assert.ok(!(player.manager.getCurrent() instanceof PlayerDialogue));
+    assert.ok(player.manager.getCurrent() instanceof ActionDialogue, 'the overhead action owns the dialogue during the cadence');
+    assert.ok(sent.every(([key]) => key !== 'sendChatboxInterface'), 'an overhead line does not open a chatbox');
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(player.manager.getCurrent(), undefined, 'the empty continuation closes and resets the dialogue');
+  } finally {
+    TaskManager.cancelTasks(player);
+    TaskManager.pendingTasks.clear();
+    TaskManager.activeTasks.length = 0;
+  }
+});
+
+test('an overhead NPC action owns its two-tick continuation; treating it as a dialogue drops the transcript tail', () => {
+  const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+  const { ActionDialogue } = require('../dist/game/model/dialogues/entries/impl/ActionDialogue');
+  const { PlayerDialogue } = require('../dist/game/model/dialogues/entries/impl/PlayerDialogue');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const area = {};
+  const chats = [];
+  const sender = new Proxy({}, { get: (_target, _key) => (..._args) => sender });
+  const location = { getZ: () => 0, getDistance: () => 1 };
+  const player = {
+    getUsername: () => 'Test', getAppearance: () => ({ isMale: () => true }),
+    isRegistered: () => true, getLocation: () => location, getPrivateArea: () => area,
+    getPacketSender: () => sender, getDialogueManager() { return this.manager; },
+    getLocalNpcs: () => [burntof],
+  };
+  const burntof = {
+    isRegistered: () => true, getPrivateArea: () => area, getLocation: () => location,
+    isOwnerOnly: () => true, getOwner: () => player, isVisible: () => true,
+    getIndex: () => 42, getCurrentDefinition: () => ({ getName: () => 'Burntof' }),
+    forceChat: (text) => chats.push(text),
+  };
+  player.manager = new DialogueManager(player);
+  const transcript = [
+    { type: 'line', speaker: 'Burntof', text: 'Yaaa*hic*aawn', presentation: 'overhead' },
+    { player: 'The transcript continues.' },
+  ];
+  const play = () => startDialogue({ core: PluginManager.getCoreApi(), emitCustomEvent() {} }, {
+    player, npc: null, npcId: 10661, definition: { getId: () => 10661, getName: () => 'Willow' },
+  }, transcript, {}, { player, npc: null, npcId: 10661, definition: { getId: () => 10661, getName: () => 'Willow' }, pages: [], speakerIdByName: new Map([['Burntof', 10664]]) });
+
+  try {
+    TaskManager.pendingTasks.clear();
+    TaskManager.activeTasks.length = 0;
+    play();
+    assert.deepEqual(chats, ['Yaaa*hic*aawn']);
+    assert.ok(player.manager.getCurrent() instanceof ActionDialogue);
+    TaskManager.process();
+    TaskManager.process();
+    assert.ok(player.manager.getCurrent() instanceof PlayerDialogue, 'the scheduled overhead continuation resumes the next line');
+
+    player.manager.reset();
+    play();
+    assert.ok(player.manager.getCurrent() instanceof ActionDialogue);
+    player.manager.advance(); // Mirrors clicking Continue while MCP reports kind "other".
+    TaskManager.process();
+    TaskManager.process();
+    assert.equal(player.manager.getCurrent(), undefined, 'advancing the internal action invalidates its guarded continuation');
+  } finally {
+    TaskManager.cancelTasks(player);
+    TaskManager.pendingTasks.clear();
+    TaskManager.activeTasks.length = 0;
+  }
+});
+
+test('an explicitly bound overhead scene actor is still local, visible, registered and owner scoped', () => {
+  const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { TaskManager } = require('../dist/game/task/TaskManager');
+  const transcript = [{ type: 'line', speaker: 'Guard Dog', text: 'Woof!', presentation: 'overhead' }];
+  const run = ({ registered = true, visible = true, owner = null, area = null, z = 0, local = true } = {}) => {
+    const chats = [], scene = {}, playerLocation = { getZ: () => 0, getDistance: () => 1 };
+    const npcLocation = { getZ: () => z };
+    const sender = new Proxy({}, { get: (_target, _key) => (..._args) => sender });
+    const player = {
+      isRegistered: () => true,
+      getLocation: () => playerLocation,
+      getPrivateArea: () => scene,
+      getLocalNpcs: () => local ? [actor] : [],
+      getPacketSender: () => sender,
+      sendMessage: () => {},
+      getDialogueManager() { return this.manager; },
+    };
+    const actor = {
+      isRegistered: () => registered,
+      isVisible: () => visible,
+      isOwnerOnly: () => true,
+      getOwner: () => owner ?? player,
+      getPrivateArea: () => area ?? scene,
+      getLocation: () => npcLocation,
+      getCurrentDefinition: () => ({ getName: () => 'Dog' }),
+      forceChat: text => chats.push(text),
+    };
+    player.manager = new DialogueManager(player);
+    const api = {
+      core: PluginManager.getCoreApi(),
+      emitCustomEvent(name, request) { if (name === 'npc-dialogue:line') request.actor = actor; },
+    };
+    const event = { player, npc: null, npcId: 14303, definition: { getId: () => 14303, getName: () => 'Captain Vibia' } };
+    startDialogue(api, event, transcript, {}, { ...event, pages: [], speakerIdByName: new Map() });
+    return { chats, player };
+  };
+
+  try {
+    TaskManager.pendingTasks.clear();
+    TaskManager.activeTasks.length = 0;
+    assert.deepEqual(run().chats, ['Woof!'], 'an explicit alias binds the real local Dog actor');
+    assert.deepEqual(run({ owner: {} }).chats, [], 'a different owner cannot speak in this scene');
+    assert.deepEqual(run({ area: {} }).chats, [], 'an actor in another private area is rejected');
+    assert.deepEqual(run({ visible: false }).chats, [], 'an invisible actor is rejected');
+    assert.deepEqual(run({ registered: false }).chats, [], 'a removed actor is rejected');
+    assert.deepEqual(run({ local: false }).chats, [], 'an actor absent from the local NPC list is rejected');
+    assert.deepEqual(run({ z: 1 }).chats, [], 'an actor on another plane is rejected');
+  } finally {
+    TaskManager.pendingTasks.clear();
+    TaskManager.activeTasks.length = 0;
+  }
+});
+
+test('ordinary typed player-placeholder lines still use the player chathead', () => {
+  const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { PlayerDialogue } = require('../dist/game/model/dialogues/entries/impl/PlayerDialogue');
+  const sender = new Proxy({}, { get: () => (..._args) => sender });
+  const player = {
+    getUsername: () => 'Test',
+    getAppearance: () => ({ isMale: () => true }),
+    isRegistered: () => true,
+    getPacketSender: () => sender,
+    getDialogueManager() { return this.manager; },
+  };
+  player.manager = new DialogueManager(player);
+  const line = data['Desert Treasure II - The Fallen Empire'].variants[
+    'the-whisperer-inspecting-the-totem-in-the-cistern'].find((step) =>
+      step.type === 'line' && step.speaker === '[player name]' && step.presentation !== 'overhead');
+  assert.ok(line, 'the variant still has ordinary typed player lines');
+  startDialogue({ core: PluginManager.getCoreApi(), emitCustomEvent() {} }, {
     player, npcId: 12232, definition: { getId: () => 12232, getName: () => 'Ketla' },
-  }, [cloneLine]);
-  const spoken = [...chain.getDialogues().values()].filter(entry => entry.getText);
-  assert.equal(spoken.length, 1);
-  assert.ok(spoken[0] instanceof PlayerDialogue, 'the copy does not borrow Ketla’s head');
-  assert.equal(spoken[0].getText(), cloneLine.text);
+  }, [line]);
+  const spoken = player.manager.getCurrent();
+  assert.ok(spoken instanceof PlayerDialogue);
+  assert.equal(spoken.getText().replace(/\s+/g, ' '), line.text.replace(/\s+/g, ' '));
 });
 
 test('a plain quest message box waits for continue before resuming the transcript', () => {
@@ -950,6 +1107,63 @@ test('quest menu warning pauses once, then presents the same selectable options'
   assert.deepEqual(menus[0].options.filter(value => typeof value === 'string'), ['Yes', 'No']);
 });
 
+test('conditional menu options resolve by their source condition id', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const previous = PluginManager.emitNpcDialogueCondition;
+  const seen = [];
+  const menus = [];
+  PluginManager.emitNpcDialogueCondition = (request) => {
+    seen.push(request.stepId);
+    return request.stepId === 'condition-source-id' ? false : null;
+  };
+  try {
+    const player = {
+      getDialogueManager: () => ({ reset() {}, startDialogues(chain) {
+        for (const entry of chain.getDialogues().values()) entry.send(player);
+      } }),
+      getPacketSender: () => ({ sendInterfaceRemoval() {} }),
+      sendMessage() {},
+    };
+    const event = { player, npcId: 1, npc: null, definition: { getName: () => 'Guard' } };
+    startDialogue({ emitCustomEvent() {}, sendMultiChatboxPrompt(_player, _title, ...pairs) {
+      menus.push(pairs.filter((_, index) => index % 2 === 0));
+    } }, event, [{ type: 'choice', options: [
+      { text: 'Hidden', id: 'option-id', condition: 'If ready:', condition_id: 'condition-source-id' },
+      { text: 'Visible', id: 'other-option' },
+    ] }], {}, { ...event, pages: [] });
+    assert.deepEqual(seen, ['condition-source-id']);
+    assert.equal(menus.length, 1);
+    assert.equal(menus[0][0], 'Visible');
+    assert.ok(!menus[0].includes('Hidden'));
+
+    const randomActions = [];
+    const randomPlayer = {
+      getDialogueManager: () => ({ reset() {}, startDialogues(chain) {
+        for (const entry of chain.getDialogues().values()) entry.send(randomPlayer);
+      } }),
+      getPacketSender: () => ({ sendInterfaceRemoval() {} }),
+      sendMessage() {},
+    };
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+    try {
+      startDialogue({ emitCustomEvent(name, request) {
+        if (name === 'npc-dialogue:action') randomActions.push(request.stepId);
+      } }, { ...event, player: randomPlayer }, [{ type: 'random', options: [
+        { text: 'Hidden', id: 'random-option-id', condition: 'If ready:', condition_id: 'condition-source-id', steps: [{ type: 'action', id: 'hidden-action' }] },
+        { text: 'Visible', id: 'random-visible', steps: [{ type: 'action', id: 'visible-action' }] },
+      ] }], {}, { player: randomPlayer, npcId: 1, pages: [] });
+    } finally {
+      Math.random = originalRandom;
+    }
+    assert.ok(randomActions.includes('visible-action'));
+    assert.ok(!randomActions.includes('hidden-action'));
+    assert.deepEqual(seen, ['condition-source-id', 'condition-source-id']);
+  } finally {
+    PluginManager.emitNpcDialogueCondition = previous;
+  }
+});
+
 test('typed speakers retain their name with a nameless transform-parent head and captured expressions', () => {
   let chain;
   const sent = [], sender = new Proxy({}, { get: (_target, key) => (...args) => { sent.push([key, ...args]); return sender; } });
@@ -979,4 +1193,105 @@ test('paired cutscene NPCs can use the native right-side chatbox without the pla
   assert.ok(sent.some(row => row[0] === 'sendChatboxInterface' && row[1] === 217));
   assert.ok(sent.some(row => row[0] === 'sendNpcHeadOnInterface' && row[1] === 16536 && row[2] === (217 << 16 | 2)));
   assert.ok(!sent.some(row => row[0] === 'sendPlayerHeadOnInterface'));
+});
+
+test('live condition runs fall through only after a chosen true branch', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  let answers = {};
+  const condition = { pluginName: 'test', handler: ({ text }) => Object.hasOwn(answers, text) ? answers[text] : null };
+  PluginManager.npcDialogueConditionHooks.unshift(condition);
+
+  const play = (tree, script = []) => {
+    const lines = [];
+    const actions = [];
+    const player = {
+      getDialogueManager: () => ({ reset() {}, startDialogues(chain) {
+        for (const entry of [...chain.getDialogues().values()].sort((a, b) => a.getIndex() - b.getIndex())) {
+          if (entry.constructor.name === 'ActionDialogue') entry.send(player);
+          else if (entry.text) lines.push(String(entry.text));
+        }
+      } }),
+      getPacketSender: () => ({ sendInterfaceRemoval() {} }),
+      sendMessage() {},
+    };
+    const definition = { getName: () => 'Guard', getId: () => 1 };
+    const event = { player, npcId: 1, npc: null, definition };
+    const api = {
+      emitCustomEvent(name, request) {
+        if (name !== 'npc-dialogue:action' || !request.stepId) return;
+        actions.push(request.stepId);
+        if (request.stepId === 'flag') answers['If flag:'] = true;
+      },
+      sendMultiChatboxPrompt(_player, _title, ...pairs) {
+        const pick = script.shift();
+        for (let i = 0; i < pairs.length; i += 2) if (pairs[i] === pick) { pairs[i + 1](); return true; }
+        assert.fail(`missing menu option ${pick}`);
+      },
+    };
+    startDialogue(api, event, tree, {}, { ...event, pages: [] });
+    return { lines, actions };
+  };
+
+  try {
+    // A true, unended branch continues; the next true branch's end stops the run.
+    answers = { 'If A:': true, 'If B:': true, 'If C:': true };
+    assert.deepEqual(play([
+      { type: 'condition', text: 'If A:', steps: [{ npc: 'a' }] },
+      { type: 'condition', text: 'If B:', steps: [{ npc: 'b' }, { type: 'end' }] },
+      { type: 'condition', text: 'If C:', steps: [{ npc: 'c' }] },
+      { npc: 'tail' },
+    ]).lines, ['a', 'b']);
+
+    // With no true answer the first unknown still plays and does not fall through.
+    answers = { 'If A:': null, 'If B:': null };
+    assert.deepEqual(play([
+      { type: 'condition', text: 'If A:', steps: [{ npc: 'a' }] },
+      { type: 'condition', text: 'If B:', steps: [{ npc: 'b' }] },
+      { npc: 'tail' },
+    ]).lines, ['a', 'tail']);
+
+    // An explicit continue still reaches later siblings when the answer is unknown.
+    answers = { 'If A:': null, 'If B:': null };
+    assert.deepEqual(play([
+      { type: 'condition', text: 'If A:', steps: [{ npc: 'a' }, { type: 'jump', reference: 'continues' }] },
+      { type: 'condition', text: 'If B:', steps: [{ npc: 'b' }] },
+    ]).lines, ['a', 'b']);
+
+    // Nested menus keep their existing control flow; only linear true branches implicitly continue.
+    answers = { 'If A:': true, 'If B:': true };
+    assert.deepEqual(play([
+      { type: 'condition', text: 'If A:', steps: [{ type: 'choice', options: [
+        { text: 'yes', steps: [{ npc: 'yes' }] },
+        { text: 'no', steps: [{ npc: 'no' }, { type: 'end' }] },
+      ] }] },
+      { type: 'condition', text: 'If B:', steps: [{ npc: 'after' }] },
+    ], ['yes']).lines, ['yes']);
+    assert.deepEqual(play([
+      { type: 'condition', text: 'If A:', steps: [{ type: 'choice', options: [
+        { text: 'yes', steps: [{ npc: 'yes' }] },
+        { text: 'no', steps: [{ npc: 'no' }, { type: 'end' }] },
+      ] }] },
+      { type: 'condition', text: 'If B:', steps: [{ npc: 'after' }] },
+    ], ['no']).lines, ['no']);
+
+    // A branch action changes the next sibling guard before it is resolved.
+    answers = { 'If A:': true };
+    const branchAction = play([
+      { type: 'condition', text: 'If A:', steps: [{ type: 'action', id: 'flag' }] },
+      { type: 'condition', text: 'If flag:', steps: [{ npc: 'guarded' }] },
+    ]);
+    assert.deepEqual(branchAction.actions, ['flag']);
+    assert.deepEqual(branchAction.lines, ['guarded']);
+
+    // Lazy conditions see an action that ran before the following guard.
+    answers = {};
+    const run = play([
+      { type: 'action', id: 'flag', action: 'set flag' },
+      { type: 'condition', text: 'If flag:', steps: [{ npc: 'guarded' }] },
+    ]);
+    assert.deepEqual(run.actions, ['flag']);
+    assert.deepEqual(run.lines, ['guarded']);
+  } finally {
+    PluginManager.npcDialogueConditionHooks.splice(PluginManager.npcDialogueConditionHooks.indexOf(condition), 1);
+  }
 });

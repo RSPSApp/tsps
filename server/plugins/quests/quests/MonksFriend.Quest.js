@@ -10,16 +10,17 @@
  * Stages (varp 30): 10 started, 20 blanket returned, 30 looking for Cedric,
  * 40 finding water, 50 given water, 60 fixing cart, 70 cart fixed, 80 complete.
  *
- * The thieves' cave ladder (18987) is not placed on the map: it only exists
- * while a player is in the stone circle, so the circle is an Area that spawns it
- * on entry ("A ladder mysteriously appears.") and removes it once the last
- * player leaves. The final Omad variant
- * ("...after-finding-and-helping-brother-cedric") has a wiki UNAVAILABLE marker
- * mid-branch; the plugin skips it and splices the dance cutscene in, so the
- * reward lines play before the completion action.
+ * The stone circle's ladder is canonical object 16680 (LADDER_192), the
+ * "Ladder" Quest Helper uses for the circle. The cache does not place it on the
+ * map, so the circle is an Area that spawns it on entry ("A ladder
+ * mysteriously appears.") and removes it once the last player leaves. Because
+ * 16680 is used by many dungeon entrances, the click handler is scoped to the
+ * circle tile. The final Omad transcript shows the eight-rune item box before
+ * the party; normal bags are paid there, while a full bag is settled by the
+ * completion reward after the dancing overheads.
  */
 module.exports = function registerMonksFriendQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location, Boundary, GameObject } = api.core;
+  const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location, Boundary, GameObject } = api.core;
   const { registerQuest, loadTranscripts } = require("../QuestRuntime");
 
   const PAGE = "Monk's Friend";
@@ -43,7 +44,7 @@ module.exports = function registerMonksFriendQuest(api) {
   const PLANK_ITEM_ID = ItemIdentifiers.PLANK;
   const LAW_RUNE_ITEM_ID = ItemIdentifiers.LAW_RUNE;
 
-  const HIDDEN_LADDER_LOC_ID = ObjectIdentifiers.LADDER_243;
+  const HIDDEN_LADDER_LOC_ID = ObjectIdentifiers.LADDER_192;
   /** The ordinary cellar ladder (ladder_from_cellar), used in many places: only this one is the cave's. */
   const CAVE_LADDER_LOC_ID = ObjectIdentifiers.LADDER_216;
   const CAVE_LADDER_TILE = { x: 2561, y: 9622, z: 0 };
@@ -66,6 +67,14 @@ module.exports = function registerMonksFriendQuest(api) {
   const WATER_MESSAGE_ID = "w4kh6u";
   const LOGS_MESSAGE_ID = "nd6lda";
   const PLANK_MESSAGE_ID = "Gil6fA";
+  const RUNE_BOX_MESSAGE_ID = "iTAzwR";
+
+  const PARTY_UNTIL_ATTRIBUTE = "monks-friend:party-until";
+  const PARTY_DURATION_MS = 20 * 60 * 1000;
+  const ARDOUGNE_MONK_NPC_ID = NpcIdentifiers.MONK_13;
+  const RUNE_REWARD_COUNT = 8;
+  const RUNE_REWARD_PAID_ATTRIBUTE = "monks-friend:rune-reward-paid";
+  const RUNE_REWARD_PENDING_ATTRIBUTE = "monks-friend:rune-reward-pending";
 
   let quest;
   // The hidden ladder exists only while the stone circle has a player in it.
@@ -74,7 +83,7 @@ module.exports = function registerMonksFriendQuest(api) {
   const hasItem = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
   const hasWood = (player) => hasItem(player, LOGS_ITEM_ID) || hasItem(player, PLANK_ITEM_ID);
 
-  /** Object 18987 is not on the map; it appears for whoever stands in the ring. */
+  /** The canonical circle ladder 16680 is not on the map; it appears for whoever stands in the ring. */
   function createStoneCircleArea() {
     class StoneCircleArea extends api.core.Area {
       postEnter(mobile) {
@@ -149,12 +158,75 @@ module.exports = function registerMonksFriendQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.WOODCUTTING, 2000);
-    // The scroll/quest points grant one law rune; top up to the quest's eight.
-    player.getInventory().adds(LAW_RUNE_ITEM_ID, 7);
+    // The transcript page titles the party chatter "for 20 minutes"; after that
+    // the named Brother Omad page is the source-backed post-quest variant.
+    player.setAttribute(PARTY_UNTIL_ATTRIBUTE, Date.now() + PARTY_DURATION_MS);
+    // Settle the deferred full-bag handover here so quest:completed observers
+    // already see the paid state. The normal bag was paid at the rune box.
+    settleRuneReward(player);
+  }
+
+  function partyActive(player) {
+    const until = Number(player.getAttribute(PARTY_UNTIL_ATTRIBUTE)) || 0;
+    return until > Date.now();
+  }
+
+  function runeRewardPaid(player) {
+    return Number(player.getAttribute(RUNE_REWARD_PAID_ATTRIBUTE)) === 1;
+  }
+
+  function runeRewardPending(player) {
+    return Number(player.getAttribute(RUNE_REWARD_PENDING_ATTRIBUTE)) === 1;
+  }
+
+  function markRuneRewardPaid(player) {
+    player.setAttribute(RUNE_REWARD_PAID_ATTRIBUTE, 1);
+    player.setAttribute(RUNE_REWARD_PENDING_ATTRIBUTE, 0);
+  }
+
+  function canHoldRuneReward(player) {
+    const inventory = player.getInventory();
+    // Law runes stack, so an existing stack always takes the reward.
+    return inventory.getAmount(LAW_RUNE_ITEM_ID) > 0 || inventory.getFreeSlots() > 0;
+  }
+
+  /**
+   * The canonical tbox handover is before the party. Pay the eight runes there
+   * when they fit; otherwise remember the deferred drop for the completion
+   * reward after the dancing. Both flags are persisted so a re-talk or relog
+   * cannot pay twice.
+   */
+  function grantRunesAtBox(player) {
+    if (runeRewardPaid(player) || runeRewardPending(player)) return;
+    if (!canHoldRuneReward(player)) {
+      player.setAttribute(RUNE_REWARD_PENDING_ATTRIBUTE, 1);
+      return;
+    }
+    const before = player.getInventory().getAmount(LAW_RUNE_ITEM_ID);
+    player.getInventory().adds(LAW_RUNE_ITEM_ID, RUNE_REWARD_COUNT);
+    if (player.getInventory().getAmount(LAW_RUNE_ITEM_ID) === before + RUNE_REWARD_COUNT) {
+      markRuneRewardPaid(player);
+    } else {
+      player.setAttribute(RUNE_REWARD_PENDING_ATTRIBUTE, 1);
+    }
+  }
+
+  /** Called from the completion reward after the dancing: settle once, or fall back if no box ran. */
+  function settleRuneReward(player) {
+    if (runeRewardPaid(player)) {
+      player.setAttribute(RUNE_REWARD_PENDING_ATTRIBUTE, 0);
+      return;
+    }
+    player.getInventory().forceAdd(player, new Item(LAW_RUNE_ITEM_ID, RUNE_REWARD_COUNT));
+    markRuneRewardPaid(player);
   }
 
   function omadVariant(stage, player) {
-    if (stage >= STAGE_COMPLETE) return "post-quest-dialogue-for-20-minutes-talking-to-brother-omad";
+    if (stage >= STAGE_COMPLETE) {
+      return partyActive(player)
+        ? "post-quest-dialogue-for-20-minutes-talking-to-brother-omad"
+        : { page: "Brother Omad", variant: "standard-dialogue-post-quest" };
+    }
     if (stage >= STAGE_FIXED_CART) return "brother-cedric-talking-to-brother-omad-after-finding-and-helping-brother-cedric";
     if (stage >= STAGE_GIVEN_WATER) return "brother-cedric-talking-to-brother-omad-after-giving-brother-cedric-water";
     if (stage >= STAGE_FINDING_WATER) return "brother-cedric-talking-to-brother-omad-after-finding-brother-cedric";
@@ -169,6 +241,8 @@ module.exports = function registerMonksFriendQuest(api) {
   }
 
   function cedricVariant(stage, player) {
+    // After completion Cedric is on the "Brother Cedric" page, not the quest page.
+    if (stage >= STAGE_COMPLETE) return "after-monk-s-friend";
     if (stage >= STAGE_FIXED_CART) return "brother-cedric-talking-to-brother-cedric-again-before-returning";
     if (stage >= STAGE_FIXING_CART) {
       return hasWood(player)
@@ -195,14 +269,46 @@ module.exports = function registerMonksFriendQuest(api) {
   function selectVariant({ npcId, player }) {
     if (npcId === BROTHER_OMAD_NPC_ID) return omadVariant(quest.getStage(player), player);
     if (npcId === BROTHER_CEDRIC_NPC_ID) return cedricVariant(quest.getStage(player), player);
+    // The Ardougne monastery monks share the party chatter for the same window.
+    // After it expires their named page's default standard dialogue is correct.
+    if (npcId === ARDOUGNE_MONK_NPC_ID) return monkVariant(quest.getStage(player), player);
     return null;
   }
 
+  function monkVariant(stage, player) {
+    if (stage < STAGE_STARTED) {
+      return { page: "Monk", variant: "ardougne-monastery-before-monk-s-friend" };
+    }
+    if (stage >= STAGE_COMPLETE) {
+      return partyActive(player)
+        ? "post-quest-dialogue-for-20-minutes-talking-to-the-monks"
+        : { page: "Monk", variant: "ardougne-monastery-after-monk-s-friend" };
+    }
+    if (stage >= STAGE_RETURNED_BLANKET) {
+      return "child-s-blanket-talking-to-a-monk-after-retrieving-the-blanket";
+    }
+    // The quest's own monk line while the blanket is still missing. The generic
+    // "Monk" page would offer the healing menu, but monks at the Ardougne
+    // Monastery do not heal, so the quest line is the correct one here.
+    return { page: "Monk's Friend", variant: "getting-started-monk-overhead" };
+  }
+
+  /**
+   * The wood leg has two sibling conditions ("has logs", "has a plank"). The
+   * shared runner plays the first true branch and then keeps the remaining
+   * siblings as a tail, so a player carrying both would hand over a log *and*
+   * a plank. Logs are the canonical hand-over, so the plank branch is answered
+   * false while logs are held and once the cart is repaired.
+   */
   function answerCondition({ player, npcId, text }) {
     if (npcId !== BROTHER_OMAD_NPC_ID && npcId !== BROTHER_CEDRIC_NPC_ID) return null;
     const value = String(text).toLowerCase();
     if (value.includes("has logs")) return hasItem(player, LOGS_ITEM_ID);
-    if (value.includes("has a plank")) return hasItem(player, PLANK_ITEM_ID);
+    if (value.includes("has a plank")) {
+      if (hasItem(player, LOGS_ITEM_ID)) return false;
+      if (quest.getStage(player) >= STAGE_FIXED_CART) return false;
+      return hasItem(player, PLANK_ITEM_ID);
+    }
     return null;
   }
 
@@ -227,10 +333,12 @@ module.exports = function registerMonksFriendQuest(api) {
   function handleAction(event) {
     const { player, npcId, stepId } = event;
     const stage = quest.getStage(player);
-    // The dump wraps a wiki gap in the final hand-in as `unavailable` mid-branch;
-    // skip past it so the reward lines and the cutscene that follow still play.
-    if (npcId === BROTHER_OMAD_NPC_ID && event.step?.type === "unavailable") {
-      event.handled = true;
+    // The rune item box is the canonical handover: normal bags are paid at the
+    // box; a full bag stays pending and is settled by the completion reward.
+    if (npcId === BROTHER_OMAD_NPC_ID && stepId === RUNE_BOX_MESSAGE_ID
+      && stage >= STAGE_FIXED_CART && stage < STAGE_COMPLETE) {
+      event.box = { items: [LAW_RUNE_ITEM_ID] };
+      grantRunesAtBox(player);
       return;
     }
     // "Dancing cutscene begins" points at the cutscene's own transcript variant,
@@ -263,7 +371,8 @@ module.exports = function registerMonksFriendQuest(api) {
     }
     if (npcId === BROTHER_CEDRIC_NPC_ID && (stepId === LOGS_MESSAGE_ID || stepId === PLANK_MESSAGE_ID)) {
       const itemId = stepId === LOGS_MESSAGE_ID ? LOGS_ITEM_ID : PLANK_ITEM_ID;
-      if (!hasItem(player, itemId)) {
+      // One hand-over repairs the cart: a repaired cart never takes more wood.
+      if (stage >= STAGE_FIXED_CART || !hasItem(player, itemId)) {
         event.handled = true;
         return;
       }
@@ -274,33 +383,21 @@ module.exports = function registerMonksFriendQuest(api) {
     }
   }
 
-  /** Wiki editor footnotes like {{^|...}} are not spoken dialogue. */
-  function handleDialogueLine(event) {
-    if (event.npcId !== BROTHER_OMAD_NPC_ID || typeof event.text !== "string") return;
-    if (event.text.includes("{{")) event.text = event.text.replace(/\{\{[^}]*\}\}/g, "").trim();
-  }
-
-  /**
-   * Object 18987 is shared with the King Black Dragon's Lava Maze ladder, and the
-   * KBD plugin claims its first click before quests load, always routing to the
-   * lair. When that climb-down starts while the player is at our hidden ladder,
-   * go to the thieves' cave instead: the lair climb is queued a tick out and
-   * cancels itself once the player is no longer where it started.
-   */
-  function handleClimbDown(event) {
-    const { player } = event;
-    if (!hiddenLadder || !player || !STONE_CIRCLE_BOUNDS.inside(player.getLocation())) return;
-    player.moveTo(CAVE_LADDER_DESTINATION.clone());
-  }
-
   function isCaveLadder(location) {
     return location?.x === CAVE_LADDER_TILE.x && location?.y === CAVE_LADDER_TILE.y && location?.z === CAVE_LADDER_TILE.z;
+  }
+
+  function isHiddenLadder(location) {
+    return location?.x === HIDDEN_LADDER_LOCATION.getX()
+      && location?.y === HIDDEN_LADDER_LOCATION.getY()
+      && location?.z === HIDDEN_LADDER_LOCATION.getZ();
   }
 
   /** The ladders into and out of the thieves' cave. */
   function handleLadderInteraction(event) {
     const { objectId, player } = event;
-    if (objectId === HIDDEN_LADDER_LOC_ID) {
+    // 16680 is a common dungeon-entrance ladder; only our spawned circle one counts.
+    if (objectId === HIDDEN_LADDER_LOC_ID && isHiddenLadder(event.location)) {
       player.moveTo(CAVE_LADDER_DESTINATION.clone());
       event.handled = true;
     } else if (objectId === CAVE_LADDER_LOC_ID && isCaveLadder(event.location)) {
@@ -308,6 +405,11 @@ module.exports = function registerMonksFriendQuest(api) {
       event.handled = true;
     }
   }
+
+  // No fixed starting value (a wall-clock deadline), but it must survive relog.
+  api.persistAttribute(PARTY_UNTIL_ATTRIBUTE);
+  api.persistAttribute(RUNE_REWARD_PAID_ATTRIBUTE, 0);
+  api.persistAttribute(RUNE_REWARD_PENDING_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "monks_friend",
@@ -317,7 +419,7 @@ module.exports = function registerMonksFriendQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [{ skillId: Skill.WOODCUTTING.getIndex(), amount: 2000, label: "Woodcutting" }],
-    rewardItemId: LAW_RUNE_ITEM_ID,
+    scrollItemId: LAW_RUNE_ITEM_ID,
     rewardItemLabel: "8 Law runes",
     buildJournal,
     onReward: grantReward,
@@ -328,8 +430,6 @@ module.exports = function registerMonksFriendQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
-  api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
-  api.onCustomEvent("ladders:climbDown", handleClimbDown);
   api.onObjectInteraction(handleLadderInteraction);
   api.registerArea(createStoneCircleArea());
 };

@@ -369,6 +369,21 @@ function buildDoorCatalog() {
       closedToOpen.set(id, id);
       continue;
     }
+    // Gameval names can identify the open leaf even when its id comes first
+    // (canafis_door_ground_open / canafis_door_ground). Keep paired gates with
+    // their family handler and require a matching, Close-only cache definition.
+    const namedOpenId = namedOpenLeaf(id);
+    const namedOpen = namedOpenId == null ? null : core.CacheDefinitions.getObject(namedOpenId);
+    if (
+      !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) &&
+      !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(namedOpenId) &&
+      namedOpen?.name === def.name &&
+      hasAction(namedOpen.actions, "close") && !hasAction(namedOpen.actions, "open")
+    ) {
+      closedToOpen.set(id, namedOpenId);
+      openToClosed.set(namedOpenId, id);
+      continue;
+    }
     const partner = core.CacheDefinitions.getObject(id + 1);
     if (!partner || partner.name !== def.name) {
       continue;
@@ -412,6 +427,25 @@ function buildDoorCatalog() {
     ) {
       closedToOpen.set(id, id + 2);
       openToClosed.set(id + 2, id);
+    }
+    // Some pairs interleave: closed A, closed B, open B, open A. Require both
+    // matching model pairs so the neighbouring door is never used as A's open leaf.
+    const outerOpen = core.CacheDefinitions.getObject(id + 3);
+    if (
+      !closedToOpen.has(id) && !openToClosed.has(id + 3) &&
+      Array.isArray(def.models) && def.models.length > 0 &&
+      Array.isArray(partner.models) && partner.models.length > 0 &&
+      hasAction(partner.actions, "open") && !hasAction(partner.actions, "close") &&
+      skipped?.name === def.name &&
+      hasAction(skipped.actions, "close") && !hasAction(skipped.actions, "open") &&
+      JSON.stringify(partner.models) === JSON.stringify(skipped.models) &&
+      outerOpen?.name === def.name &&
+      hasAction(outerOpen.actions, "close") && !hasAction(outerOpen.actions, "open") &&
+      JSON.stringify(outerOpen.models) === JSON.stringify(def.models) &&
+      ![id, id + 1, id + 2, id + 3].some((candidate) => DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(candidate))
+    ) {
+      closedToOpen.set(id, id + 3);
+      openToClosed.set(id + 3, id);
     }
   }
   for (const [closedId, openId] of SINGLE_DOOR_OPEN_IDS) {

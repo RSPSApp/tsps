@@ -9,10 +9,13 @@
  *
  * Stage varp: 714 ("rag_quest" in the cache gameval dump; `dump:cs2 4024`'s
  * quest-value getter returns get_varp 714 for the Rag and Bone Man entry). The
- * wiki does not publish its values, so the plugin mirrors its own scheme:
- * 0 not started, 1 started, 2 complete. Which of the eight bones have been
- * handed in lives in the persisted "quest.rag_and_bone_man_i.handed" bit
- * attribute, because varp 714 has no varbits to carry them.
+ * durable stage is 0 not started, 1 started, 2 complete. Quest DB row 114
+ * (table 0, column 19) completes at 4, which is the value script 4029 compares
+ * against, so the wire mapping is 0/1/4 rather than 0/1/2. Rag and Bone Man II
+ * shares the same varp and takes it over from 4 once this quest is complete.
+ * Which of the eight bones have been handed in lives in the persisted
+ * "quest.rag_and_bone_man_i.handed" bit attribute, because varp 714 has no
+ * varbits to carry them.
  *
  * Bones (raw / bone in vinegar / cleaned), cache item dump:
  *   goblin 7812/7813/7814, bear 7815/7816/7817, ram 7818/7819/7820,
@@ -72,8 +75,11 @@ module.exports = function registerRagAndBoneManIQuest(api) {
   const VARP_RAG_AND_BONE_MAN_I = 714; // "rag_quest"
   const STAGE_STARTED = 1;
   const STAGE_COMPLETE = 2;
+  const WIRE_STARTED = 1;
+  const WIRE_COMPLETE = 4; // quest DB row 114, column 19 (script 4029 threshold)
 
   const START_HOOK = "quest:rag-and-bone-man-i:start";
+  const LOAD_SHARED_VINEGAR_BONE_EVENT = "rag-and-bone-man-i:load-vinegar-bone";
 
   const JUG_OF_VINEGAR_ITEM_ID = ItemIdentifiers.JUG_OF_VINEGAR; // 7810
   const POT_OF_VINEGAR_ITEM_ID = ItemIdentifiers.POT_OF_VINEGAR; // 7811
@@ -176,6 +182,13 @@ module.exports = function registerRagAndBoneManIQuest(api) {
 
   function hasHanded(player, bit) {
     return (handedBits(player) & bit) !== 0;
+  }
+
+  /** Durable stage -> the value native getState compares against threshold 4. */
+  function wireValue(stage) {
+    if (stage >= STAGE_COMPLETE) return WIRE_COMPLETE;
+    if (stage >= STAGE_STARTED) return WIRE_STARTED;
+    return 0;
   }
 
   function allBonesHandedIn(player) {
@@ -410,6 +423,32 @@ module.exports = function registerRagAndBoneManIQuest(api) {
     return /\blogs$/i.test(name) && !/pyre/i.test(name);
   }
 
+  function loadVinegarBone(event, bone) {
+    if (!isPotBoiler(event)) return;
+    const { player, itemId } = event;
+    if (itemId !== bone.vinegar) return;
+    if (player.getInventory().getAmount(itemId) <= 0) return;
+    const boiler = getBoiler(player);
+    event.handled = true;
+    if (boiler.state === BOILER_EMPTY) {
+      player.sendMessage("You need to add some logs to the pot-boiler first.");
+      return;
+    }
+    if (boiler.state !== BOILER_LOGS) {
+      player.sendMessage("There is already a pot in the pot-boiler.");
+      return;
+    }
+    player.getInventory().deleteNumber(itemId, 1);
+    boiler.bone = bone;
+    player.setAttribute(BOILER_ATTRIBUTE, bone.vinegar);
+    showBoiler(player, BOILER_BONE);
+  }
+
+  function handleLoadSharedVinegarBone({ event, bone }) {
+    if (!event || !bone || !Number.isInteger(bone.vinegar) || !Number.isInteger(bone.cleaned)) return;
+    loadVinegarBone(event, bone);
+  }
+
   function handleItemOnObject(event) {
     if (!isPotBoiler(event)) return;
     const { player, itemId } = event;
@@ -428,19 +467,7 @@ module.exports = function registerRagAndBoneManIQuest(api) {
     }
     const bone = VINEGAR_BONE_BY_ITEM.get(itemId);
     if (bone) {
-      event.handled = true;
-      if (boiler.state === BOILER_EMPTY) {
-        player.sendMessage("You need to add some logs to the pot-boiler first.");
-        return;
-      }
-      if (boiler.state !== BOILER_LOGS) {
-        player.sendMessage("There is already a pot in the pot-boiler.");
-        return;
-      }
-      player.getInventory().deleteNumber(itemId, 1);
-      boiler.bone = bone;
-      player.setAttribute(BOILER_ATTRIBUTE, bone.vinegar);
-      showBoiler(player, BOILER_BONE);
+      loadVinegarBone(event, bone);
       return;
     }
     if (itemId === TINDERBOX_ITEM_ID) {
@@ -513,10 +540,12 @@ module.exports = function registerRagAndBoneManIQuest(api) {
   function handleLogin({ player }) {
     // The boiler state does not survive a relog; hand the bone in vinegar back.
     const pending = Number(player.getAttribute(BOILER_ATTRIBUTE)) || 0;
-    const bone = VINEGAR_BONE_BY_ITEM.get(pending);
-    if (bone && player.getInventory().getFreeSlots() > 0) {
+    const boiler = getBoiler(player);
+    boiler.bone = null;
+    showBoiler(player, BOILER_EMPTY);
+    if (pending > 0 && player.getInventory().getFreeSlots() > 0) {
       player.setAttribute(BOILER_ATTRIBUTE, 0);
-      player.getInventory().adds(bone.vinegar, 1);
+      player.getInventory().adds(pending, 1);
     }
     refreshQuestList(player);
   }
@@ -574,6 +603,7 @@ module.exports = function registerRagAndBoneManIQuest(api) {
     key: "rag_and_bone_man_i",
     name: "Rag and Bone Man I",
     varpId: VARP_RAG_AND_BONE_MAN_I,
+    varpValue: wireValue,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
@@ -592,6 +622,7 @@ module.exports = function registerRagAndBoneManIQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onCustomEvent(LOAD_SHARED_VINEGAR_BONE_EVENT, handleLoadSharedVinegarBone);
   api.onObjectInteraction("Pot-boiler", {
     "Remove-Pot": handleRemovePot,
     "Remove-Bone": handleRemoveBone,

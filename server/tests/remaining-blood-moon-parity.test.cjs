@@ -62,12 +62,14 @@ function harness({ realObjects = false } = {}) {
     spawnNpc(definition) {
       if (failSpawnId === definition.id && failSpawnCount > 0) { failSpawnCount--; return null; }
       const npc = { ...definition, getId: () => definition.id, getIndex: () => nextIndex++, isNpc: () => true, isRegistered: () => !removed.includes(npc),
+        getCurrentDefinition: () => core.NpcDefinition.forId(definition.id), isVisible: () => true,
+        isOwnerOnly: () => definition.ownerOnly === true, getPrivateArea: () => npc.area ?? null,
         isPlayer: () => false, getAsNpc() { return npc; }, getLocation: () => new core.Location(definition.x, definition.y, definition.z),
         getHitpoints: () => npc.hp ?? 1, setHitpoints(value) { npc.hp = value; }, getArea: () => npc.area ?? null, setArea(value) { npc.area = value; }, getOwner: () => definition.owner,
         getMovementQueue: () => ({ reset() { return this; }, setBlockMovement: noop, addFirstStep: noop }),
         getCombat: () => ({ reset: noop, attack: noop, getLastAttack: () => ({ reset: noop }) }), remove: noop,
         setMaxHitpoints: noop, setScriptedMovement: noop, setMultiCombat: noop, setNpcTransformationId: noop,
-        setFlag: noop, performAnimation: noop, performGraphic: noop, forceChat: noop,
+        setFlag: noop, performAnimation: noop, performGraphic: noop, forceChat: text => { npc.chat = text; },
         setPositionToFace: noop, exactMove: noop, setFollowing: noop };
       npcs.push(npc); return npc;
     },
@@ -561,8 +563,8 @@ test('repeated gather input spawns one boss and logout cleans every actor', () =
   for (const npc of gathering) assert.ok(h.removed.includes(npc), 'gathering actor removed on logout');
 });
 
-function startTranscript(h, p, npcId, variant) {
-  assert.equal(runtime.startTranscript(h.api, p, npcId, 'The Blood Moon Rises', variant), true);
+function startTranscript(h, p, npcId, variant, npc = null) {
+  assert.equal(runtime.startTranscript(h.api, p, npcId, 'The Blood Moon Rises', variant, undefined, npc), true);
 }
 
 test('real starting-out transcript keys on placeholders for two different players', () => {
@@ -836,8 +838,10 @@ test('real escape action transports to the captured hideout landing and cleans t
   p.attrs.set('the-blood-moon-rises:gathering-scene-started', true);
   p.moveTo(new core.Location(3574, 3362, 0));
   p.movementBlocked = true;
-  startTranscript(h, p, 0, 'starting-out-escaping-the-vampyres');
-  for (let i = 0; i < 30 && h.quest.getStage(p) !== 25; i++) p.manager.advance();
+  p.getLocalNpcs = () => h.npcs;
+  const ivan = h.api.spawnNpc({ id: N.IVAN_STROM_13, x: 3574, y: 3362, z: 0 });
+  startTranscript(h, p, N.IVAN_STROM_13, 'starting-out-escaping-the-vampyres', ivan);
+  for (let i = 0; i < 80 && h.quest.getStage(p) !== 25; i++) h.tick(2);
   assert.equal(h.quest.getStage(p), 25);
   assert.equal(p.getLocation().getX(), 3599);
   assert.equal(p.getLocation().getY(), 9615);
@@ -1063,6 +1067,7 @@ test('Paterdomus 32 -> 34 spawns only the captured 16154/55/56 battle roster', (
 test('Paterdomus battle clears native 34 -> 36 only after all six combat monks die', () => {
   const { BoatManager } = require('../dist/game/content/sailing/BoatManager');
   const h = harness(), p = player('Alice');
+  p.getLocalNpcs = () => h.npcs;
   enablePrereqs(h, new Set(PREREQS));
   h.quest.setStage(p, 30);
   const STORY = 'quest.the_blood_moon_rises.slepe-story';
@@ -1080,8 +1085,12 @@ test('Paterdomus battle clears native 34 -> 36 only after all six combat monks d
   h.emit('npc-death', { npc: monks[5], killer: p });
   assert.equal(p.attrs.get(STORY).monksCleared, true);
   assert.equal(p.varbits.get(15464), 36, 'the sixth death advances native 34 -> 36');
-  assert.ok(h.removed.includes(ivan), 'the captured Ivan combat actor is removed with the scene');
+  assert.ok(!h.removed.includes(ivan), 'the captured Ivan actor remains for the post-fight overhead');
   assert.ok(p.manager.getCurrent(), 'upon-killing-monks transcript starts');
+  for (let step = 0; step < 20 && !ivan.chat; step++) p.manager.advance();
+  assert.equal(ivan.chat, 'Nice job, Alice. Let\'s check upstairs.', 'the real battle Ivan speaks his captured overhead');
+  h.tick(2);
+  assert.ok(h.removed.includes(ivan), 'the battle actor is cleaned up after the overhead continuation');
   assert.equal(p.getArea(), null, 'the fight ends back in the ordinary temple');
   assert.equal(p.getPrivateArea(), null);
   assert.equal(BoatManager.syncArea(p), null);
@@ -1541,6 +1550,7 @@ test('Wyrd 10% story starts on a real HP jump, survives a cancelled chatbox, and
 
 test('Wyrd normal 80/50/10 story thresholds play in order without duplicates', () => {
   const h = harness(), p = player('WyrdNormal');
+  p.getLocalNpcs = () => h.npcs;
   enablePrereqs(h, new Set(PREREQS));
   h.quest.setStage(p, 90);
   h.emit('npc-dialogue:action', { player: p, stepId: '4G5OZg', kind: 'action' });
@@ -1554,17 +1564,19 @@ test('Wyrd normal 80/50/10 story thresholds play in order without duplicates', (
   const originalCycle = h.api.core.World.getProcessCycle;
   let cycle = 2000;
   h.api.core.World.getProcessCycle = () => ++cycle;
-  const finish = () => { let guard = 100; while (p.manager.isActive() && guard-- > 0) p.manager.advance(); };
+  const finish = () => { let guard = 100; while (p.manager.isActive() && guard-- > 0) { h.tick(2); p.manager.advance(); } };
   try {
     boss.setHitpoints(880);
     area.process(boss);
-    assert.ok(p.manager.getCurrent()?.getText?.().includes('Leave!'), 'the captured 80% line plays');
+    h.tick(2);
+    assert.ok(boss.chat?.includes('Leave!'), 'the captured 80% overhead line plays');
     finish();
     assert.equal(p.manager.isActive(), false, 'the 80% conversation completes once');
 
     boss.setHitpoints(550);
     area.process(boss);
-    assert.ok(p.manager.getCurrent()?.getText?.().includes('Hunger!'), 'the captured 50% line plays');
+    h.tick(2);
+    assert.ok(boss.chat?.includes('Hunger!'), 'the captured 50% overhead line plays');
     finish();
 
     boss.setHitpoints(110);

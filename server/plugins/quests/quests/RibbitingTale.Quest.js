@@ -103,6 +103,8 @@ module.exports = function registerRibbitingTaleQuest(api) {
   ]);
 
   const JANE_NPC_ID = NpcIdentifiers.JANE;
+  // Talk-to resolves the cache transform parent (13405), not the named child (12951).
+  const JANE_NPC_IDS = new Set([NpcIdentifiers.JANE, NpcIdentifiers.JANE_2, 13405]);
   const MARCELLUS_NPC_ID = NpcIdentifiers.MARCELLUS;
   const CUTHBERT_COMBAT_NPC_ID = NpcIdentifiers.CUTHBERT_LORD_OF_DREAD;
 
@@ -454,7 +456,7 @@ module.exports = function registerRibbitingTaleQuest(api) {
     if (stage <= STAGE_ELECTION) return "democracy-at-work-talking-to-dave-or-jane";
     if (stage < STAGE_SABOTAGED) return "democracy-at-work-talking-to-dave-or-jane-again";
     if (stage <= STAGE_DEMOCRACY_DONE) {
-      return npcId === JANE_NPC_ID
+      return JANE_NPC_IDS.has(npcId)
         ? "democracy-at-work-after-chopping-down-the-orange-tree"
         : "democracy-at-work-after-chopping-down-the-orange-tree-talking-to-dave-or-jane-after-chopping-down-the-orange-tree";
     }
@@ -783,6 +785,10 @@ module.exports = function registerRibbitingTaleQuest(api) {
       player.setAttribute(STAGE_VERSION_ATTRIBUTE, 1);
       player.setAttribute(LEGACY_CHEST_ATTRIBUTE, false);
     }
+    // Saves completed before the reward wrote the patch flag still own the patch.
+    if (quest.isComplete(player) && player.getAttribute(PATCH_UNLOCKED_ATTRIBUTE) !== true) {
+      player.setAttribute(PATCH_UNLOCKED_ATTRIBUTE, true);
+    }
     player.getPacketSender().sendVarbit(VARBIT_PATCH_UNLOCKED, player.getAttribute(PATCH_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
     refreshQuestList(player);
     ensureCuthbert(player);
@@ -914,6 +920,9 @@ module.exports = function registerRibbitingTaleQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.WOODCUTTING, 2000);
+    // The hardwood patch is a completion reward, not a post-quest conversation unlock.
+    player.setAttribute(PATCH_UNLOCKED_ATTRIBUTE, true);
+    player.getPacketSender().sendVarbit(VARBIT_PATCH_UNLOCKED, 1);
   }
   function canUsePatch(event) {
     const { player, patch } = event;

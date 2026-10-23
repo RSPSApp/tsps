@@ -56,16 +56,29 @@
  *  - Teleports use fixed tiles; the chapter 4 arena is the cache's jungle-demon
  *    room on plane 1, and only the Jungle Demon is spawned for the fight (no
  *    squad NPCs, no cutscenes).
- *  - Prerequisite quests (The Grand Tree, Tree Gnome Village) are not enforced.
+ *  - The start requires The Grand Tree and Tree Gnome Village (the wiki's
+ *    requirement list); the quest has no skill requirement, so none is
+ *    enforced.
  *  - The wiki's "teleporting loses the monkey" rule is not enforced.
- *  - This plugin adds the one missing static spawn it needs: Daero (npc 2020)
- *    on the Grand Tree's first floor at 2482,3486 (the repo's spawn data only
- *    places him inside the two hangar map copies), so the hangar travel loop
- *    works after leaving for Ardougne. Everything else is an existing spawn.
+ *  - Daero (npc 2020) is an existing Grand Tree first-floor spawn; this plugin
+ *    only re-sends its mm_daero transform varbit, it does not spawn a duplicate.
+ *  - The quest owns four climbs (the temple trapdoor, the two underground
+ *    ropes and the watchtower's top ladder). Each claim is scoped to the
+ *    object's own placement in the cache and to the direction the clicked
+ *    option names; the climb itself is handed to the Ladders plugin with an
+ *    explicit destination, so it animates and walks the collision map.
+ *  - The 10,000 coins and the three diamonds go through the engine's reward
+ *    overflow path (the pattern Waterfall Quest uses), so a full bag drops
+ *    them at the player's feet instead of losing them.
+ *  - The throne object (4771) stays with this plugin; after Monkey Madness II
+ *    it plays MM2's canonical "after-completing-monkey-madness-ii" page, since
+ *    MM2 releases its own Awowogei when it completes.
  */
 module.exports = function registerMonkeyMadnessIQuest(api) {
   const {
     Equipment,
+    Item,
+    ItemDefinition,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
@@ -81,9 +94,13 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   const PAGE = "Monkey Madness I";
 
   const VARP_MM_MAIN = 365; // "mm_main"
+  const VARBIT_MM_NARNODE = 121; // varp 372 bits 0-4
+  const VARBIT_MM_CARANOCK = 122; // varp 372 bits 5-6
   const VARBIT_MM_DAERO = 123; // varp 372 bits 7-10
   const VARBIT_MM_WAYDAR = 124; // varp 372 bits 11-12
   const VARBIT_MM_LUMDO = 125; // varp 372 bits 13-15
+  const VARBIT_MM_GARKOR = 126; // varp 372 bits 16-18
+  const VARBIT_MM_ZOOKNOCK = 127; // varp 372 bits 19-21
 
   const STAGE_STARTED = 1;
   const STAGE_SHIPYARD = 2;
@@ -176,14 +193,20 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   // 5264 is the matching "Awowogei" NPC definition, used as the chathead.
   const AWOWOGEI_OBJECT_ID = ObjectIdentifiers.AWOWOGEI; // 4771
   const AWOWOGEI_CHATHEAD_ID = NpcIdentifiers.AWOWOGEI_3; // 5264
+  // Monkey Madness II spawns its own Awowogei (6812) and releases it when the
+  // quest completes; the throne object stays here, so the chathead for MM2's
+  // canonical post-quest page is the same npc.
+  const AWOWOGEI_MM2_CHATHEAD_ID = NpcIdentifiers.AWOWOGEI_4; // 6812
+  const AWOWOGEI_PAGE = "Awowogei";
+
+  // The wiki's requirement list: The Grand Tree and Tree Gnome Village must be
+  // finished before Narnode asks for help. The quest has no skill requirement.
+  const PREREQUISITE_QUESTS = ["grand_tree", "tree_gnome_village"];
 
   // Transcript chatheads passed to startTranscript for object/item-driven pages.
   const CRATE_CHATHEAD_ID = NpcIdentifiers.DAERO; // 1444, never speaks in those pages
   const DUNGEON_CHATHEAD_ID = NpcIdentifiers.ZOOKNOCK; // 1442
   const GARKOR_CHATHEAD_ID = NpcIdentifiers.GARKOR; // 1434
-  // Both Daero spawn rows are nameless placeholders that the cache transforms by
-  // varbit mm_daero (123): 1444 with one option below 4, 1445 with Travel at 4+.
-  const DAERO_PLACEHOLDER_ID = 2020; // "null" -> Daero 1444/1445
 
   // Every npc id whose transcript events this quest answers.
   const DIALOGUE_NPC_IDS = new Set([
@@ -257,7 +280,17 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     ObjectIdentifiers.TRAPDOOR_21, // 4880
   ]);
   const TEMPLE_ROPE_ID = ObjectIdentifiers.CLIMBING_ROPE_7; // 4881
-  const MOULD_ROOM_ROPE_ID = 4889; // nameless cache id, "Climbing rope" at 2764,9165
+  const MOULD_ROOM_ROPE_ID = ObjectIdentifiers.CLIMBING_ROPE_8; // 4889, at 2764,9165
+  // The east watchtower top ladder at 2729,2766 plane 2; ClimbLinks stops at the
+  // decorative plane-1 ladder, whose adjacent landing tiles are all blocked.
+  const WATCHTOWER_TOP_EAST_ID = ObjectIdentifiers.BAMBOO_LADDER_7; // 4776
+
+  // Where those four objects stand in the cache, so a claim only fires for the
+  // object the player actually clicked and only from the plane it stands on.
+  const TEMPLE_TRAPDOOR_TILE = new Location(2807, 2785, 0);
+  const TEMPLE_ROPE_TILE = new Location(2808, 9201, 0);
+  const MOULD_ROOM_ROPE_TILE = new Location(2764, 9165, 0);
+  const WATCHTOWER_TOP_TILE = new Location(2729, 2766, 2);
 
   const JUNGLE_DEMON_NPC_ID = NpcIdentifiers.JUNGLE_DEMON; // 1443
 
@@ -278,6 +311,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   const ARENA_DEMON = new Location(2713, 9168, 1);
   const ZOO_PEN = new Location(2602, 3280, 0);
   const ZOO_OUTSIDE = new Location(2596, 3276, 0);
+  const WATCHTOWER_KRUK_LANDING = new Location(2730, 2766, 0);
 
   const ZOO_IDS = { minX: 2594, maxX: 2612, minY: 3272, maxY: 3286 };
   const WEST_VALLEY_ZONE = { minX: 2687, maxX: 2737, minY: 2738, maxY: 2766, levels: [0] };
@@ -288,6 +322,15 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
 
   const CHILD_WAIT_MS = 30000; // "enough time has passed" approximation
   const BANANAS_FOR_CHILD = 5;
+
+  // The cache's option spellings for each climb direction. A bare "Climb" is
+  // the ropes' only option and only leads up, so it counts as climbing up.
+  const CLIMB_UP_OPTIONS = new Set([
+    "climb-up", "climb up", "climb", "walk-up", "ascend", "top-floor",
+  ]);
+  const CLIMB_DOWN_OPTIONS = new Set([
+    "climb-down", "climb down", "walk-down", "descend", "bottom-floor",
+  ]);
 
   // ==========================================================================
   // Persisted attributes
@@ -311,6 +354,10 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   const SIGIL_USED_ATTRIBUTE = "quest.monkey_madness_i.sigil-used";
   const DEMON_KILLED_ATTRIBUTE = "quest.monkey_madness_i.demon-killed";
   const ZOOKNOCK_MET_ATTRIBUTE = "quest.monkey_madness_i.zooknock-met";
+  const NARNODE_HELPER_ATTRIBUTE = "monkey-madness-i:narnode-progress";
+  const CARANOCK_HELPER_ATTRIBUTE = "monkey-madness-i:caranock-progress";
+  const GARKOR_HELPER_ATTRIBUTE = "monkey-madness-i:garkor-progress";
+  const ZOOKNOCK_HELPER_ATTRIBUTE = "monkey-madness-i:zooknock-progress";
   const MOULD_GIVEN_ATTRIBUTE = "quest.monkey_madness_i.mould-given";
   const DENTURES_GIVEN_ATTRIBUTE = "quest.monkey_madness_i.dentures-given";
   const BAR_GIVEN_ATTRIBUTE = "quest.monkey_madness_i.bar-given";
@@ -357,6 +404,19 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
 
   function setStage(player, value) {
     if (quest.getStage(player) !== value) quest.setStage(player, value);
+  }
+
+  /** Asks QuestRuntime whether another registered quest has completed. */
+  function questComplete(player, key) {
+    const request = { player, key, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  function otherQuestStage(player, key) {
+    const request = { player, key, stage: null };
+    api.emitCustomEvent("quest:get-stage", request);
+    return Number.isFinite(request.stage) ? request.stage | 0 : 0;
   }
 
   function hasItem(player, itemId, amount = 1) {
@@ -435,12 +495,21 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     player.getPacketSender().sendVarbit(VARBIT_MM_LUMDO, value | 0);
   }
 
+  function setHelperProgress(player, attributeKey, varbitId, value) {
+    player.setAttribute(attributeKey, value);
+    player.getPacketSender().sendVarbit(varbitId, value);
+  }
+
   /** Re-sends the mm_gnomes varbits the spawn placeholders resolve through. */
   function syncGnomeVarps(player) {
     const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_MM_NARNODE, attribute(player, NARNODE_HELPER_ATTRIBUTE));
+    sender.sendVarbit(VARBIT_MM_CARANOCK, attribute(player, CARANOCK_HELPER_ATTRIBUTE));
     sender.sendVarbit(VARBIT_MM_DAERO, daeroState(player));
     sender.sendVarbit(VARBIT_MM_WAYDAR, waydarState(player));
     sender.sendVarbit(VARBIT_MM_LUMDO, lumdoState(player));
+    sender.sendVarbit(VARBIT_MM_GARKOR, attribute(player, GARKOR_HELPER_ATTRIBUTE));
+    sender.sendVarbit(VARBIT_MM_ZOOKNOCK, attribute(player, ZOOKNOCK_HELPER_ATTRIBUTE));
   }
 
   function addSeal(player) {
@@ -455,6 +524,9 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   function selectNarnodeVariant({ npcId, player }) {
     if (!NARNODE_IDS.has(npcId)) return null;
     const stage = stageOf(player);
+    // Monkey Madness II also owns Narnode after The Grand Tree. Yield so its
+    // later selector can choose the active quest's canonical transcript.
+    if (stage >= STAGE_COMPLETE && otherQuestStage(player, "grand_tree") >= 160) return null;
     if (stage >= STAGE_COMPLETE) return { page: "King Narnode Shareen", variant: "after-monkey-madness-i" };
     if (stage >= STAGE_CHAPTERS) {
       return flag(player, DEMON_KILLED_ATTRIBUTE)
@@ -472,7 +544,6 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
         : "chapter-1-talking-to-king-narnode-shareen";
     }
     if (stage === STAGE_SHIPYARD) {
-      setStage(player, STAGE_ORDERS);
       return "chapter-1-returning-to-king-narnode";
     }
     if (stage >= STAGE_DAERO) return "chapter-1-talking-to-king-narnode-after-starting-the-quest";
@@ -495,7 +566,6 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     const stage = stageOf(player);
     if (stage >= STAGE_COMPLETE) return { page: "G.L.O. Caranock", variant: "after-monkey-madness-i" };
     if (stage === STAGE_STARTED) {
-      setStage(player, STAGE_SHIPYARD);
       return "chapter-1-talking-to-g-l-o-caranock";
     }
     if (stage >= STAGE_SHIPYARD) return "chapter-1-talking-to-caranock-again";
@@ -509,8 +579,6 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     const state = daeroState(player);
     if (stage >= STAGE_REINITIALISED && inHangar(player)) {
       if (!flag(player, POST_PUZZLE_TALK_ATTRIBUTE)) {
-        player.setAttribute(POST_PUZZLE_TALK_ATTRIBUTE, true);
-        setDaeroState(player, 7);
         return "chapter-1-the-underground-hangar-speaking-to-daero-in-the-underground-hangar-after-the-puzzle-is-complete";
       }
       return "chapter-1-speaking-to-waydar-after-solving-the-puzzle-talking-to-daero-again";
@@ -595,7 +663,6 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
       if (flag(player, SIGIL_GIVEN_ATTRIBUTE)) return "chapter-4-talking-to-garkor-again";
       if (flag(player, CHAPTER4_SEEN_ATTRIBUTE)) return "chapter-4";
       if (flag(player, MONKEY_DELIVERED_ATTRIBUTE)) {
-        player.setAttribute(CHAPTER4_SEEN_ATTRIBUTE, true);
         return "chapter-3-returning-to-garkor";
       }
       if (flag(player, GARKOR_DISGUISED_ATTRIBUTE)) {
@@ -603,19 +670,15 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
       }
       if (!flag(player, GARKOR_ASKED_ATTRIBUTE)) return "chapter-2-talking-to-garkor-again";
       if (monkeyForm(player)) {
-        player.setAttribute(GARKOR_DISGUISED_ATTRIBUTE, true);
         return "chapter-3-talking-to-garkor-while-disguised";
       }
       return "chapter-3-talking-to-garkor-while-not-disguised";
     }
     if (!flag(player, GARKOR_MET_ATTRIBUTE)) {
-      player.setAttribute(GARKOR_MET_ATTRIBUTE, true);
-      player.setAttribute(GARKOR_ASKED_ATTRIBUTE, true);
       return "chapter-2-talking-to-garkor";
     }
     if (!flag(player, GARKOR_ASKED_ATTRIBUTE)) return "chapter-2-talking-to-garkor-again";
     if (monkeyForm(player)) {
-      player.setAttribute(GARKOR_DISGUISED_ATTRIBUTE, true);
       return "chapter-3-talking-to-garkor-while-disguised";
     }
     return "chapter-2-talking-to-garkor-again";
@@ -640,7 +703,6 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     }
     if (stage < STAGE_ATOLL) return null;
     if (!flag(player, ZOOKNOCK_MET_ATTRIBUTE)) {
-      player.setAttribute(ZOOKNOCK_MET_ATTRIBUTE, true);
       return "chapter-2-talking-to-zooknock";
     }
     if (!flag(player, GARKOR_ASKED_ATTRIBUTE)) {
@@ -831,11 +893,9 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
       case "1hF4h6": // Zooknock: after talking to Garkor
         return flag(player, GARKOR_ASKED_ATTRIBUTE);
       case "aH18LQ": // Zooknock: has all monkeyspeak amulet items
-        // Conditions are resolved before the branch's "hand over the bar" message
-        // fires, so the bar counts from the inventory, not from the handed-in flag.
         return flag(player, MOULD_GIVEN_ATTRIBUTE)
           && flag(player, DENTURES_GIVEN_ATTRIBUTE)
-          && hasItem(player, GOLD_BAR_ITEM);
+          && flag(player, BAR_GIVEN_ATTRIBUTE);
       case "KQRiu4": // Garkor: not transformed into a Karamjan monkey
       case "tcp8pc": // Kruk: transformed into the wrong monkey
         return !monkeyForm(player);
@@ -868,11 +928,20 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     if (!DIALOGUE_NPC_IDS.has(event.npcId)) return;
     switch (stepId) {
       case "AT80aC": // Narnode hands over a copy of the Royal Seal
+        // The start was refused (a prerequisite quest is unfinished), so no seal.
+        if (stageOf(player) < STAGE_STARTED) {
+          event.handled = true;
+          return;
+        }
         addSeal(player);
         return;
       case "1b-5vN": // Narnode hands over the handwritten orders
       case "g-Kuxc":
         if (!hasItem(player, NARNODES_ORDERS_ITEM)) addItem(player, NARNODES_ORDERS_ITEM);
+        if (stepId === "1b-5vN" && stageOf(player) === STAGE_SHIPYARD) {
+          setStage(player, STAGE_ORDERS);
+          setHelperProgress(player, NARNODE_HELPER_ATTRIBUTE, VARBIT_MM_NARNODE, 7);
+        }
         return;
       case "S_fRY7": // orders handed to Daero
         player.getInventory().deleteNumber(NARNODES_ORDERS_ITEM, 1);
@@ -946,6 +1015,12 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
         }
         return;
       case "URF9yW": // Zooknock returns the enchanted bar and the mould (message)
+        if (!flag(player, BAR_GIVEN_ATTRIBUTE)
+          || !flag(player, MOULD_GIVEN_ATTRIBUTE)
+          || !flag(player, DENTURES_GIVEN_ATTRIBUTE)) {
+          event.handled = true;
+          return;
+        }
         if (!hasItem(player, ENCHANTED_BAR_ITEM)) addItem(player, ENCHANTED_BAR_ITEM);
         if (!hasItem(player, MAMULET_MOULD_ITEM)) addItem(player, MAMULET_MOULD_ITEM);
         player.setAttribute(MOULD_GIVEN_ATTRIBUTE, false);
@@ -996,6 +1071,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
         return;
       case "1ZViOR": // Garkor hands over the squad sigil (message)
         player.setAttribute(SIGIL_GIVEN_ATTRIBUTE, true);
+        setHelperProgress(player, GARKOR_HELPER_ATTRIBUTE, VARBIT_MM_GARKOR, 6);
         if (!hasItem(player, SQUAD_SIGIL_ITEM)) addItem(player, SQUAD_SIGIL_ITEM);
         return;
       case "5DPD9f": // a replica sigil from Waymottin (message)
@@ -1124,6 +1200,45 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   function handleLine(event) {
     const { player, npcId, text } = event;
     if (!DIALOGUE_NPC_IDS.has(npcId)) return;
+    if (CARANOCK_IDS.has(npcId) && stageOf(player) === STAGE_STARTED
+      && text === "I shall personally see to the decommission. You should report to the King immediately.") {
+      setStage(player, STAGE_SHIPYARD);
+      setHelperProgress(player, CARANOCK_HELPER_ATTRIBUTE, VARBIT_MM_CARANOCK, 3);
+      return;
+    }
+    if (GARKOR_IDS.has(npcId) && stageOf(player) >= STAGE_ATOLL
+      && !flag(player, GARKOR_MET_ATTRIBUTE)
+      && text === "Just go and find my squad mage, human.") {
+      player.setAttribute(GARKOR_MET_ATTRIBUTE, true);
+      player.setAttribute(GARKOR_ASKED_ATTRIBUTE, true);
+      setHelperProgress(player, GARKOR_HELPER_ATTRIBUTE, VARBIT_MM_GARKOR, 2);
+      return;
+    }
+    if (GARKOR_IDS.has(npcId) && flag(player, GARKOR_ASKED_ATTRIBUTE)
+      && !flag(player, GARKOR_DISGUISED_ATTRIBUTE)
+      && monkeyForm(player)
+      && text === "I need you now to seek audience with Awowogei. Claim you are an envoy from the monkeys of Karamja and are seeking an alliance.") {
+      player.setAttribute(GARKOR_DISGUISED_ATTRIBUTE, true);
+      setHelperProgress(player, GARKOR_HELPER_ATTRIBUTE, VARBIT_MM_GARKOR, 3);
+      return;
+    }
+    if (ZOOKNOCK_IDS.has(npcId) && !flag(player, ZOOKNOCK_MET_ATTRIBUTE)
+      && text === "I am Zooknock, the 10th squad mage. These are Bunkwicket and Waymottin, two of our finest sappers. I assume you will want to know how we got here?") {
+      player.setAttribute(ZOOKNOCK_MET_ATTRIBUTE, true);
+      return;
+    }
+    if (ZOOKNOCK_IDS.has(npcId) && flag(player, GARKOR_ASKED_ATTRIBUTE)
+      && text === "I have the necessary magic to perform the shapeshifting spell, but we needed a human to transform.") {
+      setHelperProgress(player, ZOOKNOCK_HELPER_ATTRIBUTE, VARBIT_MM_ZOOKNOCK, 5);
+      return;
+    }
+    if (DAERO_IDS.has(npcId) && stageOf(player) >= STAGE_REINITIALISED
+      && !flag(player, POST_PUZZLE_TALK_ATTRIBUTE)
+      && text === "Well done, adventurer. You have managed to break Glough's code. Now the process of reinitialisation is complete, you can truly begin your journey into the unknown.") {
+      player.setAttribute(POST_PUZZLE_TALK_ATTRIBUTE, true);
+      setDaeroState(player, 7);
+      return;
+    }
     // Waydar's "Yes, let's go." flies the player to Crash Island from the hangar,
     // and Waydar on Crash Island offers the return to the stronghold.
     if (WAYDAR_IDS.has(npcId) && text === "Yes, let's go.") {
@@ -1150,7 +1265,14 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   function handleHook({ player, npcId, hook }) {
     if (hook !== "quest:monkey-madness-i:start") return;
     if (!NARNODE_IDS.has(npcId)) return;
-    if (quest.getStage(player) === 0) quest.setStage(player, STAGE_STARTED);
+    if (quest.getStage(player) !== 0) return;
+    // The wiki's requirement list: Narnode only asks a player who has finished
+    // The Grand Tree and Tree Gnome Village.
+    if (!PREREQUISITE_QUESTS.every((key) => questComplete(player, key))) {
+      player.sendMessage("You need to have completed The Grand Tree and Tree Gnome Village before Narnode can ask for your help.");
+      return;
+    }
+    quest.setStage(player, STAGE_STARTED);
   }
 
   // ==========================================================================
@@ -1286,6 +1408,14 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     const option = optionOf(event);
 
     if (objectId === AWOWOGEI_OBJECT_ID && option === "Talk-to") {
+      if (questComplete(player, "monkey_madness_ii")) {
+        // Monkey Madness II owns the post-completion conversation and releases
+        // its own Awowogei when it completes; the throne object stays with this
+        // plugin, so it plays MM2's canonical page.
+        event.handled = true;
+        startTranscript(api, player, AWOWOGEI_MM2_CHATHEAD_ID, AWOWOGEI_PAGE, "after-completing-monkey-madness-ii");
+        return;
+      }
       event.handled = true;
       talkAwowogei(player);
       return;
@@ -1357,24 +1487,83 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
       stepThrough(player, event.location);
       return;
     }
-    if (TEMPLE_TRAPDOOR_IDS.has(objectId) && option === "Open") {
+    if (TEMPLE_TRAPDOOR_IDS.has(objectId) && (option === "Open" || option === "Climb-down")) {
       event.handled = true;
-      if (player.getLocation().getY() > 9000) player.moveTo(TEMPLE_SURFACE_LANDING);
-      else player.moveTo(TEMPLE_DUNGEON_LANDING);
+      // The trapdoor stands on the temple surface (2807,2785); opening it or
+      // climbing down it drops the player into the dungeon below.
+      climbTo({ player, object: event.object }, "ladders:climbDown", TEMPLE_DUNGEON_LANDING);
       return;
     }
     if (objectId === TEMPLE_ROPE_ID && option === "Climb") {
       event.handled = true;
-      player.moveTo(TEMPLE_SURFACE_LANDING);
+      // The rope in the temple dungeon only leads up to the surface.
+      climbTo({ player, object: event.object }, "ladders:climbUp", TEMPLE_SURFACE_LANDING);
       return;
     }
   }
 
-  /** Ladders asks who owns a climb before guessing; the cavern rope exits to the denture house. */
-  function claimMouldRoomRope(request) {
-    if (request.objectId !== MOULD_ROOM_ROPE_ID) return;
-    request.handled = true;
-    request.player.moveTo(DENTURE_HOUSE_LANDING);
+  /**
+   * Ladders asks who owns a climb before guessing. These four objects have no
+   * ladder at their far end (a trapdoor over a ledge, a rope to the surface, a
+   * ladder whose plane below is solid), so the quest owns the click. The claim
+   * is scoped to the object's own placement and to the direction the clicked
+   * option names, and the climb itself is handed to the Ladders plugin with an
+   * explicit destination, so it animates and walks the collision map.
+   */
+  function claimQuestClimb(request) {
+    const { player, object } = request;
+    const location = object?.getLocation?.();
+    if (!player || !location) return;
+    const direction = climbDirection(request);
+    if (!direction) return;
+    if (TEMPLE_TRAPDOOR_IDS.has(request.objectId) && atTile(location, TEMPLE_TRAPDOOR_TILE)) {
+      if (direction !== "down") return;
+      request.handled = true;
+      climbTo(request, "ladders:climbDown", TEMPLE_DUNGEON_LANDING);
+      return;
+    }
+    if (request.objectId === TEMPLE_ROPE_ID && atTile(location, TEMPLE_ROPE_TILE)) {
+      if (direction !== "up") return;
+      request.handled = true;
+      climbTo(request, "ladders:climbUp", TEMPLE_SURFACE_LANDING);
+      return;
+    }
+    if (request.objectId === MOULD_ROOM_ROPE_ID && atTile(location, MOULD_ROOM_ROPE_TILE)) {
+      if (direction !== "up") return;
+      request.handled = true;
+      climbTo(request, "ladders:climbUp", DENTURE_HOUSE_LANDING);
+      return;
+    }
+    if (request.objectId === WATCHTOWER_TOP_EAST_ID && atTile(location, WATCHTOWER_TOP_TILE)) {
+      if (direction !== "down") return;
+      request.handled = true;
+      climbTo(request, "ladders:climbDown", WATCHTOWER_KRUK_LANDING);
+    }
+  }
+
+  /** True when the clicked object stands on exactly this tile. */
+  function atTile(location, tile) {
+    return location.getX() === tile.getX()
+      && location.getY() === tile.getY()
+      && location.getZ() === tile.getZ();
+  }
+
+  /** The direction the clicked option names, read from the object's own options. */
+  function climbDirection(request) {
+    const actions = api.core.CacheDefinitions.getObject(request.objectId)?.actions ?? [];
+    const option = String(actions[request.clickType - 1] ?? "").toLowerCase();
+    if (CLIMB_DOWN_OPTIONS.has(option)) return "down";
+    if (CLIMB_UP_OPTIONS.has(option)) return "up";
+    return null;
+  }
+
+  /** Hands the climb to the Ladders plugin with the quest's destination. */
+  function climbTo(request, event, destination) {
+    api.emitCustomEvent(event, {
+      player: request.player,
+      object: request.object,
+      destination,
+    });
   }
 
   /** The Awowogei object's Talk-to, from the wiki page's chapter 3 variants. */
@@ -1496,22 +1685,8 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
     killer.sendMessage("You have defeated the Jungle Demon!");
   }
 
-  let grandTreeDaero = null;
-
-  function ensureGrandTreeDaero() {
-    if (grandTreeDaero && grandTreeDaero.isRegistered?.() !== false) return;
-    grandTreeDaero = api.spawnNpc({
-      id: DAERO_PLACEHOLDER_ID, // "null" -> Daero 1444/1445 through mm_daero
-      x: 2482,
-      y: 3486,
-      z: 1,
-      wanderRadius: 0,
-    }) ?? null;
-  }
-
   function handleLogin({ player }) {
     syncGnomeVarps(player);
-    ensureGrandTreeDaero();
   }
 
   function handleBootstrap({ player }) {
@@ -1522,11 +1697,25 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   // Rewards
   // ==========================================================================
 
+  /**
+   * Reward extras use the engine's drop-at-reward-tile overflow, never a
+   * pending bag: a full inventory drops them at the player's feet instead of
+   * swallowing them (the same pattern Waterfall Quest uses).
+   */
+  function giveReward(player, itemId, amount) {
+    const inventory = player.getInventory();
+    if (ItemDefinition.forId(itemId)?.isStackable?.()) {
+      inventory.forceAdd(player, new Item(itemId, amount));
+      return;
+    }
+    for (let i = 0; i < amount; i++) inventory.forceAdd(player, new Item(itemId, 1));
+  }
+
   function grantReward(player) {
     // registerQuest adds the rewardItemId coin; top the stack up to 10,000 and
     // add the three diamonds the transcript mentions.
-    player.getInventory().adds(COINS_ITEM, 9999);
-    player.getInventory().adds(DIAMOND_ITEM, 3);
+    giveReward(player, COINS_ITEM, 9999);
+    giveReward(player, DIAMOND_ITEM, 3);
   }
 
   function buildJournal(player, handle) {
@@ -1648,6 +1837,10 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   // ==========================================================================
 
   for (const attributeKey of PERSISTED_ATTRIBUTES) api.persistAttribute(attributeKey);
+  api.persistAttribute(NARNODE_HELPER_ATTRIBUTE, 0);
+  api.persistAttribute(CARANOCK_HELPER_ATTRIBUTE, 0);
+  api.persistAttribute(GARKOR_HELPER_ATTRIBUTE, 0);
+  api.persistAttribute(ZOOKNOCK_HELPER_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "monkey_madness_i",
@@ -1675,7 +1868,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("door:toggle", handleDoorToggle);
-  api.onCustomEvent("ladders:climb", claimMouldRoomRope);
+  api.onCustomEvent("ladders:climb", claimQuestClimb);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnItem(handleItemOnItem);

@@ -46,6 +46,16 @@ const VARPS_ATTRIBUTE = "quetzals:varps";
 const PERSISTED_VARPS = ["quetzals_1", "quetzals_2", "quetzals_3"];
 const BASE_APPEARANCE = "quetzal_base_appearance";
 const LAST_DESTINATION = "quetzal_last_destination";
+const VARLAMORE_VISITED = "varlamore_visited";
+const FIRST_TRIP_STATE = "vmq2_first_travel";
+const CHILDREN_OF_THE_SUN = "children_of_the_sun";
+const FIRST_TRIP_VARIANT = "talking-in-varrock-talking-to-take-the-first-trip";
+const REPEAT_FIRST_TRIP_VARIANT = "talking-in-varrock-talking-again-before-taking-the-first-trip";
+const REGULUS_VARROCK_ID = 12884;
+const REGULUS_FORTIS_ID = 12885;
+const PRIMIO_VARROCK_ID = 12888;
+const PRIMIO_FORTIS_ID = 12889;
+const VARROCK_LANDING = { id: 0, x: 3281, y: 3413, z: 0 };
 /** Each site's varbit, by the table's site id. */
 const SITE_VARBITS = {
   1: "quetzal_fortis",
@@ -69,6 +79,7 @@ const FORTIS_FEED = 1;
 const FORTIS_TRAVEL = 2;
 
 let core = null;
+let pluginApi = null;
 let sites = null;
 const flights = new WeakSet();
 
@@ -159,12 +170,12 @@ function fade(player, out) {
 }
 
 /** The captured flight: fade out on the click, land four ticks later, fade back in a tick after. */
-function fly(player, site) {
+function fly(player, site, { recordDestination = true, onLand } = {}) {
   if (flights.has(player)) return;
   flights.add(player);
   const { Task, TaskManager, Location } = core;
   const sender = player.getPacketSender();
-  setVarbits(player, { [LAST_DESTINATION]: site.id });
+  if (recordDestination) setVarbits(player, { [LAST_DESTINATION]: site.id });
   sender.closeSubInterface(MAIN_MODAL);
   player.setInterfaceId(-1);
   sender.sendSoundEffect(FLIGHT_SOUND, FLIGHT_SOUND_LOOPS, FLIGHT_SOUND_DELAY, 255);
@@ -181,7 +192,10 @@ function fly(player, site) {
         return;
       }
       if (tick === MINIMAP_TICKS) sender.sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF);
-      if (tick === LAND_TICKS) player.moveTo(new Location(site.x, site.y, site.z));
+      if (tick === LAND_TICKS) {
+        player.moveTo(new Location(site.x, site.y, site.z));
+        onLand?.();
+      }
       if (tick === FADE_IN_TICKS) {
         movement.setBlockMovement(false);
         sender.sendVarbit(MINIMAP_STATE_VARBIT, 0);
@@ -198,6 +212,98 @@ function fly(player, site) {
       super.stop();
     }
   })());
+}
+
+function childrenOfTheSunComplete(player) {
+  const request = { player, key: CHILDREN_OF_THE_SUN, complete: false };
+  pluginApi?.emitCustomEvent?.("quest:is-complete", request);
+  return request.complete === true;
+}
+
+function startFirstTripMenu(player, firstTime) {
+  const varbit = varbitId(FIRST_TRIP_STATE);
+  const current = player.getPacketSender().getVarbit(varbit);
+  if (current < 2) setVarbits(player, { [FIRST_TRIP_STATE]: 2 });
+  pluginApi?.emitCustomEvent?.("npc-dialogue:start", {
+    player,
+    npcId: REGULUS_VARROCK_ID,
+    variant: firstTime ? FIRST_TRIP_VARIANT : REPEAT_FIRST_TRIP_VARIANT,
+  });
+}
+
+function firstTripArrivalTail(steps) {
+  for (const step of steps ?? []) {
+    if (step.type !== "choice") continue;
+    for (const option of step.options ?? []) {
+      const actionIndex = option.steps?.findIndex((entry) => entry.type === "action" && entry.id === "Kectpl") ?? -1;
+      if (actionIndex >= 0) return option.steps.slice(actionIndex + 1);
+    }
+  }
+  return [];
+}
+
+function startFirstTripArrival(player) {
+  pluginApi?.emitCustomEvent?.("npc-dialogue:start", {
+    player,
+    npcId: REGULUS_FORTIS_ID,
+    variant: FIRST_TRIP_VARIANT,
+    select: firstTripArrivalTail,
+  });
+}
+
+function arriveInFortis(player) {
+  setVarbits(player, { [VARLAMORE_VISITED]: 1, [FIRST_TRIP_STATE]: 3 });
+  startFirstTripArrival(player);
+}
+
+function destinationForNpc(npcId) {
+  if (npcId === PRIMIO_VARROCK_ID || npcId === REGULUS_VARROCK_ID) {
+    const fortis = landingSites().find((site) => site.id === FORTIS_SITE);
+    return fortis ? { site: fortis, firstTrip: true } : null;
+  }
+  if (npcId === PRIMIO_FORTIS_ID || npcId === REGULUS_FORTIS_ID) {
+    return { site: VARROCK_LANDING, firstTrip: false };
+  }
+  return null;
+}
+
+function travelWithPrimio(event) {
+  const { player, npcId } = event;
+  const destination = destinationForNpc(npcId);
+  if (!destination) return false;
+  event.handled = true;
+  if (!childrenOfTheSunComplete(player)) {
+    player.sendMessage("You need to complete Children of the Sun before travelling to Varlamore.");
+    return true;
+  }
+
+  const firstTripState = player.getPacketSender().getVarbit(varbitId(FIRST_TRIP_STATE));
+  const firstTime = destination.firstTrip
+    && player.getPacketSender().getVarbit(varbitId(VARLAMORE_VISITED)) === 0;
+  if (firstTime && firstTripState < 3) {
+    startFirstTripMenu(player, firstTripState < 2);
+    return true;
+  }
+  fly(player, destination.site, {
+    recordDestination: false,
+    onLand: firstTime ? () => arriveInFortis(player) : undefined,
+  });
+  return true;
+}
+
+function handleFirstTripAction(event) {
+  if (event.stepId !== "Kectpl" || event.npcId !== REGULUS_VARROCK_ID) return;
+  event.handled = true;
+  event.end = true;
+  const fortis = landingSites().find((site) => site.id === FORTIS_SITE);
+  if (!fortis) return;
+  fly(event.player, fortis, { recordDestination: false, onLand: () => arriveInFortis(event.player) });
+}
+
+function finishFirstTripDialogue(event) {
+  if (event.npcId !== REGULUS_FORTIS_ID
+    || !String(event.text).endsWith("Why don't you head on over and introduce yourself?")) return;
+  event.after = () => setVarbits(event.player, { [FIRST_TRIP_STATE]: 4 });
 }
 
 function siteUnlocked(player, site) {
@@ -241,10 +347,15 @@ module.exports = {
   members: true,
   _test: { landingSites, introduce, unlock, chooseSite, VARPS_ATTRIBUTE },
   register(api) {
+    pluginApi = api;
     core = api.core;
     api.persistAttribute(VARPS_ATTRIBUTE, null);
     api.onPlayerLogin(restore);
     api.onNpcInteraction("Renu", { Travel: travel, "Last-destination": travelToLastDestination });
+    api.onNpcInteraction("Primio", { Travel: travelWithPrimio });
+    api.onNpcInteraction("Regulus Cento", { Travel: travelWithPrimio });
+    api.onCustomEvent("npc-dialogue:action", handleFirstTripAction);
+    api.onCustomEvent("npc-dialogue:line", finishFirstTripDialogue);
     api.onInterfaceActionClick(chooseSite);
     api.onCustomEvent("interface:closed", mapClosed);
     api.onCustomEvent("quetzal:introduce", introduce);

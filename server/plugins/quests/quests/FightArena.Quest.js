@@ -94,17 +94,14 @@ module.exports = function registerFightArenaQuest(api) {
     NpcIdentifiers.JUSTIN_SERVIL_2,
   ]);
   const SPECTATOR_NPC_IDS = new Set([NpcIdentifiers.SPECTATOR]);
+  // Arena Khazard only (fight form 12025-12027 and the static host 12054).
+  // 3510 and 12055-12059 are Secrets of the North's Khazard forms; claiming
+  // them here hijacked that quest's dialogue and death state.
   const GENERAL_KHAZARD_NPC_IDS = new Set([
     NpcIdentifiers.GENERAL_KHAZARD,
-    NpcIdentifiers.GENERAL_KHAZARD_2,
     NpcIdentifiers.GENERAL_KHAZARD_3,
     NpcIdentifiers.GENERAL_KHAZARD_4,
     NpcIdentifiers.GENERAL_KHAZARD_5,
-    NpcIdentifiers.GENERAL_KHAZARD_6,
-    NpcIdentifiers.GENERAL_KHAZARD_7,
-    NpcIdentifiers.GENERAL_KHAZARD_8,
-    NpcIdentifiers.GENERAL_KHAZARD_9,
-    NpcIdentifiers.GENERAL_KHAZARD_10,
   ]);
   const KHAZARD_OGRE_IDS = new Set([
     NpcIdentifiers.KHAZARD_OGRE,
@@ -138,9 +135,14 @@ module.exports = function registerFightArenaQuest(api) {
 
   // Cell / arena / jail tiles from the reference coords. The arena's east-side
   // beast pens are sealed in the cache map, so the player only stands on the
-  // open floor west of them and the fight beasts are spawned there.
-  const JAIL_TILE = { x: 2605, y: 3141, z: 0 };
+  // open floor west of them and the fight beasts are spawned there. The jail
+  // teleport lands inside Hengrad's cell (Quest Helper's cell zone); the old
+  // 2605,3141 tile is a wall in the cache and is outside the cell.
+  const JAIL_TILE = { x: 2599, y: 3143, z: 0 };
   const ARENA_TILE = { x: 2603, y: 3156, z: 0 };
+  // The arena's only door (loc 82) sits on this tile; it is the arena's
+  // entrance/exit and the only placement of that loc in the cache.
+  const ARENA_DOOR_TILE = { x: 2606, y: 3152, z: 0 };
   const OGRE_TILE = { x: 2604, y: 3163, z: 0 };
   const SCORPION_TILE = { x: 2603, y: 3161, z: 0 };
   const BOUNCER_TILE = { x: 2604, y: 3165, z: 0 };
@@ -153,6 +155,7 @@ module.exports = function registerFightArenaQuest(api) {
   const SPARE_KEYS_MESSAGE_ID = "Ck1lJV";
   const FOLLOW_INTO_ARENA_ID = "0Xedz5";
   const JAIL_TELEPORT_ID = "ND1rhG";
+  const OGRE_DEFEAT_JAIL_TELEPORT_ID = "l2eYgD";
   const JAIL_RETURN_TELEPORT_ID = "CDVO1E";
   const ARENA_TELEPORT_ID = "XDkdB3";
   const KHAZARD_ATTACKS_ID = "ZGx6Rg";
@@ -285,7 +288,9 @@ module.exports = function registerFightArenaQuest(api) {
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.ATTACK, 12175);
     player.getSkillManager().addExperiences(Skill.THIEVING, 2175);
-    player.getInventory().adds(COINS, 999); // registerQuest adds the 1,000th coin
+    // All 1,000 at once: a full bag drops the whole stack rather than losing
+    // 999 to a silent failed add and keeping only the old single-coin top-up.
+    player.getInventory().forceAdd(player, new api.core.Item(COINS, 1000));
   }
 
   // ==========================================================================
@@ -294,10 +299,13 @@ module.exports = function registerFightArenaQuest(api) {
 
   function ladyServilVariant(player) {
     const stage = quest.getStage(player);
-    if (stage >= STAGE_COMPLETE_DEFEATED_KHAZARD) return "the-battles-talking-to-lady-servil-after-defeating-khazard";
-    if (stage >= STAGE_COMPLETE) return "the-battles-talking-to-lady-servil-after-khazard-attacks";
+    if (stage >= STAGE_COMPLETE) {
+      return { page: "Lady Servil", variant: "standard-dialogue-after-fight-arena" };
+    }
     if (stage >= STAGE_DEFEATED_KHAZARD) return "the-battles-talking-to-lady-servil-after-defeating-khazard";
-    if (stage >= STAGE_FREED_SERVILS) return "the-battles-talking-to-lady-servil-after-khazard-attacks";
+    // Quest Helper lets the player leave the arena as soon as Bouncer dies
+    // (stage 11) without talking to, or killing, General Khazard.
+    if (stage >= STAGE_DEFEATED_BOUNCER) return "the-battles-talking-to-lady-servil-after-khazard-attacks";
     if (stage >= STAGE_ENTERED_OGRE_FIGHT) return "the-battles-talking-to-lady-servil-after-freeing-sammy-from-the-jail";
     if (stage >= STAGE_TOLD_OF_BREW) return "getting-the-keys-talking-to-lady-servil-after-entering-the-arena";
     if (stage >= STAGE_OBTAINED_ARMOUR) return "entering-the-arena-talking-to-lady-servil-after-getting-armour";
@@ -376,10 +384,15 @@ module.exports = function registerFightArenaQuest(api) {
 
   function doorGuardVariant(player) {
     const stage = quest.getStage(player);
-    if (stage >= STAGE_DEFEATED_OGRE) {
+    // The jail return is the stage-8 leg only. After the scorpion (stage 10)
+    // and Bouncer (stage 11) it would teleport into a sealed cell, so those
+    // stages fall back to the Door Guard's own generated page.
+    if (stage >= STAGE_DEFEATED_OGRE && stage < STAGE_DEFEATED_SCORPION) {
       return "the-battles-talking-to-a-spectator-after-defeating-the-ogre-talking-to-a-door-guard";
     }
-    if (stage >= STAGE_STARTED) return "entering-the-arena-talking-to-the-door-guard-with-khazard-armour-equipped";
+    if (stage >= STAGE_STARTED && stage < STAGE_DEFEATED_SCORPION) {
+      return "entering-the-arena-talking-to-the-door-guard-with-khazard-armour-equipped";
+    }
     return null;
   }
 
@@ -410,7 +423,10 @@ module.exports = function registerFightArenaQuest(api) {
   function generalKhazardVariant(player) {
     const stage = quest.getStage(player);
     if (stage >= STAGE_DEFEATED_KHAZARD) return "the-battles-upon-defeating-general-khazard";
-    if (stage >= STAGE_FREED_SERVILS) return "the-battles-upon-killing-bouncer";
+    // The Khazard attack (ZGx6Rg) is the only step that sets stage 12, and it
+    // lives in the post-Bouncer conversation, so that conversation has to be
+    // offered at stage 11 (Bouncer dead) or stages 12/13 are unreachable.
+    if (stage >= STAGE_DEFEATED_BOUNCER) return "the-battles-upon-killing-bouncer";
     if (stage >= STAGE_DEFEATED_SCORPION) return "the-battles-upon-killing-the-scorpion";
     if (stage >= STAGE_DEFEATED_OGRE) return "the-battles-upon-killing-the-khazard-ogre";
     return null;
@@ -574,6 +590,17 @@ module.exports = function registerFightArenaQuest(api) {
       event.handled = true;
       return;
     }
+    if (stepId === OGRE_DEFEAT_JAIL_TELEPORT_ID) {
+      const stage = quest.getStage(player);
+      if (stage < STAGE_DEFEATED_OGRE || stage >= STAGE_DEFEATED_SCORPION) {
+        event.handled = true;
+        return;
+      }
+      teleport(player, JAIL_TILE);
+      if (stage < STAGE_SENT_JAIL) quest.setStage(player, STAGE_SENT_JAIL);
+      event.handled = true;
+      return;
+    }
     if (stepId === JAIL_TELEPORT_ID) {
       if (quest.getStage(player) < STAGE_SENT_JAIL) quest.setStage(player, STAGE_SENT_JAIL);
       teleport(player, JAIL_TILE);
@@ -589,7 +616,19 @@ module.exports = function registerFightArenaQuest(api) {
       return;
     }
     if (stepId === JAIL_RETURN_TELEPORT_ID) {
+      // The door guard's "back to the jail" branch is another way into the
+      // Hengrad/scorpion leg; without stage 9 his jail dialogue is not offered.
+      // Outside the stage-8/9 window the variant is not offered, and a stale
+      // action must not move or advance the player.
+      const stage = quest.getStage(player);
+      if (stage < STAGE_DEFEATED_OGRE || stage >= STAGE_DEFEATED_SCORPION) {
+        event.handled = true;
+        return;
+      }
+      // The jail leg is persisted only once the return actually happened: the
+      // player must land in Hengrad's cell before stage 9 (jailed) is durable.
       teleport(player, JAIL_TILE);
+      if (quest.getStage(player) < STAGE_SENT_JAIL) quest.setStage(player, STAGE_SENT_JAIL);
       event.handled = true;
       return;
     }
@@ -600,6 +639,12 @@ module.exports = function registerFightArenaQuest(api) {
     }
   }
 
+  /** Secrets of the North owns the barman's 100-coin branch at its stages 3-5. */
+  function secretsOfTheNorthOwnsBarman(player) {
+    const stage = Number(player.getAttribute("quest.secrets_of_the_north.stage")) || 0;
+    return stage >= 3 && stage <= 5;
+  }
+
   /** The Khazard barman's Fight Arena branch is unreachable through the index. */
   function handleNpcInteraction(event) {
     if (event.npcId !== KHAZARD_BARMAN_NPC_ID || event.handled) return;
@@ -607,6 +652,7 @@ module.exports = function registerFightArenaQuest(api) {
     if (String(actions[event.clickType - 1] ?? "").toLowerCase() !== "talk-to") return;
     const { player } = event;
     if (!player || quest.getStage(player) < STAGE_TOLD_OF_BREW) return;
+    if (secretsOfTheNorthOwnsBarman(player)) return;
     event.handled = true;
     startTranscript(
       api,
@@ -631,6 +677,7 @@ module.exports = function registerFightArenaQuest(api) {
     const armour = hasArmour(player);
     if (helmet && armour) {
       player.sendMessage("You search the chest, but find nothing.");
+      if (stage === STAGE_STARTED) quest.setStage(player, STAGE_OBTAINED_ARMOUR);
       return;
     }
     const missing = [];
@@ -666,12 +713,26 @@ module.exports = function registerFightArenaQuest(api) {
     if (objectId === SAMMY_CELL_DOOR || objectId === PRISON_DOOR) {
       event.handled = true;
       player.sendMessage("The gate is securely locked.");
-      return;
     }
-    if (objectId === ARENA_DOOR && quest.getStage(player) < STAGE_ENTERED_OGRE_FIGHT) {
-      event.handled = true;
-      player.sendMessage("The door is securely locked.");
-    }
+  }
+
+  /** Doors.plugin owns the Door/Open hook; answer its door:toggle event first. */
+  function handleDoorToggle(event) {
+    if (!event || event.handled) return;
+    const objectId = event.objectId ?? event.object?.getId?.();
+    if (objectId !== ARENA_DOOR) return;
+    const option = event.option ?? event.definition?.getInteractions?.()[event.clickType - 1];
+    if (option !== "Open") return;
+    // Scoped to the arena door's own tile: only loc 82's placement may be
+    // locked, never another "Door" that happens to share the id or the name.
+    const location = event.location ?? event.object?.getLocation?.();
+    const x = location?.x ?? location?.getX?.();
+    const y = location?.y ?? location?.getY?.();
+    if (x !== ARENA_DOOR_TILE.x || y !== ARENA_DOOR_TILE.y) return;
+    const { player } = event;
+    if (!player || quest.getStage(player) >= STAGE_ENTERED_OGRE_FIGHT) return;
+    event.handled = true;
+    player.sendMessage("The door is securely locked.");
   }
 
   function handleItemOnObject(event) {
@@ -738,7 +799,24 @@ module.exports = function registerFightArenaQuest(api) {
     }
   }
 
+  /** Relogging mid-fight loses the owner-only beast; respawn the required one. */
+  function restoreFight(player) {
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_ENTERED_OGRE_FIGHT && stage < STAGE_DEFEATED_OGRE) {
+      spawnFightBeast(player, NpcIdentifiers.KHAZARD_OGRE, OGRE_TILE);
+      return;
+    }
+    if (stage >= STAGE_SENT_JAIL && stage < STAGE_DEFEATED_SCORPION) {
+      spawnFightBeast(player, NpcIdentifiers.KHAZARD_SCORPION, SCORPION_TILE);
+      return;
+    }
+    if (stage >= STAGE_DEFEATED_SCORPION && stage < STAGE_DEFEATED_BOUNCER) {
+      spawnFightBeast(player, NpcIdentifiers.BOUNCER, BOUNCER_TILE);
+    }
+  }
+
   function handleLogin({ player }) {
+    restoreFight(player);
     refreshQuestList(player);
   }
 
@@ -760,7 +838,7 @@ module.exports = function registerFightArenaQuest(api) {
       { skillId: Skill.ATTACK.getIndex(), amount: 12175, label: "Attack" },
       { skillId: Skill.THIEVING.getIndex(), amount: 2175, label: "Thieving" },
     ],
-    rewardItemId: COINS,
+    scrollItemId: COINS,
     rewardItemLabel: "1,000 Coins",
     otherRewards: ["Access to the Fight Arena"],
     buildJournal,
@@ -771,6 +849,7 @@ module.exports = function registerFightArenaQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });

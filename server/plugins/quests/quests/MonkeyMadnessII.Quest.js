@@ -76,14 +76,20 @@
  *
  * Gaps / approximations:
  *  - Prerequisites: Monkey Madness I, Enlightened Journey, The Eyes of Glouphrie,
- *    Troll Stronghold, Watchtower and the skill levels are checked; Freeing King
- *    Awowogei (Recipe for Disaster) is not implemented and is not checked.
- *  - Kruk's dungeon maze, the Kruk fight entrance, the lab's stunted gorilla ride
- *    and the airship stealth minigame are skipped: the jungle-grass trapdoor
- *    teleports straight to Kruk's lair, then (from stage 83) straight into the
- *    laboratory; the six sabotage points are Investigated directly. The Crash Site
- *    cave's own Enter teleport (LocTeleports) is left in place and a zone hook
- *    plays the arrival dialogue.
+ *    Troll Stronghold, Watchtower, the skill levels and Freeing King Awowogei
+ *    (Recipe for Disaster rescue flag 128) are checked. The balloon-route varbit
+ *    (ZEP_MULTI_GNO, 2870) is read by no plugin in this repo, so it cannot be
+ *    checked; Enlightened Journey completion stands in for it.
+ *  - The jungle-grass trapdoor now reaches the start of the real agility dungeon;
+ *    the player reaches Kruk through the cache's cavern entrance after traversing
+ *    it. The cached hazards, maze routes and shortcut are left to their normal
+ *    world interactions and have not been verified in a live run. The lab passage
+ *    now leads to the stunted-gorilla interaction; its climb starts the encounter,
+ *    and the holding-area Use action is required before the device can be reached.
+ *    Airship satchels are filled at the barrel and each ship target consumes a
+ *    filled satchel, but the upper-floor/guard-catch stealth route remains outside
+ *    this plugin. The Crash Site cave's own Enter teleport (LocTeleports) is left
+ *    in place and a zone hook plays the arrival dialogue.
  *  - Instanced fights are owner-only spawns: Kruk (6805), Kob (7107), Keef (7105),
  *    the three lab gorillas (7095), four Stronghold gorillas (7097) and demonic
  *    Glough (7101). The Crash Site gorillas (7150/7151, 7144-7149) already exist
@@ -96,20 +102,26 @@
  *    own messages cover it).
  *  - Talking to Awowogei through the throne object (4771) is claimed by the
  *    Monkey Madness I plugin, which sets `handled` even when its own dialogue
- *    no-ops; this plugin spawns its own owner-only mm2_awowogei (6812) instead.
+ *    no-ops; this plugin spawns its own owner-only mm2_awowogei (6812) instead
+ *    and releases it at stage 195. The post-quest throne conversation therefore
+ *    stays with MM1 until it yields object 4771.
  *    Same class of conflict for post-quest Garkor/Lumo/Zooknock is avoided by
  *    owning Talk-to here.
+ *  - Kruk's remains are a player-owned object 28675 at his lair while stage 66
+ *    is active, so a destroyed paw can be recovered by Take-remains.
  *  - The player's own pet is never detected, so Nieve's pet condition is answered
  *    "no pet". Le Smith is pinned to position 1 (mm2_le_smith_pos = 1).
  */
 module.exports = function registerMonkeyMadnessIIQuest(api) {
   const {
     Equipment,
+    GameObject,
     Item,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
     ObjectIdentifiers,
+    ObjectManager,
     Skill,
   } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
@@ -305,6 +317,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   const KRUKS_PAW_ITEM = ItemIdentifiers.KRUKS_PAW; // 19523
   const KRUK_GREEGREE_ITEM = ItemIdentifiers.KRUK_MONKEY_GREEGREE; // 19525
   const SATCHEL_ITEM = ItemIdentifiers.SATCHEL; // 19527
+  const FILLED_SATCHEL_ITEM = ItemIdentifiers.SATCHEL_2; // 19528
   const CHARGED_ONYX_ITEM = ItemIdentifiers.CHARGED_ONYX; // 19560
   const DECONSTRUCTED_ONYX_ITEM = ItemIdentifiers.DECONSTRUCTED_ONYX; // 19562
   const ROYAL_SEED_POD_ITEM = ItemIdentifiers.ROYAL_SEED_POD; // 19564
@@ -354,6 +367,9 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   ]);
   const SATCHEL_CRATE_ID = ObjectIdentifiers.CRATE_237; // 28652
   const EXPLOSIVE_BARREL_ID = ObjectIdentifiers.BARREL_136; // 28653
+  const KRUK_BATTLE_ENTRANCE_ID = ObjectIdentifiers.CAVERN_ENTRANCE; // 28684, Enter
+  const KRUK_BATTLE_ENTRANCE_TILES = new Set(["2531,9227,1", "2548,9225,1"]);
+  const LAB_HOLDING_AREA_ID = ObjectIdentifiers.HOLDING_AREA; // 25369, Use
   const SABOTAGE_TARGET_IDS = [
     ObjectIdentifiers.COMPROMISED_SUPPORT, // 28621
     ObjectIdentifiers.COMPROMISED_SUPPORT_2, // 28622
@@ -364,15 +380,19 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   ];
   const SABOTAGE_TARGET_INDEX = new Map(SABOTAGE_TARGET_IDS.map((id, index) => [id, index]));
   const CRASH_CAVERN_ID = ObjectIdentifiers.CAVERN_ENTRANCE_2; // 28686
+  const KRUK_REMAINS_ID = 28675; // "Kruk", Take-remains
 
   // Tiles (OSRS positions from the wiki/Quest Helper, each checked walkable in the
   // cache collision map where the player is placed).
   const LAIR_LANDING = new Location(2531, 9229, 1);
+  const DUNGEON_ENTRY = new Location(2509, 9169, 1);
   const KRUK_SPAWN = new Location(2535, 9213, 1);
   const KOB_SPAWN = new Location(2831, 10061, 2);
   const KEEF_SPAWN = new Location(2543, 3031, 0);
   const PLATFORM_ENTRY = new Location(2078, 5397, 1);
   const LAB_ENTRY = new Location(2207, 5447, 0);
+  const LAB_STUNTED_GORILLA_ID = NpcIdentifiers.STUNTED_DEMONIC_GORILLA; // 7098, Climb-on
+  const LAB_RIDE_ATTRIBUTE = "monkey-madness-ii:lab-gorilla-ride";
   const LAB_DEVICE_STAND = new Location(2209, 5488, 0);
   const LAB_GORILLA_TILES = [
     new Location(2205, 5474, 0),
@@ -398,6 +418,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     [Skill.HUNTER, 60],
     [Skill.AGILITY, 55],
     [Skill.THIEVING, 55],
+    [Skill.FIREMAKING, 60],
   ];
   const START_QUESTS = [
     "monkey_madness_i",
@@ -406,6 +427,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     "troll_stronghold",
     "watchtower",
   ];
+  // Recipe for Disaster keeps each rescue in its own bit; the quest is not
+  // required as a whole, only Freeing King Awowogei.
 
   // ==========================================================================
   // Persisted attributes
@@ -419,7 +442,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
 
   const PERSISTED_ATTRIBUTES = [
     PLANTED_MASK_ATTRIBUTE, LAB_KILLS_ATTRIBUTE, STRONGHOLD_KILLS_ATTRIBUTE,
-    CRASH_TORTURED_ATTRIBUTE, CRASH_DEMONIC_ATTRIBUTE,
+    CRASH_TORTURED_ATTRIBUTE, CRASH_DEMONIC_ATTRIBUTE, LAB_RIDE_ATTRIBUTE,
   ];
 
   const npcs = new Map(); // player -> { kruk, lab: [], stronghold: [], glough, awowogei, kob, keef }
@@ -462,6 +485,9 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     for (const [skill, level] of START_SKILLS) {
       if (skills.getMaxLevel(skill) < level) return false;
     }
+    const rescue = { player, rescue: "king-awowogei", complete: false };
+    api.emitCustomEvent("recipe-for-disaster:rescue-status", rescue);
+    if (!rescue.complete) return false;
     return START_QUESTS.every((key) => questComplete(player, key));
   }
 
@@ -487,6 +513,25 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     return player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() === KRUK_GREEGREE_ITEM;
   }
 
+  function bankHasItem(player, itemId) {
+    for (const bank of player.getBanks?.() ?? []) {
+      if (bank?.contains?.(itemId) === true || (bank?.getAmount?.(itemId) ?? 0) > 0) return true;
+    }
+    return false;
+  }
+
+  function hasKrukGreegree(player) {
+    return hasItem(player, KRUK_GREEGREE_ITEM) || equippedKrukGreegree(player)
+      || bankHasItem(player, KRUK_GREEGREE_ITEM);
+  }
+
+  /** Add one non-stackable quest item only when a slot is free; false means retry later. */
+  function tryAddItem(player, itemId) {
+    if (player.getInventory().getFreeSlots() <= 0) return false;
+    addItem(player, itemId);
+    return true;
+  }
+
   function inCrashSite(player) {
     const location = player.getLocation();
     return location.getZ() === 0
@@ -499,6 +544,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (quest.getStage(player) < value) quest.setStage(player, value);
     syncSideVarps(player);
     ensureAwowogei(player);
+    ensureKrukRemains(player);
   }
 
   /** mm2_progress drives this quest's NPC/loc transforms; keep the sibling varbits in step. */
@@ -537,15 +583,23 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
 
   function ensureAwowogei(player) {
     const state = playerState(player);
+    const stage = stageOf(player);
+    if (stage < STAGE_GARKOR_BRIEFED || stage >= STAGE_COMPLETE) {
+      releaseAwowogei(player);
+      return;
+    }
     if (alive(state.awowogei)) {
       removeOwnedAwowogei(player, state.awowogei);
       return;
     }
     state.awowogei = null;
     removeOwnedAwowogei(player, null);
-    const stage = stageOf(player);
-    if (stage < STAGE_GARKOR_BRIEFED || stage >= STAGE_COMPLETE) return;
     state.awowogei = spawnOwnerNpc(player, AWOWOGEI_MM2_ID, AWOWOGEI_SPAWN);
+  }
+
+  function releaseAwowogei(player) {
+    playerState(player).awowogei = null;
+    removeOwnedAwowogei(player, null);
   }
 
   function removeOwnedAwowogei(player, keep) {
@@ -563,6 +617,36 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     const state = playerState(player);
     if (alive(state.kruk)) return;
     state.kruk = spawnOwnerNpc(player, NpcIdentifiers.KRUK_3, KRUK_SPAWN);
+  }
+
+  const krukRemains = new WeakMap();
+
+  /**
+   * Kruk's destroy text says to find his remains again. Keep a player-owned
+   * Take-remains object in the lair while stage 66 is active, including after a
+   * relog; it is removed as soon as the stage moves past Kruk's paw.
+   */
+  function ensureKrukRemains(player) {
+    const needed = stageOf(player) === STAGE_KRUK_KILLED;
+    const existing = krukRemains.get(player);
+    if (!needed) {
+      if (existing) ObjectManager.deregister(existing, true);
+      krukRemains.delete(player);
+      return;
+    }
+    if (existing && existing.getId?.() === KRUK_REMAINS_ID && existing.getOwner?.() === player) return;
+    if (existing) ObjectManager.deregister(existing, true);
+    const username = player.getUsername?.();
+    for (const object of ObjectManager.objectsAt(KRUK_SPAWN)) {
+      if (object.getId?.() !== KRUK_REMAINS_ID) continue;
+      const owner = object.getOwner?.();
+      if (owner === player || (username && owner?.getUsername?.() === username)) {
+        ObjectManager.deregister(object, true);
+      }
+    }
+    const object = new GameObject(KRUK_REMAINS_ID, KRUK_SPAWN.clone(), 10, 0, null).setOwner(player);
+    ObjectManager.register(object, true);
+    krukRemains.set(player, object);
   }
 
   function spawnKob(player) {
@@ -629,6 +713,14 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     return "chapter-i-talking-to-king-narnode";
   }
 
+  function selectNarnodeVariant({ npcId, player }) {
+    if (!NARNODE_IDS.has(npcId)) return null;
+    const stage = stageOf(player);
+    if (stage >= STAGE_COMPLETE) return { page: NARNODE_PAGE, variant: POST_QUEST_CHAR };
+    if (stage === 0 && !canStart(player)) return null;
+    return { page: PAGE, variant: narnodeVariant(player) };
+  }
+
   function handleNarnodeTalk(event) {
     const { player, npcId } = event;
     if (stageOf(player) === 0 && !canStart(player)) return false;
@@ -639,13 +731,6 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     }
     const stage = stageOf(player);
     const variant = narnodeVariant(player);
-    if (variant === "chapter-i-talking-to-king-narnode-5") advance(player, STAGE_CH1_DONE);
-    if (variant === "chapter-i-talking-to-king-narnode-4") advance(player, STAGE_KING_TOLD);
-    if (variant === "chapter-i-talking-to-king-narnode-2") advance(player, STAGE_BOOK_SHOWN);
-    if (variant === "chapter-iv-talking-to-king-narnode" && stage < STAGE_KING_TOLD_2) {
-      advance(player, STAGE_KING_TOLD_2);
-    }
-    if (variant === "chapter-v-reporting-back-to-king-narnode") advance(player, STAGE_ZOOKNOCK_SAVED);
     play(player, npcId, variant);
     return true;
   }
@@ -663,7 +748,10 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       play(player, npcId, "chapter-i-talking-to-anita");
       return true;
     }
-    if (stage >= STAGE_ANITA && stage < STAGE_TRANSLATED) {
+    // Anita only offers to translate once the note has been decoded and the
+    // player has tried (and failed) to use the translation book on it.
+    if (stage >= STAGE_NOTE_ATTEMPTED && stage < STAGE_TRANSLATED
+      && hasItem(player, SCRAWLED_NOTE_ITEM)) {
       play(player, npcId, "chapter-i-talking-to-anita-2");
       return true;
     }
@@ -767,6 +855,27 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (stage >= STAGE_COMPLETE) {
       event.handled = true;
       startTranscript(api, player, npcId, ZOOKNOCK_PAGE, POST_QUEST);
+      return true;
+    }
+    // The greegree can be lost (destroyed or left behind) before Kruk's role is
+    // finished; Zooknock makes another at the end of the Ape Atoll dungeon.
+    if (stage >= STAGE_GREE_GREE && stage < STAGE_COMPLETE && !hasKrukGreegree(player)) {
+      event.handled = true;
+      if (!tryAddItem(player, KRUK_GREEGREE_ITEM)) {
+        player.sendMessage("You need a free inventory slot before Zooknock can hand you another greegree.");
+        return true;
+      }
+      player.sendMessage("Zooknock shapes another Kruk monkey greegree for you.");
+      return true;
+    }
+    // After Glough falls, Zooknock is the QH/wiki hand-out: his half of the
+    // after-defeating-Glough transcript offers the teleport back to the king.
+    if (stage >= STAGE_ZOOKNOCK_SAVED) {
+      event.handled = true;
+      play(player, npcId, "chapter-v-after-defeating-glough", (steps) => {
+        const start = steps.findIndex(step => step?.speaker === "Zooknock");
+        return start >= 0 ? steps.slice(start) : steps;
+      });
       return true;
     }
     if (stage !== STAGE_KRUK_KILLED) return false;
@@ -889,6 +998,20 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
 
   function handleNpcInteraction(event) {
     const { npcId } = event;
+    if (npcId === LAB_STUNTED_GORILLA_ID && optionOf(event) === "Climb-on") {
+      const player = event.player;
+      if (stageOf(player) !== STAGE_GARKOR_LAB) return;
+      event.handled = true;
+      if (!equippedKrukGreegree(player)) {
+        player.sendMessage("You need to wear the Kruk monkey greegree to pass the gorilla.");
+        return;
+      }
+      player.setAttribute(LAB_RIDE_ATTRIBUTE, true);
+      advance(player, STAGE_LAB_ARRIVED);
+      play(player, GLOUGH_LAB_ID, "chapter-iii-at-glough-s-secret-lab-upon-arrival");
+      spawnLabGorillas(player);
+      return;
+    }
     if (optionOf(event) !== "Talk-to") return;
     if (NARNODE_IDS.has(npcId) && handleNarnodeTalk(event)) return;
     if (ANITA_IDS.has(npcId) && handleAnitaTalk(event)) return;
@@ -926,6 +1049,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
         }
         return;
       case "jwE-bA": // the note shown to Narnode
+        advance(player, STAGE_BOOK_SHOWN);
+        return;
       case "1LK8qR": // rest of the note burned
       case "SNNSAQ":
         return;
@@ -939,7 +1064,11 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       case "iJfk7C": // Anita translates
         return;
       case "a1AZnL": // Anita hands over the translation
-        if (!hasItem(player, TRANSLATED_NOTE_ITEM)) addItem(player, TRANSLATED_NOTE_ITEM);
+        if (!hasItem(player, TRANSLATED_NOTE_ITEM)
+          && !tryAddItem(player, TRANSLATED_NOTE_ITEM)) {
+          player.sendMessage("You need a free inventory slot for the translated note.");
+          return;
+        }
         advance(player, STAGE_TRANSLATED);
         return;
       case "IxEFah": // Narnode reads the translated note
@@ -1033,12 +1162,9 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       }
       return;
     }
-    if (ANITA_IDS.has(npcId)) {
-      if (option === "Could you translate these notes?" && stageOf(player) < STAGE_TRANSLATED) {
-        advance(player, STAGE_TRANSLATED);
-      }
-      return;
-    }
+    // Anita's choice does not advance on its own: the transcript's a1AZnL
+    // action hands over the translated note and advances the stage with it.
+    if (ANITA_IDS.has(npcId)) return;
     if (KOB_IDS.has(npcId) && option === "I accept your challenge.") {
       if (stageOf(player) === STAGE_CH2_DONE) {
         advance(player, STAGE_KOB_CHALLENGE);
@@ -1075,15 +1201,23 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       player.sendMessage("Nieve checks her equipment and nods. Let's defend the Stronghold!");
       return;
     }
-    if (npcId === GLOUGH_CAVERN_ID && option === "Yes.") {
+    if ((npcId === GLOUGH_CAVERN_ID || ZOOKNOCK_IDS.has(npcId))
+      && option === "Yes." && stageOf(player) >= STAGE_ZOOKNOCK_SAVED) {
       player.moveTo(GRAND_TREE_KING);
       return;
     }
   }
 
   function handleDialogueLine(event) {
-    const { npcId, text } = event;
+    const { npcId, text, player } = event;
     if (!DIALOGUE_NPC_IDS.has(npcId)) return;
+    if (NARNODE_IDS.has(npcId)) {
+      if (text.startsWith("Glough is a threat to us all... I must hereby re-assign you")) {
+        advance(player, STAGE_CH1_DONE);
+      } else if (text === "Nieve is the most highly skilled warrior we have here, get her assistance and defend the Stronghold.") {
+        advance(player, STAGE_KING_TOLD_2);
+      }
+    }
     if (NIEVE_IDS.has(npcId) && text === "You should pick up your pet first. It would only get in the way.") {
       event.skip = true;
     }
@@ -1239,6 +1373,10 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
         player.sendMessage("The device is humming quietly.");
         return;
       }
+      if (player.getAttribute(LAB_RIDE_ATTRIBUTE) === true) {
+        player.sendMessage("You need to dismount the gorilla before approaching the device.");
+        return;
+      }
       player.moveTo(LAB_DEVICE_STAND);
       play(player, GLOUGH_LAB_ID, "chapter-iii-at-glough-s-secret-lab-tampering-the-device");
       return;
@@ -1255,7 +1393,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (objectId === SATCHEL_CRATE_ID && option === "Search") {
       event.handled = true;
       if (stageOf(player) < STAGE_PLATFORM || stageOf(player) >= STAGE_SHIPS_SABOTAGED) return;
-      const missing = SATCHELS_PER_RUN - player.getInventory().getAmount(SATCHEL_ITEM);
+      const missing = SATCHELS_PER_RUN - player.getInventory().getAmount(SATCHEL_ITEM)
+        - player.getInventory().getAmount(FILLED_SATCHEL_ITEM);
       if (missing > 0) addItem(player, SATCHEL_ITEM, missing);
       player.sendMessage("You take satchels from the crate.");
       return;
@@ -1263,11 +1402,14 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (objectId === EXPLOSIVE_BARREL_ID && option === "Search") {
       event.handled = true;
       if (stageOf(player) < STAGE_PLATFORM || stageOf(player) >= STAGE_SHIPS_SABOTAGED) return;
-      if (!hasItem(player, SATCHEL_ITEM, SATCHELS_PER_RUN)) {
-        player.sendMessage("You need six satchels before filling them with explosives.");
+      const emptySatchels = player.getInventory().getAmount(SATCHEL_ITEM);
+      if (emptySatchels < 1) {
+        player.sendMessage("You need an empty satchel before filling it with explosives.");
         return;
       }
-      player.sendMessage("You fill every satchel with explosives.");
+      player.getInventory().deleteNumber(SATCHEL_ITEM, emptySatchels);
+      addItem(player, FILLED_SATCHEL_ITEM, emptySatchels);
+      player.sendMessage("You fill your empty satchels with explosives.");
       return;
     }
     if (SABOTAGE_TARGET_INDEX.has(objectId) && option === "Investigate") {
@@ -1278,6 +1420,43 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (objectId === CRASH_CAVERN_ID && option === "Enter") {
       event.handled = true;
       enterCrashSite(player);
+      return;
+    }
+    const location = event.location;
+    const locationKey = location && `${location.x},${location.y},${location.z}`;
+    if (objectId === KRUK_BATTLE_ENTRANCE_ID && option === "Enter" && stageOf(player) === STAGE_ARCHER_ASKED
+      && KRUK_BATTLE_ENTRANCE_TILES.has(locationKey)) {
+      event.handled = true;
+      player.moveTo(LAIR_LANDING);
+      spawnKruk(player);
+      play(player, NpcIdentifiers.KRUK_2, "chapter-ii-confronting-kruk");
+      return;
+    }
+    if (objectId === LAB_HOLDING_AREA_ID && option === "Use") {
+      const location = event.location;
+      if (stageOf(player) < STAGE_LAB_GORILLAS || stageOf(player) >= STAGE_MUTAGEN_TAKEN
+        || location?.getX?.() !== 2213 || location?.getY?.() !== 5464 || location?.getZ?.() !== 0
+        || player.getAttribute(LAB_RIDE_ATTRIBUTE) !== true) return;
+      event.handled = true;
+      player.setAttribute(LAB_RIDE_ATTRIBUTE, false);
+      player.sendMessage("You dismount the stunted gorilla.");
+      return;
+    }
+    if (objectId === KRUK_REMAINS_ID && option === "Take-remains") {
+      event.handled = true;
+      if (stageOf(player) !== STAGE_KRUK_KILLED) {
+        player.sendMessage("There is nothing to take.");
+        return;
+      }
+      if (hasItem(player, KRUKS_PAW_ITEM) || bankHasItem(player, KRUKS_PAW_ITEM)) {
+        player.sendMessage("You have already taken Kruk's remains.");
+        return;
+      }
+      if (!tryAddItem(player, KRUKS_PAW_ITEM)) {
+        player.sendMessage("You need a free inventory slot to take Kruk's remains.");
+        return;
+      }
+      player.sendMessage("You take Kruk's remains.");
       return;
     }
   }
@@ -1296,15 +1475,15 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
 
   function handleJungleGrass(player) {
     const stage = stageOf(player);
-    if (stage === STAGE_GARKOR_LAB || (stage >= STAGE_LAB_ARRIVED && stage < STAGE_GARKOR_AFTER_LAB)) {
-      enterLab(player);
-      return;
-    }
-    if (stage === STAGE_ARCHER_ASKED) {
-      player.sendMessage("You drop through the hidden trapdoor into Kruk's lair.");
-      player.moveTo(LAIR_LANDING);
-      spawnKruk(player);
-      play(player, NpcIdentifiers.KRUK_2, "chapter-ii-confronting-kruk");
+    if (stage === STAGE_ARCHER_ASKED || stage === STAGE_GARKOR_LAB) {
+      if (stage === STAGE_GARKOR_LAB && !equippedKrukGreegree(player)) {
+        player.sendMessage("You need to wear the Kruk monkey greegree to enter the dungeon.");
+        return;
+      }
+      api.sendMultiChatboxPrompt(player, "Enter the hidden trapdoor?", "Yes.", () => {
+        player.moveTo(DUNGEON_ENTRY);
+        player.sendMessage("You enter the Ape Atoll dungeon.");
+      }, "No.", () => player.getPacketSender().sendInterfaceRemoval());
       return;
     }
     if (stage === STAGE_KRUK_KILLED) {
@@ -1322,10 +1501,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   function enterLab(player) {
     const stage = stageOf(player);
     if (stage === STAGE_GARKOR_LAB) {
-      advance(player, STAGE_LAB_ARRIVED);
       player.moveTo(LAB_ENTRY);
-      play(player, GLOUGH_LAB_ID, "chapter-iii-at-glough-s-secret-lab-upon-arrival");
-      spawnLabGorillas(player);
+      player.sendMessage("You enter the laboratory. A stunted gorilla waits nearby.");
       return;
     }
     if (stage >= STAGE_LAB_ARRIVED && stage < STAGE_GARKOR_AFTER_LAB) {
@@ -1342,7 +1519,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       player.sendMessage("Sabotaging this would be pointless.");
       return;
     }
-    if (!hasItem(player, SATCHEL_ITEM)) {
+    if (!hasItem(player, FILLED_SATCHEL_ITEM)) {
       play(player, NpcIdentifiers.MONKEY_GUARD_4, "chapter-iii-investigating-pillar");
       return;
     }
@@ -1354,7 +1531,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       return;
     }
     player.setAttribute(PLANTED_MASK_ATTRIBUTE, mask | bit);
-    player.getInventory().deleteNumber(SATCHEL_ITEM, 1);
+    player.getInventory().deleteNumber(FILLED_SATCHEL_ITEM, 1);
     const planted = SABOTAGE_TARGET_IDS.filter((_, i) => (mask | bit) & (1 << i)).length;
     player.sendMessage("You plant a satchel of explosives.");
     if (planted >= SABOTAGE_TARGET_IDS.length) {
@@ -1498,7 +1675,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     const player = killer;
     if (npcId === NpcIdentifiers.KRUK_3) {
       if (stageOf(player) !== STAGE_ARCHER_ASKED) return;
-      if (!hasItem(player, KRUKS_PAW_ITEM)) addItem(player, KRUKS_PAW_ITEM);
+      if (!hasItem(player, KRUKS_PAW_ITEM)) giveOrDrop(player, KRUKS_PAW_ITEM);
       player.sendMessage("Kruk collapses; you take his paw.");
       advance(player, STAGE_KRUK_KILLED);
       return;
@@ -1570,6 +1747,11 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   function handleLogin({ player }) {
     syncSideVarps(player);
     ensureAwowogei(player);
+    ensureKrukRemains(player);
+  }
+
+  function handleQuestCompleted({ player, key }) {
+    if (key === "monkey_madness_ii") releaseAwowogei(player);
   }
 
   // ==========================================================================
@@ -1922,6 +2104,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     onReward: grantReward,
   });
 
+  api.onNpcDialogueVariant(selectNarnodeVariant);
   api.onNpcInteraction(handleNpcInteraction);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnItem(handleItemOnItem);
@@ -1931,6 +2114,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(CRASH_ZONE, handleCrashZone);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("quest:completed", handleQuestCompleted);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);

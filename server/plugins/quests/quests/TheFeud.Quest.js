@@ -419,6 +419,8 @@ module.exports = function registerTheFeudQuest(api) {
 
   function selectOperator(player) {
     const current = stage(player);
+    // After the quest the named Ali the Operator page owns the generic dialogue.
+    if (current >= STAGE_COMPLETE) return null;
     if (current >= STAGE_CHAMPION) return "celebrating-your-victory-talking-to-ali-the-operator";
     if (current >= STAGE_REPORTED) return "meeting-the-leader-talking-to-ali-the-operator";
     if (current === STAGE_POISONED) return "reporting-the-deed-talking-to-ali-the-operator";
@@ -919,6 +921,7 @@ module.exports = function registerTheFeudQuest(api) {
         return;
       }
       const count = Math.min(3, beers(player) + 1);
+      player.getInventory().deleteNumber(BEER_ITEM_ID, 1);
       player.setAttribute(BEERS_ATTRIBUTE, count);
       sendVarbit(player, VARBIT_FEUD_DRINK, count);
       const variant =
@@ -944,7 +947,6 @@ module.exports = function registerTheFeudQuest(api) {
       const success = Math.random() < 0.6;
       snakeAttempts.set(player, success);
       startTranscript(api, player, npcId, PAGE, "planning-a-murder-charming-a-snake");
-      snakeAttempts.delete(player);
     }
   }
 
@@ -1162,17 +1164,21 @@ module.exports = function registerTheFeudQuest(api) {
 
   /** Spawns a leader's summoned champion next to them, owner-only. */
   function spawnLeaderGuard(player, leaderId, guardId, spawnedFlag) {
-    if (hasFlag(player, spawnedFlag)) return;
     const world = api.getWorld();
     let leader = null;
     if (world?.getNpcs) {
       for (const npc of world.getNpcs()) {
         const id = npc?.getContentId ? npc.getContentId(player) : npc?.getId?.();
+        // Summoned guards are owner-only. Another player's guard does not fulfil
+        // this player's encounter, but a guard that survived this player's relog
+        // must not be duplicated.
+        if (id === guardId && npc?.getOwner?.() === player) return;
         if (id === leaderId) {
           leader = npc;
-          break;
         }
       }
+    } else if (hasFlag(player, spawnedFlag)) {
+      return;
     }
     const location = leader?.getLocation?.() ?? player.getLocation();
     setFlag(player, spawnedFlag);
@@ -1237,7 +1243,9 @@ module.exports = function registerTheFeudQuest(api) {
       const current = stage(player);
       if (!questActive(player) || current < STAGE_POISON_PLAN || current > STAGE_SNAKE_GIVEN) return;
       event.handled = true;
-      startTranscript(api, player, SNAKE_CHARMER_ID, "Ali the Snake Charmer", "standard-dialogue-using-a-coin-on-the-money-pot");
+      if (startTranscript(api, player, SNAKE_CHARMER_ID, "Ali the Snake Charmer", "standard-dialogue-using-a-coin-on-the-money-pot")) {
+        player.getInventory().deleteNumber(COINS_ITEM_ID, 1);
+      }
       return;
     }
     if (TROUGH_OBJECT_IDS.has(objectId) && itemId === RED_HOT_SAUCE_ITEM_ID) {

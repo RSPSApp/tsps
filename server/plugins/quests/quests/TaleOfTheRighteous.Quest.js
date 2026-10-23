@@ -70,6 +70,7 @@
  */
 module.exports = function registerTaleOfTheRighteousQuest(api) {
   const {
+    Item,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
@@ -101,6 +102,22 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
   const STAGE_LORD_TOLD = 15;
   const STAGE_HOME_TRASHED = 16;
   const STAGE_COMPLETE = 17;
+
+  // Durable stages 3-7 are internal labels, not the Quest Helper loadSteps keys.
+  // Canonical varbit 6358 uses skeleton found=5, reported=6, permission=7,
+  // Duffy told=8 and crevice found=8. Stage 9+ already matches the cache's
+  // multi-loc transform indices (rope 9, summit hidden 12, furniture 15).
+  const VARBIT_VALUE_BY_STAGE = new Map([
+    [STAGE_SKELETON_FOUND, 5],
+    [STAGE_PHILEAS_REPORTED, 6],
+    [STAGE_PERMISSION, 7],
+    [STAGE_DUFFY_TOLD, 8],
+    [STAGE_CREVICE_FOUND, 8],
+  ]);
+
+  function stageVarbitValue(stage) {
+    return VARBIT_VALUE_BY_STAGE.get(stage) ?? stage;
+  }
 
   const STRENGTH_REQUIREMENT = 16;
   const MINING_REQUIREMENT = 10;
@@ -372,6 +389,7 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
       return;
     }
     if (pendingCreviceEntry.has(player)) {
+      if (npcId !== MYSTERIOUS_VOICE_NPC_ID) return;
       pendingCreviceEntry.delete(player);
       if (choice === "yes") enterCave(player);
     }
@@ -510,8 +528,10 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
       case SKELETON_SEARCH_OBJECT_ID: {
         if (quest.getStage(player) < STAGE_STARTED || quest.isComplete(player)) return;
         event.handled = true;
-        if (!held(player, DUSTY_NOTE_ITEM_ID) && !player.getInventory().isFull()) {
-          player.getInventory().adds(DUSTY_NOTE_ITEM_ID, 1);
+        if (!held(player, DUSTY_NOTE_ITEM_ID)) {
+          const inventory = player.getInventory();
+          if (inventory.isFull()) inventory.full();
+          else inventory.adds(DUSTY_NOTE_ITEM_ID, 1);
         }
         return;
       }
@@ -625,18 +645,30 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
     ];
   }
 
+  function sendRewardVarbit(player) {
+    if (quest?.isComplete(player)) player.getPacketSender().sendVarbit(VARBIT_SHAYZIEN_REWARD, 1);
+  }
+
   function grantReward(player) {
-    player.getInventory().adds(COINS_ITEM_ID, 8000);
-    player.getPacketSender().sendVarbit(VARBIT_SHAYZIEN_REWARD, 1);
+    const inventory = player.getInventory();
+    if (inventory.isFull()) inventory.forceAdd(player, new Item(COINS_ITEM_ID, 8000));
+    else inventory.adds(COINS_ITEM_ID, 8000);
+    sendRewardVarbit(player);
   }
 
   function handleLogin({ player }) {
     ensurePhileas(player);
     if (inZone(CAVE_ZONE, player.getLocation())) ensureCaveNpcs(player);
+    sendRewardVarbit(player);
     refreshQuestList(player);
   }
 
+  function handleBootstrapComplete({ player }) {
+    sendRewardVarbit(player);
+  }
+
   function handleLogout({ player }) {
+    pendingCreviceEntry.delete(player);
     removePhileas(player);
     clearCaveNpcs(player);
   }
@@ -646,6 +678,7 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
     name: "Tale of the Righteous",
     varpId: VARP_SHAYZIEN_QUEST,
     varbitId: VARBIT_SHAYZIEN_QUEST,
+    varbitValue: stageVarbitValue,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
@@ -666,11 +699,12 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
   api.onCustomEvent("ladders:climb", claimCaveRopeClimb);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject);
-  api.onNpcClick([ARCHEIO_NPC_ID], 2, handleArcheioTeleportOption);
+  api.onNpcClick([ARCHEIO_NPC_ID], 3, handleArcheioTeleportOption);
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(PHILEAS_HOUSE_ZONE, handleHouseZoneEnter);
   api.onZoneEnter(CAVE_ZONE, handleCaveZoneEnter);
   api.onZoneExit(CAVE_ZONE, handleCaveZoneExit);
+  api.onCustomEvent("player:bootstrap-complete", handleBootstrapComplete);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

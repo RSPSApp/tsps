@@ -368,8 +368,6 @@ test('barman bribe is paid once and cannot be paid without 100 coins', () => {
   h.condition(p, '8h0Upv', 'If the player has 100 coins:');
   assert.equal(stage(h, p), 4);
   assert.equal(p.items.get(I.COINS), 200);
-  h.action(p, '8Nhp3b');
-  assert.match(p.messages.at(-1), /^You give 100 coins to the barman\.$/);
   h.talk('Khazard Barman', p, N.KHAZARD_BARMAN);
   assert.equal(variant(h), 'on-the-trail-talking-to-the-khazard-barman-after-giving-him-100-coins');
 });
@@ -1585,4 +1583,66 @@ test('scroll hand-in sends QH native 52 while retaining the SCROLL_READ stage', 
   varbits.length = 0;
   runtime.sendQuestVarps({ player: p });
   assert.equal(varbits.filter(([id]) => id === 14722).at(-1)?.[1], 52, 'login/resend keeps native52');
+});
+
+test('real NpcDialogues: barman bribe deducts 100 once and renders WN9Bk8 once', async () => {
+  const path = require('node:path');
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
+  const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
+  const { PluginManager: PM } = require('../dist/plugins/PluginManager');
+  const { startDialogue } = require('../plugins/npcs/NpcDialogues.plugin');
+  await CachePipeline.initialize(path.resolve('.'));
+  RegionManager.init();
+  new NpcDefinitionLoader().load();
+
+  const api = PM.createApi('qh728-barman-real-dialogues');
+  require('../plugins/npcs/NpcDialogues.plugin').register(api);
+  require('../plugins/quests/quests/SecretsOfTheNorth.Quest')(api);
+  const north = runtime.getRegisteredQuests().filter(q => q.key === 'secrets_of_the_north').at(-1);
+
+  const p = new Player(null);
+  const messages = [];
+  const sender = new Proxy({}, {
+    get: (target, key) => {
+      if (key === 'getVarbit') return () => 0;
+      if (key === 'isSubInterfaceOpen') return () => false;
+      if (key === 'isChatboxInterface') return () => true;
+      if (key === 'closeInterruptibleInterfaces') return () => {};
+      return () => sender;
+    },
+  });
+  p.getPacketSender = () => sender;
+  p.sendMessage = text => messages.push(String(text));
+  p.getInventory().adds(I.COINS, 300);
+  north.setStage(p, 3);
+
+  const record = require('../data/definitions/npc-dialogues.json')['Secrets of the North'];
+  const event = { player: p, npcId: N.KHAZARD_BARMAN, definition: NpcDefinition.forId(N.KHAZARD_BARMAN) };
+  startDialogue(api, event, record.variants['on-the-trail-talking-to-the-khazard-barman'], record.branches,
+    { ...event, pages: [{ page: 'Secrets of the North' }] });
+
+  const target = 'Do you know anyone called Evelot?';
+  for (let i = 0; i < 300; i++) {
+    const pending = MultiChatboxPrompt.getPending(p);
+    if (pending) {
+      const index = pending.options.indexOf(target);
+      if (index < 0) break;
+      assert.equal(MultiChatboxPrompt.handleInterfaceActionClick({
+        player: p, buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, groupId: 219,
+        slot: index + 1, action: index + 1,
+      }), true);
+      continue;
+    }
+    if (!p.getDialogueManager().getCurrent()) break;
+    if (!p.getDialogueManager().handleResume(231 << 16 | 5, 1)) break;
+    if (messages.includes('You give 100 coins to the barman.')) break;
+  }
+  assert.equal(p.getInventory().getAmount(I.COINS), 200, 'bribe deducted exactly once');
+  assert.equal(north.getStage(p), 4, 'conditional route advanced to the bribed stage');
+  assert.equal(messages.filter(text => text === 'You give 100 coins to the barman.').length, 1,
+    'canonical message rendered exactly once');
 });

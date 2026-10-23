@@ -26,9 +26,10 @@
  * 4 asked Gertrude (ask Reldo), 5 asked Reldo (return to Bob), 6 told Bob (see the
  * Sphinx), 10 Sphinx cutscene done, chores list (Bob away), 20 chores done, 30 Unferth
  * ill, 40 Apothecary told (disguise), 50 Unferth cured, 60 Bob's holiday cutscene
- * (back in Burthorpe), 70 complete. The intermediate values are this plugin's; the
- * cache only pins the completion threshold (70, DB row 142 col 19) and the chore
- * varbits above.
+ * (back in Burthorpe), 70 complete. The durable values are this plugin's and are
+ * preserved for existing saves; `WIRE_STAGE` maps them to the Quest Helper keys
+ * (0, 5, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70) actually written to
+ * varbit 1028. The cache pins the completion threshold (70, DB row 142 col 19).
  *
  * Rewards per the OSRS Wiki: 2 Quest points, a Doctor's hat or Nurse hat, and a
  * present containing two antique lamps (2,500 XP each in skills over 30) and a mouse
@@ -48,7 +49,7 @@
  *  - The Apothecary's Doctor/Nurse hat choice is two sibling conditions in the dump
  *    with no menu; the first request gives a Doctor's hat, and losing it and asking
  *    again alternates to the other hat (the wiki's switch-by-destroying).
- *  - The patch grows after 20 minutes (wiki: 15-35); MCP advance_time skips it. The
+ *  - The patch grows after 20 minutes (wiki: 15-35); MCP advance_time advances it.
  *    potatoes' "milk placed first" table state (feedhuman 2) has no wiki message.
  *  - Object prompts the transcript lacks (needing 4 seeds/a dibber, no logs in the
  *    fireplace, not holding a vial) use plain game messages.
@@ -93,6 +94,26 @@ module.exports = function registerTailOfTwoCatsQuest(api) {
   const STAGE_CURED = 50;
   const STAGE_BOB_BACK = 60;
   const STAGE_COMPLETE = 70;
+
+  // Durable stage -> Quest Helper/OSRS varbit 1028 value. The durable values stay
+  // as they are so existing saves keep their meaning; only the transmitted wire
+  // value uses the helper's stage keys.
+  const WIRE_STAGE = new Map([
+    [STAGE_STARTED, 5], // talkToHild
+    [STAGE_AMULET_ENCHANTED, 15], // findBob/talkToBob
+    [STAGE_FOUND_BOB, 20], // talkToGertrude
+    [STAGE_ASKED_GERTRUDE, 25], // talkToReldo
+    [STAGE_ASKED_RELDO, 30], // findBobAgain/talkToBobAgain
+    [STAGE_TOLD_BOB, 35], // talkToSphinx
+    [STAGE_CHORES, 40], // doChores
+    [STAGE_CHORES_DONE, 45], // reportToUnferth
+    [STAGE_MEDICAL, 50], // talkToApoth
+    [STAGE_APOTHECARY, 55], // talkToUnferthAsDoctor
+    [STAGE_CURED, 60], // findBobToFinish/talkToBobToFinish
+    [STAGE_BOB_BACK, 65], // talkToUnferthToFinish
+    [STAGE_COMPLETE, 70], // cache completion threshold
+  ]);
+  const wireStage = (stage) => WIRE_STAGE.get(stage) ?? stage;
 
   // ------------------------------------------------------------------ NPCs
 
@@ -1102,7 +1123,7 @@ module.exports = function registerTailOfTwoCatsQuest(api) {
     if (growAt <= 0) return;
     const next = growAt - ms;
     player.setAttribute(PATCH_ATTRIBUTE, Math.max(0, next));
-    if (next <= 0) finishPotatoes(player);
+    if (next <= Date.now()) finishPotatoes(player);
     if (Array.isArray(event.handledBy)) event.handledBy.push("TailOfTwoCats");
   }
 
@@ -1271,6 +1292,7 @@ module.exports = function registerTailOfTwoCatsQuest(api) {
     name: "A Tail of Two Cats",
     varpId: VARP_TWOCATS,
     varbitId: VARBIT_TWOCATS_QUEST,
+    varbitValue: wireStage,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

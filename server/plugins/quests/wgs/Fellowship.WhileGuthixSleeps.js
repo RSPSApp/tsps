@@ -2,13 +2,14 @@
 module.exports=function registerFellowship({api,stage,advance,held,give,val,play,hit,ATTRIBUTES}){
  const {Area,PrivateArea,Boundary,Location,HitDamage,HitMask,PrayerHandler,World}=api.core;
  const MERCENARIES_ATTRIBUTE='while-guthix-sleeps:mercenaries-defeated', RECRUITS_ATTRIBUTE='while-guthix-sleeps:recruits';
- const SEED_ATTRIBUTE='while-guthix-sleeps:seed-on-counter',FREE_SEED_ATTRIBUTE='while-guthix-sleeps:free-seed';
+ const SEED_ATTRIBUTE='while-guthix-sleeps:seed-on-counter',FREE_SEED_ATTRIBUTE='while-guthix-sleeps:free-seed',HERB_PICKED_ATTRIBUTE='while-guthix-sleeps:herb-picked';
  const DRAYNOR_ATTRIBUTE='while-guthix-sleeps:draynor-teleport',SARIM_ATTRIBUTE='while-guthix-sleeps:sarim-teleport';
  const SKETCHED_ATTRIBUTE='while-guthix-sleeps:spy-sketched';
  const SPY_ALERT_ATTRIBUTE='while-guthix-sleeps:spy-alert-until';
  ATTRIBUTES.push(MERCENARIES_ATTRIBUTE,RECRUITS_ATTRIBUTE,SEED_ATTRIBUTE,FREE_SEED_ATTRIBUTE,DRAYNOR_ATTRIBUTE,SARIM_ATTRIBUTE,SKETCHED_ATTRIBUTE);
+ api.persistAttribute(HERB_PICKED_ATTRIBUTE, 0);
  const IDRIA=13540,WOOD_IDRIA=13542,THAERISK=13511,AKRISAE=13543,SILIF=13519;
- const MERCENARIES=[13535,13536,13537],SPY=13545,CAPTIVE=13546,OUTSIDER=13555,FARMER=13554;
+ const MERCENARIES=[13535,13536,13537],SPY=13545,CAPTIVE=13546,OUTSIDER=13555,DRUID=13554;
  const TELEORB=29536,SEED=5300,ENRICHED_SEED=29538,ENRICHED_HERB=29530;
  const DYE=6955,LENS=4542,ROSE_LENS=6956,SERUM=29532,SUPER_SERUM=29531,SKETCH=29533;
  const PAPYRUS=970,CHARCOAL=973,COINS=995,DIBBER=5343;
@@ -35,7 +36,7 @@ module.exports=function registerFellowship({api,stage,advance,held,give,val,play
   if((l.getX()>>6)===46&&(l.getY()>>6)===52&&s>=220&&s<=900){
    spawns.push([IDRIA,2989,3343,0],[AKRISAE,2989,3342,0],[THAERISK,2990,3342,0],[SILIF,2990,3343,0]);
    if(s>=250)spawns.push([s>=620?13548:CAPTIVE,2987,3343,0]);
-   if(s>=280&&s<320)spawns.push([FARMER,2963,3338,3]);
+   if(s>=280&&s<320)spawns.push([DRUID,2963,3338,3]);
   }else if(s===230&&l.getX()>=3070&&l.getX()<=3110&&l.getY()>=3220&&l.getY()<=3270)spawns.push([SPY,3096,3248,0],[OUTSIDER,3088,3251,0]);
   else if(s===210&&l.getX()>=2630&&l.getX()<=2675&&l.getY()>=3475&&l.getY()<=3515)spawns.push([WOOD_IDRIA,2657,3504,0]);
   if(spawns.length)actors.set(player,spawns.map(([id,x,y,z])=>api.spawnNpc({id,x,y,z,wanderRadius:0,owner:player,ownerOnly:true})));
@@ -79,7 +80,29 @@ module.exports=function registerFellowship({api,stage,advance,held,give,val,play
    else if(!held(player,SUPER_SERUM)){player.sendMessage('Bring the super truth serum to the spy.');return true;}
    play(player,npcId,PREFIX+v);return true;
   }
-  if(npcId===FARMER&&s>=280){if(s>=300)give(player,ENRICHED_HERB);else player.sendMessage('The enriched snapdragon is growing. Recruit the four heroes while it grows.');return true;}
+  // The druid at the enriched snapdragon patch replaces a lost harvest.
+  if (npcId === DRUID) {
+   if (s >= 300) {
+    const herbWasPicked = val(player, HERB_PICKED_ATTRIBUTE) > 0;
+    const variant = herbWasPicked
+     ? held(player, ENRICHED_HERB)
+      ? 'after-picking-the-herb'
+      : 'after-losing-the-herb'
+     : '';
+    play(
+     player,
+     npcId,
+     PREFIX + 'using-the-serum-talking-to-the-druid' + (variant ? `-${variant}` : '')
+    );
+    if (herbWasPicked && !held(player, ENRICHED_HERB)) give(player, ENRICHED_HERB);
+    return true;
+   }
+   if (s >= 280) {
+    player.sendMessage('The enriched snapdragon is growing. Recruit the four heroes while it grows.');
+    return true;
+   }
+   return false;
+  }
   if(![IDRIA,THAERISK,AKRISAE].includes(npcId)||!atCastle(player)||s<220||s>=400)return false;
   const who=npcId===IDRIA?'idria':npcId===AKRISAE?'akrisae':'thaerisk';let v;
   if(s===220)v='capturing-a-spy-talking-to-thaerisk-idria-or-akrisae';
@@ -173,7 +196,16 @@ module.exports=function registerFellowship({api,stage,advance,held,give,val,play
   if(!held(player,DIBBER)&&!player.getAttribute('barbarian-training:farming')){player.sendMessage('You need a seed dibber to plant this seed.');return true;}
   player.getInventory().deleteNumber(ENRICHED_SEED,1);advance(player,280);sync(player);player.sendMessage('You plant the enriched snapdragon seed.');return true;
  }
- function harvest({player,objectId,definition}){objectId=definition?.id??objectId;if(!PATCHES.includes(objectId)||stage(player)<280||stage(player)>=320)return false;if(stage(player)<300){player.sendMessage('The herb is still growing.');return true;}give(player,ENRICHED_HERB);return true;}
+ function harvest({ player, objectId, definition }) {
+  objectId = definition?.id ?? objectId;
+  if (!PATCHES.includes(objectId) || stage(player) < 280 || stage(player) >= 320) return false;
+  if (stage(player) < 300) {
+   player.sendMessage('The herb is still growing.');
+   return true;
+  }
+  if (give(player, ENRICHED_HERB)) player.setAttribute(HERB_PICKED_ATTRIBUTE, 1);
+  return true;
+ }
  function inspect({player,objectId,definition}){objectId=definition?.id??objectId;if(!PATCHES.includes(objectId)||stage(player)<250)return false;player.sendMessage(stage(player)>=300?'The enriched snapdragon is ready to harvest.':stage(player)>=280?'The enriched snapdragon is growing.':'A specially prepared herb patch.');return true;}
  function drawers({player,objectId}){if(!DRAWERS.includes(objectId)||stage(player)<250)return false;give(player,PAPYRUS);give(player,CHARCOAL);return true;}
  function cell({player,objectId}){if(objectId!==CELL||stage(player)<220)return false;if(stage(player)<300){player.sendMessage('The gate is securely locked.');return true;}const l=player.getLocation();player.moveTo(new Location(l.getX()<2988?2989:2987,3343,0));return true;}

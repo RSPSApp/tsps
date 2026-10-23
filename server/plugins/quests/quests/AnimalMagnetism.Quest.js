@@ -36,29 +36,27 @@
  * Ranged 30 and Woodcutting 35 (all base levels).
  *
  * Gaps/approximations:
- * - The research-notes translation is OSRS's orb puzzle interface, which this
- *   server has no widget for: Translate consumes the research notes and yields
- *   the translated notes at once (no puzzle).
- * - The Selected iron's "face north" check is not reproduced (the player entity
- *   tracks no facing); hammering anywhere in the Rimmington mine works, so the
- *   "You think that facing North might work better." line never plays.
+ * - The research-notes switch puzzle opens cache interface 480 and requires the
+ *   player to switch off the six highlighted orbs (roots 26/31/34/40/43/46,
+ *   leaving the 2nd/5th/9th on). Each click updates the cache's paired On/Off
+ *   switch widgets; registered packet assertions cover the state changes.
  * - The chicken-catching cutscene plays through the transcript runtime with a
  *   speaker map (Alice/Cow31337Killer/Sneaky undead fowl get their own chatheads);
  *   Bessie and the cutscene props are not spawned.
- * - The burthorpe world spawn named "Turael" (id 401) resolves to a Light
- *   creature in this cache revision, so the quest spawns the real Turael (13618)
- *   owner-only at (2931,3537) while the varbit is 160-180.
+ * - The cache-owned Slayer Master at Burthorpe transforms from Turael (13618)
+ *   to Aya (13619) using While Guthix Sleeps varbit 10782; the quest reuses it.
  * - Ava with unmet requirements plays the busy line and the requirement
  *   messages, the closest transcript line for that state.
  * - The ecto-token shortfall, the silent container combine and the requirement
  *   warnings have no transcript variant, so they use plain game messages.
- * - A while-Guthix-Sleeps-completed player would meet Aya instead of Turael; WGS
- *   is not implemented here, so the Aya variants are unreachable.
+ * - A while-Guthix-Sleeps-completed player meets Aya instead of Turael, using
+ *   the same transcript steps with Aya's name and pronouns.
  *
  * Source: OSRS Wiki (Animal Magnetism, Quick guide, Transcript:Animal Magnetism).
  */
 module.exports = function registerAnimalMagnetismQuest(api) {
   const {
+    Direction,
     Equipment,
     ItemIdentifiers,
     NpcDefinition,
@@ -122,14 +120,16 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const MALCOLM_NPC_ID = NpcIdentifiers.MALCOLM; // 4411
   const MALCOLM_2_NPC_ID = NpcIdentifiers.MALCOLM_2; // 4412, wearing the crone-made amulet
   const TURAEL_NPC_ID = NpcIdentifiers.TURAEL_4; // 13618
+  const AYA_NPC_ID = NpcIdentifiers.AYA; // 13619, Turael's replacement after While Guthix Sleeps
   const UNDEAD_TREE_NPC_ID = NpcIdentifiers.UNDEAD_TREE; // 4417 (spawn 4418 resolves here at stage 150+)
   const COW31337KILLER_NPC_ID = NpcIdentifiers.COW31337KILLER; // 4420, cutscene only
   const SNEAKY_UNDEAD_FOWL_NPC_ID = NpcIdentifiers.SNEAKY_UNDEAD_FOWL; // 4419, cutscene only
 
   const ALICE_NPC_IDS = new Set([ALICE_NPC_ID, ALICE_2_NPC_ID]);
   const MALCOLM_NPC_IDS = new Set([MALCOLM_NPC_ID, MALCOLM_2_NPC_ID]);
+  const SLAYER_MASTER_NPC_IDS = new Set([TURAEL_NPC_ID, AYA_NPC_ID]);
 
-  const TURAEL_SPAWN = { x: 2931, y: 3537, z: 0 };
+  const VARBIT_WGS_SLAYER_MASTER = 10782;
 
   // ==========================================================================
   // Items
@@ -284,11 +284,14 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     "magnetism-helpful-witch-talking-to-the-witch-after-creating-the-magnet";
 
   const TURAEL_FIRST_VARIANT = "the-bark-has-bite-a-slayer-s-perspective-turael";
+  const AYA_FIRST_VARIANT = "the-bark-has-bite-a-slayer-s-perspective-aya";
   const TURAEL_AGAIN_VARIANT =
     "the-bark-has-bite-a-slayer-s-perspective-talking-to-turael-or-aya-again";
 
   const HAMMER_OUTSIDE_MINE_VARIANT =
     "magnetism-helpful-witch-using-hammer-on-selected-iron-without-being-in-rimmington-mine";
+  const HAMMER_WRONG_FACING_VARIANT =
+    "magnetism-helpful-witch-using-hammer-on-selected-iron-without-facing-north";
   const HAMMER_IN_MINE_VARIANT = "magnetism-helpful-witch-using-hammer-on-selected-iron-as-intended";
 
   const TREE_NO_AXE_VARIANT =
@@ -341,6 +344,39 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const ACTION_RECEIVE_TWO_CHICKENS_ID = "haQZnJ";
   const ACTION_CONTINUE_SUCCESS_ID = "b_F1lm";
   const ACTION_CRONE_HAIR_ID = "-6EpYR";
+  const ACTION_MAGNET_XP_ID = "G9W0YI";
+  const ACTION_NOTES_SOLVED_ID = "Bi6_MY";
+
+  // Research-notes switch puzzle (cache interface 480, ANMA_RGB).
+  const NOTES_PUZZLE_GROUP = 480;
+  const NOTES_SOLVED_VARIANT =
+    "research-and-development-talking-to-ava-again-successfully-translating-the-notes";
+  // Nine switch roots in reading order (cache x=46,94,142,191,238,285,333,381,429)
+  // and each root's model child from the cache parent links. Quest Helper's
+  // PuzzleSolver highlights the six roots to switch off; the Wiki leaves the
+  // 2nd, 5th and 9th orbs on.
+  const NOTES_PUZZLE_SWITCHES = [
+    { root: 26, model: 24, alternateRoot: 50, alternateModel: 23 },
+    { root: 28, model: 27, alternateRoot: 51, alternateModel: 25 },
+    { root: 31, model: 30, alternateRoot: 52, alternateModel: 29 },
+    { root: 34, model: 33, alternateRoot: 53, alternateModel: 32 },
+    { root: 37, model: 36, alternateRoot: 54, alternateModel: 35 },
+    { root: 40, model: 39, alternateRoot: 55, alternateModel: 38 },
+    { root: 43, model: 42, alternateRoot: 56, alternateModel: 41 },
+    { root: 46, model: 45, alternateRoot: 57, alternateModel: 44 },
+    { root: 49, model: 48, alternateRoot: 58, alternateModel: 47 },
+  ];
+  const NOTES_SWITCHES_OFF = new Set([26, 31, 34, 40, 43, 46]);
+  const NOTES_SWITCH_BY_WIDGET = new Map();
+  for (const { root, model, alternateRoot, alternateModel } of NOTES_PUZZLE_SWITCHES) {
+    NOTES_SWITCH_BY_WIDGET.set(root, root);
+    NOTES_SWITCH_BY_WIDGET.set(model, root);
+    NOTES_SWITCH_BY_WIDGET.set(alternateRoot, root);
+    NOTES_SWITCH_BY_WIDGET.set(alternateModel, root);
+  }
+  const NOTES_PUZZLE_BUTTONS = [...NOTES_SWITCH_BY_WIDGET.keys()].map(
+    (child) => (NOTES_PUZZLE_GROUP << 16) | child
+  );
 
   // ==========================================================================
   // Requirements
@@ -362,8 +398,10 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   const RIMMINGTON_MINE = { minX: 2971, maxX: 2987, minY: 3234, maxY: 3248, levels: [0] };
 
   let quest;
-  /** Owner-only Turael spawn per player, present only while the varbit sits at 160-170. */
-  const turaelSpawns = new Map();
+  /** Switches currently off in an open notes puzzle; absent means closed/reset. */
+  const notePuzzles = new WeakMap();
+  /** A solved puzzle waiting for the transcript's Bi6_MY message to finish it. */
+  const notePuzzlesAwaitingMessage = new WeakSet();
 
   // ==========================================================================
   // Helpers
@@ -451,39 +489,14 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   // Stage / Turael spawn
   // ==========================================================================
 
-  function syncTurael(player) {
-    const stage = quest.getStage(player);
-    const needed = stage >= STAGE_TURAEL && stage <= STAGE_TURAEL_AXE;
-    let npc = turaelSpawns.get(player);
-    if (needed) {
-      if (npc?.isRegistered?.()) return;
-      // Owner-only spawns no longer respawn; clear a stale duplicate first.
-      for (const worldNpc of api.getWorld()?.getNpcs?.() ?? []) {
-        if (worldNpc?.getOwner?.() === player && worldNpc.getId?.() === TURAEL_NPC_ID) api.removeNpc(worldNpc);
-      }
-      npc = api.spawnNpc({
-        id: TURAEL_NPC_ID,
-        x: TURAEL_SPAWN.x,
-        y: TURAEL_SPAWN.y,
-        z: TURAEL_SPAWN.z,
-        wanderRadius: 0,
-        owner: player,
-        ownerOnly: true,
-      });
-      if (npc) turaelSpawns.set(player, npc);
-      return;
-    }
-    if (npc) {
-      if (npc.isRegistered?.()) api.removeNpc(npc);
-      turaelSpawns.delete(player);
-    }
+  function isAyaSlayerMaster(player) {
+    return (player.getPacketSender().getVarbit(VARBIT_WGS_SLAYER_MASTER) ?? 0) > 0;
   }
 
   function setStage(player, value) {
     const current = quest.getStage(player);
     if (value < current) return;
     if (value !== current) quest.setStage(player, value);
-    syncTurael(player);
   }
 
   // ==========================================================================
@@ -552,6 +565,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   }
 
   function selectMalcolmVariant(player, stage) {
+    if (stage >= STAGE_COMPLETE) return null;
     if (stage <= STAGE_NOT_STARTED) return null; // the "Malcolm" page's standard dialogue
     if (stage <= STAGE_STARTED) return MALCOLM_LOVE_VARIANT;
     if (stage === STAGE_MALCOLM_LOVE) return MALCOLM_REPEAT_LOVE_VARIANT;
@@ -578,7 +592,8 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     if (stage === STAGE_AMULET) {
       return hasCroneAmulet(player) ? CRONE_BEFORE_DELIVERY_VARIANT : CRONE_LOST_AMULET_VARIANT;
     }
-    return { page: "Old crone", variant: "standard-dialogue-after-animal-magnetism-and-ghosts-ahoy" };
+    // Outside her amulet window the Old crone belongs to Ghosts Ahoy.
+    return null;
   }
 
   function selectWitchVariant(player, stage) {
@@ -594,13 +609,18 @@ module.exports = function registerAnimalMagnetismQuest(api) {
       if (has(player, SELECTED_IRON_ITEM_ID)) return WITCH_BEFORE_MAGNET_VARIANT;
       return WITCH_LOST_IRON_VARIANT;
     }
-    return { page: "Witch", variant: "standard-dialogue-after-the-completion-of-animal-magnetism" };
+    if (stage >= STAGE_COMPLETE) {
+      return { page: "Witch", variant: "standard-dialogue-after-the-completion-of-animal-magnetism" };
+    }
+    return { page: "Witch", variant: "standard-dialogue-after-the-completion-of-ernest-the-chicken" };
   }
 
-  function selectTuraelVariant(player, stage) {
-    if (stage === STAGE_TURAEL) return TURAEL_FIRST_VARIANT;
+  function selectTuraelVariant(player, stage, npcId) {
+    if (stage === STAGE_TURAEL) {
+      return npcId === AYA_NPC_ID ? AYA_FIRST_VARIANT : TURAEL_FIRST_VARIANT;
+    }
     if (stage === STAGE_TURAEL_AXE) return { page: PAGE, variant: TURAEL_AGAIN_VARIANT };
-    return null; // the "Turael" page's standard dialogue
+    return null; // the "Turael"/"Aya" page's standard dialogue
   }
 
   function selectVariant({ npcId, player }) {
@@ -611,7 +631,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     if (MALCOLM_NPC_IDS.has(npcId)) return selectMalcolmVariant(player, stage);
     if (npcId === OLD_CRONE_NPC_ID) return selectCroneVariant(player, stage);
     if (npcId === WITCH_NPC_ID) return selectWitchVariant(player, stage);
-    if (npcId === TURAEL_NPC_ID) return selectTuraelVariant(player, stage);
+    if (SLAYER_MASTER_NPC_IDS.has(npcId)) return selectTuraelVariant(player, stage, npcId);
     return null;
   }
 
@@ -629,7 +649,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
       if (stepId === CONDITION_GHOSTS_AHOY_ID) return questComplete(player, "ghosts_ahoy");
       return null;
     }
-    if (npcId === TURAEL_NPC_ID) {
+    if (SLAYER_MASTER_NPC_IDS.has(npcId)) {
       const axe = has(player, MITHRIL_AXE_ITEM_ID);
       const symbol = has(player, HOLY_SYMBOL_ITEM_ID);
       if (stepId === CONDITION_AXE_AND_SYMBOL_ID) return axe && symbol;
@@ -675,7 +695,7 @@ module.exports = function registerAnimalMagnetismQuest(api) {
       if (quest.getStage(player) === STAGE_STARTED) setStage(player, STAGE_MALCOLM_LOVE);
       return;
     }
-    if (npcId === TURAEL_NPC_ID && stepId === CONDITION_AXE_AND_SYMBOL_ID) {
+    if (SLAYER_MASTER_NPC_IDS.has(npcId) && stepId === CONDITION_AXE_AND_SYMBOL_ID) {
       if (quest.getStage(player) !== STAGE_TURAEL_AXE) return;
       if (!has(player, MITHRIL_AXE_ITEM_ID) || !has(player, HOLY_SYMBOL_ITEM_ID)) return;
       player.getInventory().deleteNumber(MITHRIL_AXE_ITEM_ID, 1);
@@ -712,6 +732,26 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     if (stepId === ACTION_CRONE_HAIR_ID && npcId === OLD_CRONE_NPC_ID) {
       // The message is the transcript's own; only the stage moves.
       if (quest.getStage(player) === STAGE_CRONE) setStage(player, STAGE_CRONE_HAIR);
+      return;
+    }
+    if (npcId === AVA_NPC_ID && stepId === ACTION_MAGNET_XP_ID) {
+      // XP is paid when Ava accepts the magnet, before a later chat message
+      // can be interrupted. Keep the imported message action inert.
+      return;
+    }
+    if (npcId === AVA_NPC_ID && stepId === ACTION_NOTES_SOLVED_ID) {
+      if (quest.getStage(player) !== STAGE_TRANSLATE) return;
+      if (!notePuzzlesAwaitingMessage.has(player)) return;
+      if (!has(player, RESEARCH_NOTES_ITEM_ID)) {
+        notePuzzlesAwaitingMessage.delete(player);
+        return;
+      }
+      player.getInventory().deleteNumber(RESEARCH_NOTES_ITEM_ID, 1);
+      if (!has(player, TRANSLATED_NOTES_ITEM_ID)) {
+        player.getInventory().adds(TRANSLATED_NOTES_ITEM_ID, 1);
+      }
+      notePuzzlesAwaitingMessage.delete(player);
+      setStage(player, STAGE_GIVE_NOTES);
     }
   }
 
@@ -723,8 +763,16 @@ module.exports = function registerAnimalMagnetismQuest(api) {
       player.sendMessage(`You need ${cost} ecto-tokens to buy ${count === 1 ? "a chicken" : "two chickens"}.`);
       return;
     }
-    player.getInventory().deleteNumber(ECTO_TOKEN_ITEM_ID, cost);
-    player.getInventory().adds(UNDEAD_CHICKEN_ITEM_ID, count);
+    const inventory = player.getInventory();
+    // Undead chickens do not stack. Spending the whole token stack frees its
+    // slot; otherwise each bird still needs one of its own.
+    const freedByTokens = inventory.getAmount(ECTO_TOKEN_ITEM_ID) === cost ? 1 : 0;
+    if (inventory.getFreeSlots() + freedByTokens < count) {
+      player.sendMessage(`You need ${count === 1 ? "a free inventory slot" : "two free inventory slots"} to buy ${count === 1 ? "a chicken" : "two chickens"}.`);
+      return;
+    }
+    inventory.deleteNumber(ECTO_TOKEN_ITEM_ID, cost);
+    inventory.adds(UNDEAD_CHICKEN_ITEM_ID, count);
     if (stage === STAGE_CUTSCENE) setStage(player, STAGE_CHICKENS);
   }
 
@@ -737,16 +785,15 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     const stage = quest.getStage(player);
 
     if (npcId === AVA_NPC_ID) {
-      // While Guthix Sleeps is not implemented, so the wiki's Turael/Aya
-      // alternatives always resolve to Turael.
       if (text.includes("[Turael/Aya]") || text.includes("[he's/she's]")) {
+        const aya = isAyaSlayerMaster(player);
         event.text = text
-          .replace(/\[Turael\/Aya\]/g, "Turael")
-          .replace(/\[He's\/She's\]/g, "He's")
-          .replace(/\[he's\/she's\]/g, "he's")
-          .replace(/\[his\/her\]/g, "his")
-          .replace(/\[him\/her\]/g, "him")
-          .replace(/\[he\/she\]/g, "he");
+          .replace(/\[Turael\/Aya\]/g, aya ? "Aya" : "Turael")
+          .replace(/\[He's\/She's\]/g, aya ? "She's" : "He's")
+          .replace(/\[he's\/she's\]/g, aya ? "she's" : "he's")
+          .replace(/\[his\/her\]/g, aya ? "her" : "his")
+          .replace(/\[him\/her\]/g, aya ? "her" : "him")
+          .replace(/\[he\/she\]/g, aya ? "she" : "he");
         return;
       }
       if (text === "Here they are." && stage >= STAGE_CHICKENS && stage <= STAGE_CHICKEN_ONE) {
@@ -927,7 +974,13 @@ module.exports = function registerAnimalMagnetismQuest(api) {
       return;
     }
 
-    if (npcId === TURAEL_NPC_ID) {
+    if (SLAYER_MASTER_NPC_IDS.has(npcId)) {
+      // The shared "again" variant types its speaker as "Turael/Aya". Render
+      // whichever master this player actually has.
+      if (event.step?.type === "line") {
+        event.speakerName = npcId === AYA_NPC_ID ? "Aya" : "Turael";
+        event.speakerId = npcId;
+      }
       if (
         text === "Okay, so I'll see whether I can spare an axe and a symbol. Thanks." &&
         stage === STAGE_TURAEL
@@ -1008,6 +1061,10 @@ module.exports = function registerAnimalMagnetismQuest(api) {
         startTranscript(api, player, WITCH_NPC_ID, PAGE, HAMMER_OUTSIDE_MINE_VARIANT);
         return;
       }
+      if (player.getFacingDirection() !== Direction.NORTH) {
+        startTranscript(api, player, WITCH_NPC_ID, PAGE, HAMMER_WRONG_FACING_VARIANT);
+        return;
+      }
       player.getInventory().deleteNumber(SELECTED_IRON_ITEM_ID, 1);
       player.getInventory().adds(BAR_MAGNET_ITEM_ID, 1);
       startTranscript(api, player, WITCH_NPC_ID, PAGE, HAMMER_IN_MINE_VARIANT);
@@ -1015,7 +1072,10 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     }
 
     if (!CONTAINER_PART_ITEM_IDS.has(usedItemId) || !CONTAINER_PART_ITEM_IDS.has(usedWithItemId)) return;
-    if (quest.getStage(player) !== STAGE_BUILD) return;
+    // Ava hands out a replacement pattern at 230 when the first container is
+    // lost or banked, so the rebuild must work there too.
+    const containerStage = quest.getStage(player);
+    if (containerStage !== STAGE_BUILD && containerStage !== STAGE_CONTAINER) return;
     event.handled = true;
     const hasPattern = has(player, A_PATTERN_ITEM_ID);
     const hasLeather = has(player, HARD_LEATHER_ITEM_ID);
@@ -1036,16 +1096,72 @@ module.exports = function registerAnimalMagnetismQuest(api) {
     startTranscript(api, player, AVA_NPC_ID, PAGE, variant);
   }
 
-  /** The crone's notes are a puzzle interface in OSRS; here they translate at once. */
+  /** Translate opens the cache's nine-switch notes puzzle (interface 480). */
   function handleTranslateNotes(event) {
     const { player, itemId } = event;
     if (itemId !== RESEARCH_NOTES_ITEM_ID) return;
     if (quest.getStage(player) !== STAGE_TRANSLATE) return;
     if (!has(player, RESEARCH_NOTES_ITEM_ID)) return;
     event.handled = true;
-    player.getInventory().deleteNumber(RESEARCH_NOTES_ITEM_ID, 1);
-    player.getInventory().adds(TRANSLATED_NOTES_ITEM_ID, 1);
-    setStage(player, STAGE_GIVE_NOTES);
+    notePuzzles.set(player, new Set());
+    player.getPacketSender().sendInterface(NOTES_PUZZLE_GROUP);
+    renderNotesPuzzle(player, notePuzzles.get(player));
+  }
+
+  /** Keep the cache's visible Off and initially hidden On variants in sync. */
+  function renderNotesPuzzle(player, state) {
+    const sender = player.getPacketSender();
+    for (const { root, alternateRoot } of NOTES_PUZZLE_SWITCHES) {
+      const isOff = state.has(root);
+      sender.sendInterfaceDisplayState((NOTES_PUZZLE_GROUP << 16) | root, isOff);
+      sender.sendInterfaceDisplayState((NOTES_PUZZLE_GROUP << 16) | alternateRoot, !isOff);
+    }
+  }
+
+  /**
+   * The Wiki's solution switches off the 1st/3rd/4th/6th/7th/8th orbs, leaving
+   * the 2nd, 5th and 9th on. Root and model-child ids both route to the root
+   * because the cache's model children are the clickable widgets.
+   */
+  function handleNotesPuzzleButton(event) {
+    const { player, buttonId } = event;
+    if ((buttonId >> 16) !== NOTES_PUZZLE_GROUP) return;
+    if (quest.getStage(player) !== STAGE_TRANSLATE) {
+      notePuzzles.delete(player);
+      return;
+    }
+    if (!has(player, RESEARCH_NOTES_ITEM_ID)) {
+      notePuzzles.delete(player);
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
+    if (player.getInterfaceId() !== NOTES_PUZZLE_GROUP) return;
+    const state = notePuzzles.get(player);
+    if (!state) return;
+    const root = NOTES_SWITCH_BY_WIDGET.get(buttonId & 0xffff);
+    if (root === undefined) return;
+    event.handled = true;
+    if (state.has(root)) state.delete(root);
+    else state.add(root);
+    renderNotesPuzzle(player, state);
+    const solved =
+      state.size === NOTES_SWITCHES_OFF.size &&
+      [...NOTES_SWITCHES_OFF].every((switchRoot) => state.has(switchRoot));
+    if (!solved) return;
+    notePuzzles.delete(player);
+    notePuzzlesAwaitingMessage.add(player);
+    player.getPacketSender().sendInterfaceRemoval();
+    startTranscript(api, player, AVA_NPC_ID, PAGE, NOTES_SOLVED_VARIANT);
+  }
+
+  /** Closing without solving discards the toggles; reopening starts all on. */
+  function handleInterfaceClosed(event) {
+    if (event.interfaceId === NOTES_PUZZLE_GROUP) notePuzzles.delete(event.player);
+  }
+
+  function clearNotesPuzzle(player) {
+    notePuzzles.delete(player);
+    notePuzzlesAwaitingMessage.delete(player);
   }
 
   /** The crone-made amulet is ghost-only wear. */
@@ -1082,8 +1198,12 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   }
 
   function handleLogin({ player }) {
+    clearNotesPuzzle(player);
     refreshQuestList(player);
-    syncTurael(player);
+  }
+
+  function handleLogout({ player }) {
+    clearNotesPuzzle(player);
   }
 
   // ==========================================================================
@@ -1222,6 +1342,9 @@ module.exports = function registerAnimalMagnetismQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Research notes", { Translate: handleTranslateNotes });
+  api.onInterfaceActionButton(NOTES_PUZZLE_BUTTONS, handleNotesPuzzleButton);
+  api.onCustomEvent("interface:closed", handleInterfaceClosed);
   api.onCanEquip(handleCanEquip);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

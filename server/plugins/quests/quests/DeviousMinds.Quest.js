@@ -8,14 +8,22 @@
  * bow-sword crafting chain, the orb/pouch smuggling, the Entrana cutscene and
  * the completion hand-in.
  *
- * Stages (varbit 1465 "devious_main", varp 622 "devious_base" bits 0-7):
+ * Durable stages (player attribute `quest.devious_minds.stage`):
  *   0 not started, 1 started, 2 slender blade ground, 3 bow-sword strung,
  *   4 orb received, 5 orb in pouch, 6 pouch placed (cutscene),
  *   7 High Priest heard the surprise, 8 dead monk searched,
  *   9 High Priest told to report to Sir Tiffy, 10 complete.
+ *
+ * The client wire is varbit 1465 "devious_main" (varp 622 "devious_base"
+ * bits 0-7). Its values are not 1:1 with the durable stages: Quest Helper's
+ * loadSteps keys are 0/10/20/30/40/50/60/70 and cache quest DB row 28
+ * (table 0, column 19) completes at 80. stageWire() maps the durable stage
+ * onto those values, keeping existing save values untouched.
+ *
  * The same varp carries "devious_altar" varbit 1466 (Entrana altar multi-loc
- * 10638 -> 409/10639/10640) and "devious_monk" varbit 1467 (Paterdomus spawn
- * 6222 -> 4563 alive; the dead-monk spawn 6223 -> 4564).
+ * 10638 -> 409 normal / 10639 pouch / 10640 scorched) and "devious_monk"
+ * varbit 1467 (Paterdomus spawn 6222 -> 4563 alive; the dead-monk spawn
+ * 6223 -> 4564).
  *
  * Requirements per the OSRS Wiki: Wanted!, Troll Stronghold and Doric's Quest,
  * plus 50 Runecraft and 50 Fletching to start. 65 Smithing (boostable) may be
@@ -30,7 +38,8 @@
  * wording is reused and the wiki's "The colossal pouch was so strong..."
  * survival line is sent after the cutscene; the cutscene plays as its
  * transcript lines in the chatbox (no camera pan) and the altar's orb state
- * (varbit 1466) is cleared as the last cutscene line ends; Sir Tiffy's
+ * (varbit 1466) becomes the cache's scorched transform (2) as the last
+ * cutscene line ends; Sir Tiffy's
  * "Something else." choice falls through to the transcript's unavailable
  * marker; a degraded large pouch (5513) does not hold the orb but has no
  * transcript line; the missing-level messages used when the player lacks 65
@@ -94,6 +103,7 @@ module.exports = function registerDeviousMindsQuest(api) {
     ItemIdentifiers.COLOSSAL_POUCH_3, // 26786
   ]);
   const COLOSSAL_ORB_POUCH_ITEM_ID = ItemIdentifiers.COLOSSAL_POUCH_5; // 26906
+  const COLOSSAL_ORB_BASE_POUCH_ATTRIBUTE = "devious-minds:colossal-orb-base-pouch";
   const SMALL_POUCH_ITEM_ID = ItemIdentifiers.SMALL_POUCH; // 5509
   const MEDIUM_POUCH_ITEM_IDS = new Set([
     ItemIdentifiers.MEDIUM_POUCH, // 5510
@@ -115,12 +125,28 @@ module.exports = function registerDeviousMindsQuest(api) {
   const STAGE_RETURNED = 9;
   const STAGE_COMPLETE = 10;
 
+  // Wire values for varbit 1465 (see the header). Quest Helper's keys are the
+  // stage values below; 20 is the transient "bow-sword handed in" step, and
+  // the cache's completion threshold is 80.
+  const WIRE_STARTED = 10;
+  const WIRE_BOW_SWORD_GIVEN = 20;
+  const WIRE_ORB_GIVEN = 30;
+  const WIRE_CUTSCENE = 40;
+  const WIRE_PRIEST_TOLD = 50;
+  const WIRE_DEAD_MONK = 60;
+  const WIRE_RETURNED = 70;
+  const WIRE_COMPLETE = 80;
+
+  const ALTAR_POUCH = 1;
+  const ALTAR_SCORCHED = 2;
+
   const SMITHING_LEVEL = 65;
   const RUNECRAFT_LEVEL = 50;
   const FLETCHING_LEVEL = 50;
 
   const START_HOOK = "quest:devious-minds:start";
   const MET_MONK_ATTRIBUTE = "devious-minds:met-monk";
+  const BOW_SWORD_GIVEN_ATTRIBUTE = "devious-minds:bow-sword-given";
 
   // Variants on the "Devious Minds" page.
   const V_START = "starting-off-talking-to-the-monk";
@@ -188,6 +214,21 @@ module.exports = function registerDeviousMindsQuest(api) {
 
   function questActive(player) {
     return quest.getStage(player) >= STAGE_STARTED && !quest.isComplete(player);
+  }
+
+  /** Durable stage -> varbit 1465 value; existing 1..10 saves are preserved. */
+  function stageWire(stage, player) {
+    if (stage >= STAGE_COMPLETE) return WIRE_COMPLETE;
+    if (stage >= STAGE_RETURNED) return WIRE_RETURNED;
+    if (stage >= STAGE_DEAD_MONK) return WIRE_DEAD_MONK;
+    if (stage >= STAGE_PRIEST_TOLD) return WIRE_PRIEST_TOLD;
+    if (stage >= STAGE_ALTAR) return WIRE_CUTSCENE;
+    if (stage >= STAGE_ORB_GIVEN) return WIRE_ORB_GIVEN;
+    if (stage === STAGE_BOW_SWORD && Number(player?.getAttribute(BOW_SWORD_GIVEN_ATTRIBUTE)) > 0) {
+      return WIRE_BOW_SWORD_GIVEN;
+    }
+    if (stage >= STAGE_STARTED) return WIRE_STARTED;
+    return 0;
   }
 
   function isQuestComplete(player, key) {
@@ -364,7 +405,9 @@ module.exports = function registerDeviousMindsQuest(api) {
         return meetsStartRequirements(player) ? V_START : { page: MONK_PAGE };
       }
       if (stage < STAGE_ORB_GIVEN) {
-        return held(player, BOW_SWORD_ITEM_ID) ? V_BRING_BOW_SWORD : V_MONK_AGAIN;
+        return held(player, BOW_SWORD_ITEM_ID) || Number(player.getAttribute(BOW_SWORD_GIVEN_ATTRIBUTE)) > 0
+          ? V_BRING_BOW_SWORD
+          : V_MONK_AGAIN;
       }
       return V_AFTER_ORB;
     }
@@ -442,6 +485,9 @@ module.exports = function registerDeviousMindsQuest(api) {
     if (stepId === GIVE_BOW_SWORD_ACTION_ID) {
       if (!questActive(player) || !held(player, BOW_SWORD_ITEM_ID)) return;
       player.getInventory().deleteNumber(BOW_SWORD_ITEM_ID, 1);
+      player.setAttribute(BOW_SWORD_GIVEN_ATTRIBUTE, 1);
+      // Quest Helper key 20: the hand-in step, before the orb is received.
+      player.getPacketSender().sendVarbit(VARBIT_DEVIOUS_MAIN, WIRE_BOW_SWORD_GIVEN);
       return;
     }
     if (stepId === RECEIVE_ORB_ACTION_ID) {
@@ -452,7 +498,10 @@ module.exports = function registerDeviousMindsQuest(api) {
     }
     if (stepId === RECEIVE_ORB_AGAIN_ACTION_ID) {
       if (!questActive(player)) return;
-      giveOrb(player);
+      if (!giveOrb(player)) return;
+      // A lost pouch reopens the orb-in-pouch leg; without this reset the
+      // item-on-item handler refuses the replacement orb and the quest locks.
+      if (quest.getStage(player) === STAGE_ORB_IN_POUCH) quest.setStage(player, STAGE_ORB_GIVEN);
       return;
     }
     if (stepId === FIND_DEAD_MONK_ACTION_ID) {
@@ -470,7 +519,7 @@ module.exports = function registerDeviousMindsQuest(api) {
       event.handled = true;
       if (event.text) player.sendMessage(event.text);
       if (stepId === CUTSCENE_END_ACTION_ID) {
-        player.getPacketSender().sendVarbit(ALTAR_VARBIT, 0);
+        player.getPacketSender().sendVarbit(ALTAR_VARBIT, ALTAR_SCORCHED);
       }
     }
   }
@@ -504,7 +553,7 @@ module.exports = function registerDeviousMindsQuest(api) {
       // The large pouch is destroyed with the orb; the colossal pouch survives.
       if (!colossal) player.getInventory().deleteNumber(ORB_POUCH_ITEM_ID, 1);
       player.getPacketSender().sendVarbit(MONK_VARBIT, 1); // the monk is replaced by his corpse
-      player.getPacketSender().sendVarbit(ALTAR_VARBIT, 1);
+      player.getPacketSender().sendVarbit(ALTAR_VARBIT, ALTAR_POUCH);
       quest.setStage(player, STAGE_ALTAR);
       startTranscript(api, player, HIGH_PRIEST_NPC_ID, PAGE, V_PLACE_POUCH);
       if (colossal) {
@@ -564,6 +613,7 @@ module.exports = function registerDeviousMindsQuest(api) {
       player.getInventory().deleteNumber(ORB_ITEM_ID, 1);
       player.getInventory().deleteNumber(pouchId, 1);
       player.getInventory().adds(COLOSSAL_ORB_POUCH_ITEM_ID, 1);
+      player.setAttribute(COLOSSAL_ORB_BASE_POUCH_ATTRIBUTE, pouchId);
       quest.setStage(player, STAGE_ORB_IN_POUCH);
       // The colossal-pouch variant is a transcript gap; the large-pouch words fit.
       player.sendMessage("You hide the orb in the pouch.");
@@ -574,17 +624,28 @@ module.exports = function registerDeviousMindsQuest(api) {
 
   /** Check/Empty on the orb-filled large pouch. */
   function handlePouchCheck(event) {
-    if (event.itemId !== ORB_POUCH_ITEM_ID) return false;
+    if (event.itemId !== ORB_POUCH_ITEM_ID && event.itemId !== COLOSSAL_ORB_POUCH_ITEM_ID) return false;
     startTranscript(api, event.player, MONK_NPC_ID, PAGE, V_ORB_CHECK);
     return true;
   }
 
   function handlePouchEmpty(event) {
     const { player } = event;
-    if (event.itemId !== ORB_POUCH_ITEM_ID) return false;
-    player.getInventory().deleteNumber(ORB_POUCH_ITEM_ID, 1);
-    player.getInventory().adds(ORB_ITEM_ID, 1);
-    player.getInventory().adds(LARGE_POUCH_ITEM_ID, 1);
+    if (event.itemId !== ORB_POUCH_ITEM_ID && event.itemId !== COLOSSAL_ORB_POUCH_ITEM_ID) return false;
+    const inventory = player.getInventory();
+    if (inventory.getFreeSlots() < 1) {
+      player.sendMessage("You need one free inventory slot to empty the pouch.");
+      return true;
+    }
+    const isColossal = event.itemId === COLOSSAL_ORB_POUCH_ITEM_ID;
+    const savedBasePouchId = Number(player.getAttribute(COLOSSAL_ORB_BASE_POUCH_ATTRIBUTE));
+    const returnedPouchId = isColossal
+      ? (COLOSSAL_POUCH_ITEM_IDS.has(savedBasePouchId) ? savedBasePouchId : ItemIdentifiers.COLOSSAL_POUCH)
+      : LARGE_POUCH_ITEM_ID;
+    inventory.deleteNumber(event.itemId, 1);
+    inventory.adds(ORB_ITEM_ID, 1);
+    inventory.adds(returnedPouchId, 1);
+    if (isColossal) player.setAttribute(COLOSSAL_ORB_BASE_POUCH_ATTRIBUTE, 0);
     if (quest.getStage(player) === STAGE_ORB_IN_POUCH) quest.setStage(player, STAGE_ORB_GIVEN);
     startTranscript(api, player, MONK_NPC_ID, PAGE, V_ORB_EMPTY);
     return true;
@@ -614,17 +675,25 @@ module.exports = function registerDeviousMindsQuest(api) {
 
   function handleLogin({ player }) {
     sendQuestVarbits(player);
-    player.getPacketSender().sendVarbit(ALTAR_VARBIT, 0);
+    // The altar stays scorched once the cutscene has played; stage 6 is the
+    // cutscene placement, so re-send the durable post-cutscene transform.
+    player.getPacketSender().sendVarbit(
+      ALTAR_VARBIT,
+      quest.getStage(player) >= STAGE_ALTAR ? ALTAR_SCORCHED : 0
+    );
     refreshQuestList(player);
   }
 
   api.persistAttribute(MET_MONK_ATTRIBUTE);
+  api.persistAttribute(BOW_SWORD_GIVEN_ATTRIBUTE, 0);
+  api.persistAttribute(COLOSSAL_ORB_BASE_POUCH_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "devious_minds",
     name: "Devious Minds",
     varpId: VARP_DEVIOUS_BASE,
     varbitId: VARBIT_DEVIOUS_MAIN,
+    varbitValue: stageWire,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
@@ -646,5 +715,6 @@ module.exports = function registerDeviousMindsQuest(api) {
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Large pouch", { Check: handlePouchCheck, Empty: handlePouchEmpty });
+  api.onItemAction("Colossal pouch", { Check: handlePouchCheck, Empty: handlePouchEmpty });
   api.onPlayerLogin(handleLogin);
 };

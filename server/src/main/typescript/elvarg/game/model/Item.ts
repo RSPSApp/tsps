@@ -118,7 +118,7 @@ export class Item {
      * @return
      */
     public isValid(): boolean {
-        return this.id > 0 && this.amount > 0;
+        return this.id >= 0 && this.amount > 0;
     }
 
     /**

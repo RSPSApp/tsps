@@ -61,7 +61,7 @@ export class GroundItemStore {
     private version = 0;
 
     private normalizeStack(stack: GroundItemStackMessage): ClientGroundItemStack | undefined {
-        if (!stack || !(stack.id > 0) || !(stack.itemId > 0)) return undefined;
+        if (!stack || !(stack.id > 0) || !(stack.itemId >= 0)) return undefined;
         const tile = stack.tile ? stack.tile : { x: 0, y: 0, level: 0 };
         const metadata = this.resolveMetadata(stack.itemId | 0);
         return {

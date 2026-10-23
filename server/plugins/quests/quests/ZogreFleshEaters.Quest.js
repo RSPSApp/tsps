@@ -7,14 +7,15 @@
  * the quest NPCs, the prose-condition answers, the start/complete actions, the
  * item hand-outs and the tomb gameplay (lectern, skeleton, coffin, plinth).
  *
- * Stages (varp 487): 0 unstarted, 2 investigate (started), 3 barricade smashed,
+ * Stages (varbit 487, parent varp 455, bits 0-4): 0 unstarted, 2 investigate (started), 3 barricade smashed,
  * 4 sithik (evidence turned in / potion received), 6 potion (tea poisoned),
  * 8 permanent_spell (Sithik transformed), 10 given_key, 12 killed_slash_bash,
  * 14 complete. The coffin/evidence sub-progress (0..5) and the one-shot flags
  * live in persisted "quest.zogre_flesh_eaters.*" attributes.
  *
- * Source: https://github.com/GregHib/void/blob/2b8e267836a8469757c73694ea4d57f2f1c28458/game/src/main/kotlin/content/quest/member/ogre/ZogreFleshEaters.kt
- * (varp 487 and the map stages match void's zogre_flesh_eaters.varbits.toml).
+ * Historical implementation attribution: https://github.com/GregHib/void/blob/2b8e267836a8469757c73694ea4d57f2f1c28458/game/src/main/kotlin/content/quest/member/ogre/ZogreFleshEaters.kt
+ * Current wire and dialogue bindings are checked against Quest Helper, the OSRS
+ * Wiki transcript and cache: varbit 487, with cache completion threshold 14.
  *
  * Gaps: the Jiggig cutscene camera and the blackened-area entry event are not
  * played; the cup of tea is a ground item, so pouring is wired through
@@ -38,7 +39,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
 
   const PAGE = "Zogre Flesh Eaters";
 
-  const VARP_ZOGRE_FLESH_EATERS = 487;
+  const VARBIT_ZOGRE_FLESH_EATERS = 487;
   const STAGE_STARTED = 2;
   const STAGE_BARRICADE = 3;
   const STAGE_SITHIK = 4;
@@ -480,6 +481,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     if (value.includes("if the player is leaving")) return flag(player, DOOR_LEAVING_ATTRIBUTE);
     if (value.includes("still has the artefact")) return has(player, OGRE_ARTEFACT);
     if (value.includes("lost the ogre artefact")) return !has(player, OGRE_ARTEFACT);
+    if (value.includes("has the ogre artefact")) return has(player, OGRE_ARTEFACT);
     if (value.includes("asking him again as an ogre")) return flag(player, MAKE_CURE_ATTRIBUTE) && flag(player, TRANSFORMED_ATTRIBUTE);
     if (value.includes("asking him again as a human")) return flag(player, MAKE_CURE_ATTRIBUTE) && !flag(player, TRANSFORMED_ATTRIBUTE);
     if (value.includes("if asking for the first time") || value.includes("asking for the first time")) return false;
@@ -551,6 +553,21 @@ module.exports = function registerZogreFleshEatersQuest(api) {
         return;
       case "5liwsa":
         setFlag(player, PORTRAIT_SHOWN_ATTRIBUTE);
+        return;
+      case "luhaXl":
+        setFlag(player, DECLINED_ATTRIBUTE, false);
+        if (quest.getStage(player) < STAGE_STARTED) {
+          quest.setStage(player, STAGE_STARTED);
+          give(player, COOKED_CHOMPY, 3);
+          give(player, SUPER_RESTORE_3, 2);
+        }
+        return;
+      case "uZirGH":
+        if (!has(player, OGRE_GATE_KEY)) give(player, OGRE_GATE_KEY);
+        if (quest.getStage(player) < STAGE_GIVEN_KEY) quest.setStage(player, STAGE_GIVEN_KEY);
+        return;
+      case "_QKSlE":
+        if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
         return;
       case "VDahRD":
         if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
@@ -644,24 +661,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
       return;
     }
     switch (stepId) {
-      case "6kbf4F":
-      case "66IFHw":
-        setFlag(player, DECLINED_ATTRIBUTE, false);
-        if (quest.getStage(player) < STAGE_STARTED) {
-          quest.setStage(player, STAGE_STARTED);
-          give(player, COOKED_CHOMPY, 3);
-          give(player, SUPER_RESTORE_3, 2);
-        }
-        event.handled = true;
-        return;
       case "izwjnR":
         if (quest.getStage(player) < STAGE_BARRICADE) quest.setStage(player, STAGE_BARRICADE);
         crushBarricade();
-        event.handled = true;
-        return;
-      case "YrmIgh":
-        if (!has(player, OGRE_GATE_KEY)) give(player, OGRE_GATE_KEY);
-        if (quest.getStage(player) < STAGE_GIVEN_KEY) quest.setStage(player, STAGE_GIVEN_KEY);
         event.handled = true;
         return;
       case "yn-UXu":
@@ -671,10 +673,6 @@ module.exports = function registerZogreFleshEatersQuest(api) {
           event.handled = true;
           event.end = true;
         }
-        return;
-      case "IOrqNS":
-        if (!has(player, STRANGE_POTION)) give(player, STRANGE_POTION);
-        event.handled = true;
         return;
       case "1NqRbI":
         spawnSlashBash(player);
@@ -1314,7 +1312,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   quest = registerQuest(api, {
     key: "zogre_flesh_eaters",
     name: "Zogre Flesh Eaters",
-    varpId: VARP_ZOGRE_FLESH_EATERS,
+    varbitId: VARBIT_ZOGRE_FLESH_EATERS,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,

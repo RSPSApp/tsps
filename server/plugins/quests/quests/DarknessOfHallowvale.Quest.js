@@ -9,17 +9,20 @@
  * fireplace/portrait/laboratory chain and the completion reward.
  *
  * Stages (varbit 2573 "myq3_main_quest" in varp 869 "myreque_3_main_var", bits
- * 0-8; the value ladder matches the Quest Helper plugin's step map for varp
- * 869): 0 not started, 10 Veliaf briefed (repair boat/chute), 20 boat fixed,
+ * 0-8). The durable ladder is the Quest Helper step map for varp 869, except
+ * where the client and the server disagree on what a stage means; those are
+ * mapped in varbitValue() below.
+ * 0 not started, 10 Veliaf briefed (repair boat/chute), 20 boat fixed,
  * 30 chute fixed, 40 boat pushed, 50 docked in Meiyerditch, 52 vyrewatch met,
  * 54 through the wall floorboards, 60 learned about Old Man Ral, 65 Ral told
  * the route, 70 hideout latch unhooked, 80 entered the hideout, 90 message
  * from Vertida, 100 message handed to Veliaf, 110 Drezel briefed,
  * 120 werewolves seen at the bush, 130 Drezel handed over runes,
  * 140 King Roald spoken to, 160 accepted Roald's teleport,
- * 170 Veliaf sent you to warn the Sanguinesti order, 180 back in Meiyerditch,
+ * 180 Veliaf sent you back to the Sanguinesti order in Meiyerditch
+ * (170 is the legacy alias of that point),
  * 190 reached Safalaan (charcoal and papyrus), 200 northern sketch,
- * 210 western sketch, 220 southern ambush, 250 all three sketches,
+ * 210 western sketch, 220 southern ambush, 240 Sarius Guile, 250 all three sketches,
  * 260 sketches given to Safalaan, 280 laboratory unlocked,
  * 290 Haemalchemy volume 1 taken, 300 sealed message received, 310 complete.
  *
@@ -30,7 +33,7 @@
  * 2589 myq3_wall_floorboards_down, 2590 myq3_hideout_trapdoor,
  * 2594 myq3_tapestry_state, 2595 myq3_statue_key_painting_state,
  * 2596 myq3_statue_state, 2584 myq3_runecase_searched,
- * 2598 myq3_agil_laddertop_wall.
+ * 2598 myq3_agil_laddertop_wall, 2575 myq3_sketches_given.
  *
  * Source: OSRS Wiki "Darkness of Hallowvale", its Quick guide and
  * Transcript:Darkness of Hallowvale; the cache for every id, varbit, transform
@@ -58,10 +61,16 @@
  *   3522,3357, south 3572,3331); a short guidance line is sent when using
  *   charcoal on papyrus away from all three (the wiki page has no line for
  *   that case).
- * - The quest's skill requirements (Construction 5, Mining 20, Thieving 22,
- *   Agility 26, Crafting 32, Magic 33, Strength 40) are not enforced, matching
- *   the other quest plugins. Only In Aid of the Myreque completion gates the
- *   start, so the shared Veliaf is not stolen from that quest.
+ * - Start requirements are enforced at Veliaf and the start hook: In Aid of the
+ *   Myreque plus Construction 5, Mining 20, Thieving 22, Agility 26,
+ *   Crafting 32, Magic 33 and Strength 40, from cache DB row 22 column 23.
+ * - Durable saves use internal stage 310 for completion; the varbit writer maps
+ *   that to the cache DB completion floor 320 on varbit 2573. The client ladder
+ *   also differs at three points, and the varbit writer maps them: 160 (Roald's
+ *   teleport accepted) is the client's 170 ("return to Veliaf"), 170 (Veliaf has
+ *   sent the player back) is the client's 180 ("return to Meiyerditch") and 300
+ *   (the sealed message is in hand) is the client's 310 ("bring the message to
+ *   Veliaf to finish").
  * - The post-quest shortcut doors and the tome's three 2,000 XP charges are
  *   not simulated; the tome is handed over as the 3-charge item.
  */
@@ -108,12 +117,19 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const STAGE_SKETCH_NORTH = 200;
   const STAGE_SKETCH_WEST = 210;
   const STAGE_SKETCH_SOUTH = 220;
+  const STAGE_SARIUS = 240;
   const STAGE_SKETCHES_DONE = 250;
   const STAGE_SKETCHES_GIVEN = 260;
   const STAGE_LAB_OPEN = 280;
   const STAGE_BOOK_FOUND = 290;
   const STAGE_SEALED_MESSAGE = 300;
   const STAGE_COMPLETE = 310;
+  // Cache DB row 22 column 19 completes at 320 on varbit 2573; 310 stays the durable alias.
+  const STAGE_WIRE_COMPLETE = 320;
+  // Client ladder values on varbit 2573 that differ from the durable stages.
+  const STAGE_WIRE_RETURN_TO_VELIAF = 170; // "Return to Veliaf" (after Roald's teleport)
+  const STAGE_WIRE_BACK_TO_MEIYERDITCH = 180; // "Return to the Meiyerditch Myreque base"
+  const STAGE_WIRE_SEALED_MESSAGE = 310; // "Bring the sealed message to Veliaf to finish"
 
   // Cache varbits of varp 870 "myreque3_multivar" that drive the multi-locs.
   const VARBIT_BOAT_BROKEN = 2585;
@@ -122,11 +138,13 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const VARBIT_WALL_FLOORBOARDS_DOWN = 2589;
   const VARBIT_HIDEOUT_TRAPDOOR = 2590;
   const VARBIT_WEREWOLF_BUSH = 2591;
+  const VARBIT_SHORTCUT_DOOR_UNLOCKED = 2578; // myq3_agil_ghetto_locked_door
   const VARBIT_TAPESTRY_STATE = 2594;
   const VARBIT_PORTRAIT_STATE = 2595;
   const VARBIT_STATUE_STATE = 2596;
   const VARBIT_RUNECASE_SEARCHED = 2584;
   const VARBIT_LADDER_TOP_WALL = 2598;
+  const VARBIT_SKETCHES_GIVEN = 2575; // myq3_sketches_given, varp 869 bit 10
 
   // ---------------------------------------------------------------------------
   // NPCs (cache ids; indexed transcript ids first)
@@ -213,11 +231,13 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const SAFALAAN_WALL_SPAWN_ID = NpcIdentifiers.SAFALAAN_HALLOW_2; // 8216, indexed
   const SAFALAAN_BASE_SPAWN_ID = NpcIdentifiers.SAFALAAN_HALLOW_2; // 8216 (8217 has no Talk-to option)
   const DREZEL_SPAWN_ID = NpcIdentifiers.DREZEL; // 9636, indexed
+  const SARIUS_SPAWN_ID = NpcIdentifiers.SARIUS_GUILE; // 3776, indexed Talk-to
 
   const VELIAF_BASEMENT_TILE = { x: 3494, y: 9628, z: 0 };
   const VERTIDA_HIDEOUT_TILE = { x: 3627, y: 9644, z: 0 };
   const SAFALAAN_WALL_TILE = { x: 3585, y: 3331, z: 0 };
   const SAFALAAN_BASE_TILE = { x: 3632, y: 9644, z: 0 };
+  const SARIUS_WALL_TILE = { x: 3572, y: 3331, z: 0 };
   const DREZEL_TEMPLE_TILE = { x: 3439, y: 9896, z: 0 };
 
   const MEIYERDITCH_ARRIVAL = { x: 3588, y: 3173, z: 1 };
@@ -228,6 +248,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const LAB_LANDING = { x: 3630, y: 9694, z: 0 };
   const LAB_SURFACE = { x: 3643, y: 3305, z: 0 };
   const DRAKAN_WALLS = { x: 3595, y: 3310, z: 1 };
+  const DRAKAN_WALLS_TOP = { x: 3595, y: 3311, z: 0 };
   const TRADER_SVEN_HOUSE = { x: 3597, y: 3203, z: 0 };
 
   // Castle approach sketching spots (sickle markers on the walls).
@@ -291,6 +312,8 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const WEREWOLF_BUSH_SEARCH_ID = 17989; // "Bush" Search
   const ROCKY_SURFACE_OBJECT_ID = 18056; // "Rocky surface" Search
   const BARRICADE_OBJECT_ID = 18054; // "Barricade" Open
+  const DRAKAN_WALL_SHORTCUT_UP_OBJECT_ID = 39173; // "Wall" Climb-up at 3595,3310,1
+  const DRAKAN_WALL_SHORTCUT_DOWN_OBJECT_ID = 39172; // "Wall" Climb-down at 3595,3311,0
   const POTS_OBJECT_ID = 18065; // "Pots" Search
   const SHORTCUT_DOOR_OBJECT_ID = 18091; // "Door" Open (needs the door key)
   const HIDEOUT_WALL_OBJECT_ID = 17980; // "Wall" Push
@@ -323,6 +346,8 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const CONDITION_DISTRACTION_FAIL = "0T6MNv";
   const CONDITION_TOME_LOST = "1VQDP4";
   const CONDITION_RAL_PAPYRUS_SHORT = "5Ts7kd";
+  const CONDITION_CONTINUING_FROM_IN_AID = "5iTY3c";
+  const CONDITION_COMING_BACK_TO_VELIAF = "Ao7Gq6";
 
   const ACTION_KICK_FLOORBOARDS = "lOyj8b";
   const ACTION_PUSH_BOAT = "TZQ0Xt";
@@ -339,7 +364,9 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const ACTION_SEARCH_BUSH = "oTtrXk";
   const ACTION_WEREWOLF_KNOCKOUT = "x6Upep";
   const ACTION_WEREWOLF_WAKE = "T1AXPq";
-  const ACTION_RECEIVE_VERTIDA_MESSAGE = new Set(["2nbZ9m", "ZsS1Zs"]);
+  const ACTION_RECEIVE_VERTIDA_MESSAGE = new Set([
+    "2nbZ9m", "ZsS1Zs", "V3ECPh", "5sp21e", "QVrbhO", "JmwM4H",
+  ]);
   const ACTION_HAND_MESSAGE_VELIAF = "ctOdo7";
   const ACTION_DREZEL_RUNES = "CvqNxO";
   const ACTION_ROALD_TELEPORT = "K65B9f";
@@ -354,6 +381,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const ACTION_SKETCH_WEST_LOSE = "5hTQYh";
   const ACTION_RECEIVE_SKETCH_2 = "9HmeKD";
   const ACTION_SKETCH_SOUTH_START = "T3YqyD";
+  const ACTION_SARIUS_SCENE_END = "aCPM8x";
   const ACTION_SKETCH_SOUTH_LOSE = "yFIZpi";
   const ACTION_RECEIVE_SKETCH_3 = "IxTC2L";
   const ACTION_GIVE_SKETCHES = "3RdQ7u";
@@ -379,6 +407,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const CHOICE_CITIZEN_WHISPER = "(whisper) Do you know about the Myreque?";
   const CHOICE_CITIZEN_INSIST = "(whisper) I really need to meet the Myreque.";
   const CHOICE_CITIZEN_RAL = "Can you introduce me to Old Man Ral?";
+  const CHOICE_CITIZEN_RAL_HELP = "How can Old Man Ral help me?";
   const CHOICE_RAL_SAGE = "Old Man Ral, the sage of Sanguinesti.";
   const CHOICE_DREZEL_DONE = "Okay, will do.";
   const CHOICE_ROALD_MORYTANIA = "Talk to the king about Morytania.";
@@ -402,7 +431,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   const BIT_SAFALAAN_SUPPLIES = 1 << 11;
   const BIT_LADDER_TOP = 1 << 12;
   const BIT_LADDER_FIXED = 1 << 13;
-  const BIT_VERTIDA_TASKS = 1 << 22; // Vertida's stage-180 Q&A seen
+  const BIT_SARIUS_TALKED = 1 << 23; // The stage-240 Sarius Talk-to was completed
   const TRAPDOOR_SHIFT = 14; // 2 bits: 0 hidden, 1 rug, 2 trapdoor
   const PORTRAIT_SHIFT = 16; // 2 bits: 0 intact, 1 slashed+key, 2 slashed empty
   const ENCOUNTER_SHIFT = 18; // 2 bits: 0 none, 1 tithed, 2 fought, 3 dodged
@@ -519,6 +548,44 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     return request.complete === true;
   }
 
+  // Cache DB row 22 column 23: Strength 40, Magic 33, Crafting 32, Agility 26,
+  // Thieving 22, Mining 20, Construction 5.
+  const REQUIRED_SKILLS = [
+    { skill: Skill.CONSTRUCTION, level: 5, label: "Construction" },
+    { skill: Skill.MINING, level: 20, label: "Mining" },
+    { skill: Skill.THIEVING, level: 22, label: "Thieving" },
+    { skill: Skill.AGILITY, level: 26, label: "Agility" },
+    { skill: Skill.CRAFTING, level: 32, label: "Crafting" },
+    { skill: Skill.MAGIC, level: 33, label: "Magic" },
+    { skill: Skill.STRENGTH, level: 40, label: "Strength" },
+  ];
+
+  // A Taste of Hope owns Veliaf's canonical rod hand-out while its own stage is
+  // in this window. Darkness yields rather than starting its own conversation.
+  function tasteNeedsVeliafRod(player) {
+    const request = { player, needsRod: false };
+    api.emitCustomEvent("taste-of-hope:needs-veliaf-rod", request);
+    return request.needsRod === true;
+  }
+
+  function meetsRequirements(player) {
+    if (!inAidComplete(player)) return false;
+    const skills = player.getSkillManager();
+    return REQUIRED_SKILLS.every((entry) => skills.getMaxLevel(entry.skill) >= entry.level);
+  }
+
+  function requirementsMessage(player) {
+    if (!inAidComplete(player)) {
+      player.sendMessage("You must have completed In Aid of the Myreque to start this quest.");
+    }
+    const skills = player.getSkillManager();
+    for (const entry of REQUIRED_SKILLS) {
+      if (skills.getMaxLevel(entry.skill) < entry.level) {
+        player.sendMessage(`You need ${entry.level} ${entry.label} to start this quest.`);
+      }
+    }
+  }
+
   function advance(player, stage) {
     if (quest.getStage(player) >= stage) return;
     quest.setStage(player, stage);
@@ -537,8 +604,27 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     return start > 0 ? steps.slice(start) : steps;
   }
 
-  function play(player, npcId, variant) {
-    return startTranscript(api, player, npcId, PAGE, variant, withoutLeadingJumps);
+  function sariusWakeIndex(steps) {
+    if (!Array.isArray(steps)) return -1;
+    return steps.findIndex(
+      (step) => step?.type === "line" && step.speaker === "Sarius Guile" && /^Awaken!/.test(step.text ?? "")
+    );
+  }
+
+  /** The first south-sketch scene ends as Vanstrom departs; Sarius wakes the player separately. */
+  function beforeSariusWake(steps) {
+    const start = sariusWakeIndex(steps);
+    return start > 0 ? steps.slice(0, start) : steps;
+  }
+
+  /** The stage-240 Talk-to plays the same imported Sarius dialogue, not a copied scene. */
+  function fromSariusWake(steps) {
+    const start = sariusWakeIndex(steps);
+    return start >= 0 ? steps.slice(start) : steps;
+  }
+
+  function play(player, npcId, variant, select = withoutLeadingJumps) {
+    return startTranscript(api, player, npcId, PAGE, variant, select);
   }
 
   function teleport(player, tile) {
@@ -610,7 +696,9 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   function applyStageSpawns(player) {
     if (!player || player.isPlayerBot?.() === true) return;
     const stage = quest.getStage(player);
-    if (stage >= STAGE_STARTED) {
+    // In Aid of the Myreque already leaves its owner-only Veliaf 5048 at this
+    // tile once complete. Reuse it; only spawn a fallback for a save without it.
+    if (stage >= STAGE_STARTED && !inAidComplete(player)) {
       spawnKey(player, "veliaf", VELIAF_SPAWN_ID, VELIAF_BASEMENT_TILE);
     } else {
       despawnKey(player, "veliaf");
@@ -619,6 +707,11 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       spawnKey(player, "vertida", VERTIDA_SPAWN_ID, VERTIDA_HIDEOUT_TILE);
     } else {
       despawnKey(player, "vertida");
+    }
+    if (stage >= STAGE_SARIUS && stage < STAGE_SKETCHES_DONE) {
+      spawnKey(player, "sarius", SARIUS_SPAWN_ID, SARIUS_WALL_TILE);
+    } else {
+      despawnKey(player, "sarius");
     }
     if (stage >= STAGE_SAFALAAN && stage < STAGE_SKETCHES_DONE) {
       spawnKey(player, "safalaan_wall", SAFALAAN_WALL_SPAWN_ID, SAFALAAN_WALL_TILE);
@@ -646,6 +739,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     sender.sendVarbit(VARBIT_BOAT_BROKEN, hasBit(player, BIT_BOAT_FIXED) ? 1 : 0);
     sender.sendVarbit(VARBIT_CHUTE_BROKEN, hasBit(player, BIT_CHUTE_FIXED) ? 1 : 0);
     sender.sendVarbit(VARBIT_SEA_BOAT_VISIBLE, hasBit(player, BIT_BOAT_PUSHED) ? 1 : 0);
+    sender.sendVarbit(VARBIT_SHORTCUT_DOOR_UNLOCKED, hasBit(player, BIT_DOOR_UNLOCKED) ? 1 : 0);
     sender.sendVarbit(VARBIT_WALL_FLOORBOARDS_DOWN, hasBit(player, BIT_FLOORBOARDS) ? 1 : 0);
     sender.sendVarbit(VARBIT_HIDEOUT_TRAPDOOR, field(player, TRAPDOOR_SHIFT));
     sender.sendVarbit(
@@ -659,6 +753,10 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     sender.sendVarbit(
       VARBIT_LADDER_TOP_WALL,
       hasBit(player, BIT_LADDER_FIXED) ? 2 : hasBit(player, BIT_LADDER_TOP) ? 1 : 0
+    );
+    sender.sendVarbit(
+      VARBIT_SKETCHES_GIVEN,
+      quest.getStage(player) >= STAGE_SKETCHES_GIVEN ? 1 : 0
     );
   }
 
@@ -725,6 +823,16 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         held(player, FIREPLACE_MESSAGE_ITEM_ID) ? "" : "away from the depiction of statuesque evil'.",
         "",
         "I should take the sketches to <col=800000>Safalaan</col>.",
+      ];
+    }
+    if (stage >= STAGE_SARIUS) {
+      return [
+        "Sarius Guile saved me from Vanstrom and told me the message is",
+        "hidden 'behind tiles where smoke is carried away from the depiction of",
+        "statuesque evil'.",
+        "",
+        "I should speak to Sarius if I have not already, then finish the",
+        "southern sketch and take all three to <col=800000>Safalaan</col>.",
       ];
     }
     if (stage >= STAGE_SKETCH_SOUTH) {
@@ -930,6 +1038,9 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     if (stage >= STAGE_VELIAF_SENT) {
       return "misthalin-diplomacy-talking-to-veliaf-again-after-being-sent-to-inform-the-sanguinesti-myreque";
     }
+    if (stage >= STAGE_KING_ROALD_TELEPORT) {
+      return "misthalin-diplomacy-talking-to-veliaf-hurtz-after-talking-to-king-roald";
+    }
     if (stage >= STAGE_KING_ROALD) {
       return "misthalin-diplomacy-talking-to-veliaf-hurtz-after-encountering-the-werewolves";
     }
@@ -953,20 +1064,25 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   function talkVeliaf(event) {
     const { player, npcId } = event;
     if (!VELIAF_NPC_IDS.has(npcId)) return false;
+    if (tasteNeedsVeliafRod(player)) return false;
     const stage = quest.getStage(player);
     if (stage === STAGE_UNSTARTED) {
       // Leave the shared Veliaf to In Search of/In Aid of the Myreque until
       // their prerequisite is finished.
       if (!inAidComplete(player)) return false;
+      if (!meetsRequirements(player)) {
+        event.handled = true;
+        requirementsMessage(player);
+        return true;
+      }
       event.handled = true;
       play(player, npcId, "starting-the-quest-talking-to-veliaf-hurtz");
       return true;
     }
     event.handled = true;
     const variant = veliafVariant(stage, player);
-    if (stage >= STAGE_KING_ROALD && stage < STAGE_VELIAF_SENT) {
-      advance(player, STAGE_VELIAF_SENT);
-    } else if (stage >= STAGE_VELIAF_SENT && stage < STAGE_RETURNED) {
+    if (stage >= STAGE_KING_ROALD_TELEPORT && stage < STAGE_RETURNED) {
+      // Roald's answer has been delivered: Veliaf sends the player back to Meiyerditch.
       advance(player, STAGE_RETURNED);
     }
     play(player, npcId, variant);
@@ -987,18 +1103,15 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         ? "sanguinesti-diplomacy-talking-to-vertida-sefalatis-again"
         : "sanguinesti-diplomacy-talking-to-vertida-again-after-losing-the-message";
     } else if (stage < STAGE_RETURNED) {
-      variant = "sanguinesti-diplomacy-talking-to-vertida-sefalatis-again";
-    } else if (stage < STAGE_SAFALAAN) {
-      // The wiki shows the briefing and "Okay, lead the way." as two talks at 180.
-      if (hasBit(player, BIT_VERTIDA_TASKS)) {
-        variant =
-          "close-encounters-with-vyre-kind-talking-to-vertida-sefalatis-after-being-sent-to-inform-the-sanguinesti-myreque";
-      } else {
-        setBit(player, BIT_VERTIDA_TASKS);
-        variant = "misthalin-diplomacy-talking-to-vertida-sefalatis-after-receiving-new-tasks-from-veliaf-hurtz";
-      }
+      // 140-179 is the post-King-Roald window; the canonical page points at Safalaan.
+      variant =
+        stage >= STAGE_KING_ROALD
+          ? "misthalin-diplomacy-talking-to-vertida-sefalatis-after-talking-to-king-roald"
+          : "sanguinesti-diplomacy-talking-to-vertida-sefalatis-again";
     } else if (stage < STAGE_SKETCH_NORTH) {
-      variant = "close-encounters-with-vyre-kind-talking-to-vertida-sefalatis-after-being-sent-to-inform-the-sanguinesti-myreque";
+      // Back in the hideout: the canonical briefing; "Okay, lead the way." reaches Safalaan.
+      variant =
+        "close-encounters-with-vyre-kind-talking-to-vertida-sefalatis-after-being-sent-to-inform-the-sanguinesti-myreque";
     } else if (stage < STAGE_SKETCHES_GIVEN) {
       variant = "close-encounters-with-vyre-kind-talking-to-vertida-sefalatis-again-after-being-sent-to-meet-safalaan";
     } else {
@@ -1026,7 +1139,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       }
       return "in-search-of-statuesque-evil-talking-to-safalaan-hallow-again-after-showing-him-the-message";
     }
-    if (stage >= STAGE_SKETCHES_DONE || hasAllSketches(player)) {
+    if (hasAllSketches(player)) {
       return "close-encounters-with-vyre-kind-talking-to-safalaan-hallow-with-all-three-sketches";
     }
     if (stage >= STAGE_SKETCH_WEST) {
@@ -1119,6 +1232,23 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     return true;
   }
 
+  function talkSarius(event) {
+    const { player, npcId } = event;
+    if (npcId !== SARIUS_SPAWN_ID) return false;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SARIUS || stage >= STAGE_SKETCHES_DONE) return false;
+    event.handled = true;
+    setBit(player, BIT_SARIUS_TALKED);
+    play(
+      player,
+      npcId,
+      "close-encounters-with-vyre-kind-sketching-the-south-side",
+      fromSariusWake
+    );
+    if (hasAllSketches(player)) advance(player, STAGE_SKETCHES_DONE);
+    return true;
+  }
+
   function talkCitizen(event) {
     const { player } = event;
     if (event.definition?.getName?.() !== "Meiyerditch citizen") return false;
@@ -1179,6 +1309,10 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
 
   /** Answers the inventory/state conditions the wiki prose guards. */
   function answerCondition({ player, npcId, stepId }) {
+    if (stepId === CONDITION_CONTINUING_FROM_IN_AID || stepId === CONDITION_COMING_BACK_TO_VELIAF) {
+      if (!player || !VELIAF_NPC_IDS.has(npcId)) return null;
+      return stepId === CONDITION_CONTINUING_FROM_IN_AID && inAidComplete(player);
+    }
     if (CONDITION_REQUIRED_ITEMS.has(stepId)) {
       if (npcId !== PROP_ID) return null;
       return hasRepairTools(player);
@@ -1245,6 +1379,14 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   function handleDialogueAction(event) {
     const { player, stepId } = event;
     if (!player || !stepId) return;
+    if (ACTION_RECEIVE_VERTIDA_MESSAGE.has(stepId)) {
+      event.handled = true;
+      if (!held(player, VERTIDA_MESSAGE_ITEM_ID)) {
+        if (!give(player, VERTIDA_MESSAGE_ITEM_ID, 1) || !held(player, VERTIDA_MESSAGE_ITEM_ID)) return;
+      }
+      advance(player, STAGE_MESSAGE_FROM_VERTIDA);
+      return;
+    }
     switch (stepId) {
       // -- boat repairs ------------------------------------------------------
       case ACTION_KICK_FLOORBOARDS:
@@ -1265,10 +1407,9 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         return;
       case ACTION_BOARD_BOAT:
         event.handled = true;
-        if (quest.getStage(player) < STAGE_IN_MEIYERDITCH) {
-          teleport(player, MEIYERDITCH_ARRIVAL);
-          advance(player, STAGE_IN_MEIYERDITCH);
-        }
+        // The Burgh boat is the return route once Veliaf sends you back in.
+        teleport(player, MEIYERDITCH_ARRIVAL);
+        advance(player, STAGE_IN_MEIYERDITCH);
         return;
       // -- vyrewatch ---------------------------------------------------------
       case ACTION_PAY_TITHE:
@@ -1299,17 +1440,18 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         return;
       case ACTION_RECEIVE_DOOR_KEY:
         event.handled = true;
-        give(player, DOOR_KEY_ITEM_ID, 1);
+        if (!held(player, DOOR_KEY_ITEM_ID)) give(player, DOOR_KEY_ITEM_ID, 1);
         return;
       case ACTION_UNLOCK_SHORTCUT_DOOR:
         if (!hasBit(player, BIT_DOOR_UNLOCKED)) {
           player.getInventory().deleteNumber(DOOR_KEY_ITEM_ID, 1);
           setBit(player, BIT_DOOR_UNLOCKED);
+          syncVisuals(player);
         }
         return;
       case ACTION_RECEIVE_LADDER_TOP:
         event.handled = true;
-        give(player, LADDER_TOP_ITEM_ID, 1);
+        if (!held(player, LADDER_TOP_ITEM_ID) && !give(player, LADDER_TOP_ITEM_ID, 1)) return;
         setBit(player, BIT_LADDER_TOP);
         syncVisuals(player);
         return;
@@ -1333,10 +1475,23 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         advance(player, STAGE_WEREWOLVES);
         return;
       case ACTION_DREZEL_RUNES:
-        advance(player, STAGE_DREZEL_RUNES);
-        give(player, AIR_RUNE_ITEM_ID, 3);
-        give(player, FIRE_RUNE_ITEM_ID, 1);
-        give(player, LAW_RUNE_ITEM_ID, 1);
+        event.handled = true;
+        {
+          if (quest.getStage(player) >= STAGE_DREZEL_RUNES) return;
+          const runes = [
+            [AIR_RUNE_ITEM_ID, 3],
+            [FIRE_RUNE_ITEM_ID, 1],
+            [LAW_RUNE_ITEM_ID, 1],
+          ];
+          const inventory = player.getInventory();
+          const neededSlots = runes.filter(([itemId]) => inventory.getAmount(itemId) === 0).length;
+          if (freeSlots(player) < neededSlots) {
+            player.sendMessage("You don't have enough inventory space.");
+            return;
+          }
+          for (const [itemId, amount] of runes) inventory.adds(itemId, amount);
+          advance(player, STAGE_DREZEL_RUNES);
+        }
         return;
       case ACTION_ROALD_TELEPORT:
         teleport(player, DREZEL_TEMPLE_TILE);
@@ -1351,18 +1506,6 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         advance(player, STAGE_KING_ROALD_TELEPORT);
         return;
       // -- Vertida -----------------------------------------------------------
-      case ACTION_RECEIVE_VERTIDA_MESSAGE:
-        event.handled = true;
-        if (!held(player, VERTIDA_MESSAGE_ITEM_ID)) give(player, VERTIDA_MESSAGE_ITEM_ID, 1);
-        advance(player, STAGE_MESSAGE_FROM_VERTIDA);
-        return;
-      case "V3ECPh":
-      case "5sp21e":
-      case "QVrbhO":
-      case "JmwM4H":
-        if (!held(player, VERTIDA_MESSAGE_ITEM_ID)) give(player, VERTIDA_MESSAGE_ITEM_ID, 1);
-        advance(player, STAGE_MESSAGE_FROM_VERTIDA);
-        return;
       case ACTION_HAND_MESSAGE_VELIAF:
         player.getInventory().deleteNumber(VERTIDA_MESSAGE_ITEM_ID, 1);
         advance(player, STAGE_VELIAF_HAS_MESSAGE);
@@ -1379,8 +1522,8 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       case ACTION_SAFALAAN_CHARCOAL:
         event.handled = true;
         if (!hasBit(player, BIT_SAFALAAN_SUPPLIES)) {
+          if (!give(player, CHARCOAL_ITEM_ID, 1)) return;
           setBit(player, BIT_SAFALAAN_SUPPLIES);
-          give(player, CHARCOAL_ITEM_ID, 1);
           advance(player, STAGE_SKETCH_NORTH);
         }
         return;
@@ -1390,20 +1533,28 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         return;
       case ACTION_RECEIVE_SKETCH_1:
         event.handled = true;
-        give(player, SKETCH_1_ITEM_ID, 1);
+        if (!held(player, SKETCH_1_ITEM_ID) && !give(player, SKETCH_1_ITEM_ID, 1)) return;
+        advance(player, STAGE_SKETCH_WEST);
         return;
       case ACTION_RECEIVE_SKETCH_2:
         event.handled = true;
-        give(player, SKETCH_2_ITEM_ID, 1);
-        advance(player, STAGE_SKETCH_WEST);
+        if (!held(player, SKETCH_2_ITEM_ID) && !give(player, SKETCH_2_ITEM_ID, 1)) return;
+        advance(player, STAGE_SKETCH_SOUTH);
         return;
       case ACTION_SKETCH_SOUTH_START:
         advance(player, STAGE_SKETCH_SOUTH);
         return;
+      case ACTION_SARIUS_SCENE_END:
+        event.handled = true;
+        advance(player, STAGE_SARIUS);
+        applyStageSpawns(player);
+        return;
       case ACTION_RECEIVE_SKETCH_3:
         event.handled = true;
-        give(player, SKETCH_3_ITEM_ID, 1);
-        advance(player, STAGE_SKETCHES_DONE);
+        if (!held(player, SKETCH_3_ITEM_ID) && !give(player, SKETCH_3_ITEM_ID, 1)) return;
+        if (hasBit(player, BIT_SARIUS_TALKED) || quest.getStage(player) >= STAGE_SKETCHES_DONE) {
+          advance(player, STAGE_SKETCHES_DONE);
+        }
         return;
       case ACTION_SKETCH_NORTH_LOSE:
       case ACTION_SKETCH_WEST_LOSE:
@@ -1413,6 +1564,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         return;
       case ACTION_GIVE_SKETCHES:
         event.handled = true;
+        if (!hasAllSketches(player)) return;
         player.getInventory().deleteNumber(SKETCH_1_ITEM_ID, 1);
         player.getInventory().deleteNumber(SKETCH_2_ITEM_ID, 1);
         player.getInventory().deleteNumber(SKETCH_3_ITEM_ID, 1);
@@ -1431,12 +1583,12 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
         return;
       case ACTION_PORTRAIT_KEY:
         event.handled = true;
-        if (!held(player, ORNATE_KEY_ITEM_ID)) give(player, ORNATE_KEY_ITEM_ID, 1);
+        if (!held(player, ORNATE_KEY_ITEM_ID) && !give(player, ORNATE_KEY_ITEM_ID, 1)) return;
         setField(player, PORTRAIT_SHIFT, 2);
         syncVisuals(player);
         return;
       case ACTION_PORTRAIT_TAKE_KEY:
-        if (!held(player, ORNATE_KEY_ITEM_ID)) give(player, ORNATE_KEY_ITEM_ID, 1);
+        if (!held(player, ORNATE_KEY_ITEM_ID) && !give(player, ORNATE_KEY_ITEM_ID, 1)) return;
         setField(player, PORTRAIT_SHIFT, 2);
         syncVisuals(player);
         return;
@@ -1477,13 +1629,23 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       case ACTION_RUNECASE_RUNES:
         event.handled = true;
         if (!hasBit(player, BIT_RUNECASE)) {
+          const runeStacks = [
+            [LAW_RUNE_ITEM_ID, 1],
+            [FIRE_RUNE_ITEM_ID, 3],
+            [AIR_RUNE_ITEM_ID, 3],
+            [WATER_RUNE_ITEM_ID, 1],
+            [MIND_RUNE_ITEM_ID, 1],
+          ];
+          const missingStacks = runeStacks.filter(([itemId]) => !held(player, itemId)).length;
+          if (freeSlots(player) < missingStacks) {
+            player.sendMessage("You don't have enough inventory space.");
+            return;
+          }
           setBit(player, BIT_RUNECASE);
           syncVisuals(player);
-          give(player, LAW_RUNE_ITEM_ID, 1);
-          give(player, FIRE_RUNE_ITEM_ID, 3);
-          give(player, AIR_RUNE_ITEM_ID, 3);
-          give(player, WATER_RUNE_ITEM_ID, 1);
-          give(player, MIND_RUNE_ITEM_ID, 1);
+          // The free-slot count above is exact; add directly so existing rune
+          // stacks receive the runes even with no empty slots.
+          for (const [itemId, amount] of runeStacks) player.getInventory().adds(itemId, amount);
         }
         return;
       case ACTION_SAFALAAN_SHOW_MESSAGE:
@@ -1531,8 +1693,8 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       if (field(player, CITIZEN_PHASE_SHIFT) < 2) setField(player, CITIZEN_PHASE_SHIFT, 2);
       return;
     }
-    if (option === CHOICE_CITIZEN_RAL) {
-      setField(player, CITIZEN_PHASE_SHIFT, 3);
+    if (option === CHOICE_CITIZEN_RAL || option === CHOICE_CITIZEN_RAL_HELP) {
+      if (field(player, CITIZEN_PHASE_SHIFT) < 3) setField(player, CITIZEN_PHASE_SHIFT, 3);
       advance(player, STAGE_RAL_KNOWN);
       return;
     }
@@ -1560,9 +1722,12 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   function handleStartHook(event) {
     const { player, npcId, hook } = event;
     if (hook !== START_HOOK || !VELIAF_NPC_IDS.has(npcId)) return;
-    if (quest.getStage(player) === STAGE_UNSTARTED) {
-      advance(player, STAGE_STARTED);
+    if (quest.getStage(player) !== STAGE_UNSTARTED) return;
+    if (!meetsRequirements(player)) {
+      requirementsMessage(player);
+      return;
     }
+    advance(player, STAGE_STARTED);
   }
 
   function handleLogin({ player }) {
@@ -1651,6 +1816,20 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       if (quest.getStage(player) < STAGE_RETURNED || !hasBit(player, BIT_ROCKS)) return false;
       event.handled = true;
       teleport(player, DRAKAN_WALLS);
+      return true;
+    }
+    if (
+      objectId === DRAKAN_WALL_SHORTCUT_UP_OBJECT_ID ||
+      objectId === DRAKAN_WALL_SHORTCUT_DOWN_OBJECT_ID
+    ) {
+      if (quest.getStage(player) < STAGE_RETURNED || quest.getStage(player) >= STAGE_COMPLETE) {
+        return false;
+      }
+      event.handled = true;
+      teleport(
+        player,
+        objectId === DRAKAN_WALL_SHORTCUT_UP_OBJECT_ID ? DRAKAN_WALLS_TOP : DRAKAN_WALLS
+      );
       return true;
     }
     if (objectId === POTS_OBJECT_ID) {
@@ -1761,7 +1940,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       if (quest.getStage(player) < STAGE_SKETCHES_DONE) return false;
       event.handled = true;
       const state = field(player, PORTRAIT_SHIFT);
-      if (state === 1 && !held(player, ORNATE_KEY_ITEM_ID)) {
+      if (state !== 0 && !held(player, ORNATE_KEY_ITEM_ID)) {
         play(
           player,
           PROP_ID,
@@ -1993,7 +2172,7 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     const pair = new Set([usedItemId, usedWithItemId]);
     if (!(pair.has(CHARCOAL_ITEM_ID) && pair.has(PAPYRUS_ITEM_ID))) return;
     const stage = quest.getStage(player);
-    if (stage < STAGE_SKETCH_NORTH || stage >= STAGE_SKETCHES_DONE) return;
+    if (stage < STAGE_SKETCH_NORTH || stage >= STAGE_SKETCHES_GIVEN) return;
     event.handled = true;
     if (near(player, SKETCH_NORTH_SPOT)) {
       if (held(player, SKETCH_1_ITEM_ID)) {
@@ -2033,7 +2212,12 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
       } else if (!held(player, SKETCH_2_ITEM_ID)) {
         play(player, PROP_ID, "close-encounters-with-vyre-kind-attempting-to-sketch-the-south-side-second");
       } else if (stage < STAGE_SKETCH_SOUTH) {
-        play(player, PROP_ID, "close-encounters-with-vyre-kind-sketching-the-south-side");
+        play(
+          player,
+          PROP_ID,
+          "close-encounters-with-vyre-kind-sketching-the-south-side",
+          beforeSariusWake
+        );
       } else {
         play(
           player,
@@ -2046,13 +2230,32 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     player.sendMessage("You should stand on one of the marked spots to sketch the castle.");
   }
 
-  function handleGroundItemPickup(event) {
-    const { player, groundItemId } = event;
-    if (groundItemId !== HAEMALCHEMY_ITEM_ID || !player) return;
+  function findHaemalchemyBook(player) {
     const stage = quest.getStage(player);
     if (stage >= STAGE_LAB_OPEN && stage < STAGE_BOOK_FOUND) {
       advance(player, STAGE_BOOK_FOUND);
     }
+  }
+
+  function handleItemDestroyed(event) {
+    const { player, itemId } = event;
+    if (!player || itemId !== LADDER_TOP_ITEM_ID || hasBit(player, BIT_LADDER_FIXED)) return;
+    if (!hasBit(player, BIT_LADDER_TOP)) return;
+    player.setAttribute(BITS_ATTRIBUTE, bits(player) & ~BIT_LADDER_TOP);
+    syncVisuals(player);
+  }
+
+  function handleGroundItemPickup(event) {
+    const { player, groundItemId } = event;
+    if (groundItemId !== HAEMALCHEMY_ITEM_ID || !player) return;
+    findHaemalchemyBook(player);
+  }
+
+  /** Telekinetic Grab awards the book directly, before the pickup hook can fire. */
+  function handleTelekineticGrab(event) {
+    const { player, itemId } = event;
+    if (itemId !== HAEMALCHEMY_ITEM_ID || !player) return;
+    findHaemalchemyBook(player);
   }
 
   // ---------------------------------------------------------------------------
@@ -2068,6 +2271,16 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
     varbitId: 2573, // myq3_main_quest (bits 0-8)
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    varbitValue(stage) {
+      if (stage >= STAGE_COMPLETE) return STAGE_WIRE_COMPLETE;
+      // Roald's teleport has happened: the client asks for Veliaf, not for Roald.
+      if (stage === STAGE_KING_ROALD_TELEPORT) return STAGE_WIRE_RETURN_TO_VELIAF;
+      // Veliaf has sent the player back to the Sanguinesti order.
+      if (stage === STAGE_VELIAF_SENT) return STAGE_WIRE_BACK_TO_MEIYERDITCH;
+      // The sealed message is in hand: the client asks for Veliaf to finish.
+      if (stage === STAGE_SEALED_MESSAGE) return STAGE_WIRE_SEALED_MESSAGE;
+      return stage | 0;
+    },
     questPoints: 2,
     xpRewards: [
       { skillId: Skill.AGILITY.getIndex(), amount: 7000, label: "Agility" },
@@ -2096,10 +2309,13 @@ module.exports = function registerDarknessOfHallowvaleQuest(api) {
   api.onNpcInteraction("Meiyerditch citizen", { "Talk-to": talkCitizen });
   api.onNpcInteraction("Child", { "Talk-to": talkChild });
   api.onNpcInteraction("Vyrewatch", { "Talk-to": talkVyrewatch });
+  api.onNpcInteraction(talkSarius);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnItem(handleItemOnItem);
   api.onGroundItemPickup(handleGroundItemPickup);
+  api.onCustomEvent("destroy-item:destroyed", handleItemDestroyed);
+  api.onCustomEvent("magic:telekinetic-grab", handleTelekineticGrab);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

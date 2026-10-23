@@ -104,6 +104,7 @@ function hasVisibleModelContent(w: any): boolean {
 function hasVisibleInventoryContent(w: any): boolean {
     if (typeof w?.itemId === "number" && (w.itemId | 0) >= 0) return true;
     if (!Array.isArray(w?.itemIds)) return false;
+    // Cache `itemIds` arrays use itemId+1; 0 is their empty sentinel.
     return w.itemIds.some((itemId: unknown) => typeof itemId === "number" && (itemId | 0) > 0);
 }
 
@@ -243,7 +244,7 @@ export function transformWidgetMenuEntries<T extends { option: string }>(
 ): T[] {
     const itemId = typeof w?.itemId === "number" ? w.itemId | 0 : -1;
     const uid = typeof w?.uid === "number" ? w.uid | 0 : 0;
-    if (itemId <= 0 || uid >>> 16 !== INVENTORY_GROUP_ID) {
+    if (itemId < 0 || uid >>> 16 !== INVENTORY_GROUP_ID) {
         return applyMenuTransform(entries as any, { surface: "widget", menu, widgetId: uid,
             childIndex: w?.childIndex ?? -1, itemId }) as unknown as T[];
     }
@@ -265,7 +266,7 @@ const SELECTION_TARGETS_ITEM_MASK = 0x30;
  */
 export function getSelectionTargetEntries(w: any): SimpleMenuEntry[] | undefined {
     if (!ClientState.isSpellSelected) return undefined;
-    if (typeof w?.itemId !== "number" || w.itemId <= 0) return undefined;
+    if (typeof w?.itemId !== "number" || w.itemId < 0) return undefined;
     if ((ClientState.selectedSpellTargetMask & SELECTION_TARGETS_ITEM_MASK) === 0) return undefined;
     const plainTarget = getWidgetTargetLabel(w);
     if (!plainTarget) return undefined;
@@ -322,7 +323,7 @@ export function deriveRawMenuEntriesForWidget(
     // not as a placeholder that fills empty action slots. Filling null action slots causes
     // "Use" to appear above the primary item action (e.g., Staff of air: Use, Wield, ...),
     // which is incorrect (should be Wield, Use, ...).
-    const hasItem = typeof w?.itemId === "number" && w.itemId > 0;
+    const hasItem = typeof w?.itemId === "number" && w.itemId >= 0;
     const itemTarget =
         hasItem && plainTarget
             ? `${colorStartTag(ITEM_MENU_TARGET_RGB)}${plainTarget}`
@@ -865,7 +866,7 @@ export function findBlockingWidgetInHits(
         const hasTransmitOps = (flags & 0x7fe) !== 0;
         const hasSpellAction =
             targetMask > 0 && !!sanitizeText(w?.spellActionName ?? w?.targetVerb);
-        const hasItem = typeof w?.itemId === "number" && (w.itemId | 0) > 0;
+        const hasItem = typeof w?.itemId === "number" && (w.itemId | 0) >= 0;
         const isPauseWidget = isPauseButtonWidget(w, getWidgetFlags, getWidgetByUid);
         const isDraggable = !!(w?.isDraggable || w?.eventHandlers?.onDrag || w?.onDrag);
         const buttonType = (w?.buttonType ?? 0) | 0;

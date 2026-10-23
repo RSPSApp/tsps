@@ -8,9 +8,10 @@
  * grimy herbs.
  *
  * Stages (varp 175): 1-2 snake weed (asked/found), 3-4 ardrigal, 5-6 sito foil,
- * 7-8 volencia moss, 9-10 rogue's purse, 11 all found, 12 complete, 13 spoken.
+ * 7-8 volencia moss, 9-10 rogue's purse, 11 all handed in, 12 complete.
  * Handing in the fifth clean herb plays the transcript's "Quest complete!"
- * action and finishes the quest.
+ * action and finishes the quest; talking at 11 replays that completion tail so
+ * an interrupted final hand-in is not a dead end.
  *
  * Gaps (no dump/index support): the Druidic Ritual requirement is not enforced
  * (no condition in the transcript); the "obtained from a monster drop" freshness
@@ -151,6 +152,9 @@ module.exports = function registerJunglePotionQuest(api) {
         break;
       }
     }
+    if (stage === 11) {
+      lines.push("I should speak to <col=800000>Trufitus</col> to finish the potion.");
+    }
     if (stage >= STAGE_COMPLETE) lines.push("", "<col=ff0000>QUEST COMPLETE!</col>");
     return lines;
   }
@@ -171,6 +175,11 @@ module.exports = function registerJunglePotionQuest(api) {
 
   function answerCondition({ player, text }) {
     const value = String(text).toLowerCase();
+    // Stage 11 is the helper's finish step: the fifth herb was already handed
+    // in, so replay the hand-in branch's completion tail instead of denying it.
+    if (quest.getStage(player) === 11 && value.includes("rogue's purse")) {
+      return !value.includes("no rogue's purse") && !value.includes("grimy");
+    }
     for (const herb of HERBS) {
       const name = herb.name.toLowerCase();
       const hasGrimy = held(player, herb.grimy);
@@ -195,6 +204,8 @@ module.exports = function registerJunglePotionQuest(api) {
     if (npcId !== TRUFITUS_NPC_ID) return;
     const herb = HAND_IN_STEPS.get(stepId);
     if (!herb || !held(player, herb.clean)) return;
+    // A replay after the hand-in must not consume another herb or rewind progress.
+    if (quest.getStage(player) >= herb.nextStage) return;
     player.getInventory().deleteNumber(herb.clean, 1);
     quest.setStage(player, herb.nextStage);
   }
@@ -267,10 +278,7 @@ module.exports = function registerJunglePotionQuest(api) {
     if (!herb) return;
     if (event.option && !/clean/i.test(event.option)) return;
     event.handled = true;
-    if (quest.getStage(event.player) < STAGE_STARTED) {
-      event.player.sendMessage("You cannot clean this herb until you have started Jungle Potion.");
-      return;
-    }
+    if (event.player.getInventory().getItems()[event.slot]?.getId() !== event.itemId) return;
     if (event.player.getSkillManager().getCurrentLevel(Skill.HERBLORE) < 3) {
       event.player.sendMessage("You need a Herblore level of 3 to clean this herb.");
       return;

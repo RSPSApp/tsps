@@ -4,7 +4,11 @@ module.exports=function registerTemple({api,stage,advance,held,give,val,replace,
  const PUZZLE_ATTRIBUTE='while-guthix-sleeps:temple-puzzle',POUCHES_ATTRIBUTE='while-guthix-sleeps:temple-pouches';
  ATTRIBUTES.push(PUZZLE_ATTRIBUTE,POUCHES_ATTRIBUTE);
  const SKELETON=54088,SKELETONS=[53813,53814],TABLE=54083,TABLES=[53666,53667,53668,53669,53670,53671,53672,53673,53674];
- const RUBBLE=53639,DOOR=53694,DRUIDS=[13575,13576],SICKLE=I.SILVER_SICKLE_B_,POUCH=I.DRUID_POUCH_2,EMPTY_POUCH=I.DRUID_POUCH,FLOWER=29556;
+  const RUBBLE=53639,DOOR=53694,DRUIDS=[13575,13576],SICKLE=I.SILVER_SICKLE_B_,POUCH=I.DRUID_POUCH_2,EMPTY_POUCH=I.DRUID_POUCH,FLOWER=29556;
+  // The skeleton hands over one druid pouch holding six charges; the stack of the
+  // stackable pouch item is the charge count, and a spent pouch becomes the empty
+  // pouch, which the vine flowers refill (Nature Spirit's pouch fill).
+  const POUCH_CHARGES=6;
  const DEAD_VINE=53723,FLOWERING_VINE=53724;
  const ENERGY_BRAZIER=53736;
  const RECIPES=[
@@ -34,7 +38,13 @@ module.exports=function registerTemple({api,stage,advance,held,give,val,replace,
   let s=p.getAttribute(PUZZLE_ATTRIBUTE);if(!s){const choices=RECIPES.map((_,i)=>i);for(let i=12;i>0;i--){const j=Math.floor(Math.random()*(i+1));[choices[i],choices[j]]=[choices[j],choices[i]];}s={types:choices.slice(0,8),ingredients:Array.from({length:8},()=>[]),finished:0,placed:0,revealed:0};p.setAttribute(PUZZLE_ATTRIBUTE,s);}return s;
  }
  function store(p,s){p.setAttribute(PUZZLE_ATTRIBUTE,s);}
- function sync(p){const s=state(p);p.getPacketSender().sendVarbit(10828,count(s.placed)).sendVarbit(10815,s.placed===255?0:1).sendVarbit(10810,val(p,POUCHES_ATTRIBUTE)>=6?1:0);}
+ function sync(p) {
+  const puzzle = state(p);
+  p.getPacketSender()
+   .sendVarbit(10828, count(puzzle.placed))
+   .sendVarbit(10815, puzzle.placed === 255 ? 0 : 1)
+   .sendVarbit(10810, val(p, POUCHES_ATTRIBUTE) ? 1 : 0);
+ }
  function count(mask){let n=0;while(mask){n+=mask&1;mask>>>=1;}return n;}
  function drop(p,id,position){ItemOnGroundManager.registerLocation(p,new Item(id,1),position);}
  function scenery(p,id,x,y,type=10,face=0){
@@ -55,9 +65,25 @@ module.exports=function registerTemple({api,stage,advance,held,give,val,replace,
   }sync(p);if(state(p).placed===255)openDoor(p);
  }
  function exit(e){if(visible(e)!==53637||stage(e.player)<760)return false;api.emitCustomEvent('wgs:return-chasm',{player:e.player});return true;}
- function skeleton(e){
-  const p=e.player;if(!sessions.has(p)||![SKELETON,...SKELETONS].includes(visible(e)))return false;
-  give(p,SICKLE);if(!val(p,POUCHES_ATTRIBUTE)&&(held(p,POUCH)||p.getInventory().getFreeSlots())){p.getInventory().adds(POUCH,6);p.setAttribute(POUCHES_ATTRIBUTE,6);}sync(p);return true;
+ function skeleton(e) {
+  const p = e.player;
+  if (!sessions.has(p) || ![SKELETON, ...SKELETONS].includes(visible(e))) return false;
+  // The remains hold the silver sickle (b) and a druid pouch with six charges. Both
+  // need a free slot; a full bag keeps the search open so it can be retried, and a
+  // player who carries no pouch is handed a fresh one.
+  const needsSickle = !held(p, SICKLE);
+  const needsPouch = !held(p, POUCH) && !held(p, EMPTY_POUCH);
+  const neededSlots = Number(needsSickle) + Number(needsPouch);
+  if (neededSlots > p.getInventory().getFreeSlots()) {
+   const itemName = needsPouch ? 'druid pouch' : 'silver sickle';
+   p.sendMessage(`You need a free inventory space to take the ${itemName}.`);
+   return true;
+  }
+  if (needsSickle) p.getInventory().adds(SICKLE, 1);
+  if (needsPouch) p.getInventory().adds(POUCH, POUCH_CHARGES);
+  p.setAttribute(POUCHES_ATTRIBUTE, 1);
+  sync(p);
+  return true;
  }
  function find(e){const s=state(e.player),l=e.object.getLocation(),id=visible(e);return SITES.findIndex(([x,y],i)=>x===l.getX()&&y===l.getY()&&[RECIPES[s.types[i]][1],RECIPES[s.types[i]][1]+1].includes(id));}
  function inspect(e){
@@ -68,11 +94,32 @@ module.exports=function registerTemple({api,stage,advance,held,give,val,replace,
   p.sendMessage('The statue represents '+r[0]+'. '+r[3].map(ids=>ids.map(id=>api.core.ItemDefinition.forId(id).getName()).join(' + ')).join(' or '));
   if(s.finished&(1<<i))if(!(s.placed&(1<<i)))give(p,r[2]);return true;
  }
- function ingredients(e){
-  const p=e.player,i=spirits.get(e.target);if(e.itemId!==POUCH||i===undefined||e.target.getOwner()!==p)return;e.handled=true;
-  const s=state(p);if(s.revealed&(1<<i)){p.sendMessage('This druid spirit has already left its ingredients.');return;}
-  if(!held(p,POUCH))return;p.getInventory().deleteNumber(POUCH,1);if(!held(p,POUCH))p.getInventory().adds(EMPTY_POUCH,1);s.revealed|=1<<i;store(p,s);
-  for(const id of RECIPES[s.types[i]][3][0])drop(p,id,e.target.getLocation());p.sendMessage('The druid spirit reveals the ingredients it carried.');
+ function ingredients(e) {
+  const p = e.player;
+  const siteIndex = spirits.get(e.target);
+  if (siteIndex === undefined || e.target.getOwner() !== p) return;
+  if (e.itemId !== POUCH) {
+   if (e.itemId === EMPTY_POUCH) {
+    e.handled = true;
+    p.sendMessage('You have nothing left in your druid pouch!');
+   }
+   return;
+  }
+  e.handled = true;
+  const puzzle = state(p);
+  if (puzzle.revealed & (1 << siteIndex)) {
+   p.sendMessage('This druid spirit has already left its ingredients.');
+   return;
+  }
+  if (!held(p, POUCH)) return;
+  p.getInventory().deleteNumber(POUCH, 1);
+  if (!held(p, POUCH)) p.getInventory().adds(EMPTY_POUCH, 1);
+  puzzle.revealed |= 1 << siteIndex;
+  store(p, puzzle);
+  for (const id of RECIPES[puzzle.types[siteIndex]][3][0]) {
+   drop(p, id, e.target.getLocation());
+  }
+  p.sendMessage('The druid spirit reveals the ingredients it carried.');
   api.removeNpc(e.target);
  }
  function openDoor(p){
@@ -103,7 +150,13 @@ module.exports=function registerTemple({api,stage,advance,held,give,val,replace,
   for(const o of plants)replace(p,FLOWERING_VINE,[o.getLocation().getX(),o.getLocation().getY(),0],o.getType(),o.getFace());
  }
  function pick(e){const p=e.player;if(!sessions.has(p)||visible(e)!==FLOWERING_VINE)return false;if(!p.getInventory().getFreeSlots()){p.sendMessage('You need a free inventory space.');return true;}p.getInventory().adds(FLOWER,1);const l=e.object.getLocation();replace(p,DEAD_VINE,[l.getX(),l.getY(),0],e.object.getType(),e.object.getFace());return true;}
- function login({player:p}){const l=p.getLocation();if(stage(p)<900&&l.getX()>=4032&&l.getX()<=4159&&l.getY()>=4352&&l.getY()<=4543)p.moveTo(loc(3229,9527,2));}
+ function login({ player }) {
+  sync(player);
+  const location = player.getLocation();
+  const inTemple = location.getX() >= 4032 && location.getX() <= 4159
+   && location.getY() >= 4352 && location.getY() <= 4543;
+  if (stage(player) < 900 && inTemple) player.moveTo(loc(3229, 9527, 2));
+ }
  api.onCustomEvent('wgs:enter-temple',enter);
  api.onObjectInteraction('Skeleton',{Search:skeleton});
  api.onObjectInteraction('Hole',{'Crawl-through':exit});

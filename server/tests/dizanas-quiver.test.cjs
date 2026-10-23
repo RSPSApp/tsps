@@ -401,4 +401,3 @@ test('Wilderness death above 20 destroys an unlocked quiver, but keeps a locked 
     core.ItemOnGroundManager.registerLocation = registerLocation;
   }
 });
-

@@ -70,6 +70,9 @@ module.exports = function registerGrandTreeQuest(api) {
   /** Transcript actions that end the shipyard password branch. */
   const PASSWORD_CORRECT_ACTION_ID = "CDM9ud";
   const PASSWORD_WRONG_ACTION_ID = "svX7Pp";
+  /** Transcript actions that sneak the player back into the stronghold. */
+  const FEMI_SNEAK_ACTION_ID = "6QWAFm";
+  const FEMI_PAID_SNEAK_ACTION_ID = "Op5eXj";
 
   const NARNODE_IDS = new Set([NpcIdentifiers.KING_NARNODE_SHAREEN, NpcIdentifiers.KING_NARNODE_SHAREEN_2]);
   const HAZELMERE_IDS = new Set([NpcIdentifiers.HAZELMERE, 4647]);
@@ -90,6 +93,7 @@ module.exports = function registerGrandTreeQuest(api) {
   /** The combat variant the wrong-password worker becomes (1430 has no combat). */
   const SHIPYARD_ATTACKER_ID = 5457;
 
+  const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const BARK_SAMPLE_ITEM_ID = ItemIdentifiers.BARK_SAMPLE;
   const TRANSLATION_BOOK_ITEM_ID = ItemIdentifiers.TRANSLATION_BOOK;
   const DACONIA_ROCK_ITEM_ID = ItemIdentifiers.DACONIA_ROCK;
@@ -106,7 +110,10 @@ module.exports = function registerGrandTreeQuest(api) {
   ];
 
   // Glough's house, its watchtower and the cave under the stronghold.
-  const GLOUGHS_CUPBOARD_ID = ObjectIdentifiers.CUPBOARD_14;
+  const GLOUGHS_CUPBOARD_IDS = new Set([
+    ObjectIdentifiers.CUPBOARD_14, // closed
+    ObjectIdentifiers.CUPBOARD_15, // open; QH treats it as an alternate object
+  ]);
   const GLOUGHS_CHEST_ID = ObjectIdentifiers.CLOSED_CHEST_9;
   const WATCHTOWER_TREE_ID = ObjectIdentifiers.TREE_13;
   /** Unnamed multi-loc: Open (2446) below stage 130, Climb-down (26243) at 130+. */
@@ -129,19 +136,34 @@ module.exports = function registerGrandTreeQuest(api) {
   const SHIPYARD_CRASH_DESTINATION = { x: 2924, y: 3055, z: 0 };
   /** The far side of the shipyard gate the worker opens. */
   const SHIPYARD_INSIDE_DESTINATION = { x: 2947, y: 3042, z: 0 };
+  /** Femi drops the player back inside the stronghold gate. */
+  const STRONGHOLD_INSIDE_DESTINATION = { x: 2466, y: 3495, z: 0 };
+  const FEMI_FARE = 1000;
   const BLACK_DEMON_ID = NpcIdentifiers.BLACK_DEMON_2; // 1432, the quest demon
   const DEMON_SPAWN = { x: 2488, y: 9866, z: 0 };
 
   const PILLARS_ATTRIBUTE = "grand-tree:pillars-placed";
   const PASSWORD_ATTRIBUTE = "grand-tree:shipyard-password";
   const ROOT_SEARCH_ATTRIBUTE = "grand-tree:roots-searched";
+  const FEMI_HELPED_ATTRIBUTE = "grand-tree:femi-helped";
   const CORRECT_PASSWORD = "Ka.Lu.Min.";
 
   const page = (variant) => ({ page: PAGE, variant });
   const has = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
-  const hasTwigs = (player) => TWIG_ITEM_IDS.some((itemId) => has(player, itemId));
+  const missingTwigs = (player) => TWIG_ITEM_IDS.filter((itemId) => !has(player, itemId));
+  const freeSlots = (player) => {
+    const inventory = player.getInventory();
+    return typeof inventory.getFreeSlots === "function"
+      ? inventory.getFreeSlots()
+      : inventory.isFull() ? 0 : 28;
+  };
   const grant = (player, itemId) => {
     if (!has(player, itemId)) player.getInventory().adds(itemId, 1);
+  };
+  const otherQuestStarted = (player, key) => {
+    const query = { player, key, started: false };
+    api.emitCustomEvent("quest:is-started", query);
+    return query.started === true;
   };
   const teleport = (player, tile) => player.moveTo(new Location(tile.x, tile.y, tile.z));
   const at = (tile) => new Location(tile.x, tile.y, tile.z);
@@ -217,9 +239,11 @@ module.exports = function registerGrandTreeQuest(api) {
         : "saving-the-tree-the-end-of-the-tunnel-when-talking-to-king-narnode-again";
     }
     if (stage >= STAGE_DEMON_DEFEATED) return "saving-the-tree-the-end-of-the-tunnel";
-    if (stage >= STAGE_GIVEN_TWIGS) return "treachery-revealed-glough-s-pet-when-talking-to-king-narnode-without-finishing-the-fight";
+    if (stage >= STAGE_TRAPDOOR) return "treachery-revealed-glough-s-pet-when-talking-to-king-narnode-without-finishing-the-fight";
+    if (stage >= STAGE_GIVEN_TWIGS) return "treachery-revealed-glough-s-plans-when-speaking-to-king-narnode-again";
     if (stage >= STAGE_INVASION_PLANS) return "treachery-revealed-glough-s-plans-talking-to-king-narnode-shareen";
-    if (stage >= STAGE_RELEASED) return "searching-glough-s-cupboard-imprisoned";
+    if (stage >= STAGE_LUMBER_ORDER) return "treachery-revealed-when-speaking-to-king-narnode";
+    if (stage >= STAGE_RELEASED) return "searching-glough-s-cupboard-imprisoned-when-speaking-to-king-narnode-again";
     if (stage >= STAGE_FOUND_JOURNAL) return "human-sabotage-reporting-back-to-king-narnode-when-talking-to-king-narnode-again";
     if (stage >= STAGE_SPOKEN_PRISONER) return "human-sabotage-reporting-back-to-king-narnode";
     if (stage >= STAGE_FOUND_PRISONER) {
@@ -234,6 +258,9 @@ module.exports = function registerGrandTreeQuest(api) {
 
   function gloughVariant(stage) {
     if (stage >= STAGE_COMPLETE) return "post-quest-glough";
+    if (stage >= STAGE_TRAPDOOR && stage < STAGE_DEMON_DEFEATED) {
+      return "treachery-revealed-glough-s-pet-talking-to-glough-during-the-fight";
+    }
     if (stage >= STAGE_RELEASED) return "treachery-revealed-when-speaking-to-glough";
     if (stage >= STAGE_FOUND_JOURNAL) return "searching-glough-s-cupboard-suspicions";
     return "human-sabotage-glough";
@@ -248,7 +275,11 @@ module.exports = function registerGrandTreeQuest(api) {
     return "human-sabotage-interrogating-the-prisoner";
   }
 
-  /** Which transcript variant the clicked NPC plays. */
+  /**
+   * Which transcript variant the clicked NPC plays. Shared NPCs are only owned
+   * inside their Grand Tree stage window; outside it a later quest plugin gets
+   * the turn, and the id index/name page supplies the ordinary dialogue.
+   */
   function selectVariant({ npcId, npc, player }) {
     const stage = quest.getStage(player);
     if (NARNODE_IDS.has(npcId)) {
@@ -256,27 +287,64 @@ module.exports = function registerGrandTreeQuest(api) {
       return variant ? page(variant) : null;
     }
     if (HAZELMERE_IDS.has(npcId)) {
+      if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return null;
       return page(stage >= STAGE_HAZELMERE ? "hazelmere-s-island-when-speaking-again-to-hazelmere" : "hazelmere-s-island");
     }
-    if (GLOUGH_IDS.has(npcId)) return page(gloughVariant(stage));
-    if (CHARLIE_IDS.has(npcId)) return page(charlieVariant(stage));
-    if (ANITA_IDS.has(npcId)) {
-      return page(stage >= STAGE_CHARLIE_CLUE ? "treachery-revealed-anita" : "treachery-revealed-anita");
+    if (GLOUGH_IDS.has(npcId)) {
+      if (stage >= STAGE_COMPLETE) {
+        return otherQuestStarted(player, "monkey_madness_i") ? null : page("post-quest-glough");
+      }
+      if (stage < STAGE_RELAYED_MESSAGE) return null;
+      return page(gloughVariant(stage));
     }
-    if (npcId === NpcIdentifiers.FOREMAN) return page("treachery-revealed-the-shipyard-foreman");
-    if (npcId === SHIPYARD_WORKER_ID) return page("treachery-revealed-the-shipyard-password");
+    if (CHARLIE_IDS.has(npcId)) {
+      if (stage < STAGE_FOUND_PRISONER) return null;
+      return page(charlieVariant(stage));
+    }
+    if (ANITA_IDS.has(npcId)) {
+      if (stage < STAGE_CHARLIE_CLUE || stage >= STAGE_INVASION_PLANS) return null;
+      return page(has(player, GLOUGHS_KEY_ITEM_ID)
+        ? "treachery-revealed-anita-talking-to-anita-again"
+        : "treachery-revealed-anita");
+    }
+    if (npcId === NpcIdentifiers.FOREMAN) {
+      if (stage < STAGE_RELEASED || stage >= STAGE_INVASION_PLANS) return null;
+      return page(stage >= STAGE_LUMBER_ORDER
+        ? "treachery-revealed-the-shipyard-talking-to-foreman-after-obtaining-the-lumber-order"
+        : "treachery-revealed-the-shipyard-foreman");
+    }
+    if (npcId === SHIPYARD_WORKER_ID) {
+      if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return null;
+      return page("treachery-revealed-the-shipyard-password");
+    }
     if (npcId === NpcIdentifiers.FEMI) {
-      return page("treachery-revealed-sneaking-around-when-talking-to-femi-if-you-helped-her");
+      if (stage === STAGE_NOT_STARTED) {
+        return { page: "Femi", variant: "attemping-to-enter-the-tree-gnome-stronghold-for-the-first-time" };
+      }
+      if (stage < STAGE_RELEASED || stage >= STAGE_CHARLIE_CLUE) return null;
+      if (stage >= STAGE_LUMBER_ORDER) {
+        return page("treachery-revealed-sneaking-around-when-talking-to-femi-again");
+      }
+      return page(player.getAttribute(FEMI_HELPED_ATTRIBUTE) === true
+        ? "treachery-revealed-sneaking-around-when-talking-to-femi-if-you-helped-her"
+        : "treachery-revealed-sneaking-around-when-talking-to-femi-if-you-didn-t-help-her");
     }
     if (CAPTAIN_ERRDO_IDS.has(npcId)) {
+      if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return null;
       const atStronghold = npc?.getLocation?.().getZ?.() === 3;
-      if (atStronghold && stage >= STAGE_RELEASED && stage < STAGE_LUMBER_ORDER) {
+      if (atStronghold) {
         return page("searching-glough-s-cupboard-imprisoned-fleeing-the-grand-tree");
       }
       return page("treachery-revealed-arrival-talking-to-captain-errdo-again");
     }
-    if (GNOME_GUARD_IDS.has(npcId)) return page("treachery-revealed-sneaking-around-gnome-guard");
-    if (JOGRE_IDS.has(npcId)) return page("treachery-revealed-arrival-upon-ending-the-conversation-with-errdo");
+    if (GNOME_GUARD_IDS.has(npcId)) {
+      if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return null;
+      return page("treachery-revealed-sneaking-around-gnome-guard");
+    }
+    if (JOGRE_IDS.has(npcId)) {
+      if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return null;
+      return page("treachery-revealed-arrival-upon-ending-the-conversation-with-errdo");
+    }
     return null;
   }
 
@@ -284,12 +352,19 @@ module.exports = function registerGrandTreeQuest(api) {
   function answerCondition({ player, npcId, text }) {
     if (![NARNODE_IDS, HAZELMERE_IDS, GLOUGH_IDS, CHARLIE_IDS, ANITA_IDS, CAPTAIN_ERRDO_IDS, GNOME_GUARD_IDS, JOGRE_IDS].some(ids => ids.has(npcId)) && ![NpcIdentifiers.FOREMAN, SHIPYARD_WORKER_ID, NpcIdentifiers.FEMI].includes(npcId)) return null;
     const value = String(text).toLowerCase();
-    if (value.includes("below level 50 combat")) return false;
+    if (value.includes("below level 50 combat")) {
+      return (player.getSkillManager?.().getCombatLevel?.() ?? 0) < 50;
+    }
     if (value.includes("lost the bark sample")) return !has(player, BARK_SAMPLE_ITEM_ID);
     if (value.includes("lost the translation book")) return !has(player, TRANSLATION_BOOK_ITEM_ID);
-    if (value.includes("lost the twigs")) return !hasTwigs(player);
-    if (value.includes("doesn't have enough inventory space")) return player.getInventory().isFull();
-    if (value.includes("has enough inventory space")) return !player.getInventory().isFull();
+    // A partial set is recoverable too: the King tops up the missing twigs.
+    if (value.includes("lost the twigs")) return missingTwigs(player).length > 0;
+    if (value.includes("doesn't have enough inventory space")) {
+      return missingTwigs(player).length > freeSlots(player);
+    }
+    if (value.includes("has enough inventory space")) {
+      return missingTwigs(player).length <= freeSlots(player);
+    }
     // The king's translation quiz has one right sequence; without tracking the
     // individual answers the "correct" branch is always the one to play.
     if (value.includes("chose the correct options")) return NARNODE_IDS.has(npcId) ? true : null;
@@ -303,6 +378,10 @@ module.exports = function registerGrandTreeQuest(api) {
   function handleStartHook({ player, npcId, hook }) {
     if (!NARNODE_IDS.has(npcId) || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
+    if (player.getSkillManager().getMaxLevel(Skill.AGILITY) < 25) {
+      player.sendMessage("You need 25 Agility to start The Grand Tree.");
+      return;
+    }
     quest.setStage(player, STAGE_STARTED);
     if (!has(player, BARK_SAMPLE_ITEM_ID)) player.getInventory().adds(BARK_SAMPLE_ITEM_ID, 1);
     if (!has(player, TRANSLATION_BOOK_ITEM_ID)) player.getInventory().adds(TRANSLATION_BOOK_ITEM_ID, 1);
@@ -324,20 +403,48 @@ module.exports = function registerGrandTreeQuest(api) {
       }
       return;
     }
-    // Typed lines from another speaker still carry the clicked NPC's id.
-    if (text.startsWith("I'm sorry again Traveller!")) return advance(player, STAGE_RELEASED);
+    const stage = quest.getStage(player);
+    // The King's closing line is typed on Charlie's cell transcript, so the
+    // clicked NPC id is Charlie even though the speaker is Narnode.
+    if (text.startsWith("I'm sorry again Traveller!")) {
+      if (stage >= STAGE_FOUND_JOURNAL && stage < STAGE_RELEASED) advance(player, STAGE_RELEASED);
+      return;
+    }
+    // Each line only advances the stage window its conversation belongs to, so a
+    // shared NPC talked to before that leg cannot skip the route.
     if (NARNODE_IDS.has(npcId)) {
-      if (text.startsWith("OK! I'll be back soon.")) return advance(player, STAGE_RELAYED_MESSAGE);
-      if (text.startsWith("Certainly. He's on the top level")) return advance(player, STAGE_FOUND_PRISONER);
-      if (text.startsWith("A reward will have to wait though")) return advance(player, STAGE_SEARCHING_DACONIA);
+      if (text.startsWith("OK! I'll be back soon.")) {
+        if (stage >= STAGE_HAZELMERE && stage < STAGE_RELAYED_MESSAGE) advance(player, STAGE_RELAYED_MESSAGE);
+        return;
+      }
+      if (text.startsWith("Certainly. He's on the top level")) {
+        if (stage >= STAGE_SPOKEN_GLOUGH && stage < STAGE_FOUND_PRISONER) advance(player, STAGE_FOUND_PRISONER);
+        return;
+      }
+      if (text.startsWith("A reward will have to wait though")) {
+        if (stage >= STAGE_DEMON_DEFEATED && stage < STAGE_SEARCHING_DACONIA) advance(player, STAGE_SEARCHING_DACONIA);
+        return;
+      }
       return;
     }
     if (GLOUGH_IDS.has(npcId) && text.startsWith("Your type can't be trusted!")) {
-      return advance(player, STAGE_SPOKEN_GLOUGH);
+      if (stage >= STAGE_RELAYED_MESSAGE && stage < STAGE_SPOKEN_GLOUGH) advance(player, STAGE_SPOKEN_GLOUGH);
+      return;
     }
     if (CHARLIE_IDS.has(npcId)) {
-      if (text.startsWith("Good luck!")) return advance(player, STAGE_SPOKEN_PRISONER);
-      if (text.startsWith("Okay, I'll see what I can find.")) return advance(player, STAGE_CHARLIE_CLUE);
+      if (text.startsWith("Good luck!")) {
+        if (stage >= STAGE_FOUND_PRISONER && stage < STAGE_SPOKEN_PRISONER) advance(player, STAGE_SPOKEN_PRISONER);
+        return;
+      }
+      if (text.startsWith("Okay, I'll see what I can find.")) {
+        if (stage >= STAGE_LUMBER_ORDER && stage < STAGE_CHARLIE_CLUE) {
+          if (has(player, LUMBER_ORDER_ITEM_ID)) {
+            player.getInventory().deleteNumber(LUMBER_ORDER_ITEM_ID, 1);
+          }
+          advance(player, STAGE_CHARLIE_CLUE);
+        }
+        return;
+      }
     }
   }
 
@@ -358,6 +465,11 @@ module.exports = function registerGrandTreeQuest(api) {
   function handleAction(event) {
     const { player, npcId, stepId } = event;
     if (!player || !stepId) return;
+
+    if (npcId === NpcIdentifiers.FEMI && stepId === "CWsctI") {
+      player.setAttribute(FEMI_HELPED_ATTRIBUTE, true);
+      return;
+    }
 
     // `message` steps fire twice: once as an action, once with kind "message".
     if (event.kind === "message") {
@@ -380,46 +492,85 @@ module.exports = function registerGrandTreeQuest(api) {
       return;
     }
 
+    const stage = quest.getStage(player);
     if (stepId === COMPLETE_ACTION_ID) {
       if (!NARNODE_IDS.has(npcId) || quest.isComplete(player)) return;
-      if (has(player, DACONIA_ROCK_ITEM_ID)) player.getInventory().deleteNumber(DACONIA_ROCK_ITEM_ID, 1);
+      if (stage < STAGE_SEARCHING_DACONIA || !has(player, DACONIA_ROCK_ITEM_ID)) return;
+      player.getInventory().deleteNumber(DACONIA_ROCK_ITEM_ID, 1);
       quest.complete(player);
       return;
     }
     if (stepId === HAZELMERE_SCROLL_ACTION_ID) {
+      if (stage < STAGE_STARTED || stage >= STAGE_HAZELMERE) return;
       if (has(player, BARK_SAMPLE_ITEM_ID)) player.getInventory().deleteNumber(BARK_SAMPLE_ITEM_ID, 1);
       grant(player, HAZELMERES_SCROLL_ITEM_ID);
       advance(player, STAGE_HAZELMERE);
       return;
     }
     if (stepId === BARK_REPLACEMENT_ACTION_ID) {
+      if (stage < STAGE_STARTED || stage >= STAGE_RELAYED_MESSAGE) return;
       grant(player, BARK_SAMPLE_ITEM_ID);
       return;
     }
     if (stepId === ANITA_KEY_ACTION_ID) {
+      if (stage < STAGE_CHARLIE_CLUE || stage >= STAGE_INVASION_PLANS) return;
       grant(player, GLOUGHS_KEY_ITEM_ID);
       return;
     }
     if (stepId === LUMBER_ORDER_ACTION_ID) {
-      grant(player, LUMBER_ORDER_ITEM_ID);
+      if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return;
+      if (!has(player, LUMBER_ORDER_ITEM_ID)) {
+        if (freeSlots(player) < 1) {
+          player.sendMessage("You don't have enough inventory space for the lumber order.");
+          return;
+        }
+        player.getInventory().adds(LUMBER_ORDER_ITEM_ID, 1);
+      }
       advance(player, STAGE_LUMBER_ORDER);
       return;
     }
     if (stepId === TWIGS_ACTION_ID || stepId === TWIGS_REPLACEMENT_ACTION_ID) {
-      for (const twig of TWIG_ITEM_IDS) grant(player, twig);
+      if (stage < STAGE_INVASION_PLANS || stage >= STAGE_TRAPDOOR) return;
+      const missing = missingTwigs(player);
+      if (missing.length > freeSlots(player)) {
+        player.sendMessage("You need enough free inventory slots for the missing twigs.");
+        return;
+      }
+      if (has(player, INVASION_PLANS_ITEM_ID)) {
+        player.getInventory().deleteNumber(INVASION_PLANS_ITEM_ID, 1);
+      }
+      for (const twig of missing) {
+        player.getInventory().adds(twig, 1);
+      }
       advance(player, STAGE_GIVEN_TWIGS);
       return;
     }
     if (stepId === ARREST_ACTION_ID) {
+      if (stage < STAGE_FOUND_JOURNAL || stage >= STAGE_RELEASED) return;
       teleport(player, CELL_DESTINATION);
       return;
     }
     if (stepId === RELEASE_ACTION_ID) {
+      if (stage < STAGE_FOUND_JOURNAL || stage >= STAGE_RELEASED) return;
       teleport(player, RELEASE_DESTINATION);
       advance(player, STAGE_RELEASED);
       return;
     }
+    if (stepId === FEMI_SNEAK_ACTION_ID || stepId === FEMI_PAID_SNEAK_ACTION_ID) {
+      if (stage < STAGE_RELEASED || stage >= STAGE_CHARLIE_CLUE) return;
+      if (stepId === FEMI_PAID_SNEAK_ACTION_ID
+        && player.getInventory().getAmount(COINS_ITEM_ID) < FEMI_FARE) {
+        player.sendMessage("You need 1000 coins for Femi.");
+        return;
+      }
+      if (stepId === FEMI_PAID_SNEAK_ACTION_ID) {
+        player.getInventory().deleteNumber(COINS_ITEM_ID, FEMI_FARE);
+      }
+      teleport(player, STRONGHOLD_INSIDE_DESTINATION);
+      return;
+    }
     if (stepId === PASSWORD_CORRECT_ACTION_ID || stepId === PASSWORD_WRONG_ACTION_ID) {
+      if (stage < STAGE_RELEASED || stage >= STAGE_LUMBER_ORDER) return;
       const correct = String(player.getAttribute(PASSWORD_ATTRIBUTE) ?? "") === CORRECT_PASSWORD;
       if (stepId === PASSWORD_CORRECT_ACTION_ID && correct) {
         // The worker lets the player through the now-open gate.
@@ -443,7 +594,7 @@ module.exports = function registerGrandTreeQuest(api) {
   }
 
   function searchCupboard(event) {
-    if (event.objectId !== GLOUGHS_CUPBOARD_ID) return false;
+    if (!GLOUGHS_CUPBOARD_IDS.has(event.objectId)) return false;
     const player = event.player;
     if (has(player, GLOUGHS_JOURNAL_ITEM_ID) || quest.getStage(player) >= STAGE_FOUND_JOURNAL) {
       player.sendMessage("The cupboard is empty.");
@@ -451,6 +602,10 @@ module.exports = function registerGrandTreeQuest(api) {
     }
     if (quest.getStage(player) < STAGE_SPOKEN_PRISONER) {
       player.sendMessage("You search the cupboard but find nothing.");
+      return true;
+    }
+    if (freeSlots(player) < 1) {
+      player.sendMessage("You need more inventory space to pick up Glough's Journal.");
       return true;
     }
     player.getInventory().adds(GLOUGHS_JOURNAL_ITEM_ID, 1);
@@ -466,7 +621,19 @@ module.exports = function registerGrandTreeQuest(api) {
       player.sendMessage("The chest is empty.");
       return true;
     }
-    if (!has(player, GLOUGHS_KEY_ITEM_ID)) {
+    const stage = quest.getStage(player);
+    // Once opened, the chest stays open: a lost invasion plans copy can be
+    // recovered without another key.
+    if (stage >= STAGE_INVASION_PLANS) {
+      if (freeSlots(player) < 1) {
+        player.sendMessage("You need more inventory space to pick up the invasion plans.");
+        return true;
+      }
+      player.getInventory().adds(INVASION_PLANS_ITEM_ID, 1);
+      player.sendMessage("You have found a scroll!");
+      return true;
+    }
+    if (stage < STAGE_CHARLIE_CLUE || !has(player, GLOUGHS_KEY_ITEM_ID)) {
       player.sendMessage("The chest is locked. Glough's key should open it.");
       return true;
     }
@@ -555,6 +722,10 @@ module.exports = function registerGrandTreeQuest(api) {
       player.sendMessage("You search the root but don't find anything.");
       return true;
     }
+    if (freeSlots(player) < 1) {
+      player.sendMessage("You need more inventory space to pick up the Daconia rock.");
+      return true;
+    }
     player.getInventory().adds(DACONIA_ROCK_ITEM_ID, 1);
     player.sendMessage("You've found a Daconia rock!");
     return true;
@@ -575,6 +746,10 @@ module.exports = function registerGrandTreeQuest(api) {
     if (npcId === NpcIdentifiers.FOREMAN && killer) {
       const stage = quest.getStage(killer);
       if (stage >= STAGE_RELEASED && stage < STAGE_LUMBER_ORDER) {
+        if (!has(killer, LUMBER_ORDER_ITEM_ID) && freeSlots(killer) < 1) {
+          killer.sendMessage("You don't have enough inventory space for the lumber order.");
+          return;
+        }
         grant(killer, LUMBER_ORDER_ITEM_ID);
         quest.setStage(killer, STAGE_LUMBER_ORDER);
       }
@@ -615,6 +790,7 @@ module.exports = function registerGrandTreeQuest(api) {
   api.persistAttribute(PILLARS_ATTRIBUTE);
   api.persistAttribute(PASSWORD_ATTRIBUTE);
   api.persistAttribute(ROOT_SEARCH_ATTRIBUTE);
+  api.persistAttribute(FEMI_HELPED_ATTRIBUTE, false);
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);

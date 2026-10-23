@@ -1246,6 +1246,12 @@ test('Fremennik Exiles celebration plays through real NpcDialogues/DialogueManag
   const h = setup('../plugins/quests/quests/TheFremennikExiles.Quest', 'the_fremennik_exiles');
   h.quest.setStage(h.player, 125);
   h.player.setAttribute('quest.points', 0);
+  const singer = h.spawned.find((npc) => npc.getId() === 9274);
+  assert.ok(singer, 'stage 125 restores the owner-local Olaf actor');
+  singer.getCurrentDefinition = () => h.core.NpcDefinition.forId(singer.getId());
+  singer.isVisible = () => true;
+  h.setLocation(singer.getLocation());
+  h.player.getLocalNpcs = () => [singer];
   const manager = new DialogueManager(h.player);
   h.player.getDialogueManager = () => manager;
   const definition = { getId: () => 9263, getName: () => 'Brundt the Chieftain' };
@@ -1256,7 +1262,14 @@ test('Fremennik Exiles celebration plays through real NpcDialogues/DialogueManag
   });
   const beforeXp = h.xp.length;
   let guard = 0;
-  while (manager.getCurrent() && guard++ < 80) manager.advance();
+  while (manager.getCurrent() && h.quest.getStage(h.player) < 130 && guard++ < 80) {
+    // Overhead transcript lines continue from their real scheduled task, not a
+    // chatbox click. Let the test scheduler advance those two ticks before the
+    // next player-controlled dialogue entry.
+    if (manager.getCurrent()?.constructor?.name === 'ActionDialogue') h.tick(2);
+    else manager.advance();
+  }
+  assert.ok(guard < 80, 'celebration transcript finishes without exhausting the playback guard');
   assert.equal(h.quest.getStage(h.player), 130, 'normal playback reaches completion');
   assert.ok(h.xp.length > beforeXp, 'completion grants rewards');
   const xpCount = h.xp.length;

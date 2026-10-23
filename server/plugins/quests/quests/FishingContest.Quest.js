@@ -50,12 +50,14 @@ module.exports = function registerFishingContestQuest(api) {
   const COMPLETE_ACTION_ID = "VGuVO2";
   /** Bonzo's "you are given the trophy" message after catching the winning carp. */
   const TROPHY_MESSAGE_ID = "jUkdtL";
-  /** Parser marker for the "you wait" cutscene before the winner is announced. */
-  const WAIT_CUTSCENE_ID = "cb4N0H";
+  /** Vestri/Austri hand over the pass while starting the quest. */
+  const PASS_MESSAGE_ID = "DMXLo9";
   /** "Your fishing competition spot is now beside the pipes." after the stranger moves. */
   const MOVE_SPOT_ACTION_ID = "zhYIEx";
   /** "You hand over your catch." when Bonzo takes a regular fish. */
   const REGULAR_FISH_HANDOVER_ID = "S6F2P5";
+  /** "You hand over the money and receive a fishing rod." at Grandpa Jack. */
+  const ROD_PURCHASE_MESSAGE_ID = "qkk2D3";
   /** "You show Morris your pass." in both Morris transcripts. */
   const MORRIS_SHOWS_PASS_IDS = new Set(["O2HuL5", "VItnPp"]);
   const SPARE_TROPHY_LINE = "I have a spare";
@@ -80,7 +82,15 @@ module.exports = function registerFishingContestQuest(api) {
   /** Walkable tile east of the easternmost wall pipe (the field side approach). */
   const PIPE_APPROACH_X = 2639;
   const PIPE_APPROACH_Y = 3446;
-  const HEMENSTER_GATE_IDS = new Set([ObjectIdentifiers.GATE_4, ObjectIdentifiers.GATE_5]);
+  const HEMENSTER_GATE_TILES = new Map([
+    [ObjectIdentifiers.GATE_4, { x: 2642, y: 3442 }],
+    [ObjectIdentifiers.GATE_5, { x: 2642, y: 3441 }],
+  ]);
+  const isHemensterGate = (objectId, location) => {
+    const tile = HEMENSTER_GATE_TILES.get(objectId);
+    return !!tile && location.getZ() === 0 &&
+      location.getX() === tile.x && location.getY() === tile.y;
+  };
   // The four contest spots. The willow one is the player's, the pipe one the
   // Sinister Stranger's until the garlic moves him; Big Dave and Joshua hold the rest.
   const WILLOW_SPOT_NPC_ID = 4079;
@@ -178,8 +188,14 @@ module.exports = function registerFishingContestQuest(api) {
       if (stage >= STAGE_COMPETING) return page("the-contest-speaking-to-bonzo-after-catching-a-fish");
       return page("the-contest-speaking-to-bonzo");
     }
-    if (npcId === MORRIS_NPC_ID) return page("entering-the-competition-talking-to-morris");
-    if (npcId === NpcIdentifiers.SINISTER_STRANGER) {
+    if (npcId === MORRIS_NPC_ID) {
+      // The pass-show page is only valid when the player can actually show the pass.
+      if (!has(player, FISHING_PASS_ITEM_ID)) {
+        return { page: "Morris", variant: "standard-dialogue-entering-the-gate" };
+      }
+      return page("entering-the-competition-talking-to-morris");
+    }
+    if (npcId === NpcIdentifiers.SINISTER_STRANGER || npcId === NpcIdentifiers.SINISTER_STRANGER_2) {
       return page("speaking-to-the-other-contestants-sinister-stranger");
     }
     if (npcId === NpcIdentifiers.BIG_DAVE) {
@@ -194,7 +210,7 @@ module.exports = function registerFishingContestQuest(api) {
 
   /** Answer the page's prose conditions. */
   function answerCondition({ player, npcId, text }) {
-    if (!DwarfHandlerIds.has(npcId) && ![BONZO_NPC_ID, MORRIS_NPC_ID, NpcIdentifiers.SINISTER_STRANGER, NpcIdentifiers.BIG_DAVE, NpcIdentifiers.JOSHUA, NpcIdentifiers.GRANDPA_JACK].includes(npcId)) return null;
+    if (!DwarfHandlerIds.has(npcId) && ![BONZO_NPC_ID, MORRIS_NPC_ID, NpcIdentifiers.SINISTER_STRANGER, NpcIdentifiers.SINISTER_STRANGER_2, NpcIdentifiers.BIG_DAVE, NpcIdentifiers.JOSHUA, NpcIdentifiers.GRANDPA_JACK].includes(npcId)) return null;
     const value = String(text).toLowerCase();
     const stage = quest.getStage(player);
     if (value.includes("quest speedrunning world")) return false;
@@ -212,6 +228,9 @@ module.exports = function registerFishingContestQuest(api) {
       // After completion the trophy was legitimately handed over, not lost.
       return !quest.isComplete(player) && !has(player, FISHING_TROPHY_ITEM_ID);
     }
+    if (value.includes("fishing rod in their inventory")) return hasRodInInventory(player);
+    if (value.includes("insufficient coins")) return amount(player, COINS_ITEM_ID) < FISHING_ROD_PRICE;
+    if (value.includes("insufficient inventory space")) return player.getInventory().isFull();
     return null;
   }
 
@@ -219,10 +238,19 @@ module.exports = function registerFishingContestQuest(api) {
     if (!DwarfHandlerIds.has(npcId) || hook !== START_HOOK) return;
     if (quest.getStage(player) >= STAGE_STARTED) return;
     quest.setStage(player, STAGE_STARTED);
-    if (!has(player, FISHING_PASS_ITEM_ID)) {
-      player.getInventory().adds(FISHING_PASS_ITEM_ID, 1);
-      player.sendMessage("You got the Fishing Contest Pass!");
-    }
+  }
+
+  /** The pass is handed over inside the start transcript, after the choice hook. */
+  function handlePassMessage({ player, npcId, stepId }) {
+    if (!DwarfHandlerIds.has(npcId) || stepId !== PASS_MESSAGE_ID) return;
+    if (!has(player, FISHING_PASS_ITEM_ID)) player.getInventory().adds(FISHING_PASS_ITEM_ID, 1);
+  }
+
+  /** Vestri/Austri replace a lost pass on the canonical "need another pass" branch. */
+  function handleDwarfChoice({ player, npcId, option }) {
+    if (!DwarfHandlerIds.has(npcId)) return;
+    if (!/need another competition pass/i.test(String(option ?? ""))) return;
+    if (!has(player, FISHING_PASS_ITEM_ID)) player.getInventory().adds(FISHING_PASS_ITEM_ID, 1);
   }
 
   /** Charges Bonzo's entrance fee once; false when the player cannot pay. */
@@ -314,11 +342,6 @@ module.exports = function registerFishingContestQuest(api) {
   /** Bonzo's winning message hands over the trophy; the dwarves finish it. */
   function handleAction(event) {
     const { player, npcId, stepId } = event;
-    if (npcId === BONZO_NPC_ID && stepId === WAIT_CUTSCENE_ID) {
-      // The wiki "You wait" cutscene has no executable contract; carry on to the hand-over.
-      event.handled = true;
-      return;
-    }
     if (npcId === BONZO_NPC_ID && stepId === REGULAR_FISH_HANDOVER_ID) {
       player.getInventory().deleteNumber(RAW_SARDINE_ITEM_ID, 1);
       return;
@@ -338,7 +361,7 @@ module.exports = function registerFishingContestQuest(api) {
       return;
     }
     if (npcId === MORRIS_NPC_ID && MORRIS_SHOWS_PASS_IDS.has(stepId)) {
-      player.setAttribute(GATE_ATTRIBUTE, true);
+      if (has(player, FISHING_PASS_ITEM_ID)) player.setAttribute(GATE_ATTRIBUTE, true);
       return;
     }
     if (DwarfHandlerIds.has(npcId) && stepId === COMPLETE_ACTION_ID) {
@@ -355,17 +378,17 @@ module.exports = function registerFishingContestQuest(api) {
     if (!has(player, FISHING_TROPHY_ITEM_ID)) player.getInventory().adds(FISHING_TROPHY_ITEM_ID, 1);
   }
 
-  /** Grandpa Jack sells a spare fishing rod for 5 coins. */
-  function handleGrandpaChoice({ player, npcId, option }) {
-    if (npcId !== NpcIdentifiers.GRANDPA_JACK) return;
-    if (!/buy one of your fishing rods/i.test(String(option ?? ""))) return;
-    if (amount(player, COINS_ITEM_ID) < FISHING_ROD_PRICE) {
-      player.sendMessage(`You need ${FISHING_ROD_PRICE} coins to buy a fishing rod.`);
-      return;
-    }
+  /**
+   * Grandpa Jack sells a fishing rod for 5 coins. The transcript only reaches this
+   * message after its has-rod, coins and inventory-space guards have passed.
+   */
+  function handleGrandpaPurchase({ player, npcId, stepId, kind }) {
+    if (npcId !== NpcIdentifiers.GRANDPA_JACK || stepId !== ROD_PURCHASE_MESSAGE_ID) return;
+    if (kind !== undefined && kind !== "message") return;
+    if (amount(player, COINS_ITEM_ID) < FISHING_ROD_PRICE) return;
+    if (hasRodInInventory(player) || player.getInventory().isFull()) return;
     player.getInventory().deleteNumber(COINS_ITEM_ID, FISHING_ROD_PRICE);
     player.getInventory().addItem(new Item(FISHING_ROD_ITEM_ID, 1));
-    player.sendMessage("You buy a fishing rod from Grandpa Jack.");
   }
 
   /** Red vine worms: checking the vine or using a spade on it digs one up. */
@@ -436,6 +459,9 @@ module.exports = function registerFishingContestQuest(api) {
     // Paid players see the stranger move now; the entry dialogue covers those who pay after.
     if (quest.getStage(player) >= STAGE_COMPETING) quest.setStage(player, STAGE_GARLIC);
   }
+
+  const hasRodInInventory = (player) => player.getInventory().contains(FISHING_ROD_ITEM_ID) ||
+    player.getInventory().contains(PEARL_FISHING_ROD_ITEM_ID);
 
   function hasFishingRod(player) {
     const inventory = player.getInventory();
@@ -517,22 +543,37 @@ module.exports = function registerFishingContestQuest(api) {
 
   /** Talking your way past Morris is what the gate asks for; the pass itself opens it. */
   function routeHemensterGate(event) {
-    if (!HEMENSTER_GATE_IDS.has(event.objectId)) return;
     const location = event.object.getLocation();
-    if (!inHemenster(location)) return;
+    if (!isHemensterGate(event.objectId, location)) return;
     const { player } = event;
     if (player.getAttribute(GATE_ATTRIBUTE)) return;
     if (player.getLocation().getX() <= location.getX()) return; // already in the field
+    if (quest.getStage(player) < STAGE_STARTED || !has(player, FISHING_PASS_ITEM_ID)) return;
+    player.setAttribute(GATE_ATTRIBUTE, true);
+    startTranscript(api, player, MORRIS_NPC_ID, PAGE, "entering-the-competition-clicking-on-the-gate");
+  }
+
+  /**
+   * Doors.plugin.js opens the gate on its registered Gate/Open hook after asking
+   * through door:toggle. Claim the Hemenster gate only when the pass is missing, so
+   * the shared door state cannot let the player through without one.
+   */
+  function handleHemensterGateToggle(request) {
+    if (request.handled) return;
+    const { player, objectId } = request;
+    const location = request.location ?? request.object?.getLocation?.();
+    if (!location || !isHemensterGate(objectId, location)) return;
+    // The route handler stops asking once the pass has been shown, and never
+    // blocks the field side; leave both cases to Doors so the player can leave.
+    if (player.getAttribute(GATE_ATTRIBUTE)) return;
+    if (player.getLocation().getX() <= location.getX()) return;
+    if (quest.getStage(player) >= STAGE_STARTED && has(player, FISHING_PASS_ITEM_ID)) return;
+    request.handled = true;
     if (quest.getStage(player) < STAGE_STARTED) {
       player.sendMessage("You need to start the Fishing Contest quest before entering the competition.");
       return;
     }
-    if (!has(player, FISHING_PASS_ITEM_ID)) {
-      player.sendMessage("You need a fishing pass to enter the competition.");
-      return;
-    }
-    player.setAttribute(GATE_ATTRIBUTE, true);
-    startTranscript(api, player, MORRIS_NPC_ID, PAGE, "entering-the-competition-clicking-on-the-gate");
+    player.sendMessage("You need a fishing pass to enter the competition.");
   }
 
   /** The tunnel is the quest reward; only a completed quest may use it. */
@@ -550,6 +591,11 @@ module.exports = function registerFishingContestQuest(api) {
     const { player } = event;
     const stage = quest.getStage(player);
     event.handled = true;
+    if (quest.isComplete(player)) {
+      const npcPage = event.npcId === NpcIdentifiers.AUSTRI ? "Austri" : "Vestri";
+      startTranscript(api, player, event.npcId, npcPage, "standard-dialogue-after-fishing-contest");
+      return;
+    }
     if (stage >= STAGE_WON && has(player, FISHING_TROPHY_ITEM_ID)) {
       startTranscript(api, player, event.npcId, PAGE, "returning-to-vestri-or-austri");
       return;
@@ -590,8 +636,10 @@ module.exports = function registerFishingContestQuest(api) {
   api.persistAttribute(GARLIC_ATTRIBUTE);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:action", handlePassMessage);
+  api.onCustomEvent("npc-dialogue:action", handleGrandpaPurchase);
   api.onCustomEvent("npc-dialogue:choice", handleBonzoChoice);
-  api.onCustomEvent("npc-dialogue:choice", handleGrandpaChoice);
+  api.onCustomEvent("npc-dialogue:choice", handleDwarfChoice);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onNpcInteraction(handleDwarfInteraction);
   api.onPlayerLogin(handleLogin);
@@ -606,5 +654,6 @@ module.exports = function registerFishingContestQuest(api) {
   api.onItemOnObject(useItemOnWallPipe);
   api.onObjectRoute(routeWallPipe);
   api.onObjectRoute(routeHemensterGate);
+  api.onCustomEvent("door:toggle", handleHemensterGateToggle);
   api.onCustomEvent("ladders:climb", blockTunnelClimb);
 };

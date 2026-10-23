@@ -41,7 +41,9 @@ function register(name, key) {
 }
 
 function talkWorld(key) {
-  const variants = [], conditions = [], custom = new Map(), interactions = {}, spoken = [], messages = [];
+  const variants = [], conditions = [], custom = new Map(), interactions = {}, namedNpcs = new Map(), spoken = [], messages = [];
+  const dispatchedActions = [];
+  let selectedOption = null, interceptedAction = null;
   const installed = { variants: 0, conditions: 0 };
   const api = new Proxy({
     core,
@@ -60,12 +62,22 @@ function talkWorld(key) {
       if (!custom.has(event)) custom.set(event, []);
       custom.get(event).push(fn);
     },
-    emitCustomEvent: (event, payload) => { for (const fn of custom.get(event) ?? []) fn(payload); },
+    onNpcInteraction: (name, actions) => namedNpcs.set(name, actions),
+    emitCustomEvent: (event, payload) => {
+      if (event === 'npc-dialogue:action' && payload.stepId === interceptedAction) {
+        dispatchedActions.push(payload.stepId);
+        payload.handled = true;
+        payload.end = true;
+        return;
+      }
+      for (const fn of custom.get(event) ?? []) fn(payload);
+    },
     onAnyNpcInteraction: (actions) => Object.assign(interactions, actions),
     sendMultiChatboxPrompt: (_player, _prompt, ...pairs) => {
       const options = [];
       for (let i = 0; i < pairs.length; i += 2) options.push({ text: String(pairs[i]), select: pairs[i + 1] });
-      (options.find((option) => /fine|goodbye/i.test(option.text)) ?? options.at(-1))?.select();
+      (options.find((option) => selectedOption && option.text === selectedOption)
+        ?? options.find((option) => /fine|goodbye/i.test(option.text)) ?? options.at(-1))?.select();
       return true;
     },
   }, { get: (target, prop) => prop in target ? target[prop] : () => {} });
@@ -137,10 +149,14 @@ function talkWorld(key) {
   }
 
   return {
-    quest, player, interactions, spoken, messages,
+    quest, player, interactions, spoken, messages, dispatchedActions,
+    choose(option) { selectedOption = option; },
+    interceptAction(stepId) { interceptedAction = stepId; },
     talk(p, npcId) {
       const definition = core.NpcDefinition.forId(npcId);
-      return interactions['Talk-to']({ player: p, npc: { getId: () => npcId, getName: () => definition.getName() }, npcId, definition });
+      const event = { player: p, npc: { getId: () => npcId, getName: () => definition.getName() }, npcId, definition };
+      return namedNpcs.get(definition.getName())?.['Talk-to']?.(event)
+        ?? interactions['Talk-to'](event);
     },
     cleanup() {
       if (installed.variants) PluginManager.npcDialogueVariantHooks.splice(-installed.variants);
@@ -239,6 +255,20 @@ test('Below Ice Mountain covers every QH recruitment state and its last-member b
   p.items.set(I.COINS, 25000); assert.equal(condition('-zuNtr'), true); assert.equal(condition('Z_TXng'), false);
   p.items.clear(); assert.equal(condition('EX9T0U'), true); assert.equal(condition('L2PHG2'), false);
   p.items.set(I.ASGARNIAN_ALE, 1); assert.equal(condition('EX9T0U'), false); assert.equal(condition('L2PHG2'), true);
+});
+
+test('Atlas Talk-to dispatches its canonical training transcript', () => {
+  const w = talkWorld('below_ice_mountain'), p = w.player();
+  w.quest.setStage(p, 1);
+  p.setAttribute('quest.below_ice_mountain.checkal', 5);
+  w.interceptAction('_RwWTk');
+  w.choose('Yes.');
+
+  assert.equal(w.talk(p, N.ATLAS), true);
+  assert.ok(w.spoken.includes('What do you want, little man?'));
+  assert.ok(w.spoken.some((line) => line.replace(/\s+/g, ' ').includes('No price is too much for a good workout. Are you ready to start your training session?')));
+  assert.deepEqual(w.dispatchedActions, ['_RwWTk'], 'the canonical Yes branch dispatches the training-start action');
+  assert.equal(p.getAttribute('quest.below_ice_mountain.atlas-sessions'), undefined);
 });
 
 test('The Ides of Milk covers every QH stage branch and condition', () => {

@@ -1133,11 +1133,16 @@ export class MovementQueue {
         const direction = object.getFace();
 
         if (type === 10 || type === 11 || type === 22) {
-            // Multi-locs expose their real footprint/mask only after the player's
-            // varbits resolve the MORPH child; raw ids can carry the parent's size.
+            // The MORPH child supplies the displayed actions and the side-access mask.
+            // Collision builds solid rectangular locs (types 10/11) from the placed map
+            // object's definition (RegionManager.addObjectClipping), so the route must use
+            // that same base footprint; a smaller child (Ancient Grave 34602 is 4x2, child
+            // 33578 is 1x1) would put the reach rectangle inside the blocked footprint.
+            // Type 22 clips only its origin tile, so it keeps the resolved child size.
             const def = ObjectDefinition.forPlayer(id, this.player) ?? ObjectDefinition.forId(id);
-            const xLength = def.getSizeX();
-            const yLength = def.getSizeY();
+            const footprint = type === 22 ? def : (ObjectDefinition.forId(id) ?? def);
+            const xLength = footprint.getSizeX();
+            const yLength = footprint.getSizeY();
             const blockingMask = def.getBlockingMask() | blockAccessFlags;
 
             return {
@@ -1222,7 +1227,13 @@ export class MovementQueue {
             && (RegionManager.getClipping(destX, destY, z, area) & destWall) !== 0;
     }
 
-    public walkToEntity(entity: Mobile, runnable?: () => void, range = 1, ignoreProjectileClip = false) {
+    public walkToEntity(
+        entity: Mobile,
+        runnable?: () => void,
+        range = 1,
+        ignoreProjectileClip = false,
+        allowOverlappingTiles = false
+    ) {
         let mobility = this.getMobility();
         if (!mobility.canMove()) {
             mobility.sendMessage(this.player);
@@ -1249,20 +1260,29 @@ export class MovementQueue {
             return;
         }
 
+        if (!this.isInteractionTargetValid(entity)) {
+            this.reset();
+            return;
+        }
+
         this.reset();
 
         this.walkToReset();
 
-        const reached = () => range <= 1 ? PathFinder.reachedEntity(this.player, entity) :
-            this.isInteractionTargetValid(entity) && this.player.getLocation().isWithinDistance(entity.getLocation(), range)
-            && (ignoreProjectileClip || RegionManager.canProjectileAttack(this.player, this.player.getLocation(), entity.getLocation()));
+        const reached = () => (allowOverlappingTiles && this.overlapsEntity(entity)) || (
+            range <= 1
+                ? PathFinder.reachedEntity(this.player, entity)
+                : this.isInteractionTargetValid(entity) &&
+                  this.player.getLocation().isWithinDistance(entity.getLocation(), range) &&
+                  (ignoreProjectileClip || RegionManager.canProjectileAttack(this.player, this.player.getLocation(), entity.getLocation()))
+        );
         if (reached()) {
             this.player.setMobileInteraction(entity);
             runnable?.();
             return;
         }
 
-        PathFinder.calculateEntityRoute(this.player, entity);
+        PathFinder.calculateEntityRoute(this.player, entity, range);
         if (this.canInteractWithUnreachableNpc(entity)) {
             this.reset();
             this.player.setMobileInteraction(entity);
@@ -1320,7 +1340,7 @@ export class MovementQueue {
             }
             // A step the clipping map rejected invalidates the corridor wherever we stand.
             if (this.points.length <= 1 || this.wasRouteInvalidated()) {
-                PathFinder.calculateEntityRoute(this.player, entity);
+                PathFinder.calculateEntityRoute(this.player, entity, range);
             }
         };
         TaskManager.submit(task);
@@ -1354,11 +1374,20 @@ export class MovementQueue {
     }
 
     private isInteractionTargetValid(entity: Mobile): boolean {
-        return !!entity &&
-            entity.isRegistered() &&
-            entity.getHitpoints() > 0 &&
-            entity.getPrivateArea() === this.player.getPrivateArea() &&
-            entity.getLocation().getZ() === this.player.getLocation().getZ();
+        if (!entity || !entity.isRegistered() || entity.getHitpoints() <= 0 ||
+            entity.getPrivateArea() !== this.player.getPrivateArea() ||
+            entity.getLocation().getZ() !== this.player.getLocation().getZ()) return false;
+        const owner = entity.isNpc?.() ? (entity as NPC).getOwner?.() : null;
+        return !owner || owner === this.player;
+    }
+
+    private overlapsEntity(entity: Mobile): boolean {
+        const player = this.player.getLocation();
+        const target = entity.getLocation();
+        const playerSize = Math.max(1, this.player.getSize());
+        const targetSize = Math.max(1, entity.getSize());
+        return player.getX() < target.getX() + targetSize && player.getX() + playerSize > target.getX() &&
+            player.getY() < target.getY() + targetSize && player.getY() + playerSize > target.getY();
     }
 
     /** An NPC in the main world that a player aboard a boat can see and talk to from its root. */

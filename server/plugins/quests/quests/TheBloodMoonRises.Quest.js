@@ -3614,10 +3614,16 @@ module.exports = function registerTheBloodMoonRises(api) {
     const story = slepeStory(player);
     if (!story.monksRequested || story.monksCleared) return;
     player.setAttribute(SLEPE_STORY_ATTRIBUTE, { ...story, monksCleared: true });
-    cleanupPaterdomusBattle(player);
+    const ivan = battle.actors.find((actor) => actor?.getId?.() === NpcIdentifiers.IVAN_STROM_21);
+    battle.outroPending = true;
     syncSlepeNativeStage(player);
     player.sendMessage("The Zamorakian monks are defeated. Ivan is waiting upstairs in the temple.");
-    startTranscript(api, player, NpcIdentifiers.IVAN_STROM_4, PAGE, "the-truth-hurtz-upon-killing-the-monks-of-zamorak");
+    if (ivan) {
+      startTranscript(api, player, NpcIdentifiers.IVAN_STROM_4, PAGE,
+        "the-truth-hurtz-upon-killing-the-monks-of-zamorak", undefined, ivan);
+    } else {
+      cleanupPaterdomusBattle(player);
+    }
   }
 
   function readPaterdomusBook(event) {
@@ -6749,6 +6755,13 @@ module.exports = function registerTheBloodMoonRises(api) {
   function onSlepeDialogueLine(request) {
     const player = request?.player;
     if (!player || stage(player) !== STAGE.SLEPE) return;
+    if (isQuestLine(request, "the-truth-hurtz-upon-killing-the-monks-of-zamorak",
+      "Nice job, [player name]. Let's check upstairs.", "Ivan Strom")) {
+      request.after = () => {
+        if (paterdomusBattles.get(player)?.outroPending) cleanupPaterdomusBattle(player);
+      };
+      return;
+    }
     if (request.step?.player && request.text === "Sounds like a plan! Let's do it!") {
       request.after = () => player.setAttribute(SLEPE_STORY_ATTRIBUTE,
         { ...slepeStory(player), monksRequested: true });

@@ -90,6 +90,18 @@ module.exports = function registerRatcatchersQuest(api) {
 
   const VARP_RATCATCHERS = 607;
   const VARBIT_RATCATCHERS_STAGE = 1404; // "ratcatch_var", bits 0-7 of varp 607
+  const VARBIT_HOLE_IDS = [1406, 1407, 1408, 1409];
+  const VARBIT_CAT_KNOWS_DRILL = 1410;
+  const VARBIT_CAUGHT_RAT_IDS = [1424, 1425, 1426];
+  // Cache npc-spawns: the upstairs party rats QH targets, in QH order.
+  const MANSION_RAT_NW_NPC_ID = 6224;
+  const MANSION_RAT_SE_1_NPC_ID = 6226;
+  const MANSION_RAT_SE_2_NPC_ID = 6225;
+  const MANOR_UPPER_RAT_FLAGS = new Map([
+    [MANSION_RAT_NW_NPC_ID, 1 << 0], // (2832,5098,1), north-west room
+    [MANSION_RAT_SE_1_NPC_ID, 1 << 1], // (2858,5087,1), south-east room
+    [MANSION_RAT_SE_2_NPC_ID, 1 << 2], // (2861,5093,1), south-east room
+  ]);
 
   const STAGE_STARTED = 1;
   const STAGE_SISTERS_TASK = 2;
@@ -114,8 +126,44 @@ module.exports = function registerRatcatchersQuest(api) {
   const STAGE_RATS_CHARMED = 21;
   const STAGE_COMPLETE = 22;
 
+  // Durable stages are the plugin's dialogue aliases; the wire is the cache's
+  // "ratcatch_var" varbit 1404, whose values are Quest Helper's loadSteps keys
+  // (0, 5, ... 125) and 127 for the cache DB completion threshold (row 116,
+  // column 19). Extra helper keys (15/45/57/65/75) are single-action steps
+  // between durable stages, so this is deliberately not stage * 5.
+  const STAGE_VARBIT_VALUES = new Map([
+    [STAGE_STARTED, 5],
+    [STAGE_SISTERS_TASK, 10],
+    [STAGE_RATS_CAUGHT, 20],
+    [STAGE_JIMMY_TASK, 25],
+    [STAGE_AT_MANOR, 30],
+    [STAGE_MANOR_CLEARED, 35],
+    [STAGE_JIMMY_TOLD, 40],
+    [STAGE_JACK_TASK, 50],
+    [STAGE_HOLES_POISONED, 55],
+    [STAGE_POX_POISONED, 60],
+    [STAGE_HAS_ANTIPOISON, 70],
+    [STAGE_JACK_TOLD, 80],
+    [STAGE_KING_RAT_KILLED, 85],
+    [STAGE_JACK_TOLD_2, 90],
+    [STAGE_JOE_TASK, 95],
+    [STAGE_RATS_SMOKED, 100],
+    [STAGE_JOE_TOLD, 105],
+    [STAGE_FELKRASH_TASK, 110],
+    [STAGE_STORY_HEARD, 115],
+    [STAGE_HAS_CHARM, 120],
+    [STAGE_RATS_CHARMED, 125],
+    [STAGE_COMPLETE, 127],
+  ]);
+
+  const stageVarbitValue = (stage, player) => {
+    if (stage === STAGE_SISTERS_TASK && player && ratsCaught(player) >= RATS_TO_CATCH) return 15;
+    return STAGE_VARBIT_VALUES.get(stage) ?? 0;
+  };
+
   const RATS_ATTRIBUTE = "quest.ratcatchers.rats";
   const MANOR_ATTRIBUTE = "quest.ratcatchers.manor";
+  const MANOR_UPPER_RATS_ATTRIBUTE = "ratcatchers:upper-floor-rat-flags";
   const HOLES_ATTRIBUTE = "quest.ratcatchers.holes";
   const SMOKE_ATTRIBUTE = "quest.ratcatchers.smoke";
 
@@ -249,6 +297,29 @@ module.exports = function registerRatcatchersQuest(api) {
     return request.complete === true;
   }
 
+  function questStarted(player, key) {
+    const request = { player, key, started: null };
+    api.emitCustomEvent("quest:is-started", request);
+    return request.started === true;
+  }
+
+  function sendAuxiliaryVarbit(player, id, value) {
+    player.getPacketSender().sendVarbit(id, value);
+  }
+
+  function syncQuestHelperProgress({ player }) {
+    if (!player) return;
+    const holes = holesMask(player);
+    for (const [index, bit] of [...WAREHOUSE_HOLE_BITS.values()].entries()) {
+      sendAuxiliaryVarbit(player, VARBIT_HOLE_IDS[index], (holes & bit) !== 0 ? 1 : 0);
+    }
+    sendAuxiliaryVarbit(player, VARBIT_CAT_KNOWS_DRILL, (smokeMask(player) & SMOKE_FIRST_BIT) !== 0 ? 1 : 0);
+    const flags = manorUpperRatFlags(player);
+    for (let index = 0; index < VARBIT_CAUGHT_RAT_IDS.length; index++) {
+      sendAuxiliaryVarbit(player, VARBIT_CAUGHT_RAT_IDS[index], (flags & (1 << index)) !== 0 ? 1 : 0);
+    }
+  }
+
   function locationXY(location) {
     if (!location) return null;
     const x = typeof location.getX === "function" ? location.getX() : location.x;
@@ -271,12 +342,14 @@ module.exports = function registerRatcatchersQuest(api) {
     if (value === STAGE_STARTED || value === 0) {
       player.setAttribute(RATS_ATTRIBUTE, 0);
       player.setAttribute(MANOR_ATTRIBUTE, 0);
+      player.setAttribute(MANOR_UPPER_RATS_ATTRIBUTE, 0);
       player.setAttribute(HOLES_ATTRIBUTE, 0);
       player.setAttribute(SMOKE_ATTRIBUTE, 0);
     } else if (value === STAGE_SISTERS_TASK) {
       player.setAttribute(RATS_ATTRIBUTE, 0);
     } else if (value === STAGE_AT_MANOR) {
       player.setAttribute(MANOR_ATTRIBUTE, 0);
+      player.setAttribute(MANOR_UPPER_RATS_ATTRIBUTE, 0);
     } else if (value === STAGE_JACK_TASK) {
       player.setAttribute(HOLES_ATTRIBUTE, 0);
     } else if (value === STAGE_JOE_TASK) {
@@ -287,6 +360,24 @@ module.exports = function registerRatcatchersQuest(api) {
 
   const ratsCaught = (player) => Number(player.getAttribute(RATS_ATTRIBUTE)) || 0;
   const manorRatsCaught = (player) => Number(player.getAttribute(MANOR_ATTRIBUTE)) || 0;
+  const manorUpperRatFlags = (player) => Number(player.getAttribute(MANOR_UPPER_RATS_ATTRIBUTE)) || 0;
+
+  function hasInventorySpace(inventory) {
+    return typeof inventory.getFreeSlots === "function"
+      ? inventory.getFreeSlots() > 0
+      : !inventory.isFull();
+  }
+
+  function grantRatPole(player) {
+    const inventory = player.getInventory();
+    if (held(player, RAT_POLE_ITEM_ID)) return true;
+    if (!hasInventorySpace(inventory)) {
+      inventory.full?.();
+      return false;
+    }
+      inventory.adds(RAT_POLE_ITEM_ID, 1);
+      return held(player, RAT_POLE_ITEM_ID);
+  }
 
   function wearingCatspeakAmulet(player) {
     const amulet = player.getEquipment().get(Equipment.AMULET_SLOT);
@@ -380,6 +471,12 @@ module.exports = function registerRatcatchersQuest(api) {
     if (!player || !quest) return null;
     const stage = quest.getStage(player);
     if (stage >= STAGE_COMPLETE) {
+      if (SISTER_NPC_IDS.has(npcId) && !held(player, RAT_POLE_ITEM_ID)) {
+        return {
+          page: npcId === NpcIdentifiers.GRIMESQUIT ? "Grimesquit" : "Phingspet",
+          variant: "standard-dialogue-after-the-quest-without-a-rat-pole",
+        };
+      }
       // Each NPC's own page carries a real post-quest variant; the id index's
       // default otherwise falls back to their pre-quest standard dialogue.
       if (npcId === NpcIdentifiers.GRIMESQUIT) {
@@ -637,20 +734,15 @@ module.exports = function registerRatcatchersQuest(api) {
     if (!GERTRUDE_NPC_IDS.has(npcId) || !player || !quest) return;
     const action = definition?.getActions?.()?.[event.clickType - 1];
     if (action !== "Talk-to") return;
-    if (quest.isComplete(player)) return;
+    if (quest.getStage(player) !== 0) return;
     if (!questComplete(player, GERTRUDES_CAT_QUEST_KEY)) return;
-    const stage = quest.getStage(player);
-    if (stage === 0 && !questComplete(player, ICTHLARINS_QUEST_KEY)) return;
+    if (!questComplete(player, ICTHLARINS_QUEST_KEY)) return;
+    if (!questStarted(player, "giant_dwarf")) return;
+    const tailStage = { player, key: "a_tail_of_two_cats", stage: null };
+    api.emitCustomEvent("quest:get-stage", tailStage);
+    if (tailStage.stage === 3 || tailStage.stage === 4) return;
     event.handled = true;
-    startTranscript(
-      api,
-      player,
-      npcId,
-      PAGE,
-      stage === 0
-        ? "talking-to-gertrude"
-        : "talking-to-gertrude-talking-to-gertrude-again-after-starting-the-quest"
-    );
+    startTranscript(api, player, npcId, PAGE, "talking-to-gertrude");
   }
 
   function handleAction(event) {
@@ -662,7 +754,7 @@ module.exports = function registerRatcatchersQuest(api) {
         return;
       case RAT_POLE_ACTION_ID:
         if (quest.getStage(player) < STAGE_RATS_CAUGHT) {
-          if (!held(player, RAT_POLE_ITEM_ID)) player.getInventory().adds(RAT_POLE_ITEM_ID, 1);
+          if (!grantRatPole(player)) return;
           setStage(player, STAGE_RATS_CAUGHT);
         }
         return;
@@ -762,6 +854,23 @@ module.exports = function registerRatcatchersQuest(api) {
     const { player, npcId, text } = event;
     if (!player || !quest || typeof text !== "string") return;
     const stage = quest.getStage(player);
+    if (
+      stage >= STAGE_COMPLETE &&
+      SISTER_NPC_IDS.has(npcId) &&
+      text === "Here you go." &&
+      !held(player, RAT_POLE_ITEM_ID)
+    ) {
+      grantRatPole(player);
+      return;
+    }
+    if (
+      npcId === JIMMY_NPC_ID &&
+      (stage === STAGE_JIMMY_TASK || stage === STAGE_AT_MANOR) &&
+      text.includes("Here you go, don't lose this one.")
+    ) {
+      if (!held(player, DIRECTIONS_ITEM_ID)) player.getInventory().adds(DIRECTIONS_ITEM_ID, 1);
+      return;
+    }
     if (npcId === JIMMY_NPC_ID && stage === STAGE_MANOR_CLEARED && text.includes("tell him to look out for you")) {
       setStage(player, STAGE_JIMMY_TOLD);
       return;
@@ -905,7 +1014,11 @@ module.exports = function registerRatcatchersQuest(api) {
         event.handled = true;
         player.getInventory().deleteNumber(POISONED_CHEESE_ITEM_ID, 1);
         const bit = WAREHOUSE_HOLE_BITS.get(objectId);
-        if (bit !== undefined) player.setAttribute(HOLES_ATTRIBUTE, holesMask(player) | bit);
+        if (bit !== undefined) {
+          player.setAttribute(HOLES_ATTRIBUTE, holesMask(player) | bit);
+          const index = Math.log2(bit);
+          sendAuxiliaryVarbit(player, VARBIT_HOLE_IDS[index], 1);
+        }
         if (allHolesPoisoned(player)) setStage(player, STAGE_HOLES_POISONED);
         startTranscript(api, player, JACK_NPC_ID, PAGE, "hooknosed-jack-poisoning-the-rat-holes");
         return;
@@ -953,6 +1066,7 @@ module.exports = function registerRatcatchersQuest(api) {
     const mask = smokeMask(player);
     if ((mask & SMOKE_FIRST_BIT) === 0) {
       player.setAttribute(SMOKE_ATTRIBUTE, mask | SMOKE_FIRST_BIT);
+      sendAuxiliaryVarbit(player, VARBIT_CAT_KNOWS_DRILL, 1);
       startTranscript(
         api,
         player,
@@ -963,24 +1077,19 @@ module.exports = function registerRatcatchersQuest(api) {
       return;
     }
     if ((mask & SMOKE_SECOND_BIT) === 0) {
+      // Quest Helper's second pot use (with RATCATCH_CATKNOWSDRILL set) is the
+      // successful ambush and advances the quest; the three-use sequence left
+      // the player stuck on Joe's task after the helper's last step.
       player.setAttribute(SMOKE_ATTRIBUTE, mask | SMOKE_SECOND_BIT);
+      setStage(player, STAGE_RATS_SMOKED);
       startTranscript(
         api,
         player,
-        JOE_NPC_ID,
+        catNpcId(player),
         PAGE,
-        "smokin-joe-talking-to-joe-again-before-smoking-out-the-rats-using-a-smouldering-pot-on-the-other-side-of-the-rat-hole"
+        "smokin-joe-talking-to-joe-again-before-smoking-out-the-rats-smoking-out-the-rat-hole-again"
       );
-      return;
     }
-    setStage(player, STAGE_RATS_SMOKED);
-    startTranscript(
-      api,
-      player,
-      catNpcId(player),
-      PAGE,
-      "smokin-joe-talking-to-joe-again-before-smoking-out-the-rats-smoking-out-the-rat-hole-again"
-    );
   }
 
   function handleItemOnObject(event) {
@@ -1033,6 +1142,7 @@ module.exports = function registerRatcatchersQuest(api) {
       const caught = ratsCaught(player) + 1;
       player.setAttribute(RATS_ATTRIBUTE, caught);
       if (caught >= RATS_TO_CATCH) {
+        sendAuxiliaryVarbit(player, VARBIT_RATCATCHERS_STAGE, 15);
         startTranscript(api, player, catNpcId(player), PAGE, "grimesquit-phingspet-upon-catching-the-8th-rat");
       }
       return;
@@ -1040,6 +1150,12 @@ module.exports = function registerRatcatchersQuest(api) {
     if (stage === STAGE_AT_MANOR && inZone(MANSION_ZONE, location)) {
       const caught = manorRatsCaught(player) + 1;
       player.setAttribute(MANOR_ATTRIBUTE, caught);
+      const z = location?.getZ?.() ?? location?.z;
+      const flag = z === 1 ? MANOR_UPPER_RAT_FLAGS.get(event.npcId) : undefined;
+      if (flag !== undefined && (manorUpperRatFlags(player) & flag) === 0) {
+        player.setAttribute(MANOR_UPPER_RATS_ATTRIBUTE, manorUpperRatFlags(player) | flag);
+        sendAuxiliaryVarbit(player, VARBIT_CAUGHT_RAT_IDS[Math.log2(flag)], 1);
+      }
       if (caught >= MANOR_RATS_TO_CATCH) {
         setStage(player, STAGE_MANOR_CLEARED);
         startTranscript(api, player, catNpcId(player), PAGE, "jimmy-dazzler-s-task-at-the-manor-after-catching-the-final-rat");
@@ -1209,16 +1325,18 @@ module.exports = function registerRatcatchersQuest(api) {
     player.getSkillManager().addExperiences(Skill.THIEVING, 4500);
   }
 
-  api.persistAttribute(RATS_ATTRIBUTE);
-  api.persistAttribute(MANOR_ATTRIBUTE);
-  api.persistAttribute(HOLES_ATTRIBUTE);
-  api.persistAttribute(SMOKE_ATTRIBUTE);
+  api.persistAttribute(RATS_ATTRIBUTE, 0);
+  api.persistAttribute(MANOR_ATTRIBUTE, 0);
+  api.persistAttribute(MANOR_UPPER_RATS_ATTRIBUTE, 0);
+  api.persistAttribute(HOLES_ATTRIBUTE, 0);
+  api.persistAttribute(SMOKE_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "ratcatchers",
     name: "Ratcatchers",
     varpId: VARP_RATCATCHERS,
     varbitId: VARBIT_RATCATCHERS_STAGE,
+    varbitValue: stageVarbitValue,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
@@ -1239,6 +1357,7 @@ module.exports = function registerRatcatchersQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("player:bootstrap-complete", syncQuestHelperProgress);
   api.onNpcInteraction(handleGertrudeInteraction);
   api.onItemAction("Directions", { Read: handleReadDirections });
   api.onItemAction("Snake charm", { Play: handleSnakeCharmPlay });

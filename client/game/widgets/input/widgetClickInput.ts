@@ -62,7 +62,7 @@ export function processWidgetClickInput(
                 const hasInventoryItem =
                     hitWidgetGroupId === 149 &&
                     typeof (w as any).itemId === "number" &&
-                    (w as any).itemId > 0;
+                    (w as any).itemId >= 0;
                 // Check for actual handlers, not just empty arrays
                 // Empty arrays are truthy but shouldn't count as having handlers.
                 // OSRS lists an op only when it has text, and a left-click is the top menu

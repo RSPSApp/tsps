@@ -26,9 +26,8 @@
  * objloc 1390) is not simulated, completing only plays the scroll; the key's
  * post-quest treasure digs (The Enchanted Key miniquest) are not implemented;
  * the master-clue condition is answered false; Dron's "North West side of town"
- * wrong answer is a transcript "unavailable" marker and closes silently, and his
- * "kittens" menu is reassembled from the export's split "Tea" / "Lunch" menus so
- * the correct answer is reachable; the dig spot tolerates one tile around
+ * wrong answer is a transcript "unavailable" marker and closes silently;
+ * the dig spot tolerates one tile around
  * (2442,3139); King Lathas has no npc-spawns.json entry, so an owner-only copy is
  * spawned in the Ardougne Castle throne room while the player has business with
  * him; the Droalak/Melina variants are replayed with their conditions inlined
@@ -339,50 +338,11 @@ module.exports = function registerMakingHistoryQuest(api) {
     });
   }
 
-  /**
-   * The transcript export splits Dron's "When are kittens best devoured?" menu
-   * into a one-option "Tea" menu, the PgE_Go wrong-answer action, an end, and a
-   * one-option "Lunch" menu, so the correct answer is unreachable. Reassemble
-   * the two options into one menu; both option texts and branches are the wiki's.
-   */
-  function repairDronQuiz(steps) {
-    if (!Array.isArray(steps)) return [];
-    const out = [];
-    for (let index = 0; index < steps.length; index++) {
-      const step = steps[index];
-      if (
-        step?.type === "choice" &&
-        step.options?.length === 1 &&
-        step.options[0].text === "Tea" &&
-        steps[index + 1]?.type === "action" &&
-        steps[index + 1].id === "PgE_Go" &&
-        steps[index + 2]?.type === "end" &&
-        steps[index + 3]?.type === "choice" &&
-        steps[index + 3].options?.length === 1 &&
-        steps[index + 3].options[0].text === "Lunch"
-      ) {
-        const lunch = steps[index + 3];
-        const wrongTea = { ...step.options[0], steps: [steps[index + 1]] };
-        out.push({ ...lunch, options: [...lunch.options, wrongTea] });
-        index += 3;
-        continue;
-      }
-      const copy = { ...step };
-      if (Array.isArray(copy.steps)) copy.steps = repairDronQuiz(copy.steps);
-      if (Array.isArray(copy.options)) {
-        copy.options = copy.options.map((option) => ({ ...option, steps: repairDronQuiz(option.steps) }));
-      }
-      out.push(copy);
-    }
-    return out;
-  }
-
   function playDronQuiz(player) {
     api.emitCustomEvent("npc-dialogue:start", {
       player,
       npcId: DRON_NPC_ID,
       variant: "talking-to-dron-talking-to-dron-again",
-      select: repairDronQuiz,
     });
   }
 

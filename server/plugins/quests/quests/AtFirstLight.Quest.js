@@ -23,8 +23,8 @@
  */
 module.exports = function registerAtFirstLightQuest(api) {
   const {
-    Animation, CountdownTask, DialogueChainBuilder, ItemStatementDialogue, ObjectDefinition, Skill,
-    ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, TaskManager,
+    Animation, CountdownTask, DialogueChainBuilder, Equipment, ItemStatementDialogue, ObjectDefinition,
+    Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
@@ -79,12 +79,18 @@ module.exports = function registerAtFirstLightQuest(api) {
   const TRIMMED_FUR_ITEM_ID = ItemIdentifiers.TRIMMED_FUR; // 28982
   const FOXS_REPORT_ITEM_ID = ItemIdentifiers.FOXS_REPORT; // 28983
   const JERBOA_TAIL_ITEM_ID = ItemIdentifiers.JERBOA_TAIL; // 29166
-  const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER; // 2347
+  const HAMMER_ITEM_IDS = [
+    ItemIdentifiers.HAMMER, // 2347
+    ItemIdentifiers.IMCANDO_HAMMER, // 25644
+    ItemIdentifiers.IMCANDO_HAMMER_OFF_HAND_, // 29775
+  ];
   const NEEDLE_ITEM_ID = ItemIdentifiers.NEEDLE; // 1733
   const COSTUME_NEEDLE_ITEM_ID = ItemIdentifiers.COSTUME_NEEDLE; // 29920
   const CATSPEAK_AMULET_ITEM_IDS = [
     ItemIdentifiers.CATSPEAK_AMULET, // 4677
     ItemIdentifiers.CATSPEAK_AMULET_E_, // 6544
+    ItemIdentifiers.CATSPEAK_AMULET_2, // 17002
+    ItemIdentifiers.CATSPEAK_AMULET_E__2, // 17040
   ];
 
   // Loc 53011 "Cat bed" (Check), 53012 the no-op sibling at stage 11+.
@@ -144,6 +150,8 @@ module.exports = function registerAtFirstLightQuest(api) {
   let quest;
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
+  const hasTool = (player, itemIds) => itemIds.some((itemId) => held(player, itemId)) ||
+    [Equipment.WEAPON_SLOT, Equipment.SHIELD_SLOT].some((slot) => itemIds.includes(player.getEquipment().get(slot)?.getId?.()));
   const inventoryFull = (player) => player.getInventory().isFull();
   const holdsMouse = (player) => held(player, TOY_MOUSE_ITEM_ID) || held(player, WOUND_TOY_MOUSE_ITEM_ID);
 
@@ -193,7 +201,13 @@ module.exports = function registerAtFirstLightQuest(api) {
   }
 
   function hasCatspeakAmulet(player) {
-    return CATSPEAK_AMULET_ITEM_IDS.some((itemId) => held(player, itemId));
+    if (CATSPEAK_AMULET_ITEM_IDS.some((itemId) => held(player, itemId))) return true;
+    const amulet = player.getEquipment().get(Equipment.AMULET_SLOT);
+    return CATSPEAK_AMULET_ITEM_IDS.includes(amulet?.getId?.());
+  }
+
+  function understandsCats(player) {
+    return hasCatspeakAmulet(player) || isQuestComplete(player, "dragon_slayer_ii");
   }
 
   function canRepairBed(player) {
@@ -283,7 +297,7 @@ module.exports = function registerAtFirstLightQuest(api) {
   function selectFoxVariant(player) {
     const stage = stageOf(player);
     if (stage >= STAGE_COMPLETE) return null;
-    if (sub(player, "report") === 1 || stage >= STAGE_BED_REPAIRED) return "finishing-up-talking-to-guild-hunter-fox-after-turning-in-the-report";
+    if (sub(player, "report") === 1) return "finishing-up-talking-to-guild-hunter-fox-after-turning-in-the-report";
     if (stage >= STAGE_REPORT) return "fox-tracking-reading-fox-s-report-talking-to-fox-again";
     if (stage >= STAGE_TRIMMED_FUR) return "fox-tracking-talking-to-fox";
     if (stage >= STAGE_SAMPLE_GIVEN) return "fox-tracking-talking-to-fox-after-giving-atza-the-material";
@@ -328,11 +342,15 @@ module.exports = function registerAtFirstLightQuest(api) {
       case "vL-AZN": // lost the toy mouse
         return sub(player, "mouseTaken") === 1 && !holdsMouse(player) && sub(player, "catDistract") === 0;
       case "SdFoGP": // no catspeak amulet or Dragon Slayer II
-        return !hasCatspeakAmulet(player);
+        return !understandsCats(player);
       case "xAmw_A": // has a toy mouse (wound)
         return held(player, WOUND_TOY_MOUSE_ITEM_ID) || sub(player, "catDistract") === 1;
+      case "c-avW4": // does not have a smooth leaf
+        return !held(player, SMOOTH_LEAF_ITEM_ID);
       case "aXen1A": // already has a smooth leaf
         return held(player, SMOOTH_LEAF_ITEM_ID);
+      case "khCtCH": // does not have a sticky leaf
+        return !held(player, STICKY_LEAF_ITEM_ID);
       case "DM1ufw": // already has a sticky leaf
         return held(player, STICKY_LEAF_ITEM_ID);
       case "W8dord": // still has the fur sample, or full and not yet received
@@ -393,7 +411,10 @@ module.exports = function registerAtFirstLightQuest(api) {
       if (ASSEMBLE_LINES.has(text)) event.before = () => later(player, 1, () => player.performAnimation(new Animation(ASSEMBLE_ANIMATION, 10)));
       at(ASSEMBLED_LINE, () => setSub(player, "housetrapped", 2));
     }
-    if (npcId === APATURA_NPC_ID && stage === STAGE_BED_REPAIRED && text === APATURA_DONE_LINE) event.after = () => quest.complete(player);
+    if (npcId === APATURA_NPC_ID && stage === STAGE_BED_REPAIRED && text === APATURA_DONE_LINE) event.after = () => {
+      quest.complete(player);
+      syncFox(player);
+    };
   }
 
   function handleDialogueAction(event) {
@@ -471,10 +492,22 @@ module.exports = function registerAtFirstLightQuest(api) {
     } else if (stage < STAGE_SAMPLE) {
       startTranscript(api, player, ATZA_NPC_ID, "Atza", "standard-dialogue-before-at-first-light");
     } else if (stage >= STAGE_TRIMMED_FUR) {
-      startTranscript(api, player, ATZA_NPC_ID, PAGE, held(player, TRIMMED_FUR_ITEM_ID)
-        ? "fox-tracking-talking-to-atza-after-setting-up-the-equipment-talking-to-atza-again"
-        : "fox-tracking-talking-to-atza-after-setting-up-the-equipment");
+      // The "talking to Atza again" variant carries the imported guards: t0t5aX only
+      // replaces the trimmed fur while the bed is unrepaired and zL_kax points the
+      // player back to Fox. The unconditional hand-out (KG819o) would give a second
+      // trimmed fur once the bed repair has eaten the first one.
+      startTranscript(api, player, ATZA_NPC_ID, PAGE, "fox-tracking-talking-to-atza-after-setting-up-the-equipment-talking-to-atza-again");
     } else if (stage >= STAGE_SAMPLE_GIVEN) {
+      const trapped = sub(player, "housetrapped");
+      if (trapped === 2) {
+        // The pile was assembled, but the trimmed fur hand-out never reached the
+        // player (the conversation was cut short). Atza still has it to give.
+        startTranscript(api, player, ATZA_NPC_ID, PAGE, "fox-tracking-talking-to-atza-after-setting-up-the-equipment");
+        return;
+      }
+      // The sample is in Atza's hands, so she has asked for the pile: the pile object
+      // only opens once housetrapped is 1, which the interrupted hand-in never set.
+      if (trapped === 0) setSub(player, "housetrapped", 1);
       startTranscript(api, player, ATZA_NPC_ID, PAGE, "fox-tracking-talking-to-atza-after-she-asks-to-set-up-the-equipment");
     } else {
       startTranscript(api, player, ATZA_NPC_ID, PAGE, "fox-tracking-talking-to-atza");
@@ -489,7 +522,8 @@ module.exports = function registerAtFirstLightQuest(api) {
       startTranscript(api, player, KIKO_NPC_ID, PAGE, "a-missing-fox-petting-kiko");
       return;
     }
-    startTranscript(api, player, KIKO_NPC_ID, "Guild Hunter Kiko", "petting-kiko-without-a-catspeak-amulet");
+    startTranscript(api, player, KIKO_NPC_ID, "Guild Hunter Kiko",
+      understandsCats(player) ? "petting-kiko-with-a-catspeak-amulet" : "petting-kiko-without-a-catspeak-amulet");
   }
 
   /** Hunter.plugin.js would otherwise answer with rumours; claim the quest's stages only. */
@@ -554,7 +588,7 @@ module.exports = function registerAtFirstLightQuest(api) {
   /** The pile: worked on while Atza chats (two ticks before her first line), as captured. */
   function setUpEquipment(player) {
     if (stageOf(player) !== STAGE_SAMPLE_GIVEN || sub(player, "housetrapped") !== 1) return;
-    if (!held(player, HAMMER_ITEM_ID)) {
+    if (!hasTool(player, HAMMER_ITEM_IDS)) {
       startTranscript(api, player, ATZA_NPC_ID, PAGE, "fox-tracking-setting-up-the-pile-of-equipment-without-a-hammer");
       return;
     }

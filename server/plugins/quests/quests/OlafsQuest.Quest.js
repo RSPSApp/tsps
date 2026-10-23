@@ -4,27 +4,40 @@
  * The words come from the "Olaf's Quest" transcript page; this plugin supplies the
  * Olaf/Ingrid/Volf/Ulfric variant selectors, the prose-condition answers for the
  * present deliveries, the start hook, the windswept-tree chop and dig, the damp
- * planks/embers fire, the picture-wall lever puzzle, the walkway barrel repairs,
- * the rusty gate, the chest/Ulfric encounter and the completion reward.
+ * planks/embers fire, the cache 253 picture-wall puzzle, the cache 252 rusty-gate
+ * keyhole, the walkway barrel repairs, the chest/Ulfric encounter and the
+ * completion reward.
  *
  * Stages (varbit 3534 "olaf_quest_var", varp 994 bits 0-10; cache lookup-gameval
  * and the OSRS Wiki Quest Helper stage keys): 10 asked for logs, 20 logs given /
  * delivering carvings, 30 both presents delivered, 40 damp planks given, 50 fire
  * lit, 60 Sven's map given, 70 inside the Brine Rat Cavern, 80 complete.
- * Quest Helper maps steps 10/20/30/40/50/60/70 only; 80 is the inferred completion
- * value. Sibling bits live in varps 995/996 (varbits 3535-3549), which this plugin
+ * Quest Helper maps steps 10/20/30/40/50/60/70; the current cache completes at 80.
+ * Sibling bits live in varps 995/996 (varbits 3535-3549), which this plugin
  * writes directly: 3535/3536 (carving deliveries), 3537 (fire multi-loc: 1 embers,
- * 0 fire), 3539 (Ulfric killed), 3547/3548 (walkway sections repaired).
+ * 0 fire), 3539 (Ulfric killed), 3541-3544 (the four skull disks), 3547/3548
+ * (walkway sections repaired).
  *
  * Source: https://oldschool.runescape.wiki/w/Olaf%27s_Quest and its quick guide.
  * Rewards per the wiki: 1 Quest point, 12,000 Defence XP, 20,000 coins, 4 cut
  * rubies and a piece of parchment (11036).
  *
- * Gaps / approximations:
- * - the picture-wall and gate key-shape interfaces (cache widgets 252/253) are not
- *   implemented; the wall is solved through a chatbox lever sequence holding the
- *   wiki's East-North-West-South-Bottom order (Misthalin Mystery precedent) and any
- *   skeleton key opens the gate;
+ * Picture wall (cache 253): the four disk models are re-angled with cache script
+ * 233 (if_setmodel + if_setmodelangle) and the four lever components 8-11 plus the
+ * confirm component 12 are dispatched as real interface buttons. The wiki order
+ * right/up/left/down solves the initial state right=3, top=2, left=1, bottom=2
+ * with one +1 turn per affected disk (4 = solved, wrapping 4 -> 1). That initial
+ * state is also the one QH's PaintingWall solver walks from this state; it is
+ * derived from the wiki controls, not a capture. Disk state is stored in the
+ * persisted olafs-quest:wall attribute and replayed on login.
+ *
+ * Gate (cache 252): Open or use-key shows the five cache keyhole buttons (the
+ * button models are the matching key item models, because the cache leaves the
+ * keyhole models unset). The key used on the gate is the only accepted shape; the
+ * matching key is consumed, the gate varbit 3545 is set, and the player crosses.
+ * Closing and reopening keeps the key and permits a retry.
+ *
+ * Remaining approximations:
  * - the wall and gate are not object-swapped: after solving, searching the wall and
  *   opening the gate moves the player through, Clock Tower style;
  * - the slippery bridge fall chance is not rolled; the two walkway repair hotspots
@@ -104,12 +117,20 @@ module.exports = function registerOlafsQuestQuest(api) {
   const SVENS_LAST_MAP_ITEM_ID = ItemIdentifiers.SVENS_LAST_MAP; // 11034
   const WINDSWEPT_LOGS_ITEM_ID = ItemIdentifiers.WINDSWEPT_LOGS; // 11035
   const PARCHMENT_ITEM_ID = ItemIdentifiers.PARCHMENT_2; // 11036
+  // Cache names: olaf2_gate_key_1..5. The wiki names the shapes cross, square,
+  // triangle, hexagon and star; the interface's fourth lock component is named
+  // circle in the cache (it is the same fourth shape slot).
+  const GATE_KEY_CROSS_ITEM_ID = ItemIdentifiers.KEY_12; // 11039, cross
+  const GATE_KEY_SQUARE_ITEM_ID = ItemIdentifiers.KEY_13; // 11040, square
+  const GATE_KEY_TRIANGLE_ITEM_ID = ItemIdentifiers.KEY_14; // 11041, triangle
+  const GATE_KEY_CIRCLE_ITEM_ID = ItemIdentifiers.KEY_15; // 11042, hexagon/circle lock
+  const GATE_KEY_STAR_ITEM_ID = ItemIdentifiers.KEY_16; // 11043, star
   const GATE_KEY_ITEM_IDS = [
-    ItemIdentifiers.KEY_12, // 11039
-    ItemIdentifiers.KEY_13, // 11040
-    ItemIdentifiers.KEY_14, // 11041
-    ItemIdentifiers.KEY_15, // 11042
-    ItemIdentifiers.KEY_16, // 11043
+    GATE_KEY_CROSS_ITEM_ID,
+    GATE_KEY_SQUARE_ITEM_ID,
+    GATE_KEY_TRIANGLE_ITEM_ID,
+    GATE_KEY_CIRCLE_ITEM_ID,
+    GATE_KEY_STAR_ITEM_ID,
   ];
   const ROTTEN_BARREL_ITEM_ID = ItemIdentifiers.ROTTEN_BARREL; // 11044
   const ROTTEN_BARREL_INV_ITEM_ID = ItemIdentifiers.ROTTEN_BARREL_2; // 11045
@@ -129,11 +150,66 @@ module.exports = function registerOlafsQuestQuest(api) {
   const OLAF_FIRE_VARBIT = 3537; // varp 995 bits 0-1: 1 embers, 0 fire
   const OLAF_KILLED_ULFRIC_VARBIT = 3539; // varp 995 bit 15
   const OLAF_TREASURE_VARBIT = 3540; // varp 995 bit 16
+  const OLAF_RIGHT_DISK_VARBIT = 3541; // olaf2_gate_disk_1, varp 995 bits 17-19
+  const OLAF_BOTTOM_DISK_VARBIT = 3542; // olaf2_gate_disk_2, varp 995 bits 20-22
+  const OLAF_LEFT_DISK_VARBIT = 3543; // olaf2_gate_disk_3, varp 995 bits 23-25
+  const OLAF_TOP_DISK_VARBIT = 3544; // olaf2_gate_disk_4, varp 995 bits 26-28
   const OLAF_GATE_COMPLETED_VARBIT = 3545; // varp 996 bit 1
   const OLAF_WALKWAY_1_VARBIT = 3547; // varp 996 bit 3
   const OLAF_WALKWAY_2_VARBIT = 3548; // varp 996 bit 4
 
-  // Stage values (Quest Helper step keys 10..70; completion inferred at 80).
+  // Cache interfaces 252 (olaf2_lock_gate) and 253 (olaf2_skull_puzzle).
+  const OLAF_GATE_INTERFACE_ID = 252;
+  const OLAF_WALL_INTERFACE_ID = 253;
+  const OLAF_GATE_KEY_COMPONENTS = [8, 14]; // olaf2_dummy_key / olaf_key_dummy
+  // Component names from the cache: square/cross/triangle/circle/star lock buttons.
+  const GATE_KEYHOLES = [
+    { component: 9, itemId: GATE_KEY_SQUARE_ITEM_ID },
+    { component: 10, itemId: GATE_KEY_CROSS_ITEM_ID },
+    { component: 11, itemId: GATE_KEY_TRIANGLE_ITEM_ID },
+    { component: 12, itemId: GATE_KEY_CIRCLE_ITEM_ID },
+    { component: 13, itemId: GATE_KEY_STAR_ITEM_ID },
+  ];
+  const GATE_KEYHOLE_BUTTON_UIDS = GATE_KEYHOLES.map(
+    (keyhole) => (OLAF_GATE_INTERFACE_ID << 16) | keyhole.component
+  );
+
+  // The four skull disks. value 4 is solved (the cache's zero-angle model); each
+  // lever rotates its pair +1, wrapping 4 -> 1, which is the wiki's one-step turn.
+  const WALL_DISKS = [
+    { key: "right", component: 4, modelId: 24136 },
+    { key: "top", component: 5, modelId: 24138 },
+    { key: "left", component: 6, modelId: 24135 },
+    { key: "bottom", component: 7, modelId: 24134 },
+  ];
+  // Cache component names: lever_right=8, lever_top=9, lever_left=10,
+  // lever_bottom=11, lever_confirm=12.
+  const WALL_LEVERS = {
+    8: ["left", "right"], // right lever rotates the left and right circles
+    9: ["top", "left"], // top lever rotates the top and left circles
+    10: ["left", "bottom"], // left lever rotates the left and bottom circles
+    11: ["top", "bottom"], // bottom lever rotates the top and bottom circles
+  };
+  const WALL_CONFIRM_COMPONENT = 12;
+  const WALL_PUZZLE_BUTTON_UIDS = [8, 9, 10, 11, 12].map(
+    (component) => (OLAF_WALL_INTERFACE_ID << 16) | component
+  );
+  // The wiki order right, up, left, down solves the unique initial state below:
+  // right=3, top=2, left=1, bottom=2, each lever +1 wrapping 4 -> 1.
+  const WALL_INITIAL = { right: 3, bottom: 2, left: 1, top: 2 };
+  const WALL_INITIAL_PACKED =
+    (WALL_INITIAL.right & 7) |
+    ((WALL_INITIAL.bottom & 7) << 3) |
+    ((WALL_INITIAL.left & 7) << 6) |
+    ((WALL_INITIAL.top & 7) << 9);
+  const WALL_ACTION_FLAG = 1 << 1; // Op1: Pull/Open/Confirm, matching the cache flags
+  const WALL_SET_MODEL_SCRIPT_ID = 233; // cache script: if_setmodel + if_setmodelangle + if_setmodelanim
+  const WALL_LEVER_ANIMATION_ID = 6125; // cache sequence olaf2_skull_lever
+  const WALL_MODEL_TILT = 512; // cache components' rotationX
+  const WALL_MODEL_SPIN_STEP = 512; // one quarter turn
+  const WALL_MODEL_ZOOM = 420; // cache disk component zoom
+
+  // Stage values (Quest Helper step keys 10..70; cache completion threshold 80).
   const STAGE_STARTED = 10;
   const STAGE_LOGS_GIVEN = 20;
   const STAGE_PRESENTS_DELIVERED = 30;
@@ -204,8 +280,6 @@ module.exports = function registerOlafsQuestQuest(api) {
   const MAP_RECLAIM_ACTION_ID = "ScOeTx"; // Sven's last map, reclaimed
   const COMPLETE_ACTION_ID = "QKeIBs"; // "Congratulations! Quest complete!"
 
-  const WALL_LEVER_ORDER = ["East", "North", "West", "South", "Bottom"];
-
   // The stage-50 "afterwards" choice: the food option's wiki jump continues into the
   // refuse branch's tail. Used only by the plugin-side fallback replay.
   const FOOD_OPTION_TEXT = "Alright, here, have some food. Now give me the map.";
@@ -215,6 +289,7 @@ module.exports = function registerOlafsQuestQuest(api) {
     "Well, regardless, you've more than earned this map. It was the last one my grandfather, Sven the Helmsman, ever made.";
 
   const BITS_ATTRIBUTE = "quest.olafs_quest.bits";
+  const WALL_ATTRIBUTE = "olafs-quest:wall";
   const BIT_INGRID_DELIVERED = 1 << 0;
   const BIT_VOLF_DELIVERED = 1 << 1;
   const BIT_WALKWAY_1 = 1 << 2;
@@ -229,7 +304,7 @@ module.exports = function registerOlafsQuestQuest(api) {
   let walkwayHotspotsEnsured = false;
   const ulfricByPlayer = new Map();
   const wallMessageSeen = new WeakSet();
-  const wallProgress = new WeakMap();
+  const gateKeyByPlayer = new WeakMap();
   // Food-option guard: after the confession line the wiki jump continues into the
   // refuse branch, whose opening ("Not a chance." / "Okay, okay...") does not belong.
   const foodTailPending = new WeakSet();
@@ -249,6 +324,9 @@ module.exports = function registerOlafsQuestQuest(api) {
 
   const held = (player, itemId, amount = 1) =>
     player.getInventory().getAmount(itemId) >= amount;
+
+  const owned = (player, itemId) => held(player, itemId)
+    || (player.getBanks?.() ?? []).some((bank) => bank.getAmount(itemId) > 0);
 
   function skillLevel(player, skill) {
     return Number(player.getSkillManager().getCurrentLevel(skill)) || 0;
@@ -374,9 +452,14 @@ module.exports = function registerOlafsQuestQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.DEFENCE, 12000);
-    player.getInventory().adds(RUBY_ITEM_ID, 3); // registerQuest adds the fourth.
-    player.getInventory().adds(COINS_ITEM_ID, 20000);
-    player.getInventory().adds(PARCHMENT_ITEM_ID, 1);
+    // forceAdd drops at the reward location when the bag is full, matching the
+    // runtime's quest-reward contract instead of silently losing the items.
+    const inventory = player.getInventory();
+    for (let index = 0; index < 3; index++) {
+      inventory.forceAdd(player, new Item(RUBY_ITEM_ID, 1));
+    }
+    inventory.forceAdd(player, new Item(COINS_ITEM_ID, 20000));
+    inventory.forceAdd(player, new Item(PARCHMENT_ITEM_ID, 1));
   }
 
   function selectOlafVariant(player) {
@@ -391,17 +474,44 @@ module.exports = function registerOlafsQuestQuest(api) {
     if (stage < STAGE_PLANKS_GIVEN) return PLANS_VARIANT;
     if (stage < STAGE_FIRE_LIT) return COLD_VARIANT;
     if (stage < STAGE_MAP_GIVEN) return AFTERWARDS_VARIANT;
-    if (!held(player, SVENS_LAST_MAP_ITEM_ID) && stage < STAGE_IN_CAVE) {
+    if (!owned(player, SVENS_LAST_MAP_ITEM_ID) && stage < STAGE_IN_CAVE) {
       return RECLAIM_MAP_VARIANT;
     }
     return AFTER_MAP_VARIANT;
   }
 
+  /**
+   * The item pages document that destroyed carvings/planks are replaced by Olaf
+   * ("you will need to see Olaf Hradson to get another/some more"). Reissue only
+   * the present that has not been delivered yet, so a delivered present is not
+   * duplicated. The transcript has no dedicated replacement branch, so this
+   * happens when the next Olaf conversation begins.
+   */
+  function restoreLostQuestItems(player) {
+    const stage = quest.getStage(player);
+    if (stage === STAGE_LOGS_GIVEN) {
+      if (!hasBit(player, BIT_INGRID_DELIVERED) && !owned(player, CRUDE_CARVING_ITEM_ID)) {
+        player.getInventory().adds(CRUDE_CARVING_ITEM_ID, 1);
+      }
+      if (!hasBit(player, BIT_VOLF_DELIVERED) && !owned(player, CRUDER_CARVING_ITEM_ID)) {
+        player.getInventory().adds(CRUDER_CARVING_ITEM_ID, 1);
+      }
+    } else if (stage === STAGE_PLANKS_GIVEN && !owned(player, DAMP_PLANKS_ITEM_ID)) {
+      player.getInventory().adds(DAMP_PLANKS_ITEM_ID, 1);
+    }
+  }
+
   /** Which transcript variant each speaker plays, by quest stage. */
   function selectVariant({ npcId, player }) {
     // A ::quest reset leaves the second-varp bits behind; drop them once the stage is back to 0.
-    if (quest.getStage(player) <= 0 && bits(player) !== 0) player.setAttribute(BITS_ATTRIBUTE, 0);
-    if (npcId === OLAF_NPC_ID) return selectOlafVariant(player);
+    if (quest.getStage(player) <= 0) {
+      if (bits(player) !== 0) player.setAttribute(BITS_ATTRIBUTE, 0);
+      player.setAttribute(WALL_ATTRIBUTE, WALL_INITIAL_PACKED);
+    }
+    if (npcId === OLAF_NPC_ID) {
+      restoreLostQuestItems(player);
+      return selectOlafVariant(player);
+    }
     const stage = quest.getStage(player);
     if (npcId === INGRID_NPC_ID) {
       if (stage < STAGE_LOGS_GIVEN) {
@@ -640,7 +750,7 @@ module.exports = function registerOlafsQuestQuest(api) {
     }
     if (stepId === MAP_RECLAIM_ACTION_ID) {
       event.handled = true;
-      if (!held(player, SVENS_LAST_MAP_ITEM_ID)) player.getInventory().adds(SVENS_LAST_MAP_ITEM_ID, 1);
+      if (!owned(player, SVENS_LAST_MAP_ITEM_ID)) player.getInventory().adds(SVENS_LAST_MAP_ITEM_ID, 1);
       return;
     }
     if (stepId === COMPLETE_ACTION_ID) {
@@ -653,34 +763,102 @@ module.exports = function registerOlafsQuestQuest(api) {
     }
   }
 
-  /**
-   * The picture wall's interface (cache 252) is not implemented: the wiki lever
-   * order is entered through a chatbox prompt. Wrong lever resets the sequence.
-   */
-  function openWallPuzzle(player) {
-    const pairs = [];
-    for (const lever of WALL_LEVER_ORDER) {
-      pairs.push(lever, () => pullWallLever(player, lever));
-    }
-    api.sendMultiChatboxPrompt(player, "Which lever do you pull?", ...pairs);
+  function wallState(player) {
+    const packed = Number(player.getAttribute(WALL_ATTRIBUTE));
+    if (!Number.isFinite(packed) || packed <= 0) return { ...WALL_INITIAL };
+    return {
+      right: (packed >> 0) & 7,
+      bottom: (packed >> 3) & 7,
+      left: (packed >> 6) & 7,
+      top: (packed >> 9) & 7,
+    };
   }
 
-  function pullWallLever(player, lever) {
-    const progress = wallProgress.get(player) ?? [];
-    if (WALL_LEVER_ORDER[progress.length] !== lever) {
-      wallProgress.delete(player);
-      player.sendMessage("The disks in the wall grind back to their starting positions.");
-      return;
+  function wallPacked(state) {
+    return (
+      (state.right & 7) |
+      ((state.bottom & 7) << 3) |
+      ((state.left & 7) << 6) |
+      ((state.top & 7) << 9)
+    );
+  }
+
+  function sendWallVarbits(player, state) {
+    sendVarbit(player, OLAF_RIGHT_DISK_VARBIT, state.right);
+    sendVarbit(player, OLAF_BOTTOM_DISK_VARBIT, state.bottom);
+    sendVarbit(player, OLAF_LEFT_DISK_VARBIT, state.left);
+    sendVarbit(player, OLAF_TOP_DISK_VARBIT, state.top);
+  }
+
+  function saveWallState(player, state) {
+    player.setAttribute(WALL_ATTRIBUTE, wallPacked(state));
+    sendWallVarbits(player, state);
+  }
+
+  function sendWallDisk(player, disk, value) {
+    // The disk models are flat plates; angleY spins them in their own plane.
+    // value 4 is the cache's solved angle (0), and each wrong step is one turn.
+    const angleY = ((4 - value) & 3) * WALL_MODEL_SPIN_STEP;
+    player.getPacketSender().sendClientScript(
+      WALL_SET_MODEL_SCRIPT_ID,
+      (OLAF_WALL_INTERFACE_ID << 16) | disk.component,
+      disk.modelId,
+      0,
+      0,
+      WALL_MODEL_TILT,
+      angleY,
+      0,
+      WALL_MODEL_ZOOM,
+      -1
+    );
+  }
+
+  function openWallInterface(player) {
+    const state = wallState(player);
+    saveWallState(player, state);
+    const sender = player.getPacketSender();
+    sender.sendInterface(OLAF_WALL_INTERFACE_ID);
+    for (const disk of WALL_DISKS) sendWallDisk(player, disk, state[disk.key]);
+    for (const uid of WALL_PUZZLE_BUTTON_UIDS) {
+      sender.sendInterfaceFlagsRange(uid, -1, -1, WALL_ACTION_FLAG);
     }
-    progress.push(lever);
-    if (progress.length < WALL_LEVER_ORDER.length) {
-      wallProgress.set(player, progress);
-      openWallPuzzle(player);
-      return;
-    }
-    wallProgress.delete(player);
+  }
+
+  function confirmWallPuzzle(player) {
+    const state = wallState(player);
+    if (WALL_DISKS.some((disk) => state[disk.key] !== 4)) return;
+    for (const disk of WALL_DISKS) state[disk.key] = 4;
+    saveWallState(player, state);
+    for (const disk of WALL_DISKS) sendWallDisk(player, disk, state[disk.key]);
     setBit(player, BIT_WALL_OPEN);
+    player.getPacketSender().closeInterface(OLAF_WALL_INTERFACE_ID);
     startTranscript(api, player, ULFRIC_RISE_NPC_ID, PAGE, WALL_OPEN_VARIANT);
+  }
+
+  function handleWallInterfaceClick(event) {
+    const { player, buttonId } = event;
+    if ((buttonId >>> 16) !== OLAF_WALL_INTERFACE_ID) return;
+    if (event.action !== 1) return;
+    const component = buttonId & 0xffff;
+    event.handled = true;
+    if (quest.getStage(player) < STAGE_IN_CAVE || hasBit(player, BIT_WALL_OPEN)) return;
+    if (component === WALL_CONFIRM_COMPONENT) {
+      confirmWallPuzzle(player);
+      return;
+    }
+    const affected = WALL_LEVERS[component];
+    if (!affected) return;
+    const state = wallState(player);
+    for (const key of affected) state[key] = (state[key] % 4) + 1;
+    saveWallState(player, state);
+    player.getPacketSender().sendInterfaceAnimation(
+      (OLAF_WALL_INTERFACE_ID << 16) | component,
+      WALL_LEVER_ANIMATION_ID
+    );
+    for (const key of affected) {
+      const disk = WALL_DISKS.find((entry) => entry.key === key);
+      if (disk) sendWallDisk(player, disk, state[key]);
+    }
   }
 
   function handlePictureWall(event) {
@@ -698,29 +876,83 @@ module.exports = function registerOlafsQuestQuest(api) {
       startTranscript(api, player, ULFRIC_RISE_NPC_ID, PAGE, WALL_ATTEMPT_VARIANT);
       return true;
     }
-    openWallPuzzle(player);
+    openWallInterface(player);
     return true;
   }
 
-  /**
-   * The cache has no transform for the rusty gate, so opening it moves the player
-   * across the tile (Doors.plugin.js claims "Gate" first and asks door:toggle).
-   */
+  function firstHeldGateKey(player) {
+    for (const keyId of GATE_KEY_ITEM_IDS) if (held(player, keyId)) return keyId;
+    return null;
+  }
+
+  function moveAcrossRustyGate(player) {
+    // The cache gate has no walkable open variant: cross to the far side directly.
+    const east = player.getLocation().getX() <= RUSTY_GATE_OBJECT_TILE_X;
+    player.moveTo(
+      new Location(
+        east ? RUSTY_GATE_OBJECT_TILE_X + 1 : RUSTY_GATE_OBJECT_TILE_X - 1,
+        RUSTY_GATE_OBJECT_TILE_Y,
+        0
+      )
+    );
+  }
+
+  function openGateInterface(player, usedKeyId) {
+    gateKeyByPlayer.set(player, usedKeyId);
+    const sender = player.getPacketSender();
+    sender.sendInterface(OLAF_GATE_INTERFACE_ID);
+    for (const component of OLAF_GATE_KEY_COMPONENTS) {
+      sender.sendInterfaceModel((OLAF_GATE_INTERFACE_ID << 16) | component, usedKeyId, 1);
+    }
+    for (const keyhole of GATE_KEYHOLES) {
+      const uid = (OLAF_GATE_INTERFACE_ID << 16) | keyhole.component;
+      sender.sendInterfaceModel(uid, keyhole.itemId, 1);
+      sender.sendInterfaceFlagsRange(uid, -1, -1, WALL_ACTION_FLAG);
+    }
+  }
+
+  /** The gate object opens the cache 252 keyhole interface; the key is not used yet. */
+  function presentGateKeyhole(player, usedKeyId = null) {
+    if (quest.getStage(player) < STAGE_IN_CAVE) return false;
+    if (hasBit(player, BIT_GATE_OPEN)) {
+      moveAcrossRustyGate(player);
+      return true;
+    }
+    const keyId = usedKeyId && held(player, usedKeyId) ? usedKeyId : firstHeldGateKey(player);
+    if (!keyId) {
+      player.sendMessage("The gate is locked. One of the skeletons here must carry a key.");
+      return true;
+    }
+    openGateInterface(player, keyId);
+    return true;
+  }
+
+  function handleGateInterfaceClick(event) {
+    const { player, buttonId } = event;
+    if ((buttonId >>> 16) !== OLAF_GATE_INTERFACE_ID) return;
+    if (event.action !== 1) return;
+    const component = buttonId & 0xffff;
+    const keyhole = GATE_KEYHOLES.find((entry) => entry.component === component);
+    if (!keyhole) return;
+    event.handled = true;
+    if (quest.getStage(player) < STAGE_IN_CAVE || hasBit(player, BIT_GATE_OPEN)) return;
+    const expectedKey = gateKeyByPlayer.get(player);
+    if (expectedKey && keyhole.itemId !== expectedKey) return;
+    if (!held(player, keyhole.itemId)) return;
+    player.getInventory().deleteNumber(keyhole.itemId, 1);
+    gateKeyByPlayer.delete(player);
+    setBit(player, BIT_GATE_OPEN);
+    sendVarbit(player, OLAF_GATE_COMPLETED_VARBIT, 1);
+    player.sendMessage("You turn the key in the lock and the gate swings open.");
+    player.getPacketSender().closeInterface(OLAF_GATE_INTERFACE_ID);
+    moveAcrossRustyGate(player);
+  }
+
   function openRustyGate(request) {
     const { player, objectId } = request;
     if (objectId !== RUSTY_GATE_OBJECT_ID) return false;
     if (quest.getStage(player) < STAGE_IN_CAVE) return false;
-    if (!hasAnyGateKey(player)) {
-      player.sendMessage("The gate is locked. One of the skeletons here must carry a key.");
-      return true;
-    }
-    setBit(player, BIT_GATE_OPEN);
-    sendVarbit(player, OLAF_GATE_COMPLETED_VARBIT, 1);
-    player.sendMessage("You turn the key in the lock and the gate swings open.");
-    // The cache gate has no walkable open variant: cross to the far side directly.
-    const east = player.getLocation().getX() <= RUSTY_GATE_OBJECT_TILE_X;
-    player.moveTo(new Location(east ? RUSTY_GATE_OBJECT_TILE_X + 1 : RUSTY_GATE_OBJECT_TILE_X - 1, RUSTY_GATE_OBJECT_TILE_Y, 0));
-    return true;
+    return presentGateKeyhole(player);
   }
 
   function handleGateOpen(event) {
@@ -887,6 +1119,12 @@ module.exports = function registerOlafsQuestQuest(api) {
   function handleItemOnObject(event) {
     const { player, itemId } = event;
     const objectId = resolvedObjectId(event);
+    if (GATE_KEY_ITEM_IDS.includes(itemId) && objectId === RUSTY_GATE_OBJECT_ID) {
+      if (quest.getStage(player) < STAGE_IN_CAVE) return;
+      event.handled = true;
+      presentGateKeyhole(player, itemId);
+      return;
+    }
     if (itemId === DAMP_PLANKS_ITEM_ID && FIRE_OBJECT_IDS.has(objectId)) {
       event.handled = true;
       lightOlafFire(player);
@@ -926,13 +1164,16 @@ module.exports = function registerOlafsQuestQuest(api) {
     const ulfric = ulfricByPlayer.get(player);
     if (ulfric) api.removeNpc(ulfric);
     ulfricByPlayer.delete(player);
-    wallProgress.delete(player);
+    gateKeyByPlayer.delete(player);
     foodTailPending.delete(player);
     foodTailArmed.delete(player);
   }
 
   function handleLogin({ player }) {
-    if (quest.getStage(player) <= 0 && bits(player) !== 0) player.setAttribute(BITS_ATTRIBUTE, 0);
+    if (quest.getStage(player) <= 0) {
+      if (bits(player) !== 0) player.setAttribute(BITS_ATTRIBUTE, 0);
+      player.setAttribute(WALL_ATTRIBUTE, WALL_INITIAL_PACKED);
+    }
     ensureWalkwayHotspots();
     refreshQuestList(player);
   }
@@ -949,10 +1190,12 @@ module.exports = function registerOlafsQuestQuest(api) {
     if (hasBit(player, BIT_WALKWAY_1)) sendVarbit(player, OLAF_WALKWAY_1_VARBIT, 1);
     if (hasBit(player, BIT_WALKWAY_2)) sendVarbit(player, OLAF_WALKWAY_2_VARBIT, 1);
     if (hasBit(player, BIT_GATE_OPEN)) sendVarbit(player, OLAF_GATE_COMPLETED_VARBIT, 1);
+    sendWallVarbits(player, wallState(player));
   }
 
   groundItems = api.getItemOnGroundManager();
   api.persistAttribute(BITS_ATTRIBUTE);
+  api.persistAttribute(WALL_ATTRIBUTE, WALL_INITIAL_PACKED);
 
   quest = registerQuest(api, {
     key: "olafs_quest",
@@ -985,6 +1228,8 @@ module.exports = function registerOlafsQuestQuest(api) {
   api.onObjectInteraction("Cave", { Exit: handleCaveExit });
   api.onItemAction("Spade", { Dig: handleDig });
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onInterfaceActionButton(GATE_KEYHOLE_BUTTON_UIDS, handleGateInterfaceClick);
+  api.onInterfaceActionButton(WALL_PUZZLE_BUTTON_UIDS, handleWallInterfaceClick);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogout(handleLogout);
   api.onPlayerLogin(handleLogin);

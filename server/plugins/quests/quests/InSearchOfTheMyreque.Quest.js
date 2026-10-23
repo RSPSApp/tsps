@@ -93,6 +93,11 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const PLANK_ITEM_ID = ItemIdentifiers.PLANK;
   const STEEL_NAILS_ITEM_ID = ItemIdentifiers.STEEL_NAILS;
   const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER;
+  const COINS_ITEM_ID = ItemIdentifiers.COINS;
+  const RING_OF_CHAROS_A_ITEM_IDS = [
+    ItemIdentifiers.RING_OF_CHAROS_A_, // 6465
+    ItemIdentifiers.RING_OF_CHAROS_A__2, // 17756
+  ];
   const DRUID_POUCH_ITEM_IDS = [
     ItemIdentifiers.DRUID_POUCH,
     ItemIdentifiers.DRUID_POUCH_2,
@@ -116,6 +121,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   ];
 
   const ROPE_BRIDGE_ID = ObjectIdentifiers.ROPE_BRIDGE; // 5002, Cross
+  const BRIDGE_TREE_PARENT_ID = 5003; // multi-loc resolved to 26248/26249 by varbit 3928
+  const SURFACE_DOORS_ID = ObjectIdentifiers.WOODEN_DOORS_8; // 5061, doors in the earth north of Curpile
+  const CAVE_ENTRANCE_ID = ObjectIdentifiers.CAVE_ENTRANCE_27; // 5046, hidden cave entrance
   const BROKEN_BRIDGE_IDS = new Set([
     ObjectIdentifiers.BROKEN_ROPE_BRIDGE_2, // 26244
     26245, // broken rope bridge rung, varbit 176
@@ -336,7 +344,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     }
     const member = MEMBERS.get(npcId);
     if (member) {
-      if (stage >= STAGE_KILLED_HELLHOUND) return member.after;
+      if (stage >= STAGE_KILLED_HELLHOUND && stage < STAGE_COMPLETE) return member.after;
       if (stage === STAGE_ENTERED_HIDEOUT) {
         return `myreque-hideout-speaking-to-myreque-members-before-speaking-to-veliaf-${member.slug}`;
       }
@@ -421,7 +429,12 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     const flag = FIRST_SPEAKING_STEP_FLAGS.get(stepId);
     if (!flag) return;
     setMetFlag(player, flag);
-    if (flag !== "veliaf_after" && allMembersMet(player)) {
+    if (flag === "veliaf_after") {
+      // The first-time page already describes the wall and ladder; release the exit leg.
+      if (quest.getStage(player) === STAGE_KILLED_HELLHOUND) quest.setStage(player, STAGE_SHOWN_WAY_OUT);
+      return;
+    }
+    if (allMembersMet(player)) {
       const stage = quest.getStage(player);
       if (stage >= STAGE_MET_VELIAF && stage < STAGE_WEAPONS_ACCEPTED) {
         quest.setStage(player, STAGE_WEAPONS_ACCEPTED);
@@ -592,11 +605,45 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (quest.getStage(player) === STAGE_HELLHOUND_SUMMONED) ensureHellhound(player);
   }
 
+  function enterSurfaceDoors(event) {
+    const { player } = event;
+    event.handled = true;
+    if (quest.getStage(player) < STAGE_ANSWERED_QUESTIONS) {
+      player.sendMessage("There seems to be a strange combination on the door. It would take ages to work it out.");
+      return;
+    }
+    player.moveTo(new api.core.Location(3500, 9812, 0));
+    player.sendMessage("You push open the doors and descend into the cave.");
+  }
+
+  function enterHiddenCave(event) {
+    const { player } = event;
+    event.handled = true;
+    if (quest.getStage(player) < STAGE_ANSWERED_QUESTIONS) return;
+    const inside = player.getLocation().getX() >= 3502 && player.getLocation().getY() >= 9829;
+    if (inside) {
+      player.moveTo(new api.core.Location(3500, 9812, 0));
+      player.sendMessage("You squeeze back out into the main cave.");
+      return;
+    }
+    if (quest.getStage(player) === STAGE_ANSWERED_QUESTIONS) quest.setStage(player, STAGE_ENTERED_HIDEOUT);
+    player.moveTo(new api.core.Location(3505, 9832, 0));
+    player.sendMessage("You squeeze through the hidden entrance into the Myreque hideout.");
+  }
+
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     if (!player) return;
     const stage = quest.getStage(player);
-    if (objectId === ROPE_BRIDGE_ID || BRIDGE_TREE_IDS.has(objectId)) {
+    if (objectId === SURFACE_DOORS_ID) {
+      enterSurfaceDoors(event);
+      return;
+    }
+    if (objectId === CAVE_ENTRANCE_ID) {
+      enterHiddenCave(event);
+      return;
+    }
+    if (objectId === ROPE_BRIDGE_ID || objectId === BRIDGE_TREE_PARENT_ID || BRIDGE_TREE_IDS.has(objectId)) {
       crossBridge(event);
       return;
     }
@@ -654,6 +701,15 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       if (stage < STAGE_GAVE_PLANKS) {
         player.sendMessage("You don't have the boatman's permission to use his boat.");
         return;
+      }
+      const wornRing = player.getEquipment().get(api.core.Equipment.RING_SLOT)?.getId?.();
+      const hasCharos = RING_OF_CHAROS_A_ITEM_IDS.includes(wornRing);
+      if (!hasCharos) {
+        if (!held(player, COINS_ITEM_ID, 10)) {
+          player.sendMessage("You need 10 coins to rent the boat.");
+          return;
+        }
+        player.getInventory().deleteNumber(COINS_ITEM_ID, 10);
       }
       if (stage === STAGE_GAVE_PLANKS) quest.setStage(player, STAGE_REACHED_HOLLOWS);
       player.moveTo(new api.core.Location(3498, 3380, 0));

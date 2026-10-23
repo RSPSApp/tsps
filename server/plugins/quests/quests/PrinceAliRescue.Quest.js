@@ -479,9 +479,9 @@ module.exports = function registerPrinceAliRescueQuest(api) {
       return;
     }
 
-    if (npcId === NED_NPC_ID && (stepId === "T0Ll6J" || stepId === "pCcGIe")) {
-      const currency = stepId === "T0Ll6J" ? COINS_ITEM_ID : BALL_OF_WOOL_ITEM_ID;
-      const amount = stepId === "T0Ll6J" ? 15 : 4;
+    if (npcId === NED_NPC_ID && (stepId === "T0Ll6J" || stepId === "iAbPH4" || stepId === "pCcGIe")) {
+      const currency = stepId === "pCcGIe" ? BALL_OF_WOOL_ITEM_ID : COINS_ITEM_ID;
+      const amount = stepId === "pCcGIe" ? 4 : 15;
       const inventory = player.getInventory();
       if (!held(player, currency, amount) || (inventory.isFull() && currency === COINS_ITEM_ID && inventory.getAmount(currency) > amount)) {
         event.handled = true; event.end = true; return;

@@ -82,6 +82,7 @@ module.exports = function registerWaterfallQuest(api) {
   const GLARIALS_CHEST_ID = 1994; // glarials_chest_closed_waterfall_quest
   const CROSSING_ROCK_ID = 1996; // crossing_rock_waterfall_quest
   const CROSSING_ROCK_ROPED_ID = 1997; // crossing_rock_roped_waterfall_quest
+  const CROSSING_ROCK_IDS = new Set([CROSSING_ROCK_ID, CROSSING_ROCK_ROPED_ID]);
   const CROSSING_ROPE_ID = 1998; // crossing_rope_waterfall_quest
   const WATERFALL_SWIM_POINT_ID = 10283; // waterfall_swim_point (River "Swim")
   const BAXTORIAN_CRATE_ID = 1999; // baxtorian_crate_waterfall_quest
@@ -460,10 +461,33 @@ module.exports = function registerWaterfallQuest(api) {
     else player.removeFlag(IGNORE_CLIPPING_FLAG);
   }
 
+  /**
+   * Queues the remaining capture path from the player's exact tile. The item-use
+   * walkToTile callback resets the movement queue after the handler returns, so
+   * the first poll re-queues the leg if that reset erased it; a normal walk or
+   * logout already cleared this state, so it is never re-added after cancelling.
+   */
+  function queueCrossingPath(player, path) {
+    const here = player.getLocation();
+    let start = path.findIndex(([x, y]) => x === here.getX() && y === here.getY());
+    if (start < 0) start = 0;
+    const queue = player.getMovementQueue();
+    for (let i = start; i < path.length; i++) {
+      queue.addSteps(new Location(path[i][0], path[i][1], here.getZ()));
+    }
+  }
+
   /** Ends the scoped flag as soon as the queued crossing has no steps left. */
   function pollCrossingMove(player, token, ticks) {
-    if (crossingMoves.get(player)?.token !== token) return;
+    const state = crossingMoves.get(player);
+    if (state?.token !== token) return;
     const queue = player.getMovementQueue();
+    const here = player.getLocation();
+    const [endX, endY] = state.path[state.path.length - 1];
+    const arrived = here.getX() === endX && here.getY() === endY;
+    if (queue.points?.length === 0 && !arrived && ticks > 0) {
+      queueCrossingPath(player, state.path);
+    }
     if (queue.points?.length === 0 || ticks <= 0) {
       finishCrossingMove(player);
       return;
@@ -476,10 +500,9 @@ module.exports = function registerWaterfallQuest(api) {
     finishCrossingMove(player);
     const previous = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
     const token = {};
-    crossingMoves.set(player, { previous, token });
+    crossingMoves.set(player, { previous, token, path });
     player.setFlag(IGNORE_CLIPPING_FLAG, true);
-    const queue = player.getMovementQueue();
-    for (const [x, y] of path) queue.addSteps(new Location(x, y, 0));
+    queueCrossingPath(player, path);
     // Clear on true path completion, with a bounded fallback and interaction cleanup.
     pollCrossingMove(player, token, path.length + 6);
   }
@@ -598,6 +621,7 @@ module.exports = function registerWaterfallQuest(api) {
   }
 
   function widenHudonTalkRange(request) {
+    if (request.clickType === 0) return;
     finishCrossingMove(request.player);
     if (request.npcId === HUDON_NPC_ID && stageOf(request.player) === STAGE_STARTED) request.range = 4;
   }
@@ -894,7 +918,7 @@ module.exports = function registerWaterfallQuest(api) {
   }
 
   function useRopeOnRock(event) {
-    if (event.objectId !== CROSSING_ROCK_ID || event.itemId !== ROPE_ITEM_ID) return false;
+    if (!CROSSING_ROCK_IDS.has(event.objectId) || event.itemId !== ROPE_ITEM_ID) return false;
     const { player } = event;
     showCrossingRope(player);
     // Rope-on-rock from the north bank; from the island the same click returns.
@@ -995,7 +1019,7 @@ module.exports = function registerWaterfallQuest(api) {
 
   /** The rock/rope and swim point are used from the north bank, not their own tile. */
   function routeWaterfallCrossing(event) {
-    if (event.objectId === CROSSING_ROCK_ID) {
+    if (CROSSING_ROCK_IDS.has(event.objectId)) {
       const south = event.sourceLocation.y <= 3475;
       event.destination = south
         ? { x: DEAD_TREE_ROUTE_TILE.getX(), y: DEAD_TREE_ROUTE_TILE.getY(), z: event.sourceLocation.z }

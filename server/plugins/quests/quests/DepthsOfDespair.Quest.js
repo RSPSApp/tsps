@@ -15,6 +15,10 @@
  *   what opens the Crabclaw Caves (finding the book does not advance the stage),
  *   5 met Artur in the caves, 6 killed the Sand Snake, 7 looted the Royal
  *   Accord, 8 Artur returned home, 9 complete.
+ * The durable stages 5-9 are sent as the Quest Helper/cache varbit values
+ * 8, 9, 10, 10 and 11; script 4029 marks 6027 complete at >= 11. The wire
+ * names the next action, so the caves are worth 6 (descend) and 7 (Artur)
+ * while the durable stage is still 4, and each leg turns one step further on.
  * Varbit 6028 "hosidiusquest_reward" (bit 6) is set on completion; varbit 6029
  * "hosidiusquest_favour" (bit 7) is deliberately left alone (Kourend favour was
  * removed in 2024). Varbit 12153 "hosidiusquest_artur_vis" (bit 8) drives the
@@ -43,8 +47,10 @@
  * - Crossing the stepping stones and climbing the rocks always succeed at the
  *   quest's 18 Agility requirement; the wiki's fall branches are answered but
  *   cannot be reached without the starting requirement.
- * - Palace/King variants of the family (A Kingdom Divided, varbit 12296) are out
- *   of scope; with AKD unset the house spawns resolve to the working Talk-to ids.
+ * - Palace/King variants of the family (A Kingdom Divided) are out of scope;
+ *   the Lord is only shared with A Kingdom Divided in the stage ranges that
+ *   quest actually owns him in, and with AKD unset the house spawns resolve to
+ *   the working Talk-to ids.
  * - The journal lines are written here (the wiki publishes no journal text).
  */
 module.exports = function registerDepthsOfDespairQuest(api) {
@@ -62,11 +68,15 @@ module.exports = function registerDepthsOfDespairQuest(api) {
 
   const PAGE = "The Depths of Despair";
   const START_HOOK = "quest:the-depths-of-despair:start";
+  const AKD_KEY = "a_kingdom_divided";
+  const AKD_STAGE_COMPLETE = 150;
 
   const VARP_HOSIDIUS_QUEST = 1671; // "hosidiusquest_main"
   const VARBIT_HOSIDIUS_QUEST = 6027; // "hosidiusquest" bits 0-5
   const VARBIT_HOSIDIUS_REWARD = 6028; // "hosidiusquest_reward" bit 6
   const VARBIT_ARTUR_HOME = 12153; // "hosidiusquest_artur_vis" bit 8
+  const VARBIT_PAGE_ADDED = 7918; // "kourend_diary_hos_teleport" bit in varp 2087
+  const MEMOIR_PAGE_ADDED_ATTRIBUTE = "depths-of-despair:memoir-page-added";
 
   const STAGE_STARTED = 1;
   const STAGE_OLIVIA = 2;
@@ -77,6 +87,34 @@ module.exports = function registerDepthsOfDespairQuest(api) {
   const STAGE_ACCORD_LOOTED = 7;
   const STAGE_ARTUR_HOME = 8;
   const STAGE_COMPLETE = 9;
+
+  // Quest Helper loadSteps() keys are the cache varbit values: 0 Lord, 1
+  // Olivia, 2 Galana, 3 find/read the Envoy, 4 enter the caves, 6 lower caves,
+  // 7 talk to Artur, 8 kill the snake, 9 loot the chest, 10 return to Lord.
+  // The cache's script 4029 only marks varbit 6027 complete at 11 (`>= 11`),
+  // which the final hand-in reaches. The wire names the NEXT action, so the
+  // durable dialogue stages (which are already behind the player) map one step
+  // further on: met Artur -> kill the snake (8), snake killed -> chest (9),
+  // chest emptied -> return to the Lord (10), Artur home -> the Lord (10),
+  // complete -> 11. Inside the caves the durable stage is still "read the
+  // Envoy" (4), so the location adds the two native cave values: 6 for the
+  // descent and 7 for the chamber where Artur waits.
+  const WIRE_ENTER_CAVES = 4;
+  const WIRE_LOWER_CAVES = 6;
+  const WIRE_ARTUR = 7;
+  const CANONICAL_WIRE_BY_STAGE = { 5: 8, 6: 9, 7: 10, 8: 10, 9: 11 };
+
+  /** The native wire value for a durable stage, following the player's location. */
+  function wireValue(stage, player) {
+    if (stage <= STAGE_GALANA) return stage;
+    if (stage === STAGE_READ_BOOK) {
+      const location = player?.getLocation?.();
+      if (inZone(CAVE_CHAMBER_ZONE, location)) return WIRE_ARTUR;
+      if (inZone(CAVE_ZONE, location)) return WIRE_LOWER_CAVES;
+      return WIRE_ENTER_CAVES;
+    }
+    return CANONICAL_WIRE_BY_STAGE[stage] ?? stage;
+  }
 
   const AGILITY_REQUIREMENT = 18;
 
@@ -111,6 +149,11 @@ module.exports = function registerDepthsOfDespairQuest(api) {
   const VARLAMORE_ENVOY_ITEM_ID = ItemIdentifiers.VARLAMORE_ENVOY; // 21756
   const ROYAL_ACCORD_ITEM_ID = ItemIdentifiers.ROYAL_ACCORD_OF_TWILL; // 21758
   const LANCALLIUMS_PAGE_ITEM_ID = ItemIdentifiers.LUNCH_BY_THE_LANCALLIUMS; // 21762
+  const MEMOIRS_ITEM_IDS = new Set([
+    ItemIdentifiers.KHAREDSTS_MEMOIRS, // 21760
+    ItemIdentifiers.KHAREDSTS_MEMOIRS_2, // 21761
+  ]);
+  const MEMOIRS_ITEM_ID = ItemIdentifiers.KHAREDSTS_MEMOIRS; // 21760
   const COINS_ITEM_ID = ItemIdentifiers.COINS; // 995
 
   const CAVE_ENTRANCE_OBJECT_ID = ObjectIdentifiers.CAVE_58; // 31690
@@ -129,6 +172,9 @@ module.exports = function registerDepthsOfDespairQuest(api) {
   const HOSIDIUS_HOUSE_ZONE = { minX: 1770, maxX: 1800, minY: 3555, maxY: 3585, levels: [0, 1, 2] };
   const LIBRARY_ZONE = { minX: 1600, maxX: 1665, minY: 3780, maxY: 3835, levels: [0, 1, 2] };
   const CAVE_ZONE = { minX: 1630, maxX: 1730, minY: 9720, maxY: 9870, levels: [0, 1] };
+  // The lower chamber (Artur, the Sand Snake and the chest); the Quest Helper's
+  // "downstairs in the caves" zone, which is where the native wire is 7.
+  const CAVE_CHAMBER_ZONE = { minX: 1670, maxX: 1701, minY: 9742, maxY: 9763, levels: [0, 1] };
 
   // Library shelf bounds: x 1607-1658, y 3784-3831, planes 0-2.
   const LIBRARY_CENTER_X = 1633;
@@ -178,6 +224,29 @@ module.exports = function registerDepthsOfDespairQuest(api) {
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
+  function bankHasItem(player, itemId) {
+    if (typeof player.getBanks === "function") {
+      const banks = player.getBanks() ?? [];
+      if (banks.some((bank) => bank?.getAmount?.(itemId) > 0)) return true;
+    }
+    return (player.getBank?.()?.getAmount?.(itemId) ?? 0) > 0;
+  }
+
+  const ownsItem = (player, itemId) => held(player, itemId) || bankHasItem(player, itemId);
+
+  function pageAddedToMemoir(player) {
+    return Number(player.getAttribute(MEMOIR_PAGE_ADDED_ATTRIBUTE)) > 0 ||
+      (player.getPacketSender().getVarbit?.(VARBIT_PAGE_ADDED) ?? 0) !== 0;
+  }
+
+  /** The lost-page branch only applies before the page is recorded in the memoir. */
+  function lostLunchPage(player) {
+    return quest.getStage(player) >= STAGE_COMPLETE &&
+      !ownsItem(player, LANCALLIUMS_PAGE_ITEM_ID) &&
+      ownsItem(player, MEMOIRS_ITEM_ID) &&
+      !pageAddedToMemoir(player);
+  }
+
   function tileOf(value) {
     if (!value) return null;
     return typeof value.getX === "function"
@@ -197,6 +266,30 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     api.emitCustomEvent("quest:is-complete", request);
     return request.complete === true;
   }
+
+  function otherQuestStage(player, key) {
+    const request = { player, key, stage: null };
+    api.emitCustomEvent("quest:get-stage", request);
+    return Number.isFinite(request.stage) ? request.stage | 0 : 0;
+  }
+
+  /**
+   * A Kingdom Divided only claims Lord Kandur in its own stage ranges
+   * (AKingdomDivided.Quest.js: STAGE_HOUSES..STAGE_LOOKOUT 110-118,
+   * STAGE_MEETING..STAGE_ACCORD 122-137, STAGE_ACCORD..STAGE_ARREST 138-145
+   * and STAGE_ARREST..STAGE_COMPLETE 146-149). Outside them A Kingdom
+   * Divided declines the Lord and he falls back to his generic transcript,
+   * which has neither the Depths start option nor its hand-in, so the quest
+   * could neither be started nor finished while it was in progress.
+   */
+  const AKD_LORD_STAGE_WINDOWS = [[110, 119], [122, 138], [138, 146], [146, 150]];
+
+  function akdOwnsLord(player) {
+    const stage = otherQuestStage(player, AKD_KEY);
+    return AKD_LORD_STAGE_WINDOWS.some(([from, to]) => stage >= from && stage < to);
+  }
+
+  const akdComplete = (player) => otherQuestStage(player, AKD_KEY) >= AKD_STAGE_COMPLETE;
 
   function meetsRequirements(player) {
     if (player.getSkillManager().getMaxLevel(Skill.AGILITY) < AGILITY_REQUIREMENT) return false;
@@ -219,7 +312,11 @@ module.exports = function registerDepthsOfDespairQuest(api) {
   function selectLordVariant(player) {
     const stage = quest.getStage(player);
     if (stage <= 0) return "starting-off";
-    if (stage >= STAGE_COMPLETE) return "finishing-up-talking-to-lord-hosidius-again-before-getting-the-full-reward";
+    if (stage >= STAGE_COMPLETE) {
+      return lostLunchPage(player)
+        ? "if-the-player-lost-the-memoir-page-before-using-it-on-the-memoir"
+        : "standard-dialogue";
+    }
     if (stage >= STAGE_ARTUR_HOME) return "finishing-up-returning-to-lord-hosidius";
     return "starting-off-talking-to-lord-hosidius-again";
   }
@@ -277,23 +374,30 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     // The dialogue test drives the selector without an NPC object; trust the id then.
     const at = (zone) => !npc || inZone(zone, tile);
     if (LORD_NPC_IDS.has(npcId)) {
-      return at(HOSIDIUS_HOUSE_ZONE) ? selectLordVariant(player) : null;
+      if (!at(HOSIDIUS_HOUSE_ZONE)) return null;
+      // A Kingdom Divided's Lord Kandur story owns the conversation while active.
+      return akdOwnsLord(player) ? null : selectLordVariant(player);
     }
     if (ELENA_NPC_IDS.has(npcId)) {
-      return at(HOSIDIUS_HOUSE_ZONE) ? selectElenaVariant(player) : null;
+      if (!at(HOSIDIUS_HOUSE_ZONE)) return null;
+      if (akdComplete(player)) return "standard-dialogue-after-completing-a-kingdom-divided";
+      return selectElenaVariant(player);
     }
     if (npcId === BUTLER_NPC_ID) {
-      return at(HOSIDIUS_HOUSE_ZONE) ? selectJarvisVariant(player) : null;
+      if (!at(HOSIDIUS_HOUSE_ZONE)) return null;
+      return akdComplete(player) ? "after-completing-a-kingdom-divided" : selectJarvisVariant(player);
     }
     if (npcId === OLIVIA_NPC_ID) {
-      return at(HOSIDIUS_HOUSE_ZONE) ? selectOliviaVariant(player) : null;
+      if (!at(HOSIDIUS_HOUSE_ZONE)) return null;
+      return akdComplete(player) ? "standard-dialogue-after-completing-a-kingdom-divided" : selectOliviaVariant(player);
     }
     if (npcId === GALANA_NPC_ID) {
       return at(LIBRARY_ZONE) ? selectGalanaVariant(player) : null;
     }
     if (ARTUR_NPC_IDS.has(npcId)) {
       if (!npc || inZone(CAVE_ZONE, tile)) return selectArturVariant(player, tile);
-      return inZone(HOSIDIUS_HOUSE_ZONE, tile) ? selectArturVariant(player, tile) : null;
+      if (!inZone(HOSIDIUS_HOUSE_ZONE, tile)) return null;
+      return akdComplete(player) ? "standard-dialogue-after-the-completion-of-a-kingdom-divided" : selectArturVariant(player, tile);
     }
     return null;
   }
@@ -389,6 +493,16 @@ module.exports = function registerDepthsOfDespairQuest(api) {
       text = text.replace(/\[player name\]/gi, String(player.getUsername()));
       event.text = text;
     }
+    if (LORD_NPC_IDS.has(npcId) &&
+      text.includes("I assume you're after that reward I promised you") &&
+      lostLunchPage(player)) {
+      const inventory = player.getInventory();
+      if (inventory.getFreeSlots() < 1) {
+        player.sendMessage("You need a free inventory slot to take the memoir page.");
+      } else {
+        inventory.adds(LANCALLIUMS_PAGE_ITEM_ID, 1);
+      }
+    }
     if (npcId === OLIVIA_NPC_ID) {
       if (text.includes("He's been spending a lot of time in the Arceuus Library recently") &&
         quest.getStage(player) === STAGE_STARTED) {
@@ -460,6 +574,23 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     return player.getLocation().getX() > 1705 ? STONES_WEST_TILE : STONES_EAST_TILE;
   }
 
+  /**
+   * The stepping stones are a water crossing, not a floor object that can be
+   * reached by walking onto its clipped tile. Let the normal Cross action run
+   * from either authored bank; its transcript owns the actual crossing.
+   */
+  function routeSteppingStone(event) {
+    if (event.objectId !== STEPPING_STONE_OBJECT_ID || event.clickType !== 1) return;
+    const source = event.sourceLocation;
+    const target = event.object?.getLocation?.();
+    if (!source || !target || source.z !== 0 || target.getZ() !== 0) return;
+    const bank = source.x > 1705 ? STONES_EAST_TILE : STONES_WEST_TILE;
+    const atStone = target.getY() === 9800 && [1704, 1706].includes(target.getX());
+    if (atStone) {
+      event.destination = { x: bank.x, y: bank.y, z: bank.z ?? 0 };
+    }
+  }
+
   function rocksDestination(player, lower) {
     const x = player.getLocation().getX();
     if (lower) return x > 1687 ? LOWER_ROCKS_WEST_TILE : LOWER_ROCKS_EAST_TILE;
@@ -485,7 +616,12 @@ module.exports = function registerDepthsOfDespairQuest(api) {
       case "Y4ZprR": // You climb down the rope.
       case "aXacAX": // You climb up the rope.
       case "IAW0EN": // You climb up the sand pile.
-        if (applyPendingMove(player) && stepId === "Y4ZprR") ensureCaveNpcs(player);
+        if (applyPendingMove(player)) {
+          // The move is the real action boundary: it decides whether the player
+          // is on the surface (4), in the caves (6) or in Artur's chamber (7).
+          publishWire(player);
+          if (stepId === "Y4ZprR") ensureCaveNpcs(player);
+        }
         return;
       case "r7iI2i": { // You take a copy.
         if (!held(player, VARLAMORE_ENVOY_ITEM_ID) && !player.getInventory().isFull()) {
@@ -573,11 +709,14 @@ module.exports = function registerDepthsOfDespairQuest(api) {
 
   function searchChest(player) {
     const stage = quest.getStage(player);
-    if (stage >= STAGE_ARTUR_HOME) {
+    if (quest.isComplete(player)) {
       player.sendMessage("You have already recovered the Accord.");
       return;
     }
     if (stage < STAGE_SNAKE_KILLED) return;
+    // The chest stays searchable after Artur goes home so a lost Accord can be
+    // fetched again (Lord Hosidius: "Well go fetch it and bring it here.").
+    // The transcript's own conditions still report an Accord already held.
     startTranscript(api, player, CAVE_SON_NPC_ID, PAGE, "the-envoy-to-varlamore-looting-the-chest");
   }
 
@@ -613,6 +752,19 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     BOOK_PARAGRAPHS.forEach((paragraph, index) => builder.add(new StatementDialogue(index, paragraph)));
     builder.add(new EndDialogue(BOOK_PARAGRAPHS.length));
     player.getDialogueManager().startDialogues(builder);
+  }
+
+  /** "You add an entry to Kharedst's Memoirs." */
+  function useLunchPageOnMemoirs(event) {
+    const { player, usedItemId, usedWithItemId } = event;
+    const pair = new Set([usedItemId, usedWithItemId]);
+    if (!pair.has(LANCALLIUMS_PAGE_ITEM_ID) || ![usedItemId, usedWithItemId].some((id) => MEMOIRS_ITEM_IDS.has(id))) return;
+    if (pageAddedToMemoir(player)) return;
+    event.handled = true;
+    player.getInventory().deleteNumber(LANCALLIUMS_PAGE_ITEM_ID, 1);
+    player.setAttribute(MEMOIR_PAGE_ADDED_ATTRIBUTE, 1);
+    player.getPacketSender().sendVarbit(VARBIT_PAGE_ADDED, 1);
+    player.sendMessage("You add an entry to Kharedst's Memoirs.");
   }
 
   // ==========================================================================
@@ -689,8 +841,26 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     startMoveTranscript(request.player, "the-envoy-to-varlamore-climbing-up-the-rope", UPPER_CAVE_TILE);
   }
 
+  function syncRewardVar(player) {
+    const claimed = quest.getStage(player) >= STAGE_COMPLETE ? 1 : 0;
+    player.getPacketSender().sendVarbit(VARBIT_HOSIDIUS_REWARD, claimed);
+  }
+
+  /** Publishes the native quest wire value for the player's current step. */
+  function publishWire(player) {
+    player.getPacketSender().sendVarbit(VARBIT_HOSIDIUS_QUEST, wireValue(quest.getStage(player), player));
+  }
+
   function handleLogin({ player }) {
     syncArturVisibility(player);
+    syncRewardVar(player);
+    const pageAdded = Number(player.getAttribute(MEMOIR_PAGE_ADDED_ATTRIBUTE)) > 0 ||
+      (player.getPacketSender().getVarbit?.(VARBIT_PAGE_ADDED) ?? 0) !== 0;
+    if (pageAdded) {
+      player.setAttribute(MEMOIR_PAGE_ADDED_ATTRIBUTE, 1);
+      player.getPacketSender().sendVarbit(VARBIT_PAGE_ADDED, 1);
+    }
+    publishWire(player);
     if (inZone(CAVE_ZONE, player.getLocation())) ensureCaveNpcs(player);
     refreshQuestList(player);
   }
@@ -768,6 +938,7 @@ module.exports = function registerDepthsOfDespairQuest(api) {
   }
 
   api.persistAttribute(BOOK_BAY_ATTRIBUTE);
+  api.persistAttribute(MEMOIR_PAGE_ADDED_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "the_depths_of_despair",
@@ -783,6 +954,7 @@ module.exports = function registerDepthsOfDespairQuest(api) {
     otherRewards: ["4,000 Coins", "Hosidius graceful outfit recolour", "Nightmare Zone Sand Snake"],
     buildJournal,
     onReward: grantReward,
+    varbitValue: wireValue,
   });
 
   api.onNpcDialogueVariant(selectVariant);
@@ -791,9 +963,11 @@ module.exports = function registerDepthsOfDespairQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onObjectRoute(routeSteppingStone);
   api.onCustomEvent("ladders:climb", claimRopeClimb);
   api.onObjectInteraction("Bookshelf", { Search: searchBookshelf });
   api.onItemAction(handleItemAction);
+  api.onItemOnItem(useLunchPageOnMemoirs);
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(CAVE_ZONE, handleZoneEnter);
   api.onZoneExit(CAVE_ZONE, handleZoneExit);

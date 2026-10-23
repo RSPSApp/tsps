@@ -674,6 +674,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   const vanstromFights = new WeakMap();
   const vanstromNpcMeta = new WeakMap();
   const carlFollowSessions = new WeakMap();
+  const carlFailureActors = new WeakMap();
   const personalObjects = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
@@ -789,8 +790,8 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     return start > 0 ? steps.slice(start) : steps;
   }
 
-  function play(player, npcId, variant) {
-    return startTranscript(api, player, npcId, PAGE, variant, withoutLeadingJumps);
+  function play(player, npcId, variant, npc = null) {
+    return startTranscript(api, player, npcId, PAGE, variant, withoutLeadingJumps, npc);
   }
 
   function say(player, npcId, text) {
@@ -870,6 +871,24 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     const request = { player, key, started: false };
     api.emitCustomEvent("quest:is-started", request);
     return request.started === true;
+  }
+
+  /**
+   * A Taste of Hope owns the old-base Vertida's post-quest flail reclaim, and
+   * it answers this question through "taste-of-hope:flail-reclaim". Sins
+   * keeps its own Vertida conversation while the crafting steps (the logs and
+   * the flail handover) still need it, then yields the talk so a completed
+   * Taste player can still buy a replacement flail during the quest.
+   */
+  function tasteFlailReclaimDue(player, npc) {
+    const request = { player, npc, needed: false };
+    api.emitCustomEvent("taste-of-hope:flail-reclaim", request);
+    if (!request.needed) return false;
+    if (quest.getStage(player) < STAGE_SAFALAAN_WALK) return false;
+    const spot = npc?.getLocation?.() ?? player.getLocation?.();
+    if (!spot) return false;
+    return Math.max(Math.abs(spot.getX() - HIDEOUT_VERTIDA_TILE.x),
+      Math.abs(spot.getY() - HIDEOUT_VERTIDA_TILE.y)) <= 3;
   }
 
   function meetsRequirements(player) {
@@ -1072,14 +1091,22 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   function failCarlFollow(player, caught) {
     const session = carlFollowSessions.get(player);
     if (!session) return;
-    removeCarlFollow(player);
+    carlFollowSessions.delete(player);
+    const failureActors = carlFailureActors.get(player) ?? new Set();
+    failureActors.add(session.npc);
+    carlFailureActors.set(player, failureActors);
     player.setAttribute(CARL_PROGRESS_ATTRIBUTE, 0);
     quest.setStage(player, STAGE_HAMELN);
     applyStageSpawns(player);
     syncQuestObjects(player);
     play(player, PROP_ID, caught
       ? "plague-s-end-if-caught-by-carl"
-      : "plague-s-end-if-the-player-falls-too-far-behind-carl");
+      : "plague-s-end-if-the-player-falls-too-far-behind-carl", session.npc);
+    later(player, 3, () => {
+      if (!failureActors.delete(session.npc)) return;
+      if (!failureActors.size) carlFailureActors.delete(player);
+      api.removeNpc(session.npc);
+    });
   }
   /**
    * RSMOD/RegionManager ray: each Bresenham step must be traversable, so wall
@@ -1741,37 +1768,29 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   // ---------------------------------------------------------------------------
 
   function answerCondition(event) {
-    const { player, stepId, text } = event;
-    const key = stepId ?? "";
-    const prose = String(text ?? "");
-    if (key === "7D8z_N" || prose.startsWith("If the player does not have the requirements")) {
-      return !meetsRequirements(player);
+    const { player, stepId } = event;
+    switch (stepId) {
+      case "7D8z_N": // requirements, missing
+        return !meetsRequirements(player);
+      case "S4umqc": // requirements, met
+        return meetsRequirements(player);
+      case "SGj1He": // combat, below recommended
+        return combatLevel(player) < 95;
+      case "Y7Eh4F": // vyre disguise, present
+        return hasVyreNoble(player);
+      case "CIrOJv": // vyre disguise, missing
+        return !hasVyreNoble(player);
+      case "kqP6AE": // blisterwood flail, present
+        return hasBlisterwoodFlail(player);
+      case "pl5f2L": // blisterwood flail, missing
+        return !hasBlisterwoodFlail(player);
+      case "svlKBi": // 40,000 coins, missing
+        return !held(player, ItemIdentifiers.COINS, 40000);
+      case "z2xhAs": // 40,000 coins, present
+        return held(player, ItemIdentifiers.COINS, 40000);
+      default:
+        return null;
     }
-    if (key === "S4umqc" || prose.startsWith("If the player has the requirements")) {
-      return meetsRequirements(player);
-    }
-    if (key === "SGj1He" || prose.startsWith("If the player has a lower combat level")) {
-      return combatLevel(player) < 95;
-    }
-    if (key === "Y7Eh4F" || prose.startsWith("If the player has the vyre disguise")) {
-      return hasVyreNoble(player);
-    }
-    if (key === "CIrOJv" || prose.startsWith("If the player does not have the vyre disguise")) {
-      return !hasVyreNoble(player);
-    }
-    if (key === "kqP6AE" || prose.startsWith("If the player has a blisterwood flail")) {
-      return hasBlisterwoodFlail(player);
-    }
-    if (key === "pl5f2L" || prose.startsWith("If the player does not have a blisterwood flail")) {
-      return !hasBlisterwoodFlail(player);
-    }
-    if (key === "svlKBi" || prose.startsWith("If the player does not have 40,000 coins")) {
-      return !held(player, ItemIdentifiers.COINS, 40000);
-    }
-    if (key === "z2xhAs" || prose.startsWith("If the player has at least 40,000 coins")) {
-      return held(player, ItemIdentifiers.COINS, 40000);
-    }
-    return null;
   }
 
   // ---------------------------------------------------------------------------
@@ -2282,6 +2301,9 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   function talkVertida(event) {
     const { player, npcId } = event;
     if (!VERTIDA_IDS.has(npcId)) return false;
+    // The completed A Taste of Hope reclaim owns the old-base Vertida while
+    // the player has no flail to hand.
+    if (tasteFlailReclaimDue(player, event.npc)) return false;
     const stage = quest.getStage(player);
     if (stage < STAGE_GRAVEYARD || stage >= STAGE_VANSTROM_DEAD) return false;
     if (stage < STAGE_CONVINCING) {
@@ -2642,6 +2664,9 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
       return null;
     }
     if (VERTIDA_IDS.has(npcId)) {
+      // The completed A Taste of Hope reclaim owns the old-base Vertida while
+      // the player has no flail to hand; its page answers instead.
+      if (tasteFlailReclaimDue(player, event.npc)) return null;
       if (stage < STAGE_CONVINCING) return "a-nice-and-simple-plan-speaking-to-the-myreque-talking-to-vertida";
       if (stage < STAGE_CONVINCED) {
         return hasBit(player, BIT_VERTIDA)
@@ -3684,6 +3709,8 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     cleanupVanstromFight(player);
     clearPersonalObjects(player);
     removeCarlFollow(player);
+    for (const npc of carlFailureActors.get(player) ?? []) api.removeNpc(npc);
+    carlFailureActors.delete(player);
     despawnAll(player);
   }
 

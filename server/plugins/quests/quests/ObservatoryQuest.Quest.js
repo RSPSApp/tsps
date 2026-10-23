@@ -62,15 +62,20 @@ module.exports = function registerObservatoryQuest(api) {
   const GLASS_RETURN_ACTION = "JH15Z2";
   const LENS_HAND_IN_ACTION = "p1dzXH";
 
-  const PROFESSOR_NPC_IDS = new Set([NpcIdentifiers.OBSERVATORY_PROFESSOR, NpcIdentifiers.OBSERVATORY_PROFESSOR_2]);
+  const PROFESSOR_NPC_ID = NpcIdentifiers.OBSERVATORY_PROFESSOR;
+  const PROFESSOR_NPC_IDS = new Set([PROFESSOR_NPC_ID, NpcIdentifiers.OBSERVATORY_PROFESSOR_2]);
   const ASSISTANT_NPC_ID = NpcIdentifiers.OBSERVATORY_ASSISTANT;
   const SLEEPING_GUARD_NPC_ID = NpcIdentifiers.SLEEPING_GUARD;
   const GOBLIN_GUARD_NPC_ID = NpcIdentifiers.GOBLIN_GUARD;
 
+  // 25385-25390: the three marked Observatory Dungeon chests and their open forms.
   const DUNGEON_CHEST_IDS = new Set([
-    ObjectIdentifiers.CHEST_6,
-    ObjectIdentifiers.CHEST_7,
-    ObjectIdentifiers.CHEST_85, // 25391, the real Observatory Dungeon chest
+    ObjectIdentifiers.CHEST_79,
+    ObjectIdentifiers.CHEST_80,
+    ObjectIdentifiers.CHEST_81,
+    ObjectIdentifiers.CHEST_82,
+    ObjectIdentifiers.CHEST_83,
+    ObjectIdentifiers.CHEST_84,
   ]);
   const KITCHEN_GATE_IDS = new Set([ObjectIdentifiers.KITCHEN_GATE, ObjectIdentifiers.KITCHEN_GATE_2]);
   /** 25442 is the cache transform parent of GOBLIN_STOVE/GOBLIN_STOVE_2. */
@@ -89,10 +94,11 @@ module.exports = function registerObservatoryQuest(api) {
   const SURFACE_STAIRS_ID = ObjectIdentifiers.STAIRS_129; // 25432, east hill
   const DUNGEON_STAIRS_ID = ObjectIdentifiers.STAIRS_127; // 25429, north + south
 
-  const DUNGEON_STAIRS_NORTH = { x: 2335, y: 9351 };
-  const DUNGEON_STAIRS_SOUTH = { x: 2355, y: 9395 };
+  // 2335,9351 is the south end (y is lower); 2355,9395 is the north end.
+  const DUNGEON_STAIRS_SOUTH = { x: 2335, y: 9351 };
+  const DUNGEON_STAIRS_NORTH = { x: 2355, y: 9395 };
   const SURFACE_STAIRS_LANDING = { x: 2458, y: 3185, z: 0 };
-  const DUNGEON_NORTH_LANDING = { x: 2334, y: 9350, z: 0 };
+  const DUNGEON_NORTH_LANDING = { x: 2355, y: 9394, z: 0 };
   const OBSERVATORY_LANDING = { x: 2443, y: 3158, z: 0 };
 
 
@@ -269,7 +275,9 @@ module.exports = function registerObservatoryQuest(api) {
   function grantConstellationReward(player, stepId) {
     const reward = CONSTELLATION_REWARDS[COMPLETION_ACTIONS.get(stepId)];
     if (!reward) return;
-    for (const [itemId, amount] of reward.items ?? []) player.getInventory().adds(itemId, amount);
+    for (const [itemId, amount] of reward.items ?? []) {
+      player.getInventory().forceAdd(player, new api.core.Item(itemId, amount));
+    }
     if (reward.xp) player.getSkillManager().addExperiences(reward.xp[0], reward.xp[1]);
   }
 
@@ -279,6 +287,7 @@ module.exports = function registerObservatoryQuest(api) {
     if (npcId === ASSISTANT_NPC_ID) {
       // The initial post-quest chat's "The assistant gives you some wine." hands it over.
       if (kind === "message" && stepId === WINE_MESSAGE_ACTION && quest.getStage(player) === STAGE_COMPLETE) {
+        if (player.getInventory().isFull()) return;
         player.getInventory().adds(JUG_OF_WINE, 1);
         quest.setStage(player, STAGE_CLAIMED_WINE);
       }
@@ -363,20 +372,19 @@ module.exports = function registerObservatoryQuest(api) {
     }
   }
 
-  /** Dungeon chest: the kitchen key, then (as a fallback) the stolen lens mould. */
+  /** The marked dungeon chests hold the kitchen key; the stove holds the lens mould. */
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
 
     if (DUNGEON_CHEST_IDS.has(objectId) && (option.includes("search") || option.includes("open"))) {
-      if (quest.getStage(player) !== STAGE_MOULD) return;
+      // The key can be re-obtained at stage 5 if it was lost after the gate was unlocked.
+      const stage = quest.getStage(player);
+      if (stage < STAGE_MOULD || stage > STAGE_LENS) return;
       event.handled = true;
       if (!has(player, GOBLIN_KITCHEN_KEY)) {
         player.getInventory().adds(GOBLIN_KITCHEN_KEY, 1);
         player.sendMessage("You find a kitchen key.");
-      } else if (!has(player, LENS_MOULD)) {
-        player.getInventory().adds(LENS_MOULD, 1);
-        player.sendMessage("You find the stolen lens mould inside the chest.");
       } else {
         player.sendMessage("The chest is empty.");
       }
@@ -453,10 +461,13 @@ module.exports = function registerObservatoryQuest(api) {
     if (objectId !== DUNGEON_STAIRS_ID) return;
     const x = location.getX();
     const y = location.getY();
-    if (x === DUNGEON_STAIRS_NORTH.x && y === DUNGEON_STAIRS_NORTH.y) {
-      player.moveTo(new Location(SURFACE_STAIRS_LANDING.x, SURFACE_STAIRS_LANDING.y, SURFACE_STAIRS_LANDING.z));
-    } else if (x === DUNGEON_STAIRS_SOUTH.x && y === DUNGEON_STAIRS_SOUTH.y) {
+    if (x === DUNGEON_STAIRS_SOUTH.x && y === DUNGEON_STAIRS_SOUTH.y) {
       player.moveTo(new Location(OBSERVATORY_LANDING.x, OBSERVATORY_LANDING.y, OBSERVATORY_LANDING.z));
+      if (quest.getStage(player) === STAGE_TELESCOPE && !player.getAttribute(VIEWED_ATTRIBUTE)) {
+        startTranscript(api, player, PROFESSOR_NPC_ID, PAGE, "entering-the-observatory");
+      }
+    } else if (x === DUNGEON_STAIRS_NORTH.x && y === DUNGEON_STAIRS_NORTH.y) {
+      player.moveTo(new Location(SURFACE_STAIRS_LANDING.x, SURFACE_STAIRS_LANDING.y, SURFACE_STAIRS_LANDING.z));
     } else {
       return;
     }
@@ -479,6 +490,8 @@ module.exports = function registerObservatoryQuest(api) {
     key: "observatory_quest",
     name: "Observatory Quest",
     varpId: VARP_OBSERVATORY_QUEST,
+    // Wine is a post-quest assistant reward; the cache varp completes at 7.
+    varpValue: (stage) => (stage >= STAGE_COMPLETE ? STAGE_COMPLETE : stage),
     startedValue: STAGE_PLANKS,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,

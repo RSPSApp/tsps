@@ -125,7 +125,23 @@ test('RPS third-round cheat beats the actual shown sign for every player pick', 
 test('workout lasts 206 ticks, unlocks Flex at its end and cleans up logout', () => {
   const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 1); h.attrs.set(CHECKAL, 10);
   h.action(N.ATLAS, '_RwWTk'); assert.equal(h.player.getPrivateArea().getName(), 'Barbarian Workout');
+  const workoutEntry = h.player.getPrivateArea().sourceTile(3253, 3393);
+  assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getY()], [workoutEntry.getX(), workoutEntry.getY()], 'Atlas enters the workout scene before its first scheduled action');
   assert.equal(h.attrs.get('below-ice-mountain:training'), 1); assert.equal(h.varbits.get(12062), 0);
+  const cancelledScene = h.player.getPrivateArea();
+  const cancelledTasks = [...h.tasks];
+  h.hooks.logout[0]({ player: h.player });
+  assert.equal(h.attrs.get('below-ice-mountain:training'), 0);
+  assert.equal(cancelledScene.isDestroyed(), true);
+  assert.equal(h.attrs.get(CHECKAL), 10, 'cancel leaves Checkal training progress untouched');
+  assert.equal(h.attrs.get('quest.below_ice_mountain.atlas-sessions'), undefined);
+  assert.equal(h.varbits.get(12062), 0, 'cancel does not unlock Flex');
+  for (const task of cancelledTasks) task.run();
+  assert.equal(h.attrs.get(CHECKAL), 10, 'cancelled workout tasks cannot complete after cleanup');
+
+  h.action(N.ATLAS, '_RwWTk');
+  assert.equal(h.player.getPrivateArea().getName(), 'Barbarian Workout', 'Atlas can start a fresh workout after cancellation');
+  assert.equal(h.attrs.get('below-ice-mountain:training'), 1);
   const completeWorkout = h.tasks.at(-1);
   for (const task of h.tasks.filter(task => task.ticks < 206)) task.run();
   const woman = h.spawned.find(npc => npc.getId() === 10674);
@@ -135,9 +151,13 @@ test('workout lasts 206 ticks, unlocks Flex at its end and cleans up logout', ()
   assert.ok(h.spawned.some(npc => npc.getId() === 10678), 'the barbarian crowd appears for the last pushups');
   assert.equal(completeWorkout.ticks, 206); completeWorkout.run(); assert.equal(h.attrs.get(CHECKAL), 15); assert.equal(h.varbits.get(12062), 1);
   assert.equal(h.attrs.get('quest.below_ice_mountain.atlas-sessions'), 1);
+  assert.equal(h.attrs.get('below-ice-mountain:training'), 1, 'the scene stays active through the final dialogue');
   assert.equal(h.hooks.variants[0]({ player: h.player, npcId: N.CHECKAL }), 'checkal-the-strongman-talking-to-checkal-after-completing-atlas-training');
   assert.equal(h.hooks.variants[0]({ player: h.player, npcId: N.ATLAS }), 'checkal-the-strongman-talking-to-atlas-again-after-first-training-session');
   h.action(N.ATLAS, 'Ajwwje'); assert.equal(h.attrs.get('quest.below_ice_mountain.atlas-sessions'), 1);
+  h.line(N.ATLAS, 'My work is done. Return to Checkal and show him your new-found muscles.').after();
+  assert.equal(h.attrs.get('below-ice-mountain:training'), 0, 'the canonical closing line returns the player from the workout');
+  assert.equal(h.player.getPrivateArea().isDestroyed(), true);
   h.hooks.logout[0]({ player: h.player }); assert.equal(h.attrs.get('below-ice-mountain:training'), 0); assert.equal(h.player.getMovementQueue().blocked, false);
 });
 test('mining needs level/pickaxe, damages each distinct pillar once and gives 10 XP', () => {

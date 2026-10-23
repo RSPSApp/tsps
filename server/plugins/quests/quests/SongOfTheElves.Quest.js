@@ -253,6 +253,19 @@ module.exports = function registerSongOfTheElves(api) {
     "attack-on-lletya", "after-the-attack", "preparations-at-the-dwarf-camp",
     "sealing-the-underground-pass", "the-fragment-of-seren", "the-war-s-end",
   ];
+  // Shared named NPCs whose generic transcript picker would otherwise stop at an
+  // older "standard" variant after this quest. Keyed by cache NPC name; the page
+  // and variant must both exist in the cross-page dialogue index.
+  const POST_QUEST_DIALOGUE = {
+    Edmond: ["Edmond", "standard-dialogue-after-the-song-of-the-elves-quest"],
+    Elena: ["Elena", "after-song-of-the-elves"],
+    Alrena: ["Alrena", "standard-dialogue-after-song-of-the-elves"],
+    Eluned: ["Eluned", "standard-dialogue-after-song-of-the-elves"],
+    "Councillor Halgrive": ["Councillor Halgrive", "standard-dialogue-after-song-of-the-elves"],
+    "Martha Rehnison": ["Martha Rehnison", "standard-dialogue-after-song-of-the-elves"],
+    "Ted Rehnison": ["Ted Rehnison", "standard-dialogue-after-song-of-the-elves"],
+    "Milli Rehnison": ["Milli Rehnison", "standard-dialogue-after-song-of-the-elves"],
+  };
   const REQUIRED_QUESTS = [
     ["mournings_end_part_ii", "Mourning's End Part II"],
     ["making_history", "Making History"],
@@ -708,9 +721,17 @@ module.exports = function registerSongOfTheElves(api) {
   function chapterFor(variant) {
     return CHAPTERS.findIndex((chapter) => variant === chapter || variant.startsWith(`${chapter}-`));
   }
+  function postQuestVariant(event) {
+    const entry = POST_QUEST_DIALOGUE[event?.definition?.getName?.()];
+    if (!entry) return null;
+    const [page, variant] = entry;
+    const record = event.pages?.find((candidate) => candidate.page === page);
+    return record?.variants?.includes(variant) ? { page, variant } : null;
+  }
   function selectVariant(event) {
     const player = event?.player;
-    if (!player || quest.isComplete(player)) return null;
+    if (!player) return null;
+    if (quest.isComplete(player)) return postQuestVariant(event);
     const page = event.pages?.find((entry) => entry.page === PAGE);
     if (!page) return null;
     const value = quest.getStage(player);

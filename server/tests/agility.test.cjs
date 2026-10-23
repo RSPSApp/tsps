@@ -286,6 +286,36 @@ test("every shortcut plays out from either side without leaving the player locke
   }
 });
 
+test("the cache-backed Varrock broken fence crosses its clipped north-south edge", () => {
+  const { RegionManager } = require("../dist/game/collision/RegionManager");
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const core = PluginManager.getCoreApi();
+  const objectId = core.ObjectIdentifiers.BROKEN_FENCE_2;
+  const location = new Location(3308, 3492, 0);
+  core.ObjectDefinition.init();
+  RegionManager.init();
+  RegionManager.loadMapFiles(location.getX(), location.getY());
+
+  const fence = MapObjects.get(objectId, location, null);
+  assert.ok(fence, "the cache places the Broken fence at the Quest Helper Lumber Yard route tile");
+  assert.equal(fence.getType(), 10);
+  assert.equal(fence.getFace(), 1, "cache rotation 1 blocks the north-south crossing");
+  assert.equal(fence.getDefinition().getActions()[0], "Climb-over");
+  assert.equal(RegionManager.canMove(3308, 3491, 3308, 3492, 0, 1, 1, null), false,
+    "the south approach is clipped until the obstacle runs");
+
+  const south = createPlayer(3308, 3491, 0, 1);
+  assert.notEqual(operate(south, objectId, [3308, 3492, 0]), false);
+  assert.deepEqual(tileOf(south), [3308, 3494, 0], "Climb-over lands north of the clipped fence");
+  assert.ok(south.state.messages.includes("You climb over the broken fence."));
+  assert.equal(south.getAttribute("agility.obstacle") ?? null, null);
+
+  const north = createPlayer(3308, 3494, 0, 1);
+  assert.notEqual(operate(north, objectId, [3308, 3492, 0]), false);
+  assert.deepEqual(tileOf(north), [3308, 3491, 0], "the reverse interaction lands south of the fence");
+  assert.equal(north.getAttribute("agility.obstacle") ?? null, null);
+});
+
 /** A loc's first option, or (for a multiloc like Wyrmscraig's cliff top) one of the locs it shows. */
 function firstOption(id) {
   const loc = CacheDefinitions.getObject(id);

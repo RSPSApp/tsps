@@ -20,8 +20,10 @@
  *   Each house bit and the reveal bit are written with sendVarbit (siblings in the
  *   shared varp survive); the whisper bit 5625 is set with the fifth owner.
  *   5619 veos_progress (varp 1566) is the real Client of Kourend stage varbit and
- *   is written by registerQuest's setStage. X Marks the Spot uses its own varp
- *   2111/varbit 8063 (cluequest).
+ *   is written by registerQuest's setStage. Durable stages stay 1-5 but the wire
+ *   follows Quest Helper: 3 sends 4 (orb held), 4 sends 5 (orb activated), and
+ *   completion sends 9 (also the Kourend Castle Teleport unlock). X Marks the
+ *   Spot uses its own varp 2111/varbit 8063 (cluequest).
  *   5626 veos_housereward (legacy favour-certificate pick) is never touched.
  *
  * Source: OSRS Wiki "Client of Kourend" and "Transcript:Client of Kourend"; cache
@@ -33,13 +35,18 @@
  * - the X Marks the Spot requirement is checked through quest:is-complete when
  *   choosing Veos' variant; the transcript has no refusal branch, so an
  *   unqualified player simply gets Veos' default (standard) transcript.
- * - the pack indexes the starting-off variant to every Veos id, so once X Marks
- *   is complete the start is offered wherever Veos resolves; in this server that
- *   is Port Sarim (the Kourend dock spawns do not resolve for a fresh player).
+ * - Client of Kourend's own conversation is offered only at the Piscarilius Veos
+ *   (10724). Port Sarim Veos stays with X Marks; this plugin adds the missing
+ *   WXJllC and post-X-Marks boat handoff to 1825,3691 without taking that page.
+ * - after completion the Piscarilius Veos plays the canonical
+ *   standard-dialogue-at-port-piscarilius page; its lost-memoirs condition
+ *   (drsnpy) returns 21760 because the generated branch has no item step.
  * - the two antique lamps rub through the shared xpreward interface for 500 XP
- *   each; the Kourend Castle Teleport spell unlock is not represented.
- * - "lost" means "not in the backpack" - bank contents are not inspected; the
- *   transcript's own lost/banked branches then apply.
+ *   each and the completion sends the teleport unlock wire value 9.
+ * - "lost" means "not in the backpack" - bank contents are not inspected for the
+ *   scroll/orb branches; the memoir reclaim treats a banked book as owned.
+ * - a full backpack refuses the normal orb handover and keeps durable stage 2; no
+ *   transcript or stage claims receipt without the orb.
  * - the orb activation must be within 6 tiles of the Dark Altar (object 27979 at
  *   1715,3882); anywhere else plays the "doesn't seem to respond" message.
  * - the general store owners' quest variants have no trade steps in the dump, so
@@ -62,7 +69,10 @@ module.exports = function registerClientOfKourendQuest(api) {
   const STAGE_COMPLETE = 5;
 
   const VARP_VEOS_QUEST = 1566; // "veos_quest"
-  const VEOS_PROGRESS_VARBIT = 5619; // real quest progress; reserved for X Marks in this branch
+  const VEOS_PROGRESS_VARBIT = 5619; // real quest progress; also the Kourend Castle Teleport unlock
+  const VEOS_ORB_VARBIT_VALUE = 4; // Quest Helper wire state while carrying the orb
+  const VEOS_ACTIVATED_VARBIT_VALUE = 5; // Quest Helper wire state after activating the orb
+  const VEOS_COMPLETE_VARBIT_VALUE = 9; // PacketSender's completed value for the teleport unlock
   const VEOS_PISCARILIUS_VARBIT = 5620;
   const VEOS_ARCEUUS_VARBIT = 5621;
   const VEOS_LOVAKENGJ_VARBIT = 5622;
@@ -90,17 +100,33 @@ module.exports = function registerClientOfKourendQuest(api) {
     ItemIdentifiers.ORANGE_FEATHER,
   ]);
 
-  const VEOS_NPC_IDS = new Set([
-    NpcIdentifiers.VEOS_2, // 2850
+  // Client of Kourend's own conversations belong to the Piscarilius docks Veos.
+  // Port Sarim/Hosted Veos ids stay with X Marks the Spot; this plugin only adds
+  // the missing sailing handoff there.
+  const PISCARILIUS_VEOS_NPC_ID = NpcIdentifiers.VEOS_5; // 10724 at 1825,3691
+  const PORT_SARIM_VEOS_NPC_IDS = new Set([
     NpcIdentifiers.VEOS, // 8484
-    NpcIdentifiers.VEOS_3, // 8630
-    NpcIdentifiers.VEOS_4, // 10723
-    NpcIdentifiers.VEOS_5, // 10724
-    NpcIdentifiers.VEOS_6, // 10726
-    NpcIdentifiers.VEOS_7, // 10727
-    NpcIdentifiers.VEOS_8, // 10949
+    NpcIdentifiers.VEOS_4, // 10723, X Marks' completed Port Sarim transform
   ]);
-  const NARRATOR_NPC_ID = NpcIdentifiers.VEOS; // 8484, the orb narration chathead
+  const NARRATOR_NPC_ID = PISCARILIUS_VEOS_NPC_ID; // the orb/quill narration chathead
+  const PISCARILIUS_LANDING = new Location(1825, 3691, 0);
+  const PORT_SARIM_LANDING = new Location(3054, 3245, 0);
+  const LANDS_END_LANDING = new Location(1504, 3401, 0);
+  const ZEAH_VISITED_VARBIT = 4897; // zeah_playerhasvisited, set by the boat ride
+  const VEOS_SAIL_ACTION_ID = "WXJllC";
+  const PORT_SARIM_DESTINATIONS = new Map([
+    ["I'd like to travel to Port Piscarilius, please.", PISCARILIUS_LANDING],
+    ["I'd like to travel to Land's End, please.", LANDS_END_LANDING],
+  ]);
+  const PISCARILIUS_DESTINATIONS = new Map([
+    ["Travel to Port Sarim.", PORT_SARIM_LANDING],
+    ["Travel to Land's End.", LANDS_END_LANDING],
+  ]);
+  const VEOS_DEPARTURE_LINES = new Set([
+    "As you wish.",
+    "As you wish, I hope you don't get seasick, it is a long voyage.",
+  ]);
+  const POST_QUEST_VARIANT = "standard-dialogue-at-port-piscarilius";
 
   // The five house bits: who owns them, which varbit, and the transcript ids.
   const HOUSES = [
@@ -186,6 +212,8 @@ module.exports = function registerClientOfKourendQuest(api) {
   const HAS_ORB_CONDITION_ID = "mJAvYg";
   const LOST_ORB_FULL_CONDITION_ID = "5IoSGv";
   const LOST_ORB_AGAIN_CONDITION_ID = "LIGbQM";
+  const HAS_MEMOIRS_CONDITION_ID = "K8j5Z5";
+  const MISSING_MEMOIRS_CONDITION_ID = "drsnpy";
 
   // Action/message step ids.
   const START_SCROLL_MESSAGE_ID = "qcqaI2";
@@ -201,9 +229,16 @@ module.exports = function registerClientOfKourendQuest(api) {
 
   let quest;
   const lampPending = new WeakMap();
+  const travelPending = new WeakMap();
+  const memoirsPending = new WeakSet();
+  const MEMOIRS_LINE = "I do have some things for you. Enjoy!";
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+  const banked = (player, itemId) =>
+    (player.getBanks?.() ?? []).some((bank) => Number(bank?.getAmount?.(itemId)) > 0);
+  const ownsItem = (player, itemId) => held(player, itemId) || banked(player, itemId);
   const full = (player) => player.getInventory().getFreeSlots() === 0;
+  const isPiscariliusVeos = (npcId) => npcId === PISCARILIUS_VEOS_NPC_ID;
 
   function houses(player) {
     return Number(player.getAttribute(HOUSES_ATTRIBUTE)) || 0;
@@ -234,11 +269,13 @@ module.exports = function registerClientOfKourendQuest(api) {
     return request.complete === true;
   }
 
+  /** Adds one item and reports whether the player now has it (already-held counts). */
   function give(player, itemId) {
     const inventory = player.getInventory();
-    if (inventory.getAmount(itemId) > 0) return;
-    if (inventory.getFreeSlots() < 1) return;
+    if (inventory.getAmount(itemId) > 0) return true;
+    if (inventory.getFreeSlots() < 1) return false;
     inventory.adds(itemId, 1);
+    return inventory.getAmount(itemId) > 0;
   }
 
   function removeOneFeather(player) {
@@ -320,8 +357,12 @@ module.exports = function registerClientOfKourendQuest(api) {
   }
 
   function grantReward(player) {
-    // Two 500-XP antique lamps; registerQuest adds Kharedst's memoirs.
-    player.getInventory().adds(ANTIQUE_LAMP_ITEM_ID, 2);
+    // Two 500-XP antique lamps; registerQuest adds Kharedst's memoirs. Use the
+    // reward path's forceAdd so a full backpack drops them instead of losing them.
+    const inventory = player.getInventory();
+    for (let lamp = 0; lamp < 2; lamp++) {
+      inventory.forceAdd(player, new api.core.Item(ANTIQUE_LAMP_ITEM_ID, 1));
+    }
   }
 
   function confirmLamp(player, item, slot, skill, name) {
@@ -352,12 +393,15 @@ module.exports = function registerClientOfKourendQuest(api) {
 
   /** Which transcript variant each quest NPC plays, by stage. */
   function selectVariant({ npcId, player }) {
+    // A new Talk-to starts a fresh transcript. A prior accepted travel choice may
+    // have been cancelled before its departure line, so discard that destination.
+    if (isPiscariliusVeos(npcId) || PORT_SARIM_VEOS_NPC_IDS.has(npcId)) travelPending.delete(player);
     const house = HOUSE_BY_NPC.get(npcId);
     if (house) {
       return questActive(player) ? house.variant : null;
     }
-    if (!VEOS_NPC_IDS.has(npcId)) return null;
-    if (quest.isComplete(player)) return null; // fall back to Veos' standard transcript
+    if (!isPiscariliusVeos(npcId)) return null;
+    if (quest.isComplete(player)) return POST_QUEST_VARIANT;
     const stage = quest.getStage(player);
     if (stage >= STAGE_ORB_USED) {
       return "finishing-up";
@@ -385,7 +429,9 @@ module.exports = function registerClientOfKourendQuest(api) {
       }
       return null;
     }
-    if (!VEOS_NPC_IDS.has(npcId)) return null;
+    if (!isPiscariliusVeos(npcId)) return null;
+    if (stepId === HAS_MEMOIRS_CONDITION_ID) return ownsItem(player, KHAREDSTS_MEMOIRS_ITEM_ID);
+    if (stepId === MISSING_MEMOIRS_CONDITION_ID) return !ownsItem(player, KHAREDSTS_MEMOIRS_ITEM_ID);
     const hasScroll = held(player, ENCHANTED_SCROLL_ITEM_ID);
     const hasQuill = held(player, ENCHANTED_QUILL_ITEM_ID);
     const hasOrb = held(player, MYSTERIOUS_ORB_ITEM_ID);
@@ -412,8 +458,62 @@ module.exports = function registerClientOfKourendQuest(api) {
   }
 
   function handleStartHook({ player, npcId, hook }) {
-    if (hook !== START_HOOK || !VEOS_NPC_IDS.has(npcId)) return;
+    if (hook !== START_HOOK || !isPiscariliusVeos(npcId)) return;
     if (quest.getStage(player) === 0) quest.setStage(player, STAGE_STARTED);
+  }
+
+  function landAtPiscarilius(player) {
+    player.moveTo(new Location(PISCARILIUS_LANDING.getX(), PISCARILIUS_LANDING.getY(), 0));
+    player.getPacketSender().sendVarbit(ZEAH_VISITED_VARBIT, 1);
+  }
+
+  /** X Marks' completed Port Sarim Veos still needs the canonical boat handoff. */
+  function sailToPiscarilius(event) {
+    event.handled = true;
+    landAtPiscarilius(event.player);
+  }
+
+  function rememberSailChoice({ npcId, player, option }) {
+    if (!PORT_SARIM_VEOS_NPC_IDS.has(npcId) && !isPiscariliusVeos(npcId)) return;
+    travelPending.delete(player);
+    const destination = (isPiscariliusVeos(npcId)
+      ? PISCARILIUS_DESTINATIONS
+      : PORT_SARIM_DESTINATIONS).get(option);
+    if (destination) travelPending.set(player, { npcId, destination });
+  }
+
+  function finishSailLine(event) {
+    const { npcId, player, text } = event;
+    const pending = travelPending.get(player);
+    if (!pending || pending.npcId !== npcId || !VEOS_DEPARTURE_LINES.has(text ?? "")) return;
+    event.after = () => {
+      travelPending.delete(player);
+      player.moveTo(new Location(
+        pending.destination.getX(), pending.destination.getY(), pending.destination.getZ(),
+      ));
+      if (pending.destination === PISCARILIUS_LANDING) {
+        player.getPacketSender().sendVarbit(ZEAH_VISITED_VARBIT, 1);
+      }
+    };
+  }
+
+  /** The post-quest lost-memoirs line has no item step in the dump. */
+  function handleConditionChosen(event) {
+    const { npcId, player, stepId } = event;
+    if (!isPiscariliusVeos(npcId)) return;
+    if (stepId !== MISSING_MEMOIRS_CONDITION_ID) return;
+    memoirsPending.delete(player);
+    if (ownsItem(player, KHAREDSTS_MEMOIRS_ITEM_ID)) return;
+    if (!give(player, KHAREDSTS_MEMOIRS_ITEM_ID)) memoirsPending.add(player);
+  }
+
+  /** A full bag must not play the "Enjoy!" receipt when no memoir was added. */
+  function handleMemoirsLine(event) {
+    const { npcId, player, text } = event;
+    if (!isPiscariliusVeos(npcId) || !memoirsPending.has(player) || text !== MEMOIRS_LINE) return;
+    memoirsPending.delete(player);
+    event.skip = true;
+    player.sendMessage("You need a free inventory space.");
   }
 
   /**
@@ -470,8 +570,13 @@ module.exports = function registerClientOfKourendQuest(api) {
 
   function handleOrbGrant(event) {
     const { player } = event;
-    give(player, MYSTERIOUS_ORB_ITEM_ID);
+    if (!give(player, MYSTERIOUS_ORB_ITEM_ID)) {
+      player.sendMessage("You need a free inventory space.");
+      event.end = true;
+      return false;
+    }
     if (quest.getStage(player) < STAGE_ORB) quest.setStage(player, STAGE_ORB);
+    return true;
   }
 
   /** type "action" receive steps (Player receives ...). */
@@ -524,7 +629,11 @@ module.exports = function registerClientOfKourendQuest(api) {
 
   function handleAction(event) {
     const { npcId, stepId } = event;
-    if (!VEOS_NPC_IDS.has(npcId) && !HOUSE_BY_NPC.has(npcId)) return;
+    if (stepId === VEOS_SAIL_ACTION_ID && PORT_SARIM_VEOS_NPC_IDS.has(npcId)) {
+      sailToPiscarilius(event);
+      return;
+    }
+    if (!isPiscariliusVeos(npcId) && !HOUSE_BY_NPC.has(npcId)) return;
     // Message steps arrive twice (generic action, then kind "message"); act once.
     if (event.kind === "message") {
       handleMessageAction(event);
@@ -535,6 +644,7 @@ module.exports = function registerClientOfKourendQuest(api) {
       return;
     }
     if (stepId === ORB_SAME_AS_ABOVE_ACTION_ID) {
+      event.handled = true;
       handleOrbGrant(event);
       return;
     }
@@ -552,6 +662,10 @@ module.exports = function registerClientOfKourendQuest(api) {
     refreshQuestList(player);
   }
 
+  function handleLogout({ player }) {
+    travelPending.delete(player);
+  }
+
   api.persistAttribute(HOUSES_ATTRIBUTE);
 
   quest = registerQuest(api, {
@@ -565,16 +679,30 @@ module.exports = function registerClientOfKourendQuest(api) {
     xpRewards: [],
     rewardItemId: KHAREDSTS_MEMOIRS_ITEM_ID,
     rewardItemLabel: "Kharedst's memoirs and two antique lamps",
+    otherRewards: ["Ability to use the Kourend Castle Teleport spell"],
     buildJournal,
     onReward: grantReward,
+    // Keep the durable stages but send the wire values the quest's cache/Quest
+    // Helper states use: 3 means returning to Veos, 4 carrying the orb, 5 acted.
+    varbitValue: (stage) => {
+      if (stage >= STAGE_COMPLETE) return VEOS_COMPLETE_VARBIT_VALUE;
+      if (stage === STAGE_ORB) return VEOS_ORB_VARBIT_VALUE;
+      if (stage === STAGE_ORB_USED) return VEOS_ACTIVATED_VARBIT_VALUE;
+      return stage;
+    },
   });
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
+  api.onCustomEvent("npc-dialogue:choice", rememberSailChoice);
+  api.onCustomEvent("npc-dialogue:line", finishSailLine);
+  api.onCustomEvent("npc-dialogue:line", handleMemoirsLine);
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Mysterious orb", { Activate: activateOrb });
   api.onItemAction("Antique lamp", { Rub: rubLamp });
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

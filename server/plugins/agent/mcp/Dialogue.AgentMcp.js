@@ -29,11 +29,11 @@ function readDialogue(core, p) {
 
 module.exports = function registerDialogueTools(ctx) {
   const { core, tool, z, player, find, send, status, sleepTicks } = ctx;
-  const { MultiChatboxPrompt, OptionDialogue } = core;
+  const { MultiChatboxPrompt, OptionDialogue, ActionDialogue } = core;
 
   tool(
     "dialogue",
-    "Read the open dialogue: kind (npc/player/statement/item/options), speaker, text, and options to pick from. Returns null when no dialogue is open.",
+    "Read the open dialogue: kind (npc/player/statement/item/options), speaker, text, and options to pick from. Returns null when no dialogue is open. Internal timed actions return kind=other; wait_ticks instead of continuing them.",
     { player },
     ({ player: username }) => readDialogue(core, find(username))
   );
@@ -47,6 +47,9 @@ module.exports = function registerDialogueTools(ctx) {
       const dialogue = readDialogue(core, p);
       if (!dialogue) throw new Error("No dialogue is open");
       if (dialogue.kind === "options") throw new Error(`Pick an option with dialogue_choose: ${dialogue.options.join(" | ")}`);
+      if (p.getDialogueManager().getCurrent() instanceof ActionDialogue) {
+        throw new Error("An automatic dialogue action is running; wait with wait_ticks.");
+      }
       send(p, { type: "dialogue_continue", widgetId: p.getPacketSender().getChatboxGroupId() << 16, childIndex: -1 });
       await sleepTicks(1);
       return { dialogue: readDialogue(core, find(username)), ...status(find(username)) };

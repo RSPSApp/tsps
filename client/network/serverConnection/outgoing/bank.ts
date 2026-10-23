@@ -33,7 +33,7 @@ export function sendBankDepositItem(
         slot: normalizedSlot,
         quantity: normalizedQty,
     };
-    if (itemId > 0) {
+    if (itemId >= 0) {
         payload.itemId = itemId | 0;
     }
     if (Number.isFinite(tab) && (tab as number) > 0) {

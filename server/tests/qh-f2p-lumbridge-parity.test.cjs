@@ -27,7 +27,12 @@ function register(name, key) {
     persistAttribute() {},
     onNpcDialogueVariant: (fn) => variants.push(fn),
     onNpcDialogueCondition: (fn) => conditions.push(fn),
-    onCustomEvent: (event, fn) => { if (!custom.has(event)) custom.set(event, []); custom.get(event).push(fn); },
+    onCustomEvent: (event, fn) => {
+      if (!custom.has(event)) custom.set(event, []);
+      custom.get(event).push(fn);
+      // The real shared-NPC dispatch below also needs QuestRuntime's public query.
+      if (event === 'quest:get-stage') PluginManager.createApi('QuestRuntimeTest').onCustomEvent(event, fn);
+    },
     emitCustomEvent: (event, payload) => { for (const fn of custom.get(event) || []) fn(payload); },
   }, { get(target, prop) {
     if (prop in target) return target[prop];
@@ -463,12 +468,16 @@ test('Rune Mysteries defers mid-quest Duke to real shared/other-quest dialogue',
     global.__lumbridgeRealNpcDialogues = true;
   }
   if (!global.__lumbridgeRuneDukeRepro) {
-    require('../plugins/quests/quests/RuneMysteries.Quest')(PluginManager.createApi('RuneDukeRepro'));
+    require('../plugins/quests/quests/DeathToTheDorgeshuun.Quest')(PluginManager.createApi('D2DDukeRepro'));
+    require('../plugins/quests/quests/DragonSlayer.Quest')(PluginManager.createApi('DragonDukeRepro'));
     require('../plugins/quests/quests/IdesOfMilk.Quest')(PluginManager.createApi('IdesDukeRepro'));
+    require('../plugins/quests/quests/LostTribe.Quest')(PluginManager.createApi('LostTribeDukeRepro'));
+    require('../plugins/quests/quests/RuneMysteries.Quest')(PluginManager.createApi('RuneDukeRepro'));
     global.__lumbridgeRuneDukeRepro = true;
   }
   const rune = getRegisteredQuests().findLast((entry) => entry.key === 'rune_mysteries');
   const ides = getRegisteredQuests().findLast((entry) => entry.key === 'the_ides_of_milk');
+  const dragon = getRegisteredQuests().findLast((entry) => entry.key === 'dragon_slayer_i');
   const definition = core.NpcDefinition.forId(815);
   const npc = {
     getId: () => 815, getCurrentDefinition: () => definition,
@@ -524,8 +533,30 @@ test('Rune Mysteries defers mid-quest Duke to real shared/other-quest dialogue',
 
   const other = make();
   ides.setStage(other, 10);
+  dragon.setStage(other, 1);
+  talk(other);
+  const opening = [];
+  while (other.manager.getCurrent() && opening.length < 12) {
+    const text = other.manager.getCurrent().getText?.();
+    opening.push(text);
+    if (text === "I'm looking to get into the milk trade!") break;
+    other.manager.advance();
+  }
+  assert.ok(opening.includes('Greetings. I come seeking a business permit.'),
+    'Ides must win over Dragon Slayer when its permit stage needs the Duke');
+  assert.equal(ides.getStage(other), 10, 'closing the dialogue before the referral leaves the permit step unchanged');
+  other.manager.reset();
   talk(other);
   const idesLines = finish(other);
-  assert.ok(idesLines.includes('Greetings. I come seeking a business permit.'), 'active Ides of Milk Duke dialogue must win before/through Rune deferral');
+  assert.ok(idesLines.includes('Greetings. I come seeking a business permit.'), 'the permit conversation reopens after close');
+  assert.ok(idesLines.some(line => line?.startsWith('Why not speak to Gillie Groats?')));
+  assert.equal(ides.getStage(other), 12, 'only the canonical Duke referral advances the Ides stage');
   assert.ok(!idesLines.includes('What did you want me to do again?'), 'Rune must not shadow an active shared Duke quest');
+
+  const dragonOnly = make();
+  dragon.setStage(dragonOnly, 1);
+  talk(dragonOnly);
+  const dragonDialogue = toMenu(dragonOnly);
+  assert.ok(dragonDialogue.menu?.options.includes('I seek a shield that will protect me from dragonbreath.'),
+    'Dragon Slayer keeps its Duke shield conversation when Ides is not at the permit step');
 });

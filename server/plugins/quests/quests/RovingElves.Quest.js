@@ -103,9 +103,11 @@ module.exports = function registerRovingElvesQuest(api) {
   const ELUNED_SPAWN_TILE = { x: 2290, y: 3145, z: 0 };
   const ILFEEN_SPAWN_TILE = { x: 2291, y: 3148, z: 0 };
   const ILFEEN_MET_ATTRIBUTE = "quest.roving_elves.ilfeen-met";
+  const REWARD_CHOICE_ATTRIBUTE = "quest.roving_elves.reward-choice";
+  const REWARD_CHOICE_BOW = 1;
+  const REWARD_CHOICE_SHIELD = 2;
 
   let quest;
-  const rewardChoiceByPlayer = new Map();
   const rovingNpcsByPlayer = new Map();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
@@ -192,9 +194,18 @@ module.exports = function registerRovingElvesQuest(api) {
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.STRENGTH, STRENGTH_XP);
-    const choice = rewardChoiceByPlayer.get(player) ?? "bow";
-    rewardChoiceByPlayer.delete(player);
-    give(player, choice === "shield" ? NEW_CRYSTAL_SHIELD_ITEM_ID : NEW_CRYSTAL_BOW_ITEM_ID, 1);
+    give(player, chosenRewardItemId(player), 1);
+  }
+
+  function chosenRewardItemId(player) {
+    const choice = Number(player.getAttribute(REWARD_CHOICE_ATTRIBUTE));
+    if (choice === REWARD_CHOICE_SHIELD) return NEW_CRYSTAL_SHIELD_ITEM_ID;
+    if (choice === REWARD_CHOICE_BOW) return NEW_CRYSTAL_BOW_ITEM_ID;
+    const bankedShield = (player.getBanks?.() ?? []).some((bank) => bank?.contains?.(NEW_CRYSTAL_SHIELD_ITEM_ID)
+      || (bank?.getAmount?.(NEW_CRYSTAL_SHIELD_ITEM_ID) ?? 0) > 0);
+    return held(player, NEW_CRYSTAL_SHIELD_ITEM_ID) || bankedShield
+      ? NEW_CRYSTAL_SHIELD_ITEM_ID
+      : NEW_CRYSTAL_BOW_ITEM_ID;
   }
 
   // ==========================================================================
@@ -225,7 +236,18 @@ module.exports = function registerRovingElvesQuest(api) {
         ? "enchanting-the-seed-talking-to-eluned-with-the-enchanted-seed"
         : "enchanting-the-seed-talking-to-eluned-after-losing-the-enchanted-seed";
     }
-    if (stage >= STAGE_HAS_SEED) return "enchanting-the-seed-talking-to-eluned-with-the-crystal-seed";
+    if (stage >= STAGE_HAS_SEED) {
+      return hasOldSeed(player)
+        ? "enchanting-the-seed-talking-to-eluned-with-the-crystal-seed"
+        : "consecrating-the-tomb-talking-to-eluned-again";
+    }
+    // Quest Helper checks the seed in the inventory/bank before its stage-3
+    // conditional, so a player who entered the tomb before speaking to Eluned
+    // still hands the seed straight over.
+    if (stage >= STAGE_STARTED && hasOldSeed(player)) {
+      quest.setStage(player, STAGE_HAS_SEED);
+      return "enchanting-the-seed-talking-to-eluned-with-the-crystal-seed";
+    }
     if (stage >= STAGE_SPOKEN_ELUNED) return "consecrating-the-tomb-talking-to-eluned-again";
     if (stage >= STAGE_STARTED) {
       quest.setStage(player, STAGE_SPOKEN_ELUNED);
@@ -257,10 +279,17 @@ module.exports = function registerRovingElvesQuest(api) {
     const value = String(text).toLowerCase();
     if (value.includes("inventory space")) return player.getInventory().isFull();
     if (value.includes("eyes of glouphrie")) return questComplete(player, "the_eyes_of_glouphrie");
-    // Mourning's End Part I is not implemented, so its requirements are never met.
-    if (value.includes("without the requirements for mourning")) return true;
-    if (value.includes("with the requirements for mourning")) return false;
+    const mourningStart = canProceedToMourningsEnd(player);
+    if (value.includes("without the requirements for mourning")) return !mourningStart;
+    if (value.includes("with the requirements for mourning")) return mourningStart;
     return null;
+  }
+
+  function canProceedToMourningsEnd(player) {
+    if (!quest.isComplete(player)) return false;
+    const request = { player, started: false, meetsRequirements: false };
+    api.emitCustomEvent("mournings-end-part-i:start-requirements", request);
+    return request.started === true || request.meetsRequirements === true;
   }
 
   function handleStartHook({ player, npcId, hook }) {
@@ -288,7 +317,10 @@ module.exports = function registerRovingElvesQuest(api) {
       return;
     }
     if (stepId === COMPLETE_ACTION_ID) {
-      if (!quest.isComplete(player)) quest.complete(player);
+      // The transcript's full-bag branch says Islwyn has no room to hand over
+      // the crystal creation. Keep the quest at the planted stage so the player
+      // can free a slot and talk to him again instead of losing the reward.
+      if (!quest.isComplete(player) && !player.getInventory().isFull()) quest.complete(player);
       event.handled = true;
     }
   }
@@ -297,8 +329,8 @@ module.exports = function registerRovingElvesQuest(api) {
   function handleRewardChoice({ player, npcId, option }) {
     if (!player || !ISLWYN_NPC_IDS.has(npcId)) return;
     const value = String(option ?? "").toLowerCase();
-    if (value.includes("bow")) rewardChoiceByPlayer.set(player, "bow");
-    else if (value.includes("shield")) rewardChoiceByPlayer.set(player, "shield");
+    if (value.includes("bow")) player.setAttribute(REWARD_CHOICE_ATTRIBUTE, REWARD_CHOICE_BOW);
+    else if (value.includes("shield")) player.setAttribute(REWARD_CHOICE_ATTRIBUTE, REWARD_CHOICE_SHIELD);
   }
 
   // ==========================================================================
@@ -328,7 +360,10 @@ module.exports = function registerRovingElvesQuest(api) {
   function handleSeedPickup(event) {
     const { player, groundItemId } = event;
     if (!player || groundItemId !== OLD_SEED_ITEM_ID) return;
-    if (quest.getStage(player) === STAGE_SPOKEN_ELUNED) quest.setStage(player, STAGE_HAS_SEED);
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_STARTED && stage < STAGE_HAS_SEED && player.getInventory().getFreeSlots() > 0) {
+      quest.setStage(player, STAGE_HAS_SEED);
+    }
   }
 
   /** The enchanted seed's Plant option replays the wiki plant messages. */
@@ -396,10 +431,16 @@ module.exports = function registerRovingElvesQuest(api) {
   function handleLogout({ player }) {
     if (!player) return;
     removeRovingElves(player);
-    rewardChoiceByPlayer.delete(player);
   }
 
-  api.persistAttribute(ILFEEN_MET_ATTRIBUTE);
+  /** Completing Regicide while online must make the roving pair spawn without a relog. */
+  function handleQuestCompleted({ player, key }) {
+    if (!player || key !== "regicide") return;
+    spawnRovingElves(player);
+  }
+
+  api.persistAttribute(ILFEEN_MET_ATTRIBUTE, 0);
+  api.persistAttribute(REWARD_CHOICE_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "roving_elves",
@@ -409,7 +450,7 @@ module.exports = function registerRovingElvesQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [{ skillId: Skill.STRENGTH.getIndex(), amount: STRENGTH_XP, label: "Strength" }],
-    scrollItemId: NEW_CRYSTAL_BOW_ITEM_ID,
+    scrollItemId: chosenRewardItemId,
     rewardItemLabel: "Crystal bow or crystal shield",
     otherRewards: ["Ability to wield crystal equipment"],
     buildJournal,
@@ -425,6 +466,7 @@ module.exports = function registerRovingElvesQuest(api) {
   api.onItemOnObject(handlePebbleOnTombstone, { noted: false });
   api.onItemAction(handleItemAction);
   api.onGroundItemPickup(handleSeedPickup);
+  api.onCustomEvent("quest:completed", handleQuestCompleted);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 };

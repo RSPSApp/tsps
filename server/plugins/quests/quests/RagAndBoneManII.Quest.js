@@ -7,9 +7,12 @@
  * answers, the 27-bone wish list, the hand-in, the 1/4 drop rolls, the
  * vinegar/pot-boiler cleaning chain and the reward.
  *
- * Stages (varp 716 "rag_bone_2"; the cache varp dump and `dump:cs2 4024` carry no
- * quest-list entry for 716, so the values are this plugin's own): 1 started,
- * 2 complete. The handed-in bones live in the persisted
+ * Durable stages stay 1 started / 2 complete. The cache's progress reader
+ * (script 4024) reads varp 714 for this quest, and the quest DB row (115,
+ * column 19) completes at 6. Rag and Bone Man I uses the same varp, so the
+ * durable stage maps to the wire as 4 started / 6 complete; while II is
+ * unstarted the wire follows Rag and Bone Man I (0/1, or 4 once I completes).
+ * The handed-in bones live in the persisted
  * "quest.rag_and_bone_man_ii.bones" attribute bitset (one bit per species, in the
  * SPECIES order below); the chosen reward(s) in
  * "quest.rag_and_bone_man_ii.rewards" (bit 1 ram skull helm, bit 2 bonesack).
@@ -29,33 +32,28 @@
  *   RagAndBoneManI.Quest.js's variant selector always returns its post-quest
  *   variant for a completed quest and would shadow this quest's branches; the
  *   claim replays the right page/variant through QuestRuntime.startTranscript.
- * - RagAndBoneManI.Quest.js registers first and claims every log/tinderbox use on
- *   the pot-boiler (it always sets handled), so this plugin's bone-in-vinegar use
- *   consumes one set of logs from the inventory and needs a carried tinderbox at
- *   that moment instead of using the shared boiler state. The shared Wish-list
- *   object's Read is also theirs; after Rag and Bone Man I it lists this quest's
- *   species, so no separate handler is registered here.
- * - RagAndBoneManI.Quest.js stores the boiler's client state in varbit 2046
- *   (varp 716 bits 21-28); this quest's stage writes varp 716 whole, zeroing those
- *   bits client-side (server state is unaffected). A shared fix is needed: a
- *   dedicated stage varp/varbit for II, or the boiler moved off varp 716.
- * - The boil finishes by itself after 20 ticks (OSRS clicks "Remove-Bone") and a
- *   player who logs out mid-boil loses the bone in vinegar.
+ *   The claim defers while Bone Voyage's Odd Old Man lucky-charm step is active,
+ *   so BoneVoyage.Quest.js's variant selector keeps NPC 1259.
+ * - RagAndBoneManI.Quest.js owns the shared pot-boiler state machine. This quest
+ *   passes its vinegar/clean bone ids to that handler, so both quests use the
+ *   normal put-bone, light, wait, Remove-Bone and logout-refund lifecycle. The
+ *   shared Wish-list object's Read is also theirs; after Rag and Bone Man I it
+ *   lists this quest's species, so no separate handler is registered here.
  * - npc-drops.json already rolls the wolf bone from Desert/Dire wolves and the
  *   experiment bone from Experiments unconditionally (its quest condition exists
  *   only as a free-text note), so those ids are omitted here; the other four
  *   conditional rows target monsters this map does not use (a corpse, reanimated
  *   troll/dagannoth). Killing an Experiment or Desert/Dire wolf can therefore drop
  *   twice.
- * - Post-quest exchange swaps a carried helm/bonesack only; "still possesses it"
- *   checks inventory and equipment, not the bank.
+ * - Post-quest replacement/reward ownership counts inventory, equipment and the
+ *   bank; an exchange removes the item from whichever container holds it.
  * - Pot-boiler/action messages are this plugin's wording; the transcript has none.
  *
  * Source: https://oldschool.runescape.wiki/w/Rag_and_Bone_Man_II and
  * https://oldschool.runescape.wiki/w/Transcript:Rag_and_Bone_Man_II
  */
 module.exports = function registerRagAndBoneManIIQuest(api) {
-  const { CountdownTask, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Skill, TaskManager } = api.core;
+  const { Item, ItemIdentifiers, NpcIdentifiers, Skill } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const ODD_OLD_MAN_NPC_ID = NpcIdentifiers.ODD_OLD_MAN; // 1259
@@ -63,42 +61,18 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
   const PAGE = "Rag and Bone Man II";
   const ODD_OLD_MAN_PAGE = "Odd Old Man";
 
-  // The map places the neutral transform object; the states are client objects.
-  const POT_BOILER_BASE_OBJECT_ID = 14004; // "null" object at 3360,3505,0 (dump:loc)
-  const POT_BOILER_OBJECT_IDS = new Set([
-    POT_BOILER_BASE_OBJECT_ID,
-    ObjectIdentifiers.POT_BOILER, // 14005 logs
-    ObjectIdentifiers.POT_BOILER_2, // 14006 empty
-    ObjectIdentifiers.POT_BOILER_3, // 14007 pot
-    ObjectIdentifiers.POT_BOILER_4, // 14008 lit
-    ObjectIdentifiers.POT_BOILER_5, // 14009 done
-  ]);
-
   const POT_OF_VINEGAR_ITEM_ID = ItemIdentifiers.POT_OF_VINEGAR; // 7811
-  const TINDERBOX_ITEM_ID = ItemIdentifiers.TINDERBOX; // 590
   const RAM_SKULL_HELM_ITEM_ID = ItemIdentifiers.RAM_SKULL_HELM; // 7917
   const BONESACK_ITEM_ID = ItemIdentifiers.BONESACK; // 7918
 
-  const LOG_ITEM_IDS = new Set([
-    ItemIdentifiers.LOGS,
-    ItemIdentifiers.ACHEY_TREE_LOGS,
-    ItemIdentifiers.OAK_LOGS,
-    ItemIdentifiers.WILLOW_LOGS,
-    ItemIdentifiers.MAPLE_LOGS,
-    ItemIdentifiers.YEW_LOGS,
-    ItemIdentifiers.MAGIC_LOGS,
-    ItemIdentifiers.TEAK_LOGS,
-    ItemIdentifiers.MAHOGANY_LOGS,
-    ItemIdentifiers.ARCTIC_PINE_LOGS,
-    ItemIdentifiers.REDWOOD_LOGS,
-  ]);
-
-  const VARP_RAG_AND_BONE_MAN_II = 716; // "rag_bone_2"
+  const VARP_RAG_AND_BONE_MAN = 714; // shared with Rag and Bone Man I
+  const WIRE_STARTED = 4;
+  const WIRE_COMPLETE = 6;
   const STAGE_STARTED = 1;
   const STAGE_COMPLETE = 2;
   const PRAYER_XP = 5000;
   const DROP_DENOMINATOR = 4;
-  const BOIL_TICKS = 20;
+  const LOAD_SHARED_VINEGAR_BONE_EVENT = "rag-and-bone-man-i:load-vinegar-bone";
 
   const BONES_ATTRIBUTE = "quest.rag_and_bone_man_ii.bones";
   const REWARDS_ATTRIBUTE = "quest.rag_and_bone_man_ii.rewards";
@@ -106,6 +80,11 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
   const BIT_REWARD_BONESACK = 1 << 1;
   const RAG_AND_BONE_MAN_I_STAGE_ATTRIBUTE = "quest.rag_and_bone_man_i.stage";
   const RAG_AND_BONE_MAN_I_COMPLETE = 2;
+  // Bone Voyage's Odd Old Man step (stage 9 plan agreed, before 11 complete).
+  const BONE_VOYAGE_KEY = "bone_voyage";
+  const BONE_VOYAGE_PLAN_AGREED = 9;
+  const BONE_VOYAGE_COMPLETE = 11;
+  const BONE_VOYAGE_CHARM_ATTRIBUTE = "quest.bone_voyage.charm";
 
   // Transcript ids.
   const PAGE_VARIANT_START = "talking-to-the-odd-old-man-without-any-bones";
@@ -473,9 +452,52 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     return (Number(player.getAttribute(RAG_AND_BONE_MAN_I_STAGE_ATTRIBUTE)) || 0) >= RAG_AND_BONE_MAN_I_COMPLETE;
   }
 
-  function hasItem(player, itemId) {
+  /** Another registered quest's durable stage, or 0 when it is not registered. */
+  function questStage(player, key) {
+    const request = { player, key, stage: null };
+    api.emitCustomEvent("quest:get-stage", request);
+    return Number(request.stage) || 0;
+  }
+
+  /**
+   * Bone Voyage owns NPC 1259 while it wants the lucky bone charm; its variant
+   * selector must run instead of this quest's Talk-to transcript.
+   */
+  function boneVoyageNeedsOddOldMan(player) {
+    const stage = questStage(player, BONE_VOYAGE_KEY);
+    if (stage < BONE_VOYAGE_PLAN_AGREED || stage >= BONE_VOYAGE_COMPLETE) return false;
+    return (Number(player.getAttribute(BONE_VOYAGE_CHARM_ATTRIBUTE)) || 0) < 2;
+  }
+
+  function carriedOrWorn(player, itemId) {
     if (player.getInventory().getAmount(itemId) > 0) return true;
     return (player.getEquipment().getItems() || []).some((item) => item && item.getId?.() === itemId);
+  }
+
+  function hasItem(player, itemId) {
+    if (carriedOrWorn(player, itemId)) return true;
+    return (player.getBanks?.() ?? []).some((bank) => (Number(bank?.getAmount?.(itemId)) || 0) > 0);
+  }
+
+  /** Removes one item from wherever the player owns it; true when removed. */
+  function removeItem(player, itemId) {
+    const inventory = player.getInventory();
+    if (inventory.getAmount(itemId) > 0) {
+      inventory.deleteNumber(itemId, 1);
+      return true;
+    }
+    const equipment = player.getEquipment();
+    if ((equipment.getItems() || []).some((item) => item && item.getId?.() === itemId)) {
+      equipment.deleteNumber(itemId, 1);
+      return true;
+    }
+    for (const bank of player.getBanks?.() ?? []) {
+      if ((Number(bank?.getAmount?.(itemId)) || 0) > 0) {
+        bank.deleteNumber(itemId, 1);
+        return true;
+      }
+    }
+    return false;
   }
 
   function giveItem(player, itemId) {
@@ -521,6 +543,14 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     return (bones(player) & ALL_BONES_MASK) === ALL_BONES_MASK;
   }
 
+  /** This quest's durable stage on the varp shared with Rag and Bone Man I. */
+  function wireValue(stage, player) {
+    if (stage >= STAGE_COMPLETE) return WIRE_COMPLETE;
+    if (stage >= STAGE_STARTED) return WIRE_STARTED;
+    const previous = Number(player.getAttribute(RAG_AND_BONE_MAN_I_STAGE_ATTRIBUTE)) || 0;
+    return previous >= RAG_AND_BONE_MAN_I_COMPLETE ? WIRE_STARTED : previous;
+  }
+
   /** Which wish-list variant the current state calls for; also starts the quest. */
   function wishListVariant(player) {
     if (quest.isComplete(player)) {
@@ -530,6 +560,10 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     if (quest.getStage(player) === 0) {
       quest.setStage(player, STAGE_STARTED);
       return PAGE_VARIANT_START;
+    }
+    if (allBonesHandedIn(player)) {
+      pendingHandIn.delete(player);
+      return PAGE_VARIANT_FINISHING;
     }
     const ready = readyBoneCount(player);
     if (ready > 0) {
@@ -555,6 +589,7 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
   function talkToOddOldMan(event) {
     const { player } = event;
     if (!ragAndBoneManIComplete(player)) return false;
+    if (boneVoyageNeedsOddOldMan(player)) return false;
     const variant = wishListVariant(player);
     const page = variant === POST_QUEST_VARIANT ? ODD_OLD_MAN_PAGE : PAGE;
     return startTranscript(api, player, ODD_OLD_MAN_NPC_ID, page, variant);
@@ -627,10 +662,20 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
 
   function exchangeReward(player, fromItemId, toItemId, rewardBits) {
     const inventory = player.getInventory();
-    if (inventory.getAmount(fromItemId) <= 0) return;
-    inventory.deleteNumber(fromItemId, 1);
-    giveItem(player, toItemId);
+    const fromItemIsCarried = inventory.getAmount(fromItemId) > 0;
+    if (!fromItemIsCarried && inventory.getFreeSlots() <= 0) {
+      player.sendMessage("You need more inventory space to exchange the reward.");
+      return false;
+    }
+    if (!removeItem(player, fromItemId)) return;
+    if (!inventory.adds(toItemId, 1)) {
+      // Preserve the original reward if capacity changes between preflight and receipt.
+      giveItem(player, fromItemId);
+      player.sendMessage("You need more inventory space to exchange the reward.");
+      return false;
+    }
     player.setAttribute(REWARDS_ATTRIBUTE, rewardBits);
+    return true;
   }
 
   function handleChoice(event) {
@@ -682,45 +727,16 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     player.sendMessage("You put the bone in the pot of vinegar.");
   }
 
-  /**
-   * Bone in vinegar on the pot-boiler. RagAndBoneManI.Quest.js registers first and
-   * claims every log/tinderbox use on the boiler, so this path carries its own
-   * logs and tinderbox instead of using the shared boiler state.
-   */
+  /** The first quest's boiler handler owns logs, tinderbox, timer, Remove-Pot and Remove-Bone. */
   function handleItemOnObject(event) {
-    const { player, itemId, objectId } = event;
-    if (!POT_BOILER_OBJECT_IDS.has(objectId)) return;
+    const { player, itemId } = event;
     const species = SPECIES_BY_VINEGAR_ID.get(itemId);
     if (!species) return;
     if (!questActive(player)) return;
-    const inventory = player.getInventory();
-    if (inventory.getAmount(species.vinegar) <= 0) return;
-    let logItemId;
-    for (const candidate of LOG_ITEM_IDS) {
-      if (inventory.getAmount(candidate) > 0) {
-        logItemId = candidate;
-        break;
-      }
-    }
-    if (logItemId === undefined) {
-      player.sendMessage("You need some logs to burn in the pot-boiler.");
-      return;
-    }
-    if (inventory.getAmount(TINDERBOX_ITEM_ID) <= 0) {
-      player.sendMessage("You need a tinderbox to light the pot-boiler.");
-      return;
-    }
-    event.handled = true;
-    inventory.deleteNumber(species.vinegar, 1);
-    inventory.deleteNumber(logItemId, 1);
-    player.sendMessage("You put the bone in vinegar in the pot-boiler and light the logs.");
-    TaskManager.submit(
-      new CountdownTask(player, BOIL_TICKS, () => {
-        if (player.isRegistered?.() === false) return;
-        giveItem(player, species.clean);
-        player.sendMessage("You take the cleaned bone out of the pot-boiler.");
-      })
-    );
+    api.emitCustomEvent(LOAD_SHARED_VINEGAR_BONE_EVENT, {
+      event,
+      bone: { vinegar: species.vinegar, cleaned: species.clean },
+    });
   }
 
   function buildJournal(player, questHandle) {
@@ -769,6 +785,10 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
     player.getSkillManager().addExperiences(Skill.PRAYER, PRAYER_XP);
   }
 
+  function completionScrollItemId(player) {
+    return hasReward(player, BIT_REWARD_HELM) ? RAM_SKULL_HELM_ITEM_ID : BONESACK_ITEM_ID;
+  }
+
   function handleLogin({ player }) {
     refreshQuestList(player);
   }
@@ -779,12 +799,13 @@ module.exports = function registerRagAndBoneManIIQuest(api) {
   quest = registerQuest(api, {
     key: "rag_and_bone_man_ii",
     name: "Rag and Bone Man II",
-    varpId: VARP_RAG_AND_BONE_MAN_II,
+    varpId: VARP_RAG_AND_BONE_MAN,
+    varpValue: wireValue,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [{ skillId: Skill.PRAYER.getIndex(), amount: PRAYER_XP, label: "Prayer" }],
-    scrollItemId: RAM_SKULL_HELM_ITEM_ID,
+    scrollItemId: completionScrollItemId,
     rewardItemLabel: "A bonesack or ram skull helm",
     buildJournal,
     onReward: grantRewards,

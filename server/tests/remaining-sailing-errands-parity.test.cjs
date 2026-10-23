@@ -338,7 +338,7 @@ test('Prying Times crowbar, key and crate need the real materials and stages', (
 
   h.action(N.DRINK_TROLL, 'Gyue8X');
   assert.equal(h.inventory.get(I.BOTTLE_OF_FISH_BLADDER_STOUT), 1);
-  h.action(N.DRINK_TROLL, 'PkEAX6');
+  h.action(N.DRINK_TROLL, 'jR3WLF');
   assert.equal(h.inventory.get(I.BOTTLE_OF_FISH_BLADDER_STOUT), 0);
   assert.equal(h.attrs.get('prying-times:drank-stout'), true);
 
@@ -381,7 +381,7 @@ test('Prying Times drink troll uses the real boat deck, retries spawn failure an
     if (failOnce) { failOnce = false; return null; }
     return spawn(definition);
   };
-  h.action(N.DRINK_TROLL, 'bivi2Q');
+  h.action(N.DRINK_TROLL, '0OeEX0');
   assert.equal(h.spawned.filter((npc) => npc.getId() === N.DRINK_TROLL).length, 0,
     'a failed spawn does not create an outside-deck troll');
   h.tick(1);
@@ -395,7 +395,7 @@ test('Prying Times drink troll uses the real boat deck, retries spawn failure an
   assert.ok(!deck.entities.includes(troll), 'death detaches the troll from the deck');
   assert.equal(troll.getArea(), null);
 
-  h.action(N.DRINK_TROLL, 'bivi2Q');
+  h.action(N.DRINK_TROLL, '0OeEX0');
   const second = h.spawned.filter((npc) => npc.getId() === N.DRINK_TROLL).at(-1);
   assert.ok(second && second !== troll, 'the leg can spawn a fresh troll after death');
   assert.equal(second.getArea(), deck);

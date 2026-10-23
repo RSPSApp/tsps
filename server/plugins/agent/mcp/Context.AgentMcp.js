@@ -121,7 +121,7 @@ function createContext(core, server) {
     return { sent: message };
   };
   const items = (container) => container.getItems()
-    .map((item, slot) => item && item.getId() > 0 && item.getAmount() > 0
+    .map((item, slot) => item && item.getId() >= 0 && item.getAmount() > 0
       ? { slot, id: item.getId(), name: ItemDefinition.forId(item.getId()).getName(), amount: item.getAmount() }
       : null)
     .filter(Boolean);

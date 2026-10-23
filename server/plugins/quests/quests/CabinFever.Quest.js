@@ -12,10 +12,11 @@
  * Stages (varp 655 "fever_quest"; the cache has no varbit on it): 1 started,
  * 2 sailed (cutscene), 3 taking out the enemy cannon, 4 repairing the hull,
  * 5 plundering ten loads, 6 replacing the cannon barrel, 7 firing at the crew,
- * 8 sinking the enemy ship, 9 complete. Nothing in this cache reads varp 655 (no
- * multi-loc transform, no CS2 found), so the stage values are this plugin's own
- * ordering. The state the client does read lives in the real Cabin Fever varbits
- * on varps 656/657/658, which this plugin drives and persists (evidence: the
+ * 8 sinking the enemy ship, 9 complete. The durable stage stays 1-9; the wire
+ * is mapped to the cache contract (varp 655 completes at DB table 0 column 19
+ * value 140; CS2 script 4024 reads varp 655). The state the client does read
+ * also lives in the real Cabin Fever varbits on varps 656/657/658, which this
+ * plugin drives and persists (evidence: the
  * multi-loc transforms in CacheDefinitions + scripts/lookup-gameval.ts):
  *   1741 fever_cannon (0 empty, 1 exploded, 2 stripped, 3 armed; resolves loc
  *   11213 into Cannon/Broken Cannon variants), 1742 powder, 1743 tamp, 1744 ammo,
@@ -48,11 +49,14 @@
  *    light" variant is unreachable); a bullseye lantern is refused, per the wiki.
  *  - The dump's empty-store branch reads "You have plunder to deposit." (the wiki
  *    text is inverted); it is played verbatim.
+ *  - The fever rope on the enemy deck (wiki/Quest Helper: pick it up at
+ *    1822,4827) is laid out for the player when they swing over without a
+ *    spare rope, instead of being a permanent floor item for everyone.
  *  - The mid-battle return-to-port branches (fade out, "enemy reappears") and the
  *    teleport-out messages are not wired; the pirate taunts, the post-quest lift
  *    teleports, the lost-Book replacement and the 10,000-coin claim are.
- *  - The tinderbox is handed out by the gun locker (there is no hold-corner spawn
- *    in this cache), and locker searches grant the stage's kit in one go rather
+ *  - Cache Fever rope/tinderbox floor piles convert to ordinary items on pickup;
+ *    the lockers provide the remaining quest supplies.
  *    than through OSRS's item-selection interface.
  */
 module.exports = function registerCabinFeverQuest(api) {
@@ -218,12 +222,35 @@ module.exports = function registerCabinFeverQuest(api) {
   const STAGE_SINK = 8;
   const STAGE_COMPLETE = 9;
 
+  // Cache DB (table 0, column 19) completes Cabin Fever at varp 655 value 140.
+  // Internal stages stay 0-9; this is the durable stage -> wire mapping.
+  const WIRE_COMPLETE = 140;
+  const WIRE_STAGE_VALUES = new Map([
+    [0, 0],
+    [STAGE_STARTED, 10],
+    [STAGE_SAILING, 20],
+    [STAGE_CANNON, 30],
+    [STAGE_LEAKS, 50],
+    [STAGE_PLUNDER, 70],
+    [STAGE_FIX_CANNON, 90],
+    [STAGE_FIRE, 110],
+    [STAGE_SINK, 130],
+    [STAGE_COMPLETE, WIRE_COMPLETE],
+  ]);
+
+  function wireStageValue(stage) {
+    const value = WIRE_STAGE_VALUES.get(stage | 0);
+    if (value !== undefined) return value;
+    return (stage | 0) >= STAGE_COMPLETE ? WIRE_COMPLETE : 0;
+  }
+
   const FLAGS_ATTRIBUTE = "quest.cabin_fever.flags";
+  const CREW_HITS_ATTRIBUTE = "cabin-fever:crew-hits";
   const VARP_CANNON_ATTRIBUTE = "quest.cabin_fever.var656";
   const VARP_EXTRA_ATTRIBUTE = "quest.cabin_fever.var657";
   const VARP_STORAGE_ATTRIBUTE = "quest.cabin_fever.var658";
   const FLAG_SHIP_TALKED = 1 << 0;
-  const FLAG_CREW_HIT = 1 << 1;
+  const CREW_HITS_REQUIRED = 3;
 
   const ARRIVE_ACTION_ID = "cabin-fever:arrive";
   // How long a looted plunder container stays empty (wiki: up to 5 minutes).
@@ -238,6 +265,9 @@ module.exports = function registerCabinFeverQuest(api) {
   const EAST_YARDARM = new Location(1823, 4835, 2);
   const WEST_NET_LANDING = new Location(1817, 4831, 1);
   const EAST_NET_LANDING = new Location(1824, 4834, 1);
+  // The fever rope lying on the enemy deck (wiki/Quest Helper: pick it up here).
+  const ENEMY_ROPE_TILE = { x: 1822, y: 4827, z: 1 };
+  const HOLD_TINDERBOX_TILE = { x: 1814, y: 4825, z: 0 };
 
   const PLUNDER_SOURCES = new Map([
     [ENEMY_CHEST, { varbit: VARBIT_CHEST, amount: 3, variant: "time-to-plunder-plundering-the-chest" }],
@@ -286,6 +316,7 @@ module.exports = function registerCabinFeverQuest(api) {
     sender.sendConfig(VARP_EXTRA_VAR, 0);
     sender.sendConfig(VARP_STORAGE_VAR, 0);
     player.setAttribute(FLAGS_ATTRIBUTE, 0);
+    player.setAttribute(CREW_HITS_ATTRIBUTE, 0);
     player.setAttribute(VARP_CANNON_ATTRIBUTE, 0);
     player.setAttribute(VARP_EXTRA_ATTRIBUTE, 0);
     player.setAttribute(VARP_STORAGE_ATTRIBUTE, 0);
@@ -304,6 +335,10 @@ module.exports = function registerCabinFeverQuest(api) {
 
   function setFlag(player, flag) {
     player.setAttribute(FLAGS_ATTRIBUTE, flags(player) | flag);
+  }
+
+  function crewHits(player) {
+    return Number(player.getAttribute(CREW_HITS_ATTRIBUTE)) || 0;
   }
 
   function giveSupply(player, itemId, amount) {
@@ -327,7 +362,8 @@ module.exports = function registerCabinFeverQuest(api) {
       skills.getMaxLevel(Skill.SMITHING) >= 50 &&
       skills.getMaxLevel(Skill.RANGED) >= 40 &&
       questComplete(player, "pirates_treasure") &&
-      questComplete(player, "rum_deal")
+      questComplete(player, "rum_deal") &&
+      questComplete(player, "priest_in_peril")
     );
   }
 
@@ -434,7 +470,7 @@ module.exports = function registerCabinFeverQuest(api) {
         }
         return "fixing-up-the-cannon-talking-to-bill-teach-before-fixing-the-cannon";
       case STAGE_FIRE:
-        if (hasFlag(player, FLAG_CREW_HIT)) {
+        if (crewHits(player) >= CREW_HITS_REQUIRED) {
           quest.setStage(player, STAGE_SINK);
           return "sinking-the-enemy-ship";
         }
@@ -563,7 +599,10 @@ module.exports = function registerCabinFeverQuest(api) {
   function handleChoice(event) {
     const { player, npcId, option } = event;
     if (!player || !BILL_NPC_IDS.has(npcId)) return;
-    if (option === "Yes, I've always wanted to be a pirate!") {
+    if (
+      option === "Yes, I am a man of my word." ||
+      option === "Yes, I am a woman of my word."
+    ) {
       if (quest.getStage(player) === 0 && meetsRequirements(player)) {
         quest.setStage(player, STAGE_STARTED);
       }
@@ -611,7 +650,12 @@ module.exports = function registerCabinFeverQuest(api) {
   }
 
   function claimGold(player) {
-    player.getInventory().adds(COINS, 10000);
+    const inventory = player.getInventory();
+    const before = inventory.getAmount(COINS);
+    inventory.adds(COINS, 10000);
+    // The claim is once-only, so it is only consumed when the coins landed:
+    // a full inventory without a coins stack makes the add fail silently.
+    if (inventory.getAmount(COINS) - before < 10000) return;
     setVarbitValue(player, VARBIT_GOLD, 1);
   }
 
@@ -696,7 +740,7 @@ module.exports = function registerCabinFeverQuest(api) {
   function openRepairLocker(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
-    giveSupply(player, CF_ROPE, 4);
+    giveSupply(player, ROPE, 4);
     giveSupply(player, HAMMER, 1);
     giveSupply(player, REPAIR_PLANK, 6);
     giveSupply(player, TACKS, 30);
@@ -722,7 +766,6 @@ module.exports = function registerCabinFeverQuest(api) {
       return;
     }
     if (stage === STAGE_CANNON) {
-      giveSupply(player, CF_TINDERBOX, 1);
       giveSupply(player, FUSE, 4);
       return;
     }
@@ -911,7 +954,7 @@ module.exports = function registerCabinFeverQuest(api) {
     emptyCannonLoad(player, false);
     if (ammo === CANNON_AMMO_CANISTER) {
       fireOutcome.set(player, hit ? "hit" : "miss");
-      if (hit) setFlag(player, FLAG_CREW_HIT);
+      if (hit) player.setAttribute(CREW_HITS_ATTRIBUTE, crewHits(player) + 1);
       playVariant(
         player,
         "talking-to-bill-teach-again-before-firing-the-cannon-firing-the-cannon"
@@ -1077,7 +1120,7 @@ module.exports = function registerCabinFeverQuest(api) {
     }
   }
 
-  function swingToOtherShip(player) {
+  function swingToOtherShip(player, itemId) {
     const stage = quest.getStage(player);
     if (stage < STAGE_CANNON || stage >= STAGE_COMPLETE) return;
     if ((player.getLocation()?.getZ?.() ?? 0) < 2) return;
@@ -1088,7 +1131,26 @@ module.exports = function registerCabinFeverQuest(api) {
       return;
     }
     const onOwnShip = (player.getLocation()?.getX?.() ?? 0) < 1819;
+    player.getInventory().deleteNumber(itemId, 1);
     player.moveTo(onOwnShip ? ENEMY_DECK : BATTLE_DECK);
+  }
+
+  function handleGroundItemPickup(event) {
+    const { player, groundItemId, location } = event;
+    if (!player || !location) return;
+    const at = (tile) => location.x === tile.x && location.y === tile.y && location.z === tile.z;
+    const itemId = groundItemId === CF_ROPE && at(ENEMY_ROPE_TILE)
+      ? ROPE
+      : groundItemId === CF_TINDERBOX && at(HOLD_TINDERBOX_TILE)
+        ? TINDERBOX
+        : null;
+    if (itemId === null) return;
+
+    event.handled = true;
+    const inventory = player.getInventory();
+    if (inventory.getFreeSlots() < 1 || inventory.adds(itemId, 1) === false) {
+      player.sendMessage("You do not have enough free inventory space to take that.");
+    }
   }
 
   function handleItemOnObject(event) {
@@ -1103,7 +1165,7 @@ module.exports = function registerCabinFeverQuest(api) {
     if (SAIL_OBJECT_IDS.has(objectId)) {
       if (!SWING_ROPES.has(itemId)) return;
       event.handled = true;
-      swingToOtherShip(player);
+      swingToOtherShip(player, itemId);
       return;
     }
     if (objectId === ENEMY_POWDER_BARREL) {
@@ -1261,7 +1323,6 @@ module.exports = function registerCabinFeverQuest(api) {
       REPAIR_PLANK_ALT,
       TACKS,
       PLUNDER,
-      CF_ROPE,
     ]) {
       const amount = player.getInventory().getAmount(itemId);
       if (amount > 0) player.getInventory().deleteNumber(itemId, amount);
@@ -1332,6 +1393,7 @@ module.exports = function registerCabinFeverQuest(api) {
   // ==========================================================================
 
   api.persistAttribute(FLAGS_ATTRIBUTE, 0);
+  api.persistAttribute(CREW_HITS_ATTRIBUTE, 0);
   api.persistAttribute(VARP_CANNON_ATTRIBUTE, 0);
   api.persistAttribute(VARP_EXTRA_ATTRIBUTE, 0);
   api.persistAttribute(VARP_STORAGE_ATTRIBUTE, 0);
@@ -1340,6 +1402,7 @@ module.exports = function registerCabinFeverQuest(api) {
     key: "cabin_fever",
     name: "Cabin Fever",
     varpId: VARP_CABIN_FEVER,
+    varpValue: wireStageValue,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
@@ -1366,6 +1429,7 @@ module.exports = function registerCabinFeverQuest(api) {
   api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
   api.onCustomEvent("ladders:climb", handleGangplankClaim);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onGroundItemPickup(handleGroundItemPickup);
   api.onObjectInteraction(handleObjectInteraction);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", restoreVarps);

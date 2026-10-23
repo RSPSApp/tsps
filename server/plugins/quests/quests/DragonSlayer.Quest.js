@@ -38,6 +38,7 @@ module.exports = function registerDragonSlayerQuest(api) {
   const STAGE_NED_READY = 8;
   const STAGE_CRANDOR = 9;
   const STAGE_COMPLETE = 10;
+  const IDES_PERMIT_DUKE_STAGE = 10;
 
   const ITEM = {
     coins: ItemIdentifiers.COINS,
@@ -244,6 +245,12 @@ module.exports = function registerDragonSlayerQuest(api) {
   function reward(player) {
     player.getSkillManager().addExperiences(Skill.STRENGTH, 18650);
     player.getSkillManager().addExperiences(Skill.DEFENCE, 18650);
+  }
+
+  function idesNeedsDukePermit(player) {
+    const request = { player, key: "the_ides_of_milk", stage: 0 };
+    api.emitCustomEvent("quest:get-stage", request);
+    return request.stage === IDES_PERMIT_DUKE_STAGE;
   }
 
   function giveItem(player, itemId, amount = 1) {
@@ -479,10 +486,10 @@ module.exports = function registerDragonSlayerQuest(api) {
 
     if (npcId === DUKE_HORACIO_NPC_ID) {
       // Duke's flat page carries the anti-dragon shield conversation (the
-      // Dragon Slayer I page only holds Oziach/Ned/etc. variants). Claim him
-      // while Dragon Slayer still owes the player a shield so Rune Mysteries'
-      // Duke branch cannot shadow it.
-      if (stage < STAGE_GUILDMASTER || hasItem(player, ITEM.antiDragonShield)) return null;
+      // Dragon Slayer I page only holds Oziach/Ned/etc. variants). Defer while
+      // Ides of Milk needs its stage-10 permit dialogue; otherwise claim him
+      // while Dragon Slayer still owes the player a shield.
+      if (stage < STAGE_GUILDMASTER || hasItem(player, ITEM.antiDragonShield) || idesNeedsDukePermit(player)) return null;
       return { page: DUKE_PAGE };
     }
 

@@ -1012,6 +1012,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
 
   /** The target is shot across the channel; the default walk-to range 1 never reaches it. */
   function handleRangingTargetRoute(event) {
+    if (event.clickType === 0) return;
     const room = ROOMS.find((candidate) => candidate.channelNpcIds?.has(event.npcId));
     if (!room) return;
     event.range = 10;

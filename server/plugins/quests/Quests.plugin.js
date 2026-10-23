@@ -32,7 +32,7 @@ const QUESTS = [
   "TheFremennikExiles", "FremennikTrials", "GardenOfDeath", "GardenOfTranquillity", "GertrudesCat",
   "GettingAhead", "GhostsAhoy", "GiantDwarf", "GoblinDiplomacy",
   "GrandTree", "GreatBrainRobbery", "GrimTales", "HandInTheSand",
-  "HauntedMine", "HazeelCult", "HeroesQuest", "HolyGrail",
+  "HauntedMine", "HazeelCult", "HeroesQuest", "HisFaithfulServants", "HolyGrail",
   "HorrorFromTheDeep", "IcthlarinsLittleHelper", "IdesOfMilk", "ImpCatcher",
   "InAidOfTheMyreque", "InSearchOfTheMyreque", "JunglePotion", "KingsRansom",
   "KnightsSword", "LandOfTheGoblins", "LearningTheRopes", "LegendsQuest", "LostCity",

@@ -103,6 +103,7 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   const BIT_TEARS_READY = 1 << 11;
   const BIT_CRATE = 1 << 12;
   const BIT_MET_ZANIK = 1 << 13;
+  const BIT_HEARD_DEACON = 1 << 14;
 
   const TOUR_BITS =
     BIT_DUKE | BIT_COMMON | BIT_AERECK | BIT_GOBLIN | BIT_SHOP;
@@ -224,19 +225,21 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
   ];
 
   const HAM_ZONE = { minX: 3100, maxX: 3192, minY: 9595, maxY: 9665 };
-  const RUBBLE_ZONE = { minX: 3152, maxX: 3168, minY: 9626, maxY: 9640 };
+  // The H.A.M. base's hidden trapdoor sits at 3166,9622 (cache loc 15766); the
+  // stage and the "stand next to the rubble" step are on the same tile.
+  const RUBBLE_ZONE = { minX: 3162, maxX: 3170, minY: 9618, maxY: 9626 };
   const STORE_ZONE = { minX: 2555, maxX: 2595, minY: 5175, maxY: 5230 };
   const MILL_ZONE = { minX: 3195, maxX: 3255, minY: 3260, maxY: 3315 };
   const CELLAR_ZONE = { minX: 3202, maxX: 3230, minY: 9610, maxY: 9630 };
   const LUMBRIDGE_ZONE = { minX: 3190, maxX: 3270, minY: 3185, maxY: 3265 };
 
-  const HIDDEN_TRAPDOOR_TILE = { x: 3160, y: 9632 };
+  const HIDDEN_TRAPDOOR_TILE = { x: 3166, y: 9622 };
   const STORE_ROOM_TILE = { x: 2566, y: 5186 };
-  const MILL_TRAPDOOR_TILE = { x: 3226, y: 3280 };
+  const MILL_TRAPDOOR_TILE = { x: 3230, y: 3286 };
   const MILL_CELLAR_TILE = { x: 3217, y: 9692 };
   const JAIL_TILE = { x: 3184, y: 9612 };
-  const SURFACE_TILE = { x: 3119, y: 3244 };
-  const CORPSE_TILE = { x: 3122, y: 3244 };
+  const SURFACE_TILE = { x: 3160, y: 3246 };
+  const CORPSE_TILE = { x: 3161, y: 3246 };
   const MINE_TILE = { x: 3319, y: 9616 };
   const JUNA_LOC_NAME = "<col=ffff00>Juna</col>";
 
@@ -536,11 +539,9 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (!MISTAG_IDS.has(npcId) && npcId !== NpcIdentifiers.MISTAG) return false;
     const stage = quest.getStage(player);
     if (stage === 0) {
+      // Quest Helper lists only The Lost Tribe (plus 23 Agility/Thieving) as
+      // requirements; The Giant Dwarf is not needed to start this quest.
       if (!hasQuest(player, "the_lost_tribe")) return false;
-      if (!hasQuest(player, "giant_dwarf")) {
-        player.sendMessage("You must complete The Giant Dwarf before you can help the Dorgeshuun.");
-        return true;
-      }
     } else if (stage !== STAGE_STARTED) {
       return false;
     }
@@ -1114,6 +1115,15 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
 
   function handleObjectInteraction(event) {
     const objectId = resolvedObjectId(event);
+    // The quest doors only offer "Listen-at" (15757/15758); they never emit
+    // door:toggle, so claim them from the object hook as well.
+    if (
+      objectId === ObjectIdentifiers.LARGE_DOOR_51 ||
+      objectId === ObjectIdentifiers.LARGE_DOOR_52
+    ) {
+      claimLargeDoor(event);
+      return;
+    }
     if (objectId === ObjectIdentifiers.HIDDEN_TRAPDOOR) {
       event.handled = true;
       useHiddenTrapdoor(event.player);
@@ -1155,7 +1165,9 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     const objectId = request.objectId;
     if (
       objectId !== ObjectIdentifiers.LARGE_DOOR_47 &&
-      objectId !== ObjectIdentifiers.LARGE_DOOR_49
+      objectId !== ObjectIdentifiers.LARGE_DOOR_49 &&
+      objectId !== ObjectIdentifiers.LARGE_DOOR_51 &&
+      objectId !== ObjectIdentifiers.LARGE_DOOR_52
     ) {
       return;
     }
@@ -1215,9 +1227,21 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     if (quest.getStage(player) !== STAGE_INFILTRATING) return;
     if (!hasBit(player, BIT_TALKED_GUARD) || !hasBit(player, BIT_TALKED_JOHANHUS)) return;
     if (hasBit(player, BIT_TRAPDOOR)) return;
+    placeZanik(player);
+    if (!hasBit(player, BIT_HEARD_DEACON)) {
+      // Quest Helper stops at the stage to hear the H.A.M. deacon first.
+      setBit(player, BIT_HEARD_DEACON);
+      playVariant(player, NpcIdentifiers.ZANIK, "ham-infiltrators-walking-near-the-ham-deacon");
+      playAfterChat(player, () => {
+        if (quest.getStage(player) !== STAGE_INFILTRATING || hasBit(player, BIT_TRAPDOOR)) return;
+        setBit(player, BIT_TRAPDOOR);
+        advance(player, STAGE_TRAPDOOR);
+        playVariant(player, NpcIdentifiers.ZANIK, "ham-infiltrators-walking-near-the-rubble");
+      });
+      return;
+    }
     setBit(player, BIT_TRAPDOOR);
     advance(player, STAGE_TRAPDOOR);
-    placeZanik(player);
     playVariant(player, NpcIdentifiers.ZANIK, "ham-infiltrators-walking-near-the-rubble");
   }
 
@@ -1431,6 +1455,13 @@ module.exports = function registerDeathToTheDorgeshuunQuest(api) {
     name: "Death to the Dorgeshuun",
     varpId: VARP_DTTD,
     varbitId: VARBIT_DTTD_MAIN,
+    // The saved stage is this plugin's line-by-line route; Quest Helper's
+    // loadSteps keys are the real dttd_main wire values. Keep durable saves on
+    // the internal stages but transmit the canonical varbit value.
+    varbitValue(stage) {
+      const WIRE_STAGE = [0, 1, 3, 4, 4, 5, 5, 6, 6, 7, 8, 10, 11, 12, 13];
+      return WIRE_STAGE[stage] ?? stage;
+    },
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,

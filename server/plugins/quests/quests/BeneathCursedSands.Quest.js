@@ -998,13 +998,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   function handleAction(event) {
     const { player, stepId } = event;
     switch (stepId) {
-      // Wiki "unavailable" continuation markers that sit before a branch's tail;
-      // letting them end the chat would strand the stage update after them.
-      case "POwEyB": // Zahur: before the equipment talk
-        event.handled = true;
-        return;
-      case "93LAJP": // Sophanem High Priest: hand over the first cure crate
-        event.handled = true;
+      case "e-KOmi": // Sophanem High Priest: hand over the first cure crate
         if (hasItem(player, CURE_CRATE_ITEM)) player.getInventory().deleteNumber(CURE_CRATE_ITEM, 1);
         if (quest.getStage(player) < STAGE_CRATE_DELIVERED) setStage(player, STAGE_CRATE_DELIVERED);
         return;

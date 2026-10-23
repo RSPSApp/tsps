@@ -216,7 +216,9 @@ function openCompletedScroll(player, quest, questPoints) {
   packet.sendInterfaceFlagsRange((COMPLETED_GROUP << 16) | COMPLETED_CLOSE_CHILD, -1, -1, 1 << 1);
   setText((COMPLETED_GROUP << 16) | COMPLETED_TITLE_CHILD, "Congratulations!");
   setText((COMPLETED_GROUP << 16) | COMPLETED_NAME_CHILD, `You have completed ${quest.name}!`);
-  const scrollItemId = quest.scrollItemId ?? quest.rewardItemId;
+  const scrollItemId = typeof quest.scrollItemId === "function"
+    ? quest.scrollItemId(player)
+    : quest.scrollItemId ?? quest.rewardItemId;
   if (scrollItemId !== undefined) {
     packet.sendItemOnInterfaces((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, scrollItemId, 1);
   }
@@ -420,6 +422,7 @@ function sendQuestVarps({ player }) {
  * @param api  the plugin api
  * @param def  { key, name, varpId, varbitId, varbitValue, startedValue, completionValue, questPoints,
  *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?,
+ *               scrollItemId? (item id or function of player),
  *               buildJournal?(player, quest), onReward?(player, quest),
  *               varpValue?(stage, player) }
  */

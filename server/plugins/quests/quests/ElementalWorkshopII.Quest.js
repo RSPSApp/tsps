@@ -11,7 +11,8 @@
  *   4 key taken, 5 hatch open, 6 schematics taken, 7 crane claw repaired, 8 junction pipes
  *   connected, 9 workshop repairs complete, 10 primed bar, 11 mind bar, 12 complete.
  * The stage values 1-4 follow OSRS; 5-12 split the reference's single "making the helm"
- * range. Sub-state is persisted in attributes and mirrored to the real varbits on varps
+ * range. The cache's QUEST_STATUS_GET completes varbit 2639 at 11 (DB column 19), so the
+ * durable mind-bar stage 11 is sent as 10 and the completed stage 12 as 11. Sub-state is persisted in attributes and mirrored to the real varbits on varps
  * 896/897 with the values the OSRS quest helper reads (verified against Jagex gamevals in
  * /tmp/varbits.txt): jig_state 1 placed / 2 hot / 3 flat hot / 4 cool flat / 5 dry;
  * jig_pos 0 crane / 1 press / 2 tank / 3 wind tunnel; fire_pos 0 raised / 1 lowered /
@@ -92,6 +93,14 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   const STAGE_PRIMED_BAR = 10;
   const STAGE_MIND_BAR = 11;
   const STAGE_COMPLETE = 12;
+  const WIRE_COMPLETE = 11; // the cache's completion threshold for varbit 2639
+
+  /** Durable stages 11/12 are the post-bar split; the wire completes at 11. */
+  function wireStage(value) {
+    if (value >= STAGE_COMPLETE) return WIRE_COMPLETE;
+    if (value >= STAGE_MIND_BAR) return STAGE_MIND_BAR - 1;
+    return value;
+  }
 
   const BEATEN_BOOK = ItemIdentifiers.BEATEN_BOOK; // 9717
   const SCROLL = ItemIdentifiers.SCROLL_3; // 9721
@@ -138,7 +147,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   const BOILER_FOR_KEY = ObjectIdentifiers.MACHINERY_4; // 18594, the Search version
   const BOILER_IDS = new Set([BOILER, BOILER_FOR_KEY]);
   const HATCH = 3413; // elem2_stairs_door (nameless parent -> 18595/18596/18597)
-  const HATCH_IDS = new Set([HATCH, ObjectIdentifiers.HATCH, ObjectIdentifiers.HATCH_2, ObjectIdentifiers.STAIRWELL]);
+  const HATCH_IDS = new Set([HATCH, ObjectIdentifiers.HATCH, ObjectIdentifiers.HATCH_2]);
   const PIPE_REPAIR = 3414; // elemental_piping_blue_broken_multi (nameless parent)
   const PIPE_REPAIR_IDS = new Set([PIPE_REPAIR, ObjectIdentifiers.PIPING]);
   const OLD_CRANE = ObjectIdentifiers.OLD_CRANE_16; // 18638, the placed crane base
@@ -344,7 +353,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     const water = waterState(player);
     const air = airState(player);
     const pipes = pipeState(player);
-    sendVarbit(player, VARBIT_MAIN, stage(player));
+    sendVarbit(player, VARBIT_MAIN, wireStage(stage(player)));
     sendVarbit(player, VARBIT_HIDE_KEY, hasFlag(player, FLAG_KEY_REVEALED) ? 1 : 0);
     sendVarbit(player, VARBIT_HATCH, hasFlag(player, FLAG_HATCH_OPEN) ? 1 : 0);
     sendVarbit(player, VARBIT_WATER_STATE, hasFlag(player, FLAG_PIPE_REPAIRED) ? 1 : 0);
@@ -610,10 +619,11 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
   function searchCrate(player, objectId) {
     const index = CRATE_INDEX.get(objectId);
     if (index === undefined) return;
-    const schematicsRead = hasFlag(player, FLAG_CRANE_SCHEMATIC_READ) && hasFlag(player, FLAG_LEVER_SCHEMATIC_READ);
+    const schematicsTaken = (hasFlag(player, FLAG_CRANE_SCHEMATIC_TAKEN) || has(player, CRANE_SCHEMATIC)) &&
+      (hasFlag(player, FLAG_LEVER_SCHEMATIC_TAKEN) || has(player, LEVER_SCHEMATIC));
     const map = crateMap(player);
     let kind = "empty";
-    if (schematicsRead) {
+    if (schematicsTaken) {
       for (let slot = 0; slot < CRATE_KINDS.length; slot++) {
         if (map[slot] !== index) continue;
         const candidate = CRATE_KINDS[slot];
@@ -1277,6 +1287,7 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
     varbitId: VARBIT_MAIN,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    varbitValue: wireStage,
     questPoints: 1,
     xpRewards: [
       { skillId: Skill.CRAFTING.getIndex(), amount: 7500, label: "Crafting" },

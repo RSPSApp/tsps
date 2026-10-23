@@ -7,18 +7,18 @@
  * hand-in and completes on the "finishing-up" action. Fluffs (3497) is indexed only
  * for her post-quest catspeak pages, so her quest interactions are replayed from the
  * "Gertrude's Cat" page by stage, and her milk/sardine/kitten hand-overs, the
- * doogle-sardine recipe and the crate search are supplied here.
+ * doogle-sardine recipe and NPC-crate search are supplied here.
  *
  * Stages (varp 180): 1 started, 2 paid the boy, 3 gave milk, 4 gave sardine,
  * 5 rescued the kitten, 6 complete.
  *
  * Gaps (no dump support): the crate search does not honour the reference's
- * kitten-crate varp (181) and always finds the kitten at stage 4. At completion
- * Gertrude plays her generic "Gertrude" page dialogue (the cat page has no
- * post-quest variant).
+ * kitten-crate varp (181); every Lumber Yard mewing crate can find the kitten
+ * at stage 4. At completion Gertrude plays her generic "Gertrude" page dialogue
+ * (the cat page has no post-quest variant).
  */
 module.exports = function registerGertrudesCatQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Gertrude's Cat";
@@ -27,6 +27,7 @@ module.exports = function registerGertrudesCatQuest(api) {
   const SHILOP_NPC_ID = NpcIdentifiers.SHILOP;
   const WILOUGH_NPC_ID = NpcIdentifiers.WILOUGH;
   const FLUFFS_NPC_ID = NpcIdentifiers.GERTRUDES_CAT_2;
+  const CRATE_NPC_ID = NpcIdentifiers.CRATE;
   const QUEST_NPC_IDS = new Set([...GERTRUDE_NPC_IDS, SHILOP_NPC_ID, WILOUGH_NPC_ID, FLUFFS_NPC_ID]);
 
   const VARP_GERTRUDES_CAT = 180;
@@ -40,6 +41,7 @@ module.exports = function registerGertrudesCatQuest(api) {
   const RAW_SARDINE_ITEM_ID = ItemIdentifiers.RAW_SARDINE;
   const BUCKET_ITEM_ID = ItemIdentifiers.BUCKET;
   const MILK_ITEM_ID = ItemIdentifiers.BUCKET_OF_MILK;
+  const BOTTOMLESS_MILK_ITEM_ID = 33089; // Gameval bottomless_milk_bucket_filled
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const SEASONED_SARDINE_ITEM_ID = ItemIdentifiers.SEASONED_SARDINE;
   const FLUFFS_KITTEN_ITEM_ID = ItemIdentifiers.FLUFFS_KITTEN;
@@ -55,7 +57,8 @@ module.exports = function registerGertrudesCatQuest(api) {
     [STAGE_GAVE_SARDINE]: { "pick-up": "making-seasoned-sardines-pick-up-fluffs", stroke: "making-seasoned-sardines-pick-up-fluffs" },
   };
 
-  const CRATE_LOC_ID = ObjectIdentifiers.CRATE_18;
+  // The helper marks the mewing "Crate" NPCs in the Lumber Yard.
+  const LUMBERYARD_CRATE_BOUNDS = { minX: 3298, maxX: 3315, minY: 3499, maxY: 3515, z: 0 };
 
   const START_HOOK = "quest:gertrude-s-cat:start";
   const COINS_ACTION_ID = "YQId7G";
@@ -120,9 +123,18 @@ module.exports = function registerGertrudesCatQuest(api) {
     return "starting-off";
   }
 
-  function boyVariant(stage) {
+  function boyVariant(npcId, stage) {
     if (stage >= STAGE_RESCUED) return null;
     if (stage >= STAGE_GAVE_SARDINE) return "finding-fluffs-talking-to-shilop-and-wilough-again";
+    if (stage >= STAGE_PAID_BOY) {
+      // After paying, the canonical follow-up is no longer the first (pay) menu.
+      // That variant lives on the shared "Gertrude's Cat" transcript page, not
+      // on Wilough's own page (which only has the standard/treasure-trail talk).
+      if (npcId === WILOUGH_NPC_ID) {
+        return { page: PAGE, variant: "talking-to-shilop-and-wilough-talking-to-them-again" };
+      }
+      return { page: "Shilop", variant: "standard-dialogue-after-paying-him" };
+    }
     if (stage >= STAGE_STARTED) return "talking-to-shilop-and-wilough";
     return null;
   }
@@ -130,8 +142,17 @@ module.exports = function registerGertrudesCatQuest(api) {
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
     if (GERTRUDE_NPC_IDS.has(npcId)) return gertrudeVariant(stage);
-    if (npcId === SHILOP_NPC_ID || npcId === WILOUGH_NPC_ID) return boyVariant(stage);
+    if (npcId === SHILOP_NPC_ID || npcId === WILOUGH_NPC_ID) return boyVariant(npcId, stage);
     return null;
+  }
+
+  function handleGertrudeInteraction(event) {
+    if (!GERTRUDE_NPC_IDS.has(event.npcId)) return false;
+    const stage = quest.getStage(event.player);
+    if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return false;
+    event.handled = true;
+    startTranscript(api, event.player, event.npcId, PAGE, gertrudeVariant(stage));
+    return true;
   }
 
   function answerCondition({ npcId, player, text }) {
@@ -185,6 +206,12 @@ module.exports = function registerGertrudesCatQuest(api) {
       return;
     }
     if (stepId === COMPLETE_ACTION_ID) {
+      if (!quest.isComplete(player) && stage >= STAGE_RESCUED && player.getInventory().getFreeSlots() < 3) {
+        player.sendMessage("You need three free inventory slots to receive Gertrude's rewards.");
+        event.handled = true;
+        event.end = true;
+        return;
+      }
       if (!quest.isComplete(player) && stage >= STAGE_RESCUED) quest.complete(player);
       event.handled = true;
       event.end = true;
@@ -204,6 +231,7 @@ module.exports = function registerGertrudesCatQuest(api) {
       }
       player.getInventory().deleteNumber(COINS_ITEM_ID, 100);
       player.getInventory().adds(ItemIdentifiers.PET_KITTEN, 1);
+      player.sendMessage("Gertrude gives you another kitten.");
     }
   }
 
@@ -212,9 +240,11 @@ module.exports = function registerGertrudesCatQuest(api) {
     if ((event.npcId ?? event.target?.getId?.()) !== FLUFFS_NPC_ID) return;
     const { player, itemId } = event;
     const stage = quest.getStage(player);
-    if (itemId === MILK_ITEM_ID && stage === STAGE_PAID_BOY) {
-      player.getInventory().deleteNumber(MILK_ITEM_ID, 1);
-      player.getInventory().adds(BUCKET_ITEM_ID, 1);
+    if ((itemId === MILK_ITEM_ID || itemId === BOTTOMLESS_MILK_ITEM_ID) && stage === STAGE_PAID_BOY) {
+      if (itemId === MILK_ITEM_ID) {
+        player.getInventory().deleteNumber(MILK_ITEM_ID, 1);
+        player.getInventory().adds(BUCKET_ITEM_ID, 1);
+      }
       quest.setStage(player, STAGE_GAVE_MILK);
       player.sendMessage("Fluffs laps up the milk.");
       event.handled = true;
@@ -234,7 +264,7 @@ module.exports = function registerGertrudesCatQuest(api) {
       event.handled = true;
       return;
     }
-    if (itemId === MILK_ITEM_ID || itemId === SEASONED_SARDINE_ITEM_ID || itemId === FLUFFS_KITTEN_ITEM_ID) {
+    if (itemId === MILK_ITEM_ID || itemId === BOTTOMLESS_MILK_ITEM_ID || itemId === SEASONED_SARDINE_ITEM_ID || itemId === FLUFFS_KITTEN_ITEM_ID) {
       player.sendMessage("Fluffs is not interested right now.");
       event.handled = true;
     }
@@ -276,23 +306,37 @@ module.exports = function registerGertrudesCatQuest(api) {
     event.handled = true;
   }
 
+  function isLumberyardCrate(event) {
+    if ((event.npcId ?? event.npc?.getId?.()) !== CRATE_NPC_ID) return false;
+    const location = event.npc?.getLocation?.() ?? event.location;
+    if (!location) return false;
+    const x = location.x ?? location.getX?.();
+    const y = location.y ?? location.getY?.();
+    const z = location.z ?? location.getZ?.() ?? 0;
+    const bounds = LUMBERYARD_CRATE_BOUNDS;
+    return z === bounds.z && x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
+  }
+
   /** Searching the lumber-yard crates finds the kitten once Fluffs is fed. */
   function handleCrateSearch(event) {
-    if (event.objectId !== CRATE_LOC_ID) return;
+    if (!isLumberyardCrate(event)) return false;
+    const action = event.definition?.getActions?.()[event.clickType - 1] ?? event.option;
+    if (String(action ?? "").toLowerCase() !== "search") return false;
     const { player } = event;
     if (quest.getStage(player) !== STAGE_GAVE_SARDINE || hasItem(player, FLUFFS_KITTEN_ITEM_ID)) {
       player.sendMessage("You search the crate but find nothing.");
       event.handled = true;
-      return;
+      return true;
     }
     if (player.getInventory().isFull()) {
       player.sendMessage("You need a free inventory slot.");
       event.handled = true;
-      return;
+      return true;
     }
     player.getInventory().adds(FLUFFS_KITTEN_ITEM_ID, 1);
     player.sendMessage("You find Fluffs' kitten!");
     event.handled = true;
+    return true;
   }
 
   quest = registerQuest(api, {
@@ -311,11 +355,12 @@ module.exports = function registerGertrudesCatQuest(api) {
   });
 
   api.onNpcDialogueVariant(selectVariant);
+  api.onNpcInteraction("Gertrude", { "Talk-to": handleGertrudeInteraction });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onNpcInteraction(handleFluffsInteraction);
   api.onItemOnNpc(handleItemOnCat);
   api.onItemOnItem(handleItemOnItem);
-  api.onObjectInteraction(handleCrateSearch);
+  api.onNpcInteraction("Crate", { Search: handleCrateSearch });
 };

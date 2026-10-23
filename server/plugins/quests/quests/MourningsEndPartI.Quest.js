@@ -41,9 +41,10 @@
  * Object/ground ids (cache placements, `yarn dump:loc`):
  *   Laundry Basket 4039 at 2912,3418 (Taverley); Trapdoor 8783 at 2542,3327;
  *   Ladder 8785 at 2044,4650; Closed Chest 8797 at 2039,4633; Apple Press 8807
- *   at 2484,3374; Rotten Apple Pile 8809 at 2487,3374/2489,3373; Sacks 365
- *   (the powder target in West Ardougne); Range 26181 at 2547,3322 and Cooking
- *   range 8750 in Lletya. Ground items: Barrel 3216 at 2487,3371; Rotten apple
+ *   at 2484,3374; Rotten Apple Pile 8809 at 2487,3374/2489,3373; the three
+ *   food stores are mourning_sack_full1..3 37330-37332 (365 is unrelated
+ *   generic scenery); Range 26181 at 2547,3322 and Cooking range 8750 in
+ *   Lletya. Ground items: Barrel 3216 at 2487,3371; Rotten apple
  *   1984 at 2535,3333/2549,3332.
  * NPCs: Arandar mourner spawn 9233 -> content 9013 (level 11); Arianwyn 5292 ->
  * 9014 in Lletya; Essyllt 9235 -> 9016 at 2044,4628; Elena 4257 at 2592,3336;
@@ -63,11 +64,10 @@
  *    is used directly on a flock and the loaded toad's colour must match it.
  *  - Oronwen's incremental silk/fur item-on-NPC hand-ins are not scripted; her
  *    dialogue hands the trousers over when 2 silk and bear fur are carried.
- *  - Skill requirements (50 Thieving, 60 Ranged, the stat drain) and quest
- *    prerequisites are not enforced, matching the other quest plugins.
+ *  - The 50 Thieving, 60 Ranged, Roving Elves, Big Chompy Bird Hunting and
+ *    Sheep Herder start requirements are enforced; the stat drain is not modelled.
  *  - HQ mourners (content 9017) are Attack-only in this cache, so the
  *    inside/outside headquarters variants are unreachable.
- *  - The two food stores are any two distinct Sacks 365 tiles in West Ardougne.
  *  - Entering the HQ needs the full mourner set equipped; the original
  *    "stopped by a mourner" flavour becomes a one-line refusal.
  */
@@ -131,6 +131,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   const ORONWEN_ID = NpcIdentifiers.ORONWEN; // 1478
   const TEGID_ID = NpcIdentifiers.TEGID; // 4766
   const SEER_ID = NpcIdentifiers.SEER; // 5231
+  const ELUNED_CHATHEAD = NpcIdentifiers.ELUNED; // 8766
   const GNOME_CHATHEAD = NpcIdentifiers.GNOME_5; // 5309
   const ARIANWYN_CHATHEAD = NpcIdentifiers.ARIANWYN; // 3432
   const ESSYLLT_CHATHEAD = NpcIdentifiers.ESSYLLT; // 3415
@@ -177,7 +178,13 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   const SILK = ItemIdentifiers.SILK; // 950
   const BEAR_FUR = ItemIdentifiers.BEAR_FUR; // 948
   const FEATHER = ItemIdentifiers.FEATHER; // 314
-  const TOAD_CRUNCHIES = ItemIdentifiers.TOAD_CRUNCHIES; // 2217
+  // The wiki transcript just calls these "toad crunchies"; Quest Helper also
+  // accepts the premade and Aluft variants.
+  const TOAD_CRUNCHIES_IDS = new Set([
+    ItemIdentifiers.TOAD_CRUNCHIES, // 2217
+    2243, // premade toad crunchies
+    9538, // Aluft toad crunchies
+  ]);
   const MAGIC_LOGS = ItemIdentifiers.MAGIC_LOGS; // 1513
   const LEATHER = ItemIdentifiers.LEATHER; // 1741
   const OGRE_BELLOWS = ItemIdentifiers.OGRE_BELLOWS; // 2871
@@ -206,7 +213,9 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   const GNOME_RACK_IDS = new Set([GNOME_RACK, ObjectIdentifiers.COL_FFFF00_GNOME_ON_A_RACK_COL]);
   const APPLE_PRESS = ObjectIdentifiers.APPLE_PRESS; // 8807
   const ROTTEN_APPLE_PILE = ObjectIdentifiers.ROTTEN_APPLE_PILE; // 8809
-  const SACKS = ObjectIdentifiers.SACKS_2; // 365
+  // The three West Ardougne food stores are the mourning_sack_full1..3 base
+  // locs (gameval); 365 is the unrelated generic "Sacks" scenery family.
+  const FOOD_STORE_IDS = new Set([37330, 37331, 37332]);
   const RANGE_OBJECT_IDS = new Set([
     ObjectIdentifiers.RANGE_12, // 26181, the HQ ground floor and most ranges
     ObjectIdentifiers.COOKING_RANGE_3, // 8750, the Lletya ranges
@@ -216,8 +225,6 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   const HQ_TRAPDOOR_TILE = { x: 2542, y: 3328, z: 0 };
   const LLETYA_SQUARE = { x: 2352, y: 3170, z: 0 };
   const GNOME_SPAWN = { x: 2036, y: 4630, z: 0 };
-  // Any two distinct Sacks 365 tiles inside West Ardougne count as supply points.
-  const WEST_ARDOUGNE = { minX: 2500, maxX: 2560, minY: 3260, maxY: 3335 };
 
   const VARP_MOURNINGS_END_PART_I = 517; // mourning_quest
   const VARBIT_SEE_ELUNED = 797; // mourning_can_see_eluned
@@ -304,6 +311,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     "GT5Pn9",
   ]);
   const GNOME_AGREE_OPTION = "toad crunchies and being tickled";
+  const START_HOOK = "quest:mourning-s-end-part-i:start";
 
   let quest;
   const spawnedGnomeByPlayer = new Map();
@@ -397,15 +405,19 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     return raw ? raw.split(",").filter(Boolean) : [];
   }
 
-  function inWestArdougne(location) {
-    return (
-      !!location &&
-      location.x >= WEST_ARDOUGNE.minX &&
-      location.x <= WEST_ARDOUGNE.maxX &&
-      location.y >= WEST_ARDOUGNE.minY &&
-      location.y <= WEST_ARDOUGNE.maxY &&
-      (location.z ?? 0) === 0
-    );
+  function hasToadCrunchies(player) {
+    for (const itemId of TOAD_CRUNCHIES_IDS) if (held(player, itemId)) return true;
+    return false;
+  }
+
+  function takeToadCrunchies(player) {
+    for (const itemId of TOAD_CRUNCHIES_IDS) {
+      if (held(player, itemId)) {
+        take(player, itemId, 1);
+        return true;
+      }
+    }
+    return false;
   }
 
   function play(player, npcId, variant, select) {
@@ -579,7 +591,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
         // the strange device along with some toad crunchies."
         if (held(player, MAGIC_LOGS)) take(player, MAGIC_LOGS, 1);
         if (held(player, LEATHER)) take(player, LEATHER, 1);
-        if (held(player, TOAD_CRUNCHIES)) take(player, TOAD_CRUNCHIES, 1);
+        takeToadCrunchies(player);
         if (held(player, BROKEN_DEVICE)) take(player, BROKEN_DEVICE, 1);
         if (!held(player, FIXED_DEVICE)) give(player, FIXED_DEVICE, 1);
         advance(player, STAGE_FIXED_DEVICE);
@@ -626,6 +638,38 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     if (held(player, BEAR_FUR)) take(player, BEAR_FUR, 1);
     if (!held(player, MOURNER_TROUSERS)) give(player, MOURNER_TROUSERS, 1);
     advance(player, STAGE_TROUSERS);
+  }
+
+  /**
+   * Roving Elves' post-quest Islwyn answers "Yes." with this hook, and the
+   * canonical continuation is Eluned's "in need of your skills" page (she
+   * takes the player to Lletya and hands over the crystal seed).
+   */
+  function handleDialogueHook(event) {
+    const { player, hook } = event ?? {};
+    if (!player || hook !== START_HOOK) return;
+    if (quest.getStage(player) !== 0) return;
+    if (!meetsStartRequirements(player)) {
+      player.sendMessage("You do not meet all of the requirements to start Mourning's End Part I.");
+      return;
+    }
+    advance(player, STAGE_STARTED);
+    deferPlay(player, ELUNED_CHATHEAD, "in-need-of-your-skills");
+  }
+
+  function meetsStartRequirements(player) {
+    const skills = player.getSkillManager();
+    return questComplete(player, "roving_elves")
+      && questComplete(player, "big_chompy_bird_hunting")
+      && questComplete(player, "sheep_herder")
+      && skills.getMaxLevel(Skill.RANGED) >= 60
+      && skills.getMaxLevel(Skill.THIEVING) >= 50;
+  }
+
+  function answerStartRequirementQuery(request) {
+    if (!request?.player) return;
+    request.started = quest.getStage(request.player) > 0;
+    request.meetsRequirements = meetsStartRequirements(request.player);
   }
 
   /** The gnome's "toad crunchies and being tickled" choice is the bargain. */
@@ -909,7 +953,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     if (quest.getStage(player) >= STAGE_FIXED_DEVICE) return false;
     if (gnomeState(player) < 1) return false;
     if (!held(player, BROKEN_DEVICE)) return false;
-    if (!hasGnomeMaterials(player) || !held(player, TOAD_CRUNCHIES)) return false;
+    if (!hasGnomeMaterials(player) || !hasToadCrunchies(player)) return false;
     play(player, GNOME_CHATHEAD, "earning-their-trust-it-s-a-deal-releasing-the-gnome");
     return true;
   }
@@ -928,7 +972,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
         play(player, GNOME_CHATHEAD, "earning-their-trust-torture-chamber-tickle-the-gnome-on-rack-again");
         return true;
       }
-      if (held(player, TOAD_CRUNCHIES)) {
+      if (hasToadCrunchies(player)) {
         player.setAttribute(GNOME_STATE_ATTRIBUTE, 2);
         play(player, GNOME_CHATHEAD, "earning-their-trust-torture-chamber-tickling-the-gnome-s-feet-with-a-feather");
         return true;
@@ -936,14 +980,14 @@ module.exports = function registerMourningsEndPartIQuest(api) {
       play(player, GNOME_CHATHEAD, "earning-their-trust-torture-chamber-using-a-feather-on-the-gnome-again-without-toad-crunchies");
       return true;
     }
-    if (itemId === TOAD_CRUNCHIES) {
+    if (TOAD_CRUNCHIES_IDS.has(itemId)) {
       if (released) {
-        take(player, TOAD_CRUNCHIES, 1);
+        take(player, itemId, 1);
         play(player, GNOME_CHATHEAD, "earning-their-trust-contaminating-the-stores-use-toad-crunchies-on-the-gnome");
         return true;
       }
       if (gnomeState(player) >= 1) {
-        take(player, TOAD_CRUNCHIES, 1);
+        take(player, itemId, 1);
         play(player, GNOME_CHATHEAD, "earning-their-trust-torture-chamber-with-toad-crunchies-but-no-feather");
         return true;
       }
@@ -995,22 +1039,19 @@ module.exports = function registerMourningsEndPartIQuest(api) {
     return true;
   }
 
-  function powderOnSacks(player, objectId, location) {
-    if (objectId !== SACKS) return false;
-    const stage = quest.getStage(player);
-    if (stage !== STAGE_TOXIN && stage !== STAGE_STORES) return false;
-    if (stage >= STAGE_STORES) return false;
-    if (!inWestArdougne(location)) return false;
+  function powderOnSacks(player, objectId) {
+    if (!FOOD_STORE_IDS.has(objectId)) return false;
+    if (quest.getStage(player) !== STAGE_TOXIN) return false;
     if (!held(player, TOXIC_POWDER)) return false;
-    const tile = `${location.x}:${location.y}`;
+    const store = String(objectId);
     const poisoned = storesPoisoned(player);
-    if (poisoned.includes(tile)) {
+    if (poisoned.includes(store)) {
       player.sendMessage("You've already poisoned this store.");
       return true;
     }
     take(player, TOXIC_POWDER, 1);
     player.sendMessage("You add the toxin to the grain, after a few seconds of mixing you can't tell the difference.");
-    poisoned.push(tile);
+    poisoned.push(store);
     player.setAttribute(STORES_ATTRIBUTE, poisoned.join(","));
     if (poisoned.length >= 2) advance(player, STAGE_STORES);
     return true;
@@ -1032,7 +1073,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
       return;
     }
     if (itemId === TOXIC_POWDER) {
-      event.handled = powderOnSacks(player, objectId, location);
+      event.handled = powderOnSacks(player, objectId);
     }
   }
 
@@ -1400,6 +1441,8 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   api.onNpcInteraction("Tegid", { "Talk-to": talkToTegid });
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);
+  api.onCustomEvent("mournings-end-part-i:start-requirements", answerStartRequirementQuery);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });

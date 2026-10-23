@@ -25,7 +25,8 @@
  *   72 star flower added to a vial of water (magic essence unf),
  *   73 gorak claw powder added (magic essence),
  *   75 the potion was used on the Fairy Queen,
- *   80 complete.
+ *   90 complete (cache DB row 47 column 19 requires varbit 2326 >= 90;
+ *      older durable saves at 80 are migrated to 90 on login).
  *
  * Sibling varbits written alongside the stage (all in varp 810 unless noted):
  * 2327 fairynuff_cert_taken, 2328 fairyring_use, 2329 fairyring_permission,
@@ -134,7 +135,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const STAGE_UNFINISHED_POTION = 72;
   const STAGE_FINISHED_POTION = 73;
   const STAGE_POTION_USED = 75;
-  const STAGE_COMPLETE = 80;
+  const STAGE_COMPLETE = 90;
+  const LEGACY_STAGE_COMPLETE = 80;
 
   const NUFFS_CERTIFICATE_ITEM_ID = ItemIdentifiers.NUFFS_CERTIFICATE; // 9025
   const QUEENS_SECATEURS_ITEM_ID = ItemIdentifiers.QUEENS_SECATEURS_2; // 9020
@@ -180,10 +182,11 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   const POTION_READY_CONDITION_ID = "FJYR1J";
   const REWARD_NO_ROOM_CONDITION_ID = "-LSx7-";
   const REWARD_ROOM_CONDITION_ID = "e2I60y";
-  const NUFF_INTRO_CONTINUE_ACTION_ID = "J-eUMZ";
+  const NUFF_INTRO_CONTINUE_ACTION_ID = "YO3q33"; // "You see a fairy approaching ..." message
   const HAND_OVER_SECATEURS_MESSAGE_ID = "j-qUAH";
   const PICKPOCKET_FAILED_MESSAGE_ID = "NBfLls";
   const REWARD_LAMP_MESSAGE_ID = "SuXalx";
+  const REWARD_GIVEN_ATTRIBUTE = "fairytale-ii-cure-a-queen:reward-given";
   const COMPLETE_ACTION_ID = "Vca-Ck";
 
   // Variants (from the "Fairytale II - Cure a Queen" page unless noted).
@@ -376,7 +379,10 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     if (npcId === MARTIN_NPC_ID) {
       if (!ft1Complete(player)) return null;
       if (stage >= STAGE_COMPLETE) return "standard-dialogue";
-      if (stage >= STAGE_READY) return MARTIN_AGAIN_VARIANT;
+      if (stage >= STAGE_INVESTIGATING) return MARTIN_AGAIN_VARIANT;
+      // 10 is the ready-to-accept copy: a refused start stays here so the
+      // offer (and its quest:start hook) can be shown again.
+      if (stage >= STAGE_READY) return MARTIN_READY_VARIANT;
       if (stage >= STAGE_WAITING) return martinWaited(player) ? MARTIN_READY_VARIANT : MARTIN_WAIT_VARIANT;
       return MARTIN_FIRST_VARIANT;
     }
@@ -508,9 +514,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
       return;
     }
     if (stepId === PICKPOCKET_FULL_CONDITION_ID) {
-      // The wiki branch's own text is an unavailable marker; say the standard line.
+      // The imported branch now carries the real "You don't have space to
+      // carry the secateurs" message; only clear the attempt context.
       pickpocket.delete(player);
-      player.sendMessage("You don't have enough inventory space.");
       return;
     }
     if (stepId === PICKPOCKET_ALREADY_CONDITION_ID || stepId === PICKPOCKET_FAIL_CONDITION_ID) {
@@ -527,10 +533,9 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     const { player, npcId, stepId } = event;
     if (stepId === NUFF_INTRO_CONTINUE_ACTION_ID) {
       if (!FAIRY_NUFF_NPC_IDS.has(npcId)) return;
-      // The wiki marks Very Wise's entrance as an unavailable step; handling it
-      // lets the queue's remaining steps (her warning and the pickpocket task)
-      // play instead of closing the chatbox.
-      event.handled = true;
+      // The import now carries the real "You see a fairy approaching ..."
+      // message; leave it unhandled so it displays, and advance to the
+      // pickpocket task before her warning continues.
       if (quest.getStage(player) >= STAGE_PERMISSION && quest.getStage(player) < STAGE_PICKPOCKET) {
         advance(player, STAGE_PICKPOCKET);
         syncProgress(player);
@@ -552,7 +557,20 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     }
     if (stepId === REWARD_LAMP_MESSAGE_ID) {
       if (!FAIRY_QUEEN_NPC_IDS.has(npcId)) return;
-      if (!held(player, ANTIQUE_LAMP_ITEM_ID)) player.getInventory().adds(ANTIQUE_LAMP_ITEM_ID, 1);
+      if (Number(player.getAttribute(REWARD_GIVEN_ATTRIBUTE)) > 0) return;
+      const inventory = player.getInventory();
+      if (inventory.getFreeSlots() < 1) {
+        player.sendMessage("You need an empty inventory slot for the antique lamp.");
+        event.handled = true;
+        event.end = true;
+        return;
+      }
+      const before = inventory.getAmount(ANTIQUE_LAMP_ITEM_ID);
+      inventory.adds(ANTIQUE_LAMP_ITEM_ID, 1);
+      if (inventory.getAmount(ANTIQUE_LAMP_ITEM_ID) > before) {
+        player.setAttribute(REWARD_GIVEN_ATTRIBUTE, 1);
+      }
+      syncProgress(player);
       return;
     }
     if (stepId !== COMPLETE_ACTION_ID) return;
@@ -900,7 +918,13 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     event.handledBy.push("FairytaleIICureAQueen");
   }
 
+  function migrateLegacyCompletion(player) {
+    // 80 used to be this plugin's completion value; the cache requires 90.
+    if (quest.getStage(player) === LEGACY_STAGE_COMPLETE) quest.setStage(player, STAGE_COMPLETE);
+  }
+
   function handleLogin({ player }) {
+    migrateLegacyCompletion(player);
     refreshQuestList(player);
     syncProgress(player);
     const location = player.getLocation?.();
@@ -910,6 +934,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   }
 
   function handleBootstrap({ player }) {
+    migrateLegacyCompletion(player);
     syncProgress(player);
   }
 
@@ -1028,6 +1053,7 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
   api.persistAttribute(MYSTERY_ATTRIBUTE);
   api.persistAttribute(GORAK_ATTRIBUTE);
   api.persistAttribute(MARTIN_TALK_ATTRIBUTE);
+  api.persistAttribute(REWARD_GIVEN_ATTRIBUTE, 0);
 
   groundItems = api.getItemOnGroundManager();
 
@@ -1036,7 +1062,8 @@ module.exports = function registerFairytaleIICureAQueenQuest(api) {
     name: "Fairytale II - Cure a Queen",
     varpId: VARP_FAIRYTALE,
     varbitId: VARBIT_QUEST,
-    startedValue: STAGE_WAITING,
+    // Cache DB row 47 column 18: varbit 2326 >= 10 is started (stage 5 is the wait step).
+    startedValue: STAGE_READY,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
     xpRewards: [

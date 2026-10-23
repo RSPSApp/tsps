@@ -98,6 +98,7 @@ class Heap {
  * @param getFlag (x, y, z) => collision flags
  * @param isDoor (x, y, z) => true when a closed door/gate stands on that tile
  * @param exactOnly true: no near-goal fallback (a yes/no reachability question)
+ * @param goalReach maximum distance from the target; 0 requires its exact tile
  * @returns {{ waypoints: {x, y, z}[], tiles: number } | null}
  */
 function planRoute(options) {
@@ -119,7 +120,7 @@ function planRoute(options) {
 }
 
 /** A* inside the start/goal box widened by `margin`: { exact, plan }, or false (box too big). */
-function planInBox({ from, to, getFlag, isDoor = () => false }, margin, budget) {
+function planInBox({ from, to, getFlag, isDoor = () => false, goalReach = GOAL_REACH }, margin, budget) {
   const z = from.z;
   const minX = Math.min(from.x, to.x) - margin;
   const minY = Math.min(from.y, to.y) - margin;
@@ -166,7 +167,7 @@ function planInBox({ from, to, getFlag, isDoor = () => false }, margin, budget) 
         bestDistance = distance;
         best = current;
       }
-      if (distance <= GOAL_REACH) {
+      if (distance <= goalReach) {
         found = current;
         break;
       }

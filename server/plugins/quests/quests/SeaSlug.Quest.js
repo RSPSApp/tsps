@@ -17,6 +17,8 @@
  * stage 6 -> 7. The loose panel and crane play the transcript and advance 8 -> 9 and
  * 10 -> 11. The cabin door steps through to Kennith's room: the map walls the doorway's
  * far tile off from the room with crates, so a plain one-tile cross leaves him unreachable.
+ * The platform Holgart (cache id 5070) has no world spawn, so the quest owns him for its
+ * players: he takes the player to the island at stage 4 and back to the shore at stage 11.
  * Gaps: the swamp-paste mixing recipe (flour + swamp tar on a fire) is not wired here.
  */
 module.exports = function registerSeaSlugQuest(api) {
@@ -36,6 +38,10 @@ module.exports = function registerSeaSlugQuest(api) {
     NpcIdentifiers.HOLGART_6,
     NpcIdentifiers.HOLGART_7,
   ]);
+  // The platform Holgart (cache id 5070, "Holgart (platform)", Talk-to + Travel) has no world
+  // spawn, so the quest owns him for its own players on the fishing platform.
+  const PLATFORM_HOLGART_NPC_ID = NpcIdentifiers.HOLGART_3; // 5070
+  const PLATFORM_HOLGART_TILE = { x: 2781, y: 3274, z: 0 };
 
   const VARP_SEA_SLUG = 159;
   const STAGE_STARTED = 1;
@@ -60,6 +66,7 @@ module.exports = function registerSeaSlugQuest(api) {
   const CABIN_DOOR_OBJECT_ID = 18168;
   const LOOSE_PANEL_OBJECT_ID = 18251;
   const CRANE_OBJECT_ID = 18327;
+  const CRANE_FOOTPRINT = { x0: 2770, x1: 2773, y0: 3287, y1: 3290, z: 1 };
   const PLATFORM_MIN_X = 2750;
   const PLATFORM_TILE = { x: 2784, y: 3276, z: 0 };
   const ISLAND_TILE = { x: 2794, y: 3320, z: 0 };
@@ -90,6 +97,7 @@ module.exports = function registerSeaSlugQuest(api) {
   const ARRIVAL_PLATFORM_MESSAGE = "You arrive at the fishing platform.";
   const ARRIVAL_SHORE_MESSAGE = "The boat arrives at Witchaven.";
   const UNLIT_TORCH_RECEIVE_IDS = new Set(["G6lOss", "o9pnQL"]);
+  const UNLIT_TORCH_DROP_ACTION_ID = "ab-u4V"; // full bag: "The unlit torch is dropped to the ground."
   const TORCH_LIT_MESSAGE_ID = "mqmTA7"; // "Your torch lights."
   const PANEL_KICK_MESSAGE_IDS = new Set(["vJ1GjP", "NgGUPy", "5u-9os"]);
   const CRANE_MESSAGE_IDS = new Set(["utnJSh", "PGBTE0"]);
@@ -100,6 +108,7 @@ module.exports = function registerSeaSlugQuest(api) {
   const PAGE = "Sea Slug";
 
   let quest;
+  const platformHolgarts = new Map();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
@@ -172,6 +181,7 @@ module.exports = function registerSeaSlugQuest(api) {
   }
 
   function holgartVariant(stage, player) {
+    if (stage < STAGE_STARTED) return null;
     if (stage === STAGE_STARTED) {
       quest.setStage(player, STAGE_NEEDS_SWAMP_PASTE);
       return "talking-to-holgart";
@@ -188,6 +198,7 @@ module.exports = function registerSeaSlugQuest(api) {
       return "at-the-shipwreck-island-talking-to-holgart-again-before-returning-to-the-fishing-platform";
     }
     if (stage >= STAGE_SAVED_KENNITH) return "freeing-kennith-talking-to-holgart";
+    if (stage >= STAGE_LIT_TORCH) return "at-the-fishing-platform-talking-to-holgart-at-the-fishing-platform";
     return "at-the-shipwreck-island-talking-to-holgart";
   }
 
@@ -208,11 +219,19 @@ module.exports = function registerSeaSlugQuest(api) {
 
   function baileyVariant(stage, player) {
     if (stage >= STAGE_SAVED_KENNITH) return "freeing-kennith-talking-to-bailey-after-freeing-kennith";
-    if (stage === STAGE_SPOKEN_TO_KENT) return "rescuing-kennith-talking-to-bailey";
+    if (stage === STAGE_SPOKEN_TO_KENT) {
+      return held(player, UNLIT_TORCH_ITEM_ID)
+        ? "rescuing-kennith-talking-to-bailey-again-with-the-unlit-torch"
+        : "rescuing-kennith-talking-to-bailey";
+    }
     if (stage >= STAGE_LIT_TORCH && stage < STAGE_SAVED_KENNITH) {
-      return held(player, LIT_TORCH_ITEM_ID)
-        ? "rescuing-kennith-talking-to-bailey-with-the-lit-torch"
-        : "rescuing-kennith-talking-to-bailey-again-with-the-unlit-torch";
+      if (held(player, LIT_TORCH_ITEM_ID)) {
+        return "rescuing-kennith-talking-to-bailey-with-the-lit-torch";
+      }
+      // A lost torch is replaced by the first conversation's "loses their unlit torch"
+      // branch; the "again with the unlit torch" line would leave the player stuck.
+      if (!held(player, UNLIT_TORCH_ITEM_ID)) return "rescuing-kennith-talking-to-bailey";
+      return "rescuing-kennith-talking-to-bailey-again-with-the-unlit-torch";
     }
     return "at-the-fishing-platform-talking-to-bailey";
   }
@@ -225,6 +244,11 @@ module.exports = function registerSeaSlugQuest(api) {
 
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
+    if (stage >= STAGE_COMPLETE) {
+      // Let the named-NPC pages own their canonical post-quest dialogue (and The
+      // Slug Menace's shared Holgart/Bailey conversations) once this quest is done.
+      return npcId === CAROLINE_NPC_ID ? { page: "Caroline", variant: "after-sea-slug" } : null;
+    }
     if (npcId === CAROLINE_NPC_ID) return carolineVariant(stage);
     if (HOLGART_NPC_IDS.has(npcId)) return holgartVariant(stage, player);
     if (KENNITH_NPC_IDS.has(npcId)) {
@@ -245,10 +269,17 @@ module.exports = function registerSeaSlugQuest(api) {
     if (value.includes("firemaking level is less than 30")) return firemaking < 30;
     if (value.includes("firemaking level is 30 or above")) return firemaking >= 30;
     if (value.includes("no space in their inventory")) return inventory.isFull();
+    if (value.includes("one free space in their")) {
+      // Bailey's hand-out: the player has room for the torch and has not had it yet.
+      return !inventory.isFull() && quest.getStage(player) === STAGE_SPOKEN_TO_KENT;
+    }
     if (value.includes("already has one swamp paste")) return inventory.getAmount(SWAMP_PASTE_ITEM_ID) >= 1;
     if (value.includes("does not have swamp tar")) return !held(player, ItemIdentifiers.SWAMP_TAR);
     if (value.includes("has swamp tar")) return held(player, ItemIdentifiers.SWAMP_TAR);
-    if (value.includes("loses their unlit torch")) return !held(player, UNLIT_TORCH_ITEM_ID);
+    if (value.includes("loses their unlit torch")) {
+      // Only after the torch stage: before it the player never carried one.
+      return quest.getStage(player) >= STAGE_LIT_TORCH && !held(player, UNLIT_TORCH_ITEM_ID);
+    }
     if (value.includes("has an unlit torch")) return held(player, UNLIT_TORCH_ITEM_ID);
     if (value.includes("does not have an unlit torch")) return !held(player, UNLIT_TORCH_ITEM_ID);
     if (value.includes("no sea slugs or fishermen nearby")) return true;
@@ -256,14 +287,69 @@ module.exports = function registerSeaSlugQuest(api) {
     if (value.includes("kicks the loose panel near kennith after talking to bailey")) {
       return quest.getStage(player) >= STAGE_KENNITH_NEEDS_ESCAPE;
     }
-    if (value.includes("too far away from the crane")) return false;
-    if (value.includes("one tile from the crane")) return true;
+    if (value.includes("too far away from the crane")) {
+      return quest.getStage(player) === STAGE_NEEDS_CRANE && craneDistance(player) > 1;
+    }
+    if (value.includes("one tile from the crane")) {
+      return quest.getStage(player) === STAGE_NEEDS_CRANE && craneDistance(player) <= 1;
+    }
     return null;
   }
 
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== CAROLINE_NPC_ID || hook !== START_HOOK) return;
     if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
+  }
+
+  /** Register a player-owned quest item when a dialogue handout cannot fit. */
+  function registerPlayerGroundItem(player, itemId, position) {
+    const manager = api.getItemOnGroundManager?.();
+    const privateArea = player.getPrivateArea?.() ?? null;
+    if (manager?.getGroundItem?.(player.getUsername(), itemId, position, privateArea)) return false;
+    if (!manager?.registerLocation) return false;
+    manager.registerLocation(player, new api.core.Item(itemId, 1), position);
+    return true;
+  }
+
+  /**
+   * The platform Holgart owns the stage 4 leg (he sails the player to the island) and the
+   * stage 11 return. He is spawned for the player only, while the quest needs him there.
+   */
+  function removePlatformHolgart(player) {
+    const npc = platformHolgarts.get(player);
+    if (!npc) return;
+    platformHolgarts.delete(player);
+    api.removeNpc(npc);
+  }
+
+  function ensurePlatformHolgart(player) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_SPOKEN_TO_KENNITH || stage >= STAGE_COMPLETE) {
+      removePlatformHolgart(player);
+      return;
+    }
+    if (platformHolgarts.has(player)) return;
+    const npc = api.spawnNpc({
+      id: PLATFORM_HOLGART_NPC_ID,
+      x: PLATFORM_HOLGART_TILE.x,
+      y: PLATFORM_HOLGART_TILE.y,
+      z: PLATFORM_HOLGART_TILE.z,
+      owner: player,
+      ownerOnly: true,
+      wanderRadius: 0,
+    });
+    if (npc) platformHolgarts.set(player, npc);
+  }
+
+  function grantUnlitTorch(player) {
+    if (held(player, UNLIT_TORCH_ITEM_ID) || held(player, LIT_TORCH_ITEM_ID)) return;
+    player.getInventory().adds(UNLIT_TORCH_ITEM_ID, 1);
+  }
+
+  /** ab-u4V: full bag, so the torch goes to the floor instead of being lost. */
+  function dropUnlitTorch(player) {
+    if (held(player, UNLIT_TORCH_ITEM_ID) || held(player, LIT_TORCH_ITEM_ID)) return;
+    registerPlayerGroundItem(player, UNLIT_TORCH_ITEM_ID, player.getLocation().clone());
   }
 
   function handleAction({ player, npcId, stepId }) {
@@ -300,9 +386,11 @@ module.exports = function registerSeaSlugQuest(api) {
       return;
     }
     if (UNLIT_TORCH_RECEIVE_IDS.has(stepId)) {
-      if (!held(player, UNLIT_TORCH_ITEM_ID) && !held(player, LIT_TORCH_ITEM_ID)) {
-        player.getInventory().adds(UNLIT_TORCH_ITEM_ID, 1);
-      }
+      grantUnlitTorch(player);
+      return;
+    }
+    if (stepId === UNLIT_TORCH_DROP_ACTION_ID) {
+      dropUnlitTorch(player);
       return;
     }
     if (stepId === TORCH_LIT_MESSAGE_ID) {
@@ -337,6 +425,25 @@ module.exports = function registerSeaSlugQuest(api) {
     return Number(x) === CABIN_DOOR_TILE.x &&
       Number(y) === CABIN_DOOR_TILE.y &&
       Number(z) === CABIN_DOOR_TILE.z;
+  }
+
+  function craneDistance(player) {
+    const location = player.getLocation?.();
+    const x = location?.getX?.() ?? location?.x;
+    const y = location?.getY?.() ?? location?.y;
+    const z = location?.getZ?.() ?? location?.z;
+    if (![x, y, z].every(Number.isFinite) || z !== CRANE_FOOTPRINT.z) return Infinity;
+    const dx = Math.max(CRANE_FOOTPRINT.x0 - x, 0, x - CRANE_FOOTPRINT.x1);
+    const dy = Math.max(CRANE_FOOTPRINT.y0 - y, 0, y - CRANE_FOOTPRINT.y1);
+    return Math.max(dx, dy);
+  }
+
+  function isCraneObjectLocation(location) {
+    const x = location?.getX?.() ?? location?.x;
+    const y = location?.getY?.() ?? location?.y;
+    const z = location?.getZ?.() ?? location?.z;
+    return z === CRANE_FOOTPRINT.z && x >= CRANE_FOOTPRINT.x0 && x <= CRANE_FOOTPRINT.x1 &&
+      y >= CRANE_FOOTPRINT.y0 && y <= CRANE_FOOTPRINT.y1;
   }
 
   function insideCabin(location) {
@@ -459,12 +566,14 @@ module.exports = function registerSeaSlugQuest(api) {
       return;
     }
     player.sendMessage("You rub together the dry sticks and the sticks catch alight.");
-    inventory.deleteNumber(DRY_STICKS_ITEM_ID, 1);
     if (!held(player, UNLIT_TORCH_ITEM_ID)) {
+      // The transcript's no-torch branch dies out; keep the sticks so the player
+      // can still light the torch after Bailey replaces it.
       player.sendMessage("The sticks smoke momentarily then die out.");
       event.handled = true;
       return;
     }
+    inventory.deleteNumber(DRY_STICKS_ITEM_ID, 1);
     player.sendMessage("You place the smoulding twigs to your torch.");
     player.sendMessage("Your torch lights.");
     inventory.deleteNumber(UNLIT_TORCH_ITEM_ID, 1);
@@ -493,14 +602,25 @@ module.exports = function registerSeaSlugQuest(api) {
       startTranscript(api, player, BAILEY_NPC_ID, PAGE, "freeing-kennith");
       return;
     }
-    if (objectId === CRANE_OBJECT_ID) {
+    if (objectId === CRANE_OBJECT_ID && quest.getStage(player) === STAGE_NEEDS_CRANE &&
+      isCraneObjectLocation(event.object?.getLocation?.() ?? event.location)) {
       event.handled = true;
       startTranscript(api, player, BAILEY_NPC_ID, PAGE, "freeing-kennith-using-the-crane");
     }
   }
 
+  function handleStageChanged({ player, key, stage }) {
+    if (key !== "sea_slug") return;
+    ensurePlatformHolgart(player);
+  }
+
   function handleLogin({ player }) {
     refreshQuestList(player);
+    ensurePlatformHolgart(player);
+  }
+
+  function handleLogout({ player }) {
+    removePlatformHolgart(player);
   }
 
   quest = registerQuest(api, {
@@ -522,6 +642,7 @@ module.exports = function registerSeaSlugQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onObjectInteraction(handleObjectInteraction);
   api.onObjectRoute(routeCabinDoor);
   api.onItemOnItem(BROKEN_GLASS_ITEM_NAME, DAMP_STICKS_ITEM_NAME, handleGlassOnSticks, { noted: false });
@@ -529,4 +650,5 @@ module.exports = function registerSeaSlugQuest(api) {
   api.onNpcInteraction("Holgart", { Travel: handleHolgartTravel });
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

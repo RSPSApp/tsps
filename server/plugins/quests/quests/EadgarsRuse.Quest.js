@@ -450,6 +450,9 @@ module.exports = function registerEadgarsRuseQuest(api) {
 
   function selectBurntmeatVariant(player, stage) {
     if (stage < STAGE_STARTED) return null;
+    // Troll Stronghold's freed-Eadgar state and the later Burntmeat quests own
+    // him outside this quest's progress.
+    if (stage >= STAGE_COMPLETE) return null;
     if (stage >= STAGE_GOT_BURNT_MEAT) {
       return "returning-to-eadgar-with-supplies-talking-to-burntmeat-after-giving-him-the-fake-man";
     }
@@ -470,8 +473,12 @@ module.exports = function registerEadgarsRuseQuest(api) {
 
   function selectSanfewVariant(player, stage) {
     if (oneSmallFavourNeedsSanfew(player) && (stage < STAGE_STARTED || stage >= STAGE_COMPLETE)) return null;
+    // Druidic Ritual is a prerequisite and owns Sanfew until it is finished.
+    if (stage < STAGE_STARTED && questStage(player, "druidic_ritual") < DRUIDIC_RITUAL_COMPLETE) return null;
     if (stage >= STAGE_COMPLETE) return "post-quest-talking-to-sanfew-after-finishing-the-quest";
-    if (held(player, GOUTWEED)) return "getting-the-goutweed-talking-to-sanfew-after-getting-goutweed";
+    if (stage >= STAGE_STOREROOM_OPEN && held(player, GOUTWEED)) {
+      return "getting-the-goutweed-talking-to-sanfew-after-getting-goutweed";
+    }
     if (stage >= STAGE_NEEDS_ITEMS && !supplies(player).clothes && !held(player, DIRTY_ROBE)) {
       return "obtaining-the-robes-talking-to-sanfew-about-the-robes";
     }
@@ -480,11 +487,13 @@ module.exports = function registerEadgarsRuseQuest(api) {
   }
 
   function selectTegidVariant(player, stage) {
+    // Mourning's End Part I also talks to Tegid; claim him only while Eadgar
+    // still needs the dirty robe.
     if (stage >= STAGE_NEEDS_ITEMS && stage < STAGE_COMPLETE) {
       const s = supplies(player);
       if (!s.clothes && !held(player, DIRTY_ROBE)) return "obtaining-the-robes-talking-to-tegid-about-the-robes";
     }
-    return "getting-started-talking-to-tegid";
+    return null;
   }
 
   function selectVariant({ npcId, player }) {
@@ -512,7 +521,7 @@ module.exports = function registerEadgarsRuseQuest(api) {
     if (value.includes("boosted herblore")) return hasHerblore(player) && baseHerblore(player) < HERBLORE_LEVEL;
     const stage = quest.getStage(player);
     if (value.includes("talked to eadgar before talking to burntmeat") && !value.includes("did not")) {
-      return stage === STAGE_TOLD_ABOUT_COOK;
+      return stage === STAGE_COOK_SECOND;
     }
     if (value.includes("did not talk to eadgar before talking to burntmeat")) {
       return stage === STAGE_COOK_FIRST;
@@ -713,8 +722,8 @@ module.exports = function registerEadgarsRuseQuest(api) {
       return;
     }
     if (itemId === PINEAPPLE_CHUNKS) {
-      player.getInventory().deleteNumber(PINEAPPLE_CHUNKS, 1);
-      playVariant(player, PARROTY_PETE_NPC_ID, "visiting-ardougne-using-pineapple-chunks-on-the-hatch");
+      // The transcript's own "give pineapple chunks" action consumes it.
+      playVariant(player, PARROTY_PETE_NPC_ID, "visiting-ardougne-using-pineapple-chunks-on-the-aviary-hatch");
       return;
     }
     if (LIQUOR_ITEM_IDS.has(itemId)) {

@@ -21,6 +21,12 @@ async function main() {
     try {
         assert.equal(OsrsClient.prototype.examineWidgetItem.call(client, slot), true);
         assert.deepEqual(messages, ["A full face helmet."]);
+        children[1].itemId = 0;
+        client.objTypeLoader.load = (id: number) => ({ examine: id === 0 ? "Dwarf remains." : "null" });
+        assert.equal(OsrsClient.prototype.examineWidgetItem.call(client, slot), true);
+        assert.equal(messages.at(-1), "Dwarf remains.", "the child lookup includes valid cache item zero");
+        assert.equal(OsrsClient.prototype.examineWidgetItem.call(client, { fileId: -1, itemId: 0 }), true,
+            "an item-zero widget examines its own item");
         assert.equal(OsrsClient.prototype.examineWidgetItem.call(client, { fileId: -1, itemId: -1 }), false,
             "a CC child without an item does not borrow a sibling's");
     } finally {

@@ -372,8 +372,21 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
       return current === S.THOUGHTS ? V.FIDES : V.FIDES_AGAIN;
     }
     if (NPC.RUINS_GUARDS.includes(npcId) && current >= S.BELOW && current < S.RUINS) return V.RUINS_GUARD;
-    if (npcId === NPC.SERVIUS && current >= S.BANISHED) return V.SERVIUS;
+    if (npcId === NPC.SERVIUS && current === S.BANISHED) return V.SERVIUS;
     return units.tower.selectVariant({ npcId, player, npc }) ?? units.ruins.selectVariant({ npcId, player, npc });
+  }
+
+  /** The Teomat/lobby/temple Itzla ids are absent from npc-dialogue-index, so name routing
+   * would play the generic "Prince Itzla Arkan" page and miss this quest's line hooks. */
+  function talkToItzla(event) {
+    const npcId = event.npcId ?? event.npc?.getId?.();
+    if (npcId !== NPC.ITZLA_TEOMAT && npcId !== NPC.ITZLA && npcId !== NPC.ITZLA_ROBED) return false;
+    if (npcId !== NPC.ITZLA_TEOMAT && stage(event.player) === 0) return false;
+    const variant = selectVariant({ player: event.player, npcId, npc: event.npc });
+    if (!variant) return false;
+    event.handled = true;
+    play(event.player, npcId, variant, null, event.npc);
+    return true;
   }
 
   function selectItzlaVariant(player, npc) {
@@ -853,7 +866,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     const current = stage(player);
     if (current < S.BELOW) return false;
     event.handled = true;
-    if (current >= S.BANISHED && !quest.isComplete(player)) {
+    if (current >= S.BANISHED) {
       play(player, NPC.SERVIUS, V.RUINS_AGAIN);
       return true;
     }
@@ -1031,4 +1044,5 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
   api.onPlayerLogout(handleLogout);
   units.tower.register();
   units.ruins.register();
+  api.onNpcInteraction("Prince Itzla Arkan", { "Talk-to": talkToItzla });
 };

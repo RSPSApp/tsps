@@ -899,7 +899,7 @@
   {"id":697,"location":{"x":1377,"y":3723,"z":0},"amt":1,"respawn":100,"description":"Kebos Lowlands"},
   {"id":697,"location":{"x":1392,"y":3717,"z":0},"amt":1,"respawn":100,"description":"Kebos Lowlands"},
   {"id":697,"location":{"x":1376,"y":3714,"z":0},"amt":1,"respawn":100,"description":"Kebos Lowlands"},
-  {"id":1467,"location":{"x":2784,"y":3289,"z":0},"amt":1,"respawn":0,"description":"UNDIFINED"},
+  {"id":1467,"location":{"x":2784,"y":3289,"z":0},"amt":1,"respawn":1,"description":"UNDIFINED"},
   {"id":11940,"location":{"x":2998,"y":3705,"z":0},"amt":1,"respawn":55,"description":"Wilderness"},
   {"id":11940,"location":{"x":2988,"y":3683,"z":0},"amt":1,"respawn":55,"description":"Wilderness"},
   {"id":22426,"location":{"x":3732,"y":3361,"z":0},"amt":1,"respawn":100,"description":"Slepe"},
@@ -1043,6 +1043,7 @@
   {"id":2347,"location":{"x":3251,"y":6061,"z":0},"amt":1,"respawn":100,"description":"Prifddinas"},
   {"id":2347,"location":{"x":3429,"y":9931,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":2347,"location":{"x":3442,"y":9946,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
+  {"id":2347,"location":{"x":1696,"y":3070,"z":0},"amt":1,"respawn":100,"description":"Outer Fortis"},
   {"id":311,"location":{"x":2605,"y":3396,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":311,"location":{"x":3170,"y":2838,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":53,"location":{"x":3240,"y":3940,"z":0},"amt":3,"respawn":100,"description":"Wilderness"},
@@ -1231,6 +1232,7 @@
   {"id":1733,"location":{"x":1244,"y":3685,"z":1},"amt":1,"respawn":100,"description":"Kebos Lowlands"},
   {"id":1733,"location":{"x":3229,"y":6068,"z":0},"amt":1,"respawn":100,"description":"Prifddinas"},
   {"id":1733,"location":{"x":1529,"y":3645,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
+  {"id":1733,"location":{"x":1566,"y":3035,"z":0},"amt":1,"respawn":100,"description":"Hunter Guild"},
   {"id":22251,"location":{"x":2656,"y":3424,"z":0},"amt":1,"respawn":100,"description":"Ranging Guild"},
   {"id":26963,"location":{"x":3383,"y":2793,"z":0},"amt":1,"respawn":0,"description":"UNDIFINED"},
   {"id":277,"location":{"x":3092,"y":9755,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
@@ -1819,5 +1821,7 @@
   {"id":2859,"location":{"x":2858,"y":3944,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":1171,"location":{"x":3361,"y":3154,"z":0},"amt":1,"respawn":50,"description":"UNDIFINED"},
   {"id":1171,"location":{"x":3204,"y":3515,"z":0},"amt":1,"respawn":50,"description":"UNDIFINED"},
-  {"id":1765,"location":{"x":1240,"y":3688,"z":0},"amt":1,"respawn":0,"description":"UNDIFINED"}
+  {"id":1765,"location":{"x":1240,"y":3688,"z":0},"amt":1,"respawn":0,"description":"UNDIFINED"},
+  {"id":7155,"location":{"x":1822,"y":4827,"z":1},"amt":1,"respawn":0,"description":"Cabin Fever enemy-ship rope"},
+  {"id":7156,"location":{"x":1814,"y":4825,"z":0},"amt":1,"respawn":0,"description":"Cabin Fever ship tinderbox"}
 ]

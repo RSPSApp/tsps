@@ -40,6 +40,10 @@ const KILL_COUNT_VARBIT = 464;
 const CHEST_OPEN_VARBIT = 1394;
 const LADDER_VISIBLE_VARBIT = 4743;
 const PRAYER_DRAIN_TICKS = 30;
+const MINIMAP_STATE_VARBIT = 6719;
+const MINIMAP_SHOWN = 0;
+const MINIMAP_HIDDEN = 2;
+const MAP_USED_ATTRIBUTE = "his-faithful-servants:crypt-map-studied";
 const CORNERS = [0, 2, 6, 8];
 // Room numbers run NW to SE through a 3x3 grid. The outside corridors wrap around the corners.
 const DOOR_LINKS = [
@@ -105,6 +109,7 @@ const EQUIPMENT = [
 const CREATURES = new Set([Npcs.BLOODWORM, Npcs.CRYPT_RAT, Npcs.GIANT_CRYPT_RAT, Npcs.GIANT_CRYPT_RAT_2, Npcs.GIANT_CRYPT_RAT_3, Npcs.CRYPT_SPIDER, Npcs.GIANT_CRYPT_SPIDER,
   Npcs.SKELETON_17, Npcs.SKELETON_18, Npcs.SKELETON_19, Npcs.SKELETON_20]);
 const sessions = new WeakMap();
+const minimapHidden = new WeakSet();
 let World;
 let RegionManager;
 let TaskManager;
@@ -142,6 +147,29 @@ function inBarrows(player) {
 
 function inTunnels(player) {
   return BOUNDS[1].inside(player.getLocation());
+}
+
+function phaseOf(player) {
+  return !inBarrows(player) ? "outside" : inTunnels(player) ? "tunnels" : player.getLocation().getZ() === 3 ? "crypt" : "surface";
+}
+
+/**
+ * Crypt map 28133 permanently reveals the Barrows minimap. Only touch the
+ * minimap when entering/leaving the crypt or after study, and only restore it
+ * when this session actually hid it; never overwrite another area's minimap.
+ */
+function syncMinimap(player, phase) {
+  const inside = phase === "crypt" || phase === "tunnels";
+  const studied = Number(player.getAttribute(MAP_USED_ATTRIBUTE)) === 1;
+  if (inside && !studied) {
+    if (minimapHidden.has(player)) return;
+    minimapHidden.add(player);
+    player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_HIDDEN);
+    return;
+  }
+  if (!minimapHidden.has(player)) return;
+  minimapHidden.delete(player);
+  player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_SHOWN);
 }
 
 function session(player) {
@@ -690,7 +718,7 @@ function processPlayer({ player }) {
       player.sendMessage("You've found a crypt!");
     }
   }
-  const phase = !inBarrows(player) ? "outside" : inTunnels(player) ? "tunnels" : player.getLocation().getZ() === 3 ? "crypt" : "surface";
+  const phase = phaseOf(player);
   const run = player.getAttribute(ATTRIBUTE) ?? (phase !== "outside" ? getRun(player) : null);
   if (phase !== state.phase) {
     if (state.phase === "tunnels" && phase !== "tunnels") {
@@ -699,6 +727,7 @@ function processPlayer({ player }) {
     }
     state.puzzle = null;
     state.phase = phase;
+    syncMinimap(player, phase);
     if (phase === "outside") player.getPacketSender().closeInterface(OVERLAY_ID);
     else {
       showOverlay(player);
@@ -768,10 +797,13 @@ module.exports = {
     // this mount survives. Desktop keeps waiting for the Play button, which runs
     // after WelcomeScreen re-boots the gameframe.
     api.onPlayerLogin(({ player }) => {
+      minimapHidden.delete(player);
+      syncMinimap(player, phaseOf(player));
       if (player.getAttribute(MOBILE_CLIENT_ATTRIBUTE) === true) {
         restoreOverlayAfterWelcome({ player });
       }
     });
+    api.onCustomEvent("barrows:minimap-reveal", ({ player }) => syncMinimap(player, phaseOf(player)));
     api.onNpcDeath(handleNpcDeath);
     api.onCustomEvent("collection-log:category-count", chestCount);
     api.onCustomEvent("combat-achievements:kill-count", answerKillCount);
@@ -782,5 +814,5 @@ module.exports = {
     api.onPlayerLogout(cleanupPlayer);
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
-  _test: { searchChest, chestCount },
+  _test: { searchChest, chestCount, phaseOf, syncMinimap },
 };

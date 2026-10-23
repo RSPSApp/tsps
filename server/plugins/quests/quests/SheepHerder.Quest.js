@@ -54,7 +54,8 @@ module.exports = function registerSheepHerderQuest(api) {
   const GATE_LOC_IDS = new Set([ObjectIdentifiers.GATE_14, ObjectIdentifiers.GATE_15]); // 166,167
 
   const START_HOOK = "quest:sheep-herder:start";
-  const START_FEED_STEP_ID = "4mmYvE";
+  // Councillor Halgrive and the Sheep Herder page both carry the start hand-out.
+  const START_FEED_STEP_IDS = new Set(["4mmYvE", "7B3NJr"]);
   const LOST_FEED_STEP_ID = "RZpIEQ";
   const COMPLETE_ACTION_ID = "CTPMIp";
   const DOCTOR_BUY_STEP_ID = "GU1VZY";
@@ -181,17 +182,41 @@ module.exports = function registerSheepHerderQuest(api) {
   }
 
   function grantReward(player) {
-    player.getInventory().adds(COINS_ITEM_ID, 3099);
+    // The generic 1-coin reward item completes the 3,100 total. forceAdd drops the
+    // coins at the reward tile when a full bag has no coin stack, like other quests.
+    player.getInventory().forceAdd(player, new api.core.Item(COINS_ITEM_ID, 3099));
+  }
+
+  /** Asks the neighbouring quest whether it owns this shared NPC's conversation now. */
+  function songOfTheElvesStarted(player) {
+    const request = { player, key: "song_of_the_elves" };
+    api.emitCustomEvent("quest:is-started", request);
+    return request.started === true;
+  }
+
+  function songOfTheElvesComplete(player) {
+    const request = { player, key: "song_of_the_elves" };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
   }
 
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
     if (HALGRIVE_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-sheep-herder";
+      if (stage >= STAGE_COMPLETE) {
+        // Song of the Elves has its own Halgrive conversation; let it answer first.
+        if (songOfTheElvesStarted(player)) return null;
+        return "standard-dialogue-after-sheep-herder";
+      }
       if (stage >= STAGE_DISPOSING) {
-        return allSheepDisposed(player)
-          ? "finishing-up-talking-to-councillor-halgrive-after-burning-all-bones"
-          : "starting-out-talking-to-councillor-halgrive-after-getting-the-gear";
+        if (allSheepDisposed(player)) {
+          return "finishing-up-talking-to-councillor-halgrive-after-burning-all-bones";
+        }
+        // The again branch is the only transcript that restocks lost sheep feed.
+        if (!held(player, FEED_ITEM_ID)) {
+          return "starting-out-talking-to-councillor-halgrive-talking-to-councillor-halgrive-again";
+        }
+        return "starting-out-talking-to-councillor-halgrive-after-getting-the-gear";
       }
       if (stage >= STAGE_STARTED) {
         return "starting-out-talking-to-councillor-halgrive-talking-to-councillor-halgrive-again";
@@ -199,7 +224,11 @@ module.exports = function registerSheepHerderQuest(api) {
       return "starting-out-talking-to-councillor-halgrive";
     }
     if (npcId === ORBON_NPC_ID) {
-      if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-song-of-the-elves";
+      if (stage >= STAGE_COMPLETE) {
+        if (songOfTheElvesComplete(player)) return "standard-dialogue-after-song-of-the-elves";
+        if (songOfTheElvesStarted(player)) return null;
+        return "standard-dialogue-before-song-of-the-elves";
+      }
       if (stage >= STAGE_DISPOSING) return "starting-out-talking-to-doctor-orbon-talking-to-doctor-orbon-again";
       if (stage >= STAGE_STARTED) return "starting-out-talking-to-doctor-orbon";
       return "standard-dialogue-before-song-of-the-elves";
@@ -265,7 +294,7 @@ module.exports = function registerSheepHerderQuest(api) {
       event.end = true;
       return;
     }
-    if (event.stepId === START_FEED_STEP_ID || event.stepId === LOST_FEED_STEP_ID) {
+    if (START_FEED_STEP_IDS.has(event.stepId) || event.stepId === LOST_FEED_STEP_ID) {
       if (!HALGRIVE_NPC_IDS.has(event.npcId)) return;
       if (!held(event.player, FEED_ITEM_ID)) event.player.getInventory().adds(FEED_ITEM_ID, 1);
     }

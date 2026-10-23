@@ -9,10 +9,13 @@
  * shadow-diamond gilded cross trade; the bandit chest; the boss-diamond drops;
  * and the Azzanadra completion action.
  *
- * Stages (varp 440): 1 started, 2 translation received, 3 translation delivered,
+ * Stages: 1 started, 2 translation received, 3 translation delivered,
  * 4 agreed to hunt, 6 learned of the bandits, 7 asked about the diamonds,
- * 8 Eblis found, 9 materials needed, 10/11 mirrors set up, 13 diamonds placed,
- * 15 complete.
+ * 8 Eblis found, 9 materials needed, 10 mirrors made, 11 hunting the diamonds,
+ * 12 all four diamonds placed, 13 inside the pyramid, 15 complete. The stage is
+ * sent on varbit 358 (varp 440 bits 0-14) so the native column bits 15-31 in
+ * the same varp (fire/shadow/ice/blood, staff, mirror, ladder, pyramid timer)
+ * survive stage writes.
  *
  * World wiring this plugin owns (map objects from the cache landscape):
  *  - Smoke Dungeon: Smokey well (climb-down), four standing torches (light with
@@ -31,7 +34,7 @@
  */
 module.exports = function registerDesertTreasureIQuest(api) {
   const {
-    Skill, Equipment, Location, GameObject,
+    Skill, Equipment, Location, GameObject, Item,
     ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers,
     ObjectManager, MapObjects, RegionManager,
   } = api.core;
@@ -91,17 +94,32 @@ module.exports = function registerDesertTreasureIQuest(api) {
   const BURNT_CHEST_ID = ObjectIdentifiers.BURNT_CHEST;
   const SMOKE_GATE_IDS = new Set([6451, 6452]);
   const ICE_GATE_IDS = new Set([ObjectIdentifiers.ICE_GATE, ObjectIdentifiers.ICE_GATE_2]);
+  const ICE_PATH_GATE_IDS = new Set([6461, 6462]); // icegate_left/right_small on the ice path
   const ICE_LEDGE_ID = ObjectIdentifiers.ICE_LEDGE;
   const ICE_LEDGE_TOP_ID = 6456;
-  const PYRAMID_ENTRANCE_IDS = new Set([
-    ObjectIdentifiers.PYRAMID_ENTRANCE,
-    ObjectIdentifiers.PYRAMID_ENTRANCE_2,
+  // Pyramid descent: entrance ladder 6497 -> floors 3, 2, 1 -> ground ladder
+  // 6500 -> the ancient temple door 6553. The 6545/6547 ids are side doors,
+  // not the route QH uses.
+  const PYRAMID_ENTRANCE_ID = 6497;
+  const PYRAMID_LADDER_DOWN = new Map([
+    [6498, { from: [2909, 4964, 3], to: new Location(2845, 4964, 2) }],
+    [6499, { from: [2846, 4973, 2], to: new Location(2782, 4973, 1) }],
+    [6500, { from: [2784, 4941, 1], to: new Location(3232, 9293, 0) }],
   ]);
+  const PYRAMID_ENTRANCE_LANDING = new Location(2913, 4953, 3);
+  const PYRAMID_DOOR_ID = 6553;
+  const PYRAMID_DOOR_LANDING = new Location(3234, 9323, 0);
   const PYRAMID_OBELISK_IDS = new Set([6482, 6485, 6488, 6491]);
   const TORCH_IDS = new Set([6405, 6407, 6409, 6411]);
   const DESSOUS_TOMB_ID = 6437;
 
   const VARP_DESERT_TREASURE = 440;
+  const VARBIT_DESERT_TREASURE = 358; // 15 bits of varp 440; siblings live in 15-31
+  // Native column varbits inside varp 440, used by the obelisk transforms.
+  const VARBIT_COLUMN_FIRE = 387;
+  const VARBIT_COLUMN_SHADOW = 388;
+  const VARBIT_COLUMN_ICE = 389;
+  const VARBIT_COLUMN_BLOOD = 390;
   const STAGE_STARTED = 1;
   const STAGE_TRANSLATION_RECEIVED = 2;
   const STAGE_TRANSLATION_DELIVERED = 3;
@@ -112,20 +130,25 @@ module.exports = function registerDesertTreasureIQuest(api) {
   const STAGE_MATERIALS = 9;
   const STAGE_MIRRORS = 10;
   const STAGE_HUNT = 11;
-  const STAGE_PLACED = 13;
+  const STAGE_PLACED = 12;
+  const STAGE_ENTERED = 13;
   const STAGE_COMPLETE = 15;
 
   const ETCHINGS = ItemIdentifiers.ETCHINGS;
   const TRANSLATION = ItemIdentifiers.TRANSLATION;
   const RING_OF_VISIBILITY = ItemIdentifiers.RING_OF_VISIBILITY;
-  const SILVER_POT = ItemIdentifiers.SILVER_POT_3;
-  const BLESSED_POT = ItemIdentifiers.BLESSED_POT_5;
+  const SILVER_POT = ItemIdentifiers.SILVER_POT_3; // 4658 empty silver pot
+  const BLESSED_POT = ItemIdentifiers.BLESSED_POT; // 4659 empty blessed pot
+  const BLOOD_POT = ItemIdentifiers.BLESSED_POT_2; // 4661 blood
+  const GARLIC_POT = ItemIdentifiers.BLESSED_POT_3; // 4663 blood + garlic
+  const COMPLETE_POT = ItemIdentifiers.BLESSED_POT_4; // 4665 blood + garlic + spice
+  const SPICED_POT = ItemIdentifiers.BLESSED_POT_5; // 4667 blood + spice, no garlic
   const BLESSED_POTS = new Set([
-    ItemIdentifiers.BLESSED_POT,
-    ItemIdentifiers.BLESSED_POT_2,
-    ItemIdentifiers.BLESSED_POT_3,
-    ItemIdentifiers.BLESSED_POT_4,
-    ItemIdentifiers.BLESSED_POT_5,
+    BLESSED_POT,
+    BLOOD_POT,
+    GARLIC_POT,
+    COMPLETE_POT,
+    SPICED_POT,
   ]);
   const GARLIC = ItemIdentifiers.GARLIC;
   const GARLIC_POWDER = ItemIdentifiers.GARLIC_POWDER;
@@ -191,6 +214,12 @@ module.exports = function registerDesertTreasureIQuest(api) {
   const ATTR_ICE_PARENTS = "desert-treasure-i:ice-parents";
   const ATTR_TORCHES = "desert-treasure-i:torches";
   const ATTR_PLACED = "desert-treasure-i:placed";
+  const ATTR_PLACED_MASK = "desert-treasure-i:placed-mask";
+  const ATTR_DESSOUS_KILLED = "desert-treasure-i:dessous-killed";
+  const ATTR_BLOOD_CLAIMED = "desert-treasure-i:blood-claimed";
+  const ATTR_KAMIL_KILLED = "desert-treasure-i:kamil-killed";
+  const ATTR_SMOKE_KILLED = "desert-treasure-i:smoke-killed";
+  const ATTR_SHADOW_KILLED = "desert-treasure-i:shadow-killed";
 
   // Static quest spawns / landings (checked walkable against the cache map).
   const SHADOW_LADDER_SURFACE = new Location(2547, 3421, 0);
@@ -201,23 +230,29 @@ module.exports = function registerDesertTreasureIQuest(api) {
   const SMOKE_DUNGEON_EXIT = new Location(3253, 9364, 0);
   const SMOKE_SURFACE = new Location(3310, 2963, 0);
   const FAREED_ARENA = new Location(3310, 9375, 0);
-  const ICE_LEDGE_LANDING = new Location(2849, 3809, 2);
-  const ICE_LEDGE_BOTTOM = new Location(2838, 3804, 0);
-  const PYRAMID_INTERIOR = new Location(3233, 9327, 0);
+  const ICE_LEDGE_LANDING = new Location(2840, 3806, 1);
+  const ICE_LEDGE_BOTTOM = new Location(2840, 3805, 0);
   const DESSOUS_SPAWN = new Location(3565, 3401, 0);
+  // Wiki: a lost smoke diamond reappears in Fareed's chamber when the player
+  // walks through the gate; a lost shadow diamond reappears on the ground when
+  // the player crosses back into the Damis multi-combat room.
+  const SMOKE_DIAMOND_RECOVERY_TILE = new Location(3307, 9376, 0);
+  const SHADOW_DIAMOND_RECOVERY_TILE = new Location(2745, 5115, 0);
+  const SHADOW_DIAMOND_ZONE = { minX: 2700, maxX: 2757, minY: 5080, maxY: 5125, levels: [0] };
+  const FAREED_ROOM_ZONE = { minX: 3305, maxX: 3326, minY: 9360, maxY: 9393, levels: [0] };
 
   /**
-   * The cave mouth between the ice-troll room and the ice-wolf path. The cache
-   * landscape seals this stretch of wall; killing five ice trolls thaws it open.
-   * Verified walkable from the room (2868,3739) into the wolves once cleared.
+   * The cave mouth (object 6440 / exit 6447) between the ice-troll room and the
+   * ice-wolf path, at the east side of the room around (2868-2873, 3718-3719).
+   * The cache landscape seals it; killing five ice trolls thaws it open.
    */
   const ICE_CAVE_TILES = [];
-  for (let x = 2869; x <= 2876; x++) {
-    for (let y = 3738; y <= 3741; y++) ICE_CAVE_TILES.push(new Location(x, y, 0));
+  for (let x = 2868; x <= 2873; x++) {
+    for (let y = 3718; y <= 3719; y++) ICE_CAVE_TILES.push(new Location(x, y, 0));
   }
 
-  const LADDER_OBJECT_ID = ObjectIdentifiers.LADDER_69; // "Ladder", Climb-down
-  const LADDER_UP_OBJECT_ID = 16683; // "Ladder", Climb-up
+  const LADDER_OBJECT_ID = 6560; // fd_shadowladder1 at (2547,3421)
+  const LADDER_UP_OBJECT_ID = 16683; // generic "Ladder", Climb-up for the dungeon exits
 
   let quest;
 
@@ -347,7 +382,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
     const stage = quest.getStage(player);
     // Terry is The Dig Site's expert until it is finished, and Desert Treasure
     // only needs him once its own etchings/translation chain has started.
-    if (stage < STAGE_STARTED || digSiteActive(player)) return null;
+    if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE || digSiteActive(player)) return null;
     if (stage === STAGE_STARTED) {
       if (has(player, ETCHINGS)) return "enchanting-the-mirrors-talking-to-terry";
       return "enchanting-the-mirrors-talking-to-terry-after-delivering-the-etchings";
@@ -362,6 +397,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
 
   function bartenderVariant(player) {
     const stage = quest.getStage(player);
+    if (stage >= STAGE_COMPLETE) return "after-completing-desert-treasure-i";
     if (stage < STAGE_AGREED) return null;
     if (stage <= STAGE_BANDITS) {
       if (has(player, BANDITS_BREW)) {
@@ -430,9 +466,24 @@ module.exports = function registerDesertTreasureIQuest(api) {
 
   function malakVariant(player) {
     const stage = quest.getStage(player);
+    if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-desert-treasure-i";
     if (stage < STAGE_HUNT) return null;
     if (has(player, BLOOD_DIAMOND)) return "blood-diamond-talking-to-malak-after-obtaining-the-blood-diamond";
+    if (attr(player, ATTR_DESSOUS_KILLED)) {
+      if (!has(player, BLOOD_DIAMOND) && give(player, BLOOD_DIAMOND) !== false) {
+        player.sendMessage("Malak hands you the Diamond of Blood.");
+      }
+      if (!attr(player, ATTR_BLOOD_CLAIMED) && has(player, BLOOD_DIAMOND)) {
+        setAttr(player, ATTR_BLOOD_CLAIMED, 1);
+        return "blood-diamond-talking-to-malak-after-defeating-dessous";
+      }
+      return attr(player, ATTR_BLOOD_CLAIMED)
+        ? "blood-diamond-talking-to-malak-after-losing-the-blood-diamond"
+        : "blood-diamond-talking-to-malak-after-defeating-dessous";
+    }
     if (has(player, BLESSED_POT) && !attr(player, ATTR_POT_BLOODED)) {
+      take(player, BLESSED_POT);
+      give(player, BLOOD_POT);
       setAttr(player, ATTR_POT_BLOODED, 1);
       player.sendMessage("Malak cuts you and pours some of your blood into the pot.");
       return "blood-diamond-talking-to-malak-with-the-blessed-pot";
@@ -444,7 +495,10 @@ module.exports = function registerDesertTreasureIQuest(api) {
 
   function highPriestVariant(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_HUNT || holyGrailActive(player)) return null;
+    if (stage >= STAGE_COMPLETE || stage < STAGE_HUNT || holyGrailActive(player)) return null;
+    const deviousMindsStage = { player, key: "devious_minds", stage: 0 };
+    api.emitCustomEvent("quest:get-stage", deviousMindsStage);
+    if (deviousMindsStage.stage >= 6 && deviousMindsStage.stage < 9) return null;
     if (has(player, SILVER_POT)) {
       take(player, SILVER_POT);
       if (!has(player, BLESSED_POT)) give(player, BLESSED_POT);
@@ -459,6 +513,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
 
   function trollChildVariant(player) {
     const stage = quest.getStage(player);
+    if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-desert-treasure-i";
     if (stage < STAGE_HUNT) return null;
     if (has(player, ICE_DIAMOND)) return "ice-diamond-talking-to-the-troll-child-after-receiving-the-ice-diamond";
     if (attr(player, ATTR_ICE_PARENTS)) {
@@ -472,7 +527,9 @@ module.exports = function registerDesertTreasureIQuest(api) {
   }
 
   function trollParentVariant(player) {
-    if (quest.getStage(player) < STAGE_HUNT) return null;
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-desert-treasure-i";
+    if (stage < STAGE_HUNT) return null;
     if (!attr(player, ATTR_ICE_PARENTS)) return null;
     if (!has(player, ICE_DIAMOND)) {
       give(player, ICE_DIAMOND);
@@ -500,8 +557,9 @@ module.exports = function registerDesertTreasureIQuest(api) {
 
   function selectRuantunVariant(player) {
     const stage = quest.getStage(player);
+    if (stage >= STAGE_COMPLETE) return { page: "Ruantun" };
     if (stage < STAGE_HUNT) return null;
-    if (!has(player, SILVER_POT) && !has(player, BLESSED_POT) && has(player, SILVER_BAR)) {
+    if (!has(player, SILVER_POT) && ![...BLESSED_POTS].some((id) => has(player, id)) && has(player, SILVER_BAR)) {
       take(player, SILVER_BAR);
       give(player, SILVER_POT);
       setAttr(player, ATTR_POT_BLOODED, 0);
@@ -519,7 +577,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
   function answerCondition({ player, npcId, text }) {
     if (!DIALOGUE_NPC_IDS.has(npcId)) return null;
     const value = String(text).toLowerCase();
-    if (value.includes("without the required skill levels")) return magicLevel(player) < 50;
+    if (value.includes("without the required skill levels")) return !meetsPrerequisites(player);
     if (value.includes("650 coins")) {
       if (value.includes("doesn't")) return !has(player, COINS, 650);
       return has(player, COINS, 650);
@@ -601,6 +659,30 @@ module.exports = function registerDesertTreasureIQuest(api) {
 
   function handleAction(actionEvent) {
     const { player, npcId, stepId } = actionEvent;
+    if (stepId === "aHOat3") {
+      if (has(player, COMPLETE_POT)) take(player, COMPLETE_POT);
+      spawnDessous(player);
+      actionEvent.handled = true;
+      return;
+    }
+    if (stepId === "7b8J8F") {
+      player.sendMessage("There is nothing in the pot to pour onto the grave.");
+      actionEvent.handled = true;
+      return;
+    }
+    if (stepId === "cuuk36") {
+      reclaimSmokeDiamond(player);
+      actionEvent.handled = true;
+      return;
+    }
+    if (stepId === "QDAL6X") {
+      if (!has(player, SMOKE_DIAMOND)) {
+        give(player, SMOKE_DIAMOND);
+        player.sendMessage("You take the Diamond of Smoke from the ashes of the warrior.");
+      }
+      actionEvent.handled = true;
+      return;
+    }
     if (npcId === RASOLO_NPC_ID && stepId === "RdQo2r") {
       if (!hasRingAnywhere(player) && player.getInventory().isFull?.() !== true) {
         give(player, RING_OF_VISIBILITY);
@@ -681,7 +763,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
       return;
     }
     if (npcId === RUANTUN_NPC_ID && itemId === SILVER_BAR && quest.getStage(player) >= STAGE_HUNT
-      && !has(player, SILVER_POT) && !has(player, BLESSED_POT)) {
+      && !has(player, SILVER_POT) && ![...BLESSED_POTS].some((id) => has(player, id))) {
       take(player, SILVER_BAR);
       give(player, SILVER_POT);
       setAttr(player, ATTR_POT_BLOODED, 0);
@@ -701,12 +783,88 @@ module.exports = function registerDesertTreasureIQuest(api) {
       event.handled = true;
       return;
     }
-    if (npcId === MALAK_NPC_ID && BLESSED_POTS.has(itemId) && quest.getStage(player) >= STAGE_HUNT
+    if (npcId === MALAK_NPC_ID && itemId === BLESSED_POT && quest.getStage(player) >= STAGE_HUNT
       && !attr(player, ATTR_POT_BLOODED)) {
+      take(player, BLESSED_POT);
+      give(player, BLOOD_POT);
       setAttr(player, ATTR_POT_BLOODED, 1);
       player.sendMessage("Malak cuts you and pours some of your blood into the pot.");
       event.handled = true;
     }
+  }
+
+  const DIAMOND_PLACED_BITS = {
+    [SMOKE_DIAMOND]: 1,
+    [SHADOW_DIAMOND]: 2,
+    [ICE_DIAMOND]: 4,
+    [BLOOD_DIAMOND]: 8,
+  };
+  const DIAMOND_COLUMN_VARBITS = {
+    [SMOKE_DIAMOND]: VARBIT_COLUMN_FIRE,
+    [SHADOW_DIAMOND]: VARBIT_COLUMN_SHADOW,
+    [ICE_DIAMOND]: VARBIT_COLUMN_ICE,
+    [BLOOD_DIAMOND]: VARBIT_COLUMN_BLOOD,
+  };
+  const OBELISK_DIAMONDS = new Map([
+    [6482, BLOOD_DIAMOND],
+    [6485, SMOKE_DIAMOND],
+    [6488, ICE_DIAMOND],
+    [6491, SHADOW_DIAMOND],
+  ]);
+
+  function placedDiamondMask(player) {
+    // Older saves recorded only a count; preserve it without inventing column identities.
+    if (attr(player, ATTR_PLACED) >= 4 || quest.getStage(player) >= STAGE_PLACED) return 0xf;
+    return attr(player, ATTR_PLACED_MASK);
+  }
+
+  function spawnDessous(player) {
+    player.sendMessage("You pour the blood from the pot onto the tomb. Dessous rises from his grave!");
+    let alive = false;
+    for (const npc of api.core.World.getNpcs()) {
+      if (npc?.getId?.() !== DESSOUS_NPC_ID) continue;
+      const location = npc.getLocation();
+      if (Math.abs(location.getX() - DESSOUS_SPAWN.getX()) <= 10
+        && Math.abs(location.getY() - DESSOUS_SPAWN.getY()) <= 10) alive = true;
+    }
+    if (!alive) {
+      api.spawnNpc({
+        id: DESSOUS_NPC_ID,
+        x: DESSOUS_SPAWN.getX(),
+        y: DESSOUS_SPAWN.getY(),
+        z: DESSOUS_SPAWN.getZ(),
+        owner: player,
+        ownerOnly: true,
+        wanderRadius: 0,
+      });
+    }
+  }
+
+  function ensureGroundItem(player, itemId, position) {
+    const manager = api.getItemOnGroundManager?.();
+    if (!manager?.registerLocation || !manager?.getGroundItem) return null;
+    const area = player.getPrivateArea?.() ?? null;
+    const existing = manager.getGroundItem(player.getUsername(), itemId, position, area);
+    if (existing) return existing;
+    return manager.registerLocation(player, new Item(itemId, 1), position);
+  }
+
+  function reclaimSmokeDiamond(player) {
+    if (!attr(player, ATTR_SMOKE_KILLED) || has(player, SMOKE_DIAMOND)) return;
+    ensureGroundItem(player, SMOKE_DIAMOND, SMOKE_DIAMOND_RECOVERY_TILE);
+  }
+
+  function reclaimShadowDiamond(player) {
+    if (!attr(player, ATTR_SHADOW_KILLED) || has(player, SHADOW_DIAMOND)) return;
+    ensureGroundItem(player, SHADOW_DIAMOND, SHADOW_DIAMOND_RECOVERY_TILE);
+  }
+
+  function handleFareedRoomEnter({ player }) {
+    reclaimSmokeDiamond(player);
+  }
+
+  function handleShadowRoomEnter({ player }) {
+    reclaimShadowDiamond(player);
   }
 
   function torchBit(objectId) {
@@ -733,11 +891,23 @@ module.exports = function registerDesertTreasureIQuest(api) {
         player.sendMessage("The pillar seems to repel the diamond.");
         return;
       }
+      const bit = DIAMOND_PLACED_BITS[itemId];
+      if (OBELISK_DIAMONDS.get(objectId) !== itemId) {
+        player.sendMessage("The diamond does not fit this pillar.");
+        return;
+      }
+      const mask = placedDiamondMask(player);
+      if ((mask & bit) !== 0) {
+        player.sendMessage("There is already a diamond in this pillar.");
+        return;
+      }
       take(player, itemId);
-      const placed = attr(player, ATTR_PLACED) + 1;
+      const placed = Math.min(4, attr(player, ATTR_PLACED) + 1);
       setAttr(player, ATTR_PLACED, placed);
+      setAttr(player, ATTR_PLACED_MASK, mask | bit);
+      player.getPacketSender().sendVarbit(DIAMOND_COLUMN_VARBITS[itemId], 1);
       player.sendMessage("The diamond is absorbed into the pillar...");
-      if (placed >= DIAMOND_IDS.length) {
+      if (placed >= 4) {
         if (quest.getStage(player) < STAGE_PLACED) quest.setStage(player, STAGE_PLACED);
         player.sendMessage("The force preventing access to the Pyramid has now vanished.");
       }
@@ -746,25 +916,12 @@ module.exports = function registerDesertTreasureIQuest(api) {
     if (objectId === DESSOUS_TOMB_ID && BLESSED_POTS.has(itemId)) {
       event.handled = true;
       if (quest.getStage(player) < STAGE_HUNT) return;
-      player.sendMessage("You pour the blood from the pot onto the tomb. Dessous rises from his grave!");
-      let alive = false;
-      for (const npc of api.core.World.getNpcs()) {
-        if (npc?.getId?.() !== DESSOUS_NPC_ID) continue;
-        const location = npc.getLocation();
-        if (Math.abs(location.getX() - DESSOUS_SPAWN.getX()) <= 10
-          && Math.abs(location.getY() - DESSOUS_SPAWN.getY()) <= 10) alive = true;
+      if (itemId !== COMPLETE_POT) {
+        player.sendMessage("There is nothing in the pot to pour onto the grave.");
+        return;
       }
-      if (!alive) {
-        api.spawnNpc({
-          id: DESSOUS_NPC_ID,
-          x: DESSOUS_SPAWN.getX(),
-          y: DESSOUS_SPAWN.getY(),
-          z: DESSOUS_SPAWN.getZ(),
-          owner: player,
-          ownerOnly: true,
-          wanderRadius: 0,
-        });
-      }
+      take(player, COMPLETE_POT);
+      spawnDessous(player);
       return;
     }
     if (SMOKE_GATE_IDS.has(objectId) && itemId === WARM_KEY) {
@@ -772,6 +929,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
       if (quest.getStage(player) < STAGE_HUNT) return;
       player.sendMessage("You unlock the gate and enter the room.");
       player.moveTo(new Location(FAREED_ARENA.getX(), FAREED_ARENA.getY() + 2, FAREED_ARENA.getZ()));
+      reclaimSmokeDiamond(player);
     }
   }
 
@@ -787,14 +945,33 @@ module.exports = function registerDesertTreasureIQuest(api) {
     }
     if (!ids.some((id) => BLESSED_POTS.has(id))) return;
     const { player } = event;
-    if (ids.includes(GARLIC_POWDER) && !attr(player, ATTR_POT_GARLIC)) {
+    const hasPot = (id) => has(player, id);
+    if (ids.includes(GARLIC_POWDER)) {
+      if (hasPot(BLOOD_POT)) {
+        take(player, BLOOD_POT);
+        give(player, GARLIC_POT);
+      } else if (hasPot(SPICED_POT)) {
+        take(player, SPICED_POT);
+        give(player, COMPLETE_POT);
+      } else {
+        return;
+      }
       take(player, GARLIC_POWDER);
       setAttr(player, ATTR_POT_GARLIC, 1);
       player.sendMessage("You add some crushed garlic to the pot.");
       event.handled = true;
       return;
     }
-    if (ids.includes(SPICE) && !attr(player, ATTR_POT_SPICE)) {
+    if (ids.includes(SPICE)) {
+      if (hasPot(GARLIC_POT)) {
+        take(player, GARLIC_POT);
+        give(player, COMPLETE_POT);
+      } else if (hasPot(BLOOD_POT)) {
+        take(player, BLOOD_POT);
+        give(player, SPICED_POT);
+      } else {
+        return;
+      }
       take(player, SPICE);
       setAttr(player, ATTR_POT_SPICE, 1);
       player.sendMessage("You add some spices to the pot.");
@@ -866,18 +1043,41 @@ module.exports = function registerDesertTreasureIQuest(api) {
     return true;
   }
 
+  function goThroughIcePathGate({ player }) {
+    if (quest.getStage(player) < STAGE_HUNT) return false;
+    if (player.getLocation().getZ() !== 1) return false;
+    player.moveTo(new Location(2854, 3810, 2));
+    return true;
+  }
+
   function stepOffIceLedge({ player }) {
     player.moveTo(ICE_LEDGE_BOTTOM.clone());
     return true;
   }
 
-  function openPyramidEntrance({ player }) {
-    if (quest.getStage(player) < STAGE_PLACED) {
-      player.sendMessage("A powerful force prevents you from entering the pyramid.");
-      return false;
+  function handlePyramidObject({ player, objectId, location }) {
+    if (!location) return false;
+    if (objectId === PYRAMID_ENTRANCE_ID && location.x === 3233 && location.y === 2897 && location.z === 0) {
+      if (quest.getStage(player) < STAGE_PLACED) {
+        player.sendMessage("A powerful force prevents you from entering the pyramid.");
+        return true;
+      }
+      player.moveTo(PYRAMID_ENTRANCE_LANDING.clone());
+      if (quest.getStage(player) < STAGE_ENTERED) quest.setStage(player, STAGE_ENTERED);
+      return true;
     }
-    player.moveTo(PYRAMID_INTERIOR.clone());
-    return true;
+    const ladder = PYRAMID_LADDER_DOWN.get(objectId);
+    if (ladder && location.x === ladder.from[0] && location.y === ladder.from[1]
+      && location.z === ladder.from[2]) {
+      player.moveTo(ladder.to.clone());
+      if (quest.getStage(player) < STAGE_ENTERED) quest.setStage(player, STAGE_ENTERED);
+      return true;
+    }
+    if (objectId === PYRAMID_DOOR_ID && location.x === 3234 && location.y === 9324 && location.z === 0) {
+      player.moveTo(PYRAMID_DOOR_LANDING.clone());
+      return true;
+    }
+    return false;
   }
 
   /** The Smoke Dungeon's east gate is named "Gate", so Doors asks quests first. */
@@ -899,6 +1099,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
     } else {
       player.moveTo(new Location(3304, player.getLocation().getY(), player.getLocation().getZ()));
     }
+    reclaimSmokeDiamond(player);
   }
 
   function openSecureChest({ player }) {
@@ -913,11 +1114,11 @@ module.exports = function registerDesertTreasureIQuest(api) {
   }
 
   function climbShadowLadder({ player }) {
-    if (wearingRing(player)) {
-      player.moveTo(SHADOW_DUNGEON_LANDING.clone());
-    } else {
+    if (!wearingRing(player)) {
       player.sendMessage("You cannot see a ladder there.");
+      return true;
     }
+    player.moveTo(SHADOW_DUNGEON_LANDING.clone());
     return true;
   }
 
@@ -951,6 +1152,10 @@ module.exports = function registerDesertTreasureIQuest(api) {
       event.handled = goThroughIceGate(event) === true;
       return;
     }
+    if (ICE_PATH_GATE_IDS.has(objectId)) {
+      event.handled = goThroughIcePathGate(event) === true;
+      return;
+    }
     if (objectId === ICE_LEDGE_ID) {
       event.handled = useIceLedge(event) === true;
       return;
@@ -959,9 +1164,9 @@ module.exports = function registerDesertTreasureIQuest(api) {
       event.handled = stepOffIceLedge(event) === true;
       return;
     }
-    if (PYRAMID_ENTRANCE_IDS.has(objectId)) {
-      event.handled = true;
-      openPyramidEntrance(event);
+    if (objectId === PYRAMID_ENTRANCE_ID || PYRAMID_LADDER_DOWN.has(objectId)
+      || objectId === PYRAMID_DOOR_ID) {
+      event.handled = handlePyramidObject(event);
       return;
     }
     if (objectId === BANDIT_CHEST_ID) {
@@ -1034,15 +1239,16 @@ module.exports = function registerDesertTreasureIQuest(api) {
     }
   }
 
-  /** The four diamond drops. */
+  /** The smoke/shadow diamonds drop on the kill; blood/ice are hand-ins. */
   function handleNpcDeath(event) {
     const player = event.killer ?? event.player;
     const { npcId } = event;
     if (!player || quest.getStage(player) < STAGE_HUNT) return;
+    const killedId = npcId ?? event.npc?.getId?.();
 
     // The death event reports the player-resolved variant id; the spawned id is
     // matched too because rev-241 npc transforms can resolve some spawns elsewhere.
-    if (ICE_TROLL_IDS.has(npcId) || ICE_TROLL_IDS.has(event.npc?.getId?.())) {
+    if (ICE_TROLL_IDS.has(killedId) || ICE_TROLL_IDS.has(event.npc?.getId?.())) {
       const killed = attr(player, ATTR_ICE_TROLLS) + 1;
       setAttr(player, ATTR_ICE_TROLLS, killed);
       if (killed <= 5) player.sendMessage("A chunk of ice falls away from the cave entrance...");
@@ -1053,15 +1259,32 @@ module.exports = function registerDesertTreasureIQuest(api) {
       return;
     }
 
-    const drop = npcId === DAMIS_SECOND_NPC_ID ? SHADOW_DIAMOND
-      : npcId === DESSOUS_NPC_ID ? BLOOD_DIAMOND
-      : npcId === KAMIL_NPC_ID ? ICE_DIAMOND
-      : npcId === FAREED_NPC_ID ? SMOKE_DIAMOND
-      : undefined;
-    if (drop === undefined) return;
-    if (!has(player, drop) && !player.getInventory().isFull()) {
-      give(player, drop);
-      player.sendMessage("You take one of the Diamonds of Azzanadra.");
+    if (killedId === DESSOUS_NPC_ID) {
+      setAttr(player, ATTR_DESSOUS_KILLED, 1);
+      player.sendMessage("Well that's Dessous dead, but where is the Diamond he was supposed to have?");
+      return;
+    }
+    if (killedId === KAMIL_NPC_ID) {
+      setAttr(player, ATTR_KAMIL_KILLED, 1);
+      return;
+    }
+    if (killedId === DAMIS_SECOND_NPC_ID) {
+      setAttr(player, ATTR_SHADOW_KILLED, 1);
+      if (!has(player, SHADOW_DIAMOND)) {
+        const deathTile = event.npc?.getLocation?.() ?? SHADOW_DIAMOND_RECOVERY_TILE;
+        ensureGroundItem(player, SHADOW_DIAMOND,
+          new Location(deathTile.getX(), deathTile.getY(), deathTile.getZ()));
+      }
+      return;
+    }
+    if (killedId === FAREED_NPC_ID) {
+      // Wiki: the smoke diamond appears in the inventory on the kill. A lost
+      // one reappears on the chamber floor (handled by the room/gate zone).
+      setAttr(player, ATTR_SMOKE_KILLED, 1);
+      if (!has(player, SMOKE_DIAMOND) && !player.getInventory().isFull()) {
+        give(player, SMOKE_DIAMOND);
+        player.sendMessage("You take one of the Diamonds of Azzanadra.");
+      }
     }
   }
 
@@ -1093,6 +1316,15 @@ module.exports = function registerDesertTreasureIQuest(api) {
     refreshQuestList(player);
     // The thaw is world state, lost on restart; reopen it for anyone past the count.
     if (quest.getStage(player) >= STAGE_HUNT && attr(player, ATTR_ICE_TROLLS) >= 5) openIceCave();
+    // Obelisk transforms read sibling varbits inside varp 440; replay them from
+    // the durable placement mask without touching the stage half of the varp.
+    const placed = placedDiamondMask(player);
+    for (const [itemId, bit] of Object.entries(DIAMOND_PLACED_BITS)) {
+      const column = DIAMOND_COLUMN_VARBITS[itemId];
+      if ((placed & bit) !== 0 && column !== undefined) {
+        player.getPacketSender().sendVarbit(column, 1);
+      }
+    }
   }
 
   // ==========================================================================
@@ -1116,6 +1348,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
     key: "desert_treasure_i",
     name: "Desert Treasure I",
     varpId: VARP_DESERT_TREASURE,
+    varbitId: VARBIT_DESERT_TREASURE,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 3,
@@ -1141,6 +1374,12 @@ module.exports = function registerDesertTreasureIQuest(api) {
   api.persistAttribute(ATTR_ICE_PARENTS);
   api.persistAttribute(ATTR_TORCHES);
   api.persistAttribute(ATTR_PLACED);
+  api.persistAttribute(ATTR_PLACED_MASK, 0);
+  api.persistAttribute(ATTR_DESSOUS_KILLED, 0);
+  api.persistAttribute(ATTR_BLOOD_CLAIMED, 0);
+  api.persistAttribute(ATTR_KAMIL_KILLED, 0);
+  api.persistAttribute(ATTR_SMOKE_KILLED, 0);
+  api.persistAttribute(ATTR_SHADOW_KILLED, 0);
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
@@ -1156,6 +1395,8 @@ module.exports = function registerDesertTreasureIQuest(api) {
   api.onItemOnObject(handleItemOnObject);
   api.onAnyNpcInteraction({ "Smash-ice": smashIceBlock });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onZoneEnter(FAREED_ROOM_ZONE, handleFareedRoomEnter);
+  api.onZoneEnter(SHADOW_DIAMOND_ZONE, handleShadowRoomEnter);
   api.onServerStartup(installQuestObjects);
   api.onPlayerLogin(handleLogin);
 };

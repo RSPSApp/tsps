@@ -15,7 +15,9 @@
  * letter delivered (visit Zaff), 80 Beacon ring + instructions, 110 King Roald
  * fight, 120 King freed / Surok sealed, 140 complete. The values follow the
  * RuneLite quest-helper step map (0/5/10/20/25/30/40/45/46/50/55/60/61/70/71/
- * 72/80/81/110/115/120/140).
+ * 72/80/81/110/115/120/140). The completed stage is sent to cache varbit 3523
+ * as 150 (quest DB table 0 column 19's completion threshold); the durable stage
+ * stays 140 so existing saves keep their post-quest dialogue.
  *
  * Sub-state lives in the cache's own bits so the client keeps in step:
  * varbit 3525 "surok_foldercheck" (bits 9-11) is the folder's page count (0-5),
@@ -85,6 +87,7 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   const STAGE_FIGHT = 110;
   const STAGE_KING_DEFEATED = 120;
   const STAGE_COMPLETE = 140;
+  const VARBIT_COMPLETE = 150; // cache DB table 0 row 159 column 19
 
   const RUNECRAFT_LEVEL = 35;
   const PAPERS_NEEDED = 5;
@@ -286,6 +289,7 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   const ACTION_DIG = "APAgLV";
   const ACTION_TELEPORT_OUT = "jqX-BV";
   const ACTION_GIVE_SUROKS_LETTER = "PepH7r";
+  const ACTION_GIVE_SUROKS_LETTER_AGAIN = "pRyGCh";
   const ACTION_RAT_TAKES_LETTER = "T1DY8H";
   const ACTION_GIVE_RING = "ZpM2H-";
   const ACTION_GIVE_RING_AGAIN = "fdFTWH";
@@ -296,6 +300,8 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   const ACTION_COMPLETE = "ZJvcFu";
   const LINE_WAND_REPLACED = "Here you are. Try not to lose this one!";
   const LINE_WAND_SPARE = "Hmph! In the meantime, here's another metal wand. Go and make another infused wand for me...and be more careful this time! My patience is growing thin!";
+  const LINE_BRIEFING_DIARY = "I have also given you a copy of a diary I...uh...acquired. It may also help you to find that which you seek.";
+  const LINE_RAT_SEES_LETTER = "I'm sure I don't know what you mean. Let me see the letter, please.";
 
   // --- Transient per-interaction context ----------------------------------
   const interaction = new WeakMap();
@@ -371,6 +377,16 @@ module.exports = function registerWhatLiesBelowQuest(api) {
     );
   }
 
+  function hasBankedFolder(player) {
+    return [EMPTY_FOLDER_ITEM_ID, USED_FOLDER_ITEM_ID, FULL_FOLDER_ITEM_ID]
+      .some((itemId) => inBank(player, itemId));
+  }
+
+  function ownsBeaconRing(player) {
+    return held(player, BEACON_RING_ITEM_ID)
+      || player.getEquipment().get(api.core.Equipment.RING_SLOT)?.getId?.() === BEACON_RING_ITEM_ID;
+  }
+
   // ==========================================================================
   // Transcript variant selection
   // ==========================================================================
@@ -404,6 +420,7 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   }
 
   function zaffVariant(player, stage) {
+    if (stage >= STAGE_COMPLETE) return { page: "Zaff", variant: "standard-dialogue-members-worlds" };
     if (stage >= STAGE_KING_DEFEATED && stage < STAGE_COMPLETE) return ZAFF_DEFEATED_VARIANT;
     if (stage >= STAGE_ZAFF_RING && stage < STAGE_KING_DEFEATED) return ZAFF_AGAIN_VARIANT;
     if (stage >= STAGE_RAT_KNOWS && stage < STAGE_ZAFF_RING) return ZAFF_INTRO_VARIANT;
@@ -411,6 +428,10 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   }
 
   function annaVariant(player, stage) {
+    if (stage >= STAGE_COMPLETE) {
+      return tunnelIsOpen(player) ? "after-excavating-the-statue"
+        : "after-completing-what-lies-below-while-the-statue-is-intact";
+    }
     if (stage >= STAGE_KING_DEFEATED || stage < STAGE_BRIEFED) return null;
     if (tunnelIsOpen(player)) {
       interaction.set(player, { annaTalk: true });
@@ -452,11 +473,17 @@ module.exports = function registerWhatLiesBelowQuest(api) {
       case COND_NO_SPACE:
         return inventory.isFull();
       case COND_FOLDER_NO_SPACE:
-        return !hasFolder(player) && !inventory.isFull();
+        return !hasFolder(player) && !hasBankedFolder(player) && !inventory.isFull();
       case COND_HAS_FOLDER:
         return hasFolder(player);
       case COND_LOST_FOLDER:
-        return !hasFolder(player);
+        return !hasFolder(player) && !hasBankedFolder(player);
+      case "hPduM1": // Zaff: already carrying the Beacon ring
+        return ownsBeaconRing(player);
+      case "S2p6HZ": // Zaff: the ring is banked
+        return inBank(player, BEACON_RING_ITEM_ID);
+      case "xgclJB": // Zaff: no room for a replacement
+        return inventory.isFull();
       case COND_FOLDER_ON_RAT:
         return ctx.item === "folder-on-rat" && held(player, EMPTY_FOLDER_ITEM_ID);
       case COND_PAPER_ON_RAT:
@@ -682,10 +709,17 @@ module.exports = function registerWhatLiesBelowQuest(api) {
     const { player, stepId } = event;
     if (!player || stepId === undefined) return;
     switch (stepId) {
+      case "-qkbDJ": // Zaff's post-quest replacement ring
+        if (!ZAFF_NPC_IDS.has(event.npcId) || !quest.isComplete(player)) return;
+        event.handled = true;
+        if (!ownsBeaconRing(player) && !inBank(player, BEACON_RING_ITEM_ID)) {
+          giveItem(player, BEACON_RING_ITEM_ID);
+        }
+        return;
       case ACTION_GIVE_FOLDER:
       case ACTION_GIVE_FOLDER_AGAIN:
         event.handled = true;
-        if (!hasFolder(player)) {
+        if (!hasFolder(player) && !hasBankedFolder(player)) {
           setPapers(player, 0);
           giveItem(player, EMPTY_FOLDER_ITEM_ID);
         }
@@ -708,14 +742,7 @@ module.exports = function registerWhatLiesBelowQuest(api) {
         return;
       case ACTION_GIVE_WAND:
         event.handled = true;
-        if (player.getInventory().getFreeSlots() < 1) {
-          player.sendMessage("You need a free inventory space.");
-          return;
-        }
-        player.getInventory().deleteNumber(LETTER_TO_SUROK_ITEM_ID, 1);
-        player.getInventory().adds(WAND_ITEM_ID, 1);
-        player.getInventory().adds(DIARY_ITEM_ID, 1);
-        if (quest.getStage(player) < STAGE_BRIEFED) quest.setStage(player, STAGE_BRIEFED);
+        giveBriefingItems(player);
         return;
       case ACTION_GIVE_DIARY:
         event.handled = true;
@@ -740,15 +767,19 @@ module.exports = function registerWhatLiesBelowQuest(api) {
         return;
       case ACTION_GIVE_SUROKS_LETTER:
         event.handled = true;
-        if (player.getInventory().getFreeSlots() < 1) {
-          player.sendMessage("You need a free inventory space.");
-          return;
-        }
+        // Surok takes the infused wand and bowl before handing over his letter.
+        player.getInventory().deleteNumber(INFUSED_WAND_ITEM_ID, 1);
+        player.getInventory().deleteNumber(BOWL_ITEM_ID, 1);
         player.getInventory().adds(SUROKS_LETTER_ITEM_ID, 1);
         quest.setStage(player, STAGE_SUROK_LETTER);
         return;
+      case ACTION_GIVE_SUROKS_LETTER_AGAIN:
+        event.handled = true;
+        giveItem(player, SUROKS_LETTER_ITEM_ID);
+        return;
       case ACTION_RAT_TAKES_LETTER:
         event.handled = true;
+        if (!held(player, SUROKS_LETTER_ITEM_ID)) return;
         player.getInventory().deleteNumber(SUROKS_LETTER_ITEM_ID, 1);
         quest.setStage(player, STAGE_RAT_KNOWS);
         return;
@@ -794,14 +825,48 @@ module.exports = function registerWhatLiesBelowQuest(api) {
     }
   }
 
-  /** The "I lost the wand!" branch has no action step of its own. */
+  function giveBriefingItems(player) {
+    if (player.getInventory().getFreeSlots() < 1) {
+      player.sendMessage("You need a free inventory space.");
+      return false;
+    }
+    player.getInventory().deleteNumber(LETTER_TO_SUROK_ITEM_ID, 1);
+    player.getInventory().adds(WAND_ITEM_ID, 1);
+    player.getInventory().adds(DIARY_ITEM_ID, 1);
+    if (quest.getStage(player) < STAGE_BRIEFED) quest.setStage(player, STAGE_BRIEFED);
+    return true;
+  }
+
+  function handleFolderReplacement({ player, npcId, stepId }) {
+    if (npcId !== RAT_NPC_ID || stepId !== COND_FOLDER_NO_SPACE
+      || hasFolder(player) || hasBankedFolder(player)) return;
+    if (giveItem(player, EMPTY_FOLDER_ITEM_ID)) setPapers(player, 0);
+  }
+
+  /** Branches the wiki exports without their own action step. */
   function handleDialogueLine(event) {
     const { player, npcId, text } = event;
-    if (!SUROK_NPC_IDS.has(npcId)) return;
-    if (text !== LINE_WAND_REPLACED && text !== LINE_WAND_SPARE) return;
-    if (held(player, WAND_ITEM_ID) || held(player, INFUSED_WAND_ITEM_ID)) return;
-    if (player.getInventory().getFreeSlots() < 1) return;
-    player.getInventory().adds(WAND_ITEM_ID, 1);
+    if (SUROK_NPC_IDS.has(npcId)) {
+      // "Is it a BIG secret?" reaches the same hand-out line as "Go on, then!".
+      if (text === LINE_BRIEFING_DIARY) {
+        const stage = quest.getStage(player);
+        if (stage >= STAGE_FOLDER_RETURNED && stage < STAGE_BRIEFED) giveBriefingItems(player);
+        return;
+      }
+      if (text !== LINE_WAND_REPLACED && text !== LINE_WAND_SPARE) return;
+      if (held(player, WAND_ITEM_ID) || held(player, INFUSED_WAND_ITEM_ID)) return;
+      if (player.getInventory().getFreeSlots() < 1) return;
+      player.getInventory().adds(WAND_ITEM_ID, 1);
+      return;
+    }
+    // The accusatory answer to Rat takes the letter without a wiki action step.
+    if (npcId === RAT_NPC_ID && text === LINE_RAT_SEES_LETTER) {
+      const stage = quest.getStage(player);
+      if (stage < STAGE_SUROK_LETTER || stage >= STAGE_RAT_KNOWS) return;
+      if (!held(player, SUROKS_LETTER_ITEM_ID)) return;
+      player.getInventory().deleteNumber(SUROKS_LETTER_ITEM_ID, 1);
+      quest.setStage(player, STAGE_RAT_KNOWS);
+    }
   }
 
   /** Surok's Talk-to during the fight: the glazed-over hint, without King Roald's shouts. */
@@ -1282,6 +1347,9 @@ module.exports = function registerWhatLiesBelowQuest(api) {
     varbitId: VARBIT_SUROK_QUEST,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // Script 4024 reads varbit 3523 for quest 159; script 4029 completes at the
+    // cache's DB threshold 150, so the final stage must go on the wire as 150.
+    varbitValue: (stage) => (stage >= STAGE_COMPLETE ? VARBIT_COMPLETE : stage),
     questPoints: 1,
     xpRewards: [
       { skillId: Skill.RUNECRAFTING.getIndex(), amount: 8000, label: "Runecraft" },
@@ -1302,6 +1370,7 @@ module.exports = function registerWhatLiesBelowQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:choice", handleStartChoice);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
+  api.onCustomEvent("npc-dialogue:condition", handleFolderReplacement);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject, { noted: false });

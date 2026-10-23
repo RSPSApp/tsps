@@ -168,6 +168,13 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     if (varbit !== undefined) player.getPacketSender().sendVarbit(varbit, 1);
   }
 
+  /** The side bits live in varp 2748 beside the stage varbit; login must resend them. */
+  function syncBits(player) {
+    for (const [bit, varbit] of VARBIT_BY_BIT) {
+      player.getPacketSender().sendVarbit(varbit, hasBit(player, bit) ? 1 : 0);
+    }
+  }
+
   function advanceStage(player, target) {
     if (quest.getStage(player) < target) quest.setStage(player, target);
   }
@@ -235,6 +242,12 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     const request = { player, line: null };
     api.emitCustomEvent("slayer:task-tip", request);
     return typeof request.line === "string" && request.line.length > 0;
+  }
+
+  function hasSlayerUnlock(player, name) {
+    const request = { player, name, unlocked: false };
+    api.emitCustomEvent("slayer:has-unlock", request);
+    return request.unlocked === true;
   }
 
   function inCaveZone(player) {
@@ -586,23 +599,14 @@ module.exports = function registerPorcineOfInterestQuest(api) {
           && !held(player, REINFORCED_GOGGLES_ITEM_ID)
           && !bankHasGoggles(player);
       case "cuEtvC":
-        return false;
+        return hasSlayerUnlock(player, "Malevolent Masquerade");
       case "RGQc9A":
         return !hasSlayerTask(player);
       case "B49An4":
         return hasSlayerTask(player);
-      case "2LqhLT":
-        return false;
-      case "DhLGnl":
-        return !hasSlayerTask(player);
-      case "oIq-xQ":
-        return hasSlayerTask(player);
-      case "CEpjWS":
-        return false;
-      case "9dGri8":
-        return false;
-      case "6YLYvN":
-        return true;
+      // The remaining Spria conditions belong to the Slayer plugin's own
+      // standard dialogue (assignment, combat-level checking, ineligible task).
+      // Returning null lets that owner answer instead of preempting it here.
       default:
         return null;
     }
@@ -651,6 +655,10 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     if (!SPRIA_NPC_IDS.has(event.npcId) && event.npcId !== PIG_THING_NPC_ID) return;
     if (caves.get(event.player)?.scene && event.step?.speaker === "Spria") event.speakerId = NpcIdentifiers.SPRIA_2;
     const text = String(event.text ?? "");
+    if (text.startsWith("Sure, I have another going spare.") && event.player.getInventory().isFull()) {
+      event.text = "You'll need to free up some inventory space before I can give you another pair.";
+      return;
+    }
     if (!text.includes("[task monster]") && !text.includes("[amount]")) return;
     if (!hasSlayerTask(event.player)) return;
     const line = claimSlayerTask(event.player, event.npcId, event.definition);
@@ -675,12 +683,13 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   // ==========================================================================
 
   function giveGoggles(player) {
-    if (held(player, REINFORCED_GOGGLES_ITEM_ID)) return;
+    if (held(player, REINFORCED_GOGGLES_ITEM_ID)) return true;
     if (player.getInventory().isFull()) {
       player.sendMessage("You need some free inventory space to take the goggles.");
-      return;
+      return false;
     }
     player.getInventory().adds(REINFORCED_GOGGLES_ITEM_ID, 1);
+    return true;
   }
 
   function claimSlayerTask(player, npcId, definition) {
@@ -706,15 +715,12 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   }
 
   function takeFoot(player) {
-    if (quest.getStage(player) < STAGE_SOURHOG_DEAD || quest.getStage(player) >= STAGE_BOUNTY_COLLECTED || hasFoot(player)) return;
-    if (player.getInventory().isFull()) {
-      player.sendMessage("You need some free inventory space for the foot.");
-      return;
-    }
+    if (quest.getStage(player) < STAGE_SOURHOG_DEAD || quest.getStage(player) >= STAGE_BOUNTY_COLLECTED || hasFoot(player)) return false;
+    if (player.getInventory().isFull()) return false;
     player.getInventory().adds(SOURHOG_FOOT_ITEM_ID, 1);
     setBit(player, BIT_FOOTCUT);
     quest.setStage(player, STAGE_HAS_FOOT);
-
+    return true;
   }
 
   function climbBlockage(player, destination) {
@@ -737,10 +743,6 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     }
     if (stepId === "fvC8GN") {
       collectBounty(player);
-      return;
-    }
-    if (stepId === "Um0TAs") {
-      takeFoot(player);
     }
   }
 
@@ -748,7 +750,17 @@ module.exports = function registerPorcineOfInterestQuest(api) {
     const { player, npcId, stepId, kind } = event;
     if (npcId !== SARAH_NPC_ID && !SPRIA_NPC_IDS.has(npcId) && npcId !== PIG_THING_NPC_ID) return;
     if (kind === "message") {
-      event.box = stepId === "Um0TAs" ? { items: [SOURHOG_FOOT_ITEM_ID] } : { statement: true };
+      if (stepId === "Um0TAs") {
+        // The generated success line/box must not render when the foot was refused.
+        if (takeFoot(player)) {
+          event.box = { items: [SOURHOG_FOOT_ITEM_ID] };
+        } else {
+          event.text = "You need some free inventory space for the foot.";
+          event.box = { statement: true };
+        }
+        return;
+      }
+      event.box = { statement: true };
       handleMessageAction(player, stepId);
       return;
     }
@@ -770,7 +782,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
         return;
       case "nT99T5":
         event.handled = true;
-        giveGoggles(player);
+        if (!giveGoggles(player)) event.end = true;
         return;
       case "w1i1Mg":
         event.handled = true;
@@ -1033,9 +1045,14 @@ module.exports = function registerPorcineOfInterestQuest(api) {
 
   function handleLogin({ player }) {
     refreshQuestList(player);
+    syncBits(player);
     if (inCaveZone(player) && quest.getStage(player) >= STAGE_FOUND_CAVE && !quest.isComplete(player)) {
       enterCave(player); ensureScimitar(player); ensureSourhog(player); restoreCorpse(player);
     }
+  }
+
+  function handleBootstrapComplete({ player }) {
+    syncBits(player);
   }
 
   function handleZoneEnter({ player }) {
@@ -1092,6 +1109,7 @@ module.exports = function registerPorcineOfInterestQuest(api) {
   api.onZoneEnter(SURFACE_ZONE, handleZoneEnter);
   api.onZoneEnter(CAVE_ZONE, handleZoneEnter);
   api.onPlayerLogin(handleLogin);
+  api.onCustomEvent("player:bootstrap-complete", handleBootstrapComplete);
   api.onPlayerLogout(handlePlayerGone);
   api.onPlayerDeath(handlePlayerGone);
 };

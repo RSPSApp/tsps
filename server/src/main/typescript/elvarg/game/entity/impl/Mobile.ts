@@ -71,6 +71,13 @@ export abstract class Mobile extends Entity {
     public forcedChat: string;
     public walkingDirection: Direction = Direction.NONE;
     public runningDirection: Direction = Direction.NONE;
+    /**
+     * The last compass direction this actor actually faced or stepped in. Unlike
+     * walkingDirection/runningDirection this survives resetUpdating(), so a later tick can
+     * inspect facing without a face packet being sent. Unknown until a face target or
+     * movement supplies one; no Player spawn direction is established by the server.
+     */
+    private facingDirection: Direction = Direction.NONE;
     private lastCombat = new Stopwatch();
     public updateFlag = new UpdateFlag();
     public positionToFace: Location;
@@ -303,7 +310,15 @@ export abstract class Mobile extends Entity {
     }
 
     setMobileInteraction(mobile: Mobile | null): Mobile {
+        const previousDirection = this.targetFacingDirection(this.interactingMobile);
+        if (previousDirection !== Direction.NONE) {
+            this.facingDirection = previousDirection;
+        }
         this.interactingMobile = mobile;
+        const nextDirection = this.targetFacingDirection(mobile);
+        if (nextDirection !== Direction.NONE) {
+            this.facingDirection = nextDirection;
+        }
         this.getUpdateFlag().flag(Flag.ENTITY_INTERACTION);
         return this;
     }
@@ -496,6 +511,36 @@ export abstract class Mobile extends Entity {
         return this.positionToFace;
     }
 
+    /**
+     * The current 8-way compass direction; not the client's 0..2047 rotation. An active
+     * interaction target overrides the last walk/face heading while it is on another tile.
+     */
+    getFacingDirection(): Direction {
+        const interactionDirection = this.targetFacingDirection(this.interactingMobile);
+        return interactionDirection !== Direction.NONE ? interactionDirection : this.facingDirection;
+    }
+
+    private directionTo(x: number, y: number): Direction {
+        return Direction.fromDeltas(x - this.getLocation().getX(), y - this.getLocation().getY());
+    }
+
+    private targetFacingDirection(target: Mobile | null): Direction {
+        const targetLocation = target?.getLocation();
+        return targetLocation == null
+            ? Direction.NONE
+            : this.directionTo(targetLocation.getX(), targetLocation.getY());
+    }
+
+    private updateFacingDirection(target: Location | null): void {
+        if (target == null) {
+            return;
+        }
+        const direction = this.directionTo(target.getX(), target.getY());
+        if (direction !== Direction.NONE) {
+            this.facingDirection = direction;
+        }
+    }
+
     setPositionToFace(positionToFace: Location): Mobile {
         const current = this.positionToFace;
         if (current === positionToFace) {
@@ -513,6 +558,7 @@ export abstract class Mobile extends Entity {
         if (current == null && positionToFace == null) {
             return this;
         }
+        this.updateFacingDirection(positionToFace);
         this.positionToFace = positionToFace;
         this.getUpdateFlag().flag(Flag.FACE_POSITION);
         return this;
@@ -525,6 +571,7 @@ export abstract class Mobile extends Entity {
      * facing their last walk direction.
      */
     forcePositionToFace(positionToFace: Location): Mobile {
+        this.updateFacingDirection(positionToFace);
         this.positionToFace = positionToFace;
         this.getUpdateFlag().flag(Flag.FACE_POSITION);
         return this;
@@ -540,7 +587,9 @@ export abstract class Mobile extends Entity {
         ) {
             return this;
         }
-        this.positionToFace = new Location(x, y, z);
+        const target = new Location(x, y, z);
+        this.updateFacingDirection(target);
+        this.positionToFace = target;
         this.getUpdateFlag().flag(Flag.FACE_POSITION);
         return this;
     }
@@ -647,6 +696,9 @@ export abstract class Mobile extends Entity {
 
     setWalkingDirection(walkDirection: Direction): void {
         this.walkingDirection = walkDirection;
+        if (walkDirection != null && walkDirection.getId() >= 0) {
+            this.facingDirection = walkDirection;
+        }
     }
 
     getRunningDirection(): Direction {
@@ -655,6 +707,9 @@ export abstract class Mobile extends Entity {
 
     setRunningDirection(runDirection: Direction): void {
         this.runningDirection = runDirection;
+        if (runDirection != null && runDirection.getId() >= 0) {
+            this.facingDirection = runDirection;
+        }
     }
     isResetMovementQueue(): boolean {
         return this.resetMovementQueue;

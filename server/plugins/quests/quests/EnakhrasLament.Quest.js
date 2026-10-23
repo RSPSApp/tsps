@@ -19,17 +19,19 @@
  * Per-branch progress lives in persisted quest.* attributes (sandstone kg, head
  * choice/made, limb/door/globe/brazier bits, wall stones, camulet unlimited).
  *
- * World wiring (objects the cache map leaves as null placeholders, coordinates
- * from the OSRS Wiki scenery pages):
- *   - Surface (3189,2925): Flat ground -> Headless statue (10955/10956/10957) ->
- *     Hole (10953); the Fallen statue (10971) sits in the temple at (3129,9325).
+ * World wiring:
+ *   - The surface statue (10952), fallen statue (10970), wall (11026/11027) and
+ *     secret entrances (11045-11048) are cache multilocs driven by per-player
+ *     varbits. Other temple scenery the cache leaves absent is registered here.
  *   - Middle floor (plane 1): Pedestal 10988 (3104,9312), six Brazier 11017
- *     (3114-3118 x 9306/9309), Furnace 11009 (3115,9323), Crust of ice NPC 3573
- *     (3091,9307) becoming Fountain 11007, Rubble 34663 (3108,9295), the wall
- *     11030 -> 11028 (3103,9291) and the four secret-entrance sand piles.
- *   - NPCs spawned here: Lazim 3580 surface (3191,2926) and temple (3131,9320),
+ *     (3114-3118 x 9306/9309), the Furnace grate NPC 3574 (3116,9323), Crust of
+ *     ice NPC 3573 (3092,9308) becoming Fountain 11007, Rubble 34663 (3108,9295),
+ *     the wall multilocs (3100/3105,9291) and the four secret-entrance sand
+ *     piles (10950).
+ *   - NPCs: Lazim 3580 surface (3191,2926, shared) and temple (3131,9320),
  *     Boneguard 3570 (3104,9307,2) and 3577 (3105,9297,1), Enakhra 3575
- *     (3104,9286,1) and the Crust of ice; Pentyn 3568 already spawns.
+ *     (3104,9286,1), Akthanakos 3578 (3105,9297,1) and the two puzzle NPCs;
+ *     every temple NPC is owner-scoped, Pentyn 3568 already spawns.
  *
  * Source: https://oldschool.runescape.wiki/w/Enakhra%27s_Lament and
  * https://oldschool.runescape.wiki/w/Transcript:Enakhra%27s_Lament
@@ -37,17 +39,20 @@
  * Magic XP and the Camulet.
  *
  * Gaps / approximations:
- *   - There is no onSpellOnNpc hook, so the two spell-on-NPC actions use the
- *     interactions the cache exposes: the Crust of ice's own "Melt" option for a
- *     fire spell, and a second talk to the first Boneguard (after its attack) in
- *     place of casting Crumble Undead. A shared hook is needed for exactness.
+ *   - The pedestal and doors are still shared objects; the statue, wall and
+ *     entrances now follow each player's cache varbits. NPCs are owner-scoped,
+ *     so freeing a boneguard or melting the ice no longer vanishes for others.
  *   - The transcript dump has no refusal lines for locked doors or an unsolved
  *     barrier; short system messages are used. It also marks the Lazim/Zamorak/
  *     Icthlarin granite-chisel results and the "after choosing a head" variant as
  *     missing, so those carvings are silent item swaps and the head menu repeats.
- *   - Which side a door takes is not in the transcript; any arm/leg opens the
- *     arm/leg doors the dump names. Lazim's lost-limb conditions only re-grant a
- *     limb when it is missing from the inventory.
+ *   - The cache door names pin each limb to its door (11066 right arm, 11068
+ *     left leg, 11064 left arm, 11070 right leg); the transcript names the four
+ *     cutscenes by compass direction. Lazim's lost-limb conditions only re-grant
+ *     a limb when it is missing from the inventory.
+ *   - The four secret entrances are unnamed cache multilocs (11045-11048) with
+ *     boulder varbits (N/E/S/W, 1598-1601). The cache does not link tunnel ends;
+ *     each pairing follows the room and surface coordinates and the ladder tile.
  *   - The temple Lazim stays in the starting room instead of following the
  *     player; the boneguard's five big bones drop is skipped; the magic barrier
  *     is gated only by its Pass-through handler, not by collision.
@@ -57,6 +62,7 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     GameObject,
     ItemIdentifiers,
     Location,
+    CombatSpells,
     NpcIdentifiers,
     ObjectIdentifiers,
     ObjectManager,
@@ -74,6 +80,17 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   const ENAKHRA_NPC_ID = NpcIdentifiers.ENAKHRA; // 3575
   const AKTHANAKOS_NPC_ID = NpcIdentifiers.AKTHANAKOS; // 3578
   const CRUST_OF_ICE_NPC_ID = NpcIdentifiers.CRUST_OF_ICE; // 3573
+  const FURNACE_GRATE_NPC_ID = NpcIdentifiers.FURNACE_GRATE; // 3574
+  const CRUMBLE_UNDEAD_SPELL_ID = CombatSpells.CRUMBLE_UNDEAD.spellId();
+  const pendingSpellTargets = new WeakMap();
+  const WIND_BOLT_OR_HIGHER_SPELL_IDS = new Set([
+    CombatSpells.WIND_BOLT.spellId(), CombatSpells.WIND_BLAST.spellId(),
+    CombatSpells.WIND_WAVE.spellId(), CombatSpells.WIND_SURGE.spellId(),
+  ]);
+  const FIRE_BOLT_OR_HIGHER_SPELL_IDS = new Set([
+    CombatSpells.FIRE_BOLT.spellId(), CombatSpells.FIRE_BLAST.spellId(),
+    CombatSpells.FIRE_WAVE.spellId(), CombatSpells.FIRE_SURGE.spellId(),
+  ]);
   const OWNED_NPC_IDS = new Set([
     LAZIM_NPC_ID,
     PENTYN_NPC_ID,
@@ -82,10 +99,51 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     ENAKHRA_NPC_ID,
     AKTHANAKOS_NPC_ID,
     CRUST_OF_ICE_NPC_ID,
+    FURNACE_GRATE_NPC_ID,
   ]);
 
   const VARP_ENAKH = 641;
   const VARBIT_ENAKH_QUEST = 1560; // "enakh_quest", varp 641 bits 0-6
+  // Cache quest DB row 40 column 19: native QUEST_STATUS_GET (script 4029)
+  // reports finished when varbit 1560 >= 70. Internal stages stay 0-20; the
+  // wire values are the native milestones Quest Helper keys its loadSteps on
+  // (0/10/20/30/40/50/60/70), not the raw internal stage numbers.
+  const COMPLETE_VARBIT_VALUE = 70;
+  const VARBIT_VALUE_STATUE = 10;
+  const VARBIT_VALUE_GROUND_FLOOR = 20;
+  const VARBIT_VALUE_PUZZLES = 30;
+  const VARBIT_VALUE_TOP_FLOOR = 40;
+  const VARBIT_VALUE_BONEGUARD2 = 50;
+  const VARBIT_VALUE_WALL = 60;
+
+  // Auxiliary native varbits the Quest Helper overlay reads.
+  const VARBIT_STATUE_MULTIVAR = 1593;
+  const VARBIT_STATUE_BODY_BLURB = 1562;
+  const VARBIT_STATUE_HEAD_BLURB = 1563;
+  const VARBIT_LAZIM_REALLYAMAGE = 1566;
+  const VARBIT_BLOOD_ROOM = 1576;
+  const VARBIT_ICE_ROOM = 1577;
+  const VARBIT_SMOKE_ROOM = 1578;
+  const VARBIT_SHADOW_ROOM = 1579;
+  const VARBIT_BRAZIER_IDS = [1581, 1582, 1583, 1584, 1585, 1586]; // logs, oak, willow, maple, candle, coal
+  const VARBIT_FALLEN_STATUE_MULTIVAR = 1587;
+  const VARBIT_LEFT_ARM_TAKEN = 1589;
+  const VARBIT_RIGHT_ARM_TAKEN = 1590;
+  const VARBIT_LEFT_LEG_TAKEN = 1591;
+  const VARBIT_RIGHT_LEG_TAKEN = 1592;
+  const VARBIT_LARGEWALL_MULTIVAR = 1602;
+  const VARBIT_LEFT_ARMLOCK = 1607;
+  const VARBIT_RIGHT_ARMLOCK = 1608;
+  const VARBIT_LEFT_LEGLOCK = 1609;
+  const VARBIT_RIGHT_LEGLOCK = 1610;
+  const VARBIT_Z_DOOR = 1611;
+  const VARBIT_M_DOOR = 1612;
+  const VARBIT_R_DOOR = 1613;
+  const VARBIT_K_DOOR = 1614;
+  const VARBIT_SEEN_PEDESTAL = 1618;
+  const VARBIT_LARGEWALL_NEEDS_TRIMMING = 1620;
+  // The four secret entrances (the cache's boulder varbits).
+  const VARBIT_BOULDER_IDS = { n: 1598, e: 1599, s: 1600, w: 1601 };
 
   const STAGE_NOT_STARTED = 0;
   const STAGE_STARTED = 1;
@@ -118,6 +176,7 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   const ATTR_WALL_TAKEN = "quest.enakhras_lament.wall-taken";
   const ATTR_POST_QUEST = "quest.enakhras_lament.post-quest";
   const ATTR_CAMULET_UNLIMITED = "quest.enakhras_lament.camulet-unlimited";
+  const ATTR_ENTRANCES = "quest.enakhras_lament.entrances";
 
   const BIT_LEFT_ARM = 1 << 0;
   const BIT_RIGHT_ARM = 1 << 1;
@@ -127,11 +186,13 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   const BIT_DECLINED = 1 << 5;
   const BIT_TRIED_HEAD = 1 << 6;
   const BIT_MOULD = 1 << 7;
-  const BIT_DOOR_NE = 1 << 8;
-  const BIT_DOOR_NW = 1 << 9;
-  const BIT_DOOR_SW = 1 << 10;
-  const BIT_DOOR_SE = 1 << 11;
-  const BIT_INNER_OPEN = 1 << 12;
+  // One bit per door object, so a save made before the direction fix keeps the
+  // doors it had already opened (the object ids, not the compass names, are keyed).
+  const BIT_DOOR_RIGHT_LEG = 1 << 8; // 11070 south-east
+  const BIT_DOOR_LEFT_ARM = 1 << 9; // 11064 south-west
+  const BIT_DOOR_LEFT_LEG = 1 << 10; // 11068 north-west
+  const BIT_DOOR_RIGHT_ARM = 1 << 11; // 11066 north
+  const BIT_HEAD_PLACED = 1 << 12;
   const BIT_SMOKE = 1 << 13;
   const BIT_SHADOW = 1 << 14;
   const BIT_BLOOD = 1 << 15;
@@ -144,7 +205,11 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   const BIT_BRAZIER_LOGS = 1 << 22;
   const BIT_BRAZIER_OAK = 1 << 23;
   const BIT_BRAZIER_WILLOW = 1 << 24;
-  const BIT_LIMB_DOOR_BITS = BIT_DOOR_NE | BIT_DOOR_NW | BIT_DOOR_SW | BIT_DOOR_SE;
+  const BIT_Z_DOOR = 1 << 25;
+  const BIT_M_DOOR = 1 << 26;
+  const BIT_R_DOOR = 1 << 27;
+  const BIT_K_DOOR = 1 << 28;
+  const BIT_LIMB_DOOR_BITS = BIT_DOOR_RIGHT_ARM | BIT_DOOR_LEFT_ARM | BIT_DOOR_LEFT_LEG | BIT_DOOR_RIGHT_LEG;
   const BIT_BRAZIERS = BIT_BRAZIER_MAPLE | BIT_BRAZIER_CANDLE | BIT_BRAZIER_COAL
     | BIT_BRAZIER_LOGS | BIT_BRAZIER_OAK | BIT_BRAZIER_WILLOW;
   const BIT_GLOBES = BIT_SMOKE | BIT_SHADOW | BIT_BLOOD | BIT_ICE;
@@ -200,11 +265,22 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     [3, HEAD_ICTHLARIN],
     [4, HEAD_CAMEL],
   ]);
-  const ALL_SIGILS = new Set([Z_SIGIL, M_SIGIL, R_SIGIL, K_SIGIL]);
   const ALL_LIMBS = new Set([LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG]);
   const PIZZA_IDS = new Set([2289, 2293, 2297, 2301]);
   const CAKE_IDS = new Set([1891, 1897]);
   const POTATO_TOPPING_IDS = new Set([6703, 6705, 7054, 7056, 7058, 7060]);
+  /**
+   * The food Pentyn eats, by the cache's item names: the wiki lists "bread, any
+   * kind of pie, cake or chocolate cake, any kind of pizza, or a baked potato
+   * with topping", and partial and burnt versions do not work. The pie types are
+   * the eight the Quest Helper route accepts.
+   */
+  const FOOD_NAME_PATTERNS = [
+    ["bread", /^bread$/i],
+    ["pie", /^(apple|redberry|meat|garden|fish|admiral|wild|summer) pie$/i],
+    ["pizza", /^(plain|meat|anchovy|pineapple|banana) pizza$/i],
+    ["cake", /^(chocolate )?cake$/i],
+  ];
   const SANDSTONE_SPLITS = new Map([
     [SANDSTONE_10KG, [[SANDSTONE_5KG, 2]]],
     [SANDSTONE_5KG, [[SANDSTONE_2KG, 2], [SANDSTONE_1KG, 1]]],
@@ -213,15 +289,15 @@ module.exports = function registerEnakhrasLamentQuest(api) {
 
   // Objects.
   const FLAT_GROUND = ObjectIdentifiers.FLAT_GROUND; // 10954
+  const SURFACE_STATUE_MULTILOC_ID = 10952; // Cache loc; transforms on varbit 1593.
   const HEADLESS_STATUE_1 = ObjectIdentifiers.HEADLESS_STATUE; // 10955
   const HEADLESS_STATUE_2 = ObjectIdentifiers.HEADLESS_STATUE_2; // 10956
   const HEADLESS_STATUE_3 = ObjectIdentifiers.HEADLESS_STATUE_3; // 10957
   const HOLE = ObjectIdentifiers.HOLE_13; // 10953
-  const FALLEN_STATUE = ObjectIdentifiers.FALLEN_STATUE; // 10971
-  const STATUE_OBJECT_IDS = new Set([FLAT_GROUND, HEADLESS_STATUE_1, HEADLESS_STATUE_2, HEADLESS_STATUE_3, HOLE]);
-  const STATUE_TILE = { x: 3189, y: 2925, z: 0 };
-  const FALLEN_STATUE_TILE = { x: 3129, y: 9325, z: 0 };
+  const FALLEN_STATUE_MULTILOC_ID = 10970; // Cache loc; transforms on varbit 1587.
+  const STATUE_OBJECT_IDS = new Set([SURFACE_STATUE_MULTILOC_ID, FLAT_GROUND, HEADLESS_STATUE_1, HEADLESS_STATUE_2, HEADLESS_STATUE_3, HOLE]);
   const FALLEN_STATUE_IDS = new Set([
+    FALLEN_STATUE_MULTILOC_ID,
     ObjectIdentifiers.FALLEN_STATUE,
     ObjectIdentifiers.FALLEN_STATUE_2,
     ObjectIdentifiers.FALLEN_STATUE_3,
@@ -245,17 +321,17 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   const MAGIC_BARRIER = ObjectIdentifiers.MAGIC_BARRIER; // 11005
   const FOUNTAIN = ObjectIdentifiers.FOUNTAIN_12; // 11007
   const FOUNTAIN_TILE = { x: 3091, y: 9307, z: 1 };
-  const FURNACE_1 = ObjectIdentifiers.FURNACE_8; // 11009
-  const FURNACE_2 = ObjectIdentifiers.FURNACE_9; // 11010
-  const FURNACE_IDS = new Set([FURNACE_1, FURNACE_2]);
   const RUBBLE = ObjectIdentifiers.RUBBLE_13; // 34663
   const RUBBLE_TILE = { x: 3108, y: 9295, z: 1 };
   const BRAZIER = ObjectIdentifiers.BRAZIER; // 11017
-  const WALL_BUILD = ObjectIdentifiers.WALL_31; // 11030 (first unfinished stage)
-  const WALL_DONE = ObjectIdentifiers.WALL_29; // 11028
-  const WALL_TILE = { x: 3103, y: 9291, z: 1 };
+  const WALL_MULTILOC_IDS = new Set([11026, 11027]); // Cache locs at 3100/3105, transform on varbit 1602.
   const SECRET_ENTRANCE = ObjectIdentifiers.SECRET_ENTRANCE; // 11050
+  const BOULDER_NORTH_MULTILOC_ID = 11045; // Cache loc; transform on varbit 1598.
+  const BOULDER_EAST_MULTILOC_ID = 11046; // Cache loc; transform on varbit 1599.
+  const BOULDER_SOUTH_MULTILOC_ID = 11047; // Cache loc; transform on varbit 1600.
+  const BOULDER_WEST_MULTILOC_ID = 11048; // Cache loc; transform on varbit 1601.
   const WALL_IDS = new Set([
+    ...WALL_MULTILOC_IDS,
     ObjectIdentifiers.WALL_29,
     ObjectIdentifiers.WALL_30,
     ObjectIdentifiers.WALL_31,
@@ -268,6 +344,14 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     ObjectIdentifiers.WALL_38,
     ObjectIdentifiers.WALL_39,
     ObjectIdentifiers.WALL_40,
+  ]);
+  const SECRET_ENTRANCE_IDS = new Set([
+    SECRET_ENTRANCE,
+    ObjectIdentifiers.BOULDER_12, // 11049 transformed from cache entrances.
+    BOULDER_NORTH_MULTILOC_ID,
+    BOULDER_EAST_MULTILOC_ID,
+    BOULDER_SOUTH_MULTILOC_ID,
+    BOULDER_WEST_MULTILOC_ID,
   ]);
 
   // The six braziers by tile; the transcript names them NW/N/NE/SW/S/SE.
@@ -282,26 +366,28 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   const BRAZIER_CONDITION_IDS = new Set([...BRAZIERS_BY_TILE.values()].map((entry) => entry.conditionId));
   const BRAZIER_INVESTIGATE_IDS = new Set([...BRAZIERS_BY_TILE.values()].map((entry) => entry.investigateId));
 
-  // The dump names the door cutscenes north/north-west/south-west/south-east: the
-  // north-east corner takes an arm, north-west a leg, south-west an arm and
-  // south-east a leg (anticlockwise, cutscenes 1-4).
+  // Cache names pin each door's limb and the exact item it consumes:
+  // 11066 right arm (north), 11068 left leg (north-west), 11064 left arm
+  // (south-west), 11070 right leg (south-east).
   const LIMB_DOORS = new Map([
-    [ObjectIdentifiers.DOOR_267, { variant: "bottom-floor-of-enakhra-s-temple-open-door-to-the-north", limb: "arm", bit: BIT_DOOR_NE }], // 11070 NE
-    [ObjectIdentifiers.DOOR_261, { variant: "bottom-floor-of-enakhra-s-temple-open-door-to-the-north-west", limb: "leg", bit: BIT_DOOR_NW }], // 11064 NW
-    [ObjectIdentifiers.DOOR_265, { variant: "bottom-floor-of-enakhra-s-temple-open-door-to-the-south-west", limb: "arm", bit: BIT_DOOR_SW }], // 11068 SW
-    [ObjectIdentifiers.DOOR_263, { variant: "bottom-floor-of-enakhra-s-temple-open-door-to-the-south-east", limb: "leg", bit: BIT_DOOR_SE }], // 11066 SE
+    [ObjectIdentifiers.DOOR_263, { variant: "bottom-floor-of-enakhra-s-temple-open-door-to-the-north", item: RIGHT_ARM, bit: BIT_DOOR_RIGHT_ARM }], // 11066
+    [ObjectIdentifiers.DOOR_265, { variant: "bottom-floor-of-enakhra-s-temple-open-door-to-the-north-west", item: LEFT_LEG, bit: BIT_DOOR_LEFT_LEG }], // 11068
+    [ObjectIdentifiers.DOOR_261, { variant: "bottom-floor-of-enakhra-s-temple-open-door-to-the-south-west", item: LEFT_ARM, bit: BIT_DOOR_LEFT_ARM }], // 11064
+    [ObjectIdentifiers.DOOR_267, { variant: "bottom-floor-of-enakhra-s-temple-open-door-to-the-south-east", item: RIGHT_LEG, bit: BIT_DOOR_RIGHT_LEG }], // 11070
   ]);
+  // Cache names: 11051 Z, 11053 M, 11055 R, 11057 K. Each door consumes its
+  // own sigil, not whichever sigil the player happens to be carrying.
   const INNER_DOORS = new Map([
-    [ObjectIdentifiers.DOOR_253, ObjectIdentifiers.DOOR_254], // 11051 -> 11052
-    [ObjectIdentifiers.DOOR_255, ObjectIdentifiers.DOOR_256], // 11053 -> 11054
-    [ObjectIdentifiers.DOOR_257, ObjectIdentifiers.DOOR_258], // 11055 -> 11056
-    [ObjectIdentifiers.DOOR_259, ObjectIdentifiers.DOOR_260], // 11057 -> 11058
+    [ObjectIdentifiers.DOOR_253, { openId: ObjectIdentifiers.DOOR_254, sigil: Z_SIGIL, bit: BIT_Z_DOOR }], // 11051 -> 11052
+    [ObjectIdentifiers.DOOR_255, { openId: ObjectIdentifiers.DOOR_256, sigil: M_SIGIL, bit: BIT_M_DOOR }], // 11053 -> 11054
+    [ObjectIdentifiers.DOOR_257, { openId: ObjectIdentifiers.DOOR_258, sigil: R_SIGIL, bit: BIT_R_DOOR }], // 11055 -> 11056
+    [ObjectIdentifiers.DOOR_259, { openId: ObjectIdentifiers.DOOR_260, sigil: K_SIGIL, bit: BIT_K_DOOR }], // 11057 -> 11058
   ]);
   const SIGIL_PEDESTALS = new Map([
-    [ObjectIdentifiers.PEDESTAL_20, M_SIGIL], // 11061 start room
-    [ObjectIdentifiers.PEDESTAL_19, R_SIGIL], // 11060
-    [ObjectIdentifiers.PEDESTAL_21, Z_SIGIL], // 11062
-    [ObjectIdentifiers.PEDESTAL_22, K_SIGIL], // 11063
+    [ObjectIdentifiers.PEDESTAL_20, M_SIGIL], // 11061 enakh_pedestal_sigil_m
+    [ObjectIdentifiers.PEDESTAL_19, Z_SIGIL], // 11060 enakh_pedestal_sigil_z
+    [ObjectIdentifiers.PEDESTAL_21, R_SIGIL], // 11062 enakh_pedestal_sigil_r
+    [ObjectIdentifiers.PEDESTAL_22, K_SIGIL], // 11063 enakh_pedestal_sigil_k
   ]);
 
   const LAZIM_SURFACE_TILE = { x: 3191, y: 2926, z: 0 };
@@ -310,20 +396,32 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   const BONEGUARD1_TILE = { x: 3104, y: 9307, z: 2 };
   const BONEGUARD2_TILE = { x: 3105, y: 9297, z: 1 };
   const ENAKHRA_TILE = { x: 3104, y: 9286, z: 1 };
-  const CRUST_TILE = { x: 3091, y: 9307, z: 1 };
-  // Sand pile -> surface secret entrance (compass pairing is an approximation;
-  // the cache keeps no link between the two ends of these tunnels).
-  const SAND_PILE_EXITS = new Map([
-    ["3124,9329", { x: 3194, y: 2925, z: 0 }],
-    ["3120,9289", { x: 3189, y: 2888, z: 0 }],
-    ["3087,9333", { x: 3146, y: 2908, z: 0 }],
-    ["3081,9306", { x: 3148, y: 2937, z: 0 }],
-  ]);
+  const CRUST_TILE = { x: 3092, y: 9308, z: 1 };
+  const FURNACE_GRATE_TILE = { x: 3116, y: 9323, z: 1 };
+  /**
+   * The four secret entrances. The cache places four unnamed hole objects
+   * (11045-11048) at the surface ends of the four tunnels. The room-to-hole
+   * pairing below follows north/east/south/west map geometry and the matching
+   * ladder positions; the cache itself does not name these locs:
+   *   n: sand pile 3087,9333 (north room) -> hole 11045 at 3148,2937
+   *   e: sand pile 3124,9329 (centre)     -> hole 11046 at 3194,2925
+   *   s: sand pile 3120,9289 (south room) -> hole 11047 at 3189,2888
+   *   w: sand pile 3081,9306 (west room)  -> hole 11048 at 3146,2908
+   * The room's ladder (11041/11042) sits next to its sand pile.
+   */
+  const SECRET_ENTRANCES = [
+    { key: "n", holeId: BOULDER_NORTH_MULTILOC_ID, surface: { x: 3148, y: 2937, z: 0 }, pile: "3087,9333", ladder: "3087,9336" },
+    { key: "e", holeId: BOULDER_EAST_MULTILOC_ID, surface: { x: 3194, y: 2925, z: 0 }, pile: "3124,9329", ladder: "3127,9329" },
+    { key: "s", holeId: BOULDER_SOUTH_MULTILOC_ID, surface: { x: 3189, y: 2888, z: 0 }, pile: "3120,9289", ladder: "3121,9286" },
+    { key: "w", holeId: BOULDER_WEST_MULTILOC_ID, surface: { x: 3146, y: 2908, z: 0 }, pile: "3081,9306", ladder: "3079,9306" },
+  ];
+  const ENTRANCE_BITS = { n: 1, e: 2, s: 4, w: 8 };
+  const SAND_PILE_EXITS = new Map(SECRET_ENTRANCES.map((entrance) => [entrance.pile, entrance]));
 
   let quest;
   let worldInstalled = false;
-  let boneguard1Npc = null;
-  let boneguard2Npc = null;
+  /** Owner-scoped temple NPCs, one set per player. */
+  const playerNpcs = new WeakMap();
   /** Transient food/brazier context per player, never persisted. */
   const pentynFood = new WeakMap();
   const brazierContext = new WeakMap();
@@ -342,10 +440,12 @@ module.exports = function registerEnakhrasLamentQuest(api) {
 
   function setBit(player, bit) {
     player.setAttribute(ATTR_BITS, bits(player) | bit);
+    sendAuxVarbits(player);
   }
 
   function clearBit(player, bit) {
     player.setAttribute(ATTR_BITS, bits(player) & ~bit);
+    sendAuxVarbits(player);
   }
 
   function has(player, itemId, amount = 1) {
@@ -372,6 +472,84 @@ module.exports = function registerEnakhrasLamentQuest(api) {
 
   function setAttrNumber(player, key, value) {
     player.setAttribute(key, value | 0);
+    sendAuxVarbits(player);
+  }
+
+  /**
+   * Mirror the plugin's private stage/bits onto the native auxiliary varbits
+   * Quest Helper reads (ENAKH_STATUE_MULTIVAR, the room/brazier/limb/door/wall
+   * multivars). Without these the overlay only sees varbit 1560 and its
+   * requirement conditions never turn true.
+   */
+  function sendAuxVarbits(player) {
+    const sender = player.getPacketSender?.();
+    if (!sender?.sendVarbit) return;
+    const stage = quest.getStage(player);
+    const bitfield = bits(player);
+    const statueMultivar = hasBit(player, BIT_HEAD_PLACED) || stage >= STAGE_IN_TEMPLE ? 28
+      : stage >= STAGE_STATUE_CHISELLED ? 3
+      : stage >= STAGE_BODY_PLACED ? 2
+      : stage >= STAGE_BASE_PLACED ? 1 : 0;
+    const brazierBits = [
+      BIT_BRAZIER_LOGS,
+      BIT_BRAZIER_OAK,
+      BIT_BRAZIER_WILLOW,
+      BIT_BRAZIER_MAPLE,
+      BIT_BRAZIER_CANDLE,
+      BIT_BRAZIER_COAL,
+    ];
+    const values = [
+      [VARBIT_STATUE_MULTIVAR, statueMultivar],
+      [VARBIT_STATUE_BODY_BLURB, stage >= STAGE_BODY_BLOCK ? 1 : 0],
+      [VARBIT_STATUE_HEAD_BLURB, stage >= STAGE_STATUE_CHISELLED ? 1 : 0],
+      [VARBIT_LAZIM_REALLYAMAGE, stage >= STAGE_TEMPLE_BRIEFED ? 1 : 0],
+      [VARBIT_BLOOD_ROOM, hasBit(player, BIT_BLOOD) ? 1 : 0],
+      [VARBIT_ICE_ROOM, hasBit(player, BIT_ICE) ? 1 : 0],
+      [VARBIT_SMOKE_ROOM, hasBit(player, BIT_SMOKE) ? 1 : 0],
+      [VARBIT_SHADOW_ROOM, hasBit(player, BIT_SHADOW) ? 1 : 0],
+      ...brazierBits.map((bit, index) => [VARBIT_BRAZIER_IDS[index], (bitfield & bit) !== 0 ? 1 : 0]),
+      // The cache multivar is 3 + the four taken-limb flags packed into bits 2-5.
+      [VARBIT_FALLEN_STATUE_MULTIVAR, 3 | (((bitfield & ALL_LIMB_BITS) >>> 0) << 2)],
+      [VARBIT_LEFT_ARM_TAKEN, (bitfield & BIT_LEFT_ARM) !== 0 ? 1 : 0],
+      [VARBIT_RIGHT_ARM_TAKEN, (bitfield & BIT_RIGHT_ARM) !== 0 ? 1 : 0],
+      [VARBIT_LEFT_LEG_TAKEN, (bitfield & BIT_LEFT_LEG) !== 0 ? 1 : 0],
+      [VARBIT_RIGHT_LEG_TAKEN, (bitfield & BIT_RIGHT_LEG) !== 0 ? 1 : 0],
+      [VARBIT_LARGEWALL_MULTIVAR, attrNumber(player, ATTR_WALL_TAKEN) >= 3 ? 4 : attrNumber(player, ATTR_WALL_TAKEN)],
+      [VARBIT_LEFT_ARMLOCK, (bitfield & BIT_DOOR_LEFT_ARM) !== 0 ? 1 : 0],
+      [VARBIT_RIGHT_ARMLOCK, (bitfield & BIT_DOOR_RIGHT_ARM) !== 0 ? 1 : 0],
+      [VARBIT_LEFT_LEGLOCK, (bitfield & BIT_DOOR_LEFT_LEG) !== 0 ? 1 : 0],
+      [VARBIT_RIGHT_LEGLOCK, (bitfield & BIT_DOOR_RIGHT_LEG) !== 0 ? 1 : 0],
+      [VARBIT_Z_DOOR, (bitfield & BIT_Z_DOOR) !== 0 ? 1 : 0],
+      [VARBIT_M_DOOR, (bitfield & BIT_M_DOOR) !== 0 ? 1 : 0],
+      [VARBIT_R_DOOR, (bitfield & BIT_R_DOOR) !== 0 ? 1 : 0],
+      [VARBIT_K_DOOR, (bitfield & BIT_K_DOOR) !== 0 ? 1 : 0],
+      [VARBIT_SEEN_PEDESTAL, stage >= STAGE_PEDESTAL_DONE ? 1 : 0],
+      [VARBIT_LARGEWALL_NEEDS_TRIMMING, (bitfield & BIT_WALL_PLACED) !== 0 ? 1 : 0],
+      ...Object.entries(VARBIT_BOULDER_IDS).map(([key, id]) => [id, entrances(player) & ENTRANCE_BITS[key] ? 1 : 0]),
+    ];
+    for (const [id, value] of values) sender.sendVarbit(id, value | 0);
+  }
+
+  /** The secret entrances this player has unlocked (one bit per compass). */
+  function entrances(player) {
+    return attrNumber(player, ATTR_ENTRANCES);
+  }
+
+  function unlockEntrance(player, entrance) {
+    const bit = ENTRANCE_BITS[entrance.key];
+    if (!bit || (entrances(player) & bit) !== 0) return;
+    player.setAttribute(ATTR_ENTRANCES, entrances(player) | bit);
+    sendAuxVarbits(player);
+  }
+
+  function sendAuxOnStageChanged({ player }) {
+    if (!player) return;
+    sendAuxVarbits(player);
+    ensureTempleNpcs(player);
+  }
+
+  function sendAuxOnBootstrap({ player }) {
+    if (player) sendAuxVarbits(player);
   }
 
   function advanceTo(player, stage) {
@@ -383,8 +561,38 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     return false;
   }
 
+  /** Banked is not lost: the transcript distinguishes "in the bank" from "lost". */
+  function bankHas(player, itemId) {
+    const banks = player.getBanks?.();
+    if (Array.isArray(banks)) return banks.some((bank) => bank?.contains?.(itemId) === true);
+    if (typeof player.getBank === "function") {
+      for (let tab = 0; tab < 10; tab++) {
+        if (player.getBank(tab)?.contains?.(itemId) === true) return true;
+      }
+    }
+    return false;
+  }
+
+  function bankHasAny(player, itemIds) {
+    for (const itemId of itemIds) if (bankHas(player, itemId)) return true;
+    return false;
+  }
+
   function hasAnyLimb(player) {
     for (const id of ALL_LIMBS) if (has(player, id)) return true;
+    return false;
+  }
+
+  /** A limb already cut from the statue but no longer carried can be handed back by Lazim. */
+  function hasLostLimb(player) {
+    for (const [itemId, bit] of [
+      [LEFT_ARM, BIT_LEFT_ARM],
+      [RIGHT_ARM, BIT_RIGHT_ARM],
+      [LEFT_LEG, BIT_LEFT_LEG],
+      [RIGHT_LEG, BIT_RIGHT_LEG],
+    ]) {
+      if (hasBit(player, bit) && !has(player, itemId) && !bankHas(player, itemId)) return true;
+    }
     return false;
   }
 
@@ -529,9 +737,7 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   function lazimVariant(player) {
     const stage = quest.getStage(player);
     if (stage >= STAGE_COMPLETE) {
-      const seen = attrNumber(player, ATTR_POST_QUEST) > 0;
-      setAttrNumber(player, ATTR_POST_QUEST, 1);
-      return seen
+      return attrNumber(player, ATTR_POST_QUEST) > 0
         ? "post-quest-talking-to-lazim-again-after-the-quest"
         : "post-quest-talking-to-lazim-after-the-quest";
     }
@@ -546,11 +752,13 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       }
       if (stage >= STAGE_DOORS_OPEN) return "bottom-floor-of-enakhra-s-temple-talking-to-lazim-after-losing-the-stone-limbs";
       if (stage >= STAGE_TEMPLE_BRIEFED) {
+        // The lost-limb variant is the only one with the four return conditions.
+        if (hasLostLimb(player)) return "bottom-floor-of-enakhra-s-temple-talking-to-lazim-after-losing-the-stone-limbs";
         if (hasAnyLimb(player)) return "bottom-floor-of-enakhra-s-temple-talking-to-lazim-while-holding-the-stone-limbs";
         return "bottom-floor-of-enakhra-s-temple-talking-to-lazim-after-getting-the-stone-head-once";
       }
-      // The 17-step briefing plays once; later talks use the repeat menu.
-      quest.setStage(player, STAGE_TEMPLE_BRIEFED);
+      // Variant selection can be interrupted before the briefing is seen. The
+      // milestone is committed after its final line instead.
       return "bottom-floor-of-enakhra-s-temple-talking-to-lazim-inside-the-temple";
     }
     if (has(player, SANDSTONE_32KG)) return "starting-out-talking-to-lazim-after-getting-the-sandstone-32kg";
@@ -590,6 +798,9 @@ module.exports = function registerEnakhrasLamentQuest(api) {
         ? "standard-dialogue-after-completion-of-the-quest"
         : "middle-floor-of-enakhra-s-temple-talking-to-pentyn";
     }
+    // After the cutscene Akthanakos and Enakhra are gone; no branch of theirs
+    // may play again, so the final reward dialogue cannot be replayed.
+    if (quest.getStage(player) >= STAGE_COMPLETE) return null;
     if (npcId === BONEGUARD_NPC_ID) return "middle-floor-of-enakhra-s-temple-talking-to-the-first-boneguard";
     if (npcId === BONEGUARD2_NPC_ID) {
       return quest.getStage(player) >= STAGE_WALL_BUILT
@@ -613,6 +824,8 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     const { npcId, player, stepId, text } = event;
     if (!OWNED_NPC_IDS.has(npcId)) return null;
     const value = String(text ?? "");
+    // The reward's "no room" guard is asked of the boneguard and of Akthanakos.
+    if (stepId === "yaY72t" || stepId === "tP9pxd") return player.getInventory().getFreeSlots() <= 0;
 
     if (npcId === LAZIM_NPC_ID) {
       // Sandstone hand-ins: menu option guards carry the option id.
@@ -650,9 +863,15 @@ module.exports = function registerEnakhrasLamentQuest(api) {
         return true;
       }
       // Where is the statue's head.
-      if (stepId === "jsyT6r" || stepId === "yiasHG") return !hasOriginalHead(player) && hasBit(player, BIT_TRIED_HEAD);
+      if (stepId === "jsyT6r" || stepId === "yiasHG") {
+        return !hasOriginalHead(player) && !bankHasAny(player, ORIGINAL_HEAD_IDS)
+          && !has(player, HEAD_CAVITY) && !bankHas(player, HEAD_CAVITY) && hasBit(player, BIT_TRIED_HEAD);
+      }
       if (stepId === "GO2zrU" || stepId === "Nt6C09") return hasOriginalHead(player);
-      if (stepId === "iNbY4_") return !hasOriginalHead(player) && !hasBit(player, BIT_TRIED_HEAD);
+      if (stepId === "iNbY4_") {
+        return !hasOriginalHead(player) && !bankHasAny(player, ORIGINAL_HEAD_IDS)
+          && !hasBit(player, BIT_TRIED_HEAD);
+      }
       // Lost limbs (bottom floor).
       if (stepId === "JtVWqW") return recoverLimb(player, RIGHT_ARM, BIT_RIGHT_ARM);
       if (stepId === "Ucblpq") return recoverLimb(player, LEFT_ARM, BIT_LEFT_ARM);
@@ -662,11 +881,11 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       if (BRAZIER_CONDITION_IDS.has(stepId)) return brazierContext.get(player)?.conditionId === stepId;
       if (BRAZIER_INVESTIGATE_IDS.has(stepId)) return brazierContext.get(player)?.investigateId === stepId;
       // Post-quest camulet flows.
-      if (stepId === "Y-IaPG") return !has(player, CAMULET) && !attrNumber(player, ATTR_CAMULET_UNLIMITED);
+      if (stepId === "Y-IaPG") return !has(player, CAMULET) && !bankHas(player, CAMULET);
       if (stepId === "KtrrxI") return player.getInventory().getFreeSlots() <= 0;
       if (stepId === "aOgB3U") return player.getInventory().getFreeSlots() > 0;
       if (stepId === "X4KEXi") return attrNumber(player, ATTR_CAMULET_UNLIMITED) > 0;
-      if (stepId === "VvEJ5Q") return false;
+      if (stepId === "VvEJ5Q") return !has(player, CAMULET) && bankHas(player, CAMULET);
       if (stepId === "DSFW44") return has(player, CAMULET);
       if (stepId === "YxdsZN") return !has(player, COINS, 1000000);
       if (value.startsWith("If the player has sandstone")) return hasAnySandstone(player);
@@ -676,7 +895,9 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     if (npcId === PENTYN_NPC_ID) {
       const food = pentynFood.get(player);
       const key = food?.key ?? "other";
-      if (stepId === "aGRJAj") return key === "bread";
+      // The transcript has no pie branch of its own; a pie is the food the
+      // bread branch describes, so it plays that one.
+      if (stepId === "aGRJAj") return key === "bread" || key === "pie";
       if (stepId === "52e0HN") return key === "pizza";
       if (stepId === "qZ7QjF") return key === "cake";
       if (stepId === "NdPCmi") return key === "potato";
@@ -699,16 +920,12 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       return null;
     }
 
-    if (npcId === BONEGUARD_NPC_ID || npcId === AKTHANAKOS_NPC_ID || npcId === ENAKHRA_NPC_ID) {
-      if (stepId === "yaY72t" || stepId === "tP9pxd") return player.getInventory().getFreeSlots() <= 0;
-      return null;
-    }
     return null;
   }
 
   /** Answer a lost-limb condition and hand the limb back when it applies. */
   function recoverLimb(player, limbId, bit) {
-    if (has(player, limbId)) return false;
+    if (has(player, limbId) || bankHas(player, limbId)) return false;
     if (!hasBit(player, bit)) return false;
     if (player.getInventory().getFreeSlots() > 0) player.getInventory().adds(limbId, 1);
     return true;
@@ -738,6 +955,76 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     return request.handled;
   }
 
+  /**
+   * A dropped block leaves the quest stuck, and the transcript has Lazim hand
+   * the block over again: "Here you are, adventurer. Now, use a chisel to craft
+   * it into a base for the statue." (the r7_kHr branch) and "That should be
+   * enough to use for the statue's body." (the PkYWDq branch). Those branches
+   * are the recovery, so they are the ones that play.
+   */
+  function takeOverDroppedBlock(event) {
+    const { player } = event;
+    const recovery = droppedBlockRecovery(player);
+    if (!recovery) return false;
+    if (!give(player, recovery.item, 1)) return false;
+    const request = {
+      player,
+      npc: event.npc,
+      npcId: LAZIM_NPC_ID,
+      variant: recovery.variant,
+      select: (steps) => {
+        const found = [];
+        const walk = (list) => {
+          for (const step of list ?? []) {
+            if (!step) continue;
+            if (step.id === recovery.conditionId) {
+              found.push(step);
+              return;
+            }
+            for (const option of step.options ?? []) walk(option.steps);
+            walk(step.steps);
+          }
+        };
+        walk(steps);
+        return found;
+      },
+      handled: false,
+    };
+    api.emitCustomEvent("npc-dialogue:start", request);
+    return request.handled;
+  }
+
+  /** The block the player still needs but no longer carries, if any. */
+  function droppedBlockRecovery(player) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_BASE_PLACED
+      && attrNumber(player, ATTR_BASE_KG) >= 32
+      && !has(player, SANDSTONE_32KG) && !bankHas(player, SANDSTONE_32KG)
+      && !has(player, SANDSTONE_BASE)) {
+      return {
+        item: SANDSTONE_32KG,
+        variant: "starting-out-talking-to-lazim-while-holding-sandstone-for-the-base",
+        conditionId: "r7_kHr",
+      };
+    }
+    if (stage < STAGE_BODY_PLACED
+      && attrNumber(player, ATTR_BODY_KG) >= 20
+      && !has(player, SANDSTONE_20KG) && !bankHas(player, SANDSTONE_20KG)
+      && !has(player, SANDSTONE_BODY)) {
+      return {
+        item: SANDSTONE_20KG,
+        variant: "starting-out-talking-to-lazim-while-holding-sandstone-for-the-body",
+        conditionId: "PkYWDq",
+      };
+    }
+    return null;
+  }
+
+  /** Lazim's talk: hand a dropped block back, or take over the body hand-in. */
+  function talkToLazim(event) {
+    return takeOverDroppedBlock(event) || takeOverBodyHandIn(event);
+  }
+
   /** Replace the body hand-in variant's 5-option flavour random with its Yes/No menu. */
   function bodyHandInSteps(steps) {
     return (steps ?? []).map((step) => {
@@ -758,6 +1045,21 @@ module.exports = function registerEnakhrasLamentQuest(api) {
 
   function handleDialogueLine(request) {
     if (request?.npcId !== LAZIM_NPC_ID || typeof request.text !== "string") return;
+    if (quest.getStage(request.player) === STAGE_IN_TEMPLE &&
+        request.text === "Be thankful they're the statue's limbs and not yours, adventurer.") {
+      request.after = () => {
+        if (quest.getStage(request.player) === STAGE_IN_TEMPLE) {
+          quest.setStage(request.player, STAGE_TEMPLE_BRIEFED);
+        }
+      };
+    }
+    if (quest.getStage(request.player) >= STAGE_COMPLETE && attrNumber(request.player, ATTR_POST_QUEST) === 0 &&
+        [
+          "What did you expect from a Zamorakian mage?",
+          "I'm a mage of Zamorak, after all. What else do you expect?",
+        ].includes(request.text)) {
+      request.after = () => setAttrNumber(request.player, ATTR_POST_QUEST, 1);
+    }
     // "I need [X] kg more" wants what is still missing; the "carrying" flavour wants what was handed in.
     if (request.text.includes("[1-32]")) {
       const base = attrNumber(request.player, ATTR_BASE_KG);
@@ -831,7 +1133,8 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       return;
     }
     if (option === "Do you know where the statue's head is?" && quest.getStage(player) >= STAGE_TEMPLE_BRIEFED) {
-      if (!hasOriginalHead(player) && !has(player, HEAD_CAVITY)) {
+      if (!hasOriginalHead(player) && !bankHasAny(player, ORIGINAL_HEAD_IDS)
+        && !has(player, HEAD_CAVITY) && !bankHas(player, HEAD_CAVITY)) {
         const item = HEAD_ITEM_BY_CHOICE.get(headMade(player));
         if (item !== undefined && give(player, item, 1)) {
           player.sendMessage("Lazim hands you the statue's head.");
@@ -899,8 +1202,9 @@ module.exports = function registerEnakhrasLamentQuest(api) {
 
     if (stepId === "ARRUvf") {
       event.handled = true;
-      swapSurfaceStatue(HOLE);
+      setBit(player, BIT_HEAD_PLACED);
       advanceTo(player, STAGE_IN_TEMPLE);
+      ensureTempleNpcs(player);
       player.moveTo(new Location(TEMPLE_ARRIVAL_TILE.x, TEMPLE_ARRIVAL_TILE.y, TEMPLE_ARRIVAL_TILE.z));
       return;
     }
@@ -911,21 +1215,15 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       return;
     }
     if (stepId === "AdRB_B" && event.npcId === BONEGUARD_NPC_ID) {
-      // No onSpellOnNpc hook: the second talk stands in for Crumble Undead.
       if (!hasBit(player, BIT_BONEGUARD_MET)) {
         setBit(player, BIT_BONEGUARD_MET);
         return;
       }
-      event.handled = true;
-      if (boneguard1Npc) api.removeNpc(boneguard1Npc);
-      boneguard1Npc = null;
-      advanceTo(player, STAGE_BONEGUARD1);
-      const steps = variantSteps("middle-floor-of-enakhra-s-temple-casting-crumble-undead-on-the-boneguard");
-      if (steps) event.steps = steps;
+      player.sendMessage("You need to cast Crumble Undead on the boneguard.");
       return;
     }
     if (stepId === "tAjTwX") {
-      transformBoneguard();
+      transformBoneguard(player);
       return;
     }
     if (stepId === "qyIeWP" || stepId === "Nbd15u") {
@@ -937,7 +1235,12 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     if (stepId === "qFz3o_") {
       event.handled = true;
       event.end = true;
-      if (quest.getStage(player) >= STAGE_WALL_BUILT && !quest.isComplete(player)) quest.complete(player);
+      if (quest.getStage(player) >= STAGE_WALL_BUILT && !quest.isComplete(player)) {
+        quest.complete(player);
+        // The cutscene ends with Akthanakos and Enakhra leaving for the North.
+        removeQuestNpc(player, AKTHANAKOS_NPC_ID);
+        removeQuestNpc(player, ENAKHRA_NPC_ID);
+      }
       return;
     }
     if (stepId === "BNC2HB") {
@@ -982,6 +1285,12 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     if (split) {
       event.handled = true;
       if (!has(player, withChisel)) return;
+      const outputSlots = split.reduce((total, [, amount]) => total + amount, 0);
+      const additionalSlots = outputSlots - 1; // Chiseling frees the source block's slot.
+      if (player.getInventory().getFreeSlots() < additionalSlots) {
+        player.sendMessage("You don't have enough inventory space.");
+        return;
+      }
       take(player, withChisel, 1);
       for (const [piece, amount] of split) player.getInventory().adds(piece, amount);
       return;
@@ -1023,7 +1332,6 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       event.handled = true;
       if (quest.getStage(player) < STAGE_BASE_MADE || !has(player, SANDSTONE_BASE)) return;
       take(player, SANDSTONE_BASE, 1);
-      swapSurfaceStatue(HEADLESS_STATUE_1);
       advanceTo(player, STAGE_BASE_PLACED);
       return;
     }
@@ -1031,14 +1339,12 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       event.handled = true;
       if (quest.getStage(player) < STAGE_BODY_MADE || !has(player, SANDSTONE_BODY)) return;
       take(player, SANDSTONE_BODY, 1);
-      swapSurfaceStatue(HEADLESS_STATUE_2);
       advanceTo(player, STAGE_BODY_PLACED);
       return;
     }
     if (isStatueObject(objectId) && isChiselItem(itemId)) {
       event.handled = true;
       if (quest.getStage(player) !== STAGE_BODY_PLACED) return;
-      swapSurfaceStatue(HEADLESS_STATUE_3);
       advanceTo(player, STAGE_STATUE_CHISELLED);
       return;
     }
@@ -1050,7 +1356,7 @@ module.exports = function registerEnakhrasLamentQuest(api) {
         return;
       }
       take(player, itemId, 1);
-      swapSurfaceStatue(HOLE);
+      setBit(player, BIT_HEAD_PLACED);
       startTranscript(api, player, LAZIM_NPC_ID, PAGE, "starting-out-using-the-head-on-the-statue-after-confirming-it-with-lazim");
       return;
     }
@@ -1064,7 +1370,7 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       handlePedestalItem(event);
       return;
     }
-    if (objectId === WALL_BUILD) {
+    if (WALL_IDS.has(objectId)) {
       handleWallItem(event);
       return;
     }
@@ -1140,7 +1446,6 @@ module.exports = function registerEnakhrasLamentQuest(api) {
       setAttrNumber(player, ATTR_WALL_TAKEN, placed);
       startTranscript(api, player, LAZIM_NPC_ID, PAGE, "middle-floor-of-enakhra-s-temple-using-chisel-on-the-wall");
       if (placed >= 3) {
-        swapWall(true);
         advanceTo(player, STAGE_WALL_BUILT);
         startTranscript(api, player, LAZIM_NPC_ID, PAGE, "middle-floor-of-enakhra-s-temple-finishing-the-wall");
       }
@@ -1153,7 +1458,8 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     event.handled = true;
     if (quest.getStage(player) < STAGE_INNER_OPEN || hasBit(player, BIT_BLOOD)) return;
     const category = foodCategory(itemId);
-    const accepted = category === "bread" || category === "pizza" || category === "cake" || category === "potato-topping";
+    const accepted = category === "bread" || category === "pie" || category === "pizza"
+      || category === "cake" || category === "potato-topping";
     pentynFood.set(player, { key: category, accepted });
     if (accepted) {
       take(player, itemId, 1);
@@ -1164,6 +1470,10 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   }
 
   function foodCategory(itemId) {
+    const name = String(api.core.CacheDefinitions?.getItem?.(itemId)?.name ?? "");
+    for (const [category, pattern] of FOOD_NAME_PATTERNS) {
+      if (pattern.test(name)) return category;
+    }
     if (itemId === BREAD) return "bread";
     if (PIZZA_IDS.has(itemId)) return "pizza";
     if (CAKE_IDS.has(itemId)) return "cake";
@@ -1181,28 +1491,73 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   // Spells, objects and doors
   // ==========================================================================
 
-  function handleSpellOnObject(event) {
-    if (!FURNACE_IDS.has(event.objectId)) return;
-    const { player } = event;
-    if (quest.getStage(player) < STAGE_INNER_OPEN || hasBit(player, BIT_SMOKE)) return;
-    const spell = String(api.core.CacheDefinitions?.getSpellName?.(event.spellWidget, event.spellItemId) ?? "");
-    if (!/^wind (bolt|blast|wave|surge)$/i.test(spell)) return;
+  function handleSpellOnNpc(event) {
+    const { player, npcId, spellId } = event;
+    if (!player) return;
+    let action = null;
+    if (npcId === BONEGUARD_NPC_ID && spellId === CRUMBLE_UNDEAD_SPELL_ID) action = "boneguard";
+    if (npcId === FURNACE_GRATE_NPC_ID && WIND_BOLT_OR_HIGHER_SPELL_IDS.has(spellId)) action = "furnace";
+    if (npcId === CRUST_OF_ICE_NPC_ID && FIRE_BOLT_OR_HIGHER_SPELL_IDS.has(spellId)) action = "ice";
+    if (!action || quest.getStage(player) < STAGE_INNER_OPEN) return;
+    if ((action === "boneguard" && !hasBit(player, BIT_BONEGUARD_MET)) ||
+        (action === "furnace" && hasBit(player, BIT_SMOKE)) ||
+        (action === "ice" && hasBit(player, BIT_ICE))) return;
+    let pending = pendingSpellTargets.get(player);
+    if (!pending) {
+      pending = new Set();
+      pendingSpellTargets.set(player, pending);
+    }
+    const npc = event.npc;
+    if (!npc || pending.has(npc)) return;
+    if (!event.consumeRunes()) return;
     event.handled = true;
-    setBit(player, BIT_SMOKE);
-    checkGlobes(player);
-    startTranscript(api, player, LAZIM_NPC_ID, PAGE, "middle-floor-of-enakhra-s-temple-casting-wind-bolt-blast-wave-or-surge-on-furnace-grate");
-  }
-
-  function meltIce(event) {
-    if (event.npcId !== CRUST_OF_ICE_NPC_ID) return;
-    const { player } = event;
-    event.handled = true;
-    if (quest.getStage(player) < STAGE_INNER_OPEN || hasBit(player, BIT_ICE)) return;
-    setBit(player, BIT_ICE);
-    if (event.npc) api.removeNpc(event.npc);
-    ensureObject(FOUNTAIN, FOUNTAIN_TILE);
-    checkGlobes(player);
-    startTranscript(api, player, LAZIM_NPC_ID, PAGE, "middle-floor-of-enakhra-s-temple-cast-fire-bolt-blast-wave-or-surge-on-crust-of-ice");
+    pending.add(npc);
+    const combat = player.getCombat();
+    const previousSpell = combat.getCastSpell();
+    combat.setCastSpell(event.spell);
+    let accurate;
+    try {
+      accurate = api.core.AccuracyFormulasDpsCalc.rollAccuracy(
+        player,
+        npc,
+        api.core.CombatType.MAGIC,
+      );
+    } finally {
+      combat.setCastSpell(previousSpell);
+    }
+    const delay = api.core.MagicCombatMethod.hitDelay(player, npc, event.spell);
+    api.core.TaskManager.submit(new api.core.CountdownTask(npc, delay, () => {
+      pending.delete(npc);
+      if (!player.isRegistered() || !npc.isRegistered() || npc.getOwner() !== player ||
+          quest.getStage(player) < STAGE_INNER_OPEN ||
+          (action === "boneguard" && (!hasBit(player, BIT_BONEGUARD_MET) || npc.getId() !== BONEGUARD_NPC_ID)) ||
+          (action === "furnace" && hasBit(player, BIT_SMOKE)) ||
+          (action === "ice" && (hasBit(player, BIT_ICE) || npc.getId() !== CRUST_OF_ICE_NPC_ID))) return;
+      if (!accurate) {
+        npc.performGraphic(api.core.MagicCombatMethod.SPLASH_GRAPHIC);
+        api.core.Sounds.sendSound(player, api.core.Sound.SPELL_FAIL_SPLASH);
+        return;
+      }
+      const endGraphic = event.spell.endGraphic();
+      if (endGraphic) npc.performGraphic(endGraphic);
+      const impactSound = event.spell.impactSound();
+      if (impactSound) api.core.Sounds.sendSound(npc, impactSound);
+      if (action === "boneguard") {
+        removeQuestNpc(player, BONEGUARD_NPC_ID);
+        advanceTo(player, STAGE_BONEGUARD1);
+        startTranscript(api, player, LAZIM_NPC_ID, PAGE, "middle-floor-of-enakhra-s-temple-casting-crumble-undead-on-the-boneguard");
+      } else if (action === "furnace") {
+        setBit(player, BIT_SMOKE);
+        checkGlobes(player);
+        startTranscript(api, player, LAZIM_NPC_ID, PAGE, "middle-floor-of-enakhra-s-temple-casting-wind-bolt-blast-wave-or-surge-on-furnace-grate");
+      } else {
+        setBit(player, BIT_ICE);
+        removeQuestNpc(player, CRUST_OF_ICE_NPC_ID);
+        ensureObject(FOUNTAIN, FOUNTAIN_TILE);
+        checkGlobes(player);
+        startTranscript(api, player, LAZIM_NPC_ID, PAGE, "middle-floor-of-enakhra-s-temple-cast-fire-bolt-blast-wave-or-surge-on-crust-of-ice");
+      }
+    }));
   }
 
   function lightBrazier(player, brazier) {
@@ -1261,28 +1616,43 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     startTranscript(api, player, LAZIM_NPC_ID, PAGE, "middle-floor-of-enakhra-s-temple-pass-through-magic-barrier");
   }
 
+  /** Climb a temple sand pile: it unlocks that tunnel's surface entrance. */
   function climbSandPile(event) {
-    const destination = SAND_PILE_EXITS.get(tileKey(event.location));
-    if (!destination) return;
+    const entrance = SAND_PILE_EXITS.get(tileKey(event.location));
+    if (!entrance) return;
     event.handled = true;
     const { player } = event;
     if (quest.getStage(player) < STAGE_IN_TEMPLE) return;
-    ensureObject(SECRET_ENTRANCE, destination);
-    player.moveTo(new Location(destination.x, destination.y, destination.z));
+    unlockEntrance(player, entrance);
+    player.moveTo(new Location(entrance.surface.x, entrance.surface.y, entrance.surface.z));
   }
 
+  /** Climb down a secret entrance back into the tunnel it belongs to. */
   function enterTemple(event) {
-    if (event.objectId !== SECRET_ENTRANCE) return;
+    if (!SECRET_ENTRANCE_IDS.has(event.objectId)) return;
     event.handled = true;
     const { player } = event;
     if (quest.getStage(player) < STAGE_IN_TEMPLE) return;
     const surface = tileKey(event.location);
-    for (const [pile, exit] of SAND_PILE_EXITS) {
-      if (tileKey(exit) !== surface) continue;
-      const [x, y] = pile.split(",").map(Number);
-      player.moveTo(new Location(x + 2, y, 1));
-      return;
-    }
+    const entrance = SECRET_ENTRANCES.find((entry) => tileKey(entry.surface) === surface);
+    if (!entrance) return;
+    if ((entrances(player) & ENTRANCE_BITS[entrance.key]) === 0) return;
+    const [x, y] = entrance.pile.split(",").map(Number);
+    player.moveTo(new Location(x, y, 1));
+  }
+
+  /**
+   * The four temple ladders (11041 up, 11042 down, 11043/11044 stone) sit next
+   * to their room's sand pile; using one unlocks that room's surface entrance.
+   */
+  function handleLadderClimb(event) {
+    const { player, object } = event;
+    if (!player || !object) return;
+    if (quest.getStage(player) < STAGE_IN_TEMPLE) return;
+    const tile = tileKey(object.getLocation?.());
+    const entrance = SECRET_ENTRANCES.find((entry) => entry.ladder === tile);
+    if (!entrance) return;
+    unlockEntrance(player, entrance);
   }
 
   function handleDoorToggle(request) {
@@ -1292,32 +1662,28 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     if (limbDoor) {
       request.handled = true;
       if (quest.getStage(player) < STAGE_IN_TEMPLE || hasBit(player, limbDoor.bit)) return;
-      const limb = limbDoor.limb === "arm"
-        ? [LEFT_ARM, RIGHT_ARM].find((id) => has(player, id))
-        : [LEFT_LEG, RIGHT_LEG].find((id) => has(player, id));
-      if (limb === undefined) {
+      if (!has(player, limbDoor.item)) {
         player.sendMessage("The door has an odd-shaped lock. It looks like it needs a large stone limb.");
         return;
       }
-      take(player, limb, 1);
+      take(player, limbDoor.item, 1);
       setBit(player, limbDoor.bit);
       openObject(object, objectId + 1);
       if ((bits(player) & BIT_LIMB_DOOR_BITS) === BIT_LIMB_DOOR_BITS) advanceTo(player, STAGE_DOORS_OPEN);
       startTranscript(api, player, LAZIM_NPC_ID, PAGE, limbDoor.variant);
       return;
     }
-    const openId = INNER_DOORS.get(objectId);
-    if (openId === undefined) return;
+    const innerDoor = INNER_DOORS.get(objectId);
+    if (innerDoor === undefined) return;
     request.handled = true;
-    if (quest.getStage(player) < STAGE_DOORS_OPEN || hasBit(player, BIT_INNER_OPEN)) return;
-    const sigil = [...ALL_SIGILS].find((id) => has(player, id));
-    if (sigil === undefined) {
+    if (quest.getStage(player) < STAGE_DOORS_OPEN || hasBit(player, innerDoor.bit)) return;
+    if (!has(player, innerDoor.sigil)) {
       player.sendMessage("The door has no handle or keyhole. It looks like it needs a sigil.");
       return;
     }
-    take(player, sigil, 1);
-    setBit(player, BIT_INNER_OPEN);
-    openObject(object, openId);
+    take(player, innerDoor.sigil, 1);
+    setBit(player, innerDoor.bit);
+    openObject(object, innerDoor.openId);
     advanceTo(player, STAGE_INNER_OPEN);
     startTranscript(api, player, LAZIM_NPC_ID, PAGE, "bottom-floor-of-enakhra-s-temple-placing-sigil-in-the-door");
   }
@@ -1341,19 +1707,9 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     }
   }
 
-  function swapSurfaceStatue(id) {
-    clearObjectsAt(STATUE_TILE, STATUE_OBJECT_IDS);
-    ensureObject(id, STATUE_TILE);
-  }
-
   function swapPedestal(headPlaced) {
     clearObjectsAt(PEDESTAL_TILE, new Set([PEDESTAL, PEDESTAL_HEAD]));
     ensureObject(headPlaced ? PEDESTAL_HEAD : PEDESTAL, PEDESTAL_TILE);
-  }
-
-  function swapWall(finished) {
-    clearObjectsAt(WALL_TILE, WALL_IDS);
-    ensureObject(finished ? WALL_DONE : WALL_BUILD, WALL_TILE);
   }
 
   function openObject(object, openId) {
@@ -1364,11 +1720,13 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     );
   }
 
-  function npcNear(id, tile) {
+  function npcNear(id, tile, owner) {
     const world = api.getWorld();
     if (!world?.getNpcs) return null;
     for (const npc of world.getNpcs()) {
       if (npc?.getId?.() !== id) continue;
+      const npcOwner = npc.getOwner?.();
+      if (owner && npcOwner && npcOwner !== owner) continue;
       const location = npc.getLocation?.();
       if (!location) continue;
       if (
@@ -1382,56 +1740,80 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     return null;
   }
 
-  function ensureNpc(id, tile, wanderRadius = 0) {
-    const existing = npcNear(id, tile);
-    if (existing) return existing;
-    return api.spawnNpc({ id, x: tile.x, y: tile.y, z: tile.z ?? 0, wanderRadius });
+  /**
+   * The temple's NPCs are owner-scoped: core hides an owner-only NPC from
+   * everybody else, so freeing a boneguard or melting the ice for one player
+   * no longer takes the puzzle away from the others.
+   */
+  function ensureQuestNpc(player, id, tile, wanderRadius = 0) {
+    const map = playerNpcs.get(player) ?? new Map();
+    playerNpcs.set(player, map);
+    const existing = map.get(id);
+    if (existing && !existing.isRemoved?.()) return existing;
+    const npc = api.spawnNpc({
+      id, x: tile.x, y: tile.y, z: tile.z ?? 0, wanderRadius, owner: player, ownerOnly: true,
+    });
+    map.set(id, npc);
+    return npc;
+  }
+
+  function removeQuestNpc(player, id) {
+    const map = playerNpcs.get(player);
+    const npc = map?.get(id);
+    if (!npc) return;
+    api.removeNpc(npc);
+    map.delete(id);
+  }
+
+  /** The NPCs this player's temple holds right now. */
+  function ensureTempleNpcs(player) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_IN_TEMPLE) return;
+    if (stage >= STAGE_COMPLETE) return;
+    ensureQuestNpc(player, LAZIM_NPC_ID, LAZIM_TEMPLE_TILE);
+    ensureQuestNpc(player, ENAKHRA_NPC_ID, ENAKHRA_TILE);
+    if (stage < STAGE_BONEGUARD1) ensureQuestNpc(player, BONEGUARD_NPC_ID, BONEGUARD1_TILE);
+    if (stage < STAGE_WALL_BUILT) ensureQuestNpc(player, BONEGUARD2_NPC_ID, BONEGUARD2_TILE);
+    if (stage >= STAGE_INNER_OPEN) {
+      if (!hasBit(player, BIT_ICE)) ensureQuestNpc(player, CRUST_OF_ICE_NPC_ID, CRUST_TILE);
+      if (!hasBit(player, BIT_SMOKE)) ensureQuestNpc(player, FURNACE_GRATE_NPC_ID, FURNACE_GRATE_TILE);
+    }
   }
 
   function installWorld() {
     if (worldInstalled) return;
     worldInstalled = true;
-    swapSurfaceStatue(FLAT_GROUND);
-    ensureObject(FALLEN_STATUE, FALLEN_STATUE_TILE);
     ensureObject(PEDESTAL, PEDESTAL_TILE);
     for (const key of BRAZIERS_BY_TILE.keys()) {
       const [x, y] = key.split(",").map(Number);
       ensureObject(BRAZIER, { x, y, z: 1 });
     }
-    ensureObject(FURNACE_1, { x: 3115, y: 9323, z: 1 });
     ensureObject(RUBBLE, RUBBLE_TILE);
-    ensureObject(WALL_BUILD, WALL_TILE);
-    ensureNpc(LAZIM_NPC_ID, LAZIM_SURFACE_TILE);
-    ensureNpc(LAZIM_NPC_ID, LAZIM_TEMPLE_TILE);
-    boneguard1Npc = ensureNpc(BONEGUARD_NPC_ID, BONEGUARD1_TILE);
-    boneguard2Npc = ensureNpc(BONEGUARD2_NPC_ID, BONEGUARD2_TILE);
-    ensureNpc(ENAKHRA_NPC_ID, ENAKHRA_TILE);
-    ensureNpc(CRUST_OF_ICE_NPC_ID, CRUST_TILE);
+    // The surface Lazim is shared; every other temple NPC is owner-scoped.
+    if (!npcNear(LAZIM_NPC_ID, LAZIM_SURFACE_TILE)) {
+      api.spawnNpc({ id: LAZIM_NPC_ID, x: LAZIM_SURFACE_TILE.x, y: LAZIM_SURFACE_TILE.y, z: 0 });
+    }
   }
 
-  function transformBoneguard() {
-    if (boneguard2Npc) {
-      api.removeNpc(boneguard2Npc);
-      boneguard2Npc = null;
-    }
-    ensureNpc(AKTHANAKOS_NPC_ID, BONEGUARD2_TILE);
+  function transformBoneguard(player) {
+    removeQuestNpc(player, BONEGUARD2_NPC_ID);
+    ensureQuestNpc(player, AKTHANAKOS_NPC_ID, BONEGUARD2_TILE);
   }
 
   function handleLogin({ player }) {
     installWorld();
-    restoreSurfaceStatue(player);
+    ensureTempleNpcs(player);
+    sendAuxVarbits(player);
     refreshQuestList(player);
   }
 
-  /** installWorld leaves the statue as flat ground; put back the object the stage expects. */
-  function restoreSurfaceStatue(player) {
-    const stage = quest.getStage(player);
-    const id = stage >= STAGE_IN_TEMPLE ? HOLE
-      : stage >= STAGE_STATUE_CHISELLED ? HEADLESS_STATUE_3
-      : stage >= STAGE_BODY_PLACED ? HEADLESS_STATUE_2
-      : stage >= STAGE_BASE_PLACED ? HEADLESS_STATUE_1
-      : FLAT_GROUND;
-    swapSurfaceStatue(id);
+  function cleanupPlayerTemple({ player }) {
+    pendingSpellTargets.delete(player);
+    const npcs = playerNpcs.get(player);
+    if (!npcs) return;
+    for (const npc of npcs.values()) api.removeNpc(npc);
+    npcs.clear();
+    playerNpcs.delete(player);
   }
 
   function grantReward(player) {
@@ -1445,6 +1827,18 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   // Registration
   // ==========================================================================
 
+  /** Internal stage -> native milestone Quest Helper expects in varbit 1560. */
+  function questVarbitValue(stage) {
+    if (stage >= STAGE_COMPLETE) return COMPLETE_VARBIT_VALUE;
+    if (stage >= STAGE_WALL_AGREED) return VARBIT_VALUE_WALL;
+    if (stage >= STAGE_BONEGUARD1) return VARBIT_VALUE_BONEGUARD2;
+    if (stage >= STAGE_ELEMENTS_DONE) return VARBIT_VALUE_TOP_FLOOR;
+    if (stage >= STAGE_PEDESTAL_DONE) return VARBIT_VALUE_PUZZLES;
+    if (stage >= STAGE_IN_TEMPLE) return VARBIT_VALUE_GROUND_FLOOR;
+    if (stage >= STAGE_STARTED) return VARBIT_VALUE_STATUE;
+    return 0;
+  }
+
   quest = registerQuest(api, {
     key: "enakhras_lament",
     name: "Enakhra's Lament",
@@ -1452,6 +1846,7 @@ module.exports = function registerEnakhrasLamentQuest(api) {
     varbitId: VARBIT_ENAKH_QUEST,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    varbitValue: questVarbitValue,
     questPoints: 2,
     xpRewards: [
       { skillId: Skill.CRAFTING.getIndex(), amount: 7000, label: "Crafting" },
@@ -1472,11 +1867,16 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   api.persistAttribute(ATTR_HEAD_CHOICE);
   api.persistAttribute(ATTR_HEAD_MADE);
   api.persistAttribute(ATTR_WALL_TAKEN);
-  api.persistAttribute(ATTR_POST_QUEST);
+  api.persistAttribute(ATTR_POST_QUEST, 0);
   api.persistAttribute(ATTR_CAMULET_UNLIMITED);
+  api.persistAttribute(ATTR_ENTRANCES, 0);
 
   api.onServerStartup(installWorld);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(cleanupPlayerTemple);
+  api.onCustomEvent("quest:stage-changed", sendAuxOnStageChanged);
+  api.onCustomEvent("player:bootstrap-complete", sendAuxOnBootstrap);
+  api.onCustomEvent("ladders:climb", handleLadderClimb);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
@@ -1486,9 +1886,8 @@ module.exports = function registerEnakhrasLamentQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnNpc(handleItemOnNpc);
-  api.onNpcInteraction("Lazim", { "Talk-to": takeOverBodyHandIn });
-  api.onSpellOnObject(handleSpellOnObject);
-  api.onNpcInteraction("Crust of ice", { Melt: meltIce });
+  api.onSpellOnNpc(handleSpellOnNpc);
+  api.onNpcInteraction("Lazim", { "Talk-to": talkToLazim });
   api.onObjectInteraction("Pedestal", { "Take-sigil": takeSigil });
   api.onObjectInteraction("Rubble", { "Take-rock": takeRubble });
   api.onObjectInteraction("Brazier", { Investigate: investigateBrazier });

@@ -100,6 +100,10 @@ module.exports = function registerTwilightPromiseQuest(api) {
   const MEZAN_NPC_ID = NpcIdentifiers.KNIGHT_OF_VARLAMORE_21; // 12914
   const CITIZEN_NPC_ID = NpcIdentifiers.CITIZEN_27; // 12929
   const REGULUS_NPC_ID = NpcIdentifiers.REGULUS_CENTO_3; // 12885
+  // The resolved knight content ids are absent from npc-dialogue-index.json, so the
+  // generic name lookup would play the unrelated "Knight of Varlamore" page.
+  const KNIGHT_CONTENT_IDS = [ARRUN_NPC_ID, CLAUDIA_NPC_ID, NEL_NPC_ID, VELAM_NPC_ID,
+    AZALI_SOBER_NPC_ID, AZALI_DRUNK_NPC_ID, MEZAN_NPC_ID];
   const RENU_FEED_NPC_ID = NpcIdentifiers.RENU_2; // 13349
   const AZALI_FOLLOWER_ROOT_ID = 13393; // vmq2_knight_5_follower, shown while Azali follows
   const AZALI_PUB_ROOT_ID = 13392; // vmq2_knight_5_pub
@@ -644,7 +648,11 @@ module.exports = function registerTwilightPromiseQuest(api) {
     }
     switch (stepId) {
       case STEP.AMULET_FOUND:
-        if (!held(player, AMULET_ITEM_ID)) player.getInventory().adds(AMULET_ITEM_ID, 1);
+        if (!held(player, AMULET_ITEM_ID)) {
+          if (inventoryFull(player)) return;
+          player.getInventory().adds(AMULET_ITEM_ID, 1);
+          if (!held(player, AMULET_ITEM_ID)) return;
+        }
         setRecruit(player, BAZAAR, 2);
         return;
       case STEP.AMULET_GIVEN:
@@ -712,7 +720,13 @@ module.exports = function registerTwilightPromiseQuest(api) {
   function pickpocketCitizen(event) {
     if (event.npcId !== CITIZEN_NPC_ID) return false;
     const { player } = event;
-    if (recruit(player, BAZAAR) !== 1 || held(player, AMULET_ITEM_ID)) return false;
+    const bazaarState = recruit(player, BAZAAR);
+    if ((bazaarState !== 1 && bazaarState !== 2) || held(player, AMULET_ITEM_ID)) return false;
+    if (inventoryFull(player)) {
+      event.handled = true;
+      player.sendMessage("You need an open inventory space to take the stolen amulet.");
+      return true;
+    }
     event.handled = true;
     player.sendMessage("You attempt to pick the man's pocket.");
     Scenes.later(player, 1, () => {
@@ -910,8 +924,26 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return true;
   }
 
-  function talkToAzali(event) {
-    return talkToFollower(event) || talkToAzaliAtPub(event) || talkToSoberAzali(event);
+  /** Some of the twins' variants are missing from the index for one sibling or the other. */
+  function talkToTwins(event) {
+    const { player, npcId } = event;
+    if (npcId !== FURIA_NPC_ID && npcId !== ENNIUS_NPC_ID) return false;
+    if (stage(player) >= STAGE_TEOMAT) return false;
+    event.handled = true;
+    play(player, npcId, selectTwinsVariant(player), null, event.npc);
+    return true;
+  }
+
+  /** The quest's resolved knight ids are not indexed, so answer their Talk-to from here. */
+  function talkToKnight(event) {
+    if (talkToFollower(event) || talkToAzaliAtPub(event) || talkToSoberAzali(event)) return true;
+    const { player, npcId } = event;
+    if (!KNIGHT_CONTENT_IDS.includes(npcId)) return false;
+    const variant = selectVariant({ player, npcId, npc: event.npc });
+    if (!variant) return false;
+    event.handled = true;
+    play(player, npcId, variant, null, event.npc);
+    return true;
   }
 
   /** Sober Azali before her answer: the dunk's tail, from "Oh boy...". */
@@ -1231,32 +1263,42 @@ module.exports = function registerTwilightPromiseQuest(api) {
     return talkToRenu({ ...event, npcId: RENU_FEED_NPC_ID, npc: event.target ?? event.npc, handled: false }) && (event.handled = true);
   }
 
-  /** The Prince, mid-quest at the Teomat: the battle and its aftermath come back where they stopped. */
+  /**
+   * The Prince, mid-quest at the Teomat: the battle and its aftermath come back where they
+   * stopped. The resolved Itzla/Servius ids are not in npc-dialogue-index.json, so their
+   * crypt, conversation and post-quest variants are selected here as well.
+   */
   function talkToPrince(event) {
     const { player, npcId } = event;
-    if (npcId !== ITZLA_NPC_ID || !atTeomat(event.npc)) return false;
+    if (npcId !== ITZLA_NPC_ID && npcId !== SERVIUS_NPC_ID) return false;
     const current = stage(player);
-    if (current === STAGE_TEOMAT) {
-      event.handled = true;
-      play(player, ITZLA_NPC_ID, V.PRINCE_TEOMAT, afterLine(LINES.TEOMAT), event.npc);
-      return true;
+    if (npcId === ITZLA_NPC_ID && atTeomat(event.npc)) {
+      if (current === STAGE_TEOMAT) {
+        event.handled = true;
+        play(player, ITZLA_NPC_ID, V.PRINCE_TEOMAT, afterLine(LINES.TEOMAT), event.npc);
+        return true;
+      }
+      if (current === STAGE_BATTLE) {
+        event.handled = true;
+        beginBattle(player);
+        return true;
+      }
+      if (current === STAGE_AFTERMATH) {
+        event.handled = true;
+        beginAftermath(player);
+        return true;
+      }
+      if (current === STAGE_GUARD_LEFT) {
+        event.handled = true;
+        play(player, ITZLA_NPC_ID, V.AFTER_GUARD, null, event.npc);
+        return true;
+      }
     }
-    if (current === STAGE_BATTLE) {
-      event.handled = true;
-      beginBattle(player);
-      return true;
-    }
-    if (current === STAGE_AFTERMATH) {
-      event.handled = true;
-      beginAftermath(player);
-      return true;
-    }
-    if (current === STAGE_GUARD_LEFT) {
-      event.handled = true;
-      play(player, ITZLA_NPC_ID, V.AFTER_GUARD, null, event.npc);
-      return true;
-    }
-    return false;
+    const variant = selectVariant({ player, npcId, npc: event.npc });
+    if (!variant) return false;
+    event.handled = true;
+    play(player, npcId, variant, null, event.npc);
+    return true;
   }
 
   function talkToTeomatMetzli(event) {
@@ -1501,8 +1543,11 @@ module.exports = function registerTwilightPromiseQuest(api) {
   api.onObjectInteraction("Crates", { Search: searchCrate });
   api.onObjectInteraction("Chest", { Open: openChest });
   api.onNpcInteraction("Citizen", { Pickpocket: pickpocketCitizen });
-  api.onNpcInteraction("Knight of Varlamore", { "Talk-to": talkToAzali });
+  api.onNpcInteraction("Knight of Varlamore", { "Talk-to": talkToKnight });
+  api.onNpcInteraction("Furia Tullus", { "Talk-to": talkToTwins });
+  api.onNpcInteraction("Ennius Tullus", { "Talk-to": talkToTwins });
   api.onNpcInteraction("Prince Itzla Arkan", { "Talk-to": talkToPrince });
+  api.onNpcInteraction("Servius, Teokan of Ralos", { "Talk-to": talkToPrince });
   api.onNpcInteraction("Metzli, Teokan of Ranul", { "Talk-to": talkToTeomatMetzli });
   api.onNpcInteraction("Renu", { Feed: talkToRenu });
   api.onItemOnNpc(feedOnRenu);

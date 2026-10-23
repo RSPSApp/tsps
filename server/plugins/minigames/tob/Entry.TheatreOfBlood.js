@@ -712,7 +712,7 @@ function splitNylocas(raid,npc,d) {
   }
 }
 function drops(event) {if(NPC_RAIDS.has(event.npc))event.handled=true;}
-function hasCompletion(request) { request.complete = (Number(request.player.getAttribute(COMPLETIONS_ATTRIBUTE)) || 0) > 0; }
+function hasCompletion(request) { if((Number(request.player.getAttribute(COMPLETIONS_ATTRIBUTE)) || 0) > 0) request.complete = true; }
 function keepItems(event) {if(RAIDS.has(event.player))event.shouldDrop=false;}
 function died(event) {
   const raid=RAIDS.get(event.player);if(!raid)return;event.handled=true;

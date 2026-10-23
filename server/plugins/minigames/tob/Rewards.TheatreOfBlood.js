@@ -375,6 +375,13 @@ function countCompletion(player) {
   const completions = (Number(player.getAttribute(ATTR_COMPLETIONS)) || 0) + 1;
   player.setAttribute(ATTR_COMPLETIONS, completions);
   player.sendMessage(`Your completed Theatre of Blood count is: <col=ff0000>${completions}</col>.`);
+  // The raid is over for normal mode too, so the quests waiting on a clear hear it.
+  Shared.api()?.emitCustomEvent("tob:completed", { player, mode: "normal" });
+}
+
+/** A normal-mode clear counts as a Theatre of Blood completion. */
+function hasCompletion(request) {
+  if ((Number(request.player.getAttribute(ATTR_COMPLETIONS)) || 0) > 0) request.complete = true;
 }
 
 module.exports = function registerTheatreRewards(api) {
@@ -390,6 +397,7 @@ module.exports = function registerTheatreRewards(api) {
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.TAKE_ALL, clickTakeAll);
   api.onInterfaceActionButton((INTERFACE << 16) | COMPONENT.DISCARD_ALL, clickDiscardAll);
   api.onInterfaceActionButton(ITEMS_UID, clickLootItem);
+  api.onCustomEvent("tob:has-completion", hasCompletion);
 };
 
 Object.assign(module.exports, { RewardsRoom, rollRaid, standing, lootOf, setLoot, countCompletion, CHESTS, ATTR_LOOT, ATTR_COMPLETIONS });

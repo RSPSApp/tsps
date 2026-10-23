@@ -95,7 +95,7 @@ export class Inventory {
         }
         this.slots[slotIndex] = next;
         this.emit({ type: "slot", slot: cloneSlot(next) });
-        if (next.itemId <= 0 && this.selectedSlot === slotIndex) {
+        if (next.itemId < 0 && this.selectedSlot === slotIndex) {
             this.setSelectedSlot(null);
         }
         return cloneSlot(next);
@@ -138,7 +138,7 @@ export class Inventory {
     }
 
     firstEmptySlot(): number | undefined {
-        const idx = this.slots.findIndex((slot) => slot.itemId <= 0);
+        const idx = this.slots.findIndex((slot) => slot.itemId < 0);
         return idx >= 0 ? idx : undefined;
     }
 
@@ -203,10 +203,10 @@ export class Inventory {
     }
 
     private normalizeSlot(index: number, itemId: number, quantity: number): InventorySlot {
-        const normalizedId = itemId > 0 ? itemId | 0 : -1;
+        const normalizedId = itemId >= 0 ? itemId | 0 : -1;
         // Some containers (notably bank placeholders) can have an itemId with quantity 0.
         // Treat emptiness by itemId only; quantity 0 is still a valid occupied slot.
-        const normalizedQuantity = normalizedId > 0 ? Math.max(0, quantity | 0) : 0;
+        const normalizedQuantity = normalizedId >= 0 ? Math.max(0, quantity | 0) : 0;
         return {
             slot: index | 0,
             itemId: normalizedId,
@@ -231,7 +231,7 @@ export class Inventory {
         if (slot === null || slot === undefined) return null;
         if (!this.isValidIndex(slot)) return null;
         const idx = slot | 0;
-        if (!allowEmpty && this.slots[idx].itemId <= 0) return null;
+        if (!allowEmpty && this.slots[idx].itemId < 0) return null;
         return idx;
     }
 }

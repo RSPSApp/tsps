@@ -225,8 +225,8 @@ module.exports = function registerPathOfGlouphrieQuest(api) {
   const TREE_CHIME_ACTION_ID = "QJ5K9p";
   const TOADS_GIVE_STEP_ID = "fVX5us";
   const CAKE_RECEIVE_STEP_ID = "HDplvK";
-  const LAMPS_MULTIPLE_STEP_ID = "sQ9r5K";
-  const LAMP_SINGLE_STEP_ID = "BCME6O";
+  const LAMPS_MULTIPLE_MESSAGE_ID = "HCknfU";
+  const LAMP_SINGLE_MESSAGE_ID = "dydZII";
 
   const CONDITION_HAS_TOADS = "f30JUB";
   const CONDITION_HAS_CHIME = "0ge934";
@@ -812,8 +812,8 @@ module.exports = function registerPathOfGlouphrieQuest(api) {
       healTree(player);
       return;
     }
-    if (stepId === LAMPS_MULTIPLE_STEP_ID || stepId === LAMP_SINGLE_STEP_ID) {
-      event.handled = true;
+    if (stepId === LAMPS_MULTIPLE_MESSAGE_ID || stepId === LAMP_SINGLE_MESSAGE_ID) {
+      // Message steps: grant before the default renderer prints the canonical text.
       grantLamps(player);
       return;
     }

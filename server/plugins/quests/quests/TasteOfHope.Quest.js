@@ -7,7 +7,8 @@
  * (Ver Sinhaza espionage, Serafina's house potion puzzle, the abomination trap,
  * the Ivandis flail and the Ranis Drakan boss fight) and the rewards.
  *
- * Stages (varbit 6396 "myq4", varp 1736 "myreque_4_main_var"):
+ * Stages (varp 1736 "myreque_4_main_var", sent to the client as the native
+ * myq4 varbit 6396 - see WIRE_STAGES below):
  *   0 unstarted, 1 Garth's tale (start), 5 Safalaan briefed (mercenaries),
  *   10 mercenaries spoken to, 20 Harpert paid (the wall rubble is climbable),
  *   26 spied on Ranis and Vanstrom, 30 reported back (Flaygian next),
@@ -17,11 +18,11 @@
  *   125 notes read, 130 Ivandis flail made, 135 sent to Ver Sinhaza,
  *   145 Ranis' speech, 150 fight, 155 Ranis killed, 160 speech of hope,
  *   165 finishing up, 166 complete.
- * The value ladder is pinned to the cache's own myq4 transform tables so the
- * varbit-driven multi-NPCs and locs (the hideout team appearing at 1, dying at
- * 100 and leaving at 110, Kael at Ver Sinhaza for 135-154, Serafina's house
- * 75-90, the climbable wall for 20-40, the broken fountain exactly at 75)
- * transform as live OSRS does.
+ * The internal ladder is pinned to the Quest Helper's loadSteps keys and the
+ * cache's own myq4 transform tables, so the varbit-driven multi-NPCs and locs
+ * (the hideout team appearing at 1, dying at 100 and leaving at 110, Kael at Ver
+ * Sinhaza for 135-154, Serafina's house 75-90, the climbable rubble for 20-40,
+ * the broken fountain exactly at 75) transform as live OSRS does.
  *
  * Source: OSRS Wiki ("A Taste of Hope", its Quick guide and
  * Transcript:A Taste of Hope), the cache for every id, varbit and transform
@@ -38,15 +39,14 @@
  *   invulnerable while his vyrewatch are alive, and the enrage phase is only
  *   gated by the final pair dying (the cache's faster enrage form has no
  *   server-side transform hook).
- * - Darkness of Hallowvale claims Veliaf Hurtz's Talk-to unconditionally once
- *   complete, so the Rod of Ivandis hand-out the wiki gives him is instead
- *   asked for from Vertida's "I need the Rod of Ivandis." option (once; the
- *   In Aid of the Myreque rod chain remains the other way to get one).
+ * - Veliaf Hurtz's canonical Rod of Ivandis hand-over is used in its own
+ *   stage 120-134 window: Darkness of Hallowvale and In Aid of the Myreque
+ *   yield the shared NPC to this quest's page-qualified transcript variant.
  * - Only the quest's four summoned vyrewatch and Ranis are gated behind the
  *   Ivandis flail / Rod of Ivandis; the city vyrewatch are not (no vampyre
  *   immunity exists in the combat core).
- * - Lvl-2 Enchant has no spell-on-item hook, so 3 air runes and 1 cosmic rune
- *   are used on the emerald sickle, as In Aid of the Myreque does for Lvl-1.
+ * - Lvl-2 Enchant uses the standard spell cast with a quest-provided sickle
+ *   recipe; an enchant emerald tablet is the canonical alternative.
  * - The epilogue cutscene, Stepping-stone safespot and Ranis' blood bombs/
  *   Blood Barrage are flavour only (narration and a hp-heal at the spy window).
  */
@@ -56,6 +56,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
     Boundary,
     CountdownTask,
     Equipment,
+    Item,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
@@ -103,6 +104,57 @@ module.exports = function registerTasteOfHopeQuest(api) {
   const STAGE_SPEECH_DONE = 160;
   const STAGE_FINISHING = 165;
   const STAGE_COMPLETE = 166;
+
+  // Internal stages are not the cache's native myq4 values. Each maps to the
+  // Quest Helper loadSteps key (and cache transform window) for the same point
+  // in the route, so the varbit-driven NPCs and locs advance with the player.
+  const WIRE_STAGES = new Map([
+    [STAGE_UNSTARTED, 0], // QH talkToGarth
+    [STAGE_STARTED, 15], // QH enter the base and talk to Safalaan
+    [STAGE_SAW_SAFALAAN, 20], // QH climb the rubble
+    [STAGE_MERCS_SPOKEN, 30], // QH talk to Harpert
+    [STAGE_HARPERT_PAID, 40], // QH spy route: climb the rubble again, then the theatre roof
+    [STAGE_SPIED, 45], // QH return to Safalaan
+    [STAGE_REPORTED, 55], // QH talk to Flaygian
+    [STAGE_FLAYGIAN, 65], // QH talk to Safalaan again
+    [STAGE_HOUSE_DIRECTED, 75], // QH Serafina's house
+    [STAGE_NOTES_DELIVERED, 90], // QH start the abomination fight
+    [STAGE_TRAP, 95],
+    [STAGE_ABOMINATION, 100],
+    [STAGE_ABANDONED, 110],
+    [STAGE_NEW_BASE, 115],
+    [STAGE_NOTES_RECEIVED, 120],
+    [STAGE_NOTES_READ, 125],
+    [STAGE_FLAIL, 130],
+    [STAGE_SENT_TO_RANIS, 135],
+    [STAGE_SPEECH, 140],
+    [STAGE_FIGHT, 140],
+    [STAGE_RANIS_DEAD, 145], // QH talk to Kael again; static 8319 stays visible
+    [STAGE_SPEECH_DONE, 150],
+    [STAGE_FINISHING, 160],
+    [STAGE_COMPLETE, 165],
+  ]);
+
+  /** Stage 75 covers the whole Serafina puzzle; the wire follows its sub-state. */
+  function serafinaWireStage(player) {
+    if (hasBit(player, BIT_NOTES_GIVEN)) return 90;
+    if (hasBit(player, BIT_NOTES_TAKEN) || hasBit(player, BIT_DOOR_OPEN)) return 85;
+    if (hasBit(player, BIT_POTION_CHECKED)) return 82;
+    if (hasBit(player, BIT_HOUSE_MET)) return 80;
+    return 75;
+  }
+
+  function wireStage(stage, player) {
+    if (stage === STAGE_AT_HOUSE) return serafinaWireStage(player);
+    return WIRE_STAGES.get(stage) ?? (stage | 0);
+  }
+
+  function syncSerafinaWire(player) {
+    player.getPacketSender().sendVarbit(
+      VARBIT_TASTE_OF_HOPE,
+      wireStage(quest.getStage(player), player)
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // NPCs (cache gameval names in comments; many have no generated identifier)
@@ -158,8 +210,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
   const PESTLE_AND_MORTAR_IDS = new Set([ItemIdentifiers.PESTLE_AND_MORTAR, ItemIdentifiers.PESTLE_AND_MORTAR_2, 15247]); // 233/234
   const EMERALD_IDS = new Set([ItemIdentifiers.EMERALD, 1606, 6896, 16308]); // 1605
   const CHISEL_ITEM_ID = ItemIdentifiers.CHISEL; // 1755
-  const AIR_RUNE_ITEM_ID = ItemIdentifiers.AIR_RUNE; // 556
-  const COSMIC_RUNE_ITEM_ID = ItemIdentifiers.COSMIC_RUNE; // 564
+  const ENCHANT_EMERALD_TABLET_ITEM_ID = 8017; // Enchant emerald or jade (QH POH_TABLET_ENCHANTEMERALD)
   const SILVER_SICKLE_B_ITEM_ID = ItemIdentifiers.SILVER_SICKLE_B_; // 2963
   const ROD_OF_IVANDIS_ITEM_IDS = new Set([7639, 7640, 7641, 7642, 7643, 7644, 7645, 7646, 7647, 7648]);
   const MYSTERIOUS_HERB_ITEM_ID = ItemIdentifiers.MYSTERIOUS_HERB; // 22402
@@ -262,6 +313,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
   const spawnedByPlayer = new Map();
   const fightByPlayer = new Map();
   const warningPending = new WeakSet();
+  const flailPurchasePending = new WeakSet();
   const lastImmuneMessage = new WeakMap();
 
   // ---------------------------------------------------------------------------
@@ -288,6 +340,15 @@ module.exports = function registerTasteOfHopeQuest(api) {
     return true;
   }
 
+  function forceGive(player, itemId, amount = 1) {
+    const inventory = player.getInventory();
+    if (typeof inventory.forceAdd === "function" && inventory.isFull()) {
+      inventory.forceAdd(player, new Item(itemId, amount));
+      return;
+    }
+    inventory.adds(itemId, amount);
+  }
+
   function bits(player) {
     return Number(player.getAttribute(BITS_ATTRIBUTE)) || 0;
   }
@@ -312,6 +373,17 @@ module.exports = function registerTasteOfHopeQuest(api) {
     return false;
   }
 
+  function needsVeliafRod(player) {
+    const stage = quest.getStage(player);
+    return stage >= STAGE_NOTES_RECEIVED && stage < STAGE_SENT_TO_RANIS &&
+      hasBit(player, BIT_ASKED_ROD) && !hasRod(player) && !hasBit(player, BIT_ROD_CLAIMED);
+  }
+
+  function answerVeliafRodNeed(request) {
+    if (!request?.player) return;
+    request.needsRod = needsVeliafRod(request.player);
+  }
+
   function deleteRod(player) {
     for (const itemId of ROD_OF_IVANDIS_ITEM_IDS) {
       if (held(player, itemId)) {
@@ -321,10 +393,17 @@ module.exports = function registerTasteOfHopeQuest(api) {
     }
   }
 
+  function wearingWeapon(player, itemId) {
+    return player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() === itemId;
+  }
+
+  function wearingFlail(player) {
+    return wearingWeapon(player, IVANDIS_FLAIL_ITEM_ID);
+  }
+
   function wearingFlailOrRod(player) {
-    const weapon = player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.();
-    if (weapon === IVANDIS_FLAIL_ITEM_ID) return true;
-    return ROD_OF_IVANDIS_ITEM_IDS.has(weapon);
+    if (wearingFlail(player)) return true;
+    return ROD_OF_IVANDIS_ITEM_IDS.has(player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.());
   }
 
   /** The flail counts when created, carried or wielded (the hand-ins check it). */
@@ -361,7 +440,15 @@ module.exports = function registerTasteOfHopeQuest(api) {
   }
 
   function requirementsMet(player) {
-    return questComplete(player, "darkness_of_hallowvale");
+    if (!questComplete(player, "darkness_of_hallowvale")) return false;
+    const skills = player.getSkillManager();
+    return (
+      skills.getMaxLevel(Skill.CRAFTING) >= 48 &&
+      skills.getMaxLevel(Skill.AGILITY) >= 45 &&
+      skills.getMaxLevel(Skill.ATTACK) >= 40 &&
+      skills.getMaxLevel(Skill.HERBLORE) >= 40 &&
+      skills.getMaxLevel(Skill.SLAYER) >= 38
+    );
   }
 
   function questComplete(player, key) {
@@ -437,12 +524,17 @@ module.exports = function registerTasteOfHopeQuest(api) {
   function applyStageSpawns(player) {
     if (!player || player.isPlayerBot?.() === true) return;
     const stage = quest.getStage(player);
-    // The old base under Old Man Ral: Safalaan and Vertida after the hideout falls.
+    // The old base under Old Man Ral: Safalaan for the epilogue, and Vertida for
+    // the pre- and post-quest flail reclaim (her page outlives completion).
     if (stage >= STAGE_ABANDONED && stage < STAGE_COMPLETE) {
       spawnKey(player, "safalaan_base", 8216, NEW_BASE_TILE);
-      spawnKey(player, "vertida_base", VERTIDA_NPC_ID, VERTIDA_NEW_BASE_TILE);
     } else {
       despawnKey(player, "safalaan_base");
+    }
+    // Vertida's page outlives the quest: the post-quest flail reclaim needs her.
+    if (stage >= STAGE_ABANDONED) {
+      spawnKey(player, "vertida_base", VERTIDA_NPC_ID, VERTIDA_NEW_BASE_TILE);
+    } else {
       despawnKey(player, "vertida_base");
     }
     // Kael: at the old base while the weapon is made, at Ver Sinhaza for the
@@ -555,11 +647,9 @@ module.exports = function registerTasteOfHopeQuest(api) {
   }
 
   function grantReward(player) {
-    const skills = player.getSkillManager();
     // The quest's experience comes from the tome, not automatic XP.
-    void skills;
-    if (!held(player, TOME_OF_EXPERIENCE_ITEM_ID)) give(player, TOME_OF_EXPERIENCE_ITEM_ID, 1);
-    if (!held(player, DRAKANS_MEDALLION_ITEM_ID)) give(player, DRAKANS_MEDALLION_ITEM_ID, 1);
+    if (!held(player, TOME_OF_EXPERIENCE_ITEM_ID)) forceGive(player, TOME_OF_EXPERIENCE_ITEM_ID, 1);
+    if (!held(player, DRAKANS_MEDALLION_ITEM_ID)) forceGive(player, DRAKANS_MEDALLION_ITEM_ID, 1);
     applyStageSpawns(player);
   }
 
@@ -590,6 +680,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
     }
     if (!hasBit(player, BIT_HOUSE_MET)) {
       setBit(player, BIT_HOUSE_MET);
+      syncSerafinaWire(player);
       return "the-myth-of-serafina-talking-to-safalaan";
     }
     if (hasBit(player, BIT_DOOR_OPEN)) {
@@ -658,6 +749,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
   }
 
   function safalaanNewBaseVariant(player, stage) {
+    if (stage >= STAGE_COMPLETE) return null;
     if (stage >= STAGE_ABANDONED && stage < STAGE_NEW_BASE) {
       quest.setStage(player, STAGE_NEW_BASE);
       return "the-legendary-weapon-talking-to-safalaan";
@@ -689,17 +781,17 @@ module.exports = function registerTasteOfHopeQuest(api) {
     if (stage >= STAGE_NEW_BASE && stage < STAGE_NOTES_RECEIVED && !held(player, FLAYGIANS_NOTES_ITEM_ID)) {
       return "the-legendary-weapon-talking-to-vertida-after-talking-to-safalaan";
     }
+    if (stage >= STAGE_SENT_TO_RANIS && stage < STAGE_RANIS_DEAD) {
+      return "the-legendary-weapon-talking-to-vertida-2";
+    }
+    if (stage >= STAGE_RANIS_DEAD) {
+      return "finishing-up-talking-to-vertida";
+    }
     if (hasBit(player, BIT_NOTES_READ) || held(player, FLAYGIANS_NOTES_ITEM_ID)) {
       if (hasFlail(player)) {
         return "the-legendary-weapon-talking-to-vertida-after-talking-to-safalaan-after-creating-the-ivandis-flail";
       }
       return "the-legendary-weapon-talking-to-vertida-after-talking-to-safalaan-after-reading-flaygian-s-notes";
-    }
-    if (stage >= STAGE_SENT_TO_RANIS && stage < STAGE_RANIS_DEAD) {
-      return "the-legendary-weapon-talking-to-vertida-2";
-    }
-    if (stage >= STAGE_RANIS_DEAD && stage < STAGE_COMPLETE) {
-      return "finishing-up-talking-to-vertida";
     }
     return null;
   }
@@ -774,18 +866,6 @@ module.exports = function registerTasteOfHopeQuest(api) {
     if (KAEL_IDS.has(npcId)) {
       return kaelVariant(stage);
     }
-    if (VELIAF_IDS.has(npcId)) {
-      if (
-        stage >= STAGE_NOTES_RECEIVED &&
-        stage < STAGE_SENT_TO_RANIS &&
-        !hasRod(player) &&
-        !hasBit(player, BIT_ROD_CLAIMED) &&
-        hasBit(player, BIT_ASKED_ROD)
-      ) {
-        return "the-legendary-weapon-talking-to-veliaf";
-      }
-      return null;
-    }
     return null;
   }
 
@@ -821,10 +901,45 @@ module.exports = function registerTasteOfHopeQuest(api) {
   // Dialogue: choices
   // ---------------------------------------------------------------------------
 
+  /**
+   * The canonical post-quest reclaim: Vertida sells another Ivandis flail to a
+   * player who has none to hand. The flail counts as held when it is carried or
+   * wielded, so only a destroyed or banked flail needs buying again. Sins of
+   * the Father owns the same old-base Vertida and asks this before taking the
+   * talk for itself.
+   */
+  function flailReclaimNeeded(player) {
+    if (!quest.isComplete(player)) return false;
+    if (held(player, IVANDIS_FLAIL_ITEM_ID)) return false;
+    return player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() !== IVANDIS_FLAIL_ITEM_ID;
+  }
+
+  /** The canonical purchase prompt's "Yes." is the only step that hands over a flail. */
+  function buyAnotherFlail(player) {
+    if (!held(player, COINS_ITEM_ID, 20000)) {
+      player.sendMessage("You need 20,000 coins to buy another flail.");
+      return;
+    }
+    if (!give(player, IVANDIS_FLAIL_ITEM_ID, 1)) return;
+    player.getInventory().deleteNumber(COINS_ITEM_ID, 20000);
+    narrate(player, ["You buy an Ivandis flail from Vertida."]);
+  }
+
+  /** Answers Sins of the Father's question about the post-quest flail reclaim. */
+  function handleFlailReclaimRequest(request) {
+    if (!request?.player) return;
+    request.needed = flailReclaimNeeded(request.player);
+  }
+
   function handleChoice(event) {
     const { player, npcId, option } = event;
     if (!player) return;
     const text = String(option ?? "");
+    if (flailPurchasePending.has(player)) {
+      flailPurchasePending.delete(player);
+      if (text === "Yes." && VERTIDA_IDS.has(npcId)) buyAnotherFlail(player);
+      return;
+    }
     if (warningPending.has(player) && (text === "Yes." || text === "No.")) {
       warningPending.delete(player);
       if (text === "No.") {
@@ -847,28 +962,15 @@ module.exports = function registerTasteOfHopeQuest(api) {
     if (text === "I need the Rod of Ivandis.") {
       if (!VERTIDA_IDS.has(npcId)) return;
       setBit(player, BIT_ASKED_ROD);
-      // Darkness of Hallowvale owns Veliaf's Talk-to once complete, so the rod
-      // hand-over the wiki gives him happens here instead: once, from Vertida.
-      if (stageAtLeast(player, STAGE_NOTES_READ) && !hasRod(player) && !hasBit(player, BIT_ROD_CLAIMED)) {
-        setBit(player, BIT_ROD_CLAIMED);
-        give(player, ItemIdentifiers.ROD_OF_IVANDIS_10_, 1);
-        narrate(player, ["Vertida hands you the Rod of Ivandis."]);
-      }
       return;
     }
-    if (text === "I need another flail") {
-      if (!VERTIDA_IDS.has(npcId) || !quest.isComplete(player)) return;
-      if (!held(player, COINS_ITEM_ID, 20000)) {
-        player.sendMessage("You need 20,000 coins to buy another flail.");
-        return;
-      }
-      if (freeSlots(player) < 1) {
-        player.sendMessage("You don't have enough inventory space.");
-        return;
-      }
-      player.getInventory().deleteNumber(COINS_ITEM_ID, 20000);
-      player.getInventory().adds(IVANDIS_FLAIL_ITEM_ID, 1);
-      narrate(player, ["You buy an Ivandis flail from Vertida."]);
+    if (text === "I need another flail" || text === "I need another flail.") {
+      if (!VERTIDA_IDS.has(npcId)) return;
+      const stage = quest.getStage(player);
+      if (stage < STAGE_SENT_TO_RANIS && !quest.isComplete(player)) return;
+      // The transcript asks again ("Buy an Ivandis Flail for 20,000 coins?")
+      // before any coins or item move, so defer the purchase to its Yes.
+      flailPurchasePending.add(player);
       return;
     }
     if (text === "Do you have another Drakan's medallion?") {
@@ -889,10 +991,6 @@ module.exports = function registerTasteOfHopeQuest(api) {
     }
   }
 
-  function stageAtLeast(player, stage) {
-    return quest.getStage(player) >= stage;
-  }
-
   function defer(player, action) {
     if (!CountdownTask || !TaskManager) {
       action();
@@ -904,6 +1002,20 @@ module.exports = function registerTasteOfHopeQuest(api) {
         action();
       })
     );
+  }
+
+  // The canonical Veliaf transcript has no action step for the hand-over; the
+  // nested "one free inventory space" condition is the point at which he gives it.
+  function handleDialogueCondition(event) {
+    const { player, stepId } = event;
+    if (!player || stepId !== "J8N5DP") return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_NOTES_RECEIVED || stage >= STAGE_SENT_TO_RANIS) return;
+    if (hasRod(player) || hasBit(player, BIT_ROD_CLAIMED)) return;
+    if (!give(player, ItemIdentifiers.ROD_OF_IVANDIS_10_, 1)) return;
+    setBit(player, BIT_ROD_CLAIMED);
+    syncTome(player);
+    narrate(player, ["Veliaf hands you the Rod of Ivandis."]);
   }
 
   // ---------------------------------------------------------------------------
@@ -931,7 +1043,9 @@ module.exports = function registerTasteOfHopeQuest(api) {
         event.handled = true;
         if (quest.getStage(player) !== STAGE_UNSTARTED) return;
         if (!requirementsMet(player)) {
-          player.sendMessage("You must have completed Darkness of Hallowvale to start this quest.");
+          player.sendMessage(
+            "You need Darkness of Hallowvale and 48 Crafting, 45 Agility, 40 Attack, 40 Herblore and 38 Slayer to start this quest."
+          );
           return;
         }
         quest.setStage(player, STAGE_STARTED);
@@ -972,9 +1086,10 @@ module.exports = function registerTasteOfHopeQuest(api) {
         return;
       case "1jhUsU": // message: You take some old notes from the chest
         if (kind !== "message") return;
-        if (!hasBit(player, BIT_NOTES_TAKEN)) {
+        if (!hasBit(player, BIT_NOTES_TAKEN) && !held(player, OLD_NOTES_ITEM_ID)) {
+          if (!give(player, OLD_NOTES_ITEM_ID, 1)) return;
           setBit(player, BIT_NOTES_TAKEN);
-          if (!held(player, OLD_NOTES_ITEM_ID)) give(player, OLD_NOTES_ITEM_ID, 1);
+          syncSerafinaWire(player);
         }
         return;
       case "nIsw3D": // message: You give the notes to Safalaan
@@ -1194,7 +1309,13 @@ module.exports = function registerTasteOfHopeQuest(api) {
     const isRanis = RANIS_FIGHT_IDS.has(npcId);
     const isFightVyre = VYREWATCH_FIGHT_IDS.has(npcId);
     if (!isRanis && !isFightVyre) return;
-    if (!wearingFlailOrRod(player)) {
+    if (isRanis) {
+      if (!wearingFlail(player)) {
+        zeroHit(hit);
+        player.sendMessage("Ranis can only be harmed by the Ivandis flail.");
+        return;
+      }
+    } else if (!wearingFlailOrRod(player)) {
       zeroHit(hit);
       immune(player);
       return;
@@ -1302,7 +1423,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
     const { player } = event;
     event.handled = true;
     const stage = quest.getStage(player);
-    if (stage < STAGE_MERCS_SPOKEN) {
+    if (stage < STAGE_SAW_SAFALAAN) {
       player.sendMessage("You have no reason to climb up there.");
       return;
     }
@@ -1501,6 +1622,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
       event.handled = true;
       player.getInventory().deleteNumber(POTION_ITEM_ID, 1);
       setBit(player, BIT_POTION_CHECKED);
+      syncSerafinaWire(player);
       narrate(player, [
         "You pour the potion over the door. The liquid sinks into the wood.",
         "Faint writing appears: \"Blood is the price of victory.\"",
@@ -1512,6 +1634,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
       player.getInventory().deleteNumber(BLOOD_POTION_ITEM_ID, 1);
       setBit(player, BIT_POTION_CHECKED);
       setBit(player, BIT_DOOR_OPEN);
+      syncSerafinaWire(player);
       player.sendMessage("You pour the blood potion over the door. It swings open.");
       return;
     }
@@ -1583,21 +1706,16 @@ module.exports = function registerTasteOfHopeQuest(api) {
       player.sendMessage("You use the chisel to attach the emerald to the silver sickle.");
       return;
     }
-    if (pair.has(EMERALD_SICKLE_B_ITEM_ID) && pair.has(COSMIC_RUNE_ITEM_ID)) {
+    if (pair.has(EMERALD_SICKLE_B_ITEM_ID) && pair.has(ENCHANT_EMERALD_TABLET_ITEM_ID)) {
       event.handled = true;
       if (quest.getStage(player) < STAGE_NOTES_READ) {
         player.sendMessage("You have no reason to enchant this yet.");
         return;
       }
-      if (!held(player, AIR_RUNE_ITEM_ID, 3)) {
-        player.sendMessage("You need 3 air runes to cast Lvl-2 Enchant.");
-        return;
-      }
-      player.getInventory().deleteNumber(COSMIC_RUNE_ITEM_ID, 1);
-      player.getInventory().deleteNumber(AIR_RUNE_ITEM_ID, 3);
+      player.getInventory().deleteNumber(ENCHANT_EMERALD_TABLET_ITEM_ID, 1);
       player.getInventory().deleteNumber(EMERALD_SICKLE_B_ITEM_ID, 1);
       player.getInventory().adds(ENCHANTED_EMERALD_SICKLE_B_ITEM_ID, 1);
-      player.sendMessage("As you cast Lvl-2 Enchant, the sickle vibrates and glows.");
+      player.sendMessage("You enchant the emerald sickle with the tablet.");
       return;
     }
     if (pair.has(CHAIN_ITEM_ID) && (pair.has(ENCHANTED_EMERALD_SICKLE_B_ITEM_ID) || hasRodInPair(pair))) {
@@ -1617,6 +1735,17 @@ module.exports = function registerTasteOfHopeQuest(api) {
         "You have created the Ivandis flail.",
       ]);
     }
+  }
+
+  function provideSickleEnchantRecipe(request) {
+    if (request.itemId !== EMERALD_SICKLE_B_ITEM_ID || request.spellName !== "Lvl-2 Enchant") return;
+    if (quest.getStage(request.player) < STAGE_NOTES_READ) {
+      request.declined = true;
+      request.message = "You have no reason to enchant this yet.";
+      return;
+    }
+    request.resultId = ENCHANTED_EMERALD_SICKLE_B_ITEM_ID;
+    request.message = "As you cast Lvl-2 Enchant, the sickle vibrates and glows.";
   }
 
   function hasRodInPair(pair) {
@@ -1698,6 +1827,21 @@ module.exports = function registerTasteOfHopeQuest(api) {
   // ---------------------------------------------------------------------------
   // Harpert: claimed by name because his live content id is not indexed
   // ---------------------------------------------------------------------------
+
+  function talkVeliafRod(event) {
+    const { player, npcId } = event;
+    if (!VELIAF_IDS.has(npcId)) return false;
+    if (!needsVeliafRod(player)) return false;
+    startTranscript(api, player, npcId, PAGE, "the-legendary-weapon-talking-to-veliaf");
+    return true;
+  }
+
+  function restartRanisSpeech(event) {
+    const { player } = event;
+    if (!player || quest.getStage(player) !== STAGE_RANIS_DEAD) return false;
+    startTranscript(api, player, RANIS_HUMAN_NPC_ID, PAGE, "the-taste-of-hope-a-speech-of-hope");
+    return true;
+  }
 
   function talkHarpert(event) {
     const { player, definition } = event;
@@ -1813,6 +1957,11 @@ module.exports = function registerTasteOfHopeQuest(api) {
     name: "A Taste of Hope",
     varpId: VARP_TASTE_OF_HOPE,
     varbitId: VARBIT_TASTE_OF_HOPE,
+    // The wire is the native myq4 value (the Quest Helper's step keys and the
+    // cache's NPC transform windows), not the internal stage.
+    varbitValue(stage, player) {
+      return wireStage(stage, player);
+    },
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
@@ -1825,7 +1974,12 @@ module.exports = function registerTasteOfHopeQuest(api) {
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("npc-dialogue:condition", handleDialogueCondition);
+  api.onCustomEvent("taste-of-hope:needs-veliaf-rod", answerVeliafRodNeed);
+  api.onCustomEvent("taste-of-hope:flail-reclaim", handleFlailReclaimRequest);
+  api.onNpcInteraction("Veliaf Hurtz", { "Talk-to": talkVeliafRod });
   api.onNpcInteraction("Harpert", { "Talk-to": talkHarpert });
+  api.onNpcInteraction("Kael Forshaw", { "Talk-to": restartRanisSpeech });
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleLine);
@@ -1836,6 +1990,7 @@ module.exports = function registerTasteOfHopeQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnItem(handleItemOnItem);
+  api.onCustomEvent("magic:enchant-item-recipe", provideSickleEnchantRecipe);
   api.onItemAction("Flaygian's notes", { Read: readFlaygiansNotes });
   api.onItemAction("Old notes", { Read: readOldNotes });
   api.onItemAction("Old diary", { Read: readOldDiary });

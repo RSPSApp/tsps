@@ -38,12 +38,6 @@
  *   (22097), broken/fixed stairs (22368/22369) or the crate hotspot (22457), nor
  *   for the tinderbox crate (29319); the plugin registers the first four at their
  *   wiki tiles on login (bring your own tinderbox, as the crate is not placed);
- * - the gas knockout outside the granary and the blasted hole in the door are not
- *   modelled: the temple door simply refuses to open until the fuse is lit;
- * - the dive checks accept the underwater gear carried as well as worn (no
- *   unequip path for the harness, and the whistle cannot be blown with the
- *   helmet on);
- * - the start requirements (skills and prerequisite quests) are not enforced;
  * - crate building consumes fixed materials (6 parts + 20 nails; false bottom
  *   4 planks + 8 nails) instead of the wiki's bend rolls;
  * - Sorebones drops are deterministic (clamp, tongs, 3 bell jars, 30 staples);
@@ -55,7 +49,6 @@
  * - the cache spawns 1953/1954/1964 (Brother Tranquility at Mos Le'Harmless,
  *   Harmony Island and the mill basement) resolve to null definitions at quest
  *   stages, so a visible 550 is spawned per player beside each;
- * - the reward lamp is granted but its "Pray-over" XP choice is not implemented;
  * - the holy symbol (1718) stands in for the wiki's "blessed symbol of Saradomin".
  */
 module.exports = function registerGreatBrainRobberyQuest(api) {
@@ -160,6 +153,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   const TINDERBOX_ITEM_ID = ItemIdentifiers.TINDERBOX; // 590
   const FISHBOWL_HELMET_ITEM_ID = ItemIdentifiers.FISHBOWL_HELMET; // 7534
   const DIVING_APPARATUS_ITEM_ID = ItemIdentifiers.DIVING_APPARATUS; // 7535
+  const MEDALLION_OF_THE_DEEP_ITEM_ID = ItemIdentifiers.MEDALLION_OF_THE_DEEP;
   const HOLY_SYMBOL_ITEM_ID = ItemIdentifiers.HOLY_SYMBOL; // 1718
   const RING_OF_CHAROS_ITEM_ID = ItemIdentifiers.RING_OF_CHAROS; // 4202
   const RING_OF_CHAROS_A_ITEM_ID = ItemIdentifiers.RING_OF_CHAROS_A_; // 6465
@@ -187,7 +181,9 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   const CRATE_FILLED_OBJECT_ID = ObjectIdentifiers.CRATE_200; // 22455
   const CRATE_CLOSED_OBJECT_ID = ObjectIdentifiers.CRATE_228; // 31943, Check
   const EDGEVILLE_BOOKCASE_OBJECT_ID = ObjectIdentifiers.BOOKCASE_4; // 380 at (3049,3483)
-  const CHURCH_DOOR_OBJECT_ID = ObjectIdentifiers.DOOR_446; // 22007
+  const MONASTERY_ENTRANCE_OBJECT_ID = 22119; // Open; cache transforms on varbit 3393
+  const VARBIT_MONASTERY_ENTRANCE = 3393;
+  const MONASTERY_ENTRANCE_TILE = new Location(3805, 2844, 0);
 
   const CRATE_OBJECT_IDS = new Set([
     CRATE_HOTSPOT_OBJECT_ID,
@@ -204,7 +200,6 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   const BOOKCASE_TILE = new Location(3049, 3483, 0);
   const TUNNEL_TILE = new Location(3786, 9254, 0);
   const SECRET_ROOM_TILE = new Location(3818, 2844, 0);
-  const TEMPLE_DOOR_TILE = new Location(3817, 2844, 0);
   const HARMONY_TILE = new Location(3788, 2830, 0);
   const MOS_TILE = new Location(3681, 2963, 0);
   const MIGOR_TILE = new Location(3819, 2844, 0);
@@ -233,7 +228,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   const DOCTOR_TOLD_ATTRIBUTE = `${ATTRIBUTE_PREFIX}.doctor-told`;
   const DOCTOR_LIST_ATTRIBUTE = `${ATTRIBUTE_PREFIX}.doctor-list`;
   const CATS_ATTRIBUTE = `${ATTRIBUTE_PREFIX}.cats`;
-  const SOREBONES_ATTRIBUTE = `${ATTRIBUTE_PREFIX}.sorebones`;
+  const PENDING_LAMP_REWARD_ATTRIBUTE = "great-brain-robbery:pending-lamp-reward";
 
   const CAT_TARGET = 10;
   const CRATE_PART_COUNT = 6;
@@ -251,6 +246,10 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     { id: SKULL_STAPLE_ITEM_ID, amount: STAPLES_REQUIRED },
   ];
 
+  function nextSorebonesDrop(player) {
+    return SOREBONES_DROPS.find((drop) => player.getInventory().getAmount(drop.id) < drop.amount) ?? null;
+  }
+
   const QUEST_CHATHEADS = new Set([
     TRANQUILITY_CHAT_ID,
     NpcIdentifiers.BROTHER_TRANQUILITY_2,
@@ -264,6 +263,8 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   const bookAction = new WeakMap();
   const stairsAction = new WeakMap();
   const fuseNearDoor = new WeakMap();
+  const lampPending = new WeakMap();
+  const XP_REWARD_INTERFACE_ID = 240;
   const npcsByPlayer = new Map();
 
   let quest;
@@ -292,15 +293,10 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     );
   }
 
-  /**
-   * The dive checks accept the gear carried as well as worn: this client build has
-   * no unequip path for the MCP harness and the whistle cannot be blown with the
-   * helmet on, so requiring it worn would strand the test. Documented gap.
-   */
   function hasDivingGear(player) {
     return (
       wearingDivingGear(player) ||
-      (held(player, FISHBOWL_HELMET_ITEM_ID) && held(player, DIVING_APPARATUS_ITEM_ID))
+      equipped(player, Equipment.AMULET_SLOT, MEDALLION_OF_THE_DEEP_ITEM_ID)
     );
   }
 
@@ -317,6 +313,28 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
       equipped(player, Equipment.RING_SLOT, RING_OF_CHAROS_ITEM_ID) ||
       equipped(player, Equipment.RING_SLOT, RING_OF_CHAROS_A_ITEM_ID)
     );
+  }
+
+  function isQuestComplete(player, key) {
+    const request = { player, key, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  function isRescueComplete(player, rescue) {
+    const request = { player, rescue, complete: false };
+    api.emitCustomEvent("recipe-for-disaster:rescue-status", request);
+    return request.complete === true;
+  }
+
+  function hasStartRequirements(player) {
+    const skills = player.getSkillManager();
+    return skills.getMaxLevel(Skill.CRAFTING) >= 16 &&
+      skills.getMaxLevel(Skill.CONSTRUCTION) >= 30 &&
+      skills.getMaxLevel(Skill.PRAYER) >= 50 &&
+      isQuestComplete(player, "creature_of_fenkenstrain") &&
+      isQuestComplete(player, "cabin_fever") &&
+      isRescueComplete(player, "pirate-pete");
   }
 
   function totalNails(player) {
@@ -373,27 +391,27 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     return String(actions[event.clickType - 1] ?? "");
   }
 
-  function objectAt(tile, ids) {
+  function questObjectAt(player, tile, ids) {
     const objects = ObjectManager.objectsAt(tile) ?? [];
-    return objects.find((candidate) => ids.has(candidate.getId?.()));
+    return objects.find((candidate) => candidate.getOwner?.() === player && ids.has(candidate.getId?.()));
   }
 
   function cloneLocation(location) {
     return new Location(location.getX(), location.getY(), location.getZ());
   }
 
-  function swapObjectAt(tile, expectedIds, newId, fallbackFace = 0) {
-    const object = objectAt(tile, expectedIds);
+  function swapObjectAt(player, tile, expectedIds, newId, fallbackFace = 0) {
+    const object = questObjectAt(player, tile, expectedIds);
     if (!object) return;
     ObjectManager.deregister(object, true);
     ObjectManager.register(
-      new GameObject(newId, cloneLocation(object.getLocation()), object.getType?.() ?? 10, object.getFace?.() ?? fallbackFace, null),
+      new GameObject(newId, cloneLocation(object.getLocation()), object.getType?.() ?? 10, object.getFace?.() ?? fallbackFace, null).setOwner(player),
       true
     );
   }
 
-  function removeObjectAt(tile, expectedIds) {
-    const object = objectAt(tile, expectedIds);
+  function removeObjectAt(player, tile, expectedIds) {
+    const object = questObjectAt(player, tile, expectedIds);
     if (object) ObjectManager.deregister(object, true);
   }
 
@@ -402,7 +420,8 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     if (!object) return;
     ObjectManager.deregister(object, true);
     ObjectManager.register(
-      new GameObject(newId, cloneLocation(object.getLocation()), object.getType?.() ?? 10, object.getFace?.() ?? 0, null),
+      new GameObject(newId, cloneLocation(object.getLocation()), object.getType?.() ?? 10, object.getFace?.() ?? 0, null)
+        .setOwner(object.getOwner?.() ?? event.player),
       true
     );
   }
@@ -446,18 +465,62 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     return step ? [step] : steps;
   }
 
-  function ensureQuestObjects() {
-    if (!ObjectManager.exists(STATUE_OBJECT_ID, STATUE_TILE) && !ObjectManager.exists(STATUE_PULLED_OBJECT_ID, STATUE_TILE)) {
-      ObjectManager.register(new GameObject(STATUE_OBJECT_ID, STATUE_TILE, 10, 0, null), true);
+  /** The crate transform the saved stage implies; null once the shipment has left. */
+  function crateObjectIdFor(player) {
+    const stage = quest?.getStage(player) ?? 0;
+    if (stage >= STAGE_DOCTOR_SENT) return null;
+    if (stage >= STAGE_ORDER) return CRATE_CLOSED_OBJECT_ID;
+    if (stage >= STAGE_CATS_FILLED) return CRATE_FILLED_OBJECT_ID;
+    if (stage >= STAGE_BOTTOM_BUILT) return CRATE_EMPTY_OBJECT_ID;
+    if (stage >= STAGE_CRATE_BUILT) return CRATE_BOTTOMLESS_OBJECT_ID;
+    return CRATE_HOTSPOT_OBJECT_ID;
+  }
+
+  function replaceCrateObject(player, newId) {
+    for (const object of ObjectManager.objectsAt(CRATE_TILE) ?? []) {
+      if (object.getOwner?.() === player && CRATE_OBJECT_IDS.has(object.getId?.())) {
+        ObjectManager.deregister(object, true);
+      }
     }
-    if (!ObjectManager.exists(PEEPHOLE_OBJECT_ID, PEEPHOLE_TILE)) {
-      ObjectManager.register(new GameObject(PEEPHOLE_OBJECT_ID, PEEPHOLE_TILE, 10, 0, null), true);
+    if (newId !== null) {
+      ObjectManager.register(new GameObject(newId, CRATE_TILE, 10, 0, null).setOwner(player), true);
     }
-    if (!ObjectManager.exists(BROKEN_STAIRS_OBJECT_ID, BROKEN_STAIRS_TILE) && !ObjectManager.exists(FIXED_STAIRS_OBJECT_ID, BROKEN_STAIRS_TILE)) {
-      ObjectManager.register(new GameObject(BROKEN_STAIRS_OBJECT_ID, BROKEN_STAIRS_TILE, 10, 0, null), true);
+  }
+
+  /**
+   * Restore the quest-only map objects. The crate/bottom/closed transforms are
+   * session objects, so a relog at stage 10-13 must rebuild the right one from the
+   * saved stage or the build/fill/order clicks land on the wrong transform.
+   */
+  function ensureQuestObjects(player) {
+    const stage = player && quest ? quest.getStage(player) : 0;
+    const pulled = stage >= STAGE_SPIED;
+    const statueIds = new Set([STATUE_OBJECT_ID, STATUE_PULLED_OBJECT_ID]);
+    const statue = questObjectAt(player, STATUE_TILE, statueIds);
+    const wantedStatue = pulled ? STATUE_PULLED_OBJECT_ID : STATUE_OBJECT_ID;
+    if (statue && statue.getId() !== wantedStatue) {
+      swapObjectAt(player, STATUE_TILE, new Set([statue.getId()]), wantedStatue);
+    } else if (!statue) {
+      ObjectManager.register(new GameObject(wantedStatue, STATUE_TILE, 10, 0, null).setOwner(player), true);
     }
-    if (![...CRATE_OBJECT_IDS].some((id) => ObjectManager.exists(id, CRATE_TILE))) {
-      ObjectManager.register(new GameObject(CRATE_HOTSPOT_OBJECT_ID, CRATE_TILE, 10, 0, null), true);
+    if (!questObjectAt(player, PEEPHOLE_TILE, new Set([PEEPHOLE_OBJECT_ID]))) {
+      ObjectManager.register(new GameObject(PEEPHOLE_OBJECT_ID, PEEPHOLE_TILE, 10, 0, null).setOwner(player), true);
+    }
+    const fixed = player ? flag(player, STAIRS_FIXED_ATTRIBUTE) : false;
+    const stairsIds = new Set([BROKEN_STAIRS_OBJECT_ID, FIXED_STAIRS_OBJECT_ID]);
+    const stairs = questObjectAt(player, BROKEN_STAIRS_TILE, stairsIds);
+    const wantedStairs = fixed ? FIXED_STAIRS_OBJECT_ID : BROKEN_STAIRS_OBJECT_ID;
+    if (stairs && stairs.getId() !== wantedStairs) {
+      swapObjectAt(player, BROKEN_STAIRS_TILE, new Set([stairs.getId()]), wantedStairs);
+    } else if (!stairs) {
+      ObjectManager.register(new GameObject(wantedStairs, BROKEN_STAIRS_TILE, 10, 0, null).setOwner(player), true);
+    }
+    if (player && quest) {
+      const wanted = crateObjectIdFor(player);
+      const crate = questObjectAt(player, CRATE_TILE, CRATE_OBJECT_IDS);
+      if ((crate?.getId() ?? null) !== wanted) replaceCrateObject(player, wanted);
+    } else {
+      replaceCrateObject(player, CRATE_HOTSPOT_OBJECT_ID);
     }
   }
 
@@ -570,6 +633,12 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
 
   function talkToTranquility(player) {
     const stage = quest.getStage(player);
+    if (stage >= STAGE_COMPLETE && flag(player, PENDING_LAMP_REWARD_ATTRIBUTE)) {
+      const inventory = player.getInventory();
+      if (inventory.getFreeSlots() > 0 && inventory.adds(BLESSED_LAMP_ITEM_ID, 1)) {
+        player.setAttribute(PENDING_LAMP_REWARD_ATTRIBUTE, false);
+      }
+    }
     let variant;
     if (stage >= STAGE_COMPLETE) {
       variant = "post-quest-dialogue-talking-to-brother-tranquility";
@@ -603,6 +672,11 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
 
   function talkToRufus(player) {
     const stage = quest.getStage(player);
+    // The shipping order is droppable; the pinned helper notes Rufus replaces a
+    // lost one, so hand it back before the "again" conversation.
+    if (stage >= STAGE_ORDER && stage < STAGE_DOCTOR_SENT && !held(player, SHIPPING_ORDER_ITEM_ID)) {
+      giveItem(player, SHIPPING_ORDER_ITEM_ID, 1);
+    }
     const variant =
       stage >= STAGE_CRATE_BUILT ? "talking-to-rufus-talking-to-rufus-again" : "talking-to-rufus";
     startTranscript(api, player, RUFUS_CHAT_ID, PAGE, variant);
@@ -727,13 +801,13 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     }
     if (!SOREBONES_NPC_IDS.has(event.npcId) || !player || !event.location) return;
     if (quest.getStage(player) !== STAGE_DOOR_BLOWN) return;
-    const kills = Number(player.getAttribute(SOREBONES_ATTRIBUTE)) || 0;
-    const drop = SOREBONES_DROPS[kills];
+    // Each new kill targets the first missing implement. If the last drop was
+    // left on the floor, the next kill duplicates it as the Wiki walkthrough warns.
+    const drop = nextSorebonesDrop(player);
     if (!drop) return;
     api
       .getItemOnGroundManager()
       .registerLocation(player, new Item(drop.id, drop.amount), locationOf(event.location));
-    player.setAttribute(SOREBONES_ATTRIBUTE, kills + 1);
   }
 
   // ==========================================================================
@@ -744,7 +818,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     event.handled = true;
     const player = event.player;
     if (!quest.isStarted(player) || quest.isComplete(player)) return;
-    swapObjectAt(STATUE_TILE, new Set([STATUE_OBJECT_ID]), STATUE_PULLED_OBJECT_ID);
+    swapObjectAt(player, STATUE_TILE, new Set([STATUE_OBJECT_ID]), STATUE_PULLED_OBJECT_ID);
     startTranscript(
       api,
       player,
@@ -899,7 +973,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
       player.getInventory().deleteNumber(CRATE_PART_ITEM_ID, CRATE_PART_COUNT);
       deleteNails(player, CRATE_NAILS);
       player.setAttribute(CATS_ATTRIBUTE, 0);
-      swapObjectAt(CRATE_TILE, new Set([CRATE_HOTSPOT_OBJECT_ID]), CRATE_BOTTOMLESS_OBJECT_ID);
+      swapObjectAt(player, CRATE_TILE, new Set([CRATE_HOTSPOT_OBJECT_ID]), CRATE_BOTTOMLESS_OBJECT_ID);
       if (quest.getStage(player) < STAGE_CRATE_BUILT) quest.setStage(player, STAGE_CRATE_BUILT);
     }
     startTranscript(api, player, FENKENSTRAIN_CHAT_ID, PAGE, "building-the-crate", (steps) => {
@@ -1009,7 +1083,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     event.handled = true;
     const player = event.player;
     if (quest.getStage(player) < STAGE_LIST || quest.getStage(player) > STAGE_DOOR_BLOWN) return;
-    fuseNearDoor.set(player, nearLocation(player.getLocation(), TEMPLE_DOOR_TILE, 4));
+    fuseNearDoor.set(player, nearLocation(player.getLocation(), MONASTERY_ENTRANCE_TILE, 1));
     startTranscript(
       api,
       player,
@@ -1109,9 +1183,42 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     return true;
   }
 
+  /** The blessed lamp's cache action is "Pray-over"; the reward is 5,000 XP (min level 30). */
+  function prayOverLamp(event) {
+    if (event.itemId !== BLESSED_LAMP_ITEM_ID) return false;
+    const { player, item, slot } = event;
+    if (!held(player, BLESSED_LAMP_ITEM_ID)) return false;
+    if (lampPending.get(player)?.item === item) return false;
+    lampPending.set(player, { item, slot });
+    api.emitCustomEvent("xpreward:open", {
+      player,
+      minLevel: 30,
+      title: "Choose the stat you wish to be advanced!",
+      onConfirm: (skill, name) => confirmLamp(player, item, slot, skill, name),
+    });
+    return true;
+  }
+
+  function confirmLamp(player, item, slot, skill, name) {
+    if (lampPending.get(player)?.item !== item) return null;
+    lampPending.delete(player);
+    const inventory = player.getInventory();
+    if (inventory.get(slot) !== item) return null;
+    const skills = player.getSkillManager();
+    const before = skills.getExperience(skill);
+    skills.addExperience(skill, 5000, false);
+    if (skills.getExperience(skill) === before) return null;
+    inventory.deleteAtSlot(slot, 1);
+    return `<col=0000ff>Your wish has been granted!</col> You have been awarded 5,000 ${name ?? skill.getName()} experience!`;
+  }
+
+  function cancelLampChoice({ player, interfaceId }) {
+    if (interfaceId === XP_REWARD_INTERFACE_ID) lampPending.delete(player);
+  }
+
   function handleDoorToggle(request) {
-    if (request.objectId !== CHURCH_DOOR_OBJECT_ID) return;
-    if (!nearLocation(request.location, TEMPLE_DOOR_TILE, 3)) return;
+    if (request.objectId !== MONASTERY_ENTRANCE_OBJECT_ID) return;
+    if (!nearLocation(request.location, MONASTERY_ENTRANCE_TILE, 1)) return;
     const player = request.player;
     if (!player || !quest.isStarted(player) || quest.isComplete(player)) return;
     if (quest.getStage(player) >= STAGE_DOOR_BLOWN) return;
@@ -1124,8 +1231,8 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   // ==========================================================================
 
   const CONDITION_ANSWERS = new Map([
-    ["zsGywr", () => false],
-    ["jfYyLX", () => true],
+    ["zsGywr", (player) => !hasStartRequirements(player)],
+    ["jfYyLX", hasStartRequirements],
     ["STglHL", (player) => hasDivingGear(player)],
     ["0wZEHp", (player) => !hasDivingGear(player)],
     ["znLFz8", (player) => !hasDivingGear(player)],
@@ -1224,7 +1331,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
       (player) => {
         deleteNails(player, STAIRS_NAILS);
         player.getInventory().deleteNumber(PLANK_ITEM_ID, STAIRS_PLANKS);
-        swapObjectAt(BROKEN_STAIRS_TILE, new Set([BROKEN_STAIRS_OBJECT_ID]), FIXED_STAIRS_OBJECT_ID);
+        swapObjectAt(player, BROKEN_STAIRS_TILE, new Set([BROKEN_STAIRS_OBJECT_ID]), FIXED_STAIRS_OBJECT_ID);
         setFlag(player, STAIRS_FIXED_ATTRIBUTE);
       },
     ],
@@ -1251,14 +1358,14 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
       (player) => {
         player.getInventory().deleteNumber(PLANK_ITEM_ID, BOTTOM_PLANKS);
         deleteNails(player, BOTTOM_NAILS);
-        swapObjectAt(CRATE_TILE, new Set([CRATE_BOTTOMLESS_OBJECT_ID]), CRATE_EMPTY_OBJECT_ID);
+        swapObjectAt(player, CRATE_TILE, new Set([CRATE_BOTTOMLESS_OBJECT_ID]), CRATE_EMPTY_OBJECT_ID);
         if (quest.getStage(player) < STAGE_BOTTOM_BUILT) quest.setStage(player, STAGE_BOTTOM_BUILT);
       },
     ],
     [
       "1WI7yE",
       (player) => {
-        swapObjectAt(CRATE_TILE, new Set([CRATE_EMPTY_OBJECT_ID]), CRATE_FILLED_OBJECT_ID);
+        swapObjectAt(player, CRATE_TILE, new Set([CRATE_EMPTY_OBJECT_ID]), CRATE_FILLED_OBJECT_ID);
         if (quest.getStage(player) < STAGE_CATS_FILLED) quest.setStage(player, STAGE_CATS_FILLED);
       },
     ],
@@ -1267,6 +1374,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
       (player) => {
         player.getInventory().deleteNumber(FUSE_ITEM_ID, 1);
         player.getInventory().deleteNumber(KEG_ITEM_ID, 1);
+        player.getPacketSender().sendVarbit(VARBIT_MONASTERY_ENTRANCE, 5);
         if (quest.getStage(player) < STAGE_DOOR_BLOWN) quest.setStage(player, STAGE_DOOR_BLOWN);
       },
     ],
@@ -1357,14 +1465,19 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
         return;
       case "0ckhw5":
         event.handled = true;
-        giveItem(player, SHIPPING_ORDER_ITEM_ID, 1);
+        // Rufus takes the whistle first: that slot is what a full bag needs for
+        // the order, and the old order (give then delete) lost it when full.
         player.getInventory().deleteNumber(WOLF_WHISTLE_ITEM_ID, 1);
-        swapObjectAt(CRATE_TILE, new Set([CRATE_FILLED_OBJECT_ID]), CRATE_CLOSED_OBJECT_ID);
+        if (!giveItem(player, SHIPPING_ORDER_ITEM_ID, 1)) {
+          giveItem(player, WOLF_WHISTLE_ITEM_ID, 1);
+          return;
+        }
+        swapObjectAt(player, CRATE_TILE, new Set([CRATE_FILLED_OBJECT_ID]), CRATE_CLOSED_OBJECT_ID);
         if (quest.getStage(player) < STAGE_ORDER) quest.setStage(player, STAGE_ORDER);
         return;
       case "A61QHe":
         player.getInventory().deleteNumber(SHIPPING_ORDER_ITEM_ID, 1);
-        removeObjectAt(CRATE_TILE, new Set([CRATE_CLOSED_OBJECT_ID, CRATE_FILLED_OBJECT_ID]));
+        removeObjectAt(player, CRATE_TILE, new Set([CRATE_CLOSED_OBJECT_ID, CRATE_FILLED_OBJECT_ID]));
         if (quest.getStage(player) < STAGE_DOCTOR_SENT) quest.setStage(player, STAGE_DOCTOR_SENT);
         return;
       case "9qzrXT":
@@ -1420,6 +1533,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
         return;
       case "l0AWhd":
         event.handled = true;
+        teleport(player, TRANQUILITY_TILES.tranquilityHarmony);
         player.sendMessage("The player collapses, and is sent back to the granary.");
         return;
       case "hnbBxH":
@@ -1451,13 +1565,17 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   }
 
   function handleLogin({ player }) {
-    ensureQuestObjects();
+    ensureQuestObjects(player);
     ensureMiGor(player);
     ensureHarmonyDoctor(player);
     ensureTranquility(player);
     if (quest.getStage(player) >= STAGE_OPERATION) {
       player.getPacketSender().sendVarbit(BRAIN_MULTI_MONK_VARBIT, 1);
     }
+    player.getPacketSender().sendVarbit(
+      VARBIT_MONASTERY_ENTRANCE,
+      quest.getStage(player) >= STAGE_DOOR_BLOWN ? 5 : 0
+    );
     refreshQuestList(player);
   }
 
@@ -1468,6 +1586,17 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   }
 
   function handleLogout({ player }) {
+    const ownedQuestObjects = [
+      [STATUE_TILE, new Set([STATUE_OBJECT_ID, STATUE_PULLED_OBJECT_ID])],
+      [PEEPHOLE_TILE, new Set([PEEPHOLE_OBJECT_ID])],
+      [BROKEN_STAIRS_TILE, new Set([BROKEN_STAIRS_OBJECT_ID, FIXED_STAIRS_OBJECT_ID])],
+      [CRATE_TILE, CRATE_OBJECT_IDS],
+    ];
+    for (const [tile, ids] of ownedQuestObjects) {
+      for (const object of ObjectManager.objectsAt(tile) ?? []) {
+        if (object.getOwner?.() === player && ids.has(object.getId?.())) ObjectManager.deregister(object, true);
+      }
+    }
     clearNpcs(player);
   }
 
@@ -1475,6 +1604,27 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
     player.getSkillManager().addExperiences(Skill.PRAYER, 6000);
     player.getSkillManager().addExperiences(Skill.CRAFTING, 3000);
     player.getSkillManager().addExperiences(Skill.CONSTRUCTION, 2000);
+    const inventory = player.getInventory();
+    if (inventory.getFreeSlots() > 0) {
+      inventory.adds(BLESSED_LAMP_ITEM_ID, 1);
+      player.setAttribute(PENDING_LAMP_REWARD_ATTRIBUTE, false);
+    } else {
+      player.setAttribute(PENDING_LAMP_REWARD_ATTRIBUTE, true);
+    }
+  }
+
+  /**
+   * Client varp 980 uses the quest DB's 10/130 scale (native completion
+   * threshold 130), not this plugin's compact 0-20 internal stages. The save
+   * attribute stays 0-20, so old saves keep working; only the wire value maps.
+   */
+  const VARP_VALUES = [
+    0, 10, 20, 30, 40, 40, 50, 60, 60, 60, 60, 60, 60, 60, 70, 80, 90, 100, 110, 120, 130,
+  ];
+
+  function wireValue(stage) {
+    const index = Math.max(0, Math.min(STAGE_COMPLETE, stage | 0));
+    return VARP_VALUES[index];
   }
 
   function buildJournal(player, questHandle) {
@@ -1575,12 +1725,13 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   api.persistAttribute(DOCTOR_TOLD_ATTRIBUTE);
   api.persistAttribute(DOCTOR_LIST_ATTRIBUTE);
   api.persistAttribute(CATS_ATTRIBUTE);
-  api.persistAttribute(SOREBONES_ATTRIBUTE);
+  api.persistAttribute(PENDING_LAMP_REWARD_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
     key: "great_brain_robbery",
     name: "The Great Brain Robbery",
     varpId: VARP_GREAT_BRAIN_ROBBERY,
+    varpValue: wireValue,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
@@ -1589,7 +1740,6 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
       { skillId: Skill.CRAFTING.getIndex(), amount: 3000, label: "Crafting" },
       { skillId: Skill.CONSTRUCTION.getIndex(), amount: 2000, label: "Construction" },
     ],
-    rewardItemId: BLESSED_LAMP_ITEM_ID,
     rewardItemLabel: "Blessed lamp (5,000 XP in a skill of your choice)",
     otherRewards: ["Barrelchest anchor (from the Barrelchest)"],
     buildJournal,
@@ -1604,6 +1754,8 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Prayer book", { Read: readPrayerBook, "Recite-prayer": recitePrayerBook });
   api.onItemAction("Wolf whistle", { Blow: blowWolfWhistle });
+  api.onItemAction("Blessed lamp", { "Pray-over": prayOverLamp });
+  api.onCustomEvent("interface:closed", cancelLampChoice);
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onNpcDialogueCondition(handleDialogueConditionAnswer);
   api.onCustomEvent("npc-dialogue:hook", handleDialogueHook);

@@ -91,6 +91,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   const GROTTO_ID = ObjectIdentifiers.GROTTO; // 3516 surface entrance
   const GROTTO_TREE_ID = ObjectIdentifiers.GROTTO_TREE; // 3517
   const GROTTO_EXIT_ID = ObjectIdentifiers.GROTTO_3; // 3525 cave exit
+  const SICKLE_BLESSING_OBJECT_IDS = new Set([ObjectIdentifiers.GROTTO_2, ObjectIdentifiers.ALTAR_OF_NATURE]);
 
   const ROTTING_LOG_ID = ObjectIdentifiers.ROTTING_LOG; // 3508
   const FUNGI_ON_LOG_ID = ObjectIdentifiers.FUNGI_ON_LOG; // 3509
@@ -390,6 +391,11 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   function drezelVariant(stage, player) {
+    // Once complete, Drezel returns to his canonical post-quest page. The quest
+    // transcript variants stop at the blessing/ghast conversations.
+    if (stage >= STAGE_COMPLETE) {
+      return { page: "Drezel", variant: "standard-dialogue-after-priest-in-peril-after-nature-spirit" };
+    }
     if (stage === STAGE_RECEIVED_SPELL) {
       quest.setStage(player, STAGE_BLESSED);
       return "talking-to-drezel";
@@ -434,10 +440,10 @@ module.exports = function registerNatureSpiritQuest(api) {
       return "finding-filliman-subsequent-dialogue-with-filliman-2";
     }
     if (stage >= STAGE_SHOWN_MIRROR) {
-      return "finding-filliman-subsequent-dialogue-with-filliman";
+      return "finding-filliman-talking-to-filliman-again-after-using-a-mirror-on-him";
     }
     if (stage >= STAGE_SPOKEN_FILLIMAN) {
-      return "finding-filliman-talking-to-filliman-again-after-using-a-mirror-on-him";
+      return "finding-filliman-subsequent-dialogue-with-filliman";
     }
     if (stage >= STAGE_ENTERED_SWAMP) {
       if (!wearingGhostspeak(player)) {
@@ -470,12 +476,25 @@ module.exports = function registerNatureSpiritQuest(api) {
     return null;
   }
 
+  /** The helper's setup requirements: The Restless Ghost and Priest in Peril. */
+  function meetsRequirements(player) {
+    return ["the_restless_ghost", "priest_in_peril"].every(key => {
+      const request = { player, key, complete: false };
+      api.emitCustomEvent("quest:is-complete", request);
+      return request.complete === true;
+    });
+  }
+
   function answerCondition({ player, npcId, text }) {
     if (![DREZEL_NPC_ID, FILLIMAN_NPC_ID, NATURE_SPIRIT_NPC_ID].includes(npcId)) return null;
     const value = String(text).toLowerCase();
     const inventory = player.getInventory();
-    if (value.includes("does not meet the requirements")) return false;
-    if (value.includes("meets the requirements")) return true;
+    if (value.includes("does not meet the requirements")) return !meetsRequirements(player);
+    if (value.includes("meets the requirements")) return meetsRequirements(player);
+    if (value.includes("talks to him again after speaking to him with a ghostspeak amulet")) {
+      return wearingGhostspeak(player) && quest.getStage(player) >= STAGE_SPOKEN_FILLIMAN;
+    }
+    if (value.includes("without wearing a ghostspeak amulet")) return !wearingGhostspeak(player);
     if (value.includes("not wearing the ghostspeak amulet")) return !wearingGhostspeak(player);
     if (value.includes("wearing the ghostspeak amulet")) return wearingGhostspeak(player);
     if (value.includes("not wearing their ghostspeak amulet")) return !wearingGhostspeak(player);
@@ -509,6 +528,7 @@ module.exports = function registerNatureSpiritQuest(api) {
 
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== DREZEL_NPC_ID || hook !== START_HOOK) return;
+    if (!meetsRequirements(player)) return;
     if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
   }
 
@@ -537,14 +557,17 @@ module.exports = function registerNatureSpiritQuest(api) {
     const { player, npcId, stepId } = event;
     if (npcId !== NATURE_SPIRIT_NPC_ID && npcId !== FILLIMAN_NPC_ID) return;
     if (stepId === SICKLE_BLESSED_MESSAGE_ID) {
-      if (quest.getStage(player) >= STAGE_BLESSED_SICKLE) return;
+      // Blessing a replacement sickle is also the lost-sickle recovery route;
+      // never move a later stage backwards when the message replays.
       if (held(player, SILVER_SICKLE_ITEM_ID)) {
         player.getInventory().deleteNumber(SILVER_SICKLE_ITEM_ID, 1);
         if (!held(player, SILVER_SICKLE_BLESSED_ITEM_ID)) {
           player.getInventory().adds(SILVER_SICKLE_BLESSED_ITEM_ID, 1);
         }
       }
-      quest.setStage(player, STAGE_BLESSED_SICKLE);
+      if (quest.getStage(player) < STAGE_BLESSED_SICKLE) {
+        quest.setStage(player, STAGE_BLESSED_SICKLE);
+      }
       return;
     }
     if (stepId === POUCH_GIVEN_MESSAGE_ID) {
@@ -855,6 +878,17 @@ module.exports = function registerNatureSpiritQuest(api) {
     }
   }
 
+  function blessReplacementSickle(event) {
+    const { player, itemId, objectId } = event;
+    if (itemId !== SILVER_SICKLE_ITEM_ID || !SICKLE_BLESSING_OBJECT_IDS.has(objectId)) return;
+    if (quest.getStage(player) < STAGE_BLESSED_SICKLE) return;
+    event.handled = true;
+    if (!held(player, SILVER_SICKLE_ITEM_ID)) return;
+    player.getInventory().deleteNumber(SILVER_SICKLE_ITEM_ID, 1);
+    player.getInventory().adds(SILVER_SICKLE_BLESSED_ITEM_ID, 1);
+    player.sendMessage("You bless the silver sickle.");
+  }
+
   function handleLogin({ player }) {
     refreshQuestList(player);
     ensureQuestNpcs(player);
@@ -883,7 +917,9 @@ module.exports = function registerNatureSpiritQuest(api) {
       { skillId: Skill.HITPOINTS.getIndex(), amount: 2000, label: "Hitpoints" },
       { skillId: Skill.DEFENCE.getIndex(), amount: 2000, label: "Defence" },
     ],
-    rewardItemId: SILVER_SICKLE_BLESSED_ITEM_ID,
+    // The blessing already hands over the sickle; completion must not grant a
+    // second one. The scroll still shows it via scrollItemId.
+    scrollItemId: SILVER_SICKLE_BLESSED_ITEM_ID,
     rewardItemLabel: "Silver sickle (b)",
     otherRewards: [
       "An altar of nature",
@@ -905,6 +941,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   api.onItemOnNpc(handlePouchOnGhast);
   api.onItemOnItem(handleProduceOnPouch);
   api.onItemOnObject(handleStoneOffering);
+  api.onItemOnObject(blessReplacementSickle);
   api.onItemAction(handleSpellAction);
   api.onItemAction(handleSickleAction);
   api.onItemAction(handlePouchFill);

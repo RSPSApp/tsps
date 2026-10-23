@@ -155,9 +155,9 @@ module.exports = function registerPryingTimesQuest(api) {
   const ACCEPTED_AGAIN_MESSAGE_ID = "g6tGbJ";
   const THURGO_CROWBAR_ACTION_ID = "e2Ow6O";
   const GROG_TAKE_STOUT_MESSAGE_ID = "Gyue8X";
-  const GROG_DRINK_MESSAGE_ID = "PkEAX6";
-  const GROG_TROLL_MESSAGE_ID = "bivi2Q";
-  const GROG_CHARTED_MESSAGE_ID = "98CGQt";
+  const GROG_DRINK_MESSAGE_ID = "jR3WLF";
+  const GROG_TROLL_MESSAGE_ID = "0OeEX0";
+  const GROG_CHARTED_MESSAGE_ID = "IygfmJ";
   const FINAL_CROWBAR_MESSAGE_ID = "eoE1Ay";
   const COMPLETE_ACTION_ID = "rP9tMj";
 

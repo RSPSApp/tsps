@@ -1234,10 +1234,6 @@ module.exports = function registerSecretsOfTheNorthQuest(api) {
         return;
 
       // On the Trail.
-      case "8Nhp3b":
-        event.handled = true;
-        player.sendMessage("You give 100 coins to the barman.");
-        return;
       case "ijqT1z": {
         const evelot = trackedFor(player).get("evelot");
         if (evelot) evelot.getCombat?.().attack?.(player);

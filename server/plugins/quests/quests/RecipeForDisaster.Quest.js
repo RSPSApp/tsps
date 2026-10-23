@@ -11,24 +11,56 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const FLAGS_ATTRIBUTE = "recipe-for-disaster:rescues";
   const PIRATE_ATTRIBUTE = "recipe-for-disaster:pirate-state";
   const PIRATE_HIDES_ATTRIBUTE = "recipe-for-disaster:pirate-hides-given";
+  const PIRATE_STAGE_ATTRIBUTE = "recipe-for-disaster:pirate-stage";
+  const PIRATE_FIRST_DIVE_ATTRIBUTE = "recipe-for-disaster:pirate-first-dive";
   const GOBLIN_STATE_ATTRIBUTE = "recipe-for-disaster:goblin-state";
+  const GOBLIN_STAGE_ATTRIBUTE = "recipe-for-disaster:goblin-stage";
+  const GOBLIN_SLOP_RECEIVED = 4;
   const DWARF_STATE_ATTRIBUTE = "recipe-for-disaster:dwarf-state";
+  const DWARF_STAGE_ATTRIBUTE = "recipe-for-disaster:dwarf-stage";
   const GUIDE_STATE_ATTRIBUTE = "recipe-for-disaster:guide-state";
+  const GUIDE_STAGE_ATTRIBUTE = "recipe-for-disaster:guide-stage";
   const DAVE_STATE_ATTRIBUTE = "recipe-for-disaster:evil-dave-state";
+  const DAVE_STAGE_ATTRIBUTE = "recipe-for-disaster:evil-dave-stage";
   const DAVE_RECIPE_ATTRIBUTE = "recipe-for-disaster:evil-dave-recipe";
   const DAVE_STEW_ATTRIBUTE = "recipe-for-disaster:evil-dave-stew";
   const SKRACH_STATE_ATTRIBUTE = "recipe-for-disaster:skrach-state";
+  const SKRACH_STAGE_ATTRIBUTE = "recipe-for-disaster:skrach-stage";
   const SKRACH_SPIT_ROAST_OBJECT = ObjectIdentifiers.OGRE_SPIT_ROAST_4; // 3375
   const SKRACH_SPIT_ROAST_TILE = { x: 2632, y: 2985, z: 0 };
   const SKRACH_SPIT_ROAST_BY_PLAYER = new WeakMap();
   const AWOWOGEI_STATE_ATTRIBUTE = "recipe-for-disaster:awowogei-state";
+  const AWOWOGEI_STAGE_ATTRIBUTE = "recipe-for-disaster:awowogei-stage";
   const AMIK_STATE_ATTRIBUTE = "recipe-for-disaster:amik-state";
+  const AMIK_STAGE_ATTRIBUTE = "recipe-for-disaster:amik-stage";
+  const AMIK_DRAGON_DROP_ATTRIBUTE = "recipe-for-disaster:amik-dragon-drop";
+  const AMIK_CHICKEN_DEAD_ATTRIBUTE = "recipe-for-disaster:amik-chicken-dead";
+  const AMIK_WOM_BRIEFED_ATTRIBUTE = "recipe-for-disaster:amik-wom-briefed";
+  const AMIK_WOM_ACTIVE = new WeakSet();
+  const AMIK_WOM_PENDING_BRIEFING = new WeakSet();
+  // One Small Favour's mandatory Rantz stages (OneSmallFavour.Quest.js).
+  const OSF_RANTZ_STAGES = new Set([17, 18, 20, 21]);
   const TCHIKI_COURSE_SWUNG = 256;
   const TCHIKI_CAVE_ENTERED = 512;
+  const SKRACH_TREE_PUSHED = 128;
+  const SKRACH_ARROW_FIRED = 256;
+  const SKRACH_FREE_RIDE_TAKEN = 512;
+  const AWOWOGEI_SNAKE_FOUND = 128;
+  const AWOWOGEI_RED_TREE_FOUND = 2048;
   const START_HOOK = "quest:recipe-for-disaster:start";
   const VARP_RFD = 678;
   const VARBIT_RFD = 1850;
   const VARBIT_OGRE_BOAT = 1908;
+  const RESCUE_QUEST_VARBITS = new Map([
+    [1, [1892, 60]], // Mountain Dwarf
+    [2, [1867, 40]], // Goblin generals
+    [4, [1895, 110]], // Pirate Pete
+    [8, [1896, 5]], // Lumbridge Guide
+    [16, [1878, 5]], // Evil Dave
+    [32, [1904, 170]], // Skrach Uglogwee
+    [64, [1910, 20]], // Sir Amik Varze
+    [128, [1914, 50]], // King Awowogei
+  ]);
   const COOK_IDS = new Set([
     NpcIdentifiers.COOK, NpcIdentifiers.COOK_2, NpcIdentifiers.COOK_3,
     NpcIdentifiers.COOK_4, NpcIdentifiers.COOK_5, NpcIdentifiers.COOK_6,
@@ -55,6 +87,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const FINAL_BOSS_DEFEATED_ATTRIBUTE = "recipe-for-disaster:culinaromancer-defeated";
   const EVIL_CHICKEN_LAIR_ENTRY = { x: 2455, y: 4398, z: 0 };
   const EVIL_CHICKEN_LAIR_BOSS = { x: 2455, y: 4399, z: 0 };
+  const EVIL_CHICKEN_LAIR_ZONE = { minX: 2430, maxX: 2492, minY: 4355, maxY: 4407, z: 0 };
+  const AWOWOGEI_SNAKE_HOLE = { minX: 3019, maxX: 3028, minY: 5484, maxY: 5492, z: 0 };
   const ACTIVE_FINAL_NPC_BY_PLAYER = new WeakMap();
   const JUBBLY_BY_PLAYER = new WeakMap();
   const LAMP_PENDING = new WeakMap();
@@ -135,7 +169,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const WISE_MONKEY_BITS = new Map([[NpcIdentifiers.MIZARU, 1], [NpcIdentifiers.KIKAZARU, 2], [NpcIdentifiers.IWAZARU, 4]]);
   const TCHIKI_BUSH_IDS = new Set([ObjectIdentifiers.TCHIKI_MONKEY_NUT_BUSH, 16059]);
   const EVIL_DAVE_IDS = new Set([NpcIdentifiers.EVIL_DAVE, NpcIdentifiers.EVIL_DAVE_2,
-    NpcIdentifiers.EVIL_DAVE_4, NpcIdentifiers.EVIL_DAVE_5]);
+    NpcIdentifiers.EVIL_DAVE_3, NpcIdentifiers.EVIL_DAVE_4, NpcIdentifiers.EVIL_DAVE_5]);
   const UNDERWATER_ZONE = { minX: 2938, maxX: 3002, minY: 9470, maxY: 9540, z: 1 };
   const MUDSKIPPER_CAVE = { minX: 2943, maxX: 2957, minY: 9518, maxY: 9535, z: 1 };
   const CRAB_PEN = { minX: 2970, maxX: 2988, minY: 9513, maxY: 9526, z: 1 };
@@ -160,6 +194,240 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   }
   function setFlag(player, flag) {
     player.setAttribute(FLAGS_ATTRIBUTE, flags(player) | flag);
+  }
+  function syncRescueQuestVarbits(player) {
+    for (const [flag, [varbitId, completedValue]] of RESCUE_QUEST_VARBITS) {
+      if (hasFlag(player, flag)) player.getPacketSender().sendVarbit(varbitId, completedValue);
+    }
+    syncDwarfQuestVarbits(player);
+    syncGoblinQuestVarbits(player);
+    syncDaveQuestVarbits(player);
+    syncGuideQuestVarbits(player);
+    syncPirateQuestVarbits(player);
+    syncSkrachQuestVarbits(player);
+    syncAmikQuestVarbits(player);
+    syncAwowogeiQuestVarbits(player);
+  }
+  function pirateQuestStage(player) {
+    if (hasFlag(player, 4)) return 110;
+    const state = pirateState(player);
+    const legacy = state & 8 ? 70 : state & 4 ? 40 : state & 2 ? 30 : state & 1 ? 10 : 0;
+    return Math.max(Number(player.getAttribute(PIRATE_STAGE_ATTRIBUTE)) || 0, legacy);
+  }
+  function syncPirateQuestVarbits(player) {
+    player.getPacketSender().sendVarbit(1895, pirateQuestStage(player));
+    player.getPacketSender().sendVarbit(1869, Math.min(5, player.getInventory().getAmount(ItemIdentifiers.ROCK_7)));
+    player.getPacketSender().sendVarbit(1871, inZone(player, UNDERWATER_ZONE) ? 1 : 0);
+    player.getPacketSender().sendVarbit(1872, player.getAttribute(PIRATE_FIRST_DIVE_ATTRIBUTE) ? 1 : 0);
+    player.getPacketSender().sendVarbit(1875, Math.min(5, Number(player.getAttribute(PIRATE_HIDES_ATTRIBUTE)) || 0));
+  }
+  function setPirateStage(player, value) {
+    const next = Math.max(Number(player.getAttribute(PIRATE_STAGE_ATTRIBUTE)) || 0, value);
+    player.setAttribute(PIRATE_STAGE_ATTRIBUTE, next);
+    syncPirateQuestVarbits(player);
+  }
+  function handlePirateMilestoneLine({ player, npcId, text }) {
+    if (!MURPHY_IDS.has(npcId) || hasFlag(player, 4) || stage(player) < STAGE_OPENING_COMPLETE) return;
+    if (text?.includes("In the meantime I'll wait, and if you want me to take you diving I'll be ready.")) {
+      setPirateStage(player, 20);
+    }
+  }
+  function handlePirateNungMilestoneLine({ player, npcId, text }) {
+    if (!NUNG_IDS.has(npcId) || hasFlag(player, 4) || stage(player) < STAGE_OPENING_COMPLETE) return;
+    if (text?.includes("You's gotta go up to da topsies, and your gotta get a needly-thing and some wirey stuff.")) {
+      setPirateStage(player, 70);
+    }
+  }
+  function handleAmikMilestoneLine({ player, npcId, text }) {
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 64)) return;
+    if (BANQUET_ARIS_IDS.has(npcId)
+      && text?.includes("To protect this noble knight from the magic of the culinaromancer")) {
+      setAmikStage(player, 5);
+    } else if (COOK_IDS.has(npcId)
+      && text?.includes("Ah yes! Why, I was so impressed with that recipe you created")) {
+      setAmikStage(player, 10);
+    }
+  }
+  function handleAwowogeiMilestoneLine({ player, npcId, text }) {
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 128)) return;
+    if (npcId === NpcIdentifiers.AWOWOGEI && text === "What? No. Definitely not.") {
+      setAwowogeiStage(player, 5);
+    } else if (WISE_MONKEY_BITS.has(npcId)
+      && (text === "What? eh? Did you say something?" || text === "Who's there? Hello?")) {
+      setAwowogeiStage(player, 10);
+    }
+  }
+  function handleSkrachMilestoneLine({ player, npcId, text }) {
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 32)) return;
+    if (RANTZ_IDS.has(npcId)) {
+      if (text?.includes("You's creatures says what Rantz need for da going over da big water")) {
+        setSkrachStage(player, 30);
+      } else if (text?.startsWith("Is what me's says...you's creature no helpsies")) {
+        setSkrachStage(player, 40);
+      } else if (text?.startsWith("Ok, the boat's ready, now tell me how to get a Jubbly?")) {
+        setSkrachStage(player, 70);
+      } else if (text?.startsWith("Ok, now tell me how to get Jubbly!")) {
+        setSkrachStage(player, 100);
+      }
+    }
+  }
+  function guideQuestStage(player) {
+    if (hasFlag(player, 8)) return 5;
+    const state = Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) || 0;
+    const legacy = (state & 7) === 7 ? 3 : state !== 0 ? 2 : 0;
+    return Math.max(Number(player.getAttribute(GUIDE_STAGE_ATTRIBUTE)) || 0, legacy);
+  }
+  function syncGuideQuestVarbits(player) {
+    const state = Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) || 0;
+    player.getPacketSender().sendVarbit(1896, guideQuestStage(player));
+    player.getPacketSender().sendVarbit(1894, state & 1 ? 1 : 0);
+    player.getPacketSender().sendVarbit(1897, state & 4 ? 1 : 0);
+    player.getPacketSender().sendVarbit(1898, state & 2 ? 1 : 0);
+  }
+  function setGuideStage(player, value) {
+    const next = Math.max(Number(player.getAttribute(GUIDE_STAGE_ATTRIBUTE)) || 0, value);
+    player.setAttribute(GUIDE_STAGE_ATTRIBUTE, next);
+    syncGuideQuestVarbits(player);
+  }
+  function handleGuideMilestoneLine({ player, npcId, text, pages }) {
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 8)) return;
+    if (BANQUET_ARIS_IDS.has(npcId) && text === "Okay, thanks, I'll get right on it!"
+      && pages?.some(({ page, variants }) => page === "Recipe for Disaster/Freeing the Lumbridge Guide"
+        && variants?.includes("starting-out-inspecting-the-lumbridge-guide"))) {
+      setGuideStage(player, 1);
+      return;
+    }
+    if (TRAIBORN_IDS.has(npcId) && text?.includes("Bring me the basic ingredients")) setGuideStage(player, 2);
+  }
+  function dwarfQuestStage(player) {
+    if (hasFlag(player, 1)) return 60;
+    const saved = Number(player.getAttribute(DWARF_STAGE_ATTRIBUTE)) || 0;
+    const state = dwarfState(player);
+    const legacy = state & 0x800 ? 50 : state & 0x400 ? 40 : state & 0x200 ? 30
+      : (state & 7) > 0 ? 20 : state !== 0 ? 10 : 0;
+    return Math.max(saved, legacy);
+  }
+  function syncDwarfQuestVarbits(player) {
+    const state = dwarfState(player);
+    player.getPacketSender().sendVarbit(1892, dwarfQuestStage(player));
+    player.getPacketSender().sendVarbit(1891, dwarfQuestStage(player) >= 20 ? 1 : 0);
+    player.getPacketSender().sendVarbit(1893, state & 7);
+  }
+  function goblinQuestStage(player) {
+    if (hasFlag(player, 2)) return 40;
+    const saved = Number(player.getAttribute(GOBLIN_STAGE_ATTRIBUTE)) || 0;
+    const state = goblinState(player);
+    const legacy = state & GOBLIN_SLOP_RECEIVED ? 35 : state & 2 ? 15 : 0;
+    return Math.max(saved, legacy);
+  }
+  function syncGoblinQuestVarbits(player) {
+    const state = goblinState(player);
+    player.getPacketSender().sendVarbit(1867, goblinQuestStage(player));
+    player.getPacketSender().sendVarbit(1868, (state & 2) !== 0 ? 1 : 0);
+  }
+  function setGoblinStage(player, value) {
+    const next = Math.max(Number(player.getAttribute(GOBLIN_STAGE_ATTRIBUTE)) || 0, value);
+    player.setAttribute(GOBLIN_STAGE_ATTRIBUTE, next);
+    syncGoblinQuestVarbits(player);
+  }
+  function daveQuestStage(player) {
+    if (hasFlag(player, 16)) return 5;
+    const saved = Number(player.getAttribute(DAVE_STAGE_ATTRIBUTE)) || 0;
+    const state = Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0;
+    const legacy = state & 4 ? 4 : state & 2 ? 2 : state & 1 ? 1 : 0;
+    return Math.max(saved, legacy);
+  }
+  function syncDaveQuestVarbits(player) {
+    const recipe = player.getAttribute(DAVE_RECIPE_ATTRIBUTE) ?? {};
+    const stew = player.getAttribute(DAVE_STEW_ATTRIBUTE)?.doses ?? {};
+    player.getPacketSender().sendVarbit(1878, daveQuestStage(player));
+    for (const [color, currentVarbit, targetVarbit] of [
+      ["red", 1879, 1883], ["yellow", 1880, 1884],
+      ["brown", 1881, 1885], ["orange", 1882, 1886],
+    ]) {
+      player.getPacketSender().sendVarbit(currentVarbit, Number(stew[color]) || 0);
+      player.getPacketSender().sendVarbit(targetVarbit, Number(recipe[color]) || 0);
+    }
+  }
+  function setDaveStage(player, value) {
+    const next = Math.max(Number(player.getAttribute(DAVE_STAGE_ATTRIBUTE)) || 0, value);
+    player.setAttribute(DAVE_STAGE_ATTRIBUTE, next);
+    syncDaveQuestVarbits(player);
+  }
+  function handleDaveMilestoneLine(event) {
+    const { player, npcId, text } = event;
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 16)) return;
+    if (BANQUET_ARIS_IDS.has(npcId) && text?.includes("In her basement. I make no judgement about that.")) {
+      setDaveStage(player, 1);
+      return;
+    }
+    if (EVIL_DAVE_IDS.has(npcId)
+      && text?.includes("Well it tasted like the stews my mum makes. She puts these spices in them.")) {
+      player.setAttribute(DAVE_STATE_ATTRIBUTE, (Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0) | 1);
+      if (!player.getAttribute(DAVE_RECIPE_ATTRIBUTE)) {
+        const recipe = Object.fromEntries(DAVE_SPICES.map(({ color }) => [color, 1 + Math.floor(Math.random() * 3)]));
+        player.setAttribute(DAVE_RECIPE_ATTRIBUTE, recipe);
+      }
+      setDaveStage(player, 2);
+      return;
+    }
+    if (DORIS_IDS.has(npcId) && text?.includes("I'd better go and kill some hell-rats then.")) {
+      player.setAttribute(DAVE_STATE_ATTRIBUTE, (Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0) | 2);
+      setDaveStage(player, 3);
+    }
+  }
+  function handleGoblinMilestoneLine(event) {
+    const { player, npcId, text } = event;
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 2)) return;
+    if (BANQUET_ARIS_IDS.has(npcId) && text?.includes("Well you could try asking some of the other goblins")) {
+      setGoblinStage(player, 5);
+      return;
+    }
+    if (!GOBLIN_COOK_IDS.has(npcId)) return;
+    if (text?.includes("Ok, I'll see what I can do.")) setGoblinStage(player, 10);
+    else if (text?.includes("Bring 'em all to me and Mudknuckles will make suitable dish.")) setGoblinStage(player, 30);
+  }
+  function setDwarfStage(player, value) {
+    const next = Math.max(Number(player.getAttribute(DWARF_STAGE_ATTRIBUTE)) || 0, value);
+    player.setAttribute(DWARF_STAGE_ATTRIBUTE, next);
+    syncDwarfQuestVarbits(player);
+  }
+  function handleDwarfMilestoneLine(event) {
+    const { player, npcId, text } = event;
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 1)) return;
+    if (BANQUET_ARIS_IDS.has(npcId)
+      && text?.includes("His fondness for rock cakes could prove key in")) {
+      setDwarfStage(player, 10);
+      return;
+    }
+    if ([NpcIdentifiers.EMILY, NpcIdentifiers.KAYLEE, NpcIdentifiers.TINA, NpcIdentifiers.TINA_2].includes(npcId)
+      && text?.startsWith("Mmmmm... the secret is in the gold.")) {
+      player.setAttribute(DWARF_STATE_ATTRIBUTE, dwarfState(player) | 16);
+      setDwarfStage(player, 20);
+      return;
+    }
+    if (!DWARF_NPCS.has(npcId)) return;
+    if (text === "Fer you! Anyfin'! Fer a price of course!") {
+      player.setAttribute(DWARF_STATE_ATTRIBUTE, dwarfState(player) | 0x200);
+      setDwarfStage(player, 30);
+    } else if (text?.startsWith("Also... you'll need to get the ingredients too.")) {
+      player.setAttribute(DWARF_STATE_ATTRIBUTE, dwarfState(player) | 0x400);
+      setDwarfStage(player, 40);
+    }
+  }
+  function handleRescueStatusQuery(event) {
+    const { player, rescue } = event;
+    const flag = {
+      "mountain-dwarf": 1,
+      goblins: 2,
+      "pirate-pete": 4,
+      "lumbridge-guide": 8,
+      "evil-dave": 16,
+      "skrach-uglogwee": 32,
+      "sir-amik": 64,
+      "king-awowogei": 128,
+    }[rescue];
+    if (player && flag !== undefined) event.complete = hasFlag(player, flag);
   }
   function ensureEntryPortal() {
     const { GameObject, ObjectManager, Location, ObjectIdentifiers } = api.core;
@@ -191,6 +459,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function completed(player, flag) {
     if (hasFlag(player, flag)) return false;
     setFlag(player, flag);
+    syncRescueQuestVarbits(player);
     syncSkrachSpitRoast(player);
     awardPoint(player);
     spawnCouncil(player);
@@ -206,7 +475,31 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     return player.getSkillManager().getCurrentLevel(skill);
   }
   function skrachState(player) { return Number(player.getAttribute(SKRACH_STATE_ATTRIBUTE)) || 0; }
-  function setSkrachBit(player, bit) { player.setAttribute(SKRACH_STATE_ATTRIBUTE, skrachState(player) | bit); }
+  function skrachQuestStage(player) {
+    if (hasFlag(player, 32)) return 170;
+    const state = skrachState(player);
+    const legacy = state & 16 ? 80 : state & 8 ? 90 : state & 4 ? 60 : state & 2 ? 50 : state & 1 ? 20 : 0;
+    return Math.max(Number(player.getAttribute(SKRACH_STAGE_ATTRIBUTE)) || 0, legacy);
+  }
+  function syncSkrachQuestVarbits(player) {
+    const state = skrachState(player);
+    const progress = skrachQuestStage(player);
+    player.getPacketSender().sendVarbit(1904, progress);
+    player.getPacketSender().sendVarbit(1905, progress >= 10 && progress < 170 ? 1 : 0);
+    player.getPacketSender().sendVarbit(1906, state & SKRACH_TREE_PUSHED ? 1 : 0);
+    player.getPacketSender().sendVarbit(1907, state & SKRACH_ARROW_FIRED ? 1 : 0);
+    player.getPacketSender().sendVarbit(VARBIT_OGRE_BOAT, state & 1 || hasFlag(player, 32) ? 1 : 0);
+    player.getPacketSender().sendVarbit(1909, state & SKRACH_FREE_RIDE_TAKEN ? 1 : 0);
+  }
+  function setSkrachStage(player, value) {
+    const next = Math.max(Number(player.getAttribute(SKRACH_STAGE_ATTRIBUTE)) || 0, value);
+    player.setAttribute(SKRACH_STAGE_ATTRIBUTE, next);
+    syncSkrachQuestVarbits(player);
+  }
+  function setSkrachBit(player, bit) {
+    player.setAttribute(SKRACH_STATE_ATTRIBUTE, skrachState(player) | bit);
+    syncSkrachQuestVarbits(player);
+  }
   /** The Feldip chompy-grounds spit-roast is missing from the map; show it to this player while Skrach can be rescued. */
   function syncSkrachSpitRoast(player) {
     const { GameObject, Location, ObjectManager } = api.core;
@@ -233,6 +526,11 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function completedQuest(player, key) {
     return require("../QuestRuntime").getRegisteredQuests()
       .find((entry) => entry.key === key)?.isComplete(player) === true;
+  }
+  function oneSmallFavourAtRantz(player) {
+    const osf = require("../QuestRuntime").getRegisteredQuests()
+      .find((entry) => entry.key === "one_small_favour");
+    return osf ? OSF_RANTZ_STAGES.has(osf.getStage(player)) : false;
   }
   function hasKharaziAccess(player) {
     const quests = require("../QuestRuntime").getRegisteredQuests();
@@ -348,6 +646,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     const amik = RESCUES.find((entry) => entry.flag === 64);
     if (amik && WISE_OLD_MAN_IDS.has(npcId) && stage(player) >= STAGE_OPENING_COMPLETE
       && !hasFlag(player, 64) && Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) === 1
+      && Number(player.getAttribute(AMIK_WOM_BRIEFED_ATTRIBUTE)) !== 1
       && pages.some((entry) => entry.page === amik.page)) {
       return { page: amik.page, variant: "finding-the-lair-talking-to-the-wise-old-man" };
     }
@@ -482,6 +781,21 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (ownCondition && (value.includes("does not meet the requirements") || value.includes("doesn't meet the requirements"))) {
       return !meetsOpeningRequirements(player);
     }
+    if (ownPage && value.includes("still has all the ingredients")) {
+      return [ItemIdentifiers.ENCHANTED_EGG, ItemIdentifiers.ENCHANTED_MILK, ItemIdentifiers.ENCHANTED_FLOUR]
+        .every((id) => has(player, id));
+    }
+    if (ownPage && value.includes("lost the enchanted egg")) {
+      return (Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) & 1) !== 0 && !has(player, ItemIdentifiers.ENCHANTED_EGG);
+    }
+    if (ownPage && value.includes("lost the enchanted flour")) {
+      return (Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) & 4) !== 0 && !has(player, ItemIdentifiers.ENCHANTED_FLOUR);
+    }
+    if (ownPage && value.includes("lost the enchanted milk")) {
+      return (Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) & 2) !== 0 && !has(player, ItemIdentifiers.ENCHANTED_MILK);
+    }
+    if (ownPage && value.includes("still has the slop of compromise")) return has(player, ItemIdentifiers.SLOP_OF_COMPROMISE);
+    if (ownPage && value.includes("lost the slop of compromise")) return !has(player, ItemIdentifiers.SLOP_OF_COMPROMISE);
     if ((ownCondition && value.includes("meets the requirements")) ||
       (COOK_IDS.has(npcId) && value.includes("has completed cook's assistant"))) {
       return meetsOpeningRequirements(player);
@@ -496,6 +810,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       mejHA0: !has(player, ItemIdentifiers.GREENMANS_ALE) && ingredients.filter((id) => id !== ItemIdentifiers.GREENMANS_ALE).every((id) => has(player, id)),
       "5Ks1A9": !has(player, ItemIdentifiers.DIRTY_BLAST) && ingredients.filter((id) => id !== ItemIdentifiers.DIRTY_BLAST).every((id) => has(player, id)) };
     if (Object.prototype.hasOwnProperty.call(counts, stepId)) return counts[stepId];
+    if (stepId === "2hAlI1" || stepId === "0EUWB6"
+      || (ownPage && value.includes("has a full inventory"))) return !hasSpace(player);
     if (ownPage && value.includes("doesn't have a fishbowl")) return !has(player, ItemIdentifiers.EMPTY_FISHBOWL);
     if (ownPage && value.includes("has a fishbowl")) return has(player, ItemIdentifiers.EMPTY_FISHBOWL);
     if (ownPage && value.includes("lost their diving helmet")) return !hasOrEquipped(player, ItemIdentifiers.FISHBOWL_HELMET, api.core.Equipment.HEAD_SLOT);
@@ -580,26 +896,14 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     const variant = state & 2 ? "asking-about-giant-crabs-talking-to-murphy-again-again"
       : state & 1 ? "asking-about-giant-crabs-talking-to-murphy-again"
         : "asking-about-giant-crabs-talking-to-murphy";
-    startTranscript(api, player, npcId, PIRATE_PAGE, variant, (steps) => transformGearSteps(steps));
+    startTranscript(api, player, npcId, PIRATE_PAGE, variant);
     return true;
-  }
-
-  function transformGearSteps(steps) {
-    return (steps ?? []).map((step) => {
-      if (step.type === "unavailable" && step.id === "2UA9Sd") {
-        return { type: "action", text: "Murphy converts the fishbowl into diving gear.", id: "rfd-murphy-fit-gear" };
-      }
-      return {
-        ...step,
-        ...(step.steps ? { steps: transformGearSteps(step.steps) } : {}),
-        ...(step.options ? { options: step.options.map((option) => ({ ...option, steps: transformGearSteps(option.steps) })) } : {}),
-      };
-    });
   }
 
   function handlePirateChoice({ player, npcId, option }) {
     if (!MURPHY_IDS.has(npcId) || option !== "Talk about Recipe for Disaster.") return;
     setPirateState(player, pirateState(player) | 1);
+    setPirateStage(player, 10);
   }
 
   function handleNungItem(event) {
@@ -610,6 +914,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().deleteNumber(itemId, 1);
       const given = (Number(player.getAttribute(PIRATE_HIDES_ATTRIBUTE)) || 0) + 1;
       player.setAttribute(PIRATE_HIDES_ATTRIBUTE, given);
+      syncPirateQuestVarbits(player);
+      setPirateStage(player, given >= 5 ? 60 : 50);
       const { startTranscript } = require("../QuestRuntime");
       startTranscript(api, player, npcId, PIRATE_PAGE, "underwater-bringing-nung-the-mudskipper-hides");
       return;
@@ -620,6 +926,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().deleteNumber(ItemIdentifiers.NEEDLE, 1);
       player.getInventory().deleteNumber(ItemIdentifiers.BRONZE_WIRE, 3);
       setPirateState(player, pirateState(player) | 8);
+      setPirateStage(player, 80);
       const { startTranscript } = require("../QuestRuntime");
       startTranscript(api, player, npcId, PIRATE_PAGE, "underwater-talking-to-nung-with-the-wire-and-needle");
     }
@@ -643,7 +950,11 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         player.sendMessage("You have enough rocks to cross the current safely.");
         return;
       }
+      const before = player.getInventory().getAmount(ItemIdentifiers.ROCK_7);
       addItem(player, ItemIdentifiers.ROCK_7);
+      if (player.getInventory().getAmount(ItemIdentifiers.ROCK_7) <= before) return;
+      syncPirateQuestVarbits(player);
+      setPirateStage(player, 50);
       return;
     }
     const caveIds = [ObjectIdentifiers.UNDERWATER_CAVERN_ENTRANCE, ObjectIdentifiers.UNDERWATER_CAVERN_ENTRANCE_2,
@@ -661,6 +972,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         return;
       }
       moveTo(player, 2948, 9524, 1);
+      player.setAttribute(PIRATE_FIRST_DIVE_ATTRIBUTE, true);
+      syncPirateQuestVarbits(player);
+      setPirateStage(player, 40);
       return;
     }
     if ([ObjectIdentifiers.PEN_DOOR, ObjectIdentifiers.PEN_DOOR_2].includes(objectId)
@@ -694,6 +1008,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       }
       setPirateState(player, pirateState(player) & ~4);
       moveTo(player, 2668, 3162, 0);
+      syncPirateQuestVarbits(player);
     }
   }
 
@@ -730,6 +1045,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       }
       for (const id of pieces) player.getInventory().deleteNumber(id, 1);
       player.getInventory().adds(ItemIdentifiers.RAW_FISHCAKE, 1);
+      setPirateStage(player, 90);
       const { startTranscript } = require("../QuestRuntime");
       startTranscript(api, player, NpcIdentifiers.COOK, PIRATE_PAGE, "finishing-up-combining-the-ingredients");
     }
@@ -748,6 +1064,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     const burnChance = Math.max(0, Math.min(0.75, (31 - cooking) * 0.015));
     const result = Math.random() < burnChance ? ItemIdentifiers.BURNT_FISHCAKE : ItemIdentifiers.COOKED_FISHCAKE;
     addItem(player, result);
+    setPirateStage(player, result === ItemIdentifiers.COOKED_FISHCAKE ? 100 : 90);
     const { startTranscript } = require("../QuestRuntime");
     startTranscript(api, player, NpcIdentifiers.COOK, PIRATE_PAGE, "finishing-up-cooking-a-fishcake");
   }
@@ -755,6 +1072,16 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function handleAction(event) {
     const { player, stepId, action } = event;
     if (event.handled || stage(player) === 0) return;
+    if (RANTZ_IDS.has(event.npcId) && stepId === "AKuMx3" && stage(player) >= STAGE_OPENING_COMPLETE
+      && !hasFlag(player, 32)) {
+      setSkrachBit(player, SKRACH_TREE_PUSHED);
+      return;
+    }
+    if (RANTZ_IDS.has(event.npcId) && stepId === "rPhLu8" && stage(player) >= STAGE_OPENING_COMPLETE
+      && !hasFlag(player, 32)) {
+      setSkrachBit(player, SKRACH_ARROW_FIRED);
+      return;
+    }
     if (["tOD_lg", "oKXrmY"].includes(stepId)
       && (skrachState(player) & 16) && !hasFlag(player, 32)) {
       setSkrachBit(player, 8);
@@ -792,19 +1119,31 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().deleteNumber(ItemIdentifiers.FRUIT_BLAST, 1);
       player.getInventory().deleteNumber(ItemIdentifiers.ASHES, 1);
       player.getInventory().adds(ItemIdentifiers.DIRTY_BLAST, 1);
+      event.handled = true;
       return;
     }
     if (GOBLIN_COOK_IDS.has(event.npcId) && stepId === "aDep1a") {
       if (!has(player, ItemIdentifiers.CHARCOAL)) return;
       player.getInventory().deleteNumber(ItemIdentifiers.CHARCOAL, 1);
       player.setAttribute(GOBLIN_STATE_ATTRIBUTE, goblinState(player) | 2);
+      setGoblinStage(player, 15);
       return;
     }
-    if (GOBLIN_COOK_IDS.has(event.npcId) && ["n9iLpk", "jKFpD-"].includes(stepId)) {
+    if (GOBLIN_COOK_IDS.has(event.npcId) && stepId === "n9iLpk") {
       const parts = [ItemIdentifiers.DYED_ORANGE, ItemIdentifiers.SOGGY_BREAD, ItemIdentifiers.SPICY_MAGGOTS];
       if (!parts.every((id) => has(player, id)) || !hasSpace(player)) return;
       for (const id of parts) player.getInventory().deleteNumber(id, 1);
       player.getInventory().adds(ItemIdentifiers.SLOP_OF_COMPROMISE, 1);
+      player.setAttribute(GOBLIN_STATE_ATTRIBUTE, goblinState(player) | GOBLIN_SLOP_RECEIVED);
+      setGoblinStage(player, 35);
+      event.handled = true;
+      return;
+    }
+    if (GOBLIN_COOK_IDS.has(event.npcId) && stepId === "jKFpD-") {
+      if (has(player, ItemIdentifiers.SLOP_OF_COMPROMISE) || !hasSpace(player)) return;
+      player.getInventory().adds(ItemIdentifiers.SLOP_OF_COMPROMISE, 1);
+      player.setAttribute(GOBLIN_STATE_ATTRIBUTE, goblinState(player) | GOBLIN_SLOP_RECEIVED);
+      setGoblinStage(player, 35);
       event.handled = true;
       return;
     }
@@ -817,6 +1156,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       if (hasSpace(player)) {
         player.getInventory().adds(ItemIdentifiers.DWARVEN_ROCK_CAKE, 1);
         player.setAttribute(DWARF_STATE_ATTRIBUTE, dwarfState(player) | 0x800);
+        setDwarfStage(player, 50);
       }
       else player.sendMessage("You need an empty inventory slot to take the hot rock cake.");
       return;
@@ -826,6 +1166,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       if (count === 0 && has(player, ItemIdentifiers.ASGOLDIAN_ALE)) {
         player.getInventory().deleteNumber(ItemIdentifiers.ASGOLDIAN_ALE, 1);
         player.setAttribute(DWARF_STATE_ATTRIBUTE, (dwarfState(player) & ~7) | 1);
+        syncDwarfQuestVarbits(player);
       }
       return;
     }
@@ -839,9 +1180,11 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       if (stepId === "9KHClW") player.getInventory().deleteNumber(ItemIdentifiers.CHOCOLATE_BAR, 1);
       if (stepId === "VIoVIB") player.getInventory().deleteNumber(ItemIdentifiers.PLAIN_PIZZA, 1);
       player.setAttribute(DWARF_STATE_ATTRIBUTE, dwarfState(player) | 16);
+      syncDwarfQuestVarbits(player);
       return;
     }
-    if (stepId === "rfd-murphy-fit-gear") {
+    if (event.npcId === NpcIdentifiers.MURPHY && event.pages?.some(({ page }) => page === PIRATE_PAGE)
+      && stepId === "FY6rCP") {
       if (!has(player, ItemIdentifiers.EMPTY_FISHBOWL) || !hasSpace(player)) {
         player.sendMessage("Make room and bring Murphy a fishbowl before he prepares your diving gear.");
         event.handled = true;
@@ -852,6 +1195,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().adds(ItemIdentifiers.DIVING_APPARATUS, 1);
       player.getInventory().adds(ItemIdentifiers.FISHBOWL_HELMET, 1);
       setPirateState(player, pirateState(player) | 2);
+      setPirateStage(player, 30);
       return;
     }
     if (stepId === "azBBMr") {
@@ -866,7 +1210,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         return;
       }
       setPirateState(player, pirateState(player) | 4);
+      player.setAttribute(PIRATE_FIRST_DIVE_ATTRIBUTE, true);
       moveTo(player, 2960, 9512, 1);
+      setPirateStage(player, 40);
       return;
     }
     if (stepId === "5j7eiW" && stage(player) === STAGE_STARTED) {
@@ -921,8 +1267,11 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     event.handled = true;
     const state = Number(event.player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0;
     if (!(state & 1)) {
-      const recipe = Object.fromEntries(DAVE_SPICES.map(({ color }) => [color, 1 + Math.floor(Math.random() * 3)]));
-      event.player.setAttribute(DAVE_RECIPE_ATTRIBUTE, recipe);
+      if (!event.player.getAttribute(DAVE_RECIPE_ATTRIBUTE)) {
+        const recipe = Object.fromEntries(DAVE_SPICES.map(({ color }) => [color, 1 + Math.floor(Math.random() * 3)]));
+        event.player.setAttribute(DAVE_RECIPE_ATTRIBUTE, recipe);
+      }
+      syncDaveQuestVarbits(event.player);
     }
     require("../QuestRuntime").startTranscript(api, event.player, event.npcId,
       "Recipe for Disaster/Freeing Evil Dave", state & 1
@@ -939,7 +1288,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     const state = Number(event.player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0;
     const variant = state & 2 ? "getting-the-recipe-from-doris-talking-to-doris-again"
       : state & 1 ? "getting-the-recipe-from-doris" : "talking-to-doris";
-    if ((state & 1) && !(state & 2)) event.player.setAttribute(DAVE_STATE_ATTRIBUTE, state | 2);
     require("../QuestRuntime").startTranscript(api, event.player, event.npcId,
       "Recipe for Disaster/Freeing Evil Dave", variant);
     return true;
@@ -986,6 +1334,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     player.getInventory().deleteNumber([usedItemId, usedWithItemId].find((id) => spiceForItem(id)), 1);
     player.getInventory().adds(ItemIdentifiers.SPICY_STEW, 1);
     player.setAttribute(DAVE_STEW_ATTRIBUTE, { doses });
+    syncDaveQuestVarbits(player);
     player.sendMessage(`You add ${spiceItem.doses} dose${spiceItem.doses === 1 ? "" : "s"} of ${spiceItem.color} spice to the stew.`);
   }
 
@@ -1005,18 +1354,11 @@ module.exports = function registerRecipeForDisasterQuest(api) {
           : matching === 1 ? "getting-the-recipe-from-doris-stew-tasting-with-evil-dave-one-spice-correct"
             : "getting-the-recipe-from-doris-stew-tasting-with-evil-dave-completely-wrong-spicy-stew";
     player.getInventory().deleteNumber(itemId, 1);
-    if (matching === 4) player.setAttribute(DAVE_STATE_ATTRIBUTE, (Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0) | 4);
+    if (matching === 4) {
+      player.setAttribute(DAVE_STATE_ATTRIBUTE, (Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0) | 4);
+      setDaveStage(player, 4);
+    } else syncDaveQuestVarbits(player);
     require("../QuestRuntime").startTranscript(api, player, npcId, "Recipe for Disaster/Freeing Evil Dave", variant);
-  }
-
-  function handleDaveChoice({ player, npcId, option }) {
-    if (!EVIL_DAVE_IDS.has(npcId) || option !== "What did you eat at the secret council meeting?") return;
-    const state = Number(player.getAttribute(DAVE_STATE_ATTRIBUTE)) || 0;
-    if (!(state & 1)) {
-      const recipe = Object.fromEntries(DAVE_SPICES.map(({ color }) => [color, 1 + Math.floor(Math.random() * 3)]));
-      player.setAttribute(DAVE_RECIPE_ATTRIBUTE, recipe);
-    }
-    player.setAttribute(DAVE_STATE_ATTRIBUTE, state | 1);
   }
 
   function handleLampRub(event) {
@@ -1148,13 +1490,60 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     return true;
   }
 
-  function handleAmikWiseOldMan({ player, npcId, clickType, definition }) {
+  function handleAmikWiseOldMan(event) {
+    const { player, npcId, clickType, definition } = event;
+    if (!player) return false;
+    AMIK_WOM_ACTIVE.delete(player);
+    AMIK_WOM_PENDING_BRIEFING.delete(player);
     if (!WISE_OLD_MAN_IDS.has(npcId) || stage(player) < STAGE_OPENING_COMPLETE
       || hasFlag(player, 64) || Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) !== 1) return false;
     if (definition?.getActions?.()?.[clickType - 1] !== "Talk-to") return false;
-    require("../QuestRuntime").startTranscript(api, player, npcId,
+    if (Number(player.getAttribute(AMIK_WOM_BRIEFED_ATTRIBUTE)) === 1) return false;
+    event.handled = true;
+    const started = require("../QuestRuntime").startTranscript(api, player, npcId,
       "Recipe for Disaster/Freeing Sir Amik Varze", "finding-the-lair-talking-to-the-wise-old-man");
+    if (started) AMIK_WOM_ACTIVE.add(player);
     return true;
+  }
+
+  function handleAmikWiseOldManChoice({ player, npcId, option }) {
+    if (!player || !AMIK_WOM_ACTIVE.has(player) || !WISE_OLD_MAN_IDS.has(npcId)) return;
+    if (option === "Is there anything I can do for you?") AMIK_WOM_PENDING_BRIEFING.add(player);
+    else AMIK_WOM_PENDING_BRIEFING.delete(player);
+  }
+
+  function handleAmikWiseOldManBriefingClosed({ player }) {
+    if (!player) return;
+    AMIK_WOM_ACTIVE.delete(player);
+    AMIK_WOM_PENDING_BRIEFING.delete(player);
+  }
+
+  function handleAmikWiseOldManBriefing({ player, npcId, pages, text }) {
+    if (!player || !AMIK_WOM_PENDING_BRIEFING.has(player) || !WISE_OLD_MAN_IDS.has(npcId)
+      || Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) !== 1
+      || hasFlag(player, 64) || text?.replace(/\s+/g, " ") !== "I'm sure I can think of a few little jobs. This won't be a quest, mind you, just a little favour..."
+      || !pages?.some(({ page, variants }) => page === "Recipe for Disaster/Freeing Sir Amik Varze"
+        && variants?.includes("finding-the-lair-talking-to-the-wise-old-man"))) return;
+    AMIK_WOM_PENDING_BRIEFING.delete(player);
+    AMIK_WOM_ACTIVE.delete(player);
+    player.setAttribute(AMIK_WOM_BRIEFED_ATTRIBUTE, 1);
+  }
+
+  function handleMurphyGearReceipt(event) {
+    const { player, npcId, pages, text } = event;
+    if (npcId !== NpcIdentifiers.MURPHY || !pages?.some(({ page }) => page === PIRATE_PAGE)) return;
+    const helmet = text === "Sure, here you go. Try not to lose this one, I'm not a very good glassblower.";
+    const apparatus = text === "Here, have this one. Only dropped once!";
+    if (!helmet && !apparatus) return;
+    const item = helmet ? ItemIdentifiers.FISHBOWL_HELMET : ItemIdentifiers.DIVING_APPARATUS;
+    const slot = helmet ? api.core.Equipment.HEAD_SLOT : api.core.Equipment.CAPE_SLOT;
+    if (hasOrEquipped(player, item, slot)) return;
+    if (!hasSpace(player)) {
+      player.sendMessage(`Murphy needs you to have a spare inventory slot for the diving ${helmet ? "helmet" : "apparatus"}.`);
+      event.skip = true;
+      return;
+    }
+    player.getInventory().adds(item, 1);
   }
 
   function handleWiseMonkey(event) {
@@ -1258,6 +1647,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
           player.getInventory().deleteNumber(quiz.input, 1);
           player.getInventory().adds(quiz.output, 1);
           player.setAttribute(GUIDE_STATE_ATTRIBUTE, (Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) || 0) | ({ egg: 1, milk: 2, flour: 4 }[kind]));
+          syncGuideQuestVarbits(player);
+          if ((Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) & 7) === 7) setGuideStage(player, 3);
           player.sendMessage(`Traiborn enchants the ${kind} with your knowledge.`);
         } }];
       }
@@ -1293,6 +1684,14 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.sendMessage("Bake the enchanted egg, enchanted milk and enchanted flour together in a cake tin.");
       return true;
     }
+    const guideState = Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) || 0;
+    const lost = [[1, ItemIdentifiers.ENCHANTED_EGG], [2, ItemIdentifiers.ENCHANTED_MILK],
+      [4, ItemIdentifiers.ENCHANTED_FLOUR]].some(([bit, id]) => (guideState & bit) !== 0 && !has(player, id));
+    if (lost) {
+      startTranscript(api, player, npcId, "Recipe for Disaster/Freeing the Lumbridge Guide",
+        "finishing-up-talking-to-wizard-traiborn-again");
+      return true;
+    }
     const available = Object.entries(GUIDE_QUIZZES).find(([, quiz]) => has(player, quiz.input)
       && !has(player, quiz.output));
     if (available) {
@@ -1300,10 +1699,24 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       return true;
     }
     startTranscript(api, player, npcId, "Recipe for Disaster/Freeing the Lumbridge Guide",
-      (Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) || 0) === 0
+      guideState === 0
         ? "the-quiz-talking-to-wizard-traiborn"
         : "the-quiz-talking-to-wizard-traiborn-again");
     return true;
+  }
+
+  function handleGuideConditionGrant(event) {
+    const { player, stepId } = event;
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 8)) return;
+    const itemId = { IBOxgj: ItemIdentifiers.ENCHANTED_EGG, FJEB5g: ItemIdentifiers.ENCHANTED_FLOUR,
+      OjKquk: ItemIdentifiers.ENCHANTED_MILK }[stepId];
+    if (itemId === undefined || has(player, itemId)) return;
+    if (!hasSpace(player)) {
+      player.sendMessage("You need an empty inventory slot for the replacement ingredient.");
+      return;
+    }
+    player.getInventory().adds(itemId, 1);
+    event.handled = true;
   }
 
   function handleGuideCakeItems(event) {
@@ -1319,6 +1732,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }
     for (const id of [...ingredients, ItemIdentifiers.CAKE_TIN]) player.getInventory().deleteNumber(id, 1);
     addItem(player, ItemIdentifiers.RAW_GUIDE_CAKE);
+    if ((Number(player.getAttribute(GUIDE_STATE_ATTRIBUTE)) & 7) === 7) setGuideStage(player, 3);
     player.sendMessage("You combine the enchanted ingredients in the cake tin to make a raw Cake of Guidance.");
   }
 
@@ -1331,6 +1745,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     event.handled = true;
     event.player.getInventory().deleteNumber(ItemIdentifiers.RAW_GUIDE_CAKE, 1);
     addItem(event.player, ItemIdentifiers.CAKE_OF_GUIDANCE);
+    setGuideStage(event.player, 4);
     event.player.sendMessage("You bake the Cake of Guidance.");
   }
 
@@ -1632,6 +2047,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function selectGoblinCookVariant(player) {
     if (goblinState(player) & 2) {
+      if (goblinState(player) & GOBLIN_SLOP_RECEIVED) {
+        return "finishing-up-talking-to-the-burnt-goblin-cook-after-receiving-the-slop-of-compromise";
+      }
+      if (goblinQuestStage(player) < 30) return "discovering-the-recipe-talking-to-the-burnt-goblin-cook";
       const ingredients = [ItemIdentifiers.DYED_ORANGE, ItemIdentifiers.SOGGY_BREAD, ItemIdentifiers.SPICY_MAGGOTS];
       return ingredients.every((id) => has(player, id))
         ? "finishing-up-talking-to-the-burnt-goblin-cook-with-all-three-ingredients-in-inventory"
@@ -1730,6 +2149,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       event.handled = true;
       player.getInventory().deleteNumber(ItemIdentifiers.CHARCOAL, 1);
       player.setAttribute(GOBLIN_STATE_ATTRIBUTE, goblinState(player) | 2);
+      setGoblinStage(player, 15);
     }
   }
 
@@ -1810,9 +2230,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       } else if (count > 0 && count < 4 && (variant.includes("third-asgoldian-ale") || variant.includes("fourth-asgoldian-ale"))) {
         player.getInventory().deleteNumber(ItemIdentifiers.ASGOLDIAN_ALE, 1);
         player.setAttribute(DWARF_STATE_ATTRIBUTE, (dwarfState(player) & ~7) | (count + 1));
-      } else if (dwarfState(player) & 0x200) player.setAttribute(DWARF_STATE_ATTRIBUTE, (dwarfState(player) & ~0x200) | 0x400);
-      else if (count >= 4) player.setAttribute(DWARF_STATE_ATTRIBUTE, dwarfState(player) | 0x200);
+      }
     }
+    syncDwarfQuestVarbits(player);
     return true;
   }
 
@@ -1859,6 +2279,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().deleteNumber(ItemIdentifiers.ROCK, 1);
       player.getInventory().deleteNumber(ItemIdentifiers.BALL_OF_WOOL, 1);
       player.getInventory().adds(ItemIdentifiers.BALLOON_TOAD, 1);
+      setSkrachStage(player, 140);
       return;
     }
     if (isItemPair(event, ItemIdentifiers.RAW_CHOMPY, ItemIdentifiers.IRON_SPIT)) {
@@ -1883,6 +2304,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       event.handled = true;
       if (!hasSpace(player)) return player.sendMessage("You need an empty inventory slot to carry a rock.");
       player.getInventory().adds(ItemIdentifiers.ROCK, 1);
+      setSkrachStage(player, 130);
       return;
     }
     if ([ObjectIdentifiers.CRUDE_BOAT, ObjectIdentifiers.ROW_BOAT, ObjectIdentifiers.ROW_BOAT_2].includes(objectId)
@@ -1895,6 +2317,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().deleteNumber(ItemIdentifiers.COOKED_CHOMPY, 1);
       moveTo(player, 2630, 2981, 0);
       setSkrachBit(player, 8);
+      setSkrachStage(player, 90);
       require("../QuestRuntime").startTranscript(api, player, NpcIdentifiers.RANTZ,
         "Recipe for Disaster/Freeing Skrach Uglogwee", "ranting-with-rantz-talking-to-rantz-after-arriving-on-the-ogre-boat");
       return;
@@ -1918,10 +2341,12 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       const state = skrachState(player);
       if (!(state & 2)) {
         setSkrachBit(player, 2);
+        setSkrachStage(player, 50);
         require("../QuestRuntime").startTranscript(api, player, NpcIdentifiers.RANTZ,
           "Recipe for Disaster/Freeing Skrach Uglogwee", "ranting-with-rantz-trimming-the-log-s-roots");
       } else if (!(state & 4)) {
         setSkrachBit(player, 4);
+        setSkrachStage(player, 60);
         require("../QuestRuntime").startTranscript(api, player, NpcIdentifiers.RANTZ,
           "Recipe for Disaster/Freeing Skrach Uglogwee", "ranting-with-rantz-hollowing-out-the-boat");
       }
@@ -1939,6 +2364,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       if (current && empty.includes(current)) {
         contents.deleteNumber(current, 1);
         contents.adds(ItemIdentifiers.OGRE_BELLOWS_3_, 1);
+        setSkrachStage(player, 110);
       } else player.sendMessage("Your ogre bellows are already full of swamp bubbles.");
       return;
     }
@@ -1957,8 +2383,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (spitRoasts.includes(objectId) && itemId === ItemIdentifiers.RAW_JUBBLY) {
       event.handled = true;
       player.getInventory().deleteNumber(ItemIdentifiers.RAW_JUBBLY, 1);
-      player.getInventory().adds(Math.random() < Math.max(0, (41 - level(player, Skill.COOKING)) * 0.02)
-        ? ItemIdentifiers.BURNT_JUBBLY : ItemIdentifiers.COOKED_JUBBLY, 1);
+      const result = Math.random() < Math.max(0, (41 - level(player, Skill.COOKING)) * 0.02)
+        ? ItemIdentifiers.BURNT_JUBBLY : ItemIdentifiers.COOKED_JUBBLY;
+      player.getInventory().adds(result, 1);
+      setSkrachStage(player, result === ItemIdentifiers.COOKED_JUBBLY ? 160 : 150);
       return;
     }
     if ([ObjectIdentifiers.FIRE, ObjectIdentifiers.FIRE_2, ObjectIdentifiers.FIRE_3,
@@ -1972,6 +2400,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       if (cooked === ItemIdentifiers.COOKED_CHOMPY && player.getLocation().getX() >= 2700
         && player.getLocation().getY() < 3300) {
         setSkrachBit(player, 16);
+        setSkrachStage(player, 80);
         require("../QuestRuntime").startTranscript(api, player, NpcIdentifiers.OGRE_BOAT,
           "Recipe for Disaster/Freeing Skrach Uglogwee", "ranting-with-rantz-after-cooking-the-chompy-on-the-beach");
       }
@@ -2000,6 +2429,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     player.getInventory().deleteNumber(itemId, 1);
     player.getInventory().adds(next, 1);
     player.getInventory().adds(ItemIdentifiers.BLOATED_TOAD, 1);
+    setSkrachStage(player, 120);
   }
 
   function handleSkrachDrop(event) {
@@ -2023,6 +2453,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       return;
     }
     event.player.getInventory().deleteNumber(ItemIdentifiers.BALLOON_TOAD, 1);
+    setSkrachStage(event.player, 150);
     const npc = api.spawnNpc({ id: NpcIdentifiers.JUBBLY_BIRD, x: location.getX() + 1,
       y: location.getY(), z: location.getZ(), wanderRadius: 0, owner: event.player, ownerOnly: true });
     if (npc && typeof npc === "object") JUBBLY_BY_PLAYER.set(event.player, npc);
@@ -2031,7 +2462,13 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function handleRantzTalk(event) {
     const { player, npcId } = event;
-    if (!RANTZ_IDS.has(npcId) || stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 32)) return false;
+    // Big Chompy owns Rantz until its prerequisite is complete; otherwise its
+    // mandatory named-Rantz dialogue would never be reachable behind this hook.
+    if (!RANTZ_IDS.has(npcId) || stage(player) < STAGE_OPENING_COMPLETE
+      || hasFlag(player, 32) || !completedQuest(player, "big_chompy_bird_hunting")) return false;
+    // One Small Favour owns Rantz during its mandatory Rantz stages even if the
+    // Skrach rescue has been accepted; the Skrach dialogue is resumable later.
+    if (oneSmallFavourAtRantz(player)) return false;
     const option = event.definition?.getActions?.()?.[event.clickType - 1];
     if (option !== "Talk-to") return false;
     event.handled = true;
@@ -2171,20 +2608,64 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (!player || stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 64)) return;
     if (EVIL_CHICKEN_BY_PLAYER.get(player) === event.npc && EVIL_CHICKEN_IDS.has(event.npcId)) {
       EVIL_CHICKEN_BY_PLAYER.delete(player);
+      player.setAttribute(AMIK_CHICKEN_DEAD_ATTRIBUTE, true);
+      syncAmikQuestVarbits(player);
       if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.EVIL_CHICKENS_EGG, 1);
       else {
         const { ItemOnGroundManager, Item, Location } = api.core;
-        ItemOnGroundManager.register(player, new Item(ItemIdentifiers.EVIL_CHICKENS_EGG, 1), player.getLocation());
+        ItemOnGroundManager.registerLocation(player, new Item(ItemIdentifiers.EVIL_CHICKENS_EGG, 1), player.getLocation());
       }
-    } else if (BLACK_DRAGON_IDS.has(event.npcId) && has(player, ItemIdentifiers.BRULEE_3)
-      && !has(player, ItemIdentifiers.DRAGON_TOKEN)) {
+    } else if (BLACK_DRAGON_IDS.has(event.npcId) && Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) === 1
+      && inZone(player, EVIL_CHICKEN_LAIR_ZONE) && !has(player, ItemIdentifiers.DRAGON_TOKEN)) {
+      player.setAttribute(AMIK_DRAGON_DROP_ATTRIBUTE, true);
+      syncAmikQuestVarbits(player);
       if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.DRAGON_TOKEN, 1);
-      else player.sendMessage("Your pack is full; the dragon token is lost.");
+      else {
+        const { ItemOnGroundManager, Item, Location } = api.core;
+        ItemOnGroundManager.registerLocation(player, new Item(ItemIdentifiers.DRAGON_TOKEN, 1),
+          new Location(player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()));
+      }
     }
   }
 
   function equippedMonkey(player, choices) {
     return choices.includes(equipmentId(player, api.core.Equipment.WEAPON_SLOT));
+  }
+
+  function amikQuestStage(player) {
+    if (hasFlag(player, 64)) return 20;
+    return Number(player.getAttribute(AMIK_STAGE_ATTRIBUTE)) || 0;
+  }
+  function syncAmikQuestVarbits(player) {
+    player.getPacketSender().sendVarbit(1910, amikQuestStage(player));
+    player.getPacketSender().sendVarbit(1912, player.getAttribute(AMIK_DRAGON_DROP_ATTRIBUTE) ? 1 : 0);
+    player.getPacketSender().sendVarbit(1913, player.getAttribute(AMIK_CHICKEN_DEAD_ATTRIBUTE) ? 1 : 0);
+  }
+  function setAmikStage(player, value) {
+    const next = Math.max(Number(player.getAttribute(AMIK_STAGE_ATTRIBUTE)) || 0, value);
+    player.setAttribute(AMIK_STAGE_ATTRIBUTE, next);
+    syncAmikQuestVarbits(player);
+  }
+
+  function awowogeiQuestStage(player) {
+    if (hasFlag(player, 128)) return 50;
+    const state = awowogeiState(player);
+    const saved = Number(player.getAttribute(AWOWOGEI_STAGE_ATTRIBUTE)) || 0;
+    const legacy = state & 48 ? 15 : 0;
+    return Math.max(saved, legacy);
+  }
+  function syncAwowogeiQuestVarbits(player) {
+    const state = awowogeiState(player);
+    player.getPacketSender().sendVarbit(1914, awowogeiQuestStage(player));
+    player.getPacketSender().sendVarbit(1915, state & 16 ? 10 : 0);
+    player.getPacketSender().sendVarbit(1916, state & 32 ? 10 : 0);
+    player.getPacketSender().sendVarbit(1917, state & AWOWOGEI_SNAKE_FOUND ? 10 : 0);
+    player.getPacketSender().sendVarbit(1918, state & AWOWOGEI_RED_TREE_FOUND ? 10 : 0);
+  }
+  function setAwowogeiStage(player, value) {
+    const next = Math.max(Number(player.getAttribute(AWOWOGEI_STAGE_ATTRIBUTE)) || 0, value);
+    player.setAttribute(AWOWOGEI_STAGE_ATTRIBUTE, next);
+    syncAwowogeiQuestVarbits(player);
   }
 
   function hasMonkeySpeech(player) {
@@ -2310,6 +2791,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (!(state & bit)) {
       player.getInventory().deleteNumber(itemId, 1);
       player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, state | bit);
+      syncAwowogeiQuestVarbits(player);
+      if (((state | bit) & 48) === 48) setAwowogeiStage(player, has(player, ItemIdentifiers.SNAKE_CORPSE) ? 20 : 15);
     }
     startTranscript(api, player, npcId, page, banana
       ? "ape-atoll-showing-the-wise-monkeys-the-wrong-ingredients-banana"
@@ -2341,6 +2824,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().deleteNumber(ItemIdentifiers.SNAKE_CORPSE, 1);
       player.getInventory().deleteNumber(fillingId, 1);
       player.getInventory().adds(ItemIdentifiers.RAW_STUFFED_SNAKE, 1);
+      setAwowogeiStage(player, 30);
     }
   }
 
@@ -2370,6 +2854,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       }
       if (!hasSpace(player)) return player.sendMessage("You need an empty inventory slot to collect the red banana.");
       player.getInventory().adds(ItemIdentifiers.RED_BANANA, 1);
+      player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_RED_TREE_FOUND);
+      syncAwowogeiQuestVarbits(player);
       return;
     }
     const objectDefinition = event.object?.getDefinition?.();
@@ -2395,8 +2881,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         return;
       }
       player.getInventory().deleteNumber(ItemIdentifiers.RAW_STUFFED_SNAKE, 1);
-      player.getInventory().adds(Math.random() < Math.max(0, (70 - level(player, Skill.COOKING)) * 0.025)
-        ? ItemIdentifiers.ODD_STUFFED_SNAKE : ItemIdentifiers.STUFFED_SNAKE, 1);
+      const result = Math.random() < Math.max(0, (70 - level(player, Skill.COOKING)) * 0.025)
+        ? ItemIdentifiers.ODD_STUFFED_SNAKE : ItemIdentifiers.STUFFED_SNAKE;
+      player.getInventory().adds(result, 1);
+      setAwowogeiStage(player, result === ItemIdentifiers.STUFFED_SNAKE ? 40 : 30);
     }
   }
 
@@ -2446,22 +2934,56 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     }
   }
 
+  function handleAwowogeiSnakePit(event) {
+    const { player, objectId } = event;
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 128)) return false;
+    const option = event.definition?.getActions?.()?.[event.clickType - 1];
+    if (objectId === ObjectIdentifiers.PIT_3 && option === "Enter") {
+      event.handled = true;
+      moveTo(player, 3019, 5485, 0);
+      player.sendMessage("You climb down into the snake pit on Crash Island.");
+      return true;
+    }
+    if (objectId === ObjectIdentifiers.ROPE_21 && ["Climb", "Climb-up"].includes(option)
+      && inZone(player, AWOWOGEI_SNAKE_HOLE)) {
+      event.handled = true;
+      moveTo(player, 2922, 2722, 0);
+      player.sendMessage("You climb up the rope and out of the snake pit.");
+      return true;
+    }
+    return false;
+  }
+
   function handleBigSnakeDeath(event) {
     const player = event?.killer?.isPlayer?.() ? event.killer : null;
     if (!player || event.npcId !== NpcIdentifiers.BIG_SNAKE || stage(player) < STAGE_OPENING_COMPLETE
       || hasFlag(player, 128)) return;
+    player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_SNAKE_FOUND);
+    syncAwowogeiQuestVarbits(player);
     if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.SNAKE_CORPSE, 1);
     else {
       const { ItemOnGroundManager, Item } = api.core;
-      ItemOnGroundManager.register(player, new Item(ItemIdentifiers.SNAKE_CORPSE, 1), player.getLocation());
+      ItemOnGroundManager.registerLocation(player, new Item(ItemIdentifiers.SNAKE_CORPSE, 1), player.getLocation());
     }
+    if (awowogeiQuestStage(player) >= 15) setAwowogeiStage(player, 20);
   }
 
   function handleSkrachChoice({ player, npcId, option }) {
-    if (!RANTZ_IDS.has(npcId) || option !== "Ok, I'll do it.") return;
-    player.setAttribute(SKRACH_STATE_ATTRIBUTE,
-      (Number(player.getAttribute(SKRACH_STATE_ATTRIBUTE)) || 0) | 1);
-    player.getPacketSender().sendVarbit(VARBIT_OGRE_BOAT, 1);
+    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 32)) return;
+    if (BANQUET_ARIS_IDS.has(npcId) && option === "Oh Ok then, I guess I'll talk to Rantz.") {
+      setSkrachStage(player, 10);
+      return;
+    }
+    if (RANTZ_IDS.has(npcId) && option === "Ok, I'll do it.") {
+      setSkrachBit(player, 1);
+      setSkrachStage(player, 20);
+      player.getPacketSender().sendVarbit(VARBIT_OGRE_BOAT, 1);
+      return;
+    }
+    if (OGRE_BOAT_IDS.has(npcId) && option === "Yes please, I'll get a lift back with you.") {
+      setSkrachBit(player, SKRACH_FREE_RIDE_TAKEN);
+      setSkrachStage(player, 90);
+    }
   }
 
   function handleJubblyDeath(event) {
@@ -2474,7 +2996,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.RAW_JUBBLY, 1);
     else {
       const { ItemOnGroundManager, Item, Location } = api.core;
-      ItemOnGroundManager.register(player, new Item(ItemIdentifiers.RAW_JUBBLY, 1),
+      ItemOnGroundManager.registerLocation(player, new Item(ItemIdentifiers.RAW_JUBBLY, 1),
         new Location(player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()));
     }
     player.sendMessage("You pluck the raw jubbly from the bird.");
@@ -2540,7 +3062,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function syncQuestState({ player }) {
     ensureOgreBoatTalkActions();
     syncSkrachSpitRoast(player);
-    if (stage(player) === 0) player.getPacketSender().sendVarbit(VARBIT_RFD, 7);
+    syncRescueQuestVarbits(player);
     player.getPacketSender().sendVarbit(VARBIT_OGRE_BOAT,
       (skrachState(player) & 1) || hasFlag(player, 32) ? 1 : 0);
     spawnCouncil(player);
@@ -2555,15 +3077,27 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.persistAttribute(FLAGS_ATTRIBUTE);
   api.persistAttribute(PIRATE_ATTRIBUTE);
   api.persistAttribute(PIRATE_HIDES_ATTRIBUTE);
+  api.persistAttribute(PIRATE_STAGE_ATTRIBUTE, 0);
+  api.persistAttribute(PIRATE_FIRST_DIVE_ATTRIBUTE, false);
   api.persistAttribute(GOBLIN_STATE_ATTRIBUTE);
+  api.persistAttribute(GOBLIN_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(DWARF_STATE_ATTRIBUTE);
+  api.persistAttribute(DWARF_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(GUIDE_STATE_ATTRIBUTE);
+  api.persistAttribute(GUIDE_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(DAVE_STATE_ATTRIBUTE);
+  api.persistAttribute(DAVE_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(DAVE_RECIPE_ATTRIBUTE);
   api.persistAttribute(DAVE_STEW_ATTRIBUTE);
   api.persistAttribute(SKRACH_STATE_ATTRIBUTE);
+  api.persistAttribute(SKRACH_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(AWOWOGEI_STATE_ATTRIBUTE);
+  api.persistAttribute(AWOWOGEI_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(AMIK_STATE_ATTRIBUTE);
+  api.persistAttribute(AMIK_STAGE_ATTRIBUTE, 0);
+  api.persistAttribute(AMIK_DRAGON_DROP_ATTRIBUTE, false);
+  api.persistAttribute(AMIK_CHICKEN_DEAD_ATTRIBUTE, false);
+  api.persistAttribute(AMIK_WOM_BRIEFED_ATTRIBUTE, 0);
   api.persistAttribute(FINAL_FIGHT_ATTRIBUTE);
   api.persistAttribute(FINAL_BOSS_DEFEATED_ATTRIBUTE);
   quest = registerQuest(api, {
@@ -2584,12 +3118,26 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
+  api.onCustomEvent("recipe-for-disaster:rescue-status", handleRescueStatusQuery);
   api.onCustomEvent("npc-dialogue:choice", handlePirateChoice);
-  api.onCustomEvent("npc-dialogue:choice", handleDaveChoice);
   api.onCustomEvent("npc-dialogue:choice", handleSkrachChoice);
   api.onCustomEvent("npc-dialogue:choice", handleDwarfBarChoice);
+  api.onCustomEvent("npc-dialogue:choice", handleAmikWiseOldManChoice);
+  api.onCustomEvent("interface:closed", handleAmikWiseOldManBriefingClosed);
+  api.onCustomEvent("npc-dialogue:condition", handleGuideConditionGrant);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleFlambeLine);
+  api.onCustomEvent("npc-dialogue:line", handleDwarfMilestoneLine);
+  api.onCustomEvent("npc-dialogue:line", handleGoblinMilestoneLine);
+  api.onCustomEvent("npc-dialogue:line", handleDaveMilestoneLine);
+  api.onCustomEvent("npc-dialogue:line", handleGuideMilestoneLine);
+  api.onCustomEvent("npc-dialogue:line", handleAmikWiseOldManBriefing);
+  api.onCustomEvent("npc-dialogue:line", handleMurphyGearReceipt);
+  api.onCustomEvent("npc-dialogue:line", handlePirateMilestoneLine);
+  api.onCustomEvent("npc-dialogue:line", handlePirateNungMilestoneLine);
+  api.onCustomEvent("npc-dialogue:line", handleSkrachMilestoneLine);
+  api.onCustomEvent("npc-dialogue:line", handleAmikMilestoneLine);
+  api.onCustomEvent("npc-dialogue:line", handleAwowogeiMilestoneLine);
   api.onCustomEvent("pets:vermin-caught", dropDaveSpice);
   api.onItemOnItem(handleFruitBlast, { noted: false });
   api.onItemOnItem(handleGoblinIngredients, { noted: false });
@@ -2653,6 +3201,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onCustomEvent("agility:obstacle", handleTchikiRopeSwung);
   api.onObjectInteraction(handleAwowogeiObjects);
   api.onObjectInteraction(handleAwowogeiDungeon);
+  api.onObjectInteraction(handleAwowogeiSnakePit);
   api.onObjectRoute(routeRedBananaTree);
   api.onObjectInteraction(handleAwowogeiKing);
   api.onItemAction("Balloon toad", { Drop: handleSkrachDrop, Release: handleSkrachDrop });

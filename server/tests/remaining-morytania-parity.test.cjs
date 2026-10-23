@@ -51,7 +51,10 @@ function harness(name, page = null, options = {}) {
       const npc = {
         ...definition, animations: [], graphics: [], getId: () => definition.id, getIndex: () => npc.index,
         index: nextIndex++, getLocation: () => location, moveTo: to => { location = to; },
-        getArea: () => area, setArea: value => { area = value; }, isNpc: () => true, isPlayer: () => false,
+        getCurrentDefinition: () => core.NpcDefinition.forId(definition.id),
+        getArea: () => area, getPrivateArea: () => area, setArea: value => { area = value; },
+        isVisible: () => true, isOwnerOnly: () => definition.ownerOnly === true,
+        isNpc: () => true, isPlayer: () => false,
         getAsNpc: () => npc, isRegistered: () => !npc.removed, getOwner: () => definition.owner,
         setPositionToFace: noop, forceChat: noop, performAnimation: noop, performGraphic: noop,
         getMovementQueue: () => ({ reset() { return this; }, hasPendingWork: () => false, addFirstStep: to => { location = to; } }),
@@ -1014,6 +1017,7 @@ test('Sins Carl follow walks the captured route, fails/retries, then starts the 
 
 test('Sins Carl too-close/seen fails with the captured retry feedback', () => {
   const h = harness('SinsOfTheFather'), p = player();
+  p.getLocalNpcs = () => h.npcs;
   p.moveTo(new core.Location(3750, 3296, 0));
   h.quest.setStage(p, 12);
   h.hooks.onPlayerLogin[0]({ player: p });
@@ -1030,7 +1034,35 @@ test('Sins Carl too-close/seen fails with the captured retry feedback', () => {
   p.moveTo(npc.getLocation());
   for (let tick = 0; tick < 3 && h.quest.getStage(p) === 12; tick++) area.process(p);
   assert.equal(h.quest.getStage(p), 6, 'being seen/too close resets for the captured retry');
+  h.tick(2); // resolve Carl's captured overhead line before checking its feedback message
   assert.ok(p.messages.some(text => text.includes('failed to stay hidden from Carl')) || /see you there|failed to stay hidden/i.test(p.text), 'captured caught-if-seen feedback');
+});
+
+test('Sins Carl can retry before the caught overhead cleanup without losing the new follower', () => {
+  const h = harness('SinsOfTheFather'), p = player();
+  p.getLocalNpcs = () => h.npcs;
+  p.moveTo(new core.Location(3750, 3296, 0));
+  h.quest.setStage(p, 12);
+  h.hooks.onPlayerLogin[0]({ player: p });
+  const area = h.areas.find(entry => entry.constructor.name === 'CarlFollowArea');
+  for (let tick = 0; tick < 5; tick++) {
+    const npc = h.npcs.find(entry => entry.getId() === 9558 && !entry.removed);
+    p.moveTo(new core.Location(npc.getLocation().getX() - 12, npc.getLocation().getY(), 0));
+    area.process(p);
+  }
+  const oldCarl = h.npcs.find(entry => entry.getId() === 9558 && !entry.removed);
+  p.moveTo(oldCarl.getLocation());
+  area.process(p);
+  assert.equal(h.quest.getStage(p), 6);
+  h.tick(2); // let the caught feedback speak before the player begins the retry
+
+  h.quest.setStage(p, 12);
+  h.hooks.onPlayerLogin[0]({ player: p });
+  const retryCarl = h.npcs.find(entry => entry.getId() === 9558 && entry !== oldCarl && !entry.removed);
+  assert.ok(retryCarl, 'the new follow attempt starts while the old overhead actor is retained');
+  h.tick(1);
+  assert.ok(oldCarl.removed, 'the old actor is cleaned up after its captured overhead continuation');
+  assert.equal(retryCarl.isRegistered(), true, 'delayed cleanup leaves the new attempt intact');
 });
 
 test('Sins Carl progress never follows player proximity: relog near the end restarts at the canonical start', () => {

@@ -35,12 +35,12 @@
  * - The 7-question diplomacy test answers are not in the transcript (the dump
  *   only carries the question messages), so the first attempt always fails and
  *   any retake passes; both transcript branches stay reachable.
- * - The trolley push is one interaction: Push/Pull/Big-push move the spawned
- *   trolley straight to the garden plinth and replay the transcript's
- *   "Much huffing and panting later..." / "The player finally pushes the statue
- *   to the back of Varrock Castle." lines. The 1-tile/4-tile moves, obstacles
- *   and the 2-minute recapture timers (RpygAc/lPU8xm/UowjWN/CLXY_i) are not
- *   simulated. Placement is handled directly with the transcript's exact
+ * - The trolley moves through ordinary collision-aware NPC steps for each
+ *   Push/Pull/Big-push action. The Wiki's five-minute guard recapture and the
+ *   transcript's two-minute timer text still conflict, so no timed recapture is
+ *   simulated. Logging out during a haul resets its varbits and restores the
+ *   original statue; Ellamaria's existing receipt action can issue another
+ *   trolley. Placement is handled directly with the transcript's exact
  *   messages: the Saradomin variant nests its place conditions after an END
  *   step inside the "-McVRu" branch, so they can never be reached by the
  *   transcript runtime.
@@ -77,6 +77,7 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
     MapObjects,
     NpcIdentifiers,
     ObjectIdentifiers,
+    RegionManager,
     Skill,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
@@ -525,7 +526,19 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
     if (held(player, RING_OF_CHAROS)) {
       player.getInventory().deleteNumber(RING_OF_CHAROS, 1);
       player.getInventory().adds(RING_OF_CHAROS_A, 1);
+      return;
     }
+    if (held(player, RING_OF_CHAROS_A)) return;
+    for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
+      const bank = player.getBank(tab);
+      if (bank?.contains?.(RING_OF_CHAROS)) {
+        bank.deleteNumber(RING_OF_CHAROS, 1);
+        bank.adds(RING_OF_CHAROS_A, 1);
+        return;
+      }
+      if (bank?.contains?.(RING_OF_CHAROS_A)) return;
+    }
+    player.getInventory().forceAdd(player, new Item(RING_OF_CHAROS_A, 1));
   }
 
   /** The four statuses of the potted white tree shoot. */
@@ -644,6 +657,7 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
 
   function althricVariant(player) {
     if (stage(player) < STAGE_BUILDING) return null;
+    if (stage(player) >= STAGE_COMPLETE) return null;
     if (vget(player, VARBIT_ALTHRIC) < 1) return "talking-to-brother-althric";
     setCtx(player, { kind: "althric-talk" });
     return "talking-to-brother-althric-talking-to-brother-althric-again";
@@ -943,7 +957,9 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
       }
       case "82BstK":
         if (!held(player, RING_OF_CHAROS_A) && !wearing(player, RING_OF_CHAROS_A)) {
-          player.getInventory().adds(RING_OF_CHAROS_A, 1);
+          // forceAdd drops the ring at the player's tile when the bag is full,
+          // so the well state may clear only after delivery (inventory or ground).
+          player.getInventory().forceAdd(player, new Item(RING_OF_CHAROS_A, 1));
         }
         vset(player, VARBIT_RING_IN_WELL, 0);
         if (vget(player, VARBIT_ALTHRIC) < 2) vset(player, VARBIT_ALTHRIC, 2);
@@ -1182,12 +1198,34 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
     return npc;
   }
 
-  function pushTrolley(player, npc, cargo) {
-    const site = STATUE_BY_VARBIT.get(cargo);
-    if (!site) return;
-    npc.moveTo(new Location(site.stop.x, site.stop.y, 0));
-    player.sendMessage("Much huffing and panting later...");
-    player.sendMessage("The player finally pushes the statue to the back of Varrock Castle.");
+  function moveTrolley(player, npc, action) {
+    const playerLocation = player.getLocation();
+    const trolleyLocation = npc?.getLocation?.();
+    if (!playerLocation || !trolleyLocation) return;
+    const deltaX = trolleyLocation.getX() - playerLocation.getX();
+    const deltaY = trolleyLocation.getY() - playerLocation.getY();
+    let dx = Math.abs(deltaX) >= Math.abs(deltaY) ? Math.sign(deltaX) : 0;
+    let dy = dx === 0 ? Math.sign(deltaY) : 0;
+    if (action === "pull") {
+      dx = -dx;
+      dy = -dy;
+    }
+    if (dx === 0 && dy === 0) return;
+    const distance = action === "big-push" ? 4 : 1;
+    const movement = npc.getMovementQueue();
+    movement.reset();
+    const size = npc.getSize?.() ?? 1;
+    const privateArea = npc.getPrivateArea?.() ?? player.getPrivateArea?.() ?? null;
+    let from = trolleyLocation;
+    for (let step = 0; step < distance; step++) {
+      const to = new Location(from.getX() + dx, from.getY() + dy, from.getZ());
+      if (!RegionManager.canMovestart(from, to, size, size, privateArea)) {
+        player.sendMessage("The trolley is blocked in that direction.");
+        return;
+      }
+      from = to;
+    }
+    movement.addSteps(from);
   }
 
   function placeStatueFor(player, site) {
@@ -1206,13 +1244,15 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
     const option = String(event.definition?.getActions?.()?.[click - 1] ?? "").toLowerCase();
 
     if (TROLLEY_CONTENT_IDS.has(npcId)) {
-      event.handled = true;
       const cargo = vget(player, VARBIT_TROLLEY);
       if (cargo === 0) return;
-      if (option !== "place") {
-        pushTrolley(player, npc, cargo);
+      if (["push", "pull", "big-push"].includes(option)) {
+        event.handled = true;
+        moveTrolley(player, npc, option);
         return;
       }
+      if (option !== "place") return;
+      event.handled = true;
       // Placement is handled directly: the Saradomin variant nests its place
       // conditions after an END step inside the "-McVRu" branch, so the
       // transcript can never reach them.
@@ -1271,6 +1311,7 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
 
   function handleItemOnObject(event) {
     const { player, itemId, objectId, location } = event;
+    convertSapling(player);
     if (itemId === TROLLEY) {
       if (objectId === FALADOR_STATUE) return handleUseTrolleyOnStatue(event, STATUE_SARADOMIN);
       if (objectId === LUMBRIDGE_STATUE) return handleUseTrolleyOnStatue(event, STATUE_KING);
@@ -1345,6 +1386,12 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
     if (COMPOSTS.has(itemId)) return showPlantingStep(player, "plant-compost");
     if (itemId === ItemIdentifiers.SPADE) return showPlantingStep(player, "plant-spade");
     if (itemId === patch.seed) return plantGardenPatch(player, patch);
+    // The watered shoot turns into the sapling on the next item-on-object use;
+    // the click still carries the watered id, so accept it once the conversion ran.
+    if (patch.seed === WHITE_TREE_SAPLING && itemId === WHITE_TREE_SHOOT_WATERED &&
+        held(player, WHITE_TREE_SAPLING)) {
+      return plantGardenPatch(player, patch);
+    }
   }
 
   function plantGardenPatch(player, patch) {
@@ -1545,12 +1592,18 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
   function handleLogin({ player }) {
     removeTrolley(player);
     refreshGrowth(player);
-    sendSubVarbits(player);
     const cargo = vget(player, VARBIT_TROLLEY);
     if (cargo !== 0) {
       const site = STATUE_BY_VARBIT.get(cargo);
-      if (site) spawnTrolley(player, site.stop.x, site.stop.y);
+      if (site) {
+        // The Wiki says logging out resets an unfinished statue haul; Ellamaria
+        // can issue a replacement trolley through the existing receipt action.
+        vset(player, site.varbit, 0);
+        vset(player, VARBIT_TROLLEY, 0);
+        refreshPatchObjects(player, site.sourceObject, [[site.objectTile.x, site.objectTile.y]]);
+      }
     }
+    sendSubVarbits(player);
     refreshQuestList(player);
   }
 
@@ -1673,10 +1726,11 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
   function grantReward(player) {
     activateRing(player);
     player.getSkillManager().addExperiences(Skill.FARMING, 5000);
-    player.getInventory().adds(ACORN, 1);
-    player.getInventory().adds(APPLE_TREE_SEED, 1);
-    player.getInventory().adds(GUAM_SEED, 5);
-    player.getInventory().adds(COMPOST_POTION_4, 1);
+    const inventory = player.getInventory();
+    inventory.forceAdd(player, new Item(ACORN, 1));
+    inventory.forceAdd(player, new Item(APPLE_TREE_SEED, 1));
+    inventory.forceAdd(player, new Item(GUAM_SEED, 5));
+    inventory.forceAdd(player, new Item(COMPOST_POTION_4, 1));
   }
 
   // ==========================================================================
@@ -1694,9 +1748,13 @@ module.exports = function registerGardenOfTranquillityQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
     xpRewards: [{ skillId: Skill.FARMING.getIndex(), amount: 5000, label: "Farming" }],
-    rewardItemId: RING_OF_CHAROS_A,
-    rewardItemLabel: "Ring of Charos(a)",
-    otherRewards: ["An acorn", "An apple tree seed", "5 Guam seeds", "Compost potion(4)"],
+    otherRewards: [
+      "The Ring of Charos(a) (the same ring, activated)",
+      "An acorn",
+      "An apple tree seed",
+      "5 Guam seeds",
+      "Compost potion(4)",
+    ],
     buildJournal,
     onReward: grantReward,
   });

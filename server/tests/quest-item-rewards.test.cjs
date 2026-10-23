@@ -30,10 +30,12 @@ function createPlayer() {
   const sender = new Proxy({}, {
     get: (_target, property) => {
       if (property === 'sendString') return (text, uid) => { messages.push([uid, text]); return sender; };
+      if (property === 'sendItemOnInterfaces') return (uid, id, amount) => { messages.push(['item', uid, id, amount]); return sender; };
       return () => sender;
     },
   });
   const player = {
+    messages,
     getUsername: () => 'reward-test',
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
@@ -103,6 +105,51 @@ before(async () => {
 
 after(() => {
   ItemOnGroundManager.registers = originalRegisters;
+});
+
+test('force-add preserves every non-stackable reward with zero, one or two free slots', () => {
+  for (const freeSlots of [0, 1, 2, 3]) {
+    const player = createPlayer();
+    fillInventory(player, 28 - freeSlots);
+    dropped = [];
+    const reward = new Item(REWARD_ITEM, 3);
+    player.getInventory().forceAdd(player, reward);
+    const carried = player.getInventory().getAmount(REWARD_ITEM);
+    const onGround = dropped.filter(drop => drop.id === REWARD_ITEM).reduce((sum, drop) => sum + drop.amount, 0);
+    assert.equal(carried, freeSlots, `${freeSlots} items fit`);
+    assert.equal(carried + onGround, 3, 'every reward is carried or available on the ground');
+    assert.equal(reward.getAmount(), 3, 'overflow never mutates the caller’s item');
+  }
+});
+
+test('delayed completion scrolls resolve each player’s own reward icon', (t) => {
+  const pending = [];
+  class CompletionTask {
+    constructor(_player, _ticks, callback) { this.callback = callback; }
+  }
+  const api = {
+    ...testApi,
+    core: { Item, CountdownTask: CompletionTask, TaskManager: { submit: task => pending.push(task) } },
+  };
+  t.after(() => {
+    delete api.core.CountdownTask;
+    delete api.core.TaskManager;
+  });
+  const quest = runtime.registerQuest(api, {
+    key: 'reward-scroll-player-test', name: 'Player Reward Scroll',
+    varpId: 20003, startedValue: 1, completionValue: 2, questPoints: 0,
+    scrollItemId: player => player.getAttribute('test:reward-icon'),
+  });
+  const first = createPlayer();
+  const second = createPlayer();
+  first.setAttribute('test:reward-icon', REWARD_ITEM);
+  second.setAttribute('test:reward-icon', STACKABLE_REWARD);
+  quest.complete(first);
+  quest.complete(second);
+  assert.equal(pending.length, 2, 'both scrolls wait until the hand-in has finished');
+  for (const task of pending) task.callback();
+  assert.deepEqual(first.messages.filter(entry => Array.isArray(entry) && entry[0] === 'item').map(entry => entry[2]), [REWARD_ITEM]);
+  assert.deepEqual(second.messages.filter(entry => Array.isArray(entry) && entry[0] === 'item').map(entry => entry[2]), [STACKABLE_REWARD]);
 });
 
 test('full inventory without an existing stack drops the quest reward and pays it once', () => {

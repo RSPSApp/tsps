@@ -8,6 +8,12 @@ module.exports = function registerANightAtTheTheatre(api) {
     PrivateArea, Boundary, ObjectManager, GameObject } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
   const PAGE = "A Night at the Theatre";
+  const STRANGER_PAGE = "Mysterious Stranger";
+  // The wiki's separate "So about that memory..." conversation, played after the
+  // head hand-in; it carries the line that ends the first-memory leg.
+  const FIRST_MEMORY_VARIANT = "talking-to-the-mysterious-stranger-after-getting-ranis-head-after-finishing-the-first-memory-cutscene";
+  // The Mysterious Stranger's teleport crystal shop (escape crystals).
+  const MYSTERIOUS_STRANGER_SHOP = 1240;
   const LAMPS_ATTRIBUTE = "night-at-the-theatre:lamps-used";
   const NOTE_ATTRIBUTE = "night-at-the-theatre:note-read";
   const ACID_ATTRIBUTE = "night-at-the-theatre:acid-given";
@@ -65,6 +71,13 @@ module.exports = function registerANightAtTheTheatre(api) {
   const quest = registerQuest(api, {
     key: "a_night_at_the_theatre", name: PAGE, varpId: 3055, varbitId: 12276,
     startedValue: 1, completionValue: 80, questPoints: 2,
+    // Cache DB row 104 column 19 completes at varbit 12276 >= 86. The plugin's
+    // durable completion stage is 80; send every completed save as the native
+    // threshold so existing stage-80 saves stay complete after this mapping.
+    // The client stores this quest's progress on the native even grid
+    // (0, 2, ..., 86); the durable mid-conversation stages 31, 33, 35 and 41 are
+    // values OSRS never sends, so they round up to the next native value.
+    varbitValue(stage) { return stage >= 80 ? 86 : (stage % 2 ? stage + 1 : stage); },
     rewardLines: ["Four antique lamps (20,000 combat XP each, level 50+)", "A friend of Sugadinti"],
     onReward: claimLamps,
     buildJournal(player) {
@@ -93,7 +106,7 @@ module.exports = function registerANightAtTheTheatre(api) {
       // Keep the post-quest Stranger conversation available: it includes the
       // canonical crystal shop option. claimLamps is idempotent after all four
       // lamps have been used or banked.
-      if (startTranscript(api, player, npcId, "Mysterious Stranger", "after-a-night-at-the-theatre")) return true;
+      if (startTranscript(api, player, npcId, STRANGER_PAGE, "after-a-night-at-the-theatre")) return true;
       player.sendMessage("Sugadinti is grateful for your help.");
       return true;
     }
@@ -139,17 +152,37 @@ module.exports = function registerANightAtTheTheatre(api) {
     const name = api.core.NpcDefinition.forId(npcId)?.getName?.();
     if (name !== "Mysterious Stranger" && name !== "Nature Spirit") return;
     const s = stage(player);
-    if (s >= 20 && s < 22 && text === "I'm not sure why I asked. I'll be back once I've explored this nest.") event.after = () => advance(player, 22);
+    // The hand-in conversation and the "So about that memory..." conversation
+    // share this line, so only the stage-20 conversation may open the nest leg.
+    if (s >= 20 && s < 22 && text === "My associates would prefer I remain here."
+      && questVariant(event) === FIRST_MEMORY_VARIANT) event.after = () => advance(player, 22);
     if (s >= 33 && s < 35 && text === "Perfect. I will await your return.") event.after = () => advance(player, 35);
     if (s >= 35 && s < 40 && text === "For you my friend, it is no problem at all.") event.after = () => advance(player, 40);
-    if (s >= 52 && s < 56 && text === "In that case, I'll see you in there.") event.after = () => advance(player, 56);
+    // The fifth-memory bark conversation ends on the notice board line, which is the
+    // stage-52 line of "after-killing-the-hespori"; the "Don't forget you can use the
+    // notice board..." line belongs to the stage-56+ variant and is never heard here.
+    if (s >= 52 && s < 56 && text === "You can still take other people in as well of course. Just use the notice board to set up a party and find suitable allies. Once you're ready, I will join you in the Theatre.") event.after = () => advance(player, 56);
   }
-  function action({ player, stepId, npcId }) {
+  function questVariant(event) {
+    const entry = (event.pages ?? []).find(page => String(page?.page ?? "").replace(/^Transcript:/, "") === PAGE);
+    return entry?.variants?.[0];
+  }
+  function action(event) {
+    const { player, stepId, npcId } = event;
     const name = api.core.NpcDefinition.forId(npcId)?.getName?.();
     if (name !== "Mysterious Stranger" && name !== "Daer Krand") return;
     const s = stage(player);
     if (stepId === "T6VA-h" && s < 14 && held(player, I.RANIS_HEAD)) { player.getInventory().deleteNumber(I.RANIS_HEAD, 1); advance(player, 14); }
     if (stepId === "evA_XO" && s === 14) advance(player, 20);
+    if (stepId === "7jQW6q") {
+      // "Can I get those teleport crystals you mentioned?" opens the Stranger's
+      // shop. This conversation closes with the chatbox, and closing the chatbox
+      // also closes the shop interface, so the shop opens one tick later.
+      event.handled = true;
+      event.end = true;
+      const { TaskManager, CountdownTask, ShopManager } = api.core;
+      TaskManager.submit(new CountdownTask(player, 1, () => ShopManager.open(player, MYSTERIOUS_STRANGER_SHOP)));
+    }
     if (stepId === "DqxBs2" && s === 30 && held(player, I.STRANGE_SPIDER_EGGS)) { player.getInventory().deleteNumber(I.STRANGE_SPIDER_EGGS, 1); advance(player, 31); }
     if (stepId === "0vgPPw" && s === 31) advance(player, 32);
     if (stepId === "Jb3C2v" && s === 32) advance(player, 33);
@@ -162,7 +195,15 @@ module.exports = function registerANightAtTheTheatre(api) {
     if (stepId === "dUYNsb" && s === 78) quest.complete(player);
   }
   function condition({ player, stepId, pages }) {
-    if (!pages?.some(entry => entry.page.replace(/^Transcript:/, "") === PAGE)) return;
+    const names = (pages ?? []).map(entry => String(entry.page ?? "").replace(/^Transcript:/, ""));
+    // The Stranger's post-quest page offers a Sinhaza shroud this server cannot
+    // award (the tier rules are not implemented), so the reward option is not
+    // offered; the teleport crystal option opens the shop.
+    if (names.includes(STRANGER_PAGE)) {
+      if (stepId === "FY0RCF") return true;
+      if (stepId === "WhwoJ-" || stepId === "-nVpES") return false;
+    }
+    if (!names.includes(PAGE)) return;
     const conditions = {
       "YudDDA": !held(player, I.RANIS_HEAD), "tv61D-": !held(player, I.STRANGE_SPIDER_EGGS), "UuYs_j": !held(player, I.HESPORI_BARK),
       "ULZ-yE": !player.getInventory().getFreeSlots(), "GK3KT6": !player.getInventory().getFreeSlots(), "RPwP26": !player.getInventory().getFreeSlots(),
@@ -284,7 +325,7 @@ module.exports = function registerANightAtTheTheatre(api) {
     if (!quest.isComplete(event.player)) return;
     claimLamps(event.player); event.handled = true;
   }
-  function raidCompleted({ player }) { if (stage(player) === 56) advance(player, 78); }
+  function raidCompleted({ player }) { if (stage(player) >= 52 && stage(player) < 78) advance(player, 78); }
   function raidSkip({ player, option, npcId }) {
     if (api.core.NpcDefinition.forId(npcId)?.getName?.() !== "Mysterious Stranger") return;
     if (stage(player) >= 52 && stage(player) < 56 && option === "Yes." && hasRaidCompletion(player)) advance(player, 78);

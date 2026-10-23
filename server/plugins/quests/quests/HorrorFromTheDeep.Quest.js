@@ -8,9 +8,11 @@
  * offerings, the lighting-mechanism repairs, and the dagannoth -> dagannoth mother
  * boss progression that completes the quest.
  *
- * Stages (varp 351 "deephorror"): 1 started, 2 entered the lighthouse, 4 lighthouse
- * repaired, 5 dagannoth defeated, 10 complete. Progress beyond the stage (bridge
- * halves, key, door, tar/glass/light, wall offerings) lives in the persisted
+ * Stages (varbit 34, bits 0-10 of varp 351 "deephorror"): 1 started, 2 entered
+ * the lighthouse, 4 lighthouse repaired, 5 dagannoth defeated, 10 complete.
+ * Cache quest DB row 74 column 19 requires 10, and script 4024 case 74 reads
+ * varbit 34. Progress beyond the stage (bridge halves, key, door,
+ * tar/glass/light, wall offerings) lives in the persisted
  * "quest.horror_from_the_deep.flags" bitmask.
  *
  * Travel is explicit: the ground-floor iron ladder drops into the basement (the
@@ -20,10 +22,13 @@
  * post-quest transcript; the basement fight is Jossik 4424 in the dungeon.
  *
  * Source: LostCityRS/Content quest_horror (pinned in issue #196).
- * Gaps: the dagannoth mother colour phases and their change messages are not
- * reproduced (one attackable form, 988, is spawned); the basalt-rock and
- * broken-bridge jumps, the lighthouse shop, the god-book reward choice/reclaim
- * and the post-quest bookcase are not simulated; sword/arrow wall offerings are
+ * The mother cycles through its six documented weaknesses every 30 game ticks
+ * (18 seconds). Damage is gated against the current phase and the canonical
+ * colour-change message reports the phase. The cached recolour HSL values map
+ * forms 983-988 to white, blue, red, orange, green and brown respectively.
+ * Gaps: the basalt-rock and
+ * broken-bridge jumps, the lighthouse shop, god-book reclaim and the post-quest
+ * bookcase are not simulated; sword/arrow wall offerings are
  * matched by item name rather than the cache weapon category.
  */
 module.exports = function registerHorrorFromTheDeepQuest(api) {
@@ -39,9 +44,29 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
 
   const LARRISSA_NPC_IDS = new Set([NpcIdentifiers.LARRISSA, NpcIdentifiers.LARRISSA_2]);
   const JOSSIK_DUNGEON_ID = NpcIdentifiers.JOSSIK_2; // 4424, seated in the cave during the quest
+  const JOSSIK_NPC_IDS = new Set([NpcIdentifiers.JOSSIK, JOSSIK_DUNGEON_ID]);
   const GUNNJORN_NPC_ID = NpcIdentifiers.GUNNJORN;
   const DAGANNOTH_JR_ID = NpcIdentifiers.DAGANNOTH_11; // 979, walkable level-100 Dagannoth
   const DAGANNOTH_MOTHER_ID = NpcIdentifiers.DAGANNOTH_MOTHER_9; // 988, attackable mother
+  const MOTHER_PHASE_TICKS = 18 / 0.6;
+  // Cache npc recolour HSL (hue is the high 6 bits, saturation the next 3,
+  // lightness the low 7) identifies the visible forms: 983 neutral white,
+  // 984 hue 42 blue, 985 hue 0 red, 986 hue 5 orange, 987 hue 21 green,
+  // 988 hue 7 brown. Spell IDs below are CombatSpell.spellId() values.
+  const MOTHER_PHASES = [
+    { colour: "white", weakness: "air", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_4 },
+    { colour: "blue", weakness: "water", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_5 },
+    { colour: "orange", weakness: "melee", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_7 },
+    { colour: "brown", weakness: "earth", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_9 },
+    { colour: "red", weakness: "fire", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_6 },
+    { colour: "green", weakness: "ranged", npcId: NpcIdentifiers.DAGANNOTH_MOTHER_8 },
+  ];
+  const ELEMENTAL_SPELLS = new Map([
+    [1152, "air"], [1160, "air"], [1172, "air"], [1183, "air"], [21876, "air"],
+    [1154, "water"], [1163, "water"], [1175, "water"], [1185, "water"], [21877, "water"],
+    [1156, "earth"], [1166, "earth"], [1177, "earth"], [1188, "earth"], [21878, "earth"],
+    [1158, "fire"], [1169, "fire"], [1181, "fire"], [1189, "fire"], [21879, "fire"],
+  ]);
 
   const LIGHTHOUSE_DOOR_ID = ObjectIdentifiers.DOORWAY_6; // 4577
   const BOOKCASE_ID = ObjectIdentifiers.BOOKCASE_15; // 4617
@@ -59,12 +84,6 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   const STRANGE_WALL_FAR_IDS = new Set([
     ObjectIdentifiers.STRANGE_WALL_3,
     ObjectIdentifiers.STRANGE_WALL_4,
-  ]);
-  const IRON_LADDER_IDS = new Set([
-    ObjectIdentifiers.IRON_LADDER,
-    ObjectIdentifiers.IRON_LADDER_2,
-    ObjectIdentifiers.IRON_LADDER_3,
-    ObjectIdentifiers.IRON_LADDER_4,
   ]);
   /** 4485, the foyer/dungeon ladder half that has no cache identifier. */
   const CAVE_LADDER_ID = 4485;
@@ -87,6 +106,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   const BRIDGE_NAILS = 30;
 
   const VARP_HORROR_FROM_THE_DEEP = 351; // "deephorror"
+  const VARBIT_HORROR_FROM_THE_DEEP = 34; // bits 0-10; script 4024 reads this for quest 74
   const STAGE_STARTED = 1;
   const STAGE_ENTERED_LIGHTHOUSE = 2;
   const STAGE_REPAIRED_LIGHTHOUSE = 4;
@@ -119,6 +139,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   const FLAG_WALL_FIRE = 1 << 10;
   const FLAG_WALL_SWORD = 1 << 11;
   const FLAG_WALL_ARROW = 1 << 12;
+  const FLAG_BOOK_CLAIMED = 1 << 13;
   const WALL_BITS = [
     FLAG_WALL_AIR,
     FLAG_WALL_WATER,
@@ -160,6 +181,12 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     ["LZ1XXE", DIARY],
     ["awYSNR", JOURNAL],
   ]);
+  // Jossik's post-quest casket exchange (Transcript:Jossik).
+  const GOD_BOOK_ACTIONS = new Map([
+    ["wZLOyL", ItemIdentifiers.DAMAGED_BOOK],
+    ["UDtF8K", ItemIdentifiers.DAMAGED_BOOK_2],
+    ["frpSFr", ItemIdentifiers.DAMAGED_BOOK_3],
+  ]);
 
   const START_HOOK = "quest:horror-from-the-deep:start";
   const SPAWN_DAGANNOTH_ACTION_ID = "fhKQH9";
@@ -168,6 +195,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
 
   let quest;
   const bossesByPlayer = new Map();
+  const motherPhasesByPlayer = new Map();
 
   const getFlags = (player) => Number(player.getAttribute(ATTR_FLAGS)) || 0;
   const hasFlag = (player, bit) => (getFlags(player) & bit) !== 0;
@@ -274,9 +302,14 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     return "starting-off";
   }
 
-  function jossikVariant(player) {
+  function jossikVariant(player, npcId) {
     const stage = quest.getStage(player);
-    if (stage >= STAGE_COMPLETE) return null; // default Jossik page handles post-quest
+    // Once complete, Jossik opens with the casket exchange until it has been
+    // handed in; afterwards his default shop page takes over.
+    if (stage >= STAGE_COMPLETE) {
+      return hasFlag(player, FLAG_BOOK_CLAIMED) ? null : "initial-dialogue-after-horror-from-the-deep";
+    }
+    if (npcId !== JOSSIK_DUNGEON_ID) return null;
     if (stage >= STAGE_DEFEATED_DAGANNOTH) return "upon-killing-the-dagannoth-or-talking-to-jossik";
     if (stage >= STAGE_REPAIRED_LIGHTHOUSE) return "talking-to-jossik-in-the-basement";
     return null;
@@ -292,9 +325,9 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
 
   function selectVariant({ npcId, player }) {
     if (LARRISSA_NPC_IDS.has(npcId)) return larrissaVariant(player);
-    // Only the dungeon Jossik (4424) runs the basement scenes; the one upstairs
-    // (4423) is the post-quest shop keeper and keeps the default Jossik page.
-    if (npcId === JOSSIK_DUNGEON_ID) return jossikVariant(player);
+    // Only the dungeon Jossik (4424) runs the basement scenes; either Jossik
+    // carries the post-quest casket exchange.
+    if (JOSSIK_NPC_IDS.has(npcId)) return jossikVariant(player, npcId);
     if (npcId === GUNNJORN_NPC_ID) return gunnjornVariant(player);
     return null;
   }
@@ -359,8 +392,17 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   }
 
   /** Answer the bookcase prose conditions; everything else belongs to another plugin. */
-  function answerCondition({ player, text }) {
+  function answerCondition({ player, npcId, text }) {
+    if (!JOSSIK_NPC_IDS.has(npcId)) return null;
     const value = String(text).toLowerCase();
+    if (value.includes("rusty casket")) {
+      const hasCasket = hasItem(player, RUSTY_CASKET);
+      if (value.includes("does not have")) return !hasCasket;
+      if (value.includes("stored somewhere")) return false;
+      return hasCasket;
+    }
+    if (value.includes("dropped it after obtaining it")) return !hasItem(player, RUSTY_CASKET);
+    if (value.includes("full inventory")) return freeSlots(player) === 0;
     if (!value.includes("inventory space")) return null;
     const slots = freeSlots(player);
     if (value.includes("three open inventory spaces")) return slots < 3;
@@ -370,9 +412,19 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     return null;
   }
 
+  /** 35 Agility is checked here; Alfred Grimhand's Barcrawl has no server quest to read. */
+  function meetsStartRequirements(player) {
+    return player.getSkillManager().getMaxLevel(Skill.AGILITY) >= 35;
+  }
+
   function handleStartHook({ player, npcId, hook }) {
     if (!LARRISSA_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
-    if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
+    if (quest.getStage(player) >= STAGE_STARTED) return;
+    if (!meetsStartRequirements(player)) {
+      player.sendMessage("You need an Agility level of at least 35 to start this quest.");
+      return;
+    }
+    quest.setStage(player, STAGE_STARTED);
   }
 
   function spawnAtPlayer(player, npcId) {
@@ -389,7 +441,15 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
       owner: player,
       ownerOnly: true,
     });
-    if (npc) bossesByPlayer.set(player, npc);
+    if (npc) {
+      bossesByPlayer.set(player, npc);
+      if (npcId === DAGANNOTH_MOTHER_ID) {
+        const state = { npc, ticks: 0, phase: 0, task: null };
+        motherPhasesByPlayer.set(player, state);
+        npc?.setNpcTransformationId?.(MOTHER_PHASES[state.phase].npcId);
+        startMotherPhaseTask(player, state);
+      }
+    }
   }
 
   function clearBoss(player) {
@@ -400,6 +460,8 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     const tracked = bossesByPlayer.get(player);
     if (tracked) api.removeNpc(tracked);
     bossesByPlayer.delete(player);
+    motherPhasesByPlayer.get(player)?.task?.stop?.();
+    motherPhasesByPlayer.delete(player);
     // A dagannoth only exists once the lighthouse is fixed (both spawn actions
     // require it). The death and logout hooks run for every player, so skip the
     // lookup for the players it can never concern.
@@ -438,6 +500,21 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
       if (!quest.isComplete(player)) quest.complete(player);
       return;
     }
+    const godBook = GOD_BOOK_ACTIONS.get(stepId);
+    if (godBook !== undefined) {
+      event.handled = true;
+      if (hasFlag(player, FLAG_BOOK_CLAIMED)) return;
+      // The casket is handed over; if it was lost the dialogue says Jossik
+      // already picked it up, so nothing is consumed.
+      if (hasItem(player, RUSTY_CASKET)) player.getInventory().deleteNumber(RUSTY_CASKET, 1);
+      if (freeSlots(player) < 1) {
+        player.sendMessage("You need an open inventory space to take the book.");
+        return;
+      }
+      player.getInventory().adds(godBook, 1);
+      setFlag(player, FLAG_BOOK_CLAIMED, true);
+      return;
+    }
     const book = BOOK_ACTIONS.get(stepId);
     if (book !== undefined) {
       if (freeSlots(player) >= 1) player.getInventory().adds(book, 1);
@@ -454,14 +531,71 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   function handleNpcDeath(event) {
     const player = event.killer;
     if (!player || player.isPlayer?.() === false) return;
-    if (bossesByPlayer.get(player) === event.npc) bossesByPlayer.delete(player);
-    if (event.npcId === DAGANNOTH_JR_ID && quest.getStage(player) === STAGE_REPAIRED_LIGHTHOUSE) {
-      quest.setStage(player, STAGE_DEFEATED_DAGANNOTH);
+    const mother = motherPhaseFor(event.npc);
+    if (mother) {
+      const owner = event.npc.getOwner?.();
+      if (player !== owner || motherPhasesByPlayer.get(owner) !== mother) return;
+      mother.task?.stop?.();
+      motherPhasesByPlayer.delete(owner);
+      if (bossesByPlayer.get(owner) === event.npc) bossesByPlayer.delete(owner);
+      if (quest.getStage(owner) >= STAGE_DEFEATED_DAGANNOTH && !quest.isComplete(owner)) {
+        quest.complete(owner);
+      }
       return;
     }
-    if (event.npcId === DAGANNOTH_MOTHER_ID && quest.getStage(player) >= STAGE_DEFEATED_DAGANNOTH) {
-      if (!quest.isComplete(player)) quest.complete(player);
+    if (bossesByPlayer.get(player) !== event.npc || event.npc?.getOwner?.() !== player) return;
+    bossesByPlayer.delete(player);
+    motherPhasesByPlayer.get(player)?.task?.stop?.();
+    if (motherPhasesByPlayer.get(player)?.npc === event.npc) motherPhasesByPlayer.delete(player);
+    if (event.npcId === DAGANNOTH_JR_ID && quest.getStage(player) === STAGE_REPAIRED_LIGHTHOUSE) {
+      quest.setStage(player, STAGE_DEFEATED_DAGANNOTH);
     }
+  }
+
+  function motherPhaseFor(npc) {
+    const owner = npc?.getOwner?.();
+    const state = motherPhasesByPlayer.get(owner);
+    return state?.npc === npc ? state : null;
+  }
+
+  function handleMotherHit({ npc, hit }) {
+    const state = motherPhaseFor(npc);
+    const attacker = hit?.getAttacker?.();
+    if (!state || !attacker || attacker !== npc.getOwner?.()) return;
+
+    const phase = MOTHER_PHASES[state.phase];
+    const combatType = hit.getCombatType?.();
+    let weakness = null;
+    if (combatType === api.core.CombatType.MELEE) weakness = "melee";
+    else if (combatType === api.core.CombatType.RANGED) weakness = "ranged";
+    else if (combatType === api.core.CombatType.MAGIC) {
+      const spellId = hit.getSpell?.()?.spellId?.();
+      weakness = ELEMENTAL_SPELLS.get(spellId) ?? null;
+    }
+    if (weakness !== phase.weakness) hit.setTotalDamage(0);
+  }
+
+  function startMotherPhaseTask(player, state) {
+    class MotherPhaseTask extends api.core.Task {
+      constructor() {
+        super(1, state, false);
+      }
+      execute() {
+        if (motherPhasesByPlayer.get(player) !== state || quest.getStage(player) >= STAGE_COMPLETE
+          || state.npc.getOwner?.() !== player || !state.npc.isRegistered?.()) {
+          this.stop();
+          return;
+        }
+        state.ticks++;
+        if (state.ticks < MOTHER_PHASE_TICKS) return;
+        state.ticks = 0;
+        state.phase = (state.phase + 1) % MOTHER_PHASES.length;
+        state.npc.setNpcTransformationId?.(MOTHER_PHASES[state.phase].npcId);
+        player.sendMessage(`The Dagannoth changes to ${MOTHER_PHASES[state.phase].colour}...`);
+      }
+    }
+    state.task = new MotherPhaseTask();
+    api.core.TaskManager.submit(state.task);
   }
 
   function handleLighthouseDoor(event) {
@@ -517,17 +651,12 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     player.sendMessage("You pass through the opening in the strange wall.");
   }
 
-  function handleLighthouseLadder(event) {
-    if (quest.getStage(event.player) >= STAGE_REPAIRED_LIGHTHOUSE) return;
-    event.handled = true;
-    event.player.sendMessage("You must fix the lighthouse before any ships crash!");
-  }
-
+  // Ladder IDs are reused throughout the world; the shared climb event reaches
+  // ladderMove, which scopes this quest's destinations by object and location.
   function handleObjectInteraction(event) {
     if (event.objectId === LIGHTHOUSE_DOOR_ID) return handleLighthouseDoor(event);
     if (event.objectId === BOOKCASE_ID) return handleBookcase(event);
     if (STRANGE_WALL_FAR_IDS.has(event.objectId)) return handleFarStrangeDoor(event);
-    if (IRON_LADDER_IDS.has(event.objectId)) return handleLighthouseLadder(event);
   }
 
   function handleBridgePlank(event) {
@@ -682,6 +811,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
     key: "horror_from_the_deep",
     name: "Horror from the Deep",
     varpId: VARP_HORROR_FROM_THE_DEEP,
+    varbitId: VARBIT_HORROR_FROM_THE_DEEP,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 2,
@@ -704,6 +834,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("ladders:climb", handleLadderClaim);
   api.onNpcDeath(handleNpcDeath);
+  api.onNpcHitModify(handleMotherHit);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onPlayerLogout(handleLogout);

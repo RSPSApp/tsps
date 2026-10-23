@@ -8,9 +8,9 @@
  * (cellar rubble, general store, bank, furnace), the Gadderanks fight, the
  * Ivan escort and the Rod of Ivandis chain, plus the completion reward.
  *
- * Stages (varp 704 "myreque_2_main_var"; siblings 705 "myreque2_multivar" and
- * 706 "myreque2_extravar" hold the sub-flags - kept here as persisted
- * attributes instead of mirroring unknown bit positions):
+ * Stages (the native quest status reads varbit 1990 "myreque_2_quest", base
+ * varp 705 "myreque2_multivar" bits 0-8; the sub-flags in 705/706 are kept
+ * here as persisted attributes instead of mirroring unknown bit positions):
  *   0 unstarted, 20 Veliaf briefed, 30 food placed at the gate, 50 told about
  *   the inn cellar, 60 entrance rubble mined, 80 trapdoor opened,
  *   100 cellar cleared, 120 agreed to fix the store, 150 roof fixed,
@@ -23,10 +23,11 @@
  *   350 library key, 360 library opened, 370 The Sleeping Seven read,
  *   380 boards removed, 390 rod mould, 400 silvthrill rod enchanted,
  *   410 Rod of Ivandis blessed, 420 complete.
- * Stage values mirror the Quest Helper plugin's step map for varp 704
+ * Stage values mirror the Quest Helper plugin's step map for varbit 1990
  * (0/20/30/40-50/60-70/80-90/100/110/120-160/165/170-220/230-260/280/290/
- * 300-310/315-340/350/360-370/375-410/420), which is also the OSRS varp's
- * own granularity.
+ * 300-310/315-340/350/360-370/375-410/420). QH's final key 420 is the
+ * hand-in step; the native completion threshold is 430, so the wire mapper
+ * below emits 430 for the completed stage while keeping durable saves at 420.
  *
  * Source: OSRS Wiki (transcript, quick guide) and the Quest Helper plugin's
  * InAidOfTheMyreque steps/conditions for the varp ladder and sub-varbits.
@@ -45,8 +46,8 @@
  *   own health/food teleport-out roll and the long/short route choice are
  *   simplified to the short route (the transcript's condition is answered
  *   "short route").
- * - Lvl-1 Enchant has no spell-on-item hook in this codebase, so the cosmic
- *   rune is used on the silvthrill rod to enchant it (water rune consumed).
+ * - Lvl-1 Enchant on the silvthrill rod uses the standard jewellery spell cast
+ *   with a quest-provided result recipe.
  * - "The Sleeping Seven" read text and the "you craft a silvthrill rod"
  *   line are not in the wiki transcript pack; short standalone lines are sent.
  */
@@ -64,9 +65,12 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
 
   const PAGE = "In Aid of the Myreque";
+  const AUREL_PAGE = "Aurel";
+  const DREZEL_PAGE = "Drezel";
   const START_HOOK = "quest:in-aid-of-the-myreque:start";
 
-  const VARP_IN_AID_OF_THE_MYREQUE = 704; // "myreque_2_main_var"
+  const VARBIT_IN_AID_OF_THE_MYREQUE = 1990; // "myreque_2_quest" (varp 705 bits 0-8)
+  const STAGE_COMPLETE_WIRE = 430; // native DB table 0 column 19 completion threshold
 
   const STAGE_STARTED = 20;
   const STAGE_FOOD_PLACED = 30;
@@ -209,8 +213,8 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   const CAVE_ENTRANCE_TOMB_ID = ObjectIdentifiers.CAVE_ENTRANCE_47; // 12770, Enter
   const COFFIN_ID = ObjectIdentifiers.COFFIN_16; // 12802, Inspect
   const KEYHOLE_ID = ObjectIdentifiers.KEYHOLE; // 12765, Inspect
-  const BOOKCASE_SEVEN_ID = ObjectIdentifiers.BOOKCASE_51; // 12766, Search
-  const BOOKCASE_OTHER_ID = ObjectIdentifiers.BOOKCASE_52; // 12767, Search
+  const BOOKCASE_SEVEN_ID = ObjectIdentifiers.BOOKCASE_52; // 12767 burgh_library_bookcase_ivandis, Search
+  const BOOKCASE_OTHER_ID = ObjectIdentifiers.BOOKCASE_51; // 12766 burgh_library_bookcase_history, Search
   const PATERDOMUS_WELL_ID = 3485; // "Well" at 3423,9890 (cache id, no identifier)
   const BURGH_GATE_IDS = new Set([
     ObjectIdentifiers.GATE_113, // 12816
@@ -268,6 +272,15 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     ItemIdentifiers.LEAN_SNAIL_MEAT, // 3371
     ItemIdentifiers.FAT_SNAIL_MEAT, // 3373
   ]);
+  // The crate takes either raw or cooked snails (QH setup supplies raw
+  // SNAIL_CORPSE1/2/3; the wiki says either version works).
+  const CRATE_SNAIL_ITEM_IDS = new Set([
+    ItemIdentifiers.THIN_SNAIL, // 3363
+    ItemIdentifiers.LEAN_SNAIL, // 3365
+    ItemIdentifiers.FAT_SNAIL, // 3367
+    ...SNAIL_MEAT_ITEM_IDS,
+  ]);
+  const COINS_ITEM_ID = ItemIdentifiers.COINS; // 995
   const STEEL_BAR_ITEM_ID = ItemIdentifiers.STEEL_BAR; // 2353
   const COAL_ITEM_ID = ItemIdentifiers.COAL; // 453
   const SOFT_CLAY_ITEM_ID = ItemIdentifiers.SOFT_CLAY; // 1761
@@ -275,8 +288,6 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   const SILVER_BAR_ITEM_ID = ItemIdentifiers.SILVER_BAR; // 2355
   const MITHRIL_BAR_ITEM_ID = ItemIdentifiers.MITHRIL_BAR; // 2359
   const SAPPHIRE_ITEM_ID = ItemIdentifiers.SAPPHIRE; // 1607
-  const COSMIC_RUNE_ITEM_ID = ItemIdentifiers.COSMIC_RUNE; // 564
-  const WATER_RUNE_ITEM_ID = ItemIdentifiers.WATER_RUNE; // 555
   const CRATE_EMPTY_ITEM_ID = ItemIdentifiers.CRATE; // 7630
   const CRATE_FULL_ITEM_ID = ItemIdentifiers.CRATE_2; // 7631
   const TEMPLE_LIBRARY_KEY_ITEM_ID = ItemIdentifiers.TEMPLE_LIBRARY_KEY; // 7632
@@ -413,8 +424,8 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     applyStageSpawns(player);
   }
 
-  function play(player, npcId, variant, select) {
-    return startTranscript(api, player, npcId, PAGE, variant, select);
+  function play(player, npcId, variant, select, page = PAGE) {
+    return startTranscript(api, player, npcId, page, variant, select);
   }
 
   const hasHammer = (player) => [...HAMMER_ITEM_IDS].some((id) => held(player, id));
@@ -442,7 +453,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
 
   function countFish(player) {
     let count = player.getInventory().getAmount(RAW_MACKEREL_ITEM_ID);
-    for (const id of SNAIL_MEAT_ITEM_IDS) count += player.getInventory().getAmount(id);
+    for (const id of CRATE_SNAIL_ITEM_IDS) count += player.getInventory().getAmount(id);
     return count;
   }
 
@@ -646,8 +657,9 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       despawnKey(player, "escort1");
       despawnKey(player, "escort2");
     }
-    // Drezel receives Ivan.
-    if (stage >= STAGE_DREZEL && stage < STAGE_COMPLETE) {
+    // Drezel receives Ivan and stays in the temple afterwards (the canonical
+    // lost-library-key recovery page is only reachable if he remains present).
+    if (stage >= STAGE_DREZEL) {
       spawnKey(player, "drezel", DREZEL_NPC_ID, DREZEL_TILE);
     } else {
       despawnKey(player, "drezel");
@@ -731,6 +743,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     { key: "in_search_of_the_myreque", name: "In Search of the Myreque" },
     { key: "nature_spirit", name: "Nature Spirit" },
     { key: "priest_in_peril", name: "Priest in Peril" },
+    { key: "the_restless_ghost", name: "The Restless Ghost" },
   ];
   const REQUIRED_SKILLS = [
     { skill: Skill.CRAFTING, level: 25, label: "Crafting" },
@@ -802,8 +815,9 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
         "I can start this quest by speaking to <col=800000>Veliaf Hurtz</col>",
         "in the <col=800000>Myreque Hideout</col> beneath the Canifis pub.",
         "",
-        "I have completed In Search of the Myreque, Nature Spirit and",
-        "Priest in Peril, with 25 Crafting, 15 Mining, 7 Magic and 25 Agility.",
+        "I have completed In Search of the Myreque, Nature Spirit,",
+        "Priest in Peril and The Restless Ghost, with 25 Crafting,",
+        "15 Mining, 7 Magic and 25 Agility.",
       ];
     }
     const lines = [
@@ -886,7 +900,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   /** Which variant a Talk-to handler plays; handlers pick by stage directly. */
 
   function answerCondition({ player, npcId, text, stepId, pages }) {
-    if (Array.isArray(pages) && !pages.some((entry) => entry?.page === PAGE)) return null;
+    if (Array.isArray(pages) && !pages.some((entry) => entry?.page === PAGE || entry?.page === AUREL_PAGE || entry?.page === DREZEL_PAGE)) return null;
     const inventory = player.getInventory();
     const has = (itemId) => inventory.getAmount(itemId) > 0;
     const stage = quest.getStage(player);
@@ -1042,6 +1056,14 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
         return false;
       case "zTSrDo": // didn't exhaust other dialogue options
         return false;
+      // Drezel's named-page library-key recovery (post-quest).
+      case "P91CrU": // lost temple library key
+        return quest.isComplete(player) && !held(player, TEMPLE_LIBRARY_KEY_ITEM_ID);
+      // Aurel's lost-Gadderhammer recovery page.
+      case "HxmbYb": // not enough coins
+        return !held(player, COINS_ITEM_ID, 3000);
+      case "Z1JkRV": // enough coins
+        return held(player, COINS_ITEM_ID, 3000);
       // Ivandis rod states.
       case "VJNcJx": // inspecting: before enchanting
       case "NqM8Y3": // Veliaf: before enchanting/blessing
@@ -1169,9 +1191,15 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
         return;
       }
       case "RRQbon": // Polmafi told first
-      case "lcbila": // Radigad told first
+      case "lcbila": { // Radigad told first
         setBit(player, BIT_MEMBERS_INFORMED);
+        // The helper's 290 leg is talking to one of them; it also releases the
+        // escort step if the Veliaf hideout conversation was skipped.
+        if (quest.getStage(player) >= STAGE_VELIAF_STORE && quest.getStage(player) < STAGE_HIDEOUT_TALK) {
+          advance(player, STAGE_HIDEOUT_TALK);
+        }
         return;
+      }
       case "c4DZLI": // Gadderanks first time
         setBit(player, BIT_GADDERANKS_TALKED);
         return;
@@ -1233,6 +1261,20 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
         if (!held(player, GADDERHAMMER_ITEM_ID)) give(player, GADDERHAMMER_ITEM_ID, 1);
         advance(player, STAGE_GADDERANKS_DEAD);
         return;
+      case "6qLnJV": { // Aurel's lost-Gadderhammer recovery page: buy it back
+        if (!held(player, COINS_ITEM_ID, 3000)) return;
+        if (
+          !held(player, GADDERHAMMER_ITEM_ID) &&
+          freeSlots(player) < 1 &&
+          player.getInventory().getAmount(COINS_ITEM_ID) > 3000
+        ) {
+          player.sendMessage("You don't have enough inventory space.");
+          return;
+        }
+        player.getInventory().deleteNumber(COINS_ITEM_ID, 3000);
+        if (!held(player, GADDERHAMMER_ITEM_ID)) give(player, GADDERHAMMER_ITEM_ID, 1);
+        return;
+      }
       case "OCv2XT": // Veliaf heads back to the Hollows
         advance(player, STAGE_VELIAF_STORE);
         return;
@@ -1249,9 +1291,19 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
         advance(player, STAGE_CRATE_HANDED);
         return;
       case "fTKBGC": // Drezel gives the key (message)
-      case "B_kRtc": // "receive Temple library key" (action)
-        if (!held(player, TEMPLE_LIBRARY_KEY_ITEM_ID)) give(player, TEMPLE_LIBRARY_KEY_ITEM_ID, 1);
+      case "B_kRtc": { // "receive Temple library key" (action)
+        // A full bag must not consume the key branch: stay before the key stage
+        // so Drezel's conversation can be repeated for the key.
+        if (!held(player, TEMPLE_LIBRARY_KEY_ITEM_ID) && !give(player, TEMPLE_LIBRARY_KEY_ITEM_ID, 1)) {
+          return;
+        }
         advance(player, STAGE_LIBRARY_KEY);
+        return;
+      }
+      case "7Z6IoI": // Drezel's named-page library-key recovery
+        if (!held(player, TEMPLE_LIBRARY_KEY_ITEM_ID) && quest.isComplete(player)) {
+          give(player, TEMPLE_LIBRARY_KEY_ITEM_ID, 1);
+        }
         return;
       case "3xpYaZ": // key in the keyhole
         openLibraryTrapdoor(player);
@@ -1285,6 +1337,18 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       advance(player, STAGE_STORE_AGREED);
       return;
     }
+    if (
+      String(option) === "What should I do now?" &&
+      stage >= STAGE_CRATE_GIVEN &&
+      stage < STAGE_CRATE_HANDED &&
+      !held(player, CRATE_EMPTY_ITEM_ID) &&
+      !held(player, CRATE_FULL_ITEM_ID)
+    ) {
+      // QH crate tooltip: ask Aurel what to do now for another crate.
+      const itemId = crateComplete(player) ? CRATE_FULL_ITEM_ID : CRATE_EMPTY_ITEM_ID;
+      if (give(player, itemId, 1)) player.sendMessage("Aurel gives you another crate.");
+      return;
+    }
     void stepId;
   }
 
@@ -1310,11 +1374,21 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     return value >= 1 && value < IN_SEARCH_COMPLETE;
   }
 
+  /** True while A Taste of Hope needs its canonical Veliaf rod hand-over. */
+  function tasteNeedsVeliafRod(player) {
+    const request = { player, needsRod: false };
+    api.emitCustomEvent("taste-of-hope:needs-veliaf-rod", request);
+    return request.needsRod === true;
+  }
+
   function talkVeliaf(event) {
     const { player, npcId } = event;
     if (!VELIAF_NPC_IDS.has(npcId)) return false;
     const stage = quest.getStage(player);
     if (quest.isComplete(player)) {
+      // A Taste of Hope's rod step needs Veliaf on its own transcript selector;
+      // In Aid registered earlier, so yield instead of claiming the shared NPC.
+      if (tasteNeedsVeliafRod(player)) return false;
       // The page has no post-quest variant; greet with the final conversation's
       // opening line only (never the stale rod-handover or rod-update branch).
       play(player, npcId, "rod-of-ivandis-talking-to-veliaf-with-the-finalized-rod", (steps) => steps.slice(0, 1));
@@ -1373,6 +1447,15 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     if (!AUREL_NPC_IDS.has(npcId)) return false;
     const stage = quest.getStage(player);
     if (stage < STAGE_CELLAR_CLEARED) return false;
+    if (stage >= STAGE_GADDERANKS_DEAD) {
+      // After the tithe the canonical Aurel page takes over. Losing the
+      // Gadderhammer (including a full-bag drop) has its own cross-page variant.
+      const variant = held(player, GADDERHAMMER_ITEM_ID)
+        ? "standard-dialogue"
+        : "if-the-player-has-lost-the-gadderhammer";
+      play(player, npcId, variant, null, AUREL_PAGE);
+      return true;
+    }
     if (stage < STAGE_CRATE_HANDED && held(player, CRATE_FULL_ITEM_ID)) {
       play(player, npcId, "entering-burgh-de-rott-fixing-the-general-store-handing-in-store-stock");
       return true;
@@ -1401,7 +1484,16 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   function talkRazvan(event) {
     const { player, npcId } = event;
     if (npcId !== RAZVAN_NPC_ID) return false;
-    if (quest.getStage(player) < STAGE_FOOD_PLACED) return false;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_FOOD_PLACED) return false;
+    if (stage >= STAGE_GADDERANKS && stage < STAGE_DREZEL) {
+      play(player, npcId, "gadderanks-arrives-at-burgh-de-rott-speaking-to-citizens-after-fixing-the-furnace");
+      return true;
+    }
+    if (stage >= STAGE_BANKER && stage < STAGE_GADDERANKS) {
+      play(player, npcId, "entering-burgh-de-rott-fixing-the-furnace-speaking-to-citizens-while-fixing-the-furnace");
+      return true;
+    }
     play(player, npcId, "entering-burgh-de-rott-speaking-to-citizens");
     return true;
   }
@@ -1499,8 +1591,17 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     const { player, npcId } = event;
     if (npcId !== DREZEL_NPC_ID) return false;
     const stage = quest.getStage(player);
-    if (stage < STAGE_DREZEL || stage >= STAGE_COMPLETE) return false;
-    if (stage < STAGE_LIBRARY_KEY) {
+    if (stage < STAGE_DREZEL) return false;
+    if (stage >= STAGE_COMPLETE) {
+      // Completed: only claim him to replace a lost library key; otherwise
+      // leave the shared post-quest Drezel page to its other owners.
+      if (held(player, TEMPLE_LIBRARY_KEY_ITEM_ID)) return false;
+      play(player, npcId, "standard-dialogue-after-priest-in-peril", undefined, DREZEL_PAGE);
+      return true;
+    }
+    if (stage < STAGE_LIBRARY_KEY || (!held(player, TEMPLE_LIBRARY_KEY_ITEM_ID) && stage < STAGE_LIBRARY_OPEN)) {
+      // Before the key, or after losing it before the library is open: Drezel
+      // can give another (QH item tooltip: "You can get another from Drezel").
       play(player, npcId, "asking-drezel-about-ivandis");
     } else {
       play(player, npcId, "asking-drezel-about-ivandis-talking-to-drezel-afterwards");
@@ -1660,6 +1761,10 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   }
 
   function mineEntranceRubble(player) {
+    if (quest.getStage(player) < STAGE_TOLD_INN) {
+      player.sendMessage("You should find out whether the townspeople want you here first.");
+      return;
+    }
     if (!hasPickaxe(player)) {
       player.sendMessage("You need a pickaxe to clear this rubble.");
       return;
@@ -1671,6 +1776,10 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   }
 
   function mineBasementRubble(player, objectId, tile) {
+    if (quest.getStage(player) < STAGE_TRAPDOOR_OPEN) {
+      player.sendMessage("You should open the trapdoor and climb down first.");
+      return;
+    }
     if (!hasPickaxe(player)) {
       player.sendMessage("You need a pickaxe to clear this rubble.");
       return;
@@ -1711,8 +1820,16 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   }
 
   function scoopRubble(player) {
+    if (quest.getStage(player) < STAGE_TRAPDOOR_OPEN) {
+      player.sendMessage("You should open the trapdoor and climb down first.");
+      return;
+    }
     if (!held(player, SPADE_ITEM_ID)) {
       player.sendMessage("You need a spade to scoop up the rubble.");
+      return;
+    }
+    if (!held(player, BUCKET_ITEM_ID) && !held(player, BUCKET_OF_RUBBLE_ITEM_ID)) {
+      player.sendMessage("You need something to carry the rubble in.");
       return;
     }
     const everyBit = hasBit(player, BIT_RUBBLE_1) && hasBit(player, BIT_RUBBLE_2) && hasBit(player, BIT_RUBBLE_3);
@@ -1996,10 +2113,13 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       }
       return;
     }
-    if (objectId === WORKING_FURNACE_ID && itemId === SILVER_BAR_ITEM_ID) {
-      event.handled = true;
-      craftSilvthrillRod(player);
-      return;
+    if (itemId === SILVER_BAR_ITEM_ID && (objectId === WORKING_FURNACE_ID || isFurnaceObject(event))) {
+      const onRodStep = stage >= STAGE_MOULD && held(player, ROD_MOULD_ITEM_ID);
+      if (onRodStep || objectId === WORKING_FURNACE_ID) {
+        event.handled = true;
+        craftSilvthrillRod(player);
+        return;
+      }
     }
     if (objectId === WOODEN_BOARDS_ID && HAMMER_ITEM_IDS.has(itemId)) {
       event.handled = true;
@@ -2034,7 +2154,6 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
         return;
       }
       player.getInventory().deleteNumber(ENCHANTED_SILVTHRILL_ROD_ITEM_ID, 1);
-      player.getInventory().deleteNumber(ROPE_ITEM_ID, 1);
       player.getInventory().adds(ROD_OF_IVANDIS_ITEM_ID, 1);
       player.sendMessage("You lower the rod into the Salve and withdraw it shortly after. It seems to glow in a rather strange way.");
       advance(player, STAGE_ROD_BLESSED);
@@ -2044,6 +2163,12 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       event.handled = true;
       useLibraryKey(player);
     }
+  }
+
+  /** The helper's rod step says any furnace; match the skill plugin's furnace names. */
+  function isFurnaceObject(event) {
+    const name = event.object?.getDefinition?.()?.getName?.();
+    return typeof name === "string" && /^(Small )?Furnace$/.test(name);
   }
 
   function craftSilvthrillRod(player) {
@@ -2058,7 +2183,6 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
     player.getInventory().deleteNumber(SILVER_BAR_ITEM_ID, 1);
     player.getInventory().deleteNumber(MITHRIL_BAR_ITEM_ID, 1);
     player.getInventory().deleteNumber(SAPPHIRE_ITEM_ID, 1);
-    player.getInventory().deleteNumber(ROD_MOULD_ITEM_ID, 1);
     player.getInventory().adds(SILVTHRILL_ROD_ITEM_ID, 1);
     player.sendMessage("You use the mould, silver, mithril and sapphire to craft a Silvthrill rod.");
     advance(player, STAGE_MOULD);
@@ -2080,7 +2204,7 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       attribute = CRATE_TINDER_ATTRIBUTE;
       needed = CRATE_TINDER_NEEDED;
       itemName = "tinderboxes";
-    } else if (itemId === RAW_MACKEREL_ITEM_ID || SNAIL_MEAT_ITEM_IDS.has(itemId)) {
+    } else if (itemId === RAW_MACKEREL_ITEM_ID || CRATE_SNAIL_ITEM_IDS.has(itemId)) {
       const wantedSnail = attributeNumber(player, CRATE_FISH_TYPE_ATTRIBUTE) === 1;
       if ((itemId === RAW_MACKEREL_ITEM_ID) === wantedSnail) {
         player.sendMessage(`The crate does not need any more ${itemName ?? "of those"}.`);
@@ -2123,19 +2247,17 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
       }
       return;
     }
-    if (ids.has(SILVTHRILL_ROD_ITEM_ID) && ids.has(COSMIC_RUNE_ITEM_ID)) {
-      event.handled = true;
-      if (!held(player, WATER_RUNE_ITEM_ID)) {
-        player.sendMessage("You need a water rune to cast Lvl-1 Enchant.");
-        return;
-      }
-      player.getInventory().deleteNumber(COSMIC_RUNE_ITEM_ID, 1);
-      player.getInventory().deleteNumber(WATER_RUNE_ITEM_ID, 1);
-      player.getInventory().deleteNumber(SILVTHRILL_ROD_ITEM_ID, 1);
-      player.getInventory().adds(ENCHANTED_SILVTHRILL_ROD_ITEM_ID, 1);
-      player.sendMessage("As you cast the enchantment on the rod, it seems to vibrate and glow.");
-      advance(player, STAGE_ROD_ENCHANTED);
-    }
+  }
+
+  function provideRodEnchantRecipe(request) {
+    if (request.itemId !== SILVTHRILL_ROD_ITEM_ID || request.spellName !== "Lvl-1 Enchant") return;
+    request.resultId = ENCHANTED_SILVTHRILL_ROD_ITEM_ID;
+    request.message = "As you cast the enchantment on the rod, it seems to vibrate and glow.";
+  }
+
+  function finishRodEnchant(request) {
+    if (request.itemId !== SILVTHRILL_ROD_ITEM_ID || request.resultId !== ENCHANTED_SILVTHRILL_ROD_ITEM_ID) return;
+    if (quest.getStage(request.player) < STAGE_ROD_ENCHANTED) advance(request.player, STAGE_ROD_ENCHANTED);
   }
 
   function handleItemAction(event) {
@@ -2250,9 +2372,15 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   quest = registerQuest(api, {
     key: "in_aid_of_the_myreque",
     name: "In Aid of the Myreque",
-    varpId: VARP_IN_AID_OF_THE_MYREQUE,
+    varbitId: VARBIT_IN_AID_OF_THE_MYREQUE,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
+    // QH's final step key is 420; the native quest status reads varbit 1990
+    // and completes at the DB threshold 430. Keep the durable stage at 420 for
+    // old saves and map only the completed value to the canonical wire value.
+    varbitValue(stage) {
+      return stage >= STAGE_COMPLETE ? STAGE_COMPLETE_WIRE : stage;
+    },
     questPoints: 2,
     xpRewards: REWARD_SKILLS.map((reward) => ({
       skillId: reward.skill.getIndex(),
@@ -2287,6 +2415,8 @@ module.exports = function registerInAidOfTheMyrequeQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnItem(handleItemOnItem);
+  api.onCustomEvent("magic:enchant-item-recipe", provideRodEnchantRecipe);
+  api.onCustomEvent("magic:enchant-item-cast", finishRodEnchant);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction(handleItemAction);
   api.onNpcDeath(handleNpcDeath);

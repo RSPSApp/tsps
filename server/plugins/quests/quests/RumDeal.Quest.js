@@ -173,8 +173,8 @@ module.exports = function registerRumDealQuest(api) {
   ]);
   // The map places the unnamed multi-loc root 10096 (its resolved variant is "Blindweed
   // Patch"); the cache has no name for the root, so ObjectIdentifiers has no constant.
-  // Varbit 1366 picks the stage: 0 weeds, 1 raked, 2-4 growing, 5 fully grown (the only
-  // child with a Pick option, 10102). The client only resolves the transform when it
+  // Varbit 1366 picks the stage: 0 weeds, 3 raked, 4 growing, 5 fully grown (the only
+  // child with a Pick option, 10102). Values mirror Quest Helper's DEAL_FARMING. The client only resolves the transform when it
   // builds the scene, so stage changes also send a per-player loc swap of the child.
   const PATCH_VARBIT = 1366;
   const PATCH_CHILDREN = [10097, 10098, 10099, 10100, 10101, 10102];
@@ -643,6 +643,7 @@ module.exports = function registerRumDealQuest(api) {
         return;
       case "fVhhrc": // Captain Donnie drinks the 'rum'
         if (quest.getStage(player) === STAGE_COLLECT_SWILL) {
+          if (held(player, UNSANITARY_SWILL)) player.getInventory().deleteNumber(UNSANITARY_SWILL, 1);
           quest.setStage(player, STAGE_TOLD_DONNIE);
         }
         return;
@@ -722,6 +723,18 @@ module.exports = function registerRumDealQuest(api) {
       if (quest.getStage(player) === STAGE_GROWN_BLINDWEED) {
         quest.setStage(player, STAGE_SHOW_BLINDWEED);
       }
+      return;
+    }
+    // At the "before the hopper" stage the lost-blindweed line words it "a little",
+    // and the hand-out has no action id of its own.
+    if (value.includes("savin' a little fer an emergency")) {
+      if (quest.getStage(player) === STAGE_SHOW_BLINDWEED) giveIfMissing(player, BLINDWEED);
+      return;
+    }
+    // A bucket dropped after the spider step is replaced here; the earlier
+    // hand-out only runs during the "control starts to rumble" action.
+    if (value.includes("ferget the 'rum'") && quest.getStage(player) === STAGE_COLLECT_SWILL) {
+      giveIfMissing(player, BUCKET);
       return;
     }
     if (value.includes("shoved the blindweed into the mix") && quest.getStage(player) === STAGE_BLINDWEED_ADDED) {
@@ -820,7 +833,7 @@ module.exports = function registerRumDealQuest(api) {
       return;
     }
     player.setAttribute(WEEDED_ATTRIBUTE, 1);
-    setPatchStage(player, 1);
+    setPatchStage(player, 3);
     player.performAnimation(new Animation(2273));
     player.getInventory().adds(WEEDS, 1);
     player.getSkillManager().addExperiences(Skill.FARMING, 4);
@@ -830,8 +843,8 @@ module.exports = function registerRumDealQuest(api) {
   /** The patch child (and the client's model) follows varbit 1366. */
   function syncPatchStage(player) {
     const stage = plantedAt(player) === 0
-      ? (weededPatch(player) ? 1 : 0)
-      : (blindweedGrown(player) ? 5 : 2);
+      ? (weededPatch(player) ? 3 : 0)
+      : (blindweedGrown(player) ? 5 : 4);
     setPatchStage(player, stage);
   }
 
@@ -971,7 +984,7 @@ module.exports = function registerRumDealQuest(api) {
     }
     player.getInventory().deleteNumber(BLINDWEED_SEED, 1);
     player.setAttribute(PLANTED_ATTRIBUTE, Date.now());
-    setPatchStage(player, 2);
+    setPatchStage(player, 4);
     growBlindweed(player);
     player.sendMessage("You plant a seed in the blindweed patch.");
   }
@@ -1177,8 +1190,12 @@ module.exports = function registerRumDealQuest(api) {
       return;
     }
     if (BLINDWEED_PATCH_OBJECT_IDS.has(objectId)) {
-      const interactions = (event.definition ?? api.core.ObjectDefinition?.forPlayer?.(objectId, player))
-        ?.getInteractions?.() ?? [];
+      // The map can place the unnamed multi-loc root (10096), whose own definition
+      // has no actions; resolve its varbit child before deciding Inspect vs Pick.
+      const actionDefinition = event.definition?.getInteractions?.()?.some(Boolean)
+        ? event.definition
+        : api.core.ObjectDefinition?.forPlayer?.(objectId, player) ?? event.definition;
+      const interactions = actionDefinition?.getInteractions?.() ?? [];
       if (interactions[event.clickType - 1]?.toLowerCase() === "inspect") inspectPatch(event);
       else harvestPatch(event);
       return;
@@ -1262,7 +1279,9 @@ module.exports = function registerRumDealQuest(api) {
       { skillId: Skill.FISHING.getIndex(), amount: 7000, label: "Fishing" },
       { skillId: Skill.FARMING.getIndex(), amount: 7000, label: "Farming" },
     ],
-    rewardItemId: ItemIdentifiers.HOLY_WRENCH,
+    // Davey's blessing already hands over the holy wrench; the completion must not
+    // grant a second one. The scroll still shows it via scrollItemId.
+    scrollItemId: ItemIdentifiers.HOLY_WRENCH,
     rewardItemLabel: "A holy wrench",
     otherRewards: ["Access to Braindeath Island"],
     buildJournal,

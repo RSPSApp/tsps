@@ -243,21 +243,6 @@ test('clipped type-10 crate 16560 uses its real wall sides without unmasked thro
   TaskManager.cancelTasks(eastPlayer.getIndex());
 });
 
-test('object routes build MORPH sizes and masks from the player-resolved child', (t) => {
-  const player = {
-    isPlayer: () => true, isNpc: () => false, getAsPlayer() { return this; },
-    getPacketSender: () => ({ getVarbit: () => 6, getVarp: () => 0 }),
-  };
-  const queue = new MovementQueue(player);
-  const parent = { getSizeX: () => 4, getSizeY: () => 3, getBlockingMask: () => 27, getId: () => 56522 };
-  const child = { getSizeX: () => 1, getSizeY: () => 2, getBlockingMask: () => 23, getId: () => 56523 };
-  t.mock.method(ObjectDefinition, 'forId', () => parent);
-  t.mock.method(ObjectDefinition, 'forPlayer', () => child);
-  const spec = queue.buildObjectRouteSpec(new GameObject(56522, new Location(1719, 9706, 0), 10, 0, null));
-  assert.deepEqual([spec.routeXLength, spec.routeYLength, spec.routeBlockingMask], [1, 2, 23]);
-  assert.deepEqual([spec.reachWidth, spec.reachLength, spec.reachAngle, spec.reachBlockAccessFlags], [1, 2, 0, 23]);
-});
-
 test('stage 6 painting resolves to its MORPH child and west-adjacent canvas reach', async () => {
   const { RegionManager } = require('../dist/game/collision/RegionManager');
   await ensureCache();

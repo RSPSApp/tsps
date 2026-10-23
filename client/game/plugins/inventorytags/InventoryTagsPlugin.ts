@@ -18,8 +18,8 @@ export function parseInventoryTagGroups(raw: string): InventoryTagGroup[] {
     const groups: unknown = JSON.parse(raw);
     if (!Array.isArray(groups) || groups.length > 64) throw new Error("Enter an array of at most 64 item groups.");
     return groups.map((group) => {
-        if (!group || typeof group.name !== "string" || !group.name.trim() || !/^#[0-9a-f]{6}$/i.test(group.color) || !Array.isArray(group.itemIds) || group.itemIds.length > 4096 || group.itemIds.some((id: unknown) => !Number.isInteger(id) || Number(id) <= 0)) {
-            throw new Error("Each group needs a name, #RRGGBB colour and positive integer itemIds.");
+        if (!group || typeof group.name !== "string" || !group.name.trim() || !/^#[0-9a-f]{6}$/i.test(group.color) || !Array.isArray(group.itemIds) || group.itemIds.length > 4096 || group.itemIds.some((id: unknown) => !Number.isInteger(id) || Number(id) < 0)) {
+            throw new Error("Each group needs a name, #RRGGBB colour and non-negative integer itemIds.");
         }
         return { name: group.name.trim(), color: group.color.toLowerCase(), itemIds: [...new Set<number>(group.itemIds)] };
     });

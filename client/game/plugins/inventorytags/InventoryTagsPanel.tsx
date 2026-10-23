@@ -23,7 +23,9 @@ export function InventoryTagsPanel({ plugin }: { plugin: InventoryTagsPlugin }):
         event.preventDefault();
         try {
             if (!ids.trim()) throw new Error("Enter at least one item ID.");
-            const group = { name, color, itemIds: ids.trim().split(/[\s,]+/).map(Number) };
+            const tokens = ids.trim().split(/[\s,]+/);
+            if (tokens.some(token => !token)) throw new Error("Enter an item ID before and after each comma.");
+            const group = { name, color, itemIds: tokens.map(Number) };
             if (editing) {
                 if (JSON.stringify(state.groups[editing.index]) !== editing.original) {
                     throw new Error("This group changed or was removed. Choose Edit again before saving.");

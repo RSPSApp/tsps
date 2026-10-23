@@ -71,9 +71,25 @@ async function main() {
         await enter(host, "Item IDs", "-1");
         await save(host);
         assert.deepEqual(plugin.getGroups(), groups);
-        assert.match(host.querySelector('[role="alert"]')?.textContent ?? "", /positive integer/i);
+        assert.match(host.querySelector('[role="alert"]')?.textContent ?? "", /non-negative integer/i);
         assert.equal((host.querySelector('[aria-label="Item IDs"]') as HTMLTextAreaElement).value, "-1");
         assert.equal((host.querySelector('[aria-label="Group name"]') as HTMLInputElement).value, "B");
+    }));
+    await test("editing accepts cache item zero as an explicit item ID", () => editor(async (plugin, host) => {
+        await edit(host, 1);
+        await enter(host, "Item IDs", "0, 4151");
+        await save(host);
+        assert.deepEqual(plugin.getGroups(), [groups[0], { ...groups[1], itemIds: [0, 4151] }, groups[2]]);
+        assert.equal(host.querySelector('[role="alert"]'), null);
+    }));
+    await test("empty item fields and separators cannot silently tag cache item zero", () => editor(async (plugin, host) => {
+        await edit(host, 1);
+        for (const draft of [" ", ",", "4151,", ",4151"]) {
+            await enter(host, "Item IDs", draft);
+            await save(host);
+            assert.deepEqual(plugin.getGroups(), groups, `invalid draft ${JSON.stringify(draft)} preserves saved tags`);
+            assert.ok(host.querySelector('[role="alert"]'));
+        }
     }));
     await test("removing the edited group clears the form without replacing its neighbour", () => editor(async (plugin, host) => {
         await edit(host, 1); await remove(host, "B");

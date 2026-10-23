@@ -222,3 +222,35 @@ test("no presets for an Ironman (they hand out items); normal accounts keep them
   custom["presets:can-use"](main);
   assert.equal(main.allow, true);
 });
+
+for (const source of ["pickup", "telegrab"]) {
+  for (const mode of ["ironman", "ultimate", "hardcore"]) {
+    test(`real ${source} cannot bypass ${mode} ground-item ownership`, t => {
+      const player = account("GroundIron", mode), manager = core.ItemOnGroundManager;
+      const {State} = require("../dist/game/entity/impl/grounditem/ItemOnGround");
+      const {MagicOnItemPacketListener} = require("../dist/net/packet/impl/MagicOnItemPacketListener");
+      const listener = new MagicOnItemPacketListener();
+      player.setLocation(new core.Location(3222, 3218));
+      t.mock.method(player, "isRegistered", () => true);
+      t.mock.method(PluginManager, "emitCustomEvent", (name, event) => custom[name]?.(event));
+      t.mock.method(PluginManager, "emitGroundItemPickup", event => {
+        hooks.onGroundItemPickup(event); return event.handled;
+      });
+      const items = core.World.getItems(), previous = items.splice(0);
+      t.after(() => items.splice(0, items.length, ...previous));
+      const take = pile => source === "pickup" ? manager.pickup(player, pile)
+        : listener.landGroundItemGrab(player, pile.getItem().getId(), pile.getPosition());
+      const pile = manager.registers(player, new core.Item(995, 5));
+      pile.owner = "OtherPlayer"; pile.setState(State.SEEN_BY_EVERYONE);
+      take(pile);
+      assert.equal(player.getInventory().getAmount(995), 0); assert.equal(pile.isPendingRemoval(), false);
+      assert.deepEqual(player.messages, ["You're an Ironman, so you can't take items that other players have dropped."]);
+      pile.owner = player.getUsername(); take(pile);
+      assert.equal(player.getInventory().getAmount(995), 5, "own items remain available");
+      const spawn = manager.registers(player, new core.Item(995, 7));
+      spawn.owner = null; spawn.setState(State.SEEN_BY_EVERYONE); spawn.staticSpawn = true;
+      take(spawn);
+      assert.equal(player.getInventory().getAmount(995), 12, "unowned world spawns remain available");
+    });
+  }
+}

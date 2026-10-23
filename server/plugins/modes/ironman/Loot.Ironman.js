@@ -17,12 +17,22 @@ const WARNED_ATTRIBUTE = "ironman:kill-credit-warned";
 const COMBAT_SKILLS = new Set(["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS"]);
 
 function pickup(event) {
-  const { player, groundItem } = event;
-  if (!Common.isIron(player)) return;
-  const owner = groundItem?.getOwner?.();
-  if (!owner || owner.toLowerCase() === player.getUsername().toLowerCase()) return;
-  player.sendMessage(Common.message("pickup"));
+  if (!cannotTake(event)) return;
   event.handled = true;
+}
+
+function take(event) {
+  if (event.allow === false || !cannotTake(event)) return;
+  event.allow = false;
+}
+
+function cannotTake(event) {
+  const { player, groundItem } = event;
+  if (!Common.isIron(player)) return false;
+  const owner = groundItem?.getOwner?.();
+  if (!owner || owner.toLowerCase() === player.getUsername().toLowerCase()) return false;
+  player.sendMessage(Common.message("pickup"));
+  return true;
 }
 
 /**
@@ -67,6 +77,7 @@ function experience(event) {
 
 module.exports = function attach(api) {
   api.onGroundItemPickup(pickup);
+  api.onCustomEvent("ground-items:take", take);
   api.onCustomEvent("npc-drops:roll", rolledDrops);
   api.onCanAttack(attacking);
   api.onPlayerDeathItemDrop(playerLoot);

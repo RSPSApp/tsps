@@ -213,7 +213,7 @@ import { isDropTarget, isWidgetUseTarget } from "../widgets/WidgetFlags";
 import { markWidgetInteractionDirty } from "../widgets/WidgetInteraction";
 import { WidgetManager } from "../widgets/WidgetManager";
 import { WidgetSessionManager } from "../widgets/WidgetSessionManager";
-import { applyQuestListWidgetGroups } from "../widgets/custom/questList";
+import { applyQuestListWidgetGroups, questListPreferences } from "../widgets/custom/questList";
 import { cleanupInterfaceClickTargets, cleanupWidgetClickTarget } from "../widgets/gl/widgets-gl";
 import { layoutWidgets } from "../widgets/layout/WidgetLayout";
 import { sanitizeText } from "../widgets/menu/utils";
@@ -443,6 +443,7 @@ const LOGOUT_WORLD_SWITCHER_UID = (182 << 16) | 3;
 const LOGOUT_STONE_UIDS = new Set([(161 << 16) | 46, (164 << 16) | 34, (548 << 16) | 51]);
 
 export class OsrsClient {
+    private serverQuestListGroups: QuestListWidgetGroup[] | undefined;
     private static readonly CLIENT_TICK_MS = 20;
     // Maximum amount of client-tick backlog (in ms) we will attempt to simulate.
     // This avoids multi-second/minute "catch-up" after sleep/throttling while still allowing
@@ -2815,9 +2816,11 @@ export class OsrsClient {
                 }
             } else if (payload?.action === "set_quest_list") {
                 if (this.widgetManager && Array.isArray(payload.groups)) {
+                    this.serverQuestListGroups = payload.groups as QuestListWidgetGroup[];
                     applyQuestListWidgetGroups(
                         this.widgetManager,
                         payload.groups as QuestListWidgetGroup[],
+                        questListPreferences(this.varManager),
                     );
                     markWidgetsLoaded();
                 }
@@ -6490,6 +6493,9 @@ export class OsrsClient {
             this.combatOptions.initVarDefaults();
 
             this.varManager.onVarpChange = (varpId, _oldValue, newValue) => {
+                if (varpId >= 3408 && varpId <= 3412 && this.serverQuestListGroups && this.widgetManager) {
+                    applyQuestListWidgetGroups(this.widgetManager, this.serverQuestListGroups, questListPreferences(this.varManager));
+                }
                 // Server-backed stockmarket fields are separate from cache pending-offer varps.
                 if (varpId >= 7900 && varpId < 7900 + 8 * 7) markStockTransmit();
                 if (this.cs2Vm?.isRunning()) {

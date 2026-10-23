@@ -21729,3 +21729,14 @@ test('Giant Dwarf owns Veldaban only for its stage 40 meeting; completed Giant l
   assert.equal([...rewardXp.values()].reduce((sum, value) => sum + value, 0), xpAfterCompletion,
     'replaying the completion action cannot grant the reward twice');
 });
+
+test('every registered quest has a cache metadata record for settings filters and sorting', () => {
+  const { api } = mockApi();
+  require('../plugins/quests/Quests.plugin').register(api);
+  const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
+  const cache = api.core.CacheDefinitions;
+  const records = require('../plugins/quests/QuestList.QuestRuntime').metadata(cache);
+  const normalize = value => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const missing = [...new Set(getRegisteredQuests().map(q => q.name))].filter(name => !records.has(normalize(name)));
+  assert.deepEqual(missing, [], 'missing cache records must be explicitly resolved');
+});

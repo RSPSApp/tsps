@@ -88,7 +88,17 @@ const SELECTED_SETTING_ATTRIBUTE = "settings:selected";
 // The values the player chose for the rows in data/settings.json, and the category shown
 // ({ "varbit:<id>": value, "varp:<id>": value }), restored on login as live does.
 const SETTINGS_VALUES_ATTRIBUTE = "settings:values";
-const SETTINGS = require("./data/settings.json").settings;
+// Cache 241 settings structs3107..3755/4286/2735 and reader script6716.
+const QUEST_SETTINGS = { 214:13772, 215:13778, 216:13779, 217:13776, 218:13775, 219:13777, 220:13773, 221:13774, 222:13780, 223:13781, 239:13889, 240:13890 };
+const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEntries(Object.entries(QUEST_SETTINGS).map(([id, varbit]) => [id, { varbit }])) };
+const QUEST_LIST_SETTINGS_BUTTON = (399 << 16) | 11;
+const QUEST_COLOUR_VARPS = new Set([3409,3410,3411,3412]);
+const QUEST_COLOUR_SETTINGS = {224:3410,225:3409,226:3411,227:3412};
+const SETTINGS_COLOUR_MODAL_UID = (ALL_SETTINGS_INTERFACE_ID << 16) | 2;
+const SETTINGS_COLOUR_INTERFACE = 288;
+const SETTINGS_COLOUR_SCRIPT = 4185;
+const CANCEL_COLOUR = 2147483647;
+const pendingQuestColours = new WeakMap();
 // Rows and dropdown options that may reach us (0..512). Search
 // results number rows across every category, so they run far past one category's length.
 const ALL_SETTINGS_LAST_SLOT = 511;
@@ -237,6 +247,7 @@ function setSettingVar(player, key, value) {
   if (kind === "varp") sender.sendConfig(Number(id), value);
   else sender.sendVarbit(Number(id), value);
   player.setAttribute(SETTINGS_VALUES_ATTRIBUTE, { ...savedSettings(player), [key]: value });
+  if (Object.values(QUEST_SETTINGS).some(varbit => key === `varbit:${varbit}`) || QUEST_COLOUR_VARPS.has(Number(id))) pluginApi?.emitCustomEvent("quest:list-refresh", { player });
 }
 
 function getSettingVar(player, row) {
@@ -285,6 +296,11 @@ function clickSetting({ player, slot }) {
   const settingId = Number.isInteger(slot) ? settingForRow(player, slot) : -1;
   if (settingId < 0) return false;
   selectSetting(player, settingId);
+  if (QUEST_COLOUR_SETTINGS[settingId] !== undefined) return openQuestColour(player, settingId);
+  if (settingId === 228) {
+    for (const id of QUEST_COLOUR_VARPS) setSettingVar(player, `varp:${id}`, 0);
+    return true;
+  }
   if (player.getAttribute("settings-view") === SEARCH_VIEW) {
     setSettingVar(player, `varbit:${SETTINGS_CATEGORY_VARBIT}`, catalog().settings.get(settingId).category);
   }
@@ -436,6 +452,33 @@ function openAllSettings(player) {
   return true;
 }
 
+function openQuestSettings({ player }) {
+  showCategory(player, 6); // Interfaces, cache enum422 category3621.
+  return openAllSettings(player);
+}
+
+function openQuestColour(player, settingId) {
+  const sender = player.getPacketSender();
+  const varp = QUEST_COLOUR_SETTINGS[settingId];
+  const defaults = {224:0xff0000,225:0xffff00,226:901389,227:10461087};
+  const stored = sender.getVarp(varp);
+  sender.sendSubInterface(SETTINGS_COLOUR_MODAL_UID, SETTINGS_COLOUR_INTERFACE, 0);
+  sender.sendClientScript(SETTINGS_COLOUR_SCRIPT, SETTINGS_COLOUR_MODAL_UID, stored > 0 ? stored - 1 : defaults[settingId]);
+  const action = { acceptsZero: true, acceptsNegative: true, execute(value) {
+    if (pendingQuestColours.get(player) !== action) return;
+    if (player.getEnteredAmountAction && player.getEnteredAmountAction() !== action) return;
+    pendingQuestColours.delete(player);
+    sender.closeSubInterface(SETTINGS_COLOUR_MODAL_UID);
+    if (value === CANCEL_COLOUR) return;
+    if (!Number.isInteger(value) || value < -1 || value > 0xffffff) return;
+    setSettingVar(player, `varp:${varp}`, value + 1);
+    selectSetting(player, 0);
+  } };
+  pendingQuestColours.set(player, action);
+  player.setEnteredAmountAction(action);
+  return true;
+}
+
 function startSettingsSearch({ player }) {
   player.setAttribute("settings-view", SEARCH_VIEW);
   player.getPacketSender()
@@ -447,6 +490,11 @@ function startSettingsSearch({ player }) {
 
 /** All Settings closed, by any route: its search lets go of the keyboard and chat takes it back. */
 function endSettingsSearch({ player, interfaceId }) {
+  if (interfaceId === ALL_SETTINGS_INTERFACE_ID || interfaceId === SETTINGS_COLOUR_INTERFACE) {
+    const action = pendingQuestColours.get(player);
+    pendingQuestColours.delete(player);
+    if (action && player.getEnteredAmountAction?.() === action) player.setEnteredAmountAction(null);
+  }
   if (interfaceId !== ALL_SETTINGS_INTERFACE_ID) return;
   player.getPacketSender()
     .sendVarbit(FLOATER_IS_SEARCHING_VARBIT, 0)
@@ -521,6 +569,7 @@ module.exports = {
     // Changing category, or searching, changes what a row's slot means.
     api.onInterfaceActionButton(ALL_SETTINGS_CATEGORIES_CLICKZONE, clickCategory);
     api.onInterfaceActionButton(ALL_SETTINGS_SEARCH_BAR, startSettingsSearch);
+    api.onInterfaceActionButton(QUEST_LIST_SETTINGS_BUTTON, openQuestSettings);
     api.onCustomEvent("interface:closed", endSettingsSearch);
     api.onInterfaceActionButton(ALL_SETTINGS_SETTINGS_CLICKZONE, clickSetting);
     api.onInterfaceActionButton(ALL_SETTINGS_DROPDOWN_BUTTONS, clickDropdownOption);

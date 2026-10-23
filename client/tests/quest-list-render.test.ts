@@ -93,3 +93,21 @@ assert.ok(
 );
 
 console.log("quest-list-render.test.ts: all tests passed");
+
+applyQuestListWidgetGroups(manager as any, [{ title: "A", quests: [
+    { key: "a", slot: 1, displayName: "A quest", status: 0 },
+] }], { largeText: true, textShadow: false } as any);
+assert.equal(list.children[1].fontId, 495, "large text uses the cache p12 font");
+assert.equal(list.children[1].textShadow, false, "disabled shadows affect actual rows");
+assert.equal(list.children[1].rawHeight, 18, "large rows reserve their full height");
+
+// Font changes grow the content and shrinking/filtering clamps an old scroll offset.
+const largeGroups = [{title:'A',quests:Array.from({length:20},(_,i)=>({key:`q${i}`,slot:i+1,displayName:`Quest ${i}`,status:1 as const}))}];
+applyQuestListWidgetGroups(manager as any,largeGroups,{largeText:true,textShadow:false,colors:[1,0,3,4]});
+assert.equal(view.scrollHeight,25+20*18+5);
+assert.equal(list.children[1].color,0,'black is preserved, without truthiness fallback');
+view.scrollY=9999;
+applyQuestListWidgetGroups(manager as any,[]);
+assert.equal(view.scrollY,0,'removing every row clamps the scroll');
+assert.equal(scrollbar.hidden,true,'no scrollbar for empty contents');
+assert.equal(list.children.length,0,'filtering clears old clickable rows');

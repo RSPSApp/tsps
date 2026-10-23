@@ -102,6 +102,8 @@ function open(player, categoryName = null) {
   const sender = player.getPacketSender();
   const tab = currentTab(player);
   const category = currentCategory(player, tab);
+  // The floater is an overlay: replacing the main modal must be explicit.
+  sender.sendInterfaceRemoval();
   sender.sendVarbit(LAST_TAB_VARBIT, tab.index);
   sender.sendConfig(Progress.VARP.CATEGORY_COUNT, Progress.categoryCount(player, category));
   sender.sendVarbit(LAST_CATEGORY_VARBIT, category.key);
@@ -205,6 +207,13 @@ function click(event) {
   event.handled = true;
 }
 
+function onClose({ player }) {
+  const sender = player.getPacketSender();
+  for (const group of [COLLECTION, OVERVIEW]) {
+    if (sender.isSubInterfaceOpen(group)) close(player, group);
+  }
+}
+
 function onOpen({ player, category }) {
   open(player, category);
 }
@@ -214,6 +223,7 @@ module.exports = function attachInterface(api) {
   api.persistAttribute(TAB_ATTRIBUTE, 0);
   api.persistAttribute(CATEGORY_ATTRIBUTE, 0);
   api.onCustomEvent("collection-log:open", onOpen);
+  api.onCustomEvent("collection-log:close", onClose);
   api.onInterfaceActionClick(click);
 };
 

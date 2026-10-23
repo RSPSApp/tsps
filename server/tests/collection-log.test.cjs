@@ -50,6 +50,7 @@ function createPlayer() {
     sendConfig: (id, value) => { log.push(`varp ${id}=${value}`); return sender; },
     sendVarbit: (id, value) => { log.push(`varbit ${id}=${value}`); return sender; },
     getVarbit: () => 0,
+    sendInterfaceRemoval: () => sender,
     sendSubInterface: (target, group, type) => { log.push(`open ${target >>> 16}:${target & 0xffff} ${group} ${type}`); return sender; },
     closeSubInterface: (target) => { log.push(`close ${target >>> 16}:${target & 0xffff}`); return sender; },
     closeInterface: (group) => { log.push(`close ${group}`); return sender; },
@@ -276,4 +277,58 @@ test("Barrows logs its chest rewards once, including overflow, and uses its pers
   const restored = createPlayer();
   restored.setAttribute("barrows", JSON.parse(JSON.stringify(run)));
   assert.equal(Progress.categoryCount(restored, named(0, "Barrows Chests")), 9);
+});
+
+test("summary panels replace one another in both orders while other overlays survive", () => {
+  const { PacketSender } = require("../dist/net/packet/PacketSender");
+  const { FrameUpdater } = require("../dist/util/FrameUpdater");
+  const CaInterface = require("../plugins/achievements/combatachievements/Interface.CombatAchievements");
+  require("../plugins/achievements/combatachievements/Data.CombatAchievements")(fakeApi);
+  CaInterface(fakeApi);
+  fakeApi.onCustomEvent("combat-achievements:open", ({ player, collectionLogCategory }) => {
+    if (collectionLogCategory) CaInterface.openForCollectionLog(player, collectionLogCategory);
+    else CaInterface.open(player);
+  });
+  const player = createPlayer();
+  let interfaceId = -1;
+  const frames = [];
+  const updater = new FrameUpdater();
+  Object.assign(player, {
+    getInterfaceId: () => interfaceId,
+    setInterfaceId: (value) => { interfaceId = value; },
+    getSession: () => ({ sendClientPacket: (frame) => { frames.push(frame); return true; } }),
+    getFrameUpdater: () => updater,
+    isPlayerBot: () => false,
+  });
+  const sender = new PacketSender(player);
+  player.getPacketSender = () => sender;
+  sender.sendSubInterface((161 << 16) | 13, 660, 1);
+  const assertOnly = (expected) => {
+    for (const group of [621, 908, ...Object.values(CaInterface.GROUP)]) {
+      assert.equal(sender.isSubInterfaceOpen(group), group === expected, `group ${group}, expected ${expected}`);
+    }
+    assert.equal(sender.isSubInterfaceOpen(660), true, "notification overlay survives");
+  };
+  CaInterface.open(player, CaInterface.SCREEN.TASKS);
+  assertOnly(715);
+  Interface.open(player);
+  assertOnly(621);
+  assert.equal(player.getInterfaceId(), -1);
+  CaInterface.open(player);
+  assertOnly(715);
+  CaInterface.open(player);
+  assertOnly(715);
+  Interface.open(player, "Zulrah");
+  Interface.open(player);
+  assertOnly(621);
+  Interface.click({ player, buttonId: (621 << 16) | 73, slot: 12 });
+  assertOnly(908);
+  CaInterface.open(player);
+  assertOnly(715);
+  Interface.open(player, "Zulrah");
+  Interface.click({ player, buttonId: (621 << 16) | 21 });
+  assertOnly(713);
+  CaInterface.click({ player, buttonId: (713 << 16) | 13 });
+  assertOnly(621);
+  assert.equal(Data.categoryByKey(Data.tabs()[0], player.getAttribute(Interface.CATEGORY_ATTRIBUTE)).name, "Zulrah");
 });

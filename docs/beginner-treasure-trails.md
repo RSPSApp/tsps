@@ -93,3 +93,23 @@ targets, personal Uri, interrupted/stale dialogue, metadata serialization,
 rewards, Entrana, full inventory, capacity and Explore. Run after the server
 build. Natural world/browser evidence is recorded with the
 integration report; unit coverage alone does not establish visual parity.
+
+The isolated slot-6 world (game 43706, MCP 49806) was exercised with a dedicated
+test account, using normal inventory, NPC, dialogue and emote packet paths.
+Naturally assigned steps covered all six families: maps, cryptic NPCs, anagrams,
+personal Uri emotes, Charlie's iron-dagger request and Reldo's device/dig route.
+Four complete trails opened their real reward caskets in the final recorded
+run. Earlier checks also covered Bob's clap, Ranael's anagram, and authentic
+reward-screen contents (steel plateskirt and 30 body runes). A saved Sedridor
+clue survived logout and a test-server restart unchanged, then completed against
+his actual Archmage NPC morph. No production world or existing user character
+was used. The local run record is `exports/beginner-clues/natural-route.json`
+(SHA-256 `31365266cf4c0bf3caa2415fef379030dfa6756f3142af68f769408d23c958a3`).
+
+A separate real browser account on client 3106/game 43706 rendered the authentic
+anagram parchment (`Carpet Ahoy`) and the south-east Varrock mine map (group
+351) from actual Read interactions. WebGPU rendering was confirmed. The browser
+tab used an isolated context and was closed after verification. Client builds
+pass with the repository's existing five ESLint warnings; the first build with
+CI warning promotion failed on those unchanged warnings, and the normal build
+completed successfully.

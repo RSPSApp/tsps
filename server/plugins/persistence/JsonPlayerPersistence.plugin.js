@@ -245,7 +245,7 @@ class JsonPlayerPersistence extends PlayerPersistence {
     save.rights = this.hydrateRights(parsed.rights);
     save.donatorRights = this.hydrateDonatorRights(parsed.donatorRights);
     save.spellBook = this.hydrateSpellbook(parsed.spellBook);
-    save.fightType = FightType.UNARMED_KICK;
+    save.fightType = FightType.resolve(parsed.fightType) ?? FightType.UNARMED_KICK;
     save.skullType = this.hydrateSkullType(parsed.skullType);
     save.inventory = this.hydrateItems(parsed.inventory, 28);
     save.equipment = this.hydrateItems(parsed.equipment, 14);

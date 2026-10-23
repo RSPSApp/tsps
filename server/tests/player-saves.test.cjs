@@ -342,3 +342,37 @@ test("repeated writer failures never fall back to synchronous game-thread writes
   assert.ok(persistence.writer, "a new save retries the worker with the queued snapshots");
   assert.equal(await savedGold("Lina"), 30);
 });
+
+// Exercise disk serialization and hydration used by login, not an in-memory snapshot.
+const { FightType } = require("../dist/game/content/combat/FightType");
+const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+JsonPlayerPersistence.SAVE_DIRECTORY = path.join(directory, "json-characters");
+let jsonPersistence;
+require("../plugins/persistence/JsonPlayerPersistence.plugin").register({
+  getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
+  setPlayerPersistence: (backend) => { jsonPersistence = backend; },
+  log() {},
+});
+
+for (const [name, backend] of [["SQLite", persistence], ["JSON", jsonPersistence]]) {
+  test(`${name}: non-default combat styles survive a committed save and login load`, async () => {
+    for (const [index, fightType] of [FightType.UNARMED_BLOCK, FightType.SCIMITAR_BLOCK].entries()) {
+      const original = player(`Style ${name} ${index}`);
+      original.setFightType(fightType);
+      backend.save(original, "logout");
+      await backend.flush();
+      const save = backend.load(original.getUsername());
+      assert.equal(save.getFightType(), fightType, "load restores the selected registry entry");
+      const loggedIn = player(original.getUsername());
+      save.applyToPlayer(loggedIn);
+      assert.equal(loggedIn.getFightType(), fightType, "login applies the selected style");
+    }
+  });
+
+  test(`${name}: missing or invalid saved combat styles retain the safe default`, () => {
+    for (const fightType of [undefined, null, {}, "UNARMED_BLOCK", { animation: -123456 }]) {
+      const save = backend.hydratePlayerSave({ fightType });
+      assert.equal(save.getFightType(), FightType.UNARMED_KICK);
+    }
+  });
+}

@@ -5,6 +5,7 @@ import type { WidgetNode } from "../../../widgets/WidgetNode";
 import { SKILL_NAME, type SkillId } from "../../../rs/skill/skills";
 import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import type { HelperNpc, HelperWidget, ReadonlyClientSnapshot } from "./QuestHelperProtocol";
+import { hintArrow } from "../../HintArrow";
 const MAX_WIDGETS = 12000;
 
 export function collectWidgetTree(node: WidgetNode, manager: WidgetManager, emitted = new Set<WidgetNode>()): HelperWidget {
@@ -104,5 +105,5 @@ export function collectQuestHelperSnapshot(client: OsrsClient, tick: number, sce
             if (!visited.has(root))
                 widgets.push(collectWidgetTree(root, manager, visited));
     const gender=client.playerEcs.getAppearance?.(playerIndex)?.gender;
-    return { varps, varbits, varbitDefinitions, gender, inventory: itemSlots(client.inventory), equipment: itemSlots(client.equipment), bank: itemSlots(client.bankInventory), localPlayer: { index:client.controlledPlayerServerId, name: client.localPlayerName, gender, x: tile.tileX, y: tile.tileY, plane: client.playerEcs.getLevel(playerIndex), animation: client.playerEcs.getAnimActionSeqId(playerIndex), poseAnimation: client.playerEcs.getAnimMovementSeqId(playerIndex), orientation: client.playerEcs.getRotation(playerIndex), interactingIndex: client.playerEcs.getInteractionIndex(playerIndex) }, skills, npcs, objects, groundItems: client.groundItems.getAllStacks().map(item => ({ id: item.itemId, quantity: item.quantity, x: item.tile.x, y: item.tile.y, plane: item.tile.level })), widgets, baseX: scene.baseX, baseY: scene.baseY, plane: scene.plane, tick, instanceTemplateChunks: scene.instanceTemplateChunks ? scene.instanceTemplateChunks.map(plane => plane.map(row => [...row])) : undefined };
+    return { hintArrowNpcIndex:hintArrow.type===1?hintArrow.npcId:-1, varps, varbits, varbitDefinitions, gender, inventory: itemSlots(client.inventory), equipment: itemSlots(client.equipment), bank: itemSlots(client.bankInventory), localPlayer: { index:client.controlledPlayerServerId, name: client.localPlayerName, gender, x: tile.tileX, y: tile.tileY, plane: client.playerEcs.getLevel(playerIndex), animation: client.playerEcs.getAnimActionSeqId(playerIndex), poseAnimation: client.playerEcs.getAnimMovementSeqId(playerIndex), orientation: client.playerEcs.getRotation(playerIndex), interactingIndex: client.playerEcs.getInteractionIndex(playerIndex) }, skills, npcs, objects, groundItems: client.groundItems.getAllStacks().map(item => ({ id: item.itemId, quantity: item.quantity, x: item.tile.x, y: item.tile.y, plane: item.tile.level })), widgets, baseX: scene.baseX, baseY: scene.baseY, plane: scene.plane, tick, instanceTemplateChunks: scene.instanceTemplateChunks ? scene.instanceTemplateChunks.map(plane => plane.map(row => [...row])) : undefined };
 }

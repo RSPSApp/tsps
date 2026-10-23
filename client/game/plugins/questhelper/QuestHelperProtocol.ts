@@ -64,6 +64,7 @@ export type HelperGeometry = PixelBounds & {
     loadedTilesPacked?:{encoding:"bitset-lsb-base64";shape:[4,104,104];data:string};
 };
 export type ReadonlyClientSnapshot = Readonly<{
+    hintArrowNpcIndex: number;
     mouse?: {x:number;y:number};
     weight?: number;
     gender?: number;

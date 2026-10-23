@@ -1,3 +1,4 @@
+import { collectHelperSceneObjects } from "./QuestHelperScene";
 import type { OsrsClient } from "../../OsrsClient";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import type { WidgetNode } from "../../../widgets/WidgetNode";
@@ -5,7 +6,7 @@ import { SKILL_NAME, type SkillId } from "../../../rs/skill/skills";
 import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import type { HelperNpc, HelperWidget, ReadonlyClientSnapshot } from "./QuestHelperProtocol";
 const MAX_WIDGETS = 12000;
-const MAX_OBJECTS = 20000;
+
 export function collectWidgetTree(node: WidgetNode, manager: WidgetManager, visited = new Set<WidgetNode>()): HelperWidget {
     if (visited.size >= MAX_WIDGETS)
         throw new Error("Widget snapshot exceeds the safety bound.");
@@ -66,30 +67,7 @@ export function collectQuestHelperSnapshot(client: OsrsClient, tick: number, sce
     const npcs: HelperNpc[] = [];
     client.npcEcs.forEachActive(index => { if (npcs.length >= 4096)
         throw new Error("NPC snapshot exceeds the safety bound."); npcs.push(collectHelperNpc(client, index)); });
-    const objects: {
-        id: number;
-        x: number;
-        y: number;
-        plane: number;
-        type?: number;
-        orientation?: number;
-    }[] = [];
-    const renderer = client.renderer as typeof client.renderer & {
-        getLocIdsAtTileAllLevels?: (x: number, y: number) => {
-            id: number;
-            level: number;
-            typeRot?: number;
-        }[];
-    };
-    if (!renderer.getLocIdsAtTileAllLevels)
-        throw new Error("Scene object snapshot is unavailable for this renderer.");
-    for (let x = scene.baseX; x < scene.baseX + 104; x++)
-        for (let y = scene.baseY; y < scene.baseY + 104; y++)
-            for (const loc of renderer.getLocIdsAtTileAllLevels(x, y)) {
-                if (objects.length >= MAX_OBJECTS)
-                    throw new Error("Scene object snapshot exceeds the safety bound.");
-                objects.push({ id: loc.id, x, y, plane: loc.level, type: loc.typeRot === undefined ? undefined : loc.typeRot >> 2, orientation: loc.typeRot === undefined ? undefined : loc.typeRot & 3 });
-            }
+    const objects = collectHelperSceneObjects(client, scene);
     const itemSlots = (inventory: OsrsClient["inventory"]) => inventory.getSlots().filter(slot => slot.itemId >= 0 && slot.quantity > 0).map(slot => ({ id: slot.itemId, quantity: slot.quantity, slot: slot.slot }));
     const manager = client.widgetManager;
     const groups = new Set([manager.rootInterface, ...[...manager.interfaceParents.values()].map(parent => parent.group)]);
@@ -101,3 +79,4 @@ export function collectQuestHelperSnapshot(client: OsrsClient, tick: number, sce
                 widgets.push(collectWidgetTree(root, manager, visited));
     return { varps, varbits, varbitDefinitions, inventory: itemSlots(client.inventory), equipment: itemSlots(client.equipment), bank: itemSlots(client.bankInventory), localPlayer: { name: client.localPlayerName, x: tile.tileX, y: tile.tileY, plane: client.playerEcs.getLevel(playerIndex), animation: client.playerEcs.getAnimActionSeqId(playerIndex), poseAnimation: client.playerEcs.getAnimMovementSeqId(playerIndex), orientation: client.playerEcs.getRotation(playerIndex), interactingIndex: client.playerEcs.getInteractionIndex(playerIndex) }, skills, npcs, objects, groundItems: client.groundItems.getAllStacks().map(item => ({ id: item.itemId, quantity: item.quantity, x: item.tile.x, y: item.tile.y, plane: item.tile.level })), widgets, baseX: scene.baseX, baseY: scene.baseY, plane: scene.plane, tick, instanceTemplateChunks: scene.instanceTemplateChunks ? scene.instanceTemplateChunks.map(plane => plane.map(row => [...row])) : undefined };
 }
+

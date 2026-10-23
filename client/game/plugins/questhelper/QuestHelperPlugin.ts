@@ -230,7 +230,7 @@ export class QuestHelperPlugin extends Plugin {
                 this.record({ type: names[event.kind], tick: this.tick, index: event.index });
             }
         });
-        this.listen(this.client.groundItems.mutationListeners, event => this.record({ type: event.kind === "spawn" ? "itemSpawned" : event.kind === "despawn" ? "itemDespawned" : "itemQuantityChanged", tick: this.tick, item: { id: event.stack.itemId, quantity: event.stack.quantity, x: event.stack.tile.x, y: event.stack.tile.y, plane: event.stack.tile.level } }));
+        this.listen(this.client.groundItems.mutationListeners, event => this.record({ type: event.kind === "spawn" ? "itemSpawned" : event.kind === "despawn" ? "itemDespawned" : "itemQuantityChanged", tick: this.tick, oldQuantity: event.oldQuantity, item: { id: event.stack.itemId, quantity: event.stack.quantity, x: event.stack.tile.x, y: event.stack.tile.y, plane: event.stack.tile.level } }));
         this.listen(this.client.widgetManager.groupLoadedListeners, (groupId: number) => this.record({ type: "widgetLoaded", tick: this.tick, groupId }));
         this.listen(this.client.widgetManager.interfaceClosedListeners, (groupId: number) => this.record({ type: "widgetClosed", tick: this.tick, groupId }));
     }

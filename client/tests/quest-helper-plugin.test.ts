@@ -24,6 +24,7 @@ async function main(){
     plugin.selectQuest("cook");bus.post(new GameTick());const request=requests.find(x=>x.type==="evaluate");assert.ok(request);assert.equal(request.snapshot.bank,undefined,"unknown bank must be omitted");
     const response={type:"result",protocol:1,session:request.session,sequence:request.sequence,questKey:"cook",sourceCommit:"abc",status:"active",activeStep:{id:"talk",text:["Talk"],targets:[{kind:"tile",x:3200,y:3200,plane:0}],requirements:[],dialogueChoices:[],widgets:[],overlays:[]},panels:[],diagnostics:[]};
     bus.post(new PluginMessage("quest-helper",response));assert.equal(plugin.getState().result?.status,"active");assert.equal(client.tileHighlightManager.getRenderEntries().length,1);
+    const nativeNow=Date.now;Date.now=()=>nativeNow()+2000;for(const listener of client.groundItems.mutationListeners)listener({kind:"quantity",oldQuantity:3,stack:{itemId:1944,quantity:2,tile:{x:3200,y:3200,level:0}}});bus.post(new GameTick());Date.now=nativeNow;assert.equal(requests.filter(x=>x.type==="evaluate").at(-1).events.find((event:any)=>event.type==="itemQuantityChanged").oldQuantity,3);
     plugin.selectQuest("sheep");assert.equal(client.tileHighlightManager.getRenderEntries().length,0);bus.post(new PluginMessage("quest-helper",response));assert.equal(plugin.getState().result,null);
     assert.equal(config.getConfiguration("questhelper","selectedQuest"),"sheep");
     bus.post(new GameStateChanged(GameState.LOGIN_SCREEN));assert.equal(client.varManager.varpChangeListeners.size,0);assert.equal(plugin.getState().result,null);
@@ -32,3 +33,4 @@ async function main(){
     network.socket=null as any;network.lastSkillsState=undefined;console.log("quest helper native lifecycle, preference and network isolation passed");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
+

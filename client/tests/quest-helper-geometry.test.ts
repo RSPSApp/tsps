@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { collectQuestHelperGeometry } from '../game/plugins/questhelper/QuestHelperGeometry';
 const size=107;const map:any={heightMapSize:size,borderSize:1,heightMapData:new Int16Array(4*size*size).fill(30),tileRenderFlags:Array.from({length:4},()=>Array.from({length:size},()=>new Uint8Array(size).fill(2)))};
+Object.assign(map,{getRenderBaseTileX:()=>3150,getRenderBaseTileY:()=>3150,getLocalTileSpan:()=>105});
 const client:any={camera:{pos:[3200,-6,3201],yaw:123,pitch:200,getScenePitchAngle:()=>255,getViewZoomScale:()=>1,viewportZoom:512,viewportWidth:765,viewportHeight:503,viewportXOffset:0,viewportYOffset:0,screenWidth:765,screenHeight:503,viewProjMatrix:new Float32Array(16).fill(1),projectionType:0},renderer:{canvas:{width:765,height:503},getPreferredMapForWorldTile:()=>map,getMapLocalTile:(_:any,x:number,y:number)=>({x:x-3150,y:y-3150})}};
 const geometry=collectQuestHelperGeometry(client,{baseX:3150,baseY:3150},true);const heightBytes=Buffer.from(geometry.tileHeightsPacked!.data,"base64");const flags=Buffer.from(geometry.tileSettingsPacked!.data,"base64");
 assert.equal(Buffer.from(geometry.loadedTilesPacked!.data,'base64').length,5408);
@@ -21,3 +22,4 @@ const projected=[(clip[0]/clip[3]+1)*.5*765,(1-clip[1]/clip[3])*.5*503];
 const native=worldToScreen({osrsClient:{camera},app:{width:765,height:503}} as any,3201,-240/128,3210)!;
 assert.ok(Math.abs(native[0]-projected[0])<.01);assert.ok(Math.abs(native[1]-projected[1])<.01,'RuneLite height sign matches native Y directly');
 console.log('quest helper projection matrix matches native worldToScreen');
+

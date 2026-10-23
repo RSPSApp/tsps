@@ -1,5 +1,5 @@
 import type { OsrsClient } from "../../OsrsClient";
-import type { WebGLMapSquare } from "../../../render/WebGLMapSquare";
+import { resolveHelperSceneMap, helperMapLocalTile } from "./QuestHelperScene";
 import type { HelperGeometry } from "./QuestHelperProtocol";
 
 function base64(bytes: Uint8Array): string {
@@ -11,10 +11,7 @@ function base64(bytes: Uint8Array): string {
 /** Camera uses world tiles, downward Y and the same signed heights as RuneLite. */
 export function collectQuestHelperGeometry(client: OsrsClient, scene: {baseX:number;baseY:number}, includeTerrain: boolean): HelperGeometry {
     const camera=client.camera;
-    const renderer=client.renderer as typeof client.renderer & {
-        getPreferredMapForWorldTile?:(x:number,y:number)=>WebGLMapSquare|undefined;
-        getMapLocalTile?:(map:WebGLMapSquare,x:number,y:number)=>{x:number;y:number}|undefined;
-    };
+    const renderer=client.renderer;
     const x=(camera.pos[0]-scene.baseX)*128,y=(camera.pos[2]-scene.baseY)*128,z=camera.pos[1]*128;
     const pitch=camera.getScenePitchAngle(),yaw=camera.yaw;
     const geometry:HelperGeometry={
@@ -28,13 +25,12 @@ export function collectQuestHelperGeometry(client: OsrsClient, scene: {baseX:num
         viewProjectionMatrix:Array.from(camera.viewProjMatrix),
     };
     if(!includeTerrain)return geometry;
-    if(!renderer.getPreferredMapForWorldTile||!renderer.getMapLocalTile)throw new Error("Projection terrain is unavailable for this renderer.");
     const heights=new Uint8Array(4*105*105*2),heightView=new DataView(heights.buffer),settings=new Uint8Array(4*104*104);
     for(let x=0;x<105;x++)for(let y=0;y<105;y++){
         // The final vertex may belong to the previous tile's loaded border.
         const sampleX=scene.baseX+Math.min(x,103),sampleY=scene.baseY+Math.min(y,103);
-        const map=renderer.getPreferredMapForWorldTile(sampleX,sampleY);
-        const local=map?renderer.getMapLocalTile(map,sampleX,sampleY):undefined;
+        const map=resolveHelperSceneMap(client,sampleX,sampleY);
+        const local=map?helperMapLocalTile(map,sampleX,sampleY):undefined;
         if(!map||!local)throw new Error(`Projection terrain is unavailable at ${sampleX},${sampleY}.`);
         const ix=local.x+map.borderSize+(x===104?1:0),iy=local.y+map.borderSize+(y===104?1:0),size=map.heightMapSize;
         if(ix<0||iy<0||ix>=size||iy>=size)throw new Error("Projection terrain vertex is unavailable.");

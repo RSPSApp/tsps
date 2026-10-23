@@ -104,6 +104,12 @@ export class MapManager<T extends MapSquare> {
     private currentSceneBaseX: number = -1;
     private currentSceneBaseY: number = -1;
     private currentExpandedMapLoading: number = 0;
+    // Map squares of the server's 104x104 scene, without draw-distance padding. Only these gate
+    // readiness; -1 when the grid has no scene base, so every square counts.
+    private baseSceneMinMapX: number = -1;
+    private baseSceneMaxMapX: number = -1;
+    private baseSceneMinMapY: number = -1;
+    private baseSceneMaxMapY: number = -1;
     // Pre-calculated distances for sorting (avoids recalculating in sort comparator)
     private gridMapDistances: Map<number, number> = new Map();
     private gridRevision: number = 0;
@@ -205,6 +211,7 @@ export class MapManager<T extends MapSquare> {
         this.activeSceneBaseX = -1;
         this.activeSceneBaseY = -1;
         this.currentExpandedMapLoading = 0;
+        this.baseSceneMinMapX = -1;
         this.activeExpandedMapLoading = 0;
         this.gridTransitionPending = false;
         for (const map of this.mapSquares.values()) {
@@ -500,7 +507,7 @@ export class MapManager<T extends MapSquare> {
     private isTargetGridReady(frameCount: number): boolean {
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];
-            if (!this.isMapInView(mapId)) continue;
+            if (!this.isMapInView(mapId) || !this.isBaseSceneMap(mapId)) continue;
             if (this.invalidMapIds.has(mapId) || this.mapSquares.get(mapId)?.canRender(frameCount)) {
                 continue;
             }
@@ -515,6 +522,19 @@ export class MapManager<T extends MapSquare> {
             if (!this.invalidMapIds.has(mapId) && !this.mapSquares.get(mapId)?.canRender(frameCount)) return true;
         }
         return false;
+    }
+
+    /**
+     * Whether a square is part of the server scene rather than draw-distance padding. Padding
+     * squares (expanded map loading) fade in once built; the view and the loading overlay wait
+     * only for the scene itself, so a long draw distance doesn't lengthen logins and teleports.
+     */
+    private isBaseSceneMap(mapId: number): boolean {
+        if (this.baseSceneMinMapX < 0) return true;
+        const mapX = mapId >> 8;
+        const mapY = mapId & 0xff;
+        return mapX >= this.baseSceneMinMapX && mapX <= this.baseSceneMaxMapX
+            && mapY >= this.baseSceneMinMapY && mapY <= this.baseSceneMaxMapY;
     }
 
     private isMapInView(mapId: number): boolean {
@@ -643,6 +663,11 @@ export class MapManager<T extends MapSquare> {
                 maxMapX = Math.floor(sceneMaxX / Scene.MAP_SQUARE_SIZE);
                 minMapY = Math.floor(sceneMinY / Scene.MAP_SQUARE_SIZE);
                 maxMapY = Math.floor(sceneMaxY / Scene.MAP_SQUARE_SIZE);
+                const sceneLastTile = MapManager.SCENE_STREAM_SIZE_TILES - 1;
+                this.baseSceneMinMapX = Math.floor(baseX / Scene.MAP_SQUARE_SIZE);
+                this.baseSceneMaxMapX = Math.floor((baseX + sceneLastTile) / Scene.MAP_SQUARE_SIZE);
+                this.baseSceneMinMapY = Math.floor(baseY / Scene.MAP_SQUARE_SIZE);
+                this.baseSceneMaxMapY = Math.floor((baseY + sceneLastTile) / Scene.MAP_SQUARE_SIZE);
 
                 const centerTileX = baseX + MapManager.SCENE_STREAM_HALF_TILES;
                 const centerTileY = baseY + MapManager.SCENE_STREAM_HALF_TILES;
@@ -661,6 +686,7 @@ export class MapManager<T extends MapSquare> {
                 this.currentSceneBaseX = -1;
                 this.currentSceneBaseY = -1;
                 this.currentExpandedMapLoading = 0;
+                this.baseSceneMinMapX = -1;
                 this.currentMapX = playerMapX;
                 this.currentMapY = playerMapY;
                 this.currentMapRadius = mapRadius;
@@ -841,6 +867,7 @@ export class MapManager<T extends MapSquare> {
         this.currentSceneBaseX = -1;
         this.currentSceneBaseY = -1;
         this.currentExpandedMapLoading = 0;
+        this.baseSceneMinMapX = -1;
         this.gridMapCount = 0;
         this.gridMapIdSet.clear();
         this.gridMinMapX = -1;

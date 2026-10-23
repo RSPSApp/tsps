@@ -388,11 +388,13 @@ function foregroundLoadsBeforeBackgroundAndPublishesTogether(): void {
     assert.ok(manager.loadingMapIds.has(getMapSquareId(52, 51)), "walking reprioritizes newly visible foreground maps");
     addMap(getMapSquareId(52, 50));
     update(66, 3300);
-    const sharedOldView = ids([[51, 50], [51, 51]]);
-    assert.deepEqual(visible(), sharedOldView, "one new region must not publish before the rest of its view");
+    // Squares 52,x lie east of the server scene (it ends at x 3327): draw-distance padding,
+    // which joins the view as each square is built rather than as one group.
+    const withFirstPadding = ids([[51, 50], [51, 51], [52, 50]]);
+    assert.deepEqual(visible(), withFirstPadding, "a built padding square joins without waiting for the rest");
     addMap(getMapSquareId(52, 51), 68);
     update(67, 3300);
-    assert.deepEqual(visible(), sharedOldView);
+    assert.deepEqual(visible(), withFirstPadding, "an unrenderable padding square stays hidden");
     update(68, 3300);
     assert.deepEqual(visible(), ids([[51, 50], [51, 51], [52, 50], [52, 51]]));
     assert.ok(manager.getMap(50, 50), "leaving the view must not evict useful target-grid scenery");
@@ -403,6 +405,34 @@ function foregroundLoadsBeforeBackgroundAndPublishesTogether(): void {
     }
     assert.equal(manager.getGridRevision(), revision);
     assert.equal(queued.length, queuedBeforeOrbit, "camera orbits must not change foreground membership or queue work");
+}
+
+// The loading overlay and the first publish wait for the server's 104x104 scene, as OSRS does.
+// A longer draw distance adds expanded padding squares; those fade in once built instead of
+// holding the whole view (and the login screen) back.
+function baseSceneGatesTheViewNotTheDrawDistance(): void {
+    const manager = new MapManager(4, () => {});
+    const camera = { getPosX: () => 3250, getPosZ: () => 3250 } as any;
+    const update = (frame: number) => manager.update(3250, 3250, camera, frame, 1, 3224, 3200, 2, 90);
+    const addMap = (id: number) => manager.addMap(id >> 8, id & 255, {
+        mapX: id >> 8, mapY: id & 255, canRender: () => true, delete() {},
+    });
+    const ids = (coords: number[][]) => new Set(coords.map(([x, y]) => getMapSquareId(x, y)));
+    const visible = () => new Set(manager.visibleMaps.map(map => getMapSquareId(map.mapX, map.mapY)));
+    const baseScene = ids([[50, 50], [50, 51], [51, 50], [51, 51]]);
+    update(0);
+    assert.equal(manager.gridMapCount, 9, "the draw distance keeps the padded grid");
+    const revision = manager.getGridRevision();
+    for (const id of baseScene) addMap(id);
+    update(1);
+    assert.equal(manager.isSceneReady(1), true, "padding squares must not hold the loading overlay");
+    assert.deepEqual(visible(), baseScene, "the base scene publishes without waiting for padding");
+    assert.equal(manager.hasPendingMapLoads(1), true, "unbuilt padding still counts as streaming work");
+    const padding = getMapSquareId(52, 50);
+    addMap(padding);
+    update(2);
+    assert.ok(visible().has(padding), "a padding square joins the view once it can render");
+    assert.equal(manager.getGridRevision(), revision, "joining padding does not rebuild the grid");
 }
 
 function duplicateLocReplayIsIgnored(): void {
@@ -594,6 +624,7 @@ multipartLocsRequestAllMissingModelsTogether();
 targetScenesPublishTogether();
 instanceReadinessExcludesThePreviousWorldAndBoatOverlays();
 foregroundLoadsBeforeBackgroundAndPublishesTogether();
+baseSceneGatesTheViewNotTheDrawDistance();
 duplicateLocReplayIsIgnored();
 locUpdateBeforeInitialMapDoesNotStartADuplicateMapTask();
 locReplayInvalidatesCompletedMapsWaitingToRender();

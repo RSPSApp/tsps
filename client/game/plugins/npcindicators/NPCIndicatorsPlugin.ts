@@ -3,7 +3,10 @@ import { ConfigGroup, ConfigItem } from "@runelite/client/config/ConfigItem";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
+import { ClientToolbar } from "@runelite/client/ui/ClientToolbar";
+import type { NavigationButton } from "@runelite/client/ui/NavigationButton";
 import type { OsrsClient } from "../../OsrsClient";
+import { createNPCIndicatorsNavigationButton } from "./NPCIndicatorsPanel";
 
 export const NPCIndicatorsConfig = ConfigGroup("npcindicators", {
     names: ConfigItem({ name: "NPC names", description: "One exact NPC name per line. Optional colour: Goblin|#00ff00. Names ignore case.", textArea: true, default: "" }),
@@ -28,6 +31,8 @@ export class NPCIndicatorsPlugin extends Plugin {
     static descriptor = { name: "NPC Indicators", description: "Highlight named NPCs on their current tile.", tags: ["npcs", "highlight"], configKey: "npcindicatorsplugin", enabledByDefault: false };
     static config = NPCIndicatorsConfig;
     private readonly manager = inject(ConfigManager);
+    private readonly toolbar = inject(ClientToolbar);
+    private navButton?: NavigationButton;
     private readonly config = this.manager.getConfig(NPCIndicatorsConfig);
     private readonly client: OsrsClient;
     private usedSlots = 0;
@@ -44,8 +49,16 @@ export class NPCIndicatorsPlugin extends Plugin {
     }
     onConfigChanged(event: ConfigChanged): void { if (event.getGroup() === NPCIndicatorsConfig.group) this.onGameTick(); }
     onGameStateChanged(): void { this.clear(); }
-    protected override async startUp(): Promise<void> { this.onGameTick(); }
-    protected override async shutDown(): Promise<void> { this.clear(); }
+    protected override async startUp(): Promise<void> {
+        this.navButton = createNPCIndicatorsNavigationButton(NPCIndicatorsConfig, this.manager);
+        this.toolbar.addNavigation(this.navButton);
+        this.onGameTick();
+    }
+    protected override async shutDown(): Promise<void> {
+        if (this.navButton) this.toolbar.removeNavigation(this.navButton);
+        this.navButton = undefined;
+        this.clear();
+    }
     private clear(): void {
         for (let i = 0; i < this.usedSlots; i++) this.client.tileHighlightManager.clear(this.firstSlot + i);
         this.usedSlots = 0;

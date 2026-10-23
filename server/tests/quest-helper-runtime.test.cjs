@@ -47,3 +47,12 @@ test('Tutorial Island uses native recorded steps and exact completion boundary',
  assert.match(make(10).activeStep.text.join(' '),/door/i);assert.ok(make(20).activeStep.targets.some(t=>t.kind==='npc'&&t.id===8503));
  assert.equal(make(670).status,'active');assert.equal(make(671).status,'complete');
 });
+test('native compatibility routes and projections remain read-only and keep packed vars consistent',async()=>{
+ const f=fixture();f.runtime.nativeResult=request=>({...request,snapshot:undefined,events:undefined,sourceCommit:'native-fixture',status:'active',activeStep:null,panels:[],diagnostics:[]});
+ f.runtime.projectState=()=>({varbits:{1850:3}});
+ f.runtime.varbitDefinition=id=>id===1850?{baseVar:678,startBit:0,endBit:2}:null;
+ const projected=f.runtime.authoritative(f.player,{varps:{678:20}},'cooks_assistant');
+ assert.equal(projected.varbits[1850],3);assert.equal(projected.varps[678],19);
+ assert.deepEqual(projected.varbitDefinitions[1850],{varp:678,lsb:0,msb:2});
+ await f.send({type:'select',questKey:f.quest.key});await f.evaluate();assert.equal(f.calls.length,0);assert.equal(f.sent.at(-1).sourceCommit,'native-fixture');
+});

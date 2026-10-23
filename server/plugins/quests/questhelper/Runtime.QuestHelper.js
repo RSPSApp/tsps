@@ -8,7 +8,7 @@ const status=(q,p)=>q.isComplete(p)?'FINISHED':q.isStarted(p)?'IN_PROGRESS':'NOT
 function items(container){return container.getItems().flatMap((item,slot)=>item&&item.getId()>0&&item.getAmount()>0?[{id:item.getId(),quantity:item.getAmount(),slot}]:[]);}
 
 class QuestHelperRuntime {
- constructor({getQuests,bridge,send}){this.getQuests=getQuests;this.bridge=bridge;this.send=send;this.players=new Map();this.catalogData=null;}
+ constructor({getQuests,bridge,send,nativeResult,projectState,varbitDefinition}){this.getQuests=getQuests;this.bridge=bridge;this.send=send;this.nativeResult=nativeResult;this.projectState=projectState;this.varbitDefinition=varbitDefinition;this.players=new Map();this.catalogData=null;}
  emit(player,data){for(const frame of encodeChunkedPluginMessage(data))this.send(player,frame);}
  async close(player){const state=this.players.get(player);if(!state)return;this.players.delete(player);state.active=false;state.assembler.clear();await this.bridge.close(state.engineSession).catch(()=>{});}
  async shutdown(){await Promise.all([...this.players.keys()].map(p=>this.close(p)));}
@@ -45,7 +45,7 @@ class QuestHelperRuntime {
     if(data.helperVariant!==undefined&&(!mapping||![mapping.helperVariant,...(mapping.variants||[]).map(v=>v.helperVariant)].includes(data.helperVariant)))throw new Error('Unknown helper variant');
     const snapshot=this.authoritative(player,data.snapshot,quest.key);
     const request={protocol:1,session:state.engineSession,sequence:data.sequence,questKey:quest.key,helperVariant:data.helperVariant,snapshot,events:data.events};
-    const response=quest.key==='learning_the_ropes'?tutorialResult(request,quest.getStage(player)):await this.bridge.evaluate(request);
+    const response=quest.key==='learning_the_ropes'?tutorialResult(request,quest.getStage(player)):(this.nativeResult?.(request,player)??await this.bridge.evaluate(request));
     if(this.players.get(player)!==state||!state.active||state.generation!==generation)return;
     this.emit(player,{...response,type:'result',protocol:1,session:state.session,sequence:data.sequence,questKey:quest.key});
    }finally{if(state.generation===generation)state.busy=false;}
@@ -59,6 +59,16 @@ class QuestHelperRuntime {
    for(const entry of [mapping,...(mapping?.variants||[])])if(Number.isInteger(entry?.questId))snapshot.questStates[entry.questId]=status(q,player);
    if(q.varbitId!==undefined)snapshot.varbits[q.varbitId]=q.varbitValue(stage,player);
    else if(q.varpId!==undefined)snapshot.varps[q.varpId]=q.varpValue(stage,player);
+  }
+  Object.assign(snapshot.varbits,this.projectState?.(player)?.varbits||{});
+  snapshot.varbitDefinitions={...(record(raw.varbitDefinitions)?raw.varbitDefinitions:{})};
+  for(const [id,value] of Object.entries(snapshot.varbits)){
+   const definition=this.varbitDefinition?.(Number(id));if(!definition)continue;
+   const {baseVar,startBit,endBit}=definition;
+   if(!Number.isInteger(baseVar)||!Number.isInteger(startBit)||!Number.isInteger(endBit)||startBit<0||endBit<startBit||endBit>31)throw new Error('Invalid native quest varbit definition');
+   const mask=(2**(endBit-startBit+1)-1)>>>0;
+   snapshot.varps[baseVar]=((snapshot.varps[baseVar]||0)&~(mask<<startBit))|((value&mask)<<startBit);
+   snapshot.varbitDefinitions[id]={varp:baseVar,lsb:startBit,msb:endBit};
   }
   snapshot.inventory=items(player.getInventory());snapshot.equipment=items(player.getEquipment());
   const location=player.getLocation();snapshot.localPlayer={...raw.localPlayer,name:player.getUsername(),x:location.getX(),y:location.getY(),plane:location.getZ()};snapshot.plane=location.getZ();

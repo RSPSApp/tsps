@@ -25,6 +25,12 @@ export type EaseFromValue = (typeof EaseFrom)[keyof typeof EaseFrom];
 export const CameraConfig = ConfigGroup(
     "zoom",
     {
+        controlsExpanded: ConfigItem({
+            name: "Expand controls guide",
+            description: "Show the keyboard and camera directions in the Controls overlay.",
+            position: 0,
+            default: false,
+        }),
         innerLimit: ConfigItem({
             keyName: "inner",
             name: "Expand inner zoom limit",

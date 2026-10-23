@@ -58,7 +58,7 @@ type KeyboardWidget = {
     parent?: KeyboardWidget;
 };
 const MENU_ANCHOR_Y_OFFSET = 12;
-const CONTROLS_HINT = "WASD to move. Tab cycles movement, chat and inventory. Arrows select items or interface options. Left/Right at an item row's edge switches panels; Tab also switches panels. Option/Alt toggles mouse look. Hold Shift to run. Tap Space to interact; hold Space for options, then Up/Down and Space to choose.";
+const CONTROLS_HINT = "Backquote (`), the key above Tab, exits close camera. WASD to move. Tab cycles movement, chat and inventory. Arrows select items or interface options. Left/Right at an item row's edge switches panels; Tab also switches panels. Option/Alt toggles mouse look. Hold Shift to run. Tap Space to interact; hold Space for options, then Up/Down and Space to choose.";
 const SPACE_MENU_HOLD_MS = 450;
 // Controller (standard mapping) button indices.
 const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, L3: 10, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 } as const;
@@ -1103,6 +1103,11 @@ export class FirstPersonPlugin extends Plugin implements ClientPlugin, InputKeyH
     /** First person is on (Backquote), so it owns the camera. */
     isActive(): boolean {
         return this.enabled;
+    }
+
+    /** An explicit UI exit; repeat clicks must not overwrite the restored camera preferences. */
+    exitCameraMode(): void {
+        if (this.enabled) this.setEnabled(false);
     }
 
     private setEnabled(enabled: boolean): void {

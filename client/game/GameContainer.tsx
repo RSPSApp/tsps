@@ -14,6 +14,9 @@ import { GameRenderer } from "./GameRenderer";
 import { GameState } from "./login/GameState";
 import { OsrsClient } from "./OsrsClient";
 import { Sidebar } from "./sidebar/Sidebar";
+import { ControlsHelp } from "./controls/ControlsHelp";
+import "./controls/ControlsHelp.css";
+import { FirstPersonPlugin } from "./plugins/firstperson/FirstPersonPlugin";
 
 interface OsrsContainerProps {
     osrsClient: OsrsClient;
@@ -94,6 +97,7 @@ function resolvePointerCoordinate(
 }
 
 export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
+    const closeCamera = osrsClient.runeLite.pluginManager.getPlugin(FirstPersonPlugin);
     const [renderer, setRenderer] = useState<GameRenderer>(osrsClient.renderer);
 
     const [downloadProgress, setDownloadProgress] = useState<DownloadProgress>();
@@ -364,6 +368,12 @@ export function GameContainer({ osrsClient }: OsrsContainerProps): JSX.Element {
                 <div className="game-canvas-shell">
                     <div className="game-canvas-stage">
                         {loadingBarOverlay}
+
+                        {!hideUi && osrsClient.isLoggedIn() && <ControlsHelp
+                            configManager={osrsClient.runeLite.configManager}
+                            closeCameraActive={closeCamera?.isActive() ?? false}
+                            onExitCloseCamera={() => closeCamera?.exitCameraMode()}
+                        />}
 
                         {!hideUi && (
                             <Suspense fallback={null}>

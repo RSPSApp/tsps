@@ -153,7 +153,9 @@ try {
     };
     const plugin = new FirstPersonPlugin(client);
     plugin.onKeyDown({ code: "Backquote", repeat: false } as KeyboardEvent);
-    assert.deepEqual(gameMessages, ["WASD to move. Tab cycles movement, chat and inventory. Arrows select items or interface options. Left/Right at an item row's edge switches panels; Tab also switches panels. Option/Alt toggles mouse look. Hold Shift to run. Tap Space to interact; hold Space for options, then Up/Down and Space to choose."]);
+    assert.equal(gameMessages.length, 1);
+    assert.match(gameMessages[0], /Backquote.*exits close camera/);
+    assert.match(gameMessages[0], /WASD to move.*Tab cycles movement, chat and inventory/);
     assert.equal(plugin.shouldKeepWorldMenuOpen(), false, "Backquote should not keep a closed menu alive");
     plugin.onKeyDown({ code: "Backquote", repeat: false } as KeyboardEvent);
     plugin.onKeyDown({ code: "Backquote", repeat: false } as KeyboardEvent);
@@ -1070,6 +1072,13 @@ try {
     interfaceRoots.delete(-1);
     plugin.onKeyDown({ code: "Backquote", repeat: false } as KeyboardEvent);
     console.log("controller ok");
+    plugin.onKeyDown({ code: "Backquote", repeat: false } as KeyboardEvent);
+    assert.equal(plugin.isActive(), true);
+    plugin.exitCameraMode();
+    assert.equal(plugin.isActive(), false, "visible exit button can leave close camera without a keyboard shortcut");
+    const restoredFollow = client.followPlayerCamera;
+    plugin.exitCameraMode();
+    assert.equal(client.followPlayerCamera, restoredFollow, "repeated exit preserves the restored camera preference");
 } finally {
     Object.defineProperty(globalThis, "document", {
         configurable: true,

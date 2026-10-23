@@ -23,11 +23,6 @@ export function processWidgetScrollWheelInput(
             const wUid = (w.uid ?? 0) | 0;
             if (widgetManager.isEffectivelyHidden(wUid)) continue;
 
-            // noScrollThrough blocks scroll from reaching widgets behind
-            if (w.noScrollThrough && w.isIf3 !== false) {
-                break;
-            }
-
             // Camera zoom blocking is based on actual visible widget surfaces.
             // Listener-only widgets (for example buff_bar transmit children) must not block.
             if (!blockedByVisibleWidget && getVisibleWidgetSurfaceReason(w)) {
@@ -37,7 +32,15 @@ export function processWidgetScrollWheelInput(
             const hasScrollHandler =
                 w.eventHandlers?.onScroll ||
                 (Array.isArray(w.onScroll) && w.onScroll.length > 0);
-            if (!hasScrollHandler) continue;
+            if (!hasScrollHandler) {
+                // A blocker still owns the wheel when its content has no listener (or is at
+                // a boundary). Otherwise the unconsumed delta reaches camera zoom below it.
+                if (w.noScrollThrough && w.isIf3 !== false) {
+                    blockedByVisibleWidget = true;
+                    break;
+                }
+                continue;
+            }
 
             const wheelStep = wheelDelta > 0 ? 1 : -1;
             const scrollCtx: Partial<ScriptEvent> = {

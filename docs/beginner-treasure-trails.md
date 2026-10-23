@@ -87,9 +87,9 @@ input hashes and reproducible output. No generated JSON was edited by hand.
 
 ## Verification
 
-`node --test server/tests/beginner-treasure-trails.test.cjs` exercises every step
+From `server/`, `node --test tests/beginner-treasure-trails.test.cjs` exercises every step
 family against the real cache, all Charlie requests, all map and hot/cold
 targets, personal Uri, interrupted/stale dialogue, metadata serialization,
-rewards, Entrana, full inventory, capacity and Explore. Run from the repository
-root after the server build. Natural world/browser evidence is recorded with the
+rewards, Entrana, full inventory, capacity and Explore. Run after the server
+build. Natural world/browser evidence is recorded with the
 integration report; unit coverage alone does not establish visual parity.

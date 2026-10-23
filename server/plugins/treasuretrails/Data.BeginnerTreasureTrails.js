@@ -25,8 +25,17 @@ function load(core) {
   function target(row) {
     const targetRow = C.getDbRow(value(row, "target"));
     const packed = value(targetRow, "coord");
-    return { targetRow: targetRow.id, location: coordinate(packed), description: value(targetRow, "description", ""),
-      npcIds: [value(targetRow, "npc"), value(targetRow, "fallback_npc")].filter(id => id != null), };
+    const npcIds = new Set();
+    function includeNpc(id) {
+      if (id == null || id < 0 || npcIds.has(id)) return;
+      npcIds.add(id);
+      // Clue helper targets can name a multi-NPC base, while the interaction
+      // packet names its live morph (Sedridor, Gertrude and Reldo, for example).
+      for (const morph of C.getNpc(id).transforms ?? []) includeNpc(morph);
+    }
+    includeNpc(value(targetRow, "npc"));
+    includeNpc(value(targetRow, "fallback_npc"));
+    return { targetRow: targetRow.id, location: coordinate(packed), description: value(targetRow, "description", ""), npcIds: [...npcIds] };
   }
   function step(row, kind) {
     return { row: row.id, key: C.getDbRowName(row.id), id: value(row, "id"), kind, text: value(row, "clue_text", ""), ...target(row) };

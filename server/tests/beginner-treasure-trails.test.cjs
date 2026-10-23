@@ -122,6 +122,13 @@ test("every anagram and ordinary NPC completes only after the dialogue, once", (
   }
 });
 
+test("NPC clue targets include live cache transforms such as Archmage Sedridor",()=>{
+  const f=fixture(),step=Runtime.data().steps.find(s=>s.key.endsWith("_sedridor"));
+  const npcId=core.CacheDefinitions.getNpc(step.npcIds[0]).transforms.find(id=>id>=0);
+  const trail=f.place(step);assert.equal(f.talk(trail,npcId).handled,true);f.finish();
+  assert.equal(f.items[0].getId(),23245);
+});
+
 test("interrupted or stale NPC dialogue cannot advance a banked/dropped clue", () => {
   const f = fixture();
   const trail = f.place(Runtime.data().steps.find(s => s.kind === "anagram"));
@@ -265,4 +272,37 @@ test("Explore unlocks at 600 without gating any other emote",()=>{
   Runtime.canEmote(request);assert.equal(request.allow,false);
   f.attributes.set(Runtime.COMPLETED_ATTRIBUTE,600);request.allow=true;Runtime.canEmote(request);assert.equal(request.allow,true);
   request={player:f.player,sequence:855,allow:true};Runtime.canEmote(request);assert.equal(request.allow,true);
+});
+
+test("real woodcutting and mining source paths use beginner capacity while retaining other-tier checks",()=>{
+  const f=fixture(),drops=[];
+  f.player.getSkillManager=()=>({getCurrentLevel:()=>99});
+  const sourceCore={...core,ItemOnGroundManager:{registers:(_player,item)=>drops.push(item)}};
+  const api={core:sourceCore,onItemAction(){},onCustomEvent(){},emitCustomEvent:f.api.emitCustomEvent};
+  const nests=require("../plugins/skills/woodcutting/ClueNests.Woodcutting");
+  const geodes=require("../plugins/skills/mining/ClueGeodes.Mining");
+  nests.attach(api);geodes.attach(api);
+  f.items[0]=new core.Item(23182,1);
+  const previous=Math.random;
+  try{
+    Math.random=()=>0;
+    nests.rollClueNests(f.player,{petBase:10000});
+    assert.ok(drops.some(i=>i.getId()===core.ItemIdentifiers.CLUE_NEST_BEGINNER_));
+    drops.length=0;
+    geodes.rollClueGeodes({player:f.player,skill:core.Skill.MINING,petBase:10000},()=>0);
+    assert.ok(f.items.some(i=>i?.getId()===core.ItemIdentifiers.CLUE_GEODE_BEGINNER_));
+    nests.rollClueNests(f.player,{petBase:10000});
+    assert.equal(drops.some(i=>i.getId()===core.ItemIdentifiers.CLUE_NEST_BEGINNER_),false);
+  }finally{Math.random=previous;}
+});
+
+test("impling clue ownership uses the beginner capacity query without changing easy clues",()=>{
+  const f=fixture();
+  const C=require("../plugins/skills/hunter/Context.Hunter");
+  const previous={api:C.H.api,core:C.H.core};C.H.api=f.api;C.H.core=core;
+  try{
+    f.items[0]=new core.Item(23182,1);assert.equal(C.ownsClue(f.player,"BEGINNER"),false);
+    f.items[1]=new core.Item(24361,1);assert.equal(C.ownsClue(f.player,"BEGINNER"),true);
+    f.items[2]=new core.Item(core.ItemIdentifiers.CLUE_SCROLL_EASY_,1);assert.equal(C.ownsClue(f.player,"EASY"),true);
+  }finally{Object.assign(C.H,previous);}
 });

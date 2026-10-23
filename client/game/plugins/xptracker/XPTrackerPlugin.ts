@@ -5,6 +5,7 @@ import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import { ClientToolbar } from "@runelite/client/ui/ClientToolbar";
 import type { NavigationButton } from "@runelite/client/ui/NavigationButton";
 import type { OsrsClient } from "../../OsrsClient";
+import { GameState } from "../../login/GameState";
 import { SKILL_COUNT, SKILL_NAME, type SkillId } from "../../../rs/skill/skills";
 import { createXPTrackerNavigationButton } from "./XPTrackerPanel";
 
@@ -38,7 +39,7 @@ export class XPSession {
     rows(now: number): XPRow[] {
         return [...this.skills.entries()].filter(([, value]) => value.gained > 0).map(([skill, value]) => ({
             skill, name: SKILL_NAME[skill as SkillId] ?? `Skill ${skill}`, gained: value.gained,
-            perHour: Math.round(value.gained * 3600000 / Math.max(1000, this.clock(now) - value.since)),
+            perHour: Math.round(value.gained * 3600000 / Math.max(60000, this.clock(now) - value.since)),
         }));
     }
     reset(skill: number | undefined, now: number): void {
@@ -77,6 +78,10 @@ export class XPTrackerPlugin extends Plugin {
     onGameTick(): void {
         if (!this.isStarted()) return;
         const now = this.now();
+        // A scene load is still online time. Preserve whether we had a live baseline:
+        // a normal region change must count its XP, but loading after login/reconnect
+        // must still rebase the first ordered snapshot.
+        if (this.client.gameState === GameState.LOADING_GAME) { this.commit(); return; }
         if (this.client.gameState !== 30 || !this.client.cs2Vm?.context.getStatXp) {
             const loggedOut = this.client.gameState === 10 || this.client.gameState === 50;
             if (loggedOut && this.config.resetOnLogout()) this.session.clear();

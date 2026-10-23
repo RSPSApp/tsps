@@ -1,0 +1,1583 @@
+{
+  "schema_version": 1,
+  "tables": {
+    "koschei_the_deathless": {
+      "wiki_page": "Koschei the deathless",
+      "label": "Drops",
+      "entries": [
+        {
+          "item_id": 3757,
+          "name": "Fremennik blade",
+          "section": "",
+          "rarity_raw": "Always",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    "the_mimic_elite": {
+      "wiki_page": "The Mimic",
+      "label": "Elite drops",
+      "entries": [
+        {
+          "item_id": 8782,
+          "name": "Mahogany plank",
+          "section": "100%",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 23185,
+          "name": "Ring of 3rd Age",
+          "section": "Pre-roll",
+          "rarity_raw": "6/250",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "6/264"
+        },
+        {
+          "item_id": 10350,
+          "name": "3rd Age full helmet",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10348,
+          "name": "3rd Age platebody",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10346,
+          "name": "3rd Age platelegs",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 23242,
+          "name": "3rd Age plateskirt",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10352,
+          "name": "3rd Age kiteshield",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10334,
+          "name": "3rd Age range coif",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10330,
+          "name": "3rd Age range top",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10332,
+          "name": "3rd Age range legs",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10336,
+          "name": "3rd Age vambraces",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10342,
+          "name": "3rd Age mage hat",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10338,
+          "name": "3rd Age robe top",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10340,
+          "name": "3rd Age robe",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 10344,
+          "name": "3rd Age amulet",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 12426,
+          "name": "3rd Age longsword",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 12424,
+          "name": "3rd Age bow",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 12422,
+          "name": "3rd Age wand",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 12437,
+          "name": "3rd Age cloak",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 23336,
+          "name": "3rd Age druidic robe top",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 23339,
+          "name": "3rd Age druidic robe bottoms",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 23345,
+          "name": "3rd Age druidic cloak",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 23342,
+          "name": "3rd Age druidic staff",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 20014,
+          "name": "3rd Age pickaxe",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 20011,
+          "name": "3rd Age axe",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5750",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/6072"
+        },
+        {
+          "item_id": 560,
+          "name": "Death rune",
+          "section": "Main drops",
+          "rarity_raw": "243/1250",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            120,
+            600
+          ],
+          "alternate_rarity_raw": "257/1320",
+          "notes": [
+            "Possible quantities: 600, 480, 360, 240, 120",
+            "Drops on this table become slightly more common if it takes 2-5 attempts."
+          ],
+          "quantity_options": [
+            600,
+            480,
+            360,
+            240,
+            120
+          ]
+        },
+        {
+          "item_id": 565,
+          "name": "Blood rune",
+          "section": "Main drops",
+          "rarity_raw": "243/1250",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            100,
+            500
+          ],
+          "alternate_rarity_raw": "257/1320",
+          "notes": [
+            "Possible quantities: 500, 400, 300, 200, 100"
+          ],
+          "quantity_options": [
+            500,
+            400,
+            300,
+            200,
+            100
+          ]
+        },
+        {
+          "item_id": 207,
+          "name": "Grimy ranarr weed",
+          "section": "Main drops",
+          "rarity_raw": "243/1250",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            5,
+            25
+          ],
+          "alternate_rarity_raw": "257/1320",
+          "noted": true,
+          "notes": [
+            "Possible quantities: 25, 20, 15, 10, 5"
+          ],
+          "quantity_options": [
+            25,
+            20,
+            15,
+            10,
+            5
+          ]
+        },
+        {
+          "item_id": 245,
+          "name": "Wine of Zamorak",
+          "section": "Main drops",
+          "rarity_raw": "243/1250",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            5,
+            25
+          ],
+          "alternate_rarity_raw": "257/1320",
+          "noted": true,
+          "notes": [
+            "Possible quantities: 25, 20, 15, 10, 5"
+          ],
+          "quantity_options": [
+            25,
+            20,
+            15,
+            10,
+            5
+          ]
+        },
+        {
+          "item_id": 389,
+          "name": "Raw manta ray",
+          "section": "Main drops",
+          "rarity_raw": "243/1250",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            3,
+            15
+          ],
+          "alternate_rarity_raw": "257/1320",
+          "noted": true,
+          "notes": [
+            "Possible quantities: 15, 12, 9, 6, 3"
+          ],
+          "quantity_options": [
+            15,
+            12,
+            9,
+            6,
+            3
+          ]
+        },
+        {
+          "item_id": 30926,
+          "name": "Mimic scroll case",
+          "section": "Tertiary",
+          "rarity_raw": "Always",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "notes": [
+            "Only if the player has not opened a mimic scroll case."
+          ]
+        }
+      ]
+    },
+    "the_mimic_master": {
+      "wiki_page": "The Mimic",
+      "label": "Master drops",
+      "entries": [
+        {
+          "item_id": 8782,
+          "name": "Mahogany plank",
+          "section": "100%",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 23185,
+          "name": "Ring of 3rd Age",
+          "section": "Pre-roll",
+          "rarity_raw": "6/228",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "6/240"
+        },
+        {
+          "item_id": 10350,
+          "name": "3rd Age full helmet",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10348,
+          "name": "3rd Age platebody",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10346,
+          "name": "3rd Age platelegs",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 23242,
+          "name": "3rd Age plateskirt",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10352,
+          "name": "3rd Age kiteshield",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10334,
+          "name": "3rd Age range coif",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10330,
+          "name": "3rd Age range top",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10332,
+          "name": "3rd Age range legs",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10336,
+          "name": "3rd Age vambraces",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10342,
+          "name": "3rd Age mage hat",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10338,
+          "name": "3rd Age robe top",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10340,
+          "name": "3rd Age robe",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 10344,
+          "name": "3rd Age amulet",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 12426,
+          "name": "3rd Age longsword",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 12424,
+          "name": "3rd Age bow",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 12422,
+          "name": "3rd Age wand",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 12437,
+          "name": "3rd Age cloak",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 23336,
+          "name": "3rd Age druidic robe top",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 23339,
+          "name": "3rd Age druidic robe bottoms",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 23345,
+          "name": "3rd Age druidic cloak",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 23342,
+          "name": "3rd Age druidic staff",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 20014,
+          "name": "3rd Age pickaxe",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 20011,
+          "name": "3rd Age axe",
+          "section": "Pre-roll",
+          "rarity_raw": "1/5244",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "alternate_rarity_raw": "1/5520"
+        },
+        {
+          "item_id": 560,
+          "name": "Death rune",
+          "section": "Main drops",
+          "rarity_raw": "221/1140",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            100,
+            600
+          ],
+          "alternate_rarity_raw": "233/1200",
+          "notes": [
+            "Possible quantities: 600, 500, 400, 300, 200, 100",
+            "Drops on this table become slightly more common if it takes 2-6 attempts."
+          ],
+          "quantity_options": [
+            600,
+            500,
+            400,
+            300,
+            200,
+            100
+          ]
+        },
+        {
+          "item_id": 565,
+          "name": "Blood rune",
+          "section": "Main drops",
+          "rarity_raw": "221/1140",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            83,
+            500
+          ],
+          "alternate_rarity_raw": "233/1200",
+          "notes": [
+            "Possible quantities: 500, 416, 333, 250, 166, 83"
+          ],
+          "quantity_options": [
+            500,
+            416,
+            333,
+            250,
+            166,
+            83
+          ]
+        },
+        {
+          "item_id": 207,
+          "name": "Grimy ranarr weed",
+          "section": "Main drops",
+          "rarity_raw": "221/1140",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            4,
+            25
+          ],
+          "alternate_rarity_raw": "233/1200",
+          "noted": true,
+          "notes": [
+            "Possible quantities: 25, 20, 16, 12, 8, 4"
+          ],
+          "quantity_options": [
+            25,
+            20,
+            16,
+            12,
+            8,
+            4
+          ]
+        },
+        {
+          "item_id": 245,
+          "name": "Wine of Zamorak",
+          "section": "Main drops",
+          "rarity_raw": "221/1140",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            4,
+            25
+          ],
+          "alternate_rarity_raw": "233/1200",
+          "noted": true,
+          "notes": [
+            "Possible quantities: 25, 20, 16, 12, 8, 4"
+          ],
+          "quantity_options": [
+            25,
+            20,
+            16,
+            12,
+            8,
+            4
+          ]
+        },
+        {
+          "item_id": 389,
+          "name": "Raw manta ray",
+          "section": "Main drops",
+          "rarity_raw": "221/1140",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            2,
+            15
+          ],
+          "alternate_rarity_raw": "233/1200",
+          "noted": true,
+          "notes": [
+            "Possible quantities: 15, 12, 10, 7, 5, 2"
+          ],
+          "quantity_options": [
+            15,
+            12,
+            10,
+            7,
+            5,
+            2
+          ]
+        },
+        {
+          "item_id": 30926,
+          "name": "Mimic scroll case",
+          "section": "Tertiary",
+          "rarity_raw": "Always",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ],
+          "notes": [
+            "Only if the player has not opened a mimic scroll case."
+          ]
+        }
+      ]
+    },
+    "yama": {
+      "wiki_page": "Yama",
+      "label": "Drops",
+      "entries": [
+        {
+          "item_id": 30759,
+          "name": "Soulflame horn",
+          "section": "Unique",
+          "rarity_raw": "2/600",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ],
+          "notes": [
+            "Scales with contribution; rates and quantities are shown for 100% contribution."
+          ]
+        },
+        {
+          "item_id": 30750,
+          "name": "Oathplate helm",
+          "section": "Unique",
+          "rarity_raw": "1/600",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30753,
+          "name": "Oathplate chest",
+          "section": "Unique",
+          "rarity_raw": "1/600",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30756,
+          "name": "Oathplate legs",
+          "section": "Unique",
+          "rarity_raw": "1/600",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30803,
+          "name": "Dossier",
+          "section": "Unique",
+          "rarity_raw": "1/12.1",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30763,
+          "name": "Forgotten lockbox",
+          "section": "Unique",
+          "rarity_raw": "1/33",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30765,
+          "name": "Oathplate shards",
+          "section": "Unique",
+          "rarity_raw": "1/17.07",
+          "source_template": "DropsLine",
+          "quantity": [
+            12,
+            12
+          ]
+        },
+        {
+          "item_id": 2301,
+          "name": "Pineapple pizza",
+          "section": "Supplies",
+          "rarity_raw": "7.5/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            3,
+            4
+          ]
+        },
+        {
+          "item_id": 7208,
+          "name": "Wild pie",
+          "section": "Supplies",
+          "rarity_raw": "7.5/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            3,
+            4
+          ]
+        },
+        {
+          "item_id": 139,
+          "name": "Prayer potion(3)",
+          "section": "Supplies",
+          "rarity_raw": "7.5/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            2,
+            2
+          ]
+        },
+        {
+          "item_id": 11493,
+          "name": "Super restore mix(2)",
+          "section": "Supplies",
+          "rarity_raw": "7.5/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            2,
+            2
+          ]
+        },
+        {
+          "item_id": 12701,
+          "name": "Super combat potion(1)",
+          "section": "Supplies",
+          "rarity_raw": "7.5/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 11521,
+          "name": "Zamorak mix(2)",
+          "section": "Supplies",
+          "rarity_raw": "7.5/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 1113,
+          "name": "Rune chainbody",
+          "section": "Weapons and armour",
+          "rarity_raw": "5/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            8,
+            8
+          ],
+          "noted": true,
+          "notes": [
+            "Scales with contribution; rates and quantities are shown for 100% contribution."
+          ]
+        },
+        {
+          "item_id": 1391,
+          "name": "Battlestaff",
+          "section": "Weapons and armour",
+          "rarity_raw": "4/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            40,
+            40
+          ],
+          "noted": true
+        },
+        {
+          "item_id": 1127,
+          "name": "Rune platebody",
+          "section": "Weapons and armour",
+          "rarity_raw": "3/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            8,
+            8
+          ],
+          "noted": true
+        },
+        {
+          "item_id": 4585,
+          "name": "Dragon plateskirt",
+          "section": "Weapons and armour",
+          "rarity_raw": "2/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 4087,
+          "name": "Dragon platelegs",
+          "section": "Weapons and armour",
+          "rarity_raw": "2/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 565,
+          "name": "Blood rune",
+          "section": "Runes",
+          "rarity_raw": "3/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            400,
+            400
+          ],
+          "notes": [
+            "Scales with contribution; rates and quantities are shown for 100% contribution."
+          ]
+        },
+        {
+          "item_id": 563,
+          "name": "Law rune",
+          "section": "Runes",
+          "rarity_raw": "3/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            150,
+            150
+          ]
+        },
+        {
+          "item_id": 4697,
+          "name": "Smoke rune",
+          "section": "Runes",
+          "rarity_raw": "2/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            350,
+            350
+          ]
+        },
+        {
+          "item_id": 566,
+          "name": "Soul rune",
+          "section": "Runes",
+          "rarity_raw": "2/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            500,
+            500
+          ]
+        },
+        {
+          "item_id": 566,
+          "name": "Soul rune",
+          "section": "Runes",
+          "rarity_raw": "2/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            1000,
+            1000
+          ]
+        },
+        {
+          "item_id": 554,
+          "name": "Fire rune",
+          "section": "Runes",
+          "rarity_raw": "1/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            40000,
+            40000
+          ]
+        },
+        {
+          "item_id": 21880,
+          "name": "Wrath rune",
+          "section": "Runes",
+          "rarity_raw": "1/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            800,
+            800
+          ]
+        },
+        {
+          "item_id": 30771,
+          "name": "Aether catalyst",
+          "section": "Other",
+          "rarity_raw": "7/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            850,
+            850
+          ],
+          "notes": [
+            "Scales with contribution; rates and quantities are shown for 100% contribution."
+          ]
+        },
+        {
+          "item_id": 30773,
+          "name": "Diabolic worms",
+          "section": "Other",
+          "rarity_raw": "7/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            90,
+            90
+          ]
+        },
+        {
+          "item_id": 30795,
+          "name": "Barrel of demonic tallow (full)",
+          "section": "Other",
+          "rarity_raw": "5/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30775,
+          "name": "Chasm teleport scroll",
+          "section": "Other",
+          "rarity_raw": "4/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            6,
+            6
+          ]
+        },
+        {
+          "item_id": 1605,
+          "name": "Emerald",
+          "section": "Other",
+          "rarity_raw": "3/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            40,
+            40
+          ],
+          "noted": true
+        },
+        {
+          "item_id": 1603,
+          "name": "Ruby",
+          "section": "Other",
+          "rarity_raw": "3/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            40,
+            40
+          ],
+          "noted": true
+        },
+        {
+          "item_id": 1601,
+          "name": "Diamond",
+          "section": "Other",
+          "rarity_raw": "3/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            40,
+            40
+          ],
+          "noted": true
+        },
+        {
+          "item_id": 9194,
+          "name": "Onyx bolt tips",
+          "section": "Other",
+          "rarity_raw": "1/95.11",
+          "source_template": "DropsLine",
+          "quantity": [
+            150,
+            150
+          ]
+        },
+        {
+          "item_id": 1965,
+          "name": "Cabbage",
+          "section": "Junk",
+          "rarity_raw": "3/11",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 1474,
+          "name": "Black bead",
+          "section": "Junk",
+          "rarity_raw": "3/11",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 1969,
+          "name": "Spinach roll",
+          "section": "Junk",
+          "rarity_raw": "3/11",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30747,
+          "name": "Demon dung",
+          "section": "Junk",
+          "rarity_raw": "2/11",
+          "source_template": "DropsLineReward",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30888,
+          "name": "Yami",
+          "section": "Tertiary",
+          "rarity_raw": "1/2500",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ],
+          "notes": [
+            "The drop rate is fixed at 1/2500, as long as contribution is higher than 15%."
+          ]
+        },
+        {
+          "item_id": 12113,
+          "name": "Clue scroll (elite)",
+          "section": "Tertiary",
+          "rarity_raw": "1/30",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ],
+          "notes": [
+            "The elite clue scroll drop rate increases to 1/28 after unlocking the elite Combat Achievements rewards tier.",
+            "Clue scrolls will drop as scroll boxes after the completion of X Marks the Spot."
+          ]
+        },
+        {
+          "item_id": 30771,
+          "name": "Aether catalyst",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            2000,
+            2000
+          ]
+        },
+        {
+          "item_id": 30773,
+          "name": "Diabolic worms",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            250,
+            250
+          ]
+        },
+        {
+          "item_id": 30765,
+          "name": "Oathplate shards",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            45,
+            45
+          ]
+        },
+        {
+          "item_id": 30750,
+          "name": "Oathplate helm",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ],
+          "notes": [
+            "Choice of helm, chest, or legs"
+          ]
+        },
+        {
+          "item_id": 30753,
+          "name": "Oathplate chest",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30756,
+          "name": "Oathplate legs",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30759,
+          "name": "Soulflame horn",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30822,
+          "name": "Contract of Forfeit Breath",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30789,
+          "name": "Purifying sigil (top)",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30810,
+          "name": "Contract of Glyphic Attenuation",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30791,
+          "name": "Purifying sigil (bottom)",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30813,
+          "name": "Contract of Sensory Clouding",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30783,
+          "name": "Purifying sigil (left)",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30819,
+          "name": "Contract of Divine Severance",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30785,
+          "name": "Purifying sigil (right)",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30816,
+          "name": "Contract of Bloodied Blows",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30787,
+          "name": "Purifying sigil (middle)",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30840,
+          "name": "Contract of Familiar Acquisition",
+          "section": "Contract",
+          "rarity_raw": "Always",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        },
+        {
+          "item_id": 30888,
+          "name": "Yami",
+          "section": "Contract",
+          "rarity_raw": "1/100",
+          "source_template": "DropsLine",
+          "quantity": [
+            1,
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "unparsed_reward_rows": {
+    "Catherby monodon": {
+      "source_rows": 1,
+      "exported_rows": 0
+    },
+    "Cave goblin (monster)": {
+      "source_rows": 2,
+      "exported_rows": 0
+    },
+    "Ogre monodon": {
+      "source_rows": 1,
+      "exported_rows": 0
+    },
+    "Vampyre Juvinate": {
+      "source_rows": 37,
+      "exported_rows": 0
+    }
+  }
+}

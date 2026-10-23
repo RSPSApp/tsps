@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { CLIENT_TOKEN, PluginInjector } from "@runelite/client/plugins/PluginInjector";
 import { EventBus } from "@runelite/client/eventbus/EventBus";
+import { ClientToolbar } from "@runelite/client/ui/ClientToolbar";
 import { ClientTick, PostClientTick } from "@runelite/api/events";
 import { NpcEcs } from "../game/ecs/NpcEcs";
 import { TileHighlightManager } from "../game/highlights/TileHighlightManager";
@@ -27,7 +28,7 @@ async function main() {
         playerEcs: { getIndexForServerId: () => 0, getLevel: () => plane },
         npcTypeLoader: { load: () => ({ name: "Man" }) }, tileHighlightManager: highlights };
     config.setConfigValue(NPCIndicatorsConfig, "names", "Man|#00ff00");
-    const injector = new PluginInjector(config).provide(ConfigManager, config).provide(CLIENT_TOKEN, client);
+    const injector = new PluginInjector(config).provide(ConfigManager, config).provide(ClientToolbar, new ClientToolbar()).provide(CLIENT_TOKEN, client);
     const plugin = injector.runWith(() => new NPCIndicatorsPlugin());
     await plugin.start(); plugin.onGameTick();
     const bus = new EventBus(); bus.register(plugin);

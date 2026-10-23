@@ -1,0 +1,14 @@
+import { strict as assert } from 'node:assert';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { QuestHelperPanel } from '../game/plugins/questhelper/QuestHelperPanel';
+const quests=[{questKey:'kingdom',name:'A Kingdom Divided',helperVariant:'A_KINGDOM_DIVIDED',supported:true},{questKey:'shield',name:'Shield of Arrav',helperVariant:'SHIELD_OF_ARRAV_PHOENIX_GANG',supported:true},{questKey:'shield',name:'Shield of Arrav',helperVariant:'SHIELD_OF_ARRAV_BLACK_ARM_GANG',supported:true},{questKey:'rfd',name:'Recipe for Disaster',helperVariant:'RECIPE_FOR_DISASTER_START',supported:true},{questKey:'rfd',name:'Recipe for Disaster',helperVariant:'RECIPE_FOR_DISASTER_DWARF',supported:true}];
+const state:any={selected:'shield',variant:'SHIELD_OF_ARRAV_BLACK_ARM_GANG',status:'net.runelite.api.Client.getWidget is unsupported',catalog:{sourceCommit:'abc123',quests},result:{status:'unavailable',activeStep:null,panels:[],diagnostics:[{code:'MISSING_STATE',message:'Need widget',method:'Client.getWidget',helper:'com.questhelper.PuzzleStep'}]}};
+const plugin:any={getState:()=>state,subscribe:()=>()=>{},selectQuest(){},retry(){}};
+const html=renderToStaticMarkup(createElement(QuestHelperPanel,{plugin}));
+assert.ok(!html.includes('A_KINGDOM_DIVIDED'),'normal label omits internal enum');assert.ok(html.includes('A Kingdom Divided'));
+assert.ok(html.includes('Shield of Arrav — Phoenix Gang'));assert.ok(html.includes('Shield of Arrav — Black Arm Gang'));assert.ok(html.includes('Recipe for Disaster — Start'));assert.ok(html.includes('Recipe for Disaster — Mountain Dwarf'));
+assert.ok(!html.includes('SHIELD_OF_ARRAV_'));assert.ok(!html.includes('RECIPE_FOR_DISASTER_'));
+const debug=html.match(/<details[^>]*>[\s\S]*?<summary>Helper diagnostics<\/summary>[\s\S]*?<\/details>/)?.[0];assert.ok(debug?.includes('Client.getWidget'),'technical details remain in optional disclosure');assert.ok(!debug?.includes(' open'),'debug details start collapsed');
+const main=html.replace(debug ?? '','');assert.ok(!main.includes('net.runelite.api.Client'));assert.ok(!main.includes('Client.getWidget'));assert.ok(!main.includes('com.questhelper'));assert.ok(!main.includes('abc123'));
+console.log('quest helper readable route labels and optional diagnostics passed');

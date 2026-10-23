@@ -1,9 +1,27 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { NavigationButton } from "@runelite/client/ui/NavigationButton";
 import type { QuestHelperPlugin } from "./QuestHelperPlugin";
-import type { HelperWidget, PixelBounds, RequirementState } from "./QuestHelperProtocol";
+import type { HelperQuest, HelperWidget, PixelBounds, RequirementState } from "./QuestHelperProtocol";
 const row = { display: "block", width: "100%", textAlign: "left" as const, padding: "8px", marginBottom: 4, background: "#282828", color: "#eee", border: "1px solid #555", borderRadius: 3, cursor: "pointer" };
 const clean = (text: string): string => text.replace(/<br\s*\/?\s*>/gi, "\n").replace(/<[^>]+>/g, "");
+const variantLabels: Readonly<Record<string,string>> = {
+    SHIELD_OF_ARRAV_PHOENIX_GANG: "Phoenix Gang",
+    SHIELD_OF_ARRAV_BLACK_ARM_GANG: "Black Arm Gang",
+    RECIPE_FOR_DISASTER_START: "Start",
+    RECIPE_FOR_DISASTER_DWARF: "Mountain Dwarf",
+    RECIPE_FOR_DISASTER_WARTFACE_AND_BENTNOZE: "Wartface and Bentnoze",
+    RECIPE_FOR_DISASTER_PIRATE_PETE: "Pirate Pete",
+    RECIPE_FOR_DISASTER_LUMBRIDGE_GUIDE: "Lumbridge Guide",
+    RECIPE_FOR_DISASTER_EVIL_DAVE: "Evil Dave",
+    RECIPE_FOR_DISASTER_MONKEY_AMBASSADOR: "King Awowogei",
+    RECIPE_FOR_DISASTER_SIR_AMIK_VARZE: "Sir Amik Varze",
+    RECIPE_FOR_DISASTER_SKRACH_UGLOGWEE: "Skrach Uglogwee",
+    RECIPE_FOR_DISASTER_FINALE: "Final battle",
+};
+function questLabel(quest:HelperQuest, quests:readonly HelperQuest[]):string {
+    const branch=quest.helperVariant && variantLabels[quest.helperVariant];
+    return branch && quests.filter(other=>other.questKey===quest.questKey).length>1 ? `${quest.name} — ${branch}` : quest.name;
+}
 function Requirements({ items }: {
     items: readonly RequirementState[];
 }): JSX.Element {
@@ -14,13 +32,15 @@ export function QuestHelperPanel({ plugin }: {
 }): JSX.Element {
     const state = useSyncExternalStore(plugin.subscribe, plugin.getState, plugin.getState);
     const [search, setSearch] = useState("");
-    const quests = useMemo(() => [...(state.catalog?.quests ?? [])].filter(quest => quest.name.toLowerCase().includes(search.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name)), [state.catalog, search]);
+    const catalog=state.catalog?.quests ?? [];
+    const quests = useMemo(() => [...(state.catalog?.quests ?? [])].filter(quest => questLabel(quest,state.catalog?.quests ?? []).toLowerCase().includes(search.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name)), [state.catalog, search]);
     const step = state.result?.activeStep;
     const selected = state.catalog?.quests.find(quest => quest.questKey === state.selected && quest.helperVariant === state.variant);
+    const technicalStatus=/(?:\b[A-Za-z_$]\w*\.){2,}|\b[A-Z]\w*\.[A-Za-z_$]\w*/.test(state.status);
     return <div className="rl-sidebar-panel-content" style={{ padding: 12, color: "#ddd", fontSize: 13, overflowY: "auto" }}>
         <h2 style={{ fontSize: 18, margin: "0 0 12px" }}>Quest Helper</h2>
-        <p role="status" style={{ color: "#e4c27a" }}>{state.status}</p>
-        {state.selected && <section aria-label="Selected quest"><h3>{selected?.name ?? state.selected}</h3><button style={row} onClick={() => plugin.selectQuest("")}>Stop helping</button></section>}
+        <p role="status" style={{ color: "#e4c27a" }}>{technicalStatus?"Quest Helper needs attention. Open helper diagnostics for details.":state.status}</p>
+        {state.selected && <section aria-label="Selected quest"><h3>{selected?questLabel(selected,catalog):"Selected quest"}</h3><button style={row} onClick={() => plugin.selectQuest("")}>Stop helping</button></section>}
         {state.result?.status === "active" && step && <section aria-label="Current quest step">
             {step.text.map((text, index) => <p key={index} style={{ whiteSpace: "pre-line", lineHeight: 1.5 }}>{clean(text)}</p>)}
             {!!step.requirements.length && <><h3>Requirements</h3><Requirements items={step.requirements}/></>}
@@ -28,12 +48,11 @@ export function QuestHelperPanel({ plugin }: {
             {!!step.targets.length && <details><summary>Targets ({step.targets.length})</summary><ul>{step.targets.map((target, index) => <li key={index}>{target.label ? clean(target.label) : `${target.kind}${target.id !== undefined ? ` ${target.id}` : ""}`}{target.x !== undefined ? ` (${target.x}, ${target.y}, ${target.plane ?? "?"})` : ""}</li>)}</ul></details>}
         </section>}
         {state.result?.panels.map((panel, index) => <details key={index}><summary>{clean(panel.title)}</summary>{panel.text?.map((text, index) => <p key={index}>{clean(text)}</p>)}{panel.requirements && <Requirements items={panel.requirements}/>}</details>)}
-        {!!state.result?.diagnostics.length && <section aria-label="Helper diagnostics"><h3>Helper diagnostics</h3>{state.result.diagnostics.map((diagnostic, index) => <p key={index} style={{ color: "#edb86d", overflowWrap: "anywhere" }}>{diagnostic.code}: {diagnostic.message}{diagnostic.method ? ` (${diagnostic.method})` : ""}</p>)}</section>}
+        {(state.catalog||state.result?.diagnostics.length||technicalStatus) && <details aria-label="Helper diagnostics"><summary>Helper diagnostics</summary>{technicalStatus&&<p style={{overflowWrap:"anywhere"}}>{state.status}</p>}{state.result?.diagnostics.map((diagnostic, index) => <p key={index} style={{ color: "#edb86d", overflowWrap: "anywhere" }}>{diagnostic.code}: {diagnostic.message}{diagnostic.method ? ` (${diagnostic.method})` : ""}{diagnostic.helper?` — ${diagnostic.helper}`:""}</p>)}{state.catalog&&<p style={{fontSize:10,color:"#999",overflowWrap:"anywhere"}}>Helper source: {state.catalog.sourceCommit}</p>}</details>}
         <button style={row} onClick={() => plugin.retry()}>Reconnect helper</button>
         <label htmlFor="quest-helper-search" style={{ display: "block", margin: "16px 0 6px" }}>Find a quest ({new Set(state.catalog?.quests.map(quest => quest.questKey)).size})</label>
         <input id="quest-helper-search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search quests…" style={{ boxSizing: "border-box", width: "100%", padding: 8, marginBottom: 10, background: "#202020", border: "1px solid #666", color: "white" }}/>
-        <div aria-label="Quest catalog">{quests.map(quest => <button key={`${quest.questKey}:${quest.helperVariant ?? ""}`} style={{ ...row, borderColor: quest.questKey === state.selected && quest.helperVariant === state.variant ? "#e4c27a" : "#555" }} aria-pressed={quest.questKey === state.selected && quest.helperVariant === state.variant} onClick={() => plugin.selectQuest(quest.questKey, quest.helperVariant)}>{quest.name}{quest.helperVariant ? ` — ${quest.helperVariant}` : ""}<small style={{ display: "block", color: quest.supported ? "#aaa" : "#edb86d" }}>{quest.supported ? "Guided route" : "Unsupported route"}</small></button>)}{state.catalog && !quests.length && <p>No matching quests.</p>}</div>
-        {state.catalog && <p style={{ fontSize: 10, color: "#999", overflowWrap: "anywhere" }}>Helper source: {state.catalog.sourceCommit}</p>}
+        <div aria-label="Quest catalog">{quests.map(quest => <button key={`${quest.questKey}:${quest.helperVariant ?? ""}`} style={{ ...row, borderColor: quest.questKey === state.selected && quest.helperVariant === state.variant ? "#e4c27a" : "#555" }} aria-pressed={quest.questKey === state.selected && quest.helperVariant === state.variant} onClick={() => plugin.selectQuest(quest.questKey, quest.helperVariant)}>{questLabel(quest,catalog)}<small style={{ display: "block", color: quest.supported ? "#aaa" : "#edb86d" }}>{quest.supported ? "Guided route" : "Unsupported route"}</small></button>)}{state.catalog && !quests.length && <p>No matching quests.</p>}</div>
     </div>;
 }
 function QuestHelperIcon({ label }: {

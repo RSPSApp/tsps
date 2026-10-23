@@ -215,10 +215,10 @@ module.exports = {
                 return true;
             }
 
-            player.getSkillManager().stopSkillable();
             const permission = { player, slot, sequence: emote.sequence, allow: true };
             api.emitCustomEvent("player:can-emote", permission);
             if (permission.allow === false) return true;
+            player.getSkillManager().stopSkillable();
             player.getMovementQueue().reset();
             player.setFollowing(null);
             player.performAnimation(new Animation(emote.sequence));

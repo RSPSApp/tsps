@@ -3,17 +3,16 @@
 // This is an imported exporter artifact, not a hand-maintained reward approximation.
 const TABLE = require("../../data/definitions/reward-caskets.json").beginner;
 const Runtime = require("./Runtime.BeginnerTreasureTrails");
+const Capacity = require("./Capacity.BeginnerTreasureTrails");
 const OPENING_ATTRIBUTE = "treasure-trails:opening-beginner";
 let api;
 let core;
 
 function between(min, max, random) { return min + Math.floor(random() * (max - min + 1)); }
 
-function roll(eligibleForUniques, random = Math.random) {
-  // Conditional sampling preserves every relative published weight. The Wiki does
-  // not document which replacement item OSRS uses for ineligible unique rolls.
-  const entries = TABLE.entries.filter(entry => eligibleForUniques || !entry.unique);
-  const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+function roll(random = Math.random) {
+  const entries = TABLE.entries;
+  const total = TABLE.out_of;
   const drops = [];
   const rolls = between(...TABLE.rolls, random);
   for (let i = 0; i < rolls; i++) {
@@ -58,7 +57,7 @@ function open(event) {
   try {
     // Intentional offline exception: the online anti-bot account-age gate has no
     // place in a private game. Keep the published table intact from casket one.
-    const drops = roll(true);
+    const drops = roll();
     // Validate every definition before consuming the casket; a bad import loses nothing.
     for (const drop of drops) {
       const definition = core.ItemDefinition.forId(drop.itemId);
@@ -67,9 +66,7 @@ function open(event) {
     inventory.deleteAtSlot(slot, 1);
     const count = (Number(player.getAttribute(Runtime.COMPLETED_ATTRIBUTE)) || 0) + 1;
     player.setAttribute(Runtime.COMPLETED_ATTRIBUTE, count);
-    for (const milestone of TABLE.milestones) {
-      if (milestone.item_id && milestone.completed === count) drops.push({ itemId: milestone.item_id, amount: 1, noted: false });
-    }
+    drops.push(...Capacity.milestoneRewards(player, count, TABLE.milestones));
     const slots = give(player, drops);
     Runtime.restore({ player });
     const sender = player.getPacketSender();

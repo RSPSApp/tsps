@@ -226,8 +226,8 @@ test("canonical rewards cover all items with an exact full weighted probability 
   assert.equal(Rewards.TABLE.entries.reduce((sum,e)=>sum+e.weight,0),Rewards.TABLE.out_of);
   for(const e of Rewards.TABLE.entries){assert.equal(core.CacheDefinitions.getItem(e.item_id).name,e.name);if(e.noted)assert.ok(core.CacheDefinitions.getItem(e.item_id).note>0);}
   const values=[0,0,0];
-  assert.equal(Rewards.roll(true,()=>values.shift()??0).length,1);
-  assert.equal(Rewards.roll(true,()=>0.99999).length,3);
+  assert.equal(Rewards.roll(()=>values.shift()??0).length,1);
+  assert.equal(Rewards.roll(()=>0.99999).length,3);
 });
 
 test("casket opens once, grants full-inventory overflow, increments completion and displays actual rewards",()=>{
@@ -272,6 +272,17 @@ test("Explore unlocks at 600 without gating any other emote",()=>{
   Runtime.canEmote(request);assert.equal(request.allow,false);
   f.attributes.set(Runtime.COMPLETED_ATTRIBUTE,600);request.allow=true;Runtime.canEmote(request);assert.equal(request.allow,true);
   request={player:f.player,sequence:855,allow:true};Runtime.canEmote(request);assert.equal(request.allow,true);
+});
+
+test("milestone cases recover when lost but do not duplicate held, banked or consumed cases",()=>{
+  const f=fixture(),milestones=Rewards.TABLE.milestones;
+  assert.deepEqual(Capacity.milestoneRewards(f.player,49,milestones),[]);
+  assert.deepEqual(Capacity.milestoneRewards(f.player,50,milestones),[{itemId:30902,amount:1,noted:false}]);
+  f.items[0]=new core.Item(30902,1);assert.deepEqual(Capacity.milestoneRewards(f.player,51,milestones),[]);
+  f.items[0]=null;assert.equal(Capacity.milestoneRewards(f.player,52,milestones).length,1);
+  f.attributes.set(Capacity.MINOR_ATTRIBUTE,true);assert.deepEqual(Capacity.milestoneRewards(f.player,53,milestones),[]);
+  f.player.getBank=()=>({getItems:()=>[new core.Item(30904,1)]});
+  assert.deepEqual(Capacity.milestoneRewards(f.player,100,milestones),[]);
 });
 
 test("real woodcutting and mining source paths use beginner capacity while retaining other-tier checks",()=>{

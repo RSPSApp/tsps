@@ -7,11 +7,21 @@ let core;
 
 function capacity(player) { return 2 + (player.getAttribute(MINOR_ATTRIBUTE) === true ? 1 : 0) + (player.getAttribute(MAJOR_ATTRIBUTE) === true ? 1 : 0); }
 
+function containers(player) { return [player.getInventory(), ...Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank?.(tab))]; }
+
+function milestoneRewards(player, completed, milestones) {
+  return milestones.filter(milestone => {
+    if (!milestone.item_id || completed < milestone.completed) return false;
+    const attribute = milestone.item_id === core.ItemIdentifiers.MINOR_BEGINNER_SCROLL_CASE ? MINOR_ATTRIBUTE : MAJOR_ATTRIBUTE;
+    return player.getAttribute(attribute) !== true && !containers(player).some(container =>
+      container?.getItems?.().some(item => item?.getId() === milestone.item_id && item.getAmount() > 0));
+  }).map(milestone => ({ itemId: milestone.item_id, amount: 1, noted: false }));
+}
+
 function count(player) {
   const I = core.ItemIdentifiers;
   const ids = [I.CLUE_SCROLL_BEGINNER_, I.CLUE_BOTTLE_BEGINNER_, I.CLUE_NEST_BEGINNER_, I.CLUE_GEODE_BEGINNER_, I.SCROLL_BOX_BEGINNER_];
-  const containers = [player.getInventory(), ...Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank?.(tab))];
-  return containers.reduce((sum, container) => sum + (container?.getItems?.() ?? []).reduce((sum, item) => sum + (item && ids.includes(item.getId()) ? Math.max(0, item.getAmount()) : 0), 0), 0);
+  return containers(player).reduce((sum, container) => sum + (container?.getItems?.() ?? []).reduce((sum, item) => sum + (item && ids.includes(item.getId()) ? Math.max(0, item.getAmount()) : 0), 0), 0);
 }
 
 function canReceive(request) {
@@ -76,4 +86,4 @@ module.exports = function attachCapacity(pluginApi) {
   api.onItemAction("Major beginner scroll case", { Open: openCase });
   api.onPlayerLogin(sync);
 };
-Object.assign(module.exports, { MINOR_ATTRIBUTE, MAJOR_ATTRIBUTE, capacity, count, canReceive, filterDrops, openBox, openCase });
+Object.assign(module.exports, { MINOR_ATTRIBUTE, MAJOR_ATTRIBUTE, capacity, count, canReceive, filterDrops, openBox, openCase, milestoneRewards });

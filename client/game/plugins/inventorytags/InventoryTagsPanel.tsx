@@ -10,15 +10,31 @@ export function InventoryTagsPanel({ plugin }: { plugin: InventoryTagsPlugin }):
     const [color, setColor] = useState("#ff9900");
     const [ids, setIds] = useState("");
     const [error, setError] = useState("");
-    const [editing, setEditing] = useState<number>();
+    const [editing, setEditing] = useState<{ index: number; original: string }>();
+    const resetForm = () => {
+        setName(""); setIds(""); setError(""); setEditing(undefined);
+    };
+    const remove = (index: number) => {
+        plugin.setGroups(state.groups.filter((_, at) => at !== index));
+        if (editing?.index === index) resetForm();
+        else if (editing && index < editing.index) setEditing({ ...editing, index: editing.index - 1 });
+    };
     const save = (event: React.FormEvent) => {
         event.preventDefault();
         try {
             if (!ids.trim()) throw new Error("Enter at least one item ID.");
             const group = { name, color, itemIds: ids.trim().split(/[\s,]+/).map(Number) };
-            const groups = state.groups.filter((existing, index) => editing === undefined ? existing.name !== name.trim() : index !== editing);
-            plugin.setGroups([...groups, group]);
-            setName(""); setIds(""); setError(""); setEditing(undefined);
+            if (editing) {
+                if (JSON.stringify(state.groups[editing.index]) !== editing.original) {
+                    throw new Error("This group changed or was removed. Choose Edit again before saving.");
+                }
+                const groups = [...state.groups];
+                groups[editing.index] = group;
+                plugin.setGroups(groups);
+            } else {
+                plugin.setGroups([...state.groups.filter(existing => existing.name !== name.trim()), group]);
+            }
+            resetForm();
         } catch (cause) { setError(cause instanceof Error ? cause.message : "Check the item group."); }
     };
     return <div className="rl-sidebar-panel-content">
@@ -27,8 +43,8 @@ export function InventoryTagsPanel({ plugin }: { plugin: InventoryTagsPlugin }):
         {(error || state.error) && <p role="alert">{error || state.error}</p>}
         {state.groups.map((group, index) => <section key={index} style={{ borderLeft: `4px solid ${group.color}`, padding: 8 }}>
             <strong>{group.name}</strong><p>{group.itemIds.join(", ")}</p>
-            <button onClick={() => { setEditing(index); setName(group.name); setColor(group.color); setIds(group.itemIds.join(", ")); }}>Edit</button>{" "}
-            <button aria-label={`Remove ${group.name}`} onClick={() => plugin.setGroups(state.groups.filter((_, at) => at !== index))}>Remove</button>
+            <button onClick={() => { setEditing({ index, original: JSON.stringify(group) }); setName(group.name); setColor(group.color); setIds(group.itemIds.join(", ")); setError(""); }}>Edit</button>{" "}
+            <button aria-label={`Remove ${group.name}`} onClick={() => remove(index)}>Remove</button>
         </section>)}
         <form onSubmit={save}>
             <p><label>Group name<input aria-label="Group name" value={name} onChange={(event) => setName(event.target.value)} required style={{ width: "100%" }} /></label></p>

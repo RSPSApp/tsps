@@ -71,9 +71,11 @@ export function buildWidgetInputFrame(
     };
 
     // MouseOver/MouseLeave handling
-    // PERF: Cache hit test results - only recompute when mouse moves
+    // Wheel targets must reflect the current tree: opening/closing a modal or scrolling
+    // changes what is under a stationary pointer, without a mousemove to invalidate hits.
+    // Ordinary hover frames can still reuse their cached hit test.
     let hits: any[];
-    if (mx === state.lastHoverHitX && my === state.lastHoverHitY && state.cachedHoverHits) {
+    if (input.wheelDeltaY === 0 && mx === state.lastHoverHitX && my === state.lastHoverHitY && state.cachedHoverHits) {
         hits = state.cachedHoverHits;
     } else {
         hits = collectFromAllRoots(mx, my);

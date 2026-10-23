@@ -15,15 +15,23 @@ const { ObjectIdentifiers: Objects } = require("../dist/util/ObjectIdentifiers")
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Animation } = require("../dist/game/model/Animation");
 const { Sound } = require("../dist/game/Sound");
+const { Task } = require("../dist/game/task/Task");
+const { CountdownTask } = require("../dist/game/task/impl/CountdownTask");
+const { Item } = require("../dist/game/model/Item");
+const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 
 const DATA = require("../plugins/skills/data/bones.json");
 const ASHES = require("../plugins/skills/data/ashes.json");
 
 const handlers = new Map();
 const firstActions = [];
+let burialTasks = [];
+let membersWorld = true;
 const api = {
   core: {
     Skill, Location, Equipment, ItemIdentifiers: Items, ObjectIdentifiers: Objects, CacheDefinitions, Animation, Sound,
+    Task, CountdownTask, ItemDefinition,
+    WorldDefinition: { isMembersWorld: () => membersWorld },
     Sounds: { sendSound: (who, sound) => who.sounds?.push(sound) },
   },
   emitCustomEvent: (name, payload) => (handlers.get(name) ?? []).forEach((handler) => handler(payload)),
@@ -33,6 +41,11 @@ const api = {
   onItemAction() {},
   onItemOnItem() {},
   onObjectInteraction() {},
+  onCanUseItem(handler) { handlers.set("can-use-item", [handler]); },
+  onPlayerLogout(handler) { handlers.set("logout", [handler]); },
+  onPlayerDisconnect(handler) { handlers.set("disconnect", [handler]); },
+  onPlayerDeath(handler) { handlers.set("death", [handler]); },
+  getTaskManager: () => ({ submit(task) { task.setRunning(true); burialTasks.push(task); } }),
 };
 
 let diaryElite = false;
@@ -51,6 +64,8 @@ before(async () => {
 
 beforeEach(() => {
   diaryElite = false;
+  burialTasks = [];
+  membersWorld = true;
 });
 
 function player({ at = [3222, 3218], prayer = 50, maxPrayer = 70, amulet = null, inventory = {} } = {}) {
@@ -215,4 +230,132 @@ test("a scatter resolves on the click, with the sequence, synth, message and exp
   assert.deepEqual(who.messages, ["You scatter the ashes."]);
   assert.deepEqual(animations.map((animation) => animation.id), [2295]);
   assert.deepEqual(who.sounds.map((sound) => sound.getId()), [2444]);
+});
+
+function burialPlayer(ids, maxPrayer = 70) {
+  const who = player({ maxPrayer });
+  const slots = Array.from({ length: 28 }, (_, i) => new Item(ids[i] ?? -1, ids[i] ? 1 : 0));
+  const inventory = {
+    get: slot => slots[slot], getItems: () => slots,
+    deleteAtSlot: slot => { slots[slot] = new Item(-1, 0); },
+  };
+  const state = { location: new Location(3222, 3218, 0), registered: true, hp: 10, skill: null };
+  const skills = who.getSkillManager();
+  Object.assign(who, {
+    slots, state, animations: [],
+    getIndex: () => 8761,
+    getLocation: () => state.location,
+    isRegistered: () => state.registered,
+    getHitpoints: () => state.hp,
+    getMovementQueue: () => ({ size: () => 0 }),
+    getForceMovement: () => null,
+    getInventory: () => inventory,
+    getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
+    getSkill: () => state.skill, setSkill: skill => { state.skill = skill; },
+    getSkillManager: () => ({ ...skills, stopSkillable() { state.skill?.cancel(who); state.skill = null; } }),
+    getPacketSender: () => ({ sendInterfaceRemoval() {} }),
+    performAnimation: animation => who.animations.push(animation),
+  });
+  return who;
+}
+function tickBurials(count) {
+  for (let i = 0; i < count; i++) for (const task of [...burialTasks]) if (task.isRunning()) task.tick();
+}
+const clickBury = (who, slot = 0) => firstActions[0]({ player: who, itemId: who.slots[slot].getId(), slot });
+
+test("one Bury click buries the remaining bones sequentially, one every two ticks", () => {
+  const who = burialPlayer([Items.BONES, Items.BONES, Items.BONES]);
+  assert.equal(clickBury(who), true);
+  tickBurials(1);
+  assert.equal(who.xp.get(Skill.PRAYER), undefined);
+  tickBurials(1);
+  assert.equal(who.xp.get(Skill.PRAYER), 5);
+  assert.equal(who.slots.filter(item => item.getId() === Items.BONES).length, 2);
+  tickBurials(4);
+  assert.equal(who.xp.get(Skill.PRAYER), 15);
+  assert.equal(who.slots.some(item => item.getId() === Items.BONES), false);
+  assert.equal(burialTasks.some(task => task.isRunning()), false);
+});
+
+test("the clicked bone is first, then eligible mixed bones in slot order", () => {
+  const superior = CacheDefinitions.getObjId("dragon_bones_superior");
+  const who = burialPlayer([Items.BONES, Items.COINS, Items.BIG_BONES, superior, Items.BIG_BONES], 1);
+  clickBury(who, 2);
+  tickBurials(2);
+  assert.equal(who.xp.get(Skill.PRAYER), 15);
+  assert.equal(who.slots[0].getId(), Items.BONES);
+  tickBurials(4);
+  assert.equal(who.xp.get(Skill.PRAYER), 35);
+  assert.equal(who.slots[1].getId(), Items.COINS);
+  assert.equal(who.slots[3].getId(), superior);
+});
+
+test("moving or replacing the resolving bone stops burial without consuming another item", () => {
+  for (const changed of ["location", "slot"]) {
+    const who = burialPlayer([Items.BONES, Items.BONES]);
+    clickBury(who);
+    tickBurials(1);
+    if (changed === "location") who.state.location = new Location(3223, 3218, 0);
+    else who.slots[0] = new Item(Items.COINS, 1);
+    tickBurials(4);
+    assert.equal(who.xp.get(Skill.PRAYER), undefined);
+    assert.equal(who.slots[1].getId(), Items.BONES);
+  }
+});
+
+test("logout, disconnect, death, level-up and another item action cancel unresolved burial", () => {
+  for (const event of ["logout", "disconnect", "death", "level-up:popup-opened", "can-use-item"]) {
+    const who = burialPlayer([Items.BONES, Items.BONES]);
+    clickBury(who);
+    api.emitCustomEvent(event, { player: who, action: "action", itemId: Items.COINS });
+    tickBurials(6);
+    assert.equal(who.xp.get(Skill.PRAYER), undefined, event);
+    assert.equal(who.slots[0].getId(), Items.BONES, event);
+    assert.equal(burialTasks.some(task => task.isRunning()), false, event);
+  }
+});
+
+test("a repeated Bury click replaces its previous sequence instead of doubling rewards", () => {
+  const who = burialPlayer([Items.BONES, Items.BONES, Items.BONES]);
+  clickBury(who);
+  clickBury(who, 1);
+  assert.equal(burialTasks.filter(task => task.isRunning()).length, 1);
+  tickBurials(6);
+  assert.equal(who.xp.get(Skill.PRAYER), 15);
+});
+
+test("automatic burial leaves members-only bones untouched on a free world", () => {
+  membersWorld = false;
+  const who = burialPlayer([Items.BONES, Items.DRAGON_BONES, Items.BONES]);
+  clickBury(who);
+  tickBurials(6);
+  assert.equal(who.xp.get(Skill.PRAYER), 10);
+  assert.equal(who.slots[1].getId(), Items.DRAGON_BONES);
+});
+
+test("a level-up caused by resolving a bone stops before consuming the next bone", () => {
+  const who = burialPlayer([Items.BONES, Items.BONES]);
+  const skills = who.getSkillManager();
+  who.getSkillManager = () => ({ ...skills, addExperiences(skill, amount) {
+    skills.addExperiences(skill, amount);
+    api.emitCustomEvent("level-up:popup-opened", { player: who });
+  } });
+  clickBury(who);
+  tickBurials(6);
+  assert.equal(who.xp.get(Skill.PRAYER), 5);
+  assert.equal(who.slots[1].getId(), Items.BONES);
+  assert.equal(who.state.skill, null);
+  assert.equal(burialTasks.some(task => task.isRunning()), false);
+});
+
+test("loss of skilling ownership cancels burial without resetting another action's animation", () => {
+  const who = burialPlayer([Items.BONES, Items.BONES]);
+  clickBury(who);
+  const count = who.animations.length;
+  const other = { cancel() {} };
+  who.setSkill(other);
+  tickBurials(4);
+  assert.equal(who.xp.get(Skill.PRAYER), undefined);
+  assert.equal(who.getSkill(), other);
+  assert.equal(who.animations.length, count);
 });

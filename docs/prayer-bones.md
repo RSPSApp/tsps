@@ -18,6 +18,16 @@ whole, so tenths round up, as the old table did (bones 4.5 → 5, bat bones 5.3 
 The core's `ArceuusOfferings.BONE_XP` (Sinister Offering, Construction altars) is separate and
 unchanged.
 
+### Local sequential burial convenience
+
+For this private installation, **Bury** starts with the clicked bone, then continues through
+eligible unnoted bones in inventory slot order, including mixed types. Each bone resolves after
+two game ticks; consumption and experience happen together. Nonbones, members-only bones on a
+free world, and bones above the player's Prayer level are left alone. Movement, another item
+action, logout/death or an enabled level-up popup stops the sequence without consuming its
+unresolved bone. This automatic continuation is a user-requested local convenience; it does not
+change ash scattering, bonecrusher rewards or altar offerings.
+
 ## Demonic ashes
 
 `server/plugins/skills/data/ashes.json` lists the ashes that demons drop instead of bones, by obj gameval.

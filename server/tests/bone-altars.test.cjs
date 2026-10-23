@@ -21,6 +21,10 @@ const api = {
   onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
   onItemFirstAction() {},
   onItemOnObject() {},
+  onCanUseItem() {},
+  onPlayerLogout() {},
+  onPlayerDisconnect() {},
+  onPlayerDeath() {},
 };
 const CHAOS_ALTAR = { x: 2947, y: 3820, z: 0 };
 const random = Math.random;

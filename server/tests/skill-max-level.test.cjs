@@ -516,8 +516,9 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
 // Exercise native feedback and the real plugin actions without a client or game loop.
 function feedbackPlayer(core) {
   const counts = new Map(), sent = [], animations = [], attrs = new Map(), varbits = new Map(), messages = [], graphics = [];
-  let location = new core.Location(3000, 3000, 0), menu, chatbox = -1;
+  let location = new core.Location(3000, 3000, 0), menu, chatbox = -1, activeSkill = null;
   const inventory = {
+    getItems: () => [...counts].map(([id, n]) => new core.Item(id, n)),
     get: slot => [...counts].map(([id, n]) => new core.Item(id, n))[slot],
     contains: id => (counts.get(id) ?? 0) > 0, getAmount: id => counts.get(id) ?? 0,
     deleteNumber(id, n) { const remaining = (counts.get(id) ?? 0) - n; if (remaining > 0) counts.set(id, remaining); else counts.delete(id); },
@@ -542,7 +543,7 @@ function feedbackPlayer(core) {
     getUsername: () => "feedback-test", getIndex: () => 1, isPlayerBot: () => false,
     performAnimation: a => animations.push(a.getId()), performGraphic: g => graphics.push(g.getId()), sendMessage: m => messages.push(m),
     getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
-    getSkill: () => null, setSkill() {}, setCreationMenu() {},
+    getSkill: () => activeSkill, setSkill(value) { activeSkill = value; }, setCreationMenu() {},
     getUpdateFlag: () => ({ flag() {} }),
     getAttribute: k => attrs.get(k), setAttribute: (k, v) => attrs.set(k, v),
     getSkillManager: () => p.skills, getCombat: () => ({ getTarget: () => p.target ?? null, getAttacker: () => null }),

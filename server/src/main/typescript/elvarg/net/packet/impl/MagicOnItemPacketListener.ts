@@ -193,7 +193,7 @@ export class MagicOnItemPacketListener {
       player.sendMessage("Too late - it's gone!");
       return;
     }
-    if (ItemOnGroundManager.transferToInventory(player, groundItem) <= 0) return;
+    if (ItemOnGroundManager.transferToInventory(player, groundItem, "telegrab") <= 0) return;
     PluginManager.emitCustomEvent("magic:telekinetic-grab", { player, itemId: groundItemId, position });
   }
 

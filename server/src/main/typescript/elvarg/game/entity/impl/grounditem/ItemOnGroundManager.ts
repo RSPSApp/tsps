@@ -16,6 +16,8 @@ import { Misc } from "../../../../util/Misc"
 import { PathFinder } from "../../../model/movement/path/PathFinder";
 
 export class ItemOnGroundManager {
+    private static readonly transfers = new WeakSet<ItemOnGround>();
+    private static readonly transferPlayers = new WeakSet<Player>();
     // OSRS/Lost City floor-item behavior is owner-only for 100 ticks, then public,
     // with a 300-tick total lifetime for revealable items.
     public static readonly PUBLIC_REVEAL_DELAY: number = 100
@@ -202,30 +204,63 @@ export class ItemOnGroundManager {
     }
 
     /** Generic credit/removal bookkeeping; callers retain their own reach and timing rules. */
-    public static transferToInventory(player: Player, groundItem: ItemOnGround): number {
-        if (!World.getItems().includes(groundItem) || !this.canSee(player, groundItem)) return 0;
+    public static transferToInventory(player: Player, groundItem: ItemOnGround, source: "pickup" | "telegrab" = "pickup"): number {
+        if (this.transfers.has(groundItem) || this.transferPlayers.has(player)
+            || !World.getItems().includes(groundItem) || !this.canSee(player, groundItem)) return 0;
+        this.transfers.add(groundItem);
+        this.transferPlayers.add(player);
+        try {
+            return this.transferPrepared(player, groundItem, source);
+        } finally {
+            this.transfers.delete(groundItem);
+            this.transferPlayers.delete(player);
+        }
+    }
+
+    private static transferPrepared(player: Player, groundItem: ItemOnGround, source: "pickup" | "telegrab"): number {
         const inventory = player.getInventory(), item = groundItem.getItem();
         const groundAmount = item.getAmount();
+        if (!Number.isSafeInteger(groundAmount) || groundAmount <= 0) return 0;
         const pickedUpAmount = Math.min(groundAmount, this.inventoryCapacity(player, item));
         if (pickedUpAmount <= 0) {
             inventory.full();
             return 0;
         }
         const itemId = item.getId(), metadata = JSON.stringify(item.getMeta() ?? null);
+        const position = groundItem.getPosition().clone(), owner = groundItem.getOwner();
+        const privateArea = groundItem.getPrivateArea(), state = groundItem.getState();
+        const request = {player, groundItem, source, itemId, amount: pickedUpAmount, discard: 0, allow: true, error: null};
+        PluginManager.emitCustomEvent("ground-items:take", request);
+        // Policies may reduce credit or explicitly discard a bounded remainder.
+        // Never apply a decision to a source changed by a callback.
+        if (request.allow !== true || request.error != null || !Number.isSafeInteger(request.amount)
+            || request.amount <= 0 || request.amount > pickedUpAmount || !Number.isSafeInteger(request.discard)
+            || request.discard < 0 || request.amount + request.discard > groundAmount) return 0;
+        if (!World.getItems().includes(groundItem) || !this.canSee(player, groundItem)
+            || groundItem.getItem() !== item || item.getId() !== itemId || item.getAmount() !== groundAmount
+            || JSON.stringify(item.getMeta() ?? null) !== metadata || !groundItem.getPosition().equals(position)
+            || groundItem.getPrivateArea() !== privateArea || groundItem.getOwner() !== owner || groundItem.getState() !== state) return 0;
+        const amount = Math.min(request.amount, this.inventoryCapacity(player, item));
+        if (amount <= 0) {
+            inventory.full();
+            return 0;
+        }
         const matchingAmount = () => inventory.getItems().reduce((total, entry) => total +
             (entry.getId() === itemId && JSON.stringify(entry.getMeta() ?? null) === metadata ? entry.getAmount() : 0), 0);
         const before = matchingAmount();
-        const pickedUpItem = item.clone().setAmount(pickedUpAmount);
+        const pickedUpItem = item.clone().setAmount(amount);
         inventory.addItem(pickedUpItem);
-        const credited = Math.min(pickedUpAmount, Math.max(0, matchingAmount() - before));
+        const credited = Math.min(amount, Math.max(0, matchingAmount() - before));
         if (credited <= 0) return 0;
-        if (credited === groundAmount) {
+        const removed = credited + request.discard;
+        if (removed === groundAmount) {
             ItemOnGroundManager.deregister(groundItem);
         } else {
             groundItem.setOldAmount(groundAmount);
-            item.decrementAmountBy(credited);
+            item.decrementAmountBy(removed);
             ItemOnGroundManager.perform(groundItem, OperationType.ALTER);
         }
+        PluginManager.emitCustomEvent("ground-items:taken", {player, groundItem, source, itemId, amount: credited, discarded: request.discard});
         return credited;
     }
 

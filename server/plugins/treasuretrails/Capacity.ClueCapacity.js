@@ -61,6 +61,36 @@ function clueItem(request) {
   if (request.box) request.itemId = core.ItemIdentifiers[`SCROLL_BOX_${type.tier.toUpperCase()}_`];
 }
 
+function prepareTake(request) {
+  if (request?.allow !== true || !request.player) return;
+  const type = classify(request.itemId);
+  if (!type) return;
+  if (type.tier !== "beginner" && !core.WorldDefinition.isMembersWorld()) { request.allow = false; return; }
+  if (type.form === "Clue scroll" && ownsActiveClue(request.player, type.tier)) {
+    request.allow = false;
+    request.player.sendMessage("You already have a clue scroll of this tier.");
+    return;
+  }
+  const room = Math.max(0, capacity(request.player, type.tier) - count(request.player, type.tier));
+  if (room < 1) {
+    request.allow = false;
+    request.player.sendMessage(type.form === "Scroll box" ? "You can't take any more of that tier of scroll box."
+      : "You already have a clue scroll of this tier.");
+    return;
+  }
+  request.amount = Math.min(request.amount, room);
+  if (type.form === "Clue scroll") request.amount = Math.min(request.amount, 1);
+  if (type.form === "Scroll box") request.discard = Math.max(request.discard,
+    Math.max(0, request.groundItem.getItem().getAmount() - room));
+}
+
+function taken(request) {
+  if (classify(request?.itemId)?.form !== "Scroll box" || !(request.discarded > 0)) return;
+  request.player.sendMessage(request.discarded === 1
+    ? "One of your scroll boxes was destroyed as you have too many of that tier."
+    : "Some of your scroll boxes were destroyed as you have too many of that tier.");
+}
+
 function filterDrops(request) {
   if (!request?.player || !Array.isArray(request.drops)) return;
   const unlocked = boxUnlocked(request.player);
@@ -214,6 +244,8 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("treasure-trails:open-vessel", openVessel);
   api.onCustomEvent("treasure-trails:case-eligible", caseEligible);
   api.onCustomEvent("treasure-trails:milestone-rewards", queryMilestones);
+  api.onCustomEvent("ground-items:take", prepareTake);
+  api.onCustomEvent("ground-items:taken", taken);
   api.onCustomEvent("npc-drops:roll", filterDrops);
   api.onPlayerLogin(sync);
 };

@@ -61,7 +61,7 @@ const VIEWPORTS: Record<number, number> = {
 };
 
 /** The boss health bar (hpbar_hud) and the script that writes its text. */
-const HP_HUD_TEXT = (303 << 16) | 20;
+const HP_HUD_TEXT = (303 << 16) | 21;
 const SCRIPT_HP_HUD_UPDATE = 2103;
 /** npc param: the name the boss health bar shows ("Dagannoth Kings (Echo)"). */
 const PARAM_NPC_HP_NAME = 510;

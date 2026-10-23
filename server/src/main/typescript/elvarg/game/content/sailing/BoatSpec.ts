@@ -39,6 +39,8 @@ export interface BoatSpec {
     /** Where a player lands when boarding. */
     boardingTile: { x: number; y: number };
     locs: ReadonlyArray<BoatDeckLoc>;
+    /** Loc adds a fixed ship must send on top of its cache template (dynamic overrides). */
+    syncLocs?: ReadonlyArray<BoatDeckLoc>;
     /**
      * Full sail speed in fine units a tick (the hull's base speed; 192 when absent), the hull's
      * speed cap (the trimmed sails' speed) and how long a trim lasts in ticks (the sails').

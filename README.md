@@ -37,12 +37,13 @@ Run `yarn start`. Your world appears in the World list once it registers. Keep t
 
 ## Links
 
+- [Discord](https://discord.gg/aKsyakSppk) — questions, help and development chat
 - [Progress](https://rsps.app/progress) — how much of OSRS is implemented, by category
 - [Host a world](https://rsps.app/host)
 
 ## Credits
 
-We want to thank Astrul, Detuks, Vexus and all the contributors of both the legacy Java project and the TypeScript continuation.
+We want to thank Astrul/@Lerl, Detuks/@Reinismu, @xrsps, Vexus/@bandithaxx and all the contributors of both the legacy Java project and the TypeScript continuation.
 
 ## Legal
 

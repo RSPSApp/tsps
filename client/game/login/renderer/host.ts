@@ -38,6 +38,8 @@ export interface LoginRendererHost {
     loginBoxX: number;
     loginBoxCenter: number;
     titleBackgroundImage: ImageBitmap | undefined;
+    /** The title art is the cache's (drawn whole), not the bundled image (which covers the viewport). */
+    titleBackgroundFromCache: boolean;
     logoSprite: IndexedSprite | undefined;
     logoImage: HTMLImageElement | undefined;
     logoImageLoaded: boolean;

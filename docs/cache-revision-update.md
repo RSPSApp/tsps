@@ -50,6 +50,11 @@ It lists, old to new:
 The code is read as written for the older cache: scanning code that is already migrated reports
 the migrated ids as wrong, hence `--code`.
 
+It only recognises `(group << 16) | component`. A component written any other way is missed:
+`groupId === 593 && childId === 39`, a named constant (`VIEW_SAILING_OPTIONS_CHILD = 46`), or a
+list passed to a script (`[13, 14, 15].map(uid)`). For each group in its list, search the code
+(server, plugins, client, tests) for the group id and check every component number near it.
+
 ### 5. Config decoders
 
 The client test `cache-config-decode` decodes every config entry (items, NPCs, locs, sequences,
@@ -98,6 +103,10 @@ an update. What to do with each source:
 | `item-gameplay.json` | an old export, no generator | `ItemDefinitionLoader` skips an entry whose name differs from the cache's (ignoring case), so list the entries that match the old cache's name but not the new one's and fix them by hand, checking the item against the cache (a rename can be a different item: check its params) |
 | `monsters-complete`, `npc-drops`, `npc-dialogues`, `npc-dialogue-index`, `shops` | [osrsreboxed-db](https://github.com/DayV-git/osrsreboxed-db), built from the live Wiki | Usually already on the new revision; refresh only to pick up new content |
 | `item-prices.json` | live Wiki prices | `yarn fetch:prices` if it predates the revision |
+| `item-gameplay.json` weapon types | the Wiki's combat style per weapon | `yarn sync:weapon-types` for new weapons (`weapon-data` test); check what it picks for new content, the Wiki can be incomplete on release day |
+| Combat Achievements `data/bosses.json` | cache scripts 4778/4780 | `yarn dump:ca-bosses`; the monster keys (enum 3970) are alphabetical, so a new boss moves every key after it |
+| `plugins/bots/data/object-index.json` | the cache's maps | rebuilt by the server at startup when it names another cache; commit the rebuilt file |
+| Food (`food-effects` test) | the cache's Eat items | a new Eat item needs a food entry or a reason in the test's list |
 | `npc-combat-defs`, `npc-captured-animations`, `npc-animations` | hand edits; [rsprox.net captures](https://rsprox.net/database) (`rsprox_index.py npc-anims` in osrs-captures, after its `link-cache` reads the new ids); an old RuneLite export | Nothing required: `NpcDefinitionLoader` takes each animation's role from its gameval name in the cache, and fills attackable NPCs nothing covers from their stand animation's family, so new NPCs get animations on their own. Regenerate `npc-captured-animations` to pick up new captures, and compare the startup line `service animations captured=..., guessed=..., by family=...` with the old cache's |
 | `npc-spawns`, `object-spawns`, plugin data | captures and hand edits | Check NPCs whose name moved into a transform (below); a `npc-spawns` entry may name an `NpcIdentifiers` constant with `key` instead of a raw `id`, which follows identifier regeneration |
 Data matched by name is what breaks: the loader check above, and strings in plugins. Most of 241's
@@ -121,7 +130,7 @@ plugins and the dialogue index meet the spawn on the same id; an item-on-NPC eve
 ### 10. Play
 
 The tools do not see behaviour that depends on server data, or features that never existed. Check
-in game: world map (switch maps), compass and head icons, hover text and HUD overlays, chat, bank
+in game: the login screen (its art is the cache's `title.jpg`), world map (switch maps), compass and head icons, hover text and HUD overlays, chat, bank
 (all buttons, tags), GE (buy, sell, collect, abort), shops, a skill menu, settings, sailing, and an
 NPC whose name moved into a transform (see below).
 
@@ -158,6 +167,32 @@ NPC whose name moved into a transform (see below).
 | Display names moved into NPC transforms (Morgan 3479, Dr Harlow 3480: name `null`, a varbit picks the named variant) | none: hooks resolve the variant | — |
 | 431 object and 23 item names gone or reused | compile errors | identifiers regenerated; plugins renamed (e.g. "Scythe of Vitur") |
 | Eight items renamed outright: 9487–9490 "Wizard blizzard" → "Cocktail glass", 9735/9738 "Desert goat horn" → "Goat horn", 23595/23596 "Berserker ring" → "Berserker ring (i)" | Their `item-gameplay.json` entries were skipped (23595 lost its bonuses) | names updated; 23595 takes the imbued +8 its cache params give |
+
+## Weekly builds within a revision
+
+Jagex ships content in weekly cache builds without a new revision. OpenRS2 lists each one
+(`osrs-241_2026-10-20`); the same playbook applies, and usually only steps 3, 4 and 8 find
+anything. Saved player data keyed by a cache position (an enum key, a list index) rather than an
+id moves with it: look for such keys in persisted attributes.
+
+`osrs-241_2026-09-30` → `osrs-241_2026-10-20` (Raids 4, The Fractured Archive):
+
+| Change | Effect on the old code | Fix |
+|---|---|---|
+| Item opcode 161 (`keeponlyduringseqs`: a u16 count of u16 sequence ids) now used, by 4 new items; the server also read opcode 99 (`recolall`) as one byte instead of two | `ObjType: Opcode 161 not implemented` | server `ObjType` (the client already had both) |
+| 102 items, 167 NPCs, 329 objects added; nothing renamed or removed | — | identifiers regenerated |
+| `combat_interface` (593): `special_attack` 39 → 41, `switch_button` 46 → 48 | The special attack and sailing "View" clicks go unhandled | `NetworkBuilder` named constants, `Sailing.plugin.js` |
+| `hpbar_hud` (303) gained `hp_bar_extra` at 11 (and a second bar at 22-27): everything from 11 up moves by one | The HUD scripts get the wrong components (bar colours, fades, text) | `BossHud.plugin.js` component lists, Opponent Info's HUD text 20 → 21 |
+| `equipment` (84): weight 51 → 50, attack speed 53/54 → 52/53 | Wrong texts on the equipment stats screen | `EquipmentStats.plugin.js` |
+| A Combat Achievements monster (The Fractured Archive) inserted at key 26: every later key +1 | Saved kill counts (keyed by monster key) would attach to the next boss; tasks bumped the wrong boss's counter | `dump:ca-bosses`; kill counts now saved by monster name, old numeric saves read through `data/legacy-monster-keys.json` (the 2026-09-30 keys) |
+| Client script strings carry text templates: `<str_name=value>` defines a value, `<str_name>` draws it (2 scripts on 2026-09-30, 14 now: quest names in "Requires", "Quest:", the quest list and journal, region unlocks, Slayer unblock, Gauntlet shards) | The names were dropped (bitmap font) or the tags drawn as text (widget renderer) | `rs/font/textTemplates.ts`, resolved where text is drawn, measured or wrapped |
+| The login art (binary index: `titlewide.png`/`.jpg`, 545x671, and `title.jpg`, 383x503, each the left half) is the Raids 4 art | The login screen kept showing the bundled classic archway (`public/images/loading-bg.jpg`, the old `titlewide` art), which never came from the cache | the client builds the background from `titlewide` (else `title.jpg`) and its mirror, 1089x671; the classic 765x503 scene is its top middle (162 columns in) |
+| Graphics defaults opcode 3 (three five-colour flame palettes) turned green; the client skipped it and drew hardcoded red flames | Red login flames on the green Raids 4 art | `GraphicsDefaults.flamePalettes`, `LoginScreenAnimation` builds its palettes from them (the classic colours give the old palettes exactly) |
+| Six new weapons, one new Eat item (Leftovers) | `weapon-data` and `food-effects` tests | `sync:weapon-types` (the Wiki gives Obligator and Zorya's tome "Unarmed" for now); Leftovers listed as raid food |
+
+`compare:cache` reported only the Opponent Info literal; the rest were found by searching for the
+group ids (see step 4).
+
 ## Bugs the tools found that predate 241
 
 Found by the stack and interface checks, present on 237 too:
@@ -177,6 +212,9 @@ packet), and the GE's Collect and Abort buttons were never wired (465:6 and 465:
 created by scripts 793 and 819).
 
 ## Known gaps
+
+- `<switch,pronoun,"he","she","they">` in script strings (scripts 5077/5078, with `text_pronoun`) is not
+  resolved: it needs the player's pronoun setting.
 
 - Input fields (component type 16) are not drawn or edited; their setters only store values.
 - GE: Modify offer and Repeat offer are not implemented.

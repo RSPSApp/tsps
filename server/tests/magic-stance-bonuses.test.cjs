@@ -307,13 +307,67 @@ test('accurate combat spells expose a typed generic hit-effects event to plugins
         const target = {};
         const hit = { isAccurate: () => true, getAttacker: () => attacker, getTarget: () => target, getTotalDamage: () => 9 };
         CombatSpells.FIRE_WAVE.onHitCalc(hit);
-        assert.equal(events.length, 1);
+        assert.equal(events.length, 2);
         assert.equal(events[0][0], 'magic:hit-effects');
-        assert.deepEqual(events[0][1], { attacker, target, spell: CombatSpells.FIRE_WAVE, hit, allowed: true });
+        assert.deepEqual(events[0][1], { attacker, target, spell: CombatSpells.FIRE_WAVE, hit, allowed: true, effectMultiplier: 1 });
+        assert.equal(events[1][0], 'magic:hit-effects-applied');
+        assert.equal(events[1][1], events[0][1], 'post-effect handlers see the final shared context');
 
         CombatSpells.FIRE_WAVE.onHitCalc({ ...hit, isAccurate: () => false });
-        assert.equal(events.length, 1, 'misses do not trigger spell-specific effects');
+        assert.equal(events.length, 2, 'misses do not trigger spell-specific effects');
     } finally {
         PluginManager.emitCustomEvent = emit;
     }
+});
+
+test('a combat cast pays its Wiki base XP once, at the XP rate: splashes pay the splash value, powered staves have none', (t) => {
+    const { MagicCombatMethod } = require('../dist/game/content/combat/method/impl/MagicCombatMethod');
+    const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
+    const { CombatSpells } = require('../dist/game/content/combat/magic/CombatSpells');
+    const { CombatType } = require('../dist/game/content/combat/CombatType');
+    const { SkillManager } = require('../dist/game/content/skill/SkillManager');
+    const { GameConstants } = require('../dist/game/GameConstants');
+    const { Skill } = require('../dist/game/model/Skill');
+    const { Sounds } = require('../dist/game/Sounds');
+    t.mock.method(Sounds, 'sendSound', () => {});
+    const rate = GameConstants.EXPERIENCE_MULTIPLIER;
+    GameConstants.setExperienceRate(2);
+    t.after(() => GameConstants.setExperienceRate(rate));
+
+    const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined : () => sender) });
+    const skills = new SkillManager({ getPacketSender: () => sender, getAttribute: () => undefined });
+    let spell = null;
+    const player = {
+        isPlayer: () => true, isNpc: () => false, getAsPlayer: () => player, getSkillManager: () => skills,
+        getCombat: () => ({ getSelectedSpell: () => spell, getCastSpell: () => spell, getPreviousCast: () => null }),
+    };
+    const hit = (accurate, damage) => ({
+        getTotalDamage: () => damage, getSkills: () => [Skill.MAGIC.getIndex()], getCombatType: () => CombatType.MAGIC,
+        isAccurate: () => accurate, getTarget: () => ({ isNpc: () => false }),
+    });
+    /** One cast and the hits it queues; returns the Magic XP gained. */
+    const cast = (castSpell, ...hits) => {
+        spell = castSpell;
+        t.mock.method(castSpell, 'startCast', () => {});
+        skills.setMaxLevel(Skill.MAGIC, 99).setExperience(Skill.MAGIC, 13_034_431);
+        new MagicCombatMethod().start(player, {});
+        // What hits() does once the main target is rolled; a second call (a special's extra
+        // target) must not pay again.
+        MagicCombatMethod.payBaseExperience(player, castSpell, hits[0].isAccurate());
+        MagicCombatMethod.payBaseExperience(player, castSpell, hits[0].isAccurate());
+        for (const queued of hits) CombatFactory.rewardExp(player, queued);
+        return skills.getExperience(Skill.MAGIC) - 13_034_431;
+    };
+
+    assert.equal(cast(CombatSpells.WIND_STRIKE, hit(false, 0)), 11, 'a Wind Strike splash: 5.5 base only, doubled');
+    assert.equal(cast(CombatSpells.WIND_STRIKE, hit(true, 2)), 11 + 8, '5.5 base + 2 per damage, doubled');
+    assert.equal(cast(CombatSpells.ICE_BARRAGE, hit(true, 10), hit(true, 10)), 104 + 80, 'one 52 base for two targets');
+    assert.equal(cast(CombatSpells.TRIDENT_OF_THE_SEAS, hit(true, 10)), 40, 'a powered staff: 2 per damage, no base');
+    // Wiki: the binding spells and Tele Block pay less on a splash.
+    assert.equal(cast(CombatSpells.ENTANGLE, hit(true, 0)), 178, 'Entangle hit: 89');
+    assert.equal(cast(CombatSpells.ENTANGLE, hit(false, 0)), 140, 'Entangle splash: 70');
+    assert.equal(cast(CombatSpells.BIND, hit(false, 0)), 60, 'Bind splash: 30');
+    assert.equal(cast(CombatSpells.SNARE, hit(false, 0)), 120, 'Snare splash: 60');
+    assert.equal(cast(CombatSpells.TELEBLOCK, hit(true, 0)), 190, 'Tele Block hit: 95');
+    assert.equal(cast(CombatSpells.TELEBLOCK, hit(false, 0)), 168, 'Tele Block splash: 84');
 });

@@ -6,18 +6,19 @@
  * Mortimer, the start hook, the prose-condition answers, and the quest's object/item/NPC
  * interactions.
  *
- * Stages (varp 5715 "ffg_primary", varbit 15759 "ffg", bits 0-6): 0 not started, 1 started
- * (Cormac), 2 told to see Muriel, 5 found the notebook, 6 mined sunstone, 7 chiselled the
- * core, 8 found the hat, 9 told Muriel about the hat, 10 Cormac explained the Mad Angel,
- * 11 asked Cormac again before the cavern, 12 entered the cavern, 13 three trolls dead,
- * 14 took the dull golem core, 15 powered the golem, 16 climbed into the cathedral,
- * 17 Mad Angel dead, 18 inspected Keenan's body, 20 complete.
+ * Stages (varp 5715 "ffg_primary", varbit 15759 "ffg", bits 0-6), as live sends them
+ * and as Quest Helper's loadSteps keys on them: 0 not started, 2 started (Cormac),
+ * 3 told to see Muriel, 4 followed the trail, 5 found the notebook, 6 found the hat,
+ * 8 Cormac explained the Mad Angel, 9 met Mortimer in the cavern, 11 three trolls dead,
+ * 13 investigated the golem, 14 took the dull core, 15 powered the golem,
+ * 16 climbed into the cathedral, 18 Mad Angel dead, 19 inspected Keenan's body / read the
+ * letter, 20 complete.
  *
  * The values are pinned by the cache's own multilocs, which read varbit 15759 directly:
  * ffg_dust shows 5-9 (the trail after the notebook), ffg_fake_rocks_1/2 clear at 12+,
  * slayer_master_mortimer and the powered golem appear at 12+/15+, ffg_corpse_keenan and
  * mad_angel_cathedral show 16-19, and 20 is the finished state the Wyrmscraig plugin's
- * OpenAccess used to fake. The per-step flags live in the sibling varbits 15760-15773
+ * OpenAccess used to fake (and still forces 20 until the shared patch in the report is applied). The per-step flags live in the sibling varbits 15760-15773
  * (ffg_met_cormac .. ffg_found_body) and are mirrored from a persisted bitfield.
  *
  * Source: https://oldschool.runescape.wiki/w/Fallen_From_Grace and
@@ -25,18 +26,23 @@
  * Rewards per the wiki: 2 Quest points, 10,000 Crafting, 12,500 Sailing, 5,000 Mining and
  * 5,000 Runecraft XP; the final letter is taken back on completion.
  *
+ * Requirements (62 Sailing, 60 Crafting, 47 Runecraft, 53 Mining and Pandemonium) are
+ * enforced when the start option is chosen, because the wiki's start choice carries no
+ * condition step to answer.
+ *
  * Gaps/approximations:
- * - Requirements (62 Sailing, 60 Crafting, 47 Runecraft, 53 Mining and Pandemonium) are
- *   not enforced: the wiki's start choice carries no condition to answer. They are listed
- *   in the not-started journal.
  * - The cathedral fight uses the MadAngel plugin's per-player Ardeaglais instance, opened
  *   from the basement stairs: the world's ffg multi-NPC (16320 -> 16321/16322 and
  *   16313 -> 16315/16314) has no Attack option on the quest angel, so the player wakes the
  *   dormant instance angel as in the post-quest encounter. The decorative world angel
  *   stays for stages 16-19, as the cache's multiloc dictates.
- * - The "attempting to leave the cathedral" lock puzzle and the "firmly locked" front-door
- *   line are not implemented: the shared MadAngel plugin owns Cathedral door 62368/62369
- *   and its hook wins before this plugin's.
+ * - The cathedral chest uses the captured interface 811: five pin clicks then Confirm
+ *   (811:15), with the captured per-attempt setup and a failed attempt reopening the next
+ *   one. The front door answers "attempting to leave" while the angel lives and is a single
+ *   successful pick after it dies (no separate 811 session on the door).
+ * - The south cave opening requires a raft or skiff and disembarks through the real
+ *   Sailing `wyrmscraig_cave` port; a sloop is refused (the wrong-ship split in the
+ *   Discord recording).
  * - The large hat and worn journal are registered per player as private ground items
  *   while the quest is in progress; private floor items despawn after ~5 minutes, so
  *   leaving and re-entering the area re-ensures them (as does logging in). The
@@ -49,35 +55,52 @@
  *   than the full multi-page interface.
  */
 module.exports = function registerFallenFromGraceQuest(api) {
-  const { Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } =
+  const { CountdownTask, Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill, TaskManager } =
     api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { createQuestLockpicking } = require("../QuestLockpicking");
+  const { createDirectionalLock } = require("../QuestPuzzleLocks");
   const mining = require("../../skills/Mining.plugin.js");
+  const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sailing/Sailing");
+  const { BoatManager } = require("../../../src/main/typescript/elvarg/game/content/sailing/BoatManager");
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+  const WyrmscraigAgility = require("../../skills/agility/shortcuts/Wyrmscraig.Agility");
   const MadAngelCommon = require("../../bosses/madangel/Common.MadAngel");
   const MadAngelInstance = require("../../bosses/madangel/Instance.MadAngel");
 
+  const STAGE_VERSION_ATTRIBUTE = "fallen-from-grace:stage-version";
+  const STAGE_VERSION = 2;
   const PAGE = "Fallen From Grace";
   const START_HOOK = "quest:fallen-from-grace:start";
+
+  const SAILING_REQUIREMENT = 62;
+  const CRAFTING_REQUIREMENT = 60;
+  const RUNECRAFT_REQUIREMENT = 47;
+  const MINING_REQUIREMENT = 53;
+  const REQUIREMENTS_MESSAGE =
+    "You need 62 Sailing, 60 Crafting, 47 Runecraft, 53 Mining and Pandemonium to start this quest.";
 
   const VARP_FALLEN_FROM_GRACE = 5715; // "ffg_primary"
   const VARBIT_STAGE = 15759; // "ffg", bits 0-6
   const WYRMS_BANK_CHEST_VARBIT = 15774; // "amenity_bankchest_wyrmscraig"
-  const STAGE_STARTED = 1;
-  const STAGE_MURIEL = 2;
+  // Live values (FallenFromGraceP1/P2 captures) and Quest Helper's loadSteps.
+  const STAGE_STARTED = 2;
+  const STAGE_MURIEL = 3;
+  const STAGE_TRAIL = 4;
   const STAGE_NOTEBOOK = 5;
-  const STAGE_SUNSTONE = 6;
-  const STAGE_CORE = 7;
-  const STAGE_HAT = 8;
-  const STAGE_MURIEL_HAT = 9;
-  const STAGE_CORMAC_PLAN = 10;
-  const STAGE_CORMAC_BYPASS = 11;
-  const STAGE_CAVERN = 12;
-  const STAGE_TROLLS = 13;
-  const STAGE_GOLEM = 14;
+  const STAGE_SUNSTONE = 5;
+  const STAGE_HAT = 6;
+  const STAGE_MURIEL_HAT = 6;
+  const STAGE_CORMAC_PLAN = 8;
+  const STAGE_CORMAC_BYPASS = 8;
+  const STAGE_CAVERN = 9;
+  const STAGE_TROLLS = 11;
+  const STAGE_GOLEM = 13;
+  const STAGE_CORE = 14;
   const STAGE_GOLEM_POWERED = 15;
   const STAGE_CATHEDRAL = 16;
-  const STAGE_ANGEL_DEAD = 17;
-  const STAGE_BODY = 18;
+  const STAGE_ANGEL_DEAD = 18;
+  const STAGE_BODY = 19;
   const STAGE_COMPLETE = 20;
 
   // Sibling flag varbits of varp 5715 (sent as CS2 quest state).
@@ -155,10 +178,30 @@ module.exports = function registerFallenFromGraceQuest(api) {
   const BOOKCASE_OBJECT_ID = ObjectIdentifiers.BOOKCASE_203; // 62378
   const BASEMENT_STAIRS_OBJECT_ID = ObjectIdentifiers.STAIRCASE_273; // 62255 Climb-up
   const CATHEDRAL_STAIRS_OBJECT_ID = ObjectIdentifiers.STAIRCASE_272; // 62254 Climb-down
+  const CAVE_ENTRANCE_SAILABLE_OBJECT_ID = 62217; // wyrmscraig_cave_entrance_sailable, Sail
+  const SHORTCUT_BLOCKAGE_OBJECT_ID = 62263; // wyrmscraig_cliff_shortcut_blockage -> Rocks/Mine
+  const SHORTCUT_BLOCKED_ROCKS_OBJECT_ID = 62264;
+  const SHORTCUT_TOP_OBJECT_IDS = new Set([62265, 62266, 62267]); // climbed rocks at the top
+  const SHORTCUT_VARBIT = 15720; // wyrmscraig_cliff_shortcut: 0 blockage, 1 climbable
+  const SHORTCUT_CLEARED_ATTRIBUTE = "fallen-from-grace:shortcut-cleared";
+  const SHORTCUT_ENDS = [[2554, 2209, 0], [2550, 2209, 0]];
+  // Captured P2 tick 29: the skiff crosses the south-west cave mouth without an object click.
+  // The cache pool at 2562,2203 is the portal face, and a real east-facing skiff hull stops at
+  // x2539 on the y2188 approach (open water ends at x2543); the recorded boat root then
+  // reappears at 2577.5,8606.5 (the cavern mooring).
+  // Keep this a narrow quest gate, not a proximity radius: the boat must actually reach the
+  // legal open-sea edge of the captured approach line.
+  const CAVERN_APPROACH = { minX: 2539, maxX: 2557, minY: 2187, maxY: 2189, z: 0 };
+  const CAVERN_MOORING = { fineX: 329920, fineY: 1101632, z: 0, angle: 1408 }; // 2577.5,8606.5
+  const CAVE_BOAT_TYPES = new Set(["raft", "skiff"]);
+  const CATHEDRAL_DOOR_OBJECT_IDS = new Set([62368, 62369]);
   const CREVICE_OBJECT_ID = ObjectIdentifiers.CREVICE_57; // 62257 Squeeze-through
   // ffg_corpse_keenan (no identifier: the raw multi-loc is named "null" and resolves to
   // BODY_3 62375); interactions carry the raw id.
   const CATHEDRAL_CORPSE_OBJECT_ID = 62374;
+
+  // The cathedral door uses the captured 5-pin 811 lockpicking UI; the chest uses
+  // the shared captured directional 810 lock, [1,3,2,2] (R,L,D,D).
 
   const HAT_TILE = new Location(2556, 2198, 0); // wiki map pin, south-west tip
   const JOURNAL_TILE = new Location(2568, 8660, 0); // table beside the basement chest
@@ -168,6 +211,9 @@ module.exports = function registerFallenFromGraceQuest(api) {
   const CREVICE_WALL_Y = 8654;
   const CREVICE_NORTH_Y = 8652;
   const CREVICE_SOUTH_Y = 8656;
+  // Captured P2 line 7918: after the core powers the golem the player moves from the
+  // north front (2573,8649) to the south side of the wall at (2573,8655).
+  const GOLEM_PASSAGE_TILE = new Location(2573, 8655, 0);
 
   const SURFACE_ZONE = { minX: 2510, maxX: 2625, minY: 2150, maxY: 2310 };
   const CAVERN_ZONE = { minX: 2540, maxX: 2625, minY: 8580, maxY: 8645 };
@@ -261,6 +307,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
   }
 
   function sendFlagVarps({ player }) {
+    syncShortcutVarbit(player);
     const sender = player.getPacketSender();
     const value = flags(player);
     for (const [bit, varbitId] of FLAG_VARBITS) {
@@ -334,8 +381,8 @@ module.exports = function registerFallenFromGraceQuest(api) {
       return "starting-the-quest-talking-to-cormac";
     }
     if (stage <= STAGE_STARTED) return "starting-the-quest-talking-to-cormac-after-starting-the-quest";
-    if (stage <= 4) return "following-the-trail-talking-to-cormac-after-muriel";
-    if (stage <= STAGE_CORE) return "following-the-trail-talking-to-cormac-after-finding-the-notebook";
+    if (stage <= STAGE_TRAIL) return "following-the-trail-talking-to-cormac-after-muriel";
+    if (stage <= STAGE_NOTEBOOK) return "following-the-trail-talking-to-cormac-after-finding-the-notebook";
     if (stage <= STAGE_MURIEL_HAT) {
       // The hat leads Cormac to explain the Mad Angel; the plan is now known.
       quest.setStage(player, STAGE_CORMAC_PLAN);
@@ -367,8 +414,12 @@ module.exports = function registerFallenFromGraceQuest(api) {
       quest.setStage(player, STAGE_MURIEL);
       return "following-the-trail-talking-to-muriel";
     }
-    if (stage <= 4) return "following-the-trail-talking-to-muriel-again";
-    if (stage <= STAGE_CORE) return "following-the-trail-talking-to-muriel-after-finding-the-notebook";
+    if (stage <= STAGE_MURIEL) {
+      quest.setStage(player, STAGE_TRAIL);
+      return "following-the-trail-talking-to-muriel-again";
+    }
+    if (stage <= STAGE_TRAIL) return "following-the-trail-talking-to-muriel-again";
+    if (stage <= STAGE_NOTEBOOK) return "following-the-trail-talking-to-muriel-after-finding-the-notebook";
     if (!hasFlag(player, FLAG_MURIEL_HAT)) {
       setFlag(player, FLAG_MURIEL_HAT);
       if (stage === STAGE_HAT) quest.setStage(player, STAGE_MURIEL_HAT);
@@ -462,9 +513,30 @@ module.exports = function registerFallenFromGraceQuest(api) {
   // Dialogue events
   // ==========================================================================
 
+  function isQuestComplete(player, key) {
+    const request = { player, key };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  function meetsRequirements(player) {
+    const skills = player.getSkillManager();
+    return (
+      skills.getMaxLevel(Skill.SAILING) >= SAILING_REQUIREMENT &&
+      skills.getMaxLevel(Skill.CRAFTING) >= CRAFTING_REQUIREMENT &&
+      skills.getMaxLevel(Skill.RUNECRAFTING) >= RUNECRAFT_REQUIREMENT &&
+      skills.getMaxLevel(Skill.MINING) >= MINING_REQUIREMENT &&
+      isQuestComplete(player, "pandemonium")
+    );
+  }
+
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== CORMAC_NPC_ID || hook !== START_HOOK) return;
     setFlag(player, FLAG_MET_CORMAC);
+    if (!meetsRequirements(player)) {
+      player.sendMessage(REQUIREMENTS_MESSAGE);
+      return;
+    }
     quest.setStage(player, STAGE_STARTED);
     ensureHat(player);
   }
@@ -472,9 +544,9 @@ module.exports = function registerFallenFromGraceQuest(api) {
   /** Branch side effects, keyed on the chosen condition step. */
   function handleDialogueCondition({ player, stepId }) {
     if (stepId !== GOLEM_SPACE_CONDITION_ID) return;
-    if (quest.getStage(player) !== STAGE_TROLLS) return;
-    if (!give(player, DULL_SUNSTONE_CORE_ITEM_ID)) return;
-    quest.setStage(player, STAGE_GOLEM);
+    if (quest.getStage(player) !== STAGE_GOLEM) return;
+    if (!held(player, DULL_SUNSTONE_CORE_ITEM_ID) && !give(player, DULL_SUNSTONE_CORE_ITEM_ID)) return;
+    quest.setStage(player, STAGE_CORE);
   }
 
   /**
@@ -493,7 +565,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (!OUR_MESSAGE_IDS.has(stepId)) return;
     switch (stepId) {
       case MONOLITH_TAKE_MESSAGE_ID:
-        if (quest.getStage(player) !== STAGE_MURIEL) return;
+        if (quest.getStage(player) < STAGE_MURIEL || quest.getStage(player) > STAGE_TRAIL) return;
         if (player.getInventory().isFull()) return;
         if (give(player, SCRAWLED_NOTEBOOK_ITEM_ID)) {
           setFlag(player, FLAG_KEENANS_BOOK);
@@ -592,18 +664,49 @@ module.exports = function registerFallenFromGraceQuest(api) {
     return true;
   }
 
+  /** The cathedral door's captured 811 lockpicking UI (five active pins). */
+  function openDoorLock(player) {
+    DoorLockpicking.open(player);
+  }
+
+  function unlockChest(player) {
+    player.getPacketSender().sendInterfaceRemoval();
+    if (!questActive(player) || quest.getStage(player) < STAGE_GOLEM_POWERED) return;
+    if (hasFlag(player, FLAG_CHEST_UNLOCKED)) return;
+    setFlag(player, FLAG_CHEST_UNLOCKED);
+    player.sendMessage("You successfully pick the lock.");
+    speak(player, CORMAC_NPC_ID, "entering-ardeaglais-unlocking-the-chest");
+  }
+
+  function unlockCathedralDoor(player) {
+    player.getPacketSender().sendInterfaceRemoval();
+    if (!questActive(player) || quest.getStage(player) < STAGE_ANGEL_DEAD) return;
+    if (hasFlag(player, FLAG_CATHEDRAL_OPENED)) return;
+    setFlag(player, FLAG_CATHEDRAL_OPENED);
+    player.sendMessage("You successfully pick the lock, only to see it crumble away in your hands.");
+  }
+
+  const ChestLock = createDirectionalLock(api, {
+    solution: [1, 3, 2, 2],
+    onSolved: unlockChest,
+  });
+
+  const DoorLockpicking = createQuestLockpicking(api, {
+    activePins: 5,
+    target: 7152, // captured cathedral-door success, P2 tick 621
+    onSolved: unlockCathedralDoor,
+  });
+
   function handleChest(event) {
     const { player, objectId } = event;
     if (objectId !== CHEST_OBJECT_ID) return false;
     if (!questActive(player) || quest.getStage(player) < STAGE_GOLEM_POWERED) return false;
     event.handled = true;
-    speak(
-      player,
-      CORMAC_NPC_ID,
-      hasFlag(player, FLAG_CHEST_UNLOCKED)
-        ? "entering-ardeaglais-searching-the-chest-again"
-        : "entering-ardeaglais-unlocking-the-chest"
-    );
+    if (hasFlag(player, FLAG_CHEST_UNLOCKED)) {
+      speak(player, CORMAC_NPC_ID, "entering-ardeaglais-searching-the-chest-again");
+      return true;
+    }
+    ChestLock.open(player);
     return true;
   }
 
@@ -649,7 +752,113 @@ module.exports = function registerFallenFromGraceQuest(api) {
     return true;
   }
 
+  /** Only a raft or skiff fits through the south cave opening (Quest Helper/Wiki). */
+  function handleCaveEntrance(event) {
+    const { player, objectId } = event;
+    if (objectId !== CAVE_ENTRANCE_SAILABLE_OBJECT_ID) return false;
+    event.handled = true;
+    const boat = BoatManager.getBoatAboard(player);
+    const type = boat && BoatManager.getSpec(boat)?.type;
+    if (!boat || (type !== "raft" && type !== "skiff")) {
+      player.sendMessage("You need to sail into the cavern on a raft or skiff.");
+      return true;
+    }
+    if (quest.getStage(player) < STAGE_CORMAC_PLAN) {
+      player.sendMessage("You should speak to Cormac before sailing into the cavern.");
+      return true;
+    }
+    const refusal = Sailing.disembark(player, "wyrmscraig_cave");
+    if (refusal) {
+      player.sendMessage(refusal);
+      return true;
+    }
+    setFlag(player, FLAG_WYRMS_ENTRY);
+    if (quest.getStage(player) < STAGE_CAVERN) quest.setStage(player, STAGE_CAVERN);
+    return true;
+  }
+
+  /** The cathedral's front door is locked until the angel is defeated and the body read. */
+  function handleCathedralDoor(event) {
+    const { player, objectId } = event;
+    if (!CATHEDRAL_DOOR_OBJECT_IDS.has(objectId)) return false;
+    const stage = quest.getStage(player);
+    if (!questActive(player) || stage < STAGE_CATHEDRAL) return false;
+    if (stage < STAGE_ANGEL_DEAD) {
+      event.handled = true;
+      speak(player, CORMAC_NPC_ID, "entering-ardeaglais-attempting-to-leave-the-cathedral");
+      return true;
+    }
+    if (!hasFlag(player, FLAG_CATHEDRAL_OPENED)) {
+      event.handled = true;
+      openDoorLock(player);
+      return true;
+    }
+    return false;
+  }
+
+  function shortcutCleared(player) {
+    return Boolean(player.getAttribute(SHORTCUT_CLEARED_ATTRIBUTE)) || quest.isComplete(player);
+  }
+
+  function syncShortcutVarbit(player) {
+    player.getPacketSender().sendVarbit(SHORTCUT_VARBIT, shortcutCleared(player) ? 1 : 0);
+  }
+
+  function clearShortcutBlockage(event, player, pickaxe) {
+    event.handled = true;
+    player.performAnimation(pickaxe.animation);
+    player.setAttribute(SHORTCUT_CLEARED_ATTRIBUTE, true);
+    player.getPacketSender().sendVarbit(SHORTCUT_VARBIT, 1);
+    player.sendMessage("You swing your pickaxe at the rocks...");
+    player.sendMessage("...and successfully manage to clear them.");
+    return true;
+  }
+
+  /** The captured shortcut blockage: only after the body/cathedral and with a usable pickaxe. */
+  function handleShortcutBlockage(event) {
+    const { player, objectId } = event;
+    if (objectId !== SHORTCUT_BLOCKAGE_OBJECT_ID && objectId !== SHORTCUT_BLOCKED_ROCKS_OBJECT_ID) return false;
+    if (quest.getStage(player) < STAGE_BODY || quest.isComplete(player) || shortcutCleared(player)) return false;
+    event.handled = true;
+    const pickaxe = mining.findBestPickaxe(player);
+    if (!pickaxe) {
+      player.sendMessage("You need a pickaxe to clear the rocks.");
+      return true;
+    }
+    return clearShortcutBlockage(event, player, pickaxe);
+  }
+
+  function handleShortcutItem(event) {
+    const { player, objectId, itemId } = event;
+    if (objectId !== SHORTCUT_BLOCKAGE_OBJECT_ID && objectId !== SHORTCUT_BLOCKED_ROCKS_OBJECT_ID) return false;
+    if (quest.getStage(player) < STAGE_BODY || quest.isComplete(player) || shortcutCleared(player)) return false;
+    const pickaxe = mining.findBestPickaxe(player);
+    if (!pickaxe || itemId !== pickaxe.id) return false;
+    return clearShortcutBlockage(event, player, pickaxe);
+  }
+
+  function handleShortcutClimb(event) {
+    const { player, objectId, clickType } = event;
+    if (!SHORTCUT_TOP_OBJECT_IDS.has(objectId) || clickType !== 1) return false;
+    if (quest.getStage(player) < STAGE_BODY || !shortcutCleared(player)) return false;
+    event.handled = true;
+    if (ObstacleRunner.isBusy(player)) return true;
+    const spec = WyrmscraigAgility.wyrmscraigCliff({ ends: SHORTCUT_ENDS });
+    const context = {
+      player,
+      pos: player.getLocation(),
+      obj: { x: 2551, y: 2209, z: player.getLocation().getZ() },
+      object: event.object,
+    };
+    ObstacleRunner.run(context, spec.steps(context));
+    return true;
+  }
+
   function handleObjectInteraction(event) {
+    if (handleShortcutBlockage(event)) return;
+    if (handleShortcutClimb(event)) return;
+    if (handleCathedralDoor(event)) return;
+    if (handleCaveEntrance(event)) return;
     if (handleMonolith(event)) return;
     if (handleTent(event)) return;
     if (handleChest(event)) return;
@@ -675,9 +884,6 @@ module.exports = function registerFallenFromGraceQuest(api) {
     if (other === SUNSTONE_ITEM_ID && held(player, SUNSTONE_ITEM_ID)) {
       event.handled = true;
       player.getInventory().deleteNumber(SUNSTONE_ITEM_ID, 1);
-      if (questActive(player) && quest.getStage(player) === STAGE_SUNSTONE) {
-        quest.setStage(player, STAGE_CORE);
-      }
       player.getInventory().adds(SUNSTONE_CORE_ITEM_ID, 1);
       player.sendMessage("You chisel the sunstone into a core.");
       return true;
@@ -694,12 +900,14 @@ module.exports = function registerFallenFromGraceQuest(api) {
     const { player, itemId, npcId } = event;
     if (itemId !== SUNSTONE_CORE_ITEM_ID || npcId !== BROKEN_GOLEM_NPC_ID) return false;
     const stage = quest.getStage(player);
-    if (stage < STAGE_GOLEM || stage >= STAGE_GOLEM_POWERED) return false;
+    if (stage < STAGE_CORE || stage >= STAGE_GOLEM_POWERED) return false;
     event.handled = true;
     player.getInventory().deleteNumber(SUNSTONE_CORE_ITEM_ID, 1);
     quest.setStage(player, STAGE_GOLEM_POWERED);
     ensureBasementItems(player);
     speak(player, CORMAC_NPC_ID, "entering-ardeaglais-putting-a-new-core-in-the-golem");
+    // The captured activation moves the player through the opened passage.
+    player.moveTo(GOLEM_PASSAGE_TILE);
     return true;
   }
 
@@ -712,7 +920,7 @@ module.exports = function registerFallenFromGraceQuest(api) {
     speak(
       player,
       CORMAC_NPC_ID,
-      stage === STAGE_TROLLS
+      stage <= STAGE_GOLEM
         ? "the-way-under-ardeaglais-searching-the-golem"
         : "the-way-under-ardeaglais-searching-the-golem-after-taking-the-dull-core"
     );
@@ -803,6 +1011,89 @@ module.exports = function registerFallenFromGraceQuest(api) {
   }
 
   // ==========================================================================
+  // Captured automatic cavern passage
+  // ==========================================================================
+
+  const cavernApproachKeys = new Map();
+
+  function later(key, ticks, action) {
+    TaskManager.submit(new CountdownTask(key, ticks, action));
+  }
+
+  function stopCavernApproachWatch(player) {
+    const key = cavernApproachKeys.get(player);
+    if (key) TaskManager.cancelTasks?.(key);
+    cavernApproachKeys.delete(player);
+  }
+
+  function caveBoat(player) {
+    const boat = BoatManager.getBoatAboard(player);
+    if (!boat || boat.static || boat.ownerPlayerId !== player.getIndex()) return null;
+    const type = BoatManager.getSpec(boat)?.type;
+    return CAVE_BOAT_TYPES.has(type) ? boat : null;
+  }
+
+  function inCavernApproach(boat) {
+    if (boat.level !== CAVERN_APPROACH.z) return false;
+    const x = Math.floor(boat.fineX / 128);
+    const y = Math.floor(boat.fineY / 128);
+    return x >= CAVERN_APPROACH.minX && x <= CAVERN_APPROACH.maxX
+      && y >= CAVERN_APPROACH.minY && y <= CAVERN_APPROACH.maxY;
+  }
+
+  /** One captured transition: move the player's boat to the cavern mooring and stay aboard. */
+  function enterCavernByBoat(player, boat) {
+    stopCavernApproachWatch(player);
+    boat.fineX = CAVERN_MOORING.fineX;
+    boat.fineY = CAVERN_MOORING.fineY;
+    boat.level = CAVERN_MOORING.z;
+    boat.angle = CAVERN_MOORING.angle;
+    boat.heading = CAVERN_MOORING.angle;
+    boat.moveMode = 0;
+    Sailing.dock(player, "wyrmscraig_cave");
+    setFlag(player, FLAG_WYRMS_ENTRY);
+    quest.setStage(player, STAGE_CAVERN);
+    player.sendMessage("You sail through the cave opening.");
+  }
+
+  function startCavernApproachWatch(player) {
+    if (cavernApproachKeys.has(player) || quest.getStage(player) !== STAGE_CORMAC_PLAN) return;
+    if (!caveBoat(player)) return;
+    const key = {};
+    cavernApproachKeys.set(player, key);
+    const tick = () => {
+      if (cavernApproachKeys.get(player) !== key) return;
+      if (quest.getStage(player) !== STAGE_CORMAC_PLAN) {
+        cavernApproachKeys.delete(player);
+        return;
+      }
+      const boat = caveBoat(player);
+      if (!boat) {
+        cavernApproachKeys.delete(player);
+        return;
+      }
+      if (inCavernApproach(boat)) {
+        enterCavernByBoat(player, boat);
+        return;
+      }
+      later(key, 2, tick);
+    };
+    later(key, 2, tick);
+  }
+
+  function handleSailingBoarded({ player }) {
+    if (player) startCavernApproachWatch(player);
+  }
+
+  function handleSailingLeft({ player }) {
+    if (player) stopCavernApproachWatch(player);
+  }
+
+  function handleLogout({ player }) {
+    if (player) stopCavernApproachWatch(player);
+  }
+
+  // ==========================================================================
   // NPC death
   // ==========================================================================
 
@@ -837,6 +1128,13 @@ module.exports = function registerFallenFromGraceQuest(api) {
   // Stairs, zones and login
   // ==========================================================================
 
+  function answerMadAngelVariant(request) {
+    const player = request?.player;
+    if (!player) return;
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_CATHEDRAL && stage < STAGE_ANGEL_DEAD) request.variant = "quest";
+  }
+
   function enterCathedralInstance(player) {
     if (!MadAngelCommon.core) return;
     const session = MadAngelInstance.open(player);
@@ -861,7 +1159,6 @@ module.exports = function registerFallenFromGraceQuest(api) {
       player.getInventory().deleteNumber(STAIRCASE_KEY_ITEM_ID, 1);
     }
     setFlag(player, FLAG_KEY_USED);
-    setFlag(player, FLAG_CATHEDRAL_OPENED);
     quest.setStage(player, STAGE_CATHEDRAL);
     enterCathedralInstance(player);
   }
@@ -894,18 +1191,24 @@ module.exports = function registerFallenFromGraceQuest(api) {
   function handleCavernZoneEnter({ player }) {
     if (!questActive(player)) return;
     const stage = quest.getStage(player);
-    if (stage <= STAGE_CORMAC_BYPASS) {
-      setFlag(player, FLAG_WYRMS_ENTRY);
-      quest.setStage(player, STAGE_CAVERN);
-    }
-    if (stage >= STAGE_GOLEM_POWERED || stage === STAGE_CAVERN) {
-      ensureBasementItems(player);
-    }
+    if (stage === STAGE_CAVERN && hasFlag(player, FLAG_WYRMS_ENTRY)) ensureBasementItems(player);
+    if (stage >= STAGE_GOLEM_POWERED) ensureBasementItems(player);
+  }
+
+  /** Maps the old overlapping ladder onto the live values once; completed saves stay complete. */
+  function migrateStage({ player }) {
+    if (player.getAttribute(STAGE_VERSION_ATTRIBUTE) === STAGE_VERSION) return;
+    const old = quest.getStage(player);
+    const migrated = { 1: 2, 2: 3, 6: 5, 7: 5, 8: 6, 9: 6, 10: 8, 11: 8, 12: 9, 13: 11, 14: 13, 17: 18, 18: 19 }[old];
+    if (migrated !== undefined) quest.setStage(player, migrated);
+    player.setAttribute(STAGE_VERSION_ATTRIBUTE, STAGE_VERSION);
   }
 
   function handleLogin({ player }) {
     refreshQuestList(player);
     ensureHat(player);
+    syncShortcutVarbit(player);
+    startCavernApproachWatch(player);
   }
 
   // ==========================================================================
@@ -1046,6 +1349,9 @@ module.exports = function registerFallenFromGraceQuest(api) {
   // ==========================================================================
 
   api.persistAttribute(FLAGS_ATTRIBUTE);
+  api.persistAttribute(STAGE_VERSION_ATTRIBUTE, 0);
+  api.persistAttribute(TROLL_KILLS_ATTRIBUTE, 0);
+  api.persistAttribute(SHORTCUT_CLEARED_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
     key: "fallen_from_grace",
@@ -1072,7 +1378,10 @@ module.exports = function registerFallenFromGraceQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("player:bootstrap-complete", sendFlagVarps);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onCustomEvent("madangel:cathedral-door", handleCathedralDoor);
+  api.onCustomEvent("madangel:instance-variant", answerMadAngelVariant);
   api.onItemOnItem(handleItemOnItem);
+  api.onItemOnObject(handleShortcutItem, { noted: false });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction(handleItemAction);
   api.onNpcInteraction("Broken golem", { Investigate: handleGolemInvestigate });
@@ -1082,5 +1391,9 @@ module.exports = function registerFallenFromGraceQuest(api) {
   api.onCustomEvent("ladders:climb", handleLadderClaim);
   api.onZoneEnter(SURFACE_ZONE, handleSurfaceZoneEnter);
   api.onZoneEnter(CAVERN_ZONE, handleCavernZoneEnter);
+  api.onCustomEvent("sailing:boarded", handleSailingBoarded);
+  api.onCustomEvent("sailing:left", handleSailingLeft);
+  api.onPlayerLogin(migrateStage);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
 };

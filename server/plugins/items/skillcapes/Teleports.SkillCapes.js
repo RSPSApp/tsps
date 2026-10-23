@@ -116,12 +116,16 @@ function goTo(player, label) {
     Capes.teleport(player, Capes.DATA.housePortals[key]);
     return true;
   }
-  if (key === "pandemonium" || key === "boat" || key === "last-boat") {
-    api.emitCustomEvent("sailing:cape-teleport", { player, target: key, handled: false });
+  if (key === "pandemonium" || key === "boat" || key === "last-boat" || key === "boat to pandemonium") {
+    const request = { player, target: key, handled: false };
+    api.emitCustomEvent("sailing:cape-teleport", request);
+    if (!request.handled) player.sendMessage(NOT_AVAILABLE);
     return true;
   }
-  if (key === "boat to pandemonium" || key === "rename boat") {
-    player.sendMessage(NOT_AVAILABLE);
+  if (key === "rename boat") {
+    const request = { player, handled: false };
+    api.emitCustomEvent("sailing:cape-rename-boat", request);
+    if (!request.handled) player.sendMessage(NOT_AVAILABLE);
     return true;
   }
   return false;
@@ -192,6 +196,7 @@ const OPTIONS = {
   },
   SAILING: {
     Teleport: (player) => chooseFrom(player, "Select an option", SAILING_CHOICES),
+    "Boat Teleport": (player) => chooseFrom(player, "Select an option", ["Teleport to a boat", "Teleport to a boat (last one)"]),
     "Rename boat": "Rename boat",
     "Rename Boat": "Rename boat",
   },

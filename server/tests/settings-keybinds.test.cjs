@@ -53,6 +53,7 @@ function registered() {
     onInterfaceActionButton: (id, handler) => ids(id).forEach((one) => buttons.set(one, handler)),
     onCustomEvent: (name, handler) => events.set(name, handler),
     onPlayerLogin: (handler) => logins.push(handler),
+    core: { CacheDefinitions },
   };
   Settings.register(new Proxy(api, { get: (target, prop) => (prop in target ? target[prop] : () => {}) }));
   return { buttons, events, logins };
@@ -92,6 +93,7 @@ test('XP orb mounts the counter only while enabled, and Setup opens the cached s
   sender.sendSubInterface = (uid, group, type) => { player.sent.push(`open ${uid}:${group}:${type}`); return sender; };
   sender.closeSubInterface = (uid) => { player.sent.push(`close ${uid}`); return sender; };
   const click = buttons.get((160 << 16) | 6);
+  assert.equal(buttons.get((897 << 16) | 2), click, "orbs_osm:xp_drops, the mobile orb, as well");
   logins[0]({ player });
   assert.deepEqual(player.sent, ['varbit 4702=0'], 'fresh accounts have XP drops off');
   player.sent.length = 0;
@@ -189,6 +191,15 @@ test('as captured: toggles in a category flip their var; split private chat runs
   assert.deepEqual(click(CLICKZONE, 5), ['varbit 9657=35', 'varp 287=1', 'script 83'], 'Split friends private chat');
 });
 
+test('Hide roofs is saved and sent back on login (the client script flips it too)', () => {
+  const { player, click, logins } = allSettings(4);
+  assert.deepEqual(click(CLICKZONE, 4), ['varbit 9657=7', 'varbit 12378=1'], 'Hide roofs');
+  assert.deepEqual(player.getAttribute('settings:values'), { 'varbit:9656': 4, 'varbit:12378': 1 });
+  player.sent.length = 0;
+  logins.find((login) => login.name === 'restoreSettings')({ player });
+  assert.ok(player.sent.includes('varbit 12378=1'));
+});
+
 test('as captured: a dropdown that sets one varbit to the option, and closing a dropdown', () => {
   const { click, varbit } = allSettings(0);
   click(CLICKZONE, 67);
@@ -213,4 +224,141 @@ test('login sends back every setting the player changed', () => {
   logins.find((login) => login.name === 'restoreSettings')({ player });
   assert.ok(player.sent.includes('varbit 20157=1'));
   assert.ok(player.sent.includes('varp 287=0'));
+});
+
+test('quest-list Settings opens native Interfaces category with controls transmitted', () => {
+  const { buttons } = registered();
+  const player = recordingPlayer();
+  player.setInterfaceId = id => player.sent.push(`interface ${id}`);
+  const sender = player.getPacketSender();
+  sender.sendSubInterface = () => sender;
+  sender.sendInterfaceFlagsRange = () => sender;
+  assert.equal(typeof buttons.get((399 << 16) | 11), 'function');
+  assert.equal(buttons.get((399 << 16) | 11)({ player }), true);
+  assert.equal(player.getAttribute('settings-view'), 6);
+  assert.equal(sender.getVarbit(9656), 6);
+});
+
+test('quest colour picker saves RGB+1, accepts black, rejects invalid amounts and resets defaults', () => {
+  const { buttons } = registered();
+  const player = recordingPlayer();
+  player.setAttribute('settings-view', 6);
+  let amount;
+  player.setEnteredAmountAction = action => { amount = action; };
+  const sender = player.getPacketSender();
+  sender.sendSubInterface = () => sender;
+  sender.closeSubInterface = () => sender;
+  const row = buttons.get((134 << 16) | 20);
+  row({ player, slot: 51 });
+  assert.ok(amount, 'native colour modal arms its resume-count handler');
+  assert.equal(amount.acceptsZero, true);
+  amount.execute(0);
+  assert.equal(sender.getVarp(3410), 1, 'black is a real colour');
+  row({ player, slot: 51 });
+  amount.execute(0x1000000);
+  assert.equal(sender.getVarp(3410), 1, 'out of range colour ignored');
+  row({ player, slot: 51 });
+  assert.equal(amount.acceptsNegative, true);
+  amount.execute(-1);
+  assert.equal(sender.getVarp(3410), 0, 'native Default colour restores cache default');
+  row({ player, slot: 55 });
+  assert.equal(sender.getVarp(3410), 0, 'zero selects cache default');
+});
+
+test('all native quest preferences are mapped, constrained and restored including colours', () => {
+  const { buttons, logins } = registered();
+  const player = recordingPlayer();
+  player.setAttribute('settings-view', 6);
+  const click = buttons.get((134 << 16) | 20);
+  const option = buttons.get((134 << 16) | 29);
+  for (const [slot, id] of [[42,13776],[43,13775],[44,13777],[45,13773],[46,13774],[47,13890],[49,13889],[50,13781]]) {
+    assert.equal(click({ player, slot }), true);
+    assert.equal(player.getPacketSender().getVarbit(id), 1);
+  }
+  for (const [slot, id, count] of [[39,13772,12],[40,13778,3],[41,13779,3],[48,13780,2]]) {
+    click({ player, slot });
+    for (let index=0;index<count;index++) {
+      click({ player, slot });
+      assert.equal(option({ player, slot:index*3 }), true);
+      assert.equal(player.getPacketSender().getVarbit(id), index);
+    }
+    click({ player, slot });
+    assert.equal(option({ player, slot:count*3 }), false);
+  }
+  const saved = structuredClone(player.getAttribute('settings:values'));
+  const restored = recordingPlayer();
+  restored.setAttribute('settings:values', saved);
+  for (const login of logins.slice(1)) login({player:restored});
+  for (const [key,value] of Object.entries(saved)) {
+    const [kind,id]=key.split(':');
+    assert.equal(kind==='varp' ? restored.getPacketSender().getVarp(+id) : restored.getPacketSender().getVarbit(+id), value);
+  }
+});
+
+test('quest cache sort modes, status/requirements filters, empty lists and hidden headers', () => {
+  const {questListGroups} = require('../plugins/quests/QuestList.QuestRuntime');
+  const vars=new Map();
+  const player={getAttribute:()=>0,getPacketSender:()=>({getVarbit:id=>vars.get(id)??0}),getSkillManager:()=>({getMaxLevels:()=>1,getCombatLevel:()=>3})};
+  const quests=[{key:'animal',name:'Animal Magnetism',status:1},{key:'below',name:'Below Ice Mountain',status:0},{key:'bar',name:"Alfred Grimhand's Barcrawl",status:2}];
+  const groups=()=>questListGroups(quests,player,CacheDefinitions,q=>q.status);
+  const rows=()=>groups().flatMap(g=>g.quests);
+  for(let sort=0;sort<12;sort++){
+    vars.set(13772,sort);
+    const result=groups();
+    assert.equal(rows().length,3,`sort ${sort} retains all entries`);
+    assert.ok(result.every(g=>g.title.length>0),`sort ${sort} produces a real group label`);
+  }
+  vars.set(13772,3);
+  assert.ok(groups().some(g=>g.title==='Novice'));
+  vars.set(13772,11);
+  assert.ok(groups().some(g=>g.title==='Free Quests'));
+  vars.set(13778,1);
+  assert.equal(rows().find(q=>q.quest.key==='animal').status,3,'missing requirements shown as unavailable');
+  vars.set(13890,1);
+  assert.ok(!rows().some(q=>q.quest.key==='animal'),'unavailable filter excludes the row');
+  vars.set(13890,0);vars.set(13778,2);
+  assert.ok(!rows().some(q=>q.quest.key==='animal'),'hide requirements filter excludes the row');
+  vars.set(13778,0);vars.set(13779,2);
+  assert.ok(!rows().some(q=>q.quest.key==='below'),'recommended combat filter uses cache metadata');
+  vars.set(13779,0);vars.set(13889,1);
+  assert.deepEqual(groups().map(g=>g.title),['']);
+  vars.set(13775,1);vars.set(13776,1);vars.set(13777,1);
+  assert.deepEqual(groups(),[],'all statuses filtered yields an empty list');
+  vars.clear();vars.set(13772,1);
+  const ties=questListGroups([{key:'z',name:'Animal Magnetism',status:1},{key:'a',name:'Animal Magnetism',status:1}],player,CacheDefinitions,q=>q.status);
+  assert.deepEqual(ties[0].quests.map(q=>q.quest.key),['a','z'],'equal names use stable quest keys');
+});
+
+test('quest requirements translate cache stat ids to Skill objects including Hunter/Construction', () => {
+  const {questListGroups,metadata}=require('../plugins/quests/QuestList.QuestRuntime');
+  const {Skill}=require('../dist/game/model/Skill');
+  const ids=[];
+  const player={getAttribute:()=>9999,getPacketSender:()=>({getVarbit:id=>id===13778?2:0}),getSkillManager:()=>({getMaxLevel:skill=>{ids.push(skill.getClientId());return 99;},getCombatLevel:()=>126})};
+  const records=[...metadata(CacheDefinitions).values()];
+  const names=records.filter(r=>r.requirement_stats?.some((v,i)=>i%2===0&&(v===21||v===22))).map(r=>({key:r.rowId.toString(),name:r.displayname[0],status:1}));
+  questListGroups(names,player,CacheDefinitions,q=>q.status,Skill);
+  assert.ok(ids.includes(21),'Hunter uses its client id');
+  assert.ok(ids.includes(22),'Construction uses its client id');
+});
+
+test('closing or replacing a quest colour picker invalidates only its owned amount callback', () => {
+  const {buttons,events}=registered();
+  const player=recordingPlayer();let amount;
+  player.setAttribute('settings-view',6);
+  player.setEnteredAmountAction=action=>{amount=action;};
+  player.getEnteredAmountAction=()=>amount;
+  const sender=player.getPacketSender();
+  sender.sendSubInterface=()=>sender;sender.closeSubInterface=()=>sender;
+  const click=buttons.get((134<<16)|20);
+  click({player,slot:51});const stale=amount;
+  events.get('interface:closed')({player,interfaceId:134});
+  assert.equal(amount,null,'closing clears the owned prompt');
+  stale.execute(123);
+  assert.equal(sender.getVarp(3410),0,'late reply cannot write a closed picker');
+  click({player,slot:51});const old=amount;
+  click({player,slot:52});old.execute(123);
+  assert.equal(sender.getVarp(3410),0,'replaced picker cannot mutate its colour');
+  const unrelated={execute(){}};amount=unrelated;
+  events.get('interface:closed')({player,interfaceId:288});
+  assert.equal(amount,unrelated,'unrelated amount prompt is preserved');
 });

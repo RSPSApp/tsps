@@ -5,7 +5,7 @@ import { getModelFacesFiltered, SceneBuffer } from "../buffer/SceneBuffer";
 import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
 
 type FrameKey = string; // `${spotId}|${frameIdx}|${pass}|${version}` where pass is 0=opaque,1=alpha
-const FRAME_GEOMETRY_VERSION = 2;
+const FRAME_GEOMETRY_VERSION = 3;
 
 /**
  * Cycles into `frameIdx` (1..its length) for a graphic `ageMs` old (20 ms per cycle), as the game
@@ -65,18 +65,8 @@ export class GfxCache {
             -50,
             -30,
         ) as Model;
-        // Scale/orientation from spot def
-        try {
-            if ((spot.widthScale | 0) !== 128 || (spot.heightScale | 0) !== 128) {
-                model.scale(spot.widthScale | 0, spot.heightScale | 0, spot.widthScale | 0);
-            }
-        } catch {}
-        try {
-            const ori = (((spot.orientation | 0) % 360) + 360) % 360;
-            if (ori === 90) model.rotate90();
-            else if (ori === 180) model.rotate180();
-            else if (ori === 270) model.rotate270();
-        } catch {}
+        // Scale and orientation come after the animation (placeAsSpot), as OSRS's spot animation
+        // model does: its frames move and scale the model's own axes.
         this.baseBySpot.set(spotId | 0, model);
         return model;
     }
@@ -136,7 +126,30 @@ export class GfxCache {
     }
 
     /** Build and cache geometry arrays for (spot, frame, pass). */
-    getModel(spotId:number,frame:number,cycle=0):Model|undefined { const base=this.ensureBase(spotId);return base ? this.applyFrame(base,spotId,frame,cycle):undefined; }
+    getModel(spotId:number,frame:number,cycle=0):Model|undefined { const base=this.ensureBase(spotId);const model=base ? this.applyFrame(base,spotId,frame,cycle):undefined;return model ? this.placeAsSpot(model,spotId):undefined; }
+
+    /**
+     * The spot definition's scale and orientation, on an animated frame. OSRS scales and turns
+     * a spot animation's model after animating it; turned first (a "_90" graphic), its frames
+     * would move and scale the pieces along the wrong axes (Ocellus' cracks and slam debris
+     * knocked off their tiles).
+     */
+    private placeAsSpot(model: Model, spotId: number): Model {
+        const spot = this.getSpotType(spotId);
+        if (!spot) return model;
+        try {
+            if ((spot.widthScale | 0) !== 128 || (spot.heightScale | 0) !== 128) {
+                model.scale(spot.widthScale | 0, spot.heightScale | 0, spot.widthScale | 0);
+            }
+        } catch {}
+        try {
+            const ori = (((spot.orientation | 0) % 360) + 360) % 360;
+            if (ori === 90) model.rotate90();
+            else if (ori === 180) model.rotate180();
+            else if (ori === 270) model.rotate270();
+        } catch {}
+        return model;
+    }
     ensureFrameGeometry(
         spotId: number,
         frameIdx: number,
@@ -152,8 +165,9 @@ export class GfxCache {
 
         const base = this.ensureBase(spotId);
         if (!base) return undefined;
-        const model = this.applyFrame(base, spotId, frameIdx, frameCycle);
-        if (!model) return undefined;
+        const animated = this.applyFrame(base, spotId, frameIdx, frameCycle);
+        if (!animated) return undefined;
+        const model = this.placeAsSpot(animated, spotId);
 
         // Collect textures to ensure on GPU
         try {
@@ -216,7 +230,7 @@ export class GfxCache {
     smoothingCycle(spotId: number, frameIdx: number, frameCycle: number): number {
         if (!(frameCycle > 0)) return 0;
         const mv: any = this.renderer.osrsClient as any;
-        if (!mv.animationSmoothingPlugin?.smoothsGraphics?.()) return 0;
+        if (!mv.clientPlugins.smoothsGraphics()) return 0;
         const spot = this.getSpotType(spotId);
         const seqId: number = typeof spot?.sequenceId === "number" ? spot.sequenceId | 0 : -1;
         if (seqId < 0) return 0;

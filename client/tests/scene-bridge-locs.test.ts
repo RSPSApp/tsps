@@ -49,4 +49,38 @@ async function bridgeLocsUseTheServerPlane(): Promise<void> {
         CachePipeline.getStore().close();
     }
 }
-bridgeLocsUseTheServerPlane().catch((error) => { console.error(error); process.exitCode = 1; });
+
+// LOC_ADD_CHANGE locs are added after the scene is built, when the bridge's tiles are already a
+// plane down but its heights are not. A vein the server spawns on plane 0 at the Motherlode
+// Mine's upper level must stand on plane 1's heights (the walkway), not the cave floor below it.
+function locsAddedToABuiltSceneStandOnTheBridge(): void {
+    const vein = { sizeX: 1, sizeY: 1, contourGroundType: 1, contourGroundParam: -1, isInteractive: 1, seqId: -1, clipType: 0, clipped: false };
+    const builder = new SceneBuilder({ game: "oldschool", revision: 241 } as any,
+        {} as any, {} as any, {} as any, { load: () => vein } as any, {} as any, new Map());
+    const heights = (height: number) => Array.from({ length: 64 }, () => new Int32Array(64).fill(height));
+    const flags = () => Array.from({ length: 64 }, () => new Uint8Array(64));
+    const renderFlags = [flags(), flags(), flags(), flags()];
+    renderFlags[1][40][20] = 2;
+    const walls: Array<{ level: number; x: number; height: number; entityLevel: number }> = [];
+    const scene = {
+        sizeX: 64, sizeY: 64, levels: 4,
+        tileHeights: [heights(-184), heights(-504), heights(-504), heights(-504)],
+        tileRenderFlags: renderFlags,
+        collisionMaps: [],
+        newWall: (level: number, x: number, _y: number, height: number, entity: any) => {
+            walls.push({ level, x, height, entityLevel: entity.level });
+        },
+    } as any;
+
+    builder.addLocToBuiltScene(scene, 0, 40, 20, 26661, LocModelType.WALL, 0, LocLoadType.NO_MODELS);
+    builder.addLocToBuiltScene(scene, 0, 41, 20, 26661, LocModelType.WALL, 0, LocLoadType.NO_MODELS);
+    assert.deepEqual(walls, [
+        { level: 0, x: 40, height: -504, entityLevel: 1 },
+        { level: 0, x: 41, height: -184, entityLevel: 0 },
+    ], "drawn on the server's plane, at the map plane's height on a bridge only");
+    console.log("Bridge locs: locs added to a built scene stand on the bridge passed");
+}
+
+bridgeLocsUseTheServerPlane()
+    .then(locsAddedToABuiltSceneStandOnTheBridge)
+    .catch((error) => { console.error(error); process.exitCode = 1; });

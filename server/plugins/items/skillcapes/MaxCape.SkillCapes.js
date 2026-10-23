@@ -31,6 +31,7 @@ const TELEPORT_CHOICES = [
   ...Teleports.HOUSE_CHOICES,
 ];
 const FEATURE_CHOICES = ["Search", "Ring of Life settings", "Commune", "Stamina Boost"];
+const SAILING_FEATURES = ["Teleport Boat (Pandemonium)", "Rename Boat"];
 
 let api;
 
@@ -211,10 +212,16 @@ function features(player, sub) {
     else if (/^Ring of Life/i.test(label)) Options.ringOfLifeMenu(player);
     else if (label === "Commune") Options.commune(player);
     else if (label === "Stamina Boost") Options.staminaBoost(player);
+    else if (/Teleport Boat/i.test(label)) Teleports.goTo(player, "Teleport boat to the Pandemonium");
+    else if (/Rename Boat/i.test(label)) Teleports.goTo(player, "Rename boat");
     else Teleports.goTo(player, label);
   };
   if (choice) run(choice);
-  else api.sendMultiChatboxPrompt(player, "Select an option", ...FEATURE_CHOICES.flatMap((label) => [label, () => run(label)]));
+  else api.sendMultiChatboxPrompt(player, "Select an option",
+    ...FEATURE_CHOICES.flatMap((label) => [label, () => run(label)]),
+    "More...", () => api.sendMultiChatboxPrompt(player, "Select an option",
+      ...SAILING_FEATURES.flatMap((label) => [label, () => run(label)]),
+      "Cancel", () => {}));
 }
 
 function spellbook(player, sub) {

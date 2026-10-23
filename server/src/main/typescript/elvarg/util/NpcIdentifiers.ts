@@ -13823,4 +13823,171 @@ export class NpcIdentifiers {
     public static YORKIE_5 = 16573; // Yorkie
     public static YORKIE_6 = 16574; // Yorkie
     public static YORKIE_7 = 16575; // Yorkie
+    public static PETE_KAYER = 16576; // Pete Kayer
+    public static PETE_KAYER_2 = 16577; // Pete Kayer
+    public static BOWMAN67 = 16578; // Bowman67
+    public static PETE_KAYER_3 = 16579; // Pete Kayer
+    public static PETE_KAYER_4 = 16580; // Pete Kayer
+    public static PETE_KAYER_5 = 16581; // Pete Kayer
+    public static PETE_KAYER_6 = 16582; // Pete Kayer
+    public static PETE_KAYER_7 = 16583; // Pete Kayer
+    public static PETE_KAYER_8 = 16584; // Pete Kayer
+    public static PETE_KAYER_9 = 16585; // Pete Kayer
+    public static PETE_KAYER_10 = 16586; // Pete Kayer
+    public static PETE_KAYER_11 = 16587; // Pete Kayer
+    public static PETE_KAYER_12 = 16588; // Pete Kayer
+    public static PETE_KAYER_13 = 16589; // Pete Kayer
+    public static PETE_KAYER_14 = 16590; // Pete Kayer
+    public static PETE_KAYER_15 = 16591; // Pete Kayer
+    public static PETE_KAYER_16 = 16592; // Pete Kayer
+    public static PETE_KAYER_17 = 16593; // Pete Kayer
+    public static PETE_KAYER_18 = 16594; // Pete Kayer
+    public static PETE_KAYER_19 = 16595; // Pete Kayer
+    public static PETE_KAYER_20 = 16596; // Pete Kayer
+    public static PETE_KAYER_21 = 16597; // Pete Kayer
+    public static BLINK = 16598; // Blink
+    public static DAVE_4 = 16599; // Dave
+    public static DOUBLE_DECIMATION_DARYL = 16600; // Double Decimation Daryl
+    public static WALTER_BLUE = 16601; // Walter Blue
+    public static KINETIC_KATARA = 16602; // Kinetic Katara
+    public static XX_I_DB0W_I_XX = 16603; // Xx I DB0W I xX
+    public static XX_I_DBOW_I_XX = 16604; // Xx I DBOW I xX
+    public static I_D_CLAW_U = 16605; // I D CLAW U
+    public static IM_1_HP_GL = 16606; // IM 1 HP GL
+    public static SPARRING_PARTNER = 16607; // Sparring partner
+    public static SPARRING_PARTNER_2 = 16608; // Sparring partner
+    public static SPARRING_PARTNER_3 = 16609; // Sparring partner
+    public static SPARRING_PARTNER_4 = 16610; // Sparring partner
+    public static SPARRING_PARTNER_5 = 16611; // Sparring partner
+    public static SPARRING_PARTNER_6 = 16612; // Sparring partner
+    public static SPARRING_PARTNER_7 = 16613; // Sparring partner
+    public static SPARRING_PARTNER_8 = 16614; // Sparring partner
+    public static SPARRING_PARTNER_9 = 16615; // Sparring partner
+    public static SPARRING_PARTNER_10 = 16616; // Sparring partner
+    public static SPARRING_PARTNER_11 = 16617; // Sparring partner
+    public static KEVIN = 16618; // Kevin
+    public static DANIEL = 16619; // Daniel
+    public static ROWENNA = 16620; // Rowenna
+    public static ADAM = 16621; // Adam
+    public static KIMMIE = 16622; // Kimmie
+    public static JACK_3 = 16623; // Jack
+    public static KATE = 16624; // Kate
+    public static BLINK_2 = 16625; // Blink
+    public static DAVE_5 = 16626; // Dave
+    public static DOUBLE_DECIMATION_DARYL_2 = 16627; // Double Decimation Daryl
+    public static XX_I_DBOW_I_XX_2 = 16628; // Xx I DBOW I xX
+    public static KINETIC_KATARA_2 = 16629; // Kinetic Katara
+    public static I_D_CLAW_U_2 = 16630; // I D CLAW U
+    public static ORION = 16631; // Orion
+    public static ORION_2 = 16632; // Orion
+    public static XARI = 16633; // Xari
+    public static ARCHIE = 16634; // Archie
+    public static CHUBBLES = 16635; // Chubbles
+    public static COLE = 16636; // Cole
+    public static ZEKE_2 = 16637; // Zeke
+    public static MIMI = 16638; // Mimi
+    public static DORK = 16639; // Dork
+    public static BORK = 16640; // Bork
+    public static THE_SMORKS = 16641; // The Smorks
+    public static DAGONHAI_ELDER = 16643; // Dagon'hai Elder
+    public static DAGONHAI_ELDER_2 = 16644; // Dagon'hai Elder
+    public static DAGONHAI_MONK = 16645; // Dagon'hai Monk
+    public static DAGONHAI_MONK_2 = 16646; // Dagon'hai Monk
+    public static DAGONHAI_MONK_3 = 16647; // Dagon'hai Monk
+    public static DAGONHAI_MONK_4 = 16648; // Dagon'hai Monk
+    public static COL_00FFFF_CAULDRON_COL = 16649; // <col=00ffff>Cauldron</col>
+    public static IMP_20 = 16650; // Imp
+    public static COL_00FFFF_DEMONIC_RIFT_COL = 16651; // <col=00ffff>Demonic rift</col>
+    public static EZEKIEL = 16652; // Ezekiel
+    public static COL_00FFFF_ANIMATED_SWORD_COL = 16653; // <col=00ffff>Animated Sword</col>
+    public static COL_00FFFF_SWORD_COL = 16656; // <col=00ffff>Sword</col>
+    public static COL_00FFFF_INERT_GUARDIAN_COL = 16657; // <col=00ffff>Inert Guardian</col>
+    public static ARCHIVE_GUARDIAN = 16658; // Archive Guardian
+    public static ARCHIVE_GUARDIAN_2 = 16659; // Archive Guardian
+    public static ARCHIVE_GUARDIAN_3 = 16660; // Archive Guardian
+    public static COL_00FFFF_INERT_GUARDIAN_COL_2 = 16661; // <col=00ffff>Inert Guardian</col>
+    public static COL_00FFFF_INERT_GUARDIAN_COL_3 = 16662; // <col=00ffff>Inert Guardian</col>
+    public static COL_00FFFF_INERT_GUARDIAN_COL_4 = 16663; // <col=00ffff>Inert Guardian</col>
+    public static COL_00FFFF_VINE_COL = 16664; // <col=00ffff>Vine</col>
+    public static DREADNOTH_THE_JELLIED = 16665; // Dreadnoth the Jellied
+    public static JELLY_13 = 16666; // Jelly
+    public static MOIA = 16667; // Moia
+    public static UNDEAD_BINDER = 16670; // Undead binder
+    public static HOODED_FIGURE_2 = 16672; // Hooded Figure
+    public static OCELLUS = 16673; // Ocellus
+    public static OCELLUS_2 = 16674; // Ocellus
+    public static COL_00FFFF_THE_BLADE_COL = 16676; // <col=00ffff>The Blade</col>
+    public static OCELLUS_3 = 16677; // Ocellus
+    public static VOID_RIFT = 16678; // Void Rift
+    public static VOID_SIPHON = 16679; // Void Siphon
+    public static VOID_AUGMENTER = 16680; // Void Augmenter
+    public static COL_00FFFF_VOID_VINE_COL = 16681; // <col=00ffff>Void Vine</col>
+    public static OCELLUS_4 = 16682; // Ocellus
+    public static COL_00FFFF_THE_BLADE_COL_2 = 16683; // <col=00ffff>The Blade</col>
+    public static XARTH = 16684; // Xarth
+    public static CORPSE_2 = 16687; // Corpse
+    public static CORPSE_3 = 16688; // Corpse
+    public static COL_00FFFF_RIFT_COL = 16690; // <col=00ffff>Rift</col>
+    public static COL_00FFFF_SPRITE_COL = 16691; // <col=00ffff>Sprite</col>
+    public static RECORD_KEEPER = 16692; // Record Keeper
+    public static WIZARD_APPRENTICE = 16693; // Wizard apprentice
+    public static DRUID_6 = 16694; // Druid
+    public static DRUID_7 = 16695; // Druid
+    public static ARMACUS_SELLES = 16696; // Armacus Selles
+    public static EVA_CASHIEN = 16697; // Eva Cashien
+    public static IVY_SOPHISTA_2 = 16698; // Ivy Sophista
+    public static GUARDIAN_OF_ARMADYL_10 = 16699; // Guardian of Armadyl
+    public static ALLIANCE_NAVIGATOR = 16700; // Alliance Navigator
+    public static BANKER_101 = 16704; // Banker
+    public static GENERAL_MONTOYA = 16705; // General Montoya
+    public static ALLIANCE_BUILDER = 16706; // Alliance builder
+    public static ALLIANCE_BUILDER_2 = 16707; // Alliance builder
+    public static ALLIANCE_BUILDER_3 = 16708; // Alliance builder
+    public static ALLIANCE_BUILDER_4 = 16709; // Alliance builder
+    public static TEMPLE_KNIGHT = 16710; // Temple Knight
+    public static TEMPLE_KNIGHT_2 = 16711; // Temple Knight
+    public static TEMPLE_KNIGHT_3 = 16712; // Temple Knight
+    public static TEMPLE_KNIGHT_4 = 16713; // Temple Knight
+    public static TEMPLE_KNIGHT_5 = 16714; // Temple Knight
+    public static TEMPLE_KNIGHT_6 = 16715; // Temple Knight
+    public static DRUID_8 = 16716; // Druid
+    public static DRUID_9 = 16717; // Druid
+    public static GUARDIAN_OF_ARMADYL_11 = 16718; // Guardian of Armadyl
+    public static GUARDIAN_OF_ARMADYL_12 = 16719; // Guardian of Armadyl
+    public static GUARDIAN_OF_ARMADYL_13 = 16720; // Guardian of Armadyl
+    public static GUARDIAN_OF_ARMADYL_14 = 16721; // Guardian of Armadyl
+    public static GUARDIAN_OF_ARMADYL_15 = 16722; // Guardian of Armadyl
+    public static GUARDIAN_OF_ARMADYL_16 = 16723; // Guardian of Armadyl
+    public static ARMACUS_SELLES_2 = 16724; // Armacus Selles
+    public static EVA_CASHIEN_2 = 16725; // Eva Cashien
+    public static IVY_SOPHISTA_3 = 16726; // Ivy Sophista
+    public static ARMACUS_SELLES_3 = 16727; // Armacus Selles
+    public static EVA_CASHIEN_3 = 16728; // Eva Cashien
+    public static IVY_SOPHISTA_4 = 16729; // Ivy Sophista
+    public static COL_00FFFF_CHEST_COL = 16730; // <col=00ffff>Chest</col>
+    public static COL_00FFFF_CHEST_COL_2 = 16731; // <col=00ffff>Chest</col>
+    public static COL_00FFFF_CHEST_COL_3 = 16732; // <col=00ffff>Chest</col>
+    public static COL_00FFFF_CHEST_COL_4 = 16733; // <col=00ffff>Chest</col>
+    public static COL_00FFFF_RIFT_COL_2 = 16734; // <col=00ffff>Rift</col>
+    public static COL_00FFFF_RIFT_COL_3 = 16735; // <col=00ffff>Rift</col>
+    public static SIR_LANCELOT_4 = 16752; // Sir Lancelot
+    public static SIR_GAWAIN_5 = 16753; // Sir Gawain
+    public static SIR_KAY_5 = 16754; // Sir Kay
+    public static SIR_BEDIVERE_4 = 16755; // Sir Bedivere
+    public static SIR_TRISTRAM_4 = 16756; // Sir Tristram
+    public static SIR_PELLEAS_5 = 16757; // Sir Pelleas
+    public static SIR_LUCAN_4 = 16758; // Sir Lucan
+    public static SIR_PALOMEDES_4 = 16759; // Sir Palomedes
+    public static KING_ARTHUR_4 = 16760; // King Arthur
+    public static QUARTERMASTER_2 = 16761; // Quartermaster
+    public static QUARTERMASTER_3 = 16762; // Quartermaster
+    public static ORION_3 = 16763; // Orion
+    public static ORION_4 = 16764; // Orion
+    public static XARI_2 = 16765; // Xari
+    public static ARCHIE_2 = 16766; // Archie
+    public static CHUBBLES_2 = 16767; // Chubbles
+    public static COLE_2 = 16768; // Cole
+    public static ZEKE_3 = 16769; // Zeke
+    public static MIMI_2 = 16770; // Mimi
+    public static DORK_2 = 16771; // Dork
 }

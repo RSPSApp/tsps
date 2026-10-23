@@ -6,6 +6,7 @@ import { IndexType } from "../cache/IndexType";
 import { isGroupMissingError } from "../cache/js5/GroupMissingError";
 import { retryOnMissingGroup } from "../cache/js5/retryOnMissingGroup";
 import { RawSoundData, SoundEffect } from "./legacy/SoundEffect";
+import { decodeWithOwnSetup } from "./vorbis/VorbisSample";
 
 export class SoundEffectLoader {
     private readonly index?: CacheIndex;
@@ -39,6 +40,10 @@ export class SoundEffectLoader {
 
     private tryDecode(id: number, trimOnset = true): RawSoundData | undefined {
         if (!this.index) return undefined;
+        // Newer sound effects (from 11988 in rev 241) are sampled: file 1 of their archive holds
+        // their own Vorbis setup and a Vorbis sample, where the older synths are file 0.
+        const fileIds = this.index.getFileIds?.(id);
+        if (fileIds && fileIds.length > 0 && fileIds[0] === 1) return this.decodeSampled(id);
         const file = this.index.getFileSmart(id);
         if (!file) return undefined;
         const buffer = file.getDataAsBuffer();
@@ -48,6 +53,26 @@ export class SoundEffectLoader {
         if (!raw || !raw.samples || raw.samples.length <= 0) return undefined;
         raw.delayCycles = delayCycles;
         return raw;
+    }
+
+    /** A sampled sound effect: [int setup length][Vorbis setup][Vorbis sample]. */
+    private decodeSampled(id: number): RawSoundData | undefined {
+        const file = this.index!.getFile(id, 1) as any;
+        if (!file) return undefined;
+        const data: Uint8Array = file.data;
+        const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+        const setupLength = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
+        if (setupLength <= 0 || 4 + setupLength >= bytes.length) return undefined;
+        const raw = decodeWithOwnSetup(bytes.subarray(4, 4 + setupLength), bytes.subarray(4 + setupLength));
+        if (!raw.samples || raw.samples.length === 0) return undefined;
+        // Loop points only matter for a looping sample; a one-shot plays whole.
+        return {
+            sampleRate: raw.sampleRate,
+            samples: raw.samples,
+            start: raw.looped ? raw.start : 0,
+            end: raw.looped ? raw.end : 0,
+            delayCycles: 0,
+        };
     }
 
     load(soundId: number, trimOnset = true): RawSoundData | undefined {

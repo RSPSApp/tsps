@@ -99,8 +99,20 @@ export class PlayerSession {
   // treated as newly-added and never gets that forced send. Track it explicitly instead.
   private pendingInitialLocalAppearance = true;
 
+  /** Set by the client connection: acts on the packets received since the player's last turn. */
+  private turnPacketProcessor?: () => void;
+
   constructor(channel: SessionChannel) {
     this.channel = channel;
+  }
+
+  public setTurnPacketProcessor(processor: () => void): void {
+    this.turnPacketProcessor = processor;
+  }
+
+  /** Runs at the start of the player's turn: client input comes first, as in live OSRS. */
+  public processPackets(): void {
+    this.turnPacketProcessor?.();
   }
 
   public write(_builder: PacketBuilder) {
@@ -350,6 +362,7 @@ export class PlayerSession {
     const npcViews = ServerPerf.measurePhase("network.flush.build_npc_views", () =>
       player.getLocalNpcs().map((npc) => {
         const location = npc.getLocation();
+        const npcBoat = BoatManager.getBoatAboard(npc);
         const face = npc.getFace()?.getDirection?.();
         const positionToFace = npc.getUpdateFlag().flagged(Flag.FACE_POSITION)
           ? npc.getPositionToFace()
@@ -359,6 +372,7 @@ export class PlayerSession {
           interactionIndex: this.interactionIndex(npc.getInteractingMobile()),
           index: npc.getIndex(),
           typeId: npc.getId(),
+          worldView: npcBoat?.entityIndex,
           headIcon: npc.getHeadIcon(),
           x: location.getX(),
           y: location.getY(),
@@ -373,6 +387,8 @@ export class PlayerSession {
             : undefined),
           crawl: npc.isCrawling?.() || undefined,
           modelCustomisation: npc.getModelCustomisationForUpdate?.() ?? undefined,
+          baseAnimations: npc.getBaseAnimationsForUpdate?.() ?? undefined,
+          transparency: npc.getTransparency?.() ?? undefined,
         };
       })
     );
@@ -391,7 +407,14 @@ export class PlayerSession {
       : current;
     const npcSync = ServerPerf.measurePhase(
       "network.flush.encode_npc_sync",
-      () => encodeNpcSync(tick, npcLocal, npcViews, this.npcSyncState)
+      () => encodeNpcSync(
+        tick, npcLocal, npcViews, this.npcSyncState,
+        boatAboard ? current : undefined,
+        (worldView) => {
+          const boat = BoatManager.getBoat(worldView);
+          return boat ? { x: boat.deckBaseX, y: boat.deckBaseY, level: 0 } : undefined;
+        },
+      )
     );
 
     const syncSent = ServerPerf.measurePhase("network.flush.socket_send", () => {

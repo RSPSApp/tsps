@@ -3,6 +3,7 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sounds } = api.core;
 
   const DRAIN = 50;
+  const SLASH_DEFENCE_BONUS_INDEX = 1;
   const HEALING_BLADE_ACCURACY_MULTIPLIER = 2;
   const HEALING_BLADE_DAMAGE_MULTIPLIER = 1.1;
   const HEALING_BLADE_HITPOINTS_FRACTION = 0.5;
@@ -63,6 +64,7 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
       hitCount: 1,
       accuracyMultiplier: HEALING_BLADE_ACCURACY_MULTIPLIER,
       damageMultiplier: HEALING_BLADE_DAMAGE_MULTIPLIER,
+      meleeDefenceBonusIndex: SLASH_DEFENCE_BONUS_INDEX,
     },
     combatMethod: new SaradominGodswordCombatMethod(),
   });

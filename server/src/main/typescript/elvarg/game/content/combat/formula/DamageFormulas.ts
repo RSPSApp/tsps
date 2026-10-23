@@ -171,7 +171,7 @@ export class DamageFormulas {
             }
 
         } else {
-            maxHit = entity.getAsNpc().getCurrentDefinition().getMaxHit();
+            maxHit = entity.getAsNpc().getCurrentMaxHit(CombatType.MELEE);
         }
         const adjusted = applyMeleeHitModifiers(entity, maxHit);
         return Math.floor(adjusted);
@@ -184,7 +184,7 @@ export class DamageFormulas {
         if (spell && spell.maximumHit() > 0) {
             maxHit = spell.maximumHit();
         } else if (c.isNpc()) {
-            maxHit = c.getAsNpc().getDefinition().getMaxHit();
+            maxHit = c.getAsNpc().getCurrentMaxHit(CombatType.MAGIC);
         } else {
             maxHit = 1;
         }
@@ -314,7 +314,7 @@ export class DamageFormulas {
     public static calculateMaxRangedHit(entity: Mobile, includeSpecial?: boolean) {
         if (entity.isNpc()) {
             let npc = entity as unknown as NPC;
-            return npc.getCurrentDefinition().getMaxHit();
+            return npc.getCurrentMaxHit(CombatType.RANGED);
         }
 
         let player = entity as Player;

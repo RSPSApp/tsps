@@ -17,6 +17,8 @@ import { PluginManager } from "../../../plugins/PluginManager";
 import { CombatRange } from "../../../game/content/combat/CombatRange";
 import { Spell } from "../../../game/content/combat/magic/Spell";
 import { ArceuusItemSpells } from "../../../game/content/combat/magic/ArceuusItemSpells";
+import { Task } from "../../../game/task/Task";
+import { TaskManager } from "../../../game/task/TaskManager";
 
 export class MagicOnItemPacketListener {
   private static readonly LOW_ALCH_SPELL_ID = 1162;
@@ -31,6 +33,9 @@ export class MagicOnItemPacketListener {
   private static readonly TELEKINETIC_GRAB_LEVEL = 33;
   private static readonly TELEKINETIC_GRAB_XP = 43;
   private static readonly TELEKINETIC_GRAB_RANGE = 10;
+  private static readonly HUMAN_CASTTELEGRAB = 723;
+  /** Client cycles (20ms) from the cast until the projectile lands on the item. */
+  private static readonly TELEKINETIC_GRAB_LANDS_CYCLES = 80;
   private static readonly AIR_STAVES = new Set<number>([1381, 1397, 1405, 6562, 6563, 3053, 3054]);
   private static readonly FIRE_STAVES = new Set<number>([1387, 1393, 1401, 3053, 3054]);
 
@@ -145,26 +150,61 @@ export class MagicOnItemPacketListener {
     player.getSkillManager().stopSkillable();
 
     player.setPositionToFace(position);
-    player.performAnimation(new Animation(711));
+    player.performAnimation(new Animation(MagicOnItemPacketListener.HUMAN_CASTTELEGRAB));
     player.performGraphic(new Graphic(142, GraphicHeight.HIGH));
+    // OSRS has used one travel time whatever the distance since May 2024.
     new Projectile(
       player.getLocation().clone(),
       position.clone(),
       null,
       143,
       40,
-      80,
+      MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES,
       43,
       31,
       player.getPrivateArea()
     ).sendProjectile();
+    player.getPacketSender().sendGlobalGraphic(
+      new Graphic(144, MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES, GraphicHeight.LOW), position
+    );
     Sounds.sendSound(player, Sound.TELEKINETIC_GRAB);
+    player.getClickDelay().reset();
 
+    // The item comes away when the projectile lands, not on the cast; the grab doesn't stall the
+    // player, and anyone can still take the item first.
+    const listener = this;
+    TaskManager.submit(new class extends Task {
+      // Not keyed to the player, so walking off or clicking doesn't cancel a grab already flying.
+      constructor() { super(Math.ceil(MagicOnItemPacketListener.TELEKINETIC_GRAB_LANDS_CYCLES / 30), false); }
+      execute(): void {
+        this.stop();
+        listener.landGroundItemGrab(player, groundItemId, position);
+      }
+    });
+  }
+
+  /** The telegrab projectile has landed: the item is taken if it is still there. */
+  private landGroundItemGrab(player: any, groundItemId: number, position: Location): void {
+    if (!player.isRegistered?.() || player.getHitpoints?.() <= 0) {
+      return;
+    }
+    if (player.getLocation().getZ() !== position.getZ()) {
+      player.sendMessage("Your telegrab fizzles as you move too far away.");
+      return;
+    }
+    player.getSkillManager().addExperiences(Skill.MAGIC, MagicOnItemPacketListener.TELEKINETIC_GRAB_XP);
+    const groundItem = this.findVisibleGroundItem(player, groundItemId, position);
+    if (!groundItem) {
+      player.sendMessage("Too late - it's gone!");
+      return;
+    }
+    if (!this.canReceiveGroundItem(player, groundItemId)) {
+      player.getInventory().full();
+      return;
+    }
     ItemOnGroundManager.deregister(groundItem);
     player.getInventory().addItem(groundItem.getItem().clone());
     PluginManager.emitCustomEvent("magic:telekinetic-grab", { player, itemId: groundItemId, position });
-    player.getSkillManager().addExperiences(Skill.MAGIC, MagicOnItemPacketListener.TELEKINETIC_GRAB_XP);
-    player.getClickDelay().reset();
   }
 
   private isAlchSpell(spellId: number): boolean {

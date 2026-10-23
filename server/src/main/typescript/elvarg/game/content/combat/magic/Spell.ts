@@ -1,7 +1,5 @@
-import { Misc } from "../../../../util/Misc";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { Player } from "../../../entity/impl/player/Player";
-import { Equipment } from "../../../model/container/impl/Equipment";
 import { Item } from "../../../model/Item";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
 import { Skill } from "../../../model/Skill";
@@ -133,8 +131,13 @@ export abstract class Spell {
             return false;
         }
 
-        if (player.getEquipment().getItems()[Equipment.WEAPON_SLOT].getId() == 11791 && Misc.getRandom(7) == 1) {
-            player.sendMessage("Your Staff of the dead negated your runes for this cast.");
+        // Plugins (staff of the dead, Kodai wand) may negate the rune cost of a combat spell.
+        const runeSaving = { player, offensive: typeof (this as any).maximumHit === "function", saved: false, message: null as string | null };
+        PluginManager.emitCustomEvent("magic:rune-saving", runeSaving);
+        if (runeSaving.saved) {
+            if (runeSaving.message) {
+                player.sendMessage(runeSaving.message);
+            }
         } else {
             for (const item of itemsToConsume) {
                 player.getInventory().deletes(item);

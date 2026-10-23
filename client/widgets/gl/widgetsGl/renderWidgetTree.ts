@@ -161,12 +161,11 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
 
     // The widget currently being clicked (Client.clickedWidget) is drawn semi-transparent.
     // Reference: UserComparator5.drawInterface: if (var10 == Client.clickedWidget && !var10.isScrollBar) { var14 = 128; }
-    // Note: `clickedWidget` is a private TS field on OsrsClient but exists at runtime; read via `any`.
+    // Note: `widgetInteraction` is a private TS field on OsrsClient but exists at runtime; read via `any`.
     const osrsClient = (opts.game as any)?.osrsClient as any;
+    const clickedWidget = osrsClient?.widgetInteraction?.clickedWidget;
     const clickedWidgetUid: number | null =
-        typeof osrsClient?.clickedWidget?.uid === "number"
-            ? ((osrsClient.clickedWidget.uid | 0) as number)
-            : null;
+        typeof clickedWidget?.uid === "number" ? ((clickedWidget.uid | 0) as number) : null;
 
     // PERF: Validate all dirty layouts in one pass before rendering
     // This avoids per-widget ensureLayout calls during tree traversal
@@ -500,80 +499,6 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     // would reverse widget ops (e.g., minimap orbs).
                     candEntries = ([] as any[]).concat(candEntries, base);
                 } catch {}
-
-                // Add spell-target entry if spell is selected and this is an inventory item
-                if (ClientState.isSpellSelected) {
-                    const itemId = candidate.itemId ?? -1;
-                    const candidateGroupId = candidate.groupId ?? candidate.uid >>> 16;
-                    const isInventoryItem = itemId >= 0 || candidateGroupId === 149;
-
-                    if (isInventoryItem) {
-                        // Get item name for target label
-                        let itemName = candidate.name || candidate.text || "";
-                        if (!itemName && itemId >= 0) {
-                            // Try to get item name from definition
-                            try {
-                                const objLoader = (opts.game as any)?.osrsClient?.objLoader;
-                                const itemDef = objLoader?.load?.(itemId);
-                                itemName = itemDef?.name || `Item ${itemId}`;
-                            } catch {
-                                itemName = `Item ${itemId}`;
-                            }
-                        }
-
-                        const itemTarget = itemName ? `<col=ff9040>${itemName}` : "";
-                        // spell-on-item entry uses selectedSpellActionName as the option
-                        // and "selectedSpellName -> <col=ff9040>item" as target text.
-                        const spellAction = ClientState.selectedSpellActionName || "Cast";
-                        const spellName = ClientState.selectedSpellName || "";
-                        const spellTarget =
-                            spellName && itemTarget
-                                ? `${spellName} -> ${itemTarget}`
-                                : itemTarget || spellName;
-                        const spellEntry = {
-                            option: spellAction,
-                            target: spellTarget,
-                            widgetAction: {
-                                slot: candidate.childIndex ?? candidate.uid & 0xffff,
-                                itemId: itemId,
-                            },
-                        };
-
-                        const explicitExamine = Array.isArray(candEntries)
-                            ? candEntries.find(
-                                  (e: any) =>
-                                      String(e?.option ?? "")
-                                          .trim()
-                                          .toLowerCase() === "examine",
-                              )
-                            : undefined;
-
-                        // Insert spell entry at the beginning (before Use, Drop, etc.)
-                        candEntries = [
-                            spellEntry,
-                            ...candEntries.filter((e: any) => {
-                                const lower = String(e?.option ?? "")
-                                    .trim()
-                                    .toLowerCase();
-                                return lower !== "cancel" && lower !== "examine";
-                            }),
-                        ];
-                        // Preserve explicit Examine if present on the base menu.
-                        if (explicitExamine) {
-                            candEntries.push({
-                                option:
-                                    typeof explicitExamine.option === "string"
-                                        ? explicitExamine.option
-                                        : "Examine",
-                                target:
-                                    typeof explicitExamine.target === "string"
-                                        ? explicitExamine.target
-                                        : itemTarget,
-                            });
-                        }
-                        candEntries.push({ option: "Cancel" });
-                    }
-                }
 
                 const real = UI_hasContextMenuOption(candEntries);
                 if (real) {
@@ -2783,12 +2708,17 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                             } else if (distSq <= 4225) {
                                 const markerTex = tc.getByNameToken("mapmarker,1");
                                 if (markerTex) {
+                                    // Native drawSpriteOnMinimap: x - width / 2 in whole pixels,
+                                    // so an odd-width marker sits half a pixel right of centre.
                                     minimapRenderer.drawOverlay(
                                         markerTex,
                                         screen.x,
                                         screen.y,
                                         markerTex.w * minimapRenderScale,
                                         markerTex.h * minimapRenderScale,
+                                        0,
+                                        Math.floor(markerTex.w / 2) * minimapRenderScale,
+                                        Math.floor(markerTex.h / 2) * minimapRenderScale,
                                     );
                                 }
                             }
@@ -2831,6 +2761,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                                 flagScreen.y,
                                 flagTex.w * minimapRenderScale,
                                 flagTex.h * minimapRenderScale,
+                                0,
+                                Math.floor(flagTex.w / 2) * minimapRenderScale,
+                                Math.floor(flagTex.h / 2) * minimapRenderScale,
                             );
                         }
                     }

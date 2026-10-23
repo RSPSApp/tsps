@@ -171,7 +171,7 @@ test("lamp and torch source faces survive the untextured vertex path and emit HD
 test("WebGPU HD long views retain WebGL's 160-tile range and 48-tile detail cap", () => {
     let enabled = true;
     const renderer = { osrsClient: { renderDistance: 160, lodDistance: 160,
-        hdPlugin: { isEnabled: () => enabled } } } as any;
+        clientPlugins: { hdEnabled: () => enabled, gpuSettings: () => undefined } } } as any;
     assert.equal(resolveWebGPURenderDistance(renderer), 160);
     assert.equal(resolveWebGPULodDistance(renderer), 48);
     enabled = false;

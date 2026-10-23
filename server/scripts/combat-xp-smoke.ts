@@ -53,9 +53,9 @@ assert.equal(xp(run(CombatType.RANGED, [index(Skill.RANGED)], 5), Skill.RANGED),
     assert.equal(xp(grants, Skill.DEFENCE), 10);
 }
 
-// Hitpoints: 1.33 per damage (floor 4/3), on every combat style.
+// Hitpoints: 4/3 per damage, on every combat style; SkillManager keeps its tenths (1.3).
 assert.equal(xp(run(CombatType.MELEE, [index(Skill.ATTACK)], 3), Skill.HITPOINTS), 4);
-assert.equal(xp(run(CombatType.MELEE, [index(Skill.ATTACK)], 1), Skill.HITPOINTS), 1);
+assert.equal(xp(run(CombatType.MELEE, [index(Skill.ATTACK)], 1), Skill.HITPOINTS), 4 / 3);
 
 // Magic: 2 per damage.
 {

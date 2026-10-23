@@ -15,7 +15,9 @@ const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
 /** The chatbox prompt shows at most five options; longer lists page on the last one. */
 const PROMPT_PAGE_SIZE = 5;
-const CHARGE_COLOUR = "7F00FF";
+const CHARGE_COLOUR = "7f007f";
+// Charges left are spelled out: "Your ring of dueling has seven uses left." (rsprox captures).
+const COUNT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const FOUNTAIN_OF_RUNE_CHARGES = 6;
 const FOUNTAIN_OF_HEROES_CHARGES = 4;
 
@@ -55,7 +57,9 @@ function chargeMessage(piece, charges) {
   if (charges === 2) {
     return `Your ${piece.noun} has one ${unit} left.`;
   }
-  return `Your ${piece.noun} has ${charges - 1} ${unit}s left.`;
+  const left = charges - 1;
+  const count = piece.digits ? left : COUNT_WORDS[left] ?? left;
+  return `Your ${piece.noun} has ${count} ${unit}s left.`;
 }
 
 /** The container (inventory or equipment) and slot still holding this exact item. */
@@ -324,6 +328,7 @@ function rechargeAtFountain(event) {
 
 module.exports = {
   name: "Jewellery",
+  members: true,
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();

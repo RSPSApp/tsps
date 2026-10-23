@@ -73,4 +73,30 @@ assert.deepEqual(
     ["Eat", "Use", "Drop", "Cancel"],
 );
 
+// With an item or spell selected, an inventory item offers only the selection's entry.
+const selectFor = (actionName: string, name: string, targetMask: number) => {
+    ClientState.isSpellSelected = true;
+    ClientState.selectedSpellActionName = actionName;
+    ClientState.selectedSpellName = name;
+    ClientState.selectedSpellTargetMask = targetMask;
+};
+const logs = { itemId: 1511, name: "Logs", actions: [null, null, null, null, null, null, "Drop"], targetVerb: "Use" };
+selectFor("Use", "<col=ff9040>Knife", 0x3f);
+assert.deepEqual(deriveMenuEntriesForWidget(logs, false, allOpsVisible, noWidgetLookup), [
+    { option: "Use", target: "<col=ff9040>Knife -> <col=ff9040>Logs", opIndex: 0 },
+    { option: "Cancel" },
+]);
+selectFor("Cast", "<col=00ff00>High Level Alchemy</col>", 0x20);
+assert.equal(
+    deriveMenuEntriesForWidget(logs, false, allOpsVisible, noWidgetLookup)[0]?.target,
+    "<col=00ff00>High Level Alchemy</col> -> <col=ff9040>Logs",
+);
+// A spell that cannot land on items leaves the item's own menu alone.
+selectFor("Cast", "<col=00ff00>Wind Strike</col>", 0x06);
+assert.deepEqual(
+    deriveMenuEntriesForWidget(logs, false, allOpsVisible, noWidgetLookup).map((entry) => entry.option),
+    ["Use", "Drop", "Cancel"],
+);
+ClientState.clearSpellSelection();
+
 console.log("widget menu Use dispatch test passed");

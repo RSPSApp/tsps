@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type { DrawRange } from "../render/DrawRange";
 import { VertexBuffer } from "../render/buffer/VertexBuffer";
+import { playerInterpolation } from "../render/player/PlayerInterpolation";
 
 async function main(): Promise<void> {
     const playerShader = fs.readFileSync(
@@ -64,26 +65,45 @@ async function main(): Promise<void> {
     assert.equal(scaled.verticesX[0], 192, "missing scale uses the identity, 128");
     assert.equal(base.verticesX[0], 128, "posed interpolation leaves the rest model intact");
     const walkingRenderer = new PlayerRenderer({ osrsClient: {} } as any) as any;
-    const walkSeq = { frameIds: [1, 2], frameStep: -1, getFrameLength: () => 5 };
-    const loaders = { seqFrameLoader: { load: (id: number) => id === 1 ? start : end } };
-    const last = Model.copyAnimated(base, false, true);
-    walkingRenderer.applySingleSequenceToModel(last, walkSeq, 819, 1, loaders, 5);
-    assert.equal(last.verticesX[0], 128, "final frame blends into the first frame before wrapping");
-    const first = Model.copyAnimated(base, false, true);
-    walkingRenderer.applySingleSequenceToModel(first, walkSeq, 819, 0, loaders, 0);
-    assert.deepEqual(first.verticesX, last.verticesX, "the loop boundary does not snap the pose");
-    walkingRenderer.renderer.osrsClient = {
-        controlledPlayerServerId: 1,
-        playerEcs: {
-            getIndexForServerId: () => 0, getServerIdForIndex: () => 1,
-            isMoving: () => true, getAnimSeq: () => 808,
-            getAnimSeqId: () => -1, getAnimSeqDelay: () => 0,
-        },
-        playerAnimController: { getMovementSequenceState: () => ({ seqId: 819, frame: 0, frameCycle: 3 }) },
+    const walkSeq = {
+        frameIds: [1, 2], frameStep: -1, getFrameLength: () => 5,
+        isSkeletalSeq: () => false,
     };
-    assert.equal(walkingRenderer.getMovementFrameCycle(0, 819, 0), 3);
-    assert.equal(walkingRenderer.getMovementFrameCycle(1, 819, 0), 0, "remote actors retain cheap cached poses");
-    assert.equal(walkingRenderer.getMovementFrameCycle(0, 819, 1), 0, "do not blend a stale frame");
+    const loaders = { seqFrameLoader: { load: (id: number) => id === 1 ? start : end } };
+    let movement = { seqId: 819, frame: 1, frameCycle: 5, loopCounter: 0 };
+    let smoothingEnabled = true;
+    const walkingClient = {
+        controlledPlayerServerId: 1,
+        playerEcs: { getServerIdForIndex: (pid: number) => pid + 1 },
+        playerAnimController: {
+            getSequenceState: () => undefined,
+            getMovementSequenceState: () => movement,
+        },
+        clientPlugins: { smoothsPlayer: () => smoothingEnabled },
+        seqTypeLoader: { load: () => walkSeq },
+        ...loaders,
+    };
+    const sampleMovement = (pid: number, frame: number) =>
+        playerInterpolation(walkingClient as any, pid, 819, frame);
+    const last = Model.copyAnimated(base, false, true);
+    walkingRenderer.applySingleSequenceToModel(last, walkSeq, 819, 1, loaders, sampleMovement(0, 1));
+    assert.equal(last.verticesX[0], 128, "final frame blends into the first frame before wrapping");
+    movement = { ...movement, frame: 0, frameCycle: 0 };
+    const first = Model.copyAnimated(base, false, true);
+    walkingRenderer.applySingleSequenceToModel(first, walkSeq, 819, 0, loaders, sampleMovement(0, 0));
+    assert.deepEqual(first.verticesX, last.verticesX, "the loop boundary does not snap the pose");
+    movement = { ...movement, frameCycle: 3 };
+    for (const pid of [0, 1]) {
+        const walking = Model.copyAnimated(base, false, true);
+        walkingRenderer.applySingleSequenceToModel(walking, walkSeq, 819, 0, loaders, sampleMovement(pid, 0));
+        assert.equal(walking.verticesX[0], 188, "enabled smoothing blends local and remote players");
+    }
+    assert.equal(sampleMovement(0, 1), undefined, "do not blend a stale frame");
+    smoothingEnabled = false;
+    assert.equal(sampleMovement(0, 0), undefined, "disabled smoothing retains cached keyframe poses");
+    const unsmoothed = Model.copyAnimated(base, false, true);
+    walkingRenderer.applySingleSequenceToModel(unsmoothed, walkSeq, 819, 0, loaders, sampleMovement(0, 0));
+    assert.equal(unsmoothed.verticesX[0], 128);
 
 
     assert.equal(shouldUseUnanimatedIdlePlayer(200, true, false, false, 808, 808), false);

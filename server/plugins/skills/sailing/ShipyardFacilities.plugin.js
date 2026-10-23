@@ -80,6 +80,7 @@ function buildFacility(event) {
   player.performAnimation(new Animation(SEQ_BUILD));
   playSound(player, SOUND_BUILD);
   showHotspot(player, visit, boat, hotspot);
+  pluginApi.emitCustomEvent("sailing:facility-built", { player, boat, hotspot, facility });
 }
 
 /** A built facility's Modify, aboard in the shipyard: remove it, replace it, or leave it. */

@@ -106,6 +106,12 @@ export class Sailing {
         return boat && Sailing.instances.get(boat)?.player === player ? boat : undefined;
     }
 
+    /** Any live instance of this player's boat, aboard it or left while visiting a static ship. */
+    public static instanceFor(player: Player): Boat | undefined {
+        return Sailing.instanceAboard(player)
+            ?? Array.from(Sailing.instances).find(([, active]) => active.player === player)?.[0];
+    }
+
     /**
      * Boards the player's boat moored at `dockId`. Returns a message to show when they can't
      * (no boat here, or it has sunk), otherwise null.
@@ -217,7 +223,9 @@ export class Sailing {
      * position becomes their return point, in case the boat can't be restored.
      */
     public static onLogout(player: Player): void {
-        const instance = Sailing.instanceAboard(player);
+        // A player visiting a static ship has stepped off their own boat's deck without
+        // disposing it; log that boat out too so it cannot leak an instance.
+        const instance = Sailing.instanceFor(player);
         if (!instance) return;
         const boat = Sailing.activeBoat(player);
         if (boat) boat.location = Sailing.atSea(instance, Sailing.lastPortOf(boat));
@@ -310,7 +318,7 @@ export class Sailing {
         }
     }
 
-    private static returnLocation(player: Player): Location {
+    public static returnLocation(player: Player): Location {
         const point = player.getSailing().returnPoint;
         return point ? new Location(point.x, point.y, point.z) : GameConstants.DEFAULT_LOCATION.clone();
     }

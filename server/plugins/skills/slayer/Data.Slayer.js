@@ -11,6 +11,7 @@
  *   unlock a task needs, Mortimer's modifiers.
  * - slayer_task_sublist: the boss tasks behind the "Boss" task (subtable 1), by boss id.
  * - slayer_area: Konar's locations. slayer_unlock: the Rewards interface's unlocks (bit, cost).
+ * - slayer_modifiers: Mortimer's task modifiers and the Mortimer tasks each needs completed.
  * - NPC param 50 is the Slayer task id an NPC counts for; boss NPCs are named per boss task in
  *   slayer-masters.json, since the cache has no NPC-to-boss link.
  */
@@ -25,6 +26,12 @@ const NPC_BOSS_PARAM = 1361;
 const BOSS_SUBTABLE = 1;
 /** The "Boss" task's id. */
 const BOSS_TASK_ID = 98;
+/** Mortimer's master id (slayer_master_task.master_id, the slayer_master varbit). */
+const MORTIMER = 10;
+/** Mortimer tasks completed before he offers a third choice (the choice interface's script 9739). */
+const THIRD_CHOICE_TASKS = 50;
+/** slayer_modifiers ids. */
+const MODIFIER = { POINTS: 1, QUANTITY: 2, CLUES: 3, SUPERIOR_UNIQUES: 4, XP: 5 };
 
 let core = null;
 let data = null;
@@ -47,6 +54,21 @@ function readTable(name) {
 }
 
 const first = (values, fallback = null) => (Array.isArray(values) && values.length > 0 ? values[0] : fallback);
+
+/**
+ * Mortimer's modifiers on a slayer_master_task row: (id, min, max) triples. A negative range
+ * (quantity -15 to -30) is held as positive bounds with `negative` set, as the varbits hold it.
+ */
+function modifierRanges(values) {
+  const out = [];
+  for (let i = 0; values && i + 2 < values.length; i += 3) {
+    const [id, a, b] = [values[i], values[i + 1], values[i + 2]];
+    const negative = a < 0 || b < 0;
+    const [low, high] = [Math.abs(a), Math.abs(b)].sort((x, y) => x - y);
+    out.push({ id, min: low, max: high, negative });
+  }
+  return out;
+}
 
 /** [level, skill] pairs, as the cache stores them. */
 function pairs(values) {
@@ -87,7 +109,7 @@ function build() {
       max: first(row.max_amount, 0),
       areaRows: row.areas ?? [],
       unlockRow: first(row.task_unlock),
-      modifiers: row.modifier ?? [],
+      modifiers: modifierRanges(row.modifier),
     };
     if (!entry.task) continue;
     if (!masterTasks.has(masterId)) masterTasks.set(masterId, []);
@@ -131,6 +153,13 @@ function build() {
     unlockByBit.set(unlock.bit, unlock);
   }
 
+  /** Modifier id -> { id, name, requirement (Mortimer tasks completed) }. */
+  const modifiers = new Map();
+  for (const row of readTable("slayer_modifiers")) {
+    const id = first(row.id, 0);
+    if (id > 0) modifiers.set(id, { id, name: first(row.name, ""), requirement: first(row.requirement, 0) });
+  }
+
   const masters = new Map();
   const masterByName = new Map();
   for (const [id, master] of Object.entries(MASTERS_FILE.masters)) {
@@ -144,8 +173,8 @@ function build() {
   const taskLevels = taskSlayerLevels(namedTaskNpcs);
 
   return {
-    tasks, taskById, masterTasks, bosses, bossNames, namedTaskNpcs, areas, unlocks, unlockByBit, masters,
-    masterByName, taskLevels,
+    tasks, taskById, masterTasks, bosses, bossNames, namedTaskNpcs, areas, unlocks, unlockByBit, modifiers,
+    masters, masterByName, taskLevels,
   };
 }
 
@@ -248,5 +277,8 @@ module.exports = {
   taskQuests,
   inArea,
   BOSS_TASK_ID,
+  MORTIMER,
+  THIRD_CHOICE_TASKS,
+  MODIFIER,
   config: MASTERS_FILE,
 };

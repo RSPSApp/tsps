@@ -40,9 +40,10 @@ const discovered = relayWorldEntries("ws://127.0.0.1:8787", [], {
         { worldId: "toby", name: "TobyScape", ownerUsername: "toby", playerCount: 12 },
         { worldId: "alice" },
         { worldId: "invalid world", name: "Ignored" },
+        { worldId: "offline", name: "Offline", playerCount: 0, online: false, lastSeenAt: "2026-10-22T10:00:00.000Z" },
     ],
 });
-assert.deepEqual(discovered.map((world) => world.worldId), ["toby", "alice"]);
+assert.deepEqual(discovered.map((world) => world.worldId), ["toby", "alice"], "offline worlds are for the website only");
 assert.equal(discovered[0].transport, "webrtc");
 assert.equal(discovered[0].playerCount, 12);
 assert.equal(discovered[0].name, "TobyScape");

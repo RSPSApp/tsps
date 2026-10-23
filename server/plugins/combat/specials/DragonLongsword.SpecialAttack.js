@@ -19,7 +19,7 @@ module.exports = function registerDragonLongswordSpecialAttack(api) {
 
   api.registerCombatSpecial({
     id: "dragon_longsword",
-    itemIds: [ItemIdentifiers.DRAGON_LONGSWORD],
+    itemIds: [ItemIdentifiers.DRAGON_LONGSWORD, ItemIdentifiers.DRAGON_LONGSWORD_CR_],
     drainAmount: DRAIN,
     strengthMultiplier: DAMAGE_MULTIPLIER,
     accuracyMultiplier: 1,

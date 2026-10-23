@@ -6,21 +6,19 @@
  * Seer, the exiled-phase Fremenniks and the quest objects, the prose-condition answers and the
  * item hand-ins/consumption the wiki marks with stage directions.
  *
- * Stage varbit: 9459 "vikingexile" (varp 2595, bits 0-8). The cache's own consumers pin the
- * values used here: cache dbTable 0 row 55 ("The Fremennik Exiles", quest id 157) stores
- * endstate 130; the Rellekka sand pit/rockslide/boxes multilocs (4373/20091/20092) gain their
- * Search option at varbit 9459 = 15; the Mountain Camp geysers (20093/20094) gain Inspect at
- * 50; the Rellekka Fremennik Boat (37432) gains Travel at 81; the island cave (37433) changes
- * at 96; the exile meeting-place Brundt spawn (7318) shows at 35-65 and the longhall spawn
- * (3926) hides at 81-119 and shows again at 120-130 (NPC transforms keyed on 9459).
+ * Stage varbit: 9459 "vikingexile" (varp 2595, bits 0-8). Captured 1768.bin (revision
+ * 227.1) and RuneLite Quest Helper both pin the route values below; cache dbTable 0
+ * row 55 stores endstate 130. The sand pit/rockslide/boxes multilocs gain Search at 15,
+ * the geysers Inspect at 50, the boat Travel at 85 and the island cave changes at 95.
  *
- * Stages (varbit 9459): 1 started, 15 investigating (Freygerd/Reeso told, clue objects
- * searchable), 30 evidence handed to Freygerd, 35 exiled (Brundt south-east), 50 V's shield
- * component hunt (Brundt's explanation heard), 60 V's shield assembled, 62 shield handed to
- * Brundt, 66 kegs delivered (basilisk invasion), 67 invasion started, 80 invasion survived,
- * 81 board the boat, 85 Island of Stone, 86 door explained, 96 combination solved, 100 inside
- * Jormungand's Prison, 116 Jormungand defeated, 120 back in Rellekka for the celebration,
- * 130 complete (cache dbTable 0 row 55 endstate).
+ * Stages (varbit 9459): 5 started, 10 briefed, 15 investigating, 20 evidence handed to
+ * Freygerd, 25/30 Brundt's report, 35 exiled, 40 briefed, 50 V's shield hunt, 55 shield
+ * handed over, 60 kegs requested, 65 kegs delivered, 70/75/76 back in Rellekka, 77
+ * invasion, 80 defending the market, 85 boat and Island of Stone, 90 door explained, 95
+ * combination solved, 100 prison, 105 Typhor dead, 110 Jormungand phase, 115 Jormungand
+ * dead, 120 celebration, 125 finishing, 130 complete.
+ * The shared Brundt world spawns now use cache ids 9263/9266/9267; legacy ids are still
+ * accepted for old saves.
  *
  * Rewards per the OSRS Wiki: 2 Quest points, 50,000 Slayer, 50,000 Crafting and 30,000
  * Runecraft XP, V's shield, access to the Island of Stone, Basilisk Knights as a Slayer task,
@@ -31,19 +29,20 @@
  * and the quest DB row).
  *
  * Gaps / approximations:
- *  - The door combination lock uses the cache interface 622 (puzzle_vikingexile), which a
- *    quest plugin cannot drive; it is reimplemented as a Mastermind chatbox prompt (six runes,
- *    four slots, eight attempts, then the solution rolls over, as the wiki describes).
- *  - The Waterbirth Island Dungeon route (pet-rock floor buttons, rune-thrownaxe doors) is not
- *    simulated: during the shield hunt the dungeon's Cave entrances (8929/8930) teleport
- *    straight to Bardur's chamber, and the way back out is the real ladders or a teleport.
+ *  - The door combination lock opens the cache interface 622 (puzzle_vikingexile) and drives
+ *    its four rune selectors plus Go; wrong attempts and the solution persist across relog.
+ *  - The Waterbirth Island Dungeon route uses the cache entrances and captured landings; its
+ *    floor buttons hold the pet rock while the player stands on the other, and the rune
+ *    thrownaxe special knocks down the three door-supports. Lower ladders come from the
+ *    captured loc-teleport rows where present and the generic ladder mapper otherwise.
  *  - The market fight is a per-player instance in OSRS; here owner-only basilisk waves spawn in
- *    the Rellekka market. Point values are scaled to the 6-bit varbit 9466: a basilisk is worth
- *    9 and a Monstrous Basilisk 21 (63 = 100%), so a wave or two ends the fight instead of the
- *    wiki's 30 basilisk kills. Leaving the market mid-fight is not tracked.
- *  - The Jormungand's glare/binding attacks and Typhor's magic are not simulated; their
- *    conditions (C6zHQ6/DLVETM) are answered false and the combat shout random (Qz4JMN) is
- *    replayed as transcript text only.
+ *    the Rellekka market. Varbit 9466 uses the captured 0-31 scale (1 per basilisk, 3 per
+ *    Monstrous Basilisk), reaching 100% at 31. Leaving the market mid-fight is not tracked.
+ *  - Stage 110 is entered on the first Jormungand hit. The captured gaze warning drains
+ *    Magic/Defence when the player is not facing away; the stone bind and Typhor's magic stay
+ *    presentation-only (conditions C6zHQ6/DLVETM answered false).
+ *  - Captured camera/fade/shake beats use QuestScenes: Rellekka invasion, Island of Stone
+ *    arrival and the longhall celebration with Olaf (9274).
  *  - The Item Retrieval Service (qY-jfP, the island deathbank) has no interface hook here; the
  *    Collect dialogue is replayed but nothing opens.
  *  - "being-exiled-bjorn-eldgrim" and "being-exiled-any-other-fremennik-in-rellekka" are not
@@ -59,15 +58,26 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const {
     Bank,
     Equipment,
+    GameObject,
+    Item,
     ItemIdentifiers,
+    ItemOnGroundManager,
     Location,
     NpcDefinition,
     NpcIdentifiers,
+    MapObjects,
+    ObjectDefinition,
     ObjectIdentifiers,
+    ObjectManager,
     Skill,
+    Task,
+    TaskManager,
+    World,
   } = api.core;
   const { loadTranscripts, registerQuest, startTranscript } = require("../QuestRuntime");
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
+  const { createQuestScenes } = require("../QuestScenes");
+  const Scenes = createQuestScenes(api);
 
   const PAGE = "The Fremennik Exiles";
 
@@ -80,6 +90,11 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const BRUNDT_SOUTH_EAST = NpcIdentifiers.BRUNDT_THE_CHIEFTAIN_8; // 9266, the exile meeting place
   const BRUNDT_ISLAND_DOOR = NpcIdentifiers.BRUNDT_THE_CHIEFTAIN_9; // 9267
   const BRUNDT_ISLAND_PRISON = NpcIdentifiers.BRUNDT_THE_CHIEFTAIN_10; // 9268
+  // Stale npc-spawns.json entries predate the current cache; accepting them keeps
+  // existing worlds playable until the shared spawn data is corrected.
+  const LEGACY_BRUNDT_LONGHALL = 3926;
+  const LEGACY_BRUNDT_EXILED = 7318;
+  const LEGACY_BRUNDT_ISLAND_DOOR = 9269;
   const BRUNDT_NPC_IDS = new Set([
     BRUNDT_THE_CHIEFTAIN,
     NpcIdentifiers.BRUNDT_THE_CHIEFTAIN_2, // 8145
@@ -93,6 +108,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     BRUNDT_ISLAND_PRISON, // 9268
     NpcIdentifiers.BRUNDT_THE_CHIEFTAIN_11, // 9278
     NpcIdentifiers.BRUNDT_THE_CHIEFTAIN_12, // 9279
+    LEGACY_BRUNDT_LONGHALL,
+    LEGACY_BRUNDT_EXILED,
+    LEGACY_BRUNDT_ISLAND_DOOR,
   ]);
 
   const FREYGERD = NpcIdentifiers.FREYGERD_2; // 3942
@@ -200,10 +218,12 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const POLISHING_ROCK_ITEM = ItemIdentifiers.POLISHING_ROCK; // 24262
   const VS_SHIELD_ITEM = ItemIdentifiers.VS_SHIELD_2; // 24266, the wieldable shield
   const PET_ROCK_ITEM = ItemIdentifiers.PET_ROCK; // 3695
+  const PET_ROCK_ITEM_2 = ItemIdentifiers.PET_ROCK_2; // 16746
   const FREMENNIK_SHIELD_ITEM = ItemIdentifiers.FREMENNIK_SHIELD; // 3758
   const FREMENNIK_SHIELD_2_ITEM = ItemIdentifiers.FREMENNIK_SHIELD_2; // 16759
   const MOLTEN_GLASS_ITEM = ItemIdentifiers.MOLTEN_GLASS; // 1775
   const GLASSBLOWING_PIPE_ITEM = ItemIdentifiers.GLASSBLOWING_PIPE; // 1785
+  const HAMMER_ITEM = ItemIdentifiers.HAMMER; // 2347
   const LUNAR_BAR_ITEM = ItemIdentifiers.LUNAR_BAR; // 9077
   const LUNAR_ORE_ITEM = ItemIdentifiers.LUNAR_ORE; // 9076
   const ASTRAL_RUNE_ITEM = ItemIdentifiers.ASTRAL_RUNE; // 9075
@@ -259,10 +279,33 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     ObjectIdentifiers.CAVE_74, // 37409
     ObjectIdentifiers.CAVE_75, // 37410
   ]);
-  const WATERBIRTH_DUNGEON_IDS = new Set([
-    ObjectIdentifiers.CAVE_ENTRANCE_40, // 8929
-    ObjectIdentifiers.CAVE_ENTRANCE_41, // 8930
+  // Waterbirth dungeon route (cache map, rev 241): two unnamed floor buttons beside each
+  // circular gate. 8965 is the north button, 8964 the south one; the closed gates are
+  // 8960/8959/8958 from north to south and 8963 is the cache's actionless open leaf.
+  const WATERBIRTH_BUTTON_IDS = new Set([8965, 8964]);
+  const WATERBIRTH_BUTTON_X = 2490;
+  const WATERBIRTH_GATE_DOORS = new Map([
+    [8960, 10130],
+    [8959, 10146],
+    [8958, 10162],
   ]);
+  const WATERBIRTH_OPEN_GATE_ID = 8963;
+  // Door-support NPC barricades: 2250 north, 2253 middle/west, 2256 south.
+  const WATERBIRTH_SUPPORT_IDS = new Set([2250, 2253, 2256]);
+  const WATERBIRTH_SUPPORT_MIDDLE = 2253;
+  const WATERBIRTH_SUPPORT_TILE = new Location(2544, 10143, 0);
+  // Doors auto-close after 500 ticks (plugins/objects/Doors.plugin.js); pressure gates close
+  // once the buttons are released, with a short grace for walking through.
+  const WATERBIRTH_GATE_CLOSE_TICKS = 500;
+  const WATERBIRTH_BUTTON_RELEASE_TICKS = 5;
+  const WATERBIRTH_SUPPORT_RANGE = 4;
+  const WATERBIRTH_SUPPORT_RESPAWN_TICKS = 25; // cache NpcDefinition respawn; door restore is inferred
+  const WATERBIRTH_CENTRAL_DOOR_ID = 8967;
+  const WATERBIRTH_CENTRAL_DOOR_TILES = [
+    new Location(2545, 10141, 0),
+    new Location(2543, 10143, 0),
+    new Location(2545, 10145, 0),
+  ];
   // Nameless multiloc parents placed in the map; forPlayer resolves them to the 37391+ ids.
   const SAND_PIT_PARENT = 4373;
   const ROCKSLIDE_PARENT = 20091;
@@ -277,12 +320,28 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     ObjectIdentifiers.ANVIL, // 2031
     ObjectIdentifiers.AN_EXPERIMENTAL_ANVIL, // 2672
   ]);
+  // Shipped rev241 Varrock/Lumbridge anvils and furnaces use these; quest objects keep
+  // their canonical cache names, so ordinary smithing still falls through below.
+  const CANONICAL_ANVIL_ID = 2097;
+  const CANONICAL_FURNACE_ID = 24009;
   const FURNACE_IDS = new Set([
     ObjectIdentifiers.FURNACE, // 2030
     ObjectIdentifiers.FURNACE_2, // 2966
     ObjectIdentifiers.FURNACE_3, // 3294
     ObjectIdentifiers.SMALL_FURNACE, // 3994
   ]);
+
+  function objectName(event) {
+    return event.definition?.getName?.() ?? ObjectDefinition.forId(event.objectId)?.getName?.() ?? "";
+  }
+
+  function isAnvil(event) {
+    return ANVIL_IDS.has(event.objectId) || event.objectId === CANONICAL_ANVIL_ID || objectName(event) === "Anvil";
+  }
+
+  function isFurnace(event) {
+    return FURNACE_IDS.has(event.objectId) || event.objectId === CANONICAL_FURNACE_ID || objectName(event) === "Furnace";
+  }
 
   // ==========================================================================
   // Varbits / stages / attributes
@@ -304,28 +363,54 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const VARBIT_SHIELD_GIVEN = 9471;
   const VARBIT_HELM_UNLOCK = 9472;
 
-  const STAGE_STARTED = 1;
+  // Captured 1768.bin varbit 9459 route, cross-checked with RuneLite Quest Helper.
+  const STAGE_STARTED = 5;
+  const STAGE_BRIEFED = 10;
   const STAGE_INVESTIGATING = 15;
-  const STAGE_REPORTED = 30;
+  const STAGE_REPORTED = 20;
+  const STAGE_REPORT_ACK = 25;
+  const STAGE_REPORT_EXPLAINED = 30;
   const STAGE_EXILED = 35;
+  const STAGE_EXILED_BRIEFED = 40;
   const STAGE_COMPONENTS = 50;
-  const STAGE_SHIELD_MADE = 60;
-  const STAGE_SHIELD_GIVEN = 62;
-  const STAGE_MARKET = 66;
-  const STAGE_MARKET_FIGHT = 67;
-  const STAGE_MARKET_DONE = 80;
-  const STAGE_BOAT = 81;
+  const STAGE_SHIELD_MADE = 50;
+  const STAGE_SHIELD_GIVEN = 55;
+  const STAGE_KEGS_REQUESTED = 60;
+  const STAGE_KEGS_DRUNK = 65;
+  const STAGE_MARKET = 70;
+  const STAGE_MARKET_FIGHT = 77;
+  const STAGE_INVASION = 80;
+  const STAGE_BOAT = 85;
+  const STAGE_MARKET_DONE = STAGE_BOAT;
   const STAGE_ISLAND = 85;
-  const STAGE_DOOR_TOLD = 86;
-  const STAGE_DOOR_OPEN = 96;
+  const STAGE_DOOR_TOLD = 90;
+  const STAGE_DOOR_OPEN = 95;
   const STAGE_PRISON = 100;
-  const STAGE_JORMUNGAND_DEAD = 116;
+  const STAGE_TYPHOR_DEAD = 105;
+  const STAGE_JORMUNGAND_PHASE = 110;
+  const STAGE_JORMUNGAND_DEAD = 115;
   const STAGE_CELEBRATION = 120;
+  const STAGE_FINISHING = 125;
   const STAGE_COMPLETE = 130;
 
-  const BASILISK_POINTS = 9;
-  const MONSTROUS_POINTS = 21;
-  const BASILISK_TARGET = 63;
+  // varbit 9466 is the 0-100% invasion counter stored as 0-31; capture ends at 31.
+  const BASILISK_POINTS = 1;
+  const MONSTROUS_POINTS = 3;
+  const BASILISK_TARGET = 31;
+  const SECOND_KEG_LINE = "The chieftain quickly drinks the second keg and stumbles off.";
+  const SECOND_KEG_STEP_ID = "F4atZx";
+  const KEG_TAIL_VARIANT = "making-v-s-shield-making-the-shield-brundt-with-v-s-shield-without-two-kegs-of-beer-bringing-the-kegs-afterwards";
+
+  const SCHEMA_ATTRIBUTE = "the-fremennik-exiles:schema";
+  const SCHEMA_VERSION = 1;
+  const LOCK_GROUP = 622;
+  const LOCK_TARGET_UID = (164 << 16) | 16;
+  const LOCK_SLOT_BUTTONS = [8, 15, 21, 27];
+  const LOCK_GO_BUTTON = (LOCK_GROUP << 16) | 33;
+  const LOCK_CLOSE_BUTTON = (LOCK_GROUP << 16) | 2;
+  const LOCK_VARBIT_FIRST_SLOT = 9477;
+  const LOCK_VARBIT_FEEDBACK_FIRST = 9482;
+  const LOCK_VARBIT_ROWS_DONE = 9481;
 
   const LETTER_READ_ATTRIBUTE = "quest.the_fremennik_exiles.letter-read";
   const FREYGERD_TOLD_ATTRIBUTE = "quest.the_fremennik_exiles.freygerd-told";
@@ -353,7 +438,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   // Tiles (checked walkable against the cache map).
   const WATERBIRTH_LANDING = new Location(2545, 3760, 0);
   const RELLEKKA_JARVALD_PIER = new Location(2641, 3709, 0);
-  const BARDUR_LANDING = new Location(1849, 4390, 1);
   const RELLEKKA_MARKET_TILES = [
     new Location(2660, 3648, 0),
     new Location(2665, 3652, 0),
@@ -368,6 +452,16 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   const LONGHALL_LANDING = new Location(2659, 3665, 0);
   const RELLEKKA_PORT = new Location(2625, 3692, 0);
   const ISLAND_LANDING = new Location(2470, 4010, 0);
+
+  const INVASION_CAMERA = [[2659, 3665, 600], [2659, 3670, 100]];
+  const INVASION_CAMERA_TWO = [[2655, 3670, 600], [2659, 3675, 100]];
+  const INVASION_CAMERA_THREE = [[2659, 3675, 600], [2659, 3669, 100]];
+  const CELEBRATION_CAMERA = [[2659, 3671, 700], [2659, 3685, 200]];
+  const CELEBRATION_CAMERA_TWO = [[2659, 3671, 700], [2659, 3674, 200]];
+  const BALLAD_SINGER_ID = NpcIdentifiers.OLAF_THE_BARD_2; // 9274 during the celebration
+  const BALLAD_SINGER_TILE = { x: 2659, y: 3683 };
+  const CELEBRATION_START = new WeakSet();
+  const JORM_PHASE_STARTED = new WeakSet();
 
   const RUNE_NAMES = ["Air", "Water", "Earth", "Fire", "Astral", "Cosmic"];
   const PUZZLE_SLOTS = 4;
@@ -398,8 +492,37 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function setStage(player, value) {
     if (quest.getStage(player) === value) return;
     quest.setStage(player, value);
+    player.setAttribute(SCHEMA_ATTRIBUTE, SCHEMA_VERSION);
     syncVarbits(player);
     syncQuestNpcs(player);
+  }
+
+  /** Old saves used 1-130 values with several moved milestones. */
+  function migrateStage(stage) {
+    if (stage <= 0) return 0;
+    if (stage <= 14) return STAGE_STARTED;
+    if (stage <= 29) return STAGE_INVESTIGATING;
+    if (stage <= 34) return STAGE_REPORTED;
+    if (stage <= 49) return STAGE_EXILED;
+    if (stage <= 60) return STAGE_COMPONENTS;
+    if (stage <= 65) return STAGE_SHIELD_GIVEN;
+    if (stage <= 79) return STAGE_MARKET;
+    if (stage === 80) return STAGE_BOAT; // legacy 80 meant the invasion was survived
+    if (stage <= 85) return STAGE_BOAT;
+    if (stage <= 95) return STAGE_DOOR_TOLD;
+    if (stage <= 99) return STAGE_DOOR_OPEN;
+    if (stage <= 115) return STAGE_PRISON;
+    if (stage <= 119) return STAGE_JORMUNGAND_DEAD;
+    if (stage <= 129) return STAGE_CELEBRATION;
+    return STAGE_COMPLETE;
+  }
+
+  function migrateSave(player) {
+    if ((Number(player.getAttribute(SCHEMA_ATTRIBUTE)) || 0) >= SCHEMA_VERSION) return;
+    const stage = quest.getStage(player);
+    const migrated = migrateStage(stage);
+    if (migrated !== stage) quest.setStage(player, migrated);
+    player.setAttribute(SCHEMA_ATTRIBUTE, SCHEMA_VERSION);
   }
 
   function hasItem(player, itemId, amount = 1) {
@@ -460,7 +583,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function meetsRequirements(player) {
     const skills = player.getSkillManager();
     return (
-      hasQuestCompleted(player, QUEST_KEYS.fremennik_trials) &&
       hasQuestCompleted(player, QUEST_KEYS.the_fremennik_isles) &&
       hasQuestCompleted(player, QUEST_KEYS.lunar_diplomacy) &&
       hasQuestCompleted(player, QUEST_KEYS.mountain_daughter) &&
@@ -469,6 +591,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       skills.getMaxLevel(Skill.SLAYER) >= 60 &&
       skills.getMaxLevel(Skill.SMITHING) >= 60 &&
       skills.getMaxLevel(Skill.FISHING) >= 60 &&
+      skills.getMaxLevel(Skill.MINING) >= 60 &&
       skills.getMaxLevel(Skill.RUNECRAFTING) >= 55
     );
   }
@@ -622,6 +745,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   function handleLogin({ player }) {
+    migrateSave(player);
     syncVarbits(player);
     syncQuestNpcs(player);
   }
@@ -635,6 +759,23 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (event?.key !== "the_fremennik_exiles" || !event.player) return;
     syncVarbits(event.player);
     syncQuestNpcs(event.player);
+  }
+
+  function handleLogout({ player }) {
+    Scenes.cancel(player);
+    Scenes.closeFade(player);
+    Scenes.controls(player, false);
+    player.getPacketSender().sendCameraReset();
+    CELEBRATION_START.delete(player);
+    JORM_PHASE_STARTED.delete(player);
+    const tracked = trackedNpcs.get(player);
+    if (tracked) {
+      for (const npc of tracked.values()) {
+        if (npc?.isRegistered?.()) api.removeNpc(npc);
+      }
+      trackedNpcs.delete(player);
+    }
+    clearMarketNpcs(player);
   }
 
   // ==========================================================================
@@ -671,6 +812,14 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     syncTracked(player, "askeladden", isExiled(player)
       ? { id: ASKELADDEN, x: 2663, y: 3654, z: 0, wanderRadius: 0 }
       : null);
+    // Fossegrimen has no world spawn either; the sigil hand-in needs her at the lake.
+    syncTracked(player, "fossegrimen", isExiled(player) && stage >= STAGE_COMPONENTS
+      ? { id: FOSSEGRIMEN, x: 2626, y: 3598, z: 0, wanderRadius: 0 }
+      : null);
+    // The captured celebration singer stands in the longhall while the ballad plays.
+    syncTracked(player, "ballad-singer", stage >= STAGE_CELEBRATION && stage < STAGE_COMPLETE
+      ? { id: BALLAD_SINGER_ID, ...BALLAD_SINGER_TILE, z: 0, wanderRadius: 0 }
+      : null);
     if (stage >= STAGE_MARKET_FIGHT && stage < STAGE_MARKET_DONE && !marketWaveAlive(player)) {
       spawnMarketWave(player);
     }
@@ -693,7 +842,49 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     syncTracked(player, "vritra", null);
     syncTracked(player, "typhor", null);
     // 9289 is the non-attackable Jormungand; 9291 carries the Attack option.
-    syncTracked(player, "jormungand", { id: NpcIdentifiers.THE_JORMUNGAND_3, ...PRISON_JORMUNGAND, z: 0, wanderRadius: 0 });
+    const jorm = syncTracked(player, "jormungand", { id: NpcIdentifiers.THE_JORMUNGAND_3, ...PRISON_JORMUNGAND, z: 0, wanderRadius: 0 });
+    startJormPhase(player, jorm);
+  }
+
+  /**
+   * Captured Jormungand phase: his gaze warns, then drains combat stats unless the player
+   * faces away. The stone bind is left to the base combat/area presentation.
+   */
+  function startJormPhase(player, jorm) {
+    if (!jorm || JORM_PHASE_STARTED.has(player)) return;
+    JORM_PHASE_STARTED.add(player);
+    Scenes.later(player, 15, () => gazeAt(player, jorm));
+    Scenes.later(player, 45, () => gazeAt(player, jorm));
+  }
+
+  function gazeAt(player, jorm) {
+    if (stageOf(player) < STAGE_JORMUNGAND_PHASE || stageOf(player) >= STAGE_JORMUNGAND_DEAD) return;
+    if (!jorm?.isRegistered?.() || !tracked(player, "jormungand")) return;
+    player.sendMessage("<col=ef1020>The Jormungand gazes upon you!</col>");
+    player.sendMessage("Brundt the Chieftain|Don't look at him Dalkar!");
+    if (facingAwayFrom(player, jorm)) {
+      player.sendMessage("<col=06600c>You avoid the gaze of the Jormungand!</col>");
+      return;
+    }
+    player.sendMessage("<col=ef1020>The gaze of the Jormungand drains you!</col>");
+    const skills = player.getSkillManager();
+    for (const skill of [Skill.MAGIC, Skill.DEFENCE]) {
+      const current = skills.getCurrentLevel(skill);
+      skills.setCurrentLevelCombat?.(skill, Math.max(1, current - Math.max(1, Math.floor(current * 0.05))));
+    }
+  }
+
+  /** True when the player's facing vector points away from the Jormungand. */
+  function facingAwayFrom(player, npc) {
+    const face = player.getPositionToFace?.();
+    const from = player.getLocation?.();
+    const to = npc.getLocation?.();
+    if (!face || !from || !to) return false;
+    const fx = face.getX?.() - from.getX?.();
+    const fy = face.getY?.() - from.getY?.();
+    const tx = to.getX?.() - from.getX?.();
+    const ty = to.getY?.() - from.getY?.();
+    return fx * tx + fy * ty < 0;
   }
 
   function clearMarketNpcs(player) {
@@ -731,8 +922,25 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function startMarketFight(player) {
     setMarketStarted(player, true);
     setStage(player, STAGE_MARKET_FIGHT);
+    playInvasionScene(player);
     spawnMarketWave(player);
+    setStage(player, STAGE_INVASION);
     player.sendMessage("Basilisks pour into the Rellekka market!");
+  }
+
+  /** Captured 25189/25217-25765: fade, Rellekka camera frames, then reset. */
+  function playInvasionScene(player) {
+    Scenes.fade(player, true);
+    Scenes.controls(player, true, true);
+    Scenes.later(player, 2, () => Scenes.camera(player, INVASION_CAMERA[0], INVASION_CAMERA[1], { rate: 0, rate2: 100 }));
+    Scenes.later(player, 4, () => Scenes.camera(player, INVASION_CAMERA_TWO[0], INVASION_CAMERA_TWO[1], { rate: 1, rate2: 50 }));
+    Scenes.later(player, 6, () => Scenes.camera(player, INVASION_CAMERA_THREE[0], INVASION_CAMERA_THREE[1], { rate: 1, rate2: 50 }));
+    Scenes.later(player, 8, () => Scenes.fade(player, false));
+    Scenes.later(player, 11, () => {
+      player.getPacketSender().sendCameraReset();
+      Scenes.closeFade(player);
+      Scenes.controls(player, false);
+    });
   }
 
   // ==========================================================================
@@ -765,6 +973,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
 
   function freygerdVariants(player, stage) {
     if (stage < STAGE_STARTED || stage >= STAGE_EXILED) return null;
+    if (stage < STAGE_BRIEFED) setStage(player, STAGE_BRIEFED);
     if (stage < STAGE_INVESTIGATING) {
       setStage(player, STAGE_INVESTIGATING);
       return "investigating-the-disturbance-freygerd";
@@ -788,6 +997,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
 
   function reesoVariants(player, stage) {
     if (stage < STAGE_STARTED || stage >= STAGE_EXILED) return null;
+    if (stage < STAGE_BRIEFED) setStage(player, STAGE_BRIEFED);
     if (stage < STAGE_INVESTIGATING) {
       setStage(player, STAGE_INVESTIGATING);
       return "investigating-the-disturbance-reeso";
@@ -878,9 +1088,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     const stage = stageOf(player);
 
     if (BRUNDT_NPC_IDS.has(npcId)) {
-      if (npcId === BRUNDT_LONGHALL && stage <= 0 &&
-          hasQuestCompleted(player, QUEST_KEYS.lunar_diplomacy) &&
-          !hasItem(player, ItemIdentifiers.SEAL_OF_PASSAGE)) return false;
       const choice = brundtVariant(player, npcId, stage);
       const variant = typeof choice === "string" ? choice : choice?.variant;
       if (!variant) return false;
@@ -948,18 +1155,36 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return true;
     }
 
+    if (npcId === FOSSEGRIMEN) {
+      if (!isExiled(player) || stage < STAGE_COMPONENTS) return false;
+      event.handled = true;
+      api.emitCustomEvent("npc-dialogue:start", {
+        player,
+        npc: event.npc,
+        npcId,
+        variant: "making-v-s-shield-v-sigil-fossegrimen",
+      });
+      return true;
+    }
+
     return false;
   }
 
   function brundtVariant(player, npcId, stage) {
+    if (stage === STAGE_KEGS_DRUNK &&
+        (npcId === BRUNDT_SOUTH_EAST || npcId === BRUNDT_LONGHALL)) {
+      return { variant: KEG_TAIL_VARIANT, select: () => kegTailSteps() };
+    }
     if (npcId === BRUNDT_SOUTH_EAST) {
       if (stage < STAGE_EXILED || stage >= STAGE_MARKET) return null;
-      if (stage < STAGE_COMPONENTS) {
-        setStage(player, STAGE_COMPONENTS);
+      if (stage < STAGE_EXILED_BRIEFED) {
+        setStage(player, STAGE_EXILED_BRIEFED);
         return "undoing-the-exilement-brundt";
       }
-      if (stage < STAGE_SHIELD_MADE) return "undoing-the-exilement-brundt-again";
-      if (stage === STAGE_SHIELD_MADE) {
+      if (stage < STAGE_COMPONENTS) {
+        return "undoing-the-exilement-brundt-again";
+      }
+      if (stage < STAGE_SHIELD_GIVEN) {
         if (hasVsShieldInBank(player)) {
           return "making-v-s-shield-making-the-shield-brundt-with-v-s-shield-in-the-bank";
         }
@@ -972,7 +1197,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
         // resolves standalone, so drop them and let the beer hand-over play.
         return {
           variant: "making-v-s-shield-making-the-shield-brundt-with-v-s-shield-and-two-kegs-of-beer",
-          select: (steps) => (Array.isArray(steps) ? steps.filter((step) => step.type !== "jump") : steps),
+          select: (steps) => [
+            ...(Array.isArray(steps) ? steps.filter((step) => step.type !== "jump") : []),
+            ...kegTailSteps(),
+          ],
         };
       }
       return "making-v-s-shield-making-the-shield-brundt-with-v-s-shield-without-two-kegs-of-beer-bringing-the-kegs-afterwards";
@@ -985,7 +1213,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       }
       if (stage < STAGE_DOOR_OPEN) return "island-of-stone-brundt-brundt-again";
       if (stage === STAGE_DOOR_OPEN) {
-        setStage(player, STAGE_DOOR_OPEN + 1);
         return "island-of-stone-brundt-unlocking-the-door";
       }
       return "island-of-stone-brundt-again-after-unlocking-the-door";
@@ -996,6 +1223,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     }
     // The longhall Brundt.
     if (stage <= 0) {
+      // Let Lunar Diplomacy reclaim a lost Seal of Passage before offering this quest.
+      if (npcId === BRUNDT_LONGHALL &&
+          hasQuestCompleted(player, QUEST_KEYS.lunar_diplomacy) &&
+          !hasItemAnywhere(player, ItemIdentifiers.SEAL_OF_PASSAGE)) return null;
       if (!meetsRequirements(player)) return null;
       return "starting-out-brundt-the-chieftain";
     }
@@ -1021,6 +1252,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return "longhall-celebration";
     }
     if (stage >= STAGE_COMPLETE) {
+      // Yield only when Lunar needs to replace a lost Seal; otherwise keep the
+      // Exiles postquest page on Brundt.
+      if (hasQuestCompleted(player, QUEST_KEYS.lunar_diplomacy) &&
+          !hasItemAnywhere(player, ItemIdentifiers.SEAL_OF_PASSAGE)) return null;
       return "standard-dialogue-after-the-fremennik-exiles";
     }
     return null;
@@ -1137,6 +1372,14 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   // Transcript action/message handler
   // ==========================================================================
 
+  function finishCelebration(player) {
+    if (quest.isComplete(player)) return;
+    if (stageOf(player) < STAGE_FINISHING) setStage(player, STAGE_FINISHING);
+    quest.complete(player);
+    player.getPacketSender().sendCameraReset();
+    Scenes.controls(player, false);
+  }
+
   function handleAction(event) {
     const { player } = event;
     if (!player) return;
@@ -1212,9 +1455,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
         return;
       case "mSB9hO":
         if (!shieldMade(player)) addItem(player, VS_SHIELD_ITEM);
+        if (stageOf(player) >= STAGE_MARKET && stageOf(player) < STAGE_MARKET_FIGHT) setStage(player, 76);
         return;
       case "M7J2_U":
-        if (stageOf(player) === STAGE_MARKET) startMarketFight(player);
+        if (stageOf(player) >= STAGE_MARKET && stageOf(player) < STAGE_MARKET_FIGHT) startMarketFight(player);
         return;
       case "GciOqM":
         clearMarketNpcs(player);
@@ -1229,7 +1473,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
         player.getPacketSender().sendVarbit(VARBIT_BALLAD, 1);
         return;
       case "2pgrdA":
-        if (!quest.isComplete(player)) quest.complete(player);
+        finishCelebration(player);
+        return;
+      case SECOND_KEG_STEP_ID:
+        if (stageOf(player) === STAGE_KEGS_DRUNK) setStage(player, STAGE_MARKET);
         return;
       default:
         return;
@@ -1281,6 +1528,14 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   function collectPolishingRock(player) {
+    if (!hasGlovesEquipped(player)) {
+      player.sendMessage("The geyser is too hot to reach into without ice gloves.");
+      return;
+    }
+    if (!hasFishingRod(player)) {
+      player.sendMessage("You need a fishing rod to reach into the geyser.");
+      return;
+    }
     if (rockGone(player)) {
       player.setAttribute(ROCK_GONE_ATTRIBUTE, false);
       player.getPacketSender().sendVarbit(VARBIT_ROCK_GONE, 0);
@@ -1291,6 +1546,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   function makeShield(player) {
+    if (!hasItem(player, GLASSBLOWING_PIPE_ITEM)) {
+      player.sendMessage("You need a glassblowing pipe to work the lunar glass.");
+      return;
+    }
     if (!hasItem(player, FREMENNIK_SHIELD_ITEM) && !hasItem(player, FREMENNIK_SHIELD_2_ITEM)) return;
     if (!takeAnyItem(player, FREMENNIK_SHIELD_ITEMS)) return;
     takeItem(player, LUNAR_GLASS_ITEM);
@@ -1298,7 +1557,6 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     takeItem(player, V_SIGIL_E_ITEM);
     if (!hasItem(player, PET_ROCK_ITEM)) addItem(player, PET_ROCK_ITEM);
     addItem(player, VS_SHIELD_ITEM);
-    setStage(player, STAGE_SHIELD_MADE);
   }
 
   function handShieldToBrundt(player) {
@@ -1309,22 +1567,40 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   function drinkKegs(player) {
-    if (kegCount(player) >= 2) {
-      let remaining = 2;
-      for (const itemId of KEG_ITEMS) {
-        const take = Math.min(remaining, player.getInventory().getAmount(itemId));
-        if (take > 0) {
-          player.getInventory().deleteNumber(itemId, take);
-          remaining -= take;
-        }
+    if (stageOf(player) !== STAGE_KEGS_REQUESTED || kegCount(player) < 2) return;
+    let remaining = 2;
+    for (const itemId of KEG_ITEMS) {
+      const take = Math.min(remaining, player.getInventory().getAmount(itemId));
+      if (take > 0) {
+        player.getInventory().deleteNumber(itemId, take);
+        remaining -= take;
       }
-      setStage(player, STAGE_MARKET);
     }
+    setStage(player, STAGE_KEGS_DRUNK);
+  }
+
+  /** The shipped "bringing the kegs afterwards" branch from its Hey! tail. */
+  function kegTailSteps() {
+    const record = loadTranscripts(api)?.[PAGE];
+    const raw = record?.variants?.[KEG_TAIL_VARIANT] ?? [];
+    const start = raw.findIndex((step) => step?.player === "Hey!");
+    if (start < 0) return [];
+    return raw.slice(start).map((step) =>
+      step?.id === SECOND_KEG_STEP_ID
+        ? { ...step, type: "message", text: SECOND_KEG_LINE, box: { statement: true } }
+        : step
+    );
   }
 
   // ==========================================================================
   // Transcript choice handler
   // ==========================================================================
+
+  function finishShieldQuestions(player) {
+    const asked = [SHIELD_INFO_ATTRIBUTE, GLASS_INFO_ATTRIBUTE, ROCK_INFO_ATTRIBUTE, SIGIL_INFO_ATTRIBUTE]
+      .every((key) => Number(player.getAttribute(key)) >= 1);
+    if (asked && stageOf(player) === STAGE_EXILED_BRIEFED) setStage(player, STAGE_COMPONENTS);
+  }
 
   function handleChoice(event) {
     const { player, option } = event;
@@ -1348,21 +1624,25 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       if (option === "Where can I find a Fremennik Shield?") {
         player.setAttribute(SHIELD_INFO_ATTRIBUTE, 1);
         player.getPacketSender().sendVarbit(VARBIT_SHIELD_INFO, 1);
+        finishShieldQuestions(player);
         return;
       }
       if (option === "Where can I get Lunar Glass?") {
         player.setAttribute(GLASS_INFO_ATTRIBUTE, Math.max(1, Number(player.getAttribute(GLASS_INFO_ATTRIBUTE)) || 0));
         player.getPacketSender().sendVarbit(VARBIT_GLASS_INFO, Number(player.getAttribute(GLASS_INFO_ATTRIBUTE)) || 1);
+        finishShieldQuestions(player);
         return;
       }
       if (option === "How do I make the Polishing Rock?") {
         player.setAttribute(ROCK_INFO_ATTRIBUTE, Math.max(1, Number(player.getAttribute(ROCK_INFO_ATTRIBUTE)) || 0));
         player.getPacketSender().sendVarbit(VARBIT_ROCK_INFO, Number(player.getAttribute(ROCK_INFO_ATTRIBUTE)) || 1);
+        finishShieldQuestions(player);
         return;
       }
       if (option === "How do I make V's Sigil?") {
         player.setAttribute(SIGIL_INFO_ATTRIBUTE, 1);
         player.getPacketSender().sendVarbit(VARBIT_SIGIL_INFO, 1);
+        finishShieldQuestions(player);
         return;
       }
       return;
@@ -1457,6 +1737,48 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return;
     }
 
+    if (BRUNDT_NPC_IDS.has(npcId) && text.includes("Freygerd and Reeso run the sandpit")) {
+      if (stageOf(player) < STAGE_BRIEFED) setStage(player, STAGE_BRIEFED);
+      return;
+    }
+
+    if (BRUNDT_NPC_IDS.has(npcId) && stageOf(player) === STAGE_REPORTED && text.startsWith("Dalkar, I'm glad")) {
+      setStage(player, STAGE_REPORT_ACK);
+      return;
+    }
+
+    if (BRUNDT_NPC_IDS.has(npcId) && stageOf(player) === STAGE_REPORT_ACK && text.startsWith("Exactly. Now the Moon Clan")) {
+      setStage(player, STAGE_REPORT_EXPLAINED);
+      return;
+    }
+
+    if (BRUNDT_NPC_IDS.has(npcId) && stageOf(player) === STAGE_EXILED && text.startsWith("Keep in mind, now that you've been exiled")) {
+      setStage(player, STAGE_EXILED_BRIEFED);
+      return;
+    }
+
+    if (BRUNDT_NPC_IDS.has(npcId) && stageOf(player) === STAGE_EXILED_BRIEFED && text.startsWith("Then you have the Polishing Rock")) {
+      setStage(player, STAGE_COMPONENTS);
+      return;
+    }
+
+    if (BRUNDT_NPC_IDS.has(npcId) && stageOf(player) === STAGE_MARKET && text.startsWith("Good to see you")) {
+      setStage(player, 75);
+      return;
+    }
+
+    if (BRUNDT_NPC_IDS.has(npcId) && text.startsWith("Return to me with two beers")) {
+      if (stageOf(player) >= STAGE_SHIELD_GIVEN && stageOf(player) < STAGE_KEGS_REQUESTED) {
+        setStage(player, STAGE_KEGS_REQUESTED);
+      }
+      return;
+    }
+
+    if (BRUNDT_NPC_IDS.has(npcId) && text.startsWith("The chieftain quickly drinks the second keg")) {
+      if (stageOf(player) < STAGE_MARKET) setStage(player, STAGE_MARKET);
+      return;
+    }
+
     if (BRUNDT_NPC_IDS.has(npcId) && text.startsWith("Leave at once. Do not attempt")) {
       if (stageOf(player) < STAGE_EXILED) setStage(player, STAGE_EXILED);
       return;
@@ -1475,8 +1797,17 @@ module.exports = function registerTheFremennikExilesQuest(api) {
 
     // The celebration ends on the player's "Uh oh..." line, spoken with Brundt's
     // npc id (the transcript's Olaf lines belong to the cutscene).
+    if (stageOf(player) >= STAGE_CELEBRATION && text.startsWith("T'was on a haughty winter")) {
+      startCelebrationScene(player);
+      return;
+    }
+
     if (stageOf(player) >= STAGE_CELEBRATION && text.startsWith("Uh oh")) {
-      if (!quest.isComplete(player)) quest.complete(player);
+      if (stageOf(player) < STAGE_FINISHING) setStage(player, STAGE_FINISHING);
+      // The wiki transcript puts its final completion action after an explicit
+      // `end`, which the dialogue chain closes before reaching. Run the canonical
+      // completion once the player continues past this final line instead.
+      event.after = () => finishCelebration(player);
       return;
     }
   }
@@ -1526,13 +1857,15 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       enterIslandCave(player);
       return;
     }
-    if (WATERBIRTH_DUNGEON_IDS.has(objectId)) {
-      if (isExiled(player) && stageOf(player) >= STAGE_COMPONENTS) {
+    if (WATERBIRTH_GATE_DOORS.has(objectId)) {
+      if (isExiled(player) && stageOf(player) >= STAGE_COMPONENTS && stageOf(player) < STAGE_MARKET) {
         event.handled = true;
-        enterWaterbirthDungeon(player);
+        openWaterbirthGate(player, objectId, event.object);
       }
       return;
     }
+    // The Waterbirth cave entrances (8929/8930) deliberately fall through to
+    // LocTeleports, which plays their captured landings inside the real dungeon.
     if (objectId === STRANGE_ALTAR || rawId === STRANGE_ALTAR) {
       if (isExiled(player) && stageOf(player) >= STAGE_COMPONENTS) {
         event.handled = true;
@@ -1628,6 +1961,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     }
     if (stage < STAGE_ISLAND) setStage(player, STAGE_ISLAND);
     player.moveTo(ISLAND_LANDING);
+    player.getPacketSender().sendCameraShake(1, 10, 0, 25); // captured Island of Stone arrival
   }
 
   function enterIslandCave(player) {
@@ -1651,10 +1985,213 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     playScene(player, BRUNDT_ISLAND_PRISON, "island-of-stone-brundt-again-after-unlocking-the-door-going-into-jormungand-s-prison");
   }
 
-  function enterWaterbirthDungeon(player) {
-    if (!isExiled(player) || stageOf(player) < STAGE_COMPONENTS) return;
-    player.moveTo(BARDUR_LANDING);
-    player.sendMessage("You climb down into the Waterbirth Island Dungeon and find Bardur's chamber.");
+  // ==========================================================================
+  // Waterbirth dungeon: pet-rock floor buttons, gates and door-supports
+  //
+  // These are shared world objects/NPCs: another player can hold the other floor
+  // button, follow through an opened gate, or benefit from knocked-down supports.
+  // Gate state is transient (Doors' 500-tick close plus button release); the
+  // door-supports use the engine's canonical NPC death/respawn path (25 ticks).
+  // ==========================================================================
+
+  const openWaterbirthGates = new Map();
+
+  function waterbirthButtonTiles(doorY) {
+    return [
+      new Location(WATERBIRTH_BUTTON_X, doorY, 0),
+      new Location(WATERBIRTH_BUTTON_X, doorY + 2, 0),
+    ];
+  }
+
+  function petRockOnTile(tile, owner = null) {
+    const manager = ItemOnGroundManager;
+    if (!manager?.getGroundItem) return false;
+    const owners = new Set([null, owner?.getUsername?.()]);
+    for (const player of World.getPlayers?.() ?? []) owners.add(player?.getUsername?.());
+    for (const name of owners) {
+      for (const itemId of [PET_ROCK_ITEM, PET_ROCK_ITEM_2]) {
+        if (manager.getGroundItem(name, itemId, tile, null)) return true;
+      }
+    }
+    return false;
+  }
+
+  function holdingWaterbirthButton(player, tile) {
+    const at = player.getLocation();
+    return at.getX() === tile.getX() && at.getY() === tile.getY() && at.getZ() === tile.getZ();
+  }
+
+  function playerOnTile(tile, except = null) {
+    for (const other of World.getPlayers?.() ?? []) {
+      if (!other || other === except || other.isRegistered?.() === false) continue;
+      const at = other.getLocation?.();
+      if (at && at.getX() === tile.getX() && at.getY() === tile.getY() && at.getZ() === tile.getZ()) return true;
+    }
+    return false;
+  }
+
+  function waterbirthButtonHeld(tile, except = null) {
+    return petRockOnTile(tile) || playerOnTile(tile, except);
+  }
+
+  function waterbirthButtonsHeld(player, doorY) {
+    const [first, second] = waterbirthButtonTiles(doorY);
+    return (holdingWaterbirthButton(player, first) && waterbirthButtonHeld(second, player)) ||
+      (holdingWaterbirthButton(player, second) && waterbirthButtonHeld(first, player));
+  }
+
+  function waterbirthPressureHeld(doorY) {
+    const [first, second] = waterbirthButtonTiles(doorY);
+    return waterbirthButtonHeld(first) && waterbirthButtonHeld(second);
+  }
+
+  function waterbirthGateAt(doorY) {
+    const tile = new Location(2491, doorY, 0);
+    return (ObjectManager.objectsAt?.(tile) ?? []).find((object) =>
+      WATERBIRTH_GATE_DOORS.has(object.getId?.()));
+  }
+
+  function closeWaterbirthGate(doorId) {
+    const state = openWaterbirthGates.get(doorId);
+    if (!state) return;
+    openWaterbirthGates.delete(doorId);
+    const open = (ObjectManager.objectsAt?.(state.location) ?? []).find((object) =>
+      object.getId?.() === WATERBIRTH_OPEN_GATE_ID);
+    if (open) ObjectManager.deregister(open, true);
+    ObjectManager.register(new GameObject(
+      state.closedId,
+      state.location,
+      state.type,
+      state.face,
+      state.privateArea,
+    ), true);
+  }
+
+  function pulseWaterbirthGate(doorId) {
+    const state = openWaterbirthGates.get(doorId);
+    if (!state) return;
+    const task = new Task(1, `waterbirth-gate:${doorId}`);
+    task.execute = () => {
+      task.stop();
+      const current = openWaterbirthGates.get(doorId);
+      if (!current) return;
+      current.ticks += 1;
+      current.released = waterbirthPressureHeld(current.doorY) ? 0 : current.released + 1;
+      if (current.ticks >= WATERBIRTH_GATE_CLOSE_TICKS ||
+          current.released >= WATERBIRTH_BUTTON_RELEASE_TICKS) {
+        closeWaterbirthGate(doorId);
+        return;
+      }
+      pulseWaterbirthGate(doorId);
+    };
+    TaskManager.submit(task);
+  }
+
+  function openWaterbirthGate(player, doorId, object = null) {
+    const doorY = WATERBIRTH_GATE_DOORS.get(doorId);
+    if (doorY === undefined) return;
+    if (!waterbirthButtonsHeld(player, doorY)) {
+      player.sendMessage("The gate is held shut. Put your pet rock on one floor button and stand on the other.");
+      return;
+    }
+    if (openWaterbirthGates.has(doorId)) return;
+    const gate = object?.getId?.() === doorId ? object : waterbirthGateAt(doorY);
+    if (!gate) return;
+    const state = {
+      doorId,
+      doorY,
+      closedId: doorId,
+      location: gate.getLocation().clone(),
+      type: gate.getType(),
+      face: gate.getFace(),
+      privateArea: gate.getPrivateArea?.() ?? null,
+      ticks: 0,
+      released: 0,
+    };
+    ObjectManager.deregister(gate, true);
+    ObjectManager.register(new GameObject(
+      WATERBIRTH_OPEN_GATE_ID,
+      state.location,
+      state.type,
+      state.face,
+      state.privateArea,
+    ), true);
+    openWaterbirthGates.set(doorId, state);
+    player.sendMessage("The gate grinds open.");
+    pulseWaterbirthGate(doorId);
+  }
+
+  function runeThrownaxeEquipped(player) {
+    const weapon = player.getEquipment?.().get?.(Equipment.WEAPON_SLOT)?.getId?.();
+    return weapon === ItemIdentifiers.RUNE_THROWNAXE || weapon === ItemIdentifiers.RUNE_THROWNAXE_2;
+  }
+
+  function isWaterbirthSupportDestroy(event) {
+    const { player, npc } = event;
+    if (!player || !npc) return false;
+    if (!isExiled(player)) return false;
+    const stage = stageOf(player);
+    if (stage < STAGE_COMPONENTS || stage >= STAGE_MARKET) return false;
+    const npcId = npc.getContentId?.(player) ?? event.npcId;
+    if (npcId !== WATERBIRTH_SUPPORT_MIDDLE) return false;
+    if (npc.getOwner?.() && npc.getOwner() !== player) return false;
+    const action = event.definition?.getActions?.()?.[event.clickType - 1];
+    if (String(action ?? "").toLowerCase() !== "destroy") return false;
+    if (!runeThrownaxeEquipped(player) || player.getSpecialPercentage() < 10) return false;
+    if (player.getLocation().getY() === WATERBIRTH_SUPPORT_TILE.getY()) return false;
+    return player.getLocation().isWithinDistance(npc.getLocation(), WATERBIRTH_SUPPORT_RANGE);
+  }
+
+  /** Handler-side death step: remove the actual cache-map central doors and restore
+   *  their original type/face with the support respawn. The door restore uses the cache
+   *  support respawn (25 ticks); no recorded primary door timer exists, so this is an
+   *  inference. */
+  function openWaterbirthCentralDoors() {
+    const removed = [];
+    for (const tile of WATERBIRTH_CENTRAL_DOOR_TILES) {
+      const object = MapObjects.get(WATERBIRTH_CENTRAL_DOOR_ID, tile, null)
+        ?? (ObjectManager.objectsAt?.(tile) ?? []).find((entry) => entry.getId?.() === WATERBIRTH_CENTRAL_DOOR_ID);
+      if (!object) continue;
+      removed.push({ tile, type: object.getType(), face: object.getFace() });
+      ObjectManager.deregister(object, true);
+    }
+    TaskManager.cancelTasks("waterbirth-central-doors");
+    const task = new Task(WATERBIRTH_SUPPORT_RESPAWN_TICKS, "waterbirth-central-doors");
+    task.execute = () => {
+      task.stop();
+      for (const { tile, type, face } of removed) {
+        const present = MapObjects.get(WATERBIRTH_CENTRAL_DOOR_ID, tile, null)
+          ?? (ObjectManager.objectsAt?.(tile) ?? []).find((entry) => entry.getId?.() === WATERBIRTH_CENTRAL_DOOR_ID);
+        if (!present) ObjectManager.register(new GameObject(WATERBIRTH_CENTRAL_DOOR_ID, tile, type, face, null), true);
+      }
+    };
+    TaskManager.submit(task);
+  }
+
+  function destroyWaterbirthSupport(event) {
+    const { player } = event;
+    if (!isWaterbirthSupportDestroy(event)) return;
+    player.decrementSpecialPercentage(10);
+    const nearby = World.getNpcsNear?.(WATERBIRTH_SUPPORT_TILE, 8, null) ?? [];
+    for (const support of nearby) {
+      const id = support?.getContentId?.(player) ?? support?.getId?.();
+      if (WATERBIRTH_SUPPORT_IDS.has(id) && support?.isRegistered?.()) support.setHitpoints?.(0);
+    }
+    openWaterbirthCentralDoors();
+    player.sendMessage("The rune thrownaxe bounces between the door-supports, knocking them all down.");
+    event.handled = true;
+  }
+
+  /**
+   * Wiki Exiles route: from the north/south path, use the Rune thrownaxe special on the
+   * west/middle support (2253), not the door directly opposite. Real cache collision blocks
+   * the ordinary projectile line, so this scoped route asks core for the quest-local ranged
+   * clip exception; it must not perform the attack itself.
+   */
+  function routeWaterbirthSupport(event) {
+    if (!isWaterbirthSupportDestroy(event)) return;
+    event.range = WATERBIRTH_SUPPORT_RANGE;
+    event.ignoreProjectileClip = true;
   }
 
   function summonFossegrimen(player) {
@@ -1664,15 +2201,15 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   }
 
   // ==========================================================================
-  // Door combination puzzle (interface 622 is not drivable from a plugin)
+  // Door combination puzzle (cache interface 622, buttons 8/15/21/27 + 33)
   // ==========================================================================
 
   function startDoorPuzzle(player) {
-    if (!player.getAttribute(PUZZLE_SOLUTION_ATTRIBUTE)) {
-      newPuzzle(player);
-    }
+    if (!puzzleSolution(player)) newPuzzle(player);
+    if (!puzzleRunes(player).length) player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "0,0,0,0");
+    sendLockState(player);
+    player.getPacketSender().sendSubInterface(LOCK_TARGET_UID, LOCK_GROUP, 1);
     player.sendMessage("The door bears a combination lock: four slots, six rune symbols.");
-    choosePuzzleRune(player, 0);
   }
 
   function newPuzzle(player) {
@@ -1680,7 +2217,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     for (let i = 0; i < PUZZLE_SLOTS; i++) solution.push(Math.floor(Math.random() * RUNE_NAMES.length));
     player.setAttribute(PUZZLE_SOLUTION_ATTRIBUTE, solution.join(","));
     player.setAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE, 0);
-    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "");
+    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "0,0,0,0");
   }
 
   function puzzleSolution(player) {
@@ -1689,74 +2226,75 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     return parts.length === PUZZLE_SLOTS && parts.every((value) => Number.isInteger(value)) ? parts : null;
   }
 
-  function choosePuzzleRune(player, slot, offset = 0) {
-    const options = [];
-    const end = Math.min(offset + 4, RUNE_NAMES.length);
-    for (let index = offset; index < end; index++) {
-      options.push(RUNE_NAMES[index], () => setPuzzleRune(player, slot, index));
-    }
-    if (end < RUNE_NAMES.length) {
-      options.push("More...", () => choosePuzzleRune(player, slot, end));
-    } else if (offset > 0) {
-      options.push("Back...", () => choosePuzzleRune(player, slot, 0));
-    }
-    if (options.length < 8) options.push("Cancel", () => {});
-    api.sendMultiChatboxPrompt(player, `Combination lock - slot ${slot + 1} of ${PUZZLE_SLOTS}`, ...options);
+  function puzzleRunes(player) {
+    const parts = String(player.getAttribute(PUZZLE_GUESS_ATTRIBUTE) ?? "")
+      .split(",").map((value) => Number(value));
+    return parts.length === PUZZLE_SLOTS && parts.every((value) => Number.isInteger(value) && value >= 0 && value < RUNE_NAMES.length)
+      ? parts : [0, 0, 0, 0];
   }
 
-  function setPuzzleRune(player, slot, runeIndex) {
-    const guess = String(player.getAttribute(PUZZLE_GUESS_ATTRIBUTE) ?? "").split(",").filter(Boolean);
-    const next = guess.slice(0, Math.min(slot, PUZZLE_SLOTS - 1));
-    next[slot] = String(runeIndex);
-    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, next.join(","));
-    if (slot < PUZZLE_SLOTS - 1) {
-      choosePuzzleRune(player, slot + 1);
+  function sendLockState(player) {
+    const sender = player.getPacketSender();
+    puzzleRunes(player).forEach((rune, slot) => sender.sendVarbit(LOCK_VARBIT_FIRST_SLOT + slot, rune + 1));
+    sender.sendVarbit(LOCK_VARBIT_ROWS_DONE, 0);
+  }
+
+  function cycleLockRune(player, slot, backwards) {
+    const runes = puzzleRunes(player);
+    runes[slot] = (runes[slot] + (backwards ? -1 : 1) + RUNE_NAMES.length) % RUNE_NAMES.length;
+    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, runes.join(","));
+    player.getPacketSender().sendVarbit(LOCK_VARBIT_FIRST_SLOT + slot, runes[slot] + 1);
+  }
+
+  function handleLockButton(event) {
+    const { player } = event;
+    if (!player) return;
+    if (event.buttonId === LOCK_CLOSE_BUTTON) {
+      player.getPacketSender().closeInterface(LOCK_GROUP);
       return;
     }
-    evaluatePuzzle(player);
+    if (event.buttonId === LOCK_GO_BUTTON) {
+      submitLockGuess(player);
+      return;
+    }
+    const child = event.buttonId & 0xffff;
+    const slot = LOCK_SLOT_BUTTONS.indexOf(child);
+    if (slot !== -1) cycleLockRune(player, slot, event.action === 2);
   }
 
-  function evaluatePuzzle(player) {
+  function submitLockGuess(player) {
     const solution = puzzleSolution(player);
-    const rawGuess = String(player.getAttribute(PUZZLE_GUESS_ATTRIBUTE) ?? "").split(",").filter(Boolean);
-    if (!solution || rawGuess.length < PUZZLE_SLOTS) return;
-    const guess = rawGuess.slice(0, PUZZLE_SLOTS).map((value) => Number(value));
-    player.setAttribute(PUZZLE_GUESS_ATTRIBUTE, "");
-
-    let exact = 0;
-    const remainingSolution = [];
-    const remainingGuess = [];
-    for (let i = 0; i < PUZZLE_SLOTS; i++) {
-      if (guess[i] === solution[i]) {
-        exact++;
-      } else {
-        remainingSolution.push(solution[i]);
-        remainingGuess.push(guess[i]);
-      }
-    }
-    let misplaced = 0;
-    for (const rune of remainingGuess) {
-      const at = remainingSolution.indexOf(rune);
-      if (at !== -1) {
-        misplaced++;
-        remainingSolution.splice(at, 1);
-      }
-    }
-    if (exact === PUZZLE_SLOTS) {
+    if (!solution) return;
+    const guess = puzzleRunes(player);
+    const matches = guess.map((rune, slot) => rune === solution[slot]);
+    const remaining = solution.filter((_, slot) => !matches[slot]);
+    const feedback = guess.map((rune, slot) => {
+      if (matches[slot]) return 1;
+      const at = remaining.indexOf(rune);
+      if (at === -1) return 0;
+      remaining.splice(at, 1);
+      return 2;
+    });
+    player.getPacketSender().sendVarbit(LOCK_VARBIT_ROWS_DONE, 1);
+    feedback.forEach((value, slot) => {
+      player.getPacketSender().sendVarbit(LOCK_VARBIT_FEEDBACK_FIRST + slot, value);
+    });
+    if (matches.every(Boolean)) {
       player.setAttribute(PUZZLE_OPEN_ATTRIBUTE, true);
       setStage(player, STAGE_DOOR_OPEN);
+      player.getPacketSender().closeInterface(LOCK_GROUP);
       player.sendMessage("The runes lock into place and the door grinds open.");
       return;
     }
-    player.sendMessage(`The lock rejects the combination: ${exact} correct, ${misplaced} rune${misplaced === 1 ? "" : "s"} in the wrong slot.`);
     const attempts = (Number(player.getAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE)) || 0) + 1;
     if (attempts > PUZZLE_MAX_ATTEMPTS) {
       newPuzzle(player);
+      sendLockState(player);
       player.sendMessage("The lock resets and the runes shuffle into a new combination.");
       return;
     }
     player.setAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE, attempts);
-    choosePuzzleRune(player, 0);
+    player.sendMessage("The lock rejects the combination. The runes show which are right.");
   }
 
   // ==========================================================================
@@ -1792,6 +2330,15 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (!player) return;
     const objectId = resolvedObjectId(event);
 
+    if ((itemId === PET_ROCK_ITEM || itemId === PET_ROCK_ITEM_2) && WATERBIRTH_BUTTON_IDS.has(objectId)) {
+      if (!isExiled(player) || stageOf(player) < STAGE_COMPONENTS || stageOf(player) >= STAGE_MARKET) return;
+      event.handled = true;
+      const tile = event.object?.getLocation?.() ?? player.getLocation();
+      if (!takeItem(player, itemId)) return;
+      ItemOnGroundManager.registerLocation(player, new Item(itemId, 1), tile);
+      player.sendMessage("You place the pet rock on the floor button.");
+      return;
+    }
     if (itemId === PET_ROCK_ITEM && (LARGE_GEYSER_IDS.has(objectId) || event.objectId === LARGE_GEYSER_PARENT)) {
       event.handled = true;
       inspectLargeGeyser(player);
@@ -1803,13 +2350,17 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       startTranscript(api, player, BABA_YAGA, PAGE, "making-v-s-shield-lunar-glass-enchanting-the-molten-glass-i");
       return;
     }
-    if (itemId === LUNAR_BAR_ITEM && ANVIL_IDS.has(objectId)) {
+    if (itemId === LUNAR_BAR_ITEM && isAnvil(event)) {
       if (stageOf(player) < STAGE_COMPONENTS || stageOf(player) >= STAGE_MARKET) return;
       event.handled = true;
+      if (!hasItem(player, HAMMER_ITEM)) {
+        player.sendMessage("You need a hammer to work the lunar bars.");
+        return;
+      }
       startTranscript(api, player, BABA_YAGA, PAGE, "making-v-s-shield-v-sigil-anvil");
       return;
     }
-    if (itemId === LUNAR_ORE_ITEM && FURNACE_IDS.has(objectId)) {
+    if (itemId === LUNAR_ORE_ITEM && isFurnace(event)) {
       if (stageOf(player) < STAGE_COMPONENTS || stageOf(player) >= STAGE_MARKET) return;
       event.handled = true;
       smeltLunarOre(player);
@@ -1835,6 +2386,10 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     const hasSigil = pair.has(V_SIGIL_E_ITEM) || pair.has(V_SIGIL_ITEM);
     const hasShield = [...FREMENNIK_SHIELD_ITEMS].some((id) => pair.has(id));
     if (!hasSigil || !hasShield) return;
+    if (!hasItem(player, GLASSBLOWING_PIPE_ITEM)) {
+      player.sendMessage("You need a glassblowing pipe to work the lunar glass.");
+      return;
+    }
     if (!hasItem(player, LUNAR_GLASS_ITEM) || !hasItem(player, POLISHING_ROCK_ITEM)) {
       player.sendMessage("You need the lunar glass and the polishing rock as well.");
       return;
@@ -1850,6 +2405,14 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   // ==========================================================================
   // NPC deaths
   // ==========================================================================
+
+  function handleJormungandHit({ npc, hit }) {
+    const player = hit?.getAttacker?.();
+    if (!player?.isPlayer?.()) return;
+    const npcId = npc?.getContentId?.(player) ?? npc?.getId?.();
+    if (!JORMUNGAND_NPC_IDS.has(npcId)) return;
+    if (stageOf(player) === STAGE_TYPHOR_DEAD) setStage(player, STAGE_JORMUNGAND_PHASE);
+  }
 
   function handleNpcDeath(event) {
     const player = event?.killer?.isPlayer?.() ? event.killer : null;
@@ -1883,6 +2446,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     if (TYPHOR_NPC_IDS.has(npcId)) {
       if (stageOf(player) < STAGE_PRISON) return;
       player.setAttribute(TYPHOR_DEAD_ATTRIBUTE, true);
+      setStage(player, STAGE_TYPHOR_DEAD);
       ensureJormungand(player);
       playScene(player, THE_JORMUNGAND, "island-of-stone-the-jormungand");
       return;
@@ -1890,6 +2454,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
 
     if (JORMUNGAND_NPC_IDS.has(npcId)) {
       if (stageOf(player) < STAGE_PRISON) return;
+      JORM_PHASE_STARTED.delete(player);
       player.setAttribute(JORMUNGAND_DEAD_ATTRIBUTE, true);
       syncTracked(player, "jormungand", null);
       setStage(player, STAGE_JORMUNGAND_DEAD);
@@ -1901,6 +2466,16 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   function handleJormungandFinish(player) {
     setStage(player, STAGE_CELEBRATION);
     player.moveTo(LONGHALL_LANDING);
+  }
+
+  /** Captured 73799-73878: frame the longhall while Olaf sings the ballad. */
+  function startCelebrationScene(player) {
+    if (CELEBRATION_START.has(player)) return;
+    CELEBRATION_START.add(player);
+    tracked(player, "ballad-singer")?.forceChat?.("T'was on a haughty winter,");
+    Scenes.camera(player, CELEBRATION_CAMERA[0], CELEBRATION_CAMERA[1], { rate: 0, rate2: 100 });
+    Scenes.later(player, 3, () => Scenes.camera(player, CELEBRATION_CAMERA_TWO[0], CELEBRATION_CAMERA_TWO[1], { rate: 1, rate2: 50 }));
+    Scenes.later(player, 18, () => player.getPacketSender().sendCameraReset());
   }
 
   // ==========================================================================
@@ -1930,6 +2505,12 @@ module.exports = function registerTheFremennikExilesQuest(api) {
         "I should speak to <col=800000>Brundt</col> and return to Rellekka.",
       ];
     }
+    if (stage >= STAGE_TYPHOR_DEAD) {
+      return [
+        "<str>Typhor has fallen. The Jormungand is loose in his prison.</str>",
+        "Defeat <col=800000>the Jormungand</col>.",
+      ];
+    }
     if (stage >= STAGE_PRISON) {
       return [
         "<str>I entered Jormungand's Prison with Brundt.</str>",
@@ -1946,6 +2527,12 @@ module.exports = function registerTheFremennikExilesQuest(api) {
       return [
         "<str>I reached the Island of Stone with Brundt.</str>",
         "Solve the <col=800000>combination lock</col> on the cave door.",
+      ];
+    }
+    if (stage >= STAGE_INVASION && stage < STAGE_BOAT) {
+      return [
+        "<str>Basilisks are attacking Rellekka's market.</str>",
+        "Fight beside <col=800000>Brundt</col> until the invasion is broken.",
       ];
     }
     if (stage >= STAGE_BOAT) {
@@ -2032,7 +2619,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
     skills.addExperiences(Skill.SLAYER, 50000);
     skills.addExperiences(Skill.CRAFTING, 50000);
     skills.addExperiences(Skill.RUNECRAFTING, 30000);
-    if (!hasAnyItemAnywhere(player, VS_SHIELD_ITEMS)) addItem(player, VS_SHIELD_ITEM);
+    if (!hasAnyItemAnywhere(player, VS_SHIELD_ITEMS)) {
+      player.getInventory().forceAdd(player, new Item(VS_SHIELD_ITEM, 1));
+    }
     player.getPacketSender().sendVarbit(VARBIT_BALLAD, 1);
     player.getPacketSender().sendVarbit(VARBIT_HELM_UNLOCK, 1);
   }
@@ -2063,6 +2652,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   api.persistAttribute(PUZZLE_SOLUTION_ATTRIBUTE);
   api.persistAttribute(PUZZLE_ATTEMPTS_ATTRIBUTE);
   api.persistAttribute(PUZZLE_GUESS_ATTRIBUTE);
+  api.persistAttribute(SCHEMA_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "the_fremennik_exiles",
@@ -2092,6 +2682,9 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   api.onNpcInteraction("Peer the Seer", { "Talk-to": talksToMyQuest });
   api.onNpcInteraction("Askeladden", { "Talk-to": talksToMyQuest });
   api.onNpcInteraction("Sailor", { "Talk-to": talksToMyQuest });
+  api.onNpcInteraction("Fossegrimen", { "Talk-to": talksToMyQuest });
+  api.onNpcInteraction("Door-support", { Destroy: destroyWaterbirthSupport });
+  api.onNpcRoute(routeWaterbirthSupport);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
@@ -2102,8 +2695,15 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction("Unsealed letter", { Read: readLetter });
   api.onItemAction("Pet rock", { Interact: interactPetRock });
+  api.onInterfaceActionButton([
+    ...LOCK_SLOT_BUTTONS.map((child) => (LOCK_GROUP << 16) | child),
+    LOCK_GO_BUTTON,
+    LOCK_CLOSE_BUTTON,
+  ], handleLockButton);
   api.onNpcDeath(handleNpcDeath);
+  api.onNpcHitModify(handleJormungandHit);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
 };

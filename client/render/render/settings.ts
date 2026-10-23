@@ -250,7 +250,7 @@ export function setMsaa(host: WebGLOsrsRendererHost, enabled: boolean): void {
 
 /** The GPU plugin's MSAA samples while it is on, else every sample the GPU has when MSAA is. */
 export function getRequestedMsaaSamples(host: WebGLOsrsRendererHost): number {
-    const gpu = host.osrsClient.gpuPlugin?.settings();
+    const gpu = host.osrsClient.clientPlugins.gpuSettings();
     if (gpu) return gpu.msaaSamples;
     return host.msaaEnabled ? Number.MAX_SAFE_INTEGER : 0;
 }

@@ -107,14 +107,14 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     return { page: "Father Lawrence", variant: "standard-dialogue" };
   }
 
-  function apothecaryVariant(stage) {
-    if (stage >= STAGE_SPOKEN_TO_APOTHECARY) {
-      return RJ("making-the-cadava-potion-talking-to-the-apothecary-again");
-    }
-    if (stage >= STAGE_SPOKEN_TO_FATHER_LAWRENCE) {
+  function apothecaryVariant(stage, player) {
+    if (stage === STAGE_SPOKEN_TO_FATHER_LAWRENCE) {
       return RJ("making-the-cadava-potion-talking-to-the-apothecary");
     }
-    return { page: "Apothecary", variant: "standard-dialogue" };
+    if (stage === STAGE_SPOKEN_TO_APOTHECARY && !held(player, CADAVA_POTION_ITEM_ID)) {
+      return RJ("making-the-cadava-potion-talking-to-the-apothecary-again");
+    }
+    return null;
   }
 
   function buildJournal(player, questHandle) {
@@ -223,7 +223,7 @@ module.exports = function registerRomeoAndJulietQuest(api) {
     if (npcId === ROMEO_NPC_ID) return romeoVariant(stage);
     if (JULIET_NPC_IDS.has(npcId)) return julietVariant(stage);
     if (npcId === FATHER_LAWRENCE_NPC_ID) return fatherVariant(stage);
-    if (npcId === APOTHECARY_NPC_ID) return apothecaryVariant(stage);
+    if (npcId === APOTHECARY_NPC_ID) return apothecaryVariant(stage, player);
     if (npcId === PHILLIPA_NPC_ID) return stage>=60?RJ("rescuing-juliet-talking-to-phillipa"):stage>=20?RJ("finding-juliet-talking-to-phillipa-after-agreeing-to-deliver-the-message"):RJ("finding-juliet-talking-to-phillipa");
     if (npcId === DRAUL_NPC_ID) return stage>=60?RJ("rescuing-juliet-talking-to-draul-leptoc"):stage>=50?RJ("making-the-cadava-potion-talking-to-draul-leptoc"):stage>=30?RJ("delivering-the-message-talking-to-draul-leptoc"):stage>=20?RJ("finding-juliet-talking-to-draul-leptoc-after-agreeing-to-deliver-the-message"):RJ("finding-juliet-talking-to-draul-leptoc");
     return null;

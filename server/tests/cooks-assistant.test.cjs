@@ -88,7 +88,7 @@ test('completion grants the reward item, quest points and builds the scroll', ()
     setAttribute: (k, v) => attrs.set(k, v),
     getPacketSender: () => packet,
     getFrameUpdater: () => ({ clear() {} }),
-    getInventory: () => ({ adds: (id, amount) => grants.push([id, amount]) }),
+    getInventory: () => ({ adds: (id, amount) => grants.push([id, amount]), isFull: () => false }),
     getSkillManager: () => ({ addExperiences: noop }),
     sendMessage: noop,
   };

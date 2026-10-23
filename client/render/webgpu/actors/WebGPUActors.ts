@@ -90,8 +90,9 @@ interface MapActorState {
  * - The WebGPU map stream loads squares with `loadNpcs: false`, so there is no baked per-map
  *   NPC geometry; every NPC goes through DynamicNpcAnimLoader current-frame geometry.
  * - Instances and first-person arm rendering are not ported (instanceActive is false under
- *   WebGPU), and actor frame sounds are not dispatched. World entity decks are: their actors are
- *   packed from the ECS worldViewId (packDeckActors) and placed by the map's deck transform.
+ *   WebGPU). World entity decks are: their actors are packed from the ECS worldViewId
+ *   (packDeckActors) and placed by the map's deck transform. Player frame sounds play from
+ *   PlayerAnimController, for every renderer.
  */
 export class WebGPUActors {
     private readonly writer = new ActorDataWriter();

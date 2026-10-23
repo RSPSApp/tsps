@@ -1,36 +1,53 @@
-const { Flag } = require("../../src/main/typescript/elvarg/game/model/Flag");
-const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
-const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
-const {
-  TRIDENT_CHARGE_META_KEY,
-  TRIDENT_MAX_CHARGES,
-} = require("../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
-
-// OSRS charges: 1 death rune + 1 chaos rune + 5 fire runes, plus the
-// weapon-specific resource below, added all at once per charge.
-const DEATH_RUNE_ID = ItemIdentifiers.DEATH_RUNE;
-const CHAOS_RUNE_ID = ItemIdentifiers.CHAOS_RUNE;
-const FIRE_RUNE_ID = ItemIdentifiers.FIRE_RUNE;
+// OSRS Wiki: https://oldschool.runescape.wiki/w/Trident_of_the_seas
+// and https://oldschool.runescape.wiki/w/Trident_of_the_Swamp
+const TRIDENT_CHARGE_META_KEY = "trident-charges";
+const TRIDENT_MAX_CHARGES = 2500;
+let core = null;
+let ItemIdentifiers = null;
+let DEATH_RUNE_ID = 0;
+let CHAOS_RUNE_ID = 0;
+let FIRE_RUNE_ID = 0;
 const FIRE_RUNES_PER_CHARGE = 5;
-const COINS_ID = ItemIdentifiers.COINS;
-const ZULRAH_SCALES_ID = 12934;
+let COINS_ID = 0;
+let ZULRAH_SCALES_ID = 0;
+let RECIPES = [];
 
-const RECIPES = [
-  {
-    unchargedId: ItemIdentifiers.UNCHARGED_TRIDENT,
-    chargedId: ItemIdentifiers.TRIDENT_OF_THE_SEAS,
-    primaryResourceId: COINS_ID,
-    primaryPerCharge: 10,
-    primaryName: "coins",
-  },
-  {
-    unchargedId: ItemIdentifiers.UNCHARGED_TOXIC_TRIDENT,
-    chargedId: ItemIdentifiers.TRIDENT_OF_THE_SWAMP,
-    primaryResourceId: ZULRAH_SCALES_ID,
-    primaryPerCharge: 1,
-    primaryName: "Zulrah scales",
-  },
-];
+function initialize(api) {
+  core = api.core;
+  ItemIdentifiers = core.ItemIdentifiers;
+  DEATH_RUNE_ID = ItemIdentifiers.DEATH_RUNE;
+  CHAOS_RUNE_ID = ItemIdentifiers.CHAOS_RUNE;
+  FIRE_RUNE_ID = ItemIdentifiers.FIRE_RUNE;
+  COINS_ID = ItemIdentifiers.COINS;
+  ZULRAH_SCALES_ID = ItemIdentifiers.ZULRAHS_SCALES;
+  RECIPES = [
+    {
+      unchargedId: ItemIdentifiers.UNCHARGED_TRIDENT,
+      chargedId: ItemIdentifiers.TRIDENT_OF_THE_SEAS,
+      primaryResourceId: COINS_ID,
+      primaryPerCharge: 10,
+      primaryName: "coins",
+      refundResources: [
+        [DEATH_RUNE_ID, 1],
+        [CHAOS_RUNE_ID, 1],
+        [FIRE_RUNE_ID, FIRE_RUNES_PER_CHARGE],
+      ],
+    },
+    {
+      unchargedId: ItemIdentifiers.UNCHARGED_TOXIC_TRIDENT,
+      chargedId: ItemIdentifiers.TRIDENT_OF_THE_SWAMP,
+      primaryResourceId: ZULRAH_SCALES_ID,
+      primaryPerCharge: 1,
+      primaryName: "Zulrah scales",
+      refundResources: [
+        [DEATH_RUNE_ID, 1],
+        [CHAOS_RUNE_ID, 1],
+        [FIRE_RUNE_ID, FIRE_RUNES_PER_CHARGE],
+        [ZULRAH_SCALES_ID, 1],
+      ],
+    },
+  ];
+}
 
 function recipeForTridentId(itemId) {
   return RECIPES.find((r) => r.unchargedId === itemId || r.chargedId === itemId) ?? null;
@@ -112,45 +129,98 @@ function chargeTrident(player, tridentItem, tridentSlot, recipe) {
   player.sendMessage(
     `You add ${affordable} charge${affordable === 1 ? "" : "s"} to your trident. It now has ${current + affordable} charges.`
   );
+  return true;
 }
 
-function sendChargeStatus(player, tridentItem) {
+function sendChargeStatus({ player, item: tridentItem }) {
   player.sendMessage(`Your trident has ${getCharges(tridentItem)} charges left.`);
+  return true;
+}
+
+function chargeOption({ player, item, slot }) {
+  const recipe = recipeForTridentId(item?.getId?.());
+  if (!recipe) return false;
+  return chargeTrident(player, item, slot, recipe) !== false;
+}
+
+function chargeWithResources(event) {
+  const { player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot, usedItem, usedWithItem } = event;
+  const tridentOnLeft = isTridentId(usedItemId);
+  const tridentOnRight = isTridentId(usedWithItemId);
+  if (!tridentOnLeft && !tridentOnRight) return;
+
+  const tridentItem = tridentOnLeft ? usedItem : usedWithItem;
+  const tridentSlot = tridentOnLeft ? usedItemSlot : usedWithItemSlot;
+  const otherItemId = tridentOnLeft ? usedWithItemId : usedItemId;
+  const recipe = recipeForTridentId(tridentItem.getId());
+  if (!recipe || ![DEATH_RUNE_ID, CHAOS_RUNE_ID, FIRE_RUNE_ID, recipe.primaryResourceId].includes(otherItemId)) {
+    return;
+  }
+
+  event.handled = true;
+  chargeTrident(player, tridentItem, tridentSlot, recipe);
+}
+
+function unchargeTrident({ player, item }) {
+  const recipe = recipeForTridentId(item?.getId?.());
+  if (!recipe || item.getId() !== recipe.chargedId) return false;
+  const current = getCharges(item);
+  if (current <= 0) {
+    player.sendMessage("Your trident has no charges to remove.");
+    return true;
+  }
+
+  const inventory = player.getInventory();
+  const neededSlots = recipe.refundResources.reduce(
+    (slots, [resourceId]) => slots + (inventory.contains(resourceId) ? 0 : 1),
+    0
+  );
+  if (inventory.getFreeSlots() < neededSlots) {
+    player.sendMessage("Your inventory is too full to uncharge your trident.");
+    return true;
+  }
+
+  for (const [resourceId, amountPerCharge] of recipe.refundResources) {
+    inventory.addItem(new core.Item(resourceId, current * amountPerCharge));
+  }
+  setCharges(item, 0);
+  refreshTridentState(player, item, recipe);
+  player.sendMessage(
+    recipe.primaryResourceId === ZULRAH_SCALES_ID
+      ? "You uncharge your trident and regain its runes and Zulrah scales."
+      : "You uncharge your trident and regain its runes. The coins are not refunded."
+  );
+  return true;
 }
 
 module.exports = {
   name: "Trident",
   members: true,
+  _test: {
+    get RECIPES() { return RECIPES; },
+    get TRIDENT_CHARGE_META_KEY() { return TRIDENT_CHARGE_META_KEY; },
+    get TRIDENT_MAX_CHARGES() { return TRIDENT_MAX_CHARGES; },
+    recipeForTridentId,
+    getCharges,
+    setCharges,
+    chargeTrident,
+    chargeWithResources,
+    unchargeTrident,
+  },
   register(api) {
-    api.onItemOnItem((event) => {
-      const { player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot, usedItem, usedWithItem } = event;
-      const tridentOnLeft = isTridentId(usedItemId);
-      const tridentOnRight = isTridentId(usedWithItemId);
-      if (!tridentOnLeft && !tridentOnRight) {
-        return;
-      }
-
-      const tridentSlot = tridentOnLeft ? usedItemSlot : usedWithItemSlot;
-      const tridentItem = tridentOnLeft ? usedItem : usedWithItem;
-      const otherItemId = tridentOnLeft ? usedWithItemId : usedItemId;
-
-      const recipe = recipeForTridentId(tridentItem.getId());
-      if (!recipe || otherItemId !== recipe.primaryResourceId) {
-        return;
-      }
-
-      event.handled = true;
-      chargeTrident(player, tridentItem, tridentSlot, recipe);
+    initialize(api);
+    api.onItemOnItem(chargeWithResources, { noted: false });
+    api.onItemAction("Trident of the Seas", {
+      Check: sendChargeStatus,
+      Charge: chargeOption,
+      Uncharge: unchargeTrident,
     });
-
-    api.onItemAction((event) => {
-      if (!isTridentId(event.itemId)) {
-        return;
-      }
-      if (event.clickType === 3 || (event.clickType === 4 && event.interfaceId === Equipment.INVENTORY_INTERFACE_ID)) {
-        event.handled = true;
-        sendChargeStatus(event.player, event.item);
-      }
+    api.onItemAction("Uncharged trident", { Charge: chargeOption });
+    api.onItemAction("Trident of the Swamp", {
+      Check: sendChargeStatus,
+      Charge: chargeOption,
+      Uncharge: unchargeTrident,
     });
+    api.onItemAction("Uncharged toxic trident", { Charge: chargeOption });
   },
 };

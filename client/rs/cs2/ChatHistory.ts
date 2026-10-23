@@ -13,6 +13,8 @@
  *   etc.
  */
 
+import { getClientClock } from "../../game/TransmitCycles";
+
 export interface ChatMessage {
     uid: number;
     type: number;
@@ -21,7 +23,7 @@ export interface ChatMessage {
     text: string;
     timestamp: number;
     runeLiteFormatMessage?: string | null;
-    /** Cycle counter (used by OSRS for message ordering) */
+    /** Client clock when the message arrived (OSRS Message.cycle); scripts age messages by it. */
     cycle: number;
     /** True if sender is on friend list */
     isFromFriend?: boolean;
@@ -60,8 +62,6 @@ export class ChatHistoryStore {
     private messagesByType = new Map<number, ChatMessage[]>();
     // Global UID counter for messages
     private nextUid = 1;
-    // Global cycle counter (increments each message)
-    private cycle = 0;
     // Callback fired when a message is added (used to trigger chat transmit cycle)
     onMessageAdded: ((msg: ChatMessage) => void) | null = null;
     // PERF: Cached sorted list of all messages to avoid O(n log n) sort on every getNextUid/getPrevUid call
@@ -90,7 +90,7 @@ export class ChatHistoryStore {
             prefix,
             text,
             timestamp: Date.now(),
-            cycle: this.cycle++,
+            cycle: getClientClock() | 0,
             isFromFriend,
             isFromIgnored,
         };
@@ -275,8 +275,8 @@ export class ChatHistoryStore {
             }
         }
 
-        // Sort by cycle (chronological order)
-        allMessages.sort((a, b) => a.cycle - b.cycle);
+        // Chronological: uids rise with every message, cycles can tie within a frame.
+        allMessages.sort((a, b) => a.uid - b.uid);
 
         // Cache the result
         this.sortedMessagesCache.messages = allMessages;

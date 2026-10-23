@@ -12,6 +12,8 @@
  *   answer "combat-achievements:kill-count" { player, counts }        counts["Zulrah"] = n, at login
  *   answer "combat-achievements:personal-best" { player, monster, best }   best in ticks
  *   answer "combat-achievements:reset-best" { player, monster, handled }
+ *   api.emitCustomEvent("combat-achievements:tier", { player, tier: "Hard" })
+ *                                       comes back with `unlocked`: whether the tier is reached
  *   api.emitCustomEvent("combat-achievements:open", { player, collectionLogCategory? })
  *                                       the account summary's row; a collection log boss's button
  * and it emits "combat-achievements:completed" { player, task: { id, name, tier } }.
@@ -37,6 +39,12 @@ function restore({ player }) {
 
 function onComplete(request) {
   if (request?.player && request.task !== undefined) request.completed = Progress.complete(request.player, request.task);
+}
+
+/** Whether the player has reached a tier (by name), for content locked behind one (Nex's private fights). */
+function onTier(request) {
+  const tier = Data.tiers().find((each) => each.name.toLowerCase() === String(request?.tier ?? "").toLowerCase());
+  if (request?.player && tier) request.unlocked = Progress.tierStatus(request.player, tier) > 0;
 }
 
 function onOpen({ player, collectionLogCategory }) {
@@ -94,10 +102,12 @@ module.exports = {
     require("./combatachievements/tasks/GiantMole.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/DagannothKings.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/Vorkath.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/Sarachnis.CombatAchievements")(api, Fights);
     api.onPlayerLogin(restore);
     api.onCustomEvent("combat-achievements:complete", onComplete);
     api.onCustomEvent("combat-achievements:open", onOpen);
+    api.onCustomEvent("combat-achievements:tier", onTier);
     api.registerCommand("ca", caCommand, api.core.PlayerRights.ADMINISTRATOR, "Combat Achievements: ::ca complete <task> | kc <monster> <n> | reset");
   },
-  _test: { restore, onComplete, caCommand },
+  _test: { restore, onComplete, onTier, caCommand },
 };

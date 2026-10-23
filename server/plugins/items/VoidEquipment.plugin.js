@@ -12,15 +12,17 @@ const HELMS = {
   magic: ["VOID_MAGE_HELM", "VOID_MAGE_HELM_L_", "VOID_MAGE_HELM_OR_", "VOID_MAGE_HELM_L_OR_"],
 };
 
+let coreApi;
+const lastLoadouts = new WeakMap();
+
 function matches(item, identifiers, names) {
   return names.some((name) => item?.getId() === identifiers[name]);
 }
 
-function voidSet(api, entity, combatType) {
+function voidSetForStyle(api, entity, style) {
   if (!entity?.isPlayer?.()) return null;
-  const { CombatType, Equipment, ItemIdentifiers } = api.core;
+  const { Equipment, ItemIdentifiers } = api.core;
   const items = entity.getAsPlayer().getEquipment().getItems();
-  const style = combatType === CombatType.MAGIC ? "magic" : combatType === CombatType.RANGED ? "ranged" : "melee";
   if (!matches(items[Equipment.HEAD_SLOT], ItemIdentifiers, HELMS[style]) ||
       !matches(items[Equipment.HANDS_SLOT], ItemIdentifiers, GLOVES)) return null;
   const top = items[Equipment.BODY_SLOT], robe = items[Equipment.LEG_SLOT];
@@ -29,6 +31,63 @@ function voidSet(api, entity, combatType) {
   if (!(eliteTop || matches(top, ItemIdentifiers, NORMAL_TOP)) ||
       !(eliteRobe || matches(robe, ItemIdentifiers, NORMAL_ROBE))) return null;
   return eliteTop && eliteRobe ? "elite" : "normal";
+}
+
+function voidSet(api, entity, combatType) {
+  const { CombatType } = api.core;
+  const style = combatType === CombatType.MAGIC ? "magic" : combatType === CombatType.RANGED ? "ranged" : "melee";
+  return voidSetForStyle(api, entity, style);
+}
+
+function activeVoidStyle(player) {
+  for (const style of ["melee", "ranged", "magic"]) {
+    const set = voidSetForStyle({ core: coreApi }, player, style);
+    if (set) return { style, set };
+  }
+  return null;
+}
+
+function effectLine({ style, set }) {
+  if (style === "magic") {
+    return set === "elite"
+      ? "Elite void (magic): +45% accuracy, +5% magic damage"
+      : "Void (magic): +45% magic accuracy";
+  }
+  const label = set === "elite" ? "Elite void" : "Void";
+  if (style === "ranged" && set === "elite") {
+    return `${label} (ranged): +10% accuracy, +12.5% damage`;
+  }
+  return `${label} (${style}): +10% ${style} accuracy and damage`;
+}
+
+function addVoidEffects(request) {
+  const player = request?.player;
+  if (!player || !coreApi) return;
+  const active = activeVoidStyle(player);
+  if (active) request.lines.push(effectLine(active));
+}
+
+function loadoutSignature(player) {
+  const { Equipment } = coreApi;
+  const items = player.getEquipment().getItems();
+  return [Equipment.HEAD_SLOT, Equipment.BODY_SLOT, Equipment.LEG_SLOT, Equipment.HANDS_SLOT]
+    .map((slot) => items[slot]?.getId?.() ?? -1)
+    .join(",");
+}
+
+/** A void helm/top/robe/gloves swap changes the active style, so redraw the combat tab. */
+function refreshCombatTab({ player }) {
+  if (!player || !coreApi) return;
+  const signature = loadoutSignature(player);
+  const previous = lastLoadouts.get(player);
+  lastLoadouts.set(player, signature);
+  if (previous === signature) return;
+  coreApi.WeaponInterfaceManager.assign(player);
+  player.getUpdateFlag()?.flag?.(coreApi.Flag.APPEARANCE);
+}
+
+function rememberLoadout({ player }) {
+  if (player) lastLoadouts.set(player, loadoutSignature(player));
 }
 
 function effectiveLevel(api, entity, level, { combatType, purpose }) {
@@ -51,8 +110,13 @@ function magicDamageBonus(api, entity, permille) {
 module.exports = {
   name: "VoidEquipment",
   members: true,
+  _test: { voidSetForStyle, activeVoidStyle, effectLine, addVoidEffects },
   register(api) {
+    coreApi = api.core;
     api.registerCombatEffectiveLevelModifier(effectiveLevel.bind(null, api));
     api.registerMagicDamageBonusModifier(magicDamageBonus.bind(null, api));
+    api.onCustomEvent?.("equipment:effects", addVoidEffects);
+    api.onCustomEvent?.("equipment:changed", refreshCombatTab);
+    api.onPlayerLogin?.(rememberLoadout);
   },
 };

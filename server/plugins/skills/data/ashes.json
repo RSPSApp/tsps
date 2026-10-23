@@ -1,0 +1,10 @@
+{
+  "$comment": "Prayer's demonic ashes, scattered for experience (docs/prayer-bones.md). Names are obj gamevals. xp: scattering, from the OSRS Wiki Remains page (Fiendish 10, Vile 25, Malicious 65, Abyssal 85, Infernal 110). Ashes restore no Prayer and cannot be offered at altars. Members-only ashes need no flag here: FreeToPlay refuses them on free worlds through the item's members flag.",
+  "ashes": [
+    { "obj": "fiendish_ashes", "xp": 10 },
+    { "obj": "vile_ashes", "xp": 25 },
+    { "obj": "malicious_ashes", "xp": 65 },
+    { "obj": "abyssal_ashes", "xp": 85 },
+    { "obj": "infernal_ashes", "xp": 110 }
+  ]
+}

@@ -112,6 +112,65 @@ test('Quests.plugin registers every quest through api.core without throwing', ()
   assert.doesNotThrow(() => plugin.register(api));
 });
 
+test('Family Crest only handles gold rocks in Witchaven and Mining recognizes the shared gold-rock object', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/FamilyCrest.Quest')(api);
+  const handleObjectInteraction = handlers.objects.at(-1);
+  const messages = [];
+  const player = { getAttribute: () => 0, sendMessage: message => messages.push(message) };
+  const interact = (x, y, z) => {
+    const event = {
+      player,
+      objectId: api.core.ObjectIdentifiers.GOLD_ROCKS_2,
+      clickType: 1,
+      definition: { getInteractions: () => ['Mine'] },
+      location: { x, y, z },
+      handled: false,
+    };
+    handleObjectInteraction(event);
+    return event;
+  };
+
+  assert.equal(interact(2933, 3288, 0).handled, false, 'Crafting Guild rocks must be left to Mining');
+  const witchavenRock = interact(2732, 9680, 0);
+  assert.equal(witchavenRock.handled, true, 'Witchaven rocks retain the Family Crest interaction');
+  assert.equal(messages.at(-1), 'This gold does not look special to you.');
+
+  const { ROCKS } = require('../plugins/skills/Mining.plugin');
+  const { GOLD_ROCKS_2 } = api.core.ObjectIdentifiers;
+  assert.ok(ROCKS.find(rock => rock.objectName === 'Gold rocks').objectIds.includes(GOLD_ROCKS_2));
+});
+
+test('a shop version named after a quest opens once its quest state matches (#831)', () => {
+  const { api } = mockApi();
+  require('../plugins/quests/Quests.plugin').register(api);
+  const { getRegisteredQuests, pickQuestShopVersion } = require('../plugins/quests/QuestRuntime');
+  const named = (name) => getRegisteredQuests().find((quest) => quest.name === name);
+  const attributes = new Map();
+  const player = {
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+  };
+  const pick = (shops) => {
+    const request = { player, shops, shop: null };
+    pickQuestShopVersion(request);
+    return request.shop;
+  };
+  const ned = ["Ned's Handmade Rope (100% Wool) (Default)", "Ned's Handmade Rope (100% Wool) (Fremennik Isles)"];
+  const babaYaga = ["Baba Yaga's Magic Shop. (After Lunar Diplomacy)", "Baba Yaga's Magic Shop. (During Lunar Diplomacy)"];
+  assert.equal(pick(ned), null, 'Default and Karamja gloves versions are left to the dialogue runtime');
+  assert.equal(pick(babaYaga), null);
+  const isles = named('The Fremennik Isles');
+  isles.setStage(player, isles.completionValue ?? 2);
+  assert.equal(pick(ned), ned[1], '"Fremennik Isles" names The Fremennik Isles');
+  const lunar = named('Lunar Diplomacy');
+  lunar.setStage(player, lunar.startedValue ?? 1);
+  assert.equal(pick(babaYaga), babaYaga[1]);
+  lunar.setStage(player, lunar.completionValue ?? 2);
+  assert.equal(pick(babaYaga), babaYaga[0]);
+});
+
 test('DT2 medallions cannot be banked while ordinary items remain bankable', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/DesertTreasureII.Quest')(api);
@@ -1090,12 +1149,12 @@ test('Sins of the Father opens its boat route from the Slepe rowboat after compl
   quest.setStage(player, 999);
   const boat = handlers.objects.find(handler => handler.name === 'handleObjectInteraction');
 
-  const wrongLocation = { player, objectId: 32602, location: { x: 3662, y: 3279, z: 0 }, handled: false };
+  const wrongLocation = { player, objectId: 32602, location: { x: 3661, y: 3279, z: 0 }, handled: false };
   boat(wrongLocation);
   assert.equal(wrongLocation.handled, false, 'the Slepe route is scoped to its cache boat anchor');
   assert.equal(prompt, undefined);
 
-  const travel = { player, objectId: 32602, location: { x: 3661, y: 3279, z: 0 }, option: 'Travel', handled: false };
+  const travel = { player, objectId: 32602, location: { x: 3662, y: 3279, z: 0 }, option: 'Travel', handled: false };
   boat(travel);
   assert.equal(travel.handled, true);
   assert.equal(prompt.title, 'Where would you like to sail?');
@@ -2144,6 +2203,16 @@ test('Ivan reclaims a lost Drakan medallion only after Sins of the Father is com
     .filter(entry => entry.key === 'sins_of_the_father').at(-1);
   const attributes = new Map();
   const items = new Map();
+  const messages = [];
+  let freeSlots = 28;
+  let bloodMoonStarted = false;
+  let bloodMoonComplete = false;
+  const emitCustomEvent = api.emitCustomEvent;
+  api.emitCustomEvent = (name, request) => {
+    if (name === 'quest:is-started' && request.key === 'the_blood_moon_rises') request.started = bloodMoonStarted;
+    if (name === 'quest:is-complete' && request.key === 'the_blood_moon_rises') request.complete = bloodMoonComplete;
+    emitCustomEvent(name, request);
+  };
   const player = {
     isPlayerBot: () => true,
     getAttribute: key => attributes.get(key),
@@ -2153,26 +2222,73 @@ test('Ivan reclaims a lost Drakan medallion only after Sins of the Father is com
       getAmount: id => items.get(id) ?? 0,
       contains: id => (items.get(id) ?? 0) > 0,
       adds: (id, amount) => { items.set(id, (items.get(id) ?? 0) + amount); return true; },
-      getFreeSlots: () => 28 - [...items.values()].reduce((sum, amount) => sum + amount, 0),
+      getFreeSlots: () => freeSlots,
     }),
-    sendMessage() {},
+    sendMessage: text => messages.push(text),
   };
   const actions = handlers.custom.get('npc-dialogue:action');
   const reclaim = stepId => actions.forEach(handler => handler({ player, npcId: 4440, stepId }));
-  quest.setStage(player, 299);
+  attributes.set('quest.sins_of_the_father.tome-chapters', 1);
+  quest.setStage(player, 137);
   reclaim('ZoWCuH');
   assert.equal(items.get(22400) ?? 0, 0, 'the post-quest NPC action does not bypass Sins completion');
-  quest.setStage(player, 300);
+  quest.setStage(player, 138);
   const postQuestIvan = spawned.find(npc => npc.id === 4440 && npc.x === 3598 && npc.y === 9613);
   assert.deepEqual(
     [postQuestIvan?.x, postQuestIvan?.y, postQuestIvan?.z],
     [3598, 9613, 0],
     'the actionable post-quest Ivan is placed at his canonical Meiyerditch hideout tile',
   );
-  reclaim('ZoWCuH');
+
+  const chooseVariant = handlers.variant.at(-1);
+  const ivanContext = {
+    player,
+    npcId: 4440,
+    definition: { getName: () => 'Ivan Strom' },
+    pages: [
+      { page: 'In Aid of the Myreque', variants: ['the-myreque-s-job-offer-ivan-strom'] },
+      { page: 'Ivan Strom', variants: ['standard-dialogue-after-completing-in-search-of-the-myreque',
+        'standard-dialogue-after-completing-sins-of-the-father'] },
+    ],
+  };
+  assert.equal(chooseVariant(ivanContext), 'standard-dialogue-after-completing-sins-of-the-father',
+    'post-Sins Ivan selects the canonical transcript with the medallion reclaim option');
+  bloodMoonStarted = true;
+  assert.equal(chooseVariant(ivanContext), null, 'an active Blood Moon chapter keeps Ivan ownership');
+  bloodMoonStarted = false;
+  bloodMoonComplete = true;
+  assert.equal(chooseVariant(ivanContext), null, 'completed Blood Moon also keeps Ivan ownership');
+  bloodMoonComplete = false;
+
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const ivanVariant = JSON.parse(fs.readFileSync(
+    path.join(__dirname, '../data/definitions/npc-dialogues.json'), 'utf8',
+  ))['Ivan Strom'].variants['standard-dialogue-after-completing-sins-of-the-father'];
+  let medallionActionId;
+  const walk = steps => (steps || []).forEach(step => {
+    for (const option of step.options ?? []) {
+      if (option.text === "I need another Drakan's Medallion.") {
+        medallionActionId = (option.steps ?? []).find(entry => entry.type === 'action')?.id;
+      }
+      walk(option.steps);
+    }
+    walk(step.steps);
+  });
+  walk(ivanVariant);
+  assert.equal(medallionActionId, 'ZoWCuH',
+    'the canonical post-Sins option is wired to the medallion reclaim action');
+
+  freeSlots = 0;
+  reclaim(medallionActionId);
+  assert.equal(items.get(22400) ?? 0, 0, 'a full backpack cannot hand out the medallion');
+  assert.ok(messages.some(text => text.includes('empty inventory slot')), 'a full backpack reports the missing slot');
+  freeSlots = 28;
+  reclaim(medallionActionId);
   assert.equal(items.get(22400), 1, 'Ivan restores the actual quest reward after the transcript reclaim action');
   reclaim('R8U1L0');
   assert.equal(items.get(22400), 1, 'repeating the other transcript variant cannot duplicate the medallion');
+  assert.equal(attributes.get('quest.sins_of_the_father.tome-chapters'), 1, 'medallion reclaim leaves the tome chapter count alone');
   delete require.cache[require.resolve('../plugins/quests/quests/SinsOfTheFather.Quest')];
 });
 
@@ -4379,6 +4495,8 @@ test('Blood Moon Chapel Library lever opens the Servants Quarters portal after t
 
 test('Blood Moon solid key requires the symbol, shield assembly, and southern wall mount', () => {
   const { api, handlers } = mockApi();
+  const prompts = [];
+  api.sendMultiChatboxPrompt = (who, title, ...pairs) => { prompts.push({ title, pairs }); return true; };
   require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
   const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
   const quest = getRegisteredQuests().filter((entry) => entry.key === 'the_blood_moon_rises').at(-1);
@@ -4414,7 +4532,11 @@ test('Blood Moon solid key requires the symbol, shield assembly, and southern wa
   assert.equal(inventory.contains(I.SHIELD_WITH_SYMBOL), true);
   const mount = handlers.itemOnObject.find((handler) => handler.name === 'handleMountShield');
   mount({ player, itemId: I.SHIELD_WITH_SYMBOL, location: { x: 2543, y: 7361, z: 0 }, handled: false });
-  object({ player, definition: { getName: () => 'Shield' }, location: { x: 2543, y: 7361, z: 0 }, handled: false });
+  object({ player, objectId: 61698, definition: { id: 61700, getName: () => 'Mounted shield' },
+    option: 'Search', location: { x: 2543, y: 7361, z: 0 }, handled: false });
+  assert.equal(prompts.length, 1);
+  assert.equal(prompts[0].title, 'Search the compartment?');
+  prompts[0].pairs[1]();
   assert.equal(inventory.contains(I.SOLID_KEY), true, 'searching the mounted shield yields the solid key');
 });
 
@@ -4615,7 +4737,9 @@ test('Blood Moon Ivan preserves the four-slot supply handout until it fits', () 
     [api.core.ItemIdentifiers.FOUL_CHUNKY_POTION_3_, 1],
   ].sort((a, b) => a[0] - b[0]));
   assert.equal(attributes.get('quest.the_blood_moon_rises.blood-hunt').suppliesClaimed, true);
-  assert.deepEqual(sentVarbits.at(-1), [15565, 0]);
+  assert.deepEqual(sentVarbits.find(([id]) => id === 15565), [15565, 0]);
+  assert.deepEqual(sentVarbits.filter(([id]) => id === 15481).at(-1), [15481, 1],
+    'the actual supply handover publishes the Quest Helper warning varbit');
   const duplicate = claim();
   action(duplicate);
   assert.equal(duplicate.end, true);
@@ -4672,7 +4796,7 @@ test('Blood Moon crossing preserves the captured native stages and starts the sh
   attributes.set('quest.the_blood_moon_rises.blood-hunt', { drawbridgeRepaired: true });
   const action = handlers.custom.get('npc-dialogue:action').find(handler => handler.name === 'onTranscriptAction');
   action({ player, stepId: 'lKvIyH' });
-  assert.deepEqual(sentVarbits.at(-1), [15464, 86]);
+  assert.deepEqual(sentVarbits.at(-1), [15464, 88]);
   action({ player, stepId: 'D5qF0g' });
   assert.deepEqual(sentVarbits.at(-1), [15464, 88]);
   action({ player, stepId: 'sw9z49' });
@@ -4936,6 +5060,7 @@ test('Blood Moon hunt restores both ten-turn cranks and gates the keyed house an
     getPacketSender: () => new Proxy({ sendVarbit: (id, value) => sentVarbits.push([id, value]) }, {
       get: (target, key) => target[key] ?? (() => {}),
     }),
+    getDialogueManager: () => ({ reset() {}, startDialogues() {}, getCurrent() { return undefined; } }),
     sendMessage: (message) => messages.push(message),
   };
   quest.setStage(player, 50);
@@ -5277,11 +5402,19 @@ test('Blood Moon hunt restores both ten-turn cranks and gates the keyed house an
   const repairLine = { player, step: { player: true },
     text: "We don't have time for this. Whatever we do next, we can't stay here. Let's get across that bridge." };
   cogLine(repairLine);
-  assert.equal(typeof repairLine.after, 'function', 'the player hand-in line waits for its post-line cog check');
+  assert.equal(typeof repairLine.after, 'function', 'the found-cog line waits for its post-line check');
   repairLine.after();
-  assert.equal(inventory.contains(ids.OLD_COG), false, 'the bridge handoff consumes the real cog');
+  assert.equal(inventory.contains(ids.OLD_COG), true, 'the dialogue only reports finding the cog');
+  assert.equal(attributes.get('quest.the_blood_moon_rises.blood-hunt').drawbridgeRepaired, undefined,
+    'finding the cog does not repair the bridge');
+  assert.equal(attributes.get('quest.the_blood_moon_rises.blood-hunt').cogFound, true);
+  assert.deepEqual(sentVarbits.at(-1), [15485, 1], 'the captured found-cog varbit is saved');
+  const cogUse = { player, itemId: ids.OLD_COG, objectId: 61804, definition: { id: 61804 },
+    location: { x: 2633, y: 7831, z: 0 }, handled: false };
+  useItemOnObject(cogUse);
+  assert.equal(cogUse.handled, true, 'the raw 61804 mechanism owns the cog item-use');
+  assert.equal(inventory.contains(ids.OLD_COG), false, 'the real machine consumes the held cog');
   assert.equal(attributes.get('quest.the_blood_moon_rises.blood-hunt').drawbridgeRepaired, true);
-  assert.deepEqual(sentVarbits.at(-1), [15485, 1], 'the captured drawbridge-found-cog varbit is saved');
   const crossing = { player, stepId: 'lKvIyH', handled: false, end: false };
   transcriptAction(crossing);
   assert.equal(attributes.get('quest.the_blood_moon_rises.stage'), 50, 'the repaired drawbridge permits the captured crossing transition');
@@ -5486,6 +5619,7 @@ test('The Wyrd transcript action starts a private encounter with the cache-mappe
   meleeMethod.hits = () => [combatHit(nextMeleeDamage)];
   magicMethod.hits = () => [combatHit(nextMagicDamage)];
   combatFactory.addPendingHit = hit => combatHits.push(hit);
+  let playerCombatResets = 0, bossCombatResets = 0;
   const boss = {
     isNpc: () => true,
     isPlayer: () => false,
@@ -5498,7 +5632,7 @@ test('The Wyrd transcript action starts a private encounter with the cache-mappe
     getLocation: () => bossLocation,
     setMultiCombat() {},
     setScriptedMovement(value) { this.scriptedMovement = value; },
-    getCombat: () => ({ getLastAttack: () => ({ reset() {} }) }),
+    getCombat: () => ({ reset() { bossCombatResets++; }, getLastAttack: () => ({ reset() {} }) }),
     performAnimation(animation) { animations.push(animation.getId()); },
     forceChat() {},
     setMaxHitpoints(value) { this.maxHitpoints = value; },
@@ -5511,7 +5645,7 @@ test('The Wyrd transcript action starts a private encounter with the cache-mappe
     for (const handler of handlers.custom.get(name) ?? []) handler(request);
   };
   require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
-  let playerHitpoints = 100;
+  let playerHitpoints = 100, movementBlocked = false;
   const player = {
     getUsername: () => 'WyrdFightTest',
     getAttribute: (key) => attributes.get(key),
@@ -5538,8 +5672,10 @@ test('The Wyrd transcript action starts a private encounter with the cache-mappe
     getEquipment: () => ({ get: () => null }),
     getMovementQueue: () => ({ canWalk: () => canKnockback, walkStep: (dx, dy) => {
       stepsBack.push([dx, dy]); playerLocation = new api.core.Location(playerLocation.getX() + dx, playerLocation.getY() + dy, 0);
-    } }),
+    }, reset() { return this; }, setBlockMovement(value) { movementBlocked = value; return this; } }),
+    setUntargetable() {},
     getCombat: () => ({
+      reset() { playerCombatResets++; },
       getHitQueue: () => ({ addPendingDamage: (hits) => pendingDamage.push(...hits) }),
       setAttackDelay: (ticks) => attackDelays.push(ticks),
     }),
@@ -5680,6 +5816,14 @@ test('The Wyrd transcript action starts a private encounter with the cache-mappe
     assert.deepEqual(nativeStagesAtTranscript.at(-1), [15464, 146],
       'the overkill fallback sends native stage 146 before the 10% transcript starts');
     assert.ok(transcriptStarts > dialoguesBeforeLethalHit, 'the 10% transcript starts before the NPC enters its death task');
+    assert.equal(movementBlocked, true, 'the mandatory 10% scene locks movement');
+    assert.ok(playerCombatResets > 0 && bossCombatResets > 0, 'story entry clears autoattacks on both actors');
+    dialogueActive = false;
+    movementBlocked = true;
+    wyrdQuest.setStage(player, 90);
+    worldCycle += 1;
+    bossArea.process(boss);
+    assert.equal(dialogueActive, true, 'a cancelled 10% chatbox is reopened on the next free tick');
 
     const playerDeath = handlers.playerBeforeDeath.find(handler => handler.name === 'handleWyrdPlayerBeforeDeath');
     assert.equal(typeof playerDeath, 'function', 'Wyrd deaths are handled in the encounter area');
@@ -5689,6 +5833,7 @@ test('The Wyrd transcript action starts a private encounter with the cache-mappe
     assert.equal(playerHitpoints, 99, 'a failed attempt returns the player with full Hitpoints');
     assert.deepEqual(player.destination, [3506, 9838, 0], 'a failed attempt returns to Veliaf outside the laboratory');
     assert.equal(player.getAttribute('quest.the_blood_moon_rises.wyrd-area'), null, 'the failed instance is cleared for retry');
+    assert.equal(movementBlocked, false, 'death cleanup restores movement controls');
 
     attributes.set('quest.the_blood_moon_rises.wyrd-defeated', true);
     const examine = handlers.custom.get('world:object-examine').at(-1);
@@ -5996,21 +6141,25 @@ test('Blood Moon northern-door transcript starts the private Lowerniel encounter
   action({ player, stepId: 'R8kt3U' });
   assert.equal(attributes.get('quest.the_blood_moon_rises.final-portal-used'), true);
   assert.deepEqual(player.destination, [2507, 7383, 0], 'the portal uses its captured Castle arrival');
+  const opens = [];
+  handlers.custom.set('omnishop:open', [event => opens.push(event)]);
   const chest = handlers.objects.find(handler => handler.name === 'handleFinalDrakanSupplyChest');
   const chestAction = { player, objectId: 61764, definition: { id: 61765 },
     location: new api.core.Location(2503, 7386, 0), option: 'take-supplies', handled: false };
   assert.equal(chest(chestAction), true);
   assert.equal(chestAction.handled, true);
-  action({ player, stepId: 'huhOGU', kind: 'action' });
+  assert.equal(opens.length, 1, 'Take-supplies opens the real vampyrium omnishop');
+  assert.equal(opens[0].shop, 16873);
   assert.equal(attributes.get('quest.the_blood_moon_rises.final-drakan-supplies'), true,
-    'supplies are obtained through the actual castle chest action');
+    'opening the chest records that the supplies were checked');
   const congealedBlood = api.core.ItemIdentifiers.JAR_OF_CONGEALED_BLOOD;
-  assert.equal(items.get(congealedBlood), 1, 'the final chest gives one congealed-blood jar');
+  assert.equal(items.get(congealedBlood), undefined, 'the chest no longer auto-grants a jar');
   action({ player, stepId: 'huhOGU', kind: 'action' });
-  assert.equal(items.get(congealedBlood), 1, 'reopening the chest cannot give a second jar while one is held');
-  items.delete(congealedBlood);
-  action({ player, stepId: 'huhOGU', kind: 'action' });
-  assert.equal(items.get(congealedBlood), 1, 'the chest can replace the jar after it has been consumed or dropped');
+  assert.equal(opens.length, 2, 'the canonical Take choice opens the same omnishop');
+  assert.equal(opens[1].shop, 16873);
+  assert.equal(items.get(congealedBlood), undefined, 'opening the shop grants nothing');
+  chest({ ...chestAction, handled: false });
+  assert.equal(opens.length, 3, 'the player may resupply again after losing the jar');
   const door = handlers.objects.find(handler => handler.name === 'handleFinalDrakanRoofDoor');
   const doorAction = { player, objectId: 61628, definition: { id: 61628 },
     location: new api.core.Location(2506, 7387, 0), option: 'enter', handled: false };
@@ -6201,170 +6350,174 @@ test('Blood Moon siege barrier action starts the second private Lowerniel fight 
   assert.equal(total, 810, 'the lethal multi-hit is capped at 58% so the escape cutscene cannot be skipped');
 });
 
-test('Blood Moon hall defence supplies hammers and potions, records repairs and heals a fallen Aranei', () => {
+test('Blood Moon hall defence spawns six Aranei, crates and repairs the captured hall', () => {
   const { api, handlers } = mockApi();
-  const replaced = [], objectManager = api.core.ObjectManager;
+  const replaced = [], removed = [], objectManager = api.core.ObjectManager;
   const originalDeregister = objectManager.deregister, originalRegister = objectManager.register;
-  objectManager.deregister = object => replaced.push(['remove', object]);
-  objectManager.register = object => replaced.push(['add', object]);
-  api.core = { ...api.core, PrivateArea: class extends api.core.PrivateArea {
-    constructor() { super([]); this.objects = []; }
-    enter(member) { member.area = this; }
-    add(object) { object.setArea(this); this.objects.push(object); }
-    getObjects() { return this.objects; }
-    postLeave() {}
-  } };
-  let cycle = 0, palace, loginHook;
-  api.onPlayerLogin = handler => { if(handler.name==='handleSiegeLogin')loginHook=handler; };
-  api.registerArea = area => { palace = area; };
   const originalGetProcessCycle = api.core.World.getProcessCycle;
-  api.core.World.getProcessCycle = () => cycle;
-  const spawns = [];
-  const injured = {
-    getId: () => api.core.NpcIdentifiers.ARANEI_112,
-    getIndex: () => 800,
-    getLocation: () => new api.core.Location(3173, 7855, 1),
-    getHitpoints: () => 30,
-    isRegistered: () => true,
-    setNpcTransformationId(id) { this.transformedId = id; },
-  };
-  api.spawnNpc = (definition) => (spawns.push(definition), injured);
-  const persisted = []; api.persistAttribute = key => persisted.push(key);
-  require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
-  assert(!persisted.includes('quest.the_blood_moon_rises.siege-drakan-area'), 'live combat areas must not enter JSON player saves');
-  assert(persisted.includes('quest.the_blood_moon_rises.siege-defence'), 'the earned siege checkpoint is saved');
-  const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
-  const quest = getRegisteredQuests().filter((entry) => entry.key === 'the_blood_moon_rises').at(-1);
-  const attributes = new Map();
-  const counts = new Map();
-  const inventory = {
-    contains: (id) => (counts.get(id) ?? 0) > 0,
-    adds: (id, amount) => (counts.set(id, (counts.get(id) ?? 0) + amount), true),
-    deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
-  };
-  const player = {
-    isPlayer: () => true, getAsPlayer: () => player,
-    getUsername: () => 'SiegeHallTest',
-    getPrivateArea: () => player.area,
-    getAttribute: (key) => attributes.get(key),
-    setAttribute: (key, value) => attributes.set(key, value),
-    getInventory: () => inventory,
-    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
-    getDialogueManager: () => ({ reset() {}, startDialogues() {} }),
-    sendMessage() {},
-  };
-  quest.setStage(player, 70);
-  attributes.set('quest.the_blood_moon_rises.siege-defence',{phase:'hall',integrity:100,healed:[],repaired:[]});
-  palace.process(player);
-  loginHook({player});
-  assert.deepEqual(spawns.map(({ id, x, y, z, ownerOnly }) => ({ id, x, y, z, ownerOnly })), [
-    { id: api.core.NpcIdentifiers.ARANEI_112, x: 3173, y: 7855, z: 1, ownerOnly: true },
-  ]);
-  assert.equal(replaced.filter(([kind])=>kind==='add').length,9,'the actual hall scenery is spawned inside its private instance');
-  assert.ok(replaced.every(([,object])=>object.getPrivateArea()===player.area));
-  const routeWindow = handlers.routes.find(handler => handler.name === 'routeSiegeHallWindowRepair');
-  assert.ok(routeWindow, 'north-wall window clicks have a hall-scoped reachable approach');
-  const approach = { x: 3176, y: 7857, z: 1 };
-  const { RegionManager } = api.core;
-  assert.equal(RegionManager.blocked(new api.core.Location(approach.x, approach.y, approach.z), null), false,
-    'the interior-side window approach is a cache-walkable tile');
-  const reachable = new Set(['3168,7855']), queue = [[3168, 7855]];
-  for (let index = 0; index < queue.length; index++) {
-    const [x, y] = queue[index];
-    for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-      const nx = x + dx, ny = y + dy, key = `${nx},${ny}`;
-      if (nx < 3154 || nx > 3183 || ny < 7823 || ny > 7861 || reachable.has(key) ||
-        !RegionManager.canMove(x, y, nx, ny, 1, 1, 1, null)) continue;
-      reachable.add(key);
-      queue.push([nx, ny]);
-    }
-  }
-  assert.equal(reachable.has(`${approach.x},${approach.y}`), true,
-    'the window approach connects to the cache-walkable hall entrance');
-  const windowLocation = new api.core.Location(3176, 7858, 1);
-  const windowObject = { getLocation: () => windowLocation, getPrivateArea: () => player.area };
-  const windowRoute = { player, object: windowObject, objectId: api.core.ObjectIdentifiers.DAMAGED_WINDOW,
-    definition: { id: api.core.ObjectIdentifiers.DAMAGED_WINDOW, getInteractions: () => ['Repair'] },
-    clickType: 1, sourceLocation: { x: 3168, y: 7855, z: 1 }, destination: null };
-  routeWindow(windowRoute);
-  assert.deepEqual(windowRoute.destination, approach);
-  const outsideRoute = { ...windowRoute, object: { ...windowObject, getPrivateArea: () => null }, destination: null };
-  routeWindow(outsideRoute);
-  assert.equal(outsideRoute.destination, null, 'the route cannot affect public or another player’s hall');
-  replaced.length=0;
-  const interact = handlers.objects.find((handler) => handler.name === 'handleSiegeHallObject');
-  const objectEvent = (id, x, y, option = 'Repair') => {
-    const location = new api.core.Location(x, y, 1);
-    const object = { getLocation: () => location, getType: () => 10, getFace: () => 0, getPrivateArea: () => player.area };
-    const event = { player, object, objectId: id, definition: { id }, location: { x, y, z: 1 }, option, handled: false };
-    interact(event);
-    return event;
-  };
-  const ids = api.core.ObjectIdentifiers;
-  objectEvent(ids.CRATE_OF_HAMMERS_2, 3177, 7843, 'Take-from');
-  objectEvent(ids.CRATE_OF_POTIONS, 3171, 7847, 'Take-from');
-  assert.equal(inventory.contains(api.core.ItemIdentifiers.HAMMER), true);
-  assert.equal(inventory.contains(api.core.ItemIdentifiers.HEALING_POTION), true);
-  const npc = {
-    getId: () => api.core.NpcIdentifiers.ARANEI_108,
-    getOwner: () => player, getArea: () => player.area,
-    getIndex: () => 800,
-    getLocation: () => new api.core.Location(3173, 7855, 1),
-    setNpcTransformationId(id) { this.transformedId = id; },
-  };
-  const heal = handlers.npcInteractions.get('Aranei').Heal;
-  const healEvent = { player, npc, npcId: npc.getId(), handled: false };
-  const otherEvent={...healEvent,npc:{...npc,getOwner:()=>({})}};heal(otherEvent);assert.equal(otherEvent.handled,false,'another defender cannot heal this player’s instance');
-  heal(healEvent);
-  assert.equal(healEvent.handled, true);
-  assert.equal(npc.transformedId, api.core.NpcIdentifiers.ARANEI_106);
-  objectEvent(ids.DAMAGED_PILLAR_2, 3174, 7855);
-  objectEvent(ids.DAMAGED_PILLAR_2, 3162, 7855);
-  objectEvent(ids.DAMAGED_WINDOW, 3176, 7858);
-  const state = attributes.get('quest.the_blood_moon_rises.siege-defence');
-  assert.equal(state.repaired.length, 3);
-  assert.equal(state.healed.length, 1);
-  assert.equal(state.integrity, 100, 'repairs and healing support the integrity hold instead of completing it directly');
-  assert.equal(replaced.filter(([kind]) => kind === 'add').length, 3, 'each fixed cache loc is replaced with its repaired variant');
-  assert.equal(handlers.playerProcess.some(h=>h.name==='processSiegeDefence'),false,'hall timing belongs to its area');
-  const process = ({player}) => player.area.process(player);
-  attributes.set('quest.the_blood_moon_rises.siege-defence', { ...state, integrity: 51, participation: 0, nextIntegrityLossCycle: 20 });
-  cycle = 20;
-  const npcDefinition = api.core.NpcDefinition;
-  const originalForId = npcDefinition.forId;
-  npcDefinition.forId = (id) => ({ getId: () => id, getName: () => 'Lowerniel Drakan' });
   try {
+    objectManager.deregister = object => replaced.push(['remove', object]);
+    objectManager.register = object => replaced.push(['add', object]);
+    api.core = { ...api.core, PrivateArea: class extends api.core.PrivateArea {
+      constructor() { super([]); this.objects = []; }
+      enter(member) { member.area = this; }
+      add(object) { object.setArea(this); this.objects.push(object); }
+      getObjects() { return this.objects; }
+      postLeave() {}
+    } };
+    api.core.World.getProcessCycle = () => 0;
+    const spawns = [], spawnedNpcs = [];
+    api.spawnNpc = definition => {
+      const npc = { id: definition.id, x: definition.x, y: definition.y, z: definition.z, owner: definition.owner,
+        getId() { return npc.id; }, getIndex: () => 800 + spawnedNpcs.length,
+        getLocation: () => new api.core.Location(npc.x, npc.y, npc.z),
+        getHitpoints: () => 30, isRegistered: () => true, getOwner: () => npc.owner,
+        getArea: () => npc.area, setArea: area => { npc.area = area; },
+        getNpcTransformationId: () => npc.transformedId ?? npc.id,
+        setNpcTransformationId(id) { npc.transformedId = id; } };
+      spawns.push(definition); spawnedNpcs.push(npc); return npc;
+    };
+    api.removeNpc = npc => removed.push(npc);
+    const persisted = []; api.persistAttribute = key => persisted.push(key);
+    require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
+    assert(!persisted.includes('quest.the_blood_moon_rises.siege-drakan-area'), 'live combat areas must not enter JSON player saves');
+    assert(persisted.includes('quest.the_blood_moon_rises.siege-defence'), 'the earned siege checkpoint is saved');
+    const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
+    const quest = getRegisteredQuests().filter((entry) => entry.key === 'the_blood_moon_rises').at(-1);
+    const attributes = new Map(), counts = new Map();
+    const inventory = {
+      getAmount: (id) => counts.get(id) ?? 0,
+      contains: (id) => (counts.get(id) ?? 0) > 0,
+      adds: (id, amount) => (counts.set(id, (counts.get(id) ?? 0) + amount), true),
+      deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
+    };
+    const player = {
+      isPlayer: () => true, getAsPlayer: () => player,
+      getUsername: () => 'SiegeHallTest',
+      getPrivateArea: () => player.area,
+      getAttribute: (key) => attributes.get(key),
+      setAttribute: (key, value) => attributes.set(key, value),
+      getInventory: () => inventory,
+      getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+      getDialogueManager: () => ({ reset() {}, startDialogues() {} }),
+      sendMessage() {},
+    };
+    const SIEGE = 'quest.the_blood_moon_rises.siege-defence';
+    const hallState = () => ({ version: 1, phase: 'hall', integrity: 650, timer: 300, elapsed: 0,
+      damaged: {}, injured: { 0: true }, nextPillarTick: 1000, nextWindowTick: 1000, nextAraneiTick: 1000 });
+    quest.setStage(player, 70);
+    attributes.set(SIEGE, hallState());
+    const loginHook = handlers.playerLogin.find(handler => handler.name === 'handleSiegeLogin');
+    loginHook({ player });
+    assert.deepEqual(spawns.map(({ id, x, y, z, ownerOnly }) => ({ id, x, y, z, ownerOnly })), [
+      { id: api.core.NpcIdentifiers.ARANEI_108, x: 3161, y: 7854, z: 1, ownerOnly: true },
+      { id: api.core.NpcIdentifiers.ARANEI_103, x: 3163, y: 7855, z: 1, ownerOnly: true },
+      { id: api.core.NpcIdentifiers.ARANEI_104, x: 3165, y: 7855, z: 1, ownerOnly: true },
+      { id: api.core.NpcIdentifiers.ARANEI_105, x: 3171, y: 7855, z: 1, ownerOnly: true },
+      { id: api.core.NpcIdentifiers.ARANEI_106, x: 3173, y: 7855, z: 1, ownerOnly: true },
+      { id: api.core.NpcIdentifiers.ARANEI_107, x: 3175, y: 7854, z: 1, ownerOnly: true },
+    ], 'all six captured Aranei spawn at their real tiles');
+    assert.equal(replaced.filter(([kind])=>kind==='add').length, 13,
+      'the captured four crates, barricade, two pillars and six windows are spawned inside the private instance');
+    assert.ok(replaced.every(([,object])=>object.getPrivateArea()===player.area));
+    const routeWindow = handlers.routes.find(handler => handler.name === 'routeSiegeHallWindowRepair');
+    assert.ok(routeWindow, 'north-wall window clicks have a hall-scoped reachable approach');
+    const approach = { x: 3176, y: 7857, z: 1 };
+    const { RegionManager } = api.core;
+    assert.equal(RegionManager.blocked(new api.core.Location(approach.x, approach.y, approach.z), null), false,
+      'the interior-side window approach is a cache-walkable tile');
+    const reachable = new Set(['3168,7855']), queue = [[3168, 7855]];
+    for (let index = 0; index < queue.length; index++) {
+      const [x, y] = queue[index];
+      for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const nx = x + dx, ny = y + dy, key = `${nx},${ny}`;
+        if (nx < 3154 || nx > 3183 || ny < 7823 || ny > 7861 || reachable.has(key) ||
+          !RegionManager.canMove(x, y, nx, ny, 1, 1, 1, null)) continue;
+        reachable.add(key); queue.push([nx, ny]);
+      }
+    }
+    assert.equal(reachable.has(`${approach.x},${approach.y}`), true,
+      'the window approach connects to the cache-walkable hall entrance');
+    const windowLocation = new api.core.Location(3176, 7858, 1);
+    const windowObject = { getLocation: () => windowLocation, getPrivateArea: () => player.area };
+    const windowRoute = { player, object: windowObject, objectId: api.core.ObjectIdentifiers.DAMAGED_WINDOW,
+      definition: { id: api.core.ObjectIdentifiers.DAMAGED_WINDOW, getInteractions: () => ['Repair'] },
+      clickType: 1, sourceLocation: { x: 3168, y: 7855, z: 1 }, destination: null };
+    routeWindow(windowRoute);
+    assert.deepEqual(windowRoute.destination, approach);
+    const outsideRoute = { ...windowRoute, object: { ...windowObject, getPrivateArea: () => null }, destination: null };
+    routeWindow(outsideRoute);
+    assert.equal(outsideRoute.destination, null, 'the route cannot affect public or another player’s hall');
+    replaced.length = 0;
+    const interact = handlers.objects.find((handler) => handler.name === 'handleSiegeHallObject');
+    const objectEvent = (id, x, y, option = 'Repair') => {
+      const location = new api.core.Location(x, y, 1);
+      const object = { getLocation: () => location, getType: () => 10, getFace: () => 0, getPrivateArea: () => player.area };
+      const event = { player, object, objectId: id, definition: { id }, location: { x, y, z: 1 }, option, handled: false };
+      interact(event);
+      return event;
+    };
+    const ids = api.core.ObjectIdentifiers;
+    objectEvent(ids.CRATE_OF_HAMMERS_2, 3173, 7847, 'Take-from');
+    objectEvent(ids.CRATE_OF_POTIONS, 3174, 7848, 'Take-from');
+    assert.equal(inventory.contains(api.core.ItemIdentifiers.HAMMER), true);
+    assert.equal(inventory.contains(api.core.ItemIdentifiers.HEALING_POTION), true);
+    objectEvent(ids.CRATE_OF_HAMMERS_2, 3162, 7849, 'Take-from');
+    assert.equal(inventory.getAmount(api.core.ItemIdentifiers.HAMMER), 1, 'a second crate gives no extra hammer');
+    const npc = spawnedNpcs[0];
+    const heal = handlers.npcInteractions.get('Aranei').Heal;
+    const healEvent = { player, npc, npcId: npc.getId(), handled: false };
+    const otherEvent={...healEvent,npc:{...npc,getOwner:()=>({})}};heal(otherEvent);assert.equal(otherEvent.handled,false,'another defender cannot heal this player’s instance');
+    heal(healEvent);
+    assert.equal(healEvent.handled, true);
+    assert.equal(npc.transformedId, api.core.NpcIdentifiers.ARANEI_102, 'healing returns the fallen Aranei to its captured normal id');
+    attributes.set(SIEGE, { ...attributes.get(SIEGE), injured: {} });
+    replaced.length = 0;
+    attributes.set(SIEGE, { ...attributes.get(SIEGE),
+      damaged: { '3174,7855': true, '3162,7855': true, '3176,7858': true } });
+    objectEvent(ids.DAMAGED_PILLAR_2, 3174, 7855);
+    objectEvent(ids.DAMAGED_PILLAR_2, 3162, 7855);
+    objectEvent(ids.DAMAGED_WINDOW, 3176, 7858);
+    const state = attributes.get(SIEGE);
+    assert.deepEqual(state.damaged, {}, 'repairs clear the real damaged targets');
+    assert.equal(state.repaired, undefined, 'there is no permanent repaired list any more');
+    assert.equal(state.integrity, 650, 'repairs remove sources instead of adding integrity');
+    assert.equal(replaced.filter(([kind]) => kind === 'add').length, 39, 'each repair refreshes the 13 captured hall locs');
+    assert.equal(handlers.playerProcess.some(h=>h.name==='processSiegeDefence'),false,'hall timing belongs to its area');
+    const process = ({player}) => player.area.process(player);
+    attributes.set(SIEGE, { ...hallState(), integrity: 7, damaged: { '3174,7855': true }, injured: { 0: true } });
     process({ player });
-    assert.equal(attributes.get('quest.the_blood_moon_rises.siege-defence').phase, 'hall',
-      'integrity alone cannot end the defence without the required participation');
-    attributes.set('quest.the_blood_moon_rises.siege-defence', {
-      ...attributes.get('quest.the_blood_moon_rises.siege-defence'), integrity: 51, participation: 3,
-    });
-    cycle = 40;
+    assert.equal(attributes.get(SIEGE).integrity, 4, 'one damaged pillar plus one injured Aranei costs exactly 3');
+    assert.equal(attributes.get(SIEGE).phase, 'hall');
+    attributes.set(SIEGE, { ...attributes.get(SIEGE), integrity: 2, timer: 0 });
     process({ player });
-    assert.equal(attributes.get('quest.the_blood_moon_rises.siege-defence').qualified, true);
-    assert.equal(attributes.get('quest.the_blood_moon_rises.siege-defence').phase, 'hall', '50% qualifies participation without starting the breach');
-    attributes.set('quest.the_blood_moon_rises.siege-defence', { ...attributes.get('quest.the_blood_moon_rises.siege-defence'), integrity: 1 });
-    cycle = 60; process({ player });
+    assert.equal(attributes.get(SIEGE).phase, 'breach', 'zero integrity after the timer starts the barricade cutscene');
+    const oldHall = player.area; oldHall.postLeave(player, true); replaced.length = 0;
+    const spawnCount = spawns.length;
+    loginHook({player});
+    assert.notEqual(player.area, oldHall, 'the saved breach restores a new owned hall');
+    assert(replaced.some(([kind, object]) => kind === 'add' && object.getId() === ids.BARRICADE_61), 'the saved breach has the captured 62164 barricade');
+    assert.equal(spawns.length, spawnCount, 'no Aranei respawn on the breach checkpoint');
   } finally {
-    npcDefinition.forId = originalForId;
+    objectManager.deregister = originalDeregister;
+    objectManager.register = originalRegister;
+    api.core.World.getProcessCycle = originalGetProcessCycle;
   }
-  assert.equal(attributes.get('quest.the_blood_moon_rises.siege-defence').phase, 'breach',
-    'the barricade cutscene begins only at zero integrity');
-  const oldHall = player.area; oldHall.postLeave(player, true); replaced.length = 0;
-  loginHook({player});
-  assert.notEqual(player.area, oldHall, 'the saved breach restores a new owned hall');
-  assert(replaced.some(([kind, object]) => kind === 'add' && object.getId() === ids.BARRICADE_60), 'the saved breach has a real barricade to resume the fight');
-  assert.equal(spawns.length, 1, 'healed Aranei do not respawn on the breach checkpoint');
-  objectManager.deregister = originalDeregister;
-  objectManager.register = originalRegister;
-  api.core.World.getProcessCycle = originalGetProcessCycle;
 });
 
 test('Blood Moon starts the scoped Theatre encounter and advances after Vasilias', () => {
+  // The quest destructures startTranscript when it registers, so patch it first.
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const originalStartTranscript = runtime.startTranscript;
+  let startedVariant;
+  runtime.startTranscript = (_api, _player, _npc, _page, variant) => {
+    startedVariant = variant;
+    return true;
+  };
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
-  const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
+  runtime.startTranscript = originalStartTranscript;
+  const { getRegisteredQuests } = runtime;
   const quest = getRegisteredQuests().filter((entry) => entry.key === 'the_blood_moon_rises').at(-1);
   const attributes = new Map();
   const player = {
@@ -6384,15 +6537,17 @@ test('Blood Moon starts the scoped Theatre encounter and advances after Vasilias
   handlers.custom.get('npc-dialogue:action').at(-1)({ player, stepId: '1Z5SGt' });
   assert.equal(started, 1, 'the ready dialogue enters the shared scoped raid instead of starting a duplicate arena');
   assert.equal(attributes.get('quest.the_blood_moon_rises.tob-challenge').started, true);
-  const npcDefinition = api.core.NpcDefinition;
-  const originalForId = npcDefinition.forId;
-  npcDefinition.forId = (id) => ({ getId: () => id, getName: () => 'Sugadinti Vitur' });
-  try {
-    api.emitCustomEvent('tob:bmr-completed', { player });
-  } finally {
-    npcDefinition.forId = originalForId;
-  }
-  assert.equal(quest.getStage(player), 90, 'the Vasilias clear advances to the Wyrd chapter');
+  api.emitCustomEvent('tob:bmr-completed', { player });
+  assert.equal(startedVariant, 'another-night-at-the-theatre-after-killing-the-nylocas-vasilias');
+  assert.equal(attributes.get('quest.the_blood_moon_rises.theatre-native-stage'), 138,
+    'the Vasilias clear starts the captured 138 conversation');
+  handlers.custom.get('npc-dialogue:line').find(handler => handler.name === 'onBloodMoonDialogueLine')
+    .call(null, { player, text: 'Go quick, my child. I wish you good luck.', step: { speaker: 'Sugadinti Vitur' },
+      pages: [{ page: 'The Blood Moon Rises', variants: ['another-night-at-the-theatre-after-killing-the-nylocas-vasilias'] }] });
+  assert.equal(attributes.get('quest.the_blood_moon_rises.theatre-native-stage'), 140,
+    'the closing line moves the native stage to 140');
+  handlers.custom.get('npc-dialogue:action').at(-1)({ player, stepId: '4G5OZg' });
+  assert.equal(quest.getStage(player), 90, 'the post-Vasilias scene advances to the Wyrd chapter');
   assert.equal(attributes.get('quest.the_blood_moon_rises.tob-challenge').completed, true);
 });
 
@@ -11396,16 +11551,26 @@ test('Thaerisk offers an explicit choice before the Port Sarim teleport after gi
 
 
 test('Lantern lenses and unpowered orbs are glassblown without consuming the pipe', () => {
- const {api}=mockApi(),handlers=[],items=new Map([[1785,1],[1775,2]]);let choices,level=48,xp=0;
- api.onItemOnItem=h=>handlers.push(h);api.sendMultiChatboxPrompt=(p,title,...opts)=>choices=opts;
- require('../plugins/skills/Crafting.plugin').register(api);
- const inventory={contains:id=>(items.get(id)||0)>0,deleteNumber:(id,n)=>items.set(id,items.get(id)-n),addItem:i=>items.set(i.getId(),(items.get(i.getId())||0)+i.getAmount())};
- const player={getInventory:()=>inventory,getSkillManager:()=>({getCurrentLevel:()=>level,addExperiences:(s,n)=>xp+=n}),sendMessage(){}};
- const e={player,usedItemId:1785,usedWithItemId:1775};handlers.forEach(h=>h(e));assert.equal(e.handled,true);
- assert.deepEqual([choices[0],choices[2]],['unpowered orb','lantern lens']);choices[3]();assert.equal(items.get(1775),2);
- level=49;choices[3]();assert.equal(items.get(4542),1);assert.equal(xp,55);assert.equal(items.get(1785),1);
- choices[1]();assert.equal(items.get(567),1);assert.equal(items.get(1775),0);assert.equal(xp,107.5);
- choices[3]();assert.equal(items.get(4542),1,'a stale menu cannot create more glass');
+ const {api}=mockApi(),handlers=[],tasks=[],items=new Map([[1785,1],[1775,2]]),messages=[];let menu,level=48,xp=0;
+ api.onItemOnItem=h=>handlers.push(h);api.getTaskManager=()=>({submit:t=>tasks.push(t)});
+ const members=api.core.WorldDefinition.isMembersWorld;api.core.WorldDefinition.isMembersWorld=()=>true;
+ try{
+  require('../plugins/skills/Crafting.plugin').register(api);
+  const inventory={contains:id=>(items.get(id)||0)>0,getAmount:id=>items.get(id)||0,deleteNumber:(id,n)=>items.set(id,items.get(id)-n),addItem:i=>items.set(i.getId(),(items.get(i.getId())||0)+i.getAmount())};
+  const sender={sendCreationMenu:m=>{menu=m;return sender;},sendSoundEffect:()=>sender};
+  const player={getInventory:()=>inventory,getSkillManager:()=>({getCurrentLevel:()=>level,addExperiences:(s,n)=>xp+=n}),sendMessage:m=>messages.push(m),
+   getPacketSender:()=>sender,performAnimation(){},getAttribute:()=>null,setAttribute(){},isRegistered:()=>true,getHitpoints:()=>99,
+   getMovementQueue:()=>({size:()=>0}),getForceMovement:()=>null,getInterfaceId:()=>-1,isPlayerBot:()=>false};
+  const e={player,usedItemId:1785,usedWithItemId:1775};for(const h of handlers){h(e);if(e.handled)break;}assert.equal(e.handled,true);
+  // rsprox 1842: all eight items, whatever the level, under the captured labels.
+  assert.deepEqual(menu.getOptions().labels,['Beer glass','Candle lantern','Oil lamp','Vial','Fishbowl','Unpowered staff orb','Lantern lens','Light orb']);
+  menu.execute(4542,1);assert.equal(tasks.length,0);assert.equal(messages.at(-1),'You need level 49 Crafting to make a lantern lens.');
+  level=49;menu.execute(4542,1);tasks.at(-1).execute();tasks.at(-1).execute();
+  assert.equal(items.get(4542),1);assert.equal(xp,55);assert.equal(items.get(1785),1);assert.equal(messages.at(-1),'You make a lantern lens.');
+  menu.execute(567,1);tasks.at(-1).execute();tasks.at(-1).execute();
+  assert.equal(items.get(567),1);assert.equal(items.get(1775),0);assert.equal(xp,107.5);
+  menu.execute(4542,1);assert.equal(items.get(4542),1,'a stale menu cannot create more glass');
+ }finally{api.core.WorldDefinition.isMembersWorld=members;}
 });
 
 
@@ -14339,11 +14504,12 @@ test('bridge uses the actual cache palace exit and lets a full-inventory handoff
 });
 
 test('Blood Moon native bitfield mapping restores Slepe refinery phase without changing quest stage',()=>{
- const {api,handlers}=mockApi();require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);const runtime=require('../plugins/quests/QuestRuntime'),quest=runtime.getRegisteredQuests().filter(q=>q.key==='the_blood_moon_rises').at(-1),attrs=new Map(),bits=new Map();const sender=new Proxy({}, {get:(_,key)=>key==='sendVarbit'?(id,n)=>bits.set(id,n):()=>sender});const player={getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getPacketSender:()=>sender};
+ const {api,handlers}=mockApi();require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);const runtime=require('../plugins/quests/QuestRuntime'),quest=runtime.getRegisteredQuests().filter(q=>q.key==='the_blood_moon_rises').at(-1),attrs=new Map([['the-blood-moon-rises:start-dialogue-complete',true]]),bits=new Map();const sender=new Proxy({}, {get:(_,key)=>key==='sendVarbit'?(id,n)=>bits.set(id,n):()=>sender});const player={getAttribute:k=>attrs.get(k),setAttribute:(k,v)=>attrs.set(k,v),getPacketSender:()=>sender};
  quest.setStage(player,10);assert.equal(bits.get(15464),4);assert.equal(bits.get(15467),1,'the stage-10 hideout NPC transform makes Ivan visible');
  handlers.playerLogin.at(-1)({player});assert.equal(bits.get(15464),4);assert.equal(bits.get(15467),1,'the hideout NPC transform is restored after relog');
  attrs.set('quest.the_blood_moon_rises.hideout-shrine-inspected',true);quest.setStage(player,10);assert.equal(bits.get(15464),8,'the shrine cutscene advances the native varbit');
- quest.setStage(player,20);assert.equal(bits.get(15464),12);assert.equal(bits.get(15467),2,'the ready-to-leave stage shows Ivan’s trade/disguise variant');
+ quest.setStage(player,20);assert.equal(bits.get(15464),10,'the hideout opens at native stage 10');
+ attrs.set('the-blood-moon-rises:hideout-cutscene-started',true);quest.setStage(player,20);assert.equal(bits.get(15464),12);assert.equal(bits.get(15467),2,'the ready-to-leave stage shows Ivan’s trade/disguise variant');
  quest.setStage(player,30);assert.equal(bits.get(15464),16);assert.equal(bits.get(15467),0,'the hideout Ivan is hidden after the story moves to Slepe');bits.clear();
  attrs.set('the-blood-moon-rises:refinery-progress',{started:true,phase:'fight'});runtime.sendQuestVarps({player});assert.equal(bits.get(15464),58);assert.equal(quest.getStage(player),30,'the refinery morph must not advance the quest journal stage');bits.clear();
  attrs.set('the-blood-moon-rises:refinery-progress',{started:true,phase:'cleared'});runtime.sendQuestVarps({player});assert.equal(bits.get(15464),60,'killing the guards alone does not unlock the exit before the slaves escape');bits.clear();
@@ -14449,7 +14615,9 @@ test('Blood Moon shrine examine starts the hideout conversation only at the real
   const player={getAttribute:key=>attrs.get(key),setAttribute:(key,value)=>attrs.set(key,value),getPacketSender:()=>sender,
    getLocation:()=>({getX:()=>3601,getY:()=>9614,getZ:()=>0})};
   const inspect=handlers.custom.get('world:object-examine').find(handler=>handler.name==='inspectHideoutShrine'),event={player,objectId:61174,handled:false};
-  inspect(event);assert.equal(event.handled,true);assert.equal(started[1],9531);assert.equal(started[2],'The Blood Moon Rises');assert.equal(started[3],'starting-out-inspecting-the-shrine');assert.equal(bits.get(15464),8);
+  inspect(event);assert.equal(event.handled,true);assert.equal(started[1],9531);assert.equal(started[2],'The Blood Moon Rises');assert.equal(started[3],'starting-out-inspecting-the-shrine');assert.equal(bits.get(15464),6,'the shrine objectbox opens at native stage 6');
+  handlers.custom.get('npc-dialogue:line').find(handler=>handler.name==='onBloodMoonDialogueLine')({player,text:'[player name].',
+   step:{speaker:'Ivan Strom'},pages:[{page:'The Blood Moon Rises',variants:['starting-out-inspecting-the-shrine']}]});assert.equal(bits.get(15464),8,'its first line advances to native stage 8');
   started=null;const distant={...event,handled:false,player:{...player,getLocation:()=>({getX:3610,getY:9614,getZ:0})}};inspect(distant);assert.equal(distant.handled,false);assert.equal(started,null);
  }finally{runtime.startTranscript=original;delete require.cache[require.resolve('../plugins/quests/quests/TheBloodMoonRises.Quest')];}
 });
@@ -14664,7 +14832,9 @@ test('Fremennik Exiles yields Longhall Brundt to Lunar Seal recovery before its 
   require('../plugins/quests/quests/TheFremennikExiles.Quest')(api);
   const player = {
     getAttribute: () => 0,
+    getSkillManager: () => ({ getMaxLevel: () => 0 }),
     getInventory: () => ({ getAmount: () => 0 }),
+    getBank: () => null,
   };
   const event = { player, npcId: api.core.NpcIdentifiers.BRUNDT_THE_CHIEFTAIN_6, clickType: 1, handled: false };
   assert.equal(brundtTalk(event), false);
@@ -14998,7 +15168,10 @@ test('Current Affairs and Prying Times start gates require every registered prer
   require('../plugins/quests/quests/CurrentAffairs.Quest')(api);
   require('../plugins/quests/quests/PryingTimes.Quest')(api);
   const [currentAffairs, pryingTimes] = conditions;
-  const player = { getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99 }) };
+  const player = {
+    getSkillManager: () => ({ getMaxLevel: () => 99, getCurrentLevel: () => 99 }),
+    getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 28 }),
+  };
   assert.equal(currentAffairs({ npcId: api.core.NpcIdentifiers.ARHEIN, player, stepId: 'mNhEI-' }), true,
     'missing Pandemonium blocks Current Affairs');
   assert.equal(pryingTimes({ npcId: api.core.NpcIdentifiers.SQUAWKING_STEVE_BEANIE, player, stepId: 'aifq0J' }), true,
@@ -15613,6 +15786,7 @@ test('Dragon Slayer II Torfinn runs the cache quest dragons, checkpoints the wav
       getInventory: () => ({
         getAmount: (id) => supplies.get(id) ?? 0,
         getFreeSlots: () => inventoryCapacity - [...supplies.values()].filter((amount) => amount > 0).length,
+        isFull: () => inventoryCapacity - [...supplies.values()].filter((amount) => amount > 0).length <= 0,
         adds: (id, amount = 1) => supplies.set(id, (supplies.get(id) ?? 0) + amount),
         deleteNumber: (id, amount = 1) => supplies.set(id, Math.max(0, (supplies.get(id) ?? 0) - amount)),
       }),
@@ -18507,6 +18681,40 @@ test('RFD Amik shrine requires the Wise Old Man clue, enters the mapped lair and
 });
 
 
+test('RFD shows the Feldip spit-roast only while Skrach can be rescued', () => {
+  assert.deepEqual(require('../data/definitions/object-spawns.json'), []);
+  const { api: base, handlers } = mockApi();
+  const objects = [];
+  base.core = { ...base.core, ObjectManager: {
+    register: object => objects.push(object),
+    deregister: object => { const index = objects.indexOf(object); if (index >= 0) objects.splice(index, 1); },
+  } };
+  delete require.cache[require.resolve('../plugins/quests/quests/RecipeForDisaster.Quest')];
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(base);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
+    .findLast(({ key }) => key === 'recipe_for_disaster');
+  const attributes = new Map();
+  const packetSender = new Proxy({}, { get: (_target, key) => key.startsWith('send') ? () => packetSender : undefined });
+  const player = {
+    getAttribute: key => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getPacketSender: () => packetSender,
+    getLocation: () => new base.core.Location(2632, 2985, 0),
+    getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 28 }),
+    sendMessage() {},
+  };
+  quest.setStage(player, 1);
+  assert.equal(objects.some(object => object.getId() === 3375), false);
+  quest.setStage(player, 4);
+  const roast = objects.find(object => object.getId() === 3375);
+  assert.ok(roast, 'the missing map spit-roast is supplied during the rescue');
+  assert.equal(roast.getOwner(), player);
+  assert.deepEqual([roast.getLocation().getX(), roast.getLocation().getY(), roast.getLocation().getZ()], [2632, 2985, 0]);
+  attributes.set('recipe-for-disaster:rescues', 32);
+  handlers.playerLogin.at(-1)({ player });
+  assert.equal(objects.some(object => object.getId() === 3375), false);
+});
+
 test('RFD council interactions read requirements through the SkillManager before starting a rescue', () => {
   const { api: base } = mockApi();
   const interactions = [];
@@ -19391,13 +19599,14 @@ test('RFD counts diving weight in grams and checks the apparatus in the cape slo
   };
   const player = { getInventory: () => inventory, getEquipment: () => equipment };
 
-  assert.equal(condition({ player, text: 'If the player weighs more than 27kg:' }), false);
-  assert.equal(condition({ player, text: 'If the player has lost their diving apparatus:' }), false);
+  const ask = event => condition({ ...event, pages: [{ page: 'Recipe for Disaster/Freeing Pirate Pete' }] });
+  assert.equal(ask({ player, text: 'If the player weighs more than 27kg:' }), false);
+  assert.equal(ask({ player, text: 'If the player has lost their diving apparatus:' }), false);
   inventoryItems.push(makeItem(231, 12999));
-  assert.equal(condition({ player, text: 'If the player weighs more than 27kg:' }), false);
+  assert.equal(ask({ player, text: 'If the player weighs more than 27kg:' }), false);
   inventoryItems.push(makeItem(232, 1));
-  assert.equal(condition({ player, text: 'If the player weighs more than 27kg:' }), true);
-  assert.equal(condition({ player, text: 'If the player is properly equipped:' }), false);
+  assert.equal(ask({ player, text: 'If the player weighs more than 27kg:' }), true);
+  assert.equal(ask({ player, text: 'If the player is properly equipped:' }), false);
 });
 
 
@@ -19573,7 +19782,7 @@ test('RFD Mother cycles six weaknesses and the final room suppresses prayer and 
     getSkillManager: () => ({ getCurrentLevel: () => 1 }),
     getPrayerActive: () => [],
     getEquipment: () => ({ getItems: () => equipment }),
-    getInventory: () => ({ adds: (id, amount = 1) => inventory.set(id, (inventory.get(id) ?? 0) + amount) }),
+    getInventory: () => ({ adds: (id, amount = 1) => inventory.set(id, (inventory.get(id) ?? 0) + amount), isFull: () => false }),
     getCombat: () => ({ getSelectedSpell: () => selectedSpell }),
     moveTo: (location) => { player.destination = location; },
     getPacketSender: () => new Proxy({}, { get: (_target, key) => key.startsWith('send') ? () => {} : undefined }),
@@ -20669,41 +20878,6 @@ test('Blood Moon registers its final Castle deposit chest handler', () => {
   require('../plugins/quests/quests/TheBloodMoonRises.Quest')(api);
   assert.ok(handlers.namedObjects.some(({ target, actions }) => target === 'Chest' && typeof actions.Deposit === 'function'));
 });
-test('Sins of the Father opens its boat route from the Slepe rowboat after completion', () => {
-  const { api, handlers } = mockApi();
-  let prompt;
-  api.sendMultiChatboxPrompt = (_player, title, ...options) => { prompt = { title, options }; };
-  const moved = [];
-  const attributes = new Map();
-  const player = {
-    getAttribute: key => attributes.get(key),
-    setAttribute: (key, value) => attributes.set(key, value),
-    getLocation: () => new api.core.Location(3661, 3278, 0),
-    moveTo: location => moved.push([location.getX(), location.getY(), location.getZ()]),
-    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
-    sendMessage() {},
-  };
-  require('../plugins/quests/quests/SinsOfTheFather.Quest')(api);
-  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
-    .filter(entry => entry.key === 'sins_of_the_father').at(-1);
-  quest.setStage(player, 999);
-  const boat = handlers.objects.find(handler => handler.name === 'handleObjectInteraction');
-
-  const wrongLocation = { player, objectId: 32602, location: { x: 3662, y: 3279, z: 0 }, handled: false };
-  boat(wrongLocation);
-  assert.equal(wrongLocation.handled, false, 'the Slepe route is scoped to its cache boat anchor');
-  assert.equal(prompt, undefined);
-
-  const travel = { player, objectId: 32602, location: { x: 3661, y: 3279, z: 0 }, option: 'Travel', handled: false };
-  boat(travel);
-  assert.equal(travel.handled, true);
-  assert.equal(prompt.title, 'Where would you like to sail?');
-  const graveyard = prompt.options.findIndex((value, index) => index % 2 === 0 && value === 'Icyene Graveyard.');
-  assert.notEqual(graveyard, -1);
-  prompt.options[graveyard + 1]();
-  assert.deepEqual(moved, [[3696, 3199, 0]], 'the destination uses the existing clear graveyard landing');
-});
-
 test('Sins boat lands on Burgh shore with a collision-valid route inland', () => {
   const { api, handlers } = mockApi();
   const attributes = new Map();
@@ -21018,3 +21192,610 @@ test('Blood Moon Solid-key door enters the reachable laboratory side', () => {
   'the landing has a cache path to the shelves needed for the refiner');
 });
 
+
+test('Curator Haig belongs to the active Golem museum step, then The Dig Site, then Bone Voyage', () => {
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const { api: base, handlers } = mockApi();
+  const api = new Proxy(base, {
+    get(target, prop) {
+      if (prop === 'emitCustomEvent') return (name, request) => {
+        if (name === 'quest:is-complete' || name === 'quest:is-started') {
+          const quest = runtime.getRegisteredQuests().filter(entry => entry.key === request?.key).at(-1);
+          if (quest && request.player) request[name === 'quest:is-complete' ? 'complete' : 'started'] =
+            name === 'quest:is-complete' ? quest.isComplete(request.player) : quest.isStarted(request.player);
+          return;
+        }
+        base.emitCustomEvent(name, request);
+      };
+      return target[prop];
+    },
+  });
+  for (const quest of ['BoneVoyage', 'DigSite', 'TheGolem']) {
+    delete require.cache[require.resolve(`../plugins/quests/quests/${quest}.Quest`)];
+    require(`../plugins/quests/quests/${quest}.Quest`)(api);
+  }
+  const attributes = new Map();
+  const player = { getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value) };
+  const select = () => {
+    const context = { player, npcId: 5214, pages: [] };
+    const owners = ['Bone Voyage', 'The Dig Site', 'The Golem'];
+    for (let index = 0; index < handlers.variant.length; index++) {
+      const choice = handlers.variant[index](context);
+      if (choice) return { owner: owners[index], choice };
+    }
+    return null;
+  };
+
+  attributes.set('quest.the_dig_site.stage', 9);
+  attributes.set('quest.the_golem.stage', 3);
+  const golem = select();
+  assert.equal(golem.owner, 'The Golem', 'the active Golem museum step wins over the earlier quests');
+  assert.equal(golem.choice.page, 'The Golem');
+
+  attributes.set('quest.the_golem.stage', 0);
+  attributes.set('quest.the_dig_site.stage', 0);
+  assert.equal(select().owner, 'The Dig Site', 'The Dig Site still starts through the curator');
+
+  attributes.set('quest.the_dig_site.stage', 9);
+  assert.equal(select().owner, 'Bone Voyage', 'Bone Voyage still starts once The Dig Site is complete');
+
+  attributes.set('quest.the_dig_site.stage', 0);
+  attributes.set('quest.the_golem.stage', 10);
+  assert.equal(select().owner, 'The Dig Site', 'a completed Golem does not hide The Dig Site approval');
+
+  attributes.set('quest.the_dig_site.stage', 9);
+  assert.equal(select().owner, 'Bone Voyage', 'Bone Voyage still starts after Dig Site completion');
+});
+
+test('My Arm earlier quests yield to the Secrets of the North Weiss scene and still work outside it', () => {
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const originalStartTranscript = runtime.startTranscript;
+  const started = [];
+  runtime.startTranscript = (_api, _player, npcId, page, variant) => {
+    started.push({ npcId, page, variant });
+    return true;
+  };
+  const { api: base } = mockApi();
+  const interactions = [];
+  const api = new Proxy(base, {
+    get(target, prop) {
+      if (prop === 'onNpcInteraction') return (name, actions) => {
+        if (typeof name === 'string') interactions.push({ name, actions });
+      };
+      return target[prop];
+    },
+  });
+  try {
+    for (const quest of ['MakingFriendsWithMyArm', 'MyArmsBigAdventure', 'SecretsOfTheNorth']) {
+      delete require.cache[require.resolve(`../plugins/quests/quests/${quest}.Quest`)];
+      require(`../plugins/quests/quests/${quest}.Quest`)(api);
+    }
+  } finally {
+    runtime.startTranscript = originalStartTranscript;
+  }
+  const attributes = new Map([
+    ['quest.making_friends_with_my_arm.stage', 200], // SOTN's requirement is complete
+    ["quest.my_arms_big_adventure.stage", 60],
+  ]);
+  const player = { getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value) };
+  const talk = (npcId, name) => {
+    const event = { player, npcId, clickType: 1, handled: false,
+      definition: { getName: () => name, getActions: () => ['Talk-to'] } };
+    for (const hook of interactions.filter(entry => entry.name === name)) {
+      const action = hook.actions['Talk-to'];
+      if (action && action(event) !== false) { event.handled = true; break; }
+    }
+    return event;
+  };
+  const myArm = api.core.NpcIdentifiers.MY_ARM_3; // 742, the captured Weiss My Arm
+  const snowflake = api.core.NpcIdentifiers.SNOWFLAKE; // 8431, the paired speaker
+  for (const stage of [12, 13, 14]) {
+    attributes.set('quest.secrets_of_the_north.stage', stage);
+    started.length = 0;
+    assert.equal(talk(myArm, 'My Arm').handled, true);
+    assert.deepEqual(started.map(call => [call.npcId, call.page]),
+      [[myArm, 'Secrets of the North']], `SOTN stage ${stage} owns My Arm with his own chathead`);
+    attributes.set('quest.secrets_of_the_north.stage', stage);
+    started.length = 0;
+    assert.equal(talk(snowflake, 'Snowflake').handled, true);
+    assert.deepEqual(started.map(call => [call.npcId, call.page]),
+      [[snowflake, 'Secrets of the North']], `SOTN stage ${stage} reaches Snowflake's paired dialogue`);
+  }
+  attributes.set('quest.secrets_of_the_north.stage', 0);
+  started.length = 0;
+  assert.equal(talk(myArm, 'My Arm').handled, true);
+  assert.equal(started.at(-1).page, "My Arm's Big Adventure", 'My Arm still works outside the North scene');
+  assert.equal(started.at(-1).variant, 'starting-off-talking-to-my-arm-again');
+
+  // Making Friends with My Arm has the same yield even while its own quest is in progress.
+  const makingFriends = interactions.filter(entry => entry.name === 'My Arm')[0].actions['Talk-to'];
+  attributes.set('quest.making_friends_with_my_arm.stage', 100);
+  attributes.set('quest.secrets_of_the_north.stage', 13);
+  assert.equal(makingFriends({ player, npcId: myArm, clickType: 1, handled: false,
+    definition: { getName: () => 'My Arm', getActions: () => ['Talk-to'] } }), false);
+  attributes.set('quest.secrets_of_the_north.stage', 0);
+  started.length = 0;
+  assert.notEqual(makingFriends({ player, npcId: myArm, clickType: 1, handled: false,
+    definition: { getName: () => 'My Arm', getActions: () => ['Talk-to'] } }), false);
+  assert.equal(started.at(-1).page, 'Making Friends with My Arm');
+});
+
+test('Uzer Evil Dave 902/1987 resolves Shadow, while Recipe for Disaster keeps Edgeville', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const index = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogue-index.json'), 'utf8'));
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const originalStartTranscript = runtime.startTranscript;
+  const started = [];
+  runtime.startTranscript = (_api, _player, npcId, page, variant) => {
+    started.push({ npcId, page, variant });
+    return true;
+  };
+  try {
+    const { api: base, handlers } = mockApi();
+    const interactions = [];
+    const api = new Proxy(base, {
+      get(target, prop) {
+        if (prop === 'onNpcInteraction') return (name, actions) => {
+          if (typeof name === 'function') interactions.push(name);
+          else if (actions && typeof actions['Talk-to'] === 'function') interactions.push(actions['Talk-to']);
+        };
+        return target[prop];
+      },
+    });
+    for (const quest of ['RecipeForDisaster', 'ShadowOfTheStorm']) {
+      delete require.cache[require.resolve(`../plugins/quests/quests/${quest}.Quest`)];
+      require(`../plugins/quests/quests/${quest}.Quest`)(api);
+    }
+
+    const attributes = new Map([
+      ['quest.recipe_for_disaster.stage', 4],
+      ['quest.shadow_of_the_storm.stage', 20],
+    ]);
+    const location = (x, y, z = 0) => ({ getX: () => x, getY: () => y, getZ: () => z });
+    let at = location(2721, 4914); // the Uzer portal Evil Dave
+    const player = {
+      getAttribute: key => attributes.get(key),
+      setAttribute: (key, value) => attributes.set(key, value),
+      getLocation: () => at,
+      getInventory: () => ({ getAmount: () => 0, adds: () => true, getFreeSlots: () => 28, deleteNumber: () => true }),
+      getEquipment: () => ({ getItems: () => [], get: () => null }),
+      getSkillManager: () => ({ getCurrentLevel: () => 99, getMaxLevel: () => 99, addExperiences() {} }),
+      getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+      sendMessage() {},
+    };
+    const pagesFor = (npcId, npc) => {
+      const entry = index[String(npcId)] ?? index[String(npc?.getId?.())] ?? [];
+      return entry.map(page => ({ page: String(page.page).replace(/^Transcript:/, ''), variants: page.variants ?? [] }));
+    };
+    const dispatch = (npcId, pageNpcId = npcId) => {
+      const npc = { getId: () => pageNpcId, getLocation: () => at };
+      const event = { player, npc, npcId, clickType: 1, handled: false,
+        definition: { getName: () => 'Evil Dave', getActions: () => ['Talk-to'] } };
+      for (const handler of interactions) {
+        if (handler(event) === true || event.handled) break;
+      }
+      if (event.handled) return { handled: true, transcript: started.at(-1) };
+      const context = { player, npc, npcId, pages: pagesFor(npcId, npc) };
+      for (const select of handlers.variant) {
+        const choice = select(context);
+        if (!choice) continue;
+        const variant = typeof choice === 'string' ? choice : choice.variant;
+        const page = typeof choice === 'object' && choice.page
+          ? choice.page : context.pages.find(entry => entry.variants.includes(variant))?.page;
+        return { handled: false, page, variant };
+      }
+      return { handled: false, page: null, variant: null };
+    };
+
+    started.length = 0;
+    const cached = dispatch(902);
+    assert.equal(cached.handled, false, 'Recipe for Disaster no longer claims Uzer Dave');
+    assert.equal(cached.page, 'Shadow of the Storm');
+    assert.equal(cached.variant, 'infiltrating-the-wizards');
+    assert.deepEqual(index['1987'].map(entry => entry.page), ['Transcript:Shadow of the Storm'],
+      'the raw portal id resolves to the Shadow page without the shared 902 pages');
+    assert.deepEqual(index['913'].map(entry => entry.page), ['Transcript:Shadow of the Storm'],
+      'the passage transform keeps the same canonical Shadow mapping');
+    started.length = 0;
+    const raw = dispatch(1987, 902);
+    assert.equal(raw.handled, true, 'the Shadow legacy id handler claims its raw portal id');
+    assert.equal(raw.transcript.npcId, 902, 'the raw 1987 transform keeps the resolved Evil Dave chathead');
+    assert.equal(raw.transcript.page, 'Shadow of the Storm');
+    assert.equal(raw.transcript.variant, 'infiltrating-the-wizards');
+
+    attributes.set('quest.shadow_of_the_storm.stage', 30);
+    at = location(2720, 4900, 2);
+    started.length = 0;
+    const throne = dispatch(902);
+    assert.equal(throne.page, 'Shadow of the Storm', 'the throne-room Evil Dave is also Shadow-owned');
+    assert.equal(throne.variant, 'infiltrating-the-wizards-talking-to-the-dark-wizards-evil-dave');
+    attributes.set('quest.shadow_of_the_storm.stage', 20);
+
+    at = location(3236, 3220); // Evil Dave's Edgeville basement
+    started.length = 0;
+    const rfd = dispatch(902);
+    assert.equal(rfd.handled, true, 'Recipe for Disaster still owns its own Evil Dave');
+    assert.equal(rfd.transcript.page, 'Recipe for Disaster/Freeing Evil Dave');
+    assert.equal(rfd.transcript.variant, 'talking-to-evil-dave');
+  } finally {
+    runtime.startTranscript = originalStartTranscript;
+  }
+});
+
+test('RFD condition scope keeps Current Affairs eligible at Arhein while RFD opening still works at the Cook', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const index = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogue-index.json'), 'utf8'));
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const { api: base, handlers } = mockApi();
+  const api = new Proxy(base, {
+    get(target, prop) {
+      if (prop === 'emitCustomEvent') return (name, request) => {
+        if (name === 'quest:is-complete' || name === 'quest:is-started') {
+          const quest = runtime.getRegisteredQuests().filter(entry => entry.key === request?.key).at(-1);
+          if (quest && request.player) request[name === 'quest:is-complete' ? 'complete' : 'started'] =
+            name === 'quest:is-complete' ? quest.isComplete(request.player) : quest.isStarted(request.player);
+          return;
+        }
+        base.emitCustomEvent(name, request);
+      };
+      return target[prop];
+    },
+  });
+  // Parent order: RFD first, Current Affairs later.
+  for (const quest of ['RecipeForDisaster', 'CooksAssistant', 'CurrentAffairs', 'Pandemonium']) {
+    delete require.cache[require.resolve(`../plugins/quests/quests/${quest}.Quest`)];
+    require(`../plugins/quests/quests/${quest}.Quest`)(api);
+  }
+  const quest = key => runtime.getRegisteredQuests().filter(entry => entry.key === key).at(-1);
+  const attributes = new Map([
+    ['quest.cooks_assistant.stage', quest('cooks_assistant').completionValue],
+    ['quest.pandemonium.stage', quest('pandemonium').completionValue],
+  ]);
+  let cooking = 0;
+  const player = {
+    getAttribute: key => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getSkillManager: () => ({
+      getMaxLevel: skill => skill === api.core.Skill.COOKING ? cooking : 99,
+      getCurrentLevel: skill => skill === api.core.Skill.COOKING ? cooking : 99,
+    }),
+    getInventory: () => ({ getAmount: () => 0, getFreeSlots: () => 28 }),
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+  };
+  const pagesFor = npcId => index[String(npcId)].map(entry =>
+    ({ page: String(entry.page).replace(/^Transcript:/, ''), variants: entry.variants ?? [] }));
+  const rfdCondition = handlers.condition[0];
+  const arhein = { player, npcId: 3200, stepId: 'mNhEI-',
+    text: 'If the player does not meet the requirements to begin the quest:', pages: pagesFor(3200) };
+  assert.equal(rfdCondition(arhein), null, 'RFD no longer answers the Current Affairs page');
+  const answer = handlers.condition.map(handler => handler(arhein)).find(result => typeof result === 'boolean');
+  assert.equal(answer, false, 'all eligible Current Affairs requirements take the normal start branch');
+  const arheinStart = handlers.variant.map(handler => handler({ player, npcId: 3200, pages: pagesFor(3200) }))
+    .find(result => result);
+  const arheinVariant = typeof arheinStart === 'string' ? arheinStart : arheinStart.variant;
+  const arheinPage = typeof arheinStart === 'object' && arheinStart.page
+    ? arheinStart.page : pagesFor(3200).find(entry => entry.variants.includes(arheinVariant))?.page;
+  assert.equal(arheinPage, 'Current Affairs');
+  assert.equal(arheinVariant, 'starting-off-talking-to-arhein', 'the duck question still starts normally');
+
+  const cook = { player, npcId: 4626, stepId: 'rfd-opening',
+    text: "If the player is on a members' world:", pages: pagesFor(4626) };
+  assert.equal(rfdCondition(cook), true, 'RFD still answers its own opening membership branch');
+  const requirements = { ...cook, text: 'If the player does not meet the requirements to begin the quest:' };
+  assert.equal(rfdCondition(requirements), true, 'RFD opening is still not eligible at Cooking 0');
+  cooking = 10;
+  assert.equal(rfdCondition(requirements), false, 'RFD opening becomes eligible at Cooking 10');
+  assert.deepEqual(handlers.variant[0]({ player, npcId: 4626, pages: pagesFor(4626) }),
+    { page: 'Recipe for Disaster/Another Cook\'s Quest', variant: 'starting-out' },
+    'RFD still starts through the Cook with Cook\'s Assistant complete');
+});
+
+test('Prying Times before Pandemonium owns Steve after the prerequisite completes', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const index = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/npc-dialogue-index.json'), 'utf8'));
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const { api: base, handlers } = mockApi();
+  const api = new Proxy(base, {
+    get(target, prop) {
+      if (prop === 'emitCustomEvent') return (name, request) => {
+        if (name === 'quest:is-complete' || name === 'quest:is-started') {
+          const entry = runtime.getRegisteredQuests().filter(quest => quest.key === request?.key).at(-1);
+          if (entry && request.player) request[name === 'quest:is-complete' ? 'complete' : 'started'] =
+            name === 'quest:is-complete' ? entry.isComplete(request.player) : entry.isStarted(request.player);
+          return;
+        }
+        base.emitCustomEvent(name, request);
+      };
+      return target[prop];
+    },
+  });
+  // Parent order: Prying Times before Pandemonium.
+  for (const questName of ['PryingTimes', 'Pandemonium']) {
+    delete require.cache[require.resolve(`../plugins/quests/quests/${questName}.Quest`)];
+    require(`../plugins/quests/quests/${questName}.Quest`)(api);
+  }
+  const quest = key => runtime.getRegisteredQuests().filter(entry => entry.key === key).at(-1);
+  const attributes = new Map([
+    ['quest.pandemonium.stage', quest('pandemonium').completionValue],
+    ['quest.prying_times.stage', 5],
+  ]);
+  const player = { getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value) };
+  const pages = index['14968'].map(entry =>
+    ({ page: String(entry.page).replace(/^Transcript:/, ''), variants: entry.variants ?? [] }));
+  const result = handlers.variant.map(handler => handler({ player, npcId: 14968, pages }))
+    .find(choice => choice);
+  const variant = typeof result === 'string' ? result : result.variant;
+  const page = typeof result === 'object' && result.page
+    ? result.page : pages.find(entry => entry.variants.includes(variant))?.page;
+  assert.equal(page, 'Prying Times', 'Prying Times owns Steve before Pandemonium can replay his post-quest page');
+  assert.equal(variant, 'starting-off-talking-to-steave-beanie-again-before-he-writes-in-the-log');
+});
+
+test('Shadows of Custodia: the current cache wall transform Inspects and Reinforces through the real object handler', () => {
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const originalStartTranscript = runtime.startTranscript;
+  const transcripts = [];
+  runtime.startTranscript = (_api, _player, npcId, page, variant) => {
+    transcripts.push({ npcId, page, variant });
+    return true;
+  };
+  delete require.cache[require.resolve('../plugins/quests/quests/ShadowsOfCustodia.Quest')];
+  const { api, handlers } = mockApi();
+  try {
+    require('../plugins/quests/quests/ShadowsOfCustodia.Quest')(api);
+  } finally {
+    runtime.startTranscript = originalStartTranscript;
+  }
+  const quest = runtime.getRegisteredQuests().filter(entry => entry.key === 'shadows_of_custodia').at(-1);
+  assert.ok(quest, 'real Shadows of Custodia registration');
+
+  const attributes = new Map();
+  let logs = 0, hammer = 0;
+  const varbits = new Map();
+  const packet = new Proxy({
+    sendVarbit: (id, value) => { varbits.set(id, value); return packet; },
+  }, { get: (target, key) => target[key] ?? (() => packet) });
+  const player = {
+    getAttribute: key => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getPacketSender: () => packet,
+    getInventory: () => ({
+      getAmount: id => id === api.core.ItemIdentifiers.MAPLE_LOGS ? logs : id === api.core.ItemIdentifiers.HAMMER ? hammer : 0,
+      deleteNumber: (id, amount) => { if (id === api.core.ItemIdentifiers.MAPLE_LOGS) logs -= amount; },
+    }),
+    getLocation: () => new api.core.Location(1378, 3358, 0),
+    sendMessage: () => {},
+  };
+  const stage = value => player.setAttribute('quest.shadows_of_custodia.stage', value);
+  const click = (id, clickType = 1) => {
+    const definition = api.core.ObjectDefinition.forId(id);
+    assert.ok(definition, `cache definition ${id}`);
+    const event = { player, objectId: id, definition, clickType, location: definition.getLocation?.() ?? player.getLocation(), handled: false };
+    handlers.objects[0](event);
+    return event;
+  };
+
+  assert.equal(api.core.ObjectDefinition.forId(56433).getName(), 'Wall');
+  assert.equal(api.core.ObjectDefinition.forId(56433).getInteractions()[0], 'Inspect');
+  assert.equal(api.core.ObjectDefinition.forId(56435).getInteractions()[0], 'Reinforce');
+
+  stage(5);
+  const inspect = click(56433);
+  assert.equal(inspect.handled, true, 'current transformed 56433 Inspect is handled');
+  assert.equal(quest.getStage(player), 6, 'the real wall Inspect advances stage 5 -> 6');
+  assert.ok(transcripts.some(entry => entry.variant === 'parents-anguish-finding-the-fabric-inspecting-the-wall'));
+
+  click(56433);
+  assert.equal(quest.getStage(player), 6, 'repeated Inspect cannot advance further');
+
+  // Reinforce is not available before the boys are home; it must not repair early.
+  const early = click(56435);
+  assert.equal(early.handled, true);
+  assert.equal(quest.getStage(player), 6, 'early Reinforce leaves the stage unchanged');
+  assert.equal(attributes.get('quest.shadows_of_custodia.flags') ?? 0, 0, 'early Reinforce does not set the wall flag');
+
+  stage(15);
+  logs = 4; hammer = 1;
+  const reinforced = click(56435);
+  assert.equal(reinforced.handled, true);
+  assert.equal(attributes.get('quest.shadows_of_custodia.flags') & (1 << 4), 1 << 4, 'real 56435 Reinforce sets the wall flag');
+  assert.equal(logs, 0, 'four maple logs consumed');
+  assert.ok(transcripts.some(entry => entry.variant === 'helping-around-town-reinforcing-the-wall'));
+});
+
+test('ForgettableTale yields Blue Opal Director 5999 to Giant Dwarf and keeps its own active window', () => {
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const originalStartTranscript = runtime.startTranscript;
+  const started = [];
+  runtime.startTranscript = (_api, _player, npcId, page, variant) => {
+    started.push({ npcId, page, variant });
+    return true;
+  };
+  const { api: base, handlers } = mockApi();
+  const interactions = [];
+  const api = new Proxy(base, {
+    get(target, prop) {
+      if (prop === 'onNpcInteraction') return (name, actions) => {
+        if (typeof name === 'string' && actions?.['Talk-to']) interactions.push({ name, action: actions['Talk-to'] });
+      };
+      if (prop === 'onNpcsInteraction') return (names, actions) => {
+        for (const name of names) if (actions?.['Talk-to']) interactions.push({ name, action: actions['Talk-to'] });
+      };
+      return target[prop];
+    },
+  });
+  try {
+    for (const questName of ['ForgettableTale', 'GiantDwarf']) {
+      delete require.cache[require.resolve(`../plugins/quests/quests/${questName}.Quest`)];
+      require(`../plugins/quests/quests/${questName}.Quest`)(api);
+    }
+  } finally {
+    runtime.startTranscript = originalStartTranscript;
+  }
+  const attributes = new Map([
+    ['quest.forgettable_tale.stage', 0],
+    ['quest.giant_dwarf.stage', 30],
+    ['quest.giant_dwarf.company', 3],
+    ['quest.giant_dwarf.points', 80],
+  ]);
+  const player = {
+    getAttribute: key => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getInventory: () => ({ getAmount: () => 0 }),
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+  };
+  const talk = (npcId, name) => {
+    const event = { player, npcId, clickType: 1, handled: false,
+      definition: { getName: () => name, getActions: () => ['Talk-to'] } };
+    for (const hook of interactions.filter(entry => entry.name === name)) {
+      const result = hook.action(event);
+      if (result === false) continue;
+      event.handled = true;
+      break;
+    }
+    return event;
+  };
+
+  started.length = 0;
+  assert.equal(talk(5999, 'Blue Opal Director').handled, true);
+  assert.deepEqual(started.at(-1), {
+    npcId: 5999, page: 'The Giant Dwarf', variant: 'the-head-of-a-dwarf-talking-to-a-company-director',
+  }, 'the inactive Forgettable director hook yields to Giant tasks');
+
+  attributes.set('quest.giant_dwarf.points', 100);
+  for (const handler of handlers.custom.get('npc-dialogue:choice') ?? []) {
+    handler({ player, npcId: 5999, option: "I'd like to officially join your company." });
+  }
+  assert.equal(attributes.get('quest.giant_dwarf.joined'), true);
+  assert.equal(attributes.get('quest.giant_dwarf.company'), 3);
+
+  attributes.set('quest.forgettable_tale.stage', 10);
+  started.length = 0;
+  assert.equal(talk(5999, 'Blue Opal Director').handled, true);
+  assert.deepEqual(started.at(-1), {
+    npcId: 5999, page: 'Forgettable Tale...',
+    variant: 'exploring-the-closed-tunnel-before-entering-the-tunnel-talking-to-the-company-director',
+  }, 'the active Forgettable window keeps its own director dialogue');
+
+  attributes.set('quest.forgettable_tale.stage', 0);
+  assert.equal(talk(2385, 'Cart conductor').handled, false,
+    'an inactive Forgettable cart conductor falls back to the generic dialogue');
+});
+
+test('Giant Dwarf owns Veldaban only for its stage 40 meeting; completed Giant leaves Forgettable start alone', () => {
+  const { api, handlers } = mockApi();
+  const runtime = require('../plugins/quests/QuestRuntime');
+  const originalStartTranscript = runtime.startTranscript;
+  runtime.startTranscript = () => true;
+  try {
+    // The shipped Quests.plugin registers ForgettableTale before GiantDwarf; keep
+    // that exact order so the first-answer variant chain is the real one.
+    const order = require('../plugins/quests/Quests.plugin').QUESTS;
+    assert.ok(order.indexOf('ForgettableTale') < order.indexOf('GiantDwarf'));
+    for (const questName of ['ForgettableTale', 'GiantDwarf']) {
+      delete require.cache[require.resolve(`../plugins/quests/quests/${questName}.Quest`)];
+      require(`../plugins/quests/quests/${questName}.Quest`)(api);
+    }
+  } finally {
+    runtime.startTranscript = originalStartTranscript;
+  }
+
+  const index = require('../data/definitions/npc-dialogue-index.json');
+  const dialogues = require('../data/definitions/npc-dialogues.json');
+  const attributes = new Map();
+  const rewardXp = new Map();
+  const packet = new Proxy({}, { get: () => () => packet });
+  const player = {
+    getAttribute: key => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getInventory: () => ({
+      getAmount: () => 0, adds() {}, deleteNumber() {}, getFreeSlots: () => 28, getItems: () => [],
+    }),
+    getPacketSender: () => packet,
+    getSkillManager: () => ({
+      addExperiences: (skill, amount) => rewardXp.set(skill, (rewardXp.get(skill) ?? 0) + amount),
+    }),
+    getFrameUpdater: () => ({ clear() {} }),
+    getDialogueManager: () => ({ isActive: () => false }),
+    isRegistered: () => false,
+    sendMessage() {},
+  };
+
+  // Same first-answer and page lookup NpcDialogues.plugin uses for Talk-to.
+  const firstVariant = (npcId) => {
+    const pages = (index[String(npcId)] ?? [])
+      .map(entry => ({ page: String(entry.page).replace(/^Transcript:/, ''), variants: entry.variants }))
+      .filter(entry => Object.hasOwn(dialogues, entry.page));
+    const context = { player, npcId, pages };
+    for (const hook of handlers.variant) {
+      const choice = hook(context);
+      if (!choice) continue;
+      const wanted = typeof choice === 'string' ? choice : choice.variant;
+      const wantedPage = typeof choice === 'object' ? choice.page : undefined;
+      const page = wantedPage
+        ? pages.find(entry => entry.page === wantedPage)
+        : pages.find(entry => entry.variants.includes(wanted))
+          ?? pages.find(entry => Object.hasOwn(dialogues[entry.page]?.variants ?? {}, wanted));
+      return { wanted, page: page?.page };
+    }
+    return null;
+  };
+
+  for (const npcId of [2228, 6045]) {
+    attributes.clear();
+    attributes.set('quest.forgettable_tale.stage', 0);
+    attributes.set('quest.giant_dwarf.stage', 40);
+    assert.deepEqual(firstVariant(npcId), {
+      wanted: 'art-by-committee-talking-to-commander-veldaban', page: 'The Giant Dwarf',
+    }, `Giant stage 40 owns Veldaban ${npcId}`);
+
+    attributes.set('quest.giant_dwarf.stage', 50);
+    const afterComplete = firstVariant(npcId);
+    assert.equal(afterComplete.page, 'Forgettable Tale...', `completed Giant allows FFT start on ${npcId}`);
+    assert.equal(afterComplete.wanted, 'starting-out-without-fishing-contest-completed');
+
+    attributes.set('quest.giant_dwarf.stage', 30);
+    assert.equal(firstVariant(npcId).wanted, 'starting-out-without-fishing-contest-completed',
+      `unrelated Veldaban ${npcId} dialogue is unchanged`);
+
+    attributes.set('quest.forgettable_tale.stage', 11);
+    attributes.set('quest.giant_dwarf.stage', 40);
+    assert.equal(firstVariant(npcId).wanted, 'brewing-talking-to-veldaban-after-hearing-the-drunken-dwarf-s-story',
+      `an active Forgettable Tale keeps its own Veldaban ${npcId} dialogue`);
+  }
+
+  // The selected Giant meeting transcript drives the real action handlers to stage 50 once.
+  attributes.clear();
+  attributes.set('quest.forgettable_tale.stage', 0);
+  attributes.set('quest.giant_dwarf.stage', 40);
+  attributes.set('quest.giant_dwarf.company', 3);
+  const action = (stepId) => {
+    const event = { player, npcId: 6045, stepId, handled: false };
+    for (const handler of handlers.custom.get('npc-dialogue:action') ?? []) handler(event);
+    return event;
+  };
+  const meeting = action('LsMtIf');
+  assert.deepEqual(meeting.steps, dialogues['The Giant Dwarf'].variants['art-by-committee-the-consortium-meeting'],
+    'stage 40 uses the real Consortium meeting transcript');
+  action('lEFN0h');
+  assert.equal(attributes.get('quest.giant_dwarf.stage'), 50);
+  const xpAfterCompletion = [...rewardXp.values()].reduce((sum, value) => sum + value, 0);
+  assert.equal(xpAfterCompletion, 12000, 'the quest reward is granted once');
+  action('lEFN0h');
+  assert.equal([...rewardXp.values()].reduce((sum, value) => sum + value, 0), xpAfterCompletion,
+    'replaying the completion action cannot grant the reward twice');
+});
+
+test('every registered quest has a cache metadata record for settings filters and sorting', () => {
+  const { api } = mockApi();
+  require('../plugins/quests/Quests.plugin').register(api);
+  const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
+  const cache = api.core.CacheDefinitions;
+  const records = require('../plugins/quests/QuestList.QuestRuntime').metadata(cache);
+  const normalize = value => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const missing = [...new Set(getRegisteredQuests().map(q => q.name))].filter(name => !records.has(normalize(name)));
+  assert.deepEqual(missing, [], 'missing cache records must be explicitly resolved');
+});

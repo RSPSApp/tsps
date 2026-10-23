@@ -22,6 +22,10 @@ type PendingHitConfig = {
     rollAccuracy?: boolean;
     /** False for damage that pays its own XP (or none), skipping the usual combat XP. */
     experience?: boolean;
+    /** A pre-rolled damage value, still passing through damage hooks and the HP cap. */
+    damage?: number;
+    /** Shared across one attack's hits on the same victim; applied after queue-time modifiers. */
+    damageBudget?: { remaining: number };
 };
 
 export class PendingHit {
@@ -35,6 +39,7 @@ export class PendingHit {
     private accurate: boolean;
     private handleAfterHitEffects: boolean;
     private experience = true;
+    private damageBudget?: { remaining: number };
     /** Optional per-hitsplat extra reveal delays (from `hitDelayTicks`). */
     private hitDelays?: number[];
     /** Spell selected when this hit was launched; the caster may clear it before impact. */
@@ -59,6 +64,7 @@ export class PendingHit {
                 resolvedHandleAfterHitEffects = handleAfterHitEffects;
             }
         } else if (delayOrConfig && typeof delayOrConfig === "object") {
+            this.damageBudget = delayOrConfig.damageBudget;
             if (Number.isInteger(delayOrConfig.delay)) {
                 resolvedDelay = delayOrConfig.delay as number;
             }
@@ -76,7 +82,7 @@ export class PendingHit {
             }
         }
 
-        this.hits = this.prepareHits(resolvedHitAmount, resolvedRollAccuracy);
+        this.hits = this.prepareHits(resolvedHitAmount, resolvedRollAccuracy, typeof delayOrConfig === "object" ? delayOrConfig?.damage : undefined);
         this.delay = Math.max(0, resolvedDelay);
         this.handleAfterHitEffects = resolvedHandleAfterHitEffects;
     }
@@ -114,6 +120,16 @@ export class PendingHit {
         return this.totalDamage;
     }
 
+    public capDamageToBudget(): void {
+        if (!this.damageBudget) return;
+        for (const damage of this.hits) {
+            const value = Math.max(0, Math.min(damage.getDamage(), this.damageBudget.remaining));
+            damage.setDamage(value);
+            this.damageBudget.remaining -= value;
+        }
+        this.updateTotalDamage();
+    }
+
     /** Whether the attacker gets the usual combat XP for this hit. */
     public rewardsExperience(): boolean {
         return this.experience;
@@ -149,7 +165,7 @@ export class PendingHit {
         return this.hitDelays;
     }
 
-    private prepareHits(hitAmount: number, rollAccuracy: boolean): HitDamage[] {
+    private prepareHits(hitAmount: number, rollAccuracy: boolean, fixedDamage?: number): HitDamage[] {
         // Check the hit amounts.
         if (hitAmount > 4) {
             throw new Error(
@@ -165,7 +181,7 @@ export class PendingHit {
 
         // Utility-only specials (e.g. stat boosts that resolve outside the hit
         // pipeline) declare skipAttack and produce no hitsplat.
-        const traits = CombatSpecial.activeTraitsFor(this.attacker);
+        const traits = fixedDamage === undefined ? CombatSpecial.activeTraitsFor(this.attacker) : null;
         if (traits?.skipAttack === true) {
             this.totalDamage = 0;
             return [];
@@ -205,7 +221,13 @@ export class PendingHit {
             const damage: HitDamage = this.accurate
                 ? ServerPerf.measurePhase(
                     "combat.process.method_hits.damage",
-                    () => CombatFactory.getHitDamage(this.attacker, this.target, this.combatType, roll.bypassProtectionPrayer, resolved.bounds)
+                    () => CombatFactory.getHitDamage(this.attacker, this.target, this.combatType, roll.bypassProtectionPrayer,
+                        fixedDamage === undefined ? resolved.bounds : {
+                            minimumMultiplier: 0,
+                            maximumMultiplier: 0,
+                            minimumBonus: fixedDamage,
+                            maximumBonus: fixedDamage,
+                        }, fixedDamage === undefined)
                 )
                 : new HitDamage(0, HitMask.BLUE);
             if (this.accurate && this.attacker.isPlayer() && this.target.isPlayer()) {

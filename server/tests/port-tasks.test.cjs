@@ -191,6 +191,23 @@ test("the ledger table: a crate in both hands at the cargo port, then delivered 
     "its entry on the board is drawn again");
 });
 
+test("the Prying Times delivery pays only Sailing XP, with no reward bag or shark paint", () => {
+  const player = createPlayer();
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: 600, taken: 1, delivered: 0 }]);
+  common.carry(player, common.taskById(600).crate, 0);
+  const random = Math.random;
+  Math.random = () => 0; // a reward bag and shark paint would both be paid if the task allowed them
+  try {
+    hooks.objects["Ledger table"]["Deposit-cargo"]({ player, location: PANDEMONIUM_LEDGER });
+  } finally {
+    Math.random = random;
+  }
+  assert.ok(player.log.includes("xp 150"));
+  assert.deepEqual(player.inventory.map((item) => item.getId()), []);
+  assert.ok(player.log.includes("sendConfig 5207=1") && player.log.includes("sendVarbit 19591=1"),
+    "the delivery still counts towards the completed tasks");
+});
+
 test("bags: sized by the task's base XP, 1 in 5 the destination's reward bag", () => {
   const medium = { xp: 1011, destination: "port_piscarilius" };
   assert.equal(ledger.rewardBag(medium, () => 0.9), common.DATA.coinBags[2]);

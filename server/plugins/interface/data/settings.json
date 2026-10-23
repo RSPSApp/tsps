@@ -2,6 +2,7 @@
   "//": "All Settings rows the server applies, by setting id (cache struct param 1077). A toggle flips its varbit or varp between 0 and 1. A dropdown option sets 'varbit' to the option's index, or sets every var in that option's entry of 'options'. 'script' runs after the change. From an rsprox capture of live OSRS; see docs/settings.md.",
   "settings": {
     "5": { "name": "Hitsplat tinting", "varbit": 10236 },
+    "7": { "name": "Hide roofs", "varbit": 12378 },
     "10": { "name": "Show boss health overlay", "varbit": 12389 },
     "13": { "name": "Scroll wheel can change zoom distance", "varbit": 6357 },
     "34": { "name": "Show chat effects", "varp": 171 },
@@ -28,6 +29,7 @@
         { "varbits": { "20157": 0, "4371": 1 } }
       ]
     },
+    "316": { "name": "Make-X for darts and bolts", "varbit": 10971 },
     "371": { "name": "Auto-equip & sort items from gravestone", "varbit": 9776 },
     "372": { "name": "Player Report options", "varbit": 1334 },
     "374": { "name": "Beginner clue scroll warning", "varbit": 10693 },

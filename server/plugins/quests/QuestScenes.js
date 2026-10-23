@@ -19,6 +19,9 @@ const FADE_INTERFACE = 174;
 const FADE_SCRIPT = 948;
 const FADE_CYCLES = 50;
 const CUTSCENE_STATUS_VARBIT = 542;
+// Server-owned cinematic marker Quest Helper reads as its cutscene proxy. The cache's clientscripts
+// only read it (script 3459); there is no CS2 setter, so shared scenes must publish it with 542.
+const GRAVESTONE_TLI_HIDE_VARBIT = 12139;
 const MINIMAP_STATE_VARBIT = 6719;
 const MINIMAP_OFF = 2;
 /** The camera rates every captured quest cutscene in this batch moves with. */
@@ -86,7 +89,11 @@ function createQuestScenes(api, { onEnd } = {}) {
     player.getMovementQueue().reset().setBlockMovement(active);
     player.setUntargetable(active && cutscene);
     player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, active ? MINIMAP_OFF : 0);
-    if (cutscene || !active) player.getPacketSender().sendVarbit(CUTSCENE_STATUS_VARBIT, active && cutscene ? 1 : 0);
+    if (cutscene || !active) {
+      const cinematic = active && cutscene ? 1 : 0;
+      player.getPacketSender().sendVarbit(CUTSCENE_STATUS_VARBIT, cinematic);
+      player.getPacketSender().sendVarbit(GRAVESTONE_TLI_HIDE_VARBIT, cinematic);
+    }
   }
 
   /** An empty chatbox the player cannot continue: the capture's held moments. */
@@ -146,6 +153,7 @@ function createQuestScenes(api, { onEnd } = {}) {
   function end(player, logout) {
     const scene = scenes.get(player);
     if (!scene) return;
+    scene.rules?.beforeEnd?.(player, scene);
     scenes.delete(player);
     TaskManager.cancelTasks(scene);
     for (const npc of scene.actors.splice(0)) if (npc?.isRegistered?.()) api.removeNpc(npc);

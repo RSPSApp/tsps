@@ -342,3 +342,91 @@ test("repeated writer failures never fall back to synchronous game-thread writes
   assert.ok(persistence.writer, "a new save retries the worker with the queued snapshots");
   assert.equal(await savedGold("Lina"), 30);
 });
+
+// Exercise disk serialization and hydration used by login, not an in-memory snapshot.
+const { FightType } = require("../dist/game/content/combat/FightType");
+const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+const { IndexedDbPlayerPersistence } = require("../plugins/persistence/IndexedDbPlayerPersistence.plugin");
+JsonPlayerPersistence.SAVE_DIRECTORY = path.join(directory, "json-characters");
+IndexedDbPlayerPersistence.SAVE_DIRECTORY = path.join(directory, "indexeddb-characters");
+let jsonPersistence;
+require("../plugins/persistence/JsonPlayerPersistence.plugin").register({
+  getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
+  setPlayerPersistence: (backend) => { jsonPersistence = backend; },
+  log() {},
+});
+
+const persistenceBackends = [
+  ["SQLite", persistence],
+  ["JSON", jsonPersistence],
+  ["IndexedDB", new IndexedDbPlayerPersistence()],
+];
+
+for (const [name, backend] of persistenceBackends) {
+  test(`${name}: non-default combat styles survive a committed save and login load`, async () => {
+    for (const [index, fightType] of [FightType.UNARMED_BLOCK, FightType.UNARMED_PUNCH].entries()) {
+      const original = player(`Style ${name} ${index}`);
+      original.setFightType(fightType);
+      backend.save(original, "logout");
+      await backend.flush();
+      const save = backend.load(original.getUsername());
+      assert.equal(save.getFightType(), fightType, "load restores the selected registry entry");
+      const loggedIn = player(original.getUsername());
+      save.applyToPlayer(loggedIn);
+      assert.equal(loggedIn.getFightType(), fightType, "login applies the selected style");
+    }
+  });
+
+  test(`${name}: missing or invalid saved combat styles retain the safe default`, () => {
+    for (const fightType of [undefined, null, {}, "UNARMED_BLOCK", { animation: -123456 }]) {
+      const save = backend.hydratePlayerSave({ fightType });
+      assert.equal(save.getFightType(), FightType.UNARMED_KICK);
+    }
+  });
+}
+
+let combatStyleCache;
+for (const [name, backend] of persistenceBackends) {
+  test(`${name}: equipped weapons keep colliding styles through login assignment`, async () => {
+    const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+    combatStyleCache ??= CachePipeline.initialize(path.resolve(__dirname, "..")).then(() => {
+      require("../plugins/items/ItemDefinitionLoader.plugin").register({
+        log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
+      });
+    });
+    await combatStyleCache;
+    const { Item } = require("../dist/game/model/Item");
+    const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+    const { WeaponInterfaceManager } = require("../dist/game/content/combat/WeaponInterfaceManager");
+    const styles = [[1291, FightType.LONGSWORD_BLOCK], [839, FightType.LONGBOW_LONGRANGE], [1321, FightType.SCIMITAR_BLOCK]];
+    for (const [weaponId, fightType] of styles) {
+      const original = player(`Equipped ${name} ${weaponId}`);
+      original.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(weaponId, 1));
+      original.setFightType(fightType);
+      backend.save(original, "logout");
+      await backend.flush();
+      const save = backend.load(original.getUsername());
+      const loggedIn = new Player({ sendClientPacket: () => true, write() {} });
+      loggedIn.setUsername(original.getUsername());
+      save.applyToPlayer(loggedIn);
+      WeaponInterfaceManager.assign(loggedIn);
+      assert.equal(loggedIn.getFightType(), fightType, `weapon ${weaponId} retains its own style after assignment`);
+      assert.equal(loggedIn.getPacketSender().getVarp(43), fightType.getChildId());
+      for (const invalid of [undefined, null, {}, { animation: -123456 }]) {
+        const invalidSave = backend.hydratePlayerSave({ ...save, fightType: invalid });
+        assert.equal(invalidSave.getFightType(), FightType.UNARMED_KICK, "invalid styles keep the safe fallback with equipment too");
+      }
+    }
+  });
+}
+
+test("legacy combat style fields resolve uniquely within every weapon family", () => {
+  const { WeaponInterfaces } = require("../dist/game/content/combat/WeaponInterfaces");
+  for (const weapon of Object.values(WeaponInterfaces)) {
+    if (typeof weapon?.getFightType !== "function") continue;
+    for (const fightType of weapon.getFightType()) {
+      const legacy = JSON.parse(JSON.stringify(fightType));
+      assert.equal(FightType.resolve(legacy, weapon.getFightType()), fightType, `${weapon.getName()} style ${fightType.getChildId()}`);
+    }
+  }
+});

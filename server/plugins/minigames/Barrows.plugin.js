@@ -664,7 +664,10 @@ function drainPrayer(player, run) {
   run.prayerTicks = PRAYER_DRAIN_TICKS;
   if (HILTS.has(player.getEquipment().get(Equipment.SHIELD_SLOT).getId())) return;
   const skills = player.getSkillManager();
-  skills.setCurrentLevelCombat(Skill.PRAYER, Math.max(0, skills.getCurrentLevel(Skill.PRAYER) - 8 - run.killed.length));
+  const amount = 8 + run.killed.length;
+  const apply = pluginApi.core.applyPrayerDrainModifiers;
+  const drain = typeof apply === "function" ? apply(player, amount, { source: "barrows" }) : amount;
+  skills.setCurrentLevelCombat(Skill.PRAYER, Math.max(0, skills.getCurrentLevel(Skill.PRAYER) - drain));
   skills.updateSkill(Skill.PRAYER);
   player.sendMessage("A strange force drains your Prayer.");
 }

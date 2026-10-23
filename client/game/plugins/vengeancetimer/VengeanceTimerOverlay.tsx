@@ -4,17 +4,18 @@ import type { OsrsClient } from "../../OsrsClient";
 import { IndexType } from "../../../rs/cache/IndexType";
 import { SpriteLoader } from "../../../rs/sprite/SpriteLoader";
 import { spriteToCanvas } from "../../../ui/item/ItemIcon";
-import { VENGEANCE_TIME_LIMIT_VARBIT } from "./VengeanceTimerPlugin";
+import { VENGEANCE_TIME_LIMIT_VARBIT, type VengeanceTimerPlugin } from "./VengeanceTimerPlugin";
 import "./VengeanceTimerOverlay.css";
 
 const VENGEANCE_SPRITE_ID = 564;
 
 export function VengeanceTimerOverlay({
     osrsClient,
+    plugin,
 }: {
     osrsClient: OsrsClient;
+    plugin: VengeanceTimerPlugin;
 }): JSX.Element | null {
-    const plugin = osrsClient.vengeanceTimerPlugin;
     const subscribe = useCallback((listener: () => void) => plugin.subscribe(listener), [plugin]);
     const getSnapshot = useCallback(() => plugin.getState(), [plugin]);
     const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);

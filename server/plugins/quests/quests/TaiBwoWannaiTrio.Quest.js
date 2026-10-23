@@ -10,27 +10,33 @@
  * door, plus completion via Timfraku's reward and the post-quest training
  * claimed from the three sons.
  *
- * Stages (varp 320): 3 started, 4 all three sons home, 5 complete. Per-brother
- * progress is kept in persisted attributes (quest.tai_bwo_wannai_trio.*).
+ * Stages (varp 320, capture 75): 3 started, 4 all three sons home, 5 reward
+ * dialogue, 6 complete (captured 0->1->2 dialogue boundaries precede 3).
+ * Per-brother progress is kept in persisted attributes
+ * (quest.tai_bwo_wannai_trio.*).
  *
  * Source: LostCityRS/Content scripts/quests/quest_tbwt at the pinned revision.
- * Gaps: the rock/bridge crossing and the Shaikahan cutscene/fight are not
- * simulated (Tamayu's hunt is resolved from the transcript's cutscene actions);
- * the shops and Tamayu's open_interface are left to the dialogue runtime; the
- * Cleanup-minigame checks answer "not participated"; the firemaking path for
- * burning jogre bones is folded into the Cooking requirement; damage from
- * explosions/falls is not applied.
+ * Gaps: the rock/bridge crossing is not simulated; Tamayu's hunt now plays the
+ * captured arena/camera scene but the fight itself is resolved by the transcript
+ * action; the shops and Tamayu's open_interface are left to the dialogue runtime; the
+ * Cleanup-minigame checks answer "not participated"; burning jogre bones
+ * requires Firemaking 30 while marinating requires Cooking 30; damage from
+ * explosions/falls is not applied. Black and bone spears are rejected for
+ * Tamayu's hunt, matching Quest Helper.
  */
 module.exports = function registerTaiBwoWannaiTrioQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Skill, Location, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
+  const Scenes = createQuestScenes(api);
   const PAGE = "Tai Bwo Wannai Trio";
 
   const VARP_TAI_BWO_WANNAI_TRIO = 320; // OSRS TBWT_MAIN
   const STAGE_STARTED = 3;
   const STAGE_BROTHERS_DONE = 4;
-  const STAGE_COMPLETE = 5;
+  const STAGE_REWARD = 5;
+  const STAGE_COMPLETE = 6;
 
   const TIMFRAKU_ID = NpcIdentifiers.TIMFRAKU;
   const TIADECHE_IDS = new Set([NpcIdentifiers.TIADECHE, NpcIdentifiers.TIADECHE_2]);
@@ -97,8 +103,25 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   for (const id of [1253, 1255, 1257, 1259, 1261, 1263, 5706, 5708, 5710, 5712, 5714, 5716, 5720, 5722, 5724, 5726, 5728, 5730]) {
     POISONED_SPEARS.add(id);
   }
-  for (const id of [ITEM.IRON_SPEAR_KP_, ITEM.STEEL_SPEAR_KP_, ITEM.MITHRIL_SPEAR_KP_, ITEM.ADAMANT_SPEAR_KP_, ITEM.RUNE_SPEAR_KP_, ITEM.DRAGON_SPEAR_KP_, ITEM.BLACK_SPEAR_KP_]) {
+  for (const id of [ITEM.IRON_SPEAR_KP_, ITEM.STEEL_SPEAR_KP_, ITEM.MITHRIL_SPEAR_KP_, ITEM.ADAMANT_SPEAR_KP_, ITEM.RUNE_SPEAR_KP_, ITEM.DRAGON_SPEAR_KP_]) {
     ACCEPTABLE_SPEARS.add(id);
+  }
+  // Quest Helper: bone and black spears do not work. Keep their paste
+  // conversions, but never accept them for Tamayu's hunt.
+  const BLACK_SPEARS = new Set([
+    ITEM.BLACK_SPEAR,
+    ITEM.BLACK_SPEAR_2,
+    ITEM.BLACK_SPEAR_P_,
+    ITEM.BLACK_SPEAR_P__2,
+    ITEM.BLACK_SPEAR_P_PLUS_,
+    ITEM.BLACK_SPEAR_P_PLUS__2,
+    ITEM.BLACK_SPEAR_P_PLUS_PLUS_,
+    ITEM.BLACK_SPEAR_P_PLUS_PLUS__2,
+    ITEM.BLACK_SPEAR_KP_,
+  ]);
+  for (const id of BLACK_SPEARS) {
+    ACCEPTABLE_SPEARS.delete(id);
+    KP_SPEARS.delete(id);
   }
 
   const TIADECHE_KEY = "quest.tai_bwo_wannai_trio.tiadeche";
@@ -164,6 +187,23 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   const TAMAYU_SPEAR_MESSAGE_ID = "uM0CUJ";
   const TAMAYU_WATCH_CUTSCENE_ID = "cMkbX1";
   const TAMAYU_KILL_CUTSCENE_ID = "qnTEqZ";
+  const TAMAYU_HUNT_ACTION_ID = "xSocoz";
+  const TAMAYU_POISON_HUNT_ACTION_ID = "KekPyC";
+
+  // Capture 75 ticks 4523-4548 / 4599-4630.
+  const HUNT_PLAYER_TILE = new Location(2520, 4568, 0);
+  const HUNT_ARENA = [[2500, 2560, 4540, 4600, 0]];
+  const HUNT_TAMAYU = 4705;
+  const HUNT_TAMAYU_VICTOR = 4706;
+  const HUNT_SHAIKAHAN = 4709;
+  const HUNT_MONKEY = 2848;
+  const HUNT_PELICAN = 283;
+  const HUNT_CORMORANT = 282;
+  const HUNT_WATCH_CAMERA = [
+    [2518, 4571, 350], [2524, 4575, 350], [2525, 4563, 350],
+    [2529, 4567, 350], [2530, 4571, 350], [2528, 4564, 350],
+  ];
+  const HUNT_LOOK = [2523, 4567, 160];
   const TAMAYU_SKIN_ACTION_ID = "c_cWgA";
   const TAMAYU_ATTACK_XP_ID = "EuOV9w";
   const TAMAYU_SPEAR_REWARD_ID = "DdMC-c";
@@ -179,12 +219,14 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   let quest;
   /** Item the player just used on an NPC; drives used-item prose conditions. */
   const lastUsedItem = new Map();
+  const huntReturnTiles = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const state = (player, key) => Number(player.getAttribute(key)) || 0;
   const setState = (player, key, value) => player.setAttribute(key, value | 0);
   const agilityLevel = (player) => player.getSkillManager().getCurrentLevel(Skill.AGILITY);
   const cookingLevel = (player) => player.getSkillManager().getCurrentLevel(Skill.COOKING);
+  const firemakingLevel = (player) => player.getSkillManager().getCurrentLevel(Skill.FIREMAKING);
   const fishingLevel = (player) => player.getSkillManager().getCurrentLevel(Skill.FISHING);
 
   function addXp(player, skill, amount) {
@@ -242,13 +284,63 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
       brotherLine(player, TINSAY_KEY, TINSAY_DONE, "Tinsay"),
       brotherLine(player, TIADECHE_KEY, TIADECHE_DONE, "Tiadeche"),
     ];
-    if (state(player, LUBUFU_KEY) >= LUBUFU_FETCH) {
-      lines.push(
-        state(player, LUBUFU_KEY) >= LUBUFU_APPRENTICE
-          ? "<str>Lubufu trained me to catch Karambwan.</str>"
-          : "Lubufu will teach me to catch Karambwan once I bring him 20 Karambwanji."
-      );
+
+    const tiadeche = state(player, TIADECHE_KEY);
+    const tinsay = state(player, TINSAY_KEY);
+    const tamayu = state(player, TAMAYU_KEY);
+    const lubufu = state(player, LUBUFU_KEY);
+    const agility = state(player, AGILITY_KEY);
+    const spear = state(player, SPEAR_KEY);
+    const karambwan = state(player, KARAMBWAN_KEY);
+
+    if (tiadeche >= TIADECHE_WAITING && tinsay < TINSAY_DONE) {
+      lines.push("<col=000080>I must take a <col=800000>Karambwan vessel<col=000080> to <col=800000>Tinsay<col=000080> and retrieve the crafting manual.</col>");
     }
+    if (tiadeche >= TIADECHE_WAITING && karambwan < 1 && tiadeche < TIADECHE_MANUAL) {
+      lines.push("<col=000080>He will only return to the village once he has caught a Karambwan.</col>");
+    }
+    if (tiadeche >= TIADECHE_MANUAL || karambwan >= 1) {
+      lines.push("<str>He has successfully caught a Karambwan.</str>");
+    }
+    if (tiadeche >= TIADECHE_HAS_MANUAL) {
+      lines.push("<str>retrieved crafting instructions for Tiadeche.</str>");
+    }
+
+    if (tinsay >= TINSAY_BANANA && tinsay < TINSAY_SANDWICH) {
+      lines.push("<col=000080>He requires <col=800000>banana in Karamja rum<col=000080> to repair the tribal statue.</col>");
+    }
+    if (tinsay >= TINSAY_SANDWICH) {
+      lines.push("<str>I have given him sliced banana in Karamja rum.</str>");
+    }
+    if (tinsay >= TINSAY_BONES) {
+      lines.push("<str>I have given him a seaweed in monkey skin sandwich.</str>");
+    }
+    if (tinsay >= TINSAY_DONE) {
+      lines.push("<str>I have given him a burnt Jogre bones marinated in raw Karambwanji paste.</str>");
+    }
+
+    if (tamayu >= TAMAYU_WATCHED && tamayu < TAMAYU_DONE) {
+      lines.push("He appears to be having difficulty in the hunt.");
+    }
+    if (agility >= 4) {
+      lines.push("<str>I have increased his agility to match the Shaikahan's.</str>");
+    }
+    if ((spear & 2) !== 0) {
+      lines.push("<str>I have give him a stronger and Karambwan poisoned spear.</str>");
+    }
+    if (tamayu >= TAMAYU_DONE) {
+      lines.push("<str>Tamayu has slain the Shaikahan!</str>");
+    }
+
+    if (lubufu >= LUBUFU_GIVEN) {
+      lines.push("<str>I have given Lubufu 20 Karambwanji.</str>");
+    } else if (lubufu >= LUBUFU_FETCH) {
+      lines.push("Lubufu will teach me to catch Karambwan once I bring him 20 Karambwanji.");
+    }
+    if (lubufu >= LUBUFU_APPRENTICE) {
+      lines.push("<str>Lubufu trained me to catch Karambwan.</str>");
+    }
+
     if (stage >= STAGE_BROTHERS_DONE) {
       lines.push("", "I have convinced all three sons. I must speak with <col=800000>Timfraku</col>.");
     }
@@ -257,8 +349,9 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
 
   function grantReward(_player) {
     // The 2,000 coins are handed over by Timfraku on completion; registerQuest
-    // adds one coin from rewardItemId, so top it up by 1,999 here.
-    _player.getInventory().adds(ItemIdentifiers.COINS, 1999);
+    // adds one coin from rewardItemId, so top it up by 1,999 here. forceAdd
+    // merges an existing coin stack or drops the overflow at the reward tile.
+    _player.getInventory().forceAdd(_player, new Item(ItemIdentifiers.COINS, 1999));
   }
 
   /** Which transcript variant each speaker plays, by quest stage. */
@@ -475,12 +568,30 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
     return null;
   }
 
+  function hasJunglePotion(player) {
+    return (Number(player.getAttribute(JUNGLE_POTION_STAGE)) || 0) >= JUNGLE_POTION_COMPLETE;
+  }
+
+  /** Capture 75 advances 0->1 on Timfraku's first reply and 1->2 before the prompt. */
+  function handleStartLine({ player, npcId, text }) {
+    if (npcId !== TIMFRAKU_ID || !hasJunglePotion(player)) return;
+    const stage = quest.getStage(player);
+    const line = String(text ?? "");
+    if (stage === 0 && line.includes("you would do better to")) {
+      quest.setStage(player, 1);
+      return;
+    }
+    if (stage === 1 && line.includes("I now ask you to do one last thing")) {
+      quest.setStage(player, 2);
+    }
+  }
+
   /** "Yes." on the start confirmation carries the quest slug. */
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== TIMFRAKU_ID || hook !== START_HOOK) return;
-    if (quest.getStage(player) > 0) return;
-    if ((Number(player.getAttribute(JUNGLE_POTION_STAGE)) || 0) < JUNGLE_POTION_COMPLETE) return;
-    quest.setStage(player, STAGE_STARTED);
+    if (quest.getStage(player) >= STAGE_STARTED) return;
+    if (!hasJunglePotion(player)) return;
+    if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
   }
 
   /** Remember which "I am a ..." title the player picked, and Lubufu's agreement. */
@@ -531,6 +642,50 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
       return true;
     }
     return false;
+  }
+
+  /** The captured Shaikahan hunt: village -> arena, camera sweep, actors, return. */
+  function playHuntScene(player, victory, onComplete) {
+    if (Scenes.get(player)) return;
+    const returnTile = player.getLocation().clone();
+    huntReturnTiles.set(player, returnTile);
+    const scene = Scenes.open(player, "tbwt-hunt", HUNT_ARENA);
+    Scenes.controls(player, true, true);
+    player.moveTo(HUNT_PLAYER_TILE);
+    const tamayu = Scenes.actor(scene, HUNT_TAMAYU, [2523, 4567, 0], [2524, 4567]);
+    const shaikahan = Scenes.actor(scene, HUNT_SHAIKAHAN, [2524, 4567, 0], [2523, 4567]);
+    Scenes.actor(scene, HUNT_MONKEY, [2506, 4553, 0]);
+    Scenes.actor(scene, HUNT_MONKEY, [2520, 4561, 0]);
+    Scenes.actor(scene, HUNT_MONKEY, [2534, 4555, 0]);
+    Scenes.actor(scene, HUNT_PELICAN, [2526, 4574, 0]);
+    HUNT_WATCH_CAMERA.forEach((move, index) => {
+      Scenes.later(scene, index * 4, () => Scenes.camera(player, move, HUNT_LOOK));
+    });
+    const duration = victory ? 31 : 25;
+    if (victory) {
+      Scenes.later(scene, 14, () => {
+        player.moveTo(new Location(2537, 4568, 0));
+        Scenes.actor(scene, HUNT_SHAIKAHAN, [2540, 4566, 0], [2541, 4565]);
+        Scenes.actor(scene, HUNT_TAMAYU_VICTOR, [2541, 4565, 0], [2540, 4566]);
+        Scenes.actor(scene, HUNT_PELICAN, [2551, 4578, 0]);
+        Scenes.actor(scene, HUNT_CORMORANT, [2551, 4576, 0]);
+        Scenes.camera(player, [2552, 4566, 700], [2541, 4565, 320]);
+      });
+      Scenes.later(scene, 23, () => player.getPacketSender().sendSong(147).sendJingle(190, 0));
+    }
+    for (let tick = 0; tick < duration; tick += 3) {
+      Scenes.later(scene, tick, () => {
+        const animation = new api.core.Animation(tick % 6 === 0 ? 430 : 428);
+        tamayu?.performAnimation?.(animation);
+        shaikahan?.performAnimation?.(new api.core.Animation(tick % 6 === 0 ? 1199 : 1200));
+      });
+    }
+    Scenes.later(scene, duration, () => {
+      onComplete?.();
+      Scenes.end(player);
+      player.moveTo(returnTile);
+      huntReturnTiles.delete(player);
+    });
   }
 
   function handleAction(event) {
@@ -642,12 +797,22 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
       return;
     }
     if (stepId === TAMAYU_WATCH_CUTSCENE_ID) {
-      if (state(player, TAMAYU_KEY) < TAMAYU_WATCHED) setState(player, TAMAYU_KEY, TAMAYU_WATCHED);
+      playHuntScene(player, false, () => {
+        if (state(player, TAMAYU_KEY) < TAMAYU_WATCHED) {
+          setState(player, TAMAYU_KEY, TAMAYU_WATCHED);
+        }
+      });
+      return;
+    }
+    if (stepId === TAMAYU_HUNT_ACTION_ID || stepId === TAMAYU_POISON_HUNT_ACTION_ID) {
+      playHuntScene(player, false);
       return;
     }
     if (stepId === TAMAYU_KILL_CUTSCENE_ID) {
-      if (state(player, TAMAYU_KEY) < TAMAYU_DONE) setState(player, TAMAYU_KEY, TAMAYU_DONE);
-      updateBrothers(player);
+      playHuntScene(player, true, () => {
+        if (state(player, TAMAYU_KEY) < TAMAYU_DONE) setState(player, TAMAYU_KEY, TAMAYU_DONE);
+        updateBrothers(player);
+      });
       return;
     }
     if (stepId === TAMAYU_SKIN_ACTION_ID) {
@@ -700,6 +865,7 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
 
     if (stepId === COMPLETE_MESSAGE_ID) {
       if (quest.getStage(player) >= STAGE_BROTHERS_DONE && !quest.isComplete(player)) {
+        if (quest.getStage(player) < STAGE_REWARD) quest.setStage(player, STAGE_REWARD);
         quest.complete(player);
       }
       event.handled = true;
@@ -713,7 +879,15 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
     const has = (itemId) => ids.has(itemId);
     let handled = true;
 
-    if (has(ITEM.RAW_KARAMBWANJI) && has(ITEM.KARAMBWAN_VESSEL)) {
+    if (has(ITEM.JOGRE_BONES) && has(ITEM.TINDERBOX)) {
+      if (firemakingLevel(player) < 30) {
+        player.sendMessage("You need a Firemaking level of 30 to burn Jogre bones.");
+      } else {
+        swap(player, ITEM.JOGRE_BONES, ITEM.BURNT_JOGRE_BONES);
+        addXp(player, Skill.FIREMAKING, 250);
+        player.sendMessage("You set the Jogre bones on fire. They soon burn out.");
+      }
+    } else if (has(ITEM.RAW_KARAMBWANJI) && has(ITEM.KARAMBWAN_VESSEL)) {
       swap(player, ITEM.RAW_KARAMBWANJI, ITEM.KARAMBWAN_VESSEL_3);
       player.getInventory().deleteNumber(ITEM.KARAMBWAN_VESSEL, 1);
       player.sendMessage("You load the Karambwan vessel with the raw Karambwanji.");
@@ -932,13 +1106,13 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
     const itemId = event.itemId;
     if (itemId === ITEM.JOGRE_BONES) {
       event.handled = true;
-      if (cookingLevel(player) < 30) {
-        player.sendMessage("You need a Cooking level of 30 to burn Jogre bones.");
+      if (firemakingLevel(player) < 30) {
+        player.sendMessage("You need a Firemaking level of 30 to burn Jogre bones.");
         return;
       }
       player.getInventory().deleteNumber(ITEM.JOGRE_BONES, 1);
       player.getInventory().adds(ITEM.BURNT_JOGRE_BONES, 1);
-      addXp(player, Skill.COOKING, 250);
+      addXp(player, Skill.FIREMAKING, 250);
       player.sendMessage("You burn the Jogre bones.");
       return;
     }
@@ -960,11 +1134,26 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
       player.sendMessage("The cooked karambwanji paste catches fire and explodes.");
       return;
     }
-    if (
-      itemId === ITEM.PASTY_JOGRE_BONES_3 ||
-      itemId === ITEM.PASTY_JOGRE_BONES_4 ||
-      itemId === ITEM.MARINATED_J_BONES_2
-    ) {
+    if (itemId === ITEM.PASTY_JOGRE_BONES_3) {
+      event.handled = true;
+      if (firemakingLevel(player) < 30) {
+        player.sendMessage("You need a Firemaking level of 30 to burn Jogre bones.");
+        return;
+      }
+      player.getInventory().deleteNumber(ITEM.PASTY_JOGRE_BONES_3, 1);
+      player.getInventory().adds(ITEM.PASTY_JOGRE_BONES, 1);
+      addXp(player, Skill.FIREMAKING, 250);
+      player.sendMessage("You burn the Karambwanji paste onto the Jogre bones.");
+      return;
+    }
+    if (itemId === ITEM.PASTY_JOGRE_BONES_4) {
+      event.handled = true;
+      player.getInventory().deleteNumber(ITEM.PASTY_JOGRE_BONES_4, 1);
+      player.getInventory().adds(ITEM.ASHES, 1);
+      player.sendMessage("The cooked karambwanji paste catches fire and explodes.");
+      return;
+    }
+    if (itemId === ITEM.MARINATED_J_BONES_2) {
       event.handled = true;
       player.sendMessage("You heat the bones, but they don't look any different.");
     }
@@ -1036,10 +1225,25 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) lastUsedItem.delete(player);
+    if (!player) return;
+    lastUsedItem.delete(player);
+    if (Scenes.get(player)) {
+      Scenes.end(player, true);
+      const returnTile = huntReturnTiles.get(player);
+      if (returnTile) player.moveTo(returnTile);
+    }
+    huntReturnTiles.delete(player);
+  }
+
+  /** Old saves used 5 for completion; native completion is 6. */
+  function migrateLegacyStage(player) {
+    if (quest.getStage(player) === 5 && !quest.isComplete(player)) {
+      quest.setStage(player, STAGE_COMPLETE);
+    }
   }
 
   function handleLogin({ player }) {
+    migrateLegacyStage(player);
     refreshQuestList(player);
   }
 
@@ -1075,6 +1279,7 @@ module.exports = function registerTaiBwoWannaiTrioQuest(api) {
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
+  api.onCustomEvent("npc-dialogue:line", handleStartLine);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);

@@ -54,7 +54,8 @@ function setup() {
   const player = {
     getAttribute: key => attrs.get(key), setAttribute(key, value) { attrs.set(key, value); },
     getPacketSender: () => sender, getFrameUpdater: () => null, sendMessage(message) { messages.push(message); },
-    getInventory: () => ({ getAmount: id => inventory.get(id) ?? 0,
+    getInventory: () => ({ getAmount: id => inventory.get(id) ?? 0, isFull: () => false,
+      forceAdd(owner, item) { inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()); },
       deleteNumber(id, count) { inventory.set(id, Math.max(0, (inventory.get(id) ?? 0) - count)); },
       adds(id, count) { inventory.set(id, (inventory.get(id) ?? 0) + count); } }),
     getSkillManager: () => ({ getCurrentLevel: skill => skill === core.Skill.MINING ? miningLevel : 99,

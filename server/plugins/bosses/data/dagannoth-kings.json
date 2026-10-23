@@ -1,0 +1,67 @@
+{
+  "$comment": "Dagannoth Kings (plugins/bosses/DagannothKings.plugin.js, docs/dagannoth-kings.md). Ids are the rev 241 cache's; ticks count from the attack, as in the rsprox captures (submissions 89 on rev 227 and 3433 on rev 235) and the OSRS Wiki (Dagannoth Kings, Dagannoth Kings/Strategies and each king's page).",
+  "npcs": {
+    "supreme": 2265,
+    "prime": 2266,
+    "rex": 2267,
+    "spinolyp": [5947, 5961, 5963],
+    "spinolypWater": [5946, 5948, 5962]
+  },
+  "locs": {
+    "ladder": 3831,
+    "exitLadder": 10229
+  },
+  "lairs": {
+    "public": {
+      "spawnTile": [2900, 4449, 0],
+      "bounds": { "minX": 2894, "maxX": 2932, "minY": 4430, "maxY": 4470 }
+    },
+    "task": {
+      "spawnTile": [2900, 4385, 0],
+      "bounds": { "minX": 2894, "maxX": 2932, "minY": 4366, "maxY": 4406 }
+    }
+  },
+  "outsideTile": [1910, 4367, 0],
+  "teleportTile": [1908, 4367, 0],
+  "entranceTile": [1911, 4367, 0],
+  "combat": {
+    "attackSpeed": 4,
+    "primeDistance": 12,
+    "supremeDistance": 10,
+    "primeSplashRadius": 1,
+    "supremeSplashRadius": 3,
+    "hitDelayPrime": 3,
+    "hitDelaySupreme": 2,
+    "hitDelayRex": 1,
+    "maxHit": { "supreme": 30, "prime": 50, "rex": 26, "spinolyp": 10 },
+    "respawnTicks": 150,
+    "deathTicks": 5
+  },
+  "anims": {
+    "defend": 2852,
+    "rexMelee": 2853,
+    "primeMagic": 2854,
+    "supremeRange": 2855,
+    "death": 2856,
+    "spinolypAttack": 2868,
+    "spinolypDefend": 2869,
+    "spinolypDeath": 2866,
+    "spinolypEmerge": 2864
+  },
+  "projectiles": {
+    "prime": 162,
+    "primeImpact": 477,
+    "supreme": 475,
+    "spinolypRanged": 476,
+    "spinolypMagic": 124
+  },
+  "sounds": {
+    "primeCast": 213,
+    "supremeImpact": 227
+  },
+  "aggression": {
+    "rexTiles": 5,
+    "primeTiles": 7,
+    "supremeTiles": 7
+  }
+}

@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
-module.exports = function registerBarrelchestAnchorSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Skill, Sounds } = api.core;
+function buildSpecial(core) {
+  const { Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Skill, Sounds } = core;
 
   const DRAIN = 50;
   const DRAIN_FRACTION = 0.1;
@@ -13,17 +13,13 @@ module.exports = function registerBarrelchestAnchorSpecialAttack(api) {
     if (remainingDrain <= 0) {
       return;
     }
-    if (!target.isPlayer()) {
-      // TODO: NPC combat-stat drain is not exposed by our core NPC state.
-      return;
-    }
-    const skillManager = target.getAsPlayer().getSkillManager();
+    const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
     for (const skill of PLAYER_DRAIN_ORDER) {
       if (remainingDrain <= 0) {
         break;
       }
       const currentLevel = Math.max(0, Math.floor(skillManager.getCurrentLevel(skill)));
-      const drainAmount = Math.min(remainingDrain, Math.max(0, currentLevel - 1));
+      const drainAmount = Math.min(remainingDrain, Math.max(0, currentLevel - (target.isPlayer() ? 1 : 0)));
       if (drainAmount <= 0) {
         continue;
       }
@@ -45,7 +41,7 @@ module.exports = function registerBarrelchestAnchorSpecialAttack(api) {
     }
   }
 
-  api.registerCombatSpecial({
+  return {
     id: "barrelchest_anchor",
     itemIds: [ItemIdentifiers.BARRELCHEST_ANCHOR],
     drainAmount: DRAIN,
@@ -57,5 +53,9 @@ module.exports = function registerBarrelchestAnchorSpecialAttack(api) {
       damageMultiplier: 1.1,
     },
     combatMethod: new BarrelchestAnchorCombatMethod(),
-  });
+  };
+}
+
+module.exports = function registerBarrelchestAnchorSpecialAttack(api) {
+  api.registerCombatSpecial(buildSpecial(api.core));
 };

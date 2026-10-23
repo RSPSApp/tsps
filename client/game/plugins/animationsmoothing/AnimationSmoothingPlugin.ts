@@ -46,6 +46,11 @@ export class AnimationSmoothingPlugin extends Plugin {
         return this.isEnabled() && this.config.objects();
     }
 
+    /** Whether any NPC animation is blended; a cheap check before the per-sequence one. */
+    smoothsNpcs(): boolean {
+        return this.isEnabled() && this.config.npcs();
+    }
+
     /** Whether an NPC's animation is blended; `action` is false for its movement/idle pose. */
     smoothsNpc(npcTypeId: number, seqId: number, action: boolean): boolean {
         if (!this.isEnabled() || !this.config.npcs() || EXCLUDED_SEQUENCES.has(seqId)) return false;

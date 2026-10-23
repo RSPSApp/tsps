@@ -187,7 +187,6 @@ import {
 } from "../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
-import { RENDER_CONSTANTS } from "./constants";
 import { updateWorldEntityMotion } from "./worldEntityMotion";
 import { syncLocAnimationSmoothing } from "./locs";
 
@@ -212,16 +211,6 @@ export function tickPass(host: WebGLOsrsRendererHost,
 
         host.gfxManager?.resetWorldBindings?.();
         // PERF: Use cached callback to avoid per-frame closure allocation
-        // Throttle ambient sound collection to reduce tick cost
-        host.ambientSoundFrameCounter++;
-        const shouldCollectAmbient =
-            host.ambientSoundFrameCounter >= RENDER_CONSTANTS.AMBIENT_SOUND_THROTTLE_FRAMES;
-        if (shouldCollectAmbient) {
-            host.ambientSoundFrameCounter = 0;
-            // Reset only on collect frames; between collects the previous
-            // instances stay live so volumes keep tracking the listener
-            host.ambientSoundBufferIndex = 0;
-        }
         for (let i = 0; i < host.mapManager.visibleMapCount; i++) {
             const map = host.mapManager.visibleMaps[i];
             visibleMaps.push(map);
@@ -229,11 +218,6 @@ export function tickPass(host: WebGLOsrsRendererHost,
             for (const loc of map.locsAnimated) {
                 // DynamicObject/loc animation timing is based on Client.cycle (20ms each).
                 loc.update(seqFrameLoader, clientCycle | 0, host.seqSoundCallback);
-            }
-
-            // Collect ambient sounds only every N frames (throttled)
-            if (shouldCollectAmbient) {
-                host.collectAmbientSounds(map);
             }
 
             host._ecsUpdateNpcClient(map, clientTicksElapsed);
@@ -265,40 +249,8 @@ export function tickPass(host: WebGLOsrsRendererHost,
         updateWorldEntityMotion(host);
 
         // Propagate listener position for positional audio and advance ambient loops.
-        const soundSystem = host.osrsClient.soundEffectSystem;
-        if (soundSystem) {
-            try {
-                const peListener = host.osrsClient.playerEcs;
-                const idxListener = peListener.getIndexForServerId(
-                    host.osrsClient.controlledPlayerServerId,
-                );
-                if (idxListener !== undefined) {
-                    const px = peListener.getX(idxListener) | 0;
-                    const py = peListener.getY(idxListener) | 0;
-                    const level = peListener.getLevel(idxListener) | 0;
-                    soundSystem.updateListenerPosition(px, py, level * 128);
-                } else {
-                    // z is the listener plane (level * 128), not a world height
-                    soundSystem.updateListenerPosition(
-                        host.osrsClient.camera.getPosX() * 128,
-                        host.osrsClient.camera.getPosZ() * 128,
-                        0,
-                    );
-                }
-            } catch {
-                soundSystem.updateListenerPosition(
-                    host.osrsClient.camera.getPosX() * 128,
-                    host.osrsClient.camera.getPosZ() * 128,
-                    0,
-                );
-            }
-            // Truncate the buffer only on collect frames; the update itself
-            // runs every frame so volumes track the listener continuously
-            if (shouldCollectAmbient) {
-                host.ambientSoundBuffer.length = host.ambientSoundBufferIndex;
-            }
-            soundSystem.updateAmbientSounds(host.ambientSoundBuffer);
-        }
+        host.osrsClient.updateSoundListener();
+        host.osrsClient.ambientSounds.frame(visibleMaps);
 
         // animation stepping is handled by the client tick loop (`PlayerEcs` + `PlayerAnimController`).
     

@@ -23,17 +23,23 @@ function delayed(id: number, delay: number, priority: Priority): Animation {
 
 export class TeleportType {
     // Spellbooks
-    // Standard spellbook teleport: arms wide (714, human_castteleport) on cast, the bubble
-    // (308) flashing mid-teleport, 715 (human_castteleport_reverse) on landing 3 ticks after
-    // cast. The anim/graphic/sound ids and the landing tick are as captured for the skull
-    // sceptre's shared standard teleport (docs/stronghold-of-security.md).
-    // The bubble must not fire with the arms: 714 rises first, so a same-tick bubble reads as
-    // coming first (seen in game). Fired from TeleportTask's middle step (T+1) with a 15-cycle
-    // client delay, the flash lands at ~T+1.5, clear of the arms and ahead of departure. The 15
-    // is tuned to that window, not captured.
-    // Start tick 4 (not 3): TeleportTask runs steps 0 and 1 on the cast tick, so the
-    // arrival step lands a tick later than its number (see TELE_TAB below).
-    public static readonly NORMAL = new TeleportType(4, new Animation(714, Priority.HIGH), null, new Animation(715, Priority.HIGH), null, new Graphic(308, 15, GraphicHeight.HIGH), null);
+    // Standard spellbook teleport, also jewellery and the skull sceptre, as in rsprox captures
+    // (Varrock Teleport, necklace of passage; docs/teleport-tablets.md): human_castteleport (714)
+    // with teleport_casting (111) at height 92 and the teleport sound on the cast, busy until
+    // landing on tick 3 with the animation reset, and the reset again a tick later. 111's own
+    // sequence (667) leads in before the bubble, so the bubble follows the arms by itself.
+    // TeleportTask runs step 0 on the click and step n on the click's tick + n (the task pass
+    // runs before packets), so start tick 3 lands on tick 3.
+    public static readonly NORMAL = new TeleportType(
+        3,
+        new Animation(714, Priority.HIGH),
+        null,
+        Animation.DEFAULT_RESET_ANIMATION,
+        new Graphic(111, 0, 92 as GraphicHeight),
+        null,
+        null,
+        { busy: true, repeatEndAnimation: true },
+    );
     public static readonly ANCIENT = new TeleportType(5, new Animation(1979, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(392, GraphicHeight.LOW, Priority.HIGH), null, null);
     public static readonly LUNAR = new TeleportType(4, new Animation(1816, Priority.HIGH), null, new Animation(715, Priority.HIGH), new Graphic(308, GraphicHeight.LOW, Priority.HIGH), null, null);
     public static readonly ARCEUUS = new TeleportType(4, new Animation(1816, Priority.HIGH), null, new Animation(715, Priority.HIGH), new Graphic(747, GraphicHeight.HIGH, Priority.HIGH), null, null);
@@ -45,12 +51,12 @@ export class TeleportType {
     /**
      * Teleport tablets, as in an OSRS capture (docs/teleport-tablets.md): the tablet is smashed
      * (4069, sound 965), absorbed two ticks later (4071 and spotanim 678), and the player lands
-     * on the fourth tick. TeleportTask runs its steps 0 and 1 both on the click's tick (once when
-     * submitted, once in that tick's task pass), so step n falls on tick n - 1: start tick 5
-     * lands on the fourth tick, and the middle step (5 - 2) on the second.
+     * on the fourth tick. TeleportTask runs step 0 when the click is handled and step n on the
+     * click's tick + n (World.process runs the task pass before packets): start tick 4 lands on
+     * the fourth tick, and the middle step (4 - 2) on the second.
      */
     public static readonly TELE_TAB = new TeleportType(
-        5,
+        4,
         delayed(4069, 16, Priority.HIGH),
         new Animation(4071, Priority.HIGH),
         Animation.DEFAULT_RESET_ANIMATION,
@@ -58,6 +64,21 @@ export class TeleportType {
         new Graphic(678, GraphicHeight.LOW, Priority.HIGH),
         null,
         { sound: new Sound(965, 1, 15, 0), busy: true, repeatEndAnimation: true },
+    );
+    /**
+     * Teleport scrolls, as in OSRS captures (docs/teleport-tablets.md): the scroll opens
+     * (teleport_scroll_open 3864, telescroll_teleport 1039, the spell teleport sound) and is used
+     * up on the click, and the player lands on the third tick (start tick 3, as above).
+     */
+    public static readonly TELE_SCROLL = new TeleportType(
+        3,
+        new Animation(3864, Priority.HIGH),
+        null,
+        Animation.DEFAULT_RESET_ANIMATION,
+        new Graphic(1039, GraphicHeight.LOW, Priority.HIGH),
+        null,
+        null,
+        { busy: true, repeatEndAnimation: true },
     );
     public static readonly PURO_PURO = new TeleportType(9, new Animation(6601, Priority.HIGH), null, Animation.DEFAULT_RESET_ANIMATION, new Graphic(1118, GraphicHeight.LOW, Priority.HIGH), null, null);
 

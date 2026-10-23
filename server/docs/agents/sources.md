@@ -37,6 +37,10 @@ with content and code noted separately where they diverge. These are references 
 architecture, tooling and content - the order above still governs behaviour, except where a
 source is called out as a behavior oracle.
 
+- **RSProx** (unscored: a capture tool, not a server) — a local proxy that records the traffic
+  between the real client and live OSRS (the captures above). Kotlin; packet decoders for each
+  revision from 223 (`protocol/osrs-<revision>`), a transcriber and replay. MIT. Behavior
+  oracle. <https://github.com/blurite/rsprox>, recordings at <https://rsprox.net/database>
 - **Void** 9/10 — cleanest RSPS codebase; Kotlin, docs, CI, script system. 2011 rev634. BSD-3.
   <https://github.com/GregHib/void>
 - **LostCity** 8/10 — TS engine + script-driven 2004 content; ideal architecture ref, not

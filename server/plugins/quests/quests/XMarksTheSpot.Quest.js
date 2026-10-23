@@ -86,6 +86,9 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   const PREVIOUS_DISTANCE_ATTRIBUTE = "x-marks-the-spot:previous-distance";
   const PREVIOUS_COORD_ATTRIBUTE = "x-marks-the-spot:previous-coord";
   const LAMP_USED_ATTRIBUTE = "x-marks-the-spot:lamp-used";
+  const CLUE_BOX_STATE_ATTRIBUTE = "x-marks-the-spot:clue-box-state";
+  const CLUE_BOX_PENDING = 1;
+  const CLUE_BOX_CLAIMED = 2;
 
   // Wiki Map:X Marks the Spot pins.
   const DIG_SPOTS = new Map([
@@ -102,6 +105,75 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   let quest;
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+  const banked = (player, itemId) =>
+    (player.getBanks?.() ?? []).some((bank) => Number(bank?.getAmount?.(itemId)) > 0);
+  const ownsItem = (player, itemId) => held(player, itemId) || banked(player, itemId);
+  const clueBoxState = (player) => Number(player.getAttribute(CLUE_BOX_STATE_ATTRIBUTE)) || 0;
+  const atPortSarim = (location) => Boolean(location) && location.z === 0 &&
+    location.x >= 2950 && location.x <= 3120 && location.y >= 3150 && location.y <= 3350;
+
+  function setClueBoxState(player, state) {
+    player.setAttribute(CLUE_BOX_STATE_ATTRIBUTE, state);
+    player.getPacketSender().sendVarbit(CLUE_REWARD_VARBIT, state === CLUE_BOX_CLAIMED ? 1 : 0);
+  }
+
+  /** Give the beginner box only when the player does not already own one. */
+  function grantClueBox(player) {
+    const inventory = player.getInventory();
+    const before = inventory.getAmount(BEGINNER_SCROLL_BOX);
+    if (before > 0 || banked(player, BEGINNER_SCROLL_BOX) || inventory.getFreeSlots() < 1) return false;
+    inventory.adds(BEGINNER_SCROLL_BOX, 1);
+    return inventory.getAmount(BEGINNER_SCROLL_BOX) > before;
+  }
+
+  /** Grant once, or defer until Veos is spoken to again. Claimed is set only on a real grant. */
+  function settleClueBox(player) {
+    if (clueBoxState(player) === CLUE_BOX_CLAIMED) return false;
+    if (grantClueBox(player)) {
+      setClueBoxState(player, CLUE_BOX_CLAIMED);
+      return true;
+    }
+    if (clueBoxState(player) !== CLUE_BOX_PENDING) setClueBoxState(player, CLUE_BOX_PENDING);
+    return false;
+  }
+
+  /** The persisted attribute is authoritative; 8066 is only a mirror. */
+  function mirrorLampState(player) {
+    const used = Number(player.getAttribute(LAMP_USED_ATTRIBUTE)) === 1;
+    player.getPacketSender().sendVarbit(LAMP_REWARD_VARBIT, used ? 1 : 0);
+    return used;
+  }
+
+  /** A completed save with no state predates this state and was always marked claimed. */
+  function syncClueBoxState(player) {
+    let state = clueBoxState(player);
+    if (state === 0) {
+      state = CLUE_BOX_CLAIMED;
+      player.setAttribute(CLUE_BOX_STATE_ATTRIBUTE, state);
+    }
+    player.getPacketSender().sendVarbit(CLUE_REWARD_VARBIT, state === CLUE_BOX_CLAIMED ? 1 : 0);
+    return state;
+  }
+
+  /** Port Sarim Veos Talk-to after completion: reclaim an unused lamp and settle a pending box. */
+  function recoverVeosRewards(player) {
+    const used = mirrorLampState(player);
+    const inventory = player.getInventory();
+    if (!used && !ownsItem(player, ANTIQUE_LAMP) && inventory.getFreeSlots() >= 1) {
+      const before = inventory.getAmount(ANTIQUE_LAMP);
+      inventory.adds(ANTIQUE_LAMP, 1);
+      if (inventory.getAmount(ANTIQUE_LAMP) <= before) return;
+    }
+    if (syncClueBoxState(player) === CLUE_BOX_PENDING) settleClueBox(player);
+  }
+
+  function handleVeosTalk(event) {
+    const location = event.location ?? event.npc?.getLocation?.();
+    if (event.clickType !== 1 || !atPortSarim(location)) return;
+    if (event.npcId !== VEOS_NPC_ID && event.npcId !== VEOS_POST_QUEST_NPC_ID) return;
+    if (quest.getStage(event.player) < STAGE_COMPLETE) return;
+    recoverVeosRewards(event.player);
+  }
 
   const onTile = (player, tile) => {
     const location = player.getLocation();
@@ -223,10 +295,9 @@ module.exports = function registerXMarksTheSpotQuest(api) {
       return POST_QUEST_VARIANT;
     }
     if (stage >= STAGE_CASKET) {
-      if (player.getAttribute(HANDED_CASKET_ATTRIBUTE)) return FINISHING_VARIANT;
-      if (held(player, ANCIENT_CASKET)) return FINISHING_VARIANT;
-      if (held(player, TREASURE_SCROLL_3)) return CLUE_VARIANT_BY_STAGE.get(STAGE_FOURTH_CLUE);
-      return LOST_ITEM_VARIANT;
+      if (player.getAttribute(HANDED_CASKET_ATTRIBUTE) || held(player, ANCIENT_CASKET)) return FINISHING_VARIANT;
+      // A lost casket is re-dug at the fourth clue; Veos only replaces scrolls and orbs.
+      return CLUE_VARIANT_BY_STAGE.get(STAGE_FOURTH_CLUE);
     }
     if (stage <= 0) {
       if (awaitingScroll(player)) return RETAKE_SCROLL_VARIANT;
@@ -407,6 +478,10 @@ module.exports = function registerXMarksTheSpotQuest(api) {
 
   function handleLogin({ player }) {
     ensureVeos(player);
+    if (quest.getStage(player) >= STAGE_COMPLETE) {
+      mirrorLampState(player);
+      syncClueBoxState(player);
+    }
     refreshQuestList(player);
     player.getPacketSender().sendVarbit(PREVIOUS_DISTANCE_VARBIT, Number(player.getAttribute(PREVIOUS_DISTANCE_ATTRIBUTE)) || 0).sendConfig(PREVIOUS_COORD_VARP, Number(player.getAttribute(PREVIOUS_COORD_ATTRIBUTE)) || -1);
   }
@@ -488,10 +563,10 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   }
 
   function grantReward(player) {
-    player.getPacketSender().sendVarbit(COIN_REWARD_VARBIT, 1).sendVarbit(CLUE_REWARD_VARBIT, 1);
+    player.getPacketSender().sendVarbit(COIN_REWARD_VARBIT, 1);
     player.getInventory().adds(COINS, 200);
-    player.getInventory().adds(ANTIQUE_LAMP, 1);
-    if (!held(player, BEGINNER_SCROLL_BOX)) player.getInventory().adds(BEGINNER_SCROLL_BOX, 1);
+    if (!ownsItem(player, ANTIQUE_LAMP)) player.getInventory().adds(ANTIQUE_LAMP, 1);
+    settleClueBox(player);
   }
 
   api.persistAttribute(AWAITING_SCROLL_ATTRIBUTE, 0);
@@ -500,6 +575,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   api.persistAttribute(PREVIOUS_DISTANCE_ATTRIBUTE, 0);
   api.persistAttribute(PREVIOUS_COORD_ATTRIBUTE, -1);
   api.persistAttribute(LAMP_USED_ATTRIBUTE, 0);
+  api.persistAttribute(CLUE_BOX_STATE_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "x_marks_the_spot",
@@ -518,6 +594,7 @@ module.exports = function registerXMarksTheSpotQuest(api) {
   });
 
   api.onNpcInteraction(resumeHandIn);
+  api.onNpcInteraction(handleVeosTalk);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:line", fillTranscriptBlanks);

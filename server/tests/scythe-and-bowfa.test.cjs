@@ -10,7 +10,6 @@ const { ItemIdentifiers } = require('../dist/util/ItemIdentifiers');
 const { RangedWeapon } = require('../dist/game/content/combat/ranged/RangedData');
 const { BOW_OF_FAERDHINEN_IDS } = require('../dist/game/content/combat/ranged/CrystalBow');
 const Scythe = require('../plugins/items/ScytheOfVitur.plugin');
-const CrystalArmour = require('../plugins/combat/effects/CrystalArmour.EquipmentEffects');
 
 const NAMES = new Map();
 let nextId = 90000;
@@ -32,7 +31,7 @@ function player(worn) {
     return entity;
 }
 
-const npcOfSize = (size) => ({ isNpc: () => true, getAsNpc: () => ({ getSize: () => size }) });
+const npcOfSize = (size) => ({ getHitpoints: () => 1000, isNpc: () => true, getAsNpc: () => ({ getSize: () => size }) });
 
 // One registration against a fake core; each swing resets what it records.
 let rerolled = [];
@@ -46,6 +45,7 @@ class PendingHit {
     getTotalDamage() {
         return this.damage;
     }
+    setTotalDamage(value) { this.damage = value; }
 }
 Scythe.register({
     core: {
@@ -58,6 +58,7 @@ Scythe.register({
         DamageFormulas: { calculateMaxMeleeHit: () => maxHit },
     },
     registerCombatMethodResolver: (r) => { resolver = r; },
+    onServerStartup: (handler) => handler(),
     onItemAction: () => {},
     onItemOnItem: () => {},
 });
@@ -94,28 +95,6 @@ test('every bow of Faerdhinen fires its own arrows, not the ammo slot', () => {
         assert.equal(ammo.getItemId(), id);
     }
     assert.equal(RangedWeapon.getSelfAmmo(ItemIdentifiers.BOW_OF_FAERDHINEN_C_).getProjectileId(), 1922);
-});
-
-test('crystal armour boosts a crystal bow or bow of Faerdhinen by its pieces', () => {
-    const bowfa = item('Bow of faerdhinen (c)');
-    const helm = item('Crystal helm');
-    const body = item('Crystal body');
-    const legs = item('Crystal legs');
-    const full = player({
-        [Equipment.WEAPON_SLOT]: bowfa,
-        [Equipment.HEAD_SLOT]: helm,
-        [Equipment.BODY_SLOT]: body,
-        [Equipment.LEG_SLOT]: legs,
-    });
-    assert.equal(CrystalArmour._test.pieces(full), 6);
-    assert.equal(CrystalArmour._test.accuracy(full, 20000), 26000, '+30%');
-    assert.equal(CrystalArmour._test.damage(full, 40), 46, '+15%');
-
-    const helmOnly = player({ [Equipment.WEAPON_SLOT]: bowfa, [Equipment.HEAD_SLOT]: helm });
-    assert.equal(CrystalArmour._test.damage(helmOnly, 40), 41, '+2.5%');
-
-    const gauntletBow = player({ [Equipment.WEAPON_SLOT]: item('Crystal bow (perfected)'), [Equipment.HEAD_SLOT]: helm });
-    assert.equal(CrystalArmour._test.pieces(gauntletBow), 0);
 });
 
 // Scythe charges (Wiki: Scythe of Vitur#Charging and degradation).

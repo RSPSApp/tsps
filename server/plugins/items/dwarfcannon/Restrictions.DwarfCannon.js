@@ -29,7 +29,7 @@ function inPolygon(points, x, y) {
 }
 
 /** The message refusing a cannon at `location`, or null where one may be set up. */
-function restrictionAt(location, privateArea = null) {
+function restrictionAt(location, privateArea = null, player = null) {
   const data = load();
   if (privateArea) return data.default;
   const x = location.getX();
@@ -38,7 +38,13 @@ function restrictionAt(location, privateArea = null) {
   for (const restriction of data.restrictions) {
     for (const area of restriction.areas ?? []) {
       if (area.z !== undefined && area.z !== z) continue;
-      if (inPolygon(area.points, x, y)) return restriction.message;
+      if (!inPolygon(area.points, x, y)) continue;
+      if (restriction.quest) {
+        const request = { player, key: restriction.quest.key, stage: 0 };
+        Cannon.api.emitCustomEvent("quest:get-stage", request);
+        if (request.stage < restriction.quest.minStage || request.stage > restriction.quest.maxStage) continue;
+      }
+      return restriction.message;
     }
   }
   return null;

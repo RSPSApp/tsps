@@ -126,10 +126,11 @@ module.exports = function registerMisthalinMysteryQuest(api) {
     [29654, 4041],
     [29655, 4042],
   ]);
+  // 29659 resolves to 30136 unlit at stage90 and 30137 once revealed. 30138 is
+  // the manor's decorative lit fireplaces, which are not the riddle.
   const FIREPLACE_LOC_IDS = new Set([
     ObjectIdentifiers.FIREPLACE_24, // 30136
     ObjectIdentifiers.FIREPLACE_25, // 30137
-    ObjectIdentifiers.FIREPLACE_26, // 30138
   ]);
   const PIANO_LOC_IDS = new Set([
     ObjectIdentifiers.PIANO_9, // 30134
@@ -418,7 +419,7 @@ module.exports = function registerMisthalinMysteryQuest(api) {
   }
   function sceneLine(event){
     const {player,text}=event,area=island(player);
-    if(ABIGALE_NPC_IDS.has(event.npcId)&&text==="Okay, I'll see what I can do.")event.before=()=>{if(quest.getStage(player)===STAGE_STARTED)quest.setStage(player,STAGE_BRIEFED);};
+    if((ABIGALE_NPC_IDS.has(event.npcId)||HEWEY_NPC_IDS.has(event.npcId))&&text==="Okay, I'll see what I can do.")event.before=()=>{if(quest.getStage(player)===STAGE_STARTED)quest.setStage(player,STAGE_BRIEFED);};
     if(text.includes("You need [3 more spaces/2 more spaces/another space]")){
       const missing=3-freeSlots(player);event.text=text.replace("[3 more spaces/2 more spaces/another space]",missing===1?"another space":`${missing} more spaces`);
     }

@@ -15,6 +15,7 @@ const NO_APRON_VARIANT = "when-trying-to-enter-the-guild-without-wearing-a-brown
 const WELCOME_VARIANT = "when-trying-to-enter-the-guild-whilst-wearing-a-brown-apron-or-crafting-cape";
 /** The guild is south of the door; its tile, under the porch, is outside. */
 const OUTSIDE_FROM_Y = 3289;
+const WALK_ANIMATION = 819;
 const APRONS = /^(?:brown|golden) apron$/i;
 
 let api;
@@ -39,9 +40,39 @@ function masterCrafterSays(player, variant) {
   api.emitCustomEvent("npc-dialogue:start", { player, npcId: core.NpcIdentifiers.MASTER_CRAFTER, variant, handled: false });
 }
 
+function later(player, ticks, action) {
+  core.TaskManager.submit(new (class extends core.Task {
+    constructor() { super(ticks, player, false); }
+    execute() { this.stop(); action(); }
+  })());
+}
+
+function crossDoor(player, door, entering) {
+  if (player.getForceMovement()) return;
+  const { Location, ForceMovement, ForceMovementTask } = core;
+  const doorTile = door.getLocation();
+  const inside = new Location(doorTile.getX(), doorTile.getY() - 1, doorTile.getZ());
+  const from = entering ? doorTile : inside;
+  const to = entering ? inside : doorTile;
+  if (!player.getLocation().equals(from)) player.moveTo(from.clone());
+
+  const dx = to.getX() - from.getX();
+  const dy = to.getY() - from.getY();
+  const direction = dy > 0 ? 0 : dx > 0 ? 1 : dy < 0 ? 2 : 3;
+  const sender = player.getPacketSender();
+  sender.sendObjectRemoval(door);
+  core.TaskManager.submit(new ForceMovementTask(player, 2,
+    new ForceMovement(from.clone(), new Location(dx, dy), 0, 30, direction, WALK_ANIMATION)));
+  later(player, 3, () => sender.sendObject(door));
+}
+
 function openDoor(event) {
   const { player } = event;
-  if (player.getLocation().getY() < OUTSIDE_FROM_Y) return false;
+  const entering = player.getLocation().getY() >= OUTSIDE_FROM_Y;
+  if (!entering) {
+    crossDoor(player, event.object, false);
+    return true;
+  }
   if (player.getSkillManager().getMaxLevel(core.Skill.CRAFTING) < REQUIRED_LEVEL) {
     player.sendMessage(`You need a Crafting level of ${REQUIRED_LEVEL} to enter the Crafting Guild.`);
     return true;
@@ -51,7 +82,8 @@ function openDoor(event) {
     return true;
   }
   masterCrafterSays(player, WELCOME_VARIANT);
-  return false;
+  crossDoor(player, event.object, true);
+  return true;
 }
 
 function canBank(player) {

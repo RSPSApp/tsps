@@ -78,6 +78,14 @@ export abstract class Area {
         return null;
     }
 
+    /**
+     * A walk click the engine would refuse because the player is mid forced move (or being placed
+     * after one): true when the area takes it (a roll chained at once), false to refuse it.
+     */
+    handleForcedWalk(player: Player, destination: { x: number; y: number; z: number }): boolean {
+        return false;
+    }
+
     /** true keeps `npc` aggressive towards `player` despite their tolerance timer. */
     npcAggressionTolerance(player: Player, npc: NPC): boolean | null {
         return null;

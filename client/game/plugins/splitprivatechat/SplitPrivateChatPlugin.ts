@@ -1,5 +1,9 @@
+import { GameState } from "@runelite/api/GameState";
+import { ChatMessage, GameStateChanged } from "@runelite/api/events";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
-import type { ChatMessageEvent } from "../../../network/serverConnection/types/messages";
+import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
+import { createElement, lazy, type ReactNode } from "react";
+import type { OsrsClient } from "../../OsrsClient";
 import { sanitizeText } from "../../../widgets/menu/utils";
 
 export const SPLIT_PRIVATE_CHAT_VARP = 287;
@@ -18,18 +22,13 @@ export interface SplitPrivateChatState {
 
 type SplitPrivateChatListener = () => void;
 
-function isPrivateMessage(message: ChatMessageEvent): boolean {
-    return (
-        message.chatType === 3 ||
-        message.chatType === 6 ||
-        message.messageType === "private_in" ||
-        message.messageType === "private_out"
-    );
-}
+const SplitPrivateChatOverlay = lazy(() =>
+    import("./SplitPrivateChatOverlay").then((m) => ({ default: m.SplitPrivateChatOverlay })),
+);
 
-function isOutgoingPrivateMessage(message: ChatMessageEvent): boolean {
-    return message.chatType === 6 || message.messageType === "private_out";
-}
+// RuneLite's ChatMessageType.PRIVATECHAT and PRIVATECHATOUT.
+const PRIVATECHAT = 3;
+const PRIVATECHATOUT = 6;
 
 export class SplitPrivateChatPlugin extends Plugin {
     static descriptor: PluginDescriptor = {
@@ -40,7 +39,20 @@ export class SplitPrivateChatPlugin extends Plugin {
         configKey: "splitprivatechatplugin",
     };
 
+    private readonly client = inject<OsrsClient>(CLIENT_TOKEN);
     private readonly listeners = new Set<SplitPrivateChatListener>();
+
+    onChatMessage(message: ChatMessage): void {
+        if (this.client.varManager?.getVarp(SPLIT_PRIVATE_CHAT_VARP) === 1) this.addMessage(message);
+    }
+
+    onGameStateChanged(event: GameStateChanged): void {
+        if (event.getGameState() === GameState.LOGIN_SCREEN) this.clear();
+    }
+
+    renderHud(osrsClient: OsrsClient): ReactNode {
+        return createElement(SplitPrivateChatOverlay, { osrsClient, plugin: this });
+    }
     private state: SplitPrivateChatState = { messages: [] };
 
     subscribe(listener: SplitPrivateChatListener): () => void {
@@ -52,18 +64,19 @@ export class SplitPrivateChatPlugin extends Plugin {
         return this.state;
     }
 
-    addMessage(message: ChatMessageEvent, now = Date.now()): void {
-        if (!isPrivateMessage(message)) {
+    addMessage(message: ChatMessage, now = Date.now()): void {
+        const type = message.getType();
+        if (type !== PRIVATECHAT && type !== PRIVATECHATOUT) {
             return;
         }
 
-        const text = sanitizeText(message.text);
+        const text = sanitizeText(message.getMessage());
         if (!text) {
             return;
         }
 
-        const name = sanitizeText(message.from);
-        const direction = isOutgoingPrivateMessage(message) ? "To" : "From";
+        const name = sanitizeText(message.getName());
+        const direction = type === PRIVATECHATOUT ? "To" : "From";
         const prefix = name ? `${direction} ${name}: ` : `${direction}: `;
         this.commit([
             ...this.state.messages.filter((entry) => entry.expiresAt > now),

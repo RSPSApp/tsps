@@ -5,7 +5,8 @@ import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import { Scene } from "../../rs/scene/Scene";
 import type { DrawRange } from "../DrawRange";
 import { sceneryRangeVisible } from "../SceneryVisibility";
-import { LocAnimated } from "../loc/LocAnimated";
+import { LocAnimated, type LocFrameSoundHandler } from "../loc/LocAnimated";
+import { hasSunkenLocs, sunkenRangeIndices } from "../loc/SunkenLocs";
 import type { SeqFrameLoader } from "../../rs/model/seq/SeqFrameLoader";
 import type { SeqTypeLoader } from "../../rs/config/seqtype/SeqTypeLoader";
 import type { SdMapData } from "../loader/SdMapData";
@@ -711,12 +712,15 @@ export class WebGPUMapSquare implements MapSquare {
         LocAnimated.carryOver(previous, this.locsAnimated);
     }
 
-    /** Advances animated locs (Client.cycle timing) and points their ranges at the frame (draw2.ts). */
-    updateAnimatedLocs(seqFrameLoader: SeqFrameLoader, cycle: number): void {
+    /**
+     * Advances animated locs (Client.cycle timing) and points their ranges at the frame (draw2.ts).
+     * `onFrameSound` plays their frame sounds; the shadow pass advances them again without it.
+     */
+    updateAnimatedLocs(seqFrameLoader: SeqFrameLoader, cycle: number, onFrameSound?: LocFrameSoundHandler): void {
         const ranges = this.locRanges;
         if (!ranges) return;
         for (const loc of this.locsAnimated) {
-            loc.update(seqFrameLoader, cycle);
+            loc.update(seqFrameLoader, cycle, onFrameSound);
             for (const alpha of [false, true]) {
                 const frame = (alpha ? loc.anim.framesAlpha : loc.anim.frames)?.[loc.drawFrame()];
                 for (const lod of [false, true]) {
@@ -974,6 +978,45 @@ export class WebGPUMapSquare implements MapSquare {
     drawDepth(pass: GPURenderPassEncoder, roofPlaneLimit: number, visibility: SceneryDrawContext): void {
         this.drawBatches(pass, this.opaqueBatches, roofPlaneLimit, false, visibility, true);
         this.drawBatches(pass, this.alphaBatches, roofPlaneLimit, true, visibility, true);
+    }
+
+    /** Whether any of its locs is drawn below the floor (SunkenLocs). */
+    hasSunkenLocs(): boolean {
+        return !this.worldEntity && hasSunkenLocs(this.locsAnimated);
+    }
+
+    /**
+     * SunkenLocs, after the opaque scene: `punch` resets the depth under their opaque and alpha
+     * faces (the caller sets the viewport's depth to 1), otherwise their opaque faces again.
+     */
+    drawSunkenLocs(pass: GPURenderPassEncoder, punch: boolean, roofPlaneLimit: number, visibility: SceneryDrawContext): void {
+        const group = this.groups.get("loc");
+        if (!group || this.worldEntity) return;
+        const resources = this.resources;
+        const baseX = this.getRenderBaseTileX(), baseZ = this.getRenderBaseTileY();
+        for (const alpha of punch ? [false, true] : [false]) {
+            const batch = alpha ? group.alpha : group.opaque;
+            if (!batch) continue;
+            const indices = sunkenRangeIndices(this.locsAnimated, alpha).filter((i) => {
+                const range = batch.ranges[i];
+                return !!range && range[1] > 0 && range[2] > 0 &&
+                    !(roofPlaneLimit < 3 && batch.planes && i < batch.planes.length && batch.planes[i] > roofPlaneLimit) &&
+                    sceneryRangeVisible(range, baseX, baseZ, visibility.tileX, visibility.tileZ, visibility.distance,
+                        visibility.lodDistance, false, visibility.camera, visibility.shadow);
+            });
+            if (indices.length === 0) continue;
+            pass.setPipeline(punch ? resources.punchPipelines[alpha ? 1 : 0] : resources.opaquePipeline);
+            pass.setBindGroup(SCENE_GROUP, resources.sceneBindGroup);
+            pass.setBindGroup(WORLD_TEXTURES_GROUP, resources.mapWorldTextureBindGroup);
+            pass.setBindGroup(MAP_TEXTURES_GROUP, batch.bindGroup);
+            pass.setVertexBuffer(0, batch.vertexBuffer);
+            pass.setIndexBuffer(batch.indexBuffer, "uint32");
+            for (const i of indices) {
+                const range = batch.ranges[i];
+                pass.setBindGroup(MAP_UNIFORMS_GROUP, batch.uniformsBindGroup, [(batch.uniformBase + i) * MAP_UNIFORM_STRIDE]);
+                pass.drawIndexed(range[1] | 0, range[2] | 0, (range[0] / DRAW_RANGE_INDEX_BYTES) | 0, 0, 0);
+            }
+        }
     }
 
     delete(): void {

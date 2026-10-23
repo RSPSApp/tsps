@@ -154,3 +154,58 @@ test('the complete registry lets Varrock Aris start Demon Slayer and keeps banqu
     assert.deepEqual(rfd(request(npcId)), { page: "Recipe for Disaster/Another Cook's Quest", variant: 'chef-surprise-talking-to-aris' });
   }
 });
+
+test('completed One Small Favour releases Fred to Sheep Shearer while its own chicken step remains owned', () => {
+  const N = core.NpcIdentifiers;
+  const variantFor = (p, npcId) => {
+    for (const hook of variants) {
+      const answer = hook.fn({ player: p, npcId });
+      if (answer) return { quest: hook.quest, answer };
+    }
+    return null;
+  };
+  const p = player();
+  p.attrs.set('quest.one_small_favour.stage', 285);
+  p.attrs.set('quest.sheep_shearer.stage', 0);
+  assert.deepEqual(variantFor(p, N.FRED_THE_FARMER), {
+    quest: 'SheepShearer',
+    answer: { page: 'Sheep Shearer', variant: 'starting-off' },
+  }, 'completed OSF must not keep Fred');
+  assert.equal(variants.find(hook => hook.quest === 'OneSmallFavour').fn({ player: p, npcId: N.FRED_THE_FARMER }), null);
+
+  p.attrs.set('quest.one_small_favour.stage', 5);
+  p.attrs.set('quest.sheep_shearer.stage', 0);
+  assert.deepEqual(variantFor(p, N.FRED_THE_FARMER), {
+    quest: 'OneSmallFavour',
+    answer: 'the-various-favours-are-asked-asking-fred-for-chickens',
+  }, 'active OSF chicken step still owns Fred');
+});
+
+test('One Small Favour only claims Aggie at its ask/return steps, leaving Prince Ali paste reachable', () => {
+  const N = core.NpcIdentifiers;
+  const variantFor = (p, npcId) => {
+    for (const hook of variants) {
+      const answer = hook.fn({ player: p, npcId });
+      if (answer) return { quest: hook.quest, answer };
+    }
+    return null;
+  };
+  const p = player();
+  p.attrs.set('quest.prince_ali_rescue.stage', 20);
+  p.attrs.set('quest.one_small_favour.stage', 4);
+  assert.deepEqual(variantFor(p, N.AGGIE), {
+    quest: 'PrinceAliRescue',
+    answer: { page: 'Prince Ali Rescue', variant: 'preparations-for-rescue-talking-to-aggie' },
+  }, 'OSF between its Aggie steps must not swallow the active paste dialogue');
+
+  p.attrs.set('quest.one_small_favour.stage', 3);
+  assert.deepEqual(variantFor(p, N.AGGIE), {
+    quest: 'OneSmallFavour',
+    answer: 'the-various-favours-are-asked-asking-aggie-to-be-a-character-witness',
+  }, 'OSF ask-Aggie step still owns her');
+  p.attrs.set('quest.one_small_favour.stage', 39);
+  assert.deepEqual(variantFor(p, N.AGGIE), {
+    quest: 'OneSmallFavour',
+    answer: 'heading-back-to-complete-the-favours-aggie',
+  }, 'OSF return-to-Aggie turn-in still owns her');
+});

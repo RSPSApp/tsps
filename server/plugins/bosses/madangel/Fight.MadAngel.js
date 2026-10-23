@@ -57,6 +57,7 @@ class Fight {
     this.npc = npc;
     this.player = session.player;
     this.data = Common.data;
+    this.npcs = session.npcs ?? Common.data.npcs;
     this.tick = 0;
     this.startTick = -1;
     this.attacks = 0;
@@ -88,9 +89,9 @@ class Fight {
   // ------------------------------------------------------------------ waking and ticking
 
   wake() {
-    const { npcs, wake, music } = this.data;
+    const { wake, music } = this.data;
     const { Animation, Graphic } = this.core;
-    this.npc.setNpcTransformationId(npcs.waking);
+    this.npc.setNpcTransformationId(this.npcs.waking);
     this.npc.performAnimation(new Animation(wake.anim));
     this.npc.performGraphicInSlot(SLOT_SPECIAL, new Graphic(wake.spotanim));
     this.npc.faceTile(this.player.getLocation());
@@ -99,7 +100,9 @@ class Fight {
   }
 
   begin() {
-    this.npc.setNpcTransformationId(-1);
+    this.npc.setNpcTransformationId(this.npcs.fighting);
+    const max = this.npc.getMaxHitpoints?.() ?? this.npc.getDefinition().getHitpoints();
+    this.npc.setHitpoints(max);
     this.startTick = this.tick;
     this.showHud();
     this.npc.getCombat().attack(this.player);
@@ -404,7 +407,7 @@ class Fight {
   // ------------------------------------------------------------------ the HP HUD (the BossHud plugin)
 
   hudValues() {
-    return { player: this.player, npcId: this.data.npcs.fighting, current: Math.max(0, this.npc.getHitpoints()), maximum: this.npc.getDefinition().getHitpoints() };
+    return { player: this.player, npcId: this.npcs.fighting, current: Math.max(0, this.npc.getHitpoints()), maximum: this.npc.getMaxHitpoints?.() ?? this.npc.getDefinition().getHitpoints() };
   }
 
   showHud() {
@@ -486,7 +489,9 @@ function angelHitModify({ npc, hit }) {
 }
 
 function attachFight(api) {
-  api.registerNpcCombatMethodProvider(Common.data.npcs.fighting, combatClass());
+  for (const id of new Set([Common.data.npcs.fighting, Common.data.questNpcs?.fighting].filter(Number.isInteger))) {
+    api.registerNpcCombatMethodProvider(id, combatClass());
+  }
   api.onCombatHitRoll(angelHitRoll);
   api.onNpcHitModify(angelHitModify);
 }

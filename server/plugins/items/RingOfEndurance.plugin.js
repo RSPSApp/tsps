@@ -4,13 +4,14 @@
  * Charged with stamina potions and mixes, one charge per dose (1,000 max).
  * While a charged ring is worn, a stamina dose is doubled (40% energy and a
  * 4-minute buff) and spends one charge; uncharging does not refund charges.
- * The 500-charge passive run-drain reduction is not modelled because the run
- * energy drain rate has no plugin hook yet.
+ * With 500 or more charges, the ring skips 15% of run-energy drain.
  */
 const Equipment = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment").Equipment;
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
 const MAX_CHARGES = 1000;
+const PASSIVE_MIN_CHARGES = 500;
+const PASSIVE_SKIP_PERCENT = 15;
 const CHARGES_META_KEY = "ring-of-endurance";
 
 const DOSE_BY_ITEM = new Map([
@@ -35,6 +36,19 @@ function charges(item) {
 function wornRing(player) {
   const item = player?.getEquipment?.()?.get?.(Equipment.RING_SLOT);
   return item && chargedIds.has(Number(item.getId?.() ?? -1)) ? item : null;
+}
+
+function passiveApplies(player, roll) {
+  const ring = wornRing(player);
+  return ring != null && charges(ring) >= PASSIVE_MIN_CHARGES && roll < PASSIVE_SKIP_PERCENT;
+}
+
+/** The ring skips 15% of run-energy drain once it holds 500 charges (Wiki). */
+function drainModifier(entity, amount) {
+  if (!entity?.isPlayer?.()) {
+    return amount;
+  }
+  return passiveApplies(entity.getAsPlayer(), core.Misc.getRandom(99)) ? 0 : amount;
 }
 
 function refresh(player) {
@@ -105,7 +119,7 @@ function uncharge({ player, item }) {
 module.exports = {
   name: "RingOfEndurance",
   members: true,
-  _test: { charges, wornRing, useCharge, doubleStamina, chargeRing, uncharge, MAX_CHARGES },
+  _test: { charges, wornRing, useCharge, doubleStamina, chargeRing, uncharge, passiveApplies, drainModifier, MAX_CHARGES },
   register(api) {
     core = api.core;
     const I = core.ItemIdentifiers;
@@ -117,6 +131,7 @@ module.exports = {
     ]);
 
     api.onCustomEvent("potions:stamina-effect", doubleStamina);
+    api.registerRunEnergyDrainModifier(drainModifier);
     api.onItemAction((event) => {
       if (chargedIds.has(event.itemId)) {
         const option = String(event.option ?? "").toLowerCase();

@@ -37,6 +37,9 @@ const WebSocket = require("ws");
 const CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:3101";
 const TIMEOUT_MS = Number(process.env.SMOKE_TIMEOUT_MS) || 60000;
+// The client holds no plugin references; find one by its descriptor name.
+const pluginJs = (name) => `((pm) => pm.getPlugins().find((p) => pm.getDescriptor(p).name === ${JSON.stringify(name)}))(window.osrsClient.runeLite.pluginManager)`;
+const HD_PLUGIN_JS = pluginJs("117 HD");
 const COMMAND_TIMEOUT_MS = Math.min(TIMEOUT_MS, 15000);
 const DEVTOOLS_TIMEOUT_MS = Math.min(TIMEOUT_MS, 20000);
 const SETTLE_MS = 3000;
@@ -95,8 +98,10 @@ async function main() {
                             window.osrsClient ??
                             (window.__WEBGPU_RENDERER__ && window.__WEBGPU_RENDERER__.osrsClient) ??
                             null;
-                        if (!client || !client.hdPlugin) return "hd-plugin-missing";
-                        await client.runeLite.pluginManager.setPluginEnabled(client.hdPlugin, true);
+                        const pm = client && client.runeLite.pluginManager;
+                        const hd = pm && pm.getPlugins().find((p) => pm.getDescriptor(p).name === "117 HD");
+                        if (!hd) return "hd-plugin-missing";
+                        await pm.setPluginEnabled(hd, true);
                         return "hd-enabled";
                     })()`,
                 });
@@ -394,8 +399,7 @@ async function rendererState(cdp) {
                         ? renderer.osrsClient.isLoggedIn()
                         : false),
                 gameState: renderer.osrsClient ? renderer.osrsClient.gameState : -1,
-                hdEnabled: !!(renderer.osrsClient && renderer.osrsClient.hdPlugin &&
-                    renderer.osrsClient.hdPlugin.isEnabled && renderer.osrsClient.hdPlugin.isEnabled()),
+                hdEnabled: !!(renderer.osrsClient && renderer.osrsClient.clientPlugins.hdEnabled()),
                 visibleMaps:
                     renderer.mapManager && renderer.mapManager.visibleMaps
                         ? renderer.mapManager.visibleMaps.length
@@ -532,7 +536,7 @@ async function checkHdLights(cdp) {
     await sleep(500);
         const state = await evaluate(`(() => {
             const client = window.osrsClient, r = window.__WEBGPU_RENDERER__ ?? client.renderer;
-            const lightState = r.world?.extension ?? client.hdPlugin.renderers.get(r);
+            const lightState = r.world?.extension ?? ${HD_PLUGIN_JS}.renderers.get(r);
             const plane = r.getPlayerRawPlane(), locs = [];
             for (let m = 0; m < r.mapManager.visibleMapCount; m++) {
                 const map = r.mapManager.visibleMaps[m], ids = map.tileLocIdsByLevel?.[plane], offsets = map.tileLocOffsetsByLevel?.[plane];
@@ -566,7 +570,7 @@ async function checkHdQuality(cdp) {
         return result.result.value;
     };
     const keys = ["textureFiltering", "antiAliasing", "depthAwareAo"];
-    const defaults = await evaluate("window.osrsClient.hdPlugin.options");
+    const defaults = await evaluate(`${HD_PLUGIN_JS}.options`);
     for (const key of keys) assert.equal(defaults[key], true, `${key} defaults on`);
     const pixels = await evaluate(`(${hdQualityGpuPixels.toString()})()`);
     console.log(`[webgpu-smoke] HD GPU pixel checks: ${JSON.stringify(pixels)}`);
@@ -580,7 +584,7 @@ async function checkHdQuality(cdp) {
         await sleep(500);
         const state = await evaluate(`(() => {
             const r = window.__WEBGPU_RENDERER__, ext = r.world.extension;
-            return { frame: r.stats.frameCount, options: r.osrsClient.hdPlugin.options,
+            return { frame: r.stats.frameCount, options: ${HD_PLUGIN_JS}.options,
                 filtering: ext.uniforms[196], aoWidth: ext.post.ssao.blurTexture.width, sceneWidth: r.canvas.width };
         })()`);
         for (const key of keys) assert.equal(state.options[key], disabled !== "all" && disabled !== key, `${key} after disabling ${disabled}`);

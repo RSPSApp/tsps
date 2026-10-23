@@ -1,7 +1,7 @@
 /**
  * Wyrmscraig (https://oldschool.runescape.wiki/w/Wyrmscraig), from
- * plugins/areas/data/wyrmscraig.json, as captured: Fallen From Grace's finished state for every
- * player (open access) and the cave under Ardeaglais. Each lives in ./wyrmscraig/. The
+ * plugins/areas/data/wyrmscraig.json: the cave under Ardeaglais. Fallen From Grace owns
+ * its quest state and the cliff shortcut's mined state. The
  * shortcuts are Agility's (shortcuts/Wyrmscraig.Agility.js); the Mad Angel is the MadAngel plugin
  * (plugins/bosses). See docs/wyrmscraig.md.
  */
@@ -12,7 +12,6 @@ module.exports = {
   members: true,
   register(api) {
     Common.init(api);
-    require("./wyrmscraig/OpenAccess.Wyrmscraig")(api);
     require("./wyrmscraig/Cave.Wyrmscraig")(api);
   },
 };

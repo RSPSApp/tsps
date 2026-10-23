@@ -47,7 +47,7 @@ export function resolveGpuSettings(config: {
 /**
  * RuneLite's GPU plugin: anti-aliasing (FXAA or MSAA x2 to x16), draw distance, an FPS cap
  * and colour banding, kept across sessions. While it is on, its settings replace the
- * renderer's defaults and the browser quality profile's; the renderers ask `settings()` each
+ * renderer's defaults and the browser quality profile's; the renderers ask `gpuSettings()` each
  * frame, so changes apply straight away on WebGL and WebGPU alike.
  */
 export class GpuPlugin extends Plugin {
@@ -79,7 +79,7 @@ export class GpuPlugin extends Plugin {
     }
 
     /** The settings to apply, or undefined while the plugin is off. */
-    settings(): GpuSettings | undefined {
+    gpuSettings(): GpuSettings | undefined {
         return this.isEnabled() ? this.current : undefined;
     }
 

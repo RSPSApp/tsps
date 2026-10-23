@@ -43,20 +43,19 @@
  * ids from the cache (lookup-gameval/dump:loc) and Object/ItemIdentifiers.
  *
  * Gaps / approximations:
- *  - No cutscene or instance engine: the two "(cutscene begins)" teleports play
- *    their transcript in place, and the Giant Sea Snake is an owner-only spawn
- *    in the shared boss room rather than an instance (killing it despawns it).
- *  - Doors 15204, steam-vent/rockfall damage while walking, the lift manual's
- *    read text and the "approaching the first fire remains" line are not
- *    implemented (no walk-over hook/interface in scope).
+ *  - No instance engine: the Giant Sea Snake is an owner-only spawn in the
+ *    shared boss room rather than an instance (killing it despawns it). The
+ *    meddling-kids scene plays the captured transcript with its camera move and
+ *    returns the player to (2580, 10268); the snake room itself has no camera.
+ *  - Doors 15204, steam-vent and rockfall damage are not in capture 91, so they
+ *    are not implemented. The "approaching the first fire remains" line is not
+ *    hooked. The lift manual (7972) opens its captured two-page book from the
+ *    floor spawn or inventory.
  *  - "the burnt diary" Read shows the wiki diary text as a book; nothing in the
- *    cache is read for its [] page count beyond the item id.
+ *    cache is read for its [] page count beyond the item id. Reading with all
+ *    five chapters advances the recorded stage to 100.
  *  - The "(Continues with Changing heirs dialogue.)"/relationship continuation
  *    markers close the chat instead of replaying Throne of Miscellania's page.
- *  - Throne of Miscellania's Advisor Ghrim action q1HFEt still says "Royal
- *    Trouble is not yet available on this world."; this plugin's Ghrim selector
- *    returns the Royal Trouble menu at stage 0 instead, so the message is never
- *    reached (shared change would be needed to remove it).
  *  - Fisherman Frodi has no Royal Trouble transcript variant in the pack, so
  *    only Gunnhild, Leif and Magnus advance the theft investigation.
  *  - The 20,000 coins are handed over by Queen Sigrid's transcript action
@@ -74,7 +73,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
     Skill,
     StatementDialogue,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { openBook, registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
 
   const PAGE = "Royal Trouble";
 
@@ -147,8 +146,11 @@ module.exports = function registerRoyalTroubleQuest(api) {
   const MISC_SCROLL = 50;
   const MISC_DUNGEON = 60;
   const MISC_DONAL = 80;
+  const MISC_LIFT = 90;
+  const MISC_DIARY = 100;
   const MISC_KIDS = 110;
   const MISC_BOSS = 120;
+  const MISC_COMPLETE = 130;
 
   const ETC_SIGRID = 10;
   const ETC_REPORTED = 20;
@@ -196,6 +198,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
   ];
   const LETTER_ITEM_ID = ItemIdentifiers.LETTER_6; // 7966
   const ENGINE_ITEM_ID = ItemIdentifiers.ENGINE; // 7967
+  const LIFT_MANUAL_ITEM_ID = ItemIdentifiers.LIFT_MANUAL; // 7972
   const SCROLL_ITEM_ID = ItemIdentifiers.SCROLL_2; // 7968
   const PULLEY_BEAM_ITEM_ID = ItemIdentifiers.PULLEY_BEAM; // 7969
   const LONG_PULLEY_BEAM_ITEM_ID = ItemIdentifiers.LONG_PULLEY_BEAM; // 7970
@@ -256,9 +259,45 @@ module.exports = function registerRoyalTroubleQuest(api) {
   const DUNGEON_ZONE = { minX: 2494, maxX: 2625, minY: 10240, maxY: 10304, levels: [0, 1, 2] };
   const BOSS_ROOM_ZONE = { minX: 2608, maxX: 2622, minY: 10272, maxY: 10290, levels: [0] };
   const BOSS_TILE = { x: 2615, y: 10280 };
+  // Capture 91 drops the heavy box on the walkable fight ledge, not the boss island.
+  const HEAVY_BOX_TILE = { x: 2613, y: 10278 };
   const LIFT_BOTTOM_TILE = { x: 2508, y: 10288, z: 0 };
   const LIFT_TOP_TILE = { x: 2508, y: 10288, z: 1 };
   const CAVE_EXIT_TILE = { x: 2621, y: 3866, z: 0 };
+  // Capture 91's meddling-kids scene: camera over the kids, then the player
+  // returns to the path at (2580, 10268).
+  const KIDS_SCENE_TILE = { x: 2571, y: 10276, z: 0 };
+  const KIDS_EXIT_TILE = { x: 2580, y: 10268, z: 0 };
+  const KIDS_CAMERA_MOVE = { x: 2571, y: 10273, height: 350, rate: 100 };
+  const KIDS_CAMERA_LOOK = { x: 2571, y: 10277, height: 300, rate: 100 };
+  // Capture 91 sends a second, faster reveal toward the kids before resetting.
+  const KIDS_REVEAL_MOVE = { x: 2567, y: 10274, height: 400, rate: 13 };
+  const KIDS_REVEAL_LOOK = { x: 2582, y: 10270, height: 300, rate: 13 };
+  const KIDS_REVEAL_RETARGET = { x: 2571, y: 10277, height: 300, rate: 2 };
+  const CUTSCENE_END_ACTION = "P_Qf1k";
+
+  const MANUAL_TITLE = "AMCE Lift-In-A-Box User Manual";
+  // Capture 91 opens this book from the manual on the lift-room floor (item 7972).
+  function manualPage(left, right = []) {
+    const page = {};
+    left.forEach((text, line) => { page[44 + line] = text; });
+    right.forEach((text, line) => { page[60 + line] = text; });
+    return page;
+  }
+  const LIFT_MANUAL_PAGES = [
+    manualPage(
+      ["Troubleshooting your AMCE", "Lift-In-A-Box", "", "<col=800000>'My lift doesn't work!'<col=000080>", "",
+        "1. Have you added the", "pulleys? Make sure you have", "a long top beam with a", "pulley, and pulleys on the",
+        "two crossbeams. We", "recommend AMCE Pulley-", "Beams-In-A-Box.", "", "2. Have you attached a", "rope? Wind one of your"],
+      ["AMCE Ropes-In-A-Box", "through the pulleys.", "", "3. Is the platform broken?", "Repair it with one of your",
+        "AMCE Beams-In-A-Box.", "", "4. Have you added the", "engine? The AMCE Lift-In-", "A-Box does not include an",
+        "engine.", "", "5. Have you added coal to", "the engine? All compatible", "coal engines have a maximum"]
+    ),
+    manualPage(
+      ["load of five chunks of coal.", "", "(AMCE Lift-In-A-Box,", "Pulley-Beams-In-A-Box,", "Beams-In-A-Box and Ropes-",
+        "In-A-Box are all registered", "trademarks of Ali Morrisane", "Commercial Enterprises", "(AMCE) Ltd.)"]
+    ),
+  ];
 
   const FIRE_BITS = new Map([
     [FIRE_REMAINS_OBJECT_IDS[0], 1 << 0],
@@ -273,10 +312,12 @@ module.exports = function registerRoyalTroubleQuest(api) {
   // ==========================================================================
 
   // Advisor Ghrim.
+  const GHRIM_PAGE = "Advisor Ghrim";
   const V_GHRIM_MAIN = "getting-started-talking-to-advisor-ghrim";
   const V_GHRIM_WAIT = "getting-started-talking-to-advisor-ghrim-after-starting-the-quest";
   const V_GHRIM_DUNGEON = "to-the-dungeon-with-you-talking-to-advisor-ghrim";
   const V_GHRIM_DUNGEON_2 = "to-the-dungeon-with-you-talking-to-advisor-ghrim-2";
+  const V_GHRIM_POST = "standard-dialogue-after-completing-royal-trouble";
 
   // King Vargas.
   const V_VARGAS_AFTER_START = "getting-started-talking-to-king-vargas-after-starting-the-quest";
@@ -305,9 +346,15 @@ module.exports = function registerRoyalTroubleQuest(api) {
   const V_ASTRID_POST = "post-quest-talking-to-princess-astrid";
 
   // Investigation speakers.
+  const GUNNHILD_PAGE = "Gardener Gunnhild";
+  const LEIF_PAGE = "Lumberjack Leif";
+  const MAGNUS_PAGE = "Miner Magnus";
   const V_GUNNHILD = "investigating-the-stolen-goods-talking-to-gardener-gunhild";
   const V_LEIF = "investigating-the-stolen-goods-talking-to-lumberjack-leif";
   const V_MAGNUS = "investigating-the-stolen-goods-talking-to-miner-magnus";
+  const V_GUNNHILD_AFTER_THRONE = "standard-dialogue-after-completion-of-throne-of-miscellania";
+  const V_LEIF_AFTER_THRONE = "standard-dialogue-after-throne-of-miscellania";
+  const V_MAGNUS_AFTER_THRONE = "standard-dialogue-after-throne-of-miscellania";
   const V_MATILDA = "investigating-the-stolen-goods-talking-to-matilda";
   const V_HELGA = "investigating-the-stolen-goods-talking-to-helga";
   const V_ASHILD = "investigating-the-stolen-goods-talking-to-ashild";
@@ -316,6 +363,8 @@ module.exports = function registerRoyalTroubleQuest(api) {
   const V_SAILOR = "to-the-dungeon-with-you-talking-to-the-sailor";
 
   // Guards / Donal / kids / boss.
+  const GUARD_PAGE = "Guard (Miscellania)";
+  const V_GUARD_POST = "standard-dialogue-after-completing-royal-trouble";
   const V_GUARD_NO_SCROLL = "to-the-dungeon-with-you-attempting-to-enter-the-dungeon-without-the-scroll";
   const V_GUARD_SCROLL = "to-the-dungeon-with-you-entering-the-dungeon-with-the-scroll";
   const V_GUARD_LAIR = "those-meddling-kids-leaving-the-giant-sea-snake-s-lair";
@@ -609,7 +658,8 @@ module.exports = function registerRoyalTroubleQuest(api) {
 
   function selectGhrim(player) {
     const stage = quest.getStage(player);
-    if (stage >= STAGE_COMPLETE) return variant(PAGE, V_GHRIM_MAIN);
+    if (!questComplete(player, "throne_of_miscellania")) return null;
+    if (stage >= STAGE_COMPLETE) return variant(GHRIM_PAGE, V_GHRIM_POST);
     if (royalMisc(player) >= MISC_SCROLL) return variant(PAGE, V_GHRIM_DUNGEON_2);
     if (royalMisc(player) >= MISC_GHRIM) return variant(PAGE, V_GHRIM_DUNGEON);
     if (stage === STAGE_STARTED) return variant(PAGE, V_GHRIM_WAIT);
@@ -644,7 +694,11 @@ module.exports = function registerRoyalTroubleQuest(api) {
     if (stage === 0) return null; // Throne of Miscellania's post-quest Sigrid
     if (stage >= STAGE_COMPLETE) return variant(PAGE, V_SIGRID_POST);
     if (royalEtc(player) >= ETC_BOX) return variant(PAGE, V_SIGRID_AGAIN);
-    if (royalEtc(player) >= ETC_REPORTED) return variant(PAGE, V_SIGRID_BOX);
+    if (royalEtc(player) >= ETC_REPORTED) {
+      return held(player, HEAVY_BOX_ITEM_ID) || royalMisc(player) >= MISC_BOSS
+        ? variant(PAGE, V_SIGRID_BOX)
+        : variant(PAGE, V_SIGRID_AGAIN);
+    }
     if (royalEtc(player) >= ETC_SIGRID) {
       return hasAttribute(player, ETC_VILLAGERS_ATTRIBUTE)
         ? variant(PAGE, V_SIGRID_RETURN)
@@ -672,7 +726,12 @@ module.exports = function registerRoyalTroubleQuest(api) {
 
   function selectMiscWorker(player, npcId) {
     const misc = royalMisc(player);
-    if (misc < MISC_INVESTIGATE || misc >= MISC_GHRIM) return null;
+    if (misc < MISC_INVESTIGATE || misc >= MISC_GHRIM) {
+      if (!questComplete(player, "throne_of_miscellania")) return null;
+      if (npcId === NpcIdentifiers.GARDENER_GUNNHILD) return variant(GUNNHILD_PAGE, V_GUNNHILD_AFTER_THRONE);
+      if (npcId === NpcIdentifiers.LUMBERJACK_LEIF) return variant(LEIF_PAGE, V_LEIF_AFTER_THRONE);
+      return variant(MAGNUS_PAGE, V_MAGNUS_AFTER_THRONE);
+    }
     if (!hasAttribute(player, MISC_VILLAGERS_ATTRIBUTE)) {
       setAttributeFlag(player, MISC_VILLAGERS_ATTRIBUTE, true);
       player.getPacketSender().sendVarbit(VARBIT_MISC_VILLAGERS, 1);
@@ -703,6 +762,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
   function selectDungeonGuard(player) {
     const stage = quest.getStage(player);
     if (stage === 0) return null;
+    if (quest.isComplete(player)) return variant(GUARD_PAGE, V_GUARD_POST);
     const misc = royalMisc(player);
     if (misc < MISC_SCROLL) return variant(PAGE, V_GUARD_NO_SCROLL);
     if (misc === MISC_SCROLL) return variant(PAGE, V_GUARD_SCROLL);
@@ -748,7 +808,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
         return held(player, HEAVY_BOX_ITEM_ID);
       case COND_LOST_BOX_GUARD:
       case COND_LOST_BOX_SIGRID:
-        return royalMisc(player) >= MISC_BOSS && !held(player, HEAVY_BOX_ITEM_ID);
+        return royalMisc(player) >= MISC_BOSS && !ownsHeavyBox(player);
       case COND_HAS_LETTER_SIGRID:
       case COND_HAS_LETTER_VARGAS:
         return held(player, LETTER_ITEM_ID);
@@ -773,7 +833,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
         if (!held(player, MINING_PROP_ITEM_ID)) giveItem(player, MINING_PROP_ITEM_ID);
         break;
       case COND_LOST_BOX_GUARD:
-        if (!held(player, HEAVY_BOX_ITEM_ID)) giveItem(player, HEAVY_BOX_ITEM_ID);
+        if (!ownsHeavyBox(player)) giveItem(player, HEAVY_BOX_ITEM_ID);
         break;
       case COND_HAS_BOX_SIGRID:
         if (held(player, HEAVY_BOX_ITEM_ID)) takeItem(player, HEAVY_BOX_ITEM_ID);
@@ -850,7 +910,23 @@ module.exports = function registerRoyalTroubleQuest(api) {
 
   function handleAction(event) {
     const { player, stepId } = event;
-    if (!player || !OWN_ACTION_IDS.has(stepId)) return;
+    if (!player) return;
+    if (stepId === CUTSCENE_END_ACTION) {
+      const sender = player.getPacketSender();
+      sender.sendCameraMoveTo(KIDS_REVEAL_MOVE.x, KIDS_REVEAL_MOVE.y, KIDS_REVEAL_MOVE.height,
+        { rate: KIDS_REVEAL_MOVE.rate, rate2: 0 });
+      sender.sendCameraLookAt(KIDS_REVEAL_LOOK.x, KIDS_REVEAL_LOOK.y, KIDS_REVEAL_LOOK.height,
+        { rate: KIDS_REVEAL_LOOK.rate, rate2: 0 });
+      sender.sendCameraLookAt(KIDS_REVEAL_RETARGET.x, KIDS_REVEAL_RETARGET.y, KIDS_REVEAL_RETARGET.height,
+        { rate: KIDS_REVEAL_RETARGET.rate, rate2: 0 });
+      replayNextTick(player, () => {
+        player.getPacketSender().sendCameraReset();
+        player.getPacketSender().sendVarbit(VARBIT_KIDS_CUTSCENE, 1);
+        movePlayer(player, KIDS_EXIT_TILE);
+      });
+      return;
+    }
+    if (!OWN_ACTION_IDS.has(stepId)) return;
     if (ACTION_CONTINUE_CHANGE_HEIRS.has(stepId)) {
       if (stepId === ACTION_SEND_TO_CITIZENS) advanceMisc(player, MISC_INVESTIGATE);
       if (stepId === ACTION_REPORT_TO_VARGAS) advanceMisc(player, MISC_REPORTED);
@@ -914,7 +990,14 @@ module.exports = function registerRoyalTroubleQuest(api) {
     if (stepId === ACTION_COMPLETE) {
       event.handled = true;
       event.end = true;
-      if (!quest.isComplete(player) && royalEtc(player) >= ETC_BOX) quest.complete(player);
+      if (!quest.isComplete(player) && royalEtc(player) >= ETC_BOX) {
+        setRoyalMisc(player, MISC_COMPLETE);
+        setAttributeFlag(player, MISC_VILLAGERS_ATTRIBUTE, false);
+        setAttributeFlag(player, ETC_VILLAGERS_ATTRIBUTE, false);
+        setAttributeFlag(player, DIARY_READ_ATTRIBUTE, false);
+        sendSideVarbits(player);
+        quest.complete(player);
+      }
       return;
     }
     if (stepId === ACTION_RELATION_BRAND || stepId === ACTION_RELATION_ASTRID) {
@@ -1064,22 +1147,34 @@ module.exports = function registerRoyalTroubleQuest(api) {
       }
       playMessages(player, V_TUNNEL_BEAMS);
     }
-    movePlayer(player, { x: 2515, y: 10290, z: 0 });
+    player.sendMessage("You squeeze through the small hole in the wall.");
+    // Capture 91 tunnels from (2511,10287,1) to the walkable ledge at (2514,10291,0).
+    movePlayer(player, { x: 2514, y: 10291, z: 0 });
   }
 
   function squeezeFremennikCrack(player, objectId) {
     if (!questActive(player)) return;
+    const entering = objectId === FREMENNIK_CRACK_IN_OBJECT_ID;
+    if (!entering) {
+      movePlayer(player, { x: 2585, y: 10263, z: 0 });
+      return;
+    }
     if (chapters(player) < 5 || !diaryRead(player)) {
       playVariant(player, ARMOD_NPC_ID, V_CREVICE_LOCKED);
       return;
     }
     if (!hasAttribute(player, CUTSCENE_ATTRIBUTE)) {
       setAttributeFlag(player, CUTSCENE_ATTRIBUTE, true);
-      player.getPacketSender().sendVarbit(VARBIT_KIDS_CUTSCENE, 1);
+      movePlayer(player, KIDS_SCENE_TILE);
+      const sender = player.getPacketSender();
+      sender.sendCameraMoveTo(KIDS_CAMERA_MOVE.x, KIDS_CAMERA_MOVE.y, KIDS_CAMERA_MOVE.height,
+        { rate: KIDS_CAMERA_MOVE.rate, rate2: 0 });
+      sender.sendCameraLookAt(KIDS_CAMERA_LOOK.x, KIDS_CAMERA_LOOK.y, KIDS_CAMERA_LOOK.height,
+        { rate: KIDS_CAMERA_LOOK.rate, rate2: 0 });
       playVariant(player, ARMOD_NPC_ID, V_KIDS, sliceCutscene);
+      return;
     }
-    const entering = objectId === FREMENNIK_CRACK_IN_OBJECT_ID;
-    movePlayer(player, entering ? { x: 2585, y: 10263, z: 0 } : { x: 2585, y: 10258, z: 0 });
+    movePlayer(player, KIDS_EXIT_TILE);
   }
 
   function squeezeSnakeCrack(player, objectId) {
@@ -1252,7 +1347,9 @@ module.exports = function registerRoyalTroubleQuest(api) {
     if (itemId === ENGINE_ITEM_ID && stage === LIFT_BEAM) {
       event.handled = true;
       takeItem(player, ENGINE_ITEM_ID);
-      setLiftStage(player, coalInEngine(player) >= 5 ? LIFT_DONE : LIFT_ENGINE);
+      const complete = coalInEngine(player) >= 5;
+      setLiftStage(player, complete ? LIFT_DONE : LIFT_ENGINE);
+      if (complete) advanceMisc(player, MISC_LIFT);
       playMessages(player, V_LIFT_ENGINE);
       return;
     }
@@ -1270,7 +1367,10 @@ module.exports = function registerRoyalTroubleQuest(api) {
     }
     takeItem(player, COAL_ITEM_ID);
     setCoalInEngine(player, coalInEngine(player) + 1);
-    if (liftStage(player) >= LIFT_ENGINE && coalInEngine(player) >= 5) setLiftStage(player, LIFT_DONE);
+    if (liftStage(player) >= LIFT_ENGINE && coalInEngine(player) >= 5) {
+      setLiftStage(player, LIFT_DONE);
+      advanceMisc(player, MISC_LIFT);
+    }
     playMessages(player, V_LIFT_COAL);
   }
 
@@ -1313,13 +1413,26 @@ module.exports = function registerRoyalTroubleQuest(api) {
       event.handled = true;
       setAttributeFlag(player, DIARY_READ_ATTRIBUTE, true);
       for (let bit = 0; bit < 5; bit++) player.getPacketSender().sendVarbit(VARBIT_DIARY_READ_1 + bit, 1);
+      if (chapters(player) >= 5) advanceMisc(player, MISC_DIARY);
       openDiary(player);
+      return;
+    }
+    if (itemId === LIFT_MANUAL_ITEM_ID) {
+      event.handled = true;
+      openBook(player, MANUAL_TITLE, LIFT_MANUAL_PAGES);
       return;
     }
     if (itemId === LETTER_ITEM_ID) {
       event.handled = true;
       playVariant(player, QUEEN_SIGRID_NPC_ID, V_LETTER_READ);
     }
+  }
+
+  function handleGroundItemClick(event) {
+    const { player, groundItemId } = event;
+    if (!player || groundItemId !== LIFT_MANUAL_ITEM_ID) return;
+    event.handled = true;
+    openBook(player, MANUAL_TITLE, LIFT_MANUAL_PAGES);
   }
 
   function openDiary(player) {
@@ -1391,11 +1504,39 @@ module.exports = function registerRoyalTroubleQuest(api) {
       }
       return;
     }
-    if (zone === BOSS_ROOM_ZONE) ensureBoss(player);
+    if (zone === BOSS_ROOM_ZONE) {
+      ensureBoss(player);
+      recoverHeavyBox(player);
+    }
   }
 
   function handleBossRoomExit({ player }) {
     if (player) clearBoss(player);
+  }
+
+  function ownsHeavyBox(player) {
+    if (held(player, HEAVY_BOX_ITEM_ID)) return true;
+    if ((player.getBank?.()?.getAmount?.(HEAVY_BOX_ITEM_ID) ?? 0) > 0) return true;
+    return Boolean(api.getItemOnGroundManager?.().getGroundItemById?.(HEAVY_BOX_ITEM_ID, player));
+  }
+
+  /** A single reachable copy: death, expiry, relog and re-entry all use the captured tile. */
+  function dropHeavyBox(player) {
+    if (!player || ownsHeavyBox(player)) return false;
+    const groundItems = api.getItemOnGroundManager?.();
+    if (!groundItems) return false;
+    groundItems.registerLocation(
+      player,
+      new Item(HEAVY_BOX_ITEM_ID, 1),
+      new Location(HEAVY_BOX_TILE.x, HEAVY_BOX_TILE.y, 0)
+    );
+    return true;
+  }
+
+  function recoverHeavyBox(player) {
+    if (!player || quest.getStage(player) === 0 || quest.isComplete(player)) return;
+    if (royalMisc(player) < MISC_BOSS) return;
+    dropHeavyBox(player);
   }
 
   function ensureBoss(player) {
@@ -1429,11 +1570,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
     bosses.delete(killer);
     if (quest.getStage(killer) === 0) return;
     if (royalMisc(killer) < MISC_BOSS) setRoyalMisc(killer, MISC_BOSS);
-    const location = npc.getLocation?.() ?? npc.getSpawnPosition?.();
-    const groundItems = api.getItemOnGroundManager?.();
-    if (location && groundItems) {
-      groundItems.registerLocation(killer, new Item(HEAVY_BOX_ITEM_ID, 1), location);
-    }
+    dropHeavyBox(killer);
     playMessages(killer, V_BOSS_DEAD);
   }
 
@@ -1462,6 +1599,10 @@ module.exports = function registerRoyalTroubleQuest(api) {
         lines.push("I should take the heavy box to <col=800000>Queen Sigrid</col> in Etceteria.");
       } else if (misc >= MISC_KIDS) {
         lines.push("I must kill the <col=800000>giant sea snake</col> in the caves and take back the stolen goods.");
+      } else if (misc >= MISC_DIARY) {
+        lines.push("I have the full diary. I should squeeze through the crevice and deal with the snake.");
+      } else if (misc >= MISC_LIFT) {
+        lines.push("The lift is working. I should explore the caves and find the burnt diary pages.");
       } else if (misc >= MISC_DONAL) {
         lines.push("Donal gave me a mining prop. I should explore the caves the dwarves uncovered,");
         lines.push("collect the burnt diary pages and find the monster.");
@@ -1508,10 +1649,17 @@ module.exports = function registerRoyalTroubleQuest(api) {
   function handleLogin({ player }) {
     refreshQuestList(player);
     sendSideVarbits(player);
+    recoverHeavyBox(player);
   }
 
   function handleLogout({ player }) {
     clearBoss(player);
+    player?.getPacketSender?.().sendCameraReset();
+  }
+
+  function handlePlayerDeath({ player }) {
+    clearBoss(player);
+    player?.getPacketSender?.().sendCameraReset();
   }
 
   function handleBootstrapComplete({ player }) {
@@ -1569,6 +1717,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction(handleItemAction);
+  api.onGroundItemClick([LIFT_MANUAL_ITEM_ID], 3, handleGroundItemClick);
   api.onCustomEvent("ladders:climb", handleClimb);
   api.onNpcDeath(handleNpcDeath);
   api.onZoneEnter(DUNGEON_ZONE, handleZoneEnter);
@@ -1576,5 +1725,6 @@ module.exports = function registerRoyalTroubleQuest(api) {
   api.onZoneExit(BOSS_ROOM_ZONE, handleBossRoomExit);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onPlayerDeath(handlePlayerDeath);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrapComplete);
 };

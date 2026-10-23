@@ -23,7 +23,7 @@ module.exports = {
       api.onObjectInteraction(floor.reward.name, { [floor.reward.option]: Rewards.open });
     }
     // Ladder handlers return false outside the Stronghold, leaving every other ladder to Ladders.
-    for (const name of ["Ladder", "Dripping vine"]) api.onObjectInteraction(name, { "Climb-down": Travel.climbDown, "Climb-up": Travel.climbUp });
+    for (const name of ["Ladder", "Dripping vine", "Boney ladder"]) api.onObjectInteraction(name, { "Climb-down": Travel.climbDown, "Climb-up": Travel.climbUp });
     api.onObjectInteraction("Bone Chain", { "Climb-up": Travel.climbUp });
     api.onObjectInteraction("Portal", { Use: Travel.usePortal });
     api.onInterfaceActionClick(Travel.warningClick);

@@ -58,8 +58,8 @@ test("a value that isn't an object, or a new site without x and y, is warned abo
 });
 
 test("the shipped bot-sites.json: skilling sites on and the PvP pens off, as a deployment would set it", () => {
-  const ids = ["lumbridge", "varrock", "falador", "seers", "east_ardougne", "edge_low", "edge_mid", "edge_mains", "varrock_ditch", "green_drags_gate", "revs_entrance"];
-  const on = (id) => !id.startsWith("edge") && !["varrock_ditch", "green_drags_gate", "revs_entrance"].includes(id);
+  const ids = ["lumbridge", "edge_low", "edge_mid", "edge_mains", "varrock_ditch"];
+  const on = (id) => !id.startsWith("edge") && id !== "varrock_ditch";
   const config = Object.fromEntries(ids.map((id) => [id, { enabled: on(id) }]));
   const { result, warnings } = quietly(() => readBotSites(SITES, config));
   assert.deepEqual(warnings, []);

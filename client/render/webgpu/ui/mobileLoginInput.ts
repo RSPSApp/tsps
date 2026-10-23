@@ -3,6 +3,7 @@ import * as handlers from "../../render/handlers";
 import type { WebGLOsrsRendererHost } from "../../render/hostInterface";
 import * as mobileLogin from "../../render/mobileLogin";
 import type { WebGPURenderer } from "../WebGPURenderer";
+import type { UiRenderMetrics } from "./WebGPUUi";
 
 export interface MobileLoginInput {
     /** WebGL's per-frame syncMobileLoginInput: focuses or blurs the hidden input. */
@@ -17,7 +18,10 @@ export interface MobileLoginInput {
  * "desktop site", get their keyboard. The shared functions take the WebGL host; this hands them a
  * structurally-typed stand-in with the fields and methods they use (as WebGPUUi's quality host).
  */
-export function createMobileLoginInput(renderer: WebGPURenderer): MobileLoginInput {
+export function createMobileLoginInput(
+    renderer: WebGPURenderer,
+    computeMetrics: (bufW: number, bufH: number) => UiRenderMetrics,
+): MobileLoginInput {
     const shim: Record<string, unknown> = {
         osrsClient: renderer.osrsClient,
         canvas: renderer.canvas,
@@ -53,9 +57,20 @@ export function createMobileLoginInput(renderer: WebGPURenderer): MobileLoginInp
         if (!renderer.osrsClient.isOnLoginScreen()) return;
         const touch = event.changedTouches[0] ?? event.touches[0];
         if (!touch) return;
+        // The title is laid out in UI layout units (presentation.update), so map the buffer
+        // pixels through the UI render metrics as the click path does. On a DPR-2+ phone the
+        // raw buffer position missed the field, and the frame loop's later focus is outside the
+        // tap, where iOS does not open the keyboard.
         const { x, y } = mobileLogin.getCanvasTouchPos(host, touch);
+        const metrics = computeMetrics(
+            Math.max(1, renderer.canvas.width | 0),
+            Math.max(1, renderer.canvas.height | 0),
+        );
         const loginRenderer = renderer.osrsClient.loginRenderer;
-        loginRenderer.setMousePosition(x, y);
+        loginRenderer.setMousePosition(
+            (x - metrics.renderOffsetX) / metrics.renderScaleX,
+            (y - metrics.renderOffsetY) / metrics.renderScaleY,
+        );
         const content = loginRenderer.mapPointerToContent(loginRenderer.mouseX, loginRenderer.mouseY);
         const field = mobileLogin.resolveLoginFieldAt(host, content.y);
         if (field === undefined) return;

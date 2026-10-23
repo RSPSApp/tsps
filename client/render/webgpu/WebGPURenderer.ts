@@ -1,3 +1,4 @@
+import { LocAnimated, type LocFrameSoundHandler } from "../loc/LocAnimated";
 import Denque from "denque";
 import { mat4, vec3 } from "gl-matrix";
 
@@ -76,6 +77,9 @@ const AUTO_FOG_DEPTH_FACTOR = 0.85;
  * screen are not ported yet; see docs/webgpu-renderer.md.
  */
 export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
+    /** Animated scenery's frame sounds (windmills, machinery), as the WebGL tick plays them. */
+    private readonly locFrameSound: LocFrameSoundHandler = (seqType, frame, at) =>
+        this.osrsClient.handleSeqFrameSounds(seqType, frame, { position: { x: at.x, y: at.y, z: at.level * 128 } });
     type: OsrsRendererType = WEBGPU;
 
     device!: GPUDevice;
@@ -310,7 +314,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
      * rebuilds the loaded scenery. The first call only records the state they were built with.
      */
     private syncLocAnimationSmoothing(): void {
-        const settings = this.osrsClient.animationSmoothingPlugin?.objectSettings();
+        const settings = this.osrsClient.clientPlugins.objectSettings();
         const smooth = settings?.smoothLocAnimations ? settings.smoothLocAnimationSteps : -1;
         if (this.smoothLocAnimations === smooth) return;
         const first = this.smoothLocAnimations === undefined;
@@ -345,7 +349,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             maxLevel: Math.max(0, Math.min(Scene.MAX_LEVELS - 1, Scene.MAX_LEVELS - 1)),
             loadNpcs: false,
             smoothTerrain: true,
-            ...this.osrsClient.animationSmoothingPlugin?.objectSettings(),
+            ...this.osrsClient.clientPlugins.objectSettings(),
             minimizeDrawCalls: true,
             loadedTextureIds: this.world?.loadedTextureIds ?? new Set<number>(),
             locOverrides: this.locOverrides,
@@ -502,6 +506,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const world = this.world;
         const mapData = world ? this.instances.takeBuiltScene() : null;
         if (!world || !mapData) return;
+        // The scene's loc animations go on in the new one (LocAnimated.carryOver): a held one (a
+        // collapsed floor) would replay from frame 0 otherwise.
+        const carried: LocAnimated[] = [];
+        for (const previous of this.mapManager.mapSquares.values()) carried.push(...((previous as any).locsAnimated ?? []));
         this.mapManager.cleanUp();
         this.osrsClient.clearMinimapImageUrls();
         const { mapX, mapY } = mapData;
@@ -509,6 +517,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.instanceSceneMap = { mapX: mapX | 0, mapY: mapY | 0 };
         const square = WebGPUMapSquare.load(this.device, world, mapData, -1, frameCount);
         square.initAnimatedLocs(mapData, this.osrsClient.seqTypeLoader, getClientCycle() | 0);
+        LocAnimated.carryOver(carried, square.locsAnimated);
         world.uploadMapTextures(mapData.loadedTextures);
         this.mapManager.addMap(mapX, mapY, square);
         this.actors?.onMapAdded(square, mapData);
@@ -601,7 +610,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const renderDistance = resolveWebGPURenderDistance(this);
         // HD spreads haze over long views, as on WebGL (render/render/frame/render.ts).
         const { fogEnd, fogDepth } = resolveFogRange({ renderDistance, autoFogDepth: true,
-            autoFogDepthFactor: AUTO_FOG_DEPTH_FACTOR, manualFogDepth: 0, hd: this.osrsClient.hdPlugin?.isEnabled() });
+            autoFogDepthFactor: AUTO_FOG_DEPTH_FACTOR, manualFogDepth: 0, hd: this.osrsClient.clientPlugins.hdEnabled() });
 
         const data = this.world.sceneData;
         data.set(camera.viewProjMatrix as Float32Array, 0);
@@ -619,7 +628,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         data[62] = timeSec;
         data[63] = this.brightness;
         // colorBanding: the GPU plugin's, else WebGL's default (the shader divides by it).
-        data[64] = this.osrsClient.gpuPlugin?.settings()?.colorBanding ?? 255.0;
+        data[64] = this.osrsClient.clientPlugins.gpuSettings()?.colorBanding ?? 255.0;
         data[65] = this.osrsClient.isNewTextureAnim ? 1.0 : 0.0;
         this.world.flushSceneUniforms();
     }
@@ -646,7 +655,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             // consumes and clears it.
             const inputManager = this.osrsClient.inputManager;
             if (
-                this.osrsClient.hdPlugin?.isEnabled() === true &&
+                this.osrsClient.clientPlugins.hdEnabled() === true &&
                 this.osrsClient.followPlayerCamera &&
                 inputManager.wheelDeltaY !== 0 &&
                 inputManager.mouseX >= 0 &&
@@ -692,14 +701,15 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 -1,
                 -1,
                 Math.max(this.osrsClient.expandedMapLoading | 0,
-                    this.osrsClient.hdPlugin?.isEnabled() ? Math.ceil((resolveWebGPURenderDistance(this) - 25) / 8) : 0),
+                    this.osrsClient.clientPlugins.hdEnabled() ? Math.ceil((resolveWebGPURenderDistance(this) - 25) / 8) : 0),
                 resolveWebGPURenderDistance(this),
             );
             this.updateSkyColor();
             this.syncLocAnimationSmoothing();
             for (const map of this.mapManager.visibleMaps) {
-                map.updateAnimatedLocs(this.osrsClient.seqFrameLoader, cycle);
+                map.updateAnimatedLocs(this.osrsClient.seqFrameLoader, cycle, this.locFrameSound);
             }
+            this.osrsClient.ambientSounds.frame(this.mapManager.visibleMaps);
             // World entity decks are drawn from their own coordinate space; hand each map this
             // frame's placement matrix (identity maps are left untouched).
             for (const map of this.mapManager.visibleMaps) {
@@ -718,7 +728,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         // A scene extension (e.g. 117 HD) is a runtime toggle: pick the pipeline pair once per
         // frame, before any map draw.
         const extension = world.extension;
-        const gpu = this.osrsClient.gpuPlugin?.settings();
+        const gpu = this.osrsClient.clientPlugins.gpuSettings();
         const sampleCount = gpu && gpu.msaaSamples > 0 ? WEBGPU_MSAA_SAMPLES : 1;
         world.selectExtension(!!extension?.isActive(), sampleCount);
 
@@ -822,6 +832,14 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 if (visible[i].canRender(this.stats.frameCount)) {
                     visible[i].drawOpaque(pass, roofPlaneLimit, this.frameScenery);
                 }
+            }
+            // Locs seen below the floor (SunkenLocs): the depth under them reset, then drawn again.
+            const sunken = visible.filter((map) => map.canRender(this.stats.frameCount) && map.hasSunkenLocs());
+            if (sunken.length > 0) {
+                pass.setViewport(0, 0, width, height, 1, 1);
+                for (const map of sunken) map.drawSunkenLocs(pass, true, roofPlaneLimit, this.frameScenery);
+                pass.setViewport(0, 0, width, height, 0, 1);
+                for (const map of sunken) map.drawSunkenLocs(pass, false, roofPlaneLimit, this.frameScenery);
             }
             this.actors?.drawOpaque(pass);
             for (let i = visible.length - 1; i >= 0; i--) {

@@ -49,6 +49,10 @@ export class TileMarkersPlugin extends Plugin {
         return this.state;
     }
 
+    tileMarkersConfig(): TileMarkersPluginConfig {
+        return this.getConfig();
+    }
+
     getConfig(): TileMarkersPluginConfig {
         return { ...this.state.config, enabled: this.isEnabled() };
     }

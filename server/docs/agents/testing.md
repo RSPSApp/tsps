@@ -3,6 +3,9 @@
 Start the server with the agent MCP enabled (see [perf.md](perf.md)). These tools let an agent
 run the in-game checklist a PR asks for, without a client.
 
+For a quest start-to-finish run (Quest Helper route, stages/varps, rewards, relog and recovery),
+use the checklist in [quest-testing.md](quest-testing.md).
+
 | Step | Tool |
 | --- | --- |
 | Get players | `login` (any number of accounts), `logout`, `disconnect` (drops the connection without logging out, like a closed tab) |

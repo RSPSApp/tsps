@@ -12,7 +12,7 @@ type CachedText = { texture: ScreenTexture; w: number; h: number };
 
 /**
  * Port of client/ui/devoverlay/GroundItemOverlay.ts using the screen layer. Labels are drawn
- * for the entries produced by OsrsClient.getGroundItemOverlayEntries (same cap/fallback
+ * for the entries produced by the ground items plugin (same cap/fallback
  * selection as the WebGL path).
  */
 export class GroundItemLabelLayer {

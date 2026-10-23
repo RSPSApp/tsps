@@ -6,7 +6,8 @@
  *   0 not started, 2 accepted Alina's invitation, 4 the delegation arrives,
  *   6 tailing the suspicious guard, 8 the guard entered the house (eavesdrop),
  *   10 report to Sergeant Tobyn, 12 marking the disguised bandits,
- *   14 all four bandits marked, 16 escorted to the palace roof, 22 complete.
+ *   14 all four bandits marked, 16 escorted to the palace roof, 18 in the
+ *   bandit cell, 20 left the cell, 22 Itzla departs, 24 complete.
  * On completion varbit 9645 ("vmq1_questcomplete_type") is set to 2, matching the
  * live-game transition recorded for this quest. Varbit 9646 ("vmq1_met_alina") is
  * set on the first Alina/Noah conversation.
@@ -19,8 +20,9 @@
  * are real guards; marking any of them is what Tobyn's "incorrectly marked" branch
  * answers. All ten guard NPCs use the cache's Mark 12668+3i / Unmark 12669+3i ids.
  *
- * The suspicious guard is 12662 ("Guard" with the big bag, visible variant);
- * Alina/Noah are 12644/12646, Sergeant Tobyn 12648 and Prince Itzla Arkan 12650.
+ * The suspicious guard is the primary 12661 ("Guard" with the big bag); 12662
+ * is the cache's visible sibling and has no transform. Alina/Noah are
+ * 12644/12646, Sergeant Tobyn 12648 and Prince Itzla Arkan 12650.
  * The bandit house door is object 50048 at (3259,3400), claimed through the shared
  * Doors plugin's "door:toggle" event.
  *
@@ -33,17 +35,20 @@
  *
  * Gaps: the tail is a walk along the wiki's route with pauses at the hiding spots,
  * not a cutscene - there is no line-of-sight or turn-to-look check, only "stepped
- * within one tile" (spotted) and "fell more than 14 tiles behind" (too far). Scene
- * directions play as game messages and multi-speaker cutscene lines share the
- * speaking NPC's chathead. The dump has no post-quest Alina/Noah variant, so a
- * completed player replays the intro with the start hook guarded, as ClockTower
- * does. The escort to the palace roof is a teleport to (3203,3473,2). All Varrock
- * quest NPCs are per-player owner-only spawns because none exist in
+ * within one tile" (spotted) and "fell more than 14 tiles behind" (too far). The
+ * delegation, eavesdrop and roof camera tracks use the captured coordinates and
+ * resets; scene directions still play as game messages. Multi-speaker cutscene
+ * lines share the speaking NPC's chathead. The dump has no post-quest Alina/Noah
+ * variant, so a completed player replays the intro with the start hook guarded,
+ * as ClockTower does. The escort to the palace roof is a teleport to (3203,3473,2).
+ * All Varrock quest NPCs are per-player owner-only spawns because none exist in
  * npc-spawns.json.
  */
 module.exports = function registerChildrenOfTheSunQuest(api) {
-  const { Location, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Location, NpcIdentifiers, ObjectIdentifiers, RegionManager } = api.core;
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
+  const Scenes = createQuestScenes(api);
 
   const PAGE = "Children of the Sun";
   const START_HOOK = "quest:children-of-the-sun:start";
@@ -65,11 +70,16 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   const STAGE_MARKING = 12;
   const STAGE_MARKED = 14;
   const STAGE_ROOF = 16;
-  const STAGE_COMPLETE = 22;
+  const STAGE_CELL = 18;
+  const STAGE_LEFT_CELL = 20;
+  const STAGE_ITZLA_LEFT = 22;
+  const STAGE_COMPLETE = 24;
 
   const MET_ALINA_ATTRIBUTE = "quest.children_of_the_sun.met-alina";
   const GUARDS_ATTRIBUTE = "quest.children_of_the_sun.guards";
   const TAIL_FAIL_ATTRIBUTE = "quest.children_of_the_sun.tail-fail";
+  const SCHEMA_ATTRIBUTE = "children-of-the-sun:schema";
+  const SCHEMA_VERSION = 2;
   const TAIL_FAIL_SPOTTED = 1;
   const TAIL_FAIL_FAR = 2;
 
@@ -77,7 +87,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   const NOAH_NPC_ID = NpcIdentifiers.NOAH; // 12646
   const TOBYN_NPC_ID = NpcIdentifiers.SERGEANT_TOBYN; // 12648
   const ITZLA_NPC_ID = NpcIdentifiers.PRINCE_ITZLA_ARKAN; // 12650
-  const BAG_GUARD_NPC_ID = NpcIdentifiers.GUARD_186; // 12662, visible bag guard
+  const BAG_GUARD_NPC_ID = NpcIdentifiers.GUARD_185; // 12661 primary; 12662 is the visible sibling
 
   const ALINA_NPC_IDS = new Set([NpcIdentifiers.ALINA, NpcIdentifiers.ALINA_2]);
   const NOAH_NPC_IDS = new Set([NpcIdentifiers.NOAH, NpcIdentifiers.NOAH_2]);
@@ -148,6 +158,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     { x: 3248, y: 3390 },
     { x: 3248, y: 3396 },
     { x: 3247, y: 3397 },
+    { x: 3258, y: 3400, pause: 2 }, // house approach beside the bandit door
   ];
   const TAIL_FAIL_DISTANCE = 14;
   const TAIL_SPOTTED_DISTANCE = 1;
@@ -161,6 +172,18 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   const ALINA_TILE = { x: 3225, y: 3426 };
   const NOAH_TILE = { x: 3228, y: 3427 };
   const TOBYN_TILE = { x: 3211, y: 3437 };
+
+  // Captured cell scene: the roof is dressed as a cell, the bandit and the
+  // enhanced Tobyn/Itzla variants appear, and Itzla walks to the bars.
+  const CELL_BANDIT_ID = NpcIdentifiers.BANDIT_20; // 12667
+  const CELL_TOBYN_ID = 12649; // enhanced roof variant
+  const CELL_ITZLA_ID = 12651;
+  const CELL_PLAYER_TILE = { x: 3204, y: 3473 };
+  const CELL_BANDIT_TILE = { x: 3201, y: 3470 };
+  const CELL_TOBYN_TILE = { x: 3203, y: 3473 };
+  const CELL_ITZLA_TILE = { x: 3205, y: 3473 };
+  const CELL_ITZLA_BARS = { x: 3204, y: 3470 };
+  const CELL_INSTANCE_TILE = { x: 10172, y: 3399, z: 2 };
 
   // Condition step ids on the "Children of the Sun" page.
   const F2P_CONDITION_IDS = new Set(["i6hlqM", "uSwN8S"]);
@@ -187,6 +210,24 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   const ITZLA_DEPARTS_STEP = "VS01WH";
   const COMPLETE_STEP = "9QLQQG";
   const INTERROGATION_BEGIN_STEP = "D6DBki";
+
+  // Captured camera tracks (RSProx 1637, rev 226.1): [offset, move, look, rates?].
+  const CAMERA_DELEGATION = [
+    [3, [3213, 3433, 460], [3225, 3427, 260]],
+    [24, [3216, 3434, 390], [3211, 3438, 190]],
+    [38, [3223, 3434, 390], [3225, 3425, 190]],
+    [46, null],
+  ];
+  const CAMERA_EAVESDROP = [
+    [3, [3252, 3396, 490], [3260, 3400, 290]],
+    [10, [3263, 3395, 340], [3260, 3403, 300]],
+    [18, [3252, 3396, 490], [3260, 3400, 290]],
+    [21, null],
+  ];
+  const CAMERA_ROOF = [
+    [15, [3207, 3471, 311], [3197, 3469, 300]],
+    [40, null],
+  ];
 
   const V_MEET = "delegation-talking-to-noah-or-alina";
   const V_BEFORE_START = "delegation-subsequent-dialogues-before-starting-the-quest";
@@ -277,6 +318,31 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     api.emitCustomEvent("npc-dialogue:start", { player, npcId, variant });
   }
 
+  function playCamera(player, shots) {
+    Scenes.cancel(player);
+    for (const [ticks, move, look, rates] of shots) {
+      Scenes.later(player, ticks, () => {
+        if (player.isRegistered?.() === false) return;
+        if (!move) player.getPacketSender().sendCameraReset();
+        else Scenes.camera(player, move, look, rates);
+      });
+    }
+  }
+
+  function resetCamera(player) {
+    Scenes.cancel(player);
+    player.getPacketSender().sendCameraReset();
+  }
+
+  function later(player, ticks, fn) {
+    const { CountdownTask, TaskManager } = api.core;
+    if (!CountdownTask || !TaskManager) { fn(); return; }
+    TaskManager.submit(new CountdownTask(player, ticks, () => {
+      if (player.isRegistered?.() === false) return;
+      fn();
+    }));
+  }
+
   // ==========================================================================
   // NPC spawns
   // ==========================================================================
@@ -357,12 +423,43 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     if (quest.isComplete(player)) sender.sendVarbit(QUESTCOMPLETE_TYPE_VARBIT, 2);
   }
 
+  function removeCellScene(player) {
+    removeTracked(player, "cell-bandit");
+    removeTracked(player, "cell-tobyn");
+    removeTracked(player, "cell-itzla");
+  }
+
+  function enterCellScene(player) {
+    removeTracked(player, "tobyn-roof");
+    removeTracked(player, "itzla");
+    removeCellScene(player);
+    spawnTracked(player, "cell-bandit", { id: CELL_BANDIT_ID, ...CELL_BANDIT_TILE, z: 2, wanderRadius: 0 });
+    spawnTracked(player, "cell-tobyn", { id: CELL_TOBYN_ID, ...CELL_TOBYN_TILE, z: 2, wanderRadius: 0 });
+    const itzla = spawnTracked(player, "cell-itzla", { id: CELL_ITZLA_ID, ...CELL_ITZLA_TILE, z: 2, wanderRadius: 0 });
+    player.moveTo(new Location(CELL_PLAYER_TILE.x, CELL_PLAYER_TILE.y, 2));
+    later(player, 1, () => itzla?.moveTo?.(new Location(CELL_ITZLA_TILE.x, CELL_ITZLA_TILE.y - 2, 2)));
+    later(player, 2, () => itzla?.moveTo?.(new Location(CELL_ITZLA_BARS.x, CELL_ITZLA_BARS.y, 2)));
+  }
+
+  function leaveCellScene(player) {
+    removeCellScene(player);
+    player.moveTo(new Location(CELL_INSTANCE_TILE.x, CELL_INSTANCE_TILE.y, CELL_INSTANCE_TILE.z));
+    later(player, 1, () => {
+      player.moveTo(new Location(ROOF_LANDING.x, ROOF_LANDING.y, ROOF_LANDING.z));
+      ensureRoofNpcs(player);
+    });
+  }
+
   function ensureQuestNpcs(player) {
     if (!player || player.isPlayerBot?.() === true) return;
     ensureGroundNpcs(player);
     const stage = quest.getStage(player);
     if (stage >= STAGE_MARKING && stage < STAGE_ROOF) ensureGuards(player);
-    if (stage >= STAGE_ROOF && !quest.isComplete(player)) ensureRoofNpcs(player);
+    if (stage === STAGE_CELL) { enterCellScene(player); return; }
+    if (stage >= STAGE_ROOF && !quest.isComplete(player)) {
+      ensureRoofNpcs(player);
+      if (stage >= STAGE_ITZLA_LEFT) removeTracked(player, "itzla");
+    }
     if (stage === STAGE_TAILING) startTail(player);
   }
 
@@ -382,6 +479,58 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     doorGuards.delete(player);
   }
 
+  /** Adjacent four-way route between captured checkpoints on the real map. */
+  function walkableTailTile(x, y) {
+    try {
+      return !RegionManager.blocked(new Location(x, y, 0), null);
+    } catch {
+      return false;
+    }
+  }
+
+  function tailSegment(from, to) {
+    const startKey = `${from.x},${from.y}`;
+    const goalKey = `${to.x},${to.y}`;
+    const queue = [[from.x, from.y]];
+    const parent = new Map([[startKey, null]]);
+    for (let index = 0; index < queue.length; index++) {
+      const [x, y] = queue[index];
+      if (`${x},${y}` === goalKey) break;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        const key = `${nx},${ny}`;
+        if (parent.has(key) || Math.abs(nx - from.x) > 30 || Math.abs(ny - from.y) > 30) continue;
+        if (!walkableTailTile(nx, ny)) continue;
+        if (RegionManager.canMove(x, y, nx, ny, 0, 1, 1, null) === false) continue;
+        parent.set(key, `${x},${y}`);
+        queue.push([nx, ny]);
+      }
+    }
+    if (!parent.has(goalKey)) return null;
+    const path = [];
+    for (let key = goalKey; key && key !== startKey; key = parent.get(key)) {
+      const [x, y] = key.split(",").map(Number);
+      path.push({ x, y });
+    }
+    return path.reverse();
+  }
+
+  let tailRouteCache;
+  function buildTailRoute() {
+    if (tailRouteCache !== undefined) return tailRouteCache;
+    const route = [];
+    for (let index = 1; index < TAIL_WAYPOINTS.length; index++) {
+      const from = TAIL_WAYPOINTS[index - 1];
+      const to = TAIL_WAYPOINTS[index];
+      const segment = tailSegment(from, to);
+      if (!segment) { tailRouteCache = null; return null; }
+      if (to.pause) segment[segment.length - 1].pause = to.pause;
+      route.push(...segment);
+    }
+    tailRouteCache = route;
+    return route;
+  }
+
   function startTail(player) {
     removeTailGuard(player);
     removeDoorGuard(player);
@@ -399,12 +548,13 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     if (!npc) return;
     tailSessions.set(player, {
       npc,
+      route: buildTailRoute() ?? TAIL_WAYPOINTS.slice(1),
       index: 0,
       pauseTicks: 0,
       grace: 2,
       stuck: 0,
-      lastX: -1,
-      lastY: -1,
+      lastX: start.x,
+      lastY: start.y,
     });
     quest.setStage(player, STAGE_TAILING);
   }
@@ -466,14 +616,14 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     if (npc.getMovementQueue().hasPendingWork()) {
       if (session.stuck > 8) {
         npc.getMovementQueue().reset();
-        session.stuck = 0;
       } else {
         return;
       }
     }
 
-    const target = TAIL_WAYPOINTS[session.index];
+    const target = session.route[session.index];
     if (!target) {
+      // The guard has reached the door approach; the door cutscene is next.
       finishTail(player);
       return;
     }
@@ -488,11 +638,8 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
       session.pauseTicks = target.pause;
       return;
     }
-    const next = TAIL_WAYPOINTS[session.index];
-    if (next) {
-      npc.getMovementQueue().addFirstStep(new Location(next.x, next.y, 0));
-      session.stuck = 0;
-    }
+    const next = session.route[session.index];
+    if (next) npc.getMovementQueue().addFirstStep(new Location(next.x, next.y, 0));
   }
 
   function handlePlayerProcess({ player }) {
@@ -538,6 +685,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     const stage = quest.getStage(player);
     const onRoof = player.getLocation().getZ() === 2;
     if (quest.isComplete(player)) return onRoof ? V_INTERROGATION_DONE_TOBYN : null;
+    if (stage >= STAGE_ITZLA_LEFT) return onRoof ? V_INTERROGATION_DONE_TOBYN : V_TOBYN_TURNED_IN;
     if (stage >= STAGE_ROOF) return onRoof ? V_INTERROGATION : V_TOBYN_TURNED_IN;
     if (stage >= STAGE_MARKING) {
       if (correctGuardsMarked(player) === CORRECT_GUARD_COUNT) return V_TOBYN_MARKED;
@@ -609,6 +757,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
         event.handled = true;
         if (message) player.sendMessage(message);
         if (quest.getStage(player) < STAGE_DELEGATION) quest.setStage(player, STAGE_DELEGATION);
+        playCamera(player, CAMERA_DELEGATION);
         return;
       case BAG_GUARD_OUT_STEP:
       case GUARD_PASSES_STEP:
@@ -622,6 +771,10 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
         if (quest.getStage(player) < STAGE_TAILING) startTail(player);
         return;
       case EAVESDROP_BEGIN_STEP:
+        event.handled = true;
+        if (message) player.sendMessage(message);
+        playCamera(player, CAMERA_EAVESDROP);
+        return;
       case INTERROGATION_BEGIN_STEP:
         event.handled = true;
         if (message) player.sendMessage(message);
@@ -637,19 +790,31 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
         event.end = true;
         if (message) player.sendMessage(message);
         escortToRoof(player);
+        playCamera(player, CAMERA_ROOF);
         return;
       case ENTER_CELL_STEP:
+        event.handled = true;
+        if (message) player.sendMessage(message);
+        enterCellScene(player);
+        if (quest.getStage(player) < STAGE_CELL) quest.setStage(player, STAGE_CELL);
+        return;
       case LEAVE_CELL_STEP:
         event.handled = true;
         if (message) player.sendMessage(message);
+        leaveCellScene(player);
+        if (quest.getStage(player) < STAGE_LEFT_CELL) quest.setStage(player, STAGE_LEFT_CELL);
         return;
       case ITZLA_DEPARTS_STEP:
         event.handled = true;
         if (message) player.sendMessage(message);
+        removeTracked(player, "cell-itzla");
+        removeTracked(player, "cell-bandit");
         removeTracked(player, "itzla");
+        if (quest.getStage(player) < STAGE_ITZLA_LEFT) quest.setStage(player, STAGE_ITZLA_LEFT);
         return;
       case COMPLETE_STEP:
         event.handled = true;
+        removeCellScene(player);
         if (!quest.isComplete(player)) {
           player.getPacketSender().sendVarbit(QUESTCOMPLETE_TYPE_VARBIT, 2);
           quest.complete(player);
@@ -706,7 +871,29 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     return true;
   }
 
+  function markSchema(player) {
+    if (Number(player.getAttribute(SCHEMA_ATTRIBUTE)) === SCHEMA_VERSION) return;
+    player.setAttribute(SCHEMA_ATTRIBUTE, SCHEMA_VERSION);
+  }
+
+  /**
+   * Before the native stage split, 22 meant "quest complete". Only saves
+   * without the schema marker can be old, so they are moved to native 24.
+   * Rewards are never re-paid: this only changes the stage.
+   */
+  function migrateLegacyStage(player) {
+    if (Number(player.getAttribute(SCHEMA_ATTRIBUTE)) === SCHEMA_VERSION) return;
+    if (quest.getStage(player) === 22) quest.setStage(player, STAGE_COMPLETE);
+    markSchema(player);
+  }
+
+  function handleStageChanged(event) {
+    if (event.key !== "children_of_the_sun" || !event.player) return;
+    markSchema(event.player);
+  }
+
   function handleLogin({ player }) {
+    migrateLegacyStage(player);
     ensureQuestNpcs(player);
     syncGuardVarbits(player);
     refreshQuestList(player);
@@ -714,6 +901,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
 
   function handleLogout({ player }) {
     if (!player) return;
+    resetCamera(player);
     removeTailGuard(player);
     removeDoorGuard(player);
     removeGuards(player);
@@ -806,6 +994,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   api.persistAttribute(MET_ALINA_ATTRIBUTE);
   api.persistAttribute(GUARDS_ATTRIBUTE);
   api.persistAttribute(TAIL_FAIL_ATTRIBUTE);
+  api.persistAttribute(SCHEMA_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "children_of_the_sun",
@@ -825,6 +1014,7 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onNpcInteraction("Guard", { Mark: markGuard, Unmark: unmarkGuard });
   api.onPlayerProcess(handlePlayerProcess);

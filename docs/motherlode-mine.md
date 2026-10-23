@@ -34,6 +34,7 @@ The plugin lives under `areas/` so that its "Ladder" handler runs before the gen
   - **When only the bigger sack is bought:** "Let me have a think...", his lines for the two upgrades left, then the same menu.
 - **The upper level** is a bridge on the same plane. Varbit 2086 says which level the player is on, and the ladders (19044 at the foot, 19045 at the top) are multilocs on it.
   - The map stores the bridge's locs a plane up. The server sends their changes on plane 0 (as captured), and the client's `SceneBuilder` maps them onto the bridge, so its veins and rockfalls change in place.
+- **The crates** (loc 357, "Crate") round the machine hold a hammer at (3752, 5674), (3756, 5668) and (3752, 5664), and a bronze pickaxe at (3758, 5671), (3755, 5665) and (3753, 5659) (Wiki: Crate (old)). Searching one gives its item unless the player already carries one.
 - **The nugget shop** stock and prices are the Wiki's: the prospector outfit, coal bag, gem bag, soft clay pack and bag full of gems.
 
 ## Ways in and out
@@ -79,7 +80,16 @@ Bold is captured; the rest are OpenRune's.
   - The fixed strut 26669 (rotation 0), the wheel 26671 (rotation 0) and the foam 2016 (rotation 1) were sent, with Smithing XP.
 - **Where:** the northern strut is at (3742, 5669), its wheel at (3743, 5668) and its foam at (3743, 5671). The southern strut's foam is at (3743, 5665).
 
+### The crates
+
+- **A find:** on arrival, the item goes into the inventory and an item box (193) opens with the item and "You've found a hammer. How handy." (or "a bronze pickaxe"). There is no animation or sound.
+- **Already carrying one:** the game message "You search the crate but find nothing.", the same as any other old crate.
+- **Captured:** hammers from (3752, 5674) and (3752, 5664), and bronze pickaxes from (3753, 5659) and (3755, 5665). (3756, 5668) was searched only while carrying a hammer.
+
 ## Guessed rather than captured
+
+- **Two of the crates:** that (3756, 5668) holds a hammer and (3758, 5671) a bronze pickaxe follows the Wiki map's pin colours, which match the four captured crates.
+- **A crate with a full inventory** says "You don't have enough inventory space.", and a worn bronze pickaxe doesn't count as having one. Neither was captured.
 
 - **How often a strut breaks:** 2-4 rounds of 97 ticks after its repair (OpenRune).
 - **The pay-dirt roll** (OpenRune's 60/256 at level 1 to 105/256 at 99, every pickaxe interval) and the rockfall's respawn (78-100 ticks).

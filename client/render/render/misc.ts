@@ -200,9 +200,9 @@ export function resolveEffectiveLodThresholdTiles(host: WebGLOsrsRendererHost, f
 
         const renderDistance = host.getFrameRenderDistanceTiles() | 0;
         // The GPU plugin's draw distance keeps everything but its last 2 tiles in full detail.
-        const gpu = host.osrsClient.gpuPlugin?.settings();
+        const gpu = host.osrsClient.clientPlugins.gpuSettings();
         const base = clamp(gpu ? gpu.drawDistance - 2 : host.osrsClient.lodDistance | 0, 0,
-            Math.min(renderDistance, host.osrsClient.hdPlugin?.isEnabled() ? 48 : renderDistance));
+            Math.min(renderDistance, host.osrsClient.clientPlugins.hdEnabled() ? 48 : renderDistance));
         if ((host.effectiveLodThresholdFrame | 0) === (frameId | 0)) {
             return host.effectiveLodThresholdTiles | 0;
         }

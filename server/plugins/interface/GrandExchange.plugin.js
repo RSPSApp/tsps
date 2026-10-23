@@ -21,6 +21,10 @@ const QUANTITY = 4396;
 // The new offer's price: a long varp from rev 241 (it was varbit 4398).
 const PRICE_LONG = 5753;
 const SELECTED_ITEM = 1151;
+// ge_offers:setup_desc, the examine text under the item name; the server sets it.
+const SETUP_DESC = uid(27);
+// ge_offers:details_desc, the same text on an existing offer's details screen.
+const DETAILS_DESC = uid(16);
 // Cache script 5733 reads pending client requests here, not accepted offers.
 // Keep them separate from the stockmarket opcode data.
 const OFFER_ITEMS = [3204, 3206, 3208, 3210, 3212, 3214, 3216, 3218];
@@ -43,6 +47,13 @@ function validItem(id) {
   if (!CacheDefinitions.hasItem(id)) return false;
   const name = CacheDefinitions.getItem(id)?.name;
   return Boolean(name && name !== "null");
+}
+
+/** What the GE trades: tradeable items (a note sells as its item). */
+function exchangeable(id) {
+  if (!validItem(id)) return false;
+  const definition = ItemDefinition.forId(id);
+  return ItemDefinition.forId(definition.unNote()).isTradeable();
 }
 
 function price(id) {
@@ -164,7 +175,12 @@ function refresh(player, offer) {
     .sendVarbit(SELL, offer.sell ? 1 : 0)
     .sendVarbit(QUANTITY, offer.quantity)
     .sendVarpLong(PRICE_LONG, offer.itemId > 0 ? price(offer.itemId) : 1)
-    .sendVarbit(SELECTED_SLOT, offer.slot + 1);
+    .sendVarbit(SELECTED_SLOT, offer.slot + 1)
+    .sendString(examine(offer.itemId), SETUP_DESC);
+}
+
+function examine(itemId) {
+  return itemId > 0 ? ItemDefinition.forId(itemId).getExamine() ?? "" : "";
 }
 
 function home(player) {
@@ -196,7 +212,8 @@ function showCompleted(player, slot) {
   player.getPacketSender()
     .sendConfig(SELECTED_ITEM, -1)
     .sendVarbit(SELECTED_SLOT, 0)
-    .sendVarbit(SELECTED_SLOT, slot + 1);
+    .sendVarbit(SELECTED_SLOT, slot + 1)
+    .sendString(examine(completedOffers(player)[slot].itemId), DETAILS_DESC);
 }
 
 function chooseItem(player, offer) {
@@ -207,14 +224,16 @@ function chooseItem(player, offer) {
   player.setEnteredSyntaxAction({ execute: (input) => {
     if (!active(player, offer)) return;
     const id = Number(input);
-    if (!validItem(id)) return;
+    // The client search lists tradeable, unnoted items only; anything else is not a real pick.
+    if (!exchangeable(id) || ItemDefinition.forId(id).isNoted()) return;
     closeSearch(player);
     offer.itemId = id;
     offer.quantity = 1;
     refresh(player, offer);
   } });
   searching.add(player);
-  player.getPacketSender().sendInterfaceScript(750, ["Grand Exchange Item Search", 0, -1, 0]);
+  // Script 750's first int reaches oc_find (via 752) as its tradable-only flag.
+  player.getPacketSender().sendInterfaceScript(750, ["Grand Exchange Item Search", 1, -1, 0]);
 }
 
 function start(player, sell, slot = 0, itemId = -1) {
@@ -239,7 +258,7 @@ function start(player, sell, slot = 0, itemId = -1) {
 }
 
 function confirm(player, offer) {
-  if (!active(player, offer) || !validItem(offer.itemId)) return;
+  if (!active(player, offer) || !exchangeable(offer.itemId)) return;
   const amount = offer.quantity;
   const total = amount * price(offer.itemId);
   const sender = player.getPacketSender();
@@ -280,6 +299,7 @@ function confirm(player, offer) {
   sender.sendInterfaceScript(786, [], { [SELECTED_ITEM]: -1, ...marketVarps(offer.slot, finished) },
       { [SELECTED_SLOT]: offer.slot + 1 },
       { [COLLECTIONS[offer.slot]]: collection(finished) })
+    .sendString(examine(offer.itemId), DETAILS_DESC)
     .sendMessage("Offer placed. It will complete in five seconds.");
   scheduleCompletion(player, finished);
 
@@ -446,6 +466,10 @@ function handleInventoryItem(event) {
   if (event.player.getInterfaceId() !== GE) return false;
   const item = event.player.getInventory().getItems()[event.slot];
   if (item?.getId() === event.itemId && validItem(event.itemId)) {
+    if (!exchangeable(event.itemId)) {
+      event.player.sendMessage("That item can't be traded on the Grand Exchange.");
+      return true;
+    }
     start(event.player, true, offers.get(event.player)?.slot ?? 0, event.itemId);
     return true;
   }
@@ -522,7 +546,7 @@ module.exports = {
     api.registerCommand("gecollect", openCollectionBox, undefined, "Open the Grand Exchange collection box");
 
     api.onNpcInteraction("Grand Exchange Clerk", { "Exchange": openGrandExchange });
-    api.onNpcInteraction("Banker", { "Collect": openCollectionBox });
+    api.onNpcsInteraction(["Banker", "Ashuelot Reis"], { "Collect": openCollectionBox });
 
     api.onObjectInteraction("Bank booth", { "Collect": openCollectionBox });
     api.onObjectInteraction("Grand Exchange booth", {

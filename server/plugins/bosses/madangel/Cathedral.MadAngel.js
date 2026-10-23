@@ -18,6 +18,9 @@ const EXIT_FADE = { moveTicks: 2, inTicks: 4, closeTicks: 6 };
 function openDoor({ player, objectId }) {
   const { doors } = Common.data;
   if (!doors.ids.includes(objectId)) return false;
+  const request = { player, objectId, handled: false };
+  Common.api.emitCustomEvent("madangel:cathedral-door", request);
+  if (request.handled) return true;
   const { Animation } = Common.core;
   const at = player.getLocation();
   const toX = at.getX() >= doors.outsideX ? doors.insideX : doors.outsideX;

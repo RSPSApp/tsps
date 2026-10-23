@@ -142,6 +142,21 @@ test('only a save from before hashing matches the plain password', async () => {
   assert.equal((await login('tokenuser', 'oldpass', 0)).success, true);
 });
 
+test('the display name keeps its capitals, and an account keeps its saved name', async () => {
+  GameConstants.PLAYER_PERSISTENCE = { ...GameConstants.PLAYER_PERSISTENCE, load: () => null };
+  const created = await login('John UIM', 'hunter22', 0);
+  assert.equal(created.success, true);
+  assert.equal(created.displayName, 'John UIM', 'a new account takes the name as typed');
+  assert.equal((await login('john_uim', 'hunter22', 0)).displayName, 'john uim', 'underscores show as spaces');
+  assert.equal((await login('a b c', 'hunter22', 0)).success, true, 'every space counts, not just the first');
+
+  const save = accountStore('oldpass');
+  save.getDisplayName = () => 'John UIM';
+  assert.equal((await login('john uim', 'oldpass', 0)).displayName, 'John UIM', 'the saved name wins over the typed one');
+  delete save.getDisplayName;
+  assert.equal((await login('john uim', 'oldpass', 0)).displayName, 'john uim', 'a save without one takes the typed name');
+});
+
 test('changing the password signs out every remembered login', () => {
   const { Player } = require('../dist/game/entity/impl/player/Player');
   const player = Object.create(Player.prototype);

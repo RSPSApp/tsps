@@ -64,6 +64,73 @@ test('Top-floor and Bottom-floor go all the way (Lumbridge castle staircases)', 
     assert.deepEqual(lands(mapObject(3205, 3208, 2, 56231), ClimbLinks.DOWN, new Location(3206, 3208, 2), true), [3206, 3208, 0], 'Bottom-floor');
 });
 
+test('declared Wizards Tower pair links both ways from plugin data', () => {
+    const up = mapObject(3103, 9576, 0, 2148);
+    const down = mapObject(3104, 3162, 0, 2147);
+    assert.deepEqual(lands(up, ClimbLinks.UP, new Location(3104, 9576, 0)), [3105, 3162, 0]);
+    assert.deepEqual(lands(down, ClimbLinks.DOWN, new Location(3105, 3162, 0)), [3104, 9576, 0]);
+});
+
+test('a multi-storey ladder skips only an inert same-name middle segment (Goblin Village crate ladder)', () => {
+    const bottom = mapObject(2954, 3497, 0, 16450);
+    const middle = mapObject(2954, 3497, 1, 16557);
+    const top = mapObject(2954, 3497, 2, 16556);
+    assert.equal(ClimbLinks.climbs(middle.getId(), ClimbLinks.UP), false);
+    assert.equal(ClimbLinks.climbs(middle.getId(), ClimbLinks.DOWN), false);
+    assert.deepEqual(lands(bottom, ClimbLinks.UP, new Location(2954, 3498, 0)), [2954, 3498, 2], '0 -> 2');
+    assert.deepEqual(lands(top, ClimbLinks.DOWN, new Location(2954, 3498, 2)), [2953, 3497, 0], '2 -> 0');
+    const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
+    assert.deepEqual((ObjectDefinition.forId(16557).getInteractions() ?? []).filter(Boolean), []);
+});
+
+test('a missing ladder floor is not skipped; only the real inert segment unlocks the next plane', () => {
+    const bottom = mapObject(2954, 3497, 0, 16450);
+    const hash = MapObjects.getHash(2954, 3497, 1);
+    const original = MapObjects.mapObjects.get(hash);
+    const middleIndex = original.findIndex((object) => object.getId() === 16557);
+    assert.ok(middleIndex >= 0);
+    const middleObject = original[middleIndex];
+    original.splice(middleIndex, 1);
+    try {
+        assert.equal(ClimbLinks.destination(bottom, ClimbLinks.UP, new Location(2954, 3498, 0)), null,
+            'no object on plane 1 means no jump over it to plane 2');
+    } finally {
+        original.splice(middleIndex, 0, middleObject);
+    }
+});
+
+test('the Ladders task climbs the Goblin Village ladder 0 -> 2 and 2 -> 0', () => {
+    const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
+    const listeners = new Map(), interactions = new Map(), tasks = [];
+    const api = {
+        getTaskManager: () => ({ submit: (task) => { task.setRunning(true); tasks.push(task); }, cancelTasks: () => {} }),
+        onCustomEvent: (name, handler) => listeners.set(name, [...(listeners.get(name) ?? []), handler]),
+        emitCustomEvent: (name, payload) => (listeners.get(name) ?? []).forEach((handler) => handler(payload)),
+        onObjectInteraction: (name, actions) => interactions.set(name, actions),
+        sendMultiChatboxPrompt: () => true,
+    };
+    require('../plugins/objects/Ladders.plugin').register(api);
+    const climb = (object, direction, from) => {
+        const movement = { block: false, reset() { return this; }, setBlockMovement(value) { this.block = value; return this; },
+            isMovementBlocked() { return this.block; }, didMovePreviousCycle: () => false };
+        const player = { location: from.clone(), getLocation: () => player.location, moveTo: (target) => { player.location = target; },
+            getMovementQueue: () => movement, getPrivateArea: () => null, getHitpoints: () => 10, performAnimation() {} };
+        const event = { player, object, objectId: object.getId(), clickType: 1, location: object.getLocation(),
+            definition: ObjectDefinition.forId(object.getId()), sourceLocation: { x: from.getX(), y: from.getY(), z: from.getZ() } };
+        const handler = interactions.get('Ladder')[direction === ClimbLinks.UP ? 'Climb-up' : 'Climb-down'];
+        assert.ok(handler, 'Ladder climb handler');
+        handler(event);
+        for (let tick = 0; tick < 4; tick++) for (const task of [...tasks]) task.tick();
+        return player.location;
+    };
+    assert.deepEqual(tileOf(climb(mapObject(2954, 3497, 0, 16450), ClimbLinks.UP, new Location(2954, 3498, 0))), [2954, 3498, 2]);
+    assert.deepEqual(tileOf(climb(mapObject(2954, 3497, 2, 16556), ClimbLinks.DOWN, new Location(2954, 3498, 2))), [2953, 3497, 0]);
+});
+
+function tileOf(location) {
+    return location && [location.getX(), location.getY(), location.getZ()];
+}
+
 test('an object without the matching climb option, or nothing at the other end, leads nowhere', () => {
     const trapdoor = mapObject(3209, 3216, 0, 14880);
     assert.equal(ClimbLinks.destination(trapdoor, ClimbLinks.UP, new Location(3209, 3217, 0)), null, 'a trapdoor only climbs down');

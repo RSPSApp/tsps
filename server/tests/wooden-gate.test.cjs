@@ -1438,6 +1438,56 @@ test('Elena house door leaves a real collision path to her chemical cabinet', as
   } finally { area.destroy(); h.restore(); }
 });
 
+test('Arboretum Large doors 39251/39253 swing east as a public double door', async () => {
+  await initializeMapCollisionOnce();
+  RegionManager.loadMapFiles(3614, 3361, true);
+  const O = require('../dist/util/ObjectIdentifiers').ObjectIdentifiers;
+  assert.deepEqual([O.LARGE_DOOR_100, O.LARGE_DOOR_101], [39251, 39253]);
+  const definitions = new Map([39251, 39252, 39253, 39254]
+    .map(id => [id, CacheDefinitions.getObject(id)]));
+  const h = buildHarness({ cacheObjects: definitions, objectManager: ObjectManager, realMapObjects: true });
+  const closedAt = (id, x, y) => MapObjects.get(id, new Location(x, y, 0), null);
+  try {
+    const north = closedAt(39253, 3614, 3361), south = closedAt(39251, 3614, 3362);
+    assert.ok(north && south, 'cache places both closed Arboretum leaves');
+    assert.deepEqual([north.getFace(), south.getFace()], [2, 2]);
+
+    // One normal Open on either leaf swings the whole public double door.
+    h.click(39253, 3614, 3361, 2, 'Open', 'Large door');
+    assert.equal(closedAt(39253, 3614, 3361), null);
+    assert.equal(closedAt(39251, 3614, 3362), null);
+    const openNorth = closedAt(39254, 3615, 3361), openSouth = closedAt(39252, 3615, 3362);
+    assert.ok(openNorth && openSouth, 'both captured open leaves appear on the +x tiles');
+    assert.deepEqual([openNorth.getFace(), openSouth.getFace()], [3, 1]);
+
+    const route = new RsmodRouteFinding();
+    const path = (srcY, destY) => route.findRoute({ level: 0, srcX: 3613, srcY, srcSize: 1,
+      destX: 3616, destY, privateArea: null, moveNear: false });
+    for (const y of [3361, 3362]) {
+      assert.equal(path(y, y).success, true, `normal RSMOD crosses the open threshold east at y=${y}`);
+      const back = route.findRoute({ level: 0, srcX: 3616, srcY: y, srcSize: 1,
+        destX: 3613, destY: y, privateArea: null, moveNear: false });
+      assert.equal(back.success, true, `normal RSMOD crosses the open threshold west at y=${y}`);
+    }
+
+    // Auto-close restores the closed pair, then an ordinary second player can open it.
+    h.submitted.at(-1).execute();
+    assert.ok(closedAt(39253, 3614, 3361) && closedAt(39251, 3614, 3362));
+    h.click(39253, 3614, 3361, 2, 'Open', 'Large door');
+    assert.ok(closedAt(39254, 3615, 3361) && closedAt(39252, 3615, 3362),
+      'the public door is re-openable by another ordinary click');
+  } finally {
+    for (const [id, x, y] of [[39251, 3614, 3362], [39252, 3615, 3362],
+      [39253, 3614, 3361], [39254, 3615, 3361]]) {
+      const object = MapObjects.get(id, new Location(x, y, 0), null);
+      if (object) ObjectManager.deregister(object, true);
+    }
+    ObjectManager.register(new GameObject(39251, new Location(3614, 3362, 0), 0, 2, null), true);
+    ObjectManager.register(new GameObject(39253, new Location(3614, 3361, 0), 0, 2, null), true);
+    h.restore();
+  }
+});
+
 test('Rehnison door opens a real path past the entrance chair to the hidden bed', async () => {
   await initializeMapCollisionOnce();
   const definitions = new Map([2537, 2538].map(id => [id, CacheDefinitions.getObject(id)]));

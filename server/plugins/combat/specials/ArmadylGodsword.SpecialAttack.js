@@ -2,6 +2,7 @@ module.exports = function registerArmadylGodswordSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Sounds } = api.core;
 
   const DRAIN = 50;
+  const SLASH_DEFENCE_BONUS_INDEX = 1;
   const ANIMATION = new Animation(7644);
   const GRAPHIC = new Graphic(1211, Priority.HIGH);
 
@@ -20,6 +21,13 @@ module.exports = function registerArmadylGodswordSpecialAttack(api) {
     drainAmount: DRAIN,
     strengthMultiplier: 1.375,
     accuracyMultiplier: 2,
+    // Judgement rolls the hidden 1.1x godsword boost, floored, then 1.25x; always vs slash defence.
+    traits: {
+      hitCount: 1,
+      accuracyMultiplier: 2,
+      damageMultiplierStages: [1.1, 1.25],
+      meleeDefenceBonusIndex: SLASH_DEFENCE_BONUS_INDEX,
+    },
     combatMethod: new ArmadylGodswordCombatMethod(),
   });
 };

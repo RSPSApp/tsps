@@ -18,6 +18,7 @@ function blowpipeMethod(player) {
   let resolver = null;
   const api = new Proxy({}, {
     get: (_, name) => {
+      if (name === "core") return require("../dist/plugins/PluginManager").PluginManager.getCoreApi();
       if (name === "registerCombatMethodResolver") return (entry) => { resolver = entry; };
       if (name === "getBonusManager" || name === "getCombatFactory") return () => ({});
       return () => {};

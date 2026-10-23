@@ -51,8 +51,8 @@ module.exports = function registerRuneMysteriesQuest(api) {
   /** Temple of the Eye's stage attribute. Its tower/portal stages (6-25) give
    * Sedridor dialogue of their own, so Rune Mysteries must not shadow him there. */
   const TEMPLE_OF_THE_EYE_STAGE_ATTRIBUTE = "quest.temple_of_the_eye.stage";
-  const TOTE_TOWER_STAGE = 6;
-  const TOTE_COMPLETE_STAGE = 26;
+  const TOTE_TOWER_STAGE = 60;
+  const TOTE_COMPLETE_STAGE = 130;
 
   const TALISMAN_VARBIT = 13720; // cache runemysteries_talisman
   const TALISMAN_ATTRIBUTE = "rune-mysteries:talisman-received";
@@ -227,14 +227,16 @@ module.exports = function registerRuneMysteriesQuest(api) {
     const stage = quest.getStage(player);
 
     if (npcId === DUKE_HORACIO_NPC_ID) {
-      // The Duke is shared with Dragon Slayer I, whose shield conversation lives
-      // on his own flat page. Once Rune Mysteries is complete the quest has
-      // nothing more to say through him, so step aside and let the other Duke
-      // branches (Dragon Slayer, the flat page) play.
+      // The Duke is shared with Dragon Slayer I and other quests. Rune Mysteries
+      // only owns his dialogue before/at the talisman handover; after that its
+      // "again" page has no valid branch (both guards are stage-1 only). Defer
+      // to another active quest, otherwise the shared flat Duke page, which
+      // carries the real mid-quest/talisman-recovery/shield lines.
       if (stage >= STAGE_COMPLETE) return null;
       if (stage === STAGE_NOT_STARTED) {
         return { page: PAGE_RUNE_MYSTERIES, variant: VARIANT_DUKE_STARTING };
       }
+      if (stage >= STAGE_GIVEN_TALISMAN) return null;
       return { page: PAGE_RUNE_MYSTERIES, variant: VARIANT_DUKE_AGAIN };
     }
 

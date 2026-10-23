@@ -1,6 +1,6 @@
 /** Pirate's Treasure. Capture evidence: docs/f2p-coastal-parity.md. */
 module.exports = function registerPiratesTreasureQuest(api) {
-  const { Equipment, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, GameObject, Animation, Task, TaskManager, StatementDialogue } = api.core;
+  const { Equipment, Location, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, GameObject, Animation, Task, TaskManager, CountdownTask, TemplatedInstanceArea, StatementDialogue } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const FRANK_NPC_ID = NpcIdentifiers.REDBEARD_FRANK;
@@ -42,8 +42,24 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const GARDENER_TILE = { x: 2997, y: 3382, z: 0 };
   const STOCK_ROOM_DOOR_TILE = { x: 3012, y: 3204 };
   const STORE_CRATE_TILE = { x: 3009, y: 3207 };
-  const PORT_SARIM_LANDING = new Location(3029, 3217, 0);
-  const MUSA_POINT_LANDING = new Location(2956, 3146, 0);
+  // The ship's deck at each end (rsprox captures 1434, 1653); the gangplank leads ashore.
+  const PORT_SARIM_LANDING = new Location(3032, 3217, 1);
+  const MUSA_POINT_LANDING = new Location(2956, 3143, 1);
+  /** The voyage, as captured: the ship at sea (map chunk 3064,3208 plane 1) under ship_journey. */
+  const SHIP_AT_SEA_CHUNK = { sourceChunkX: 3064 >> 3, sourceChunkY: 3208 >> 3, sourcePlane: 1, rotation: 0 };
+  const SHIP_JOURNEY_INTERFACE = 299;
+  const SHIP_JOURNEY_SCRIPT = 1131;
+  const TO_KARAMJA_ROUTE = 4;
+  const TO_PORT_SARIM_ROUTE = 5;
+  const SHIP_JOURNEY_TICKS = 9;
+  const SEA_SONG = 147;
+  const SAILING_JINGLE = 172;
+  const TOPLEVEL = 161;
+  /** Side tabs the voyage closes (combat to magic, logout to music), with the group each gets back. */
+  const VOYAGE_TABS = [[77, 320], [78, 629], [79, 149], [80, 387], [86, 182], [87, 116], [88, 216], [89, 239]];
+  const COMBAT_TAB = 76;
+  const PRAYER_TAB = 81;
+  const MAGIC_TAB = 82;
   const PANDEMONIUM_LANDING = new Location(3069, 2987, 0); // Pandemonium.Quest.js landing tile.
   const FARE = 30;
   const GARDENER_SHOUT = "First moles, now this! Take this, vandal!";
@@ -463,7 +479,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
       player.sendMessage("You don't have enough coins to pay for passage.");
       return;
     }
-    sail(player, MUSA_POINT_LANDING, "Musa Point", FARE);
+    voyage(player, MUSA_POINT_LANDING, TO_KARAMJA_ROUTE, "The ship arrives at Karamja.", FARE);
   }
 
   function sailToPortSarim(player, fare = FARE) {
@@ -472,7 +488,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
       player.sendMessage(`You do not have enough coins to pay passage, you need ${fare}.`);
       return false;
     }
-    sail(player, PORT_SARIM_LANDING, "Port Sarim", fare);
+    voyage(player, PORT_SARIM_LANDING, TO_PORT_SARIM_ROUTE, "The ship arrives at Port Sarim.", fare);
     return true;
   }
 
@@ -518,6 +534,64 @@ module.exports = function registerPiratesTreasureQuest(api) {
       if (player.isRegistered?.() !== false) player.moveTo(destination);
     };
     TaskManager.submit(task);
+  }
+
+  /** The ship at sea: one chunk, the player alone on it until the ship arrives. */
+  class ShipAtSea extends TemplatedInstanceArea {
+    constructor(player, destination) {
+      super(1, 1);
+      this.owner = player;
+      this.destination = destination;
+      this.setChunk(0, 0, 0, SHIP_AT_SEA_CHUNK);
+    }
+    canTeleport() { return false; }
+    canAttack() { return false; }
+    postLeave(mobile, logout) {
+      if (mobile === this.owner) {
+        TaskManager.cancelTasks(this);
+        if (sailing.has(mobile)) arrive(mobile, this, logout);
+      }
+      super.postLeave(mobile, logout);
+    }
+  }
+
+  /** As captured: pay, the ship at sea under ship_journey with the side tabs closed, then the deck nine ticks later. */
+  function voyage(player, destination, route, arrival, fare) {
+    sailing.add(player);
+    if (fare > 0) player.sendMessage(`You pay ${fare} coins and board the ship.`);
+    const ship = new ShipAtSea(player, destination);
+    player.getDialogueManager().reset();
+    player.getMovementQueue().reset().setBlockMovement(true);
+    player.setUntargetable(true);
+    player.moveTo(ship.tile(0, 0, 0));
+    ship.enter(player);
+    const sender = player.getPacketSender();
+    sender.sendSong(SEA_SONG).sendJingle(SAILING_JINGLE, 0)
+      .sendInterface(SHIP_JOURNEY_INTERFACE).sendClientScript(SHIP_JOURNEY_SCRIPT, route);
+    for (const slot of [COMBAT_TAB, PRAYER_TAB, MAGIC_TAB, ...VOYAGE_TABS.map(([tab]) => tab)]) {
+      sender.closeSubInterface((TOPLEVEL << 16) | slot);
+    }
+    TaskManager.submit(new CountdownTask(ship, SHIP_JOURNEY_TICKS, () => {
+      arrive(player, ship, false);
+      ship.leave(player, false);
+      StatementDialogue.send(player, arrival);
+    }));
+  }
+
+  function arrive(player, ship, logout) {
+    sailing.delete(player);
+    player.moveTo(ship.destination);
+    player.getMovementQueue().setBlockMovement(false);
+    player.setUntargetable(false);
+    if (logout) return;
+    const sender = player.getPacketSender();
+    sender.sendTabInterface(0, 593);
+    sender.sendTabInterface(5, 541);
+    sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
+    for (const [slot, group] of VOYAGE_TABS) sender.sendTabInterface(slot, group);
+    player.getInventory().refreshItems();
+    player.getEquipment().refreshItems();
+    sender.sendInterfaceRemoval();
   }
 
   function payForBananas(player) {
@@ -577,6 +651,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
 
   function searchStoreCrate(player) {
     if (!isEmployed(player, 2)) { player.sendMessage("Wydin won't let you into the stock room."); return; }
+    if (!wearingApron(player)) { player.sendMessage("You need to put your white apron on first."); return; }
     player.sendMessage("There are a lot of bananas in the crate.");
     if (attr(player, RUM_ATTRIBUTE) >= 2 && giveItem(player, RUM_ITEM_ID)) {
       setAttr(player, RUM_ATTRIBUTE, 0);

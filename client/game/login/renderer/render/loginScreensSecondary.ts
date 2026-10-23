@@ -3,8 +3,8 @@ import type { LoginRendererHost, RenderContext } from "../host";
 import { isCaretVisible } from "../canvas";
 import {
     getRememberedPlayBounds,
-    REMEMBERED_LOG_OUT_TEXT,
-    REMEMBERED_LOG_OUT_Y,
+    REMEMBERED_SIGN_OUT_TEXT,
+    REMEMBERED_SIGN_OUT_Y,
     REMEMBERED_PLAY_Y,
     REMEMBERED_TITLE_Y,
 } from "../layout/geometry";
@@ -265,17 +265,7 @@ export function drawWelcomeDisplayName(
         }
         drawCenteredText(host, ctx, host.fontBold12, state.displayName, centerX, REMEMBERED_PLAY_Y + 18, 0xffff00, true);
 
-        if (host.fontPlain11) {
-            drawCenteredText(host, 
-                ctx,
-                host.fontPlain11,
-                REMEMBERED_LOG_OUT_TEXT,
-                centerX,
-                REMEMBERED_LOG_OUT_Y,
-                0xffffff,
-                true,
-            );
-        }
+        drawButton(host, ctx, centerX, REMEMBERED_SIGN_OUT_Y, REMEMBERED_SIGN_OUT_TEXT);
     
 }
 

@@ -11,6 +11,7 @@ const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { Location } = require("../dist/game/model/Location");
 const { Skill } = require("../dist/game/model/Skill");
 const { ItemIds } = require("../dist/util/IdEnums");
+const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 
 const Mine = require("../plugins/areas/motherlode/State.MotherlodeMine");
 const Veins = require("../plugins/areas/motherlode/Veins.MotherlodeMine");
@@ -21,6 +22,7 @@ const hooks = { objects: {}, conditions: [], events: {} };
 const spawned = [];
 const MotherlodeMine = require("../plugins/areas/MotherlodeMine.plugin");
 MotherlodeMine.register({
+  core: require("../dist/plugins/PluginManager").PluginManager.getCoreApi(),
   persistAttribute() {},
   onServerStartup() {},
   onPlayerLogin() {},
@@ -229,7 +231,7 @@ test("the pay-dirt stops in the channel while both wheels are broken", () => {
   assert.equal(Mine.sackTotal(Mine.stateOf(p)), 0, "nothing reaches the sack");
 
   const smith = player(3741, 5669);
-  smith.inventory.add({ getId: () => ItemIds.HAMMER, getAmount: () => 1 });
+  smith.inventory.add({ getId: () => ItemIdentifiers.HAMMER, getAmount: () => 1 });
   interact("Broken strut", "Hammer", { player: smith, objectId: Machine.BROKEN_STRUT, location: { x: 3742, y: 5669, z: 0 } });
   withRandom(0, () => ticks(1));
   assert.equal(smith.animations.at(-1), 3971);
@@ -359,4 +361,24 @@ test("Percy's real transcript reaches his unlock menu whatever has been bought",
   } finally {
     PluginManager.npcDialogueConditionHooks.splice(PluginManager.npcDialogueConditionHooks.indexOf(hook), 1);
   }
+});
+
+test("the crates give a hammer or a bronze pickaxe, unless one is carried (rsprox, Wiki)", () => {
+  const search = hooks.objects.Crate.Search;
+  const searcher = player(3752, 5673);
+  assert.equal(search({ player: searcher, location: { x: 3752, y: 5674, z: 0 } }), true);
+  assert.deepEqual(searcher.inventory.items, [{ id: ItemIdentifiers.HAMMER, amount: 1 }]);
+  const box = [...searcher.dialogues[0].getDialogues().values()][0];
+  assert.equal(box.getText(), "You've found a hammer. How handy.");
+
+  search({ player: searcher, location: { x: 3752, y: 5664, z: 0 } });
+  assert.deepEqual(searcher.inventory.items, [{ id: ItemIdentifiers.HAMMER, amount: 1 }]);
+  assert.deepEqual(searcher.messages, ["You search the crate but find nothing."]);
+
+  search({ player: searcher, location: { x: 3753, y: 5659, z: 0 } });
+  assert.deepEqual(searcher.inventory.items.map((item) => item.id), [ItemIdentifiers.HAMMER, ItemIdentifiers.BRONZE_PICKAXE]);
+  assert.equal([...searcher.dialogues[1].getDialogues().values()][0].getText(), "You've found a bronze pickaxe. How handy.");
+
+  // Every other crate is left to the other "Crate" handlers.
+  assert.equal(search({ player: searcher, location: { x: 3200, y: 3200, z: 0 } }), false);
 });

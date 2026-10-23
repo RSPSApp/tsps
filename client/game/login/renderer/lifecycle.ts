@@ -29,6 +29,7 @@ export function dispose(host: LoginRendererHost): void {
         if (host.titleBackgroundImage) {
             host.titleBackgroundImage.close();
             host.titleBackgroundImage = undefined;
+            host.titleBackgroundFromCache = false;
         }
 
         // Clear animation

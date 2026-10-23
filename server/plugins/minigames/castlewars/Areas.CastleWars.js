@@ -274,11 +274,16 @@ function keepGameItemsOffTheFloor(event) {
   event.handled = true;
 }
 
+function allowBountyHunterWeapons(event) {
+  if (event.attacker?.getArea?.() === game.gameArea && event.target?.getArea?.() === game.gameArea) event.allowed = true;
+}
+
 module.exports = function attachCastleWarsAreas(api, castleWars) {
   game = castleWars;
   core = api.core;
   data = castleWars.data;
   registerAreas(api);
+  api.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
   api.onServerStartup(setUpCastle);
   api.onPlayerLogin(restoreLoginInsideCastleWars);
   api.onCanEquip(protectTeamColours);

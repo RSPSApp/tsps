@@ -70,6 +70,11 @@ const DEFAULT_AUDIO_SETTINGS: Readonly<Record<number, number>> = {
 
 export class Player extends Mobile {
     public static readonly INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
+    public static readonly BANK_NOTE_WITHDRAWAL_ATTRIBUTE = "bank:note-withdrawal";
+    public static readonly BANK_INSERT_MODE_ATTRIBUTE = "bank:insert-mode";
+    public static readonly BANK_QUANTITY_MODE_ATTRIBUTE = "bank:quantity-mode";
+    public static readonly BANK_CUSTOM_QUANTITY_ATTRIBUTE = "bank:custom-quantity";
+    public static readonly BANK_PLACEHOLDERS_ATTRIBUTE = "bank:placeholders";
 
     getSize(): number {
         return 1;
@@ -166,13 +171,8 @@ export class Player extends Mobile {
     // Java primitive int defaults to 0; initialize explicitly in TS to avoid undefined tab routing.
     public currentBankTab = 0;
     public banks: Bank[] = Array(Bank.TOTAL_BANK_TABS).fill(null); // last index is for bank searches
-    private noteWithdrawal = false;
-    private insertMode = false;
-    private bankQuantityMode = 0;
-    private bankCustomQuantity = 0;
     private searchingBank = false;
     private searchSyntax = "";
-    private placeholders = false;
     private fightType = FightType.UNARMED_KICK;
     public weapon: WeaponInterfaces = WeaponInterfaces.UNARMED;
     private autoRetaliate = true;
@@ -385,6 +385,8 @@ export class Player extends Mobile {
         const timed = <T>(phase: string, fn: () => T): T =>
             ServerPerf.measurePhase(`player.process.${phase}`, fn);
 
+        // Client input first: packets received since the last turn act now, on the tick.
+        timed("client_input", () => this.getSession()?.processPackets());
         // Queued impacts land before this player acts, matching LostCity's
         // processQueues-then-processInteraction order. A hit that kills them here
         // stops the rest of this turn via the isDying/hitpoints guards below.
@@ -812,7 +814,15 @@ export class Player extends Mobile {
     private viewDistanceQuietCycles = 0;
 
     public getViewDistance(): number {
-        return this.viewDistance;
+        return this.fixedViewDistance ?? this.viewDistance;
+    }
+
+    /** A view distance kept regardless of the crowd (a spectator watching a room), or null. */
+    private fixedViewDistance: number | null = null;
+
+    /** Fixes how far other players are seen (up to 64), as for a spectator; null resizes again. */
+    public setFixedViewDistance(distance: number | null): void {
+        this.fixedViewDistance = distance == null ? null : Math.max(1, Math.min(64, Math.trunc(distance)));
     }
 
     /** How far away NPCs (and their projectiles) are seen; 15 unless an area widens it. */
@@ -1084,35 +1094,39 @@ export class Player extends Mobile {
     }
 
     public setNoteWithdrawal(noteWithdrawal: boolean): void {
-        this.noteWithdrawal = noteWithdrawal;
+        this.setAttribute(Player.BANK_NOTE_WITHDRAWAL_ATTRIBUTE, noteWithdrawal);
     }
 
     public withdrawAsNote(): boolean {
-        return this.noteWithdrawal;
+        return this.getAttribute(Player.BANK_NOTE_WITHDRAWAL_ATTRIBUTE) === true;
     }
 
     public setInsertMode(insertMode: boolean): void {
-        this.insertMode = insertMode;
+        this.setAttribute(Player.BANK_INSERT_MODE_ATTRIBUTE, insertMode);
     }
 
     public insertModeReturn(): boolean {
-        return this.insertMode;
+        return this.getAttribute(Player.BANK_INSERT_MODE_ATTRIBUTE) === true;
     }
 
     public setBankQuantityMode(mode: number): void {
-        this.bankQuantityMode = Math.max(0, Math.min(4, Math.trunc(mode)));
+        const quantityMode = Number.isFinite(mode) ? Math.trunc(mode) : 0;
+        this.setAttribute(Player.BANK_QUANTITY_MODE_ATTRIBUTE, Math.max(0, Math.min(4, quantityMode)));
     }
 
     public getBankQuantityMode(): number {
-        return this.bankQuantityMode;
+        const mode = Number(this.getAttribute(Player.BANK_QUANTITY_MODE_ATTRIBUTE) ?? 0);
+        return Number.isFinite(mode) ? Math.max(0, Math.min(4, Math.trunc(mode))) : 0;
     }
 
     public setBankCustomQuantity(amount: number): void {
-        this.bankCustomQuantity = Math.max(0, Math.trunc(amount));
+        const quantity = Number.isFinite(amount) ? Math.trunc(amount) : 0;
+        this.setAttribute(Player.BANK_CUSTOM_QUANTITY_ATTRIBUTE, Math.max(0, quantity));
     }
 
     public getBankCustomQuantity(): number {
-        return this.bankCustomQuantity;
+        const quantity = Number(this.getAttribute(Player.BANK_CUSTOM_QUANTITY_ATTRIBUTE) ?? 0);
+        return Number.isFinite(quantity) ? Math.max(0, Math.trunc(quantity)) : 0;
     }
 
     public getBanks(): Bank[] {
@@ -1236,11 +1250,11 @@ export class Player extends Mobile {
     }
 
     public isPlaceholders(): boolean {
-        return this.placeholders;
+        return this.getAttribute(Player.BANK_PLACEHOLDERS_ATTRIBUTE) === true;
     }
 
     public setPlaceholders(placeholders: boolean): void {
-        this.placeholders = placeholders;
+        this.setAttribute(Player.BANK_PLACEHOLDERS_ATTRIBUTE, placeholders);
     }
 
     public manipulateHit(hit: PendingHit): PendingHit {

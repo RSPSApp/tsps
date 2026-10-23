@@ -1,3 +1,4 @@
+import { ClientState } from "../../game/ClientState";
 import { MenuTargetType } from "../../rs/MenuEntry";
 import { applyMenuTransform } from "../../ui/menu/menuTransforms";
 import { isDropTarget, isPauseButton, shouldShowMenuOption } from "../WidgetFlags";
@@ -254,6 +255,29 @@ export function transformWidgetMenuEntries<T extends { option: string }>(
     }) as unknown as T[];
 }
 
+/** Target mask bits a selection needs to land on an inventory item (item or component use). */
+const SELECTION_TARGETS_ITEM_MASK = 0x30;
+
+/**
+ * While an item ("Use") or spell is selected, an inventory item offers only the selection's
+ * entry - "Use Knife -> Logs", "Cast High Level Alchemy -> Logs" - and Cancel, in place of its
+ * own ops. Undefined when nothing is selected or the widget is not a target.
+ */
+export function getSelectionTargetEntries(w: any): SimpleMenuEntry[] | undefined {
+    if (!ClientState.isSpellSelected) return undefined;
+    if (typeof w?.itemId !== "number" || w.itemId <= 0) return undefined;
+    if ((ClientState.selectedSpellTargetMask & SELECTION_TARGETS_ITEM_MASK) === 0) return undefined;
+    const plainTarget = getWidgetTargetLabel(w);
+    if (!plainTarget) return undefined;
+    const action = sanitizeText(ClientState.selectedSpellActionName) ?? "Cast";
+    const selected = ClientState.selectedSpellName || "";
+    const itemTarget = `${colorStartTag(ITEM_MENU_TARGET_RGB)}${plainTarget}`;
+    return [
+        { option: action, target: selected ? `${selected} -> ${itemTarget}` : itemTarget, opIndex: 0 },
+        { option: "Cancel" },
+    ];
+}
+
 /** A widget's menu entries in OSRS display order, after client plugins' reordering. */
 export function deriveMenuEntriesForWidget(
     w: any,
@@ -261,6 +285,10 @@ export function deriveMenuEntriesForWidget(
     getWidgetFlags?: (w: any) => number,
     getWidgetByUid?: (uid: number) => any,
 ): SimpleMenuEntry[] {
+    if (!onlyBasic) {
+        const selectionEntries = getSelectionTargetEntries(w);
+        if (selectionEntries) return selectionEntries;
+    }
     const entries = deriveRawMenuEntriesForWidget(w, onlyBasic, getWidgetFlags, getWidgetByUid);
     return onlyBasic ? entries : transformWidgetMenuEntries(w, entries);
 }

@@ -16,6 +16,7 @@ function startBridge({ failing = 0 } = {}) {
   const script = /<script>([\s\S]*)<\/script>/.exec(BROWSER_HOST_BRIDGE_HTML)[1];
   const posted = [];
   const urls = [];
+  const sends = [];
   const port = { postMessage: (message) => posted.push(message), start: () => {}, onmessage: null };
   let polls = 0;
   let connect;
@@ -25,6 +26,7 @@ function startBridge({ failing = 0 } = {}) {
       return { ok: true, status: 200, text: async () => "session" };
     }
     urls.push(url);
+    if (url.includes("/send?")) sends.push(Buffer.from(init.body));
     if (failing > 0 && /\/(poll|send)\?/.test(url)) {
       failing--;
       throw new TypeError("Failed to fetch");
@@ -48,6 +50,7 @@ function startBridge({ failing = 0 } = {}) {
     AbortSignal,
     TypeError,
     ArrayBuffer,
+    Uint8Array,
     setTimeout,
   });
   connect({ data: "browser-host-connect", ports: [port] });
@@ -55,6 +58,7 @@ function startBridge({ failing = 0 } = {}) {
     polls: () => polls,
     posted,
     urls,
+    sends,
     dropNext: () => { failing = 1; },
     send: (type, data) => port.onmessage({ data: { type, data } }),
   };
@@ -96,6 +100,29 @@ test("a dropped poll or send is retried, not the end of the session (#559)", asy
     "/browser-host/session/session/send?seq=1",
   ]);
   assert.ok(bridge.posted.some((m) => m.type === "sent" && m.bytes === 2));
+});
+
+test("frames sent while a send is in flight share the next send, up to a message each", async (t) => {
+  const bridge = startBridge();
+  t.after(() => bridge.send("close"));
+  await tick();
+  bridge.send("pause");
+  await tick();
+  const frame = (byte, length = 1) => new Uint8Array(length).fill(byte).buffer;
+
+  bridge.send("message", frame(1));
+  for (const byte of [2, 3, 4]) bridge.send("message", frame(byte));
+  await tick(50);
+  assert.deepEqual(bridge.sends.map((body) => [...body]), [[1], [2, 3, 4]], "one request for the three that waited");
+
+  bridge.send("message", frame(5));
+  bridge.send("message", frame(6, 40_000));
+  bridge.send("message", frame(7, 40_000));
+  await tick(50);
+  assert.deepEqual(bridge.sends.slice(2).map((body) => body.length), [1, 40_000, 40_000], "a batch stays within 64 KiB");
+  assert.deepEqual(bridge.urls.filter((url) => url.includes("/send?")).map((url) => url.split("seq=")[1]), ["1", "2", "3", "4", "5"]);
+  const sent = bridge.posted.filter((m) => m.type === "sent").reduce((total, m) => total + m.bytes, 0);
+  assert.equal(sent, 4 + 1 + 80_000, "the host is told every byte left");
 });
 
 function fakeResponse() {

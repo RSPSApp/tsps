@@ -30,15 +30,15 @@ function breakDown(cannon) {
   cannon.player?.sendMessage(MESSAGE.BROKEN);
 }
 
-/** Gone: its parts wait at Nulodion (balls in it are lost). */
+/** Gone: parts and loaded ammunition wait at Nulodion (Wiki). */
 function lose(cannon) {
   Cannon.forget(cannon);
   const { player } = cannon;
-  if (player) markLost(player, cannon.kind, cannon.stage);
+  if (player) markLost(player, cannon.kind, cannon.stage, cannon.steel, cannon.granite);
 }
 
-function markLost(player, kind, stage) {
-  player.setAttribute(Cannon.LOST_ATTRIBUTE, { kind, stage });
+function markLost(player, kind, stage, steel = 0, granite = 0) {
+  player.setAttribute(Cannon.LOST_ATTRIBUTE, steel || granite ? { kind, stage, steel, granite } : { kind, stage });
   player.setAttribute(Cannon.STATE_ATTRIBUTE, null);
   Cannon.clearVars(player);
   player.sendMessage(MESSAGE.LOST);
@@ -90,7 +90,7 @@ function reattach({ player }) {
     return;
   }
   const saved = player.getAttribute(Cannon.STATE_ATTRIBUTE);
-  if (saved && Cannon.KINDS[saved.kind]) markLost(player, saved.kind, saved.stage ?? 4);
+  if (saved && Cannon.KINDS[saved.kind]) markLost(player, saved.kind, saved.stage ?? 4, saved.steel ?? 0, saved.granite ?? 0);
 }
 
 /** Logged out: the cannon stays up, but stops firing (nobody to fire for). */
@@ -115,6 +115,7 @@ function fastForwardDecay({ player }) {
 module.exports = function attachDecay(api) {
   api.persistAttribute(Cannon.STATE_ATTRIBUTE);
   api.persistAttribute(Cannon.LOST_ATTRIBUTE);
+  api.persistAttribute(Cannon.RECOVERED_AMMO_ATTRIBUTE);
   api.onObjectInteraction("Dwarf multicannon", { "Pick-up": pickUp });
   api.onObjectInteraction("Broken multicannon", { Repair: repair, "Pick-up": pickUp });
   api.onObjectInteraction("Cannon base", { "Pick-up": pickUp });

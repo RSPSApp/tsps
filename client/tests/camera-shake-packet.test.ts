@@ -4,6 +4,7 @@ import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import {
     encodeCameraReset,
     encodeCameraShake,
+    encodeCameraTarget,
     encodeCameraMoveTo,
     encodeCameraLookAt,
     encodeCameraUnlock,
@@ -22,6 +23,14 @@ assert.deepEqual(shake, {
 const reset = decodeServerPacket(new Uint8Array(encodeCameraReset())) as any;
 assert.deepEqual(reset, { type: "camera", payload: { mode: "reset" } });
 
+// cam_target: a spectator's camera on a room's middle or on the fighter they follow.
+assert.deepEqual(decodeServerPacket(new Uint8Array(encodeCameraTarget({ x: 4127, y: 5673, level: 1 }))), {
+    type: "camera", payload: { mode: "target", x: 4127, y: 5673, level: 1 },
+});
+assert.deepEqual(decodeServerPacket(new Uint8Array(encodeCameraTarget({ player: 1766 }))), {
+    type: "camera", payload: { mode: "target", player: 1766 },
+});
+
 for (const [encode, mode] of [[encodeCameraMoveTo, "move"], [encodeCameraLookAt, "look"]] as const) {
     for (const instant of [true, false]) {
         assert.deepEqual(decodeServerPacket(new Uint8Array(encode(2850, 10230, 1200, instant))), {
@@ -33,7 +42,7 @@ for (const [encode, mode] of [[encodeCameraMoveTo, "move"], [encodeCameraLookAt,
             type: "camera", payload: { mode, x: 2850, y: 10230, height: -200, ...options },
         });
     }
-    for (const easing of ["linear", "ease_in_out_sine", "ease_out_cubic", "ease_out_sine"] as const) {
+    for (const easing of ["linear", "ease_in_out_sine", "ease_out_cubic", "ease_out_sine", "ease_in_sine"] as const) {
         const options = { cycles: 210, easing, heightRelative: false, ignoreTerrain: true, trackTarget: false };
         assert.deepEqual(decodeServerPacket(new Uint8Array(encode(3128, 3476, 400, options))), {
             type: "camera", payload: { mode, x: 3128, y: 3476, height: 400, ...options },

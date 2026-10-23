@@ -1,6 +1,5 @@
-// TODO: base implementation — demon 10% drain needs an NPC demon-category flag; NPC stat drain not available in core. Ported from xrsps-typescript; untested.
-module.exports = function registerDarklightSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill } = api.core;
+function buildSpecial(core) {
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill } = core;
 
   const DRAIN = 50;
   const SPECIAL_ANIMATION = new Animation(2890);
@@ -10,16 +9,14 @@ module.exports = function registerDarklightSpecialAttack(api) {
   const DRAINED_SKILLS = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE];
 
   function weaken(target) {
-    if (!target.isPlayer()) {
-      // TODO: NPC combat-stat drain is not exposed by our core NPC state.
-      return;
-    }
-    const skillManager = target.getAsPlayer().getSkillManager();
+    const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
+    const demon = target.isNpc?.() && target.getAsNpc().getCurrentDefinition().hasAttribute("demon");
+    const fraction = demon ? 0.10 : DRAIN_FRACTION;
     for (const skill of DRAINED_SKILLS) {
       const baseLevel = skillManager.getMaxLevel(skill);
       const current = skillManager.getCurrentLevel(skill);
-      const drainAmount = Math.floor(baseLevel * DRAIN_FRACTION) + FLAT_DRAIN;
-      skillManager.setCurrentLevels(skill, Math.max(1, current - drainAmount));
+      const drainAmount = Math.floor(baseLevel * fraction) + FLAT_DRAIN;
+      skillManager.setCurrentLevels(skill, Math.max(target.isPlayer() ? 1 : 0, current - drainAmount));
     }
   }
 
@@ -32,19 +29,24 @@ module.exports = function registerDarklightSpecialAttack(api) {
     }
 
     handleAfterHitEffects(hit) {
-      if (!hit.isAccurate() || Math.floor(hit.getTotalDamage()) <= 0) {
+      if (!hit.isAccurate()) {
         return;
       }
       weaken(hit.getTarget());
     }
   }
 
-  api.registerCombatSpecial({
+  return {
     id: "darklight",
     itemIds: [ItemIdentifiers.DARKLIGHT],
     drainAmount: DRAIN,
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
+    traits: { hitCount: 1, meleeDefenceBonusIndex: 0 },
     combatMethod: new DarklightCombatMethod(),
-  });
+  };
+}
+
+module.exports = function registerDarklightSpecialAttack(api) {
+  api.registerCombatSpecial(buildSpecial(api.core));
 };

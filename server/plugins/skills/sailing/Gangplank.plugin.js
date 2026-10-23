@@ -101,6 +101,7 @@ module.exports = {
   register(api) {
     content();
     api.onObjectInteraction("Gangplank", { Board: boardBoat, Disembark: disembarkBoat });
+    api.onObjectInteraction("Mooring point", { Board: boardBoat, Disembark: disembarkBoat });
     api.onObjectInteraction("Buoy", { Dock: dockAtBuoyOp });
   },
 };

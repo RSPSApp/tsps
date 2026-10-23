@@ -201,7 +201,7 @@ export class InteractHighlightLayer {
         this.targets = [];
         this.composeBindGroups = [];
 
-        const config = this.host.osrsClient.interactHighlightPlugin?.getConfig?.();
+        const config = this.host.osrsClient.clientPlugins.interactHighlightConfig();
         if (!config?.enabled) return;
 
         try {

@@ -58,8 +58,10 @@ function areaClass() {
 }
 
 class Session {
-  constructor(player) {
+  constructor(player, variant) {
     this.player = player;
+    this.variant = variant;
+    this.npcs = variant === "quest" ? (Common.data.questNpcs ?? Common.data.npcs) : Common.data.npcs;
     this.area = new (areaClass())();
     this.area.session = this;
     const { sourceChunkX, sourceChunkY, chunks } = Common.data.instance;
@@ -92,13 +94,14 @@ class Session {
 
   /** The dormant angel on its spot: the fighting angel, shown asleep until woken. */
   spawnAngel() {
-    const { npcs, spawn } = Common.data;
+    const { spawn } = Common.data;
     const at = this.tile(spawn.tile);
-    const npc = Common.api.spawnNpc({ id: npcs.fighting, x: at.getX(), y: at.getY(), z: at.getZ(), owner: this.player, wanderRadius: 0, face: spawn.direction });
+    const id = this.variant === "quest" ? this.npcs.dormant : this.npcs.fighting;
+    const npc = Common.api.spawnNpc({ id, x: at.getX(), y: at.getY(), z: at.getZ(), owner: this.player, wanderRadius: 0, face: spawn.direction });
     if (!npc) return null;
     npc.__skipDefaultRespawn = true;
     npc.__madAngel = this;
-    npc.setNpcTransformationId(npcs.dormant);
+    npc.setNpcTransformationId(this.npcs.dormant);
     this.area.add(npc);
     this.boss = npc;
     return npc;
@@ -117,10 +120,17 @@ class Session {
 
 const sessionOf = (player) => sessions.get(player) ?? null;
 
+/** Lets the owning quest answer whether this instance is its quest variant. */
+function instanceVariant(player) {
+  const request = { player, variant: null };
+  Common.api.emitCustomEvent?.("madangel:instance-variant", request);
+  return request.variant === "quest" ? "quest" : "normal";
+}
+
 /** Starts the player's cathedral: the instance and the dormant angel, ready for the move in. */
 function open(player) {
   sessionOf(player)?.end();
-  const session = new Session(player);
+  const session = new Session(player, instanceVariant(player));
   sessions.set(player, session);
   session.spawnAngel();
   return session;

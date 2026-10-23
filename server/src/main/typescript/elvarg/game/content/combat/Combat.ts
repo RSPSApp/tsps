@@ -14,6 +14,7 @@ import { CombatFactory, CanAttackResponse } from "./CombatFactory";
 import { CombatRange } from "./CombatRange";
 import { CombatSpecial } from "./CombatSpecial";
 import { SpecialAttackTargetingResolver } from "./SpecialAttackTargeting";
+import { AccuracyFormulasDpsCalc } from "./formula/AccuracyFormulasDpsCalc";
 import { CombatType } from "./CombatType";
 import type { CombatSpell } from "./magic/CombatSpell";
 import type { CombatMethod } from "./method/CombatMethod";
@@ -661,8 +662,9 @@ export class Combat {
         if (targeting) {
             const resolved = SpecialAttackTargetingResolver.resolve(this.character, target, targeting);
             if (resolved.largeTargetExtraHit) {
-                // TODO: reduced (0.75) accuracy for the large-target second hit.
-                const extra = method.hits(this.character, target);
+                // Wiki: the large-target second hit has 25% reduced accuracy.
+                const scale = targeting.largeTargetExtraHit?.accuracyMultiplier ?? 1;
+                const extra = AccuracyFormulasDpsCalc.withAccuracyScale(scale, () => method.hits(this.character, target));
                 if (extra) for (const hit of extra) CombatFactory.addPendingHit(hit);
             } else {
                 for (const secondary of resolved.secondaryTargets) {

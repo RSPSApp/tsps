@@ -1,7 +1,13 @@
 import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../../game/sync/PlayerUpdateDecoder";
 import { setPacketSocket } from "../../packet";
-import { DEFAULT_URL, WS_GLOBAL_KEY, WS_SUPPRESS_RECONNECT_KEY, getEnv } from "../constants";
+import {
+    DEFAULT_URL,
+    KEEPALIVE_INTERVAL_MS,
+    WS_GLOBAL_KEY,
+    WS_SUPPRESS_RECONNECT_KEY,
+    getEnv,
+} from "../constants";
 import { processServerMessage } from "../handlers/dispatch";
 import { state } from "../state";
 import { clearLoginConnectRetryTimer } from "./loginHelpers";
@@ -110,6 +116,14 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
 
         ws.addEventListener("message", (evt) => {
             if (state.socket !== ws) return;
+
+            // Sent from incoming traffic rather than a timer: the server talks every tick, and
+            // background tabs throttle timers, but not socket events.
+            const now = Date.now();
+            if (now - state.lastKeepaliveAt >= KEEPALIVE_INTERVAL_MS) {
+                state.lastKeepaliveAt = now;
+                send({ type: "ping", payload: { time: now } });
+            }
 
             try {
                 const raw = (evt as MessageEvent).data;

@@ -4,18 +4,21 @@
  * The words come from the "Current Affairs" transcript page (npc-dialogues.json,
  * osrsreboxed). NPCs: Arhein (3200), Harry (3213) and Councillor Catherine
  * (14952). Catherine is missing from npc-spawns.json, so she is owner-spawned at
- * her desk (2825,3454) on login; the deployable current duck (15153, the
- * "stopped, Collect" variant) is owner-spawned at the ripple while charting.
+ * her desk (2825,3454) on login; the collectable current duck (15153, the
+ * "stopped, Collect" variant) is owner-spawned at its recorded stop tile.
  *
- * Stages (varbit 18282 "current_affairs", varp 4956 bits 0-6 - the wiki lists no
- * stage values, so the cache varbit is the authority and the values below are
- * this plugin's own): 1 started, 2 form cr-4p given, 3 form filled, 4 form
- * handed in, 5 mayor caught, 6 mayor chained, 7 form 7r4-5h (audit passed),
- * 8 signed form handed in (by-law changed), 9 duck given, 10 currents charted,
- * 11 complete. The real quest also keeps the eight form answers in varp 4957
- * ("current_affairs_form") and dialogue flags in bits 8-13 of varp 4956; this
- * plugin mirrors the stage varbit only and keeps answers/kit/chain state in
- * persisted "current-affairs:*" attributes.
+ * Stages (varbit 18282 "current_affairs", varp 4956 bits 0-6): the values follow
+ * RuneLite Quest Helper's pinned stage map (0, 5, 10, 15, 20, 25, 30, 35, 40),
+ * corroborated by the cache varbits: 5 started, 10 form cr-4p given/filled, 15
+ * form handed in and Arhein told about the mayor, 20 mayor caught, 25 mayor
+ * chained and audit started, 30 form 7r4-5h (audit passed), 35 signed form
+ * handed in (by-law changed), 40 duck given, 45 complete. Collecting the duck
+ * sets varbit 18602 (sailing_charting_current_duck_catherby_bay_complete) and
+ * leaves the stage at 40, so Arhein selects "after charting the current" from
+ * that flag, as Quest Helper's catherbyCharted requirement does. The eight form
+ * answers ride in varbits 18290-18297 (varp 4957) and the dialogue flags in 18285-18289 (varp
+ * 4956), as Quest Helper and the cache name them; the persisted
+ * "current-affairs:*" attributes remain the save-relog source of truth.
  *
  * Rewards (OSRS Wiki): 1 Quest point, 1,400 Sailing XP, 1,000 Fishing XP,
  * 25 sawmill coupon (oak plank); the player keeps the current duck and the Mayor
@@ -29,18 +32,20 @@
  *   with the page's own question texts and success/failure branches replayed
  *   through the NpcDialogues export QuestRuntime.startTranscript itself uses.
  *   On a wrong answer only the missed questions are re-asked, as the Wiki notes.
- * - There are no boat-bound sea currents here, so Track-current works anywhere
- *   and places the duck at the ripple west of the Obelisk of Water (2841,3422);
- *   Collecting it is the "charting" step.
- * - Arhein has no post-quest variant on the page, so a completed player replays
- *   "starting-off-talking-to-arhein-again". Catherine's and Harry's post-quest
- *   pages are used as-is.
+ * - Track-current requires being aboard the player's own boat and within 8 tiles
+ *   of the release ripple; collecting requires the stopped duck plus the boat
+ *   within 12 tiles of the stop. The duck is placed west of the Obelisk of Water
+ *   (2841,3422), and Collecting it is the "charting" step.
+ * - Arhein has no post-quest variant on the page. A completed player with the
+ *   duck keeps the post-quest page; without it, Quest Helper lets Arhein
+ *   replace the reward, so the recorded without-duck branch is reused.
+ *   Catherine's and Harry's post-quest pages are used as-is.
  * - The mayor's Consult/Feed item options use the Mayor of Catherby item page.
  * - The charcoal is required to use Form cr-4p's "Fill-in" but is not consumed;
  *   the "You need some charcoal..." refusal is the one line not from the wiki.
  */
 module.exports = function registerCurrentAffairsQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Item, Skill, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const {
     registerQuest,
     refreshQuestList,
@@ -55,6 +60,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
   const HARRY_NPC_ID = NpcIdentifiers.HARRY; // 3213
   const CATHERINE_NPC_ID = NpcIdentifiers.COUNCILLOR_CATHERINE; // 14952
   const MAYOR_NPC_ID = NpcIdentifiers.MAYOR_OF_CATHERBY; // 15050, chathead for Consult
+  const DUCK_MOVING_NPC_ID = NpcIdentifiers.CURRENT_DUCK; // 15152, released/followed duck
   const DUCK_NPC_ID = NpcIdentifiers.CURRENT_DUCK_2; // 15153, the collectable stopped duck
 
   // Items (cache ids; ItemIdentifiers comments).
@@ -76,18 +82,23 @@ module.exports = function registerCurrentAffairsQuest(api) {
 
   const VARP_CURRENT_AFFAIRS = 4956; // "current_affairs_main"
   const VARBIT_CURRENT_AFFAIRS_STAGE = 18282; // "current_affairs", varp 4956 bits 0-6
+  const VARBIT_FORM_GIVEN = 18285;
+  const VARBIT_KIT_PURCHASED = 18287;
+  const VARBIT_AUDIT_START = 18288;
+  const VARBIT_FORM2_GIVEN = 18289;
+  const VARBIT_FORM_Q1 = 18290; // q1..q8 are two bits each through 18297
+  const VARBIT_FORM_Q1_CORRECT = 18298;
+  const VARBIT_CATHERBY_CHARTED = 18602; // sailing_charting_current_duck_catherby_bay_complete
 
-  const STAGE_STARTED = 1;
-  const STAGE_FORM_GIVEN = 2;
-  const STAGE_FORM_FILLED = 3;
-  const STAGE_FORM_HANDED_IN = 4;
-  const STAGE_MAYOR_CAUGHT = 5;
-  const STAGE_MAYOR_CHAINED = 6;
-  const STAGE_FORM2_GIVEN = 7;
-  const STAGE_SIGNED_HANDED_IN = 8;
-  const STAGE_DUCK_GIVEN = 9;
-  const STAGE_CURRENTS_CHARTED = 10;
-  const STAGE_COMPLETE = 11;
+  const STAGE_STARTED = 5;
+  const STAGE_FORM_GIVEN = 10;
+  const STAGE_FORM_HANDED_IN = 15;
+  const STAGE_MAYOR_CAUGHT = 20;
+  const STAGE_MAYOR_CHAINED = 25;
+  const STAGE_FORM2_GIVEN = 30;
+  const STAGE_SIGNED_HANDED_IN = 35;
+  const STAGE_DUCK_GIVEN = 40;
+  const STAGE_COMPLETE = 45; // capture 3467: 40 -> 45 on the Arhein completion action
 
   const PAGE = "Current Affairs";
   const START_HOOK = "quest:current-affairs:start";
@@ -147,13 +158,24 @@ module.exports = function registerCurrentAffairsQuest(api) {
 
   // Councillor Catherine's desk (desk 58192 at 2824,3453, cabinet at 2827,3453).
   const CATHERINE_SPAWN = { x: 2825, y: 3454, z: 0 };
-  // The ripple just west of the Obelisk of Water (object 2151 at 2844,3422).
-  const RIPPLE_LOCATION = { x: 2841, y: 3422, z: 0 };
+  // Capture 3467: release at (2837,3414), then the duck walks this route and
+  // stops at (2802,3322) south-west of Entrana.
+  const DUCK_RELEASE_LOCATION = { x: 2837, y: 3414, z: 0 };
+  const DUCK_STOP_LOCATION = { x: 2802, y: 3322, z: 0 };
+  const DUCK_COLLECT_RANGE = 12; // the boat deck's cross-world reach to the stopped duck
+  const DUCK_ROUTE = [
+    [2837, 3402], [2831, 3396], [2823, 3396], [2818, 3391], [2809, 3391],
+    [2809, 3389], [2801, 3389], [2801, 3378], [2798, 3375], [2798, 3343],
+    [2802, 3339], [2802, 3322],
+  ];
+  const VARBIT_BOARDED_BOAT = 19136; // sailing_boarded_boat
 
   const FORM_ANSWERS_ATTRIBUTE = "current-affairs:form-answers";
   const KIT_BOUGHT_ATTRIBUTE = "current-affairs:kit-bought";
   const MAYOR_CHAINED_ATTRIBUTE = "current-affairs:mayor-chained";
   const MAYORS_ASKED_ATTRIBUTE = "current-affairs:mayors-asked";
+  const CURRENTS_CHARTED_ATTRIBUTE = "current-affairs:currents-charted";
+  const STAGE_VERSION_ATTRIBUTE = "current-affairs:stage-v2";
 
   let quest;
   let transcriptPage = null;
@@ -161,6 +183,8 @@ module.exports = function registerCurrentAffairsQuest(api) {
   const audits = new WeakMap(); // player -> { answers, asked, remaining }
   const catherineByPlayer = new WeakMap(); // player -> owner-only NPC
   const deployedDuckByPlayer = new WeakMap(); // player -> owner-only NPC
+  const duckJourneys = new WeakMap(); // player -> task key while the duck walks
+  const stoppedDucks = new WeakSet(); // the deployed duck finished its route
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const freeSlots = (player) => player.getInventory().getFreeSlots();
@@ -177,6 +201,14 @@ module.exports = function registerCurrentAffairsQuest(api) {
     return answers.every((value) => Number.isInteger(value)) ? answers : null;
   }
 
+  /** Mirrors the saved answers into the cache's form varbits (18290-18297, two bits each). */
+  function sendFormAnswerVarbits(player, answers = formAnswers(player)) {
+    for (let index = 0; index < QUESTION_COUNT; index++) {
+      const value = answers ? (answers[index] + 1) : 0; // varbit 0 = unanswered
+      player.getPacketSender().sendVarbit(VARBIT_FORM_Q1 + index, value);
+    }
+  }
+
   function isMayorChained(player) {
     return player.getAttribute(MAYOR_CHAINED_ATTRIBUTE) === true;
   }
@@ -185,14 +217,19 @@ module.exports = function registerCurrentAffairsQuest(api) {
     return Number(player.getAttribute(MAYORS_ASKED_ATTRIBUTE)) || 0;
   }
 
+  function currentsCharted(player) {
+    return player.getAttribute(CURRENTS_CHARTED_ATTRIBUTE) === true;
+  }
+
   function meetsRequirements(player) {
     const skills = player.getSkillManager();
     const pandemonium = { player, key: "pandemonium", complete: false };
     api.emitCustomEvent("quest:is-complete", pandemonium);
     return (
       skills.getMaxLevel(Skill.SAILING) >= SAILING_LEVEL &&
-      skills.getCurrentLevel(Skill.FISHING) >= FISHING_LEVEL &&
-      pandemonium.complete === true
+      skills.getMaxLevel(Skill.FISHING) >= FISHING_LEVEL &&
+      pandemonium.complete === true &&
+      freeSlots(player) >= 2 // Quest Helper: the form and the election kit need two slots
     );
   }
 
@@ -219,11 +256,17 @@ module.exports = function registerCurrentAffairsQuest(api) {
   function arheinVariant(player) {
     if (otherQuestOwnsArhein(player)) return null;
     const stage = quest.getStage(player);
-    if (quest.isComplete(player)) return "starting-off-talking-to-arhein-again"; // no post-quest variant
+    if (quest.isComplete(player)) {
+      // Quest Helper: a lost reward duck can be replaced by Arhein. Reuse the
+      // recorded without-duck branch; with the duck held keep the post-quest page.
+      return held(player, CURRENT_DUCK_ITEM_ID)
+        ? "starting-off-talking-to-arhein-again"
+        : "going-with-the-flow-talking-to-arhein-without-the-duck";
+    }
     if (stage === 0) return "starting-off-talking-to-arhein";
     if (stage < STAGE_FORM_HANDED_IN) return "starting-off-talking-to-arhein-again";
     if (stage === STAGE_FORM_HANDED_IN) return "long-live-the-mayor-talking-to-arhein";
-    if (stage === STAGE_MAYOR_CAUGHT) {
+    if (stage < STAGE_MAYOR_CHAINED) {
       return held(player, MAYOR_ITEM_ID)
         ? "long-live-the-mayor-talking-to-arhein-with-the-mayor"
         : "long-live-the-mayor-talking-to-arhein-again";
@@ -235,6 +278,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
     }
     if (stage === STAGE_SIGNED_HANDED_IN) return "going-with-the-flow-talking-to-arhein";
     if (stage === STAGE_DUCK_GIVEN) {
+      if (currentsCharted(player)) return "going-with-the-flow-talking-to-arhein-after-charting-the-current";
       return held(player, CURRENT_DUCK_ITEM_ID)
         ? "going-with-the-flow-talking-to-arhein-again"
         : "going-with-the-flow-talking-to-arhein-without-the-duck";
@@ -245,7 +289,8 @@ module.exports = function registerCurrentAffairsQuest(api) {
   function harryVariant(player) {
     const stage = quest.getStage(player);
     if (quest.isComplete(player)) return null; // falls back to Harry's own page
-    if (stage < STAGE_FORM_HANDED_IN) return null;
+    // Quest Helper's stage 20 is "go and see Harry about a replacement".
+    if (stage < STAGE_MAYOR_CAUGHT) return null;
     if (held(player, MAYOR_ITEM_ID)) return "long-live-the-mayor-catching-the-mayor-talking-to-harry-after-catching-the-mayor";
     if (held(player, MAYORAL_FISHBOWL_ITEM_ID)) {
       return "long-live-the-mayor-talking-to-harry-after-buying-the-mayoral-election-kit";
@@ -260,7 +305,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
     const stage = quest.getStage(player);
     if (stage === 0) return null; // standard Councillor Catherine dialogue
     if (stage === STAGE_STARTED) return "red-tape-talking-to-councillor-catherine";
-    if (stage <= STAGE_FORM_FILLED) {
+    if (stage <= STAGE_FORM_GIVEN) {
       return held(player, FORM_CR_4P_ITEM_ID)
         ? "red-tape-talking-to-councillor-catherine-again"
         : "red-tape-talking-to-councillor-catherine";
@@ -268,7 +313,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
     if (stage === STAGE_FORM_HANDED_IN) {
       return "red-tape-talking-to-councillor-catherine-after-handing-in-form-cr-4p";
     }
-    if (stage <= STAGE_MAYOR_CHAINED) {
+    if (stage < STAGE_FORM2_GIVEN) {
       if (!held(player, MAYOR_ITEM_ID)) return "long-live-the-mayor-talking-to-councillor-catherine-without-the-mayor";
       return "long-live-the-mayor-talking-to-councillor-catherine-with-the-mayor";
     }
@@ -456,6 +501,8 @@ module.exports = function registerCurrentAffairsQuest(api) {
   function startAudit(player) {
     const data = auditData();
     if (!data) return;
+    fillStates.delete(player);
+    player.getPacketSender().sendVarbit(VARBIT_AUDIT_START, 1);
     audits.set(player, {
       answers: [],
       asked: [],
@@ -474,11 +521,14 @@ module.exports = function registerCurrentAffairsQuest(api) {
     const asked = [...new Set(audit.asked)];
     // A stage-jumped player (no stored answers) is passed rather than looped.
     const wrong = expected ? asked.filter((index) => audit.answers[index] !== expected[index]) : [];
+    const packet = player.getPacketSender();
+    for (const index of asked) packet.sendVarbit(VARBIT_FORM_Q1_CORRECT + index, wrong.includes(index) ? 0 : 1);
     if (wrong.length === 0) {
-      // The form answers are only needed for the audit; the quiz is done with them.
-      player.setAttribute(FORM_ANSWERS_ATTRIBUTE, "");
       if (quest.getStage(player) < STAGE_FORM2_GIVEN) quest.setStage(player, STAGE_FORM2_GIVEN);
       playTranscriptSteps(player, auditData().passed);
+      // The form answers are only needed for the audit; the quiz is done with them.
+      player.setAttribute(FORM_ANSWERS_ATTRIBUTE, "");
+      sendFormAnswerVarbits(player, null);
       return;
     }
     audits.set(player, { answers: [], asked: [], remaining: wrong });
@@ -511,6 +561,14 @@ module.exports = function registerCurrentAffairsQuest(api) {
   /** Fills the wiki's "[X]" in Arhein's "mayor [X]" line. */
   function handleDialogueLine(event) {
     if (event.npcId !== ARHEIN_NPC_ID || typeof event.text !== "string") return;
+    // Quest Helper moves the stage from "hear about the mayor" to "find one" at
+    // the end of Arhein's explanation, before the player leaves the conversation.
+    if (
+      event.text === "I'll help you replace the fish." &&
+      quest.getStage(event.player) === STAGE_FORM_HANDED_IN
+    ) {
+      quest.setStage(event.player, STAGE_MAYOR_CAUGHT);
+    }
     if (!event.text.includes("[X]")) return;
     event.text = event.text.replace("[X]", String(MAYORS_BEFORE + mayorsAsked(event.player)));
   }
@@ -535,8 +593,10 @@ module.exports = function registerCurrentAffairsQuest(api) {
       if (held(player, FORM_CR_4P_ITEM_ID)) return;
       player.getInventory().adds(FORM_CR_4P_ITEM_ID, 1);
       player.setAttribute(FORM_ANSWERS_ATTRIBUTE, "");
+      sendFormAnswerVarbits(player, null);
+      player.getPacketSender().sendVarbit(VARBIT_FORM_GIVEN, 1);
       const stage = quest.getStage(player);
-      if (stage === STAGE_STARTED || stage === STAGE_FORM_FILLED) {
+      if (stage <= STAGE_FORM_GIVEN) {
         quest.setStage(player, STAGE_FORM_GIVEN);
       }
       return;
@@ -550,7 +610,9 @@ module.exports = function registerCurrentAffairsQuest(api) {
       const complete = state.answers.filter((value) => Number.isInteger(value)).length;
       if (complete < QUESTION_COUNT) return;
       player.setAttribute(FORM_ANSWERS_ATTRIBUTE, state.answers.join(""));
-      if (quest.getStage(player) < STAGE_FORM_FILLED) quest.setStage(player, STAGE_FORM_FILLED);
+      sendFormAnswerVarbits(player, state.answers);
+      // Filling the form is a sub-step of stage 10; Quest Helper keys it on the
+      // q1-q8 varbits rather than the stage, so the stage does not move here.
       return;
     }
     // "Councillor Catherine takes the completed form." The answers stay in the
@@ -569,6 +631,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
       player.getInventory().adds(MAYORAL_FISHBOWL_ITEM_ID, 1);
       player.getInventory().adds(TINY_NET_ITEM_ID, 1);
       player.setAttribute(KIT_BOUGHT_ATTRIBUTE, true);
+      player.getPacketSender().sendVarbit(VARBIT_KIT_PURCHASED, 1);
       return;
     }
     // "Harry gives you a tiny net and a mayoral fishbowl." (lost kit)
@@ -592,8 +655,9 @@ module.exports = function registerCurrentAffairsQuest(api) {
       ) {
         player.getInventory().adds(FORM_7R4_5H_ITEM_ID, 1);
       }
-      if (stepId === FORM2_GIVEN_ACTION_ID && quest.getStage(player) < STAGE_FORM2_GIVEN) {
-        quest.setStage(player, STAGE_FORM2_GIVEN);
+      if (stepId === FORM2_GIVEN_ACTION_ID) {
+        player.getPacketSender().sendVarbit(VARBIT_FORM2_GIVEN, 1);
+        if (quest.getStage(player) < STAGE_FORM2_GIVEN) quest.setStage(player, STAGE_FORM2_GIVEN);
       }
       return;
     }
@@ -620,7 +684,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
     if (stepId === COMPLETE_ACTION_ID) {
       event.handled = true;
       event.end = true;
-      if (!quest.isComplete(player) && quest.getStage(player) >= STAGE_CURRENTS_CHARTED) {
+      if (!quest.isComplete(player) && quest.getStage(player) >= STAGE_DUCK_GIVEN && currentsCharted(player)) {
         quest.complete(player);
       }
     }
@@ -723,7 +787,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
     event.handled = true;
     player.getInventory().deleteNumber(MAYORAL_FISHBOWL_ITEM_ID, 1);
     player.getInventory().adds(MAYOR_ITEM_ID, 1);
-    if (stage === STAGE_FORM_HANDED_IN) quest.setStage(player, STAGE_MAYOR_CAUGHT);
+    if (stage < STAGE_MAYOR_CAUGHT) quest.setStage(player, STAGE_MAYOR_CAUGHT);
     startTranscript(api, player, HARRY_NPC_ID, PAGE, CATCH_MAYOR_VARIANT);
   }
 
@@ -768,35 +832,145 @@ module.exports = function registerCurrentAffairsQuest(api) {
   // The current duck
   // ==========================================================================
 
+  /** True when the player is on their own boat (capture 3467: the duck climbs aboard). */
+  function aboard(player) {
+    const sender = player.getPacketSender?.();
+    if (sender?.getVarbit?.(VARBIT_BOARDED_BOAT) === 1) return true;
+    const state = player.getSailing?.();
+    const boat = state?.boats?.find?.((entry) => entry.slot === state.activeBoatSlot);
+    return boat?.location?.kind === "at_sea";
+  }
+
+  /** The boat's world tile at sea, or the player's tile when they are on foot. */
+  function worldTile(player) {
+    const state = player.getSailing?.();
+    const boat = state?.boats?.find?.((entry) => entry.slot === state.activeBoatSlot);
+    if (aboard(player) && boat?.location?.kind === "at_sea") {
+      return { x: Math.floor(boat.location.fineX / 128), y: Math.floor(boat.location.fineY / 128) };
+    }
+    const location = player.getLocation();
+    return { x: location.getX(), y: location.getY() };
+  }
+
+  function distanceFrom(tile, target) {
+    return Math.max(Math.abs(tile.x - target.x), Math.abs(tile.y - target.y));
+  }
+
+  function duckPath() {
+    const path = [];
+    let { x, y } = DUCK_RELEASE_LOCATION;
+    const push = (nextX, nextY) => {
+      while (x !== nextX || y !== nextY) {
+        x += Math.sign(nextX - x);
+        y += Math.sign(nextY - y);
+        path.push([x, y]);
+      }
+    };
+    for (const [nextX, nextY] of DUCK_ROUTE) push(nextX, nextY);
+    return path;
+  }
+
+  function startDuckJourney(player, duck) {
+    const key = {};
+    duckJourneys.set(player, key);
+    const path = duckPath();
+    let index = 0;
+    const step = () => {
+      if (duckJourneys.get(player) !== key || duck?.isRegistered?.() === false) return;
+      if (index >= path.length) {
+        duckJourneys.delete(player);
+        duck.moveTo(new Location(DUCK_STOP_LOCATION.x, DUCK_STOP_LOCATION.y, DUCK_STOP_LOCATION.z));
+        duck.setNpcTransformationId(DUCK_NPC_ID);
+        stoppedDucks.add(duck);
+        player.sendMessage("The current duck comes to a stop.");
+        return;
+      }
+      const [x, y] = path[index++];
+      duck.moveTo(new Location(x, y, DUCK_RELEASE_LOCATION.z));
+      api.core.TaskManager.submit(new api.core.CountdownTask(key, 1, step));
+    };
+    step();
+  }
+
   function trackCurrent(event) {
     const { player } = event;
     event.handled = true;
+    if (quest.isComplete(player) || quest.getStage(player) < STAGE_DUCK_GIVEN) return;
+    if (!aboard(player)) {
+      player.sendMessage("You need to be on your boat to release the duck.");
+      return;
+    }
+    if (distanceFrom(worldTile(player), DUCK_RELEASE_LOCATION) > 8) {
+      player.sendMessage("The duck should be released by the island east of Catherby.");
+      return;
+    }
     const existing = deployedDuckByPlayer.get(player);
-    if (existing?.isRegistered?.()) return;
-    deployedDuckByPlayer.delete(player);
+    if (existing?.isRegistered?.()) {
+      player.sendMessage("The duck is already tracking the currents.");
+      return;
+    }
     const duck = api.spawnNpc({
-      id: DUCK_NPC_ID,
-      x: RIPPLE_LOCATION.x,
-      y: RIPPLE_LOCATION.y,
-      z: RIPPLE_LOCATION.z,
+      id: DUCK_MOVING_NPC_ID,
+      x: DUCK_RELEASE_LOCATION.x,
+      y: DUCK_RELEASE_LOCATION.y,
+      z: DUCK_RELEASE_LOCATION.z,
       wanderRadius: 0,
       owner: player,
       ownerOnly: true,
     });
-    if (duck) deployedDuckByPlayer.set(player, duck);
+    if (duck) {
+      deployedDuckByPlayer.set(player, duck);
+      startDuckJourney(player, duck);
+    }
     startTranscript(api, player, ARHEIN_NPC_ID, PAGE, DUCK_DEPLOY_VARIANT);
+  }
+
+  /**
+   * Widen only the owned, stopped duck's actual Collect click while aboard. Every
+   * other NPC route keeps the normal range 1 (owner/LOS checks still run in core).
+   */
+  function widenDuckCollectRange(event) {
+    if (event.npcId !== DUCK_NPC_ID || !event.npc) return;
+    const { player } = event;
+    if (deployedDuckByPlayer.get(player) !== event.npc) return;
+    if (!stoppedDucks.has(event.npc)) return;
+    if (!aboard(player)) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_DUCK_GIVEN || quest.isComplete(player)) return;
+    const actions = event.definition?.getActions?.() ?? event.definition?.getInteractions?.();
+    if (String(actions?.[event.clickType - 1] ?? "").toLowerCase() !== "collect") return;
+    event.range = DUCK_COLLECT_RANGE;
   }
 
   function collectDuck(event) {
     const { player } = event;
     const duck = deployedDuckByPlayer.get(player);
     if (!duck || event.npc !== duck) return false;
+    if (!stoppedDucks.has(duck)) {
+      event.handled = true;
+      player.sendMessage("The duck is still tracking the currents.");
+      return true;
+    }
     event.handled = true;
+    if (!aboard(player)) {
+      player.sendMessage("The duck recognises your boat and climbs aboard. You need to be on your boat.");
+      return true;
+    }
+    if (distanceFrom(worldTile(player), DUCK_STOP_LOCATION) > DUCK_COLLECT_RANGE) {
+      player.sendMessage("You need to sail closer to the duck.");
+      return true;
+    }
     api.removeNpc(duck);
     deployedDuckByPlayer.delete(player);
+    stoppedDucks.delete(duck);
+    const journey = duckJourneys.get(player);
+    if (journey) api.core.TaskManager.cancelTasks?.(journey);
+    duckJourneys.delete(player);
     if (!held(player, CURRENT_DUCK_ITEM_ID)) player.getInventory().adds(CURRENT_DUCK_ITEM_ID, 1);
-    if (quest.getStage(player) === STAGE_DUCK_GIVEN) quest.setStage(player, STAGE_CURRENTS_CHARTED);
+    player.setAttribute(CURRENTS_CHARTED_ATTRIBUTE, true);
+    player.getPacketSender().sendVarbit(VARBIT_CATHERBY_CHARTED, 1);
     startTranscript(api, player, ARHEIN_NPC_ID, PAGE, DUCK_COLLECT_VARIANT);
+    return true;
   }
 
   // ==========================================================================
@@ -832,8 +1006,32 @@ module.exports = function registerCurrentAffairsQuest(api) {
     if (npc) catherineByPlayer.set(player, npc);
   }
 
+  /** One-time move from the old 1-11 ladder to the captured 5-45 ladder. */
+  function migrateStage(player) {
+    if (player.getAttribute(STAGE_VERSION_ATTRIBUTE) === true) return;
+    player.setAttribute(STAGE_VERSION_ATTRIBUTE, true);
+    const legacy = quest.getStage(player);
+    if (legacy === 0) return;
+    const mapped = new Map([[1, 5], [2, 10], [3, 10], [4, 15], [5, 20], [6, 25],
+      [7, 30], [8, 35], [9, 40], [10, 40], [11, 45]]).get(legacy);
+    if (mapped === undefined) return; // already a captured stage, leave it
+    if (legacy >= 10) {
+      player.setAttribute(CURRENTS_CHARTED_ATTRIBUTE, true);
+      player.getPacketSender().sendVarbit(VARBIT_CATHERBY_CHARTED, 1);
+    }
+    quest.setStage(player, mapped); // setStage only: no second reward on legacy completion
+  }
+
   function handleLogin({ player }) {
+    migrateStage(player);
     refreshQuestList(player);
+    sendFormAnswerVarbits(player);
+    const packet = player.getPacketSender();
+    packet.sendVarbit(VARBIT_FORM_GIVEN, quest.getStage(player) >= STAGE_FORM_GIVEN ? 1 : 0);
+    packet.sendVarbit(VARBIT_KIT_PURCHASED, player.getAttribute(KIT_BOUGHT_ATTRIBUTE) === true ? 1 : 0);
+    packet.sendVarbit(VARBIT_AUDIT_START, quest.getStage(player) >= STAGE_MAYOR_CHAINED ? 1 : 0);
+    packet.sendVarbit(VARBIT_FORM2_GIVEN, quest.getStage(player) >= STAGE_FORM2_GIVEN ? 1 : 0);
+    packet.sendVarbit(VARBIT_CATHERBY_CHARTED, currentsCharted(player) ? 1 : 0);
     ensureCatherine(player);
   }
 
@@ -844,6 +1042,10 @@ module.exports = function registerCurrentAffairsQuest(api) {
     catherineByPlayer.delete(player);
     const duck = deployedDuckByPlayer.get(player);
     if (duck) api.removeNpc(duck);
+    const journey = duckJourneys.get(player);
+    if (journey) api.core.TaskManager.cancelTasks?.(journey);
+    duckJourneys.delete(player);
+    if (duck) stoppedDucks.delete(duck);
     deployedDuckByPlayer.delete(player);
     fillStates.delete(player);
     audits.delete(player);
@@ -867,7 +1069,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
         "<col=ff0000>QUEST COMPLETE!</col>",
       ];
     }
-    if (stage >= STAGE_CURRENTS_CHARTED) {
+    if (stage >= STAGE_DUCK_GIVEN && currentsCharted(player)) {
       return [
         "<str>Arhein asked me to test whether his duck can track</str>",
         "<str>the Catherby currents.</str>",
@@ -879,8 +1081,8 @@ module.exports = function registerCurrentAffairsQuest(api) {
       return [
         "<str>Arhein gave me his duck and asked me to test it.</str>",
         "",
-        "I should release the <col=800000>current duck</col> at the ripple west of the",
-        "<col=800000>Obelisk of Water</col> and collect it once it stops.",
+        "I should release the <col=800000>current duck</col> by the island east of",
+        "<col=800000>Catherby</col> and collect it once it stops south-west of Entrana.",
       ];
     }
     if (stage >= STAGE_SIGNED_HANDED_IN) {
@@ -920,14 +1122,14 @@ module.exports = function registerCurrentAffairsQuest(api) {
         "I should speak to <col=800000>Arhein</col> about finding the mayor.",
       ];
     }
-    if (stage >= STAGE_FORM_FILLED) {
-      return [
-        "<str>I filled in form cr-4p.</str>",
-        "",
-        "I should return the completed <col=800000>form</col> to Councillor Catherine.",
-      ];
-    }
     if (stage >= STAGE_FORM_GIVEN) {
+      if (formAnswers(player)) {
+        return [
+          "<str>I filled in form cr-4p.</str>",
+          "",
+          "I should return the completed <col=800000>form</col> to Councillor Catherine.",
+        ];
+      }
       return [
         "<str>Councillor Catherine gave me form cr-4p to register as a sailor.</str>",
         "",
@@ -957,13 +1159,18 @@ module.exports = function registerCurrentAffairsQuest(api) {
     const skills = player.getSkillManager();
     skills.addExperiences(Skill.SAILING, 1400);
     skills.addExperiences(Skill.FISHING, 1000);
-    if (freeSlots(player) >= 1) player.getInventory().adds(SAWMILL_COUPON_ITEM_ID, 24);
+    // QuestRuntime adds the first coupon. The stack is stackable, so engine
+    // overflow can merge into an existing stack or drop the extra 24 at the
+    // reward tile instead of silently losing them.
+    player.getInventory().forceAdd(player, new Item(SAWMILL_COUPON_ITEM_ID, 24));
   }
 
   api.persistAttribute(FORM_ANSWERS_ATTRIBUTE);
   api.persistAttribute(KIT_BOUGHT_ATTRIBUTE);
   api.persistAttribute(MAYOR_CHAINED_ATTRIBUTE);
   api.persistAttribute(MAYORS_ASKED_ATTRIBUTE);
+  api.persistAttribute(CURRENTS_CHARTED_ATTRIBUTE, false);
+  api.persistAttribute(STAGE_VERSION_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
     key: "current_affairs",
@@ -978,8 +1185,8 @@ module.exports = function registerCurrentAffairsQuest(api) {
       { skillId: Skill.FISHING.getIndex(), amount: 1000, label: "Fishing" },
     ],
     rewardItemId: SAWMILL_COUPON_ITEM_ID,
-    rewardItemLabel: "25 x Sawmill coupon (oak plank)",
-    otherRewards: ["The current duck", "The Mayor of Catherby", "Access to sea charting currents"],
+    rewardItemLabel: "25 Sawmill coupons (oak)",
+    otherRewards: ["Access to sea charting currents", "The current duck", "The Mayor of Catherby"],
     buildJournal,
     onReward: grantReward,
   });
@@ -1000,6 +1207,7 @@ module.exports = function registerCurrentAffairsQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onObjectRoute(routeAquariumClick);
   api.onNpcInteraction("Councillor Catherine", { "Talk-to": catherineTalkTo });
+  api.onNpcRoute(widenDuckCollectRange);
   api.onNpcInteraction("Current duck", { Collect: collectDuck });
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);

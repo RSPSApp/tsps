@@ -74,6 +74,8 @@ export class SceneRaycaster {
     private interactLocModelLoader?: LocModelLoader;
     private resolvedLocTypeCache: Map<number, LocType> = new Map();
     private locModelMeshCache: Map<string, LocModelMesh> = new Map();
+    /** Projected vertices for one model test; grows to the largest model, reused per test. */
+    private projected = new Float32Array(0);
     worldEntityTransformProvider?: (map: WebGLMapSquare) => Float32Array | undefined;
     /** Main-world fine position of a point in a boat's deck scene (see worldEntityMotion). */
     deckToWorldProvider?: (
@@ -135,7 +137,7 @@ export class SceneRaycaster {
 
     /** The draw distance in tiles, the GPU plugin's while it is on. */
     private drawDistance(): number {
-        return this.osrsClient.gpuPlugin?.settings()?.drawDistance ?? this.osrsClient.renderDistance;
+        return this.osrsClient.clientPlugins.gpuSettings()?.drawDistance ?? this.osrsClient.renderDistance;
     }
 
     private getControlledPlayerWorldViewId(): number {
@@ -417,47 +419,51 @@ export class SceneRaycaster {
         const exitPoint = vec3.create();
         ray.at(tEffectiveExit, exitPoint);
 
-        // Determine the tile bounding range from the 3D ray path
-        // This works correctly for all camera angles including top-down
-        const minTileX = Math.max(baseX, Math.floor(Math.min(entryPoint[0], exitPoint[0])));
-        const maxTileX = Math.min(mapMaxTileX, Math.floor(Math.max(entryPoint[0], exitPoint[0])));
-        const minTileY = Math.max(baseY, Math.floor(Math.min(entryPoint[2], exitPoint[2])));
-        const maxTileY = Math.min(mapMaxTileY, Math.floor(Math.max(entryPoint[2], exitPoint[2])));
+        // Walk only the tiles the ray's ground projection crosses (Amanatides-Woo DDA). Tile
+        // columns are effectively unbounded vertically, so these are exactly the tiles whose
+        // column the ray enters; the rectangle around the segment can be thousands of tiles.
+        const x0 = entryPoint[0];
+        const z0 = entryPoint[2];
+        const dx = exitPoint[0] - x0;
+        const dz = exitPoint[2] - z0;
+        let tileX = Math.min(mapMaxTileX, Math.max(baseX, Math.floor(x0)));
+        let tileY = Math.min(mapMaxTileY, Math.max(baseY, Math.floor(z0)));
+        const endTileX = Math.min(mapMaxTileX, Math.max(baseX, Math.floor(exitPoint[0])));
+        const endTileY = Math.min(mapMaxTileY, Math.max(baseY, Math.floor(exitPoint[2])));
+        const stepX = dx > 0 ? 1 : -1;
+        const stepY = dz > 0 ? 1 : -1;
+        // Segment fraction at which the walk crosses the next tile edge, and per tile.
+        const deltaX = dx !== 0 ? Math.abs(1 / dx) : Infinity;
+        const deltaY = dz !== 0 ? Math.abs(1 / dz) : Infinity;
+        let nextX = dx !== 0 ? (stepX > 0 ? tileX + 1 - x0 : x0 - tileX) * deltaX : Infinity;
+        let nextY = dz !== 0 ? (stepY > 0 ? tileY + 1 - z0 : z0 - tileY) * deltaY : Infinity;
 
-        // Track seen LOCs to avoid duplicates from multi-tile objects
-        const seenLocs = new Set<string>();
+        // Neighbouring tiles' locs are searched once per raycast, not once per ray tile.
+        const visitedAnchors = new Set<number>();
         const resolvedLocTypes = new Map<number, LocType>();
 
-        // Vertical bounds for tile column intersection test
-        // Use generous bounds to catch all objects at any height
-        const columnMinY = -500;
-        const columnMaxY = 500;
-
-        // Check each tile in the bounding range with 3D ray-box intersection
-        // This is accurate for all camera angles including steep/top-down views
-        for (let tileX = minTileX; tileX <= maxTileX; tileX++) {
-            for (let tileY = minTileY; tileY <= maxTileY; tileY++) {
-                // 3D ray-box test against the tile's vertical column
-                const boxHit = rayIntersectsBox(
-                    ray,
-                    [tileX, columnMinY, tileY],
-                    [tileX + 1, columnMaxY, tileY + 1],
-                );
-                if (!boxHit) continue;
-                if (boxHit.tMin > maxDistance) continue;
-
-                this.collectTileHits(
-                    map,
-                    ray,
-                    tileX,
-                    tileY,
-                    maxDistance,
-                    hits,
-                    seenLocs,
-                    resolvedLocTypes,
-                    basePlane,
-                );
+        const maxSteps = (mapTileSpan * 2 + 2) | 0;
+        for (let step = 0; step <= maxSteps; step++) {
+            this.collectTileHits(
+                map,
+                ray,
+                tileX,
+                tileY,
+                maxDistance,
+                hits,
+                visitedAnchors,
+                resolvedLocTypes,
+                basePlane,
+            );
+            if (tileX === endTileX && tileY === endTileY) break;
+            if (nextX < nextY) {
+                tileX += stepX;
+                nextX += deltaX;
+            } else {
+                tileY += stepY;
+                nextY += deltaY;
             }
+            if (tileX < baseX || tileX > mapMaxTileX || tileY < baseY || tileY > mapMaxTileY) break;
         }
     }
 
@@ -468,7 +474,7 @@ export class SceneRaycaster {
         worldTileY: number,
         maxDistance: number,
         hits: SceneRaycastHit[],
-        seenLocs?: Set<string>,
+        visitedAnchors?: Set<number>,
         resolvedLocTypes?: Map<number, LocType>,
         basePlane?: number,
     ): void {
@@ -538,6 +544,7 @@ export class SceneRaycaster {
         // Search range must cover both multi-tile footprints (negative offsets) AND
         // locs whose models extend beyond their footprint in any direction (e.g. sails).
         const LOC_SEARCH_RANGE = 6;
+        const mapTileSpan = map.getLocalTileSpan();
         const startPlane = typeof interactionLevel === "number" ? interactionLevel : 0;
         const endPlane =
             typeof interactionLevel === "number" ? interactionLevel + 1 : Scene.MAX_LEVELS;
@@ -550,10 +557,16 @@ export class SceneRaycaster {
                     if (
                         anchorLocalX < 0 ||
                         anchorLocalY < 0 ||
-                        anchorLocalX >= map.getLocalTileSpan() ||
-                        anchorLocalY >= map.getLocalTileSpan()
+                        anchorLocalX >= mapTileSpan ||
+                        anchorLocalY >= mapTileSpan
                     ) {
                         continue;
+                    }
+
+                    if (visitedAnchors) {
+                        const key = (level * mapTileSpan + anchorLocalX) * mapTileSpan + anchorLocalY;
+                        if (visitedAnchors.has(key)) continue;
+                        visitedAnchors.add(key);
                     }
 
                     const locIds = map.getLocIdsAtLocal(level, anchorLocalX, anchorLocalY);
@@ -592,12 +605,6 @@ export class SceneRaycaster {
                             const tmp = sizeX;
                             sizeX = sizeY;
                             sizeY = tmp;
-                        }
-
-                        if (seenLocs) {
-                            const key = `${locId}|${level}|${anchorWorldX}|${anchorWorldY}|${packedTypeRot}`;
-                            if (seenLocs.has(key)) continue;
-                            seenLocs.add(key);
                         }
 
                         const centerX = anchorWorldX + sizeX * 0.5;
@@ -1045,7 +1052,7 @@ export class SceneRaycaster {
 
         const frame = this.mouseFrame(ray);
         const vertexCount = mesh.verticesX.length;
-        const proj = new Float32Array(vertexCount * 3);
+        const proj = this.projectionBuffer(vertexCount);
         for (let v = 0; v < vertexCount; v++) {
             projectToMouseFrame(
                 frame,
@@ -1120,7 +1127,7 @@ export class SceneRaycaster {
         if (boxOnly) return tBox;
 
         const frame = this.mouseFrame(ray);
-        const proj = new Float32Array(triangles.length * 3);
+        const proj = this.projectionBuffer(triangles.length);
         for (let i = 0; i < triangles.length; i++) {
             const p = triangles[i];
             projectToMouseFrame(frame, p[0], p[1], p[2], proj, i);
@@ -1131,6 +1138,13 @@ export class SceneRaycaster {
             if (t !== undefined && t <= maxDistance && t < bestT) bestT = t;
         }
         return Number.isFinite(bestT) ? bestT : undefined;
+    }
+
+    private projectionBuffer(vertexCount: number): Float32Array {
+        if (this.projected.length < vertexCount * 3) {
+            this.projected = new Float32Array(vertexCount * 3);
+        }
+        return this.projected;
     }
 
     /**

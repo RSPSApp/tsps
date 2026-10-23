@@ -93,12 +93,18 @@ export function updateFollowCamera(
         px = Math.round(projected.x);
         py = Math.round(projected.y);
     }
+    // A camera target (a spectator's) stands in for the player.
+    const cameraTarget = osrsClient.getCameraTargetPosition();
+    if (cameraTarget) {
+        px = cameraTarget.x;
+        py = cameraTarget.y;
+    }
     const playerX = px / 128;
     const playerZ = py / 128;
 
     renderer.playerPosUni[0] = playerX;
     renderer.playerPosUni[1] = playerZ;
-    const basePlane = playerEcs.getLevel(playerEcsIndex) | 0;
+    const basePlane = cameraTarget ? cameraTarget.level : playerEcs.getLevel(playerEcsIndex) | 0;
     const playerHeightSample = sampleBridgeHeightForWorldTile(
         renderer.mapManager,
         playerX,
@@ -174,7 +180,7 @@ export function updateFollowCamera(
     // drives the view, or in ortho) this stays exactly as before: raw pitch override, raw yaw
     // and an unscaled follow distance.
     const hdCameraFeel =
-        osrsClient.hdPlugin?.isEnabled() === true &&
+        osrsClient.clientPlugins.hdEnabled() === true &&
         camera.getViewPitchOverride() === undefined &&
         camera.projectionType === ProjectionType.PERSPECTIVE;
     const dtSec = Math.max(0, deltaTimeMs) / 1000;

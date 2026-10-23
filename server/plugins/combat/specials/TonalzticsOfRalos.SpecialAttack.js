@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
-module.exports = function registerTonalzticsOfRalosSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, PendingHit, RangedCombatMethod, Skill, WeaponProfiles } = api.core;
+function buildSpecial(core) {
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, PendingHit, RangedCombatMethod, Skill, WeaponProfiles } = core;
 
   const DRAIN = 50;
   const SPECIAL_ANIMATION = new Animation(10914);
@@ -28,11 +28,7 @@ module.exports = function registerTonalzticsOfRalosSpecialAttack(api) {
         hit.getTarget().performGraphic(IMPACT_GRAPHIC);
       }
       const target = hit.getTarget();
-      if (!target.isPlayer()) {
-        // TODO: NPC combat-stat drain is not exposed by our core NPC state.
-        return;
-      }
-      const skillManager = target.getAsPlayer().getSkillManager();
+      const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
       const drainAmount = Math.floor(skillManager.getCurrentLevel(Skill.MAGIC) * DEFENCE_DRAIN_MAGIC_FRACTION);
       if (drainAmount <= 0) {
         return;
@@ -47,7 +43,7 @@ module.exports = function registerTonalzticsOfRalosSpecialAttack(api) {
     }
   }
 
-  api.registerCombatSpecial({
+  return {
     id: "tonalztics_of_ralos",
     itemIds: [ItemIdentifiers.TONALZTICS_OF_RALOS],
     drainAmount: DRAIN,
@@ -55,5 +51,9 @@ module.exports = function registerTonalzticsOfRalosSpecialAttack(api) {
     accuracyMultiplier: 1,
     traits: { hitCount: HIT_COUNT },
     combatMethod: new TonalzticsOfRalosCombatMethod(),
-  });
+  };
+}
+
+module.exports = function registerTonalzticsOfRalosSpecialAttack(api) {
+  api.registerCombatSpecial(buildSpecial(api.core));
 };

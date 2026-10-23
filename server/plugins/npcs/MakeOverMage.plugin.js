@@ -43,6 +43,7 @@ function openMakeover({ player }) {
 
 module.exports = {
   name: "MakeOverMage",
+  _test: { canOpenMakeover },
   register(api) {
     const CombatFactory = api.getCombatFactory();
     // A new account designs its character first, as in OSRS (there is no welcome screen for it).

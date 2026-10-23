@@ -3,8 +3,9 @@ module.exports = function registerAncientGodswordSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, HitDamage, HitMask, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sounds, Task, TaskManager } = api.core;
 
   const DRAIN = 50;
+  const SLASH_DEFENCE_BONUS_INDEX = 1;
   const ANIMATION = new Animation(9171);
-  const GRAPHIC = new Graphic(1211, Priority.HIGH);
+  const GRAPHIC = new Graphic(1996, Priority.HIGH);
   const BLOOD_SACRIFICE_DELAY_TICKS = 8;
   const BLOOD_SACRIFICE_ESCAPE_DISTANCE = 5;
   const BLOOD_SACRIFICE_DAMAGE = 25;
@@ -55,16 +56,16 @@ module.exports = function registerAncientGodswordSpecialAttack(api) {
           target.sendMessage("You have been sacrificed.");
           target.performGraphic(new Graphic(377));
 
-          // TODO: NPC max-hitpoints lookup for the 15%-of-base cap on NPCs.
-          let heal = BLOOD_SACRIFICE_DAMAGE;
-          if (target.isPlayer()) {
-            const baseHitpoints = target.getAsPlayer().getSkillManager().getMaxLevel(Skill.HITPOINTS);
-            heal = Math.min(
-              BLOOD_SACRIFICE_DAMAGE,
-              BLOOD_SACRIFICE_PLAYER_HEAL_CAP,
-              Math.floor(baseHitpoints * BLOOD_SACRIFICE_HEAL_FRACTION)
-            );
-          }
+          // 15% of the target's max Hitpoints, capped at 15 against players and 25 against NPCs.
+          const player = target.isPlayer();
+          const baseHitpoints = player
+            ? target.getAsPlayer().getSkillManager().getMaxLevel(Skill.HITPOINTS)
+            : target.getAsNpc().getMaxHitpoints();
+          const heal = Math.min(
+            BLOOD_SACRIFICE_DAMAGE,
+            player ? BLOOD_SACRIFICE_PLAYER_HEAL_CAP : BLOOD_SACRIFICE_NPC_HEAL_CAP,
+            Math.floor(baseHitpoints * BLOOD_SACRIFICE_HEAL_FRACTION)
+          );
           if (heal > 0) {
             attacker.heal(heal);
           }
@@ -86,6 +87,7 @@ module.exports = function registerAncientGodswordSpecialAttack(api) {
       hitCount: 1,
       accuracyMultiplier: 2,
       damageMultiplier: 1.1,
+      meleeDefenceBonusIndex: SLASH_DEFENCE_BONUS_INDEX,
     },
     combatMethod: new AncientGodswordCombatMethod(),
   });

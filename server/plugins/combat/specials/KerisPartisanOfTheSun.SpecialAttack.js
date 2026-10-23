@@ -1,5 +1,4 @@
-// TODO: ported from xrsps-typescript; untested.
-module.exports = function registerKerisPartisanOfTheSunSpecialAttack(api) {
+function buildSpecial(api) {
   const { Animation, CombatMethod, CombatSpecial, CombatType, Graphic, ItemIdentifiers, Skill } = api.core;
 
   const DRAIN = 75;
@@ -22,6 +21,12 @@ module.exports = function registerKerisPartisanOfTheSunSpecialAttack(api) {
         return;
       }
       const player = character.getAsPlayer();
+      const query = { player, inside: false };
+      api.emitCustomEvent("toa:in-tombs", query);
+      if (!query.inside) {
+        player.sendMessage("This special attack can only be used within the Tombs of Amascut.");
+        return;
+      }
       const skillManager = player.getSkillManager();
       const prayer = skillManager.getCurrentLevel(Skill.PRAYER);
       if (prayer < PRAYER_COST) {
@@ -60,7 +65,7 @@ module.exports = function registerKerisPartisanOfTheSunSpecialAttack(api) {
     }
   }
 
-  api.registerCombatSpecial({
+  return {
     id: "keris_partisan_of_the_sun",
     itemIds: [
       ItemIdentifiers.KERIS_PARTISAN_OF_THE_SUN,
@@ -71,5 +76,9 @@ module.exports = function registerKerisPartisanOfTheSunSpecialAttack(api) {
     accuracyMultiplier: 1,
     traits: { skipAttack: true },
     combatMethod: new KerisPartisanOfTheSunCombatMethod(),
-  });
+  };
+}
+
+module.exports = function registerKerisPartisanOfTheSunSpecialAttack(api) {
+  api.registerCombatSpecial(buildSpecial(api));
 };

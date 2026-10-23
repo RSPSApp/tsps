@@ -61,7 +61,6 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
   const VARIANT_ORANGE_GENERALS = "showing-the-generals-different-goblin-armours-orange-painted-goblin-armour";
   const VARIANT_BLUE_GENERALS = "showing-the-generals-different-goblin-armours-blue-painted-goblin-armour";
   const VARIANT_BROWN_GENERALS = "showing-the-generals-different-goblin-armours-brown-painted-goblin-armour";
-  const VARIANT_DONE_GENERALS = "starting-off-talking-to-the-generals-again";
   const VARIANT_GRUBFOOT_STANDARD = "standard-dialogue-after-goblin-diplomacy";
   const VARIANT_BLUE_GRUBFOOT = "showing-the-generals-different-goblin-armours-blue-painted-goblin-armour-talking-to-grubfoot";
   const VARIANT_ORANGE_GRUBFOOT = "showing-the-generals-different-goblin-armours-orange-painted-goblin-armour-talking-to-grubfoot";
@@ -143,7 +142,9 @@ module.exports = function registerGoblinDiplomacyQuest(api) {
       if (stage === STAGE_BLUE_REJECTED) {
         return page(VARIANT_BROWN_GENERALS);
       }
-      return page(VARIANT_DONE_GENERALS);
+      // The Wiki's "Talking to the Generals again" is {{tact|above}} - the same
+      // conversation as the start; the dump's alias is an unresolved jump.
+      return page(VARIANT_START_GENERALS);
     }
     if (GRUBFOOT_NPC_IDS.includes(npcId)) {
       if (stage >= STAGE_BROWN_ACCEPTED) {

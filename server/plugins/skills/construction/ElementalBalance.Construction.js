@@ -97,7 +97,7 @@ function castOnBalance(player, npc, spell) {
   for (const item of runes) player.getInventory().delete(item.getId(), item.getAmount());
   player.getMovementQueue().reset();
   player.setPositionToFace(npc.getLocation());
-  const animation = spell.castAnimation();
+  const animation = spell.castAnimationFor(player);
   if (animation) player.performAnimation(animation);
   const graphic = spell.startGraphic();
   if (graphic) player.performGraphic(graphic);

@@ -1,3 +1,5 @@
+import type { OverlayUpdateArgs } from "../ui/devoverlay/Overlay";
+
 /**
  * Server-driven OSRS hint arrow state.
  *
@@ -67,4 +69,70 @@ export function clearHintArrow(): void {
 /** Native blink: visible while `gameCycle % 20 < 10`, with gameCycle ticking every 20ms. */
 export function isHintArrowBlinkOn(): boolean {
     return Math.floor(performance.now() / 20) % 20 < 10;
+}
+
+type NpcOverlayAnchorResolver = (
+    ecsId: number,
+    baseWorldX: number,
+    baseWorldZ: number,
+    npcTypeId: number,
+) => { worldX: number; worldZ: number; logicalHeightTiles: number };
+
+/**
+ * Where the NPC (type 1) or tile (type 2) hint arrow's anchor lands on screen, shared by the
+ * WebGL TutorialHintOverlay and the WebGPU HintArrowLayer. Undefined when there is nothing to draw.
+ */
+export function hintArrowScreenPoint(
+    args: OverlayUpdateArgs,
+    client: any,
+    resolveNpcOverlayAnchor: NpcOverlayAnchorResolver | undefined,
+): [number, number] | undefined {
+    const helpers = args.helpers;
+    if (!helpers?.worldToScreen) return undefined;
+    let worldX: number;
+    let worldY: number;
+    let plane: number;
+    let heightOffsetTiles: number;
+    if (hintArrow.type === 1) {
+        // Follow the rendered (interpolated) NPC like the native head icons do.
+        const npcEcs = client?.npcEcs;
+        const ecsId = npcEcs?.getEcsIdForServer?.(hintArrow.npcId);
+        if (ecsId === undefined || ecsId < 0) return undefined;
+        const mid = npcEcs.getMapId(ecsId) | 0;
+        const typeId = npcEcs.getNpcTypeId(ecsId) | 0;
+        // Native: worldToScreenActor(npc, getLogicalHeightWithAnimationOffset() + 15).
+        const anchor = resolveNpcOverlayAnchor?.(
+            ecsId,
+            ((mid >> 8) & 0xff) * 64 + (npcEcs.getX(ecsId) | 0) / 128,
+            (mid & 0xff) * 64 + (npcEcs.getY(ecsId) | 0) / 128,
+            typeId,
+        );
+        if (!anchor) return undefined;
+        worldX = anchor.worldX;
+        worldY = anchor.worldZ;
+        plane = npcEcs.getLevel(ecsId) | 0;
+        heightOffsetTiles = anchor.logicalHeightTiles + 15 / 128;
+    } else if (hintArrow.type === 2) {
+        // Tile hints carry their own floor: another floor's target is not drawn here.
+        const localPlane = args.state.playerLevel ?? 0;
+        if ((hintArrow.plane | 0) !== localPlane) return undefined;
+        // As the OSRS client: the tile's centre or edge, `height * 2` world units up.
+        const [subX, subY] = hintArrowTileOffset(hintArrow.position);
+        worldX = hintArrow.x + subX / 128;
+        worldY = hintArrow.y + subY / 128;
+        plane = localPlane;
+        heightOffsetTiles = ((hintArrow.height | 0) * 2) / 128;
+    } else {
+        // Actor hints (type 3) are overhead head icons, drawn with the other head icons.
+        return undefined;
+    }
+
+    // Scene Y points down, so "up" is ground minus the offset.
+    const ground = helpers.getMinTileHeightInRadius?.(worldX, worldY, plane, 0) ?? 0;
+    const screen = helpers.worldToScreen(worldX, ground - heightOffsetTiles, worldY) as
+        | number[]
+        | Float32Array
+        | undefined;
+    if (!screen || typeof screen[0] !== "number" || typeof screen[1] !== "number") return undefined;
+    return [screen[0], screen[1]];
 }

@@ -365,7 +365,6 @@ export class WebGLMapSquare {
     // Reusable buffer for getLocTypeRotsAtLocal to avoid per-call allocations
     private locTypeRotsAtLocalBuffer: number[] = [];
     /** Static loc ambient sound emitters; built lazily by the renderer, cleared on scene data refresh. */
-    ambientSoundEmitters?: { locId: number; x: number; y: number; level: number; rot: number }[];
     private loc?: DoorGeometryResources;
     private locDrawRangePlanes?: NonNullable<DoorGeometryResources["planes"]>;
     private door?: DoorGeometryResources;
@@ -1843,7 +1842,6 @@ export class WebGLMapSquare {
             this.locTypeRotsAtLocalBuffer.length = 0;
             for (const listener of this.locDataChangedListeners) listener();
         }
-        this.ambientSoundEmitters = undefined;
     }
 
     refreshLocGeometry(

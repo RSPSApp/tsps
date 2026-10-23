@@ -893,11 +893,10 @@ module.exports = function registerOneSmallFavourQuest(api) {
     }
 
     if (AGGIE_IDS.has(npcId)) {
+      // Only Aggie's ask and final turn-in steps are OSF's; between them QH sends the
+      // player to Jimmy/H.A.M., so other quests keep their own Aggie conversations.
       if (stage === STAGE_BRIAN) return "the-various-favours-are-asked-asking-aggie-to-be-a-character-witness";
       if (stage === STAGE_JIMMY) return "heading-back-to-complete-the-favours-aggie";
-      if (stage >= STAGE_AGGIE && stage < STAGE_JIMMY) {
-        return "the-various-favours-are-asked-asking-aggie-to-be-a-character-witness-returning-to-aggie-without-completing-the-favour";
-      }
       return null;
     }
 
@@ -911,10 +910,10 @@ module.exports = function registerOneSmallFavourQuest(api) {
     }
 
     if (npcId === FRED) {
-      if (stage < STAGE_JOHANHUS) return null;
-      if (stage >= STAGE_JIMMY) return "heading-back-to-complete-the-favours-fred";
+      // Fred owns only OSF's chicken request. After that QH sends the player to Seth,
+      // and a completed OSF must not keep Fred from Sheep Shearer.
       if (stage === STAGE_JOHANHUS) return "the-various-favours-are-asked-asking-fred-for-chickens";
-      return "the-various-favours-are-asked-asking-fred-for-chickens-returning-to-fred-before-speaking-to-seth";
+      return null;
     }
 
     if (npcId === SETH) {

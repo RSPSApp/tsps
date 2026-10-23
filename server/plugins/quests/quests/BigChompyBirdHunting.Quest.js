@@ -154,50 +154,6 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     if (quest.getStage(player) < STAGE_STARTED) quest.setStage(player, STAGE_STARTED);
   }
 
-  /** Item-on-item fletching of ogre arrows, ported from xrsps. */
-  function handleItemOnItem(event) {
-    const { player } = event;
-    const ids = [event.usedItemId, event.usedWithItemId];
-    if (quest.getStage(player) < STAGE_STARTED) return;
-    if (ids.includes(ItemIdentifiers.KNIFE) && ids.includes(ItemIdentifiers.ACHEY_TREE_LOGS)) {
-      if (has(player, ItemIdentifiers.ACHEY_TREE_LOGS)) {
-        player.getInventory().deleteNumber(ItemIdentifiers.ACHEY_TREE_LOGS, 1);
-        player.getInventory().adds(ItemIdentifiers.OGRE_ARROW_SHAFT, 6);
-        player.sendMessage("You cut the achey logs into six ogre arrow shafts.");
-        event.handled = true;
-      }
-      return;
-    }
-    if (ids.includes(ItemIdentifiers.CHISEL) && ids.includes(ItemIdentifiers.WOLF_BONES)) {
-      if (has(player, ItemIdentifiers.WOLF_BONES)) {
-        player.getInventory().deleteNumber(ItemIdentifiers.WOLF_BONES, 1);
-        player.getInventory().adds(ItemIdentifiers.WOLFBONE_ARROWTIPS, 6);
-        event.handled = true;
-      }
-      return;
-    }
-    if (ids.includes(ItemIdentifiers.FEATHER) && ids.includes(ItemIdentifiers.OGRE_ARROW_SHAFT)) {
-      const amount = Math.min(player.getInventory().getAmount(ItemIdentifiers.OGRE_ARROW_SHAFT), Math.floor(player.getInventory().getAmount(ItemIdentifiers.FEATHER) / 4), 6);
-      if (amount >= 1) {
-        player.getInventory().deleteNumber(ItemIdentifiers.FEATHER, amount * 4);
-        player.getInventory().deleteNumber(ItemIdentifiers.OGRE_ARROW_SHAFT, amount);
-        player.getInventory().adds(ItemIdentifiers.FLIGHTED_OGRE_ARROW, amount);
-        event.handled = true;
-      }
-      return;
-    }
-    if (ids.includes(ItemIdentifiers.WOLFBONE_ARROWTIPS) && ids.includes(ItemIdentifiers.FLIGHTED_OGRE_ARROW)) {
-      const amount = Math.min(player.getInventory().getAmount(ItemIdentifiers.WOLFBONE_ARROWTIPS), player.getInventory().getAmount(ItemIdentifiers.FLIGHTED_OGRE_ARROW), 6);
-      if (amount >= 1) {
-        player.getInventory().deleteNumber(ItemIdentifiers.WOLFBONE_ARROWTIPS, amount);
-        player.getInventory().deleteNumber(ItemIdentifiers.FLIGHTED_OGRE_ARROW, amount);
-        player.getInventory().adds(OGRE_ARROW, amount);
-        player.sendMessage(`You make ${amount} ogre arrow${amount === 1 ? "" : "s"}.`);
-        event.handled = true;
-      }
-    }
-  }
-
   /** Bellows on swamp bubbles, and a bloated toad on the ground. */
   function handleItemOnObject(event) {
     const { player, objectId, itemId } = event;
@@ -274,7 +230,6 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
-  api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject);
   api.onItemAction(handleItemAction);
   api.onPlayerLogin(handleLogin);

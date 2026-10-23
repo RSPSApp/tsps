@@ -40,10 +40,31 @@ export function getWorldClickBlockingWidgetAtPoint(
     if (!widgetManager || widgetManager.rootInterface === -1) {
         return null;
     }
+    const hits = collectInputWidgetsAtPoint(widgetManager, px, py);
+    if (hits.length === 0) {
+        return null;
+    }
+    return findBlockingWidgetInHits(hits, {
+        isInputCaptureWidget: (uid) => isInputCaptureWidget(widgetManager, uid),
+        getWidgetFlags: (widget) => widgetManager?.getWidgetFlags(widget) ?? 0,
+        getWidgetByUid: (uid) => widgetManager?.getWidgetByUid(uid),
+    });
+}
 
+function isInputCaptureWidget(widgetManager: WidgetManager, uid: number): boolean {
+    const parent = widgetManager.interfaceParents.get(uid);
+    return !!parent && (parent.type | 0) === 0;
+}
+
+/** Widgets under a point across every input root, bottom to top, as input picking sees them. */
+export function collectInputWidgetsAtPoint(
+    widgetManager: WidgetManager,
+    px: number,
+    py: number,
+): any[] {
     const allRoots = widgetManager.getInputRoots();
     if (allRoots.length === 0) {
-        return null;
+        return [];
     }
 
     const visibleMap = new Map<number, boolean>();
@@ -52,25 +73,16 @@ export function getWorldClickBlockingWidgetAtPoint(
         const group = widgetManager.interfaceParents.get(containerUid)?.group;
         return typeof group === "number" ? widgetManager.getAllGroupRoots(group) : [];
     };
-    const isInputCaptureWidget = (uid: number): boolean => {
-        const parent = widgetManager.interfaceParents.get(uid);
-        return !!parent && (parent.type | 0) === 0;
-    };
 
-    const hits = collectWidgetsAtPointAcrossRoots(
+    return collectWidgetsAtPointAcrossRoots(
         allRoots,
         px,
         py,
         visibleMap,
         getStaticChildren,
         getInterfaceParentRoots,
-        isInputCaptureWidget,
+        (uid) => isInputCaptureWidget(widgetManager, uid),
     );
-    return findBlockingWidgetInHits(hits, {
-        isInputCaptureWidget,
-        getWidgetFlags: (widget) => widgetManager?.getWidgetFlags(widget) ?? 0,
-        getWidgetByUid: (uid) => widgetManager?.getWidgetByUid(uid),
-    });
 }
 
 /**

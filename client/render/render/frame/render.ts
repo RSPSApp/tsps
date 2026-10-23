@@ -1,5 +1,4 @@
 import { hintArrow } from "../../../game/HintArrow";
-import { appendAttackTimerOverhead } from "../../../game/plugins/attacktimer/AttackTimerOverhead";
 import { updateSkyColor } from "../environment";
 import { syncCameraViewportUnitScale } from "../quality";
 import Denque from "denque";
@@ -605,7 +604,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         const renderDistance = host.resolveEffectiveRenderDistanceTiles(frameCount | 0);
         // Server scene rebases at local tile 16/88. Load enough static scenery
         // beyond those edges for the requested HD view, without changing simulation.
-        const sceneryPadding = host.osrsClient.hdPlugin?.isEnabled() ? Math.ceil(Math.max(0, renderDistance - 16) / 8) : 0;
+        const sceneryPadding = host.osrsClient.clientPlugins.hdEnabled() ? Math.ceil(Math.max(0, renderDistance - 16) / 8) : 0;
         host.mapManager.update(
             host.playerPosUni[0],
             host.playerPosUni[1],
@@ -627,7 +626,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
             autoFogDepth: host.autoFogDepth,
             autoFogDepthFactor: host.autoFogDepthFactor,
             manualFogDepth: host.fogDepth,
-            hd: host.osrsClient.hdPlugin?.isEnabled(),
+            hd: host.osrsClient.clientPlugins.hdEnabled(),
         });
 
         // Update scene uniform buffer
@@ -646,7 +645,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
             .set(8, fogDepth as any)
             .set(9, timeSec as any)
             .set(10, host.brightness as any)
-            .set(11, (host.osrsClient.gpuPlugin?.settings()?.colorBanding ?? host.colorBanding) as any)
+            .set(11, (host.osrsClient.clientPlugins.gpuSettings()?.colorBanding ?? host.colorBanding) as any)
             .set(12, host.osrsClient.isNewTextureAnim as any)
             .update();
         profiler.endPhase();
@@ -986,9 +985,9 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                     );
                 }
             } catch {}
-            // The attack timer plugin's countdown, with the local player's text.
+            // Plugin text with the local player's overhead chat (the attack timer).
             try {
-                appendAttackTimerOverhead(
+                host.osrsClient.clientPlugins.appendLocalPlayerOverheads(
                     host,
                     localPlayerTextIdx,
                     overheadTexts,
@@ -1296,7 +1295,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
             // Spot animations were previously collected from SpotAnimationManager; no-op now.
 
             if (playerWorldX != null && playerWorldZ != null) {
-                const overlayEntries = host.osrsClient.getGroundItemOverlayEntries(
+                const overlayEntries = host.osrsClient.clientPlugins.groundItemOverlayEntries(
                     Math.floor(playerWorldX),
                     Math.floor(playerWorldZ),
                     playerLevel,
@@ -1309,7 +1308,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         const camX = Math.floor(host.osrsClient.camera.getPosX());
                         const camY = Math.floor(host.osrsClient.camera.getPosZ());
                         const camLevel = resolveGroundItemStackPlane(host.getPlayerRawPlane() | 0);
-                        const camEntries = host.osrsClient.getGroundItemOverlayEntries(camX, camY, camLevel, {
+                        const camEntries = host.osrsClient.clientPlugins.groundItemOverlayEntries(camX, camY, camLevel, {
                             radius: groundOverlayRadius,
                             maxEntries: groundOverlayMaxEntries,
                         });
@@ -1326,7 +1325,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         const fallbackX = (peHs.getX(idx) / 128.0) | 0;
                         const fallbackY = (peHs.getY(idx) / 128.0) | 0;
                         const fallbackLevel = peHs.getLevel(idx) | 0;
-                        const overlayEntries = host.osrsClient.getGroundItemOverlayEntries(
+                        const overlayEntries = host.osrsClient.clientPlugins.groundItemOverlayEntries(
                             fallbackX,
                             fallbackY,
                             fallbackLevel,
@@ -1397,7 +1396,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         host.app.clearColor(host.skyColor[0], host.skyColor[1], host.skyColor[2], host.skyColor[3]);
         host.app.defaultDrawFramebuffer().clear();
 
-        if (host.frameFxaaDrawCall && (host.osrsClient.gpuPlugin?.settings()?.fxaa ?? host.fxaaEnabled)) {
+        if (host.frameFxaaDrawCall && (host.osrsClient.clientPlugins.gpuSettings()?.fxaa ?? host.fxaaEnabled)) {
             host.frameFxaaDrawCall.uniform("u_resolution", host.resolutionUni);
             host.frameFxaaDrawCall.texture("u_frame", host.textureFramebuffer.colorAttachments[0]);
             host.frameFxaaDrawCall.draw();
@@ -1412,7 +1411,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         try {
             const playerLevel = host.getPlayerBasePlane() | 0;
             const playerRawLevel = host.getPlayerRawPlane() | 0;
-            const tileMarkersConfig = host.osrsClient.tileMarkersPlugin.getConfig();
+            const tileMarkersConfig = host.osrsClient.clientPlugins.tileMarkersConfig();
             // Compute player world position for post-present overlays
             // Use current position (no interpolation) to match player model rendering
             let postPlayerWorldX: number | undefined = undefined;

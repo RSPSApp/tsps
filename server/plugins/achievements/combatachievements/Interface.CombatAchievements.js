@@ -133,6 +133,7 @@ function show(player, screen, { from = null } = {}) {
   const sender = player.getPacketSender();
   setView(player, VARBIT.LAST_OPENED, screen);
   if (from === null) {
+    pluginApi?.emitCustomEvent("collection-log:close", { player });
     sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   } else if (!(from === SCREEN.BOSSES && screen === SCREEN.BOSS)) {
     sender.closeInterface(SCREEN_GROUP[from]);

@@ -207,13 +207,19 @@ export function updateCameraFollow(host: WebGLOsrsRendererHost, deltaTime?: numb
             px = Math.round(projected.x);
             py = Math.round(projected.y);
         }
+        // A camera target (a spectator's) stands in for the player.
+        const cameraTarget = host.osrsClient.getCameraTargetPosition();
+        if (cameraTarget) {
+            px = cameraTarget.x;
+            py = cameraTarget.y;
+        }
         const playerX = px / 128;
         const playerZ = py / 128;
 
         // Update player position for fog calculation (use actual player pos)
         host.playerPosUni[0] = playerX;
         host.playerPosUni[1] = playerZ;
-        const basePlane = pe.getLevel(playerEcsIndex) | 0;
+        const basePlane = cameraTarget ? cameraTarget.level : pe.getLevel(playerEcsIndex) | 0;
         const playerHeightSample = sampleBridgeHeightForWorldTile(
             host.mapManager,
             playerX,

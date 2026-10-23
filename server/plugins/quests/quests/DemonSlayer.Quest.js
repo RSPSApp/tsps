@@ -33,8 +33,8 @@ module.exports = function registerDemonSlayerQuest(api) {
   /** Temple of the Eye's stage attribute. Its tower stages (6-25) give Traiborn
    * dialogue of their own, so Demon Slayer must not shadow him there. */
   const TEMPLE_OF_THE_EYE_STAGE_ATTRIBUTE = "quest.temple_of_the_eye.stage";
-  const TOTE_TOWER_STAGE = 6;
-  const TOTE_COMPLETE_STAGE = 26;
+  const TOTE_TOWER_STAGE = 60;
+  const TOTE_COMPLETE_STAGE = 130;
   const STAGE_STARTED = 1;
   const STAGE_KEY_HUNT = 2;
   const STAGE_COLLECTING_BONES = 3;
@@ -52,6 +52,14 @@ module.exports = function registerDemonSlayerQuest(api) {
   const BUCKET_OF_WATER_ITEM_ID = ItemIdentifiers.BUCKET_OF_WATER;
   const EMPTY_BUCKET_ITEM_ID = ItemIdentifiers.BUCKET;
   const SPINACH_ROLL_ITEM_ID = ItemIdentifiers.SPINACH_ROLL;
+
+  /** Wiki: jugs, bowls and vials of water flush the key as well as a bucket. */
+  const WATER_CONTAINERS = new Map([
+    [BUCKET_OF_WATER_ITEM_ID, EMPTY_BUCKET_ITEM_ID],
+    [ItemIdentifiers.JUG_OF_WATER, ItemIdentifiers.JUG],
+    [ItemIdentifiers.BOWL_OF_WATER, ItemIdentifiers.BOWL],
+    [ItemIdentifiers.VIAL_OF_WATER, ItemIdentifiers.VIAL],
+  ]);
 
   /** Object id 2843 has no generated ObjectIdentifiers member; value kept from the original plugin. */
   const PALACE_KITCHEN_DRAIN_OBJECT_ID = 2843;
@@ -740,16 +748,17 @@ module.exports = function registerDemonSlayerQuest(api) {
   }
 
   function pourWaterOnDrain(event) {
-    if (event.itemId !== BUCKET_OF_WATER_ITEM_ID || !DRAIN_LOC_IDS.has(event.objectId)) return;
+    const emptyContainer = WATER_CONTAINERS.get(event.itemId);
+    if (!emptyContainer || !DRAIN_LOC_IDS.has(event.objectId)) return;
     const { player } = event;
     if (quest.getStage(player) >= STAGE_SILVERLIGHT) {
       player.sendMessage("There is no reason to pour water there.");
       event.handled = true;
       return;
     }
-    if (player.getInventory().getAmount(BUCKET_OF_WATER_ITEM_ID) <= 0) return;
-    player.getInventory().deleteNumber(BUCKET_OF_WATER_ITEM_ID, 1);
-    player.getInventory().adds(EMPTY_BUCKET_ITEM_ID, 1);
+    if (player.getInventory().getAmount(event.itemId) <= 0) return;
+    player.getInventory().deleteNumber(event.itemId, 1);
+    player.getInventory().adds(emptyContainer, 1);
     player.sendMessage("You pour the liquid down the drain.");
     event.handled = true;
     if (hasItem(player, PRYSIN_KEY_ITEM_ID) || bankHasItem(player, PRYSIN_KEY_ITEM_ID)) return;

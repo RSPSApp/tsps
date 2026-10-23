@@ -86,10 +86,10 @@ export function StatusTimerOverlay({
     );
 }
 
-export function PoisonTimerOverlay({ osrsClient }: { osrsClient: OsrsClient }): JSX.Element | null {
-    return <StatusTimerOverlay className="poison-timer-infobox" fallback="☠" osrsClient={osrsClient} plugin={osrsClient.poisonTimerPlugin} secondsVarp={POISON_TIMER_SECONDS_VARP} title="Poison" typeVarp={POISON_TIMER_TYPE_VARP} sprites={POISON_SPRITES} />;
+export function PoisonTimerOverlay({ osrsClient, plugin }: { osrsClient: OsrsClient; plugin: StatusTimerPlugin }): JSX.Element | null {
+    return <StatusTimerOverlay className="poison-timer-infobox" fallback="☠" osrsClient={osrsClient} plugin={plugin} secondsVarp={POISON_TIMER_SECONDS_VARP} title="Poison" typeVarp={POISON_TIMER_TYPE_VARP} sprites={POISON_SPRITES} />;
 }
 
-export function FreezeTimerOverlay({ osrsClient }: { osrsClient: OsrsClient }): JSX.Element | null {
-    return <StatusTimerOverlay className="freeze-timer-infobox" fallback="❄" osrsClient={osrsClient} plugin={osrsClient.freezeTimerPlugin} secondsVarp={FREEZE_TIMER_SECONDS_VARP} title="Frozen" typeVarp={FREEZE_TIMER_SPELL_VARP} sprites={FREEZE_SPRITES} />;
+export function FreezeTimerOverlay({ osrsClient, plugin }: { osrsClient: OsrsClient; plugin: StatusTimerPlugin }): JSX.Element | null {
+    return <StatusTimerOverlay className="freeze-timer-infobox" fallback="❄" osrsClient={osrsClient} plugin={plugin} secondsVarp={FREEZE_TIMER_SECONDS_VARP} title="Frozen" typeVarp={FREEZE_TIMER_SPELL_VARP} sprites={FREEZE_SPRITES} />;
 }

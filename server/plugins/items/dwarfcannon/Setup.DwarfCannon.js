@@ -38,7 +38,8 @@ function hasAllParts(player, kind) {
 function refusal(player, kind) {
   if (Cannon.cannonOf(player)) return MESSAGE.ONE_ONLY;
   if (!hasAllParts(player, kind)) return MESSAGE.PARTS;
-  const restricted = Restrictions.restrictionAt(player.getLocation(), player.getPrivateArea?.() ?? null);
+  if (Cannon.core.BoatManager.getBoatAboard(player)) return Restrictions.load().default;
+  const restricted = Restrictions.restrictionAt(player.getLocation(), player.getPrivateArea?.() ?? null, player);
   if (restricted) return restricted;
   const sw = player.getLocation().transform(-1, -1);
   if (footprint(sw).some((tile) => Cannon.core.RegionManager.blocked(tile, null))) return MESSAGE.SPACE;
@@ -82,10 +83,12 @@ function placeBase(player, kind, centre) {
   player.getPacketSender().sendVarbit(Data.VARBIT.BUSY, 0);
   if (player.isRegistered?.() === false || !player.getLocation().equals(centre) || refusal(player, kind)) return;
   const sw = centre.transform(-1, -1);
+  const recovered = player.getAttribute(Cannon.RECOVERED_AMMO_ATTRIBUTE);
   const cannon = {
-    owner: player.getUsername(), player, kind, sw, centre, stage: 0, steel: 0, granite: 0,
+    owner: player.getUsername(), player, kind, sw, centre, stage: 0, steel: recovered?.steel ?? 0, granite: recovered?.granite ?? 0,
     direction: 0, firing: false, firedAt: 0, age: 0, broken: false, gone: false, object: null, setupTime: 0,
   };
+  player.setAttribute(Cannon.RECOVERED_AMMO_ATTRIBUTE, null);
   Cannon.cannons.set(cannon.owner, cannon);
   addPart(cannon);
   runOff(player, sw);
@@ -120,7 +123,7 @@ function nextPart(cannon) {
     Cannon.later(Data.SETUP_TICKS[cannon.stage], () => nextPart(cannon));
     return;
   }
-  Cannon.later(1, () => Ammo.loadFromInventory(cannon, Data.CAPACITY));
+  Cannon.later(1, () => Ammo.loadFromInventory(cannon, Cannon.capacity(cannon.player)));
 }
 
 module.exports = function attachSetup(api) {

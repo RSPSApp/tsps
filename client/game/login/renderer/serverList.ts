@@ -78,7 +78,8 @@ export function relayWorldEntries(
     if (!Array.isArray(worlds)) return [];
     const relayUrl = new URL(signalUrl);
     return worlds
-        .filter((world: any) => typeof world?.worldId === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(world.worldId))
+        // The relay also lists recently offline worlds; only the website shows those.
+        .filter((world: any) => typeof world?.worldId === "string" && /^[A-Za-z0-9._-]{1,64}$/.test(world.worldId) && world.online !== false)
         .flatMap((world: any): ServerListEntry[] => {
             let endpoint = relayUrl;
             if (world.transport === "websocket") {
@@ -223,7 +224,7 @@ export function refreshServerList(host: LoginRendererHost) {
                     statusUrl.pathname = "/worlds";
                     const response = await fetch(statusUrl, { signal: AbortSignal.timeout(8000) });
                     const data = response.ok ? await response.json() : undefined;
-                    const world = data?.worlds?.find((entry: any) => entry?.worldId === server.worldId);
+                    const world = data?.worlds?.find((entry: any) => entry?.worldId === server.worldId && entry.online !== false);
                     const entry = relayWorldEntries(server.signalUrl, server.iceServers ?? [], { worlds: world ? [world] : [] })[0];
                     if (entry) Object.assign(server, entry, { name: server.name, relayDiscovered: false });
                     server.playerCount = Number.isInteger(world?.playerCount) ? world.playerCount : world ? -1 : null;

@@ -32,17 +32,18 @@ Ticks count from the action named; captured gamevals are in brackets.
 
 | Phase | When | Attacks (captured share) | Speed |
 | --- | --- | --- | --- |
-| One | Start | Tail swipe 10693 (`attack_melee_02`) 70%, stomp 10698 30% | 4 |
+| One | Start | Beside his target: tail swipe 10693 (`attack_melee_02`) 80%, stomp 10698 20%. Out of reach: stomp | 4 |
 | Feeding | 80% (once) | Magic 10697 with 2639 on him, ranged 10695, stomp 10699, rats 10703 (4:4:2:1) | 6 |
 | Two | After feeding | As phase one | 4 |
 | Enraged | 30% | Magic 10696 with 2638, ranged 10694, stomp 10698, rats 10706 (2:2:3:1) | 4 |
 
+- **Phase one and two by distance:** the captured shares split by where the player stood when he attacked. Within a tile of him, solo instances show 95 tail swipes to 21 stomps; further away, 46 stomps to 11 swipes. So he stomps from range while walking in (the generic `combat:close-in` flag), and steps round to an edge for the swipe as before. Stomps can follow stomps (a third of the time in phase one, up to five in a row), so nothing stops that. Overall that is still the 7:3 the table used to give.
 - **To the food:** at 80% he walks to one of the three piles and stands on (3297, 9873), (3304, 9866) or (3298, 9860), facing it. There he plays the eating idle (10689, sent as a `bas` change on live; here the animation is replayed every 3 ticks) and heals five times, about every six ticks, by 5 or 10 per player in the room (heal hitsplat 6). Then he goes back to melee. Reaching 30% ends the feeding.
 - **To the middle:** at 30% he walks to (3298, 9867) and stays there. If he heals above 30% he goes back to eating (Wiki).
 - **His walks** pause his attacks. Players in his way don't block him and hits don't stop him (the generic `combat:no-retaliate` flag), and he faces where he walks. While he eats he keeps facing the pile, attacks included (captured: his facing is re-sent with each heal), through a new generic `combat:keep-facing` flag in Combat.
 - **Magic and ranged:** projectiles 2640 and 2642, cycles 30 to 120, height 200 to 100, angle 40, progress 0 (rev 234). The hit lands 4 ticks after the cast, whatever the distance. Cast sounds 7700 (magic) and 7722 (ranged); impacts 2641 and 2643 on the player. Melee lands on the swing's tick.
 - **Max hits (Wiki):** solo 13 melee, 8 magic, 7 ranged, 15-22 rubble; public 13, 14, 13 and 15-24.
-- **Rubble:** twelve tiles (12 in 641 of 989 captured stomps, fewer where they overlapped), always one under each player and the rest anywhere on the floor (x 3290-3306, y 9860-9875). Each tile gets 2644 (`vfx_rat_boss_falling_debris_01`) with delay 60 and the area sound 4175 (delay 240, range 5); the stomp itself plays area sounds 7699 and 7667 at the middle of the room. Rubble hits land 5 ticks after the stomp.
+- **Rubble:** twelve tiles (12 in 641 of 989 captured stomps, fewer where they overlapped), always one under each player and the rest anywhere on the floor (x 3290-3306, y 9860-9875). Each tile gets 2644 (`vfx_rat_boss_falling_debris_01`) with delay 60 and the area sound 4175 (delay 240, range 5); the stomp itself plays area sounds 7699 and 7667 at the middle of the room. Rubble hits land 9 ticks after the stomp, on players who stood on a rubble tile at the end of the tick before. Across the 29 recordings with stomps, 68 of 93 such players were hit on that tick, against 1 of 437 at 5 ticks. The falling sound's 240-cycle delay (8 ticks) agrees. It used to be 5 ticks, so the hit came about four ticks before the rock.
 - **Rats:** six at once, two ticks into the call, on random floor tiles; at most twelve waves (Wiki), and calls at least 41 ticks apart (the shortest of 27 captured gaps). The enraged call also plays area sound 7717 (delay 90). Any player's hit kills a rat, and rat bone weapons hit them without an attack delay (Wiki). They stay after Scurrius dies.
 
 ## Loot and kill count

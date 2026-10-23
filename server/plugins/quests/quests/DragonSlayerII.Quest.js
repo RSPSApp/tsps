@@ -581,7 +581,7 @@ module.exports = function registerDragonSlayerII(api) {
     else talk(p, npcId, "finishing-up");
   }
   function talkDallas({ player: p, npcId }) {
-    if (stage(p) < S.START) return;
+    if (stage(p) < S.START) return false;
     if (stage(p) === S.START) { talk(p, npcId, "starting-out-talking-to-dallas-jones"); advance(p, S.KARAMJA); }
     else if (stage(p) === S.KARAMJA) {
       talk(p, npcId, "starting-out-talking-to-dallas-in-elvarg-s-lair");
@@ -644,7 +644,7 @@ module.exports = function registerDragonSlayerII(api) {
     else if (stage(p) >= S.LITHKREN) talk(p, npcId, "the-ultimate-weapon-talking-to-dallas");
   }
   function talkJardric({ player: p, npcId, location }) {
-    if (stage(p) < S.TO_LITHKREN || stage(p) >= S.COMPLETE) return;
+    if (stage(p) < S.TO_LITHKREN || stage(p) >= S.COMPLETE) return false;
     const here = location ?? p.getLocation();
     const x = here.getX?.() ?? here.x;
     const y = here.getY?.() ?? here.y;
@@ -1094,7 +1094,7 @@ module.exports = function registerDragonSlayerII(api) {
     }
   }
   function talkEllenTraining({ player: p, npcId }) {
-    if (!quest.isComplete(p)) return;
+    if (!quest.isComplete(p)) return false;
     startTranscript(api, p, npcId, "Ellen", Number(p.getAttribute(ATTR_TRAINING_REWARDS)) >= 4
       ? "after-claiming-experience-rewards" : "standard-dialogue");
   }
@@ -1161,6 +1161,7 @@ module.exports = function registerDragonSlayerII(api) {
     else if (stage(p) >= S.KEYS && stage(p) < S.LITHKREN) talk(p, npcId, "bob-the-cat-talking-to-bob");
     else if (stage(p) >= S.LITHKREN && stage(p) < S.LEADERS) talk(p, npcId, "the-ultimate-weapon-talking-to-bob");
     else if (stage(p) >= S.FLEET) talk(p, npcId, "the-assault-talking-to-bob-on-varrock-s-grand-ship");
+    else return false;
   }
   function talkSphinx({ player: p, npcId }) {
     if (stage(p) !== S.DREAM || Number(p.getAttribute(ATTR_DREAM_PROGRESS)) < 1) return false;
@@ -1190,25 +1191,25 @@ module.exports = function registerDragonSlayerII(api) {
       spawnGalvek(p);
       return;
     }
-    if (stage(p) < S.KEYS || stage(p) >= S.FORGE || !p.getAttribute(ATTR_UNGAEL_TRIP)) return;
+    if (stage(p) < S.KEYS || stage(p) >= S.FORGE || !p.getAttribute(ATTR_UNGAEL_TRIP)) return false;
     talk(p, npcId, "robert-s-ungael-key-piece-talking-to-torfinn");
     p.setAttribute(ATTR_UNGAEL_TRIP, true);
     p.sendMessage("Torfinn takes you to Ungael. Vorkath is ahead; prepare for the fight.");
     p.moveTo(new Location(2272, 4053, 0));
   }
   function talkHerbertForKey({ player: p, npcId }) {
-    if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return;
+    if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return false;
     talk(p, npcId, "camorra-s-key-piece-talking-to-veos-cabin-boy-herbert");
   }
   function talkAmeliaForKey({ player: p, npcId }) {
-    if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return;
+    if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return false;
     talk(p, npcId, p.getAttribute(ATTR_CRYPT_READY)
       ? "camorra-s-key-piece-talking-to-amelia-talking-to-amelia-again"
       : "camorra-s-key-piece-talking-to-amelia");
     p.setAttribute(ATTR_CRYPT_READY, true);
   }
   function talkKourendHistorian({ player: p, npcId, definition }) {
-    if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return;
+    if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return false;
     const name = definition?.getName?.() || definition?.name;
     const variant = name === "Istoria" ? "camorra-s-key-piece-talking-to-istoria"
       : name === "Imerominia" ? "camorra-s-key-piece-talking-to-imerominia"
@@ -1224,7 +1225,7 @@ module.exports = function registerDragonSlayerII(api) {
     });
   }
   function talkReldo({ player: p, npcId }) {
-    if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return;
+    if (stage(p) < S.KEYS || stage(p) >= S.FORGE) return false;
     const step = Number(p.getAttribute(ATTR_MORYTANIA)) || 0;
     const variant = step === 0 ? "tristan-s-key-piece-talking-to-reldo"
       : step === 1 ? "tristan-s-key-piece-talking-to-reldo-talking-to-him-before-finding-the-book"
@@ -1263,13 +1264,13 @@ module.exports = function registerDragonSlayerII(api) {
   }
   function talkSarah({ player: p, npcId }) {
     const step = Number(p.getAttribute(ATTR_MORYTANIA)) || 0;
-    if (stage(p) < S.KEYS || stage(p) >= S.FORGE || step < 2) return;
+    if (stage(p) < S.KEYS || stage(p) >= S.FORGE || step < 2) return false;
     talk(p, npcId, step < 3 ? "tristan-s-key-piece-talking-to-sarah-corvo" : "tristan-s-key-piece-talking-to-sarah-corvo-talking-to-her-again");
     p.setAttribute(ATTR_MORYTANIA, 3);
   }
   function talkAva({ player: p, npcId }) {
     const step = Number(p.getAttribute(ATTR_MORYTANIA)) || 0;
-    if (stage(p) < S.KEYS || stage(p) > S.FORGE || step < 3) return;
+    if (stage(p) < S.KEYS || stage(p) > S.FORGE || step < 3) return false;
     if (step === 3) {
       talk(p, npcId, "tristan-s-key-piece-talking-to-ava");
       p.setAttribute(ATTR_MORYTANIA, 4);

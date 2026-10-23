@@ -1,4 +1,5 @@
 import { BeforeRender } from "./BeforeRender";
+import { ChatMessage } from "./ChatMessage";
 import { ClientTick } from "./ClientTick";
 import { CommandExecuted } from "./CommandExecuted";
 import { ConfigChanged } from "./ConfigChanged";
@@ -10,6 +11,7 @@ import { PluginChanged } from "./PluginChanged";
 import { PostClientTick } from "./PostClientTick";
 
 export { BeforeRender } from "./BeforeRender";
+export { ChatMessage } from "./ChatMessage";
 export { ClientTick } from "./ClientTick";
 export { CommandExecuted } from "./CommandExecuted";
 export { ConfigChanged } from "./ConfigChanged";
@@ -32,6 +34,7 @@ export const EVENT_CLASSES: Record<string, EventClass> = {
     ClientTick,
     PostClientTick,
     BeforeRender,
+    ChatMessage,
     GameStateChanged,
     ConfigChanged,
     PluginMessage,

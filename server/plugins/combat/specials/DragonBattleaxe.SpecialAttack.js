@@ -1,11 +1,13 @@
-// TODO: ported from xrsps-typescript; untested.
 module.exports = function registerDragonBattleaxeSpecialAttack(api) {
-  const { CombatMethod, CombatSpecial, CombatType, ItemIdentifiers, Skill } = api.core;
+  const { Animation, CombatMethod, CombatSpecial, CombatType, Graphic, ItemIdentifiers, Skill } = api.core;
 
   const DRAIN = 100;
   const DRAIN_FRACTION = 0.1;
   const BASE_STRENGTH_BOOST = 10;
   const DRAIN_TO_STRENGTH_DIVISOR = 4;
+  const ANIMATION = new Animation(1056);
+  const GRAPHIC = new Graphic(246);
+  const FORCED_CHAT = "Raarrrrrgggggghhhhhhh!";
   const DRAINED_SKILLS = [Skill.ATTACK, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC];
 
   // Rampage is an instant utility special: drain 10% of Attack/Defence/Ranged/Magic,
@@ -24,6 +26,9 @@ module.exports = function registerDragonBattleaxeSpecialAttack(api) {
       if (!character.isPlayer()) {
         return;
       }
+      character.forceChat(FORCED_CHAT);
+      character.performAnimation(ANIMATION);
+      character.performGraphic(GRAPHIC);
       const skillManager = character.getAsPlayer().getSkillManager();
 
       let totalDrained = 0;

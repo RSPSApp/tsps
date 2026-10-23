@@ -73,6 +73,12 @@
       "instance": { "chunkX": 360, "chunkY": 661, "width": 13, "height": 9 }
     }
   },
+  "ancient": {
+    "$comment": "Zaros's essence, earned in the Ancient Prison (the Nex plugin): no general or chamber of its own here.",
+    "name": "Zaros",
+    "essenceVarbit": 13080,
+    "followers": [[11290, 11293]]
+  },
   "crossings": {
     "bandosDoor": { "id": 26461, "tile": [2851, 5333, 2], "east": [2851, 5333, 2], "west": [2850, 5333, 2], "strength": 70, "anim": 7214, "sound": 71 },
     "armadylPillar": { "id": 26380, "north": [2872, 5279, 2], "middle": [2872, 5274, 2], "south": [2872, 5269, 2], "ranged": 70, "grapple": 9419, "anim": 6067, "gfx": 1036, "gfxHeight": 82, "objAnim": 6072, "sounds": [[2928, 0], [3503, 6]], "landSound": 2455 },

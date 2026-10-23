@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { PlayerRights } = require("../../src/main/typescript/elvarg/game/model/rights/PlayerRights");
 
 let pluginApi;
 let World;
@@ -121,6 +120,7 @@ function streamServerPerfToPlayer(player, limitTicks = 60) {
 module.exports = {
   name: "PluginPerfCommand",
   register(api) {
+    const { PlayerRights } = api.core;
     pluginApi = api;
     World = api.getWorld();
     ServerPerf = api.getServerPerf();

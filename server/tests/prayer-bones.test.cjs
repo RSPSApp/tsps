@@ -13,16 +13,23 @@ const { Equipment } = require("../dist/game/model/container/impl/Equipment");
 const { ItemIdentifiers: Items } = require("../dist/util/ItemIdentifiers");
 const { ObjectIdentifiers: Objects } = require("../dist/util/ObjectIdentifiers");
 const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+const { Animation } = require("../dist/game/model/Animation");
+const { Sound } = require("../dist/game/Sound");
 
 const DATA = require("../plugins/skills/data/bones.json");
+const ASHES = require("../plugins/skills/data/ashes.json");
 
 const handlers = new Map();
+const firstActions = [];
 const api = {
-  core: { Skill, Location, Equipment, ItemIdentifiers: Items, ObjectIdentifiers: Objects, CacheDefinitions },
+  core: {
+    Skill, Location, Equipment, ItemIdentifiers: Items, ObjectIdentifiers: Objects, CacheDefinitions, Animation, Sound,
+    Sounds: { sendSound: (who, sound) => who.sounds?.push(sound) },
+  },
   emitCustomEvent: (name, payload) => (handlers.get(name) ?? []).forEach((handler) => handler(payload)),
   onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
   persistAttribute() {},
-  onItemFirstAction() {},
+  onItemFirstAction(handler) { firstActions.push(handler); },
   onItemAction() {},
   onItemOnItem() {},
   onObjectInteraction() {},
@@ -166,4 +173,46 @@ test("every hundredth charge says how many are left, and a crush in the Catacomb
   kill(who, [{ itemId: Items.BONES, amount: 2 }]);
   assert.deepEqual(who.messages, ["Your bonecrusher has 5,700 charges left."]);
   assert.equal(who.levels.current, 52);
+});
+
+test("every demonic ash in the data is a real obj whose first option is Scatter, with the Wiki's experience", () => {
+  const wiki = { fiendish_ashes: 10, vile_ashes: 25, malicious_ashes: 65, abyssal_ashes: 85, infernal_ashes: 110 };
+  assert.deepEqual(ASHES.ashes.map((row) => row.obj), Object.keys(wiki));
+  for (const row of ASHES.ashes) {
+    const id = CacheDefinitions.getObjId(row.obj);
+    assert.ok(Number.isInteger(id), row.obj);
+    assert.equal(CacheDefinitions.getItem(id).inventoryActions[0], "Scatter", row.obj);
+    assert.equal(row.xp, wiki[row.obj], row.obj);
+  }
+});
+
+test("the first-action handlers leave items that are neither bones nor ashes alone", () => {
+  const who = player();
+  assert.equal(firstActions.length, 2);
+  for (const handler of firstActions) {
+    assert.equal(handler({ player: who, itemId: Items.COINS, slot: 0, handled: false }), false);
+  }
+});
+
+test("a scatter resolves on the click, with the sequence, synth, message and experience live OSRS sends", () => {
+  const vile = CacheDefinitions.getObjId("vile_ashes");
+  const who = player();
+  const slots = [{ getId: () => vile }];
+  const animations = [];
+  const skills = who.getSkillManager();
+  Object.assign(who, {
+    sounds: [],
+    getClickDelay: () => ({ elapsedTime: () => true, reset() {} }),
+    getInventory: () => ({ get: (slot) => slots[slot] ?? null, deleteAtSlot: (slot) => { slots[slot] = null; } }),
+    getSkillManager: () => ({ ...skills, stopSkillable() {} }),
+    getPacketSender: () => ({ sendInterfaceRemoval() {} }),
+    performAnimation: (animation) => animations.push(animation),
+  });
+  // This api has no CountdownTask or task manager, so a scatter that waited for a later tick throws.
+  assert.deepEqual(firstActions.map((handler) => handler({ player: who, itemId: vile, slot: 0, handled: false })), [false, true]);
+  assert.equal(slots[0], null);
+  assert.equal(who.xp.get(Skill.PRAYER), 25);
+  assert.deepEqual(who.messages, ["You scatter the ashes."]);
+  assert.deepEqual(animations.map((animation) => animation.id), [2295]);
+  assert.deepEqual(who.sounds.map((sound) => sound.getId()), [2444]);
 });

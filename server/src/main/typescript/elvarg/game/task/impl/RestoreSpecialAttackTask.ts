@@ -1,26 +1,19 @@
 import { Task } from "../Task";
 import { Mobile } from "../../entity/impl/Mobile";
 import { CombatSpecial } from "../../content/combat/CombatSpecial";
-import { Equipment } from "../../model/container/impl/Equipment";
 import { GameConstants } from "../../GameConstants";
-import { ItemIdentifiers } from "../../../util/ItemIdentifiers";
 
 const DEFAULT_RESTORE_DELAY_TICKS = 50;
-const LIGHTBEARER_RESTORE_DELAY_TICKS = 25;
 const TICK_RATE_MS = Number(GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE ?? 600);
 
 function resolveRestoreDelayTicks(character: Mobile): number {
-    if (!character?.isPlayer?.()) {
-        return DEFAULT_RESTORE_DELAY_TICKS;
-    }
-    const ringId = character
-        .getAsPlayer()
-        .getEquipment()
-        .get(Equipment.RING_SLOT)
-        ?.getId?.();
-    return ringId === ItemIdentifiers.LIGHTBEARER
-        ? LIGHTBEARER_RESTORE_DELAY_TICKS
-        : DEFAULT_RESTORE_DELAY_TICKS;
+    // Loaded lazily so this module does not join the Player/QuickPrayers/PrayerHandler/
+    // PluginManager require cycle through EquipmentEffects.
+    const { applySpecialEnergyRestoreModifiers } =
+        require("../../content/combat/EquipmentEffects") as typeof import("../../content/combat/EquipmentEffects");
+    return Math.max(1, Math.round(
+        applySpecialEnergyRestoreModifiers(character, DEFAULT_RESTORE_DELAY_TICKS)
+    ));
 }
 
 function ticksToSeconds(delayTicks: number): number {

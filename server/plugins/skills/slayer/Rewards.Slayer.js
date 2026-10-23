@@ -166,6 +166,11 @@ function cancel(player) {
   player.sendMessage("Your task has been cancelled.");
 }
 
+/** "slayer:cancel-task" { player }: Mortimer's "Can I cancel that task?". */
+function cancelEvent({ player }) {
+  if (player) cancel(player);
+}
+
 function slotOpen(player, slot) {
   if (slot === "diary") return player.getPacketSender().getVarbit(LUMBRIDGE_ELITE_VARBIT) === 1;
   return player.getPacketSender().getVarp(QUEST_POINTS_VARP) >= SLOT_QUEST_POINTS[slot];
@@ -273,6 +278,7 @@ function buy({ player, slot, opId, action }) {
 
 function attach(pluginApi) {
   pluginApi.onCustomEvent("slayer:open-rewards", open);
+  pluginApi.onCustomEvent("slayer:cancel-task", cancelEvent);
   pluginApi.onInterfaceActionButton(CONFIRM_BUTTON, confirmClick);
   pluginApi.onInterfaceActionButton(VIEW_TASKS, viewTasks);
   pluginApi.onInterfaceActionButton(BUY_ITEMS, buy);

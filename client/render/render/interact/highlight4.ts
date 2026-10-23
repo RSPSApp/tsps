@@ -212,8 +212,8 @@ export function resolveInteractHighlightTargetFromEntry(host: WebGLOsrsRendererH
 
 export function updateInteractHighlightHoverTarget(host: WebGLOsrsRendererHost, simpleEntries: SimpleMenuEntry[]): void {
 
-        const config = host.osrsClient.interactHighlightPlugin.getConfig();
-        if (!config.enabled || (!config.showHover && !config.itemShowHover)) {
+        const config = host.osrsClient.clientPlugins.interactHighlightConfig();
+        if (!config?.enabled || (!config.showHover && !config.itemShowHover)) {
             host.clearInteractHighlightHoverTarget();
             return;
         }
@@ -239,8 +239,8 @@ export function onInteractHighlightEntryInvoked(host: WebGLOsrsRendererHost,
         clickedTile?: { tileX: number; tileY: number; plane?: number },
     ): void {
 
-        const config = host.osrsClient.interactHighlightPlugin.getConfig();
-        if (!config.enabled) {
+        const config = host.osrsClient.clientPlugins.interactHighlightConfig();
+        if (!config?.enabled) {
             host.clearInteractHighlightActiveTarget();
             return;
         }

@@ -44,9 +44,11 @@ test('a teleport tablet plays out as in the OSRS capture, tick by tick', (t) => 
     t.after(() => { Sounds.sendSound = sendSound; });
     const { player, ticks, log, nextTick } = recordingPlayer();
 
-    // The click is handled between ticks; its sends go out with tick 0.
+    // World.process runs the task pass before packets, so the click is handled after tick 0's
+    // task pass: its sends go out with tick 0, and the task's next step runs on tick 1.
     TeleportHandler.teleport(player, new Location(3213, 3424, 0), TeleportType.TELE_TAB, false,
         () => log('arrived'), () => log('tablet used'));
+    nextTick();
     for (let tick = 0; tick < 7; tick++) {
         TaskManager.process();
         nextTick();
@@ -69,6 +71,7 @@ test('every teleport frees the player on the tick they land, not two ticks later
     t.after(() => { Sounds.sendSound = sendSound; });
     const { player, ticks, nextTick } = recordingPlayer();
     TeleportHandler.teleport(player, new Location(3213, 3424, 0), TeleportType.NORMAL, false);
+    nextTick();
     for (let tick = 0; tick < 6; tick++) {
         TaskManager.process();
         nextTick();
@@ -76,5 +79,28 @@ test('every teleport frees the player on the tick they land, not two ticks later
     const landed = ticks.findIndex((sent) => sent.some((entry) => entry.startsWith('teleport')));
     assert.ok(landed > 0);
     assert.ok(ticks[landed].includes('free'), 'free on the landing tick');
-    assert.deepEqual(ticks.slice(landed + 1).flat(), [], 'and nothing holds them after');
+    assert.deepEqual(ticks.slice(landed + 1).flat(), ['anim 65535'], 'only the repeated reset after (captured), nothing holding them');
+});
+
+test('a teleport scroll plays out as in the OSRS captures, tick by tick', (t) => {
+    const sendSound = Sounds.sendSound;
+    Sounds.sendSound = (_player, sound) => log(`sound ${sound.getId()}`);
+    t.after(() => { Sounds.sendSound = sendSound; });
+    const { player, ticks, log, nextTick } = recordingPlayer();
+
+    TeleportHandler.teleport(player, new Location(3658, 3404, 0), TeleportType.TELE_SCROLL, false, () => log('arrived'));
+    nextTick();
+    for (let tick = 0; tick < 6; tick++) {
+        TaskManager.process();
+        nextTick();
+    }
+
+    assert.deepEqual(ticks.slice(0, 5), [
+        ['locked', 'anim 3864', 'spotanim 1039', 'sound 200', 'varbit 12393=1'],
+        [],
+        [],
+        ['anim 65535', 'varbit 12393=0', 'teleport 3658,3404', 'free', 'arrived'],
+        ['anim 65535'],
+    ]);
+    assert.deepEqual(ticks.slice(5).flat(), [], 'nothing after');
 });

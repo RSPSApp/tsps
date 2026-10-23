@@ -65,8 +65,11 @@ Adopted from our Vite site discipline, adapted for a game client:
 
 The server runs a **600ms tick loop** — the same as OSRS. Each tick:
 
-1. Process queued player actions (combat, skills, interactions)
-2. Tick NPCs (AI, combat, movement)
+1. Tick NPCs (AI, combat, movement)
+2. Tick players. Each player's turn starts with the client packets received since their last
+   turn, so input acts on the next tick as in live OSRS. Only connection upkeep, login,
+   client-plugin traffic, free movement and logout are handled as they arrive
+   (`IMMEDIATE_PACKETS` in `net/NetworkBuilder.ts`).
 3. Encode updates into binary packets
 4. Send sync packets to all connected clients
 

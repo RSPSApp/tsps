@@ -1,0 +1,81 @@
+{
+  "$comment": "Guardians of the Rift reward tables (OSRS Wiki: Rewards Guardian, Intricate pouch). Items by cache gameval name; weights out of each table's total. 'once' entries roll only until the player has had one (an attribute records it). 'level' on a rune: the Runecraft level it needs; below it the amount drops to a third (ours, the Wiki gives no figure).",
+  "search": {
+    "rare": [
+      { "item": "gotr_book", "chance": 20, "once": true },
+      { "item": "catalytic_talisman", "chance": 200 },
+      { "item": "abyssal_needle", "chance": 300, "once": true },
+      { "item": "abyssal_lantern", "chance": 700 },
+      { "item": "abyssal_red_dye", "chance": 1200 },
+      { "item": "abyssal_green_dye", "chance": 1200 },
+      { "item": "abyssal_blue_dye", "chance": 1200 }
+    ],
+    "pet": { "item": "abyssalpet", "chance": 4000 },
+    "total": 140,
+    "main": [
+      { "table": "pouch", "weight": 15 },
+      { "item": "airrune", "amount": [400, 500], "weight": 4, "level": 1 },
+      { "item": "waterrune", "amount": [400, 500], "weight": 4, "level": 5 },
+      { "item": "earthrune", "amount": [400, 500], "weight": 4, "level": 9 },
+      { "item": "firerune", "amount": [400, 500], "weight": 4, "level": 14 },
+      { "item": "mindrune", "amount": [250, 400], "weight": 4, "level": 2 },
+      { "item": "bodyrune", "amount": [80, 150], "weight": 4, "level": 20 },
+      { "item": "chaosrune", "amount": [61, 150], "weight": 10, "level": 35 },
+      { "item": "cosmicrune", "amount": [20, 30], "weight": 10, "level": 27 },
+      { "item": "naturerune", "amount": [28, 150], "weight": 10, "level": 44 },
+      { "item": "lawrune", "amount": [5, 120], "weight": 10, "level": 54 },
+      { "item": "deathrune", "amount": [5, 120], "weight": 10, "level": 65 },
+      { "item": "bloodrune", "amount": [5, 120], "weight": 10, "level": 77 },
+      { "table": "talisman", "weight": 16 },
+      { "item": "abyssal_pearl", "amount": [14, 16], "weight": 18 },
+      { "item": "gotr_intricate_pouch", "weight": 5 },
+      { "item": "abyssal_ashes", "weight": 1 },
+      { "item": "needle", "weight": 1 }
+    ],
+    "pouches": ["rcu_pouch_small", "rcu_pouch_medium", "rcu_pouch_large", "rcu_pouch_giant"],
+    "talismans": {
+      "total": 560,
+      "entries": [
+        { "item": "cert_air_talisman", "weight": 48 },
+        { "item": "cert_water_talisman", "weight": 48 },
+        { "item": "cert_earth_talisman", "weight": 48 },
+        { "item": "cert_fire_talisman", "weight": 48 },
+        { "item": "cert_mind_talisman", "weight": 64 },
+        { "item": "cert_body_talisman", "weight": 64 },
+        { "item": "cert_chaos_talisman", "weight": 64 },
+        { "item": "cert_cosmic_talisman", "weight": 64 },
+        { "item": "cert_nature_talisman", "weight": 64 },
+        { "item": "elemental_talisman", "weight": 16 },
+        { "item": "law_talisman", "weight": 16, "quest": "troll_stronghold" },
+        { "item": "cert_death_talisman", "weight": 16, "quest": "mournings_end_part_ii" }
+      ]
+    }
+  },
+  "intricatePouch": {
+    "preroll": [
+      { "item": "blood_essence_inactive", "chance": 200 },
+      { "item": "macro_genilamp", "chance": 15 },
+      { "item": "gotr_tarnished_locket", "chance": 40, "once": true },
+      { "item": "gotr_lost_bag", "chance": 60, "once": true }
+    ],
+    "total": 45,
+    "main": [
+      { "item": "astralrune", "amount": [150, 200], "weight": 5 },
+      { "item": "bloodrune", "amount": [150, 200], "weight": 5 },
+      { "item": "chaosrune", "amount": [200, 300], "weight": 5 },
+      { "item": "cosmicrune", "amount": [200, 300], "weight": 5 },
+      { "item": "deathrune", "amount": [150, 200], "weight": 5 },
+      { "item": "lawrune", "amount": [200, 250], "weight": 5 },
+      { "item": "naturerune", "amount": [200, 300], "weight": 5 },
+      { "item": "soulrune", "amount": [150, 200], "weight": 5 },
+      { "item": "dragonshield_a", "weight": 1 },
+      { "item": "dragon_spear", "weight": 1 },
+      { "item": "crystal_key", "weight": 1 },
+      { "item": "dragon_med_helm", "weight": 1 },
+      { "item": "cert_blankrune_high", "amount": [500, 1000], "weight": 1 }
+    ],
+    "tertiary": [
+      { "item": "trail_clue_hard_map001", "chance": 10 }
+    ]
+  }
+}

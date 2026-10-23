@@ -204,11 +204,11 @@ module.exports = function registerRestlessGhostQuest(api) {
       if (stage === STAGE_STARTED) {
         return { page: "The Restless Ghost", variant: "talking-to-father-urhney" };
       }
-      if (stage >= STAGE_SPOKEN_URHNEY) {
-        return { page: "The Restless Ghost", variant: "talking-to-father-urhney-if-the-ghostspeak-amulet-is-ever-lost" };
+      if (stage >= STAGE_COMPLETE) {
+        return { page: "Father Urhney", variant: "after-the-restless-ghost" };
       }
       if (stage >= STAGE_SPOKEN_URHNEY) {
-        return { page: "Father Urhney", variant: "after-the-restless-ghost" };
+        return { page: "The Restless Ghost", variant: "talking-to-father-urhney-if-the-ghostspeak-amulet-is-ever-lost" };
       }
       return { page: "Father Urhney", variant: "before-the-restless-ghost" };
     }

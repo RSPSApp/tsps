@@ -147,15 +147,17 @@ export class PlayerPoseGeometry {
             return cached;
         }
 
-        const geometry = this.build(base.baseModel, base.baseCenterX, base.baseCenterZ, {
+        const built = this.build(base.baseModel, base.baseCenterX, base.baseCenterZ, {
             seqId,
             frameIdx,
             interpolation,
             overlaySeqId,
             overlayFrameIdx,
         });
-        if (!geometry) return undefined;
+        if (!built) return undefined;
+        const [geometry, animated] = built;
         geometry.key = key;
+        if (!animated) return geometry;
         this.geomCache.set(key, geometry);
         while (this.geomCache.size > MAX_CPU_GEOMETRY_ENTRIES) {
             const oldest = this.geomCache.keys().next().value as string | undefined;
@@ -186,6 +188,8 @@ export class PlayerPoseGeometry {
             return cached ?? undefined;
         }
         let matrices: Float32Array | null = null;
+        // A frame still streaming in leaves the rest pose: draw it, but don't keep it.
+        let keep = true;
         try {
             const rig = this.rigFor(base.baseModel);
             // The CPU path re-centres the posed model on the base centre; GPU poses assume none.
@@ -196,7 +200,7 @@ export class PlayerPoseGeometry {
                     : undefined;
                 if (seqType && !seqType.isSkeletalSeq?.() && !overlayType?.isSkeletalSeq?.()) {
                     const pose = new LabelPose(rig);
-                    this.applySequenceToModel(
+                    keep = this.applySequenceToModel(
                         pose,
                         anim.seqId,
                         anim.frameIdx,
@@ -210,6 +214,7 @@ export class PlayerPoseGeometry {
         } catch {
             matrices = null;
         }
+        if (!keep) return matrices ?? undefined;
         this.poseCache.set(key, matrices);
         while (this.poseCache.size > MAX_POSE_ENTRIES) {
             this.poseCache.delete(this.poseCache.keys().next().value as string);
@@ -351,10 +356,10 @@ export class PlayerPoseGeometry {
             overlaySeqId?: number;
             overlayFrameIdx?: number;
         },
-    ): PosedActorGeometry | undefined {
+    ): [PosedActorGeometry, boolean] | undefined {
         try {
             const model = Model.copyAnimated(baseModel, false, true);
-            this.applySequenceToModel(
+            const animated = this.applySequenceToModel(
                 model,
                 anim.seqId,
                 anim.frameIdx,
@@ -390,13 +395,13 @@ export class PlayerPoseGeometry {
             const alphaVertices = this.alphaSceneBuf.vertexBuf.byteArray();
             const alphaIndices = new Int32Array(this.alphaSceneBuf.indices);
 
-            return {
+            return [{
                 key: "",
                 opaqueVertices,
                 opaqueIndices,
                 alphaVertices,
                 alphaIndices,
-            };
+            }, animated];
         } catch {
             return undefined;
         }
@@ -420,7 +425,7 @@ export class PlayerPoseGeometry {
         overlaySeqId: number | undefined,
         overlayFrameIdx: number | undefined,
         interpolation: ActorInterpolation | undefined,
-    ): void {
+    ): boolean {
         try {
             const seqType = this.client.seqTypeLoader.load(seqId | 0);
             const overlayId =
@@ -431,12 +436,12 @@ export class PlayerPoseGeometry {
                 typeof overlayFrameIdx === "number" && Number.isFinite(overlayFrameIdx)
                     ? overlayFrameIdx | 0
                     : -1;
-            if (!seqType) return;
+            if (!seqType) return false;
             const overlayType =
                 overlayId >= 0 && overlayFrame >= 0
                     ? this.client.seqTypeLoader.load(overlayId)
                     : undefined;
-            this.applySequenceTransformations(
+            return this.applySequenceTransformations(
                 model,
                 seqType as any,
                 seqId | 0,
@@ -446,7 +451,9 @@ export class PlayerPoseGeometry {
                 overlayFrame,
                 interpolation,
             );
-        } catch {}
+        } catch {
+            return false;
+        }
     }
 
     private applySingleSequence(

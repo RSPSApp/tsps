@@ -3,6 +3,7 @@ const { before, test } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
+const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
 const runtime = require('../plugins/quests/QuestRuntime');
 const actualCore = PluginManager.getCoreApi();
 const { ItemIdentifiers: I, NpcIdentifiers: N, ObjectIdentifiers: O } = actualCore;
@@ -43,6 +44,7 @@ function setup(module) {
     getAttribute: key => attrs.get(key), setAttribute(key, value) { attrs.set(key, value); }, getPacketSender: () => sender, getFrameUpdater: () => null,
     getInventory: () => ({ getAmount: id => inventory.get(id) ?? 0, isFull: () => full, full() { messages.push('Inventory full'); },
       adds(id, amount) { inventory.set(id, (inventory.get(id) ?? 0) + amount); },
+      forceAdd(_player, item) { inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()); },
       deleteNumber(id, amount) { assert.ok((inventory.get(id) ?? 0) >= amount, 'cannot consume missing item ' + id); inventory.set(id, inventory.get(id) - amount); } }),
     getEquipment: () => ({ get: slot => equipment.has(slot) ? { getId: () => equipment.get(slot) } : null }),
     getSkillManager: () => ({ getCurrentLevel: () => mining, getCombatLevel: () => combat, addExperiences(...args) { xp.push(args); } }),
@@ -62,6 +64,63 @@ function setup(module) {
     logout() { for (const fn of logout) fn({ player }); },
   };
 }
+
+/** Reuse the registered quest/player but drive the real NpcDialogues transcript runner. */
+function playGeneralTranscript(h, npcId) {
+  const manager = new DialogueManager(h.player);
+  h.player.getDialogueManager = () => manager;
+  const choice = h.variant(npcId);
+  assert.ok(choice);
+  runtime.startTranscript(h.api, h.player, npcId, choice.page, choice.variant);
+  const lines = [];
+  for (let step = 0; step < 80; step++) {
+    const current = manager.getCurrent();
+    if (!current) break;
+    if (current instanceof h.core.NpcDialogue) {
+      lines.push({ speaker: h.core.NpcDefinition.forId(current.getNpcId())?.getName?.(), text: current.getText() });
+    }
+    manager.advance();
+  }
+  return { choice, lines };
+}
+
+function goblinState(h) {
+  return {
+    stage: h.quest.getStage(h.player), qp: h.attrs.get('quest.points'),
+    gold: h.inventory.get(I.GOLD_BAR) ?? 0, xp: JSON.stringify(h.xp),
+    messages: JSON.stringify(h.messages), items: JSON.stringify([...h.inventory]),
+  };
+}
+
+test('post-quest generals 669/670 play the real again/start conversation without rewards', () => {
+  for (const npcId of [N.GENERAL_BENTNOZE, N.GENERAL_WARTFACE]) {
+    const h = setup('GoblinDiplomacy');
+    h.quest.setStage(h.player, 6);
+    h.attrs.set('quest.points', 5);
+    h.inventory.set(I.GOLD_BAR, 1);
+    const before = goblinState(h);
+    const { choice, lines } = playGeneralTranscript(h, npcId);
+    assert.equal(choice.variant, 'starting-off-talking-to-general-wartface-or-general-bentnoze');
+    assert.ok(lines.length > 0, 'dialogue must not be silent for ' + npcId);
+    assert.ok(lines.some(line => /^General (Bentnoze|Wartface)$/.test(line.speaker ?? '') && line.text.length > 0),
+      'canonical general speaker/text for ' + npcId + ': ' + JSON.stringify(lines));
+    assert.deepEqual(goblinState(h), before, 'post-quest talk changes no stage/reward ' + npcId);
+  }
+});
+
+test('Goblin general variants before completion are unchanged', () => {
+  const h = setup('GoblinDiplomacy');
+  for (const [stage, expected] of [
+    [0, 'starting-off-talking-to-general-wartface-or-general-bentnoze'],
+    [1, 'showing-the-generals-different-goblin-armours-orange-painted-goblin-armour'],
+    [3, 'showing-the-generals-different-goblin-armours-blue-painted-goblin-armour'],
+    [4, 'showing-the-generals-different-goblin-armours-brown-painted-goblin-armour'],
+  ]) {
+    h.quest.setStage(h.player, stage);
+    assert.equal(h.variant(N.GENERAL_BENTNOZE).variant, expected, 'Bentnoze stage ' + stage);
+    assert.equal(h.variant(N.GENERAL_WARTFACE).variant, expected, 'Wartface stage ' + stage);
+  }
+});
 
 test('Doric starts with the request line and completes only after the native copper box', () => {
   const h = setup('DoricsQuest');

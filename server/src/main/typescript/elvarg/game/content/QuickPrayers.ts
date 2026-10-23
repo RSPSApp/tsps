@@ -1,12 +1,19 @@
+import { CacheDefinitions } from "../cache/CacheDefinitions";
 import { Player } from "../entity/impl/player/Player";
 import { Skill } from "../model/Skill";
-import { PrayerHandler } from "./PrayerHandler";
-import { PrayerData } from "./PrayerHandler";
+import type { PrayerData } from "./PrayerHandler";
 
 export class QuickPrayers {
-    private static readonly PRAYER_VALUES: PrayerData[] = Array.from(PrayerData.values());
-    private static get PRAYER_HANDLER() {
-        return PrayerHandler;
+    private static prayerValues: PrayerData[] | null = null;
+    private static get PRAYER_VALUES(): PrayerData[] {
+        return this.prayerValues ??= Array.from(this.PRAYER_DATA.values());
+    }
+    private static get PRAYER_HANDLER(): typeof import("./PrayerHandler").PrayerHandler {
+        // Loaded lazily: Player -> QuickPrayers -> PrayerHandler -> Player is a load-time cycle.
+        return require("./PrayerHandler").PrayerHandler;
+    }
+    private static get PRAYER_DATA(): typeof import("./PrayerHandler").PrayerData {
+        return require("./PrayerHandler").PrayerData;
     }
     public static get THICK_SKIN() {
         return QuickPrayers.PRAYER_HANDLER.THICK_SKIN;
@@ -103,19 +110,19 @@ export class QuickPrayers {
     }
 
     public static canUse(player: Player, prayer: PrayerData, msg: boolean): boolean {
-        return PrayerHandler.canUse(player, prayer, msg);
+        return QuickPrayers.PRAYER_HANDLER.canUse(player, prayer, msg);
     }
 
     public static isActivated(player: Player, prayerId: number): boolean {
-        return PrayerHandler.isActivated(player, prayerId);
+        return QuickPrayers.PRAYER_HANDLER.isActivated(player, prayerId);
     }
 
     public static activatePrayerPrayerId(player: Player, prayerId: number): void {
-        PrayerHandler.activatePrayerPrayerId(player, prayerId);
+        QuickPrayers.PRAYER_HANDLER.activatePrayerPrayerId(player, prayerId);
     }
 
     public static deactivatePrayer(player: Player, prayerId: number): void {
-        PrayerHandler.deactivatePrayer(player, prayerId);
+        QuickPrayers.PRAYER_HANDLER.deactivatePrayer(player, prayerId);
     }
     private static readonly TOGGLE_QUICK_PRAYERS = 1500;
     private static readonly SETUP_BUTTON = 1506;
@@ -123,8 +130,9 @@ export class QuickPrayers {
     private static readonly QUICK_PRAYERS_TAB_INTERFACE_ID = 17200;
     private static readonly PRAYER_WIDGET_GROUP_ID = 541;
     private static readonly QUICK_PRAYER_WIDGET_CHILD_ID = 4;
-    private static readonly MINIMAP_WIDGET_GROUP_ID = 160;
-    private static readonly MINIMAP_PRAYER_ORB_CHILD_ID = 20;
+    /** The prayer orb on the desktop orbs and the mobile toplevel's (gameval names). */
+    private static readonly PRAYER_ORB_COMPONENTS = ["orbs:prayerbutton", "orbs_osm:prayerbutton"];
+    private static prayerOrbIds?: number[];
     private static readonly SETUP_WIDGET_GROUP_ID = 77;
     private static readonly SETUP_WIDGET_CHILD_ID = 4;
     private static readonly SETUP_DONE_CHILD_ID = 5;
@@ -134,6 +142,13 @@ export class QuickPrayers {
         0, 1, 2, 18, 19, 3, 4, 5, 6, 7, 8, 20, 21, 9, 10,
         11, 12, 13, 14, 22, 23, 15, 16, 17, 28, 25, 26, 24, 27,
     ];
+
+    private static isPrayerOrb(widgetId: number): boolean {
+        QuickPrayers.prayerOrbIds ??= QuickPrayers.PRAYER_ORB_COMPONENTS
+            .map((name) => CacheDefinitions.getComponentId(name))
+            .filter((id): id is number => id !== null);
+        return QuickPrayers.prayerOrbIds.includes(widgetId);
+    }
 
     private player: Player;
     public prayers: PrayerData[] = Array.from(
@@ -288,7 +303,7 @@ export class QuickPrayers {
             return;
         }
         if (this.enabled) {
-            PrayerHandler.deactivatePrayers(this.player);
+            QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player);
             this.player.getPacketSender().sendVarbit(QuickPrayers.PRAYER_ALL_ACTIVE_VARBIT, 0);
             this.enabled = false;
         } else {
@@ -301,7 +316,7 @@ export class QuickPrayers {
                 QuickPrayers.canUse(this.player, blocked, true);
                 this.enabled = false;
             } else {
-                PrayerHandler.deactivatePrayers(this.player);
+                QuickPrayers.PRAYER_HANDLER.deactivatePrayers(this.player);
                 this.player.getPacketSender().sendVarbit(
                     QuickPrayers.PRAYER_ALL_ACTIVE_VARBIT,
                     this.selectedPrayerMask(),
@@ -325,7 +340,7 @@ export class QuickPrayers {
             } else this.toggleQuickPrayers();
             return true;
         }
-        if (groupId === QuickPrayers.MINIMAP_WIDGET_GROUP_ID && childId === QuickPrayers.MINIMAP_PRAYER_ORB_CHILD_ID) {
+        if (QuickPrayers.isPrayerOrb((groupId << 16) | childId)) {
             if (buttonNum === 2) this.openSetup();
             else this.toggleQuickPrayers();
             return true;

@@ -12,6 +12,7 @@ const Trimming = require("../plugins/items/skillcapes/Trimming.SkillCapes");
 const Boost = require("../plugins/items/skillcapes/Boost.SkillCapes");
 const Teleports = require("../plugins/items/skillcapes/Teleports.SkillCapes");
 const Options = require("../plugins/items/skillcapes/Options.SkillCapes");
+const MetalAttraction = require("../plugins/items/skillcapes/MetalAttraction.SkillCapes");
 const WornVariants = require("../plugins/items/skillcapes/WornVariants.SkillCapes");
 const MaxCape = require("../plugins/items/skillcapes/MaxCape.SkillCapes");
 
@@ -34,7 +35,7 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
   Capes.init(api);
-  for (const unit of [WornVariants, Sellers, Trimming, Boost, Teleports, Options, MaxCape]) unit(api);
+  for (const unit of [WornVariants, Sellers, Trimming, Boost, Teleports, Options, MetalAttraction, MaxCape]) unit(api);
 });
 
 const obj = (name) => core.CacheDefinitions.getObjId(name);
@@ -74,7 +75,7 @@ function container(ids, size) {
 }
 
 /** A player with the given 99s (skill keys), worn cape, inventory and bank. */
-function player({ ninetyNines = [], cape = -1, inventory = [], bank = [], coins = 0 } = {}) {
+function player({ ninetyNines = [], cape = -1, inventory = [], bank = [], coins = 0, location = { x: 3000, y: 3000, z: 0 } } = {}) {
   const equipment = Array(14).fill(null).map(() => item(-1, 0));
   equipment[core.Equipment.CAPE_SLOT] = item(cape);
   const inv = container(inventory, 28);
@@ -86,10 +87,11 @@ function player({ ninetyNines = [], cape = -1, inventory = [], bank = [], coins 
   const varbits = new Map();
   const levelOf = (skill) => (ninetyNines.includes("ALL") || ninetyNines.some((key) => core.Skill[key] === skill) ? 99 : 50);
   return {
-    messages, attributes, varbits,
+    messages, attributes, varbits, location,
     getEquipment: () => ({ ...container([], 0), getItems: () => equipment, contains: (id) => equipment.some((i) => i.getId() === id), refreshItems() {} }),
     getInventory: () => inv,
     getBanks: () => banks,
+    getLocation: () => ({ getX: () => location.x, getY: () => location.y, getZ: () => location.z }),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: (text) => messages.push(text),
@@ -133,6 +135,62 @@ test("worn submenus read the cache's params in order", () => {
   assert.deepEqual(Capes.wornSubOptions(max, 2).slice(0, 2), ["Crafting Guild", "Farming Guild"]);
   const construction = core.CacheDefinitions.getItem(obj("skillcape_construction"));
   assert.equal(Capes.wornSubOption(construction, 1, 1), "Rimmington");
+});
+
+test("Ava's assembler max capes recover 80%, an accumulator max cape and the Ranging cape 72% (80% after Vorkath)", () => {
+  const { ammoRecovery } = Options._test;
+  const recovery = (p) => {
+    const request = { player: p, recovery: null };
+    ammoRecovery(request);
+    return request.recovery;
+  };
+  assert.equal(recovery(player({ cape: obj("skillcape_max_assembler") })), 80);
+  assert.equal(recovery(player({ cape: obj("skillcape_max_anma") })), 72);
+  const max = player({ cape: obj("skillcape_max") });
+  assert.equal(recovery(max), 72);
+  max.setAttribute(Capes.VORKATH_UPGRADE_ATTRIBUTE, true);
+  assert.equal(recovery(max), 80);
+  const ranging = player({ cape: obj("skillcape_ranging") });
+  assert.equal(recovery(ranging), 72);
+  ranging.setAttribute(Capes.VORKATH_UPGRADE_ATTRIBUTE, true);
+  assert.equal(recovery(ranging), 80);
+  assert.equal(recovery(player({ cape: obj("skillcape_attack") })), null);
+});
+
+test("the Ranging cape gathers steel, then mithril after Vorkath's head, only while worn and moving", () => {
+  const { process, tableFor } = MetalAttraction._test;
+  const p = player({ cape: obj("skillcape_ranging") });
+  for (let tick = 0; tick < Capes.DATA.metalAttraction.intervalTicks; tick++) process({ player: p });
+  assert.equal(p.getInventory().getFreeSlots(), 28, "no movement, no gathering");
+
+  p.location.x += 3;
+  process({ player: p });
+  const held = () => p.getInventory().getItems().filter((item) => item.getId() > 0);
+  assert.equal(held().length, 1);
+  assert.ok(tableFor(p).some((entry) => entry.id === held()[0].getId()), "a steel-table item");
+
+  p.getEquipment().getItems()[core.Equipment.CAPE_SLOT].setId(-1);
+  for (let tick = 0; tick < Capes.DATA.metalAttraction.intervalTicks * 2; tick++) process({ player: p });
+  assert.equal(held().length, 1, "no cape, no gathering");
+
+  p.getEquipment().getItems()[core.Equipment.CAPE_SLOT].setId(obj("skillcape_ranging"));
+  p.setAttribute(Capes.VORKATH_UPGRADE_ATTRIBUTE, true);
+  p.location.x += 3;
+  for (let tick = 0; tick < Capes.DATA.metalAttraction.intervalTicks; tick++) process({ player: p });
+  assert.equal(held().length, 2);
+  assert.ok(tableFor(p).some((entry) => entry.id === held()[1].getId()), "a mithril-table item after the upgrade");
+});
+
+test("the Sailing cape asks the sailing plugin for its boat teleport and rename options", () => {
+  events.length = 0;
+  const p = player({ cape: obj("skillcape_sailing") });
+  Teleports.goTo(p, "Teleport boat to the Pandemonium");
+  assert.ok(events.includes("sailing:cape-teleport"));
+  assert.equal(p.messages.at(-1), "That isn't available yet.");
+  events.length = 0;
+  Teleports.goTo(p, "Rename boat");
+  assert.ok(events.includes("sailing:cape-rename-boat"));
+  assert.equal(p.messages.at(-1), "That isn't available yet.");
 });
 
 test("teleport labels from menus and options map to destinations", () => {

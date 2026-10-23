@@ -9,7 +9,6 @@ import { BonusManager } from "../model/equipment/BonusManager";
 import { Sound } from "../Sound";
 import { Sounds } from "../Sounds";
 import { Misc } from "../../util/Misc";
-import { PluginManager } from "../../plugins/PluginManager";
 
 export class PrayerHandler {
 
@@ -226,6 +225,9 @@ export class PrayerHandler {
     }
 
     public static canUse(player: Player, prayer: PrayerData, msg: boolean): boolean {
+        // Loaded lazily: PluginManager imports Player, and QuickPrayers -> PrayerHandler -> Player
+        // is already a cycle at module load.
+        const { PluginManager } = require("../../plugins/PluginManager");
         const disabledMessage = PluginManager.emitPrayerDisabled(player, prayer);
         if (disabledMessage !== null) {
             if (msg) {

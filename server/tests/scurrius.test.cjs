@@ -235,6 +235,72 @@ test("each phase picks only its captured attacks, and rats stop after twelve wav
   assert.ok(!seen({ phase: "enraged", ratWaves: RAT_WAVE_LIMIT }).has("summon"));
 });
 
+test("in phase one he stomps one attack in five beside his target, and only stomps out of reach", () => {
+  const { pickAction, PHASE_ONE } = Fight._test;
+  assert.deepEqual(PHASE_ONE, [["melee", 4], ["stomp", 1]]);
+  const state = { phase: "combat", ratWaves: 0 };
+  assert.deepEqual(new Set(Array.from({ length: 100 }, () => pickAction(state, 0, false))), new Set(["stomp"]));
+});
+
+test("he melees beside his target and stomps from range while closing in, but keeps his place eating", () => {
+  const Method = Fight._test.defineCombatMethod();
+  const flags = new Set();
+  let target = null;
+  const npc = {
+    getSize: () => 3,
+    getLocation: () => new Location(3298, 9866, 0),
+    getCombat: () => ({ getTarget: () => target }),
+    setFlag: (name) => flags.add(name),
+    removeFlag: (name) => flags.delete(name),
+  };
+  const method = new Method();
+  target = createPlayer({ x: 3301, y: 9867 });
+  assert.equal(method.attackDistance(npc), 1);
+  assert.equal(method.type(), core.CombatType.MELEE);
+  assert.ok(flags.has("combat:close-in"));
+  target = createPlayer({ x: 3305, y: 9867 });
+  assert.equal(method.attackDistance(npc), 20);
+  assert.equal(method.type(), core.CombatType.RANGED);
+  Fight.stateOf(npc).phase = "feeding";
+  assert.equal(method.attackDistance(npc), 20);
+});
+
+test("the rubble lands nine ticks after the stomp, on the players still on its tiles", () => {
+  const players = [createPlayer({ x: 3293, y: 9864 }), createPlayer({ x: 3300, y: 9870 })];
+  const hits = new Map(players.map((player) => [player, []]));
+  for (const player of players) {
+    player.getCombat = () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.get(player).push(damage[0].getDamage()) }) });
+  }
+  const boss = {
+    getId: () => Common.SOLO_ID,
+    getPrivateArea: () => null,
+    getHitpoints: () => 500,
+    isRegistered: () => true,
+    getPlayersWithinDistance: () => players,
+  };
+  const rubble = new Set();
+  const sender = players[0].getPacketSender();
+  players[0].getPacketSender = () => new Proxy(sender, {
+    get: (target, method) => (method === "sendGlobalGraphic"
+      ? (_graphic, tile) => { rubble.add(`${tile.getX()},${tile.getY()}`); return target; }
+      : target[method]),
+  });
+  Fight._test.stomp(boss);
+  assert.equal(rubble.size, Fight._test.ROCKFALL_TILES);
+  // The second player steps off onto a clear tile before it lands.
+  let clear = null;
+  for (let x = Common.FLOOR.minX; !clear && x <= Common.FLOOR.maxX; x++) {
+    if (!rubble.has(`${x},9867`)) clear = new Location(x, 9867, 0);
+  }
+  players[1].moveTo(clear);
+  runTicks(8);
+  assert.deepEqual([...hits.values()].map((list) => list.length), [0, 0]);
+  runTicks(1);
+  assert.equal(hits.get(players[0]).length, 1);
+  assert.ok(hits.get(players[0])[0] >= 15 && hits.get(players[0])[0] <= 22);
+  assert.equal(hits.get(players[1]).length, 0);
+});
+
 test("the rubble covers twelve floor tiles, one under each player", () => {
   const boss = { getPrivateArea: () => null };
   const players = [createPlayer({ x: 3293, y: 9864 }), createPlayer({ x: 3300, y: 9870 })];

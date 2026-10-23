@@ -139,6 +139,540 @@
    "base": 6918,
    "result": 12419,
    "name": "Occult ornament kit"
+  },
+  {
+   "kit": 26479,
+   "base": 8839,
+   "result": 26463,
+   "name": "Shattered relics void ornament kit"
+  },
+  {
+   "kit": 26479,
+   "base": 8840,
+   "result": 26465,
+   "name": "Shattered relics void ornament kit"
+  },
+  {
+   "kit": 26479,
+   "base": 8842,
+   "result": 26467,
+   "name": "Shattered relics void ornament kit"
+  },
+  {
+   "kit": 26479,
+   "base": 13072,
+   "result": 26469,
+   "name": "Shattered relics void ornament kit"
+  },
+  {
+   "kit": 26479,
+   "base": 13073,
+   "result": 26471,
+   "name": "Shattered relics void ornament kit"
+  },
+  {
+   "kit": 26479,
+   "base": 11663,
+   "result": 26473,
+   "name": "Shattered relics void ornament kit"
+  },
+  {
+   "kit": 26479,
+   "base": 11664,
+   "result": 26475,
+   "name": "Shattered relics void ornament kit"
+  },
+  {
+   "kit": 26479,
+   "base": 11665,
+   "result": 26477,
+   "name": "Shattered relics void ornament kit"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 13579,
+   "worn": 13580,
+   "name": "Arceuus graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 13581,
+   "worn": 13582,
+   "name": "Arceuus graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 13583,
+   "worn": 13584,
+   "name": "Arceuus graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 13585,
+   "worn": 13586,
+   "name": "Arceuus graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 13587,
+   "worn": 13588,
+   "name": "Arceuus graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 13589,
+   "worn": 13590,
+   "name": "Arceuus graceful boots"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 13591,
+   "worn": 13592,
+   "name": "Piscarilius graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 13593,
+   "worn": 13594,
+   "name": "Piscarilius graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 13595,
+   "worn": 13596,
+   "name": "Piscarilius graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 13597,
+   "worn": 13598,
+   "name": "Piscarilius graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 13599,
+   "worn": 13600,
+   "name": "Piscarilius graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 13601,
+   "worn": 13602,
+   "name": "Piscarilius graceful boots"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 13603,
+   "worn": 13604,
+   "name": "Lovakengj graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 13605,
+   "worn": 13606,
+   "name": "Lovakengj graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 13607,
+   "worn": 13608,
+   "name": "Lovakengj graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 13609,
+   "worn": 13610,
+   "name": "Lovakengj graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 13611,
+   "worn": 13612,
+   "name": "Lovakengj graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 13613,
+   "worn": 13614,
+   "name": "Lovakengj graceful boots"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 13615,
+   "worn": 13616,
+   "name": "Shayzien graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 13617,
+   "worn": 13618,
+   "name": "Shayzien graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 13619,
+   "worn": 13620,
+   "name": "Shayzien graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 13621,
+   "worn": 13622,
+   "name": "Shayzien graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 13623,
+   "worn": 13624,
+   "name": "Shayzien graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 13625,
+   "worn": 13626,
+   "name": "Shayzien graceful boots"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 13627,
+   "worn": 13628,
+   "name": "Hosidius graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 13629,
+   "worn": 13630,
+   "name": "Hosidius graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 13631,
+   "worn": 13632,
+   "name": "Hosidius graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 13633,
+   "worn": 13634,
+   "name": "Hosidius graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 13635,
+   "worn": 13636,
+   "name": "Hosidius graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 13637,
+   "worn": 13638,
+   "name": "Hosidius graceful boots"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 13667,
+   "worn": 13668,
+   "name": "Kourend graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 13669,
+   "worn": 13670,
+   "name": "Kourend graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 13671,
+   "worn": 13672,
+   "name": "Kourend graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 13673,
+   "worn": 13674,
+   "name": "Kourend graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 13675,
+   "worn": 13676,
+   "name": "Kourend graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 13677,
+   "worn": 13678,
+   "name": "Kourend graceful boots"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 21061,
+   "worn": 21063,
+   "name": "Agility Arena graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 21064,
+   "worn": 21066,
+   "name": "Agility Arena graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 21067,
+   "worn": 21069,
+   "name": "Agility Arena graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 21070,
+   "worn": 21072,
+   "name": "Agility Arena graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 21073,
+   "worn": 21075,
+   "name": "Agility Arena graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 21076,
+   "worn": 21078,
+   "name": "Agility Arena graceful boots"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 24743,
+   "worn": 24745,
+   "name": "Hallowed graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 24746,
+   "worn": 24748,
+   "name": "Hallowed graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 24749,
+   "worn": 24751,
+   "name": "Hallowed graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 24752,
+   "worn": 24754,
+   "name": "Hallowed graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 24755,
+   "worn": 24757,
+   "name": "Hallowed graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 24758,
+   "worn": 24760,
+   "name": "Hallowed graceful boots"
+  },
+  {
+   "kit": 0,
+   "base": 11850,
+   "result": 27444,
+   "worn": 27446,
+   "name": "Adventurer graceful hood"
+  },
+  {
+   "kit": 0,
+   "base": 11852,
+   "result": 27447,
+   "worn": 27449,
+   "name": "Adventurer graceful cape"
+  },
+  {
+   "kit": 0,
+   "base": 11854,
+   "result": 27450,
+   "worn": 27452,
+   "name": "Adventurer graceful top"
+  },
+  {
+   "kit": 0,
+   "base": 11856,
+   "result": 27453,
+   "worn": 27455,
+   "name": "Adventurer graceful legs"
+  },
+  {
+   "kit": 0,
+   "base": 11858,
+   "result": 27456,
+   "worn": 27458,
+   "name": "Adventurer graceful gloves"
+  },
+  {
+   "kit": 0,
+   "base": 11860,
+   "result": 27459,
+   "worn": 27461,
+   "name": "Adventurer graceful boots"
+  },
+  {
+   "kit": 25099,
+   "base": 11850,
+   "result": 25069,
+   "worn": 25071,
+   "name": "Trailblazer graceful hood"
+  },
+  {
+   "kit": 25099,
+   "base": 11852,
+   "result": 25072,
+   "worn": 25074,
+   "name": "Trailblazer graceful cape"
+  },
+  {
+   "kit": 25099,
+   "base": 11854,
+   "result": 25075,
+   "worn": 25077,
+   "name": "Trailblazer graceful top"
+  },
+  {
+   "kit": 25099,
+   "base": 11856,
+   "result": 25078,
+   "worn": 25080,
+   "name": "Trailblazer graceful legs"
+  },
+  {
+   "kit": 25099,
+   "base": 11858,
+   "result": 25081,
+   "worn": 25083,
+   "name": "Trailblazer graceful gloves"
+  },
+  {
+   "kit": 25099,
+   "base": 11860,
+   "result": 25084,
+   "worn": 25086,
+   "name": "Trailblazer graceful boots"
+  },
+  {
+   "kit": 30044,
+   "base": 11850,
+   "result": 30045,
+   "worn": 30047,
+   "name": "Varlamore graceful hood"
+  },
+  {
+   "kit": 30044,
+   "base": 11852,
+   "result": 30048,
+   "worn": 30050,
+   "name": "Varlamore graceful cape"
+  },
+  {
+   "kit": 30044,
+   "base": 11854,
+   "result": 30051,
+   "worn": 30053,
+   "name": "Varlamore graceful top"
+  },
+  {
+   "kit": 30044,
+   "base": 11856,
+   "result": 30054,
+   "worn": 30056,
+   "name": "Varlamore graceful legs"
+  },
+  {
+   "kit": 30044,
+   "base": 11858,
+   "result": 30057,
+   "worn": 30059,
+   "name": "Varlamore graceful gloves"
+  },
+  {
+   "kit": 30044,
+   "base": 11860,
+   "result": 30060,
+   "worn": 30062,
+   "name": "Varlamore graceful boots"
+  },
+  {
+   "kit": 30451,
+   "base": 4708,
+   "result": 30445,
+   "name": "Echo ahrim's ornament kit"
+  },
+  {
+   "kit": 30451,
+   "base": 4712,
+   "result": 30447,
+   "name": "Echo ahrim's ornament kit"
+  },
+  {
+   "kit": 30451,
+   "base": 4714,
+   "result": 30449,
+   "name": "Echo ahrim's ornament kit"
+  },
+  {
+   "kit": 30451,
+   "base": 4710,
+   "result": 30568,
+   "name": "Echo ahrim's ornament kit"
   }
  ]
 }

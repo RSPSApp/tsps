@@ -71,6 +71,10 @@ export class HdPlugin extends Plugin {
     private compilingHd = false;
 
     // Config events only reach a started plugin: pick up changes made while HD was off.
+    hdEnabled(): boolean {
+        return this.isEnabled();
+    }
+
     protected override async startUp(): Promise<void> {
         this.options = this.readOptions();
     }

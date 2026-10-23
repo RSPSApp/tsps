@@ -17,20 +17,30 @@
  * so kills from before Combat Achievements still finish their tasks (as the Wiki says kill-count
  * tasks were completed retroactively). The boss pages show the count through the monster's
  * kill-count varp (data/bosses.json).
+ *
+ * Counts are saved by monster name: the cache's monster keys (enum 3970) are alphabetical and move
+ * when a monster is added. Saves keyed by number are from before, and read through the keys of
+ * the cache they were written on (data/legacy-monster-keys.json).
  */
 const Data = require("./Data.CombatAchievements");
 const Progress = require("./Progress.CombatAchievements");
+const LEGACY_KEYS = require("./data/legacy-monster-keys.json").names;
 
 const KILLS_ATTRIBUTE = "combat-achievements:kills";
 
 let pluginApi;
 
 function counts(player) {
-  return { ...(player.getAttribute(KILLS_ATTRIBUTE) ?? {}) };
+  const all = {};
+  for (const [key, value] of Object.entries(player.getAttribute(KILLS_ATTRIBUTE) ?? {})) {
+    const name = /^\d+$/.test(key) ? LEGACY_KEYS[key] : key;
+    if (name) all[name] = Math.max(Number(all[name]) || 0, Number(value) || 0);
+  }
+  return all;
 }
 
 function killCount(player, monster) {
-  return Number(counts(player)[monster.key]) || 0;
+  return Number(counts(player)[monster.name]) || 0;
 }
 
 function sendKillCount(player, monster) {
@@ -49,7 +59,7 @@ function checkTasks(player, monster, { silent = false } = {}) {
 
 function setCount(player, monster, value) {
   const all = counts(player);
-  all[monster.key] = Math.max(0, Math.floor(value));
+  all[monster.name] = Math.max(0, Math.floor(value));
   player.setAttribute(KILLS_ATTRIBUTE, all);
   sendKillCount(player, monster);
 }
@@ -104,7 +114,7 @@ function restore(player) {
   const all = counts(player);
   for (const [name, value] of Object.entries(request.counts)) {
     const monster = Data.monsterNamed(name);
-    if (monster && Number(value) > (Number(all[monster.key]) || 0)) all[monster.key] = Math.floor(Number(value));
+    if (monster && Number(value) > (Number(all[monster.name]) || 0)) all[monster.name] = Math.floor(Number(value));
   }
   player.setAttribute(KILLS_ATTRIBUTE, all);
   for (const monster of Data.monsters().values()) {
@@ -118,8 +128,8 @@ function restore(player) {
 function reset(player) {
   const all = counts(player);
   player.setAttribute(KILLS_ATTRIBUTE, {});
-  for (const key of Object.keys(all)) {
-    const monster = Data.monsters().get(Number(key));
+  for (const name of Object.keys(all)) {
+    const monster = Data.monsterNamed(name);
     if (monster) sendKillCount(player, monster);
   }
 }

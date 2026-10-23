@@ -198,8 +198,8 @@ export function getInteractHighlightDrawTargets(host: WebGLOsrsRendererHost, ): 
         const out = host.interactHighlightDrawTargets;
         out.length = 0;
 
-        const config = host.osrsClient.interactHighlightPlugin.getConfig();
-        if (!config.enabled) return out;
+        const config = host.osrsClient.clientPlugins.interactHighlightConfig();
+        if (!config?.enabled) return out;
 
         host.syncInteractHighlightActiveTargetFromLocalInteraction();
         host.maybeExpireInteractHighlightTarget();

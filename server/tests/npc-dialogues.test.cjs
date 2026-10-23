@@ -363,6 +363,46 @@ test('an action step is dispatched once with its transcript step id', () => {
   assert.deepEqual(said, ['The gate swings open.']);
 });
 
+test('a shop split into versions opens the version a plugin picks, else its Default (#831)', () => {
+  // Ned's "Yes, I would like some rope." names the shop page; the dump lists its versions.
+  const find = (nodes) => {
+    for (const node of nodes ?? []) {
+      if (node.action === 'open_shop') return node;
+      const nested = find(node.steps) ?? find((node.options ?? []).flatMap((option) => option.steps ?? []));
+      if (nested) return nested;
+    }
+    return undefined;
+  };
+  const step = find(talk('Ned'));
+  assert.deepEqual(step.shops, ["Ned's Handmade Rope (100% Wool) (Default)", "Ned's Handmade Rope (100% Wool) (Fremennik Isles)"]);
+
+  const { ShopDefinition } = require('../dist/game/definition/ShopDefinition');
+  const { ShopManager } = require('../dist/game/model/container/shop/ShopManager');
+  const all = ShopDefinition.all;
+  const open = ShopManager.open;
+  const opened = [];
+  ShopDefinition.all = () => step.shops.map((name, index) => ({ getName: () => name, getId: () => 1249 + index }));
+  ShopManager.open = (player, id) => { opened.push(id); return true; };
+  try {
+    const player = {
+      getDialogueManager: () => ({ reset() {}, startDialogues(chain) { for (const entry of chain.getDialogues().values()) try { entry.send(player); } catch { /* unwired */ } } }),
+      getPacketSender: () => ({ sendInterfaceRemoval() {} }),
+      sendMessage() {},
+    };
+    const definition = { getName: () => 'Ned', getId: () => 4280 };
+    const event = { player, npc: { getId: () => 4280 }, npcId: 4280, definition };
+    const run = (pick) => startDialogue({
+      emitCustomEvent(name, payload) { if (name === 'npc-dialogue:shop' && pick) payload.shop = pick; },
+    }, event, [step], {}, { player, npc: event.npc, npcId: 4280, definition, pages: [] });
+    run(null);
+    run(step.shops[1]);
+  } finally {
+    ShopDefinition.all = all;
+    ShopManager.open = open;
+  }
+  assert.deepEqual(opened, [1249, 1250]);
+});
+
 test('"previous" on the first menu replays it instead of ending the dialogue', () => {
   // Ulsquire's "What did you find out about the remains?" ends in {{tact|previous}}:
   // the player must land back on the question menu, not have the chat closed.

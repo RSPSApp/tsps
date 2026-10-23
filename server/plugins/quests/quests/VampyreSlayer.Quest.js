@@ -67,7 +67,7 @@ module.exports = function registerVampyreSlayerQuest(api) {
   const hasItem = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
   const ownsStake = (player) => hasItem(player, STAKE_ITEM_ID) ||
-    (player.getBanks?.() ?? []).some((bank) => bank.getAmount(STAKE_ITEM_ID) > 0);
+    (player.getBanks?.() ?? []).some((bank) => bank?.getAmount?.(STAKE_ITEM_ID) > 0);
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);

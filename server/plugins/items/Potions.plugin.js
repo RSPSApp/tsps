@@ -1300,30 +1300,85 @@ function handlePotionDrink(player, itemId, slot) {
   return true;
 }
 
-/** Pour matching four-dose drinks into the target, leaving excess in the source. */
-function combinePotionDoses(event) {
-  const { player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot } = event;
-  const source = POTION_BY_ITEM_ID.get(usedItemId);
-  const target = POTION_BY_ITEM_ID.get(usedWithItemId);
-  if (!source || !target || source.chain !== target.chain || source.chain.length !== 4 ||
-      source.potion.emptyItemId <= 0 || usedItemSlot === usedWithItemSlot) return;
+/** Cache enum 5583: every potion, mix and unfinished potion to its dose enum (0 = the empty vial, 1-4 doses). */
+const POTION_DOSE_ENUM = 5583;
+/** Pouring between vessels (rsprox captures: combining, dividing). */
+const POUR_SOUND = 2401;
+const DOSE_WORDS = ["", "one", "two", "three", "four"];
 
+/**
+ * The vessels of a potion's family by dose, `byDose[0]` the empty one, from the cache's dose enum;
+ * drinks it lacks (Guthix rest, the CoX gourds) use their registered chain.
+ */
+function doseFamily(itemId) {
+  const { CacheDefinitions } = pluginApi.core;
+  const enumId = CacheDefinitions.getEnumValues(POTION_DOSE_ENUM).get(itemId);
+  if (Number.isInteger(enumId)) {
+    const values = CacheDefinitions.getEnumValues(enumId);
+    const byDose = [0, 1, 2, 3, 4].map((dose) => values.get(dose) ?? -1);
+    return { key: enumId, byDose, doses: byDose.indexOf(itemId), max: byDose.slice(1).filter((id) => id > 0).length };
+  }
+  const entry = POTION_BY_ITEM_ID.get(itemId);
+  if (!entry || entry.potion.emptyItemId <= 0 || entry.chain.length !== 4) return null;
+  return { key: entry.chain, byDose: [entry.potion.emptyItemId, ...[...entry.chain].reverse()], doses: entry.doses, max: 4 };
+}
+
+function pourMessage(player, text) {
+  player.getPacketSender().sendSound(POUR_SOUND, 1, 0).sendTypedMessage(pluginApi.core.ChatType.SPAM, text);
+}
+
+/**
+ * One potion used on another of its kind pours into the target, leaving any excess in the source
+ * ("You have combined the liquid into four doses."); used on its empty vessel it is shared out,
+ * the larger half staying ("You divide the liquid between the vessels."). rsprox captures.
+ */
+function pourPotion(event) {
+  const { player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot } = event;
   const inventory = player.getInventory();
   const sourceItem = inventory.getItems()[usedItemSlot];
   const targetItem = inventory.getItems()[usedWithItemSlot];
-  if (sourceItem?.getId() !== usedItemId || targetItem?.getId() !== usedWithItemId ||
+  if (usedItemSlot === usedWithItemSlot || sourceItem?.getId() !== usedItemId || targetItem?.getId() !== usedWithItemId ||
       sourceItem.getAmount() !== 1 || targetItem.getAmount() !== 1) return;
-
-  event.handled = true;
-  const transferred = Math.min(source.doses, source.chain.length - target.doses);
-  if (transferred === 0) return;
-  const remaining = source.doses - transferred;
+  const source = doseFamily(usedItemId);
+  const target = doseFamily(usedWithItemId);
   const { Item } = pluginApi.core;
-  inventory.setItem(usedItemSlot, new Item(remaining > 0
-    ? source.chain[source.chain.length - remaining] : source.potion.emptyItemId, 1));
-  inventory.setItem(usedWithItemSlot, new Item(target.chain[target.chain.length - target.doses - transferred], 1));
+  const potion = source ?? target;
+  const potionSlot = source ? usedItemSlot : usedWithItemSlot;
+  const emptySlot = source ? usedWithItemSlot : usedItemSlot;
+  if (potion && potion.max > 1 && potion.doses >= 2 && inventory.getItems()[emptySlot].getId() === potion.byDose[0]) {
+    event.handled = true;
+    inventory.setItem(potionSlot, new Item(potion.byDose[Math.ceil(potion.doses / 2)], 1));
+    inventory.setItem(emptySlot, new Item(potion.byDose[Math.floor(potion.doses / 2)], 1));
+    inventory.refreshItems();
+    pourMessage(player, "You divide the liquid between the vessels.");
+    return;
+  }
+  if (!source || !target || source.key !== target.key || source.max < 2 || source.doses < 1 || target.doses < 1) return;
+  event.handled = true;
+  const transferred = Math.min(source.doses, source.max - target.doses);
+  if (transferred === 0) return;
+  inventory.setItem(usedItemSlot, new Item(source.byDose[source.doses - transferred], 1));
+  inventory.setItem(usedWithItemSlot, new Item(target.byDose[target.doses + transferred], 1));
   inventory.refreshItems();
-  player.sendMessage("You pour from one container into the other.");
+  pourMessage(player, `You have combined the liquid into ${DOSE_WORDS[target.doses + transferred]} doses.`);
+}
+
+/** Vials of water, coconut milk and blood empty to a vial too, though no dose enum lists them. */
+const EMPTYABLE_VIALS = ["vial_water", "vial_coconut_milk", "vial_blood"];
+
+/** "Empty" on a potion or a filled vial: the empty vessel, "You empty the vial." (rsprox captures). */
+function emptyVessel(event) {
+  const { player, itemId, slot, clickType } = event;
+  const { CacheDefinitions, Item } = pluginApi.core;
+  if (CacheDefinitions.getItem(itemId)?.inventoryActions?.[clickType - 1] !== "Empty") return;
+  const family = doseFamily(itemId);
+  const empty = family && family.doses >= 1 ? family.byDose[0]
+    : EMPTYABLE_VIALS.some((name) => CacheDefinitions.getObjId(name) === itemId) ? CacheDefinitions.getObjId("vial_empty") : -1;
+  const inventory = player.getInventory();
+  if (empty <= 0 || inventory.getItems()[slot]?.getId() !== itemId) return;
+  event.handled = true;
+  inventory.setItem(slot, new Item(empty, 1)).refreshItems();
+  player.getPacketSender().sendTypedMessage(pluginApi.core.ChatType.SPAM, "You empty the vial.");
 }
 
 function pauseTimedEffects({ player }) {
@@ -1350,8 +1405,13 @@ function resumeTimedEffects({ player }) {
   }
 }
 
-/** The hitpoints orb's "Cure" (orbs:healthbutton). */
-const HEALTH_ORB_CURE_UID = (160 << 16) | 9;
+/** The hitpoints orb's "Cure", on the desktop orbs and the mobile toplevel's (gameval names). */
+const HEALTH_ORB_CURE_COMPONENTS = ["orbs:healthbutton", "orbs_osm:healthbutton"];
+/** Packed ids of interface components, by gameval name; ones this cache lacks are left out. */
+function componentIds(api, names) {
+  return names.map((name) => api.core.CacheDefinitions.getComponentId(name)).filter(Number.isInteger);
+}
+
 /** The potions it can drink: those that cure poison or venom. */
 const CURE_POTIONS = new Set([
   "Antipoison", "Superantipoison", "Antidote+", "Antidote++", "Sanfew serum",
@@ -1403,12 +1463,13 @@ module.exports = {
     api.onPlayerLogout(pauseTimedEffects);
     api.onPlayerLogin(resumeTimedEffects);
     api.onPlayerDeath(clearPrayerRegeneration);
-    api.onItemOnItem(combinePotionDoses, { noted: false });
+    api.onItemOnItem(pourPotion, { noted: false });
+    api.onItemAction(emptyVessel);
     api.onItemFirstAction((event) => {
       const { player, itemId, slot } = event;
       return handlePotionDrink(player, itemId, slot);
     });
-    api.onInterfaceActionButton(HEALTH_ORB_CURE_UID, cureFromHealthOrb);
+    api.onInterfaceActionButton(componentIds(api, HEALTH_ORB_CURE_COMPONENTS), cureFromHealthOrb);
 
     api.onPlayerProcess(({ player }) => {
       if (player?.isPlayerBot?.()) {

@@ -49,6 +49,11 @@ export class NpcDefinition {
     private deathTicks: number = 2;
     private combatLevel: number = 0;
     private stats: number[] = [...NpcDefinition.DEFAULT_STATS];
+    private rangedDefenceBonuses: Partial<Record<"light" | "heavy", number>> = {};
+
+    public getRangedDefenceBonus(type: "light" | "standard" | "heavy"): number {
+        return (type === "standard" ? undefined : this.rangedDefenceBonuses[type]) ?? this.stats[14] ?? 0;
+    }
     private slayerLevel: number = 0;
     private combatFollowDistance: number = 7;
     private actions: string[] = [];

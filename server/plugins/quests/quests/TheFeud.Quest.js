@@ -332,7 +332,7 @@ module.exports = function registerTheFeudQuest(api) {
     sender.sendVarbit(VARBIT_DRINK_FOUND, current >= STAGE_POISON_PLAN ? 1 : 0);
     sender.sendVarbit(VARBIT_FOUND_TRAIT, current >= STAGE_TRAITOR_TOLD ? 1 : 0);
     sender.sendVarbit(VARBIT_TALK_VILLAGER, current >= STAGE_MAYOR ? 2 : current >= STAGE_CHAMPION ? 1 : 0);
-    sender.sendVarbit(VARBIT_NPC_MULTI, current >= STAGE_JOINED && current < STAGE_COMPLETE ? 2 : 0);
+    sender.sendVarbit(VARBIT_NPC_MULTI, current >= STAGE_JOINED ? 2 : 0);
     sender.sendVarbit(VARBIT_BOSS_VIS, current >= STAGE_REPORTED && current < STAGE_CHAMPION ? 1 : 0);
     sender.sendVarbit(VARBIT_BOSS_VIS2, current >= STAGE_REPORTED && current < STAGE_CHAMPION ? 1 : 0);
     sender.sendVarbit(VARBIT_BANDIT_BOSS_VIS, current >= STAGE_CHAMPION ? 1 : 0);

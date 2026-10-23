@@ -34,9 +34,21 @@ const ROCKS = [
   { objectName: "Tin rocks", objectIds: [7485, 7486], level: 1, xp: 8, oreId: ItemIds.TIN_ORE, petBase: 741600, cycles: 12, respawnTicks: 4 },
   { objectName: "Blurite rocks", objectIds: [ObjectIds.BLURITE_ROCKS, ObjectIds.BLURITE_ROCKS_2], level: 10, xp: 17.5, oreId: ItemIds.BLURITE_ORE, successLow: 90, successHigh: 350, respawnTicks: 42 },
   { objectName: "Iron rocks", objectIds: [7455, 7488], level: 15, xp: 35, oreId: ItemIds.IRON_ORE, petBase: 741600, cycles: 13, respawnTicks: 5 },
+  // Wiki Rocks (Barronite): level 14, 1-minute respawn; each success is 76% shards (4-6, 16xp)
+  // or 24% deposit (1, 32xp). Success chart 0.328125 at level 14 -> 0.394531 at 99 (/256: 84 at level 14, 101 at level 99).
+  {
+    objectName: "Barronite rocks",
+    objectIds: [41547, 41548, 41549, 41550],
+    level: 14, xp: 32, oreId: ItemIds.BARRONITE_DEPOSIT,
+    successLow: 82, successHigh: 101, respawnTicks: 100,
+    outcomes: [
+      { itemId: ItemIds.BARRONITE_SHARDS, min: 4, max: 6, weight: 76, xp: 16, message: "You manage to mine some barronite shards." },
+      { itemId: ItemIds.BARRONITE_DEPOSIT, min: 1, max: 1, weight: 24, xp: 32, message: "You manage to mine a barronite deposit." },
+    ],
+  },
   { objectName: "Silver rocks", objectIds: [7457], level: 20, xp: 40, oreId: ItemIds.SILVER_ORE, petBase: 741600, cycles: 14, respawnTicks: 7 },
   { objectName: "Coal rocks", objectIds: [7456], level: 30, xp: 50, oreId: ItemIds.COAL, petBase: 290640, cycles: 15, respawnTicks: 7 },
-  { objectName: "Gold rocks", objectIds: [7491, 9720, 9721, 9722, 11951, 11183, 11184, 11185, 2099], level: 40, xp: 65, oreId: ItemIds.GOLD_ORE, petBase: 296640, cycles: 15, respawnTicks: 10 },
+  { objectName: "Gold rocks", objectIds: [7491, 9720, 9721, 9722, 11951, 11183, 11184, 11185, 2099, ObjectIds.GOLD_ROCKS_2], level: 40, xp: 65, oreId: ItemIds.GOLD_ORE, petBase: 296640, cycles: 15, respawnTicks: 10 },
   { objectName: "Mithril rocks", objectIds: [7492, 7459], level: 50, xp: 80, oreId: ItemIds.MITHRIL_ORE, petBase: 148320, cycles: 17, respawnTicks: 11 },
   { objectName: "Adamantite rocks", objectIds: [7460], level: 70, xp: 95, oreId: ItemIds.ADAMANTITE_ORE, petBase: 59328, cycles: 18, respawnTicks: 14 },
   { objectName: "Runite rocks", objectIds: [14859, 4860, 2106, 2107, 7461], level: 85, xp: 125, oreId: ItemIds.RUNITE_ORE, petBase: 42377, cycles: 23, respawnTicks: 45 },
@@ -186,6 +198,20 @@ function startMining(player, rockObject, rock, activeSessions) {
   return true;
 }
 
+function rollOutcome(outcomes) {
+  const total = outcomes.reduce((sum, outcome) => sum + outcome.weight, 0);
+  let roll = Math.random() * total;
+  for (const outcome of outcomes) {
+    roll -= outcome.weight;
+    if (roll < 0) return outcome;
+  }
+  return outcomes[outcomes.length - 1];
+}
+
+function outcomeAmount(outcome) {
+  return outcome.min + Math.floor(Math.random() * (outcome.max - outcome.min + 1));
+}
+
 class MiningTask extends Task {
   constructor(activeSessions) {
     super(1);
@@ -256,15 +282,18 @@ class MiningTask extends Task {
         if (state.cyclesUntilOre > 0) continue;
       }
 
-      if (InfernalPickaxe.tryCombustOre(player, state.pickaxe.id, state.rock.oreId)) {
+      const outcome = state.rock.outcomes ? rollOutcome(state.rock.outcomes) : null;
+      const oreId = outcome?.itemId ?? state.rock.oreId;
+      const amount = outcome ? outcomeAmount(outcome) : 1;
+      if (InfernalPickaxe.tryCombustOre(player, state.pickaxe.id, oreId)) {
         player.sendMessage("The infernal pickaxe smelts the ore as you mine it.");
       } else {
-        giveOre(player, state.rock.oreId, 1);
-        player.sendMessage(state.rock.oreMessage ?? "You get some ores.");
+        giveOre(player, oreId, amount);
+        player.sendMessage(outcome?.message ?? state.rock.oreMessage ?? "You get some ores.");
       }
       CrystalPickaxe.tryUseCharge(player);
-      player.getSkillManager().addExperiences(Skill.MINING, state.rock.xp);
-      mineExtraOre(player, state.rock);
+      player.getSkillManager().addExperiences(Skill.MINING, outcome?.xp ?? state.rock.xp);
+      if (!outcome) mineExtraOre(player, state.rock);
       pluginApi.emitCustomEvent("mining:success", { player, skill: Skill.MINING, petBase: state.rock.petBase });
       if (state.rock.infinite) {
         if (inventoryBlocks(player, state.rock.oreId)) {

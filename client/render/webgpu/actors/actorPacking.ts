@@ -368,6 +368,8 @@ export function packNpcActorData(
     writer.data[offset + 2] = renderPlane | (ecs.getRotation(ecsId) << 2);
     writer.data[offset + 3] = ecs.getServerId(ecsId);
     packActorColorOverride(writer, index, ecs.getColorOverride(ecsId));
+    // Its fade (OSRS npc transparency): 0 opaque to 255 invisible.
+    writer.data[index * 8 + 6] = ecs.getTransparency?.(ecsId, getClientCycle() | 0) ?? 0;
     return index;
 }
 

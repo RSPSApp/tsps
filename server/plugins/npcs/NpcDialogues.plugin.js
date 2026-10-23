@@ -13,7 +13,8 @@
  * past it. A message step's "npc-dialogue:action" (`kind: "message"`) can set
  * `box: { items }` (one or two item ids) to show it as an item box, as OSRS shows
  * hand-outs, instead of a chat message. "npc-dialogue:start" plays a named variant on demand.
- * Speech, choices, random alternatives and named shops run through existing systems.
+ * Speech, choices, random alternatives and named shops run through existing systems; a shop
+ * with versions emits "npc-dialogue:shop" ({ player, npcId, target, shops, shop }) to pick one.
  */
 const fs = require("fs");
 const path = require("path");
@@ -287,6 +288,19 @@ function nestOrphanConditions(steps) {
   });
 }
 
+/** First-true (else first-unknown, else none) pick for a run of sibling conditions. */
+function chooseCondition(run, resolveCondition) {
+  const answers = run.map((condition) => resolveCondition(condition));
+  let index = answers.findIndex((answer) => answer === true);
+  if (index === -1) {
+    const unknown = answers.findIndex((answer) => answer === null);
+    // Every condition answered false: the guarded content does not apply.
+    if (unknown === -1) return null;
+    index = unknown;
+  }
+  return { index, condition: run[index] };
+}
+
 /**
  * Flatten a transcript into a linear play queue.
  *
@@ -294,6 +308,8 @@ function nestOrphanConditions(steps) {
  * run of sibling conditions the first true one wins; if none is true the first the
  * resolver could not answer wins, so behaviour is unchanged when no plugin resolves
  * them. If every condition is explicitly false the guarded content is skipped.
+ * `opts.lazyConditions` leaves each run as a `condition_run` step for the live
+ * runner to resolve when it is reached, so earlier choices/actions are observed.
  * Jumps resolve through `opts.resolveJump`; unresolved jumps fall through.
  * `opts.wrapBranch` can splice bookkeeping steps in front of a chosen branch.
  */
@@ -336,23 +352,33 @@ function flatten(steps, opts = {}) {
     const runStart = position;
     while (steps[position + 1]?.type === "condition") position++;
     const run = steps.slice(runStart, position + 1);
-    const answers = run.map((condition) => resolveCondition(condition));
-    let chosen = answers.findIndex((answer) => answer === true);
-    if (chosen === -1) {
-      const unknown = answers.findIndex((answer) => answer === null);
-      // Every condition answered false: the guarded content does not apply.
-      if (unknown === -1) continue;
-      chosen = unknown;
+    if (opts.lazyConditions) {
+      out.push({ type: "condition_run", run });
+      continue;
     }
-    const step_ = run[chosen];
+    const chosen = chooseCondition(run, resolveCondition);
+    if (!chosen) continue;
+    const step_ = chosen.condition;
     out.push(...wrapBranch(step_, flatten(step_.steps || [], opts)));
     if (opts.stopped) break;
     if (continues(step_.steps)) {
-      out.push(...flatten(run.slice(chosen + 1), opts));
+      out.push(...flatten(run.slice(chosen.index + 1), opts));
       if (opts.stopped) break;
     }
   }
   return out;
+}
+
+/**
+ * The shop an open_shop step opens. A shop page split into versions lists them in
+ * `step.shops` ("Ned's Handmade Rope (100% Wool) (Default)", "... (Fremennik Isles)");
+ * "npc-dialogue:shop" lets a plugin pick one by game state, else the Default version opens.
+ */
+function shopName(api, player, npcId, step) {
+  if (!Array.isArray(step.shops)) return step.target;
+  const request = { player, npcId, target: step.target, shops: step.shops, shop: null };
+  api.emitCustomEvent("npc-dialogue:shop", request);
+  return request.shop ?? step.shops.find((name) => name.endsWith(" (Default)"));
 }
 
 function startDialogue(api, event, steps, branches = {}, context = {}) {
@@ -518,7 +544,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       .find((candidate) => candidate && !sameBranch(candidate)) ?? "end";
   };
 
-  const flattenOptions = () => ({ resolveCondition, resolveJump,
+  const flattenOptions = () => ({ resolveCondition, resolveJump, lazyConditions: true,
     wrapBranch: (chosen, branch) => [{ type: "condition_chosen", id: chosen.id, text: chosen.text }, ...branch] });
 
   function presentMenu(menu, offset = 0, tail = []) {
@@ -591,6 +617,24 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // Jumps that only ever lead to more jumps would never show anything.
           if (++context.jumps > MAX_JUMPS) return close();
           run([...step.steps, ...after], currentRecord);
+        } }));
+        manager.startDialogues(chain);
+        return;
+      }
+      if (step.type === "condition_run") {
+        const after = queue.slice(position + 1);
+        chain.add(new ActionDialogue(index++, { execute: () => {
+          // Judged now, not when the queue was built: the choices/actions before
+          // this point have run and may have changed what the guards observe.
+          const chosen = chooseCondition(step.run, resolveCondition);
+          if (!chosen) return run(after, currentRecord);
+          const tail = continues(chosen.condition.steps) ? step.run.slice(chosen.index + 1) : [];
+          run([
+            { type: "condition_chosen", id: chosen.condition.id, text: chosen.condition.text },
+            ...(chosen.condition.steps || []),
+            ...tail,
+            ...after,
+          ], currentRecord);
         } }));
         manager.startDialogues(chain);
         return;
@@ -755,7 +799,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return run([...(option.steps || []), ...rest], record);
         }
         if (step.type === "action" && step.action === "open_shop") {
-          const target = step.target;
+          const target = shopName(api, player, npcId, step);
           const shops = ShopDefinition.all().filter((shop) => shop.getName() === target);
           if (shops.length === 1) {
             close();

@@ -111,7 +111,7 @@ test("the data: every object and boot item as the cache names it, 33 questions w
   for (const floor of Data.DATA.floors) {
     assert.equal(name(floor.portal), "Portal");
     if (floor.down) assert.ok(["Ladder", "Dripping vine"].includes(name(floor.down)));
-    for (const id of floor.up) assert.ok(["Ladder", "Dripping vine", "Bone Chain"].includes(name(id)));
+    for (const id of floor.up) assert.ok(["Ladder", "Dripping vine", "Bone Chain", "Boney ladder"].includes(name(id)));
   }
   assert.deepEqual(Data.DATA.boots.map((boot) => CacheDefinitions.getItem(boot.item).name), Data.DATA.boots.map((boot) => boot.name));
   assert.equal(Data.DATA.questions.length, 33);
@@ -272,6 +272,10 @@ test("as captured: portals need the floor done (or the Wiki's combat level); ent
     "You climb up the ladder which seems to twist and wind in all directions.",
     "move 3081,3421,0",
   ]);
+  events.length = 0;
+  Travel.climbUp({ player, object: { getId: () => 23921 } });
+  assert.equal(`${events[0].destination.getX()},${events[0].destination.getY()},${events[0].destination.getZ()}`, "2148,5283,0",
+    "floor 4's Boney ladder lands beside floor 3's vine down");
   assert.equal(Travel.climbDown({ player, object: { getId: () => 1 } }), false, "other ladders fall through");
 });
 

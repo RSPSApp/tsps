@@ -8,7 +8,7 @@
  *   empty to full over `cycles` client cycles (390, its melee charge), then held at half for 3
  *   ticks, then taken away. The NPC goes 3 ticks later.
  * ::ifcolour <groupId> <childId> <rgb15> - recolours a component (IF_SETCOLOUR, 15-bit RGB as the
- *   game sends it). The boss HUD's bar is 303:13-15: 25600, 576, 800 normally; the Doom's shield
+ *   game sends it). The boss HUD's bar is 303:14-16: 25600, 576, 800 normally; the Doom's shield
  *   makes them 132, 623, 853.
  */
 

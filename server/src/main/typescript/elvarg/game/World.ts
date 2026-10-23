@@ -130,7 +130,8 @@ export class World {
     }
 
     public static getPlayerByName(username: string): Player | undefined {
-        return this.players.search(p => p && p.getUsername && p.getUsername() === Misc.formatText(username));
+        const name = Misc.formatNameForProtocol(Misc.formatDisplayName(username));
+        return this.players.search(p => p && p.getUsername && Misc.formatNameForProtocol(p.getUsername()) === name);
     }
 
     public static isPlayerSessionConnected(player: Player): boolean {
@@ -713,11 +714,12 @@ export class World {
     // Maintains player.getLocalNpcs() - the per-tick sync path (PlayerSession.flushClient)
     // reads this list directly to know which NPCs to include in the player's view.
     /**
-     * A teleported NPC leaves the local list for its teleport tick, except one gliding there
-     * (npc.exactMove): the glide has to reach clients in that very tick, with the teleport.
+     * A teleported NPC stays in view the tick it moves when that tick's update has to reach the
+     * client with it: an exact move (its glide), or a fade (its fade in where it lands); otherwise
+     * it is dropped and added back the next tick, and the update would be lost.
      */
-    private static isExactMoving(npc: NPC): boolean {
-        return npc.getExactMove?.() != null;
+    private static staysInViewWhenPlaced(npc: NPC): boolean {
+        return npc.getExactMove?.() != null || npc.getTransparency?.() != null;
     }
 
     /** How far the player sees NPCs (15 unless an area widens it). */
@@ -740,7 +742,7 @@ export class World {
                 npc.isRegistered() &&
                 npc.isVisible() &&
                 origin.isViewableFromWithin(BoatManager.rootLocation(npc), viewDistance) &&
-                (!npc.isNeedsPlacement() || World.isExactMoving(npc)) &&
+                (!npc.isNeedsPlacement() || World.staysInViewWhenPlaced(npc)) &&
                 BoatManager.syncArea(npc) === privateArea &&
                 BoatManager.canSeeAboard(player, npc) &&
                 (!npc.isOwnerOnly?.() || npc.getOwner?.() === player)
@@ -759,7 +761,7 @@ export class World {
             World.getNpcs().get(currentPet.getIndex()) === currentPet &&
             currentPet.isRegistered() && currentPet.isVisible() &&
             currentPet.getOwner() === player &&
-            (!currentPet.isNeedsPlacement() || World.isExactMoving(currentPet)) &&
+            (!currentPet.isNeedsPlacement() || World.staysInViewWhenPlaced(currentPet)) &&
             BoatManager.syncArea(currentPet) === privateArea &&
             BoatManager.canSeeAboard(player, currentPet) &&
             BoatManager.rootLocation(currentPet).isViewableFromWithin(origin, viewDistance)) {
@@ -774,7 +776,7 @@ export class World {
             if (localNpcs.length >= World.MAX_LOCAL_NPCS) break;
             if (npc == null || localIndexes.has(npc.getIndex()) || !npc.isVisible()) continue;
             if (!npc.isRegistered() || World.getNpcs().get(npc.getIndex()) !== npc) continue;
-            if (npc.isNeedsPlacement() && !World.isExactMoving(npc)) continue;
+            if (npc.isNeedsPlacement() && !World.staysInViewWhenPlaced(npc)) continue;
             if (BoatManager.syncArea(npc) !== privateArea) continue;
             if (!BoatManager.canSeeAboard(player, npc)) continue;
             if (npc.isOwnerOnly?.() && npc.getOwner?.() !== player) continue;

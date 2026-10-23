@@ -1,0 +1,77 @@
+{
+  "$comment": "Sarachnis (plugins/bosses/Sarachnis.plugin.js, docs/sarachnis.md). Ids are the rev 241 cache's; ticks count from the attack, as in the rsprox captures (submissions 3932, 3926, 3927 on rev 236) and the OSRS Wiki (Sarachnis, Sarachnis/Strategies).",
+  "npcs": {
+    "boss": 8713,
+    "meleeSpawn": 8714,
+    "mageSpawn": 8715
+  },
+  "locs": {
+    "entrance": 34858,
+    "exit": 34859,
+    "web": 34895,
+    "peekWeb": 34898,
+    "slashedWeb": 34899,
+    "dungeonWeb": 733
+  },
+  "lair": { "minX": 1833, "maxX": 1850, "minY": 9893, "maxY": 9911 },
+  "spawnTile": [1840, 9900, 0],
+  "teleportTile": [1842, 9911, 0],
+  "outsideTile": [1842, 9913, 0],
+  "peekWebTile": [1847, 9919, 0],
+  "dungeonWebTiles": [[1841, 9933, 0], [1833, 9944, 0]],
+  "corners": [
+    [1835, 9895, 0],
+    [1844, 9895, 0],
+    [1835, 9904, 0],
+    [1844, 9904, 0]
+  ],
+  "combat": {
+    "attackSpeed": 4,
+    "attackDistance": 10,
+    "maxHit": 31,
+    "respawnTicks": 16,
+    "deathTicks": 7,
+    "healMelee": 5,
+    "healRanged": 10,
+    "webEveryAttacks": 4,
+    "webFreezeTicks": 6,
+    "webMessage": "Sarachnis has webbed you in place!",
+    "webSay": "Hsss!",
+    "spawnThresholds": [0.66, 0.33],
+    "minionHitpoints": 30
+  },
+  "anims": {
+    "melee": 8147,
+    "ranged": 4410,
+    "death": 8318,
+    "wade": 11511,
+    "slash": 8833
+  },
+  "projectiles": {
+    "ranged": 1686,
+    "web": 1687,
+    "minionMage": 1682
+  },
+  "projectileShapes": {
+    "ranged": { "start": 39, "base": 76, "perTile": 10, "startHeight": 32, "endHeight": 64, "angle": 16, "progress": 48 },
+    "web": { "start": 39, "base": 51, "perTile": 10, "cap": 116, "startHeight": 32, "endHeight": 64, "angle": 16, "progress": 16 },
+    "minionMage": { "start": 39, "base": 46, "perTile": 10, "startHeight": 120, "endHeight": 120, "angle": 16, "progress": 48 }
+  },
+  "sounds": {
+    "ranged": 555,
+    "melee": [543, 541],
+    "web": 543,
+    "deathArea1": 539,
+    "deathArea2": 538,
+    "deathSynth": [542, 537],
+    "minionMageCast": 543,
+    "minionMageImpact": 227,
+    "minionMageImpactDelay": 116
+  },
+  "instance": {
+    "fee": 25000,
+    "discountedFee": 12500,
+    "hardTierVarbit": 12865
+  },
+  "music": 641
+}

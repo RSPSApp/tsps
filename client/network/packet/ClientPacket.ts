@@ -38,6 +38,14 @@ export const ClientPacket = {
     OPNPC_U: ClientPacketId.OPNPC_U,
     EXAMINE_NPC: ClientPacketId.EXAMINE_NPC,
 
+    // World entity interactions
+    OPWORLDENTITY1: ClientPacketId.OPWORLDENTITY1,
+    OPWORLDENTITY2: ClientPacketId.OPWORLDENTITY2,
+    OPWORLDENTITY3: ClientPacketId.OPWORLDENTITY3,
+    OPWORLDENTITY4: ClientPacketId.OPWORLDENTITY4,
+    OPWORLDENTITY5: ClientPacketId.OPWORLDENTITY5,
+    OPWORLDENTITY6: ClientPacketId.OPWORLDENTITY6,
+
     // Player interactions
     OPPLAYER1: ClientPacketId.OPPLAYER1,
     OPPLAYER2: ClientPacketId.OPPLAYER2,

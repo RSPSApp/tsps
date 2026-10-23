@@ -27,6 +27,82 @@ test("a snapshot retains trade escrow without changing the live trade", () => {
   }
 });
 
+test("bank preferences survive a save and load", () => {
+  const player = new Player(null);
+  player.setNoteWithdrawal(true);
+  player.setInsertMode(true);
+  player.setBankQuantityMode(4);
+  player.setBankCustomQuantity(137);
+  player.setPlaceholders(true);
+
+  const save = PlayerSave.fromPlayer(player);
+  const loaded = new Player(null);
+  save.applyToPlayer(loaded);
+
+  assert.equal(loaded.withdrawAsNote(), true);
+  assert.equal(loaded.insertModeReturn(), true);
+  assert.equal(loaded.getBankQuantityMode(), 4);
+  assert.equal(loaded.getBankCustomQuantity(), 137);
+  assert.equal(loaded.isPlaceholders(), true);
+
+  const resaved = PlayerSave.fromPlayer(loaded);
+  assert.deepEqual(resaved.attributes, {
+    "bank:note-withdrawal": true,
+    "bank:insert-mode": true,
+    "bank:quantity-mode": 4,
+    "bank:custom-quantity": 137,
+    "bank:placeholders": true,
+  });
+  for (const field of [
+    "bankNoteWithdrawal",
+    "bankInsertMode",
+    "bankQuantityMode",
+    "bankCustomQuantity",
+    "bankPlaceholders",
+  ]) {
+    assert.equal(field in resaved, false, `${field} is no longer a dedicated save field`);
+  }
+});
+
+test("older saves without bank preferences retain the defaults", () => {
+  const save = PlayerSave.fromPlayer(new Player(null));
+
+  const loaded = new Player(null);
+  save.applyToPlayer(loaded);
+
+  assert.equal(loaded.withdrawAsNote(), false);
+  assert.equal(loaded.insertModeReturn(), false);
+  assert.equal(loaded.getBankQuantityMode(), 0);
+  assert.equal(loaded.getBankCustomQuantity(), 0);
+  assert.equal(loaded.isPlaceholders(), false);
+  assert.deepEqual(PlayerSave.fromPlayer(loaded).attributes, {});
+});
+
+test("legacy dedicated bank fields migrate to persistent attributes", () => {
+  const save = Object.assign(PlayerSave.fromPlayer(new Player(null)), {
+    bankNoteWithdrawal: true,
+    bankInsertMode: true,
+    bankQuantityMode: 4,
+    bankCustomQuantity: 137,
+    bankPlaceholders: true,
+  });
+  const loaded = new Player(null);
+  save.applyToPlayer(loaded);
+
+  assert.equal(loaded.withdrawAsNote(), true);
+  assert.equal(loaded.insertModeReturn(), true);
+  assert.equal(loaded.getBankQuantityMode(), 4);
+  assert.equal(loaded.getBankCustomQuantity(), 137);
+  assert.equal(loaded.isPlaceholders(), true);
+  assert.deepEqual(PlayerSave.fromPlayer(loaded).attributes, {
+    "bank:note-withdrawal": true,
+    "bank:insert-mode": true,
+    "bank:quantity-mode": 4,
+    "bank:custom-quantity": 137,
+    "bank:placeholders": true,
+  });
+});
+
 test("an older save's player fields load as attributes and are saved back as attributes", () => {
   const save = Object.assign(PlayerSave.fromPlayer(new Player(null)), {
     pcPoints: 250,

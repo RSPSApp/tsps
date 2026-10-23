@@ -37,7 +37,7 @@ export interface WeaponCombatProfile {
     fireSound?: Sound;
     ammoRequired?: number;
     boltEffects?: boolean;
-    specialDamage?: { minimum: number; maximum: number };
+    rangedDefenceType?: "light" | "standard" | "heavy";
 }
 
 // OSRS projectile types (server projanim config): an arrow ends at delay + lengthAdjustment +
@@ -153,6 +153,7 @@ export class WeaponProfiles {
             fireSound: Sound.SHOOT_BOW_QUIET,
         });
         this.add(WeaponInterfaces.CROSSBOW, {
+            rangedDefenceType: "heavy",
             attackAnimation: 4230,
             npcAttackAnimation: 7552,
             attackSpeed: 6,
@@ -165,6 +166,7 @@ export class WeaponProfiles {
             boltEffects: true,
         });
         this.add(WeaponInterfaces.KARILS_CROSSBOW, {
+            rangedDefenceType: "heavy",
             attackSpeed: 4,
             attackDistance: 7,
             longRangeDistance: 9,
@@ -174,6 +176,7 @@ export class WeaponProfiles {
             fireSound: Sound.SHOOT_CROSSBOW,
         });
         this.add(WeaponInterfaces.BLOWPIPE, {
+            rangedDefenceType: "light",
             attackAnimation: 5061,
             attackSpeed: 3,
             attackDistance: 5,
@@ -185,6 +188,7 @@ export class WeaponProfiles {
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.KNIFE, {
+            rangedDefenceType: "light",
             attackAnimation: 806,
             attackSpeed: 3,
             attackDistance: 4,
@@ -195,6 +199,7 @@ export class WeaponProfiles {
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.DART, {
+            rangedDefenceType: "light",
             attackAnimation: 806,
             attackSpeed: 3,
             attackDistance: 3,
@@ -205,6 +210,7 @@ export class WeaponProfiles {
             fireSound: Sound.THROW_DART,
         });
         this.add(WeaponInterfaces.JAVELIN, {
+            rangedDefenceType: "heavy",
             attackAnimation: 929,
             attackSpeed: 6,
             attackDistance: 5,
@@ -223,9 +229,18 @@ export class WeaponProfiles {
             projectiles: [{ delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 43, endHeight: 31 }],
             fireSound: Sound.THROW_DART,
         });
+        this.add(WeaponInterfaces.THROWNAXE, {
+            attackDistance: 4,
+            longRangeDistance: 6,
+            longRangeFightType: FightType.THROWNAXE_LONGRANGE,
+            rangedDefenceType: "light",
+            hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
+            projectiles: [THROWN_PROJECTILE],
+        });
         this.add(WeaponInterfaces.HALBERD, { attackDistance: 2 });
         this.add(WeaponInterfaces.WHIP, { attackAnimation: 1658, attackSpeed: 4, attackSound: Sound.WEAPON_WHIP });
         this.add(WeaponInterfaces.BALLISTA, {
+            rangedDefenceType: "heavy",
             attackSpeed: 7,
             attackDistance: 7,
             longRangeDistance: 9,
@@ -237,7 +252,7 @@ export class WeaponProfiles {
         this.add(WeaponInterfaces.DARK_BOW, {
             attackAnimation: 426,
             attackSpeed: 9,
-            attackDistance: 9,
+            attackDistance: 10,
             longRangeDistance: 10,
             longRangeFightType: FightType.LONGBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT, { base: 1, distanceOffset: 2, divisor: 3 }],
@@ -245,7 +260,6 @@ export class WeaponProfiles {
             fireSound: Sound.SHOOT_BOW_QUIET,
             ammoRequired: 2,
             doubleStartGraphic: true,
-            specialDamage: { minimum: 8, maximum: 48 },
         });
         this.register({
             itemIds: CRYSTAL_BOW_ALL_WEAPON_IDS,
@@ -327,6 +341,16 @@ export class WeaponProfiles {
             itemIds: [12373, 12374, 12375, 12376, 12377, 12378, 12379, 12380],
             attackSpeed: 5,
         });
+        // Wands (Wiki): the staff interface's styles at 4 ticks, a tick faster than staves; the cache has no speed for them.
+        this.register({
+            itemIds: [
+                ItemIdentifiers.BEGINNER_WAND, ItemIdentifiers.BEGINNER_WAND_3, ItemIdentifiers.APPRENTICE_WAND,
+                ItemIdentifiers.APPRENTICE_WAND_3, ItemIdentifiers.TEACHER_WAND, ItemIdentifiers.MASTER_WAND,
+                ItemIdentifiers.MASTER_WAND_3, ItemIdentifiers._3RD_AGE_WAND, ItemIdentifiers.KODAI_WAND,
+                ItemIdentifiers.KODAI_WAND_3, ItemIdentifiers.DRAGON_HUNTER_WAND,
+            ],
+            attackSpeed: 4,
+        });
         // Composite bows (Wiki): 5-tick standard, 4-tick rapid, 10-tile range.
         this.register({
             itemIds: [4827, 10280, 10282, 10284],
@@ -351,11 +375,12 @@ export class WeaponProfiles {
             projectiles: [DEFAULT_PROJECTILE],
             fireSound: Sound.SHOOT_BOW_QUIET,
         });
-        // Chinchompas (Wiki): thrown, 3-tick medium fuse / 4-tick otherwise, 9-tile range.
+        // Chinchompas (Wiki): thrown, 3-tick medium fuse / 4-tick otherwise, 9-tile range (10 on the long fuse).
         const chinchompa = {
+            rangedDefenceType: "heavy" as const,
             attackSpeed: 4,
             attackDistance: 9,
-            longRangeDistance: 9,
+            longRangeDistance: 10,
             longRangeFightType: FightType.CHINCHOMPA_LONG_FUSE,
             hitDelays: [{ base: 1, distanceOffset: 0, divisor: 6 }],
             projectiles: [THROWN_PROJECTILE],
@@ -365,6 +390,8 @@ export class WeaponProfiles {
         // chinchompas have their own seq (human_chinchompa_attack_pvn).
         this.register({ itemIds: [ItemIdentifiers.CHINCHOMPA_2, ItemIdentifiers.RED_CHINCHOMPA_2], ...chinchompa });
         this.register({ itemIds: [ItemIdentifiers.BLACK_CHINCHOMPA], ...chinchompa, attackAnimation: 7618 });
+        // Salamanders (Wiki): every style, flare included, reaches 1 tile; speed comes from the SALAMANDER interface.
+        this.add(WeaponInterfaces.SALAMANDER, { attackDistance: 1 });
         // Wiki: Blisterwood stakes have 6-tile range (8 on Longrange); the cache
         // capture records their NPC attack animation and projectile.
         this.register({
@@ -377,6 +404,16 @@ export class WeaponProfiles {
             hitDelays: [STANDARD_HIT],
             projectiles: [THROWN_PROJECTILE],
             fireSound: Sound.THROW_DART,
+        });
+        // Wiki (Blackjack): 4-tick attack speed. The cache has no speed param for them, so the
+        // blunt (warhammer) interface's 6 would apply.
+        this.register({
+            itemIds: [
+                ItemIdentifiers.OAK_BLACKJACK, ItemIdentifiers.OAK_BLACKJACK_O_, ItemIdentifiers.OAK_BLACKJACK_D_,
+                ItemIdentifiers.WILLOW_BLACKJACK, ItemIdentifiers.WILLOW_BLACKJACK_O_, ItemIdentifiers.WILLOW_BLACKJACK_D_,
+                ItemIdentifiers.MAPLE_BLACKJACK, ItemIdentifiers.MAPLE_BLACKJACK_O_, ItemIdentifiers.MAPLE_BLACKJACK_D_,
+            ],
+            attackSpeed: 4,
         });
         return true;
     })();

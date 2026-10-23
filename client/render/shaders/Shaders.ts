@@ -15,8 +15,9 @@ export function createProgram(
     fragShader: string,
     discardAlpha: boolean,
     multiDraw: boolean,
+    extraDefines: string[] = [],
 ): ProgramSource {
-    const defines: string[] = [];
+    const defines: string[] = [...extraDefines];
     if (multiDraw) {
         defines.push("MULTI_DRAW");
     }
@@ -31,7 +32,7 @@ export function createMainProgram(discardAlpha: boolean, multiDraw: boolean): Pr
 }
 
 export function createNpcProgram(discardAlpha: boolean, multiDraw: boolean): ProgramSource {
-    return createProgram(npcVertShader, mainFragShader, discardAlpha, multiDraw);
+    return createProgram(npcVertShader, mainFragShader, discardAlpha, multiDraw, ["ACTOR_FADE"]);
 }
 
 export function createProjectileProgram(discardAlpha: boolean, multiDraw: boolean): ProgramSource {

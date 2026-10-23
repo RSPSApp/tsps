@@ -30,16 +30,28 @@ function toOsrsKeyCode(domKeyCode: number): number {
     return -1;
 }
 
+/** Finger travel per camera zoom notch while pinching (CSS px). */
+const PINCH_PX_PER_WHEEL_NOTCH = 20;
+/** A mouse wheel notch's deltaY (pixel mode). */
+const WHEEL_NOTCH_DELTA = 100;
+
+/**
+ * Forced-landscape portrait mode (useSafariLandscapeLock) rotates the root 90deg clockwise.
+ * getBoundingClientRect then returns swapped (rotated) dimensions.
+ */
+export function isIosLandscapeRotated(): boolean {
+    const root = typeof document !== "undefined" ? document.documentElement : undefined;
+    return (
+        root?.dataset?.iosSafariForceLandscape === "1" &&
+        root?.dataset?.iosSafariForceLandscapeRotated === "1"
+    );
+}
+
 export function getMousePos(container: HTMLElement, event: MouseEvent | Touch): vec2 {
     const rect = container.getBoundingClientRect();
 
-    // Forced-landscape portrait mode rotates the root 90deg clockwise.
-    // In that case getBoundingClientRect returns swapped (rotated) dimensions,
-    // so use clientWidth/clientHeight for the unrotated layout dimensions.
-    const root = typeof document !== "undefined" ? document.documentElement : undefined;
-    const forceLandscape = root?.dataset?.iosSafariForceLandscape === "1";
-    const rotatedLandscape = root?.dataset?.iosSafariForceLandscapeRotated === "1";
-    const isIosRotated = forceLandscape && rotatedLandscape;
+    // When rotated, use clientWidth/clientHeight for the unrotated layout dimensions.
+    const isIosRotated = isIosLandscapeRotated();
 
     // Use getBoundingClientRect dimensions for baseW/baseH so that viewport-space
     // coordinates (event.clientX - rect.left) are correctly scaled to canvas buffer
@@ -228,6 +240,8 @@ export class InputManager {
     private pinchCenterY: number = 0;
     /** Accumulated pinch zoom delta (positive = zoom in, negative = zoom out) */
     pinchZoomDelta: number = 0;
+    /** Finger travel (CSS px, + = pinch in) not yet turned into wheel notches. */
+    private pinchNotchRemainder: number = 0;
 
     // === Touch scroll state (for mobile lists) ===
     /** Previous touch Y position for scroll velocity calculation */
@@ -934,6 +948,7 @@ export class InputManager {
             const distance = this.getTouchDistance(event.touches[0], event.touches[1]);
             this.pinchStartDistance = distance;
             this.lastPinchDistance = distance;
+            this.pinchNotchRemainder = 0;
             const [cx, cy] = this.getTouchCenter(event.touches[0], event.touches[1]);
             this.pinchCenterX = cx;
             this.pinchCenterY = cy;
@@ -970,8 +985,15 @@ export class InputManager {
             const distance = this.getTouchDistance(event.touches[0], event.touches[1]);
             const delta = distance - this.lastPinchDistance;
             // Pinch-in (delta < 0) → positive wheelDeltaY (zoom out), matching wheel-down.
-            // Scale ~2 so a modest pinch feels similar to a few wheel notches.
-            this.wheelDeltaY += -delta * 2;
+            // The zoom scripts take one fixed notch per frame whatever the delta, so a raw
+            // per-move delta zoomed a notch every frame of any pinch. Send whole notches by
+            // finger travel instead, keeping the remainder.
+            this.pinchNotchRemainder += -delta;
+            while (Math.abs(this.pinchNotchRemainder) >= PINCH_PX_PER_WHEEL_NOTCH) {
+                const sign = Math.sign(this.pinchNotchRemainder);
+                this.wheelDeltaY += sign * WHEEL_NOTCH_DELTA;
+                this.pinchNotchRemainder -= sign * PINCH_PX_PER_WHEEL_NOTCH;
+            }
             this.lastPinchDistance = distance;
             const [cx, cy] = this.getTouchCenter(event.touches[0], event.touches[1]);
             this.pinchCenterX = cx;
@@ -999,14 +1021,15 @@ export class InputManager {
             this.isPinching = false;
             this.pinchStartDistance = 0;
             this.lastPinchDistance = 0;
-            // If one finger remains, start a fresh one-finger gesture.
+            // If one finger remains, start a fresh one-finger gesture: it may orbit the camera,
+            // but lifting it is the end of the pinch, not a tap where it rests.
             if (event.touches.length === 1 && this.element) {
                 const [x, y] = getMousePos(this.element, event.touches[0]);
                 this.prevTouchY = y;
                 this.prevTouchTime = performance.now();
                 this.touchScrollVelocityY = 0;
                 this.isTouchScrolling = false;
-                this.touchAdapter.onFingerDown(x, y, this.lastInputTimeMs);
+                this.touchAdapter.onFingerDown(x, y, this.lastInputTimeMs, true);
             }
             event.preventDefault();
             return;

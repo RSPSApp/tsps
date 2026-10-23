@@ -77,7 +77,17 @@ export function handleInboundWorld(msg: any): boolean {
             const client = g?.__osrsClient;
             const payload = msg.payload;
             if (!client?.camera || !payload) return true;
+            // cam_target: the camera follows a tile or another player (spectating) until cam_reset.
+            if (payload.mode === "target") {
+                client.cameraTarget = Number.isInteger(payload.player)
+                    ? { playerServerId: payload.player }
+                    : { x: payload.x | 0, y: payload.y | 0, level: payload.level | 0 };
+                client.followPlayerCamera = true;
+                client.camera.clearScriptedCamera();
+                return true;
+            }
             if (payload.mode === "reset") {
+                client.cameraTarget = undefined;
                 client.followPlayerCamera = true;
                 client.camera.clearScriptedCamera();
                 client.camera.setScenePitchOverride(undefined);

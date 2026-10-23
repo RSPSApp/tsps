@@ -24,6 +24,12 @@ module.exports = function registerKnightsSwordQuest(api) {
   const IRON_BAR_ITEM_ID = ItemIdentifiers.IRON_BAR;
   const GIANT_DWARF_PIE_ATTRIBUTE = "quest.giant_dwarf.pie";
   const SIR_VYVIN_NPC_ID = NpcIdentifiers.SIR_VYVIN;
+  const GIANT_DWARF_AXE_ITEM_IDS = new Set([
+    ItemIdentifiers.DWARVEN_BATTLEAXE,
+    ItemIdentifiers.DWARVEN_BATTLEAXE_2,
+    ItemIdentifiers.DWARVEN_BATTLEAXE_3,
+    ItemIdentifiers.DWARVEN_BATTLEAXE_4,
+  ]);
 
   const CUPBOARD_CLOSED_ID = ObjectIdentifiers.CUPBOARD_8;
   const CUPBOARD_OPEN_ID = ObjectIdentifiers.CUPBOARD_9;
@@ -297,6 +303,29 @@ module.exports = function registerKnightsSwordQuest(api) {
     return null;
   }
 
+  /** GiantDwarf owns Thurgo while its axe-repair branch is active and the player holds the axe. */
+  function giantDwarfOwnsThurgo(player) {
+    const started = { player, key: "the_giant_dwarf", started: false };
+    api.emitCustomEvent("quest:is-started", started);
+    if (!started.started) return false;
+    const complete = { player, key: "the_giant_dwarf", complete: false };
+    api.emitCustomEvent("quest:is-complete", complete);
+    if (complete.complete) return false;
+    return [...GIANT_DWARF_AXE_ITEM_IDS].some((itemId) => hasItem(player, itemId));
+  }
+
+  // A pie handover sets stage 3 before the captured sword-request tail is shown. If the
+  // player cancels/logs out before that tail, replay it from WITH_PIE without a second pie.
+  function thurgoTalkTo(event) {
+    const npcId = event.npcId ?? event.npc?.getId?.();
+    if (npcId !== THURGO_NPC_ID || quest.getStage(event.player) !== STAGE_GAVE_THURGO_PIE) return false;
+    if (giantDwarfOwnsThurgo(event.player)) return false;
+    event.handled = true;
+    startTranscript(api, event.player, THURGO_NPC_ID, PAGE_QUESTS, VARIANT_THURGO_WITH_PIE,
+      (steps) => findTail(steps, "QZPa_e") ?? []);
+    return true;
+  }
+
   function feedThurgo(event) {
     const { player } = event;
     event.handled = true;
@@ -466,5 +495,6 @@ module.exports = function registerKnightsSwordQuest(api) {
   api.onCustomEvent("npc-dialogue:menu", warnBeforeStart);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onObjectInteraction("Cupboard", { Open: openCupboard, Search: searchCupboardObject, Shut: shutCupboard });
+  api.onNpcInteraction("Thurgo", { "Talk-to": thurgoTalkTo });
   api.onItemOnNpc(handleItemOnNpc);
 };

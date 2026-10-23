@@ -8,10 +8,13 @@
  * Water Ravine Dungeon (rope entry, ancestral door, three golem fights, three
  * water channels), the genie's crevice and the statuette hand-in.
  *
- * Stages (varbit 1444 "elidquest", varp 616): 1 mayor's plea accepted,
- * 2 Ghaslor's ballad received, 3 torn robes found, 4 all three channels
- * cleared, 5 spirits told of the statuette, 6 mayor named the crevice,
- * 7 sole traded for the statuette, 8 quest complete.
+ * Stages (varbit 1444 "elidquest", varp 616; rev-227 capture 1788):
+ * 10 mayor's plea accepted, 20 Ghaslor's ballad/key on table, 25 key
+ * telegrabbed, 27 ancestral door opened, 30 lake door opened after the three
+ * channels, 35 spirits told of the statuette, 40 mayor named the crevice,
+ * 50 genie deal accepted, 55 sole traded for the statuette, 60 complete.
+ * Lost key/shoes are re-placed on login and lost torn robes can be searched
+ * again from the shrine cupboard.
  *
  * The seven side bits live in varbit 1445 "elid_shiratti", 1446-1448
  * "elid_black/white/greygolem", 1449-1451 "elid_mining/thieving/rangingchannel"
@@ -20,10 +23,11 @@
  *
  * Object ids (cache loc dump, all placed in Nardah / the Water Ravine Dungeon
  * at y 9536-9599): 10382/10384 closed cupboards and 10385-10387 search
- * variants, 10404 empty / 10405 clear water channels, 10419-10429 dungeon
- * doors, 10416 crevice and 10434 rope, 6382 root above the waterfall,
- * 10438 statuette plinth / 10439 Elidinis Statuette (both absent from the
- * cache map, so the plugin places them itself).
+ * variants, 10399/10396 thieving/mining water-channel multilocs transformed
+ * by varbits 1450/1449, the 4763/4765 ranging target for varbit 1451,
+ * 10419-10429 dungeon doors, 10416 crevice and 10434 rope, 6382 root above
+ * the waterfall, 10438 statuette plinth / 10439 Elidinis Statuette (both
+ * absent from the cache map, so the plugin places them itself).
  *
  * Source: https://oldschool.runescape.wiki/w/Spirits_of_the_Elid and its
  * quick guide (requirements 33 Magic / 37 Ranged / 37 Mining / 37 Thieving;
@@ -38,10 +42,11 @@
  *    black golem door has no reachable adjacent tile at all, so quest-door
  *    clicks are routed to the player's own tile (handleObjectRoute) and the
  *    genie's crevice door crosses from the recorded click side.
- *  - The golems have no OSRS stab/slash/crush weakness in this server's
- *    monster data, so any weapon kills them.
+ *  - Golem damage is filtered by the plugin to the captured stab/slash/crush
+ *    styles; the monster definitions themselves have no weakness data.
  *  - The mining channel needs a usable pickaxe and 37 Mining, the thieving
  *    channel 37 Thieving and the ranging channel 37 Ranged (base levels).
+ *  - The rope descent plays the captured camera, fade, landing tile and theme.
  *  - The crevice darkness warning uses the shared Darkness light-source check;
  *    no light source stops the climb instead of applying bug damage.
  *  - The key is telegrabbed as in OSRS; direct pickup says it is out of reach.
@@ -56,16 +61,24 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     Item,
     ItemIdentifiers,
     Location,
-    MapObjects,
     NpcIdentifiers,
     ObjectIdentifiers,
     ObjectManager,
+    Ammunition,
+    CombatFactory,
+    CombatRange,
+    CombatType,
+    RangedCombatMethod,
+    RangedWeapon,
     Skill,
+    WeaponProfiles,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
   const darkness = require("../../world/Darkness.plugin.js");
   const mining = require("../../skills/Mining.plugin.js");
 
+  const Scenes = createQuestScenes(api);
   const PAGE = "Spirits of the Elid";
   const START_HOOK = "quest:spirits-of-the-elid:start";
 
@@ -79,15 +92,18 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const VARBIT_THIEVING_CHANNEL = 1450; // elid_thievingchannel
   const VARBIT_RANGING_CHANNEL = 1451; // elid_rangingchannel
 
+  // Native ELIDQUEST varbit values (Quest Helper loadSteps / cache 1444).
   const STAGE_NOT_STARTED = 0;
-  const STAGE_STARTED = 1;
-  const STAGE_BALLAD = 2;
-  const STAGE_ROBES = 3;
-  const STAGE_CHANNELS = 4;
-  const STAGE_SPIRITS = 5;
-  const STAGE_MAYOR = 6;
-  const STAGE_STATUETTE = 7;
-  const STAGE_COMPLETE = 8;
+  const STAGE_STARTED = 10;
+  const STAGE_BALLAD = 20;
+  const STAGE_KEY = 25;
+  const STAGE_DUNGEON = 27;
+  const STAGE_CHANNELS = 30;
+  const STAGE_SPIRITS = 35;
+  const STAGE_MAYOR = 40;
+  const STAGE_GENIE_DEAL = 50;
+  const STAGE_STATUETTE = 55;
+  const STAGE_COMPLETE = 60;
 
   const AWUSAH_NPC_ID = NpcIdentifiers.AWUSAH_THE_MAYOR; // 4756
   const GHASLOR_NPC_ID = NpcIdentifiers.GHASLOR_THE_ELDER; // 4745
@@ -111,6 +127,13 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const SPIRIT_NPC_IDS = new Set([NIRRIE_NPC_ID, TIRRIE_NPC_ID, HALLAK_NPC_ID]);
   const GOLEM_NPC_IDS = new Set([BLACK_GOLEM_NPC_ID, WHITE_GOLEM_NPC_ID, GREY_GOLEM_NPC_ID]);
   const CHATTER_NPC_IDS = new Set([HABIBAH_NPC_ID, MESKHENET_NPC_ID, ZAHRA_NPC_ID]);
+  const ASKING_VARIANTS = new Map([
+    [ALI_THE_CARTER_NPC_ID, "asking-around-the-town-ali-the-carter"],
+    [ROKUH_NPC_ID, "asking-around-the-town-rokuh"],
+    [GARAI_NPC_ID, "asking-around-the-town-garai"],
+    [NKUKU_NPC_ID, "asking-around-the-town-nkuku"],
+    [USI_NPC_ID, "asking-around-the-town-usi"],
+  ]);
 
   const KNIFE_ITEM_ID = ItemIdentifiers.KNIFE; // 946
   const FLETCHING_KNIFE_ITEM_ID = ItemIdentifiers.FLETCHING_KNIFE; // 31043
@@ -131,21 +154,32 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   const CREVICE_OBJECT_ID = ObjectIdentifiers.CREVICE_9; // 10416, west of Nardah
   const CREVICE_ROPE_OBJECT_ID = ObjectIdentifiers.ROPE_10; // 10434, inside the crevice
   const CAVE_EXIT_OBJECT_ID = ObjectIdentifiers.CAVE_EXIT_18; // 10417
-  const WATER_CHANNEL_OBJECT_ID = ObjectIdentifiers.WATER_CHANNEL_2; // 10404
-  const CLEAR_WATER_CHANNEL_OBJECT_ID = ObjectIdentifiers.WATER_CHANNEL_3; // 10405
+  // Cache multilocs that the client transforms from the channel varbits.
+  const THIEVING_CHANNEL_OBJECT_ID = 10399; // elid_waterchannel_thieving_multiloc
+  const MINING_CHANNEL_OBJECT_ID = 10396; // elid_waterchannel_mining_multiloc
+  // Cache gameval elid_ranging_target (not yet in generated identifiers).
+  const RANGING_TARGET_NPC_IDS = new Set([4763, 4765]);
+  // The map places the multiloc 10389 at (3426,2930); varbit 1444 resolves it to
+  // 10438 while the statuette is missing and 10439 once it is returned.
+  const PLINTH_MULTILOC_OBJECT_ID = 10389; // elid_statuette_multiloc
   const PLINTH_OBJECT_ID = ObjectIdentifiers.STATUETTE_PLINTH; // 10438
   const STATUETTE_OBJECT_ID = ObjectIdentifiers.ELIDINIS_STATUETTE; // 10439
+  // The client sends the map parent id; keep the resolved children for direct use.
+  const PLINTH_OBJECT_IDS = new Set([PLINTH_MULTILOC_OBJECT_ID, PLINTH_OBJECT_ID]);
+  const STATUETTE_OBJECT_IDS = new Set([PLINTH_MULTILOC_OBJECT_ID, STATUETTE_OBJECT_ID]);
   const CUPBOARD_SEARCH_IDS = new Set([
-    ObjectIdentifiers.CUPBOARD_36, // 10383
-    ObjectIdentifiers.CUPBOARD_38, // 10385 (opened north-western cupboard)
-    ObjectIdentifiers.CUPBOARD_39, // 10386 (opened cupboard)
-    ObjectIdentifiers.CUPBOARD_40, // 10387
+    ObjectIdentifiers.CUPBOARD_36, // 10383 opened cupboard
+    ObjectIdentifiers.CUPBOARD_38, // 10385 opened cupboard with robes
+    ObjectIdentifiers.CUPBOARD_40, // 10387 opened empty cupboard
   ]);
-  const KEY_DOOR_IDS = new Set([
+  const CUPBOARD_WITH_ROBES_TILE = new Location(3420, 2930, 0);
+  const LAKE_DOOR_IDS = new Set([
     ObjectIdentifiers.DOOR_248, // 10423
-    ObjectIdentifiers.DOOR_249, // 10425
+    ObjectIdentifiers.DOOR_249, // 10425 (mirror)
+  ]);
+  const ANCESTRAL_DOOR_IDS = new Set([
     ObjectIdentifiers.DOOR_250, // 10427
-    ObjectIdentifiers.DOOR_251, // 10429
+    ObjectIdentifiers.DOOR_251, // 10429 (mirror)
   ]);
   const CREVICE_DOOR_ID = ObjectIdentifiers.DOOR_252; // 10431, genie's door
   const GOLEM_DOOR_IDS = new Set([
@@ -154,15 +188,17 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     ObjectIdentifiers.DOOR_247, // 10421
   ]);
 
-  // Shrine to Elidinis (wiki map pin) and Awusah's doorway.
-  const SHRINE_TILE = new Location(3426, 2932, 0);
+  // The ancestral key sits on the shrine's wooden table (elid_wooden_table).
+  const ANCESTRAL_KEY_TILE = new Location(3432, 2928, 0);
   const SHOES_TILE = new Location(3442, 2917, 0);
   // West of the ancestral door, where the rope lands the player.
-  const DUNGEON_ENTRY_TILE = new Location(3351, 9558, 0);
+  const DUNGEON_ENTRY_TILE = new Location(3349, 9536, 0);
   // Past the ancestral door, at the white golem's door.
   const GOLEM_CORRIDOR_TILE = new Location(3365, 9544, 0);
   // Lake side of the ancestral door, used once the channels are clear.
   const LAKE_ENTRY_TILE = new Location(3347, 9563, 0);
+  // South side of the lake door, where the last channel sends the player.
+  const LAKE_DOOR_APPROACH_TILE = new Location(3354, 9559, 0);
   const DUNGEON_EXIT_TILES = [
     new Location(3349, 9557, 0),
     new Location(3347, 9563, 0),
@@ -179,11 +215,9 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     approach: new Location(3365, 9544, 0),
     inside: new Location(3365, 9539, 0),
     spawn: new Location(3364, 9544, 0),
-    channelTiles: [
-      new Location(3363, 9538, 0),
-      new Location(3364, 9538, 0),
-    ],
+    channelTiles: [new Location(3365, 9538, 0)],
     channelVariant: "the-waterfall-starting-the-water-flow-southern-room",
+    channelObjectId: THIEVING_CHANNEL_OBJECT_ID,
     channelBit: null, // filled in below
     golemBit: null,
     skill: "THIEVING",
@@ -194,11 +228,9 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     approach: new Location(3370, 9547, 0),
     inside: new Location(3377, 9546, 0),
     spawn: new Location(3371, 9547, 0),
-    channelTiles: [
-      new Location(3378, 9545, 0),
-      new Location(3378, 9546, 0),
-    ],
+    channelTiles: [new Location(3378, 9547, 0)],
     channelVariant: "the-waterfall-starting-the-water-flow-eastern-room",
+    channelObjectId: MINING_CHANNEL_OBJECT_ID,
     channelBit: null,
     golemBit: null,
     skill: "MINING",
@@ -217,6 +249,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       new Location(3376, 9555, 0),
     ],
     channelVariant: "the-waterfall-starting-the-water-flow-northern-room",
+    channelNpcIds: RANGING_TARGET_NPC_IDS,
     channelBit: null,
     golemBit: null,
     skill: "RANGED",
@@ -241,10 +274,19 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   BLACK_GOLEM_ROOM.channelBit = BIT_RANGING_CHANNEL;
 
   const ROOMS = [WHITE_GOLEM_ROOM, GREY_GOLEM_ROOM, BLACK_GOLEM_ROOM];
+  // OSRS requires stab/slash/crush (southern/eastern/northern golem).
+  // BonusManager melee bonus types (stab 0, slash 1, crush 2).
+  const ATTACK_STAB = 0;
+  const ATTACK_SLASH = 1;
+  const ATTACK_CRUSH = 2;
+  const GOLEM_WEAKNESS = new Map([
+    [WHITE_GOLEM_NPC_ID, { style: ATTACK_STAB, name: "stab" }],
+    [GREY_GOLEM_NPC_ID, { style: ATTACK_SLASH, name: "slash" }],
+    [BLACK_GOLEM_NPC_ID, { style: ATTACK_CRUSH, name: "crush" }],
+  ]);
   const ROOM_BY_DOOR = new Map(ROOMS.map((room) => [room.doorId, room]));
 
   let quest;
-  let shrineObject = null;
   let dungeonExitPlaced = false;
   const trackedGolems = new Map(); // "<username>:<doorId>" -> npc
   /** Where each player clicked a quest door, captured before the walk: the black
@@ -349,26 +391,10 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     return object;
   }
 
-  function placeShrineObject(id) {
-    if (shrineObject) {
-      ObjectManager.deregister(shrineObject, true);
-      shrineObject = null;
-    }
-    shrineObject = placeWorldObject(id, SHRINE_TILE);
-  }
-
   function ensureDungeonExit() {
     if (dungeonExitPlaced) return;
     dungeonExitPlaced = true;
     for (const tile of DUNGEON_EXIT_TILES) placeWorldObject(CAVE_EXIT_OBJECT_ID, tile);
-  }
-
-  /** Swaps the room's empty channels for the "Clear" variant once its golem dies. */
-  function makeChannelsClearable(room) {
-    for (const tile of room.channelTiles) {
-      const object = MapObjects.get(WATER_CHANNEL_OBJECT_ID, tile, null);
-      if (object) replaceObject(object, CLEAR_WATER_CHANNEL_OBJECT_ID);
-    }
   }
 
   // ==========================================================================
@@ -426,7 +452,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
         "I should talk to the <col=800000>spirits</col> by the lake in the dungeon.",
       ];
     }
-    if (stage >= STAGE_ROBES) {
+    if (stage >= STAGE_KEY) {
       return [
         "<str>Awusah the Mayor asked me to lift the curse on Nardah.</str>",
         "<str>Ghaslor gave me the ballad of Jareesh and I found the torn robes</str>",
@@ -469,10 +495,11 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     if (npcId === AWUSAH_NPC_ID) {
       if (quest.isComplete(player)) return null; // dedicated after-quest page
       if (stage <= STAGE_NOT_STARTED) return "starting-off";
-      if (stage === STAGE_SPIRITS) return "the-crevice-talking-to-awusah-the-mayor";
-      if (stage === STAGE_MAYOR) return "the-crevice-talking-to-awusah-the-mayor-again";
-      if (stage === STAGE_STATUETTE) return "sole-split-talking-to-the-mayor-with-the-statuette";
-      return "starting-off-talking-to-awusah-after-starting-the-quest";
+      if (stage < STAGE_SPIRITS) return "starting-off-talking-to-awusah-after-starting-the-quest";
+      if (stage < STAGE_MAYOR) return "the-crevice-talking-to-awusah-the-mayor";
+      if (stage < STAGE_GENIE_DEAL) return "the-crevice-talking-to-awusah-the-mayor-again";
+      if (stage < STAGE_STATUETTE) return "sole-split-talking-to-the-mayor-again";
+      return "sole-split-talking-to-the-mayor-with-the-statuette";
     }
     if (npcId === GHASLOR_NPC_ID) {
       if (quest.isComplete(player)) return null;
@@ -485,30 +512,29 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       if (stage >= STAGE_SPIRITS) return "the-crevice-talking-to-shiratti-the-custodian";
       return "starting-off-talking-to-shiratti-the-custodian";
     }
-    if (npcId === ALI_THE_CARTER_NPC_ID) {
-      return stage >= STAGE_STARTED && stage < STAGE_SPIRITS ? "asking-around-the-town-ali-the-carter" : null;
-    }
-    if (npcId === ROKUH_NPC_ID) {
-      return stage >= STAGE_STARTED && stage < STAGE_SPIRITS ? "asking-around-the-town-rokuh" : null;
-    }
-    if (npcId === GARAI_NPC_ID) {
-      return stage >= STAGE_STARTED && stage < STAGE_SPIRITS ? "asking-around-the-town-garai" : null;
-    }
-    if (npcId === NKUKU_NPC_ID) {
-      return stage >= STAGE_STARTED && stage < STAGE_SPIRITS ? "asking-around-the-town-nkuku" : null;
-    }
-    if (npcId === USI_NPC_ID) {
-      return stage >= STAGE_STARTED && stage < STAGE_SPIRITS ? "asking-around-the-town-usi" : null;
+    if (
+      npcId === ALI_THE_CARTER_NPC_ID ||
+      npcId === ROKUH_NPC_ID ||
+      npcId === GARAI_NPC_ID ||
+      npcId === NKUKU_NPC_ID ||
+      npcId === USI_NPC_ID
+    ) {
+      return stage >= STAGE_STARTED && stage < STAGE_SPIRITS ? ASKING_VARIANTS.get(npcId) : null;
     }
     if (npcId === GENIE_NPC_ID) {
-      if (stage !== STAGE_MAYOR) return null;
+      if (stage < STAGE_MAYOR) return null;
+      if (stage >= STAGE_STATUETTE) {
+        return !quest.isComplete(player) && !held(player, STATUETTE_ITEM_ID)
+          ? "sole-split-talking-to-the-genie-after-losing-the-statuette"
+          : null;
+      }
       if (!hasBit(player, BIT_DEAL_ACCEPTED)) return "the-crevice-talking-to-the-genie";
       if (held(player, SOLE_ITEM_ID)) return "sole-split-returning-to-the-genie-with-the-mayor-s-sole";
       return "the-crevice-talking-to-the-genie-again-after-accepting-his-deal";
     }
     if (SPIRIT_NPC_IDS.has(npcId)) {
       if (quest.isComplete(player)) return null;
-      if (stage >= STAGE_SPIRITS) {
+      if (stage > STAGE_CHANNELS) {
         return "the-waterfall-talking-to-the-spirits-of-the-elid-again-after-learning-about-the-statuette";
       }
       return "the-waterfall-talking-to-the-spirits-of-the-elid";
@@ -560,6 +586,9 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     if (npcId !== GENIE_NPC_ID) return;
     if (String(option).toLowerCase().includes("agree to the deal")) {
       setBit(player, BIT_DEAL_ACCEPTED);
+      if (quest.getStage(player) >= STAGE_MAYOR && quest.getStage(player) < STAGE_GENIE_DEAL) {
+        quest.setStage(player, STAGE_GENIE_DEAL);
+      }
     }
   }
 
@@ -570,17 +599,23 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       event.handled = true;
       if (!held(player, BALLAD_ITEM_ID)) player.getInventory().adds(BALLAD_ITEM_ID, 1);
       if (quest.getStage(player) === STAGE_STARTED) quest.setStage(player, STAGE_BALLAD);
+      ensureAncestralKey(player);
       if (text) player.sendMessage(text);
       return;
     }
     if (stepId === "CqbO1I" || stepId === "UDr1XL") {
-      // "You trade the sole for the statuette." Idempotent: only the stage 6
-      // hand-in trades, so a repeated message event cannot eat a second sole.
+      // "You trade the sole for the statuette." The first deal advances to 55;
+      // the recorded lost-statuette conversation trades another sole at 55.
       event.handled = true;
-      if (quest.getStage(player) === STAGE_MAYOR) {
+      const stage = quest.getStage(player);
+      const firstDeal = stepId === "CqbO1I" && stage === STAGE_GENIE_DEAL;
+      const replacement = stepId === "UDr1XL" && stage >= STAGE_STATUETTE &&
+        !quest.isComplete(player) && !held(player, STATUETTE_ITEM_ID) &&
+        held(player, SOLE_ITEM_ID);
+      if (firstDeal || replacement) {
         if (held(player, SOLE_ITEM_ID)) player.getInventory().deleteNumber(SOLE_ITEM_ID, 1);
         if (!held(player, STATUETTE_ITEM_ID)) player.getInventory().adds(STATUETTE_ITEM_ID, 1);
-        quest.setStage(player, STAGE_STATUETTE);
+        if (firstDeal) quest.setStage(player, STAGE_STATUETTE);
       }
       if (text) player.sendMessage(text);
       return;
@@ -589,8 +624,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       // "Congratulations! Quest complete!" - the statuette lands on its plinth.
       event.handled = true;
       event.end = true;
-      if (!quest.isComplete(player)) {
-        placeShrineObject(STATUETTE_OBJECT_ID);
+      if (!quest.isComplete(player) && quest.getStage(player) >= STAGE_STATUETTE) {
         quest.complete(player);
       }
     }
@@ -610,7 +644,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     const { player, npcId } = event;
     if (!CHATTER_NPC_IDS.has(npcId)) return;
     const stage = quest.getStage(player);
-    if (stage < STAGE_STARTED || stage >= STAGE_MAYOR) return;
+    if (stage < STAGE_STARTED || stage >= STAGE_SPIRITS) return;
     event.handled = true;
     startTranscript(
       api,
@@ -671,7 +705,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   function handleItemOnNpc(event) {
     const { player, npcId, itemId } = event;
     if (npcId !== AWUSAH_NPC_ID || itemId !== KNIFE_ITEM_ID) return;
-    if (quest.getStage(player) < STAGE_SPIRITS) return;
+    if (quest.getStage(player) < STAGE_MAYOR) return;
     event.handled = true;
     startTranscript(api, player, AWUSAH_NPC_ID, PAGE, "sole-split-using-a-knife-on-awusah-the-mayor");
   }
@@ -686,7 +720,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       }
       player.getInventory().deleteNumber(ROPE_ITEM_ID, 1);
       ensureDungeonExit();
-      player.moveTo(DUNGEON_ENTRY_TILE);
+      playRopeDescent(player);
       player.sendMessage("You tie the rope to the root and climb down into the cave.");
       return;
     }
@@ -701,12 +735,33 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       player.sendMessage("You tie the rope to the crevice.");
       return;
     }
-    if (itemId === STATUETTE_ITEM_ID && objectId === PLINTH_OBJECT_ID) {
+    if (itemId === STATUETTE_ITEM_ID && PLINTH_OBJECT_IDS.has(objectId)) {
       event.handled = true;
       if (!questActive(player) || quest.getStage(player) < STAGE_STATUETTE) return;
       player.getInventory().deleteNumber(STATUETTE_ITEM_ID, 1);
       startTranscript(api, player, AWUSAH_NPC_ID, PAGE, "sole-split-using-the-statuette-on-the-plinth");
     }
+  }
+
+  /** Capture 1788: descent camera, fade, teleport to (3349,9536), reset and theme. */
+  function playRopeDescent(player) {
+    Scenes.camera(player, [3368, 3134, 1175], [3372, 3130, 25], { rate: 1, rate2: 200 });
+    Scenes.fade(player, true);
+    Scenes.later(player, 2, () => {
+      player.moveTo(DUNGEON_ENTRY_TILE);
+      player.getPacketSender().sendCameraReset().sendSong(462);
+      Scenes.fade(player, false);
+      Scenes.later(player, 2, () => Scenes.closeFade(player));
+    });
+  }
+
+  /** Logout/death during the rope fade: cancel pending ticks and leave no half-open transition. */
+  function handleTransitionInterrupted({ player } = {}) {
+    if (!player) return;
+    Scenes.cancel(player);
+    Scenes.closeFade(player);
+    Scenes.controls(player, false);
+    player.getPacketSender?.().sendCameraReset?.();
   }
 
   function handleGroundItemPickup(event) {
@@ -725,12 +780,17 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     const { objectId } = event;
     if (objectId === ObjectIdentifiers.CUPBOARD_35) {
       event.handled = true;
-      replaceObject(event.object, ObjectIdentifiers.CUPBOARD_38);
+      replaceObject(event.object, ObjectIdentifiers.CUPBOARD_36);
       return true;
     }
     if (objectId === ObjectIdentifiers.CUPBOARD_37) {
       event.handled = true;
-      replaceObject(event.object, ObjectIdentifiers.CUPBOARD_39);
+      replaceObject(event.object, ObjectIdentifiers.CUPBOARD_38);
+      return true;
+    }
+    if (objectId === ObjectIdentifiers.CUPBOARD_39) {
+      event.handled = true;
+      replaceObject(event.object, ObjectIdentifiers.CUPBOARD_40);
       return true;
     }
     return false;
@@ -740,7 +800,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     const { player, objectId } = event;
     if (!CUPBOARD_SEARCH_IDS.has(objectId)) return false;
     event.handled = true;
-    if (!sameTile(event.location, new Location(3420, 2927, 0))) {
+    if (!sameTile(event.location, CUPBOARD_WITH_ROBES_TILE)) {
       player.sendMessage("You find nothing interesting.");
       return true;
     }
@@ -754,21 +814,27 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     }
     player.getInventory().adds(TORN_ROBE_TOP_ITEM_ID, 1);
     player.getInventory().adds(TORN_ROBE_BOTTOM_ITEM_ID, 1);
+    replaceObject(event.object, ObjectIdentifiers.CUPBOARD_40);
     startTranscript(api, player, SHIRATTI_NPC_ID, PAGE, "starting-off-searching-the-north-western-cupboard");
-    if (quest.getStage(player) < STAGE_ROBES) quest.setStage(player, STAGE_ROBES);
+    if (quest.getStage(player) < STAGE_BALLAD) quest.setStage(player, STAGE_BALLAD);
     return true;
   }
 
   function shutCupboard(event) {
     const { objectId } = event;
-    if (objectId === ObjectIdentifiers.CUPBOARD_38) {
+    if (objectId === ObjectIdentifiers.CUPBOARD_36) {
       event.handled = true;
       replaceObject(event.object, ObjectIdentifiers.CUPBOARD_35);
       return true;
     }
-    if (objectId === ObjectIdentifiers.CUPBOARD_39) {
+    if (objectId === ObjectIdentifiers.CUPBOARD_38) {
       event.handled = true;
       replaceObject(event.object, ObjectIdentifiers.CUPBOARD_37);
+      return true;
+    }
+    if (objectId === ObjectIdentifiers.CUPBOARD_40) {
+      event.handled = true;
+      replaceObject(event.object, ObjectIdentifiers.CUPBOARD_39);
       return true;
     }
     return false;
@@ -779,7 +845,12 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   // ==========================================================================
 
   function isQuestDoor(objectId) {
-    return KEY_DOOR_IDS.has(objectId) || GOLEM_DOOR_IDS.has(objectId) || objectId === CREVICE_DOOR_ID;
+    return (
+      LAKE_DOOR_IDS.has(objectId) ||
+      ANCESTRAL_DOOR_IDS.has(objectId) ||
+      GOLEM_DOOR_IDS.has(objectId) ||
+      objectId === CREVICE_DOOR_ID
+    );
   }
 
   /**
@@ -806,9 +877,14 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
 
   function handleDoorToggle(event) {
     const { player, objectId } = event;
-    if (KEY_DOOR_IDS.has(objectId)) {
+    if (ANCESTRAL_DOOR_IDS.has(objectId)) {
       event.handled = true;
       useAncestralDoor(player);
+      return;
+    }
+    if (LAKE_DOOR_IDS.has(objectId)) {
+      event.handled = true;
+      openLakeDoor(player);
       return;
     }
     if (GOLEM_DOOR_IDS.has(objectId)) {
@@ -828,6 +904,15 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     }
   }
 
+  function openLakeDoor(player) {
+    if (!allChannelsClear(player)) {
+      player.sendMessage("The door is locked.");
+      return;
+    }
+    player.moveTo(LAKE_ENTRY_TILE);
+    if (quest.getStage(player) < STAGE_CHANNELS) quest.setStage(player, STAGE_CHANNELS);
+  }
+
   function useAncestralDoor(player) {
     if (!held(player, ANCESTRAL_KEY_ITEM_ID)) {
       player.sendMessage("The door is locked.");
@@ -845,7 +930,10 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       return;
     }
     startTranscript(api, player, AWUSAH_NPC_ID, PAGE, "the-waterfall-opening-the-door-with-the-robes-equipped");
-    player.moveTo(allChannelsClear(player) ? LAKE_ENTRY_TILE : GOLEM_CORRIDOR_TILE);
+    player.moveTo(
+      quest.getStage(player) >= STAGE_CHANNELS ? LAKE_ENTRY_TILE : GOLEM_CORRIDOR_TILE
+    );
+    if (quest.getStage(player) < STAGE_DUNGEON) quest.setStage(player, STAGE_DUNGEON);
   }
 
   function golemKeyFor(player, room) {
@@ -894,25 +982,74 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   // Water channels
   // ==========================================================================
 
-  function handleChannelClear(event) {
-    const { player, objectId, location } = event;
-    if (objectId !== CLEAR_WATER_CHANNEL_OBJECT_ID) return false;
-    const room = roomForChannel(location);
-    if (!room) return false;
-    event.handled = true;
+  function clearChannel(player, room) {
     if (hasBit(player, room.channelBit)) {
       player.sendMessage("The channel is already clear.");
-      return true;
+      return;
     }
     if (!hasBit(player, room.golemBit)) {
       player.sendMessage("You may not pass!");
-      return true;
+      return;
     }
-    if (!hasChannelSkill(player, room)) return true;
+    if (!hasChannelSkill(player, room)) return;
     setBit(player, room.channelBit);
     startTranscript(api, player, room.golemNpcId, PAGE, room.channelVariant);
-    if (quest.getStage(player) < STAGE_CHANNELS) quest.setStage(player, STAGE_CHANNELS);
     moveToNextChannel(player);
+  }
+
+  function handleChannelClear(event) {
+    const { player, objectId, location } = event;
+    const room = ROOMS.find(
+      (candidate) =>
+        candidate.channelObjectId === objectId &&
+        candidate.channelTiles.some((tile) => sameTile(location, tile))
+    );
+    if (!room) return false;
+    event.handled = true;
+    clearChannel(player, room);
+    return true;
+  }
+
+  /** The target is shot across the channel; the default walk-to range 1 never reaches it. */
+  function handleRangingTargetRoute(event) {
+    const room = ROOMS.find((candidate) => candidate.channelNpcIds?.has(event.npcId));
+    if (!room) return;
+    event.range = 10;
+  }
+
+  /** The northern room is cleared by shooting the ranging target, not an object. */
+  function handleRangingTarget(event) {
+    const { player, npcId, npc, clickType } = event;
+    const room = ROOMS.find(
+      (candidate) => candidate.skill === "RANGED" && candidate.channelNpcIds?.has(npcId)
+    );
+    if (!room) return false;
+    const action = npc?.getCurrentDefinition?.(player)?.getActions?.()[clickType - 1];
+    if (String(action ?? "").toLowerCase() !== "shoot") return false;
+    if (!questActive(player) ||
+        quest.getStage(player) < STAGE_DUNGEON ||
+        quest.getStage(player) >= STAGE_CHANNELS) {
+      return false;
+    }
+    const owner = npc?.getOwner?.();
+    if (owner && owner !== player) return false;
+    const rangedWeapon = RangedWeapon.getFor(player);
+    if (!rangedWeapon) {
+      player.sendMessage("You need a ranged weapon to shoot the target.");
+      return false;
+    }
+    player.getCombat().setRangedWeapon(rangedWeapon);
+    player.getCombat().setAmmunition(Ammunition.getFor(player));
+    const method = new RangedCombatMethod();
+    const ammoRequired = WeaponProfiles.ranged(player).ammoRequired ?? 1;
+    if (!CombatFactory.checkAmmo(player, ammoRequired, true)) return false;
+    if (!CombatRange.canReach(player, method, npc)) {
+      player.sendMessage("You can't reach the target.");
+      return false;
+    }
+    event.handled = true;
+    method.start(player, npc);
+    clearChannel(player, room);
     return true;
   }
 
@@ -923,7 +1060,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
    */
   function moveToNextChannel(player) {
     const next = ROOMS.find((room) => !hasBit(player, room.channelBit));
-    player.moveTo(next ? next.approach : LAKE_ENTRY_TILE);
+    player.moveTo(next ? next.approach : LAKE_DOOR_APPROACH_TILE);
   }
 
   function hasChannelSkill(player, room) {
@@ -960,7 +1097,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   function handleObjectInteraction(event) {
     const { player, objectId, clickType } = event;
     const option = String(event.definition?.getActions?.()?.[clickType - 1] ?? "").toLowerCase();
-    if (objectId === CLEAR_WATER_CHANNEL_OBJECT_ID && option === "clear") {
+    if (ROOMS.some((room) => room.channelObjectId === objectId) && option === "clear") {
       handleChannelClear(event);
       return;
     }
@@ -987,7 +1124,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
       player.moveTo(WATERFALL_SURFACE_TILE);
       return;
     }
-    if (objectId === STATUETTE_OBJECT_ID && option === "pray-at") {
+    if (STATUETTE_OBJECT_IDS.has(objectId) && option === "pray-at") {
       event.handled = true;
       prayAtStatuette(player);
     }
@@ -1007,6 +1144,24 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   // Golem deaths
   // ==========================================================================
 
+  /** Only the matching melee style can hurt a guardian golem. */
+  function handleGolemHit({ npc, hit }) {
+    const weakness = GOLEM_WEAKNESS.get(npc?.getId?.());
+    if (!weakness) return;
+    if (hit?.getCombatType?.() !== CombatType.MELEE) {
+      for (const damage of hit?.getHits?.() ?? []) damage.setDamage(0);
+      return;
+    }
+    const attacker = hit.getAttacker?.();
+    const player = attacker?.isPlayer?.() ? attacker.getAsPlayer?.() : null;
+    if (player?.getFightType?.()?.getBonusType?.() === weakness.style) return;
+    const dealt = hit.getTotalDamage?.() ?? 0;
+    for (const damage of hit?.getHits?.() ?? []) damage.setDamage(0);
+    if (player && dealt > 0) {
+      player.sendMessage(`You can only damage this golem with the ${weakness.name} attack style.`);
+    }
+  }
+
   function handleNpcDeath(event) {
     const { killer, npcId } = event;
     if (!killer || !GOLEM_NPC_IDS.has(npcId)) return;
@@ -1015,7 +1170,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     trackedGolems.delete(golemKeyFor(killer, room));
     if (!questActive(killer)) return;
     setBit(killer, room.golemBit);
-    makeChannelsClearable(room);
     startTranscript(api, killer, npcId, PAGE, "the-waterfall-guardian-golem-after-defeating-a-golem");
   }
 
@@ -1039,9 +1193,36 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     return false;
   }
 
+  function ensureAncestralKey(player) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_BALLAD || stage >= STAGE_STATUETTE) return;
+    if (held(player, ANCESTRAL_KEY_ITEM_ID)) return;
+    if (
+      itemOnGroundManager.getGroundItem(
+        player.getUsername(),
+        ANCESTRAL_KEY_ITEM_ID,
+        ANCESTRAL_KEY_TILE,
+        player.getPrivateArea() ?? null
+      )
+    ) {
+      return;
+    }
+    itemOnGroundManager.registerLocation(
+      player,
+      new Item(ANCESTRAL_KEY_ITEM_ID, 1),
+      ANCESTRAL_KEY_TILE
+    );
+  }
+
+  /** The table is out of reach: OSRS requires Telekinetic Grab for the key. */
+  function handleTelekineticGrab({ player, itemId }) {
+    if (itemId !== ANCESTRAL_KEY_ITEM_ID) return;
+    if (quest.getStage(player) < STAGE_KEY) quest.setStage(player, STAGE_KEY);
+  }
+
   function ensureShoes(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_SPIRITS || quest.isComplete(player)) return;
+    if (stage < STAGE_MAYOR || quest.isComplete(player)) return;
     if (held(player, SHOES_ITEM_ID) || held(player, SOLE_ITEM_ID) || held(player, STATUETTE_ITEM_ID)) {
       return;
     }
@@ -1062,14 +1243,30 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   // Login / world state
   // ==========================================================================
 
+  /** One-time move from the old fabricated 1..8 scale to native stages. */
+  function migrateLegacyStage(player) {
+    const stage = quest.getStage(player);
+    if (stage <= STAGE_NOT_STARTED || stage >= STAGE_STARTED) return;
+    const legacy = new Map([
+      [1, STAGE_STARTED],
+      [2, STAGE_BALLAD],
+      [3, STAGE_BALLAD],
+      [4, STAGE_CHANNELS],
+      [5, STAGE_SPIRITS],
+      [6, STAGE_MAYOR],
+      [7, STAGE_STATUETTE],
+      [8, STAGE_COMPLETE],
+    ]);
+    const mapped = legacy.get(stage);
+    if (mapped !== undefined) quest.setStage(player, mapped);
+  }
+
   function handleLogin({ player }) {
+    migrateLegacyStage(player);
     refreshQuestList(player);
     syncVarbits(player);
+    ensureAncestralKey(player);
     ensureShoes(player);
-    for (const room of ROOMS) {
-      if (hasBit(player, room.golemBit)) makeChannelsClearable(room);
-    }
-    if (quest.isComplete(player)) placeShrineObject(STATUETTE_OBJECT_ID);
   }
 
   // ==========================================================================
@@ -1106,7 +1303,6 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
     },
   });
 
-  placeShrineObject(PLINTH_OBJECT_ID);
   ensureDungeonExit();
 
   api.onNpcDialogueVariant(selectVariant);
@@ -1116,20 +1312,26 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("door:toggle", handleDoorToggle);
+  api.onCustomEvent("magic:telekinetic-grab", handleTelekineticGrab);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onObjectRoute(handleObjectRoute);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onNpcRoute(handleRangingTargetRoute);
+  api.onNpcInteraction(handleRangingTarget);
   api.onObjectInteraction("Cupboard", {
     Open: openCupboard,
     Search: searchCupboard,
     Shut: shutCupboard,
   });
   api.onNpcDeath(handleNpcDeath);
+  api.onNpcHitModify(handleGolemHit);
   api.onNpcInteraction("Habibah", { "Talk-to": talkToChatter });
   api.onNpcInteraction("Meskhenet", { "Talk-to": talkToChatter });
   api.onNpcInteraction("Zahra", { "Talk-to": talkToChatter });
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleTransitionInterrupted);
+  api.onPlayerDeath(handleTransitionInterrupted);
 };

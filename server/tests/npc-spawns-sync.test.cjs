@@ -110,7 +110,7 @@ test('the Sailing islands and seas, without minigame, plugin and Group Ironman N
 
 test("Varlamore's underground, without the bosses that have no fight yet", () => {
   const spawns = require('../data/definitions/npc-spawns.json');
-  const below = spawns.filter((spawn) => spawn.source === 'wiki' && inBoxes(spawn, [parseBox('1216,9344,1727,9855')]));
+  const below = spawns.filter((spawn) => (spawn.source === 'wiki' || spawn.source === 'capture-1693') && inBoxes(spawn, [parseBox('1216,9344,1727,9855')]));
   assert.ok(below.length >= 450, `${below.length} spawns`);
   assert.ok(below.some((spawn) => spawn.name === 'Banker' && spawn.level === 1), "Cam Torum's bank");
   assert.ok(below.filter((spawn) => spawn.name === 'Wyrmling').every((spawn) => spawn.id === 13031), "Neypotzli's own wyrmlings");

@@ -378,7 +378,6 @@ export const RENDER_CONSTANTS = {
     HITSPLAT_SCALE: 1,
     /** Extra multiplier for health bars (on top of UI/render scale). */
     HEALTH_BAR_VISUAL_SCALE: 1.2,
-    AMBIENT_SOUND_THROTTLE_FRAMES: 3,
     WALK_PHASE_BIAS: 0.0,
     RUN_PHASE_BIAS: 0.0,
 } as const;

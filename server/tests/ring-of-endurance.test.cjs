@@ -15,6 +15,7 @@ RingOfEndurance.register({
   onCustomEvent() {},
   onItemAction() {},
   onItemOnItem() {},
+  registerRunEnergyDrainModifier() {},
 });
 
 function item(id, meta = {}) {
@@ -89,6 +90,16 @@ test("a worn charged ring doubles a stamina dose and spends one charge", () => {
   const plain = { player: withoutRing, energy: 20, durationMs: 120000 };
   RingOfEndurance._test.doubleStamina(plain);
   assert.equal(plain.energy, 20, "no ring, no doubling");
+});
+
+test("a ring with 500 charges skips 15% of run-energy drain", () => {
+  const ring = item(ItemIds.RING_OF_ENDURANCE, { "ring-of-endurance": 500 });
+  const player = createPlayer({ ring });
+  assert.equal(RingOfEndurance._test.passiveApplies(player, 14), true);
+  assert.equal(RingOfEndurance._test.passiveApplies(player, 15), false);
+  ring.setMetaValue("ring-of-endurance", 499);
+  assert.equal(RingOfEndurance._test.passiveApplies(player, 0), false);
+  assert.equal(RingOfEndurance._test.passiveApplies(createPlayer(), 0), false);
 });
 
 test("uncharging drops the charges without refunding them", () => {

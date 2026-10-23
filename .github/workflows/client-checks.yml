@@ -9,6 +9,7 @@ permissions:
 
 jobs:
     check:
+        if: github.repository == 'RSPSApp/tsps'
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4

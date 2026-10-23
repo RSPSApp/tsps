@@ -42,11 +42,13 @@ import {
   PluginItemOnObjectEvent,
   PluginSpellOnObjectEvent,
   PluginSpellOnItemEvent,
+  PluginSpellCastEvent,
   PluginNpcDeathEvent,
   PluginNpcBeforeDeathEvent,
   PluginNpcHitModifyEvent,
   PluginNpcAggressionToleranceEvent,
   PluginNpcInteractionEvent,
+  PluginWorldEntityInteractionEvent,
   PluginNpcInteractionDefinition,
   PluginNpcDialogueContext,
   PluginNpcDialogueConditionEvent,
@@ -168,6 +170,56 @@ const COMMAND_PERMISSION_RIGHTS: Record<string, number> = {
   DEVELOPER: PlayerRights.DEVELOPER.getId(),
 };
 
+function applyPluginRegionReplacement(
+  pluginName: string,
+  regionId: number,
+  result: { source: string; terrainBytes: number; objectBytes: number; objectCount: number }
+): void {
+  let clippingReloaded = false;
+  try {
+    const collisionModule = require("../game/collision/RegionManager");
+    clippingReloaded =
+      collisionModule?.RegionManager?.reloadRegion?.(regionId) === true;
+  } catch (reloadErr) {
+    console.error(
+      `[plugins] ${pluginName} failed to reload clipping for region ${regionId}`,
+      reloadErr
+    );
+  }
+
+  let streamedPlayers = 0;
+  try {
+    const worldModule = require("../game/World");
+    const World = worldModule?.World;
+    if (World?.getPlayers && World?.isPlayerSessionConnected) {
+      const players = World.getPlayers();
+      players?.forEach?.((player: any) => {
+        if (!player || !World.isPlayerSessionConnected(player)) {
+          return;
+        }
+        if (MapRegionReplacementManager.sendReplacementToPlayer(player, regionId)) {
+          streamedPlayers++;
+        }
+      });
+    }
+  } catch (streamErr) {
+    console.error(
+      `[plugins] ${pluginName} failed to stream region replacement ${regionId}`,
+      streamErr
+    );
+  }
+
+  console.info(`[plugins] ${pluginName} replaced map region`, {
+    regionId,
+    source: result.source,
+    terrainBytes: result.terrainBytes,
+    objectBytes: result.objectBytes,
+    objectCount: result.objectCount,
+    clippingReloaded,
+    streamedPlayers,
+  });
+}
+
 export class PluginManager {
   private static readonly PERF_EVENT_SAMPLE_LIMIT = 128;
   private static readonly MAX_PLUGIN_DEPTH = 2;
@@ -200,6 +252,7 @@ export class PluginManager {
   private static objectHooksByName = new Map<string, ObjectInteractionHook[]>();
   private static nextObjectHookOrder = 0;
   private static npcInteractionHooks: PluginHook<PluginNpcInteractionEvent>[] = [];
+  private static worldEntityInteractionHooks: PluginHook<PluginWorldEntityInteractionEvent>[] = [];
   /**
    * `onAnyNpcInteraction` hooks. Kept apart from the id/name hooks so a generic
    * transcript handler (e.g. NpcDialogues) never outruns a specific plugin that
@@ -270,6 +323,7 @@ export class PluginManager {
     [];
   private static spellOnObjectHooks: PluginHook<PluginSpellOnObjectEvent>[] = [];
   private static spellOnItemHooks: PluginHook<PluginSpellOnItemEvent>[] = [];
+  private static spellCastHooks: PluginHook<PluginSpellCastEvent>[] = [];
   private static groundItemInteractionHooks: PluginHook<PluginGroundItemInteractionEvent>[] =
     [];
   private static groundItemPickupHooks: PluginHook<PluginGroundItemInteractionEvent>[] = [];
@@ -1001,6 +1055,18 @@ export class PluginManager {
     return event.handled === true;
   }
 
+  /** Runs a world entity menu option through plugins; true when one handled it. */
+  public static emitWorldEntityInteraction(event: PluginWorldEntityInteractionEvent): boolean {
+    if (!event || !event.player || !Number.isInteger(event.entityIndex)) {
+      return false;
+    }
+    for (const hook of PluginManager.worldEntityInteractionHooks) {
+      if (event.handled) break;
+      PluginManager.executeHook(hook, event, "world_entity_interaction", "world_entity_interaction");
+    }
+    return event.handled === true;
+  }
+
   /** Asks dialogue plugins which transcript variant to play (first answer wins). */
   public static emitNpcDialogueVariant(
     event: PluginNpcDialogueContext
@@ -1071,13 +1137,14 @@ export class PluginManager {
       return null;
     }
     const event: PluginCanAttackEvent = { attacker, target, method, allow: null };
+    let allowed = false;
     for (const hook of PluginManager.canAttackHooks) {
+      event.allow = null;
       PluginManager.executeHook(hook, event, "can_attack", "can_attack");
-      if (event.allow !== null) {
-        return event.allow;
-      }
+      if (event.allow === false) return false;
+      if (event.allow === true) allowed = true;
     }
-    return null;
+    return allowed ? true : null;
   }
 
   public static emitCanTeleport(player: any, wildernessLevelLimit: number = 20, destination?: any): boolean | null {
@@ -1633,6 +1700,14 @@ export class PluginManager {
     return event.handled === true;
   }
 
+  public static emitSpellCast(event: PluginSpellCastEvent): boolean {
+    for (const hook of PluginManager.spellCastHooks) {
+      if (event.handled) break;
+      PluginManager.executeHook(hook, event, "spell_cast", "spell_cast");
+    }
+    return event.handled === true;
+  }
+
   public static emitGroundItemInteraction(
     event: PluginGroundItemInteractionEvent
   ): boolean {
@@ -2096,6 +2171,10 @@ export class PluginManager {
       CombatMethod: require(`${combat}/method/CombatMethod`).CombatMethod,
       CombatSpecial: require(`${combat}/CombatSpecial`).CombatSpecial,
       CombatFactory: require(`${combat}/CombatFactory`).CombatFactory,
+      BonusManager: require(`${model}/equipment/BonusManager`).BonusManager,
+      WeaponInterfaces: require(`${combat}/WeaponInterfaces`).WeaponInterfaces,
+      Barrows: require(`${combat}/Barrows`).Barrows,
+      applyPrayerDrainModifiers: require(`${combat}/EquipmentEffects`).applyPrayerDrainModifiers,
       CombatEquipment: require(`${combat}/CombatEquipment`).CombatEquipment,
       CombatRange: require(`${combat}/CombatRange`).CombatRange,
       CanAttackResponse: require(`${combat}/CombatFactory`).CanAttackResponse,
@@ -2127,6 +2206,7 @@ export class PluginManager {
       Direction: require(`${model}/Direction`).Direction,
       Equipment: require(`${model}/container/impl/Equipment`).Equipment,
       Bank: require(`${model}/container/impl/Bank`).Bank,
+      PlayerStatus: require(`${model}/PlayerStatus`).PlayerStatus,
       Task: require("../game/task/Task").Task,
       CountdownTask: require("../game/task/impl/CountdownTask").CountdownTask,
       ForceMovement: require(`${model}/ForceMovement`).ForceMovement,
@@ -2157,6 +2237,9 @@ export class PluginManager {
         isEnabled: () => PluginManager.isPluginPerformanceProfilingEnabled(),
       }),
       World: require("../game/World").World,
+      BoatManager: require("../game/content/sailing/BoatManager").BoatManager,
+      BOAT_VIEW_DISTANCE: require("../game/content/sailing/WorldEntitySync").BOAT_VIEW_DISTANCE,
+      Sailing: require("../game/content/sailing/Sailing").Sailing,
       GameObject: require("../game/entity/impl/object/GameObject").GameObject,
       PrivateArea: require(`${model}/areas/impl/PrivateArea`).PrivateArea,
       TemplatedInstanceArea: require(`${model}/areas/impl/TemplatedInstanceArea`).TemplatedInstanceArea,
@@ -2838,6 +2921,11 @@ export class PluginManager {
       },
       onNpcRoute: (handler) => {
         if (typeof handler === "function") PluginManager.npcRouteHooks.push({ pluginName, handler });
+      },
+      onWorldEntityInteraction: (handler: (event: PluginWorldEntityInteractionEvent) => void) => {
+        if (typeof handler === "function") {
+          PluginManager.worldEntityInteractionHooks.push({ pluginName, handler });
+        }
       },
       onNpcInteraction: (
         handler: string | ((event: PluginNpcInteractionEvent) => void),
@@ -3551,6 +3639,20 @@ export class PluginManager {
           },
         });
       },
+      onSpellCast: (handler) => {
+        if (typeof handler !== "function") {
+          return;
+        }
+        PluginManager.spellCastHooks.push({
+          pluginName,
+          handler: (event) => {
+            if (!event || event.handled || !event.player) {
+              return;
+            }
+            handler(event);
+          },
+        });
+      },
       onItemAction: (
         handler: string | ((event: PluginItemActionEvent) => void),
         actions?: Record<string, (event: PluginItemActionEvent) => void | boolean>
@@ -3819,50 +3921,7 @@ export class PluginManager {
             regionId,
             source as string | [string, string]
           );
-
-          let clippingReloaded = false;
-          try {
-            const collisionModule = require("../game/collision/RegionManager");
-            clippingReloaded =
-              collisionModule?.RegionManager?.reloadRegion?.(regionId) === true;
-          } catch (reloadErr) {
-            console.error(
-              `[plugins] ${pluginName} failed to reload clipping for region ${regionId}`,
-              reloadErr
-            );
-          }
-
-          let streamedPlayers = 0;
-          try {
-            const worldModule = require("../game/World");
-            const World = worldModule?.World;
-            if (World?.getPlayers && World?.isPlayerSessionConnected) {
-              const players = World.getPlayers();
-              players?.forEach?.((player: any) => {
-                if (!player || !World.isPlayerSessionConnected(player)) {
-                  return;
-                }
-                if (MapRegionReplacementManager.sendReplacementToPlayer(player, regionId)) {
-                  streamedPlayers++;
-                }
-              });
-            }
-          } catch (streamErr) {
-            console.error(
-              `[plugins] ${pluginName} failed to stream region replacement ${regionId}`,
-              streamErr
-            );
-          }
-
-          console.info(`[plugins] ${pluginName} replaced map region`, {
-            regionId,
-            source: result.source,
-            terrainBytes: result.terrainBytes,
-            objectBytes: result.objectBytes,
-            objectCount: result.objectCount,
-            clippingReloaded,
-            streamedPlayers,
-          });
+          applyPluginRegionReplacement(pluginName, regionId, result);
         } catch (err) {
           console.error(
             `[plugins] ${pluginName} failed to replace map region ${regionId}`,
@@ -3967,6 +4026,7 @@ export class PluginManager {
       emitFiremakingBlocked: (event) => PluginManager.emitFiremakingBlocked(event),
       emitObjectInteraction: (event) => PluginManager.emitObjectInteraction(event),
       emitNpcInteraction: (event) => PluginManager.emitNpcInteraction(event),
+      emitWorldEntityInteraction: (event) => PluginManager.emitWorldEntityInteraction(event),
       emitItemOnObject: (event) => PluginManager.emitItemOnObject(event),
       emitPlayerLogin: (event) => PluginManager.emitPlayerLogin(event),
       emitCustomEvent: (eventName, payload) =>
@@ -4024,8 +4084,20 @@ export class PluginManager {
         require("../game/content/combat/EquipmentEffects").registerRunEnergyRestoreModifier(
           modifier
         ),
+      registerRunEnergyDrainModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerRunEnergyDrainModifier(
+          modifier
+        ),
+      registerSpecialEnergyRestoreModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerSpecialEnergyRestoreModifier(
+          modifier
+        ),
       registerIncomingDamageModifier: (modifier) =>
         require("../game/content/combat/EquipmentEffects").registerIncomingDamageModifier(
+          modifier
+        ),
+      registerPrayerDrainModifier: (modifier) =>
+        require("../game/content/combat/EquipmentEffects").registerPrayerDrainModifier(
           modifier
         ),
       setCombatEngine: (engine) => {

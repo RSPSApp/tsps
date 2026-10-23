@@ -32,7 +32,7 @@ test("WebGPU interact highlight reuses its per-target buffers and bind groups ev
     let targets = [target];
     const host = {
         canvas,
-        osrsClient: { interactHighlightPlugin: { getConfig: () => ({ enabled: true }) } },
+        osrsClient: { clientPlugins: { interactHighlightConfig: () => ({ enabled: true }) } },
         getInteractHighlightDrawTargets: () => targets,
     } as unknown as OverlayHost;
 

@@ -1,6 +1,5 @@
-// TODO: ported from xrsps-typescript (Sweep/forward-line targeting); untested.
-module.exports = function registerDragonHalberdSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sounds } = api.core;
+// OSRS Wiki: Dragon halberd, special attack (including the three-player PvP cap).
+function dragonHalberdSpecial({ Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sounds }) {
 
   const DRAIN = 30;
   const ANIMATION = new Animation(1203);
@@ -23,6 +22,7 @@ module.exports = function registerDragonHalberdSpecialAttack(api) {
     pattern: "forward_line",
     width: 3,
     maxTargets: 10,
+    maxPlayerTargets: 3,
     requiresMultiCombat: true,
     largeTargetExtraHit: { minimumSize: 2, accuracyMultiplier: 0.75 },
   };
@@ -36,9 +36,9 @@ module.exports = function registerDragonHalberdSpecialAttack(api) {
     }
   }
 
-  api.registerCombatSpecial({
+  return {
     id: "dragon_halberd",
-    itemIds: [ItemIdentifiers.DRAGON_HALBERD, ...CRYSTAL_HALBERD_IDS],
+    itemIds: [ItemIdentifiers.DRAGON_HALBERD, ItemIdentifiers.DRAGON_HALBERD_CR_, ...CRYSTAL_HALBERD_IDS],
     drainAmount: DRAIN,
     strengthMultiplier: 1.1,
     accuracyMultiplier: 1,
@@ -50,5 +50,9 @@ module.exports = function registerDragonHalberdSpecialAttack(api) {
       targeting: SWEEP_TARGETING,
     },
     combatMethod: new DragonHalberdCombatMethod(),
-  });
+  };
+}
+
+module.exports = function registerDragonHalberdSpecialAttack(api) {
+  api.registerCombatSpecial(dragonHalberdSpecial(api.core));
 };

@@ -76,6 +76,20 @@
     "prifddinas": [3239, 6076, 0]
   },
   "chinchompaTeleportsPerDay": 5,
+  "metalAttraction": {
+    "intervalTicks": 350,
+    "moveTiles": 3,
+    "steel": [
+      ["steel_arrow", 1975], ["steel_dart", 5], ["steel_knife", 5], ["iron_ore", 5],
+      ["nails", 5], ["poh_toy_mouse_unwound", 1], ["digsitearrow", 1], ["steel_arrowheads", 1],
+      ["steel_med_helm", 1], ["steel_bar", 1]
+    ],
+    "mithril": [
+      ["mithril_arrow", 1975], ["mithril_dart", 5], ["mithril_knife", 5], ["mithril_ore", 5],
+      ["nails_mithril", 5], ["adamant_arrow", 1], ["digsitearrow", 1], ["mithril_arrowheads", 1],
+      ["mithril_med_helm", 1], ["mithril_bar", 1]
+    ]
+  },
   "max": {
     "cape": "skillcape_max",
     "worn": "skillcape_max_worn",

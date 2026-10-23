@@ -6,6 +6,18 @@ module.exports = function registerShoveSpecialAttack(api) {
   const GRAPHIC = new Graphic(263, GraphicHeight.HIGH);
   const STUN_ANIMATION = new Animation(424);
 
+  // A blocked Shove spends no energy and turns the special off, so an immune
+  // target isn't re-attempted (and re-messaged) every swing.
+  function cancelShove(character, message) {
+    if (message) {
+      character.sendMessage(message);
+    }
+    character.setSpecialActivated(false);
+    if (character.isPlayer()) {
+      CombatSpecial.updateBar(character.getAsPlayer());
+    }
+  }
+
   class ShoveCombatMethod extends CombatMethod {
     hits(character, target) {
       return null;
@@ -18,19 +30,20 @@ module.exports = function registerShoveSpecialAttack(api) {
       // energy/animation/sound, so a blocked Shove doesn't waste the
       // special attack.
       if (target.getTimers().has(TimerKey.STUN) || target.getTimers().has(TimerKey.STUN_IMMUNITY)) {
+        cancelShove(character);
         return;
       }
 
       if (character.isPlayer()) {
         const player = character.getAsPlayer();
         if (player.getDueling().inDuel() && player.getDueling().getRules()[DuelRule.NO_MOVEMENT.getButtonId()]) {
-          player.sendMessage("This weapon's special attack cannot be used in this duel.");
+          cancelShove(character, "This weapon's special attack cannot be used in this duel.");
           return;
         }
       }
 
       if (target.getSize() > 1) {
-        character.sendMessage("That creature is too large to knock back!");
+        cancelShove(character, "That creature is too large to knock back!");
         return;
       }
 
@@ -98,6 +111,10 @@ module.exports = function registerShoveSpecialAttack(api) {
       ItemIdentifiers.DRAGON_SPEAR_P_PLUS_,
       ItemIdentifiers.DRAGON_SPEAR_KP_,
       ItemIdentifiers.DRAGON_SPEAR_P_,
+      ItemIdentifiers.DRAGON_SPEAR_CR_,
+      ItemIdentifiers.DRAGON_SPEAR_P_CR_,
+      ItemIdentifiers.DRAGON_SPEAR_P_CR__3,
+      ItemIdentifiers.DRAGON_SPEAR_P_CR__5,
       ItemIdentifiers.ZAMORAKIAN_SPEAR,
       ItemIdentifiers.ZAMORAKIAN_HASTA,
     ],

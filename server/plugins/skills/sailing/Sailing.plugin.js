@@ -50,7 +50,7 @@ function boardedVarbits(type, owned) {
 }
 
 const COMBAT_OPTIONS_GROUP = 593;
-const VIEW_SAILING_OPTIONS_CHILD = 46;
+const VIEW_SAILING_OPTIONS_CHILD = 48;
 /** The sidepanel's "View Combat Options" (see Sidepanel.Sailing.js). */
 const VIEW_COMBAT_OPTIONS_CHILD = 1;
 
@@ -107,7 +107,7 @@ function onLeft({ player, reason }) {
 }
 
 /**
- * The combat tab's "View" button (593:46) and the sidepanel's "Combat Options" (937:33) swap
+ * The combat tab's "View" button (593:48) and the sidepanel's "Combat Options" (937:33) swap
  * the combat tab between the combat options and the sailing sidepanel while aboard; the
  * client only plays a click (script 489), the server remounts the tab.
  */

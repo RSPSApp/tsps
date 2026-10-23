@@ -187,16 +187,17 @@ function wearingVoidMage(player) {
 function elementalAccuracy(roll) {
   const { attacker, target } = roll;
   if (!attacker.isPlayer() || !target.isNpc()) return;
+  // Every player's roll on every NPC comes through here: leave anything not a row or elemental first.
+  const targetId = target.getId();
+  if (!Shared.isRowHitbox(targetId) && !Shared.isMinion(targetId)) return;
   const spell = selectedSpell(attacker);
   if (!spell) return;
   recentCasts.set(attacker, { spell, tick: core.World.getProcessCycle() });
-  const targetId = target.getId();
   if (Shared.isRowHitbox(targetId)) {
     const need = targetId === Shared.FIRE_ROW_ID ? "water" : "fire";
     if (spellElement(spell) === need) roll.forceAccurate = true;
     return;
   }
-  if (!Shared.isMinion(targetId)) return;
   if (spellName(spell) === "WIND_STRIKE") {
     roll.forceAccurate = true;
     return;

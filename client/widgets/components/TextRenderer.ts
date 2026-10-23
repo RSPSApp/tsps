@@ -1,6 +1,7 @@
 import { BitmapFont } from "../../rs/font/BitmapFont";
 import type { GLRenderer } from "../gl/renderer";
 import { getBitmapFontAtlas } from "../../ui/text/BitmapFontAtlas";
+import { resolveTextTemplates } from "../../rs/font/textTemplates";
 
 export type FontLoader = (id: number) => BitmapFont | undefined;
 export type InlineImageResolver = (
@@ -22,6 +23,7 @@ interface TextSegment {
  * Returns an array of text segments with their styling
  */
 export function parseOsrsMarkup(text: string, defaultColor: number): TextSegment[] {
+    text = resolveTextTemplates(text);
     const segments: TextSegment[] = [];
     let currentColor = defaultColor;
     let currentShadow = -1; // -1 = default (black if shadow enabled)
@@ -532,6 +534,7 @@ export function drawTextGL(
     renderScaleX: number = 1,
     renderScaleY: number = 1,
 ) {
+    text = resolveTextTemplates(text);
     // Early exit for empty text
     if (!text || w <= 0 || h <= 0) return;
 
@@ -590,7 +593,7 @@ export function wrapTextToWidth(
     maxW: number,
     measure: (s: string) => number,
 ): string[] {
-    const normalized = String(text).replace(/<br\s*\/?\s*>/gi, "\n");
+    const normalized = resolveTextTemplates(String(text)).replace(/<br\s*\/?\s*>/gi, "\n");
     const paragraphs = normalized.split(/\n/);
     const out: string[] = [];
     for (const para of paragraphs) {
@@ -627,7 +630,7 @@ export function wrapTextToWidth(
 }
 
 export function splitExplicitLineBreaks(text: string): string[] {
-    return String(text)
+    return resolveTextTemplates(String(text))
         .replace(/<br\s*\/?\s*>/gi, "\n")
         .split(/\n/);
 }
@@ -663,6 +666,7 @@ export function drawWrappedTextGL(
     renderScaleX: number = 1,
     renderScaleY: number = 1,
 ) {
+    text = resolveTextTemplates(text);
     // Early exit for empty text
     if (!text || w <= 0 || h <= 0) return;
 
@@ -787,6 +791,7 @@ export function drawRichTextGL(
     renderScaleX: number = 1,
     renderScaleY: number = 1,
 ) {
+    text = resolveTextTemplates(text);
     const font = fontLoader(fontId);
     if (!font) return;
 

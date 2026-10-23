@@ -24,19 +24,36 @@ function durability(item) {
   if (base == null) return null;
   const saved = Number(item.getMetaValue?.(META_KEY)?.remaining);
   if (Number.isInteger(saved)) return Math.max(0, Math.min(MAX_DURABILITY, saved));
-  if (Barrows.isBroken(id)) return 0;
-  if (id >= 4856 && id < 5000) return [MAX_DURABILITY, 750, 500, 250][(id - 4856) % 6] ?? 0;
-  return MAX_DURABILITY;
+  const stage = Barrows.stageOf(id);
+  if (stage == null) return null;
+  return [MAX_DURABILITY, 750, 500, 250, 0][stage] ?? MAX_DURABILITY;
+}
+
+function stageFor(remaining) {
+  return remaining > 750 ? 0 : remaining > 500 ? 1 : remaining > 250 ? 2 : remaining > 0 ? 3 : 4;
 }
 
 function setDurability(item, remaining) {
   const base = Barrows.baseItemId(item?.getId?.());
   if (base == null) return false;
   const value = Math.max(0, Math.min(MAX_DURABILITY, Math.floor(remaining)));
-  const stage = value > 750 ? 0 : value > 500 ? 1 : value > 250 ? 2 : value > 0 ? 3 : 4;
-  item.setId(Barrows.stageItemId(base, stage));
+  const stage = stageFor(value);
+  item.setId(Barrows.stageItemIdFor(item.getId(), stage));
   item.setMetaValue(META_KEY, { remaining: value });
   return true;
+}
+
+function baseName(item) {
+  return String(item?.getDefinition?.()?.getName?.() ?? "Barrows equipment").replace(/ \d+$/, "");
+}
+
+function sendDegradeMessage(player, item, stage) {
+  const name = baseName(item);
+  if (stage === 4) {
+    player.sendMessage(`Your ${name} has fully degraded and can no longer be used.`);
+  } else {
+    player.sendMessage(`Your ${name} has degraded to ${[100, 75, 50, 25][stage]}%.`);
+  }
 }
 
 function barrowsItems(player) {
@@ -65,7 +82,12 @@ function degradeEquipment(player) {
   for (const item of player.getEquipment().getItems()) {
     if (!Barrows.isBarrowsItem(item?.getId?.())) continue;
     weaponChanged ||= BARROWS_WEAPONS.has(Barrows.baseItemId(item.getId()));
-    changed ||= setDurability(item, durability(item) - 1);
+    const remaining = durability(item);
+    const beforeStage = stageFor(remaining);
+    const next = Math.max(0, remaining - 1);
+    changed = setDurability(item, next) || changed;
+    const afterStage = stageFor(next);
+    if (afterStage > beforeStage) sendDegradeMessage(player, item, afterStage);
   }
 
   const amulet = player.getEquipment().get(Equipment.AMULET_SLOT);
@@ -196,6 +218,7 @@ function repairEquipment(event) {
 module.exports = {
   name: "BarrowsEquipment",
   members: true,
+  _test: { durability, setDurability, stageFor, degradeEquipment, repairAll, refresh },
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
@@ -275,14 +298,14 @@ module.exports = {
     });
     api.onItemDropPolicy((event) => {
       if (Barrows.isBarrowsItem(event.item?.getId?.())) setDurability(event.item, 0);
-      if (event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED_FULL || event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED) {
+      if (event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED) {
         event.item.setId(-1);
         event.handled = true;
       }
     });
     api.onPlayerDeathItemDrop((event) => {
       if (Barrows.isBarrowsItem(event.item?.getId?.())) setDurability(event.item, 0);
-      if (event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED_FULL || event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED) {
+      if (event.item?.getId?.() === Barrows.AMULET_OF_THE_DAMNED) {
         event.item.setId(-1);
         event.handled = true;
       }

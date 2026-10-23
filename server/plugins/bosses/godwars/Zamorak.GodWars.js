@@ -51,7 +51,10 @@ function drainOnSlam(attack, hit) {
   if (!attack?.special || !target?.isPlayer?.()) return;
   const { Skill } = Common.core;
   const skills = target.getSkillManager();
-  skills.setCurrentLevels(Skill.PRAYER, Math.floor(skills.getCurrentLevel(Skill.PRAYER) / 2));
+  const amount = Math.floor(skills.getCurrentLevel(Skill.PRAYER) / 2);
+  const apply = Common.core.applyPrayerDrainModifiers;
+  const drain = typeof apply === "function" ? apply(target, amount) : amount;
+  skills.setCurrentLevels(Skill.PRAYER, Math.max(0, skills.getCurrentLevel(Skill.PRAYER) - drain));
   skills.updateSkill(Skill.PRAYER);
   target.sendMessage("K'ril Tsutsaroth slams through your protection prayer, leaving you feeling drained.");
 }

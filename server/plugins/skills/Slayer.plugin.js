@@ -6,6 +6,7 @@ const UNITS = [
   require("./slayer/Data.Slayer"),
   require("./slayer/State.Slayer"),
   require("./slayer/Tasks.Slayer"),
+  require("./slayer/Choice.Slayer"),
   require("./slayer/Masters.Slayer"),
   require("./slayer/Combat.Slayer"),
   require("./slayer/Checks.Slayer"),

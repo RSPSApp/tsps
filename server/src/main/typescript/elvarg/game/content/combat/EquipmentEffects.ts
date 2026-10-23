@@ -9,6 +9,8 @@ export interface CombatEffectiveLevelContext {
 }
 export type CombatEffectiveLevelModifier = (entity: Mobile, level: number, context: CombatEffectiveLevelContext) => number;
 export type RunEnergyRestoreModifier = (entity: Mobile, delayMs: number) => number;
+export type RunEnergyDrainModifier = (entity: Mobile, amount: number) => number;
+export type SpecialEnergyRestoreModifier = (entity: Mobile, delayTicks: number) => number;
 export interface IncomingDamageContext {
   type?: unknown;
   attacker?: Mobile;
@@ -16,6 +18,12 @@ export interface IncomingDamageContext {
   meleeAttackBonusIndex?: number;
 }
 export type IncomingDamageModifier = (entity: Mobile, hitDamage: HitDamage, context: IncomingDamageContext) => void;
+export interface PrayerDrainContext {
+  /** The NPC whose attack drains Prayer, or a named environmental source. */
+  attacker?: Mobile;
+  source?: string;
+}
+export type PrayerDrainModifier = (entity: Mobile, amount: number, context: PrayerDrainContext) => number;
 
 const meleeHitModifiers: HitModifier[] = [];
 const combatEffectiveLevelModifiers: CombatEffectiveLevelModifier[] = [];
@@ -29,7 +37,10 @@ const rangedDefenseModifiers: HitModifier[] = [];
 const magicAttackAccuracyModifiers: HitModifier[] = [];
 const magicDefenseModifiers: HitModifier[] = [];
 const runEnergyRestoreModifiers: RunEnergyRestoreModifier[] = [];
+const runEnergyDrainModifiers: RunEnergyDrainModifier[] = [];
+const specialEnergyRestoreModifiers: SpecialEnergyRestoreModifier[] = [];
 const incomingDamageModifiers: IncomingDamageModifier[] = [];
+const prayerDrainModifiers: PrayerDrainModifier[] = [];
 
 const applyModifiers = (modifiers: HitModifier[], entity: Mobile, baseHit: number): number =>
   modifiers.reduce((damage, modifier) => {
@@ -103,11 +114,30 @@ export function registerRunEnergyRestoreModifier(modifier: RunEnergyRestoreModif
   runEnergyRestoreModifiers.push(modifier);
 }
 
+export function registerRunEnergyDrainModifier(modifier: RunEnergyDrainModifier): void {
+  if (typeof modifier === "function") {
+    runEnergyDrainModifiers.push(modifier);
+  }
+}
+
+export function registerSpecialEnergyRestoreModifier(modifier: SpecialEnergyRestoreModifier): void {
+  if (typeof modifier !== "function") {
+    return;
+  }
+  specialEnergyRestoreModifiers.push(modifier);
+}
+
 export function registerIncomingDamageModifier(modifier: IncomingDamageModifier): void {
   if (typeof modifier !== "function") {
     return;
   }
   incomingDamageModifiers.push(modifier);
+}
+
+export function registerPrayerDrainModifier(modifier: PrayerDrainModifier): void {
+  if (typeof modifier === "function") {
+    prayerDrainModifiers.push(modifier);
+  }
 }
 
 export function applyMeleeHitModifiers(entity: Mobile, baseHit: number): number {
@@ -159,9 +189,33 @@ export function applyRunEnergyRestoreModifiers(entity: Mobile, delayMs: number):
   }, delayMs);
 }
 
+/** Run energy spent for a movement step, after drain modifiers (the endurance ring skips 15%). */
+export function applyRunEnergyDrainModifiers(entity: Mobile, amount: number): number {
+  return runEnergyDrainModifiers.reduce((value, modifier) => {
+    const next = modifier(entity, value);
+    return Number.isFinite(next) && next >= 0 ? next : value;
+  }, amount);
+}
+
+/** Ticks between special-attack energy restores, after rate modifiers (the lightbearer halves it). */
+export function applySpecialEnergyRestoreModifiers(entity: Mobile, delayTicks: number): number {
+  return specialEnergyRestoreModifiers.reduce((delay, modifier) => {
+    const next = modifier(entity, delay);
+    return Number.isFinite(next) && next > 0 ? next : delay;
+  }, delayTicks);
+}
+
 /** Notifies listeners of a landed hit so they can reduce it or react (charges, set effects). */
 export function applyIncomingDamageModifiers(entity: Mobile, hitDamage: HitDamage, context: IncomingDamageContext = {}): void {
   for (const modifier of incomingDamageModifiers) {
     modifier(entity, hitDamage, context);
   }
+}
+
+/** Runs Prayer-drain modifiers (the Spectral shield halves NPC drains outside PvP). */
+export function applyPrayerDrainModifiers(entity: Mobile, amount: number, context: PrayerDrainContext = {}): number {
+  return prayerDrainModifiers.reduce((value, modifier) => {
+    const next = modifier(entity, value, context);
+    return Number.isFinite(next) && next >= 0 ? next : value;
+  }, amount);
 }

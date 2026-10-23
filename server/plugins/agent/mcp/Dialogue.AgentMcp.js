@@ -74,4 +74,17 @@ module.exports = function registerDialogueTools(ctx) {
       return { chose: dialogue.options[index], dialogue: readDialogue(core, find(username)), ...status(find(username)) };
     }
   );
+
+  tool(
+    "dialogue_amount",
+    "Answer the open enter-amount prompt with a number (the native resume_countdialog).",
+    { player, amount: z.number().int().min(0) },
+    async ({ player: username, amount }) => {
+      const p = find(username);
+      if (!p.getEnteredAmountAction?.()) throw new Error("No enter-amount prompt is open");
+      send(p, { type: "dialogue_amount", amount });
+      await sleepTicks(1);
+      return { amount, dialogue: readDialogue(core, find(username)), ...status(find(username)) };
+    }
+  );
 };

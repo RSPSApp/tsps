@@ -255,6 +255,10 @@ function leaveArenaOnLogout({ player }) {
   if (inside(player, ARENA)) player.moveTo(tile(WAITING_DROP));
 }
 
+function allowBountyHunterWeapons(event) {
+  if (inside(event.attacker, ARENA) && inside(event.target, ARENA)) event.allowed = true;
+}
+
 module.exports = {
   name: "TzhaarFightPits",
   members: true,
@@ -273,6 +277,7 @@ module.exports = {
     pluginApi.onPlayerDeath(pitDeath);
     pluginApi.onShouldDropItemsOnDeath(keepItemsInPit);
     pluginApi.onCanAttack(pitCanAttack);
+    pluginApi.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
     pluginApi.onPlayerLogout(dropChampionSkull);
     pluginApi.onPlayerLogout(leaveArenaOnLogout);
   },

@@ -166,6 +166,8 @@ function createCdp(url) {
 }
 
 const CLIENT_JS = `(() => window.osrsClient ?? window.__WEBGPU_RENDERER__?.osrsClient ?? window.__osrsClient ?? null)()`;
+// The client holds no plugin references; find one by its descriptor name.
+const SMOOTHING_JS = `((pm) => pm.getPlugins().find((p) => pm.getDescriptor(p).name === "Animation Smoothing"))(${CLIENT_JS}.runeLite.pluginManager)`;
 
 // Boots one candidate headless, navigates it to the target URL and probes for
 // WebGPU there: navigator.gpu is a secure-context API, so it must be checked
@@ -310,7 +312,7 @@ async function main() {
     if (smoothing !== null) {
       await cdp.evaluate(`(async () => {
         const c = ${CLIENT_JS};
-        await c.runeLite.pluginManager.setPluginEnabled(c.animationSmoothingPlugin, ${smoothing === "on"});
+        await c.runeLite.pluginManager.setPluginEnabled(${SMOOTHING_JS}, ${smoothing === "on"});
       })()`);
     }
 
@@ -348,7 +350,7 @@ async function main() {
           if (v) fractionalVertices++;
         }
         durations.sort((a,b) => a-b);
-        return { backend: r.constructor.name, enabled: c.animationSmoothingPlugin.isEnabled(),
+        return { backend: r.constructor.name, enabled: ${SMOOTHING_JS}.isEnabled(),
           poses: poses.size, fractionalVertices, glError: (r.gl ?? r.app?.gl)?.getError?.() ?? 0,
           medianFrameMs: durations[60], p95FrameMs: durations[114] };
       })()`);

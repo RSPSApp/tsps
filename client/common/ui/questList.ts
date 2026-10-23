@@ -1,11 +1,13 @@
 export const QUEST_LIST_STATUS_IN_PROGRESS = 0;
 export const QUEST_LIST_STATUS_NOT_STARTED = 1;
 export const QUEST_LIST_STATUS_COMPLETE = 2;
+export const QUEST_LIST_STATUS_UNAVAILABLE = 3;
 
 export type QuestListStatus =
     | typeof QUEST_LIST_STATUS_IN_PROGRESS
     | typeof QUEST_LIST_STATUS_NOT_STARTED
-    | typeof QUEST_LIST_STATUS_COMPLETE;
+    | typeof QUEST_LIST_STATUS_COMPLETE
+    | typeof QUEST_LIST_STATUS_UNAVAILABLE;
 
 export interface QuestListConfigQuest {
     key: string;

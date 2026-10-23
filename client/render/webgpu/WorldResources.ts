@@ -512,9 +512,11 @@ export class WorldResources {
               })
             : undefined;
 
+        /** `punch`: no colour and no depth test, for SunkenLocs' depth reset (drawn at depth 1). */
         const createMainPipeline = (
             alpha: boolean,
             mode: "base" | "extended" | "depth",
+            punch: boolean = false,
         ): GPURenderPipeline => {
             const depth = mode === "depth";
             const module = createMainShaderModule(device, {
@@ -523,7 +525,7 @@ export class WorldResources {
                 depth,
             });
             return createScenePipeline(device, {
-                label: `webgpu main${alpha ? " alpha" : ""} pipeline${mode === "base" ? "" : ` ${mode}`}`,
+                label: `webgpu main${alpha ? " alpha" : ""}${punch ? " punch" : ""} pipeline${mode === "base" ? "" : ` ${mode}`}`,
                 layout: mode === "base" ? pipelineLayout : extendedPipelineLayout!,
                 vertex: {
                     module,
@@ -548,7 +550,8 @@ export class WorldResources {
                                       mode === "extended"
                                           ? extension!.sceneColorFormat ?? canvasFormat
                                           : canvasFormat,
-                                  blend: alpha
+                                  writeMask: punch ? 0 : undefined,
+                                  blend: alpha && !punch
                                       ? {
                                             color: {
                                                 srcFactor: "src-alpha",
@@ -569,7 +572,7 @@ export class WorldResources {
                 depthStencil: {
                     format: depth ? extension!.depthFormat ?? SCENE_DEPTH_FORMAT : SCENE_DEPTH_FORMAT,
                     depthWriteEnabled: true,
-                    depthCompare: "less-equal",
+                    depthCompare: punch ? "always" : "less-equal",
                 },
             });
         };
@@ -581,6 +584,10 @@ export class WorldResources {
             basePipelines: [createMainPipeline(false, "base"), createMainPipeline(true, "base")],
             extendedPipelines: extension
                 ? [createMainPipeline(false, "extended"), createMainPipeline(true, "extended")]
+                : undefined,
+            basePunchPipelines: [createMainPipeline(false, "base", true), createMainPipeline(true, "base", true)],
+            extendedPunchPipelines: extension
+                ? [createMainPipeline(false, "extended", true), createMainPipeline(true, "extended", true)]
                 : undefined,
             depthPipelines: depthTextureBindGroup
                 ? [createMainPipeline(false, "depth"), createMainPipeline(true, "depth")]
@@ -608,6 +615,8 @@ export class WorldResources {
     /** Selected per frame by `selectExtension`; map draws always read these fields. */
     opaquePipeline: GPURenderPipeline;
     alphaPipeline: GPURenderPipeline;
+    /** The opaque and alpha depth-reset pipelines of SunkenLocs, selected with the others. */
+    punchPipelines: [GPURenderPipeline, GPURenderPipeline];
     /** group(1) for map draws: base or extended, chosen by `selectExtension`. */
     mapWorldTextureBindGroup: GPUBindGroup;
     /** A plugin's scene extension, see ./sceneExtension.ts. */
@@ -638,6 +647,8 @@ export class WorldResources {
     private readonly sceneUniformBuffer: GPUBuffer;
     private readonly basePipelines: [GPURenderPipeline, GPURenderPipeline];
     private readonly extendedPipelines?: [GPURenderPipeline, GPURenderPipeline];
+    private readonly basePunchPipelines: [GPURenderPipeline, GPURenderPipeline];
+    private readonly extendedPunchPipelines?: [GPURenderPipeline, GPURenderPipeline];
     private readonly ownedTextures: GPUTexture[];
     private readonly textureArray: GPUTexture;
     private readonly textureLayerCount: number;
@@ -650,6 +661,8 @@ export class WorldResources {
         sceneUniformBuffer: GPUBuffer;
         basePipelines: [GPURenderPipeline, GPURenderPipeline];
         extendedPipelines?: [GPURenderPipeline, GPURenderPipeline];
+        basePunchPipelines: [GPURenderPipeline, GPURenderPipeline];
+        extendedPunchPipelines?: [GPURenderPipeline, GPURenderPipeline];
         depthPipelines?: [GPURenderPipeline, GPURenderPipeline];
         extension?: WebGPUSceneExtension;
         sceneBindGroup: GPUBindGroup;
@@ -671,6 +684,9 @@ export class WorldResources {
         this.sceneUniformBuffer = parts.sceneUniformBuffer;
         this.basePipelines = parts.basePipelines;
         this.extendedPipelines = parts.extendedPipelines;
+        this.basePunchPipelines = parts.basePunchPipelines;
+        this.extendedPunchPipelines = parts.extendedPunchPipelines;
+        this.punchPipelines = parts.basePunchPipelines;
         this.depthPipelines = parts.depthPipelines;
         [this.opaquePipeline, this.alphaPipeline] = parts.basePipelines;
         this.extension = parts.extension;
@@ -726,6 +742,8 @@ export class WorldResources {
         const [opaque, alpha] = extended ?? this.basePipelines;
         this.opaquePipeline = withSampleCount(opaque, sampleCount);
         this.alphaPipeline = withSampleCount(alpha, sampleCount);
+        const [opaquePunch, alphaPunch] = (extended ? this.extendedPunchPipelines : undefined) ?? this.basePunchPipelines;
+        this.punchPipelines = [withSampleCount(opaquePunch, sampleCount), withSampleCount(alphaPunch, sampleCount)];
         this.mapWorldTextureBindGroup = extended
             ? this.extensionTextureBindGroup!
             : this.worldTextureBindGroup;

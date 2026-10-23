@@ -1,11 +1,11 @@
 import { getClientCycle } from "../../../network/ServerConnection";
+import { hintArrow } from "../../../game/HintArrow";
 import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import { mat4, vec3, vec4 } from "gl-matrix";
 import { Scene } from "../../../rs/scene/Scene";
 import type { HitsplatEventPayload } from "../../../game/GameRenderer";
 import { ClientState } from "../../../game/ClientState";
 import type { GroundItemOverlayEntry } from "../../../game/data/ground/GroundItemStore";
-import { appendAttackTimerOverhead } from "../../../game/plugins/attacktimer/AttackTimerOverhead";
 import type { TileMarkersPluginConfig } from "../../../game/plugins/tilemarkers/types";
 import type { Model } from "../../../rs/model/Model";
 import type { OsrsMenuEntry } from "../../../rs/MenuEntry";
@@ -380,6 +380,7 @@ export class OverlayHost {
         for (const entry of this.overheadPrayerOutput) {
             entry.headIconPk = -1;
             entry.headIconPrayer = -1;
+            entry.headIconHint = false;
             entry.npcHeadIcons = undefined;
             entry.customHeadIcons = undefined;
             entry.heightOffsetTiles = 0.9;
@@ -1307,9 +1308,9 @@ export class OverlayHost {
             }
         } catch {}
 
-        // The attack timer plugin's countdown, with the local player's text (render.ts 1043-1052).
+        // Plugin text with the local player's overhead chat (the attack timer) (render.ts 1043-1052).
         try {
-            appendAttackTimerOverhead(
+            this.typedHost.osrsClient.clientPlugins.appendLocalPlayerOverheads(
                 this.typedHost,
                 localPlayerTextIdx,
                 overheadTexts,
@@ -1328,7 +1329,11 @@ export class OverlayHost {
                     const headIconPk = pe.getHeadIconPk(i);
                     const headIconPrayer = pe.getHeadIconPrayer(i);
                     const customHeadIcons = osrsClient.clientPlugins.playerHeadIcons(pe.getServerIdForIndex(i) ?? -1);
-                    if (headIconPk < 0 && headIconPrayer < 0 && customHeadIcons.length === 0) continue;
+                    // The yellow Castle Wars flag arrow rides the carrier as a head icon.
+                    const isHinted =
+                        hintArrow.type === 3 &&
+                        (pe.getServerIdForIndex?.(i) ?? -1) === hintArrow.playerId;
+                    if (headIconPk < 0 && headIconPrayer < 0 && !isHinted && customHeadIcons.length === 0) continue;
 
                     const px = pe.getX(i) | 0;
                     const py = pe.getY(i) | 0;
@@ -1347,6 +1352,7 @@ export class OverlayHost {
                     );
                     entry.headIconPk = headIconPk;
                     entry.headIconPrayer = headIconPrayer;
+                    entry.headIconHint = isHinted;
                     entry.customHeadIcons = customHeadIcons;
                     entry.heightOffsetTiles = this.resolvePlayerHeadIconOffset(
                         i,
@@ -1545,7 +1551,7 @@ export class OverlayHost {
         // Ground item labels: player anchor first, camera fallback (render.ts 1341-1386).
         this.groundOverlayEntries = [];
         if (playerWorldX != null && playerWorldZ != null) {
-            const overlayEntries = osrsClient.getGroundItemOverlayEntries(
+            const overlayEntries = osrsClient.clientPlugins.groundItemOverlayEntries(
                 Math.floor(playerWorldX),
                 Math.floor(playerWorldZ),
                 playerLevel,
@@ -1558,7 +1564,7 @@ export class OverlayHost {
                     const camX = Math.floor(osrsClient.camera.getPosX());
                     const camY = Math.floor(osrsClient.camera.getPosZ());
                     const camLevel = resolveGroundItemStackPlane(this.getPlayerRawPlane() | 0);
-                    const camEntries = osrsClient.getGroundItemOverlayEntries(camX, camY, camLevel, {
+                    const camEntries = osrsClient.clientPlugins.groundItemOverlayEntries(camX, camY, camLevel, {
                         radius: groundOverlayRadius,
                         maxEntries: groundOverlayMaxEntries,
                     });
@@ -1573,7 +1579,7 @@ export class OverlayHost {
                     const fallbackX = (peHs.getX(idx) / 128.0) | 0;
                     const fallbackY = (peHs.getY(idx) / 128.0) | 0;
                     const fallbackLevel = peHs.getLevel(idx) | 0;
-                    const overlayEntries = osrsClient.getGroundItemOverlayEntries(
+                    const overlayEntries = osrsClient.clientPlugins.groundItemOverlayEntries(
                         fallbackX,
                         fallbackY,
                         fallbackLevel,
@@ -1630,7 +1636,7 @@ export class OverlayHost {
 
         let config: TileMarkersPluginConfig | undefined;
         try {
-            config = osrsClient.tileMarkersPlugin.getConfig();
+            config = osrsClient.clientPlugins.tileMarkersConfig();
         } catch {}
 
         const destWorldX = ClientState.destinationWorldX | 0;

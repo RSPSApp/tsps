@@ -1,0 +1,176 @@
+{
+  "$comment": "The Fractured Archive's own data (plugins/minigames/tfa/), from rsprox captures: docs/fractured-archive.md. Ticks are counted from the arrival in the lobby.",
+  "intro": {
+    "actors": [
+      { "npc": "ARMACUS_CUTSCENE", "tile": [4137, 5547], "face": [4136, 5548] },
+      { "npc": "EVA_CUTSCENE", "tile": [4136, 5550], "face": [4135, 5549] },
+      { "npc": "IVY_CUTSCENE", "tile": [4137, 5549], "face": [4136, 5548] }
+    ],
+    "shots": [
+      { "tick": 1, "move": [4123, 5551, 1100], "look": [4123, 5562, 500] },
+      { "tick": 2, "glide": [4132, 5551, 1100], "cycles": 500, "easing": "ease_in_sine" },
+      { "tick": 17, "move": [4127, 5542, 1100], "look": [4127, 5562, 900] },
+      { "tick": 17, "glide": [4127, 5532, 1000], "cycles": 555, "easing": "ease_out_sine" },
+      { "tick": 27, "move": [4119, 5545, 500], "look": [4113, 5550, 200] },
+      { "tick": 32, "move": [4129, 5539, 800], "look": [4133, 5545, 500] }
+    ],
+    "walkTick": 32,
+    "walk": [[4131, 5544], [4135, 5548]],
+    "linesTick": 41,
+    "lines": [
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 588, "text": "Hello agai-", "cutOffAfter": 3 },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 568, "text": "Greetings, adventurer! Have you come to join the ranks of the Alliance?" },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 589, "text": "Armacus, this is <player>, the adventurer I told you about." },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 567, "text": "Aha! Well met, young <player>." },
+      { "speaker": "EVA_CUTSCENE", "name": "Eva Cashien", "anim": 589, "text": "I have heard good things from my uncle. It is good to meet you, <player>." },
+      { "player": true, "anim": 588, "text": "Well met, and likewise." },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 591, "text": "Thank you. This is Eva Cashien and Armacus Selles. They are leading the Temple Knights and the Guardians of Armadyl who have mobilised to defend the Archive." },
+      { "player": true, "anim": 554, "text": "The Archive? What do you mean?" },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 576, "text": "Did you not receive my message? Concerning... Let me get you up to speed..." },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 591, "text": "It seems the Stone of Jas wasn't the only thing Guthix hid down here. This Archive was built to house various other powerful artefacts, to stop them falling into the wrong hands." },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 591, "text": "However, thanks to Lucien, it is now at risk. His followers are preparing to attack the Archive. Not only that, but it seems various other groups are also mobilising their forces." },
+      { "player": true, "anim": 555, "text": "I see. What's the current situation? Have your soldiers entered the Archive already?" },
+      { "speaker": "EVA_CUTSCENE", "name": "Eva Cashien", "anim": 589, "text": "No, they are still on their way. We came ahead of time to scout out the situation." },
+      { "player": true, "anim": 588, "text": "And what do you make of it?" },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 569, "text": "It's quite the pickle we're in, I'm afraid! Our enemies approach from all sides. We have identified six vulnerable chambers altogether." },
+      { "speaker": "EVA_CUTSCENE", "name": "Eva Cashien", "anim": 590, "text": "What's more, the central chamber we intended to use to establish fortifications appears to be guarded by some sort of hostile creature." },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 589, "text": "It is likely one of Guthix's creations, left behind to defend the Archive from intruders." },
+      { "player": true, "anim": 554, "text": "Could we leverage it to help us?" },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 613, "text": "I'm afraid not... It might hold off some of the intruders, but it won't manage all of them. And without getting in there to establish defences of our own, we won't stand a much better of a chance." },
+      { "player": true, "anim": 13958, "text": "I see... That's unfortunate." },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 569, "text": "Indeed! But not all is bad news. Several of our enemies have clashed on their way to the Archive, and it's bought us some time." },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 569, "text": "If a brave young adventurer were to appear and clear the way for us to set up our defences, whilst we gathered our troops..." },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 567, "text": "But wait! We have one right here!" },
+      { "speaker": "EVA_CUTSCENE", "name": "Eva Cashien", "anim": 13968, "text": "Armacus' jesting aside, we're hoping you might be able to help us establish a foothold.", "actorAnim": { "npc": "ARMACUS_CUTSCENE", "seq": "LAUGH" } },
+      { "player": true, "anim": 555, "text": "I see. And do we know anything specific about what artefacts are hidden here?" },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 13954, "text": "It seems to be all manner of things. Most of them likely aren't too valuable to our foes, but the Archive has an inner vault." },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 13954, "text": "We're not sure exactly what's inside, but we can't take any risks. We need to assume that the contents could have the potential to be on par with the Stone of Jas itself." },
+      { "player": true, "anim": 554, "text": "And our foes? What do we know about them?" },
+      { "speaker": "EVA_CUTSCENE", "name": "Eva Cashien", "anim": 13954, "text": "Lucien's forces are being led by someone called Moia. Our records have little information on her, but if Lucien has trusted her with this task, we must assume she is very dangerous." },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 570, "text": "However, luckily for us, there does seem to have been some splintering within Lucien's ranks. The Dagon'hai no longer appear to be working with him. Instead, they seem intent on raiding the Archive for themselves." },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 590, "text": "There is also a goblin warband that has somehow found out about this place. I fear we may have other foes as well that have not yet revealed themselves." },
+      { "player": true, "anim": 588, "text": "Sounds like we'd best not waste any time then." },
+      { "speaker": "EVA_CUTSCENE", "name": "Eva Cashien", "anim": 590, "text": "Thank you, <player>. Once you've cleared the central chamber, we'll split up and tackle our enemies one at a time." },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 591, "text": "We'll be leaning heavily on you once again, <player>. Our forces will do what they can to lift your burden, but our enemies are powerful, and you have more experience than most." },
+      { "player": true, "anim": 588, "text": "Thank you, I'll-", "cutOffAfter": 3 },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 570, "text": "Indeed! They are powerful. But! You need not face them alone. I have no doubt that an enterprising young adventurer such as yourself has many capable and jolly allies." },
+      { "speaker": "ARMACUS_CUTSCENE", "name": "Armacus Selles", "anim": 13954, "text": "Now is the time to unite, and leverage the strength of our co-operation against the weakness of our foes' greed." },
+      { "player": true, "anim": 13968, "text": "I'll see what I can do." },
+      { "speaker": "EVA_CUTSCENE", "name": "Eva Cashien", "anim": 589, "text": "We must go and ready our forces. We will see you inside." },
+      { "speaker": "IVY_CUTSCENE", "name": "Ivy Sophista", "anim": 588, "text": "Good luck, <player>." }
+    ],
+    "exit": {
+      "bow": { "npc": "IVY_CUTSCENE", "afterTicks": 1 },
+      "walks": [
+        { "npc": "IVY_CUTSCENE", "to": [4134, 5546] },
+        { "npc": "EVA_CUTSCENE", "to": [4134, 5549] },
+        { "npc": "ARMACUS_CUTSCENE", "to": [4136, 5547] }
+      ],
+      "fadeAfterTicks": 2,
+      "endAfterTicks": 4
+    }
+  },
+  "gathering": {
+    "rocks": [
+      { "tile": [4111, 5538], "variant": 0, "face": 0 },
+      { "tile": [4113, 5533], "variant": 0, "face": 3 },
+      { "tile": [4116, 5535], "variant": 0, "face": 0 },
+      { "tile": [4116, 5537], "variant": 1, "face": 2 },
+      { "tile": [4113, 5538], "variant": 1, "face": 2 },
+      { "tile": [4115, 5532], "variant": 1, "face": 1 },
+      { "tile": [4117, 5534], "variant": 2, "face": 3 },
+      { "tile": [4114, 5539], "variant": 2, "face": 1 },
+      { "tile": [4110, 5536], "variant": 2, "face": 1 },
+      { "tile": [4111, 5535], "variant": 2, "face": 0 }
+    ],
+    "activeCount": 3,
+    "rotateTicks": 289,
+    "sprite": { "spawn": [4115, 5536], "chancePerMinute": 0.25, "lifeTicks": 40 },
+    "builders": [
+      "This bridge will hold a thousand marching soldiers once I'm done with it!",
+      "Stop boasting and get back to work, pal.",
+      "I am!"
+    ]
+  },
+  "hub": {
+    "$comment": "The Nexus between bosses (level 2), per visit: after the 1st, 2nd and 3rd boss past the Guardian. Staff, tiles, facings and overhead lines as captured; the lines' interval is an estimate.",
+    "linesEvery": 12,
+    "visits": {
+      "1": [
+        {"npc": "eva_cashien_sword", "tile": [4127, 5597, 2], "face": "SOUTH", "lines": ["There's no time to waste, pick a side!", "Pick a side, and may Saradomin guide you!", "The middle defences are buckling, pick a side!"]},
+        {"npc": "armacus_selles", "tile": [4120, 5582, 2], "face": "EAST"},
+        {"npc": "alliance_druid_2", "tile": [4125, 5603, 2], "face": "WEST"},
+        {"npc": "alliance_guardian_of_armadyl_4", "tile": [4124, 5600, 2], "face": "NORTH"},
+        {"npc": "alliance_temple_knight_2", "tile": [4124, 5588, 2], "face": "WEST"},
+        {"npc": "alliance_druid_1", "tile": [4132, 5589, 2], "face": "EAST"},
+        {"npc": "alliance_temple_knight_1", "tile": [4122, 5580, 2], "face": "SOUTH_WEST"}
+      ],
+      "2": [
+        {"npc": "eva_cashien", "tile": [4135, 5603, 2], "face": "WEST"},
+        {"npc": "tfa_midraid_supplies_npc", "tile": [4129, 5609, 2], "face": "SOUTH", "lines": ["Stock available!", "Supplies are available!", "Shop's open!", "Supplies are ready!", "Fully stocked!"]},
+        {"npc": "tfa_ivy_sophista_noop", "tile": [4127, 5613, 2], "face": "SOUTH", "lines": ["One final push, pick a side!", "Pick a side! Do not relent!", "Give them no quarter, pick a side!"]},
+        {"npc": "alliance_druid_1", "tile": [4124, 5600, 2], "face": "SOUTH"},
+        {"npc": "alliance_temple_knight_2", "tile": [4127, 5596, 2], "face": "WEST"},
+        {"npc": "alliance_guardian_of_armadyl_3", "tile": [4124, 5588, 2], "face": "WEST", "lines": ["Runes ready!"]},
+        {"npc": "alliance_guardian_of_armadyl_3", "tile": [4132, 5589, 2], "face": "EAST"},
+        {"npc": "alliance_temple_knight_1", "tile": [4122, 5580, 2], "face": "SOUTH_WEST"}
+      ],
+      "3": [
+        {"npc": "armacus_selles_postguardian", "tile": [4128, 5619, 2], "face": "SOUTH"},
+        {"npc": "eva_cashien_sword", "tile": [4126, 5619, 2], "face": "SOUTH"},
+        {"npc": "tfa_ivy_sophista", "tile": [4127, 5618, 2], "face": "SOUTH", "lines": ["The inner vault must be protected!", "Go inside and clear out any threats!", "There's a disturbance in the inner vault!", "Deal with it and let's end this!"]},
+        {"npc": "alliance_guardian_of_armadyl_6", "tile": [4125, 5602, 2], "face": "SOUTH"},
+        {"npc": "alliance_guardian_of_armadyl_2", "tile": [4124, 5599, 2], "face": "SOUTH"},
+        {"npc": "alliance_temple_knight_2", "tile": [4124, 5588, 2], "face": "WEST"},
+        {"npc": "alliance_druid_2", "tile": [4132, 5589, 2], "face": "EAST", "lines": ["More runes coming!"]},
+        {"npc": "alliance_temple_knight_1", "tile": [4122, 5580, 2], "face": "SOUTH_WEST"}
+      ]
+    },
+    "wheelbarrow": {"loc": "tfa_loot_wheelbarrow", "tile": [4130, 5608, 2], "face": 0, "visit": "2"},
+    "postGuardian": {"npcs": ["armacus_selles_postguardian", "alliance_guardian_of_armadyl_3", "alliance_guardian_of_armadyl_4", "alliance_guardian_of_armadyl_5", "alliance_guardian_of_armadyl_6"], "tiles": [[4127, 5573], [4126, 5574], [4128, 5574], [4126, 5576], [4128, 5576]], "runTo": [4127, 5590]}
+  },
+  "loot": {
+    "$comment": "Wiki, Chest (The Fractured Archive): three standard rolls when no unique (weights out of 148, from the Drop Rate Project), each roll 1/51 to give five times as much; tertiaries per chest. The unique chance, the uniques' weights (the Wiki only ranks them: Rondache > Zorya's tome = Horn of Bran > Ascension crossbows > Obligator) and the pet's rate are estimates. Aether catalyst (3/148) is left out: the cache has no item by that name.",
+    "rolls": 3,
+    "bonusChance": 51,
+    "bonusFactor": 5,
+    "uniqueChance": 0.04,
+    "uniques": [["rondache", 30], ["zoryas_tome_uncharged", 22], ["tfa_zeal_reward", 22], ["ascension_crossbows", 16], ["obligator_uncharged", 10]],
+    "standard": [
+      ["battlestaff", 34, 37, 5],
+      ["dragon_platelegs", 1, 1, 5],
+      ["dragon_plateskirt", 1, 1, 5],
+      ["rune_kiteshield", 5, 7, 5],
+      ["naturerune", 301, 385, 5],
+      ["astralrune", 301, 385, 5],
+      ["bloodrune", 301, 385, 5],
+      ["soulrune", 301, 380, 5],
+      ["earthrune", 3009, 3551, 5],
+      ["unidentified_harralander", 60, 66, 3],
+      ["unidentified_ranarr", 18, 20, 3],
+      ["unidentified_toadflax", 24, 28, 3],
+      ["snapdragon_seed", 3, 4, 3],
+      ["kwuarm_seed", 7, 8, 3],
+      ["snape_grass_seed", 7, 8, 3],
+      ["yew_seed", 4, 5, 3],
+      ["sapphire", 24, 27, 5],
+      ["emerald", 24, 26, 5],
+      ["ruby", 23, 27, 5],
+      ["diamond", 24, 26, 5],
+      ["iron_ore", 851, 915, 3],
+      ["adamantite_ore", 60, 72, 3],
+      ["runite_ore", 25, 26, 3],
+      ["ascension_shards", 75, 82, 22],
+      ["xbows_bolt_tips_onyx", 50, 58, 5],
+      ["earth_orb", 68, 75, 5],
+      ["desiccated_page", 30, 36, 3],
+      ["blankrune_high", 1404, 1632, 3],
+      ["mahogany_logs", 140, 152, 3],
+      ["dragon_arrowheads", 350, 369, 3],
+      ["raw_shark", 80, 91, 3],
+      ["wine_of_zamorak", 32, 36, 3]
+    ],
+    "tertiary": [["archivists_folio_empty", 20], ["tfa_mote_air", 80], ["tfa_mote_water", 80], ["tfa_mote_earth", 80], ["tfa_mote_fire", 80], ["CLUE_SCROLL_ELITE_", 12]],
+    "pet": ["ocelluspet", 400]
+  }
+}

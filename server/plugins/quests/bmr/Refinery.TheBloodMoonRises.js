@@ -326,15 +326,18 @@ module.exports = function registerRefinery(api, getQuestStage) {
       return true;
     }
     if (matchesObject(event, MINE_TUNNEL, "Tunnel") && option === "enter" && x === TUNNEL_TILE.x && y === TUNNEL_TILE.y && z === TUNNEL_TILE.z) {
-      if (!["tunnel", "fight", "cleared", "freed"].includes(progress(player).phase)) return false;
+      // Escaped players can still re-enter the cleared lab from the tunnel, matching the
+      // ordinary two-way tunnel; this restores the only route back to the castle landing.
+      if (!["tunnel", "fight", "cleared", "freed", "escaped"].includes(progress(player).phase)) return false;
       event.handled = true;
       enterRoom(player);
       return true;
     }
     if (matchesObject(event, CASTLE_EXIT, "Entry") && option === "enter" && x === 3182 && y === 7470 && z === 0) {
-      if (progress(player).phase !== "freed") return false;
+      const phase = progress(player).phase;
+      if (phase !== "freed" && phase !== "escaped") return false;
       event.handled = true;
-      setProgress(player, { phase: "escaped" });
+      if (phase === "freed") setProgress(player, { phase: "escaped" });
       player.getCombat().reset();
       player.moveTo(new Location(CASTLE_LANDING.x, CASTLE_LANDING.y, CASTLE_LANDING.z));
       return true;
@@ -377,7 +380,11 @@ module.exports = function registerRefinery(api, getQuestStage) {
     const player = event?.player;
     if (!player) return;
     if (event.stepId === "O3RVAV" && progress(player).phase === "pickaxe") {
-      if (!player.getInventory().contains(PICKAXE_ITEM)) player.getInventory().adds(PICKAXE_ITEM, 1);
+      const inventory = player.getInventory();
+      if (!inventory.contains(PICKAXE_ITEM) && inventory.adds(PICKAXE_ITEM, 1) === false) {
+        player.sendMessage("Make room in your inventory before taking Ivan's spare pickaxe.");
+        return;
+      }
       setProgress(player, { phase: "pickaxe", borrowedPickaxe: true });
     } else if (event.stepId === "iYSMco" && progress(player).phase === "tomb" && mining.findBestPickaxe(player)) {
       setProgress(player, { phase: "mined" });

@@ -13,6 +13,8 @@ interface CombatEffectSpellInterface {
     endGraphic: () => Graphic;
     startGraphic: () => Graphic;
     baseExperience: () => number;
+    /** The binding spells and Tele Block pay less on a splash. */
+    splashExperience?: () => number;
     itemsRequired: (player: Player) => Item[];
     levelRequired: () => number;
     spellId: () => number;
@@ -34,6 +36,9 @@ export class  CombatEffectSpell extends CombatSpell {
     }
     baseExperience() {
         return this.options.baseExperience();
+    }
+    splashExperience() {
+        return this.options.splashExperience?.() ?? this.baseExperience();
     }
 
     constructor(private readonly options: CombatEffectSpellInterface) {

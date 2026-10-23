@@ -143,9 +143,6 @@ export class LunarSpells {
             "bake pie": { level: 65, experience: 60, runes: [rune(9075), rune(554, 5), rune(555, 4)] },
             "humidify": { level: 68, experience: 65, runes: [rune(9075), rune(555, 3), rune(563)] },
             "hunter kit": { level: 71, experience: 70, runes: [rune(9075, 2), rune(554, 2), rune(563)] },
-            "spin flax": { level: 76, experience: 75, runes: [rune(9075, 2), rune(555, 5), rune(563)] },
-            "superglass make": { level: 77, experience: 78, runes: [rune(9075, 2), rune(556, 6), rune(563)] },
-            "tan leather": { level: 78, experience: 81, runes: [rune(9075, 2), rune(561, 5), rune(563)] },
             "plank make": { level: 86, experience: 90, runes: [rune(9075, 2), rune(557, 15), rune(561)] },
             "magic imbue": { level: 82, experience: 86, runes: [rune(9075, 2), rune(554, 7), rune(556, 7)] },
             "npc contact": { level: 67, experience: 63, runes: [rune(9075), rune(564), rune(556, 2)] },
@@ -178,19 +175,6 @@ export class LunarSpells {
             player.sendMessage("You need at least five free inventory spaces to cast Hunter Kit.");
             return true;
         }
-        if (key === "spin flax" && !has([1779])) {
-            player.sendMessage("You do not have any flax to spin.");
-            return true;
-        }
-        if (key === "superglass make" && (!inventory.contains(1783) || !inventory.contains(1781))) {
-            player.sendMessage("You need both bucket of sand and soda ash to make glass.");
-            return true;
-        }
-        const hides = [1753, 1751, 1749, 1747];
-        if (key === "tan leather" && !has(hides)) {
-            player.sendMessage("You do not have any dragonhide to tan.");
-            return true;
-        }
         const planks = new Map([[1511, [960, 350]], [1521, [8778, 1050]], [6333, [8780, 350]], [6332, [8782, 1050]]]);
         if (key === "plank make" && !items.some(item => planks.has(item.getId()))) {
             player.sendMessage("You do not have any logs to turn into planks.");
@@ -217,17 +201,6 @@ export class LunarSpells {
                 inventory.adds(946, 1).adds(303, 1).adds(954, 2).adds(10029, 1).adds(10008, 1);
             } else if (key === "magic imbue") {
                 player.setAttribute("lunar:magic-imbue-until", Date.now() + 12 * 60_000);
-            } else if (key === "spin flax") {
-                for (const item of inventory.getValidItems()) if (item.getId() === 1779) item.setId(1777);
-            } else if (key === "superglass make") {
-                const amount = Math.min(inventory.getAmount(1783), inventory.getAmount(1781));
-                inventory.deleteNumber(1783, amount).deleteNumber(1781, amount).adds(1775, amount);
-            } else if (key === "tan leather") {
-                const leather = new Map([[1753, 1745], [1751, 2505], [1749, 2507], [1747, 2509]]);
-                for (const item of inventory.getValidItems()) {
-                    const result = leather.get(item.getId());
-                    if (result) item.setId(result);
-                }
             } else {
                 for (const item of [...inventory.getValidItems()]) {
                     const plank = planks.get(item.getId());

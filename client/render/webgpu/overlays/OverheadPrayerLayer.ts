@@ -1,5 +1,6 @@
 import type { CacheIndex } from "../../../rs/cache/CacheIndex";
 import { IndexType } from "../../../rs/cache/IndexType";
+import { isHintArrowBlinkOn } from "../../../game/HintArrow";
 import { GraphicsDefaults } from "../../../rs/config/defaults/GraphicsDefaults";
 import { IndexedSprite } from "../../../rs/sprite/IndexedSprite";
 import { SpriteLoader } from "../../../rs/sprite/SpriteLoader";
@@ -19,15 +20,17 @@ export class OverheadPrayerLayer {
     private iconSprites = {
         pk: new Map<number, ScreenTexture>(),
         prayer: new Map<number, ScreenTexture>(),
+        hint: new Map<number, ScreenTexture>(),
     };
     private failedSpriteIndices = {
         pk: new Set<number>(),
         prayer: new Set<number>(),
+        hint: new Set<number>(),
     };
     private npcIconSprites = new Map<string, ScreenTexture>();
     private customIconSprites = new Map<IndexedSprite, ScreenTexture>();
     private failedNpcIconKeys = new Set<string>();
-    private archiveIds = { pk: -1, prayer: -1 };
+    private archiveIds = { pk: -1, prayer: -1, hint: -1 };
 
     scale = 1.0;
 
@@ -52,6 +55,7 @@ export class OverheadPrayerLayer {
             const sprites = [
                 this.getSprite("pk", entry.headIconPk | 0),
                 this.getSprite("prayer", entry.headIconPrayer | 0),
+                entry.headIconHint && isHintArrowBlinkOn() ? this.getSprite("hint", 0) : undefined,
                 ...(entry.npcHeadIcons ?? []).map((icon) =>
                     this.getNpcSprite(icon.archiveId, icon.spriteId),
                 ),
@@ -108,7 +112,7 @@ export class OverheadPrayerLayer {
     }
 
     dispose(): void {
-        for (const kind of ["pk", "prayer"] as const) {
+        for (const kind of ["pk", "prayer", "hint"] as const) {
             for (const sprite of this.iconSprites[kind].values()) this.screen.releaseTexture(sprite);
             this.iconSprites[kind].clear();
             this.failedSpriteIndices[kind].clear();
@@ -130,13 +134,14 @@ export class OverheadPrayerLayer {
                 const defaults = GraphicsDefaults.load(cacheInfo, cacheSystem);
                 this.archiveIds.pk = defaults.headIconsPk;
                 this.archiveIds.prayer = defaults.headIconsPrayer;
+                this.archiveIds.hint = defaults.headIconsHint;
             }
             if (this.spriteIndex) {
-                for (const kind of ["pk", "prayer"] as const) {
+                for (const kind of ["pk", "prayer", "hint"] as const) {
                     if (this.archiveIds[kind] >= 0) continue;
                     try {
                         this.archiveIds[kind] = this.spriteIndex.getArchiveId(
-                            kind === "pk" ? "headicons_pk" : "headicons_prayer",
+                            kind === "pk" ? "headicons_pk" : kind === "prayer" ? "headicons_prayer" : "headicons_hint",
                         );
                     } catch {}
                 }
@@ -144,7 +149,7 @@ export class OverheadPrayerLayer {
         } catch {}
     }
 
-    private getSprite(kind: "pk" | "prayer", index: number): ScreenTexture | undefined {
+    private getSprite(kind: "pk" | "prayer" | "hint", index: number): ScreenTexture | undefined {
         if (index < 0) return undefined;
         const cached = this.iconSprites[kind].get(index);
         if (cached) return cached;

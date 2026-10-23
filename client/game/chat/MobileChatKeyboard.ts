@@ -56,8 +56,9 @@ export class MobileChatKeyboard {
         input.type = "text";
         input.autocomplete = "off";
         input.dataset.mobileChatInput = "true";
+        // Keep the native caret above the keyboard so typing cannot pan the game out of view.
         input.style.cssText =
-            "position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none";
+            "position:fixed;top:0;left:0;width:16px;height:16px;font-size:16px;border:0;padding:0;margin:0;opacity:0;pointer-events:none";
         input.addEventListener("input", () => {
             if (!this.open) return;
             const next = input.value;

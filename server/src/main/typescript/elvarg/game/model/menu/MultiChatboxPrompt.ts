@@ -80,6 +80,9 @@ export class MultiChatboxPrompt {
       options.push({ text: "Cancel", callback: () => {} });
     }
 
+    // A multi prompt takes ownership from any native dialogue that showed it.
+    // Conversely, a later native dialogue must not resume this prompt's callbacks.
+    player.getDialogueManager?.()?.reset?.();
     const sender = player.getPacketSender();
     sender.sendInterfaceScript(2379);
     sender.sendVarbit(10670, 1);
@@ -104,26 +107,31 @@ export class MultiChatboxPrompt {
 
   /** The prompt the player has open, if any. */
   public static getPending(player: any): { title: string; options: string[] } | null {
-    const pending = MultiChatboxPrompt.pendingPrompts.get(player);
-    // Closing the chatbox another way (walking off, a new dialogue) leaves the entry behind.
-    if (!pending || pending.expiresAt < Date.now()) return null;
-    if (!player.getPacketSender?.()?.isChatboxInterface?.(MultiChatboxPrompt.INTERFACE_ID)) return null;
+    const pending = MultiChatboxPrompt.ownedPrompt(player);
+    if (!pending) return null;
     return {
       title: pending.title,
       options: pending.options.map((option) => option.text),
     };
   }
 
+  private static ownedPrompt(player: any): PendingMultiChatboxPrompt | null {
+    const pending = MultiChatboxPrompt.pendingPrompts.get(player);
+    if (!pending) return null;
+    if (!Number.isInteger(pending.expiresAt) || pending.expiresAt < Date.now()
+      || player.getDialogueManager?.()?.isActive?.()
+      || !player.getPacketSender?.()?.isChatboxInterface?.(MultiChatboxPrompt.INTERFACE_ID)) {
+      MultiChatboxPrompt.pendingPrompts.delete(player);
+      return null;
+    }
+    return pending;
+  }
+
   public static handleInterfaceActionClick(
     event: PluginInterfaceActionClickEvent
   ): boolean {
-    const pending = MultiChatboxPrompt.pendingPrompts.get(event.player);
+    const pending = MultiChatboxPrompt.ownedPrompt(event.player);
     if (!pending) {
-      return false;
-    }
-    if (!Number.isInteger(pending.expiresAt) || pending.expiresAt < Date.now()) {
-      MultiChatboxPrompt.pendingPrompts.delete(event.player);
-      event.player?.getPacketSender?.()?.sendInterfaceRemoval?.();
       return false;
     }
     if (
@@ -140,13 +148,8 @@ export class MultiChatboxPrompt {
   }
 
   private static selectOption(player: any, optionIndex: number): boolean {
-    const pending = MultiChatboxPrompt.pendingPrompts.get(player);
+    const pending = MultiChatboxPrompt.ownedPrompt(player);
     if (!pending) {
-      return false;
-    }
-    if (!Number.isInteger(pending.expiresAt) || pending.expiresAt < Date.now()) {
-      MultiChatboxPrompt.pendingPrompts.delete(player);
-      player?.getPacketSender?.()?.sendInterfaceRemoval?.();
       return false;
     }
     if (

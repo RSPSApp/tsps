@@ -2,6 +2,13 @@ import { SeqType } from "../../rs/config/seqtype/SeqType";
 import { SeqFrameLoader } from "../../rs/model/seq/SeqFrameLoader";
 import { AnimationFrames } from "../AnimationFrames";
 
+/** Plays an animated loc's frame sounds, at its tile (fine units) and level. */
+export type LocFrameSoundHandler = (
+    seqType: SeqType,
+    frame: number,
+    context: { x: number; y: number; level: number },
+) => void;
+
 export class LocAnimated {
     seqType?: SeqType;
 
@@ -117,11 +124,7 @@ export class LocAnimated {
     update(
         seqFrameLoader: SeqFrameLoader,
         cycle: number,
-        onFrameSound?: (
-            seqType: SeqType,
-            frame: number,
-            context: { x: number; y: number; level: number },
-        ) => void,
+        onFrameSound?: LocFrameSoundHandler,
     ): number {
         if (!this.seqType) {
             this.lastSoundFrame = -1;

@@ -62,6 +62,7 @@ export class LoginRenderer implements LoginRendererHost {
     loginBoxCenter = 382;
 
     titleBackgroundImage: ImageBitmap | undefined;
+    titleBackgroundFromCache = false;
     logoSprite: import("../../rs/sprite/IndexedSprite").IndexedSprite | undefined;
     logoImage: HTMLImageElement | undefined;
     logoImageLoaded = false;
@@ -204,11 +205,11 @@ export class LoginRenderer implements LoginRendererHost {
     loadLogoImage(): Promise<boolean> {
         return assets.loadLogoImage(this);
     }
-    loadTitleBackground(): Promise<boolean> {
-        return assets.loadTitleBackground(this);
+    loadTitleBackground(cache?: CacheSystem): Promise<boolean> {
+        return assets.loadTitleBackground(this, cache);
     }
-    loadTitleSprites(cache: CacheSystem): boolean {
-        return assets.loadTitleSprites(this, cache);
+    loadTitleSprites(cache: CacheSystem, flamePalettes?: number[][]): boolean {
+        return assets.loadTitleSprites(this, cache, flamePalettes);
     }
     loadFonts(cache: CacheSystem): boolean {
         return assets.loadFonts(this, cache);

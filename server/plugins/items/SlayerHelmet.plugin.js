@@ -8,7 +8,8 @@
  * multiplying it ("slayer:imbued-ranged-bonus").
  * The helmet is assembled at 55 Crafting by using any component on another with
  * them all in the inventory (a charged mask loses its charges), and Disassemble
- * turns it back into its parts.
+ * turns it back into its parts. A scroll of imbuing on a black mask or helmet
+ * makes its (i) form instead; a charged mask keeps its charges.
  *
  * Assembling needs the Malevolent masquerade unlock (varbit slayer_helm_unlocked, bought
  * in the Slayer Rewards interface). Reinforced goggles are not required.
@@ -24,6 +25,12 @@ let ItemIdentifiers;
 let Skill;
 /** Components besides the mask, filled at register. */
 let PARTS = [];
+// ponytail: scroll of imbuing only; NMZ points and Soul Wars zeal shops aren't modelled.
+// Add their purchases here when those reward shops land.
+/** Scroll of imbuing ids, filled at register. */
+let IMBUE_SCROLLS = new Set();
+/** Black mask / Slayer helmet id -> its imbued id, filled at register. */
+let IMBUED_ITEMS = new Map();
 
 function headName(player) {
   const head = player.getEquipment?.()?.getItems?.()?.[pluginApi.core.Equipment.HEAD_SLOT];
@@ -100,8 +107,35 @@ function isPart(itemId) {
   return maskId(itemId) != null || PARTS.includes(itemId);
 }
 
+function isImbueScroll(itemId) {
+  return IMBUE_SCROLLS.has(Number(itemId));
+}
+
 function findMask(inventory) {
   return inventory.getItems().find((item) => item && maskId(item.getId()) != null) ?? null;
+}
+
+/** Scroll of imbuing on a black mask or Slayer helmet (Wiki: "Imbuing first"). */
+function imbue(event) {
+  if (event.handled) return;
+  const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
+  const scrollOnUsed = isImbueScroll(usedItemId);
+  const scrollOnWith = isImbueScroll(usedWithItemId);
+  if (scrollOnUsed === scrollOnWith) return;
+  const targetId = Number(scrollOnUsed ? usedWithItemId : usedItemId);
+  const result = IMBUED_ITEMS.get(targetId);
+  if (result == null) return;
+  event.handled = true;
+  const targetItem = scrollOnUsed ? usedWithItem : usedItem;
+  player.getInventory().deleteNumber(scrollOnUsed ? Number(usedItemId) : Number(usedWithItemId), 1);
+  targetItem.setId(result);
+  player.getInventory().refreshItems();
+  pluginApi.emitCustomEvent("equipment:changed", { player });
+  player.sendMessage(
+    targetId === ItemIdentifiers.SLAYER_HELMET
+      ? "You imbue the Slayer helmet with the scroll."
+      : "You imbue the black mask with the scroll."
+  );
 }
 
 /** Ours: the Wiki gives no message for assembling without the unlock. */
@@ -113,8 +147,17 @@ function helmUnlocked(player) {
 }
 
 function assemble(event) {
+  if (event.handled) return;
   const { player, usedItemId, usedWithItemId } = event;
-  if (!isPart(usedItemId) || !isPart(usedWithItemId) || usedItemId === usedWithItemId) return;
+  const scrollOnUsed = isImbueScroll(usedItemId);
+  const scrollOnWith = isImbueScroll(usedWithItemId);
+  const usingScroll = scrollOnUsed || scrollOnWith;
+  const otherId = Number(scrollOnUsed ? usedWithItemId : usedItemId);
+  if (usingScroll) {
+    if (!isPart(otherId)) return;
+  } else if (!isPart(usedItemId) || !isPart(usedWithItemId) || usedItemId === usedWithItemId) {
+    return;
+  }
   const inventory = player.getInventory();
   const mask = findMask(inventory);
   if (!mask || PARTS.some((part) => !inventory.contains(part))) return;
@@ -127,10 +170,13 @@ function assemble(event) {
     player.sendMessage(`You need a Crafting level of ${CRAFTING_LEVEL} to make a Slayer helmet.`);
     return;
   }
-  const imbued = maskId(mask.getId()) === "imbued";
+  const imbued = usingScroll || maskId(mask.getId()) === "imbued";
   inventory.deleteNumber(mask.getId(), 1);
   for (const part of PARTS) inventory.deleteNumber(part, 1);
+  if (usingScroll) inventory.deleteNumber(scrollOnUsed ? Number(usedItemId) : Number(usedWithItemId), 1);
   inventory.adds(imbued ? ItemIdentifiers.SLAYER_HELMET_I_ : ItemIdentifiers.SLAYER_HELMET, 1);
+  inventory.refreshItems();
+  pluginApi.emitCustomEvent("equipment:changed", { player });
   player.sendMessage("You combine the items into a Slayer helmet.");
 }
 
@@ -151,10 +197,12 @@ function disassemble(event) {
     player.sendMessage("You don't have enough inventory space to disassemble the helmet.");
     return true;
   }
-  const imbued = item.getId() === ItemIdentifiers.SLAYER_HELMET_I_;
+  const imbued = itemName(item.getId()).includes("(i)");
   inventory.deleteNumber(item.getId(), 1);
   inventory.adds(imbued ? ItemIdentifiers.BLACK_MASK_I_ : ItemIdentifiers.BLACK_MASK, 1);
   for (const part of PARTS) inventory.adds(part, 1);
+  inventory.refreshItems();
+  pluginApi.emitCustomEvent("equipment:changed", { player });
   player.sendMessage("You disassemble the Slayer helmet.");
   return true;
 }
@@ -172,6 +220,21 @@ module.exports = {
       ItemIdentifiers.SPINY_HELMET,
       ItemIdentifiers.ENCHANTED_GEM,
     ];
+    IMBUE_SCROLLS = new Set([ItemIdentifiers.SCROLL_OF_IMBUING, ItemIdentifiers.SCROLL_OF_IMBUING_2]);
+    IMBUED_ITEMS = new Map([
+      [ItemIdentifiers.BLACK_MASK_10_, ItemIdentifiers.BLACK_MASK_10_I_],
+      [ItemIdentifiers.BLACK_MASK_9_, ItemIdentifiers.BLACK_MASK_9_I_],
+      [ItemIdentifiers.BLACK_MASK_8_, ItemIdentifiers.BLACK_MASK_8_I_],
+      [ItemIdentifiers.BLACK_MASK_7_, ItemIdentifiers.BLACK_MASK_7_I_],
+      [ItemIdentifiers.BLACK_MASK_6_, ItemIdentifiers.BLACK_MASK_6_I_],
+      [ItemIdentifiers.BLACK_MASK_5_, ItemIdentifiers.BLACK_MASK_5_I_],
+      [ItemIdentifiers.BLACK_MASK_4_, ItemIdentifiers.BLACK_MASK_4_I_],
+      [ItemIdentifiers.BLACK_MASK_3_, ItemIdentifiers.BLACK_MASK_3_I_],
+      [ItemIdentifiers.BLACK_MASK_2_, ItemIdentifiers.BLACK_MASK_2_I_],
+      [ItemIdentifiers.BLACK_MASK_1_, ItemIdentifiers.BLACK_MASK_1_I_],
+      [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.BLACK_MASK_I_],
+      [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.SLAYER_HELMET_I_],
+    ]);
     api.registerMeleeAttackAccuracyModifier(meleeBoost);
     api.registerMeleeHitModifier(meleeBoost);
     api.registerRangedAttackAccuracyModifier(rangedAccuracyBoost);
@@ -179,6 +242,7 @@ module.exports = {
     api.registerMagicAttackAccuracyModifier(magicBoost);
     api.registerMagicHitModifier(magicBoost);
     api.onCustomEvent("slayer:imbued-active", imbuedActive);
+    api.onItemOnItem(imbue, { noted: false });
     api.onItemOnItem(assemble, { noted: false });
     // Worn Partner and Log aren't built; handling them keeps an unhandled worn click from
     // taking the helmet off.
@@ -186,5 +250,5 @@ module.exports = {
     api.onItemAction("Slayer helmet", actions);
     api.onItemAction("Slayer helmet (i)", actions);
   },
-  _test: { slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost },
+  _test: { slayerHeadwear, meleeBoost, rangedAccuracyBoost, rangedDamageBoost, magicBoost, imbue, assemble },
 };

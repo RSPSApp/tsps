@@ -48,7 +48,7 @@ export class VoiceChatPlugin extends Plugin {
         name: "Voice Chat",
         description: "Replace Report with voice controls. Starts listening; select On to use your microphone.",
         tags: ["voice", "proximity", "audio"],
-        enabledByDefault: false,
+        enabledByDefault: true,
         configKey: "voicechatplugin",
     };
     static config = VoiceChatConfig;

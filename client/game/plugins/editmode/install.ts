@@ -90,6 +90,7 @@ import type {
     EditModeWorldDefinition,
     EditModeWorldZone,
 } from "./types";
+import type { InteractHighlightPluginConfig } from "../interacthighlight/InteractHighlightConfig";
 
 /** Synthetic server ids for editor NPCs, kept clear of the server's own range. */
 const EDITOR_NPC_SERVER_ID_BASE = 60000;
@@ -114,6 +115,17 @@ const ZONE_OVERLAY_ALPHA = 0.14;
 const SPAWN_TILE_COLOR = 0xa855f7;
 const PATH_PREVIEW_COLOR = 0xfbbf24;
 const WALL_PREVIEW_GROUND_COLOR = 0x78965f;
+const EDITOR_INTERACT_HIGHLIGHT: InteractHighlightPluginConfig = {
+    enabled: true,
+    showHover: true,
+    showInteract: true,
+    hoverColor: 0xffffff,
+    interactColor: 0xffffff,
+    itemShowHover: true,
+    itemShowInteract: true,
+    itemHoverColor: 0xffffff,
+    itemInteractColor: 0xffffff,
+};
 
 type EditorRegionReplacement = {
     terrainData: Uint8Array;
@@ -584,9 +596,10 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     const sceneEdits = (edits: readonly EditModeEdit[]) => [...objectSpawnEdits(objectSpawns ?? []), ...edits];
     const mapIconSprites = new Map<number, HTMLCanvasElement>();
     const mapIconLocs = new WeakMap<MinimapIcon, { locId: number; rotation?: number } | null>();
-    let previousInteractHighlightConfig:
-        | ReturnType<typeof client.interactHighlightPlugin.getConfig>
-        | undefined;
+    // Edit mode loads no RuneLite plugins, so the editor supplies its own outlines.
+    // Never removed: the editor installs once, for the page's life, and edit mode loads no
+    // Interact Highlight plugin for this to override.
+    client.clientPlugins.add({ interactHighlightConfig: () => EDITOR_INTERACT_HIGHLIGHT });
     let terrainPreviewSignature = "";
 
     const clearPlacementPreview = (): void => {
@@ -634,20 +647,6 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         client.tileHighlightManager.clear(EDITOR_HOVER_TILE_SLOT);
         terrainHost(client)?.clearInteractHighlightHoverTarget();
     };
-    const configureInteractHighlight = (): void => {
-        if (!previousInteractHighlightConfig) {
-            previousInteractHighlightConfig = {
-                ...client.interactHighlightPlugin.getConfig(),
-            };
-        }
-        client.interactHighlightPlugin.setConfig({
-            enabled: true,
-            showHover: true,
-            showInteract: true,
-            hoverColor: 0xffffff,
-            interactColor: 0xffffff,
-        });
-    };
     const clearSelectionHighlight = (): void => {
         clearPointerPreview();
         selectedModelTarget = undefined;
@@ -655,10 +654,6 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         client.tileHighlightManager.clear(EDITOR_SELECTION_TILE_SLOT);
         const renderer = terrainHost(client);
         renderer?.clearInteractHighlightActiveTarget();
-        if (previousInteractHighlightConfig) {
-            client.interactHighlightPlugin.setConfig(previousInteractHighlightConfig);
-            previousInteractHighlightConfig = undefined;
-        }
     };
     const getMapIconSprite = (spriteId: number): HTMLCanvasElement | undefined => {
         const cached = mapIconSprites.get(spriteId);
@@ -1339,7 +1334,6 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         },
         previewPointer: (tile) => {
             clearPointerPreview();
-            configureInteractHighlight();
             const { renderer, target } = resolvePointerTarget();
             if (renderer && target) {
                 ensureBuildingHighlightRenderer(renderer);
@@ -1369,7 +1363,6 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             const analysis = analyseBuilding(tile);
             if (!analysis) return;
             buildingPreviewTileKey = tileKey;
-            configureInteractHighlight();
             buildingModelHighlight = analysis.highlight;
             if (!analysis.highlight) setBuildingTileFallback(analysis.building, EDITOR_HOVER_TILE_SLOT);
         },
@@ -1377,7 +1370,6 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             clearSelectionHighlight();
             const analysis = analyseBuilding(tile);
             if (!analysis) return undefined;
-            configureInteractHighlight();
             const building = analysis.building;
             buildingSelectionHighlight = analysis.highlight;
             if (!analysis.highlight) {
@@ -1441,7 +1433,6 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             // The editor picks scenery and NPCs only (resolveEditScenePick), never ground items.
             if (renderer && target && target.kind !== "item") {
                 selectedModelTarget = target;
-                configureInteractHighlight();
                 renderer.interactHighlightActiveTarget = target;
                 renderer.interactHighlightActiveFromInteraction = false;
                 renderer.interactHighlightClickTick = -1;

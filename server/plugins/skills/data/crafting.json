@@ -1,0 +1,1537 @@
+{
+  "$comment": "Crafting recipes for plugins/skills/crafting/. Items are ItemIdentifiers names (generated from the cache). Levels, XP and materials: OSRS Wiki (Crafting and each item's page). Menus, timings, messages and the silver components: rsprox captures and cache scripts, see docs/crafting.md.",
+  "source": "https://oldschool.runescape.wiki/w/Crafting",
+  "leather": {
+    "$comment": "Material -> items a needle makes from it, in menu order. `made` completes 'You make ...'.",
+    "LEATHER": [
+      {
+        "item": "LEATHER_GLOVES",
+        "leather": 1,
+        "level": 1,
+        "xp": 13.8,
+        "made": "a pair of leather gloves"
+      },
+      {
+        "item": "LEATHER_BOOTS",
+        "leather": 1,
+        "level": 7,
+        "xp": 16.25,
+        "made": "a pair of leather boots"
+      },
+      {
+        "item": "LEATHER_COWL",
+        "leather": 1,
+        "level": 9,
+        "xp": 18.5,
+        "made": "a leather cowl"
+      },
+      {
+        "item": "LEATHER_VAMBRACES",
+        "leather": 1,
+        "level": 11,
+        "xp": 22,
+        "made": "a pair of leather vambraces"
+      },
+      {
+        "item": "LEATHER_BODY",
+        "leather": 1,
+        "level": 14,
+        "xp": 25,
+        "made": "a leather body"
+      },
+      {
+        "item": "LEATHER_CHAPS",
+        "leather": 1,
+        "level": 18,
+        "xp": 27,
+        "made": "a pair of leather chaps"
+      },
+      {
+        "item": "COIF",
+        "leather": 1,
+        "level": 38,
+        "xp": 37,
+        "made": "a coif",
+        "members": true
+      }
+    ],
+    "HARD_LEATHER": [
+      {
+        "item": "HARDLEATHER_BODY",
+        "leather": 1,
+        "level": 28,
+        "xp": 35,
+        "made": "a hard leather body"
+      }
+    ],
+    "GREEN_DRAGON_LEATHER": [
+      {
+        "item": "GREEN_DHIDE_BODY",
+        "leather": 3,
+        "level": 63,
+        "xp": 186,
+        "made": "a green dragonhide body",
+        "label": "Green dragonhide body",
+        "members": true
+      },
+      {
+        "item": "GREEN_DHIDE_VAMBRACES",
+        "leather": 1,
+        "level": 57,
+        "xp": 62,
+        "made": "a pair of green dragonhide vambraces",
+        "label": "Green dragonhide vambraces",
+        "members": true
+      },
+      {
+        "item": "GREEN_DHIDE_CHAPS",
+        "leather": 2,
+        "level": 60,
+        "xp": 124,
+        "made": "a pair of green dragonhide chaps",
+        "label": "Green dragonhide chaps",
+        "members": true
+      }
+    ],
+    "BLUE_DRAGON_LEATHER": [
+      {
+        "item": "BLUE_DHIDE_BODY",
+        "leather": 3,
+        "level": 71,
+        "xp": 210,
+        "made": "a blue dragonhide body",
+        "label": "Blue dragonhide body",
+        "members": true
+      },
+      {
+        "item": "BLUE_DHIDE_VAMBRACES",
+        "leather": 1,
+        "level": 66,
+        "xp": 70,
+        "made": "a pair of blue dragonhide vambraces",
+        "label": "Blue dragonhide vambraces",
+        "members": true
+      },
+      {
+        "item": "BLUE_DHIDE_CHAPS",
+        "leather": 2,
+        "level": 68,
+        "xp": 140,
+        "made": "a pair of blue dragonhide chaps",
+        "label": "Blue dragonhide chaps",
+        "members": true
+      }
+    ],
+    "RED_DRAGON_LEATHER": [
+      {
+        "item": "RED_DHIDE_BODY",
+        "leather": 3,
+        "level": 77,
+        "xp": 234,
+        "made": "a red dragonhide body",
+        "label": "Red dragonhide body",
+        "members": true
+      },
+      {
+        "item": "RED_DHIDE_VAMBRACES",
+        "leather": 1,
+        "level": 73,
+        "xp": 78,
+        "made": "a pair of red dragonhide vambraces",
+        "label": "Red dragonhide vambraces",
+        "members": true
+      },
+      {
+        "item": "RED_DHIDE_CHAPS",
+        "leather": 2,
+        "level": 75,
+        "xp": 156,
+        "made": "a pair of red dragonhide chaps",
+        "label": "Red dragonhide chaps",
+        "members": true
+      }
+    ],
+    "BLACK_DRAGON_LEATHER": [
+      {
+        "item": "BLACK_DHIDE_BODY",
+        "leather": 3,
+        "level": 84,
+        "xp": 258,
+        "made": "a black dragonhide body",
+        "label": "Black dragonhide body",
+        "members": true
+      },
+      {
+        "item": "BLACK_DHIDE_VAMBRACES",
+        "leather": 1,
+        "level": 79,
+        "xp": 86,
+        "made": "a pair of black dragonhide vambraces",
+        "label": "Black dragonhide vambraces",
+        "members": true
+      },
+      {
+        "item": "BLACK_DHIDE_CHAPS",
+        "leather": 2,
+        "level": 82,
+        "xp": 172,
+        "made": "a pair of black dragonhide chaps",
+        "label": "Black dragonhide chaps",
+        "members": true
+      }
+    ],
+    "SNAKESKIN": [
+      {
+        "item": "SNAKESKIN_BOOTS",
+        "leather": 6,
+        "level": 45,
+        "xp": 30,
+        "made": "a pair of snakeskin boots",
+        "members": true
+      },
+      {
+        "item": "SNAKESKIN_VAMBRACES",
+        "leather": 8,
+        "level": 47,
+        "xp": 35,
+        "made": "a pair of snakeskin vambraces",
+        "members": true
+      },
+      {
+        "item": "SNAKESKIN_BANDANA",
+        "leather": 5,
+        "level": 48,
+        "xp": 45,
+        "made": "a snakeskin bandana",
+        "members": true
+      },
+      {
+        "item": "SNAKESKIN_CHAPS",
+        "leather": 12,
+        "level": 51,
+        "xp": 50,
+        "made": "a pair of snakeskin chaps",
+        "members": true
+      },
+      {
+        "item": "SNAKESKIN_BODY",
+        "leather": 15,
+        "level": 53,
+        "xp": 55,
+        "made": "a snakeskin body",
+        "members": true
+      }
+    ],
+    "XERICIAN_FABRIC": [
+      {
+        "item": "XERICIAN_HAT",
+        "leather": 3,
+        "level": 14,
+        "xp": 66,
+        "made": "a Xerician hat",
+        "members": true
+      },
+      {
+        "item": "XERICIAN_ROBE",
+        "leather": 4,
+        "level": 17,
+        "xp": 88,
+        "made": "a Xerician robe",
+        "members": true
+      },
+      {
+        "item": "XERICIAN_TOP",
+        "leather": 5,
+        "level": 22,
+        "xp": 110,
+        "made": "a Xerician top",
+        "members": true
+      }
+    ],
+    "HUEYCOATL_HIDE": [
+      {
+        "item": "HUEYCOATL_HIDE_VAMBRACES",
+        "leather": 1,
+        "level": 76,
+        "xp": 95,
+        "made": "a pair of Hueycoatl hide vambraces",
+        "members": true
+      },
+      {
+        "item": "HUEYCOATL_HIDE_COIF",
+        "leather": 2,
+        "level": 76,
+        "xp": 190,
+        "made": "a Hueycoatl hide coif",
+        "members": true
+      },
+      {
+        "item": "HUEYCOATL_HIDE_CHAPS",
+        "leather": 2,
+        "level": 77,
+        "xp": 190,
+        "made": "a pair of Hueycoatl hide chaps",
+        "members": true
+      },
+      {
+        "item": "HUEYCOATL_HIDE_BODY",
+        "leather": 3,
+        "level": 78,
+        "xp": 285,
+        "made": "a Hueycoatl hide body",
+        "members": true
+      }
+    ]
+  },
+  "combine": {
+    "$comment": "One item used on another, both used up; `materials` used up too, `tools` kept. `ticks` per item (Wiki).",
+    "recipes": [
+      {
+        "pair": [
+          "STEEL_STUDS",
+          "LEATHER_BODY"
+        ],
+        "item": "STUDDED_BODY",
+        "level": 41,
+        "xp": 40,
+        "ticks": 3,
+        "seq": 1249,
+        "seqName": "human_leather_crafting",
+        "members": true
+      },
+      {
+        "pair": [
+          "STEEL_STUDS",
+          "LEATHER_CHAPS"
+        ],
+        "item": "STUDDED_CHAPS",
+        "level": 44,
+        "xp": 42,
+        "ticks": 3,
+        "seq": 1249,
+        "seqName": "human_leather_crafting",
+        "members": true
+      },
+      {
+        "pair": [
+          "KEBBIT_CLAWS",
+          "LEATHER_VAMBRACES"
+        ],
+        "item": "SPIKY_VAMBRACES",
+        "level": 32,
+        "xp": 6,
+        "ticks": 3,
+        "seq": 5243,
+        "seqName": "human_crafting_spikedvambraces",
+        "members": true
+      },
+      {
+        "pair": [
+          "KEBBIT_CLAWS",
+          "GREEN_DHIDE_VAMBRACES"
+        ],
+        "item": "GREEN_SPIKY_VAMBRACES",
+        "level": 32,
+        "xp": 5,
+        "ticks": 3,
+        "seq": 5243,
+        "seqName": "human_crafting_spikedvambraces",
+        "members": true
+      },
+      {
+        "pair": [
+          "KEBBIT_CLAWS",
+          "BLUE_DHIDE_VAMBRACES"
+        ],
+        "item": "BLUE_SPIKY_VAMBRACES",
+        "level": 32,
+        "xp": 5,
+        "ticks": 3,
+        "seq": 5243,
+        "seqName": "human_crafting_spikedvambraces",
+        "members": true
+      },
+      {
+        "pair": [
+          "KEBBIT_CLAWS",
+          "RED_DHIDE_VAMBRACES"
+        ],
+        "item": "RED_SPIKY_VAMBRACES",
+        "level": 32,
+        "xp": 5,
+        "ticks": 3,
+        "seq": 5243,
+        "seqName": "human_crafting_spikedvambraces",
+        "members": true
+      },
+      {
+        "pair": [
+          "KEBBIT_CLAWS",
+          "BLACK_DHIDE_VAMBRACES"
+        ],
+        "item": "BLACK_SPIKY_VAMBRACES",
+        "level": 32,
+        "xp": 5,
+        "ticks": 3,
+        "seq": 5243,
+        "seqName": "human_crafting_spikedvambraces",
+        "members": true
+      },
+      {
+        "pair": [
+          "HARD_LEATHER",
+          "OAK_SHIELD"
+        ],
+        "pairAmounts": [
+          2,
+          1
+        ],
+        "materials": [
+          [
+            "BRONZE_NAILS",
+            15
+          ]
+        ],
+        "tools": [
+          "HAMMER"
+        ],
+        "item": "HARD_LEATHER_SHIELD",
+        "level": 41,
+        "xp": 70,
+        "ticks": 5,
+        "seq": 1249,
+        "seqName": "human_leather_crafting",
+        "members": true
+      },
+      {
+        "pair": [
+          "SNAKESKIN",
+          "WILLOW_SHIELD"
+        ],
+        "pairAmounts": [
+          2,
+          1
+        ],
+        "materials": [
+          [
+            "IRON_NAILS",
+            15
+          ]
+        ],
+        "tools": [
+          "HAMMER"
+        ],
+        "item": "SNAKESKIN_SHIELD",
+        "level": 56,
+        "xp": 100,
+        "ticks": 5,
+        "seq": 1249,
+        "seqName": "human_leather_crafting",
+        "members": true
+      },
+      {
+        "pair": [
+          "GREEN_DRAGON_LEATHER",
+          "MAPLE_SHIELD"
+        ],
+        "pairAmounts": [
+          2,
+          1
+        ],
+        "materials": [
+          [
+            "STEEL_NAILS",
+            15
+          ]
+        ],
+        "tools": [
+          "HAMMER"
+        ],
+        "item": "GREEN_DHIDE_SHIELD",
+        "level": 62,
+        "xp": 124,
+        "ticks": 5,
+        "seq": 1249,
+        "seqName": "human_leather_crafting",
+        "members": true
+      },
+      {
+        "pair": [
+          "BLUE_DRAGON_LEATHER",
+          "YEW_SHIELD"
+        ],
+        "pairAmounts": [
+          2,
+          1
+        ],
+        "materials": [
+          [
+            "MITHRIL_NAILS",
+            15
+          ]
+        ],
+        "tools": [
+          "HAMMER"
+        ],
+        "item": "BLUE_DHIDE_SHIELD",
+        "level": 69,
+        "xp": 140,
+        "ticks": 5,
+        "seq": 1249,
+        "seqName": "human_leather_crafting",
+        "members": true
+      },
+      {
+        "pair": [
+          "RED_DRAGON_LEATHER",
+          "MAGIC_SHIELD"
+        ],
+        "pairAmounts": [
+          2,
+          1
+        ],
+        "materials": [
+          [
+            "ADAMANTITE_NAILS",
+            15
+          ]
+        ],
+        "tools": [
+          "HAMMER"
+        ],
+        "item": "RED_DHIDE_SHIELD",
+        "level": 76,
+        "xp": 156,
+        "ticks": 5,
+        "seq": 1249,
+        "seqName": "human_leather_crafting",
+        "members": true
+      },
+      {
+        "pair": [
+          "BLACK_DRAGON_LEATHER",
+          "REDWOOD_SHIELD"
+        ],
+        "pairAmounts": [
+          2,
+          1
+        ],
+        "materials": [
+          [
+            "RUNE_NAILS",
+            15
+          ]
+        ],
+        "tools": [
+          "HAMMER"
+        ],
+        "item": "BLACK_DHIDE_SHIELD",
+        "level": 83,
+        "xp": 172,
+        "ticks": 5,
+        "seq": 1249,
+        "seqName": "human_leather_crafting",
+        "members": true
+      }
+    ]
+  },
+  "gems": {
+    "$comment": "`crush`: the Wiki's success chart (low/high out of 256 at levels 1/99) and the XP of a crushed gem.",
+    "recipes": [
+      {
+        "uncut": "UNCUT_OPAL",
+        "cut": "OPAL",
+        "level": 1,
+        "xp": 15,
+        "seq": 890,
+        "seqName": "human_opalcutting",
+        "members": true,
+        "crush": {
+          "low": 128,
+          "high": 250,
+          "xp": 3.8
+        }
+      },
+      {
+        "uncut": "UNCUT_JADE",
+        "cut": "JADE",
+        "level": 13,
+        "xp": 20,
+        "seq": 891,
+        "seqName": "human_jadecutting",
+        "members": true,
+        "crush": {
+          "low": 100,
+          "high": 245,
+          "xp": 5
+        }
+      },
+      {
+        "uncut": "UNCUT_RED_TOPAZ",
+        "cut": "RED_TOPAZ",
+        "level": 16,
+        "xp": 25,
+        "seq": 892,
+        "seqName": "human_redtopazcutting",
+        "members": true,
+        "crush": {
+          "low": 90,
+          "high": 240,
+          "xp": 6.3
+        }
+      },
+      {
+        "uncut": "UNCUT_SAPPHIRE",
+        "cut": "SAPPHIRE",
+        "level": 20,
+        "xp": 50,
+        "seq": 888,
+        "seqName": "human_sapphirecutting",
+        "members": false
+      },
+      {
+        "uncut": "UNCUT_EMERALD",
+        "cut": "EMERALD",
+        "level": 27,
+        "xp": 67.5,
+        "seq": 889,
+        "seqName": "human_emeraldcutting",
+        "members": false
+      },
+      {
+        "uncut": "UNCUT_RUBY",
+        "cut": "RUBY",
+        "level": 34,
+        "xp": 85,
+        "seq": 887,
+        "seqName": "human_rubycutting",
+        "members": false
+      },
+      {
+        "uncut": "UNCUT_DIAMOND",
+        "cut": "DIAMOND",
+        "level": 43,
+        "xp": 107.5,
+        "seq": 886,
+        "seqName": "human_diamondcutting",
+        "members": false
+      },
+      {
+        "uncut": "UNCUT_DRAGONSTONE",
+        "cut": "DRAGONSTONE",
+        "level": 55,
+        "xp": 137.5,
+        "seq": 885,
+        "seqName": "human_dragonstonecutting",
+        "members": true
+      },
+      {
+        "uncut": "UNCUT_ONYX",
+        "cut": "ONYX",
+        "level": 67,
+        "xp": 167.5,
+        "seq": 2717,
+        "seqName": "human_onyxcutting",
+        "members": true
+      },
+      {
+        "uncut": "UNCUT_ZENYTE",
+        "cut": "ZENYTE",
+        "level": 89,
+        "xp": 50,
+        "seq": 7185,
+        "seqName": "human_zenytecutting",
+        "members": true
+      }
+    ]
+  },
+  "amethyst": {
+    "$comment": "One amethyst makes `amount` (Wiki: Amethyst).",
+    "seq": 6295,
+    "seqName": "human_amethystcutting",
+    "recipes": [
+      {
+        "item": "AMETHYST_BOLT_TIPS",
+        "amount": 15,
+        "level": 83,
+        "xp": 60,
+        "members": true
+      },
+      {
+        "item": "AMETHYST_ARROWTIPS",
+        "amount": 15,
+        "level": 85,
+        "xp": 60,
+        "members": true
+      },
+      {
+        "item": "AMETHYST_JAVELIN_TIPS",
+        "amount": 5,
+        "level": 87,
+        "xp": 60,
+        "members": true
+      },
+      {
+        "item": "AMETHYST_DART_TIP",
+        "amount": 8,
+        "level": 89,
+        "xp": 60,
+        "members": true
+      }
+    ]
+  },
+  "glassblowing": {
+    "$comment": "Menu labels as captured (recording 1842); `name` completes 'You make a ...'.",
+    "seq": 884,
+    "seqName": "human_glassblowing",
+    "sound": 2724,
+    "soundDelay": 10,
+    "recipes": [
+      {
+        "item": "BEER_GLASS",
+        "label": "Beer glass",
+        "name": "beer glass",
+        "level": 1,
+        "xp": 17.5,
+        "members": true
+      },
+      {
+        "item": "EMPTY_CANDLE_LANTERN",
+        "label": "Candle lantern",
+        "name": "candle lantern",
+        "level": 4,
+        "xp": 19,
+        "members": true
+      },
+      {
+        "item": "EMPTY_OIL_LAMP",
+        "label": "Oil lamp",
+        "name": "oil lamp",
+        "level": 12,
+        "xp": 25,
+        "members": true
+      },
+      {
+        "item": "VIAL",
+        "label": "Vial",
+        "name": "vial",
+        "level": 33,
+        "xp": 35,
+        "members": true
+      },
+      {
+        "item": "EMPTY_FISHBOWL",
+        "label": "Fishbowl",
+        "name": "fishbowl",
+        "level": 42,
+        "xp": 42.5,
+        "members": true
+      },
+      {
+        "item": "UNPOWERED_ORB",
+        "label": "Unpowered staff orb",
+        "name": "unpowered staff orb",
+        "level": 46,
+        "xp": 52.5,
+        "members": true
+      },
+      {
+        "item": "LANTERN_LENS",
+        "label": "Lantern lens",
+        "name": "lantern lens",
+        "level": 49,
+        "xp": 55,
+        "members": true
+      },
+      {
+        "item": "EMPTY_LIGHT_ORB",
+        "label": "Light orb",
+        "name": "light orb",
+        "level": 87,
+        "xp": 70,
+        "members": true
+      }
+    ]
+  },
+  "pottery": {
+    "$comment": "One soft clay shapes `shaped` unfired items (default 1).",
+    "seq": 883,
+    "seqName": "human_potterywheel",
+    "recipes": [
+      {
+        "name": "pot",
+        "unfired": "UNFIRED_POT",
+        "fired": "POT",
+        "level": 1,
+        "shapingXp": 6.3,
+        "firingXp": 6.3
+      },
+      {
+        "name": "cup",
+        "unfired": "UNFIRED_CUP",
+        "fired": "EMPTY_CUP",
+        "level": 3,
+        "shapingXp": 8.5,
+        "firingXp": 8.5,
+        "members": true,
+        "shaped": 4
+      },
+      {
+        "name": "pie dish",
+        "unfired": "UNFIRED_PIE_DISH",
+        "fired": "PIE_DISH",
+        "level": 7,
+        "shapingXp": 15,
+        "firingXp": 10
+      },
+      {
+        "name": "bowl",
+        "unfired": "UNFIRED_BOWL",
+        "fired": "BOWL",
+        "level": 8,
+        "shapingXp": 18,
+        "firingXp": 15
+      },
+      {
+        "name": "plant pot",
+        "unfired": "UNFIRED_PLANT_POT",
+        "fired": "EMPTY_PLANT_POT",
+        "level": 19,
+        "shapingXp": 20,
+        "firingXp": 17.5,
+        "members": true
+      }
+    ],
+    "waterContainers": [
+      [
+        "BUCKET_OF_WATER",
+        "BUCKET"
+      ],
+      [
+        "BOWL_OF_WATER",
+        "BOWL"
+      ],
+      [
+        "JUG_OF_WATER",
+        "JUG"
+      ],
+      [
+        "VIAL_OF_WATER",
+        "VIAL"
+      ]
+    ]
+  },
+  "spinning": {
+    "$comment": "`materials`: any one of them makes the product, in order of preference; `amount` of it per item.",
+    "seq": 13139,
+    "seqName": "human_spinningwheel_60",
+    "wheelSeq": 466,
+    "wheelSeqName": "spinningwheel",
+    "sound": 2590,
+    "recipes": [
+      {
+        "item": "BALL_OF_WOOL",
+        "materials": [
+          "WOOL"
+        ],
+        "amount": 1,
+        "level": 1,
+        "xp": 2.5
+      },
+      {
+        "item": "BOW_STRING",
+        "materials": [
+          "FLAX"
+        ],
+        "amount": 1,
+        "level": 10,
+        "xp": 15,
+        "members": true
+      },
+      {
+        "item": "CROSSBOW_STRING",
+        "materials": [
+          "SINEW",
+          "OAK_ROOTS",
+          "WILLOW_ROOTS",
+          "MAPLE_ROOTS",
+          "YEW_ROOTS"
+        ],
+        "amount": 1,
+        "level": 10,
+        "xp": 15,
+        "members": true
+      },
+      {
+        "item": "LINEN_YARN",
+        "materials": [
+          "FLAX"
+        ],
+        "amount": 1,
+        "level": 12,
+        "xp": 16,
+        "members": true
+      },
+      {
+        "item": "MAGIC_STRING",
+        "materials": [
+          "MAGIC_ROOTS"
+        ],
+        "amount": 1,
+        "level": 19,
+        "xp": 30,
+        "members": true
+      },
+      {
+        "item": "ROPE",
+        "materials": [
+          "HAIR"
+        ],
+        "amount": 1,
+        "level": 30,
+        "xp": 25,
+        "members": true
+      },
+      {
+        "item": "HEMP_YARN",
+        "materials": [
+          "HEMP"
+        ],
+        "amount": 1,
+        "level": 39,
+        "xp": 60,
+        "members": true
+      },
+      {
+        "item": "COTTON_YARN",
+        "materials": [
+          "COTTON_BOLL"
+        ],
+        "amount": 1,
+        "level": 73,
+        "xp": 105,
+        "members": true
+      }
+    ]
+  },
+  "weaving": {
+    "seq": 2270,
+    "seqName": "farming_useloom",
+    "sound": 2587,
+    "soundDelay": 2,
+    "recipes": [
+      {
+        "item": "STRIP_OF_CLOTH",
+        "materials": [
+          "BALL_OF_WOOL"
+        ],
+        "amount": 4,
+        "level": 10,
+        "xp": 12,
+        "members": true
+      },
+      {
+        "item": "BOLT_OF_LINEN",
+        "materials": [
+          "LINEN_YARN"
+        ],
+        "amount": 2,
+        "level": 12,
+        "xp": 20,
+        "members": true
+      },
+      {
+        "item": "EMPTY_SACK",
+        "materials": [
+          "JUTE_FIBRE"
+        ],
+        "amount": 4,
+        "level": 21,
+        "xp": 38,
+        "members": true
+      },
+      {
+        "item": "DRIFT_NET",
+        "materials": [
+          "JUTE_FIBRE"
+        ],
+        "amount": 2,
+        "level": 26,
+        "xp": 55,
+        "members": true
+      },
+      {
+        "item": "BASKET",
+        "materials": [
+          "WILLOW_BRANCH"
+        ],
+        "amount": 6,
+        "level": 36,
+        "xp": 56,
+        "members": true
+      },
+      {
+        "item": "BOLT_OF_CANVAS",
+        "materials": [
+          "HEMP_YARN"
+        ],
+        "amount": 2,
+        "level": 39,
+        "xp": 75,
+        "members": true
+      },
+      {
+        "item": "BOLT_OF_COTTON",
+        "materials": [
+          "COTTON_YARN"
+        ],
+        "amount": 2,
+        "level": 73,
+        "xp": 132,
+        "members": true
+      }
+    ]
+  },
+  "gold": {
+    "$comment": "crafting_gold (446): `firstComponent` is each type's plain-gold button; product rows are [item, level, XP] in `gems` order (null: plain gold).",
+    "gems": [
+      null,
+      "SAPPHIRE",
+      "EMERALD",
+      "RUBY",
+      "DIAMOND",
+      "DRAGONSTONE",
+      "ONYX",
+      "ZENYTE"
+    ],
+    "types": [
+      {
+        "name": "ring",
+        "firstComponent": 8,
+        "mould": "RING_MOULD",
+        "products": [
+          [
+            "GOLD_RING",
+            5,
+            15
+          ],
+          [
+            "SAPPHIRE_RING",
+            20,
+            40
+          ],
+          [
+            "EMERALD_RING",
+            27,
+            55
+          ],
+          [
+            "RUBY_RING",
+            34,
+            70
+          ],
+          [
+            "DIAMOND_RING",
+            43,
+            85
+          ],
+          [
+            "DRAGONSTONE_RING",
+            55,
+            100
+          ],
+          [
+            "ONYX_RING",
+            67,
+            115
+          ],
+          [
+            "ZENYTE_RING",
+            89,
+            150
+          ]
+        ]
+      },
+      {
+        "name": "necklace",
+        "firstComponent": 23,
+        "mould": "NECKLACE_MOULD",
+        "products": [
+          [
+            "GOLD_NECKLACE",
+            6,
+            20
+          ],
+          [
+            "SAPPHIRE_NECKLACE",
+            22,
+            55
+          ],
+          [
+            "EMERALD_NECKLACE",
+            29,
+            60
+          ],
+          [
+            "RUBY_NECKLACE",
+            40,
+            75
+          ],
+          [
+            "DIAMOND_NECKLACE",
+            56,
+            90
+          ],
+          [
+            "DRAGON_NECKLACE",
+            72,
+            105
+          ],
+          [
+            "ONYX_NECKLACE",
+            82,
+            120
+          ],
+          [
+            "ZENYTE_NECKLACE",
+            92,
+            165
+          ]
+        ]
+      },
+      {
+        "name": "amulet",
+        "firstComponent": 37,
+        "mould": "AMULET_MOULD",
+        "products": [
+          [
+            "GOLD_AMULET_U_",
+            8,
+            30
+          ],
+          [
+            "SAPPHIRE_AMULET_U_",
+            24,
+            65
+          ],
+          [
+            "EMERALD_AMULET_U_",
+            31,
+            70
+          ],
+          [
+            "RUBY_AMULET_U_",
+            50,
+            85
+          ],
+          [
+            "DIAMOND_AMULET_U_",
+            70,
+            100
+          ],
+          [
+            "DRAGONSTONE_AMULET_U_",
+            80,
+            150
+          ],
+          [
+            "ONYX_AMULET_U_",
+            90,
+            165
+          ],
+          [
+            "ZENYTE_AMULET_U_",
+            98,
+            200
+          ]
+        ]
+      },
+      {
+        "name": "bracelet",
+        "firstComponent": 50,
+        "mould": "BRACELET_MOULD",
+        "products": [
+          [
+            "GOLD_BRACELET_2",
+            7,
+            25
+          ],
+          [
+            "SAPPHIRE_BRACELET_2",
+            23,
+            60
+          ],
+          [
+            "EMERALD_BRACELET",
+            30,
+            65
+          ],
+          [
+            "RUBY_BRACELET",
+            42,
+            80
+          ],
+          [
+            "DIAMOND_BRACELET",
+            58,
+            95
+          ],
+          [
+            "DRAGONSTONE_BRACELET",
+            74,
+            110
+          ],
+          [
+            "ONYX_BRACELET",
+            84,
+            125
+          ],
+          [
+            "ZENYTE_BRACELET_2",
+            95,
+            180
+          ]
+        ]
+      }
+    ],
+    "quantities": {
+      "60": 1,
+      "61": 5,
+      "62": 10,
+      "63": "x",
+      "64": 28
+    }
+  },
+  "silver": {
+    "$comment": "silver_crafting (6), from cache script 1596: component (and its gameval name) -> product, level and mould; XP from the Wiki. `extra` are used up besides the bar.",
+    "products": [
+      {
+        "component": 7,
+        "componentName": "opal_ring",
+        "item": "OPAL_RING",
+        "level": 1,
+        "xp": 10,
+        "mould": "RING_MOULD",
+        "extra": [
+          "OPAL"
+        ],
+        "members": true
+      },
+      {
+        "component": 8,
+        "componentName": "jade_ring",
+        "item": "JADE_RING",
+        "level": 13,
+        "xp": 32,
+        "mould": "RING_MOULD",
+        "extra": [
+          "JADE"
+        ],
+        "members": true
+      },
+      {
+        "component": 9,
+        "componentName": "topaz_ring",
+        "item": "TOPAZ_RING",
+        "level": 16,
+        "xp": 35,
+        "mould": "RING_MOULD",
+        "extra": [
+          "RED_TOPAZ"
+        ],
+        "members": true
+      },
+      {
+        "component": 11,
+        "componentName": "opal_necklace",
+        "item": "OPAL_NECKLACE",
+        "level": 16,
+        "xp": 35,
+        "mould": "NECKLACE_MOULD",
+        "extra": [
+          "OPAL"
+        ],
+        "members": true
+      },
+      {
+        "component": 12,
+        "componentName": "jade_necklace",
+        "item": "JADE_NECKLACE",
+        "level": 25,
+        "xp": 54,
+        "mould": "NECKLACE_MOULD",
+        "extra": [
+          "JADE"
+        ],
+        "members": true
+      },
+      {
+        "component": 13,
+        "componentName": "topaz_necklace",
+        "item": "TOPAZ_NECKLACE",
+        "level": 32,
+        "xp": 70,
+        "mould": "NECKLACE_MOULD",
+        "extra": [
+          "RED_TOPAZ"
+        ],
+        "members": true
+      },
+      {
+        "component": 15,
+        "componentName": "opal_amulet",
+        "item": "OPAL_AMULET_U_",
+        "level": 27,
+        "xp": 55,
+        "mould": "AMULET_MOULD",
+        "extra": [
+          "OPAL"
+        ],
+        "members": true
+      },
+      {
+        "component": 16,
+        "componentName": "jade_amulet",
+        "item": "JADE_AMULET_U_",
+        "level": 34,
+        "xp": 70,
+        "mould": "AMULET_MOULD",
+        "extra": [
+          "JADE"
+        ],
+        "members": true
+      },
+      {
+        "component": 17,
+        "componentName": "topaz_amulet",
+        "item": "TOPAZ_AMULET_U_",
+        "level": 45,
+        "xp": 80,
+        "mould": "AMULET_MOULD",
+        "extra": [
+          "RED_TOPAZ"
+        ],
+        "members": true
+      },
+      {
+        "component": 19,
+        "componentName": "opal_bracelet",
+        "item": "OPAL_BRACELET",
+        "level": 22,
+        "xp": 45,
+        "mould": "BRACELET_MOULD",
+        "extra": [
+          "OPAL"
+        ],
+        "members": true
+      },
+      {
+        "component": 20,
+        "componentName": "jade_bracelet",
+        "item": "JADE_BRACELET",
+        "level": 29,
+        "xp": 60,
+        "mould": "BRACELET_MOULD",
+        "extra": [
+          "JADE"
+        ],
+        "members": true
+      },
+      {
+        "component": 21,
+        "componentName": "topaz_bracelet",
+        "item": "TOPAZ_BRACELET",
+        "level": 38,
+        "xp": 75,
+        "mould": "BRACELET_MOULD",
+        "extra": [
+          "RED_TOPAZ"
+        ],
+        "members": true
+      },
+      {
+        "component": 23,
+        "componentName": "holy_symbol",
+        "item": "UNSTRUNG_SYMBOL",
+        "level": 16,
+        "xp": 50,
+        "mould": "HOLY_MOULD"
+      },
+      {
+        "component": 24,
+        "componentName": "unholy_symbol",
+        "item": "UNSTRUNG_EMBLEM",
+        "level": 17,
+        "xp": 50,
+        "mould": "UNHOLY_MOULD",
+        "members": true
+      },
+      {
+        "component": 25,
+        "componentName": "sickle",
+        "item": "SILVER_SICKLE",
+        "level": 18,
+        "xp": 50,
+        "mould": "SICKLE_MOULD",
+        "members": true
+      },
+      {
+        "component": 26,
+        "componentName": "lightning_rod",
+        "item": "CONDUCTOR",
+        "level": 20,
+        "xp": 50,
+        "mould": "CONDUCTOR_MOULD",
+        "members": true
+      },
+      {
+        "component": 27,
+        "componentName": "crossbow_bolt",
+        "item": "SILVER_BOLTS_UNF_",
+        "level": 21,
+        "xp": 50,
+        "mould": "BOLT_MOULD",
+        "amount": 10,
+        "members": true
+      },
+      {
+        "component": 28,
+        "componentName": "tiara",
+        "item": "TIARA",
+        "level": 23,
+        "xp": 52.5,
+        "mould": "TIARA_MOULD"
+      },
+      {
+        "component": 29,
+        "componentName": "ivandis",
+        "item": "SILVTHRILL_ROD_2",
+        "level": 25,
+        "xp": 55,
+        "mould": "ROD_MOULD",
+        "extra": [
+          "MITHRIL_BAR",
+          "SAPPHIRE"
+        ],
+        "members": true
+      },
+      {
+        "component": 30,
+        "componentName": "agrith_sigil",
+        "item": "DEMONIC_SIGIL",
+        "level": 30,
+        "xp": 50,
+        "mould": "DEMONIC_SIGIL_MOULD",
+        "members": true
+      }
+    ],
+    "quantities": {
+      "$comment": "make_1, make_5, make_10, make_x, make_all",
+      "32": 1,
+      "33": 5,
+      "34": 10,
+      "35": "x",
+      "36": 28
+    }
+  },
+  "perfect": {
+    "$comment": "Family Crest: a 'perfect' gold bar, a ruby and the mould at a furnace (Wiki: 'perfect' ring/necklace).",
+    "recipes": [
+      {
+        "name": "'perfect' ring",
+        "item": "PERFECT_RING",
+        "mould": "RING_MOULD",
+        "level": 40,
+        "xp": 70
+      },
+      {
+        "name": "'perfect' necklace",
+        "item": "PERFECT_NECKLACE",
+        "mould": "NECKLACE_MOULD",
+        "level": 40,
+        "xp": 75
+      }
+    ]
+  },
+  "strungAmulets": {
+    "$comment": "A ball of wool on the unstrung amulet, 4 XP (Wiki: amulet stringing).",
+    "xp": 4,
+    "pairs": [
+      [
+        "GOLD_AMULET_U_",
+        "GOLD_AMULET"
+      ],
+      [
+        "SAPPHIRE_AMULET_U_",
+        "SAPPHIRE_AMULET"
+      ],
+      [
+        "EMERALD_AMULET_U_",
+        "EMERALD_AMULET"
+      ],
+      [
+        "RUBY_AMULET_U_",
+        "RUBY_AMULET"
+      ],
+      [
+        "DIAMOND_AMULET_U_",
+        "DIAMOND_AMULET"
+      ],
+      [
+        "DRAGONSTONE_AMULET_U_",
+        "DRAGONSTONE_AMULET"
+      ],
+      [
+        "ONYX_AMULET_U_",
+        "ONYX_AMULET"
+      ],
+      [
+        "ZENYTE_AMULET_U_",
+        "ZENYTE_AMULET"
+      ],
+      [
+        "OPAL_AMULET_U_",
+        "OPAL_AMULET"
+      ],
+      [
+        "JADE_AMULET_U_",
+        "JADE_AMULET"
+      ],
+      [
+        "TOPAZ_AMULET_U_",
+        "TOPAZ_AMULET"
+      ]
+    ]
+  },
+  "battlestaves": {
+    "$comment": "Wiki: first staff 3 ticks after the choice, then every 2.",
+    "seq": 7531,
+    "seqName": "human_battlestaff_crafting",
+    "recipes": [
+      {
+        "orb": "WATER_ORB",
+        "item": "WATER_BATTLESTAFF",
+        "level": 54,
+        "xp": 100
+      },
+      {
+        "orb": "EARTH_ORB",
+        "item": "EARTH_BATTLESTAFF",
+        "level": 58,
+        "xp": 112.5
+      },
+      {
+        "orb": "FIRE_ORB",
+        "item": "FIRE_BATTLESTAFF",
+        "level": 62,
+        "xp": 125
+      },
+      {
+        "orb": "AIR_ORB",
+        "item": "AIR_BATTLESTAFF",
+        "level": 66,
+        "xp": 137.5
+      }
+    ]
+  }
+}

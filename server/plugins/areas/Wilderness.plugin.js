@@ -445,9 +445,13 @@ function onPlayerDisconnect(state, player) {
   lastLevelRowVisible.delete(player);
 }
 
-function canAttack(attacker, target) {
+function canAttack(attacker, target, method) {
   if (!attacker?.isPlayer?.() || !target?.isPlayer?.()) {
     return null;
+  }
+
+  if (method?.warpedSceptreBuiltInSpell === true && isInWilderness(target)) {
+    return false;
   }
 
   if (tileFactsOf(attacker)?.safeBuilding || tileFactsOf(target)?.safeBuilding) {
@@ -547,8 +551,8 @@ function createWildernessArea(api, state) {
       rules.postLeave(mobile, logout);
     }
 
-    canAttack(attacker, target) {
-      return rules.canAttack(attacker, target);
+    canAttack(attacker, target, method) {
+      return rules.canAttack(attacker, target, method);
     }
 
     canTeleport(player, wildernessLevelLimit) {
@@ -635,6 +639,7 @@ function onObeliskClick(event) {
 
 module.exports = {
   name: "Wilderness",
+  _test: { canAttack },
   register(api) {
     const state = createState();
 

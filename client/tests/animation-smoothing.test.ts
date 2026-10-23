@@ -157,7 +157,7 @@ const gfxCache = new GfxCache({
     osrsClient: {
         spotAnimTypeLoader: { load: () => ({ sequenceId: 5 }) },
         seqTypeLoader: { load: () => ({ frameIds: [1, 2, 3], isSkeletalSeq: () => skeletal }) },
-        animationSmoothingPlugin: { smoothsGraphics: () => graphicsOn },
+        clientPlugins: { smoothsGraphics: () => graphicsOn },
     },
 } as any);
 assert.equal(gfxCache.smoothingCycle(100, 0, 3), 3);

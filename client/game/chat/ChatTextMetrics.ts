@@ -1,6 +1,7 @@
 import type { CacheSystem } from "../../rs/cache/CacheSystem";
 import { IndexType } from "../../rs/cache/IndexType";
 import { BitmapFont } from "../../rs/font/BitmapFont";
+import { resolveTextTemplates } from "../../rs/font/textTemplates";
 import { SpriteLoader } from "../../rs/sprite/SpriteLoader";
 
 export type ChatTextMetricsDeps = {
@@ -17,6 +18,7 @@ export class ChatTextMetrics {
     constructor(private readonly deps: ChatTextMetricsDeps) {}
 
     measureTextWidthOsrsMarkup(text: string, font: BitmapFont | undefined): number {
+        text = resolveTextTemplates(text);
         if (!text) return 0;
 
         let width = 0;

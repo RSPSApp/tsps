@@ -10,6 +10,7 @@ import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import { PluginManager } from "@runelite/client/plugins/PluginManager";
 
 import type { OsrsClient } from "../../OsrsClient";
+import { createElement, lazy, type ReactNode } from "react";
 import type { ClientPlugin } from "../ClientPluginManager";
 import { TILE_FLAG_BRIDGE, TILE_FLAG_UNDER_ROOF } from "../../scene/TileRenderFlags";
 import type { WebGLOsrsRenderer } from "../../../render/WebGLOsrsRenderer";
@@ -74,6 +75,8 @@ export interface WeatherPluginState {
     lightning: number;
 }
 
+const WeatherOverlay = lazy(() => import("./WeatherOverlay").then((m) => ({ default: m.WeatherOverlay })));
+
 export class WeatherPlugin extends Plugin implements ClientPlugin {
     static descriptor: PluginDescriptor = {
         name: "3D Weather",
@@ -84,6 +87,10 @@ export class WeatherPlugin extends Plugin implements ClientPlugin {
     };
 
     static config = WeatherConfig;
+
+    renderHud(): ReactNode {
+        return createElement(WeatherOverlay, { plugin: this });
+    }
 
     private readonly client = inject<OsrsClient>(CLIENT_TOKEN);
     private readonly pluginManager = inject(PluginManager);

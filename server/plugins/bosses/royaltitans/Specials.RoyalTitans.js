@@ -23,6 +23,8 @@ const WALL_DAMAGE_TICKS = 3;
 const walks = new WeakMap();
 
 let core = null;
+/** Area.RoyalTitans's live fights, looked up on the engine's first tick. */
+let sessions = null;
 
 const { alive, fighting, tileOf, later, sessionOfNpc } = Shared;
 
@@ -662,7 +664,10 @@ function tickSession(session) {
 }
 
 function tick() {
-  for (const session of require("./Area.RoyalTitans").sessions.values()) {
+  // This runs every tick, fights or not: look the module up once and stop when nobody is fighting.
+  sessions ??= require("./Area.RoyalTitans").sessions;
+  if (sessions.size === 0) return;
+  for (const session of sessions.values()) {
     const live = fighting(session.branda) || fighting(session.eldric);
     if (!live && session.rows.size === 0 && session.minions.size === 0) continue;
     tickSession(session);

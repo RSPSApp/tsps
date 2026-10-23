@@ -388,7 +388,7 @@ class HdWebGPUExtension implements WebGPUSceneExtension {
             }
         }
         // The GPU plugin's anti-aliasing replaces HD's own: FXAA here, MSAA in the world pass.
-        const gpu = renderer.osrsClient.gpuPlugin?.settings();
+        const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
         post.encode(renderer, encoder, frame, gpu ? { ...options, antiAliasing: gpu.fxaa } : options);
     }
 

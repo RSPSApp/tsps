@@ -7,6 +7,7 @@ const {
   decodeClientPackets,
   MOBILE_CLIENT_ATTRIBUTE,
   MOBILE_GAMEFRAME_ROOT,
+  orbsGroupFor,
   resolveGameframeRoot,
 } = require('../dist/net/protocol/ClientProtocol');
 
@@ -27,6 +28,11 @@ test('mobile clients are locked to the mobile gameframe', () => {
   assert.equal(MOBILE_GAMEFRAME_ROOT, 601);
   assert.equal(resolveGameframeRoot(player({ [MOBILE_CLIENT_ATTRIBUTE]: true, 'client-layout-root': 548 })), 601);
   assert.equal(resolveGameframeRoot(player({ [MOBILE_CLIENT_ATTRIBUTE]: true, 'client-layout-root': 164 })), 601);
+});
+
+test('the mobile gameframe mounts its own orbs (orbs_osm), as live does', () => {
+  assert.equal(orbsGroupFor(MOBILE_GAMEFRAME_ROOT), 897);
+  for (const root of [161, 164, 548]) assert.equal(orbsGroupFor(root), 160);
 });
 
 test('handshake decodes the mobile client type byte', () => {

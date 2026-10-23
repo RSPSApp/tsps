@@ -11,6 +11,10 @@ let core;
 const MAX_LEVEL = 99;
 /** OSRS resets daily limits at 00:00 UTC. */
 const DAILY_ATTRIBUTE = "skillcapes:daily";
+/** Ranging "Commune": the player has asked the cape not to gather metal items. */
+const JUNK_OFF_ATTRIBUTE = "skillcapes:accumulator-junk-off";
+/** Vorkath's head has been used on a Ranging or max cape: its ammo recovery and metal are mithril. */
+const VORKATH_UPGRADE_ATTRIBUTE = "skillcapes:vorkath-head-upgrade";
 const WORN_OPTION_PARAM = 451;
 const FIRST_WORN_OPTION_CLICK = 2;
 /** Worn submenus (cache params): the first entry at 661 + op, later entries at 2066 + op + 8 * n. */
@@ -244,7 +248,8 @@ function itemName(id) {
 
 module.exports = {
   init, DATA, CAPES, CAPE_BY_SKILL, CAPE_BY_ITEM, HOOD_IDS, MAX, COMBINED, COMBINED_BY_CAPE, COMBINED_BY_ITEM,
-  MAX_LEVEL, DAILY_ATTRIBUTE, objId, seqId, isMaxCape, capeSlotId, baseLevel, count99s, maxed, capeHasPerk, hasPerk,
+  MAX_LEVEL, DAILY_ATTRIBUTE, JUNK_OFF_ATTRIBUTE, VORKATH_UPGRADE_ATTRIBUTE,
+  objId, seqId, isMaxCape, capeSlotId, baseLevel, count99s, maxed, capeHasPerk, hasPerk,
   answerPerk, keyOf, itemOption, wornSubOption, wornSubOptions, talk, messageBox, playTranscript, teleport,
   today, dailyUses, useDaily, later, itemName,
   get api() { return api; },

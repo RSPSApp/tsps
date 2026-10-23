@@ -1,11 +1,37 @@
-// TODO: ported from xrsps-typescript; untested.
-module.exports = function registerDarkBowSpecialAttack(api) {
-  const { Ammunition, Animation, CombatFactory, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
+let core;
 
-  const DRAIN = 55;
-  const HIT_COUNT = 2;
-  const DESCENT_OF_DARKNESS_DAMAGE_MULTIPLIER = 1.3;
-  const DESCENT_OF_DARKNESS_MINIMUM_DAMAGE = 5;
+const DESCENT_OF_DRAGONS = { multiplier: 1.5, minimum: 8, cap: 48 };
+const DESCENT_OF_DARKNESS = { multiplier: 1.3, minimum: 5, cap: Infinity };
+const HIT_COUNT = 2;
+const DRAIN = 55;
+const SPECIAL_ID = "dark_bow";
+
+function isDragonArrow(player) {
+  const { Ammunition } = core;
+  return [Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW].includes(player.getCombat().getAmmunition());
+}
+
+function descentOf(player) {
+  const { Equipment, ItemIdentifiers } = core;
+  const descent = isDragonArrow(player) ? DESCENT_OF_DRAGONS : DESCENT_OF_DARKNESS;
+  const bountyHunter = player.getEquipment().get(Equipment.WEAPON_SLOT).getId() === ItemIdentifiers.DARK_BOW_BH_;
+  return { ...descent, minimum: descent.minimum + (bountyHunter ? 2 : 0), bountyHunter };
+}
+
+function rollDescent({ attacker, target, damage, accurate }) {
+  const { CombatFactory, CombatType, DamageFormulas, PluginManager } = core;
+  if (!attacker.isPlayer() || !attacker.isSpecialActivated() || attacker.getCombatSpecial()?.getId() !== SPECIAL_ID) {
+    return;
+  }
+  const { multiplier, minimum, cap, bountyHunter } = descentOf(attacker);
+  const boosted = Math.floor(PluginManager.modifyRangedMaxHit(attacker, target, DamageFormulas.sourceMaxHit(attacker, CombatType.RANGED)) * multiplier);
+  const maximum = accurate ? Math.max(minimum, boosted) : minimum;
+  const bounds = { minimumMultiplier: 0, maximumMultiplier: 0, minimumBonus: bountyHunter ? minimum : 0, maximumBonus: maximum };
+  damage.setDamage(Math.max(minimum, Math.min(cap, CombatFactory.getHitDamage(attacker, target, CombatType.RANGED, false, bounds).getDamage())));
+}
+
+function buildDarkBowSpecialAttack(core) {
+  const { Ammunition, Animation, CombatFactory, CombatSpecial, CombatType, DamageFormulas, Equipment, Graphic, GraphicHeight, ItemIdentifiers, PendingHit, PluginManager, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = core;
   const ANIMATION = new Animation(426);
   const GRAPHIC = new Graphic(1100, GraphicHeight.HIGH);
 
@@ -13,9 +39,7 @@ module.exports = function registerDarkBowSpecialAttack(api) {
     hits(character, target) {
       const distance = character.getLocation().getDistance(target.getLocation());
       const delays = WeaponProfiles.hitDelays(character.getAsPlayer(), distance);
-      // The dark bow profile already declares two hit delays; one PendingHit with
-      // the special's hit count keeps this at two hitsplats instead of four.
-      return [new PendingHit(character, target, this, { delay: delays[0], hitAmount: HIT_COUNT })];
+      return delays.map((delay) => new PendingHit(character, target, this, { delay, hitAmount: 1 }));
     }
 
     canAttack(character, target) {
@@ -35,7 +59,7 @@ module.exports = function registerDarkBowSpecialAttack(api) {
       player.performAnimation(ANIMATION);
       Sounds.sendSound(character, Sound.SHOOT_BOW_QUIET);
       let projectileId = 1099;
-      if (player.getCombat().getAmmunition() != Ammunition.DRAGON_ARROW) {
+      if (!isDragonArrow(player)) {
         projectileId = 1101;
       }
       Projectile.createProjectile(player, target, projectileId, 40, 70, 43, 31).sendProjectile();
@@ -52,25 +76,36 @@ module.exports = function registerDarkBowSpecialAttack(api) {
     }
   }
 
-  // TODO: dragon arrows use Descent of Dragons (1.5x, minimum 8, cap 48);
-  // the trait engine reads a fixed trait set per special, and the core dark bow
-  // profile already clamps special damage to 8..48, so the non-dragon values
-  // are registered here.
-  api.registerCombatSpecial({
-    id: "dark_bow",
-    itemIds: [ItemIdentifiers.DARK_BOW],
+
+  return {
+    id: SPECIAL_ID,
+    itemIds: [
+      ItemIdentifiers.DARK_BOW,
+      ItemIdentifiers.DARK_BOW_3,
+      ItemIdentifiers.DARK_BOW_4,
+      ItemIdentifiers.DARK_BOW_5,
+      ItemIdentifiers.DARK_BOW_6,
+      ItemIdentifiers.DARK_BOW_7,
+      ItemIdentifiers.DARK_BOW_BH_,
+      ItemIdentifiers.CORRUPTED_DARK_BOW,
+      ItemIdentifiers.DARK_BOW_DEADMAN_,
+    ],
     drainAmount: DRAIN,
-    strengthMultiplier: DESCENT_OF_DARKNESS_DAMAGE_MULTIPLIER,
+    strengthMultiplier: DESCENT_OF_DARKNESS.multiplier,
     accuracyMultiplier: 1,
     traits: {
-      hitCount: HIT_COUNT,
+      hitCount: 1,
       accuracyMultiplier: 1,
-      damageMultiplier: DESCENT_OF_DARKNESS_DAMAGE_MULTIPLIER,
-      minimumDamageBonus: DESCENT_OF_DARKNESS_MINIMUM_DAMAGE,
       rollAttackType: "ranged",
       damageType: "ranged",
     },
     combatMethod: new DarkBowCombatMethod(),
     metadata: { finisherDamageMultiplier: 2 },
-  });
+  };
+}
+
+module.exports = function registerDarkBowSpecialAttack(api) {
+  core = api.core;
+  api.onCombatHitDamage(rollDescent);
+  api.registerCombatSpecial(buildDarkBowSpecialAttack(core));
 };

@@ -94,6 +94,10 @@ const DESTINATIONS = {
     teleport("Yama", location(1439, 10076), TeleportType.NORMAL),
     teleport("Skotizo", location(1662, 10049), TeleportType.NORMAL),
     teleport("Royal Titans", location(2950, 9574), TeleportType.NORMAL),
+    teleport("Dagannoth Kings", location(1908, 4367), TeleportType.NORMAL),
+    teleport("Sarachnis", location(1842, 9913), TeleportType.NORMAL),
+    teleport("Thermonuclear Smoke Devil", location(2379, 9452), TeleportType.NORMAL),
+    teleport("The Mimic", location(1645, 3572, 1), TeleportType.NORMAL),
   ],
   [TAB.MINIGAMES]: [
     teleport("Barrows", location(3565, 3315), TeleportType.NORMAL),

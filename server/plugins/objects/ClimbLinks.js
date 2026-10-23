@@ -1,7 +1,8 @@
 /**
- * Where a ladder, staircase or trapdoor leads, worked out from the map itself rather than a
- * list of coordinates (issue #119): the object at the other end is found in the cache's map
- * data, and the player lands on a walkable tile from which that object can be used.
+ * Where a ladder, staircase or trapdoor leads, worked out from the map itself (issue #119):
+ * the object at the other end is found in the cache's map data, and the player lands on a
+ * walkable tile from which that object can be used. A few cache arrangements the search
+ * cannot derive are declared in data/climb-links.json and matched first.
  *
  * - The other end has a climb option in the opposite direction (a Climb-up staircase pairs with
  *   a Climb-down one above it; a trapdoor pairs with the ladder below it).
@@ -31,6 +32,18 @@ const UNDERGROUND_OFFSET = 6400;
 /** How far around the clicked object the other end may lie. */
 const SEARCH_RADIUS = 4;
 const MAX_PLANE = 3;
+
+function loadDeclaredLinks() {
+  const data = require("./data/climb-links.json");
+  const links = new Map();
+  for (const { up, down } of data.pairs) {
+    links.set(`${up.id}:${up.x},${up.y},${up.z}`, { direction: UP, id: down.id, x: down.x, y: down.y, z: down.z });
+    links.set(`${down.id}:${down.x},${down.y},${down.z}`, { direction: DOWN, id: up.id, x: up.x, y: up.y, z: up.z });
+  }
+  return links;
+}
+
+const DECLARED_LINKS = loadDeclaredLinks();
 
 function options(id) {
   return (ObjectDefinition.forId(id)?.getInteractions?.() ?? []).filter(Boolean).map((option) => option.toLowerCase());
@@ -68,19 +81,77 @@ function objectsAround(x, y, z, radius) {
   return found;
 }
 
+/** Objects covering the same footprint as `object` on `z` (not a broad search). */
+function objectsOnFootprint(object, z) {
+  const area = footprint(object);
+  const found = [];
+  const seen = new Set();
+  for (let x = area.x; x < area.x + area.width; x++) {
+    for (let y = area.y; y < area.y + area.length; y++) {
+      for (const candidate of objectsAround(x, y, z, 0)) {
+        const key = `${candidate.getId()}:${candidate.getLocation().getX()},${candidate.getLocation().getY()},${z}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        found.push(candidate);
+      }
+    }
+  }
+  return found;
+}
+
+function objectName(id) {
+  return ObjectDefinition.forId(id)?.getName?.() ?? null;
+}
+
+/**
+ * A decorative/inert segment of the same climb (e.g. Goblin Village's middle ladder on
+ * plane 1, which has no Climb option) sitting exactly in the clicked object's column.
+ * Only an actual same-name, non-climbable object unlocks skipping that plane; a missing
+ * floor or another kind of object never does.
+ */
+function inertSameColumnSegment(object, z) {
+  const name = objectName(object.getId());
+  if (!name) return null;
+  return objectsOnFootprint(object, z).find((candidate) =>
+    objectName(candidate.getId()) === name
+    && !climbs(candidate.getId(), UP)
+    && !climbs(candidate.getId(), DOWN)
+  ) ?? null;
+}
+
 /**
  * The object at the other end of `object` going `direction`: one that climbs back the other
  * way, on the next plane around the object, else underground (or back up from it).
  */
 function otherEnd(object, direction) {
   const from = object.getLocation();
+  const declared = DECLARED_LINKS.get(`${object.getId()}:${from.getX()},${from.getY()},${from.getZ()}`);
+  if (declared) {
+    if (declared.direction !== direction) return null;
+    return objectsAround(declared.x, declared.y, declared.z, 0)
+      .find((candidate) => candidate.getId() === declared.id) ?? null;
+  }
   const area = footprint(object);
   const nearest = (candidates, x, y) => candidates
     .filter((candidate) => climbs(candidate.getId(), -direction))
     .sort((a, b) => distanceToFootprint(x, y, footprint(a)) - distanceToFootprint(x, y, footprint(b)))[0] ?? null;
   const centreX = area.x + (area.width >> 1);
   const centreY = area.y + (area.length >> 1);
-  const sameColumn = () => nearest(objectsAround(centreX, centreY, from.getZ() + direction, SEARCH_RADIUS + 1), centreX, centreY);
+  const sameColumn = () => {
+    let z = from.getZ() + direction;
+    if (z < 0 || z > MAX_PLANE) return null;
+    const first = nearest(objectsAround(centreX, centreY, z, SEARCH_RADIUS + 1), centreX, centreY);
+    if (first) return first;
+    if (!inertSameColumnSegment(object, z)) return null;
+    // Follow a chain of same-column, same-name inert segments (bounded by the planes).
+    for (;;) {
+      z += direction;
+      if (z < 0 || z > MAX_PLANE) return null;
+      const end = nearest(objectsOnFootprint(object, z), centreX, centreY);
+      if (end) return end;
+      if (!inertSameColumnSegment(object, z)) return null;
+    }
+  };
   const underground = (y) => nearest(objectsAround(centreX, y, 0, SEARCH_RADIUS), centreX, y);
   // Going up from underground, the surface comes first; going down from the ground floor,
   // there is no plane below, only the underground.

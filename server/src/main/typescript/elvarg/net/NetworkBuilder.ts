@@ -42,7 +42,7 @@ import {
 } from "./protocol/ClientProtocol";
 import {
   WORLD_MAP_CLOSE_WIDGET_ID,
-  WORLD_MAP_ORB_WIDGET_IDS,
+  isWorldMapOrbWidget,
 } from "./protocol/WorldMapProtocol";
 import { ObjectActionPacketListener } from "./packet/impl/ObjectActionPacketListener";
 import { NPCOptionPacketListener } from "./packet/impl/NPCOptionPacketListener";
@@ -117,9 +117,9 @@ export async function connectHeadlessClient(username: string, password: string):
 
 /** "Log out" on the remembered-account screen: the server drops that browser's token. */
 async function forgetLoginToken(rawUsername: string, token: string): Promise<void> {
-  const protocolName = Misc.formatNameForProtocol(rawUsername.trim());
+  const username = Misc.formatDisplayName(rawUsername);
+  const protocolName = Misc.formatNameForProtocol(username);
   if (protocolName.length < 1 || protocolName.length > 12 || !Misc.isValidName(protocolName)) return;
-  const username = Misc.formatText(protocolName);
   const online = World.getPlayerByName(username);
   if (online) {
     const entries = readLoginTokens(online.getAttribute(LOGIN_TOKENS_ATTRIBUTE), Date.now());
@@ -143,12 +143,17 @@ async function forgetLoginToken(rawUsername: string, token: string): Promise<voi
 }
 
 const CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE = "interface:close-on-interface-close";
+/** The combat tab (combat_interface) and its auto-retaliate and special attack buttons. */
+const COMBAT_INTERFACE = 593;
+const COMBAT_AUTO_RETALIATE_CHILD = 32;
+const COMBAT_SPECIAL_ATTACK_CHILD = 41;
 const WORLD_INTERACTIONS = new Set([
   "move",
   "teleport",
   "world_map_click",
   "npc_option",
   "object_option",
+  "world_entity_option",
   "player_option",
   "ground_item_action",
   "inventory_action",
@@ -161,6 +166,24 @@ const WORLD_INTERACTIONS = new Set([
   "spell_on_object",
   "item_on_ground",
   "spell_on_ground",
+]);
+
+/**
+ * Packets acted on as they arrive: connection upkeep, logging in, client-plugin traffic (voice
+ * signalling), free movement's real-time input (its client runs at most a tick ahead of the
+ * server's answer) and logout, which World answers on the tick itself. A logged-in player's other
+ * packets wait for the start of their next turn, as live OSRS acts on input on the next tick.
+ */
+const IMMEDIATE_PACKETS = new Set([
+  "hello",
+  "ping",
+  "raw",
+  "login",
+  "login_forget",
+  "handshake",
+  "plugin_message",
+  "movement_input",
+  "logout",
 ]);
 
 /** Packets the client sends on its own, which don't count as the player's input. */
@@ -260,6 +283,18 @@ export class NetworkBuilder {
 
 export class ClientConnection {
   private static readonly pendingNames = new Set<string>();
+  /**
+   * A logged-in connection that sends nothing for this long is dead: the client pings every 5 s
+   * while the server talks. A phone that sleeps or changes network never closes its socket (a
+   * tunnel keeps the server's end open too), and its player stayed in the world, so logging back
+   * in failed with "already logged in".
+   */
+  private static readonly IDLE_TIMEOUT_MS = 30_000;
+  private static readonly IDLE_CHECK_MS = 5_000;
+  private lastFrameAt = Date.now();
+  /** Set by the first ping: a client from before the keepalive is never timed out. */
+  private sendsKeepalive = false;
+  private idleCheck?: ReturnType<typeof setInterval>;
   private pending?: PendingLogin;
   private reservedName?: string;
   private player?: Player;
@@ -269,10 +304,13 @@ export class ClientConnection {
   private loginFailure?: string;
   private input = Promise.resolve();
   private queuedInputFrames = 0;
+  /** Packets received since this player's last turn (see IMMEDIATE_PACKETS). */
+  private turnPackets: ClientMessages = [];
 
   constructor(private readonly channel: BinaryChannel) {
     channel.onData((frame) => {
       if (this.closed) return;
+      this.lastFrameAt = Date.now();
       if (frame.length > MAX_GAME_MESSAGE_BYTES || this.queuedInputFrames >= NetworkConstants.PACKET_QUEUE_LIMIT) {
         console.warn("[network] client input limit exceeded", { bytes: frame.length, queued: this.queuedInputFrames });
         this.cleanup("input_limit");
@@ -326,13 +364,38 @@ export class ClientConnection {
     return this.loginFailure;
   }
 
-  private async dispatch(packets: ClientMessages): Promise<void> {
+  /**
+   * Acts on the packets received since this player's last turn, at the start of their turn.
+   * They run even after a disconnect: input that arrived still counts while the player is held
+   * in the world.
+   */
+  public processTurnPackets(): void {
+    if (this.turnPackets.length === 0) return;
+    const packets = this.turnPackets;
+    this.turnPackets = [];
+    // None of these await, so they all run now, inside the player's turn.
+    this.dispatch(packets, true).catch((error) => {
+      console.warn("[network] client packet rejected", error);
+    });
+  }
+
+  private async dispatch(packets: ClientMessages, turn = false): Promise<void> {
     // Frames already queued on the input chain can outlive the socket (a handshake
     // buffered before a disconnect, for example). A closed connection must not act
     // on them or build a player for a socket that is already gone.
-    if (this.closed) return;
+    if (this.closed && !turn) return;
     for (const packet of packets) {
-      if (this.closed) return;
+      if (this.closed && !turn) return;
+      if (!turn && this.player && !IMMEDIATE_PACKETS.has(packet.type)) {
+        if (this.turnPackets.length >= NetworkConstants.PACKET_QUEUE_LIMIT) {
+          console.warn("[network] client turn packet limit exceeded", { queued: this.turnPackets.length });
+          this.cleanup("input_limit");
+          this.channel.close(1008, "input limit");
+          return;
+        }
+        this.turnPackets.push(packet);
+        continue;
+      }
       if (this.player) LunarSpells.expireSpellbookSwap(this.player);
       if (this.player && !NON_INPUT_PACKETS.has(packet.type)) this.player.lastInputCycle = World.getProcessCycle();
       if (this.player && WORLD_INTERACTIONS.has(packet.type)) {
@@ -374,6 +437,22 @@ export class ClientConnection {
           continue;
         case "npc_option":
           if (this.player) NPC_ACTIONS.executeOption(this.player, packet.index, packet.clickType);
+          continue;
+        case "world_entity_option":
+          if (this.player) {
+            // Forged/foreign/out-of-range world-entity indices never reach plugin handlers.
+            const boat = BoatManager.getBoat(packet.index);
+            const root = BoatManager.rootLocation(this.player);
+            if (boat && BoatManager.canSeeBoat(this.player, boat)
+              && root.isWithinDistance(new Location(boat.tileX, boat.tileY, boat.level), 32)) {
+              PluginManager.emitWorldEntityInteraction({
+                player: this.player,
+                entityIndex: packet.index,
+                clickType: packet.clickType,
+                handled: false,
+              });
+            }
+          }
           continue;
         case "object_option":
           if (this.player) OBJECT_ACTIONS.executeAction(
@@ -555,7 +634,7 @@ export class ClientConnection {
         case "dialogue_amount": {
           const action = this.player?.getEnteredAmountAction();
           // 0 is dropped unless the prompt takes it (a setting where 0 means off).
-          if (action && (packet.amount > 0 || (packet.amount === 0 && (action as { acceptsZero?: boolean }).acceptsZero === true))) {
+          if (action && (packet.amount > 0 || (packet.amount === 0 && action.acceptsZero === true) || (packet.amount < 0 && action.acceptsNegative === true))) {
             action.execute(packet.amount);
           }
           else if (this.player && Bank.isOpen(this.player) && packet.amount > 0) {
@@ -585,7 +664,7 @@ export class ClientConnection {
             // option's statement) must not take the same click as its option.
             const openDialogue = this.player.getDialogueManager().getCurrent();
             const equipmentSlot = EquipPacketListener.resolveEquipmentSlot(actionPacket.groupId, actionPacket.childId);
-            if (WORLD_MAP_ORB_WIDGET_IDS.includes(actionPacket.widgetId) && actionPacket.buttonNum === 2) {
+            if (isWorldMapOrbWidget(actionPacket.widgetId) && actionPacket.buttonNum === 2) {
               this.player.getPacketSender().toggleWorldMap();
             } else if (actionPacket.widgetId === WORLD_MAP_CLOSE_WIDGET_ID) {
               this.player.getPacketSender().closeWorldMap();
@@ -619,7 +698,7 @@ export class ClientConnection {
               // Cache-native quick-prayer orb and setup controls.
             } else if (actionPacket.groupId === 541 && PrayerHandler.togglePrayer(this.player, actionPacket.childId)) {
               // Prayer widgets map directly onto the existing prayer engine.
-            } else if (actionPacket.groupId === 593 && actionPacket.childId === 32) {
+            } else if (actionPacket.groupId === COMBAT_INTERFACE && actionPacket.childId === COMBAT_AUTO_RETALIATE_CHILD) {
               // The combat widget's auto-retaliate control does not emit a varp
               // change in every cache/client path, so the button is authoritative.
               this.player.setAutoRetaliate(!this.player.autoRetaliateReturn());
@@ -630,7 +709,7 @@ export class ClientConnection {
                 172,
                 this.player.autoRetaliateReturn() ? 0 : 1,
               );
-            } else if (actionPacket.groupId === 593 && actionPacket.childId === 39) {
+            } else if (actionPacket.groupId === COMBAT_INTERFACE && actionPacket.childId === COMBAT_SPECIAL_ATTACK_CHILD) {
               CombatSpecial.activate(this.player);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);
@@ -638,6 +717,8 @@ export class ClientConnection {
               this.player, actionPacket.groupId, actionPacket.childId, actionPacket.slot
             )) {
               // Cache-native combat autocast controls reuse the existing spell state.
+            } else if (this.emitSpellCast(actionPacket)) {
+              // Plugins own the self-cast spells they register for, by cache spell name.
             } else if (SpellTeleports.handleSelf(
               this.player,
               this.resolveSpellName(actionPacket.widgetId, actionPacket.groupId, actionPacket.childId, actionPacket.itemId),
@@ -906,8 +987,10 @@ export class ClientConnection {
           continue;
         case "raw":
           continue;
-        case "hello":
         case "ping":
+          this.sendsKeepalive = true;
+          continue;
+        case "hello":
           continue;
         case "login":
           await this.login(packet.username, packet.password, packet.revision, packet.flags);
@@ -929,8 +1012,8 @@ export class ClientConnection {
   private async login(rawUsername: string, password: string, revision: number, flags = 0): Promise<void> {
     const tokenLogin = (flags & LOGIN_FLAG_TOKEN) !== 0;
     this.releasePendingName();
-    const protocolName = Misc.formatNameForProtocol(rawUsername.trim());
-    const username = Misc.formatText(protocolName);
+    const typedName = Misc.formatDisplayName(rawUsername);
+    const protocolName = Misc.formatNameForProtocol(typedName);
     const key = protocolName.toLowerCase();
 
     if (revision !== CachePipeline.getActive().revision) {
@@ -947,7 +1030,7 @@ export class ClientConnection {
       this.failLogin(3, "Invalid username or password.");
       return;
     }
-    if (PlayerPunishment.banned(username)) {
+    if (PlayerPunishment.banned(typedName)) {
       this.failLogin(4, "Your account has been disabled.");
       return;
     }
@@ -957,8 +1040,8 @@ export class ClientConnection {
     }
     if (
       World.getPlayers().isFull() ||
-      World.getPlayerByName(username) ||
-      World.getAddPlayerQueue().some((player) => player.getUsername().toLowerCase() === username.toLowerCase()) ||
+      World.getPlayerByName(typedName) ||
+      World.getAddPlayerQueue().some((player) => Misc.formatNameForProtocol(player.getUsername()) === protocolName) ||
       ClientConnection.pendingNames.has(key)
     ) {
       this.failLogin(World.getPlayers().isFull() ? 2 : 5, World.getPlayers().isFull()
@@ -971,9 +1054,9 @@ export class ClientConnection {
 
     let save: any | null = null;
     try {
-      save = GameConstants.PLAYER_PERSISTENCE.load(username);
+      save = GameConstants.PLAYER_PERSISTENCE.load(typedName);
     } catch (error) {
-      console.error(`[login] failed to load ${username}`, error);
+      console.error(`[login] failed to load ${typedName}`, error);
       this.releasePendingName();
       this.failLogin(8, "The login server is busy.");
       return;
@@ -996,15 +1079,15 @@ export class ClientConnection {
         const check = checkLoginToken(entries, password);
         if (check.kind !== "valid") {
           if (check.kind === "reused") {
-            console.warn(`[login] ${username}: a replaced login token was used again; revoking it`);
-            await this.saveLoginTokens(username, save, revokeLoginToken(entries, check.index));
+            console.warn(`[login] ${typedName}: a replaced login token was used again; revoking it`);
+            await this.saveLoginTokens(typedName, save, revokeLoginToken(entries, check.index));
           }
           this.releasePendingName();
           this.failLogin(3, "Invalid username or password.");
           return;
         }
         ({ token: loginToken, entries: loginTokens } = issueLoginToken(entries, now, check.index));
-        await this.saveLoginTokens(username, save, loginTokens);
+        await this.saveLoginTokens(typedName, save, loginTokens);
         passwordHash = String(save.getPasswordHashWithSalt?.() ?? "");
       } else if (save) {
         const stored = String(save.getPasswordHashWithSalt?.() ?? "");
@@ -1033,10 +1116,10 @@ export class ClientConnection {
         const now = Date.now();
         const entries = readLoginTokens(save?.attributes?.[LOGIN_TOKENS_ATTRIBUTE], now);
         ({ token: loginToken, entries: loginTokens } = issueLoginToken(entries, now));
-        if (save) await this.saveLoginTokens(username, save, loginTokens);
+        if (save) await this.saveLoginTokens(typedName, save, loginTokens);
       }
     } catch (error) {
-      console.error(`[login] failed to authenticate ${username}`, error);
+      console.error(`[login] failed to authenticate ${typedName}`, error);
       this.releasePendingName();
       this.failLogin(8, "The login server is busy.");
       return;
@@ -1048,6 +1131,9 @@ export class ClientConnection {
       this.releasePendingName();
       return;
     }
+    // An account keeps the name it was first saved with; the typed one only names a new account.
+    const savedName = String(save?.getDisplayName?.() ?? "");
+    const username = Misc.formatNameForProtocol(savedName) === protocolName ? savedName : typedName;
     this.pending = { username, passwordHash, save, loginTokens };
     this.send(encodeLoginResponse(true, -1, "", username, loginToken));
     console.info(`[login] accepted ${username} from ${this.channel.remoteAddress}`);
@@ -1061,6 +1147,7 @@ export class ClientConnection {
     }
     const pending = this.pending;
     const session = new PlayerSession(this.channel);
+    session.setTurnPacketProcessor(() => this.processTurnPackets());
     const player = new Player(session, GameConstants.DEFAULT_LOCATION.clone());
     session.setPlayer(player);
     player.setUsername(pending.username);
@@ -1083,6 +1170,7 @@ export class ClientConnection {
       return;
     }
     this.player = player;
+    this.startIdleCheck();
     CONNECTIONS.set(player, this);
     this.releasePendingName();
     // Back aboard a boat they logged out on at sea.
@@ -1135,14 +1223,14 @@ export class ClientConnection {
     // Ctrl (1) inverts the run toggle for this walk; Ctrl+Shift (2) is a staff teleport that
     // plugins take over, and walks like a Ctrl-click for everyone else.
     const invert = modifierFlags === 2 || (modifierFlags & 1) !== 0;
-    const run = forceRun || (invert ? !player.isRunningReturn() : player.isRunningReturn());
-    player.setRunning(run);
-    player.getMovementQueue().requestWalk(
-      new Location(x, y, player.getLocation().getZ())
-    );
+    // The inversion holds for this path only; the run setting and orb stay as they are.
+    const runOverride = forceRun ? true : invert ? !player.isRunningReturn() && player.getRunEnergy() > 0 : null;
     // MovementQueue owns the destination flag and de-duplicates it; sending it
     // here as well double-posts the marker on every walk click.
-    player.getPacketSender().sendRunStatus();
+    player.getMovementQueue().requestWalk(
+      new Location(x, y, player.getLocation().getZ()),
+      runOverride
+    );
   }
 
   private inventoryAction(packet: Extract<ReturnType<typeof decodeClientPackets>[number], { type: "inventory_action" }>): void {
@@ -1189,6 +1277,14 @@ export class ClientConnection {
       // Invalid cache-backed selections are rejected by the combat listener.
     }
     return -1;
+  }
+
+  private emitSpellCast(packet: { widgetId: number; groupId: number; childId: number; itemId?: number; buttonNum?: number; opId?: number }): boolean {
+    const spellName = this.resolveSpellName(packet.widgetId, packet.groupId, packet.childId, packet.itemId);
+    return spellName !== undefined && PluginManager.emitSpellCast({
+      player: this.player, spellName, spellWidget: packet.widgetId, spellItemId: packet.itemId ?? -1,
+      opId: packet.buttonNum ?? packet.opId ?? 1, handled: false,
+    });
   }
 
   private resolveSpellName(widgetId: number, groupId: number, childId: number, itemId?: number): string | undefined {
@@ -1301,9 +1397,23 @@ export class ClientConnection {
     this.pending = undefined;
   }
 
+  /** Drops the logged-in connection once a client that pings goes quiet (IDLE_TIMEOUT_MS). */
+  private startIdleCheck(): void {
+    if (this.closed) return;
+    this.idleCheck = setInterval(() => {
+      if (!this.sendsKeepalive || Date.now() - this.lastFrameAt < ClientConnection.IDLE_TIMEOUT_MS) return;
+      this.cleanup("idle_timeout");
+      try {
+        this.channel.close(1001, "idle timeout");
+      } catch {}
+    }, ClientConnection.IDLE_CHECK_MS);
+    this.idleCheck.unref?.();
+  }
+
   private cleanup(source: string): void {
     if (this.closed) return;
     this.closed = true;
+    if (this.idleCheck) clearInterval(this.idleCheck);
     this.releasePendingName();
     if (!this.player) return;
     // The disconnect hooks fire when the player leaves the world, which a player in

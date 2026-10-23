@@ -1,13 +1,14 @@
 /**
  * Scurrius' fight (Wiki: Scurrius, Scurrius/Strategies), timed and animated from the rsprox
  * captures (docs/scurrius.md):
- * - phase one: tail swipes in melee, sometimes a stomp that drops rubble (every 4 ticks);
+ * - phase one: tail swipes in melee, one attack in five a stomp that drops rubble, and only
+ *   stomps while his target is out of reach, walking in on them (every 4 ticks);
  * - at 80% he walks to one of the three food piles and eats there: five heals of 5 or 10 per
  *   player in the room, about every six ticks, while he throws magic and fur balls, stomps and
  *   calls six giant rats; then back to melee;
  * - at 30% he walks to the middle of the room and keeps to magic, ranged, stomps and rats (every
  *   4 ticks), and goes back to eating if he heals above 30%;
- * - the rubble: twelve tiles, one under each player, the rest anywhere on the floor, landing five
+ * - the rubble: twelve tiles, one under each player, the rest anywhere on the floor, landing nine
  *   ticks after the stomp for 15-22 (solo) or 15-24 (public);
  * - the rats: at most twelve waves; any hit from a player kills one, and rat bone weapons hit
  *   them without an attack delay.
@@ -38,9 +39,12 @@ const FEEDING_ATTACK_SPEED = 6;
 /** He keeps his place while eating and in the middle; the room is 17 tiles across. */
 const RANGED_DISTANCE = 20;
 
-/** Captured: 12 debris tiles, landing 5 ticks after the stomp. */
+/**
+ * Captured: 12 debris tiles. The rock lands 9 ticks after the stomp, on whoever stood on a tile at
+ * the end of the tick before: 68 of 93 such players were hit then, against 1 in 437 at 5 ticks.
+ */
 const ROCKFALL_TILES = 12;
-const ROCKFALL_LAND_TICKS = 5;
+const ROCKFALL_LAND_TICKS = 9;
 /** map_anim delay (client cycles) and the falling sound's delay and range, as captured. */
 const DEBRIS_GFX_DELAY = 60;
 const DEBRIS_SOUND_DELAY = 240;
@@ -59,13 +63,18 @@ const RAT_CALL_COOLDOWN_TICKS = 41;
 /** Generic engine flags: no turning back to fight on a hit, and no turning to the target. */
 const NO_RETALIATE_FLAG = "combat:no-retaliate";
 const KEEP_FACING_FLAG = "combat:keep-facing";
+/** Generic engine flag: keeps walking in on the target while attacking from range. */
+const CLOSE_IN_FLAG = "combat:close-in";
 
 /** Captured projectile: a fixed 30-120 cycle flight, so the hit lands 4 ticks after the cast. */
 const PROJECTILE = Object.freeze({ start: 30, end: 120, startHeight: 200, endHeight: 100, angle: 40, progress: 0 });
 const DISTANT_HIT_DELAY = 3;
 
-/** Captured share of each attack per phase (rsprox, 35 recordings). */
-const PHASE_ONE = Object.freeze([["melee", 7], ["stomp", 3]]);
+/**
+ * Captured share of each attack per phase (rsprox, 35 recordings). In phase one, beside his
+ * target: tail swipe 95, stomp 21 (solo instances); out of reach he stomps (46 to 11).
+ */
+const PHASE_ONE = Object.freeze([["melee", 4], ["stomp", 1]]);
 const FEEDING = Object.freeze([["magic", 4], ["ranged", 4], ["stomp", 2], ["summon", 1]]);
 const ENRAGED = Object.freeze([["magic", 2], ["ranged", 2], ["stomp", 3], ["summon", 1]]);
 
@@ -81,6 +90,7 @@ function stateOf(npc) {
   if (!state) {
     state = { phase: "combat", feeding: null, fed: false, ratWaves: 0, walking: null };
     states.set(npc, state);
+    npc.setFlag?.(CLOSE_IN_FLAG, true);
   }
   return state;
 }
@@ -114,12 +124,27 @@ function weighted(choices, allowed = () => true) {
   return pool[0][0];
 }
 
-function pickAction(state, now = core.World.getProcessCycle()) {
+function pickAction(state, now = core.World.getProcessCycle(), beside = true) {
   const canSummon = (name) => name !== "summon"
     || (state.ratWaves < RAT_WAVE_LIMIT && now - (state.lastCallAt ?? -Infinity) >= RAT_CALL_COOLDOWN_TICKS);
   if (state.phase === "feeding") return weighted(FEEDING, canSummon);
   if (state.phase === "enraged") return weighted(ENRAGED, canSummon);
-  return weighted(PHASE_ONE);
+  return beside ? weighted(PHASE_ONE) : "stomp";
+}
+
+/** Whether `target` stands within a tile of his footprint (or under him). */
+function besideTarget(npc, target) {
+  if (!target) return false;
+  const size = Math.max(1, npc.getSize?.() ?? 1);
+  const from = npc.getLocation();
+  const to = target.getLocation();
+  const dx = Math.max(from.getX() - to.getX(), 0, to.getX() - (from.getX() + size - 1));
+  const dy = Math.max(from.getY() - to.getY(), 0, to.getY() - (from.getY() + size - 1));
+  return Math.max(dx, dy) <= 1;
+}
+
+function targetOf(npc) {
+  return npc.getCombat?.().getTarget?.() ?? null;
 }
 
 function sendProjectile(npc, target, projectileId) {
@@ -217,6 +242,8 @@ function walkTo(npc, state, destination, onArrive) {
   npc.setFlag(core.NPC.WALK_THROUGH_ENTITIES_FLAG, true);
   npc.setFlag(NO_RETALIATE_FLAG, true);
   npc.removeFlag(KEEP_FACING_FLAG);
+  // He keeps his place where he arrives; only phase one and two close in again.
+  npc.removeFlag(CLOSE_IN_FLAG);
   npc.setMobileInteraction(null);
   npc.setPositionToFace(null);
   npc.getMovementQueue().reset();
@@ -323,7 +350,9 @@ function heal(npc) {
 function finishFeeding(npc, state) {
   state.feeding = null;
   npc.removeFlag(KEEP_FACING_FLAG);
-  if (state.phase === "feeding") state.phase = "combat";
+  if (state.phase !== "feeding") return;
+  state.phase = "combat";
+  npc.setFlag(CLOSE_IN_FLAG, true);
 }
 
 function goEat(npc, state) {
@@ -403,15 +432,24 @@ function defineCombatMethod() {
       super();
       this.stance = CombatType.MELEE;
       this.action = "melee";
+      this.npc = null;
     }
 
+    /** In phase one and two, melee beside his target; out of reach, the stomp works from range. */
     type() {
+      const npc = this.npc;
+      if (npc && stateOf(npc).phase === "combat") return besideTarget(npc, targetOf(npc)) ? CombatType.MELEE : CombatType.RANGED;
       return this.stance;
     }
 
-    /** Melee chases in phase one; eating and in the middle he keeps his place. */
+    /**
+     * Phase one and two: melee beside his target, so he steps round to an edge as usual; further
+     * away he stomps, closing in as he does. Eating and in the middle he keeps his place.
+     */
     attackDistance(character) {
+      this.npc = character;
       const phase = stateOf(character).phase;
+      if (phase === "combat") return besideTarget(character, targetOf(character)) ? 1 : RANGED_DISTANCE;
       return phase === "feeding" || phase === "enraged" ? RANGED_DISTANCE : 1;
     }
 
@@ -420,6 +458,7 @@ function defineCombatMethod() {
     }
 
     start(character, target) {
+      this.npc = character;
       const state = stateOf(character);
       // A heal or a hit since the last check may call for the next phase first.
       advancePhase(character);
@@ -429,7 +468,7 @@ function defineCombatMethod() {
         return;
       }
       const feeding = state.phase === "feeding";
-      this.action = pickAction(state);
+      this.action = pickAction(state, core.World.getProcessCycle(), besideTarget(character, target));
       if (this.action === "melee") {
         character.performAnimation(new Animation(ANIM.melee));
         return;

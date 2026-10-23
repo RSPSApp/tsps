@@ -172,6 +172,16 @@ test("kill counts: a named NPC's death counts and finishes the kill-count tasks 
   assert.equal(Progress.isComplete(player, kbd.tasks.find((task) => task.killCount === 25).id), false);
 });
 
+test("kill counts: saves keyed by the old cache's monster keys read by name, and save by name", () => {
+  const player = createPlayer();
+  // osrs-241_2026-09-30 keys: 32 King Black Dragon, 71 Zulrah (both moved up one with the Fractured Archive).
+  player.setAttribute(Kills.KILLS_ATTRIBUTE, { 32: 12, 71: 5 });
+  assert.equal(Kills.killCount(player, Data.monsterNamed("King Black Dragon")), 12);
+  assert.equal(Kills.killCount(player, Data.monsterNamed("Zulrah")), 5);
+  Kills.setCount(player, Data.monsterNamed("Zulrah"), 6);
+  assert.deepEqual(player.getAttribute(Kills.KILLS_ATTRIBUTE), { "King Black Dragon": 12, Zulrah: 6 });
+});
+
 test("kill counts: event-counted content and the counts plugins keep, caught up at login", () => {
   const player = createPlayer();
   fakeApi.emitCustomEvent("combat-achievements:kill", { player, monster: "Barrows" });
@@ -199,7 +209,8 @@ test("as captured: the account summary row reopens the last screen; the burger m
   assert.deepEqual(player.log.slice(0, 4), ["varbit 12858=2", "varbit 17940=1", "close 717", "open 161:16 715 0"], "a tier's button: Tasks at that tier");
   player.log.length = 0;
   Interface.click({ player, buttonId: (715 << 16) | 25, slot: 14 });
-  assert.deepEqual(player.log, ["varbit 17940=3", "close 715", "open 161:16 716 0", "events 716:23 10-16 2", "events 716:15 0-71 3"]);
+  // Captured as 0-71 with 71 bosses; the Fractured Archive (osrs-241_2026-10-20) makes it 72.
+  assert.deepEqual(player.log, ["varbit 17940=3", "close 715", "open 161:16 716 0", "events 716:23 10-16 2", "events 716:15 0-72 3"]);
   player.log.length = 0;
   Interface.click({ player, buttonId: (716 << 16) | 15, action: 23 });
   assert.deepEqual(player.log, ["varbit 12862=23", "varp 261=-1", "varbit 17940=4", "open 161:16 713 0", "events 713:27 10-16 2", "events 713:23 0-1 2", "events 713:24 0-0 2"]);
@@ -287,6 +298,21 @@ test("derived rules: \"without taking any damage\" fails on any hit taken", () =
   Fights.onHitResolved({ attacker: skotizo, target: player, hit: { getCombatType: () => "MELEE", getTotalDamage: () => 3 } });
   Fights.onNpcDeath({ npc: skotizo, killer: player, damagers: [player] });
   assert.equal(Progress.isComplete(player, named("Demon Evasion").id), false);
+});
+
+test("fights: hits on and from NPCs no rule reads are not kept (issue #748)", () => {
+  const player = fighter();
+  player.isPlayer = () => true;
+  const man = fightNpc("Man", 7);
+  const hit = { getCombatType: () => "MELEE", getTotalDamage: () => 1 };
+  for (processCycle = 20000; processCycle < 26000; processCycle += 4) {
+    Fights.onDealt({ player, target: man, hit });
+    Fights.onHitResolved({ attacker: man, target: player, hit });
+  }
+  assert.equal(Fights._test.taken.get(player), undefined, "an hour tanking men keeps no history");
+  Fights.onDealt({ player, target: fightNpc("Alchemical Hydra", 100), hit });
+  Fights.onHitResolved({ attacker: man, target: player, hit });
+  assert.equal(Fights._test.taken.get(player).length, 1, "in a fight a rule reads, every NPC's hits count");
 });
 
 test("Dagannoth Kings: all three within 9 seconds, Rex with another on one tick", () => {

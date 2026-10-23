@@ -1,6 +1,7 @@
 /**
  * Choosing a mode in game, as captured on Tutorial Island: the Ironman tutor opens the setup
- * interface (`ironman:open-setup`), a mode button asks for confirmation, and Proceed sets the mode.
+ * interface (`ironman:open-setup` { player, upgrades, onClosed? }), a mode button asks for
+ * confirmation, and Proceed sets the mode.
  * On the island any mode can be picked; afterwards Adam only allows downgrades. OSRS also has you
  * set a bank PIN there; this server has none, so the confirmation leaves it out. Adam's "Armour"
  * option hands out the mode's armour.
@@ -23,7 +24,10 @@ function rank(mode) {
   return Ironman.data.modes[mode]?.rank ?? 0;
 }
 
-/** Player -> whether the open setup interface allows upgrades (only on Tutorial Island). */
+/**
+ * Player -> the open setup: whether it allows upgrades (only on Tutorial Island), and the
+ * requester's `onClosed`, called once it closes however it closes.
+ */
 const openSetups = new WeakMap();
 
 function openSetup(request) {
@@ -32,8 +36,15 @@ function openSetup(request) {
   request.handled = true;
   const setup = setupData();
   for (const [varp, value] of Object.entries(setup.varps)) player.getPacketSender().sendConfig(Number(varp), value);
-  openSetups.set(player, request.upgrades === true);
+  openSetups.set(player, { upgrades: request.upgrades === true, onClosed: request.onClosed });
   player.getPacketSender().sendInterface(setup.interface);
+}
+
+/** Forgets the open setup and tells its requester, once, whichever way it ended. */
+function endSetup(player) {
+  const open = openSetups.get(player);
+  openSetups.delete(player);
+  open?.onClosed?.();
 }
 
 function closePopup(player) {
@@ -42,7 +53,7 @@ function closePopup(player) {
 }
 
 function choose(player, mode) {
-  const upgrades = openSetups.get(player);
+  const upgrades = openSetups.get(player)?.upgrades;
   if (upgrades === undefined) return;
   const current = Ironman.modeOf(player);
   if (mode === "group") {
@@ -74,7 +85,7 @@ function choose(player, mode) {
       Ironman.setMode(player, mode);
       player.getPacketSender().sendVarbit(Ironman.data.varbits.downgradePermitted, 1);
       player.getPacketSender().sendInterfaceRemoval();
-      openSetups.delete(player);
+      endSetup(player);
       const { DialogueChainBuilder, StatementDialogue } = core;
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, Ironman.message("modeUpdated"))));
     },
@@ -143,7 +154,7 @@ module.exports = function attach(api) {
     });
   }
   api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
-    if (interfaceId === setup.interface) openSetups.delete(player);
+    if (interfaceId === setup.interface) endSetup(player);
   });
   api.onCustomEvent("ironman:open-setup", openSetup);
   api.onCustomEvent("ironman:mode", answerMode);

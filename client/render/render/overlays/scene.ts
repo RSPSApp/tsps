@@ -346,7 +346,7 @@ export function drawSceneTileOverlays(host: WebGLOsrsRendererHost, time: number,
             return;
         }
 
-        const tileMarkersConfig = host.osrsClient.tileMarkersPlugin.getConfig();
+        const tileMarkersConfig = host.osrsClient.clientPlugins.tileMarkersConfig();
         host.syncTileMarkerOverlayConfig(tileMarkersConfig);
 
         const playerLevel = host.getPlayerBasePlane() | 0;

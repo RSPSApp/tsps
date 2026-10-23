@@ -103,7 +103,7 @@ import { ClientState } from "../../../game/ClientState";
 import { GameRenderer } from "../../../game/GameRenderer";
 import type { HitsplatEventPayload } from "../../../game/GameRenderer";
 import { OsrsRendererType, WEBGL } from "../../../game/GameRenderers";
-import { ClickMode, getMousePos } from "../../../game/InputManager";
+import { ClickMode, getMousePos, isIosLandscapeRotated } from "../../../game/InputManager";
 import { OsrsClient } from "../../../game/OsrsClient";
 import { ActorAnimationClip } from "../../../game/actor/ActorAnimation";
 import {
@@ -216,6 +216,19 @@ export function toCssEvent(host: WebGLOsrsRendererHost,
             host.cachedCanvasRect = host.canvas.getBoundingClientRect();
         }
         const rect = host.cachedCanvasRect;
+        if (isIosLandscapeRotated()) {
+            // Inverse of getMousePos's rotation remap (localX = screenY, localY = baseH -
+            // screenX), on the unrotated client size. Without it, every position this
+            // builds (the red click cross among them) came back transposed in portrait.
+            const canvas = host.canvas;
+            const baseW = canvas.clientWidth || canvas.offsetWidth || rect.height;
+            const baseH = canvas.clientHeight || canvas.offsetHeight || rect.width;
+            const localX = canvas.width > 0 ? (gx * baseW) / canvas.width : gx;
+            const localY = canvas.height > 0 ? (gy * baseH) / canvas.height : gy;
+            host.cachedCssEventResult.clientX = rect.left + baseH - localY;
+            host.cachedCssEventResult.clientY = rect.top + localX;
+            return host.cachedCssEventResult;
+        }
         const scaleX = host.canvas.width > 0 ? rect.width / host.canvas.width : 1;
         const scaleY = host.canvas.height > 0 ? rect.height / host.canvas.height : 1;
         host.cachedCssEventResult.clientX = rect.left + gx * scaleX;
@@ -226,6 +239,12 @@ export function toCssEvent(host: WebGLOsrsRendererHost,
 
 export function isMouseInUIRegion(host: WebGLOsrsRendererHost, mx: number, my: number): boolean {
 
+        // The minimap's own click target, wherever and however large the layout draws it. The
+        // fixed top-right box below assumes a 1x desktop minimap; the larger mobile one (601)
+        // let taps outside that box start a world walk that overrode the minimap walk.
+        if (host.osrsClient.getWidgetInteractionState()?.isPointerOverMinimapClickTarget(mx, my)) {
+            return true;
+        }
         // Fixed chrome surrounds the scene; window-edge resizable regions no longer apply.
         if (host.osrsClient.widgetManager.rootInterface === 548) {
             return !host.osrsClient.camera.containsScreenPoint(mx, my);

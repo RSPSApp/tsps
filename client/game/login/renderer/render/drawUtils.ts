@@ -1,7 +1,7 @@
 import type { BitmapFont } from "../../../../rs/font/BitmapFont";
 import type { IndexedSprite } from "../../../../rs/sprite/IndexedSprite";
 import type { LoginRendererHost, RenderContext } from "../host";
-import { withContentTransform } from "../layout/geometry";
+import { getTitleArtScene, withContentTransform } from "../layout/geometry";
 
 export function drawGradientRect(host: LoginRendererHost, ctx: RenderContext, x: number, y: number, width: number, height: number, startColor: number, endColor: number) {
 
@@ -33,16 +33,32 @@ export function drawSpriteWithOverlay(host: LoginRendererHost, ctx: RenderContex
 
 export function drawLogoToCtx(host: LoginRendererHost, ctx: RenderContext): void {
 
-        withContentTransform(host, ctx, (ctx) => {
+        const drawLogo = (ctx: RenderContext) => {
             const logoY = 18;
-            if (host.logoImageLoaded && host.logoImage) {
-                const logoX = host.LOGIN_BOX_CENTER - Math.floor(host.logoImage.width / 2);
-                ctx.drawImage(host.logoImage, logoX, logoY);
-            } else if (host.logoSprite) {
+            // The cache's logo sprite, as the OSRS client draws it; the bundled image only without one.
+            if (host.logoSprite) {
                 const logoX = host.LOGIN_BOX_CENTER - Math.floor(host.logoSprite.subWidth / 2);
                 drawSprite(host, ctx, host.logoSprite, logoX, logoY);
+            } else if (host.logoImageLoaded && host.logoImage) {
+                const logoX = host.LOGIN_BOX_CENTER - Math.floor(host.logoImage.width / 2);
+                ctx.drawImage(host.logoImage, logoX, logoY);
             }
-        });
+        };
+        if (!host.titleBackgroundImage || !host.titleBackgroundFromCache) {
+            withContentTransform(host, ctx, drawLogo);
+            return;
+        }
+        // The cache's art grows past the scene on large viewports: the logo is painted on it,
+        // so it grows with it, as the flames do.
+        const scene = getTitleArtScene(host);
+        ctx.save();
+        ctx.translate(scene.x, scene.y);
+        ctx.scale(scene.scale, scene.scale);
+        try {
+            drawLogo(ctx);
+        } finally {
+            ctx.restore();
+        }
     
 }
 

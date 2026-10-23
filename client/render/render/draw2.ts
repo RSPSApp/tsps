@@ -329,10 +329,10 @@ export function drawWithRoofPlaneFilter(host: WebGLOsrsRendererHost,
         const point = map ? host.getRenderCullTile() : undefined;
         let distance = map ? resolveFogRange({ renderDistance: host.getFrameRenderDistanceTiles(),
             autoFogDepth: host.autoFogDepth, autoFogDepthFactor: host.autoFogDepthFactor,
-            manualFogDepth: host.fogDepth, hd: host.osrsClient.hdPlugin?.isEnabled() }).fogEnd : 0;
+            manualFogDepth: host.fogDepth, hd: host.osrsClient.clientPlugins.hdEnabled() }).fogEnd : 0;
         // Fog is centred on the shader's player position. Free-camera culling
         // can use a different origin; pad conservatively rather than opening holes.
-        if (map && host.osrsClient.hdPlugin?.isEnabled()) distance += Math.max(
+        if (map && host.osrsClient.clientPlugins.hdEnabled()) distance += Math.max(
             Math.abs(point!.x - host.playerPosUni[0]), Math.abs(point!.y - host.playerPosUni[1]));
         const lodDistance = map ? host.getFrameLodThresholdTiles() : 0;
         const baseX = map?.getRenderBaseTileX() ?? 0, baseZ = map?.getRenderBaseTileY() ?? 0;
@@ -438,7 +438,7 @@ export function isMapWithinRenderDistance(host: WebGLOsrsRendererHost,
 
 export function resolveEffectiveRenderDistanceTiles(host: WebGLOsrsRendererHost, frameId: number): number {
 
-        const base = clamp((host.osrsClient.gpuPlugin?.settings()?.drawDistance ?? host.osrsClient.renderDistance) | 0, 25, host.osrsClient.hdPlugin?.isEnabled() ? 160 : 90);
+        const base = clamp((host.osrsClient.clientPlugins.gpuSettings()?.drawDistance ?? host.osrsClient.renderDistance) | 0, 25, host.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);
         if ((host.effectiveRenderDistanceFrame | 0) === (frameId | 0)) {
             return host.effectiveRenderDistanceTiles | 0;
         }

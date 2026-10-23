@@ -100,6 +100,9 @@ function syncTabs(player, value) {
   }
 }
 
+/** Players with step text up: game messages may show over it (chatbox script 663). */
+const textUp = new WeakSet();
+
 /** The step text in the chatbox, or a plain action text ("Your character is now attempting ..."). */
 function showText(player, title, body) {
   const text = title ? `<col=0000ff>${title}</col><br>${T.pronoun(player, body)}` : T.pronoun(player, body);
@@ -107,11 +110,13 @@ function showText(player, title, body) {
   out.sendSubInterface(interfaces.chatboxText, interfaces.text, OVERLAY_TYPE);
   out.sendVarbit(varbits.allowTextOverlap, 1);
   out.sendClientScript(scripts.text, text);
+  textUp.add(player);
 }
 
 function hideText(player) {
   sender(player).sendVarbit(varbits.allowTextOverlap, 0);
   sender(player).closeSubInterface(interfaces.chatboxText);
+  textUp.delete(player);
 }
 
 function showActionText(player, key) {
@@ -330,6 +335,13 @@ function finish(player) {
 function applyUi(player) {
   openTabs.set(player, new Set(TAB_GROUP.keys()));
   render(player, T.progress(player));
+  // A newly built chatbox shows the latest message over the step text as it loads (its first
+  // chat transmit): a login message (a plugin's greeting) would cover the step. Messages may show
+  // over it again from the next tick, once that has passed.
+  sender(player).sendVarbit(varbits.allowTextOverlap, 0);
+  T.later(1, () => {
+    if (textUp.has(player)) sender(player).sendVarbit(varbits.allowTextOverlap, 1);
+  });
 }
 
 /** Clicking the flashing tab completes the step that asks for it. */

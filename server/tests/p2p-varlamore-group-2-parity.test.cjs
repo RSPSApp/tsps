@@ -34,7 +34,7 @@ function harness(name) {
     map.set(name, current);
   }
   const api = new Proxy({ core: { ...core, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: taskManager,
-    MultiChatboxPrompt: { getPending: p => p.prompt }, ObjectManager: { register: object => objects.push(object), deregister: noop } },
+    MultiChatboxPrompt: { getPending: p => p.prompt }, ObjectManager: objectManager },
     getTaskManager: () => taskManager,
     onNpcsInteraction: (names, actions) => names.forEach(name => attach(namedNpcs, name, actions)),
     onItemAction: (name, actions) => { if (typeof name === 'function') (hooks.onItemAction ??= []).push(name); else itemActions.set(name, actions); },
@@ -1106,6 +1106,20 @@ test('DOTI backstage requires searching the real bookshelf and discussing every 
   h.emit('npc-dialogue:choice', { player: p, npcId: 13837, stepId: '4N708L', option: 'Did you know there was a hidden passage in here?' });
   assert.notEqual(p.attrs.get(key('backstage.bookshelf')), true); assert.equal(h.quest.getStage(p), 38);
   object(54726); assert.equal(p.attrs.get(key('backstage.bookshelf')), true); assert.equal(h.quest.getStage(p), 40);
+});
+
+test('DOTI backstage bookshelf is a player-scoped stage spawn, not a global object spawn', () => {
+  assert.deepEqual(require('../data/definitions/object-spawns.json'), []);
+  const { h, p } = doti(); h.quest.setStage(p, 36);
+  const shelf = h.objects.find(object => object.getId() === 54734);
+  assert.ok(shelf, 'the searchable changing bookshelf appears for this player');
+  assert.equal(shelf.getOwner(), p);
+  assert.deepEqual([shelf.getLocation().getX(), shelf.getLocation().getY(), shelf.getLocation().getZ()], [1461, 9331, 0]);
+  h.quest.setStage(p, 40);
+  assert.equal(h.objects.some(object => object.getId() === 54734), false);
+  const base = h.objects.find(object => object.getId() === 54735);
+  assert.ok(base, 'the cache bookshelf returns once the backstage clue is done');
+  assert.equal(base.getOwner(), p);
 });
 
 test('DOTI Attack uses the staged combat method and preserves actors through their scripted moves', () => {

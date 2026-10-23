@@ -38,6 +38,8 @@ module.exports = function registerFamilyCrestQuest(api) {
   const START_HOOK = "quest:family-crest:start";
   /** "Congratulations! Quest complete!" in the-crest-reassembled-talking-to-dimintheis. */
   const COMPLETE_ACTION_ID = "QH4WTh";
+  const WITCHAVEN_GOLD_ROCK_REGION_X = 42;
+  const WITCHAVEN_GOLD_ROCK_REGION_Y = 151;
 
   // Choice texts (the transcript dump gives these options no ids) and the message /
   // condition step ids that carry the stage transitions or item hand-ins.
@@ -264,6 +266,9 @@ module.exports = function registerFamilyCrestQuest(api) {
   /** Mine perfect gold from the Witchaven rock once Boot has told you where it is. */
   function handleObjectInteraction(event) {
     if (event.objectId !== ObjectIdentifiers.GOLD_ROCKS_2) return;
+    const { x, y, z } = event.location ?? {};
+    if (z !== 0 || Math.floor(x / 64) !== WITCHAVEN_GOLD_ROCK_REGION_X ||
+        Math.floor(y / 64) !== WITCHAVEN_GOLD_ROCK_REGION_Y) return;
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
     if (!option.includes("mine")) return;
     const { player } = event;

@@ -1,0 +1,34 @@
+{
+  "$comment": "Thermonuclear smoke devil (plugins/bosses/ThermonuclearSmokeDevil.plugin.js, docs/thermonuclear-smoke-devil.md). Ids are the rev 241 cache's; ticks count from the attack, as in the rsprox captures (submissions 1158 on rev 237 and 1510 on rev 224) and the OSRS Wiki (Thermonuclear smoke devil, Thermonuclear smoke devil/Strategies).",
+  "npcs": {
+    "boss": 499,
+    "smokeDevil": 498
+  },
+  "locs": {
+    "creviceOutside": 535,
+    "creviceInside": 536
+  },
+  "lair": { "minX": 2351, "maxX": 2378, "minY": 9438, "maxY": 9461 },
+  "spawnTile": [2360, 9452, 0],
+  "teleportTile": [2379, 9452, 0],
+  "outsideTile": [2379, 9452, 0],
+  "insideTile": [2376, 9452, 0],
+  "combat": {
+    "attackSpeed": 2,
+    "attackDistance": 8,
+    "maxHit": 8,
+    "hitDelayTicks": 2
+  },
+  "anims": {
+    "attack": 3847,
+    "block": 3848,
+    "death": 3849
+  },
+  "projectiles": {
+    "attack": 644,
+    "impact": 643
+  },
+  "sounds": {
+    "attack": 272
+  }
+}

@@ -6,8 +6,10 @@
  *   - every hit the player dealt: tick, combat type, melee attack type, special attack, weapon
  *   - every hit the player took, from any NPC: tick, the NPC, its combat type, the damage
  *   - the killing blow and the player's prayers when it landed
- * When the NPC dies, the rules registered for its name decide which tasks each player who fought
- * it has finished:
+ * Only NPCs with rules are tracked, and hits taken only while the player is in such a fight: every
+ * other hit in the world would otherwise cost something, and the history grew for as long as a
+ * player kept fighting anything. When the NPC dies, the rules registered for its name decide which
+ * tasks each player who fought it has finished:
  *
  *   Fights.onKill("King Black Dragon", {
  *     "Claw Clipper": (fight) => fight.prayedAtKill("PROTECT_FROM_MELEE"),
@@ -30,8 +32,10 @@ const IDLE_TICKS = 100;
 
 /** npc -> Map(player -> fight record). */
 const fights = new WeakMap();
-/** player -> [{ tick, npc, npcName, type, damage }], hits taken from NPCs. */
+/** player -> [{ tick, npc, npcName, type, damage }], hits taken from NPCs, oldest first. */
 const taken = new WeakMap();
+/** player -> the last tick they hit, or were hit by, an NPC with rules. */
+const lastFought = new WeakMap();
 /** NPC name (lower case) -> [{ task, test }]. */
 const rules = new Map();
 
@@ -75,10 +79,22 @@ function weaponId(player) {
   return id > 0 ? id : -1;
 }
 
+/** Whether a rule reads this NPC's fights. */
+function watched(npc) {
+  ensureRules();
+  return rules.has(npcName(npc).toLowerCase());
+}
+
+/** In a fight a rule may read: one touched within IDLE_TICKS, so not yet started over. */
+function engaged(player, now) {
+  return now - (lastFought.get(player) ?? -Infinity) <= IDLE_TICKS;
+}
+
 function recordFor(player, npc) {
   if (!fights.has(npc)) fights.set(npc, new Map());
   const byPlayer = fights.get(npc);
   const now = tick();
+  lastFought.set(player, now);
   const record = byPlayer.get(player);
   if (!record || now - record.lastTick > IDLE_TICKS) {
     byPlayer.set(player, { startTick: now, lastTick: now, dealt: [], killingBlow: null });
@@ -90,7 +106,7 @@ function recordFor(player, npc) {
 
 /** onPlayerDealtDamage: a hit the player has queued on its target. */
 function onDealt({ player, target, hit }) {
-  if (!isNpc(target) || !player) return;
+  if (!isNpc(target) || !player || !watched(target)) return;
   const fight = recordFor(player, target);
   const fightType = player.getFightType?.();
   fight.dealt.push({
@@ -118,16 +134,24 @@ function onHitResolved({ attacker, target, hit }) {
     const damage = Number(hit?.getTotalDamage?.() ?? 0);
     if (damage <= 0) return;
     const now = tick();
-    const log = (taken.get(target) ?? []).filter((entry) => now - entry.tick <= TAKEN_HISTORY_TICKS);
+    if (watched(attacker)) recordFor(target, attacker);
+    // No fight a rule reads is open, so no future one starts before now: nothing here is needed.
+    if (!engaged(target, now)) {
+      taken.delete(target);
+      return;
+    }
+    const log = taken.get(target) ?? [];
+    let stale = 0;
+    while (stale < log.length && now - log[stale].tick > TAKEN_HISTORY_TICKS) stale++;
+    if (stale > 0) log.splice(0, stale);
     const type = combatTypeName(hit);
     const prayer = core.PrayerHandler[PROTECTION[type]];
     const onPrayer = prayer !== undefined && core.PrayerHandler.isActivated(target, prayer);
     log.push({ tick: now, npc: attacker, npcName: npcName(attacker), type, damage, onPrayer });
     taken.set(target, log);
-    recordFor(target, attacker);
     return;
   }
-  if (isPlayer(attacker) && isNpc(target) && target.getHitpoints?.() <= 0) {
+  if (isPlayer(attacker) && isNpc(target) && target.getHitpoints?.() <= 0 && watched(target)) {
     const fight = recordFor(attacker, target);
     fight.killingBlow = {
       tick: tick(),
@@ -223,8 +247,10 @@ function onNpcDeath(event) {
   if (npc?.getMaxHitpoints?.() === 1) return;
   const list = rules.get(npcName(npc).toLowerCase());
   if (!byPlayer || !list?.length) return;
+  const now = tick();
   for (const [player, record] of byPlayer) {
-    if (player.isRegistered?.() === false) continue;
+    // Left alone past IDLE_TICKS the fight was over (recordFor would have started it over).
+    if (player.isRegistered?.() === false || now - record.lastTick > IDLE_TICKS) continue;
     const fight = summary(player, npc, record, event);
     for (const { task, test } of list) {
       if (Progress.isComplete(player, task.id)) continue;
@@ -247,4 +273,4 @@ module.exports = function attachFights(api) {
   api.onCombatHitResolved(onHitResolved);
 };
 
-Object.assign(module.exports, { onKill, onDealt, onHitResolved, onNpcDeath, summary, rules });
+Object.assign(module.exports, { onKill, onDealt, onHitResolved, onNpcDeath, summary, rules, _test: { taken } });

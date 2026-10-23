@@ -42,6 +42,7 @@ const SALVE_AMULETS = new Map([
 ]);
 
 let BonusManager;
+let pluginApi;
 
 function component(childId) {
   return (EQUIPMENT_STATS_INTERFACE_ID << 16) | childId;
@@ -57,10 +58,27 @@ function formatMagicDamage(value) {
   return `${number < 0 ? "" : "+"}${number.toFixed(1)}%`;
 }
 
+function formatPercent(value) {
+  const percent = Math.round((Number(value) || 0) * 10) / 10;
+  return Number.isInteger(percent) ? `${percent}` : percent.toFixed(1);
+}
+
 function formatTargetBonus(bonus) {
-  const percent = Math.trunc(bonus?.percent || 0);
-  if (percent === 0) return "+0%";
-  return `+${percent}% (${bonus.meleeOnly ? "melee" : "all styles"})`;
+  if (!bonus) return "+0%";
+  const status = bonus.active === undefined ? "" : bonus.active ? ", on task" : ", off task";
+  if (bonus.imbued) {
+    return `+${formatPercent(100 / 6)}% melee, +15% ranged/magic${status}`;
+  }
+  return `+${formatPercent(bonus.percent)}% (${bonus.meleeOnly ? "melee" : "all styles"}${status})`;
+}
+
+/** Asks Slayer whether the worn headwear's target is on the assignment. */
+function slayerOnTask(player) {
+  const target = player.getCombat?.()?.getTarget?.();
+  if (!target?.isNpc?.() || typeof target.getAsNpc !== "function") return false;
+  const request = { player, npc: target.getAsNpc(), onTask: false };
+  pluginApi?.emitCustomEvent?.("slayer:on-task", request);
+  return request.onTask === true;
 }
 
 function getTargetBonuses(player) {
@@ -71,26 +89,46 @@ function getTargetBonuses(player) {
     ? head.getDefinition().getName().toLowerCase()
     : "";
   const slayerItem = headName.includes("slayer helmet") || headName.includes("black mask");
+  const imbued = headName.includes("(i)");
 
   return {
     undead: SALVE_AMULETS.get(amuletId),
     slayer: slayerItem
-      ? { percent: 100 / 6, meleeOnly: !headName.includes("(i)") }
+      ? { percent: 100 / 6, meleeOnly: !imbued, imbued, active: slayerOnTask(player) }
       : undefined,
   };
 }
 
-function getWeight(player) {
+/** Cache weights are grams; the interface shows kilograms. */
+function cacheWeightKg(item) {
+  return (Number(item.getDefinition().getWeight()) || 0) / 1000;
+}
+
+function getWeight(player, slotWeights = {}) {
   let weight = 0;
-  for (const item of [
-    ...player.getInventory().getItems(),
-    ...player.getEquipment().getItems(),
-  ]) {
+  const equipment = player.getEquipment().getItems();
+  for (let slot = 0; slot < equipment.length; slot++) {
+    const item = equipment[slot];
     if (item?.getId?.() > 0 && item.getAmount?.() > 0) {
-      weight += Number(item.getDefinition().getWeight()) || 0;
+      weight += Number.isFinite(slotWeights[slot]) ? slotWeights[slot] : cacheWeightKg(item);
+    }
+  }
+  for (const item of player.getInventory().getItems()) {
+    if (item?.getId?.() > 0 && item.getAmount?.() > 0) {
+      weight += cacheWeightKg(item);
     }
   }
   return weight;
+}
+
+/** Set effects other plugins expose for the stats panel (and the graceful weight override). */
+function describeEffects(player) {
+  const request = { player, lines: [], slotWeights: {} };
+  pluginApi?.emitCustomEvent?.("equipment:effects", request);
+  request.lines = request.lines.filter(
+    (line) => typeof line === "string" && line.trim().length > 0,
+  );
+  return request;
 }
 
 function render(player) {
@@ -117,9 +155,17 @@ function render(player) {
   const fallbackSpeed = typeof weapon?.getSpeed === "function" ? weapon.getSpeed() : 4;
   const baseSpeed = WeaponProfiles.attackSpeed(player, fallbackSpeed);
   const actualSpeed = player.getBaseAttackSpeed();
-  sender.sendString(`Base: ${(baseSpeed * 0.6).toFixed(1)}s`, component(53));
-  sender.sendString(`Actual: ${(actualSpeed * 0.6).toFixed(1)}s`, component(54));
-  sender.sendString(`${getWeight(player).toFixed(1)} kg`, component(51));
+  sender.sendString(`Base: ${(baseSpeed * 0.6).toFixed(1)}s`, component(52));
+  sender.sendString(`Actual: ${(actualSpeed * 0.6).toFixed(1)}s`, component(53));
+
+  const effects = describeEffects(player);
+  sender.sendString(`${getWeight(player, effects.slotWeights).toFixed(1)} kg`, component(50));
+}
+
+function onEquipmentChanged({ player }) {
+  if (player?.getInterfaceId?.() === EQUIPMENT_STATS_INTERFACE_ID) {
+    update(player);
+  }
 }
 
 function update(player) {
@@ -161,7 +207,9 @@ function handleItemAction({ player, buttonId, action }) {
 
 module.exports = {
   name: "EquipmentStats",
+  _test: { formatTargetBonus, getTargetBonuses, getWeight, describeEffects },
   register(api) {
+    pluginApi = api;
     BonusManager = api.getBonusManager();
     api.onInterfaceActionButton(OPEN_EQUIPMENT_STATS_BUTTON, ({ player }) => open(player));
     api.onInterfaceActionButton([...EQUIPMENT_SLOT_BY_COMPONENT.keys()], handleItemAction);
@@ -170,5 +218,6 @@ module.exports = {
         update(player);
       }
     });
+    api.onCustomEvent?.("equipment:changed", onEquipmentChanged);
   },
 };

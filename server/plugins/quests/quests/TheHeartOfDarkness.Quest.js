@@ -237,7 +237,10 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     if (stage(player) > 0 || isQuestComplete(player, TWILIGHTS_PROMISE_KEY)) sender.sendVarbit(ITZLA_VIS_VARBIT, override ?? itzlaVis(player));
     const bits = recruitBits(player);
     RECRUIT_VARBITS.forEach((varbit, index) => sender.sendVarbit(varbit, (bits >> index) & 1));
-    if (stage(player) >= S.BANISHED) sender.sendVarbit(SERVIUS_PALACE_VARBIT, quest.isComplete(player) ? 0 : 1);
+    // Servius stays visible at the palace after this quest so The Final Dawn can
+    // offer its start from the cache-transformed 13694/14377 npc. The old
+    // completion value 0 hid the only Talk-to variant (start-probe-4).
+    if (stage(player) >= S.BANISHED) sender.sendVarbit(SERVIUS_PALACE_VARBIT, 1);
     units.tower?.syncVarbits(player);
     units.ruins?.syncVarbits(player);
   }

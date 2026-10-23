@@ -23,6 +23,11 @@ export class GraphicsDefaults extends Type {
      * follows the mouse, then the yellow one shown where a heading was set.
      */
     headingIndicatorModels: [number, number] = [-1, -1];
+    /**
+     * The login screen's flame palettes (opcode 3): the base palette, then the two it flashes to,
+     * each five colours the palette runs through (classic: black, red, yellow, white, white).
+     */
+    flamePalettes: number[][] | undefined;
 
     static load(cacheInfo: CacheInfo, fileSystem: CacheSystem): GraphicsDefaults {
         if (
@@ -90,8 +95,12 @@ export class GraphicsDefaults extends Type {
                 if (opcode === 6) buffer.readBigSmart();
                 break;
             case 3:
-                // Three flame palettes of five colours.
-                for (let i = 0; i < 15; i++) buffer.readMedium();
+                this.flamePalettes = [];
+                for (let palette = 0; palette < 3; palette++) {
+                    const colours: number[] = [];
+                    for (let i = 0; i < 5; i++) colours.push(buffer.readMedium());
+                    this.flamePalettes.push(colours);
+                }
                 break;
             case 4:
                 this.headingIndicatorModels = [buffer.readBigSmart(), buffer.readBigSmart()];

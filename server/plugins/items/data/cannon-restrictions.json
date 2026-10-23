@@ -4,7 +4,31 @@
  "restrictions": [
   {
    "name": "Abyssal Area",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3008,
+       4864
+      ],
+      [
+       3072,
+       4864
+      ],
+      [
+       3072,
+       4928
+      ],
+      [
+       3008,
+       4928
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "https://github.com/osrs-wiki/osrs-wiki-maps/blob/f6fe9b2f5483625aad1de98d45e15fa08b124440/scripts/user_world_defs.json: map10007 exact source region47,76 (cross-checked RuneLite gpu/regions/regions.txt)"
   },
   {
    "name": "Abyssal Nexus",
@@ -82,15 +106,108 @@
   },
   {
    "name": "Ancient Guthixian Temple",
-   "message": "A strange magical force won't let you set up a cannon here"
+   "message": "A strange magical force won't let you set up a cannon here",
+   "areas": [
+    {
+     "points": [
+      [
+       4032,
+       4352
+      ],
+      [
+       4160,
+       4352
+      ],
+      [
+       4160,
+       4544
+      ],
+      [
+       4032,
+       4544
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/quests/wgs/Temple.WhileGuthixSleeps.js: temple PrivateArea Boundary"
   },
   {
    "name": "Ancient Prison",
-   "message": "An ancient power won't let you set up a cannon here."
+   "message": "An ancient power won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2840,
+       5180
+      ],
+      [
+       2946,
+       5180
+      ],
+      [
+       2946,
+       5236
+      ],
+      [
+       2840,
+       5236
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/bosses/data/nex.json: prison.box"
   },
   {
    "name": "Barbarian Assault",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1856,
+       5376
+      ],
+      [
+       1920,
+       5376
+      ],
+      [
+       1920,
+       5504
+      ],
+      [
+       1856,
+       5504
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       2560,
+       5248
+      ],
+      [
+       2624,
+       5248
+      ],
+      [
+       2624,
+       5312
+      ],
+      [
+       2560,
+       5312
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "https://github.com/osrs-wiki/osrs-wiki-maps/blob/f6fe9b2f5483625aad1de98d45e15fa08b124440/scripts/user_world_defs.json: maps10019 and10020 source regions29,84+29,85 and40,82; displaypadding excluded"
   },
   {
    "name": "Black Knights' Fortress",
@@ -121,15 +238,87 @@
   },
   {
    "name": "Brutus arena",
-   "message": "It's far too muddy for you to set up a cannon here."
+   "message": "It's far too muddy for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3240,
+       3265
+      ],
+      [
+       3269,
+       3265
+      ],
+      [
+       3269,
+       3302
+      ],
+      [
+       3240,
+       3302
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/quests/quests/IdesOfMilk.Quest.js: BullArena PrivateArea Boundary"
   },
   {
    "name": "Bryophyta's lair",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3204,
+       9922
+      ],
+      [
+       3239,
+       9922
+      ],
+      [
+       3239,
+       9948
+      ],
+      [
+       3204,
+       9948
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/bosses/data/giant-boss-lairs.json: cache map and rsprox lair bounds"
   },
   {
    "name": "Callisto's Den",
-   "message": "It doesn't seem safe to set up a cannon here."
+   "message": "It doesn't seem safe to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3328,
+       10304
+      ],
+      [
+       3392,
+       10304
+      ],
+      [
+       3392,
+       10368
+      ],
+      [
+       3328,
+       10368
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/bosses/data/wilderness-bosses.json: cache script 384 lair map-square bounds"
   },
   {
    "name": "Castle Wars",
@@ -335,7 +524,8 @@
   },
   {
    "name": "Clan Hall",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "source": "https://oldschool.runescape.wiki/w/Clan_Hall?action=raw: instance, covered by restrictionAt privateArea guard"
   },
   {
    "name": "Dwarven Mine",
@@ -457,19 +647,114 @@
   },
   {
    "name": "Feldip Hills jungle hunter area",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2500,
+       2942
+      ],
+      [
+       2616,
+       2942
+      ],
+      [
+       2616,
+       2880
+      ],
+      [
+       2500,
+       2880
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "https://oldschool.runescape.wiki/w/Feldip_Hunter_area?action=raw: highlightedarea map polygon"
   },
   {
    "name": "Fight Arena interior",
-   "message": "The dwarves won't be happy if you set up a cannon here."
+   "message": "The dwarves won't be happy if you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2583,
+       3152
+      ],
+      [
+       2607,
+       3152
+      ],
+      [
+       2607,
+       3171
+      ],
+      [
+       2583,
+       3171
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Active cache collision: closed 382-tile component from FightArena.Quest.js ARENA_TILE2603,3156; bounds2583..2606,3152..3170, no search clipping"
   },
   {
    "name": "Forthos Dungeon",
-   "message": "A mysterious presence won't let you set up a cannon here."
+   "message": "A mysterious presence won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1792,
+       9856
+      ],
+      [
+       1856,
+       9856
+      ],
+      [
+       1856,
+       9984
+      ],
+      [
+       1792,
+       9984
+      ]
+     ]
+    }
+   ],
+   "source": "Active cache world-map index19/details0 area32 kourend_underground, WorldMapSection2 source bounds; matches captured Forthos entrances and Sarachnis lair"
   },
   {
    "name": "Fossil Island bank chest island",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3763,
+       3897
+      ],
+      [
+       3768,
+       3897
+      ],
+      [
+       3768,
+       3902
+      ],
+      [
+       3763,
+       3902
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Active terrain region14908: closed23-tile land/shore component from rowboat arrival3765,3899, excludes full water overlay shape0; corroborates Wiki Bank_Chest-wreck3767,3899. Bounds are physical island, not Museum Camp bank or padded map view."
   },
   {
    "name": "Fremennik Slayer Dungeon",
@@ -693,7 +978,51 @@
   },
   {
    "name": "Hair of the Dog",
-   "message": "Roavar won't be happy if you set up a cannon here."
+   "message": "Roavar won't be happy if you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3488,
+       3478
+      ],
+      [
+       3488,
+       3468
+      ],
+      [
+       3500,
+       3468
+      ],
+      [
+       3503,
+       3471
+      ],
+      [
+       3505,
+       3471
+      ],
+      [
+       3505,
+       3480
+      ],
+      [
+       3491,
+       3480
+      ],
+      [
+       3491,
+       3479
+      ],
+      [
+       3490,
+       3478
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "https://oldschool.runescape.wiki/w/Hair_of_the_Dog?action=raw: map polygon"
   },
   {
    "name": "Hespori",
@@ -835,7 +1164,73 @@
   },
   {
    "name": "Jiggig Dungeon",
-   "message": "The ground is too soft for you to set up a cannon here."
+   "message": "The ground is too soft for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2432,
+       9344
+      ],
+      [
+       2496,
+       9344
+      ],
+      [
+       2496,
+       9472
+      ],
+      [
+       2432,
+       9472
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       2432,
+       9344
+      ],
+      [
+       2496,
+       9344
+      ],
+      [
+       2496,
+       9472
+      ],
+      [
+       2432,
+       9472
+      ]
+     ],
+     "z": 1
+    },
+    {
+     "points": [
+      [
+       2432,
+       9344
+      ],
+      [
+       2496,
+       9344
+      ],
+      [
+       2496,
+       9472
+      ],
+      [
+       2432,
+       9472
+      ]
+     ],
+     "z": 2
+    }
+   ],
+   "source": "https://github.com/osrs-wiki/osrs-wiki-maps/blob/f6fe9b2f5483625aad1de98d45e15fa08b124440/scripts/user_world_defs.json: map10084 exact source regions38,146+38,147 planes0-2; matches ZogreFleshEaters quest stair destinations"
   },
   {
    "name": "Jormungand's Prison basilisk areas",
@@ -843,7 +1238,73 @@
   },
   {
    "name": "Karuulm Slayer Dungeon",
-   "message": "The electricity bursting through this part of the cavern would render the cannon useless."
+   "message": "The electricity bursting through this part of the cavern would render the cannon useless.",
+   "areas": [
+    {
+     "points": [
+      [
+       1251,
+       10147
+      ],
+      [
+       1277,
+       10147
+      ],
+      [
+       1277,
+       10171
+      ],
+      [
+       1251,
+       10171
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       1256,
+       10175
+      ],
+      [
+       1302,
+       10175
+      ],
+      [
+       1302,
+       10207
+      ],
+      [
+       1256,
+       10207
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       1356,
+       10257
+      ],
+      [
+       1378,
+       10257
+      ],
+      [
+       1378,
+       10279
+      ],
+      [
+       1356,
+       10279
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Active cache closed collision components: normal wyrms299 tiles, task wyrms603 tiles, Alchemical Hydra472 tiles. No component reaches search edge; no disconnected 3x3 cannon centre exists inside these bounds. Normal hydra/drake rooms excluded."
   },
   {
    "name": "Killerwatt Plane",
@@ -875,7 +1336,30 @@
   },
   {
    "name": "Kraken Cove",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2240,
+       9984
+      ],
+      [
+       2301,
+       9984
+      ],
+      [
+       2301,
+       10049
+      ],
+      [
+       2240,
+       10049
+      ]
+     ]
+    }
+   ],
+   "source": "server/plugins/skills/data/slayer-areas.json: Kraken Cove, Wiki and spawn checked"
   },
   {
    "name": "Lair of Tarn Razorlor",
@@ -906,7 +1390,31 @@
   },
   {
    "name": "Lizardman Caves",
-   "message": "The ground is too marshy here."
+   "message": "The ground is too marshy here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1280,
+       9920
+      ],
+      [
+       1344,
+       9920
+      ],
+      [
+       1344,
+       9984
+      ],
+      [
+       1280,
+       9984
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "Active cache world-map index19/details0 area33 kebos_underground, source chunk sections1280..1343,9920..9935 and1280..1343,9936..9983; matches Wiki pin and cache shaman spawns"
   },
   {
    "name": "Lizardman Temple",
@@ -937,11 +1445,36 @@
   },
   {
    "name": "Mogre Camp",
-   "message": "It's just a little too damp for you to set up a cannon here."
+   "message": "It's just a little too damp for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2938,
+       9470
+      ],
+      [
+       3003,
+       9470
+      ],
+      [
+       3003,
+       9541
+      ],
+      [
+       2938,
+       9541
+      ]
+     ],
+     "z": 1
+    }
+   ],
+   "source": "server/plugins/quests/quests/RecipeForDisaster.Quest.js: UNDERWATER_ZONE"
   },
   {
    "name": "Nightmare Zone",
-   "message": "Dominic won't be happy if you set up a cannon here."
+   "message": "Dominic won't be happy if you set up a cannon here.",
+   "source": "https://oldschool.runescape.wiki/w/Nightmare_Zone?action=raw: combat dreams are instanced, covered by privateArea guard"
   },
   {
    "name": "Ourania Cave bank area",
@@ -1004,7 +1537,8 @@
   },
   {
    "name": "Realm of Memories",
-   "message": "The archaic atmosphere won't let you set up a cannon here"
+   "message": "The archaic atmosphere won't let you set up a cannon here",
+   "source": "https://oldschool.runescape.wiki/w/Realm_of_Memories?action=raw: Gone since Cow Boss and Skill Guide & Level-Up Changes; historical area, no active accessible content here"
   },
   {
    "name": "Red chinchompa hunting ground",
@@ -1064,7 +1598,30 @@
   },
   {
    "name": "Ruins of Tapoyauik",
-   "message": "An ancient magical force won't let you set up a cannon here."
+   "message": "An ancient magical force won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1600,
+       9600
+      ],
+      [
+       1665,
+       9600
+      ],
+      [
+       1665,
+       9665
+      ],
+      [
+       1600,
+       9665
+      ]
+     ]
+    }
+   ],
+   "source": "server/plugins/skills/data/slayer-areas.json: Tapoyauik (Wiki and spawn checked)"
   },
   {
    "name": "Sailing boats",
@@ -1072,15 +1629,192 @@
   },
   {
    "name": "Scabaras Dungeon",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3406,
+       9220
+      ],
+      [
+       3440,
+       9220
+      ],
+      [
+       3440,
+       9276
+      ],
+      [
+       3406,
+       9276
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       3368,
+       9244
+      ],
+      [
+       3390,
+       9244
+      ],
+      [
+       3390,
+       9253
+      ],
+      [
+       3368,
+       9253
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       3390,
+       9243
+      ],
+      [
+       3406,
+       9243
+      ],
+      [
+       3406,
+       9254
+      ],
+      [
+       3390,
+       9254
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       3433,
+       9243
+      ],
+      [
+       3446,
+       9243
+      ],
+      [
+       3446,
+       9254
+      ],
+      [
+       3433,
+       9254
+      ]
+     ],
+     "z": 2
+    },
+    {
+     "points": [
+      [
+       3421,
+       9247
+      ],
+      [
+       3433,
+       9247
+      ],
+      [
+       3433,
+       9250
+      ],
+      [
+       3421,
+       9250
+      ]
+     ],
+     "z": 2
+    },
+    {
+     "points": [
+      [
+       3407,
+       9244
+      ],
+      [
+       3421,
+       9244
+      ],
+      [
+       3421,
+       9253
+      ],
+      [
+       3407,
+       9253
+      ]
+     ],
+     "z": 2
+    }
+   ],
+   "source": "Active cache closed collision components of lower rooms578/102/90 tiles and upper rooms73/34/116 tiles; seeds from BeneathCursedSands quest entrance, Mehhar, Champion arena and cache Locust rider spawns. No search-edge clipping."
   },
   {
    "name": "Scurrius' Lair",
-   "message": "It's far too damp for you to set up a cannon here."
+   "message": "It's far too damp for you to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3289,
+       9858
+      ],
+      [
+       3309,
+       9858
+      ],
+      [
+       3309,
+       9878
+      ],
+      [
+       3289,
+       9878
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/bosses/scurrius/Common.Scurrius.js: LAIR"
   },
   {
    "name": "Sorceress's Garden",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2880,
+       5440
+      ],
+      [
+       2944,
+       5440
+      ],
+      [
+       2944,
+       5504
+      ],
+      [
+       2880,
+       5504
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/minigames/sorceressgarden/Gardens.SorceresssGarden.js: isolated cache map square containing all four flood-filled mazes and central garden"
   },
   {
    "name": "Mort'ton and Shades of Mort'ton",
@@ -1088,11 +1822,59 @@
   },
   {
    "name": "Shellbane Gryphon Cave",
-   "message": "The ground is too unstable to set up a cannon here."
+   "message": "The ground is too unstable to set up a cannon here.",
+   "source": "Active cache closed275-tile cave collision component from Wiki map pin3179,8876; no search-edge clipping. Actual boss instance also covered by privateArea guard.",
+   "areas": [
+    {
+     "points": [
+      [
+       3167,
+       8865
+      ],
+      [
+       3191,
+       8865
+      ],
+      [
+       3191,
+       8883
+      ],
+      [
+       3167,
+       8883
+      ]
+     ],
+     "z": 0
+    }
+   ]
   },
   {
    "name": "Silk Chasm",
-   "message": "It doesn't seem safe to set up a cannon here."
+   "message": "It doesn't seem safe to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3392,
+       10176
+      ],
+      [
+       3456,
+       10176
+      ],
+      [
+       3456,
+       10240
+      ],
+      [
+       3392,
+       10240
+      ]
+     ],
+     "z": 2
+    }
+   ],
+   "source": "server/plugins/bosses/data/wilderness-bosses.json: cache script 384 lair map-square bounds"
   },
   {
    "name": "Slayer Tower",
@@ -1363,6 +2145,33 @@
    "message": "Dusty Aliv won't be happy if you set up a cannon here."
   },
   {
+   "name": "Smoke Devil Dungeon boss room",
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2351,
+       9438
+      ],
+      [
+       2378,
+       9438
+      ],
+      [
+       2378,
+       9461
+      ],
+      [
+       2351,
+       9461
+      ]
+     ]
+    }
+   ],
+   "source": "OSRS Wiki (Thermonuclear smoke devil: a cannon cannot be used inside the boss room); outline from the boss room polygon extremes"
+  },
+  {
    "name": "Theatre of Blood",
    "message": "The vampyres won't be happy if you set up a cannon here."
   },
@@ -1372,11 +2181,85 @@
   },
   {
    "name": "Tonali Cavern",
-   "message": "An ancient magical force won't let you set up a cannon here."
+   "message": "An ancient magical force won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1280,
+       9344
+      ],
+      [
+       1345,
+       9344
+      ],
+      [
+       1345,
+       9473
+      ],
+      [
+       1280,
+       9473
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/skills/data/slayer-areas.json: Crypt of Tonali, corroborated Wiki Tonali Cavern map pin1311,9382"
   },
   {
    "name": "Tower of Magic",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       1568,
+       3804
+      ],
+      [
+       1601,
+       3804
+      ],
+      [
+       1601,
+       3841
+      ],
+      [
+       1568,
+       3841
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       1568,
+       3804
+      ],
+      [
+       1601,
+       3804
+      ],
+      [
+       1601,
+       3841
+      ],
+      [
+       1568,
+       3841
+      ]
+     ],
+     "z": 1
+    }
+   ],
+   "quest": {
+    "key": "the_ascent_of_arceuus",
+    "minStage": 1,
+    "maxStage": 13
+   },
+   "source": "server/plugins/quests/quests/AscentOfArceuus.Quest.js: TOWER_ZONE; STAGE_STARTED1 through before STAGE_COMPLETE14, queried through quest:get-stage"
   },
   {
    "name": "Mor Ul Rek, TzHaar Fight Cave, TzHaar Fight Pit",
@@ -1619,23 +2502,164 @@
   },
   {
    "name": "Ungael",
-   "message": "The intense cold threatens to crack the metal of your cannon. You probably shouldn't put it down here."
+   "message": "The intense cold threatens to crack the metal of your cannon. You probably shouldn't put it down here.",
+   "areas": [
+    {
+     "points": [
+      [
+       2258,
+       4054
+      ],
+      [
+       2287,
+       4054
+      ],
+      [
+       2287,
+       4079
+      ],
+      [
+       2258,
+       4079
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/bosses/vorkath/Area.Vorkath.js: CRATER (Vorkath area)"
   },
   {
    "name": "Uzer Mastaba",
-   "message": "An ancient magical force won't let you set up a cannon here."
+   "message": "An ancient magical force won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3842,
+       4547
+      ],
+      [
+       3901,
+       4547
+      ],
+      [
+       3901,
+       4604
+      ],
+      [
+       3842,
+       4604
+      ]
+     ],
+     "z": 0
+    },
+    {
+     "points": [
+      [
+       3719,
+       4674
+      ],
+      [
+       3901,
+       4674
+      ],
+      [
+       3901,
+       4733
+      ],
+      [
+       3719,
+       4733
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/quests/quests/CurseOfArrav.Quest.js: MASTABA_ZONE and LOWER_TOMB_ZONE"
   },
   {
    "name": "Vanstrom Klause",
-   "message": "You can't set up a cannon here."
+   "message": "You can't set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3560,
+       3348
+      ],
+      [
+       3585,
+       3348
+      ],
+      [
+       3585,
+       3372
+      ],
+      [
+       3560,
+       3372
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/quests/quests/SinsOfTheFather.Quest.js: VanstromArena Boundary"
   },
   {
    "name": "Vet'ion's Rest",
-   "message": "It doesn't seem safe to set up a cannon here."
+   "message": "It doesn't seem safe to set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3264,
+       10176
+      ],
+      [
+       3328,
+       10176
+      ],
+      [
+       3328,
+       10240
+      ],
+      [
+       3264,
+       10240
+      ]
+     ],
+     "z": 1
+    }
+   ],
+   "source": "server/plugins/bosses/data/wilderness-bosses.json: cache script 384 lair map-square bounds"
   },
   {
    "name": "Water mill cellar",
-   "message": "It is too damp for the cannon to function here."
+   "message": "It is too damp for the cannon to function here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3200,
+       9678
+      ],
+      [
+       3251,
+       9678
+      ],
+      [
+       3251,
+       9716
+      ],
+      [
+       3200,
+       9716
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/quests/quests/DeathToTheDorgeshuun.Quest.js: STAGE_MILL interaction zone, Wiki map pin confirms location"
   },
   {
    "name": "Warriors' Guild",
@@ -2225,7 +3249,31 @@
   },
   {
    "name": "Zemouregal's Base",
-   "message": "A strange magical force won't let you set up a cannon here."
+   "message": "A strange magical force won't let you set up a cannon here.",
+   "areas": [
+    {
+     "points": [
+      [
+       3490,
+       4530
+      ],
+      [
+       3621,
+       4530
+      ],
+      [
+       3621,
+       4631
+      ],
+      [
+       3490,
+       4631
+      ]
+     ],
+     "z": 0
+    }
+   ],
+   "source": "server/plugins/quests/quests/DefenderOfVarrock.Quest.js: BASE_ZONE, Wiki map pin confirms location"
   },
   {
    "name": "Zulrah's Shrine",

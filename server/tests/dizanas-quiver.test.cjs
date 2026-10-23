@@ -36,10 +36,23 @@ function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = nu
     getAmount: (id) => carried.get(id) ?? 0,
     getFreeSlots: () => 27,
     adds(id, amount) { carried.set(id, (carried.get(id) ?? 0) + amount); return inventory; },
+    add(item) { carried.set(item.getId(), (carried.get(item.getId()) ?? 0) + item.getAmount()); return inventory; },
+    deleteNumber(id, amount) {
+      const left = (carried.get(id) ?? 0) - amount;
+      if (left > 0) carried.set(id, left); else carried.delete(id);
+    },
+    getItems: () => [...carried].map(([id, amount]) => new Item(id, amount)),
     refreshItems() {},
   };
+  const sentStrings = [];
+  const sentItems = [];
+  let interfaceId = -1;
+  const location = { getX: () => 3000, getY: () => 3500 };
   const player = {
-    worn, varps, messages, carried,
+    worn, varps, messages, carried, sentStrings, sentItems,
+    getInterfaceId: () => interfaceId,
+    setInterfaceId: (id) => { interfaceId = id; },
+    getLocation: () => location,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getEquipment: () => equipment,
@@ -48,6 +61,10 @@ function fakePlayer({ cape = I.DIZANAS_QUIVER, weapon = I.TWISTED_BOW, ammo = nu
     getPacketSender() {
       const sender = {
         sendConfig: (id, value) => { varps.set(id, value); return sender; },
+        sendSubInterface: (target, group) => { interfaceId = group; return sender; },
+        sendString: (text, uid) => { sentStrings.push([uid, text]); return sender; },
+        sendItemOnInterfaces: (uid, itemId, amount) => { sentItems.push([uid, itemId, amount]); return sender; },
+        sendItemOnInterface: (uid, itemId, slot, amount) => { sentItems.push([uid, itemId, amount]); return sender; },
       };
       return sender;
     },
@@ -69,6 +86,8 @@ function rangedStrength(player) {
 }
 
 let loginHandlers = [];
+let shouldKeepHandlers = [];
+let deathDropHandlers = [];
 
 before(async () => {
   await CachePipeline.initialize();
@@ -76,6 +95,10 @@ before(async () => {
   const api = PluginManager.createApi('DizanasQuiver');
   const onPlayerLogin = api.onPlayerLogin;
   api.onPlayerLogin = (handler) => { loginHandlers.push(handler); return onPlayerLogin?.(handler); };
+  const onShouldKeepItemOnDeath = api.onShouldKeepItemOnDeath;
+  api.onShouldKeepItemOnDeath = (handler) => { shouldKeepHandlers.push(handler); return onShouldKeepItemOnDeath?.(handler); };
+  const onPlayerDeathItemDrop = api.onPlayerDeathItemDrop;
+  api.onPlayerDeathItemDrop = (handler) => { deathDropHandlers.push(handler); return onPlayerDeathItemDrop?.(handler); };
   Quiver.register(api);
 });
 
@@ -190,3 +213,192 @@ test('shots use up the quiver: 20% break, the rest drop, and it runs out', () =>
     core.ItemOnGroundManager.registerLocation = registerLocation;
   }
 });
+
+test("every quiver stage is a cape with the Wiki's +18 ranged attack and +3 ranged strength", () => {
+  for (const id of [I.DIZANAS_QUIVER_UNCHARGED_, I.DIZANAS_QUIVER, I.BLESSED_DIZANAS_QUIVER]) {
+    const definition = core.ItemDefinition.forId(id);
+    assert.equal(definition.getEquipmentType().getSlot(), Equipment.CAPE_SLOT, `item ${id}`);
+    assert.equal(definition.getBonuses()[4], 18, `ranged attack ${id}`);
+    assert.equal(definition.getBonuses()[11], 3, `ranged strength ${id}`);
+    assert.equal(definition.getRequirements()[4], 75, `ranged level ${id}`);
+  }
+});
+
+function splinterEvent(player, amount) {
+  player.carried.set(I.SUNFIRE_SPLINTERS, amount);
+  const splinters = new Item(I.SUNFIRE_SPLINTERS, amount);
+  const quiver = player.worn[Equipment.CAPE_SLOT];
+  return {
+    player, usedItem: splinters, usedWithItem: quiver,
+    usedItemId: I.SUNFIRE_SPLINTERS, usedWithItemId: quiver.getId(), handled: false,
+  };
+}
+
+test('sunfire splinters charge up to 20,000, and uncharging returns them', () => {
+  const player = fakePlayer();
+  const event = splinterEvent(player, 100);
+  assert.equal(Quiver._test.chargeWithSplinters(event), true);
+  assert.equal(player.worn[Equipment.CAPE_SLOT].getId(), I.DIZANAS_QUIVER);
+  assert.equal(Quiver._test.itemCharges(player.worn[Equipment.CAPE_SLOT]), 100);
+  assert.equal(player.carried.has(I.SUNFIRE_SPLINTERS), false);
+  assert.match(player.messages.at(-1), /It now has 100 charges/);
+
+  const capped = fakePlayer();
+  Quiver._test.chargeWithSplinters(splinterEvent(capped, 30000));
+  assert.equal(Quiver._test.itemCharges(capped.worn[Equipment.CAPE_SLOT]), 20000);
+  assert.equal(capped.carried.get(I.SUNFIRE_SPLINTERS), 10000);
+
+  assert.equal(Quiver._test.uncharge({ player: capped, item: capped.worn[Equipment.CAPE_SLOT] }), true);
+  assert.equal(capped.worn[Equipment.CAPE_SLOT].getId(), I.DIZANAS_QUIVER_UNCHARGED_);
+  assert.equal(Quiver._test.itemCharges(capped.worn[Equipment.CAPE_SLOT]), 0);
+  assert.equal(capped.carried.get(I.SUNFIRE_SPLINTERS), 30000, 'the charge is reversible');
+});
+
+function sunfireBonuses(player) {
+  const bonuses = new Array(14).fill(0);
+  Quiver._test.quiverBonuses({ player, bonuses });
+  return bonuses;
+}
+
+test("Dizana's Sunfire adds +10 ranged attack and +1 ranged strength to arrows and bolts", () => {
+  const charged = fakePlayer({ ammo: [I.DRAGON_ARROW, 100] });
+  charged.worn[Equipment.CAPE_SLOT].setMetaValue(Quiver.CHARGE_META, 5);
+  assert.equal(sunfireBonuses(charged)[4], 10);
+  assert.equal(sunfireBonuses(charged)[11], 1);
+
+  const uncharged = fakePlayer({ ammo: [I.DRAGON_ARROW, 100] });
+  assert.equal(sunfireBonuses(uncharged)[4], 0);
+
+  const blessing = fakePlayer({ ammo: [I.HOLY_BLESSING, 1] });
+  blessing.worn[Equipment.CAPE_SLOT].setMetaValue(Quiver.CHARGE_META, 5);
+  assert.equal(sunfireBonuses(blessing)[4], 0, 'not a storable arrow/bolt');
+
+  const quiverAmmo = fakePlayer({ ammo: [I.DRAGON_ARROW, 100] });
+  click(quiverAmmo, 2);
+  quiverAmmo.worn[Equipment.AMMUNITION_SLOT] = new Item(I.HOLY_BLESSING, 1);
+  quiverAmmo.worn[Equipment.CAPE_SLOT].setMetaValue(Quiver.CHARGE_META, 5);
+  assert.equal(sunfireBonuses(quiverAmmo)[4], 10);
+});
+
+test('one in three shots spends a charge, and exhausting it leaves the uncharged quiver', () => {
+  const player = fakePlayer({ ammo: [I.DRAGON_ARROW, 100] });
+  player.worn[Equipment.CAPE_SLOT].setMetaValue(Quiver.CHARGE_META, 2);
+  const getRandom = Misc.getRandom;
+  try {
+    Misc.getRandom = () => 0;
+    Quiver._test.spendCharge({ attacker: player, hit: { getCombatType: () => core.CombatType.RANGED } });
+    assert.equal(Quiver._test.itemCharges(player.worn[Equipment.CAPE_SLOT]), 1);
+    assert.equal(player.worn[Equipment.CAPE_SLOT].getId(), I.DIZANAS_QUIVER);
+    Quiver._test.spendCharge({ attacker: player, hit: { getCombatType: () => core.CombatType.RANGED } });
+    assert.equal(player.worn[Equipment.CAPE_SLOT].getId(), I.DIZANAS_QUIVER_UNCHARGED_);
+    assert.equal(player.messages.at(-1), "Your Dizana's quiver has run out of charges.");
+  } finally {
+    Misc.getRandom = getRandom;
+  }
+});
+
+test("an NPC attacker never spends the quiver charge", () => {
+  const npc = { isPlayer: () => false };
+  assert.doesNotThrow(() => Quiver._test.spendCharge({ attacker: npc, hit: { getCombatType: () => core.CombatType.RANGED } }));
+});
+
+test("Ava's device applies its recovery without being consumed", () => {
+  const player = fakePlayer();
+  const device = new Item(I.AVAS_ASSEMBLER, 1);
+  player.carried.set(I.AVAS_ASSEMBLER, 1);
+  const event = {
+    player, usedItem: player.worn[Equipment.CAPE_SLOT], usedWithItem: device,
+    usedItemId: player.worn[Equipment.CAPE_SLOT].getId(), usedWithItemId: I.AVAS_ASSEMBLER, handled: false,
+  };
+  assert.equal(Quiver._test.upgradeWithAva(event), true);
+  assert.equal(player.getAttribute(Quiver.AVA_ATTRIBUTE), 80);
+  assert.equal(player.carried.get(I.AVAS_ASSEMBLER), 1, 'the device is not consumed');
+  assert.equal(Quiver._test.avaRecovery(player), 80);
+
+  const noQuiver = fakePlayer({ cape: null });
+  assert.equal(Quiver._test.avaRecovery(noQuiver), null);
+});
+
+test('Open shows the stored ammo without moving or duplicating it', () => {
+  const player = fakePlayer({ ammo: [I.DRAGON_ARROW, 100] });
+  click(player, 2);
+  assert.equal(Quiver._test.openQuiver({ player }), true);
+  assert.equal(player.getInterfaceId(), 30010);
+  assert.ok(player.sentItems.some(([, itemId, amount]) => itemId === I.DRAGON_ARROW && amount === 100));
+  assert.ok(player.sentStrings.some(([, text]) => /Dragon arrow x 100/.test(text)));
+  assert.deepEqual(Quiver.stored(player), { id: I.DRAGON_ARROW, amount: 100 });
+  assert.equal(player.carried.size, 0);
+});
+
+test('blessing costs the remaining 150,000 splinters and makes Sunfire permanent', () => {
+  const player = fakePlayer();
+  Quiver._test.chargeWithSplinters(splinterEvent(player, 1000));
+  player.carried.set(I.SUNFIRE_SPLINTERS, 149000);
+  const item = player.worn[Equipment.CAPE_SLOT];
+  const event = { player, item, handled: false };
+  assert.equal(Quiver._test.blessAtShrine(event), true);
+  assert.equal(item.getId(), I.BLESSED_DIZANAS_QUIVER);
+  assert.equal(player.carried.has(I.SUNFIRE_SPLINTERS), false);
+  assert.match(player.messages.at(-1), /allowing it to not need charges/);
+});
+
+test('Wilderness death below 20 breaks the quiver, drops 270,000 coins and its ammo', () => {
+  const player = fakePlayer({ ammo: [I.DRAGON_ARROW, 50] });
+  click(player, 2);
+  const item = player.worn[Equipment.CAPE_SLOT];
+  const levelAt = core.Wilderness.levelAt;
+  const registerLocation = core.ItemOnGroundManager.registerLocation;
+  const drops = [];
+  core.Wilderness.levelAt = () => 10;
+  core.ItemOnGroundManager.registerLocation = (who, dropped) => drops.push(dropped);
+  try {
+    assert.equal(shouldKeepHandlers[0]({ player, item }), true);
+    const event = { player, killer: { isPlayer: () => true }, item, location: { getX: () => 0, getY: () => 0 }, handled: false };
+    deathDropHandlers[0](event);
+    assert.equal(item.getId(), I.DIZANAS_QUIVER_BROKEN_);
+    assert.equal(Quiver.stored(player), null);
+    assert.ok(drops.some((drop) => drop.getId() === 995 && drop.getAmount() === 270000));
+    assert.ok(drops.some((drop) => drop.getId() === I.DRAGON_ARROW && drop.getAmount() === 50));
+  } finally {
+    core.Wilderness.levelAt = levelAt;
+    core.ItemOnGroundManager.registerLocation = registerLocation;
+  }
+});
+
+test('Wilderness death above 20 destroys an unlocked quiver, but keeps a locked one and its ammo loss', () => {
+  const levelAt = core.Wilderness.levelAt;
+  const registerLocation = core.ItemOnGroundManager.registerLocation;
+  const drops = [];
+  core.Wilderness.levelAt = () => 30;
+  core.ItemOnGroundManager.registerLocation = (who, dropped) => drops.push(dropped);
+  try {
+    const unlocked = fakePlayer({ ammo: [I.DRAGON_ARROW, 50] });
+    click(unlocked, 2);
+    const unlockedItem = unlocked.worn[Equipment.CAPE_SLOT];
+    unlockedItem.setMetaValue(Quiver.CHARGE_META, 10);
+    assert.equal(shouldKeepHandlers[0]({ player: unlocked, item: unlockedItem }), null);
+    const destroyed = { player: unlocked, killer: { isPlayer: () => true }, item: unlockedItem, location: { getX: () => 0, getY: () => 0 }, handled: false };
+    deathDropHandlers[0](destroyed);
+    assert.equal(destroyed.handled, true);
+    assert.equal(unlockedItem.getId(), -1);
+    assert.ok(drops.some((drop) => drop.getId() === 995 && drop.getAmount() === 9600));
+    assert.ok(drops.some((drop) => drop.getId() === I.DRAGON_ARROW));
+
+    drops.length = 0;
+    const locked = fakePlayer({ cape: I.DIZANAS_QUIVER_L_, ammo: [I.DRAGON_ARROW, 50] });
+    click(locked, 2);
+    const lockedItem = locked.worn[Equipment.CAPE_SLOT];
+    lockedItem.setMetaValue(Quiver.CHARGE_META, 10);
+    assert.equal(shouldKeepHandlers[0]({ player: locked, item: lockedItem }), true);
+    const kept = { player: locked, killer: { isPlayer: () => true }, item: lockedItem, location: { getX: () => 0, getY: () => 0 }, handled: false };
+    deathDropHandlers[0](kept);
+    assert.equal(kept.handled, false);
+    assert.equal(lockedItem.getId(), I.DIZANAS_QUIVER_L_UNCHARGED_);
+    assert.equal(Quiver.stored(locked), null);
+    assert.equal(drops.length, 0, 'locked quivers keep nothing to drop');
+  } finally {
+    core.Wilderness.levelAt = levelAt;
+    core.ItemOnGroundManager.registerLocation = registerLocation;
+  }
+});
+

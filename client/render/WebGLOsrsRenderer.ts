@@ -1,3 +1,4 @@
+import { LocAnimated } from "./loc/LocAnimated";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -255,6 +256,11 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public pendingInstanceScene: SdMapData | null = null;
     /** The map square the drawn instance scene is built as; it owns every NPC in the scene. */
     public instanceSceneMap: { mapX: number; mapY: number } | null = null;
+    /**
+     * The animated locs of the scene an instance rebuild replaces, to carry their animations onto
+     * the new scene (a held loc animation would otherwise start again from frame 0).
+     */
+    public carriedLocAnimations: LocAnimated[] | null = null;
     /** Active world entity overlays (rendered on top of normal world). */
     public worldEntityOverlays: Map<
         number,
@@ -418,8 +424,6 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     public drawSubsetBuffer: DrawRange[] = [];
     // Reusable arrays for tickPass (avoids per-frame allocation)
     public visibleMapsBuffer: WebGLMapSquare[] = [];
-    public ambientSoundBuffer: import("../game/audio/SoundEffectSystem").AmbientSoundInstance[] = [];
-    public ambientSoundBufferIndex: number = 0;
     // Reusable object for gfxRenderer.renderMapPass calls
     public gfxRenderPassOffsets: { player?: number; npc?: number; world?: number } = {};
     // Reusable object for seqSoundCallback to avoid nested object allocation
@@ -434,11 +438,6 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         this.seqSoundPosition.z = ctx.level * 128;
         this.osrsClient.handleSeqFrameSounds(seqType, frame, this.seqSoundOptions);
     };
-    // Throttle ambient sound collection to every N frames (reduces tick cost)
-    public ambientSoundFrameCounter: number = 0;
-    public static readonly AMBIENT_SOUND_THROTTLE_FRAMES = 3;
-    // Memoized "does this loc (or any of its transforms) emit ambient sound"
-    public locSoundPotentialCache: Map<number, boolean> = new Map();
     public groundItemStacks: Map<number, ClientGroundItemStack[]> = new Map();
     public groundItemStackHashes: Map<number, string> = new Map();
 
@@ -2257,47 +2256,6 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
 
     public _ecsUpdateNpcClient(map: WebGLMapSquare, clientTicksElapsed: number): void {
         return render._ecsUpdateNpcClient(this, map, clientTicksElapsed);
-    }
-
-    public addAmbientSoundInstance(
-        locId: number,
-        soundType: any,
-        x: number,
-        y: number,
-        z: number,
-        orientation: number,
-        sizeX: number,
-        sizeY: number,
-    ): void {
-        return render.addAmbientSoundInstance(this, locId, soundType, x, y, z, orientation, sizeX, sizeY);
-    }
-
-    public static locTypeHasSound(locType: any): boolean {
-        return render.locTypeHasSound(locType);
-    }
-
-    public locHasSoundPotential(locId: number): boolean {
-        return render.locHasSoundPotential(this, locId);
-    }
-
-    public getMapSoundEmitters(
-        map: WebGLMapSquare,
-    ): { locId: number; x: number; y: number; level: number; rot: number }[] {
-        return render.getMapSoundEmitters(this, map);
-    }
-
-    public addAmbientEmitter(
-        locId: number,
-        x: number,
-        y: number,
-        level: number,
-        rot: number,
-    ): void {
-        return render.addAmbientEmitter(this, locId, x, y, level, rot);
-    }
-
-    collectAmbientSounds(map: WebGLMapSquare): void {
-        return render.collectAmbientSounds(this, map);
     }
 
     addNpcRenderData(map: WebGLMapSquare) {

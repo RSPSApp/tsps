@@ -17,7 +17,7 @@ module.exports = function registerDragonSwordSpecialAttack(api) {
 
   api.registerCombatSpecial({
     id: "dragon_sword",
-    itemIds: [ItemIdentifiers.DRAGON_SWORD],
+    itemIds: [ItemIdentifiers.DRAGON_SWORD, ItemIdentifiers.DRAGON_SWORD_CR_],
     drainAmount: DRAIN,
     strengthMultiplier: 1,
     accuracyMultiplier: 1,

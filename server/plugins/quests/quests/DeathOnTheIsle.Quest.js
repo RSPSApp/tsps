@@ -11,10 +11,12 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
     CombatType,
     Item,
     Animation,
+    GameObject,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
     ObjectIdentifiers,
+    ObjectManager,
     Skill,
   } = api.core;
   const { refreshQuestList, registerQuest, startTranscript } = require("../QuestRuntime");
@@ -119,6 +121,10 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
   const BOOKSHELF_CLOSED = ObjectIdentifiers.BOOKSHELF_397; // 54726, Search
   const BOOKSHELF_OPEN = ObjectIdentifiers.BOOKSHELF_398; // 54727, Search
   const BOOKSHELF_PASSAGE = ObjectIdentifiers.BOOKSHELF_PASSAGE; // 54728, Enter
+  // The generated identifiers omit the cache's changing-bookshelf multi-locs.
+  const CHANGING_BOOKSHELF_BASE = 54735; // stage varbit 11210: bookshelf, then the post-quest passage
+  const CHANGING_BOOKSHELF_IN = 54734; // clue varbit 11250: searchable closed/open bookshelf
+  const CHANGING_BOOKSHELF_TILE = new Location(1461, 9331, 0);
   const CRATE_POISON = ObjectIdentifiers.CRATE_341; // 54731, Search
   const BACKSTAGE_ENTRANCE = ObjectIdentifiers.BACKSTAGE_ENTRANCE; // 54715, Enter
   const FANCY_CHEST = ObjectIdentifiers.FANCY_CHEST; // 54736, Open
@@ -511,6 +517,7 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
   // ==========================================================================
 
   const trackedNpcs = new WeakMap();
+  const changingBookshelfByPlayer = new WeakMap();
 
   function spawnTracked(player, key, definition) {
     const tracked = trackedNpcs.get(player) ?? new Map();
@@ -568,6 +575,37 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
       if (npc) { api.removeNpc(npc); tracked.delete(key); }
       spawnTracked(player, key, spawn);
     }
+    syncChangingBookshelf(player);
+  }
+
+  /** The map's changing bookshelf has no options during the quest; this player's copy is searchable. */
+  function syncChangingBookshelf(player) {
+    const stage = stageOf(player);
+    const existing = changingBookshelfByPlayer.get(player);
+    if (stage >= STAGE_THEATRE_GUARDS && stage < STAGE_NAIATLI_ACCUSED) {
+      if (existing?.getId() === CHANGING_BOOKSHELF_IN) return;
+      if (existing) ObjectManager.deregister(existing, true);
+      const object = new GameObject(CHANGING_BOOKSHELF_IN, cloneBookshelfTile(), 10, 0, null).setOwner(player);
+      ObjectManager.register(object, true);
+      changingBookshelfByPlayer.set(player, object);
+      return;
+    }
+    if (!existing || existing.getId() === CHANGING_BOOKSHELF_BASE) return;
+    ObjectManager.deregister(existing, true);
+    const base = new GameObject(CHANGING_BOOKSHELF_BASE, cloneBookshelfTile(), 10, 0, null).setOwner(player);
+    ObjectManager.register(base, true);
+    changingBookshelfByPlayer.set(player, base);
+  }
+
+  function cloneBookshelfTile() {
+    return new Location(CHANGING_BOOKSHELF_TILE.getX(), CHANGING_BOOKSHELF_TILE.getY(), CHANGING_BOOKSHELF_TILE.getZ());
+  }
+
+  function clearChangingBookshelf(player) {
+    const object = changingBookshelfByPlayer.get(player);
+    if (!object) return;
+    ObjectManager.deregister(object, true);
+    changingBookshelfByPlayer.delete(player);
   }
 
   function removeAllSpawns(player) {
@@ -1751,6 +1789,7 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
 
   function handleLogout({ player }) {
     if (!player) return;
+    clearChangingBookshelf(player);
     removeAllSpawns(player);
     Scenes.end(player, true); Scenes.cancel(player);
   }

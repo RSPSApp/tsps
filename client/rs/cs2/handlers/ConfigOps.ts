@@ -149,8 +149,17 @@ export function registerConfigOps(handlers: HandlerMap): void {
             for (let id = 0; id < maxItemId; id++) {
                 const obj = ctx.objTypeLoader.load(id);
                 // Bank placeholders share their item's name but are never real items (a blank
-                // model): spawned and dropped, one is an invisible ground item.
-                if (obj && obj.name && obj.name !== "null" && obj.placeholderTemplate === -1) {
+                // model): spawned and dropped, one is an invisible ground item. Noted copies are
+                // left out too, and a tradable-only search (the Grand Exchange) also drops the
+                // untradeable variants that share a real item's name (Abyssal whip 4178, 20405).
+                if (
+                    obj &&
+                    obj.name &&
+                    obj.name !== "null" &&
+                    obj.placeholderTemplate === -1 &&
+                    obj.noteTemplate === -1 &&
+                    (!tradableOnly || obj.isTradable)
+                ) {
                     if (obj.name.toLowerCase().includes(query)) {
                         ctx.itemSearchResults.push(id);
                     }

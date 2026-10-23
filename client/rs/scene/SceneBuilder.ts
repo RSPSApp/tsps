@@ -759,6 +759,40 @@ export class SceneBuilder {
         }
     }
 
+    /**
+     * Adds a loc the server spawned (LOC_ADD_CHANGE) to a scene already built. Bridges are
+     * demoted by then, so the server's plane is the one it is drawn on, but its heights are still
+     * the map plane's: the Motherlode Mine's upper veins stand on plane 1's heights, not on the
+     * cave floor 320 units below.
+     */
+    addLocToBuiltScene(
+        scene: Scene,
+        level: number,
+        tileX: number,
+        tileY: number,
+        id: number,
+        type: LocModelType,
+        rotation: number,
+        locLoadType: LocLoadType,
+        seqOverride?: number,
+        seqRandomStartOverride?: boolean,
+    ): void {
+        this.addLoc(
+            scene,
+            level,
+            tileX,
+            tileY,
+            id,
+            type,
+            rotation,
+            scene.collisionMaps[level],
+            locLoadType,
+            seqOverride,
+            seqRandomStartOverride,
+            SceneBuilder.mapLevel(scene, tileX, tileY, level),
+        );
+    }
+
     addLoc(
         scene: Scene,
         level: number,
@@ -771,6 +805,7 @@ export class SceneBuilder {
         locLoadType: LocLoadType,
         seqOverride?: number,
         seqRandomStartOverride?: boolean,
+        heightLevel: number = level,
     ): void {
         if ((id | 0) <= 0) {
             return;
@@ -811,10 +846,12 @@ export class SceneBuilder {
             endY = tileY + 1;
         }
 
-        const heightMap = scene.tileHeights[level];
+        // Heights come from the map plane: after bridge demotion a bridge's locs are drawn a
+        // plane below the heights they stand on (`heightLevel`, see addLocToBuiltScene).
+        const heightMap = scene.tileHeights[heightLevel];
         let heightMapAbove: Int32Array[] | undefined;
-        if (level < scene.levels - 1) {
-            heightMapAbove = scene.tileHeights[level + 1];
+        if (heightLevel < scene.levels - 1) {
+            heightMapAbove = scene.tileHeights[heightLevel + 1];
         }
 
         const centerHeight =
@@ -868,7 +905,7 @@ export class SceneBuilder {
                     id,
                     type,
                     rotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -890,7 +927,7 @@ export class SceneBuilder {
                     id,
                     LocModelType.NORMAL,
                     locRotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -948,7 +985,7 @@ export class SceneBuilder {
                     id,
                     type,
                     rotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -966,7 +1003,7 @@ export class SceneBuilder {
                     id,
                     type,
                     rotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1010,7 +1047,7 @@ export class SceneBuilder {
                     id,
                     type,
                     rotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1045,7 +1082,7 @@ export class SceneBuilder {
                     id,
                     type,
                     rotation + 4,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1055,7 +1092,7 @@ export class SceneBuilder {
                     id,
                     type,
                     (rotation + 1) & 3,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1088,7 +1125,7 @@ export class SceneBuilder {
                     id,
                     type,
                     rotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1122,7 +1159,7 @@ export class SceneBuilder {
                     id,
                     type,
                     rotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1144,7 +1181,7 @@ export class SceneBuilder {
                     id,
                     LocModelType.WALL_DECORATION_INSIDE,
                     rotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1185,7 +1222,7 @@ export class SceneBuilder {
                     id,
                     LocModelType.WALL_DECORATION_INSIDE,
                     rotation,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1229,7 +1266,7 @@ export class SceneBuilder {
                     id,
                     LocModelType.WALL_DECORATION_INSIDE,
                     rotation + 4,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1268,7 +1305,7 @@ export class SceneBuilder {
                     id,
                     LocModelType.WALL_DECORATION_INSIDE,
                     insideRotation + 4,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1312,7 +1349,7 @@ export class SceneBuilder {
                     id,
                     LocModelType.WALL_DECORATION_INSIDE,
                     rotation + 4,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,
@@ -1322,7 +1359,7 @@ export class SceneBuilder {
                     id,
                     LocModelType.WALL_DECORATION_INSIDE,
                     insideRotation + 4,
-                    level,
+                    heightLevel,
                     tileX,
                     tileY,
                     seqId,

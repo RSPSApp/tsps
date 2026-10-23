@@ -33,9 +33,9 @@ const GRAPPLE_VARBIT = "free_grapple";
 const ROL_TOGGLE_VARBIT = "rol_toggle";
 const ROL_OFF_ATTRIBUTE = "skillcapes:ring-of-life-off";
 const ROL_ARDOUGNE_ATTRIBUTE = "skillcapes:ring-of-life-ardougne";
-const JUNK_OFF_ATTRIBUTE = "skillcapes:accumulator-junk-off";
+const JUNK_OFF_ATTRIBUTE = Capes.JUNK_OFF_ATTRIBUTE;
 const ARDOUGNE_MARKET = [2662, 3305, 0];
-const VORKATH_UPGRADE_ATTRIBUTE = "skillcapes:vorkath-head-upgrade";
+const VORKATH_UPGRADE_ATTRIBUTE = Capes.VORKATH_UPGRADE_ATTRIBUTE;
 const ACCUMULATOR_RECOVERY = 72;
 const ASSEMBLER_RECOVERY = 80;
 
@@ -223,8 +223,17 @@ function ringOfLife(request) {
 
 /** "skillcape:ammo-recovery" `{ player, recovery }`: a worn Ranging (or max) cape's share. */
 function ammoRecovery(request) {
-  if (request.recovery != null || !Capes.hasPerk(request.player, "RANGED")) return;
-  request.recovery = request.player.getAttribute(VORKATH_UPGRADE_ATTRIBUTE) === true ? ASSEMBLER_RECOVERY : ACCUMULATOR_RECOVERY;
+  const { player } = request;
+  if (!player || request.recovery != null) return;
+  // Max capes combined with an Ava's device keep that device's own rate (Wiki: Max cape).
+  const combined = Capes.COMBINED_BY_CAPE.get(Capes.capeSlotId(player));
+  if (combined) {
+    if (/assembler/i.test(combined.label)) request.recovery = ASSEMBLER_RECOVERY;
+    else if (/accumulator/i.test(combined.label)) request.recovery = ACCUMULATOR_RECOVERY;
+    return;
+  }
+  if (!Capes.hasPerk(player, "RANGED")) return;
+  request.recovery = player.getAttribute(VORKATH_UPGRADE_ATTRIBUTE) === true ? ASSEMBLER_RECOVERY : ACCUMULATOR_RECOVERY;
 }
 
 function upgradeWithVorkathHead(event) {

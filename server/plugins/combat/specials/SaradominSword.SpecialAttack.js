@@ -1,14 +1,29 @@
-// TODO: ported from xrsps-typescript; untested.
-module.exports = function registerSaradominSwordSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, HitDamage, HitMask, ItemIdentifiers, MeleeCombatMethod, Misc, Priority, Sounds, Task, TaskManager } = api.core;
+function buildSpecial(core) {
+  const { Animation, CombatFactory, CombatMethod, CombatSpecial, CombatType, Graphic, ItemIdentifiers, MeleeCombatMethod, Misc, PendingHit, Priority, PrayerHandler, Skill, Sounds } = core;
 
   const DRAIN = 100;
+  // Misc.getRandom(n) is inclusive (0..n), so the 1-16 range rolls getRandom(max - min).
   const SLASH_DEFENCE_BONUS_INDEX = 1;
   const LIGHTNING_MINIMUM_DAMAGE = 1;
   const LIGHTNING_MAXIMUM_DAMAGE = 16;
   const ANIMATION = new Animation(1132);
   const GRAPHIC = new Graphic(1213, Priority.HIGH);
   const ENEMY_GRAPHIC = new Graphic(1195);
+
+  class LightningCombatMethod extends CombatMethod {
+    type() { return CombatType.MAGIC; }
+    hits() { return []; }
+    handleAfterHitEffects(hit) {
+      const attacker = hit.getAttacker();
+      const damage = hit.getTotalDamage();
+      if (attacker.isPlayer() && damage > 0) {
+        const skills = attacker.getAsPlayer().getSkillManager();
+        skills.addExperience(Skill.MAGIC, damage * 2, true);
+        skills.addExperience(Skill.HITPOINTS, damage * 4 / 3, true);
+      }
+    }
+  }
+  const lightningMethod = new LightningCombatMethod();
 
   class SaradominSwordCombatMethod extends MeleeCombatMethod {
     start(character, target) {
@@ -25,30 +40,19 @@ module.exports = function registerSaradominSwordSpecialAttack(api) {
       }
       target.performGraphic(ENEMY_GRAPHIC);
 
-      // Saradomin's Lightning: an independent 1-16 Magic hitsplat after the
-      // melee strike. The upstream evaluator queues a real magic attack; our
-      // core has no deferred-attack hook, so a delayed hitsplat stands in.
-      // TODO: route the lightning through the real magic attack pipeline.
-      const lightningDamage = LIGHTNING_MINIMUM_DAMAGE
-        + Misc.getRandom(LIGHTNING_MAXIMUM_DAMAGE - LIGHTNING_MINIMUM_DAMAGE + 1);
-      TaskManager.submit(new (class extends Task {
-        constructor() {
-          super(1);
-        }
-
-        execute() {
-          if (!target.isRegistered() || target.getHitpoints() <= 0) {
-            this.stop();
-            return;
-          }
-          target.getCombat().getHitQueue().addPendingDamage([new HitDamage(lightningDamage, HitMask.RED).setSource(hit.getAttacker())]);
-          this.stop();
-        }
-      })());
+      const splashed = target.isPlayer() && PrayerHandler.isActivated(target.getAsPlayer(), PrayerHandler.PROTECT_FROM_MAGIC);
+      const lightningDamage = splashed ? 0 : LIGHTNING_MINIMUM_DAMAGE
+        + Misc.getRandom(LIGHTNING_MAXIMUM_DAMAGE - LIGHTNING_MINIMUM_DAMAGE);
+      CombatFactory.addPendingHit(new PendingHit(hit.getAttacker(), target, lightningMethod, {
+        delay: 1,
+        rollAccuracy: false,
+        experience: false,
+        damage: lightningDamage,
+      }));
     }
   }
 
-  api.registerCombatSpecial({
+  return {
     id: "saradomin_sword",
     itemIds: [ItemIdentifiers.SARADOMIN_SWORD],
     drainAmount: DRAIN,
@@ -62,5 +66,9 @@ module.exports = function registerSaradominSwordSpecialAttack(api) {
       meleeDefenceBonusIndex: SLASH_DEFENCE_BONUS_INDEX,
     },
     combatMethod: new SaradominSwordCombatMethod(),
-  });
+  };
+}
+
+module.exports = function registerSaradominSwordSpecialAttack(api) {
+  api.registerCombatSpecial(buildSpecial(api.core));
 };

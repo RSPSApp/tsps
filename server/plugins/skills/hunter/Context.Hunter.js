@@ -24,8 +24,20 @@ function distance(a, b) {
   return Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY()));
 }
 
+/** Distance to a loc's whole footprint (drift-net anchors are 5x2), rotated with its face. */
+function footprintDistance(from, object) {
+  const at = object.getLocation(), definition = object.getDefinition?.();
+  if (from.getZ() !== at.getZ()) return Infinity;
+  const sizeX = definition?.getSizeX?.() ?? 1, sizeY = definition?.getSizeY?.() ?? 1;
+  const turned = object.getFace() % 2 === 1, width = turned ? sizeY : sizeX, length = turned ? sizeX : sizeY;
+  const gap = (point, start, size) => Math.max(0, start - point, point - (start + size - 1));
+  return Math.max(gap(from.getX(), at.getX(), width), gap(from.getY(), at.getY(), length));
+}
+
 function nearby(player, entity, range = 2) {
-  return player.getPrivateArea() === entity.getPrivateArea() && distance(player.getLocation(), entity.getLocation()) <= range;
+  if (player.getPrivateArea() !== entity.getPrivateArea()) return false;
+  const reach = entity instanceof H.core.GameObject ? footprintDistance(player.getLocation(), entity) : distance(player.getLocation(), entity.getLocation());
+  return reach <= range;
 }
 
 function active(player) {
@@ -119,9 +131,10 @@ function chance(player, creature, bonus = 0, required = creature.level) {
 
 function choose(player, entries, entity = null) {
   player.getDialogueManager().startDialogues(new H.core.DialogueChainBuilder().add(new H.core.OptionDialogue(0, {
+    // Options arrive one-based (the first is 1).
     executeOption(option) {
       player.getPacketSender().sendInterfaceRemoval();
-      if (active(player) && (!entity || nearby(player, entity))) entries[Number(option)]?.[1]();
+      if (active(player) && (!entity || nearby(player, entity))) entries[Number(option) - 1]?.[1]();
     },
   }, ...entries.map(([text]) => text))));
 }
@@ -204,8 +217,13 @@ function ownsClue(player, tier) {
 function questComplete(player, key) {
   const request = { player, key, complete: null };
   H.api.emitCustomEvent("quest:is-complete", request);
-  return typeof request.complete === "boolean" ? request.complete : Number(player.getAttribute(`quest.${key}.stage`)) >= 2;
+  return typeof request.complete === "boolean" ? request.complete : questStage(player, key) >= 2;
+}
+
+function questStage(player, key) {
+  const value = Number(player.getAttribute(`quest.${key}.stage`));
+  return Number.isFinite(value) ? value : 0;
 }
 
 module.exports = { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  exchange, drop, xp, probability, outfit, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, ownsClue };
+  footprintDistance, exchange, drop, xp, probability, outfit, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };

@@ -8,6 +8,11 @@ export class Sound {
 
     public static CUTTING = new Sound(2605, 1, 0, 0)
 
+    // fletching sounds
+
+    // Attaching crossbow limbs to a stock (rsprox captures, recording 1749).
+    public static CROSSBOW_LIMBS = new Sound(2922, 1, 0, 0)
+
     public static SHEAR_SHEEP = new Sound(761, 1, 0, 0)
 
     // cooking sounds

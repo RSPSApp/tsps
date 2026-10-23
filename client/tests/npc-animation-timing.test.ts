@@ -49,7 +49,7 @@ test("disabled animation smoothing skips per-NPC sequence resolution", async () 
     const { isNpcAnimationSmoothed } = await import("../render/render/anim/npc2");
     let sequenceReads = 0;
     const host = {
-        osrsClient: { animationSmoothingPlugin: { isEnabled: () => false } },
+        osrsClient: { clientPlugins: { smoothsNpcs: () => false } },
         dynamicNpcAnimLoader: { isReady: () => true },
         resolveNpcMovementSequenceIds: () => { sequenceReads++; },
     } as any;

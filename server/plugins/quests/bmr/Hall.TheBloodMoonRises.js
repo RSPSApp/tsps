@@ -11,14 +11,27 @@ module.exports = function registerHall({ api, state, process, cleanup, scenery }
       super.postLeave(member, logout);
     }
   }
+  function place(area, player) {
+    area.objects = [];
+    for (const [id, x, y, type = 10, face = 0] of scenery(player)) {
+      const object = new GameObject(id, new Location(x, y, 1), type, face, area);
+      ObjectManager.register(object, true);
+      area.objects.push(object);
+    }
+  }
   function enter(player) {
     if (!['hall', 'breach'].includes(state(player).phase)) return false;
     if (sessions.has(player)) return true;
     const area = new SiegeHallArea(player); sessions.set(player, area); area.enter(player);
-    for (const [id, x, y, type = 10, face = 0] of scenery(player)) {
-      ObjectManager.register(new GameObject(id, new Location(x, y, 1), type, face, area), true);
-    }
+    place(area, player);
     return true;
   }
-  return { enter, sessions, SiegeHallArea };
+  function refresh(player) {
+    const area = sessions.get(player);
+    if (!area) return false;
+    for (const object of area.objects ?? []) ObjectManager.deregister(object, true);
+    place(area, player);
+    return true;
+  }
+  return { enter, refresh, sessions, SiegeHallArea };
 };

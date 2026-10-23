@@ -3,6 +3,7 @@ import * as assert from "node:assert/strict";
 const { registerQuest, openJournalBySlot } = require("../plugins/quests/QuestRuntime.js");
 
 const attributes = new Map<string, unknown>();
+const questPreferences = new Map<number, number>([[13772, 1]]);
 const sent = {
     configs: [] as Array<[number, number]>,
     jingles: [] as number[],
@@ -20,11 +21,13 @@ const player = {
     setAttribute: (key: string, value: unknown) => attributes.set(key, value),
     sendMessage: (message: string) => sent.messages.push(message),
     getInventory: () => ({
+        isFull: () => false,
         adds: (id: number, amount: number) => sent.granted.push([id, amount]),
     }),
     getPacketSender: () => ({
         sendConfig: (id: number, value: number) => sent.configs.push([id, value]),
         sendVarbit: () => {},
+        getVarbit: (id: number) => questPreferences.get(id) ?? 0,
         sendJingle: (id: number) => sent.jingles.push(id),
         sendQuestList: (groups: any) => sent.questLists.push(groups),
         sendInterfaceFlagsRange: (uid: number, from: number, to: number) => sent.flagRanges.push([uid, from, to]),
@@ -146,4 +149,24 @@ assert.ok(
     "the last quest row gets its journal flags"
 );
 
+// Click mapping belongs to the snapshot rendered on the client, even if a preference
+// has changed before a refresh packet is sent.
+questPreferences.set(13889, 1);
+sent.strings.length = 0;
+openJournalBySlot(player, 3);
+assert.ok(sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("The Beta Quest")));
+require("../plugins/quests/QuestRuntime").refreshQuestList(player);
+const withoutHeaders = sent.questLists.at(-1);
+assert.equal(withoutHeaders[0].title, "");
+assert.equal(withoutHeaders[0].quests[0].slot, 0);
+sent.strings.length = 0;
+openJournalBySlot(player, 0);
+assert.ok(sent.strings.some(([text, uid]) => uid === journalTitleUid && text.includes("Alpha Quest")));
+questPreferences.set(13776, 1);
+questPreferences.set(13777, 1);
+require("../plugins/quests/QuestRuntime").refreshQuestList(player);
+assert.deepEqual(sent.questLists.at(-1), []);
+sent.strings.length = 0;
+openJournalBySlot(player, 0);
+assert.equal(sent.strings.length, 0, "filtered entries cannot open stale journals");
 console.info("quest runtime smoke passed");

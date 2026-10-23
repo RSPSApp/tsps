@@ -17,6 +17,16 @@ import type {
     WebGPUSceneExtension,
     WebGPUSceneExtensionContext,
 } from "../../render/webgpu/sceneExtension";
+import { createElement, Fragment, type ReactNode } from "react";
+import type { OsrsClient } from "../OsrsClient";
+import type { ClientGroundItemStack, GroundItemOverlayEntry } from "../data/ground/GroundItemStore";
+import type { LoginStretch } from "../login/renderer/types";
+import type { WebGLOsrsRendererHost } from "../../render/render/hostInterface";
+import type { OverheadTextEntry } from "../../ui/devoverlay/Overlay";
+import type { GpuSettings } from "./gpu/GpuPlugin";
+import type { InteractHighlightPluginConfig } from "./interacthighlight/InteractHighlightConfig";
+import type { FixedStretch } from "./stretchedmode/StretchedModePlugin";
+import { DISABLED_TILE_MARKERS_CONFIG, type TileMarkersPluginConfig } from "./tilemarkers/TileMarkersConfig";
 
 /**
  * Draw/input context handed to a plugin that supplies a custom gameframe (the
@@ -201,13 +211,66 @@ export interface ClientPlugin {
         entries: SimpleMenuEntry[],
         context: MenuTransformContext,
     ): SimpleMenuEntry[];
+    /** Graphics settings overriding the renderer's own (first answer wins). */
+    gpuSettings?(): GpuSettings | undefined;
+    /** Whether HD lighting is on, which widens draw distance and fog. */
+    hdEnabled?(): boolean;
+    /** How scenery animations are baked when a map square loads (first answer wins). */
+    objectSettings?(): { smoothLocAnimations: boolean; smoothLocAnimationSteps: number };
+    smoothsPlayer?(seqId: number): boolean;
+    smoothsNpcs?(): boolean;
+    smoothsNpc?(npcTypeId: number, seqId: number, action: boolean): boolean;
+    smoothsGraphics?(): boolean;
+    /** Scales the fixed gameframe to fill the window (first answer wins). */
+    fixedStretch?(bufW: number, bufH: number, minScale: number): FixedStretch | null;
+    /** Scales resizable mode's interface on top of interface scaling. */
+    resizableScale?(uiScale: number, width: number, height: number): number;
+    isStretchingResizable?(): boolean;
+    /** The scene's render resolution as a fraction of the canvas; the lowest wins. */
+    sceneResolutionScale?(): number;
+    loginStretch?(): LoginStretch | null;
+    /** Destination and true-tile highlights (first answer wins). */
+    tileMarkersConfig?(): TileMarkersPluginConfig | undefined;
+    /** Hover and interaction outlines on world objects (first answer wins). */
+    interactHighlightConfig?(): InteractHighlightPluginConfig | undefined;
+    /** Ground item labels around a tile (first answer wins). */
+    groundItemOverlayEntries?(
+        tileX: number,
+        tileY: number,
+        level: number,
+        opts?: { radius?: number; maxEntries?: number },
+    ): GroundItemOverlayEntry[] | undefined;
+    groundItemMenuName?(stack: ClientGroundItemStack, name: string): string;
+    groundItemMenuTarget?(stack: ClientGroundItemStack, target: string): string;
+    deprioritizeGroundItem?(stack: ClientGroundItemStack): boolean;
+    /** Text drawn with the local player's overhead chat. */
+    appendLocalPlayerOverheads?(
+        host: WebGLOsrsRendererHost,
+        index: number | undefined,
+        output: OverheadTextEntry[],
+        maxEntries: number,
+        playerDefaultHeightTiles: number | undefined,
+    ): void;
+    /** Mounted widgets are about to be laid out. */
+    updateWidgetLayout?(): void;
+    /** DOM drawn over the game canvas. */
+    renderHud?(client: OsrsClient): ReactNode;
 }
 
 export class ClientPluginManager {
     private readonly plugins: ClientPlugin[] = [];
+    // Per-frame and per-actor hooks walk only the plugins that implement them.
+    private readonly implementers = new Map<keyof ClientPlugin, ClientPlugin[]>();
 
     add(plugin: ClientPlugin): void {
         this.plugins.push(plugin);
+        this.implementers.clear();
+    }
+
+    private implementing(hook: keyof ClientPlugin): ClientPlugin[] {
+        let plugins = this.implementers.get(hook);
+        if (!plugins) this.implementers.set(hook, (plugins = this.plugins.filter((plugin) => plugin[hook] !== undefined)));
+        return plugins;
     }
 
     playerHeadIcons(serverId: number): IndexedSprite[] {
@@ -349,6 +412,147 @@ export class ClientPluginManager {
 
     handleClientCommand(command: string): boolean {
         return this.plugins.some((plugin) => plugin.handleClientCommand?.(command) === true);
+    }
+
+    gpuSettings(): GpuSettings | undefined {
+        for (const plugin of this.implementing("gpuSettings")) {
+            const settings = plugin.gpuSettings!();
+            if (settings) return settings;
+        }
+        return undefined;
+    }
+
+    hdEnabled(): boolean {
+        for (const plugin of this.implementing("hdEnabled")) if (plugin.hdEnabled!()) return true;
+        return false;
+    }
+
+    objectSettings(): { smoothLocAnimations: boolean; smoothLocAnimationSteps: number } | undefined {
+        for (const plugin of this.implementing("objectSettings")) {
+            const settings = plugin.objectSettings!();
+            if (settings) return settings;
+        }
+        return undefined;
+    }
+
+    smoothsPlayer(seqId: number): boolean {
+        for (const plugin of this.implementing("smoothsPlayer")) if (plugin.smoothsPlayer!(seqId)) return true;
+        return false;
+    }
+
+    smoothsNpcs(): boolean {
+        for (const plugin of this.implementing("smoothsNpcs")) if (plugin.smoothsNpcs!()) return true;
+        return false;
+    }
+
+    smoothsNpc(npcTypeId: number, seqId: number, action: boolean): boolean {
+        for (const plugin of this.implementing("smoothsNpc")) if (plugin.smoothsNpc!(npcTypeId, seqId, action)) return true;
+        return false;
+    }
+
+    smoothsGraphics(): boolean {
+        for (const plugin of this.implementing("smoothsGraphics")) if (plugin.smoothsGraphics!()) return true;
+        return false;
+    }
+
+    fixedStretch(bufW: number, bufH: number, minScale: number): FixedStretch | null {
+        for (const plugin of this.plugins) {
+            const stretch = plugin.fixedStretch?.(bufW, bufH, minScale);
+            if (stretch) return stretch;
+        }
+        return null;
+    }
+
+    resizableScale(uiScale: number, width: number, height: number): number {
+        for (const plugin of this.plugins) uiScale = plugin.resizableScale?.(uiScale, width, height) ?? uiScale;
+        return uiScale;
+    }
+
+    isStretchingResizable(): boolean {
+        return this.plugins.some((plugin) => plugin.isStretchingResizable?.() === true);
+    }
+
+    sceneResolutionScale(): number {
+        let scale = 1;
+        for (const plugin of this.implementing("sceneResolutionScale")) scale = Math.min(scale, plugin.sceneResolutionScale!());
+        return scale;
+    }
+
+    loginStretch(): LoginStretch | null {
+        for (const plugin of this.plugins) {
+            const stretch = plugin.loginStretch?.();
+            if (stretch) return stretch;
+        }
+        return null;
+    }
+
+    tileMarkersConfig(): TileMarkersPluginConfig {
+        for (const plugin of this.plugins) {
+            const config = plugin.tileMarkersConfig?.();
+            if (config) return config;
+        }
+        return DISABLED_TILE_MARKERS_CONFIG;
+    }
+
+    interactHighlightConfig(): InteractHighlightPluginConfig | undefined {
+        for (const plugin of this.plugins) {
+            const config = plugin.interactHighlightConfig?.();
+            if (config) return config;
+        }
+        return undefined;
+    }
+
+    groundItemOverlayEntries(
+        tileX: number,
+        tileY: number,
+        level: number,
+        opts?: { radius?: number; maxEntries?: number },
+    ): GroundItemOverlayEntry[] {
+        for (const plugin of this.plugins) {
+            const entries = plugin.groundItemOverlayEntries?.(tileX, tileY, level, opts);
+            if (entries) return entries;
+        }
+        return [];
+    }
+
+    groundItemMenuName(stack: ClientGroundItemStack, name: string): string {
+        for (const plugin of this.plugins) name = plugin.groundItemMenuName?.(stack, name) ?? name;
+        return name;
+    }
+
+    groundItemMenuTarget(stack: ClientGroundItemStack, target: string): string {
+        for (const plugin of this.plugins) target = plugin.groundItemMenuTarget?.(stack, target) ?? target;
+        return target;
+    }
+
+    deprioritizeGroundItem(stack: ClientGroundItemStack): boolean {
+        return this.plugins.some((plugin) => plugin.deprioritizeGroundItem?.(stack) === true);
+    }
+
+    appendLocalPlayerOverheads(
+        host: WebGLOsrsRendererHost,
+        index: number | undefined,
+        output: OverheadTextEntry[],
+        maxEntries: number,
+        playerDefaultHeightTiles: number | undefined,
+    ): void {
+        for (const plugin of this.plugins) {
+            plugin.appendLocalPlayerOverheads?.(host, index, output, maxEntries, playerDefaultHeightTiles);
+        }
+    }
+
+    updateWidgetLayout(): void {
+        for (const plugin of this.plugins) plugin.updateWidgetLayout?.();
+    }
+
+    renderHud(client: OsrsClient): ReactNode[] {
+        const huds: ReactNode[] = [];
+        this.plugins.forEach((plugin, i) => {
+            const hud = plugin.renderHud?.(client);
+            // The plugin list only grows, so its index is a stable key.
+            if (hud) huds.push(createElement(Fragment, { key: i }, hud));
+        });
+        return huds;
     }
 
 }

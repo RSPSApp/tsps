@@ -133,7 +133,7 @@ function shoot(cannon, owner, npc) {
 
   // The owner's Ranged accuracy with a ranged weapon, otherwise their melee, against Ranged defence (Wiki).
   const style = CombatFactory.getMethod(owner).type() === CombatType.RANGED ? CombatType.RANGED : CombatType.MELEE;
-  const accurate = AccuracyFormulasDpsCalc.rollAccuracy(owner, npc, style, CombatType.RANGED);
+  const accurate = AccuracyFormulasDpsCalc.rollAccuracy(owner, npc, style, CombatType.RANGED, "heavy");
   const max = granite ? Data.MAX_HIT.granite : Data.MAX_HIT.steel;
   const damage = accurate ? Math.min(npc.getHitpoints(), Math.floor(Math.random() * (max + 1))) : 0;
   const hit = new PendingHit(owner, npc, method(), { delay: 0, rollAccuracy: false, experience: false, handleAfterHitEffects: false });

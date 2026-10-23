@@ -1,4 +1,5 @@
 import { processQuestListTouchScroll } from "./input/questListScrollbarInput";
+import { processWidgetTouchScroll } from "./input/widgetTouchScrollInput";
 import { shouldSkipWidgetClickInput } from "./input/widgetClickGuard";
 import { processWidgetClickInput } from "./input/widgetClickInput";
 import { processWidgetDragInput } from "./input/widgetDragInput";
@@ -113,6 +114,7 @@ export class WidgetInputController {
             widgetInteraction,
         );
         if (processQuestListTouchScroll(frame, widgetManager)) return;
+        if (processWidgetTouchScroll(this.deps, frame, widgetManager)) return;
         processWidgetScrollWheelInput(this.deps, frame, widgetManager, widgetInteraction);
 
         if (shouldSkipWidgetClickInput(this.deps, frame)) return;

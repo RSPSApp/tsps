@@ -161,7 +161,11 @@ export class WorldEntitySync {
     }
 
     private static encodeDeckLocs(boat: Boat): Buffer[] {
-        return BoatManager.getSpec(boat)!.locs.map((loc) => WorldEntitySync.encodeDeckLoc(boat, loc));
+        // A static ship's template already draws its own locs; only its explicit dynamic
+        // additions/overrides are sent. Player boats send their full deck loc set.
+        const spec = BoatManager.getSpec(boat)!;
+        const locs = boat.static ? spec.syncLocs ?? [] : spec.locs;
+        return locs.map((loc) => WorldEntitySync.encodeDeckLoc(boat, loc));
     }
 
     private static encodeDeckLoc(boat: Boat, loc: BoatDeckLoc): Buffer {

@@ -215,7 +215,7 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
 
     protected override getEffectiveFpsLimit(): number {
         // The GPU plugin's cap replaces the client's own, mobile battery caps included.
-        const gpu = this.osrsClient.gpuPlugin?.settings();
+        const gpu = this.osrsClient.clientPlugins.gpuSettings();
         let limit = gpu ? gpu.fpsLimit : super.getEffectiveFpsLimit();
         let target = gpu ? 0 : Number(this.osrsClient.targetFps) | 0;
         // Never honor CS2 mobile battery caps (~20) on desktop.

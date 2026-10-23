@@ -2,7 +2,7 @@
 
 const C = require("./Context.Hunter");
 const { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
-  exchange, drop, xp, chance, begin, hide, removeObject, questComplete } = C;
+  exchange, drop, xp, chance, begin, hide, removeObject, questComplete, questStage } = C;
 
 function find(object) {
   for (const trap of H.traps) {
@@ -35,6 +35,17 @@ function materials(def, player) {
   return [[def.item, 1]];
 }
 
+// The Wiki asks for partial completion of Eagles' Peak: Nickolaus teaches box traps at the camp.
+// EaglesPeak.Quest.js's stage table: 6 (STAGE_RESCUED) puts him at the camp for the ferret lesson,
+// 8 completes the quest. The quest runtime keeps the stage in this attribute, so the stage alone
+// decides (questComplete's ">= 2" fallback would let stages 2-5 through).
+// ponytail: no captured refusal; the message is ours.
+const EAGLES_PEAK_BOX_TRAP_STAGE = 6;
+
+function boxTrapsUnlocked(player) {
+  return questStage(player, "eagles_peak") >= EAGLES_PEAK_BOX_TRAP_STAGE;
+}
+
 function canLay(player, kind, location, base, ground) {
   const def = H.data.traps[kind];
   const pit = kind === "pit" && base ? H.data.creatures.find(c => c.trap === "pit"
@@ -52,6 +63,9 @@ function canLay(player, kind, location, base, ground) {
   if (ground) return H.core.ItemOnGroundManager.getGroundItem(player.getUsername(), def.item, location, player.getPrivateArea()) === ground;
   if (kind === "monkey" && (!hasTool(player, H.core.ItemIdentifiers.KRUK_MONKEY_GREEGREE) || !questComplete(player, "monkey_madness_ii"))) {
     player.sendMessage("You need Monkey Madness II and a Kruk monkey greegree to hunt here."); return false;
+  }
+  if (kind === "box" && !boxTrapsUnlocked(player)) {
+    player.sendMessage("You need to learn how to use box traps from Nickolaus during Eagles' Peak."); return false;
   }
   if (!exchange(player, materials(def, player), [], false)) { player.sendMessage("You don't have the materials to set this trap."); return false; }
   return true;
@@ -228,7 +242,7 @@ function bait(event) {
 
 function eligible(trap, npc, creature) {
   if (!creature || creature.trap !== trap.kind || !available(npc) || npc.getPrivateArea() !== trap.area || level(trap.player) < creature.level) return false;
-  if (trap.kind === "box" && !questComplete(trap.player, "eagles_peak")) return false;
+  if (trap.kind === "box" && !boxTrapsUnlocked(trap.player)) return false;
   if (trap.player.getLocation().equals(trap.location)) return false;
   if (trap.base && trap.kind === "pit" && !H.core.CacheDefinitions.getObject(trap.base.getId()).transforms?.includes(creature.caught)) return false;
   if (trap.kind === "deadfall" && (creature.npc === H.core.NpcIdentifiers.PYRE_FOX) !== (trap.location.getX() < 2000)) return false;

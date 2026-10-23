@@ -4,7 +4,7 @@ import {
     type QuestListWidgetGroup,
 } from "../../common/ui/questList";
 import { layoutQuestScrollbarChildren } from "../../game/widgets/input/questListScrollbarInput";
-import { FONT_BOLD_12, FONT_PLAIN_11 } from "../../ui/fonts";
+import { FONT_BOLD_12, FONT_PLAIN_11, FONT_PLAIN_12 } from "../../ui/fonts";
 import type { WidgetManager } from "../WidgetManager";
 import type { WidgetNode } from "../WidgetNode";
 
@@ -17,6 +17,22 @@ const QUEST_LIST_LIST_UID = (QUEST_LIST_GROUP_ID << 16) | QUEST_LIST_LIST_CHILD_
 const QUEST_LIST_TEXT_CONTAINER_UID =
     (QUEST_LIST_GROUP_ID << 16) | QUEST_LIST_TEXT_CONTAINER_CHILD_ID;
 const QUEST_LIST_SCROLLBAR_UID = (QUEST_LIST_GROUP_ID << 16) | QUEST_LIST_SCROLLBAR_CHILD_ID;
+/** 399:2, where script 4137 hangs script 1340 on ~210 quest varps to rebuild the list (2633). */
+const QUEST_LIST_ROOT_UID = (QUEST_LIST_GROUP_ID << 16) | 2;
+const QUEST_LIST_REBUILD_SCRIPT = 1340;
+
+export function questListPreferences(vars: { getVarbit(id: number): number; getVarp(id: number): number }) {
+    // CS2 2633/4181: colours are stored as RGB+1, zero selects the cache default.
+    const color = (id: number, fallback: number) => {
+        const stored = vars.getVarp(id);
+        return stored > 0 ? stored - 1 : fallback;
+    };
+    return {
+        largeText: vars.getVarbit(13780) === 1,
+        textShadow: vars.getVarbit(13781) !== 1,
+        colors: [color(3409, 0xffff00), color(3410, 0xff0000), color(3411, 901389), color(3412, 10461087)],
+    };
+}
 
 const HEADER_HEIGHT = 18;
 const HEADER_ADVANCE = 25;
@@ -33,6 +49,7 @@ const COLOR_COMPLETE = 0x00ff00;
 const COLOR_HOVER = 0xffffff;
 
 function resolveQuestColor(status: number): number {
+    if ((status | 0) === 3) return 0x9fa09f;
     if ((status | 0) === QUEST_LIST_STATUS_COMPLETE) return COLOR_COMPLETE;
     if ((status | 0) === QUEST_LIST_STATUS_IN_PROGRESS) return COLOR_IN_PROGRESS;
     return COLOR_NOT_STARTED;
@@ -134,9 +151,23 @@ function registerChild(widgetManager: WidgetManager, parent: WidgetNode, child: 
     widgetManager.registerWidget(child);
 }
 
+/**
+ * Script 2633, rerun on every quest varp, measures the rows it builds itself. Under a server-owned
+ * list it builds none, so it scrolled the list back to the top on every quest update. The server
+ * sends the list again as quests progress, and that keeps the scroll position.
+ */
+function stopCacheListRebuilds(widgetManager: WidgetManager): void {
+    const root = widgetManager.getWidgetByUid(QUEST_LIST_ROOT_UID);
+    if (!root || root.onVarTransmit?.[0] !== QUEST_LIST_REBUILD_SCRIPT) return;
+    root.onVarTransmit = undefined;
+    root.varTransmitTriggers = undefined;
+    if (root.eventHandlers) delete root.eventHandlers.onVarTransmit;
+}
+
 export function applyQuestListWidgetGroups(
     widgetManager: WidgetManager,
     groups: QuestListWidgetGroup[],
+    preferences: { largeText?: boolean; textShadow?: boolean; colors?: readonly number[] } = {},
 ): void {
     const list = widgetManager.getWidgetByUid(QUEST_LIST_LIST_UID);
     if (!list) return;
@@ -148,9 +179,12 @@ export function applyQuestListWidgetGroups(
     widgetManager.setServerOwnedWidget(QUEST_LIST_LIST_UID, true);
     widgetManager.setServerOwnedWidget(QUEST_LIST_TEXT_CONTAINER_UID, true);
     widgetManager.setServerOwnedWidget(QUEST_LIST_SCROLLBAR_UID, false);
+    stopCacheListRebuilds(widgetManager);
     clearDynamicChildren(widgetManager, list);
 
     let y = 0;
+    const rowHeight = preferences.largeText ? 18 : ROW_HEIGHT;
+    const lineHeight = preferences.largeText ? 13 : ROW_LINE_HEIGHT;
     for (const group of Array.isArray(groups) ? groups : []) {
         // One malformed group must not abort the list or skip the sizing below.
         try {
@@ -179,13 +213,15 @@ export function applyQuestListWidgetGroups(
                         xTextAlignment: 0,
                         yTextAlignment: 0,
                         actions: [],
+                        textShadow: preferences.textShadow !== false,
+                        textShadowed: preferences.textShadow !== false,
                     }),
                 );
                 y += HEADER_ADVANCE;
             }
 
             for (const quest of quests) {
-                const color = resolveQuestColor(quest.status);
+                const color = preferences.colors?.[quest.status] ?? resolveQuestColor(quest.status);
                 const rowText = boundedQuestText(quest.displayName);
                 registerChild(
                     widgetManager,
@@ -194,24 +230,26 @@ export function applyQuestListWidgetGroups(
                         rawX: 0,
                         rawY: y,
                         rawWidth: 0,
-                        rawHeight: ROW_HEIGHT,
+                        rawHeight: rowHeight,
                         widthMode: 1,
                         heightMode: 0,
                         xPositionMode: 1,
                         yPositionMode: 0,
                         text: rowText,
-                        fontId: FONT_PLAIN_11,
+                        fontId: preferences.largeText ? FONT_PLAIN_12 : FONT_PLAIN_11,
+                        textShadow: preferences.textShadow !== false,
+                        textShadowed: preferences.textShadow !== false,
                         textColor: color,
                         color,
                         mouseOverColor: COLOR_HOVER,
                         xTextAlignment: 0,
                         yTextAlignment: 1,
-                        lineHeight: ROW_LINE_HEIGHT,
+                        lineHeight,
                         actions: ["", "Read journal:", "", "", "", "Pin journal:"],
                         opBase: `<col=ff9040>${rowText}</col>`,
                     }),
                 );
-                y += ROW_HEIGHT;
+                y += rowHeight;
             }
         } catch (error) {
             console.warn("[quest-list] skipping malformed group", error);

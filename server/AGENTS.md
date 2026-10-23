@@ -32,6 +32,7 @@ against live OSRS, never against another private server.
     `plugins/combat/specials/`). Ask before deviating.
 13. **No one-offs.** No single-item special cases, override layers or abstractions for one
     value. Edit the canonical data (`data/definitions/items.json`, `shops.json`) instead.
+    For generated data, rule 16 applies: fix its dumper rather than its output.
 14. **Attribute keys** are kebab-case and namespaced (`warriors-guild:basement-unlocked`),
     declared once in a `*_ATTRIBUTE` constant. A saved attribute passes the value a new player
     starts with: `api.persistAttribute(KEY, 0)`. Values equal to it aren't saved, and a save
@@ -42,6 +43,14 @@ against live OSRS, never against another private server.
     `plugins/skills/sailing/data/`), loaded relative to the plugin file. World data stays in
     `data/definitions/`: world/shops/items/music, and everything about NPCs - definitions,
     animations, drops, dialogues, spawns, dormants - plus the bot population config.
+16. **Never manually modify generated JSON from
+    [RSPSApp/osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db).** This strictly
+    includes `npc-dialogues.json`, `npc-dialogue-index.json`, generated drops/subtables,
+    shops, examines and every other imported export. No hand merges, one-off edits or
+    post-generation patches. Fix the source/parser/dumper in `../osrsreboxed-db`, add the
+    relevant regression check, regenerate, and import the output. Repeat dumps from the
+    same inputs must match. Resolve conflicts through regeneration and disclose any
+    remaining difference; never hide it with a local override.
 
 ## A plugin that follows them
 
@@ -72,6 +81,7 @@ module.exports = {
 | Where behaviour comes from, packet captures, reference codebases | [docs/agents/sources.md](docs/agents/sources.md) |
 | Measuring performance before and after a change (MCP load + perf tools) | [docs/agents/perf.md](docs/agents/perf.md) |
 | Checking behaviour in-game (MCP test tools, incl. headless screenshots/clips) | [docs/agents/testing.md](docs/agents/testing.md) |
+| Testing a quest start-to-finish (Quest Helper route, stages/varps, rewards, relog) | [docs/agents/quest-testing.md](docs/agents/quest-testing.md) |
 
 Project layout: [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Gamemode-independent
 modules: [`docs/extrascripts.md`](../docs/extrascripts.md).

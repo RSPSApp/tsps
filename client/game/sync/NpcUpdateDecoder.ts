@@ -41,6 +41,10 @@ export type NpcUpdateBlock = {
     faceTile?: { x: number; y: number };
     /** Body-model slot overrides (OSRS npc model customisation); an empty list resets them. */
     modelCustomisation?: Array<{ slot: number; modelId: number }>;
+    /** Stand / walk / turn sequence overrides (slots 0 idle, 1 walk, 2 turn left, 3 turn right); empty resets them. */
+    baseAnimations?: Array<{ slot: number; seqId: number }>;
+    /** A fade of its model: transparency `from` (-1: its current) to `to` (0 opaque, 255 invisible). */
+    transparency?: { startCycle: number; endCycle: number; from: number; to: number };
     say?: string;
     colorOverride?: {
         startCycle: number;
@@ -67,7 +71,8 @@ export type NpcInfoFrame = {
  * - Maintains a local NPC id list internally.
  * - Only decodes the subset of update blocks that our server currently emits:
  *   FACE_ENTITY (0x8), HIT_MASK (0x20), COLOR_OVERRIDE (0x100), SPOTANIM2 (0x20000), SEQUENCE (0x10),
- *   HEAD_ICONS (0x200), EXACT_MOVE (0x400), FACE_TILE (0x800).
+ *   HEAD_ICONS (0x200), EXACT_MOVE (0x400), FACE_TILE (0x800), MODEL_CUSTOMISATION (0x1000),
+ *   BASE_ANIMATIONS (0x2000), TRANSPARENCY (0x8000).
  */
 export class NpcUpdateDecoder {
     private npcIndices: number[] = [];
@@ -90,6 +95,8 @@ export class NpcUpdateDecoder {
             /** Reference for main-world NPCs; the local tile unless the player is on a boat. */
             rootTileX?: number;
             rootTileY?: number;
+            /** Deck-scene base of a world view (the boat's deckBase); main-world NPCs use root. */
+            worldViewBase?: (worldViewId: number) => { x: number; y: number } | undefined;
             level: number;
         },
     ): NpcInfoFrame {
@@ -216,10 +223,16 @@ export class NpcUpdateDecoder {
             const rot = (typeof defaultRot === "number" ? defaultRot : 0) & 2047;
             const typeId = stream.readBits(16) | 0;
 
-            // Deck NPCs are relative to the player's deck tile, main-world NPCs to the root tile.
+            // Main-world NPCs are relative to the viewer's root tile; deck NPCs to the deck
+            // scene base of their own world view (not necessarily the player's boat).
             const inMainWorld = worldViewId < 0;
-            const baseX = inMainWorld ? (opts.rootTileX ?? opts.localTileX) : opts.localTileX;
-            const baseY = inMainWorld ? (opts.rootTileY ?? opts.localTileY) : opts.localTileY;
+            const viewBase = inMainWorld ? undefined : opts.worldViewBase?.(worldViewId);
+            const baseX = inMainWorld
+                ? (opts.rootTileX ?? opts.localTileX)
+                : (viewBase?.x ?? opts.localTileX);
+            const baseY = inMainWorld
+                ? (opts.rootTileY ?? opts.localTileY)
+                : (viewBase?.y ?? opts.localTileY);
             const tileX = (baseX | 0) + (dx | 0);
             const tileY = (baseY | 0) + (dy | 0);
 
@@ -402,6 +415,32 @@ export class NpcUpdateDecoder {
                     entries.push({ slot, modelId });
                 }
                 block.modelCustomisation = entries;
+            }
+
+            // BASE_ANIMATIONS (0x2000): the stand / walk / turn sequences to use instead of the type's.
+            if ((mask & 0x2000) !== 0) {
+                const count = stream.readUnsignedByte() | 0;
+                const entries: Array<{ slot: number; seqId: number }> = [];
+                for (let i = 0; i < count; i++) {
+                    const slot = stream.readUnsignedByte() | 0;
+                    const seqId = stream.readUnsignedShortBE() | 0;
+                    entries.push({ slot, seqId: seqId === 0xffff ? -1 : seqId });
+                }
+                block.baseAnimations = entries;
+            }
+
+            // TRANSPARENCY (0x8000): a fade of the model (OSRS npc transparency).
+            if ((mask & 0x8000) !== 0) {
+                const start = stream.readUnsignedShortBE() | 0;
+                const end = stream.readUnsignedShortBE() | 0;
+                const from = stream.readUnsignedShortBE() | 0;
+                const to = stream.readUnsignedByte() | 0;
+                block.transparency = {
+                    startCycle: ((opts.clientCycle | 0) + start) | 0,
+                    endCycle: ((opts.clientCycle | 0) + end) | 0,
+                    from: from === 0xffff ? -1 : from & 0xff,
+                    to,
+                };
             }
 
             if (Object.keys(block).length > 0) {

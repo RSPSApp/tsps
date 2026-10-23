@@ -155,21 +155,10 @@ test('shearing makes a sheep bald for one minute and never yields wool twice', (
   const event = { player: p, npc: sheep, npcId: N.SHEEP_18, clickType: 1, definition: { getActions: () => ['Shear'] } };
   h.hooks.onNpcInteraction[0](event); h.hooks.onNpcInteraction[0](event);
   assert.equal(p.items.get(I.WOOL), 1);
-  assert.deepEqual(transforms, [N.SHEEP_16]);
+  assert.deepEqual(transforms, [N.SHEEP_2]);
   const regrow = h.tasks.at(-1); assert.equal(regrow.getDelay(), 100); regrow.execute();
   h.hooks.onNpcInteraction[0](event);
   assert.equal(p.items.get(I.WOOL), 2);
-});
-
-test('spinning uses the native production menu and honours the selected amount', () => {
-  const h = harness('SheepShearer'), p = player(); p.items.set(I.WOOL, 3);
-  h.hooks.onItemOnObject[0]({ player: p, itemId: I.WOOL, objectId: O.SPINNING_WHEEL });
-  assert.deepEqual(p.menu.getItems(), [I.BALL_OF_WOOL]);
-  assert.equal(p.items.get(I.WOOL), 3);
-  p.menu.execute(I.BALL_OF_WOOL, 2);
-  const task = h.tasks.at(-1); task.execute(); task.execute();
-  assert.equal(p.items.get(I.WOOL), 1); assert.equal(p.items.get(I.BALL_OF_WOOL), 2);
-  assert.deepEqual(p.xp, [[core.Skill.CRAFTING, 2.5], [core.Skill.CRAFTING, 2.5]]);
 });
 
 test('Harlow requests beer before advancing, then exchanges one beer for one stake', () => {

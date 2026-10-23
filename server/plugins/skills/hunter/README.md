@@ -26,7 +26,8 @@ nets, rumours, pursuit charges) is persisted and restored on login.
   Molch pearls, golden tench, spirit flakes, Rada's blessing, fish cutting and clue bottles.
 - **Herbiboar** (`Herbiboar.Hunter.js`): five starts, cache-derived trail graph, fossil/numulite
   inspections, tunnel flush, 1-4 herbs by Herblore level with magic secateurs, Herbi pet.
-- **Drift net fishing** (`DriftNets.Hunter.js`): Ceto access (daily/permanent numulite), two anchors,
+- **Drift net fishing** (`DriftNets.Hunter.js`): Ceto or the tunnel beside her (daily/permanent numulite;
+  the sea floor is reached by the rowboats in `plugins/areas/FossilIslandUnderwater.plugin.js`), two anchors,
   Annette's 2,000-net storage, active chase and passive capture, fish/fossil/clue rewards and
   bank-for-5-numulite, 44 Hunter/47 Fishing level-gated.
 - **Crab traps** (`Crabs.Hunter.js`): red/blue/rainbow traps built with Construction, baiting,
@@ -55,8 +56,10 @@ interpolation in `Context.probability`. Where the Wiki publishes no numbers, the
 - Lucky jars only give one clue-table roll; another plugin may answer `hunter:lucky-loot`.
 - Wyrmscraig goats, Letvek and Stymphalak have no usable rev237 assets and are excluded. Aerial
   fishing uses king worms/fish offcuts because fish chunks and javelin heads are absent.
-- Box traps require Eagles' Peak; quest plugins answer `quest:is-complete` or the fallback reads
-  `quest.<key>.stage >= 2`. No live in-game playthrough has been done yet.
+- Box traps need Eagles' Peak from stage 6, when Nickolaus teaches them at the camp (the Wiki asks
+  for partial completion); quest plugins answer `quest:is-complete`, or the fallback reads
+  `quest.<key>.stage >= 2`. Tracking, box traps, Herbiboar and a full drift-net cycle have been
+  played through with the agent MCP; most other methods have not.
 
 ## Sources
 

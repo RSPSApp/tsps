@@ -62,6 +62,7 @@ export class TaskManager {
      * skipped this cycle (bot stride) still makes progress.
      */
     public static processWalkTo(key: any): void {
+        TaskManager.activatePendingWalkTo(key);
         let writeIndex = 0;
         const tasks = TaskManager.activeTasks;
         for (let i = 0; i < tasks.length; i++) {
@@ -85,6 +86,26 @@ export class TaskManager {
             if (keepRunning) tasks[writeIndex++] = t;
         }
         tasks.length = writeIndex;
+    }
+
+    /**
+     * Client input runs inside the owner's turn, after this cycle's process() has
+     * already activated pending tasks. A walk-to submitted there must still get its
+     * reach check after this turn's movement, or arriving on the click cycle
+     * resolves a cycle late.
+     */
+    private static activatePendingWalkTo(key: any): void {
+        if (TaskManager.pendingTasks.length === 0) return;
+        const pending = TaskManager.pendingTasks.toArray();
+        if (!pending.some(t => t.type === TaskType.WALK_TO && t.key === key)) return;
+        TaskManager.pendingTasks.clear();
+        for (const t of pending) {
+            if (t.type !== TaskType.WALK_TO || t.key !== key) {
+                TaskManager.pendingTasks.push(t);
+            } else if (t.isRunning()) {
+                TaskManager.activeTasks.push(t);
+            }
+        }
     }
 
     /** Catches WALK_TO tasks whose owner did not take a turn this cycle. */

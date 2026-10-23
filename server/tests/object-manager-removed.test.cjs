@@ -138,6 +138,51 @@ test('runtime objects are indexed by tile and region, in step with the world lis
     assert.ok(!World.getObjects().includes(fire) && !World.getObjects().includes(elsewhere));
 });
 
+test('a runtime object removed while out of a player\'s scene is removed when they come back', () => {
+    const scenePlayer = (inScene) => {
+        const packets = [];
+        return {
+            packets,
+            inScene,
+            getPrivateArea: () => null,
+            getSession() { return { isTileInScene: () => this.inScene }; },
+            getPacketSender: () => ({
+                sendObject: (object) => packets.push(['add', object]),
+                sendObjectRemoval: (object) => packets.push(['del', object]),
+            }),
+        };
+    };
+    const opener = scenePlayer(true);
+    const stranger = scenePlayer(false);
+    const originalForEach = World.forEachNetworkPlayer;
+    World.forEachNetworkPlayer = (consumer) => [opener, stranger].forEach(consumer);
+    try {
+        // An opened door: a runtime loc the opener's client was sent.
+        const at = new Location(3222, 3218, 0);
+        const door = new GameObject(1536, at, 0, 1, null);
+        ObjectManager.register(door, true);
+        assert.deepEqual(opener.packets, [['add', door]]);
+
+        // It closes while the opener is away: no packet reaches them.
+        opener.inScene = false;
+        opener.packets.length = 0;
+        ObjectManager.deregister(new GameObject(1536, at.clone(), 0, 1, null), true);
+        assert.deepEqual(opener.packets, []);
+
+        // Back in the scene, the stale door is removed once; the stranger never saw it.
+        opener.inScene = true;
+        ObjectManager.onRegionChange(opener, 3222 - 52, 3218 - 52);
+        assert.deepEqual(opener.packets.map(([kind, object]) => [kind, object.getId()]), [['del', 1536]]);
+        opener.packets.length = 0;
+        ObjectManager.onRegionChange(opener, 3222 - 52, 3218 - 52);
+        assert.deepEqual(opener.packets, []);
+        ObjectManager.onRegionChange(stranger, 3222 - 52, 3218 - 52);
+        assert.deepEqual(stranger.packets, []);
+    } finally {
+        World.forEachNetworkPlayer = originalForEach;
+    }
+});
+
 test('owner objects resolve through normal loc lookup and only enter their owner scene', () => {
     const ownerPackets = [], otherPackets = [];
     const player = (packets) => ({

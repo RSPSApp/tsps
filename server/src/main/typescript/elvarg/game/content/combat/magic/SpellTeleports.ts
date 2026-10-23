@@ -27,14 +27,14 @@ class TeleportSpell extends Spell {
     startCast(): void { }
     getSpellbook(): MagicSpellbook { return this.data.spellbook; }
 
-    cast(player: Player, name: string): boolean {
-        if (!TeleportHandler.checkReqs(player, this.data.destination) || !this.canCast(player, false)) {
+    cast(player: Player, name: string, destination: Location = this.data.destination): boolean {
+        if (!TeleportHandler.checkReqs(player, destination) || !this.canCast(player, false)) {
             return true;
         }
         if (!this.canCast(player, true)) {
             return true;
         }
-        TeleportHandler.teleport(player, this.data.destination, this.data.spellbook === MagicSpellbook.ANCIENT ? TeleportType.ANCIENT : TeleportType.NORMAL, false,
+        TeleportHandler.teleport(player, destination, this.data.spellbook === MagicSpellbook.ANCIENT ? TeleportType.ANCIENT : TeleportType.NORMAL, false,
             () => PluginManager.emitCustomEvent("spell:teleport-arrival", { player, name }));
         player.getSkillManager().addExperiences(Skill.MAGIC, this.data.experience);
         return true;
@@ -73,9 +73,10 @@ export class SpellTeleports {
         return Array.from(this.SPELLS, ([name, spell]) => ({ name, ...spell.data }));
     }
 
-    static handleSelf(player: Player, name: string | undefined): boolean {
+    /** Casts a teleport; `destination` replaces the spell's own (Varrock's Grand Exchange option). */
+    static handleSelf(player: Player, name: string | undefined, destination?: Location): boolean {
         const key = name?.trim().toLowerCase() ?? "";
         const spell = this.SPELLS.get(key);
-        return spell ? spell.cast(player, key) : false;
+        return spell ? spell.cast(player, key, destination) : false;
     }
 }

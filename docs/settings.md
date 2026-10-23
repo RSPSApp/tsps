@@ -20,6 +20,7 @@ The client only reports the click. The server sets the variable and sends it bac
 
 | Setting | Id | Variable |
 | --- | --- | --- |
+| Hide roofs | 7 | varbit 12378 `option_hide_rooftops` |
 | Hitsplat tinting | 5 | varbit 10236 `hitsplat_tint_disabled` |
 | Max hit hitsplats | 279 | varbit 14196 `hitsplat_maxhit_disabled` |
 | Show boss health overlay | 10 | varbit 12389 `hpbar_hud_boss_disabled` |
@@ -80,4 +81,39 @@ With pop-ups disabled, players kept skilling and fighting straight through their
 - **Jingles.** Live plays `midi_jingle` per skill, two per skill (Attack 29/30, Defence 37/38, Magic 51/52, combat 299 …). Which one plays depends on the level: Magic's second plays at levels that unlock a spell, while Hitpoints and Strength switch to it at 50. The rule per skill still needs working out.
 - **Player Trade and Report options**: live also sends `set_player_op` (4 "Trade with", 8 "Report") or removes them. The tsps client builds those menu entries itself, so only the varbits are set.
 - **Sailing side panel**: live also sets `sailing_sidepanel_visible_from_combat_tab` (19153) from the option. Sailing sets that varbit itself when boarding and leaving.
-- **Colour pickers** (type 9, for example Public chat colour) are not handled.
+- **Other colour pickers** (type 9, for example Public chat colour) are not handled; quest-list colours are supported below.
+
+## Quest list preferences (cache 241)
+
+Settings at `399:11` opens native All Settings (`134`) on Interfaces (category6,
+struct3621 / enum4025). Quest List occupies rows38–55. Button scripts5996 →3944
+→3945 only play a sound; the server owns opening the modal. Authored mappings in
+Settings.plugin.js are independent of generated JSON. Cache structs3107/3108/3110/
+3599/3744/3751–3755/4286/2735 and reader6716 establish setting ids214–223,239,240
+and varbits13772–13781,13889–13890. Enums4244/4245/4246 define twelve sorting
+modes, three requirement choices and Small/Large.
+
+Quest DB table0 supplies metadata through named gameval columns. Regression tests
+verify every registered quest has a cache record. Requirements use registered quest
+completion, cache stat pairs, quest points and combat level. Recommended stats and
+combat are a separate filter. Quest stages and level-ups refresh active filters.
+Classic separates Free Quests, Members' Quests and Miniquests. All twelve sorting
+modes rebuild the same server slot mapping; tied names use quest keys. Hidden
+headers reserve no slots. Old flags are cleared and clicks use the last sent snapshot.
+
+The renderer reads text/shadow settings and colour varps, recomputes row heights,
+scroll extents and dragger bounds, and preserves the native scrollbar. CS2 2633 uses
+fonts494/495 for small/large. Reader4181 maps settings224/225/226/227 to varps
+3410/3409/3411/3412, stored as RGB+1; zero selects the struct default. The server
+mounts native colour modal288 in134:2 and calls4185. Scripts4208 →4209 →614
+return RGB via resume_countdialog;2147483647 cancels and -1 selects default.
+Amount replies allow zero/negative only when the prompt opts in; plugin validation
+accepts -1..0xffffff. Setting228 resets all four colours. Preferences persist through
+the existing settings:values framework and restore on login/remount.
+
+Verification: settings/quest suites412passed, existing quest-list/runtime smokes,
+client rendering/scrollbar tests, server build, client typecheck/production build.
+Native acceptance: at the isolated worktree URL open Quests →Settings, scroll
+Interfaces to Quest List, change sorting/filter, close and open row journals. Choose
+Large, disable shadows, choose a colour (including black), reset and relog. Use the
+worktree ports; leave the main play world running.

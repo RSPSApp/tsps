@@ -7,8 +7,7 @@ import {
     LOGIN_FORM_BUTTON_Y,
     LOGIN_FORM_REMEMBER_Y,
     getRememberedPlayBounds,
-    REMEMBERED_LOG_OUT_TEXT,
-    REMEMBERED_LOG_OUT_Y,
+    REMEMBERED_SIGN_OUT_Y,
     REMEMBER_USERNAME_TEXT,
 } from "../layout/geometry";
 import { measureText } from "../render/drawUtils";
@@ -193,17 +192,8 @@ export function handleWelcomeDisplayNameClick(host: LoginRendererHost, x: number
         if (x >= button.x && x < button.x + button.width && y >= button.y && y < button.y + button.height) {
             return LoginActions.PLAY;
         }
-        if (host.fontPlain11) {
-            const centerX = host.loginBoxX + 180;
-            const halfWidth = measureText(host, host.fontPlain11, REMEMBERED_LOG_OUT_TEXT) / 2;
-            if (
-                x >= centerX - halfWidth - 4 &&
-                x <= centerX + halfWidth + 4 &&
-                y >= REMEMBERED_LOG_OUT_Y - 12 &&
-                y <= REMEMBERED_LOG_OUT_Y + 4
-            ) {
-                return LoginActions.FORGET_REMEMBERED_LOGIN;
-            }
+        if (isButtonHit(host, x, y, host.loginBoxX + 180, REMEMBERED_SIGN_OUT_Y)) {
+            return LoginActions.FORGET_REMEMBERED_LOGIN;
         }
         return undefined;
     

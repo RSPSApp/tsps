@@ -2,6 +2,18 @@
 
 Server rules and plugin conventions are in [server/AGENTS.md](server/AGENTS.md).
 
+## Generated data
+
+Manual modifications to `npc-dialogues.json` or **any generated JSON dumped from
+[RSPSApp/osrsreboxed-db](https://github.com/RSPSApp/osrsreboxed-db) are strictly forbidden,
+including conflict resolutions, one-off repairs and post-dump patches. Fix the source,
+parser or export logic in `../osrsreboxed-db`, then regenerate and import its output.
+Preserve the fix in the dumper with a regression check; repeat generation from the same
+inputs must produce identical content. Resolve generated-file conflicts by regeneration,
+and report any remaining difference. Generated files change only through this process.
+Inspect the original source and fix parser/runtime bugs at their cause; moving a
+repaired output subtree into a dumper override does not satisfy this rule.
+
 ## Worktrees
 
 Several agents work at once, each in its own worktree with its own ports. They are in the

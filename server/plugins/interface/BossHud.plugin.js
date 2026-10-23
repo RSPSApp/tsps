@@ -14,6 +14,10 @@
  *   ticks later) clears the values and hides it. A show before then cancels it. With no delay the
  *   values clear at once and a fade is left to finish (the Doom's kill, as captured).
  * - "boss-hud:reset" { player } - hides it and empties its container (the Doom's delve change).
+ * - "boss-hud:extra" { player, current, maximum, colours?, hidden? } - the second bar under the
+ *   first (rev 241, hpbar_hud_show_extra_bar): the Smorks under Bork, Ocellus' first phase. Live
+ *   sets varp 5991, varbits 16570/16571 (current, maximum), colours on 303:24-26 and runs 10152
+ *   (false); `hidden` takes it away again.
  */
 const GROUP = 303;
 const uid = (child) => (GROUP << 16) | child;
@@ -29,16 +33,16 @@ const FADE_OUT_SCRIPT = 2889;
 const CLEAR_SCRIPT = 2249;
 const HP = uid(5);
 const CONTAINER = uid(1);
-const OPEN_COMPONENTS = [0, 2, 4, 5, 8, 10, 20, 13, 14, 15, 9, 6, 7, 11, 18, 19, 16, 17, 3].map(uid);
-const REDRAW_COMPONENTS = [5, 20, 13, 14, 15, 8, 9, 18, 19, 16, 17].map(uid);
+const OPEN_COMPONENTS = [0, 2, 4, 5, 8, 10, 21, 14, 15, 16, 9, 6, 7, 12, 19, 20, 17, 18, 3].map(uid);
+const REDRAW_COMPONENTS = [5, 21, 14, 15, 16, 8, 9, 19, 20, 17, 18].map(uid);
 /**
  * The fade scripts take 14 components and the transparency to start from: hp, name_area,
  * outer_border, name_backing, creature_name, inner_border, the bar's back, sliding and remaining
  * parts, its text, its thresholds and hp_bar_1/2.
  */
-const FADE_COMPONENTS = [5, 8, 6, 7, 9, 11, 13, 14, 15, 20, 18, 19, 16, 17].map(uid);
+const FADE_COMPONENTS = [5, 8, 6, 7, 9, 12, 14, 15, 16, 21, 19, 20, 17, 18].map(uid);
 /** The bar's back, sliding and remaining parts, and their usual colours (15-bit RGB, captured). */
-const COLOUR_COMPONENTS = [13, 14, 15].map(uid);
+const COLOUR_COMPONENTS = [14, 15, 16].map(uid);
 const COLOURS = [25600, 576, 800];
 /**
  * 2887 returns at once if told to start from the transparency the HUD already has, and a
@@ -49,6 +53,13 @@ const SHOW_FADE_FROM = 254;
 const FADE_IN_FROM = 255;
 const FADE_OUT_FROM = 0;
 const HIDE_AFTER_TICKS = 4;
+
+const SHOW_EXTRA_VARP = 5991;
+const EXTRA_CURRENT_VARBIT = 16570;
+const EXTRA_MAXIMUM_VARBIT = 16571;
+const EXTRA_REDRAW_SCRIPT = 10152;
+/** health_bar_back_extra, _sliding_extra and _remaining_extra. */
+const EXTRA_COLOUR_COMPONENTS = [24, 25, 26].map(uid);
 
 let core = null;
 /** Per player: what their HUD shows, and a counter that cancels a pending hide. */
@@ -113,6 +124,10 @@ function clear(player, hideHp = true) {
     .sendVarbit(CURRENT_VARBIT, 0)
     .sendVarbit(MAXIMUM_VARBIT, 0)
     .sendVarbit(BOSS_VARBIT, 0);
+  if (state.extra) {
+    state.extra = null;
+    sender.sendConfig(SHOW_EXTRA_VARP, 0).sendVarbit(EXTRA_CURRENT_VARBIT, 0).sendVarbit(EXTRA_MAXIMUM_VARBIT, 0);
+  }
   if (hideHp) sender.sendInterfaceDisplayState(HP, true);
 }
 
@@ -144,6 +159,28 @@ function resetHud({ player }) {
   sender.sendInterfaceScript(CLEAR_SCRIPT, [CONTAINER]);
 }
 
+/** The second bar: shown with its values and colours, or `hidden` (each sends only what changed). */
+function extraHud({ player, current, maximum, colours, hidden = false }) {
+  if (!player) return;
+  const state = stateOf(player);
+  const sender = player.getPacketSender();
+  if (hidden) {
+    if (!state.extra) return;
+    state.extra = null;
+    sender.sendConfig(SHOW_EXTRA_VARP, 0).sendVarbit(EXTRA_CURRENT_VARBIT, 0).sendVarbit(EXTRA_MAXIMUM_VARBIT, 0);
+    return;
+  }
+  const extra = state.extra ?? (state.extra = { current: -1, maximum: -1, colours: null });
+  if (maximum != null && maximum !== extra.maximum) sender.sendVarbit(EXTRA_MAXIMUM_VARBIT, (extra.maximum = maximum));
+  if (current != null && current !== extra.current) sender.sendVarbit(EXTRA_CURRENT_VARBIT, (extra.current = Math.max(0, current)));
+  sender.sendConfig(SHOW_EXTRA_VARP, 1);
+  if (colours && colours.join() !== extra.colours?.join()) {
+    EXTRA_COLOUR_COMPONENTS.forEach((component, index) => sender.sendInterfaceColour(component, colours[index]));
+    extra.colours = colours;
+  }
+  sender.sendClientScript(EXTRA_REDRAW_SCRIPT, 0);
+}
+
 function bind(api) {
   core = api.core;
 }
@@ -157,5 +194,6 @@ module.exports = {
     api.onCustomEvent("boss-hud:fade", fadeHud);
     api.onCustomEvent("boss-hud:hide", hideHud);
     api.onCustomEvent("boss-hud:reset", resetHud);
+    api.onCustomEvent("boss-hud:extra", extraHud);
   },
 };

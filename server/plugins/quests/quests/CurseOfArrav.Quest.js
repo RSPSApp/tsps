@@ -931,8 +931,19 @@ module.exports = function registerCurseOfArravQuest(api) {
     player.moveTo(new Location(TUNNEL_CELLAR_LANDING.x, TUNNEL_CELLAR_LANDING.y, 0));
   }
 
+  /** Defender of Varrock has its own key/dialogue/entry on this shared trapdoor. */
+  function defenderActive(player) {
+    const started = { player, key: "defender_of_varrock", started: false };
+    api.emitCustomEvent("quest:is-started", started);
+    if (started.started !== true) return false;
+    const complete = { player, key: "defender_of_varrock", complete: false };
+    api.emitCustomEvent("quest:is-complete", complete);
+    return complete.complete !== true;
+  }
+
   function handleBaseTrapdoorOpen(event) {
     const { player } = event;
+    if (defenderActive(player)) return; // let Defender play V_TRAPDOOR and consume its key
     event.handled = true;
     const tile = objectTile(event);
     if (tile) replacePlacedObject(BASE_TRAPDOOR_OPEN_REPLACEMENT_ID, tile.x, tile.y, BASE_TRAPDOOR_OPEN_OBJECT_ID, 10, 1);
@@ -940,6 +951,7 @@ module.exports = function registerCurseOfArravQuest(api) {
 
   function handleBaseTrapdoorEnter(event) {
     const { player } = event;
+    if (defenderActive(player)) return; // Defender owns the active-quest crossing
     event.handled = true;
     player.moveTo(new Location(BASE_INTERIOR_LANDING.x, BASE_INTERIOR_LANDING.y, 0));
   }

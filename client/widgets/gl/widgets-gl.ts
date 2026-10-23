@@ -7,5 +7,6 @@ export {
     processWidgetUiInput,
     detachGLUI,
     cleanupInterfaceClickTargets,
+    cleanupWidgetClickTarget,
     getVisibleWidgetSurfaceReason,
 } from "./widgetsGl";

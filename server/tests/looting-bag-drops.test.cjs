@@ -51,3 +51,30 @@ test("monsters found everywhere follow the same rule", () => {
 test("abyssal demons never drop one, even in the Wilderness", () => {
   assert.equal(dropsBag("abyssal_demon_drop_table_wilderness", npc("Abyssal demon", ...WILDERNESS)), false);
 });
+
+const HARD_CLUE = 2722;
+
+test("npc-drops:tertiary-chance multiplies a tertiary's chance (Mortimer's clue tasks)", () => {
+  const listeners = [];
+  const noop = () => undefined;
+  const api = new Proxy({
+    core: {},
+    getItemOnGroundManager: () => ({}),
+    emitCustomEvent: (name, payload) => { if (name === "npc-drops:tertiary-chance") listeners.forEach((fn) => fn(payload)); },
+  }, { get: (target, key) => (key in target ? target[key] : noop) });
+  require("../plugins/npcs/NpcDrops.plugin").register(api);
+  const table = [...__internals.tablesByNpc.values()].flat().find((candidate) => candidate.table_id === "bloodveld");
+  const hardClue = (roll) => {
+    const random = Math.random;
+    Math.random = () => roll;
+    try {
+      return __internals.rollTable(table, player, npc("Bloodveld", ...LUMBRIDGE)).some((drop) => drop.itemId === HARD_CLUE);
+    } finally {
+      Math.random = random;
+    }
+  };
+  // 1/256: a roll of 1.5/256 misses, and hits at twice the chance.
+  assert.equal(hardClue(1.5 / 256), false);
+  listeners.push((request) => request.rules.push({ pattern: /^clue scroll/i, multiplier: 2 }));
+  assert.equal(hardClue(1.5 / 256), true);
+});

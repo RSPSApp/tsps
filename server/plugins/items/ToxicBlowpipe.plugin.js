@@ -1,41 +1,25 @@
-const { Animation } = require("../../src/main/typescript/elvarg/game/model/Animation");
-const { CombatSpecial } = require("../../src/main/typescript/elvarg/game/content/combat/CombatSpecial");
-const { Flag } = require("../../src/main/typescript/elvarg/game/model/Flag");
-const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
-const { PendingHit } = require("../../src/main/typescript/elvarg/game/content/combat/hit/PendingHit");
-const { Projectile } = require("../../src/main/typescript/elvarg/game/model/Projectile");
-const { RangedCombatMethod } = require("../../src/main/typescript/elvarg/game/content/combat/method/impl/RangedCombatMethod");
-const { RangedWeapon, Ammunition } = require("../../src/main/typescript/elvarg/game/content/combat/ranged/RangedData");
-const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
-const { Sound } = require("../../src/main/typescript/elvarg/game/Sound");
-const { Sounds } = require("../../src/main/typescript/elvarg/game/Sounds");
-const { WeaponInterfaces } = require("../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaces");
-const { WeaponProfiles } = require("../../src/main/typescript/elvarg/game/content/combat/WeaponProfile");
-const { WeaponInterfaceManager } = require("../../src/main/typescript/elvarg/game/content/combat/WeaponInterfaceManager");
-const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
-const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
-const { Misc } = require("../../src/main/typescript/elvarg/util/Misc");
+let core;
+const methods = new Map();
+const uncappedDamage = new WeakMap();
 
-const TOXIC_BLOWPIPE_EMPTY_ID = ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_;
-const TOXIC_BLOWPIPE_ID = ItemIdentifiers.TOXIC_BLOWPIPE;
-const ZULRAH_SCALES_ID = 12934;
 const TOXIC_BLOWPIPE_MAX_SCALES = 16383;
 const TOXIC_BLOWPIPE_MAX_DARTS = 16383;
 const TOXIC_BLOWPIPE_META_KEY = "toxic-blowpipe";
 
 const DART_RANGED_STRENGTHS = new Map([
-  [ItemIdentifiers.BRONZE_DART, 1],
-  [ItemIdentifiers.IRON_DART, 2],
-  [ItemIdentifiers.STEEL_DART, 3],
-  [ItemIdentifiers.BLACK_DART, 6],
-  [ItemIdentifiers.MITHRIL_DART, 9],
-  [ItemIdentifiers.ADAMANT_DART, 17],
-  [ItemIdentifiers.RUNE_DART, 26],
-  [ItemIdentifiers.AMETHYST_DART, 28],
-  [ItemIdentifiers.DRAGON_DART, 35],
+  ["BRONZE_DART", 1],
+  ["IRON_DART", 2],
+  ["STEEL_DART", 3],
+  ["BLACK_DART", 6],
+  ["MITHRIL_DART", 9],
+  ["ADAMANT_DART", 17],
+  ["RUNE_DART", 26],
+  ["AMETHYST_DART", 28],
+  ["DRAGON_DART", 35],
 ]);
 
-const TOXIC_BLOWPIPE_DART_ID_SET = new Set(Array.from(DART_RANGED_STRENGTHS.keys()));
+// Venom starts at 6 damage and escalates (Wiki: Venom); poisonEntity stores it as the damage.
+const VENOM_START_DAMAGE = 6;
 const EMPTY_STATE = Object.freeze({ scales: 0, dartId: -1, dartAmount: 0 });
 
 function normalizeInt(value, fallback) {
@@ -43,11 +27,11 @@ function normalizeInt(value, fallback) {
 }
 
 function isToxicBlowpipeItemId(itemId) {
-  return itemId === TOXIC_BLOWPIPE_EMPTY_ID || itemId === TOXIC_BLOWPIPE_ID;
+  return itemId === core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_ || itemId === core.ItemIdentifiers.TOXIC_BLOWPIPE;
 }
 
 function isToxicBlowpipeDartId(itemId) {
-  return TOXIC_BLOWPIPE_DART_ID_SET.has(Number(itemId));
+  return [...DART_RANGED_STRENGTHS.keys()].some((name) => core.ItemIdentifiers[name] === Number(itemId));
 }
 
 function sanitizeMeta(raw) {
@@ -78,7 +62,7 @@ const BlowpipeState = {
       item.setMetaValue(TOXIC_BLOWPIPE_META_KEY, state);
     }
     if (item && isToxicBlowpipeItemId(item.getId())) {
-      item.setId(state.scales > 0 || state.dartAmount > 0 ? TOXIC_BLOWPIPE_ID : TOXIC_BLOWPIPE_EMPTY_ID);
+      item.setId(state.scales > 0 || state.dartAmount > 0 ? core.ItemIdentifiers.TOXIC_BLOWPIPE : core.ItemIdentifiers.TOXIC_BLOWPIPE_EMPTY_);
     }
     return item;
   },
@@ -86,7 +70,7 @@ const BlowpipeState = {
     return this.write(item, updater(this.read(item)));
   },
   equipped(player) {
-    const item = player?.getEquipment?.()?.get?.(Equipment.WEAPON_SLOT) ?? null;
+    const item = player?.getEquipment?.()?.get?.(core.Equipment.WEAPON_SLOT) ?? null;
     return item && isToxicBlowpipeItemId(item.getId()) ? item : null;
   },
   hasDarts(item) {
@@ -95,7 +79,7 @@ const BlowpipeState = {
   },
   ammo(item) {
     const { dartId } = this.read(item);
-    return dartId > 0 ? Ammunition.getForItem(dartId) : null;
+    return dartId > 0 ? core.Ammunition.getForItem(dartId) : null;
   },
   addScales(item, amount) {
     return this.update(item, (state) => ({ ...state, scales: state.scales + amount }));
@@ -128,7 +112,7 @@ const BlowpipeState = {
 };
 
 function getToxicBlowpipeDartStrength(itemId) {
-  return DART_RANGED_STRENGTHS.get(Number(itemId)) ?? 0;
+  return [...DART_RANGED_STRENGTHS].find(([name]) => core.ItemIdentifiers[name] === Number(itemId))?.[1] ?? 0;
 }
 
 function getDefinitionBonus(item, index) {
@@ -144,7 +128,7 @@ function getAmmoName(dartId) {
   if (!isToxicBlowpipeDartId(dartId)) {
     return "darts";
   }
-  return new Item(dartId).getDefinition()?.getName?.()?.toLowerCase?.() ?? "darts";
+  return new core.Item(dartId).getDefinition()?.getName?.()?.toLowerCase?.() ?? "darts";
 }
 
 function canAddStack(inventory, itemId) {
@@ -171,16 +155,16 @@ function refreshBlowpipeState(player, item, preferredSlot = -1) {
   if (container) {
     container.refreshItems();
     if (container === player.getEquipment()) {
-      player.getUpdateFlag()?.flag?.(Flag.APPEARANCE);
+      player.getUpdateFlag()?.flag?.(core.Flag.APPEARANCE);
     }
   }
   if (
-    player.getWeapon?.() === WeaponInterfaces.BLOWPIPE ||
-    player.getEquipment().get(Equipment.WEAPON_SLOT) === item
+    player.getWeapon?.() === core.WeaponInterfaces.BLOWPIPE ||
+    player.getEquipment().get(core.Equipment.WEAPON_SLOT) === item
   ) {
-    WeaponInterfaceManager.assign(player);
+    core.WeaponInterfaceManager.assign(player);
   }
-  BonusManager.update(player);
+  core.BonusManager.update(player);
 }
 
 function isReady(player, item, amountRequired = 1, silent = false) {
@@ -217,7 +201,7 @@ function chargeScales(player, blowpipeItem, blowpipeSlot, scaleItem) {
   if (add <= 0) {
     return;
   }
-  player.getInventory().deleteNumber(ZULRAH_SCALES_ID, add);
+  player.getInventory().deleteNumber(core.ItemIdentifiers.ZULRAHS_SCALES, add);
   BlowpipeState.addScales(blowpipeItem, add);
   refreshBlowpipeState(player, blowpipeItem, blowpipeSlot);
   player.sendMessage(`You add ${add} Zulrah scales to the blowpipe.`);
@@ -238,7 +222,7 @@ function chargeDarts(player, blowpipeItem, blowpipeSlot, dartItem) {
   }
 
   if (currentAmount > 0 && currentId !== dartId) {
-    player.getInventory().add(new Item(currentId, currentAmount), true);
+    player.getInventory().add(new core.Item(currentId, currentAmount), true);
     BlowpipeState.clear(blowpipeItem);
   }
 
@@ -263,7 +247,7 @@ function unloadBlowpipe(player, blowpipeItem, slot) {
 
   const inventory = player.getInventory();
   let requiredSlots = 0;
-  if (scales > 0 && !inventory.contains(ZULRAH_SCALES_ID)) {
+  if (scales > 0 && !inventory.contains(core.ItemIdentifiers.ZULRAHS_SCALES)) {
     requiredSlots++;
   }
   if (dartAmount > 0 && !inventory.contains(dartId)) {
@@ -275,10 +259,10 @@ function unloadBlowpipe(player, blowpipeItem, slot) {
   }
 
   if (scales > 0) {
-    inventory.add(new Item(ZULRAH_SCALES_ID, scales), true);
+    inventory.add(new core.Item(core.ItemIdentifiers.ZULRAHS_SCALES, scales), true);
   }
   if (dartAmount > 0 && isToxicBlowpipeDartId(dartId)) {
-    inventory.add(new Item(dartId, dartAmount), true);
+    inventory.add(new core.Item(dartId, dartAmount), true);
   }
 
   BlowpipeState.clear(blowpipeItem);
@@ -300,10 +284,9 @@ function sendStatus(player, blowpipeItem) {
 }
 
 function maybeConsumeLoadedDart(player, blowpipeItem) {
-  if (player.getEquipment().get(Equipment.CAPE_SLOT).getId() === ItemIdentifiers.AVAS_ACCUMULATOR) {
-    if (Misc.getRandom(12) <= 9) {
-      return false;
-    }
+  // An Ava's device keeps its share of the darts out of the pipe's count (Wiki: 60/72/80%).
+  if (core.Misc.getRandom(99) < core.CombatFactory.ammoRecovery(player)) {
+    return false;
   }
   if (BlowpipeState.consumeDart(blowpipeItem) <= 0) {
     player.sendMessage("Your Toxic blowpipe has run out of darts!");
@@ -314,7 +297,7 @@ function maybeConsumeLoadedDart(player, blowpipeItem) {
 }
 
 function maybeConsumeScale(player, blowpipeItem) {
-  if (Misc.getRandom(2) !== 0) {
+  if (core.Misc.getRandom(2) !== 0) {
     if (BlowpipeState.consumeScale(blowpipeItem) <= 0) {
       player.sendMessage("Your Toxic blowpipe has run out of scales!");
       player.getCombat().reset();
@@ -324,242 +307,232 @@ function maybeConsumeScale(player, blowpipeItem) {
   return false;
 }
 
-class ToxicBlowpipeCombatMethod extends RangedCombatMethod {
-  constructor(special) {
-    super();
-    this.special = special === true;
+function combatMethod(special) {
+  if (methods.has(special))
+    return methods.get(special);
+  class ToxicBlowpipeCombatMethod extends core.RangedCombatMethod {
+    constructor(special) {
+      super();
+      this.special = special === true;
+    }
+    canAttack(character, target) {
+      if (!character?.isPlayer?.()) {
+        return false;
+      }
+      const player = character.getAsPlayer();
+      const blowpipeItem = BlowpipeState.equipped(player);
+      if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+        return false;
+      }
+      return isReady(player, blowpipeItem);
+    }
+    attackSpeed(character) {
+      const target = character?.getCombat?.()?.getTarget?.() ?? null;
+      const baseSpeed = target?.isPlayer?.() ? 4 : 3;
+      return character?.getFightType?.()?.isRapid?.() === true ? Math.max(1, baseSpeed - 1) : baseSpeed;
+    }
+    hits(character, target) {
+      const distance = character.getLocation().getDistance(target.getLocation());
+      // The blowpipe's own hit-delay profile, as RangedCombatMethod reads it.
+      const delay = core.WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
+      return [new core.PendingHit(character, target, this, delay)];
+    }
+    start(character, target) {
+      const player = character.getAsPlayer();
+      const blowpipeItem = BlowpipeState.equipped(player);
+      if (!blowpipeItem) {
+        player.getCombat().reset();
+        return;
+      }
+      const ammo = getAmmo(player);
+      if (!ammo) {
+        player.sendMessage("You must load darts into the Toxic blowpipe.");
+        player.getCombat().reset();
+        return;
+      }
+      const animation = character.getAttackAnim();
+      if (animation !== -1) {
+        character.performAnimation(new core.Animation(animation));
+      }
+      core.Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35)
+        .sendProjectile();
+      core.Sounds.sendSound(character, core.Sound.THROW_DART);
+      if (this.special) {
+        const drainAmount = player.getCombatSpecial?.()?.getDrainAmount?.() ?? 50;
+        core.CombatSpecial.drain(player, drainAmount);
+      }
+      const dartsDepleted = maybeConsumeLoadedDart(player, blowpipeItem);
+      const scalesDepleted = maybeConsumeScale(player, blowpipeItem);
+      if (dartsDepleted || scalesDepleted) {
+        refreshBlowpipeState(player, blowpipeItem);
+      }
+    }
+    handleAfterHitEffects(hit) {
+      const attacker = hit?.getAttacker?.();
+      const target = hit?.getTarget?.();
+      if (!attacker?.isPlayer?.() || !target) {
+        return;
+      }
+      const player = attacker.getAsPlayer();
+      const totalDamage = Number(uncappedDamage.get(hit) ?? hit.getTotalDamage?.() ?? 0);
+      if (totalDamage <= 0 || hit.isAccurate?.() !== true) {
+        return;
+      }
+      if (core.Misc.getRandom(3) === 0) {
+        core.CombatFactory.poisonEntity(target, VENOM_START_DAMAGE, 2);
+      }
+      if (!this.special) {
+        return;
+      }
+      const heal = Math.floor(totalDamage * 0.5);
+      if (heal <= 0) {
+        return;
+      }
+      const skillManager = player.getSkillManager();
+      const maxHp = skillManager.getMaxLevel(core.Skill.HITPOINTS);
+      const nextHp = Math.min(maxHp, skillManager.getCurrentLevel(core.Skill.HITPOINTS) + heal);
+      skillManager.setCurrentLevels(core.Skill.HITPOINTS, nextHp);
+      skillManager.updateSkill(core.Skill.HITPOINTS);
+    }
   }
+  const method = new ToxicBlowpipeCombatMethod(special);
+  methods.set(special, method);
+  return method;
+}
 
-  canAttack(character, target) {
-    if (!character?.isPlayer?.()) {
-      return false;
-    }
-    const player = character.getAsPlayer();
-    const blowpipeItem = BlowpipeState.equipped(player);
-    if (!blowpipeItem || blowpipeItem.getId() !== TOXIC_BLOWPIPE_ID) {
-      return false;
-    }
-    return isReady(player, blowpipeItem);
+function rangedAmmoResolverResolve(player) {
+  const blowpipeItem = BlowpipeState.equipped(player);
+  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+    return null;
   }
+  return BlowpipeState.ammo(blowpipeItem);
+}
 
-  attackSpeed(character) {
-    const target = character?.getCombat?.()?.getTarget?.() ?? null;
-    const baseSpeed = target?.isPlayer?.() ? 4 : 3;
-    return character?.getFightType?.()?.isRapid?.() === true ? Math.max(1, baseSpeed - 1) : baseSpeed;
+function rangedAmmoHandlerCheckAmmo(player, amountRequired, silent = false) {
+  const rangedWeapon = player?.getCombat?.()?.getRangedWeapon?.();
+  if (rangedWeapon !== core.RangedWeapon.TOXIC_BLOWPIPE) {
+    return null;
   }
+  return isReady(player, BlowpipeState.equipped(player), amountRequired, silent);
+}
 
-  hits(character, target) {
-    const distance = character.getLocation().getDistance(target.getLocation());
-    // The blowpipe's own hit-delay profile, as RangedCombatMethod reads it.
-    const delay = WeaponProfiles.hitDelays(character.getAsPlayer(), distance)[0];
-    return [new PendingHit(character, target, this, delay)];
+function rangedAmmoHandlerDecrementAmmo(player, pos, amount) {
+  const rangedWeapon = player?.getCombat?.()?.getRangedWeapon?.();
+  if (rangedWeapon !== core.RangedWeapon.TOXIC_BLOWPIPE) {
+    return false;
   }
-
-  start(character, target) {
-    const player = character.getAsPlayer();
-    const blowpipeItem = BlowpipeState.equipped(player);
-    if (!blowpipeItem) {
-      player.getCombat().reset();
-      return;
-    }
-    const ammo = getAmmo(player);
-    if (!ammo) {
-      player.sendMessage("You must load darts into the Toxic blowpipe.");
-      player.getCombat().reset();
-      return;
-    }
-
-    const animation = character.getAttackAnim();
-    if (animation !== -1) {
-      character.performAnimation(new Animation(animation));
-    }
-
-    Projectile.createProjectile(character, target, ammo.getProjectileId(), 40, 60, 40, 35)
-      .sendProjectile();
-    Sounds.sendSound(character, Sound.THROW_DART);
-
-    if (this.special) {
-      const drainAmount = player.getCombatSpecial?.()?.getDrainAmount?.() ?? 50;
-      CombatSpecial.drain(player, drainAmount);
-    }
-
-    const dartsDepleted = maybeConsumeLoadedDart(player, blowpipeItem);
-    const scalesDepleted = maybeConsumeScale(player, blowpipeItem);
-    if (dartsDepleted || scalesDepleted) {
-      refreshBlowpipeState(player, blowpipeItem);
+  const blowpipeItem = BlowpipeState.equipped(player);
+  if (!blowpipeItem) {
+    player.getCombat().reset();
+    return true;
+  }
+  let depleted = false;
+  for (let i = 0; i < amount; i++) {
+    if (BlowpipeState.consumeScale(blowpipeItem) <= 0) {
+      depleted = true;
+      break;
     }
   }
+  if (depleted) {
+    refreshBlowpipeState(player, blowpipeItem);
+    player.sendMessage("Your Toxic blowpipe has run out of scales!");
+    player.getCombat().reset();
+  }
+  return true;
+}
 
-  handleAfterHitEffects(hit) {
-    const attacker = hit?.getAttacker?.();
-    const target = hit?.getTarget?.();
-    if (!attacker?.isPlayer?.() || !target) {
-      return;
-    }
+function bonusProviderApply(event) {
+  const { player, bonuses } = event;
+  const blowpipeItem = BlowpipeState.equipped(player);
+  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+    return;
+  }
+  if (!isCharged(blowpipeItem)) {
+    return;
+  }
+  const { dartId } = BlowpipeState.read(blowpipeItem);
+  if (!isToxicBlowpipeDartId(dartId)) {
+    return;
+  }
+  bonuses[core.BonusManager.ATTACK_RANGE] += 30 - getDefinitionBonus(blowpipeItem, core.BonusManager.ATTACK_RANGE);
+  bonuses[10 + core.BonusManager.RANGED_STRENGTH] +=
+    20 + getToxicBlowpipeDartStrength(dartId) - getDefinitionBonus(blowpipeItem, 10 + core.BonusManager.RANGED_STRENGTH);
+}
 
-    const player = attacker.getAsPlayer();
-    const totalDamage = Number(hit.getTotalDamage?.() ?? 0);
-    if (totalDamage <= 0 || hit.isAccurate?.() !== true) {
-      return;
-    }
+function combatMethodResolverResolve(attacker) {
+  if (!attacker?.isPlayer?.()) {
+    return null;
+  }
+  const player = attacker.getAsPlayer();
+  const blowpipeItem = BlowpipeState.equipped(player);
+  if (!blowpipeItem || blowpipeItem.getId() !== core.ItemIdentifiers.TOXIC_BLOWPIPE) {
+    return null;
+  }
+  if (player.isSpecialActivated?.() === true && player.getCombatSpecial?.()?.getId?.() === "toxic_blowpipe") {
+    return combatMethod(true);
+  }
+  return combatMethod(false);
+}
 
-    if (Misc.getRandom(3) === 0) {
-      CombatFactory.poisonEntity(target, 12, 2);
-    }
-
-    if (!this.special) {
-      return;
-    }
-
-    const heal = Math.floor(totalDamage * 0.5);
-    if (heal <= 0) {
-      return;
-    }
-
-    const skillManager = player.getSkillManager();
-    const maxHp = skillManager.getMaxLevel(Skill.HITPOINTS);
-    const nextHp = Math.min(maxHp, skillManager.getCurrentLevel(Skill.HITPOINTS) + heal);
-    skillManager.setCurrentLevels(Skill.HITPOINTS, nextHp);
-    skillManager.updateSkill(Skill.HITPOINTS);
+function itemOnItem(event) {
+  const { player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot, usedItem, usedWithItem } = event;
+  const blowpipeOnLeft = isToxicBlowpipeItemId(usedItemId);
+  const blowpipeOnRight = isToxicBlowpipeItemId(usedWithItemId);
+  if (!blowpipeOnLeft && !blowpipeOnRight) {
+    return;
+  }
+  const blowpipeSlot = blowpipeOnLeft ? usedItemSlot : usedWithItemSlot;
+  const blowpipeItem = blowpipeOnLeft ? usedItem : usedWithItem;
+  const otherItem = blowpipeOnLeft ? usedWithItem : usedItem;
+  const otherItemId = blowpipeOnLeft ? usedWithItemId : usedItemId;
+  if (otherItemId === core.ItemIdentifiers.ZULRAHS_SCALES) {
+    event.handled = true;
+    chargeScales(player, blowpipeItem, blowpipeSlot, otherItem);
+    return;
+  }
+  if (isToxicBlowpipeDartId(otherItemId)) {
+    event.handled = true;
+    chargeDarts(player, blowpipeItem, blowpipeSlot, otherItem);
   }
 }
 
-const REGULAR_COMBAT_METHOD = new ToxicBlowpipeCombatMethod(false);
-const SPECIAL_COMBAT_METHOD = new ToxicBlowpipeCombatMethod(true);
+function itemAction(event) {
+  if (!isToxicBlowpipeItemId(event.itemId)) {
+    return;
+  }
+  if (event.clickType === 2) {
+    event.handled = true;
+    unloadBlowpipe(event.player, event.item, event.slot);
+    return;
+  }
+  if (event.clickType === 3) {
+    event.handled = true;
+    sendStatus(event.player, event.item);
+    return;
+  }
+  if (event.clickType === 4 && event.interfaceId === core.Equipment.INVENTORY_INTERFACE_ID) {
+    event.handled = true;
+    sendStatus(event.player, event.item);
+  }
+}
 
-let BonusManager;
-let CombatFactory;
+function rememberDamage({ attacker, hit, damage }) {
+  if (attacker?.isPlayer?.() && attacker.isSpecialActivated?.() && attacker.getCombatSpecial?.()?.getId() === "toxic_blowpipe") {
+    uncappedDamage.set(hit, damage.getDamage());
+  }
+}
 
 module.exports = {
   name: "ToxicBlowpipe",
   members: true,
   register(api) {
-    BonusManager = api.getBonusManager();
-    CombatFactory = api.getCombatFactory();
-    api.registerRangedAmmoResolver({
-      resolve(player) {
-        const blowpipeItem = BlowpipeState.equipped(player);
-        if (!blowpipeItem || blowpipeItem.getId() !== TOXIC_BLOWPIPE_ID) {
-          return null;
-        }
-        return BlowpipeState.ammo(blowpipeItem);
-      },
-    });
-
-    api.registerRangedAmmoHandler({
-      checkAmmo(player, amountRequired, silent = false) {
-        const rangedWeapon = player?.getCombat?.()?.getRangedWeapon?.();
-        if (rangedWeapon !== RangedWeapon.TOXIC_BLOWPIPE) {
-          return null;
-        }
-        return isReady(player, BlowpipeState.equipped(player), amountRequired, silent);
-      },
-      decrementAmmo(player, pos, amount) {
-        const rangedWeapon = player?.getCombat?.()?.getRangedWeapon?.();
-        if (rangedWeapon !== RangedWeapon.TOXIC_BLOWPIPE) {
-          return false;
-        }
-        const blowpipeItem = BlowpipeState.equipped(player);
-        if (!blowpipeItem) {
-          player.getCombat().reset();
-          return true;
-        }
-        let depleted = false;
-        for (let i = 0; i < amount; i++) {
-          if (BlowpipeState.consumeScale(blowpipeItem) <= 0) {
-            depleted = true;
-            break;
-          }
-        }
-        if (depleted) {
-          refreshBlowpipeState(player, blowpipeItem);
-          player.sendMessage("Your Toxic blowpipe has run out of scales!");
-          player.getCombat().reset();
-        }
-        return true;
-      },
-    });
-
-    api.registerBonusProvider({
-      apply(event) {
-        const { player, bonuses } = event;
-        const blowpipeItem = BlowpipeState.equipped(player);
-        if (!blowpipeItem || blowpipeItem.getId() !== TOXIC_BLOWPIPE_ID) {
-          return;
-        }
-        if (!isCharged(blowpipeItem)) {
-          return;
-        }
-        const { dartId } = BlowpipeState.read(blowpipeItem);
-        if (!isToxicBlowpipeDartId(dartId)) {
-          return;
-        }
-        bonuses[BonusManager.ATTACK_RANGE] += 30 - getDefinitionBonus(blowpipeItem, BonusManager.ATTACK_RANGE);
-        bonuses[10 + BonusManager.RANGED_STRENGTH] +=
-          20 + getToxicBlowpipeDartStrength(dartId) - getDefinitionBonus(blowpipeItem, 10 + BonusManager.RANGED_STRENGTH);
-      },
-    });
-
-    api.registerCombatMethodResolver({
-      resolve(attacker) {
-        if (!attacker?.isPlayer?.()) {
-          return null;
-        }
-        const player = attacker.getAsPlayer();
-        const blowpipeItem = BlowpipeState.equipped(player);
-        if (!blowpipeItem || blowpipeItem.getId() !== TOXIC_BLOWPIPE_ID) {
-          return null;
-        }
-        if (player.isSpecialActivated?.() === true && player.getCombatSpecial?.()?.getId?.() === "toxic_blowpipe") {
-          return SPECIAL_COMBAT_METHOD;
-        }
-        return REGULAR_COMBAT_METHOD;
-      },
-    });
-
-    api.onItemOnItem((event) => {
-      const { player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot, usedItem, usedWithItem } = event;
-      const blowpipeOnLeft = isToxicBlowpipeItemId(usedItemId);
-      const blowpipeOnRight = isToxicBlowpipeItemId(usedWithItemId);
-      if (!blowpipeOnLeft && !blowpipeOnRight) {
-        return;
-      }
-
-      const blowpipeSlot = blowpipeOnLeft ? usedItemSlot : usedWithItemSlot;
-      const blowpipeItem = blowpipeOnLeft ? usedItem : usedWithItem;
-      const otherItem = blowpipeOnLeft ? usedWithItem : usedItem;
-      const otherItemId = blowpipeOnLeft ? usedWithItemId : usedItemId;
-
-      if (otherItemId === ZULRAH_SCALES_ID) {
-        event.handled = true;
-        chargeScales(player, blowpipeItem, blowpipeSlot, otherItem);
-        return;
-      }
-
-      if (isToxicBlowpipeDartId(otherItemId)) {
-        event.handled = true;
-        chargeDarts(player, blowpipeItem, blowpipeSlot, otherItem);
-      }
-    });
-
-    api.onItemAction((event) => {
-      if (!isToxicBlowpipeItemId(event.itemId)) {
-        return;
-      }
-      if (event.clickType === 2) {
-        event.handled = true;
-        unloadBlowpipe(event.player, event.item, event.slot);
-        return;
-      }
-      if (event.clickType === 3) {
-        event.handled = true;
-        sendStatus(event.player, event.item);
-        return;
-      }
-      if (event.clickType === 4 && event.interfaceId === Equipment.INVENTORY_INTERFACE_ID) {
-        event.handled = true;
-        sendStatus(event.player, event.item);
-      }
-    });
+    core = api.core;
+    api.onCombatHitDamage(rememberDamage);
+    api.registerRangedAmmoResolver({ resolve: rangedAmmoResolverResolve });
+    api.registerRangedAmmoHandler({ checkAmmo: rangedAmmoHandlerCheckAmmo, decrementAmmo: rangedAmmoHandlerDecrementAmmo });
+    api.registerBonusProvider({ apply: bonusProviderApply });
+    api.registerCombatMethodResolver({ resolve: combatMethodResolverResolve });
+    api.onItemOnItem(itemOnItem);
+    api.onItemAction(itemAction);
   },
 };

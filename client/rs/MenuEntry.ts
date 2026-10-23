@@ -5,6 +5,7 @@ export enum MenuTargetType {
     LOC,
     OBJ,
     ITEM, // inventory items
+    WORLD_ENTITY,
 }
 
 export interface MenuEntry {

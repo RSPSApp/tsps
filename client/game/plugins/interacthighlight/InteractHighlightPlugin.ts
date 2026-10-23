@@ -49,6 +49,10 @@ export class InteractHighlightPlugin extends Plugin {
         return this.state;
     }
 
+    interactHighlightConfig(): InteractHighlightPluginConfig {
+        return this.getConfig();
+    }
+
     getConfig(): InteractHighlightPluginConfig {
         return { ...this.state.config, enabled: this.isEnabled() };
     }

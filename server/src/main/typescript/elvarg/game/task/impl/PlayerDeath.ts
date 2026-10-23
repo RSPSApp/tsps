@@ -1,7 +1,6 @@
 import { GameConstants } from "../../GameConstants";
 import { MORTAL_DEVELOPER_ATTRIBUTE } from "../../entity/impl/Mobile";
 import { CombatFactory } from "../../content/combat/CombatFactory";
-import { ItemDefinition } from "../../definition/ItemDefinition";
 import { ItemOnGroundManager } from "../../entity/impl/grounditem/ItemOnGroundManager";
 import { Player } from "../../entity/impl/player/Player";
 import { PlayerRights } from "../../model/rights/PlayerRights";
@@ -11,7 +10,6 @@ import { SkullType } from "../../model/SkullType";
 import { PrayerData, PrayerHandler } from "../../content/PrayerHandler";
 import { Skill } from "../../model/Skill";
 import { Location } from "../../model/Location";
-import { BrokenItem } from "../../model/BrokenItem";
 import { Animation } from "../../model/Animation";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { ItemIdentifiers } from "../../../util/ItemIdentifiers";
@@ -64,8 +62,6 @@ export class PlayerDeathTask extends Task {
                     const pluginShouldDropItems =
                         PluginManager.emitShouldDropItemsOnDeath(this.player, this.killer ?? null);
                     this.loseItems = pluginShouldDropItems ?? true;
-                    const shouldDropItemsOnDeath = this.loseItems;
-                    const droppedItems: Item[] = [];
                     const deathPosition = this.player.getLocation();
                     // Always drop player bones on death, independent of item-drop policy.
                     ItemOnGroundManager.registerLocation(
@@ -74,121 +70,15 @@ export class PlayerDeathTask extends Task {
                         deathPosition
                     );
                     if (this.loseItems) {
-                        const itemsToKeep = shouldDropItemsOnDeath
-                            ? PlayerDeathTask.getItemsToKeep(this.player)
-                            : [];
-                        this.itemsToKeep = Array.isArray(itemsToKeep) ? itemsToKeep : [];
-                        const playerItems = PlayerDeathTask.splitIntoComponents(this.player, this.killer, this.itemsToKeep,
-                            this.player.getInventory().getValidItems().concat(this.player.getEquipment().getValidItems()));
-                        const position = deathPosition;
-                        let dropped = false;
-                        let pluginHandledDrop = false;
-                        const layout = PlayerDeathTask.slotLayout(this.player);
-                        const lostUntradeables: Item[] = [];
-
-                        for (let item of playerItems) {
-                            const dropEligible =
-                                shouldDropItemsOnDeath &&
-                                (item.isTradeable() || (!item.isLostOnDeath() && Barrows.isBarrowsItem(item.getId()))) &&
-                                !this.itemsToKeep.includes(item) &&
-                                !PlayerDeathTask.keepsEverything(this.player);
-                            const deathDropEvent = {
-                                player: this.player,
-                                killer: this.killer ?? null,
-                                item,
-                                location: position,
-                                shouldDropItems: shouldDropItemsOnDeath,
-                                dropEligible,
-                                suppressDefaultDrop: false,
-                                handled: false,
-                            };
-                            const handled = PluginManager.emitPlayerDeathItemDrop(deathDropEvent);
-                            if (handled) {
-                                pluginHandledDrop = true;
-                                continue;
-                            }
-
-                            if (deathDropEvent.suppressDefaultDrop && deathDropEvent.dropEligible) {
-                                dropped = true;
-                                continue;
-                            }
-
-                            if (!shouldDropItemsOnDeath) {
-                                // Remove all carried items on death without ground spawns.
-                                continue;
-                            }
-                            // Owners and developers keep everything.
-                            if (PlayerDeathTask.keepsEverything(this.player)) {
-                                if (!item.isLostOnDeath() && !this.itemsToKeep.includes(item)) {
-                                    this.itemsToKeep.push(item);
-                                }
-                                continue;
-                            }
-                            if (item.isLostOnDeath() || this.itemsToKeep.includes(item)) {
-                                continue;
-                            }
-                            // Untradeables are kept unless a death-drops hook takes them (a grave).
-                            if (!item.isTradeable() && !Barrows.isBarrowsItem(item.getId())) {
-                                lostUntradeables.push(item);
-                                continue;
-                            }
-                            droppedItems.push(item);
-                        }
-
-                        // Emitted with nothing lost too: a death still changes an existing grave.
-                        if (shouldDropItemsOnDeath && !PlayerDeathTask.keepsEverything(this.player)) {
-                            const before = droppedItems.length + lostUntradeables.length;
-                            PluginManager.emitPlayerDeathDrops({
-                                player: this.player,
-                                killer: this.killer ?? null,
-                                location: position,
-                                items: droppedItems,
-                                untradeables: lostUntradeables,
-                                layout,
-                            });
-                            if (droppedItems.length + lostUntradeables.length < before) {
-                                pluginHandledDrop = true;
-                            }
-                        }
-                        for (const item of droppedItems) {
-                            ItemOnGroundManager.registerLocation(
-                                this.killer ? this.killer : this.player,
-                                item,
-                                position
-                            );
-                            dropped = true;
-                        }
-                        this.itemsToKeep.push(...lostUntradeables);
-
-                        // Handle defeat..
-                        if (this.killer) {
-                            if (shouldDropItemsOnDeath && !dropped && !pluginHandledDrop) {
-                                this.killer.sendMessage(`${this.player.getUsername()} had no valuable items to be dropped.`);
-                            }
-                        }
-
-                        // Reset items
-                        this.player.getInventory().resetItems().refreshItems();
-                        this.player.getEquipment().resetItems().refreshItems();
+                        this.itemsToKeep = PlayerDeathTask.dropItems(this.player, this.killer, deathPosition);
                     }
                     // Restore the player's default attributes (such as stats)..
                     this.player.resetAttributes();
 
-                    // If the player lost items..
+                    // If the player lost items, the ones a death keeps come back.
                     if (this.loseItems) {
-                        // Handle items kept on death..
-                        if (this.itemsToKeep.length > 0) {
-                            for (const it of this.itemsToKeep) {
-                                let id = it.getId();
-                                const brokenItem = BrokenItem.get(id);
-                                if (brokenItem != null) {
-                                    id = brokenItem.getBrokenItem();
-                                    this.player.sendMessage(`Your ${ItemDefinition.forId(it.getId()).getName()} has been broken. You can fix it by talking to Perdu.`);
-                                }
-                                this.player.getInventory().addItem(it.clone().setId(id));
-                            }
-                            this.itemsToKeep.length = 0;
-                        }
+                        PlayerDeathTask.returnKeptItems(this.player, this.itemsToKeep);
+                        this.itemsToKeep = [];
                     }
 
                     // Notify defeat hooks for all deaths so plugins can apply
@@ -261,6 +151,115 @@ export class PlayerDeathTask extends Task {
             this.player.resetAttributes();
             this.player.moveTo(this.resolveBotRespawnLocation() ?? GameConstants.DEFAULT_LOCATION);
         }
+    }
+
+    /**
+     * A death's item loss at `position`: the items a death keeps are set aside and returned, the
+     * rest go to the death-drops hooks (a grave) or the floor, and the inventory and equipment
+     * are emptied. `returnKeptItems` gives the kept ones back.
+     */
+    public static dropItems(player: Player, killer: Player | null | undefined, position: Location): Item[] {
+        const kept = PlayerDeathTask.getItemsToKeep(player);
+        const itemsToKeep: Item[] = Array.isArray(kept) ? kept : [];
+        const playerItems = PlayerDeathTask.splitIntoComponents(player, killer, itemsToKeep,
+            player.getInventory().getValidItems().concat(player.getEquipment().getValidItems()));
+        const droppedItems: Item[] = [];
+        const lostUntradeables: Item[] = [];
+        const layout = PlayerDeathTask.slotLayout(player);
+        let dropped = false;
+        let pluginHandledDrop = false;
+
+        for (const item of playerItems) {
+            const dropEligible =
+                (item.isTradeable() || (!item.isLostOnDeath() && Barrows.isBarrowsItem(item.getId()))) &&
+                !itemsToKeep.includes(item) &&
+                !PlayerDeathTask.keepsEverything(player);
+            const deathDropEvent = {
+                player,
+                killer: killer ?? null,
+                item,
+                kept: itemsToKeep.includes(item),
+                location: position,
+                shouldDropItems: true,
+                dropEligible,
+                suppressDefaultDrop: false,
+                handled: false,
+            };
+            const handled = PluginManager.emitPlayerDeathItemDrop(deathDropEvent);
+            if (handled) {
+                pluginHandledDrop = true;
+                continue;
+            }
+
+            if (deathDropEvent.suppressDefaultDrop && deathDropEvent.dropEligible) {
+                dropped = true;
+                continue;
+            }
+
+            // Owners and developers keep everything.
+            if (PlayerDeathTask.keepsEverything(player)) {
+                if (!item.isLostOnDeath() && !itemsToKeep.includes(item)) {
+                    itemsToKeep.push(item);
+                }
+                continue;
+            }
+            if (item.isLostOnDeath() || itemsToKeep.includes(item)) {
+                continue;
+            }
+            // Untradeables are kept unless a death-drops hook takes them (a grave).
+            if (!item.isTradeable() && !Barrows.isBarrowsItem(item.getId())) {
+                lostUntradeables.push(item);
+                continue;
+            }
+            droppedItems.push(item);
+        }
+
+        // Emitted with nothing lost too: a death still changes an existing grave.
+        if (!PlayerDeathTask.keepsEverything(player)) {
+            const before = droppedItems.length + lostUntradeables.length;
+            PluginManager.emitPlayerDeathDrops({
+                player,
+                killer: killer ?? null,
+                location: position,
+                items: droppedItems,
+                untradeables: lostUntradeables,
+                layout,
+            });
+            if (droppedItems.length + lostUntradeables.length < before) {
+                pluginHandledDrop = true;
+            }
+        }
+        for (const item of droppedItems) {
+            ItemOnGroundManager.registerLocation(killer ? killer : player, item, position);
+            dropped = true;
+        }
+        itemsToKeep.push(...lostUntradeables);
+
+        // Handle defeat..
+        if (killer && !dropped && !pluginHandledDrop) {
+            killer.sendMessage(`${player.getUsername()} had no valuable items to be dropped.`);
+        }
+
+        // Reset items
+        player.getInventory().resetItems().refreshItems();
+        player.getEquipment().resetItems().refreshItems();
+        return itemsToKeep;
+    }
+
+    /** The items a death let the player keep, back in the inventory. */
+    public static returnKeptItems(player: Player, items: Item[]): void {
+        for (const it of items) {
+            player.getInventory().addItem(it.clone());
+        }
+    }
+
+    /**
+     * Loses items as a death at `position` would, without the death itself: a raid that holds
+     * its dead until the whole party falls takes their items then (The Fractured Archive).
+     */
+    public static loseItemsAsDeath(player: Player, position: Location): void {
+        PlayerDeathTask.returnKeptItems(player, PlayerDeathTask.dropItems(player, null, position));
+        GameConstants.PLAYER_PERSISTENCE.requestSave(player, "death");
     }
 
     private static getAmountToKeep(player: Player): number {

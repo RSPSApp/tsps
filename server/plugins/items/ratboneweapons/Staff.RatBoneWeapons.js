@@ -60,8 +60,8 @@ function spellFor(player) {
       flightCycles(cast, castOn), PROJECTILE.startHeight, PROJECTILE.endHeight, cast.getPrivateArea(),
     ).withSource(cast).withAngle(PROJECTILE.angle).withProgress(PROJECTILE.progress),
     endGraphic: () => new Graphic(CAST.impact, 0, IMPACT_HEIGHT),
-    // Awarded on a successful hit by onHitResolved: combat spells' base experience isn't added by
-    // the engine (CombatFactory), and the Wiki gives the bone staff its 35 unlike other powered staves.
+    // Awarded on a successful hit by onHitResolved, not per cast like a spellbook spell's: the Wiki
+    // gives the bone staff 35 base XP unlike other powered staves, but none on a splash.
     baseExperience: () => 0,
     levelRequired: () => 1,
   });

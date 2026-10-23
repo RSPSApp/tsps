@@ -43,6 +43,8 @@ flat out uint v_texId;
 flat out float v_alphaCutOff;
 out float v_fogAmount;
 flat out float v_plane;
+// Its fade (OSRS npc transparency): 0 opaque to 1 invisible.
+flat out float v_transparency;
 
 #include "./includes/branchless-logic.glsl";
 #include "./includes/hsl-to-rgb.glsl";
@@ -60,6 +62,7 @@ struct NpcInfo {
     uint plane;
     uint rotation;
     vec4 hslOverride; // per-actor HSL override (hue, sat, lum, amount)
+    float transparency; // 0 opaque to 1 invisible
 };
 
 ivec2 getDataTexCoordFromIndex(int index) {
@@ -89,6 +92,8 @@ NpcInfo decodeNpcInfo(int offset) {
         float(int(data1.g) & 0x7F),           // lum (0-127)
         float((int(data1.g) >> 7) & 0xFF)     // amount (0-255)
     );
+    // B: its fade (0-255)
+    info.transparency = float(data1.b & 0xFFu) / 255.0;
 
     return info;
 }
@@ -154,4 +159,5 @@ void main() {
 
     gl_Position = u_projectionMatrix * viewPos;
     v_plane = float(npcInfo.plane);
+    v_transparency = npcInfo.transparency;
 }

@@ -1,15 +1,15 @@
 // TODO: base implementation — exact max-hit formula still needs an ammo-only ranged evaluator source. Ported from xrsps-typescript; untested.
 // TODO: Soulshot special attack animation/graphic ids not found; skipped.
-module.exports = function registerSeercullSpecialAttack(api) {
-  const { CombatSpecial, ItemIdentifiers, RangedCombatMethod, Skill } = api.core;
+function buildSpecial(core) {
+  const { CombatSpecial, ItemIdentifiers, RangedCombatMethod, Skill } = core;
 
   const DRAIN = 100;
 
   function soulshot(target, damage) {
-    if (damage <= 0 || !target.isPlayer()) {
+    if (damage <= 0) {
       return;
     }
-    const skillManager = target.getAsPlayer().getSkillManager();
+    const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
     const current = skillManager.getCurrentLevel(Skill.MAGIC);
     const max = skillManager.getMaxLevel(Skill.MAGIC);
     // Only drains while Magic has not already been reduced.
@@ -33,7 +33,7 @@ module.exports = function registerSeercullSpecialAttack(api) {
     }
   }
 
-  api.registerCombatSpecial({
+  return {
     id: "seercull",
     itemIds: [ItemIdentifiers.SEERCULL],
     drainAmount: DRAIN,
@@ -41,5 +41,9 @@ module.exports = function registerSeercullSpecialAttack(api) {
     accuracyMultiplier: 1,
     traits: { guaranteedHit: true },
     combatMethod: new SeercullCombatMethod(),
-  });
+  };
+}
+
+module.exports = function registerSeercullSpecialAttack(api) {
+  api.registerCombatSpecial(buildSpecial(api.core));
 };

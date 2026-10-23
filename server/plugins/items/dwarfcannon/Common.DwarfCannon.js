@@ -6,6 +6,7 @@ const Data = require("./Data.DwarfCannon");
 
 const STATE_ATTRIBUTE = "dwarf-cannon:state";
 const LOST_ATTRIBUTE = "dwarf-cannon:lost";
+const RECOVERED_AMMO_ATTRIBUTE = "dwarf-cannon:recovered-ammo";
 const LOAD_X_ATTRIBUTE = "dwarf-cannon:load-x";
 
 let api = null;
@@ -79,6 +80,16 @@ function packCoord(location) {
 
 function balls(cannon) {
   return cannon.steel + cannon.granite;
+}
+
+/** Wiki: medium/hard/elite Combat Achievement rewards raise the ball capacity. */
+function capacity(player) {
+  for (const [tier, balls] of [["Elite", 60], ["Hard", 45], ["Medium", 35]]) {
+    const request = { player, tier, unlocked: false };
+    api.emitCustomEvent("combat-achievements:tier", request);
+    if (request.unlocked) return balls;
+  }
+  return Data.CAPACITY;
 }
 
 /** Saves the cannon on its owner so a logout (or a lost cannon) keeps track of it. */
@@ -165,8 +176,8 @@ function forget(cannon) {
 }
 
 module.exports = {
-  init, later, kindOfPart, cannonOf, cannonAt, packCoord, balls, save, sendVars, resendVars, clearVars, viewers,
-  areaSound, animate, setLoc, removeLoc, forget, KINDS, cannons, STATE_ATTRIBUTE, LOST_ATTRIBUTE, LOAD_X_ATTRIBUTE,
+  init, later, capacity, kindOfPart, cannonOf, cannonAt, packCoord, balls, save, sendVars, resendVars, clearVars, viewers,
+  areaSound, animate, setLoc, removeLoc, forget, KINDS, cannons, STATE_ATTRIBUTE, LOST_ATTRIBUTE, LOAD_X_ATTRIBUTE, RECOVERED_AMMO_ATTRIBUTE,
   get api() { return api; },
   get core() { return core; },
 };

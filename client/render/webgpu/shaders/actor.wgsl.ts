@@ -312,6 +312,8 @@ struct ActorInfo {
     plane: u32,
     rotation: u32,
     hslOverride: vec4<f32>,
+    // Its fade (OSRS npc transparency): 0 opaque to 1 invisible.
+    transparency: f32,
 };
 
 fn decodeActorInfo(index: i32) -> ActorInfo {
@@ -329,6 +331,7 @@ fn decodeActorInfo(index: i32) -> ActorInfo {
         f32(i32(data1.g) & 0x7F),
         f32((i32(data1.g) >> 7) & 0xFF),
     );
+    info.transparency = f32(data1.b & 0xFFu) / 255.0;
     return info;
 }
 
@@ -446,11 +449,13 @@ function placement(kind: ActorKind): string {
         ? `
     let info = decodeProjectileInfo(i32(actorU.u_dataOffset + actorU.u_drawId));
     let actorRotation = info.yaw;
-    let actorHslOverride = vec4<f32>(-1.0, -1.0, -1.0, 0.0);`
+    let actorHslOverride = vec4<f32>(-1.0, -1.0, -1.0, 0.0);
+    let actorTransparency = 0.0;`
         : `
     let info = decodeActorInfo(i32(actorU.u_dataOffset + actorU.u_drawId));
     let actorRotation = info.rotation;
-    let actorHslOverride = info.hslOverride;`;
+    let actorHslOverride = info.hslOverride;
+    let actorTransparency = info.transparency;`;
     const localVertex = projectile
         ? `glslRowMul(glslRowMul(vec4<f32>(vertex.pos, 1.0),
             rotationZ(f32(info.roll) * RS_TO_RADIANS)), rotationX(f32(info.pitch) * RS_TO_RADIANS))`
@@ -526,6 +531,7 @@ fn vs_${kind}(${vertexParams(kind)}) -> ActorVertexOutput {${placement(kind)}
     out.v_texId = vertex.textureId;
     out.v_alphaCutOff = getMaterial(vertex.textureId).alphaCutOff;
     out.v_fogAmount = actorFogAmount(localPos);
+    out.v_transparency = actorTransparency;
 ${ext?.actor.vertex ?? ""}
     return out;
 }
@@ -574,8 +580,20 @@ fn sampleModelTexture(textureId: u32, texCoord: vec2<f32>) -> vec4<f32> {
     return textureSampleLevel(u_textures, u_sampler, texCoord, i32(textureId), 0.0).bgra;
 }
 
+// A 4x4 ordered dither threshold for a screen pixel (0-1), so a fading model thins out evenly.
+fn fadeThreshold(pixel: vec2<f32>) -> f32 {
+    var bayer = array<f32, 16>(0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    let x = u32(pixel.x) % 4u;
+    let y = u32(pixel.y) % 4u;
+    return (bayer[x + y * 4u] + 0.5) / 16.0;
+}
+
 @fragment
 fn fs_actor(input: ActorVertexOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    // A fading NPC (OSRS npc transparency) is screen-door dithered, in either pass.
+    if (input.v_transparency > 0.0 && input.v_transparency >= fadeThreshold(input.position.xy)) {
+        discard;
+    }
     var textureColor = vec4<f32>(1.0);
 ${slots?.textureSample ?? "    textureColor = sampleModelTexture(input.v_texId, input.v_texCoord);"}
     var alpha = textureColor.a * input.v_color.a;
@@ -646,7 +664,9 @@ struct ActorVertexOutput {
     @location(1) v_texCoord: vec2<f32>,
     @location(2) @interpolate(flat) v_texId: u32,
     @location(3) @interpolate(flat) v_alphaCutOff: f32,
-    @location(4) v_fogAmount: f32,${ext?.actor.varyings ?? ""}
+    @location(4) v_fogAmount: f32,
+    // The fade sits at the last location, clear of the extensions' (from 5 up).
+    @location(15) @interpolate(flat) v_transparency: f32,${ext?.actor.varyings ?? ""}
 };
 
 struct DepthVertexOutput {

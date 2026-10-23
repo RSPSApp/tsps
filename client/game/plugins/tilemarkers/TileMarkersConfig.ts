@@ -33,6 +33,15 @@ export interface TileMarkersPluginConfig {
     currentTileColor: number;
 }
 
+/** What the renderer draws with no tile markers plugin loaded. */
+export const DISABLED_TILE_MARKERS_CONFIG: TileMarkersPluginConfig = {
+    enabled: false,
+    showDestinationTile: false,
+    showCurrentTile: false,
+    destinationTileColor: DEFAULT_DESTINATION_TILE_COLOR,
+    currentTileColor: 0x808080,
+};
+
 export interface TileMarkersPluginState {
     config: TileMarkersPluginConfig;
     version: number;

@@ -4,19 +4,72 @@
  * clean herb and vial of water the player carries - noted or not - into unfinished potions for
  * 200 coins each, as many as they can pay for. Noted pairs come back noted. The option is only
  * on her right-click menu; its messages have no capture.
+ *
+ * "Clean" (rsprox captures, recordings 333, 1834, 3159; Wiki): "Clean all your herbs at 200 coins
+ * each?", then every grimy herb she can be paid for, with no XP; noted ones only after the hard
+ * Desert Diary.
  */
 const COST = 200;
 
 let api;
 let core;
 
-function unlocked(player) {
-  const cape = { player, skill: "HERBLORE", result: false };
-  api.emitCustomEvent("skillcape:has-perk", cape);
-  if (cape.result === true) return true;
+function hardDiary(player) {
   const diary = { player, diary: "desert", tier: "hard", complete: false };
   api.emitCustomEvent("diary:is-complete", diary);
   return diary.complete === true;
+}
+
+function unlocked(player) {
+  const cape = { player, skill: "HERBLORE", result: false };
+  api.emitCustomEvent("skillcape:has-perk", cape);
+  return cape.result === true || hardDiary(player);
+}
+
+function cleanFor(grimyId) {
+  const request = { grimyId, clean: null };
+  api.emitCustomEvent("herblore:clean", request);
+  return request.clean;
+}
+
+function say(player, npcId, text) {
+  const { DialogueChainBuilder, NpcDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, npcId, text)));
+}
+
+/** Cleans every grimy herb she is paid for, unnoted first, then noted after the hard Desert Diary. */
+function cleanAll(player, npcId) {
+  const inventory = player.getInventory();
+  const { ItemIdentifiers } = core;
+  const notes = hardDiary(player);
+  let affordable = Math.floor(inventory.getAmount(ItemIdentifiers.COINS) / COST);
+  let cleaned = 0;
+  for (const item of [...inventory.getItems()]) {
+    const id = item?.getId?.() ?? -1;
+    if (id <= 0 || affordable <= 0) continue;
+    const definition = core.ItemDefinition.forId(id);
+    if (definition.isNoted() && !notes) continue;
+    const clean = cleanFor(definition.isNoted() ? definition.unNote() : id);
+    const count = Math.min(inventory.getAmount(id), affordable);
+    if (!clean || count <= 0) continue;
+    inventory.deleteNumber(id, count);
+    inventory.deleteNumber(ItemIdentifiers.COINS, count * COST);
+    inventory.adds(definition.isNoted() ? notedOf(clean) : clean, count);
+    affordable -= count;
+    cleaned += count;
+  }
+  say(player, npcId, cleaned === 0 ? "I didn't find anything that I could clean." : "There, all done.");
+}
+
+function cleanHerbs(event) {
+  const { player, npcId } = event;
+  if (player.getInventory().getAmount(core.ItemIdentifiers.COINS) < COST) {
+    say(player, npcId, `I'll want ${COST} coins to clean each herb.`);
+    return true;
+  }
+  api.sendMultiChatboxPrompt(player, `Clean all your herbs at ${COST} coins each?`,
+    "Yes", () => cleanAll(player, npcId), "No", () => {});
+  return true;
 }
 
 function unfinishedFor(herbId) {
@@ -80,10 +133,10 @@ function makeUnfinished(event) {
 module.exports = {
   name: "Zahur",
   members: true,
-  _test: { makeUnfinished, unlocked, herbsCarried },
+  _test: { makeUnfinished, unlocked, herbsCarried, cleanHerbs, cleanAll },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
-    api.onNpcInteraction("Zahur", { "Make unfinished potion(s)": makeUnfinished });
+    api.onNpcInteraction("Zahur", { "Make unfinished potion(s)": makeUnfinished, Clean: cleanHerbs });
   },
 };

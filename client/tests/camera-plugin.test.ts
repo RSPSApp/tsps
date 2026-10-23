@@ -116,7 +116,7 @@ const keys = new Set<string>();
 const camera = {
     yaw: 0,
     pitch: 256,
-    getTargetYaw() { return this.yaw; },
+    forcedAngleChanges: 0,
 };
 const client: any = {
     cameraShakeDisabled: false,
@@ -211,9 +211,13 @@ async function main(): Promise<void> {
     const start = frame({ keyYaw: 8 });
     assert.ok(start.keyYaw + start.dragYaw < 8, "starts slower than the key turns");
     for (let i = 0; i < 30; i++) frame({ keyYaw: 8 });
+    // HD's follow camera rewrites the yaw as it smooths: not a forced turn, the speed holds.
+    camera.yaw -= 40;
+    assert.ok(frame({ keyYaw: 8 }).dragYaw > 7.9, "a smoothed yaw doesn't drop the turn");
     const after = frame({});
     assert.ok(after.dragYaw > 3, `keeps turning after letting go (${after.dragYaw})`);
     camera.yaw += 500; // cam_forceangle
+    camera.forcedAngleChanges++;
     assert.equal(frame({}).dragYaw, 0, "a forced angle drops the turn");
     assert.equal(frame({ dragYaw: 8 }).dragYaw, 8, "Ease: arrow keys leaves the mouse as it is");
 

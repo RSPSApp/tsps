@@ -14,6 +14,7 @@ import { VARBIT_ROOF_REMOVAL } from "../../../common/vars";
 import { MenuTargetType } from "../../MenuEntry";
 import { chatHistory } from "../ChatHistory";
 import { Opcodes } from "../Opcodes";
+import { CANCEL_SELECTION_HANDLER } from "../../../widgets/gl/widgetsGl/constants";
 import type { HandlerMap } from "./HandlerTypes";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
@@ -951,6 +952,11 @@ export function registerClientOps(handlers: HandlerMap): void {
         return undefined;
     };
 
+    // While an item or spell is selected, every op-less widget gets a target that only clears
+    // the selection on click. Over the game view those would hide the world entry
+    // ("Use Knife -> Goblin") behind an empty component hover.
+    const isMenuHoverTarget = (t: any): boolean => t?.onClick !== CANCEL_SELECTION_HANDLER;
+
     const getHoverTarget = (osrsClient: any): any => {
         for (const canvasAny of getInteractionCanvases(osrsClient)) {
             const clicks =
@@ -979,11 +985,11 @@ export function registerClientOps(handlers: HandlerMap): void {
                 // op-bearing rows and would otherwise blank the minimenu.
                 const hit =
                     clicks.pick(px, py, (t: any) => !!t?.primaryOption?.option) ||
-                    clicks.pick(px, py);
+                    clicks.pick(px, py, isMenuHoverTarget);
                 if (hit) return hit;
             }
             const hoverTarget = clicks?.getHoverTarget?.();
-            if (hoverTarget) return hoverTarget;
+            if (hoverTarget && isMenuHoverTarget(hoverTarget)) return hoverTarget;
         }
         return undefined;
     };

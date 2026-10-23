@@ -1,3 +1,4 @@
+import { CLIENT_TOKEN } from "../runelite/client/plugins/PluginInjector";
 import { strict as assert } from "node:assert";
 
 import { createElement } from "react";
@@ -74,6 +75,7 @@ async function main(): Promise<void> {
     const configManager = new ConfigManager(undefined, new MemoryStorage());
     const pluginManager = new PluginManager(new EventBus(), configManager);
     const pluginToolbar = pluginManager.getInjector().get<ClientToolbar>(ClientToolbar);
+    pluginManager.getInjector().provide(CLIENT_TOKEN, {});
     pluginManager.loadCorePlugins([
         ConfigPlugin,
         NotesPlugin,

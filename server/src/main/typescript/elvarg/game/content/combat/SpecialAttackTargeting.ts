@@ -1,11 +1,11 @@
 import { Mobile } from "../../entity/impl/Mobile";
-import type { NPC } from "../../entity/impl/npc/NPC";
+import { CombatFactory } from "./CombatFactory";
 import { World } from "../../World";
 import { AreaManager } from "../../model/areas/AreaManager";
 import type { SpecialAttackTargeting } from "./WeaponSpecialTraits";
 
 export interface SpecialTargetingResult {
-    /** Extra NPCs the same special should also strike (excludes the primary). */
+    /** Extra mobiles (NPCs and players) the same special should also strike (excludes the primary). */
     secondaryTargets: Mobile[];
     /** A footprint-aware special hits the primary again instead of sweeping. */
     largeTargetExtraHit: boolean;
@@ -13,10 +13,17 @@ export interface SpecialTargetingResult {
 
 const EMPTY: SpecialTargetingResult = { secondaryTargets: [], largeTargetExtraHit: false };
 
+/** Tiles a mobile occupies: its south-west corner and square footprint. */
+function footprint(mobile: Mobile): { x: number; y: number; z: number; size: number } {
+    const location = mobile.getLocation();
+    return { x: location.getX(), y: location.getY(), z: location.getZ(), size: Math.max(1, mobile.getSize()) };
+}
+
 /**
- * Resolves forward-line / footprint target selection for a special attack.
- * Core-neutral: it only reads locations and the NPC list, and leaves accuracy
- * and damage rolls to the normal hit pipeline.
+ * Resolves forward-line / footprint target selection for a special attack. Candidates are
+ * every NPC and player on the primary's plane; each one the shape reaches must pass the
+ * shared secondary-target permission checks. Accuracy and damage rolls stay in the normal
+ * hit pipeline.
  */
 export class SpecialAttackTargetingResolver {
     static resolve(
@@ -24,16 +31,17 @@ export class SpecialAttackTargetingResolver {
         primary: Mobile,
         targeting: SpecialAttackTargeting | undefined
     ): SpecialTargetingResult {
-        if (!targeting || targeting.pattern !== "forward_line") {
+        if (!targeting || (targeting.pattern !== "forward_line" && targeting.pattern !== "surrounding")) {
             return EMPTY;
         }
-        if (!attacker || !primary || !attacker.isPlayer() || !primary.isNpc()) {
+        if (!attacker || !primary || !attacker.isPlayer()) {
             return EMPTY;
         }
 
         const large = targeting.largeTargetExtraHit;
         if (
             large &&
+            primary.isNpc() &&
             Math.max(1, primary.getAsNpc().getSize()) >= Math.max(2, Math.trunc(large.minimumSize))
         ) {
             return { secondaryTargets: [], largeTargetExtraHit: true };
@@ -51,6 +59,53 @@ export class SpecialAttackTargetingResolver {
             return EMPTY;
         }
 
+        const found: Mobile[] = [];
+        const seen = new Set<Mobile>();
+        let playersHit = primary.isPlayer() ? 1 : 0;
+        // Returns true once the cap is reached.
+        const take = (candidate: Mobile): boolean => {
+            if (seen.has(candidate)) {
+                return false;
+            }
+            seen.add(candidate);
+            if (candidate.isPlayer() && playersHit >= Math.max(0, Math.trunc(targeting.maxPlayerTargets ?? 0))) {
+                return false;
+            }
+            if (!CombatFactory.canAttackSecondaryTarget(attacker, primary, candidate)) {
+                return false;
+            }
+            if (candidate.isPlayer()) {
+                playersHit++;
+            }
+            found.push(candidate);
+            return found.length >= limit;
+        };
+
+        const z = primary.getLocation().getZ();
+        const candidates: Mobile[] = [];
+        const collect = (mobile: Mobile) => {
+            if (mobile !== primary && mobile !== attacker && mobile.getLocation().getZ() === z) {
+                candidates.push(mobile);
+            }
+        };
+        World.getNpcs().forEach(collect);
+        World.getPlayers().forEach(collect);
+
+        if (targeting.pattern === "surrounding") {
+            const origin = attacker.getLocation();
+            for (const candidate of candidates) {
+                const { x, y, size } = footprint(candidate);
+                if (
+                    origin.getX() >= x - 1 && origin.getX() <= x + size &&
+                    origin.getY() >= y - 1 && origin.getY() <= y + size &&
+                    take(candidate)
+                ) {
+                    break;
+                }
+            }
+            return { secondaryTargets: found, largeTargetExtraHit: false };
+        }
+
         const width = Math.max(1, Math.trunc(targeting.width));
         const half = Math.floor((width - 1) / 2);
         const attackerLocation = attacker.getLocation();
@@ -62,48 +117,16 @@ export class SpecialAttackTargetingResolver {
         }
         const perpX = -dy;
         const perpY = dx;
-        const depth = Math.max(1, attackerLocation.getDistance(primaryLocation) + 1);
-
-        const found: Mobile[] = [];
-        const seen = new Set<Mobile>();
-        for (let d = 1; d <= depth; d++) {
-            for (let lateral = -half; lateral <= half; lateral++) {
-                const x = attackerLocation.getX() + dx * d + perpX * lateral;
-                const y = attackerLocation.getY() + dy * d + perpY * lateral;
-                const npc = SpecialAttackTargetingResolver.npcAt(x, y, primaryLocation.getZ(), primary);
-                if (npc && !seen.has(npc)) {
-                    seen.add(npc);
-                    found.push(npc);
-                    if (found.length >= limit) {
-                        return { secondaryTargets: found, largeTargetExtraHit: false };
-                    }
+        for (let lateral = -half; lateral <= half; lateral++) {
+            const tx = primaryLocation.getX() + perpX * lateral;
+            const ty = primaryLocation.getY() + perpY * lateral;
+            for (const candidate of candidates) {
+                const { x, y, size } = footprint(candidate);
+                if (tx >= x && tx < x + size && ty >= y && ty < y + size && take(candidate)) {
+                    return { secondaryTargets: found, largeTargetExtraHit: false };
                 }
             }
         }
         return { secondaryTargets: found, largeTargetExtraHit: false };
-    }
-
-    private static npcAt(x: number, y: number, z: number, primary: Mobile): NPC | null {
-        let result: NPC | null = null;
-        World.getNpcs().forEach((npc) => {
-            if (result || npc === primary) {
-                return;
-            }
-            if (!npc.isRegistered() || npc.getHitpoints() <= 0) {
-                return;
-            }
-            const location = npc.getLocation();
-            if (location.getZ() !== z) {
-                return;
-            }
-            const size = Math.max(1, npc.getSize());
-            if (
-                x >= location.getX() && x < location.getX() + size &&
-                y >= location.getY() && y < location.getY() + size
-            ) {
-                result = npc;
-            }
-        });
-        return result;
     }
 }

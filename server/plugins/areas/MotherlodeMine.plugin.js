@@ -16,6 +16,7 @@ const Mine = require("./motherlode/State.MotherlodeMine");
 const Veins = require("./motherlode/Veins.MotherlodeMine");
 const Machine = require("./motherlode/Machine.MotherlodeMine");
 const Rockfalls = require("./motherlode/Rockfalls.MotherlodeMine");
+const Crates = require("./motherlode/Crates.MotherlodeMine");
 
 /** The mine's map square, where the HUD shows. */
 const MINE_ZONE = { ...Mine.MINE, levels: [Mine.MINE.z] };
@@ -219,6 +220,7 @@ module.exports = {
   _test: { tick, start, crawl, climb, squeezeThrough, percyCondition, percyPays, enterMine },
   register(api) {
     Machine.init(api);
+    Crates.init(api);
     api.persistAttribute(Mine.STATE_ATTRIBUTE, { sack: {}, machine: [], held: [] });
     api.onServerStartup(start);
     api.onPlayerLogin(login);
@@ -236,6 +238,7 @@ module.exports = {
     api.onObjectInteraction("Sack", { Search: Machine.searchSack });
     api.onObjectInteraction("Empty sack", { Search: Machine.searchSack });
     api.onObjectInteraction("Broken strut", { Hammer: Machine.hammerStrut });
+    api.onObjectInteraction("Crate", { Search: Crates.search });
     api.onNpcDialogueCondition(percyCondition);
     api.onCustomEvent("npc-dialogue:action", percyPays);
     api.registerCommand("mlmstrut", Machine.forceBreak, PlayerRights.DEVELOPER, "Break a Motherlode Mine strut");

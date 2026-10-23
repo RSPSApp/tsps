@@ -278,7 +278,8 @@ export function addNpcRenderData(host: WebGLOsrsRendererHost, map: WebGLMapSquar
                     host.actorRenderData[offset + 4] = 0;
                     host.actorRenderData[offset + 5] = 0;
                 }
-                host.actorRenderData[offset + 6] = 0;
+                // Its fade (OSRS npc transparency): 0 opaque to 255 invisible.
+                host.actorRenderData[offset + 6] = ecs.getTransparency?.(id, clientCycle) ?? 0;
                 host.actorRenderData[offset + 7] = 0;
             }
 
@@ -369,7 +370,7 @@ export function addUnbatchedNpcRenderData(host: WebGLOsrsRendererHost): void {
                 host.actorRenderData[offset + 4] = 0;
                 host.actorRenderData[offset + 5] = 0;
             }
-            host.actorRenderData[offset + 6] = 0;
+            host.actorRenderData[offset + 6] = ecs.getTransparency?.(ecsId, clientCycle) ?? 0;
             host.actorRenderData[offset + 7] = 0;
 
             host.actorRenderCount = required;

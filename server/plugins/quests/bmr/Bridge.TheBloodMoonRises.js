@@ -87,9 +87,14 @@ module.exports = function registerBridge({ api, stage, attribute, ready, play, s
     return true;
   }
   function finish(player) {
+    if (state(player)?.phase !== 'fall-back') return false;
+    // A logout removes the private BridgeArea but keeps the persisted fall-back
+    // phase. The canonical vqg4qO conversation must still finish that phase and
+    // land the player back in the hall, so do not require a live area.
     const area = sessions.get(player);
-    if (!area || state(player)?.phase !== 'fall-back') return false;
-    area.leave(player, false); player.moveTo(new Location(3168, 7855, 1)); return true;
+    if (area) area.leave(player, false);
+    player.moveTo(new Location(3168, 7855, 1));
+    return true;
   }
   function hit({ npc, hit }) {
     if (!portals.has(npc)) return;

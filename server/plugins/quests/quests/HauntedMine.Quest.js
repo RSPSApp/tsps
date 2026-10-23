@@ -8,10 +8,11 @@
  * crystal-mine key and the crystal outcrop that completes the quest.
  *
  * Stages live on varp 382 ("hauntedmine" in the cache varp dump; the quest's sibling
- * state is varp 383 "hauntedmine_bits"). The wiki only names the varps, it does not
- * publish the stage values, so the mapping below is this server's:
- *   1 started, 2 zealot's key stolen, 3 second entrance found, 4 fungus cart moved,
- *   5 Treus encountered, 6 Treus killed, 7 crystal-mine key taken, 8 complete.
+ * state is varp 383 "hauntedmine_bits"). The captured 1768.bin route (revision 227.1),
+ * cross-checked with RuneLite Quest Helper, pins the stage values:
+ *   1 started, 3 second entrance found, 5 lift down, 7 Dayth room, 8 Treus appeared,
+ *   9 Treus killed, 10 crystal-mine key taken, 11 shard cut/complete. Legacy saves (old
+ *   mapping 1-8) are migrated once on login under "haunted-mine:schema".
  * The lever/cart/lift sub-state is persisted in the "quest.haunted_mine.bits"
  * attribute; the cart and lift flags are also mirrored to the real cache varbits in
  * varp 383 (hauntedmine_begincart_fungus 2395, _endcart_fungus 2396,
@@ -24,18 +25,17 @@
  * Source: OSRS Wiki, "Haunted Mine", "Abandoned Mine" and "Haunted Mine/Quick guide";
  * the words are the "Haunted Mine" wiki transcript page.
  *
+ * Captured presentation: interface 144 cart tutorial with actors 3610 and camera tracks,
+ * Treus spawn at 2788,4458 (sequence 1437) and the ghost at 2802,4516 walking to the valve.
+ *
  * Gaps:
  * - "Transcript:Zealot" (the pickpocket lines and the post-quest scene where he takes
  *   the key back) is not in npc-dialogues.json, so pickpocketing gives the key with
  *   no words and a completed player replays "after-killing-treus-dayth", the closest
  *   variant in the dump.
- * - The points-settings interface and its junction puzzle are not simulated: pulling a
- *   lever plays the wiki "pull the lever" message and checking the panel with a fungus
- *   in the central cart sends the cart to the northern one.
- * - The exact OSRS stage values are unpublished, so varp 382 only feeds the local stage
- *   and quest list; anything the client derives from raw OSRS values is not reproduced.
- * - The flooded chamber's wade to the south shore has no loc-teleport entry in this
- *   server (a pre-existing map gap), so the MCP runthrough teleports that one leg.
+ * - The flooded chamber is walked across normally (captured route). Cache 241 clips
+ *   the one crossing tile; installFloodedChannelFix clears only that BLOCKED_TILE
+ *   after each region load, leaving every other terrain flag and object unchanged.
  * - Walking the fungus out through the main-entrance stairs reuses the cart-tunnel
  *   crumble line, which mentions crawling.
  * - A few system lines have no wiki transcript and are authored: the unpowered lift,
@@ -45,7 +45,9 @@
  */
 module.exports = function registerHauntedMineQuest(api) {
   const {
+    Animation,
     CountdownTask,
+    ObjectDefinition,
     Item,
     ItemIdentifiers,
     Location,
@@ -55,14 +57,18 @@ module.exports = function registerHauntedMineQuest(api) {
     Sound,
     Sounds,
     ObjectManager,
+    RegionManager,
     TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
+  const Scenes = createQuestScenes(api);
 
   const ZEALOT_NPC_ID = NpcIdentifiers.ZEALOT; // 3611
   const TREUS_DAYTH_NPC_ID = NpcIdentifiers.TREUS_DAYTH; // 3616
   const INNOCENT_LOOKING_KEY_NPC_ID = NpcIdentifiers.INNOCENT_LOOKING_KEY; // 3619
   const MISCHIEVOUS_GHOST_NPC_ID = NpcIdentifiers.MISCHIEVOUS_GHOST; // 3627
+  const MINE_CART_NPC_ID = 3610; // the capture's moving mine-cart actor
 
   const ZEALOTS_KEY_ITEM_ID = ItemIdentifiers.ZEALOTS_KEY; // 4078
   const GLOWING_FUNGUS_ITEM_ID = ItemIdentifiers.GLOWING_FUNGUS; // 4075
@@ -110,6 +116,8 @@ module.exports = function registerHauntedMineQuest(api) {
     ObjectIdentifiers.CRYSTAL_OUTCROP_3, // 4928
   ]);
   const WATER_VALVE_OBJECT_ID = ObjectIdentifiers.WATER_VALVE; // 4924
+  const FLOODED_LIFT_OBJECT_ID = ObjectIdentifiers.LIFT_4; // 4942, floors the flooded chamber up to the lift room
+  const DAYTH_STAIRS_OBJECT_ID = ObjectIdentifiers.STAIRS_29; // 4971, flooded chamber down to Treus Dayth
   const LIFT_DOWN_OBJECT_IDS = new Set([
     ObjectIdentifiers.LIFT, // 4937
     ObjectIdentifiers.LIFT_2, // 4938
@@ -140,31 +148,60 @@ module.exports = function registerHauntedMineQuest(api) {
   // northern cart by Ladder 10 that the fungus is sent to.
   const CART_START_TILE = { x: 2778, y: 4506 };
   const CART_END_TILE = { x: 2774, y: 4537 };
+  const LIFT_ROOM_TILE = { x: 2807, y: 4492 };
   const LEVEL_6_LIGHT_LEVEL = 0;
+  const FLOODED_CHANNEL_TILE = { x: 2725, y: 4453 };
+  const FLOODED_CHANNEL_REGION = 10821;
+
+  // Captured cart tutorial (interface 144) and its cart actors/cameras.
+  const CART_CAMERA_START = [[2777, 4511, 400], [2778, 4506, 100]];
+  const CART_CAMERA_SLOW = [[2777, 4514, 400], [2778, 4509, 100]];
+  const CART_CAMERA_END = [[2776, 4539, 400], [2779, 4535, 100]];
+  const CART_CAMERA_END_SLOW = [[2776, 4539, 400], [2776, 4535, 100]];
+  const CART_ONE_START = { x: 2778, y: 4507 };
+  const CART_TWO_START = { x: 2779, y: 4535 };
+  const TREUS_CAMERA = [[2788, 4454, 400], [2788, 4458, 80]];
+  const TREUS_CAMERA_CLOSE = [[2788, 4454, 400], [2788, 4455, 80]];
+  const TREUS_CAMERA_WIDE = [[2782, 4455, 800], [2788, 4455, 80]];
+  const TREUS_TILE = { x: 2788, y: 4458 };
+  const GHOST_START = { x: 2802, y: 4516 };
+  const GHOST_VALVE = { x: 2807, y: 4496 };
+  const GHOST_PATH = (() => {
+    // Captured 93377-93575: 15 tiles north, then 5 diagonal steps to the valve.
+    const path = [];
+    const diagonalStartY = GHOST_VALVE.y + 5;
+    for (let y = GHOST_START.y - 1; y >= diagonalStartY; y--) path.push({ x: GHOST_START.x, y });
+    for (let step = 1; step <= 5; step++) path.push({ x: GHOST_START.x + step, y: diagonalStartY - step });
+    return path;
+  })();
+
 
   const AGILITY_CART_REQUIREMENT = 15;
   const CRAFTING_SHARD_REQUIREMENT = 35;
-  /** The ghost gives the player roughly this long to reach the lift. */
-  const GHOST_CLOSE_TICKS = 20;
+  /** Captured timing: ghost appears 20 ticks after the valve, reaches it 21 ticks later. */
+  const GHOST_CLOSE_TICKS = 21;
   /** Ticks the three lift messages occupy before the tinderbox line joins them. */
   const LIFT_MESSAGE_TICKS = 4;
-  /** Ticks the valve messages occupy before the ghost's chathead can take over. */
-  const GHOST_APPEAR_TICKS = 3;
+  /** Ticks between opening the valve and the captured ghost appearing. */
+  const GHOST_APPEAR_TICKS = 20;
 
   const VARP_HAUNTED_MINE = 382; // "hauntedmine"
   const VARBIT_LIFT_POWERED_ONCE = 2393; // hauntedmine_liftpoweredonce (varp 383 bits 9)
   const VARBIT_LIFT_POWERED_NOW = 2394; // hauntedmine_liftpowerednow (varp 383 bits 10)
   const VARBIT_BEGINCART_FUNGUS = 2395; // hauntedmine_begincart_fungus (varp 383 bits 11)
   const VARBIT_ENDCART_FUNGUS = 2396; // hauntedmine_endcart_fungus (varp 383 bits 12)
+  const VARBIT_HEARD_ABOUT_KEY = 2397; // hauntedmine_heardaboutkey (varp 383 bit 21)
 
+  // Captured 1768.bin: start 1, mine entered 3, lift down 5, Dayth room 7,
+  // key attempt 8, Dayth killed 9, crystal key taken 10, crystal cut/complete 11.
   const STAGE_STARTED = 1;
-  const STAGE_GOT_KEY = 2;
   const STAGE_SECOND_ENTRANCE = 3;
-  const STAGE_CART_MOVED = 4;
-  const STAGE_TREUS_ENCOUNTERED = 5;
-  const STAGE_TREUS_DEAD = 6;
-  const STAGE_KEY_TAKEN = 7;
-  const STAGE_COMPLETE = 8;
+  const STAGE_LIFT_DOWN = 5;
+  const STAGE_TREUS_ROOM = 7;
+  const STAGE_TREUS_ENCOUNTERED = 8;
+  const STAGE_TREUS_DEAD = 9;
+  const STAGE_KEY_TAKEN = 10;
+  const STAGE_COMPLETE = 11;
 
   const BITS_ATTRIBUTE = "quest.haunted_mine.bits";
   const BIT_FUNGUS_IN_CART_START = 1 << 0;
@@ -174,6 +211,62 @@ module.exports = function registerHauntedMineQuest(api) {
   const BIT_LIFT_POWERED_ONCE = 1 << 4;
   const BIT_REACHED_DEPTHS = 1 << 5;
   const BIT_GHOST_SEEN = 1 << 6;
+  const BIT_PUZZLE_STARTED = 1 << 7;
+  const BIT_CART_TUTORIAL_DONE = 1 << 8;
+
+  const SCHEMA_ATTRIBUTE = "haunted-mine:schema";
+  const SCHEMA_VERSION = 1;
+  const LEVERS_ATTRIBUTE = "haunted-mine:levers";
+
+  // Interface 144 is the points/track panel. Component 155 is its Start button.
+  const POINTS_SETTINGS_GROUP = 144;
+  const POINTS_SETTINGS_TARGET_UID = (164 << 16) | 16;
+  const POINTS_SETTINGS_START_BUTTON = (POINTS_SETTINGS_GROUP << 16) | 155;
+
+  // Levers A-H each toggle the captured cache varbit for that junction. The physical A and B
+  // levers are crossed in the cache: object A drives varbit HAUNTEDMINE_LEVER_B (2385) and
+  // object B drives HAUNTEDMINE_LEVER_A (2386), as Quest Helper's leverA/leverB conditions do.
+  const LEVER_VARBIT_BY_OBJECT = new Map([
+    [ObjectIdentifiers.LEVER_26, 2385], // A (varbit B)
+    [ObjectIdentifiers.LEVER_27, 2386], // B (varbit A)
+    [ObjectIdentifiers.LEVER_28, 2387], // C
+    [ObjectIdentifiers.LEVER_29, 2388], // D
+    [ObjectIdentifiers.LEVER_30, 2389], // E
+    [ObjectIdentifiers.LEVER_31, 2390], // I
+    [ObjectIdentifiers.LEVER_32, 2391], // J
+    [ObjectIdentifiers.LEVER_33, 2392], // K
+  ]);
+  // Quest Helper's lever route: A, B, E and I on; C, D, J and K off.
+  /*
+   * Haunted Mine's levels are separate z0 map areas, so ClimbLinks cannot pair them.
+   * These are the captured 1768 landings for the cart/fungus/valve ladders.
+   */
+  const HAUNTED_LADDER_LINKS = new Map([
+    ['3422,9625', { down: { x: 2783, y: 4569 } }],
+    ['2782,4569', { up: { x: 3421, y: 9625 } }],
+    ['2798,4567', { down: { x: 2734, y: 4504 } }],
+    ['2734,4503', { up: { x: 2798, y: 4568 } }],
+    ['2725,4486', { down: { x: 2789, y: 4487 } }],
+    ['2789,4486', { up: { x: 2725, y: 4487 } }],
+    ['3413,9633', { down: { x: 2772, y: 4577 } }],
+    ['2797,4599', { down: { x: 2733, y: 4534 } }],
+    ['2733,4535', { up: { x: 2798, y: 4599 } }],
+    ['2710,4540', { down: { x: 2774, y: 4539 } }],
+    ['2774,4540', { up: { x: 2710, y: 4539 } }],
+    ['2732,4529', { down: { x: 2796, y: 4528 } }],
+  ]);
+
+  // Captured stair transitions missing from LocTeleports (4971 Walk-down).
+  const HAUNTED_STAIR_LINKS = new Map([
+    ['4971:2746,4436', { down: { x: 2811, y: 4454 } }],
+    ['4971:2692,4436', { down: { x: 2758, y: 4454 } }],
+    ['4973:2812,4452', { up: { x: 2750, y: 4437 } }],
+  ]);
+
+  const LEVER_SOLUTION = new Map([
+    [2386, 1], [2385, 1], [2387, 0], [2388, 0],
+    [2389, 1], [2390, 1], [2391, 0], [2392, 0],
+  ]);
 
   const PAGE = "Haunted Mine";
   const START_HOOK = "quest:haunted-mine:start";
@@ -195,7 +288,6 @@ module.exports = function registerHauntedMineQuest(api) {
   const V_RETRIEVE = "inside-the-mine-retrieving-the-glowing-fungus";
   const V_PLACE_BACK = "inside-the-mine-retrieving-the-glowing-fungus-attempting-to-place-the-fungus-back-in-the-minecart";
   const V_VALVE = "inside-the-mine-turning-the-water-valve";
-  const V_GHOST_APPEARS = "inside-the-mine-mischievous-ghost-appearing";
   const V_GHOST_WINS = "inside-the-mine-mischievous-ghost-appearing-losing-the-race-to-the-ghost";
   const V_LIFT = "inside-the-mine-taking-the-lift";
   const V_LIFT_TINDERBOX = "inside-the-mine-taking-the-lift-if-the-player-has-a-tinderbox-in-their-inventory";
@@ -241,6 +333,7 @@ module.exports = function registerHauntedMineQuest(api) {
   const liveTreus = new WeakMap();
   const liveGhost = new WeakMap();
   const ghostTimer = new WeakMap();
+  const liveCarts = new WeakMap();
 
   function bits(player) {
     return Number(player.getAttribute(BITS_ATTRIBUTE)) || 0;
@@ -256,6 +349,42 @@ module.exports = function registerHauntedMineQuest(api) {
 
   function clearBit(player, bit) {
     player.setAttribute(BITS_ATTRIBUTE, bits(player) & ~bit);
+  }
+
+  function levers(player) {
+    return Number(player.getAttribute(LEVERS_ATTRIBUTE)) || 0;
+  }
+
+  function leverOn(player, varbitId) {
+    return (levers(player) & (1 << (varbitId - 2385))) !== 0;
+  }
+
+  function toggleLever(player, varbitId) {
+    const bit = 1 << (varbitId - 2385);
+    player.setAttribute(LEVERS_ATTRIBUTE, levers(player) ^ bit);
+    player.getPacketSender().sendVarbit(varbitId, leverOn(player, varbitId) ? 1 : 0);
+  }
+
+  function leversSolved(player) {
+    for (const [varbitId, value] of LEVER_SOLUTION) {
+      if ((leverOn(player, varbitId) ? 1 : 0) !== value) return false;
+    }
+    return true;
+  }
+
+  /** Old saves used 1-8 with different meanings; map them before any reward can run. */
+  const LEGACY_STAGE = new Map([[1, 1], [2, 1], [3, 3], [4, 3], [5, 8], [6, 9], [7, 10], [8, 11]]);
+
+  function migrateSave(player) {
+    if ((Number(player.getAttribute(SCHEMA_ATTRIBUTE)) || 0) >= SCHEMA_VERSION) return;
+    const stage = quest.getStage(player);
+    const migrated = LEGACY_STAGE.get(stage);
+    if (migrated !== undefined && migrated !== stage) quest.setStage(player, migrated);
+    player.setAttribute(SCHEMA_ATTRIBUTE, SCHEMA_VERSION);
+  }
+
+  function markNewSave(player) {
+    player.setAttribute(SCHEMA_ATTRIBUTE, SCHEMA_VERSION);
   }
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
@@ -297,6 +426,10 @@ module.exports = function registerHauntedMineQuest(api) {
     packet.sendVarbit(VARBIT_LIFT_POWERED_NOW, hasBit(player, BIT_VALVE_OPEN) ? 1 : 0);
     packet.sendVarbit(VARBIT_BEGINCART_FUNGUS, hasBit(player, BIT_FUNGUS_IN_CART_START) ? 1 : 0);
     packet.sendVarbit(VARBIT_ENDCART_FUNGUS, hasBit(player, BIT_FUNGUS_IN_CART_END) ? 1 : 0);
+    packet.sendVarbit(VARBIT_HEARD_ABOUT_KEY, quest.getStage(player) >= STAGE_STARTED ? 1 : 0);
+    for (const varbitId of LEVER_SOLUTION.keys()) {
+      packet.sendVarbit(varbitId, leverOn(player, varbitId) ? 1 : 0);
+    }
   }
 
   // ==========================================================================
@@ -307,6 +440,7 @@ module.exports = function registerHauntedMineQuest(api) {
   function selectVariant({ npcId, player }) {
     if (npcId !== ZEALOT_NPC_ID) return null;
     const stage = quest.getStage(player);
+    if (stage >= STAGE_STARTED) sendStateVarps(player);
     if (stage >= STAGE_TREUS_DEAD) return V_KILLED_TREUS; // no post-quest variant in the dump
     if (stage >= STAGE_TREUS_ENCOUNTERED) return V_MET_TREUS;
     if (stage >= STAGE_SECOND_ENTRANCE) return V_SECOND_ENTRANCE;
@@ -333,7 +467,11 @@ module.exports = function registerHauntedMineQuest(api) {
   /** "Yes." starts the quest. */
   function handleStartHook({ player, npcId, hook }) {
     if (npcId !== ZEALOT_NPC_ID || hook !== START_HOOK) return;
-    if (quest.getStage(player) === 0) quest.setStage(player, STAGE_STARTED);
+    if (quest.getStage(player) === 0) {
+      quest.setStage(player, STAGE_STARTED);
+      markNewSave(player);
+      sendStateVarps(player);
+    }
   }
 
   // ==========================================================================
@@ -345,20 +483,27 @@ module.exports = function registerHauntedMineQuest(api) {
     if (existing) return;
     const treus = api.spawnNpc({
       id: TREUS_DAYTH_NPC_ID,
-      x: 2785,
-      y: 4455,
+      x: TREUS_TILE.x,
+      y: TREUS_TILE.y,
       z: LEVEL_6_LIGHT_LEVEL,
       wanderRadius: 6,
       owner: player,
       ownerOnly: true,
     });
-    if (treus) liveTreus.set(player, treus);
+    if (!treus) return;
+    liveTreus.set(player, treus);
+    treus.performAnimation?.(new Animation(1437));
+    Scenes.camera(player, TREUS_CAMERA[0], TREUS_CAMERA[1], { rate: 0, rate2: 100 });
+    Scenes.later(player, 2, () => Scenes.camera(player, TREUS_CAMERA_CLOSE[0], TREUS_CAMERA_CLOSE[1], { rate: 1, rate2: 50 }));
+    Scenes.later(player, 4, () => Scenes.camera(player, TREUS_CAMERA_WIDE[0], TREUS_CAMERA_WIDE[1], { rate: 1, rate2: 50 }));
+    Scenes.later(player, 10, () => player.getPacketSender().sendCameraReset());
   }
 
   function removeTreus(player) {
     const treus = liveTreus.get(player);
     if (treus) api.removeNpc(treus);
     liveTreus.delete(player);
+    player.getPacketSender().sendCameraReset();
   }
 
   function stopGhost(player) {
@@ -367,6 +512,7 @@ module.exports = function registerHauntedMineQuest(api) {
       timer.stop();
       ghostTimer.delete(player);
     }
+    Scenes.cancel(player);
     const ghost = liveGhost.get(player);
     if (ghost) api.removeNpc(ghost);
     liveGhost.delete(player);
@@ -375,14 +521,24 @@ module.exports = function registerHauntedMineQuest(api) {
   function spawnGhost(player) {
     const ghost = api.spawnNpc({
       id: MISCHIEVOUS_GHOST_NPC_ID,
-      x: 2807,
-      y: 4497,
+      x: GHOST_START.x,
+      y: GHOST_START.y,
       z: 0,
       wanderRadius: 0,
       owner: player,
       ownerOnly: true,
     });
-    if (ghost) liveGhost.set(player, ghost);
+    if (!ghost) return;
+    liveGhost.set(player, ghost);
+    ghost.forceChat?.("Ooooo Wooooo Woo");
+    ghost.performAnimation?.(new Animation(5478));
+    GHOST_PATH.forEach((tile, index) => {
+      Scenes.later(player, index + 1, () => {
+        if (liveGhost.get(player) !== ghost) return;
+        ghost.moveTo(new Location(tile.x, tile.y, 0));
+        if (index % 4 === 3) ghost.performAnimation?.(new Animation(index % 8 === 3 ? 5794 : 5795));
+      });
+    });
   }
 
   /** Starts the valve race: the ghost appears and shuts the water off shortly after. */
@@ -390,10 +546,7 @@ module.exports = function registerHauntedMineQuest(api) {
     stopGhost(player);
     if (!CountdownTask || !TaskManager) return;
     spawnGhost(player);
-    if (!hasBit(player, BIT_GHOST_SEEN)) {
-      setBit(player, BIT_GHOST_SEEN);
-      startTranscript(api, player, MISCHIEVOUS_GHOST_NPC_ID, PAGE, V_GHOST_APPEARS);
-    }
+    if (!hasBit(player, BIT_GHOST_SEEN)) setBit(player, BIT_GHOST_SEEN);
     const timer = new CountdownTask(player, GHOST_CLOSE_TICKS, () => closeValve(player));
     ghostTimer.set(player, timer);
     TaskManager.submit(timer);
@@ -424,7 +577,7 @@ module.exports = function registerHauntedMineQuest(api) {
     const killer = event.killer?.isPlayer?.() ? event.killer : null;
     if (!killer || liveTreus.get(killer) !== event.npc) return;
     liveTreus.delete(killer);
-    if (quest.getStage(killer) === STAGE_TREUS_ENCOUNTERED) {
+    if (quest.getStage(killer) < STAGE_TREUS_DEAD) {
       quest.setStage(killer, STAGE_TREUS_DEAD);
     }
     startTranscript(api, killer, TREUS_DAYTH_NPC_ID, PAGE, V_TREUS_KILLED);
@@ -441,7 +594,7 @@ module.exports = function registerHauntedMineQuest(api) {
     if (!quest.isStarted(player) || quest.isComplete(player)) return false;
     if (hasBit(player, BIT_VALVE_KEY_USED) || held(player, ZEALOTS_KEY_ITEM_ID)) return false;
     giveItem(player, ZEALOTS_KEY_ITEM_ID);
-    if (quest.getStage(player) < STAGE_GOT_KEY) quest.setStage(player, STAGE_GOT_KEY);
+    player.getPacketSender().sendVarbit(VARBIT_HEARD_ABOUT_KEY, 1);
   }
 
   /** Take on the innocent-looking key: first take wakes Treus; later takes claim it. */
@@ -505,10 +658,12 @@ module.exports = function registerHauntedMineQuest(api) {
     }
     if (stepId === A_COMPLETE) {
       event.handled = true;
+      if (!quest.isComplete(player) && quest.getStage(player) < STAGE_KEY_TAKEN) return;
       if (player.getInventory().getFreeSlots() < 1) {
         player.sendMessage("You don't have enough inventory space to cut a shard.");
         return;
       }
+      // The outcrop stays cuttable after the quest; only completion is once-only.
       player.getInventory().adds(SALVE_SHARD_ITEM_ID, 1);
       if (!quest.isComplete(player)) quest.complete(player);
     }
@@ -553,6 +708,11 @@ module.exports = function registerHauntedMineQuest(api) {
 
   function cutCrystal(event) {
     const { player } = event;
+    if (!quest.isComplete(player) &&
+        (!quest.isStarted(player) || quest.getStage(player) < STAGE_KEY_TAKEN)) {
+      event.handled = true;
+      return;
+    }
     event.handled = true;
     if (!held(player, CHISEL_ITEM_ID)) {
       player.sendMessage("You need a chisel to cut a shard from the crystal.");
@@ -570,20 +730,106 @@ module.exports = function registerHauntedMineQuest(api) {
   }
 
   function pullLever(event) {
+    const { player, objectId } = event;
+    const varbitId = LEVER_VARBIT_BY_OBJECT.get(objectId);
+    if (varbitId === undefined) return;
+    if (!quest.isStarted(player) || quest.isComplete(player) || quest.getStage(player) >= STAGE_LIFT_DOWN) return;
     event.handled = true;
-    startTranscript(api, event.player, ZEALOT_NPC_ID, PAGE, V_LEVER);
+    toggleLever(player, varbitId);
+    player.sendMessage("You pull the lever. The old points creak into place.");
+    tryMoveCart(player);
+    startTranscript(api, player, ZEALOT_NPC_ID, PAGE, V_LEVER);
   }
 
-  /** Checking the panel sends a cart that is loaded with a fungus to the far side. */
+  /** Opens the cache's points-settings panel (interface 144). */
   function checkPointsSettings(event) {
     const { player } = event;
-    if (!hasBit(player, BIT_FUNGUS_IN_CART_START)) return; // panel only matters with a loaded cart
+    if (!quest.isStarted(player) || quest.isComplete(player)) return;
     event.handled = true;
+    player.getPacketSender().sendSubInterface(POINTS_SETTINGS_TARGET_UID, POINTS_SETTINGS_GROUP, 1);
+  }
+
+  function startPointsPuzzle(event) {
+    const { player } = event;
+    if (!quest.isStarted(player) || quest.isComplete(player)) return;
+    setBit(player, BIT_PUZZLE_STARTED);
+    if (!hasBit(player, BIT_CART_TUTORIAL_DONE)) {
+      startCartTutorial(player);
+      return;
+    }
+    player.getPacketSender().closeInterface(POINTS_SETTINGS_GROUP);
+    player.sendMessage("You start the track: pull the levers until the points line up.");
+    tryMoveCart(player);
+  }
+
+  function spawnCart(player, tile) {
+    const cart = api.spawnNpc({
+      id: MINE_CART_NPC_ID,
+      x: tile.x,
+      y: tile.y,
+      z: 0,
+      wanderRadius: 0,
+      owner: player,
+      ownerOnly: true,
+    });
+    if (cart) {
+      const carts = liveCarts.get(player) ?? [];
+      carts.push(cart);
+      liveCarts.set(player, carts);
+    }
+    return cart;
+  }
+
+  function removeCarts(player) {
+    for (const cart of liveCarts.get(player) ?? []) {
+      if (cart?.isRegistered?.()) api.removeNpc(cart);
+    }
+    liveCarts.delete(player);
+  }
+
+  /**
+   * The captured interface-144 tutorial: two cart actors move along the junctions while
+   * the camera frames each end of the track.
+   */
+  function startCartTutorial(player) {
+    setBit(player, BIT_CART_TUTORIAL_DONE);
+    Scenes.camera(player, CART_CAMERA_START[0], CART_CAMERA_START[1], { rate: 0, rate2: 100 });
+    const first = spawnCart(player, CART_ONE_START);
+    if (first?.getMovementQueue) {
+      for (let y = CART_ONE_START.y + 1; y <= CART_ONE_START.y + 3; y++) {
+        first.getMovementQueue().addFirstStep(new Location(CART_ONE_START.x, y, 0));
+      }
+    }
+    Scenes.later(player, 2, () => Scenes.camera(player, CART_CAMERA_SLOW[0], CART_CAMERA_SLOW[1], { rate: 1, rate2: 10 }));
+    Scenes.later(player, 5, () => {
+      if (first?.isRegistered?.()) api.removeNpc(first);
+      Scenes.camera(player, CART_CAMERA_END[0], CART_CAMERA_END[1], { rate: 0, rate2: 100 });
+      const second = spawnCart(player, CART_TWO_START);
+      if (second?.getMovementQueue) {
+        for (let x = CART_TWO_START.x - 1; x >= CART_TWO_START.x - 3; x--) {
+          second.getMovementQueue().addFirstStep(new Location(x, CART_TWO_START.y, 0));
+        }
+      }
+      Scenes.later(player, 1, () => Scenes.camera(player, CART_CAMERA_END_SLOW[0], CART_CAMERA_END_SLOW[1], { rate: 1, rate2: 10 }));
+    });
+    Scenes.later(player, 9, () => {
+      removeCarts(player);
+      player.getPacketSender().sendCameraReset().closeInterface(POINTS_SETTINGS_GROUP);
+      startTranscript(api, player, ZEALOT_NPC_ID, PAGE, V_CART_MOVED);
+      tryMoveCart(player);
+    });
+  }
+
+  /** Sends a loaded cart across once the panel is started and the levers match. */
+  function tryMoveCart(player) {
+    if (!hasBit(player, BIT_PUZZLE_STARTED)) return false;
+    if (!hasBit(player, BIT_FUNGUS_IN_CART_START) || hasBit(player, BIT_FUNGUS_IN_CART_END)) return false;
+    if (!leversSolved(player)) return false;
     clearBit(player, BIT_FUNGUS_IN_CART_START);
     setBit(player, BIT_FUNGUS_IN_CART_END);
     sendStateVarps(player);
-    if (quest.getStage(player) < STAGE_CART_MOVED) quest.setStage(player, STAGE_CART_MOVED);
     startTranscript(api, player, ZEALOT_NPC_ID, PAGE, V_CART_MOVED);
+    return true;
   }
 
   /** Search the cart holding the fungus, take it back out. */
@@ -628,6 +874,7 @@ module.exports = function registerHauntedMineQuest(api) {
     setBit(player, BIT_LIFT_POWERED_ONCE);
     clearBit(player, BIT_VALVE_OPEN);
     sendStateVarps(player);
+    if (quest.getStage(player) < STAGE_LIFT_DOWN) quest.setStage(player, STAGE_LIFT_DOWN);
     startTranscript(api, player, ZEALOT_NPC_ID, PAGE, V_LIFT);
     if (held(player, TINDERBOX_ITEM_ID)) {
       player.getInventory().deleteNumber(TINDERBOX_ITEM_ID, 1);
@@ -659,7 +906,7 @@ module.exports = function registerHauntedMineQuest(api) {
       return;
     }
     const stage = quest.getStage(player);
-    if (MINE_ENTRANCE_IDS.has(objectId) && stage >= STAGE_GOT_KEY && stage < STAGE_SECOND_ENTRANCE) {
+    if (MINE_ENTRANCE_IDS.has(objectId) && stage >= STAGE_STARTED && stage < STAGE_SECOND_ENTRANCE) {
       quest.setStage(player, STAGE_SECOND_ENTRANCE);
     }
     if (!MINE_EXIT_OBJECT_IDS.has(objectId)) return;
@@ -677,8 +924,28 @@ module.exports = function registerHauntedMineQuest(api) {
     startTranscript(api, player, ZEALOT_NPC_ID, PAGE, V_FUNGUS_EXIT);
   }
 
+  /** Claims Haunted's same-plane ladders before ClimbLinks guesses. */
+  function claimHauntedLadder(event) {
+    const object = event?.object;
+    const location = object?.getLocation?.();
+    if (!location) return;
+    const actions = ObjectDefinition.forId(event.objectId)?.getInteractions?.() ?? [];
+    const down = actions.some((action) => /down/i.test(action || ""));
+    const stair = HAUNTED_STAIR_LINKS.get(`${event.objectId}:${location.getX()},${location.getY()}`);
+    const link = stair ?? HAUNTED_LADDER_LINKS.get(`${location.getX()},${location.getY()}`);
+    if (!link) return;
+    const destination = down ? link.down : link.up;
+    if (!destination) return;
+    event.handled = true;
+    api.emitCustomEvent(down ? "ladders:climbDown" : "ladders:climbUp", {
+      player: event.player,
+      object,
+      destination: new Location(destination.x, destination.y, 0),
+    });
+  }
+
   function handleObjectInteraction(event) {
-    const { objectId } = event;
+    const { player, objectId } = event;
     if (objectId === CLIMB_OVER_CART_OBJECT_ID) {
       climbOverCart(event);
       return;
@@ -693,6 +960,23 @@ module.exports = function registerHauntedMineQuest(api) {
     }
     if (objectId === WATER_VALVE_OBJECT_ID) {
       turnValve(event);
+      return;
+    }
+    if (objectId === DAYTH_STAIRS_OBJECT_ID) {
+      if (
+        quest.isStarted(player) &&
+        !quest.isComplete(player) &&
+        hasBit(player, BIT_REACHED_DEPTHS) &&
+        quest.getStage(player) >= STAGE_LIFT_DOWN &&
+        quest.getStage(player) < STAGE_TREUS_ROOM
+      ) {
+        quest.setStage(player, STAGE_TREUS_ROOM);
+      }
+      return; // LocTeleports owns the descent.
+    }
+    if (objectId === FLOODED_LIFT_OBJECT_ID) {
+      event.handled = true;
+      player.moveTo(new Location(LIFT_ROOM_TILE.x, LIFT_ROOM_TILE.y, 0));
       return;
     }
     if (LIFT_DOWN_OBJECT_IDS.has(objectId)) {
@@ -730,6 +1014,7 @@ module.exports = function registerHauntedMineQuest(api) {
     player.getInventory().deleteNumber(GLOWING_FUNGUS_ITEM_ID, 1);
     setBit(player, BIT_FUNGUS_IN_CART_START);
     sendStateVarps(player);
+    tryMoveCart(player);
   }
 
   /**
@@ -787,13 +1072,17 @@ module.exports = function registerHauntedMineQuest(api) {
   // ==========================================================================
 
   function handleLogin({ player }) {
+    migrateSave(player);
     refreshQuestList(player);
     sendStateVarps(player);
   }
 
   function handleLogout({ player }) {
+    Scenes.cancel(player);
+    removeCarts(player);
     stopGhost(player);
     removeTreus(player);
+    player.getPacketSender().sendCameraReset().closeSubInterface?.((161 << 16) | 1);
   }
 
   // ==========================================================================
@@ -819,16 +1108,14 @@ module.exports = function registerHauntedMineQuest(api) {
         "<str>him reach the Salve crystals deep in the haunted mine.</str>",
         "",
       ];
-      if (stage < STAGE_GOT_KEY) {
-        lines.push("I should pickpocket the <col=800000>Zealot</col> to get his key.");
-      } else if (stage < STAGE_SECOND_ENTRANCE) {
-        lines.push("I should use the Zealot's key to get into the lower levels.");
-      } else if (stage < STAGE_CART_MOVED) {
+      if (stage < STAGE_SECOND_ENTRANCE) {
+        lines.push("I should pickpocket the <col=800000>Zealot</col> for his key, then");
+        lines.push("find the second entrance into the mine.");
+      } else if (stage < STAGE_LIFT_DOWN) {
         lines.push("I should send a <col=800000>glowing fungus</col> across the mine cart track");
         lines.push("to light the deepest level.");
-      } else if (stage < STAGE_TREUS_ENCOUNTERED) {
-        lines.push("I should power the water valve with the Zealot's key and take the");
-        lines.push("lift down to the deepest level.");
+      } else if (stage < STAGE_TREUS_ROOM) {
+        lines.push("I should take the <col=800000>lift</col> down into the flooded mine.");
       } else if (stage < STAGE_TREUS_DEAD) {
         lines.push("I should defeat <col=800000>Treus Dayth</col> and take the key he guards.");
       } else if (stage < STAGE_KEY_TAKEN) {
@@ -848,7 +1135,21 @@ module.exports = function registerHauntedMineQuest(api) {
     player.getSkillManager().addExperiences(Skill.STRENGTH, 22000);
   }
 
+  /** Capture 1768 crosses 2725,4453 after the lift; cache 241 clips that one tile. */
+  function installFloodedChannelFix({ regionId } = {}) {
+    if (regionId !== FLOODED_CHANNEL_REGION) return;
+    RegionManager.removeClipping(
+      FLOODED_CHANNEL_TILE.x,
+      FLOODED_CHANNEL_TILE.y,
+      0,
+      RegionManager.BLOCKED_TILE,
+      null
+    );
+  }
+
   api.persistAttribute(BITS_ATTRIBUTE);
+  api.persistAttribute(LEVERS_ATTRIBUTE, 0);
+  api.persistAttribute(SCHEMA_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "haunted_mine",
@@ -868,13 +1169,16 @@ module.exports = function registerHauntedMineQuest(api) {
     onReward: grantReward,
   });
 
+  api.onRegionLoaded(installFloodedChannelFix);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
   api.onCustomEvent("door:toggle", handleDoorToggle);
+  api.onCustomEvent("ladders:climb", claimHauntedLadder);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onInterfaceActionButton(POINTS_SETTINGS_START_BUTTON, startPointsPuzzle);
   api.onItemAction("Glowing fungus", { Drop: dropFungus });
   api.onNpcInteraction("Zealot", { Pickpocket: pickpocketZealot });
   api.onNpcInteraction("Innocent-looking key", { Take: takeInnocentKey });

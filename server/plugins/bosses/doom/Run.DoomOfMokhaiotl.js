@@ -281,7 +281,7 @@ class DoomRun {
     this.updateHud();
   }
 
-  /** Capture: the HUD's bar is recoloured (303:13-15) blue while the shield is up and back after, then redrawn. */
+  /** Capture: the HUD's bar is recoloured (303:14-16) blue while the shield is up and back after, then redrawn. */
   hudColours(shielded) {
     Shared.api().emitCustomEvent("boss-hud:update", { player: this.player, colours: shielded ? HUD.shieldColours : HUD.colours });
   }

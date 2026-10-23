@@ -1,4 +1,13 @@
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+import { createElement, lazy, type ReactNode } from "react";
+import type { OsrsClient } from "../../OsrsClient";
+
+const PoisonTimerOverlay = lazy(() =>
+    import("./StatusTimerOverlay").then((m) => ({ default: m.PoisonTimerOverlay })),
+);
+const FreezeTimerOverlay = lazy(() =>
+    import("./StatusTimerOverlay").then((m) => ({ default: m.FreezeTimerOverlay })),
+);
 
 export interface StatusTimerPluginConfig {
     enabled: boolean;
@@ -101,6 +110,10 @@ export class PoisonTimerPlugin extends StatusTimerPlugin {
         tags: ["combat", "timer"],
         configKey: "poisontimerplugin",
     };
+
+    renderHud(osrsClient: OsrsClient): ReactNode {
+        return createElement(PoisonTimerOverlay, { osrsClient, plugin: this });
+    }
 }
 
 export class FreezeTimerPlugin extends StatusTimerPlugin {
@@ -110,4 +123,8 @@ export class FreezeTimerPlugin extends StatusTimerPlugin {
         tags: ["combat", "timer"],
         configKey: "freezetimerplugin",
     };
+
+    renderHud(osrsClient: OsrsClient): ReactNode {
+        return createElement(FreezeTimerOverlay, { osrsClient, plugin: this });
+    }
 }

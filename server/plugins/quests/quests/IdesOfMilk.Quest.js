@@ -258,8 +258,15 @@ module.exports = function registerIdesOfMilkQuest(api) {
     return true;
   }
 
+  function hasEquippedAmulet(player) {
+    // Cache wearPos 2 (neck/amulet); the charged and empty amulets share it.
+    return (player.getEquipment?.()?.getItems?.() ?? []).some((item) =>
+      item?.getId?.() === COWBELL_AMULET_ITEM_ID || item?.getId?.() === CHARGED_COWBELL_AMULET_ITEM_ID);
+  }
+
   function hasAmulet(player) {
-    return held(player, COWBELL_AMULET_ITEM_ID) || held(player, CHARGED_COWBELL_AMULET_ITEM_ID);
+    return held(player, COWBELL_AMULET_ITEM_ID) || held(player, CHARGED_COWBELL_AMULET_ITEM_ID)
+      || hasEquippedAmulet(player);
   }
 
   function sethTalked(player) {
@@ -431,10 +438,11 @@ module.exports = function registerIdesOfMilkQuest(api) {
     if (stepId === "bo0hmW" || stepId === "gROlcY") return held(player, SECOND_SAMPLE_ITEM_ID);
     if (stepId === "g99Opl" || stepId === "1qWPVz" || stepId === "wgvV7v") return freeSlots(player) < 1;
     if (stepId === "Si4XUQ" || stepId === "Q-sZIb" || stepId === "CltN0x") return freeSlots(player) >= 1;
-    if (stepId === "rQeSSv" || stepId === "m2cjiq" || stepId === "eeHo4c") {
-      return player.getInventory().isFull();
-    }
-    if (stepId === "0MczJn") return !player.getInventory().isFull();
+    if (stepId === "rQeSSv" || stepId === "eeHo4c") return freeSlots(player) < 1;
+    // Gillie's amulet is handed over earlier in this same transcript, so the
+    // lamp's space check must count that slot.
+    if (stepId === "m2cjiq") return freeSlots(player) - (hasAmulet(player) ? 0 : 1) < 1;
+    if (stepId === "0MczJn") return freeSlots(player) - (hasAmulet(player) ? 0 : 1) >= 1;
     return null;
   }
 
@@ -539,7 +547,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
       return;
     }
     if (stepId === "2ePb5b") {
-      grantItem(player, COWBELL_AMULET_ITEM_ID);
+      if (!hasAmulet(player)) grantItem(player, COWBELL_AMULET_ITEM_ID);
       return;
     }
     if (stepId === "O4owU9") {

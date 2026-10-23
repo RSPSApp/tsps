@@ -2,16 +2,17 @@
  * Spirit shield upgrades (https://oldschool.runescape.wiki/w/Spirit_shield).
  *
  * A holy elixir on a spirit shield makes the blessed spirit shield at 85 Prayer.
- * A spirit sigil on the blessed shield at an anvil (90 Prayer + 85 Smithing,
- * hammer in the inventory) makes the arcane/spectral/elysian shield. The
- * Spectral prayer-drain passive is not modelled because the prayer-drain
- * sources it halves are mostly unimplemented.
+ * A spirit sigil on the blessed shield (90 Prayer + 85 Smithing, hammer in the
+ * inventory) makes the arcane/spectral/elysian shield, with the smithing
+ * animation/sound and 1,800 Smithing XP. The Spectral prayer-drain passive is in
+ * combat/effects/SpiritShields.EquipmentEffects.js.
  */
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 
 const BLESS_PRAYER = 85;
 const SIGIL_PRAYER = 90;
 const SIGIL_SMITHING = 85;
+const ATTACH_XP = 1800;
 
 const SIGIL_RESULTS = new Map([
   [ItemIdentifiers.ELYSIAN_SIGIL, ItemIdentifiers.ELYSIAN_SPIRIT_SHIELD],
@@ -20,6 +21,7 @@ const SIGIL_RESULTS = new Map([
 ]);
 
 let core = null;
+let pluginApi = null;
 
 function inventoryContains(player, itemId) {
   return player.getInventory().contains(itemId);
@@ -31,6 +33,15 @@ function prayerLevel(player) {
 
 function smithingLevel(player) {
   return player.getSkillManager().getCurrentLevel(core.Skill.SMITHING);
+}
+
+/** The anvil action the Wiki's creation table shows: human_smithing and its sound. */
+function playAttachFeedback(player) {
+  const sequence = core.CacheDefinitions?.getSeqId?.("human_smithing");
+  if (sequence != null && core.Animation) player.performAnimation?.(new core.Animation(sequence));
+  const sound = core.Sound?.SMITHING;
+  if (sound) core.Sounds?.sendSound?.(player, sound);
+  player.getSkillManager?.().addExperience?.(core.Skill.SMITHING, ATTACH_XP);
 }
 
 function bless(event) {
@@ -46,7 +57,10 @@ function bless(event) {
   player.getInventory().deleteNumber(ItemIdentifiers.HOLY_ELIXIR, 1);
   usedWithItem.setId(ItemIdentifiers.BLESSED_SPIRIT_SHIELD);
   player.getInventory().refreshItems();
-  player.sendMessage("You bless the spirit shield with the elixir.");
+  const sound = core.Sound?.PRAYER_RECHARGE;
+  if (sound) core.Sounds?.sendSound?.(player, sound);
+  pluginApi?.emitCustomEvent?.("equipment:changed", { player });
+  player.sendMessage("The spirit shield glows an eerie holy glow.");
 }
 
 function attachSigil(event) {
@@ -73,6 +87,8 @@ function attachSigil(event) {
   player.getInventory().deleteNumber(sigilId, 1);
   shieldItem.setId(result);
   player.getInventory().refreshItems();
+  playAttachFeedback(player);
+  pluginApi?.emitCustomEvent?.("equipment:changed", { player });
   player.sendMessage("You attach the sigil to the blessed spirit shield.");
 }
 
@@ -82,6 +98,7 @@ module.exports = {
   _test: { bless, attachSigil, SIGIL_RESULTS },
   register(api) {
     core = api.core;
+    pluginApi = api;
     api.onItemOnItem(bless, { noted: false });
     api.onItemOnItem(attachSigil, { noted: false });
   },

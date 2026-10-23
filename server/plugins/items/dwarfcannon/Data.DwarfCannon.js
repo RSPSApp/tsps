@@ -50,8 +50,9 @@ const LOSE_TICKS = 3500;
 
 /**
  * Where each direction fires: polygon offsets from the cannon's centre. These are
- * Near-Reality's (the Wiki gives no shape); they overlap, which is how one monster can take two
- * balls in a rotation (Wiki). Indexed as DIRECTIONS.
+ * originally ported from Near-Reality. Their 49 central tiles now match the OSRS Wiki
+ * Cannon Double Shot.png diagram (tests/dwarf-cannon.test.cjs); the outer polygons
+ * remain unverified. Indexed as DIRECTIONS.
  */
 const ZONES = [
   [[-5, 19], [-5, 8], [-2, 8], [-2, 7], [-4, 7], [-4, 6], [-3, 6], [-3, 5], [-2, 5], [-2, 4], [-1, 4], [-1, 2], [2, 2], [2, 4], [3, 4], [3, 5], [4, 5], [4, 6], [5, 6], [5, 7], [3, 7], [3, 8], [6, 8], [6, 19]],

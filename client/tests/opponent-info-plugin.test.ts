@@ -83,7 +83,7 @@ const client: any = {
         getWidgetByUid: (uid: number) =>
             uid === ((161 << 16) | 91)
                 ? { _absX: 0, _absY: 0, _absWidth: 800, _absHeight: 600, width: 800, height: 600 }
-                : uid === ((303 << 16) | 20) ? hudText : undefined,
+                : uid === ((303 << 16) | 21) ? hudText : undefined,
         isEffectivelyHidden: () => false,
         invalidateWidgetRender() {},
     },

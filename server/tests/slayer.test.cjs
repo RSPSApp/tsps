@@ -24,6 +24,7 @@ const Equipment = require("../plugins/skills/slayer/Equipment.Slayer");
 const Finishers = require("../plugins/skills/slayer/Finishers.Slayer");
 const Superiors = require("../plugins/skills/slayer/Superiors.Slayer");
 const Keys = require("../plugins/skills/slayer/Keys.Slayer");
+const Choice = require("../plugins/skills/slayer/Choice.Slayer");
 
 const core = PluginManager.getCoreApi();
 const handlers = { events: new Map(), death: [], canAttack: [] };
@@ -76,6 +77,9 @@ function createPlayer({ combat = 126, slayer = 99, levels = {}, points = 0 } = {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: (message) => messages.push(message),
+    setInterfaceId() {},
+    getInterfaceId: () => -1,
+    getFrameUpdater: () => ({ clear() {}, clearGroup() {} }),
     getSkillManager: () => ({
       getMaxLevel: (skill) => (skill === Skill.SLAYER ? slayer : levels[skill.getIndex?.()] ?? 99),
       getCurrentLevel: (skill) => (skill === Skill.SLAYER ? slayer : 99),
@@ -587,4 +591,150 @@ test("every task quest names a task and a registered quest", () => {
     assert.equal(Data.get().taskById.get(Number(id))?.displayName, needs.task, `task ${id}`);
     for (const key of needs.any) assert.ok(keys.has(key), `${needs.task}: ${key} is a quest`);
   }
+});
+
+// --- Mortimer (rsprox captures: mortimer-and-task-completion)
+
+const MORTIMER = Data.MORTIMER;
+const sequence = (...values) => { let i = 0; return () => values[Math.min(i++, values.length - 1)]; };
+const setVarp = (player, name, value) => player.getPacketSender().sendConfig(CacheDefinitions.getVarpId(name), value);
+const entryFor = (name) => master(MORTIMER).tasks.find((entry) => entry.task.displayName === name);
+
+test("Mortimer's modifiers come from the cache: ranges per task, unlocks per modifier", () => {
+  const unlocks = Object.fromEntries([...Data.get().modifiers.values()].map((modifier) => [modifier.id, modifier.requirement]));
+  assert.deepEqual(unlocks, { 1: 0, 2: 0, 3: 15, 4: 25, 5: 40 });
+  assert.deepEqual(entryFor("Cave Crawlers").modifiers.find((range) => range.id === Data.MODIFIER.QUANTITY),
+    { id: 2, min: 15, max: 30, negative: true });
+  assert.deepEqual(entryFor("Aberrant Spectres").modifiers.find((range) => range.id === Data.MODIFIER.QUANTITY),
+    { id: 2, min: 30, max: 80, negative: false });
+});
+
+test("Mortimer's modifier values are multiples of 5, from the modifiers the player has unlocked", () => {
+  const range = { min: 30, max: 80 };
+  assert.equal(Choice.steppedValue(range, () => 0), 30);
+  assert.equal(Choice.steppedValue(range, () => 0.9999), 80);
+  for (let i = 0; i < 50; i++) assert.equal(Choice.steppedValue(range, Math.random) % 5, 0);
+  const player = createPlayer();
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) seen.add(Choice.rollModifier(player, entryFor("Aberrant Spectres")).id);
+  assert.deepEqual([...seen].sort(), [1, 2], "points and quantity only at first");
+  setVarp(player, "slayer_mortimer_tasks_completed", 40);
+  for (let i = 0; i < 400; i++) seen.add(Choice.rollModifier(player, entryFor("Aberrant Spectres")).id);
+  assert.deepEqual([...seen].sort(), [1, 2, 3, 4, 5]);
+});
+
+test("Mortimer offers two different tasks, three after 50 of his tasks, and keeps the roll", () => {
+  const player = createPlayer();
+  assert.ok(Choice.open(player, master(MORTIMER)));
+  const first = [1, 2, 3].map((n) => varbit(player, `slayer_choose_task_${n}`));
+  assert.ok(first[0] && first[1] && first[0] !== first[1]);
+  assert.equal(first[2], 0);
+  assert.equal(varbit(player, "slayer_choose_rolled_master"), MORTIMER);
+  assert.ok(varbit(player, "slayer_choose_task_1_modifier_id") > 0, "every choice has a modifier");
+  assert.ok(Choice.open(player, master(MORTIMER)));
+  assert.deepEqual([1, 2, 3].map((n) => varbit(player, `slayer_choose_task_${n}`)), first, "reopening doesn't roll again");
+  assert.equal(Masters.assignmentLine(player, master(5)),
+    "Hmm... It appears as though Mortimer has provided you with a task choice, you must go to them in order to pick.");
+
+  commands.mortimertasks({ player, parts: ["mortimertasks", "60"] });
+  assert.equal(varbit(player, "slayer_choose_rolled_master"), 0, "::mortimertasks drops the waiting roll");
+  Choice.open(player, master(MORTIMER));
+  assert.ok(varbit(player, "slayer_choose_task_3"), "rolled again, with a third choice");
+
+  const veteran = createPlayer();
+  setVarp(veteran, "slayer_mortimer_tasks_completed", 50);
+  Choice.roll(veteran, master(MORTIMER));
+  const three = [1, 2, 3].map((n) => varbit(veteran, `slayer_choose_task_${n}`));
+  assert.equal(new Set(three).size, 3);
+  assert.ok(!three.includes(0));
+});
+
+test("picking a task sets it with its modifier, as live does", () => {
+  const player = createPlayer();
+  Choice.roll(player, master(MORTIMER));
+  setVarbit(player, "slayer_choose_task_2", taskId("Aberrant Spectres"));
+  setVarbit(player, "slayer_choose_task_2_modifier_id", Data.MODIFIER.QUANTITY);
+  setVarbit(player, "slayer_choose_task_2_modifier_value", 75);
+  setVarbit(player, "slayer_choose_task_2_modifier_negative", 0);
+  const before = emitted.length;
+  Choice.pick({ player, action: 10 });
+  const task = Tasks.current(player);
+  assert.equal(task.taskId, taskId("Aberrant Spectres"));
+  assert.equal(task.masterId, MORTIMER);
+  assert.deepEqual(task.modifier, { id: 2, value: 75, negative: false });
+  assert.equal(task.count, task.original + 75, "the base roll, then the modifier");
+  assert.ok(task.original >= 80 && task.original <= 120);
+  for (const name of ["slayer_choose_task_1", "slayer_choose_task_2", "slayer_choose_task_2_modifier_value", "slayer_choose_rolled_master"]) {
+    assert.equal(varbit(player, name), 0, name);
+  }
+  assert.ok(emitted.slice(before).some(([name]) => name === "slayer:task-chosen"));
+
+  const shorter = createPlayer();
+  Choice.roll(shorter, master(MORTIMER));
+  setVarbit(shorter, "slayer_choose_task_1", taskId("Cave Crawlers"));
+  setVarbit(shorter, "slayer_choose_task_1_modifier_id", Data.MODIFIER.QUANTITY);
+  setVarbit(shorter, "slayer_choose_task_1_modifier_value", 20);
+  setVarbit(shorter, "slayer_choose_task_1_modifier_negative", 1);
+  Choice.pick({ player: shorter, action: 0 });
+  assert.equal(Tasks.current(shorter).count, Tasks.current(shorter).original - 20);
+});
+
+test("completing a Mortimer task: his own streak and the points modifier (captured lines)", () => {
+  const player = createPlayer({ points: 190 });
+  giveTask(player, MORTIMER, "Cave Crawlers", 1);
+  setVarp(player, "slayer_mortimer_tasks_completed", 1);
+  setVarbit(player, "slayer_modifier_id", Data.MODIFIER.POINTS);
+  setVarbit(player, "slayer_modifier_value", 5);
+  kill(player, npcNamed("Cave crawler"));
+  assert.equal(varp(player, "slayer_mortimer_tasks_completed"), 2);
+  assert.equal(varbit(player, "slayer_points"), 195);
+  assert.equal(varbit(player, "slayer_tasks_completed"), 0, "not the standard streak");
+  assert.equal(varbit(player, "slayer_modifier_id"), 0, "cleared with the task");
+  assert.equal(player.messages.at(-1),
+    "<col=ef1020>You've completed </col>2 Mortimer tasks<col=ef1020> and received </col>5 points<col=ef1020>, giving you a total of </col>195<col=ef1020>; return to a Slayer master.</col>");
+
+  const plain = createPlayer({ points: 10 });
+  giveTask(plain, MORTIMER, "Cave Crawlers", 1);
+  setVarbit(plain, "slayer_modifier_id", Data.MODIFIER.CLUES);
+  setVarbit(plain, "slayer_modifier_value", 50);
+  kill(plain, npcNamed("Cave crawler"));
+  assert.equal(varbit(plain, "slayer_points"), 10);
+  assert.equal(plain.messages.at(-1), "<col=ef1020>You've completed </col>1 Mortimer tasks<col=ef1020>; return to a Slayer master.</col>");
+});
+
+test("Mortimer's Slayer XP and clue modifiers", () => {
+  const player = createPlayer();
+  giveTask(player, MORTIMER, "Bloodveld", 10);
+  setVarbit(player, "slayer_modifier_id", Data.MODIFIER.XP);
+  setVarbit(player, "slayer_modifier_value", 25);
+  const bloodveld = npcNamed("Bloodveld");
+  kill(player, bloodveld);
+  assert.equal(player.xp.at(-1)[1], bloodveld.getDefinition().getHitpoints() * 1.25);
+
+  setVarbit(player, "slayer_modifier_id", Data.MODIFIER.CLUES);
+  setVarbit(player, "slayer_modifier_value", 100);
+  const chance = (name, npc) => {
+    const request = { player, npc, rules: [] };
+    for (const fn of handlers.events.get("npc-drops:tertiary-chance")) fn(request);
+    return request.rules.filter((rule) => rule.pattern.test(name)).reduce((total, rule) => total * rule.multiplier, 1);
+  };
+  assert.equal(chance("Clue scroll (hard)", npcNamed("Bloodveld")), 2);
+  assert.equal(chance("Long bone", npcNamed("Bloodveld")), 1, "only clue scrolls");
+  assert.equal(chance("Clue scroll (hard)", npcNamed("Abyssal demon")), 1, "only on task");
+});
+
+test("superiors roll the unique tables, more often with Mortimer's modifier", () => {
+  const hand = npcNamed("Crushing hand");
+  assert.equal(Superiors.uniqueChance(hand), 200 - 60 ** 2 / 125, "Wiki: 1/171.2 for a Slayer level 5 superior");
+  const { ItemIdentifiers } = core;
+  assert.deepEqual(Superiors.rollUniques(hand, 1, () => 0), [ItemIdentifiers.IMBUED_HEART, ItemIdentifiers.ETERNAL_GEM]);
+  assert.deepEqual(Superiors.rollUniques(hand, 1, sequence(0, 0.99, 0, 0.99)), [ItemIdentifiers.MIST_BATTLESTAFF]);
+  assert.deepEqual(Superiors.rollUniques(hand, 1, () => 0.01), [], "1/171.2 misses 0.01");
+  assert.equal(Superiors.rollUniques(hand, 2, sequence(0.01, 0, 0.99)).length, 1, "doubled, 0.01 hits");
+
+  const player = createPlayer();
+  giveTask(player, MORTIMER, "Crawling Hands", 10);
+  setVarbit(player, "slayer_modifier_id", Data.MODIFIER.SUPERIOR_UNIQUES);
+  setVarbit(player, "slayer_modifier_value", 50);
+  assert.equal(Tasks.killBoost(player, hand, Data.MODIFIER.SUPERIOR_UNIQUES), 1.5);
 });

@@ -34,9 +34,10 @@ function closeOverlay(player) {
   player.getPacketSender().closeSubInterface(OVERLAY_ATMOSPHERE_UID);
 }
 
-/** In the dungeon proper or one of its chamber instances. */
+/** In the dungeon proper, one of its chamber instances, or an area that counts as part of it (the Ancient Prison). */
 function inGodWars(player) {
-  return Common.inDungeon(player.getLocation()) || player.getArea()?.isGodWarsInstance === true;
+  const area = player.getArea();
+  return Common.inDungeon(player.getLocation()) || area?.isGodWarsInstance === true || area?.isGodWarsArea === true;
 }
 
 /** Heals and resets the general and bodyguards of an empty shared chamber. */
@@ -211,15 +212,15 @@ function syncOnLogin({ player }) {
   if (inGodWars(player)) openOverlay(player);
 }
 
-/** ::essence [amount] [god]: sets one god's essence, or all four (40 when no amount is given). */
+/** ::essence [amount] [god]: sets one god's essence, or every god's (40 when no amount is given). */
 function essenceCommand({ player, parts }) {
   const amount = parts[1] === undefined ? Common.data.essence.required : Number(parts[1]);
   const faction = parts[2] ? Common.factionByKey(String(parts[2]).toLowerCase()) : null;
   if (!Number.isFinite(amount) || (parts[2] && !faction)) {
-    player.sendMessage("Usage: ::essence [amount] [bandos|armadyl|saradomin|zamorak]");
+    player.sendMessage("Usage: ::essence [amount] [bandos|armadyl|saradomin|zamorak|ancient]");
     return true;
   }
-  for (const each of faction ? [faction] : Common.factions) Common.setEssence(player, each, amount);
+  for (const each of faction ? [faction] : Common.essenceGods) Common.setEssence(player, each, amount);
   player.sendMessage(`${faction ? faction.name : "All gods'"} essence set to ${Math.min(Math.max(0, Math.trunc(amount)), Common.data.essence.max)}.`);
   return true;
 }
@@ -235,10 +236,8 @@ function setRespawns() {
 
 function attachDungeon(api) {
   const { entrance } = Common.data;
-  for (const faction of Common.factions) {
-    api.persistAttribute(Common.essenceAttribute(faction.key));
-    api.persistAttribute(Common.killsAttribute(faction.key));
-  }
+  for (const faction of Common.factions) api.persistAttribute(Common.killsAttribute(faction.key), 0);
+  for (const god of Common.essenceGods) api.persistAttribute(Common.essenceAttribute(god.key), 0);
   api.persistAttribute(Common.ENTRANCE_ROPE_ATTRIBUTE);
   api.registerArea(new (dungeonArea())());
   api.onServerStartup(setRespawns);

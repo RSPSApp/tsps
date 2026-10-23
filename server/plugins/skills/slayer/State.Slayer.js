@@ -27,6 +27,9 @@ const PERSISTED_VARPS = [
   "slayer_rewards_blocked_diary_2", "slayer_stored_varp", "slayer_modifiers",
   "slayer_mortimer_tasks_completed", "slayer_misc", "slayer_misc_perm", "slayer_misc_perm_2",
   "slayer_misc_perm_3",
+  // Holds Mortimer's offered tasks (varbits slayer_choose_task_1..3 and _1_boss_id); the cache
+  // names the varp after a Leagues relic, but no Leagues varbit sits on it.
+  "slayer_league_relic_culling_spree",
 ];
 
 /** Slayer varbits on varps that aren't Slayer's own (millcheck_multi): saved one by one. */

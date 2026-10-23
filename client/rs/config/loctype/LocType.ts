@@ -248,24 +248,34 @@ export class LocType extends Type {
                 }
             }
         } else if (opcode === 6) {
+            // Opcodes 6 and 7 are 1 and 5 with int model ids. A second block holds the
+            // low-detail models, which normal detail skips just as 1 and 5 do.
             const count = buffer.readUnsignedByte();
             if (count > 0) {
-                this.models = new Array(count);
-                this.types = new Array(count);
-                for (let i = 0; i < count; i++) {
-                    this.models[i] = new Array(1);
-                    this.models[i][0] = buffer.readInt();
-                    this.types[i] = buffer.readUnsignedByte();
+                if (this.models && !this.lowDetail) {
+                    buffer.offset += count * 5;
+                } else {
+                    this.models = new Array(count);
+                    this.types = new Array(count);
+                    for (let i = 0; i < count; i++) {
+                        this.models[i] = new Array(1);
+                        this.models[i][0] = buffer.readInt();
+                        this.types[i] = buffer.readUnsignedByte();
+                    }
                 }
             }
         } else if (opcode === 7) {
             const count = buffer.readUnsignedByte();
             if (count > 0) {
-                this.types = undefined;
-                this.models = new Array(1);
-                this.models[0] = new Array(count);
-                for (let i = 0; i < count; i++) {
-                    this.models[0][i] = buffer.readInt();
+                if (this.models && !this.lowDetail) {
+                    buffer.offset += count * 4;
+                } else {
+                    this.types = undefined;
+                    this.models = new Array(1);
+                    this.models[0] = new Array(count);
+                    for (let i = 0; i < count; i++) {
+                        this.models[0][i] = buffer.readInt();
+                    }
                 }
             }
         } else if (opcode === 14) {

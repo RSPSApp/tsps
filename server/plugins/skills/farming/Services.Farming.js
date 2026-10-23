@@ -3,6 +3,9 @@ const Data = require("./Data.Farming");
 const Model = require("./Model.Farming");
 const Patches = require("./Patches.Farming");
 
+// Every gardener stands within 7 tiles of its patch; Ceto (drift nets, 20 tiles from the
+// underwater seaweed) and Cap'n Izzy No-Beard (agility arena, 12) also advertise Pay.
+const GARDENER_RANGE = 10;
 const COMPOST_NAMES = ["", "Compost", "Supercompost", "Ultracompost", "Rotten tomato"];
 const SUPER = new Set(["Pineapple", "Tenti pineapple", "Watermelon", "Coconut", "Coconut shell", "Papaya fruit", "Calquat fruit", "Poison ivy berries", "White berries", "Jangerberries", "Mushroom", "Dragonfruit", "Snape grass", "Celastrus bark", "White lily", "White tree fruit", "Oak roots", "Willow roots", "Maple roots", "Yew roots", "Magic roots"]);
 const COMPOST = new Set(["Weeds", "Grain", "Kebab", "Varlamorian kebab", "Flax", "Redberries", "Cadava berries", "Dwellberries", "Potato", "Onion", "Cabbage", "Tomato", "Sweetcorn", "Strawberry", "Lemon", "Lime", "Cooking apple", "Banana", "Orange", "Curry leaf", "Peach", "Watermelon slice", "Barley malt", "Hammerstone hops", "Asgarnian hops", "Jute fibre", "Kelda hops", "Yanillian hops", "Krandorian hops", "Wildblood hops", "Marigolds", "Rosemary", "Nasturtiums", "Woad leaf", "Limpwurt root", "Willow branch", "Rotten apple", "Apple mush", "Seaweed", "Edible seaweed", "Giant seaweed", "Potato cactus", "Leaves", "Oak leaves", "Willow leaves", "Maple leaves", "Yew leaves", "Magic leaves"]);
@@ -354,7 +357,7 @@ function farmingNpc(event) {
     }
     if (action !== "pay" && action !== "pay-fare" && action !== "talk-to") return;
     const pos = npc.getLocation();
-    const patches = Data.CACHE.patches.filter(p => p.z === pos.getZ() && Math.abs(p.x - pos.getX()) <= 20 && Math.abs(p.y - pos.getY()) <= 20);
+    const patches = Data.CACHE.patches.filter(p => p.z === pos.getZ() && Math.abs(p.x - pos.getX()) <= GARDENER_RANGE && Math.abs(p.y - pos.getY()) <= GARDENER_RANGE);
     // A "Pay" option alone does not make an NPC a gardener: Bonzo (contest fee), Saniboch
     // (Brimhaven entrance) and the Blast Furnace foreman all advertise Pay. A gardener only
     // exists where a patch does, so never claim an NPC with no patch nearby.

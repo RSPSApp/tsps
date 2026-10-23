@@ -125,6 +125,18 @@ module.exports = function registerDigSiteQuest(api) {
     player.getSkillManager().addExperiences(Skill.HERBLORE, 2000);
   }
 
+  function isQuestStarted(player, key) {
+    const request = { player, key, started: false };
+    api.emitCustomEvent("quest:is-started", request);
+    return request.started === true;
+  }
+
+  function isQuestComplete(player, key) {
+    const request = { player, key, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
   /** Which transcript variant each speaker plays, by quest stage. */
   function selectVariant({ npcId, player }) {
     const stage = quest.getStage(player);
@@ -194,8 +206,8 @@ module.exports = function registerDigSiteQuest(api) {
       return "making-a-discovery-talking-to-terry-balando";
     }
     if (npcId === CURATOR_NPC_ID) {
-      // The Golem reuses the museum curator; let it own him once started.
-      if ((Number(player.getAttribute("quest.the_golem.stage")) || 0) >= 1) return null;
+      // The Golem reuses the museum curator only while its museum step is active.
+      if (isQuestStarted(player, "the_golem") && !isQuestComplete(player, "the_golem")) return null;
       return "starting-the-quest-getting-the-curator-s-approval";
     }
     if (npcId === PANNING_GUIDE_NPC_ID) {

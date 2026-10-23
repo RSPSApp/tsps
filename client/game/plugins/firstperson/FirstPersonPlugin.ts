@@ -1070,7 +1070,7 @@ export class FirstPersonPlugin extends Plugin implements ClientPlugin, InputKeyH
         this.restoreRunMode = undefined;
     }
 
-    tickMovement(): void {
+    onClientTick(): void {
         if (this.enabled) this.handleMovement(this.client.camera, this.client.inputManager);
     }
 

@@ -25,6 +25,19 @@ flat in uint v_texId;
 flat in float v_alphaCutOff;
 in float v_fogAmount;
 flat in float v_plane;
+#ifdef ACTOR_FADE
+// The NPC's fade (npc.vert.glsl): 0 opaque to 1 invisible.
+flat in float v_transparency;
+
+// A 4x4 ordered dither threshold for a screen pixel (0-1), so a fading model thins out evenly.
+float fadeThreshold(vec2 pixel) {
+    int x = int(mod(pixel.x, 4.0));
+    int y = int(mod(pixel.y, 4.0));
+    int index = x + y * 4;
+    int bayer[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+    return (float(bayer[index]) + 0.5) / 16.0;
+}
+#endif
 
 layout(location = 0) out vec4 fragColor;
 
@@ -280,6 +293,13 @@ vec4 sampleModelTexture(uint textureId, vec2 texCoord) {
 }
 
 void main() {
+#ifdef ACTOR_FADE
+    // A fading NPC (OSRS npc transparency) is screen-door dithered, which works in the opaque
+    // and the alpha passes alike.
+    if (v_transparency > 0.0 && v_transparency >= fadeThreshold(gl_FragCoord.xy)) {
+        discard;
+    }
+#endif
     vec4 textureColor = sampleModelTexture(v_texId, v_texCoord);
     float alpha = textureColor.a * v_color.a;
 

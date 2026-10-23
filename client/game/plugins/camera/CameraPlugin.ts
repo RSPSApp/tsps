@@ -36,11 +36,6 @@ const CAMERA_DO_ZOOM = 42;
 const CAMERA_SET_ZOOM_LIMITS = 605;
 const PITCH_MAX = 512;
 
-/** The signed difference a - b between two yaws, in -1024..1023. */
-function yawDifference(a: number, b: number): number {
-    return ((((a - b) % 2048) + 3072) % 2048) - 1024;
-}
-
 /**
  * RuneLite's Camera plugin: wider zoom limits, a zoom step, Control to zoom or to reset the
  * zoom, camera speed, inverted mouse axes and no camera shake. On top of it, camera easing:
@@ -83,9 +78,8 @@ export class CameraPlugin extends Plugin implements ClientPlugin, InputKeyHandle
 
     /** The cache's limits, from camera_set_zoom_limits, once it has run. */
     private defaultLimits?: { smallMin: number; smallMax: number; bigMin: number; bigMax: number };
-    /** Where this frame's rotation leaves the camera, to tell when something else turns it. */
-    private expectedYaw = 0;
-    private expectedPitch = 0;
+    /** The camera's forced angle count last frame, to tell when something else turns it. */
+    private forcedAngleChanges = 0;
 
     constructor(client?: OsrsClient) {
         super();
@@ -169,11 +163,9 @@ export class CameraPlugin extends Plugin implements ClientPlugin, InputKeyHandle
             return;
         }
         // Something else turned the camera (a script, the server, a cutscene): drop the turn.
-        if (
-            this.easing.isTurning() &&
-            (Math.abs(yawDifference(camera.getTargetYaw(), this.expectedYaw)) > 1 ||
-                Math.abs(camera.pitch - this.expectedPitch) > 1)
-        ) {
+        // Counted, not compared: HD's follow camera rewrites the yaw every frame as it smooths.
+        if (camera.forcedAngleChanges !== this.forcedAngleChanges) {
+            this.forcedAngleChanges = camera.forcedAngleChanges;
             this.easing.stop();
         }
 
@@ -204,8 +196,6 @@ export class CameraPlugin extends Plugin implements ClientPlugin, InputKeyHandle
 
         const pitchTo = camera.pitch + rotation.keyPitch + rotation.dragPitch;
         if (eased.pitch !== 0 && (pitchTo <= 0 || pitchTo >= PITCH_MAX)) this.easing.stopPitch();
-        this.expectedYaw = camera.getTargetYaw() + rotation.keyYaw + rotation.dragYaw;
-        this.expectedPitch = clamp(pitchTo, 0, PITCH_MAX);
     }
 
     private readConfig(): void {

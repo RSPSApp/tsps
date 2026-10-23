@@ -1,6 +1,6 @@
 /** Prince Ali Rescue. Capture evidence: docs/f2p-coastal-parity.md. */
 module.exports = function registerPrinceAliRescueQuest(api) {
-  const { ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location, GameObject, Animation, Skill, Task, TaskManager, StatementDialogue } = api.core;
+  const { ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location, GameObject, Animation, Skill, Task, TaskManager, StatementDialogue, Item } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const VARP_PRINCE_ALI_RESCUE = 273;
@@ -290,7 +290,9 @@ module.exports = function registerPrinceAliRescueQuest(api) {
   }
 
   function reward(player) {
-    player.getInventory().adds(COINS_ITEM_ID, 700);
+    // Coins merge with an existing stack; a full bag with no coin stack keeps the
+    // 700-coin reward as a ground drop instead of completing and losing it.
+    player.getInventory().forceAdd(player, new Item(COINS_ITEM_ID, 700));
   }
 
   function selectVariant({ npcId, player }) {
@@ -362,7 +364,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
         return !held(player, SOFT_CLAY_ITEM_ID) || held(player, KEY_PRINT_ITEM_ID);
       }
       if (value.includes("if the player is not ready")) {
-        return !(stage >= STAGE_GUARD_DRUNK && held(player, ROPE_ITEM_ID));
+        return stage < STAGE_GUARD_DRUNK || (stage < STAGE_KELI_TIED && !held(player, ROPE_ITEM_ID));
       }
       if (value.includes("used rope on lady keli")) return stage >= STAGE_KELI_TIED;
       if (value.includes("is ready and talks to lady keli")) {
@@ -540,7 +542,7 @@ module.exports = function registerPrinceAliRescueQuest(api) {
       return;
     }
 
-    if (stepId === KELI_TIED_UP || stepId === "vpUraQ") {
+    if (stepId === KELI_TIED_UP) {
       if (!tieKeli(player)) { event.handled = true; return; }
       event.box = { statement: true };
       return;

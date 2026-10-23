@@ -11,9 +11,14 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { test } = require('node:test');
+const { test, before } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
+// Quest stage updates render cache-backed quest-list metadata. Keep one live store
+// for the whole file so cached definitions and RegionManager share its lifetime.
+before(async () => {
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+});
 
 const { PluginManager } = require('../dist/plugins/PluginManager');
 
@@ -89,12 +94,22 @@ function questFiles() {
 function loadQuest(name) {
   const handlers = { variant: [], condition: [] };
   const noop = () => {};
+  let targetStageKey = null;
   const base = {
     core: PluginManager.getCoreApi(),
     onNpcDialogueVariant: (h) => handlers.variant.push(h),
     onNpcDialogueCondition: (h) => handlers.condition.push(h),
     onCustomEvent: noop,
-    persistAttribute: noop,
+    persistAttribute: (key) => {
+      if (!targetStageKey && /^quest\..+\.stage$/.test(String(key))) targetStageKey = key;
+    },
+    emitCustomEvent: (eventName, request) => {
+      if (!request?.key) return;
+      const stage = Number(request.player?.__stage) || 0;
+      const own = targetStageKey === `quest.${request.key}.stage`;
+      if (eventName === 'quest:is-complete') request.complete = own ? stage >= 100 : true;
+      if (eventName === 'quest:is-started') request.started = own ? stage > 0 : false;
+    },
   };
   const api = new Proxy(base, {
     get(target, prop) {
@@ -105,6 +120,7 @@ function loadQuest(name) {
   require(path.join(serverRoot, 'plugins/quests/quests', `${name}.Quest`))(api);
   return {
     name,
+    targetStageKey,
     selectVariant: handlers.variant.at(-1),
     answerCondition: handlers.condition.at(-1),
   };
@@ -142,12 +158,11 @@ for (const name of questFiles()) {
         const stagePlayer = new Proxy(player, {
           get(obj, prop) {
             if (prop === 'getAttribute') {
-              return (key) =>
-                String(key) === 'quest.shield_of_arrav.stage'
-                  ? 0
-                  : String(key).endsWith('.stage')
-                    ? stage
-                    : undefined;
+              return (key) => {
+                if (key === quest.targetStageKey) return stage;
+                if (String(key) === 'quest.shield_of_arrav.stage') return 0;
+                return String(key).endsWith('.stage') ? 1000 : undefined;
+              };
             }
             return obj[prop];
           },
@@ -186,9 +201,22 @@ for (const name of questFiles()) {
     assert.ok(selections > 0, `${name}: selector never returned a variant (stale npc ids?)`);
 
     if (quest.answerCondition) {
+      player.__stage = 0;
+      const conditionPlayer = new Proxy(player, {
+        get(obj, prop) {
+          if (prop === 'getAttribute') {
+            return (key) => {
+              if (key === quest.targetStageKey) return 0;
+              if (String(key) === 'quest.shield_of_arrav.stage') return 0;
+              return String(key).endsWith('.stage') ? 1000 : undefined;
+            };
+          }
+          return obj[prop];
+        },
+      });
       for (const text of collectConditionTexts(pagesUsed)) {
         assert.doesNotThrow(
-          () => quest.answerCondition({ npcId: 0, player, text, stepId: null }),
+          () => quest.answerCondition({ npcId: 0, player: conditionPlayer, text, stepId: null }),
           `${name}: answering condition "${text}" threw`
         );
       }

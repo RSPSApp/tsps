@@ -23,6 +23,7 @@ type Phase = "idle" | "pending" | "longPressed" | "orbiting" | "dragging";
  */
 export class TouchGestureRecognizer {
     private phase: Phase = "idle";
+    private orbitOnly = false;
     private startX = 0;
     private startY = 0;
     private startTimeMs = 0;
@@ -52,9 +53,13 @@ export class TouchGestureRecognizer {
         return this.phase === "pending";
     }
 
-    /** Finger down — begins a pending gesture (no click yet). */
-    fingerDown(x: number, y: number, timeMs: number): TouchGestureIntent[] {
+    /**
+     * Finger down — begins a pending gesture (no click yet). `orbitOnly` (the finger left on
+     * the screen after a pinch) may still orbit or drag, but never taps or long-presses.
+     */
+    fingerDown(x: number, y: number, timeMs: number, orbitOnly = false): TouchGestureIntent[] {
         this.phase = "pending";
+        this.orbitOnly = orbitOnly;
         this.startX = x;
         this.startY = y;
         this.startTimeMs = timeMs;
@@ -126,7 +131,7 @@ export class TouchGestureRecognizer {
      * Emits longPress once when holdMs elapses without leaving pending.
      */
     checkLongPress(timeMs: number): TouchGestureIntent[] {
-        if (this.phase !== "pending") {
+        if (this.phase !== "pending" || this.orbitOnly) {
             return [];
         }
         if (timeMs - this.startTimeMs < this.config.holdMs) {
@@ -144,7 +149,7 @@ export class TouchGestureRecognizer {
         const intents: TouchGestureIntent[] = [{ type: "move", x, y }];
 
         if (this.phase === "pending") {
-            intents.push({ type: "tap", x: this.startX, y: this.startY });
+            intents.push(this.orbitOnly ? { type: "cancel" } : { type: "tap", x: this.startX, y: this.startY });
         } else if (this.phase === "orbiting") {
             intents.push({ type: "orbitEnd" });
         } else if (this.phase === "longPressed") {
@@ -175,6 +180,7 @@ export class TouchGestureRecognizer {
 
     private reset(): void {
         this.phase = "idle";
+        this.orbitOnly = false;
         this.startX = 0;
         this.startY = 0;
         this.startTimeMs = 0;

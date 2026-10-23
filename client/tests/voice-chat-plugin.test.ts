@@ -95,6 +95,8 @@ async function main(): Promise<void> {
     manager.getInjector().provide(CLIENT_TOKEN, client);
     manager.loadCorePlugins([VoiceChatPlugin]);
     const plugin = manager.getPlugin(VoiceChatPlugin)!;
+    assert.equal(manager.isEnabled(VoiceChatPlugin), true, "voice chat is on by default");
+    await manager.setPluginEnabled(VoiceChatPlugin, false);
     const enginePlugins = new ClientPluginManager();
     enginePlugins.add(plugin);
     const click = () => enginePlugins.handleWidgetAction({ widget: button, option: "Cycle voice mode", opIndex: 2, source: "primary" });

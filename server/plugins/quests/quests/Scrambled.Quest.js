@@ -1,34 +1,36 @@
 /**
  * Scrambled! (members).
  *
- * The words come from the "Scrambled!" transcript page (OSRS Wiki). The stage
- * lives in varbit 16758 ("scrambled", bits 0-6 of varp 4748 "scrambled_primary";
- * varp 4749 "scrambled_puzzle" is the unimplemented puzzle's own varp):
- *   0 not started, 1 Alan accepted (egg on the ground), 2 the broken egg
- *   inspected (go to town), 3 King briefed (rally her men), 4 all three men
- *   gathered at the temple, 5 the replacement-egg plan told (gather eggs),
- *   6 all three replacement eggs handed in, 7 the eggs judged (puzzle pending),
- *   8 complete (varbit checkpoints 16758 = 0,1,2,3,4,5,6,7,8).
+ * Route and stages come from the RSProx database capture (download 1106, revision 237.1)
+ * and the OSRS Wiki transcript. The capture shows varbit 16758 "scrambled" moving through
+ * 0,2,4,6,8,10,12,14,16,18,19,20,22,24,26,28,30. The sibling varbits drive the cache's own
+ * NPC and loc transforms, so the quest uses them instead of private flags:
+ *   16759/16764/16765  Nezketi/Kauayotl/Acatzin (0 talk, 2 agreed, 3 work agreed,
+ *                      4 work done, 7 departed; Nezketi 2->7 when given his tea)
+ *   16766/16769/16770  jaguar/dragon/chicken replacement egg (1 ready, 2 guardian out,
+ *                      3 guardian dead, 4 handed in, 5 broken after judging)
+ *   16994              egg on the wall visibility
+ *   16995              workbench nails taken
  *
- * The three men each move from Tal Teklan to Tal Teok. The static spawns
- * (14506/14507/14508 and Alan 14476) are the cache's silent cutscene ids with no
- * options, so the plugin spawns owner-only talkable copies (14503-14505, Alan
- * 14475) at the same tiles. NPCs 14488 "Humphrey Dumphrey" (Inspect) and the
- * temple replacement eggs 14490-14495 are spawned owner-only too; the level-16
- * large chicken (14510), level-106 red dragon (14511) and level-88 black jaguar
- * (14512) guard owner-only egg-pile ground items because the cache does not place
- * the Egg Pile locs (56927-56934 are absent from every map region).
+ * The actual quest locs are placed in this cache: chicken/dragon/jaguar egg piles
+ * (56926/56929/56932), broken whetstone (56936), broken cart (56941), damiana (56935)
+ * and the workbench (56945). Searching a pile spawns its guardian; looting after the kill
+ * gives the egg.
  *
- * The whetstone and the racing cart are proxied through the Blacksmith (use a
- * hammer on him) and Kauayotl (use a plank on him) because the Whetstone
- * (56937-56940) and Cart (56942-56944) locs are also unplaced. The egg-piece
- * puzzle (its interface does not exist here) is reduced to the wiki's
- * "attempts to put the eggs together" line, and the wiki's "That's the last one.
- * Let's get these eggs judged." transition line is skipped.
+ * The captured egg jigsaw is interface 922, opened with varp 4756 = dbrow 5397. The cache's
+ * own scripts build the 26 pieces, handle drag/rotate and send IF_TRIGGEROPLOCAL when a piece
+ * is placed correctly. This plugin enables those triggers, records each solved piece in varp
+ * 4749, sends script 7970 to lock it (the captured positions) and closes the interface when
+ * all 26 are set. Progress is persisted, so a relog reopens the partly solved puzzle and
+ * re-locks the pieces already placed.
  *
- * Source: OSRS Wiki "Scrambled!" page, quick guide and transcript.
- * Rewards per the OSRS Wiki: 1 Quest point, 5,000 Construction, Cooking and
+ * Rewards per the OSRS Wiki and capture: 1 Quest point, 5,000 Construction, Cooking and
  * Smithing XP; the pet Egg from the egg on the wall and Alan's bones afterwards.
+ *
+ * Quest Helper cross-check (pinned Zoinkwiz/quest-helper 06da90f):
+ * src/main/java/com/questhelper/helpers/quests/scrambled/Scrambled.java. It confirms the
+ * stage values, the whetstone/cart/egg-pile objects, the six required items, boss levels
+ * (chicken 16, jaguar 88, dragon 106) and the three men's varbit states.
  */
 module.exports = function registerScrambledQuest(api) {
   const {
@@ -36,85 +38,138 @@ module.exports = function registerScrambledQuest(api) {
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
-    ObjectIdentifiers,
     Skill,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Scrambled!";
-  const START_HOOK = "quest:scrambled:start";
 
-  // Varp 4748 "scrambled_primary"; the stage is varbit 16758 "scrambled".
+  const VARBIT_STAGE = 16758;
   const VARP_SCRAMBLED = 4748;
-  const VARBIT_SCRAMBLED_STAGE = 16758;
 
   const STAGE_NOT_STARTED = 0;
-  const STAGE_STARTED = 1;
-  const STAGE_INSPECTED = 2;
-  const STAGE_MEN = 3;
-  const STAGE_GATHERED = 4;
-  const STAGE_PLAN = 5;
-  const STAGE_GIVEN = 6;
-  const STAGE_JUDGED = 7;
-  const STAGE_COMPLETE = 8;
+  const STAGE_STARTED = 2;
+  const STAGE_CONFIRMED = 4;
+  const STAGE_EGG_FELL = 6;
+  const STAGE_INSPECTED = 8;
+  const STAGE_KING_RALLIED = 10;
+  const STAGE_KING_BRIEFED = 12;
+  const STAGE_MEN = 14;
+  const STAGE_GATHERED = 16;
+  const STAGE_PLAN = 18;
+  const STAGE_TWO_EGGS = 19;
+  const STAGE_GIVEN = 20;
+  const STAGE_JUDGED = 22;
+  const STAGE_FIXING = 24;
+  const STAGE_FIXED = 26;
+  const STAGE_FINALE = 28;
+  const STAGE_COMPLETE = 30;
 
-  // ==========================================================================
-  // NPCs
-  // ==========================================================================
+  const VARBIT_NEZKETI = 16759;
+  const VARBIT_KAUAYOTL = 16764;
+  const VARBIT_ACATZIN = 16765;
+  const VARBIT_JAGUAR_EGG = 16766;
+  const VARBIT_DRAGON_EGG = 16769;
+  const VARBIT_CHICKEN_EGG = 16770;
+  const VARBIT_EGG_VISIBLE = 16994;
+  const VARBIT_NAILS = 16995;
 
-  const ALAN_NPC_ID = NpcIdentifiers.ALAN_2; // 14475, Talk-to (static 14476 is silent)
-  const CITIZEN_NPC_IDS = new Set([
-    NpcIdentifiers.CITIZEN_125, // 14763
-    NpcIdentifiers.CITIZEN_126, // 14764
-    NpcIdentifiers.CITIZEN_127, // 14765
-    NpcIdentifiers.CITIZEN_128, // 14766
-    NpcIdentifiers.CITIZEN_129, // 14767
-    NpcIdentifiers.CITIZEN_130, // 14768
-    NpcIdentifiers.CITIZEN_131, // 14769
-    NpcIdentifiers.CITIZEN_132, // 14770
-    NpcIdentifiers.FARMER_34, // 14773
+  const MAN_NEZKETI = "nezketi";
+  const MAN_KAUAYOTL = "kauayotl";
+  const MAN_ACATZIN = "acatzin";
+
+  const EGGS = [
+    {
+      key: "chicken",
+      varbit: VARBIT_CHICKEN_EGG,
+      itemId: ItemIdentifiers.LARGE_EGG, // 30967
+      objectId: 56926, // scr_eggs_chicken (multi-loc)
+      objectTile: { x: 1238, y: 3137 },
+      guardianId: NpcIdentifiers.LARGE_CHICKEN, // 14510
+      guardianTile: { x: 1239, y: 3137 },
+      pileVariant: "talking-to-king-after-gathering-all-her-men-interacting-with-the-pile-of-eggs-large-chicken-s-egg-pile",
+      giveNpc: MAN_ACATZIN,
+      setupStep: "0pMMZD",
+      giveVariant: "after-collecting-the-three-eggs-talking-to-acatzin",
+      giveAgainVariant: "after-collecting-the-three-eggs-talking-to-acatzin-talking-to-acatzin-again",
+    },
+    {
+      key: "jaguar",
+      varbit: VARBIT_JAGUAR_EGG,
+      itemId: ItemIdentifiers.JAGUAR_EGG, // 30969
+      objectId: 56932, // scr_eggs_jaguar (multi-loc)
+      objectTile: { x: 1332, y: 3122 },
+      guardianId: NpcIdentifiers.BLACK_JAGUAR_2, // 14512
+      guardianTile: { x: 1329, y: 3122 },
+      pileVariant: "talking-to-king-after-gathering-all-her-men-interacting-with-the-pile-of-eggs-jaguar-s-egg-pile",
+      giveNpc: MAN_NEZKETI,
+      setupStep: "NXRXMq",
+      giveVariant: "after-collecting-the-three-eggs-nezketi",
+      giveAgainVariant: "after-collecting-the-three-eggs-nezketi-talking-to-nezketi-again",
+    },
+    {
+      key: "dragon",
+      varbit: VARBIT_DRAGON_EGG,
+      itemId: ItemIdentifiers.DRAGON_EGG, // 30968
+      objectId: 56929, // scr_eggs_dragon (multi-loc)
+      objectTile: { x: 1259, y: 9482 },
+      guardianId: NpcIdentifiers.RED_DRAGON_9, // 14511
+      guardianTile: { x: 1257, y: 9482 },
+      pileVariant: "talking-to-king-after-gathering-all-her-men-interacting-with-the-pile-of-eggs-red-dragon-s-egg-pile",
+      giveNpc: MAN_KAUAYOTL,
+      setupStep: "teOflj",
+      giveVariant: "after-collecting-the-three-eggs-kauayotl",
+      giveAgainVariant: "after-collecting-the-three-eggs-kauayotl-talking-to-kauayotl-again",
+    },
+  ];
+  const EGG_BY_OBJECT = new Map(EGGS.map((egg) => [egg.objectId, egg]));
+  const EGG_BY_ITEM = new Map(EGGS.map((egg) => [egg.itemId, egg]));
+  const EGG_BY_SETUP_STEP = new Map(EGGS.map((egg) => [egg.setupStep, egg]));
+
+  const MAN_CONFIG = new Map([
+    [MAN_NEZKETI, { varbit: VARBIT_NEZKETI, npcId: NpcIdentifiers.NEZKETI, town: { x: 1224, y: 3104 }, temple: { x: 1246, y: 3167 } }],
+    [MAN_KAUAYOTL, { varbit: VARBIT_KAUAYOTL, npcId: NpcIdentifiers.KAUAYOTL, town: { x: 1252, y: 3107 }, temple: { x: 1248, y: 3165 } }],
+    [MAN_ACATZIN, { varbit: VARBIT_ACATZIN, npcId: NpcIdentifiers.ACATZIN, town: { x: 1228, y: 3117 }, temple: { x: 1246, y: 3165 } }],
   ]);
-  const KING_NPC_ID = NpcIdentifiers.KING; // 14496
-  const JATZIRI_NPC_ID = NpcIdentifiers.JATZIRI_TEOKI_OF_RALOS; // 14726
-  const ACATZIN_NPC_ID = NpcIdentifiers.ACATZIN; // 14505
-  const NEZKETI_NPC_ID = NpcIdentifiers.NEZKETI; // 14503
-  const KAUAYOTL_NPC_ID = NpcIdentifiers.KAUAYOTL; // 14504
-  const BLACKSMITH_NPC_ID = NpcIdentifiers.BLACKSMITH_4; // 14509
-  const EGG_INSPECT_NPC_ID = NpcIdentifiers.HUMPHREY_DUMPHREY_2; // 14488, Inspect
+
+  const ALAN_NPC_ID = NpcIdentifiers.ALAN_2; // 14475, Talk-to
+  const ALAN_CUTSCENE_NPC_ID = NpcIdentifiers.ALAN_3; // 14476, silent cutscene actor
+  const EGG_VISIBLE_NPC_ID = NpcIdentifiers.HUMPHREY_DUMPHREY; // 14487, egg on the wall
+  const FALLEN_EGG_NPC_ID = 14479; // scrambled_egg_fallen (multinpc -> 14488)
+  const EGG_SPLAT_ANIMATION = 12308;
+  const BROKEN_EGG_NPC_ID = NpcIdentifiers.HUMPHREY_DUMPHREY_2; // 14488, Inspect
+  const EGG_FIX_NPC_ID = NpcIdentifiers.HUMPHREY_DUMPHREY_3; // 14489, Fix
   const PET_EGG_NPC_ID = NpcIdentifiers.HUMPHREY_DUMPHREY; // 14487, Talk-to
-  const CHICKEN_EGG_NPC_ID = NpcIdentifiers.COL_00FFFF_CHICKEN_EGG_COL; // 14490
-  const DRAGON_EGG_NPC_ID = NpcIdentifiers.COL_00FFFF_DRAGON_EGG_COL; // 14492
-  const JAGUAR_EGG_NPC_ID = NpcIdentifiers.COL_00FFFF_JAGUAR_EGG_COL; // 14494
-  const LARGE_CHICKEN_NPC_ID = NpcIdentifiers.LARGE_CHICKEN; // 14510
-  const RED_DRAGON_NPC_ID = NpcIdentifiers.RED_DRAGON_9; // 14511
-  const BLACK_JAGUAR_NPC_ID = NpcIdentifiers.BLACK_JAGUAR_2; // 14512
-  const GUARDIAN_NPC_IDS = new Set([LARGE_CHICKEN_NPC_ID, RED_DRAGON_NPC_ID, BLACK_JAGUAR_NPC_ID]);
+  const KING_NPC_ID = NpcIdentifiers.KING; // 14496
+  const BLACKSMITH_NPC_ID = NpcIdentifiers.BLACKSMITH_4; // 14509
+  const CITIZEN_NPC_IDS = new Set([
+    NpcIdentifiers.CITIZEN_125, NpcIdentifiers.CITIZEN_126, NpcIdentifiers.CITIZEN_127,
+    NpcIdentifiers.CITIZEN_128, NpcIdentifiers.CITIZEN_129, NpcIdentifiers.CITIZEN_130,
+    NpcIdentifiers.CITIZEN_131, NpcIdentifiers.CITIZEN_132, NpcIdentifiers.FARMER_34,
+  ]);
+  const GUARDIAN_IDS = new Set(EGGS.map((egg) => egg.guardianId));
 
   const ALAN_TILE = { x: 1247, y: 3167 };
-  const TOWN_TILES = {
-    acatzin: { x: 1226, y: 3118 },
-    nezketi: { x: 1226, y: 3104 },
-    kauayotl: { x: 1250, y: 3106 },
-  };
-  const TEMPLE_TILES = {
-    acatzin: { x: 1244, y: 3168 },
-    nezketi: { x: 1250, y: 3168 },
-    kauayotl: { x: 1247, y: 3169 },
-  };
-  const EGG_NPC_TILE = { x: 1246, y: 3164 };
-  const CHICKEN_EGG_TILE = { x: 1244, y: 3166 };
-  const JAGUAR_EGG_TILE = { x: 1250, y: 3166 };
-  const DRAGON_EGG_TILE = { x: 1247, y: 3165 };
+  const BROKEN_EGG_TILE = { x: 1247, y: 3170 };
+  const BROKEN_EGG_TEMPLE_TILE = { x: 1244, y: 3168 };
+  const WALL_EGG_TILE = { x: 1247, y: 3170 };
   const BONES_TILE = new Location(1247, 3163, 0);
-  const BOWL_TILE = new Location(1219, 3120, 0);
+  const BOWL_TILE = new Location(1229, 3119, 0);
+  const PLANKS_TILE = new Location(1238, 3076, 0);
+  const HAMMER_TILE = new Location(1207, 3108, 0);
+  const SAW_TILE = new Location(1212, 3093, 0);
+  const PLANKS_COUNT = 2;
+  const TAL_TEKLAND_ZONE = { minX: 1200, maxX: 1265, minY: 3075, maxY: 3180, levels: [0] };
 
-  // ==========================================================================
-  // Items
-  // ==========================================================================
+  const WHETSTONE_OBJECT_ID = 56936;
+  const CART_OBJECT_ID = 56941;
+  const WORKBENCH_OBJECT_ID = 56945;
+  const DAMIANA_OBJECT_ID = 56935;
 
-  const LARGE_EGG_ITEM_ID = ItemIdentifiers.LARGE_EGG; // 30967
-  const DRAGON_EGG_ITEM_ID = ItemIdentifiers.DRAGON_EGG; // 30968
-  const JAGUAR_EGG_ITEM_ID = ItemIdentifiers.JAGUAR_EGG; // 30969
+  const LARGE_EGG_ITEM_ID = ItemIdentifiers.LARGE_EGG;
+  const DRAGON_EGG_ITEM_ID = ItemIdentifiers.DRAGON_EGG;
+  const JAGUAR_EGG_ITEM_ID = ItemIdentifiers.JAGUAR_EGG;
   const PET_EGG_ITEM_ID = ItemIdentifiers.EGG_4; // 30970
   const ALANS_BONES_ITEM_ID = ItemIdentifiers.ALANS_BONES; // 30973
   const DAMIANA_LEAVES_ITEM_ID = ItemIdentifiers.DAMIANA_LEAVES; // 30977
@@ -132,62 +187,10 @@ module.exports = function registerScrambledQuest(api) {
   const SAW_ITEM_ID = ItemIdentifiers.SAW; // 8794
   const PLANK_ITEM_ID = ItemIdentifiers.PLANK; // 960
   const IRON_NAILS_ITEM_ID = ItemIdentifiers.IRON_NAILS; // 4820
-
   const CART_TOOL_ITEM_IDS = new Set([HAMMER_ITEM_ID, SAW_ITEM_ID, PLANK_ITEM_ID, IRON_NAILS_ITEM_ID]);
-
-  // ==========================================================================
-  // Objects
-  // ==========================================================================
-
-  const DAMIANA_OBJECT_ID = ObjectIdentifiers.DAMIANA; // 56935, Pick
-  const WORKBENCH_OBJECT_ID = ObjectIdentifiers.WORKBENCH_28; // 56945, Search
-
-  // ==========================================================================
-  // State bits (persisted "quest.scrambled.bits")
-  // ==========================================================================
-
-  const BITS_ATTRIBUTE = "quest.scrambled.bits";
-
-  const BIT_ACATZIN_ASKED = 1 << 0;
-  const BIT_ACATZIN_REFUSED = 1 << 1;
-  const BIT_ACATZIN_DEPARTED = 1 << 2;
-  const BIT_NEZKETI_ASKED = 1 << 3;
-  const BIT_NEZKETI_REFUSED = 1 << 4;
-  const BIT_NEZKETI_DEPARTED = 1 << 5;
-  const BIT_KAUAYOTL_ASKED = 1 << 6;
-  const BIT_KAUAYOTL_REFUSED = 1 << 7;
-  const BIT_KAUAYOTL_FIXED = 1 << 8;
-  const BIT_KAUAYOTL_DEPARTED = 1 << 9;
-  const BIT_CITIZEN_MET = 1 << 10;
-  const BIT_BLACKSMITH_TOLD = 1 << 11;
-  const BIT_WHETSTONE_FIXED = 1 << 12;
-  const BIT_AXE_RECEIVED = 1 << 13;
-  const BIT_PLAN_TOLD = 1 << 14;
-  const BIT_CHICKEN_TAKEN = 1 << 15;
-  const BIT_JAGUAR_TAKEN = 1 << 16;
-  const BIT_DRAGON_TAKEN = 1 << 17;
-  const BIT_CHICKEN_DEAD = 1 << 18;
-  const BIT_JAGUAR_DEAD = 1 << 19;
-  const BIT_DRAGON_DEAD = 1 << 20;
-  const BIT_CHICKEN_GIVEN = 1 << 21;
-  const BIT_JAGUAR_GIVEN = 1 << 22;
-  const BIT_DRAGON_GIVEN = 1 << 23;
-  const BIT_PET_EGG_RECEIVED = 1 << 24;
-  const BIT_WORKBENCH_SEARCHED = 1 << 25;
-
-  const EGG_BITS = new Set([
-    BIT_CHICKEN_TAKEN, BIT_JAGUAR_TAKEN, BIT_DRAGON_TAKEN,
-    BIT_CHICKEN_DEAD, BIT_JAGUAR_DEAD, BIT_DRAGON_DEAD,
-    BIT_CHICKEN_GIVEN, BIT_JAGUAR_GIVEN, BIT_DRAGON_GIVEN,
-  ]);
-
-  // ==========================================================================
-  // Transcript variants
-  // ==========================================================================
 
   const V_START = "starting-off";
   const V_EGG_INSPECT = "starting-off-the-great-fall";
-  const V_JATZIRI = "starting-off-the-great-fall-talking-to-jatziri";
   const V_CITIZEN = "starting-off-the-great-fall-talking-to-the-nearby-farmer-or-citizen";
   const V_KING_CITIZEN = "starting-off-the-great-fall-talking-to-the-king-the-bartender";
   const V_KING_DIRECT = "starting-off-the-great-fall-talking-to-king-first-without-talking-to-anyone-else";
@@ -196,71 +199,49 @@ module.exports = function registerScrambledQuest(api) {
   const V_KING_POST = "post-quest-dialogue-king";
 
   const V_ACATZIN_INTRO = "all-the-king-s-men-talking-to-acatzin";
-  const V_ACATZIN_REFUSED = "all-the-king-s-men-talking-to-acatzin-talking-to-acatzin-after-refusing-to-talk-to-the-blacksmith";
   const V_ACATZIN_AGAIN = "all-the-king-s-men-talking-to-acatzin-subsequent-dialogue-with-acatzin";
   const V_ACATZIN_AXE = "all-the-king-s-men-talking-to-the-blacksmith-talking-to-acatzin-after-receiving-the-axe";
   const V_ACATZIN_POST = "post-quest-dialogue-acatzin";
-
   const V_BS_INTRO = "all-the-king-s-men-talking-to-the-blacksmith";
   const V_BS_AGAIN = "all-the-king-s-men-talking-to-the-blacksmith-talking-to-the-blacksmith-again-before-repairing-the-whetstone";
-  const V_BS_REPAIR = "all-the-king-s-men-talking-to-the-blacksmith-repairing-the-whetstone";
   const V_BS_AFTER = "all-the-king-s-men-talking-to-the-blacksmith-talking-to-the-blacksmith-after-repairing-the-whetstone";
 
   const V_NEZKETI_INTRO = "all-the-king-s-men-talking-to-nezketi";
-  const V_NEZKETI_REFUSED = "all-the-king-s-men-talking-to-nezketi-talking-to-nezketi-after-refusing-to-give-him-tea";
   const V_NEZKETI_AGAIN = "all-the-king-s-men-talking-to-nezketi-subsequent-dialogue-with-nezketi";
   const V_NEZKETI_MAKING_TEA = "all-the-king-s-men-talking-to-nezketi-making-the-tea";
   const V_NEZKETI_TEA = "all-the-king-s-men-talking-to-nezketi-talking-to-nezketi-with-brewed-tea";
   const V_NEZKETI_POST = "post-quest-dialogue-nezketi";
 
   const V_KAUAYOTL_INTRO = "all-the-king-s-men-talking-to-kauayotl";
-  const V_KAUAYOTL_REFUSED = "all-the-king-s-men-talking-to-kauayotl-talking-to-kauayotl-again-after-refusing-to-help";
   const V_KAUAYOTL_AGAIN = "all-the-king-s-men-talking-to-kauayotl-subsequent-dialogue-with-kauayotl";
   const V_KAUAYOTL_REPAIR = "all-the-king-s-men-talking-to-kauayotl-fixing-the-cart";
   const V_KAUAYOTL_AFTER = "all-the-king-s-men-talking-to-kauayotl-talking-to-kauayotl-after-fixing-the-cart";
   const V_KAUAYOTL_POST = "post-quest-dialogue-kauayotl";
 
   const V_TEMPLE_PLAN = "talking-to-king-after-gathering-all-her-men-talking-to-any-of-king-s-men-at-the-temple";
-  const V_REMIND_ACATZIN = "talking-to-king-after-gathering-all-her-men-talking-to-king-s-men-again-talking-to-acatzin";
-  const V_REMIND_NEZKETI = "talking-to-king-after-gathering-all-her-men-talking-to-king-s-men-again-talking-to-nezketi";
-  const V_REMIND_KAUAYOTL = "talking-to-king-after-gathering-all-her-men-talking-to-king-s-men-again-talking-to-kauayotl";
-
-  const V_GIVE_CHICKEN = "after-collecting-the-three-eggs-talking-to-acatzin";
-  const V_GIVE_CHICKEN_AGAIN = "after-collecting-the-three-eggs-talking-to-acatzin-talking-to-acatzin-again";
-  const V_GIVE_DRAGON = "after-collecting-the-three-eggs-kauayotl";
-  const V_GIVE_DRAGON_AGAIN = "after-collecting-the-three-eggs-kauayotl-talking-to-kauayotl-again";
-  const V_GIVE_JAGUAR = "after-collecting-the-three-eggs-nezketi";
-  const V_GIVE_JAGUAR_AGAIN = "after-collecting-the-three-eggs-nezketi-talking-to-nezketi-again";
+  const V_REMIND = {
+    [MAN_ACATZIN]: "talking-to-king-after-gathering-all-her-men-talking-to-king-s-men-again-talking-to-acatzin",
+    [MAN_NEZKETI]: "talking-to-king-after-gathering-all-her-men-talking-to-king-s-men-again-talking-to-nezketi",
+    [MAN_KAUAYOTL]: "talking-to-king-after-gathering-all-her-men-talking-to-king-s-men-again-talking-to-kauayotl",
+  };
   const V_JUDGE = "judging-the-eggs";
   const V_FIX = "judging-the-eggs-talking-to-any-of-king-s-men-before-putting-humphrey-dumphrey-back-together";
-
-  const V_PILE_CHICKEN = "talking-to-king-after-gathering-all-her-men-interacting-with-the-pile-of-eggs-large-chicken-s-egg-pile";
-  const V_PILE_JAGUAR = "talking-to-king-after-gathering-all-her-men-interacting-with-the-pile-of-eggs-jaguar-s-egg-pile";
-  const V_PILE_DRAGON = "talking-to-king-after-gathering-all-her-men-interacting-with-the-pile-of-eggs-red-dragon-s-egg-pile";
-
-  // ==========================================================================
-  // Condition step ids
-  // ==========================================================================
 
   const PROFANITY_ON_IDS = new Set(["XIV3xs", "8wyNJx", "HpBDKB"]);
   const PROFANITY_OFF_IDS = new Set(["31iRqs", "7O2bIU", "4D6mHx"]);
   const EGG_INTERACT_CONDITION_ID = "nqU4Qn";
-
   const NO_SMITHING_CONDITION_ID = "jd3uiy";
   const SMITHING_CONDITION_ID = "sX4CDu";
   const NO_HAMMER_CONDITION_ID = "iqpELc";
   const HAMMER_CONDITION_ID = "81aaOL";
-
   const NO_SPACE_AXE_CONDITION_ID = "wJL8nr";
   const SPACE_AXE_CONDITION_ID = "bq8dgW";
   const HAS_BROKEN_AXE_CONDITION_ID = "DRj_is";
   const HAS_FIXED_AXE_CONDITION_ID = "j7DTpN";
-
   const NO_SPACE_CUP_CONDITION_ID = "m0_j_t";
   const HAS_CUP_CONDITION_ID = "0GmlhG";
   const NO_CUP_CONDITION_ID = "nFi8iD";
   const NO_SPACE_REGIVE_CONDITION_ID = "WjYKqn";
-
   const LEAVES_ON_CUP_CONDITION_ID = "1cNTsz";
   const LEAVES_ON_BOWL_CONDITION_ID = "oZjb1-";
   const LEAVES_ON_WATER_CONDITION_ID = "jHtr8H";
@@ -269,27 +250,23 @@ module.exports = function registerScrambledQuest(api) {
   const TEA_BOWL_CONDITION_ID = "aLq4lu";
   const TEA_OTHER_CONDITION_ID = "2Lt2Ms";
   const TEA_CUP_CONDITION_ID = "Xng0jB";
-
   const NO_CONSTRUCTION_CONDITION_ID = "SAFyQ6";
   const CONSTRUCTION_CONDITION_ID = "YBtv6Z";
   const NO_CART_ITEMS_CONDITION_ID = "L_ogIR";
   const CART_ITEMS_CONDITION_ID = "5uVvuD";
-
   const PILE_CONDITION_IDS = new Set([
     "spety9", "2UjyxQ", "-HzjUb",
     "JuFOIQ", "470ssp", "4Gi17J",
     "tGBrGi", "Q8GqFE", "CWV8aX",
   ]);
 
-  // ==========================================================================
-  // Action / message step ids
-  // ==========================================================================
-
+  const CUTSCENE_STEP = "KvvDVx";
+  const EGG_FALLS_STEP = "2DUXLf";
   const WHETSTONE_FIXED_STEP = "RjBq3R";
   const AXE_RECEIVE_STEP = "cXz59o";
   const AXE_HANDED_STEP = "vP_T1a";
-  const CUP_GIVEN_1_STEP = "MKmsN9";
-  const CUP_GIVEN_2_STEP = "GZ5xmp";
+  const ACATZIN_LEAVES_STEP = "Ycv_sH";
+  const CUP_GIVEN_STEPS = new Set(["MKmsN9", "GZ5xmp"]);
   const TEA_LEAVES_ADDED_STEP = "Q7zTx5";
   const TEA_BREWED_STEP = "8UQD6q";
   const TEA_XP_STEP = "EQiiPp";
@@ -301,59 +278,39 @@ module.exports = function registerScrambledQuest(api) {
   const FIX_ATTEMPT_STEP = "QzLEE2";
   const MEN_LEAVE_STEP = "R85gy5";
   const ALAN_DIES_STEP = "Txl_sf";
-  const CHICKEN_SETUP_STEP = "0pMMZD";
-  const JAGUAR_SETUP_STEP = "NXRXMq";
-  const DRAGON_SETUP_STEP = "teOflj";
 
-  // ==========================================================================
-  // Pile table
-  // ==========================================================================
-
-  const PILES = [
-    {
-      itemId: LARGE_EGG_ITEM_ID,
-      tile: { x: 1241, y: 3141 },
-      guardianId: LARGE_CHICKEN_NPC_ID,
-      guardianTile: { x: 1242, y: 3142 },
-      variant: V_PILE_CHICKEN,
-      key: "chicken",
-      deadBit: BIT_CHICKEN_DEAD,
-      takenBit: BIT_CHICKEN_TAKEN,
-      givenBit: BIT_CHICKEN_GIVEN,
-      attemptId: "spety9",
-      takeId: "2UjyxQ",
-      noSpaceId: "-HzjUb",
-    },
-    {
-      itemId: JAGUAR_EGG_ITEM_ID,
-      tile: { x: 1332, y: 3121 },
-      guardianId: BLACK_JAGUAR_NPC_ID,
-      guardianTile: { x: 1336, y: 3121 },
-      variant: V_PILE_JAGUAR,
-      key: "jaguar",
-      deadBit: BIT_JAGUAR_DEAD,
-      takenBit: BIT_JAGUAR_TAKEN,
-      givenBit: BIT_JAGUAR_GIVEN,
-      attemptId: "JuFOIQ",
-      takeId: "470ssp",
-      noSpaceId: "4Gi17J",
-    },
-    {
-      itemId: DRAGON_EGG_ITEM_ID,
-      tile: { x: 1258, y: 9482 },
-      guardianId: RED_DRAGON_NPC_ID,
-      guardianTile: { x: 1255, y: 9482 },
-      variant: V_PILE_DRAGON,
-      key: "dragon",
-      deadBit: BIT_DRAGON_DEAD,
-      takenBit: BIT_DRAGON_TAKEN,
-      givenBit: BIT_DRAGON_GIVEN,
-      attemptId: "tGBrGi",
-      takeId: "Q8GqFE",
-      noSpaceId: "CWV8aX",
-    },
+  // Cache jigsaw (interface 922). The onLoad scripts build the 26 pieces from dbrow 5397;
+  // dragging/rotating calls if_triggeroplocal, and script 7970 locks a solved piece.
+  const JIGSAW_GROUP = 922;
+  const JIGSAW_PIECES_CHILD = 7;
+  const JIGSAW_PIECES_UID = (JIGSAW_GROUP << 16) | JIGSAW_PIECES_CHILD;
+  const JIGSAW_DBROW = 5397;
+  const JIGSAW_VARP = 4756;
+  const JIGSAW_PROGRESS_VARP = 4749;
+  const JIGSAW_LOCK_SCRIPT = 7970;
+  const JIGSAW_PIECE_COUNT = 26;
+  const JIGSAW_SCRIPT_TRIGGER = 1 << 23;
+  // Target positions from Quest Helper's EggSolver, in piece order.
+  const JIGSAW_POSITIONS = [
+    [194, 121], [217, 27], [260, 22], [250, 41], [175, 58], [198, 60],
+    [288, 71], [231, 71], [231, 99], [257, 113], [273, 115], [306, 119],
+    [243, 149], [309, 160], [269, 177], [297, 217], [252, 213], [244, 255],
+    [199, 248], [222, 199], [187, 210], [149, 179], [209, 160], [165, 141],
+    [157, 103], [196, 105],
   ];
-  const PILE_BY_ITEM = new Map(PILES.map((pile) => [pile.itemId, pile]));
+
+  const STATE_PREFIX = "scrambled:";
+  const VERSION_ATTRIBUTE = "scrambled:version";
+  const VERSION = 2;
+  const JIGSAW_ATTRIBUTE = "scrambled:jigsaw";
+  const OLD_STAGE_MAP = new Map([[1, 6], [2, 8], [3, 14], [4, 16], [5, 18], [6, 20], [7, 24], [8, 30]]);
+  const BITS_ATTRIBUTE = "quest.scrambled.bits";
+  const BIT_CITIZEN_MET = 1;
+  const BIT_WORKBENCH_SEARCHED = 1 << 1;
+  const BIT_PET_EGG_RECEIVED = 1 << 2;
+  const BIT_AXE_RECEIVED = 1 << 3;
+  const BIT_KAUAYOTL_REPAIRED = 1 << 4;
+  const BIT_ACATZIN_REPAIRED = 1 << 5;
 
   /** The tea-making condition matching a just-performed item use. */
   const teaAction = new WeakMap();
@@ -362,6 +319,7 @@ module.exports = function registerScrambledQuest(api) {
 
   let quest;
   let groundItems;
+  const Scenes = createQuestScenes(api, { onEnd: handleSceneEnd });
 
   // ==========================================================================
   // State helpers
@@ -379,9 +337,25 @@ module.exports = function registerScrambledQuest(api) {
     player.setAttribute(BITS_ATTRIBUTE, bits(player) | bit);
   }
 
-  function clearBit(player, bit) {
-    player.setAttribute(BITS_ATTRIBUTE, bits(player) & ~bit);
+  function stateKey(kind, key) {
+    return `${STATE_PREFIX}${kind}-${key}`;
   }
+
+  function varbitValue(player, varbit, kind, key) {
+    return Number(player.getAttribute(stateKey(kind, key))) || 0;
+  }
+
+  function sendVarbit(player, varbit, value, kind, key) {
+    player.setAttribute(stateKey(kind, key), value | 0);
+    player.getPacketSender().sendVarbit(varbit, value | 0);
+  }
+
+  const man = (player, key) => varbitValue(player, MAN_CONFIG.get(key).varbit, "man", key);
+  const setMan = (player, key, value) => sendVarbit(player, MAN_CONFIG.get(key).varbit, value, "man", key);
+  const eggValue = (player, egg) => varbitValue(player, egg.varbit, "egg", egg.key);
+  const setEgg = (player, egg, value) => sendVarbit(player, egg.varbit, value, "egg", egg.key);
+  const nailsTaken = (player) => varbitValue(player, VARBIT_NAILS, "misc", "nails") > 0;
+  const setNailsTaken = (player) => sendVarbit(player, VARBIT_NAILS, 1, "misc", "nails");
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
   const full = (player) => player.getInventory().getFreeSlots() < 1;
@@ -445,6 +419,10 @@ module.exports = function registerScrambledQuest(api) {
     }
   }
 
+  function setStage(player, stage) {
+    if (quest.getStage(player) !== stage) quest.setStage(player, stage);
+  }
+
   // ==========================================================================
   // Owner-only NPC spawns
   // ==========================================================================
@@ -483,177 +461,161 @@ module.exports = function registerScrambledQuest(api) {
     }
   }
 
-  function ensureMan(player, key, npcId) {
-    if (hasBit(player, manDepartedBit(key))) {
-      removeTracked(player, `${key}-town`);
-      const temple = TEMPLE_TILES[key];
-      spawnTracked(player, `${key}-temple`, { id: npcId, x: temple.x, y: temple.y, z: 0, wanderRadius: 0 });
-    } else {
-      removeTracked(player, `${key}-temple`);
-      const town = TOWN_TILES[key];
-      spawnTracked(player, `${key}-town`, { id: npcId, x: town.x, y: town.y, z: 0, wanderRadius: 0 });
-    }
+  function spawnAt(player, key, id, tile) {
+    spawnTracked(player, key, { id, x: tile.x, y: tile.y, z: 0, wanderRadius: 0 });
   }
 
-  function manDepartedBit(key) {
-    if (key === "acatzin") return BIT_ACATZIN_DEPARTED;
-    if (key === "nezketi") return BIT_NEZKETI_DEPARTED;
-    return BIT_KAUAYOTL_DEPARTED;
-  }
-
-  function ensureQuestNpcs(player) {
-    if (!player || player.isPlayerBot?.() === true) return;
+  function ensureSpawns(player) {
+    if (!player || player.isPlayerBot?.() === true || !quest) return;
     const stage = quest.getStage(player);
-    if (quest.isComplete(player)) {
-      removeTracked(player, "alan");
-      removeTracked(player, "egg");
-      removeTracked(player, "chicken-egg");
-      removeTracked(player, "jaguar-egg");
-      removeTracked(player, "dragon-egg");
-      for (const key of ["acatzin", "nezketi", "kauayotl"]) {
-        removeTracked(player, `${key}-temple`);
-        ensureManAtTown(player, key);
-      }
-      spawnTracked(player, "pet-egg", { id: PET_EGG_NPC_ID, ...EGG_NPC_TILE, z: 0, wanderRadius: 0 });
-      return;
-    }
-    if (stage === STAGE_NOT_STARTED) {
-      spawnTracked(player, "alan", { id: ALAN_NPC_ID, ...ALAN_TILE, z: 0, wanderRadius: 0 });
+
+    // Alan and the egg on the wall before the fall.
+    if (stage < STAGE_EGG_FELL) {
+      spawnAt(player, "alan", ALAN_NPC_ID, ALAN_TILE);
     } else {
       removeTracked(player, "alan");
     }
-    if (stage >= STAGE_STARTED) {
-      spawnTracked(player, "egg", { id: EGG_INSPECT_NPC_ID, ...EGG_NPC_TILE, z: 0, wanderRadius: 0 });
-    }
-    if (stage >= STAGE_MEN) {
-      ensureMan(player, "acatzin", ACATZIN_NPC_ID);
-      ensureMan(player, "nezketi", NEZKETI_NPC_ID);
-      ensureMan(player, "kauayotl", KAUAYOTL_NPC_ID);
-    }
-    if (hasBit(player, BIT_CHICKEN_GIVEN)) {
-      spawnTracked(player, "chicken-egg", { id: CHICKEN_EGG_NPC_ID, ...CHICKEN_EGG_TILE, z: 0, wanderRadius: 0 });
-    }
-    if (hasBit(player, BIT_JAGUAR_GIVEN)) {
-      spawnTracked(player, "jaguar-egg", { id: JAGUAR_EGG_NPC_ID, ...JAGUAR_EGG_TILE, z: 0, wanderRadius: 0 });
-    }
-    if (hasBit(player, BIT_DRAGON_GIVEN)) {
-      spawnTracked(player, "dragon-egg", { id: DRAGON_EGG_NPC_ID, ...DRAGON_EGG_TILE, z: 0, wanderRadius: 0 });
-    }
-  }
 
-  function ensureManAtTown(player, key) {
-    const npcId = key === "acatzin" ? ACATZIN_NPC_ID : key === "nezketi" ? NEZKETI_NPC_ID : KAUAYOTL_NPC_ID;
-    const town = TOWN_TILES[key];
-    spawnTracked(player, `${key}-town`, { id: npcId, x: town.x, y: town.y, z: 0, wanderRadius: 0 });
+    // The broken egg moves into the temple once all three eggs are handed in.
+    removeTracked(player, "egg-ground");
+    removeTracked(player, "egg-temple");
+    removeTracked(player, "egg-fix");
+    if (stage >= STAGE_EGG_FELL && stage <= STAGE_PLAN) {
+      spawnAt(player, "egg-ground", BROKEN_EGG_NPC_ID, BROKEN_EGG_TILE);
+    } else if (stage >= STAGE_TWO_EGGS && stage < STAGE_FIXING) {
+      spawnAt(player, "egg-temple", BROKEN_EGG_NPC_ID, BROKEN_EGG_TEMPLE_TILE);
+    } else if (stage >= STAGE_FIXING && stage < STAGE_FINALE) {
+      spawnAt(player, "egg-fix", EGG_FIX_NPC_ID, BROKEN_EGG_TEMPLE_TILE);
+    }
+
+    // King's men: village while rallying, temple once gathered.
+    for (const key of MAN_CONFIG.keys()) {
+      removeTracked(player, `man-town-${key}`);
+      removeTracked(player, `man-temple-${key}`);
+    }
+    if (stage >= STAGE_MEN && stage < STAGE_GATHERED) {
+      for (const [key, config] of MAN_CONFIG) spawnAt(player, `man-town-${key}`, config.npcId, config.town);
+    } else if (stage >= STAGE_GATHERED) {
+      for (const [key, config] of MAN_CONFIG) spawnAt(player, `man-temple-${key}`, config.npcId, config.temple);
+    }
+
+    // A guardian stays out until killed; level 2 in its varbit means "spawned".
+    for (const egg of EGGS) {
+      const key = `guardian-${egg.key}`;
+      if (eggValue(player, egg) === 2) {
+        spawnAt(player, key, egg.guardianId, egg.guardianTile);
+      } else {
+        removeTracked(player, key);
+      }
+    }
+
+    if (stage >= STAGE_FINALE) {
+      spawnAt(player, "pet-egg", PET_EGG_NPC_ID, WALL_EGG_TILE);
+    } else {
+      removeTracked(player, "pet-egg");
+    }
   }
 
   function ensureGroundItems(player) {
-    if (!player || quest.isComplete(player)) return;
+    if (!player || !quest) return;
     const stage = quest.getStage(player);
-    if (stage >= STAGE_MEN && stage <= STAGE_PLAN && !hasAnyBowl(player)) {
+    if (stage >= STAGE_INSPECTED && stage < STAGE_PLAN && !hasAnyBowl(player)) {
       if (!groundItems.getGroundItem(player.getUsername(), BOWL_ITEM_ID, BOWL_TILE)) {
         groundItems.registerLocation(player, new Item(BOWL_ITEM_ID, 1), BOWL_TILE);
       }
     }
-    if (stage >= STAGE_PLAN && hasBit(player, BIT_PLAN_TOLD)) {
-      for (const pile of PILES) {
-        if (hasBit(player, pile.takenBit) || hasBit(player, pile.givenBit)) continue;
-        const tile = new Location(pile.tile.x, pile.tile.y, 0);
-        if (!groundItems.getGroundItem(player.getUsername(), pile.itemId, tile)) {
-          groundItems.registerLocation(player, new Item(pile.itemId, 1), tile);
-        }
+    if (stage >= STAGE_MEN && stage < STAGE_PLAN && !held(player, PLANK_ITEM_ID, PLANKS_COUNT)) {
+      if (!groundItems.getGroundItem(player.getUsername(), PLANK_ITEM_ID, PLANKS_TILE)) {
+        groundItems.registerLocation(player, new Item(PLANK_ITEM_ID, PLANKS_COUNT), PLANKS_TILE);
       }
     }
+    if (stage >= STAGE_INSPECTED && stage < STAGE_PLAN && !held(player, HAMMER_ITEM_ID)) {
+      if (!groundItems.getGroundItem(player.getUsername(), HAMMER_ITEM_ID, HAMMER_TILE)) {
+        groundItems.registerLocation(player, new Item(HAMMER_ITEM_ID, 1), HAMMER_TILE);
+      }
+    }
+    if (stage >= STAGE_INSPECTED && stage < STAGE_PLAN && !held(player, SAW_ITEM_ID)) {
+      if (!groundItems.getGroundItem(player.getUsername(), SAW_ITEM_ID, SAW_TILE)) {
+        groundItems.registerLocation(player, new Item(SAW_ITEM_ID, 1), SAW_TILE);
+      }
+    }
+  }
+
+  function handleZoneEnter({ player }) {
+    ensureSpawns(player);
+    ensureGroundItems(player);
   }
 
   // ==========================================================================
   // Transcript wiring
   // ==========================================================================
 
-  /** Which transcript variant an NPC plays, by stage and per-man state. */
   function selectVariant({ npcId, player }) {
     if (npcId === ALAN_NPC_ID) {
-      return quest.getStage(player) === STAGE_NOT_STARTED ? V_START : null;
-    }
-    if (npcId === JATZIRI_NPC_ID) {
-      const stage = quest.getStage(player);
-      return stage >= STAGE_STARTED && stage < STAGE_MEN ? V_JATZIRI : null;
+      return quest.getStage(player) < STAGE_EGG_FELL ? V_START : null;
     }
     if (npcId === KING_NPC_ID) return selectKingVariant(player);
     if (npcId === BLACKSMITH_NPC_ID) return selectBlacksmithVariant(player);
-    if (npcId === ACATZIN_NPC_ID) return selectAcatzinVariant(player);
-    if (npcId === NEZKETI_NPC_ID) return selectNezketiVariant(player);
-    if (npcId === KAUAYOTL_NPC_ID) return selectKauayotlVariant(player);
+    if (npcId === MAN_CONFIG.get(MAN_ACATZIN).npcId) return selectAcatzinVariant(player);
+    if (npcId === MAN_CONFIG.get(MAN_NEZKETI).npcId) return selectNezketiVariant(player);
+    if (npcId === MAN_CONFIG.get(MAN_KAUAYOTL).npcId) return selectKauayotlVariant(player);
     return null;
   }
 
   function selectKingVariant(player) {
     const stage = quest.getStage(player);
-    if (quest.isComplete(player)) return V_KING_POST;
+    if (stage >= STAGE_COMPLETE) return V_KING_POST;
     if (stage >= STAGE_GATHERED) return V_KING_MEN;
     if (stage >= STAGE_MEN) return V_KING_AGAIN;
-    if (stage >= STAGE_INSPECTED) {
-      return hasBit(player, BIT_CITIZEN_MET) ? V_KING_CITIZEN : V_KING_DIRECT;
-    }
+    if (stage >= STAGE_INSPECTED) return hasBit(player, BIT_CITIZEN_MET) ? V_KING_CITIZEN : V_KING_DIRECT;
     return null;
   }
 
   function selectBlacksmithVariant(player) {
-    if (!hasBit(player, BIT_ACATZIN_ASKED) || quest.isComplete(player)) return null;
-    if (hasBit(player, BIT_AXE_RECEIVED)) return null;
-    if (hasBit(player, BIT_WHETSTONE_FIXED)) return V_BS_AFTER;
-    if (hasBit(player, BIT_BLACKSMITH_TOLD)) return V_BS_AGAIN;
-    return V_BS_INTRO;
+    if (man(player, MAN_ACATZIN) < 3 || man(player, MAN_ACATZIN) >= 7) return null;
+    return man(player, MAN_ACATZIN) >= 4 ? V_BS_AFTER : V_BS_INTRO;
   }
 
   function selectAcatzinVariant(player) {
-    const stage = quest.getStage(player);
     if (quest.isComplete(player)) return V_ACATZIN_POST;
-    if (hasBit(player, BIT_ACATZIN_DEPARTED)) return selectGatherVariant(player, "chicken", V_GIVE_CHICKEN, V_GIVE_CHICKEN_AGAIN, V_REMIND_ACATZIN);
-    if (!hasBit(player, BIT_ACATZIN_ASKED)) {
-      return hasBit(player, BIT_ACATZIN_REFUSED) ? V_ACATZIN_REFUSED : V_ACATZIN_INTRO;
-    }
-    if (held(player, DAMAGED_AXE_ITEM_ID) || held(player, FIXED_AXE_ITEM_ID)) return V_ACATZIN_AXE;
-    if (stage >= STAGE_GATHERED) return null;
+    if (quest.getStage(player) >= STAGE_FINALE) return selectGatherVariant(player, EGGS[0]);
+    if (man(player, MAN_ACATZIN) >= 7) return selectGatherVariant(player, EGGS[0]);
+    if (man(player, MAN_ACATZIN) === 0) return V_ACATZIN_INTRO;
+    if (held(player, FIXED_AXE_ITEM_ID) || held(player, DAMAGED_AXE_ITEM_ID)) return V_ACATZIN_AXE;
     return V_ACATZIN_AGAIN;
   }
 
   function selectNezketiVariant(player) {
     if (quest.isComplete(player)) return V_NEZKETI_POST;
-    if (hasBit(player, BIT_NEZKETI_DEPARTED)) return selectGatherVariant(player, "jaguar", V_GIVE_JAGUAR, V_GIVE_JAGUAR_AGAIN, V_REMIND_NEZKETI);
-    if (!hasBit(player, BIT_NEZKETI_ASKED)) {
-      return hasBit(player, BIT_NEZKETI_REFUSED) ? V_NEZKETI_REFUSED : V_NEZKETI_INTRO;
-    }
-    if (hasAnyTea(player)) return V_NEZKETI_TEA;
-    return V_NEZKETI_AGAIN;
+    if (quest.getStage(player) >= STAGE_FINALE) return selectGatherVariant(player, EGGS[1]);
+    if (man(player, MAN_NEZKETI) >= 7) return selectGatherVariant(player, EGGS[1]);
+    if (man(player, MAN_NEZKETI) === 0) return V_NEZKETI_INTRO;
+    return hasAnyTea(player) ? V_NEZKETI_TEA : V_NEZKETI_AGAIN;
   }
 
   function selectKauayotlVariant(player) {
     if (quest.isComplete(player)) return V_KAUAYOTL_POST;
-    if (hasBit(player, BIT_KAUAYOTL_DEPARTED)) return selectGatherVariant(player, "dragon", V_GIVE_DRAGON, V_GIVE_DRAGON_AGAIN, V_REMIND_KAUAYOTL);
-    if (!hasBit(player, BIT_KAUAYOTL_ASKED)) {
-      return hasBit(player, BIT_KAUAYOTL_REFUSED) ? V_KAUAYOTL_REFUSED : V_KAUAYOTL_INTRO;
-    }
-    return hasBit(player, BIT_KAUAYOTL_FIXED) ? V_KAUAYOTL_AFTER : V_KAUAYOTL_AGAIN;
+    if (quest.getStage(player) >= STAGE_FINALE) return selectGatherVariant(player, EGGS[2]);
+    if (man(player, MAN_KAUAYOTL) >= 7) return selectGatherVariant(player, EGGS[2]);
+    if (man(player, MAN_KAUAYOTL) === 0) return V_KAUAYOTL_INTRO;
+    if (man(player, MAN_KAUAYOTL) >= 3) return V_KAUAYOTL_AFTER;
+    return V_KAUAYOTL_AGAIN;
   }
 
   /** The temple conversation: plan, hand-ins, judging and the egg fix. */
-  function selectGatherVariant(player, key, give, giveAgain, remind) {
+  function selectGatherVariant(player, egg) {
     const stage = quest.getStage(player);
-    if (stage >= STAGE_JUDGED) return V_FIX;
+    // 26 is "egg rebuilt"; 24 still waits for the jigsaw and must not start the finale.
+    if (stage >= STAGE_FIXED) return V_FIX;
+    if (stage >= STAGE_FIXING) return null;
     if (stage >= STAGE_GIVEN) return V_JUDGE;
     if (stage < STAGE_PLAN) return V_TEMPLE_PLAN;
-    const given = key === "chicken"
-      ? BIT_CHICKEN_GIVEN
-      : key === "jaguar" ? BIT_JAGUAR_GIVEN : BIT_DRAGON_GIVEN;
-    if (hasBit(player, given)) return giveAgain;
-    const eggId = key === "chicken"
-      ? LARGE_EGG_ITEM_ID
-      : key === "jaguar" ? JAGUAR_EGG_ITEM_ID : DRAGON_EGG_ITEM_ID;
-    return held(player, eggId) ? give : remind;
+    const value = eggValue(player, egg);
+    if (value >= 4) return egg.giveAgainVariant;
+    if (held(player, egg.itemId)) return egg.giveVariant;
+    return V_REMIND[egg.giveNpc];
   }
 
-  /** Answers the wiki prose conditions with live state. */
   function answerCondition({ player, stepId }) {
     if (!stepId) return null;
     if (PROFANITY_ON_IDS.has(stepId)) return false;
@@ -688,96 +650,148 @@ module.exports = function registerScrambledQuest(api) {
   }
 
   function answerPileCondition(player, stepId) {
-    const pile = pileForStep(stepId);
+    const pile = EGGS.find((entry) =>
+      (entry.key === "chicken" && ["spety9", "2UjyxQ", "-HzjUb"].includes(stepId)) ||
+      (entry.key === "jaguar" && ["JuFOIQ", "470ssp", "4Gi17J"].includes(stepId)) ||
+      (entry.key === "dragon" && ["tGBrGi", "Q8GqFE", "CWV8aX"].includes(stepId))
+    );
     if (!pile) return null;
-    const dead = hasBit(player, pile.deadBit);
-    const space = !full(player);
-    if (stepId === pile.attemptId) return !dead;
-    if (stepId === pile.takeId) return dead && space;
-    if (stepId === pile.noSpaceId) return dead && !space;
-    return null;
+    const value = eggValue(player, pile);
+    const attempt = ["spety9", "JuFOIQ", "tGBrGi"].includes(stepId);
+    const take = ["2UjyxQ", "470ssp", "Q8GqFE"].includes(stepId);
+    if (attempt) return value === 1;
+    if (take) return value === 3 && !full(player);
+    return value === 3 && full(player);
   }
 
-  function pileForStep(stepId) {
-    return PILES.find((pile) => pile.attemptId === stepId || pile.takeId === stepId || pile.noSpaceId === stepId) ?? null;
-  }
-
-  function handleStartHook({ player, npcId, hook }) {
-    if (hook !== START_HOOK || npcId !== ALAN_NPC_ID) return;
-    if (quest.getStage(player) !== STAGE_NOT_STARTED) return;
-    if (!meetsRequirements(player)) {
-      notifyRequirements(player);
+  function handleChoice({ player, npcId, option }) {
+    const stage = quest.getStage(player);
+    if (npcId === ALAN_NPC_ID) {
+      if (option === "Yes." && stage === STAGE_NOT_STARTED) {
+        if (!meetsRequirements(player)) {
+          notifyRequirements(player);
+          return;
+        }
+        player.setAttribute(VERSION_ATTRIBUTE, VERSION);
+        setStage(player, STAGE_STARTED);
+        player.sendMessage("You've started a new quest: <col=0ab0ff>Scrambled!</col>");
+      } else if (option === "Of course!" && stage === STAGE_STARTED) {
+        setStage(player, STAGE_CONFIRMED);
+      }
       return;
     }
-    quest.setStage(player, STAGE_STARTED);
-    removeTracked(player, "alan");
-    spawnTracked(player, "egg", { id: EGG_INSPECT_NPC_ID, ...EGG_NPC_TILE, z: 0, wanderRadius: 0 });
+    if (npcId === MAN_CONFIG.get(MAN_ACATZIN).npcId) {
+      if (option === "I can talk to the blacksmith." && man(player, MAN_ACATZIN) < 3) {
+        setMan(player, MAN_ACATZIN, 3);
+      }
+      return;
+    }
+    if (npcId === MAN_CONFIG.get(MAN_NEZKETI).npcId) {
+      if (option === "I can get you some tea." && man(player, MAN_NEZKETI) < 2) {
+        setMan(player, MAN_NEZKETI, 2);
+      }
+      return;
+    }
+    if (npcId === MAN_CONFIG.get(MAN_KAUAYOTL).npcId) {
+      if (option === "I see. Well, maybe I can help out with that?" && man(player, MAN_KAUAYOTL) < 2) {
+        setMan(player, MAN_KAUAYOTL, 2);
+      }
+    }
   }
 
-  /** Stage moves carried by exact transcript lines (prose has no ids for them). */
+  /** Stage moves carried by exact transcript lines (the capture has no ids for them). */
   function handleDialogueLine(event) {
     const { player, npcId, text } = event;
-    if (npcId === KING_NPC_ID && quest.getStage(player) === STAGE_INSPECTED && String(text).includes("Nezketi should be in the temple just south of here")) {
-      quest.setStage(player, STAGE_MEN);
-      ensureQuestNpcs(player);
+    const line = String(text);
+    const stage = quest.getStage(player);
+    // The profanity-disabled finale branch ends on this line without an explicit end step.
+    if (stage === STAGE_FINALE && (line === "Bollocks." || line === ".")) {
+      if (!quest.isComplete(player)) quest.complete(player);
       return;
     }
-    if (npcId === BLACKSMITH_NPC_ID && String(text).includes("try and fix the whetstone")) {
-      setBit(player, BIT_BLACKSMITH_TOLD);
+    if (npcId === KING_NPC_ID) {
+      if (stage === STAGE_INSPECTED && line.includes("They'll be up to the task")) {
+        setStage(player, STAGE_KING_RALLIED);
+        setStage(player, STAGE_KING_BRIEFED);
+      } else if (stage === STAGE_KING_BRIEFED && line.includes("Nezketi should be in the temple just south of here")) {
+        setStage(player, STAGE_MEN);
+        ensureSpawns(player);
+      }
+      return;
+    }
+    if (line.includes("No, it's necessary") && stage === STAGE_JUDGED) {
+      setStage(player, STAGE_FIXING);
+      ensureSpawns(player);
+      api.core.TaskManager.submit(new api.core.CountdownTask(player, 1, () => {
+        if (player.isRegistered?.() !== false && quest.getStage(player) === STAGE_FIXING) openJigsaw(player);
+      }));
       return;
     }
     if (
-      (npcId === ACATZIN_NPC_ID || npcId === NEZKETI_NPC_ID || npcId === KAUAYOTL_NPC_ID) &&
-      String(text).includes("I'll be back once I have some eggs")
+      [...MAN_CONFIG.values()].some((config) => config.npcId === npcId) &&
+      line.includes("I'll be back once I have some eggs")
     ) {
-      setBit(player, BIT_PLAN_TOLD);
-      if (quest.getStage(player) === STAGE_GATHERED) quest.setStage(player, STAGE_PLAN);
-      ensureGroundItems(player);
-    }
-  }
-
-  /** Quest-gated menu options that carry no action step. */
-  function handleChoice({ player, npcId, option }) {
-    if (npcId === ACATZIN_NPC_ID) {
-      if (option === "I can talk to the blacksmith.") {
-        clearBit(player, BIT_ACATZIN_REFUSED);
-        setBit(player, BIT_ACATZIN_ASKED);
-      } else if (option === "There's no time for this!") {
-        setBit(player, BIT_ACATZIN_REFUSED);
-      }
-      return;
-    }
-    if (npcId === NEZKETI_NPC_ID) {
-      if (option === "I can get you some tea.") {
-        clearBit(player, BIT_NEZKETI_REFUSED);
-      } else if (option === "Now's not the time for tea!") {
-        setBit(player, BIT_NEZKETI_REFUSED);
-      }
-      return;
-    }
-    if (npcId === KAUAYOTL_NPC_ID) {
-      if (option === "I see. Well, maybe I can help out with that?") {
-        clearBit(player, BIT_KAUAYOTL_REFUSED);
-        setBit(player, BIT_KAUAYOTL_ASKED);
-      } else if (option === "We have bigger problems right now!") {
-        setBit(player, BIT_KAUAYOTL_REFUSED);
+      if (stage === STAGE_GATHERED) {
+        setStage(player, STAGE_PLAN);
+        for (const egg of EGGS) if (eggValue(player, egg) === 0) setEgg(player, egg, 1);
       }
     }
   }
 
-  /** Chosen condition branches with gameplay meaning. */
   function handleCondition({ player, stepId }) {
-    if (stepId === EGG_INTERACT_CONDITION_ID && quest.getStage(player) === STAGE_STARTED) {
-      quest.setStage(player, STAGE_INSPECTED);
+    if (stepId === EGG_INTERACT_CONDITION_ID && quest.getStage(player) === STAGE_EGG_FELL) {
+      setStage(player, STAGE_INSPECTED);
     }
   }
 
-  /** The transcript's item hand-outs, scene messages and completion. */
+  function handleSceneEnd() {}
+
+  /** The captured start cutscene: fade, Alan and the egg, camera, splat, then the fallen egg. */
+  function playEggFallScene(player) {
+    if (Scenes.get(player)) return;
+    Scenes.controls(player, true, true);
+    Scenes.fade(player, true);
+    Scenes.later(player, 2, () => {
+      if (quest.getStage(player) !== STAGE_CONFIRMED) return;
+      removeTracked(player, "alan");
+      player.moveTo(new Location(1247, 3167, 0));
+      const scene = Scenes.open(player, "scrambled-egg-fall", [[1244, 1250, 3163, 3172, 0]]);
+      Scenes.actor(scene, ALAN_CUTSCENE_NPC_ID, [1247, 3166, 0], [1247, 3170]);
+      const egg = Scenes.actor(scene, EGG_VISIBLE_NPC_ID, [1247, 3170, 0]);
+      Scenes.camera(player, [1251, 3165, 340], [1246, 3168, 140]);
+      Scenes.fade(player, false);
+      Scenes.later(scene, 44, () => egg?.performAnimation(new api.core.Animation(EGG_SPLAT_ANIMATION)));
+      Scenes.later(scene, 49, () => {
+        if (egg) Scenes.removeActor(scene, egg);
+        Scenes.actor(scene, FALLEN_EGG_NPC_ID, [1247, 3170, 0]);
+      });
+      Scenes.later(scene, 56, () => Scenes.fade(player, true));
+      Scenes.later(scene, 58, () => {
+        Scenes.end(player);
+        Scenes.closeFade(player);
+        player.moveTo(new Location(1247, 3167, 0));
+        setStage(player, STAGE_EGG_FELL);
+        ensureSpawns(player);
+      });
+    });
+  }
+
   function handleAction(event) {
-    const { player, stepId } = event;
+    const { player, stepId, step } = event;
+    const isKingsMan = [...MAN_CONFIG.values()].some((config) => config.npcId === event.npcId);
+    if (step?.type === "end" && isKingsMan && quest.getStage(player) === STAGE_FINALE) {
+      event.handled = true;
+      event.end = true;
+      if (!quest.isComplete(player)) quest.complete(player);
+      return;
+    }
     if (!stepId) return;
+    if (stepId === EGG_FALLS_STEP) {
+      if (quest.getStage(player) === STAGE_CONFIRMED) playEggFallScene(player);
+      return;
+    }
     if (stepId === WHETSTONE_FIXED_STEP) {
-      setBit(player, BIT_WHETSTONE_FIXED);
+      if (man(player, MAN_ACATZIN) === 3) setMan(player, MAN_ACATZIN, 4);
       return;
     }
     if (stepId === AXE_RECEIVE_STEP) {
@@ -787,14 +801,18 @@ module.exports = function registerScrambledQuest(api) {
       return;
     }
     if (stepId === AXE_HANDED_STEP) {
-      player.getInventory().deleteNumber(FIXED_AXE_ITEM_ID, 1);
-      setBit(player, BIT_ACATZIN_DEPARTED);
+      if (held(player, FIXED_AXE_ITEM_ID)) player.getInventory().deleteNumber(FIXED_AXE_ITEM_ID, 1);
+      setMan(player, MAN_ACATZIN, 7);
       advanceIfAllMenDeparted(player);
-      ensureQuestNpcs(player);
       return;
     }
-    if (stepId === CUP_GIVEN_1_STEP || stepId === CUP_GIVEN_2_STEP) {
-      setBit(player, BIT_NEZKETI_ASKED);
+    if (stepId === ACATZIN_LEAVES_STEP) {
+      setMan(player, MAN_ACATZIN, 7);
+      advanceIfAllMenDeparted(player);
+      return;
+    }
+    if (CUP_GIVEN_STEPS.has(stepId)) {
+      if (man(player, MAN_NEZKETI) < 2) setMan(player, MAN_NEZKETI, 2);
       if (!full(player) && !held(player, EMPTY_CUP_ITEM_ID)) player.getInventory().adds(EMPTY_CUP_ITEM_ID, 1);
       return;
     }
@@ -814,155 +832,185 @@ module.exports = function registerScrambledQuest(api) {
       return;
     }
     if (stepId === TEA_HANDED_STEP) {
-      player.getInventory().deleteNumber(DAMIANA_TEA_CUP_ITEM_ID, 1);
-      setBit(player, BIT_NEZKETI_DEPARTED);
+      if (held(player, DAMIANA_TEA_CUP_ITEM_ID)) player.getInventory().deleteNumber(DAMIANA_TEA_CUP_ITEM_ID, 1);
+      setMan(player, MAN_NEZKETI, 7);
       advanceIfAllMenDeparted(player);
-      ensureQuestNpcs(player);
       return;
     }
     if (stepId === CART_FIXED_STEP) {
-      player.getInventory().deleteNumber(PLANK_ITEM_ID, 2);
-      player.getInventory().deleteNumber(IRON_NAILS_ITEM_ID, 6);
-      setBit(player, BIT_KAUAYOTL_FIXED);
+      setMan(player, MAN_KAUAYOTL, 3);
       return;
     }
     if (stepId === KAUAYOTL_DEPARTED_STEP) {
-      setBit(player, BIT_KAUAYOTL_DEPARTED);
+      setMan(player, MAN_KAUAYOTL, 7);
       advanceIfAllMenDeparted(player);
-      ensureQuestNpcs(player);
       return;
     }
     if (stepId === EGG_BROKEN_STEP) {
-      if (quest.getStage(player) === STAGE_STARTED) quest.setStage(player, STAGE_INSPECTED);
+      if (quest.getStage(player) < STAGE_INSPECTED) setStage(player, STAGE_INSPECTED);
       return;
     }
-    if (stepId === CHICKEN_SETUP_STEP) {
-      finishEggHandIn(player, "chicken");
-      return;
-    }
-    if (stepId === JAGUAR_SETUP_STEP) {
-      finishEggHandIn(player, "jaguar");
-      return;
-    }
-    if (stepId === DRAGON_SETUP_STEP) {
-      finishEggHandIn(player, "dragon");
+    const egg = EGG_BY_SETUP_STEP.get(stepId);
+    if (egg) {
+      finishEggHandIn(player, egg);
       return;
     }
     if (stepId === ALL_EGGS_FALL_STEP) {
-      removeTracked(player, "chicken-egg");
-      removeTracked(player, "jaguar-egg");
-      removeTracked(player, "dragon-egg");
-      if (quest.getStage(player) === STAGE_GIVEN) quest.setStage(player, STAGE_JUDGED);
+      if (quest.getStage(player) === STAGE_GIVEN) {
+        setStage(player, STAGE_JUDGED);
+        for (const entry of EGGS) if (eggValue(player, entry) >= 4) setEgg(player, entry, 5);
+      }
       return;
     }
     if (stepId === FIX_ATTEMPT_STEP) return;
     if (stepId === MEN_LEAVE_STEP) {
-      removeTracked(player, "acatzin-temple");
-      removeTracked(player, "nezketi-temple");
-      removeTracked(player, "kauayotl-temple");
+      for (const key of MAN_CONFIG.keys()) removeTracked(player, `man-temple-${key}`);
       return;
     }
     if (stepId === ALAN_DIES_STEP) {
       if (!quest.isComplete(player)) {
-        removeTracked(player, "egg");
+        setStage(player, STAGE_FINALE);
+        removeTracked(player, "egg-ground");
+        removeTracked(player, "egg-temple");
+        removeTracked(player, "egg-fix");
+        for (const key of MAN_CONFIG.keys()) removeTracked(player, `man-temple-${key}`);
+        for (const key of MAN_CONFIG.keys()) setMan(player, key, 0);
+        for (const entry of EGGS) setEgg(player, entry, 0);
+        sendStateVarbits(player);
         if (!groundItems.getGroundItem(player.getUsername(), ALANS_BONES_ITEM_ID, BONES_TILE)) {
           groundItems.registerLocation(player, new Item(ALANS_BONES_ITEM_ID, 1), BONES_TILE);
         }
-        quest.complete(player);
-        spawnTracked(player, "pet-egg", { id: PET_EGG_NPC_ID, ...EGG_NPC_TILE, z: 0, wanderRadius: 0 });
+        ensureSpawns(player);
       }
     }
   }
 
   function allMenDeparted(player) {
-    return (
-      hasBit(player, BIT_ACATZIN_DEPARTED) &&
-      hasBit(player, BIT_NEZKETI_DEPARTED) &&
-      hasBit(player, BIT_KAUAYOTL_DEPARTED)
-    );
+    return [...MAN_CONFIG.keys()].every((key) => man(player, key) >= 7);
   }
 
   function advanceIfAllMenDeparted(player) {
     if (allMenDeparted(player) && quest.getStage(player) === STAGE_MEN) {
-      quest.setStage(player, STAGE_GATHERED);
+      setStage(player, STAGE_GATHERED);
+      ensureSpawns(player);
     }
   }
 
-  function finishEggHandIn(player, key) {
-    const eggId = key === "chicken"
-      ? LARGE_EGG_ITEM_ID
-      : key === "jaguar" ? JAGUAR_EGG_ITEM_ID : DRAGON_EGG_ITEM_ID;
-    const givenBit = key === "chicken"
-      ? BIT_CHICKEN_GIVEN
-      : key === "jaguar" ? BIT_JAGUAR_GIVEN : BIT_DRAGON_GIVEN;
-    player.getInventory().deleteNumber(eggId, 1);
-    setBit(player, givenBit);
-    ensureQuestNpcs(player);
-    if (
-      hasBit(player, BIT_CHICKEN_GIVEN) &&
-      hasBit(player, BIT_JAGUAR_GIVEN) &&
-      hasBit(player, BIT_DRAGON_GIVEN) &&
-      quest.getStage(player) === STAGE_PLAN
-    ) {
-      quest.setStage(player, STAGE_GIVEN);
-    }
+  function finishEggHandIn(player, egg) {
+    player.getInventory().deleteNumber(egg.itemId, 1);
+    setEgg(player, egg, 4);
+    if (quest.getStage(player) !== STAGE_PLAN && quest.getStage(player) !== STAGE_TWO_EGGS) return;
+    const given = EGGS.filter((entry) => eggValue(player, entry) >= 4).length;
+    if (given >= 3) setStage(player, STAGE_GIVEN);
+    else if (given === 2) setStage(player, STAGE_TWO_EGGS);
   }
+
+  // ==========================================================================
+  // World interactions
+  // ==========================================================================
 
   /** Farmer/Citizen point the player at King after the egg breaks. */
   function handleCitizenTalk(event) {
     const { player, npcId } = event;
-    if (!CITIZEN_NPC_IDS.has(npcId)) return false;
-    if (quest.getStage(player) !== STAGE_INSPECTED || hasBit(player, BIT_CITIZEN_MET)) return false;
+    if (!CITIZEN_NPC_IDS.has(npcId)) return;
+    if (quest.getStage(player) !== STAGE_INSPECTED || hasBit(player, BIT_CITIZEN_MET)) return;
     event.handled = true;
     setBit(player, BIT_CITIZEN_MET);
     startTranscript(api, player, npcId, PAGE, V_CITIZEN);
-    return true;
   }
 
-  /** The broken egg is the quest's Inspect NPC (14488). */
   function inspectEgg(event) {
     const { player, npcId } = event;
-    if (npcId !== EGG_INSPECT_NPC_ID) return false;
-    if (quest.getStage(player) < STAGE_STARTED || quest.isComplete(player)) return false;
+    if (npcId !== BROKEN_EGG_NPC_ID) return;
+    if (quest.getStage(player) < STAGE_EGG_FELL || quest.getStage(player) > STAGE_JUDGED) return;
     event.handled = true;
-    startTranscript(api, player, EGG_INSPECT_NPC_ID, PAGE, V_EGG_INSPECT);
-    return true;
+    startTranscript(api, player, BROKEN_EGG_NPC_ID, PAGE, V_EGG_INSPECT);
   }
 
-  /** The egg on the wall hands out the pet egg after the quest. */
+  function fixEgg(event) {
+    const { player, npcId } = event;
+    if (npcId !== EGG_FIX_NPC_ID || quest.getStage(player) !== STAGE_FIXING) return;
+    event.handled = true;
+    openJigsaw(player);
+  }
+
+  function jigsawMask(player) {
+    return Number(player.getAttribute(JIGSAW_ATTRIBUTE)) || 0;
+  }
+
+  function jigsawComplete(player) {
+    return jigsawMask(player) === (1 << JIGSAW_PIECE_COUNT) - 1;
+  }
+
+  function openJigsaw(player) {
+    const sender = player.getPacketSender();
+    if (sender.isSubInterfaceOpen?.(JIGSAW_GROUP)) return;
+    sender.sendConfig(JIGSAW_VARP, JIGSAW_DBROW);
+    sender.sendSubInterface((161 << 16) | 16, JIGSAW_GROUP, 0);
+    sender.sendInterfaceFlagsRange(JIGSAW_PIECES_UID, 0, JIGSAW_PIECE_COUNT - 1, JIGSAW_SCRIPT_TRIGGER);
+    sender.sendConfig(JIGSAW_PROGRESS_VARP, jigsawMask(player));
+    // Re-lock pieces already solved before a logout/reopen.
+    for (let piece = 0; piece < JIGSAW_PIECE_COUNT; piece++) {
+      if ((jigsawMask(player) & (1 << piece)) !== 0) sendJigsawLock(sender, piece);
+    }
+    if (jigsawComplete(player)) finishJigsaw(player);
+  }
+
+  function sendJigsawLock(sender, piece) {
+    const [x, y] = JIGSAW_POSITIONS[piece];
+    sender.sendInterfaceScript(JIGSAW_LOCK_SCRIPT, [JIGSAW_DBROW, piece, x, y]);
+  }
+
+  function handleJigsawTrigger(event) {
+    const { player } = event;
+    if (!event.scriptTrigger || event.groupId !== JIGSAW_GROUP || event.childId !== JIGSAW_PIECES_CHILD) return;
+    if (quest.getStage(player) !== STAGE_FIXING) return;
+    const piece = Number(event.slot);
+    if (!Number.isInteger(piece) || piece < 0 || piece >= JIGSAW_PIECE_COUNT) return;
+    event.handled = true;
+    const mask = jigsawMask(player);
+    if ((mask & (1 << piece)) !== 0) return;
+    const next = mask | (1 << piece);
+    player.setAttribute(JIGSAW_ATTRIBUTE, next);
+    const sender = player.getPacketSender();
+    sender.sendConfig(JIGSAW_PROGRESS_VARP, next);
+    sendJigsawLock(sender, piece);
+    if (next === (1 << JIGSAW_PIECE_COUNT) - 1) finishJigsaw(player);
+  }
+
+  function finishJigsaw(player) {
+    player.getPacketSender().closeInterface(JIGSAW_GROUP);
+    setStage(player, STAGE_FIXED);
+    ensureSpawns(player);
+  }
+
   function petEggTalk(event) {
     const { player, npcId } = event;
-    if (npcId !== PET_EGG_NPC_ID || !quest.isComplete(player)) return false;
+    if (npcId !== PET_EGG_NPC_ID || !quest.isComplete(player)) return;
     event.handled = true;
     if (!hasBit(player, BIT_PET_EGG_RECEIVED)) {
-      setBit(player, BIT_PET_EGG_RECEIVED);
+      const before = player.getInventory().getAmount(PET_EGG_ITEM_ID);
       player.getInventory().adds(PET_EGG_ITEM_ID, 1);
+      if (player.getInventory().getAmount(PET_EGG_ITEM_ID) <= before) return;
+      setBit(player, BIT_PET_EGG_RECEIVED);
       player.sendMessage("The egg wibbles fondly. You gain an egg.");
     }
-    return true;
   }
 
-  /** Whetstone and axe repair through the Blacksmith; the cart through Kauayotl. */
   function handleItemOnNpc(event) {
     const { player, npcId, itemId } = event;
-    if (npcId === BLACKSMITH_NPC_ID) {
-      if (itemId === HAMMER_ITEM_ID && hasBit(player, BIT_BLACKSMITH_TOLD) && !hasBit(player, BIT_WHETSTONE_FIXED)) {
-        event.handled = true;
-        startTranscript(api, player, BLACKSMITH_NPC_ID, PAGE, V_BS_REPAIR);
-        return;
-      }
-      if (itemId === DAMAGED_AXE_ITEM_ID && hasBit(player, BIT_WHETSTONE_FIXED)) {
-        event.handled = true;
-        player.getInventory().deleteNumber(DAMAGED_AXE_ITEM_ID, 1);
-        player.getInventory().adds(FIXED_AXE_ITEM_ID, 1);
-        player.sendMessage("You repair Acatzin's axe using the whetstone.");
-        return;
-      }
+    if (npcId !== BLACKSMITH_NPC_ID) return;
+    if (itemId === HAMMER_ITEM_ID && man(player, MAN_ACATZIN) === 3) {
+      event.handled = true;
+      setMan(player, MAN_ACATZIN, 4);
+      player.sendMessage("You fix the blacksmith's whetstone.");
       return;
     }
-    if (npcId === KAUAYOTL_NPC_ID && CART_TOOL_ITEM_IDS.has(itemId) && hasBit(player, BIT_KAUAYOTL_ASKED) && !hasBit(player, BIT_KAUAYOTL_FIXED)) {
+    if (itemId === DAMAGED_AXE_ITEM_ID && man(player, MAN_ACATZIN) >= 4) {
       event.handled = true;
-      startTranscript(api, player, KAUAYOTL_NPC_ID, PAGE, V_KAUAYOTL_REPAIR);
+      player.getInventory().deleteNumber(DAMAGED_AXE_ITEM_ID, 1);
+      player.getInventory().adds(FIXED_AXE_ITEM_ID, 1);
+      player.sendMessage("You repair Acatzin's axe using the whetstone.");
     }
   }
 
@@ -980,7 +1028,7 @@ module.exports = function registerScrambledQuest(api) {
       if (!action) return;
       event.handled = true;
       teaAction.set(player, action);
-      startTranscript(api, player, NEZKETI_NPC_ID, PAGE, V_NEZKETI_MAKING_TEA);
+      startTranscript(api, player, MAN_NEZKETI, PAGE, V_NEZKETI_MAKING_TEA);
       teaAction.delete(player);
       return;
     }
@@ -994,19 +1042,17 @@ module.exports = function registerScrambledQuest(api) {
     }
   }
 
-  /** Boiling the damiana water on a cooking oven. */
   function handleDamianaWaterOnOven(event) {
     const { player } = event;
     if (!held(player, DAMIANA_WATER_ITEM_ID)) return false;
     event.handled = true;
     teaAction.set(player, "boil");
-    startTranscript(api, player, NEZKETI_NPC_ID, PAGE, V_NEZKETI_MAKING_TEA);
+    startTranscript(api, player, MAN_NEZKETI, PAGE, V_NEZKETI_MAKING_TEA);
     teaAction.delete(player);
     return true;
   }
 
-  /** Filling an empty bowl at a fountain. */
-  function handleBowlOnFountain(event) {
+  function handleBowlOnWater(event) {
     const { player, itemId } = event;
     if (itemId !== BOWL_ITEM_ID) return false;
     event.handled = true;
@@ -1016,7 +1062,6 @@ module.exports = function registerScrambledQuest(api) {
     return true;
   }
 
-  /** Damiana leaves from the shrubs outside Tal Teklan. */
   function pickDamiana(event) {
     const { player, objectId } = event;
     if (objectId !== DAMIANA_OBJECT_ID) return;
@@ -1029,12 +1074,11 @@ module.exports = function registerScrambledQuest(api) {
     player.sendMessage("You pick some damiana leaves.");
   }
 
-  /** Twenty iron nails from the blacksmith's workbench. */
   function searchWorkbench(event) {
     const { player, objectId } = event;
     if (objectId !== WORKBENCH_OBJECT_ID) return;
     event.handled = true;
-    if (hasBit(player, BIT_WORKBENCH_SEARCHED)) {
+    if (nailsTaken(player)) {
       player.sendMessage("You have already taken the nails from the workbench.");
       return;
     }
@@ -1042,44 +1086,82 @@ module.exports = function registerScrambledQuest(api) {
       player.sendMessage("You don't have enough inventory space.");
       return;
     }
-    setBit(player, BIT_WORKBENCH_SEARCHED);
+    setNailsTaken(player);
     player.getInventory().adds(IRON_NAILS_ITEM_ID, 20);
     player.sendMessage("You take some iron nails from the workbench.");
   }
 
-  /** Egg piles: the guardian interrupts the first take; the second one succeeds. */
-  function handleGroundItemPickup(event) {
-    const { player, groundItemId, location } = event;
-    const pile = PILE_BY_ITEM.get(groundItemId);
-    if (!pile || !location) return;
-    if (location.x !== pile.tile.x || location.y !== pile.tile.y) return;
-    if (quest.isComplete(player) || quest.getStage(player) < STAGE_PLAN) return;
-    if (!hasBit(player, BIT_PLAN_TOLD)) return;
-    if (hasBit(player, pile.takenBit) || hasBit(player, pile.givenBit)) return;
-    if (hasBit(player, pile.deadBit)) {
-      if (full(player)) event.handled = true;
-      else setBit(player, pile.takenBit);
-      startTranscript(api, player, pile.guardianId, PAGE, pile.variant);
+  function repairWhetstone(event) {
+    const { player, objectId } = event;
+    if (objectId !== WHETSTONE_OBJECT_ID) return;
+    if (man(player, MAN_ACATZIN) !== 3) return;
+    event.handled = true;
+    if (!held(player, HAMMER_ITEM_ID)) {
+      player.sendMessage("You need a hammer to repair the whetstone.");
       return;
     }
+    setMan(player, MAN_ACATZIN, 4);
+    player.sendMessage("You fix the blacksmith's whetstone.");
+  }
+
+  function repairCart(event) {
+    const { player, objectId } = event;
+    if (objectId !== CART_OBJECT_ID) return;
+    if (man(player, MAN_KAUAYOTL) !== 2) return;
     event.handled = true;
-    spawnTracked(player, `guardian-${pile.key}`, {
-      id: pile.guardianId,
-      x: pile.guardianTile.x,
-      y: pile.guardianTile.y,
-      z: 0,
-      wanderRadius: 0,
-    });
-    startTranscript(api, player, pile.guardianId, PAGE, pile.variant);
+    if (!hasAllCartItems(player)) {
+      player.sendMessage("You need two planks, six nails, a hammer and a saw to repair the cart.");
+      return;
+    }
+    player.getInventory().deleteNumber(PLANK_ITEM_ID, 2);
+    player.getInventory().deleteNumber(IRON_NAILS_ITEM_ID, 6);
+    setMan(player, MAN_KAUAYOTL, 3);
+    player.sendMessage("You repair the cart.");
+  }
+
+  function useAxeOnWhetstone(event) {
+    const { player, itemId, objectId } = event;
+    if (objectId !== WHETSTONE_OBJECT_ID || itemId !== DAMAGED_AXE_ITEM_ID) return;
+    if (man(player, MAN_ACATZIN) < 4) return;
+    event.handled = true;
+    player.getInventory().deleteNumber(DAMAGED_AXE_ITEM_ID, 1);
+    player.getInventory().adds(FIXED_AXE_ITEM_ID, 1);
+    player.sendMessage("You repair Acatzin's axe using the whetstone.");
+  }
+
+  /** Search a real egg-pile loc: the first search wakes its guardian. */
+  function searchEggPile(event) {
+    const { player, objectId } = event;
+    const egg = EGG_BY_OBJECT.get(objectId);
+    if (!egg) return;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_PLAN || stage >= STAGE_JUDGED) return;
+    event.handled = true;
+    let value = eggValue(player, egg);
+    if (value === 0 && stage >= STAGE_PLAN) {
+      setEgg(player, egg, 1);
+      value = 1;
+    }
+    if (value === 1) {
+      startTranscript(api, player, egg.guardianId, PAGE, egg.pileVariant);
+      setEgg(player, egg, 2);
+      ensureSpawns(player);
+      return;
+    }
+    if (value === 3) {
+      startTranscript(api, player, egg.guardianId, PAGE, egg.pileVariant);
+      if (full(player)) return;
+      player.getInventory().adds(egg.itemId, 1);
+    }
   }
 
   /** Killing a pile guardian opens its egg pile. */
   function handleNpcDeath(event) {
     const { npcId, killer, npc } = event;
-    if (!GUARDIAN_NPC_IDS.has(npcId) || !killer?.setAttribute) return;
-    const pile = PILES.find((entry) => entry.guardianId === npcId);
-    if (!pile) return;
-    setBit(killer, pile.deadBit);
+    if (!GUARDIAN_IDS.has(npcId) || !killer?.setAttribute) return;
+    const egg = EGGS.find((entry) => entry.guardianId === npcId);
+    if (!egg) return;
+    setEgg(killer, egg, 3);
     const map = trackedNpcs.get(killer);
     if (map) {
       for (const [key, trackedNpc] of map) {
@@ -1089,21 +1171,63 @@ module.exports = function registerScrambledQuest(api) {
   }
 
   function handleLogin({ player }) {
-    ensureQuestNpcs(player);
+    migrate(player);
+    // A relog during the egg-fall scene resumes just after it: the egg has fallen.
+    if (quest.getStage(player) === STAGE_CONFIRMED) setStage(player, STAGE_EGG_FELL);
+    sendStateVarbits(player);
+    player.getPacketSender().sendConfig(JIGSAW_PROGRESS_VARP, jigsawMask(player));
+    if (quest.getStage(player) === STAGE_FIXING && jigsawComplete(player)) finishJigsaw(player);
+    ensureSpawns(player);
     ensureGroundItems(player);
     refreshQuestList(player);
   }
 
+  /** Cancel the egg-fall pre-scene timer and leave no half-open fade on logout/death. */
+  function handleTransitionInterrupted({ player } = {}) {
+    if (!player) return;
+    Scenes.cancel(player);
+    if (Scenes.get(player)) {
+      Scenes.end(player, true);
+      return;
+    }
+    Scenes.closeFade(player);
+    Scenes.controls(player, false);
+    player.getPacketSender?.().sendCameraReset?.();
+  }
+
   function handleLogout({ player }) {
-    if (player) removeAllTracked(player);
+    if (!player) return;
+    handleTransitionInterrupted({ player });
+    removeAllTracked(player);
+  }
+
+  /**
+   * Version 1 used stages 0..8 for the same route (1 started, 2 inspected, ... 8 complete).
+   * Version 2 uses the captured 0..30 scale. Saves without the version marker are v1.
+   */
+  function migrate(player) {
+    if ((Number(player.getAttribute(VERSION_ATTRIBUTE)) || 0) >= VERSION) return;
+    const stage = quest.getStage(player);
+    const mapped = OLD_STAGE_MAP.get(stage);
+    if (mapped !== undefined) quest.setStage(player, mapped);
+    player.setAttribute(VERSION_ATTRIBUTE, VERSION);
+  }
+
+  function sendStateVarbits(player) {
+    const stage = quest.getStage(player);
+    const sender = player.getPacketSender();
+    for (const [key, config] of MAN_CONFIG) sender.sendVarbit(config.varbit, man(player, key));
+    for (const egg of EGGS) sender.sendVarbit(egg.varbit, eggValue(player, egg));
+    sender.sendVarbit(VARBIT_NAILS, nailsTaken(player) ? 1 : 0);
+    sender.sendVarbit(VARBIT_EGG_VISIBLE, stage < STAGE_EGG_FELL || stage >= STAGE_FINALE ? 1 : 0);
   }
 
   // ==========================================================================
   // Journal
   // ==========================================================================
 
-  function manLine(player, bit, label) {
-    return hasBit(player, bit)
+  function manLine(player, key, label) {
+    return man(player, key) >= 7
       ? `<str>${label} has gone to the temple.</str>`
       : `${label} still needs my help.`;
   }
@@ -1120,18 +1244,32 @@ module.exports = function registerScrambledQuest(api) {
         "<col=ff0000>QUEST COMPLETE!</col>",
       ];
     }
+    if (stage >= STAGE_FIXED) {
+      return [
+        "<str>I rallied King's men and rebuilt the broken egg.</str>",
+        "",
+        "I should speak to one of <col=800000>King's men</col> at the temple.",
+      ];
+    }
+    if (stage >= STAGE_FIXING) {
+      return [
+        "<str>All of the replacement eggs broke, so the only option is to</str>",
+        "<str>put Humphrey Dumphrey back together again.</str>",
+        "",
+        "I should fix the <col=800000>broken egg</col> at the temple.",
+      ];
+    }
     if (stage >= STAGE_JUDGED) {
       return [
-        "<str>I rallied King's men and gathered eggs from a large chicken,</str>",
-        "<str>a red dragon and a jaguar, but every replacement broke too.</str>",
+        "<str>I gathered eggs from a large chicken, a red dragon and a jaguar,</str>",
+        "<str>but every replacement broke too.</str>",
         "",
-        "I must help put <col=800000>Humphrey Dumphrey</col> back together again.",
+        "I should speak to one of <col=800000>King's men</col> at the temple.",
       ];
     }
     if (stage >= STAGE_GIVEN) {
       return [
-        "<str>I found a large chicken egg, a dragon egg and a jaguar egg</str>",
-        "<str>and King's men have prepared all three to be judged.</str>",
+        "<str>King's men have prepared all three replacement eggs.</str>",
         "",
         "I should speak to one of <col=800000>King's men</col> at the temple.",
       ];
@@ -1141,15 +1279,9 @@ module.exports = function registerScrambledQuest(api) {
         "<str>There is no way to put the broken egg back together, so King's</str>",
         "<str>men want to find a replacement egg to judge.</str>",
         "",
-        hasBit(player, BIT_CHICKEN_TAKEN) || hasBit(player, BIT_CHICKEN_GIVEN)
-          ? "<str>A large chicken egg.</str>"
-          : "A large chicken egg from the farm south of <col=800000>Tal Teok</col>.",
-        hasBit(player, BIT_DRAGON_TAKEN) || hasBit(player, BIT_DRAGON_GIVEN)
-          ? "<str>A dragon egg.</str>"
-          : "A dragon egg from the <col=800000>Dragon Nest</col> to the east.",
-        hasBit(player, BIT_JAGUAR_TAKEN) || hasBit(player, BIT_JAGUAR_GIVEN)
-          ? "<str>A jaguar egg.</str>"
-          : "A jaguar egg from the campsite by the mine east of town.",
+        eggValue(player, EGGS[0]) >= 3 ? "<str>A large chicken egg.</str>" : "A large chicken egg from the farm south of <col=800000>Tal Teok</col>.",
+        eggValue(player, EGGS[2]) >= 3 ? "<str>A dragon egg.</str>" : "A dragon egg from the <col=800000>Dragon Nest</col> to the east.",
+        eggValue(player, EGGS[1]) >= 3 ? "<str>A jaguar egg.</str>" : "A jaguar egg from the campsite by the mine east of town.",
       ];
     }
     if (stage >= STAGE_GATHERED) {
@@ -1163,9 +1295,9 @@ module.exports = function registerScrambledQuest(api) {
       return [
         "King asked me to rally her men to help the broken egg:",
         "",
-        manLine(player, BIT_ACATZIN_DEPARTED, "Acatzin (in the inn)"),
-        manLine(player, BIT_NEZKETI_DEPARTED, "Nezketi (in the temple south of the inn)"),
-        manLine(player, BIT_KAUAYOTL_DEPARTED, "Kauayotl (at the eastern entrance)"),
+        manLine(player, MAN_ACATZIN, "Acatzin (in the inn)"),
+        manLine(player, MAN_NEZKETI, "Nezketi (in the temple south of the inn)"),
+        manLine(player, MAN_KAUAYOTL, "Kauayotl (at the eastern entrance)"),
       ];
     }
     if (stage >= STAGE_INSPECTED) {
@@ -1176,7 +1308,7 @@ module.exports = function registerScrambledQuest(api) {
         "I should look for help in <col=800000>Tal Teklan</col>.",
       ];
     }
-    if (stage >= STAGE_STARTED) {
+    if (stage >= STAGE_EGG_FELL) {
       return [
         "<str>Alan left me to look after his egg while he gathered food,</str>",
         "<str>but it fell from the wall and smashed.</str>",
@@ -1190,7 +1322,14 @@ module.exports = function registerScrambledQuest(api) {
     ];
   }
 
-  api.persistAttribute(BITS_ATTRIBUTE);
+  api.persistAttribute(BITS_ATTRIBUTE, 0);
+  api.persistAttribute(VERSION_ATTRIBUTE, 0);
+  api.persistAttribute(JIGSAW_ATTRIBUTE, 0);
+  for (const key of MAN_CONFIG.keys()) {
+    api.persistAttribute(stateKey("man", key), 0);
+  }
+  for (const egg of EGGS) api.persistAttribute(stateKey("egg", egg.key), 0);
+  api.persistAttribute(stateKey("misc", "nails"), 0);
 
   function grantReward(player) {
     player.getSkillManager().addExperiences(Skill.CONSTRUCTION, 5000);
@@ -1202,7 +1341,7 @@ module.exports = function registerScrambledQuest(api) {
     key: "scrambled",
     name: "Scrambled!",
     varpId: VARP_SCRAMBLED,
-    varbitId: VARBIT_SCRAMBLED_STAGE,
+    varbitId: VARBIT_STAGE,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
@@ -1222,22 +1361,29 @@ module.exports = function registerScrambledQuest(api) {
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
-  api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onInterfaceActionClick(handleJigsawTrigger);
   api.onNpcInteraction("Citizen", { "Talk-to": handleCitizenTalk });
   api.onNpcInteraction("Farmer", { "Talk-to": handleCitizenTalk });
-  api.onNpcInteraction("Humphrey Dumphrey", { Inspect: inspectEgg, "Talk-to": petEggTalk });
+  api.onNpcInteraction("Humphrey Dumphrey", { Inspect: inspectEgg, Fix: fixEgg, "Talk-to": petEggTalk });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject("Damiana water", "Oven", handleDamianaWaterOnOven);
-  api.onItemOnObject("Bowl", "Fountain", handleBowlOnFountain);
+  api.onItemOnObject("Damiana water", "Stove", handleDamianaWaterOnOven);
+  api.onItemOnObject("Bowl", "Water Pump", handleBowlOnWater);
+  api.onItemOnObject("Bowl", "Fountain", handleBowlOnWater);
+  api.onItemOnObject(useAxeOnWhetstone);
   api.onObjectInteraction("Damiana", { Pick: pickDamiana });
   api.onObjectInteraction("Workbench", { Search: searchWorkbench });
-  api.onGroundItemPickup(handleGroundItemPickup);
+  api.onObjectInteraction("Broken whetstone", { Repair: repairWhetstone });
+  api.onObjectInteraction("Cart", { Repair: repairCart });
+  api.onObjectInteraction("Eggs", { Search: searchEggPile });
   api.onNpcDeath(handleNpcDeath);
+  api.onZoneEnter(TAL_TEKLAND_ZONE, handleZoneEnter);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onPlayerDeath(handleTransitionInterrupted);
 };

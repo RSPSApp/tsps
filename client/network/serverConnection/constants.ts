@@ -13,6 +13,12 @@ export const getEnv = (key: string): string | undefined =>
 
 export const DEFAULT_URL = getDefaultWsUrl();
 export const LOGIN_CONNECT_RETRY_DELAY_MS = 1000;
+/**
+ * How often the client says it is still there. The server drops a connection that goes quiet
+ * (a phone that sleeps or changes network never closes its socket, least of all through a
+ * tunnel), and the player could not log back in while that session lived on.
+ */
+export const KEEPALIVE_INTERVAL_MS = 5000;
 /** LOGIN packet flags: ask for a "Stay logged in" token. */
 export const LOGIN_FLAG_REMEMBER = 1;
 /** LOGIN packet flags: the password field holds that token. */

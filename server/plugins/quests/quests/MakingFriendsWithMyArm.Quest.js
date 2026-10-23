@@ -552,6 +552,9 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
   function talkToMyArm(event) {
     const { player, npcId } = event;
     if (!MY_ARM_NPC_IDS.has(npcId)) return false;
+    // Secrets of the North stages 12-14 own My Arm for its Weiss information scene.
+    const sotnStage = Number(player.getAttribute("quest.secrets_of_the_north.stage")) || 0;
+    if (sotnStage >= 12 && sotnStage <= 14) return false;
     const stage = quest.getStage(player);
     if (npcId === MY_ARM_PRISON_NPC_ID) {
       // 8411 is My Arm's Big Adventure's spawn id too: only own it in the prison cell.

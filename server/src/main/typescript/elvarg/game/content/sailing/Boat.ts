@@ -25,6 +25,8 @@ export interface BoatInit {
     entityIndex: number;
     configId: number;
     ownerPlayerId: number;
+    /** A fixed quest/world ship rather than a player's moving boat. */
+    static?: boolean;
     /** Chunk coords of the deck scene's centre chunk, where the boat template is copied to. */
     deckRegionX: number;
     deckRegionY: number;
@@ -56,6 +58,8 @@ export class Boat {
     readonly entityIndex: number;
     readonly configId: number;
     readonly ownerPlayerId: number;
+    /** A fixed quest/world ship rather than a player's moving boat. */
+    readonly static: boolean;
     /** Shown only to its owner (a boat in the shipyard), with anyone aboard it. */
     ownerOnly = false;
     readonly deckRegionX: number;
@@ -86,6 +90,7 @@ export class Boat {
         this.entityIndex = init.entityIndex;
         this.configId = init.configId;
         this.ownerPlayerId = init.ownerPlayerId;
+        this.static = init.static === true;
         this.deckRegionX = init.deckRegionX;
         this.deckRegionY = init.deckRegionY;
         this.sizeX = init.sizeX;

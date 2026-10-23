@@ -29,9 +29,9 @@ export class TouchInputAdapter {
         this.recognizer.setConfig({ enableCameraOrbit: enabled });
     }
 
-    onFingerDown(x: number, y: number, timeMs: number): void {
+    onFingerDown(x: number, y: number, timeMs: number, orbitOnly = false): void {
         this.clearLongPressTimer();
-        this.applyIntents(this.recognizer.fingerDown(x, y, timeMs));
+        this.applyIntents(this.recognizer.fingerDown(x, y, timeMs, orbitOnly));
         this.scheduleLongPressCheck();
     }
 

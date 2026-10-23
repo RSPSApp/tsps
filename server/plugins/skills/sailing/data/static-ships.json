@@ -1,0 +1,156 @@
+[
+  {
+    "id": "the_zenith",
+    "configId": 9,
+    "sizeX": 16,
+    "sizeZ": 32,
+    "templateChunkX": 485,
+    "templateChunkY": 796,
+    "deckLevel": 1,
+    "walkable": "template",
+    "hull": {
+      "offsetX": 0,
+      "offsetY": 0,
+      "width": 2048,
+      "length": 4096
+    },
+    "deckCentreX": 960,
+    "deckCentreY": 2240,
+    "boardingTile": {
+      "x": 7,
+      "y": 14
+    },
+    "hitpoints": 260,
+    "hostile": false,
+    "fineX": 367936,
+    "fineY": 320960
+  },
+  {
+    "id": "red_reef_pirate_1",
+    "configId": 13,
+    "sizeX": 8,
+    "sizeZ": 16,
+    "templateChunkX": 483,
+    "templateChunkY": 795,
+    "deckLevel": 1,
+    "walkable": "all",
+    "hull": {
+      "offsetX": 0,
+      "offsetY": -256,
+      "width": 384,
+      "length": 1280
+    },
+    "deckCentreX": 448,
+    "deckCentreY": 1024,
+    "boardingTile": {
+      "x": 3,
+      "y": 8
+    },
+    "hitpoints": 120,
+    "hostile": true,
+    "fineX": 362176,
+    "fineY": 301856
+  },
+  {
+    "id": "red_reef_pirate_2",
+    "configId": 14,
+    "sizeX": 8,
+    "sizeZ": 16,
+    "templateChunkX": 483,
+    "templateChunkY": 795,
+    "deckLevel": 1,
+    "walkable": "all",
+    "hull": {
+      "offsetX": 0,
+      "offsetY": -256,
+      "width": 384,
+      "length": 1280
+    },
+    "deckCentreX": 448,
+    "deckCentreY": 1024,
+    "boardingTile": {
+      "x": 3,
+      "y": 8
+    },
+    "hitpoints": 120,
+    "hostile": true,
+    "fineX": 362624,
+    "fineY": 302080
+  },
+  {
+    "id": "pandemonium_tutorial_ship",
+    "configId": 1,
+    "sizeX": 8,
+    "sizeZ": 8,
+    "templateChunkX": 480,
+    "templateChunkY": 807,
+    "deckLevel": 1,
+    "walkableTiles": [
+      [
+        3,
+        2
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        4
+      ]
+    ],
+    "deckLocs": [
+      {
+        "id": 59554,
+        "x": 3,
+        "y": 4,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0,
+        "part": "helm"
+      },
+      {
+        "id": 59530,
+        "x": 3,
+        "y": 3,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0,
+        "part": "sails"
+      },
+      {
+        "id": 29506,
+        "x": 3,
+        "y": 5,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0,
+        "part": "sailCloth"
+      },
+      {
+        "id": 59663,
+        "x": 3,
+        "y": 2,
+        "level": 1,
+        "shape": 10,
+        "rotation": 0
+      }
+    ],
+    "hull": {
+      "offsetX": 0,
+      "offsetY": 0,
+      "width": 128,
+      "length": 384
+    },
+    "deckCentreX": 448,
+    "deckCentreY": 448,
+    "boardingTile": {
+      "x": 3,
+      "y": 4
+    },
+    "hitpoints": 20,
+    "hostile": false,
+    "fineX": 387264,
+    "fineY": 410944
+  }
+]

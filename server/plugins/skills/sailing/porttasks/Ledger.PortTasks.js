@@ -106,8 +106,10 @@ function complete(player, index, task, random = Math.random) {
   held[index] = null;
   common.setSlots(player, held);
   player.getSkillManager().addExperiences(Skill.SAILING, task.xp);
-  give(player, rewardBag(task, random));
-  if (random() < SHARK_PAINT_CHANCE) give(player, SHARK_PAINT);
+  if (task.noReward !== true) {
+    give(player, rewardBag(task, random));
+    if (random() < SHARK_PAINT_CHANCE) give(player, SHARK_PAINT);
+  }
   countCompletion(player);
   replaceOnBoard(player, task);
   player.sendMessage(`You have finished the ${common.blue(task.name)} port task.`);

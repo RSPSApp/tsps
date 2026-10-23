@@ -423,7 +423,7 @@ test('Shield gang doors claim the shared door toggle and cross on the axis their
   const tile = () => [p.getLocation().getX(), p.getLocation().getY()];
   at(3185, 3387);
   assert.equal(toggle(core.ObjectIdentifiers.DOOR_71, 3185, 3388, 3).handled, true);
-  assert.deepEqual(tile(), [3185, 3387]); assert.equal(p.messages.at(-1), 'This door is locked from the inside.');
+  assert.deepEqual(tile(), [3185, 3387]); assert.equal(p.messages.at(-1), 'This door seems to be locked from the inside.');
   p.attributes.set('shield-of-arrav.gang', 2); q.quest.setStage(p, 4);
   toggle(core.ObjectIdentifiers.DOOR_71, 3185, 3388, 3); assert.deepEqual(tile(), [3185, 3388]);
   toggle(core.ObjectIdentifiers.DOOR_71, 3185, 3388, 3); assert.deepEqual(tile(), [3185, 3387]);

@@ -23,7 +23,8 @@ before(async () => {
   const realApi = PluginManager.createApi("RunecraftingTest");
   const base = {
     ...realApi,
-    onPlayerLogin: (handler) => (handlers.login = handler),
+    // The tiaras' login sync registers first; the pouches' one comes after it.
+    onPlayerLogin: (handler) => (handlers.login ??= handler),
     core: PluginManager.getCoreApi(),
     onObjectInteraction: (name, actions) => {
       Object.entries(actions).forEach(([option, handler]) => (handlers[`${name}:${option}`] = handler));

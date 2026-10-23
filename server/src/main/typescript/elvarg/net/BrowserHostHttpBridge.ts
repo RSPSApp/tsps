@@ -18,7 +18,11 @@ addEventListener("message", function connect(event) {
   const port = event.ports[0];
   let sessionId;
   let closed = false;
-  let sendTail = Promise.resolve();
+  // One send in flight; frames that arrive meanwhile go out together in the next.
+  // Keyboard movement sends every 20ms, so a send per frame fell behind whenever a
+  // WebContainer request took longer than that, and the backlog grew with players.
+  const outbox = [];
+  let sending = false;
   let contentRequests = 0;
   // The host pauses polling while its peer drains slowly, so unsent frames stay
   // queued on the server, where outbound backpressure can see them.
@@ -84,21 +88,41 @@ addEventListener("message", function connect(event) {
   const poll = async () => {
     while (!closed) await (paused || retrying(pollOnce));
   };
+  const sendOutbox = async () => {
+    sending = true;
+    try {
+      while (!closed && outbox.length) {
+        // Client packets are self-delimiting, so the server decodes a batch as it does one frame.
+        let count = 0;
+        let bytes = 0;
+        while (count < outbox.length && (count === 0 || bytes + outbox[count].byteLength <= ${MAX_GAME_MESSAGE_BYTES})) {
+          bytes += outbox[count++].byteLength;
+        }
+        const body = new Uint8Array(bytes);
+        let offset = 0;
+        for (const frame of outbox.splice(0, count)) {
+          body.set(new Uint8Array(frame), offset);
+          offset += frame.byteLength;
+        }
+        // A retry repeats the same batch and seq, so the server can drop a duplicate.
+        const seq = ++sendSeq;
+        await retrying(async () => {
+          const response = await fetch("/browser-host/session/" + sessionId + "/send?seq=" + seq, { method: "POST", body });
+          if (!response.ok) throw new Error("WebContainer HTTP send failed: " + response.status);
+        });
+        port.postMessage({ type: "sent", bytes });
+      }
+    } finally {
+      sending = false;
+    }
+  };
   port.onmessage = (event) => {
     if (closed) return;
     if (event.data?.type === "content") {
       void fetchContent(event.data);
     } else if (event.data?.type === "message" && event.data.data instanceof ArrayBuffer) {
-      const data = event.data.data;
-      const bytes = data.byteLength;
-      sendTail = sendTail.then(async () => {
-        const seq = ++sendSeq;
-        await retrying(async () => {
-          const response = await fetch("/browser-host/session/" + sessionId + "/send?seq=" + seq, { method: "POST", body: data });
-          if (!response.ok) throw new Error("WebContainer HTTP send failed: " + response.status);
-        });
-        port.postMessage({ type: "sent", bytes });
-      }).catch(fail);
+      outbox.push(event.data.data);
+      if (!sending) sendOutbox().catch(fail);
     } else if (event.data?.type === "pause") {
       if (!paused) paused = new Promise((resolve) => { resumePoll = resolve; });
     } else if (event.data?.type === "resume") {

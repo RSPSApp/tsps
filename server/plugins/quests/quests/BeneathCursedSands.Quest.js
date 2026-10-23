@@ -6,32 +6,26 @@
  * answers (requirements, inventory space, puzzle state), the stage-direction
  * handlers, the object/item interactions, the quest spawns and the reward.
  *
- * Stage varbit: 13841 "bcs" (varp 3421 "bcs_primary", bits 0-8). Evidence: the
- * cache's own BCS multi-locs and multi-NPCs are driven by this varbit and their
- * transform tables pin the values used here - the Maisa placeholders show her
- * at 4-10 (camp), 12-20 (necropolis), 22-24 (camp), 68-70 and 78-84 (Nardah),
- * 92-96 (necropolis) and 102-104 (Sophanem); the furnace is inspectable at 26,
- * refuels at 28, lights at 30 and is lit from 31; the pillar is inspectable
- * 26-36 and shows the emblem at 38; the well searches 26-38; the tomb entry
- * opens at 25/37; the key urn searches 54-56; the altar is usable at 63; the
- * chemistry table at 82; the lily shows at lily_type 1. Sibling varbits of varp
- * 3421 are written separately: 13850 bcs_lily_type, 13853 bcs_owed_partisan and
+ * Stage varbit: 13841 "bcs" (varp 3421 "bcs_primary", bits 0-8). Recording 101
+ * shows every milestone as an even value (2,4,6,...,108); the cache's own
+ * multi-locs and multi-NPCs use the same table. Sibling varbits of varp 3421
+ * are written separately: 13850 bcs_lily_type, 13853 bcs_owed_partisan and
  * 13854 bcs_owed_circlet.
  *
- * Stages (varbit 13841): 0 not started, 1 message received, 4 Maisa met at the
- * camp, 5 leaving for the necropolis, 11 at the necropolis, 12 entry inspected,
- * 13 guard fight, 14 guard defeated, 22 back at the camp, 25 in the Ruins of
- * Ullek, 26 furnace inspected, 28 refuelled, 30 ready to light, 31 lit,
- * 32 stone tablet taken, 33 chest dug up, 34 chest opened (scarab mould),
- * 35 scarab emblem smelted, 37 tomb opened, 38 entered the tomb (Scarab
- * Mages), 39 mages defeated, 40 first lever, 41 second lever (door open),
- * 46 urn chamber, 47 urn puzzle solved,
- * 49 Mehhar named, 54 key known, 55 rusty key taken, 57 upper door open
- * (Champion), 58 Champion defeated, 63 upper chamber, 64 High Priest of
- * Scabaras freed, 68 Nardah, 70 lily hunt, 72 Roger met, 74 Roger fed,
- * 76 lily picked, 82 cure equipment started, 84 cure crate taken,
- * 85 crate delivered, 92 necropolis finale, 94 citizens freed, 98 Menaphite
- * Akh fight, 100 Akh defeated, 102 Sophanem finale, 105 complete.
+ * Stages (varbit 13841): 2 message received, 4 message slipped, 6 message read,
+ * 8 Maisa intro, 10 camp talk done, 12 departure, 14 necropolis, 16 entry
+ * inspected, 18 guard fight, 20 guard defeated, 22 post-fight talk, 24 camp
+ * leads, 26 Ruins of Ullek, 28 furnace inspected, 30 refuelled, 32 lit/emblem
+ * hunt, 34 emblem crafted, 36 emblem placed, 38 rotation confirmed, 40 tomb
+ * entered, 42 mages defeated, 44 first lever, 46 levers/riddle door, 48 riddle
+ * solved, 50 Mehhar, 52 tomb history, 54 key known, 56 key taken, 58 upper
+ * door open, 60 Champion fight, 62 Champion defeated, 64 incantation,
+ * 66 priest information, 68 Scabaras High Priest freed, 70 Nardah, 72 Maisa
+ * departs, 74 Roger met, 76 Roger fed, 78 lily picked, 80 lily given, 82 cure
+ * equipment started, 84 chemistry solved, 86 Maisa departs, 88 crate taken,
+ * 90 crate delivered, 92 necropolis finale, 94 citizens freed, 96 citizens
+ * walking, 98 Akh fight, 100 Akh defeated, 102 Sophanem finale, 104 meeting,
+ * 106 Maisa tomb meeting, 108 complete.
  *
  * Rewards per the OSRS Wiki: 2 Quest points, 50,000 Agility XP, the Keris
  * partisan and the Circlet of water (if the inventory is full they are owed and
@@ -43,8 +37,9 @@
  * and placement.
  *
  * Gaps / approximations:
- *  - No cutscenes: the stage directions set stage/teleport/spawn and the
- *    transcript lines play in the chatbox.
+ *  - Cutscene cameras: the captured move/look pairs for the necropolis, guard,
+ *    tomb, finale/Akh and Sophanem scenes are sent through QuestScenes; actor
+ *    positions, sub-tick arcs and all fades are not fully reconstructed.
  *  - This cache places no interactive Jaltevas Pyramid exterior, so the
  *    "inspect the blocked entry" beat is bound to the necropolis rubble
  *    (44003): climbing it plays the blocked-entry messages and sets the
@@ -54,12 +49,13 @@
  *  - The cache's camp Maisa (11474) is a static world spawn, so she is visible
  *    before the quest starts and after she should have left; variant selection
  *    keeps her talk benign outside her chapters.
- *  - The chest's seven-digit lock and the pillar's rotation interface are not
- *    simulated: the chest always opens (passcode 1118513) and the emblem is
- *    placed facing down. The urn riddle is not enforced: any emblem may go in
- *    any urn and the lever accepts the puzzle once all four are slotted.
- *  - The two tomb levers must be within 60s in OSRS; here pulling both distinct
- *    levers (any order) opens the door and the dart trap never fires.
+ *  - The chest uses the captured numeric code 1118513. The pillar opens
+ *    interface 750 and requires three captured clicks (varbit 13849 18 -> 15)
+ *    before the entry unlocks; the underlying 3D rotation is not reconstructed.
+ *    The urn riddle is enforced: the four riddle slots must hold scarab/human/
+ *    baboon/crocodile in the 749-derived order before the lever opens the inner
+ *    door. The two tomb levers share the captured 100-tick (60s) window; a late
+ *    second lever fires the captured dart graphic/sound and resets both bits.
  *  - Combat is real NPC kills (Head Menaphite Guard 11529, Scarab Mage 11508 x2,
  *    Champion of Scabaras 11483, Menaphite Akh 11492) but boss specials (shadow
  *    rift, lightning, prayer punishment, shadow) are not scripted.
@@ -90,55 +86,67 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   // Stage values / varbits
   // ==========================================================================
 
+  const VARBIT_INVESTIGATED_ENTRY = 13844; // bcs_investigated_entry, varp 3421 bit 12
+  const VARBIT_FOUND_MOULD = 13847; // bcs_found_mould, varp 3421 bits 15-17
   const VARBIT_LILY = 13850; // bcs_lily_type
   const VARBIT_OWED_PARTISAN = 13853; // bcs_owed_partisan
   const VARBIT_OWED_CIRCLET = 13854; // bcs_owed_circlet
 
+  // Captured varbit 13841 values (recording 101): every milestone is even.
   const STAGE_NOT_STARTED = 0;
-  const STAGE_STARTED = 1;
-  const STAGE_CAMP = 4;
-  const STAGE_DEPARTING = 5;
-  const STAGE_NECROPOLIS = 11;
-  const STAGE_ENTRY_INSPECTED = 12;
-  const STAGE_GUARD_FIGHT = 13;
-  const STAGE_GUARD_DEFEATED = 14;
+  const STAGE_STARTED = 2;
+  const STAGE_MESSAGE = 4;
+  const STAGE_MESSAGE_READ = 6;
+  const STAGE_MAISA_INTRO = 8;
+  const STAGE_CAMP = 10;
+  const STAGE_DEPARTING = 12;
+  const STAGE_NECROPOLIS = 14;
+  const STAGE_ENTRY_INSPECTED = 16;
+  const STAGE_GUARD_FIGHT = 18;
+  const STAGE_GUARD_DEFEATED = 20;
   const STAGE_CAMP_LEADS = 22;
-  const STAGE_RUINS = 25;
-  const STAGE_FURNACE_INSPECTED = 26;
-  const STAGE_FURNACE_REFUELLED = 28;
+  const STAGE_CAMP_TALKED = 24;
+  const STAGE_RUINS = 26;
+  const STAGE_FURNACE_INSPECTED = 28;
+  const STAGE_FURNACE_REFUELLED = 30;
   const STAGE_FURNACE_TO_LIGHT = 30;
-  const STAGE_FURNACE_LIT = 31;
+  const STAGE_FURNACE_LIT = 32;
   const STAGE_TABLET = 32;
-  const STAGE_CHEST_DUG = 33;
-  const STAGE_MOULD = 34;
-  const STAGE_EMBLEM = 35;
-  const STAGE_TOMB_OPEN = 37;
-  const STAGE_TOMB_ENTERED = 38;
-  const STAGE_MAGES_DEAD = 39;
-  const STAGE_LEVER_ONE = 40;
-  const STAGE_LEVERS_DONE = 41;
+  const STAGE_CHEST_DUG = 32;
+  const STAGE_MOULD = 32;
+  const STAGE_EMBLEM = 34;
+  const STAGE_TOMB_OPEN = 36;
+  const STAGE_EMBLEM_CONFIRMED = 38;
+  const STAGE_TOMB_ENTERED = 40;
+  const STAGE_MAGES_DEAD = 42;
+  const STAGE_LEVER_ONE = 44;
+  const STAGE_LEVERS_DONE = 46;
   const STAGE_URN_CHAMBER = 46;
-  const STAGE_URN_PUZZLE = 47;
-  const STAGE_SPIRIT_MET = 49;
+  const STAGE_URN_PUZZLE = 48;
+  const STAGE_SPIRIT_MET = 50;
   const STAGE_KEY_KNOWN = 54;
-  const STAGE_KEY_TAKEN = 55;
-  const STAGE_UPPER_OPEN = 57;
-  const STAGE_CHAMPION_DEAD = 58;
-  const STAGE_ALTAR = 63;
-  const STAGE_PRIEST_FREED = 64;  const STAGE_NARDAH = 68;
-  const STAGE_LILY_HUNT = 70;
-  const STAGE_CROC_MET = 72;
-  const STAGE_ROGER_FED = 74;
-  const STAGE_LILY_PICKED = 76;
+  const STAGE_KEY_TAKEN = 56;
+  const STAGE_UPPER_OPEN = 58;
+  const STAGE_CHAMPION_FIGHT = 60;
+  const STAGE_CHAMPION_DEAD = 62;
+  const STAGE_ALTAR = 62;
+  const STAGE_PRIEST_FREED = 68;
+  const STAGE_NARDAH = 70;
+  const STAGE_LILY_HUNT = 72;
+  const STAGE_CROC_MET = 74;
+  const STAGE_ROGER_FED = 76;
+  const STAGE_LILY_PICKED = 78;
   const STAGE_EQUIPMENT = 82;
-  const STAGE_CURE_TAKEN = 84;
-  const STAGE_CRATE_DELIVERED = 85;
+  const STAGE_CHEMISTRY_DONE = 84;
+  const STAGE_MAISA_DEPARTS = 86;
+  const STAGE_CURE_TAKEN = 88;
+  const STAGE_CRATE_DELIVERED = 90;
   const STAGE_FINALE = 92;
   const STAGE_CITIZENS_FREED = 94;
   const STAGE_AKH_FIGHT = 98;
   const STAGE_AKH_DEAD = 100;
   const STAGE_SOPHANEM = 102;
-  const STAGE_COMPLETE = 105;
+  const STAGE_COMPLETE = 108;
 
   // ==========================================================================
   // Ids
@@ -155,17 +163,30 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   const ZAHUR = NpcIdentifiers.ZAHUR; // 4753
   const MEHHAR = NpcIdentifiers.MEHHAR; // 11479
   const HIGH_PRIEST_OF_SCABARAS = NpcIdentifiers.HIGH_PRIEST_OF_SCABARAS; // 11480
+  const HIGH_PRIEST_CUTSCENE = 11481;
+  const CHAMPION_CUTSCENE = 11482;
   const HIGH_PRIEST_IDS = new Set([
     NpcIdentifiers.HIGH_PRIEST_2, // 4206, the town High Priest (cache transform)
     NpcIdentifiers.HIGH_PRIEST_4, // 11502
   ]);
-  const OSMAN = NpcIdentifiers.OSMAN; // 1809, the indexed Osman; 11486 has no dialogue index entry
+  const OSMAN = NpcIdentifiers.OSMAN; // 1809, the indexed Osman (town/Contact)
+  const OSMAN_BCS = NpcIdentifiers.OSMAN_10; // 11486, captured raw/content id; visual 11488
+  const OSMAN_BCS_IDS = new Set([11486, 11488]); // raw/content + visual multinpc aliases
   const MENAPHITE_AKH = NpcIdentifiers.MENAPHITE_AKH_3; // 11492, level 351
   const SCARAB_MAGE = NpcIdentifiers.SCARAB_MAGE_3; // 11508, level 119
   const CHAMPION_OF_SCABARAS = NpcIdentifiers.CHAMPION_OF_SCABARAS_2; // 11483, level 379
   const HEAD_MENAPHITE_GUARD = NpcIdentifiers.HEAD_MENAPHITE_GUARD_2; // 11529, level 174
-  const CITIZEN = NpcIdentifiers.CITIZEN; // 11533
-  const WORLD_CITIZEN = 11540; // the Citizen spawned by npc-spawns.json
+  const CITIZEN = 11537; // bcs_necropolis_citizen_5, Quest Helper's citizen anchor
+  const BCS_NECROPOLIS_CITIZEN_IDS = new Set([
+    CITIZEN,
+    NpcIdentifiers.CITIZEN, // 11533
+    11534, // bcs_necropolis_citizen_2
+    11535, // bcs_necropolis_citizen_3
+    11536, // bcs_necropolis_citizen_4
+    11538, // bcs_necropolis_citizen_6
+    11539, // bcs_necropolis_citizen_7
+    11540, // bcs_necropolis_citizen_8, also spawned by npc-spawns.json
+  ]);
   const ROGER = 11514; // bcs_crocodile_named, "Roger"
 
   const MESSAGE_ITEM = ItemIdentifiers.MESSAGE_8; // 26942
@@ -234,10 +255,10 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   const WELL_SEARCH = ObjectIdentifiers.WELL_23; // 43903
   const ENTRY_SEALED = ObjectIdentifiers.ENTRY_4; // 43953, Inspect
   const ENTRY_OPEN = ObjectIdentifiers.ENTRY_5; // 43954, Enter
-  const DOOR_CHAMPION = ObjectIdentifiers.DOOR_658; // 43960, z2
+  const DOOR_CHAMPION = ObjectIdentifiers.DOOR_661; // 43963, z2, normal door into the champion area
   const DOOR_LEVERS_A = ObjectIdentifiers.DOOR_659; // 43961, z0
   const DOOR_LEVERS_B = ObjectIdentifiers.DOOR_660; // 43962, z0
-  const DOOR_UPPER = ObjectIdentifiers.DOOR_661; // 43963, z2, rusty key
+  const DOOR_UPPER = ObjectIdentifiers.DOOR_658; // 43960, z2, rusty key
   const LEVER_TOMB_ON = ObjectIdentifiers.LEVER_58; // 43967
   const LEVER_TOMB_OFF = ObjectIdentifiers.LEVER_59; // 43968
   const LEVER_URN = ObjectIdentifiers.LEVER_60; // 43969
@@ -248,9 +269,45 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   const KEY_URN = ObjectIdentifiers.URN_44; // 43981
   const LILY = ObjectIdentifiers.LILY; // 43984, lily present
   const LILY_PICKED = ObjectIdentifiers.LILY_3; // 43986, already picked
+  const LILY_PLACED = 44593; // placed map loc; cache transforms it to 43984 at stage 76
   const STEPPING_STONE = ObjectIdentifiers.STEPPING_STONE_48; // 43988
-  const CHEMISTRY_TABLE = ObjectIdentifiers.CHEMISTRY_TABLE_3; // 43991
+  const CHEMISTRY_TABLE = ObjectIdentifiers.CHEMISTRY_TABLE_3; // 43991, resolved at stage 82
+  const CHEMISTRY_TABLE_PLACED = 44594; // placed multi-loc; cache transforms 82 -> 43991 (Use)
+  const PILLAR_INTERFACE = 750;
+  const PILLAR_BUTTONS = [8, 9].map((child) => (PILLAR_INTERFACE << 16) | child);
+  const LORE_TABLET_INTERFACE = 748;
+  const LORE_RIDDLE_INTERFACE = 749;
+  const CHEMISTRY_INTERFACE = 751;
+  const CHEMISTRY_BUTTONS = [25, 26, 27, 28].map((child) => (CHEMISTRY_INTERFACE << 16) | child);
+  const CHEST_CODE = 1118513; // captured resume_p_countdialog value
+  const CHEMISTRY_TARGET = { left: 12, middle: 39, right: 45 };
+  const TABLET_LORE = [
+    "",
+    "The Zamorakians are coming. We have no quarrel with them, but they",
+    "won't care. We are already preparing our defences, but should Ullek",
+    "fall, we can't let them defile Scabaras' precious artefacts. I've locked",
+    "what I can in a chest and buried it to the south. If I don't make it",
+    "through the coming storm, you'll find the chest under the",
+    "southernmost ritual pillar. Your name hides the code to unlock it.",
+    "",
+    "With love,",
+    "Sethos",
+  ];
+  const RIDDLE_LORE = [
+    "In the days that followed the great sacrifice, Osmumten was faced",
+    "with the task of ruling without the guidance of his lord. From north and",
+    "south the four avatars came, offering their support. To the one that",
+    "arrived first, he offered some linen. The one that was offered a",
+    "necklace came from just south of the goddess of companionship. The",
+    "god of isolation arrived just before the god of health and was",
+    "offered a carving. The one who arrived third came from north of the",
+    "goddess of resourcefulness but south of another. The one from the",
+    "far south arrived last, just after the one offered some wine. After",
+    "receiving their gifts and offering their guidance, the avatars",
+    "returned from whence they came. But where did they come from?",
+  ];
   const NECROPOLIS_RUBBLE = ObjectIdentifiers.RUBBLE_60; // 44003, climbable
+  const BLOCKED_ENTRY = 44008; // toa_entrance_blocked, Inspect at the Jaltevas Pyramid
   const DIG_PILLARS = new Set([
     ObjectIdentifiers.PILLAR_86, // 43994
     ObjectIdentifiers.PILLAR_87, // 43995
@@ -271,6 +328,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   const INTRO_ATTRIBUTE = "beneath-cursed-sands:maisa-intro";
   const ENTRY_INSPECTED_ATTRIBUTE = "beneath-cursed-sands:entry-inspected";
+  const TABLET_FOUND_ATTRIBUTE = "beneath-cursed-sands:tablet-found";
+  const TABLET_READ_ATTRIBUTE = "beneath-cursed-sands:tablet-read";
+  const MOULD_FOUND_ATTRIBUTE = "beneath-cursed-sands:mould-found";
   const TALKED_CITIZEN_ATTRIBUTE = "beneath-cursed-sands:talked-citizen";
   const URNS_ATTRIBUTE = "beneath-cursed-sands:urns";
   const LEVERS_ATTRIBUTE = "beneath-cursed-sands:levers";
@@ -289,6 +349,13 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     3: "crocodile",
     4: "scarab",
   };
+  const URN_EXPECTED = {
+    1: 4, // northernmost: god of isolation / scarab
+    2: 2, // centre-north: god of health / human
+    3: 1, // centre-south: some linen / baboon
+    4: 3, // southernmost: some necklace / crocodile
+  };
+
   const EMBLEM_ITEM_BY_TYPE = {
     1: BABOON_EMBLEM_ITEM,
     2: HUMAN_EMBLEM_ITEM,
@@ -308,12 +375,17 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   /** Transient: which urn the player is inspecting (message ids carry no slot). */
   const urnSlotByPlayer = new WeakMap();
+  const firstLeverAt = new WeakMap();
   /** Transient: the upper door tile an action opens (messages carry no location). */
   const doorLocationByPlayer = new WeakMap();
   /** Per-player quest spawns, keyed by a role name. */
   const trackedNpcs = new Map();
+  const chemistryState = new WeakMap();
 
   let quest;
+  const { createQuestScenes } = require("../QuestScenes");
+  const Scenes = createQuestScenes(api);
+  const cameraWatch = new WeakMap();
 
   function hasItem(player, itemId, amount = 1) {
     return player.getInventory().getAmount(itemId) >= amount;
@@ -360,7 +432,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     quest.setStage(player, value);
     syncNpcs(player);
     // Lily/owed varbits live in the same parent varp as the stage.
-    sendQuestBits(player);
+    syncQuestVarbits(player);
   }
 
   function introDone(player) {
@@ -384,13 +456,14 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   }
 
   function setUrnEmblem(player, slot, type) {
-    const next = urnState(player) | (type << ((slot - 1) * 4));
+    const shift = (slot - 1) * 4;
+    const next = (urnState(player) & ~(0xf << shift)) | ((type & 0xf) << shift);
     player.setAttribute(URNS_ATTRIBUTE, next | 0);
   }
 
   function urnPuzzleComplete(player) {
     for (let slot = 1; slot <= 4; slot++) {
-      if (urnEmblem(player, slot) === 0) return false;
+      if (urnEmblem(player, slot) !== URN_EXPECTED[slot]) return false;
     }
     return true;
   }
@@ -450,8 +523,20 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     return null;
   }
 
-  function sendQuestBits(player) {
+  /** The native bcs_found_mould values the helper reads: 1 found, 2 read, 4 mould taken. */
+  function foundMouldState(player) {
+    if (hasFlag(player, MOULD_FOUND_ATTRIBUTE) || quest.getStage(player) >= STAGE_EMBLEM) return 4;
+    if (hasFlag(player, TABLET_READ_ATTRIBUTE)) return 2;
+    if (hasFlag(player, TABLET_FOUND_ATTRIBUTE)) return 1;
+    return 0;
+  }
+
+  /** Publish the persisted BCS sub-varbits, leaving every bit sibling untouched. */
+  function syncQuestVarbits(player) {
     const sender = player.getPacketSender();
+    const stage = quest.getStage(player);
+    sender.sendVarbit(VARBIT_INVESTIGATED_ENTRY, entryInspected(player) || stage >= STAGE_ENTRY_INSPECTED ? 1 : 0);
+    sender.sendVarbit(VARBIT_FOUND_MOULD, foundMouldState(player));
     sender.sendVarbit(VARBIT_LILY, lilyType(player));
     sender.sendVarbit(VARBIT_OWED_PARTISAN, owedPartisan(player) ? 1 : 0);
     sender.sendVarbit(VARBIT_OWED_CIRCLET, owedCirclet(player) ? 1 : 0);
@@ -530,13 +615,13 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   /** Keeps the per-player quest NPCs in step with the stage. */
   function syncNpcs(player) {
     const stage = quest.getStage(player);
-    ensureNpc(player, "citizen", CITIZEN, 3344, 2736, 0, stage >= STAGE_NECROPOLIS && stage <= STAGE_CAMP_LEADS);
+    ensureNpc(player, "citizen", CITIZEN, 3347, 2718, 0, stage >= STAGE_NECROPOLIS && stage <= STAGE_CAMP_LEADS);
     ensureNpc(
       player,
       "necropolis-maisa",
       MAISA_CAMP,
-      3345,
-      2745,
+      3327,
+      2740,
       0,
       (stage >= STAGE_GUARD_FIGHT && stage <= STAGE_CAMP_LEADS) ||
         (stage >= STAGE_FINALE && stage <= STAGE_AKH_DEAD + 1)
@@ -548,17 +633,36 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       player,
       "scabaras-priest",
       HIGH_PRIEST_OF_SCABARAS,
-      3405,
-      9250,
+      3407,
+      9248,
       2,
-      stage >= STAGE_UPPER_OPEN && stage <= STAGE_PRIEST_FREED + 3
+      stage >= STAGE_CHAMPION_DEAD && stage <= STAGE_PRIEST_FREED + 3
     );
-    ensureNpc(player, "osman", OSMAN, 3380, 2789, 0, stage >= STAGE_AKH_DEAD && stage <= STAGE_AKH_DEAD + 1);
+    ensureNpc(player, "osman", OSMAN_BCS, 3371, 2801, 0, stage >= STAGE_AKH_DEAD && stage <= STAGE_AKH_DEAD + 1);
     ensureNpc(player, "guard", HEAD_MENAPHITE_GUARD, 3348, 2740, 0, stage === STAGE_GUARD_FIGHT);
-    ensureNpc(player, "mage1", SCARAB_MAGE, 3434, 9245, 0, stage === STAGE_TOMB_ENTERED);
-    ensureNpc(player, "mage2", SCARAB_MAGE, 3434, 9251, 0, stage === STAGE_TOMB_ENTERED);
-    ensureNpc(player, "champion", CHAMPION_OF_SCABARAS, 3436, 9248, 2, stage === STAGE_UPPER_OPEN);
-    ensureNpc(player, "akh", MENAPHITE_AKH, 3378, 2786, 0, stage === STAGE_AKH_FIGHT);
+    ensureNpc(player, "mage1", SCARAB_MAGE, 3438, 9247, 2, stage === STAGE_TOMB_ENTERED);
+    ensureNpc(player, "mage2", SCARAB_MAGE, 3438, 9249, 2, stage === STAGE_TOMB_ENTERED);
+    const championIntro = stage >= STAGE_UPPER_OPEN && stage < STAGE_CHAMPION_DEAD;
+    ensureNpc(
+      player,
+      "tomb-high-priest",
+      HIGH_PRIEST_CUTSCENE,
+      3410,
+      9248,
+      2,
+      stage === STAGE_TOMB_ENTERED || championIntro
+    );
+    ensureNpc(
+      player,
+      "tomb-champion",
+      CHAMPION_CUTSCENE,
+      3411,
+      9251,
+      2,
+      stage === STAGE_TOMB_ENTERED || stage === STAGE_UPPER_OPEN
+    );
+    ensureNpc(player, "champion", CHAMPION_OF_SCABARAS, 3411, 9251, 2, stage === STAGE_CHAMPION_FIGHT);
+    ensureNpc(player, "akh", MENAPHITE_AKH, 3369, 2805, 0, stage === STAGE_AKH_FIGHT);
   }
 
   // ==========================================================================
@@ -607,6 +711,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   }
 
   function selectMaisaVariant(stage, player) {
+    if (stage >= STAGE_SOPHANEM) return null;
     if (stage < STAGE_NECROPOLIS) {
       return introDone(player)
         ? "starting-off-talking-to-maisa-talking-to-maisa-again-before-the-cutscene"
@@ -623,11 +728,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (stage <= STAGE_CURE_TAKEN) {
       return "cure-me-pox-talking-to-maisa-after-zahur-explains-the-equipment";
     }
-    if (stage < STAGE_FINALE) {
-      // After the crate is delivered she waits at the necropolis for the finale.
-      setStage(player, STAGE_FINALE);
-      return "fight-with-the-menaphite-akh-talking-to-maisa-at-the-necropolis";
-    }
+    if (stage < STAGE_FINALE) return null; // the High Priest advances 90 -> 92
     if (stage <= STAGE_AKH_FIGHT - 1) return "fight-with-the-menaphite-akh-talking-to-maisa-at-the-necropolis";
     if (stage <= STAGE_AKH_DEAD + 1) {
       return "fight-with-the-menaphite-akh-talking-to-maisa-at-the-necropolis-escape-fire-during-the-fight-with-the-menaphite-akh";
@@ -637,6 +738,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   function selectZahurVariant(stage, player) {
     if (stage < STAGE_PRIEST_FREED || stage >= STAGE_COMPLETE) return null;
+    if (stage >= STAGE_CHEMISTRY_DONE && stage < STAGE_CURE_TAKEN) {
+      return "cure-me-pox-warming-up-the-equipment-talking-to-zahur-before-getting-the-crate";
+    }
     if (stage >= STAGE_CURE_TAKEN) return "cure-me-pox-warming-up-the-equipment-talking-to-zahur-again";
     if (stage === STAGE_EQUIPMENT) return "cure-me-pox-warming-up-the-equipment-talking-to-zahur-before-getting-the-crate";
     if (stage >= STAGE_LILY_PICKED) return "cure-me-pox-returning-to-zahur";
@@ -665,7 +769,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         ? "fight-with-the-menaphite-akh-talking-to-maisa-or-the-high-priest-talking-to-high-priest-before-getting-the-reward"
         : null;
     }
-    if (stage === STAGE_SOPHANEM) return "fight-with-the-menaphite-akh-talking-to-maisa-or-the-high-priest";
+    if (stage >= STAGE_SOPHANEM) return "fight-with-the-menaphite-akh-talking-to-maisa-or-the-high-priest";
     if (stage >= STAGE_CURE_TAKEN) {
       return hasItem(player, CURE_CRATE_ITEM)
         ? "cure-me-pox-talking-to-the-high-priest-of-sophanem"
@@ -679,6 +783,23 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       return "fight-with-the-menaphite-akh-defeating-the-menaphite-akh";
     }
     return null;
+  }
+
+  /**
+   * The finale Osman is spawned as raw/content 11486 (visual 11488), which has no
+   * dialogue-index entry. Dispatch Talk-to explicitly so the canonical BCS variant plays
+   * with the correct (non-town) head.
+   */
+  function handleOsmanTalk(event) {
+    const { player, npcId } = event ?? {};
+    if (!player || !OSMAN_BCS_IDS.has(npcId)) return;
+    const definition = event.definition ?? api.core.NpcDefinition.forId(npcId);
+    const action = String(definition?.getActions?.()?.[event.clickType - 1] ?? "");
+    if (action.toLowerCase() !== "talk-to") return;
+    const variant = selectOsmanVariant(quest.getStage(player));
+    if (!variant) return;
+    event.handled = true;
+    startTranscript(api, player, OSMAN_BCS, PAGE, variant, null, event.npc ?? null);
   }
 
   function selectCitizenVariant(stage) {
@@ -695,8 +816,8 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (npcId === MEHHAR) return selectMehharVariant(stage);
     if (npcId === HIGH_PRIEST_OF_SCABARAS) return selectScabarasPriestVariant(stage);
     if (HIGH_PRIEST_IDS.has(npcId)) return selectHighPriestVariant(stage, player);
-    if (npcId === OSMAN) return selectOsmanVariant(stage);
-    if (npcId === CITIZEN || npcId === WORLD_CITIZEN) return selectCitizenVariant(stage);
+    if (npcId === OSMAN || OSMAN_BCS_IDS.has(npcId)) return selectOsmanVariant(stage);
+    if (BCS_NECROPOLIS_CITIZEN_IDS.has(npcId)) return selectCitizenVariant(stage);
     return null;
   }
 
@@ -823,6 +944,54 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   }
 
   // ==========================================================================
+  // Recorded camera tracks
+  // ==========================================================================
+
+  function showCamera(player, move, look, options = {}) {
+    stopCamera(player);
+    if (options.lockControls !== false) Scenes.controls(player, true, options.cutscene !== false);
+    Scenes.camera(player, move, look);
+    const token = {};
+    cameraWatch.set(player, token);
+    if (options.next) {
+      for (const [ticks, nextMove, nextLook] of options.next) {
+        Scenes.later(player, ticks, () => {
+          if (cameraWatch.get(player) === token) Scenes.camera(player, nextMove, nextLook);
+        });
+      }
+    }
+    if (options.shake) {
+      for (const [ticks, axis, random] of options.shake) {
+        Scenes.later(player, ticks, () => {
+          if (cameraWatch.get(player) === token) player.getPacketSender().sendCameraShake(axis, random, 0, 0);
+        });
+      }
+    }
+    if (options.resetAt !== undefined) {
+      Scenes.later(player, options.resetAt, () => {
+        if (cameraWatch.get(player) === token) stopCamera(player);
+      });
+    }
+    if (options.poll !== true) return;
+    const poll = () => {
+      if (cameraWatch.get(player) !== token) return;
+      if (Scenes.chatOpen(player)) {
+        Scenes.later(player, 1, poll);
+        return;
+      }
+      stopCamera(player);
+    };
+    Scenes.later(player, 1, poll);
+  }
+
+  function stopCamera(player) {
+    if (!cameraWatch.delete(player)) return;
+    Scenes.cancel(player);
+    Scenes.controls(player, false);
+    player.getPacketSender().sendCameraReset();
+  }
+
+  // ==========================================================================
   // Action / message handling
   // ==========================================================================
 
@@ -832,16 +1001,22 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       // Wiki "unavailable" continuation markers that sit before a branch's tail;
       // letting them end the chat would strand the stage update after them.
       case "POwEyB": // Zahur: before the equipment talk
-      case "93LAJP": // Sophanem High Priest: before the crate hand-in
         event.handled = true;
+        return;
+      case "93LAJP": // Sophanem High Priest: hand over the first cure crate
+        event.handled = true;
+        if (hasItem(player, CURE_CRATE_ITEM)) player.getInventory().deleteNumber(CURE_CRATE_ITEM, 1);
+        if (quest.getStage(player) < STAGE_CRATE_DELIVERED) setStage(player, STAGE_CRATE_DELIVERED);
         return;
       // Chapter 1 - Jamila and the necropolis.
       case "BJhYfb": // Jamila slips you a message
       case "L-uj6w":
         if (!hasItem(player, MESSAGE_ITEM)) player.getInventory().adds(MESSAGE_ITEM, 1);
+        if (quest.getStage(player) < STAGE_MESSAGE) setStage(player, STAGE_MESSAGE);
         return;
       case "xBeK96": // cutscene: arriving at the necropolis
         setStage(player, STAGE_DEPARTING);
+        showCamera(player, [3322, 2743, 480], [3332, 2735, 290], { poll: true });
         return;
       case "jclHjw": // cutscene ends
         setStage(player, STAGE_NECROPOLIS);
@@ -852,14 +1027,21 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       case "tpcVMZ": // guard cutscene begins (guard path)
         event.handled = true;
         flag(player, TALKED_CITIZEN_ATTRIBUTE, true);
+        showCamera(player, [3338, 2722, 390], [3343, 2732, 90], {
+          poll: true,
+          next: [[8, [3341, 2721, 440], [3340, 2735, 140]]],
+        });
         startTranscriptDeferred(player, MAISA_CAMP, "starting-off-guard-cutscene");
         return;
       case "V9HUjH": // the fight begins
         event.handled = true;
+        stopCamera(player);
         setStage(player, STAGE_GUARD_FIGHT);
+        showCamera(player, [3331, 2730, 580], [3349, 2726, 280], { lockControls: false, poll: true });
         return;
       case "IDLAQq": // flee from the fight
         removeTracked(player, "guard");
+        stopCamera(player);
         return;
 
       // Chapter 2 - camp and ruins.
@@ -892,16 +1074,21 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         return;
       case "PCiLey": // well: stone tablet found
         if (!hasItem(player, STONE_TABLET_ITEM)) player.getInventory().adds(STONE_TABLET_ITEM, 1);
+        flag(player, TABLET_FOUND_ATTRIBUTE, true);
         if (quest.getStage(player) < STAGE_TABLET) setStage(player, STAGE_TABLET);
+        syncQuestVarbits(player);
         return;
       case "D9NBz-": // dig up an old chest
         if (!hasItem(player, CHEST_ITEM)) player.getInventory().adds(CHEST_ITEM, 1);
         if (quest.getStage(player) < STAGE_CHEST_DUG) setStage(player, STAGE_CHEST_DUG);
         return;
-      case "aCMKC-": // scarab emblem placed in the pillar
+      case "aCMKC-": // scarab emblem placed in the pillar opens the rotation puzzle
         if (hasItem(player, SCARAB_EMBLEM_ITEM)) player.getInventory().deleteNumber(SCARAB_EMBLEM_ITEM, 1);
         setStage(player, STAGE_TOMB_OPEN);
-        startTranscriptDeferred(player, MAISA_CAMP, "the-ruins-of-ullek-confirming-the-scarab-emblem-in-the-pillar");
+        openPillarPuzzle(player);
+        return;
+      case "dPVj3O": // rotation correct
+        if (quest.getStage(player) === STAGE_TOMB_OPEN) setStage(player, STAGE_EMBLEM_CONFIRMED);
         return;
 
       // Chapter 2 - the tomb.
@@ -932,16 +1119,36 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         event.handled = true;
         player.sendMessage(`The ${urnName(player)} urn is empty.`);
         return;
-      case "vRtBKz": // lever by the urns: puzzle solved
+      case "T-XWqk": // remove the emblem from a full urn
+        removeUrnEmblem(event);
+        return;
+      case "5n8so9": // swap for baboon
+        swapUrnEmblem(event, EMBLEM_TYPE_BABOON);
+        return;
+      case "-ZAIcb": // swap for human
+        swapUrnEmblem(event, EMBLEM_TYPE_HUMAN);
+        return;
+      case "PvgO3l": // swap for crocodile
+        swapUrnEmblem(event, EMBLEM_TYPE_CROCODILE);
+        return;
+      case "OzGmtr": // swap for scarab
+        swapUrnEmblem(event, EMBLEM_TYPE_SCARAB);
+        return;
+      case "vRtBKz": // lever by the urns: only the exact riddle map unlocks it
         event.handled = true;
+        if (!urnPuzzleComplete(player)) {
+          player.sendMessage("The lever doesn't budge. The four emblems are not in the right urns.");
+          return;
+        }
         player.sendMessage("As you pull the lever, you hear a loud click from the door.");
         if (quest.getStage(player) < STAGE_URN_PUZZLE) setStage(player, STAGE_URN_PUZZLE);
         return;
       case "MQFYdD": // rusty key opens the upper door
         event.handled = true;
-        stepThrough(player, doorLocationByPlayer.get(player));
         doorLocationByPlayer.delete(player);
+        if (hasItem(player, RUSTY_KEY_ITEM)) player.getInventory().deleteNumber(RUSTY_KEY_ITEM, 1);
         if (quest.getStage(player) < STAGE_UPPER_OPEN) setStage(player, STAGE_UPPER_OPEN);
+        enterChampionArena(player);
         return;
       case "ppIMnm": // rusty key found in the urn
         if (!hasItem(player, RUSTY_KEY_ITEM)) player.getInventory().adds(RUSTY_KEY_ITEM, 1);
@@ -967,7 +1174,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       case "L2Rz7X": // lily picked
         if (!hasItem(player, LILY_ITEM)) player.getInventory().adds(LILY_ITEM, 1);
         if (quest.getStage(player) < STAGE_LILY_PICKED) setStage(player, STAGE_LILY_PICKED);
-        sendQuestBits(player);
+        syncQuestVarbits(player);
         return;
       case "EHRsdS": // Maisa departs to get the venom
         removeTracked(player, "nardah-maisa");
@@ -983,18 +1190,41 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       // Chapter 4 - the finale.
       case "PZPIrV": // cutscene: walking to the citizens
         if (quest.getStage(player) < STAGE_CITIZENS_FREED) setStage(player, STAGE_CITIZENS_FREED);
+        showCamera(player, [3331, 2731, 630], [3349, 2724, 310], {
+          poll: true,
+          next: [
+            [8, [3339, 2730, 630], [3349, 2724, 310]],
+            [16, [3345, 2724, 1700], [3360, 2709, 700]],
+            [28, [3342, 2717, 390], [3351, 2731, 90]],
+            [40, [3366, 2786, 1000], [3370, 2794, 10]],
+            [52, [3367, 2810, 460], [3371, 2793, 260]],
+            [64, [3363, 2804, 300], [3374, 2800, 200]],
+            [76, [3368, 2797, 440], [3370, 2811, 340]],
+          ],
+          shake: [[84, 0, 5]],
+        });
         return;
       case "31LmTQ": // scene pans to Maisa's camp
-        player.moveTo(new Location(3378, 2790, 0));
+        player.moveTo(new Location(3368, 2788, 0));
         return;
       case "VNowdJ": // the Akh fight begins
         event.handled = true;
-        player.moveTo(new Location(3378, 2790, 0));
+        player.moveTo(new Location(3369, 2803, 0));
         setStage(player, STAGE_AKH_FIGHT);
+        // Capture101: cam_reset one tick after the final Akh transformation (stage 98),
+        // before the fight; release controls so the player can attack.
+        showCamera(player, [3363, 2804, 300], [3374, 2800, 200], { shake: [[2, 0, 5]], resetAt: 1 });
         return;
       case "1WDBi3": // Osman departs
         removeTracked(player, "osman");
         if (quest.getStage(player) < STAGE_SOPHANEM) setStage(player, STAGE_SOPHANEM);
+        showCamera(player, [3280, 2790, 400], [3288, 2777, 180], {
+          poll: true,
+          next: [
+            [8, [3273, 2796, 750], [3273, 2779, 700]],
+            [16, [3280, 2786, 500], [3263, 2783, 340]],
+          ],
+        });
         return;
       case "aHisly": // Maisa shows you a spear with a keris on the end
         if (freeSlots(player) > 0) {
@@ -1020,6 +1250,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
           player.sendMessage("The High Priest tries to hand you a Circlet of Water, but you don't have enough room for it.");
         }
         return;
+      case "n8xF8w": // chemistry complete: Maisa departs for the necropolis
+        if (quest.getStage(player) < STAGE_MAISA_DEPARTS) setStage(player, STAGE_MAISA_DEPARTS);
+        return;
       case "eRrcx2": // Keris partisan found in the tent
         if (freeSlots(player) > 0 && !hasItem(player, KERIS_PARTISAN_ITEM)) {
           player.getInventory().adds(KERIS_PARTISAN_ITEM, 1);
@@ -1032,6 +1265,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       case "oyt_LF": // Congratulations! Quest complete!
       case "am2Oh5":
         event.handled = true;
+        stopCamera(player);
         if (!quest.isComplete(player)) quest.complete(player);
         return;
       default:
@@ -1055,6 +1289,28 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     player.sendMessage(`You put the ${EMBLEM_NAME_BY_TYPE[type]} emblem in the ${URN_NAME_BY_SLOT[slot]} urn.`);
   }
 
+  function removeUrnEmblem(event) {
+    const { player } = event;
+    const slot = urnSlotByPlayer.get(player);
+    const type = slot ? urnEmblem(player, slot) : 0;
+    event.handled = true;
+    if (!type || freeSlots(player) === 0) return;
+    player.getInventory().adds(EMBLEM_ITEM_BY_TYPE[type], 1);
+    setUrnEmblem(player, slot, 0);
+  }
+
+  function swapUrnEmblem(event, type) {
+    const { player } = event;
+    const slot = urnSlotByPlayer.get(player);
+    const oldType = slot ? urnEmblem(player, slot) : 0;
+    const newItem = EMBLEM_ITEM_BY_TYPE[type];
+    event.handled = true;
+    if (!oldType || oldType === type || !hasItem(player, newItem)) return;
+    player.getInventory().deleteNumber(newItem, 1);
+    setUrnEmblem(player, slot, type);
+    player.getInventory().adds(EMBLEM_ITEM_BY_TYPE[oldType], 1);
+  }
+
   // ==========================================================================
   // Dialogue lines (end-of-conversation stage beats)
   // ==========================================================================
@@ -1062,13 +1318,31 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   function handleLine(event) {
     const { player, npcId, text } = event;
     const stage = quest.getStage(player);
+    if (HIGH_PRIEST_IDS.has(npcId) && text === "Hello again, friend. Your cure has worked wonderfully. Not a single citizen is infected any more. We're finally free of the plagues!") {
+      showCamera(player, [3280, 2790, 400], [3288, 2777, 180], {
+        poll: true,
+        next: [
+          [8, [3273, 2796, 750], [3273, 2779, 700]],
+          [16, [3280, 2786, 500], [3263, 2783, 340]],
+        ],
+      });
+      return;
+    }
+    if (MAISA_IDS.has(npcId) && text === "My list of allies grows shorter every day, but you actually seem to care about what's happening out here. You also seem to know what you're doing." && stage === STAGE_MESSAGE_READ) {
+      setStage(player, STAGE_MAISA_INTRO);
+      return;
+    }
+    if (MAISA_IDS.has(npcId) && text === "Fair enough... so what are our leads?" && stage === STAGE_CAMP_LEADS) {
+      setStage(player, STAGE_CAMP_TALKED);
+      return;
+    }
     if (text === "Well let me know when you're ready, and I'll take you down there.") {
       flag(player, INTRO_ATTRIBUTE, true);
       setStage(player, STAGE_CAMP);
       return;
     }
     if (text === "Hmm... this seems familiar..." || text === "Hmm... this seems familiar... I'd better report back to Maisa.") {
-      if (npcId === CITIZEN || npcId === WORLD_CITIZEN) flag(player, TALKED_CITIZEN_ATTRIBUTE, true);
+      if (BCS_NECROPOLIS_CITIZEN_IDS.has(npcId)) flag(player, TALKED_CITIZEN_ATTRIBUTE, true);
       return;
     }
     if (MAISA_IDS.has(npcId) && text === "Will do." && stage === STAGE_GUARD_DEFEATED) {
@@ -1088,6 +1362,14 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
         return;
       }
     }
+    if (
+      text === "Fine. We'll do it your way." &&
+      stage === STAGE_UPPER_OPEN &&
+      (npcId === HIGH_PRIEST_CUTSCENE || npcId === HIGH_PRIEST_OF_SCABARAS)
+    ) {
+      setStage(player, STAGE_CHAMPION_FIGHT);
+      return;
+    }
     if (npcId === HIGH_PRIEST_OF_SCABARAS && text === "Good luck in your fight, adventurer. May Scabaras guide you.") {
       if (stage < STAGE_PRIEST_FREED) setStage(player, STAGE_PRIEST_FREED);
       return;
@@ -1103,8 +1385,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       return;
     }
     if (HIGH_PRIEST_IDS.has(npcId) && text === "Thank you, friend. You are once again our saviour!") {
-      if (hasItem(player, CURE_CRATE_ITEM)) player.getInventory().deleteNumber(CURE_CRATE_ITEM, 1);
-      if (stage < STAGE_CRATE_DELIVERED) setStage(player, STAGE_CRATE_DELIVERED);
+      if (stage < STAGE_FINALE) setStage(player, STAGE_FINALE);
       return;
     }
   }
@@ -1124,14 +1405,14 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (itemId === MESSAGE_ITEM && option === "Read") {
       event.handled = true;
       player.sendMessage("Head east from Sophanem and you'll find a camp by the cliffs. Meet me there as soon as you can.");
+      if (quest.getStage(player) < STAGE_MESSAGE_READ) setStage(player, STAGE_MESSAGE_READ);
       return;
     }
     if (itemId === STONE_TABLET_ITEM && option === "Read") {
       event.handled = true;
-      player.sendMessage("Akhem, the Zamorakians are coming. We have no quarrel with them, but they won't care.");
-      player.sendMessage("We are already preparing our defences, but should Ullek fall, we can't let them defile Scabaras' precious artefacts.");
-      player.sendMessage("I've locked what I can in a chest and buried it to the south. If I don't make it through the coming storm, you'll find the chest under the southernmost ritual pillar. Your name hides the code to unlock it.");
-      player.sendMessage("With love, Sethos");
+      flag(player, TABLET_READ_ATTRIBUTE, true);
+      openLorePanel(player, LORE_TABLET_INTERFACE, TABLET_LORE);
+      syncQuestVarbits(player);
       return;
     }
     if (itemId === CHEST_ITEM && option === "Open") {
@@ -1142,10 +1423,60 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   function openChest(player) {
     if (!hasItem(player, CHEST_ITEM)) return;
+    const sender = player.getPacketSender();
+    sender.sendEnterAmountPrompt("The chest has a seven digit lock. What would you like to enter?");
+    player.setEnteredAmountAction({ execute: (code) => unlockChest(player, code) });
+  }
+
+  function unlockChest(player, code) {
+    if (!hasItem(player, CHEST_ITEM)) return;
+    if (code !== CHEST_CODE) {
+      player.sendMessage("The combination doesn't seem to work.");
+      return;
+    }
     player.getInventory().deleteNumber(CHEST_ITEM, 1);
     if (!hasItem(player, SCARAB_MOULD_ITEM)) player.getInventory().adds(SCARAB_MOULD_ITEM, 1);
     player.sendMessage("You unlock the chest and recover a scarab mould from within.");
+    flag(player, MOULD_FOUND_ATTRIBUTE, true);
     if (quest.getStage(player) < STAGE_MOULD) setStage(player, STAGE_MOULD);
+    syncQuestVarbits(player);
+  }
+
+  function openLorePanel(player, interfaceId, lines) {
+    const sender = player.getPacketSender();
+    lines.forEach((text, index) => sender.sendString(text, (interfaceId << 16) | (3 + index)));
+    sender.sendInterface(interfaceId);
+  }
+
+  function openPillarPuzzle(player) {
+    if (quest.getStage(player) !== STAGE_TOMB_OPEN) return;
+    const sender = player.getPacketSender();
+    const current = sender.getVarbit?.(13849) ?? 0;
+    sender.sendVarbit(13849, current >= 15 && current <= 18 ? current : 18);
+    sender.sendInterface(PILLAR_INTERFACE);
+  }
+
+  function handlePillarButton(event) {
+    const { player } = event;
+    if (quest.getStage(player) !== STAGE_TOMB_OPEN) return false;
+    const child = event.buttonId & 0xffff;
+    const sender = player.getPacketSender();
+    if (child === 8) {
+      event.handled = true;
+      const value = Math.max(15, (sender.getVarbit?.(13849) ?? 18) - 1);
+      sender.sendVarbit(13849, value);
+      return true;
+    }
+    if (child === 9) {
+      event.handled = true;
+      if ((sender.getVarbit?.(13849) ?? 18) === 15) {
+        sender.sendInterfaceRemoval();
+        player.sendMessage("You hear a click from the nearby entry.");
+        setStage(player, STAGE_EMBLEM_CONFIRMED);
+      }
+      return true;
+    }
+    return false;
   }
 
   function handleItemOnObject(event) {
@@ -1208,7 +1539,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (FURNACE_IDS.has(objectId)) {
       event.handled = true;
       if (option === "Inspect") {
-        if (stage < STAGE_FURNACE_REFUELLED) setStage(player, STAGE_FURNACE_REFUELLED);
+        if (stage < STAGE_FURNACE_INSPECTED) setStage(player, STAGE_FURNACE_INSPECTED);
         startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-interacting-with-objects-furnace-inspect-furnace");
         return;
       }
@@ -1239,7 +1570,8 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     }
     if (objectId === PILLAR_EMBLEM) {
       event.handled = true;
-      startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-confirming-the-scarab-emblem-in-the-pillar");
+      if (stage === STAGE_TOMB_OPEN) openPillarPuzzle(player);
+      else startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-confirming-the-scarab-emblem-in-the-pillar");
       return;
     }
     if (objectId === WELL_SEARCH) {
@@ -1275,6 +1607,14 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       if (!hasItem(player, SPADE_ITEM)) player.getInventory().adds(SPADE_ITEM, 1);
       return;
     }
+    if (objectId === BLOCKED_ENTRY) {
+      event.handled = true;
+      flag(player, ENTRY_INSPECTED_ATTRIBUTE, true);
+      if (stage < STAGE_ENTRY_INSPECTED) setStage(player, STAGE_ENTRY_INSPECTED);
+      else syncQuestVarbits(player);
+      startTranscript(api, player, MAISA_CAMP, PAGE, "starting-off-inspecting-the-blocked-entry-after-finishing-the-cutscene");
+      return;
+    }
     if (objectId === NECROPOLIS_RUBBLE) {
       event.handled = true;
       climbNecropolisRubble(player);
@@ -1292,13 +1632,16 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       return;
     }
     if (objectId === DOOR_LEVERS_A || objectId === DOOR_LEVERS_B) {
-      event.handled = true;
-      openLeversDoor(player, event.location);
+      event.handled = openLeversDoor(player, event.location, objectId);
       return;
     }
     if (objectId === DOOR_UPPER) {
+      // After the Champion dies the captured route walks straight through this door;
+      // leave it to Doors.plugin so a normal Open swaps in the open leaf.
+      if (stage >= STAGE_CHAMPION_DEAD) return;
       event.handled = true;
-      openUpperDoor(player, event.location);
+      if (stage >= STAGE_UPPER_OPEN) enterChampionArena(player);
+      else openUpperDoor(player, event.location);
       return;
     }
     if (objectId === DOOR_CHAMPION) {
@@ -1314,7 +1657,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     }
     if (objectId === RIDDLE_PLAQUE) {
       event.handled = true;
-      startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-inspecting-the-south-west-plaque");
+      openLorePanel(player, LORE_RIDDLE_INTERFACE, RIDDLE_LORE);
       return;
     }
     if (objectId === URN_INSPECT) {
@@ -1328,7 +1671,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-searching-the-urn-by-mehhar");
       return;
     }
-    if (objectId === LILY) {
+    if (objectId === LILY || objectId === LILY_PLACED) {
       event.handled = true;
       pickLily(player);
       return;
@@ -1350,7 +1693,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       crossSteppingStone(player);
       return;
     }
-    if (objectId === CHEMISTRY_TABLE) {
+    if (objectId === CHEMISTRY_TABLE || objectId === CHEMISTRY_TABLE_PLACED) {
       event.handled = true;
       useChemistryTable(player);
       return;
@@ -1367,6 +1710,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (!entryInspected(player)) {
       flag(player, ENTRY_INSPECTED_ATTRIBUTE, true);
       if (quest.getStage(player) < STAGE_ENTRY_INSPECTED) setStage(player, STAGE_ENTRY_INSPECTED);
+      else syncQuestVarbits(player);
       startTranscript(api, player, MAISA_CAMP, PAGE, "starting-off-inspecting-the-blocked-entry-after-finishing-the-cutscene");
     }
   }
@@ -1374,8 +1718,6 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   function enterTomb(player) {
     const stage = quest.getStage(player);
     if (stage === STAGE_RUINS) {
-      // The first entry opens the upper ruins; the scabarites are already below.
-      setStage(player, STAGE_FURNACE_INSPECTED);
       startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-entering-the-ruins");
       return;
     }
@@ -1383,22 +1725,39 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-interacting-with-objects-entry");
       return;
     }
-    player.moveTo(new Location(3438, 9248, 0));
-    if (stage < STAGE_TOMB_ENTERED) setStage(player, STAGE_TOMB_ENTERED);
+    player.moveTo(new Location(3445, 9248, 2));
+    showCamera(player, [3420, 9241, 580], [3410, 9252, 380], { resetAt: 12 });
+    if (stage < STAGE_TOMB_ENTERED) {
+      setStage(player, STAGE_TOMB_ENTERED);
+      startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-entering-the-ruins");
+    }
   }
 
   function pullTombLever(player, location) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_MAGES_DEAD || stage > STAGE_LEVERS_DONE) return;
+    if (stage < STAGE_MAGES_DEAD || stage >= STAGE_URN_PUZZLE) return;
     const bit = location && location.y <= 9248 ? 1 : 2;
     const was = leverBits(player);
-    const next = was | bit;
-    if (next === was) {
+    if ((was & bit) !== 0) {
       startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-pulling-levers-when-the-lever-resets");
       return;
     }
+    const now = api.core.World.getProcessCycle();
+    const first = firstLeverAt.get(player);
+    if (was !== 0 && (first === undefined || now - first > 100)) {
+      firstLeverAt.delete(player);
+      setLeverBits(player, 0);
+      player.performGraphic(new api.core.Graphic(1575, 0, 124));
+      player.getPacketSender().sendSoundEffect(4195, 1, 0);
+      player.sendMessage("A dart trap fires and the tomb levers reset. Pull them again quickly.");
+      startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-pulling-levers-when-the-lever-resets");
+      return;
+    }
+    if (was === 0) firstLeverAt.set(player, now);
+    const next = was | bit;
     setLeverBits(player, next);
     const done = (next & 3) === 3;
+    if (done) firstLeverAt.delete(player);
     setStage(player, done ? STAGE_LEVERS_DONE : STAGE_LEVER_ONE);
     startTranscript(
       api,
@@ -1432,17 +1791,38 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-opening-the-upstairs-locked-door");
   }
 
-  /** The lever-opened downstairs door (43961/43962); both leaves route here. */
-  function openLeversDoor(player, location) {
-    if (quest.getStage(player) >= STAGE_LEVERS_DONE) {
-      stepThrough(player, location);
-      if (quest.getStage(player) < STAGE_URN_CHAMBER) setStage(player, STAGE_URN_CHAMBER);
-      return;
-    }
-    startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-opening-the-downstairs-locked-door");
+  /** The captured west arena; logging in here resumes the unfinished Champion intro. */
+  function inChampionArena(player) {
+    const at = player.getLocation?.();
+    if (!at || at.getZ?.() !== 2) return false;
+    return at.getX() >= 3404 && at.getX() <= 3420 && at.getY() >= 9240 && at.getY() <= 9256;
   }
 
-  /** The Champion door (43960) beyond the altar. */
+  function startChampionIntro(player) {
+    if (quest.getStage(player) !== STAGE_UPPER_OPEN) return;
+    startTranscriptDeferred(player, HIGH_PRIEST_CUTSCENE, "the-ruins-of-ullek-the-champion-of-scabaras");
+  }
+
+  /** Normal entry once the door is unlocked at stage 58: no key is granted or consumed. */
+  function enterChampionArena(player) {
+    player.getMovementQueue?.().reset?.();
+    player.moveTo(new Location(3420, 9248, 2));
+    startChampionIntro(player);
+  }
+
+  /** The lever-opened downstairs door (43961/43962); both leaves route here. */
+  function openLeversDoor(player, location, objectId) {
+    const stage = quest.getStage(player);
+    const inner = objectId === DOOR_LEVERS_B;
+    const allowed = inner
+      ? stage >= STAGE_URN_PUZZLE && urnPuzzleComplete(player)
+      : stage >= STAGE_LEVERS_DONE;
+    if (allowed) return false;
+    startTranscript(api, player, MAISA_CAMP, PAGE, "the-ruins-of-ullek-opening-the-downstairs-locked-door");
+    return true;
+  }
+
+  /** The Champion door (43963), the normal door into the champion area after the keyed door. */
   function openChampionDoor(player, location) {
     stepThrough(player, location);
     const stage = quest.getStage(player);
@@ -1458,8 +1838,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     if (request.handled) return;
     const { player, objectId, location } = request;
     if (objectId === DOOR_LEVERS_A || objectId === DOOR_LEVERS_B) {
-      request.handled = true;
-      openLeversDoor(player, location);
+      // Allowed doors must fall through to Doors.plugin: it swaps the captured closed
+      // leaf for the open leaf (43964) and normal MovementQueue walking crosses it.
+      request.handled = openLeversDoor(player, location, objectId);
       return;
     }
     if (objectId === DOOR_CHAMPION) {
@@ -1468,8 +1849,58 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
       return;
     }
     if (objectId === DOOR_UPPER) {
+      const stage = quest.getStage(player);
+      if (stage >= STAGE_CHAMPION_DEAD) return;
       request.handled = true;
-      openUpperDoor(player, location);
+      if (stage >= STAGE_UPPER_OPEN) enterChampionArena(player);
+      else openUpperDoor(player, location);
+    }
+  }
+
+  /**
+   * Captured River Elid cross: the stone and the island lily are clicked from the bank,
+   * not walked onto. Allow those two clicks in place so the normal object action runs.
+   */
+  const STEPPING_STONE_TILE = new Location(3353, 2923, 0);
+  const LILY_TILE = new Location(3353, 2927, 0);
+
+  function atObjectTile(event, tile) {
+    const at = event.object?.getLocation?.() ?? event.object?.location;
+    if (!at) return false;
+    return (
+      (at.getX?.() ?? at.x) === tile.getX() &&
+      (at.getY?.() ?? at.y) === tile.getY() &&
+      (at.getZ?.() ?? at.z) === tile.getZ()
+    );
+  }
+
+  function clickedOption(event, wanted) {
+    const definition = event.definition ?? api.core.CacheDefinitions?.getObject?.(event.objectId);
+    const actions = definition?.getInteractions?.() ?? definition?.actions ?? [];
+    return String(actions[event.clickType - 1] ?? "").toLowerCase() === wanted;
+  }
+
+  function routeSteppingStones(event) {
+    const { player, objectId } = event ?? {};
+    if (!player) return;
+    if (quest.getStage(player) < STAGE_LILY_HUNT) return;
+    const at = player.getLocation?.();
+    if (!at || at.getZ?.() !== 0) return;
+    const x = at.getX();
+    const y = at.getY();
+    if (objectId === STEPPING_STONE) {
+      if (!atObjectTile(event, STEPPING_STONE_TILE) || !clickedOption(event, "cross")) return;
+      // Captured click tile 3353,2921 plus the immediate 2-tile bank approaches only.
+      if (x < 3351 || x > 3355 || y < 2919 || y > 2921) return;
+      if (Math.max(Math.abs(x - 3353), Math.abs(y - 2923)) > 2) return;
+      event.destination = { x, y, z: 0 };
+      return;
+    }
+    if (objectId === LILY || objectId === LILY_PLACED) {
+      if (!atObjectTile(event, LILY_TILE) || !clickedOption(event, "pick")) return;
+      // The scripted Roger landing 3353,2926 and its adjacent island tiles only.
+      if (Math.max(Math.abs(x - 3353), Math.abs(y - 2927)) > 1) return;
+      event.destination = { x, y, z: 0 };
     }
   }
 
@@ -1503,8 +1934,49 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   }
 
   function useChemistryTable(player) {
-    if (quest.getStage(player) < STAGE_EQUIPMENT) return;
-    startTranscript(api, player, MAISA_CAMP, PAGE, "cure-me-pox-warming-up-the-equipment");
+    if (quest.getStage(player) < STAGE_EQUIPMENT || quest.getStage(player) >= STAGE_CURE_TAKEN) return;
+    const state = { left: 0, middle: 0, right: 0 };
+    chemistryState.set(player, state);
+    sendChemistryState(player, state);
+    const sender = player.getPacketSender();
+    sender.sendInterface(CHEMISTRY_INTERFACE);
+    sender.sendInterfaceScript(4517, [0, 100, 25]);
+    sender.sendInterfaceScript(4518, [100, 100]);
+  }
+
+  function sendChemistryState(player, state) {
+    const sender = player.getPacketSender();
+    sender.sendVarbit(13863, state.left);
+    sender.sendVarbit(13864, state.middle);
+    sender.sendVarbit(13865, state.right);
+  }
+
+  function handleChemistryButton(event) {
+    const { player } = event;
+    const state = chemistryState.get(player);
+    if (!state) return false;
+    event.handled = true;
+    const child = event.buttonId & 0xffff;
+    if (child === 25) state.middle = Math.min(45, state.middle + 3);
+    else if (child === 27) state.right = Math.min(45, state.right + 3);
+    else if (child === 26) {
+      state.left = Math.min(45, state.left + 3);
+      state.middle = Math.max(0, state.middle - 3);
+      state.right = Math.min(45, state.right + 3);
+    } else if (child === 28) {
+      state.left = Math.min(45, state.left + 3);
+      state.right = Math.max(0, state.right - 3);
+    }
+    sendChemistryState(player, state);
+    player.getPacketSender().sendInterfaceScript(4517, [0, 100, 25]);
+    player.getPacketSender().sendInterfaceScript(4518, [100, 100]);
+    if (state.left === CHEMISTRY_TARGET.left && state.middle === CHEMISTRY_TARGET.middle && state.right === CHEMISTRY_TARGET.right) {
+      chemistryState.delete(player);
+      player.getPacketSender().sendInterfaceRemoval();
+      setStage(player, STAGE_CHEMISTRY_DONE);
+      startTranscript(api, player, ZAHUR, PAGE, "cure-me-pox-warming-up-the-equipment");
+    }
+    return true;
   }
 
   /** Mirror the player to the tile past a blocking object tile. */
@@ -1532,6 +2004,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     const stage = quest.getStage(killer);
     if (tracked.get("guard") === npc) {
       tracked.delete("guard");
+      stopCamera(killer);
       if (stage === STAGE_GUARD_FIGHT) setStage(killer, STAGE_GUARD_DEFEATED);
       return;
     }
@@ -1544,11 +2017,12 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     }
     if (tracked.get("champion") === npc) {
       tracked.delete("champion");
-      if (stage === STAGE_UPPER_OPEN) setStage(killer, STAGE_CHAMPION_DEAD);
+      if (stage === STAGE_CHAMPION_FIGHT || stage === STAGE_UPPER_OPEN) setStage(killer, STAGE_CHAMPION_DEAD);
       return;
     }
     if (tracked.get("akh") === npc) {
       tracked.delete("akh");
+      stopCamera(killer);
       if (stage === STAGE_AKH_FIGHT) setStage(killer, STAGE_AKH_DEAD);
     }
   }
@@ -1560,11 +2034,18 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   function handleLogin({ player }) {
     installTombLevers();
     syncNpcs(player);
-    sendQuestBits(player);
+    syncQuestVarbits(player);
+    // Only resume a genuinely unfinished intro when physically inside the west arena;
+    // stage 58 outside (e.g. 3432,9248) must re-enter through 43960 first.
+    if (inChampionArena(player)) startChampionIntro(player);
+  }
+
+  function handleLogout({ player }) {
+    stopCamera(player);
   }
 
   function handleBootstrap({ player }) {
-    sendQuestBits(player);
+    syncQuestVarbits(player);
   }
 
   function buildJournal(player, questHandle) {
@@ -1663,6 +2144,9 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
 
   api.persistAttribute(INTRO_ATTRIBUTE);
   api.persistAttribute(ENTRY_INSPECTED_ATTRIBUTE);
+  api.persistAttribute(TABLET_FOUND_ATTRIBUTE, false);
+  api.persistAttribute(TABLET_READ_ATTRIBUTE, false);
+  api.persistAttribute(MOULD_FOUND_ATTRIBUTE, false);
   api.persistAttribute(TALKED_CITIZEN_ATTRIBUTE);
   api.persistAttribute(URNS_ATTRIBUTE);
   api.persistAttribute(LEVERS_ATTRIBUTE);
@@ -1685,6 +2169,18 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
     onReward: grantReward,
   });
 
+  api.onObjectRoute(routeSteppingStones);
+  api.onNpcInteraction((event) => {
+    if (!event?.player || !BCS_NECROPOLIS_CITIZEN_IDS.has(event.npcId)) return;
+    const definition = event.definition ?? api.core.NpcDefinition.forId(event.npcId);
+    const action = String(definition?.getActions?.()?.[event.clickType - 1] ?? "");
+    if (action.toLowerCase() !== "talk-to") return;
+    const variant = selectCitizenVariant(quest.getStage(event.player));
+    if (!variant) return;
+    event.handled = true;
+    startTranscript(api, event.player, CITIZEN, PAGE, variant);
+  });
+  api.onNpcInteraction(handleOsmanTalk);
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
@@ -1694,7 +2190,10 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   api.onItemAction(handleItemAction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onInterfaceActionButton(CHEMISTRY_BUTTONS, handleChemistryButton);
+  api.onInterfaceActionButton(PILLAR_BUTTONS, handlePillarButton);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);
 };

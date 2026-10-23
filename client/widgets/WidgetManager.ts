@@ -153,6 +153,11 @@ export class WidgetManager {
     onGroupLoaded?: (groupId: number) => void;
     /** Callback fired when an interface closes - used to clean up click targets */
     onInterfaceClose?: (groupId: number) => void;
+    /**
+     * Called for each widget CC_DELETE / CC_DELETEALL removes. Dynamic widgets get a fresh uid
+     * each time they are created, so whatever is keyed by uid must be dropped here.
+     */
+    onWidgetUnregistered?: (uid: number) => void;
     onResizeListener?: (scriptId: number, sourceWidget: WidgetNode) => void;
     /** Invoker for runtime-set onResize handlers (set via IF_SETONRESIZE) */
     onResizeInvoker?: (sourceWidget: WidgetNode) => void;
@@ -1226,6 +1231,7 @@ export class WidgetManager {
         this.maybeInvalidateDynamicChildrenCache(widget);
         this.widgetByUid.delete(uid);
         this.modelWidgets = undefined;
+        this.onWidgetUnregistered?.(uid);
     }
 
     /**
@@ -1237,6 +1243,7 @@ export class WidgetManager {
         if (typeof widget.uid === "number") {
             this.widgetByUid.delete(widget.uid);
             this.modelWidgets = undefined;
+            this.onWidgetUnregistered?.(widget.uid);
         }
         if (Array.isArray(widget.children)) {
             for (const child of widget.children) {

@@ -40,7 +40,7 @@ yarn sync:npc-spawns --box 2520,2170,2660,2310 --box 2560,8560,2640,8660 --tag W
 2. Otherwise 0 for an NPC without a walk animation in the cache.
 3. Otherwise the loader's default (5).
 
-The Wiki map's `r` only sizes its marker, so it isn't used: Mortimer's map has `r=4`, and he stands still.
+The Wiki map's `r` only sizes its marker, so it isn't used: Mortimer's map has `r=4`, and he wanders one tile (rsprox captures).
 
 **Wiki map layers.** The Wiki draws many dungeons on their own map layers (`mapID`), whose coordinates or plane can differ from the game's: the God Wars Dungeon is on plane 0 there and 2 in the game, and the Stronghold of Security's floors are each shifted (the Sepulchre of Death by +352, +288). Before comparing, each Wiki map square on a layer votes, through its spawns, for the shift that puts them on existing spawns of the same NPC:
 - **A square is aligned** when at least 2 spawns, and half of those with a same-name spawn anywhere, agree on one shift.
@@ -70,7 +70,8 @@ Added with the command above: 84 spawns on the island and in the Wyrmscraig Cave
 
 The existing Mad Angel matched and wasn't doubled. All of them that fight have drop tables and stats.
 
-- **Standing still:** the fishing spots (as existing ones), Mortimer and the broken golem (no walk animation). Mortimer 16175, the post-quest version, has no animations at all in the cache: no `readyanim` or `walkanim` opcode, only conditional menu options (opcode 252). The other id, 16294, has `mortimer_idle`.
+- **Standing still:** the fishing spots (as existing ones) and the broken golem (no walk animation).
+- **Mortimer:** live spawns the parent `slayer_master_mortimer` (4462), which transforms on `ffg` into the post-quest version with Assignment and Trade (16175), and wanders one tile around 2590, 8614 (rsprox captures). The client animates an NPC from its parent: 4462 has `mortimer_idle` and a walk animation, while 16175 has none, so spawned as 16175 he stood in the default pose and couldn't walk.
 - **Mountain trolls:** the Wiki lists 936–942 and 16330–16332 under one version, identical in the cache; the script used 936, which existing spawns use.
 - **Not covered by spawns:** dialogue, the two shops, Mortimer's Slayer assignments, goat hunting and golem crafting.
 

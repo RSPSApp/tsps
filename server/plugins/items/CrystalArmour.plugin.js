@@ -6,23 +6,38 @@
  * for the full set). Pieces start at 2,500 charges, lose one per successful
  * hit received and turn inactive at zero, losing their bonus. Crystal shards
  * add 100 charges each up to 20,000.
+ *
+ * Pieces are sung from crystal armour seeds and shards at a singing bowl
+ * (requiring Song of the Elves), and Revert returns the seeds while
+ * forfeiting the loaded charges.
  */
 const START_CHARGES = 2500;
 const MAX_CHARGES = 20000;
 const SHARD_CHARGES = 100;
 const CHARGES_META_KEY = "crystal-armour";
+const SONG_OF_THE_ELVES = "song_of_the_elves";
+const SINGING_SEQUENCE = "prif_crystal_singing";
+const SINGING_SOUND = 8;
+const NO_MATERIALS = "You do not have all of the required materials and requirements to make anything.";
+const LEVEL_TOO_LOW = "You need to be at least level {level} Crafting and Smithing to create anything through crystal singing.";
+const SONG_LOCKED = "You need to complete Song of the Elves to create crystal armour.";
 
 const PIECES = [
-  { slotName: "HEAD", itemName: "Crystal helm", activeIdName: "CRYSTAL_HELM", inactiveIdName: "CRYSTAL_HELM_INACTIVE_", accuracy: 0.05, damage: 0.025, label: "crystal helm" },
-  { slotName: "BODY", itemName: "Crystal body", activeIdName: "CRYSTAL_BODY", inactiveIdName: "CRYSTAL_BODY_INACTIVE_", accuracy: 0.15, damage: 0.075, label: "crystal body" },
-  { slotName: "LEG", itemName: "Crystal legs", activeIdName: "CRYSTAL_LEGS", inactiveIdName: "CRYSTAL_LEGS_INACTIVE_", accuracy: 0.10, damage: 0.05, label: "crystal legs" },
+  { slotName: "HEAD", itemName: "Crystal helm", activeIdName: "CRYSTAL_HELM", inactiveIdName: "CRYSTAL_HELM_INACTIVE_", accuracy: 0.05, damage: 0.025, label: "crystal helm", seeds: 1, shards: 50, level: 70, xp: 2500 },
+  { slotName: "BODY", itemName: "Crystal body", activeIdName: "CRYSTAL_BODY", inactiveIdName: "CRYSTAL_BODY_INACTIVE_", accuracy: 0.15, damage: 0.075, label: "crystal body", seeds: 3, shards: 150, level: 74, xp: 7500 },
+  { slotName: "LEG", itemName: "Crystal legs", activeIdName: "CRYSTAL_LEGS", inactiveIdName: "CRYSTAL_LEGS_INACTIVE_", accuracy: 0.10, damage: 0.05, label: "crystal legs", seeds: 2, shards: 100, level: 72, xp: 5000 },
 ];
 
 let core = null;
+let pluginApi = null;
 let inactiveByActive = new Map();
 let activeByInactive = new Map();
 let activeIds = new Set();
+let pieceByItemId = new Map();
 let crystalWeaponIds = new Set();
+
+const activeId = (piece) => core.ItemIdentifiers[piece.activeIdName];
+const inactiveId = (piece) => core.ItemIdentifiers[piece.inactiveIdName];
 
 function charges(item) {
   const saved = Number(item.getMetaValue?.(CHARGES_META_KEY)?.charges);
@@ -112,11 +127,9 @@ function chargesLabel(piece, item) {
 }
 
 function checkCharges({ player, item }) {
-  for (const piece of PIECES) {
-    if (item.getId() === core.ItemIdentifiers[piece.activeIdName] || item.getId() === core.ItemIdentifiers[piece.inactiveIdName]) {
-      player.sendMessage(chargesLabel(piece, item));
-      return;
-    }
+  const piece = pieceByItemId.get(item?.getId?.());
+  if (piece) {
+    player.sendMessage(chargesLabel(piece, item));
   }
 }
 
@@ -150,24 +163,144 @@ function addShardCharges(event) {
   event.handled = true;
 }
 
-function attach(pluginApi) {
+function songOfTheElvesComplete(player) {
+  const request = { player, key: SONG_OF_THE_ELVES, complete: false };
+  pluginApi.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
+function maxCraftable(player, piece) {
+  const inventory = player.getInventory();
+  return Math.min(
+    Math.floor(inventory.getAmount(core.ItemIdentifiers.CRYSTAL_ARMOUR_SEED) / piece.seeds),
+    Math.floor(inventory.getAmount(core.ItemIdentifiers.CRYSTAL_SHARD) / piece.shards),
+  );
+}
+
+function meetsLevels(player, piece) {
+  const skills = player.getSkillManager();
+  return skills.getCurrentLevel(core.Skill.CRAFTING) >= piece.level
+    && skills.getCurrentLevel(core.Skill.SMITHING) >= piece.level;
+}
+
+function openCreationMenu(player) {
+  const items = PIECES.map(activeId);
+  player.getPacketSender().sendCreationMenu(new core.CreationMenu("What would you like to make?", items, {
+    execute: (itemId, amount) => {
+      const piece = PIECES.find((candidate) => activeId(candidate) === itemId);
+      if (piece) {
+        makeArmour(player, piece, amount);
+      }
+    },
+  }));
+}
+
+/** Sings up to `amount` pieces, consuming the seeds and shards for each. */
+function makeArmour(player, piece, amount = 1) {
+  if (!piece) {
+    return false;
+  }
+  if (!songOfTheElvesComplete(player)) {
+    player.sendMessage(SONG_LOCKED);
+    return false;
+  }
+  const made = Math.min(Math.max(1, Math.floor(Number(amount) || 1)), maxCraftable(player, piece));
+  if (made <= 0) {
+    player.sendMessage(NO_MATERIALS);
+    return false;
+  }
+  if (!meetsLevels(player, piece)) {
+    player.sendMessage(LEVEL_TOO_LOW.replace("{level}", piece.level));
+    return false;
+  }
+  const inventory = player.getInventory();
+  inventory.deleteNumber(core.ItemIdentifiers.CRYSTAL_ARMOUR_SEED, piece.seeds * made);
+  inventory.deleteNumber(core.ItemIdentifiers.CRYSTAL_SHARD, piece.shards * made);
+  for (let index = 0; index < made; index++) {
+    inventory.adds(activeId(piece), 1);
+  }
+  const sequence = core.CacheDefinitions?.getSeqId?.(SINGING_SEQUENCE);
+  if (sequence != null) {
+    player.performAnimation(new core.Animation(sequence));
+  }
+  player.getPacketSender().sendSound(SINGING_SOUND, 1, 0);
+  const skills = player.getSkillManager();
+  skills.addExperiences(core.Skill.SMITHING, piece.xp * made);
+  skills.addExperiences(core.Skill.CRAFTING, piece.xp * made);
+  inventory.refreshItems();
+  player.sendMessage(`You sing the crystal into ${made === 1 ? `a ${piece.label}` : `${made} ${piece.label} pieces`}.`);
+  return true;
+}
+
+/** Using a seed on a singing bowl opens the three armour recipes. */
+function useSeedOnBowl(event) {
+  const { player } = event;
+  if (!songOfTheElvesComplete(player)) {
+    player.sendMessage(SONG_LOCKED);
+    return true;
+  }
+  if (!PIECES.some((piece) => maxCraftable(player, piece) > 0)) {
+    player.sendMessage(NO_MATERIALS);
+    return true;
+  }
+  openCreationMenu(player);
+  return true;
+}
+
+/** Revert: returns the crystal armour seeds but forfeits the loaded charges. */
+function dismantle(event) {
+  const { player, item } = event;
+  const piece = pieceByItemId.get(item?.getId?.());
+  if (!piece) {
+    return;
+  }
+  const inventory = player.getInventory();
+  const worn = event.interfaceId === core.Equipment.INVENTORY_INTERFACE_ID;
+  if (inventory.getFreeSlots() + (worn ? 0 : 1) < piece.seeds) {
+    player.sendMessage("You need more inventory space to revert the crystal armour.");
+    return;
+  }
+  let slot = event.slot;
+  if (worn) {
+    if (!core.EquipPacketListener.unequip(player, event.slot)) {
+      return;
+    }
+    slot = inventory.getItems().indexOf(item);
+  }
+  item.setMetaValue(CHARGES_META_KEY, undefined);
+  inventory.deleteItem(item, slot);
+  inventory.adds(core.ItemIdentifiers.CRYSTAL_ARMOUR_SEED, piece.seeds);
+  refresh(player);
+  player.sendMessage(`You revert the ${piece.label} to ${piece.seeds === 1 ? "a crystal armour seed" : `${piece.seeds} crystal armour seeds`}.`);
+}
+
+/** Inactive pieces have no stats, so they cannot be equipped until recharged. */
+function canEquip(event) {
+  const itemId = event?.item?.getId?.();
+  if (!itemId || !activeByInactive.has(itemId)) {
+    return;
+  }
+  event.allow = false;
+  event.player.sendMessage("This crystal armour is inactive. Add crystal shards to it before wearing it.");
+}
+
+function attach(pluginApiInstance) {
+  pluginApi = pluginApiInstance;
   core = pluginApi.core;
-  const I = core.ItemIdentifiers;
-  const { CRYSTAL_BOW_ALL_WEAPON_IDS, isChargedCrystalBow } = require("../../src/main/typescript/elvarg/game/content/combat/ranged/CrystalBow");
+  const { CRYSTAL_BOW_ALL_WEAPON_IDS, BOW_OF_FAERDHINEN_IDS, isChargedCrystalBow } = require("../../src/main/typescript/elvarg/game/content/combat/ranged/CrystalBow");
   inactiveByActive = new Map();
   activeByInactive = new Map();
+  pieceByItemId = new Map();
   for (const piece of PIECES) {
-    const active = I[piece.activeIdName];
-    const inactive = I[piece.inactiveIdName];
+    const active = activeId(piece);
+    const inactive = inactiveId(piece);
     inactiveByActive.set(active, inactive);
     activeByInactive.set(inactive, active);
+    pieceByItemId.set(active, piece);
+    pieceByItemId.set(inactive, piece);
   }
   activeIds = new Set(inactiveByActive.keys());
-  crystalWeaponIds = new Set([
-    I.BOW_OF_FAERDHINEN, I.BOW_OF_FAERDHINEN_2,
-    I.BOW_OF_FAERDHINEN_C_, I.BOW_OF_FAERDHINEN_C__2, I.BOW_OF_FAERDHINEN_C__3,
-    I.BOW_OF_FAERDHINEN_C__4, I.BOW_OF_FAERDHINEN_C__5,
-  ]);
+  crystalWeaponIds = new Set(BOW_OF_FAERDHINEN_IDS);
   for (const id of CRYSTAL_BOW_ALL_WEAPON_IDS) {
     if (isChargedCrystalBow(id)) {
       crystalWeaponIds.add(id);
@@ -183,16 +316,18 @@ module.exports = {
     api.registerRangedAttackAccuracyModifier(applyCrystalAccuracy);
     api.registerRangedHitModifier(applyCrystalDamage);
     api.registerIncomingDamageModifier(onIncomingDamage);
+    api.onCanEquip(canEquip);
     for (const piece of PIECES) {
-      api.onItemAction(piece.itemName, { Check: checkCharges });
-      api.onItemAction(`${piece.itemName} (inactive)`, { Check: checkCharges });
+      api.onItemAction(piece.itemName, { Check: checkCharges, Revert: dismantle });
+      api.onItemAction(`${piece.itemName} (inactive)`, { Revert: dismantle });
+      api.onItemOnItem("Crystal shard", piece.itemName, addShardCharges, { noted: false });
+      api.onItemOnItem("Crystal shard", `${piece.itemName} (inactive)`, addShardCharges, { noted: false });
     }
-    api.onItemOnItem("Crystal shard", "Crystal helm", addShardCharges, { noted: false });
-    api.onItemOnItem("Crystal shard", "Crystal helm (inactive)", addShardCharges, { noted: false });
-    api.onItemOnItem("Crystal shard", "Crystal body", addShardCharges, { noted: false });
-    api.onItemOnItem("Crystal shard", "Crystal body (inactive)", addShardCharges, { noted: false });
-    api.onItemOnItem("Crystal shard", "Crystal legs", addShardCharges, { noted: false });
-    api.onItemOnItem("Crystal shard", "Crystal legs (inactive)", addShardCharges, { noted: false });
+    api.onItemOnObject("Crystal armour seed", "Singing bowl", useSeedOnBowl, { noted: false });
   },
-  _test: { bonus, charges, useCharge, applyCrystalAccuracy, applyCrystalDamage, onIncomingDamage, PIECES, START_CHARGES, MAX_CHARGES, addShardCharges },
+  _test: {
+    bonus, charges, useCharge, applyCrystalAccuracy, applyCrystalDamage, onIncomingDamage,
+    PIECES, START_CHARGES, MAX_CHARGES, addShardCharges, makeArmour, useSeedOnBowl,
+    dismantle, canEquip, songOfTheElvesComplete,
+  },
 };

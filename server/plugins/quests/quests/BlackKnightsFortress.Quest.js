@@ -1,6 +1,6 @@
 /** Black Knights' Fortress: revision 240 capture 20260817T005704 and the OSRS Wiki. */
 module.exports = function registerBlackKnightsFortressQuest(api) {
-  const { Location, Equipment, Animation, Graphic, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Location, Equipment, Animation, Graphic, CountdownTask, TaskManager, TemplatedInstanceArea, StatementDialogue, Item, WorldDefinition, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
 
   const { registerQuest, startTranscript, QUEST_POINTS_ATTRIBUTE } = require("../QuestRuntime");
 
@@ -28,6 +28,34 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const CABBAGE_ITEM_ID = ItemIdentifiers.CABBAGE;
   const DRAYNOR_MANOR_CABBAGE_ITEM_ID = ItemIdentifiers.CABBAGE_3;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
+  const REWARD_COINS = 2500;
+  /** Other quests whose Sir Amik conversations must win over BKF's post-quest greeting. */
+  const SHARED_AMIK_ACTIVE_QUESTS = ["dragon_slayer_ii", "recipe_for_disaster"];
+
+  function reward(player) {
+    // forceAdd drops stackable coins at the reward tile when a full bag has no coin
+    // stack, so completing the quest can never destroy the recorded reward.
+    player.getInventory().forceAdd(player, new Item(COINS_ITEM_ID, REWARD_COINS));
+  }
+
+  function questStarted(player, key) {
+    const request = { player, key, started: false };
+    api.emitCustomEvent("quest:is-started", request);
+    return request.started === true;
+  }
+
+  function questComplete(player, key) {
+    const request = { player, key, complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  /** Recruitment Drive always claims Sir Amik until complete; the members quests claim him when active. */
+  function sharedAmikQuestActive(player) {
+    if (!WorldDefinition.isMembersWorld()) return false;
+    if (!questComplete(player, "recruitment_drive")) return true;
+    return SHARED_AMIK_ACTIVE_QUESTS.some((key) => questStarted(player, key) && !questComplete(player, key));
+  }
 
   const FORTRESS_ENTRANCE_DOOR_LOC_ID = ObjectIdentifiers.STURDY_DOOR;
   const BANQUET_HALL_DOOR_LOC_ID = ObjectIdentifiers.DOOR_68;
@@ -116,10 +144,6 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
       "",
       "I need at least <col=800000>12 Quest Points</col>.",
     ];
-  }
-
-  function reward(player) {
-    player.getInventory().adds(COINS_ITEM_ID, 2500);
   }
 
   function playVariant(api, player, npcId, page, variant, select) {
@@ -245,6 +269,9 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     const request = { player, key: "wanted", started: false };
     api.emitCustomEvent("quest:is-started", request);
     if (request.started) return false;
+    // Sir Amik is shared: let Recruitment Drive and the active members quests keep
+    // their own conversation instead of replacing it with this optional greeting.
+    if (sharedAmikQuestActive(player)) return false;
     event.handled = true;
     playVariant(api, player, SIR_AMIK_VARZE_NPC_ID, BKF_PAGE, V_START, () => [
       { player: "Hello Sir Amik." }, { type: "line", speaker: "Sir Amik Varze", text: "Hello, friend!" },
@@ -528,7 +555,7 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     }
     if (itemId === DRAYNOR_MANOR_CABBAGE_ITEM_ID) {
       if (stage !== STAGE_SABOTAGE) {
-        player.sendMessage("Why would I want to do that?");
+        playVariant(pluginApi, player, FORTRESS_WITCH_NPC_ID, BKF_PAGE, V_CABBAGE_BEFORE);
       } else {
         playVariant(pluginApi, player, FORTRESS_WITCH_NPC_ID, BKF_PAGE, V_CABBAGE_DRAYNOR);
       }

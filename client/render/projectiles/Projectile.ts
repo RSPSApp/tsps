@@ -218,7 +218,10 @@ export class Projectile {
         this.yaw =
             (Math.trunc(Math.atan2(this.speedX, this.speedY) * RAD_TO_RS_UNITS) + 1024) & 2047;
         this.pitch = Math.trunc(Math.atan2(this.speedZ, this.speedScalar) * 325.949) & 2047;
-        this.roll = (this.animationFrame * 32) & 2047;
+        // OSRS turns a projectile's model by its yaw and pitch only (Projectile.getModel rotates
+        // the pitch; there is no roll). A spin here turned animated models sideways: the Archive
+        // Guardian's rocks arc ~950 units up in model space and came in from the side.
+        this.roll = 0;
 
         if (this.frameLengths && this.frameLengths.length > 0) {
             this.frameCycle += cycles;

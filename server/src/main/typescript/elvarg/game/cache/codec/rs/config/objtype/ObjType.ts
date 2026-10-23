@@ -309,6 +309,10 @@ export class ObjType extends Type {
         } else if (opcode === 160) {
             // Rev 241: `stackable=never`.
             this.stackability = ObjStackability.NEVER;
+        } else if (opcode === 161) {
+            // `keeponlyduringseqs`: the sequences during which the item is kept.
+            const count = buffer.readUnsignedShort();
+            for (let i = 0; i < count; i++) buffer.readUnsignedShort();
         } else if (opcode === 251) {
             this.isUnlockable = true;
         } else if (opcode === 69) {
@@ -382,8 +386,8 @@ export class ObjType extends Type {
             // OSRS newer: small flag; consume a byte to maintain alignment.
             buffer.readUnsignedByte();
         } else if (opcode === 99) {
-            // OSRS newer: small flag; consume a byte to maintain alignment.
-            buffer.readUnsignedByte();
+            // Rev 241: `recolall` (one HSL colour).
+            buffer.readUnsignedShort();
         } else if (opcode === 75) {
             this.weight = buffer.readShort();
         } else if (opcode === 78) {

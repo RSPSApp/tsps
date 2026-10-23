@@ -9,11 +9,15 @@
  * - ::superior spawns the current task's superior beside the player, unlock or not.
  * - ::slayertask <amount> <task> sets a task outright ("::slayertask 20 abyssal demons"), from
  *   Duradel unless the player's last master is known.
+ * - ::mortimertasks <amount> sets how many Mortimer tasks the player has done (his modifiers
+ *   unlock at 15, 25 and 40, a third choice at 50) and drops a waiting choice, so the next one
+ *   is rolled with the new count.
  */
 const Data = require("./Data.Slayer");
 const State = require("./State.Slayer");
 const Tasks = require("./Tasks.Slayer");
 const Superiors = require("./Superiors.Slayer");
+const Choice = require("./Choice.Slayer");
 
 /** slayer_points is 17 bits wide. */
 const POINTS_CAP = (1 << 17) - 1;
@@ -71,6 +75,17 @@ function setTask({ player, parts }) {
   player.sendMessage(`Your task is now ${amount} ${task.displayName || task.name}.`);
 }
 
+function setMortimerTasks({ player, parts }) {
+  const amount = Number(parts?.[1]);
+  if (!Number.isInteger(amount) || amount < 0) {
+    player.sendMessage("Usage: ::mortimertasks <amount>");
+    return;
+  }
+  State.setVarp(player, "slayer_mortimer_tasks_completed", amount);
+  if (Choice.pending(player)) Choice.clearRoll(player);
+  player.sendMessage(`You have now completed ${amount} Mortimer tasks.`);
+}
+
 function attach(api) {
   const { DEVELOPER } = api.core.PlayerRights;
   api.registerCommand("completetask", completeTask, DEVELOPER, "Complete the current Slayer task");
@@ -78,6 +93,7 @@ function attach(api) {
   api.registerCommand("clearunlocks", clearUnlocks, DEVELOPER, "Clear every Slayer Rewards unlock");
   api.registerCommand("superior", spawnSuperior, DEVELOPER, "Spawn the current Slayer task's superior");
   api.registerCommand("slayertask", setTask, DEVELOPER, "Set a Slayer task: ::slayertask <amount> <task name>");
+  api.registerCommand("mortimertasks", setMortimerTasks, DEVELOPER, "Set Mortimer tasks completed: ::mortimertasks <amount>");
 }
 
-module.exports = { attach, completeTask, setPoints, clearUnlocks, spawnSuperior };
+module.exports = { attach, completeTask, setPoints, clearUnlocks, spawnSuperior, setMortimerTasks };

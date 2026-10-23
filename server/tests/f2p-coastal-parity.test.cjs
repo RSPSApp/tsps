@@ -72,23 +72,26 @@ function player() {
   const inventory = {
     getAmount: (id) => items.get(id) || 0,
     adds: (id, amount) => items.set(id, (items.get(id) || 0) + amount),
+    forceAdd: (_player, item) => items.set(item.getId(), (items.get(item.getId()) || 0) + item.getAmount()),
     deleteNumber: (id, amount) => items.set(id, Math.max(0, (items.get(id) || 0) - amount)),
     getFreeSlots: () => 28 - [...items].reduce((sum, [id, amount]) => sum + (id === 995 ? Number(amount > 0) : amount), 0),
     isFull: () => inventory.getFreeSlots() <= 0,
+    refreshItems() {},
   };
   let packet;
   packet = new Proxy({}, { get: (_, method) => (...args) => { packets.push([method, ...args]); return packet; } });
   const p = { attributes, items, bank, equipment, packets, messages, xp,
     getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory, getBanks: () => [{ getAmount: (id) => bank.get(id) || 0 }],
-    getEquipment: () => ({ getItems: () => equipment, get: () => null }), getLocation: () => location,
+    getEquipment: () => ({ getItems: () => equipment, get: () => null, refreshItems() {} }), getLocation: () => location,
+    getSpellbook: () => ({ getInterfaceId: () => 938 }),
     getPrivateArea: () => area instanceof core.PrivateArea ? area : null, getUsername: () => 'QuestTester', getPacketSender: () => packet,
     getFrameUpdater: () => ({ clear() {} }),
     getDialogueManager: () => ({ reset() {}, startDialogues() {}, isActive: () => false }),
     getSkillManager: () => ({ getCombatLevel: () => 20, getCurrentLevel: () => 1, addExperiences: (skill, amount) => xp.push([skill.getIndex(), amount]) }),
     sendMessage: (message) => messages.push(message), isPlayer: () => true, isNpc: () => false,
     getAsPlayer: () => p, getIndex: () => index, getArea: () => area, setArea: (value) => { area = value; },
-    moveTo: (value) => { location = value; }, getMovementQueue: () => ({ setBlockMovement() {}, addSteps: (value) => { location = value; } }),
+    moveTo: (value) => { location = value; }, getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() {}, addSteps: (value) => { location = value; } }),
     isRunningReturn: () => running, setRunning: (value) => { running = value; },
     setUntargetable() {}, setNpcTransformationId: (value) => { transform = value; },
     getNpcTransformationId: () => transform, performAnimation() {}, performGraphic() {},
@@ -336,14 +339,25 @@ test('Ned sells captured quest rope for 15 coins or four wool, refusing missing 
   assert.equal(p.items.get(1759), 0); assert.equal(p.items.get(954), 2);
 });
 
-test('Port Sarim sailing charges once and lands at the captured tile after five ticks', () => {
+test('as captured: Port Sarim and Karamja boats charge once, sail under ship_journey, and land on the deck nine ticks later', () => {
   const q = register('PiratesTreasure', 'pirates_treasure'), p = player(); p.items.set(995, 60);
   const travel = q.namedNpc.get('Seaman Thresnor:Travel'); travel({ player: p }); travel({ player: p });
-  assert.equal(p.items.get(995), 30); assert.ok(p.messages.includes('You board the ship and sail to Musa Point.'));
-  q.tick(4); assert.equal(p.getLocation().getX(), 3228); q.tick(1);
-  assert.equal(p.getLocation().getX(), 2956); assert.equal(p.getLocation().getY(), 3146);
-  q.namedNpc.get('Customs officer:Travel')({ player: p }); q.tick(5);
-  assert.equal(p.getLocation().getX(), 3029); assert.equal(p.getLocation().getY(), 3217);
+  assert.equal(p.items.get(995), 30, 'a second click while sailing is not charged');
+  assert.deepEqual(p.messages, ['You pay 30 coins and board the ship.']);
+  assert.ok(p.getPrivateArea(), 'at sea on the ship instance');
+  assert.ok(p.packets.some((row) => row[0] === 'sendInterface' && row[1] === 299));
+  assert.ok(p.packets.some((row) => row[0] === 'sendClientScript' && row[1] === 1131 && row[2] === 4));
+  assert.ok(p.packets.some((row) => row[0] === 'closeSubInterface' && row[1] === ((161 << 16) | 79)), 'the inventory tab closes');
+  q.tick(8); assert.ok(p.getPrivateArea(), 'still sailing after eight ticks');
+  q.tick(1);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [2956, 3143, 1]);
+  assert.equal(p.getPrivateArea(), null);
+  assert.ok(p.packets.some((row) => row[0] === 'sendTabInterface' && row[1] === 79 && row[2] === 149), 'the inventory tab is back');
+  p.packets.length = 0;
+  q.namedNpc.get('Customs officer:Travel')({ player: p });
+  assert.ok(p.packets.some((row) => row[0] === 'sendClientScript' && row[1] === 1131 && row[2] === 5));
+  q.tick(9);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3032, 3217, 1]);
   // After Pandemonium the boats name their stops instead of offering Travel.
   p.items.set(995, 30); q.namedNpc.get('Captain Tobias:The Pandemonium')({ player: p }); q.tick(5);
   assert.equal(p.items.get(995), 0); assert.equal(p.getLocation().getX(), 3069); assert.equal(p.getLocation().getY(), 2987);

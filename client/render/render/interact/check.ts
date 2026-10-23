@@ -28,7 +28,7 @@ import {
     subscribeTick,
 } from "../../../network/ServerConnection";
 import { sendLogin } from "../../../network/ServerConnection";
-import { sendPlayerOption } from "../../../network/serverConnection/outgoing/interact";
+import { sendPlayerOption, sendWorldEntityOption } from "../../../network/serverConnection/outgoing/interact";
 import { flushPackets } from "../../../network/packet";
 import { createTextureArray } from "../../../picogl/PicoTexture";
 import { RS_TO_RADIANS } from "../../../rs/MathConstants";
@@ -195,12 +195,62 @@ import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { RENDER_CONSTANTS, formatPlayerCombatLabel } from "../constants";
 
-export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
+/** What the last world interaction pass saw, per renderer host. */
+type InteractionPassInputs = {
+    mouseX: number;
+    mouseY: number;
+    clientCycle: number;
+    menuOpen: boolean;
+    camera: Float32Array;
+};
+const lastPassInputs = new WeakMap<object, InteractionPassInputs>();
 
-        const frameCount = host.stats.frameCount;
-        host.lastInteractionRaycastHitCount = 0;
-        host.lastInteractionMenuOptionCount = 0;
-        let raycastHitCount = 0;
+/**
+ * True when nothing the world menu depends on changed since the last pass: the pointer, the
+ * camera, the client cycle (the world itself only changes on cycles) and the menu. Without this
+ * the scene is raycast at the display's frame rate under a still pointer.
+ */
+function isInteractionPassUnchanged(
+    host: WebGLOsrsRendererHost,
+    mouseX: number,
+    mouseY: number,
+    clicked: boolean,
+): boolean {
+    const camera = host.osrsClient.camera;
+    const clientCycle = getClientCycle() | 0;
+    const menuOpen = !!host.osrsClient.menuOpen;
+    let last = lastPassInputs.get(host);
+    let unchanged =
+        !clicked &&
+        !!last &&
+        last.mouseX === mouseX &&
+        last.mouseY === mouseY &&
+        last.clientCycle === clientCycle &&
+        last.menuOpen === menuOpen;
+    if (!last) {
+        last = { mouseX, mouseY, clientCycle, menuOpen, camera: new Float32Array(18) };
+        lastPassInputs.set(host, last);
+    }
+    const cam = last.camera;
+    for (let i = 0; i < 16; i++) {
+        if (cam[i] !== camera.viewMatrix[i]) {
+            cam[i] = camera.viewMatrix[i];
+            unchanged = false;
+        }
+    }
+    if (cam[16] !== camera.projectionMatrix[0] || cam[17] !== camera.projectionMatrix[5]) {
+        cam[16] = camera.projectionMatrix[0];
+        cam[17] = camera.projectionMatrix[5];
+        unchanged = false;
+    }
+    last.mouseX = mouseX;
+    last.mouseY = mouseY;
+    last.clientCycle = clientCycle;
+    last.menuOpen = menuOpen;
+    return unchanged;
+}
+
+export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
 
         const inputManager = host.osrsClient.inputManager;
         const mouseX = inputManager.getInteractionMouseX();
@@ -210,6 +260,14 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         const pickY = inputManager.pickY;
         const picked = pickX !== -1 && pickY !== -1;
         const leftClicked = inputManager.leftClickX !== -1 && inputManager.leftClickY !== -1;
+        if (isInteractionPassUnchanged(host, mouseX, mouseY, picked || leftClicked || isMouseDown)) {
+            return;
+        }
+
+        const frameCount = host.stats.frameCount;
+        host.lastInteractionRaycastHitCount = 0;
+        host.lastInteractionMenuOptionCount = 0;
+        let raycastHitCount = 0;
 
         // If the click is inside the bottom-right UI tabs region, consume it (don't interact with world).
         if (leftClicked) {
@@ -235,6 +293,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         ) {
             if (mouseX === -1 || mouseY === -1) {
                 host.clearInteractHighlightHoverTarget();
+            } else {
+                // Nothing was built during the cooldown: run again as soon as it ends.
+                lastPassInputs.delete(host);
             }
             return;
         }
@@ -333,6 +394,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             // PERF: Reuse cached arrays/sets instead of allocating new ones each frame
             const locIds = host.cachedLocIds;
             locIds.clear();
+            const worldEntityIds = new Set<number>();
             const objIds = host.cachedObjIds;
             objIds.clear();
             const npcIds = host.cachedNpcIds;
@@ -819,6 +881,39 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     if (locIds.has(dedupeKey)) continue;
                     locIds.add(dedupeKey);
 
+                    // A loc hit on a static ship's deck scene offers the world entity's own
+                    // actions (Board/Attack) instead, unless the player is already on it.
+                    const weIndex = (host as any).getWorldEntityIndexForMapId?.(hit.mapId);
+                    const currentWorldView = (host as any).getControlledPlayerWorldViewId?.() ?? -1;
+                    if (typeof weIndex === "number" && weIndex >= 0 && !worldEntityIds.has(weIndex)) {
+                        worldEntityIds.add(weIndex);
+                        const overlay = (host as any).worldEntityOverlays?.get(weIndex);
+                        const weType = overlay && host.osrsClient.worldEntityTypeLoader?.load(overlay.configId);
+                        let actions = (weType?.actions ?? []).map((action: string | null, index: number) =>
+                            action ? { action, index } : undefined).filter(Boolean) as Array<{ action: string; index: number }>;
+                        if (actions.length === 0 && weType?.name && weType.name !== "null") {
+                            actions = [{ action: "Board", index: 0 }];
+                        }
+                        if (weIndex === currentWorldView) {
+                            const board = actions.find(({ action }) => /^board$/i.test(action));
+                            if (!board) actions = [];
+                            else actions = [{ action: "Disembark", index: board.index }];
+                        }
+                        for (const { action, index } of actions) {
+                            menuEntries.push({
+                                option: action,
+                                targetId: weIndex,
+                                targetType: MenuTargetType.WORLD_ENTITY,
+                                targetName: weType?.name || "ship",
+                                targetLevel: -1,
+                                mapX: localX,
+                                mapY: localY,
+                                opcode: MenuOpcode.Custom,
+                                onClick: () => sendWorldEntityOption(weIndex, index + 1),
+                            });
+                        }
+                    }
+
                     // Item selection suppresses normal actions/examine.
                     if (ClientState.isItemSelected === 1) {
                         const itemName =
@@ -910,7 +1005,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         plane,
                     );
                     if (!stacks || stacks.length === 0) continue;
-                    const groundItemsPlugin = host.osrsClient.groundItemsPlugin;
+                    const plugins = host.osrsClient.clientPlugins;
 
                     const tileKey = `${localX}:${localY}`;
                     if (objIds.has(tileKey)) continue;
@@ -923,7 +1018,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         for (const stack of stacks) {
                             const objType = host.osrsClient.objTypeLoader.load(stack.itemId);
                             if (!objType || objType.name === "null") continue;
-                            const menuName = groundItemsPlugin.getMenuTargetName(
+                            const menuName = plugins.groundItemMenuName(
                                 stack,
                                 objType.name,
                             );
@@ -956,7 +1051,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             for (const stack of stacks) {
                                 const objType = host.osrsClient.objTypeLoader.load(stack.itemId);
                                 if (!objType || objType.name === "null") continue;
-                                const menuName = groundItemsPlugin.getMenuTargetName(
+                                const menuName = plugins.groundItemMenuName(
                                     stack,
                                     objType.name,
                                 );
@@ -986,12 +1081,12 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     for (const stack of stacks) {
                         const objType = host.osrsClient.objTypeLoader.load(stack.itemId);
                         if (!objType || objType.name === "null") continue;
-                        const menuName = groundItemsPlugin.getMenuTargetName(stack, objType.name);
-                        const menuTarget = groundItemsPlugin.getMenuTargetColorized(
+                        const menuName = plugins.groundItemMenuName(stack, objType.name);
+                        const menuTarget = plugins.groundItemMenuTarget(
                             stack,
                             menuName,
                         );
-                        const deprioritized = groundItemsPlugin.shouldDeprioritizeInMenu(stack);
+                        const deprioritized = plugins.deprioritizeGroundItem(stack);
 
                         const actions = objType.groundActions ?? [];
                         for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {

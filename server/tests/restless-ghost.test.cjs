@@ -1,8 +1,13 @@
 // Run after `yarn build`: node --test tests/restless-ghost.test.cjs
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { test, before } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
+// Quest stage updates render cache-backed quest-list metadata. Keep one live store
+// for the whole file so cached definitions and RegionManager share its lifetime.
+before(async () => {
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+});
 
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');

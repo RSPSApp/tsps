@@ -15,7 +15,7 @@ export function playerInterpolation(
     const action = client.playerAnimController.getSequenceState(serverId);
     const movement = client.playerAnimController.getMovementSequenceState(serverId);
     const sample = (id: number, index: number, isOverlay: boolean) => {
-        if (!client.animationSmoothingPlugin?.smoothsPlayer(id)) return undefined;
+        if (!client.clientPlugins.smoothsPlayer(id)) return undefined;
         const isAction = !isOverlay && action?.seqId === id && action.delay === 0;
         const state = isAction ? action : movement;
         if (state?.seqId !== id || state.frame !== index) return undefined;

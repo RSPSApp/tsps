@@ -29,13 +29,15 @@ module.exports = function registerLearningTheRopesQuest(api) {
 
   let quest;
 
-  /** Mirrors a tutorial step into the quest stage; completes it on crossing 671. */
+  /**
+   * Mirrors a tutorial step into the quest stage; completes it on crossing 671. Completing
+   * writes the endstate (671) to the shared varp, so the stage then still follows the step:
+   * skipping the island jumps straight to 1000, and left at 671 the cache's gameframe kept the
+   * tabs it locks on the island (logout among them) disabled until the next login.
+   */
   function applyTutorialProgress(player, value) {
     if (!player || player.isPlayerBot?.() === true) return;
-    if (value >= STAGE_COMPLETE && !quest.isComplete(player)) {
-      quest.complete(player);
-      return;
-    }
+    if (value >= STAGE_COMPLETE && !quest.isComplete(player)) quest.complete(player);
     if (quest.getStage(player) !== value) quest.setStage(player, value);
   }
 

@@ -1,5 +1,6 @@
 /**
- * Burying bones, from plugins/skills/data/bones.json (docs/prayer-bones.md).
+ * Burying bones, from plugins/skills/data/bones.json, and scattering demonic ashes, from
+ * plugins/skills/data/ashes.json (docs/prayer-bones.md).
  *
  * Other plugins bury through custom events:
  *   api.emitCustomEvent("prayer:bury", { player, itemId, scale, crushed })
@@ -13,24 +14,39 @@
  *        `restore` once, so two sources (the Catacombs, a dragonbone necklace) never stack.
  */
 const DATA = require("./data/bones.json");
+const ASHES = require("./data/ashes.json");
 
 const BURY_DELAY_MS = 1200; // Two OSRS game ticks.
 const BURY_ANIMATION = 827; // human_pickupfloor
+// Scattering as live OSRS sends it (rsprox captures, docs/prayer-bones.md): no spotanim.
+const SCATTER_ANIMATION = 2295; // farming_ingredient_sprinkle
+const SCATTER_SOUND = 2444; // farming_sprinkle
 
 let api = null;
 let bones = null;
+let ashes = null;
 
-/** The bone rows by item id, resolved from their gamevals on first use. */
-function boneFor(itemId) {
-  if (!bones) {
-    bones = new Map();
-    for (const row of DATA.bones) {
-      const id = api.core.CacheDefinitions.getObjId(row.obj);
-      if (!Number.isInteger(id)) throw new Error(`[Prayer] unknown obj gameval ${row.obj}`);
-      bones.set(id, row);
-    }
+/** Rows keyed by item id, resolved from their obj gamevals on first use. */
+function rowsByItemId(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    const id = api.core.CacheDefinitions.getObjId(row.obj);
+    if (!Number.isInteger(id)) throw new Error(`[Prayer] unknown obj gameval ${row.obj}`);
+    map.set(id, row);
   }
+  return map;
+}
+
+/** The bone rows by item id. */
+function boneFor(itemId) {
+  if (!bones) bones = rowsByItemId(DATA.bones);
   return bones.get(itemId) ?? null;
+}
+
+/** The demonic ash rows by item id. */
+function ashFor(itemId) {
+  if (!ashes) ashes = rowsByItemId(ASHES.ashes);
+  return ashes.get(itemId) ?? null;
 }
 
 /** Experience is whole in tsps; a bone's tenths round up, as the old table did (bones 4.5 -> 5). */
@@ -109,11 +125,37 @@ function buryBone({ player, itemId, slot }) {
   return true;
 }
 
+/**
+ * "Scatter" on demonic ashes: Prayer experience, no restore (Wiki, Remains). Unlike burying, it
+ * resolves on the tick it is clicked: live OSRS removes the ash and sends the experience, the
+ * message, the sequence and the synth together.
+ */
+function scatterAshes({ player, itemId, slot }) {
+  const core = api.core;
+  const ash = ashFor(itemId);
+  if (!ash) return false;
+  // Burying's two-tick click delay; the captures only show scatters three or more ticks apart.
+  if (!player.getClickDelay().elapsedTime(BURY_DELAY_MS)) return true;
+  const inventory = player.getInventory();
+  if (inventory.get(slot)?.getId() !== itemId) return true;
+
+  player.getSkillManager().stopSkillable();
+  player.getPacketSender().sendInterfaceRemoval();
+  inventory.deleteAtSlot(slot, 1);
+  player.performAnimation(new core.Animation(SCATTER_ANIMATION));
+  core.Sounds.sendSound(player, new core.Sound(SCATTER_SOUND, 1, 0, 0));
+  player.sendMessage("You scatter the ashes.");
+  player.getSkillManager().addExperiences(core.Skill.PRAYER, ash.xp);
+  player.getClickDelay().reset();
+  return true;
+}
+
 module.exports = {
   name: "Prayer",
   register(pluginApi) {
     api = pluginApi;
     api.onItemFirstAction(buryBone);
+    api.onItemFirstAction(scatterAshes);
     api.onCustomEvent("prayer:bury", buryRequest);
     api.onCustomEvent("prayer:bone", boneRequest);
   },

@@ -33,7 +33,7 @@ test('show sends what the Mad Angel capture does, then fades the bar in from 254
   emit('boss-hud:show', { player, npcId: 16305, current: 755, maximum: 755 });
   assert.deepEqual(player.log, [
     ['varp', 1683, 16305], ['varbit', 6099, 755], ['varbit', 6100, 755], ['varbit', 12401, 1],
-    ['colour', 13, 25600], ['colour', 14, 576], ['colour', 15, 800],
+    ['colour', 14, 25600], ['colour', 15, 576], ['colour', 16, 800],
     ['script', 2376, (303 << 16) | 3],
     ['script', 2887, 254],
   ]);
@@ -49,7 +49,7 @@ test('update sends only what changed, and new colours are redrawn', () => {
   assert.deepEqual(player.log, [['varbit', 6099, 480]]);
   player.log.length = 0;
   emit('boss-hud:update', { player, colours: [132, 623, 853] });
-  assert.deepEqual(player.log, [['colour', 13, 132], ['colour', 14, 623], ['colour', 15, 853], ['script', 2102, 1]]);
+  assert.deepEqual(player.log, [['colour', 14, 132], ['colour', 15, 623], ['colour', 16, 853], ['script', 2102, 1]]);
   player.log.length = 0;
   emit('boss-hud:update', { player, npcId: 14707, current: 480, maximum: 525, force: true });
   assert.equal(player.log.length, 3, 'forced: all three again');

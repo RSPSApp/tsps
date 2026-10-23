@@ -11,10 +11,21 @@
  * 207, 15 accepted Razmire's shade hunt, 20/25/30/35/40 one..five shades
  * killed, 45 gave remains to Razmire, 47 showed them to Ulsquire, 50 temple
  * discussed, 55 temple repair begun, 60 altar can be lit, 65 sacred oil made,
- * 70 pyre logs made, 75 logs on the pyre, 80 shade cremated, 100 complete.
+ * 70 pyre logs made, 75 logs on the pyre, 80 shade cremated, 85 complete.
+ * The rev-227 capture also writes temple varps 343 (repair %) and 345
+ * (sanctity). Varp 340 is a bitfield: the cache names made_perm_serum (bit 7),
+ * pyre_loc (9-13) and temple_resources (14-27). Quest Helper requires bit 1/3
+ * for partial 207 cures and bit 5/6 for permanent 208; bits 0/2 (used 207) come
+ * from the older LostCity-derived partial mask. Bit 7 matches the cache's
+ * made_perm_serum and is set at the altar. The capture's 207 cure values are
+ * 12 for Razmire (bits 2+3) and 15 for both priests (adds bits 0+1). Repair
+ * follows the captured build-tick model: one
+ * material set per tick, +1% repair and +1 sanctity, with a worn Flamtaer
+ * bracelet performing five ticks per click.
  *
- * Source: LostCityRS/Content scripts/quests/quest_mortton and
- * scripts/minigames/game_mortton (pinned in issue #196).
+ * Sources: OSRS Wiki quick guide, Quest Helper pinned route, and RSProx rev-227
+ * capture 1846. Legacy LostCityRS scripts (quest_mortton/game_mortton, pinned
+ * in issue #196) remain the starting point for the minigame state.
  *
  * Gaps: the afflicted/cured transformations are modelled with per-player flags
  * rather than NPC changes (the fire altar is a real spawned object and its lit
@@ -32,8 +43,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     ItemIdentifiers,
     NpcIdentifiers,
     ObjectIdentifiers,
+    Equipment,
+    CountdownTask,
+    TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, openBook, startTranscript } = require("../QuestRuntime");
 
   const ULSQUIRE_NPC_IDS = new Set([
     NpcIdentifiers.AFFLICTED_ULSQUIRE_,
@@ -61,6 +75,18 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   const START_HOOK = "quest:shades-of-mort-ton:start";
 
   const VARP_SHADES_OF_MORTTON = 339;
+  const VARP_MORTTON_MULTI = 340;
+  const VARP_TEMPLE_REPAIRED = 343;
+  const VARP_TEMPLE_SANCTITY = 345;
+  // Varp 340: bits 1/3 are Quest Helper's partial 207 visible flags (kept as
+  // 3/12 with the LostCity-derived 0/2 used flags), bits 5/6 are its permanent
+  // 208 flags, and bit 7 is the cache's made_perm_serum, set at the altar.
+  const MULTI_ULSQUIRE_CURED = 0b0011;
+  const MULTI_RAZMIRE_CURED = 0b1100;
+  const MULTI_ULSQUIRE_PERMANENT = 1 << 5;
+  const MULTI_RAZMIRE_PERMANENT = 1 << 6;
+  const MULTI_PERM_SERUM = 1 << 7;
+  const FLAMTAER_BRACELET_REPAIRS = 5;
 
   const STAGE_NOT_STARTED = 0;
   const STAGE_READ_DIARY = 5;
@@ -77,7 +103,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   const STAGE_CREATED_PYRE_LOGS = 70;
   const STAGE_LOGS_ON_PYRE = 75;
   const STAGE_LIT_PYRE = 80;
-  const STAGE_COMPLETE = 100;
+  const STAGE_COMPLETE = 85;
 
   const DIARY_ITEM_ID = ItemIdentifiers.DIARY_2;
   const REMAINS_ITEM_IDS = [
@@ -169,6 +195,14 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     [ItemIdentifiers.SACRED_OIL_1_, ItemIdentifiers.VIAL],
   ]);
 
+  /** Serum 207 placed in the sacred flame becomes permanent serum 208. */
+  const SERUM_207_TO_208 = new Map([
+    [ItemIdentifiers.SERUM_207_4_, ItemIdentifiers.SERUM_208_4_],
+    [ItemIdentifiers.SERUM_207_3_, ItemIdentifiers.SERUM_208_3_],
+    [ItemIdentifiers.SERUM_207_2_, ItemIdentifiers.SERUM_208_2_],
+    [ItemIdentifiers.SERUM_207_1_, ItemIdentifiers.SERUM_208_1_],
+  ]);
+
   /** One dose of olive oil sanctifies into the same-dose sacred oil. */
   const OLIVE_TO_SACRED = new Map([
     [ItemIdentifiers.OLIVE_OIL_4_, ItemIdentifiers.SACRED_OIL_4_],
@@ -195,11 +229,44 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   const MET_RAZMIRE_ATTRIBUTE = "quest.shades_of_mortton.met_razmire";
   const OLIVE_OIL_ATTRIBUTE = "quest.shades_of_mortton.olive_oil";
   const TABLE_SEARCHED_ATTRIBUTE = "quest.shades_of_mortton.table_searched";
-  const TEMPLE_BUILD_ATTRIBUTE = "quest.shades_of_mortton.temple_build";
-  const TEMPLE_BUILD_REQUIRED = 5;
+  const TEMPLE_REPAIRED_ATTRIBUTE = "shades-of-mortton:temple-repaired";
+  const TEMPLE_SANCTITY_ATTRIBUTE = "shades-of-mortton:temple-sanctity";
+  // Older saves stored a 0..5 wall-repair count under this key.
+  const LEGACY_TEMPLE_BUILD_ATTRIBUTE = "quest.shades_of_mortton.temple_build";
   const PYRE_LOGS_ATTRIBUTE = "quest.shades_of_mortton.pyre_logs";
   const PYRE_REMAINS_ATTRIBUTE = "quest.shades_of_mortton.pyre_remains";
-  const PERM_SERUM_ATTRIBUTE = "quest.shades_of_mortton.perm_serum";
+  const PERM_ULSQUIRE_ATTRIBUTE = "shades-of-mortton:perm-ulsquire";
+  const PERM_RAZMIRE_ATTRIBUTE = "shades-of-mortton:perm-razmire";
+  const MULTI_ATTRIBUTE = "shades-of-mortton:multi";
+  const PERM_GIFT_ATTRIBUTE = "shades-of-mortton:perm-gift";
+  const MADE_PERM_SERUM_ATTRIBUTE = "shades-of-mortton:made-perm-serum";
+
+  const DIARY_TITLE = "Diary of Herbi Flax";
+  // Capture 1846 ticks 7163-7166: the book opens on the page 11 spread.
+  const DIARY_PAGES = [
+    {
+      44: "<col=000080> ~ Page 11 ~ ",
+      45: "<col=000000>Some local townsfolk are",
+      46: "<col=000000>worried about the mists",
+      47: "<col=000000>coming from the North East.",
+      48: "<col=000000>Ordered more fire logs from",
+      49: "<col=000000>Razmire's shop, must find a",
+      50: "<col=000000>more reliable source of",
+      51: "<col=000000>fyreneght. That money",
+      52: "<col=000000>grabbing Razmire didn't",
+      53: "<col=000000>know what I was talking",
+      54: "<col=000000>about, had to explain they",
+      55: "<col=000000>were ashes! Herbs like",
+      56: "<col=000000>harralander, marrentil and",
+      57: "<col=000000>tarromin in short supply. I'm",
+      58: "<col=000000>hoping the latter will make",
+      60: "<col=000000>solution 194 the best yet.",
+      61: "",
+      62: "The remains of a primitive",
+      63: "temple to the north have",
+      64: "piqued my curiosity.",
+    },
+  ];
 
   const REPAIR_MATERIALS_MESSAGE =
     "~ Repairing the temple ~To repair the temple you need to increase your material resource pool by bringing limestone bricks, timber beams (or wooden planks) and swamp paste, either in your inventory or in a Flamtaer bag.";
@@ -219,6 +286,63 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       : inventory.isFull()
         ? 0
         : 28;
+  }
+
+  function templeProgress(player) {
+    let repaired = Math.min(100, Number(player.getAttribute(TEMPLE_REPAIRED_ATTRIBUTE)) || 0);
+    let sanctity = Math.min(100, Number(player.getAttribute(TEMPLE_SANCTITY_ATTRIBUTE)) || 0);
+    if (repaired === 0 && sanctity === 0) {
+      // Saves from the old 0..5 model were already allowed to light the altar
+      // once five walls had been repaired.
+      if (quest.getStage(player) >= STAGE_CAN_LIGHT_ALTAR) {
+        repaired = 100;
+        sanctity = 20;
+      } else {
+        const built = Number(player.getAttribute(LEGACY_TEMPLE_BUILD_ATTRIBUTE)) || 0;
+        repaired = Math.min(100, built);
+        sanctity = Math.min(100, built);
+      }
+    }
+    return { repaired, sanctity };
+  }
+
+  function syncTemple(player) {
+    const { repaired, sanctity } = templeProgress(player);
+    const packet = player.getPacketSender();
+    packet.sendConfig(VARP_TEMPLE_REPAIRED, repaired);
+    packet.sendConfig(VARP_TEMPLE_SANCTITY, sanctity);
+  }
+
+  function curedMultiValue(player) {
+    let value = 0;
+    if (player.getAttribute(MET_ULSQUIRE_ATTRIBUTE)) {
+      value |= MULTI_ULSQUIRE_CURED;
+    }
+    if (player.getAttribute(MET_RAZMIRE_ATTRIBUTE)) {
+      value |= MULTI_RAZMIRE_CURED;
+    }
+    if (player.getAttribute(PERM_ULSQUIRE_ATTRIBUTE)) {
+      value |= MULTI_ULSQUIRE_PERMANENT;
+    }
+    if (player.getAttribute(PERM_RAZMIRE_ATTRIBUTE)) {
+      value |= MULTI_RAZMIRE_PERMANENT;
+    }
+    if (player.getAttribute(MADE_PERM_SERUM_ATTRIBUTE)) {
+      value |= MULTI_PERM_SERUM;
+    }
+    return value;
+  }
+
+  function setMulti(player) {
+    const value = curedMultiValue(player);
+    player.setAttribute(MULTI_ATTRIBUTE, value);
+    player.getPacketSender().sendConfig(VARP_MORTTON_MULTI, value);
+  }
+
+  function syncCuredNpcs(player) {
+    // Rebuild from the saved cure attributes so permanent 208 bits (5/6) and
+    // the altar bit (7) survive login even if an older save cached a stale mask.
+    setMulti(player);
   }
 
   function remainingCount(player) {
@@ -488,6 +612,13 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   /** Quest actions and item hand-outs in the transcript branches. */
   function handleAction(event) {
     const { player, npcId, stepId } = event;
+    if (stepId === "eINek0") {
+      // "Yes." on the diary confirmation opens the captured book interface.
+      event.handled = true;
+      handleStartHook({ player, hook: START_HOOK });
+      openBook(player, DIARY_TITLE, DIARY_PAGES);
+      return;
+    }
     if (stepId === "LyXCwi") {
       if (quest.getStage(player) >= STAGE_LIT_PYRE && !quest.isComplete(player)) {
         quest.complete(player);
@@ -548,7 +679,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       startTranscript(api, player, NpcIdentifiers.ULSQUIRE_SHAUNCY, PAGE, "reading-the-book");
       return;
     }
-    player.sendMessage("You flick through Herbi Flax's diary.");
+    openBook(player, DIARY_TITLE, DIARY_PAGES);
   }
 
   /** Ashes finish serum 207; sacred oil turns logs into pyre logs. */
@@ -607,18 +738,29 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     const { player } = event;
     if (quest.getStage(player) < STAGE_READ_DIARY) return;
     if (!drainDoses(player, is207 ? SERUM_207_ITEM_IDS : SERUM_208_ITEM_IDS, 1)) return;
-    const key = ULSQUIRE_NPC_IDS.has(npcId)
-      ? MET_ULSQUIRE_ATTRIBUTE
-      : MET_RAZMIRE_ATTRIBUTE;
-    player.setAttribute(key, player.getAttribute(key) || "cured");
+    const isUlsquire = ULSQUIRE_NPC_IDS.has(npcId);
+    if (is208) {
+      player.setAttribute(
+        isUlsquire ? PERM_ULSQUIRE_ATTRIBUTE : PERM_RAZMIRE_ATTRIBUTE,
+        true
+      );
+      setMulti(player);
+    } else {
+      player.setAttribute(
+        isUlsquire ? MET_ULSQUIRE_ATTRIBUTE : MET_RAZMIRE_ATTRIBUTE,
+        player.getAttribute(isUlsquire ? MET_ULSQUIRE_ATTRIBUTE : MET_RAZMIRE_ATTRIBUTE) ||
+          "cured"
+      );
+      setMulti(player);
+    }
     if (quest.getStage(player) < STAGE_MADE_SERUM) {
       player.sendMessage(
         "The serum it works...but it's not too fresh, make some yourself and then it might work for longer."
       );
       return;
     }
-    if (is208 && !player.getAttribute(PERM_SERUM_ATTRIBUTE)) {
-      player.setAttribute(PERM_SERUM_ATTRIBUTE, true);
+    if (is208 && !player.getAttribute(PERM_GIFT_ATTRIBUTE)) {
+      player.setAttribute(PERM_GIFT_ATTRIBUTE, true);
       const coins = 180 + Math.floor(Math.random() * 41);
       player.getInventory().adds(ItemIdentifiers.COINS, coins);
       player.sendMessage(`You've been given ${coins} coins.`);
@@ -659,6 +801,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     if (ALTAR_OBJECT_IDS.has(objectId) && itemId === ItemIdentifiers.TINDERBOX) {
       event.handled = true;
       lightAltar(player);
+      return;
+    }
+    if (ALTAR_OBJECT_IDS.has(objectId) && SERUM_207_ITEM_IDS.includes(itemId)) {
+      event.handled = true;
+      sanctifySerum(player);
     }
   }
 
@@ -685,21 +832,80 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       player.sendMessage(REPAIR_MATERIALS_MESSAGE);
       return;
     }
-    player.getInventory().deleteNumber(ItemIdentifiers.LIMESTONE_BRICK, 1);
-    player.getInventory().deleteNumber(
-      held(player, ItemIdentifiers.TIMBER_BEAM)
-        ? ItemIdentifiers.TIMBER_BEAM
-        : ItemIdentifiers.PLANK,
-      1
+    // One build tick consumes one material set. A worn Flamtaer bracelet
+    // performs the bracelet's rapid-build ticks from one click (capture 1846).
+    const bracelet =
+      player.getEquipment?.()?.get?.(Equipment.HANDS_SLOT)?.getId?.() ===
+      ItemIdentifiers.FLAMTAER_BRACELET;
+    const ticks = bracelet ? FLAMTAER_BRACELET_REPAIRS : 1;
+    const timberId = held(player, ItemIdentifiers.TIMBER_BEAM)
+      ? ItemIdentifiers.TIMBER_BEAM
+      : ItemIdentifiers.PLANK;
+    if (
+      !held(player, ItemIdentifiers.LIMESTONE_BRICK, ticks) ||
+      !held(player, timberId, ticks) ||
+      !held(player, ItemIdentifiers.SWAMP_PASTE, 5 * ticks)
+    ) {
+      player.sendMessage(REPAIR_MATERIALS_MESSAGE);
+      return;
+    }
+    player.getInventory().deleteNumber(ItemIdentifiers.LIMESTONE_BRICK, ticks);
+    player.getInventory().deleteNumber(timberId, ticks);
+    player.getInventory().deleteNumber(ItemIdentifiers.SWAMP_PASTE, 5 * ticks);
+    const { repaired, sanctity } = templeProgress(player);
+    player.setAttribute(
+      TEMPLE_REPAIRED_ATTRIBUTE,
+      Math.min(100, repaired + ticks)
     );
-    player.getInventory().deleteNumber(ItemIdentifiers.SWAMP_PASTE, 5);
-    const built = (Number(player.getAttribute(TEMPLE_BUILD_ATTRIBUTE)) || 0) + 1;
-    player.setAttribute(TEMPLE_BUILD_ATTRIBUTE, built);
+    // Capture 1846: one repair click gives +1% repair and +2 sanctity, then a
+    // separate sanctity tick lands a few ticks later.
+    player.setAttribute(
+      TEMPLE_SANCTITY_ATTRIBUTE,
+      Math.min(100, sanctity + Math.min(2, ticks + 1))
+    );
+    syncTemple(player);
+    TaskManager.submit(new CountdownTask(player, 4, () => {
+      if (player.isRegistered?.() === false) return;
+      const progress = templeProgress(player);
+      player.setAttribute(
+        TEMPLE_SANCTITY_ATTRIBUTE,
+        Math.min(100, progress.sanctity + 1)
+      );
+      syncTemple(player);
+    }));
     player.sendMessage("You repair the temple wall.");
     if (stage < STAGE_REBUILD_TEMPLE) quest.setStage(player, STAGE_REBUILD_TEMPLE);
-    if (built >= TEMPLE_BUILD_REQUIRED && quest.getStage(player) < STAGE_CAN_LIGHT_ALTAR) {
+    const progress = templeProgress(player);
+    if (
+      progress.repaired >= 100 &&
+      progress.sanctity >= 20 &&
+      quest.getStage(player) < STAGE_CAN_LIGHT_ALTAR
+    ) {
       quest.setStage(player, STAGE_CAN_LIGHT_ALTAR);
       player.sendMessage("You are now allowed to light the holy fire altar.");
+    }
+  }
+
+  /** Serum 207 placed in the sacred flame becomes serum 208 of the same dose. */
+  function sanctifySerum(player) {
+    if (quest.getStage(player) < STAGE_CAN_LIGHT_ALTAR) {
+      player.sendMessage(
+        "You need to have repaired or reinforced the walls of the temple before you can use the sacred flame."
+      );
+      return;
+    }
+    if (!altarLit) {
+      player.sendMessage("The fire altar needs to be lit before you can sanctify the serum.");
+      return;
+    }
+    for (const [serumId, permanentId] of SERUM_207_TO_208) {
+      if (player.getInventory().getAmount(serumId) <= 0) continue;
+      player.getInventory().deleteNumber(serumId, 1);
+      player.getInventory().adds(permanentId, 1);
+      player.setAttribute(MADE_PERM_SERUM_ATTRIBUTE, true);
+      setMulti(player);
+      player.sendMessage("You sanctify the serum in the sacred flame.");
+      return;
     }
   }
 
@@ -867,7 +1073,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   }
 
   function handleLogin({ player }) {
+    // The old completion value was 100; native rev-227 uses 85.
+    if (quest.getStage(player) > STAGE_COMPLETE) quest.setStage(player, STAGE_COMPLETE);
     refreshQuestList(player);
+    syncTemple(player);
+    syncCuredNpcs(player);
   }
 
   api.persistAttribute(KILLS_ATTRIBUTE);
@@ -875,10 +1085,15 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   api.persistAttribute(MET_RAZMIRE_ATTRIBUTE);
   api.persistAttribute(OLIVE_OIL_ATTRIBUTE);
   api.persistAttribute(TABLE_SEARCHED_ATTRIBUTE);
-  api.persistAttribute(TEMPLE_BUILD_ATTRIBUTE);
+  api.persistAttribute(TEMPLE_REPAIRED_ATTRIBUTE, 0);
+  api.persistAttribute(TEMPLE_SANCTITY_ATTRIBUTE, 0);
   api.persistAttribute(PYRE_LOGS_ATTRIBUTE);
   api.persistAttribute(PYRE_REMAINS_ATTRIBUTE);
-  api.persistAttribute(PERM_SERUM_ATTRIBUTE);
+  api.persistAttribute(PERM_ULSQUIRE_ATTRIBUTE, false);
+  api.persistAttribute(PERM_RAZMIRE_ATTRIBUTE, false);
+  api.persistAttribute(MULTI_ATTRIBUTE);
+  api.persistAttribute(PERM_GIFT_ATTRIBUTE, false);
+  api.persistAttribute(MADE_PERM_SERUM_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
     key: "shades_of_mortton",

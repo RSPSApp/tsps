@@ -727,6 +727,8 @@ module.exports = function registerBetweenARockQuest(api) {
     }
     player.getInventory().deleteNumber(GOLD_BAR_ITEM, 3);
     addItem(player, GOLD_HELMET_ITEM, 1);
+    // Wiki (Gold helmet): 30 Smithing XP.
+    player.getSkillManager().addExperiences(Skill.SMITHING, 30);
     player.sendMessage("You hammer the gold bars into a golden helmet.");
   }
 

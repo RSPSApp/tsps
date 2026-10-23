@@ -33,8 +33,9 @@ Firemaking cape's light, the Slayer cape's repeat chance).
 | Hitpoints: double regeneration | core `stats:restore-rate` (Player.ts), answered in `Passive.SkillCapes.js` |
 | Mining: 5% extra ore up to adamantite | `mining:extra-ore`, answered in `Passive.SkillCapes.js` |
 | Prayer: holy wrench, worn or carried | `items/Potions.plugin.js` |
-| Ranged: accumulator (72%), 80% after Vorkath's head | `items/AvasAccumulator.plugin.js` via `skillcape:ammo-recovery` |
+| Ranged: accumulator (72%), assembler/upgraded max capes (80%), metal gathering | `items/AvasAccumulator.plugin.js` via `skillcape:ammo-recovery`; `skillcapes/MetalAttraction.SkillCapes.js` |
 | Runecraft: every altar without talisman or tiara (varbits `rc_no_tally_required_*`) | `skills/Runecrafting.plugin.js` |
+| Sailing: teleport a boat to the Pandemonium and rename a boat | `skills/sailing/BoatTeleport.plugin.js` via `sailing:cape-teleport` / `sailing:cape-rename-boat` |
 | Slayer: no combat requirement (worn); 10% previous task (carried) | `skills/slayer/Tasks.Slayer.js` |
 | Smithing: gold bar XP; coal bag holds 36 | `skills/Smithing.plugin.js`, `items/storage/CoalBag.StorageItems.js` |
 | Thieving: +10% pickpocket | `skills/thieving/Pickpocket.Thieving.js` |
@@ -63,8 +64,9 @@ Firemaking cape's light, the Slayer cape's repeat chance).
   the rest at the portal). Hunter: five chinchompa teleports a day ("You have # teleports
   remaining today.", varbit `chinchompa_teleports`); the guild after Guildmaster Apatura's
   upgrade (his transcript's `upgrading-a-skillcape`). Construction's Teleport opens the menu
-  interface "House portal teleports". Sailing and the max cape's Pandemonium and boat entries go
-  to `sailing:cape-teleport` (BoatTeleport.plugin.js).
+  interface "House portal teleports". Sailing and the max cape's Pandemonium, boat and
+  "Teleport Boat (Pandemonium)" entries go to `sailing:cape-teleport`; "Rename Boat" goes to
+  `sailing:cape-rename-boat` (BoatTeleport.plugin.js).
 - **Options**: Stamina Boost (once a day, "You feel reinvigorated."), Search (pestle and mortar,
   `searchcape_pestle`; grapple and crossbow three times a day, `searchcape_grapple`, varbit
   `free_grapple`), Spellbook ("Choose spellbook: (5/5 left)", "Arceuus spellbook activated.",
@@ -100,11 +102,9 @@ mirror them for the client.
 
 ## Open
 
-- Ava's assembler's own 80% and the accumulator max capes' recovery aren't implemented anywhere.
 - Essence pouches never degrade in tsps, so the Runecraft cape's no-decay perk has nothing to stop.
-- The Ranging cape's metal gathering, Brass Hand Harry's boat options (teleport boat to the
-  Pandemonium, rename boat) and the max cape's "Rename boat" say they aren't available yet.
 - The max hood choice at Mac is a chat menu, not the live interface.
+- Rename the boat through one validated text prompt rather than the live descriptor/noun list.
 - `data/definitions/npc-interactions.json` still binds old custom shops to other real NPCs
   (221, 2200, 4921, 308/315/316); Ajjat's and the Ranging Guild armour salesman's were removed
   so their own dialogue and shop work.

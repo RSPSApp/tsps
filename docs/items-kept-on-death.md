@@ -6,7 +6,7 @@ How `PlayerDeathTask` (`server/src/main/typescript/elvarg/game/task/impl/PlayerD
 
 - **How many:** 3, or 0 when skulled; Protect Item adds one (a red skull keeps none).
 - **Which:** the most valuable items carried, **tradeable and untradeable alike**. An untradeable item among them takes one of the slots. Before, untradeable items were left out of the ranking, so a cheaper tradeable item took the slot: with Protect Item and a skull, a 125k light ballista was kept over a 4.6m volatile Nightmare staff.
-- **Untradeable items outside the kept ones** go to the player's grave on a PvM death ([gravestones](gravestones.md)). On a PvP death, or with graves turned off, they are still kept, as before, unless they split (below).
+- **Untradeable items outside the kept ones** go to the player's grave on a PvM death ([gravestones](gravestones.md)). On a PvP death, or with graves turned off, they are still kept, as before, unless they split (below) or break ([broken items](broken-items.md)).
 - **Preset items** (from `::presets`, flagged with item metadata) are always lost and never take a kept slot. That's by design: they're free.
 
 ## Upgraded Nightmare staffs (Wiki)
@@ -35,4 +35,3 @@ There are no captures of either staff, so these come from the cache's names:
 ## Not covered
 
 - **Dismantle and attaching orbs** (the Wiki's "reverted to its tradeable components at any time").
-- **Breaking kept items:** a kept item with a broken form (`BrokenItem`: fire cape, defenders, void) still comes back broken after any death, as before.

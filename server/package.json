@@ -52,6 +52,7 @@
     "dump:widget": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-widget.ts",
     "dump:ca-bosses": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-ca-bosses.ts",
     "dump:item-combat-styles": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-item-combat-styles.ts",
+    "dump:smithing": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-smithing-layout.ts",
     "dump:construction": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-construction.ts",
     "refine:npc-spawns": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/refine-npc-spawns.ts",
     "sync:loc-teleports": "node ./scripts/sync-loc-teleports.cjs",

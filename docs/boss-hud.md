@@ -11,7 +11,7 @@ The client mounts 303 at login (`encodeGameframeBootstrap`). Its own scripts dra
 | The NPC | varp 1683 `hpbar_hud_npc` |
 | Current and maximum | varbits 6099 `hpbar_hud_hp` and 6100 `hpbar_hud_basehp` |
 | Boss mode | varbit 12401 `hpbar_hud_boss` |
-| The bar's colours | 303:13, :14 and :15 (usually 25600, 576 and 800) |
+| The bar's colours | 303:14, :15 and :16 (usually 25600, 576 and 800) |
 
 The plugin sets those and runs the scripts: 2376 `hp_hud_open`, the fades 2887 (in) and 2889 (out), 2102 to redraw new colours, and 2249 to empty the container.
 

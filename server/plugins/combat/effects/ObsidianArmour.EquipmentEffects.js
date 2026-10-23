@@ -44,9 +44,47 @@ function damage(entity, value) {
   return boosted;
 }
 
+let coreApi;
+const lastLoadouts = new WeakMap();
+
+function effectLines(request) {
+  const player = asPlayer(request?.player);
+  if (!player || !coreApi || !tzhaarWielder(player)) return;
+  if (wearingSet(player)) request.lines.push("Obsidian armour: +10% melee accuracy and damage");
+  if (wearing(player, Equipment.AMULET_SLOT, BERSERKER_NECKLACES)) {
+    request.lines.push("Berserker necklace: +20% melee damage");
+  }
+}
+
+function loadoutSignature(player) {
+  const items = player.getEquipment().getItems();
+  return [Equipment.WEAPON_SLOT, Equipment.AMULET_SLOT, Equipment.HEAD_SLOT, Equipment.BODY_SLOT, Equipment.LEG_SLOT]
+    .map((slot) => items[slot]?.getId?.() ?? -1)
+    .join(",");
+}
+
+/** A weapon, necklace or armour change changes the melee loadout, so redraw the combat tab. */
+function refreshCombatTab({ player }) {
+  if (!player || !coreApi) return;
+  const signature = loadoutSignature(player);
+  const previous = lastLoadouts.get(player);
+  lastLoadouts.set(player, signature);
+  if (previous === signature) return;
+  coreApi.WeaponInterfaceManager.assign(player);
+  player.getUpdateFlag()?.flag?.(coreApi.Flag.APPEARANCE);
+}
+
+function rememberLoadout({ player }) {
+  if (player) lastLoadouts.set(player, loadoutSignature(player));
+}
+
 module.exports = function registerObsidianEffects(api) {
+  coreApi = api.core;
   api.registerMeleeAttackAccuracyModifier(setBonus);
   api.registerMeleeHitModifier(damage);
+  api.onCustomEvent?.("equipment:effects", effectLines);
+  api.onCustomEvent?.("equipment:changed", refreshCombatTab);
+  api.onPlayerLogin?.(rememberLoadout);
 };
 
-module.exports._test = { setBonus, damage };
+module.exports._test = { setBonus, damage, effectLines };

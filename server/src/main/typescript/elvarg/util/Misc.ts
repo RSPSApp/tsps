@@ -799,7 +799,12 @@ export class Misc {
   }
 
   public static formatNameForProtocol(name: string): string {
-    return name.toLowerCase().replace(" ", "_");
+    return name.toLowerCase().replace(/ /g, "_");
+  }
+
+  /** A typed login name as shown in game: capitals kept, underscores as spaces. */
+  public static formatDisplayName(name: string): string {
+    return name.trim().replace(/_/g, " ");
   }
 
   public static formatName(name: string): string {

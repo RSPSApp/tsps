@@ -13,9 +13,9 @@ function onAngelDeath(event) {
   const { npc } = event;
   const fight = session.fight;
   const player = session.player;
-  const { npcs, death, hud, killCountVarp } = Common.data;
+  const { death, hud, killCountVarp } = Common.data;
   fight.stop();
-  npc.setNpcTransformationId(npcs.dead);
+  npc.setNpcTransformationId(session.npcs.dead);
   event.remains = { ticks: death.respawnTicks };
 
   const kills = (Number(player.getAttribute(Common.KILLS_ATTRIBUTE)) || 0) + 1;

@@ -12,26 +12,40 @@
  * (lotg_fairy_ring_machine_setup, 2738,5218) transforms on varbit 13599 - value 50 ->
  * 43101 "Machine" (Adjust), 51 hidden, 52-56 powered noop, 57+ hidden - and loc 43466
  * (lotg_wired_fairy_mushroom_ring) turns wired at 50-56. So 50 and 52/57 are
- * cache-anchored; the intermediate values are this plugin's ordering (nothing else in
- * the cache reads them).
+ * cache-anchored, and the RSProx 1694 capture confirms every transition below.
+ * RuneLite Quest Helper pinned 06da90f9 (LandOfTheGoblins.java) follows the same map.
  *
  * Stages (varbit 13599):
  *   0  not started (talk to Grubfoot by the Dorgesh-Kaan mine entrance)
- *   10 agreed to take Grubfoot into the city
- *   15 entered Dorgesh-Kaan with Grubfoot followable to Oldak's lab
- *   20 Oldak teleported the player and Zanik to the Goblin Cave (temple entrance)
- *   25 the temple guards refused a human entry
- *   27 the Makeover Mage explained the goblin potion recipe (can pick berries)
- *   30 drank the potion, passed the guards and entered the Goblin Temple
- *   32 freed Zanik with a Dorgesh-kaan sphere
- *   35 passed High Priest Bighead's test on the Big High War God
- *   40 the six tribe keys unlocked the crypt
- *   49 Strongbones revealed Yu'biusk is another plane of existence
+ *   2  agreed to take Grubfoot into the city
+ *   4  Grubfoot's dream cutscene played in Oldak's lab
+ *   6  Grubfoot left for Goblin Village
+ *   8  ready to travel to the secret temple (Oldak teleports the pair)
+ *   10 Oldak teleported the player and Zanik to the Goblin Cave (temple entrance)
+ *   12 the temple guards refused a human entry
+ *   14 the Makeover Mage was asked about becoming a goblin
+ *   16 the Makeover Mage explained the goblin potion recipe (can pick berries)
+ *   18 drank the potion (goblin form)
+ *   20 passed the guards
+ *   22 entered the Goblin Temple
+ *   24 spoke to Zanik in the Huzamogaarb cell
+ *   26 freed Zanik with a Dorgesh-kaan sphere
+ *   28 asked High Priest Bighead where Zanik is
+ *   30 passed High Priest Bighead's test on the Big High War God
+ *   32 learned the crypt holds the old high priests
+ *   34 learned the six tribe keys unlock the crypt
+ *   36 unlocked the crypt door
+ *   38 entered the crypt / disturbed Snothead
+ *   40 learned Snailfeet's name
+ *   42 learned Mosschin's name
+ *   44 learned Redeyes' name
+ *   46 learned Strongbones' name
+ *   48 Strongbones revealed Yu'biusk is another plane of existence
+ *   48 returned to Oldak and Zanik, who ask to meet at the fungus ring
  *   50 the fungus-ring machine can be adjusted (cache-anchored)
- *   51 the machine was activated, the portal opened (cache-anchored)
- *   52 arrived in Yu'biusk (cache-anchored: machine powered)
- *   55 opened the strange box, Zanik was taken
- *   60 quest complete (cache-anchored: machine gone)
+ *   52 arrived in Yu'biusk (captured 50->52 on arrival; machine powered)
+ *   54 opened the strange box, Zanik was taken (captured)
+ *   56 quest complete (captured 54->56; machine gone)
  *
  * Rewards per the OSRS Wiki: 2 Quest points, 8,000 Agility, Fishing, Thieving and
  * Herblore XP, access to the Goblin Temple, Yu'biusk (fairy ring BLQ) and goblin potions.
@@ -40,30 +54,30 @@
  * for every id, varbit and placement (`lookup-gameval`, `dump:loc`).
  *
  * Gaps / approximations:
- *  - The Goblin Cave itself is not mapped in this server's cache (only the temple at
- *    3715-3775,4290-4400, the crypt and Yu'biusk); quest travel there is a teleport to
- *    the temple door, and the temple doors 43087/43088 and crypt gate 43278 move the
- *    player across their wall rather than opening a modelled cave.
- *  - There is no player transmogrification in this repo, so goblin form is a persisted
- *    flag mirrored to varbit 13612 (lotg_player_is_a_goblin); the sunlight/combat
- *    reversal and the appearance/name rendering are not simulated. "[goblin name]"
- *    placeholders play verbatim.
+ *  - The Goblin Cave map exists (loc 2 enters at 2622,3392; the chamber around
+ *    2617,9797 and guards at 2580,9852 are walkable), so the cave is entered and walked
+ *    normally. The temple staircase loc is absent from this cache (MapObjects is empty
+ *    at 2581,9853), so accepting the guards moves the player inside the temple.
+ *  - Goblin form uses the supported player appearance transform
+ *    (setNpcTransformationId with the six lotg unarmoured goblins), the type varbit and
+ *    transform graphic/animation. Sunlight/combat reversal and the custom name chathead
+ *    are not simulated; "[goblin name]" placeholders play verbatim.
  *  - The Makeover Mage's Talk-to is owned by plugins/npcs/MakeOverMage.plugin.js
  *    (name hook, registers earlier), and Morris's Talk-to by FishingContest, so the
- *    mage's LOTG conversation is started when the player enters his house at stage 25
+ *    mage's LOTG conversation is started when the player enters his house at stage 12
  *    and the whitefish is caught by using a raw slimy eel on the Hemenster fishing
  *    spots (FishingContest owns their Bait option).
  *  - Grubfoot's follower walk is talk-driven: he is teleported to the lab when the
  *    player enters the city; the walk-in cutscene lines and the pet-following lines
  *    are not simulated (pet conditions answer false).
- *  - Temple/enclave NPC tiles are eyeballed from the cache map (no room names in the
- *    dump), then verified against the server's own collision map; each tribe's
- *    priest/guard pair stands on the hall's edge. The Preacher's sermon has no
+ *  - Temple/enclave NPC ids and tiles come from the RSProx 1694 actor adds, cross-checked
+ *    against Quest Helper's guard/priest names (the ids are not sequential by tribe).
+ *    Each tribe's priest/guard pair stands in its enclave. The Preacher's sermon has no
  *    interaction in the cache and is not played.
  *  - Crypt priests are summoned by Say-name (a message, the wiki has no line), turn
  *    into their Talk-to ghosts on death, and are owned per player.
- *  - The 9-4-1 power distribution is a two-option chatbox prompt (the OSRS interface
- *    has no cache equivalent here); wrong combinations are simply not offered.
+ *  - The 9-4-1 power distribution uses the real cache interface 738 (Add/Subtract on
+ *    widgets 21-26, Confirm 38) and drives varbits 13603-13605.
  */
 module.exports = function registerLandOfTheGoblinsQuest(api) {
   const {
@@ -74,7 +88,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     ObjectIdentifiers,
     Skill,
   } = api.core;
-  const { registerQuest, refreshQuestList, startDialogue, startTranscript } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Land of the Goblins";
   const START_HOOK = "quest:land-of-the-goblins:start";
@@ -83,22 +98,73 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   const VARBIT_LAND_OF_THE_GOBLINS = 13599;
   // Varbit 13612 lotg_player_is_a_goblin (varp 3355 bit 31).
   const VARBIT_GOBLIN_FORM = 13612;
+  const VARBIT_GOBLIN_TYPE = 13615; // lotg_goblin_type (varp 3356 bits 11-13)
+  const VARBIT_KNOWS_WHITEFISH = 13602; // lotg_know_about_fish (varp 3355 bit 11)
+  const VARBIT_MACHINE_1 = 13603; // lotg_connectors_1 (varp 3355 bits 12-15)
+  const VARBIT_MACHINE_2 = 13604; // lotg_connectors_2
+  const VARBIT_MACHINE_3 = 13605; // lotg_connectors_3
+  const VARBIT_FAIRY_RING_ANIMATING = 13611; // lotg_fairy_ring_animating (varp 3355 bits 29-30)
+  const VARBIT_MACHINE_EXPLAINED = 13618; // lotg_machine_explained (varp 3356 bit 20)
+  const MACHINE_INTERFACE = 738;
+  const MACHINE_FLOATER_UID = (161 << 16) | 16;
+  const MACHINE_ADD = new Map([[21, 0], [23, 1], [25, 2]]);
+  const MACHINE_SUBTRACT = new Map([[22, 0], [24, 1], [26, 2]]);
+  const MACHINE_CONFIRM = 38;
+  const MACHINE_TARGET = [9, 4, 1];
+  const MACHINE_POWER_ATTRIBUTES = [
+    "land-of-the-goblins:machine-1",
+    "land-of-the-goblins:machine-2",
+    "land-of-the-goblins:machine-3",
+  ];
+  const GOBLIN_SELECTION_INTERFACE = 739;
+  const GOBLIN_SELECT_BUTTONS = new Map([[12, 1], [15, 2], [18, 3], [21, 4], [24, 5], [27, 6]]);
+  const GOBLIN_CONFIRM_BUTTON = 30;
+  // The cache's six unarmoured lotg goblin appearances (type 1-6).
+  const GOBLIN_FORM_NPC_IDS = [
+    NpcIdentifiers.GOBLIN_88,
+    NpcIdentifiers.GOBLIN_98,
+    NpcIdentifiers.GOBLIN_108,
+    NpcIdentifiers.GOBLIN_118,
+    NpcIdentifiers.GOBLIN_128,
+    NpcIdentifiers.GOBLIN_138,
+  ];
+  const GOBLIN_TRANSFORM_GRAPHIC = 2039;
+  const GOBLIN_TRANSFORM_ANIMATION = 9286;
+  const GOBLIN_TYPE_ATTRIBUTE = "land-of-the-goblins:goblin-type";
+  const MIGRATION_ATTRIBUTE = "land-of-the-goblins:migration";
+  const MIGRATION_VERSION = 2;
+  const CAVE_ENTRANCE_OBJECT_ID = 2; // mcannoncave, the Fishing Guild goblin cave entrance
+  const CAVE_ENTRANCE_TILE = { x: 2624, y: 3393 };
+  const GOBLIN_CAVE_TILE = { x: 2617, y: 9797 };
 
-  const STAGE_STARTED = 10;
-  const STAGE_CITY = 15;
-  const STAGE_CAVE = 20;
-  const STAGE_REFUSED = 25;
-  const STAGE_MAGE = 27;
-  const STAGE_GOBLIN = 30;
-  const STAGE_FREED = 32;
-  const STAGE_TEST = 35;
-  const STAGE_KEYS = 40;
-  const STAGE_YUBIUSK_KNOWN = 49;
+  const STAGE_STARTED = 2;
+  const STAGE_CUTSCENE = 4;
+  const STAGE_ZANIK_TALK = 6;
+  const STAGE_CITY = 8;
+  const STAGE_CAVE = 10;
+  const STAGE_REFUSED = 12;
+  const STAGE_MAGE = 14;
+  const STAGE_POTION = 16;
+  const STAGE_GOBLIN = 18;
+  const STAGE_TEMPLE = 20;
+  const STAGE_SPHERE = 22;
+  const STAGE_PRISON = 24;
+  const STAGE_FREED = 26;
+  const STAGE_BIGHEAD = 28;
+  const STAGE_TEST = 30;
+  const STAGE_CRYPT_KNOWN = 32;
+  const STAGE_KEYS = 34;
+  const STAGE_CRYPT = 36;
+  const STAGE_SNOTHEAD = 38;
+  const STAGE_SNAILFEET = 40;
+  const STAGE_MOSSCHIN = 42;
+  const STAGE_REDEYES = 44;
+  const STAGE_STRONGBONES = 46;
+  const STAGE_YUBIUSK_KNOWN = 48;
   const STAGE_MACHINE = 50;
-  const STAGE_ACTIVATED = 51;
   const STAGE_YUBIUSK = 52;
-  const STAGE_BOX = 55;
-  const STAGE_COMPLETE = 60;
+  const STAGE_BOX = 54;
+  const STAGE_COMPLETE = 56;
 
   const BITS_ATTRIBUTE = "quest.land_of_the_goblins.bits";
   const KEYS_ATTRIBUTE = "quest.land_of_the_goblins.keys";
@@ -118,6 +184,9 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   const BIT_PRISON_TALK = 1 << 11;
   const BIT_CRYPT_UNLOCKED = 1 << 12;
   const BIT_BOX_OPENED = 1 << 13;
+  // Helper-facing dialogue knowledge, persisted with the other quest bits.
+  const BIT_KNOWS_WHITEFISH = 1 << 14;
+  const BIT_MACHINE_EXPLAINED = 1 << 15;
 
   // NPCs (cache names in NpcIdentifiers.ts).
   const GRUBFOOT_NPC_ID = NpcIdentifiers.GRUBFOOT_8; // 11255, mine entrance / lab
@@ -158,23 +227,26 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   // The six tribes: Saragorgak white/west, Yurkolgokh yellow/north-west, Huzamogaarb
   // black/north-east, Ekeleshuun blue/east, Narogoshuun orange/south-east,
-  // Horogothgar purple/south-west (wiki). Priests are the Pickpocket-id of each pair.
+  // Horogothgar purple/south-west (wiki). The ids are NOT sequential by tribe: the
+  // capture's actor adds and Quest Helper's guard/priest names put white=11319/11309,
+  // yellow=11321/11313, black=11318/11307, blue=11316/11303, orange=11317/11305 and
+  // purple=11320/11311. Mail and key arrays below stay in this same tribe order.
   const TRIBE_COUNT = 6;
   const TRIBE_PRIEST_IDS = [
-    NpcIdentifiers.PRIEST_8, // 11305
-    NpcIdentifiers.PRIEST_10, // 11307
-    NpcIdentifiers.PRIEST_6, // 11303
-    NpcIdentifiers.PRIEST_12, // 11309
-    NpcIdentifiers.PRIEST_14, // 11311
-    NpcIdentifiers.PRIEST_16, // 11313
+    NpcIdentifiers.PRIEST_12, // 11309, white
+    NpcIdentifiers.PRIEST_16, // 11313, yellow
+    NpcIdentifiers.PRIEST_10, // 11307, black
+    NpcIdentifiers.PRIEST_6, // 11303, blue
+    NpcIdentifiers.PRIEST_8, // 11305, orange
+    NpcIdentifiers.PRIEST_14, // 11311, purple
   ];
   const TRIBE_GUARD_IDS = [
-    NpcIdentifiers.GUARD_152, // 11316
-    NpcIdentifiers.GUARD_153, // 11317
-    NpcIdentifiers.GUARD_154, // 11318
-    NpcIdentifiers.GUARD_155, // 11319
-    NpcIdentifiers.GUARD_156, // 11320
-    NpcIdentifiers.GUARD_157, // 11321
+    NpcIdentifiers.GUARD_155, // 11319, white
+    NpcIdentifiers.GUARD_157, // 11321, yellow
+    NpcIdentifiers.GUARD_154, // 11318, black
+    NpcIdentifiers.GUARD_152, // 11316, blue
+    NpcIdentifiers.GUARD_153, // 11317, orange
+    NpcIdentifiers.GUARD_156, // 11320, purple
   ];
   const TRIBE_MAIL_IDS = [
     ItemIdentifiers.WHITE_GOBLIN_MAIL, // 26567
@@ -325,6 +397,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   const ZANIK_ENTERS_TEMPLE_ACTION_ID = "gge_be";
   const ZANIK_ESCAPES_ACTION_IDS = new Set(["Z18uaI", "EPc9qL"]);
   const CUTSCENE_START_ACTION_ID = "FS_LnE";
+  const DREAM_CUTSCENE_START_ACTION_ID = "zSUlVq";
+  const DREAM_CUTSCENE_END_ACTION_ID = "YUdQ2P";
   const ARRIVE_YUBIUSK_ACTION_ID = "UszKmx";
   const BOX_SUCKED_ACTION_ID = "Eh5lL0";
   const BOX_PLAYER_PORTAL_ACTION_ID = "oeHSHw";
@@ -338,6 +412,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     ZANIK_ENTERS_TEMPLE_ACTION_ID,
     ...ZANIK_ESCAPES_ACTION_IDS,
     CUTSCENE_START_ACTION_ID,
+    DREAM_CUTSCENE_START_ACTION_ID,
+    DREAM_CUTSCENE_END_ACTION_ID,
     ARRIVE_YUBIUSK_ACTION_ID,
     BOX_SUCKED_ACTION_ID,
     BOX_PLAYER_PORTAL_ACTION_ID,
@@ -346,38 +422,51 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     AGGIE_WHITE_MAIL_ACTION_ID,
   ]);
 
-  // Spawn tiles (cache placements; temple interior eyeballed from the loc dump and
-  // verified walkable against the server's own collision map).
+  // Spawn tiles (cache placements; temple interior from the capture actor adds).
   const GRUBFOOT_MINE_TILE = { x: 3318, y: 9613 };
   const GRUBFOOT_LAB_TILE = { x: 2702, y: 5369 };
   const GRUBFOOT_VILLAGE_TILE = { x: 2957, y: 3514 };
-  const ZANIK_LAB_TILE = { x: 2706, y: 5366 };
-  const ZANIK_CAVE_TILE = { x: 3731, y: 4305 };
+  const ZANIK_LAB_TILE = { x: 2703, y: 5366 };
+  const ZANIK_CAVE_TILE = { x: 2617, y: 9797 };
   const ZANIK_PRISON_TILE = { x: 3755, y: 4340 };
   const ENTRANCE_GUARD_TILES = [
-    { x: 3730, y: 4302 },
-    { x: 3734, y: 4302 },
+    { x: 2580, y: 9852 },
+    { x: 2582, y: 9852 },
   ];
-  const CAVE_TELEPORT_TILE = { x: 3732, y: 4302 };
+  const CAVE_TELEPORT_TILE = GOBLIN_CAVE_TILE;
   const TEMPLE_INSIDE_TILE = { x: 3744, y: 4306 };
   const HIGH_PRIEST_TILE = { x: 3744, y: 4326 };
   const PREACHER_TILE = { x: 3748, y: 4317 };
+  // Temple spawn tiles are the capture 1694 actor adds (not the Quest Helper
+  // interaction points, which are where the player stands). Order matches the tribes.
   const TRIBE_GUARD_TILES = [
-    { x: 3725, y: 4319 },
-    { x: 3728, y: 4333 },
-    { x: 3753, y: 4339 },
-    { x: 3754, y: 4330 },
-    { x: 3752, y: 4322 },
-    { x: 3739, y: 4322 },
+    { x: 3732, y: 4320 }, // white
+    { x: 3735, y: 4329 }, // yellow
+    { x: 3753, y: 4329 }, // black
+    { x: 3756, y: 4320 }, // blue
+    { x: 3753, y: 4311 }, // orange
+    { x: 3735, y: 4311 }, // purple
   ];
   const TRIBE_PRIEST_TILES = [
-    { x: 3727, y: 4319 },
-    { x: 3730, y: 4333 },
-    { x: 3755, y: 4340 },
-    { x: 3756, y: 4330 },
-    { x: 3754, y: 4322 },
-    { x: 3741, y: 4322 },
+    { x: 3724, y: 4316 }, // white
+    { x: 3724, y: 4332 }, // yellow
+    { x: 3757, y: 4340 }, // black
+    { x: 3760, y: 4319 }, // blue
+    { x: 3761, y: 4307 }, // orange
+    { x: 3734, y: 4302 }, // purple
   ];
+  // Captured enclave pass: the guard shoves the player across one blocked mouth tile.
+  // `from` is the hall side, `to` the enclave side (1694 lines 19275/31040/31912/32582/
+  // 33158/33802). This is the only movement that may ignore clipping.
+  const TRIBE_GUARD_PASS = [
+    { from: { x: 3733, y: 4320 }, to: { x: 3731, y: 4320 } }, // white
+    { from: { x: 3736, y: 4328 }, to: { x: 3734, y: 4330 } }, // yellow
+    { from: { x: 3752, y: 4328 }, to: { x: 3754, y: 4330 } }, // black
+    { from: { x: 3755, y: 4320 }, to: { x: 3757, y: 4320 } }, // blue
+    { from: { x: 3752, y: 4312 }, to: { x: 3754, y: 4310 } }, // orange
+    { from: { x: 3736, y: 4312 }, to: { x: 3734, y: 4310 } }, // purple
+  ];
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
   const RING_OLDAK_TILE = { x: 2743, y: 5221 };
   const RING_ZANIK_TILE = { x: 2733, y: 5222 };
   const YUBIUSK_OLDAK_TILE = { x: 3540, y: 4384 };
@@ -385,6 +474,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   const YUBIUSK_TELEPORT_TILE = { x: 3540, y: 4386 };
   const LAB_RETURN_TILE = { x: 2703, y: 5367 };
 
+  const BLACK_MUSHROOM_ZONE = { minX: 2560, maxX: 2630, minY: 9780, maxY: 9870, levels: [0] };
   const MINE_ZONE = { minX: 3300, maxX: 3340, minY: 9590, maxY: 9640, levels: [0] };
   const CITY_ZONE = { minX: 2670, maxX: 2780, minY: 5270, maxY: 5440, levels: [0] };
   const TEMPLE_ZONE = { minX: 3690, maxX: 3800, minY: 4260, maxY: 4420, levels: [0] };
@@ -394,8 +484,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   const GOBLIN_NAMES = ["Dung", "Grub", "Spit", "Wart", "Bone", "Zog"];
   const REQUIREMENTS_MESSAGE =
-    "You must complete Another Slice of H.A.M., Death to the Dorgeshuun and Fishing Contest, " +
-    "and have 38 Agility, 40 Fishing, 45 Thieving and 48 Herblore to start this quest.";
+    "You must complete Another Slice of H.A.M. and Fishing Contest, and have 38 Agility, " +
+    "40 Fishing, 45 Thieving and 48 Herblore to start this quest.";
   const OLDAK_MATERIALS_HINT =
     "Oldak needs two law runes and a piece of molten glass to make a moving-over-distance sphere.";
   const PHARMAKOS_MESSAGE =
@@ -403,6 +493,15 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   /** Transient tribe context for the enclave-guard prose conditions (never persisted). */
   const enclaveTribe = new WeakMap();
+  /** Scoped ignore-clipping movement for an accepted guard pass. */
+  const guardPassMoves = new WeakMap();
+  /** Potion showed the makeover interface but has not been confirmed. */
+  const pendingGoblinPotion = new WeakMap();
+  /** The 9-4-1 relay values while the player is using interface 738. */
+  const machinePower = new WeakMap();
+  /** Captured machine animation values 1/2 while the Yu'biusk cutscene plays. */
+  const fairyRingAnimating = new WeakMap();
+  const Scenes = createQuestScenes(api);
   /** Owner-only quest spawns per player, keyed by a stable key. */
   const trackedNpcs = new WeakMap();
 
@@ -448,11 +547,30 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     player.setAttribute(CRYPT_ATTRIBUTE, cryptMask(player) | (1 << index));
   }
 
+  /** Publish the helper's native Land of the Goblins sub-varbits (bit siblings survive). */
+  function syncQuestVarbits(player) {
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_KNOWS_WHITEFISH, hasBit(player, BIT_KNOWS_WHITEFISH) ? 1 : 0);
+    sender.sendVarbit(VARBIT_MACHINE_EXPLAINED, hasBit(player, BIT_MACHINE_EXPLAINED) ? 1 : 0);
+    sender.sendVarbit(VARBIT_FAIRY_RING_ANIMATING, fairyRingAnimating.get(player) ?? 0);
+  }
+
+  function setFairyRingAnimating(player, value) {
+    fairyRingAnimating.set(player, value);
+    syncQuestVarbits(player);
+  }
+
   function allKeysHeld(player) {
     return keysMask(player) === (1 << TRIBE_COUNT) - 1;
   }
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
+
+  /** Keys can legitimately be banked; a banked key is owned and must not be duplicated. */
+  function bankedAmount(player, itemId) {
+    const banks = player.getBanks?.() ?? (player.getBank ? [player.getBank()] : []);
+    return banks.reduce((total, bank) => total + Number(bank?.getAmount?.(itemId) ?? 0), 0);
+  }
 
   function hasOldakMaterials(player) {
     return held(player, LAW_RUNE_ITEM_ID, 2) && held(player, MOLTEN_GLASS_ITEM_ID, 1);
@@ -479,11 +597,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     if (skills.getMaxLevel(Skill.FISHING) < 40) return false;
     if (skills.getMaxLevel(Skill.THIEVING) < 45) return false;
     if (skills.getMaxLevel(Skill.HERBLORE) < 48) return false;
-    return (
-      hasQuest(player, "another_slice_of_ham") &&
-      hasQuest(player, "death_to_the_dorgeshuun") &&
-      hasQuest(player, "fishing_contest")
-    );
+    return hasQuest(player, "another_slice_of_ham") && hasQuest(player, "fishing_contest");
   }
 
   function setStage(player, value) {
@@ -493,6 +607,19 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   function teleport(player, tile) {
     player.moveTo(new Location(tile.x, tile.y, player.getLocation().getZ()));
+  }
+
+  function tileInZone(location, zone) {
+    const x = location?.getX ? location.getX() : location?.x;
+    const y = location?.getY ? location.getY() : location?.y;
+    const z = location?.getZ ? location.getZ() : (location?.z ?? 0);
+    return (
+      x >= zone.minX &&
+      x <= zone.maxX &&
+      y >= zone.minY &&
+      y <= zone.maxY &&
+      (zone.levels ?? [0]).includes(z)
+    );
   }
 
   function inZone(player, zone) {
@@ -561,6 +688,44 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     trackedNpcs.delete(player);
   }
 
+  /** Restore any existing ignore-clipping state; never leave free temple walking. */
+  function finishGuardPass(player) {
+    const state = guardPassMoves.get(player);
+    if (!state) return;
+    guardPassMoves.delete(player);
+    if (state.previous) player.setFlag(IGNORE_CLIPPING_FLAG, true);
+    else player.removeFlag(IGNORE_CLIPPING_FLAG);
+  }
+
+  /** Ends the scoped flag as soon as the queued pass has no steps left. */
+  function pollGuardPass(player, token, ticks) {
+    if (guardPassMoves.get(player)?.token !== token) return;
+    const queue = player.getMovementQueue();
+    if (queue.size() === 0 || ticks <= 0) {
+      finishGuardPass(player);
+      return;
+    }
+    Scenes.later(player, 1, () => pollGuardPass(player, token, ticks - 1));
+  }
+
+  /** Captured guard shove: only these exact two tiles may ignore clipping. */
+  function walkGuardPass(player, destination) {
+    finishGuardPass(player);
+    const previous = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
+    const token = {};
+    guardPassMoves.set(player, { previous, token });
+    player.setFlag(IGNORE_CLIPPING_FLAG, true);
+    const queue = player.getMovementQueue();
+    queue.reset();
+    queue.addSteps(new Location(destination.x, destination.y, 0));
+    pollGuardPass(player, token, 4);
+  }
+
+  /** Any ordinary walk request cancels the scoped pass movement. */
+  function cancelGuardPass(event) {
+    finishGuardPass(event.player);
+  }
+
   /** Spawns exactly the NPCs the player's current stage/state calls for. */
   function syncQuestNpcs(player) {
     if (!player || player.isPlayerBot?.() === true) return;
@@ -571,14 +736,14 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       complete || stage >= STAGE_CAVE || hasBit(player, BIT_GRUBFOOT_LEFT);
     if (hideGrubfoot) {
       removeTracked(player, "grubfoot");
-    } else if (stage >= STAGE_CITY) {
+    } else if (stage >= STAGE_CUTSCENE) {
       moveTracked(player, "grubfoot", GRUBFOOT_NPC_ID, GRUBFOOT_LAB_TILE);
     } else {
       moveTracked(player, "grubfoot", GRUBFOOT_NPC_ID, GRUBFOOT_MINE_TILE);
     }
 
     const zanikLab =
-      (stage >= STAGE_CITY && stage < STAGE_CAVE) ||
+      (stage >= STAGE_STARTED && stage < STAGE_CAVE) ||
       (stage >= STAGE_FREED && stage < STAGE_MACHINE);
     if (zanikLab) {
       moveTracked(player, "zanik-lab", ZANIK_LAB_NPC_ID, ZANIK_LAB_TILE);
@@ -586,7 +751,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       removeTracked(player, "zanik-lab");
     }
 
-    if (questActive(player) && stage >= STAGE_CAVE && stage < STAGE_GOBLIN) {
+    if (questActive(player) && stage >= STAGE_CAVE && stage < STAGE_TEMPLE) {
       moveTracked(player, "zanik-cave", ZANIK_CAVE_NPC_ID, ZANIK_CAVE_TILE);
       moveTracked(player, "entrance-guard-1", NpcIdentifiers.GOBLIN_GUARD_2, ENTRANCE_GUARD_TILES[0]);
       moveTracked(player, "entrance-guard-2", NpcIdentifiers.GOBLIN_GUARD_3, ENTRANCE_GUARD_TILES[1]);
@@ -596,7 +761,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       removeTracked(player, "entrance-guard-2");
     }
 
-    const inTemple = questActive(player) && stage >= STAGE_GOBLIN && stage < STAGE_MACHINE;
+    const inTemple = stage >= STAGE_TEMPLE && (stage < STAGE_MACHINE || complete);
     if (inTemple) {
       moveTracked(player, "bighead", HIGH_PRIEST_BIGHEAD_NPC_ID, HIGH_PRIEST_TILE);
       moveTracked(player, "preacher", PREACHER_NPC_ID, PREACHER_TILE);
@@ -613,7 +778,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       }
     }
 
-    if (questActive(player) && stage >= STAGE_GOBLIN && stage < STAGE_FREED) {
+    if (questActive(player) && stage >= STAGE_TEMPLE && stage < STAGE_FREED) {
       moveTracked(player, "zanik-prison", ZANIK_PRISON_NPC_ID, ZANIK_PRISON_TILE);
     } else {
       removeTracked(player, "zanik-prison");
@@ -648,7 +813,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   function selectGrubfootVariant(player, stage) {
     if (stage >= STAGE_CAVE) return null;
-    if (stage >= STAGE_CITY) return "grubfoot-s-dream-walking-with-grubfoot-in-oldak-s-lab";
+    if (stage >= STAGE_CUTSCENE) return "grubfoot-s-dream-walking-with-grubfoot-in-oldak-s-lab";
     if (stage >= STAGE_STARTED) {
       return hasBit(player, BIT_FOLLOWING)
         ? "grubfoot-s-dream-walking-with-grubfoot-whilst-following-the-player"
@@ -658,11 +823,15 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   }
 
   function selectZanikVariant(player, stage) {
-    if (stage === STAGE_CITY) {
+    if (stage === STAGE_STARTED) {
       if (!hasBit(player, BIT_MET_ZANIK)) {
         setBit(player, BIT_MET_ZANIK);
+        setStage(player, STAGE_CUTSCENE);
         return "grubfoot-s-dream-talking-to-zanik-oldak";
       }
+      return "grubfoot-s-dream-talking-to-zanik-oldak";
+    }
+    if (stage >= STAGE_CUTSCENE && stage < STAGE_CAVE) {
       return hasBit(player, BIT_GRUBFOOT_LEFT)
         ? "grubfoot-s-dream-talking-to-zanik-oldak-after-grubfoot-leaves"
         : "grubfoot-s-dream-talking-to-zanik-oldak-after-the-cutscene";
@@ -670,13 +839,13 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     if (stage >= STAGE_FREED && stage < STAGE_YUBIUSK_KNOWN) {
       return "the-temple-of-tribes-talking-to-zanik-in-oldak-s-lab";
     }
-    if (stage === STAGE_YUBIUSK_KNOWN) return "path-to-yu-biusk-returning-to-dorgesh-kaan";
+    if (stage >= STAGE_YUBIUSK_KNOWN) return "path-to-yu-biusk-returning-to-dorgesh-kaan";
     return null;
   }
 
   function selectOldakLabVariant(player, stage) {
     if (stage >= STAGE_COMPLETE) return "post-quest-dialogue-oldak";
-    if (stage >= STAGE_CITY && stage < STAGE_CAVE) {
+    if (stage >= STAGE_CUTSCENE && stage < STAGE_CAVE) {
       return "grubfoot-s-dream-talking-to-zanik-oldak-after-the-cutscene";
     }
     if (stage >= STAGE_CAVE && stage < STAGE_REFUSED) {
@@ -687,17 +856,17 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
         ? "imposter-among-goblins-talking-to-oldak-talking-to-oldak-again"
         : "imposter-among-goblins-talking-to-oldak";
     }
-    if (stage === STAGE_MAGE) {
+    if (stage === STAGE_MAGE || stage === STAGE_POTION) {
       return "imposter-among-goblins-talking-to-oldak-after-talking-to-the-makeover-mage";
     }
     if (stage >= STAGE_GOBLIN && stage < STAGE_TEST) {
       return "the-temple-of-tribes-talking-to-oldak";
     }
-    if (stage >= STAGE_TEST && stage < STAGE_YUBIUSK_KNOWN) {
-      return "the-temple-of-tribes-talking-to-oldak-2";
-    }
-    if (stage === STAGE_YUBIUSK_KNOWN) {
+    if (stage >= STAGE_YUBIUSK_KNOWN) {
       return "path-to-yu-biusk-returning-to-dorgesh-kaan";
+    }
+    if (stage >= STAGE_TEST) {
+      return "the-temple-of-tribes-talking-to-oldak-2";
     }
     return null;
   }
@@ -714,14 +883,15 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     if (OLDAK_LAB_NPC_IDS.has(npcId)) return selectOldakLabVariant(player, stage);
     if (npcId === ZANIK_LAB_NPC_ID) return selectZanikVariant(player, stage);
     if (npcId === ZANIK_CAVE_NPC_ID) {
-      return questActive(player) && stage < STAGE_GOBLIN
+      return questActive(player) && stage < STAGE_TEMPLE
         ? "imposter-among-goblins-talking-to-zanik"
         : null;
     }
     if (npcId === ZANIK_PRISON_NPC_ID) {
-      if (!questActive(player) || stage !== STAGE_GOBLIN) return null;
+      if (!questActive(player) || stage < STAGE_TEMPLE || stage >= STAGE_FREED) return null;
       if (!hasBit(player, BIT_PRISON_TALK)) {
         setBit(player, BIT_PRISON_TALK);
+        if (stage < STAGE_PRISON) setStage(player, STAGE_PRISON);
         return "the-temple-of-tribes-talking-to-zanik";
       }
       return "the-temple-of-tribes-talking-to-zanik-again";
@@ -747,7 +917,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
         : null;
     }
     if (npcId === HIGH_PRIEST_BIGHEAD_NPC_ID) {
-      if (!questActive(player) || stage < STAGE_GOBLIN) return null;
+      if (!questActive(player) || stage < STAGE_TEMPLE) return null;
       if (stage < STAGE_FREED) {
         if (!hasBit(player, BIT_MET_BIGHEAD)) {
           setBit(player, BIT_MET_BIGHEAD);
@@ -755,11 +925,17 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
         }
         return "the-temple-of-tribes-talking-to-high-priest-bighead-again";
       }
-      if (stage === STAGE_FREED) return "the-temple-of-tribes-talking-to-high-priest-bighead-2";
+      if (stage === STAGE_FREED) {
+        setStage(player, STAGE_BIGHEAD);
+        return "the-temple-of-tribes-talking-to-high-priest-bighead";
+      }
+      if (stage === STAGE_BIGHEAD) return "the-temple-of-tribes-talking-to-high-priest-bighead-2";
       if (stage === STAGE_TEST) {
-        return hasBit(player, BIT_TEST_DONE)
-          ? "the-temple-of-tribes-talking-to-high-priest-bighead-after-answering-questions"
-          : "the-temple-of-tribes-talking-to-high-priest-bighead-2";
+        setStage(player, STAGE_CRYPT_KNOWN);
+        return "the-temple-of-tribes-talking-to-high-priest-bighead-after-answering-questions";
+      }
+      if (stage === STAGE_CRYPT_KNOWN) {
+        return "the-temple-of-tribes-talking-to-high-priest-bighead-after-answering-questions";
       }
       if (stage >= STAGE_KEYS) {
         return "the-temple-of-tribes-talking-to-high-priest-bighead-after-asking-him-all-questions";
@@ -767,7 +943,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       return null;
     }
     if (ENTRANCE_GUARD_NPC_IDS.has(npcId)) {
-      if (!questActive(player) || stage < STAGE_CAVE || stage >= STAGE_GOBLIN) return null;
+      if (!questActive(player) || stage < STAGE_CAVE || stage >= STAGE_TEMPLE) return null;
       if (stage >= STAGE_MAGE && hasBit(player, BIT_GOBLIN_FORM)) {
         return "the-temple-of-tribes-talking-to-goblin-guards";
       }
@@ -777,7 +953,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     }
     const priestTribe = PRIEST_TRIBE_BY_ID.get(npcId);
     if (priestTribe !== undefined) {
-      if (!questActive(player) || stage < STAGE_TEST) return null;
+      if (!questActive(player) || stage < STAGE_KEYS) return null;
       return TRIBE_PRIEST_VARIANTS[priestTribe];
     }
     const ghostVariant = CRYPT_GHOST_VARIANT_BY_ID.get(npcId);
@@ -792,11 +968,13 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   // ==========================================================================
 
   function answerEnclaveCondition(player, stepId) {
-    const tribe = enclaveTribe.get(player);
-    if (tribe === undefined) return null;
-    const correct = wornBodyId(player) === TRIBE_MAIL_IDS[tribe];
-    if (stepId === ENCLAVE_WRONG_MAIL_CONDITION_ID) return !correct;
-    if (stepId === ENCLAVE_RIGHT_MAIL_CONDITION_ID) return correct;
+    const state = enclaveTribe.get(player);
+    if (!state) return null;
+    const correct = wornBodyId(player) === TRIBE_MAIL_IDS[state.tribe];
+    if (stepId === ENCLAVE_WRONG_MAIL_CONDITION_ID) return !state.leaving && !correct;
+    if (stepId === ENCLAVE_RIGHT_MAIL_CONDITION_ID) return !state.leaving && correct;
+    if (stepId === ENCLAVE_LEAVE_WRONG_CONDITION_ID) return state.leaving && !correct;
+    if (stepId === ENCLAVE_LEAVE_RIGHT_CONDITION_ID) return state.leaving && correct;
     return false;
   }
 
@@ -832,13 +1010,28 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     setStage(player, STAGE_STARTED);
   }
 
+  function goblinType(player) {
+    return Math.min(6, Math.max(1, Number(player.getAttribute(GOBLIN_TYPE_ATTRIBUTE)) || 1));
+  }
+
+  function applyGoblinAppearance(player) {
+    const type = goblinType(player);
+    player.setNpcTransformationId(GOBLIN_FORM_NPC_IDS[type - 1]);
+    player.getUpdateFlag().flag(api.core.Flag.APPEARANCE);
+    player.getPacketSender().sendVarbit(VARBIT_GOBLIN_FORM, 1).sendVarbit(VARBIT_GOBLIN_TYPE, type);
+  }
+
   function setGoblinForm(player, on) {
     if (on) {
       setBit(player, BIT_GOBLIN_FORM);
-      player.getPacketSender().sendVarbit(VARBIT_GOBLIN_FORM, 1);
+      applyGoblinAppearance(player);
+      player.performGraphic(new api.core.Graphic(GOBLIN_TRANSFORM_GRAPHIC, 0, 0));
+      player.performAnimation?.(new api.core.Animation(GOBLIN_TRANSFORM_ANIMATION));
     } else {
       clearBit(player, BIT_GOBLIN_FORM);
-      player.getPacketSender().sendVarbit(VARBIT_GOBLIN_FORM, 0);
+      player.setNpcTransformationId(-1);
+      player.getUpdateFlag().flag(api.core.Flag.APPEARANCE);
+      player.getPacketSender().sendVarbit(VARBIT_GOBLIN_FORM, 0).sendVarbit(VARBIT_GOBLIN_TYPE, 0);
     }
   }
 
@@ -870,13 +1063,14 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     }
     if (ENTRANCE_GUARD_NPC_IDS.has(npcId) && /^Yes, me/.test(text)) {
       setBit(player, BIT_GOBLIN_NAME);
-      setStage(player, STAGE_GOBLIN);
+      setStage(player, STAGE_TEMPLE);
       teleport(player, TEMPLE_INSIDE_TILE);
       return;
     }
     if (OLDAK_LAB_NPC_IDS.has(npcId) || npcId === OLDAK_RING_NPC_ID) {
       if (text === "Can you teleport me to the temple again?") {
-        // The stage-25 conversation pays for the trip in its own branch (condition
+        if (quest.getStage(player) === STAGE_ZANIK_TALK) setStage(player, STAGE_CITY);
+        // The refusal conversation pays for the trip in its own branch (condition
         // 4j8klO + action 6cDx_0); later variants lost the jump target, so pay here.
         const firstOldakVisit =
           quest.getStage(player) === STAGE_REFUSED && !hasBit(player, BIT_ASKED_OLDAK);
@@ -898,12 +1092,61 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     }
   }
 
+  function finishCutscene(player) {
+    Scenes.cancel(player);
+    Scenes.closeFade(player);
+    Scenes.controls(player, false);
+    player.getPacketSender().sendCameraReset();
+  }
+
+  function startDreamCutscene(player) {
+    Scenes.controls(player, true, true);
+    Scenes.fade(player, true);
+    Scenes.camera(player, [3864, 4369, 520], [3853, 4384, 320], { rate: 232, rate2: 232 });
+    Scenes.later(player, 2, () => {
+      Scenes.fade(player, false);
+      Scenes.camera(player, [3868, 4384, 560], [3880, 4384, 320], { rate: 2, rate2: 0 });
+    });
+    Scenes.later(player, 4, () => {
+      Scenes.camera(player, [3868, 4391, 540], [3868, 4395, 340], { rate: 1, rate2: 0 });
+    });
+    Scenes.later(player, 25, () => finishCutscene(player));
+  }
+
+  function startYubiuskCutscene(player) {
+    Scenes.controls(player, true, true);
+    Scenes.fade(player, true);
+    Scenes.camera(player, [3568, 4366, 450], [3576, 4374, 250], { rate: 232, rate2: 232 });
+    Scenes.later(player, 3, () => {
+      Scenes.fade(player, false);
+      Scenes.camera(player, [3546, 4389, 580], [3537, 4389, 380], { rate: 232, rate2: 232 });
+    });
+    Scenes.later(player, 8, () => {
+      Scenes.camera(player, [3534, 4396, 650], [3537, 4390, 350]);
+    });
+    Scenes.later(player, 10, () => {
+      setFairyRingAnimating(player, 0);
+      finishCutscene(player);
+    });
+  }
+
+  function startBoxCutscene(player) {
+    Scenes.cancel(player);
+    Scenes.controls(player, true, true);
+    Scenes.camera(player, [3546, 4389, 580], [3537, 4389, 380], { rate: 232, rate2: 232 });
+    Scenes.later(player, 3, () => {
+      Scenes.camera(player, [3534, 4396, 650], [3537, 4390, 350]);
+    });
+    Scenes.later(player, 8, () => finishCutscene(player));
+  }
+
   function handleDialogueAction(event) {
     const { player, stepId } = event;
     if (!stepId || !ACTION_STEP_IDS.has(stepId)) return;
     if (stepId === GRUBFOOT_LEAVES_ACTION_ID) {
       event.handled = true;
       setBit(player, BIT_GRUBFOOT_LEFT);
+      if (quest.getStage(player) < STAGE_ZANIK_TALK) setStage(player, STAGE_ZANIK_TALK);
       syncQuestNpcs(player);
       return;
     }
@@ -921,6 +1164,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     if (stepId === ZANIK_ENTERS_TEMPLE_ACTION_ID) {
       event.handled = true;
       setBit(player, BIT_GUARDS_REFUSED);
+      if (quest.getStage(player) < STAGE_REFUSED) setStage(player, STAGE_REFUSED);
       syncQuestNpcs(player);
       return;
     }
@@ -936,30 +1180,40 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       setStage(player, STAGE_TEST);
       return;
     }
-    if (stepId === CUTSCENE_START_ACTION_ID) {
+    if (stepId === CUTSCENE_START_ACTION_ID || stepId === DREAM_CUTSCENE_START_ACTION_ID) {
       event.handled = true;
+      startDreamCutscene(player);
+      return;
+    }
+    if (stepId === DREAM_CUTSCENE_END_ACTION_ID) {
+      event.handled = true;
+      finishCutscene(player);
       return;
     }
     if (stepId === ARRIVE_YUBIUSK_ACTION_ID) {
       event.handled = true;
       setStage(player, STAGE_YUBIUSK);
       teleport(player, YUBIUSK_TELEPORT_TILE);
+      setFairyRingAnimating(player, 2);
+      startYubiuskCutscene(player);
       return;
     }
     if (stepId === BOX_SUCKED_ACTION_ID) {
       event.handled = true;
       setBit(player, BIT_BOX_OPENED);
+      setStage(player, STAGE_BOX);
+      startBoxCutscene(player);
       removeTracked(player, "zanik-yubiusk");
       return;
     }
     if (stepId === BOX_PLAYER_PORTAL_ACTION_ID) {
       event.handled = true;
-      setStage(player, STAGE_BOX);
       teleport(player, LAB_RETURN_TILE);
       return;
     }
     if (stepId === QUEST_COMPLETE_ACTION_ID) {
       event.handled = true;
+      finishCutscene(player);
       if (!quest.isComplete(player)) quest.complete(player);
       return;
     }
@@ -984,14 +1238,49 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     const { player, npcId, text } = event;
     if (!text) return;
     const value = String(text);
+    if (AGGIE_NPC_IDS.has(npcId) && value.includes("bring me a Hemenster Whitefish and five coins")) {
+      setBit(player, BIT_KNOWS_WHITEFISH);
+      syncQuestVarbits(player);
+      return;
+    }
+    if (
+      (OLDAK_LAB_NPC_IDS.has(npcId) || npcId === OLDAK_RING_NPC_ID) &&
+      quest.getStage(player) === STAGE_MACHINE &&
+      value.includes("The inner circle has a radius of one zurg")
+    ) {
+      setBit(player, BIT_MACHINE_EXPLAINED);
+      syncQuestVarbits(player);
+      return;
+    }
     if (npcId === MAKEOVER_MAGE_NPC_ID || npcId === NpcIdentifiers.MAKEOVER_MAGE) {
-      if (value.includes("add some pharmakos berries") && quest.getStage(player) === STAGE_REFUSED) {
-        setStage(player, STAGE_MAGE);
+      if (value.includes("add some pharmakos berries")) {
+        if (quest.getStage(player) < STAGE_MAGE) setStage(player, STAGE_MAGE);
+        if (quest.getStage(player) === STAGE_MAGE) setStage(player, STAGE_POTION);
+        return;
       }
+      if (quest.getStage(player) === STAGE_REFUSED) setStage(player, STAGE_MAGE);
       return;
     }
     if (ENTRANCE_GUARD_NPC_IDS.has(npcId) && value.includes("Only goblins allowed")) {
       if (quest.getStage(player) === STAGE_CAVE) setStage(player, STAGE_REFUSED);
+      return;
+    }
+    if (npcId === HIGH_PRIEST_BIGHEAD_NPC_ID && value.includes("Crypt door locked by six keys")) {
+      if (quest.getStage(player) === STAGE_CRYPT_KNOWN) setStage(player, STAGE_KEYS);
+      return;
+    }
+    if (CRYPT_GHOST_VARIANT_BY_ID.has(npcId)) {
+      if (value.startsWith("Snailfeet. That his name.") && quest.getStage(player) < STAGE_SNAILFEET) {
+        setStage(player, STAGE_SNAILFEET);
+      } else if (value === "Mosschin." && quest.getStage(player) < STAGE_MOSSCHIN) {
+        setStage(player, STAGE_MOSSCHIN);
+      } else if (value.startsWith("Redeyes.") && quest.getStage(player) < STAGE_REDEYES) {
+        setStage(player, STAGE_REDEYES);
+      } else if (value.startsWith("Strongbones. He was") && quest.getStage(player) < STAGE_STRONGBONES) {
+        setStage(player, STAGE_STRONGBONES);
+      } else if (value.includes("another plane of existence") && quest.getStage(player) < STAGE_YUBIUSK_KNOWN) {
+        setStage(player, STAGE_YUBIUSK_KNOWN);
+      }
       return;
     }
     if (
@@ -1008,19 +1297,52 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   // ==========================================================================
 
   function passEnclaveGuard(player, npcId) {
-    if (!questActive(player) || quest.getStage(player) < STAGE_GOBLIN) return;
-    enclaveTribe.set(player, GUARD_TRIBE_BY_ID.get(npcId));
+    // Post-quest entry is still canonical; it grants no stage, key or item progress.
+    if (quest.getStage(player) < STAGE_TEMPLE) return;
+    const tribe = GUARD_TRIBE_BY_ID.get(npcId);
+    if (tribe === undefined) return;
+    const pass = TRIBE_GUARD_PASS[tribe];
+    const location = player.getLocation();
+    if (location.getZ() !== 0) return;
+    const at = (tile) =>
+      location.getX() === tile.x && location.getY() === tile.y;
+    const guard = TRIBE_GUARD_TILES[tribe];
+    const adjacent =
+      Math.max(Math.abs(location.getX() - guard.x), Math.abs(location.getY() - guard.y)) <= 1;
+    const fromDistance = Math.abs(location.getX() - pass.from.x) + Math.abs(location.getY() - pass.from.y);
+    const toDistance = Math.abs(location.getX() - pass.to.x) + Math.abs(location.getY() - pass.to.y);
+    const leaving = !at(pass.from) && toDistance < fromDistance;
+    const correct = wornBodyId(player) === TRIBE_MAIL_IDS[tribe];
+    enclaveTribe.set(player, { tribe, leaving });
     startTranscript(api, player, npcId, PAGE, "the-temple-of-tribes-talking-to-enclave-guards");
+    if (correct) {
+      // Npc interaction may have auto-pathed to a cardinal guard tile, not the exact
+      // captured mouth tile, so cross from any valid adjacent approach.
+      if (adjacent) walkGuardPass(player, leaving ? pass.from : pass.to);
+    } else if (leaving) {
+      // Captured throw-out (1694): player is moved back to the hall-side mouth.
+      player.moveTo(new Location(pass.from.x, pass.from.y, 0));
+    }
   }
 
   function pickpocketPriest(player, npcId) {
     const tribe = PRIEST_TRIBE_BY_ID.get(npcId);
-    if (tribe === undefined || !questActive(player) || quest.getStage(player) < STAGE_TEST) return;
-    if (hasKey(player, tribe)) {
+    if (tribe === undefined || !questActive(player) || quest.getStage(player) < STAGE_KEYS) return;
+    const keyId = TRIBE_KEY_IDS[tribe];
+    const ownsKey = held(player, keyId) || bankedAmount(player, keyId) > 0;
+    // The saved mask alone is not ownership: a key can be lost before the crypt. Re-stolen
+    // keys are only credited once the physical key has been given.
+    if (hasKey(player, tribe) && ownsKey) {
       player.sendMessage("You have already stolen this priest's key.");
       return;
     }
-    player.getInventory().adds(TRIBE_KEY_IDS[tribe], 1);
+    if (!ownsKey) {
+      if (player.getInventory().getFreeSlots() < 1) {
+        player.sendMessage("You don't have enough inventory space.");
+        return;
+      }
+      player.getInventory().adds(keyId, 1);
+    }
     setKeysMask(player, keysMask(player) | (1 << tribe));
     if (allKeysHeld(player)) player.sendMessage("You have taken the keys of all six tribes.");
   }
@@ -1045,6 +1367,13 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     ...ENTRANCE_GUARD_NPC_IDS,
   ]);
 
+  /** Wiki action/unavailable markers precede the real post-test Bighead questions. */
+  function withoutWikiMarkers(steps) {
+    let start = 0;
+    while (start < steps.length && ["action", "unavailable"].includes(steps[start].type)) start++;
+    return steps.slice(start);
+  }
+
   function handleNpcInteraction(event) {
     const { player, npcId, clickType, definition } = event;
     const option = definition?.getActions?.()?.[clickType - 1];
@@ -1054,6 +1383,14 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       if (!variant) return;
       event.handled = true;
       startTranscript(api, player, npcId, PAGE, variant);
+      return;
+    }
+    if (option === "Talk-to" && npcId === HIGH_PRIEST_BIGHEAD_NPC_ID &&
+        questActive(player) && quest.getStage(player) >= STAGE_TEST) {
+      const variant = selectVariant({ npcId, player });
+      if (!variant) return;
+      event.handled = true;
+      startTranscript(api, player, npcId, PAGE, variant, withoutWikiMarkers);
       return;
     }
     if (option === "Buy-sphere" && npcId === OLDAK_RING_NPC_ID) {
@@ -1145,7 +1482,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   }
 
   function searchSphereCrate(player) {
-    if (quest.getStage(player) < STAGE_GOBLIN || quest.isComplete(player)) return;
+    if (quest.getStage(player) < STAGE_TEMPLE || quest.isComplete(player)) return;
     if (hasBit(player, BIT_FOUND_SPHERE)) {
       player.sendMessage("The crate is empty.");
       return;
@@ -1155,11 +1492,12 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       return;
     }
     setBit(player, BIT_FOUND_SPHERE);
+    if (quest.getStage(player) < STAGE_SPHERE) setStage(player, STAGE_SPHERE);
     player.getInventory().adds(DORGESH_KAAN_SPHERE_ITEM_ID, 1);
   }
 
   function searchArmourCrate(player) {
-    if (!questActive(player) || quest.getStage(player) < STAGE_GOBLIN) return;
+    if (!questActive(player) || quest.getStage(player) < STAGE_TEMPLE) return;
     if (player.getInventory().isFull()) {
       player.sendMessage("You don't have enough inventory space.");
       return;
@@ -1185,9 +1523,31 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     }
     setKeysMask(player, 0);
     setBit(player, BIT_CRYPT_UNLOCKED);
-    setStage(player, STAGE_KEYS);
+    setStage(player, STAGE_CRYPT);
     player.sendMessage("You unlock the crypt gate with the six keys.");
     teleport(player, { x: 3742, y: 4383 });
+    setStage(player, STAGE_SNOTHEAD);
+  }
+
+  function machineValues(player) {
+    let values = machinePower.get(player);
+    if (!values) {
+      values = MACHINE_POWER_ATTRIBUTES.map((key) => Number(player.getAttribute(key)) || 0);
+      machinePower.set(player, values);
+    }
+    return values;
+  }
+
+  function setMachineValue(player, index, value) {
+    machinePower.get(player)[index] = value;
+    player.setAttribute(MACHINE_POWER_ATTRIBUTES[index], value);
+  }
+
+  function sendMachineValues(player, values) {
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_MACHINE_1, values[0]);
+    sender.sendVarbit(VARBIT_MACHINE_2, values[1]);
+    sender.sendVarbit(VARBIT_MACHINE_3, values[2]);
   }
 
   function adjustMachine(player) {
@@ -1195,31 +1555,46 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       player.sendMessage("The machine is not ready to be adjusted.");
       return;
     }
-    startDialogue(api, player, { npcId: OLDAK_RING_NPC_ID }, [
-      {
-        options: [
-          {
-            text: "9, 4, 1",
-            echo: false,
-            next: [
-              {
-                exec: () => {
-                  setStage(player, STAGE_ACTIVATED);
-                  startTranscript(
-                    api,
-                    player,
-                    OLDAK_RING_NPC_ID,
-                    PAGE,
-                    "through-the-fungus-ring-activating-the-machine"
-                  );
-                },
-              },
-            ],
-          },
-          { text: "Never mind.", echo: false, next: [] },
-        ],
-      },
-    ]);
+    const values = machineValues(player);
+    sendMachineValues(player, values);
+    player.getPacketSender().sendSubInterface(MACHINE_FLOATER_UID, MACHINE_INTERFACE, 1);
+  }
+
+  function handleMachineInterface(event) {
+    const { player, buttonId } = event;
+    if ((buttonId >> 16) !== MACHINE_INTERFACE) return;
+    const child = buttonId & 0xffff;
+    const values = machineValues(player);
+    if (MACHINE_ADD.has(child)) {
+      event.handled = true;
+      const index = MACHINE_ADD.get(child);
+      setMachineValue(player, index, Math.min(15, values[index] + 1));
+      sendMachineValues(player, values);
+      return;
+    }
+    if (MACHINE_SUBTRACT.has(child)) {
+      event.handled = true;
+      const index = MACHINE_SUBTRACT.get(child);
+      setMachineValue(player, index, Math.max(0, values[index] - 1));
+      sendMachineValues(player, values);
+      return;
+    }
+    if (child === MACHINE_CONFIRM) {
+      event.handled = true;
+      if (values.some((value, index) => value !== MACHINE_TARGET[index])) {
+        player.sendMessage("The relay buzzes; the power is not distributed correctly.");
+        return;
+      }
+      player.getPacketSender().closeSubInterface(MACHINE_FLOATER_UID);
+      setFairyRingAnimating(player, 1);
+      startTranscript(
+        api,
+        player,
+        OLDAK_RING_NPC_ID,
+        PAGE,
+        "through-the-fungus-ring-activating-the-machine"
+      );
+    }
   }
 
   function openStrangeBox(player) {
@@ -1232,14 +1607,24 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
 
   function handleObjectInteraction(event) {
     const { player, objectId } = event;
+    if (objectId === CAVE_ENTRANCE_OBJECT_ID) {
+      event.handled = true;
+      teleport(player, player.getLocation().getY() >= 9000 ? CAVE_ENTRANCE_TILE : GOBLIN_CAVE_TILE);
+      return;
+    }
+    if (objectId === BLACK_MUSHROOMS_OBJECT_ID) {
+      // 6311 is shared with The Golem and world content: only claim it inside LOTG's
+      // Goblin Cave while this quest is active, leaving every other placement alone.
+      if (!questActive(player) || !tileInZone(event.location, BLACK_MUSHROOM_ZONE)) return;
+      event.handled = true;
+      player.getInventory().adds(BLACK_MUSHROOM_ITEM_ID, 1);
+      player.sendMessage("You pick a mushroom.");
+      return;
+    }
     if (!QUEST_OBJECT_IDS.has(objectId)) return;
     event.handled = true;
     if (objectId === PHARMAKOS_BUSH_OBJECT_ID) {
       pickPharmakosBerries(player);
-      return;
-    }
-    if (objectId === BLACK_MUSHROOMS_OBJECT_ID) {
-      if (questActive(player)) player.getInventory().adds(BLACK_MUSHROOM_ITEM_ID, 1);
       return;
     }
     if (objectId === SPHERE_CRATE_OBJECT_ID) {
@@ -1296,6 +1681,20 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
       player.getInventory().adds(ItemIdentifiers.GOBLIN_POTION_4_, 1);
       return;
     }
+    const mushroomOnVial =
+      (first === BLACK_MUSHROOM_ITEM_ID && second === VIAL_ITEM_ID) ||
+      (first === VIAL_ITEM_ID && second === BLACK_MUSHROOM_ITEM_ID);
+    if (mushroomOnVial) {
+      event.handled = true;
+      if (!held(player, PESTLE_AND_MORTAR_ITEM_ID)) {
+        player.sendMessage("You need a pestle and mortar to grind the mushroom.");
+        return;
+      }
+      player.getInventory().deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
+      player.getInventory().deleteNumber(VIAL_ITEM_ID, 1);
+      player.getInventory().adds(BLACK_DYE_ITEM_ID, 1);
+      return;
+    }
     const pestle = first === PESTLE_AND_MORTAR_ITEM_ID ? second : second === PESTLE_AND_MORTAR_ITEM_ID ? first : null;
     if (pestle === BLACK_MUSHROOM_ITEM_ID) {
       event.handled = true;
@@ -1318,7 +1717,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   }
 
   function catchWhitefish(player) {
-    if (!questActive(player) || quest.getStage(player) < STAGE_TEST) return;
+    if (!questActive(player) || quest.getStage(player) < STAGE_KEYS) return;
     if (!held(player, FISHING_ROD_ITEM_ID)) {
       player.sendMessage("You need a fishing rod to catch a whitefish.");
       return;
@@ -1332,7 +1731,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   }
 
   function handleAggieItem(player, itemId) {
-    if (!questActive(player) || quest.getStage(player) < STAGE_TEST) return false;
+    if (!questActive(player) || quest.getStage(player) < STAGE_KEYS) return false;
     if (itemId === WHITE_GOBLIN_MAIL_ITEM_ID) {
       startTranscript(api, player, NpcIdentifiers.AGGIE, PAGE, "keys-to-the-crypt-using-white-goblin-mail-on-aggie");
       return true;
@@ -1381,13 +1780,54 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     }
   }
 
-  function advanceGoblinPotion(player, itemId) {
+  function openGoblinSelection(player, itemId) {
+    if (player.getEquipment().getItems().some((item) => (item?.getId?.() ?? -1) > 0)) {
+      player.sendMessage("You should remove your equipment before drinking the potion.");
+      return;
+    }
+    if (!held(player, itemId)) return;
+    pendingGoblinPotion.set(player, itemId);
+    player.getPacketSender()
+      .sendVarbit(VARBIT_GOBLIN_TYPE, goblinType(player))
+      .sendInterface(GOBLIN_SELECTION_INTERFACE);
+  }
+
+  function confirmGoblinPotion(player) {
+    const itemId = pendingGoblinPotion.get(player);
+    if (itemId === undefined || !held(player, itemId)) {
+      pendingGoblinPotion.delete(player);
+      return;
+    }
+    pendingGoblinPotion.delete(player);
     const index = GOBLIN_POTION_DOSE_ITEMS.indexOf(itemId);
     player.getInventory().deleteNumber(itemId, 1);
     const next = GOBLIN_POTION_DOSE_ITEMS[index + 1];
     player.getInventory().adds(next ?? VIAL_ITEM_ID, 1);
+    player.sendMessage("You drink some of your goblin transmogrification potion.");
+    if (next !== undefined) {
+      player.sendMessage(`You have ${4 - (index + 1)} doses of potion left.`);
+    }
+    player.setAttribute(GOBLIN_TYPE_ATTRIBUTE, goblinType(player));
     player.setAttribute("quest.land_of_the_goblins.goblin-name", Math.floor(Math.random() * GOBLIN_NAMES.length));
+    if (quest.getStage(player) < STAGE_GOBLIN) setStage(player, STAGE_GOBLIN);
     setGoblinForm(player, true);
+    player.getPacketSender().sendInterfaceRemoval();
+  }
+
+  function handleGoblinSelectionButton(event) {
+    const { player, buttonId } = event;
+    if ((buttonId >> 16) !== GOBLIN_SELECTION_INTERFACE) return;
+    const child = buttonId & 0xffff;
+    if (GOBLIN_SELECT_BUTTONS.has(child)) {
+      event.handled = true;
+      player.setAttribute(GOBLIN_TYPE_ATTRIBUTE, GOBLIN_SELECT_BUTTONS.get(child));
+      player.getPacketSender().sendVarbit(VARBIT_GOBLIN_TYPE, GOBLIN_SELECT_BUTTONS.get(child));
+      return;
+    }
+    if (child === GOBLIN_CONFIRM_BUTTON) {
+      event.handled = true;
+      confirmGoblinPotion(player);
+    }
   }
 
   function handleItemAction(event) {
@@ -1395,7 +1835,7 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     if (option !== "Drink") return;
     if (!GOBLIN_POTION_DOSE_ITEMS.includes(itemId)) return;
     event.handled = true;
-    advanceGoblinPotion(player, itemId);
+    openGoblinSelection(player, itemId);
   }
 
   // ==========================================================================
@@ -1405,8 +1845,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   function handleQuestZoneEnter(event) {
     const { player } = event;
     if (!player || player.isPlayerBot?.() === true) return;
-    if (quest.getStage(player) === STAGE_STARTED && inZone(player, CITY_ZONE)) {
-      setStage(player, STAGE_CITY);
+    if (quest.getStage(player) === STAGE_TEMPLE && inZone(player, TEMPLE_ZONE)) {
+      setStage(player, STAGE_SPHERE);
     }
     if (
       quest.getStage(player) === STAGE_REFUSED &&
@@ -1418,15 +1858,45 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     syncQuestNpcs(player);
   }
 
+  /** Old odd stages (10/15/20/25/.../60) -> captured even stages. Idempotent by version. */
+  function migrateSave(player) {
+    if ((Number(player.getAttribute(MIGRATION_ATTRIBUTE)) || 0) >= MIGRATION_VERSION) return;
+    const old = quest.getStage(player);
+    let next = old;
+    if (old === 40) next = hasBit(player, BIT_CRYPT_UNLOCKED) ? STAGE_SNOTHEAD : STAGE_KEYS;
+    else if (old === 10) next = STAGE_STARTED;
+    else if (old === 15) next = STAGE_CUTSCENE;
+    else if (old === 20) next = STAGE_CAVE;
+    else if (old === 25) next = STAGE_REFUSED;
+    else if (old === 27) next = STAGE_POTION;
+    else if (old === 30) next = STAGE_TEMPLE;
+    else if (old === 32) next = STAGE_FREED;
+    else if (old === 35) next = STAGE_TEST;
+    else if (old === 49) next = STAGE_YUBIUSK_KNOWN;
+    else if (old === 51) next = STAGE_YUBIUSK;
+    else if (old === 55) next = STAGE_BOX;
+    else if (old === 60) next = STAGE_COMPLETE;
+    if (next !== old) quest.setStage(player, next);
+    player.setAttribute(MIGRATION_ATTRIBUTE, MIGRATION_VERSION);
+  }
+
   function handleLogin({ player }) {
+    migrateSave(player);
     refreshQuestList(player);
     if (!quest.isComplete(player) && quest.getStage(player) >= STAGE_STARTED) {
       player.getPacketSender().sendVarbit(VARBIT_GOBLIN_FORM, hasBit(player, BIT_GOBLIN_FORM) ? 1 : 0);
+      if (hasBit(player, BIT_GOBLIN_FORM)) applyGoblinAppearance(player);
     }
+    fairyRingAnimating.delete(player);
+    syncQuestVarbits(player);
     syncQuestNpcs(player);
   }
 
   function handleLogout({ player }) {
+    finishGuardPass(player);
+    finishCutscene(player);
+    machinePower.delete(player);
+    fairyRingAnimating.delete(player);
     removeAllTracked(player);
   }
 
@@ -1467,9 +1937,6 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
         "We arrived in <col=800000>Yu'biusk</col>. I should look around",
         "and find the <col=800000>strange box</col> to the north.",
       ];
-    }
-    if (stage >= STAGE_ACTIVATED) {
-      return ["<str>I activated Oldak's machine and the portal opened.</str>", ""];
     }
     if (stage >= STAGE_MACHINE) {
       return [
@@ -1564,6 +2031,9 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   api.persistAttribute(BITS_ATTRIBUTE);
   api.persistAttribute(KEYS_ATTRIBUTE);
   api.persistAttribute(CRYPT_ATTRIBUTE);
+  api.persistAttribute(GOBLIN_TYPE_ATTRIBUTE, 1);
+  MACHINE_POWER_ATTRIBUTES.forEach((key) => api.persistAttribute(key, 0));
+  api.persistAttribute(MIGRATION_ATTRIBUTE, 0);
   api.persistAttribute("quest.land_of_the_goblins.goblin-name");
 
   quest = registerQuest(api, {
@@ -1576,15 +2046,12 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     questPoints: 2,
     xpRewards: [
       { skillId: Skill.AGILITY.getIndex(), amount: 8000, label: "Agility" },
-      { skillId: Skill.FISHING.getIndex(), amount: 8000, label: "Fishing" },
-      { skillId: Skill.THIEVING.getIndex(), amount: 8000, label: "Thieving" },
       { skillId: Skill.HERBLORE.getIndex(), amount: 8000, label: "Herblore" },
+      { skillId: Skill.THIEVING.getIndex(), amount: 8000, label: "Thieving" },
+      { skillId: Skill.FISHING.getIndex(), amount: 8000, label: "Fishing" },
     ],
-    scrollItemId: ItemIdentifiers.GOBLIN_POTION_4_,
-    otherRewards: [
-      "Access to the Goblin Temple",
-      "Ability to make goblin potions",
-    ],
+    scrollItemId: ItemIdentifiers.GOBLIN_POTION_3_,
+    otherRewards: [],
     buildJournal,
     onReward: grantReward,
   });
@@ -1600,6 +2067,8 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction(handleItemAction);
+  api.onInterfaceActionButton([...GOBLIN_SELECT_BUTTONS.keys(), GOBLIN_CONFIRM_BUTTON].map((child) => (GOBLIN_SELECTION_INTERFACE << 16) | child), handleGoblinSelectionButton);
+  api.onInterfaceActionButton([...MACHINE_ADD.keys(), ...MACHINE_SUBTRACT.keys(), MACHINE_CONFIRM].map((child) => (MACHINE_INTERFACE << 16) | child), handleMachineInterface);
   api.onObjectInteraction(handleObjectInteraction);
   api.onZoneEnter(MINE_ZONE, handleQuestZoneEnter);
   api.onZoneEnter(CITY_ZONE, handleQuestZoneEnter);
@@ -1609,4 +2078,5 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
   api.onZoneEnter(YUBIUSK_ZONE, handleQuestZoneEnter);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onWalkRoute(cancelGuardPass);
 };

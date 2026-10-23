@@ -16,6 +16,8 @@ const DriftNets = require("./hunter/DriftNets.Hunter");
 const Dungeon = require("./hunter/Dungeon.Hunter");
 const Rumours = require("./hunter/Rumours.Hunter");
 const Broavs = require("./hunter/Broavs.Hunter");
+const Ceto = require("./hunter/Ceto.Hunter");
+const Annette = require("./hunter/Annette.Hunter");
 
 // Ground traps are "Take" (op3) and "Lay"/"Activate" (op4) in the cache.
 const LAY_GROUND_OPTION = 4;
@@ -79,11 +81,18 @@ module.exports = {
     api.onObjectInteraction("Hole", { "Build-trap": Crabs.build });
     api.onObjectInteraction("Crab trap (empty)", { Bait: Crabs.bait });
     for (const name of ["Crab trap (baited)", "Crab trap (full)"]) api.onObjectInteraction(name, { Empty: Crabs.empty });
-    api.onNpcInteraction("Ceto", { "Talk-to": DriftNets.pay, Pay: DriftNets.pay });
+    api.onNpcInteraction("Ceto", { Pay: Ceto.pay });
+    api.onObjectInteraction("Tunnel", { Enter: Ceto.tunnelEnter, Pay: Ceto.tunnelPay });
+    api.onNpcDialogueCondition(Ceto.condition);
+    api.onCustomEvent("npc-dialogue:action", Ceto.action);
+    api.onCustomEvent("npc-dialogue:action", Annette.action);
+    api.onCustomEvent("npc-dialogue:line", Ceto.line);
     api.onNpcInteraction("Fish shoal", { Chase: DriftNets.chase });
     for (const name of ["Drift net anchors", "Drift net (full)"]) api.onObjectInteraction(name, {
       "Set up": DriftNets.setup, "Take down": DriftNets.takeDown, Harvest: DriftNets.harvest, Inspect: DriftNets.inspect });
-    api.onObjectInteraction("<col=ffff00>Annette</col>", { "Talk-to": DriftNets.storage, Nets: DriftNets.storage });
+    api.onObjectInteraction("<col=ffff00>Annette</col>", { "Talk-to": Annette.talk, Nets: Annette.nets });
+    api.onInterfaceActionButton(Annette.STORED_NETS_UID, Annette.storedClick);
+    api.onInterfaceActionButton(Annette.SIDE_ITEMS_UID, Annette.sideClick);
     api.onObjectInteraction("Plant door", { Navigate: DriftNets.exit });
     for (const name of ["Huntmaster Gilman (Novice)", "Guild Hunter Cervus (Adept)", "Guild Hunter Ornus (Adept)",
       "Guild Hunter Aco (Expert)", "Guild Hunter Teco (Expert)", "Guild Hunter Wolf (Master)"])
@@ -94,7 +103,7 @@ module.exports = {
     for (const name of ["Basic quetzal whistle", "Enhanced quetzal whistle", "Perfected quetzal whistle", "Perfected quetzal whistle(i)"])
       api.onItemAction(name, { Rumour: Rumours.check });
     api.onItemOnObject(Runtime.objectUse, { noted: false });
-    api.onItemOnObject("Drift net", "<col=ffff00>Annette</col>", DriftNets.use, { noted: true });
+    api.onItemOnObject("Drift net", "<col=ffff00>Annette</col>", Annette.use, { noted: true });
     api.onItemOnItem(Runtime.itemUse, { noted: false });
     api.onItemOnPlayer(Catching.boost, { noted: false });
     api.onItemOnNpc(Runtime.npcUse, { noted: false });

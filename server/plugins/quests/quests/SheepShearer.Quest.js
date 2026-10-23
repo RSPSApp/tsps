@@ -13,7 +13,7 @@
  * Wool collection follows the Wiki; fast-path handover and rewards follow rsprox 1718.
  */
 module.exports = function registerSheepShearerQuest(api) {
-  const { Skill, Animation, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, TaskManager, CountdownTask } = api.core;
+  const { Skill, Animation, ItemIdentifiers, NpcIdentifiers, TaskManager, CountdownTask } = api.core;
   const { registerQuest, refreshQuestList } = require("../QuestRuntime");
 
   const FRED_THE_FARMER_NPC_ID = NpcIdentifiers.FRED_THE_FARMER;
@@ -31,32 +31,24 @@ module.exports = function registerSheepShearerQuest(api) {
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
 
   const SHEAR_ANIMATION = new Animation(893);
-  const SPIN_ANIMATION = new Animation(13138);
 
-  /** Shearable variants verified against the revision 241 cache. */
-  const SHEARABLE_SHEEP_IDS = new Set([
-    NpcIdentifiers.SHEEP_18,
-    NpcIdentifiers.SHEEP_19,
-    NpcIdentifiers.SHEEP_20,
-    NpcIdentifiers.SHEEP_21,
-    NpcIdentifiers.SHEEP_BALD_BLACK_HEAD,
-    NpcIdentifiers.SHEEP_3,
-    NpcIdentifiers.SHEEP_BALD_WHITE_HEAD,
-    NpcIdentifiers.SHEEP_5,
-    NpcIdentifiers.SHEEP_6,
-    NpcIdentifiers.SHEEP_7,
-    NpcIdentifiers.SHEEP_8,
-  ]);
-
-  const SPINNING_WHEEL_IDS = new Set([
-    ObjectIdentifiers.SPINNING_WHEEL,
-    ObjectIdentifiers.SPINNING_WHEEL_2,
-    ObjectIdentifiers.SPINNING_WHEEL_3,
-    ObjectIdentifiers.SPINNING_WHEEL_4,
-    ObjectIdentifiers.SPINNING_WHEEL_5,
-    ObjectIdentifiers.SPINNING_WHEEL_6,
-    ObjectIdentifiers.SPINNING_WHEEL_7,
-    ObjectIdentifiers.SPINNING_WHEEL_8,
+  /**
+   * The revision-241 shearable sheep, each mapped to the sheared npc of the same
+   * wool colour. The pairs are the cache gamevals' matching SHEEPUNSHEERED and
+   * SHEEPSHEERED names.
+   */
+  const SHEARED_SHEEP_BY_ID = new Map([
+    [NpcIdentifiers.SHEEP_18, NpcIdentifiers.SHEEP_2],
+    [NpcIdentifiers.SHEEP_19, NpcIdentifiers.SHEEP_4],
+    [NpcIdentifiers.SHEEP_20, NpcIdentifiers.SHEEP_9],
+    [NpcIdentifiers.SHEEP_21, NpcIdentifiers.SHEEP_10],
+    [NpcIdentifiers.SHEEP_BALD_BLACK_HEAD, NpcIdentifiers.SHEEP_11],
+    [NpcIdentifiers.SHEEP_3, NpcIdentifiers.SHEEP_12],
+    [NpcIdentifiers.SHEEP_BALD_WHITE_HEAD, NpcIdentifiers.SHEEP_13],
+    [NpcIdentifiers.SHEEP_5, NpcIdentifiers.SHEEP_14],
+    [NpcIdentifiers.SHEEP_6, NpcIdentifiers.SHEEP_15],
+    [NpcIdentifiers.SHEEP_7, NpcIdentifiers.SHEEP_16],
+    [NpcIdentifiers.SHEEP_8, NpcIdentifiers.SHEEP_17],
   ]);
 
   const SAW_THING_ATTRIBUTE = "sheep-shearer:saw-thing";
@@ -150,8 +142,8 @@ module.exports = function registerSheepShearerQuest(api) {
     player.getInventory().adds(WOOL_ITEM_ID, 1);
     player.sendMessage("You get some wool.");
     shornSheep.add(npc);
-    const whiteSheep = npc.getDefinition().getId() >= NpcIdentifiers.SHEEP_21;
-    npc.setNpcTransformationId(whiteSheep ? NpcIdentifiers.SHEEP_17 : NpcIdentifiers.SHEEP_16);
+    const shearedId = SHEARED_SHEEP_BY_ID.get(npc.getDefinition().getId());
+    npc.setNpcTransformationId(shearedId ?? -1);
     TaskManager.submit(new CountdownTask(npc, 100, () => {
       shornSheep.delete(npc);
       if (npc.isRegistered()) npc.setNpcTransformationId(-1);
@@ -223,11 +215,20 @@ module.exports = function registerSheepShearerQuest(api) {
     if (event.text === "Yes, okay. I can do that." && pendingStart.has(event.player)) {
       event.after = () => {
         pendingStart.delete(event.player);
-        if (quest.getStage(event.player) === 0) quest.setStage(event.player, STAGE_STARTED);
+        if (quest.getStage(event.player) !== 0) return;
+        // Fred's start gives shears unless the player already has them or has all 20 balls.
+        // Do not commit the start when that handout cannot fit.
+        if (!hasShears(event.player) && woolBalls(event.player) < TOTAL_BALLS_OF_WOOL
+          && event.player.getInventory().isFull()) {
+          event.player.getInventory().full();
+          return;
+        }
+        quest.setStage(event.player, STAGE_STARTED);
       };
     }
     const remaining = remainingWool(quest.getStage(event.player));
     event.text = event.text.replace("20 more balls of wool", `${remaining} more ${remaining === 1 ? "ball" : "balls"} of wool`)
+      .replace("[1-19]", String(remaining))
       .replace("[#]", String(remaining));
   }
 
@@ -301,7 +302,7 @@ module.exports = function registerSheepShearerQuest(api) {
       event.handled = true;
       return;
     }
-    if (SHEARABLE_SHEEP_IDS.has(event.npcId)) {
+    if (SHEARED_SHEEP_BY_ID.has(event.npcId)) {
       shearSheep(event.player, event.npc ?? event.target);
       event.handled = true;
     }
@@ -315,60 +316,10 @@ module.exports = function registerSheepShearerQuest(api) {
       event.handled = true;
       return;
     }
-    if (SHEARABLE_SHEEP_IDS.has(npcId)) {
+    if (SHEARED_SHEEP_BY_ID.has(npcId)) {
       shearSheep(event.player, event.npc ?? event.target);
       event.handled = true;
     }
-  }
-
-  const spinning = new WeakMap();
-
-  function spinWool(player) {
-    if (player.getInventory().getAmount(WOOL_ITEM_ID) <= 0) {
-      player.sendMessage("You need some wool to spin.");
-      return;
-    }
-    player.getPacketSender().sendCreationMenu(new api.core.CreationMenu(
-      "What would you like to spin?", [BALL_OF_WOOL_ITEM_ID], {
-        execute(_itemId, amount) {
-          const token = {};
-          const from = player.getLocation().clone();
-          let remaining = Math.min(Math.max(0, Math.trunc(amount)), player.getInventory().getAmount(WOOL_ITEM_ID));
-          spinning.set(player, token);
-          player.getPacketSender().sendInterfaceRemoval();
-          TaskManager.submit(new (class extends api.core.Task {
-            constructor() { super(3, player, false); }
-            execute() {
-              if (spinning.get(player) !== token || player.isRegistered() === false ||
-                  !player.getLocation().equals(from) || remaining <= 0 || player.getInventory().getAmount(WOOL_ITEM_ID) <= 0) {
-                this.stop();
-                return;
-              }
-              player.performAnimation(SPIN_ANIMATION);
-              player.getInventory().deleteNumber(WOOL_ITEM_ID, 1);
-              player.getInventory().adds(BALL_OF_WOOL_ITEM_ID, 1);
-              player.getSkillManager().addExperiences(Skill.CRAFTING, 2.5);
-              remaining--;
-              if (remaining === 0) this.stop();
-            }
-          })());
-        },
-      }
-    ));
-  }
-
-  function handleItemOnObject(event) {
-    if (event.itemId !== WOOL_ITEM_ID || !SPINNING_WHEEL_IDS.has(event.objectId)) return;
-    spinWool(event.player);
-    event.handled = true;
-  }
-
-  function handleObjectInteraction(event) {
-    if (!SPINNING_WHEEL_IDS.has(event.objectId)) return;
-    const action = (event.definition?.getInteractions?.() ?? [])[event.clickType - 1];
-    if (String(action).toLowerCase() !== "spin") return;
-    spinWool(event.player);
-    event.handled = true;
   }
 
   function handlePlayerLogin({ player }) {
@@ -402,9 +353,6 @@ module.exports = function registerSheepShearerQuest(api) {
   api.onNpcInteraction(handleNpcInteraction);
   api.onItemOnNpc(handleItemOnNpc);
 
-  // Spinning: wool used on a spinning wheel, or its Spin option.
-  api.onItemOnObject(handleItemOnObject, { noted: false });
-  api.onObjectInteraction(handleObjectInteraction);
 
   api.onPlayerLogin(handlePlayerLogin);
 };

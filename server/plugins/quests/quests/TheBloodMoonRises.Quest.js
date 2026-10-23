@@ -6,13 +6,23 @@
 module.exports = function registerTheBloodMoonRises(api) {
   const { Animation, Boundary, Equipment, Graphic, HitDamage, HitMask, Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectDefinition, ObjectIdentifiers, PrayerHandler, PrivateArea, Skill, World } = api.core;
   const { registerQuest, loadTranscripts, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
   const { handleDrakanDodgeRoll } = require("../bmr/DrakanDodgeRoll.TheBloodMoonRises");
-  require("../bmr/Refinery.TheBloodMoonRises")(api, stage);
+  const refinery = require("../bmr/Refinery.TheBloodMoonRises")(api, stage);
   require("../bmr/FinalCastleDeposit.TheBloodMoonRises")(api);
   const PAGE = "The Blood Moon Rises";
+  const Scenes = createQuestScenes(api);
   const START_HOOK = "quest:the-blood-moon-rises:start";
+  const START_DIALOGUE_COMPLETE = "the-blood-moon-rises:start-dialogue-complete";
+  const HIDEOUT_CUTSCENE_STARTED = "the-blood-moon-rises:hideout-cutscene-started";
   const TOME_ID = ItemIdentifiers.TOME_OF_EXPERIENCE_3;
   const PREP_ATTRIBUTE = "quest.the_blood_moon_rises.preparations";
+  // Quest Helper's actual sub-progress varbits (primary-captured, not hints).
+  const IVAN_GIVEN_PICKAXE_VARBIT = 15469;
+  const IVAN_HIDEOUT_PROGRESS_VARBIT = 15473;
+  const VELIAF_HIDEOUT_PROGRESS_VARBIT = 15474;
+  const SANGVESTI_SUPPLY_WARNING_VARBIT = 15481;
+  const IN_VAMPYRIUM_VARBIT = 15482;
   const THRONE_PUZZLE_ATTRIBUTE = "quest.the_blood_moon_rises.castle-throne-puzzle";
   const THRONE_BUST_VARBITS = Object.freeze([15539, 15540, 15541, 15542]);
   const BASIN_PUZZLE_ATTRIBUTE = "quest.the_blood_moon_rises.castle-basin-puzzle";
@@ -57,6 +67,7 @@ module.exports = function registerTheBloodMoonRises(api) {
   const HIDEOUT_SHRINE_INSPECTED = "quest.the_blood_moon_rises.hideout-shrine-inspected";
   const HIDEOUT_DEFENSE_COMPLETE = "quest.the_blood_moon_rises.hideout-defense-complete";
   const SLEPE_STORY_ATTRIBUTE = "quest.the_blood_moon_rises.slepe-story";
+  const SLEPE_NATIVE_STAGE_ATTRIBUTE = "the-blood-moon-rises:slepe-native-stage";
   const CASTLE_SHRINE_ATTRIBUTE = "quest.the_blood_moon_rises.castle-shrine-prayed";
   const CASTLE_SHRINE_VARBIT = 15470;
   const CASTLE_DUNGEON_STAIRS = Object.freeze({ id: 61208, x: 3147, y: 7585, z: 0 });
@@ -82,6 +93,8 @@ module.exports = function registerTheBloodMoonRises(api) {
   const CASTLE_THIRD_EMBLEM_RECEPTACLE_VARBIT = 15507;
   const CASTLE_THIRD_EMBLEM_FOUND_VARBIT = 15567;
   const CASTLE_THIRD_EMBLEM_RECEPTACLE = Object.freeze({ id: 61637, x: 2486, y: 7421, z: 0 });
+  const CASTLE_VANESCULA_WALL_VARBIT = 15511;
+  const CASTLE_VANESCULA_WALL = Object.freeze({ id: 61611, crackedId: 61613, holeId: 61614, x: 2492, y: 7364, z: 0 });
   const CASTLE_VANESCULA_STUDY_EMBLEM_VARBIT = 15503;
   const CASTLE_VANESCULA_STUDY_RECEPTACLE = Object.freeze({ id: 61633, x: 2476, y: 7367, z: 0 });
   const CASTLE_VANESCULA_EMBLEM_RECEPTACLE = Object.freeze({ id: 61634, x: 2469, y: 7408, z: 0 });
@@ -105,6 +118,8 @@ module.exports = function registerTheBloodMoonRises(api) {
   const CASTLE_TRANSITION_PENDING_ATTRIBUTE = "quest.the_blood_moon_rises.castle-transition-pending";
   const CASTLE_BOOK_VARBITS = Object.freeze([15550, 15551, 15552, 15553, 15554, 15555, 15556, 15557]);
   const CASTLE_GILDED_BOOKCASE_VARBIT = 15525;
+  // 61698 Empty mount -> 61700 Mounted shield (Search) via varbit 15526.
+  const CASTLE_SHIELD_MOUNT_VARBIT = 15526;
   const CASTLE_BOOKCASE_INTERFACE = 962;
   const CASTLE_BOOK_ITEMS = Object.freeze({ gilded: 33767, vampyre: 33768, fullMoonKey: ItemIdentifiers.FULL_MOON_KEY,
     mysteryJerky: ItemIdentifiers.MYSTERIOUS_JERKY,
@@ -519,6 +534,9 @@ module.exports = function registerTheBloodMoonRises(api) {
   // the siege hall has been earned. This is an explicit portal transition;
   // login/death recovery never moves a player here automatically.
   const CASTLE_SIEGE_HALL_ARRIVAL = Object.freeze({ x: 3168, y: 7857, z: 1 });
+  // Bridge's captured 62144 entrance landing; used as the safe current-chapter
+  // return when a prepared player uses the Castle Drakan lobby portal again.
+  const CASTLE_PALACE_ENTRANCE_ARRIVAL = Object.freeze({ x: 3168, y: 7859, z: 1 });
   const CASTLE_VAMPYRIUM_RETURN = Object.freeze({ id: 61221, x: 2323, y: 7370, z: 0 });
   const CASTLE_LEGACY_BLOCKED_ARRIVAL = Object.freeze({ x: 2310, y: 7404, z: 0 });
   const REFINERY_COMPLETED_EVENT = "bmr:refinery-completed";
@@ -539,13 +557,23 @@ module.exports = function registerTheBloodMoonRises(api) {
     { x: 3408, y: 3492, window: "Friar", itemId: ItemIdentifiers.THE_LIFE_OF_FRIAR },
     { x: 3409, y: 3494, window: "Erysail", itemId: ItemIdentifiers.PIOUS_PROCEEDINGS },
   ];
-  const SLEPE_MONK_TILES = [
-    [3410, 3484], [3410, 3493], [3411, 3489], [3415, 3485], [3415, 3489],
-  ];
-  const SLEPE_MONK_IDS = new Set([
-    NpcIdentifiers.MONK_OF_ZAMORAK_4, NpcIdentifiers.MONK_OF_ZAMORAK_5, NpcIdentifiers.MONK_OF_ZAMORAK_6,
-    16154, 16155, 16156, 16271, 16272, 16273,
+  // P1 tick 1740 (30205-30217): Ivan 15863 plus two each 16154/16155/16156 at the captured
+  // tiles; the 16271/16272 walkers (28371/29985) are world 3484/3485 morphs on varbit 15464.
+  const PATERDOMUS_BATTLE_SPAWNS = Object.freeze([
+    { id: NpcIdentifiers.IVAN_STROM_21, x: 3409, y: 3488, face: 1536 },
+    { id: NpcIdentifiers.MONK_OF_ZAMORAK_12, x: 3413, y: 3489 },
+    { id: NpcIdentifiers.MONK_OF_ZAMORAK_13, x: 3411, y: 3492 },
+    { id: NpcIdentifiers.MONK_OF_ZAMORAK_14, x: 3415, y: 3491 },
+    { id: NpcIdentifiers.MONK_OF_ZAMORAK_12, x: 3410, y: 3485 },
+    { id: NpcIdentifiers.MONK_OF_ZAMORAK_13, x: 3414, y: 3484 },
+    { id: NpcIdentifiers.MONK_OF_ZAMORAK_14, x: 3417, y: 3486 },
   ]);
+  const PATERDOMUS_BATTLE_TARGET = Object.freeze({ x: 3408, y: 3488, z: 0 });
+  const PATERDOMUS_ESCAPE_DOORS = Object.freeze([
+    { id: ObjectIdentifiers.LARGE_DOOR_110, x: 3408, y: 3489 },
+    { id: ObjectIdentifiers.LARGE_DOOR_111, x: 3408, y: 3488 },
+  ]);
+  const paterdomusBattles = new Map();
   const SLEPE_WINDOW_ROUTES = new Map([
     [61280, { x: 3408, y: 3485, destination: { x: 3409, y: 3485, z: 1 } }],
     [61282, { x: 3408, y: 3485, destination: { x: 3409, y: 3485, z: 1 } }],
@@ -566,6 +594,10 @@ module.exports = function registerTheBloodMoonRises(api) {
   const HIDEOUT_CHEST_TILE = { x: 3600, y: 9617, z: 0 };
   const VYRE_NOBLE_OUTFIT = [ItemIdentifiers.VYRE_NOBLE_TOP, ItemIdentifiers.VYRE_NOBLE_LEGS, ItemIdentifiers.VYRE_NOBLE_SHOES];
   const HUNT_TRAPDOOR_ID = 61848;
+  // Raw cache loc at the Sangvesti drawbridge; 61804 transforms to 61805/61806.
+  const HUNT_DRAWBRIDGE_MECHANISM_ID = 61804;
+  const HUNT_DRAWBRIDGE_MECHANISM_TILE = Object.freeze({ x: 2633, y: 7831, z: 0 });
+  const HUNT_FOUND_COG_VARBIT = 15485;
   const HUNT_ITEMS = {
     crank: ItemIdentifiers.CRANK_WHEEL, dustyBook: ItemIdentifiers.DUSTY_BOOK, viturKey: ItemIdentifiers.VITUR_KEY,
     boltCutters: ItemIdentifiers.BOLT_CUTTERS, toothHalf: ItemIdentifiers.TOOTH_HALF_OF_KEY_6,
@@ -605,6 +637,7 @@ module.exports = function registerTheBloodMoonRises(api) {
     NOT_STARTED: 0,
     STARTED: 10,
     HIDEOUT: 20,
+    RETURNED: 25,
     SLEPE: 30,
     CASTLE: 40,
     ESCAPE: 45,
@@ -640,13 +673,45 @@ module.exports = function registerTheBloodMoonRises(api) {
   const FINAL_EFARITAY_ID = NpcIdentifiers.EFARITAY_HALLOW_3;
   const FINAL_EFARITAY_CUTSCENE_ID = NpcIdentifiers.EFARITAY_HALLOW_5;
   const FINAL_WYRD_ID = NpcIdentifiers.WYRD_4;
+  // Wiki Efaritay's Supplies page: location Castle Drakan, run by Efaritay
+  // "after the completion of The Blood Moon Rises", map x=3163 y=7717 plane=0.
+  // Cache 15943 is the named Efaritay with the Trade option.
+  const POST_QUEST_EFARITAY = Object.freeze({ id: NpcIdentifiers.EFARITAY_HALLOW_3, x: 3163, y: 7717, z: 0 });
+  const TOME_RECLAIM_PAGE = "Efaritay Hallow";
+  const TOME_RECLAIM_VARIANT = "if-the-tome-of-experience-was-destroyed";
+  // Night of the Blood Moon gathering (native stages 152-164): the captured
+  // castle scene and its Lowerniel combat_3 encounter before Efaritay opens
+  // the Vampyrium portal.
+  const BLOOD_MOON_SCENE = Object.freeze({ x: 3570, y: 3351, z: 0 });
+  // RSProx P1: Ivan's escape teleports the party to (3599,9615,0) and spawns
+  // the hideout Ivan at (3597,9614,0).
+  const HIDEOUT_ESCAPE_LANDING = Object.freeze({ x: 3599, y: 9615, z: 0 });
+  const HIDEOUT_DEFENSE_COURTYARD = Object.freeze({ minX: 3561, maxX: 3589, minY: 3347, maxY: 3367, z: 0 });
+  const BLOOD_MOON_DRAKAN_ID = NpcIdentifiers.LOWERNIEL_DRAKAN_18;
+  const BLOOD_MOON_ALLIES = Object.freeze([NpcIdentifiers.IVAN_STROM_23,
+    NpcIdentifiers.SUGADINTI_VITUR_6, NpcIdentifiers.ARANEI_92]);
+  const BLOOD_MOON_FIGHT_ATTRIBUTE = "the-blood-moon-rises:gathering-fight";
+  const BLOOD_MOON_SCENE_ATTRIBUTE = "the-blood-moon-rises:gathering-scene-started";
+  const BLOOD_MOON_DRAKAN_MAX_HP = 3000;
+  // RSProx 4288: the scripted Safalaan intervention fires when the hp bar is 879.
+  const BLOOD_MOON_DRAKAN_THRESHOLD = 900;
   // Cache loc 61215 becomes Enterable child 61217 at native stage 166–171.
   const FINAL_PORTAL = Object.freeze({ id: 61215, visibleId: 61217, x: 3703, y: 3185, z: 0 });
   const FINAL_CASTLE_ARRIVAL = Object.freeze({ x: 2507, y: 7383, z: 0 });
   const FINAL_GRAVEYARD_AFTER_FIGHT = Object.freeze({ x: 3731, y: 3220, z: 0 });
   const FINAL_EFARITAY_TILE = Object.freeze({ x: 3706, y: 3211, z: 0 });
+  // The stage-164 graveyard Efaritay is the captured 3700,3185 actor; the
+  // post-fight 174 scene keeps its own 3706,3211 cutscene tiles.
+  const FINAL_EFARITAY_GRAVEYARD_TILE = Object.freeze({ x: 3700, y: 3185, z: 0 });
+  // RSProx: the gathering threshold conversation ends at the castle landing with
+  // Ivan 15852 (transform parent of 15855) waiting beside the player.
+  const GATHERING_CASTLE_LANDING = Object.freeze({ x: 2846, y: 7391, z: 0 });
+  const GATHERING_CASTLE_IVAN = Object.freeze({ id: 15852, x: 2845, y: 7387, z: 0 });
+  const GATHERING_CASTLE_SUGADINTI = Object.freeze({ id: 15957, x: 2846, y: 7389, z: 0 });
   // Cache loc 61764 becomes child 61765 (Take-supplies) during native stages 168–170.
   const FINAL_DRAKAN_SUPPLY_CHEST = Object.freeze({ id: 61764, x: 2503, y: 7386, z: 0 });
+  // Cache DB row 16873: vampyrium_consumable_shop (omnishop_main 819 / side 806).
+  const FINAL_SUPPLY_SHOP_ROW = 16873;
   const FINAL_DRAKAN_ROOF_DOOR = Object.freeze({ id: 61628, x: 2506, y: 7387, z: 0 });
   const FINAL_DRAKAN_WAVES = Object.freeze([
     "left", "right", "north", "left", "right", "left", "north", "pincer",
@@ -671,10 +736,13 @@ module.exports = function registerTheBloodMoonRises(api) {
   const slepeManors = new Map();
   const drakanEncounters = new Map();
   const finalEfaritays = new Map();
+  const postQuestEfaritays = new Map();
   const finalCutsceneActors = new Map();
   const siegeDrakanEncounters = new Map();
-  const siegeHallInjured = new Map();
+  const siegeAranei = new Map();
   const theatreActors = new Map();
+  const gatheringCastleIvans = new Map();
+  const gatheringCastleSugadintis = new Map();
   function preparationStoryReady(player) {
     const prep = player?.getAttribute(PREP_ATTRIBUTE) ?? {};
     return prep.introComplete && prep.stewFed && prep.safalaanAnswered && prep.preparationsDiscussed &&
@@ -685,12 +753,43 @@ module.exports = function registerTheBloodMoonRises(api) {
     return preparationStoryReady(player) && Boolean(player?.getAttribute(PREP_ATTRIBUTE)?.sugadintiReady) &&
       (hasItem(player, PREP.flail) || player?.getEquipment?.()?.contains?.(PREP.flail)) && hasItem(player, PREP.stakes);
   }
+
+  // Publish Quest Helper's captured hideout/preparation sub-progress from the
+  // state the quest already models. No stage or hint progress is forced.
+  function publishHelperVarbits(player) {
+    if (!player) return;
+    const sender = player.getPacketSender?.();
+    if (typeof sender?.sendVarbit !== "function") return;
+    const prep = player.getAttribute(PREP_ATTRIBUTE) ?? {};
+    const hunt = player.getAttribute(HUNT_ATTRIBUTE) ?? {};
+    const refineryProgress = refinery.progress(player);
+    const ivanProgress = prep.sugadintiReady || prep.veliafFollowupComplete ||
+      prep.vanesculaTalkComplete || prep.veliafFirstTalkComplete || prep.ivanStakesComplete ? 3
+      : prep.stakes ? 2 : prep.stakesConversationComplete ? 1 : 0;
+    const veliafProgress = prep.veliafFollowupComplete ? 3
+      : prep.vanesculaTalkComplete ? 2 : prep.veliafFirstTalkComplete ? 1 : 0;
+    const inVampyrium = isInVampyriumRealm(player);
+    sender.sendVarbit(IVAN_GIVEN_PICKAXE_VARBIT, refineryProgress.borrowedPickaxe ? 1 : 0);
+    sender.sendVarbit(IVAN_HIDEOUT_PROGRESS_VARBIT, ivanProgress);
+    sender.sendVarbit(VELIAF_HIDEOUT_PROGRESS_VARBIT, veliafProgress);
+    sender.sendVarbit(SANGVESTI_SUPPLY_WARNING_VARBIT, hunt.suppliesClaimed ? 1 : 0);
+    sender.sendVarbit(IN_VAMPYRIUM_VARBIT, inVampyrium ? 1 : 0);
+  }
+
+  function publishHelperVarbitsOnLogin({ player } = {}) {
+    publishHelperVarbits(player);
+  }
+
+  function publishHelperVarbitsOnStageChange({ player } = {}) {
+    publishHelperVarbits(player);
+  }
   const hideoutDefense = require("../bmr/HideoutDefense.TheBloodMoonRises")({ api, stage: player => stage(player),
     hideoutStage: STAGE.HIDEOUT,
     complete: (player, npcId) => startTranscript(api, player, npcId, PAGE, "starting-out-escaping-the-vampyres") });
   const CHAPTERS = [
     [STAGE.STARTED, "starting-out"],
     [STAGE.HIDEOUT, "starting-out-in-the-myreque-hideout"],
+    [STAGE.RETURNED, "starting-out"],
     [STAGE.SLEPE, "the-truth-hurtz"],
     [STAGE.CASTLE, "escape-from-castle-drakan"],
     [STAGE.ESCAPE, "blood-hunt"],
@@ -713,6 +812,24 @@ module.exports = function registerTheBloodMoonRises(api) {
     [Skill.HERBLORE, 64, "Herblore"], [Skill.MAGIC, 57, "Magic"],
   ];
   let quest;
+
+  // Private ground-floor fight. As in the other quest fights, the area is at the live temple
+  // coordinates: entering it drops the main-world 3484/3485 morphs from the owner's NPC view
+  // and exposes only the battle actors. The front-door threshold is included so stepping back
+  // one tile does not end the fight.
+  class PaterdomusBattleArea extends PrivateArea {
+    constructor(owner) {
+      super([new Boundary(3408, 3418, 3483, 3494, 0)]);
+      this.owner = owner;
+    }
+    isMulti() { return true; }
+    canAttack(attacker, target) {
+      const attackerHere = attacker?.getArea?.() === this;
+      const targetHere = target?.getArea?.() === this;
+      if (attackerHere || targetHere) return attackerHere && targetHere;
+      return null;
+    }
+  }
 
   class WyrdEncounterArea extends PrivateArea {
     constructor(owner) {
@@ -737,7 +854,8 @@ module.exports = function registerTheBloodMoonRises(api) {
     process(mobile) {
       if (!mobile?.isNpc?.()) return;
       const encounter = wyrdEncounters.get(this);
-      if (!encounter || mobile !== encounter.boss || encounter.finished || mobile.getHitpoints() <= 0) return;
+      if (!encounter || mobile !== encounter.boss || encounter.finished) return;
+      if (mobile.getHitpoints() <= 0 && !encounter.pendingEnding) return;
       const now = World.getProcessCycle();
       if (encounter.lastCycle === now) return;
       encounter.lastCycle = now;
@@ -749,20 +867,27 @@ module.exports = function registerTheBloodMoonRises(api) {
       // ends. Keep the encounter dormant until the player's final line lands.
       if (!encounter.introComplete) return;
 
-      const hpPercent = mobile.getHitpoints() / mobile.getMaxHitpoints();
-      const threshold = hpPercent <= 0.1 ? 10 : hpPercent <= 0.5 ? 50 : hpPercent <= 0.8 ? 80 : 0;
-      if (threshold && !encounter.thresholdsSeen.has(threshold)) {
-        encounter.thresholdsSeen.add(threshold);
-        if (threshold === 10) {
-          encounter.ending = true;
-          player.setAttribute(WYRD_CUTSCENE_ATTRIBUTE, true);
-          quest.setStage(player, STAGE.WYRDS);
-        }
-        startTranscript(api, player, mobile.getId(), PAGE, `fighting-wyrds-upon-reaching-${threshold}-hp`);
+      // Never start or consume a threshold while another conversation owns the
+      // chatbox: actual QA shows a walk/attack click cancelling the mandatory
+      // 10% scene when it was started underneath the intro.
+      if (player.getDialogueManager?.()?.isActive?.()) return;
+      if (encounter.pendingEnding || encounter.ending) {
+        // The 10% scene is mandatory. If a movement/attack cancelled its chatbox
+        // before dJZbqF advanced the chapter, reopen it on the next free tick.
+        if (stage(player) === STAGE.WYRDS) startWyrdEnding(encounter);
         return;
       }
-      if (player.getDialogueManager?.()?.isActive?.()) return;
-      if (encounter.ending) return;
+      const hpPercent = mobile.getHitpoints() / mobile.getMaxHitpoints();
+      const threshold = hpPercent <= 0.1 ? 10 : hpPercent <= 0.5 ? 50 : hpPercent <= 0.8 ? 80 : 0;
+      if (threshold === 10) {
+        startWyrdEnding(encounter);
+        return;
+      }
+      if (threshold && !encounter.thresholdsSeen.has(threshold) &&
+        startTranscript(api, player, mobile.getId(), PAGE, `fighting-wyrds-upon-reaching-${threshold}-hp`)) {
+        encounter.thresholdsSeen.add(threshold);
+        return;
+      }
 
       const loc = player.getLocation();
       const px = loc.getX();
@@ -926,6 +1051,7 @@ module.exports = function registerTheBloodMoonRises(api) {
     clearWyrdPools(encounter, false);
     api.removeNpc(encounter.boss);
     player.getCombat()?.getHitQueue?.().clear?.();
+    Scenes.controls(player, false);
     area.leave(player, false);
     wyrdEncounters.delete(area);
     player.setAttribute(WYRD_AREA_ATTRIBUTE, null);
@@ -1598,6 +1724,17 @@ module.exports = function registerTheBloodMoonRises(api) {
     return handleDrakanDodgeRoll(event, fight, api.core);
   }
 
+  function openFinalSupplyShop(player) {
+    if (!player || stage(player) !== STAGE.FINAL) return false;
+    // The supply chest is the cache-owned vampyrium consumables omnishop. This
+    // flag records that the player has checked/opened the supplies for the roof
+    // warning; it never blocks opening the shop again or buying more.
+    player.setAttribute(DRAKAN_SUPPLY_ATTRIBUTE, true);
+    const request = { player, shop: FINAL_SUPPLY_SHOP_ROW, handled: false };
+    api.emitCustomEvent("omnishop:open", request);
+    return request.handled === true;
+  }
+
   function handleFinalDrakanSupplyChest(event) {
     const player = event?.player;
     const tile = event?.location;
@@ -1605,51 +1742,25 @@ module.exports = function registerTheBloodMoonRises(api) {
     const y = tile?.y ?? tile?.getY?.();
     const z = tile?.z ?? tile?.getZ?.();
     const ids = [event?.objectId, event?.definition?.id];
+    const option = String(event?.option ?? "").toLowerCase();
     if (!player || !ids.some(id => id === FINAL_DRAKAN_SUPPLY_CHEST.id || id === 61765) ||
       x !== FINAL_DRAKAN_SUPPLY_CHEST.x || y !== FINAL_DRAKAN_SUPPLY_CHEST.y || z !== FINAL_DRAKAN_SUPPLY_CHEST.z ||
-      String(event?.option ?? "").toLowerCase() !== "take-supplies") return false;
+      !["search", "take-supplies"].includes(option)) return false;
     event.handled = true;
     if (quest.isComplete(player) || stage(player) !== STAGE.FINAL) {
       player.sendMessage("The chest's Vampyrium supplies are only for the final pursuit of Lowerniel.");
       return true;
     }
-    startTranscript(api, player, 0, PAGE, "night-of-the-blood-moon-searching-the-supply-chest");
-    return true;
-  }
-
-  function giveFinalDrakanSupplies(player) {
-    const inventory = player.getInventory();
-    const planned = [
-      [ItemIdentifiers.JAR_OF_CONGEALED_BLOOD, 1],
-      [ItemIdentifiers.RANK_FROTHY_POTION_4_, 2],
-      [ItemIdentifiers.FOUL_CHUNKY_POTION_4_, 4],
-    ];
-    let free = inventory.getFreeSlots?.() ?? 0;
-    let added = 0;
-    for (const [id, amount] of planned) {
-      if (id === ItemIdentifiers.JAR_OF_CONGEALED_BLOOD && hasItem(player, id)) continue;
-      for (let count = 0; count < amount && free > 0; count++) {
-        if (!inventory.adds(id, 1)) break;
-        free--;
-        added++;
-      }
+    if (option === "search") {
+      // Captured oploc1: Search opens the two-option useful-supplies menu and
+      // sets the final-fight supply warning bit before the choice is made.
+      player.setAttribute(DRAKAN_SUPPLY_ATTRIBUTE, true);
+      player.getPacketSender?.().sendVarbit?.(15480, 1);
+      startTranscript(api, player, 0, PAGE, "night-of-the-blood-moon-searching-the-supply-chest");
+      return true;
     }
-    if (free > 0 && !hasItem(player, ItemIdentifiers.DRAKANS_MEDALLION) &&
-      inventory.adds(ItemIdentifiers.DRAKANS_MEDALLION, 1)) {
-      free--;
-      added++;
-    }
-    while (free > 0) {
-      if (!inventory.adds(ItemIdentifiers.RANCID_SLIMY_POTION_4_, 1)) break;
-      free--;
-      added++;
-    }
-    if (!added) {
-      player.sendMessage("Make room in your inventory before taking supplies from the chest.");
-      return false;
-    }
-    player.setAttribute(DRAKAN_SUPPLY_ATTRIBUTE, true);
-    player.sendMessage("You take Vampyrium potions and emergency blood from the supply chest.");
+    // Captured oploc2: Take-supplies opens the real omnishop directly.
+    openFinalSupplyShop(player);
     return true;
   }
 
@@ -1900,13 +2011,242 @@ module.exports = function registerTheBloodMoonRises(api) {
     player.sendMessage("You awaken beside the northern door with your remaining supplies. Lowerniel still waits inside.");
   }
 
+  function beginBloodMoonGathering(player) {
+    if (!player || stage(player) !== STAGE.FENCE_FOUND) return false;
+    if (Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) >= 152) return false;
+    setFinalNativeStage(player, 152);
+    return true;
+  }
+
+  function sceneReady(player) {
+    return typeof player?.getMovementQueue === "function" && typeof player?.getPacketSender === "function";
+  }
+
+  function resetBloodMoonScene(player) {
+    if (!player) return;
+    Scenes.cancel(player);
+    player.setAttribute(BLOOD_MOON_SCENE_ATTRIBUTE, null);
+    if (!sceneReady(player)) return;
+    Scenes.closeFade(player);
+    Scenes.controls(player, false);
+    player.getPacketSender().sendCameraReset();
+  }
+
+  function resetBloodMoonSceneOnLogin({ player } = {}) {
+    resetBloodMoonScene(player);
+    recoverGatheringFightOnLogin(player);
+    recoverHideoutEscapeLanding({ player });
+  }
+
+  function recoverHideoutEscapeLanding({ player } = {}) {
+    if (!player || stage(player) !== STAGE.RETURNED) return;
+    const location = player.getLocation?.();
+    const x = location?.getX?.() ?? location?.x;
+    const y = location?.getY?.() ?? location?.y;
+    const z = location?.getZ?.() ?? location?.z;
+    // Only the stranded courtyard save is repaired; stage 25 elsewhere is left alone.
+    if (z !== HIDEOUT_DEFENSE_COURTYARD.z ||
+      x < HIDEOUT_DEFENSE_COURTYARD.minX || x > HIDEOUT_DEFENSE_COURTYARD.maxX ||
+      y < HIDEOUT_DEFENSE_COURTYARD.minY || y > HIDEOUT_DEFENSE_COURTYARD.maxY) return;
+    resetBloodMoonScene(player);
+    player.moveTo(new Location(HIDEOUT_ESCAPE_LANDING.x, HIDEOUT_ESCAPE_LANDING.y,
+      HIDEOUT_ESCAPE_LANDING.z));
+    player.sendMessage("Ivan's teleport sets you down in the Myreque hideout.");
+  }
+
+  function recoverGatheringFightOnLogin(player) {
+    if (!player || stage(player) !== STAGE.FENCE_FOUND) return;
+    const fight = player.getAttribute(BLOOD_MOON_FIGHT_ATTRIBUTE);
+    if (fight?.boss?.getHitpoints?.() > 0) return;
+    // No live gathering fight survives a restart: clear the stale scene/fight
+    // markers so the fence -> Myreque prevail route can start the 152 scene again.
+    cleanupGatheringDrakan(player);
+    player.setAttribute(BLOOD_MOON_FIGHT_ATTRIBUTE, null);
+    if (Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) >= 152 &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) < 158) {
+      // 158+ means the threshold conversation already moved the group to the
+      // castle; keep that earned landing and let the login sync spawn Ivan.
+      player.moveTo(new Location(WYRD_BURGH_RETURN.x, WYRD_BURGH_RETURN.y, WYRD_BURGH_RETURN.z));
+      player.sendMessage("The gathering was interrupted. Inspect the broken fence again to continue.");
+    }
+  }
+
+  function startGatheringScene(player) {
+    if (!player || stage(player) !== STAGE.FENCE_FOUND ||
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) !== 152 ||
+      player.getAttribute(BLOOD_MOON_SCENE_ATTRIBUTE)) return false;
+    player.setAttribute(BLOOD_MOON_SCENE_ATTRIBUTE, true);
+    player.moveTo(new Location(BLOOD_MOON_SCENE.x, BLOOD_MOON_SCENE.y, BLOOD_MOON_SCENE.z));
+    // RSProx P1 t358-406: fade in over the gathering then pan/rise over the crowd.
+    if (sceneReady(player)) {
+      Scenes.fade(player, true);
+      Scenes.controls(player, true, true);
+      Scenes.camera(player, [3594, 3358, 120], [3566, 3355, 180]);
+      Scenes.later(player, 2, () => {
+        Scenes.camera(player, [3581, 3358, 120], [3566, 3355, 180]);
+        Scenes.fade(player, false);
+      });
+      Scenes.later(player, 6, () => Scenes.camera(player, [3571, 3350, 360], [3566, 3355, 180]));
+    }
+    return startTranscript(api, player, 0, PAGE, "night-of-the-blood-moon");
+  }
+
+  function failGatheringFight(player, message) {
+    cleanupGatheringDrakan(player);
+    resetBloodMoonScene(player);
+    player.setAttribute(BLOOD_MOON_FIGHT_ATTRIBUTE, null);
+    if (stage(player) === STAGE.FENCE_FOUND) {
+      player.moveTo(new Location(WYRD_BURGH_RETURN.x, WYRD_BURGH_RETURN.y, WYRD_BURGH_RETURN.z));
+    }
+    player.sendMessage(message);
+    return false;
+  }
+
+  function startGatheringDrakanFight(player) {
+    if (!player || stage(player) !== STAGE.FENCE_FOUND ||
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) !== 152) return false;
+    const existing = player.getAttribute(BLOOD_MOON_FIGHT_ATTRIBUTE);
+    if (existing && existing.boss?.getHitpoints?.() > 0) return true;
+    const boss = api.spawnNpc({ id: BLOOD_MOON_DRAKAN_ID, x: 3570, y: 3352, z: 0,
+      wanderRadius: 0, owner: player, ownerOnly: true });
+    if (!boss) {
+      return failGatheringFight(player,
+        "Lowerniel could not be reached. Inspect the broken fence again to retry the gathering.");
+    }
+    boss.setMultiCombat?.(true);
+    boss.setMaxHitpoints(BLOOD_MOON_DRAKAN_MAX_HP);
+    boss.setHitpoints(BLOOD_MOON_DRAKAN_MAX_HP);
+    const allies = BLOOD_MOON_ALLIES.map((id, index) => api.spawnNpc({ id, x: 3571 + index, y: 3355, z: 0,
+      wanderRadius: 0, owner: player, ownerOnly: true })).filter(Boolean);
+    for (const ally of allies) ally.getCombat?.().attack?.(boss);
+    boss.getCombat?.().attack?.(player);
+    player.setAttribute(BLOOD_MOON_FIGHT_ATTRIBUTE, { boss, allies, ending: false });
+    setFinalNativeStage(player, 154);
+    player.sendMessage("Lowerniel fights in the open. Keep your defences up; Safalaan's intervention ends the clash at the story threshold.");
+    return true;
+  }
+
+  function finishGatheringDrakanClash(player, npc) {
+    const fight = player?.getAttribute?.(BLOOD_MOON_FIGHT_ATTRIBUTE);
+    if (!fight || fight.ending || fight.boss !== npc) return false;
+    fight.ending = true;
+    api.removeNpc(npc);
+    // Keep Ivan and the aranei for the captured post-fight conversations.
+    player.setAttribute(BLOOD_MOON_FIGHT_ATTRIBUTE, { boss: null, allies: fight.allies ?? [], ending: true });
+    setFinalNativeStage(player, 156);
+    startTranscript(api, player, npc.getId(), PAGE, "night-of-the-blood-moon-upon-lowerniel-reaching-30-hp");
+    return true;
+  }
+
+  function handleGatheringDrakanHit(event) {
+    const npc = event?.npc;
+    const fight = npc?.getOwner?.()?.getAttribute?.(BLOOD_MOON_FIGHT_ATTRIBUTE);
+    if (!npc || npc.getId?.() !== BLOOD_MOON_DRAKAN_ID || !fight || fight.boss !== npc || fight.ending || !event?.hit) return;
+    for (const part of event.hit.getHits?.() ?? []) {
+      const damage = part.getDamage?.() ?? 0;
+      if (npc.getHitpoints() - damage < BLOOD_MOON_DRAKAN_THRESHOLD) {
+        part.setDamage(Math.max(0, npc.getHitpoints() - BLOOD_MOON_DRAKAN_THRESHOLD));
+      }
+    }
+    event.hit.updateTotalDamage?.();
+    const remaining = (event.hit.getHits?.() ?? []).reduce((hp, part) => hp - (part.getDamage?.() ?? 0), npc.getHitpoints());
+    if (remaining <= BLOOD_MOON_DRAKAN_THRESHOLD) finishGatheringDrakanClash(fight.boss.getOwner?.(), npc);
+  }
+
+  function handleGatheringDrakanBeforeDeath(event) {
+    const npc = event?.npc;
+    const player = npc?.getOwner?.()?.isPlayer?.() ? npc.getOwner() : event?.killer;
+    if (!npc || npc.getId?.() !== BLOOD_MOON_DRAKAN_ID || !player?.isPlayer?.() ||
+      stage(player) !== STAGE.FENCE_FOUND || Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) !== 154) return;
+    const fight = player.getAttribute(BLOOD_MOON_FIGHT_ATTRIBUTE);
+    if (!fight || fight.boss !== npc || event.preventDeath) return;
+    event.preventDeath = true;
+    finishGatheringDrakanClash(player, npc);
+  }
+
+  function cleanupGatheringDrakan(player) {
+    const fight = player?.getAttribute?.(BLOOD_MOON_FIGHT_ATTRIBUTE);
+    if (!fight) return;
+    for (const npc of [fight.boss, ...(fight.allies ?? [])]) if (npc) api.removeNpc(npc);
+    player.setAttribute(BLOOD_MOON_FIGHT_ATTRIBUTE, null);
+  }
+
+  function cleanupGatheringDrakanOnLogout({ player } = {}) {
+    cleanupGatheringDrakan(player);
+  }
+
+  function spawnGatheringCastleIvan(player) {
+    if (!player || stage(player) !== STAGE.FENCE_FOUND) return null;
+    const native = Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE));
+    if (!(native >= 158 && native < 164)) return null;
+    const existing = gatheringCastleIvans.get(player);
+    if (existing && !existing.isDestroyed?.() && existing.getHitpoints?.() > 0) return existing;
+    const npc = api.spawnNpc({ id: GATHERING_CASTLE_IVAN.id, x: GATHERING_CASTLE_IVAN.x,
+      y: GATHERING_CASTLE_IVAN.y, z: GATHERING_CASTLE_IVAN.z,
+      wanderRadius: 0, owner: player, ownerOnly: true });
+    if (!npc) return null;
+    npc.setScriptedMovement?.(true);
+    gatheringCastleIvans.set(player, npc);
+    return npc;
+  }
+
+  function spawnGatheringCastleSugadinti(player) {
+    if (!player || stage(player) !== STAGE.FENCE_FOUND) return null;
+    const native = Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE));
+    if (!(native >= 160 && native < 164)) return null;
+    const existing = gatheringCastleSugadintis.get(player);
+    if (existing && !existing.isDestroyed?.() && existing.getHitpoints?.() > 0) return existing;
+    const npc = api.spawnNpc({ id: GATHERING_CASTLE_SUGADINTI.id,
+      x: GATHERING_CASTLE_SUGADINTI.x, y: GATHERING_CASTLE_SUGADINTI.y,
+      z: GATHERING_CASTLE_SUGADINTI.z, wanderRadius: 0, owner: player, ownerOnly: true });
+    if (!npc) return null;
+    npc.setScriptedMovement?.(true);
+    gatheringCastleSugadintis.set(player, npc);
+    return npc;
+  }
+
+  function syncGatheringCastleActors(player) {
+    spawnGatheringCastleIvan(player);
+    spawnGatheringCastleSugadinti(player);
+  }
+
+  function cleanupGatheringCastleActors({ player } = {}) {
+    const ivan = player && gatheringCastleIvans.get(player);
+    if (ivan) api.removeNpc(ivan);
+    const sugadinti = player && gatheringCastleSugadintis.get(player);
+    if (sugadinti) api.removeNpc(sugadinti);
+    if (player) {
+      gatheringCastleIvans.delete(player);
+      gatheringCastleSugadintis.delete(player);
+    }
+  }
+
+  // The threshold transcript is a real conversation; only leave the gathering
+  // scene after its final canonical line. gaf5Xw ("Efaritay flies away.") is a
+  // mid-transcript action, so it must not move the player.
+  function finishGatheringThresholdConversation(player) {
+    if (!player || stage(player) !== STAGE.FENCE_FOUND ||
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) !== 156) return;
+    cleanupGatheringDrakan(player);
+    resetBloodMoonScene(player);
+    player.setAttribute(BLOOD_MOON_SCENE_ATTRIBUTE, null);
+    setFinalNativeStage(player, 158);
+    player.moveTo(new Location(GATHERING_CASTLE_LANDING.x, GATHERING_CASTLE_LANDING.y,
+      GATHERING_CASTLE_LANDING.z));
+    syncGatheringCastleActors(player);
+  }
+
+  function syncGatheringCastleActorsOnLogin({ player } = {}) {
+    if (player) syncGatheringCastleActors(player);
+  }
+
   function syncFinalEfaritay(player) {
     if (!player || quest.isComplete(player) || stage(player) !== STAGE.FINAL ||
       player.getAttribute(DRAKAN_ENCOUNTER_COMPLETE) || player.getAttribute(FINAL_PORTAL_USED_ATTRIBUTE)) return;
     const existing = finalEfaritays.get(player);
     if (existing && existing.getHitpoints?.() > 0) return existing;
-    const npc = api.spawnNpc({ id: FINAL_EFARITAY_ID, x: FINAL_EFARITAY_TILE.x,
-      y: FINAL_EFARITAY_TILE.y, z: FINAL_EFARITAY_TILE.z,
+    const npc = api.spawnNpc({ id: FINAL_EFARITAY_ID, x: FINAL_EFARITAY_GRAVEYARD_TILE.x,
+      y: FINAL_EFARITAY_GRAVEYARD_TILE.y, z: FINAL_EFARITAY_GRAVEYARD_TILE.z,
       wanderRadius: 0, owner: player, ownerOnly: true });
     if (!npc) return null;
     npc.setScriptedMovement?.(true);
@@ -1919,6 +2259,30 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (!npc) return;
     api.removeNpc(npc);
     finalEfaritays.delete(player);
+  }
+
+  function syncPostQuestEfaritay({ player } = {}) {
+    if (!player) return null;
+    if (!quest.isComplete(player)) {
+      cleanupPostQuestEfaritay({ player });
+      return null;
+    }
+    const existing = postQuestEfaritays.get(player);
+    if (existing && !existing.isDestroyed?.() && existing.getHitpoints?.() > 0) return existing;
+    const npc = api.spawnNpc({ id: POST_QUEST_EFARITAY.id, x: POST_QUEST_EFARITAY.x,
+      y: POST_QUEST_EFARITAY.y, z: POST_QUEST_EFARITAY.z, wanderRadius: 0,
+      owner: player, ownerOnly: true });
+    if (!npc) return null;
+    npc.setScriptedMovement?.(true);
+    postQuestEfaritays.set(player, npc);
+    return npc;
+  }
+
+  function cleanupPostQuestEfaritay({ player } = {}) {
+    const npc = player && postQuestEfaritays.get(player);
+    if (!npc) return;
+    api.removeNpc(npc);
+    postQuestEfaritays.delete(player);
   }
 
   function spawnFinalCutsceneActors(player) {
@@ -2046,6 +2410,10 @@ module.exports = function registerTheBloodMoonRises(api) {
     fight.ending = true;
     fight.deathConfirmed = true;
     fight.player.setAttribute(DRAKAN_DEATH_CONFIRMED, true);
+    // RSProx 4272: death01 animation, camera over the roof, then stage 172.
+    npc.performAnimation?.(new Animation(14339));
+    fight.player.getPacketSender()?.sendCameraMoveTo?.(2497, 7838, 250, { rate: 232, rate2: 100 });
+    fight.player.getPacketSender()?.sendCameraLookAt?.(2512, 7838, 100, { rate: 232, rate2: 100 });
     setFinalNativeStage(fight.player, 172);
     startTranscript(api, fight.player, npc.getId(), PAGE, "night-of-the-blood-moon-upon-killing-lowerniel-drakan");
     return true;
@@ -2103,122 +2471,226 @@ module.exports = function registerTheBloodMoonRises(api) {
     pillar: ObjectIdentifiers.PILLAR_150,
     damagedWindow: ObjectIdentifiers.DAMAGED_WINDOW,
     window: ObjectIdentifiers.WINDOW_20,
-    barricade: ObjectIdentifiers.BARRICADE_60,
+    barricade: ObjectIdentifiers.BARRICADE_61,
     hammer: ItemIdentifiers.HAMMER,
     healingPotion: ItemIdentifiers.HEALING_POTION,
     injuredAranei: [NpcIdentifiers.ARANEI_108, NpcIdentifiers.ARANEI_109, NpcIdentifiers.ARANEI_110,
       NpcIdentifiers.ARANEI_111, NpcIdentifiers.ARANEI_112, NpcIdentifiers.ARANEI_113],
+    aranei: [
+      { normal: NpcIdentifiers.ARANEI_102, injured: NpcIdentifiers.ARANEI_108, x: 3161, y: 7854 },
+      { normal: NpcIdentifiers.ARANEI_103, injured: NpcIdentifiers.ARANEI_109, x: 3163, y: 7855 },
+      { normal: NpcIdentifiers.ARANEI_104, injured: NpcIdentifiers.ARANEI_110, x: 3165, y: 7855 },
+      { normal: NpcIdentifiers.ARANEI_105, injured: NpcIdentifiers.ARANEI_111, x: 3171, y: 7855 },
+      { normal: NpcIdentifiers.ARANEI_106, injured: NpcIdentifiers.ARANEI_112, x: 3173, y: 7855 },
+      { normal: NpcIdentifiers.ARANEI_107, injured: NpcIdentifiers.ARANEI_113, x: 3175, y: 7854 },
+    ],
     repairLocations: new Map([
       ["3174,7855", [ObjectIdentifiers.DAMAGED_PILLAR_2, ObjectIdentifiers.PILLAR_150]],
       ["3162,7855", [ObjectIdentifiers.DAMAGED_PILLAR_2, ObjectIdentifiers.PILLAR_150]],
       ["3176,7858", [ObjectIdentifiers.DAMAGED_WINDOW, ObjectIdentifiers.WINDOW_20]],
+      ["3172,7858", [ObjectIdentifiers.DAMAGED_WINDOW, ObjectIdentifiers.WINDOW_20]],
       ["3174,7858", [ObjectIdentifiers.DAMAGED_WINDOW, ObjectIdentifiers.WINDOW_20]],
+      ["3160,7858", [ObjectIdentifiers.DAMAGED_WINDOW, ObjectIdentifiers.WINDOW_20]],
       ["3162,7858", [ObjectIdentifiers.DAMAGED_WINDOW, ObjectIdentifiers.WINDOW_20]],
       ["3164,7858", [ObjectIdentifiers.DAMAGED_WINDOW, ObjectIdentifiers.WINDOW_20]],
     ]),
   };
 
-  function hallDefenceState(player) {
-    return player.getAttribute(SIEGE_DEFENCE_ATTRIBUTE) ?? { phase: "bridge", integrity: 100, healed: [], repaired: [] };
+  // Captured P3: the hall opens at 650 with a 300-tick timer. Loss per tick is
+  // exactly 2 per damaged pillar plus 1 per injured Aranei; windows are
+  // cosmetic. Timer expiry does not change the formula. Repairs remove the
+  // pillar/window source and heals revert one Aranei; neither raises the meter.
+  // shortcut: the only detail the capture does not decode is the attack cadence
+  // (when pillars/windows break and Aranei fall); the intervals below follow the
+  // observed acceleration without replaying the recorded timeline.
+  const HALL_STATE_VERSION = 1;
+  const HALL_INTEGRITY_MAX = 650;
+  const HALL_SIEGE_TICKS = 300;
+  const HALL_PILLAR_DAMAGE = 2;
+  const HALL_ARANEI_DAMAGE = 1;
+  const HALL_FIRST_PILLAR_TICK = 28;
+  const HALL_FIRST_WINDOW_TICK = 14;
+  const HALL_FIRST_ARANEI_TICK = 43;
+  const HALL_INTEGRITY_OVERLAY_UID = (161 << 16) | 8;
+  const HALL_INTEGRITY_INTERFACE = 968;
+  const HALL_INTEGRITY_SCRIPT = 9674;
+  const HALL_PILLAR_KEYS = [...SIEGE_HALL.repairLocations]
+    .filter(([, ids]) => ids[0] === SIEGE_HALL.damagedPillar).map(([key]) => key);
+  const HALL_WINDOW_KEYS = [...SIEGE_HALL.repairLocations]
+    .filter(([, ids]) => ids[0] === SIEGE_HALL.damagedWindow).map(([key]) => key);
+  const hallHuds = new WeakSet();
+
+  function freshHallState() {
+    return { version: HALL_STATE_VERSION, phase: "hall", integrity: HALL_INTEGRITY_MAX,
+      timer: HALL_SIEGE_TICKS, elapsed: 0, damaged: {}, injured: {},
+      nextPillarTick: HALL_FIRST_PILLAR_TICK, nextWindowTick: HALL_FIRST_WINDOW_TICK,
+      nextAraneiTick: HALL_FIRST_ARANEI_TICK };
   }
 
-  // The live defense uses a continuously falling integrity meter. Cache data
-  // and the transcript expose the 50% story threshold, but not its server tick
-  // cadence or exact repair gains. These two timing/gain values are shortcuts
-  // pending live calibration; integrity, rather than a repair-count gate, is
-  // the actual win condition.
-  const HALL_INTEGRITY_INTERVAL = 20;
-  const HALL_INTEGRITY_LOSS = 1;
-  const HALL_INTEGRITY_THRESHOLD = 50;
-  // shortcut: the Wiki says a player must participate but does not publish a
-  // count; require three distinct repair/heal actions before the breach scene.
-  const HALL_PARTICIPATION_REQUIRED = 3;
+  function hallDefenceState(player) {
+    const raw = player.getAttribute(SIEGE_DEFENCE_ATTRIBUTE) ?? { phase: "bridge", integrity: 100 };
+    if (raw.phase !== "hall" || raw.version === HALL_STATE_VERSION) return raw;
+    // Legacy saves used a 0-100 bar, a participation gate and a permanent
+    // repaired list; the capture replaced all three.
+    const migrated = { ...freshHallState(),
+      integrity: Math.max(0, Math.min(HALL_INTEGRITY_MAX,
+        Math.round((Number(raw.integrity) || 0) * (HALL_INTEGRITY_MAX / 100)))) };
+    // A qualified legacy defence had already survived the old 20-minute holdout,
+    // so its 300-tick story timer cannot still be running after the migration.
+    if (raw.qualified) migrated.timer = 0;
+    return migrated;
+  }
 
-  function applyHallIntegrity(player, delta, participated = false) {
-    const state = hallDefenceState(player);
-    if (state.phase !== "hall") return;
-    const integrity = Math.max(0, Math.min(100, (state.integrity ?? 100) + delta));
-    const updated = { ...state, integrity,
-      participation: (state.participation ?? 0) + (participated ? 1 : 0) };
+  function publishHallIntegrity(player, state) {
+    const sender = player.getPacketSender?.();
+    if (!sender || state.phase !== "hall") return;
+    if (!hallHuds.has(player)) {
+      hallHuds.add(player);
+      sender.sendSubInterface?.(HALL_INTEGRITY_OVERLAY_UID, HALL_INTEGRITY_INTERFACE, 1);
+      sender.sendString?.("Hideout Integrity", (HALL_INTEGRITY_INTERFACE << 16) | 6);
+    }
+    sender.sendClientScript?.(HALL_INTEGRITY_SCRIPT, state.integrity, HALL_INTEGRITY_MAX,
+      state.timer, HALL_SIEGE_TICKS);
+  }
+
+  function closeHallIntegrity(player) {
+    if (!hallHuds.delete(player)) return;
+    player.getPacketSender?.()?.closeSubInterface?.(HALL_INTEGRITY_OVERLAY_UID);
+  }
+
+  function hallDamage(state) {
+    const pillars = HALL_PILLAR_KEYS.filter(key => state.damaged?.[key]).length;
+    const injured = Object.values(state.injured ?? {}).filter(Boolean).length;
+    return pillars * HALL_PILLAR_DAMAGE + injured * HALL_ARANEI_DAMAGE;
+  }
+
+  function hallDamageChanged(previous, next) {
+    const keys = new Set([...Object.keys(previous.damaged ?? {}), ...Object.keys(next.damaged ?? {})]);
+    for (const key of keys) {
+      if (Boolean(previous.damaged?.[key]) !== Boolean(next.damaged?.[key])) return true;
+    }
+    return false;
+  }
+
+  function advanceHallDefence(state) {
+    const next = { ...state, elapsed: (state.elapsed ?? 0) + 1,
+      damaged: { ...(state.damaged ?? {}) }, injured: { ...(state.injured ?? {}) } };
+    next.timer = Math.max(0, state.timer - 1);
+    if (next.elapsed >= next.nextPillarTick) {
+      const key = HALL_PILLAR_KEYS.find(target => !next.damaged[target]);
+      if (key) next.damaged[key] = true;
+      next.nextPillarTick += Math.max(20, 70 - Math.floor(next.elapsed / 8));
+    }
+    if (next.elapsed >= next.nextWindowTick) {
+      const key = HALL_WINDOW_KEYS.find(target => !next.damaged[target]);
+      if (key) next.damaged[key] = true;
+      next.nextWindowTick += Math.max(12, 40 - Math.floor(next.elapsed / 15));
+    }
+    if (next.elapsed >= next.nextAraneiTick) {
+      const index = SIEGE_HALL.aranei.findIndex((_, i) => !next.injured[i]);
+      if (index >= 0) next.injured[index] = true;
+      next.nextAraneiTick += Math.max(5, 14 - Math.floor(next.elapsed / 35));
+    }
+    next.integrity = Math.max(0, state.integrity - hallDamage(next));
+    return next;
+  }
+
+  function syncSiegeAranei(player, state) {
+    const npcs = siegeAranei.get(player.getUsername?.() ?? player.getIndex?.());
+    if (!npcs) return;
+    SIEGE_HALL.aranei.forEach((def, index) => {
+      const npc = npcs.get(index);
+      if (!npc) return;
+      const id = state.injured?.[index] ? def.injured : def.normal;
+      if ((npc.getNpcTransformationId?.() ?? npc.getId?.()) !== id) npc.setNpcTransformationId?.(id);
+    });
+  }
+
+  function failHallDefence(player) {
+    player.sendMessage("You failed to defend the hideout!");
+    const state = freshHallState();
+    player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, state);
+    hall.refresh?.(player);
+    syncSiegeAranei(player, state);
+    publishHallIntegrity(player, state);
+  }
+
+  function breachHallDefence(player, state) {
+    const updated = { ...state, phase: "breach", integrity: 0 };
     player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, updated);
-    if (integrity <= HALL_INTEGRITY_THRESHOLD && !updated.qualified) {
-      if (updated.participation < HALL_PARTICIPATION_REQUIRED) {
-        updated.integrity = HALL_INTEGRITY_THRESHOLD + 1;
-        player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, updated);
-        player.sendMessage("The Aranei need more help before the doors give way. Repair another damaged window or pillar, or heal a fallen Aranei.");
-        return;
-      }
-      updated.qualified = true;
-      player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, updated);
-    }
-    if (integrity === 0 && updated.qualified) {
-      updated.phase = "breach";
-      player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, updated);
-      quest.setStage(player, STAGE.SIEGE);
-      startTranscript(api, player, NpcIdentifiers.LOWERNIEL_DRAKAN_19, PAGE,
-        "drakan-s-siege-upon-reaching-0-hideout-integrity");
-    }
+    closeHallIntegrity(player);
+    quest.setStage(player, STAGE.SIEGE);
+    startTranscript(api, player, NpcIdentifiers.LOWERNIEL_DRAKAN_19, PAGE,
+      "drakan-s-siege-upon-reaching-0-hideout-integrity");
   }
 
   function processSiegeDefence({ player }) {
     if (!player || stage(player) !== STAGE.SIEGE) return;
     const state = hallDefenceState(player);
     if (state.phase !== "hall") return;
-    const cycle = World.getProcessCycle();
-    if (cycle < (state.nextIntegrityLossCycle ?? cycle + HALL_INTEGRITY_INTERVAL)) {
-      if (state.nextIntegrityLossCycle === undefined) player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE,
-        { ...state, nextIntegrityLossCycle: cycle + HALL_INTEGRITY_INTERVAL });
-      return;
-    }
-    applyHallIntegrity(player, -HALL_INTEGRITY_LOSS);
-    const updated = hallDefenceState(player);
-    player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE,
-      { ...updated, nextIntegrityLossCycle: cycle + HALL_INTEGRITY_INTERVAL });
+    const updated = advanceHallDefence(state);
+    player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, updated);
+    if (hallDamageChanged(state, updated)) hall.refresh?.(player);
+    syncSiegeAranei(player, updated);
+    publishHallIntegrity(player, updated);
+    if (updated.integrity > 0) return;
+    // P2 primary: reaching 0 before the timer shows "You failed to defend the
+    // hideout!" and restarts a fresh 650/300 defence.
+    if (updated.timer > 0) failHallDefence(player);
+    else breachHallDefence(player, updated);
   }
 
-  function injuredAraneiKey(npc) {
-    const location = npc.getLocation?.();
-    return `aranei:${location?.getX?.()},${location?.getY?.()},${location?.getZ?.()}`;
-  }
-
-  function spawnSiegeInjuredAranei(player) {
+  function spawnSiegeAranei(player) {
     const state = hallDefenceState(player);
-    if (state.phase !== "hall" || (state.healed ?? []).includes("aranei:3173,7855,1")) return;
+    if (state.phase !== "hall") return;
     const key = player.getUsername?.() ?? player.getIndex?.();
-    const old = siegeHallInjured.get(key);
-    if (old && old.isRegistered?.() && old.getHitpoints?.() > 0) return;
-    const npc = api.spawnNpc({ id: NpcIdentifiers.ARANEI_112, x: 3173, y: 7855, z: 1,
-      wanderRadius: 0, owner: player, ownerOnly: true });
-    if (npc) { player.getPrivateArea?.()?.enter(npc); siegeHallInjured.set(key, npc); }
+    let npcs = siegeAranei.get(key);
+    if (!npcs) siegeAranei.set(key, npcs = new Map());
+    SIEGE_HALL.aranei.forEach((def, index) => {
+      const injured = Boolean(state.injured?.[index]);
+      const old = npcs.get(index);
+      if (old?.isRegistered?.()) {
+        const id = injured ? def.injured : def.normal;
+        if ((old.getNpcTransformationId?.() ?? old.getId?.()) !== id) old.setNpcTransformationId?.(id);
+        return;
+      }
+      const npc = api.spawnNpc({ id: injured ? def.injured : def.normal, x: def.x, y: def.y, z: 1,
+        wanderRadius: 0, owner: player, ownerOnly: true });
+      if (npc) { player.getPrivateArea?.()?.enter(npc); npcs.set(index, npc); }
+    });
+  }
+
+  function removeSiegeAranei(player) {
+    const key = player.getUsername?.() ?? player.getIndex?.();
+    for (const npc of siegeAranei.get(key)?.values() ?? []) api.removeNpc(npc);
+    siegeAranei.delete(key);
   }
 
   function handleSiegeLogin({ player }) {
     if (!player || stage(player) !== STAGE.SIEGE) return;
     const state = hallDefenceState(player);
+    if (state.phase === "fall-back") {
+      // The logout removed the bridge session. Resume the captured fall-back
+      // conversation instead of skipping to phase hall; stage stays 118 until
+      // the player really finishes vqg4qO.
+      if (!player.getDialogueManager?.()?.getCurrent?.()) {
+        startTranscript(api, player, NpcIdentifiers.SAREI_5, PAGE,
+          "drakan-s-siege-upon-reaching-0-defender-integrity");
+      }
+      return;
+    }
     hall.enter(player);
-    if (state.phase === "hall") player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE,
-      { ...state, nextIntegrityLossCycle: World.getProcessCycle() + HALL_INTEGRITY_INTERVAL });
-    spawnSiegeInjuredAranei(player);
+    if (state.phase === "hall") {
+      player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, state);
+      publishHallIntegrity(player, state);
+    }
+    spawnSiegeAranei(player);
   }
 
   function handleSiegeLogout({ player }) {
     if (!player) return;
-    const key = player.getUsername?.() ?? player.getIndex?.();
-    const npc = siegeHallInjured.get(key);
-    if (npc) api.removeNpc(npc);
-    siegeHallInjured.delete(key);
-  }
-
-  function replaceHallObject(event, replacementId) {
-    const object = event.object;
-    if (!object) return false;
-    const location = object.getLocation();
-    const area = hall.sessions.get(event.player);
-    if (!area || object.getPrivateArea?.() !== area) return false;
-    const replacement = new api.core.GameObject(replacementId, location.clone(), object.getType(), object.getFace(), area);
-    api.core.ObjectManager.deregister(object, true);
-    api.core.ObjectManager.register(replacement, true);
-    return true;
+    closeHallIntegrity(player);
+    removeSiegeAranei(player);
   }
 
   function handleSiegeHallObject(event) {
@@ -2233,8 +2705,18 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (objectId === SIEGE_HALL.hammerCrate || objectId === SIEGE_HALL.potionCrate) {
       event.handled = true;
       const item = objectId === SIEGE_HALL.hammerCrate ? SIEGE_HALL.hammer : SIEGE_HALL.healingPotion;
-      if (!inventory.contains(item)) inventory.adds(item, 1);
-      player.sendMessage(item === SIEGE_HALL.hammer ? "You take a hammer from the crate." : "You take a healing potion from the crate.");
+      const label = item === SIEGE_HALL.hammer ? "hammer" : "healing potion";
+      if (inventory.contains(item)) {
+        player.sendMessage(`You already have a ${label}.`);
+        return;
+      }
+      const before = inventory.getAmount(item);
+      inventory.adds(item, 1);
+      if (inventory.getAmount(item) === before) {
+        player.sendMessage("You have no room in your inventory.");
+        return;
+      }
+      player.sendMessage(`You take a ${label} from the crate.`);
       return;
     }
 
@@ -2250,17 +2732,18 @@ module.exports = function registerTheBloodMoonRises(api) {
     const repair = SIEGE_HALL.repairLocations.get(repairKey);
     if (!repair || objectId !== repair[0]) return;
     event.handled = true;
-    if (!(state.repaired ?? []).includes(repairKey) && !inventory.contains(SIEGE_HALL.hammer)) {
+    if (!inventory.contains(SIEGE_HALL.hammer)) {
       player.sendMessage("You need a hammer from the crate in the hall to repair this.");
       return;
     }
-    if ((state.repaired ?? []).includes(repairKey)) {
+    if (!state.damaged?.[repairKey]) {
       player.sendMessage("You have already repaired this part of the hall.");
       return;
     }
-    if (!replaceHallObject(event, repair[1])) return;
-    player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, { ...state, repaired: [...(state.repaired ?? []), repairKey] });
-    applyHallIntegrity(player, 8, true);
+    const damaged = { ...state.damaged };
+    delete damaged[repairKey];
+    player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, { ...state, damaged });
+    hall.refresh?.(player);
     player.sendMessage(repair[0] === SIEGE_HALL.damagedPillar ? "You brace and repair the damaged pillar." : "You repair the damaged window.");
   }
 
@@ -2289,19 +2772,18 @@ module.exports = function registerTheBloodMoonRises(api) {
       stage(player) !== STAGE.SIEGE || hallDefenceState(player).phase !== "hall") return false;
     if (npc.getOwner?.() !== player || npc.getArea?.() !== hall.sessions.get(player)) return false;
     event.handled = true;
+    const index = SIEGE_HALL.aranei.findIndex(def => def.injured === npcId);
     const state = hallDefenceState(player);
-    const key = injuredAraneiKey(npc);
-    if ((state.healed ?? []).includes(key)) return;
     const inventory = player.getInventory();
     if (!inventory.contains(SIEGE_HALL.healingPotion)) {
       player.sendMessage("The Aranei needs a healing potion from the crate in the hall.");
       return;
     }
     inventory.deleteNumber(SIEGE_HALL.healingPotion, 1);
-    npc.setNpcTransformationId?.(NpcIdentifiers.ARANEI_106);
-    player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, { ...state, healed: [...(state.healed ?? []), key] });
-    applyHallIntegrity(player, 12, true);
-    siegeHallInjured.delete(player.getUsername?.() ?? player.getIndex?.());
+    npc.setNpcTransformationId?.(SIEGE_HALL.aranei[index].normal);
+    const injured = { ...(state.injured ?? {}) };
+    delete injured[index];
+    player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, { ...state, injured });
     player.sendMessage("You give the healing potion to the Aranei and help them back to their feet.");
   }
 
@@ -2340,6 +2822,7 @@ module.exports = function registerTheBloodMoonRises(api) {
     // instance. Re-entering the fight returns native progress to its 144 step.
     if (player.getAttribute(WYRD_CUTSCENE_ATTRIBUTE)) {
       player.setAttribute(WYRD_CUTSCENE_ATTRIBUTE, false);
+      Scenes.controls(player, false);
       quest.setStage(player, STAGE.WYRDS);
     }
     const area = new WyrdEncounterArea(player.getUsername?.());
@@ -2374,6 +2857,27 @@ module.exports = function registerTheBloodMoonRises(api) {
     return true;
   }
 
+  function startWyrdEnding(encounter) {
+    const { player, boss } = encounter;
+    if (encounter.finished || stage(player) !== STAGE.WYRDS) return false;
+    if (player.getDialogueManager?.()?.isActive?.()) return false;
+    // Native 146 marks the held 10% scene and is published before its first line.
+    player.setAttribute(WYRD_CUTSCENE_ATTRIBUTE, true);
+    quest.setStage(player, STAGE.WYRDS);
+    if (!startTranscript(api, player, boss.getId(), PAGE, "fighting-wyrds-upon-reaching-10-hp")) {
+      player.setAttribute(WYRD_CUTSCENE_ATTRIBUTE, false);
+      return false;
+    }
+    encounter.ending = true;
+    encounter.pendingEnding = false;
+    encounter.thresholdsSeen.add(10);
+    // The 10% scene is mandatory: stop autoattacks, pending targets and movement.
+    player.getCombat().reset();
+    boss.getCombat().reset();
+    Scenes.controls(player, true, true);
+    return true;
+  }
+
   function handleWyrdDeath(event) {
     if (handleSiegeDrakanDeath(event)) return;
     if (handleDrakanDeath(event)) return;
@@ -2383,13 +2887,8 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (!encounter || npc !== encounter.boss || encounter.finished || event?.killer !== encounter.player) return;
     // A lethal hit can skip over 10% between NPC processing ticks. Keep the same
     // story outcome as the threshold trigger: Safalaan knocks the player out and flees.
-    if (!encounter.ending) {
-      encounter.ending = true;
-      encounter.thresholdsSeen.add(10);
-      encounter.player.setAttribute(WYRD_CUTSCENE_ATTRIBUTE, true);
-      quest.setStage(encounter.player, STAGE.WYRDS);
-      startTranscript(api, encounter.player, npc.getId(), PAGE, "fighting-wyrds-upon-reaching-10-hp");
-    }
+    encounter.pendingEnding = true;
+    startWyrdEnding(encounter);
   }
 
   function handleWyrdBeforeDeath(event) {
@@ -2401,13 +2900,8 @@ module.exports = function registerTheBloodMoonRises(api) {
     // Preserve the boss at that threshold when one large hit would otherwise kill it.
     event.preventDeath = true;
     npc.setHitpoints(110);
-    if (!encounter.ending) {
-      encounter.ending = true;
-      encounter.thresholdsSeen.add(10);
-      encounter.player.setAttribute(WYRD_CUTSCENE_ATTRIBUTE, true);
-      quest.setStage(encounter.player, STAGE.WYRDS);
-      startTranscript(api, encounter.player, npc.getId(), PAGE, "fighting-wyrds-upon-reaching-10-hp");
-    }
+    encounter.pendingEnding = true;
+    startWyrdEnding(encounter);
   }
 
   function cleanupWyrdEncounter({ player } = {}) {
@@ -2418,6 +2912,7 @@ module.exports = function registerTheBloodMoonRises(api) {
       encounter.finished = true;
       clearWyrdPools(encounter, false);
       api.removeNpc(encounter.boss);
+      Scenes.controls(player, false);
       area.leave(player, false);
       wyrdEncounters.delete(area);
     }
@@ -2445,12 +2940,11 @@ module.exports = function registerTheBloodMoonRises(api) {
     const player = event?.player;
     const name = String(event?.definition?.getName?.() ?? "").toLowerCase();
     const objectId = event?.objectId ?? event?.definition?.id ?? event?.definition?.getId?.();
-    // The live cache child is exposed as the generic name "Fence" (IDs 61264/61268),
-    // even though the quest transcript calls this scenery the broken fence. Its cache
-    // definition has no option, so the normal object-action packet cannot reach a hook;
-    // claim the native Examine packet at the player's nearby fence tile instead.
+    // The transcript calls this scenery the broken fence; the cache exposes Fence
+    // parents 61264/61268 and their Inspect children 61265/61269. Accept either the
+    // object option or the legacy Examine path, restricted to the recorded tile.
     if (!player || !player.getAttribute(WYRD_DEFEATED_ATTRIBUTE) ||
-      (name !== "broken fence" && ![61264, 61268].includes(objectId))) return false;
+      (!["broken fence", "fence"].includes(name) && ![61264, 61265, 61268, 61269].includes(objectId))) return false;
     const location = event.location ?? player.getLocation?.();
     const x = location?.getX?.() ?? location?.x;
     const y = location?.getY?.() ?? location?.y;
@@ -2473,14 +2967,46 @@ module.exports = function registerTheBloodMoonRises(api) {
     }
   }
 
+  const SLEPE_REFINERY_NATIVE_STAGES = Object.freeze({
+    route: 48, tomb: 50, pickaxe: 52, mined: 54, tunnel: 56,
+    fight: 58, cleared: 60, freed: 62, escaped: 64,
+  });
+
+  function slepeNativeStage(player) {
+    const phase = player?.getAttribute("the-blood-moon-rises:refinery-progress")?.phase;
+    if (phase) {
+      // Once the refinery route reaches the castle lobby, later native stages
+      // (66+) must win over the refinery's own escaped stage 64.
+      if (phase === "escaped" && Number(player.getAttribute(CASTLE_NATIVE_STAGE_ATTRIBUTE)) >= 66) {
+        return Number(player.getAttribute(CASTLE_NATIVE_STAGE_ATTRIBUTE));
+      }
+      return SLEPE_REFINERY_NATIVE_STAGES[phase] ?? 48;
+    }
+    return derivedSlepeNativeStage(player?.getAttribute(SLEPE_STORY_ATTRIBUTE) ?? {});
+  }
+
   function nativeStage(value, player) {
+    if (value === STAGE.SLEPE) return slepeNativeStage(player);
     if (value === STAGE.WYRDS) return player?.getAttribute(WYRD_CUTSCENE_ATTRIBUTE) ? 146 : 144;
     if (value === STAGE.WYRD_DEFEATED) return 148;
-    if (value === STAGE.FENCE_FOUND) return 150;
+    if (value === STAGE.FENCE_FOUND) {
+      // 158/160/162 are the earned Castle Drakan handoff sub-stages inside the
+      // same quest stage. A login resync must not publish 150 and hide Ivan.
+      const saved = Number(player?.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE));
+      return Number.isInteger(saved) && saved >= 158 && saved < 164 ? saved : 150;
+    }
     if (value === STAGE.COMPLETE) return 178;
-    if (value === STAGE.STARTED) return player?.getAttribute(HIDEOUT_SHRINE_INSPECTED) ? 8 : 4;
-    if (value === STAGE.HIDEOUT) return 12;
-    if (value === STAGE.SLEPE) return 16;
+    if (value === STAGE.STARTED) {
+      // Captured start: accepting Sarius sets 2, the closing line sets 4, the
+      // shrine objectbox sets 6, and its first line sets 8.
+      if (player?.getAttribute(HIDEOUT_SHRINE_INSPECTED)) return 8;
+      return player?.getAttribute(START_DIALOGUE_COMPLETE) ? 4 : 2;
+    }
+    if (value === STAGE.RETURNED) return 14;
+    if (value === STAGE.HIDEOUT) {
+      // "I'm ready." arms the trip (10); the Lowerniel cutscene opens at 12.
+      return player?.getAttribute(HIDEOUT_CUTSCENE_STARTED) ? 12 : 10;
+    }
     if (value === STAGE.CASTLE) return Number(player?.getAttribute(CASTLE_NATIVE_STAGE_ATTRIBUTE)) || 70;
     if (value === STAGE.ESCAPE) {
       return player?.getAttribute(HUNT_ATTRIBUTE)?.finalDialogueComplete ? 84 : 82;
@@ -2561,26 +3087,18 @@ module.exports = function registerTheBloodMoonRises(api) {
         // The native recording places Sugadinti just west of the Theatre entrance.
         : native >= 132 && native <= 136
           ? [[15956, 3670, 3219, 0]]
-          : [];
+          // RSProx places the post-Theatre Veliaf and Ivan outside the old lab.
+          // 15874/15851 are transform parents that resolve to their Talk-to
+          // children (15878/15855) on native 140-142.
+          : native >= 140 && native <= 142
+            ? [[15874, 3541, 3257, 0], [15851, 3541, 3260, 0]]
+            : [];
     if (actors.length === desired.length && actors.every((npc, index) =>
       !npc.isDestroyed?.() && npc.getId?.() === desired[index][0])) return;
     cleanupTheatreActors(player);
     const spawned = desired.map(([id, x, y, z]) => api.spawnNpc({ id, x, y, z,
       wanderRadius: 0, owner: player, ownerOnly: true })).filter(Boolean);
     if (spawned.length) theatreActors.set(player, spawned);
-  }
-
-  function nativeQuestVarbit(value, player) {
-    if (value === STAGE.SLEPE) {
-      const phase = player?.getAttribute("the-blood-moon-rises:refinery-progress")?.phase;
-      const refineryStage = ({ route: 48, tomb: 50, pickaxe: 52, mined: 54, tunnel: 56,
-        fight: 58, cleared: 60, freed: 62, escaped: 64 })[phase];
-      if (phase === "escaped" && Number(player?.getAttribute(CASTLE_NATIVE_STAGE_ATTRIBUTE)) >= 66) {
-        return Number(player.getAttribute(CASTLE_NATIVE_STAGE_ATTRIBUTE));
-      }
-      if (refineryStage !== undefined) return refineryStage;
-    }
-    return nativeStage(value, player);
   }
 
   function syncHideoutIvan(event) {
@@ -2802,10 +3320,124 @@ module.exports = function registerTheBloodMoonRises(api) {
     return ivan;
   }
 
+  // Quest Helper's varbit map runs 16-44 through the Slepe and Paterdomus
+  // chapters; the castle refinery owns 48-64 after "Lead the way". Mirror those
+  // cache stages as the story flags change so NPC/object morphs see real progress.
+  function derivedSlepeNativeStage(story) {
+    if (story.tombRouteStarted) return 44;
+    if (story.writingsRead) return 42;
+    if (story.writingsGiven) return 40;
+    if (story.booksPlaced) return 38;
+    if (story.monksCleared) return 36;
+    if (story.monksRequested) return story.monksBattleStarted ? 34 : 32;
+    if (story.upstairsTalked) return 30;
+    if (story.journalRead) return 28;
+    if (story.journalGiven) return 26;
+    if (story.manorComplete) return 24;
+    if (story.manorEnemiesDefeated) return 22;
+    if (story.manorEntered) return 20;
+    if (story.royClue) return 18;
+    return 16;
+  }
+
+  function syncSlepeNativeStage(player) {
+    if (!player || stage(player) !== STAGE.SLEPE) return;
+    // The refinery owns 48-64 while its route is active.
+    if (player.getAttribute("the-blood-moon-rises:refinery-progress")?.phase) return;
+    const value = derivedSlepeNativeStage(slepeStory(player));
+    if (Number(player.getAttribute(SLEPE_NATIVE_STAGE_ATTRIBUTE)) === value) return;
+    player.setAttribute(SLEPE_NATIVE_STAGE_ATTRIBUTE, value);
+    player.getPacketSender().sendVarbit(15464, value);
+  }
+
+  // Quest Helper's ground floor for this scene: the front-door threshold plus the
+  // temple interior (3409-3418, 3483-3494). The captured 32 -> 34 transition happens
+  // on the tick after the player steps through the opened 3489/3490 doors.
+  function inPaterdomusBattleZone(player) {
+    const { x, y, z } = paterdomusLocation(player) ?? {};
+    return z === 0 && x >= 3409 && x <= 3418 && y >= 3483 && y <= 3494;
+  }
+
+  function inPaterdomusBattleBounds(player) {
+    const { x, y, z } = paterdomusLocation(player) ?? {};
+    return z === 0 && x >= 3408 && x <= 3418 && y >= 3483 && y <= 3494;
+  }
+
+  function cleanupPaterdomusBattle(player) {
+    const battle = player && paterdomusBattles.get(player);
+    if (!battle) return;
+    paterdomusBattles.delete(player);
+    for (const npc of battle.actors) if (npc?.isRegistered?.() !== false) api.removeNpc(npc);
+    for (const object of battle.locs) player.getPacketSender?.().sendObjectRemoval?.(object);
+    if (battle.area && player.getArea?.() === battle.area) battle.area.leave(player, false);
+  }
+
+  function cleanupPaterdomusBattleOnLogout({ player } = {}) {
+    cleanupPaterdomusBattle(player);
+  }
+
+  function startPaterdomusBattle(player) {
+    if (!player || paterdomusBattles.has(player)) return;
+    const story = slepeStory(player);
+    if (stage(player) !== STAGE.SLEPE || !story.monksRequested || story.monksCleared) return;
+    const area = new PaterdomusBattleArea(player);
+    const battle = { area, actors: [], monks: new Set(), locs: [] };
+    paterdomusBattles.set(player, battle);
+    area.enter(player);
+    const target = new Location(PATERDOMUS_BATTLE_TARGET.x, PATERDOMUS_BATTLE_TARGET.y, PATERDOMUS_BATTLE_TARGET.z);
+    for (const spawn of PATERDOMUS_BATTLE_SPAWNS) {
+      const npc = api.spawnNpc({ id: spawn.id, x: spawn.x, y: spawn.y, z: 0, wanderRadius: 0,
+        owner: player, ownerOnly: true, ...(spawn.face === undefined ? {} : { face: spawn.face }) });
+      if (!npc) continue;
+      battle.actors.push(npc);
+      area.enter(npc);
+      if (spawn.id === NpcIdentifiers.IVAN_STROM_21) continue;
+      npc.setMultiCombat?.(true);
+      npc.setPositionToFace?.(target);
+      npc.getCombat?.().attack?.(player);
+      battle.monks.add(npc);
+    }
+    for (const door of PATERDOMUS_ESCAPE_DOORS) {
+      const object = new api.core.GameObject(door.id, new Location(door.x, door.y, 0), 0, 2, area);
+      area.add(object);
+      api.core.ObjectManager.register(object, true);
+      battle.locs.push(object);
+    }
+    const expectedMonks = PATERDOMUS_BATTLE_SPAWNS.length - 1;
+    if (battle.monks.size !== expectedMonks) {
+      cleanupPaterdomusBattle(player);
+      return;
+    }
+    if (!story.monksBattleStarted) {
+      player.setAttribute(SLEPE_STORY_ATTRIBUTE, { ...story, monksBattleStarted: true });
+      syncSlepeNativeStage(player);
+    }
+  }
+
+  function processPaterdomusBattle(player) {
+    const story = slepeStory(player);
+    if (stage(player) !== STAGE.SLEPE || !story.monksRequested || story.monksCleared) {
+      cleanupPaterdomusBattle(player);
+      return;
+    }
+    const battle = paterdomusBattles.get(player);
+    if (battle) {
+      // AreaManager also leaves the scene at its bounds; cleaning up here keeps the
+      // captured exit prompt and covers a direct move/logout between area ticks.
+      if (player.getArea?.() !== battle.area || !inPaterdomusBattleBounds(player)) {
+        cleanupPaterdomusBattle(player);
+      }
+      return;
+    }
+    if (inPaterdomusBattleZone(player)) startPaterdomusBattle(player);
+  }
+
   function processSlepeProgress({ player }) {
     if (!player || stage(player) !== STAGE.SLEPE) return;
+    syncSlepeNativeStage(player);
     const story = slepeStory(player);
     if (!story.manorComplete) return;
+    processPaterdomusBattle(player);
     if (story.monksCleared && inPaterdomusTemple(player, 1)) {
       spawnPaterdomusIvan(player, { x: 3417, y: 3487, z: 1 });
       return;
@@ -2971,24 +3603,21 @@ module.exports = function registerTheBloodMoonRises(api) {
     startTranscript(api, player, NpcIdentifiers.IVAN_STROM_4, PAGE, "the-truth-hurtz-upon-completing-the-book-puzzle");
   }
 
-  function handlePaterdomusMonkDeath(event) {
+  function handlePaterdomusBattleDeath(event) {
     const player = event?.killer;
     const npc = event?.npc;
     if (!player?.isPlayer?.() || !npc || stage(player) !== STAGE.SLEPE) return;
+    const battle = paterdomusBattles.get(player);
+    if (!battle?.monks.has(npc)) return;
+    battle.monks.delete(npc);
+    if (battle.monks.size > 0) return;
     const story = slepeStory(player);
     if (!story.monksRequested || story.monksCleared) return;
-    const spawn = npc.getSpawnPosition?.() ?? npc.getLocation?.();
-    if (!SLEPE_MONK_IDS.has(npc.getId?.() ?? event.npcId) || !spawn || spawn.getZ() !== 0) return;
-    const x = spawn.getX(), y = spawn.getY();
-    if (!SLEPE_MONK_TILES.some(([tx, ty]) => tx === x && ty === y)) return;
-    const kills = new Set(story.monkKills ?? []);
-    kills.add(`${x},${y}`);
-    const allDefeated = kills.size >= SLEPE_MONK_TILES.length;
-    player.setAttribute(SLEPE_STORY_ATTRIBUTE, { ...story, monkKills: [...kills], ...(allDefeated ? { monksCleared: true } : {}) });
-    if (allDefeated) {
-      player.sendMessage("The Zamorakian monks are defeated. Ivan is waiting upstairs in the temple.");
-      startTranscript(api, player, NpcIdentifiers.IVAN_STROM_4, PAGE, "the-truth-hurtz-upon-killing-the-monks-of-zamorak");
-    }
+    player.setAttribute(SLEPE_STORY_ATTRIBUTE, { ...story, monksCleared: true });
+    cleanupPaterdomusBattle(player);
+    syncSlepeNativeStage(player);
+    player.sendMessage("The Zamorakian monks are defeated. Ivan is waiting upstairs in the temple.");
+    startTranscript(api, player, NpcIdentifiers.IVAN_STROM_4, PAGE, "the-truth-hurtz-upon-killing-the-monks-of-zamorak");
   }
 
   function readPaterdomusBook(event) {
@@ -3027,7 +3656,8 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (z !== HIDEOUT_SHRINE_TILE.z || Math.abs(x - HIDEOUT_SHRINE_TILE.x) > 2 || Math.abs(y - HIDEOUT_SHRINE_TILE.y) > 2) return;
     event.handled = true;
     player.setAttribute(HIDEOUT_SHRINE_INSPECTED, true);
-    player.getPacketSender().sendVarbit(15464, nativeStage(STAGE.STARTED, player));
+    // The shrine objectbox opens at native stage 6; its first line advances to 8.
+    player.getPacketSender().sendVarbit(15464, 6);
     startTranscript(api, player, 9531, PAGE, "starting-out-inspecting-the-shrine");
   }
 
@@ -3082,6 +3712,38 @@ module.exports = function registerTheBloodMoonRises(api) {
 
   function stage(player) { return quest.getStage(player); }
 
+  function isInVampyriumRealm(player) {
+    if (!player) return false;
+    const currentStage = stage(player);
+    const location = player.getLocation?.();
+    const x = location?.getX?.(), y = location?.getY?.(), z = location?.getZ?.();
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const castleRoom = Number(player.getAttribute(CASTLE_ROOM_ATTRIBUTE));
+    const castleFloor = Number(player.getAttribute(CASTLE_FLOOR_ATTRIBUTE));
+    const inCastle = (currentStage === STAGE.CASTLE || currentStage === STAGE.ESCAPE) &&
+      Object.values(CASTLE_ROOM).includes(castleRoom) &&
+      (castleFloor === 1 || castleFloor === 2) && (z === 0 || z === 1) &&
+      x >= 2300 && x <= 2600 && y >= 7300 && y <= 7440;
+    const inTown = [STAGE.ESCAPE, STAGE.BLOOD_HUNT].includes(currentStage) &&
+      x >= 2560 && x <= 2660 && y >= 7780 && y <= 7900;
+    const inFirstBlood = [STAGE.ESCAPE, STAGE.BLOOD_HUNT].includes(currentStage) &&
+      x >= FIRST_BLOOD_ARENA.minX && x <= FIRST_BLOOD_ARENA.maxX &&
+      y >= FIRST_BLOOD_ARENA.minY && y <= FIRST_BLOOD_ARENA.maxY && z === FIRST_BLOOD_ARENA.z;
+    // QH inResupplyZone/refuge and the palace approach remain Vampyrium.
+    const inRefuge = [STAGE.ESCAPE, STAGE.BLOOD_HUNT, STAGE.PREPARATIONS, STAGE.SIEGE].includes(currentStage) &&
+      x >= 2830 && x <= 3060 && y >= 7630 && y <= 7930;
+    const inPalace = [STAGE.PREPARATIONS, STAGE.SIEGE].includes(currentStage) &&
+      x >= 3154 && x <= 3183 && y >= 7823 && y <= 7861;
+    const drakanArea = player.getAttribute(DRAKAN_AREA_ATTRIBUTE);
+    const inFinalEncounter = currentStage === STAGE.FINAL && drakanArea != null &&
+      player.getArea?.() === drakanArea;
+    const inFinalStaging = currentStage === STAGE.FINAL &&
+      Boolean(player.getAttribute(FINAL_PORTAL_USED_ATTRIBUTE)) && z === 0 &&
+      x >= 2500 && x <= 2516 && y >= 7378 && y <= 7390;
+    return inCastle || inTown || inFirstBlood || inRefuge || inPalace ||
+      inFinalEncounter || inFinalStaging;
+  }
+
   function handleVampyriumPotionArea(request) {
     if (request?.area !== "vampyrium" || !request.player) return;
     const player = request.player;
@@ -3135,9 +3797,50 @@ module.exports = function registerTheBloodMoonRises(api) {
     return selected;
   }
 
+  // Only Ivan is proven safe for a Blood Moon post-quest greeting across the
+  // shared pages. Other shared NPCs (notably King Roald) can still need a
+  // fresh start conversation from another quest at stage 0, so they are left
+  // to their canonical index/default selection.
+  const IVAN_POST_QUEST_VARIANT = "post-quest-dialogue-ivan";
+  const IVAN_SHARED_QUEST_KEYS = Object.freeze([
+    "in_search_of_the_myreque", "in_aid_of_the_myreque",
+    "darkness_of_hallowvale", "sins_of_the_father", "a_night_at_the_theatre",
+  ]);
+
+  function questStage(player, key) {
+    const request = { player, key, stage: null };
+    api.emitCustomEvent("quest:get-stage", request);
+    return Number.isInteger(request.stage) ? request.stage : null;
+  }
+
+  function questActive(player, key) {
+    const current = questStage(player, key);
+    if (current === null || current <= 0) return false;
+    const complete = { player, key, complete: false };
+    api.emitCustomEvent("quest:is-complete", complete);
+    return complete.complete !== true;
+  }
+
+  function ivanSharedQuestActive(player) {
+    return IVAN_SHARED_QUEST_KEYS.some((key) => questActive(player, key));
+  }
+
   function selectVariant(event) {
     const player = event?.player;
-    if (!player || quest.isComplete(player)) return null;
+    if (!player) return null;
+    if (quest.isComplete(player)) {
+      const npcName = String(event.definition?.getName?.() ?? "").toLowerCase();
+      if (npcName === "efaritay hallow") {
+        const efaritayPage = event.pages?.find((entry) => entry.page === TOME_RECLAIM_PAGE);
+        if (!efaritayPage?.variants?.includes(TOME_RECLAIM_VARIANT)) return null;
+        return !hasTome(player) && tomeUses(player) < 6
+          ? { page: TOME_RECLAIM_PAGE, variant: TOME_RECLAIM_VARIANT } : null;
+      }
+      if (npcName !== "ivan strom" || ivanSharedQuestActive(player)) return null;
+      const page = event.pages?.find((entry) => entry.page === PAGE);
+      return page?.variants?.includes(IVAN_POST_QUEST_VARIANT)
+        ? { page: PAGE, variant: IVAN_POST_QUEST_VARIANT } : null;
+    }
     const page = event.pages?.find((entry) => entry.page === PAGE);
     if (!page) return null;
     const value = stage(player);
@@ -3148,6 +3851,11 @@ module.exports = function registerTheBloodMoonRises(api) {
         return { page: sinsPage.page, variant: sinsVariant };
       }
       return null;
+    }
+    if (value === STAGE.RETURNED) {
+      if (event.definition?.getName?.() !== "Ivan Strom") return null;
+      return page.variants.includes("starting-out-back-at-the-hideout")
+        ? { page: PAGE, variant: "starting-out-back-at-the-hideout" } : null;
     }
     if (value === STAGE.NOT_STARTED) {
       if (event.definition?.getName?.() !== "Sarius Guile" || !meetsRequirements(player)) return null;
@@ -3261,6 +3969,7 @@ module.exports = function registerTheBloodMoonRises(api) {
     player.getPacketSender().sendVarbit(CASTLE_LAST_ROOM_VARBIT, room);
     player.getPacketSender().sendVarbit(CASTLE_LAST_FLOOR_VARBIT, floor);
     const story = castleStory(player);
+    player.getPacketSender().sendVarbit(CASTLE_VANESCULA_WALL_VARBIT, story.vanesculaWallBlown ? 1 : 0);
     player.getPacketSender().sendVarbit(CASTLE_VANESCULA_EMBLEM_VARBIT, story.vanesculaEmblemPlaced
       ? castleEmblemVarbitValue(story.vanesculaEmblemId ?? ItemIdentifiers.DRAKAN_EMBLEM) : 0);
     player.getPacketSender().sendVarbit(CASTLE_RANIS_PARLOUR_EMBLEM_VARBIT, story.ranisParlourEmblemPlaced
@@ -4555,6 +5264,10 @@ module.exports = function registerTheBloodMoonRises(api) {
       return;
     }
     const story = castleStory(player);
+    if (!story.defeated?.includes("crescent-venator")) {
+      player.sendMessage("The Venator still guards the emblem.");
+      return;
+    }
     if (story.thirdEmblemClaimed || hasItem(player, ItemIdentifiers.DRAKAN_EMBLEM_3)) {
       player.sendMessage("You have already taken this emblem.");
       return;
@@ -4565,6 +5278,72 @@ module.exports = function registerTheBloodMoonRises(api) {
     player.getPacketSender().sendVarbit(CASTLE_THIRD_EMBLEM_RECEPTACLE_VARBIT, 0);
     player.getPacketSender().sendVarbit(CASTLE_THIRD_EMBLEM_FOUND_VARBIT, 1);
     player.sendMessage("You take the emblem from the receptacle.");
+  }
+
+  function handleCastleVanesculaWall(event) {
+    const player = event?.player;
+    const tile = event?.location;
+    const x = tile?.x ?? tile?.getX?.();
+    const y = tile?.y ?? tile?.getY?.();
+    const z = tile?.z ?? tile?.getZ?.();
+    if (!player || quest.isComplete(player) || stage(player) !== STAGE.CASTLE ||
+      x !== CASTLE_VANESCULA_WALL.x || y !== CASTLE_VANESCULA_WALL.y || z !== CASTLE_VANESCULA_WALL.z ||
+      (!castleEventHasObjectId(event, CASTLE_VANESCULA_WALL.id) &&
+        !castleEventHasObjectId(event, CASTLE_VANESCULA_WALL.crackedId) &&
+        !castleEventHasObjectId(event, CASTLE_VANESCULA_WALL.holeId))) return;
+    const option = String(event?.option ?? "").toLowerCase();
+    const story = castleStory(player);
+    if (option === "inspect" && !story.vanesculaWallBlown) {
+      event.handled = true;
+      player.sendMessage("The wall is cracked. An explosive barrel could break through it.");
+      return;
+    }
+    if (option !== "enter" || !story.vanesculaWallBlown) return;
+    if (Number(player.getAttribute(CASTLE_ROOM_ATTRIBUTE)) !== CASTLE_ROOM.VANESCULA_CHAMBER ||
+      Number(player.getAttribute(CASTLE_FLOOR_ATTRIBUTE)) !== 2) {
+      player.sendMessage("There is no opening here.");
+      return;
+    }
+    event.handled = true;
+    player.moveTo(new Location(2487, 7421, 0));
+    player.setAttribute(CASTLE_ROOM_ATTRIBUTE, CASTLE_ROOM.VENATOR_ROOM);
+    player.setAttribute(CASTLE_FLOOR_ATTRIBUTE, 2);
+    syncCastleRoom(player, 4);
+    syncCastleActors(player);
+  }
+
+  function handleCastleVanesculaWallItem(event) {
+    const player = event?.player;
+    const tile = event?.location;
+    const x = tile?.x ?? tile?.getX?.();
+    const y = tile?.y ?? tile?.getY?.();
+    const z = tile?.z ?? tile?.getZ?.();
+    if (!player || quest.isComplete(player) || stage(player) !== STAGE.CASTLE ||
+      x !== CASTLE_VANESCULA_WALL.x || y !== CASTLE_VANESCULA_WALL.y || z !== CASTLE_VANESCULA_WALL.z ||
+      (!castleEventHasObjectId(event, CASTLE_VANESCULA_WALL.id) &&
+        !castleEventHasObjectId(event, CASTLE_VANESCULA_WALL.crackedId) &&
+        !castleEventHasObjectId(event, CASTLE_VANESCULA_WALL.holeId)) ||
+      event?.itemId !== ItemIdentifiers.EXPLOSIVE_BARREL) return;
+    event.handled = true;
+    if (Number(player.getAttribute(CASTLE_ROOM_ATTRIBUTE)) !== CASTLE_ROOM.VANESCULA_CHAMBER ||
+      Number(player.getAttribute(CASTLE_FLOOR_ATTRIBUTE)) !== 2) return;
+    const story = castleStory(player);
+    if (story.vanesculaWallBlown) {
+      player.sendMessage("The wall is already broken open.");
+      return;
+    }
+    if (!hasItem(player, ItemIdentifiers.TINDERBOX)) {
+      player.sendMessage("You need a tinderbox to light the barrel.");
+      return;
+    }
+    if (!hasItem(player, ItemIdentifiers.EXPLOSIVE_BARREL)) {
+      player.sendMessage("You need an explosive barrel.");
+      return;
+    }
+    player.getInventory().deleteNumber(ItemIdentifiers.EXPLOSIVE_BARREL, 1);
+    player.setAttribute(CASTLE_STORY_ATTRIBUTE, { ...story, vanesculaWallBlown: true });
+    player.getPacketSender().sendVarbit(CASTLE_VANESCULA_WALL_VARBIT, 1);
+    player.sendMessage("You wedge the explosive barrel into the crack and light it. The wall collapses.");
   }
 
   function inspectRanisCrackedWall(event) {
@@ -4909,8 +5688,10 @@ module.exports = function registerTheBloodMoonRises(api) {
 
   function addCastleMedallionDestination(event) {
     const player = event?.player;
-    if (!player || !Array.isArray(event.destinations) ||
-      stage(player) < STAGE.SLEPE || stage(player) > STAGE.SIEGE ||
+    // The medallion's Castle Drakan option is unlocked by inspecting the
+    // shrine and stays available after the quest, so completed players can
+    // walk from the medallion landing to the post-quest Efaritay normally.
+    if (!player || !Array.isArray(event.destinations) || stage(player) < STAGE.SLEPE ||
       !slepeStory(player).refineryComplete || !player.getAttribute(CASTLE_SHRINE_ATTRIBUTE)) return;
     event.destinations.push({
       label: "Castle Drakan.",
@@ -4951,6 +5732,14 @@ module.exports = function registerTheBloodMoonRises(api) {
         CASTLE_VAMPYRIUM_ARRIVAL.z));
       player.setAttribute(CASTLE_ROOM_ATTRIBUTE, CASTLE_ROOM.LOBBY);
       syncCastleRoom(player);
+    } else if (currentStage === STAGE.PREPARATIONS) {
+      // QH returnToVampyrium* proves the lobby portal is the bank/resupply
+      // return. The exact resume tile is uncaptured; reuse the recorded normal
+      // palace entrance landing (Bridge 62144 -> 3168,7859,1), preserving stage,
+      // progress and inventory.
+      player.moveTo(new Location(CASTLE_PALACE_ENTRANCE_ARRIVAL.x,
+        CASTLE_PALACE_ENTRANCE_ARRIVAL.y, CASTLE_PALACE_ENTRANCE_ARRIVAL.z));
+      palace.sync(player);
     } else if (currentStage === STAGE.SIEGE) {
       const existing = player.getAttribute(SIEGE_DRAKAN_AREA_ATTRIBUTE);
       if (existing && existing.isDestroyed?.() !== true) {
@@ -4964,9 +5753,10 @@ module.exports = function registerTheBloodMoonRises(api) {
       player.moveTo(new Location(CASTLE_SIEGE_HALL_ARRIVAL.x, CASTLE_SIEGE_HALL_ARRIVAL.y,
         CASTLE_SIEGE_HALL_ARRIVAL.z));
       if (!hall.enter(player)) return false;
-      spawnSiegeInjuredAranei(player);
+      spawnSiegeAranei(player);
       player.getPacketSender().sendVarbit(15464, nativeStage(STAGE.SIEGE, player));
     }
+    publishHelperVarbits(player);
     return true;
   }
 
@@ -4993,7 +5783,31 @@ module.exports = function registerTheBloodMoonRises(api) {
   // puzzle and boss handlers below remain responsible for the actual mechanics.
   function onTranscriptAction(event) {
     const player = event?.player;
-    if (!player || quest.isComplete(player)) return;
+    if (!player) return;
+    if (quest.isComplete(player)) {
+      if (event.stepId === "8qI8YD") {
+        // Canonical post-quest Efaritay recovery for a lost/destroyed tome.
+        // The shared completion add cannot place it in a full inventory, so
+        // this is the normal route to reclaim it without duplicating a held,
+        // equipped, banked or fully-read copy.
+        event.handled = true;
+        if (hasTome(player) || tomeUses(player) >= 6) {
+          event.end = true;
+          return;
+        }
+        const inventory = player.getInventory();
+        if ((inventory.getFreeSlots?.() ?? 0) < 1 || inventory.adds(TOME_ID, 1) === false) {
+          player.sendMessage("You need an empty inventory slot to reclaim the tome of experience.");
+          event.end = true;
+          return;
+        }
+      }
+      return;
+    }
+    if (event.stepId === "O3RVAV") {
+      // Refinery runs first and owns the actual grant; publish from its state.
+      publishHelperVarbits(player);
+    }
     if (event.stepId === "1JPVz5" && stage(player) === STAGE.THEATRE) {
       setTheatreNativeStage(player, 126);
     }
@@ -5031,6 +5845,7 @@ module.exports = function registerTheBloodMoonRises(api) {
       }
       player.setAttribute(HUNT_ATTRIBUTE, { ...hunt, suppliesClaimed: true });
       player.getPacketSender()?.sendVarbit?.(15565, 0);
+      publishHelperVarbits(player);
       event.box = { items: [ItemIdentifiers.MYSTERIOUS_JERKY, ItemIdentifiers.FOUL_CHUNKY_POTION_3_] };
       return;
     }
@@ -5063,7 +5878,8 @@ module.exports = function registerTheBloodMoonRises(api) {
       return;
     }
     if (event.stepId === "lKvIyH" && stage(player) === STAGE.BLOOD_HUNT) {
-      setBloodHuntNativeStage(player, 86);
+      // Captured P1: fitting the cog lowers the bridge and advances 86 -> 88.
+      setBloodHuntNativeStage(player, 88);
     }
     if (event.stepId === "D5qF0g" && stage(player) === STAGE.BLOOD_HUNT) {
       setBloodHuntNativeStage(player, 88);
@@ -5120,6 +5936,7 @@ module.exports = function registerTheBloodMoonRises(api) {
       syncCastleRoom(player);
       setCastleNativeStage(player, 72);
       syncCastleActors(player);
+      publishHelperVarbits(player);
     }
     if (event.stepId === "LTAe0k" && stage(player) === STAGE.CASTLE) {
       const refiner = player.getAttribute(REFINER_ATTRIBUTE) ?? {};
@@ -5134,7 +5951,12 @@ module.exports = function registerTheBloodMoonRises(api) {
     }
     if (event.stepId === "huhOGU" && stage(player) === STAGE.FINAL) {
       event.handled = true;
-      giveFinalDrakanSupplies(player);
+      openFinalSupplyShop(player);
+      return;
+    }
+    if (event.stepId === "5E6Et6" && stage(player) === STAGE.FINAL) {
+      event.handled = true;
+      api.emitCustomEvent("bank:open-deposit-box", { player });
       return;
     }
     if (event.stepId === "W2h12S" && stage(player) === STAGE.FINAL) {
@@ -5150,6 +5972,7 @@ module.exports = function registerTheBloodMoonRises(api) {
       event.handled = true;
       player.setAttribute(FINAL_PORTAL_USED_ATTRIBUTE, true);
       setFinalNativeStage(player, 168);
+      publishHelperVarbits(player);
       cleanupFinalEfaritay({ player });
       player.moveTo(new Location(FINAL_CASTLE_ARRIVAL.x, FINAL_CASTLE_ARRIVAL.y, FINAL_CASTLE_ARRIVAL.z));
       spawnFinalArrivalActors(player);
@@ -5236,13 +6059,21 @@ module.exports = function registerTheBloodMoonRises(api) {
       player.sendMessage("Keep the vyrewatch away from Ivan and let him complete the spell before escaping.");
       return;
     }
+    if (event.stepId === "fiqzZ7") {
+      resetBloodMoonScene(player);
+      // Captured escape landing (P1): hideout, beside Ivan.
+      player.moveTo(new Location(HIDEOUT_ESCAPE_LANDING.x, HIDEOUT_ESCAPE_LANDING.y,
+        HIDEOUT_ESCAPE_LANDING.z));
+    }
     const next = ACTION_STAGE[event.stepId];
     if (event.stepId === "vqg4qO") {
       if (stage(player) !== STAGE.SIEGE || !bridge.finish(player)) return;
-      player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, { phase: "hall", integrity: 100, healed: [], repaired: [] });
+      const state = freshHallState();
+      player.setAttribute(SIEGE_DEFENCE_ATTRIBUTE, state);
       quest.setStage(player, STAGE.SIEGE);
       hall.enter(player);
-      spawnSiegeInjuredAranei(player);
+      publishHallIntegrity(player, state);
+      spawnSiegeAranei(player);
     }
     if (event.stepId === "Sut83Q") {
       if (!preparationReady(player)) {
@@ -5267,6 +6098,7 @@ module.exports = function registerTheBloodMoonRises(api) {
       player.moveTo(new Location(BLOOD_HUNT_SCENE_ARRIVAL.x, BLOOD_HUNT_SCENE_ARRIVAL.y,
         BLOOD_HUNT_SCENE_ARRIVAL.z));
       player.setAttribute(CASTLE_ROOM_ATTRIBUTE, null);
+      publishHelperVarbits(player);
     }
     if (next) advance(player, next);
     if (event.stepId === "4G5OZg") startWyrdBattle(player);
@@ -5309,16 +6141,40 @@ module.exports = function registerTheBloodMoonRises(api) {
       setFinalNativeStage(player, 174);
       player.moveTo(new Location(FINAL_GRAVEYARD_AFTER_FIGHT.x,
         FINAL_GRAVEYARD_AFTER_FIGHT.y, FINAL_GRAVEYARD_AFTER_FIGHT.z));
+      publishHelperVarbits(player);
       spawnFinalCutsceneActors(player);
+      // RSProx 4272 t2507: fade into the graveyard with Efaritay and the Wyrd.
+      if (sceneReady(player)) {
+        Scenes.fade(player, true);
+        Scenes.controls(player, true, true);
+        Scenes.camera(player, [3715, 3210, 345], [3707, 3211, 65]);
+        Scenes.later(player, 2, () => Scenes.fade(player, false));
+      }
     }
     if (event.stepId === "NrSBWo" && stage(player) === STAGE.FINAL) {
       transformFinalWyrdForCutscene(player);
     }
     if (event.stepId === "I_SfUV" && stage(player) === STAGE.FINAL) {
-      setFinalNativeStage(player, 176);
-      player.moveTo(new Location(FINAL_GRAVEYARD_AFTER_FIGHT.x,
-        FINAL_GRAVEYARD_AFTER_FIGHT.y, FINAL_GRAVEYARD_AFTER_FIGHT.z));
-      cleanupFinalCutsceneActors({ player });
+      if (sceneReady(player)) {
+        Scenes.fade(player, true);
+        Scenes.later(player, 1, () => {
+          setFinalNativeStage(player, 176);
+          player.moveTo(new Location(FINAL_GRAVEYARD_AFTER_FIGHT.x,
+            FINAL_GRAVEYARD_AFTER_FIGHT.y, FINAL_GRAVEYARD_AFTER_FIGHT.z));
+          cleanupFinalCutsceneActors({ player });
+          resetBloodMoonScene(player);
+          Scenes.fade(player, false);
+        });
+      } else {
+        setFinalNativeStage(player, 176);
+        player.moveTo(new Location(FINAL_GRAVEYARD_AFTER_FIGHT.x,
+          FINAL_GRAVEYARD_AFTER_FIGHT.y, FINAL_GRAVEYARD_AFTER_FIGHT.z));
+        cleanupFinalCutsceneActors({ player });
+      }
+    }
+    if (event.stepId === "OF-fKO" && stage(player) === STAGE.FENCE_FOUND &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) === 160) {
+      setFinalNativeStage(player, 162);
     }
     if (event.stepId === "Xz7d4O") startSiegeDrakanBattle(player);
     if (event.stepId === "zPiZ9c") finishSiegeDrakanBattle(player);
@@ -5340,6 +6196,7 @@ module.exports = function registerTheBloodMoonRises(api) {
       }
       player.setAttribute(WYRD_AREA_ATTRIBUTE, null);
       player.setAttribute(WYRD_CUTSCENE_ATTRIBUTE, false);
+      Scenes.controls(player, false);
       player.setAttribute(WYRD_DEFEATED_ATTRIBUTE, true);
       advance(player, STAGE.WYRD_DEFEATED);
       player.moveTo(new Location(3562, 3322, 0));
@@ -5348,16 +6205,25 @@ module.exports = function registerTheBloodMoonRises(api) {
       advance(player, STAGE.FENCE_FOUND);
       player.moveTo(new Location(WYRD_BURGH_RETURN.x, WYRD_BURGH_RETURN.y, WYRD_BURGH_RETURN.z));
     }
-    if (event.stepId === "2QgFZA" && player.getAttribute(WYRD_DEFEATED_ATTRIBUTE)) {
-      player.setAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE, 164);
-      advance(player, STAGE.FINAL);
-      syncFinalEfaritay(player);
+    if (event.stepId === "2QgFZA" && player.getAttribute(WYRD_DEFEATED_ATTRIBUTE) &&
+      String(event.kind ?? "action") !== "message") {
+      // "I'm ready." walks the party out to the Blood Moon gathering (native
+      // 152); Efaritay's portal only opens after its fight and conversations.
+      beginBloodMoonGathering(player);
     }
     if (event.stepId === "BzMe5D" && stage(player) === STAGE.FINAL
       && player.getAttribute(DRAKAN_ENCOUNTER_COMPLETE)) {
       cleanupFinalCutsceneActors({ player });
       cleanupFinalEfaritay({ player });
       quest.complete(player);
+      syncPostQuestEfaritay({ player });
+      if (sceneReady(player)) {
+        Scenes.fade(player, true);
+        Scenes.later(player, 2, () => {
+          resetBloodMoonScene(player);
+          Scenes.fade(player, false);
+        });
+      }
     }
   }
 
@@ -5366,7 +6232,10 @@ module.exports = function registerTheBloodMoonRises(api) {
     const challenge = player?.getAttribute(TOB_CHALLENGE_ATTRIBUTE);
     if (!player || stage(player) !== STAGE.THEATRE || !challenge?.started || challenge.completed) return;
     player.setAttribute(TOB_CHALLENGE_ATTRIBUTE, { ...challenge, completed: true });
-    advance(player, STAGE.WYRDS);
+    // Captured order after the last Theatre boss: 138 while Sugadinti and the
+    // aranei explain Vanescula's location, 140 once that scene closes, 142 when
+    // Veliaf leads the way at the ruins, 144 when the Wyrd fight begins.
+    setTheatreNativeStage(player, 138);
     startTranscript(api, player, NpcIdentifiers.SUGADINTI_VITUR_6, PAGE,
       "another-night-at-the-theatre-after-killing-the-nylocas-vasilias");
   }
@@ -5616,12 +6485,97 @@ module.exports = function registerTheBloodMoonRises(api) {
       return false;
     }
     if (!hideoutDefense.prepare(player)) return false;
+    // RSProx P1 t255-257: fade out under the hideout camera as the party leaves.
+    if (sceneReady(player)) {
+      Scenes.fade(player, true);
+      Scenes.controls(player, true, true);
+      Scenes.camera(player, [3597, 9617, 370], [3602, 9610, 369]);
+      Scenes.later(player, 2, () => Scenes.fade(player, false));
+    }
+    player.setAttribute(HIDEOUT_CUTSCENE_STARTED, true);
+    player.getPacketSender().sendVarbit(15464, nativeStage(STAGE.HIDEOUT, player));
     return startTranscript(api, player, NpcIdentifiers.IVAN_STROM_13, PAGE, "starting-out-lowerniel-s-speech");
+  }
+
+  // Line steps have no stable id in the transcript export, so scope them to
+  // this quest page, the exact variant, the raw (unformatted) text and speaker.
+  // request.text is the wiki source with placeholders such as "[player name]".
+  function isQuestLine(request, variant, text, speaker = undefined) {
+    if (!request?.pages?.some(page => page.page === PAGE && page.variants?.includes(variant))) return false;
+    if (request.text !== text) return false;
+    return speaker === undefined || request.step?.speaker === speaker;
   }
 
   function onBloodMoonDialogueLine(request) {
     const player = request?.player;
     if (!player) return;
+    if (stage(player) === STAGE.STARTED) {
+      if (!player.getAttribute(START_DIALOGUE_COMPLETE) &&
+        isQuestLine(request, "starting-out", "Good luck, [player name].", "Sarius Guile")) {
+        player.setAttribute(START_DIALOGUE_COMPLETE, true);
+        player.getPacketSender().sendVarbit(15464, nativeStage(STAGE.STARTED, player));
+      } else if (player.getAttribute(HIDEOUT_SHRINE_INSPECTED) &&
+        isQuestLine(request, "starting-out-inspecting-the-shrine", "[player name].", "Ivan Strom")) {
+        player.getPacketSender().sendVarbit(15464, nativeStage(STAGE.STARTED, player));
+      }
+    }
+    if (stage(player) === STAGE.RETURNED &&
+      isQuestLine(request, "starting-out-back-at-the-hideout", "What is it?")) {
+      advance(player, STAGE.SLEPE);
+      return;
+    }
+    if (stage(player) === STAGE.FENCE_FOUND &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) === 152 &&
+      isQuestLine(request, "night-of-the-blood-moon", "I suppose we're about to find out...", "Sugadinti Vitur")) {
+      // Release the held gathering camera controls before the fight itself.
+      request.after = () => {
+        Scenes.controls(player, false);
+        startGatheringDrakanFight(player);
+      };
+      return;
+    }
+    if (stage(player) === STAGE.FENCE_FOUND &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) === 152 &&
+      isQuestLine(request, "fighting-wyrds-inspecting-the-broken-fence", "Myreque prevail.")) {
+      request.after = () => startGatheringScene(player);
+      return;
+    }
+    if (stage(player) === STAGE.FENCE_FOUND &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) === 156 &&
+      isQuestLine(request, "night-of-the-blood-moon-upon-lowerniel-reaching-30-hp",
+        "I promise you, we will discuss this matter properly, but first, the crowd needs to be placated. I must address them. Please, wait for me inside the castle...",
+        "Sugadinti Vitur")) {
+      // The conversation ends here; only now does the captured script move the
+      // group to the castle and leave Ivan waiting inside.
+      request.after = () => finishGatheringThresholdConversation(player);
+      return;
+    }
+    if (stage(player) === STAGE.FENCE_FOUND &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) === 158 &&
+      isQuestLine(request, "night-of-the-blood-moon-talking-to-ivan",
+        "My children, I'm sorry for rushing you inside. Time was of the essence in gaining control of the vampyres. However, I have promising news. It seems that for now at least, most are willing to accept me as their ruler.",
+        "Sugadinti Vitur")) {
+      setFinalNativeStage(player, 160);
+      syncGatheringCastleActors(player);
+    }
+    if (stage(player) === STAGE.FENCE_FOUND &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) >= 160 &&
+      isQuestLine(request, "night-of-the-blood-moon-talking-to-ivan",
+        "Thank you, and good luck, my child.", "Sugadinti Vitur")) {
+      cleanupGatheringDrakan(player);
+      cleanupGatheringCastleActors({ player });
+      resetBloodMoonScene(player);
+      player.setAttribute(BLOOD_MOON_SCENE_ATTRIBUTE, null);
+      setFinalNativeStage(player, 164);
+      advance(player, STAGE.FINAL);
+      syncFinalEfaritay(player);
+      player.moveTo(new Location(FINAL_EFARITAY_GRAVEYARD_TILE.x, FINAL_EFARITAY_GRAVEYARD_TILE.y, FINAL_EFARITAY_GRAVEYARD_TILE.z));
+    }
+    if (stage(player) === STAGE.THEATRE &&
+      isQuestLine(request, "another-night-at-the-theatre-after-killing-the-nylocas-vasilias",
+        "Go quick, my child. I wish you good luck.", "Sugadinti Vitur")) {
+      setTheatreNativeStage(player, 140);
+    }
     if (stage(player) === STAGE.WYRDS && request.step?.speaker === "Wyrd"
       && request.text === "Then stay... Stay and die!") {
       request.after = () => activateWyrdEncounter(player);
@@ -5657,7 +6611,13 @@ module.exports = function registerTheBloodMoonRises(api) {
       if (prepProgress) {
         request.after = () => {
           if (stage(player) !== STAGE.PREPARATIONS) return;
-          player.setAttribute(PREP_ATTRIBUTE, { ...(player.getAttribute(PREP_ATTRIBUTE) ?? {}), [prepProgress[1]]: true });
+          const prep = player.getAttribute(PREP_ATTRIBUTE) ?? {};
+          const updated = { ...prep, [prepProgress[1]]: true };
+          if (prepProgress[1] === "stakesConversationComplete" && prep.stakes) {
+            updated.ivanStakesComplete = true;
+          }
+          player.setAttribute(PREP_ATTRIBUTE, updated);
+          publishHelperVarbits(player);
         };
         return;
       }
@@ -5714,17 +6674,18 @@ module.exports = function registerTheBloodMoonRises(api) {
     if ([STAGE.ESCAPE, STAGE.BLOOD_HUNT].includes(stage(player)) && request.step?.player &&
       request.text === "We don't have time for this. Whatever we do next, we can't stay here. Let's get across that bridge." &&
       !player.getAttribute(HUNT_ATTRIBUTE)?.drawbridgeRepaired) {
+      // This conversation only reports that the cog was found (captured varbit
+      // 15485). Fitting it to the mechanism at 2633,7831 is the mandatory next
+      // interaction; do not repair or consume it during the dialogue.
       request.after = () => {
         const state = player.getAttribute(HUNT_ATTRIBUTE) ?? {};
-        if (state.drawbridgeRepaired) return;
-        const inventory = player.getInventory();
-        if (!inventory.contains(HUNT_ITEMS.oldCog)) {
+        if (state.cogFound || state.drawbridgeRepaired) return;
+        if (!player.getInventory().contains(HUNT_ITEMS.oldCog)) {
           player.sendMessage("The drawbridge still needs the old cog from the Jovkai smithy.");
           return;
         }
-        inventory.deleteNumber(HUNT_ITEMS.oldCog, 1);
-        player.setAttribute(HUNT_ATTRIBUTE, { ...state, drawbridgeRepaired: true, cogHandedIn: true });
-        player.getPacketSender().sendVarbit(15485, 1);
+        player.setAttribute(HUNT_ATTRIBUTE, { ...state, cogFound: true });
+        player.getPacketSender().sendVarbit(HUNT_FOUND_COG_VARBIT, 1);
       };
       return;
     }
@@ -5776,7 +6737,12 @@ module.exports = function registerTheBloodMoonRises(api) {
     }
     if (request.step?.speaker === "Lowerniel Drakan" &&
       request.text === "As a starting point, you may wish to deal with the two humans that stand among you, unless of course you've all become so weak that you can't even do that anymore...") {
-      request.after = () => hideoutDefense.start(player);
+      // Captured departure ends its held cutscene when the courtyard fight begins:
+      // release movement/cutscene controls but keep the scene camera until escape.
+      request.after = () => {
+        Scenes.controls(player, false);
+        hideoutDefense.start(player);
+      };
     }
   }
 
@@ -5844,6 +6810,10 @@ module.exports = function registerTheBloodMoonRises(api) {
       return true;
     }
     if (quest.isComplete(player)) return false;
+    if (stage(player) === STAGE.RETURNED && npcName === "ivan strom") {
+      event.handled = true;
+      return startTranscript(api, player, event.npcId, PAGE, "starting-out-back-at-the-hideout");
+    }
     if (stage(player) === STAGE.HIDEOUT && npcName === "ivan strom") {
       event.handled = true;
       api.sendMultiChatboxPrompt(player, "Are you ready to go to Darkmeyer?",
@@ -5857,6 +6827,17 @@ module.exports = function registerTheBloodMoonRises(api) {
         ? "night-of-the-blood-moon-entering-the-portal-talking-to-efaritay-again"
         : "night-of-the-blood-moon-talking-to-efaritay";
       return startTranscript(api, player, event.npcId, PAGE, variant);
+    }
+    if (stage(player) === STAGE.FENCE_FOUND &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) >= 156 && npcName === "ivan strom") {
+      event.handled = true;
+      setFinalNativeStage(player, 158);
+      return startTranscript(api, player, event.npcId, PAGE, "night-of-the-blood-moon-talking-to-ivan");
+    }
+    if (stage(player) === STAGE.FENCE_FOUND &&
+      Number(player.getAttribute(FINAL_NATIVE_STAGE_ATTRIBUTE)) >= 160 && npcName === "sugadinti vitur") {
+      event.handled = true;
+      return startTranscript(api, player, event.npcId, PAGE, "night-of-the-blood-moon-talking-to-ivan");
     }
     if (stage(player) === STAGE.THEATRE) {
       const native = Number(player.getAttribute(THEATRE_NATIVE_STAGE_ATTRIBUTE)) || 124;
@@ -5874,6 +6855,12 @@ module.exports = function registerTheBloodMoonRises(api) {
         event.handled = true;
         return startTranscript(api, player, event.npcId, PAGE,
           "another-night-at-the-theatre-talking-to-sugadinti-outside-the-theatre");
+      }
+      if (native >= 140 && ["veliaf hurtz", "ivan strom"].includes(npcName)) {
+        event.handled = true;
+        setTheatreNativeStage(player, 142);
+        return startTranscript(api, player, event.npcId, PAGE,
+          "fighting-wyrds-talking-to-veliaf-outside-the-ruins");
       }
       if (native >= 136 && native <= 138 && npcName === "sugadinti vitur" &&
         player.getAttribute(TOB_CHALLENGE_ATTRIBUTE)?.started &&
@@ -5901,7 +6888,8 @@ module.exports = function registerTheBloodMoonRises(api) {
     }
     if (stage(player) === STAGE.PREPARATIONS && ["ivan strom", "sarei"].includes(npcName)) {
       event.handled = true;
-      const variant = (player.getAttribute(PREP_ATTRIBUTE) ?? {}).ivanSareiIntroComplete
+      const prep = player.getAttribute(PREP_ATTRIBUTE) ?? {};
+      const variant = prep.ivanSareiIntroComplete
         ? "hallowed-preparations-talking-to-ivan-and-sarei-talking-to-them-again"
         : "hallowed-preparations-talking-to-ivan-and-sarei";
       return startTranscript(api, player, event.npcId, PAGE, variant);
@@ -6067,6 +7055,16 @@ module.exports = function registerTheBloodMoonRises(api) {
 
   function hasItem(player, itemId) {
     return player.getInventory().contains(itemId) || player.getEquipment?.().contains?.(itemId) === true;
+  }
+
+  function tomeUses(player) {
+    return Number(player?.getAttribute?.(ATTRIBUTE)) || 0;
+  }
+
+  // The tome is unbankable in OSRS, but a stale/manual bank copy still counts as
+  // owned so the reclaim can never duplicate it.
+  function hasTome(player) {
+    return hasItem(player, TOME_ID) || hasBankedItem(player, TOME_ID);
   }
 
   function giveInventoryItem(player, itemId, fullMessage = "Make room in your inventory before taking that item.") {
@@ -6718,12 +7716,26 @@ module.exports = function registerTheBloodMoonRises(api) {
     return true;
   }
 
+  function giveMountedShieldSolidKey(player) {
+    if (!player || quest.isComplete(player) || stage(player) !== STAGE.CASTLE) return;
+    const state = player.getAttribute(SOLID_KEY_ATTRIBUTE) ?? { shield: false, mounted: false, key: false };
+    if (player.getInventory().contains(ItemIdentifiers.SOLID_KEY)) {
+      player.sendMessage("You already have the solid key.");
+      return;
+    }
+    if (!giveInventoryItem(player, ItemIdentifiers.SOLID_KEY,
+      "Make room in your inventory before taking the solid key.")) return;
+    player.setAttribute(SOLID_KEY_ATTRIBUTE, { ...state, key: true });
+    player.sendMessage("You search the mounted shield and find a solid looking key. You take it.");
+  }
+
   function handleSolidKeyObjects(event) {
     const player = event?.player;
     if (!player || quest.isComplete(player) || stage(player) !== STAGE.CASTLE) return;
     const { x, y, z } = event.location ?? {};
     if (z !== 0) return;
     const name = String(event.definition?.getName?.() ?? "").toLowerCase();
+    const option = String(event.option ?? "").toLowerCase();
     const basinState = player.getAttribute(BASIN_PUZZLE_ATTRIBUTE) ?? { basins: {}, symbol: false };
     const state = player.getAttribute(SOLID_KEY_ATTRIBUTE) ?? { shield: false, mounted: false, key: false };
     if (name === "crate" && x === 2439 && y === 7378) {
@@ -6738,12 +7750,16 @@ module.exports = function registerTheBloodMoonRises(api) {
       return;
     }
     if (x !== 2543 || y !== 7361) return;
-    if (state.mounted) {
-      event.handled = true;
-      if (!giveInventoryItem(player, ItemIdentifiers.SOLID_KEY, "Make room in your inventory before taking the solid key.")) return;
-      player.setAttribute(SOLID_KEY_ATTRIBUTE, { ...state, key: true });
-      player.sendMessage("You search the mounted shield and take the solid key.");
+    const visibleId = event.definition?.id ?? event.objectId;
+    if (!state.mounted || (visibleId !== 61700 && name !== "mounted shield") || option !== "search") return;
+    event.handled = true;
+    if (player.getInventory().contains(ItemIdentifiers.SOLID_KEY)) {
+      player.sendMessage("You already have the solid key.");
+      return;
     }
+    api.sendMultiChatboxPrompt(player, "Search the compartment?",
+      "Yes.", () => giveMountedShieldSolidKey(player),
+      "No.", () => {});
   }
 
   function setClockValue(player, side, hand, value) {
@@ -7245,6 +8261,23 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (z !== 0) return;
     const itemId = event.itemId;
     const inventory = player.getInventory();
+    if (x === HUNT_DRAWBRIDGE_MECHANISM_TILE.x && y === HUNT_DRAWBRIDGE_MECHANISM_TILE.y &&
+      [event.objectId, event.definition?.id].includes(HUNT_DRAWBRIDGE_MECHANISM_ID) &&
+      itemId === HUNT_ITEMS.oldCog) {
+      event.handled = true;
+      const state = player.getAttribute(HUNT_ATTRIBUTE) ?? {};
+      if (state.drawbridgeRepaired) {
+        player.sendMessage("The drawbridge mechanism is already repaired.");
+        return;
+      }
+      if (!inventory.contains(HUNT_ITEMS.oldCog)) return;
+      inventory.deleteNumber(HUNT_ITEMS.oldCog, 1);
+      player.setAttribute(HUNT_ATTRIBUTE, { ...state, drawbridgeRepaired: true, cogHandedIn: true });
+      player.getPacketSender().sendVarbit(HUNT_FOUND_COG_VARBIT, 1);
+      startTranscript(api, player, NpcIdentifiers.VANESCULA_DRAKAN_10, PAGE,
+        "blood-hunt-crossing-the-bridge");
+      return;
+    }
     if (x === 2591 && y === 7825 && itemId === HUNT_ITEMS.bucket) {
       handleBloodHuntObjects({ ...event, player, itemId });
     } else if (x === 2592 && y === 7833 && itemId === HUNT_ITEMS.bucketWater) {
@@ -7329,13 +8362,24 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (x !== 2543 || y !== 7361 || z !== 0) return;
     event.handled = true;
     const state = player.getAttribute(SOLID_KEY_ATTRIBUTE) ?? { shield: false, mounted: false, key: false };
+    if (state.mounted) {
+      player.sendMessage("The shield is already mounted.");
+      return;
+    }
     if (!state.assembled || !player.getInventory().contains(ItemIdentifiers.SHIELD_WITH_SYMBOL)) {
       player.sendMessage("The shield is missing its ancient symbol.");
       return;
     }
     player.getInventory().deleteNumber(ItemIdentifiers.SHIELD_WITH_SYMBOL, 1);
     player.setAttribute(SOLID_KEY_ATTRIBUTE, { ...state, mounted: true });
-    player.sendMessage("You mount the shield on the southern wall.");
+    player.getPacketSender().sendVarbit(CASTLE_SHIELD_MOUNT_VARBIT, 1);
+    player.sendMessage("You place the shield on the mount and a hidden compartment beneath it opens.");
+  }
+
+  function syncSolidKeyMountOnLogin({ player } = {}) {
+    if (!player) return;
+    const state = player.getAttribute(SOLID_KEY_ATTRIBUTE) ?? {};
+    player.getPacketSender()?.sendVarbit?.(CASTLE_SHIELD_MOUNT_VARBIT, state.mounted ? 1 : 0);
   }
 
   function handleRefiner(event) {
@@ -7566,6 +8610,7 @@ module.exports = function registerTheBloodMoonRises(api) {
     if (!replaceItems(player, ...recipe)) return;
     if (stakesRecipe) {
       player.setAttribute(PREP_ATTRIBUTE, { ...(player.getAttribute(PREP_ATTRIBUTE) ?? {}), stakes: true });
+      publishHelperVarbits(player);
       player.sendMessage("You cut the blisterwood logs into five stakes.");
     } else if (pair.has(PREP.blessedSickle)) {
       player.sendMessage("You embed the diamond into the sickle.");
@@ -7595,7 +8640,7 @@ module.exports = function registerTheBloodMoonRises(api) {
 
   const ACTION_STAGE = {
     "gzCVlH": STAGE.SLEPE,
-    "fiqzZ7": STAGE.SLEPE,
+    "fiqzZ7": STAGE.RETURNED,
     "XqVfhB": STAGE.ESCAPE,
     "D5qF0g": STAGE.BLOOD_HUNT,
     "sw9z49": STAGE.BLOOD_HUNT,
@@ -7604,7 +8649,6 @@ module.exports = function registerTheBloodMoonRises(api) {
     "vqg4qO": STAGE.SIEGE,
     "1JPVz5": STAGE.THEATRE,
     "4G5OZg": STAGE.WYRDS,
-    "4ebW6l": STAGE.FINAL,
   };
 
   quest = registerQuest(api, {
@@ -7614,27 +8658,37 @@ module.exports = function registerTheBloodMoonRises(api) {
     varbitId: 15464,
     // shortcut: other chapter native stages need their cache morphs validated before mapping.
     varpValue: nativeStage,
-    varbitValue: nativeQuestVarbit,
+    varbitValue: nativeStage,
     startedValue: STAGE.STARTED,
     completionValue: STAGE.COMPLETE,
     questPoints: 4,
     rewardItemId: TOME_ID,
-    rewardItemLabel: "Tome of Experience (six chapters)",
-    otherRewards: ["Access to Vampyrium", "A Hallowed flail", "Sunspear", "The vampyres of Morytania are tolerant of you"],
+    rewardItemLabel: "A Tome of Experience",
+    otherRewards: ["The Sunspear", "Access to Vampyrium"],
     buildJournal,
   });
+  api.persistAttribute(START_DIALOGUE_COMPLETE, false);
+  api.persistAttribute(HIDEOUT_CUTSCENE_STARTED, false);
   api.persistAttribute(HIDEOUT_SHRINE_INSPECTED);
   api.persistAttribute(SLEPE_STORY_ATTRIBUTE);
+  api.persistAttribute(SLEPE_NATIVE_STAGE_ATTRIBUTE, 16);
   api.persistAttribute(CASTLE_SHRINE_ATTRIBUTE);
   api.persistAttribute(CASTLE_UNLOCKED_PASSAGES_ATTRIBUTE);
   const hall = require("../bmr/Hall.TheBloodMoonRises")({ api, state: hallDefenceState,
     process: processSiegeDefence, cleanup: handleSiegeLogout, scenery: player => {
-      const repaired = hallDefenceState(player).repaired ?? [];
-      // shortcut: potion-crate placement is inferred on reachable hall flooring; calibrate against a live OSRS capture.
-      return [[SIEGE_HALL.hammerCrate, 3177, 7843], [SIEGE_HALL.potionCrate, 3171, 7847],
-        [SIEGE_HALL.barricade, 3167, 7844], ...[...SIEGE_HALL.repairLocations].map(([key, ids]) => {
+      const damaged = hallDefenceState(player).damaged ?? {};
+      // P3 4336-4348: the four crates, barricade and windows at their exact
+      // captured tiles, shapes and rotations.
+      return [[SIEGE_HALL.hammerCrate, 3173, 7847, 10, 1],
+        [SIEGE_HALL.hammerCrate, 3162, 7849, 10, 0],
+        [SIEGE_HALL.potionCrate, 3174, 7848, 11, 0],
+        [SIEGE_HALL.potionCrate, 3163, 7847, 11, 3],
+        [SIEGE_HALL.barricade, 3167, 7844, 10, 2],
+        ...[...SIEGE_HALL.repairLocations].map(([key, ids]) => {
           const [x, y] = key.split(',').map(Number);
-          return [ids[repaired.includes(key) ? 1 : 0], x, y, ids[0] === SIEGE_HALL.damagedWindow ? 0 : 10, ids[0] === SIEGE_HALL.damagedWindow ? 2 : 0];
+          return [ids[damaged[key] ? 0 : 1], x, y,
+            ids[0] === SIEGE_HALL.damagedWindow ? 0 : 10,
+            ids[0] === SIEGE_HALL.damagedWindow ? 3 : 0];
         })];
     } });
   const palace = require("../bmr/Palace.TheBloodMoonRises")({ api, stage,
@@ -7670,6 +8724,7 @@ module.exports = function registerTheBloodMoonRises(api) {
   api.onCustomEvent("quest:stage-changed", syncSlepeRoy);
   api.onCustomEvent("quest:stage-changed", cleanupSlepeStory);
   api.onCustomEvent("quest:stage-changed", syncTheatreActorsOnStageChange);
+  api.onCustomEvent("quest:stage-changed", publishHelperVarbitsOnStageChange);
   api.onCustomEvent("quest:stage-changed", syncBloodHuntPartyOnStageChange);
   api.onCustomEvent("ladders:climb", handleCastleLobbyStairs);
   api.onCustomEvent("player:bootstrap-complete", syncPalaceActorsAfterBootstrap);
@@ -7683,6 +8738,8 @@ module.exports = function registerTheBloodMoonRises(api) {
   api.onObjectInteraction(handleFinalDrakanRoofDoor);
   api.onCustomEvent("drakan-medallion:destinations", addCastleMedallionDestination);
   api.onCustomEvent("world:object-examine", inspectHideoutShrine);
+  // The shipped loc 61177 exposes Inspect (not Examine): use the named object hook.
+  api.onObjectInteraction("Makeshift shrine", { Inspect: inspectHideoutShrine });
   api.onNpcDialogueCondition(handleSlepeJournalCondition);
   api.onNpcDialogueCondition(answerHideoutCondition);
   api.onNpcDialogueCondition(answerPreparationStakesCondition);
@@ -7744,6 +8801,8 @@ module.exports = function registerTheBloodMoonRises(api) {
   api.onObjectInteraction(handleCastleEmblemReceptaclePlacement);
   api.onObjectInteraction(handleCastleEmblemReceptacleRemoval);
   api.onObjectInteraction(handleCastleThirdEmblemReceptacle);
+  api.onObjectInteraction(handleCastleVanesculaWall);
+  api.onItemOnObject(handleCastleVanesculaWallItem, { noted: false });
   api.onObjectInteraction(inspectRanisCrackedWall);
   api.onItemOnItem(handleCastleKeyItemOnItem);
   api.onItemOnItem(handleCastleChunkyPotionCombine, { noted: false });
@@ -7806,16 +8865,26 @@ module.exports = function registerTheBloodMoonRises(api) {
   api.onPlayerLogin(recoverFirstBloodEncounter);
   api.onPlayerLogin(resumePreparationIntro);
   api.onPlayerLogin(syncCastleLobbyOnLogin);
+  api.onPlayerLogin(resetBloodMoonSceneOnLogin);
   api.onPlayerLogin(syncCastleRoomOnLogin);
   api.onPlayerLogin(syncCastleChapelPortalOnLogin);
+  api.onPlayerLogin(syncSolidKeyMountOnLogin);
   api.onPlayerLogin(recoverFinalDrakanLanding);
   api.onPlayerLogin(syncFinalEfaritayOnLogin);
+  api.onPlayerLogin(syncGatheringCastleActorsOnLogin);
+  api.onPlayerLogin(syncPostQuestEfaritay);
+  api.onPlayerLogin(publishHelperVarbitsOnLogin);
   api.onPlayerLogin(resumeFinalDrakanVictory);
   api.onPlayerLogout(cleanupCastleActors);
   api.onPlayerLogout(cleanupPalaceActors);
   api.onPlayerLogout(cleanupBloodHuntActors);
   api.onPlayerLogout(cleanupFirstBloodEncounter);
+  api.onPlayerLogout(cleanupGatheringDrakanOnLogout);
+  api.onPlayerLogout(cleanupGatheringCastleActors);
+  api.onPlayerLogout(cleanupPaterdomusBattleOnLogout);
+  api.onPlayerLogout(({ player } = {}) => { if (player) Scenes.cancel(player); });
   api.onPlayerLogout(cleanupFinalEfaritay);
+  api.onPlayerLogout(cleanupPostQuestEfaritay);
   api.onPlayerLogout(cleanupFinalCutsceneActors);
   api.onPlayerLogout(handleFinalDrakanLogout);
   api.onPlayerLogout(handleSiegeLogout);
@@ -7825,16 +8894,19 @@ module.exports = function registerTheBloodMoonRises(api) {
   api.onPlayerLogout(cleanupSlepeManor);
   api.onNpcDeath(handleWyrdDeath);
   api.onNpcBeforeDeath(handleWyrdBeforeDeath);
+  api.onNpcBeforeDeath(handleGatheringDrakanBeforeDeath);
   api.onPlayerBeforeDeath(handleWyrdPlayerBeforeDeath);
   api.onCombatHitRoll(allowWyrdHitThroughPrayer);
   api.onCustomEvent("world:object-examine", inspectWyrdFence);
+  api.onObjectInteraction("Fence", { Inspect: inspectWyrdFence });
   api.onNpcDeath(handleSlepeManorDeath);
-  api.onNpcDeath(handlePaterdomusMonkDeath);
+  api.onNpcDeath(handlePaterdomusBattleDeath);
   api.onNpcDeath(handleCastleNpcDeath);
   api.onNpcDeath(handleBloodHuntPursuerDeath);
   api.onPlayerBeforeDeath(handleFinalDrakanBeforeDeath);
   api.persistAttribute(HIDEOUT_DEFENSE_COMPLETE);
   api.onNpcHitModify(handleSiegeDrakanHit);
+  api.onNpcHitModify(handleGatheringDrakanHit);
   api.onNpcHitModify(handleFirstBloodHit);
   api.onNpcHitModify(handleFinalDrakanHit);
   api.persistAttribute(WYRD_DEFEATED_ATTRIBUTE);

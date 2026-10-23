@@ -253,4 +253,4 @@ The scoreboard (57288) opens interface 920, filled with strings:
 | `::doomkill` | Beats the Doom of the current delve. |
 | `::exactmove [npcId] [tiles] [laps] [snap]` | Glides an NPC (the burrowed Doom by default) around you. |
 | `::headbar [npcId] [barId] [cycles]` | Shows a headbar over an NPC (the Doom's charge bar by default), filling, held, then removed. |
-| `::ifcolour <group> <child> <rgb15>` | Recolours a component (the Doom's HUD bar is 303:13–15). |
+| `::ifcolour <group> <child> <rgb15>` | Recolours a component (the Doom's HUD bar is 303:14–16). |

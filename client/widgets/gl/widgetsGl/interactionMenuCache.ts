@@ -2,6 +2,7 @@ import { ClientState } from "../../../game/ClientState";
 import {
     deriveMenuEntriesForWidget as UI_deriveMenuEntriesForWidget,
     deriveRawMenuEntriesForWidget,
+    getSelectionTargetEntries,
     transformWidgetMenuEntries,
 } from "../../../widgets/menu/utils";
 type WidgetMenuDeriveCacheEntry = {
@@ -249,6 +250,8 @@ export function deriveMenuEntriesForWidgetCached(
     w: any,
     getWidgetFlags?: (w: any) => number,
 ): Array<{ option: string; target?: string }> {
+    const selectionEntries = getSelectionTargetEntries(w);
+    if (selectionEntries) return selectionEntries;
     const uid = typeof w?.uid === "number" ? w.uid | 0 : 0;
     if (uid === 0) {
         return UI_deriveMenuEntriesForWidget(w as any, false, getWidgetFlags) || [];

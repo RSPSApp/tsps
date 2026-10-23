@@ -1,4 +1,4 @@
-# Thieving: pickpocketing
+# Thieving: pickpocketing and blackjacking
 
 Pickpocketing is built from the OSRS Wiki: the [Thieving](https://oldschool.runescape.wiki/w/Thieving#Pickpocketing) page, each target's own page (its skilling success chart, Thieving info and loot), and the [Coin pouch](https://oldschool.runescape.wiki/w/Coin_pouch), [Rogue equipment](https://oldschool.runescape.wiki/w/Rogue_equipment), [Gloves of silence](https://oldschool.runescape.wiki/w/Gloves_of_silence), [Dodgy necklace](https://oldschool.runescape.wiki/w/Dodgy_necklace) and [Thieving cape](https://oldschool.runescape.wiki/w/Thieving_cape) pages. Item and NPC ids come from the cache.
 
@@ -7,7 +7,8 @@ Pickpocketing is built from the OSRS Wiki: the [Thieving](https://oldschool.rune
 | File | What it owns |
 | --- | --- |
 | `server/plugins/skills/data/pickpocketing.json` | Every target: its NPCs, level, experience, success chart, stun damage, coin pouch, quest, pet rate and loot. |
-| `server/plugins/skills/Thieving.plugin.js` | Stalls, and registering the two modules below. |
+| `server/plugins/skills/Thieving.plugin.js` | Stalls and module registration. |
+| `server/plugins/skills/thieving/Blackjacking.Thieving.js` | Pollnivnian bandit/thug lure, knockout and the shared pickpocket target event. |
 | `server/plugins/skills/thieving/Pickpocket.Thieving.js` | The pickpocket itself: checks, timing, success, loot, failure and the equipment effects. |
 | `server/plugins/skills/thieving/CoinPouch.Thieving.js` | Opening coin pouches ("Open-all" and "Open"). |
 
@@ -82,9 +83,22 @@ Quest requirements are checked with the `quest:is-complete` event, falling back 
 
 TzHaar-Hur need a fire or infernal cape (including their max-cape versions), worn or carried. That's the Wiki's requirement for entering Mor Ul Rek, which has no entrance check here.
 
+## Blackjacking
+
+Sources: [Blackjack](https://oldschool.runescape.wiki/w/Blackjack?action=raw), [Thieving training](https://oldschool.runescape.wiki/w/Thieving_training?action=raw), [Pollnivnian bandits](https://oldschool.runescape.wiki/w/Bandit_(Pollnivneach)?action=raw), [Menaphite Thug](https://oldschool.runescape.wiki/w/Menaphite_Thug?action=raw), and [Coin pouch](https://oldschool.runescape.wiki/w/Coin_pouch?action=raw). The Blackjacking page redirects to Thieving training.
+
+- Lure and Knock-Out require learning the technique during The Feud (stage 9), an equipped blackjack, and 45/55/65 Thieving for bearded bandits/unbearded bandits/thugs. Lure makes the target follow, allowing the player to take it behind a closed door.
+- The cache's bearded bandits are 736/737 (65 XP); unbearded bandits are 734/735 (84.3 XP). The Feud keeps the unlocked NPC transforms after completion, so the client still offers Lure and Knock-Out after relogging.
+- Knock-Out is refused during combat or when another blackjacking target can see the player. The Wiki does not require standing behind the target.
+- All blackjacks and target types use the Blackjack page's chart: low 80, high 240, interpolated by Thieving level. Its cited Jagex explanation explicitly says the rate is independent of target type. The Menaphite Thug subpage instead lists low 78; the main Blackjack page wins here.
+- Success gives 10 Thieving XP and holds the NPC unconscious for six ticks, with two guaranteed pickpockets. Those reuse the normal pickpocket cooldown, loot, rogue equipment, XP and pet path, using the bending animation and direct coins. A full inventory permits them if coins already have a stack; the coin-pouch cap does not stop them.
+- Failure makes the NPC aggressive after three ticks. A quick retry or pickpocket cancels that pending aggression, including a pickpocket with a full inventory. An attempt with a different weapon stops the target attacking, matching the documented reset method.
+- Awake bandits give coin pouches (40/50 coins); thugs give 60. The Wiki has no awake Pollnivnian success chart, so those two targets follow this module's established estimated-chart policy using the awake thug's 50/160 chart. Their stun damage is also estimated from the thug. These awake-only values need an OSRS capture before claiming exact parity.
+- The Wiki guarantees two pickpockets but gives no exact knockout/failure/lure tick counts. The six-tick unconscious window, three-tick aggression delay and ten-tick lure window are implementation timings needing a capture; no other RSPS was used.
+
 ## Not modelled
 
-- **Blackjacking:** knocking out and luring Pollnivneach villagers, bandits and thugs. The villagers and Pollnivneach bandits are left out, since the Wiki gives no plain pickpocket rate for them. Menaphite thugs can be pickpocketed normally.
+- **Villagers after The Feud:** the quest retains its own tutorial lure and knockout; generic post-quest villagers are not implemented.
 - **Wealthy citizen:** the street urchin distraction, which lets them be pickpocketed repeatedly with one click.
 - **The Ardougne diary:** no diary system exists yet. Its effects would be +10% success (medium: in Ardougne; hard: everywhere), the gloves of silence becoming ineffective, and coin pouch limits of 56, 84 and 140.
 - **Location- or quest-only loot:** the Pirate's medallion fragment (The Onyx Crest only), the Pirate's very rare medium clue (no rate given), and the H.A.M. robe table during Death to the Dorgeshuun.
@@ -95,7 +109,7 @@ TzHaar-Hur need a fire or infernal cape (including their max-cape versions), wor
 ## Cache NPCs with a Pickpocket option that this doesn't cover
 
 - **Quest plugins:** Twig and Berry (Troll Stronghold), Curator Haig Halen (The Golem), Dr Fenkenstrain (Creature of Fenkenstrain) and Sandy (The Hand in the Sand) handle their own.
-- **Blackjacking (not modelled):** Villager, and the Pollnivneach bandits (NPC ids 734–737, which share the name "Bandit" with the Bandit Camp's 690 and 695).
+- **Villagers:** generic post-quest pickpocketing is not implemented; The Feud owns its tutorial interaction.
 - **No Wiki pickpocket data:** Anja, Hengel, Drunken man, Head Guard, Student, Tourist, Priest, Zealot, Salvager, Adala, Constantinius, Cozyac, Istoria, Movario, Patzi, Pavo, Xocotla, Emissary Ascended, Cuffs, Jeff, Narf, Rusty, 'Black-eye', 'Gummy', 'No fingers' and 'The Guns'.
 
 ## Unverified details

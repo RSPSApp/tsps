@@ -1,0 +1,225 @@
+{
+  "$comment": "Spells that make Crafting materials, for plugins/skills/craftingspells/. Items are ItemIdentifiers names. Levels, XP, runes and amounts: OSRS Wiki (Spin Flax, Superglass Make, Tan Leather, Charge Water/Earth/Fire/Air Orb). Animations and graphics: cache gamevals (names beside the ids). See docs/crafting.md.",
+  "lunar": {
+    "defenceLevel": 40,
+    "castSeq": 4413,
+    "castSeqName": "lunar_human_magic_summon2",
+    "spells": {
+      "Spin Flax": {
+        "level": 76,
+        "xp": 75,
+        "runes": [
+          [
+            "ASTRAL_RUNE",
+            1
+          ],
+          [
+            "NATURE_RUNE",
+            2
+          ],
+          [
+            "AIR_RUNE",
+            5
+          ]
+        ],
+        "spotanim": 728,
+        "spotanimName": "quest_lunar_magic_flax_strim",
+        "batch": 5,
+        "craftingXp": 15,
+        "conversions": [
+          [
+            "FLAX",
+            "BOW_STRING"
+          ]
+        ],
+        "noneMessage": "You do not have any flax to spin."
+      },
+      "Tan Leather": {
+        "level": 78,
+        "xp": 81,
+        "runes": [
+          [
+            "ASTRAL_RUNE",
+            2
+          ],
+          [
+            "NATURE_RUNE",
+            1
+          ],
+          [
+            "FIRE_RUNE",
+            5
+          ]
+        ],
+        "spotanim": 322,
+        "spotanimName": "lunar_tan_leather",
+        "batch": 5,
+        "craftingXp": 0,
+        "$comment": "Cowhide makes soft leather; the Wiki's hard leather toggle is not implemented.",
+        "conversions": [
+          [
+            "COWHIDE",
+            "LEATHER"
+          ],
+          [
+            "SNAKE_HIDE",
+            "SNAKESKIN"
+          ],
+          [
+            "SNAKE_HIDE_3",
+            "SNAKESKIN"
+          ],
+          [
+            "GREEN_DRAGONHIDE",
+            "GREEN_DRAGON_LEATHER"
+          ],
+          [
+            "BLUE_DRAGONHIDE",
+            "BLUE_DRAGON_LEATHER"
+          ],
+          [
+            "RED_DRAGONHIDE",
+            "RED_DRAGON_LEATHER"
+          ],
+          [
+            "BLACK_DRAGONHIDE",
+            "BLACK_DRAGON_LEATHER"
+          ]
+        ],
+        "noneMessage": "You do not have any hides to tan."
+      },
+      "Superglass Make": {
+        "level": 77,
+        "xp": 78,
+        "runes": [
+          [
+            "ASTRAL_RUNE",
+            2
+          ],
+          [
+            "FIRE_RUNE",
+            6
+          ],
+          [
+            "AIR_RUNE",
+            10
+          ]
+        ],
+        "spotanim": 729,
+        "spotanimName": "quest_lunar_magic_superglass",
+        "$comment": "Each ash matches `sand` buckets of sand (giant seaweed six). Each sand gives a glass and 10 Crafting XP, with `bonusChance` of a second (Wiki averages: 1.3 per sand, 1.6 with giant seaweed); glass that does not fit drops.",
+        "sand": "BUCKET_OF_SAND",
+        "glass": "MOLTEN_GLASS",
+        "craftingXp": 10,
+        "ash": [
+          {
+            "item": "SODA_ASH",
+            "sand": 1,
+            "bonusChance": 0.3
+          },
+          {
+            "item": "SEAWEED",
+            "sand": 1,
+            "bonusChance": 0.3
+          },
+          {
+            "item": "SWAMP_WEED",
+            "sand": 1,
+            "bonusChance": 0.3
+          },
+          {
+            "item": "GIANT_SEAWEED",
+            "sand": 6,
+            "bonusChance": 0.6
+          }
+        ],
+        "noneMessage": "You need both bucket of sand and soda ash to make glass."
+      }
+    }
+  },
+  "chargeOrbs": {
+    "$comment": "Cast on the matching obelisk; repeats every `intervalTicks` (the Wiki's autocast speed) while the player has orbs and runes and stays put.",
+    "seq": 726,
+    "seqName": "human_castchargeorb",
+    "intervalTicks": 6,
+    "orb": "UNPOWERED_ORB",
+    "spells": [
+      {
+        "name": "Charge Water Orb",
+        "obelisk": "Obelisk of Water",
+        "orb": "WATER_ORB",
+        "runes": [
+          [
+            "COSMIC_RUNE",
+            3
+          ],
+          [
+            "WATER_RUNE",
+            30
+          ]
+        ],
+        "level": 56,
+        "xp": 66,
+        "spotanim": 149,
+        "spotanimName": "chargewaterorb_casting"
+      },
+      {
+        "name": "Charge Earth Orb",
+        "obelisk": "Obelisk of Earth",
+        "orb": "EARTH_ORB",
+        "runes": [
+          [
+            "COSMIC_RUNE",
+            3
+          ],
+          [
+            "EARTH_RUNE",
+            30
+          ]
+        ],
+        "level": 60,
+        "xp": 70,
+        "spotanim": 151,
+        "spotanimName": "chargeearthorb_casting"
+      },
+      {
+        "name": "Charge Fire Orb",
+        "obelisk": "Obelisk of Fire",
+        "orb": "FIRE_ORB",
+        "runes": [
+          [
+            "COSMIC_RUNE",
+            3
+          ],
+          [
+            "FIRE_RUNE",
+            30
+          ]
+        ],
+        "level": 63,
+        "xp": 73,
+        "spotanim": 152,
+        "spotanimName": "chargefireorb_casting"
+      },
+      {
+        "name": "Charge Air Orb",
+        "obelisk": "Obelisk of Air",
+        "orb": "AIR_ORB",
+        "runes": [
+          [
+            "COSMIC_RUNE",
+            3
+          ],
+          [
+            "AIR_RUNE",
+            30
+          ]
+        ],
+        "level": 66,
+        "xp": 76,
+        "spotanim": 150,
+        "spotanimName": "chargewindorb_casting"
+      }
+    ]
+  }
+}

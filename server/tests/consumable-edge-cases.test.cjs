@@ -1,6 +1,7 @@
 // Run after `yarn build`: node --test tests/consumable-edge-cases.test.cjs
 const assert = require("node:assert/strict");
-const { test } = require("node:test");
+const path = require("path");
+const { test, before } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
@@ -10,20 +11,28 @@ const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 
 const Potions = require("../plugins/items/Potions.plugin");
 const { Item } = require("../dist/game/model/Item");
-let combinePotions, staminaFromHook;
-Potions.register(new Proxy({}, {
-  get: (_, key) => key === "core" ? { Item } : (...args) => {
-    if (key === "onCustomEvent" && args[0] === "potions:apply-stamina") staminaFromHook = args[1];
-    // The Skillcapes plugin answers this; a worn Prayer cape is all these tests need.
-    if (key === "emitCustomEvent" && args[0] === "skillcape:has-perk" && args[1].skill === "PRAYER") {
-      args[1].result = args[1].player.getEquipment().contains(ItemIdentifiers.PRAYER_CAPE);
-    }
-    if (key === "onItemOnItem") {
-      combinePotions = args[0];
-      assert.deepEqual(args[1], { noted: false });
-    }
-  },
-}));
+const { PluginManager } = require("../dist/plugins/PluginManager");
+let combinePotions, emptyVessel, staminaFromHook, core;
+before(async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  core = PluginManager.getCoreApi();
+  // Register after the cache is up: the potion plugin resolves its orb components at register.
+  Potions.register(new Proxy({}, {
+    get: (_, key) => key === "core" ? core : (...args) => {
+      if (key === "onItemAction") emptyVessel = args[0];
+      if (key === "onCustomEvent" && args[0] === "potions:apply-stamina") staminaFromHook = args[1];
+      // The Skillcapes plugin answers this; a worn Prayer cape is all these tests need.
+      if (key === "emitCustomEvent" && args[0] === "skillcape:has-perk" && args[1].skill === "PRAYER") {
+        args[1].result = args[1].player.getEquipment().contains(ItemIdentifiers.PRAYER_CAPE);
+      }
+      if (key === "onItemOnItem") {
+        combinePotions = args[0];
+        assert.deepEqual(args[1], { noted: false });
+      }
+    },
+  }));
+});
 const {
   applyPrayerRestore, applySanfewRestore, applyAncientBrew, applyDivine, processDivine,
   applyMenaphiteRemedy, processMenaphite, applyPrayerRegeneration, processPrayerRegeneration,
@@ -31,21 +40,30 @@ const {
   pauseTimedEffects, resumeTimedEffects,
 } = Potions._test;
 
-function pour(sourceId, targetId, sourceSlot = 0, targetSlot = 1) {
-  const items = [new Item(sourceId, 1), new Item(targetId, 1)];
-  let refreshes = 0;
+function vessels(ids) {
+  const items = ids.map((id) => new Item(id, 1));
+  const sent = { messages: [], sounds: [], refreshes: 0 };
   const inventory = {
     getItems: () => items,
     setItem(slot, item) { items[slot] = item; return this; },
-    refreshItems() { refreshes++; return this; },
+    refreshItems() { sent.refreshes++; return this; },
   };
+  const sender = {
+    sendSound(id) { sent.sounds.push(id); return sender; },
+    sendTypedMessage(type, text) { sent.messages.push(text); return sender; },
+  };
+  return { items, sent, player: { getInventory: () => inventory, getPacketSender: () => sender, sendMessage() {} } };
+}
+
+function pour(sourceId, targetId, sourceSlot = 0, targetSlot = 1, detail = false) {
+  const { items, sent, player } = vessels([sourceId, targetId]);
   const event = {
-    player: { getInventory: () => inventory, sendMessage() {} },
-    usedItemId: sourceId, usedWithItemId: targetId,
+    player, usedItemId: sourceId, usedWithItemId: targetId,
     usedItemSlot: sourceSlot, usedWithItemSlot: targetSlot, handled: false,
   };
   combinePotions(event);
-  return { ids: items.map((item) => item.getId()), refreshes, handled: event.handled };
+  const result = { ids: items.map((item) => item.getId()), refreshes: sent.refreshes, handled: event.handled };
+  return detail ? { ...result, ...sent } : result;
 }
 
 test("using matching potions combines doses in either order and leaves a vial", () => {
@@ -79,6 +97,46 @@ test("combining never mixes potion variants, notes or the same slot", () => {
   const result = pour(I.ENERGY_POTION_1_, I.ENERGY_POTION_4_);
   assert.deepEqual(result.ids, [I.ENERGY_POTION_1_, I.ENERGY_POTION_4_]);
   assert.equal(result.refreshes, 0);
+});
+
+test("pouring says how many doses there are now, with the pouring sound", () => {
+  const I = ItemIdentifiers;
+  const result = pour(I.SUPER_RESTORE_2_, I.SUPER_RESTORE_3_, 0, 1, true);
+  assert.deepEqual(result.ids, [I.SUPER_RESTORE_1_, I.SUPER_RESTORE_4_]);
+  assert.deepEqual(result.messages, ["You have combined the liquid into four doses."]);
+  assert.deepEqual(result.sounds, [2401]);
+  assert.deepEqual(pour(I.SUPER_RESTORE_1_, I.SUPER_RESTORE_2_, 0, 1, true).messages, ["You have combined the liquid into three doses."]);
+});
+
+test("potions with no drink effect and barbarian mixes combine through the cache's dose enum", () => {
+  const obj = (name) => core.CacheDefinitions.getObjId(name);
+  assert.deepEqual(pour(obj("1dosegoading"), obj("2dosegoading")).ids, [obj("vial_empty"), obj("3dosegoading")]);
+  assert.deepEqual(pour(obj("brutal_1dose1attack"), obj("brutal_1dose1attack")).ids, [obj("vial_empty"), obj("brutal_2dose1attack")]);
+});
+
+test("a potion used on an empty vial is shared out, the larger half staying", () => {
+  const I = ItemIdentifiers;
+  const result = pour(I.SUPER_RESTORE_3_, I.VIAL, 0, 1, true);
+  assert.deepEqual(result.ids, [I.SUPER_RESTORE_2_, I.SUPER_RESTORE_1_]);
+  assert.deepEqual(result.messages, ["You divide the liquid between the vessels."]);
+  assert.deepEqual(pour(I.VIAL, I.SUPER_RESTORE_4_).ids, [I.SUPER_RESTORE_2_, I.SUPER_RESTORE_2_]);
+  assert.deepEqual(pour(I.SUPER_RESTORE_1_, I.VIAL).ids, [I.SUPER_RESTORE_1_, I.VIAL]);
+});
+
+test("Empty leaves the vial: potions, unfinished potions and a vial of water", () => {
+  const obj = (name) => core.CacheDefinitions.getObjId(name);
+  for (const name of ["3dose2restore", "ranarrvial", "vial_water", "weapon_poison"]) {
+    const { items, sent, player } = vessels([obj(name)]);
+    const event = { player, itemId: obj(name), slot: 0, clickType: 4, handled: false };
+    emptyVessel(event);
+    assert.equal(event.handled, true, name);
+    assert.equal(items[0].getId(), obj("vial_empty"), name);
+    assert.deepEqual(sent.messages, ["You empty the vial."]);
+  }
+  const { player } = vessels([obj("3dose2restore")]);
+  const drink = { player, itemId: obj("3dose2restore"), slot: 0, clickType: 1, handled: false };
+  emptyVessel(drink);
+  assert.equal(drink.handled, false, "Drink is not Empty");
 });
 
 function createPlayer({ base = 99, current = 1, inventory = [], equipment = [] } = {}) {
@@ -183,9 +241,15 @@ SpellTeleports.register({
       teleport: (player, destination, type, warning, onArrival, onMiddle) =>
         teleports.push({ destination, type, onArrival, onMiddle }),
     },
-    TeleportType: { TELE_TAB: "TELE_TAB" },
+    TeleportType: { TELE_TAB: "TELE_TAB", TELE_SCROLL: "TELE_SCROLL" },
+    SpellTeleports: require("../dist/game/content/combat/magic/SpellTeleports").SpellTeleports,
+    LunarSpells: { getTeleportDestinations: () => [] },
+    ArceuusSpells: { getTeleportDestinations: () => [] },
   },
+  persistAttribute() {},
   onItemAction: (handler) => { breakTablet = handler; },
+  onPlayerLogin() {},
+  onSpellCast() {},
   emitCustomEvent: (name, request) => houseTablet(request),
   onInterfaceActionClick() {},
 });
@@ -194,6 +258,7 @@ function tabletHolder(count) {
   const items = new Array(count).fill(ItemIdentifiers.VARROCK_TELEPORT);
   return {
     items,
+    getAttribute: () => undefined,
     getInventory: () => ({
       contains: (id) => items.includes(id),
       deleteNumber: (id) => items.splice(items.indexOf(id), 1),
@@ -231,7 +296,7 @@ test("a redirected Rellekka house tablet goes to the portal outside the Fremenni
   assert.equal(teleports[0].type, "TELE_TAB");
 });
 
-test("a Nardah scroll uses its Teleport action and consumes only after teleport starts", () => {
+test("a Nardah scroll uses its Teleport action and is used up on the click", () => {
   teleports.length = 0;
   allowTeleport = true;
   const player = tabletHolder(1);
@@ -244,10 +309,8 @@ test("a Nardah scroll uses its Teleport action and consumes only after teleport 
     [teleports[0].destination.getX(), teleports[0].destination.getY(), teleports[0].destination.getZ()],
     [3401, 2918, 0]
   );
-  assert.equal(teleports[0].type, "TELE_TAB");
-  assert.equal(player.items.length, 1, "scroll is consumed two ticks into the teleport");
-  teleports[0].onMiddle();
-  assert.equal(player.items.length, 0);
+  assert.equal(teleports[0].type, "TELE_SCROLL");
+  assert.equal(player.items.length, 0, "scrolls go on the click (docs/teleport-tablets.md)");
 });
 
 test("a refused tablet (teleblock, deep Wilderness, busy) is not used up", () => {

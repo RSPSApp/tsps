@@ -102,15 +102,19 @@ export class SkillManager {
         return 99;
     }
 
+    /**
+     * Stored experience keeps tenths, as OSRS does (oak logs are 37.5, a hitpoints drop 1.3).
+     * Rounding (not flooring) only clears float noise from adding tenths; flooring the stored
+     * total threw the fraction away on every gain, so rate 1 ran slower than OSRS.
+     */
     private static sanitizeExperienceValue(value: number): number {
         if (!Number.isFinite(value) || value <= 0) {
             return 0;
         }
-        const floored = Math.floor(value);
-        if (floored >= SkillManager.MAX_EXPERIENCE) {
+        if (value >= SkillManager.MAX_EXPERIENCE) {
             return SkillManager.MAX_EXPERIENCE;
         }
-        return floored;
+        return Math.round(value * 10) / 10;
     }
 
     addExperiences(skill: Skill, experience: number): SkillManager {
@@ -131,6 +135,12 @@ export class SkillManager {
         // Multipliers...
         if (multipliers) {
             experience *= GameConstants.EXPERIENCE_MULTIPLIER;
+        }
+        // OSRS counts experience in tenths: a gain keeps its tenths and drops the rest
+        // (4/3 per damage is 1.3 for one damage). The epsilon keeps 3.3 from reading as 3.29999.
+        experience = Math.floor(experience * 10 + 1e-6) / 10;
+        if (experience <= 0) {
+            return this;
         }
 
         // Send exp drop..
@@ -154,9 +164,7 @@ export class SkillManager {
         this.skills.maxLevel[skillIndex] = startingLevel;
 
         // Add experience to the selected skill..
-        this.skills.experience[skillIndex] = this.skills.experience[skillIndex] + experience > SkillManager.MAX_EXPERIENCE
-            ? SkillManager.MAX_EXPERIENCE
-            : this.skills.experience[skillIndex] + experience;
+        this.skills.experience[skillIndex] = SkillManager.sanitizeExperienceValue(this.skills.experience[skillIndex] + experience);
 
         // Get the skill's new level after experience has been added..
         let newLevel = SkillManager.getLevelForExperience(this.skills.experience[skillIndex]);
@@ -488,7 +496,8 @@ export class SkillManager {
         if (this.skills.experience[idx] !== sanitized) {
             this.skills.experience[idx] = sanitized;
         }
-        return sanitized;
+        // Whole experience, as the skills packet and the client show it; the tenths stay stored.
+        return Math.floor(sanitized);
     }
 
     /**

@@ -65,7 +65,9 @@ module.exports = function registerHazeelCultQuest(api) {
   const HIDEOUT_TILE = { x: 2606, y: 9692, z: 0 };
   const HIDEOUT_RAFT_TILE = { x: 2606, y: 9693, z: 0 };
   const RAFT_RETURN_TILE = { x: 2568, y: 9681, z: 0 };
-  const SEWER_LANDING = { x: 2584, y: 9633, z: 0 };
+  // Capture 1694 tick [6564]: cave 2852 lands beside the raft at (2570,9682),
+  // not the disconnected Clock Tower landing (2584,9633).
+  const SEWER_LANDING = { x: 2570, y: 9682, z: 0 };
   const SEWER_STAIRS_SURFACE = { x: 2570, y: 3283, z: 0 };
   const MANSION_BASEMENT = { x: 2544, y: 9695, z: 0 };
   const MANSION_FROM_BASEMENT = { x: 2570, y: 3268, z: 0 };
@@ -448,6 +450,28 @@ module.exports = function registerHazeelCultQuest(api) {
     }
   }
 
+  /**
+   * The basement ladder is also a blocked-click loc. Capture 1694 tick [6698]
+   * shows a plain Climb-down from (2569,3271) through (2570,3268) to the
+   * basement; Ladders would otherwise guess a surface landing and preempt
+   * handleTravel. Claim only the two mansion tiles.
+   */
+  function claimMansionBasementLadder(request) {
+    if (request.handled) return;
+    const { player, objectId, object } = request;
+    const location = object?.getLocation?.();
+    if (!player || !location) return;
+    if (objectId === MANSION_BASEMENT_LADDER_ID
+      && location.getX() === 2570 && location.getY() === 3267 && location.getZ() === 0) {
+      player.moveTo(new Location(MANSION_BASEMENT.x, MANSION_BASEMENT.y, MANSION_BASEMENT.z));
+      request.handled = true;
+    } else if (objectId === BASEMENT_LADDER_ID
+      && location.getX() === 2544 && location.getY() === 9694 && location.getZ() === 0) {
+      player.moveTo(new Location(MANSION_FROM_BASEMENT.x, MANSION_FROM_BASEMENT.y, MANSION_FROM_BASEMENT.z));
+      request.handled = true;
+    }
+  }
+
   /** Looting the hideout chest after Alomone's death recovers the family armour. */
   function handleHideoutChest(event) {
     if (event.objectId !== HIDEOUT_CHEST_ID) return;
@@ -628,6 +652,7 @@ module.exports = function registerHazeelCultQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleAlomoneLine);
   api.onCustomEvent("npc-dialogue:line", fillPlayerName);
   api.onCustomEvent("ladders:climb", claimMansionStairs);
+  api.onCustomEvent("ladders:climb", claimMansionBasementLadder);
   api.onItemOnObject(handlePoisonRange, { noted: false });
   api.onObjectRoute(routeMansionStairs);
   api.onObjectInteraction(handleEvidenceCupboard);

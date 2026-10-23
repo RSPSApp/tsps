@@ -4,6 +4,18 @@
   "unlockBit": 35,
   "xpPerHitpoint": 10,
   "message": "<col=ff0000>A superior foe has appeared...</col>",
+  "_uniques": "Wiki, Superior slayer monster: a superior rolls each of two unique drop tables at 1 in (200 - (Slayer requirement + 55)^2 / 125). The first gives an imbued heart, dust battlestaff or mist battlestaff (1/8, 7/16, 7/16); the second an eternal gem 1/8 of the time. Weights are out of 16; item names are ItemIdentifiers constants.",
+  "uniques": [
+    {
+      "IMBUED_HEART": 2,
+      "DUST_BATTLESTAFF": 7,
+      "MIST_BATTLESTAFF": 7
+    },
+    {
+      "ETERNAL_GEM": 2,
+      "NOTHING": 14
+    }
+  ],
   "superiors": {
     "Crawling hand": "Crushing hand",
     "Cave crawler": "Chasm crawler",

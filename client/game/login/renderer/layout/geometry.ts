@@ -3,6 +3,35 @@ import type { LoginRendererHost, RenderContext } from "../host";
 
 export function getTitleBackgroundLayout(host: LoginRendererHost) {
 
+        const art = host.titleBackgroundImage;
+        if (art && host.titleBackgroundFromCache) {
+            // The cache's title art: centred on the scene and drawn whole, growing past the scene's
+            // scale (up to TITLE_ART_MAX_GROWTH times) while the viewport still fits it, so large
+            // screens are not mostly black. Where even the scene's scale doesn't fit it whole, its
+            // classic 765x503 part (centred, at the top) lies under the scene, as in the classic client.
+            const sceneScale = host.contentScale > 0 ? host.contentScale : 1;
+            const centerX = host.contentOriginX + (host.SCENE_WIDTH * sceneScale) / 2;
+            const centerY = host.contentOriginY + (host.SCENE_HEIGHT * sceneScale) / 2;
+            const fit = Math.min(
+                (2 * Math.min(centerX - host.containerX, host.containerX + host.containerWidth - centerX)) / art.width,
+                (2 * Math.min(centerY, host.containerHeight - centerY)) / art.height,
+            );
+            if (fit < sceneScale) {
+                const sceneX = (art.width - host.SCENE_WIDTH) / 2;
+                return {
+                    drawX: host.contentOriginX - sceneX * sceneScale,
+                    drawY: host.contentOriginY,
+                    drawW: art.width * sceneScale,
+                    drawH: art.height * sceneScale,
+                    scale: sceneScale,
+                };
+            }
+            const scale = Math.min(sceneScale * LOGIN_LAYOUT.TITLE_ART_MAX_GROWTH, fit);
+            const drawW = art.width * scale;
+            const drawH = art.height * scale;
+            return { drawX: centerX - drawW / 2, drawY: centerY - drawH / 2, drawW, drawH, scale };
+        }
+        // The bundled widescreen image covers the viewport.
         const targetW = Math.max(1, host.containerWidth);
         const targetH = Math.max(1, host.containerHeight);
         const img = host.titleBackgroundImage;
@@ -21,24 +50,32 @@ export function getTitleBackgroundLayout(host: LoginRendererHost) {
     
 }
 
+/**
+ * Where the classic 765x503 scene lies in the drawn title art: its middle 765 columns (from the
+ * top), (1089 - 765) / 2 = 162 in for the cache's titlewide art and the bundled image, none for
+ * title.jpg. What is painted on the art (the flames, the logo) goes through this, so it stays
+ * on the art and grows with it on large viewports.
+ */
+export function getTitleArtScene(host: LoginRendererHost) {
+
+        const bg = getTitleBackgroundLayout(host);
+        const artW = host.titleBackgroundImage?.width || LOGIN_LAYOUT.TITLE_BG_WIDTH;
+        const cropX = Math.max(0, Math.floor((artW - host.SCENE_WIDTH) / 2));
+        const scale = bg.drawW / artW;
+        return { x: bg.drawX + cropX * scale, y: bg.drawY, scale };
+
+}
+
 export function getLogicalFirePositions(host: LoginRendererHost) {
 
-        // Classic 765-scene fire edges mapped into the 1089-wide title art:
-        //   cropX = (1089 - 765) / 2 = 162
-        //   left  = 162 + (-22) = 140
-        //   right = 162 + (765 - 128 + 22) = 821
-        // Track those art-space X values through the cover-fit background transform.
-        const bg = getTitleBackgroundLayout(host);
-        const artW = LOGIN_LAYOUT.TITLE_BG_WIDTH;
-        const leftSrcX = LOGIN_LAYOUT.TITLE_BG_CROP_X - 22;
-        const rightSrcX = LOGIN_LAYOUT.TITLE_BG_CROP_X + host.SCENE_WIDTH - 128 + 22;
-        // Scale fire sprites with the background so bowl size matches the art.
-        const fireScale = bg.drawW / artW;
+        // Classic 765-scene fire edges (-22 and 765 - 128 + 22), scaled with the art so the
+        // bowl size matches it.
+        const scene = getTitleArtScene(host);
         return {
-            leftX: bg.drawX + (leftSrcX / artW) * bg.drawW,
-            rightX: bg.drawX + (rightSrcX / artW) * bg.drawW,
-            y: bg.drawY,
-            scale: fireScale,
+            leftX: scene.x - 22 * scene.scale,
+            rightX: scene.x + (host.SCENE_WIDTH - 128 + 22) * scene.scale,
+            y: scene.y,
+            scale: scene.scale,
         };
     
 }
@@ -159,7 +196,8 @@ function getUpscaleContext(width: number, height: number): OffscreenCanvasRender
 
 /**
  * Draws classic 765x503 content into the scaled content band. When Stretched Mode
- * enlarges it without integer scaling, the content is drawn "sharp bilinear": nearest-neighbour up to the next whole multiple of
+ * enlarges it without integer scaling, or a phone fits it at a fractional scale, the
+ * content is drawn "sharp bilinear": nearest-neighbour up to the next whole multiple of
  * the device scale in a buffer, then filtered down once to the exact size. Edges stay
  * crisp without the uneven blocks of fractional nearest-neighbour or the blur and
  * per-sprite fringes of filtering every sprite on its own.
@@ -169,7 +207,7 @@ export function withContentTransform(host: LoginRendererHost, ctx: RenderContext
         const deviceScale = host.contentScale * (host.renderScale > 0 ? host.renderScale : 1);
         const factor = Math.ceil(deviceScale - 0.01);
         const buffer =
-            host.contentSmoothing && factor > 1
+            host.contentSmoothing && Math.abs(deviceScale - factor) > 0.01
                 ? getUpscaleContext(host.SCENE_WIDTH * factor, host.SCENE_HEIGHT * factor)
                 : undefined;
 
@@ -209,14 +247,16 @@ export const LOGIN_FORM_BUTTON_Y = 321;
 
 /**
  * Remembered-account screen, laid out like live's launcher login (measured from a live
- * screenshot): "Welcome to ...", then the large "Play Now" button with the account name in it. "Switch account" below it is ours (the
- * launcher logs out on live) and sits where "Can't login? Click here." does on the form.
+ * screenshot): "Welcome to ...", then the large "Play Now" button with the account name in it,
+ * and below it a "Sign out" button, as live's mobile client has (its "Switch character" has no
+ * counterpart here). Sign out forgets the remembered login, on the server too.
  */
 export const REMEMBERED_TITLE_Y = 207;
 /** Centre of titlebutton_large; "Play Now" sits 13 above it, the name's baseline 18 below. */
 export const REMEMBERED_PLAY_Y = 262;
-export const REMEMBERED_LOG_OUT_TEXT = "Switch account";
-export const REMEMBERED_LOG_OUT_Y = 357;
+export const REMEMBERED_SIGN_OUT_TEXT = "Sign out";
+/** Centre of the Sign out button (titlebutton), where the screens' single "Back" buttons sit. */
+export const REMEMBERED_SIGN_OUT_Y = 326;
 
 /** The large Play Now button's bounds around its centre (titlebutton_large is 218x68). */
 export function getRememberedPlayBounds(host: LoginRendererHost) {

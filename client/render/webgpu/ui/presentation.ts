@@ -5,6 +5,7 @@ import type { LoginRenderer } from "../../../game/login/LoginRenderer";
 import type { LoginState } from "../../../game/login/LoginState";
 import { withRenderTransform } from "../../../game/login/renderer/layout/config";
 import { getLogicalFirePositions } from "../../../game/login/renderer/layout/geometry";
+import { drawServerListOverlay } from "../../../game/login/renderer/render/serverListOverlay";
 import { LoadingMessageOverlay } from "../../../ui/devoverlay/LoadingMessageOverlay";
 import type { OverlayUpdateArgs } from "../../../ui/devoverlay/Overlay";
 import { SystemUpdateOverlay } from "../../../ui/devoverlay/SystemUpdateOverlay";
@@ -50,7 +51,7 @@ export class WebgpuUiPresentation {
         this.systemUpdateOverlay = new SystemUpdateOverlay({
             getChatboxRect: () => getChatboxScreenRect({ osrsClient }),
         });
-        this.mobileLoginInput = createMobileLoginInput(renderer);
+        this.mobileLoginInput = createMobileLoginInput(renderer, computeMetrics);
     }
 
     /** Appended after the widget overlay exists, so the title always composites on top. */
@@ -74,7 +75,9 @@ export class WebgpuUiPresentation {
         }
 
         if (osrsClient.isLoggedIn()) {
-            this.hide(this.loginCanvas);
+            // The logout tab's World Switcher opens the server list over the game.
+            if (osrsClient.loginState.serverListOpen) this.drawInGameServerList(metrics, bufW, bufH);
+            else this.hide(this.loginCanvas);
             this.updateHudFx(timeMs, deltaMs, bufW, bufH);
         } else {
             // Login-like states own the frame: route input, draw the title, black the world out.
@@ -228,6 +231,23 @@ export class WebgpuUiPresentation {
             bufW - metrics.renderOffsetX,
             bufH - metrics.renderOffsetY,
         );
+        this.show(canvas);
+    }
+
+    /** Mirrors LoginOverlay.drawInGameServerList: the list over the world, in buffer pixels. */
+    private drawInGameServerList(metrics: UiRenderMetrics, bufW: number, bufH: number): void {
+        const { loginRenderer, loginState, inputManager } = this.renderer.osrsClient;
+        // Surface = buffer, as on WebGL, so handleInGameServerListInput's raw clicks line up.
+        loginRenderer.updateLayout(metrics.layoutW, metrics.layoutH, bufW, bufH);
+        loginRenderer.setMousePosition(inputManager.mouseX, inputManager.mouseY);
+        loginState.hoveredServerIndex = loginRenderer.computeHoveredServerIndex(loginState);
+        const canvas = this.loginCanvas;
+        this.resize(canvas, bufW, bufH);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, bufW, bufH);
+        withRenderTransform(loginRenderer, ctx, () => drawServerListOverlay(loginRenderer, ctx, loginState));
         this.show(canvas);
     }
 

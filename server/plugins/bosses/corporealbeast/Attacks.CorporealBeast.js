@@ -95,22 +95,15 @@ function rollMagic(npc, player, method, max, delay) {
   return hit;
 }
 
-const SPECTRAL_SPIRIT_SHIELD = 12821;
-
-function wearsSpectral(player) {
-  const { Equipment } = Shared.core();
-  return player.getEquipment?.().getItems?.()[Equipment.SHIELD_SLOT]?.getId?.() === SPECTRAL_SPIRIT_SHIELD;
-}
-
 function drainOnLanding(npc, player, hit, ticks) {
   if (!hit.isAccurate()) return;
   Shared.later(npc, ticks, () => {
     if (player.getHitpoints() <= 0) return;
-    const { Skill } = Shared.core();
+    const { Skill, applyPrayerDrainModifiers } = Shared.core();
     const skill = Math.random() < 0.5 ? Skill.PRAYER : Skill.MAGIC;
     let amount = Shared.randomInclusive(MAGIC.drain.drainMin, MAGIC.drain.drainMax);
     // The spectral spirit shield halves prayer drains (Wiki).
-    if (skill === Skill.PRAYER && wearsSpectral(player)) amount = Math.floor(amount / 2);
+    if (skill === Skill.PRAYER) amount = applyPrayerDrainModifiers(player, amount, { attacker: npc });
     player.getSkillManager().decreaseCurrentLevel(skill, amount, 0);
     player.sendMessage(`Your ${skill === Skill.PRAYER ? "Prayer" : "Magic"} has been slightly drained!`);
     npc.heal(Math.floor(hit.getTotalDamage() / 2));

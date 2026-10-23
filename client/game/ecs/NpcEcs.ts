@@ -39,6 +39,8 @@ export class NpcEcs {
     private readonly movementOverrides=new Map<number, Partial<Record<string,number>>>();
     getMovementOverrides(id:number):Partial<Record<string,number>>|undefined { return this.movementOverrides.get(id); }
     setMovementOverride(id:number,key:string,sequence:number):void { let values=this.movementOverrides.get(id); if(!values){values={};this.movementOverrides.set(id,values);} values[key]=sequence|0; }
+    /** The server's base animation block: slots 0-3 the stand, walk, turn-left and turn-right sequences; an empty list resets them. */
+    setBaseAnimations(id:number,entries:Array<{slot:number;seqId:number}>):void { if(entries.length===0){this.movementOverrides.delete(id);return;} for(const entry of entries){const key=["idle","walk","turnLeft","turnRight"][entry.slot]; if(key) this.setMovementOverride(id,key,entry.seqId);} }
     getOverheadTextRaw(index:number):string|undefined { return this.overheadText[index]; }
     setOverheadTextRaw(index:number,text:string|undefined):void { const old=this.overheadText[index];this.overheadText[index]=text;if(old!==text)this.notifyMutation({kind:"overhead",index,text:text ?? ""}); }
     setSequenceId(index:number,sequence:number):void { const old=this.seqId[index];this.seqId[index]=sequence|0;if(old!==sequence)this.notifyMutation({kind:"animation",index}); }
@@ -120,6 +122,8 @@ export class NpcEcs {
     private colorOverrideAmount!: Uint8Array; // Override amount (0-255, 0=none, 255=full)
     private colorOverrideStartCycle!: Int32Array; // Start cycle
     private colorOverrideEndCycle!: Int32Array; // End cycle
+    /** Fades in progress or held (OSRS npc transparency), by NPC. */
+    private fades = new Map<number, { startCycle: number; endCycle: number; from: number; to: number }>();
 
     // Spawn/meta
     private spawnTileX: Uint8Array; // 0..63
@@ -361,7 +365,7 @@ export class NpcEcs {
     ): number {
         const id = this.allocId();
         const mid = getMapSquareId(mapX, mapY);
-        this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);
+        this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);this.fades.delete(id);
         this.active[id] = 1;
         this.mapId[id] = mid;
         this.npcTypeId[id] = npcTypeId | 0;
@@ -424,7 +428,7 @@ export class NpcEcs {
             if (idx !== -1) list.splice(idx, 1);
             if (list.length === 0) this.perMap.delete(mid);
         }
-        this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);
+        this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);this.fades.delete(id);
         this.active[id] = 0;
         this.freeList.push(id);
         const sid = this.serverId[id] | 0;
@@ -531,7 +535,7 @@ export class NpcEcs {
                 continue;
             }
             this.notifyMutation({ kind: "despawn", index: id });
-            this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);
+            this.movementOverrides.delete(id);this.modelHeightOverrides.delete(id);this.fades.delete(id);
             this.active[id] = 0;
             this.freeList.push(id);
             this.interactionIndex[id] = NO_INTERACTION;
@@ -1472,5 +1476,29 @@ export class NpcEcs {
 
     clearColorOverride(i: number): void {
         if (this.colorOverrideAmount) this.colorOverrideAmount[i] = 0;
+    }
+
+    // ── Transparency (OSRS npc transparency: fades) ──────────────────────
+    /**
+     * Starts a fade: from `from` (-1: its transparency now) to `to`, 0 opaque to 255 invisible,
+     * between client cycles `startCycle` and `endCycle`; it stays at `to` after.
+     */
+    setTransparency(i: number, startCycle: number, endCycle: number, from: number, to: number, now: number): void {
+        const start = from >= 0 ? from : this.getTransparency(i, now);
+        if (start === 0 && to === 0) {
+            this.fades.delete(i);
+            return;
+        }
+        this.fades.set(i, { startCycle, endCycle, from: start, to });
+    }
+
+    /** The NPC's transparency at a client cycle (0 opaque, 255 invisible). */
+    getTransparency(i: number, cycle: number): number {
+        const fade = this.fades.get(i);
+        if (!fade) return 0;
+        if (cycle <= fade.startCycle) return fade.from;
+        if (cycle >= fade.endCycle) return fade.to;
+        const t = (cycle - fade.startCycle) / Math.max(1, fade.endCycle - fade.startCycle);
+        return Math.round(fade.from + (fade.to - fade.from) * t);
     }
 }

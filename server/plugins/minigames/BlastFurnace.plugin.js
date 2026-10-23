@@ -6,7 +6,7 @@
  * belt and dispenser timings, ore limits and messages follow Offline_Scape's port
  * (docs/blast-furnace.md lists which).
  */
-const { SMELTING_RECIPES } = require("../skills/Smithing.plugin");
+const Smithing = require("../skills/Smithing.plugin");
 
 /** The furnace room. */
 const ROOM = { minX: 1934, maxX: 1959, minY: 4955, maxY: 4976, levels: [0] };
@@ -105,7 +105,8 @@ function init(api) {
   ]);
   // Half the coal of a furnace, and iron never fails. Bars needing coal smelt first, so iron
   // ore with coal in the pot becomes steel.
-  BARS = SMELTING_RECIPES
+  Smithing.loadData(core);
+  BARS = Smithing.SMELTING_RECIPES
     .filter((recipe) => barVarbits.has(recipe.barId))
     .map((recipe) => ({
       ...recipe,

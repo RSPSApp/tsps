@@ -1,0 +1,17 @@
+{
+  "underwater": { "box": [3712, 3775, 10240, 10367], "plane": 1 },
+  "arrival": [3732, 10281, 1],
+  "surface": [3769, 3898, 0],
+  "destinations": {
+    "camp": { "to": [3724, 3808, 0], "message": "You row to the expedition camp..." },
+    "north": { "to": [3733, 3893, 0], "message": "You row to the north of the island..." },
+    "sea": { "to": [3765, 3899, 0], "message": "You row out to sea..." }
+  },
+  "boats": {
+    "camp": [["Row to the north of the island.", "north"], ["Row out to sea, north of the island.", "sea"]],
+    "north": [["Row to the camp.", "camp"], ["Row out to sea.", "sea"]],
+    "diving": [["Row to the north of the island.", "north"], ["Row to the camp.", "camp"], ["Dive into the sea.", "dive"]]
+  },
+  "oxygen": { "max": 1000, "drain": 10, "everyTicks": 3 },
+  "drownTears": [10, 20]
+}

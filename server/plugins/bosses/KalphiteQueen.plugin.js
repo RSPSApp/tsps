@@ -51,6 +51,7 @@ const COCOONS = [
   [3493, 9483, 0, 0, 2],
 ];
 
+let core;
 let TaskManager;
 let ItemOnGroundManager;
 let World;
@@ -154,14 +155,11 @@ class KalphiteQueenCombat extends CombatMethod {
       return;
     }
     const player = target.getAsPlayer();
-    if (player.getEquipment().getItems().some((item) => item?.getId?.() === ItemIdentifiers.SPECTRAL_SPIRIT_SHIELD)
-      && Misc.randomInclusive(0, 1) === 0) {
-      return;
-    }
+    const drain = core.applyPrayerDrainModifiers(player, 1, { attacker: hit.getAttacker?.() });
     const skills = player.getSkillManager();
     const prayer = skills.getCurrentLevel?.(Skill.PRAYER);
-    if (Number.isFinite(prayer) && prayer > 0) {
-      skills.setCurrentLevels(Skill.PRAYER, prayer - 1);
+    if (Number.isFinite(prayer) && prayer > 0 && drain > 0) {
+      skills.setCurrentLevels(Skill.PRAYER, prayer - drain);
     }
   }
 }
@@ -297,6 +295,7 @@ module.exports = {
   name: "KalphiteQueen",
   members: true,
   register(api) {
+    core = api.core;
     TaskManager = api.getTaskManager();
     api.onCustomEvent("collection-log:category-count", collectionLogCount);
     api.onCustomEvent("combat-achievements:kill-count", combatAchievementsKillCount);

@@ -26,23 +26,38 @@
  * quest-helper for the stage values and consortium scoring (75 points -> director,
  * 100 -> join); the cache for every id, varbit and item state.
  *
+ * Route cross-check: RuneLite Quest Helper "The Giant Dwarf" (Zoinkwiz/quest-helper
+ * pinned 06da90f982518a093f2fe1c9cfac5547fa7053d3) for the mandatory step order,
+ * requirements and consortium scoring; the recorded transcript provides the words.
+ *
+ * Requirements enforced at the start: 12 Crafting, 16 Firemaking, 33 Magic,
+ * 14 Thieving and the standard spellbook (Quest Helper's list).
+ * Item weights are cache grams, so the bookcase compares carried weight against
+ * 30,000g. The current Varrock Reldo (22428) is handled explicitly. Company
+ * secretaries/directors use canonical named Talk-to bindings; the shared
+ * ForgettableTale director hook must return false when it defers (see
+ * jobs/varrock-keldagrim.shared.md) or it claims Talk-to before this plugin.
+ * A declined Veldaban task can be re-offered.
+ *
  * Gaps / approximations:
- *  - Telekinetic Grab on a ground item cannot be hooked in this server and Dromund
- *    is static, so both boot pickups use a 50% "he is not looking" roll (retry if
- *    he spots you). The right boot's Take replays the transcript's Telekinetic
- *    Grab branches; the cat branch (6GAow8) is unreachable and answers false.
+ *  - Dromund is static, so both boot pickups use a 50% "he is not looking" roll.
+ *    The probability is an inference: the transcript and Quest Helper show both
+ *    outcomes but no capture establishes the chance. The right boot supports the
+ *    real Telekinetic Grab event; rejected grabs restore the ground item so it
+ *    stays reclaimable. The cat branch (6GAow8) is unreachable and answers false.
  *  - The consortium loop tracks one pinned company and one task at a time, with no
  *    delivery timer or per-company score; +20 per ore delivery, +12 per bar
  *    delivery, -2 for cancelling, +20 once for the Purple Pewter H.A.M. headstart.
- *  - Cutscene room availability is always "a room is available"; optional scenes
- *    are played as transcript lines, with no camera or statue swaps. The boatman's
- *    post-quest Travel option is not handled.
+ *  - Cutscene room availability is always "a room is available"; the captured
+ *    boat fade is replayed, while later statue/council scenes remain transcript
+ *    prose because capture 3278 only covers the start. The boatman's post-quest
+ *    Travel option is not handled.
  *  - The "[company name]" placeholder in spoken lines is filled, but option labels
  *    are not routed through the line hook, so the one option reading "Yes! Long
  *    live the [company name]!" keeps its wiki placeholder.
  */
 module.exports = function registerGiantDwarfQuest(api) {
-  const { ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
+  const { Item, ItemIdentifiers, Location, MagicSpellbook, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
   const { registerQuest, startTranscript, loadTranscripts } = require("../QuestRuntime");
 
   // ==========================================================================
@@ -50,7 +65,7 @@ module.exports = function registerGiantDwarfQuest(api) {
   // ==========================================================================
 
   const PAGE = "The Giant Dwarf";
-  const START_HOOK = "quest:the-giant-dwarf:start";
+  const FADE_UID = (161 << 16) | 1;
 
   const BOATMAN_START_VARIANT = "starting-off-talking-to-dwarven-boatman";
   const VELDABAN_AGAIN_VARIANT = "starting-off-talking-to-veldaban-again-after-agreeing-to-help";
@@ -138,7 +153,7 @@ module.exports = function registerGiantDwarfQuest(api) {
   const VERMUNDI_NPC_ID = NpcIdentifiers.VERMUNDI; // 2367
   const LIBRARIAN_NPC_ID = NpcIdentifiers.LIBRARIAN; // 2370
   const DROMUND_NPC_ID = NpcIdentifiers.DROMUND; // 2374
-  const RELDO_NPC_IDS = new Set([NpcIdentifiers.RELDO, NpcIdentifiers.RELDO_2]); // 4242/4243
+  const RELDO_NPC_IDS = new Set([NpcIdentifiers.RELDO, NpcIdentifiers.RELDO_2, 22428]); // 4242/4243 + current Varrock Reldo
   const THURGO_NPC_ID = NpcIdentifiers.THURGO; // 4733
   const RED_AXE_SECRETARY_NPC_ID = NpcIdentifiers.RED_AXE_SECRETARY; // 5997
   const RED_AXE_DIRECTOR_NPC_ID = NpcIdentifiers.RED_AXE_DIRECTOR_4; // 6025
@@ -147,42 +162,56 @@ module.exports = function registerGiantDwarfQuest(api) {
     {
       id: 1,
       name: "Purple Pewter",
+      secretaryName: "Purple Pewter Secretary",
+      directorName: "Purple Pewter Director",
       secretary: NpcIdentifiers.PURPLE_PEWTER_SECRETARY, // 5990
       director: NpcIdentifiers.PURPLE_PEWTER_DIRECTOR_3, // 5998
     },
     {
       id: 2,
       name: "Yellow Fortune",
+      secretaryName: "Yellow Fortune Secretary",
+      directorName: "Yellow Fortune Director",
       secretary: NpcIdentifiers.YELLOW_FORTUNE_SECRETARY, // 5991
       director: NpcIdentifiers.YELLOW_FORTUNE_DIRECTOR_2, // 6000
     },
     {
       id: 3,
       name: "Blue Opal",
+      secretaryName: "Blue Opal Secretary",
+      directorName: "Blue Opal Director",
       secretary: NpcIdentifiers.BLUE_OPAL_SECRETARY, // 5992
       director: NpcIdentifiers.BLUE_OPAL_DIRECTOR_2, // 5999
     },
     {
       id: 4,
       name: "Green Gemstone",
+      secretaryName: "Green Gemstone Secretary",
+      directorName: "Green Gemstone Director",
       secretary: NpcIdentifiers.GREEN_GEMSTONE_SECRETARY, // 5993
       director: NpcIdentifiers.GREEN_GEMSTONE_DIRECTOR_2, // 6021
     },
     {
       id: 5,
       name: "White Chisel",
+      secretaryName: "White Chisel Secretary",
+      directorName: "White Chisel Director",
       secretary: NpcIdentifiers.WHITE_CHISEL_SECRETARY, // 5994
       director: NpcIdentifiers.WHITE_CHISEL_DIRECTOR_2, // 6022
     },
     {
       id: 6,
       name: "Silver Cog",
+      secretaryName: "Silver Cog Secretary",
+      directorName: "Silver Cog Director",
       secretary: NpcIdentifiers.SILVER_COG_SECRETARY, // 5995
       director: NpcIdentifiers.SILVER_COG_DIRECTOR_2, // 6023
     },
     {
       id: 7,
       name: "Brown Engine",
+      secretaryName: "Brown Engine Secretary",
+      directorName: "Brown Engine Director",
       secretary: NpcIdentifiers.BROWN_ENGINE_SECRETARY, // 5996
       director: NpcIdentifiers.BROWN_ENGINE_DIRECTOR_2, // 6024
     },
@@ -192,6 +221,8 @@ module.exports = function registerGiantDwarfQuest(api) {
   const DIRECTOR_COMPANY_BY_ID = new Map(COMPANIES.map((company) => [company.director, company]));
   const SECRETARY_NPC_IDS = new Set(COMPANIES.map((company) => company.secretary));
   const DIRECTOR_NPC_IDS = new Set(COMPANIES.map((company) => company.director));
+  const SECRETARY_NAMES = [...COMPANIES.map((company) => company.secretaryName), "Red Axe Secretary"];
+  const DIRECTOR_NAMES = [...COMPANIES.map((company) => company.directorName), "Red Axe Director"];
 
   const BOOK_ITEM = ItemIdentifiers.BOOK_ON_COSTUMES; // 5065
   const CLOTHES_ITEM = ItemIdentifiers.EXQUISITE_CLOTHES; // 5067
@@ -291,6 +322,9 @@ module.exports = function registerGiantDwarfQuest(api) {
   const LIGHT_LEVEL = 16;
   const SAPPHIRE_CRAFT_LEVEL = 12;
   const BOOT_THIEVING_LEVEL = 14;
+  const TELEGRAB_LEVEL = 33;
+  const UNDER_WEIGHT_LIMIT = 30_000; // item weights are stored in grams
+  const RIGHT_BOOT_TILE = new Location(2836, 10226, 0);
 
   const CLOTHES_ATTRIBUTE = "quest.giant_dwarf.clothes";
   const LIBRARIAN_ATTRIBUTE = "quest.giant_dwarf.librarian";
@@ -321,7 +355,6 @@ module.exports = function registerGiantDwarfQuest(api) {
   // wiki marks its scene transitions unavailable. Skipping them plays the
   // transcript's real lines through to Veldaban.
   const BOAT_CUTSCENE_STEP_IDS = new Set([
-    "RV7CMp",
     "bQ3UM1",
     "Ru6HA5",
     "ZPUkah",
@@ -389,11 +422,23 @@ module.exports = function registerGiantDwarfQuest(api) {
     return player.getSkillManager().getCurrentLevel(skill);
   }
 
+  /** Quest Helper's explicit requirements for The Giant Dwarf. */
+  function missingRequirements(player) {
+    const skills = player.getSkillManager();
+    const missing = [];
+    if (skills.getMaxLevel(Skill.CRAFTING) < SAPPHIRE_CRAFT_LEVEL) missing.push(`${SAPPHIRE_CRAFT_LEVEL} Crafting`);
+    if (skills.getMaxLevel(Skill.FIREMAKING) < LIGHT_LEVEL) missing.push(`${LIGHT_LEVEL} Firemaking`);
+    if (skills.getMaxLevel(Skill.MAGIC) < TELEGRAB_LEVEL) missing.push(`${TELEGRAB_LEVEL} Magic`);
+    if (skills.getMaxLevel(Skill.THIEVING) < BOOT_THIEVING_LEVEL) missing.push(`${BOOT_THIEVING_LEVEL} Thieving`);
+    if (player.getSpellbook?.() !== MagicSpellbook.NORMAL) missing.push("the standard spellbook");
+    return missing;
+  }
+
   function carriedWeight(player) {
     let weight = 0;
     for (const item of [...player.getInventory().getItems(), ...player.getEquipment().getItems()]) {
       if (item?.getId?.() > 0 && item.getAmount?.() > 0) {
-        weight += Number(item.getDefinition().getWeight()) || 0;
+        weight += (Number(item.getDefinition().getWeight()) || 0) * Number(item.getAmount());
       }
     }
     return weight;
@@ -651,9 +696,9 @@ module.exports = function registerGiantDwarfQuest(api) {
       case "ttjvy8":
         return !flag(player, LIBRARIAN_ATTRIBUTE) && !hasItem(player, BOOK_ITEM);
       case "QaXKTZ":
-        return !hasItem(player, BOOK_ITEM) && carriedWeight(player) > 30;
+        return !hasItem(player, BOOK_ITEM) && carriedWeight(player) > UNDER_WEIGHT_LIMIT;
       case "QoVouj":
-        return !hasItem(player, BOOK_ITEM) && carriedWeight(player) <= 30;
+        return !hasItem(player, BOOK_ITEM) && carriedWeight(player) <= UNDER_WEIGHT_LIMIT;
       case "4DpV4g":
         return hasItem(player, BOOK_ITEM);
       case "1rEz3k":
@@ -1029,6 +1074,17 @@ module.exports = function registerGiantDwarfQuest(api) {
     }
   }
 
+  function fade(player, out) {
+    player.getPacketSender().sendSubInterface(FADE_UID, 174, 1, {
+      postScripts: [{ scriptId: 948, args: out ? [0, 255, 0, 0, 50] : [0, 0, 0, 255, 50] }],
+    });
+  }
+
+  function finishBoatCutscene(player) {
+    fade(player, false);
+    player.getPacketSender().closeSubInterface(FADE_UID);
+  }
+
   function handleAction(event) {
     const { player, stepId } = event;
     if (BOAT_CUTSCENE_STEP_IDS.has(stepId)) {
@@ -1036,6 +1092,21 @@ module.exports = function registerGiantDwarfQuest(api) {
       return;
     }
     switch (stepId) {
+      case "RV7CMp": {
+        // The capture fades to black for the client-side boat film. The scene
+        // markers cannot be replayed here, so the fade carries the transition
+        // into the arrival action instead of dropping the presentation.
+        event.handled = true;
+        fade(player, true);
+        const { CountdownTask, TaskManager } = api.core;
+        if (CountdownTask && TaskManager) {
+          TaskManager.submit(new CountdownTask(player, 3, () => {
+            if (player.isRegistered?.() === false) return;
+            finishBoatCutscene(player);
+          }));
+        }
+        return;
+      }
       case "rbNSPj": {
         event.handled = true;
         player.moveTo(BLACK_GUARD_HQ_TILE);
@@ -1046,6 +1117,7 @@ module.exports = function registerGiantDwarfQuest(api) {
       case "TWPrRb":
         event.handled = true;
         player.moveTo(BLACK_GUARD_HQ_TILE);
+        finishBoatCutscene(player);
         return;
       case "GVSGRf": {
         event.handled = true;
@@ -1072,6 +1144,13 @@ module.exports = function registerGiantDwarfQuest(api) {
         event.handled = true;
         if (!hasItem(player, COINS_ITEM, CLOTHES_PRICE)) {
           player.sendMessage(`You need ${CLOTHES_PRICE} coins to pay Vermundi.`);
+          return;
+        }
+        // Spending exactly the fee empties the coin slot; a larger stack keeps
+        // the bag full and the clothes would be lost after payment.
+        if (!hasItem(player, CLOTHES_ITEM) && player.getInventory().getFreeSlots() < 1 &&
+            player.getInventory().getAmount(COINS_ITEM) > CLOTHES_PRICE) {
+          player.sendMessage("You couldn't hold all those items.");
           return;
         }
         player.getInventory().deleteNumber(COINS_ITEM, CLOTHES_PRICE);
@@ -1160,17 +1239,25 @@ module.exports = function registerGiantDwarfQuest(api) {
   // Transcript hook and choice handler
   // ==========================================================================
 
-  function handleStartHook({ player, npcId, hook }) {
-    if (hook !== START_HOOK) return;
-    if (!BOATMAN_NPC_IDS.has(npcId)) return;
-    if (stageOf(player) !== 0) return;
-    setStage(player, STAGE_STARTED);
-    syncVarbits(player);
-  }
-
   function handleChoice(event) {
     const { player, npcId, option } = event;
+    if (VELDABAN_NPC_IDS.has(npcId)) {
+      if (option === "Yes, I will do this." && stageOf(player) < STAGE_BLASIDAR) setStage(player, STAGE_BLASIDAR);
+      return;
+    }
     if (BOATMAN_NPC_IDS.has(npcId)) {
+      // The transcript has no hook step for the start; its "Start The Giant
+      // Dwarf quest?" choice is the real acceptance point.
+      if (option === "Yes." && stageOf(player) === 0) {
+        const missing = missingRequirements(player);
+        if (missing.length > 0) {
+          player.sendMessage(`You need ${missing.join(", ")} to start The Giant Dwarf.`);
+          return;
+        }
+        setStage(player, STAGE_STARTED);
+        syncVarbits(player);
+        return;
+      }
       if (option === "Yes, I will do this." && stageOf(player) < STAGE_BLASIDAR) setStage(player, STAGE_BLASIDAR);
       return;
     }
@@ -1230,12 +1317,29 @@ module.exports = function registerGiantDwarfQuest(api) {
   // ==========================================================================
 
   function npcOption(event) {
-    return event.definition?.getActions?.()?.[event.clickType - 1];
+    const actions = event.definition?.getActions?.() ?? event.definition?.getInteractions?.();
+    const action = actions?.[event.clickType - 1];
+    // Some transformed director NPCs arrive without a cached definition; their
+    // first option is still Talk-to.
+    if (action) return action;
+    return event.clickType === 1 ? "Talk-to" : undefined;
   }
 
-  function talkToConsortium(event) {
+  /** A declined task leaves stage 5 with no transcript hook; offer it again. */
+  function talkToVeldaban(event) {
+    const { player } = event;
+    if (!player || npcOption(event) !== "Talk-to") return false;
+    if (stageOf(player) !== STAGE_STARTED) return false;
+    const remainder = veldabanOfferRemainder();
+    if (!remainder) return false;
+    event.handled = true;
+    startTranscript(api, player, event.npcId, PAGE, BOATMAN_START_VARIANT, () => remainder);
+    return true;
+  }
+
+  /** Named Talk-to handler for every company secretary and director. */
+  function handleConsortiumNpc(event) {
     const { player, npcId } = event;
-    if (npcOption(event) !== "Talk-to") return;
     const stage = stageOf(player);
     if (stage < STAGE_CONSORTIUM || stage >= STAGE_VELDABAN) return;
     if (npcId === RED_AXE_SECRETARY_NPC_ID) {
@@ -1404,6 +1508,48 @@ module.exports = function registerGiantDwarfQuest(api) {
     bootCase.delete(player);
   }
 
+  /** Return a boot the telekinetic grab should not have awarded. */
+  function restoreRightBoot(player) {
+    const manager = api.getItemOnGroundManager?.();
+    if (manager) manager.registerLocation(player, new Item(RIGHT_BOOT_ITEM, 1), RIGHT_BOOT_TILE.clone());
+  }
+
+  /**
+   * Telekinetic Grab deregisters the ground item and awards it before this
+   * event fires. A grab that is too early, duplicated or spotted by Dromund
+   * must hand the boot back and restore the ground item so it stays retryable.
+   * The 50% "spotted" roll is an inference: the capture and Quest Helper show
+   * the two outcomes but do not expose the probability.
+   */
+  function handleTelekineticGrab(event) {
+    const { player, itemId } = event;
+    if (!player || itemId !== RIGHT_BOOT_ITEM) return;
+    const reject = (variant, message) => {
+      if (hasItem(player, RIGHT_BOOT_ITEM)) player.getInventory().deleteNumber(RIGHT_BOOT_ITEM, 1);
+      restoreRightBoot(player);
+      if (message) player.sendMessage(message);
+      startTranscript(api, player, DROMUND_NPC_ID, PAGE, variant);
+      bootCase.delete(player);
+    };
+    if (hasModelBit(player, MODEL_BOOTS) || hasItem(player, EXQUISITE_BOOTS_ITEM)) {
+      return reject(BOOTS_DONE_VARIANT);
+    }
+    if (stageOf(player) < STAGE_ITEMS || bootsState(player) < BOOTS_SARO) {
+      return reject(BOOT_BEFORE_VARIANT);
+    }
+    // The core already added the boot; a second one would duplicate it.
+    if (player.getInventory().getAmount(RIGHT_BOOT_ITEM) > 1) {
+      return reject(RIGHT_BOOT_VARIANT);
+    }
+    const watching = Math.random() < 0.5;
+    bootCase.set(player, watching ? "los" : "clear");
+    if (watching) {
+      return reject(RIGHT_BOOT_VARIANT, "Dromund spots you and snatches the boot back.");
+    }
+    startTranscript(api, player, DROMUND_NPC_ID, PAGE, RIGHT_BOOT_VARIANT);
+    bootCase.delete(player);
+  }
+
   // ==========================================================================
   // Objects
   // ==========================================================================
@@ -1543,15 +1689,17 @@ module.exports = function registerGiantDwarfQuest(api) {
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
-  api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleLine);
-  api.onNpcInteraction(talkToConsortium);
+  api.onNpcsInteraction(SECRETARY_NAMES, { "Talk-to": handleConsortiumNpc });
+  api.onNpcsInteraction(DIRECTOR_NAMES, { "Talk-to": handleConsortiumNpc });
+  api.onNpcInteraction("Commander Veldaban", { "Talk-to": talkToVeldaban });
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnItem(handleItemOnItem);
   api.onItemAction(handleItemAction);
   api.onGroundItemPickup(handleGroundItemPickup);
+  api.onCustomEvent("magic:telekinetic-grab", handleTelekineticGrab);
   api.onObjectInteraction(handleObjectInteraction);
   api.onPlayerLogin(handleLogin);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrap);

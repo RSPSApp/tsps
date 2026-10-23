@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Shared God Wars Dungeon state: the data file, the four factions, essence, the general kill
+ * Shared God Wars Dungeon state: the data file, the four factions (and Zaros's essence), essence, the general kill
  * counts and small helpers the other units use. See docs/god-wars-dungeon.md.
  */
 const fs = require("fs");
@@ -19,6 +19,8 @@ const ENTRANCE_ROPE_ATTRIBUTE = "godwars:entrance-rope";
 const ropeAttribute = (varbit) => `godwars:rope-${varbit}`;
 
 const factions = Object.entries(data.factions).map(([key, faction]) => ({ key, ...faction }));
+/** Every god whose essence the dungeon keeps: the four factions and Zaros (the Ancient Prison's). */
+const essenceGods = [...factions, { key: "ancient", ...data.ancient }];
 
 let api = null;
 let core = null;
@@ -39,7 +41,7 @@ function inDungeon(location) {
   return inBox(dungeon, location.getX(), location.getY()) && dungeon.planes.includes(location.getZ());
 }
 
-const factionByKey = (key) => factions.find((faction) => faction.key === key) ?? null;
+const factionByKey = (key) => essenceGods.find((faction) => faction.key === key) ?? null;
 const factionForDoor = (id) => factions.find((faction) => faction.door.id === id) ?? null;
 const factionForAltar = (id) => factions.find((faction) => faction.altar === id) ?? null;
 
@@ -64,11 +66,11 @@ function setEssence(player, faction, value) {
 }
 
 function syncEssence(player) {
-  for (const faction of factions) player.getPacketSender().sendVarbit(faction.essenceVarbit, getEssence(player, faction));
+  for (const faction of essenceGods) player.getPacketSender().sendVarbit(faction.essenceVarbit, getEssence(player, faction));
 }
 
 function resetEssence(player) {
-  for (const faction of factions) setEssence(player, faction, 0);
+  for (const faction of essenceGods) setEssence(player, faction, 0);
 }
 
 /** Wearing anything of the god's (by the cache's item name, so every variant counts). */
@@ -148,6 +150,7 @@ function swingDoor(faction) {
 module.exports = {
   data,
   factions,
+  essenceGods,
   ALTAR_ATTRIBUTE,
   CHAMBER_ATTRIBUTE,
   ENTRANCE_ROPE_ATTRIBUTE,

@@ -377,6 +377,66 @@
       ]
     },
     {
+      "key": "pollnivnian_bearded_bandit",
+      "name": "pollnivnian bearded bandit",
+      "wiki": "https://oldschool.runescape.wiki/w/Bandit_(Pollnivneach)",
+      "npcs": [
+        "Bandit"
+      ],
+      "ids": [
+        736,
+        737
+      ],
+      "level": 45,
+      "xp": 65,
+      "stunDamage": 5,
+      "low": 50,
+      "high": 160,
+      "estimatedFrom": "Menaphite Thug (awake only; Wiki has no awake bandit chart)",
+      "coinPouch": {
+        "id": 22529,
+        "coins": 40
+      },
+      "petBase": 256086,
+      "always": [
+        {
+          "id": 995,
+          "name": "Coins",
+          "amount": 40
+        }
+      ]
+    },
+    {
+      "key": "pollnivnian_bandit",
+      "name": "pollnivnian bandit",
+      "wiki": "https://oldschool.runescape.wiki/w/Bandit_(Pollnivneach)",
+      "npcs": [
+        "Bandit"
+      ],
+      "ids": [
+        734,
+        735
+      ],
+      "level": 55,
+      "xp": 84.3,
+      "stunDamage": 5,
+      "low": 50,
+      "high": 160,
+      "estimatedFrom": "Menaphite Thug (awake only; Wiki has no awake bandit chart)",
+      "coinPouch": {
+        "id": 22532,
+        "coins": 50
+      },
+      "petBase": 255836,
+      "always": [
+        {
+          "id": 995,
+          "name": "Coins",
+          "amount": 50
+        }
+      ]
+    },
+    {
       "key": "menaphite_thug",
       "name": "Menaphite thug",
       "wiki": "https://oldschool.runescape.wiki/w/Menaphite_Thug",

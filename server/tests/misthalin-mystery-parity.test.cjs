@@ -98,6 +98,56 @@ function object(h,p,id,x=1647,y=4841) {
 function island(h,p,stage) {
   h.quest.setStage(p,stage);p.moveTo(new core.Location(1637,4802,0));h.hooks.onPlayerLogin.at(-1)({player:p});return p.getArea();
 }
+for (const [name, npcId] of [['Abigale', N.ABIGALE], ['Hewey', N.HEWEY]]) {
+  test(`${name}'s complete starting conversation unlocks the rowboat and survives login`, () => {
+    const h=harness('MisthalinMystery'),p=player();
+    h.talk(p,npcId);continueToMenu(h,p);assert.equal(h.quest.getStage(p),0);
+    h.choose(p,'Yes.');assert.equal(h.quest.getStage(p),5);
+    h.continueUntil(p,()=>p.text.includes('The boat we escaped on'));
+    assert.equal(h.quest.getStage(p),5,'the briefing must finish before travel unlocks');
+    h.continueUntil(p,()=>!p.manager.getCurrent());assert.equal(h.quest.getStage(p),10);
+    // Restore only saved attributes into a fresh session; login must resend the stage.
+    h.hooks.onPlayerLogout[0]({player:p});const restored=player();
+    for(const [key,value] of p.attrs)restored.attrs.set(key,value);
+    h.hooks.onPlayerLogin.at(-1)({player:restored});
+    assert.equal(h.quest.getStage(restored),10);assert.equal(restored.varbits.get(3468),10);
+    restored.moveTo(new core.Location(3240,3142,0));
+    object(h,restored,core.ObjectIdentifiers.ROWBOAT_9);h.tick(2);
+    assert.deepEqual([restored.getLocation().getX(),restored.getLocation().getY()],[1637,4802]);
+    assert.ok(restored.getArea());h.tick(3);assert.equal(restored.blocked,false);
+    h.hooks.onPlayerLogout[0]({player:restored});
+  });
+
+  test(`${name}'s refusal or cancelled introduction leaves the rowboat locked`, () => {
+    for(const choice of ['No.', 'cancel', 'Yes.']){
+      const h=harness('MisthalinMystery'),p=player();
+      h.talk(p,npcId);continueToMenu(h,p);
+      if(choice!=='cancel')h.choose(p,choice);
+      if(choice==='No.')h.continueUntil(p,()=>!p.manager.getCurrent());
+      else p.getPacketSender().sendInterfaceRemoval();
+      assert.equal(h.quest.getStage(p),choice==='Yes.'?5:0);
+      const origin=p.getLocation().clone();object(h,p,core.ObjectIdentifiers.ROWBOAT_9);h.tick(5);
+      assert.ok(p.getLocation().equals(origin));assert.equal(p.getArea(),null);
+      assert.notEqual(p.blocked,true);
+      h.hooks.onPlayerLogout[0]({player:p});
+    }
+  });
+
+  test(`${name} can recover a saved stage-five introduction and unlock the rowboat`, () => {
+    const h=harness('MisthalinMystery'),p=player();
+    h.talk(p,npcId);continueToMenu(h,p);h.choose(p,'Yes.');
+    assert.equal(h.quest.getStage(p),5);p.getPacketSender().sendInterfaceRemoval();
+    h.hooks.onPlayerLogout[0]({player:p});const restored=player();
+    for(const [key,value] of p.attrs)restored.attrs.set(key,value);
+    h.hooks.onPlayerLogin.at(-1)({player:restored});assert.equal(restored.varbits.get(3468),5);
+    h.talk(restored,npcId);continueToMenu(h,restored);h.choose(restored,'Yes.');
+    h.continueUntil(restored,()=>!restored.manager.getCurrent());assert.equal(h.quest.getStage(restored),10);
+    object(h,restored,core.ObjectIdentifiers.ROWBOAT_9);h.tick(2);
+    assert.deepEqual([restored.getLocation().getX(),restored.getLocation().getY()],[1637,4802]);
+    h.hooks.onPlayerLogout[0]({player:restored});
+  });
+}
+
 test('rowboat fades before its message and uses the captured two-tick crossing in both directions',()=>{
   for(const toIsland of [true,false]){
     const h=harness('MisthalinMystery'),p=player();

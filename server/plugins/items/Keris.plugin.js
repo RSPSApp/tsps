@@ -52,9 +52,10 @@ function applyKerisDamage(attacker, maxHit) {
   if (!player || !isKeris(player) || !isKalphiteOrScabarite(target)) {
     return maxHit;
   }
-  const damageMultiplier = AMASCUT_PARTISANS.has(weaponId(player)) ? 1.15 : 4 / 3;
+  // Integer ratios: floating 1.15 turns a max hit of 100 into 114.
+  const [numerator, denominator] = AMASCUT_PARTISANS.has(weaponId(player)) ? [23, 20] : [4, 3];
   const criticalMultiplier = Misc.randomInclusive(1, 51) === 1 ? 3 : 1;
-  return Math.floor(maxHit * damageMultiplier * criticalMultiplier);
+  return Math.floor((maxHit * numerator * criticalMultiplier) / denominator);
 }
 
 function applyBreachingAccuracy(attacker, attackRoll) {

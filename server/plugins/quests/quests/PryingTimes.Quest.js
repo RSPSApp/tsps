@@ -11,7 +11,9 @@
  * hold's crowbar tool unlock at value 20 - sailing/Cargo.Sailing.js): 5 courier task accepted
  * (Steve writes it into the captain's log), 10 looty delivered, 15 Steve asks for a
  * 'special key', 20 crowbar made by Thurgo, 25 'key' shown to Steve (test the grog),
- * 30 complete. Sibling bits 18318 quest_pry_steve_log / 18319 quest_pry_thurgo_met /
+ * 30 told Steve the key works / open the crate, 35 complete (capture 3455 sets
+ * 30 during the "About that crate..." talk and 35 on the completion action).
+ * Sibling bits 18318 quest_pry_steve_log / 18319 quest_pry_thurgo_met /
  * 18320 quest_pry_reward are mirrored client-side as the stage reaches them.
  *
  * Thurgo is shared with The Knight's Sword (a Prying Times requirement), whose
@@ -30,9 +32,11 @@
  * coupon (oak plank), ability to chart forgotten drinks and unlimited crowbars from
  * the crate of crowbars.
  *
+ * Quest Helper models the delivery as port task 600 ("Pandemonium pirate looty delivery"),
+ * so Steve writes that real task row into a free slot and the ordinary ledger tables in
+ * Port Sarim and The Pandemonium take and deposit its crate.
+ *
  * Gaps/approximations:
- * - The quest's cargo moves directly between its ledgers; it uses the existing port-task
- *   slot ledger for the start requirement but does not create a generic courier task row.
  * - The floating crate sits on the north-west shore so it is reachable on foot; "on
  *   deck" is standing near it, as a boat cannot be boarded there (no Sailing API in
  *   api.core either, so `Sailing.instanceAboard` is out of reach).
@@ -47,6 +51,7 @@ module.exports = function registerPryingTimesQuest(api) {
   const {
     Equipment,
     GameObject,
+    Item,
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
@@ -55,13 +60,16 @@ module.exports = function registerPryingTimesQuest(api) {
     Skill,
   } = api.core;
   const { registerQuest, refreshQuestList, loadTranscripts, startTranscript } = require("../QuestRuntime");
+  const portTasks = require("../../skills/sailing/porttasks/Common.PortTasks");
+  portTasks.init(api);
 
-  // NPCs (cache ids; NpcIdentifiers comments).
+  // NPCs (cache ids; NpcIdentifiers comments). Steve spawns as the base 14967,
+  // whose cache transform (sailing_intro 18314) publishes 14968/14969.
+  const STEVE_BASE_NPC_ID = 14967; // steve_beanie, multinpc 14968/14969
   const STEVE_NPC_ID = NpcIdentifiers.SQUAWKING_STEVE_BEANIE; // 14968
   const STEVE_NPC_ID_2 = NpcIdentifiers.SQUAWKING_STEVE_BEANIE_2; // 14969
   const THURGO_NPC_ID = NpcIdentifiers.THURGO; // 4733
   const DRINK_TROLL_NPC_ID = NpcIdentifiers.DRINK_TROLL; // 15164
-  const PORT_MASTER_NPC_ID = NpcIdentifiers.PORT_MASTER; // 15459, chathead for the deposit line
   const STEVE_NPC_IDS = new Set([STEVE_NPC_ID, STEVE_NPC_ID_2]);
 
   // Items (cache ids; ItemIdentifiers comments).
@@ -94,12 +102,14 @@ module.exports = function registerPryingTimesQuest(api) {
   const STAGE_TOLD_STEVE = 15;
   const STAGE_HAS_CROWBAR = 20;
   const STAGE_TEST_KEY = 25;
-  const STAGE_COMPLETE = 30;
+  const STAGE_OPEN_CRATE = 30;
+  const STAGE_COMPLETE = 35;
+
+  const DELIVERY_TASK_ID = 600; // port-tasks.json "Pandemonium pirate looty delivery"
 
   const START_LEVEL_SMITHING = 30;
   const START_LEVEL_SAILING = 12;
   const RECOMMENDED_COMBAT = 10;
-  const COURIER_XP = 180;
   const SMITHING_XP = 1000;
   const SAILING_XP = 800;
   const SAWMILL_COUPONS = 25;
@@ -121,8 +131,6 @@ module.exports = function registerPryingTimesQuest(api) {
   const THURGO_MAKE_VARIANT = "making-a-key-talking-to-thurgo";
   const INSPECT_CROWBAR_VARIANT = "making-a-key-inspecting-the-crowbar";
   const FINAL_CRATE_NOT_READY_VARIANT = "making-a-key-attempting-to-open-the-crate-before-talking-with-steve";
-  const TAKE_CARGO_VARIANT = "retrieving-and-depositing-the-pirate-looty-take-cargo-from-ledger-table-in-port-sarim";
-  const DEPOSIT_CARGO_VARIANT = "retrieving-and-depositing-the-pirate-looty-deposit-cargo-on-the-ledger-table-on-the-pandemonium";
   const GROG_OPEN_VARIANT = "the-grog-reaching-the-sealed-crate";
   const GROG_DRINK_VARIANT = "the-grog-drinking-the-bottle-of-fish-bladder-stout";
   const FINAL_CRATE_VARIANT = "finishing-up-opening-the-crate-next-to-steve-beanie";
@@ -145,9 +153,6 @@ module.exports = function registerPryingTimesQuest(api) {
   // Message/action step ids whose side effects this plugin performs.
   const ACCEPTED_MESSAGE_ID = "nbTB-L";
   const ACCEPTED_AGAIN_MESSAGE_ID = "g6tGbJ";
-  const TAKE_CARGO_MESSAGE_ID = "v2HhAb";
-  const DELIVERED_MESSAGE_ID = "kT3kNI";
-  const COURIER_XP_ACTION_ID = "2x0SPV";
   const THURGO_CROWBAR_ACTION_ID = "e2Ow6O";
   const GROG_TAKE_STOUT_MESSAGE_ID = "Gyue8X";
   const GROG_DRINK_MESSAGE_ID = "PkEAX6";
@@ -169,9 +174,14 @@ module.exports = function registerPryingTimesQuest(api) {
   const GROG_CRATE_TILE = { x: 3013, y: 2998 };
   const STEVE_CRATE_TILE = { x: 3048, y: 2965 };
   const STEVE_SPAWN = { x: 3050, y: 2966 };
-  const GROG_CRATE_DECK_RANGE = 4;
+  const GROG_CRATE_DECK_RANGE = 12; // the deck can use a main-world loc within 12 tiles
+  const FINE_UNITS_PER_TILE = 128; // Boat.fineX/fineY are 128ths of a world tile
+  const VARBIT_BOARDED_BOAT = 19136;
 
   const STEVE_LOG_ATTRIBUTE = "prying-times:steve-log";
+  const DELIVERY_ASSIGNED_ATTRIBUTE = "prying-times:delivery-assigned";
+  const DELIVERY_BASELINE_ATTRIBUTE = "prying-times:delivery-baseline";
+  const STAGE_VERSION_ATTRIBUTE = "prying-times:stage-v2";
   const THURGO_MET_ATTRIBUTE = "prying-times:thurgo-met";
   const DRANK_STOUT_ATTRIBUTE = "prying-times:drank-stout";
   const TOLD_STEVE_ATTRIBUTE = "prying-times:told-steve";
@@ -188,6 +198,13 @@ module.exports = function registerPryingTimesQuest(api) {
 
   function isSteve(npcId) {
     return STEVE_NPC_IDS.has(npcId);
+  }
+
+  /** Pandemonium must own Steve until its own quest is complete; then Prying starts. */
+  function pandemoniumComplete(player) {
+    const request = { player, key: "pandemonium", complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
   }
 
   function questActive(player) {
@@ -239,15 +256,33 @@ module.exports = function registerPryingTimesQuest(api) {
     return hammer && held(player, STEEL_BAR_ITEM_ID) && held(player, REDBERRY_PIE_ITEM_ID);
   }
 
-  function nearGrogCrate(player) {
+  /** True when the player is on their own boat (sailing_boarded_boat). */
+  function aboard(player) {
+    const sender = player.getPacketSender?.();
+    if (sender?.getVarbit?.(VARBIT_BOARDED_BOAT) === 1) return true;
+    const state = player.getSailing?.();
+    const boat = state?.boats?.find?.((entry) => entry.slot === state.activeBoatSlot);
+    return boat?.location?.kind === "at_sea";
+  }
+
+  /** The boat's world tile at sea, or the player's tile when they are on foot. */
+  function worldTile(player) {
+    const state = player.getSailing?.();
+    const boat = state?.boats?.find?.((entry) => entry.slot === state.activeBoatSlot);
+    if (aboard(player) && boat?.location?.kind === "at_sea") {
+      return { x: Math.floor(boat.location.fineX / FINE_UNITS_PER_TILE), y: Math.floor(boat.location.fineY / FINE_UNITS_PER_TILE) };
+    }
     const location = player.getLocation();
-    return (
-      location.getZ() === 0 &&
-      Math.max(
-        Math.abs(location.getX() - GROG_CRATE_TILE.x),
-        Math.abs(location.getY() - GROG_CRATE_TILE.y)
-      ) <= GROG_CRATE_DECK_RANGE
-    );
+    return { x: location.getX(), y: location.getY() };
+  }
+
+  function nearGrogCrate(player) {
+    if (!aboard(player)) return false;
+    const tile = worldTile(player);
+    return Math.max(
+      Math.abs(tile.x - GROG_CRATE_TILE.x),
+      Math.abs(tile.y - GROG_CRATE_TILE.y)
+    ) <= GROG_CRATE_DECK_RANGE;
   }
 
   function page() {
@@ -262,8 +297,13 @@ module.exports = function registerPryingTimesQuest(api) {
   /** Which transcript variant Steve plays, by stage and carried items. */
   function selectVariant({ npcId, player }) {
     if (!isSteve(npcId)) return null;
+    // Pandemonium is a prerequisite and its own hook returned Steve's post-quest
+    // page for every eligible player. Yield until it is done, then own Steve;
+    // once Prying is complete, yield back so Pandemonium's post-quest page plays.
+    if (!pandemoniumComplete(player)) return null;
+    if (quest.isComplete(player)) return null;
     const stage = quest.getStage(player);
-    if (stage >= STAGE_COMPLETE) return STEVE_SUBSEQUENT_VARIANT; // no post-quest variant in the dump
+    if (stage >= STAGE_OPEN_CRATE) return STEVE_SUBSEQUENT_VARIANT;
     if (stage >= STAGE_TEST_KEY) {
       if (!drankStout(player)) {
         return held(player, STOUT_ITEM_ID) ? STEVE_WITH_GROG_VARIANT : STEVE_MAKING_KEY_AGAIN_VARIANT;
@@ -275,6 +315,12 @@ module.exports = function registerPryingTimesQuest(api) {
     if (stage >= STAGE_DELIVERED) return STEVE_DELIVERED_VARIANT;
     if (stage >= STAGE_ACCEPTED) {
       if (!steveLogWritten(player)) return STEVE_LOG_PENDING_VARIANT;
+      if (deliveryDone(player)) {
+        // Quest Helper stage 10 is "let Steve know"; the ledger cleared the task
+        // row, so the conversation is due even before the player picks the line.
+        if (stage < STAGE_DELIVERED) quest.setStage(player, STAGE_DELIVERED);
+        return STEVE_DELIVERED_VARIANT;
+      }
       return held(player, CRATE_OF_LOOTY_ITEM_ID) ? STEVE_HOLDING_LOOTY_VARIANT : STEVE_SUBSEQUENT_VARIANT;
     }
     return STEVE_START_VARIANT;
@@ -324,9 +370,45 @@ module.exports = function registerPryingTimesQuest(api) {
   // Dialogue side effects
   // ==========================================================================
 
+  function deliverySlot(player) {
+    return portTasks.slots(player).findIndex((slot) => slot?.id === DELIVERY_TASK_ID);
+  }
+
+  /** Quest Helper models the delivery as port task 600, so accept the real row. */
+  function assignDeliveryTask(player) {
+    if (deliverySlot(player) >= 0) return true;
+    const slots = portTasks.slots(player);
+    const free = slots.findIndex((slot) => !slot);
+    if (free < 0) return false;
+    slots[free] = { id: DELIVERY_TASK_ID, taken: 0, delivered: 0 };
+    portTasks.setSlots(player, slots);
+    return true;
+  }
+
+  function completedTotal(player) {
+    return Number(player.getAttribute(portTasks.COMPLETED_ATTRIBUTE)?.total) || 0;
+  }
+
+  /**
+   * The task row is cleared by the ledger table when the looty is delivered. A
+   * cancellation clears it too, so require the completed-task counter to have
+   * risen since acceptance (capture 3455 increments it).
+   */
+  function deliveryDone(player) {
+    return player.getAttribute(DELIVERY_ASSIGNED_ATTRIBUTE) === true
+      && deliverySlot(player) < 0
+      && completedTotal(player) > (Number(player.getAttribute(DELIVERY_BASELINE_ATTRIBUTE)) || 0);
+  }
+
   /** Steve writes the task into the captain's log. */
   function writeSteveLog(player) {
+    if (!assignDeliveryTask(player)) {
+      player.sendMessage("You can't take on any more port tasks right now.");
+      return;
+    }
     player.setAttribute(STEVE_LOG_ATTRIBUTE, true);
+    player.setAttribute(DELIVERY_ASSIGNED_ATTRIBUTE, true);
+    player.setAttribute(DELIVERY_BASELINE_ATTRIBUTE, completedTotal(player));
     player.getPacketSender().sendVarbit(VARBIT_STEVE_LOG, 1);
     if (quest.getStage(player) < STAGE_ACCEPTED) quest.setStage(player, STAGE_ACCEPTED);
   }
@@ -339,8 +421,9 @@ module.exports = function registerPryingTimesQuest(api) {
   /** "You hammer a crowbar out of your steel bar..." - consumes bar and pie. */
   function makeCrowbar(player) {
     if (!questActive(player) || quest.getStage(player) < STAGE_TOLD_STEVE) return;
-    if (held(player, STEEL_BAR_ITEM_ID)) player.getInventory().deleteNumber(STEEL_BAR_ITEM_ID, 1);
-    if (held(player, REDBERRY_PIE_ITEM_ID)) player.getInventory().deleteNumber(REDBERRY_PIE_ITEM_ID, 1);
+    if (!hasCrowbarMaterials(player)) return;
+    player.getInventory().deleteNumber(STEEL_BAR_ITEM_ID, 1);
+    player.getInventory().deleteNumber(REDBERRY_PIE_ITEM_ID, 1);
     if (!held(player, CROWBAR_ITEM_ID)) player.getInventory().adds(CROWBAR_ITEM_ID, 1);
     setThurgoMet(player);
     if (quest.getStage(player) < STAGE_HAS_CROWBAR) quest.setStage(player, STAGE_HAS_CROWBAR);
@@ -360,7 +443,7 @@ module.exports = function registerPryingTimesQuest(api) {
       return;
     }
     if (option === DELIVERED_OPTION) {
-      if (stage >= STAGE_DELIVERED && stage < STAGE_TOLD_STEVE) quest.setStage(player, STAGE_TOLD_STEVE);
+      if (stage === STAGE_DELIVERED) quest.setStage(player, STAGE_TOLD_STEVE);
       return;
     }
     if (option === SPECIAL_KEY_OPTION) {
@@ -370,6 +453,8 @@ module.exports = function registerPryingTimesQuest(api) {
     if (option === ABOUT_CRATE_OPTION) {
       if (stage >= STAGE_TEST_KEY && drankStout(player) && !toldSteve(player)) {
         player.setAttribute(TOLD_STEVE_ATTRIBUTE, true);
+        player.setAttribute(STAGE_VERSION_ATTRIBUTE, true);
+        quest.setStage(player, STAGE_OPEN_CRATE);
       }
     }
   }
@@ -380,23 +465,6 @@ module.exports = function registerPryingTimesQuest(api) {
       case ACCEPTED_MESSAGE_ID:
       case ACCEPTED_AGAIN_MESSAGE_ID:
         if (isSteve(npcId)) writeSteveLog(player);
-        return;
-      case TAKE_CARGO_MESSAGE_ID:
-        if (!held(player, CRATE_OF_LOOTY_ITEM_ID) && freeSlots(player) >= 1) {
-          player.getInventory().adds(CRATE_OF_LOOTY_ITEM_ID, 1);
-        }
-        return;
-      case DELIVERED_MESSAGE_ID:
-        if (held(player, CRATE_OF_LOOTY_ITEM_ID)) {
-          player.getInventory().deleteNumber(CRATE_OF_LOOTY_ITEM_ID, 1);
-        }
-        if (quest.getStage(player) >= STAGE_ACCEPTED && quest.getStage(player) < STAGE_DELIVERED) {
-          quest.setStage(player, STAGE_DELIVERED);
-        }
-        return;
-      case COURIER_XP_ACTION_ID:
-        event.handled = true;
-        player.getSkillManager().addExperiences(Skill.SAILING, COURIER_XP);
         return;
       case THURGO_CROWBAR_ACTION_ID:
         if (npcId !== THURGO_NPC_ID) return;
@@ -471,37 +539,21 @@ module.exports = function registerPryingTimesQuest(api) {
     finalCrateObject = registerQuestObject(CROWBAR_CRATE_ID, STEVE_CRATE_TILE);
   }
 
-  function takeCargo(event) {
-    const { player } = event;
-    event.handled = true;
-    if (quest.getStage(player) !== STAGE_ACCEPTED || quest.isComplete(player)) return;
-    if (held(player, CRATE_OF_LOOTY_ITEM_ID)) return;
-    if (freeSlots(player) < 1) {
-      player.sendMessage("You don't have enough inventory space.");
-      return;
-    }
-    startTranscript(api, player, STEVE_NPC_ID, PAGE, TAKE_CARGO_VARIANT);
-  }
-
-  function depositCargo(event) {
-    const { player } = event;
-    event.handled = true;
-    if (quest.getStage(player) !== STAGE_ACCEPTED || quest.isComplete(player)) return;
-    if (!held(player, CRATE_OF_LOOTY_ITEM_ID)) return;
-    startTranscript(api, player, PORT_MASTER_NPC_ID, PAGE, DEPOSIT_CARGO_VARIANT);
-  }
-
   function openGrogCrate(event) {
     const { player } = event;
     event.handled = true;
     if (quest.getStage(player) < STAGE_TEST_KEY || quest.isComplete(player)) return;
+    if (!nearGrogCrate(player)) {
+      player.sendMessage("You need to be on your boat at the crate to reach it.");
+      return;
+    }
     startTranscript(api, player, DRINK_TROLL_NPC_ID, PAGE, GROG_OPEN_VARIANT);
   }
 
   function openFinalCrate(event) {
     const { player } = event;
     event.handled = true;
-    if (quest.getStage(player) < STAGE_TEST_KEY) {
+    if (quest.getStage(player) < STAGE_OPEN_CRATE) {
       if (quest.isStarted(player) && !quest.isComplete(player)) {
         startTranscript(api, player, STEVE_NPC_ID, PAGE, FINAL_CRATE_NOT_READY_VARIANT);
       }
@@ -523,12 +575,26 @@ module.exports = function registerPryingTimesQuest(api) {
   }
 
   function handleObjectInteraction(event) {
+    const { player } = event;
     switch (event.objectId) {
+      // The ledger tables are ordinary port-task ledgers: the sailing plugin's
+      // "Ledger table" hooks take and deposit the crate. This generic hook runs
+      // before them, so a deposit is confirmed a tick later (capture 3455: 5 -> 10).
       case PORT_SARIM_LEDGER_ID:
-        takeCargo(event);
-        return;
       case PANDEMONIUM_LEDGER_ID:
-        depositCargo(event);
+        if (quest.getStage(player) !== STAGE_ACCEPTED) return;
+        if (portTasks.heldCrate(player) !== portTasks.taskById(DELIVERY_TASK_ID)?.crate) return;
+        // This generic hook is registered before the sailing plugin's named
+        // "Ledger table" hook, so on a deposit the task row is cleared after we
+        // return. Re-check a tick later, where capture 3455 has the 5 -> 10 move.
+        {
+          const { CountdownTask, TaskManager } = api.core;
+          TaskManager.submit(new CountdownTask(player, 1, () => {
+            if (quest.getStage(player) === STAGE_ACCEPTED && deliveryDone(player)) {
+              quest.setStage(player, STAGE_DELIVERED);
+            }
+          }));
+        }
         return;
       case GROG_CRATE_ID:
         openGrogCrate(event);
@@ -605,10 +671,31 @@ module.exports = function registerPryingTimesQuest(api) {
     playDrinkTranscript(player);
   }
 
-  function spawnDrinkTroll(player) {
+  function retryDrinkTroll(player, retries) {
+    if (retries <= 0) return;
+    const { CountdownTask, TaskManager } = api.core;
+    if (!CountdownTask || !TaskManager) return;
+    TaskManager.submit(new CountdownTask(player, 1, () => spawnDrinkTroll(player, retries - 1)));
+  }
+
+  function detachDrinkTroll(npc) {
+    const area = npc?.getArea?.();
+    if (!area) return;
+    if (typeof area.remove === "function") area.remove(npc);
+    else area.detach?.(npc);
+  }
+
+  function spawnDrinkTroll(player, retries = 2) {
     const existing = drinkTrollByPlayer.get(player);
-    if (existing?.isRegistered?.()) return;
+    if (existing?.isRegistered?.()) return existing;
     drinkTrollByPlayer.delete(player);
+    const boat = api.core.BoatManager?.getBoatAboard?.(player);
+    const deck = boat ? api.core.BoatManager?.getDeck?.(boat) : undefined;
+    if (!deck) {
+      // The troll stands on the player's virtual deck; retry after the boarding tick.
+      retryDrinkTroll(player, retries);
+      return undefined;
+    }
     const location = player.getLocation();
     const npc = api.spawnNpc({
       id: DRINK_TROLL_NPC_ID,
@@ -619,7 +706,13 @@ module.exports = function registerPryingTimesQuest(api) {
       owner: player,
       ownerOnly: true,
     });
-    if (npc) drinkTrollByPlayer.set(player, npc);
+    if (!npc) {
+      retryDrinkTroll(player, retries);
+      return undefined;
+    }
+    deck.enter(npc);
+    drinkTrollByPlayer.set(player, npc);
+    return npc;
   }
 
   function handleNpcDeath(event) {
@@ -627,7 +720,10 @@ module.exports = function registerPryingTimesQuest(api) {
     const owner = event.npc?.getOwner?.();
     if (!owner) return;
     const troll = drinkTrollByPlayer.get(owner);
-    if (troll === event.npc) drinkTrollByPlayer.delete(owner);
+    if (troll === event.npc) {
+      drinkTrollByPlayer.delete(owner);
+      detachDrinkTroll(event.npc);
+    }
   }
 
   // ==========================================================================
@@ -644,7 +740,7 @@ module.exports = function registerPryingTimesQuest(api) {
     const existing = steveByPlayer.get(player);
     if (existing?.isRegistered?.()) return;
     const npc = api.spawnNpc({
-      id: STEVE_NPC_ID,
+      id: STEVE_BASE_NPC_ID,
       x: STEVE_SPAWN.x,
       y: STEVE_SPAWN.y,
       z: 0,
@@ -655,10 +751,26 @@ module.exports = function registerPryingTimesQuest(api) {
     if (npc) steveByPlayer.set(player, npc);
   }
 
+  /** Old completion was stage 30; the captured completion is 35. */
+  function migrateStage(player) {
+    if (player.getAttribute(STAGE_VERSION_ATTRIBUTE) === true) return;
+    player.setAttribute(STAGE_VERSION_ATTRIBUTE, true);
+    if (quest.getStage(player) === 30) {
+      quest.setStage(player, STAGE_COMPLETE);
+      player.getPacketSender().sendVarbit(VARBIT_REWARD, 1);
+    }
+  }
+
   function handleLogin({ player }) {
+    migrateStage(player);
     refreshQuestList(player);
     installQuestObjects();
     ensureSteve(player);
+    player.getPacketSender().sendVarbit(VARBIT_REWARD, quest.isComplete(player) ? 1 : 0);
+    const stage = quest.getStage(player);
+    if (drankStout(player) && stage >= STAGE_TEST_KEY && stage < STAGE_OPEN_CRATE) {
+      spawnDrinkTroll(player);
+    }
   }
 
   function handleLogout({ player }) {
@@ -667,7 +779,10 @@ module.exports = function registerPryingTimesQuest(api) {
     if (steve) api.removeNpc(steve);
     steveByPlayer.delete(player);
     const troll = drinkTrollByPlayer.get(player);
-    if (troll) api.removeNpc(troll);
+    if (troll) {
+      detachDrinkTroll(troll);
+      api.removeNpc(troll);
+    }
     drinkTrollByPlayer.delete(player);
   }
 
@@ -685,6 +800,13 @@ module.exports = function registerPryingTimesQuest(api) {
         "<str>told Steve, and opened his crate full of crowbars.</str>",
         "",
         "<col=ff0000>QUEST COMPLETE!</col>",
+      ];
+    }
+    if (stage >= STAGE_OPEN_CRATE) {
+      return [
+        "<str>Steve said I can take as many crowbars as I like.</str>",
+        "",
+        "I should open the <col=800000>crate</col> next to Steve.",
       ];
     }
     if (stage >= STAGE_TEST_KEY) {
@@ -765,13 +887,19 @@ module.exports = function registerPryingTimesQuest(api) {
     const skills = player.getSkillManager();
     skills.addExperiences(Skill.SMITHING, SMITHING_XP);
     skills.addExperiences(Skill.SAILING, SAILING_XP);
-    // registerQuest adds the rewardItemId coupon; top the stack up to 25.
-    if (freeSlots(player) >= 1) {
-      player.getInventory().adds(SAWMILL_COUPON_ITEM_ID, SAWMILL_COUPONS - 1);
-    }
+    // QuestRuntime adds the first coupon. Use the engine's normal reward
+    // overflow (merge an existing stack, or drop at the reward tile) instead of
+    // silently skipping the other 24 when the inventory is full.
+    player.getInventory().forceAdd(
+      player,
+      new Item(SAWMILL_COUPON_ITEM_ID, SAWMILL_COUPONS - 1)
+    );
   }
 
   api.persistAttribute(STEVE_LOG_ATTRIBUTE);
+  api.persistAttribute(DELIVERY_ASSIGNED_ATTRIBUTE, false);
+  api.persistAttribute(DELIVERY_BASELINE_ATTRIBUTE, 0);
+  api.persistAttribute(STAGE_VERSION_ATTRIBUTE, false);
   api.persistAttribute(THURGO_MET_ATTRIBUTE);
   api.persistAttribute(DRANK_STOUT_ATTRIBUTE);
   api.persistAttribute(TOLD_STEVE_ATTRIBUTE);
@@ -785,15 +913,12 @@ module.exports = function registerPryingTimesQuest(api) {
     completionValue: STAGE_COMPLETE,
     questPoints: 1,
     xpRewards: [
-      { skillId: Skill.SMITHING.getIndex(), amount: SMITHING_XP, label: "Smithing" },
       { skillId: Skill.SAILING.getIndex(), amount: SAILING_XP, label: "Sailing" },
+      { skillId: Skill.SMITHING.getIndex(), amount: SMITHING_XP, label: "Smithing" },
     ],
     rewardItemId: SAWMILL_COUPON_ITEM_ID,
-    rewardItemLabel: "25 x Sawmill coupon (oak plank)",
-    otherRewards: [
-      "Ability to chart forgotten drinks",
-      "Unlimited crowbars from the crate of crowbars",
-    ],
+    rewardItemLabel: "25 Sawmill coupons (oak)",
+    otherRewards: ["Access to charting forgotten drinks"],
     buildJournal,
     onReward: grantReward,
   });
@@ -803,6 +928,13 @@ module.exports = function registerPryingTimesQuest(api) {
   api.onNpcInteraction("Thurgo", { "Talk-to": thurgoTalkTo });
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  // Optional shared hook from Ledger.PortTasks.complete (see the shared report):
+  // removes the one-tick re-check after a deposit.
+  api.onCustomEvent("sailing:port-task-completed", ({ player, task }) => {
+    if (player && task?.id === DELIVERY_TASK_ID && quest.getStage(player) === STAGE_ACCEPTED) {
+      quest.setStage(player, STAGE_DELIVERED);
+    }
+  });
   api.onItemAction("Crowbar", { Inspect: inspectCrowbar });
   api.onItemAction("Bottle of fish bladder stout", { Drink: drinkStout });
   api.onObjectInteraction(handleObjectInteraction);

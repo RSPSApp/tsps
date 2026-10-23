@@ -21,6 +21,17 @@ test("lowering a skill takes effect on the first call (issue #101)", () => {
   }
 });
 
+test("rate 1 keeps OSRS's tenths of experience instead of flooring each gain away (issue #748)", () => {
+  const xp = new SkillManager({ getPacketSender: () => sender, getAttribute: () => undefined });
+  xp.setExperience(Skill.WOODCUTTING, 0);
+  for (let log = 0; log < 2; log++) xp.addExperience(Skill.WOODCUTTING, 37.5, true);
+  assert.equal(xp.getExperience(Skill.WOODCUTTING), 75, "two oak logs");
+  xp.setExperience(Skill.HITPOINTS, 1154);
+  for (let hit = 0; hit < 10; hit++) xp.addExperience(Skill.HITPOINTS, 4 / 3, true);
+  assert.equal(xp.skills.experience[Skill.HITPOINTS.getIndex()], 1167, "ten 1-damage hits are 1.3 each, as OSRS");
+  assert.equal(xp.getExperience(Skill.HITPOINTS), 1167);
+});
+
 test("Hunter cache data, trap ownership, transactions, cancellation and persisted birdhouses", async () => {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   const { PluginManager } = require("../dist/plugins/PluginManager");
@@ -148,6 +159,9 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
 
     // Box traps accept spicy tomato/minced meat, deadfalls a jerboa tail; both return on dismantle.
     p.counts.clear(); p.counts.set(I.BOX_TRAP, 1); p.counts.set(I.SPICY_TOMATO, 1); p.counts.set(I.SPICY_MINCED_MEAT, 1);
+    Traps.activate({ player: p, itemId: I.BOX_TRAP }); advance(3);
+    assert.equal(H.traps.size, 0, "box traps wait for Nickolaus's lesson in Eagles' Peak");
+    p.attrs.set("quest.eagles_peak.stage", 6);
     Traps.activate({ player: p, itemId: I.BOX_TRAP }); advance(3);
     const boxTrap = [...H.traps][0]; assert.ok(boxTrap);
     Traps.bait({ player: p, object: boxTrap.objects[0], itemId: I.RAW_BEEF });
@@ -402,11 +416,57 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     q.moveTo(anchor.getLocation().clone().add(0,1));q.options[1][1]();
     assert.equal(Drift.state(q).nets[anchor.getId()],undefined);assert.equal(q.counts.has(I.NUMULITE),false);
     assert.ok(q.banks.some(b=>b.items.size>0));Drift.cleanup({player:q});
+    // Ceto's transcript: its conditions follow the player's access and numulites.
+    const Ceto = require("../plugins/skills/hunter/Ceto.Hunter");
+    const cetoSays = text => Ceto.condition({ player: q, npcId: core.NpcIdentifiers.CETO, text });
+    Drift.state(q).until = 0; q.counts.set(I.NUMULITE, 200);
+    assert.equal(cetoSays("If the player has the level requirements to drift net fish, but has not paid for a day's access:"), true);
+    assert.equal(cetoSays("If the player has at least 200 numulites in their inventory:"), true);
+    assert.ok(Drift.buyDay(q)); assert.equal(q.counts.has(I.NUMULITE), false);
+    assert.equal(cetoSays("If the player has paid to access for the day:"), true);
+    assert.equal(cetoSays("If the player has paid for permanent access:"), false);
+    assert.equal(Ceto.condition({ player: q, npcId: core.NpcIdentifiers.ANNETTE, text: "If the player has paid for permanent access:" }), null);
+    // The lines the payments hang on are the transcript's own words.
+    const transcript = JSON.stringify(require("../data/definitions/npc-dialogues.json").Ceto);
+    for (const words of [Ceto.PAY_TEXT, Ceto.ENTERS_LINE, Ceto.PERMANENT_LINE]) assert.ok(transcript.includes(JSON.stringify(words)), words);
+    Drift.state(q).until = 0; q.counts.set(I.NUMULITE, 200);
+    const give = { player: q, npcId: core.NpcIdentifiers.CETO, action: "give", text: Ceto.PAY_TEXT, handled: false };
+    Ceto.action(give);
+    assert.ok(give.handled && !give.end && Drift.state(q).until > Date.now(), "the give step pays for the day");
+    const broke = { player: q, npcId: core.NpcIdentifiers.CETO, action: "give", text: Ceto.PAY_TEXT, handled: false };
+    Ceto.action(broke); assert.ok(broke.end, "no numulites ends the conversation");
+    q.counts.set(I.NUMULITE, 20000);
+    const thanks = { player: q, npcId: core.NpcIdentifiers.CETO, text: Ceto.PERMANENT_LINE, skip: false };
+    Ceto.line(thanks);
+    assert.equal(Drift.state(q).until, -1); assert.equal(q.counts.has(I.NUMULITE), false);
     q.equipment.clear();q.counts.clear();q.moveTo(new core.Location(1370,3620));q.counts.set(I.KING_WORM,2);
     Aerial.borrow({player:q});const spot=prey(core.NpcIdentifiers.FISHING_SPOT_12,q.getLocation().clone().add(2,0));
     const preAerial=q.experience.get(Skill.HUNTER);Aerial.fish({player:q,npc:spot,npcId:spot.getId()});advance(1);
     assert.ok(q.experience.get(Skill.HUNTER)>preAerial);assert.equal(q.counts.get(I.KING_WORM),1);
     Aerial.cleanup({player:q});Runtime.cleanup({player:q});
+
+    // Tracking: the object the visible tracks lead to reveals the next set, and the last one hides the kebbit.
+    const t = player(), tracked = [];
+    t.counts.set(I.NOOSE_WAND, 1); t.sendMessage = m => tracked.push(m);
+    const trailAt = ([x, y, z]) => new core.GameObject(1, new core.Location(x, y, z), 10, 0, null);
+    const segmentOf = varbit => Tracking.data.segments.find(s => s.varbit === varbit);
+    const burrow = trailAt(Tracking.data.segments.find(s => s.burrow && s.kebbit === "feldip_weasel").start);
+    t.moveTo(burrow.getLocation().clone());
+    Tracking.inspect({ player: t, object: burrow, definition: { getName: () => "Burrow" } });
+    let searches = 0;
+    while (!tracked.at(-1).startsWith("Something is moving here") && searches++ < 15) {
+      const varbit = [...t.configs.keys()].at(-1), segment = segmentOf(varbit);
+      const forwards = t.configs.get(varbit) === (segment.inverted ? 5 : 4);
+      const spot = trailAt(forwards ? segment.end : segment.start);
+      t.moveTo(spot.getLocation().clone());
+      Tracking.inspect({ player: t, object: spot, definition: { getName: () => "Bush" } });
+      assert.notEqual(tracked.at(-1), "You find no new tracks here.", "the object the tracks lead to continues the trail");
+    }
+    assert.ok(searches < 15, "the trail ends at the kebbit");
+    const hide = trailAt([t.getLocation().getX(), t.getLocation().getY(), t.getLocation().getZ()]);
+    Tracking.catchPrey({ player: t, object: hide }); advance(2);
+    assert.equal(t.experience.get(Skill.HUNTER), 48, "a Feldip weasel gives 48 Hunter XP");
+    assert.ok(t.counts.has(I.FELDIP_WEASEL_FUR));
 
     const route = { npcId: core.NpcIdentifiers.FISHING_SPOT_12, definition: { getActions: () => ["Catch"] }, clickType: 1, range: 1 };
     Runtime.npcRoute(route); assert.equal(route.range, 9);
@@ -430,7 +490,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     let completed = 0, queued = 0;
     const queue = { player: { ...p, getIndex: () => 1, setMobileInteraction() {} }, getMobility: () => ({ canMove: () => true }),
       checkDestination: () => true, reset() {}, walkToReset() {}, isInteractionTargetValid: () => true,
-      canInteractWithUnreachableNpc: () => false };
+      isProjectedMainWorldNpc: () => false, canInteractWithUnreachableNpc: () => false };
     try {
       core.PathFinder.reachedEntity = () => false;
       core.PathFinder.calculateEntityRoute = () => {};
@@ -666,8 +726,11 @@ test("burying resolves inventory and XP together on tick two; movement, logout a
   }
 });
 
-test("Fletching keeps going while moving, stops on the next click and never restarts its animation after a level-up", () => {
+test("Fletching keeps going while moving, stops on the next click and never restarts its animation after a level-up", async () => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   const { PluginManager } = require("../dist/plugins/PluginManager");
+  // Fletching names its animations by gameval; an earlier test may have opened the cache already.
+  try { CachePipeline.getActive(); } catch { await CachePipeline.initialize(require("node:path").resolve(__dirname, "..")); }
   const core = PluginManager.getCoreApi(), tasks = [];
   const hooks = registerFeedbackPlugin("skills/Fletching", core, {
     getTaskManager: () => ({ submit: task => { task.setRunning(true); tasks.push(task); } }),
@@ -796,19 +859,32 @@ test("client feedback IDs and per-gem animations exist in the active OSRS cache"
     assert.ok(interfaces.getFile(233, child)?.data.length, `level-up component ${child}`);
   const configs = CacheIndexDat2.fromStore(IndexType.DAT2.configs, store);
   const core = PluginManager.getCoreApi();
-  const hooks = registerFeedbackPlugin("skills/Crafting", core);
-  for (const [uncut, cut, animation] of [["OPAL", "OPAL", 890], ["JADE", "JADE", 891],
-    ["RED_TOPAZ", "RED_TOPAZ", 892], ["SAPPHIRE", "SAPPHIRE", 888], ["EMERALD", "EMERALD", 889],
-    ["RUBY", "RUBY", 887], ["DIAMOND", "DIAMOND", 886], ["DRAGONSTONE", "DRAGONSTONE", 885],
-    ["ONYX", "ONYX", 2717], ["ZENYTE", "ZENYTE", 7185]]) {
-    assert.ok(configs.getFile(ConfigType.DAT2.seqs, animation)?.data.length, `gem sequence ${animation}`);
-    const p = feedbackPlayer(core), I = core.ItemIdentifiers;
-    p.skills = { getCurrentLevel: () => 99, addExperiences() {} };
-    p.counts.set(I.CHISEL, 1); p.counts.set(I[`UNCUT_${uncut}`], 1);
-    hooks.onItemOnItem({ player: p, usedItemId: I.CHISEL, usedWithItemId: I[`UNCUT_${uncut}`] });
-    assert.equal(p.animations.at(-1), animation, uncut);
-    assert.equal(p.counts.get(I[cut]), 1);
-    assert.equal(p.sent.filter(([type, id]) => type === "sendSoundEffect" && id === 2586).length, 1);
+  const tasks = [];
+  const hooks = registerFeedbackPlugin("skills/Crafting", core, { getTaskManager: () => ({ submit: task => tasks.push(task) }) });
+  const members = core.WorldDefinition.isMembersWorld, random = Math.random;
+  core.WorldDefinition.isMembersWorld = () => true;
+  Math.random = () => 0;
+  try {
+    for (const [uncut, cut, animation] of [["OPAL", "OPAL", 890], ["JADE", "JADE", 891],
+      ["RED_TOPAZ", "RED_TOPAZ", 892], ["SAPPHIRE", "SAPPHIRE", 888], ["EMERALD", "EMERALD", 889],
+      ["RUBY", "RUBY", 887], ["DIAMOND", "DIAMOND", 886], ["DRAGONSTONE", "DRAGONSTONE", 885],
+      ["ONYX", "ONYX", 2717], ["ZENYTE", "ZENYTE", 7185]]) {
+      assert.ok(configs.getFile(ConfigType.DAT2.seqs, animation)?.data.length, `gem sequence ${animation}`);
+      const p = feedbackPlayer(core), I = core.ItemIdentifiers;
+      p.skills = { getCurrentLevel: () => 99, addExperiences() {} };
+      p.getInterfaceId = () => -1;
+      p.counts.set(I.CHISEL, 1); p.counts.set(I[`UNCUT_${uncut}`], 1);
+      hooks.onItemOnItem({ player: p, usedItemId: I.CHISEL, usedWithItemId: I[`UNCUT_${uncut}`] });
+      // rsprox 1875: the gem is cut on the tick after it is chosen in the skillmulti menu.
+      p.menu().execute(I[`UNCUT_${uncut}`], 1);
+      tasks.at(-1).execute();
+      assert.equal(p.animations.at(-1), animation, uncut);
+      assert.equal(p.counts.get(I[cut]), 1);
+      assert.equal(p.sent.filter(([type, id]) => type === "sendSoundEffect" && id === 2586).length, 1);
+    }
+  } finally {
+    core.WorldDefinition.isMembersWorld = members;
+    Math.random = random;
   }
 });
 
@@ -892,10 +968,12 @@ test("disconnecting before a pickpocket's outcome tick cancels it", () => {
   // (thieving-pickpocket.test.cjs). A player gone by then gets nothing.
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const core = PluginManager.getCoreApi(), tasks = [], npcHooks = {};
-  registerFeedbackPlugin("skills/Thieving", core, {
-    getTaskManager: () => ({ submit(task) { task.setRunning(true); tasks.push(task); } }),
-    getCombatFactory: () => ({ inCombat: () => false }),
+  registerFeedbackPlugin("skills/Thieving", { ...core,
+    TaskManager: { submit(task) { task.setRunning(true); tasks.push(task); } },
+    CombatFactory: { inCombat: () => false },
+  }, {
     onNpcInteraction: (name, actions) => { npcHooks[name] = actions; },
+    onNpcsInteraction: (names, actions) => { for (const name of names) npcHooks[name] = { ...npcHooks[name], ...actions }; },
   });
   const p = feedbackPlayer(core);
   p.getIndex = () => 1; p.getTimers = () => ({ has: () => false, getTicks: () => 0 });

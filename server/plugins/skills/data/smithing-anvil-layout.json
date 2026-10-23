@@ -1,0 +1,1226 @@
+{
+  "generatedBy": "yarn dump:smithing",
+  "bars": [
+    {
+      "barType": 1,
+      "bar": 2349,
+      "obj": "bronze_bar",
+      "slots": [
+        {
+          "component": 9,
+          "item": 1205,
+          "obj": "bronze_dagger",
+          "label": "Dagger"
+        },
+        {
+          "component": 10,
+          "item": 1277,
+          "obj": "bronze_sword",
+          "label": "Sword"
+        },
+        {
+          "component": 11,
+          "item": 1321,
+          "obj": "bronze_scimitar",
+          "label": "Scimitar"
+        },
+        {
+          "component": 12,
+          "item": 1291,
+          "obj": "bronze_longsword",
+          "label": "Longsword"
+        },
+        {
+          "component": 13,
+          "item": 1307,
+          "obj": "bronze_2h_sword",
+          "label": "2h sword"
+        },
+        {
+          "component": 14,
+          "item": 1351,
+          "obj": "bronze_axe",
+          "label": "Axe"
+        },
+        {
+          "component": 15,
+          "item": 1422,
+          "obj": "bronze_mace",
+          "label": "Mace"
+        },
+        {
+          "component": 16,
+          "item": 1337,
+          "obj": "bronze_warhammer",
+          "label": "Warhammer"
+        },
+        {
+          "component": 17,
+          "item": 1375,
+          "obj": "bronze_battleaxe",
+          "label": "Battleaxe"
+        },
+        {
+          "component": 18,
+          "item": 3095,
+          "obj": "bronze_claws",
+          "label": "Claws",
+          "quest": "death_plateau"
+        },
+        {
+          "component": 19,
+          "item": 1103,
+          "obj": "bronze_chainbody",
+          "label": "Chainbody"
+        },
+        {
+          "component": 20,
+          "item": 1075,
+          "obj": "bronze_platelegs",
+          "label": "Platelegs"
+        },
+        {
+          "component": 21,
+          "item": 1087,
+          "obj": "bronze_plateskirt",
+          "label": "Plateskirt"
+        },
+        {
+          "component": 22,
+          "item": 1117,
+          "obj": "bronze_platebody",
+          "label": "Platebody"
+        },
+        {
+          "component": 23,
+          "item": 4819,
+          "obj": "nails_bronze",
+          "label": "Nails"
+        },
+        {
+          "component": 24,
+          "item": 1139,
+          "obj": "bronze_med_helm",
+          "label": "Med helm"
+        },
+        {
+          "component": 25,
+          "item": 1155,
+          "obj": "bronze_full_helm",
+          "label": "Full helm"
+        },
+        {
+          "component": 26,
+          "item": 1173,
+          "obj": "bronze_sq_shield",
+          "label": "Sq shield"
+        },
+        {
+          "component": 27,
+          "item": 1189,
+          "obj": "bronze_kiteshield",
+          "label": "Kiteshield"
+        },
+        {
+          "component": 29,
+          "item": 819,
+          "obj": "bronze_dart_tip",
+          "label": "Dart tips",
+          "quest": "the_tourist_trap"
+        },
+        {
+          "component": 30,
+          "item": 39,
+          "obj": "bronze_arrowheads",
+          "label": "Arrowtips"
+        },
+        {
+          "component": 31,
+          "item": 864,
+          "obj": "bronze_knife",
+          "label": "Knives"
+        },
+        {
+          "component": 32,
+          "item": 1794,
+          "obj": "bronzecraftwire",
+          "label": "Wire"
+        },
+        {
+          "component": 34,
+          "item": 9375,
+          "obj": "xbows_crossbow_bolts_bronze_unfeathered",
+          "label": "Bolts",
+          "members": true
+        },
+        {
+          "component": 35,
+          "item": 9420,
+          "obj": "xbows_crossbow_limbs_bronze",
+          "label": "Limbs",
+          "members": true
+        },
+        {
+          "component": 33,
+          "item": 19570,
+          "obj": "bronze_javelin_head",
+          "label": "Javelin tips",
+          "members": true
+        },
+        {
+          "component": 36,
+          "item": 31999,
+          "obj": "sailing_boat_keel_part_bronze",
+          "label": "Keel parts",
+          "members": true,
+          "quest": "pandemonium"
+        }
+      ]
+    },
+    {
+      "barType": 2,
+      "bar": 2351,
+      "obj": "iron_bar",
+      "slots": [
+        {
+          "component": 9,
+          "item": 1203,
+          "obj": "iron_dagger",
+          "label": "Dagger"
+        },
+        {
+          "component": 10,
+          "item": 1279,
+          "obj": "iron_sword",
+          "label": "Sword"
+        },
+        {
+          "component": 11,
+          "item": 1323,
+          "obj": "iron_scimitar",
+          "label": "Scimitar"
+        },
+        {
+          "component": 12,
+          "item": 1293,
+          "obj": "iron_longsword",
+          "label": "Longsword"
+        },
+        {
+          "component": 13,
+          "item": 1309,
+          "obj": "iron_2h_sword",
+          "label": "2h sword"
+        },
+        {
+          "component": 14,
+          "item": 1349,
+          "obj": "iron_axe",
+          "label": "Axe"
+        },
+        {
+          "component": 15,
+          "item": 1420,
+          "obj": "iron_mace",
+          "label": "Mace"
+        },
+        {
+          "component": 16,
+          "item": 1335,
+          "obj": "iron_warhammer",
+          "label": "Warhammer"
+        },
+        {
+          "component": 17,
+          "item": 1363,
+          "obj": "iron_battleaxe",
+          "label": "Battleaxe"
+        },
+        {
+          "component": 18,
+          "item": 3096,
+          "obj": "iron_claws",
+          "label": "Claws",
+          "quest": "death_plateau"
+        },
+        {
+          "component": 19,
+          "item": 1101,
+          "obj": "iron_chainbody",
+          "label": "Chainbody"
+        },
+        {
+          "component": 20,
+          "item": 1067,
+          "obj": "iron_platelegs",
+          "label": "Platelegs"
+        },
+        {
+          "component": 21,
+          "item": 1081,
+          "obj": "iron_plateskirt",
+          "label": "Plateskirt"
+        },
+        {
+          "component": 22,
+          "item": 1115,
+          "obj": "iron_platebody",
+          "label": "Platebody"
+        },
+        {
+          "component": 23,
+          "item": 4820,
+          "obj": "nails_iron",
+          "label": "Nails"
+        },
+        {
+          "component": 24,
+          "item": 1137,
+          "obj": "iron_med_helm",
+          "label": "Med helm"
+        },
+        {
+          "component": 25,
+          "item": 1153,
+          "obj": "iron_full_helm",
+          "label": "Full helm"
+        },
+        {
+          "component": 26,
+          "item": 1175,
+          "obj": "iron_sq_shield",
+          "label": "Sq shield"
+        },
+        {
+          "component": 27,
+          "item": 1191,
+          "obj": "iron_kiteshield",
+          "label": "Kiteshield"
+        },
+        {
+          "component": 28,
+          "item": 4540,
+          "obj": "oil_lantern_frame",
+          "label": "Lamp frame"
+        },
+        {
+          "component": 29,
+          "item": 820,
+          "obj": "iron_dart_tip",
+          "label": "Dart tips",
+          "quest": "the_tourist_trap"
+        },
+        {
+          "component": 30,
+          "item": 40,
+          "obj": "iron_arrowheads",
+          "label": "Arrowtips"
+        },
+        {
+          "component": 31,
+          "item": 863,
+          "obj": "iron_knife",
+          "label": "Knives"
+        },
+        {
+          "component": 32,
+          "item": 7225,
+          "obj": "spit_iron",
+          "label": "Iron spit"
+        },
+        {
+          "component": 34,
+          "item": 9377,
+          "obj": "xbows_crossbow_bolts_iron_unfeathered",
+          "label": "Bolts",
+          "members": true
+        },
+        {
+          "component": 35,
+          "item": 9423,
+          "obj": "xbows_crossbow_limbs_iron",
+          "label": "Limbs",
+          "members": true
+        },
+        {
+          "component": 33,
+          "item": 19572,
+          "obj": "iron_javelin_head",
+          "label": "Javelin tips",
+          "members": true
+        },
+        {
+          "component": 36,
+          "item": 32002,
+          "obj": "sailing_boat_keel_part_iron",
+          "label": "Keel parts",
+          "members": true,
+          "quest": "pandemonium"
+        }
+      ]
+    },
+    {
+      "barType": 3,
+      "bar": 2353,
+      "obj": "steel_bar",
+      "slots": [
+        {
+          "component": 9,
+          "item": 1207,
+          "obj": "steel_dagger",
+          "label": "Dagger"
+        },
+        {
+          "component": 10,
+          "item": 1281,
+          "obj": "steel_sword",
+          "label": "Sword"
+        },
+        {
+          "component": 11,
+          "item": 1325,
+          "obj": "steel_scimitar",
+          "label": "Scimitar"
+        },
+        {
+          "component": 12,
+          "item": 1295,
+          "obj": "steel_longsword",
+          "label": "Longsword"
+        },
+        {
+          "component": 13,
+          "item": 1311,
+          "obj": "steel_2h_sword",
+          "label": "2h sword"
+        },
+        {
+          "component": 14,
+          "item": 1353,
+          "obj": "steel_axe",
+          "label": "Axe"
+        },
+        {
+          "component": 15,
+          "item": 1424,
+          "obj": "steel_mace",
+          "label": "Mace"
+        },
+        {
+          "component": 16,
+          "item": 1339,
+          "obj": "steel_warhammer",
+          "label": "Warhammer"
+        },
+        {
+          "component": 17,
+          "item": 1365,
+          "obj": "steel_battleaxe",
+          "label": "Battleaxe"
+        },
+        {
+          "component": 18,
+          "item": 3097,
+          "obj": "steel_claws",
+          "label": "Claws",
+          "quest": "death_plateau"
+        },
+        {
+          "component": 19,
+          "item": 1105,
+          "obj": "steel_chainbody",
+          "label": "Chainbody"
+        },
+        {
+          "component": 20,
+          "item": 1069,
+          "obj": "steel_platelegs",
+          "label": "Platelegs"
+        },
+        {
+          "component": 21,
+          "item": 1083,
+          "obj": "steel_plateskirt",
+          "label": "Plateskirt"
+        },
+        {
+          "component": 22,
+          "item": 1119,
+          "obj": "steel_platebody",
+          "label": "Platebody"
+        },
+        {
+          "component": 23,
+          "item": 1539,
+          "obj": "nails",
+          "label": "Nails"
+        },
+        {
+          "component": 24,
+          "item": 1141,
+          "obj": "steel_med_helm",
+          "label": "Med helm"
+        },
+        {
+          "component": 25,
+          "item": 1157,
+          "obj": "steel_full_helm",
+          "label": "Full helm"
+        },
+        {
+          "component": 26,
+          "item": 1177,
+          "obj": "steel_sq_shield",
+          "label": "Sq shield"
+        },
+        {
+          "component": 27,
+          "item": 1193,
+          "obj": "steel_kiteshield",
+          "label": "Kiteshield"
+        },
+        {
+          "component": 28,
+          "item": 4544,
+          "obj": "bullseye_lantern_nolens",
+          "label": "Lamp frame"
+        },
+        {
+          "component": 29,
+          "item": 821,
+          "obj": "steel_dart_tip",
+          "label": "Dart tips",
+          "quest": "the_tourist_trap"
+        },
+        {
+          "component": 30,
+          "item": 41,
+          "obj": "steel_arrowheads",
+          "label": "Arrowtips"
+        },
+        {
+          "component": 31,
+          "item": 865,
+          "obj": "steel_knife",
+          "label": "Knives"
+        },
+        {
+          "component": 32,
+          "item": 2370,
+          "obj": "studs",
+          "label": "Studs"
+        },
+        {
+          "component": 34,
+          "item": 9378,
+          "obj": "xbows_crossbow_bolts_steel_unfeathered",
+          "label": "Bolts",
+          "members": true
+        },
+        {
+          "component": 35,
+          "item": 9425,
+          "obj": "xbows_crossbow_limbs_steel",
+          "label": "Limbs",
+          "members": true
+        },
+        {
+          "component": 33,
+          "item": 19574,
+          "obj": "steel_javelin_head",
+          "label": "Javelin tips",
+          "members": true
+        },
+        {
+          "component": 36,
+          "item": 32005,
+          "obj": "sailing_boat_keel_part_steel",
+          "label": "Keel parts",
+          "members": true,
+          "quest": "pandemonium"
+        },
+        {
+          "component": 37,
+          "item": 32886,
+          "obj": "chain",
+          "label": "Chain",
+          "members": true
+        }
+      ]
+    },
+    {
+      "barType": 4,
+      "bar": 2359,
+      "obj": "mithril_bar",
+      "slots": [
+        {
+          "component": 9,
+          "item": 1209,
+          "obj": "mithril_dagger",
+          "label": "Dagger"
+        },
+        {
+          "component": 10,
+          "item": 1285,
+          "obj": "mithril_sword",
+          "label": "Sword"
+        },
+        {
+          "component": 11,
+          "item": 1329,
+          "obj": "mithril_scimitar",
+          "label": "Scimitar"
+        },
+        {
+          "component": 12,
+          "item": 1299,
+          "obj": "mithril_longsword",
+          "label": "Longsword"
+        },
+        {
+          "component": 13,
+          "item": 1315,
+          "obj": "mithril_2h_sword",
+          "label": "2h sword"
+        },
+        {
+          "component": 14,
+          "item": 1355,
+          "obj": "mithril_axe",
+          "label": "Axe"
+        },
+        {
+          "component": 15,
+          "item": 1428,
+          "obj": "mithril_mace",
+          "label": "Mace"
+        },
+        {
+          "component": 16,
+          "item": 1343,
+          "obj": "mithril_warhammer",
+          "label": "Warhammer"
+        },
+        {
+          "component": 17,
+          "item": 1369,
+          "obj": "mithril_battleaxe",
+          "label": "Battleaxe"
+        },
+        {
+          "component": 18,
+          "item": 3099,
+          "obj": "mithril_claws",
+          "label": "Claws",
+          "quest": "death_plateau"
+        },
+        {
+          "component": 19,
+          "item": 1109,
+          "obj": "mithril_chainbody",
+          "label": "Chainbody"
+        },
+        {
+          "component": 20,
+          "item": 1071,
+          "obj": "mithril_platelegs",
+          "label": "Platelegs"
+        },
+        {
+          "component": 21,
+          "item": 1085,
+          "obj": "mithril_plateskirt",
+          "label": "Plateskirt"
+        },
+        {
+          "component": 22,
+          "item": 1121,
+          "obj": "mithril_platebody",
+          "label": "Platebody"
+        },
+        {
+          "component": 23,
+          "item": 4822,
+          "obj": "nails_mithril",
+          "label": "Nails"
+        },
+        {
+          "component": 24,
+          "item": 1143,
+          "obj": "mithril_med_helm",
+          "label": "Med helm"
+        },
+        {
+          "component": 25,
+          "item": 1159,
+          "obj": "mithril_full_helm",
+          "label": "Full helm"
+        },
+        {
+          "component": 26,
+          "item": 1181,
+          "obj": "mithril_sq_shield",
+          "label": "Sq shield"
+        },
+        {
+          "component": 27,
+          "item": 1197,
+          "obj": "mithril_kiteshield",
+          "label": "Kiteshield"
+        },
+        {
+          "component": 29,
+          "item": 822,
+          "obj": "mithril_dart_tip",
+          "label": "Dart tips",
+          "quest": "the_tourist_trap"
+        },
+        {
+          "component": 30,
+          "item": 42,
+          "obj": "mithril_arrowheads",
+          "label": "Arrowtips"
+        },
+        {
+          "component": 31,
+          "item": 866,
+          "obj": "mithril_knife",
+          "label": "Knives"
+        },
+        {
+          "component": 34,
+          "item": 9379,
+          "obj": "xbows_crossbow_bolts_mithril_unfeathered",
+          "label": "Bolts",
+          "members": true
+        },
+        {
+          "component": 35,
+          "item": 9427,
+          "obj": "xbows_crossbow_limbs_mithril",
+          "label": "Limbs",
+          "members": true
+        },
+        {
+          "component": 33,
+          "item": 19576,
+          "obj": "mithril_javelin_head",
+          "label": "Javelin tips",
+          "members": true
+        },
+        {
+          "component": 32,
+          "item": 9416,
+          "obj": "xbows_grapple_tip_mithril",
+          "label": "Grapple tip",
+          "members": true
+        },
+        {
+          "component": 36,
+          "item": 32008,
+          "obj": "sailing_boat_keel_part_mithril",
+          "label": "Keel parts",
+          "members": true,
+          "quest": "pandemonium"
+        }
+      ]
+    },
+    {
+      "barType": 5,
+      "bar": 2361,
+      "obj": "adamantite_bar",
+      "slots": [
+        {
+          "component": 9,
+          "item": 1211,
+          "obj": "adamant_dagger",
+          "label": "Dagger"
+        },
+        {
+          "component": 10,
+          "item": 1287,
+          "obj": "adamant_sword",
+          "label": "Sword"
+        },
+        {
+          "component": 11,
+          "item": 1331,
+          "obj": "adamant_scimitar",
+          "label": "Scimitar"
+        },
+        {
+          "component": 12,
+          "item": 1301,
+          "obj": "adamant_longsword",
+          "label": "Longsword"
+        },
+        {
+          "component": 13,
+          "item": 1317,
+          "obj": "adamant_2h_sword",
+          "label": "2h sword"
+        },
+        {
+          "component": 14,
+          "item": 1357,
+          "obj": "adamant_axe",
+          "label": "Axe"
+        },
+        {
+          "component": 15,
+          "item": 1430,
+          "obj": "adamant_mace",
+          "label": "Mace"
+        },
+        {
+          "component": 16,
+          "item": 1345,
+          "obj": "adamnt_warhammer",
+          "label": "Warhammer"
+        },
+        {
+          "component": 17,
+          "item": 1371,
+          "obj": "adamant_battleaxe",
+          "label": "Battleaxe"
+        },
+        {
+          "component": 18,
+          "item": 3100,
+          "obj": "adamant_claws",
+          "label": "Claws",
+          "quest": "death_plateau"
+        },
+        {
+          "component": 19,
+          "item": 1111,
+          "obj": "adamant_chainbody",
+          "label": "Chainbody"
+        },
+        {
+          "component": 20,
+          "item": 1073,
+          "obj": "adamant_platelegs",
+          "label": "Platelegs"
+        },
+        {
+          "component": 21,
+          "item": 1091,
+          "obj": "adamant_plateskirt",
+          "label": "Plateskirt"
+        },
+        {
+          "component": 22,
+          "item": 1123,
+          "obj": "adamant_platebody",
+          "label": "Platebody"
+        },
+        {
+          "component": 23,
+          "item": 4823,
+          "obj": "nails_adamant",
+          "label": "Nails"
+        },
+        {
+          "component": 24,
+          "item": 1145,
+          "obj": "adamant_med_helm",
+          "label": "Med helm"
+        },
+        {
+          "component": 25,
+          "item": 1161,
+          "obj": "adamant_full_helm",
+          "label": "Full helm"
+        },
+        {
+          "component": 26,
+          "item": 1183,
+          "obj": "adamant_sq_shield",
+          "label": "Sq shield"
+        },
+        {
+          "component": 27,
+          "item": 1199,
+          "obj": "adamant_kiteshield",
+          "label": "Kiteshield"
+        },
+        {
+          "component": 29,
+          "item": 823,
+          "obj": "adamant_dart_tip",
+          "label": "Dart tips",
+          "quest": "the_tourist_trap"
+        },
+        {
+          "component": 30,
+          "item": 43,
+          "obj": "adamant_arrowheads",
+          "label": "Arrowtips"
+        },
+        {
+          "component": 31,
+          "item": 867,
+          "obj": "adamant_knife",
+          "label": "Knives"
+        },
+        {
+          "component": 34,
+          "item": 9380,
+          "obj": "xbows_crossbow_bolts_adamantite_unfeathered",
+          "label": "Bolts",
+          "members": true
+        },
+        {
+          "component": 35,
+          "item": 9429,
+          "obj": "xbows_crossbow_limbs_adamantite",
+          "label": "Limbs",
+          "members": true
+        },
+        {
+          "component": 32,
+          "item": 19578,
+          "obj": "adamant_javelin_head",
+          "label": "Javelin tips",
+          "members": true
+        },
+        {
+          "component": 36,
+          "item": 32011,
+          "obj": "sailing_boat_keel_part_adamant",
+          "label": "Keel parts",
+          "members": true,
+          "quest": "pandemonium"
+        }
+      ]
+    },
+    {
+      "barType": 6,
+      "bar": 2363,
+      "obj": "runite_bar",
+      "slots": [
+        {
+          "component": 9,
+          "item": 1213,
+          "obj": "rune_dagger",
+          "label": "Dagger"
+        },
+        {
+          "component": 10,
+          "item": 1289,
+          "obj": "rune_sword",
+          "label": "Sword"
+        },
+        {
+          "component": 11,
+          "item": 1333,
+          "obj": "rune_scimitar",
+          "label": "Scimitar"
+        },
+        {
+          "component": 12,
+          "item": 1303,
+          "obj": "rune_longsword",
+          "label": "Longsword"
+        },
+        {
+          "component": 13,
+          "item": 1319,
+          "obj": "rune_2h_sword",
+          "label": "2h sword"
+        },
+        {
+          "component": 14,
+          "item": 1359,
+          "obj": "rune_axe",
+          "label": "Axe"
+        },
+        {
+          "component": 15,
+          "item": 1432,
+          "obj": "rune_mace",
+          "label": "Mace"
+        },
+        {
+          "component": 16,
+          "item": 1347,
+          "obj": "rune_warhammer",
+          "label": "Warhammer"
+        },
+        {
+          "component": 17,
+          "item": 1373,
+          "obj": "rune_battleaxe",
+          "label": "Battleaxe"
+        },
+        {
+          "component": 18,
+          "item": 3101,
+          "obj": "rune_claws",
+          "label": "Claws",
+          "quest": "death_plateau"
+        },
+        {
+          "component": 19,
+          "item": 1113,
+          "obj": "rune_chainbody",
+          "label": "Chainbody"
+        },
+        {
+          "component": 20,
+          "item": 1079,
+          "obj": "rune_platelegs",
+          "label": "Platelegs"
+        },
+        {
+          "component": 21,
+          "item": 1093,
+          "obj": "rune_plateskirt",
+          "label": "Plateskirt"
+        },
+        {
+          "component": 22,
+          "item": 1127,
+          "obj": "rune_platebody",
+          "label": "Platebody"
+        },
+        {
+          "component": 23,
+          "item": 4824,
+          "obj": "nails_rune",
+          "label": "Nails"
+        },
+        {
+          "component": 24,
+          "item": 1147,
+          "obj": "rune_med_helm",
+          "label": "Med helm"
+        },
+        {
+          "component": 25,
+          "item": 1163,
+          "obj": "rune_full_helm",
+          "label": "Full helm"
+        },
+        {
+          "component": 26,
+          "item": 1185,
+          "obj": "rune_sq_shield",
+          "label": "Sq shield"
+        },
+        {
+          "component": 27,
+          "item": 1201,
+          "obj": "rune_kiteshield",
+          "label": "Kiteshield"
+        },
+        {
+          "component": 29,
+          "item": 824,
+          "obj": "rune_dart_tip",
+          "label": "Dart tips",
+          "quest": "the_tourist_trap"
+        },
+        {
+          "component": 30,
+          "item": 44,
+          "obj": "rune_arrowheads",
+          "label": "Arrowtips"
+        },
+        {
+          "component": 31,
+          "item": 868,
+          "obj": "rune_knife",
+          "label": "Knives"
+        },
+        {
+          "component": 34,
+          "item": 9381,
+          "obj": "xbows_crossbow_bolts_runite_unfeathered",
+          "label": "Bolts",
+          "members": true
+        },
+        {
+          "component": 35,
+          "item": 9431,
+          "obj": "xbows_crossbow_limbs_runite",
+          "label": "Limbs",
+          "members": true
+        },
+        {
+          "component": 32,
+          "item": 19580,
+          "obj": "rune_javelin_head",
+          "label": "Javelin tips",
+          "members": true
+        },
+        {
+          "component": 36,
+          "item": 32014,
+          "obj": "sailing_boat_keel_part_rune",
+          "label": "Keel parts",
+          "members": true,
+          "quest": "pandemonium"
+        }
+      ]
+    },
+    {
+      "barType": 7,
+      "bar": 13354,
+      "obj": "lovakite_bar",
+      "slots": [
+        {
+          "component": 9,
+          "item": 13357,
+          "obj": "shayzien_gloves_1",
+          "label": "Gloves (1)"
+        },
+        {
+          "component": 10,
+          "item": 13358,
+          "obj": "shayzien_boots_1",
+          "label": "Boots (1)"
+        },
+        {
+          "component": 11,
+          "item": 13359,
+          "obj": "shayzien_helm_1",
+          "label": "Helm (1)"
+        },
+        {
+          "component": 12,
+          "item": 13360,
+          "obj": "shayzien_legs_1",
+          "label": "Greaves (1)"
+        },
+        {
+          "component": 13,
+          "item": 13361,
+          "obj": "shayzien_body_1",
+          "label": "Platebody (1)"
+        },
+        {
+          "component": 14,
+          "item": 13362,
+          "obj": "shayzien_gloves_2",
+          "label": "Gloves (2)"
+        },
+        {
+          "component": 15,
+          "item": 13363,
+          "obj": "shayzien_boots_2",
+          "label": "Boots (2)"
+        },
+        {
+          "component": 16,
+          "item": 13364,
+          "obj": "shayzien_helm_2",
+          "label": "Helm (2)"
+        },
+        {
+          "component": 17,
+          "item": 13365,
+          "obj": "shayzien_legs_2",
+          "label": "Greaves (2)"
+        },
+        {
+          "component": 18,
+          "item": 13366,
+          "obj": "shayzien_body_2",
+          "label": "Platebody (2)"
+        },
+        {
+          "component": 19,
+          "item": 13367,
+          "obj": "shayzien_gloves_3",
+          "label": "Gloves (3)"
+        },
+        {
+          "component": 20,
+          "item": 13368,
+          "obj": "shayzien_boots_3",
+          "label": "Boots (3)"
+        },
+        {
+          "component": 21,
+          "item": 13369,
+          "obj": "shayzien_helm_3",
+          "label": "Helm (3)"
+        },
+        {
+          "component": 22,
+          "item": 13370,
+          "obj": "shayzien_legs_3",
+          "label": "Greaves (3)"
+        },
+        {
+          "component": 23,
+          "item": 13371,
+          "obj": "shayzien_body_3",
+          "label": "Platebody (3)"
+        },
+        {
+          "component": 24,
+          "item": 13372,
+          "obj": "shayzien_gloves_4",
+          "label": "Gloves (4)"
+        },
+        {
+          "component": 25,
+          "item": 13373,
+          "obj": "shayzien_boots_4",
+          "label": "Boots (4)"
+        },
+        {
+          "component": 26,
+          "item": 13374,
+          "obj": "shayzien_helm_4",
+          "label": "Helm (4)"
+        },
+        {
+          "component": 27,
+          "item": 13375,
+          "obj": "shayzien_legs_4",
+          "label": "Greaves (4)"
+        },
+        {
+          "component": 28,
+          "item": 13376,
+          "obj": "shayzien_body_4",
+          "label": "Platebody (4)"
+        },
+        {
+          "component": 29,
+          "item": 13377,
+          "obj": "shayzien_gloves_5",
+          "label": "Gloves (5)"
+        },
+        {
+          "component": 30,
+          "item": 13378,
+          "obj": "shayzien_boots_5",
+          "label": "Boots (5)"
+        },
+        {
+          "component": 31,
+          "item": 13379,
+          "obj": "shayzien_helm_5",
+          "label": "Helm (5)"
+        },
+        {
+          "component": 32,
+          "item": 13380,
+          "obj": "shayzien_legs_5",
+          "label": "Greaves (5)"
+        },
+        {
+          "component": 33,
+          "item": 13381,
+          "obj": "shayzien_body_5",
+          "label": "Platebody (5)"
+        }
+      ]
+    }
+  ]
+}

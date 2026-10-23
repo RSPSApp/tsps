@@ -19,6 +19,7 @@ module.exports = {
     require("./skillcapes/Teleports.SkillCapes")(api);
     require("./skillcapes/Options.SkillCapes")(api);
     require("./skillcapes/Passive.SkillCapes")(api);
+    require("./skillcapes/MetalAttraction.SkillCapes")(api);
     require("./skillcapes/MaxCape.SkillCapes")(api);
     require("./skillcapes/MacIsland.SkillCapes")(api);
   },

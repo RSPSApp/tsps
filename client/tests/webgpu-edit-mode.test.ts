@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { JSDOM } from "jsdom";
 import { Camera } from "../game/Camera";
 import { TileHighlightManager } from "../game/highlights/TileHighlightManager";
+import { ClientPluginManager } from "../game/plugins/ClientPluginManager";
 
 require.extensions[".glsl"] = (module, file) => { module.exports = fs.readFileSync(file, "utf8"); };
 for (const ext of [".png", ".jpg", ".webp"]) require.extensions[ext] = (module, file) => { module.exports = file; };
@@ -31,7 +32,8 @@ async function main() {
         isLoggedIn: () => false,
         inputManager: { mouseX: -1, mouseY: -1 },
         playerEcs: { size: () => 0, getIndexForServerId: () => undefined },
-        interactHighlightPlugin: { getConfig: () => ({ enabled: false }), setConfig() {} },
+        // Edit mode loads no plugins.
+        clientPlugins: new ClientPluginManager(),
     };
     const renderer: any = {
         osrsClient: client, canvas, stats: { frameCount: 0 },

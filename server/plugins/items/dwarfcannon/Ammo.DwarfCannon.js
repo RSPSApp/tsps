@@ -20,7 +20,7 @@ function loadFromInventory(cannon, amount) {
   const Items = Cannon.core.ItemIdentifiers;
   const inventory = player.getInventory();
   let loaded = 0;
-  const room = () => Math.min(Data.CAPACITY - Cannon.balls(cannon), amount - loaded);
+  const room = () => Math.min(Cannon.capacity(player) - Cannon.balls(cannon), amount - loaded);
   const granite = Math.min(room(), inventory.getAmount(Items.GRANITE_CANNONBALL));
   if (granite > 0) {
     inventory.delete(Items.GRANITE_CANNONBALL, granite);
@@ -58,7 +58,7 @@ function fire({ player, object }) {
   const cannon = ownCannon(player, object);
   if (cannon === null) return false;
   if (!cannon) return true;
-  loadFromInventory(cannon, Data.CAPACITY);
+  loadFromInventory(cannon, Cannon.capacity(player));
   if (Cannon.balls(cannon) === 0) {
     player.sendMessage(MESSAGE.NO_BALLS);
     return true;
@@ -116,7 +116,7 @@ function loadX({ player, object }) {
   if (!cannon) return true;
   const amount = Number(player.getAttribute(Cannon.LOAD_X_ATTRIBUTE) ?? 0);
   if (amount > 0) {
-    if (Cannon.balls(cannon) >= Data.CAPACITY) player.sendMessage(MESSAGE.FULL);
+    if (Cannon.balls(cannon) >= Cannon.capacity(player)) player.sendMessage(MESSAGE.FULL);
     else if (loadFromInventory(cannon, amount) === 0) player.sendMessage(MESSAGE.NO_BALLS);
     return true;
   }
@@ -128,13 +128,13 @@ function askLoadX(player) {
   const sender = player.getPacketSender();
   sender.sendVarbit(Data.VARBIT.BUSY, 1);
   player.setEnteredAmountAction({ execute: (amount) => setLoadX(player, amount) });
-  sender.sendEnterAmountPrompt(`Set load-x cannonballs (1 - ${Data.CAPACITY}):`);
+  sender.sendEnterAmountPrompt(`Set load-x cannonballs (1 - ${Cannon.capacity(player)}):`);
 }
 
 function setLoadX(player, entered) {
   player.getPacketSender().sendVarbit(Data.VARBIT.BUSY, 0);
   if (!Number.isInteger(entered) || entered <= 0) return;
-  const amount = Math.min(Data.CAPACITY, entered);
+  const amount = Math.min(Cannon.capacity(player), entered);
   player.setAttribute(Cannon.LOAD_X_ATTRIBUTE, amount);
   player.getPacketSender().sendVarbit(Data.VARBIT.LOAD_X, amount);
   player.sendMessage(`You will now load ${amount} cannonballs when using Load-x.`);

@@ -22,9 +22,6 @@ export class UIInputBridge {
     private lastProcessedClickMode2: number = Number.NaN;
     private lastProcessedClickMode3: number = Number.NaN;
     private lastProcessedMiddleClickSequence: number = -1;
-    private lastProcessedTargetVersion: number = -1;
-    private unchangedInputProcessedCount: number = 0;
-    private lastUnchangedInputLogMs: number = -Infinity;
     // When true, suppress the next pointer-up transition for the current click.
     // Used when a handler consumes the click on mousedown (OSRS menu parity).
     private suppressUpUntilRelease: boolean = false;
@@ -86,7 +83,6 @@ export class UIInputBridge {
             middleClickY,
             middleClickSequence,
         } = input;
-        const targetVersion = this.clicks.getVersion();
         const sameInputState =
             mouseX === this.lastProcessedMouseX &&
             mouseY === this.lastProcessedMouseY &&
@@ -95,27 +91,14 @@ export class UIInputBridge {
             clickMode2 === this.lastProcessedClickMode2 &&
             clickMode3 === this.lastProcessedClickMode3 &&
             middleClickSequence === this.lastProcessedMiddleClickSequence;
-        if (sameInputState && targetVersion === this.lastProcessedTargetVersion) {
-            return;
-        }
-        if (sameInputState && this.lastProcessedTargetVersion >= 0) {
-            this.unchangedInputProcessedCount++;
-            const now = performance.now();
-            if (now - this.lastUnchangedInputLogMs >= 1000) {
-                console.log(
-                    `[ui-input] unchanged input processed because targets changed count=${
-                        this.unchangedInputProcessedCount
-                    } targets=${this.clicks.getTargetCount()} targetVersion=${targetVersion} prevTargetVersion=${
-                        this.lastProcessedTargetVersion
-                    } mouse=${mouseX | 0},${mouseY | 0} clickMode2=${
-                        clickMode2 | 0
-                    } clickMode3=${clickMode3 | 0}`,
-                );
-                this.unchangedInputProcessedCount = 0;
-                this.lastUnchangedInputLogMs = now;
+        if (sameInputState) {
+            // Targets may have moved under a still pointer: only the hover can change. Picking
+            // is one pass over the targets, far cheaper than hashing all of them every frame.
+            if (mouseX >= 0 && mouseY >= 0) {
+                const mousePos = this.transformPoint(mouseX, mouseY);
+                this.clicks.onPointerMove(mousePos.x, mousePos.y);
             }
-        } else {
-            this.unchangedInputProcessedCount = 0;
+            return;
         }
 
         const mousePos = this.transformPoint(mouseX, mouseY);
@@ -172,7 +155,6 @@ export class UIInputBridge {
         this.lastProcessedClickMode2 = clickMode2;
         this.lastProcessedClickMode3 = clickMode3;
         this.lastProcessedMiddleClickSequence = middleClickSequence;
-        this.lastProcessedTargetVersion = targetVersion;
     }
 
     /**

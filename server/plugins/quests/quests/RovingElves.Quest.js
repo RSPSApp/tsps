@@ -81,7 +81,8 @@ module.exports = function registerRovingElvesQuest(api) {
   const STRENGTH_XP = 10000; // cache row 122 stat_xp_awarded [2, 100000]
 
   const GLARIALS_TOMBSTONE_OBJECT_ID = ObjectIdentifiers.GLARIALS_TOMBSTONE; // 1992
-  const TOMB_LADDER_OBJECT_ID = ObjectIdentifiers.LADDER_218; // 17387, Climb-up in the tomb
+  const TOMB_LADDER_OBJECT_ID = ObjectIdentifiers.LADDER_218; // 17387, generic id shared by many ladders
+  const TOMB_LADDER_TILE = { x: 2556, y: 9844, z: 0 }; // cache placement inside Glarial's Tomb
   const TOMB_ENTRY_TILE = { x: 2556, y: 9845, z: 0 };
   const TOMB_EXIT_TILE = { x: 2557, y: 3445, z: 0 };
   // quest-helper's throne room zone around the Chalice (2603,9910).
@@ -316,6 +317,9 @@ module.exports = function registerRovingElvesQuest(api) {
   /** The tomb ladder climbs back up beside the tombstone (no map link exists). */
   function claimTombLadder(request) {
     if (!request || request.objectId !== TOMB_LADDER_OBJECT_ID) return;
+    const at = request.object?.getLocation?.();
+    if (!at || at.getX() !== TOMB_LADDER_TILE.x || at.getY() !== TOMB_LADDER_TILE.y
+      || at.getZ() !== TOMB_LADDER_TILE.z) return;
     request.handled = true;
     request.player.moveTo(new Location(TOMB_EXIT_TILE.x, TOMB_EXIT_TILE.y, TOMB_EXIT_TILE.z));
   }

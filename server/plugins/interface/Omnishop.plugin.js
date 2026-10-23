@@ -28,9 +28,11 @@
  * - The list is 12 components per entry. Op1 selects: varp 3869 = the entry. The client draws
  *   the info panel itself and asks for its text with a trigger on trigger_request_info
  *   [shop, entry]; the server answers omnishop_main_info_update [shop, -1, entry, description,
- *   1, 0, 1]. Ops 2-5 buy 1, 5, 10 or 50 (ops "-1", "-5", "-10", "-50"), at most the stock's
- *   omnishop_stock_max_purchase; op10 examines. Buttons 1-4 buy 1/5/10/50 of the selected
- *   entry. (Until rev 238 the server sent omnishop_main_info_setup on op1 instead.)
+ *   1, 0, 1]. Ops 2-5 buy the shop's four amounts (ops "-1", "-5", "-10", "-50" unless the row
+ *   sets omnishop_buy_q1-4, codes into enum 5844: 1, 5, 10, 50, 2, 3; Alliance Supplies buys
+ *   1/2/3/5), at most the stock's omnishop_stock_max_purchase; op10 examines. Buttons 1-4 buy
+ *   those amounts of the selected entry. (Until rev 238 the server sent
+ *   omnishop_main_info_setup on op1 instead.)
  * - Each unit bought takes each currency (one varp change per currency) and redraws it
  *   (omnishop_main_currency_redraw [shop]). Refusals: "You don't have enough Lye resin.",
  *   "You cannot buy any more of that item." (a restricted item already owned) and "You don't
@@ -71,6 +73,8 @@ const TABLE = { SHOP: "omnishop_shop_data", STOCK: "omnishop_stock_data", CURREN
 const LIST_PER_ENTRY = 12;
 const INVENTORY_SIZE = 28;
 const QUANTITIES = [1, 5, 10, 50];
+/** omnishop_buy_q1-4 hold codes into this enum (client script 10163). */
+const QUANTITY_ENUM = 5844;
 /** List and side ops 2-5 are the four quantities; op10 is Examine. */
 const FIRST_QUANTITY_OP = 2;
 const EXAMINE_OP = 10;
@@ -114,6 +118,16 @@ function int(row, table, name, fallback = 0) {
   return id === null ? fallback : row.int(id, fallback);
 }
 
+/** The row's four buy amounts, or 1/5/10/50 where it sets none. */
+function buyQuantities(row) {
+  const amounts = cache().getEnumValues(QUANTITY_ENUM);
+  return QUANTITIES.map((fallback, index) => {
+    const code = int(row, TABLE.SHOP, `omnishop_buy_q${index + 1}`, -1);
+    const amount = code > 0 ? Number(amounts.get(code)) : NaN;
+    return amount > 0 ? amount : fallback;
+  });
+}
+
 /** A shop row read once: its stock and currencies. */
 function shopOf(rowId) {
   if (shops.has(rowId)) return shops.get(rowId);
@@ -138,7 +152,7 @@ function shopOf(rowId) {
       noted: int(stockRow, TABLE.STOCK, "omnishop_stock_sold_noted") === 1,
     };
   });
-  const shop = { row: rowId, name: cache().getDbRowName(rowId), stock };
+  const shop = { row: rowId, name: cache().getDbRowName(rowId), stock, quantities: buyQuantities(row) };
   shops.set(rowId, shop);
   return shop;
 }
@@ -328,7 +342,7 @@ function clickList({ player, slot, action }) {
   const op = Number(action);
   if (op === 1) select(player, entry);
   else if (op === EXAMINE_OP) examine(player, entry.itemId);
-  else if (QUANTITIES[op - FIRST_QUANTITY_OP]) buy(player, shop, entry, QUANTITIES[op - FIRST_QUANTITY_OP]);
+  else if (shop.quantities[op - FIRST_QUANTITY_OP]) buy(player, shop, entry, shop.quantities[op - FIRST_QUANTITY_OP]);
 }
 
 function clickBuy(event) {
@@ -336,7 +350,7 @@ function clickBuy(event) {
   if (!shop) return;
   const index = COMPONENT.BUY.map(component).indexOf(event.buttonId);
   const entry = shop.stock[event.player.getPacketSender().getVarp(varp(VARP.SELECTED))];
-  if (index >= 0 && entry) buy(event.player, shop, entry, QUANTITIES[index]);
+  if (index >= 0 && entry) buy(event.player, shop, entry, shop.quantities[index]);
 }
 
 function stockFor(shop, itemId) {

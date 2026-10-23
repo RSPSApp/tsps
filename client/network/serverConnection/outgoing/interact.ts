@@ -101,3 +101,40 @@ export function sendLocInteract(
         payload: { id: id | 0, tile: { x: tile.x | 0, y: tile.y | 0 }, level, action },
     } as any);
 }
+
+/** Sends a native OPWORLDENTITY option (1-6) for a static ship or boat. */
+export function sendWorldEntityOption(entityIndex: number, option: number): void {
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+    const index = entityIndex | 0;
+    const op = option | 0;
+    if (index < 0 || op < 1 || op > 6) return;
+    const { ClientPacket, createPacket, queuePacket } = require("../../packet");
+    const pkt = createPacket(ClientPacket[`OPWORLDENTITY${op}` as const]);
+    const buffer = pkt.packetBuffer;
+    switch (op) {
+        case 1:
+            buffer.writeShortLE(index);
+            buffer.writeByteSub(0);
+            break;
+        case 2:
+            buffer.writeShortAdd(index);
+            buffer.writeByteAdd(0);
+            break;
+        case 3:
+            buffer.writeShort(index);
+            buffer.writeByteNeg(0);
+            break;
+        case 4:
+            buffer.writeByteSub(0);
+            buffer.writeShort(index);
+            break;
+        case 5:
+            buffer.writeByteAdd(0);
+            buffer.writeShortLE(index);
+            break;
+        default:
+            buffer.writeShortAddLE(index);
+            break;
+    }
+    queuePacket(pkt);
+}

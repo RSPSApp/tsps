@@ -90,6 +90,14 @@ export enum ClientPacketId {
 
     // Dialog
     RESUME_PAUSEBUTTON = 62, // Dialog continue (6 bytes)
+
+    // World entity (static ship / boat) options
+    OPWORLDENTITY6 = 225,
+    OPWORLDENTITY5 = 224,
+    OPWORLDENTITY2 = 221,
+    OPWORLDENTITY4 = 223,
+    OPWORLDENTITY3 = 222,
+    OPWORLDENTITY1 = 220,
 }
 
 /**
@@ -152,6 +160,12 @@ export const CLIENT_PACKET_LENGTHS: Record<number, number> = {
     [ClientPacketId.OPLOC_T_ALT]: 15,
     [ClientPacketId.OPOBJ1]: 7,
     [ClientPacketId.OPOBJ3]: 7,
+    [ClientPacketId.OPWORLDENTITY1]: 3,
+    [ClientPacketId.OPWORLDENTITY2]: 3,
+    [ClientPacketId.OPWORLDENTITY3]: 3,
+    [ClientPacketId.OPWORLDENTITY4]: 3,
+    [ClientPacketId.OPWORLDENTITY5]: 3,
+    [ClientPacketId.OPWORLDENTITY6]: 2,
 };
 
 /**

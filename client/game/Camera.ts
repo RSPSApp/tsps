@@ -16,7 +16,7 @@ export enum ProjectionType {
     ORTHO,
 }
 
-type CameraEasing = "linear" | "ease_in_out_sine" | "ease_out_cubic" | "ease_out_sine";
+type CameraEasing = "linear" | "ease_in_out_sine" | "ease_out_cubic" | "ease_out_sine" | "ease_in_sine";
 interface CameraTween {
     cycles: number;
     elapsed: number;
@@ -60,6 +60,8 @@ export class Camera {
 
     pitch: number;
     yaw: number;
+    /** Bumped each time the angle is forced (snapToPitch/snapToYaw): a script or the server turned it. */
+    forcedAngleChanges = 0;
 
     private targetPos: vec3;
     private targetPitch: number;
@@ -244,6 +246,7 @@ export class Camera {
         if (tween.easing === "ease_in_out_sine") return (1 - Math.cos(Math.PI * progress)) / 2;
         if (tween.easing === "ease_out_cubic") return 1 - Math.pow(1 - progress, 3);
         if (tween.easing === "ease_out_sine") return Math.sin((Math.PI * progress) / 2);
+        if (tween.easing === "ease_in_sine") return 1 - Math.cos((Math.PI * progress) / 2);
         return progress;
     }
 
@@ -456,12 +459,14 @@ export class Camera {
     }
 
     snapToPitch(pitch: number): void {
+        this.forcedAngleChanges++;
         this.targetPitch = clamp(pitch, 0, 512);
         this.pitch = this.targetPitch;
         this.updated = true;
     }
 
     snapToYaw(yaw: number): void {
+        this.forcedAngleChanges++;
         const wrapped = this.wrapYawInternal(yaw);
         this.targetYaw = wrapped;
         this.yaw = this.targetYaw;

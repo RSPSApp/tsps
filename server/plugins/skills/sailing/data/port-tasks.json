@@ -661,7 +661,7 @@
     {"id":597,"row":9260,"type":"bounty","name":"Lunar Isle vampyre kraken bounty","level":80,"board":"lunar_isle"},
     {"id":598,"row":9261,"type":"bounty","name":"Lunar Isle narwhal bounty","level":76,"board":"lunar_isle"},
     {"id":599,"row":9262,"type":"courier","name":"Pandemonium ship part delivery","level":1,"cargoPort":"port_sarim","destination":"the_pandemonium","crate":32807,"amount":1,"xp":100,"cancellable":false},
-    {"id":600,"row":9263,"type":"courier","name":"Pandemonium pirate looty delivery","level":12,"cargoPort":"port_sarim","destination":"the_pandemonium","crate":32808,"amount":1,"xp":150},
+    {"id":600,"row":9263,"type":"courier","name":"Pandemonium pirate looty delivery","level":12,"cargoPort":"port_sarim","destination":"the_pandemonium","crate":32808,"amount":1,"xp":150,"noReward":true},
     {"id":603,"row":4966,"type":"courier","name":"Void Knights' Outpost clothes delivery","level":64,"board":"rellekka","cargoPort":"rellekka","destination":"void_knights_outpost","crate":32925,"amount":5,"xp":4921},
     {"id":604,"row":4967,"type":"courier","name":"Rellekka arrowtip delivery","level":64,"board":"rellekka","cargoPort":"void_knights_outpost","destination":"rellekka","crate":32924,"amount":5,"xp":9842},
     {"id":605,"row":13311,"type":"bounty","name":"Port Tyras veiled kraken bounty","level":80,"board":"port_tyras"},

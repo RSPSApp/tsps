@@ -341,14 +341,39 @@ function rollQuantity(entry) {
   return min + randomInt(max - min + 1);
 }
 
-/** Independent `weight / out_of` chance. */
-function hits(entry, doubleChance = false) {
+/** Independent `weight / out_of` chance, `multiplier` times as likely. */
+function hits(entry, multiplier = 1) {
   const outOf = Number(entry.out_of);
   if (!Number.isInteger(outOf) || outOf <= 0) {
     return false;
   }
   const weight = Number.isInteger(entry.weight) ? entry.weight : 1;
-  return randomInt(outOf) < Math.min(outOf, weight * (doubleChance ? 2 : 1));
+  return Math.random() * outOf < Math.min(outOf, weight * multiplier);
+}
+
+const WILDERNESS_CLUE = /^clue scroll \((?!beginner\))/i;
+
+/**
+ * What makes tertiary drops likelier for this kill, asked once per kill: rules
+ * { pattern, multiplier } matched against each entry's name. An imbued ring of wealth doubles
+ * clue scrolls in the Wilderness, and plugins answer npc-drops:tertiary-chance
+ * { player, npc, npcId, rules } by pushing their own (Mortimer's clue tasks).
+ */
+function tertiaryRules(player, npc) {
+  const rules = [];
+  if (isWearingImbuedRingOfWealth(player) && Wilderness.isInLocation(npc?.getLocation?.())) {
+    rules.push({ pattern: WILDERNESS_CLUE, multiplier: 2 });
+  }
+  pluginApi?.emitCustomEvent("npc-drops:tertiary-chance", { player, npc, npcId: npc?.getId?.(), rules });
+  return rules;
+}
+
+function tertiaryMultiplier(entry, rules) {
+  let multiplier = 1;
+  for (const rule of rules) {
+    if (rule.pattern.test(entry.name || "")) multiplier *= rule.multiplier;
+  }
+  return multiplier;
 }
 
 function rollSharedTable(name, player, depth = 0) {
@@ -487,6 +512,7 @@ function rollTable(table, player, npc) {
     drops.push(...rollOnce(table, entries, player, roll === 0));
   }
 
+  const rules = table.tertiary?.length ? tertiaryRules(player, npc) : [];
   for (const entry of table.tertiary || []) {
     // A tertiary at 1/1 is a conditional drop, not a guaranteed one: the wiki writes
     // "Always" for things that always drop *given* a condition (an active clue step, a quest,
@@ -498,9 +524,7 @@ function rollTable(table, player, npc) {
       continue;
     }
     if (entry.name === LOOTING_BAG && !lootingBagDrops(npc)) continue;
-    const wildernessClue = /^clue scroll \((?!beginner\))/i.test(entry.name || "") &&
-      isWearingImbuedRingOfWealth(player) && Wilderness.isInLocation(npc?.getLocation?.());
-    if (hits(entry, wildernessClue)) {
+    if (hits(entry, tertiaryMultiplier(entry, rules))) {
       drops.push(...resolveEntry(entry, player));
     }
   }
@@ -556,13 +580,16 @@ function dropFor(player, npc, npcId, location, damagers = []) {
   return drops.length;
 }
 
-/** Puts rolled drops on the ground for `player` (noted where the table says), or coins in the pack. */
+/**
+ * Puts rolled drops on the ground for `player` (noted where the table says), or currency in the
+ * pack when a worn ring of wealth has Coin collection on.
+ */
 function placeDrops(player, drops, location) {
   for (const drop of drops) {
     if (!Number.isInteger(drop.itemId) || drop.amount <= 0) {
       continue;
     }
-    if (CURRENCY_IDS.has(drop.itemId) && autoCollectCurrencies(player)) {
+    if (CURRENCY_IDS.has(drop.itemId) && isWearingRingOfWealth(player) && autoCollectCurrencies(player)) {
       const inventory = player.getInventory();
       if (inventory.contains(drop.itemId) || inventory.getFreeSlots() > 0) {
         inventory.adds(drop.itemId, drop.amount);
@@ -666,5 +693,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables },
 
   // Exposed for the smoke test.
-  __internals: { loadDrops, rollTable, rollSharedTable, tablesByNpc, sharedTables },
+  __internals: { loadDrops, rollTable, rollSharedTable, placeDrops, tablesByNpc, sharedTables },
 };

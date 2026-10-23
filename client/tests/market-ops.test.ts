@@ -81,7 +81,7 @@ ctx.stringStackSize = 0;
 ctx.pushString = (value: string) => { ctx.stringStack[ctx.stringStackSize++] = value; };
 ctx.popString = () => ctx.stringStack[--ctx.stringStackSize];
 ctx.npcTypeLoader = { getCount: () => npcs.length, load: (id: number) => ({ name: npcs[id] }) };
-ctx.objTypeLoader = { load: (id: number) => (items[id] ? { name: items[id], placeholderTemplate: -1 } : null) };
+ctx.objTypeLoader = { load: (id: number) => (items[id] ? { name: items[id], placeholderTemplate: -1, noteTemplate: -1, isTradable: true } : null) };
 
 const find = (query: string) => {
     ctx.pushString(query);

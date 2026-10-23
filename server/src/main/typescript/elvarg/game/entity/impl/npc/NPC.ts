@@ -1,3 +1,4 @@
+import { Skill } from "../../../model/Skill";
 import { CacheDefinitions } from "../../../cache/CacheDefinitions";
 import { Mobile } from "../Mobile";
 import { Sound } from "../../../Sound";
@@ -40,6 +41,16 @@ export type NpcExactMove = {
     endCycles: number;
     angle: number;
 };
+
+
+/**
+ * A fade (OSRS npc transparency): the NPC's model goes from `from` to `to` (0 opaque, 255
+ * invisible) between `startCycles` and `endCycles` client cycles into the tick, and stays at `to`.
+ */
+export type NpcTransparency = { startCycles: number; endCycles: number; from: number; to: number };
+
+/** The base animation slots the npc update block carries (the client maps them to its movement set). */
+export const BASE_ANIMATION_SLOT = { IDLE: 0, WALK: 1, TURN_LEFT: 2, TURN_RIGHT: 3 } as const;
 
 export class NPC extends Mobile {
     private static sameLocation(a: Location | null | undefined, b: Location | null | undefined): boolean {
@@ -126,6 +137,8 @@ export class NPC extends Mobile {
     private exactMoveState: NpcExactMove | null = null;
     /** This tick's headbars besides the hitpoints one, sent with the NPC's update and cleared after it. */
     private headbars: NpcHeadbar[] = [];
+    /** This tick's fade, sent with the NPC's update and cleared after it. */
+    private transparencyState: NpcTransparency | null = null;
     /** Its steps are sent as crawls (half walking speed on the client) rather than walks. */
     private crawling = false;
     /** A tile to turn to this tick (OSRS npc face coord), sent with the NPC's update and cleared after it. */
@@ -136,6 +149,8 @@ export class NPC extends Mobile {
      * keeps being sent for a few ticks before the field clears.
      */
     private modelCustomisation: { slot: number; modelId: number }[] | undefined = undefined;
+    private baseAnimations: { slot: number; seqId: number }[] | undefined = undefined;
+    private baseAnimationsResetUntil = 0;
     private modelCustomisationResetUntil = 0;
     private isDying: boolean;
     private owner: Player;
@@ -152,9 +167,7 @@ export class NPC extends Mobile {
     private healthBarOverride: { id: number; width: number } | null = null;
     /** Scales the combat XP players get for damaging this NPC (OSRS gives some bosses less). */
     private combatXpMultiplier: number = 1;
-    private defenceLevel: number | null = null;
-    private defenceRestoreCycle = 0;
-    // ponytail: standard regeneration; add encounter-specific rates/caps with those bosses.
+    private readonly drainedLevels = new Map<Skill, { level: number; cycle: number }>();
     private static readonly STAT_RESTORE_TICKS = 100;
     /** Ticks per level a drained stat comes back; a boss can restore faster (the Corporeal Beast). */
     private statRestoreTicks = NPC.STAT_RESTORE_TICKS;
@@ -315,10 +328,11 @@ export class NPC extends Mobile {
                 || this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING)) {
                 const max = this.getMaxHitpoints();
                 if (max > this.hitpoints) {
-                    this.setHitpoints(this.hitpoints + (max * 0.1));
-                    if (this.hitpoints > max) {
-                        this.setHitpoints(max);
-                    }
+                    // OSRS hitpoints are integers. Floor the 10% step and the stored value so
+                    // regeneration can never leave a fractional HP (the old code produced
+                    // 1.5 from max 5 and a fractional target could no longer be finished).
+                    const regen = Math.max(1, Math.floor(max * 0.1));
+                    this.setHitpoints(Math.min(max, Math.floor(this.hitpoints + regen)));
                 }
             }
         }
@@ -446,9 +460,10 @@ export class NPC extends Mobile {
      * A defence bonus (BonusManager.DEFENCE_STAB..DEFENCE_RANGE) as this NPC has it now: the
      * definition's, unless a fight has changed it for this NPC (setDefenceBonusOverrides).
      */
-    public getDefenceBonus(index: number): number {
+    public getDefenceBonus(index: number, rangedType: "light" | "standard" | "heavy" = "standard"): number {
         const override = this.defenceBonusOverrides?.[index];
         if (typeof override === "number") return override;
+        if (index === 4) return this.getCurrentDefinition().getRangedDefenceBonus(rangedType);
         return this.getCurrentDefinition().getStats()[10 + index] ?? 0;
     }
 
@@ -476,29 +491,56 @@ export class NPC extends Mobile {
         return base;
     }
 
-    /** Temporary Defence belongs to this NPC, never its shared definition. */
+    /** Temporary combat stats belong to this NPC, never its shared definition. */
+    public getMaxLevel(skill: Skill): number {
+        const slot = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.RANGED, Skill.MAGIC].indexOf(skill);
+        if (slot < 0) throw new RangeError("Unsupported NPC combat skill");
+        return this.getCurrentDefinition().getStats()[slot];
+    }
+
+    public getCurrentLevel(skill: Skill): number {
+        const base = this.getMaxLevel(skill);
+        const drained = this.drainedLevels.get(skill);
+        if (!drained) return base;
+        const restored = Math.max(0, Math.floor((World.getProcessCycle() - drained.cycle) / this.statRestoreTicks));
+        drained.level = Math.min(base, drained.level + restored);
+        drained.cycle += restored * this.statRestoreTicks;
+        if (drained.level === base) this.drainedLevels.delete(skill);
+        return drained.level;
+    }
+
+    public setCurrentLevels(skill: Skill, level: number): void {
+        if (!Number.isFinite(level)) throw new RangeError("Invalid NPC combat level");
+        const base = this.getMaxLevel(skill);
+        this.getCurrentLevel(skill);
+        const cycle = this.drainedLevels.get(skill)?.cycle ?? World.getProcessCycle();
+        level = Math.max(0, Math.min(base, Math.floor(level)));
+        if (level === base) this.drainedLevels.delete(skill);
+        else this.drainedLevels.set(skill, { level, cycle });
+    }
+
     public getDefenceLevel(): number {
-        const base = this.getCurrentDefinition().getStats()[2];
-        if (this.defenceLevel === null) return base;
-        const restored = Math.floor((World.getProcessCycle() - this.defenceRestoreCycle) / this.statRestoreTicks);
-        if (restored > 0) {
-            this.defenceLevel = Math.min(base, this.defenceLevel + restored);
-            this.defenceRestoreCycle += restored * this.statRestoreTicks;
-            if (this.defenceLevel === base) this.defenceLevel = null;
-        }
-        return this.defenceLevel ?? base;
+        return this.getCurrentLevel(Skill.DEFENCE);
+    }
+
+    public setDefenceLevel(level: number): void {
+        this.setCurrentLevels(Skill.DEFENCE, level);
     }
 
     public setStatRestoreTicks(ticks: number): void {
         this.statRestoreTicks = Math.max(1, Math.trunc(ticks));
     }
 
-    public setDefenceLevel(level: number): void {
-        if (!Number.isFinite(level)) throw new RangeError("Invalid NPC Defence level");
-        if (this.defenceLevel === null) this.defenceRestoreCycle = World.getProcessCycle();
-        const base = this.getCurrentDefinition().getStats()[2];
-        this.defenceLevel = Math.max(0, Math.min(base, Math.floor(level)));
-        if (this.defenceLevel === base) this.defenceLevel = null;
+    /** Wiki NPC damage formula; configured caps still bound scripted attacks. */
+    public getCurrentMaxHit(type: CombatType): number {
+        const definition = this.getCurrentDefinition();
+        const maximum = definition.getMaxHit();
+        if (type === CombatType.MAGIC) return maximum;
+        const skill = type === CombatType.MELEE ? Skill.STRENGTH : Skill.RANGED;
+        const current = this.getCurrentLevel(skill);
+        if (current === this.getMaxLevel(skill)) return maximum;
+        const bonus = definition.getStats()[type === CombatType.MELEE ? 6 : 8] ?? 0;
+        return Math.min(maximum, Math.floor(0.5 + (current + 9) * (bonus + 64) / 640));
     }
 
     public getBaseAttackSpeed(): number {
@@ -603,6 +645,32 @@ export class NPC extends Mobile {
             this.modelCustomisationResetUntil = World.getProcessCycle() + 5;
         }
         return this;
+    }
+
+    /**
+     * Overrides the stand / walk sequences every viewer's client uses for this NPC (OSRS npc base
+     * animation set change), e.g. the Archive Guardian's ground idle once it lands: without it the
+     * client goes back to the cache's stand pose whenever an animation ends. Null resets them.
+     */
+    public setBaseAnimations(sequences: { idle?: number; walk?: number; turnLeft?: number; turnRight?: number } | null): NPC {
+        const entries: { slot: number; seqId: number }[] = [];
+        if (sequences?.idle !== undefined) entries.push({ slot: BASE_ANIMATION_SLOT.IDLE, seqId: sequences.idle | 0 });
+        if (sequences?.walk !== undefined) entries.push({ slot: BASE_ANIMATION_SLOT.WALK, seqId: sequences.walk | 0 });
+        if (sequences?.turnLeft !== undefined) entries.push({ slot: BASE_ANIMATION_SLOT.TURN_LEFT, seqId: sequences.turnLeft | 0 });
+        if (sequences?.turnRight !== undefined) entries.push({ slot: BASE_ANIMATION_SLOT.TURN_RIGHT, seqId: sequences.turnRight | 0 });
+        this.baseAnimations = entries;
+        this.baseAnimationsResetUntil = entries.length > 0 ? 0 : World.getProcessCycle() + 5;
+        return this;
+    }
+
+    /** The base animations to send this update, or undefined when there are none (or a reset expired). */
+    public getBaseAnimationsForUpdate(): { slot: number; seqId: number }[] | undefined {
+        if (this.baseAnimations === undefined) return undefined;
+        if (this.baseAnimations.length === 0 && World.getProcessCycle() > this.baseAnimationsResetUntil) {
+            this.baseAnimations = undefined;
+            return undefined;
+        }
+        return this.baseAnimations;
     }
 
     /** The customisation to send this update, or undefined when there is none (or a reset expired). */
@@ -718,6 +786,27 @@ export class NPC extends Mobile {
         return this;
     }
 
+    /**
+     * Fades the NPC's model to `to` (0 opaque, 255 invisible) over client cycles `startCycles` to
+     * `endCycles` of this tick, from `from` (its current look when left out), as OSRS's npc
+     * transparency: a boss teleporting out (`fade(255, { from: 0, startCycles: 30, endCycles: 45 })`),
+     * a spawn fading in (`fade(0, { from: 255, endCycles: 30 })`).
+     */
+    public fade(to: number, options: { from?: number; startCycles?: number; endCycles?: number } = {}): NPC {
+        const clamp = (value: number) => Math.max(0, Math.min(255, Math.trunc(value)));
+        this.transparencyState = {
+            startCycles: Math.max(0, Math.trunc(options.startCycles ?? 0)),
+            endCycles: Math.max(0, Math.trunc(options.endCycles ?? 30)),
+            from: options.from === undefined ? -1 : clamp(options.from),
+            to: clamp(to),
+        };
+        return this;
+    }
+
+    public getTransparency(): NpcTransparency | null {
+        return this.transparencyState;
+    }
+
     /** Takes a headbar shown with showHeadbar away. */
     public removeHeadbar(id: number): NPC {
         this.headbars = this.headbars.filter((bar) => bar.id !== id);
@@ -760,6 +849,7 @@ export class NPC extends Mobile {
         this.exactMoveState = null;
         this.headbars = [];
         this.faceTileState = null;
+        this.transparencyState = null;
     }
 
     public getCombatMethod(): CombatMethod {

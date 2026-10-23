@@ -561,3 +561,72 @@ export function resetSetup(): void {
     modeBlockFlags = [];
     modeMapping = [];
 }
+
+/** Everything a setup decides, to switch between setups (the music's and a sound's own). */
+type VorbisSetupState = {
+    setupInitialized: boolean;
+    blocksize0: number;
+    blocksize1: number;
+    codebooks: VorbisCodebook[];
+    floors: VorbisFloor[];
+    residues: VorbisResidue[];
+    mappings: VorbisMapping[];
+    modeBlockFlags: boolean[];
+    modeMapping: number[];
+    twiddle0: Float32Array;
+    twiddle1: Float32Array;
+    window0: Float32Array;
+    window1: Float32Array;
+    window2_0: Float32Array;
+    window2_1: Float32Array;
+    bitrev0: Int32Array;
+    bitrev1: Int32Array;
+};
+
+function captureSetup(): VorbisSetupState {
+    return {
+        setupInitialized, blocksize0, blocksize1, codebooks, floors, residues, mappings,
+        modeBlockFlags, modeMapping, twiddle0, twiddle1, window0, window1, window2_0, window2_1,
+        bitrev0, bitrev1,
+    };
+}
+
+function applySetup(state: VorbisSetupState): void {
+    ({
+        setupInitialized, blocksize0, blocksize1, codebooks, floors, residues, mappings,
+        modeBlockFlags, modeMapping, twiddle0, twiddle1, window0, window1, window2_0, window2_1,
+        bitrev0, bitrev1,
+    } = state);
+}
+
+/** Setups built for samples that carry their own, by their bytes. */
+const ownSetups = new Map<string, VorbisSetupState>();
+
+function setupKey(data: Uint8Array): string {
+    let hash = 2166136261;
+    for (let i = 0; i < data.length; i++) hash = Math.imul(hash ^ data[i], 16777619);
+    return `${data.length}:${hash >>> 0}`;
+}
+
+/**
+ * Decodes a sample against its own setup (OSRS's newer sound effects carry one before the
+ * sample), leaving the shared setup (the music samples') as it was.
+ */
+export function decodeWithOwnSetup(setupData: Uint8Array, sampleData: Uint8Array): RawSoundData {
+    const shared = captureSetup();
+    try {
+        const key = setupKey(setupData);
+        let own = ownSetups.get(key);
+        if (!own) {
+            resetSetup();
+            initVorbisSetup(setupData);
+            own = captureSetup();
+            ownSetups.set(key, own);
+        } else {
+            applySetup(own);
+        }
+        return new VorbisSample(sampleData).toRawSound();
+    } finally {
+        applySetup(shared);
+    }
+}

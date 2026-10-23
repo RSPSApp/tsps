@@ -65,13 +65,16 @@ function inspect({ player, object, definition }) {
   const state = trails.get(player);
   if (!state || !nearby(player, object)) return false;
   pursuit(player, state);
-  const next = state.path[state.step + 1];
-  if (next && (same(next.trigger ?? next.end, position) || same(next.end, position))) {
+  // The visible tracks lead to the object at the current segment's end; searching it reveals the next one.
+  const current = state.path[state.step], next = state.path[state.step + 1];
+  if (!same(current.trigger ?? current.end, position) && !same(current.end, position)) {
+    player.sendMessage("You find no new tracks here.");
+  } else if (next) {
     state.step++;
     state.due = H.tick + 300;
     player.getPacketSender().sendVarbit(next.varbit, next.inverted ? 5 : 4);
-    player.sendMessage(state.step === state.path.length - 1 ? "Something is moving here. Use your noose wand to catch it." : "You find more tracks.");
-  } else player.sendMessage("You find no new tracks here.");
+    player.sendMessage("You find more tracks.");
+  } else player.sendMessage("Something is moving here. Use your noose wand to catch it.");
   return true;
 }
 

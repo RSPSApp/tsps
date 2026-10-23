@@ -45,6 +45,9 @@ const ARAXXOR_TELEPORT_DESTINATION = new Location(3658, 9816, 0);
 const ROYAL_TITANS_TELEPORT_DESTINATION = new Location(2950, 9574, 0);
 // The Hueycoatl's camp on the Darkfrost, where the slope from the arena lands.
 const HUEYCOATL_TELEPORT_DESTINATION = new Location(1524, 3290, 0);
+// Sarachnis waits in the burial tomb south of the Spider Den (1840, 9900); land outside
+// the thick web (1842, 9912) and go in on foot, like the lair's own entrance does.
+const SARACHNIS_TELEPORT_DESTINATION = new Location(1842, 9913, 0);
 const BOSS_TELEPORT_DESTINATIONS = new Map([
   [28151, new Location(3290, 3847, 0)], // Callisto
   [28152, new Location(3261, 3927, 0)], // Chaos Elemental
@@ -240,8 +243,18 @@ function getBossTeleportPages() {
         { label: "Araxxor", destination: ARAXXOR_TELEPORT_DESTINATION },
         { label: "Royal Titans", destination: ROYAL_TITANS_TELEPORT_DESTINATION },
         { label: "Hueycoatl", destination: HUEYCOATL_TELEPORT_DESTINATION },
-        { label: "Back", nextPage: 2 },
+        { label: "Sarachnis", destination: SARACHNIS_TELEPORT_DESTINATION },
+        { label: "More options", nextPage: 4 },
+      ],
+    },
+    {
+      title: "Boss teleports",
+      options: [
+        { label: "Back", nextPage: 3 },
         { label: "Close", close: true },
+        null,
+        null,
+        null,
       ],
     },
   ];

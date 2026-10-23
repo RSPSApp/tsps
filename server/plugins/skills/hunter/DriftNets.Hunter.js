@@ -3,6 +3,8 @@
 const C = require("./Context.Hunter"), { H } = C;
 const ATTRIBUTE = "hunter.drift-nets";
 const bases = new Map(), sessions = new Map(), chasing = new Map();
+// ponytail: no capture of the entrance; inside by the plant door, and beside the tunnel on Ceto's side.
+const INSIDE_TILE = [3737, 10299, 1], OUTSIDE_TILE = [3729, 10294, 1];
 let Area;
 
 function state(player) {
@@ -39,7 +41,7 @@ function enter(player) {
   };
   const area = new Area();
   area.enter(player);
-  player.moveTo(new H.core.Location(3731, 10293, 1));
+  player.moveTo(new H.core.Location(...INSIDE_TILE));
   H.core.RegionManager.loadMapFiles(3740, 10295);
   for (const rows of H.core.MapObjects.mapObjects.values()) {
     for (const o of rows) {
@@ -61,32 +63,44 @@ function enter(player) {
   sync({ player });
 }
 
-function pay({ player, npc }) {
-  if (!C.nearby(player, npc)) return true;
-  C.choose(player, [["Enter drift net fishing", () => enter(player)],
-    ["Pay 200 numulite for today", () => purchase(player, 200)],
-    ["Pay 20,000 numulite for permanent access", () => purchase(player, 20000)]], npc);
+const DAY_MS = 86400000;
+const UNLIMITED_ACCESS_VARBIT = 242; // fossil_driftnet_unlimitedaccess: the tunnel drops its Pay option
+
+function levels(player) {
+  const m = player.getSkillManager();
+  return m.getMaxLevel(H.core.Skill.HUNTER) >= 44 && m.getMaxLevel(H.core.Skill.FISHING) >= 47;
+}
+
+function hasAccess(player) {
+  const until = state(player).until;
+  return until === -1 || until > Date.now();
+}
+
+/** Ceto's day pass runs to midnight UTC. */
+function buyDay(player) {
+  if (!C.exchange(player, [[H.core.ItemIdentifiers.NUMULITE, 200]], [])) return false;
+  state(player).until = (Math.floor(Date.now() / DAY_MS) + 1) * DAY_MS;
   return true;
 }
 
-function purchase(player, cost) {
-  if (!permitted(player)) return;
-  if (state(player).until === -1) { enter(player); return; }
-  if (!C.exchange(player, [[H.core.ItemIdentifiers.NUMULITE, cost]], [])) return;
-  state(player).until = cost === 20000 ? -1 : (Math.floor(Date.now() / 86400000) + 1) * 86400000;
-  enter(player);
+function buyPermanent(player) {
+  if (!C.exchange(player, [[H.core.ItemIdentifiers.NUMULITE, 20000]], [])) return false;
+  state(player).until = -1;
+  sync({ player });
+  return true;
 }
 
 function login({ player }) {
   const l = player.getLocation();
-  if (l.getZ() === 1 && l.getX() >= 3730 && l.getX() <= 3752 && l.getY() >= 10285 && l.getY() <= 10305) {
+  if (inCavern(l)) {
     if (permitted(player) && (state(player).until === -1 || state(player).until > Date.now())) enter(player);
-    else player.moveTo(new H.core.Location(3728, 10293, 1));
+    else player.moveTo(new H.core.Location(...OUTSIDE_TILE));
   }
   sync({ player });
 }
 
 function sync({ player }) {
+  player.getPacketSender().sendVarbit(UNLIMITED_ACCESS_VARBIT, state(player).until === -1 ? 1 : 0);
   for (const [id, d] of bases) {
     const net = state(player).nets[id];
     player.getPacketSender().sendVarbit(d.transformVarbit, !net ? 0 : net.count >= 10 ? 3 : net.count ? 2 : 1);
@@ -130,10 +144,8 @@ function capture(player, net, active) {
   sync({ player });
 }
 
-function nearAnchor(npc, location) {
-  const here = npc.getLocation();
-  return here.getZ() === location.getZ()
-    && Math.max(Math.abs(here.getX() - location.getX()), Math.abs(here.getY() - location.getY())) <= 1;
+function nearAnchor(npc, anchor) {
+  return C.footprintDistance(npc.getLocation(), anchor) <= 1;
 }
 
 // ponytail: Wiki does not publish scare odds or passive timing; both are explicit
@@ -260,43 +272,17 @@ function takeDown(event) {
   return true;
 }
 
-function storage({ player, object }) {
-  if (!C.nearby(player, object)) return true;
-  C.choose(player, [["Store all drift nets", () => { if (C.nearby(player, object)) store(player); }],
-    ["Withdraw 10 drift nets", () => { if (C.nearby(player, object)) withdraw(player, 10); }],
-    ["Withdraw all drift nets", () => { if (C.nearby(player, object)) withdraw(player, 2000); }]]);
-  return true;
-}
-
-function store(player) {
-  const I = H.core.ItemIdentifiers, s = state(player);
-  for (const id of [I.DRIFT_NET, H.core.ItemDefinition.forId(I.DRIFT_NET).getNoteId()]) {
-    const amount = Math.min(2000 - s.stored, player.getInventory().getAmount(id));
-    if (amount > 0 && C.exchange(player, [[id, amount]], [])) s.stored += amount;
-  }
-  player.sendMessage(`Annette is storing ${s.stored} drift nets.`);
-}
-
-function withdraw(player, n) {
-  const s = state(player), amount = Math.min(n, s.stored, player.getInventory().getFreeSlots());
-  if (amount > 0 && C.exchange(player, [], [[H.core.ItemIdentifiers.DRIFT_NET, amount]])) s.stored -= amount;
-}
-
 function use(event) {
   if (bases.has(event.objectId) && event.itemId === H.core.ItemIdentifiers.DRIFT_NET) {
     event.handled = true;
     setup(event);
-  } else if (event.objectId === H.core.ObjectIdentifiers.COL_FFFF00_ANNETTE_COL
-    && [H.core.ItemIdentifiers.DRIFT_NET, H.core.ItemDefinition.forId(H.core.ItemIdentifiers.DRIFT_NET).getNoteId()].includes(event.itemId)) {
-    event.handled = true;
-    if (C.nearby(event.player, event.object)) store(event.player);
   }
 }
 
 function exit({ player }) {
   if (!sessions.has(player)) return false;
   cleanup({ player });
-  player.moveTo(new H.core.Location(3728, 10293, 1));
+  player.moveTo(new H.core.Location(...OUTSIDE_TILE));
   return true;
 }
 
@@ -309,14 +295,22 @@ function cleanup({ player }) {
   session.area.destroy();
 }
 
+function inCavern(location) {
+  return location.getZ() === 1 && location.getX() >= 3730 && location.getX() <= 3752 && location.getY() >= 10285 && location.getY() <= 10305;
+}
+
 // ponytail: one passive shoal per minute; exact passive timing is unpublished.
 function process() {
+  // Drowning, a teleport or anything else that moves a player out of the cavern ends their session.
+  for (const [player, session] of sessions) {
+    if (!player.isRegistered() || player.getPrivateArea() !== session.area || !inCavern(player.getLocation())) cleanup({ player });
+  }
   for (const [npc, run] of chasing) {
     const net = state(run.player).nets[run.id], target = anchor(run.player, run.id);
     if (H.tick >= run.due || !npc.isRegistered() || !npc.isVisible() || !C.active(run.player)
       || net !== run.net || net.count >= 10 || net.rewards || !target) { chasing.delete(npc); continue; }
     if (H.tick % 2 === 0) H.core.PathFinder.calculateWalkRoute(npc, target.getLocation().getX(), target.getLocation().getY());
-    if (nearAnchor(npc, target.getLocation())) {
+    if (nearAnchor(npc, target)) {
       capture(run.player, net, true);
       C.hide(npc, 8);
       chasing.delete(npc);
@@ -329,5 +323,5 @@ function process() {
   }
 }
 
-module.exports = { ATTRIBUTE, initialize, state, enter, pay, setup, chase, harvest, inspect, takeDown, storage, use, exit,
+module.exports = { ATTRIBUTE, initialize, state, enter, levels, permitted, hasAccess, buyDay, buyPermanent, setup, chase, harvest, inspect, takeDown, use, exit,
   cleanup, process, login, sync, experience, rewards, fossil, bases };

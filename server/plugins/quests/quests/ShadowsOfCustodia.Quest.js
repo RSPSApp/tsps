@@ -18,7 +18,7 @@
  *
  * Stages (live checkpoints, matching the RuneLite Quest Helper ShadowsOfCustodia
  * step map and the loc transforms): 0 not started, 2 read the notice board,
- * 4 asked around (Ictus), 5 parents let you search their house (wall inspectable),
+ * 4 asked around (Ictus gates this), 5 parents let you search their house (wall inspectable),
  * 6 scratched wall inspected (puddles appear), 8 puddle inspected (plank reachable),
  * 9 wet fabric scrap fished off the plank, 10 scrap shown to the parents,
  * 12 inside the Stalker Den, 14 the boys are back in Auburnvale,
@@ -54,13 +54,16 @@
  * sells hammers). Multi-speaker cutscenes (Ariadna's lines inside Antos's rescue
  * conversation) share the speaking NPC's chathead, as startTranscript has no
  * speaker index. The den's injured boy and cave Antos are owner-only spawns; the
- * town Antos from npc-spawns.json keeps the generic line. The quest completes at
+ * town Antos from npc-spawns.json keeps the generic line. Den entry and the
+ * boys/Antos return moves use the captured fade beats; den entry adds the captured
+ * rockslide locs through a private QuestScene. The quest completes at
  * the end of the rescue conversation (its final Ariadna line), which is where the
  * transcript puts her scene, rather than after a separate talk with her.
  */
 module.exports = function registerShadowsOfCustodiaQuest(api) {
   const { Item, ItemIdentifiers, Location, NpcIdentifiers, ObjectIdentifiers, Skill } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
   const PAGE = "Shadows of Custodia";
   const START_HOOK = "quest:shadows-of-custodia:start";
@@ -150,6 +153,8 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
     ETZ_NPC_ID,
     INJURED_BOY_NPC_ID,
     NpcIdentifiers.INJURED_BOY_2,
+    14217, // soc_injured_person_intown
+    14220, // soc_etz_multi
   ]);
 
   const NOTICE_BOARD_OBJECT_ID = ObjectIdentifiers.NOTICE_BOARD_7; // 56416 at (1396,3356)
@@ -159,7 +164,9 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
   // varbit-selected transform, the server resolves back to these.
   const PLANK_OBJECT_ID = 56417; // -> 56418 "Plank" Inspect at stages 6-9
   const PUDDLE_OBJECT_IDS = new Set([56422, 56423]); // -> 56420 "Puddle" Inspect
-  const WALL_OBJECT_ID = 56432; // -> 56433 Inspect / 56435 Reinforce
+  // Varbit 16659 transforms the hidden base 56432 through 56434/56433/56435/56436;
+  // the visible state (not the base) is what the client clicks.
+  const WALL_OBJECT_IDS = new Set([56432, 56433, 56434, 56435, 56436]);
 
   const WET_FABRIC_SCRAP_ITEM_ID = ItemIdentifiers.WET_FABRIC_SCRAP; // 30936
   const MAPLE_LOGS_ITEM_ID = ItemIdentifiers.MAPLE_LOGS; // 1517
@@ -174,19 +181,20 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
   const WALL_LOG_COST = 4;
   const LONG_BOW_COST = 4;
 
-  const DEN_LANDING = { x: 1297, y: 9766, z: 0 };
+  const DEN_LANDING = { x: 1296, y: 9767, z: 0 };
   const CAVE_MOUTH = { x: 1295, y: 3376, z: 0 };
   const INJURED_BOY_TILE = { x: 1298, y: 9757, z: 0 };
   const ANTOS_TILE = { x: 1337, y: 9753, z: 0 };
   const CREATURE_TILES = [
-    { x: 1334, y: 9755 },
-    { x: 1336, y: 9752 },
-    { x: 1335, y: 9756 },
+    { x: 1331, y: 9757 },
+    { x: 1328, y: 9753 },
+    { x: 1331, y: 9749 },
   ];
-  const AUBURNVALE_LANDING = { x: 1381, y: 3363, z: 0 };
+  const AUBURNVALE_LANDING = { x: 1381, y: 3359, z: 0 };
+  const ARIADNA_LANDING = { x: 1369, y: 3344, z: 0 };
   const LADDER_LANDING = { x: 1380, y: 3357, z: 0 };
   // Wiki spawn point for the quest fishing rod (Fishing rod item spawns).
-  const ROD_SPAWN_TILE = { x: 1331, y: 3332, z: 0 };
+  const ROD_SPAWN_TILE = { x: 1331, y: 3330, z: 0 };
 
   // The Stalker Den is map regions 5272/5273/5016 (x 1216-1343, y 9728-9855).
   const DEN_ZONE = { minX: 1216, maxX: 1343, minY: 9728, maxY: 9855, levels: [0] };
@@ -202,6 +210,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
   const creatureSpawns = new WeakMap(); // player -> Set<npc>
   const creatureOwners = new WeakMap(); // npc -> player
 
+  const Scenes = createQuestScenes(api);
   let quest;
 
   const held = (player, itemId, amount = 1) =>
@@ -240,10 +249,20 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
     return held(player, WILLOW_LONGBOW_ITEM_ID, LONG_BOW_COST);
   }
 
+  /** Captured: once wall and guard bow tasks are both done, the boys are awake. */
+  function syncTasksDone(player) {
+    if (hasFlag(player, WALL_REPAIR_BIT) && hasFlag(player, GUARD_CAPTAIN_BIT) &&
+        quest.getStage(player) < STAGE_TASKS_DONE) {
+      quest.setStage(player, STAGE_TASKS_DONE);
+    }
+  }
+
   function wallState(player) {
     if (hasFlag(player, WALL_REPAIR_BIT)) return 3;
-    if (quest.getStage(player) >= STAGE_TASKS) return 2;
-    if (quest.getStage(player) >= STAGE_HOUSE_SEARCH) return 1;
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_TASKS) return 2;
+    if (stage >= STAGE_FABRIC_FOUND) return 0;
+    if (stage >= STAGE_HOUSE_SEARCH) return 1;
     return 0;
   }
 
@@ -508,29 +527,47 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
         event.handled = true;
         if (event.text) player.sendMessage(String(event.text));
         removeDenNpc(player, "boy");
-        player.moveTo(new Location(AUBURNVALE_LANDING.x, AUBURNVALE_LANDING.y, AUBURNVALE_LANDING.z));
-        if (quest.getStage(player) < STAGE_BOYS_RETURNED) {
-          quest.setStage(player, STAGE_BOYS_RETURNED);
-        }
-        syncProgressVarbits(player);
+        Scenes.fade(player, true);
+        Scenes.later(player, 2, () => {
+          player.moveTo(new Location(AUBURNVALE_LANDING.x, AUBURNVALE_LANDING.y, AUBURNVALE_LANDING.z));
+          if (quest.getStage(player) < STAGE_BOYS_RETURNED) quest.setStage(player, STAGE_BOYS_RETURNED);
+          syncProgressVarbits(player);
+          Scenes.fade(player, false);
+          Scenes.later(player, 2, () => Scenes.closeFade(player));
+        });
         return;
       case "atm-AZ": // handed the four longbows to Ariadna
       case "c3igWy":
         event.handled = true;
+        // The hand-in action is the durable source of the guard-captain flag.
+        // The transcript condition is not a reliable completion hook in the
+        // shipped dialogue runner, so keep this idempotent and recover old
+        // saves that already show bowsMade=2 but lost the flag.
+        if (quest.getStage(player) < STAGE_TASKS) return;
         if (bowsMade(player) < 2 && hasFourLongbows(player)) {
           if (event.text) player.sendMessage(String(event.text));
           player.getInventory().deleteNumber(WILLOW_LONGBOW_ITEM_ID, LONG_BOW_COST);
           setBowsMade(player, 2);
+        }
+        if (bowsMade(player) >= 2) {
+          setFlag(player, GUARD_CAPTAIN_BIT);
+          syncProgressVarbits(player);
+          syncTasksDone(player);
         }
         return;
       case "d0esGd": // carried Antos back to Auburnvale
         event.handled = true;
         if (event.text) player.sendMessage(String(event.text));
         removeDenNpc(player, "antos");
-        player.moveTo(new Location(AUBURNVALE_LANDING.x, AUBURNVALE_LANDING.y, AUBURNVALE_LANDING.z));
-        if (quest.getStage(player) < STAGE_ANTOS_RETURNED) {
-          quest.setStage(player, STAGE_ANTOS_RETURNED);
-        }
+        // The Ariadna continuation in this same transcript completes on stage 22;
+        // write it before the fade so the final captured line can complete once.
+        if (quest.getStage(player) < STAGE_ANTOS_RETURNED) quest.setStage(player, STAGE_ANTOS_RETURNED);
+        Scenes.fade(player, true);
+        Scenes.later(player, 2, () => {
+          player.moveTo(new Location(ARIADNA_LANDING.x, ARIADNA_LANDING.y, ARIADNA_LANDING.z));
+          Scenes.fade(player, false);
+          Scenes.later(player, 2, () => Scenes.closeFade(player));
+        });
         return;
       default:
         return;
@@ -544,13 +581,20 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
     const started = quest.getStage(player) >= STAGE_STARTED;
     if (started && npcId === ICTUS_NPC_ID && !hasFlag(player, SILLYMAN_BIT)) {
       setFlag(player, SILLYMAN_BIT);
-      if (quest.getStage(player) < STAGE_ASKED_AROUND) {
-        quest.setStage(player, STAGE_ASKED_AROUND);
-      }
+      // Captured: Ictus completes the "ask around" step; the shopkeeper is optional.
+      if (quest.getStage(player) < STAGE_ASKED_AROUND) quest.setStage(player, STAGE_ASKED_AROUND);
       return;
     }
     if (started && npcId === MARCUS_NPC_ID && !hasFlag(player, CITIZEN_BIT)) {
       setFlag(player, CITIZEN_BIT);
+      return;
+    }
+    if (started && npcId === BARTENDER_NPC_ID && !hasFlag(player, BARKEEP_BIT)) {
+      setFlag(player, BARKEEP_BIT);
+      return;
+    }
+    if (started && npcId === SHOPKEEPER_NPC_ID && !hasFlag(player, SHOPKEEP_BIT)) {
+      setFlag(player, SHOPKEEP_BIT);
       return;
     }
     if (started && npcId === ARIADNA_NPC_ID && !hasFlag(player, ARIADNA_MET_BIT)) {
@@ -639,7 +683,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
       if (stage < STAGE_PUDDLE_INSPECTED) quest.setStage(player, STAGE_PUDDLE_INSPECTED);
       return;
     }
-    if (objectId === WALL_OBJECT_ID) {
+    if (WALL_OBJECT_IDS.has(objectId)) {
       if (action === "Inspect") {
         event.handled = true;
         startTranscript(api, player, AEMILIA_NPC_ID, PAGE, "parents-anguish-finding-the-fabric-inspecting-the-wall");
@@ -648,6 +692,12 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
       }
       if (action === "Reinforce") {
         event.handled = true;
+        // Quest Helper only exposes Reinforce once the boys are home (stage 15).
+        if (stage < STAGE_TASKS) {
+          startTranscript(api, player, AEMILIA_NPC_ID, PAGE, "parents-anguish-finding-the-fabric-inspecting-the-wall");
+          if (stage < STAGE_WALL_INSPECTED) quest.setStage(player, STAGE_WALL_INSPECTED);
+          return;
+        }
         reinforceWall(player);
         return;
       }
@@ -656,9 +706,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
     if (objectId === CAVE_ENTER_OBJECT_ID) {
       if (action !== "Enter") return;
       event.handled = true;
-      player.moveTo(new Location(DEN_LANDING.x, DEN_LANDING.y, DEN_LANDING.z));
-      if (stage === STAGE_MOUNTAINS) quest.setStage(player, STAGE_DEN);
-      syncDenNpcs(player);
+      enterDen(player, stage);
       return;
     }
     if (objectId === CAVE_EXIT_OBJECT_ID) {
@@ -687,6 +735,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
     player.getInventory().deleteNumber(MAPLE_LOGS_ITEM_ID, WALL_LOG_COST);
     setFlag(player, WALL_REPAIR_BIT);
     syncProgressVarbits(player);
+    syncTasksDone(player);
     startTranscript(api, player, AEMILIA_NPC_ID, PAGE, "helping-around-town-reinforcing-the-wall");
   }
 
@@ -757,6 +806,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
         ownerOnly: true,
       });
       if (npc) {
+        attachToDenScene(player, npc);
         list.add(npc);
         creatureOwners.set(npc, player);
       }
@@ -775,14 +825,34 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
     if (quest.getStage(owner) < STAGE_CREATURES) quest.setStage(owner, STAGE_CREATURES);
   }
 
+  /** Owner-only den actors must join the private scene area or they are hidden. */
+  function attachToDenScene(player, npc) {
+    const scene = Scenes.get(player);
+    if (npc && scene?.area) scene.area.add(npc);
+    return npc;
+  }
+
+  /** Wait for the private area's queued NPC removal, then spawn world den actors once. */
+  function resyncDenAfterScene(player, attempts = 6) {
+    if (!player?.isRegistered?.()) return;
+    const tracked = denNpcs.get(player);
+    const pending = tracked && [tracked.boy, tracked.antos].some(npc => npc?.isRegistered?.());
+    if (pending && attempts > 0) {
+      Scenes.later(player, 1, () => resyncDenAfterScene(player, attempts - 1));
+      return;
+    }
+    denNpcs.delete(player);
+    syncDenNpcs(player);
+  }
+
   function syncDenNpcs(player) {
     const stage = quest.getStage(player);
     const tracked = denNpcs.get(player) ?? { boy: null, antos: null };
     denNpcs.set(player, tracked);
 
     const wantBoy = stage >= STAGE_MOUNTAINS && stage < STAGE_BOYS_RETURNED;
-    if (wantBoy && !tracked.boy) {
-      tracked.boy = api.spawnNpc({
+    if (wantBoy && (!tracked.boy || tracked.boy.isRegistered?.() === false)) {
+      tracked.boy = attachToDenScene(player, api.spawnNpc({
         id: INJURED_BOY_NPC_ID,
         x: INJURED_BOY_TILE.x,
         y: INJURED_BOY_TILE.y,
@@ -790,15 +860,15 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
         wanderRadius: 0,
         owner: player,
         ownerOnly: true,
-      });
+      }));
     } else if (!wantBoy && tracked.boy) {
       api.removeNpc(tracked.boy);
       tracked.boy = null;
     }
 
     const wantAntos = stage >= STAGE_BOYS_TALKED && !quest.isComplete(player);
-    if (wantAntos && !tracked.antos) {
-      tracked.antos = api.spawnNpc({
+    if (wantAntos && (!tracked.antos || tracked.antos.isRegistered?.() === false)) {
+      tracked.antos = attachToDenScene(player, api.spawnNpc({
         id: ANTOS_NPC_ID,
         x: ANTOS_TILE.x,
         y: ANTOS_TILE.y,
@@ -806,7 +876,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
         wanderRadius: 0,
         owner: player,
         ownerOnly: true,
-      });
+      }));
     } else if (!wantAntos && tracked.antos) {
       api.removeNpc(tracked.antos);
       tracked.antos = null;
@@ -849,9 +919,36 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
   // Zones, login and the rod spawn
   // ==========================================================================
 
+  function enterDen(player, stage) {
+    Scenes.controls(player, true, true);
+    Scenes.fade(player, true);
+    Scenes.later(player, 2, () => {
+      if (!Scenes.get(player)) {
+        const scene = Scenes.open(player, "custodia-den", [[1216, 1343, 9728, 9855, 0]]);
+        for (const [id, x, y, face] of [
+          [57645, 1286, 9744, 3], [57645, 1289, 9744, 0], [57642, 1288, 9745, 3],
+          [11426, 1299, 9744, 0], [11426, 1301, 9745, 3], [57643, 1299, 9746, 1],
+          [57642, 1301, 9744, 1], [11426, 1287, 9743, 1], [11426, 1285, 9742, 0],
+          [57643, 1287, 9742, 2],
+        ]) Scenes.loc(scene, { id, x, y, z: 0, face });
+      }
+      player.moveTo(new Location(DEN_LANDING.x, DEN_LANDING.y, DEN_LANDING.z));
+      if (stage >= STAGE_MOUNTAINS && stage < STAGE_DEN) quest.setStage(player, STAGE_DEN);
+      Scenes.fade(player, false);
+      Scenes.later(player, 2, () => {
+        Scenes.closeFade(player);
+        // The captured den transition ends with the fade-in. Keeping this private
+        // scene alive blocked the normal path and hid owner-only den NPCs.
+        Scenes.end(player, false);
+        Scenes.later(player, 1, () => resyncDenAfterScene(player));
+      });
+    });
+  }
+
   function handleDenZoneEnter({ player }) {
     if (!player || player.isPlayerBot?.() === true) return;
-    if (quest.getStage(player) === STAGE_MOUNTAINS) quest.setStage(player, STAGE_DEN);
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_MOUNTAINS && stage < STAGE_DEN) quest.setStage(player, STAGE_DEN);
     syncDenNpcs(player);
   }
 
@@ -896,6 +993,7 @@ module.exports = function registerShadowsOfCustodiaQuest(api) {
 
   function handleLogout({ player }) {
     if (!player) return;
+    Scenes.end(player, true);
     clearPlayerSpawns(player);
   }
 

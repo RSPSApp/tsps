@@ -28,10 +28,28 @@ const { SHORTCUTS } = require("../plugins/skills/agility/shortcuts/Shortcuts.Agi
 const core = PluginManager.getCoreApi();
 const objectHooks = new Map();
 const loginHooks = [];
+const customHooks = new Map();
+const spawnedNpcs = [];
 const api = new Proxy({
   core,
   onObjectInteraction: (name, actions) => objectHooks.set(name, { ...(objectHooks.get(name) ?? {}), ...actions }),
   onPlayerLogin: (handler) => loginHooks.push(handler),
+  onCustomEvent: (name, handler) => customHooks.set(name, [...(customHooks.get(name) ?? []), handler]),
+  emitCustomEvent: (name, event) => { for (const handler of customHooks.get(name) ?? []) handler(event); },
+  spawnNpc: (definition) => {
+    const npc = {
+      ...definition,
+      getId: () => definition.id,
+      getRealId: () => definition.id,
+      getLocation: () => new Location(definition.x, definition.y, definition.z ?? 0),
+      setArea() {},
+      setNpcTransformationId() {},
+      isRegistered: () => true,
+    };
+    spawnedNpcs.push(npc);
+    return npc;
+  },
+  removeNpc: () => {},
 }, { get: (target, key) => target[key] ?? (() => {}) });
 
 let gamevals = null;
@@ -58,6 +76,8 @@ function createPlayer({ x = 2530, y = 2205, prayers = [] } = {}) {
       if (method === "sendVarbit" || method === "sendSoundEffect") log.push(`${method} ${args.slice(0, 3).join(" ")}`);
       if (method === "sendSubInterface") log.push(`fade ${args[3]?.postScripts?.[0]?.args?.[1]}`);
       if (method === "sendGraphic") log.push(`graphic ${args[0].id}`);
+      if (method === "sendInterface") log.push(`interface ${args[0]}`);
+      if (method === "sendInterfaceScript") log.push(`script ${args[0]} ${JSON.stringify(args[1])}`);
       return sender;
     },
   });
@@ -67,6 +87,7 @@ function createPlayer({ x = 2530, y = 2205, prayers = [] } = {}) {
     isRegistered: () => true,
     getLocation: () => location,
     moveTo: (to) => { location = to; log.push(`move ${to.getX()} ${to.getY()}`); },
+    sendMessage: (message) => log.push(`message ${message}`),
     setLocation: (to) => { location = to; },
     setPositionToFace: () => {},
     performAnimation: (animation) => log.push(`anim ${animation.getId?.() ?? animation.id}`),
@@ -77,6 +98,10 @@ function createPlayer({ x = 2530, y = 2205, prayers = [] } = {}) {
     getPrayerActive: () => active,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
+    setEnteredAmountAction(value) { this.amountAction = value; },
+    getEnteredAmountAction() { return this.amountAction; },
+    setInterfaceId(value) { this.interfaceId = value; },
+    getInterfaceId() { return this.interfaceId; },
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage.map((d) => d.getDamage())) }) }),
   };
 }
@@ -87,14 +112,14 @@ test("the data: every id is the cache's, under the names the captures print", ()
   const loc = (id) => CacheDefinitions.getObject(id);
   const seq = gamevals.namesOf(GamevalKind.SEQ);
   const spotanim = gamevals.namesOf(GamevalKind.SPOTANIM);
-  const varbit = gamevals.namesOf(GamevalKind.VARBIT);
-  const { cave, openAccess } = AreaCommon.data;
-  assert.deepEqual(openAccess.varbits.map(({ id }) => varbit.get(id)), ["ffg", "wyrmscraig_cliff_shortcut"]);
+  const { cave } = AreaCommon.data;
   assert.deepEqual([loc(cave.entrance.id).name, loc(cave.entrance.id).actions[0]], ["Cave", "Enter"]);
   assert.deepEqual([loc(cave.exit.id).name, loc(cave.exit.id).actions[0]], ["Cave", "Exit"]);
 
   const data = Common.data;
   for (const id of Object.values(data.npcs).filter((id) => id !== data.npcs.cathedral)) assert.equal(CacheDefinitions.getNpc(id).name, "Mad Angel");
+  assert.deepEqual(data.questNpcs, { dormant: 16306, waking: 16311, fighting: 16309, dead: 16312 });
+  assert.equal(NpcDefinition.forId(data.questNpcs.fighting).getHitpoints(), 565, "quest fight hp");
   assert.equal(CacheDefinitions.getNpc(data.npcs.dormant).actions[0], "Wake");
   assert.equal(CacheDefinitions.getNpc(data.npcs.fighting).actions[1], "Attack");
   assert.deepEqual(loc(data.pew.climbId).actions.slice(0, 1), ["Climb"]);
@@ -129,11 +154,54 @@ test("the shortcuts: levels and ends as the Wiki and the capture have them", () 
 
 // ------------------------------------------------------------------ open access and the cave
 
-test("open access: every login gets Fallen From Grace's finished state", () => {
+test("Wyrmscraig leaves the quest and mined shortcut state to Fallen From Grace", () => {
   const player = createPlayer();
   for (const hook of loginHooks) hook({ player });
-  assert.ok(player.log.includes("sendVarbit 15759 20"));
-  assert.ok(player.log.includes("sendVarbit 15720 1"));
+  assert.equal(player.log.some((line) => line.startsWith("sendVarbit 15720")), false,
+    "Fallen From Grace owns the mined shortcut state");
+  assert.equal(player.log.some((line) => line.startsWith("sendVarbit 15759")), false,
+    "Fallen From Grace owns 15759; Wyrmscraig must not force its finished state");
+});
+
+test("as captured: the Mad Angel door is claimed by Fallen From Grace until its lock is picked", () => {
+  const namedObjects = new Map();
+  const custom = new Map();
+  const doorApi = new Proxy({
+    core,
+    onObjectInteraction: (name, actions) => {
+      if (typeof name === "string") namedObjects.set(name, { ...(namedObjects.get(name) ?? {}), ...actions });
+    },
+    onCustomEvent: (name, fn) => custom.set(name, [...(custom.get(name) ?? []), fn]),
+    emitCustomEvent: (name, event) => { for (const fn of custom.get(name) ?? []) fn(event); },
+  }, { get: (target, key) => target[key] ?? (() => {}) });
+
+  MadAngel.register(doorApi);
+  require("../plugins/quests/quests/FallenFromGrace.Quest")(doorApi);
+  const ffg = require("../plugins/quests/QuestRuntime").getRegisteredQuests()
+    .filter((quest) => quest.key === "fallen_from_grace").at(-1);
+  const door = namedObjects.get("Cathedral door").Open;
+
+  const locked = createPlayer({ x: 2542, y: 2215 });
+  ffg.setStage(locked, 18);
+  assert.equal(door({ player: locked, objectId: 62368 }), true);
+  assert.ok(locked.log.includes("interface 811"), 'the real 5-pin lock UI opens');
+  assert.ok(locked.log.some((line) => line.startsWith("script 6994")), 'the 811 renderer runs');
+  assert.ok(locked.amountAction, 'the real amount callback is armed');
+  assert.equal(locked.log.some((line) => line.startsWith("anim 4282")), false, "FFG claims the first pick, no movement");
+  assert.equal(locked.getLocation().getX(), 2542);
+  locked.amountAction.execute(7152); // captured second 811 session, P2 tick 621
+  assert.ok(locked.log.some((line) => line.includes("successfully pick the lock")));
+  assert.ok(locked.getAttribute('quest.fallen_from_grace.flags') & (1 << 7), 'CATHEDRAL_OPENED set by the lock');
+
+  assert.equal(door({ player: locked, objectId: 62368 }), true);
+  assert.ok(locked.log.some((line) => line.startsWith("anim 4282")), "the opened door falls through to MadAngel");
+  runTicks(1);
+  assert.notEqual(locked.getLocation().getX(), 2542, "the default door movement runs once FFG releases it");
+
+  const finished = createPlayer({ x: 2542, y: 2215 });
+  ffg.setStage(finished, 20);
+  assert.equal(door({ player: finished, objectId: 62368 }), true);
+  assert.ok(finished.log.some((line) => line.startsWith("anim 4282")), "post-quest door is ordinary MadAngel access");
 });
 
 test("as captured: the cave - the crawl, the fade, the move 2 ticks in, and back out", () => {
@@ -179,6 +247,40 @@ test("the drop table, corrected: no quest crystal, a 1/25 teleport, the supply b
   }
 });
 
+test("quest Mad Angel instance spawns raw 16306 and uses the 16311/16309/16312 chain", () => {
+  const Instance = require("../plugins/bosses/madangel/Instance.MadAngel");
+  Common.init(api);
+  customHooks.set("madangel:instance-variant", [(request) => { request.variant = "quest"; }]);
+  const questPlayer = createPlayer({ x: 2532, y: 2215 });
+  const questSession = Instance.open(questPlayer);
+  assert.equal(questSession.variant, "quest");
+  assert.equal(spawnedNpcs.at(-1).getId(), 16306, "instance starts from the captured raw dormant base");
+  assert.equal(questSession.npcs.fighting, 16309);
+
+  customHooks.delete("madangel:instance-variant");
+  const normalPlayer = createPlayer({ x: 2532, y: 2215 });
+  const normalSession = Instance.open(normalPlayer);
+  assert.equal(normalSession.variant, "normal");
+  assert.equal(spawnedNpcs.at(-1).getId(), 16305, "ordinary boss spawn is unchanged");
+  assert.equal(normalSession.npcs.fighting, 16305);
+});
+
+test("the quest fight transforms to 16311 then 16309 and resets HP to 565; ordinary stays 755", () => {
+  const quest = fightAt(createPlayer(), { hitpoints: 755, maxHitpoints: 565, npcs: Common.data.questNpcs });
+  quest.fight.wake();
+  assert.ok(quest.npcLog.includes("transform 16311"), "quest waking form");
+  quest.fight.begin();
+  assert.ok(quest.npcLog.includes("transform 16309"), "quest fighting form");
+  assert.equal(quest.npc.getHitpoints(), 565, "quest fight HP from the 16309 definition");
+
+  const normal = fightAt(createPlayer(), { npcs: Common.data.npcs });
+  normal.fight.wake();
+  normal.fight.begin();
+  assert.ok(normal.npcLog.includes("transform 16307"), "ordinary waking form");
+  assert.ok(normal.npcLog.includes("transform 16305"), "ordinary fighting form");
+  assert.equal(normal.npc.getHitpoints(), 755, "ordinary boss HP unchanged");
+});
+
 // ------------------------------------------------------------------ the fight's rules
 
 test("as captured: each cleave hits the quarter between the front a step before and the sword's side", () => {
@@ -189,7 +291,7 @@ test("as captured: each cleave hits the quarter between the front a step before 
 });
 
 /** A fight against a fake angel in a fake cathedral (instance tiles = world tiles). */
-function fightAt(player, { hitpoints = 755 } = {}) {
+function fightAt(player, { hitpoints = 755, maxHitpoints = 755, npcs = Common.data.npcs } = {}) {
   let hp = hitpoints;
   const npcLog = [];
   const bossHits = [];
@@ -198,6 +300,7 @@ function fightAt(player, { hitpoints = 755 } = {}) {
     getLocation: () => new Location(2532, 2215, 0),
     getHitpoints: () => hp,
     setHitpoints: (value) => { hp = value; },
+    getMaxHitpoints: () => maxHitpoints,
     getDefinition: () => ({ getHitpoints: () => 755 }),
     setNpcTransformationId: (id) => npcLog.push(`transform ${id}`),
     performAnimation: (animation) => npcLog.push(`anim ${animation.getId?.() ?? animation.id}`),
@@ -217,6 +320,7 @@ function fightAt(player, { hitpoints = 755 } = {}) {
   };
   const session = {
     player,
+    npcs,
     area: null,
     tile: ([x, y, z]) => new Location(x, y, z ?? 0),
     worldTile: (location) => [location.getX(), location.getY()],

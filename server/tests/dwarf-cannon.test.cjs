@@ -167,7 +167,11 @@ test("firing: the flag the next tick, then a turn a tick; a target is shot befor
   const stop = watch(p);
   const { rollAccuracy } = core.AccuracyFormulasDpsCalc;
   const random = Math.random;
-  core.AccuracyFormulasDpsCalc.rollAccuracy = () => true;
+  core.AccuracyFormulasDpsCalc.rollAccuracy = (_attacker, _target, _style, defenceType, rangedDefenceType) => {
+    assert.equal(defenceType, core.CombatType.RANGED);
+    assert.equal(rangedDefenceType, "heavy", "cannonballs use heavy defence regardless of the held weapon");
+    return true;
+  };
   Math.random = () => 0.5;
   try {
     const start = p.ticks.length - 1;
@@ -279,7 +283,7 @@ test("decay: broken at 25 minutes, Repair; gone 10 minutes on, and Nulodion give
   cannon.age = Data.LOSE_TICKS - 1;
   runTicks(p, 1);
   assert.equal(Cannon.cannonOf(p), null);
-  assert.deepEqual(p.getAttribute(Cannon.LOST_ATTRIBUTE), { kind: "plain", stage: 4 });
+  assert.deepEqual(p.getAttribute(Cannon.LOST_ATTRIBUTE), { kind: "plain", stage: 4, steel: 30, granite: 0 });
   const ask = (text) => Nulodion.answerCondition({ npcId: core.NpcIdentifiers.NULODION, player: p, text });
   assert.equal(ask("If the player's cannon is still set-up somewhere:"), false);
   assert.equal(ask("If the player has lost their cannon by world-hopping or letting it despawn:"), true);
@@ -331,7 +335,7 @@ test("the ornament kit on each part, Dismantle back; an ornament cannon uses its
 
 test("restrictions: every Wiki area has its message; outlines are polygons; instances refuse", () => {
   const data = Restrictions.load();
-  assert.equal(data.restrictions.length, 71);
+  assert.equal(data.restrictions.length, 72);
   for (const r of data.restrictions) {
     assert.ok(r.name && r.message, r.name);
     for (const area of r.areas ?? []) assert.ok(area.points.length >= 3 && r.source, r.name);
@@ -357,6 +361,207 @@ test("every id the cannon uses is in the cache", () => {
     for (let d = 0; d < 8; d++) {
       assert.ok(seqs.getFile(kind.fire + d)?.data, `fire ${kind.fire + d}`);
       assert.ok(seqs.getFile(kind.turn + d)?.data, `turn ${kind.turn + d}`);
+    }
+  }
+});
+
+test("Combat Achievements raises capacity for setup, Fire, and Load X: medium35 hard45 elite60", () => {
+  for (const [tier, capacity] of [[null, 30], ["Medium", 35], ["Hard", 45], ["Elite", 60]]) {
+    Cannon.init({ core, emitCustomEvent: (name, request) => {
+      if (name === "combat-achievements:tier") request.unlocked = request.tier === tier;
+    } });
+    const p = gunner();
+    assert.equal(Cannon.capacity(p), capacity);
+    const cannon = built(p);
+    assert.equal(cannon.steel, capacity, "setup auto-load respects tier");
+    cannon.steel = 0;
+    Ammo.setLoadX(p, 999);
+    assert.equal(p.getAttribute(Cannon.LOAD_X_ATTRIBUTE), capacity);
+    Ammo.loadX({ player: p, object: cannon.object });
+    assert.equal(cannon.steel, capacity, "Load X respects tier");
+    cannon.steel = 0;
+    Ammo.fire({ player: p, object: cannon.object });
+    assert.equal(cannon.steel, capacity, "Fire respects tier");
+    Cannon.forget(cannon);
+  }
+  Cannon.init({ core, emitCustomEvent() {} });
+});
+
+test("Nulodion's generated transcript sells the750k six-item set and validates at payment", () => {
+  const p = gunner({ parts: [], steel: 0 });
+  const inventory = p.getInventory();
+  const event = { npcId: core.NpcIdentifiers.NULODION, player: p, kind: "message", text: Nulodion.SELLS_CANNON };
+  const condition = (text) => Nulodion.answerCondition({ ...event, text });
+  assert.equal(condition("If the player does not have at least 750,000 coins:"), true);
+  Nulodion.sellCannon(event);
+  assert.equal(inventory.getAmount(Items.CANNON_BASE), 0);
+  inventory.add(new core.Item(Items.COINS, Nulodion.CANNON_PRICE), false);
+  assert.equal(condition("If the player has at least 750,000 coins and enough inventory space:"), true);
+  Nulodion.sellCannon(event);
+  assert.equal(inventory.getAmount(Items.COINS), 0);
+  for (const id of [...Cannon.KINDS.plain.parts, Items.AMMO_MOULD, Items.INSTRUCTION_MANUAL]) assert.equal(inventory.getAmount(id), 1);
+  Nulodion.sellCannon(event);
+  assert.equal(inventory.getAmount(Items.CANNON_BASE), 1, "no duplicate set without another payment");
+  inventory.add(new core.Item(Items.COINS, Nulodion.CANNON_PRICE), false);
+  for (let i = 0; i < 22; i++) inventory.add(new core.Item(Items.SPADE, 1), false);
+  assert.equal(condition("If the player has less than six free inventory space:"), true);
+  Nulodion.sellCannon(event);
+  assert.equal(inventory.getAmount(Items.COINS), Nulodion.CANNON_PRICE, "no payment with insufficient space");
+});
+
+test("Nulodion revalidates replacement space and a still-deployed cannon", () => {
+  const p = gunner();
+  const cannon = built(p);
+  p.setAttribute(Cannon.LOST_ATTRIBUTE, { kind: "plain", stage: 4 });
+  const event = { npcId: core.NpcIdentifiers.NULODION, player: p, kind: "message", text: Nulodion.GIVES_CANNON };
+  Nulodion.giveCannon(event);
+  assert.ok(p.getAttribute(Cannon.LOST_ATTRIBUTE), "cannot reclaim while a cannon stands");
+  Cannon.forget(cannon);
+  for (let i = 0; i < 26; i++) p.getInventory().add(new core.Item(Items.SPADE, 1), false);
+  Nulodion.giveCannon(event);
+  assert.ok(p.getAttribute(Cannon.LOST_ATTRIBUTE), "cannot lose replacement to a full inventory");
+});
+
+test("firing zones match all49 tiles in the Wiki Cannon Double Shot.png diagram", () => {
+  // Wiki https://oldschool.runescape.wiki/images/Cannon_Double_Shot.png, centred on the barrel.
+  // Green=2 shots/revolution, grey=1, red/centre=0. Rows north to south.
+  const expected = [
+    [1, 1, 2, 1, 2, 1, 1],
+    [1, 1, 2, 1, 2, 1, 1],
+    [2, 2, 1, 0, 1, 2, 2],
+    [1, 1, 0, 0, 0, 1, 1],
+    [2, 2, 1, 0, 1, 2, 2],
+    [1, 1, 2, 1, 2, 1, 1],
+    [1, 1, 2, 1, 2, 1, 1],
+  ];
+  for (let row = 0; row < 7; row++) for (let col = 0; col < 7; col++) {
+    const shots = Data.DIRECTIONS.filter((_, direction) => Data.inZone(direction, col - 3, 3 - row)).length;
+    assert.equal(shots, expected[row][col], `Wiki tile ${col - 3},${3 - row}`);
+  }
+});
+
+test("new restricted outlines use existing content bounds and the Wiki Hair of the Dog polygon", () => {
+  for (const [name, x, y, z] of [
+    ["Callisto's Den", 3359, 10335, 0], ["Vet'ion's Rest", 3295, 10203, 1],
+    ["Silk Chasm", 3423, 10212, 2], ["Ancient Prison", 2856, 5225, 0],
+    ["Scurrius' Lair", 3300, 9865, 0], ["Ungael", 2272, 4064, 0],
+    ["Kraken Cove", 2270, 10010, 0], ["Hair of the Dog", 3495, 3475, 0],
+  ]) {
+    const restriction = Restrictions.load().restrictions.find((entry) => entry.name === name);
+    assert.equal(Restrictions.restrictionAt(new core.Location(x, y, z)), restriction.message, name);
+  }
+  assert.equal(Restrictions.restrictionAt(new core.Location(3495, 3467, 0)), null, "outside the pub polygon");
+  assert.equal(Restrictions.restrictionAt(new core.Location(3295, 10203, 0)), null, "Vet'ion plane is respected");
+});
+
+test("sailing boats reject cannon setup through the actual boarded boat state", () => {
+  const p = gunner();
+  const original = core.BoatManager.getBoatAboard;
+  try {
+    core.BoatManager.getBoatAboard = () => ({});
+    assert.equal(Setup.refusal(p, 'plain'), Restrictions.load().default);
+  } finally {
+    core.BoatManager.getBoatAboard = original;
+  }
+});
+
+test("Nulodion preserves decayed cannon ammunition, loaded in the next cannon exactly once", () => {
+  const p = gunner({ steel: 0, granite: 12 });
+  const cannon = built(p);
+  cannon.age = Data.LOSE_TICKS - 1;
+  runTicks(p, 1);
+  Nulodion.giveCannon({ npcId: core.NpcIdentifiers.NULODION, player: p, kind: 'message', text: Nulodion.GIVES_CANNON });
+  assert.deepEqual(p.getAttribute(Cannon.RECOVERED_AMMO_ATTRIBUTE), { steel: 0, granite: 12 });
+  const restored = built(p);
+  assert.equal(restored.granite, 12);
+  assert.equal(restored.steel, 0);
+  assert.equal(p.getAttribute(Cannon.RECOVERED_AMMO_ATTRIBUTE), null);
+  assert.equal(p.getAttribute(Cannon.LOST_ATTRIBUTE), null);
+  Decay.pickUp({ player: p, object: restored.object });
+  assert.equal(p.getInventory().getAmount(Items.GRANITE_CANNONBALL), 12);
+});
+
+test("Wiki source polygons, source map regions and canonical content bounds cover the remaining proven areas", () => {
+  for (const [name, x, y, z] of [
+    ['Feldip Hills jungle hunter area', 2558, 2911, 0], ['Brutus arena', 3261, 3287, 0],
+    ['Fight Arena interior', 2603, 3156, 0], ['Forthos Dungeon', 1840, 9900, 0],
+    ['Lizardman Caves', 1307, 9951, 0], ['Mogre Camp', 2960, 9512, 1],
+    ['Ruins of Tapoyauik', 1602, 9631, 0], ['Tonali Cavern', 1311, 9382, 0],
+    ['Vanstrom Klause', 3575, 3352, 0], ['Uzer Mastaba', 3850, 4578, 0],
+    ['Uzer Mastaba', 3892, 4714, 0], ['Abyssal Area', 3040, 4896, 0],
+    ['Barbarian Assault', 1888, 5440, 0], ['Barbarian Assault', 2592, 5280, 0],
+    ['Jiggig Dungeon', 2477, 9436, 2], ['Jiggig Dungeon', 2446, 9418, 0],
+    ['Fossil Island bank chest island', 3765, 3899, 0], ['Scabaras Dungeon', 3410, 9239, 0],
+    ['Scabaras Dungeon', 3372, 9248, 0], ['Scabaras Dungeon', 3445, 9248, 2],
+    ['Shellbane Gryphon Cave', 3179, 8876, 0],
+  ]) {
+    const entry = Restrictions.load().restrictions.find((r) => r.name === name);
+    assert.equal(Restrictions.restrictionAt(new core.Location(x, y, z)), entry.message, name);
+  }
+  assert.equal(Restrictions.restrictionAt(new core.Location(3733, 3893, 0)), null, 'Fossil Island mainland remains allowed');
+  assert.equal(Restrictions.restrictionAt(new core.Location(3765, 3899, 1)), null, 'bank island is on the surface');
+  assert.equal(Restrictions.restrictionAt(new core.Location(2617, 2911, 0)), null, 'outside the Wiki hunter polygon');
+  assert.equal(Restrictions.restrictionAt(new core.Location(2988, 4896, 0)), null, 'outside the exact Abyssal Area source region');
+});
+
+test("Karuulm restriction covers the two wyrm rooms and Alchemical Hydra, preserving normal hydras and other floors", () => {
+  const entry = Restrictions.load().restrictions.find((r) => r.name === 'Karuulm Slayer Dungeon');
+  for (const [x, y] of [[1259, 10154], [1268, 10191], [1364, 10265]]) {
+    assert.equal(Restrictions.restrictionAt(new core.Location(x, y, 0)), entry.message);
+  }
+  assert.equal(Restrictions.restrictionAt(new core.Location(1304, 10260, 0)), null, 'normal hydras allow cannons');
+  assert.equal(Restrictions.restrictionAt(new core.Location(1308, 10253, 1)), null, 'drakes allow cannons');
+});
+
+test("Tower of Magic restriction applies only during Ascent of Arceuus, through the quest stage event", () => {
+  let stage = 0;
+  const player = gunner();
+  const location = new core.Location(1589, 3819, 0);
+  Cannon.init({ core, emitCustomEvent: (name, request) => {
+    if (name === 'quest:get-stage' && request.key === 'the_ascent_of_arceuus' && request.player === player) request.stage = stage;
+  } });
+  try {
+    assert.equal(Restrictions.restrictionAt(location, null, player), null);
+    for (stage of [1, 5, 13]) assert.equal(Restrictions.restrictionAt(location, null, player), "You can't set up a cannon here.");
+    stage = 14;
+    assert.equal(Restrictions.restrictionAt(location, null, player), null, 'completed quest permits setup');
+    assert.equal(Restrictions.restrictionAt(location.transform(0, 0, 2), null, player), null, 'unrelated plane');
+  } finally { Cannon.init({ core, emitCustomEvent() {} }); }
+});
+
+test("cache-derived room restrictions match closed walkable components and cannot include another valid cannon room", () => {
+  const rooms = [
+    ['Fight Arena interior', 2603, 3156, 0, 382, [2583, 3152, 2606, 3170]],
+    ['Karuulm Slayer Dungeon', 1259, 10154, 0, 299, [1251, 10147, 1276, 10170]],
+    ['Karuulm Slayer Dungeon', 1268, 10191, 0, 603, [1256, 10175, 1301, 10206]],
+    ['Karuulm Slayer Dungeon', 1364, 10265, 0, 472, [1356, 10257, 1377, 10278]],
+    ['Scabaras Dungeon', 3410, 9239, 0, 578, [3406, 9220, 3439, 9275]],
+    ['Scabaras Dungeon', 3372, 9248, 0, 102, [3368, 9244, 3389, 9252]],
+    ['Scabaras Dungeon', 3390, 9248, 0, 90, [3390, 9243, 3405, 9253]],
+    ['Scabaras Dungeon', 3445, 9248, 2, 73, [3433, 9243, 3445, 9253]],
+    ['Scabaras Dungeon', 3427, 9248, 2, 34, [3421, 9247, 3432, 9249]],
+    ['Scabaras Dungeon', 3411, 9251, 2, 116, [3407, 9244, 3420, 9252]],
+    ['Shellbane Gryphon Cave', 3179, 8876, 0, 275, [3167, 8865, 3190, 8882]],
+  ];
+  for (const [name, startX, startY, z, count, box] of rooms) {
+    core.RegionManager.loadMapFiles(startX, startY);
+    const queue = [[startX, startY]], seen = new Set([`${startX},${startY}`]);
+    for (let i = 0; i < queue.length; i++) {
+      const [x, y] = queue[i];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, key = `${nx},${ny}`;
+        if (seen.has(key) || !core.RegionManager.canMove(x, y, nx, ny, z, 1, 1, null)) continue;
+        assert.ok(Math.abs(nx - startX) < 140 && Math.abs(ny - startY) < 140, `${name}: component must close naturally`);
+        seen.add(key); queue.push([nx, ny]);
+      }
+    }
+    assert.equal(queue.length, count, name);
+    assert.deepEqual([Math.min(...queue.map(([x]) => x)), Math.min(...queue.map(([, y]) => y)), Math.max(...queue.map(([x]) => x)), Math.max(...queue.map(([, y]) => y))], box, name);
+    const entry = Restrictions.load().restrictions.find((r) => r.name === name);
+    for (const [x, y] of queue) assert.equal(Restrictions.restrictionAt(new core.Location(x, y, z)), entry.message, `${name}: ${x},${y}`);
+    for (let x = box[0] + 1; x < box[2]; x++) for (let y = box[1] + 1; y < box[3]; y++) {
+      if (seen.has(`${x},${y}`)) continue;
+      assert.ok(Setup.footprint(new core.Location(x - 1, y - 1, z)).some((tile) => core.RegionManager.blocked(tile, null)), `${name}: no unrelated valid cannon centre at ${x},${y}`);
     }
   }
 });

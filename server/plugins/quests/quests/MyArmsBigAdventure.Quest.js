@@ -345,6 +345,9 @@ module.exports = function registerMyArmsBigAdventureQuest(api) {
   /** Talk-to on the quest's My Arm spawns (name hook; the kitchen one transforms to an indexed id). */
   function talkToMyArm(event) {
     const { player, npcId } = event;
+    // Secrets of the North stages 12-14 own My Arm for its Weiss information scene.
+    const sotnStage = Number(player.getAttribute("quest.secrets_of_the_north.stage")) || 0;
+    if (sotnStage >= 12 && sotnStage <= 14) return false;
     const choice = selectMyArmVariant(player);
     if (!choice) return false;
     if (!startTranscript(api, player, npcId, PAGE, choice.variant, choice.select)) return false;

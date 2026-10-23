@@ -44,13 +44,41 @@ export class BoatManager {
     }
 
     public static spawn(ownerIndex: number, spec: BoatSpec, placement: BoatPlacement): Boat | undefined {
-        const entityIndex = BoatManager.allocateEntityIndex();
+        return BoatManager.spawnBoat(ownerIndex, spec, placement, false);
+    }
+
+    /**
+     * Spawns a fixed ship (a quest or world entity). Its entity index may be supplied so a
+     * quest can reuse the index the capture names; the deck scene allocation is the same.
+     */
+    public static spawnStatic(
+        ownerIndex: number,
+        spec: BoatSpec,
+        placement: BoatPlacement,
+        entityIndex?: number,
+    ): Boat | undefined {
+        return BoatManager.spawnBoat(ownerIndex, spec, placement, true, entityIndex);
+    }
+
+    private static spawnBoat(
+        ownerIndex: number,
+        spec: BoatSpec,
+        placement: BoatPlacement,
+        isStatic: boolean,
+        preferredIndex?: number,
+    ): Boat | undefined {
+        const entityIndex = preferredIndex !== undefined
+            && preferredIndex >= FIRST_ENTITY_INDEX && preferredIndex <= LAST_ENTITY_INDEX
+            && !BoatManager.boats.has(preferredIndex)
+            ? preferredIndex
+            : BoatManager.allocateEntityIndex();
         if (entityIndex === undefined) return undefined;
         const slot = entityIndex - FIRST_ENTITY_INDEX;
         const boat = new Boat({
             entityIndex,
             configId: spec.configId,
             ownerPlayerId: ownerIndex,
+            static: isStatic,
             deckRegionX: DECK_REGION_BASE + (slot % DECK_REGION_COLUMNS) * DECK_REGION_SPACING,
             deckRegionY: DECK_REGION_BASE + Math.floor(slot / DECK_REGION_COLUMNS) * DECK_REGION_SPACING,
             sizeX: spec.sizeX,

@@ -1,3 +1,4 @@
+import { WeaponProfiles } from "../WeaponProfile";
 import { PrayerHandler } from "../../../content/PrayerHandler";
 import { CombatType } from "../CombatType";
 import { FightStyle } from '../FightStyle';
@@ -15,6 +16,7 @@ import { resolveSpecialAttackType, WeaponSpecialTraits } from "../WeaponSpecialT
 type RollCacheEntry = {
     cycle: number;
     defenceLevel: number;
+    npcLevels?: string;
     effectiveAttackLevel?: number;
     effectiveDefenseLevel?: number;
     effectiveRangedAttack?: number;
@@ -22,7 +24,7 @@ type RollCacheEntry = {
     attackMeleeRoll?: number;
     attackRangedRoll?: number;
     attackMagicRoll?: number;
-    defenseRangedRoll?: number;
+    defenseRangedRolls?: Map<string, number>;
     defenseMagicRoll?: number;
     defenseMeleeRolls?: Map<number, number>;
 };
@@ -57,11 +59,13 @@ export class AccuracyFormulasDpsCalc {
         const cycle = World.getProcessCycle();
         const defenceLevel = entity.isNpc() ? entity.getAsNpc().getDefenceLevel()
             : entity.getAsPlayer().getSkillManager().getCurrentLevel(Skill.DEFENCE);
+        const npcLevels = entity.isNpc() ? [Skill.ATTACK, Skill.RANGED, Skill.MAGIC]
+            .map((skill) => entity.getAsNpc().getCurrentLevel(skill)).join(",") : undefined;
         const cached = this.rollCache.get(entity);
-        if (cached && cached.cycle === cycle && cached.defenceLevel === defenceLevel) {
+        if (cached && cached.cycle === cycle && cached.defenceLevel === defenceLevel && cached.npcLevels === npcLevels) {
             return cached;
         }
-        const next: RollCacheEntry = { cycle, defenceLevel, defenseMeleeRolls: new Map<number, number>() };
+        const next: RollCacheEntry = { cycle, defenceLevel, npcLevels, defenseMeleeRolls: new Map<number, number>() };
         this.rollCache.set(entity, next);
         return next;
     }
@@ -219,7 +223,8 @@ export class AccuracyFormulasDpsCalc {
         entity: any,
         enemy: any,
         style: any,
-        defenceType?: CombatType
+        defenceType?: CombatType,
+        rangedDefenceType?: "light" | "standard" | "heavy"
     ): { attack: number; defence: number } | null {
         const traits: WeaponSpecialTraits | null = CombatSpecial.activeTraitsFor(entity);
         const attackStyle = resolveSpecialAttackType(traits?.rollAttackType) ?? style;
@@ -244,7 +249,7 @@ export class AccuracyFormulasDpsCalc {
             const defenceIndex = traits?.meleeDefenceBonusIndex ?? meleeIndex;
             defRoll = AccuracyFormulasDpsCalc.defenseMeleeRoll(enemy, defenceIndex);
         } else if (defenceStyle === CombatType.RANGED) {
-            defRoll = AccuracyFormulasDpsCalc.defenseRangedRoll(enemy);
+            defRoll = AccuracyFormulasDpsCalc.defenseRangedRoll(enemy, rangedDefenceType ?? (entity.isPlayer() ? WeaponProfiles.ranged(entity.getAsPlayer()).rangedDefenceType : undefined));
         } else {
             defRoll = AccuracyFormulasDpsCalc.defenseMagicRoll(enemy);
         }
@@ -259,11 +264,26 @@ export class AccuracyFormulasDpsCalc {
             defRoll = Math.floor(defRoll * enemy.getAsNpc().getRollFactor());
         }
 
+        attRoll = Math.floor(attRoll * AccuracyFormulasDpsCalc.scopedAccuracyScale);
+
         return { attack: attRoll, defence: defRoll };
     }
 
-    public static rollAccuracy(entity: any, enemy: any, style: any, defenceType?: CombatType) {
-        const rolls = AccuracyFormulasDpsCalc.specialRolls(entity, enemy, style, defenceType);
+    private static scopedAccuracyScale = 1;
+
+    /** Runs `build` with every accuracy roll's attack roll scaled (halberd Sweep's reduced second hit). */
+    public static withAccuracyScale<T>(scale: number, build: () => T): T {
+        const previous = AccuracyFormulasDpsCalc.scopedAccuracyScale;
+        AccuracyFormulasDpsCalc.scopedAccuracyScale = scale;
+        try {
+            return build();
+        } finally {
+            AccuracyFormulasDpsCalc.scopedAccuracyScale = previous;
+        }
+    }
+
+    public static rollAccuracy(entity: any, enemy: any, style: any, defenceType?: CombatType, rangedDefenceType?: "light" | "standard" | "heavy") {
+        const rolls = AccuracyFormulasDpsCalc.specialRolls(entity, enemy, style, defenceType, rangedDefenceType);
         if (rolls == null) {
             return false;
         }
@@ -313,7 +333,7 @@ export class AccuracyFormulasDpsCalc {
             return cache.effectiveAttackLevel;
         }
         if (entity.isNpc()) {
-            const att = entity.getAsNpc().getCurrentDefinition().getStats()[0] + 9;
+            const att = entity.getAsNpc().getCurrentLevel(Skill.ATTACK) + 9;
             cache.effectiveAttackLevel = att;
             return att;
         }
@@ -450,20 +470,22 @@ export class AccuracyFormulasDpsCalc {
     }
 
     // Ranged
-    public static defenseRangedRoll(enemy: Mobile) {
+    public static defenseRangedRoll(enemy: Mobile, type: "light" | "standard" | "heavy" = "standard") {
         const cache = this.getRollCache(enemy);
-        if (cache.defenseRangedRoll != null) {
-            return cache.defenseRangedRoll;
-        }
+        const cached = cache.defenseRangedRolls?.get(type);
+        if (cached != null) return cached;
         let defLevel = AccuracyFormulasDpsCalc.effectiveDefenseLevel(enemy);
 
-        const defRange = AccuracyFormulasDpsCalc.defenceBonus(enemy, BonusManager.DEFENCE_RANGE);
+        const defRange = enemy.isNpc()
+            ? enemy.getAsNpc().getDefenceBonus(BonusManager.DEFENCE_RANGE, type)
+            : AccuracyFormulasDpsCalc.defenceBonus(enemy, BonusManager.DEFENCE_RANGE);
 
         defLevel = applyRangedDefenseModifiers(enemy, defLevel);
         defLevel *= defRange + 64;
 
-        cache.defenseRangedRoll = Math.floor(defLevel);
-        return cache.defenseRangedRoll;
+        const resolved = Math.floor(defLevel);
+        (cache.defenseRangedRolls ??= new Map()).set(type, resolved);
+        return resolved;
     }
 
     private static effectiveRangedAttack(entity: Mobile) {
@@ -473,7 +495,7 @@ export class AccuracyFormulasDpsCalc {
         }
         if (entity.isNpc()) {
             // Prayer bonuses don't apply to NPCs (yet)
-            cache.effectiveRangedAttack = entity.getAsNpc().getCurrentDefinition().getStats()[3] + 9;
+            cache.effectiveRangedAttack = entity.getAsNpc().getCurrentLevel(Skill.RANGED) + 9;
             return cache.effectiveRangedAttack;
         }
 
@@ -530,7 +552,7 @@ export class AccuracyFormulasDpsCalc {
         }
         if (entity.isNpc()) {
             // Prayer bonuses don't apply to NPCs (yet)
-            const mag = entity.getAsNpc().getCurrentDefinition().getStats()[4] + 9;
+            const mag = entity.getAsNpc().getCurrentLevel(Skill.MAGIC) + 9;
             cache.effectiveMagicLevel = mag;
             return mag;
         }
@@ -563,7 +585,7 @@ export class AccuracyFormulasDpsCalc {
         let defLevel: number;
 
         if (enemy.isNpc()) {
-            defLevel = enemy.getAsNpc().getCurrentDefinition().getStats()[4] + 9;
+            defLevel = enemy.getAsNpc().getCurrentLevel(Skill.MAGIC) + 9;
         } else {
             const player = enemy.getAsPlayer();
             const magicLevel = AccuracyFormulasDpsCalc.scalePercent(

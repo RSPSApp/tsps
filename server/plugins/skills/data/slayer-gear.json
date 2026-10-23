@@ -4,9 +4,12 @@
     { "names": ["Banshee", "Twisted Banshee", "Screaming banshee", "Screaming twisted banshee"], "protection": ["Earmuffs", "Slayer helmet"], "hit": 6, "drainPercent": 10, "drain": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "PRAYER", "AGILITY"] },
     { "names": ["Aberrant spectre", "Deviant spectre", "Abhorrent spectre", "Repugnant spectre"], "protection": ["Nose peg", "Slayer helmet"], "hit": 14, "bypassPrayer": true, "drainPercent": 10, "drain": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "PRAYER", "AGILITY"] },
     { "names": ["Dust devil", "Choke devil"], "protection": ["Facemask", "Gas mask", "Slayer helmet"], "hit": 16, "drainTo": { "ATTACK": "all", "STRENGTH": "all", "RANGED": "all", "MAGIC": "all", "AGILITY": "half", "DEFENCE": "half", "PRAYER": "half" } },
+    { "names": ["Smoke devil"], "protection": ["Facemask", "Gas mask", "Slayer helmet"], "drainTo": { "ATTACK": "all", "STRENGTH": "all", "RANGED": "all", "MAGIC": "all", "AGILITY": "half", "DEFENCE": "half", "PRAYER": "half" } },
+    { "names": ["Thermonuclear smoke devil", "Nuclear smoke devil"], "protection": ["Facemask", "Gas mask", "Slayer helmet"], "hit": 15, "drainTo": { "ATTACK": "all", "STRENGTH": "all", "RANGED": "all", "MAGIC": "all", "AGILITY": "half", "DEFENCE": "half", "PRAYER": "half" } },
     { "names": ["Basilisk", "Basilisk Youngling", "Basilisk Knight", "Basilisk Sentinel", "Monstrous basilisk", "Monstrous Basilisk", "Cockatrice", "Cockathrice", "Moonlight Cockatrice"], "protection": ["Mirror shield", "V's shield"], "drainPercent": 10, "drain": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC"] },
     { "names": ["Wall beast"], "protection": ["Spiny helmet", "Slayer helmet"], "hit": 18 }
   ],
+  "_smokeDevilNote": "Smoke devils: no unprotected max is documented (protected max is 20), so unprotected hits stay accurate with the drain and prayers keep working (Wiki: Protect from Missiles negates them). Thermonuclear: the Wiki confirms unprotected hits land above its max 8 ('even more damage'); the 15 is Near-Reality's number, kept as a behavior-oracle estimate.",
   "_immune": "Monsters only some attacks hurt (Wiki, Kurask and Turoth): leaf-bladed melee weapons, broad arrows and bolts, and Magic Dart.",
   "immune": {
     "names": ["Kurask", "Turoth", "King kurask", "Spiked Turoth"],

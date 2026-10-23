@@ -24,6 +24,11 @@ export abstract class CombatMethod {
     public handleAfterHitEffects(hit: PendingHit): void {
     }
 
+    /** False when a Defensive magic hit pays Magic only (a salamander's Blaze), not Magic + Defence. */
+    public splitsDefensiveMagicExperience(): boolean {
+        return true;
+    }
+
     public canAttack(character: Mobile, target: Mobile): boolean {
         return true;
     }

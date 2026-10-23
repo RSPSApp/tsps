@@ -49,11 +49,12 @@ function tutorialPlayer(progress, x = 3102, y = 3095) {
   const player = new Player(null);
   player.setUsername("tutorial");
   player.setLocation(new core.Location(x, y, 0));
-  const sent = { messages: [], varps: new Map(), scripts: [] };
+  const sent = { messages: [], varps: new Map(), varbits: new Map(), scripts: [] };
   const sender = new Proxy({}, {
     get: (_, key) => (...args) => {
       if (key === "sendMessage") sent.messages.push(args[0]);
       if (key === "sendConfig") sent.varps.set(args[0], args[1]);
+      if (key === "sendVarbit") sent.varbits.set(args[0], args[1]);
       if (key === "sendClientScript") sent.scripts.push(args);
       return sender;
     },
@@ -292,6 +293,15 @@ test("a new account skips the welcome screen, designs its character, then gets t
   assert.ok(sent.scripts.some(([id, text]) => id === 1974 && String(text).includes("Past Experience")));
 });
 
+test("a newly built chatbox doesn't show the login messages over the step text", () => {
+  const ALLOW_MES_OVERLAP = 10690;
+  const { player, sent } = tutorialPlayer(30);
+  PluginManager.emitPlayerProcess({ player }); // the UI goes up on a new gameframe
+  assert.equal(sent.varbits.get(ALLOW_MES_OVERLAP), 0, "not while the chatbox loads");
+  ticks(1);
+  assert.equal(sent.varbits.get(ALLOW_MES_OVERLAP), 1, "messages show over the step from the next tick");
+});
+
 test("an existing player still gets the welcome screen", async () => {
   const { player } = tutorialPlayer(1000, 3222, 3218);
   const roots = [];
@@ -428,17 +438,44 @@ test("arriving in Lumbridge clears the worn items completely: the weapon interfa
   assert.equal(player.getWeapon(), WeaponInterfaces.UNARMED, "fights unarmed, not with the bow");
 });
 
-test("skipping the island as an Ironman opens the setup with every mode; declining does not", () => {
+test("skipping the island as an Ironman opens the setup with every mode, then ends it; declining does not", () => {
   const Leave = require("../plugins/areas/tutorialisland/Leave.TutorialIsland");
   const { STEP } = require("../plugins/areas/tutorialisland/Common.TutorialIsland");
+  const IRONMAN_SETUP = 890;
 
   const { player } = tutorialPlayer(STEP.GIELINOR_TALK, 3094, 3104);
   Leave.finishSkip(player, true);
-  assert.equal(progress(player), STEP.COMPLETED, "the tutorial ends first");
   ticks(2);
+  assert.equal(progress(player), STEP.GIELINOR_TALK, "the setup comes first: the welcome box and quest scroll would close it");
   click(player, IRONMAN_SETUP_HARDCORE);
   player.getEnteredAmountAction().execute(1);
   assert.equal(player.getAttribute("ironman:mode"), "hardcore", "an upgrade is allowed, as on the island");
+  ticks(2);
+  assert.equal(progress(player), STEP.GIELINOR_TALK, "the mode-updated statement is still up");
+  player.getDialogueManager().reset();
+  ticks(2);
+  assert.equal(progress(player), STEP.COMPLETED, "the tutorial ends once the chatbox is free");
+
+  const { player: closed, sent: closedSent } = tutorialPlayer(STEP.GIELINOR_TALK, 3094, 3104);
+  Leave.finishSkip(closed, true);
+  ticks(2);
+  PluginManager.emitCustomEvent("interface:closed", { player: closed, interfaceId: IRONMAN_SETUP });
+  ticks(2);
+  assert.equal(progress(closed), STEP.COMPLETED, "closing the setup without a choice still ends the skip");
+  assert.equal(closed.getAttribute("ironman:mode") ?? "none", "none");
+  // Learning the Ropes completes at 671 on the same varp: it must not leave it there.
+  assert.equal(closedSent.varps.get(PROGRESS_VARP), STEP.COMPLETED, "the tutorial varp ends at 1000");
+
+  // Logging out with the setup open (no close event) leaves the skip pending: the next login
+  // finishes it rather than leaving the player mid-island.
+  const { player: dropped } = tutorialPlayer(STEP.GIELINOR_TALK, 3094, 3104);
+  Leave.finishSkip(dropped, true);
+  ticks(2);
+  assert.equal(dropped.getAttribute(Leave.SKIP_PENDING_ATTRIBUTE), true);
+  Leave.onLogin({ player: dropped, isNewAccount: false });
+  ticks(2);
+  assert.equal(progress(dropped), STEP.COMPLETED, "the next login finishes the skip");
+  assert.equal(dropped.getAttribute(Leave.SKIP_PENDING_ATTRIBUTE), null);
 
   const { player: declined } = tutorialPlayer(STEP.GIELINOR_TALK, 3094, 3104);
   Leave.finishSkip(declined, false);

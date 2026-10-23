@@ -3,6 +3,7 @@ import { CacheSystem } from "../cache/CacheSystem";
 import { IndexType } from "../cache/IndexType";
 import { ByteBuffer } from "../io/ByteBuffer";
 import { SpriteLoader } from "../sprite/SpriteLoader";
+import { resolveTextTemplates } from "./textTemplates";
 
 /**
  * Java-compatible Linear Congruential Generator (LCG) random number generator.
@@ -262,6 +263,7 @@ export class BitmapFont {
     }
 
     measure(text: string): number {
+        text = resolveTextTemplates(text);
         let w = 0;
         let prev = -1;
         for (let i = 0; i < text.length; i++) {
@@ -295,6 +297,7 @@ export class BitmapFont {
         shadowRgb: number,
         seed: number,
     ): void {
+        text = resolveTextTemplates(text);
         if (!text) return;
         // Convert RGB ints to CSS colors for the glyph cache.
         const toCss = (rgb: number): string => `#${(rgb >>> 0).toString(16).padStart(6, "0")}`;
@@ -343,6 +346,7 @@ export class BitmapFont {
         alpha: number,
         xOffsets?: ArrayLike<number> | null,
     ): void {
+        text = resolveTextTemplates(text);
         let penX = x;
         let prev = -1;
         let idx = 0;
@@ -552,6 +556,7 @@ export class BitmapFont {
         y: number,
         color: string,
     ) {
+        text = resolveTextTemplates(text);
         let penX = x;
         let prev = -1;
 

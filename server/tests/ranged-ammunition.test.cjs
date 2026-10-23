@@ -97,7 +97,7 @@ ItemOnGroundManager.registerLocation = (player, item, position) => drops.push({ 
 
 const POS = { x: 3000, y: 3000, z: 0 };
 
-function ammoHarness({ itemId = Items.BRONZE_ARROW, amount = 5, capeId = -1 } = {}) {
+function ammoHarness({ itemId = Items.BRONZE_ARROW, amount = 5, capeId = -1, rangedWeapon = RangedWeapon.SHORTBOW } = {}) {
   let ammo = new GroundItem(itemId, amount);
   const equipment = {
     get: (slot) => slot === Slots.AMMUNITION_SLOT ? ammo
@@ -108,7 +108,7 @@ function ammoHarness({ itemId = Items.BRONZE_ARROW, amount = 5, capeId = -1 } = 
   const player = {
     getEquipment: () => equipment,
     sendMessage() {},
-    getCombat: () => ({ getRangedWeapon: () => RangedWeapon.SHORTBOW, getAmmunition: () => Ammunition.getForItem(itemId) }),
+    getCombat: () => ({ getRangedWeapon: () => rangedWeapon, getAmmunition: () => Ammunition.getForItem(itemId) }),
   };
   return { player, ammo: () => ammo };
 }
@@ -152,23 +152,34 @@ test("Ava's attractor recovers 60% and Ava's accumulator 72%", () => {
   shot(attractor, 0.30);
   assert.equal(attractor.ammo().getAmount(), 4);
 
-  // The plugin only claims what it knows: other capes fall through to core.
+  // The assembler recovers 80% itself, so the other 20% breaks and nothing lands.
   const assembler = ammoHarness({ capeId: Items.AVAS_ASSEMBLER });
-  assert.equal(avaRecovery.recovery(assembler.player), null);
+  assert.equal(avaRecovery.recovery(assembler.player), 80);
   drops.length = 0;
   shot(assembler, 0.50);
+  assert.equal(assembler.ammo().getAmount(), 5);
+  assert.equal(drops.length, 0);
+  shot(assembler, 0.10);
   assert.equal(assembler.ammo().getAmount(), 4);
+  assert.equal(drops.length, 0);
+
+  // Unknown capes fall through to core.
+  const other = ammoHarness({ capeId: Items.AVAS_DEVICE });
+  assert.equal(avaRecovery.recovery(other.player), null);
+  drops.length = 0;
+  shot(other, 0.50);
+  assert.equal(other.ammo().getAmount(), 4);
   assert.equal(drops.length, 1);
 });
 
 test('javelins drop and are recoverable like other ammunition', () => {
   drops.length = 0;
-  const javelin = ammoHarness({ itemId: Items.BRONZE_JAVELIN });
+  const javelin = ammoHarness({ itemId: Items.BRONZE_JAVELIN, rangedWeapon: RangedWeapon.BALLISTA });
   shot(javelin, 0.50);
   assert.equal(javelin.ammo().getAmount(), 4);
   assert.deepEqual(drops, [{ id: Items.BRONZE_JAVELIN, amount: 1, position: POS }]);
 
-  const recovered = ammoHarness({ itemId: Items.BRONZE_JAVELIN, capeId: Items.AVAS_ACCUMULATOR });
+  const recovered = ammoHarness({ itemId: Items.BRONZE_JAVELIN, rangedWeapon: RangedWeapon.BALLISTA, capeId: Items.AVAS_ACCUMULATOR });
   shot(recovered, 0.99);
   assert.equal(recovered.ammo().getAmount(), 5);
 });

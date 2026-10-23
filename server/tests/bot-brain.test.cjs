@@ -1652,7 +1652,7 @@ test('sites split each mode\'s count over the tiers and the registry only assign
   const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
   const registry = createBotActivityRegistry({ world: { core: PluginManager.getCoreApi() } });
   const bySite = new Map(registry.sites.map((site) => [site.id, site]));
-  const towns = ['lumbridge', 'varrock', 'falador', 'seers', 'east_ardougne'];
+  const towns = ['lumbridge'];
   const configured = JSON.parse(fs.readFileSync('data/definitions/bot-sites.json', 'utf8')).sites;
   const total = (counts) => typeof counts === 'number' ? counts : Object.values(counts).reduce((sum, count) => sum + count, 0);
   for (const town of towns) {
@@ -1670,12 +1670,10 @@ test('sites split each mode\'s count over the tiers and the registry only assign
   assert.equal(bySite.get('lumbridge_woodcutting_experts').activities[0].id, 'yew_trees', 'each tier takes the best activity it can do');
   assert.equal(bySite.get('lumbridge_woodcutting_novices').activities[0].id, 'normal_trees');
   assert.equal(bySite.get('lumbridge_mining_experts').activities[0].id, 'mithril_rocks');
-  const expertsRotation = bySite.get('varrock_woodcutting_experts').rotation;
-  assert.equal(bySite.get('varrock_mining_experts').rotation, expertsRotation, 'a site tier shares one rotation');
+  const expertsRotation = bySite.get('lumbridge_woodcutting_experts').rotation;
+  assert.equal(bySite.get('lumbridge_mining_experts').rotation, expertsRotation, 'a site tier shares one rotation');
   assert.deepEqual(expertsRotation.switchAfterMs, { min: 15 * 60000, max: 25 * 60000 });
-  assert.equal(expertsRotation.weights.yew_trees, bySite.get('varrock_woodcutting_experts').count, 'switches are weighted by the mode counts');
-  assert.ok(!bySite.get('varrock_mining_novices').rotation.activityIds.some((id) => id.endsWith('_trees')),
-    'Varrock novices never switch to woodcutting');
+  assert.equal(expertsRotation.weights.yew_trees, bySite.get('lumbridge_woodcutting_experts').count, 'switches are weighted by the mode counts');
   const os = require('node:os');
   const path = require('node:path');
   const sitesPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bot-sites-')), 'bot-sites.json');

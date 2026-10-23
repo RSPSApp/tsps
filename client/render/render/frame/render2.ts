@@ -169,6 +169,7 @@ import { type MinimapIcon, SdMapData } from "../../loader/SdMapData";
 import { SdMapDataLoader } from "../../loader/SdMapDataLoader";
 import { SdMapLoaderInput } from "../../loader/SdMapLoaderInput";
 import { isDoorLocType } from "../../loc/SceneLocs";
+import { hasSunkenLocs, sunkenRangeIndices } from "../../loc/SunkenLocs";
 import {
     DynamicNpcAnimLoader,
     DynamicNpcFrameGeometry,
@@ -385,7 +386,55 @@ export function renderGeometryPass(host: WebGLOsrsRendererHost, transparent: boo
 export function renderOpaquePass(host: WebGLOsrsRendererHost, ): void {
 
         host.renderGeometryPass(false);
+        if (!host.hdShadowFrustum) renderSunkenLocs(host);
     
+}
+
+/**
+ * Locs meant to be seen below the floor (SUNKEN_LOC_IDS): their faces first reset the depth
+ * under them to the far plane (no colour), so the floor no longer hides them, then they are drawn
+ * again normally. Their translucent faces go on in the transparent pass.
+ */
+function renderSunkenLocs(host: WebGLOsrsRendererHost): void {
+        const maps = host.mapManager.visibleMaps;
+        const count = host.mapManager.visibleMapCount;
+        const roofPlaneLimit = host.getRoofPlaneLimit();
+        const cullTile = host.getRenderCullTile();
+        const lodThresholdTiles = Math.max(0, host.getFrameLodThresholdTiles() | 0);
+        const renderDistanceTiles = Math.max(0, host.getFrameRenderDistanceTiles() | 0);
+        const draws: { drawCall: DrawCall; drawRanges: DrawRange[]; indices: number[]; punchOnly: boolean }[] = [];
+        for (let i = 0; i < count; i++) {
+            const map = maps[i];
+            if (!hasSunkenLocs(map.locsAnimated) || host.mapManager.worldEntityMapIds.has(map.id)) continue;
+            if (host.getMapTileDistanceFromPoint(map, cullTile.x, cullTile.y) > lodThresholdTiles) continue;
+            if (!host.isMapWithinRenderDistance(map, cullTile.x, cullTile.y, renderDistanceTiles, 0)) continue;
+            for (const alpha of [false, true]) {
+                const batch = map.getLocDrawCall(alpha, false, false);
+                if (!batch) continue;
+                const planes = map.getLocDrawRangesPlanes(alpha, false, false);
+                const indices = sunkenRangeIndices(map.locsAnimated, alpha).filter((index) =>
+                    !(roofPlaneLimit < 3 && planes && index < planes.length && planes[index] > roofPlaneLimit));
+                if (indices.length === 0) continue;
+                if (alpha) {
+                    batch.drawCall.uniform("u_roofPlaneLimit", roofPlaneLimit);
+                    batch.drawCall.uniform("u_worldEntityTransform", WebGLMapSquare.IDENTITY_MAT4);
+                    batch.drawCall.uniform("u_worldEntityOpacity", 1.0);
+                    host.updateAnimatedDrawRanges(map, batch.drawCall, batch.drawRanges, true, false, false);
+                }
+                draws.push({ drawCall: batch.drawCall, drawRanges: batch.drawRanges, indices, punchOnly: alpha });
+            }
+        }
+        if (draws.length === 0) return;
+
+        const app = host.app;
+        app.colorMask(false, false, false, false);
+        app.depthFunc(PicoGL.ALWAYS);
+        app.depthRange(1, 1);
+        for (const draw of draws) host.draw(draw.drawCall, draw.drawRanges, draw.indices);
+        app.depthRange(0, 1);
+        app.depthFunc(PicoGL.LEQUAL);
+        app.colorMask(true, true, true, true);
+        for (const draw of draws) if (!draw.punchOnly) host.draw(draw.drawCall, draw.drawRanges, draw.indices);
 }
 
 export function renderTransparentPass(host: WebGLOsrsRendererHost, ): void {

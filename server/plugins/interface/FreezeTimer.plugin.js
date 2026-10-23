@@ -4,11 +4,10 @@ const TICK_MILLIS = 600;
 
 const states = new WeakMap();
 const pendingSpellIds = new WeakMap();
+let freezeKey = null;
 
 function getFreezeTicks(player) {
-  const timers = player.getTimers?.();
-  const freezeKey = require("../../src/main/typescript/elvarg/util/timers/TimerKey").TimerKey.FREEZE;
-  return Math.max(0, Number(timers?.getTicks?.(freezeKey) ?? 0));
+  return Math.max(0, Number(player.getTimers?.()?.getTicks?.(freezeKey) ?? 0));
 }
 
 function sync(player, force = false) {
@@ -31,6 +30,9 @@ function sync(player, force = false) {
 module.exports = {
   name: "Freeze Timer",
   register(api) {
+    // Resolved once: a require() here ran per player per tick, and in a built server it
+    // missed the resolve cache (the .ts path throws, then is rewritten to dist) at ~15us a call.
+    freezeKey = api.core.TimerKey.FREEZE;
     api.onCombatHitResolved(({ attacker, target }) => {
       if (!target?.isPlayer?.() || states.get(target)?.ticks > 0 || getFreezeTicks(target) === 0) {
         return;

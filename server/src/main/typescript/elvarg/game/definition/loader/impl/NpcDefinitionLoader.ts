@@ -36,6 +36,8 @@ type CombatStats = {
         crush?: number;
         magic?: number;
         ranged?: number;
+        light?: number;
+        heavy?: number;
     };
 };
 
@@ -216,9 +218,9 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                 slash: monster.defence_slash,
                 crush: monster.defence_crush,
                 magic: monster.defence_magic,
-                // The dump splits ranged defence into light/standard/heavy; this
-                // engine models a single ranged defence.
                 ranged: monster.defence_ranged_standard,
+                light: monster.defence_ranged_light,
+                heavy: monster.defence_ranged_heavy,
             },
         };
     }
@@ -379,6 +381,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                 }
                 Object.assign(definition, {
                     stats: levels,
+                    rangedDefenceBonuses: { light: stat.defenceBonuses?.light, heavy: stat.defenceBonuses?.heavy },
                     // getExamine() falls back to a generic line, so keep the raw field here.
                     examine: stat.examine ?? definition.examine,
                     hitpoints: stat.hitpoints ?? definition.getHitpoints(),

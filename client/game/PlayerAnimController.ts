@@ -27,14 +27,20 @@ export type ServerSequenceOptions = {
     delay?: number;
 };
 
+/** Plays a sequence frame's sounds for the player at ECS index `ecsIndex`. */
+export type PlayerFrameSoundHandler = (serverId: number, ecsIndex: number, seqType: SeqType, frame: number) => void;
+
 export class PlayerAnimController {
     private readonly states = new Map<number, PlayerSeqState>();
     private readonly movementStates = new Map<number, PlayerMovementSeqState>();
+    /** The seq|frame each player's action and movement sounds last played for, so a frame plays once. */
+    private readonly soundFrames = new Map<number, { action: number; movement: number }>();
 
     constructor(
         private readonly playerEcs: PlayerEcs,
         private readonly seqTypeLoader: SeqTypeLoader,
         private readonly seqFrameLoader: SeqFrameLoader,
+        private readonly onFrameSound?: PlayerFrameSoundHandler,
     ) {}
 
     /**
@@ -183,8 +189,41 @@ export class PlayerAnimController {
 
                 // === Movement sequence (Actor.movementSequence) ===
                 this.stepMovementSequence(serverId, idx);
+
+                if (this.onFrameSound) this.emitFrameSounds(serverId, idx, state);
             }
         }
+    }
+
+    /**
+     * Frame sounds play here, as each frame starts, rather than from a renderer's draw pass, so
+     * they play under every renderer and for players off screen.
+     */
+    private emitFrameSounds(serverId: number, idx: number, state: PlayerSeqState): void {
+        let last = this.soundFrames.get(serverId);
+        if (!last) {
+            last = { action: -1, movement: -1 };
+            this.soundFrames.set(serverId, last);
+        }
+        const actionKey = (state.seqId | 0) >= 0 && (state.delay | 0) === 0 ? frameKey(state.seqId, state.frame) : -1;
+        if (actionKey !== last.action) {
+            last.action = actionKey;
+            if (actionKey >= 0) this.playFrameSound(serverId, idx, state.seqId | 0, state.frame | 0);
+        }
+        const movement = this.movementStates.get(serverId);
+        const movementKey = movement && (movement.seqId | 0) >= 0 ? frameKey(movement.seqId, movement.frame) : -1;
+        if (movementKey !== last.movement) {
+            last.movement = movementKey;
+            if (movement && movementKey >= 0) this.playFrameSound(serverId, idx, movement.seqId | 0, movement.frame | 0);
+        }
+    }
+
+    private playFrameSound(serverId: number, idx: number, seqId: number, frame: number): void {
+        const seqType = this.safeLoadSeqType(seqId);
+        if (!seqType || (!seqType.frameSounds?.size && !seqType.soundEffects?.length)) return;
+        try {
+            this.onFrameSound!(serverId, idx, seqType, frame);
+        } catch {}
     }
 
     getSequenceState(serverId: number): SequenceStateView | undefined {
@@ -222,6 +261,7 @@ export class PlayerAnimController {
         }
         this.states.delete(serverId);
         this.movementStates.delete(serverId);
+        this.soundFrames.delete(serverId);
     }
 
     reset(): void {
@@ -230,6 +270,7 @@ export class PlayerAnimController {
         }
         this.states.clear();
         this.movementStates.clear();
+        this.soundFrames.clear();
     }
 
     private stateFor(serverId: number): PlayerSeqState {
@@ -537,4 +578,8 @@ export class PlayerAnimController {
         this.playerEcs.setAnimSeqFrame(idx, state.frame | 0);
         this.playerEcs.setAnimSeqFrameCycle(idx, state.frameCycle | 0);
     }
+}
+
+function frameKey(seqId: number, frame: number): number {
+    return (seqId | 0) * 65536 + (frame & 0xffff);
 }

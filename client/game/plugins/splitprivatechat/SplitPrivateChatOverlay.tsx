@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import type { OsrsClient } from "../../OsrsClient";
-import { SPLIT_PRIVATE_CHAT_VARP } from "./SplitPrivateChatPlugin";
+import { SPLIT_PRIVATE_CHAT_VARP, type SplitPrivateChatPlugin } from "./SplitPrivateChatPlugin";
 import "./SplitPrivateChatOverlay.css";
 
-export function SplitPrivateChatOverlay({ osrsClient }: { osrsClient: OsrsClient }): JSX.Element | null {
-    const plugin = osrsClient.splitPrivateChatPlugin;
+export function SplitPrivateChatOverlay({
+    osrsClient,
+    plugin,
+}: {
+    osrsClient: OsrsClient;
+    plugin: SplitPrivateChatPlugin;
+}): JSX.Element | null {
     const subscribe = useCallback((listener: () => void) => plugin.subscribe(listener), [plugin]);
     const getSnapshot = useCallback(() => plugin.getState(), [plugin]);
     const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);

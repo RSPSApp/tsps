@@ -87,6 +87,7 @@ function clearBleed(player) {
 
 function restoreFromPool(player, tier) {
   restoreSpecialAttack(player);
+  pluginApi?.emitCustomEvent("rejuvenation-pool:restored", { player });
   if (tier >= 1) restoreRunEnergy(player);
   if (tier >= 2) restorePrayer(player);
   if (tier >= 3) restoreLoweredStats(player);
@@ -98,6 +99,7 @@ function restoreFromPool(player, tier) {
 }
 
 let TaskManager;
+let pluginApi;
 
 function drinkFromPool(event, tier = 4) {
   const player = event.player;
@@ -128,6 +130,7 @@ module.exports = {
   name: "RejuvenationPool",
   register(api) {
     TaskManager = api.getTaskManager();
+    pluginApi = api;
     api.onObjectInteraction("Pool of Restoration", { Drink: restoration });
     api.onObjectInteraction("Pool of Revitalisation", { Drink: revitalisation });
     api.onObjectInteraction("Pool of Rejuvenation", { Drink: rejuvenation });

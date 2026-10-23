@@ -1,6 +1,6 @@
 # God Wars Dungeon
 
-The God Wars Dungeon and its four generals (General Graardor, Kree'arra, Commander Zilyana, K'ril Tsutsaroth), built from the OSRS Wiki, rsprox captures (https://rsprox.net/database) and the cache. Nex is separate. It is one plugin, `server/plugins/bosses/GodWars.plugin.js`, with one unit per part in `server/plugins/bosses/godwars/` and its data in `godwars/data/godwars.json`.
+The God Wars Dungeon and its four generals (General Graardor, Kree'arra, Commander Zilyana, K'ril Tsutsaroth), built from the OSRS Wiki, rsprox captures (https://rsprox.net/database) and the cache. Nex and the Ancient Prison are a plugin of their own (docs/nex.md); Zaros's essence is kept here with the others. It is one plugin, `server/plugins/bosses/GodWars.plugin.js`, with one unit per part in `server/plugins/bosses/godwars/` and its data in `godwars/data/godwars.json`.
 
 ## Layout
 
@@ -101,10 +101,9 @@ Where sounds were played at the same moment by two bodyguards in every capture (
 
 ## Testing
 
-`::essence [amount] [god]` (administrators) sets one god's essence, or all four; with no amount it sets 40.
+`::essence [amount] [god]` (administrators) sets one god's essence (bandos, armadyl, saradomin, zamorak or ancient), or every god's; with no amount it sets 40.
 
 ## Not done
 
 - Kree'arra's melee (only when nobody attacks him, per the Wiki) and his knock-back.
 - Monsters of different gods fighting each other.
-- Nex, the Ancient Prison and the frozen key pieces.

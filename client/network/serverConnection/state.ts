@@ -71,6 +71,7 @@ export const state = {
     lastUrl: DEFAULT_URL,
     webRtcConfig: undefined as WebRtcConnectionConfig | undefined,
     reconnectTimer: null as ReturnType<typeof setTimeout> | null,
+    lastKeepaliveAt: 0,
     reconnectDelayMs: 250,
     reconnectAttempts: 0,
     isReconnecting: false,

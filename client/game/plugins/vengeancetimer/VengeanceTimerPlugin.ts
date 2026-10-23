@@ -1,4 +1,6 @@
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
+import { createElement, lazy, type ReactNode } from "react";
+import type { OsrsClient } from "../../OsrsClient";
 
 export const VENGEANCE_TIME_LIMIT_VARBIT = 2451;
 export const VENGEANCE_COOLDOWN_MS = 30_000;
@@ -15,6 +17,10 @@ export interface VengeanceTimerPluginState {
 
 type VengeanceTimerPluginListener = () => void;
 
+const VengeanceTimerOverlay = lazy(() =>
+    import("./VengeanceTimerOverlay").then((m) => ({ default: m.VengeanceTimerOverlay })),
+);
+
 export class VengeanceTimerPlugin extends Plugin {
     static descriptor: PluginDescriptor = {
         name: "Vengeance Timer",
@@ -22,6 +28,10 @@ export class VengeanceTimerPlugin extends Plugin {
         tags: ["combat", "timer"],
         configKey: "vengeancetimerplugin",
     };
+
+    renderHud(osrsClient: OsrsClient): ReactNode {
+        return createElement(VengeanceTimerOverlay, { osrsClient, plugin: this });
+    }
 
     private readonly listeners = new Set<VengeanceTimerPluginListener>();
     private cooldownActive = false;

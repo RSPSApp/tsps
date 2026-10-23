@@ -7,6 +7,12 @@
     "fighting": 16305,
     "dead": 16308
   },
+  "questNpcs": {
+    "dormant": 16306,
+    "waking": 16311,
+    "fighting": 16309,
+    "dead": 16312
+  },
   "doors": {
     "ids": [62368, 62369],
     "anim": 4282,

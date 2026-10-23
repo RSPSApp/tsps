@@ -1,8 +1,10 @@
-import type { ClientGroundItemStack } from "../../data/ground/GroundItemStore";
+import type { ClientGroundItemStack, GroundItemOverlayEntry } from "../../data/ground/GroundItemStore";
+import type { OsrsClient } from "../../OsrsClient";
+import { getServerTickPhaseNow } from "../../../network/serverConnection/timing";
 import { ConfigChanged } from "@runelite/api/events";
 import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
-import { inject } from "@runelite/client/plugins/PluginInjector";
+import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import {
     GroundItemsConfig,
     readGroundItemsConfig,
@@ -264,6 +266,8 @@ export class GroundItemsPlugin extends Plugin {
 
     private readonly listeners: Set<GroundItemsListener> = new Set();
     private readonly configManager = inject(ConfigManager);
+    private readonly client = inject<OsrsClient>(CLIENT_TOKEN);
+    private groundItemOverlayCache?: { key: string; entries: GroundItemOverlayEntry[] };
 
     private highlightedPatterns: CompiledPattern[] = [];
     private hiddenPatterns: CompiledPattern[] = [];
@@ -433,7 +437,7 @@ export class GroundItemsPlugin extends Plugin {
         return valueByMode(geValue, haValue, this.config.valueCalculationMode);
     }
 
-    getMenuTargetName(stack: ClientGroundItemStack, baseName?: string): string {
+    groundItemMenuName(stack: ClientGroundItemStack, baseName?: string): string {
         const name = typeof baseName === "string" && baseName.length > 0 ? baseName : stack.name;
         if (!this.isEnabled()) {
             return name;
@@ -447,7 +451,7 @@ export class GroundItemsPlugin extends Plugin {
         return `${name} (${formatWithCommas(stack.quantity)})`;
     }
 
-    getMenuTargetColorized(stack: ClientGroundItemStack, targetName: string): string {
+    groundItemMenuTarget(stack: ClientGroundItemStack, targetName: string): string {
         if (!this.isEnabled()) {
             return targetName;
         }
@@ -461,7 +465,7 @@ export class GroundItemsPlugin extends Plugin {
         return `<col=${(evaluation.color >>> 0).toString(16).padStart(6, "0")}>${targetName}</col>`;
     }
 
-    shouldDeprioritizeInMenu(stack: ClientGroundItemStack): boolean {
+    deprioritizeGroundItem(stack: ClientGroundItemStack): boolean {
         if (!this.isEnabled()) {
             return false;
         }
@@ -509,6 +513,173 @@ export class GroundItemsPlugin extends Plugin {
             return true;
         }
         return false;
+    }
+
+    groundItemOverlayEntries(
+        tileX: number,
+        tileY: number,
+        level: number,
+        opts?: { radius?: number; maxEntries?: number },
+    ): GroundItemOverlayEntry[] {
+        const config = this.getConfig();
+        if (!config.enabled) {
+            return [];
+        }
+
+        const radius = Math.max(1, opts?.radius ?? 12);
+        const maxEntries = Math.max(1, opts?.maxEntries ?? 40);
+        const serverTiming = getServerTickPhaseNow();
+        const accountType = this.client.getLocalAccountType();
+        const timerBucket =
+            config.despawnTimerMode === "seconds"
+                ? Math.max(
+                      0,
+                      Math.floor(
+                          (Math.max(
+                              0,
+                              Math.min(
+                                  0.999,
+                                  Number.isFinite(serverTiming.phase) ? serverTiming.phase : 0,
+                              ),
+                          ) *
+                              Math.max(1, serverTiming.tickMs | 0)) /
+                              100,
+                      ),
+                  )
+                : 0;
+        const cacheKey = [
+            tileX | 0,
+            tileY | 0,
+            level | 0,
+            radius | 0,
+            maxEntries | 0,
+            accountType | 0,
+            serverTiming.tick | 0,
+            timerBucket | 0,
+            this.client.groundItems.getVersion() | 0,
+            this.getVersion() | 0,
+        ].join("|");
+        const cachedOverlay = this.groundItemOverlayCache;
+        if (cachedOverlay?.key === cacheKey) {
+            return cachedOverlay.entries;
+        }
+
+        const stacks = this.client.groundItems.getStacksInRadius(tileX | 0, tileY | 0, level | 0, {
+            radius,
+            // Pull a bounded candidate set, then apply plugin filtering down to maxEntries.
+            maxEntries: Math.max(maxEntries * 4, 128),
+        });
+        const centerX = tileX | 0;
+        const centerY = tileY | 0;
+
+        type OverlayCandidate = {
+            stack: (typeof stacks)[number];
+            label: string;
+            color: number;
+            timerLabel?: string;
+            timerColor?: number;
+            value: number;
+            distance: number;
+        };
+        const groups = new Map<
+            string,
+            {
+                tileX: number;
+                tileY: number;
+                level: number;
+                distance: number;
+                candidates: OverlayCandidate[];
+            }
+        >();
+
+        for (const stack of stacks) {
+            const evaluated = this.evaluateStack(stack, {
+                includeTimerLabel: true,
+                timing: {
+                    currentTick: serverTiming.tick | 0,
+                    tickPhase: serverTiming.phase,
+                    tickMs: serverTiming.tickMs | 0,
+                },
+                accountType,
+            });
+            if (!evaluated.highlighted) {
+                if (evaluated.hidden) {
+                    continue;
+                }
+                if (config.showHighlightedOnly) {
+                    continue;
+                }
+            }
+
+            const stackTileX = stack.tile.x | 0;
+            const stackTileY = stack.tile.y | 0;
+            const stackLevel = stack.tile.level | 0;
+            const distance = Math.max(
+                Math.abs(stackTileX - centerX),
+                Math.abs(stackTileY - centerY),
+            );
+            const key = `${stackLevel}|${stackTileX}|${stackTileY}`;
+            let group = groups.get(key);
+            if (!group) {
+                group = {
+                    tileX: stackTileX,
+                    tileY: stackTileY,
+                    level: stackLevel,
+                    distance,
+                    candidates: [],
+                };
+                groups.set(key, group);
+            }
+            group.candidates.push({
+                stack,
+                label: evaluated.baseLabel,
+                color: evaluated.color,
+                timerLabel: evaluated.timerLabel,
+                timerColor: evaluated.timerColor,
+                value: this.getValueForStack(stack),
+                distance,
+            });
+        }
+
+        if (groups.size === 0) {
+            this.groundItemOverlayCache = { key: cacheKey, entries: [] };
+            return [];
+        }
+
+        const sortedGroups = [...groups.values()].sort((a, b) => {
+            if (a.distance !== b.distance) return a.distance - b.distance;
+            if (a.tileY !== b.tileY) return a.tileY - b.tileY;
+            return a.tileX - b.tileX;
+        });
+        const entries: GroundItemOverlayEntry[] = [];
+        for (const group of sortedGroups) {
+            group.candidates.sort((a, b) => {
+                if (a.value !== b.value) return b.value - a.value;
+                if (a.stack.quantity !== b.stack.quantity)
+                    return b.stack.quantity - a.stack.quantity;
+                return a.stack.itemId - b.stack.itemId;
+            });
+            for (let line = 0; line < group.candidates.length; line++) {
+                const candidate = group.candidates[line];
+                entries.push({
+                    tileX: group.tileX,
+                    tileY: group.tileY,
+                    level: group.level,
+                    label: candidate.label,
+                    color: candidate.color,
+                    timerLabel: candidate.timerLabel,
+                    timerColor: candidate.timerColor,
+                    line,
+                });
+                if (entries.length >= maxEntries) {
+                    this.groundItemOverlayCache = { key: cacheKey, entries };
+                    return entries;
+                }
+            }
+        }
+
+        this.groundItemOverlayCache = { key: cacheKey, entries };
+        return entries;
     }
 
     private commit(): void {

@@ -1,0 +1,10 @@
+{
+  "$comment": "Endpoints verified from cache osrs-241_2026-10-20 placements and climb actions. The Wizards' Tower surface and basement are 6414 tiles apart, beyond the generic 6400-tile underground search. Each pair's up object offers Climb-up; down offers Climb-down.",
+  "pairs": [
+    {
+      "name": "Wizards' Tower basement ladder",
+      "up": { "id": 2148, "x": 3103, "y": 9576, "z": 0 },
+      "down": { "id": 2147, "x": 3104, "y": 3162, "z": 0 }
+    }
+  ]
+}

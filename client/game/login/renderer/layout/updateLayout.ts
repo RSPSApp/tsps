@@ -128,7 +128,12 @@ export function updateLayout(
         }
 
         host.contentScale = contentScale;
-        host.contentSmoothing = !!stretch && !stretch.integerScaling && contentScale > 1;
+        // Fractional scales drawn nearest-neighbour land glyph columns on 1 or 2 pixels
+        // unevenly. Stretched Mode upscales and phones fit the scene to a short screen at
+        // any ratio, so both draw through the sharp-bilinear buffer instead.
+        host.contentSmoothing =
+            (!!stretch && !stretch.integerScaling && contentScale > 1) ||
+            (isMobileMode && Math.abs(contentScale - Math.round(contentScale)) > 0.01);
 
         const scaledW = host.SCENE_WIDTH * host.contentScale;
         const scaledH = host.SCENE_HEIGHT * host.contentScale;

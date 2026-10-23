@@ -136151,7 +136151,7 @@
       "label": "Drops",
       "table_name": "Nex Drops",
       "wiki_page": "Nex",
-      "main_max_roll": 14,
+      "main_max_roll": 12,
       "entries": [
         {
           "item_id": 532,
@@ -136172,8 +136172,8 @@
             876
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136185,8 +136185,8 @@
             986
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136198,8 +136198,8 @@
             592
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136211,8 +136211,8 @@
             283
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136224,8 +136224,8 @@
             2252
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Runes and ammunition",
           "assumed_rarity": true
         },
@@ -136237,8 +136237,8 @@
             100
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Resources",
           "noted": true,
           "assumed_rarity": true
@@ -136251,8 +136251,8 @@
             80
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Resources",
           "noted": true,
           "assumed_rarity": true
@@ -136265,8 +136265,8 @@
             64
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Resources",
           "noted": true,
           "assumed_rarity": true
@@ -136279,8 +136279,8 @@
             64
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Resources",
           "noted": true,
           "assumed_rarity": true
@@ -136293,26 +136293,23 @@
             10
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Consumables",
           "assumed_rarity": true,
           "notes": [
             "Sharks and Prayer potions are dropped together"
-          ]
-        },
-        {
-          "item_id": 2434,
-          "name": "Prayer potion(4)",
-          "quantity": [
-            3,
-            3
           ],
-          "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
-          "section": "Consumables",
-          "assumed_rarity": true
+          "bonus_drops": [
+            {
+              "item_id": 2434,
+              "name": "Prayer potion(4)",
+              "quantity": [
+                3,
+                3
+              ]
+            }
+          ]
         },
         {
           "item_id": 6685,
@@ -136322,26 +136319,23 @@
             10
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Consumables",
           "assumed_rarity": true,
           "notes": [
             "Saradomin brews and Super restores are dropped together"
-          ]
-        },
-        {
-          "item_id": 3024,
-          "name": "Super restore(4)",
-          "quantity": [
-            1,
-            5
           ],
-          "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
-          "section": "Consumables",
-          "assumed_rarity": true
+          "bonus_drops": [
+            {
+              "item_id": 3024,
+              "name": "Super restore(4)",
+              "quantity": [
+                1,
+                5
+              ]
+            }
+          ]
         },
         {
           "item_id": 26388,
@@ -136351,8 +136345,8 @@
             39
           ],
           "weight": 1,
-          "out_of": 14,
-          "rarity": 0.0714286,
+          "out_of": 12,
+          "rarity": 0.0833333,
           "section": "Other",
           "assumed_rarity": true
         },
@@ -179874,6 +179868,7 @@
       "label": "Elite drops",
       "table_name": "The Mimic Elite drops",
       "wiki_page": "The Mimic",
+      "main_max_roll": 1250,
       "entries": [
         {
           "item_id": 8782,
@@ -179885,6 +179880,381 @@
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
+        },
+        {
+          "item_id": 560,
+          "name": "Death rune",
+          "quantity": [
+            120,
+            600
+          ],
+          "weight": 243,
+          "out_of": 1250,
+          "rarity": 0.1944,
+          "section": "Consumables"
+        },
+        {
+          "item_id": 565,
+          "name": "Blood rune",
+          "quantity": [
+            100,
+            500
+          ],
+          "weight": 243,
+          "out_of": 1250,
+          "rarity": 0.1944,
+          "section": "Consumables"
+        },
+        {
+          "item_id": 207,
+          "name": "Grimy ranarr weed",
+          "quantity": [
+            5,
+            25
+          ],
+          "weight": 243,
+          "out_of": 1250,
+          "rarity": 0.1944,
+          "section": "Consumables",
+          "noted": true
+        },
+        {
+          "item_id": 245,
+          "name": "Wine of Zamorak",
+          "quantity": [
+            5,
+            25
+          ],
+          "weight": 243,
+          "out_of": 1250,
+          "rarity": 0.1944,
+          "section": "Consumables",
+          "noted": true
+        },
+        {
+          "item_id": 389,
+          "name": "Raw manta ray",
+          "quantity": [
+            3,
+            15
+          ],
+          "weight": 243,
+          "out_of": 1250,
+          "rarity": 0.1944,
+          "section": "Consumables",
+          "noted": true
+        },
+        {
+          "item_id": 23185,
+          "name": "Ring of 3rd age",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 6,
+          "out_of": 250,
+          "rarity": 0.024,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10350,
+          "name": "3rd Age full helmet",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10348,
+          "name": "3rd Age platebody",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10346,
+          "name": "3rd Age platelegs",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23242,
+          "name": "3rd Age plateskirt",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10352,
+          "name": "3rd Age kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10334,
+          "name": "3rd Age range coif",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10330,
+          "name": "3rd Age range top",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10332,
+          "name": "3rd Age range legs",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10336,
+          "name": "3rd Age vambraces",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10342,
+          "name": "3rd Age mage hat",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10338,
+          "name": "3rd Age robe top",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10340,
+          "name": "3rd Age robe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10344,
+          "name": "3rd Age amulet",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 12426,
+          "name": "3rd Age longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 12424,
+          "name": "3rd Age bow",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 12422,
+          "name": "3rd Age wand",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 12437,
+          "name": "3rd Age cloak",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23336,
+          "name": "3rd Age druidic robe top",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23339,
+          "name": "3rd Age druidic robe bottoms",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23345,
+          "name": "3rd Age druidic cloak",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23342,
+          "name": "3rd Age druidic staff",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 20014,
+          "name": "3rd Age pickaxe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 20011,
+          "name": "3rd Age axe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5750,
+          "rarity": 0.0001739,
+          "section": "Uniques",
+          "separate_roll": true
         }
       ],
       "tertiary": []
@@ -179894,6 +180264,7 @@
       "label": "Master drops",
       "table_name": "The Mimic Master drops",
       "wiki_page": "The Mimic",
+      "main_max_roll": 1140,
       "entries": [
         {
           "item_id": 8782,
@@ -179905,6 +180276,381 @@
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
+        },
+        {
+          "item_id": 560,
+          "name": "Death rune",
+          "quantity": [
+            100,
+            600
+          ],
+          "weight": 221,
+          "out_of": 1140,
+          "rarity": 0.1938596,
+          "section": "Consumables"
+        },
+        {
+          "item_id": 565,
+          "name": "Blood rune",
+          "quantity": [
+            83,
+            500
+          ],
+          "weight": 221,
+          "out_of": 1140,
+          "rarity": 0.1938596,
+          "section": "Consumables"
+        },
+        {
+          "item_id": 207,
+          "name": "Grimy ranarr weed",
+          "quantity": [
+            4,
+            25
+          ],
+          "weight": 221,
+          "out_of": 1140,
+          "rarity": 0.1938596,
+          "section": "Consumables",
+          "noted": true
+        },
+        {
+          "item_id": 245,
+          "name": "Wine of Zamorak",
+          "quantity": [
+            4,
+            25
+          ],
+          "weight": 221,
+          "out_of": 1140,
+          "rarity": 0.1938596,
+          "section": "Consumables",
+          "noted": true
+        },
+        {
+          "item_id": 389,
+          "name": "Raw manta ray",
+          "quantity": [
+            2,
+            15
+          ],
+          "weight": 221,
+          "out_of": 1140,
+          "rarity": 0.1938596,
+          "section": "Consumables",
+          "noted": true
+        },
+        {
+          "item_id": 23185,
+          "name": "Ring of 3rd age",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 6,
+          "out_of": 228,
+          "rarity": 0.0263158,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10350,
+          "name": "3rd Age full helmet",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10348,
+          "name": "3rd Age platebody",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10346,
+          "name": "3rd Age platelegs",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23242,
+          "name": "3rd Age plateskirt",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10352,
+          "name": "3rd Age kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10334,
+          "name": "3rd Age range coif",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10330,
+          "name": "3rd Age range top",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10332,
+          "name": "3rd Age range legs",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10336,
+          "name": "3rd Age vambraces",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10342,
+          "name": "3rd Age mage hat",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10338,
+          "name": "3rd Age robe top",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10340,
+          "name": "3rd Age robe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 10344,
+          "name": "3rd Age amulet",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 12426,
+          "name": "3rd Age longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 12424,
+          "name": "3rd Age bow",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 12422,
+          "name": "3rd Age wand",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 12437,
+          "name": "3rd Age cloak",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23336,
+          "name": "3rd Age druidic robe top",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23339,
+          "name": "3rd Age druidic robe bottoms",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23345,
+          "name": "3rd Age druidic cloak",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 23342,
+          "name": "3rd Age druidic staff",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 20014,
+          "name": "3rd Age pickaxe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
+        },
+        {
+          "item_id": 20011,
+          "name": "3rd Age axe",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 1,
+          "out_of": 5244,
+          "rarity": 0.0001907,
+          "section": "Uniques",
+          "separate_roll": true
         }
       ],
       "tertiary": []
@@ -181076,6 +181822,7 @@
           ],
           "pre_roll": true,
           "weight": 1,
+          "out_of": 350,
           "rarity_raw": "1/350",
           "section": "Pre-roll"
         },

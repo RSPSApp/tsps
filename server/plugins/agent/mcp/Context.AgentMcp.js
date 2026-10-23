@@ -101,7 +101,8 @@ const tile = (location) => ({ x: location.getX(), y: location.getY(), z: locatio
 
 function createContext(core, server) {
   const {
-    World, MapObjects, ObjectDefinition, ItemDefinition, GameConstants, TaskManager, MultiChatboxPrompt, RegionManager,
+    World, MapObjects, ObjectDefinition, ItemDefinition, GameConstants, TaskManager, MultiChatboxPrompt,
+    RegionManager, BoatManager,
   } = core;
 
   const find = (username) => {
@@ -125,8 +126,14 @@ function createContext(core, server) {
       : null)
     .filter(Boolean);
 
-  const sleepTicks = (ticks) =>
-    new Promise((resolve) => setTimeout(resolve, ticks * GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE));
+  // Waits for `ticks` game ticks, counted by the world, not the clock: the server acts on input
+  // at the start of the player's next turn, so what was sent before has then happened.
+  const sleepTicks = (ticks) => new Promise((resolve) => {
+    const target = World.getProcessCycle() + ticks;
+    const pollMs = Math.max(1, Math.floor(GameConstants.GAME_ENGINE_PROCESSING_CYCLE_RATE / 12));
+    const poll = () => (World.getProcessCycle() >= target ? resolve() : setTimeout(poll, pollMs));
+    setTimeout(poll, pollMs);
+  });
   // What the player is in the middle of; empty means idle.
   const activity = (p) => {
     const busy = [];
@@ -153,8 +160,10 @@ function createContext(core, server) {
     const current = p.getArea?.();
     return current ? { name: current.getName(), plugin: current.pluginName ?? null, private: !!p.getPrivateArea?.() } : null;
   };
+  const movementBlocked = (p) => p.getMovementQueue?.()?.isMovementBlocked?.() === true;
   const status = (p) => ({
-    ...tile(p.getLocation()), hitpoints: p.getHitpoints(), busy: activity(p), open: waitingOn(p),
+    ...tile(p.getLocation()), hitpoints: p.getHitpoints(), movementBlocked: movementBlocked(p),
+    busy: activity(p), open: waitingOn(p),
     area: area(p), messages: takeMessages(p), client: takeClient(p),
   });
   // Polls each tick until the player reaches `target`, opens a dialogue/interface, or has been
@@ -185,39 +194,74 @@ function createContext(core, server) {
   // Everything with a menu within `radius` tiles of the player.
   const nearby = (p, radius) => {
     const here = p.getLocation();
-    const near = (loc) => loc.getZ() === here.getZ()
-      && Math.abs(loc.getX() - here.getX()) <= radius && Math.abs(loc.getY() - here.getY()) <= radius;
-
     const privateArea = p.getPrivateArea?.() ?? null;
-    const viewedArea = privateArea?.countsAsMainWorld() ? null : privateArea;
+    const isDeck = !!privateArea?.boat && privateArea.countsAsMainWorld?.() === true;
+    const viewedArea = privateArea && !privateArea.countsAsMainWorld() ? privateArea : null;
+    const deckArea = isDeck ? privateArea : null;
+    const root = isDeck ? BoatManager.rootLocation(p) : here;
+    const near = (loc, center) => loc.getZ() === center.getZ()
+      && Math.abs(loc.getX() - center.getX()) <= radius && Math.abs(loc.getY() - center.getY()) <= radius;
+
     const sceneObjects = new Map();
-    const keyOf = object => { const at = object.getLocation(); return `${at.getX()},${at.getY()},${at.getZ()},${object.getType()}`; };
+    // Scene identity is tile + loc type: a personal/owner overlay replaces the base cache loc.
+    const keyOf = object => {
+      const at = object.getLocation();
+      return `${at.getX()},${at.getY()},${at.getZ()},${object.getType()}`;
+    };
     const loadedRegions = new Set();
-    for (let x = here.getX() - radius; x <= here.getX() + radius; x++) {
-      const regionX = Math.floor(x / 64);
-      for (let y = here.getY() - radius; y <= here.getY() + radius; y++) {
-        const regionY = Math.floor(y / 64);
-        const regionKey = `${regionX},${regionY}`;
-        if (!loadedRegions.has(regionKey)) {
+    const loadRegions = (center) => {
+      for (let x = center.getX() - radius; x <= center.getX() + radius; x++) {
+        const regionX = Math.floor(x / 64);
+        for (let y = center.getY() - radius; y <= center.getY() + radius; y++) {
+          const regionY = Math.floor(y / 64);
+          const regionKey = `${regionX},${regionY}`;
+          if (loadedRegions.has(regionKey)) continue;
           RegionManager?.loadMapFiles?.(x, y, false);
           loadedRegions.add(regionKey);
         }
-        const tile = new core.Location(x, y, here.getZ());
-        for (const object of [...(MapObjects.mapObjects.get(MapObjects.getHash(x, y, here.getZ())) ?? []), ...(viewedArea?.getTemplateObjects?.(tile) ?? [])]) {
-          const at = object.getLocation();
-          if (at.getX() === x && at.getY() === y && at.getZ() === here.getZ()) sceneObjects.set(keyOf(object), object);
+      }
+    };
+    const addWorldObjects = (center) => {
+      loadRegions(center);
+      for (let x = center.getX() - radius; x <= center.getX() + radius; x++) {
+        for (let y = center.getY() - radius; y <= center.getY() + radius; y++) {
+          const tile = new core.Location(x, y, center.getZ());
+          const candidates = [
+            ...(MapObjects.mapObjects.get(MapObjects.getHash(x, y, center.getZ())) ?? []),
+            ...(viewedArea?.getTemplateObjects?.(tile) ?? []),
+          ];
+          for (const object of candidates) {
+            const at = object.getLocation();
+            if (at.getX() === x && at.getY() === y && at.getZ() === center.getZ()) sceneObjects.set(keyOf(object), object);
+          }
         }
       }
-    }
-    const privateObjects = new Set(viewedArea?.getObjects() ?? []);
-    for (const object of privateObjects) {
-      if (near(object.getLocation())) sceneObjects.set(keyOf(object), object);
-    }
-    for (const object of MapObjects.ownerObjectsInScene?.(p, here.getX() - radius, here.getY() - radius, radius * 2 + 1) ?? []) {
-      if (near(object.getLocation())) sceneObjects.set(keyOf(object), object);
+      for (const object of MapObjects.ownerObjectsInScene?.(
+        p, center.getX() - radius, center.getY() - radius, radius * 2 + 1,
+      ) ?? []) {
+        if (near(object.getLocation(), center)) sceneObjects.set(keyOf(object), object);
+      }
+    };
+
+    // A boat deck has two coordinate spaces: main-world locs/NPCs around the root tile, and
+    // deck locs/NPCs around the player's local deck tile. Ordinary worlds and templated
+    // instances keep their single here/viewedArea space.
+    addWorldObjects(root);
+    if (isDeck) {
+      for (const object of deckArea.getObjects()) {
+        if (near(object.getLocation(), here)) sceneObjects.set(keyOf(object), object);
+      }
+    } else {
+      const privateObjects = new Set(viewedArea?.getObjects() ?? []);
+      for (const object of privateObjects) {
+        if (near(object.getLocation(), here)) sceneObjects.set(keyOf(object), object);
+      }
     }
     for (const removed of World.getRemovedObjects()) {
-      if (removed.getPrivateArea() === viewedArea && sceneObjects.get(keyOf(removed))?.getId() === removed.getId()) sceneObjects.delete(keyOf(removed));
+      const area = removed.getPrivateArea();
+      if ((area === viewedArea || area === deckArea) && sceneObjects.get(keyOf(removed))?.getId() === removed.getId()) {
+        sceneObjects.delete(keyOf(removed));
+      }
     }
     const objects = [];
     for (const object of sceneObjects.values()) {
@@ -225,29 +269,45 @@ function createContext(core, server) {
       const definition = ObjectDefinition.forPlayer(object.getId(), p);
       const options = definition?.getInteractions()?.filter(Boolean);
       const at = object.getLocation();
-      // Private encounter effects (pools, beams) are visible even without menu actions.
       const name = definition?.getName?.();
-      if (options?.length || privateObjects.has(object) || (name && name !== "null")) objects.push({ id: definition?.id ?? object.getId(), name, options: options ?? [], x: at.getX(), y: at.getY() });
+      const isDeckObject = deckArea?.getObjects?.().includes(object);
+      if (options?.length || isDeckObject || viewedArea?.getObjects()?.includes(object) || (name && name !== "null")) {
+        objects.push({ id: object.getId(), displayId: definition?.id ?? object.getId(), name, options: options ?? [], x: at.getX(), y: at.getY() });
+      }
     }
 
-    return {
-      npcs: World.getNpcsNear(here, radius, viewedArea).filter((npc) => !npc.isOwnerOnly?.() || npc.getOwner?.() === p).map((npc) => {
-        const definition = npc.getCurrentDefinition(p);
-        const animation = lastNpcAnimation(npc, World);
-        return {
-          index: npc.getIndex(), id: npc.getContentId?.(p) ?? definition?.getId?.() ?? npc.getId(), name: definition?.getName(),
-          hitpoints: npc.getHitpoints(), maxHitpoints: npc.getMaxHitpoints(), headIcon: npc.getHeadIcon?.() ?? -1,
-          animation: animation.id, animationTick: animation.tick,
-          chat: animation.chat, chatTick: animation.chatTick,
-          options: (definition?.getActions() ?? []).filter(Boolean), ...tile(npc.getLocation()),
-        };
-      }),
-      objects,
-      groundItems: World.getItems().filter((item) => near(item.getPosition())).map((item) => ({
-        id: item.getItem().getId(), name: item.getItem().getDefinition().getName(),
-        amount: item.getItem().getAmount(), ...tile(item.getPosition()),
-      })),
+    const npcsByIndex = new Map();
+    const addNpcs = (center, area) => {
+      for (const npc of World.getNpcsNear(center, radius, area)) {
+        if (npc.isOwnerOnly?.() && npc.getOwner?.() !== p) continue;
+        npcsByIndex.set(npc.getIndex(), npc);
+      }
     };
+    addNpcs(root, isDeck ? null : viewedArea);
+    if (isDeck) addNpcs(here, deckArea);
+    const npcs = Array.from(npcsByIndex.values()).map((npc) => {
+      const definition = npc.getCurrentDefinition(p);
+      const animation = lastNpcAnimation(npc, World);
+      return {
+        index: npc.getIndex(), id: npc.getContentId?.(p) ?? definition?.getId?.() ?? npc.getId(), name: definition?.getName(),
+        hitpoints: npc.getHitpoints(), maxHitpoints: npc.getMaxHitpoints(), headIcon: npc.getHeadIcon?.() ?? -1,
+        animation: animation.id, animationTick: animation.tick,
+        chat: animation.chat, chatTick: animation.chatTick,
+        options: (definition?.getActions() ?? []).filter(Boolean), ...tile(npc.getLocation()),
+      };
+    });
+
+    const groundByKey = new Map();
+    for (const item of World.getItems()) {
+      const at = item.getPosition();
+      if (!near(at, root) && !(isDeck && near(at, here))) continue;
+      groundByKey.set(`${item.getItem().getId()}@${at.getX()},${at.getY()},${at.getZ()}`, {
+        id: item.getItem().getId(), name: item.getItem().getDefinition().getName(),
+        amount: item.getItem().getAmount(), ...tile(at),
+      });
+    }
+
+    return { npcs, objects, groundItems: Array.from(groundByKey.values()) };
   };
   // Nearest NPC/object/ground item called `target` (that has `option`, when given). Errors name
   // what is nearby so the agent can correct itself.
@@ -325,7 +385,7 @@ function createContext(core, server) {
     core, z, tool, MAX_WAIT_TICKS,
     player: z.string().describe("Username of an online player"),
     amountSchema: z.union([z.number().int().min(1), z.literal("all")]).default(1),
-    find, send, items, tile, sleepTicks, takeMessages, takeClient, area, status, settle, npcClick, nearby, nearest,
+    find, send, items, tile, sleepTicks, takeMessages, takeClient, area, status, movementBlocked, settle, npcClick, nearby, nearest,
     inventorySlot, carried, byName, clicks, clickEach,
   };
 }

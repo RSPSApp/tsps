@@ -1,3 +1,4 @@
+import { LocAnimated } from "../loc/LocAnimated";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -383,6 +384,11 @@ export function loadMap(host: WebGLOsrsRendererHost,
             reuseFrame,
             host.osrsClient.npcEcs,
         );
+
+        if (host.carriedLocAnimations) {
+            LocAnimated.carryOver(host.carriedLocAnimations, loadedMap.locsAnimated);
+            host.carriedLocAnimations = null;
+        }
 
         // For instances, set base world position for height sampling.
         // The height data is at source coordinates, not instance coordinates.

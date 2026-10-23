@@ -158,6 +158,12 @@ module.exports = function registerBoneVoyageQuest(api) {
     return request.complete === true;
   }
 
+  function isQuestStarted(player, key) {
+    const request = { player, key, started: false };
+    api.emitCustomEvent("quest:is-started", request);
+    return request.started === true;
+  }
+
   function canEnterWoodcuttingGuild(player) {
     return player.getSkillManager().getMaxLevel(Skill.WOODCUTTING) >= WOODCUTTING_GUILD_LEVEL;
   }
@@ -254,6 +260,10 @@ module.exports = function registerBoneVoyageQuest(api) {
     const stage = quest.getStage(player);
 
     if (npcId === CURATOR_NPC_ID) {
+      // The Golem's museum step owns the curator while that quest is in progress,
+      // and The Dig Site owns him until it is complete (Bone Voyage requires it).
+      if ((isQuestStarted(player, "the_golem") && !isQuestComplete(player, "the_golem")) ||
+        !isQuestComplete(player, DIG_SITE_KEY)) return null;
       return stage === 0
         ? "starting-out-talking-to-curator-haig-halen"
         : "starting-out-talking-to-haig-halen-again";

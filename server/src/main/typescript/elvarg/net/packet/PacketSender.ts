@@ -44,6 +44,7 @@ import {
   CameraEasing,
   encodeWidgetSetColour, encodeAttackTimer,
   encodeCameraReset,
+  encodeCameraTarget,
   encodeSetInteractionMode,
   encodeResetInteractionMode,
   encodeChatFilterSettings,
@@ -921,6 +922,12 @@ export class PacketSender {
   /** Drops a world's own interaction mode, so it follows the default again. */
   sendResetInteractionMode(worldId: number): this {
     this.player.getSession().sendClientPacket(encodeResetInteractionMode(worldId));
+    return this;
+  }
+
+  /** cam_target: the camera follows a tile or another player (by index) until sendCameraReset. */
+  sendCameraTarget(target: { x: number; y: number; level: number } | { player: number }): this {
+    this.player.getSession().sendClientPacket(encodeCameraTarget(target));
     return this;
   }
 

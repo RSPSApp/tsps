@@ -260,8 +260,19 @@ function leftCombatRoom(player) {
   }
 }
 
+function allowBountyHunterWeapons(event) {
+  const house = House.houseFor(event.attacker);
+  if (!house || House.houseFor(event.target) !== house) return;
+  const from = fightTileOf(house, event.attacker);
+  const to = fightTileOf(house, event.target);
+  if (from?.ring === RINGS.COMBAT_RING && sameFight(from, to)) event.allowed = true;
+}
+
 function attachCombatRings(api) {
-  for (const name of ["Boxing ring", "Fencing ring", "Combat ring"]) api.onObjectInteraction(name, { "Climb-over": climbOver });
+  api.onObjectInteraction("Boxing ring", { "Climb-over": climbOver });
+  api.onObjectInteraction("Fencing ring", { "Climb-over": climbOver });
+  api.onObjectInteraction("Combat ring", { "Climb-over": climbOver });
+  api.onCustomEvent("bounty-hunter:weapon-area", allowBountyHunterWeapons);
   api.onObjectInteraction("Magic barrier", { "Walk-through": climbOver });
   api.onObjectInteraction("Glove Rack", { Search: searchRack });
   api.onObjectInteraction("Weapons Rack", { Search: searchRack });

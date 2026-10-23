@@ -15,34 +15,32 @@
  * here are 3275 ("contact_people_vis", cache locs 20333/20334/20345 and NPCs
  * 6167-6170 transform on it) and 3279 ("contact_been_downstairs").
  *
- * Stages: 0 not started, 1 agreed to help (cut scene 1 played), 2 asked about a
- * way in from below (visit Jex), 3 Jex told about the cellar trapdoor, 4 been
- * down in the tunnels, 5 searched Kaleef's body, 6 Maisa convinced (persuade
- * Osman), 7 Osman agreed to come, 8 Osman left Al Kharid (meet him outside
- * Sophanem), 9 cut scene 2 played (find him in the caves), 10 Giant Scarab
- * defeated (talk to Osman), 11 Osman's account heard (report to the High
- * Priest), 111 complete. The completion value 111 is pinned by the cache:
- * 20378 (the Temple of the Lesser Gods altar) transforms to 44034 (Pray-at) and
- * NPC 4186 (Sophanem locust) to -1 only at stage 111; the cache also changes
- * the dungeon "Body" multi 44597 at 71/80 with 3274, but this quest never needs
- * those cache-driven forms.
+ * Stages (recording 101, varbit 3274): 0 not started, 10 agreed to help, 20 cut
+ * scene 1 done, 30 asked about a way in from below, 40 Jex told about the
+ * cellar trapdoor, 50 Kaleef's parchment taken, 60 Maisa convinced, 70 Osman
+ * agreed to meet, 90 cut scene 2 done, 100 Giant Scarab active, 110 scarab
+ * dead, 120 Osman's account heard, 130 complete. The capture has no stage 80;
+ * the second Al Kharid conversation is a confirmation, not a stage.
  *
  * Requirements (OSRS Wiki): Prince Ali Rescue and Icthlarin's Little Helper;
  * gated with quest:is-complete and answered on the "lacks the requirements"
  * condition (eHzg2g). Rewards: 1 Quest point, 7,000 Thieving XP, a bankable
- * Combat lamp (granted; its Rub XP interface is not implemented), the Keris
- * dagger (from the scarab or reclaimed from Osman), and access to Sophanem's
- * dungeon, bank and shops (contact_people_vis is set on completion, which turns
- * the cache's ruined market stalls back into the shops).
+ * Combat lamp, the Keris dagger (from the scarab or reclaimed from Osman), and
+ * access to Sophanem's dungeon, bank and shops (contact_people_vis is set on
+ * completion, which turns the cache's ruined market stalls back into the shops).
+ * The lamp's Rub menu grants two 7,000 XP wishes among Attack, Strength,
+ * Defence, Hitpoints, Ranged and Magic (capture 101 ticks 8619/8629 and the
+ * Combat lamp transcript); varbit 3287 records 0/1/2 wishes and the lamp is
+ * deleted only after the second successful wish.
  *
- * Gaps/approximations:
- * - The dungeon is not instanced and its maze is not simulated: the cellar
- *   trapdoor (20340, guarded by 3881/3883) teleports the player next to Kaleef's
- *   body; the map's traps, scarab mages and locust riders stay live. The temple
- *   ladder down (20275) has no recorded teleport entry, so the quest claims it.
- * - The Giant Scarab is an owner-only spawn in the map rather than an instance;
- *   its summoned riders/mages and the cave-in are not modelled, and the fight
- *   starts from the cut scene-3 stage direction.
+ * Route (recording 101): temple ladder 20275 lands at 2765,5131; trapdoor
+ * 20340 lands at 2166,4409,2; the maze traps 20271/20272 are interactive; the
+ * boss ladder 20287 lands at 2297,4298 only after Jex and starts cut scene 3 at
+ * stage 90. The capture does not show every wall-collision or trap-damage roll,
+ * so those remain approximations.
+ * - The Giant Scarab is an owner-only spawn at 2269,4316; its summoned riders
+ *   and the cave-in are not modelled, and the fight starts from the cut
+ *   scene-3 stage direction.
  * - Kaleef's body is the cache "Body" (Search) multi 44597; the handler refuses
  *   repeated searches but the object's cache form cannot leave the searchable
  *   range because the stage map never enters 71-110.
@@ -65,11 +63,13 @@ module.exports = function registerContactQuest(api) {
     ItemIdentifiers,
     Location,
     NpcIdentifiers,
+    OptionDialogue,
     Skill,
     StatementDialogue,
     TaskManager,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
   // ==========================================================================
   // Transcript pages
@@ -86,24 +86,27 @@ module.exports = function registerContactQuest(api) {
   const VARBIT_CONTACT = 3274; // "contact" bits 0-7
   const VARBIT_CONTACT_PEOPLE_VIS = 3275; // "contact_people_vis" bit 8
   const VARBIT_CONTACT_BEEN_DOWNSTAIRS = 3279; // "contact_been_downstairs" bit 13
+  const VARBIT_CONTACT_MAISA_INVIS = 3284; // "contact_maisa_invis"
+  const VARBIT_CONTACT_LAMP = 3287; // contact lamp wishes used (0..2)
 
   // ==========================================================================
   // Stages
   // ==========================================================================
 
+  // Captured varbit 3274 values (recording 101): 10,20,30,40,50,60,70,90,100,110,120,130.
   const STAGE_NOT_STARTED = 0;
-  const STAGE_STARTED = 1;
-  const STAGE_ASKED_ABOUT_TUNNELS = 2;
-  const STAGE_JEX_TOLD = 3;
-  const STAGE_IN_TUNNELS = 4;
-  const STAGE_BODY_SEARCHED = 5;
-  const STAGE_MAISA_CONVINCED = 6;
-  const STAGE_OSMAN_AGREED = 7;
-  const STAGE_OSMAN_LEFT = 8;
-  const STAGE_CAVES = 9;
-  const STAGE_BOSS_DEAD = 10;
-  const STAGE_OSMAN_TALKED = 11;
-  const STAGE_COMPLETE = 111;
+  const STAGE_STARTED = 10;
+  const STAGE_CUTSCENE_1_DONE = 20;
+  const STAGE_ASKED_ABOUT_TUNNELS = 30;
+  const STAGE_JEX_TOLD = 40;
+  const STAGE_BODY_SEARCHED = 50;
+  const STAGE_MAISA_CONVINCED = 60;
+  const STAGE_OSMAN_AGREED = 70;
+  const STAGE_CAVES = 90;
+  const STAGE_BOSS_FIGHT = 100;
+  const STAGE_BOSS_DEAD = 110;
+  const STAGE_OSMAN_TALKED = 120;
+  const STAGE_COMPLETE = 130;
 
   // ==========================================================================
   // NPCs
@@ -115,7 +118,16 @@ module.exports = function registerContactQuest(api) {
   ]);
   const JEX_NPC_ID = NpcIdentifiers.JEX; // 3875
   const MAISA_NPC_ID = NpcIdentifiers.MAISA; // 3876
-  const OSMAN_NPC_ID = NpcIdentifiers.OSMAN_9; // 4286, Al Kharid / Sophanem gates
+  const MAISA_NPC_IDS = new Set([MAISA_NPC_ID, 6164]); // 6164 is the base multi that transforms to 3876
+  // Capture 101 ticks 8078-8083: Maisa (2258,4317) is talked to across the four-block
+  // chasm from the east landing (dialogue opens at 2263,4320); QH also names the
+  // west side. Keep this reach on her quiz stages only; range 1 stays the default.
+  const MAISA_TALK_RANGE = 10;
+  const OSMAN_NPC_ID = NpcIdentifiers.OSMAN_9; // 4286, resolved content id for handlers/chatheads
+  // The dungeon actor spawns as the cache parent; at stage 110 varbit 3274
+  // resolves 11568 contact_osman_cave_instance to 4286. The world rows use the
+  // matching Al Kharid (6165) and Sophanem (6166) cache parents.
+  const OSMAN_DUNGEON_NPC_ID = 11568;
   const COENUS_NPC_ID = NpcIdentifiers.COENUS; // 11499, cut scene 1 speaker
   const GIANT_SCARAB_NPC_ID = NpcIdentifiers.GIANT_SCARAB; // 797, level 191
   const SOPHANEM_GUARD_NPC_IDS = new Set([
@@ -126,7 +138,12 @@ module.exports = function registerContactQuest(api) {
   ]);
   const SOPHANEM_GUARD_CHATHEAD_ID = NpcIdentifiers.SOPHANEM_GUARD; // 3881
   /** Owner-only NPCs this plugin spawns (dedupe + cleanup). */
-  const OWNED_NPC_IDS = new Set([MAISA_NPC_ID, OSMAN_NPC_ID, GIANT_SCARAB_NPC_ID]);
+  const OWNED_NPC_IDS = new Set([
+    MAISA_NPC_ID,
+    OSMAN_NPC_ID,
+    OSMAN_DUNGEON_NPC_ID,
+    GIANT_SCARAB_NPC_ID,
+  ]);
 
   // ==========================================================================
   // Objects (no generated identifier exists; names from the gameval loc dump)
@@ -134,7 +151,9 @@ module.exports = function registerContactQuest(api) {
 
   const TEMPLE_LADDER_ID = 20275; // Temple of the Lesser Gods -> bank cellar
   const CELLAR_TRAPDOOR_ID = 20340; // bank cellar -> Sophanem dungeon
+  const BOSS_LADDER_ID = 20287; // chasm climb-down beside the Giant Scarab
   const KALEEF_BODY_MULTI_ID = 44597; // cache multi -> 44046 "Body" (Search)
+  const CHASM_TRAP_IDS = new Set([20271, 20272]); // recorded floor-spike and spear traps
 
   // ==========================================================================
   // Items
@@ -149,6 +168,18 @@ module.exports = function registerContactQuest(api) {
   const PARCHMENT_ITEM_ID = ItemIdentifiers.PARCHMENT; // 10585
   const COMBAT_LAMP_ITEM_ID = ItemIdentifiers.COMBAT_LAMP; // 10586
 
+  const LAMP_WISHES = 2;
+  const LAMP_XP = 7000;
+  const LAMP_MENU_TITLE = "<col=000080>Which stat do you wish for?";
+  const LAMP_MESSAGES = new Map([
+    [Skill.ATTACK, "You wish for strengthened Attack - your wish comes true as you gain 7000 XP."],
+    [Skill.STRENGTH, "You wish for strengthened Strength - your muscles bulge as you gain 7000 XP."],
+    [Skill.DEFENCE, "You wish for strengthened Defence - your wish comes true as you gain 7000 XP."],
+    [Skill.HITPOINTS, "You wish for strengthened Hitpoints - you feel tougher as you gain 7000 XP."],
+    [Skill.RANGED, "You wish for strengthened Ranged skill - your eye becomes keener as you gain 7000 XP."],
+    [Skill.MAGIC, "You wish for strengthened Magic skill - your mind feels expansive as you gain 7000 XP."],
+  ]);
+
   const TINDERBOX_PRICE = 50;
   const TORCH_PRICE = 200;
   const KERIS_REPLACEMENT_PRICE = 20000;
@@ -157,11 +188,12 @@ module.exports = function registerContactQuest(api) {
   // Locations
   // ==========================================================================
 
-  const CELLAR_LANDING = new Location(2800, 5160, 0);
-  const MAZE_LANDING = new Location(2286, 4317, 0); // beside Kaleef's body
-  const BOSS_LANDING = new Location(2298, 4297, 0); // beside the boss ladder
-  const BOSS_SPAWN = new Location(2294, 4296, 0);
-  const MAISA_SPAWN = new Location(2274, 4315, 0); // slightly west of the body
+  const CELLAR_LANDING = new Location(2765, 5131, 0);
+  const MAZE_ENTRY = new Location(2166, 4409, 2); // captured trapdoor landing
+  const BOSS_LANDING = new Location(2297, 4298, 0); // captured boss-ladder landing
+  const BOSS_SPAWN = new Location(2269, 4316, 0);
+  const MAISA_SPAWN = new Location(2258, 4317, 0); // Quest Helper west side of the chasm
+  const OSMAN_SPAWN = new Location(2274, 4315, 0); // captured post-battle Osman
   const DUNGEON = { minX: 2100, maxX: 2500, minY: 4200, maxY: 4500 };
   const AL_KHARID_OSMAN = { x: 3286, y: 3180 };
   const SOPHANEM_OSMAN = { x: 3289, y: 2818 };
@@ -180,6 +212,7 @@ module.exports = function registerContactQuest(api) {
   // ==========================================================================
 
   const BITS_ATTRIBUTE = "quest.contact.bits";
+  const LAMP_WISHES_ATTRIBUTE = "contact:lamp-wishes";
   const BIT_HP_MENU_SEEN = 1 << 0;
   const BIT_OSMAN_MET = 1 << 1;
   const BIT_KERIS_TAKEN = 1 << 2;
@@ -189,6 +222,14 @@ module.exports = function registerContactQuest(api) {
   const PAR_KEY = "prince_ali_rescue";
 
   let quest;
+  const Scenes = createQuestScenes(api);
+  const cameraWatch = new WeakMap();
+
+  const CUTSCENE_CAMERAS = {
+    "starting-out-cut-scene-1-sophanem-and-menaphos-meet": { move: [3278, 2786, 480], look: [3261, 2783, 320] },
+    "i-spy-with-my-little-eye-cut-scene-2-osman-sneaks-into-sophanem": { move: [3297, 2799, 500], look: [3314, 2799, 340] },
+    "beetle-battle-cut-scene-3-osman-and-maisa-speak-below-sophanem": { move: [2263, 4327, 610], look: [2260, 4313, 410], shake: true },
+  };
   let groundItems;
   /** Correct Prince Ali quiz answers so far, transient per conversation. */
   const answersRight = new WeakMap();
@@ -198,6 +239,8 @@ module.exports = function registerContactQuest(api) {
   const osmanWrong = new WeakMap();
   /** Owner-only quest NPCs, per player: { maisa, osman, boss }. */
   const trackedNpcs = new Map();
+  /** Open Rub menu: { player, item, slot, wishes } so a moved/lost lamp cannot pay XP. */
+  const lampSessions = new WeakMap();
 
   // ==========================================================================
   // Helpers
@@ -269,7 +312,42 @@ module.exports = function registerContactQuest(api) {
   }
 
   function playCutscene(player, npcId, variant) {
+    const shot = CUTSCENE_CAMERAS[variant];
+    if (shot) {
+      stopCamera(player);
+      Scenes.controls(player, true, true);
+      Scenes.camera(player, shot.move, shot.look);
+      watchCamera(player, shot);
+    }
     startTranscript(api, player, npcId, PAGE, variant);
+  }
+
+  function watchCamera(player, shot) {
+    const token = {};
+    cameraWatch.set(player, token);
+    if (shot.shake) {
+      for (let i = 0; i < 5; i++) {
+        Scenes.later(player, 38 + i * 4, () => {
+          if (cameraWatch.get(player) === token) player.getPacketSender().sendCameraShake(0, 5, 0, 0);
+        });
+      }
+    }
+    const poll = () => {
+      if (cameraWatch.get(player) !== token) return;
+      if (Scenes.chatOpen(player)) {
+        Scenes.later(player, 1, poll);
+        return;
+      }
+      stopCamera(player);
+    };
+    Scenes.later(player, 1, poll);
+  }
+
+  function stopCamera(player) {
+    if (!cameraWatch.delete(player)) return;
+    Scenes.cancel(player);
+    Scenes.controls(player, false);
+    player.getPacketSender().sendCameraReset();
   }
 
   function scheduleCutscene(player, npcId, variant) {
@@ -319,19 +397,24 @@ module.exports = function registerContactQuest(api) {
     }
   }
 
-  function ensureMaisa(player) {
+  function ensureMaisa() {
+    // Maisa 6164 is the canonical world spawn (corrected to 2258,4317); her
+    // cache transform hides her during the scarab encounter via varbit 3284.
+  }
+
+  function syncMaisaVisibility(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_IN_TUNNELS || stage >= STAGE_BOSS_DEAD) return;
-    trackNpc(player, "maisa", { id: MAISA_NPC_ID, x: MAISA_SPAWN.x, y: MAISA_SPAWN.y, z: MAISA_SPAWN.z });
+    const hidden = stage >= STAGE_BOSS_FIGHT && stage < STAGE_OSMAN_TALKED;
+    player.getPacketSender().sendVarbit(VARBIT_CONTACT_MAISA_INVIS, hidden ? 1 : 0);
   }
 
   function ensureDungeonOsman(player) {
     if (quest.getStage(player) !== STAGE_BOSS_DEAD) return;
     trackNpc(player, "osman", {
-      id: OSMAN_NPC_ID,
-      x: BOSS_LANDING.x,
-      y: BOSS_LANDING.y,
-      z: BOSS_LANDING.z,
+      id: OSMAN_DUNGEON_NPC_ID,
+      x: OSMAN_SPAWN.x,
+      y: OSMAN_SPAWN.y,
+      z: OSMAN_SPAWN.z,
     });
   }
 
@@ -358,7 +441,7 @@ module.exports = function registerContactQuest(api) {
     if (HIGH_PRIEST_NPC_IDS.has(npcId)) return selectHighPriestVariant(player);
     if (npcId === JEX_NPC_ID) return selectJexVariant(player);
     if (SOPHANEM_GUARD_NPC_IDS.has(npcId)) return selectGuardVariant(player);
-    if (npcId === MAISA_NPC_ID) return selectMaisaVariant(player, npc);
+    if (MAISA_NPC_IDS.has(npcId)) return selectMaisaVariant(player, npc);
     if (npcId === OSMAN_NPC_ID) return selectOsmanVariant(player, npc);
     return null;
   }
@@ -367,7 +450,7 @@ module.exports = function registerContactQuest(api) {
     if (!isQuestComplete(player, ILH_KEY)) return null;
     const stage = quest.getStage(player);
     if (stage === STAGE_NOT_STARTED) return "starting-out-talking-to-the-high-priest";
-    if (stage === STAGE_STARTED) {
+    if (stage <= STAGE_CUTSCENE_1_DONE) {
       return hasBit(player, BIT_HP_MENU_SEEN)
         ? "starting-out-talking-to-high-priest-after-the-cutscene-talking-to-the-high-priest-again-before-asking-if-there-is-a-way-in-from-below"
         : "starting-out-talking-to-high-priest-after-the-cutscene";
@@ -392,6 +475,7 @@ module.exports = function registerContactQuest(api) {
     if (stage < STAGE_CAVES) {
       return "the-sect-of-scabaras-talking-to-jex-after-entering-the-tunnels";
     }
+    if (quest.isComplete(player)) return "standard-dialogue";
     return "beetle-battle-talking-to-jex";
   }
 
@@ -404,12 +488,22 @@ module.exports = function registerContactQuest(api) {
   function selectMaisaVariant(player, npc) {
     if (!inDungeon(npc)) return null;
     const stage = quest.getStage(player);
-    if (stage < STAGE_IN_TUNNELS) return null;
+    if (stage < STAGE_JEX_TOLD) return null;
     if (stage <= STAGE_BODY_SEARCHED) {
       answersRight.set(player, 0);
       return "kaleef-s-corpse-talking-to-maisa";
     }
-    return "kaleef-s-corpse-talking-to-maisa-again-after-correctly-answering-but-before-speaking-to-osman";
+    return stage === STAGE_MAISA_CONVINCED
+      ? "kaleef-s-corpse-talking-to-maisa-again-after-correctly-answering-but-before-speaking-to-osman"
+      : null;
+  }
+
+  /** Talk across the chasm on Maisa's quiz stages; her real NPC alone gets this reach. */
+  function widenMaisaTalkRange(event) {
+    if (!MAISA_NPC_IDS.has(event.npcId) || event.npc?.getOwner?.()) return;
+    const stage = quest.getStage(event.player);
+    if (stage < STAGE_JEX_TOLD || stage > STAGE_MAISA_CONVINCED) return;
+    event.range = MAISA_TALK_RANGE;
   }
 
   function selectOsmanVariant(player, npc) {
@@ -421,7 +515,7 @@ module.exports = function registerContactQuest(api) {
     }
     if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-contact";
     if (near(npc, SOPHANEM_OSMAN.x, SOPHANEM_OSMAN.y)) {
-      if (stage >= STAGE_OSMAN_AGREED && stage <= STAGE_CAVES) {
+      if (stage === STAGE_OSMAN_AGREED) {
         return "i-spy-with-my-little-eye-talking-to-osman-outside-sophanem";
       }
       return null;
@@ -436,7 +530,7 @@ module.exports = function registerContactQuest(api) {
       if (stage === STAGE_OSMAN_AGREED) {
         return "i-spy-with-my-little-eye-talking-to-osman-at-al-kharid-again-after-succeeding-to-persuade-him";
       }
-      if (stage >= STAGE_OSMAN_LEFT && stage < STAGE_COMPLETE) {
+      if (stage > STAGE_OSMAN_AGREED && stage < STAGE_COMPLETE) {
         return "i-spy-with-my-little-eye-speaking-to-not-osman-in-al-kharid";
       }
     }
@@ -507,7 +601,7 @@ module.exports = function registerContactQuest(api) {
   /** Fired once a condition branch has been chosen (the wiki guard passed). */
   function handleConditionChosen(event) {
     const { player, npcId, stepId } = event;
-    if (npcId === MAISA_NPC_ID && stepId === "qEP0VV") {
+    if (MAISA_NPC_IDS.has(npcId) && stepId === "qEP0VV") {
       quest.setStage(player, STAGE_MAISA_CONVINCED);
     }
   }
@@ -520,7 +614,7 @@ module.exports = function registerContactQuest(api) {
     const { player, npcId, option } = event;
     const value = norm(option);
     if (HIGH_PRIEST_NPC_IDS.has(npcId)) {
-      if (quest.getStage(player) === STAGE_STARTED) {
+      if (quest.getStage(player) <= STAGE_CUTSCENE_1_DONE) {
         setBit(player, BIT_HP_MENU_SEEN);
         if (value === "is there any way into menaphos from below") {
           quest.setStage(player, STAGE_ASKED_ABOUT_TUNNELS);
@@ -545,7 +639,7 @@ module.exports = function registerContactQuest(api) {
       }
       return;
     }
-    if (npcId === MAISA_NPC_ID) {
+    if (MAISA_NPC_IDS.has(npcId)) {
       if (value === "draynor village" || value === "leela") {
         answersRight.set(player, Math.min(2, (answersRight.get(player) ?? 0) + 1));
       }
@@ -570,7 +664,6 @@ module.exports = function registerContactQuest(api) {
       }
       if (value === "i want to talk to you about sophanem") {
         if (stage === STAGE_MAISA_CONVINCED) setBit(player, BIT_OSMAN_MET);
-        else if (stage === STAGE_OSMAN_AGREED) quest.setStage(player, STAGE_OSMAN_LEFT);
       }
     }
   }
@@ -591,6 +684,7 @@ module.exports = function registerContactQuest(api) {
       case "tEWAER": // end of cut scene 1
         event.handled = true;
         event.end = true;
+        if (quest.getStage(player) === STAGE_STARTED) quest.setStage(player, STAGE_CUTSCENE_1_DONE);
         return;
 
       // Guard purchases.
@@ -612,24 +706,31 @@ module.exports = function registerContactQuest(api) {
       // I spy with my little eye.
       case "CtRXdK": // cut scene 2 begins
         event.handled = true;
-        if (quest.getStage(player) === STAGE_OSMAN_LEFT) {
+        if (quest.getStage(player) === STAGE_OSMAN_AGREED) {
           scheduleCutscene(player, OSMAN_NPC_ID, "i-spy-with-my-little-eye-cut-scene-2-osman-sneaks-into-sophanem");
         }
         return;
       case "1qe3Gi": // after cut scene 2 ends
         event.handled = true;
-        if (quest.getStage(player) === STAGE_OSMAN_LEFT) quest.setStage(player, STAGE_CAVES);
+        if (quest.getStage(player) === STAGE_OSMAN_AGREED) quest.setStage(player, STAGE_CAVES);
         return;
 
       // Beetle battle.
       case "_dkntA": // the Giant Scarab attacks
         event.handled = true;
         event.end = true;
-        if (quest.getStage(player) === STAGE_CAVES) spawnGiantScarab(player);
+        if (quest.getStage(player) === STAGE_CAVES) {
+          quest.setStage(player, STAGE_BOSS_FIGHT);
+          player.getPacketSender().sendVarbit(VARBIT_CONTACT_MAISA_INVIS, 1);
+          spawnGiantScarab(player);
+        }
         return;
       case "1Ipn6a": // Osman leaves the cavern
         removeTracked(player, "osman");
-        if (quest.getStage(player) === STAGE_BOSS_DEAD) quest.setStage(player, STAGE_OSMAN_TALKED);
+        if (quest.getStage(player) === STAGE_BOSS_DEAD) {
+          quest.setStage(player, STAGE_OSMAN_TALKED);
+          player.getPacketSender().sendVarbit(VARBIT_CONTACT_MAISA_INVIS, 0);
+        }
         return;
       case "Rc_Gnh": // Osman hands over the unclaimed Keris
         if (player.getInventory().isFull()) {
@@ -697,7 +798,7 @@ module.exports = function registerContactQuest(api) {
     const tracked = trackedNpcs.get(killer);
     if (tracked?.boss !== npc) return;
     delete tracked.boss;
-    if (quest.getStage(killer) !== STAGE_CAVES) return;
+    if (quest.getStage(killer) !== STAGE_BOSS_FIGHT) return;
     quest.setStage(killer, STAGE_BOSS_DEAD);
     const location = npc.getLocation?.() ?? npc.getSpawnLocation?.();
     if (location && groundItems) {
@@ -717,6 +818,11 @@ module.exports = function registerContactQuest(api) {
     if (request.objectId === CELLAR_TRAPDOOR_ID) {
       request.handled = true;
       useCellarTrapdoor(request.player);
+      return;
+    }
+    if (request.objectId === BOSS_LADDER_ID) {
+      request.handled = true;
+      useBossLadder(request.player);
     }
   }
 
@@ -734,27 +840,31 @@ module.exports = function registerContactQuest(api) {
     );
   }
 
+  function useBossLadder(player) {
+    if (quest.getStage(player) < STAGE_JEX_TOLD && !quest.isComplete(player)) {
+      player.sendMessage("You should speak to Jex about these tunnels first.");
+      return;
+    }
+    teleport(player, BOSS_LANDING);
+    if (quest.getStage(player) !== STAGE_CAVES) return;
+    const tracked = trackedNpcs.get(player);
+    if (!tracked?.boss?.isRegistered?.()) {
+      scheduleCutscene(player, OSMAN_NPC_ID, "beetle-battle-cut-scene-3-osman-and-maisa-speak-below-sophanem");
+    }
+  }
+
   function useCellarTrapdoor(player) {
     const stage = quest.getStage(player);
     if (stage < STAGE_JEX_TOLD && !quest.isComplete(player)) {
       player.sendMessage("You should speak to Jex about these tunnels first.");
       return;
     }
-    if (stage === STAGE_CAVES) {
-      teleport(player, BOSS_LANDING);
-      const tracked = trackedNpcs.get(player);
-      if (!tracked?.boss?.isRegistered?.()) {
-        scheduleCutscene(player, OSMAN_NPC_ID, "beetle-battle-cut-scene-3-osman-and-maisa-speak-below-sophanem");
-      }
-      return;
-    }
-    teleport(player, MAZE_LANDING);
+    teleport(player, MAZE_ENTRY);
     if (stage === STAGE_BOSS_DEAD) {
       ensureDungeonOsman(player);
       return;
     }
     if (stage === STAGE_JEX_TOLD) {
-      quest.setStage(player, STAGE_IN_TUNNELS);
       player.getPacketSender().sendVarbit(VARBIT_CONTACT_BEEN_DOWNSTAIRS, 1);
       startTranscript(
         api,
@@ -768,10 +878,18 @@ module.exports = function registerContactQuest(api) {
   }
 
   function handleObjectInteraction(event) {
+    if (CHASM_TRAP_IDS.has(event.objectId)) {
+      event.handled = true;
+      const success = Math.random() < 0.5;
+      event.player.sendMessage(
+        success ? "You successfully disable the trap." : "You accidentally set off a trap!"
+      );
+      return;
+    }
     if (event.objectId !== KALEEF_BODY_MULTI_ID) return;
     const { player } = event;
     event.handled = true;
-    if (quest.getStage(player) < STAGE_IN_TUNNELS) return;
+    if (quest.getStage(player) < STAGE_JEX_TOLD) return;
     if (hasBit(player, BIT_BODY_SEARCHED) || held(player, PARCHMENT_ITEM_ID)) {
       player.sendMessage("There is nothing else of interest on the body.");
       return;
@@ -782,7 +900,7 @@ module.exports = function registerContactQuest(api) {
     }
     player.getInventory().adds(PARCHMENT_ITEM_ID, 1);
     setBit(player, BIT_BODY_SEARCHED);
-    if (quest.getStage(player) === STAGE_IN_TUNNELS) quest.setStage(player, STAGE_BODY_SEARCHED);
+    if (quest.getStage(player) === STAGE_JEX_TOLD) quest.setStage(player, STAGE_BODY_SEARCHED);
     player.sendMessage("You search the body and find a bloody parchment.");
   }
 
@@ -790,7 +908,111 @@ module.exports = function registerContactQuest(api) {
   // Items
   // ==========================================================================
 
+  function lampWishes(player) {
+    return Math.max(0, Math.min(LAMP_WISHES, Number(player.getAttribute(LAMP_WISHES_ATTRIBUTE)) || 0));
+  }
+
+  function sendLampWishes(player) {
+    player.getPacketSender().sendVarbit(VARBIT_CONTACT_LAMP, lampWishes(player));
+  }
+
+  function setLampWishes(player, wishes) {
+    player.setAttribute(LAMP_WISHES_ATTRIBUTE, wishes);
+    sendLampWishes(player);
+  }
+
+  function lampInSlot(player, session) {
+    const item = player.getInventory().get(session.slot);
+    return item === session.item && item?.getId?.() === COMBAT_LAMP_ITEM_ID;
+  }
+
+  function openLampMenu(player, moreOptions) {
+    const options = moreOptions
+      ? ["Ranged.", "Magic.", "Nothing at the moment.", "Previous wishes."]
+      : ["Attack.", "Strength.", "Defence.", "Hitpoints.", "Another wish."];
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+      new OptionDialogue(0, {
+        executeOption(option) {
+          chooseLampOption(player, Number(option), moreOptions);
+        },
+      }, ...options).setTitle(LAMP_MENU_TITLE),
+    ));
+  }
+
+  function chooseLampOption(player, option, moreOptions) {
+    const session = lampSessions.get(player);
+    if (!session || session.wishes !== lampWishes(player) || !lampInSlot(player, session)) {
+      lampSessions.delete(player);
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
+    if (moreOptions) {
+      if (option === 3) {
+        lampSessions.delete(player);
+        player.getPacketSender().sendInterfaceRemoval();
+        return;
+      }
+      if (option === 4) {
+        openLampMenu(player, false);
+        return;
+      }
+    } else if (option === 5) {
+      openLampMenu(player, true);
+      return;
+    }
+    const skill = moreOptions
+      ? (option === 1 ? Skill.RANGED : option === 2 ? Skill.MAGIC : null)
+      : [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.HITPOINTS][option - 1] ?? null;
+    if (!skill) return;
+    grantLampWish(player, session, skill);
+  }
+
+  function grantLampWish(player, session, skill) {
+    if (session.wishes >= LAMP_WISHES || lampWishes(player) !== session.wishes || !lampInSlot(player, session)) {
+      lampSessions.delete(player);
+      player.getPacketSender().sendInterfaceRemoval();
+      return;
+    }
+    const manager = player.getSkillManager();
+    const before = manager.getExperience(skill);
+    manager.addExperience(skill, LAMP_XP, false);
+    if (manager.getExperience(skill) === before) {
+      lampSessions.delete(player);
+      player.getPacketSender().sendInterfaceRemoval();
+      player.sendMessage("You cannot gain experience in that skill right now.");
+      return;
+    }
+    const wishes = session.wishes + 1;
+    player.sendMessage(LAMP_MESSAGES.get(skill));
+    setLampWishes(player, wishes);
+    lampSessions.delete(player);
+    if (wishes >= LAMP_WISHES) {
+      player.sendMessage("The lamp dissipates into smoke that drifts away.");
+      player.getInventory().deleteAtSlot(session.slot, 1);
+    }
+    player.getPacketSender().sendInterfaceRemoval();
+  }
+
+  function rubCombatLamp(event) {
+    const { player } = event;
+    const wishes = lampWishes(player);
+    if (wishes >= LAMP_WISHES) {
+      player.sendMessage("The lamp has already granted both of its wishes.");
+      return;
+    }
+    const item = player.getInventory().get(event.slot);
+    if (!item || item.getId?.() !== COMBAT_LAMP_ITEM_ID) return;
+    lampSessions.set(player, { item, slot: event.slot, wishes });
+    openLampMenu(player, false);
+  }
+
   function handleItemAction(event) {
+    if (event.itemId === COMBAT_LAMP_ITEM_ID) {
+      if (!String(event.option ?? "").toLowerCase().includes("rub")) return;
+      event.handled = true;
+      rubCombatLamp(event);
+      return;
+    }
     if (event.itemId !== PARCHMENT_ITEM_ID) return;
     if (!String(event.option ?? "").toLowerCase().includes("read")) return;
     event.handled = true;
@@ -823,11 +1045,14 @@ module.exports = function registerContactQuest(api) {
 
   function syncContactVarps({ player }) {
     sendPeopleVisible(player);
+    sendLampWishes(player);
   }
 
   function handleLogin({ player }) {
     refreshQuestList(player);
     sendPeopleVisible(player);
+    syncMaisaVisibility(player);
+    sendLampWishes(player);
     if (!inDungeonArea(player)) return;
     ensureMaisa(player);
     ensureDungeonOsman(player);
@@ -841,6 +1066,8 @@ module.exports = function registerContactQuest(api) {
   }
 
   function handleLogout({ player }) {
+    lampSessions.delete(player);
+    stopCamera(player);
     removeOwnedNpcs(player);
   }
 
@@ -904,7 +1131,7 @@ module.exports = function registerContactQuest(api) {
         "There was a woman, <col=800000>Maisa</col>, just to the west.",
       ];
     }
-    if (stage === STAGE_IN_TUNNELS) {
+    if (stage === STAGE_JEX_TOLD) {
       return [
         "I climbed down the trapdoor into the tunnels beneath Sophanem.",
         "I should look for a way through to Menaphos.",
@@ -950,11 +1177,13 @@ module.exports = function registerContactQuest(api) {
     removeOwnedNpcs(player);
   }
 
+
   // ==========================================================================
   // Registration
   // ==========================================================================
 
   api.persistAttribute(BITS_ATTRIBUTE);
+  api.persistAttribute(LAMP_WISHES_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "contact",
@@ -986,6 +1215,7 @@ module.exports = function registerContactQuest(api) {
   api.onCustomEvent("ladders:climb", handleLadderClaim);
   api.onCustomEvent("player:bootstrap-complete", syncContactVarps);
   api.onObjectInteraction(handleObjectInteraction);
+  api.onNpcRoute(widenMaisaTalkRange);
   api.onItemAction(handleItemAction);
   api.onGroundItemPickup(handleGroundItemPickup);
   api.onNpcDeath(handleNpcDeath);

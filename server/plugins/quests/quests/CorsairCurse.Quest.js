@@ -323,6 +323,8 @@ module.exports = function registerCorsairCurseQuest(api) {
     if (stage === STAGE_NOT_STARTED) return "the-cursed-crew-talking-to-captain-tock";
     if (nearRimmington(npc)) return "the-cursed-crew-talking-to-captain-tock-again";
     switch (stage) {
+      case STAGE_STARTED:
+        return "the-cursed-crew-talking-to-captain-tock";
       case STAGE_INVESTIGATING:
         if (thief(player) === THIEF_HEARD) return "arsen-s-curse-talking-to-captain-tock";
         if (crewResolved(player)) return "traitor-in-the-midst-talking-to-captain-tock";

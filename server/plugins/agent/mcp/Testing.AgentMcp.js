@@ -50,6 +50,46 @@ module.exports = function registerTestingTools(ctx) {
   );
 
   tool(
+    "set_npc_hitpoints",
+    "Testing helper: lower a living registered NPC's hitpoints after its real encounter has started. Requires the same private area/plane, observable distance, owner and real attack permission; only reduces HP (1..max), never starts combat or changes quest state.",
+    {
+      player,
+      npcIndex: z.number().int().min(0).describe("NPC index, as observe lists it"),
+      hitpoints: z.number().int().positive().describe("New HP from 1..max, lower than current"),
+    },
+    ({ player: username, npcIndex, hitpoints }) => {
+      const p = find(username);
+      const npc = World.getNpcs().get(npcIndex);
+      if (!npc) throw new Error(`No NPC at index ${npcIndex}`);
+      if (!npc.isRegistered?.() || npc.getHitpoints() <= 0) {
+        throw new Error(`NPC ${npcIndex} is not a living registered actor`);
+      }
+      const npcArea = npc.getPrivateArea?.() ?? null;
+      const playerArea = p.getPrivateArea?.() ?? null;
+      if (npcArea !== playerArea || npc.getLocation().getZ() !== p.getLocation().getZ()) {
+        throw new Error(`NPC ${npcIndex} is not in the player's private area and plane`);
+      }
+      if (p.getLocation().getDistance(npc.getLocation()) > 32) {
+        throw new Error(`NPC ${npcIndex} is outside observable distance (max 32 tiles)`);
+      }
+      const permission = CombatFactory.canAttackPermission(p, npc, false);
+      if (permission !== CanAttackResponse.CAN_ATTACK) {
+        throw new Error(`Cannot target NPC ${npcIndex}: ${CanAttackResponse[permission]}`);
+      }
+      const max = npc.getMaxHitpoints?.() ?? npc.getHitpoints();
+      if (!Number.isInteger(hitpoints) || hitpoints < 1 || hitpoints > max) {
+        throw new Error(`hitpoints must be an integer from 1 to ${max}`);
+      }
+      const before = npc.getHitpoints();
+      if (hitpoints >= before) {
+        throw new Error(`hitpoints must reduce the NPC's current ${before} HP`);
+      }
+      npc.setHitpoints(hitpoints);
+      return { npcIndex, before, hitpoints, maxHitpoints: max, ...status(p) };
+    }
+  );
+
+  tool(
     "can_teleport",
     "Ask the real teleport check whether the player may teleport right now (to x/y/z if given), without teleporting. Returns the verdict and any message it sent.",
     {

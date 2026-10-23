@@ -259,7 +259,7 @@ export class PlayerRelations {
 
     public addFriend(username: bigint): void {
         const name = Misc.formatName(Misc.longToString(username));
-        if (name === this.player.getUsername()) {
+        if (username === this.player.getLongUsername()) {
             return;
         }
         if (this.friendList.length >= PlayerRelations.MAX_FRIENDS) {
@@ -291,7 +291,7 @@ export class PlayerRelations {
 
     public deleteFriend(username: bigint): void {
         const name = Misc.formatName(Misc.longToString(username));
-        if (name === this.player.getUsername()) {
+        if (username === this.player.getLongUsername()) {
             return;
         }
         const friendIndex = this.friendList.indexOf(username);
@@ -312,7 +312,7 @@ export class PlayerRelations {
 
     public addIgnore(username: bigint): void {
         const name = Misc.formatName(Misc.longToString(username));
-        if (name === this.player.getUsername()) {
+        if (username === this.player.getLongUsername()) {
             return;
         }
         if (this.ignoreList.length >= PlayerRelations.MAX_IGNORES) {
@@ -339,7 +339,7 @@ export class PlayerRelations {
 
     public deleteIgnore(username: bigint): void {
         const name = Misc.formatName(Misc.longToString(username));
-        if (name === this.player.getUsername()) {
+        if (username === this.player.getLongUsername()) {
             return;
         }
         const ignoreIndex = this.ignoreList.indexOf(username);

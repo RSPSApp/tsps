@@ -1,6 +1,39 @@
 import { IndexedSprite } from "../../rs/sprite/IndexedSprite";
 
 /**
+ * The flame palettes when the cache gives none (graphics defaults opcode 3 holds them): the
+ * classic red flames and the green and blue they flash to.
+ */
+export const CLASSIC_FLAME_PALETTES: number[][] = [
+    [0x000000, 0xff0000, 0xffff00, 0xffffff, 0xffffff],
+    [0x000000, 0x00ff00, 0x00ffff, 0xffffff, 0xffffff],
+    [0x000000, 0x0000ff, 0xff00ff, 0xffffff, 0xffffff],
+];
+
+/**
+ * A 256-entry flame palette running through five colours, 64 entries from each to the next. A
+ * channel steps by (to - from + sign) / 64, which gives the classic palettes exactly (4 a step for
+ * a full 0-255 run).
+ */
+export function buildFlamePalette(colours: number[]): Int32Array {
+    const palette = new Int32Array(256);
+    for (let segment = 0; segment < 4; segment++) {
+        const from = colours[segment] ?? 0;
+        const to = colours[segment + 1] ?? from;
+        for (let i = 0; i < 64; i++) {
+            let colour = 0;
+            for (const shift of [16, 8, 0]) {
+                const a = (from >> shift) & 0xff;
+                const delta = ((to >> shift) & 0xff) - a;
+                colour |= (a + Math.trunc((i * (delta + Math.sign(delta))) / 64)) << shift;
+            }
+            palette[segment * 64 + i] = colour;
+        }
+    }
+    return palette;
+}
+
+/**
  * Login screen runes flame animation.
  */
 export class LoginScreenAnimation {
@@ -32,7 +65,7 @@ export class LoginScreenAnimation {
     private accumulator: number = 0;
     private static readonly MS_PER_TICK = 20;
 
-    constructor(sprites: IndexedSprite[]) {
+    constructor(sprites: IndexedSprite[], flamePalettes: number[][] = CLASSIC_FLAME_PALETTES) {
         this.sprites = sprites;
         this.sineOffsets = new Int32Array(256);
         this.colorPaletteRed = new Int32Array(256);
@@ -43,52 +76,14 @@ export class LoginScreenAnimation {
         this.tempNoiseMap = new Int32Array(32768);
         this.fireBuffer = new Int32Array(32768);
         this.tempFireBuffer = new Int32Array(32768);
-        this.initColors();
+        this.initColors(flamePalettes);
     }
 
-    private initColors(): void {
-        // Base palette
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteRed[i] = i * 262144; // i << 18
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteRed[i + 64] = i * 1024 + 16711680; // i * 0x400 + 0xFF0000
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteRed[i + 128] = i * 4 + 16776960; // i * 4 + 0xFFFF00
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteRed[i + 192] = 16777215; // 0xFFFFFF
-        }
-
-        // Flash palette 1
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteGreen[i] = i * 1024; // i << 10
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteGreen[i + 64] = i * 4 + 65280; // i * 4 + 0xFF00
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteGreen[i + 128] = i * 262144 + 65535; // i << 18 + 0xFFFF
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteGreen[i + 192] = 16777215; // 0xFFFFFF
-        }
-
-        // Flash palette 2
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteBlue[i] = i * 4;
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteBlue[i + 64] = i * 262144 + 255; // i << 18 + 0xFF
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteBlue[i + 128] = i * 1024 + 16711935; // i << 10 + 0xFF00FF
-        }
-        for (let i = 0; i < 64; i++) {
-            this.colorPaletteBlue[i + 192] = 16777215; // 0xFFFFFF
-        }
-
+    private initColors(flamePalettes: number[][]): void {
+        const [base, flash1, flash2] = flamePalettes.length === 3 ? flamePalettes : CLASSIC_FLAME_PALETTES;
+        this.colorPaletteRed.set(buildFlamePalette(base));
+        this.colorPaletteGreen.set(buildFlamePalette(flash1));
+        this.colorPaletteBlue.set(buildFlamePalette(flash2));
         this.resetNoiseMap(null);
     }
 

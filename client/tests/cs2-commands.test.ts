@@ -89,7 +89,7 @@ test("world list: no worlds, in the six-value world shape", () => {
 });
 
 test("oc_find pops its boolean and returns the match count", () => {
-    const s = context({ objTypeLoader: { load: (id: number) => (id === 4151 ? { name: "Abyssal whip", placeholderTemplate: -1 } : null) } });
+    const s = context({ objTypeLoader: { load: (id: number) => (id === 4151 ? { name: "Abyssal whip", placeholderTemplate: -1, noteTemplate: -1, isTradable: true } : null) } });
     s.strings.push("whip");
     s.ints.push(1);
     run(Opcodes.OC_FIND, s.ctx);

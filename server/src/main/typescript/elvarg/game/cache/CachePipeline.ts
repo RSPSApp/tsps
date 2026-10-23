@@ -44,6 +44,10 @@ export class CachePipeline {
   private static store?: FileStore;
   private static xteas = new Map<number, number[]>();
 
+  public static isInitialized(): boolean {
+    return this.active != null;
+  }
+
   public static getActive(): ActiveCache {
     if (!this.active) throw new Error("Cache pipeline has not been initialized");
     return this.active;

@@ -37,7 +37,12 @@ module.exports = function registerBallistaSpecialAttack(api) {
 
   api.registerCombatSpecial({
     id: "ballista",
-    itemIds: [ItemIdentifiers.LIGHT_BALLISTA, ItemIdentifiers.HEAVY_BALLISTA],
+    itemIds: [
+      ItemIdentifiers.LIGHT_BALLISTA,
+      ItemIdentifiers.HEAVY_BALLISTA,
+      ItemIdentifiers.LIGHT_BALLISTA_4,
+      ItemIdentifiers.HEAVY_BALLISTA_OR_,
+    ],
     drainAmount: DRAIN,
     strengthMultiplier: 1.25,
     accuracyMultiplier: 1.25,

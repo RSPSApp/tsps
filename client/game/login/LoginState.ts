@@ -59,6 +59,7 @@ function isPageRunningLocally(): boolean {
  */
 export class LoginState {
     constructor() {
+        this.serverName = getDefaultServerName();
         // Load persisted settings from localStorage
         this.loadPersistedSettings();
         this.loadPersistedLoginState();
@@ -287,8 +288,17 @@ export class LoginState {
     /** Current server address displayed on the button */
     serverAddress: string = getDefaultServerAddress();
 
-    /** Current server name displayed on the button */
-    serverName: string = getDefaultServerName();
+    /** Current server name displayed on the button, and in the page title */
+    private currentServerName = "";
+    get serverName(): string {
+        return this.currentServerName;
+    }
+    set serverName(name: string) {
+        this.currentServerName = name;
+        // Edit mode keeps its own title (OsrsClient sets it).
+        if (typeof document === "undefined" || new URLSearchParams(window.location.search).has("edit")) return;
+        document.title = name.trim() ? `${name.trim()} - RSPS.app` : "RSPS.app";
+    }
 
     /** Whether the current server uses secure WebSocket */
     serverSecure: boolean = getDefaultServerSecure();

@@ -18,11 +18,10 @@ let EXIT_PORTALS;
 let RIFT_RUNES;
 let RUINS_BY_ID;
 const RUINS_DATA = require("./data/runecrafting-ruins.json");
+const Pouches = require("./runecrafting/Pouches.Runecrafting");
 let RUINS;
 /** The exit portal's sound (synth 200). */
 const EXIT_PORTAL_SOUND = 200;
-let POUCH_TIERS;
-let POUCH_ACTIONS;
 let ABYSS_OBSTACLES;
 let PICKAXE_IDS;
 let AXE_IDS;
@@ -32,7 +31,6 @@ let RUNE_ESSENCE_MINE;
 let ABYSS_INNER_RING;
 
 const RUNE_MYSTERIES_STAGE_ATTRIBUTE = "quest.rune_mysteries.stage";
-const POUCHES_ATTRIBUTE = "runecrafting:pouches";
 const RUNE_MYSTERIES_COMPLETE_STAGE = 6;
 const ABYSS_OBSTACLE_XP = 25;
 const ABYSS_SKULL_SECONDS = 10 * 60;
@@ -120,20 +118,21 @@ function initialize(api) {
 
   RUNES_BY_ALTAR_ID = new Map([
     [ObjectIdentifiers.ALTAR_33, { runeId: ItemIdentifiers.AIR_RUNE, level: 1, xp: 5, pureOnly: false, multiplier: [[11, 2], [22, 3], [33, 4], [44, 5], [55, 6], [66, 7], [77, 8], [88, 9], [99, 10]] }],
-    [ObjectIdentifiers.ALTAR_34, { runeId: ItemIdentifiers.MIND_RUNE, level: 2, xp: 6, pureOnly: false, multiplier: [[14, 2], [28, 3], [42, 4], [56, 5], [70, 6], [84, 7], [98, 8]] }],
-    [ObjectIdentifiers.ALTAR_35, { runeId: ItemIdentifiers.WATER_RUNE, level: 5, xp: 7, pureOnly: false, multiplier: [[19, 2], [38, 3], [57, 4], [76, 5], [95, 6]] }],
-    [ObjectIdentifiers.ALTAR_36, { runeId: ItemIdentifiers.EARTH_RUNE, level: 9, xp: 8, pureOnly: false, multiplier: [[26, 2], [52, 3], [78, 4]] }],
-    [ObjectIdentifiers.ALTAR_37, { runeId: ItemIdentifiers.FIRE_RUNE, level: 14, xp: 9, pureOnly: false, multiplier: [[35, 2], [70, 3]] }],
-    [ObjectIdentifiers.ALTAR_38, { runeId: ItemIdentifiers.BODY_RUNE, level: 20, xp: 10, pureOnly: false, multiplier: [[46, 2], [92, 3]] }],
-    [ObjectIdentifiers.ALTAR_39, { runeId: ItemIdentifiers.COSMIC_RUNE, level: 27, xp: 11, pureOnly: true, multiplier: [[59, 2]] }],
-    [ObjectIdentifiers.ALTAR_55, { runeId: ItemIdentifiers.CHAOS_RUNE, level: 35, xp: 12, pureOnly: true, multiplier: [[74, 2]] }],
-    [ObjectIdentifiers.ALTAR_57, { runeId: ItemIdentifiers.ASTRAL_RUNE, level: 40, xp: 13, pureOnly: true, multiplier: [[82, 2]] }],
-    [ObjectIdentifiers.ALTAR_46, { runeId: ItemIdentifiers.NATURE_RUNE, level: 44, xp: 14, pureOnly: true, multiplier: [[91, 2]] }],
-    [ObjectIdentifiers.ALTAR_40, { runeId: ItemIdentifiers.LAW_RUNE, level: 54, xp: 15, pureOnly: true, multiplier: [[95, 2]] }],
-    [ObjectIdentifiers.ALTAR_56, { runeId: ItemIdentifiers.DEATH_RUNE, level: 65, xp: 16, pureOnly: true, multiplier: [[99, 2]] }],
+    [ObjectIdentifiers.ALTAR_34, { runeId: ItemIdentifiers.MIND_RUNE, level: 2, xp: 5.5, pureOnly: false, multiplier: [[14, 2], [28, 3], [42, 4], [56, 5], [70, 6], [84, 7], [98, 8]] }],
+    [ObjectIdentifiers.ALTAR_35, { runeId: ItemIdentifiers.WATER_RUNE, level: 5, xp: 6, pureOnly: false, multiplier: [[19, 2], [38, 3], [57, 4], [76, 5], [95, 6]] }],
+    [ObjectIdentifiers.ALTAR_36, { runeId: ItemIdentifiers.EARTH_RUNE, level: 9, xp: 6.5, pureOnly: false, multiplier: [[26, 2], [52, 3], [78, 4]] }],
+    [ObjectIdentifiers.ALTAR_37, { runeId: ItemIdentifiers.FIRE_RUNE, level: 14, xp: 7, pureOnly: false, multiplier: [[35, 2], [70, 3]] }],
+    [ObjectIdentifiers.ALTAR_38, { runeId: ItemIdentifiers.BODY_RUNE, level: 20, xp: 7.5, pureOnly: false, multiplier: [[46, 2], [92, 3]] }],
+    [ObjectIdentifiers.ALTAR_39, { runeId: ItemIdentifiers.COSMIC_RUNE, level: 27, xp: 8, pureOnly: true, multiplier: [[59, 2]] }],
+    [ObjectIdentifiers.ALTAR_55, { runeId: ItemIdentifiers.CHAOS_RUNE, level: 35, xp: 8.5, pureOnly: true, multiplier: [[74, 2]] }],
+    [ObjectIdentifiers.ALTAR_57, { runeId: ItemIdentifiers.ASTRAL_RUNE, level: 40, xp: 8.7, pureOnly: true, multiplier: [[82, 2]] }],
+    [ObjectIdentifiers.ALTAR_46, { runeId: ItemIdentifiers.NATURE_RUNE, level: 44, xp: 9, pureOnly: true, multiplier: [[91, 2]] }],
+    [ObjectIdentifiers.ALTAR_40, { runeId: ItemIdentifiers.LAW_RUNE, level: 54, xp: 9.5, pureOnly: true, multiplier: [[95, 2]] }],
+    [ObjectIdentifiers.ALTAR_56, { runeId: ItemIdentifiers.DEATH_RUNE, level: 65, xp: 10, pureOnly: true, multiplier: [[99, 2]] }],
     [ObjectIdentifiers.BLOOD_ALTAR, { runeId: ItemIdentifiers.BLOOD_RUNE, level: 75, xp: 27, pureOnly: true, multiplier: [] }],
   ]);
-  RUNES_BY_ALTAR_ID.set(ObjectIdentifiers.ALTAR_83, RUNES_BY_ALTAR_ID.get(ObjectIdentifiers.BLOOD_ALTAR));
+  // The true Blood Altar binds pure essence (Wiki: 77 Runecraft, 10.5 XP an essence).
+  RUNES_BY_ALTAR_ID.set(ObjectIdentifiers.ALTAR_83, { runeId: ItemIdentifiers.BLOOD_RUNE, level: 77, xp: 10.5, pureOnly: true, multiplier: [] });
 
   TALISMANS = new Map([
     [ItemIdentifiers.AIR_TALISMAN, { name: "Air talisman", runeId: ItemIdentifiers.AIR_RUNE, x: 2841, y: 4829, ruinX: 2983, ruinY: 3288 }],
@@ -203,20 +202,6 @@ function initialize(api) {
     [ObjectIdentifiers.BLOOD_RIFT_2, ItemIdentifiers.BLOOD_RUNE],
   ]);
 
-  POUCH_TIERS = [
-    { itemId: ItemIdentifiers.SMALL_POUCH, name: "Small pouch", level: 1, capacity: 3, decayChance: -1 },
-    { itemId: ItemIdentifiers.MEDIUM_POUCH, name: "Medium pouch", level: 25, capacity: 6, decayChance: 45 },
-    { itemId: ItemIdentifiers.LARGE_POUCH, name: "Large pouch", level: 50, capacity: 9, decayChance: 29 },
-    { itemId: ItemIdentifiers.GIANT_POUCH, name: "Giant pouch", level: 75, capacity: 12, decayChance: 10 },
-  ];
-  POUCH_ACTIONS = new Map();
-  for (const tier of POUCH_TIERS) {
-    POUCH_ACTIONS.set(tier.itemId, tier);
-  }
-  POUCH_ACTIONS.set(ItemIdentifiers.MEDIUM_POUCH_2, POUCH_ACTIONS.get(ItemIdentifiers.MEDIUM_POUCH));
-  POUCH_ACTIONS.set(ItemIdentifiers.LARGE_POUCH_2, POUCH_ACTIONS.get(ItemIdentifiers.LARGE_POUCH));
-  POUCH_ACTIONS.set(ItemIdentifiers.GIANT_POUCH_2, POUCH_ACTIONS.get(ItemIdentifiers.GIANT_POUCH));
-
   ABYSS_OBSTACLES = new Map([
     [ObjectIdentifiers.ROCK_111, { objectName: "Rock", action: "Mine", skill: Skill.MINING, toolIds: PICKAXE_IDS, toolMessage: "You need a pickaxe to mine through the rock.", fail: "You fail to mine through the rock." }],
     [ObjectIdentifiers.TENDRILS_4, { objectName: "Tendrils", action: "Chop", skill: Skill.WOODCUTTING, toolIds: AXE_IDS, toolMessage: "You need an axe to chop through the tendrils.", fail: "You fail to chop through the tendrils." }],
@@ -252,138 +237,6 @@ function hasCompletedRuneMysteries(player) {
 
 function requestTeleport(player, destination) {
   pluginApi.emitCustomEvent("lever:teleport", { player, destination: destination.clone() });
-}
-
-function ensurePouchArray(player) {
-  const existing = player.getAttribute(POUCHES_ATTRIBUTE);
-  const containers = Array.isArray(existing) ? existing : [];
-
-  const byItemId = new Map();
-  for (const container of containers) {
-    const pouchId = container?.pouch?.itemId ?? container?.pouch?.id ?? -1;
-    if (Number.isInteger(pouchId)) {
-      byItemId.set(pouchId, container);
-    }
-  }
-
-  const normalized = [];
-  for (const tier of POUCH_TIERS) {
-    const raw = byItemId.get(tier.itemId);
-    normalized.push({
-      pouch: {
-        itemId: tier.itemId,
-        requiredLevel: tier.level,
-        capacity: tier.capacity,
-        decayChance: tier.decayChance,
-      },
-      runeEssenceAmt: Math.max(0, Number(raw?.runeEssenceAmt || 0)),
-      pureEssenceAmt: Math.max(0, Number(raw?.pureEssenceAmt || 0)),
-    });
-  }
-
-  player.setAttribute(POUCHES_ATTRIBUTE, normalized);
-  return normalized;
-}
-
-function pouchContainerFor(event) {
-  const tier = POUCH_ACTIONS.get(event.itemId);
-  if (!tier) {
-    return null;
-  }
-  return ensurePouchArray(event.player).find((entry) => entry.pouch.itemId === tier.itemId) ?? null;
-}
-
-function storePouch(player, container) {
-  if (container.runeEssenceAmt + container.pureEssenceAmt >= container.pouch.capacity) {
-    player.sendMessage("Your pouch is already full.");
-    return;
-  }
-
-  if (
-    player.getSkillManager().getMaxLevel(Skill.RUNECRAFTING) <
-    container.pouch.requiredLevel
-  ) {
-    player.sendMessage(
-      `You need a Runecrafting level of at least ${container.pouch.requiredLevel} to use this.`
-    );
-    return;
-  }
-
-  for (
-    let i = container.runeEssenceAmt + container.pureEssenceAmt;
-    i < container.pouch.capacity;
-    i++
-  ) {
-    if (player.getInventory().contains(ItemIdentifiers.PURE_ESSENCE)) {
-      player.getInventory().deleteNumber(ItemIdentifiers.PURE_ESSENCE, 1);
-      container.pureEssenceAmt++;
-    } else if (player.getInventory().contains(ItemIdentifiers.RUNE_ESSENCE)) {
-      player.getInventory().deleteNumber(ItemIdentifiers.RUNE_ESSENCE, 1);
-      container.runeEssenceAmt++;
-    } else {
-      player.sendMessage("You don't have any more essence to store.");
-      break;
-    }
-  }
-}
-
-function checkPouch(player, container) {
-  const tier = POUCH_TIERS.find((entry) => entry.itemId === container.pouch.itemId);
-  const label = (tier?.name ?? "pouch").toLowerCase();
-  player.sendMessage(
-    `Your ${label} contains ${container.runeEssenceAmt} Rune essence and ${container.pureEssenceAmt} Pure essence.`
-  );
-}
-
-function withdrawPouch(player, container) {
-  const total = container.runeEssenceAmt + container.pureEssenceAmt;
-  if (total <= 0) {
-    player.sendMessage("Your pouch is already empty.");
-    return;
-  }
-
-  for (let i = 0; i < total; i++) {
-    if (player.getInventory().isFull()) {
-      player.getInventory().full();
-      break;
-    }
-    if (container.pureEssenceAmt > 0) {
-      player.getInventory().adds(ItemIdentifiers.PURE_ESSENCE, 1);
-      container.pureEssenceAmt--;
-    } else if (container.runeEssenceAmt > 0) {
-      player.getInventory().adds(ItemIdentifiers.RUNE_ESSENCE, 1);
-      container.runeEssenceAmt--;
-    } else {
-      break;
-    }
-  }
-}
-
-function handlePouchStore(event) {
-  const container = pouchContainerFor(event);
-  if (!container) {
-    return false;
-  }
-  storePouch(event.player, container);
-  return true;
-}
-
-function handlePouchCheck(event) {
-  const container = pouchContainerFor(event);
-  if (!container) {
-    return false;
-  }
-  checkPouch(event.player, container);
-  return true;
-}
-
-function handlePouchWithdraw(event) {
-  const container = pouchContainerFor(event);
-  if (!container) {
-    return false;
-  }
-  withdrawPouch(event.player, container);
-  return true;
 }
 
 function handleCraftRunes(event) {
@@ -447,6 +300,21 @@ function handleCraftRunes(event) {
 
   event.handled = true;
   return true;
+}
+
+/**
+ * "runecrafting:altar-rune" { player, objectId, rune }: what an altar crafts, for content that
+ * crafts its own essence there (Guardians of the Rift): { runeId, level, xp, amount, petBase } with
+ * `amount` the runes an essence makes at the player's level, or null.
+ */
+function answerAltarRune(request) {
+  const runeData = RUNES_BY_ALTAR_ID.get(request?.objectId);
+  if (!runeData || !request.player) return;
+  const level = request.player.getSkillManager().getCurrentLevel(Skill.RUNECRAFTING);
+  request.rune = {
+    runeId: runeData.runeId, level: runeData.level, xp: runeData.xp, amount: runeMultiplier(level, runeData),
+    petBase: runeData.runeId === ItemIdentifiers.BLOOD_RUNE ? BLOOD_RIFT_GUARDIAN_BASE : RIFT_GUARDIAN_BASE,
+  };
 }
 
 function locateDirection(player, ruinX, ruinY) {
@@ -697,13 +565,8 @@ module.exports = {
     api.onObjectInteraction("Blood Altar", { Bind: handleCraftRunes });
     api.onObjectInteraction("Portal", { Use: handleExitPortal });
 
-    for (const tier of POUCH_TIERS) {
-      api.onItemAction(tier.name, {
-        Fill: handlePouchStore,
-        Check: handlePouchCheck,
-        Empty: handlePouchWithdraw,
-      });
-    }
+    Pouches.attach(api);
+    api.onCustomEvent("runecrafting:altar-rune", answerAltarRune);
 
     for (const talisman of TALISMANS.values()) {
       api.onItemAction(talisman.name, { Locate: handleTalismanLocate });
@@ -732,7 +595,6 @@ module.exports = {
       altars: RUNES_BY_ALTAR_ID.size,
       talismans: TALISMANS.size,
       rifts: RIFT_RUNES.size,
-      pouches: POUCH_TIERS.length,
       abyssObstacles: ABYSS_OBSTACLES.size,
     });
   },

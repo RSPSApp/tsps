@@ -118,7 +118,7 @@ function climbUp(event) {
   if (id === BONE_CHAIN) {
     player.sendMessage("You shin up the rope, squeeze through a passage then climb a ladder.");
     player.sendMessage("You climb up the ladder which seems to twist and wind in all directions.");
-    player.moveTo(Data.upDestination(floor));
+    player.moveTo(Data.toLocation(Data.DATA.surface));
     return true;
   }
   pluginApi.emitCustomEvent("ladders:climbUp", { player, destination: Data.upDestination(floor) });

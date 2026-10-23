@@ -28,7 +28,7 @@ const Records = require('../plugins/bosses/doom/Records.DoomOfMokhaiotl');
 const Burrow = require('../plugins/bosses/doom/Burrow.DoomOfMokhaiotl');
 const { chargeTicks } = require('../plugins/bosses/doom/Shield.DoomOfMokhaiotl');
 
-const hooks = { objects: [], prompts: [], hitModify: [], beforeDeath: [], attack: [], timing: [], roll: [], buttons: {} };
+const hooks = { objects: [], prompts: [], hitModify: [], beforeDeath: [], attack: [], timing: [], roll: [], buttons: {}, login: [], zone: [] };
 let nextIndex = 1;
 const SIZES = { [Shared.NPC.DOOM]: 5, [Shared.NPC.EARTHEN_SHIELD]: 3 };
 
@@ -98,6 +98,7 @@ function fakeNpc(id, x, y) {
 
 // The HUD is the BossHud plugin's, reached through custom events.
 const bossHud = new Map();
+const customEvents = new Map();
 require('../plugins/interface/BossHud.plugin').register({
   core: PluginManager.getCoreApi(),
   onCustomEvent: (name, handler) => bossHud.set(name, handler),
@@ -108,8 +109,8 @@ function fakeApi() {
     core: PluginManager.getCoreApi(),
     persistAttribute() {},
     registerNpcCombatMethodProvider() {},
-    onPlayerLogin() {},
-    onZoneEnter() {},
+    onPlayerLogin: (handler) => hooks.login.push(handler),
+    onZoneEnter: (_zone, handler) => hooks.zone.push(handler),
     onObjectInteraction: (handler) => hooks.objects.push(handler),
     onCanAttack: (handler) => hooks.attack.push(handler),
     onNpcBeforeDeath: (handler) => hooks.beforeDeath.push(handler),
@@ -121,10 +122,18 @@ function fakeApi() {
     onPlayerDeath() {},
     registerCommand() {},
     onInterfaceActionButton: (uid, handler) => { hooks.buttons[uid] = handler; },
+    onCustomEvent: (name, handler) => {
+      const list = customEvents.get(name) ?? [];
+      list.push(handler);
+      customEvents.set(name, list);
+    },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     spawnNpc: ({ id, x, y }) => fakeNpc(id, x, y),
     removeNpc: (npc) => { npc.registered = false; },
-    emitCustomEvent: (name, payload) => bossHud.get(name)?.(payload),
+    emitCustomEvent: (name, payload) => {
+      bossHud.get(name)?.(payload);
+      for (const handler of customEvents.get(name) ?? []) handler(payload);
+    },
   };
 }
 
@@ -227,11 +236,17 @@ before(() => {
   RegionManager.init();
   ObjectDefinition.init();
   const api = fakeApi();
+  const QuestRuntime = require('../plugins/quests/QuestRuntime');
+  QuestRuntime.registerQuest(api, {
+    key: 'the_final_dawn', name: 'The Final Dawn', varpId: 4737, varbitId: 16663,
+    startedValue: 1, completionValue: 68, questPoints: 3,
+  });
   Lobby(api);
   Delve(api);
   Rewards(api);
   Scoreboard(api);
   Records.resetWorld();
+  assert.ok(customEvents.get('quest:is-complete')?.length, 'real QuestRuntime completion handler registered');
 });
 
 function objectsHere(id, tile) {
@@ -249,6 +264,53 @@ function surfacedRun({ attacks = false, random = () => 0.99 } = {}) {
   run.hazards.nextLarvaAt = Infinity;
   return { player, run };
 }
+
+
+function realPacketSender(player) {
+  const { PacketSender } = require('../dist/net/packet/PacketSender');
+  player.getSession = () => ({ sendClientPacket: () => true });
+  const sender = new PacketSender(player);
+  sender.sendSubInterface = () => sender;
+  player.getPacketSender = () => sender;
+  return sender;
+}
+
+test('lobby Pass-through uses durable Final Dawn completion, not the transient packet varbit', () => {
+  const player = fakePlayer();
+  player.setAttribute('quest.the_final_dawn.stage', 68);
+  const sender = realPacketSender(player);
+  assert.equal(typeof sender.getVarbit, 'function');
+  assert.equal(sender.getVarbit(Shared.VARBIT.FINAL_DAWN), 0, 'fresh PacketSender cache is empty');
+  assert.equal(Lobby.passThroughEntrance({ player, option: 'Pass-through' }), true);
+  ticks(2);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()],
+    [Shared.TILES.LOBBY.x, Shared.TILES.LOBBY.y, Shared.TILES.LOBBY.z]);
+  assert.equal(sender.getVarbit(Shared.VARBIT.FINAL_DAWN), 0, 'gate did not rely on or write the packet varbit');
+  assert.equal(player.getAttribute('quest.the_final_dawn.stage'), 68);
+});
+
+test('lobby denies unfinished Final Dawn even with a stale completed packet varbit', () => {
+  const player = fakePlayer();
+  player.setAttribute('quest.the_final_dawn.stage', 67);
+  const sender = realPacketSender(player);
+  sender.sendVarbit(Shared.VARBIT.FINAL_DAWN, 68);
+  assert.equal(sender.getVarbit(Shared.VARBIT.FINAL_DAWN), 68);
+  const before = [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
+  assert.equal(Lobby.passThroughEntrance({ player, option: 'Pass-through' }), false);
+  ticks(2);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], before);
+  assert.equal(player.getAttribute('quest.the_final_dawn.stage'), 67);
+  assert.equal(sender.getVarbit(Shared.VARBIT.FINAL_DAWN), 68, 'stale fixture varbit remains unchanged');
+});
+
+test('lobby Inspect falls through even when Final Dawn is complete', () => {
+  const player = fakePlayer();
+  player.setAttribute('quest.the_final_dawn.stage', 68);
+  const before = [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
+  assert.equal(Lobby.passThroughEntrance({ player, option: 'Inspect' }), false);
+  ticks(2);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], before);
+});
 
 // ------------------------------------------------------------------ data
 
@@ -271,6 +333,44 @@ test('the cache has the Doom, its larvae and locs where the capture put them', (
   assert.equal(entrance.transformVarbit, Shared.VARBIT.FINAL_DAWN);
   assert.equal(entrance.transforms[Shared.FINAL_DAWN_COMPLETE], Shared.OBJECT.ENTRANCE_OPEN);
   assert.equal(CacheDefinitions.getObject(Shared.OBJECT.ENTRANCE_OPEN).actions[0], 'Pass-through');
+});
+
+test('an unfinished Final Dawn login or ruins entry preserves the saved quest stage', () => {
+  const p = fakePlayer();
+  p.setAttribute('quest.the_final_dawn.stage', 62);
+  for (const handler of hooks.login) handler({ player: p });
+  for (const handler of hooks.zone) handler({ player: p });
+  assert.equal(p.getAttribute('quest.the_final_dawn.stage'), 62);
+  assert.equal(p.varbits.get(Shared.VARBIT.FINAL_DAWN), 62, 'QuestRuntime sends the saved stage only');
+  assert.equal(Lobby.openEntrance, undefined, 'no unconditional completion writer remains');
+});
+
+test('the Doom entrance leaves an unfinished quest Inspect to the quest handler', () => {
+  const p = fakePlayer();
+  p.varbits.set(Shared.VARBIT.FINAL_DAWN, 65);
+  const inspect = {
+    player: p, objectId: Shared.OBJECT.ENTRANCE, clickType: 2, handled: false,
+    definition: { getInteractions: () => ['', 'Inspect'] },
+  };
+  for (const handler of hooks.objects) handler(inspect);
+  assert.equal(inspect.handled, false, 'Inspect is not consumed before quest completion');
+  assert.deepEqual([p.location.getX(), p.location.getY(), p.location.getZ()], [1311, 9556, 0], 'no lobby teleport');
+});
+
+test('a genuinely completed Final Dawn still opens the boss entrance with Pass-through', () => {
+  const p = fakePlayer();
+  p.setAttribute('quest.the_final_dawn.stage', Shared.FINAL_DAWN_COMPLETE);
+  const pass = {
+    player: p, objectId: Shared.OBJECT.ENTRANCE_OPEN, clickType: 1, handled: false,
+    definition: { getInteractions: () => ['Pass-through'] },
+  };
+  for (const handler of hooks.objects) {
+    if (pass.handled) break;
+    handler(pass);
+  }
+  assert.equal(pass.handled, true, 'completed quest still enters the lobby');
+  ticks(2);
+  assert.deepEqual([p.location.getX(), p.location.getY(), p.location.getZ()], [1311, 9540, 0]);
 });
 
 test('the arrival, the volatile earth tiles and the lobby tiles are open floor', () => {
@@ -993,7 +1093,7 @@ test('the shield turns the HUD blue, shows its points on headbar 11, and larvae 
   player.colours.length = 0;
   run.attacks.phase = 'shield';
   run.shield.start();
-  assert.deepEqual(player.colours, [[13, 132], [14, 623], [15, 853]], 'blue (capture)');
+  assert.deepEqual(player.colours, [[14, 132], [15, 623], [16, 853]], 'blue (capture)');
   assert.deepEqual(player.scriptArgs.at(-1)[0], 2102);
   assert.deepEqual(run.boss.headbars.at(-1), { id: 81, fill: 0, endFill: 100, duration: 510 });
   player.weapon = 29591;
@@ -1004,7 +1104,7 @@ test('the shield turns the HUD blue, shows its points on headbar 11, and larvae 
   assert.deepEqual(run.boss.shown.at(-1), { damage: 100, splat: 17, health: { current: 357, max: 500, bar: { id: 11, width: 120 } } });
   player.colours.length = 0;
   run.shield.damage(1000);
-  assert.deepEqual(player.colours, [[13, 25600], [14, 576], [15, 800]], 'back to normal');
+  assert.deepEqual(player.colours, [[14, 25600], [15, 576], [16, 800]], 'back to normal');
   run.end('exit');
 });
 
@@ -1081,7 +1181,7 @@ test('the HUD opens as the capture does: hp hidden at the delve change, then col
   player.dialogueActive = false;
   ticks(1);
   assert.deepEqual(player.hudLog, [
-    ['colour', 13, 25600], ['colour', 14, 576], ['colour', 15, 800],
+    ['colour', 14, 25600], ['colour', 15, 576], ['colour', 16, 800],
     ['script', 2376, (303 << 16) | 3],
     ['script', 2887, 254],
   ], 'no un-hiding before 2376, and no 2102 on open');

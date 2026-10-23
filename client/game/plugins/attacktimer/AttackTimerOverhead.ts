@@ -19,7 +19,6 @@ export function appendAttackTimerOverhead(
     playerDefaultHeightTiles: number | undefined,
 ): void {
     if (index === undefined || output.length >= maxEntries) return;
-    if (!host.osrsClient.attackTimerPlugin?.isEnabled()) return;
     const ticks = getAttackTimerTicks(getCurrentTick());
     if (ticks <= 0) return;
     const pe = host.osrsClient.playerEcs;

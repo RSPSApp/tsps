@@ -49,7 +49,7 @@ After a question, the move comes on the response's continue.
   3. a tick later: "You climb down the ladder to the next level." and the next floor (2042,5245; 2123,5252; 2358,5215).
 
   "Don't ask me this again" skips the warning from then on. Going down to floor 2 completes the Varrock easy diary task "Enter the second level of the Stronghold of Security".
-- **Up:** the ladders and vine climb as any ladder does (`ladders:climbUp`). Floor 1's go to the surface; the others land beside the ladder down on the floor above. Floor 4's Bone Chain says "You shin up the rope, squeeze through a passage then climb a ladder." and "You climb up the ladder which seems to twist and wind in all directions.", then puts you at 3081,3421.
+- **Up:** the ladders and vine climb as any ladder does (`ladders:climbUp`). Floor 1's go to the surface; the others, floor 4's Boney ladder (23921) included, land beside the ladder down on the floor above. Floor 4's Bone Chain says "You shin up the rope, squeeze through a passage then climb a ladder." and "You climb up the ladder which seems to twist and wind in all directions.", then puts you at 3081,3421.
 - **The portals** ("You enter the portal to be whisked through to the treasure room.") work once the floor's reward is claimed. On floors 1–3 they also work from combat level 26, 51 and 76 (Wiki). Otherwise: "You must have completed this level to take this shortcut."
 
 ## Rewards

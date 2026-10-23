@@ -4,7 +4,9 @@
  * Superior Slayer monsters (data/slayer-superiors.json): with Bigger and Badder unlocked and
  * not toggled off (slayer_toggleoff_superiormobs), an on-task kill ("slayer:task-kill" from
  * Tasks.Slayer.js) spawns the monster's superior where it died, 1 time in 200, attacking the
- * player. A superior gives ten times its hitpoints in Slayer XP, on task or not.
+ * player. A superior gives ten times its hitpoints in Slayer XP, on task or not (on task through
+ * the task's kill, so Mortimer's XP modifier counts it), and rolls the superior unique tables
+ * (Mortimer's superior unique modifier raises their chance).
  */
 const DATA = require("../data/slayer-superiors.json");
 const Data = require("./Data.Slayer");
@@ -17,6 +19,9 @@ let core = null;
 let superiorIds = null;
 /** Normal monster name (lowercase) -> its first attackable cache NPC id. */
 let normalIds = null;
+/** Superiors whose XP the task's kill gave (Tasks.Slayer.js runs before npcKilled). */
+const onTaskKills = new WeakSet();
+const UNIQUE_TABLE_SIZE = 16;
 const superiorNames = new Set(Object.values(DATA.superiors).map((name) => name.toLowerCase()));
 
 function init(pluginApi) {
@@ -89,8 +94,8 @@ function enabled(player) {
  */
 function taskKillEvent(event) {
   if (isSuperior(event.npc)) {
-    event.taskXp = event.xp * DATA.xpPerHitpoint;
-    event.xp = 0;
+    event.xp *= DATA.xpPerHitpoint;
+    onTaskKills.add(event.npc);
     return;
   }
   taskKill(event);
@@ -108,11 +113,44 @@ function taskKill({ player, npc }, random = Math.random) {
   return superior;
 }
 
-/** A superior's Slayer XP, on task or not. */
+/** A superior's Slayer XP off task (on task, the task's kill gave it). */
 function npcKilled({ killer, npc }) {
-  if (!killer?.isPlayer?.() || !isSuperior(npc)) return;
+  if (!killer?.isPlayer?.() || !isSuperior(npc) || onTaskKills.has(npc)) return;
   const hitpoints = (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getHitpoints();
   killer.getSkillManager().addExperiences(core.Skill.SLAYER, hitpoints * DATA.xpPerHitpoint);
+}
+
+/** 1 in this many per unique table (Wiki): lower for superiors that need more Slayer. */
+function uniqueChance(npc) {
+  const level = Math.max(1, (npc.getCurrentDefinition?.() ?? npc.getDefinition?.())?.getSlayerLevel?.() ?? 1);
+  return 200 - (level + 55) ** 2 / 125;
+}
+
+/**
+ * The superior unique tables, each rolled once; `boost` multiplies their chance (Mortimer's
+ * superior unique modifier). Returns the item ids won.
+ */
+function rollUniques(npc, boost = 1, random = Math.random) {
+  const won = [];
+  const chance = boost / uniqueChance(npc);
+  for (const table of DATA.uniques) {
+    if (random() >= chance) continue;
+    let roll = Math.floor(random() * UNIQUE_TABLE_SIZE);
+    for (const [name, weight] of Object.entries(table)) {
+      roll -= weight;
+      if (roll >= 0) continue;
+      if (name !== "NOTHING") won.push(core.ItemIdentifiers[name]);
+      break;
+    }
+  }
+  return won;
+}
+
+/** "npc-drops:add": a superior's uniques join its drops. */
+function addUniques({ player, npc, drops }) {
+  if (!player || !npc || !Array.isArray(drops) || !isSuperior(npc)) return;
+  const boost = Tasks.killBoost(player, npc, Data.MODIFIER.SUPERIOR_UNIQUES);
+  for (const itemId of rollUniques(npc, boost)) drops.push({ itemId, amount: 1, noted: false });
 }
 
 /** "slayer:is-superior" { npc, superior }: whether an NPC is a superior Slayer monster. */
@@ -123,7 +161,8 @@ function answerIsSuperior(request) {
 function attach(pluginApi) {
   pluginApi.onCustomEvent("slayer:task-kill", taskKillEvent);
   pluginApi.onCustomEvent("slayer:is-superior", answerIsSuperior);
+  pluginApi.onCustomEvent("npc-drops:add", addUniques);
   pluginApi.onNpcDeath(npcKilled);
 }
 
-module.exports = { init, attach, taskKill, npcKilled, isSuperior, resolve, superiorForTask, spawnForTask };
+module.exports = { init, attach, taskKill, npcKilled, rollUniques, uniqueChance, isSuperior, resolve, superiorForTask, spawnForTask };

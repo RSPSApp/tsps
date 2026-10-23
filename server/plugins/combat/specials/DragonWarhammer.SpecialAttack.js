@@ -1,6 +1,6 @@
-// Smash drains 30% of current Defence after a damaging hit.
-module.exports = function registerDragonWarhammerSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sounds } = api.core;
+// Smash drains 30% of current Defence after a successful accuracy roll.
+function buildSpecial(core) {
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sounds } = core;
 
   const DRAIN = 50;
   const DEFENCE_DRAIN_FRACTION = 0.3;
@@ -8,7 +8,7 @@ module.exports = function registerDragonWarhammerSpecialAttack(api) {
   const GRAPHIC = new Graphic(1292, Priority.HIGH);
 
   function smash(hit) {
-    if (!hit.isAccurate() || Math.floor(hit.getTotalDamage()) <= 0) {
+    if (!hit.isAccurate()) {
       return;
     }
     const target = hit.getTarget();
@@ -36,7 +36,7 @@ module.exports = function registerDragonWarhammerSpecialAttack(api) {
     }
   }
 
-  api.registerCombatSpecial({
+  return {
     id: "dragon_warhammer",
     itemIds: [ItemIdentifiers.DRAGON_WARHAMMER, ItemIdentifiers.DRAGON_WARHAMMER_3, ItemIdentifiers.DRAGON_WARHAMMER_OR_, ItemIdentifiers.DRAGON_WARHAMMER_CR_],
     drainAmount: DRAIN,
@@ -48,5 +48,9 @@ module.exports = function registerDragonWarhammerSpecialAttack(api) {
       damageMultiplier: 1.5,
     },
     combatMethod: new DragonWarhammerCombatMethod(),
-  });
+  };
+}
+
+module.exports = function registerDragonWarhammerSpecialAttack(api) {
+  api.registerCombatSpecial(buildSpecial(api.core));
 };

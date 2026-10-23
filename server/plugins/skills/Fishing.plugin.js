@@ -471,7 +471,7 @@ function landCatch(player, tool, variant, caught) {
   // A listener may take over the session (the tutorial stops after one catch).
   let stop = false;
   for (const fish of new Set(landed)) {
-    const event = { player, skill: Skill.FISHING, petBase: fish.petBase, stop: false };
+    const event = { player, skill: Skill.FISHING, itemId: fish.id, petBase: fish.petBase, stop: false };
     pluginApi.emitCustomEvent("fishing:success", event);
     if (event.stop) stop = true;
   }

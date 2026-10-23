@@ -232,17 +232,32 @@ test('login sends back every setting the player changed', () => {
   assert.ok(player.sent.includes('varp 287=0'));
 });
 
-test('quest-list Settings opens native Interfaces category with controls transmitted', () => {
-  const { buttons } = registered();
+test('quest-list Settings opens Quest List search and dispatches global result rows', () => {
+  const { buttons, events } = registered();
   const player = recordingPlayer();
   player.setInterfaceId = id => player.sent.push(`interface ${id}`);
   const sender = player.getPacketSender();
-  sender.sendSubInterface = () => sender;
+  sender.sendSubInterface = () => { player.sent.push('open settings'); return sender; };
   sender.sendInterfaceFlagsRange = () => sender;
+  sender.sendClientScript = (id, ...args) => { player.sent.push(`script ${id}${args.length ? ':' + args.join(',') : ''}`); return sender; };
   assert.equal(typeof buttons.get((399 << 16) | 11), 'function');
   assert.equal(buttons.get((399 << 16) | 11)({ player }), true);
-  assert.equal(player.getAttribute('settings-view'), 6);
+  assert.equal(player.getAttribute('settings-view'), -1);
   assert.equal(sender.getVarbit(9656), 6);
+  assert.equal(sender.getVarbit(9648), 1);
+  assert.equal(sender.getVarbit(16073), 1);
+  assert.equal(sender.getVarbit(16074), 1);
+  assert.ok(player.sent.indexOf('open settings') < player.sent.indexOf('script 5968:Quest List'));
+  assert.ok(player.sent.indexOf('varbit 16074=1') < player.sent.indexOf('script 5968:Quest List'));
+  assert.ok(player.sent.indexOf('script 5968:Quest List') < player.sent.indexOf('script 4020'));
+  // Global search result301 is setting315, unlike Interfaces category row301.
+  player.sent.length = 0;
+  buttons.get(CLICKZONE)({ player, slot: 301 });
+  assert.ok(player.sent.includes('varbit 9657=315'));
+  events.get('interface:closed')({ player, interfaceId: 134 });
+  assert.equal(sender.getVarbit(16073), 0);
+  assert.equal(sender.getVarbit(16074), 0);
+  assert.ok(player.sent.includes('script 2158'));
 });
 
 test('quest colour picker saves RGB+1, accepts black, rejects invalid amounts and resets defaults', () => {

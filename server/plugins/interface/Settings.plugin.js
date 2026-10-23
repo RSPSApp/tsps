@@ -80,6 +80,8 @@ const CHATDEFAULT_STOPINPUT_SCRIPT = 4020;
 const CHATDEFAULT_RESTOREINPUT_SCRIPT = 2158;
 // The category shown: scripts 3837/3840 draw the category list and its settings from it.
 const SETTINGS_CATEGORY_VARBIT = 9656;
+const SETTINGS_FIRST_LOAD_VARBIT = 9648;
+const SETTINGS_SEARCH_OVERRIDE_SCRIPT = 5968;
 // The setting last clicked (settings_selected_setting). Capture: a row click sets it to that
 // setting's id; choosing a dropdown option, closing the dropdown or changing category clears it.
 const SETTINGS_SELECTED_SETTING_VARBIT = 9657;
@@ -454,7 +456,10 @@ function openAllSettings(player) {
 
 function openQuestSettings({ player }) {
   showCategory(player, 6); // Interfaces, cache enum422 category3621.
-  return openAllSettings(player);
+  player.getPacketSender().sendVarbit(SETTINGS_FIRST_LOAD_VARBIT, 1);
+  openAllSettings(player);
+  startSettingsSearch({ player, query: "Quest List" });
+  return true;
 }
 
 function openQuestColour(player, settingId) {
@@ -479,12 +484,14 @@ function openQuestColour(player, settingId) {
   return true;
 }
 
-function startSettingsSearch({ player }) {
+function startSettingsSearch({ player, query }) {
   player.setAttribute("settings-view", SEARCH_VIEW);
-  player.getPacketSender()
+  const sender = player.getPacketSender();
+  sender
     .sendVarbit(FLOATER_IS_SEARCHING_VARBIT, 1)
-    .sendVarbit(FLOATER_SEARCH_LISTEN_FOR_KEYBOARD_VARBIT, 1)
-    .sendClientScript(CHATDEFAULT_STOPINPUT_SCRIPT);
+    .sendVarbit(FLOATER_SEARCH_LISTEN_FOR_KEYBOARD_VARBIT, 1);
+  if (typeof query === "string") sender.sendClientScript(SETTINGS_SEARCH_OVERRIDE_SCRIPT, query);
+  sender.sendClientScript(CHATDEFAULT_STOPINPUT_SCRIPT);
   return false;
 }
 

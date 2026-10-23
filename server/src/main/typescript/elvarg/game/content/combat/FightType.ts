@@ -71,9 +71,9 @@ class FightTypeClass {
         return FightTypeClass.valuesList;
     }
 
-    public static resolve(value: unknown): FightTypeClass | null {
+    public static resolve(value: unknown, availableTypes: readonly FightTypeClass[] = FightTypeClass.values()): FightTypeClass | null {
         if (value instanceof FightTypeClass) {
-            return value;
+            return availableTypes.includes(value) ? value : null;
         }
 
         if (!value || typeof value !== "object") {
@@ -89,7 +89,7 @@ class FightTypeClass {
             return null;
         }
 
-        const candidates = FightTypeClass.values().filter((fightType) => {
+        const candidates = availableTypes.filter((fightType) => {
             return (animation === null || fightType.animation === animation)
                 && (parentId === null || fightType.parentId === parentId)
                 && (childId === null || fightType.childId === childId)

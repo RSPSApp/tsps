@@ -39,6 +39,14 @@ async function main() {
     const save = async (host: HTMLElement) => {
         await act(async () => host.querySelector("form")!.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })));
     };
+    const enter = async (host: HTMLElement, label: string, value: string) => {
+        const input = host.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLTextAreaElement;
+        const prototype = input.tagName === "TEXTAREA" ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype;
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, value);
+            input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+        });
+    };
 
     await test("saving an unchanged edit preserves first-match tag priority", () => editor(async (plugin, host) => {
         await edit(host, 0); await save(host);
@@ -48,6 +56,24 @@ async function main() {
     await test("removing an earlier group preserves the edit target and unrelated groups", () => editor(async (plugin, host) => {
         await edit(host, 1); await remove(host, "A"); await save(host);
         assert.deepEqual(plugin.getGroups(), groups.slice(1));
+    }));
+    await test("saving changed names and item IDs replaces only the edited slot", () => editor(async (plugin, host) => {
+        await edit(host, 1);
+        await enter(host, "Group name", "Equipment");
+        await enter(host, "Item IDs", "11840, 11802");
+        await save(host);
+        assert.deepEqual(plugin.getGroups(), [groups[0], { ...groups[1], name: "Equipment", itemIds: [11840, 11802] }, groups[2]]);
+        assert.equal(plugin.colorForItem(4151), 0xff0000);
+        assert.equal(plugin.colorForItem(11840), 0x0000ff);
+    }));
+    await test("invalid edited item IDs leave saved groups intact and retain the draft", () => editor(async (plugin, host) => {
+        await edit(host, 1);
+        await enter(host, "Item IDs", "-1");
+        await save(host);
+        assert.deepEqual(plugin.getGroups(), groups);
+        assert.match(host.querySelector('[role="alert"]')?.textContent ?? "", /positive integer/i);
+        assert.equal((host.querySelector('[aria-label="Item IDs"]') as HTMLTextAreaElement).value, "-1");
+        assert.equal((host.querySelector('[aria-label="Group name"]') as HTMLInputElement).value, "B");
     }));
     await test("removing the edited group clears the form without replacing its neighbour", () => editor(async (plugin, host) => {
         await edit(host, 1); await remove(host, "B");

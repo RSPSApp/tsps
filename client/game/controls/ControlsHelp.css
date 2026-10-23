@@ -1,30 +1,35 @@
 .controls-help {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column-reverse;
+    width: max-content;
     z-index: 15;
     max-width: min(350px, calc(100% - 20px));
     color: #e7dfcd;
     background: #28251ff2;
     border: 1px solid #73664c;
     border-radius: 4px;
-    font: 13px/1.45 sans-serif;
+    font: 12px/1.4 sans-serif;
     pointer-events: auto;
     overscroll-behavior: contain;
 }
-.controls-help-heading { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px; }
+.controls-help.expanded { width: 350px; }
+.controls-help-heading { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px; }
 .controls-help button {
     cursor: pointer;
     border: 1px solid #827354;
     border-radius: 3px;
-    padding: 5px 8px;
+    padding: 4px 7px;
     color: inherit;
     background: #3a3429;
     font: inherit;
 }
 .controls-help button:hover { background: #534932; }
 .controls-help button:focus-visible { outline: 2px solid #e6be69; outline-offset: 2px; }
-.controls-help-guide { max-height: min(380px, 60vh); overflow: auto; padding: 8px 12px; border-top: 1px solid #73664c; }
+.controls-help-guide { max-height: min(380px, 60vh); overflow: auto; padding: 8px 12px; border-bottom: 1px solid #73664c; }
 .controls-help-guide p { margin: 8px 0; }
 .controls-help-guide dl { margin: 0; }
 .controls-help-guide dt { margin-top: 10px; font-weight: bold; color: #e6be69; }

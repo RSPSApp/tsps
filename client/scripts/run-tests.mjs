@@ -9,7 +9,8 @@ import { fileURLToPath } from "node:url";
 
 const clientDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const testsDir = join(clientDir, "tests");
-const tsx = join(clientDir, "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
+// Run the CLI with Node directly: Windows .cmd shims require a shell.
+const tsx = fileURLToPath(import.meta.resolve("tsx/cli"));
 
 // Tests that are known to fail, each with the reason. Keep this short: a test belongs here only
 // until someone fixes it, and the summary lists every skipped test so none is forgotten.
@@ -31,7 +32,7 @@ for (const file of files) {
         continue;
     }
     const start = Date.now();
-    const result = spawnSync(tsx, [join("tests", file)], { cwd: clientDir, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [tsx, join("tests", file)], { cwd: clientDir, encoding: "utf8" });
     const seconds = ((Date.now() - start) / 1000).toFixed(1);
     if (result.status === 0) {
         passed++;

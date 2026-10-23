@@ -753,6 +753,7 @@ test('real ItemOnGroundManager respawns a captured bottle after four ticks', () 
   const items = new Map();
   const inventory = {
     getFreeSlots: () => (globalThis.__full ? 0 : 28),
+    getItems: () => [...items].map(([id, amount]) => new core.Item(id, amount)),
     getAmount: id => items.get(id) ?? 0,
     contains: id => (items.get(id) ?? 0) > 0,
     addItem: item => items.set(item.getId(), (items.get(item.getId()) ?? 0) + item.getAmount()),

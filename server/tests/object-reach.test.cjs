@@ -13,6 +13,7 @@ const { Location } = require('../dist/game/model/Location');
 const { TaskManager } = require('../dist/game/task/TaskManager');
 const { World } = require('../dist/game/World');
 const { ItemOnGroundManager } = require('../dist/game/entity/impl/grounditem/ItemOnGroundManager');
+const { ItemOnGround, State } = require('../dist/game/entity/impl/grounditem/ItemOnGround');
 const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
 const { Item } = require('../dist/game/model/Item');
 const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
@@ -457,22 +458,20 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
   let resets = 0;
   let removed = 0;
   const floorItem = new Item(33788, 1);
-  const groundItem = {
-    getItem: () => floorItem,
-    getPosition: () => new Location(100, 100, 0),
-    getPrivateArea: () => null,
-    isPendingRemoval: () => false,
-  };
+  const groundItem = new ItemOnGround(State.SEEN_BY_PLAYER, 'ObjectReachTest',
+    new Location(100, 100, 0), floorItem, true, -1, null);
+  const received = [];
   const player = {
+    getUsername: () => 'ObjectReachTest',
     getLocation: () => location,
     getSize: () => 1,
     getPrivateArea: () => null,
     getMovementQueue: () => ({ reset: () => { resets++; } }),
     getInventory: () => ({
       getFreeSlots: () => 1,
-      getItems: () => [],
+      getItems: () => received,
       getAmount: () => 0,
-      addItem: () => { inventoryAdds++; },
+      addItem: (item) => { inventoryAdds++; received.push(item.clone()); },
     }),
     getLastItemPickup: () => ({ reset() {} }),
   };

@@ -22,13 +22,17 @@ test('Telekinetic Grab takes the item when its projectile lands, not on the cast
     t.mock.method(Projectile.prototype, 'sendProjectile', () => {});
     t.mock.method(Sounds, 'sendSound', () => {});
     t.mock.method(CombatRange, 'withinApproachDistance', () => true);
-    t.mock.method(ItemOnGroundManager, 'deregister', () => { onGround = false; });
     for (const name of ['hasRunes', 'canReceiveGroundItem']) t.mock.method(listener, name, () => true);
     t.mock.method(listener, 'runeCosts', () => []);
     t.mock.method(listener, 'consumeRunes', () => {});
     t.mock.method(listener, 'findVisibleGroundItem', () => (onGround ? groundItem : null));
 
     const added = [];
+    t.mock.method(ItemOnGroundManager, 'transferToInventory', (_player, item) => {
+        onGround = false;
+        added.push(item.getItem().clone());
+        return 1;
+    });
     const messages = [];
     const sender = new Proxy({}, { get: (_, name) => (name === 'then' ? undefined : () => sender) });
     const player = {

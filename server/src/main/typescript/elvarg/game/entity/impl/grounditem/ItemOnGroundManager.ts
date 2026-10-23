@@ -168,6 +168,7 @@ export class ItemOnGroundManager {
             return;
         }
 
+        if (!this.canSee(player, groundItem)) return;
         if (PluginManager.emitGroundItemPickup({
             player,
             groundItem,
@@ -177,37 +178,55 @@ export class ItemOnGroundManager {
             handled: false,
         })) return;
 
+        if (this.transferToInventory(player, groundItem) <= 0) return;
+        Sounds.sendSound(player, Sound.PICK_UP_ITEM);
+        player.getLastItemPickup().reset();
+    }
+
+    /** Quantity this inventory can accept, using the same stack identity as addItem. */
+    public static inventoryCapacity(player: Player, item: Item): number {
         const inventory = player.getInventory();
-        const groundAmount = groundItem.getItem().getAmount();
-        const stackable = ItemDefinition.forId(itemId).isStackable();
-        const metadata = JSON.stringify(groundItem.getItem().getMeta() ?? null);
+        const definition = ItemDefinition.forId(item.getId());
+        if (item.getId() <= 0 || definition === ItemDefinition.DEFAULT || definition.getId() !== item.getId()) return 0;
+        const stackable = definition.isStackable();
+        const metadata = JSON.stringify(item.getMeta() ?? null);
         const matchingStack = stackable ? inventory.getItems().find(item =>
-            item.getId() === itemId && JSON.stringify(item.getMeta() ?? null) === metadata
+            item.getId() === definition.getId() && JSON.stringify(item.getMeta() ?? null) === metadata
         ) : undefined;
         // Use the same stack identity and limit as inventory addition. Stacks
         // with different metadata need a separate slot, even for the same id.
-        const capacity = stackable
+        return stackable
             ? matchingStack ? MAX_STACK_AMOUNT - matchingStack.getAmount()
                 : inventory.getFreeSlots() > 0 ? MAX_STACK_AMOUNT : 0
             : inventory.getFreeSlots();
-        const pickedUpAmount = Math.min(groundAmount, capacity);
+    }
+
+    /** Generic credit/removal bookkeeping; callers retain their own reach and timing rules. */
+    public static transferToInventory(player: Player, groundItem: ItemOnGround): number {
+        if (!World.getItems().includes(groundItem) || !this.canSee(player, groundItem)) return 0;
+        const inventory = player.getInventory(), item = groundItem.getItem();
+        const groundAmount = item.getAmount();
+        const pickedUpAmount = Math.min(groundAmount, this.inventoryCapacity(player, item));
         if (pickedUpAmount <= 0) {
             inventory.full();
-            return;
+            return 0;
         }
-
-        const pickedUpItem = groundItem.getItem().clone().setAmount(pickedUpAmount);
+        const itemId = item.getId(), metadata = JSON.stringify(item.getMeta() ?? null);
+        const matchingAmount = () => inventory.getItems().reduce((total, entry) => total +
+            (entry.getId() === itemId && JSON.stringify(entry.getMeta() ?? null) === metadata ? entry.getAmount() : 0), 0);
+        const before = matchingAmount();
+        const pickedUpItem = item.clone().setAmount(pickedUpAmount);
         inventory.addItem(pickedUpItem);
-        if (pickedUpAmount === groundAmount) {
+        const credited = Math.min(pickedUpAmount, Math.max(0, matchingAmount() - before));
+        if (credited <= 0) return 0;
+        if (credited === groundAmount) {
             ItemOnGroundManager.deregister(groundItem);
         } else {
             groundItem.setOldAmount(groundAmount);
-            groundItem.getItem().decrementAmountBy(pickedUpAmount);
+            item.decrementAmountBy(credited);
             ItemOnGroundManager.perform(groundItem, OperationType.ALTER);
         }
-
-        Sounds.sendSound(player, Sound.PICK_UP_ITEM);
-        player.getLastItemPickup().reset();
+        return credited;
     }
 
     public static registers(player: Player, item: Item): ItemOnGround {
@@ -283,7 +302,7 @@ export class ItemOnGroundManager {
         return !!owner && Misc.formatNameForProtocol(owner) === Misc.formatNameForProtocol(username);
     }
 
-    private static canSee(player: Player, item: ItemOnGround, includePendingRemoval = false): boolean {
+    public static canSee(player: Player, item: ItemOnGround, includePendingRemoval = false): boolean {
         if (!item || (!includePendingRemoval && item.isPendingRemoval()) || item.getPosition().getZ() !== player.getLocation().getZ()) return false;
         if (player.getPrivateArea() !== item.getPrivateArea() || item.getPosition().getDistance(player.getLocation()) > 64) return false;
         if (item.getState() === State.SEEN_BY_PLAYER) return this.isOwner(player.getUsername(), item);

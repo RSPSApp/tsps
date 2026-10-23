@@ -80,6 +80,7 @@ export type ReadonlyClientSnapshot = Readonly<{
     equipment: readonly HelperItem[];
     bank?: readonly HelperItem[];
     localPlayer: WorldTile & {
+        index: number;
         name: string;
         combatLevel?: number;
         gender?: number;

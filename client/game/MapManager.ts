@@ -45,6 +45,9 @@ export class MapManager<T extends MapSquare> {
     static readonly SCENE_STREAM_HALF_TILES = MapManager.SCENE_STREAM_SIZE_TILES >> 1;
     // OSRS preferences use 0..5 levels; distant scenery can request a wider static window.
     static readonly SCENE_EXPANDED_STEP_TILES = 8;
+    // The view waits for scene squares this close to the player (the default draw distance);
+    // farther squares fade in as they finish building.
+    static readonly SCENE_READY_RANGE_TILES = 25;
     static readonly SCENE_MAX_EXPANDED_LEVEL = 20;
     // Scene base rebases when local player exits [16, 88) in the 104x104 window.
     static readonly SCENE_REBASE_MIN_LOCAL_TILE = 16;
@@ -507,7 +510,7 @@ export class MapManager<T extends MapSquare> {
     private isTargetGridReady(frameCount: number): boolean {
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];
-            if (!this.isMapInView(mapId) || !this.isBaseSceneMap(mapId)) continue;
+            if (!this.gatesScene(mapId)) continue;
             if (this.invalidMapIds.has(mapId) || this.mapSquares.get(mapId)?.canRender(frameCount)) {
                 continue;
             }
@@ -525,10 +528,16 @@ export class MapManager<T extends MapSquare> {
     }
 
     /**
-     * Whether a square is part of the server scene rather than draw-distance padding. Padding
-     * squares (expanded map loading) fade in once built; the view and the loading overlay wait
-     * only for the scene itself, so a long draw distance doesn't lengthen logins and teleports.
+     * Whether the view (and the loading overlay) waits for this square: a server-scene square
+     * within the default draw distance of the player. Everything else in view, draw-distance
+     * padding or far scene squares, is built afterwards and fades in, so a long draw distance
+     * doesn't lengthen logins and teleports.
      */
+    private gatesScene(mapId: number): boolean {
+        return this.isBaseSceneMap(mapId) && this.isMapWithin(mapId, MapManager.SCENE_READY_RANGE_TILES);
+    }
+
+    /** Whether a square is part of the server's 104x104 scene rather than draw-distance padding. */
     private isBaseSceneMap(mapId: number): boolean {
         if (this.baseSceneMinMapX < 0) return true;
         const mapX = mapId >> 8;
@@ -538,11 +547,17 @@ export class MapManager<T extends MapSquare> {
     }
 
     private isMapInView(mapId: number): boolean {
+        return this.isMapWithin(mapId, this.viewRangeTiles);
+    }
+
+    /** Whether a square is within `rangeTiles` of the view (capped by the view range); a negative view range means unlimited. */
+    private isMapWithin(mapId: number, rangeTiles: number): boolean {
         if (this.viewRangeTiles < 0) return true;
+        const range = Math.min(rangeTiles, this.viewRangeTiles);
         const x = (mapId >> 8) * Scene.MAP_SQUARE_SIZE + 32;
         const z = (mapId & 0xff) * Scene.MAP_SQUARE_SIZE + 32;
         return Math.max(Math.abs(this.viewX - x) - 32, Math.abs(this.viewZ - z) - 32, 0) <=
-            this.viewRangeTiles + CHUNK_SIZE;
+            range + CHUNK_SIZE;
     }
 
     private commitTargetGridAsActive(): void {
@@ -787,14 +802,21 @@ export class MapManager<T extends MapSquare> {
             this.gridTransitionPending = true;
         }
 
-        // Foreground builds take priority over scenery that is still outside the view.
+        // Foreground builds take priority over scenery that is still outside the view, and the
+        // squares the view waits for are queued before the rest of it.
         let viewMapCount = 0;
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];
             if (!this.isMapInView(mapId)) continue;
             viewMapCount++;
             if (!this.activeGridMapIdSet.has(mapId)) this.gridTransitionPending = true;
-            this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+            if (this.gatesScene(mapId)) this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+        }
+        for (let i = 0; i < this.gridMapCount; i++) {
+            const mapId = this.gridMapIds[i];
+            if (this.isMapInView(mapId) && !this.gatesScene(mapId)) {
+                this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+            }
         }
         if (viewMapCount !== this.activeGridMapCount) this.gridTransitionPending = true;
 

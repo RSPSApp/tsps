@@ -435,6 +435,26 @@ function baseSceneGatesTheViewNotTheDrawDistance(): void {
     assert.equal(manager.getGridRevision(), revision, "joining padding does not rebuild the grid");
 }
 
+// A scene base that straddles map squares covers 3x3 of them, all inside a long draw distance.
+// The view waits only for the scene squares near the player, and those build first.
+function nearSceneSquaresGateAndBuildFirst(): void {
+    const queued: number[] = [];
+    const manager = new MapManager(4, (x, y) => { queued.push(getMapSquareId(x, y)); });
+    const camera = { getPosX: () => 3240, getPosZ: () => 3240 } as any;
+    const update = (frame: number) => manager.update(3240, 3240, camera, frame, 1, 3180, 3180, 3, 90);
+    const addMap = (id: number) => manager.addMap(id >> 8, id & 255, {
+        mapX: id >> 8, mapY: id & 255, canRender: () => true, delete() {},
+    });
+    const ids = (coords: number[][]) => new Set(coords.map(([x, y]) => getMapSquareId(x, y)));
+    const near = ids([[50, 50], [50, 51], [51, 50], [51, 51]]);
+    update(0);
+    assert.deepEqual(new Set(queued.slice(0, 4)), near, "the squares the view waits for are queued first");
+    for (const id of near) addMap(id);
+    update(1);
+    assert.equal(manager.isSceneReady(1), true, "far scene squares (49,x) must not hold the overlay");
+    assert.deepEqual(new Set(manager.visibleMaps.map(map => getMapSquareId(map.mapX, map.mapY))), near);
+}
+
 function duplicateLocReplayIsIgnored(): void {
     let refreshes = 0;
     const host = {
@@ -625,6 +645,7 @@ targetScenesPublishTogether();
 instanceReadinessExcludesThePreviousWorldAndBoatOverlays();
 foregroundLoadsBeforeBackgroundAndPublishesTogether();
 baseSceneGatesTheViewNotTheDrawDistance();
+nearSceneSquaresGateAndBuildFirst();
 duplicateLocReplayIsIgnored();
 locUpdateBeforeInitialMapDoesNotStartADuplicateMapTask();
 locReplayInvalidatesCompletedMapsWaitingToRender();

@@ -21,16 +21,19 @@ async function main(){
     manager.getInjector().provide(CLIENT_TOKEN,client);manager.loadCorePlugins([QuestHelperPlugin]); const plugin=manager.getPlugin(QuestHelperPlugin)!;
     assert.equal(manager.isEnabled(QuestHelperPlugin),false);bus.post(new GameTick());assert.equal(requests.length,0);
     await manager.setPluginEnabled(QuestHelperPlugin,true);assert.equal(manager.getInjector().get<ClientToolbar>(ClientToolbar).getNavigations().length,1);
+    network.lastRunEnergyState={weight:2.5} as any;client.inputManager={mouseX:42,mouseY:43};client.playerEcs.getAppearance=()=>({gender:1});
     plugin.selectQuest("cook");bus.post(new GameTick());const request=requests.find(x=>x.type==="evaluate");assert.ok(request);assert.equal(request.snapshot.bank,undefined,"unknown bank must be omitted");
+    assert.equal(request.snapshot.localPlayer.gender,1);assert.equal(request.snapshot.localPlayer.combatLevel,3);assert.equal(request.snapshot.weight,2.5);assert.deepEqual(request.snapshot.geometry.mouse,{x:42,y:43});
     const response={type:"result",protocol:1,session:request.session,sequence:request.sequence,questKey:"cook",sourceCommit:"abc",status:"active",activeStep:{id:"talk",text:["Talk"],targets:[{kind:"tile",x:3200,y:3200,plane:0}],requirements:[],dialogueChoices:[],widgets:[],overlays:[]},panels:[],diagnostics:[]};
     bus.post(new PluginMessage("quest-helper",response));assert.equal(plugin.getState().result?.status,"active");assert.equal(client.tileHighlightManager.getRenderEntries().length,1);
-    const nativeNow=Date.now;Date.now=()=>nativeNow()+2000;for(const listener of client.groundItems.mutationListeners)listener({kind:"quantity",oldQuantity:3,stack:{itemId:1944,quantity:2,tile:{x:3200,y:3200,level:0}}});bus.post(new GameTick());Date.now=nativeNow;assert.equal(requests.filter(x=>x.type==="evaluate").at(-1).events.find((event:any)=>event.type==="itemQuantityChanged").oldQuantity,3);
+    for(const listener of client.npcEcs.mutationListeners)listener({kind:"despawn",index:7});Object.assign(client,{npcTypeLoader:{load:()=>({id:10,name:"Guide",combatLevel:4})}});Object.assign(client.npcEcs,{getNpcTypeId:()=>10,getServerState:()=>({tileX:3200,tileY:3200,plane:0}),isLinked:()=>true,getServerId:()=>42,getSeqId:()=>-1,getRotation:()=>0,getInteractionIndex:()=>-1});for(const listener of client.npcEcs.mutationListeners)listener({kind:"appearance",index:7});const nativeNow=Date.now;Date.now=()=>nativeNow()+2000;for(const listener of client.groundItems.mutationListeners)listener({kind:"quantity",oldQuantity:3,stack:{itemId:1944,quantity:2,tile:{x:3200,y:3200,level:0}}});bus.post(new GameTick());Date.now=nativeNow;assert.equal(requests.filter(x=>x.type==="evaluate").at(-1).events.find((event:any)=>event.type==="itemQuantityChanged").oldQuantity,3);
+    assert.equal(requests.filter(x=>x.type==="evaluate").at(-1).events.find((event:any)=>event.type==="npcDespawned").ecsIndex,7);
+    assert.equal(requests.filter(x=>x.type==="evaluate").at(-1).events.find((event:any)=>event.type==="npcChanged").oldId,10);
     plugin.selectQuest("sheep");assert.equal(client.tileHighlightManager.getRenderEntries().length,0);bus.post(new PluginMessage("quest-helper",response));assert.equal(plugin.getState().result,null);
     assert.equal(config.getConfiguration("questhelper","selectedQuest"),"sheep");
     bus.post(new GameStateChanged(GameState.LOGIN_SCREEN));assert.equal(client.varManager.varpChangeListeners.size,0);assert.equal(plugin.getState().result,null);
     client.localPlayerName="B";bus.post(new GameTick());const current=requests.filter(x=>x.type==="evaluate").at(-1);assert.notEqual(current.session,request.session);bus.post(new PluginMessage("quest-helper",response));assert.equal(plugin.getState().result,null);
     await manager.setPluginEnabled(QuestHelperPlugin,false);assert.equal(manager.getInjector().get<ClientToolbar>(ClientToolbar).getNavigations().length,0);assert.equal(client.varManager.varpChangeListeners.size,0);assert.equal(client.tileHighlightManager.getRenderEntries().length,0);
-    network.socket=null as any;network.lastSkillsState=undefined;console.log("quest helper native lifecycle, preference and network isolation passed");
+    network.socket=null as any;network.lastSkillsState=undefined;network.lastRunEnergyState=undefined;console.log("quest helper native lifecycle, preference and network isolation passed");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
-

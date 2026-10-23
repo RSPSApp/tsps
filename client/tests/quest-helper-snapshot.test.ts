@@ -1,10 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { collectQuestHelperSnapshot, collectWidgetTree } from '../game/plugins/questhelper/QuestHelperSnapshot';
 const parent:any={uid:1,x:0,y:0,width:400,height:300,isHidden:false,children:[]};
-const child:any={uid:2,x:5,y:10,width:30,height:20,_absX:100,_absY:120,isHidden:false,text:'Choose',children:[]};
+const child:any={uid:2,id:1,parentUid:1,fileId:-1,childIndex:0,x:5,y:10,width:30,height:20,_absX:100,_absY:120,isHidden:false,text:'Choose',children:[]};
 parent.children.push(child); child.children.push(parent);
 const manager:any={getStaticChildrenByParentUid:()=>[],getDynamicChildrenByParent:(w:any)=>w.children ?? [],isEffectivelyHidden:()=>false};
-const tree=collectWidgetTree(parent,manager); assert.equal(tree.children?.[0].bounds?.x,100); assert.equal(tree.children?.[0].children?.length,0,'cycle does not recurse forever');
+const tree=collectWidgetTree(parent,manager); assert.equal(tree.dynamicChildren?.[0]?.bounds?.x,100); assert.equal(tree.dynamicChildren?.[0]?.dynamicChildren?.length,1,'cycle does not recurse forever');
 const ecs:any={getIndexForServerId:()=>0,getLevel:()=>0,getAnimActionSeqId:()=>-1,getAnimMovementSeqId:()=>-1,getRotation:()=>0,getInteractionIndex:()=>-1};
 const client:any={getControlledPlayerMovementTile:()=>({tileX:3200,tileY:3200}),controlledPlayerServerId:1,localPlayerName:'Tester',playerEcs:ecs,varManager:{values:Int32Array.from([0,5]),customVarbits:new Map([[42,{baseVar:1,startBit:0,endBit:2}]]),varbitLoader:{load:()=>undefined},getVarbit:()=>5},inventory:{getSlots:()=>[{slot:0,itemId:1944,quantity:1}]},equipment:{getSlots:()=>[]},bankInventory:{getSlots:()=>[]},npcEcs:{forEachActive:()=>{}},renderer:{getLocIdsAtTileAllLevels:()=>[]},groundItems:{getAllStacks:()=>[]},widgetManager:{...manager,rootInterface:-1,interfaceParents:new Map(),getAllGroupRoots:()=>[]}};
 const result=collectQuestHelperSnapshot(client,3,{baseX:3150,baseY:3150,plane:0},[{id:0,baseLevel:4,currentLevel:3,xp:400}],new Set([42,43]));

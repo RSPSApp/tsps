@@ -42,9 +42,15 @@ function QuestHelperIcon({ label }: {
 export function createQuestHelperNavigationButton(plugin: QuestHelperPlugin): NavigationButton { return NavigationButton.builder().tooltip("Quest Helper").icon(QuestHelperIcon).priority(6).panel(() => <QuestHelperPanel plugin={plugin}/>).build(); }
 export function visibleHelperWidgetBounds(widgets: readonly HelperWidget[], ids: ReadonlySet<number>, itemIds: ReadonlySet<number>): PixelBounds[] {
     const result: PixelBounds[] = [];
-    const walk = (widget: HelperWidget, ancestorHidden = false) => { const hidden = ancestorHidden || widget.hidden; if (!hidden && widget.bounds && (ids.has(widget.id) || (widget.itemId !== undefined && itemIds.has(widget.itemId))))
-        result.push(widget.bounds); for (const child of widget.children ?? [])
-        walk(child, hidden); };
+    const emitted=new Set<string>();
+    const walk = (widget: HelperWidget, ancestorHidden = false) => {
+        const hidden = ancestorHidden || widget.hidden;
+        if (!hidden && widget.bounds && (ids.has(widget.id) || (widget.itemId !== undefined && itemIds.has(widget.itemId)))) {
+            const key=`${widget.runtimeId ?? widget.id}:${widget.index ?? -1}`;
+            if(!emitted.has(key)){result.push(widget.bounds);emitted.add(key);}
+        }
+        for(const child of [...(widget.children ?? []),...(widget.staticChildren ?? []),...(widget.dynamicChildren ?? []),...(widget.nestedChildren ?? [])])if(child)walk(child,hidden);
+    };
     widgets.forEach(widget => walk(widget));
     return result;
 }

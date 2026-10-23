@@ -8,7 +8,7 @@ import { ClientToolbar } from "@runelite/client/ui/ClientToolbar";
 import type { NavigationButton } from "@runelite/client/ui/NavigationButton";
 import { encodeChunkedPluginMessage, ChunkedPluginMessageAssembler } from "../../../common/network/ChunkedPluginMessages";
 import { send } from "../../../network/serverConnection/connection/send";
-import { getLatestSkills, subscribeBank } from "../../../network/ServerConnection";
+import { getLatestSkills, getLatestRunEnergy, subscribeBank } from "../../../network/ServerConnection";
 import type { OsrsClient } from "../../OsrsClient";
 import { ClientState } from "../../ClientState";
 import type { OrderedClientEvent, ReadonlyClientSnapshot } from "./QuestHelperProtocol";
@@ -184,7 +184,9 @@ export class QuestHelperPlugin extends Plugin {
             for (const item of [...snapshot.inventory, ...snapshot.equipment])
                 this.itemDefinitionIds.add(item.id);
             const definitions = collectQuestHelperDefinitions(this.client, { items: this.itemDefinitionIds, objects: this.objectDefinitionIds, npcs: this.npcDefinitionIds });
-            this.snapshot = { ...snapshot, ...definitions, bank: this.knownBank ? snapshot.bank : undefined, containers: { 93: snapshot.inventory, 94: snapshot.equipment, ...(this.knownBank ? { 95: snapshot.bank ?? [] } : {}) }, localPlayer: { ...snapshot.localPlayer, combatLevel: skills.combatLevel }, geometry: this.geometryRequested ? collectQuestHelperGeometry(this.client, ClientState, true) : { x: 0, y: 0, width: this.client.renderer.canvas.width, height: this.client.renderer.canvas.height } };
+            const weight=getLatestRunEnergy()?.weight;
+            const mouse=this.client.inputManager?{x:this.client.inputManager.mouseX,y:this.client.inputManager.mouseY}:undefined;
+            this.snapshot = { ...snapshot, ...definitions, mouse, weight, combatLevel:skills.combatLevel, bank: this.knownBank ? snapshot.bank : undefined, containers: { 93: snapshot.inventory, 94: snapshot.equipment, ...(this.knownBank ? { 95: snapshot.bank ?? [] } : {}) }, localPlayer: { ...snapshot.localPlayer, weight, combatLevel: skills.combatLevel }, geometry: this.geometryRequested ? collectQuestHelperGeometry(this.client, ClientState, true) : { x: 0, y: 0, mouse, width: this.client.renderer.canvas.width, height: this.client.renderer.canvas.height } };
             const events = this.events.drain();
             events.push({ type: "gameTick", tick: this.tick });
             this.lastSent = now;
@@ -224,10 +226,11 @@ export class QuestHelperPlugin extends Plugin {
         this.listen(this.client.npcEcs.mutationListeners, event => {
             const names = { spawn: "npcSpawned", despawn: "npcDespawned", composition: "npcChanged", animation: "animationChanged", interacting: "interactingChanged", overhead: "overheadTextChanged", appearance: "npcChanged" };
             try {
-                this.record({ type: names[event.kind], tick: this.tick, npc: collectHelperNpc(this.client, event.index), oldId: event.oldId, text: event.text });
+                const npc=collectHelperNpc(this.client, event.index);
+                this.record({ type: names[event.kind], tick: this.tick, index:npc.index, ecsIndex:event.index, npc, oldId: event.kind === "appearance" ? npc.id : event.oldId, text: event.text });
             }
             catch {
-                this.record({ type: names[event.kind], tick: this.tick, index: event.index });
+                this.record({ type: names[event.kind], tick: this.tick, ecsIndex: event.index });
             }
         });
         this.listen(this.client.groundItems.mutationListeners, event => this.record({ type: event.kind === "spawn" ? "itemSpawned" : event.kind === "despawn" ? "itemDespawned" : "itemQuantityChanged", tick: this.tick, oldQuantity: event.oldQuantity, item: { id: event.stack.itemId, quantity: event.stack.quantity, x: event.stack.tile.x, y: event.stack.tile.y, plane: event.stack.tile.level } }));

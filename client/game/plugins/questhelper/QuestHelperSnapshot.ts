@@ -7,12 +7,38 @@ import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import type { HelperNpc, HelperWidget, ReadonlyClientSnapshot } from "./QuestHelperProtocol";
 const MAX_WIDGETS = 12000;
 
-export function collectWidgetTree(node: WidgetNode, manager: WidgetManager, visited = new Set<WidgetNode>()): HelperWidget {
-    if (visited.size >= MAX_WIDGETS)
-        throw new Error("Widget snapshot exceeds the safety bound.");
-    visited.add(node);
-    const children = [...manager.getStaticChildrenByParentUid(node.uid), ...manager.getDynamicChildrenByParent(node)];
-    return { id: node.uid, text: node.text, hidden: manager.isEffectivelyHidden(node.uid), bounds: { x: node._absX ?? node.x, y: node._absY ?? node.y, width: node._absWidth ?? node.width, height: node._absHeight ?? node.height }, itemId: node.itemId, itemQuantity: node.itemQuantity, children: [...new Set(children)].filter(child => !visited.has(child)).map(child => collectWidgetTree(child, manager, visited)) };
+export function collectWidgetTree(node: WidgetNode, manager: WidgetManager, emitted = new Set<WidgetNode>()): HelperWidget {
+    const path = new Set<WidgetNode>();
+    let count = 0;
+    const visit = (current: WidgetNode): HelperWidget | null => {
+        if (path.has(current)) return null;
+        if (++count > MAX_WIDGETS || (!emitted.has(current) && emitted.size >= MAX_WIDGETS)) throw new Error("Widget snapshot exceeds the safety bound.");
+        emitted.add(current);
+        path.add(current);
+        try {
+            const mounted = manager.getSubInterface?.(current.uid);
+            const staticChildren = manager.getStaticChildrenByParentUid(current.uid);
+            // Preserve the native sparse runtime array. The manager's dense accessor
+            // intentionally strips null slots and IF1 references for rendering.
+            const dynamicChildren = Array.from(current.children ?? [], child => child &&
+                child.parentUid === current.uid && ((child.childIndex ?? -1) >= 0 || child.fileId === -1)
+                ? visit(child) : null);
+            return {
+                id: current.id ?? current.uid, runtimeId: current.uid, index: current.childIndex ?? -1,
+                parentId: current.parentUid, fileId:current.fileId, groupId:current.groupId, originalX: current.rawX, originalY: current.rawY,
+                originalWidth: current.rawWidth, originalHeight: current.rawHeight,
+                animationId: current.sequenceId ?? current.modelAnim, modelId: current.modelId,
+                name: current.opBase ?? current.dataText, spriteId: current.spriteId, type: current.type,
+                text: current.text, hidden: manager.isEffectivelyHidden(current.uid),
+                bounds: {x: current._absX ?? current.x, y: current._absY ?? current.y,
+                    width: current._absWidth ?? current.width, height: current._absHeight ?? current.height},
+                itemId: current.itemId, itemQuantity: current.itemQuantity ?? current.itemAmount,
+                staticChildren: staticChildren.map(visit), dynamicChildren,
+                nestedChildren: mounted ? manager.getAllGroupRoots(mounted.group).map(visit) : [],
+            };
+        } finally { path.delete(current); }
+    };
+    return visit(node)!;
 }
 export function collectHelperNpc(client: OsrsClient, index: number): HelperNpc {
     const ecs = client.npcEcs;
@@ -20,7 +46,7 @@ export function collectHelperNpc(client: OsrsClient, index: number): HelperNpc {
     const base = client.npcTypeLoader.load(id);
     const type = base.transforms ? base.transform(client.varManager, client.npcTypeLoader) : base;
     const server = ecs.getServerState(index);
-    return { index: ecs.isLinked(index) ? ecs.getServerId(index) : -index - 1, id, transformedId: type?.id ?? -1, name: type?.name ?? "", x: server?.tileX ?? Math.floor(ecs.getWorldX(index) / 128), y: server?.tileY ?? Math.floor(ecs.getWorldY(index) / 128), plane: server?.plane ?? ecs.getLevel(index), animation: ecs.getSeqId(index), orientation: ecs.getRotation(index), combatLevel: type?.combatLevel };
+    return { index: ecs.isLinked(index) ? ecs.getServerId(index) : -index - 1, ecsIndex:index, id, transformedId: type?.id ?? -1, name: type?.name ?? "", x: server?.tileX ?? Math.floor(ecs.getWorldX(index) / 128), y: server?.tileY ?? Math.floor(ecs.getWorldY(index) / 128), plane: server?.plane ?? ecs.getLevel(index), animation: ecs.getSeqId(index), orientation: ecs.getRotation(index), combatLevel: type?.combatLevel, interactingIndex:ecs.getInteractionIndex(index) };
 }
 /** Runs synchronously at the game-tick boundary; never changes cache, actors, vars or widgets. */
 export function collectQuestHelperSnapshot(client: OsrsClient, tick: number, scene: {
@@ -77,6 +103,6 @@ export function collectQuestHelperSnapshot(client: OsrsClient, tick: number, sce
         for (const root of manager.getAllGroupRoots(group))
             if (!visited.has(root))
                 widgets.push(collectWidgetTree(root, manager, visited));
-    return { varps, varbits, varbitDefinitions, inventory: itemSlots(client.inventory), equipment: itemSlots(client.equipment), bank: itemSlots(client.bankInventory), localPlayer: { name: client.localPlayerName, x: tile.tileX, y: tile.tileY, plane: client.playerEcs.getLevel(playerIndex), animation: client.playerEcs.getAnimActionSeqId(playerIndex), poseAnimation: client.playerEcs.getAnimMovementSeqId(playerIndex), orientation: client.playerEcs.getRotation(playerIndex), interactingIndex: client.playerEcs.getInteractionIndex(playerIndex) }, skills, npcs, objects, groundItems: client.groundItems.getAllStacks().map(item => ({ id: item.itemId, quantity: item.quantity, x: item.tile.x, y: item.tile.y, plane: item.tile.level })), widgets, baseX: scene.baseX, baseY: scene.baseY, plane: scene.plane, tick, instanceTemplateChunks: scene.instanceTemplateChunks ? scene.instanceTemplateChunks.map(plane => plane.map(row => [...row])) : undefined };
+    const gender=client.playerEcs.getAppearance?.(playerIndex)?.gender;
+    return { varps, varbits, varbitDefinitions, gender, inventory: itemSlots(client.inventory), equipment: itemSlots(client.equipment), bank: itemSlots(client.bankInventory), localPlayer: { name: client.localPlayerName, gender, x: tile.tileX, y: tile.tileY, plane: client.playerEcs.getLevel(playerIndex), animation: client.playerEcs.getAnimActionSeqId(playerIndex), poseAnimation: client.playerEcs.getAnimMovementSeqId(playerIndex), orientation: client.playerEcs.getRotation(playerIndex), interactingIndex: client.playerEcs.getInteractionIndex(playerIndex) }, skills, npcs, objects, groundItems: client.groundItems.getAllStacks().map(item => ({ id: item.itemId, quantity: item.quantity, x: item.tile.x, y: item.tile.y, plane: item.tile.level })), widgets, baseX: scene.baseX, baseY: scene.baseY, plane: scene.plane, tick, instanceTemplateChunks: scene.instanceTemplateChunks ? scene.instanceTemplateChunks.map(plane => plane.map(row => [...row])) : undefined };
 }
-

@@ -11,19 +11,38 @@ export type HelperItem = {
 };
 export type HelperNpc = WorldTile & {
     index: number;
+    ecsIndex: number;
     id: number;
     transformedId?: number;
     name: string;
     animation?: number;
     orientation?: number;
     combatLevel?: number;
+    interactingIndex?: number;
 };
 export type HelperWidget = {
     id: number;
+    runtimeId?: number;
+    index?: number;
+    parentId?: number;
+    fileId?: number;
+    groupId?: number;
+    originalX?: number;
+    originalY?: number;
+    originalWidth?: number;
+    originalHeight?: number;
+    animationId?: number;
+    modelId?: number;
+    name?: string;
+    spriteId?: number;
+    type?: number;
     text?: string;
     hidden?: boolean;
     bounds?: PixelBounds;
     children?: HelperWidget[];
+    staticChildren?: (HelperWidget | null)[];
+    dynamicChildren?: (HelperWidget | null)[];
+    nestedChildren?: (HelperWidget | null)[];
     itemId?: number;
     itemQuantity?: number;
 };
@@ -34,6 +53,7 @@ export type PixelBounds = {
     height: number;
 };
 export type HelperGeometry = PixelBounds & {
+    mouse?:{x:number;y:number};
     baseX?:number;baseY?:number;projectionType?:"perspective"|"orthographic";gpu?:boolean;
     cameraX?:number;cameraY?:number;cameraZ?:number;cameraPitch?:number;cameraYaw?:number;
     cameraFpX?:number;cameraFpY?:number;cameraFpZ?:number;cameraFpPitch?:number;cameraFpYaw?:number;
@@ -44,6 +64,10 @@ export type HelperGeometry = PixelBounds & {
     loadedTilesPacked?:{encoding:"bitset-lsb-base64";shape:[4,104,104];data:string};
 };
 export type ReadonlyClientSnapshot = Readonly<{
+    mouse?: {x:number;y:number};
+    weight?: number;
+    gender?: number;
+    combatLevel?: number;
     varps: Readonly<Record<string, number>>;
     varbits: Readonly<Record<string, number>>;
     varbitDefinitions?: Readonly<Record<string, {
@@ -58,6 +82,8 @@ export type ReadonlyClientSnapshot = Readonly<{
     localPlayer: WorldTile & {
         name: string;
         combatLevel?: number;
+        gender?: number;
+        weight?: number;
         animation?: number;
         poseAnimation?: number;
         orientation?: number;
@@ -226,7 +252,7 @@ const overlay = (v: unknown): boolean => {
 };
 const step = (v: unknown): boolean => obj(v) && str(v.id) && list(v.text, str) && list(v.targets, target) && list(v.requirements, requirement) && list(v.dialogueChoices, v => obj(v) && str(v.text) && optional(v, "index", int)) && list(v.widgets, v => obj(v) && int(v.id) && optional(v, "bounds", bounds) && optional(v, "label", str)) && list(v.overlays, overlay);
 export function parseHelperResponse(value: unknown): HelperResponse | null {
-    if (!obj(value) || value.protocol !== 1 || !str(value.session) || !str(value.questKey) || !str(value.sourceCommit) || !int(value.sequence) || value.sequence < 1 || !["active", "complete", "unsupported", "unavailable"].includes(value.status as string) || !(value.activeStep === null || step(value.activeStep)) || !list(value.panels, v => obj(v) && str(v.title) && optional(v, "text", v => list(v, str)) && optional(v, "requirements", v => list(v, requirement))) || !list(value.diagnostics, diagnostic) || !optional(value, "requests", v => list(v, r => obj(r) && typeof r.kind === "string" && /^(geometry|varbit|varbitDefinition|itemDefinitions|objectDefinitions|npcDefinitions|widgetBounds|questState|container)(\.[a-zA-Z][a-zA-Z0-9]{0,63})?$/.test(r.kind) && int(r.id) && r.id >= 0)))
+    if (!obj(value) || value.protocol !== 1 || !str(value.session) || !str(value.questKey) || !str(value.sourceCommit) || !int(value.sequence) || value.sequence < 1 || !["active", "complete", "unsupported", "unavailable"].includes(value.status as string) || !(value.activeStep === null || step(value.activeStep)) || !list(value.panels, v => obj(v) && str(v.title) && optional(v, "text", v => list(v, str)) && optional(v, "requirements", v => list(v, requirement))) || !list(value.diagnostics, diagnostic) || !optional(value, "requests", v => list(v, r => obj(r) && typeof r.kind === "string" && /^(geometry|varbit|varbitDefinition|itemDefinitions|objectDefinitions|npcDefinitions|widget|widgetBounds|questState|container)(\.[a-zA-Z][a-zA-Z0-9]{0,63})?$/.test(r.kind) && int(r.id) && r.id >= 0)))
         return null;
     // Copy across the trust boundary; callers cannot mutate in-flight results.
     return JSON.parse(JSON.stringify(value)) as HelperResponse;

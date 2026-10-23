@@ -16,6 +16,7 @@ export function collectQuestHelperGeometry(client: OsrsClient, scene: {baseX:num
     const pitch=camera.getScenePitchAngle(),yaw=camera.yaw;
     const geometry:HelperGeometry={
         x:0,y:0,width:renderer.canvas.width,height:renderer.canvas.height,
+        mouse: client.inputManager ? {x:client.inputManager.mouseX,y:client.inputManager.mouseY}:undefined,
         baseX:scene.baseX,baseY:scene.baseY,projectionType:camera.projectionType===0?"perspective":"orthographic",
         gpu:true,cameraX:Math.trunc(x),cameraY:Math.trunc(y),cameraZ:Math.trunc(z),cameraPitch:Math.trunc(pitch),cameraYaw:Math.trunc(yaw),
         cameraFpX:x,cameraFpY:y,cameraFpZ:z,cameraFpPitch:pitch*Math.PI/1024,cameraFpYaw:yaw*Math.PI/1024,

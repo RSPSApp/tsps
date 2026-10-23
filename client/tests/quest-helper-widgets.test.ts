@@ -1,0 +1,15 @@
+import { strict as assert } from 'node:assert';
+import { collectWidgetTree } from '../game/plugins/questhelper/QuestHelperSnapshot';
+import { parseHelperResponse } from '../game/plugins/questhelper/QuestHelperProtocol';
+const parent:any={uid:100,id:100,parentUid:-1,fileId:4,childIndex:-1,x:20,y:30,rawX:2,rawY:3,width:100,height:50,isHidden:false,sequenceId:91,modelId:17,opBase:'Puzzle',spriteId:42,children:new Array(5).fill(null)};
+const dynamic:any={uid:900,id:100,parentUid:100,fileId:-1,childIndex:3,x:8,y:9,rawX:5,rawY:6,width:10,height:12,isHidden:false,text:'Move tile',modelAnim:92,children:[]};
+const linked:any={uid:101,id:101,parentUid:100,fileId:5,childIndex:-1,x:0,y:0,width:1,height:1,isHidden:false};
+const nested:any={uid:200,id:200,parentUid:-1,fileId:0,childIndex:-1,x:0,y:0,width:2,height:2,isHidden:false};
+parent.children[3]=dynamic;parent.children[4]=linked;dynamic.children=[parent];
+const manager:any={isEffectivelyHidden:()=>false,getStaticChildrenByParentUid:(id:number)=>id===100?[linked,dynamic]:id===900?[parent]:[],getDynamicChildrenByParent:()=>{throw new Error('dense runtime children lose holes');},getSubInterface:(id:number)=>id===100?{group:2}:undefined,getAllGroupRoots:()=>[nested]};
+const tree=collectWidgetTree(parent,manager);
+assert.equal(tree.originalX,2);assert.equal(tree.originalY,3);assert.equal(tree.animationId,91);assert.equal(tree.modelId,17);assert.equal(tree.name,'Puzzle');assert.equal(tree.spriteId,42);assert.equal(tree.index,-1);
+assert.equal(tree.dynamicChildren?.length,5);assert.equal(tree.dynamicChildren?.[0],null);assert.equal(tree.dynamicChildren?.[3]?.index,3);assert.equal(tree.dynamicChildren?.[3]?.id,100);assert.equal(tree.dynamicChildren?.[3]?.runtimeId,900);assert.equal(tree.dynamicChildren?.[3]?.originalX,5);assert.equal(tree.dynamicChildren?.[3]?.animationId,92);assert.equal(tree.dynamicChildren?.[4],null,'IF1 linked static child is not a runtime child');
+assert.equal(tree.staticChildren?.[1]?.runtimeId,900,'shared node is preserved independently in both typed arrays');assert.equal(tree.nestedChildren?.[0]?.id,200);assert.equal(tree.dynamicChildren?.[3]?.staticChildren?.[0],null,'path-local cycle terminates without losing other roles');assert.equal(tree.children,undefined,'legacy duplication is omitted');
+const result:any={protocol:1,session:'s',sequence:1,questKey:'q',sourceCommit:'abc',status:'unavailable',activeStep:null,panels:[],diagnostics:[],requests:[{kind:'widget.originalX',id:100}]};assert.ok(parseHelperResponse(result));
+console.log('quest helper native widget fields, typed child arrays and requests passed');

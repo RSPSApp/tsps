@@ -16,7 +16,7 @@ class PrivateArea {
 }
 
 function fixture() {
-  const items = [new Item(23184), new Item(23184)], attributes = new Map(), messages = [], queue = [];
+  const items = [new Item(23184), new Item(23184)], attributes = new Map(), messages = [], queue = [], events = new Map();
   const player = {
     isRegistered: () => true, getHitpoints: () => 10, isPlayer: () => true, getAsPlayer() { return this; },
     getArea() { return this.area; }, getPrivateArea() { return this.area; },
@@ -28,12 +28,14 @@ function fixture() {
   };
   const core = { ItemIdentifiers: {MIMIC: 23184, MAHOGANY_PLANK: 8782}, NpcIdentifiers: {THE_MIMIC: 7979, THE_MIMIC_2: 8633},
     ObjectIdentifiers: {}, PrivateArea, Boundary: class {}, Location, World: {getRemoveNPCQueue: () => queue},
-    Item, ItemDefinition: {forId: () => ({isStackable: () => true, getNoteId: () => -1, getName: () => "Coins"})} };
-  const api = {core, registerArea() {}, onObjectInteraction() {}, onCustomEvent() {}, persistAttribute() {}, onItemAction() {},
-    emitCustomEvent(name, event) { if (name === "npc-drops:roll-table") event.drops.push({itemId: 995, amount: 42}); },
+    Item, ItemDefinition: {forId: id => ({getId: () => id, isStackable: () => true, getNoteId: () => -1, getName: () => "Coins"})} };
+  const api = {core, registerArea() {}, onObjectInteraction() {}, persistAttribute() {}, onItemAction() {},
+    onCustomEvent(name, handler) { if (!events.has(name)) events.set(name, []); events.get(name).push(handler); },
+    emitCustomEvent(name, event) { for (const handler of events.get(name) ?? []) handler(event); },
     spawnNpc: definition => ({ hp: 100, getId: () => definition.id, isRegistered: () => true, getHitpoints() { return this.hp; },
       getPrivateArea() { return this.area; }, getArea() { return this.area; }, setNpcTransformationId() {}, setFlag() {}, getCombat: () => ({attack() {}}) }) };
   Shared.bind(api); Lair.attach(api); Reward.attach(api);
+  require("../plugins/treasuretrails/RewardCaskets.plugin").register(api);
   State.initialize(items[0], "master", 7);
   State.initialize(items[1], "elite", 6);
   const first = items[0], second = items[1];
@@ -97,10 +99,12 @@ test("a simultaneous player and boss death keeps the victory and charges no atte
 test("opening a victorious second Mimic consumes its slot and leaves the first casket untouched", () => {
   const f = fixture();
   State.defeat(f.player, f.second, f.b.id);
-  Reward.openMimic({player: f.player, slot: 1, item: f.second});
+  const original = Math.random;
+  try { Math.random = () => 0.1; Reward.openMimic({player: f.player, slot: 1, item: f.second}); }
+  finally { Math.random = original; }
   assert.equal(f.items[0], f.first);
-  assert.equal(f.items[1].getId(), 995);
-  assert.equal(f.items[1].getAmount(), 42);
+  assert.equal(f.items[1].getId(), 1079);
+  assert.equal(f.items[1].getAmount(), 1);
   assert.equal(State.forOpen(f.player, f.first).defeated, false);
   assert.equal(f.attributes.get(State.LEDGER_ATTRIBUTE)[f.b.id], undefined);
 });

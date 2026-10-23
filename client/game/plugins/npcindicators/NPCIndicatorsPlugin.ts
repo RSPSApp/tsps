@@ -31,6 +31,8 @@ export class NPCIndicatorsPlugin extends Plugin {
     private readonly config = this.manager.getConfig(NPCIndicatorsConfig);
     private readonly client: OsrsClient;
     private usedSlots = 0;
+    private readonly trackedNpcs = new Map<number, number>();
+    private tilesBySlot = new Map<number, Set<number>>();
     // Reserved exclusively for this plugin; clearing never removes server or quest markers.
     private readonly firstSlot = 62000;
 
@@ -47,6 +49,8 @@ export class NPCIndicatorsPlugin extends Plugin {
     private clear(): void {
         for (let i = 0; i < this.usedSlots; i++) this.client.tileHighlightManager.clear(this.firstSlot + i);
         this.usedSlots = 0;
+        this.trackedNpcs.clear();
+        this.tilesBySlot.clear();
     }
     onGameTick(): void {
         this.clear();
@@ -66,9 +70,34 @@ export class NPCIndicatorsPlugin extends Plugin {
             const type = base?.transforms ? base.transform(client.varManager, client.npcTypeLoader) : base;
             const rule = type && byName.get(String(type.name ?? "").replace(/<[^>]*>/g, "").trim().toLowerCase());
             if (!rule) continue;
+            this.trackedNpcs.set(id, rule.slot);
+        }
+        this.onPostClientTick();
+    }
+
+    /** PostClientTick runs after NPC interpolation; ClientTick still sees the previous position. */
+    onPostClientTick(): void {
+        if (!this.isStarted() || this.client.gameState !== 30) { this.clear(); return; }
+        const client = this.client;
+        const local = client.playerEcs.getIndexForServerId(client.controlledPlayerServerId);
+        if (local === undefined) { this.clear(); return; }
+        const plane = client.playerEcs.getLevel(local);
+        const next = new Map<number, Set<number>>();
+        for (const [id, slot] of this.trackedNpcs) {
+            if (client.npcEcs.isActive?.(id) === false || client.npcEcs.getLevel(id) !== plane) continue;
             const x = client.npcEcs.getWorldX(id) >> 7;
             const y = client.npcEcs.getWorldY(id) >> 7;
-            client.tileHighlightManager.set((plane << 28) | (x << 14) | y, rule.slot, 0);
+            let tiles = next.get(slot);
+            if (!tiles) { tiles = new Set<number>(); next.set(slot, tiles); }
+            tiles.add((plane << 28) | (x << 14) | y);
         }
+        // Compare per-slot sets so overlapping NPCs retain their shared tile when one moves.
+        for (const [slot, tiles] of this.tilesBySlot) for (const coord of tiles) {
+            if (!next.get(slot)?.has(coord)) client.tileHighlightManager.remove(coord, slot, 0);
+        }
+        for (const [slot, tiles] of next) for (const coord of tiles) {
+            if (!this.tilesBySlot.get(slot)?.has(coord)) client.tileHighlightManager.set(coord, slot, 0);
+        }
+        this.tilesBySlot = next;
     }
 }

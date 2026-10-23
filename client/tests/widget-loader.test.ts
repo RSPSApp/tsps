@@ -24,10 +24,16 @@ const Events = require("../../server/plugins/npcs/random-events/Common.RandomEve
 const { Location } = require("../../server/dist/game/model/Location");
 const manager = new WidgetManager(cache, new WidgetLoader(cache));
 const location = new Location(3222, 3222, 0);
+const attributes = new Map<string, unknown>();
+const persistedAttributes = new Map<string, unknown>();
 let npc: any, interfaceId = -1;
 const player = {
     isRegistered: () => true, getHitpoints: () => 10, busy: () => false,
     getLocation: () => location, getUsername: () => "WidgetTest",
+    getAttribute: (key: string) => attributes.get(key),
+    setAttribute(key: string, value: unknown) {
+        if (value == null) attributes.delete(key); else attributes.set(key, value);
+    },
     getCombat: () => ({ getTarget: () => null, getAttacker: () => null }),
     getInterfaceId: () => interfaceId, sendMessage() {},
     getPacketSender: () => ({
@@ -44,6 +50,7 @@ Events.initialize({
     core: { Location,
         NpcIdentifiers: require("../../server/dist/util/NpcIdentifiers").NpcIdentifiers,
         ItemIdentifiers: require("../../server/dist/util/ItemIdentifiers").ItemIdentifiers },
+    persistAttribute(key: string, defaultValue?: unknown) { persistedAttributes.set(key, defaultValue); },
     emitCustomEvent() {}, getRegionManager: () => ({ blocked: () => false, canMovestart: () => true }),
     spawnNpc(definition: any) {
         return npc = { getOwner: () => definition.owner, getLocation: () => location,
@@ -51,9 +58,12 @@ Events.initialize({
     },
     removeNpc() {},
 });
+assert.ok(persistedAttributes.has("random-events:next-at"), "cooldown must be registered for persistence");
+assert.equal(persistedAttributes.get("random-events:return-location"), null);
 for (const [index, group, children] of [[1, 297, [6, 7, 8, 9, 10, 11, 12]], [4, 184, [8, 9, 10]]] as const) {
     Events.spawnCommand({ player, parts: ["randevt", String(index)] });
     Events.talk({ player, npc });
+    assert.equal(interfaceId, group, "the real event must open the interface under test");
     for (const child of children) {
         const widget = manager.getWidgetByUid((group << 16) | child)!;
         const flags = manager.getWidgetFlags(widget);

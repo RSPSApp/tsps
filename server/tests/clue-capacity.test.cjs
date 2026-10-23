@@ -245,3 +245,50 @@ test("retrieval owners expose stored items without consuming or changing them, a
     assert.equal(JSON.stringify(saved), before, key);
   }
 });
+
+for (const [metadata, freeSlots, shouldOpen] of [[{source: "old"}, 0, false], [null, 0, true], [{source: "old"}, 1, true]]) {
+  test(`nest opening reserves both outputs with ${JSON.stringify(metadata)} box metadata and ${freeSlots} free slots`, () => {
+    const f = fixture(), I = core.ItemIdentifiers, box = I.SCROLL_BOX_BEGINNER_, nest = I.CLUE_NEST_BEGINNER_;
+    require("../plugins/skills/woodcutting/ClueNests.Woodcutting").attach(f.api);
+    const existing = new core.Item(box, 1, metadata), source = new core.Item(nest);
+    f.inventory.setItem(0, existing); f.inventory.setItem(1, source);
+    for (let slot = 2; slot < 28 - freeSlots; slot++) f.inventory.setItem(slot, new core.Item(385));
+    const before = JSON.stringify(f.inventory.getItems());
+    f.actions.get("Clue nest (beginner)").Open({player: f.player, slot: 1, itemId: nest, item: source});
+    if (!shouldOpen) {
+      assert.equal(JSON.stringify(f.inventory.getItems()), before, "failed reservation preserves the complete inventory");
+      assert.equal(f.inventory.getAmount(I.BIRD_NEST_6), 0);
+    } else {
+      assert.equal(f.inventory.getAmount(nest), 0); assert.equal(f.inventory.getAmount(box), 2);
+      assert.equal(f.inventory.getAmount(I.BIRD_NEST_6), 1, "the empty nest must never be lost");
+      assert.deepEqual(existing.getMeta(), metadata);
+    }
+  });
+}
+
+for (const [name, idName] of [["Clue geode (beginner)", "CLUE_GEODE_BEGINNER_"],
+  ["Clue bottle (beginner)", "CLUE_BOTTLE_BEGINNER_"], ["Clue nest (beginner)", "CLUE_NEST_BEGINNER_"]]) {
+  test(`${name} preserves its source when the output's matching stack is capped`, () => {
+    const f = fixture(), I = core.ItemIdentifiers;
+    const {MAX_STACK_AMOUNT} = require("../dist/game/model/container/StackType");
+    if (name.includes("geode")) require("../plugins/skills/mining/ClueGeodes.Mining").attach(f.api);
+    if (name.includes("nest")) require("../plugins/skills/woodcutting/ClueNests.Woodcutting").attach(f.api);
+    const source = new core.Item(I[idName]);
+    f.inventory.setItem(0, new core.Item(I.SCROLL_BOX_BEGINNER_, MAX_STACK_AMOUNT));
+    f.inventory.setItem(1, source);
+    const before = JSON.stringify(f.inventory.getItems());
+    f.actions.get(name).Open({player: f.player, slot: 1, itemId: I[idName], item: source});
+    assert.equal(JSON.stringify(f.inventory.getItems()), before, "a capped output cannot consume the vessel even with free slots");
+  });
+}
+
+test("vessel opening rechecks the clicked source after quest callbacks move it", () => {
+  const f = fixture(), I = core.ItemIdentifiers, source = new core.Item(I.CLUE_BOTTLE_BEGINNER_);
+  f.inventory.setItem(0, source);
+  f.api.onCustomEvent("quest:is-complete", () => {
+    f.inventory.setItem(0, new core.Item(385)); f.inventory.setItem(1, source);
+  });
+  f.actions.get("Clue bottle (beginner)").Open({player: f.player, slot: 0, itemId: source.getId(), item: source});
+  assert.equal(f.inventory.getItems()[0].getId(), 385); assert.equal(f.inventory.getItems()[1], source);
+  assert.equal(f.inventory.getAmount(I.SCROLL_BOX_BEGINNER_), 0);
+});

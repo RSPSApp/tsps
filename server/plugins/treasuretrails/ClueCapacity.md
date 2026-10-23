@@ -13,6 +13,13 @@ Office and the implemented item retrieval services. The generic
 owner without changing that storage. Current owners: Zulrah, Nightmare, Yama,
 Theatre of Blood and Hespori.
 
+Vessel opening reserves every output before consuming the clicked nest, bottle
+or geode. Outputs have no metadata: a tagged box stack needs a separate slot,
+and a matching stack must have capacity below the item limit. A nest also
+needs room for its empty-nest output on members worlds. Reservation counts the
+slot freed by consuming a single vessel, and rechecks the clicked source after
+quest/storage callbacks. Failed reservation preserves the complete inventory.
+
 Custom events:
 
 - `treasure-trails:capacity`: `{player, tier, capacity:null}`.

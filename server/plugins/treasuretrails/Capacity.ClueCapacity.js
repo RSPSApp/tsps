@@ -165,11 +165,23 @@ function openVessel(event) {
   const id = request.box ? request.itemId : core.ItemIdentifiers[`CLUE_SCROLL_${type.tier.toUpperCase()}_`];
   const rewards = [id];
   if (type.form === "Clue nest" && core.WorldDefinition.isMembersWorld()) rewards.push(core.ItemIdentifiers.BIRD_NEST_6);
-  const slotsNeeded = rewards.filter(reward => !core.ItemDefinition.forId(reward).isStackable() || !inventory.contains(reward)).length;
+  let slotsNeeded = 0;
+  for (const reward of rewards) {
+    // These outputs have no metadata. A tagged copy is a different stack,
+    // and an existing matching stack must also have room below its limit.
+    const matching = core.ItemDefinition.forId(reward).isStackable() && inventory.getItems().some(entry =>
+      entry.getId() === reward && JSON.stringify(entry.getMeta() ?? null) === "null");
+    if (!matching) slotsNeeded++;
+    else if (core.ItemOnGroundManager.inventoryCapacity(event.player, new core.Item(reward)) < 1) {
+      inventory.full();
+      return true;
+    }
+  }
   if (inventory.getFreeSlots() + (item.getAmount() === 1 ? 1 : 0) < slotsNeeded) {
     inventory.full();
     return true;
   }
+  if (clicked(event) !== item) return true;
   inventory.deleteAtSlot(event.slot, 1);
   for (const reward of rewards) inventory.adds(reward, 1);
   return true;

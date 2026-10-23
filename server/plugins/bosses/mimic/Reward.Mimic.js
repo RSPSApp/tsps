@@ -23,8 +23,9 @@
 
 const Shared = require("./Shared.Mimic");
 const Lair = require("./Lair.Mimic");
+const State = require("./State.Mimic");
 
-const DEFEATED_ATTRIBUTE = "mimic:defeated";
+const DEFEATED_ATTRIBUTE = State.LEGACY_DEFEATED_ATTRIBUTE;
 /** Elite consumable max quantities for attempt-scaled tiers: floor(max * R / 5).
  * Maxima mirror the_mimic entries in npc-drops.json (the canonical table data). */
 function tierMax() {
@@ -90,14 +91,19 @@ function openMimic(event) {
     player.sendMessage("It'd be bad taste to try opening that in here.");
     return;
   }
-  if (!Shared.mimicItem(player)) return;
-  if (player.getAttribute?.(DEFEATED_ATTRIBUTE) !== true) {
+  const inventory = player.getInventory();
+  const slot = Number.isInteger(event.slot) ? event.slot : Shared.mimicSlot(player);
+  const item = inventory.getItems()[slot];
+  if (item?.getId?.() !== Shared.ids().CASKET_ITEM || event.item && event.item !== item) return;
+  const casket = Shared.rewardState(player, item);
+  if (!casket.defeated) {
     player.sendMessage("Visit the Strange Casket, upstairs in Watson's house in Hosidius, to attempt the Mimic's challenge.");
     return;
   }
-  const rolls = Shared.rollsForOpen(player);
-  const { CASKET_ITEM, PLANK } = Shared.ids();
-  player.getInventory()?.deleteNumber?.(CASKET_ITEM, 1);
+  const rolls = casket.attemptsLeft;
+  const { PLANK } = Shared.ids();
+  inventory.deleteAtSlot(slot, 1);
+  State.forget(player, casket.id);
   player.setAttribute?.(DEFEATED_ATTRIBUTE, false);
   // Spent out: the chest is gone with no loot (Wiki: failing every attempt).
   if (rolls < 1) {
@@ -127,13 +133,13 @@ function openMimic(event) {
 /** An arena kill pays on open, not on the floor. */
 function onDropsGenerated(event) {
   const { player, npc, npcId } = event ?? {};
-  if (npcId !== Shared.ids().BOSS || !player || !Shared.alive(player)) return;
+  if (npcId !== Shared.ids().BOSS || !player) return;
   const area = npc.getPrivateArea?.() ?? npc.getArea?.();
   const session = area ? Lair.sessionOf(area) : null;
   if (!session) return;
   if (session.owner && player !== session.owner && player.getAsPlayer?.() !== session.owner) return;
   event.handled = true;
-  player.setAttribute?.(DEFEATED_ATTRIBUTE, true);
+  Shared.markDefeated(player, session.casketId);
 }
 
 /** Dying is observed through postLeave (the respawn leaves the arena), which
@@ -141,6 +147,7 @@ function onDropsGenerated(event) {
 function attach(api) {
   pluginApi = api;
   api.persistAttribute(DEFEATED_ATTRIBUTE, false);
+  api.persistAttribute(State.LEDGER_ATTRIBUTE, {});
   api.persistAttribute(Shared.ROLLS_ATTRIBUTE, Shared.FRESH_ROLLS);
   api.onItemAction("Mimic", { Open: openMimic });
   api.onCustomEvent("npc-drops:generated", onDropsGenerated);

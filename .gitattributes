@@ -12,3 +12,5 @@
 /server/** merge=ours
 # Generated transport parity checks compare the canonical LF output byte for byte.
 /server/plugins/quests/questhelper/Chunks.QuestHelper.js text eol=lf
+# Preserve the canonical reward artifact's bytes on Windows checkouts too.
+/server/data/definitions/clue-caskets.json text eol=lf

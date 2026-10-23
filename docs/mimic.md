@@ -1,6 +1,6 @@
 # The Mimic
 
-The elite-clue casket boss in the arena below Watson's house, built from
+The elite/master clue casket boss in the arena below Watson's house, built from
 the OSRS Wiki ([The Mimic](https://oldschool.runescape.wiki/w/The_Mimic)) with
 Near-Reality's fight cross-checked mechanic by mechanic. Near-Reality is a leaked dump with no
 license: a behaviour oracle only, no code was ported. Where only NR attests a value,
@@ -12,6 +12,7 @@ The plugin is `server/plugins/bosses/Mimic.plugin.js`, units in
 | File | What it owns |
 | --- | --- |
 | `Shared.Mimic.js` | Ids (cache gamevals), arena tiles, candy table, anims. |
+| `State.Mimic.js` | Per-casket identity, origin, original clue-roll count, remaining attempts and victory; saved loss ledger for dropped/grave-held caskets. |
 | `Lair.Mimic.js` | PrivateArea over the real arena (multicombat, so boss + minions can pile one player), entry (casket on strange casket), keyhole exit behind the "Are you sure you wish to leave?" confirm, stomp ticks, cleanup. |
 | `Challenge.Mimic.js` | `Challenge` on the casket form (7979) wakes the boss (8633). |
 | `Fight.Mimic.js` | Attack script: melee crush, candy volley, minions, stomp hits, death cleanup. |
@@ -57,6 +58,27 @@ Already in data (not this plugin): combat stats (`monsters-complete.json`: 8633 
 `::item 23184`, use it on the strange casket, `Challenge`, survive: melee hits ~23s,
 candy volleys of six with minion spawns, escalating stomps, joint minion death.
 
+## Casket state
+
+The [Mimic item page](https://oldschool.runescape.wiki/w/Mimic) permits juggling
+and carrying several Mimics. Each casket therefore has its own identity and saved
+state. Arena entry binds that identity; moving or dropping the item cannot charge
+another casket, transfer a victory or refund a failed attempt. The player save
+retains a ledger for an item that is temporarily absent. Recovery reconciles the
+item and ledger downward. A simultaneous player/boss death retains the victory
+without spending an attempt. Opening uses the clicked inventory slot.
+
+Five elite or six master attempts are distinct from the original4–6 elite or
+5–7 master clue rolls. Each failure removes one original reward roll. Legacy items
+stored only an elite-style count; migration preserves their prior default of five
+original rolls rather than inventing a master origin. Corrupt state is rejected.
+
+Original clue roll ranges come from the complete unmodified canonical
+`clue-caskets.json` artifact, exporter commit `2d2965fb`, SHA256
+`98564db4cee328d18898be7562877ff34a53106af472052375a12438f6e4ea56`.
+The state and session tests cover multiple caskets, loss recovery, simultaneous
+death, the clicked slot, corrupt metadata and the real player save/load path.
+
 ## Not yet implemented
 
 - **Casket acquisition:** elite/master reward caskets don't open in TSPS yet (no clue
@@ -70,6 +92,6 @@ candy volleys of six with minion spawns, escalating stomps, joint minion death.
   chests default elite); every leave or death with the fight on costs one,
   simultaneous death does not; at zero the chest disappears. The obtain line ("The chest turned out to be
   the Mimic!") waits on the clue system with acquisition, pity counters and
-  origin tracking. Tertiary scroll case, ring rate shift and base 4-6 clue rolls
+  acquisition integration. Origin/attempt state is implemented above. Tertiary scroll case, ring rate shift and base4–6 elite/5–7 master clue rolls
   are follow-ups with the same.
 - **Death retrieval fee** (NR: 90k at the strange casket) and the boss timer.

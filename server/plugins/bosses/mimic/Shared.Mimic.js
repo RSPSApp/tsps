@@ -7,6 +7,7 @@
  * never bare numbers at use sites.
  */
 
+const State = require("./State.Mimic");
 const state = { api: null, core: null };
 
 function bind(api) {
@@ -67,20 +68,23 @@ function alive(entity) {
 }
 
 /**
- * Rolls state, tracked per Mimic item: six chances from a master clue, five from
- * elite (Wiki article); fresh chests default to elite until the clue system
- * tracks origin.
+ * Legacy aliases remain available to callers; the per-casket ledger is now
+ * authoritative when an item is dropped or moved to a grave during its fight.
  */
-const ROLLS_META_KEY = "mimic-rolls";
-const ROLLS_ATTRIBUTE = "mimic:rolls";
-const FRESH_ROLLS = 5;
+const ROLLS_META_KEY = State.META_KEY;
+const ROLLS_ATTRIBUTE = State.LEGACY_ROLLS_ATTRIBUTE;
+const FRESH_ROLLS = State.ATTEMPTS.elite;
 
 function mimicSlot(player) {
   const slot = player.getInventory?.()?.getSlotForItemId?.(ids().CASKET_ITEM);
   return Number.isInteger(slot) && slot >= 0 ? slot : -1;
 }
 
-function mimicItem(player) {
+function mimicItem(player, casketId = null) {
+  if (casketId != null) {
+    return player.getInventory?.()?.getItems?.()?.find(item => item?.getId?.() === ids().CASKET_ITEM &&
+      item.getMetaValue?.(ROLLS_META_KEY)?.id === casketId) ?? null;
+  }
   const slot = mimicSlot(player);
   if (slot < 0) return null;
   const item = player.getInventory?.()?.getItems?.()?.[slot];
@@ -92,45 +96,58 @@ function rollsOn(item) {
   return Number.isInteger(rolls) ? rolls : null;
 }
 
-/** Fresh chest (or resync): the item and the attribute mirror each other. */
-function ensureRolls(player) {
-  const item = mimicItem(player);
-  if (!item) return null;
-  let rolls = rollsOn(item);
-  if (rolls === null) {
-    rolls = FRESH_ROLLS;
-    item.setMetaValue?.(ROLLS_META_KEY, { rolls });
-  }
-  player.setAttribute?.(ROLLS_ATTRIBUTE, rolls);
+function casketState(player, casketId = null) {
+  const item = mimicItem(player, casketId);
+  if (!item && casketId == null) return null;
+  return State.get(player, item, casketId);
+}
+
+function initializeCasket(item, tier, clueRolls) {
+  if (item?.getId?.() !== ids().CASKET_ITEM) throw new Error("Invalid Mimic casket item");
+  return State.initialize(item, tier, clueRolls);
+}
+
+/** The old mirror remains informational; new items reconcile by their own identity. */
+function ensureRolls(player, casketId = null) {
+  const item = mimicItem(player, casketId);
+  const record = casketState(player, casketId);
+  if (!record) return null;
+  player.setAttribute?.(ROLLS_ATTRIBUTE, record.rolls);
   return item;
 }
 
 /**
  * Spend one roll (a leave or death with the fight on). At zero the chest
- * disappears. Falls back to the attribute mirror when the chest isn't carried
- * (grave, ground); the mirror is synced wherever the item is touched.
+ * disappears. The session's casket identity selects its saved ledger entry even
+ * when the item is on the ground or in a grave.
  */
-function spendRoll(player) {
-  const item = mimicItem(player);
-  let rolls = item ? rollsOn(item) : null;
-  if (rolls === null) {
-    const attr = player.getAttribute?.(ROLLS_ATTRIBUTE);
-    rolls = Number.isInteger(attr) ? attr : FRESH_ROLLS;
-  }
-  const left = Math.max(0, rolls - 1);
-  if (item) item.setMetaValue?.(ROLLS_META_KEY, { rolls: left });
+function spendRoll(player, casketId = null) {
+  const item = mimicItem(player, casketId);
+  if (!item && casketId == null) return 0;
+  const left = State.spend(player, item, casketId).rolls;
   player.setAttribute?.(ROLLS_ATTRIBUTE, left);
   if (left <= 0 && item) {
-    player.getInventory?.()?.deleteNumber?.(ids().CASKET_ITEM, 1);
+    const inventory = player.getInventory();
+    const slot = inventory.getItems().indexOf(item);
+    if (slot >= 0) inventory.deleteAtSlot(slot, 1);
+    State.forget(player, casketId ?? item.getMetaValue(ROLLS_META_KEY).id);
   }
   return left;
 }
 
-/** Rolls to pay on open: item and mirror reconciled down (grave/bank drift). */
-function rollsForOpen(player) {
-  const meta = rollsOn(mimicItem(player));
-  const attr = player.getAttribute?.(ROLLS_ATTRIBUTE);
-  return Math.min(meta ?? FRESH_ROLLS, Number.isInteger(attr) ? attr : FRESH_ROLLS);
+/** Origin, original clue rolls and attempts reconciled by casket identity. */
+function rewardState(player, item = mimicItem(player)) {
+  return item ? State.forOpen(player, item) : null;
 }
 
-module.exports = { bind, core, ids, alive, ARENA, ENTRANCE_TILE, CASKET_TILE, WATSON_TILE, ANIM, CANDY, VOLLEY, ROLLS_META_KEY, ROLLS_ATTRIBUTE, FRESH_ROLLS, mimicSlot, mimicItem, rollsOn, ensureRolls, spendRoll, rollsForOpen };
+function rollsForOpen(player, item = mimicItem(player)) {
+  return rewardState(player, item)?.attemptsLeft ?? 0;
+}
+
+function markDefeated(player, casketId) {
+  return State.defeat(player, mimicItem(player, casketId), casketId);
+}
+
+module.exports = { bind, core, ids, alive, ARENA, ENTRANCE_TILE, CASKET_TILE, WATSON_TILE, ANIM, CANDY, VOLLEY,
+  ROLLS_META_KEY, ROLLS_ATTRIBUTE, FRESH_ROLLS, mimicSlot, mimicItem, rollsOn, ensureRolls, spendRoll, rollsForOpen,
+  casketState, initializeCasket, rewardState, markDefeated };

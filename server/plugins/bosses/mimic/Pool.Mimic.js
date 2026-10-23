@@ -2,7 +2,7 @@
 
 // The Wiki rates here are unconditional probabilities. Splitting pre-roll and
 // common rows into independent rolls would discount the common rewards twice.
-const ATTEMPTS = { elite: 5, master: 6 };
+const { ATTEMPTS } = require("./State.Mimic");
 
 function gcd(a, b) {
   while (b) [a, b] = [b, a % b];

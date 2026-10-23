@@ -23,9 +23,9 @@ function challenge({ player, npc }) {
   // 7979 entry and Near-Reality transforms silently), so the casket just wakes.
   npc.setNpcTransformationId(BOSS);
   session.boss = npc;
-  // The attempt begins: fresh chests start on five rolls (elite origin).
+  // Retain the entered casket's attempts even if another Mimic is now carried.
   try {
-    Shared.ensureRolls(player);
+    Shared.ensureRolls(player, session.casketId);
   } catch {
     // Rolls default fresh at open; the fight never depends on them.
   }

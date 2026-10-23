@@ -93,7 +93,7 @@ function areaClass() {
     postLeave(mobile, logout) {
       if (mobile.isPlayer?.() && mobile.getAsPlayer?.() === this.owner) {
         const session = sessions.get(this);
-        if (session?.boss && Shared.alive(session.boss)) Shared.spendRoll(mobile.getAsPlayer());
+        if (session?.boss && Shared.alive(session.boss)) Shared.spendRoll(mobile.getAsPlayer(), session.casketId);
         end(this);
       }
       super.postLeave(mobile, logout);
@@ -126,6 +126,11 @@ function enterArena(player) {
     player.sendMessage("You need the mimic casket to fight the Mimic.");
     return false;
   }
+  const casket = Shared.casketState(player);
+  if (casket.defeated || casket.rolls < 1) {
+    player.sendMessage(casket.defeated ? "You have already defeated the Mimic in this casket. Open it outside the arena." : "This Mimic has no attempts remaining.");
+    return false;
+  }
   const area = new (areaClass())(player);
   pluginApi.registerArea(area);
   area.enter(player);
@@ -146,7 +151,7 @@ function enterArena(player) {
     return false;
   }
   area.add(npc);
-  sessions.set(area, { boss: null, casket: npc, minions: {}, stompCount: 0, owner: player });
+  sessions.set(area, { boss: null, casket: npc, minions: {}, stompCount: 0, owner: player, casketId: casket.id });
   return true;
 }
 

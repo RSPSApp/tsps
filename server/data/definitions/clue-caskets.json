@@ -1,0 +1,4419 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "sources": {
+      "elite": {
+        "url": "https://oldschool.runescape.wiki/w/Reward_casket_(elite)",
+        "sha256": "f6ae44487bd522e4067d76822fd94c883264119a5a7ed430232c00f39ec39378"
+      },
+      "master": {
+        "url": "https://oldschool.runescape.wiki/w/Reward_casket_(master)",
+        "sha256": "f9fbdcd68f297d1018b57dabf7cdf021ee61c07416a4c372064d7084a84e6cf1"
+      }
+    },
+    "license": "CC BY-NC-SA 3.0 — Old School RuneScape Wiki contributors",
+    "items_sha256": "72338151c2dcec3af8ab5db8b292532b77f07f8fc0181d5197a3715e9233ecf4",
+    "hash_encoding": "UTF-8 with LF newlines",
+    "probabilities": "Exact source branch factors before Wiki display rounding",
+    "tertiary": "Separate from per-roll pools; notes require explicit eligibility handling"
+  },
+  "tables": {
+    "elite": {
+      "casket_item_id": 20543,
+      "rolls": [
+        4,
+        6
+      ],
+      "mimic_chance": "1/35",
+      "out_of": 1699970250,
+      "entries": [
+        {
+          "item_id": 12538,
+          "name": "Dragon full helm ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12534,
+          "name": "Dragon chainbody ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12536,
+          "name": "Dragon legs/skirt ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12532,
+          "name": "Dragon sq shield ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 20002,
+          "name": "Dragon scimitar ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12526,
+          "name": "Fury ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12530,
+          "name": "Light infinity colour kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12528,
+          "name": "Dark infinity colour kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12397,
+          "name": "Royal crown",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12393,
+          "name": "Royal gown top",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12395,
+          "name": "Royal gown bottom",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12439,
+          "name": "Royal sceptre",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12351,
+          "name": "Musketeer hat",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12441,
+          "name": "Musketeer tabard",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12443,
+          "name": "Musketeer pants",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12381,
+          "name": "Black d'hide body (g)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12385,
+          "name": "Black d'hide body (t)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12383,
+          "name": "Black d'hide chaps (g)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12387,
+          "name": "Black d'hide chaps (t)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12596,
+          "name": "Rangers' tunic",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19994,
+          "name": "Ranger gloves",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19997,
+          "name": "Holy wraps",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12363,
+          "name": "Bronze dragon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12365,
+          "name": "Iron dragon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12367,
+          "name": "Steel dragon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12369,
+          "name": "Mithril dragon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 23270,
+          "name": "Adamant dragon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 23273,
+          "name": "Rune dragon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19943,
+          "name": "Arceuus scarf",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19946,
+          "name": "Hosidius scarf",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19949,
+          "name": "Lovakengj scarf",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19952,
+          "name": "Piscarilius scarf",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19955,
+          "name": "Shayzien scarf",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12357,
+          "name": "Katana",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12373,
+          "name": "Dragon cane",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19991,
+          "name": "Bucket helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19988,
+          "name": "Blacksmith's helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12540,
+          "name": "Deerstalker",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12430,
+          "name": "Afro",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12355,
+          "name": "Big pirate hat",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12432,
+          "name": "Top hat",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12353,
+          "name": "Monocle",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12335,
+          "name": "Briefcase",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 12337,
+          "name": "Sagacious spectacles",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 19970,
+          "name": "Dark bow tie",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19958,
+          "name": "Dark tuxedo jacket",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19961,
+          "name": "Dark tuxedo cuffs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19964,
+          "name": "Dark trousers",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19967,
+          "name": "Dark tuxedo shoes",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19985,
+          "name": "Light bow tie",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19973,
+          "name": "Light tuxedo jacket",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19976,
+          "name": "Light tuxedo cuffs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19979,
+          "name": "Light trousers",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 19982,
+          "name": "Light tuxedo shoes",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 * 1/10 ) round 1}}",
+          "weight": 133331
+        },
+        {
+          "item_id": 23249,
+          "name": "Rangers' tights",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 23255,
+          "name": "Uri's hat",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 23252,
+          "name": "Giant boot",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 23246,
+          "name": "Fremennik kilt",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Elite clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 1/51 ) round 1}}",
+          "weight": 1333310
+        },
+        {
+          "item_id": 20005,
+          "name": "Ring of nature",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 989,
+          "name": "Crystal key",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 12371,
+          "name": "Lava dragon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 1391,
+          "name": "Battlestaff",
+          "quantity": [
+            100,
+            100
+          ],
+          "noted": true,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 11951,
+          "name": "Extended antifire(4)",
+          "quantity": [
+            30,
+            30
+          ],
+          "noted": true,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 3024,
+          "name": "Super restore(4)",
+          "quantity": [
+            30,
+            30
+          ],
+          "noted": true,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 6685,
+          "name": "Saradomin brew(4)",
+          "quantity": [
+            30,
+            30
+          ],
+          "noted": true,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 2444,
+          "name": "Ranging potion(4)",
+          "quantity": [
+            30,
+            30
+          ],
+          "noted": true,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 3486,
+          "name": "Gilded full helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 3481,
+          "name": "Gilded platebody",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 3483,
+          "name": "Gilded platelegs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 3485,
+          "name": "Gilded plateskirt",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 3488,
+          "name": "Gilded kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 20146,
+          "name": "Gilded med helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 20149,
+          "name": "Gilded chainbody",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 20152,
+          "name": "Gilded sq shield",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 20155,
+          "name": "Gilded 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 20158,
+          "name": "Gilded spear",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 20161,
+          "name": "Gilded hasta",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 5/23 * 1/11 ) round 1}}",
+          "weight": 52700
+        },
+        {
+          "item_id": 12389,
+          "name": "Gilded scimitar",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 12391,
+          "name": "Gilded boots",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 23258,
+          "name": "Gilded coif",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 23261,
+          "name": "Gilded d'hide vambraces",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 23264,
+          "name": "Gilded d'hide body",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 23267,
+          "name": "Gilded d'hide chaps",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 23276,
+          "name": "Gilded pickaxe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 23279,
+          "name": "Gilded axe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 23282,
+          "name": "Gilded spade",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 ) round 1}}",
+          "weight": 115940
+        },
+        {
+          "item_id": 10350,
+          "name": "3rd Age full helmet",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10348,
+          "name": "3rd Age platebody",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10346,
+          "name": "3rd Age platelegs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 23242,
+          "name": "3rd Age plateskirt",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10352,
+          "name": "3rd Age kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10334,
+          "name": "3rd Age range coif",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10330,
+          "name": "3rd Age range top",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10332,
+          "name": "3rd Age range legs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10336,
+          "name": "3rd Age vambraces",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10342,
+          "name": "3rd Age mage hat",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10338,
+          "name": "3rd Age robe top",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10340,
+          "name": "3rd Age robe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 10344,
+          "name": "3rd Age amulet",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 12426,
+          "name": "3rd Age longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 12422,
+          "name": "3rd Age wand",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 12437,
+          "name": "3rd Age cloak",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 12424,
+          "name": "3rd Age bow",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega rare table - Elite clues",
+          "rarity_raw": "1/{{#expr:1/( 1/25 * 2/51 * 1/23 * 1/17 ) round 1}}",
+          "weight": 6820
+        },
+        {
+          "item_id": 1127,
+          "name": "Rune platebody",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 1079,
+          "name": "Rune platelegs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 1093,
+          "name": "Rune plateskirt",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 1201,
+          "name": "Rune kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 9185,
+          "name": "Rune crossbow",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 1215,
+          "name": "Dragon dagger",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 1434,
+          "name": "Dragon mace",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 1305,
+          "name": "Dragon longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 9194,
+          "name": "Onyx bolt tips",
+          "quantity": [
+            8,
+            12
+          ],
+          "noted": false,
+          "section": "Weapons and armour",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 563,
+          "name": "Law rune",
+          "quantity": [
+            50,
+            75
+          ],
+          "noted": false,
+          "section": "Runes",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 560,
+          "name": "Death rune",
+          "quantity": [
+            50,
+            75
+          ],
+          "noted": false,
+          "section": "Runes",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 565,
+          "name": "Blood rune",
+          "quantity": [
+            50,
+            75
+          ],
+          "noted": false,
+          "section": "Runes",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 566,
+          "name": "Soul rune",
+          "quantity": [
+            50,
+            75
+          ],
+          "noted": false,
+          "section": "Runes",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 11115,
+          "name": "Dragonstone bracelet",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Jewellery",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 1664,
+          "name": "Dragon necklace",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Jewellery",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 1645,
+          "name": "Dragonstone ring",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Jewellery",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 7060,
+          "name": "Tuna potato",
+          "quantity": [
+            15,
+            20
+          ],
+          "noted": true,
+          "section": "Food",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 7218,
+          "name": "Summer pie",
+          "quantity": [
+            15,
+            20
+          ],
+          "noted": true,
+          "section": "Food",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 8778,
+          "name": "Oak plank",
+          "quantity": [
+            60,
+            80
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 8780,
+          "name": "Teak plank",
+          "quantity": [
+            40,
+            50
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 8782,
+          "name": "Mahogany plank",
+          "quantity": [
+            20,
+            30
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 2363,
+          "name": "Runite bar",
+          "quantity": [
+            1,
+            3
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 985,
+          "name": "Tooth half of key",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/2 ) round 1}}",
+          "weight": 26322120
+        },
+        {
+          "item_id": 987,
+          "name": "Loop half of key",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/2 ) round 1}}",
+          "weight": 26322120
+        },
+        {
+          "item_id": 5289,
+          "name": "Palm tree seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/3 ) round 1}}",
+          "weight": 17548080
+        },
+        {
+          "item_id": 5315,
+          "name": "Yew seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/3 ) round 1}}",
+          "weight": 17548080
+        },
+        {
+          "item_id": 5316,
+          "name": "Magic seed",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/3 ) round 1}}",
+          "weight": 17548080
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            20000,
+            30000
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            10000,
+            15000
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 7/20 ) round 1}}",
+          "weight": 18425484
+        },
+        {
+          "item_id": 10476,
+          "name": "Purple sweets",
+          "quantity": [
+            9,
+            23
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 ) round 1}}",
+          "weight": 52644240
+        },
+        {
+          "item_id": 10476,
+          "name": "Purple sweets",
+          "quantity": [
+            8,
+            12
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 7/20 ) round 1}}",
+          "weight": 18425484
+        },
+        {
+          "item_id": 7329,
+          "name": "Red firelighter",
+          "quantity": [
+            9,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/5 ) round 1}}",
+          "weight": 10528848
+        },
+        {
+          "item_id": 7330,
+          "name": "Green firelighter",
+          "quantity": [
+            9,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/5 ) round 1}}",
+          "weight": 10528848
+        },
+        {
+          "item_id": 7331,
+          "name": "Blue firelighter",
+          "quantity": [
+            9,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/5 ) round 1}}",
+          "weight": 10528848
+        },
+        {
+          "item_id": 10326,
+          "name": "Purple firelighter",
+          "quantity": [
+            9,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/5 ) round 1}}",
+          "weight": 10528848
+        },
+        {
+          "item_id": 10327,
+          "name": "White firelighter",
+          "quantity": [
+            9,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/5 ) round 1}}",
+          "weight": 10528848
+        },
+        {
+          "item_id": 20220,
+          "name": "Holy blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/20 ) round 1}}",
+          "weight": 2632212
+        },
+        {
+          "item_id": 20223,
+          "name": "Unholy blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/20 ) round 1}}",
+          "weight": 2632212
+        },
+        {
+          "item_id": 20226,
+          "name": "Peaceful blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/20 ) round 1}}",
+          "weight": 2632212
+        },
+        {
+          "item_id": 20232,
+          "name": "War blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/20 ) round 1}}",
+          "weight": 2632212
+        },
+        {
+          "item_id": 20229,
+          "name": "Honourable blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/20 ) round 1}}",
+          "weight": 2632212
+        },
+        {
+          "item_id": 20235,
+          "name": "Ancient blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/20 ) round 1}}",
+          "weight": 2632212
+        },
+        {
+          "item_id": 20238,
+          "name": "Charge dragonstone jewellery scroll",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12402,
+          "name": "Nardah teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12411,
+          "name": "Mos le'harmless teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12406,
+          "name": "Mort'ton teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12404,
+          "name": "Feldip hills teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12405,
+          "name": "Lunar isle teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12403,
+          "name": "Digsite teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12408,
+          "name": "Piscatoris teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12407,
+          "name": "Pest control teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12409,
+          "name": "Tai bwo wannai teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12642,
+          "name": "Lumberyard teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 12410,
+          "name": "Iorwerth camp teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 21/22 * 1/12 ) round 1}}",
+          "weight": 8375220
+        },
+        {
+          "item_id": 21387,
+          "name": "Master scroll book (empty)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 2/31 * 1/22 ) round 1}}",
+          "weight": 4785840
+        },
+        {
+          "item_id": 3827,
+          "name": "Saradomin page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3828,
+          "name": "Saradomin page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3829,
+          "name": "Saradomin page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3830,
+          "name": "Saradomin page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3831,
+          "name": "Zamorak page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3832,
+          "name": "Zamorak page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3833,
+          "name": "Zamorak page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3834,
+          "name": "Zamorak page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3835,
+          "name": "Guthix page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3836,
+          "name": "Guthix page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3837,
+          "name": "Guthix page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 3838,
+          "name": "Guthix page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12613,
+          "name": "Bandos page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12614,
+          "name": "Bandos page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12615,
+          "name": "Bandos page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12616,
+          "name": "Bandos page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12617,
+          "name": "Armadyl page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12618,
+          "name": "Armadyl page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12619,
+          "name": "Armadyl page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12620,
+          "name": "Armadyl page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12621,
+          "name": "Ancient page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12622,
+          "name": "Ancient page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12623,
+          "name": "Ancient page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        },
+        {
+          "item_id": 12624,
+          "name": "Ancient page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 24/25 * 1/31 * 1/24 ) round 1}}",
+          "weight": 2193510
+        }
+      ],
+      "tertiary": [
+        {
+          "item_id": 19835,
+          "name": "Clue scroll (master)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Tertiary",
+          "rarity_raw": "1/5",
+          "notes": [
+            "Clue scrolls will drop as scroll boxes after the completion of X Marks the Spot."
+          ],
+          "probability": "1/5"
+        },
+        {
+          "item_id": 30918,
+          "name": "Minor elite scroll case",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Tertiary",
+          "rarity_raw": "Always",
+          "notes": [
+            "Players will always receive a minor elite scroll case on their 50th completed elite clue scroll ''or'' their first completed elite clue scroll if their clue count is above 50 (if the player has lost the item and did not open it before)."
+          ]
+        },
+        {
+          "item_id": 30920,
+          "name": "Major elite scroll case",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Tertiary",
+          "rarity_raw": "Always",
+          "notes": [
+            "Players will always receive a major elite scroll case on their 150th completed elite clue scroll ''or'' their first completed elite clue scroll if their clue count is above 150 (if the player has lost the item and did not open it before)."
+          ]
+        },
+        {
+          "item_id": 19941,
+          "name": "Heavy casket",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Tertiary",
+          "rarity_raw": "always",
+          "notes": [
+            "Players will always receive a heavy casket on their 200th completed elite clue scroll ''or'' their first completed elite clue scroll if their clue count is above 200 (if the player has lost the item)."
+          ]
+        }
+      ]
+    },
+    "master": {
+      "casket_item_id": 19836,
+      "rolls": [
+        5,
+        7
+      ],
+      "mimic_chance": "1/15",
+      "out_of": 1498508880,
+      "entries": [
+        {
+          "item_id": 20065,
+          "name": "Occult ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20062,
+          "name": "Torture ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 22246,
+          "name": "Anguish ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 23348,
+          "name": "Tormented ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20143,
+          "name": "Dragon defender ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 22239,
+          "name": "Dragon kiteshield ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/10 * 1/3 ) round 1}}",
+          "weight": 58696
+        },
+        {
+          "item_id": 22236,
+          "name": "Dragon platebody ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/10 * 2/3 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20128,
+          "name": "Hood of darkness",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20131,
+          "name": "Robe top of darkness",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20134,
+          "name": "Gloves of darkness",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20137,
+          "name": "Robe bottom of darkness",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20140,
+          "name": "Boots of darkness",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20035,
+          "name": "Samurai kasa",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20038,
+          "name": "Samurai shirt",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20041,
+          "name": "Samurai gloves",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20044,
+          "name": "Samurai greaves",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20047,
+          "name": "Samurai boots",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20113,
+          "name": "Arceuus hood",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20116,
+          "name": "Hosidius hood",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20119,
+          "name": "Lovakengj hood",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20122,
+          "name": "Piscarilius hood",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20125,
+          "name": "Shayzien hood",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20029,
+          "name": "Old demon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20020,
+          "name": "Lesser demon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20023,
+          "name": "Greater demon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20026,
+          "name": "Black demon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20032,
+          "name": "Jungle demon mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 19724,
+          "name": "Left eye patch",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20110,
+          "name": "Bowl wig",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20056,
+          "name": "Ale of the gods",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20050,
+          "name": "Obsidian cape (r)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20008,
+          "name": "Fancy tiara",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20053,
+          "name": "Half moon spectacles",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 ) round 1}}",
+          "weight": 1760880
+        },
+        {
+          "item_id": 20068,
+          "name": "Armadyl godsword ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/4 ) round 1}}",
+          "weight": 440220
+        },
+        {
+          "item_id": 20071,
+          "name": "Bandos godsword ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/4 ) round 1}}",
+          "weight": 440220
+        },
+        {
+          "item_id": 20074,
+          "name": "Saradomin godsword ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/4 ) round 1}}",
+          "weight": 440220
+        },
+        {
+          "item_id": 20077,
+          "name": "Zamorak godsword ornament kit",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/4 ) round 1}}",
+          "weight": 440220
+        },
+        {
+          "item_id": 20095,
+          "name": "Ankou mask",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20098,
+          "name": "Ankou top",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20101,
+          "name": "Ankou gloves",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20104,
+          "name": "Ankou's leggings",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20107,
+          "name": "Ankou socks",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20080,
+          "name": "Mummy's head",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20083,
+          "name": "Mummy's body",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20086,
+          "name": "Mummy's hands",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20089,
+          "name": "Mummy's legs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20092,
+          "name": "Mummy's feet",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Master clue uniques",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/3 * 1/5 ) round 1}}",
+          "weight": 117392
+        },
+        {
+          "item_id": 20059,
+          "name": "Bucket helm (g)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 20017,
+          "name": "Ring of coins",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 1965,
+          "name": "Cabbage",
+          "quantity": [
+            3,
+            3
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 12913,
+          "name": "Anti-venom+(4)",
+          "quantity": [
+            15,
+            15
+          ],
+          "noted": true,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 269,
+          "name": "Torstol",
+          "quantity": [
+            50,
+            50
+          ],
+          "noted": true,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 3486,
+          "name": "Gilded full helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 3481,
+          "name": "Gilded platebody",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 3483,
+          "name": "Gilded platelegs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 3485,
+          "name": "Gilded plateskirt",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 3488,
+          "name": "Gilded kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 20146,
+          "name": "Gilded med helm",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 20149,
+          "name": "Gilded chainbody",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 20152,
+          "name": "Gilded sq shield",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 20155,
+          "name": "Gilded 2h sword",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 20158,
+          "name": "Gilded spear",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 20161,
+          "name": "Gilded hasta",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/11 ) round 1}}",
+          "weight": 10005
+        },
+        {
+          "item_id": 12389,
+          "name": "Gilded scimitar",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 12391,
+          "name": "Gilded boots",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 23258,
+          "name": "Gilded coif",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 23261,
+          "name": "Gilded d'hide vambraces",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 23264,
+          "name": "Gilded d'hide body",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 23267,
+          "name": "Gilded d'hide chaps",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 23276,
+          "name": "Gilded pickaxe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 23279,
+          "name": "Gilded axe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 23282,
+          "name": "Gilded spade",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 ) round 1}}",
+          "weight": 110055
+        },
+        {
+          "item_id": 10350,
+          "name": "3rd Age full helmet",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10348,
+          "name": "3rd Age platebody",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10346,
+          "name": "3rd Age platelegs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 23242,
+          "name": "3rd Age plateskirt",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10352,
+          "name": "3rd Age kiteshield",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10334,
+          "name": "3rd Age range coif",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10330,
+          "name": "3rd Age range top",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10332,
+          "name": "3rd Age range legs",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10336,
+          "name": "3rd Age vambraces",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10342,
+          "name": "3rd Age mage hat",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10338,
+          "name": "3rd Age robe top",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10340,
+          "name": "3rd Age robe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 10344,
+          "name": "3rd Age amulet",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 23336,
+          "name": "3rd Age druidic robe top",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 23339,
+          "name": "3rd Age druidic robe bottoms",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 23345,
+          "name": "3rd Age druidic cloak",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 12426,
+          "name": "3rd Age longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 12424,
+          "name": "3rd Age bow",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 12422,
+          "name": "3rd Age wand",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 23342,
+          "name": "3rd Age druidic staff",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 12437,
+          "name": "3rd Age cloak",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 20014,
+          "name": "3rd Age pickaxe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 20011,
+          "name": "3rd Age axe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Mega-rare table - Master clues",
+          "rarity_raw": "1/{{#expr:1/( 1/23 * 1/37 * 1/16 * 1/23 ) round 1}}",
+          "weight": 4785
+        },
+        {
+          "item_id": 1215,
+          "name": "Dragon dagger",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 1434,
+          "name": "Dragon mace",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 1305,
+          "name": "Dragon longsword",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 4587,
+          "name": "Dragon scimitar",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 1377,
+          "name": "Dragon battleaxe",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 3204,
+          "name": "Dragon halberd",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Weapons",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 561,
+          "name": "Nature rune",
+          "quantity": [
+            100,
+            200
+          ],
+          "noted": false,
+          "section": "Runes and ammunition",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 560,
+          "name": "Death rune",
+          "quantity": [
+            100,
+            200
+          ],
+          "noted": false,
+          "section": "Runes and ammunition",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 565,
+          "name": "Blood rune",
+          "quantity": [
+            100,
+            200
+          ],
+          "noted": false,
+          "section": "Runes and ammunition",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 566,
+          "name": "Soul rune",
+          "quantity": [
+            100,
+            200
+          ],
+          "noted": false,
+          "section": "Runes and ammunition",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 9245,
+          "name": "Onyx bolts (e)",
+          "quantity": [
+            15,
+            25
+          ],
+          "noted": false,
+          "section": "Runes and ammunition",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 391,
+          "name": "Manta ray",
+          "quantity": [
+            15,
+            25
+          ],
+          "noted": true,
+          "section": "Food",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 245,
+          "name": "Wine of Zamorak",
+          "quantity": [
+            35,
+            50
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 225,
+          "name": "Limpwurt root",
+          "quantity": [
+            40,
+            60
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 207,
+          "name": "Grimy ranarr weed",
+          "quantity": [
+            5,
+            10
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 3049,
+          "name": "Grimy toadflax",
+          "quantity": [
+            25,
+            35
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 3051,
+          "name": "Grimy snapdragon",
+          "quantity": [
+            5,
+            10
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 451,
+          "name": "Runite ore",
+          "quantity": [
+            5,
+            8
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 2363,
+          "name": "Runite bar",
+          "quantity": [
+            5,
+            7
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 1747,
+          "name": "Black dragonhide",
+          "quantity": [
+            5,
+            25
+          ],
+          "noted": true,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 985,
+          "name": "Tooth half of key",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/2 ) round 1}}",
+          "weight": 24713040
+        },
+        {
+          "item_id": 987,
+          "name": "Loop half of key",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/2 ) round 1}}",
+          "weight": 24713040
+        },
+        {
+          "item_id": 5289,
+          "name": "Palm tree seed",
+          "quantity": [
+            1,
+            2
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/3 ) round 1}}",
+          "weight": 16475360
+        },
+        {
+          "item_id": 5315,
+          "name": "Yew seed",
+          "quantity": [
+            1,
+            2
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/3 ) round 1}}",
+          "weight": 16475360
+        },
+        {
+          "item_id": 5316,
+          "name": "Magic seed",
+          "quantity": [
+            1,
+            2
+          ],
+          "noted": false,
+          "section": "Resources",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/3 ) round 1}}",
+          "weight": 16475360
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            20000,
+            35000
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            10000,
+            15000
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 7/20 ) round 1}}",
+          "weight": 17299128
+        },
+        {
+          "item_id": 995,
+          "name": "Coins",
+          "quantity": [
+            15000,
+            30000
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 1/23 * 2/37 * 2/3 ) + (1/23 * 1/37 * 9/10 )) round 1}}",
+          "weight": 3932632
+        },
+        {
+          "item_id": 10476,
+          "name": "Purple sweets",
+          "quantity": [
+            14,
+            33
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 ) round 1}}",
+          "weight": 49426080
+        },
+        {
+          "item_id": 10476,
+          "name": "Purple sweets",
+          "quantity": [
+            8,
+            12
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 7/20 ) round 1}}",
+          "weight": 17299128
+        },
+        {
+          "item_id": 7329,
+          "name": "Red firelighter",
+          "quantity": [
+            20,
+            38
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/5 ) round 1}}",
+          "weight": 9885216
+        },
+        {
+          "item_id": 7330,
+          "name": "Green firelighter",
+          "quantity": [
+            20,
+            38
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/5 ) round 1}}",
+          "weight": 9885216
+        },
+        {
+          "item_id": 7331,
+          "name": "Blue firelighter",
+          "quantity": [
+            20,
+            38
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/5 ) round 1}}",
+          "weight": 9885216
+        },
+        {
+          "item_id": 10326,
+          "name": "Purple firelighter",
+          "quantity": [
+            20,
+            38
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/5 ) round 1}}",
+          "weight": 9885216
+        },
+        {
+          "item_id": 10327,
+          "name": "White firelighter",
+          "quantity": [
+            20,
+            38
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/5 ) round 1}}",
+          "weight": 9885216
+        },
+        {
+          "item_id": 20220,
+          "name": "Holy blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/20 ) round 1}}",
+          "weight": 2471304
+        },
+        {
+          "item_id": 20223,
+          "name": "Unholy blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/20 ) round 1}}",
+          "weight": 2471304
+        },
+        {
+          "item_id": 20226,
+          "name": "Peaceful blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/20 ) round 1}}",
+          "weight": 2471304
+        },
+        {
+          "item_id": 20232,
+          "name": "War blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/20 ) round 1}}",
+          "weight": 2471304
+        },
+        {
+          "item_id": 20229,
+          "name": "Honourable blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/20 ) round 1}}",
+          "weight": 2471304
+        },
+        {
+          "item_id": 20235,
+          "name": "Ancient blessing",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 1/29 * 1/20 ) round 1}}",
+          "weight": 2471304
+        },
+        {
+          "item_id": 20238,
+          "name": "Charge dragonstone jewellery scroll",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12402,
+          "name": "Nardah teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12411,
+          "name": "Mos le'harmless teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12406,
+          "name": "Mort'ton teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12404,
+          "name": "Feldip hills teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12405,
+          "name": "Lunar isle teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12403,
+          "name": "Digsite teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12408,
+          "name": "Piscatoris teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12407,
+          "name": "Pest control teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12409,
+          "name": "Tai bwo wannai teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12642,
+          "name": "Lumberyard teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 12410,
+          "name": "Iorwerth camp teleport",
+          "quantity": [
+            5,
+            15
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 21/22 * 1/12 ) round 1}}",
+          "weight": 7863240
+        },
+        {
+          "item_id": 21387,
+          "name": "Master scroll book (empty)",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/( 22/23 * 2/29 * 1/22 ) round 1}}",
+          "weight": 4493280
+        },
+        {
+          "item_id": 3827,
+          "name": "Saradomin page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3828,
+          "name": "Saradomin page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3829,
+          "name": "Saradomin page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3830,
+          "name": "Saradomin page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3831,
+          "name": "Zamorak page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3832,
+          "name": "Zamorak page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3833,
+          "name": "Zamorak page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3834,
+          "name": "Zamorak page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3835,
+          "name": "Guthix page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3836,
+          "name": "Guthix page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3837,
+          "name": "Guthix page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 3838,
+          "name": "Guthix page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12613,
+          "name": "Bandos page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12614,
+          "name": "Bandos page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12615,
+          "name": "Bandos page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12616,
+          "name": "Bandos page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12617,
+          "name": "Armadyl page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12618,
+          "name": "Armadyl page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12619,
+          "name": "Armadyl page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12620,
+          "name": "Armadyl page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12621,
+          "name": "Ancient page 1",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12622,
+          "name": "Ancient page 2",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12623,
+          "name": "Ancient page 3",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        },
+        {
+          "item_id": 12624,
+          "name": "Ancient page 4",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Shared treasure trail items",
+          "rarity_raw": "1/{{#expr:1/(( 22/23 * 1/29 * 1/24 ) + (1/23 * 1/37 * 1/24)) round 1}}",
+          "weight": 2132790
+        }
+      ],
+      "tertiary": [
+        {
+          "item_id": 19730,
+          "name": "Bloodhound",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Tertiary",
+          "rarity_raw": "1/1000",
+          "probability": "1/1000"
+        },
+        {
+          "item_id": 22675,
+          "name": "Scroll sack",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Tertiary",
+          "rarity_raw": "always",
+          "notes": [
+            "Players will receive the scroll sack '''only''' on their 100th completed clue scroll (master), or if their clue count is above 100 and the player does not have the item."
+          ]
+        },
+        {
+          "item_id": 30922,
+          "name": "Minor master scroll case",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Tertiary",
+          "rarity_raw": "Always",
+          "notes": [
+            "Players will always receive a minor master scroll case on their 25th completed master clue scroll ''or'' their first completed master clue scroll if their clue count is above 25 (if the player has lost the item and did not open it before)."
+          ]
+        },
+        {
+          "item_id": 30924,
+          "name": "Major master scroll case",
+          "quantity": [
+            1,
+            1
+          ],
+          "noted": false,
+          "section": "Tertiary",
+          "rarity_raw": "Always",
+          "notes": [
+            "Players will always receive a major master scroll case on their 75th completed master clue scroll ''or'' their first completed master clue scroll if their clue count is above 75 (if the player has lost the item and did not open it before)."
+          ]
+        }
+      ]
+    }
+  }
+}

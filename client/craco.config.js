@@ -30,7 +30,7 @@ paths.appHtml = path.resolve(appRoot, "public/index.html");
 paths.appIndexJs = path.resolve(appRoot, "index.tsx");
 paths.appTypeDeclarations = path.resolve(appRoot, "react-app-env.d.ts");
 paths.appTsConfig = path.resolve(appRoot, "tsconfig.json");
-paths.appBuild = path.resolve(appRoot, "build");
+paths.appBuild = path.resolve(appRoot, process.env.BUILD_PATH || "build");
 
 // WebRTC clients cannot fetch custom interfaces from the signalling relay.
 // Export the same definitions that the server plugins register, rather than maintaining

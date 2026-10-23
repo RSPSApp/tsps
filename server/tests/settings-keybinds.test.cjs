@@ -191,6 +191,21 @@ test('as captured: toggles in a category flip their var; split private chat runs
   assert.deepEqual(click(CLICKZONE, 5), ['varbit 9657=35', 'varp 287=1', 'script 83'], 'Split friends private chat');
 });
 
+// Regression adapted from Bandit-HaxUnit's upstream PR #825.
+test('Hide roofs saves both choices and restores them on login', () => {
+  const { player, click, logins } = allSettings(4);
+  const restore = logins.find(login => login.name === 'restoreSettings');
+  for (const expected of [1, 0]) {
+    assert.deepEqual(click(CLICKZONE, 4), ['varbit 9657=7', `varbit 12378=${expected}`]);
+    assert.equal(player.getAttribute('settings:values')['varbit:12378'], expected);
+    const restored = recordingPlayer();
+    restored.setAttribute('settings:values', structuredClone(player.getAttribute('settings:values')));
+    restore({ player: restored });
+    assert.equal(restored.getPacketSender().getVarbit(12378), expected);
+    assert.ok(restored.sent.includes(`varbit 12378=${expected}`), 'login explicitly restores disabled as well as enabled');
+  }
+});
+
 test('as captured: a dropdown that sets one varbit to the option, and closing a dropdown', () => {
   const { click, varbit } = allSettings(0);
   click(CLICKZONE, 67);

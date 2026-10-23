@@ -16,7 +16,15 @@ Repairs regenerate canonical cached Wiki inputs through `../osrsreboxed-db`; gen
 
 ### Remaining accuracy limits
 
-The regenerated data still contains 165 assumed rarity rows and 12 quantity expressions without an executable numeric quantity. Five multi-herb distributions remain unresolved: hydra, colossal hydra, bloodthirsty hydra, butterfly ray and eagle ray. Those unresolved herb accesses do not award guessed replacements.
+The regenerated data still contains 165 assumed rarity rows and eight quantity expressions without an executable numeric quantity. Five multi-herb distributions remain unresolved: hydra, colossal hydra, bloodthirsty hydra, butterfly ray and eagle ray. Those unresolved herb accesses do not award guessed replacements.
+
+An additional audit found 110 comma-separated quantity expressions across 11 cached pages that the existing exporter incorrectly concatenates into integers. Most represent conditional quantities (including DT2 perfect kills), not thousands separators or proven uniform ranges. Correct execution of those alternatives remains unfinished; the numeric fields must not be treated as verified OSRS quantities. The ray combat-herb accesses also lose variable-count metadata. Both findings remain outstanding.
+
+### Quantity comment repair
+
+Canonical parser revision `3c91caa0db50d280ac6abf603097126a6bdab84a` strips invisible Wiki comments before quantity/noted parsing. Regeneration restores `[1,1]` Hydra bones for Hydra, Colossal Hydra and Bloodthirsty Hydra, and `[100,299]` for Zulrah's guaranteed scales. The normal scale roll previously fell back to one. The separate 500-scale outcome remains separate; other probabilities are unchanged. Current Wiki confirmation: [Zulrah](https://oldschool.runescape.wiki/w/Zulrah).
+
+Two complete exports from identical cached inputs matched byte-for-byte. Imported `npc-drops.json` SHA256: `ed71f8c99c77e16a0c0380f9d296728eed6d7dd193ab8d67226a5eb5e631aeec`. Semantic comparison found only these four quantity rows changed; shared tables were identical. Canonical parser/database tests passed 37/37, and consumer quantity/override tests passed 13/13, including actual roller endpoints 100 and 299. This is a quantity parser repair, not a full current-Wiki table refresh.
 
 Thirty NPC IDs have alternative tables while the generic runtime currently chooses the first. Some location, quest, diary and account conditions are recorded in notes rather than executable rules; 230 original rows included quest requirement notes. Existing gameplay plugins own some such conditions, but ownership has not been proved for every row. Giant-key Wilderness doubling and Hill Giant location-specific variants require further work.
 

@@ -28518,7 +28518,10 @@
         {
           "item_id": 22786,
           "name": "Hydra bones",
-          "quantity_raw": "1<!-- Regular hydras only drop one set of bones. If you are changing this to 2, you might be confusing this page with Alchemical Hydra.-->",
+          "quantity": [
+            1,
+            1
+          ],
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
@@ -52309,7 +52312,10 @@
         {
           "item_id": 22786,
           "name": "Hydra bones",
-          "quantity_raw": "1<!-- Regular hydras only drop one set of bones. If you are changing this to 2, you might be confusing this page with Alchemical Hydra.-->",
+          "quantity": [
+            1,
+            1
+          ],
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
@@ -100704,7 +100710,10 @@
         {
           "item_id": 22786,
           "name": "Hydra bones",
-          "quantity_raw": "1<!-- Regular hydras only drop one set of bones. If you are changing this to 2, you might be confusing this page with Alchemical Hydra.-->",
+          "quantity": [
+            1,
+            1
+          ],
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"
@@ -210236,7 +210245,10 @@
         {
           "item_id": 12934,
           "name": "Zulrah's scales",
-          "quantity_raw": "100-299<!--note: the 500 scale drop is separate and intentionally excluded here-->",
+          "quantity": [
+            100,
+            299
+          ],
           "always": true,
           "rarity_raw": "Always",
           "section": "100%"

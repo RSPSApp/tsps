@@ -1071,10 +1071,9 @@ export class WebGPUActors {
     // ── Culling ────────────────────────────────────────────────────────────────────────────────
 
     private getCullTile(): { x: number; y: number } {
-        const camera = this.renderer.osrsClient.camera;
         return {
-            x: Math.floor(camera.getPosX()),
-            y: Math.floor(camera.getPosZ()),
+            x: this.renderer.playerPosUni[0],
+            y: this.renderer.playerPosUni[1],
         };
     }
 

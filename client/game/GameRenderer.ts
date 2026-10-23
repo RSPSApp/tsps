@@ -5,7 +5,6 @@ import { SceneBuilder } from "../rs/scene/SceneBuilder";
 import { isMobileMode } from "../common/utils/DeviceUtil";
 import { clamp } from "../common/utils/MathUtil";
 import { ProjectionType } from "./Camera";
-import { ClientState } from "./ClientState";
 import { OsrsRendererType } from "./GameRenderers";
 import { getAxisDeadzone } from "./InputManager";
 import { MapManager, MapSquare } from "./MapManager";
@@ -294,21 +293,6 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
         this.mapManager.init(
             this.osrsClient.mapFileIndex,
             SceneBuilder.fillEmptyTerrain(this.osrsClient.loadedCache.info),
-        );
-        if (!this.osrsClient.isLoggedIn()) {
-            return;
-        }
-        // Use camera position for initial load (player position not yet available)
-        const camera = this.osrsClient.camera;
-        this.mapManager.update(
-            camera.getPosX(),
-            camera.getPosZ(),
-            camera,
-            this.stats.frameCount,
-            this.osrsClient.mapRadius,
-            ClientState.baseX | 0,
-            ClientState.baseY | 0,
-            this.osrsClient.expandedMapLoading | 0,
         );
     }
 

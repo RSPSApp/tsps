@@ -327,13 +327,9 @@ export function drawWithRoofPlaneFilter(host: WebGLOsrsRendererHost,
         filtered.length = 0;
         const moving = map && host.mapManager.worldEntityMapIds.has(map.id);
         const point = map ? host.getRenderCullTile() : undefined;
-        let distance = map ? resolveFogRange({ renderDistance: host.getFrameRenderDistanceTiles(),
+        const distance = map ? resolveFogRange({ renderDistance: host.getFrameRenderDistanceTiles(),
             autoFogDepth: host.autoFogDepth, autoFogDepthFactor: host.autoFogDepthFactor,
             manualFogDepth: host.fogDepth, hd: host.osrsClient.clientPlugins.hdEnabled() }).fogEnd : 0;
-        // Fog is centred on the shader's player position. Free-camera culling
-        // can use a different origin; pad conservatively rather than opening holes.
-        if (map && host.osrsClient.clientPlugins.hdEnabled()) distance += Math.max(
-            Math.abs(point!.x - host.playerPosUni[0]), Math.abs(point!.y - host.playerPosUni[1]));
         const lodDistance = map ? host.getFrameLodThresholdTiles() : 0;
         const baseX = map?.getRenderBaseTileX() ?? 0, baseZ = map?.getRenderBaseTileY() ?? 0;
 

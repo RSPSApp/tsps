@@ -4,7 +4,7 @@ import type { Frustum } from "../../game/Frustum";
 import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import { Scene } from "../../rs/scene/Scene";
 import type { DrawRange } from "../DrawRange";
-import { sceneryRangeVisible } from "../SceneryVisibility";
+import { sceneryBoundsVisible, sceneryRangeVisible } from "../SceneryVisibility";
 import { LocAnimated } from "../loc/LocAnimated";
 import type { SeqFrameLoader } from "../../rs/model/seq/SeqFrameLoader";
 import type { SeqTypeLoader } from "../../rs/config/seqtype/SeqTypeLoader";
@@ -37,6 +37,7 @@ type MapDrawBatch = {
     vertexBuffer: GPUBuffer;
     indexBuffer: GPUBuffer;
     ranges: DrawRange[];
+    bounds?: number[];
     planes: Uint8Array | undefined;
     bindGroup: GPUBindGroup;
     /** The group's MapUniforms (one entry per range, u_drawId = range index). */
@@ -623,9 +624,18 @@ export class WebGPUMapSquare implements MapSquare {
                 entry = 0;
                 for (const batch of batches) {
                     if (batch.ranges.length > 0) {
+                        // A missing animation bound must keep the whole batch conservative.
+                        let bounds = batch.ranges[0].bounds?.slice();
+                        for (const range of batch.ranges) {
+                            if (!bounds || !range.bounds) { bounds = undefined; break; }
+                            for (let axis = 0; axis < 3; axis++) {
+                                bounds[axis] = Math.min(bounds[axis], range.bounds[axis]);
+                                bounds[axis + 3] = Math.max(bounds[axis + 3], range.bounds[axis + 3]);
+                            }
+                        }
                         group[batch.key] = {
                             vertexBuffer: geometry.vertexBuffer, indexBuffer: geometry.indexBuffer,
-                            ranges: batch.ranges, planes: batch.planes, bindGroup: batch.bindGroup,
+                            ranges: batch.ranges, bounds, planes: batch.planes, bindGroup: batch.bindGroup,
                             uniformsBindGroup, uniformBase: entry, uniformEntries: entries, lod: batch.lod,
                         };
                     }
@@ -1015,6 +1025,8 @@ export class WebGPUMapSquare implements MapSquare {
         const baseX = this.getRenderBaseTileX(), baseZ = this.getRenderBaseTileY();
         for (const batch of batches) {
             if (batch.lod && (depth || this.worldEntity)) continue;
+            if (!this.worldEntity && batch.bounds && !sceneryBoundsVisible(batch.bounds, baseX, baseZ,
+                visibility.tileX, visibility.tileZ, visibility.distance, visibility.camera, visibility.shadow)) continue;
             pass.setBindGroup(MAP_TEXTURES_GROUP, batch.bindGroup);
             pass.setVertexBuffer(0, batch.vertexBuffer);
             pass.setIndexBuffer(batch.indexBuffer, "uint32");

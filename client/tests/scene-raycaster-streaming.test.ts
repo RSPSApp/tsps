@@ -164,7 +164,7 @@ houseRaycaster.getLocModelMesh = () => mesh;
 const hotspotHits: any[] = [];
 houseRaycaster.collectTileHits(house,
     { origin: [6498.75, -10.25, 6511], direction: [0, 0, -1] },
-    6498, 6509, 10, hotspotHits, new Set(), new Map(), 1);
+    6498, 6509, 10, hotspotHits, new Uint8Array(4 * 104 * 104), new Map(), 1);
 assert.equal(hotspotHits[0]?.interactId, 4515, "outer room build hotspots must be pickable at their rendered height");
 assert.equal(hotspotHits[0]?.tileX, 6498);
 assert.equal(hotspotHits[0]?.tileY, 6509);

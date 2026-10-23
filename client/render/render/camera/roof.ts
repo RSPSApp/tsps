@@ -285,8 +285,8 @@ export function clampCullTileToGridBounds(host: WebGLOsrsRendererHost, tile: { x
 
 export function getRenderCullTile(host: WebGLOsrsRendererHost, ): { x: number; y: number } {
 
-        // Scene draw-distance is camera-anchored, then clamped to the loaded grid bounds.
-        return host.clampCullTileToGridBounds(host.getCameraTileXY());
+        // Fog uses this projected world position too, including aboard a boat.
+        return { x: host.playerPosUni[0], y: host.playerPosUni[1] };
     
 }
 

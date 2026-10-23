@@ -7,6 +7,7 @@ import { TextureLoader } from "../../rs/texture/TextureLoader";
 import { HSL_RGB_MAP, INVALID_HSL_COLOR, packHsl } from "../../rs/util/ColorUtil";
 import { clamp } from "../../common/utils/MathUtil";
 import { addTerrainCell, addFarTerrainChunk, SCENERY_CHUNK_SIZE } from "../loader/FarScene";
+import type { AnimationFrames } from "../AnimationFrames";
 import { DrawRange, newDrawRange } from "../DrawRange";
 import { InteractType } from "../InteractType";
 import { LocAnimatedData } from "../loc/LocAnimatedData";
@@ -43,6 +44,7 @@ export type DrawCommand = {
     elements: number;
     instances: ModelInfo[];
     chunk?: [number, number];
+    bounds?: number[]; // Union of every baked animation frame, in model units.
 };
 
 export type SceneModel = {
@@ -195,6 +197,7 @@ export class SceneBuffer {
 
     private heightBounds: number[][] = [];
     private rangeCache = new WeakMap<DrawCommand, DrawRange>();
+    private animationBounds = new WeakMap<AnimationFrames, number[] | null>();
 
     setHeightBounds(scene: Scene): void {
         this.heightBounds = scene.tileHeights.map(columns => {
@@ -215,16 +218,9 @@ export class SceneBuffer {
         if (command.instances.length === 1 && command.instances[0].contourGround === ContourGroundType.TERRAIN)
             range.batchKey = command.instances[0].level;
         range.chunk = command.chunk ?? [Math.floor(command.instances[0].sceneX / 1024) * 8, Math.floor(command.instances[0].sceneZ / 1024) * 8];
-        if (command.elements > 0) {
-            const base = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
-            for (let i = command.offset / 4; i < command.offset / 4 + command.elements; i++) {
-                const offset = this.indices[i] * this.vertexBuf.stride;
-                const x = (this.vertexBuf.view.getUint32(offset, true) >>> 17) - 16384;
-                const y = 16384 - (this.vertexBuf.view.getUint32(offset + 4, true) & 32767);
-                const z = (this.vertexBuf.view.getUint32(offset + 8, true) >>> 17) - 16384;
-                base[0] = Math.min(base[0], x); base[1] = Math.min(base[1], y); base[2] = Math.min(base[2], z);
-                base[3] = Math.max(base[3], x); base[4] = Math.max(base[4], y); base[5] = Math.max(base[5], z);
-            }
+        if (command.bounds || command.elements > 0) {
+            const base = command.bounds ?? this.geometryBounds(command.offset, command.elements);
+            if (!base) return range;
             const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
             for (const instance of command.instances) {
                 const heights = instance.contourGround < ContourGroundType.NONE ? this.heightBounds[instance.level] ?? [-16384, 16384] : [0, 0];
@@ -235,10 +231,25 @@ export class SceneBuffer {
                     bounds[axis + 3] = Math.max(bounds[axis + 3], (base[axis + 3] + shift[axis] + (axis === 1 ? heights[1] : 0)) / 128 + 0.05);
                 }
             }
-            range.bounds = bounds;
+            if (bounds.every(Number.isFinite)) range.bounds = bounds;
         }
         this.rangeCache.set(command, range);
         return range;
+    }
+
+    private geometryBounds(offset: number, elements: number,
+        bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]): number[] | undefined {
+        const first = offset / 4;
+        if (!Number.isInteger(first) || first < 0 || first + elements > this.indices.length) return undefined;
+        for (let i = first; i < first + elements; i++) {
+            const vertex = this.indices[i] * this.vertexBuf.stride;
+            const x = (this.vertexBuf.view.getUint32(vertex, true) >>> 17) - 16384;
+            const y = 16384 - (this.vertexBuf.view.getUint32(vertex + 4, true) & 32767);
+            const z = (this.vertexBuf.view.getUint32(vertex + 8, true) >>> 17) - 16384;
+            bounds[0] = Math.min(bounds[0], x); bounds[1] = Math.min(bounds[1], y); bounds[2] = Math.min(bounds[2], z);
+            bounds[3] = Math.max(bounds[3], x); bounds[4] = Math.max(bounds[4], y); bounds[5] = Math.max(bounds[5], z);
+        }
+        return bounds.every(Number.isFinite) ? bounds : undefined;
     }
 
     appendFarScenery(far: SceneBuffer): void {
@@ -317,19 +328,31 @@ export class SceneBuffer {
     addLocAnimated(group: LocAnimatedGroup, loc: SceneLocEntity): LocAnimatedData {
         const anim = group.anim;
 
+        let cachedBounds = this.animationBounds.get(anim);
+        if (cachedBounds === undefined) {
+            const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+            let complete = true;
+            for (const frames of [anim.frames, anim.framesAlpha]) for (const frame of frames ?? []) {
+                if (!frame || (frame[1] > 0 && !this.geometryBounds(frame[0], frame[1], bounds))) complete = false;
+            }
+            cachedBounds = complete && bounds.every(Number.isFinite) ? bounds : null;
+            this.animationBounds.set(anim, cachedBounds);
+        }
+        const bounds = cachedBounds ?? undefined;
+
         // Normal (merged)
         const drawRangeIndex = this.drawCommands.length;
         this.drawCommands.push({
             offset: 0,
             elements: 0,
-            instances: [loc],
+            instances: [loc], bounds,
         });
         const drawRangeAlphaIndex = this.drawCommandsAlpha.length;
         if (anim.framesAlpha) {
             this.drawCommandsAlpha.push({
                 offset: 0,
                 elements: 0,
-                instances: [loc],
+                instances: [loc], bounds,
             });
         }
         // Lod (merged)
@@ -340,14 +363,14 @@ export class SceneBuffer {
             this.drawCommandsLod.push({
                 offset: 0,
                 elements: 0,
-                instances: [loc],
+                instances: [loc], bounds,
             });
             if (anim.framesAlpha) {
                 drawRangeLodAlphaIndex = this.drawCommandsLodAlpha.length;
                 this.drawCommandsLodAlpha.push({
                     offset: 0,
                     elements: 0,
-                    instances: [loc],
+                    instances: [loc], bounds,
                 });
             }
         }
@@ -357,14 +380,14 @@ export class SceneBuffer {
         this.drawCommandsInteract.push({
             offset: 0,
             elements: 0,
-            instances: [loc],
+            instances: [loc], bounds,
         });
         const drawRangeInteractAlphaIndex = this.drawCommandsInteractAlpha.length;
         if (anim.framesAlpha) {
             this.drawCommandsInteractAlpha.push({
                 offset: 0,
                 elements: 0,
-                instances: [loc],
+                instances: [loc], bounds,
             });
         }
 
@@ -376,14 +399,14 @@ export class SceneBuffer {
             this.drawCommandsInteractLod.push({
                 offset: 0,
                 elements: 0,
-                instances: [loc],
+                instances: [loc], bounds,
             });
             if (anim.framesAlpha) {
                 drawRangeInteractLodAlphaIndex = this.drawCommandsInteractLodAlpha.length;
                 this.drawCommandsInteractLodAlpha.push({
                     offset: 0,
                     elements: 0,
-                    instances: [loc],
+                    instances: [loc], bounds,
                 });
             }
         }

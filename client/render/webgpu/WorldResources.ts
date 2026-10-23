@@ -330,11 +330,12 @@ export class WorldResources {
                         true,
                         1.0,
                     );
+                    if (texturePixels.length === 0) continue;
                     pixels.set(texturePixels, (i + 1) * pixelCount);
+                    loadedTextureIds.add(textureId);
                 } catch (e) {
                     console.error("Failed loading texture", textureId, e);
                 }
-                loadedTextureIds.add(textureId);
             }
         }
 

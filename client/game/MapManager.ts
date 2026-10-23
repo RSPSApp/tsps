@@ -1,4 +1,5 @@
 import { isLowEndDevice } from "../common/utils/DeviceUtil";
+import { CHUNK_SIZE } from "../common/instance/InstanceTypes";
 import { MapFileIndex, getMapSquareId } from "../rs/map/MapFileIndex";
 import { Scene } from "../rs/scene/Scene";
 import { Camera } from "./Camera";
@@ -42,12 +43,20 @@ export class MapManager<T extends MapSquare> {
     // OSRS top-level scene window is 104x104 tiles, rebased by server packets.
     static readonly SCENE_STREAM_SIZE_TILES = 104;
     static readonly SCENE_STREAM_HALF_TILES = MapManager.SCENE_STREAM_SIZE_TILES >> 1;
-    // OSRS preferences use 0..5 levels; HD scenery can request a wider static window.
+    // OSRS preferences use 0..5 levels; distant scenery can request a wider static window.
     static readonly SCENE_EXPANDED_STEP_TILES = 8;
     static readonly SCENE_MAX_EXPANDED_LEVEL = 20;
     // Scene base rebases when local player exits [16, 88) in the 104x104 window.
     static readonly SCENE_REBASE_MIN_LOCAL_TILE = 16;
     static readonly SCENE_REBASE_MAX_LOCAL_TILE = 88;
+
+    static getSceneryPadding(renderDistance: number): number {
+        // At a rebase edge only 16 tiles remain; load the rest of the view outside the scene.
+        return Math.ceil(
+            Math.max(0, renderDistance - MapManager.SCENE_REBASE_MIN_LOCAL_TILE) /
+                MapManager.SCENE_EXPANDED_STEP_TILES,
+        );
+    }
 
     /** Low-end devices only build squares within render distance + margin (tests flip this). */
     static lowEnd: boolean = isLowEndDevice;
@@ -68,7 +77,7 @@ export class MapManager<T extends MapSquare> {
     worldEntityMapIds: Set<number> = new Set();
 
     // Legacy resident budget knobs kept for compatibility with existing settings UI.
-    // Top-level streaming now prunes maps strictly to the active grid for .
+    // Top-level streaming retains maps inside the target scene window.
     maxResidentMaps: number = 128;
     private _useCounter: number = 1;
     private _lastUsed: Map<number, number> = new Map();
@@ -81,6 +90,9 @@ export class MapManager<T extends MapSquare> {
     private rangeBuiltX = 0;
     private rangeBuiltZ = 0;
     private rangeBuiltTiles = -1;
+    private viewX = 0;
+    private viewZ = 0;
+    private viewRangeTiles = -1;
 
     // Target streaming grid (what we are currently loading toward).
     gridMapCount: number = 0;
@@ -110,7 +122,6 @@ export class MapManager<T extends MapSquare> {
     private activeSceneBaseY: number = -1;
     private activeExpandedMapLoading: number = 0;
     private gridTransitionPending: boolean = false;
-    private transitionRenderMapIds: number[] = [];
 
     visibleMapCount: number = 0;
     visibleMaps: T[] = [];
@@ -478,10 +489,25 @@ export class MapManager<T extends MapSquare> {
         this.activeGridMaxMapY = -1;
     }
 
-    private isTargetGridReady(): boolean {
+    isSceneReady(frameCount: number): boolean {
+        if (ClientState.inInstance) {
+            // Applying an instance clears the normal grid before installing its composed scene.
+            if (this.gridMapCount > 0 || this.activeGridMapCount > 0) return false;
+            for (const [mapId, map] of this.mapSquares) {
+                if (!this.worldEntityMapIds.has(mapId) && map.canRender(frameCount)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return this.gridRevision > 0 && !this.gridTransitionPending && this.isTargetGridReady(frameCount);
+    }
+
+    private isTargetGridReady(frameCount: number): boolean {
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];
-            if (this.mapSquares.has(mapId) || this.invalidMapIds.has(mapId)) {
+            if (!this.isMapInView(mapId)) continue;
+            if (this.invalidMapIds.has(mapId) || this.mapSquares.get(mapId)?.canRender(frameCount)) {
                 continue;
             }
             return false;
@@ -489,10 +515,26 @@ export class MapManager<T extends MapSquare> {
         return true;
     }
 
+    hasPendingMapLoads(frameCount: number): boolean {
+        for (let i = 0; i < this.gridMapCount; i++) {
+            const mapId = this.gridMapIds[i];
+            if (!this.invalidMapIds.has(mapId) && !this.mapSquares.get(mapId)?.canRender(frameCount)) return true;
+        }
+        return false;
+    }
+
+    private isMapInView(mapId: number): boolean {
+        if (this.viewRangeTiles < 0) return true;
+        const x = (mapId >> 8) * Scene.MAP_SQUARE_SIZE + 32;
+        const z = (mapId & 0xff) * Scene.MAP_SQUARE_SIZE + 32;
+        return Math.max(Math.abs(this.viewX - x) - 32, Math.abs(this.viewZ - z) - 32, 0) <=
+            this.viewRangeTiles + CHUNK_SIZE;
+    }
+
     private commitTargetGridAsActive(): void {
-        this.activeGridMapCount = this.gridMapCount;
-        this.activeGridMapIds = this.gridMapIds.slice(0, this.gridMapCount);
-        this.activeGridMapIdSet = new Set(this.gridMapIdSet);
+        this.activeGridMapIds = this.gridMapIds.slice(0, this.gridMapCount).filter(id => this.isMapInView(id));
+        this.activeGridMapCount = this.activeGridMapIds.length;
+        this.activeGridMapIdSet = new Set(this.activeGridMapIds);
         this.activeGridMinMapX = this.gridMinMapX;
         this.activeGridMaxMapX = this.gridMaxMapX;
         this.activeGridMinMapY = this.gridMinMapY;
@@ -501,7 +543,7 @@ export class MapManager<T extends MapSquare> {
         this.activeSceneBaseX = this.currentSceneBaseX;
         this.activeSceneBaseY = this.currentSceneBaseY;
         this.activeExpandedMapLoading = this.currentExpandedMapLoading;
-        this.pruneOutsideGrid(this.activeGridMapIdSet);
+        this.pruneOutsideGrid(this.gridMapIdSet);
         this.gridTransitionPending = false;
     }
 
@@ -513,25 +555,12 @@ export class MapManager<T extends MapSquare> {
     }
 
     private collectRenderGridMapIds(posX: number, posZ: number): number[] {
-        this.transitionRenderMapIds.length = 0;
-        for (let i = 0; i < this.activeGridMapCount; i++) {
-            this.transitionRenderMapIds.push(this.activeGridMapIds[i]);
-        }
-        if (this.gridTransitionPending) {
-            for (let i = 0; i < this.gridMapCount; i++) {
-                const mapId = this.gridMapIds[i];
-                if (!this.activeGridMapIdSet.has(mapId)) {
-                    this.transitionRenderMapIds.push(mapId);
-                }
-            }
-        }
-
-        this.transitionRenderMapIds.sort(
+        this.activeGridMapIds.sort(
             (a, b) =>
                 getMapDistanceSq(posX, posZ, a >> 8, a & 0xff) -
                 getMapDistanceSq(posX, posZ, b >> 8, b & 0xff),
         );
-        return this.transitionRenderMapIds;
+        return this.activeGridMapIds;
     }
 
     update(
@@ -556,6 +585,10 @@ export class MapManager<T extends MapSquare> {
             this.visibleMaps.length = this.visibleMapCount;
             return;
         }
+
+        this.viewX = posX;
+        this.viewZ = posZ;
+        this.viewRangeTiles = streamRangeTiles === undefined ? -1 : Math.max(0, streamRangeTiles);
 
         const playerMapX = Math.floor(posX / Scene.MAP_SQUARE_SIZE);
         const playerMapY = Math.floor(posZ / Scene.MAP_SQUARE_SIZE);
@@ -730,40 +763,42 @@ export class MapManager<T extends MapSquare> {
                 }
             }
 
-            // Check if the new grid overlaps the current active grid.
-            let hasOverlap = false;
-            for (let i = 0; i < this.gridMapCount; i++) {
-                if (this.activeGridMapIdSet.has(this.gridMapIds[i])) {
-                    hasOverlap = true;
+            // Publish the whole foreground together, including initial loads and teleports.
+            this.gridTransitionPending = true;
+        }
+
+        // Foreground builds take priority over scenery that is still outside the view.
+        let viewMapCount = 0;
+        for (let i = 0; i < this.gridMapCount; i++) {
+            const mapId = this.gridMapIds[i];
+            if (!this.isMapInView(mapId)) continue;
+            viewMapCount++;
+            if (!this.activeGridMapIdSet.has(mapId)) this.gridTransitionPending = true;
+            this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+        }
+        if (viewMapCount !== this.activeGridMapCount) this.gridTransitionPending = true;
+
+        const foregroundReady = this.isTargetGridReady(frameCount);
+        if (this.gridTransitionPending && foregroundReady) {
+            this.commitTargetGridAsActive();
+        }
+
+        if (foregroundReady) {
+            let backgroundLoading = false;
+            for (const mapId of this.loadingMapIds) {
+                if (this.gridMapIdSet.has(mapId) && !this.isMapInView(mapId)) {
+                    backgroundLoading = true;
                     break;
                 }
             }
-
-            if (hasOverlap) {
-                // Walking / same-region: keep old grid visible until all new maps are ready.
-                this.gridTransitionPending = true;
-            } else {
-                // Cross-region teleport: commit new grid immediately so maps
-                // render progressively as they arrive from workers.
-                this.gridTransitionPending = true;
-                this.commitTargetGridAsActive();
+            if (!backgroundLoading) {
+                for (let i = 0; i < this.gridMapCount; i++) {
+                    const mapId = this.gridMapIds[i];
+                    if (this.isMapInView(mapId) || this.mapSquares.has(mapId)) continue;
+                    this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+                    if (this.loadingMapIds.has(mapId) || this.mapSquares.has(mapId)) break;
+                }
             }
-        }
-
-        // Ensure all maps in the target streaming grid are queued.
-        for (let i = 0; i < this.gridMapCount; i++) {
-            const mapId = this.gridMapIds[i];
-            const mapX = mapId >> 8;
-            const mapY = mapId & 0xff;
-
-            const mapSquare = this.mapSquares.get(mapId);
-            if (!mapSquare) {
-                this.loadMap(mapX, mapY, false, this.gridRevision);
-            }
-        }
-
-        if (this.gridTransitionPending && this.isTargetGridReady()) {
-            this.commitTargetGridAsActive();
         }
 
         // Collect visible maps from the active grid only.
@@ -780,6 +815,7 @@ export class MapManager<T extends MapSquare> {
             const renderMapIds = this.collectRenderGridMapIds(sortX, sortZ);
             for (let i = 0; i < renderMapIds.length; i++) {
                 const mapId = renderMapIds[i];
+                if (!this.isMapInView(mapId)) continue;
 
                 this._lastUsed.set(mapId, this._useCounter++);
                 const mapSquare = this.mapSquares.get(mapId);

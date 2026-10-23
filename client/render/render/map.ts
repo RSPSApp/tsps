@@ -351,17 +351,8 @@ export function loadMap(host: WebGLOsrsRendererHost,
         host.registerMinimapData(mapData);
 
         const frameCount = host.stats.frameCount;
-        // -1.0 makes loadAlpha = 1.0 immediately in the vertex shader,
-        // skipping the 1-second fog fade-in for teleport-loaded maps. A world entity's map (a
-        // boat deck) never fades in: it is reloaded whenever the boat is respawned or rebuilt
-        // (a facility built, a part swapped, the boat re-added while sailing), and each reload
-        // would otherwise fade it in again as if it were new terrain.
-        const reuseTime =
-            existing instanceof WebGLMapSquare
-                ? existing.timeLoaded
-                : host.skipMapFadeIn || host.mapManager.worldEntityMapIds.has(mapId)
-                    ? -1.0
-                    : time;
+        // The grid appears atomically; individual upload times must not fade its squares separately.
+        const reuseTime = existing instanceof WebGLMapSquare ? existing.timeLoaded : -1.0;
         const reuseFrame = existing instanceof WebGLMapSquare ? existing.frameLoaded : frameCount;
 
         const loadedMap = WebGLMapSquare.load(

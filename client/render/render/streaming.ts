@@ -205,6 +205,7 @@ export function hasPendingMapStreamingWork(host: WebGLOsrsRendererHost, ): boole
 
         if (host.mapsToLoad.length > 0) return true;
         if (host.mapManager.loadingMapIds.size > 0) return true;
+        if (host.mapManager.hasPendingMapLoads(host.stats.frameCount)) return true;
         return host.getPendingStreamMapCount() > 0;
     
 }

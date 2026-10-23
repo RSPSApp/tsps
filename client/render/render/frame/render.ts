@@ -603,8 +603,8 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
         const streamAroundPlayer = host.getControlledPlayerWorldViewId() >= 0;
         const renderDistance = host.resolveEffectiveRenderDistanceTiles(frameCount | 0);
         // Server scene rebases at local tile 16/88. Load enough static scenery
-        // beyond those edges for the requested HD view, without changing simulation.
-        const sceneryPadding = host.osrsClient.clientPlugins.hdEnabled() ? Math.ceil(Math.max(0, renderDistance - 16) / 8) : 0;
+        // beyond those edges for the requested view, without changing simulation.
+        const sceneryPadding = MapManager.getSceneryPadding(renderDistance);
         host.mapManager.update(
             host.playerPosUni[0],
             host.playerPosUni[1],

@@ -129,20 +129,30 @@ export class Js5Persistence {
     }
 
     /**
-     * The bytes at [offset, offset + length) from a range an earlier session stored, or undefined
-     * when no stored range holds them all. A device that skips restore() (a phone's or a tablet's
+     * The bytes at [offset, offset + length) from ranges an earlier session stored, or undefined
+     * when they do not cover the request. A device that skips restore() (a phone's or a tablet's
      * tab cannot hold everything ever fetched) reads them back from disk, not the network.
      */
     async read(offset: number, length: number): Promise<Uint8Array | undefined> {
-        const range = (await this.stored()).find((r) => r.start <= offset && offset + length <= r.end);
-        if (!range) return undefined;
         try {
-            const resp = await (await this.cachePromise).match(range.key);
-            if (!resp) return undefined;
-            // A slice of the stored blob reads only that part from disk; ranges run to megabytes.
-            const from = offset - range.start;
-            const bytes = new Uint8Array(await (await resp.blob()).slice(from, from + length).arrayBuffer());
-            return bytes.byteLength === length ? bytes : undefined;
+            const parts: Blob[] = [];
+            let cursor = offset;
+            for (const range of await this.stored()) {
+                if (range.end <= cursor) continue;
+                if (range.start > cursor) return undefined;
+                const resp = await (await this.cachePromise).match(range.key);
+                if (!resp) return undefined;
+                // Read only the needed slices; a batch can span several earlier flushes.
+                const end = Math.min(offset + length, range.end);
+                const part = (await resp.blob()).slice(cursor - range.start, end - range.start);
+                if (part.size !== end - cursor) return undefined;
+                parts.push(part);
+                cursor = end;
+                if (cursor === offset + length) {
+                    return new Uint8Array(await (parts.length === 1 ? parts[0] : new Blob(parts)).arrayBuffer());
+                }
+            }
+            return undefined;
         } catch {
             return undefined;
         }
@@ -170,7 +180,7 @@ export class Js5Persistence {
             } catch (e) {
                 console.warn("[js5] Failed listing persisted ranges:", e);
             }
-            return ranges;
+            return ranges.sort((a, b) => a.start - b.start || b.end - a.end);
         })();
         return this.storedRanges;
     }
@@ -262,6 +272,8 @@ export class Js5Persistence {
                     console.warn("[js5] Failed persisting range:", e);
                 }
             }
+        }).catch((e) => {
+            console.warn("[js5] Failed persisting ranges:", e);
         });
         return this.flushChain;
     }

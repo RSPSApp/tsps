@@ -227,11 +227,12 @@ export function initTextureArray(host: WebGLOsrsRendererHost, ) {
                     true,
                     1.0,
                 );
+                if (texturePixels.length === 0) continue;
                 pixels.set(texturePixels, (i + 1) * pixelCount);
+                host.loadedTextureIds.add(textureId);
             } catch (e) {
                 console.error("Failed loading texture", textureId, e);
             }
-            host.loadedTextureIds.add(textureId);
         }
 
         host.textureArray = createTextureArray(

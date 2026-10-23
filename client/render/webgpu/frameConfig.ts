@@ -4,6 +4,8 @@
  * frame before drawing the scene.
  */
 import { clamp } from "../../common/utils/MathUtil";
+import { ClientState } from "../../game/ClientState";
+import { MapManager } from "../../game/MapManager";
 import { isIos, isLowEndDevice, isMobileMode, isTouchDevice } from "../../common/utils/DeviceUtil";
 import { computeRoofPlaneLimit } from "../../game/roof/RoofVisibility";
 import { resolveBridgePromotedPlane } from "../../game/scene/PlaneResolver";
@@ -20,6 +22,26 @@ import type { WebGPURenderer } from "./WebGPURenderer";
 interface TilePoint {
     x: number;
     y: number;
+}
+
+/** Match WebGL's authoritative scene window; orbiting the camera must not reload scenery. */
+export function updateWebGPUMapStreaming(renderer: WebGPURenderer, frameCount: number): void {
+    const client = renderer.osrsClient;
+    const preview = !client.isLoggedIn() && client.scenePreviewEnabled;
+    const streamAroundPlayer = preview || getControlledPlayerWorldViewId(renderer) >= 0;
+    const distance = resolveWebGPURenderDistance(renderer);
+    const padding = MapManager.getSceneryPadding(distance);
+    renderer.mapManager.update(
+        preview ? client.camera.getPosX() : renderer.playerPosUni[0],
+        preview ? client.camera.getPosZ() : renderer.playerPosUni[1],
+        client.camera,
+        frameCount,
+        Math.max(client.mapRadius, Math.ceil((distance + 32) / 64)),
+        streamAroundPlayer ? -1 : ClientState.baseX | 0,
+        streamAroundPlayer ? -1 : ClientState.baseY | 0,
+        Math.max(client.expandedMapLoading | 0, padding),
+        distance,
+    );
 }
 
 /**

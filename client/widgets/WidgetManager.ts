@@ -2196,8 +2196,7 @@ export class WidgetManager {
         const currentAngle = this.compassWidget.spriteAngle ?? 0;
         if (currentAngle !== spriteAngle) {
             this.compassWidget.spriteAngle = spriteAngle;
-            // Mark compass widget as dirty for redraw
-            this.invalidateWidgetRender(this.compassWidget, "compass");
+            this.invalidateWidgetRect(this.compassWidget);
         }
     }
 

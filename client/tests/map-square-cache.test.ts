@@ -19,8 +19,15 @@ assert.notEqual(cacheKey(info, { ...input, smoothLocAnimations: true, smoothLocA
 assert.ok(isCacheable(input));
 assert.ok(!isCacheable({ ...input, persistentCache: false }));
 assert.ok(!isCacheable({ ...input, doorOnly: true }));
+assert.ok(!isCacheable({ ...input, locOnly: true }));
+assert.ok(!isCacheable({ ...input, instance: {} }));
+assert.ok(!isCacheable({ ...input, overrideRenderPos: { x: 0, y: 0 } }));
 assert.ok(!isCacheable({ ...input, locOverrides: new Map([["k", {}]]) }));
+assert.ok(!isCacheable({ ...input, locSpawns: new Map([["k", {}]]) }));
+assert.ok(!isCacheable({ ...input, terrainOverrides: new Map([["k", {}]]) }));
+assert.ok(!isCacheable({ ...input, mapRegionReplacements: new Map([["k", {}]]) }));
 assert.ok(!isCacheable({ ...input, extraLocs: [{}] }));
+assert.ok(!isCacheable({ ...input, extraNpcs: [{}] }));
 
 assert.ok(shouldStore(true, {}));
 assert.ok(!shouldStore(false, {}));

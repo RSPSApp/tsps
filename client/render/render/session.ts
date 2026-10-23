@@ -266,7 +266,6 @@ export function clearSessionCaches(host: WebGLOsrsRendererHost, ): void {
         host.cameraTerrainPitchPressure = 0;
         host.clearCameraShake();
         host.mapDataLoadedNotified = false;
-        host.heightValidAtTime = undefined;
     
 }
 

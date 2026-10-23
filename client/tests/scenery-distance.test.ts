@@ -12,6 +12,59 @@ import { resolveFogRange } from "../render/RenderDistancePolicy";
 
 (globalThis as any).self = globalThis;
 const { SceneBuffer } = require("../render/buffer/SceneBuffer");
+const { drawWithRoofPlaneFilter, getMapZoneDistanceFromPoint, isMapWithinRenderDistance } = require("../render/render/draw2");
+const { getRenderCullTile } = require("../render/render/camera/roof");
+
+// Fog follows the player while the camera orbits behind them, including without HD.
+const edgeRange = newDrawRange(0, 6);
+edgeRange.chunk = [0, 0]; edgeRange.bounds = [0, -1, 0, 8, 1, 8];
+const edgeMap = { id: 256, mapX: 1, mapY: 0,
+    getRenderBaseTileX: () => 64, getRenderBaseTileY: () => 0 };
+let cameraX = 0, edgeDraws = 0;
+const edgeHost: any = {
+    playerPosUni: [49, 0],
+    mapManager: { worldEntityMapIds: new Set() },
+    getCameraTileXY: () => ({ x: cameraX, y: 0 }),
+    clampCullTileToGridBounds: (point: any) => point,
+    getRenderCullTile: () => getRenderCullTile(edgeHost),
+    getFrameRenderDistanceTiles: () => 25, getFrameLodThresholdTiles: () => 100,
+    getMapZoneDistanceFromPoint: (map: any, x: number, y: number) => getMapZoneDistanceFromPoint(edgeHost, map, x, y),
+    autoFogDepth: true, autoFogDepthFactor: 0.85, fogDepth: 24,
+    osrsClient: { clientPlugins: { hdEnabled: () => false }, camera: { frustum: { intersectsBox: () => true } } },
+    frameRoofTotalRangeCount: 0, frameRoofFilteredRangeCount: 0, roofFilteredDrawIndices: [],
+    draw: () => edgeDraws++,
+};
+for (const x of [0, 28, 70]) {
+    cameraX = x;
+    const point = edgeHost.getRenderCullTile();
+    assert.equal(isMapWithinRenderDistance(edgeHost, edgeMap, point.x, point.y, 25, 0), true,
+        "a whole-map guard must retain scenery inside the player's fog boundary during camera rotation");
+    drawWithRoofPlaneFilter(edgeHost, {}, [edgeRange], undefined, 3, edgeMap);
+}
+assert.equal(edgeDraws, 3, "non-HD terrain inside player visibility must survive every camera orbit");
+
+const foggedMap = { id: -256, mapX: -1, mapY: 0,
+    getRenderBaseTileX: () => -64, getRenderBaseTileY: () => 0 };
+const workload = [];
+for (let x = -128; x <= 128; x += 8) for (let z = -128; z <= 128; z += 8) {
+    const range = newDrawRange(0, 6);
+    range.bounds = [x, -1, z, x + 8, 1, z + 8];
+    workload.push(range);
+}
+for (const x of [0, 28, 37, 70]) {
+    cameraX = x;
+    const point = edgeHost.getRenderCullTile();
+    assert.deepEqual(point, { x: 49, y: 0 }, "orbiting must not move the shader's fog/LOD origin");
+    assert.equal(isMapWithinRenderDistance(edgeHost, foggedMap, point.x, point.y, 25, 0), false);
+    let submitted = 0;
+    edgeHost.draw = (_call: unknown, ranges: unknown[], indices?: number[]) => {
+        submitted += indices?.length ?? ranges.length;
+    };
+    drawWithRoofPlaneFilter(edgeHost, {}, workload, undefined, 3,
+        { id: 0, getRenderBaseTileX: () => 0, getRenderBaseTileY: () => 0 });
+    assert.equal(submitted, 64, "distance culling excludes wholly fogged geometry at every camera offset");
+}
+
 const hdFog = resolveFogRange({ renderDistance: 160, autoFogDepth: true,
     autoFogDepthFactor: 0.85, manualFogDepth: 24, hd: true });
 assert.deepEqual(hdFog, { fogEnd: 120, fogDepth: 24 }, "Long views need stronger haze and an obscured outer margin");
@@ -180,3 +233,59 @@ draws.length = 0;
 backend.draw(drawCall, chunks, [0, 2]);
 assert.deepEqual(draws, [{ id: 0, range: [0, 6, 1] }, { id: 2, range: [48, 6, 1] }], "Culling must never draw an excluded gap or change model IDs");
 console.log("Scenery distance checks passed: 128 → 80 terrain triangles, joined chunk/mixed-detail edges, exact open meshes, exclusive LODs and light-volume culling");
+
+// Animated commands start empty, but every baked pose must contribute to their culling bounds.
+const animatedBoundsBuffer = new SceneBuffer({} as any, new Map(), 32);
+const bakedFrame = (points: number[][]) => {
+    const offset = animatedBoundsBuffer.indexByteOffset();
+    for (const [x, y, z] of points) animatedBoundsBuffer.indices.push(
+        animatedBoundsBuffer.vertexBuf.addVertex(x, y, z, 100, 255, 0, 0, -1, false));
+    return newDrawRange(offset, points.length);
+};
+const emptyFrame = newDrawRange(0, 0);
+const bakedFrames = {
+    frames: [emptyFrame, bakedFrame([[-128, -64, 0], [256, 320, 64], [0, 0, -128]]),
+        bakedFrame([[-384, -192, 128], [128, 640, 384], [0, 0, 0]])],
+    framesAlpha: [bakedFrame([[-512, -320, -384], [640, 960, 512], [0, 0, 0]]), emptyFrame, emptyFrame],
+    frameStarts: [0, 2],
+};
+const contourScene = new Scene(4, 1, 1);
+for (const column of contourScene.tileHeights[2]) column.fill(-320);
+contourScene.tileHeights[2][0][0] = 192;
+animatedBoundsBuffer.setHeightBounds(contourScene);
+const placements = [
+    { sceneX: 8 * 128 + 64, sceneZ: 16 * 128 + 64, heightOffset: -275, level: 2, contourGround: 1 },
+    { sceneX: 90 * 128, sceneZ: -40 * 128, heightOffset: 67, level: 0, contourGround: 2 },
+].map(placement => ({ ...placement, lowDetail: false, interactId: 1,
+    entity: { seqId: 1, seqRandomStart: false, rotation: 0 } }));
+for (const placement of placements) animatedBoundsBuffer.addLocAnimated({ anim: bakedFrames, locs: [] }, placement);
+for (const commands of [animatedBoundsBuffer.drawCommands, animatedBoundsBuffer.drawCommandsAlpha,
+    animatedBoundsBuffer.drawCommandsLod, animatedBoundsBuffer.drawCommandsLodAlpha,
+    animatedBoundsBuffer.drawCommandsInteract, animatedBoundsBuffer.drawCommandsInteractAlpha,
+    animatedBoundsBuffer.drawCommandsInteractLod, animatedBoundsBuffer.drawCommandsInteractLodAlpha]) {
+    for (const command of commands) {
+        const draw = animatedBoundsBuffer.createDrawRange(command);
+        assert.ok(draw.bounds, "empty initial commands still retain the full animation bounds");
+        const placement = command.instances[0];
+        for (const frame of [...bakedFrames.frames, ...bakedFrames.framesAlpha]) {
+            for (let i = frame[0] / 4; i < frame[0] / 4 + frame[1]; i++) {
+                const offset = animatedBoundsBuffer.indices[i] * 12, view = animatedBoundsBuffer.vertexBuf.view;
+                for (const height of placement.contourGround === 1 ? [-320, 192] : [0]) {
+                    const point = [((view.getUint32(offset, true) >>> 17) - 16384 + placement.sceneX) / 128,
+                        (16384 - (view.getUint32(offset + 4, true) & 32767) - Math.round(placement.heightOffset / 8) * 8 + height) / 128,
+                        ((view.getUint32(offset + 8, true) >>> 17) - 16384 + placement.sceneZ) / 128];
+                    point.forEach((value, axis) => assert.ok(value >= draw.bounds[axis] && value <= draw.bounds[axis + 3],
+                        "all opaque/alpha/intermediate poses and contour heights stay inside the instance bounds"));
+                }
+            }
+        }
+    }
+}
+for (const frames of [[emptyFrame], [bakedFrames.frames[1], undefined], [newDrawRange(1e9, 3)]]) {
+    const conservative = new SceneBuffer({} as any, new Map(), 1);
+    conservative.vertexBuf = animatedBoundsBuffer.vertexBuf;
+    conservative.indices = animatedBoundsBuffer.indices;
+    conservative.addLocAnimated({ anim: { frames, framesAlpha: undefined }, locs: [] }, placements[0]);
+    assert.equal(conservative.createDrawRange(conservative.drawCommands[0]).bounds, undefined,
+        "empty, missing or unavailable geometry keeps the unbounded fallback");
+}

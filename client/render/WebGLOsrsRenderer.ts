@@ -720,8 +720,6 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
 
     // Track if we've notified LoadingTracker that map data is ready
     public mapDataLoadedNotified: boolean = false;
-    // Time (in seconds) when height data first became valid (for fog fade-in delay)
-    public heightValidAtTime: number | undefined = undefined;
 
     // Optional override: force a specific idle SeqType id for player animation
     playerIdleSeqId: number = -1;

@@ -1,7 +1,7 @@
 import Denque from "denque";
 import { mat4, vec3 } from "gl-matrix";
 
-import { isWebGPUSupported } from "../../common/utils/DeviceUtil";
+import { isLowEndDevice, isWebGPUSupported } from "../../common/utils/DeviceUtil";
 import { GameRenderer } from "../../game/GameRenderer";
 import type {
     HitsplatEventPayload,
@@ -47,7 +47,7 @@ import { environmentAt } from "../render/environment";
 import { getCanvasResolutionScale, syncCameraViewportUnitScale } from "../render/quality";
 import { GPU_TEXTURE_USAGE, SCENE_DEPTH_FORMAT, SCENE_GROUP, WORLD_TEXTURES_GROUP } from "./bindings";
 import { getControlledPlayerEcsIndex, updateFollowCamera } from "./camera";
-import { resolveWebGPULodDistance, resolveWebGPURenderDistance } from "./frameConfig";
+import { resolveWebGPULodDistance, resolveWebGPURenderDistance, updateWebGPUMapStreaming } from "./frameConfig";
 import { FxaaPass } from "./fxaa";
 import { SceneMsaaTargets } from "./msaaTargets";
 import { WEBGPU_MSAA_SAMPLES } from "./multisample";
@@ -117,6 +117,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     /** LOC/REGION packet handling and the map rebuilds they cause (./locUpdates.ts). */
     readonly locUpdates = new LocUpdates(this);
     private mapsToLoad = new Denque<QueuedMap>();
+    private pendingMapBuilds = 0;
+    private mapLoadEpoch = 0;
 
     private skyColor = new Float32Array([0, 0, 0]);
     private sceneHslOverride = new Float32Array([-1, -1, -1, 0]);
@@ -131,7 +133,6 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     readonly followCamRot = mat4.create();
     readonly followCamForwardAxis = vec3.fromValues(0, 0, -1);
     readonly followCamForward = vec3.create();
-    heightValidAtTime: number | undefined;
     mapDataLoadedNotified: boolean = false;
 
     // 117 HD follow-camera feel (updateFollowCamera): eased wheel zoom and yaw/pitch inertia.
@@ -337,9 +338,11 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         streamGeneration?: number,
         partial?: "door" | "loc",
     ): Promise<void> {
+        const epoch = this.mapLoadEpoch;
         this.locUpdates.applyGamemode();
         const locVersion = this.locUpdates.version(mapX, mapY);
         const input: SdMapLoaderInput = {
+            persistentCache: isLowEndDevice,
             mapX,
             mapY,
             maxLevel: Math.max(0, Math.min(Scene.MAX_LEVELS - 1, Scene.MAX_LEVELS - 1)),
@@ -357,17 +360,19 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             locOnly: partial === "loc",
         };
         try {
-            const mapData = await this.osrsClient.workerPool.queueLoad<
-                SdMapLoaderInput,
-                SdMapData | undefined,
-                SdMapDataLoader
-            >(this.dataLoader, input);
-            if (!mapData) {
+            const mapData = await this.loadSceneData(input);
+            if (epoch !== this.mapLoadEpoch || this.instanceActive) return;
+            if (streamGeneration !== undefined && !this.mapManager.isMapInTargetGrid(mapX, mapY)) {
                 this.mapManager.loadingMapIds.delete(getMapSquareId(mapX, mapY));
+                return;
+            }
+            if (!mapData) {
+                this.mapManager.addInvalidMap(mapX, mapY);
                 return;
             }
             this.mapsToLoad.push({ mapData, streamGeneration, locVersion });
         } catch (error) {
+            if (epoch !== this.mapLoadEpoch || this.instanceActive) return;
             console.error(`[webgpu] map load failed for (${mapX}, ${mapY})`, error);
             this.mapManager.deferFailedMapLoad(mapX, mapY);
         }
@@ -387,6 +392,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     }
 
     override clearInstance(): void {
+        this.mapLoadEpoch++;
         this.instances.clear();
         this.mapsToLoad.clear();
         // Drops the instance square and resets the grid, so streaming reloads the normal maps.
@@ -486,10 +492,15 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
     /** Builds a scene in the map worker (instances build theirs through here). */
     async loadSceneData(input: Omit<SdMapLoaderInput, "loadedTextureIds">): Promise<SdMapData | undefined> {
-        return await this.osrsClient.workerPool.queueLoad<SdMapLoaderInput, SdMapData | undefined, SdMapDataLoader>(
-            this.dataLoader,
-            { ...input, loadedTextureIds: this.world?.loadedTextureIds ?? new Set<number>() },
-        );
+        this.pendingMapBuilds++;
+        try {
+            return await this.osrsClient.workerPool.queueLoad<SdMapLoaderInput, SdMapData | undefined, SdMapDataLoader>(
+                this.dataLoader,
+                { ...input, loadedTextureIds: this.world?.loadedTextureIds ?? new Set<number>() },
+            );
+        } finally {
+            this.pendingMapBuilds--;
+        }
     }
 
     /**
@@ -539,6 +550,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             if (!queued) break;
             const { mapData } = queued;
             const { mapX, mapY } = mapData;
+            if (queued.streamGeneration !== undefined && !this.mapManager.isMapInTargetGrid(mapX, mapY)) {
+                this.mapManager.loadingMapIds.delete(getMapSquareId(mapX, mapY));
+                continue;
+            }
             // Built before a loc change: the reload LocUpdates queued replaces it.
             if (queued.locVersion !== undefined && !this.locUpdates.isCurrent(mapX, mapY, queued.locVersion)) {
                 continue;
@@ -558,7 +573,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
                 continue;
             }
             if (queued.locVersion !== undefined) this.locUpdates.applied(mapX, mapY);
-            const timeLoaded = existing ? existing.timeLoaded : performance.now() / 1000;
+            const timeLoaded = existing ? existing.timeLoaded : -1;
             if (existing) {
                 this.mapManager.removeMap(mapX, mapY);
             }
@@ -683,18 +698,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             // fails as a whole, flashing the clear colour.
             if (this.instanceActive) this.applyInstanceScene(this.stats.frameCount);
             else this.applyReadyMaps(this.stats.frameCount);
-            this.mapManager.update(
-                this.osrsClient.camera.getPosX(),
-                this.osrsClient.camera.getPosZ(),
-                this.osrsClient.camera,
-                this.stats.frameCount,
-                Math.max(this.osrsClient.mapRadius, Math.ceil((resolveWebGPURenderDistance(this) + 32) / 64)),
-                -1,
-                -1,
-                Math.max(this.osrsClient.expandedMapLoading | 0,
-                    this.osrsClient.clientPlugins.hdEnabled() ? Math.ceil((resolveWebGPURenderDistance(this) - 25) / 8) : 0),
-                resolveWebGPURenderDistance(this),
-            );
+            updateWebGPUMapStreaming(this, this.stats.frameCount);
             this.updateSkyColor();
             this.syncLocAnimationSmoothing();
             for (const map of this.mapManager.visibleMaps) {
@@ -734,15 +738,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const roofPlaneLimit = drawScene ? this.interactionHost.getRoofPlaneLimit() : 3;
         this.frameRoofPlaneLimit = roofPlaneLimit;
         const camera = this.osrsClient.camera;
-        const bounds = this.mapManager.getGridTileBounds();
-        const tileX = bounds ? Math.max(bounds.minX, Math.min(bounds.maxX - 1, Math.floor(camera.getPosX())))
-            : Math.floor(camera.getPosX());
-        const tileZ = bounds ? Math.max(bounds.minY, Math.min(bounds.maxY - 1, Math.floor(camera.getPosZ())))
-            : Math.floor(camera.getPosZ());
         this.frameScenery = {
-            tileX, tileZ,
-            distance: world.sceneData[60] + Math.max(Math.abs(tileX - this.playerPosUni[0]),
-                Math.abs(tileZ - this.playerPosUni[1])),
+            tileX: this.playerPosUni[0], tileZ: this.playerPosUni[1],
+            distance: world.sceneData[60],
             lodDistance: resolveWebGPULodDistance(this), camera: camera.frustum,
         };
 
@@ -903,7 +901,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     }
 
     hasPendingMapStreamingWork(): boolean {
-        return this.mapsToLoad.length > 0;
+        return this.pendingMapBuilds > 0 || this.mapManager.loadingMapIds.size > 0 || this.mapsToLoad.length > 0 ||
+            this.instances.hasPendingWork() ||
+            this.mapManager.hasPendingMapLoads(this.stats.frameCount) ||
+            !this.mapManager.isSceneReady(this.stats.frameCount);
     }
 
     /** Controlled player's raw plane; part of the HdLightsHost surface. */
@@ -1047,6 +1048,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
      * client sits on "Loading - please wait".
      */
     override clearSessionCaches(): void {
+        this.mapLoadEpoch++;
         this.locUpdates.dispose();
         this.locOverrides.clear();
         this.addedLocs.clear();
@@ -1063,10 +1065,10 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         this.followCamCameraFeelInitialized = false;
         this.followCamDistance = 12;
         this.mapDataLoadedNotified = false;
-        this.heightValidAtTime = undefined;
     }
 
     override cleanUp(): void {
+        this.mapLoadEpoch++;
         this.locUpdates.dispose();
         this.actors?.dispose();
         this.overlays?.dispose();

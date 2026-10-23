@@ -56,3 +56,78 @@ for (let i = 0; i < 2000; i++) {
 }
 
 console.log("Hover raycast walks the tiles the ray crosses");
+
+// Large models can reach six tiles away from their anchor. Neighbourhood deduplication must
+// retain every anchor on each interaction plane, including bridge changes and 104-tile scenes.
+const { mat4 } = require("gl-matrix");
+for (const [span, bridge, deck, plane] of [
+    [64, false, false, 0], [64, true, false, 0],
+    [104, false, false, undefined], [104, true, false, 0],
+    [64, false, true, 0],
+] as const) {
+    const baseX = deck ? 9600 : BASE_X + 8;
+    const baseY = deck ? 9600 : BASE_Y + 24;
+    const anchors = new Set<string>();
+    const crossed: [number, number][] = [];
+    const bridgeAt = (x: number) => bridge && (x & 2) !== 0;
+    const idAt = (level: number, x: number, y: number) => (level * span + x) * span + y + 1;
+    const fixture = {
+        id: 1234, mapX: baseX / 64, mapY: baseY / 64, interactionPlane: -1,
+        getRenderBaseTileX: () => baseX, getRenderBaseTileY: () => baseY,
+        getRenderBaseWorldX: () => baseX, getRenderBaseWorldY: () => baseY,
+        getLocalTileSpan: () => span,
+        getTileRenderFlag: (level: number, x: number) => level === 1 && bridgeAt(x) ? 2 : 0,
+        getLocIdsAtLocal: (level: number, x: number, y: number) => {
+            const key = `${level}:${x}:${y}`;
+            assert.ok(!anchors.has(key), `anchor ${key} is tested once per ray`);
+            anchors.add(key);
+            return [idAt(level, x, y)];
+        },
+        getLocTypeRotsAtLocal: () => [10],
+    };
+    const picker = new SceneRaycaster({
+        visibleMapCount: 1, visibleMaps: [fixture],
+        worldEntityMapIds: new Set(deck ? [fixture.id] : []),
+    }, {
+        renderDistance: 100, clientPlugins: { gpuSettings: () => undefined },
+        groundItems: { getStacksAt: () => [] }, npcEcs: { queryByMap: () => [] },
+        playerEcs: { getIndexForServerId: () => undefined, size: () => 0 },
+        camera: { viewMatrix: mat4.create() },
+    });
+    picker.sampleHeightAt = () => 0;
+    picker.getResolvedLocType = (id: number) => ({ id, actions: ["Use"], sizeX: 1, sizeY: 1 });
+    picker.intersectLocModel = (_ray: unknown, _max: number, type: { id: number }) => type.id / 10000;
+    const collect = picker.collectTileHits;
+    picker.collectTileHits = function (...args: any[]) {
+        crossed.push([args[2] - baseX, args[3] - baseY]);
+        return collect.apply(this, args);
+    };
+    if (deck) {
+        const transform = mat4.fromTranslation(mat4.create(), [-6400, 0, -6400]);
+        picker.worldEntityTransformProvider = () => transform;
+    }
+    // The outer-room ray catches indices beyond 64, right at the composed scene boundary.
+    const localX = span === 104 ? 90.5 : 24.5;
+    const origin = [baseX + localX - (deck ? 6400 : 0), -1, baseY + 30.5 - (deck ? 6400 : 0)];
+    const pickRay = new Ray(origin, [1, 0, 0.3]);
+    const hits = picker.raycast(pickRay, { maxDistance: 24, basePlane: plane });
+    assert.ok(crossed.length > 5, "the normal or transformed ray actually crosses the scene");
+    const expected = new Set<string>();
+    for (const [x, y] of crossed) {
+        const levels = plane === undefined ? [0, 1, 2, 3] : [bridgeAt(x) ? 1 : plane];
+        for (const level of levels) for (let dx = -6; dx <= 6; dx++) for (let dy = -6; dy <= 6; dy++) {
+            if (x + dx >= 0 && y + dy >= 0 && x + dx < span && y + dy < span) {
+                expected.add(`${level}:${x + dx}:${y + dy}`);
+            }
+        }
+    }
+    assert.deepEqual(anchors, expected, `all neighbourhood anchors: span=${span}, bridge=${bridge}, deck=${deck}`);
+    assert.equal(hits.length, expected.size, "every unique synthetic loc remains selectable");
+    assert.equal(new Set(hits.map((hit: any) => hit.interactId)).size, hits.length, "no duplicate menu hits");
+    for (let i = 1; i < hits.length; i++) assert.ok(hits[i - 1].t <= hits[i].t, "hit priority stays front to back");
+    anchors.clear(); crossed.length = 0;
+    assert.deepEqual(picker.raycast(pickRay, { maxDistance: 24, basePlane: plane }), hits,
+        "each new ray starts with fresh visited anchors");
+}
+
+console.log("Hover neighbourhoods preserve bridge, house and transformed boat loc hits");

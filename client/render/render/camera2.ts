@@ -222,7 +222,7 @@ export function updateCameraFollow(host: WebGLOsrsRendererHost, deltaTime?: numb
             BridgePlaneStrategy.RENDER,
         );
         // Login must finish while a cutscene owns the camera, too.
-        if (playerHeightSample.valid) markMapDataLoaded(host, timeSec);
+        markMapDataLoaded(host, playerHeightSample.valid);
         if (!host.osrsClient.followPlayerCamera) return;
 
         // OSRS follow camera uses a smoothed focal point (oculusOrbFocalPointX/Y) that eases toward the player.
@@ -383,15 +383,11 @@ export function updateCameraFollow(host: WebGLOsrsRendererHost, deltaTime?: numb
 }
 
 /**
- * Map data counts as loaded once the player's ground height has been valid for a second (the
- * fog fade-in: smoothstep over u_currentTime - u_timeLoaded); then the loading tracker is told.
+ * Keep the loading overlay until the whole scene and the player's ground are ready.
  */
-function markMapDataLoaded(host: WebGLOsrsRendererHost, timeSec: number | undefined): void {
-    if (host.mapDataLoadedNotified || timeSec === undefined) return;
-    if (host.heightValidAtTime === undefined) {
-        host.heightValidAtTime = timeSec;
-    } else if (timeSec - host.heightValidAtTime >= 1.0) {
-        host.mapDataLoadedNotified = true;
-        host.osrsClient.loadingTracker.markComplete(LoadingRequirement.MAP_DATA_LOADED);
-    }
+function markMapDataLoaded(host: WebGLOsrsRendererHost, heightValid: boolean): void {
+    if (host.mapDataLoadedNotified) return;
+    if (!heightValid || !host.mapManager.isSceneReady(host.stats.frameCount)) return;
+    host.mapDataLoadedNotified = true;
+    host.osrsClient.loadingTracker.markComplete(LoadingRequirement.MAP_DATA_LOADED);
 }

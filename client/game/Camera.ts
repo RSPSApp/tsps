@@ -150,7 +150,7 @@ export class Camera {
 
     static rawPitchToScenePitchAngle(rawPitch: number): number {
         const normalizedPitch = clamp(Number(rawPitch) || 0, 0, 512);
-        return 128 + Math.floor((normalizedPitch * 255) / 512);
+        return 128 + (normalizedPitch * 255) / 512;
     }
 
     snapToPosition(x?: number, y?: number, z?: number): void {
@@ -412,7 +412,7 @@ export class Camera {
 
     setScenePitchOverride(pitch: number | undefined): void {
         this.scenePitchOverride =
-            pitch === undefined ? undefined : clamp(Math.trunc(pitch), 0, 512);
+            pitch === undefined ? undefined : clamp(pitch, 0, 512);
         this.updated = true;
     }
 

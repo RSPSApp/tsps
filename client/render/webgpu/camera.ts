@@ -107,7 +107,7 @@ export function updateFollowCamera(
         BridgePlaneStrategy.RENDER,
     );
     // Login must finish while a cutscene owns the camera, too.
-    if (playerHeightSample.valid) markMapDataLoaded(renderer, timeSec);
+    markMapDataLoaded(renderer, playerHeightSample.valid);
     // Scripted camera moves (and free cameras) turn following off, as in WebGL's frame loop.
     if (!osrsClient.followPlayerCamera) return;
 
@@ -283,13 +283,10 @@ export function updateFollowCamera(
     camera.snapToPosition(undefined, desiredPosY, undefined);
 }
 
-/** Map data counts as loaded once the player's ground height has been valid for a second. */
-function markMapDataLoaded(renderer: WebGPURenderer, timeSec: number): void {
+/** Keep the loading overlay until the whole scene and the player's ground are ready. */
+function markMapDataLoaded(renderer: WebGPURenderer, heightValid: boolean): void {
     if (renderer.mapDataLoadedNotified) return;
-    if (renderer.heightValidAtTime === undefined) {
-        renderer.heightValidAtTime = timeSec;
-    } else if (timeSec - renderer.heightValidAtTime >= 1.0) {
-        renderer.mapDataLoadedNotified = true;
-        renderer.osrsClient.loadingTracker.markComplete(LoadingRequirement.MAP_DATA_LOADED);
-    }
+    if (!heightValid || !renderer.mapManager.isSceneReady(renderer.stats.frameCount)) return;
+    renderer.mapDataLoadedNotified = true;
+    renderer.osrsClient.loadingTracker.markComplete(LoadingRequirement.MAP_DATA_LOADED);
 }

@@ -98,8 +98,50 @@ test("WebGPU selects one scenery tier per chunk, culls fog/frustum and keeps unc
 test("WebGPU shadows use full geometry and the light frustum, including off-screen casters", () => {
     const f = fixture([range(0, 6, 0), range(24, 12, 64)], [range(72, 3, 64)]);
     f.square.drawDepth(f.pass, 3, { ...f.context,
-        shadow: { intersectsBox: (box: number[][]) => box[0][0] >= 64 } as Frustum });
+        shadow: { intersectsBox: (box: number[][]) => box[1][0] >= 64 } as Frustum });
     assert.deepEqual(f.draws.map(d => [d.first, d.count]), [[6, 12]]);
+    f.square.delete();
+});
+
+test("WebGPU rejects an off-screen batch without testing each range", () => {
+    const f = fixture(Array.from({ length: 200 }, (_, i) => range(i * 24, 6, 80 + i)), []);
+    let tests = 0;
+    f.context.distance = 1000;
+    f.context.camera = { intersectsBox: (box: number[][]) => { tests++; return box[0][0] < 40; } } as Frustum;
+    f.square.drawOpaque(f.pass, 3, f.context);
+    assert.equal(f.draws.length, 0);
+    assert.equal(tests, 1, "one conservative batch test replaces 200 rejected range tests");
+    f.square.delete();
+});
+
+test("WebGPU batch bounds preserve per-range draws across camera, fog, roofs and shadows", () => {
+    const full = Array.from({ length: 80 }, (_, i) => range(i * 24, 6, (i * 17) % 128 - 32));
+    const far = full.map((r, i) => range((80 + i) * 24, 6, r.bounds![0]));
+    const f = fixture(full, far, Uint8Array.from(full, (_, i) => i % 4));
+    const batches = (f.square as any).opaqueBatches;
+    const bounds = batches.map((batch: any) => batch.bounds);
+    for (const shadow of [false, true]) for (const roof of [0, 3]) for (let x = -64; x <= 128; x += 8) {
+        const frustum = { intersectsBox: (box: number[][]) => box[0][0] <= x + 24 && box[1][0] >= x } as Frustum;
+        const context = { ...f.context, tileX: x, distance: 32, camera: frustum,
+            shadow: shadow ? frustum : undefined };
+        f.draws.length = 0;
+        batches.forEach((batch: any, i: number) => batch.bounds = bounds[i]);
+        f.square.drawOpaque(f.pass, roof, context);
+        const bounded = f.draws.slice();
+        f.draws.length = 0;
+        batches.forEach((batch: any) => batch.bounds = undefined);
+        f.square.drawOpaque(f.pass, roof, context);
+        assert.deepEqual(bounded, f.draws, `same draws at x=${x}, roof=${roof}, shadow=${shadow}`);
+    }
+    f.square.delete();
+});
+
+test("WebGPU keeps batches containing unbounded animation ranges conservative", () => {
+    const unbounded = newDrawRange(24, 6);
+    const f = fixture([range(0, 6, 80), unbounded], []);
+    f.square.drawOpaque(f.pass, 3, f.context);
+    assert.deepEqual(f.draws.map(d => [d.first, d.count]), [[6, 6]]);
+    assert.equal((f.square as any).opaqueBatches[0].bounds, undefined);
     f.square.delete();
 });
 
@@ -134,6 +176,27 @@ test("WebGPU advances both full and far animated ranges to the same baked frame"
     assert.deepEqual(far[0].slice(0, 2), [48, 12]);
     assert.deepEqual(full[0].chunk, [0, 0]);
     assert.deepEqual(far[0].chunk, [24, 0]);
+    f.square.delete();
+});
+
+test("WebGPU partial loc rebuilds replace animation bounds and keep them while frames advance", () => {
+    const f = fixture([range(0, 6, 0)], []);
+    f.square.drawOpaque(f.pass, 3, f.context);
+    assert.equal(f.draws.length, 1);
+    const replacement = range(24, 12, 80);
+    f.square.refreshPartial({ ...f.data, locOnly: true,
+        loc: { ...f.data.loc, drawRanges: [replacement] } } as any, {} as any, 1);
+    f.square.locsAnimated = [{ anim: { frames: [range(48, 6, 80)] }, update() {}, drawFrame: () => 0,
+        getDrawRangeIndex: (alpha: boolean, _interact: boolean, lod: boolean) => alpha || lod ? -1 : 0 } as any];
+    f.square.updateAnimatedLocs({} as any, 10);
+    assert.deepEqual(replacement.bounds, [80, -1, 0, 88, 1, 8]);
+    f.draws.length = 0;
+    f.square.drawOpaque(f.pass, 3, f.context);
+    assert.equal(f.draws.length, 0, "the replacement no longer inherits the old visible bounds");
+    f.context.tileX = 80;
+    f.context.camera = { intersectsBox: () => true } as unknown as Frustum;
+    f.square.drawOpaque(f.pass, 3, f.context);
+    assert.deepEqual(f.draws.map(d => [d.first, d.count]), [[12, 6]], "the new pose renders when its bounds are in view");
     f.square.delete();
 });
 

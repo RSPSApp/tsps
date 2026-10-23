@@ -438,8 +438,8 @@ export class SceneRaycaster {
         let nextX = dx !== 0 ? (stepX > 0 ? tileX + 1 - x0 : x0 - tileX) * deltaX : Infinity;
         let nextY = dz !== 0 ? (stepY > 0 ? tileY + 1 - z0 : z0 - tileY) * deltaY : Infinity;
 
-        // Neighbouring tiles' locs are searched once per raycast, not once per ray tile.
-        const visitedAnchors = new Set<number>();
+        // Adjacent ray tiles share most neighbours; mark (plane, x, y) without hashing each lookup.
+        const visitedAnchors = new Uint8Array(Scene.MAX_LEVELS * mapTileSpan * mapTileSpan);
         const resolvedLocTypes = new Map<number, LocType>();
 
         const maxSteps = (mapTileSpan * 2 + 2) | 0;
@@ -474,7 +474,7 @@ export class SceneRaycaster {
         worldTileY: number,
         maxDistance: number,
         hits: SceneRaycastHit[],
-        visitedAnchors?: Set<number>,
+        visitedAnchors?: Uint8Array,
         resolvedLocTypes?: Map<number, LocType>,
         basePlane?: number,
     ): void {
@@ -565,8 +565,8 @@ export class SceneRaycaster {
 
                     if (visitedAnchors) {
                         const key = (level * mapTileSpan + anchorLocalX) * mapTileSpan + anchorLocalY;
-                        if (visitedAnchors.has(key)) continue;
-                        visitedAnchors.add(key);
+                        if (visitedAnchors[key]) continue;
+                        visitedAnchors[key] = 1;
                     }
 
                     const locIds = map.getLocIdsAtLocal(level, anchorLocalX, anchorLocalY);

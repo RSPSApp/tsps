@@ -46,6 +46,37 @@ const cache = {
     next.queue(Sector.SIZE * 20, bytes.byteLength);
     await next.flush();
     assert.equal(puts, 1, "a range an earlier session stored is not stored again");
+
+    // Fetch batching can join groups that previous flushes stored separately.
+    const more = Uint8Array.from({ length: Sector.SIZE * 10 }, (_, i) => (i + 7) % 239);
+    dat2.write(Sector.SIZE * 30, more);
+    first.queue(Sector.SIZE * 30, more.byteLength);
+    await first.flush();
+    dat2.write(Sector.SIZE * 45, more.subarray(0, Sector.SIZE));
+    first.queue(Sector.SIZE * 45, Sector.SIZE);
+    await first.flush();
+    const later = new Js5Persistence("test", "/caches/dat2", new SparseDat2(dat2.byteLength, false));
+    const joined = await later.read(Sector.SIZE * 25, Sector.SIZE * 10);
+    assert.ok(joined, "a batch spanning adjacent stored ranges reads entirely from storage");
+    assert.deepEqual(joined, dat2.read(Sector.SIZE * 25, Sector.SIZE * 10));
+    assert.equal(await later.read(Sector.SIZE * 19, Sector.SIZE * 2), undefined, "a gap before stored data still needs the network");
+    assert.equal(await later.read(Sector.SIZE * 39, Sector.SIZE * 2), undefined, "a gap after stored data still needs the network");
+    assert.equal(await later.read(Sector.SIZE * 39, Sector.SIZE * 7), undefined, "a gap between stored parts still needs the network");
+
+    const stored = entries.get("/caches/dat2/range/?s=30&n=10")!;
+    stored.body = stored.body.slice(0, Sector.SIZE);
+    assert.equal(await later.read(Sector.SIZE * 25, Sector.SIZE * 10), undefined, "a truncated stored part is never returned as a complete batch");
+    entries.delete("/caches/dat2/range/?s=30&n=10");
+    assert.equal(await later.read(Sector.SIZE * 25, Sector.SIZE * 10), undefined, "an evicted part falls back to the network");
+
+    (globalThis as any).caches = { open: async () => { throw new Error("storage denied"); } };
+    const unavailable = new Js5Persistence("test", "/caches/dat2", dat2);
+    assert.equal(await unavailable.read(Sector.SIZE * 20, Sector.SIZE), undefined,
+        "unavailable storage must let the caller fetch from the network");
+    unavailable.queue(Sector.SIZE * 20, Sector.SIZE);
+    await unavailable.flush();
+    unavailable.queue(Sector.SIZE * 21, Sector.SIZE);
+    await unavailable.flush();
     console.log("js5 persistence read ok");
 })().catch((error) => {
     console.error(error);

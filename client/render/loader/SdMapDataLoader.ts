@@ -1392,6 +1392,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         }: SdMapLoaderInput,
     ): Promise<RenderDataResult<SdMapData | undefined>> {
         if (mapProfileEnabled) console.time(`load map ${mapX},${mapY}`);
+        const sparseMissesBefore = state.js5?.store.missCount;
         this.init();
         state.sceneBuilder.mapFileLoader.setRegionReplacements(mapRegionReplacements);
 
@@ -1656,6 +1657,11 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             scene.light(textureLoader, -50, -10, -50);
         }
         if (mapProfileEnabled) console.timeEnd(`build scene ${mapX},${mapY}`);
+        // Sparse model misses return undefined; wait before packing a scene we'll discard.
+        if (state.js5?.store.missCount !== sparseMissesBefore) {
+            if (mapProfileEnabled) console.timeEnd(`load map ${mapX},${mapY}`);
+            return { data: undefined, transferables: [] };
+        }
 
         // Terrain does not change for LOC_ADD_CHANGE packets. Keep it in the
         // primary mesh and put mutable non-door locs in their own mesh.

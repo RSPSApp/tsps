@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 
 import { Camera } from "../game/Camera";
+import { computeRoofPlaneLimit } from "../game/roof/RoofVisibility";
+import { TILE_FLAG_UNDER_ROOF } from "../game/scene/TileRenderFlags";
+import { registerClientOps } from "../rs/cs2/handlers/ClientOps";
+import type { HandlerMap } from "../rs/cs2/handlers/HandlerTypes";
+import { Opcodes } from "../rs/cs2/Opcodes";
 
 const camera = new Camera(0, 0, 0, 256, 512);
 camera.move(0, 0, -1);
@@ -28,5 +33,31 @@ camera.setViewPitchOverride(600);
 assert.equal(camera.getScenePitchAngle(), 480, "close camera can look nearly vertically downward");
 camera.setViewPitchOverride(undefined);
 assert.equal(camera.getScenePitchAngle(), 128, "clearing a view override should restore camera controls");
+
+camera.setScenePitchOverride(300.25);
+assert.equal(camera.getScenePitchAngle(), 300.25, "terrain pressure and smoothing retain fractional render angles");
+camera.setScenePitchOverride(600);
+assert.equal(camera.getScenePitchAngle(), 512, "render override limits still apply");
+camera.setScenePitchOverride(undefined);
+
+const handlers: HandlerMap = new Map();
+registerClientOps(handlers);
+const scriptAngles: number[] = [];
+const ctx: any = { widgetManager: { osrsClient: { camera } }, pushInt: (value: number) => scriptAngles.push(value) };
+camera.snapToPitch(210);
+for (let i = 0; i < 20; i++) {
+    camera.updatePitch(camera.pitch, 0.2);
+    handlers.get(Opcodes.CAM_GETANGLE_XA)!(ctx, 0 as any);
+}
+assert.ok(scriptAngles.every(Number.isInteger), "native CS2 camera-angle reads remain integers");
+assert.equal(new Set(scriptAngles).size, 3, "render precision must not change native angle quantization");
+
+const roofMap = { mapX: 0, mapY: 0, getTileRenderFlag: (_plane: number, x: number, y: number) => x === 0 && y === 0 ? TILE_FLAG_UNDER_ROOF : 0 };
+const roofMaps: any = { getMap: () => roofMap, getMapForWorldTile: () => roofMap };
+const roofInput = { playerRawPlane: 0, roofsHidden: false,
+    cameraTile: { x: 0, y: 0 }, playerTile: { x: 2, y: 2 }, targetTile: { x: 2, y: 2 } };
+assert.equal(computeRoofPlaneLimit(roofMaps, 3, { ...roofInput, cameraPitch: 309.75 }), 0);
+assert.equal(computeRoofPlaneLimit(roofMaps, 3, { ...roofInput, cameraPitch: 310 }), 3,
+    "fractional render angles retain the native roof-hiding threshold");
 
 console.log("camera control orientation ok");

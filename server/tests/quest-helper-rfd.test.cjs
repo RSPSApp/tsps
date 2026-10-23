@@ -95,7 +95,7 @@ test('Amik reads its actual Aris unlock and every server brulee recipe intermedi
 });
 test('Awowogei covers recipe mask, three monkey talks, offerings, course, hole and cooking',()=>{
  for(const[bits,id]of[[0,'awowogei-king'],[72,'awowogei-monkeys'],[79,'awowogei-banana-offer'],[95,'awowogei-nuts-offer'],[127,'awowogei-snake']])assert.equal(step({attrs:{'awowogei-state':bits}},'MONKEY_AMBASSADOR').id,id);
- for(const[bits,inventory,id,location]of[[127,{SNAKE_CORPSE:1},'awowogei-red-banana'],[127,{SNAKE_CORPSE:1,RED_BANANA:1},'awowogei-course'],[383,{SNAKE_CORPSE:1,RED_BANANA:1},'awowogei-hole'],[895,{SNAKE_CORPSE:1,RED_BANANA:1},'awowogei-nuts',[3020,5457,0]],[127,{RAW_STUFFED_SNAKE:1},'awowogei-dungeon'],[1151,{RAW_STUFFED_SNAKE:1},'awowogei-cook',[3055,5484,0]]])assert.equal(step({attrs:{'awowogei-state':bits},inventory,location},'MONKEY_AMBASSADOR').id,id);
+ for(const[bits,inventory,id,location]of[[127,{SNAKE_CORPSE:1},'awowogei-filling-choice'],[127,{SNAKE_CORPSE:1,RED_BANANA:1},'awowogei-slice'],[383,{SNAKE_CORPSE:1},'awowogei-hole'],[895,{SNAKE_CORPSE:1},'awowogei-nuts',[3020,5457,0]],[127,{RAW_STUFFED_SNAKE:1},'awowogei-dungeon'],[1151,{RAW_STUFFED_SNAKE:1},'awowogei-cook',[3055,5484,0]]])assert.equal(step({attrs:{'awowogei-state':bits},inventory,location},'MONKEY_AMBASSADOR').id,id);
 });
 test('finale follows actual persisted checkpoints and all six combat waves',()=>{
  assert.equal(step({flags:255,attrs:{'culinaromancer-wave':-1}},'FINALE').id,'final-enter');
@@ -149,7 +149,19 @@ test('late recipes progress from real carried ingredients and equipped forms',()
  assert.equal(step({attrs:{'pirate-state':16},inventory:{GROUND_COD:1,GROUND_KELP:1,GROUND_GIANT_CRAB_MEAT:1,BREADCRUMBS:1}},'PIRATE_PETE').id,'pete-mix');
  assert.equal(step({attrs:{'amik-state':1},inventory:{BRULEE:1,EVIL_CHICKENS_EGG:1}},'SIR_AMIK_VARZE').id,'amik-add-egg');
  const flambe=step({attrs:{'amik-state':1},inventory:{BRULEE_3:1,DRAGON_TOKEN:1}},'SIR_AMIK_VARZE');assert.equal(flambe.id,'amik-flambe');assert.ok(flambe.requirements.some(r=>r.ids?.includes(I.ICE_GLOVES)&&!r.met));
- for(const[inventory,id]of[[{SNAKE_CORPSE:1,RED_BANANA:1,TCHIKI_MONKEY_NUTS:1},'awowogei-slice'],[{SNAKE_CORPSE:1,SLICED_RED_BANANA:1,TCHIKI_MONKEY_NUTS:1},'awowogei-grind'],[{SNAKE_CORPSE:1,SLICED_RED_BANANA:1,TCHIKI_NUT_PASTE:1},'awowogei-stuff']])assert.equal(step({attrs:{'awowogei-state':127},inventory},'MONKEY_AMBASSADOR').id,id);
+ for(const[inventory,id]of[[{SNAKE_CORPSE:1,RED_BANANA:1,TCHIKI_MONKEY_NUTS:1},'awowogei-slice'],[{SNAKE_CORPSE:1,SLICED_RED_BANANA:1,TCHIKI_MONKEY_NUTS:1},'awowogei-stuff'],[{SNAKE_CORPSE:1,SLICED_RED_BANANA:1,TCHIKI_NUT_PASTE:1},'awowogei-stuff']])assert.equal(step({attrs:{'awowogei-state':127},inventory},'MONKEY_AMBASSADOR').id,id);
+});
+test('either snake filling is sufficient without gathering the other',()=>{
+ for(const filling of ['SLICED_RED_BANANA','TCHIKI_NUT_PASTE']){
+  const s=step({attrs:{'awowogei-state':127},inventory:{SNAKE_CORPSE:1,[filling]:1}},'MONKEY_AMBASSADOR');
+  assert.equal(s.id,'awowogei-stuff');assert.match(s.text.join(' '),/one filling|either filling/i);
+  assert.ok(s.targets.some(t=>t.id===I[filling]));
+ }
+ assert.match(step({attrs:{'awowogei-state':127},inventory:{SNAKE_CORPSE:1}},'MONKEY_AMBASSADOR').text.join(' '),/choose.*one/i);
+ assert.equal(step({attrs:{'awowogei-state':127},inventory:{SNAKE_CORPSE:1,TCHIKI_MONKEY_NUTS:1}},'MONKEY_AMBASSADOR').id,'awowogei-grind');
+ assert.equal(step({attrs:{'awowogei-state':127},inventory:{RAW_STUFFED_SNAKE:1}},'MONKEY_AMBASSADOR').id,'awowogei-dungeon');
+ assert.equal(step({attrs:{'awowogei-state':0},inventory:{RAW_STUFFED_SNAKE:1}},'MONKEY_AMBASSADOR').id,'awowogei-dungeon');
+ assert.match(step({attrs:{'awowogei-state':127},inventory:{STUFFED_SNAKE:1}},'MONKEY_AMBASSADOR').id,/rescue/);
 });
 test('factory resolves quest handles at evaluation after plugin registration completes',()=>{
  let available=[];const render=createRfdRenderer({core,getQuests:()=>available});const f=fixture({stage:5});

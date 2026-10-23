@@ -376,30 +376,26 @@ function createRfdRenderer({core, getQuests}) {
         const state=number('awowogei-state');
         speech();
         const monkeys=()=>npc([N.MIZARU,N.KIKAZARU,N.IWAZARU]);
-        if(!(state&8))return step('awowogei-king','With an M\'speak amulet, talk to King Awowogei on Ape Atoll. The live King interaction is a mapped object; the council Awowogei in Lumbridge is a separate NPC.',[object([O.AWOWOGEI,O.AWOWOGEI_2,O.AWOWOGEI_3])]);
-        if((state&7)!==7)return step('awowogei-monkeys','Talk to all three wise monkeys on Ape Atoll while carrying or wearing an M\'speak amulet.',[monkeys()]);
-        if(!(state&16)){ingredient('Banana',I.BANANA);return step('awowogei-banana-offer','Use an ordinary banana on one of the three wise monkeys to learn about the red banana.',[monkeys(),item(I.BANANA)]);}
-        if(!(state&32)){ingredient('Monkey nuts',I.MONKEY_NUTS);return step('awowogei-nuts-offer','Use ordinary monkey nuts on one of the three wise monkeys to learn about Tchiki nuts.',[monkeys(),item(I.MONKEY_NUTS)]);}
         if(has(I.RAW_STUFFED_SNAKE)){
           need('Zombie monkey greegree worn',equipped(core.Equipment.WEAPON_SLOT,[I.ZOMBIE_MONKEY_GREEGREE,I.ZOMBIE_MONKEY_GREEGREE_2]));
           if((state&1024)&&at(3050,3062,5478,5492))return step('awowogei-cook','While wearing a zombie monkey greegree, use the raw stuffed snake on the hot rocks in this room. Then use the cooked snake on Awowogei at the council.',[object([16077,16078,16079,16080,26175]),item(I.RAW_STUFFED_SNAKE)]);
           return step('awowogei-dungeon','Wear a zombie monkey greegree and enter the crack (16061) in the Ape Atoll temple dungeon to reach the hot rocks. Cook the snake there.',[object(16061),item(I.RAW_STUFFED_SNAKE)]);
         }
+        if(!(state&8))return step('awowogei-king','With an M\'speak amulet, talk to King Awowogei on Ape Atoll. The live King interaction is a mapped object; the council Awowogei in Lumbridge is a separate NPC.',[object([O.AWOWOGEI,O.AWOWOGEI_2,O.AWOWOGEI_3])]);
+        if((state&7)!==7)return step('awowogei-monkeys','Talk to all three wise monkeys on Ape Atoll while carrying or wearing an M\'speak amulet.',[monkeys()]);
+        if(!(state&16)){ingredient('Banana',I.BANANA);return step('awowogei-banana-offer','Use an ordinary banana on one of the three wise monkeys to learn about the red banana.',[monkeys(),item(I.BANANA)]);}
+        if(!(state&32)){ingredient('Monkey nuts',I.MONKEY_NUTS);return step('awowogei-nuts-offer','Use ordinary monkey nuts on one of the three wise monkeys to learn about Tchiki nuts.',[monkeys(),item(I.MONKEY_NUTS)]);}
         if(!has(I.SNAKE_CORPSE))return step('awowogei-snake','Travel to Crash Island, enter the snake pit, kill the Big Snake and collect its corpse.',[npc(N.BIG_SNAKE),item(I.SNAKE_CORPSE)]);
-        if(!has(I.RED_BANANA)&&!has(I.SLICED_RED_BANANA)){
-          need('Gorilla greegree worn',equipped(core.Equipment.WEAPON_SLOT,[I.GORILLA_GREEGREE,I.BEARDED_GORILLA_GREEGREE,I.ANCIENT_GORILLA_GREEGREE,I.GORILLA_GREEGREE_2]));
-          ingredient('Rope',I.ROPE);
-          return step('awowogei-red-banana','Wear a gorilla greegree and use a rope on the red banana tree. The recipe must have been revealed by all three monkeys and both ingredient offerings.',[object([O.RED_BANANA_TREE,O.RED_BANANA_TREE_2,15580]),item(I.ROPE)]);
-        }
-        if(!has(I.TCHIKI_MONKEY_NUTS)&&!has(I.TCHIKI_NUT_PASTE)){
+        const preparedFilling=[I.SLICED_RED_BANANA,I.TCHIKI_NUT_PASTE].find(id=>has(id));
+        if(preparedFilling){need('One empty inventory slot',inv.getFreeSlots()>=1);return step('awowogei-stuff','Use either filling on the snake corpse: sliced red banana or Tchiki nut paste. One filling is sufficient on this server; you do not need to gather the other.',[item(I.SNAKE_CORPSE),item(preparedFilling)]);}
+        if(has(I.RED_BANANA)){ingredient('Knife',I.KNIFE);return step('awowogei-slice','Use a knife on the red banana. Then use the sliced banana on the snake corpse; this filling alone is sufficient.',[item(I.KNIFE),item(I.RED_BANANA)]);}
+        if(has(I.TCHIKI_MONKEY_NUTS)){ingredient('Pestle and mortar',I.PESTLE_AND_MORTAR);return step('awowogei-grind','Grind the Tchiki monkey nuts with a pestle and mortar. Then use the paste on the snake corpse; this filling alone is sufficient.',[item(I.TCHIKI_MONKEY_NUTS),item(I.PESTLE_AND_MORTAR)]);}
+        if(state&256){
           need('Ninja monkey greegree worn',equipped(core.Equipment.WEAPON_SLOT,[I.NINJA_MONKEY_GREEGREE,I.NINJA_MONKEY_GREEGREE_2,I.NINJA_MONKEY_GREEGREE_3,I.NINJA_MONKEY_GREEGREE_4]));
-          if(!(state&256))return step('awowogei-course','Wear a ninja monkey greegree, put away pets/followers and complete the Ape Atoll agility course through its rope swing. Then enter the course hole.',[object(O.ROPE_20),object(O.HOLE_18)]);
           if(!(state&512)||!at(3018,3027,5454,5460))return step('awowogei-hole','After swinging across the course rope, enter the hole to reach the Tchiki cave at 3020,5457.',[object(O.HOLE_18)]);
           return step('awowogei-nuts','Pick the Tchiki nut bush in this cave while wearing a ninja monkey greegree. Leave through the exit at 3025,5457.',[object([O.TCHIKI_MONKEY_NUT_BUSH,16059],3020,5457),object(16060,3025,5457)]);
         }
-        if(has(I.RED_BANANA)){ingredient('Knife',I.KNIFE);return step('awowogei-slice','Use a knife on the red banana.',[item(I.KNIFE),item(I.RED_BANANA)]);}
-        if(has(I.TCHIKI_MONKEY_NUTS)){ingredient('Pestle and mortar',I.PESTLE_AND_MORTAR);return step('awowogei-grind','Grind the Tchiki monkey nuts with a pestle and mortar.',[item(I.TCHIKI_MONKEY_NUTS),item(I.PESTLE_AND_MORTAR)]);}
-        return step('awowogei-stuff','Use sliced red banana or Tchiki nut paste on the snake corpse. Carry both prepared fillings; the server creates the raw stuffed snake when either is used.',[item(I.SNAKE_CORPSE),item(I.SLICED_RED_BANANA),item(I.TCHIKI_NUT_PASTE)]);
+        return step('awowogei-filling-choice','Choose one filling route. Red banana: wear a gorilla greegree, use a rope on the red banana tree, then slice the banana with a knife. Tchiki paste: wear a ninja greegree, put away pets/followers, cross the Ape Atoll course rope, enter its hole, pick Tchiki nuts and grind them. Either prepared filling alone can stuff the snake on this server.',[object([O.RED_BANANA_TREE,O.RED_BANANA_TREE_2,15580]),item(I.ROPE),object(O.ROPE_20),object(O.HOLE_18)]);
       }
 
       if (part === 'FINALE') {

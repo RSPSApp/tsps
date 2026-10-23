@@ -456,8 +456,9 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
   let inventoryAdds = 0;
   let resets = 0;
   let removed = 0;
+  const floorItem = new Item(33788, 1);
   const groundItem = {
-    getItem: () => ({ getId: () => 33788, getAmount: () => 1 }),
+    getItem: () => floorItem,
     getPosition: () => new Location(100, 100, 0),
     getPrivateArea: () => null,
     isPendingRemoval: () => false,
@@ -469,6 +470,7 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
     getMovementQueue: () => ({ reset: () => { resets++; } }),
     getInventory: () => ({
       getFreeSlots: () => 1,
+      getItems: () => [],
       getAmount: () => 0,
       addItem: () => { inventoryAdds++; },
     }),

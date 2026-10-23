@@ -779,7 +779,19 @@ export abstract class ItemContainer {
       // Drop once at the reward location. Ground-stack merging must not mutate the reward item.
       getItemOnGroundManager().registers(player, item.clone());
     } else {
+      const requested = item.getAmount();
+      const meta = JSON.stringify(item.getMeta() ?? null);
+      const matchingAmount = () => this.items.reduce((total, entry) =>
+        entry.getId() === item.getId() && JSON.stringify(entry.getMeta() ?? null) === meta
+          ? total + entry.getAmount() : total, 0);
+      const before = matchingAmount();
       this.addItem(item);
+      // Addition can fit only part of a stack or a nonstackable batch. Preserve
+      // the exact remainder, just as forceAdd already does for a full inventory.
+      const remaining = requested - (matchingAmount() - before);
+      if (remaining > 0) {
+        getItemOnGroundManager().registers(player, item.clone().setAmount(remaining));
+      }
     }
   }
 

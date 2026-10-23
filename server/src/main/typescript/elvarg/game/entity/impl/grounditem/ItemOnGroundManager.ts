@@ -10,6 +10,7 @@ import { ItemOnGround } from "./ItemOnGround"
 import { State } from "./ItemOnGround"
 import { GroundItemRespawnTask } from '../../../task/impl/GroundItemRespawnTask'
 import { Item } from "../../../model/Item"
+import { MAX_STACK_AMOUNT } from "../../../model/container/StackType"
 import { PrivateArea } from "../../../model/areas/impl/PrivateArea"
 import { Misc } from "../../../../util/Misc"
 import { PathFinder } from "../../../model/movement/path/PathFinder";
@@ -131,7 +132,14 @@ export class ItemOnGroundManager {
 
             // Modify the existing item.
             if (item_.getItem().getId() === item.getItem().getId()) {
+                if (JSON.stringify(item_.getItem().getMeta() ?? null) !== JSON.stringify(item.getItem().getMeta() ?? null)) {
+                    continue;
+                }
                 let oldAmount = item_.getItem().getAmount();
+                if (oldAmount + item.getItem().getAmount() > MAX_STACK_AMOUNT) {
+                    // Keep a separate ground pile; incrementAmountBy caps rather than returning overflow.
+                    continue;
+                }
                 item_.getItem().incrementAmountBy(item.getItem().getAmount());
                 item_.setOldAmount(oldAmount);
                 item_.setTick(0);
@@ -170,40 +178,34 @@ export class ItemOnGroundManager {
         })) return;
 
         const inventory = player.getInventory();
-        if (!(inventory.getFreeSlots() > 0 ||
-            (ItemDefinition.forId(itemId).isStackable() && inventory.contains(itemId)))) {
+        const groundAmount = groundItem.getItem().getAmount();
+        const stackable = ItemDefinition.forId(itemId).isStackable();
+        const metadata = JSON.stringify(groundItem.getItem().getMeta() ?? null);
+        const matchingStack = stackable ? inventory.getItems().find(item =>
+            item.getId() === itemId && JSON.stringify(item.getMeta() ?? null) === metadata
+        ) : undefined;
+        // Use the same stack identity and limit as inventory addition. Stacks
+        // with different metadata need a separate slot, even for the same id.
+        const capacity = stackable
+            ? matchingStack ? MAX_STACK_AMOUNT - matchingStack.getAmount()
+                : inventory.getFreeSlots() > 0 ? MAX_STACK_AMOUNT : 0
+            : inventory.getFreeSlots();
+        const pickedUpAmount = Math.min(groundAmount, capacity);
+        if (pickedUpAmount <= 0) {
             inventory.full();
             return;
         }
 
-        const inventoryAmount = inventory.getAmount(groundItem.getItem().getId());
-        const groundAmount = groundItem.getItem().getAmount();
-        let pickedUpItem = groundItem.getItem();
-        let deregister = true;
-
-        if (
-            inventoryAmount + groundAmount > Number.MAX_SAFE_INTEGER ||
-            inventoryAmount + groundAmount <= 0
-        ) {
-            const playerCanHold = Number.MAX_SAFE_INTEGER - inventoryAmount;
-            if (playerCanHold <= 0) {
-                player.sendMessage("You cannot hold more of that item.");
-                return;
-            }
-
-            const currentAmount = groundItem.getItem().getAmount();
-            groundItem.setOldAmount(currentAmount);
-            groundItem.getItem().decrementAmountBy(playerCanHold);
-            ItemOnGroundManager.perform(groundItem, OperationType.ALTER);
-            pickedUpItem = groundItem.getItem().clone().setAmount(playerCanHold);
-            deregister = false;
-        }
-
-        if (deregister) {
-            ItemOnGroundManager.deregister(groundItem);
-        }
-
+        const pickedUpItem = groundItem.getItem().clone().setAmount(pickedUpAmount);
         inventory.addItem(pickedUpItem);
+        if (pickedUpAmount === groundAmount) {
+            ItemOnGroundManager.deregister(groundItem);
+        } else {
+            groundItem.setOldAmount(groundAmount);
+            groundItem.getItem().decrementAmountBy(pickedUpAmount);
+            ItemOnGroundManager.perform(groundItem, OperationType.ALTER);
+        }
+
         Sounds.sendSound(player, Sound.PICK_UP_ITEM);
         player.getLastItemPickup().reset();
     }

@@ -1,5 +1,12 @@
 # Random events
 
+[Pinball](https://oldschool.runescape.wiki/w/Pinball) gives five noted sapphires,
+emeralds or rubies at 3/10 each, or two noted diamonds at 1/10.
+[Flippa's transcript](https://oldschool.runescape.wiki/w/Transcript:Flippa) supplies
+the yes/no invitation. In cache revision 241 the invitation is NPC 6744 (`FLIPPA_2`),
+with `Talk-to` and `Dismiss`; NPC 5427 (`FLIPPA`) is the two-tile room variant
+with only `Talk-To`, whose spelling does not match the invitation action hook.
+
 This plugin adapts existing implementations rather than inventing event control flow.
 Full upstream notices are retained in [LICENSES.txt](LICENSES.txt).
 

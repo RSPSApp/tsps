@@ -321,7 +321,7 @@ test('randevt is described and owner-only, selects each index immediately and re
   const ids = [N.GENIE, N.SANDWICH_LADY, N.DRUNKEN_DWARF, N.RICK_TURPENTINE,
     N.MILES, N.MYSTERIOUS_OLD_MAN_2, N.DR_JEKYLL, N.COUNT_CHECK_2, null, N.CAPT_ARNAV,
     N.BEE_KEEPER_2, N.QUIZ_MASTER_2, N.SERGEANT_DAMIEN_2, N.FREAKY_FORESTER_2, N.LEO_2,
-    N.FLIPPA, N.EVIL_BOB, N.EVIL_BOB, N.POSTIE_PETE_2, N.MYSTERIOUS_OLD_MAN_4,
+    N.FLIPPA_2, N.EVIL_BOB, N.EVIL_BOB, N.POSTIE_PETE_2, N.MYSTERIOUS_OLD_MAN_4,
     N.MYSTERIOUS_OLD_MAN_5, N.PILLORY_GUARD, N.DUNCE_2, N.STRANGE_PLANT];
   let previous;
   ids.forEach((id, index) => {
@@ -960,6 +960,54 @@ test('Gravedigger buries the five right coffins for zombie pieces', t => {
   choose(h, p, 0);
   assert.ok(p.rewards.includes(13283) && p.rewards.includes(13284));
   assert.equal(Teleports.sessionOf(p), undefined);
+});
+
+test('Pinball inviter supports the cache Talk-to and Dismiss actions through real dispatch', async t => {
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  await CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
+  t.mock.method(PluginManager, 'getCoreApi', () => h.api.core);
+  const previousHooks = PluginManager.npcInteractionHooks;
+  PluginManager.npcInteractionHooks = [];
+  t.after(() => { PluginManager.npcInteractionHooks = previousHooks; });
+  PluginManager.createApi('RandomEvents').onNpcInteraction('Flippa', h.hooks.Flippa);
+  const definition = NpcDefinition.forId(npc.getId());
+  const operate = clickType => PluginManager.emitNpcInteraction({
+    player: p, npc, definition, npcId: npc.getId(), clickType, handled: false,
+  });
+  assert.equal(operate(1), true, 'the spawned cache variant dispatches Talk-to');
+  assert.ok(p.dialogue);
+  choose(h, p, 1);
+  assert.equal(Teleports.hasSession(p), false, 'declining keeps the invitation');
+  assert.equal(npc.removed, undefined);
+  assert.equal(operate(1), true, 'the invitation can be reopened');
+  assert.equal(definition.getActions()[4], 'Dismiss', 'the client exposes Dismiss');
+  assert.equal(operate(5), true);
+  assert.equal(npc.removed, true);
+  assert.equal(Events.activeFor(p), null);
+  assert.equal(Teleports.hasSession(p), false);
+});
+
+test('Pinball awards noted gems with the Wiki 3/3/3/1 weights at roll boundaries', t => {
+  const h = harness(t);
+  const cases = [[0, 1608, 5], [0.299999, 1608, 5], [0.3, 1606, 5],
+    [0.599999, 1606, 5], [0.6, 1604, 5], [0.899999, 1604, 5],
+    [0.9, 1602, 2], [0.999999, 1602, 2]];
+  for (const [roll, id, amount] of cases) {
+    const p = h.player(), origin = p.location.clone(), npc = h.spawn(p, 15);
+    h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });
+    choose(h, p, 0);
+    const session = Teleports.sessionOf(p);
+    session.data.done = true;
+    h.random(roll);
+    h.hooks['object:Cave Exit'].Use({ player: p, handled: false,
+      object: { getId: () => 9293, getLocation: () => new Location(1971, 5036, 0) } });
+    assert.deepEqual(p.rewardItems.map(item => [item.getId(), item.getAmount()]), [[id, amount]], `roll ${roll}`);
+    assert.ok(p.location.equals(origin));
+    assert.equal(Teleports.hasSession(p), false);
+  }
 });
 
 test('Pinball scores the glowing post, resets on others and pays at the cave exit', t => {

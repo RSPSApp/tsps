@@ -15,7 +15,8 @@ const POSTS = [
   [[1977, 5046], 9258, 9259],
 ];
 const EXIT = 9293;
-const GEM_TABLE = [[1608, 5], [1606, 5], [1604, 5], [1602, 2]];
+// Noted sapphire/emerald/ruby: 3/10 each; noted diamond: 1/10 (cumulative roll limits).
+const GEM_TABLE = [[1608, 5, 3], [1606, 5, 6], [1604, 5, 9], [1602, 2, 10]];
 
 // The room is shared: one glowing post, one object per tile, restored when the last player leaves.
 const room = { objects: new Map(), glow: -1, owners: 0 };
@@ -25,7 +26,7 @@ module.exports = function attach(api, Events) {
   const { Location, ObjectManager } = api.core;
 
   const definition = {
-    id: N.FLIPPA,
+    id: N.FLIPPA_2,
     kind: "pinball",
     greeting: "Come play game,",
     talk(active, { teleport }) {
@@ -146,7 +147,8 @@ module.exports = function attach(api, Events) {
       Teleports.finish(session, { message: "You leave the pinball room without a prize." });
       return true;
     }
-    const reward = GEM_TABLE[Math.floor(Math.random() * GEM_TABLE.length)];
+    const roll = Math.floor(Math.random() * 10);
+    const reward = GEM_TABLE.find(([, , limit]) => roll < limit);
     Teleports.finish(session, { reward: [{ id: reward[0], amount: reward[1] }],
       message: "You cash in your pinball prize." });
     return true;

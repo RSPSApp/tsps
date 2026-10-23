@@ -51,6 +51,11 @@ function heldItems(player) {
   return Array.isArray(held?.items) ? held : null;
 }
 
+/** Generic read-only retrieval inventory; consumers must not inspect our saved attributes. */
+function retrievalItems(request) {
+  for (const [itemId, amount] of heldItems(request.player)?.items ?? []) request.items.push({itemId, amount});
+}
+
 function refusedBoarding(player) {
   if (!heldItems(player)) return false;
   Shared.npcSay(player, Shared.NPC.PRIESTESS, "I've got some stuff you left at the shrine earlier. You should get it back from me before sacrificing yourself again.");
@@ -285,6 +290,7 @@ function collectionLogCount(request) {
 module.exports = function registerZulrahShrine(api) {
   Shared.bind(api);
   api.onCustomEvent("collection-log:category-count", collectionLogCount);
+  api.onCustomEvent("item-retrieval:items", retrievalItems);
   for (const key of Object.values(Shared.ATTR)) api.persistAttribute(key);
   api.registerNpcCombatMethodProvider([...Shared.FORM_IDS], Fight.idleMethod(), { singleton: false });
   api.registerNpcCombatMethodProvider([Shared.NPC.SNAKELING_MELEE], MeleeSnakeling(), { singleton: false });
@@ -316,3 +322,4 @@ module.exports.onlyWhenSurfaced = onlyWhenSurfaced;
 module.exports.readTeleport = readTeleport;
 module.exports.readScroll = readScroll;
 module.exports.formatTicks = formatTicks;
+module.exports.retrievalItems = retrievalItems;

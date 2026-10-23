@@ -15,6 +15,10 @@ const heldItems = (player) => {
   return held && Array.isArray(held.items) && held.items.length > 0 ? held : null;
 };
 
+function retrievalItems(request) {
+  for (const [itemId, amount] of heldItems(request.player)?.items ?? []) request.items.push({itemId, amount});
+}
+
 /** A death in a dream: what would drop stays with its keeper. Elsewhere, an unsafe death loses it. */
 function hold(event) {
   const { player, item } = event;
@@ -111,6 +115,7 @@ function openService(request) {
 }
 
 function attachRetrieval(api) {
+  api.onCustomEvent("item-retrieval:items", retrievalItems);
   api.persistAttribute(Common.HELD_ITEMS_ATTRIBUTE);
   api.onPlayerDeathItemDrop(hold);
   api.onNpcsInteraction(["Shura", "Sister Senga"], { Collect: collectOption });
@@ -118,4 +123,4 @@ function attachRetrieval(api) {
   api.onCustomEvent("npc-dialogue:action", openService);
 }
 
-module.exports = { attachRetrieval, announce };
+module.exports = { attachRetrieval, announce, retrievalItems };

@@ -46,23 +46,33 @@ function rollClueNests(player, tree) {
     if (chance < 1 || Math.floor(Math.random() * chance) !== 0 || ownsClue(player, tier)) {
       continue;
     }
-    core.ItemOnGroundManager.registers(player, new core.Item(tier.nestId, 1));
+    const reward = {player, itemId: tier.nestId, box: false};
+    pluginApi?.emitCustomEvent?.("treasure-trails:clue-item", reward);
+    if (reward.box) {
+      player.getInventory().forceAdd(player, new core.Item(reward.itemId, 1));
+      if (core.WorldDefinition.isMembersWorld()) core.ItemOnGroundManager.registers(player, new core.Item(core.ItemIdentifiers.BIRD_NEST_6, 1));
+    } else core.ItemOnGroundManager.registers(player, new core.Item(tier.nestId, 1));
     player.sendMessage("<col=ff0000>A bird's nest falls out of the tree.");
   }
 }
 
 function openClueNest(event) {
+  const request = {...event, handled: false};
+  pluginApi?.emitCustomEvent?.("treasure-trails:open-vessel", request);
+  if (request.handled) return true;
   const { player } = event;
   const tier = tiers.find((entry) => entry.nestId === event.itemId);
   if (!tier) {
     return false;
   }
   const inventory = player.getInventory();
+  const item = inventory.getItems()[event.slot];
+  if (item?.getId() !== tier.nestId || item.getAmount() < 1 || event.item && event.item !== item) return true;
   if (inventory.getFreeSlots() <= 0) {
     player.sendMessage("You need a free inventory space to open the bird's nest.");
     return true;
   }
-  inventory.deleteNumber(tier.nestId, 1);
+  inventory.deleteAtSlot(event.slot, 1);
   inventory.adds(core.ItemIdentifiers.BIRD_NEST_6, 1);
   inventory.adds(tier.scrollId, 1);
   player.sendMessage("You take a clue scroll out of the bird's nest.");

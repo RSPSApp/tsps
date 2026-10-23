@@ -116,7 +116,10 @@ function openMimic(event) {
       const request = { player, tier: casket.tier, rolls: casket.normalRolls, drops: null, handled: false, error: null };
       pluginApi.emitCustomEvent("treasure-trails:roll-casket", request);
       if (!request.handled || !Array.isArray(request.drops) || request.error) throw request.error ?? new Error("Casket reward service unavailable");
-      const bonus = Pool.roll(BONUS_TABLES, casket.tier, casket.attemptsLeft);
+      const eligibility = {player, itemId: Shared.core().ItemIdentifiers.MIMIC_SCROLL_CASE, eligible: null};
+      pluginApi.emitCustomEvent("treasure-trails:case-eligible", eligibility);
+      if (typeof eligibility.eligible !== "boolean") throw new Error("Scroll-case capacity service unavailable");
+      const bonus = Pool.roll(BONUS_TABLES, casket.tier, casket.attemptsLeft, {includeScrollCase: eligibility.eligible});
       drops = validateDrops([...request.drops, ...bonus]);
       const first = bonus.find(drop => drop.itemId !== Shared.ids().PLANK);
       const name = Shared.core().ItemDefinition.forId(first.itemId).getName();

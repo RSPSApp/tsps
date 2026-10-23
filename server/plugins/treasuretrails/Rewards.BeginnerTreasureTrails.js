@@ -3,7 +3,6 @@
 // This is an imported exporter artifact, not a hand-maintained reward approximation.
 const TABLE = require("../../data/definitions/reward-caskets.json").beginner;
 const Runtime = require("./Runtime.BeginnerTreasureTrails");
-const Capacity = require("./Capacity.BeginnerTreasureTrails");
 const OPENING_ATTRIBUTE = "treasure-trails:opening-beginner";
 let api;
 let core;
@@ -66,7 +65,7 @@ function open(event) {
     inventory.deleteAtSlot(slot, 1);
     const count = (Number(player.getAttribute(Runtime.COMPLETED_ATTRIBUTE)) || 0) + 1;
     player.setAttribute(Runtime.COMPLETED_ATTRIBUTE, count);
-    drops.push(...Capacity.milestoneRewards(player, count, TABLE.milestones));
+    api.emitCustomEvent("treasure-trails:milestone-rewards", {player, completed: count, milestones: TABLE.milestones, drops});
     const slots = give(player, drops);
     Runtime.restore({ player });
     const sender = player.getPacketSender();

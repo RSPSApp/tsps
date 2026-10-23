@@ -196,7 +196,7 @@ function rewards(player, def) {
     EARTH: [["MEDIUM", 100]], ESSENCE: [["MEDIUM", 50]], ECLECTIC: [["MEDIUM", 25]], NATURE: [["HARD", 100]],
     MAGPIE: [["HARD", 50]], NINJA: [["HARD", 25]], DRAGON: [["ELITE", 50]], CRYSTAL: [["ELITE", 50]] };
   for (const [tier, denominator] of clues[def.key] ?? []) {
-    const id = I[`CLUE_SCROLL_${tier}_`];
+    const id = I[`${C.questComplete(player, "x_marks_the_spot") ? "SCROLL_BOX" : "CLUE_SCROLL"}_${tier}_`];
     if (roll(1, denominator) === 1 && !C.ownsClue(player, tier)) result.push([id, 1]);
   }
   return result;

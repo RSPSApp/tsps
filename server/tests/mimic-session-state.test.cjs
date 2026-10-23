@@ -36,6 +36,7 @@ function fixture() {
       getPrivateArea() { return this.area; }, getArea() { return this.area; }, setNpcTransformationId() {}, setFlag() {}, getCombat: () => ({attack() {}}) }) };
   Shared.bind(api); Lair.attach(api); Reward.attach(api);
   require("../plugins/treasuretrails/RewardCaskets.plugin").register(api);
+  api.onCustomEvent("treasure-trails:case-eligible", request => { request.eligible = false; });
   State.initialize(items[0], "master", 7);
   State.initialize(items[1], "elite", 6);
   const first = items[0], second = items[1];

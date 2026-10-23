@@ -10,7 +10,7 @@ const plugin = require("../plugins/treasuretrails/BeginnerTreasureTrails.plugin"
 const core = PluginManager.getCoreApi();
 const Runtime = require("../plugins/treasuretrails/Runtime.BeginnerTreasureTrails");
 const Rewards = require("../plugins/treasuretrails/Rewards.BeginnerTreasureTrails");
-const Capacity = require("../plugins/treasuretrails/Capacity.BeginnerTreasureTrails");
+const Capacity = require("../plugins/treasuretrails/Capacity.ClueCapacity");
 
 function fixture() {
   const actions = new Map(), events = new Map(), attributes = new Map(), sent = [], ground = [], spawned = [];
@@ -37,7 +37,9 @@ function fixture() {
     onPlayerLogout() {}, onPlayerDisconnect() {}, onPlayerLogin() {}, onInterfaceActionButton() {},
     spawnNpc: def => { const npc = {getLocation: () => new core.Location(def.x, def.y, def.z), def}; spawned.push(npc); return npc; },
     removeNpc: npc => { npc.removed = true; }, getRegionManager: () => ({blocked: () => false, canMovestart: () => true}) };
+  api.onCustomEvent("quest:is-complete", request => { if (request.key === "x_marks_the_spot") request.complete = true; });
   plugin.register(api);
+  require("../plugins/treasuretrails/ClueCapacity.plugin").register(api);
   function place(step, trailLength = 1, slot = 0) {
     const item = items[slot] = new core.Item(23182, 1);
     const state = { ...Runtime.stateOf(item), row: step.row, length: trailLength, completed: 0, task: null, hotcold: Runtime.data().hotcold[0].row };
@@ -247,11 +249,11 @@ test("Entrana blocks beginner caskets without consuming them",()=>{
   assert.equal(Rewards.open(f.event()),true);assert.equal(f.items[0].getId(),23245);assert.equal(f.attributes.get(Runtime.COMPLETED_ATTRIBUTE),undefined);
 });
 
-test("beginner capacity counts all forms and banked boxes; other tiers retain their fallback",()=>{
+test("shared capacity counts all forms and banked boxes across tiers",()=>{
   const f=fixture();f.items[0]=new core.Item(23182,1);
   let request={player:f.player,tier:"beginner",allowed:null};Capacity.canReceive(request);assert.equal(request.allowed,true);
   f.items[1]=new core.Item(24361,1);Capacity.canReceive(request);assert.equal(request.allowed,false);
-  request={player:f.player,tier:"easy",allowed:null};Capacity.canReceive(request);assert.equal(request.allowed,null);
+  request={player:f.player,tier:"easy",allowed:null};Capacity.canReceive(request);assert.equal(request.allowed,true);
   f.items[2]=new core.Item(core.ItemIdentifiers.MINOR_BEGINNER_SCROLL_CASE,1);Capacity.openCase(f.event(2));assert.equal(Capacity.capacity(f.player),3);
   f.items[2]=new core.Item(core.ItemIdentifiers.MINOR_BEGINNER_SCROLL_CASE,1);Capacity.openCase(f.event(2));assert.equal(Capacity.capacity(f.player),3);assert.equal(f.items[2].getId(),30902);
   f.items[2]=new core.Item(core.ItemIdentifiers.MAJOR_BEGINNER_SCROLL_CASE,1);Capacity.openCase(f.event(2));assert.equal(Capacity.capacity(f.player),4);
@@ -264,7 +266,7 @@ test("scroll boxes open without losing a full stack and NPC drops respect beginn
   Capacity.openBox(f.event());assert.equal(f.items[0].getAmount(),2);
   f.items[1]=null;Capacity.openBox(f.event());assert.equal(f.items[0].getAmount(),1);assert.equal(f.items[1].getId(),23182);
   const request={player:f.player,drops:[{itemId:23182,amount:1},{itemId:core.ItemIdentifiers.CLUE_SCROLL_EASY_,amount:1},{itemId:995,amount:10}]};
-  Capacity.filterDrops(request);assert.deepEqual(request.drops.map(d=>d.itemId),[core.ItemIdentifiers.CLUE_SCROLL_EASY_,995]);
+  Capacity.filterDrops(request);assert.deepEqual(request.drops.map(d=>d.itemId),[core.ItemIdentifiers.SCROLL_BOX_EASY_,995]);
 });
 
 test("Explore unlocks at 600 without gating any other emote",()=>{
@@ -285,7 +287,7 @@ test("milestone cases recover when lost but do not duplicate held, banked or con
   assert.deepEqual(Capacity.milestoneRewards(f.player,100,milestones),[]);
 });
 
-test("real woodcutting and mining source paths use beginner capacity while retaining other-tier checks",()=>{
+test("real woodcutting and mining source paths use shared capacity",()=>{
   const f=fixture(),drops=[];
   f.player.getSkillManager=()=>({getCurrentLevel:()=>99});
   const sourceCore={...core,ItemOnGroundManager:{registers:(_player,item)=>drops.push(item)}};
@@ -298,22 +300,24 @@ test("real woodcutting and mining source paths use beginner capacity while retai
   try{
     Math.random=()=>0;
     nests.rollClueNests(f.player,{petBase:10000});
-    assert.ok(drops.some(i=>i.getId()===core.ItemIdentifiers.CLUE_NEST_BEGINNER_));
+    assert.ok(f.items.some(i=>i?.getId()===core.ItemIdentifiers.SCROLL_BOX_BEGINNER_));
+    assert.ok(drops.some(i=>i.getId()===core.ItemIdentifiers.BIRD_NEST_6));
     drops.length=0;
     geodes.rollClueGeodes({player:f.player,skill:core.Skill.MINING,petBase:10000},()=>0);
-    assert.ok(f.items.some(i=>i?.getId()===core.ItemIdentifiers.CLUE_GEODE_BEGINNER_));
+    assert.equal(f.items.some(i=>i?.getId()===core.ItemIdentifiers.CLUE_GEODE_BEGINNER_),false);
     nests.rollClueNests(f.player,{petBase:10000});
     assert.equal(drops.some(i=>i.getId()===core.ItemIdentifiers.CLUE_NEST_BEGINNER_),false);
   }finally{Math.random=previous;}
 });
 
-test("impling clue ownership uses the beginner capacity query without changing easy clues",()=>{
+test("impling clue ownership uses shared capacity for beginner and easy clues",()=>{
   const f=fixture();
   const C=require("../plugins/skills/hunter/Context.Hunter");
   const previous={api:C.H.api,core:C.H.core};C.H.api=f.api;C.H.core=core;
   try{
     f.items[0]=new core.Item(23182,1);assert.equal(C.ownsClue(f.player,"BEGINNER"),false);
     f.items[1]=new core.Item(24361,1);assert.equal(C.ownsClue(f.player,"BEGINNER"),true);
-    f.items[2]=new core.Item(core.ItemIdentifiers.CLUE_SCROLL_EASY_,1);assert.equal(C.ownsClue(f.player,"EASY"),true);
+    f.items[2]=new core.Item(core.ItemIdentifiers.CLUE_SCROLL_EASY_,1);assert.equal(C.ownsClue(f.player,"EASY"),false);
+    f.items[3]=new core.Item(core.ItemIdentifiers.SCROLL_BOX_EASY_,1);assert.equal(C.ownsClue(f.player,"EASY"),true);
   }finally{Object.assign(C.H,previous);}
 });

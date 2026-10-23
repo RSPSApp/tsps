@@ -19,6 +19,10 @@ function storedOf(player) {
   return Array.isArray(stored) ? stored : [];
 }
 
+function retrievalItems(request) {
+  for (const {id: itemId, amount} of storedOf(request.player)) request.items.push({itemId, amount});
+}
+
 /** Everything but the kept items moves into the chest, replacing anything already there. */
 function storeAfterWipe(player) {
   const { Item, PlayerDeathTask } = Shared.core();
@@ -79,8 +83,9 @@ function searchChest(event) {
 
 module.exports = function registerTheatreRetrieval(api) {
   Shared.bind(api);
+  api.onCustomEvent("item-retrieval:items", retrievalItems);
   api.persistAttribute(ATTR_STORED);
   Shared.onObject(api, Shared.OBJECT.RETRIEVAL_CHEST, searchChest);
 };
 
-Object.assign(module.exports, { ATTR_STORED, FEE, storeAfterWipe, storedOf, collect, searchChest });
+Object.assign(module.exports, { ATTR_STORED, FEE, storeAfterWipe, storedOf, collect, searchChest, retrievalItems });

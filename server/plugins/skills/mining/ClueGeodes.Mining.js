@@ -45,12 +45,11 @@ function ownsClue(player, tier) {
 }
 
 function giveGeode(player, geodeId) {
+  const request = {player, itemId: geodeId, box: false};
+  pluginApi?.emitCustomEvent?.("treasure-trails:clue-item", request);
+  geodeId = request.itemId;
   const inventory = player.getInventory();
-  if (inventory.getFreeSlots() > 0) {
-    inventory.adds(geodeId, 1);
-  } else {
-    core.ItemOnGroundManager.registers(player, new core.Item(geodeId, 1));
-  }
+  inventory.forceAdd(player, new core.Item(geodeId, 1));
   player.sendMessage("You find a clue geode!");
 }
 
@@ -69,13 +68,18 @@ function rollClueGeodes({ player, skill, petBase }, random = Math.random) {
 }
 
 function openClueGeode(event) {
+  const request = {...event, handled: false};
+  pluginApi?.emitCustomEvent?.("treasure-trails:open-vessel", request);
+  if (request.handled) return true;
   const { player } = event;
   const tier = tiers.find((entry) => entry.geodeId === event.itemId);
   if (!tier) {
     return false;
   }
   const inventory = player.getInventory();
-  inventory.deleteNumber(tier.geodeId, 1);
+  const item = inventory.getItems()[event.slot];
+  if (item?.getId() !== tier.geodeId || item.getAmount() < 1 || event.item && event.item !== item) return true;
+  inventory.deleteAtSlot(event.slot, 1);
   inventory.adds(tier.scrollId, 1);
   player.sendMessage("You open the geode and find a clue scroll.");
   return true;

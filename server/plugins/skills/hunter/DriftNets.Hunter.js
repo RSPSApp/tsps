@@ -204,9 +204,10 @@ function rewards(player, count) {
   for (const [min, id] of [[50, I.RAW_LOBSTER], [60, I.RAW_SWORDFISH], [70, I.RAW_SHARK],
     [80, I.RAW_SEA_TURTLE], [90, I.RAW_MANTA_RAY]]) if (l >= min) fish.push(id);
   const result = [];
+  const clueId = I[`${C.questComplete(player, "x_marks_the_spot") ? "SCROLL_BOX" : "CLUE_BOTTLE"}_MEDIUM_`];
   for (let i = 0; i < count; i++) {
     if (C.roll(1, 25) === 1) { const f = fossil(); if (f) result.push(f); }
-    else if (C.roll(1, 600) === 1 && !C.ownsClue(player, "MEDIUM") && !result.some(([id]) => id === I.CLUE_BOTTLE_MEDIUM_)) result.push([I.CLUE_BOTTLE_MEDIUM_, 1]);
+    else if (C.roll(1, 600) === 1 && !C.ownsClue(player, "MEDIUM") && !result.some(([id]) => id === clueId)) result.push([clueId, 1]);
     else result.push([fish[C.roll(0, fish.length - 1)], 1]);
   }
   return result;

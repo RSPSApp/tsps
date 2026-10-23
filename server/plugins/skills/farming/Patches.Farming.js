@@ -33,6 +33,11 @@ function farmFor(player) {
     }
     return farm;
 }
+
+function retrievalItems(request) {
+    for (const {id: itemId, amount} of request.player.getAttribute(FARM_ATTRIBUTE)?.deathbank ?? [])
+        request.items.push({itemId, amount});
+}
 function stateFor(player, patch) {
     const farm = farmFor(player);
     return farm.patches[Data.patchKey(patch)] ??= Model.emptyPatch(Date.now(), farm, ["GRAPES", "CORAL", "SEAWEED"].includes(patch.type) ? 0 : 3);
@@ -694,6 +699,7 @@ function attach(api) {
     api.onCustomEvent("player:world-input", cancelWork);
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
     api.onCustomEvent("hespori:quest-challenge", Hespori.challengeHespori);
+    api.onCustomEvent("item-retrieval:items", retrievalItems);
     api.onCustomEvent("hespori:quest-process", Hespori.hesporiProcess);
     api.onCustomEvent("hespori:quest-can-attack", Hespori.hesporiCanAttack);
     api.onCustomEvent("hespori:quest-leave", Hespori.hesporiLogout);
@@ -707,4 +713,4 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { FARM_ATTRIBUTE, farmFor, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, cure, noteSeedling, advanceTime, attach, tick: farmingTick });
+Object.assign(module.exports, { FARM_ATTRIBUTE, farmFor, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, cure, noteSeedling, advanceTime, attach, tick: farmingTick, retrievalItems });

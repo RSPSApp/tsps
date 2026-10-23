@@ -151,6 +151,7 @@ function talkToVoice({ player }) {
 }
 
 function attachVoice(api) {
+  api.onCustomEvent("item-retrieval:items", retrievalItems);
   api.persistAttribute(Common.VOICE_PROGRESS_ATTRIBUTE);
   api.persistAttribute(Common.HELD_ITEMS_ATTRIBUTE);
   api.onPlayerLogin(syncProgress);
@@ -161,4 +162,8 @@ function attachVoice(api) {
   api.onPlayerDeathItemDrop(holdForVoice);
 }
 
-module.exports = { attachVoice, retrievalFee };
+function retrievalItems(request) {
+  for (const [itemId, amount] of heldItems(request.player)?.items ?? []) request.items.push({itemId, amount});
+}
+
+module.exports = { attachVoice, retrievalFee, retrievalItems };

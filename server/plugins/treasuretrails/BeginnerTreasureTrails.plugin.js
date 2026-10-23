@@ -5,6 +5,5 @@ module.exports = {
   register(api) {
     require("./Runtime.BeginnerTreasureTrails")(api);
     require("./Rewards.BeginnerTreasureTrails")(api);
-    require("./Capacity.BeginnerTreasureTrails")(api);
   },
 };

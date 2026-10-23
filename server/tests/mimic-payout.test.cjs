@@ -25,7 +25,7 @@ test("every imported normal and Mimic reward resolves against the installed cach
   }
 });
 
-function fixture(tier, clueRolls, spent = 0, service = true) {
+function fixture(tier, clueRolls, spent = 0, service = true, capacityService = true) {
   const events = new Map(), attributes = new Map(), messages = [], obtained = [];
   const item = new core.Item(core.ItemIdentifiers.MIMIC);
   const items = [item];
@@ -36,12 +36,13 @@ function fixture(tier, clueRolls, spent = 0, service = true) {
   const player = {getInventory: () => inventory, getAttribute: key => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value), sendMessage: text => messages.push(text),
     isRegistered: () => true, getHitpoints: () => 10, getArea: () => null};
-  const api = {core, persistAttribute() {}, onItemAction() {},
+  const api = {core, persistAttribute() {}, onItemAction() {}, onPlayerLogin() {},
     onCustomEvent(name, handler) { if (!events.has(name)) events.set(name, []); events.get(name).push(handler); },
     emitCustomEvent(name, request) { for (const handler of events.get(name) ?? []) handler(request); },
   };
   Shared.bind(api);
   if (service) require("../plugins/treasuretrails/RewardCaskets.plugin").register(api);
+  if (capacityService) require("../plugins/treasuretrails/ClueCapacity.plugin").register(api);
   Reward.attach(api);
   State.initialize(item, tier, clueRolls);
   const record = State.ensure(player, item);
@@ -74,6 +75,19 @@ test("missing reward service preserves the Mimic and its won state", () => {
   assert.equal(f.items[0], f.item);
   assert.equal(State.forOpen(f.player, f.item).defeated, true);
   assert.equal(f.obtained.length, 0);
+});
+
+test("a victorious Mimic awards its canonical scroll case until consumed, without held duplicates", () => {
+  const id = core.ItemIdentifiers.MIMIC_SCROLL_CASE, original = Math.random;
+  try {
+    Math.random = () => 0.1;
+    const first = fixture("elite", 4); first.open(); assert.equal(first.amount(id), 1);
+    const held = fixture("master", 7); held.items.push(new core.Item(id)); held.open(); assert.equal(held.amount(id), 0);
+    const consumed = fixture("master", 7); consumed.attributes.set("treasure-trails:mimic-case", true);
+    consumed.open(); assert.equal(consumed.amount(id), 0);
+    const missing = fixture("elite", 4, 0, true, false); missing.open();
+    assert.equal(missing.items[0], missing.item); assert.equal(missing.obtained.length, 0);
+  } finally { Math.random = original; }
 });
 
 test("invalid selected reward definition fails before casket consumption", () => {

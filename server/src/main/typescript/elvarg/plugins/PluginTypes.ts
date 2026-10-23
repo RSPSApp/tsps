@@ -858,6 +858,8 @@ export interface PluginApi {
     actions: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>
   ): void;
   onNpcInteraction(handler: (event: PluginNpcInteractionEvent) => void): void;
+  /** Conditional interaction ownership before normal NPC handlers. Leave unclaimed events untouched. */
+  onBeforeNpcInteraction(handler: (event: PluginNpcInteractionEvent) => void): void;
   /** World entity (static ship/boat) options, by op number (1-6). */
   onWorldEntityInteraction(handler: (event: PluginWorldEntityInteractionEvent) => void): void;
   /** Set a non-combat NPC option's approach range before movement starts. */

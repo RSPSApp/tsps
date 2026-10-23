@@ -5,6 +5,7 @@
  * an empty bird nest.
  */
 let core = null;
+let pluginApi = null;
 let tiers = [];
 
 function buildTiers(ids) {
@@ -19,6 +20,9 @@ function buildTiers(ids) {
 
 // OSRS allows one clue of each tier at a time, in any of its forms, carried or banked.
 function ownsClue(player, tier) {
+  const request = { player, tier: tier.name, allowed: null };
+  pluginApi?.emitCustomEvent?.("treasure-trails:can-receive", request);
+  if (typeof request.allowed === "boolean") return !request.allowed;
   const names = new Set(
     ["Clue scroll", "Clue bottle", "Clue nest", "Clue geode", "Scroll box"].map((form) => `${form} (${tier.name})`)
   );
@@ -66,6 +70,7 @@ function openClueNest(event) {
 }
 
 function attach(api) {
+  pluginApi = api;
   core = api.core;
   tiers = buildTiers(core.ItemIdentifiers);
   for (const tier of tiers) {

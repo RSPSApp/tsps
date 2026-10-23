@@ -1,0 +1,934 @@
+{
+  "meta": {
+    "source": "https://oldschool.runescape.wiki/w/Reward_casket_(beginner)",
+    "source_capture": "2026-10-23 indexed rendered Wiki page; revision unavailable",
+    "license": "CC BY-NC-SA 3.0 — Old School RuneScape Wiki contributors",
+    "source_sha256": "eb239613a0231c7d73b72dcee2733fdabd289d64b305c8ad26f2d1d1945f409a",
+    "items_sha256": "70d6d124c0da2b7f24208dabcaa4344d967cd38e055bd1f36e33d1646a1d2fd0",
+    "rate_reference": "Wiki cites Mod Tide, 11 October 2019",
+    "limits": [
+      "The source does not specify replacement behavior for ineligible uniques.",
+      "Milestone scroll cases were released 2 July 2025; older caches may lack them.",
+      "Milestone cases are conditional unlocks, not per-roll random rewards."
+    ]
+  },
+  "beginner": {
+    "casket_item_id": 23245,
+    "rolls": [
+      1,
+      3
+    ],
+    "out_of": 44280,
+    "entries": [
+      {
+        "item_id": 23285,
+        "name": "Mole slippers",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23288,
+        "name": "Frog slippers",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23291,
+        "name": "Bear feet",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23294,
+        "name": "Demon feet",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23297,
+        "name": "Jester cape",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23300,
+        "name": "Shoulder parrot",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23303,
+        "name": "Monk's robe top (t)",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23306,
+        "name": "Monk's robe (t)",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23309,
+        "name": "Amulet of defence (t)",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23312,
+        "name": "Sandwich lady hat",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23315,
+        "name": "Sandwich lady top",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23318,
+        "name": "Sandwich lady bottom",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23321,
+        "name": "Rune scimitar ornament kit (Guthix)",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23324,
+        "name": "Rune scimitar ornament kit (Saradomin)",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 23327,
+        "name": "Rune scimitar ornament kit (Zamorak)",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 123,
+        "rarity_raw": "1/360",
+        "noted": false,
+        "unique": true
+      },
+      {
+        "item_id": 1313,
+        "name": "Black 2h sword",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1361,
+        "name": "Black axe",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1367,
+        "name": "Black battleaxe",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1107,
+        "name": "Black chainbody",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1217,
+        "name": "Black dagger",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1165,
+        "name": "Black full helm",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1195,
+        "name": "Black kiteshield",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1297,
+        "name": "Black longsword",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1426,
+        "name": "Black mace",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1151,
+        "name": "Black med helm",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 12297,
+        "name": "Black pickaxe",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1125,
+        "name": "Black platebody",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1089,
+        "name": "Black plateskirt",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1077,
+        "name": "Black platelegs",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1179,
+        "name": "Black sq shield",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1327,
+        "name": "Black scimitar",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1283,
+        "name": "Black sword",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1341,
+        "name": "Black warhammer",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 55,
+        "rarity_raw": "11/8856",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 841,
+        "name": "Shortbow",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 839,
+        "name": "Longbow",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 843,
+        "name": "Oak shortbow",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 845,
+        "name": "Oak longbow",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1267,
+        "name": "Iron pickaxe",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1381,
+        "name": "Staff of air",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1383,
+        "name": "Staff of water",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1385,
+        "name": "Staff of earth",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1387,
+        "name": "Staff of fire",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1157,
+        "name": "Steel full helm",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1119,
+        "name": "Steel platebody",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1069,
+        "name": "Steel platelegs",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1083,
+        "name": "Steel plateskirt",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1295,
+        "name": "Steel longsword",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1207,
+        "name": "Steel dagger",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1353,
+        "name": "Steel axe",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1365,
+        "name": "Steel battleaxe",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1167,
+        "name": "Leather cowl",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1129,
+        "name": "Leather body",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1095,
+        "name": "Leather chaps",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1063,
+        "name": "Leather vambraces",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1131,
+        "name": "Hardleather body",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 579,
+        "name": "Blue wizard hat",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 577,
+        "name": "Blue wizard robe",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1017,
+        "name": "Wizard hat",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 581,
+        "name": "Black robe",
+        "quantity": [
+          1,
+          1
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 556,
+        "name": "Air rune",
+        "quantity": [
+          15,
+          35
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 558,
+        "name": "Mind rune",
+        "quantity": [
+          15,
+          35
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 555,
+        "name": "Water rune",
+        "quantity": [
+          15,
+          35
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 557,
+        "name": "Earth rune",
+        "quantity": [
+          15,
+          35
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 554,
+        "name": "Fire rune",
+        "quantity": [
+          15,
+          35
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 559,
+        "name": "Body rune",
+        "quantity": [
+          15,
+          35
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 562,
+        "name": "Chaos rune",
+        "quantity": [
+          2,
+          7
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 561,
+        "name": "Nature rune",
+        "quantity": [
+          2,
+          7
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 563,
+        "name": "Law rune",
+        "quantity": [
+          2,
+          7
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 882,
+        "name": "Bronze arrow",
+        "quantity": [
+          15,
+          30
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 884,
+        "name": "Iron arrow",
+        "quantity": [
+          7,
+          15
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": false,
+        "unique": false
+      },
+      {
+        "item_id": 1965,
+        "name": "Cabbage",
+        "quantity": [
+          5,
+          9
+        ],
+        "weight": 1845,
+        "rarity_raw": "1/24",
+        "noted": true,
+        "unique": false
+      },
+      {
+        "item_id": 315,
+        "name": "Shrimps",
+        "quantity": [
+          5,
+          14
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": true,
+        "unique": false
+      },
+      {
+        "item_id": 325,
+        "name": "Sardine",
+        "quantity": [
+          5,
+          12
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": true,
+        "unique": false
+      },
+      {
+        "item_id": 347,
+        "name": "Herring",
+        "quantity": [
+          5,
+          9
+        ],
+        "weight": 990,
+        "rarity_raw": "11/492",
+        "noted": true,
+        "unique": false
+      }
+    ],
+    "restrictions": {
+      "cannot_open_on_entrana": true,
+      "unique_minimum_account_age_seconds": 36000,
+      "ineligible_unique_replacement": null
+    },
+    "milestones": [
+      {
+        "completed": 50,
+        "item_id": 30902,
+        "name": "Minor beginner scroll case"
+      },
+      {
+        "completed": 100,
+        "item_id": 30904,
+        "name": "Major beginner scroll case"
+      },
+      {
+        "completed": 600,
+        "emote": "Explore"
+      }
+    ]
+  }
+}

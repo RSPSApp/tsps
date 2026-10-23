@@ -1,9 +1,14 @@
 // From server/: node --test tests/remaining-desert-parity.test.cjs (after yarn build).
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { test, before } = require('node:test');
 const path = require('node:path');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
+// Quest stage updates render cache-backed quest-list metadata. Keep one live store
+// for the whole file so cached definitions and RegionManager share its lifetime.
+before(async () => {
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+});
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
@@ -617,7 +622,6 @@ test('Beneath Cursed Sands: logout resets a running camera', () => {
   assert.equal(p.camera.at(-1)[0], 'reset');
 });
 test('Beneath Cursed Sands: real cache entry -> citizen -> guard -> ruins keeps stage order', async () => {
-  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
   const h = harness('../plugins/quests/quests/BeneathCursedSands.Quest');
   const p = player();
   h.quest.setStage(p, 14);
@@ -717,7 +721,6 @@ test('Beneath Cursed Sands: inner lever door is denied before the solved urn rid
   assert.equal(allowed.handled, false, 'Doors.plugin owns the allowed open leaf');
 });
 test('Beneath Cursed Sands: shipped guard transcript clears scene controls and spawns the fight', async () => {
-  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
   const h = harness('../plugins/quests/quests/BeneathCursedSands.Quest');
   const p = player();
   h.quest.setStage(p, 16);
@@ -749,7 +752,6 @@ test('Beneath Cursed Sands: shipped guard transcript clears scene controls and s
   assert.ok(h.npcs.some(npc => npc.id === 11529));
 });
 test('Beneath Cursed Sands: tomb entry uses the captured z2 instance landing and actors', async () => {
-  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
   const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
   const { RegionManager } = require('../dist/game/collision/RegionManager');
   const h = harness('../plugins/quests/quests/BeneathCursedSands.Quest');
@@ -1169,7 +1171,6 @@ test('Contact: completed Jex uses his canonical standard dialogue', () => {
   assert.equal(h.variant({ player: p, npcId: 3875, npc: {} }), 'standard-dialogue');
 });
 test('Beneath Cursed Sands: real Inventory full bag preserves the urn on Remove', async () => {
-  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
   const h = harness('../plugins/quests/quests/BeneathCursedSands.Quest');
   const p = player();
   const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');

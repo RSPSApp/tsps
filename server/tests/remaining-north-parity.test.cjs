@@ -1,9 +1,14 @@
 // Secrets of the North route parity: server plugin + quest runtime + Wiki dialogue data.
 // From server/: node --test tests/remaining-north-parity.test.cjs (after yarn build).
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { test, before } = require('node:test');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
+// Quest stage updates render cache-backed quest-list metadata. Keep one live store
+// for the whole file so cached definitions and RegionManager share its lifetime.
+before(async () => {
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(require('node:path').resolve(__dirname, '..'));
+});
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const runtime = require('../plugins/quests/QuestRuntime');
 const sotnRecord = require('../data/definitions/npc-dialogues.json')['Secrets of the North'];
@@ -843,7 +848,6 @@ test('rev-241 hidden-room route: false wall claim reaches the ladder landing and
   const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
   const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
   const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
-  await CachePipeline.initialize(path.resolve('.'));
   RegionManager.init();
   RegionManager.loadMapFiles(2572, 3270);
 
@@ -972,7 +976,6 @@ test('real NpcDialogues: false-wall message action arms Yes/No through the actua
   const { PluginManager: PM } = require('../dist/plugins/PluginManager');
   const { TaskManager } = require('../dist/game/task/TaskManager');
   const { PathFinder } = require('../dist/game/model/movement/path/PathFinder');
-  await CachePipeline.initialize(path.resolve('.'));
   RegionManager.init();
   new NpcDefinitionLoader().load();
 

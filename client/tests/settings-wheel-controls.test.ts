@@ -58,6 +58,7 @@ assert.deepEqual([input.mouseX, input.mouseY], [40, 50], "captured mouse look ke
 
 const config = new ConfigManager(undefined);
 const props = { configManager: config, closeCameraActive: true, onExitCloseCamera() {} };
+assert.equal(renderToStaticMarkup(React.createElement(ControlsHelp, { ...props, closeCameraActive: false })), "", "standard view has no Controls overlay or pill");
 let markup = renderToStaticMarkup(React.createElement(ControlsHelp, props));
 assert.match(markup, /Controls/);
 assert.match(markup, /Exit close camera/);
@@ -70,4 +71,5 @@ assert.match(markup, /above Tab/);
 assert.match(markup, /Tab/);
 assert.match(markup, /WASD/);
 assert.match(markup, /Settings/);
+assert.equal(renderToStaticMarkup(React.createElement(ControlsHelp, { ...props, closeCameraActive: false })), "", "leaving close camera hides the whole guide even with a saved expanded preference");
 console.log("settings wheel and controls tests passed");

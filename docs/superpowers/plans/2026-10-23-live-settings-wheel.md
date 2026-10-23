@@ -32,3 +32,9 @@ Build `main.ee80c022.js` / `199.5f071cbe.chunk.js`, own isolated slot 3, 117 HD 
 - Closed Settings through its native Close action. No modal remained. World wheel changed HD target 1→1.1972173631218102 and moved the camera normally.
 
 Structured live evidence is in `docs/superpowers/evidence/2026-10-23-settings-wheel-slot3.json`. Focused settings wheel, native cache Settings, first-person, camera, WebGPU render ordering and HD camera tests pass. Typecheck and changed-source ESLint pass; production build passes with existing unrelated warnings. The regression now exercises the actual WebGPU render ordering, not just a standalone cache list.
+
+## User-directed controls placement
+
+Hide the entire Controls section outside close-camera mode. In close-camera mode, show a compact bottom-centred strip with the expand/collapse and exit buttons. The guide expands upward so those buttons remain at the edge. Keep the saved expansion preference and default collapsed state. Verify inactive/active rendering, production build and a native screenshot in isolated slot 3; no input or renderer behavior changes.
+
+Native screenshot confirmed the collapsed strip is 196.73×34.80 CSS pixels, centred exactly, eight pixels above the bottom edge. Final build `main.071f0e38.js` reports zero Controls elements in standard view and one collapsed strip within the existing 250 ms HUD refresh after close-camera activation. Mode visibility is refreshed independently of changes in the FPS number. Expansion keeps the heading anchored to the bottom; Exit hides the entire section again. Render-condition regression, typecheck, changed UI ESLint and production build pass (existing unrelated build warnings only).

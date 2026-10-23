@@ -1,0 +1,13 @@
+import {strict as assert} from 'node:assert';
+import {clearHintArrow,hintArrow,setHintArrowTile} from '../game/HintArrow';
+import {OwnedQuestHintArrow,questDirection} from '../game/plugins/questhelper/QuestHelperNavigation';
+const snapshot:any={localPlayer:{x:3200,y:3200,plane:0},npcs:[{id:7,index:42,x:3203,y:3204,plane:0,name:'Cook'}],objects:[],groundItems:[]};
+const step:any={targets:[{kind:'npc',id:7,x:3210,y:3210,plane:0}],text:['Talk to the Cook.']};
+let direction=questDirection(step,snapshot);assert.equal(direction?.target.x,3203);assert.match(direction!.text,/north-east/);assert.match(direction!.text,/4 tiles/);
+direction=questDirection({...step,targets:[{kind:'tile',x:3210,y:3200,plane:1}]},snapshot);assert.match(direction!.text,/floor 1/);
+direction=questDirection({...step,targets:[{kind:'npc',id:8,x:3300,y:3200,plane:0}]},snapshot);assert.equal(direction?.target.x,3300,'remote coordinates work without a loaded NPC');
+const owned=new OwnedQuestHintArrow();clearHintArrow();owned.update(questDirection(step,snapshot));assert.equal(hintArrow.type,2);assert.equal(hintArrow.x,3203);
+setHintArrowTile(123,456,5,8);owned.clear();assert.equal(hintArrow.x,123,'server arrows survive helper cleanup');owned.update(direction);assert.equal(hintArrow.x,123,'helper does not replace server guidance');
+clearHintArrow();owned.update(direction);assert.equal(hintArrow.x,3300);owned.clear();assert.equal(hintArrow.type,0);
+assert.equal(questDirection({...step,targets:[{kind:'item',id:99}]},snapshot),null,'no invented destination for inventory-only steps');
+console.log('Quest Helper navigation and native arrow ownership passed');

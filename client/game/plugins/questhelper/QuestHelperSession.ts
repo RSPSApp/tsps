@@ -14,6 +14,7 @@ export class QuestHelperSession {
     private lastTick = -1;
     private inFlight = false;
     private autoSelectTutorial = true;
+    private lastCatalogTick = -1;
     private state: HelperSessionState = { selected: "", catalog: null, result: null, status: "Log in to use Quest Helper.", version: 0 };
     private readonly listeners = new Set<() => void>();
     constructor(private readonly send: (data: unknown) => void, private readonly sessionId = () => globalThis.crypto.randomUUID()) { }
@@ -57,12 +58,17 @@ export class QuestHelperSession {
         if (!this.session) {
             this.session = this.sessionId();
             this.sequence = 0;
+            this.lastCatalogTick = snapshot?.tick ?? -1;
             this.send({ type: "catalog", protocol: 1, session: this.session });
             if (this.state.selected)
                 this.send({ type: "select", protocol: 1, session: this.session, questKey: this.state.selected, helperVariant: this.state.variant });
         }
         if (!snapshot)
             return;
+        if (!this.state.selected && (this.lastCatalogTick < 0 || snapshot.tick - this.lastCatalogTick >= 10)) {
+            this.lastCatalogTick = snapshot.tick;
+            this.send({type:"catalog",protocol:1,session:this.session});
+        }
         if (!this.state.selected || snapshot.tick === this.lastTick || this.inFlight)
             return;
         this.lastTick = snapshot.tick;
@@ -75,10 +81,12 @@ export class QuestHelperSession {
         if (!result || !this.account || result.session !== this.session || result.sequence !== this.sequence || result.questKey !== this.state.selected)
             return false;
         this.inFlight = false;
-        const catalog = result.status === "complete" && this.state.catalog ? {
-            ...this.state.catalog,
-            quests: this.state.catalog.quests.map(quest => quest.questKey === result.questKey ? { ...quest, status: "FINISHED" as const } : quest),
-        } : this.state.catalog;
+        const updated = new Map(result.questProgress?.map(quest=>[quest.questKey,quest]) ?? []);
+        const currentCatalog = this.state.catalog ? {...this.state.catalog,quests:this.state.catalog.quests.map(quest=>({...quest,...updated.get(quest.questKey)}))} : null;
+        const catalog = result.status === "complete" && currentCatalog ? {
+            ...currentCatalog,
+            quests: currentCatalog.quests.map(quest => quest.questKey === result.questKey ? { ...quest, status: "FINISHED" as const } : quest),
+        } : currentCatalog;
         this.patch({ result, catalog, status: result.status === "active" ? "Guided route active" : result.status === "complete" ? "Quest complete" : result.status === "unsupported" ? "This route is unsupported" : "Quest Helper is unavailable" });
         return true;
     }

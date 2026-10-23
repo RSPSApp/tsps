@@ -11,6 +11,7 @@ const quests: any[] = [
     {questKey:"rune_mysteries",name:"Rune Mysteries",supported:true,status:"NOT_STARTED"},
     {questKey:"other",name:"Existing adventure",supported:true,status:"IN_PROGRESS"},
 ];
+for(const quest of quests)quest.eligibility={known:true,eligible:true,missing:[],recommendedMissing:[],difficulty:0,length:1};
 const sent: any[]=[];let generation=0;
 const session=new QuestHelperSession(data=>sent.push(data),()=>`new-${++generation}`);
 session.update("NewPlayer");

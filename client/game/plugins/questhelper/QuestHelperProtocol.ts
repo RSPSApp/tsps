@@ -204,7 +204,10 @@ export type HelperResponse = {
     panels: HelperPanel[];
     diagnostics: HelperDiagnostic[];
     requests?: HelperStateRequest[];
+    questProgress?: QuestProgress[];
 };
+export type QuestEligibility = {known:boolean;eligible:boolean;missing:string[];recommendedMissing:string[];difficulty:number;length:number};
+export type QuestProgress = {questKey:string;status:"NOT_STARTED"|"IN_PROGRESS"|"FINISHED";stage:number;eligibility?:QuestEligibility};
 export type HelperQuest = {
     questKey: string;
     name: string;
@@ -214,6 +217,7 @@ export type HelperQuest = {
     requiredVarbits?: number[];
     status?: "NOT_STARTED" | "IN_PROGRESS" | "FINISHED";
     stage?: number;
+    eligibility?: QuestEligibility;
 };
 export type HelperCatalog = {
     protocol: 1;
@@ -240,6 +244,8 @@ const optional = (o: Obj, key: string, check: (v: unknown) => boolean): boolean 
 const bounds = (v: unknown): boolean => obj(v) && finite(v.x) && finite(v.y) && finite(v.width) && finite(v.height) && v.width >= 0 && v.height >= 0;
 const requirement = (v: unknown): boolean => obj(v) && str(v.name) && typeof v.met === "boolean" && optional(v, "ids", v => list(v, int)) && optional(v, "quantity", int);
 const diagnostic = (v: unknown): boolean => obj(v) && str(v.code) && str(v.message) && optional(v, "helper", str) && optional(v, "method", str);
+const eligibility = (v:unknown):boolean => obj(v)&&typeof v.known==="boolean"&&typeof v.eligible==="boolean"&&list(v.missing,str,128)&&list(v.recommendedMissing,str,128)&&int(v.difficulty)&&int(v.length);
+const progress = (v:unknown):boolean => obj(v)&&str(v.questKey)&&["NOT_STARTED","IN_PROGRESS","FINISHED"].includes(v.status as string)&&int(v.stage)&&optional(v,"eligibility",eligibility);
 const target = (v: unknown): boolean => obj(v) && ["npc", "object", "item", "tile", "widget"].includes(v.kind as string) && optional(v, "id", int) && optional(v, "ids", v => list(v, int)) && optional(v, "x", int) && optional(v, "y", int) && optional(v, "plane", v => int(v) && v >= 0 && v <= 3) && optional(v, "label", str);
 const paint = (v: unknown): boolean => typeof v === "string" && (/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v) || v === "none");
 const pathPart = (v: unknown): boolean => obj(v) && ["M", "L", "Q", "C", "Z"].includes(v.op as string) && list(v.values, finite, 6) && (v.values as number[]).length === ({ M: 2, L: 2, Q: 4, C: 6, Z: 0 } as Record<string, number>)[v.op as string];
@@ -254,12 +260,14 @@ const overlay = (v: unknown): boolean => {
 };
 const step = (v: unknown): boolean => obj(v) && str(v.id) && list(v.text, str) && list(v.targets, target) && list(v.requirements, requirement) && list(v.dialogueChoices, v => obj(v) && str(v.text) && optional(v, "index", int)) && list(v.widgets, v => obj(v) && int(v.id) && optional(v, "bounds", bounds) && optional(v, "label", str)) && list(v.overlays, overlay);
 export function parseHelperResponse(value: unknown): HelperResponse | null {
+    if (obj(value) && !optional(value,"questProgress",v=>list(v,progress,512))) return null;
     if (!obj(value) || value.protocol !== 1 || !str(value.session) || !str(value.questKey) || !str(value.sourceCommit) || !int(value.sequence) || value.sequence < 1 || !["active", "complete", "unsupported", "unavailable"].includes(value.status as string) || !(value.activeStep === null || step(value.activeStep)) || !list(value.panels, v => obj(v) && str(v.title) && optional(v, "text", v => list(v, str)) && optional(v, "requirements", v => list(v, requirement))) || !list(value.diagnostics, diagnostic) || !optional(value, "requests", v => list(v, r => obj(r) && typeof r.kind === "string" && /^(geometry|varbit|varbitDefinition|itemDefinitions|objectDefinitions|npcDefinitions|widget|widgetBounds|questState|container)(\.[a-zA-Z][a-zA-Z0-9]{0,63})?$/.test(r.kind) && int(r.id) && r.id >= 0)))
         return null;
     // Copy across the trust boundary; callers cannot mutate in-flight results.
     return JSON.parse(JSON.stringify(value)) as HelperResponse;
 }
 export function parseHelperCatalog(value: unknown): HelperCatalog | null {
+    if (obj(value) && Array.isArray(value.quests) && !value.quests.every(q=>obj(q)&&optional(q,"eligibility",eligibility))) return null;
     if (!obj(value) || value.protocol !== 1 || !str(value.sourceCommit) || !list(value.quests, v => obj(v) && str(v.questKey) && str(v.name) && typeof v.supported === "boolean" && optional(v, "helperClass", str) && optional(v, "helperVariant", str) && optional(v, "requiredVarbits", v => list(v, int)) && optional(v, "variants", v => list(v, x => obj(x) && str(x.helperVariant) && str(x.helperClass), 32)), 512) || !list(value.diagnostics, diagnostic))
         return null;
     const quests = (value.quests as (HelperQuest & {

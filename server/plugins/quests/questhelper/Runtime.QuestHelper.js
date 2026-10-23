@@ -8,7 +8,8 @@ const status=(q,p)=>q.isComplete(p)?'FINISHED':q.isStarted(p)?'IN_PROGRESS':'NOT
 function items(container){return container.getItems().flatMap((item,slot)=>item&&item.getId()>0&&item.getAmount()>0?[{id:item.getId(),quantity:item.getAmount(),slot}]:[]);}
 
 class QuestHelperRuntime {
- constructor({getQuests,bridge,send,nativeResult,projectState,varbitDefinition}){this.getQuests=getQuests;this.bridge=bridge;this.send=send;this.nativeResult=nativeResult;this.projectState=projectState;this.varbitDefinition=varbitDefinition;this.players=new Map();this.catalogData=null;}
+ constructor({getQuests,bridge,send,nativeResult,projectState,varbitDefinition,eligibility}){this.getQuests=getQuests;this.bridge=bridge;this.send=send;this.nativeResult=nativeResult;this.projectState=projectState;this.varbitDefinition=varbitDefinition;this.eligibility=eligibility;this.players=new Map();this.catalogData=null;}
+ progress(player){const eligibility=this.eligibility?.(player);return this.getQuests().map(q=>({questKey:q.key,status:status(q,player),stage:q.getStage(player),...(eligibility?{eligibility:eligibility.get(q.key)}:{})}));}
  emit(player,data){for(const frame of encodeChunkedPluginMessage(data))this.send(player,frame);}
  async close(player){const state=this.players.get(player);if(!state)return;this.players.delete(player);state.active=false;state.assembler.clear();await this.bridge.close(state.engineSession).catch(()=>{});}
  async shutdown(){await Promise.all([...this.players.keys()].map(p=>this.close(p)));}
@@ -21,9 +22,10 @@ class QuestHelperRuntime {
    const data=state.assembler.accept(frame);if(!data)return;
    if(data.type==='close'){await this.close(player);return;}
    if(data.type==='catalog'){
-    this.catalogPromise=this.bridge.catalog();const catalog=await this.catalogPromise;if(this.players.get(player)!==state)return;this.catalogData=catalog;
+    if(!this.catalogPromise)this.catalogPromise=this.bridge.catalog().catch(error=>{this.catalogPromise=null;throw error;});const catalog=await this.catalogPromise;if(this.players.get(player)!==state)return;this.catalogData=catalog;
     const mapped=new Map(catalog.quests.map(q=>[q.questKey,q]));
-    this.emit(player,{...catalog,type:'catalog',protocol:1,session:state.session,quests:this.getQuests().map(q=>({...mapped.get(q.key),questKey:q.key,name:q.name,supported:mapped.get(q.key)?.supported===true,status:status(q,player),stage:q.getStage(player)}))});return;
+    const progress=new Map(this.progress(player).map(q=>[q.questKey,q]));
+    this.emit(player,{...catalog,type:'catalog',protocol:1,session:state.session,quests:this.getQuests().map(q=>({...mapped.get(q.key),questKey:q.key,name:q.name,supported:mapped.get(q.key)?.supported===true,...progress.get(q.key)}))});return;
    }
    const quest=this.getQuests().find(q=>q.key===data.questKey);
    if(!quest)throw new Error('Unknown quest');
@@ -47,7 +49,7 @@ class QuestHelperRuntime {
     const request={protocol:1,session:state.engineSession,sequence:data.sequence,questKey:quest.key,helperVariant:data.helperVariant,snapshot,events:data.events};
     const response=quest.key==='learning_the_ropes'?tutorialResult(request,quest.getStage(player)):(this.nativeResult?.(request,player)??await this.bridge.evaluate(request));
     if(this.players.get(player)!==state||!state.active||state.generation!==generation)return;
-    this.emit(player,{...response,type:'result',protocol:1,session:state.session,sequence:data.sequence,questKey:quest.key});
+    this.emit(player,{...response,type:'result',protocol:1,session:state.session,sequence:data.sequence,questKey:quest.key,questProgress:this.progress(player)});
    }finally{if(state.generation===generation)state.busy=false;}
   }catch(error){if(this.players.get(player)===state)this.emit(player,{type:'error',protocol:1,session:state.session,code:'QUEST_HELPER_UNAVAILABLE',message:String(error.message).slice(0,1024)});}
  }

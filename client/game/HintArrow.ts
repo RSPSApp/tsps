@@ -25,14 +25,19 @@ export interface HintArrowState {
 }
 
 export const hintArrow: HintArrowState = { type: 0, npcId: 0, playerId: 0, x: 0, y: 0, height: 0, position: 2, plane: 0 };
+let hintArrowRevision = 0;
+/** Allows optional client providers to release only their own arrow. */
+export const getHintArrowRevision = (): number => hintArrowRevision;
 
 export function setHintArrowNpc(npcId: number): void {
+    hintArrowRevision++;
     hintArrow.type = 1;
     hintArrow.npcId = npcId | 0;
 }
 
 /** A tile hint: OSRS's height byte, and OSRS's position type (bits 2-4) with the plane (bits 0-1). */
 export function setHintArrowTile(x: number, y: number, height: number, packed: number): void {
+    hintArrowRevision++;
     hintArrow.type = 2;
     hintArrow.x = x | 0;
     hintArrow.y = y | 0;
@@ -58,11 +63,13 @@ export function hintArrowTileOffset(position: number): [number, number] {
 
 /** An overhead arrow over a specific player, for as long as the server keeps sending it. */
 export function setHintArrowPlayer(playerId: number): void {
+    hintArrowRevision++;
     hintArrow.type = 3;
     hintArrow.playerId = playerId | 0;
 }
 
 export function clearHintArrow(): void {
+    hintArrowRevision++;
     hintArrow.type = 0;
 }
 

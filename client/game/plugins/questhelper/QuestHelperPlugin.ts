@@ -20,6 +20,7 @@ import { OwnedTileHighlights, resolveTargetTiles } from "./QuestHelperHighlights
 import { createQuestHelperNavigationButton, QuestHelperOverlay } from "./QuestHelperPanel";
 import { collectQuestHelperDefinitions } from "./QuestHelperDefinitions";
 import { collectQuestHelperGeometry } from "./QuestHelperGeometry";
+import {OwnedQuestHintArrow,questDirection} from "./QuestHelperNavigation";
 export class QuestHelperPlugin extends Plugin {
     static descriptor: PluginDescriptor = { name: "Quest Helper", description: "Read-only guided quest steps, requirements and highlights from the local Quest Helper engine.", tags: ["quests", "guide", "offline"], enabledByDefault: true, configKey: "questhelperplugin" };
     static config = QuestHelperConfig;
@@ -30,6 +31,7 @@ export class QuestHelperPlugin extends Plugin {
     private readonly assembly = new ChunkedPluginMessageAssembler();
     private readonly events = new QuestHelperEvents();
     private readonly highlights = new OwnedTileHighlights(this.client.tileHighlightManager, 60001);
+    private readonly navigation = new OwnedQuestHintArrow();
     private nav?: NavigationButton;
     private cleanup: (() => void)[] = [];
     private tick = 0;
@@ -47,21 +49,37 @@ export class QuestHelperPlugin extends Plugin {
     subscribe = this.session.subscribe;
     getState = this.session.getState;
     getSnapshot(): ReadonlyClientSnapshot | undefined { return this.snapshot; }
+    getDirection() {
+        if(!this.getConfig().showDirections || this.getState().result?.status!=="active" || !this.snapshot)return null;
+        const tile=this.client.getControlledPlayerMovementTile();
+        if(!tile)return null;
+        const targets=this.getState().result?.activeStep?.targets??[];
+        const npcs=this.snapshot.npcs.map(npc=>{
+            if(!targets.some(t=>t.kind==='npc'&&(t.id===(npc.transformedId??npc.id)||t.ids?.includes(npc.transformedId??npc.id))))return npc;
+            try{return collectHelperNpc(this.client,npc.ecsIndex);}catch{return npc;}
+        });
+        return questDirection(this.getState().result?.activeStep,{...this.snapshot,npcs,localPlayer:{...this.snapshot.localPlayer,x:tile.tileX,y:tile.tileY,plane:ClientState.plane}});
+    }
+    onPostClientTick():void {this.refreshNavigation();}
+    private refreshNavigation():void {
+        this.navigation.update(this.isStarted()&&this.isEnabled()&&Date.now()-this.lastSent<15000?this.getDirection():null);
+    }
     getConfig(): {
         highlightTiles: boolean;
         highlightWidgets: boolean;
         showOverlays: boolean;
         highlightColor: number;
+        showDirections: boolean;
     } {
         const config = this.configManager.getConfig(QuestHelperConfig);
-        return { highlightTiles: config.highlightTiles(), highlightWidgets: config.highlightWidgets(), showOverlays: config.showOverlays(), highlightColor: config.highlightColor() };
+        return { highlightTiles: config.highlightTiles(), highlightWidgets: config.highlightWidgets(), showOverlays: config.showOverlays(), highlightColor: config.highlightColor(), showDirections:config.showDirections() };
     }
     protected async startUp(): Promise<void> {
         const config = this.configManager.getConfig(QuestHelperConfig);
         this.session.select(config.selectedQuest(), config.helperVariant() || undefined);
         this.nav = createQuestHelperNavigationButton(this);
         this.toolbar.addNavigation(this.nav);
-        this.cleanup.push(this.session.subscribe(() => this.refreshHighlights()));
+        this.cleanup.push(this.session.subscribe(() => {this.refreshHighlights();this.refreshNavigation();}));
         this.faulted = false;
     }
     protected async shutDown(): Promise<void> {
@@ -118,7 +136,10 @@ export class QuestHelperPlugin extends Plugin {
                 if (this.session.acceptCatalog(data) && !previous && this.getState().selected === "learning_the_ropes" && this.nav)
                     this.toolbar.openPanel(this.nav);
             }
-            else if (data.type === "result" && this.session.accept(data)) {
+            else if (data.type === "result") {
+                const wasComplete=this.getState().result?.status==='complete';
+                if(!this.session.accept(data))return;
+                if(!wasComplete&&this.getState().result?.status==='complete'&&this.nav)this.toolbar.openPanel(this.nav);
                 this.pendingSince = 0;
                 for (const request of this.getState().result?.requests ?? []) {
                     const kind = request.kind.split(".")[0];
@@ -242,7 +263,7 @@ export class QuestHelperPlugin extends Plugin {
     }
     private detachSources(): void { for (const cleanup of this.cleanupSources)
         cleanup(); this.cleanupSources = []; }
-    private clearRuntime(): void { this.detachSources(); this.events.clear(); this.assembly.clear(); this.highlights.clear(); this.snapshot = undefined; this.account = ""; this.knownBank = false; this.pendingSince = 0; this.lastSent = 0; this.requiredVarbits.clear(); this.itemDefinitionIds.clear(); this.objectDefinitionIds.clear(); this.npcDefinitionIds.clear(); }
+    private clearRuntime(): void { this.detachSources(); this.events.clear(); this.assembly.clear(); this.highlights.clear(); this.navigation.clear(); this.snapshot = undefined; this.account = ""; this.knownBank = false; this.pendingSince = 0; this.lastSent = 0; this.requiredVarbits.clear(); this.itemDefinitionIds.clear(); this.objectDefinitionIds.clear(); this.npcDefinitionIds.clear(); }
     private refreshHighlights(): void {
         const state = this.getState();
         const config = this.getConfig();

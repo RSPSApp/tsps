@@ -30,6 +30,11 @@ const CHEER_CYCLES = 120;
 const CRY_CYCLES = 88;
 const OUTFIT = [3057, 3058, 3059, 3060, 3061];
 const NEEDED = 4;
+// Cache 241 region 8010: macro_spotlight (15625) is 3x3 at (2007,4761), physical plane 1;
+// its center is (2008,4762). The other spotlight centers on the static Mime at (2011,4762).
+// Stage tiles carry bridge bit 2, so actors use logical plane 0. This is a cache-supported
+// stage position; an authentic teleport capture is still needed to certify the exact OSRS tile.
+const STAGE_ARRIVAL = { x: 2008, y: 4762, z: 0 };
 
 function animationTicks(cycles) {
   // The client advances the final frame when cycle > length (PlayerAnimController / tick3).
@@ -53,7 +58,7 @@ module.exports = function attach(api, Events) {
         options: [
           ["Yeah, I'd love to do a mime show.", () => teleport({
             kind: "mime",
-            arrive: { x: 2010, y: 4755, z: 0 },
+            arrive: STAGE_ARRIVAL,
             teleportRefusal: "I need to finish my performance!",
             onStart: start,
           })],

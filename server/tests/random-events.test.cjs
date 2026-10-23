@@ -1149,6 +1149,7 @@ test('Mime finds the stage NPC after arrival and waits for each cache animation'
     h.random((index + 0.1) / 8);
     h.hooks['Mysterious Old Man']['Talk-to']({ player: p, npc, handled: false });
     choose(h, p, 0);
+    assert.ok(p.location.equals(new Location(2008, 4762, 0)), 'arrive on the stage spotlight, opposite the mime');
     assert.equal(mime.animation, animation, 'real stage NPC performs the chosen emote');
     assert.ok(!p.messages.some(message => /The mime performs:/.test(message)));
     h.ticks(ticks - 1);

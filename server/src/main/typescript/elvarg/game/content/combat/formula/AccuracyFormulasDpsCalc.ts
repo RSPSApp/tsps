@@ -12,6 +12,7 @@ import { World } from "../../../World";
 import { PluginManager } from "../../../../plugins/PluginManager";
 import { CombatSpecial } from "../CombatSpecial";
 import { resolveSpecialAttackType, WeaponSpecialTraits } from "../WeaponSpecialTraits";
+import { Spell } from "../magic/Spell";
 
 type RollCacheEntry = {
     cycle: number;
@@ -639,8 +640,12 @@ export class AccuracyFormulasDpsCalc {
         }
 
         const request = { attacker: entity, target: targetOverride ?? entity.getCombat().getTarget(),
-            spell: entity.getCombat().getSelectedSpell(), baseAttackRoll, attackRoll: Math.floor(attRoll) };
+            spell: entity.getCombat().getSelectedSpell(), context: Spell.getCalculationContext(entity, entity.getCombat().getSelectedSpell()),
+            baseAttackRoll, attackRoll: Math.floor(attRoll) };
+        PluginManager.emitCustomEvent("combat:magic-attack-roll-modify", request);
+        request.attackRoll = Number.isFinite(request.attackRoll) && request.attackRoll >= 0 ? Math.floor(request.attackRoll) : Math.floor(attRoll);
+        const modifiedRoll = request.attackRoll;
         PluginManager.emitCustomEvent("combat:magic-attack-roll", request);
-        return Number.isFinite(request.attackRoll) && request.attackRoll >= 0 ? Math.floor(request.attackRoll) : Math.floor(attRoll);
+        return Number.isFinite(request.attackRoll) && request.attackRoll >= 0 ? Math.floor(request.attackRoll) : modifiedRoll;
     }
 }

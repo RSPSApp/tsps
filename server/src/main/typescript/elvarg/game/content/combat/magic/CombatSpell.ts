@@ -1,6 +1,6 @@
 import { PluginManager } from "../../../../plugins/PluginManager";
 
-import { Spell } from "./Spell";
+import { Spell, SpellCastContext } from "./Spell";
 import { Mobile } from "../../../entity/impl/Mobile";
 import { NPC } from "../../../entity/impl/npc/NPC";
 import { Animation } from "../../../model/Animation";
@@ -97,7 +97,7 @@ export abstract class CombatSpell extends Spell {
   abstract startGraphic(): Graphic | undefined;
   abstract castProjectile(cast: Mobile, castOn: Mobile): Projectile | undefined;
   abstract endGraphic(): Graphic | undefined;
-  abstract finishCast(cast: Mobile, castOn: Mobile, accurate: boolean, damage: number): void;
+  abstract finishCast(cast: Mobile, castOn: Mobile, accurate: boolean, damage: number, context?: SpellCastContext | null): void;
   abstract levelRequired(): number;
   abstract getSpell(): CombatSpell;
 

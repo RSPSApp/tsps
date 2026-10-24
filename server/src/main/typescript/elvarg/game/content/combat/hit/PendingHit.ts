@@ -14,6 +14,7 @@ import { DamageFormulas } from "../formula/DamageFormulas";
 import type { SpecialDamageBounds } from "../CombatFactory";
 import type { WeaponSpecialTraits } from "../WeaponSpecialTraits";
 import type { CombatSpell } from "../magic/CombatSpell";
+import { Spell, SpellCastContext } from "../magic/Spell";
 
 type PendingHitConfig = {
     delay?: number;
@@ -47,7 +48,8 @@ export class PendingHit {
     /** A roll hook (Verac's set) let this hit through protection prayers. */
     private protectionBypassed = false;
 
-    constructor(attacker: Mobile, target: Mobile, method: CombatMethod, delayOrConfig?: number | PendingHitConfig, handleAfterHitEffects?: boolean) {
+    constructor(attacker: Mobile, target: Mobile, method: CombatMethod, delayOrConfig?: number | PendingHitConfig, handleAfterHitEffects?: boolean,
+        private readonly spellContext: SpellCastContext | null = null) {
         this.attacker = attacker;
         this.target = target;
         this.method = method;
@@ -82,7 +84,8 @@ export class PendingHit {
             }
         }
 
-        this.hits = this.prepareHits(resolvedHitAmount, resolvedRollAccuracy, typeof delayOrConfig === "object" ? delayOrConfig?.damage : undefined);
+        this.hits = Spell.withCastContext(attacker, this.spellContext, () =>
+            this.prepareHits(resolvedHitAmount, resolvedRollAccuracy, typeof delayOrConfig === "object" ? delayOrConfig?.damage : undefined));
         this.delay = Math.max(0, resolvedDelay);
         this.handleAfterHitEffects = resolvedHandleAfterHitEffects;
     }
@@ -102,6 +105,7 @@ export class PendingHit {
     public getSpell(): CombatSpell | null {
         return this.spell;
     }
+    public getSpellContext(): SpellCastContext | null { return this.spellContext; }
 
     public setSpell(spell: CombatSpell | null): PendingHit {
         this.spell = spell;

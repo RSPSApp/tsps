@@ -54,6 +54,8 @@ export class Bank extends ItemContainer {
      * is not a withdrawal (op 9, Configure-Charges, on items with cache param 2257).
      */
     public static readonly ITEM_OP_EVENT = "bank:item-op";
+    /** `{ player, items }`: new inventory item instances after a successful withdrawal, before refresh. */
+    public static readonly WITHDRAWN_ITEMS_EVENT = "bank:withdrawn-items";
     /** `{ player }` after the open bank redraws its items and the side panel's inventory. */
     public static readonly REFRESHED_EVENT = "bank:refreshed";
 
@@ -112,6 +114,9 @@ export class Bank extends ItemContainer {
                 }
 
                 slot = player.getBank(itemTab).getSlotForItemId(item);
+                // The aggregate count can include other charge/metadata states.
+                // Only clone the amount held by this exact source stack.
+                amount = Math.min(amount, player.getBank(itemTab).getItems()[slot].getAmount());
 
                 player.getBank(itemTab).switchsItem(
                     player.getInventory(),
@@ -1068,7 +1073,7 @@ export class Bank extends ItemContainer {
             return this;
         }
 
-        this.deleteItemContainer(item, slot, refresh, to);
+        this.deleteItemContainer(item, slot, to instanceof Inventory ? false : refresh, to);
 
 
         // Check if we can actually withdraw the item as a note.
@@ -1080,7 +1085,14 @@ export class Bank extends ItemContainer {
         }
 
         // Add the item to the other container
-        to.add(item, refresh);
+        const previousItems = to instanceof Inventory ? new Set(to.getValidItems()) : null;
+        to.add(item, previousItems ? false : refresh);
+        if (previousItems) {
+            const items = to.getValidItems().filter(added => !previousItems.has(added));
+            if (items.length > 0) {
+                getPluginManager().emitCustomEvent(Bank.WITHDRAWN_ITEMS_EVENT, { player: this.getPlayer(), items });
+            }
+        }
 
         // Sort this container
         if (sort && this.getAmount(item.getId()) <= 0)

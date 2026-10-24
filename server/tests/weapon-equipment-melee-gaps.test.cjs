@@ -27,13 +27,13 @@ function target() {
 }
 function lightning(source, victim) {
   let value;
-  const oldMax = core.DamageFormulas.sourceMaxHit;
-  core.DamageFormulas.sourceMaxHit = () => 0;
+  const oldBounds = core.DamageFormulas.sourceHitBounds;
+  core.DamageFormulas.sourceHitBounds = () => ({ minimum: 0, maximum: 0 });
   const old = CombatFactory.addPendingHit;
   CombatFactory.addPendingHit = (hit) => { value = hit; };
   try { special('SaradominSword').combatMethod.handleAfterHitEffects({ isAccurate: () => true,
     getAttacker: () => source, getTarget: () => victim }); }
-  finally { CombatFactory.addPendingHit = old; core.DamageFormulas.sourceMaxHit = oldMax; }
+  finally { CombatFactory.addPendingHit = old; core.DamageFormulas.sourceHitBounds = oldBounds; }
   return value;
 }
 test('lightning is a capped delayed Magic hit paying 2 Magic XP per damage', () => {
@@ -56,8 +56,8 @@ test('lightning never inherits a newly activated special hit count, skip flag or
   assert.equal(hit.getCombatType(), CombatType.MAGIC);
 });
 test('fixed Magic hits keep Elysian and incoming damage reductions', () => {
-  const oldMax = core.DamageFormulas.sourceMaxHit, oldRandom = Math.random;
-  core.DamageFormulas.sourceMaxHit = () => 0;
+  const oldBounds = core.DamageFormulas.sourceHitBounds, oldRandom = Math.random;
+  core.DamageFormulas.sourceHitBounds = () => ({ minimum: 0, maximum: 0 });
   Math.random = () => 0;
   try {
     const source = { isNpc: () => true, isPlayer: () => false, getAsNpc: () => source,
@@ -69,7 +69,7 @@ test('fixed Magic hits keep Elysian and incoming damage reductions', () => {
     registerIncomingDamageModifier((entity, damage) => { if (entity === victim) damage.multiplyDamage(0.5); });
     const hit = new core.PendingHit(source, victim, { type: () => CombatType.MAGIC, accuracyDefenceType: (type) => type }, { damage: 16, rollAccuracy: false });
     assert.equal(hit.getTotalDamage(), 6, '16 reduced by Elysian25%, then incoming50%');
-  } finally { core.DamageFormulas.sourceMaxHit = oldMax; Math.random = oldRandom; }
+  } finally { core.DamageFormulas.sourceHitBounds = oldBounds; Math.random = oldRandom; }
 });
 test('guild cyclopes reject real lightning through existing non-melee immunity and give no XP', () => {
   let immune;

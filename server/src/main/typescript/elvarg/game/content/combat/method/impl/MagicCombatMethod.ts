@@ -14,6 +14,7 @@ import { GraphicHeight } from "../../../../model/GraphicHeight";
 import { MagicSpellbook } from "../../../../model/MagicSpellbook";
 import { Skill } from "../../../../model/Skill";
 import type { CombatSpell } from "../../magic/CombatSpell";
+import { Spell } from "../../magic/Spell";
 
 
 export class MagicCombatMethod extends CombatMethod {
@@ -95,7 +96,8 @@ export class MagicCombatMethod extends CombatMethod {
 
     public hits(character: Mobile, target: Mobile): PendingHit[] {
         let spell = character.getCombat().getSelectedSpell();
-        let hits: PendingHit[] = [new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell)).setSpell(spell)];
+        const context = Spell.getCastContext(character, spell);
+        let hits: PendingHit[] = [new PendingHit(character, target, this, MagicCombatMethod.hitDelay(character, target, spell), true, context).setSpell(spell)];
 
 
         if (!spell) {
@@ -131,7 +133,7 @@ export class MagicCombatMethod extends CombatMethod {
                 if (!CombatFactory.canAttackSecondaryTarget(character, target, next, spellRadius)) {
                     continue;
                 }
-                let pendingHit: PendingHit = new PendingHit(character, next, this, MagicCombatMethod.hitDelay(character, next, spell), false).setSpell(spell);
+                let pendingHit: PendingHit = new PendingHit(character, next, this, MagicCombatMethod.hitDelay(character, next, spell), false, context).setSpell(spell);
                 multiCombatHits.push(pendingHit);
                 spell.onHitCalc(pendingHit);
             }
@@ -287,7 +289,7 @@ export class MagicCombatMethod extends CombatMethod {
                 target.performGraphic(MagicCombatMethod.SPLASH_GRAPHIC);
                 Sounds.sendSound(attacker, Sound.SPELL_FAIL_SPLASH);
             }
-            previousSpell.finishCast(attacker, target, accurate, damage);
+            previousSpell.finishCast(attacker, target, accurate, damage, hit.getSpellContext());
         }
     }
 

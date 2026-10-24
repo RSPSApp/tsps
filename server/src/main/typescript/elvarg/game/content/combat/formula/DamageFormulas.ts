@@ -11,6 +11,7 @@ import { applyCombatEffectiveLevelModifiers, applyMagicDamageBonusModifiers, app
 import { CombatSpecial } from "../CombatSpecial";
 import { SpecialAttackMaximumHitSource, WeaponSpecialTraits } from "../WeaponSpecialTraits";
 import { PluginManager } from "../../../../plugins/PluginManager";
+import { Spell } from "../magic/Spell";
 
 const getPlayerCombatSpecial = (player: Player): any | null => {
     const accessor = (player as any)?.getCombatSpecial;
@@ -24,6 +25,12 @@ const getPlayerCombatSpecial = (player: Player): any | null => {
 };
 
 export class DamageFormulas {
+    public static sourceHitBounds(entity: Mobile, attackType: CombatType, target?: Mobile): { minimum: number; maximum: number } {
+        if (attackType === CombatType.MAGIC && CombatSpecial.activeTraitsFor(entity)?.maximumHitSource === undefined) {
+            return DamageFormulas.getMagicHitBounds(entity, undefined, target);
+        }
+        return { minimum: 0, maximum: DamageFormulas.sourceMaxHit(entity, attackType) };
+    }
     private static scaleRatio(value: number, numerator: number, denominator: number): number {
         return Math.floor((value * numerator) / denominator);
     }
@@ -178,11 +185,16 @@ export class DamageFormulas {
         return Math.floor(adjusted);
     }
 
-    public static getMagicMaxhit(c: Mobile, spellOverride?: CombatSpell | null): number {
+    public static getMagicMaxhit(c: Mobile, spellOverride?: CombatSpell | null, targetOverride?: Mobile): number {
+        return DamageFormulas.getMagicHitBounds(c, spellOverride, targetOverride).maximum;
+    }
+
+    public static getMagicHitBounds(c: Mobile, spellOverride?: CombatSpell | null, targetOverride?: Mobile): { minimum: number; maximum: number } {
         let maxHit = 0;
         const spell = spellOverride ?? c.getCombat().getSelectedSpell();
 
-        if (spell && spell.maximumHit() > 0) {
+        if (spell && Number.isFinite(spell.maximumHit()) && spell.maximumHit() >= 0) {
+            // An explicit zero is a real spell maximum, not a missing definition.
             maxHit = spell.maximumHit();
         } else if (c.isNpc()) {
             maxHit = c.getAsNpc().getCurrentMaxHit(CombatType.MAGIC);
@@ -192,8 +204,9 @@ export class DamageFormulas {
 
         // Generic stages retain the actual spell override and original base.
         // Gameplay additions/multipliers belong to registered plugin handlers.
-        const target = c.getCombat().getTarget();
-        const baseRequest = { attacker: c, target, spell, originalMaxHit: maxHit, maxHit };
+        const target = targetOverride ?? c.getCombat().getTarget();
+        const context = Spell.getCalculationContext(c, spell);
+        const baseRequest = { attacker: c, target, spell, context, originalMaxHit: maxHit, maxHit };
         PluginManager.emitCustomEvent("combat:magic-base-max-hit", baseRequest);
         if (Number.isFinite(baseRequest.maxHit) && baseRequest.maxHit >= 0) maxHit = Math.floor(baseRequest.maxHit);
         const { CombatSpells } = require("../magic/CombatSpells") as typeof import("../magic/CombatSpells");
@@ -208,9 +221,14 @@ export class DamageFormulas {
         }
 
         maxHit = Math.floor(applyMagicHitModifiers(c, maxHit));
-        const request = { attacker: c, target, spell, baseMaxHit, maxHit };
+        const request = { attacker: c, target, spell, context, baseMaxHit, maxHit };
         PluginManager.emitCustomEvent("combat:magic-max-hit", request);
-        return Number.isFinite(request.maxHit) && request.maxHit >= 0 ? Math.floor(request.maxHit) : maxHit;
+        maxHit = Number.isFinite(request.maxHit) && request.maxHit >= 0 ? Math.floor(request.maxHit) : maxHit;
+        const bounds = { attacker: c, target, spell, context, baseMaxHit, maxHit, minHit: 0 };
+        PluginManager.emitCustomEvent("combat:magic-hit-bounds", bounds);
+        const maximum = Number.isFinite(bounds.maxHit) && bounds.maxHit >= 0 ? Math.floor(bounds.maxHit) : maxHit;
+        const minimum = Number.isFinite(bounds.minHit) && bounds.minHit >= 0 ? Math.min(maximum, Math.floor(bounds.minHit)) : 0;
+        return { minimum, maximum };
     }
 
     public static getVolatileNightmareStaffBaseMaxHit(player: Player): number {

@@ -380,7 +380,7 @@ test('magic impact effects use the launched spell after another spell has been c
  const {Sounds}=require('../dist/game/Sounds');const old=Sounds.sendSound,calls=[];Sounds.sendSound=()=>{};
  const launched={spellId:()=>-1,endGraphic:()=>null,impactSound:()=>null,finishCast:(a,t,accurate,damage)=>calls.push([accurate,damage])};
  const attacker={getHitpoints:()=>99,getCombat:()=>({getPreviousCast:()=>({finishCast:()=>assert.fail('a later spell cannot replace the launched bind')})})};
- const target={getHitpoints:()=>99};const hit={getAttacker:()=>attacker,getTarget:()=>target,isAccurate:()=>true,getTotalDamage:()=>7,getSpell:()=>launched};
+ const target={getHitpoints:()=>99};const hit={getAttacker:()=>attacker,getTarget:()=>target,isAccurate:()=>true,getTotalDamage:()=>7,getSpell:()=>launched,getSpellContext:()=>null};
  try{new MagicCombatMethod().handleAfterHitEffects(hit);assert.deepEqual(calls,[[true,7]]);hit.getSpell=()=>null;new MagicCombatMethod().handleAfterHitEffects(hit);assert.equal(calls.length,1);}finally{Sounds.sendSound=old;}
 });
 

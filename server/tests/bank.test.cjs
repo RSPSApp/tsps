@@ -214,6 +214,19 @@ test("withdrawing never takes more than the clicked stack holds", () => {
   assert.deepEqual(metas(player.getBank(0)), [[1, { charges: 1200 }]]);
 });
 
+test("search withdrawals cannot clone one metadata stack using the aggregate item count", () => {
+  const player = createPlayer();
+  bankTwoTridents(player);
+  player.isSearchingBank = () => true;
+  player.getBank(Bank.BANK_SEARCH_TAB_INDEX).add(new Item(TRIDENT, 1, { charges: 5 }), false);
+  player.getBank(Bank.BANK_SEARCH_TAB_INDEX).add(new Item(TRIDENT, 1, { charges: 1200 }), false);
+
+  Bank.withdraw(player, TRIDENT, 0, -1, Bank.BANK_SEARCH_TAB_INDEX);
+
+  assert.deepEqual(metas(player.getInventory()), [[1, { charges: 5 }]]);
+  assert.deepEqual(metas(player.getBank(0)), [[1, { charges: 1200 }]]);
+});
+
 test("the client layout lists tabs 1-9 before the main tab", () => {
   const player = createPlayer();
   player.getBank(0).add(new Item(LAVA_BATTLESTAFF, 1), false);

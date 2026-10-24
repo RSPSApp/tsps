@@ -329,8 +329,8 @@ test("four missed dragon claws rolls deal 0 or a 2-damage split, never anything 
 
 function lightningHit({ accurate, splashed = false }) {
   const queued = [];
-  const oldMax = PluginManager.getCoreApi().DamageFormulas.sourceMaxHit;
-  PluginManager.getCoreApi().DamageFormulas.sourceMaxHit = () => 0;
+  const oldBounds = PluginManager.getCoreApi().DamageFormulas.sourceHitBounds;
+  PluginManager.getCoreApi().DamageFormulas.sourceHitBounds = () => ({ minimum: 0, maximum: 0 });
   const realQueue = CombatFactory.addPendingHit;
   CombatFactory.addPendingHit = (hit) => queued.push(hit);
   const target = {
@@ -349,7 +349,7 @@ function lightningHit({ accurate, splashed = false }) {
     special("saradomin_sword").getCombatMethod().handleAfterHitEffects(hit);
   } finally {
     CombatFactory.addPendingHit = realQueue;
-    PluginManager.getCoreApi().DamageFormulas.sourceMaxHit = oldMax;
+    PluginManager.getCoreApi().DamageFormulas.sourceHitBounds = oldBounds;
   }
   for (const hit of queued) {
     assert.equal(hit.getCombatType(), CombatType.MAGIC);

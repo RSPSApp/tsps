@@ -185,7 +185,8 @@ export class CombatFactory {
             maxHit = PluginManager.modifyRangedMaxHit(entity, victim, maxHit);
             damage = CombatFactory.rollSpecialDamage(entity, maxHit, boundsOverride, applySpecialTraits);
         } else if (type == CombatType.MAGIC) {
-            damage = CombatFactory.rollSpecialDamage(entity, DamageFormulas.sourceMaxHit(entity, CombatType.MAGIC), boundsOverride, applySpecialTraits);
+            const bounds = DamageFormulas.sourceHitBounds(entity, CombatType.MAGIC, victim);
+            damage = CombatFactory.rollSpecialDamage(entity, bounds.maximum, boundsOverride, applySpecialTraits, bounds.minimum);
         }
 
         // Wiki (Ward of Arceuus): demons hit 10% less, that 10% rounded down first.
@@ -280,10 +281,10 @@ export class CombatFactory {
      * 0..maxHit roll; with traits it honours per-hit min/max multipliers, flat
      * bonuses and a maximum cap.
      */
-    private static rollSpecialDamage(entity: Mobile, maxHit: number, boundsOverride?: SpecialDamageBounds, applySpecialTraits = true): number {
+    private static rollSpecialDamage(entity: Mobile, maxHit: number, boundsOverride?: SpecialDamageBounds, applySpecialTraits = true, minimumFloor = 0): number {
         const traits = applySpecialTraits ? CombatSpecial.activeTraitsFor(entity) : null;
         if (!traits && !boundsOverride) {
-            return Misc.randomInclusive(0, maxHit);
+            return Misc.randomInclusive(Math.min(maxHit, Math.max(0, minimumFloor)), maxHit);
         }
         let minimum = Math.floor(
             maxHit * (boundsOverride?.minimumMultiplier ?? traits?.minimumDamageMultiplier ?? 0)
@@ -308,6 +309,7 @@ export class CombatFactory {
             minimum = maximum;
             maximum = swap;
         }
+        minimum = Math.max(minimum, Math.min(maximum, Math.max(0, minimumFloor)));
         return Misc.randomInclusive(Math.max(0, minimum), Math.max(0, maximum));
     }
 

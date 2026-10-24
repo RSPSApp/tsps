@@ -365,26 +365,12 @@ export class CombatSpells {
     });
 
     public static CONFUSE = new CombatEffectSpell({
+        maximumHit: () => 0,
         castAnimation() {
             return new Animation(716);
         },
         castProjectile(cast, castOn) {
             return Projectile.createProjectile(cast, castOn, 103, 0, 20, 43, 31);
-        },
-        spellEffect(cast, castOn) {
-            if (castOn.isPlayer()) {
-                const player = castOn as Player;
-                if (player.getSkillManager().getCurrentLevel(Skill.ATTACK) < player.getSkillManager().getMaxLevel(Skill.ATTACK)) {
-                    if (cast.isPlayer()) {
-                        (cast as Player).sendMessage("The spell has no effect because the player has already been weakened.");
-                    }
-                    return;
-                }
-                const decrease = Math.floor(0.05 * (player.getSkillManager().getCurrentLevel(Skill.ATTACK)));
-                player.getSkillManager().setCurrentLevelCombat(Skill.ATTACK, player.getSkillManager().getCurrentLevel(Skill.ATTACK) - decrease);
-                player.getSkillManager().updateSkill(Skill.ATTACK);
-                player.sendMessage("You feel slightly weakened.");
-            }
         },
         endGraphic() {
             return new Graphic(104, GraphicHeight.HIGH);
@@ -473,47 +459,13 @@ export class CombatSpells {
     });
 
     public static WEAKEN = new CombatEffectSpell({
+        maximumHit: () => 0,
         castAnimation() {
             return new Animation(717);
         },
 
         castProjectile(cast: Mobile, castOn: Mobile) {
             return Projectile.createProjectile(cast, castOn, 106, 0, 20, 43, 31);
-        },
-
-        spellEffect(cast: Mobile, castOn: Mobile) {
-            if (castOn.isPlayer()) {
-                let player = castOn as Player;
-
-                if (player.getSkillManager().getCurrentLevel(Skill.STRENGTH) < player.getSkillManager().getMaxLevel(Skill.STRENGTH)) {
-                    if (cast.isPlayer()) {
-                        (cast as Player).sendMessage(
-                            "The spell has no effect because the player has already been weakened."
-                        );
-                    }
-                    return;
-                }
-
-                let decrease = Math.floor(0.05 * player.getSkillManager().getCurrentLevel(Skill.STRENGTH));
-                player.getSkillManager().setCurrentLevelCombat(Skill.STRENGTH, player.getSkillManager().getCurrentLevel(Skill.STRENGTH) - decrease);
-                player.getSkillManager().updateSkill(Skill.STRENGTH);
-                player.sendMessage(
-                    "You feel slightly weakened."
-                );
-            } /*else if (castOn.isNpc()) {
-                    let npc = castOn as NPC;
-        
-                    if (npc.getDefenceWeakened()[1] || npc.getStrengthWeakened()[1]) {
-                        if (cast.isPlayer()) {
-                            (cast as Player).sendMessage(
-                                "The spell has no effect because the NPC has already been weakened."
-                            );
-                        }
-                        return;
-                    }
-        
-                    npc.getDefenceWeakened()[1] = true;
-                }*/
         },
 
         endGraphic() {
@@ -631,42 +583,13 @@ export class CombatSpells {
     });
 
     public static CURSE = new CombatEffectSpell({
+        maximumHit: () => 0,
         castAnimation() {
             return new Animation(718);
         },
 
         castProjectile(cast, castOn) {
             return Projectile.createProjectile(cast, castOn, 109, 0, 20, 43, 31);
-        },
-
-        spellEffect(cast, castOn) {
-            if (castOn.isPlayer()) {
-                const player = castOn as Player;
-
-                if (player.getSkillManager().getCurrentLevel(Skill.DEFENCE) < player.getSkillManager().getMaxLevel(Skill.DEFENCE)) {
-                    if (cast.isPlayer()) {
-                        (cast as Player).sendMessage("The spell has no effect because the player has already been weakened.");
-                    }
-                    return;
-                }
-
-                const decrease = Math.floor(0.05 * player.getSkillManager().getCurrentLevel(Skill.DEFENCE));
-                player.getSkillManager().setCurrentLevelCombat(Skill.DEFENCE, player.getSkillManager().getCurrentLevel(Skill.DEFENCE) - decrease);
-                player.getSkillManager().updateSkill(Skill.DEFENCE);
-
-                player.sendMessage("You feel slightly weakened.");
-            }/* else if (castOn.isNpc()) {
-                const npc = castOn as NPC;
-        
-                if (npc.getDefenceWeakened()[2] || npc.getStrengthWeakened()[2]) {
-                    if (cast.isPlayer()) {
-                        (cast as Player).sendMessage("The spell has no effect because the NPC has already been weakened.");
-                    }
-                    return;
-                }
-        
-                npc.getDefenceWeakened()[2] = true;
-            }*/
         },
 
         endGraphic() {
@@ -695,16 +618,13 @@ export class CombatSpells {
     });
 
     public static BIND = new CombatEffectSpell({
+        maximumHit: () => 0,
         castAnimation: () => {
             return new Animation(710);
         },
 
         castProjectile: (cast, castOn) => {
             return Projectile.createProjectile(cast, castOn, 178, 0, 20, 43, 31);
-        },
-
-        spellEffect: (cast, castOn) => {
-            getCombatFactory().freeze(castOn, 5);
         },
 
         endGraphic: () => {
@@ -978,15 +898,12 @@ export class CombatSpells {
     });
 
     public static SNARE = new CombatEffectSpell({
-        members: true,
+        maximumHit: () => 2,
         castAnimation() {
             return new Animation(710);
         },
         castProjectile(cast, castOn) {
             return Projectile.createProjectile(cast, castOn, 178, 0, 20, 43, 31);
-        },
-        spellEffect(cast, castOn) {
-            getCombatFactory().freeze(castOn, 10);
         },
         endGraphic() {
             return new Graphic(180, GraphicHeight.HIGH);
@@ -999,7 +916,7 @@ export class CombatSpells {
         },
         splashExperience: () => 60,
         itemsRequired(player) {
-            return [new Item(555, 3), new Item(557, 4), new Item(561, 3)];
+            return [new Item(555, 4), new Item(557, 4), new Item(561, 3)];
         },
         levelRequired() {
             return 50;
@@ -1280,41 +1197,13 @@ export class CombatSpells {
     });
 
     public static VULNERABILITY = new CombatEffectSpell({
+        maximumHit: () => 0,
         members: true,
         castAnimation() {
             return new Animation(718);
         },
         castProjectile(cast, castOn) {
             return Projectile.createProjectile(cast, castOn, 168, 0, 20, 43, 31);
-        },
-        spellEffect(cast, castOn) {
-            if (castOn.isPlayer()) {
-                let player = castOn as Player;
-
-
-                if (player.getSkillManager().getCurrentLevel(Skill.DEFENCE) < player.getSkillManager().getMaxLevel(Skill.DEFENCE)) {
-                    if (cast.isPlayer()) {
-                        (cast as Player).sendMessage("The spell has no effect because the player is already weakened.");
-                    }
-                    return;
-                }
-
-                let decrease = Math.floor(0.10 * player.getSkillManager().getCurrentLevel(Skill.DEFENCE));
-                player.getSkillManager().setCurrentLevelCombat(Skill.DEFENCE, player.getSkillManager().getCurrentLevel(Skill.DEFENCE) - decrease);
-                player.getSkillManager().updateSkill(Skill.DEFENCE);
-                player.sendMessage("You feel slightly weakened.");
-            }/* else if (castOn.isNpc()) {
-                let npc = castOn as NPC;
-        
-                if (npc.getDefenceWeakened()[2] || npc.getStrengthWeakened()[2]) {
-                    if (cast.isPlayer()) {
-                        (cast as Player).sendMessage("The spell has no effect because the NPC is already weakened.");
-                    }
-                    return;
-                }
-        
-                npc.getStrengthWeakened()[2] = true;
-            }*/
         },
         endGraphic() {
             return new Graphic(169);
@@ -1371,37 +1260,13 @@ export class CombatSpells {
     });
 
     public static ENFEEBLE = new CombatEffectSpell({
+        maximumHit: () => 0,
         members: true,
         castAnimation: function () {
             return new Animation(728);
         },
         castProjectile: function (cast, castOn) {
             return Projectile.createProjectile(cast, castOn, 171, 0, 20, 43, 31);
-        },
-        spellEffect: function (cast, castOn) {
-            if (castOn.isPlayer()) {
-                let player = castOn as Player;
-                if (player.getSkillManager().getCurrentLevel(Skill.STRENGTH) < player.getSkillManager().getMaxLevel(Skill.STRENGTH)) {
-                    if (cast.isPlayer()) {
-                        (cast as Player).sendMessage("The spell has no effect because the player is already weakened.");
-                    }
-                    return;
-                }
-                let decrease = Math.floor(0.10 * (player.getSkillManager().getCurrentLevel(Skill.STRENGTH)));
-                player.getSkillManager().setCurrentLevelCombat(Skill.STRENGTH, player.getSkillManager().getCurrentLevel(Skill.STRENGTH) - decrease);
-                player.getSkillManager().updateSkill(Skill.STRENGTH);
-                player.sendMessage("You feel slightly weakened.");
-            }
-            /* else if (castOn.isNpc()) {
-            let npc = castOn as NPC;
-            if (npc.getDefenceWeakened()[1] || npc.getStrengthWeakened()[1]) {
-            if (cast.isPlayer()) {
-            (cast as Player).sendMessage("The spell has no effect because the NPC is already weakened.");
-            }
-            return;
-            }
-            npc.getStrengthWeakened()[1] = true;
-            } */
         },
         endGraphic: function () {
             return new Graphic(172);
@@ -1654,15 +1519,13 @@ export class CombatSpells {
     });
 
     public static ENTANGLE = new CombatEffectSpell({
+        maximumHit: () => 5,
         members: true,
         castAnimation() {
             return new Animation(710);
         },
         castProjectile(cast, castOn) {
             return Projectile.createProjectile(cast, castOn, 178, 0, 20, 43, 31);
-        },
-        spellEffect(cast, castOn) {
-            getCombatFactory().freeze(castOn, 15);
         },
         endGraphic() {
             return new Graphic(179, GraphicHeight.HIGH);
@@ -1686,43 +1549,13 @@ export class CombatSpells {
     });
 
     public static STUN = new CombatEffectSpell({
+        maximumHit: () => 0,
         members: true,
         castAnimation() {
             return new Animation(729);
         },
         castProjectile(cast, castOn) {
             return Projectile.createProjectile(cast, castOn, 174, 0, 20, 43, 31);
-        },
-        spellEffect(cast, castOn) {
-            if (castOn.isPlayer()) {
-                const player = castOn as Player;
-
-                if (player.getSkillManager().getCurrentLevel(Skill.ATTACK) < player.getSkillManager().getMaxLevel(Skill.ATTACK)) {
-                    if (cast.isPlayer()) {
-                        (cast as Player).sendMessage(
-                            "The spell has no effect because the player is already weakened.");
-                    }
-                    return;
-                }
-
-                const decrease = Math.floor(0.10 * (player.getSkillManager().getCurrentLevel(Skill.ATTACK)));
-                player.getSkillManager().setCurrentLevelCombat(Skill.ATTACK, player.getSkillManager().getCurrentLevel(Skill.ATTACK) - decrease);
-                player.getSkillManager().updateSkill(Skill.ATTACK);
-                player.sendMessage(
-                    "You feel slightly weakened.");
-            }/* else if (castOn.isNpc()) {
-                    const npc = castOn as NPC;
-        
-                    if (npc.getDefenceWeakened()[0] || npc.getStrengthWeakened()[0]) {
-                        if (cast.isPlayer()) {
-                            (cast as Player).sendMessage(
-                                "The spell has no effect because the NPC is already weakened.");
-                        }
-                        return;
-                    }
-        
-                    npc.getStrengthWeakened()[0] = true;
-                }*/
         },
         endGraphic() {
             return new Graphic(107);

@@ -1335,7 +1335,7 @@ export class OsrsClient {
             getSeqTypeLoader: () => this.seqTypeLoader,
             getSeqFrameLoader: () => this.seqFrameLoader,
             getBasTypeLoader: () => this.basTypeLoader,
-            getSkeletalSeqLoader: () => this.loaderFactory?.getSkeletalSeqLoader?.(),
+            getSkeletalSeqLoader: () => this.skeletalSeqLoader,
             varManager: this.varManager,
             widgetManager: this.widgetManager,
             playerEcs: this.playerEcs,
@@ -3553,8 +3553,7 @@ export class OsrsClient {
                                             npcTypeLoader: this.npcTypeLoader,
                                             seqTypeLoader: this.seqTypeLoader,
                                             seqFrameLoader: this.seqFrameLoader,
-                                            skeletalSeqLoader:
-                                                this.loaderFactory?.getSkeletalSeqLoader?.(),
+                                            skeletalSeqLoader: this.skeletalSeqLoader,
                                             varManager: this.varManager,
                                             basTypeLoader: this.basTypeLoader,
                                         });
@@ -4676,7 +4675,7 @@ export class OsrsClient {
                     npcTypeLoader: undefined,
                     seqTypeLoader: this.seqTypeLoader,
                     seqFrameLoader: this.seqFrameLoader,
-                    skeletalSeqLoader: this.loaderFactory.getSkeletalSeqLoader?.(),
+                    skeletalSeqLoader: this.skeletalSeqLoader,
                     varManager: this.varManager,
                     basTypeLoader: this.basTypeLoader,
                 });

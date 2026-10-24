@@ -370,7 +370,7 @@ export class PlayerRenderer {
                 npcTypeLoader: mv.npcTypeLoader,
                 seqTypeLoader: mv.seqTypeLoader,
                 seqFrameLoader: mv.seqFrameLoader,
-                skeletalSeqLoader: mv.loaderFactory.getSkeletalSeqLoader?.(),
+                skeletalSeqLoader: mv.skeletalSeqLoader,
                 varManager: mv.varManager,
                 basTypeLoader: mv.basTypeLoader,
             });
@@ -1296,7 +1296,7 @@ export class PlayerRenderer {
     ): boolean {
         if (!seqType) return false;
         if (seqType.isSkeletalSeq?.()) {
-            const skeletal = mv.loaderFactory.getSkeletalSeqLoader?.()?.load(seqType.skeletalId);
+            const skeletal = mv.skeletalSeqLoader?.load(seqType.skeletalId);
             if (!skeletal) return false;
             const duration = this.getEffectiveSkeletalDuration(seqType, seqId | 0);
             const local = Math.max(0, frameIdx | 0) % Math.max(1, duration | 0);
@@ -1355,9 +1355,7 @@ export class PlayerRenderer {
         const overlayCached = !!overlayType.isSkeletalSeq?.();
 
         if (baseCached) {
-            const baseSkeletal = mv.loaderFactory
-                .getSkeletalSeqLoader?.()
-                ?.load(baseType.skeletalId);
+            const baseSkeletal = mv.skeletalSeqLoader?.load(baseType.skeletalId);
             if (!baseSkeletal) return false;
 
             const baseDuration = this.getEffectiveSkeletalDuration(baseType, baseSeqId | 0);
@@ -1370,9 +1368,7 @@ export class PlayerRenderer {
                     return true;
                 }
 
-                const overlaySkeletal = mv.loaderFactory
-                    .getSkeletalSeqLoader?.()
-                    ?.load(overlayType.skeletalId);
+                const overlaySkeletal = mv.skeletalSeqLoader?.load(overlayType.skeletalId);
                 if (!overlaySkeletal) {
                     model.animateSkeletal(baseSkeletal, baseAnimFrame);
                     return false;
@@ -1438,9 +1434,7 @@ export class PlayerRenderer {
                 return true;
             }
 
-            const overlaySkeletal = mv.loaderFactory
-                .getSkeletalSeqLoader?.()
-                ?.load(overlayType.skeletalId);
+            const overlaySkeletal = mv.skeletalSeqLoader?.load(overlayType.skeletalId);
             if (!overlaySkeletal) {
                 model.animateInterleavedFrame(baseFrame0, !!baseType.op14, undefined, false,
                     interpolationFrame(baseType, interpolation?.base, mv.seqFrameLoader), interpolation?.base?.alpha);

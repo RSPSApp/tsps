@@ -720,7 +720,7 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
         const changed = this.changedVarps;
         this.changedVarps = new Set();
         const client = this.osrsClient;
-        const varbitLoader = client.loaderFactory?.getVarBitTypeLoader?.();
+        const varbitLoader = client.varManager.varbitLoader;
         // Builds read the workers' copy of the vars, squares loaded later too.
         client.updateVars();
         if (!client.locTypeLoader || !varbitLoader) return;

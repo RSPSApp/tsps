@@ -320,7 +320,7 @@ export class PlayerPoseGeometry {
                 npcTypeLoader: mv.npcTypeLoader,
                 seqTypeLoader: mv.seqTypeLoader,
                 seqFrameLoader: mv.seqFrameLoader,
-                skeletalSeqLoader: mv.loaderFactory?.getSkeletalSeqLoader?.(),
+                skeletalSeqLoader: mv.skeletalSeqLoader,
                 varManager: mv.varManager,
                 basTypeLoader: mv.basTypeLoader,
             });
@@ -483,7 +483,7 @@ export class PlayerPoseGeometry {
     ): boolean {
         if (!seqType) return false;
         if (seqType.isSkeletalSeq?.()) {
-            const skeletal = this.client.loaderFactory?.getSkeletalSeqLoader?.()?.load(seqType.skeletalId);
+            const skeletal = this.client.skeletalSeqLoader?.load(seqType.skeletalId);
             if (!skeletal) return false;
             const duration = this.effectiveSkeletalDuration(seqType, seqId | 0);
             const local = Math.max(0, frameIdx | 0) % Math.max(1, duration | 0);
@@ -528,7 +528,7 @@ export class PlayerPoseGeometry {
 
         const baseCached = !!baseType.isSkeletalSeq?.();
         const overlayCached = !!overlayType.isSkeletalSeq?.();
-        const skeletalLoader = this.client.loaderFactory?.getSkeletalSeqLoader?.();
+        const skeletalLoader = this.client.skeletalSeqLoader;
 
         if (baseCached) {
             const baseSkeletal = skeletalLoader?.load(baseType.skeletalId);

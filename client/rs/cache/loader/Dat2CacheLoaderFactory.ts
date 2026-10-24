@@ -90,6 +90,27 @@ import { CacheLoaderFactory } from "./CacheLoaderFactory";
 
 export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     private enumTypeLoader?: EnumTypeLoader;
+    private underlayTypeLoader?: FloorTypeLoader;
+    private overlayTypeLoader?: OverlayFloorTypeLoader;
+    private varBitTypeLoader?: VarBitTypeLoader;
+    private varcIntTypeLoader?: VarcIntTypeLoader;
+    private locTypeLoader?: LocTypeLoader;
+    private npcTypeLoader?: NpcTypeLoader;
+    private objTypeLoader?: ObjTypeLoader;
+    private seqTypeLoader?: SeqTypeLoader;
+    private spotAnimTypeLoader?: SpotAnimTypeLoader;
+    private basTypeLoader?: BasTypeLoader;
+    private paramTypeLoader?: ParamTypeLoader;
+    private idkTypeLoader?: IdkTypeLoader;
+    private structTypeLoader?: StructTypeLoader;
+    private textureLoader?: TextureLoader;
+    private modelLoader?: ModelLoader;
+    private seqBaseLoader?: SeqBaseLoader;
+    private seqFrameLoader?: SeqFrameLoader;
+    private skeletalSeqLoader?: SkeletalSeqLoader;
+    private worldEntityTypeLoader?: WorldEntityTypeLoader;
+    private mapFileLoader?: MapFileLoader;
+    private mapScenes?: IndexedSprite[];
 
     constructor(
         readonly cacheInfo: CacheInfo,
@@ -102,46 +123,67 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     }
 
     getUnderlayTypeLoader(): FloorTypeLoader {
+        if (this.underlayTypeLoader) return this.underlayTypeLoader;
         const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
         const underlaysArchive = configIndex.getArchive(ConfigType.DAT2.underlays);
-        return new ArchiveUnderlayFloorTypeLoader(this.cacheInfo, underlaysArchive);
+        return (this.underlayTypeLoader = new ArchiveUnderlayFloorTypeLoader(
+            this.cacheInfo,
+            underlaysArchive,
+        ));
     }
 
     getOverlayTypeLoader(): OverlayFloorTypeLoader {
+        if (this.overlayTypeLoader) return this.overlayTypeLoader;
         const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
         const overlaysArchive = configIndex.getArchive(ConfigType.DAT2.overlays);
-        return new ArchiveOverlayFloorTypeLoader(this.cacheInfo, overlaysArchive);
+        return (this.overlayTypeLoader = new ArchiveOverlayFloorTypeLoader(
+            this.cacheInfo,
+            overlaysArchive,
+        ));
     }
 
     getVarBitTypeLoader(): VarBitTypeLoader {
+        if (this.varBitTypeLoader) return this.varBitTypeLoader;
         if (this.isIndexConfigs()) {
             const varbitsIndex = this.cacheSystem.getIndex(IndexType.RS2.varbits);
-            return new IndexVarBitTypeLoader(this.cacheInfo, varbitsIndex);
+            return (this.varBitTypeLoader = new IndexVarBitTypeLoader(
+                this.cacheInfo,
+                varbitsIndex,
+            ));
         } else {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const varbitsArchive = configIndex.getArchive(ConfigType.DAT2.varbits);
-            return new ArchiveVarBitTypeLoader(this.cacheInfo, varbitsArchive);
+            return (this.varBitTypeLoader = new ArchiveVarBitTypeLoader(
+                this.cacheInfo,
+                varbitsArchive,
+            ));
         }
     }
 
     getVarcIntTypeLoader(): VarcIntTypeLoader {
+        if (this.varcIntTypeLoader) return this.varcIntTypeLoader;
         const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
         const varcArchive = configIndex.getArchive(ConfigType.DAT2.varClient);
-        return new ArchiveVarcIntTypeLoader(this.cacheInfo, varcArchive);
+        return (this.varcIntTypeLoader = new ArchiveVarcIntTypeLoader(
+            this.cacheInfo,
+            varcArchive,
+        ));
     }
 
     getLocTypeLoader(): LocTypeLoader {
+        if (this.locTypeLoader) return this.locTypeLoader;
         if (this.isIndexConfigs()) {
             const locsIndex = this.cacheSystem.getIndex(IndexType.RS2.locs);
-            return new IndexLocTypeLoader(this.cacheInfo, locsIndex);
+            return (this.locTypeLoader = new IndexLocTypeLoader(this.cacheInfo, locsIndex));
         } else {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const locsArchive = configIndex.getArchive(ConfigType.DAT2.locs);
-            return new ArchiveLocTypeLoader(this.cacheInfo, locsArchive);
+            return (this.locTypeLoader = new ArchiveLocTypeLoader(this.cacheInfo, locsArchive));
         }
     }
 
     getNpcTypeLoader(): NpcTypeLoader {
+        if (this.npcTypeLoader) return this.npcTypeLoader;
         let baseLoader: NpcTypeLoader;
         if (this.isIndexConfigs()) {
             const npcIndex = this.cacheSystem.getIndex(IndexType.RS2.npcs);
@@ -152,10 +194,11 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
             baseLoader = new ArchiveNpcTypeLoader(this.cacheInfo, npcsArchive);
         }
         // Wrap to resolve the server's npc model customisations (synthetic type ids).
-        return new CustomNpcTypeLoader(baseLoader);
+        return (this.npcTypeLoader = new CustomNpcTypeLoader(baseLoader));
     }
 
     getObjTypeLoader(): ObjTypeLoader {
+        if (this.objTypeLoader) return this.objTypeLoader;
         let baseLoader: ObjTypeLoader;
         if (this.isIndexConfigs()) {
             const objIndex = this.cacheSystem.getIndex(IndexType.RS2.objs);
@@ -170,37 +213,49 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
             );
         }
         // Wrap with custom item loader to support custom items
-        return new CustomObjTypeLoader(baseLoader, this.cacheInfo);
+        return (this.objTypeLoader = new CustomObjTypeLoader(baseLoader, this.cacheInfo));
     }
 
     getSeqTypeLoader(): SeqTypeLoader {
+        if (this.seqTypeLoader) return this.seqTypeLoader;
         if (this.isIndexConfigs()) {
             const seqIndex = this.cacheSystem.getIndex(IndexType.RS2.seqs);
-            return new IndexSeqTypeLoader(this.cacheInfo, seqIndex);
+            return (this.seqTypeLoader = new IndexSeqTypeLoader(this.cacheInfo, seqIndex));
         } else {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const seqsArchive = configIndex.getArchive(ConfigType.DAT2.seqs);
-            return new ArchiveSeqTypeLoader(this.cacheInfo, seqsArchive);
+            return (this.seqTypeLoader = new ArchiveSeqTypeLoader(this.cacheInfo, seqsArchive));
         }
     }
 
     getSpotAnimTypeLoader(): SpotAnimTypeLoader {
+        if (this.spotAnimTypeLoader) return this.spotAnimTypeLoader;
         if (this.isIndexConfigs()) {
             const spotIndex = this.cacheSystem.getIndex(IndexType.RS2.spotAnims);
-            return new IndexSpotAnimTypeLoader(this.cacheInfo, spotIndex);
+            return (this.spotAnimTypeLoader = new IndexSpotAnimTypeLoader(
+                this.cacheInfo,
+                spotIndex,
+            ));
         } else {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const spotArchive = configIndex.getArchive(ConfigType.DAT2.spotAnims);
-            return new ArchiveSpotAnimTypeLoader(this.cacheInfo, spotArchive);
+            return (this.spotAnimTypeLoader = new ArchiveSpotAnimTypeLoader(
+                this.cacheInfo,
+                spotArchive,
+            ));
         }
     }
 
     getBasTypeLoader(): BasTypeLoader {
+        if (this.basTypeLoader) return this.basTypeLoader;
         if (this.cacheInfo.game === "runescape" && this.cacheInfo.revision >= 530) {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             try {
                 const basArchive = configIndex.getArchive(ConfigType.RS2.bas);
-                return new ArchiveBasTypeLoader(this.cacheInfo, basArchive);
+                return (this.basTypeLoader = new ArchiveBasTypeLoader(
+                    this.cacheInfo,
+                    basArchive,
+                ));
             } catch (e) {
                 console.error("Failed to load bastype archive", e);
             }
@@ -209,15 +264,20 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     }
 
     getParamTypeLoader(): ParamTypeLoader {
+        if (this.paramTypeLoader) return this.paramTypeLoader;
         const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
         const paramsArchive = configIndex.getArchive(ConfigType.DAT2.params);
-        return new ArchiveParamTypeLoader(this.cacheInfo, paramsArchive);
+        return (this.paramTypeLoader = new ArchiveParamTypeLoader(
+            this.cacheInfo,
+            paramsArchive,
+        ));
     }
 
     getIdkTypeLoader(): IdkTypeLoader {
+        if (this.idkTypeLoader) return this.idkTypeLoader;
         const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
         const idkArchive = configIndex.getArchive(ConfigType.DAT2.identkits);
-        return new ArchiveIdkTypeLoader(this.cacheInfo, idkArchive);
+        return (this.idkTypeLoader = new ArchiveIdkTypeLoader(this.cacheInfo, idkArchive));
     }
 
     getEnumTypeLoader(): EnumTypeLoader | undefined {
@@ -233,6 +293,7 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     }
 
     getStructTypeLoader(): StructTypeLoader | undefined {
+        if (this.structTypeLoader) return this.structTypeLoader;
         try {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             // Structs are at archive 34 for OSRS caches
@@ -241,7 +302,10 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
                 configIndex.archiveExists(ConfigType.OSRS.struct)
             ) {
                 const structsArchive = configIndex.getArchive(ConfigType.OSRS.struct);
-                return new ArchiveStructTypeLoader(this.cacheInfo, structsArchive);
+                return (this.structTypeLoader = new ArchiveStructTypeLoader(
+                    this.cacheInfo,
+                    structsArchive,
+                ));
             }
         } catch (e) {
             console.error("Failed to load struct archive", e);
@@ -250,6 +314,7 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     }
 
     getTextureLoader(): TextureLoader {
+        if (this.textureLoader) return this.textureLoader;
         const textureIndex = this.cacheSystem.getIndex(IndexType.DAT2.textures);
         const spriteIndex = this.cacheSystem.getIndex(IndexType.DAT2.sprites);
         if (
@@ -258,63 +323,90 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
         ) {
             const isSimplified =
                 this.cacheInfo.game === "oldschool" && this.cacheInfo.revision >= 233;
-            return SpriteTextureLoader.load(textureIndex, spriteIndex, isSimplified);
+            return (this.textureLoader = SpriteTextureLoader.load(
+                textureIndex,
+                spriteIndex,
+                isSimplified,
+            ));
         } else if (this.cacheSystem.indexExists(IndexType.RS2.materials)) {
             // materials starting 499 or 500
             const materialIndex = this.cacheSystem.getIndex(IndexType.RS2.materials);
 
-            return ProceduralTextureLoader.load(
+            return (this.textureLoader = ProceduralTextureLoader.load(
                 this.cacheInfo.revision,
                 materialIndex,
                 textureIndex,
                 spriteIndex,
-            );
+            ));
         } else {
-            return OldProceduralTextureLoader.load(textureIndex, spriteIndex);
+            return (this.textureLoader = OldProceduralTextureLoader.load(
+                textureIndex,
+                spriteIndex,
+            ));
         }
     }
 
     getModelLoader(): ModelLoader {
+        if (this.modelLoader) return this.modelLoader;
         const modelIndex = this.cacheSystem.getIndex(IndexType.DAT2.models);
-        return new IndexModelLoader(modelIndex);
+        return (this.modelLoader = new IndexModelLoader(modelIndex));
     }
 
     getSeqBaseLoader(): SeqBaseLoader {
+        if (this.seqBaseLoader) return this.seqBaseLoader;
         const index = this.cacheSystem.getIndex(IndexType.DAT2.skeletons);
-        return new IndexSeqBaseLoader(this.cacheInfo, index);
+        return (this.seqBaseLoader = new IndexSeqBaseLoader(this.cacheInfo, index));
     }
 
     getSeqFrameLoader(): SeqFrameLoader {
+        if (this.seqFrameLoader) return this.seqFrameLoader;
         const index = this.cacheSystem.getIndex(IndexType.DAT2.animations);
-        return new Dat2SeqFrameLoader(this.cacheInfo, index, this.getSeqBaseLoader());
+        return (this.seqFrameLoader = new Dat2SeqFrameLoader(
+            this.cacheInfo,
+            index,
+            this.getSeqBaseLoader(),
+        ));
     }
 
     getSkeletalSeqLoader(): SkeletalSeqLoader | undefined {
+        if (this.skeletalSeqLoader) return this.skeletalSeqLoader;
         if (this.cacheInfo.game === "oldschool" && this.cacheInfo.revision >= 229) {
             const index = this.cacheSystem.getIndex(IndexType.OSRS.animKeyFrames);
-            return new IndexSkeletalSeqLoader(index, this.getSeqBaseLoader());
+            return (this.skeletalSeqLoader = new IndexSkeletalSeqLoader(
+                index,
+                this.getSeqBaseLoader(),
+            ));
         }
         const index = this.cacheSystem.getIndex(IndexType.DAT2.animations);
-        return new IndexSkeletalSeqLoader(index, this.getSeqBaseLoader());
+        return (this.skeletalSeqLoader = new IndexSkeletalSeqLoader(
+            index,
+            this.getSeqBaseLoader(),
+        ));
     }
 
     getWorldEntityTypeLoader(): WorldEntityTypeLoader | undefined {
+        if (this.worldEntityTypeLoader) return this.worldEntityTypeLoader;
         try {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const archive = configIndex.getArchive(ConfigType.OSRS.worldEntity);
-            return new ArchiveWorldEntityTypeLoader(this.cacheInfo, archive);
+            return (this.worldEntityTypeLoader = new ArchiveWorldEntityTypeLoader(
+                this.cacheInfo,
+                archive,
+            ));
         } catch {
             return undefined;
         }
     }
 
     getMapFileLoader(): MapFileLoader {
+        if (this.mapFileLoader) return this.mapFileLoader;
         const mapIndex = this.cacheSystem.getIndex(IndexType.DAT2.maps);
         const mapFileIndex = new Dat2MapIndex(mapIndex);
-        return new MapFileLoader(mapIndex, mapFileIndex);
+        return (this.mapFileLoader = new MapFileLoader(mapIndex, mapFileIndex));
     }
 
     getMapScenes(): IndexedSprite[] {
+        if (this.mapScenes) return this.mapScenes;
         const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
         const spriteIndex = this.cacheSystem.getIndex(IndexType.DAT2.sprites);
 
@@ -337,11 +429,11 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
                 }
             }
 
-            return mapSceneSprites;
+            return (this.mapScenes = mapSceneSprites);
         } else {
             const graphicDefaults = GraphicsDefaults.load(this.cacheInfo, this.cacheSystem);
             if (graphicDefaults.mapScenes === -1) {
-                return [];
+                return (this.mapScenes = []);
             }
             const mapScenes = SpriteLoader.loadIntoIndexedSprites(
                 spriteIndex,
@@ -351,7 +443,7 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
                 throw new Error("Failed to load map scenes");
             }
 
-            return mapScenes;
+            return (this.mapScenes = mapScenes);
         }
     }
 

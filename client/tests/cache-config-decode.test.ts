@@ -80,6 +80,39 @@ test("enum lookups reuse their lazy loader and still retry an unavailable archiv
     assert.equal(reads, 3);
 });
 
+test("loader getters reuse one instance per cache factory", () => {
+    const info = loadCacheList(loadCacheInfos()).latest;
+    const cache = CacheSystem.fromFiles(info, loadCache(info).files);
+    const factory = new Dat2CacheLoaderFactory(info, "dat2", cache);
+    const getters = [
+        "getUnderlayTypeLoader",
+        "getOverlayTypeLoader",
+        "getVarBitTypeLoader",
+        "getVarcIntTypeLoader",
+        "getLocTypeLoader",
+        "getNpcTypeLoader",
+        "getObjTypeLoader",
+        "getSeqTypeLoader",
+        "getSpotAnimTypeLoader",
+        "getParamTypeLoader",
+        "getIdkTypeLoader",
+        "getEnumTypeLoader",
+        "getStructTypeLoader",
+        "getTextureLoader",
+        "getModelLoader",
+        "getSeqBaseLoader",
+        "getSeqFrameLoader",
+        "getSkeletalSeqLoader",
+        "getWorldEntityTypeLoader",
+        "getMapFileLoader",
+    ] as const;
+    for (const getter of getters) {
+        const first = (factory as any)[getter]();
+        if (first === undefined) continue;
+        assert.equal((factory as any)[getter](), first, `${getter} reuses its loader`);
+    }
+});
+
 test("every config entry decodes exactly", () => {
     const info = loadCacheList(loadCacheInfos()).latest;
     const cache = CacheSystem.fromFiles(info, loadCache(info).files);

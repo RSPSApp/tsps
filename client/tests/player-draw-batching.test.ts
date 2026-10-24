@@ -105,6 +105,32 @@ async function main(): Promise<void> {
     walkingRenderer.applySingleSequenceToModel(unsmoothed, walkSeq, 819, 0, loaders, sampleMovement(0, 0));
     assert.equal(unsmoothed.verticesX[0], 128);
 
+    let cachedSkeletalLoads = 0;
+    let factorySkeletalLoads = 0;
+    const skeletalSeq = { isSkeletalSeq: () => true, skeletalId: 42 };
+    const skeletalLoaders = {
+        seqFrameLoader: { load: () => undefined },
+        skeletalSeqLoader: {
+            load: (id: number) => {
+                cachedSkeletalLoads++;
+                assert.equal(id, 42);
+                return undefined;
+            },
+        },
+        loaderFactory: {
+            getSkeletalSeqLoader: () => {
+                factorySkeletalLoads++;
+                return { load: () => undefined };
+            },
+        },
+    };
+    const skeletalPose = Model.copyAnimated(base, false, true);
+    assert.equal(
+        walkingRenderer.applySingleSequenceToModel(skeletalPose, skeletalSeq, 42, 0, skeletalLoaders),
+        false,
+    );
+    assert.equal(cachedSkeletalLoads, 1, "skeletal poses use the cached sequence loader");
+    assert.equal(factorySkeletalLoads, 0, "the renderer must not build a fresh skeletal loader per pose");
 
     assert.equal(shouldUseUnanimatedIdlePlayer(200, true, false, false, 808, 808), false);
     assert.equal(shouldUseUnanimatedIdlePlayer(201, true, false, false, 808, 808), true);

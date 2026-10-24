@@ -17,6 +17,7 @@ const multiloc = {
 const locTypeLoader: any = { load: (id: number) => (id === 100 ? multiloc : undefined) };
 let varp42 = 0;
 const varbitLoader: any = { load: () => undefined };
+let factoryVarBitLoaderCalls = 0;
 const withMultiloc = [Int32Array.from([100])];
 
 const worldViews = new WorldViewManager();
@@ -29,8 +30,13 @@ const renderer: any = {
     changedVarps: new Set([42]),
     multiLocBuilds: new Map(),
     osrsClient: {
-        varManager: { getVarp: () => varp42, getVarbit: () => 0 },
-        loaderFactory: { getVarBitTypeLoader: () => varbitLoader },
+        varManager: { getVarp: () => varp42, getVarbit: () => 0, varbitLoader },
+        loaderFactory: {
+            getVarBitTypeLoader: () => {
+                factoryVarBitLoaderCalls++;
+                return { load: () => undefined };
+            },
+        },
         locTypeLoader,
         updateVars: () => {},
         worldViewManager: worldViews,
@@ -60,5 +66,6 @@ varp42 = 1;
 renderer.changedVarps = new Set([42]);
 (GameRenderer.prototype as any).reloadMultiLocSquares.call(renderer);
 assert.deepEqual(reloaded, ["50,50", "50,50"], "a changed variant reloads it");
+assert.equal(factoryVarBitLoaderCalls, 0, "reloads reuse the VarManager's varbit loader");
 
 console.log("multiloc-deck-reload: ok");

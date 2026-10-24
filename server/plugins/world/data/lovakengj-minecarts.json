@@ -1,0 +1,30 @@
+{
+  "_source": "OSRS Wiki: Lovakengj_Minecart_Network (stations in its order, 1-9 then A-C; the 20-coin fare, free after The Forsaken Tower) and the conductors' transcripts (npc-dialogues.json). Carts and control panels are map locs (28835 Minecart, 28837 Control panel); arrival and spawn tiles are walkable tiles beside them (collision checked).",
+  "fare": 20,
+  "quest": "The Forsaken Tower",
+  "menuTitle": "Select a destination",
+  "_menuTitle": "calibrated: the Wiki shows the destination list but not its title",
+  "_spawn": "The six stations added on 10 January 2024 have no conductor in the generated npc-spawns.json, so the plugin places them beside their control panel.",
+  "stations": [
+    { "key": "arceuus", "label": "Arceuus", "conductor": "lovakengj_minecart_arceuus", "name": "Loinur", "cart": [1670, 3832], "arrive": [1669, 3833] },
+    { "key": "farmingGuild", "label": "Farming Guild", "conductor": "lovakengj_minecart_farming_guild", "name": "Ferain", "cart": [1218, 3738], "arrive": [1218, 3737], "spawn": [1221, 3737] },
+    { "key": "hosidiusSouth", "label": "Hosidius South", "conductor": "lovakengj_minecart_tithe_farm", "name": "Elnes", "cart": [1808, 3480], "arrive": [1808, 3479], "spawn": [1805, 3479] },
+    { "key": "hosidiusWest", "label": "Hosidius West", "conductor": "lovakengj_minecart_hosidius", "name": "Traxi", "cart": [1655, 3542], "arrive": [1655, 3541] },
+    { "key": "kingstown", "label": "Kingstown", "conductor": "lovakengj_minecart_kingstown", "name": "Hordal", "cart": [1698, 3660], "arrive": [1697, 3660], "spawn": [1700, 3658] },
+    { "key": "kourendWoodland", "label": "Kourend Woodland", "conductor": "lovakengj_minecart_kourend_woodland", "name": "Buneir", "cart": [1571, 3466], "arrive": [1572, 3466], "spawn": [1573, 3464] },
+    { "key": "lovakengj", "label": "Lovakengj", "conductor": "lovakengj_minecart_lovakengj", "name": "Miriam", "cart": [1518, 3732], "arrive": [1519, 3732] },
+    { "key": "mountQuidamortem", "label": "Mount Quidamortem", "conductor": "lovakengj_minecart_quidamortem", "name": "Stuliette", "cart": [1254, 3548], "arrive": [1253, 3548] },
+    { "key": "northernTundras", "label": "Northern Tundras", "conductor": "lovakengj_minecart_northern_tundras", "name": "Lassin", "cart": [1648, 3930], "arrive": [1648, 3931], "spawn": [1647, 3929] },
+    { "key": "portPiscarilius", "label": "Port Piscarilius", "conductor": "lovakengj_minecart_piscarilius", "name": "Raeli", "cart": [1760, 3710], "arrive": [1759, 3710] },
+    { "key": "shayzienEast", "label": "Shayzien East", "conductor": "lovakengj_minecart_shayzien", "name": "Mogrim", "cart": [1590, 3621], "arrive": [1590, 3622] },
+    { "key": "shayzienWest", "label": "Shayzien West", "conductor": "lovakengj_minecart_shayzien_wall", "name": "Hatna", "cart": [1414, 3577], "arrive": [1413, 3577], "spawn": [1416, 3579] }
+  ],
+  "_nearTiles": "How close a player must be to a station's cart for it to count as the station they are at.",
+  "nearTiles": 12,
+  "travelTicks": 3,
+  "_travelTicks": "calibrated: a fade and the move (the riding animation was removed on 10 January 2024)",
+  "messages": {
+    "fare": "Minecart rides are 20 coins.",
+    "_fare": "the transcript's line (said by the conductor)"
+  }
+}

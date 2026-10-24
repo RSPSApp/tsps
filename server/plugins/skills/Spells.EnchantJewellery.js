@@ -1,4 +1,5 @@
 let core;
+let pluginApi;
 const spells = new Map();
 
 function handleSpellOnItem(event) {
@@ -8,7 +9,11 @@ function handleSpellOnItem(event) {
   const { player, itemId, slot } = event;
   const resultId = spell.results.get(itemId);
   if (resultId === undefined) {
-    player.sendMessage("This spell cannot be cast on that item.");
+    // "magic:enchant-item": something else this spell works on (the Mage Training Arena's
+    // shapes), cast with this spell's own runes, level and XP.
+    const other = { player, spell, spellName: spell.data.name, itemId, slot, handled: false };
+    pluginApi.emitCustomEvent("magic:enchant-item", other);
+    if (!other.handled) player.sendMessage("This spell cannot be cast on that item.");
     return;
   }
   const inventory = player.getInventory();
@@ -22,6 +27,7 @@ function handleSpellOnItem(event) {
 }
 
 module.exports = function attach(api) {
+  pluginApi = api;
   core = api.core;
   const { ItemIds } = core;
   // Wiki Lvl-1–7 Enchant GIFs/sound files; sequences and graphics verified in cache 241.

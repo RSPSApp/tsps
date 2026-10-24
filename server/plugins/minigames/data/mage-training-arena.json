@@ -1,0 +1,163 @@
+{
+  "_description": "Mage Training Arena (https://oldschool.runescape.wiki/w/Mage_Training_Arena and its room pages, Pizazz_points, Progress_hat, Entrance_Guardian). Names are cache gamevals; tiles are the map's. Values under a `_calibrated` note have no Wiki figure.",
+  "names": {
+    "npcs": {
+      "entranceGuardian": "magictraining_guard_entrance",
+      "enchantmentGuardian": "magictraining_guard_encha",
+      "hat": "magictraining_pizazz_hat",
+      "alchemyGuardian": "magictraining_guard_alchem"
+    },
+    "locs": {
+      "enchantPortal": "magictraining_enchantdoor",
+      "exit": "magictraining_returndoor",
+      "hole": "magictraining_encha_hole",
+      "cubePile": "magictraining_enchan_shapepile1",
+      "cylinderPile": "magictraining_enchan_shapepile2",
+      "icosahedronPile": "magictraining_enchan_shapepile3",
+      "pentamidPile": "magictraining_enchan_shapepile4",
+      "alchemistsPortal": "magictraining_alchemdoor",
+      "coinCollector": "magictraining_coin_collector",
+      "cupboard0": "magictraining_alchem_cupboard0_open",
+      "cupboard1": "magictraining_alchem_cupboard1_open",
+      "cupboard2": "magictraining_alchem_cupboard2_open",
+      "cupboard3": "magictraining_alchem_cupboard3_open",
+      "cupboard4": "magictraining_alchem_cupboard4_open",
+      "cupboard5": "magictraining_alchem_cupboard5_open"
+    },
+    "items": {
+      "hatDull": "magictraining_proghat_dull",
+      "hatEnergised": "magictraining_proghat_energised",
+      "hatFull": "magictraining_proghat_full",
+      "cube": "magictraining_enchan_cube",
+      "cylinder": "magictraining_enchan_cylinder",
+      "icosahedron": "magictraining_enchan_icosahendron",
+      "pentamid": "magictraining_enchan_pentamid",
+      "orb": "magictraining_enchan_shapeorb",
+      "dragonstone": "magictraining_dragonstone",
+      "cosmic": "cosmicrune",
+      "death": "deathrune",
+      "blood": "bloodrune",
+      "boots": "magictraining_leather_boots",
+      "kiteshield": "magictraining_adamant_kiteshield",
+      "helm": "magictraining_adamant_med_helm",
+      "emerald": "magictraining_emerald",
+      "longsword": "magictraining_rune_longsword",
+      "arenaCoins": "magictraining_coins",
+      "coins": "coins"
+    },
+    "interfaces": {
+      "lobby": "magictraining_main",
+      "enchanting": "magictraining_encha",
+      "alchemists": "magictraining_alchem"
+    },
+    "components": {
+      "lobbyTelekinetic": "magictraining_main:magictrain_tele_points",
+      "lobbyAlchemist": "magictraining_main:magictrain_alch_points",
+      "lobbyEnchantment": "magictraining_main:magictrain_ench_points",
+      "lobbyGraveyard": "magictraining_main:magictrain_grave_points",
+      "enchantPoints": "magictraining_encha:magictrain_encha_pts",
+      "bonusCube": "magictraining_encha:magictrain_encha_laycube",
+      "bonusCylinder": "magictraining_encha:magictrain_encha_laycyl",
+      "bonusPentamid": "magictraining_encha:magictrain_encha_laypent",
+      "bonusIcosahedron": "magictraining_encha:magictrain_encha_layico",
+      "alchemistPoints": "magictraining_alchem:magictrain_alchem_pts",
+      "cost1": "magictraining_alchem:magictrain_alchem_cost1",
+      "cost2": "magictraining_alchem:magictrain_alchem_cost2",
+      "cost3": "magictraining_alchem:magictrain_alchem_cost3",
+      "cost4": "magictraining_alchem:magictrain_alchem_cost4",
+      "cost5": "magictraining_alchem:magictrain_alchem_cost5",
+      "free1": "magictraining_alchem:magictrain_lay1",
+      "free2": "magictraining_alchem:magictrain_lay2",
+      "free3": "magictraining_alchem:magictrain_lay3",
+      "free4": "magictraining_alchem:magictrain_lay4",
+      "free5": "magictraining_alchem:magictrain_lay5"
+    }
+  },
+  "lobby": {
+    "_bounds": "the entrance hall on both floors (the Rewards Guardian is upstairs)",
+    "bounds": [3352, 3374, 3296, 3325],
+    "levels": [0, 1],
+    "arrive": [3363, 3318, 0]
+  },
+  "enchanting": {
+    "bounds": [3340, 3386, 9615, 9662, 0],
+    "arrive": [3363, 9644, 0],
+    "level": 7
+  },
+  "points": {
+    "_caps": "doubled on 8 May 2024 (Wiki: Pizazz_points)",
+    "caps": {
+      "telekinetic": 8000,
+      "alchemist": 16000,
+      "enchantment": 32000,
+      "graveyard": 8000
+    },
+    "hatEnergised": 300,
+    "hatFull": 600
+  },
+  "enchant": {
+    "_spells": "points per enchant = the spell's level; every 10th shape doubles it, the bonus shape adds 2 after; a dragonstone is twice the spell's level",
+    "spells": {
+      "Lvl-1 Enchant": 1,
+      "Lvl-2 Enchant": 2,
+      "Lvl-3 Enchant": 3,
+      "Lvl-4 Enchant": 4,
+      "Lvl-5 Enchant": 5,
+      "Lvl-6 Enchant": 6,
+      "Lvl-7 Enchant": 7
+    },
+    "every": 10,
+    "bonus": 2,
+    "dragonstoneChance": 32,
+    "bonusTicks": 40,
+    "_bonusTicks": "24 seconds (Wiki)",
+    "orbXp": 20,
+    "orbsPerReward": 20,
+    "rewardRunes": 3,
+    "orbCap": 4000
+  },
+  "messages": {
+    "_unverified": "the Wiki gives no capture for these except the guardian's bonus lines",
+    "level": "You need a Magic level of {level} to enter the {room}.",
+    "bonusShape": "The bonus shape has changed to the {shape}.",
+    "inventoryFull": "You don't have enough inventory space.",
+    "pointsCapped": "You can't hold any more {type} Pizazz Points.",
+    "orbsDeposited": "You deposit {count} orb{s} into the hole.",
+    "runesForOrbs": "You receive {amount} {rune} for the orbs you deposited.",
+    "itemsTaken": "The arena's items vanish as you leave.",
+    "noCoins": "You can't take coins into the Alchemists' Playground.",
+    "costsChanging": "The costs are changing!",
+    "free": "The {item} is free to convert!",
+    "cupboardEmpty": "The cupboard is empty.",
+    "deposited": "You deposit {coins} coin{cs} and earn {points} Alchemist Pizazz Point{s}.",
+    "nothingToDeposit": "You don't have any coins to deposit.",
+    "coinsToBank": "{coins} coins have been added to your bank.",
+    "_free": "the guardian's own spellings for the items (Wiki, Alchemy_Guardian)"
+  },
+  "alchemists": {
+    "_bounds": "plane 2 of the arena's basement (the Enchanting Chamber is plane 0, the Graveyard plane 1)",
+    "bounds": [3340, 3386, 9615, 9662, 2],
+    "arrive": [3364, 9625, 2],
+    "level": 21,
+    "_items": "the five items in the cupboards' fixed clockwise order, then the empty one; the overlay lists them in this order",
+    "items": ["boots", "kiteshield", "helm", "emerald", "longsword", null],
+    "cupboards": ["cupboard0", "cupboard1", "cupboard2", "cupboard3", "cupboard4", "cupboard5"],
+    "values": [1, 5, 8, 15, 30],
+    "changeTicks": 100,
+    "_changeTicks": "60 seconds (Wiki, since 8 May 2024)",
+    "takeMany": 5,
+    "alchemyTicks": 5,
+    "_calibrated": "how often an item is free to convert: the Wiki says only 'sometimes'",
+    "freeChance": 0.5,
+    "coinsPerPoint": 100,
+    "coinsBack": 10,
+    "depositXp": 2,
+    "freeNames": {
+      "boots": "leather boots",
+      "kiteshield": "adamant kite shield",
+      "helm": "adamant medium helm",
+      "emerald": "emerald",
+      "longsword": "rune long sword"
+    }
+  }
+}

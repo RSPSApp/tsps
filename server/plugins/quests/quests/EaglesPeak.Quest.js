@@ -44,9 +44,8 @@
  *   - the golden pedestal sends a plain game message while the puzzle is unsolved;
  *   - the spawned quest kebbit has no combat definition in this cache, so the
  *     Threaten -> Taunt path is the reliable one; the death drop is wired anyway;
- *   - the eagle transport system (eagles 1487-1489, rope lasso and the
- *     jungle/desert nest unlocks) is not implemented - no plugin owns it, so the
- *     eyrie is left empty and the "attempting to travel" transcript is unreachable;
+ *   - the eagle transport system (the eagles, rope lasso and the jungle/desert
+ *     nest access) is plugins/world/EagleTransport.plugin.js;
  *   - extra eagle costumes (5 feathers, swamp tar, yellow dye, 25 gp) are
  *     described by Asyff's repeat dialogue but not sold;
  *   - the dungeon tunnel pairs are inferred (the real partners are not in this

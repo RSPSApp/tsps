@@ -1,0 +1,66 @@
+{
+  "_source": "OSRS Wiki: Eagle_transport_system, Polar_eagle, Jungle_eagle, Desert_eagle, Growing_vine; Transcript:Eagles'_Peak for the refusal. Ids are cache gamevals; tiles are from the map (collision checked).",
+  "names": {
+    "npcs": {
+      "peakDesert": "eaglepeak_eagle_todesert",
+      "peakJungle": "eaglepeak_eagle_tojungle",
+      "peakPolar": "eaglepeak_eagle_topolar",
+      "desert": "eaglepeak_eagle_desert",
+      "jungle": "eaglepeak_eagle_jungle",
+      "polar": "eaglepeak_eagle_polar",
+      "boulder": "eaglepeak_desert_boulder"
+    },
+    "locs": {
+      "feldipEnter": "eaglepeak_cavein_jungle",
+      "feldipExit": "eaglepeak_jungle_cave_entrance",
+      "rellekkaEnter": "eaglepeak_cavein_ice",
+      "rellekkaExit": "eaglepeak_ice_cave_entrance",
+      "uzerEnter": "eaglepeak_cavein_desert",
+      "uzerExit": "eaglepeak_desert_cave_exit",
+      "vine": "eaglepeak_vines_patch"
+    },
+    "objs": {
+      "rope": "rope",
+      "gardenCane": "fenk_cane",
+      "sparLight": "thatching_spar_light",
+      "sparMedium": "thatching_spar_med",
+      "sparDense": "thatching_spar_dense",
+      "teasingStick": "hunting_teasing_stick"
+    },
+    "varbits": {
+      "quest": "eaglepeak_quest",
+      "vine": "eaglepeak_jungle_vine",
+      "unblockedDesert": "eaglepeak_unblocked_desert"
+    },
+    "seqs": { "lasso": "elid_rope_lasso" }
+  },
+  "quest": "Eagles' Peak",
+  "_farEagles": "The far eyries' own eagles (1491-1493) are multinpcs the cache shows at eaglepeak_quest 40, a value the Eagles' Peak plugin's stages never reach; a player who has done the quest gets their own Quick-travel eagle (the Peak's ids, which have the option) on each of their tiles instead.",
+  "_peak": "The Eagles' Peak eyrie (plane 3, past the stone door): eagles in it fly out to the other three.",
+  "peak": { "box": [2008, 2034, 4950, 4976, 3], "arrive": [2022, 4960, 3] },
+  "_eyries": "Each eyrie: where a flight from the Peak lands, and its cave in and out. The Peak eagle's shown id picks the eyrie.",
+  "eyries": {
+    "desert": { "peakEagle": "peakDesert", "eagle": "desert", "arrive": [3425, 9569, 0], "inside": [3420, 9562, 0], "outside": [3405, 3159, 0], "enter": "uzerEnter", "exit": "uzerExit", "box": [3412, 3434, 9556, 9574, 0], "eagles": [[3422, 9568], [3428, 9565]] },
+    "jungle": { "peakEagle": "peakJungle", "eagle": "jungle", "arrive": [2520, 9325, 0], "inside": [2525, 9324, 0], "outside": [2513, 2926, 0], "enter": "feldipEnter", "exit": "feldipExit", "box": [2508, 2532, 9310, 9330, 0], "eagles": [[2516, 9322], [2523, 9317]] },
+    "polar": { "peakEagle": "peakPolar", "eagle": "polar", "arrive": [2724, 10214, 0], "inside": [2708, 10206, 0], "outside": [2744, 3830, 1], "enter": "rellekkaEnter", "exit": "rellekkaExit", "box": [2698, 2740, 10196, 10224, 0], "eagles": [[2727, 10217], [2730, 10203]] }
+  },
+  "_travelTicks": "Calibrated: the lasso, then a fade, then the move (no capture of the flight).",
+  "flightTicks": 4,
+  "caveTicks": 2,
+  "_boulder": "Wiki: 45 Strength (boosts count) to push the boulder by the desert eyrie's exit. It stands in the one-tile passage between the exit and the eagles; a push takes the player past it either way.",
+  "boulder": { "strength": 45, "south": [3420, 9563, 0], "north": [3420, 9567, 0], "tiles": [[3419, 9564], [3420, 9564], [3419, 9565], [3420, 9565]] },
+  "_vine": "Wiki Growing_vine: an item stuck in by the young vine guides it; it grows within a couple of minutes, and is climbable after about 40 (the Wiki's figure), with the line below. Varbit eaglepeak_jungle_vine: 1 guided, 2 growing, 3 tall. The growing step is calibrated.",
+  "vine": { "bankEveryTicks": 50, "growingTicks": 200, "tallTicks": 4000, "stages": { "guided": 1, "growing": 2, "tall": 3 } },
+  "messages": {
+    "questIncomplete": "You must have completed the Eagles' Peak quest before you can try to lasso a giant eagle.",
+    "noRope": "You need a rope to lasso the eagle.",
+    "lasso": "You lasso the eagle and it carries you off.",
+    "vineGuided": "You stick the {item} into the ground beside the young vine.",
+    "vineGrown": "Those vines should be worth checking on now.",
+    "vineNotReady": "The vine isn't strong enough to climb yet.",
+    "vineAlready": "The vine is already being guided.",
+    "boulderWeak": "You need a Strength level of 45 to push this boulder.",
+    "boulderPush": "You push the boulder aside and squeeze past.",
+    "_unverified": "questIncomplete is the transcript's; vineGrown is the Wiki's quote. The rest have no capture behind them."
+  }
+}

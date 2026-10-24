@@ -104,10 +104,9 @@ test("the spawn, teleport and crevice tiles agree with the logs", () => {
   assert.ok(free(Common.DATA.teleportTile), "teleport landing blocked");
   assert.ok(free(Common.OUTSIDE_TILE), "outside crevice blocked");
   assert.ok(free(Common.INSIDE_TILE), "inside crevice blocked");
-  const bosses = Teleports._test.DESTINATIONS[Teleports._test.TAB.BOSSES];
-  const entry = bosses.find((row) => row.name === "Thermonuclear Smoke Devil");
-  assert.ok(entry, "missing ::teleports entry");
-  assert.deepEqual([entry.destination.getX(), entry.destination.getY(), entry.destination.getZ()], [2379, 9452, 0]);
+  const entry = Teleports._test.Destinations.byKey("thermonuclear-smoke-devil");
+  assert.ok(entry?.tabs.includes(Teleports._test.TAB.BOSSES), "missing ::teleports entry");
+  assert.deepEqual(entry.tile, [2379, 9452, 0]);
 });
 
 // ------------------------------------------------------------------ the fight

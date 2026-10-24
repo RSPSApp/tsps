@@ -24,6 +24,11 @@ function climbManorStairs(request) {
   request.handled = true;
 }
 
+/** "count-draynor:arriving" { player }: a teleport into the crypt gets its own instance too. */
+function arriving({ player }) {
+  player.setAttribute(ATTR_PENDING_INSTANCE, true);
+}
+
 function createEncounter(player) {
   const { PrivateArea, Boundary } = pluginApi.core;
   return new (class CountDraynorArea extends PrivateArea {
@@ -139,6 +144,7 @@ module.exports = {
   register(api) {
     pluginApi = api;
     api.onCustomEvent("ladders:climb", climbManorStairs);
+    api.onCustomEvent("count-draynor:arriving", arriving);
     api.onObjectFirstClick(api.core.ObjectIdentifiers.COFFIN_46, openCoffin);
     api.onCombatHitRoll(garlicWeakness);
     api.registerMeleeHitModifier(garlicDamage);
@@ -146,4 +152,5 @@ module.exports = {
     api.registerMagicHitModifier(garlicDamage);
     api.onNpcDeath(countDied);
   },
+  _test: { arriving, ATTR_PENDING_INSTANCE },
 };

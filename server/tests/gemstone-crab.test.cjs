@@ -58,6 +58,7 @@ GemstoneCrab.register({
   onPlayerDealtDamage: (handler) => hooks.dealt.push(handler),
   onNpcInteraction: (handler) => hooks.npc.push(handler),
   onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },
+  onCustomEvent: (name, handler) => { hooks.events = { ...hooks.events, [name]: handler }; },
   onZoneEnter: (zone, handler) => hooks.zonesEnter.push({ zone, handler }),
   onZoneExit: (zone, handler) => hooks.zonesExit.push({ zone, handler }),
   registerCommand: (name, handler) => { hooks.commands[name] = handler; },

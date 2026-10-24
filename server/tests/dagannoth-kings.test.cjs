@@ -156,10 +156,9 @@ test("both lairs, the landing tiles and the teleport agree with the logs", () =>
   assert.ok(free(Common.PUBLIC_SPAWN), "public spawn blocked");
   assert.ok(free(Common.TASK_SPAWN), "task spawn blocked");
   assert.ok(free(Common.OUTSIDE_TILE), "ladder tile blocked");
-  const bosses = Teleports._test.DESTINATIONS[Teleports._test.TAB.BOSSES];
-  const entry = bosses.find((row) => row.name === "Dagannoth Kings");
-  assert.ok(entry, "missing ::teleports entry");
-  assert.deepEqual([entry.destination.getX(), entry.destination.getY(), entry.destination.getZ()], [1908, 4367, 0]);
+  const entry = Teleports._test.Destinations.byKey("dagannoth-kings");
+  assert.ok(entry?.tabs.includes(Teleports._test.TAB.BOSSES), "missing ::teleports entry");
+  assert.deepEqual(entry.tile, [1908, 4367, 0]);
 });
 
 // ------------------------------------------------------------------ the fights

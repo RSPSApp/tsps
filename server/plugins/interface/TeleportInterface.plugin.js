@@ -1,212 +1,256 @@
-const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
-const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
-const { TeleportHandler } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportHandler");
-const { TeleportType } = require("../../src/main/typescript/elvarg/game/model/teleportation/TeleportType");
-const { FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("./widgetGroup");
+/**
+ * ::teleports, a free server teleport list (clicking a spell itself still enforces its rune
+ * and level requirements). Destinations come from data/teleports.json and are grouped into
+ * tabs; the list is searchable, and a player can keep favourites and see their last few
+ * teleports. The Wilderness asks first, unless the player chose not to be asked again.
+ */
+const Layout = require("./teleportinterface/Layout.TeleportInterface");
+const Destinations = require("./teleportinterface/Destinations.TeleportInterface");
 
-const GROUP_ID = 30007;
-const MAIN_MODAL_UID = (161 << 16) | 16;
-const TAB = { TELEPORTS: "teleports", WILDERNESS: "wilderness", BOSSES: "bosses", MINIGAMES: "minigames" };
-const TAB_ORDER = [TAB.TELEPORTS, TAB.WILDERNESS, TAB.BOSSES, TAB.MINIGAMES];
-const TAB_LABELS = { [TAB.TELEPORTS]: "Teleports", [TAB.WILDERNESS]: "Wilderness", [TAB.BOSSES]: "Bosses", [TAB.MINIGAMES]: "Minigames" };
-const COMPONENT = { ROOT: 0, FRAME: 1, TAB_START: 10, TAB_LABEL_START: 20, LIST_VIEW: 30, LIST_SCROLLBAR: 31, ROW_BACKGROUND_START: 100, ROW_LABEL_START: 200 };
-const uid = (component) => (GROUP_ID << 16) | component;
-const ROW_COUNT = 32;
-const ROW_HEIGHT = 24;
-const ROW_COLUMNS = 2;
-const ROW_WIDTH = 216;
-const TAB_WIDTH = 106;
-const TAB_STEP = 114;
-const LIST_CONTENT_HEIGHT = Math.ceil(ROW_COUNT / ROW_COLUMNS) * ROW_HEIGHT;
+const { GROUP_ID, MAIN_MODAL_UID, COMPONENT, uid } = Layout;
+const { TAB, TAB_ORDER, TAB_LABELS } = Destinations;
+const TAB_ATTRIBUTE = "teleports:tab";
+const SELECTED_ATTRIBUTE = "teleports:selected";
+const FAVOURITES_ATTRIBUTE = "teleports:favourites";
+const RECENT_ATTRIBUTE = "teleports:recent";
+const SKIP_WILDERNESS_WARNING_ATTRIBUTE = "teleports:skip-wilderness-warning";
+const RECENT_LIMIT = 5;
+const DATA_PART_BYTES = 40000;
+const OP = { SELECT: 1, TELEPORT: 2, FAVOURITE: 3 };
+const SEARCH_MAX_LENGTH = 40;
 const TAB_UIDS = TAB_ORDER.map((_, index) => uid(COMPONENT.TAB_START + index));
-const ROW_UIDS = Array.from({ length: ROW_COUNT }, (_, row) => uid(COMPONENT.ROW_LABEL_START + row));
-const ATTR_TAB = "teleports:tab";
+const ROW_UIDS = Array.from({ length: Layout.ROW_SLOTS }, (_, slot) => uid(COMPONENT.ROW_LABEL_START + slot));
+const INTERFACE_DEFINITION = Layout.buildInterface(TAB_ORDER.map((tab) => TAB_LABELS[tab]));
 
-const location = (x, y, z = 0) => new Location(x, y, z);
-const teleport = (name, destination, type) => ({ name, destination, type });
+let core;
+let pluginApi;
 
-// Spellbook destinations implemented by this server. The interface is a free server
-// teleport list; clicking the spell itself still enforces its rune and level requirements.
-const DESTINATIONS = {
-  [TAB.TELEPORTS]: [
-    teleport("Standard: Lumbridge", location(3222, 3218), TeleportType.NORMAL),
-    teleport("Standard: Varrock", location(3213, 3424), TeleportType.NORMAL),
-    teleport("Standard: Falador", location(2964, 3378), TeleportType.NORMAL),
-    teleport("Standard: House", location(2953, 3224), TeleportType.NORMAL),
-    teleport("Standard: Camelot", location(2757, 3478), TeleportType.NORMAL),
-    teleport("Standard: Kourend Castle", location(1643, 3672), TeleportType.NORMAL),
-    teleport("Standard: Ardougne", location(2661, 3301), TeleportType.NORMAL),
-    teleport("Standard: Civitas Illa Fortis", location(1680, 3130), TeleportType.NORMAL),
-    teleport("Standard: Watchtower", location(2549, 3112, 2), TeleportType.NORMAL),
-    teleport("Standard: Trollheim", location(2891, 3678), TeleportType.NORMAL),
-    teleport("Standard: Ape Atoll", location(2796, 2798), TeleportType.NORMAL),
-    teleport("Ancient: Edgeville", location(3087, 3496), TeleportType.ANCIENT),
-    teleport("Ancient: Paddewwa", location(3097, 9880), TeleportType.ANCIENT),
-    teleport("Ancient: Senntisten", location(3320, 3338), TeleportType.ANCIENT),
-    teleport("Ancient: Kharyrll", location(3492, 3471), TeleportType.ANCIENT),
-    teleport("Ancient: Lassar", location(3002, 3470), TeleportType.ANCIENT),
-    teleport("Arceuus: Home", location(1712, 3882), TeleportType.ARCEUUS),
-    teleport("Arceuus: Library", location(1632, 3838), TeleportType.ARCEUUS),
-    teleport("Arceuus: Draynor Manor", location(3108, 3352), TeleportType.ARCEUUS),
-    teleport("Arceuus: Battlefront", location(1348, 3739), TeleportType.ARCEUUS),
-    teleport("Arceuus: Mind Altar", location(2980, 3510), TeleportType.ARCEUUS),
-    teleport("Arceuus: Respawn", GameConstants.DEFAULT_LOCATION, TeleportType.ARCEUUS),
-    teleport("Arceuus: Salve Graveyard", location(3432, 3461), TeleportType.ARCEUUS),
-    teleport("Arceuus: Fenkenstrain's Castle", location(3548, 3528), TeleportType.ARCEUUS),
-    teleport("Arceuus: West Ardougne", location(2500, 3291), TeleportType.ARCEUUS),
-    teleport("Arceuus: Harmony Island", location(3797, 2866), TeleportType.ARCEUUS),
-    teleport("Arceuus: Barrows", location(3565, 3315), TeleportType.ARCEUUS),
-    teleport("Arceuus: Ape Atoll", location(2770, 9100), TeleportType.ARCEUUS),
-    teleport("Ring of wealth: Grand Exchange", location(3163, 3488), TeleportType.NORMAL),
-    teleport("Ring of wealth: Miscellania", location(2539, 3864), TeleportType.NORMAL),
-    teleport("Ring of wealth: Falador Park", location(2994, 3377), TeleportType.NORMAL),
-    teleport("Ring of wealth: Dondakan", location(2824, 10168), TeleportType.NORMAL),
-  ],
-  [TAB.WILDERNESS]: [
-    teleport("Ancient: Dareeyak", location(2966, 3696), TeleportType.ANCIENT),
-    teleport("Ancient: Carrallanger", location(3156, 3666), TeleportType.ANCIENT),
-    teleport("Ancient: Annakarl", location(3288, 3886), TeleportType.ANCIENT),
-    teleport("Ancient: Ghorrock", location(2977, 3873), TeleportType.ANCIENT),
-    teleport("Arceuus: Cemetery", location(2978, 3763), TeleportType.ARCEUUS),
-  ],
-  [TAB.BOSSES]: [
-    teleport("Callisto", location(3290, 3847), TeleportType.NORMAL),
-    teleport("Chaos Elemental", location(3261, 3927), TeleportType.NORMAL),
-    teleport("Chaos Fanatic", location(2979, 3846), TeleportType.NORMAL),
-    teleport("Crazy Archaeologist", location(2977, 3702), TeleportType.NORMAL),
-    teleport("Deranged Archaeologist", location(3682, 3718), TeleportType.NORMAL),
-    teleport("King Black Dragon", location(3010, 3849), TeleportType.NORMAL),
-    teleport("Scorpia", location(3233, 10341), TeleportType.NORMAL),
-    teleport("Venenatis", location(3320, 3796), TeleportType.NORMAL),
-    teleport("Vet'ion", location(3219, 3788), TeleportType.NORMAL),
-    teleport("Artio", location(3116, 3675), TeleportType.NORMAL),
-    teleport("Calvar'ion", location(3180, 3682), TeleportType.NORMAL),
-    teleport("Spindel", location(3182, 3745), TeleportType.NORMAL),
-    teleport("Count Draynor", location(3077, 9772), TeleportType.NORMAL),
-    teleport("Elvarg", location(2852, 9637), TeleportType.NORMAL),
-    teleport("Kalphite Queen", location(3508, 9494), TeleportType.NORMAL),
-    teleport("Kraken", location(2280, 10016), TeleportType.NORMAL),
-    teleport("Corporeal Beast", location(2966, 4252, 2), TeleportType.NORMAL),
-    teleport("Zulrah", location(2196, 3056), TeleportType.NORMAL),
-    teleport("Doom of Mokhaiotl", location(1311, 9531, 1), TeleportType.NORMAL),
-    teleport("Vorkath", location(2272, 4052), TeleportType.NORMAL),
-    teleport("Araxxor", location(3658, 9816), TeleportType.NORMAL),
-    teleport("Yama", location(1439, 10076), TeleportType.NORMAL),
-    teleport("Skotizo", location(1662, 10049), TeleportType.NORMAL),
-    teleport("Royal Titans", location(2950, 9574), TeleportType.NORMAL),
-    teleport("Dagannoth Kings", location(1908, 4367), TeleportType.NORMAL),
-    teleport("Sarachnis", location(1842, 9913), TeleportType.NORMAL),
-    teleport("Thermonuclear Smoke Devil", location(2379, 9452), TeleportType.NORMAL),
-    teleport("The Mimic", location(1645, 3572, 1), TeleportType.NORMAL),
-  ],
-  [TAB.MINIGAMES]: [
-    teleport("Barrows", location(3565, 3315), TeleportType.NORMAL),
-    teleport("Blast Furnace", location(1939, 4958), TeleportType.NORMAL),
-    teleport("Castle Wars", location(2440, 3089), TeleportType.NORMAL),
-    teleport("Chambers of Xeric", location(1234, 3566), TeleportType.NORMAL),
-    teleport("Duel Arena", location(3366, 3266), TeleportType.NORMAL),
-    teleport("Fortis Colosseum", location(1799, 9506), TeleportType.NORMAL),
-    teleport("Pest Control", location(2657, 2639), TeleportType.NORMAL),
-    teleport("Tempoross", location(3137, 2840), TeleportType.NORMAL),
-    teleport("TzHaar Fight Caves", location(2438, 5168), TeleportType.NORMAL),
-    teleport("TzHaar Fight Pits", location(2399, 5177), TeleportType.NORMAL),
-    teleport("The Gauntlet", location(3032, 6127, 1), TeleportType.NORMAL),
-    teleport("The Inferno", location(2495, 5111), TeleportType.NORMAL),
-    teleport("Theatre of Blood", location(3670, 3219), TeleportType.NORMAL),
-    teleport("Warriors' Guild", location(2876, 3546), TeleportType.NORMAL),
-    teleport("Wintertodt", location(1630, 3955), TeleportType.NORMAL),
-  ],
-};
-
-function buildInterface() {
-  const { widgets, add } = createWidgetGroup(GROUP_ID);
-  const root = add(COMPONENT.ROOT, -1, {
-    rawWidth: 18, rawHeight: 18, widthMode: 1, heightMode: 1,
-    width: 494, height: 316, xPositionMode: 1, yPositionMode: 1,
-  });
-  add(COMPONENT.FRAME, root, { widthMode: 1, heightMode: 1, width: 494, height: 316 });
-  for (let index = 0; index < TAB_ORDER.length; index++) {
-    const x = 18 + index * TAB_STEP;
-    add(COMPONENT.TAB_START + index, root, {
-      type: TYPE_RECTANGLE, rawX: x, rawY: 32, rawWidth: TAB_WIDTH, rawHeight: 24, width: TAB_WIDTH, height: 24,
-      filled: true, color: 0x2b241b, mouseOverColor: 0x3a3125, opacity: 32, actions: ["Open"], flags: FLAG_OP1,
-    });
-    add(COMPONENT.TAB_LABEL_START + index, root, {
-      type: TYPE_TEXT, rawX: x, rawY: 32, rawWidth: TAB_WIDTH, rawHeight: 24, width: TAB_WIDTH, height: 24,
-      text: "", fontId: 496, textColor: 0xffd27f, textShadowed: true, xTextAlignment: 1, yTextAlignment: 1,
-    });
-  }
-  const list = add(COMPONENT.LIST_VIEW, root, {
-    rawX: 18, rawY: 72, rawWidth: 448, rawHeight: 224, width: 448, height: 224, scrollWidth: 448, scrollHeight: LIST_CONTENT_HEIGHT,
-  });
-  add(COMPONENT.LIST_SCROLLBAR, root, { rawX: 466, rawY: 72, rawWidth: 16, rawHeight: 224, width: 16, height: 224, noClickThrough: true });
-  for (let row = 0; row < ROW_COUNT; row++) {
-    const x = (row % ROW_COLUMNS) * ROW_WIDTH;
-    const y = Math.floor(row / ROW_COLUMNS) * ROW_HEIGHT;
-    add(COMPONENT.ROW_BACKGROUND_START + row, list, {
-      type: TYPE_RECTANGLE, rawX: x, rawY: y, rawWidth: ROW_WIDTH - 4, rawHeight: ROW_HEIGHT - 3, width: ROW_WIDTH - 4, height: ROW_HEIGHT - 3,
-      filled: true, color: 0x211b16, mouseOverColor: 0x3a3125, opacity: 32,
-    });
-    add(COMPONENT.ROW_LABEL_START + row, list, {
-      type: TYPE_TEXT, rawX: x + 6, rawY: y, rawWidth: ROW_WIDTH - 16, rawHeight: ROW_HEIGHT - 3, width: ROW_WIDTH - 16, height: ROW_HEIGHT - 3,
-      text: "", fontId: 494, textColor: 0xe8ded0, textShadowed: true, yTextAlignment: 1, actions: ["Teleport"], flags: FLAG_OP1,
-    });
-  }
-  return { groupId: GROUP_ID, widgets, scroll: [{ viewComponent: COMPONENT.LIST_VIEW, scrollbarComponent: COMPONENT.LIST_SCROLLBAR, contentHeight: LIST_CONTENT_HEIGHT }] };
-}
-
-const INTERFACE_DEFINITION = buildInterface();
+const favourites = (player) => [...(player.getAttribute(FAVOURITES_ATTRIBUTE) ?? [])];
+const recent = (player) => [...(player.getAttribute(RECENT_ATTRIBUTE) ?? [])];
+const isOpen = (player) => player.getInterfaceId?.() === GROUP_ID;
 
 function selectedTab(player) {
-  const tab = player?.getAttribute?.(ATTR_TAB);
-  return TAB_ORDER.includes(tab) ? tab : TAB.TELEPORTS;
+  const tab = player.getAttribute(TAB_ATTRIBUTE);
+  return TAB_ORDER.includes(tab) ? tab : TAB.ALL;
 }
 
-function render(player, tab = selectedTab(player)) {
-  player.setAttribute(ATTR_TAB, tab);
+/** Rows in order, in parts that each fit a widget text packet with room to spare. */
+function splitRows(rows) {
+  const parts = [[]];
+  let bytes = 2;
+  for (const row of rows) {
+    const size = Buffer.byteLength(JSON.stringify(row), "latin1") + 1;
+    if (bytes + size > DATA_PART_BYTES && parts.at(-1).length > 0) {
+      parts.push([]);
+      bytes = 2;
+    }
+    parts.at(-1).push(row);
+    bytes += size;
+  }
+  if (parts.length > Layout.DATA_PART_COMPONENTS.length) {
+    throw new Error(`[teleports] ${rows.length} rows need ${parts.length} data parts; Layout declares ${Layout.DATA_PART_COMPONENTS.length}`);
+  }
+  return parts;
+}
+
+/**
+ * Every destination's row (with its panel text) and each tab's layout. The client switches
+ * tabs from these itself; `active` is sent only on open, so a refresh never moves the tab.
+ */
+function sendRows(player, active = undefined) {
+  const favouriteKeys = favourites(player);
   const sender = player.getPacketSender();
-  for (let index = 0; index < TAB_ORDER.length; index++) {
-    const current = TAB_ORDER[index];
-    sender.sendString(current === tab ? `<col=ffffff>${TAB_LABELS[current]}</col>` : `<col=ffd27f>${TAB_LABELS[current]}</col>`, uid(COMPONENT.TAB_LABEL_START + index));
-  }
-  const destinations = DESTINATIONS[tab];
-  for (let row = 0; row < ROW_COUNT; row++) {
-    const entry = destinations[row];
-    sender.sendString(entry?.name ?? "", uid(COMPONENT.ROW_LABEL_START + row))
-      .sendInterfaceDisplayState(uid(COMPONENT.ROW_BACKGROUND_START + row), !entry)
-      .sendInterfaceDisplayState(uid(COMPONENT.ROW_LABEL_START + row), !entry);
-  }
+  const parts = splitRows(Destinations.catalog((entry) => panelText(player, entry, favouriteKeys)));
+  Layout.DATA_PART_COMPONENTS.forEach((component, index) => sender.sendString(JSON.stringify(parts[index] ?? []), uid(component)));
+  const layout = { tabs: Destinations.layouts(favouriteKeys, recent(player)) };
+  if (active !== undefined) layout.active = TAB_ORDER.indexOf(active);
+  sender.sendString(JSON.stringify(layout), uid(COMPONENT.LAYOUT));
 }
 
-function open(player, tab = TAB.TELEPORTS) {
+function killCountLine(player, entry) {
+  if (!entry.kc) return "";
+  const request = { player, monster: entry.kc };
+  pluginApi.emitCustomEvent("combat-achievements:count", request);
+  return `Kill count: <col=ffffff>${Number(request.total) || 0}</col>`;
+}
+
+function wildernessLine(entry) {
+  const level = Destinations.wildernessLevel(entry);
+  if (level <= 0) return "";
+  const [x, y, z] = entry.tile;
+  return `<col=ff5f5f>Level ${level} Wilderness${core.Wilderness.isMulti(x, y, z) ? ", multi-combat" : ""}</col>`;
+}
+
+/**
+ * What the details panel shows for a destination. It travels with the rows, so the client
+ * fills the panel the moment a row is clicked (Layout's list.select) instead of a tick later.
+ */
+function panelText(player, entry, favouriteKeys) {
+  // The Wilderness and kill-count lines fill from the top, so a missing one leaves no gap.
+  const [info = "", info2 = ""] = [wildernessLine(entry), killCountLine(player, entry)].filter(Boolean);
+  return {
+    title: entry.name,
+    subtitle: entry.group ?? TAB_LABELS[entry.tabs[0]],
+    info,
+    info2,
+    description: entry.description ?? "",
+    favourite: favouriteKeys.includes(entry.key) ? "Unfavourite" : "Favourite",
+  };
+}
+
+/** The panel before anything is selected; selecting is drawn by the client. */
+function showEmptyPanel(player) {
+  const sender = player.getPacketSender();
+  for (const component of [COMPONENT.TELEPORT_BUTTON, COMPONENT.TELEPORT_LABEL, COMPONENT.FAVOURITE_BUTTON, COMPONENT.FAVOURITE_LABEL]) {
+    sender.sendInterfaceDisplayState(uid(component), true);
+  }
+  sender.clearItemOnInterface(uid(COMPONENT.PANEL_ICON));
+  sender.sendString("Teleports", uid(COMPONENT.PANEL_TITLE))
+    .sendString("", uid(COMPONENT.PANEL_SUBTITLE))
+    .sendString("", uid(COMPONENT.PANEL_WILDERNESS))
+    .sendString("", uid(COMPONENT.PANEL_KILLS))
+    .sendString("Select a destination to see where it goes. Right-click one to teleport straight there or keep it as a favourite.",
+      uid(COMPONENT.PANEL_DESCRIPTION));
+}
+
+function open(player, query = "") {
   player.setInterfaceId(GROUP_ID);
   player.getPacketSender().sendSubInterface(MAIN_MODAL_UID, GROUP_ID, 0, {
     postScripts: [{ scriptId: 227, args: [uid(COMPONENT.FRAME), "Server Teleports"] }],
   });
-  render(player, tab);
+  player.setAttribute(SELECTED_ATTRIBUTE, undefined);
+  const tab = query ? TAB.ALL : selectedTab(player);
+  player.setAttribute(TAB_ATTRIBUTE, tab);
+  sendRows(player, tab);
+  player.getPacketSender().sendString(query.slice(0, SEARCH_MAX_LENGTH), uid(COMPONENT.SEARCH_INPUT));
+  showEmptyPanel(player);
 }
 
-function selectDestination(player, row) {
-  if (player.getInterfaceId?.() !== GROUP_ID) return false;
-  const entry = DESTINATIONS[selectedTab(player)][row];
-  if (!entry) return true;
+function rememberTeleport(player, entry) {
+  const keys = recent(player).filter((key) => key !== entry.key);
+  keys.unshift(entry.key);
+  player.setAttribute(RECENT_ATTRIBUTE, keys.slice(0, RECENT_LIMIT));
+}
+
+function go(player, entry, tile) {
+  const destination = Destinations.location(tile);
+  if (!core.TeleportHandler.checkReqs(player, destination)) return;
+  // A destination's own plugin can prepare the arrival (Count Draynor's crypt instance).
+  if (entry.arrival) pluginApi.emitCustomEvent(entry.arrival, { player });
+  rememberTeleport(player, entry);
+  core.TeleportHandler.teleport(player, destination, core.TeleportType[entry.type], false);
+}
+
+/** Where a destination lands now: its tile, or what its owning plugin answers for a live one. */
+function tileOf(player, entry) {
+  if (!entry.live) return entry.tile;
+  const request = { player };
+  pluginApi.emitCustomEvent(entry.live, request);
+  return request.tile;
+}
+
+function confirmWilderness(player, entry, tile, level) {
+  const { DialogueChainBuilder, OptionDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new OptionDialogue(0, {
+      executeOption(option) {
+        player.getPacketSender().sendInterfaceRemoval();
+        if (Number(option) === 3) player.setAttribute(SKIP_WILDERNESS_WARNING_ATTRIBUTE, true);
+        if (Number(option) === 1 || Number(option) === 3) go(player, entry, tile);
+      },
+    }, "Yes.", "No.", "Yes, and don't ask again.").setTitle(`Teleport into level ${level} Wilderness?`),
+  ));
+}
+
+function teleport(player, entry) {
   player.getPacketSender().sendInterfaceRemoval();
-  if (!TeleportHandler.checkReqs(player, entry.destination)) return true;
-  TeleportHandler.teleport(player, entry.destination, entry.type, false);
+  const tile = tileOf(player, entry);
+  if (!tile) {
+    player.getPacketSender().sendMessage(entry.unavailable ?? "You can't teleport there right now.");
+    return;
+  }
+  const level = entry.live ? Destinations.levelAt(tile) : Destinations.wildernessLevel(entry);
+  if (level > 0 && !player.getAttribute(SKIP_WILDERNESS_WARNING_ATTRIBUTE)) confirmWilderness(player, entry, tile, level);
+  else go(player, entry, tile);
+}
+
+function toggleFavourite(player, entry) {
+  const keys = favourites(player);
+  const kept = keys.filter((key) => key !== entry.key);
+  player.setAttribute(FAVOURITES_ATTRIBUTE, kept.length === keys.length ? [...keys, entry.key] : kept);
+  // Fresh rows carry the new Favourite label and Saved tab; the client keeps its tab, scroll
+  // and selection.
+  sendRows(player);
+}
+
+/** The client has already drawn the panel; the panel's buttons act on this selection. */
+function select(player, entry) {
+  player.setAttribute(SELECTED_ATTRIBUTE, entry.key);
+}
+
+function openTeleports({ player, parts }) {
+  if (parts[1]?.toLowerCase() === "last") {
+    const entry = Destinations.byKey(recent(player)[0]);
+    if (entry) teleport(player, entry);
+    else player.getPacketSender().sendMessage("You haven't teleported with ::teleports yet.");
+    return true;
+  }
+  open(player, parts.slice(1).join(" "));
+  return true;
+}
+
+/** The client has already switched; this tab is where ::teleports reopens. */
+function clickTab({ player, buttonId }) {
+  if (!isOpen(player)) return false;
+  player.setAttribute(TAB_ATTRIBUTE, TAB_ORDER[TAB_UIDS.indexOf(buttonId)]);
+  return true;
+}
+
+/** A list row: its slot carries the row id the client showed there. */
+function clickRow({ player, slot, opId }) {
+  if (!isOpen(player)) return false;
+  const entry = Destinations.byId(slot);
+  if (!entry) return true;
+  if (opId === OP.TELEPORT) teleport(player, entry);
+  else if (opId === OP.FAVOURITE) toggleFavourite(player, entry);
+  else select(player, entry);
+  return true;
+}
+
+function selected(player) {
+  return isOpen(player) ? Destinations.byKey(player.getAttribute(SELECTED_ATTRIBUTE)) : undefined;
+}
+
+function clickTeleportButton({ player }) {
+  const entry = selected(player);
+  if (entry) teleport(player, entry);
+  return true;
+}
+
+function clickFavouriteButton({ player }) {
+  const entry = selected(player);
+  if (entry) toggleFavourite(player, entry);
   return true;
 }
 
 module.exports = {
   name: "TeleportInterface",
   register(api) {
+    pluginApi = api;
+    core = api.core;
+    Destinations.init(api);
     api.registerCustomInterface(INTERFACE_DEFINITION);
-    api.registerCommand("teleports", ({ player }) => (open(player), true), undefined, "Browse teleport destinations");
-    api.onInterfaceActionButton(TAB_UIDS, ({ player, buttonId }) => {
-      const index = TAB_UIDS.indexOf(buttonId);
-      if (index >= 0) render(player, TAB_ORDER[index]);
-      return true;
-    });
-    api.onInterfaceActionButton(ROW_UIDS, ({ player, buttonId }) => selectDestination(player, ROW_UIDS.indexOf(buttonId)));
+    api.persistAttribute(FAVOURITES_ATTRIBUTE, []);
+    api.persistAttribute(RECENT_ATTRIBUTE, []);
+    api.persistAttribute(SKIP_WILDERNESS_WARNING_ATTRIBUTE, false);
+    api.registerCommand("teleports", openTeleports, undefined, "Browse teleport destinations (optional search text, or 'last')");
+    api.onInterfaceActionButton(TAB_UIDS, clickTab);
+    api.onInterfaceActionButton(ROW_UIDS, clickRow);
+    api.onInterfaceActionButton([uid(COMPONENT.TELEPORT_BUTTON), uid(COMPONENT.TELEPORT_LABEL)], clickTeleportButton);
+    api.onInterfaceActionButton([uid(COMPONENT.FAVOURITE_BUTTON), uid(COMPONENT.FAVOURITE_LABEL)], clickFavouriteButton);
   },
-  _test: { GROUP_ID, COMPONENT, DESTINATIONS, LIST_CONTENT_HEIGHT, ROW_COUNT, TAB, TAB_UIDS, ROW_UIDS, open, render, selectDestination, uid },
+  _test: {
+    GROUP_ID, COMPONENT, TAB, TAB_UIDS, ROW_UIDS, OP, FAVOURITES_ATTRIBUTE, RECENT_ATTRIBUTE,
+    SKIP_WILDERNESS_WARNING_ATTRIBUTE, Destinations, uid,
+  },
 };

@@ -503,7 +503,17 @@ export function processWidgetClickInput(
                             ) {
                                 break;
                             }
+                            // A row of a server-declared clickable list sends the row it
+                            // shows, as the menu path does (WidgetActionRouter).
+                            const customRowId = deps.getCustomInterfaces().rowIdAt(groupId, childId);
+                            if (customRowId === null) break;
+                            if (customRowId !== undefined) payload.slot = customRowId;
                             sendWidgetAction(payload);
+                            if (customRowId !== undefined) {
+                                deps.getCustomInterfaces().handleRowOp(customRowId, opId);
+                            } else {
+                                deps.getCustomInterfaces().handleWidgetOp(groupId, childId);
+                            }
                         }
                     } catch (err) {
                         console.warn("[OsrsClient] widget action send failed", err);

@@ -118,6 +118,15 @@ function crabActive() {
   return state.crab != null && state.burrow == null;
 }
 
+/**
+ * "gemstone-crab:location" { player } -> tile: the landing at the crab's mine, or at the mine
+ * it rises at next while it is burrowed (as the caves choose).
+ */
+function locate(request) {
+  const spot = crabActive() ? state.spot : state.nextSpot;
+  if (SPOTS[spot]) request.tile = [...SPOTS[spot].exit, 0];
+}
+
 function pickSpot(not) {
   let spot;
   do spot = Math.floor(Math.random() * SPOTS.length); while (spot === not && SPOTS.length > 1);
@@ -468,7 +477,7 @@ function forceBurrow({ player }) {
 module.exports = {
   name: "GemstoneCrab",
   members: true,
-  _test: { state, tick, attack, inReach, rollGem, spawnCrab, startBurrow, topDealers, recordDamage, SPOTS },
+  _test: { state, tick, attack, inReach, rollGem, spawnCrab, startBurrow, topDealers, recordDamage, locate, SPOTS },
   register(api) {
     pluginApi = api;
     ItemOnGroundManager = api.getItemOnGroundManager();
@@ -476,6 +485,7 @@ module.exports = {
     api.onPlayerDealtDamage(recordDamage);
     api.onNpcInteraction(mineShell);
     api.onObjectInteraction("Cave", { "Crawl-through": crawl });
+    api.onCustomEvent("gemstone-crab:location", locate);
     for (const { zone, enter, exit } of AREA_HOOKS) {
       api.onZoneEnter(zone, enter);
       api.onZoneExit(zone, exit);

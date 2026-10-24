@@ -61,6 +61,16 @@ function isMembersWorld() {
   return core.WorldDefinition.isMembersWorld() !== false;
 }
 
+/**
+ * "shooting-stars:current" { player } -> tile: a tile beside the star that has landed, or none
+ * while no star is down. The star's x,y is the south-west of its 2x2 footprint.
+ */
+function locateStar(request) {
+  const star = world.star;
+  if (!star || star.gone) return;
+  request.tile = [star.x - 1, star.y, star.z];
+}
+
 /** The star's 2x2 footprint is reachable from any tile next to it. */
 function isNextToStar(player, star) {
   const at = player.getLocation();
@@ -159,6 +169,7 @@ module.exports = {
   TICKS_PER_MINUTE,
   world,
   bind,
+  locateStar,
   sizeEntry,
   sizeOfLoc,
   minutesToTicks,

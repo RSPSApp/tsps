@@ -34,6 +34,11 @@ export type CustomInterfaceDeclaration = {
         endpoint?: string;
         /** Hidden text component receiving JSON rows over the authenticated game socket. */
         dataComponent?: number;
+        /**
+         * More hidden components whose rows follow `dataComponent`'s, in order. A widget text
+         * packet carries at most 64 KB, so a long list arrives in parts.
+         */
+        extraDataComponents?: number[];
         queryParam?: string;
         limit?: number;
         debounceMs?: number;
@@ -48,8 +53,29 @@ export type CustomInterfaceDeclaration = {
         iconBaseY?: number;
         backgroundStart: number;
         backgroundBaseY?: number;
-        /** "%name" and "%id" are replaced per row. */
+        /**
+         * Text components drawn beside the icons. Without them the icon component carries
+         * the label too; with them the icons show each row's `icon` item instead of its id.
+         */
+        labelStart?: number;
+        labelBaseY?: number;
+        /** "%name", "%id" and "%detail" are replaced per row. */
         itemLabel?: string;
+        /** The label of a header row; "%name" is replaced. */
+        headerLabel?: string;
+        /** Clicking a row sends its id to the server as the action's slot. */
+        clickable?: boolean;
+        /**
+         * Shows a clicked row's details at once, without waiting a tick for the server: each
+         * `texts` component takes the row's `panel` value of that name, `iconComponent` takes
+         * its icon, and `showComponents` appear. Only the `op` click selects (default op 1).
+         */
+        select?: {
+            op?: number;
+            texts?: Record<string, number>;
+            iconComponent?: number;
+            showComponents?: number[];
+        };
         /** Text lists have no inventory item associated with each row. */
         textOnly?: boolean;
     };
@@ -73,9 +99,77 @@ export type CustomInterfaceDeclaration = {
         truncated?: string;
     };
     hint?: { component: number; text: string };
+    /**
+     * Tabs switched client-side, with no wait for the server. The data component then holds a
+     * catalog of every row once, and `layoutComponent` receives
+     * `{ active?, tabs: [[rowId | { header }]] }`: each tab's rows in order, with section
+     * headers. A tab click (still sent to the server) shows that tab's rows, recolours the
+     * labels and, with `clearQuery`, empties the search. A layout without `active` keeps the
+     * player's current tab, so a refresh can't pull them back to an older one.
+     */
+    tabs?: {
+        components: number[];
+        labelComponents: number[];
+        labels: string[];
+        /** "%s" is replaced with the tab's label. */
+        activeTemplate?: string;
+        inactiveTemplate?: string;
+        layoutComponent: number;
+        clearQuery?: boolean;
+    };
 };
 
-export type CustomInterfaceRow = { id: number; name: string };
+export type CustomInterfaceRow = {
+    id: number;
+    name: string;
+    /** Item shown in the row's icon slot, for lists with separate labels. */
+    icon?: number;
+    /** Plain text for the label's "%detail". */
+    detail?: string;
+    /** Extra words the search matches, never shown. */
+    terms?: string;
+    /** A section title: not clickable, and kept only while a row under it matches. */
+    header?: boolean;
+    /** Text for the declared select panel, by name; server markup is kept. */
+    panel?: Record<string, string>;
+};
+
+function toRow(row: any): CustomInterfaceRow {
+    return {
+        id: row.id | 0,
+        name: String(row.name ?? ""),
+        icon: Number.isInteger(row.icon) ? row.icon : undefined,
+        detail: typeof row.detail === "string" ? row.detail : undefined,
+        terms: typeof row.terms === "string" ? row.terms : undefined,
+        header: row.header === true,
+        panel: row.panel && typeof row.panel === "object"
+            ? Object.fromEntries(
+                  Object.entries(row.panel).filter(([, value]) => typeof value === "string"),
+              ) as Record<string, string>
+            : undefined,
+    };
+}
+
+/** Rows matching the query, with each header kept only while a row under it matches. */
+export function filterRows(rows: CustomInterfaceRow[], query: string): CustomInterfaceRow[] {
+    const term = query.trim().toLowerCase();
+    const result: CustomInterfaceRow[] = [];
+    let header: CustomInterfaceRow | undefined;
+    for (const row of rows) {
+        if (row.header) {
+            header = row;
+            continue;
+        }
+        const text = `${row.name} ${row.terms ?? ""}`.toLowerCase();
+        if (!text.includes(term)) continue;
+        if (header) {
+            result.push(header);
+            header = undefined;
+        }
+        result.push(row);
+    }
+    return result;
+}
 
 // Standard cache scrollbar scripts and sprites - the same ones cache interfaces use.
 const SCROLLBAR_INIT_SCRIPT_ID = 31;
@@ -124,6 +218,14 @@ export class CustomInterfaceRuntime {
     private renderedVersion = -1;
     private version = 0;
     private visibleStartRow = -1;
+    /** Row shown in each list slot, for clickable lists. */
+    private slotRows: (CustomInterfaceRow | undefined)[] = [];
+    private labelActions = new Map<number, unknown>();
+    private selectedRowId: number | undefined;
+    private catalog = new Map<number, CustomInterfaceRow>();
+    private dataParts: CustomInterfaceRow[][] = [];
+    private tabLayouts: Array<Array<number | { header: string }>> = [];
+    private activeTab = 0;
     private scrollbarState = new Map<number, string>();
     private fetchTimer: ReturnType<typeof setTimeout> | undefined;
     private fetchSequence = 0;
@@ -146,6 +248,7 @@ export class CustomInterfaceRuntime {
         this.focused = !!declaration.search;
         this.syncInput();
         this.applyHint();
+        this.applyTabLabels();
         this.applyScrollRegions();
         this.renderRows(true);
         return true;
@@ -160,16 +263,53 @@ export class CustomInterfaceRuntime {
     /** The server can drive the query too - prefill, clear, or correct it. */
     handleSetText(uid: number, text: string): boolean {
         const search = this.declaration?.search;
-        if (search?.dataComponent !== undefined && uid === this.uid(search.dataComponent)) {
+        const dataComponents = search?.dataComponent === undefined
+            ? []
+            : [search.dataComponent, ...(search.extraDataComponents ?? [])];
+        const part = dataComponents.findIndex((component) => uid === this.uid(component));
+        if (part >= 0) {
+            let rows: CustomInterfaceRow[] = [];
             try {
-                const rows = JSON.parse(text);
-                this.sourceRows = Array.isArray(rows)
-                    ? rows.filter((row) => Number.isInteger(row?.id) && row.id > 0 && typeof row.name === "string")
+                const parsed = JSON.parse(text);
+                rows = Array.isArray(parsed)
+                    ? parsed
+                          .filter((row) => Number.isInteger(row?.id) && row.id > 0 && typeof row.name === "string")
+                          .map(toRow)
                     : [];
             } catch {
-                this.sourceRows = [];
+                rows = [];
             }
-            this.scheduleFetch();
+            this.dataParts[part] = rows;
+            rows = dataComponents.flatMap((_, index) => this.dataParts[index] ?? []);
+            if (this.declaration?.tabs) {
+                this.catalog = new Map(rows.map((row) => [row.id, row]));
+                this.sourceRows = this.tabRows();
+            } else {
+                this.sourceRows = rows;
+            }
+            // New data for the same list (a favourite toggled) keeps the scroll; a new query
+            // starts from the top.
+            this.scheduleFetch(false);
+            if (this.selectedRowId !== undefined) this.applySelection(this.selectedRowId);
+            return true;
+        }
+        const tabs = this.declaration?.tabs;
+        if (tabs && uid === this.uid(tabs.layoutComponent)) {
+            let layout: any;
+            try {
+                layout = JSON.parse(text);
+            } catch {
+                layout = undefined;
+            }
+            this.tabLayouts = Array.isArray(layout?.tabs)
+                ? layout.tabs.map((tab: unknown) => (Array.isArray(tab) ? tab : []))
+                : [];
+            const opened = Number.isInteger(layout?.active);
+            if (opened) this.activeTab = layout.active;
+            this.applyTabLabels();
+            this.sourceRows = this.tabRows();
+            this.scheduleFetch(opened);
+            if (this.selectedRowId !== undefined) this.applySelection(this.selectedRowId);
             return true;
         }
         if (!search || uid !== this.uid(search.inputComponent)) {
@@ -179,6 +319,110 @@ export class CustomInterfaceRuntime {
         this.syncInput();
         this.scheduleFetch();
         return true;
+    }
+
+    /**
+     * The id of the row a clickable list shows in the clicked slot: null for a header or an
+     * empty slot, undefined when the component is not one of the list's slots.
+     */
+    rowIdAt(groupId: number, childId: number): number | null | undefined {
+        const declaration = this.declaration;
+        const list = declaration?.list;
+        if (!list?.clickable || (groupId | 0) !== (declaration!.groupId | 0)) {
+            return undefined;
+        }
+        for (const start of [list.iconStart, list.labelStart, list.backgroundStart]) {
+            if (start === undefined) continue;
+            const slot = (childId | 0) - start;
+            if (slot >= 0 && slot < list.slotCount) {
+                const row = this.slotRows[slot];
+                return row && !row.header ? row.id : null;
+            }
+        }
+        return undefined;
+    }
+
+    /** A widget op was sent: a declared tab switches its list now, not a tick later. */
+    handleWidgetOp(groupId: number, childId: number): void {
+        const declaration = this.declaration;
+        const tabs = declaration?.tabs;
+        if (!tabs || (groupId | 0) !== (declaration!.groupId | 0)) return;
+        const index = [tabs.components, tabs.labelComponents].reduce(
+            (found, components) => (found >= 0 ? found : components.indexOf(childId | 0)),
+            -1,
+        );
+        if (index < 0) return;
+        this.activeTab = index;
+        this.applyTabLabels();
+        this.sourceRows = this.tabRows();
+        if (tabs.clearQuery) {
+            this.query = "";
+            this.syncInput();
+        }
+        this.scheduleFetch(true);
+    }
+
+    /** The active tab's rows from the catalog, with its section headers. */
+    private tabRows(): CustomInterfaceRow[] {
+        const rows: CustomInterfaceRow[] = [];
+        (this.tabLayouts[this.activeTab] ?? []).forEach((entry, index) => {
+            if (typeof entry === "number") {
+                const row = this.catalog.get(entry);
+                if (row) rows.push(row);
+            } else if (entry && typeof entry.header === "string") {
+                // Header ids only have to differ from each other and from the catalog's.
+                rows.push({ id: -1 - index, name: entry.header, header: true });
+            }
+        });
+        return rows;
+    }
+
+    private applyTabLabels(): void {
+        const tabs = this.declaration?.tabs;
+        if (!tabs) return;
+        tabs.labelComponents.forEach((component, index) => {
+            const template = index === this.activeTab
+                ? tabs.activeTemplate ?? "%s"
+                : tabs.inactiveTemplate ?? "%s";
+            this.setText(component, template.replace("%s", tabs.labels[index] ?? ""));
+        });
+    }
+
+    /** A clickable row was sent with this op: the select op shows the row's details now. */
+    handleRowOp(rowId: number, opId: number): void {
+        const select = this.declaration?.list?.select;
+        if (!select || (opId | 0) !== (select.op ?? 1)) return;
+        this.applySelection(rowId);
+    }
+
+    private applySelection(rowId: number): void {
+        const select = this.declaration?.list?.select;
+        const row = this.catalog.get(rowId)
+            ?? this.sourceRows.find((candidate) => candidate.id === rowId && !candidate.header);
+        if (!select || !row) return;
+        this.selectedRowId = rowId;
+        for (const [field, component] of Object.entries(select.texts ?? {})) {
+            this.setText(component, row.panel?.[field] ?? "");
+        }
+        const icon = select.iconComponent === undefined ? undefined : this.widget(select.iconComponent);
+        if (icon) {
+            const itemId = row.icon ?? -1;
+            icon.itemId = itemId;
+            icon.itemQuantity = itemId >= 0 ? 1 : 0;
+            icon.itemAmount = itemId >= 0 ? 1 : 0;
+            markWidgetInteractionDirty(icon);
+            this.deps.widgetManager.invalidateWidgetRender(icon);
+        }
+        for (const component of select.showComponents ?? []) {
+            const widget = this.widget(component);
+            if (!widget) continue;
+            if (!widget.hidden && !widget.isHidden) continue;
+            widget.hidden = false;
+            widget.isHidden = false;
+            markWidgetInteractionDirty(widget);
+            // Showing can change layout, which hidden widgets skip.
+            this.deps.widgetManager.invalidateWidget(widget, "custom-interface-select");
+        }
     }
 
     handleWidgetClick(groupId: number, childId: number): boolean {
@@ -278,6 +522,13 @@ export class CustomInterfaceRuntime {
         this.version = 0;
         this.renderedVersion = -1;
         this.visibleStartRow = -1;
+        this.slotRows = [];
+        this.selectedRowId = undefined;
+        this.catalog = new Map();
+        this.dataParts = [];
+        this.tabLayouts = [];
+        this.activeTab = 0;
+        this.labelActions.clear();
         this.scrollbarState.clear();
     }
 
@@ -354,7 +605,7 @@ export class CustomInterfaceRuntime {
         }
     }
 
-    private scheduleFetch(): void {
+    private scheduleFetch(resetScroll = true): void {
         const search = this.declaration?.search;
         if (!search) {
             return;
@@ -364,11 +615,10 @@ export class CustomInterfaceRuntime {
         }
         const query = this.query;
         if (search.dataComponent !== undefined) {
-            const term = query.trim().toLowerCase();
-            this.rows = this.sourceRows.filter((row) => row.name.toLowerCase().includes(term));
-            this.total = this.rows.length;
+            this.rows = filterRows(this.sourceRows, query);
+            this.total = this.rows.filter((row) => !row.header).length;
             this.version++;
-            this.renderRows(true);
+            this.renderRows(resetScroll);
             return;
         }
         if (query.trim().length === 0) {
@@ -496,6 +746,7 @@ export class CustomInterfaceRuntime {
         this.renderedVersion = this.version;
 
         const label = list.itemLabel ?? "";
+        const headerLabel = list.headerLabel ?? "%name";
         for (let slot = 0; slot < list.slotCount; slot++) {
             const poolRow = Math.floor(slot / list.columns);
             const column = slot % list.columns;
@@ -503,9 +754,11 @@ export class CustomInterfaceRuntime {
             const row = this.rows[resultRow * list.columns + column];
             const background = this.widget(list.backgroundStart + slot);
             const icon = this.widget(list.iconStart + slot);
-            if (!background || !icon) {
+            const text = list.labelStart === undefined ? icon : this.widget(list.labelStart + slot);
+            if (!background || !icon || !text) {
                 continue;
             }
+            this.slotRows[slot] = row;
 
             const backgroundY = (list.backgroundBaseY ?? 0) + resultRow * list.rowHeight;
             const iconY = (list.iconBaseY ?? 0) + resultRow * list.rowHeight;
@@ -513,31 +766,54 @@ export class CustomInterfaceRuntime {
             background.y = backgroundY;
             icon.rawY = iconY;
             icon.y = iconY;
+            if (text !== icon) {
+                const labelY = (list.labelBaseY ?? 0) + resultRow * list.rowHeight;
+                text.rawY = labelY;
+                text.y = labelY;
+            }
 
             const hidden = !row;
-            background.hidden = hidden;
-            background.isHidden = hidden;
+            background.hidden = hidden || !!row?.header;
+            background.isHidden = background.hidden;
             icon.hidden = hidden;
             icon.isHidden = hidden;
+            text.hidden = hidden;
+            text.isHidden = hidden;
 
-            if (row) {
-                icon.itemId = list.textOnly ? -1 : row.id | 0;
-                icon.itemQuantity = list.textOnly ? 0 : 1;
-                icon.itemAmount = list.textOnly ? 0 : 1;
-                icon.text = label
-                    .replace("%name", sanitize(row.name))
-                    .replace("%id", String(row.id | 0));
-            } else {
-                icon.itemId = -1;
-                icon.itemQuantity = 0;
-                icon.itemAmount = 0;
-                icon.text = "";
+            const itemId = !row || row.header
+                ? -1
+                : text !== icon
+                  ? row.icon ?? -1
+                  : list.textOnly
+                    ? -1
+                    : row.id | 0;
+            icon.itemId = itemId;
+            icon.itemQuantity = itemId >= 0 ? 1 : 0;
+            icon.itemAmount = itemId >= 0 ? 1 : 0;
+            if (text !== icon) {
+                icon.hidden = hidden || itemId < 0;
+                icon.isHidden = icon.hidden;
+            }
+            text.text = !row
+                ? ""
+                : (row.header ? headerLabel : label)
+                      .replace("%name", sanitize(row.name))
+                      .replace("%id", String(row.id | 0))
+                      .replace("%detail", sanitize(row.detail));
+            if (list.clickable) {
+                // A header is a title, not a destination: it offers no ops.
+                if (!this.labelActions.has(slot)) this.labelActions.set(slot, text.actions);
+                text.actions = row?.header ? [] : this.labelActions.get(slot);
             }
 
             markWidgetInteractionDirty(background);
             markWidgetInteractionDirty(icon);
             this.deps.widgetManager.invalidateWidgetRender(background);
             this.deps.widgetManager.invalidateWidgetRender(icon);
+            if (text !== icon) {
+                markWidgetInteractionDirty(text);
+                this.deps.widgetManager.invalidateWidgetRender(text);
+            }
         }
 
         this.deps.widgetManager.invalidateScroll(view);

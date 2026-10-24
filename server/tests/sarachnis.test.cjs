@@ -459,10 +459,9 @@ test("the three fight tasks judge what the fight saw", () => {
 
 test("::teleports lists Sarachnis in the new interface and the dialogue", () => {
   const TeleportInterface = require("../plugins/interface/TeleportInterface.plugin");
-  const names = TeleportInterface._test.DESTINATIONS[TeleportInterface._test.TAB.BOSSES].map((entry) => entry.name);
-  assert.ok(names.includes("Sarachnis"));
-  const sarachnis = TeleportInterface._test.DESTINATIONS[TeleportInterface._test.TAB.BOSSES].find((entry) => entry.name === "Sarachnis");
-  assert.deepEqual([sarachnis.destination.getX(), sarachnis.destination.getY()], [1842, 9913]);
+  const sarachnis = TeleportInterface._test.Destinations.byKey("sarachnis");
+  assert.ok(sarachnis.tabs.includes(TeleportInterface._test.TAB.BOSSES));
+  assert.deepEqual(sarachnis.tile.slice(0, 2), [1842, 9913]);
 });
 
 test("the thick web lets out from the boss side, and the web passes both ways", () => {

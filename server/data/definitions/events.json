@@ -9,7 +9,7 @@
     "enabled": false,
     "area": {
       "minX": 3150,
-      "minY": 3550,
+      "minY": 3150,
       "maxX": 3350,
       "maxY": 3750,
       "plane": 0
@@ -28,16 +28,19 @@
       {
         "id": "SANTA_HAT",
         "name": "Santa hat",
+        "itemId": 1050,
         "oncePerAccount": true
       },
       {
         "id": "CHRISTMAS_CRACKER",
         "name": "Christmas cracker",
+        "itemId": 962,
         "oncePerAccount": false
       },
       {
         "id": "RED_PARTYHAT",
         "name": "Red partyhat",
+        "itemId": 1038,
         "oncePerAccount": true
       }
     ],
@@ -61,11 +64,179 @@
       "maxY": 3600,
       "plane": 0
     },
-    "npcs": [],
-    "rewards": [],
+    "npcs": [
+      {
+        "id": 70,
+        "x": 3550,
+        "y": 3450,
+        "plane": 0,
+        "wanderRadius": 4,
+        "name": "Skeleton"
+      },
+      {
+        "id": 70,
+        "x": 3600,
+        "y": 3500,
+        "plane": 0,
+        "wanderRadius": 4,
+        "name": "Skeleton"
+      },
+      {
+        "id": 5054,
+        "x": 3650,
+        "y": 3550,
+        "plane": 0,
+        "wanderRadius": 6,
+        "name": "Skeleton Hellhound"
+      },
+      {
+        "id": 3764,
+        "x": 3580,
+        "y": 3520,
+        "plane": 0,
+        "wanderRadius": 8,
+        "name": "Flying female vampire"
+      }
+    ],
+    "rewards": [
+      {
+        "id": "SCYTHE_OF_VITUR",
+        "name": "Scythe of Vitur",
+        "itemId": 22325,
+        "oncePerAccount": true
+      },
+      {
+        "id": "SKELETON_MASK",
+        "name": "Skeleton mask",
+        "itemId": 10346,
+        "oncePerAccount": true
+      },
+      {
+        "id": "ZOMBIE_HEAD",
+        "name": "Zombie head",
+        "itemId": 6680,
+        "oncePerAccount": false
+      }
+    ],
     "activity": {
-      "type": "generic",
-      "description": "Halloween event content."
+      "type": "hunt-monsters",
+      "description": "Hunt the Halloween monsters spawning around the area to earn rewards from the event NPC."
+    }
+  },
+  "easter": {
+    "key": "easter",
+    "name": "Easter",
+    "monthStart": 3,
+    "dayStart": 25,
+    "monthEnd": 4,
+    "dayEnd": 21,
+    "enabled": false,
+    "area": {
+      "minX": 3100,
+      "minY": 3100,
+      "maxX": 3400,
+      "maxY": 3500,
+      "plane": 0
+    },
+    "npcs": [
+      {
+        "id": 3902,
+        "x": 3210,
+        "y": 3210,
+        "plane": 0,
+        "wanderRadius": 2,
+        "name": "Easter Bunny"
+      }
+    ],
+    "rewards": [
+      {
+        "id": "BUNNY_EARS",
+        "name": "Bunny ears",
+        "itemId": 1037,
+        "oncePerAccount": true
+      },
+      {
+        "id": "GIANT_EASTER_EGG",
+        "name": "Giant Easter egg",
+        "itemId": 23446,
+        "oncePerAccount": false
+      },
+      {
+        "id": "EASTER_EGG_HELM",
+        "name": "Egg helm",
+        "itemId": 21214,
+        "oncePerAccount": true
+      }
+    ],
+    "activity": {
+      "type": "egg-hunt",
+      "description": "Find and break Easter egg rocks scattered around the area to receive rewards from the Easter Bunny."
+    }
+  },
+  "summer": {
+    "key": "summer",
+    "name": "Summer Festival",
+    "monthStart": 6,
+    "dayStart": 1,
+    "monthEnd": 8,
+    "dayEnd": 31,
+    "enabled": false,
+    "area": {
+      "minX": 3000,
+      "minY": 3500,
+      "maxX": 3800,
+      "maxY": 4000,
+      "plane": 0
+    },
+    "npcs": [
+      {
+        "id": 70,
+        "x": 3200,
+        "y": 3650,
+        "plane": 0,
+        "wanderRadius": 6,
+        "name": "Fire Elemental"
+      },
+      {
+        "id": 70,
+        "x": 3300,
+        "y": 3700,
+        "plane": 0,
+        "wanderRadius": 6,
+        "name": "Fire Elemental"
+      },
+      {
+        "id": 5054,
+        "x": 3400,
+        "y": 3750,
+        "plane": 0,
+        "wanderRadius": 8,
+        "name": "Hellhound"
+      }
+    ],
+    "rewards": [
+      {
+        "id": "FIRE_CAPE",
+        "name": "Fire cape",
+        "itemId": 6570,
+        "oncePerAccount": true
+      },
+      {
+        "id": "ICE_CREAM_EASTER_EGG",
+        "name": "Ice cream easter egg",
+        "itemId": 26928,
+        "oncePerAccount": false
+      },
+      {
+        "id": "FESTIVE_GAMES_CROWN",
+        "name": "Festive games crown",
+        "itemId": 27588,
+        "oncePerAccount": false
+      }
+    ],
+    "activity": {
+      "type": "fire-running",
+      "description": "Complete fire-running challenges during the Summer Festival to earn rewards."
     }
   }
 }

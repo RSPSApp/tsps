@@ -1,0 +1,71 @@
+{
+  "christmas": {
+    "key": "christmas",
+    "name": "Christmas",
+    "monthStart": 12,
+    "dayStart": 24,
+    "monthEnd": 1,
+    "dayEnd": 3,
+    "enabled": false,
+    "area": {
+      "minX": 3150,
+      "minY": 3550,
+      "maxX": 3350,
+      "maxY": 3750,
+      "plane": 0
+    },
+    "npcs": [
+      {
+        "id": 464,
+        "x": 3222,
+        "y": 3218,
+        "plane": 0,
+        "wanderRadius": 2,
+        "name": "Santa"
+      }
+    ],
+    "rewards": [
+      {
+        "id": "SANTA_HAT",
+        "name": "Santa hat",
+        "oncePerAccount": true
+      },
+      {
+        "id": "CHRISTMAS_CRACKER",
+        "name": "Christmas cracker",
+        "oncePerAccount": false
+      },
+      {
+        "id": "RED_PARTYHAT",
+        "name": "Red partyhat",
+        "oncePerAccount": true
+      }
+    ],
+    "activity": {
+      "type": "talk-to-santa",
+      "description": "Talk to Santa to receive your Christmas rewards."
+    }
+  },
+  "halloween": {
+    "key": "halloween",
+    "name": "Halloween",
+    "monthStart": 10,
+    "dayStart": 25,
+    "monthEnd": 11,
+    "dayEnd": 2,
+    "enabled": false,
+    "area": {
+      "minX": 3500,
+      "minY": 3400,
+      "maxX": 3700,
+      "maxY": 3600,
+      "plane": 0
+    },
+    "npcs": [],
+    "rewards": [],
+    "activity": {
+      "type": "generic",
+      "description": "Halloween event content."
+    }
+  }
+}

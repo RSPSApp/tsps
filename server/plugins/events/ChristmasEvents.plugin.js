@@ -30,6 +30,14 @@ function markRewardReceived(player, rewardId) {
   player.setAttribute(CHRISTMAS_COMPLETE_ATTRIBUTE, completed);
 }
 
+function getUnreceivedRewards(eventDef, player) {
+  if (!eventDef || !eventDef.rewards) return [];
+  return eventDef.rewards.filter((reward) => {
+    if (!reward.oncePerAccount) return true;
+    return !hasReceivedReward(player, reward.id);
+  });
+}
+
 function grantReward(player, rewardDef) {
   if (!player || !rewardDef) return;
 
@@ -66,18 +74,19 @@ function grantReward(player, rewardDef) {
 function handleSantaInteraction({ player }) {
   if (!player) return;
 
-  const inventory = player.getInventory();
-  if (!inventory) {
-    player.message("You cannot receive rewards right now.");
-    return;
-  }
-
   const eventDef = eventScheduler?.getLoadedEvents?.()["christmas"];
   if (!eventDef || !eventDef.rewards) return;
 
+  const unreceived = getUnreceivedRewards(eventDef, player);
+
+  if (unreceived.length === 0) {
+    player.message("You have already received all your Christmas rewards.");
+    return;
+  }
+
   player.message("Merry Christmas! Here's a little something for you.");
 
-  for (const reward of eventDef.rewards) {
+  for (const reward of unreceived) {
     grantReward(player, reward);
   }
 }

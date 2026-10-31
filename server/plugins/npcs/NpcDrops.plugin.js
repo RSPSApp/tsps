@@ -68,6 +68,12 @@ function lootingBagDrops(npc) {
 
 /** npcId -> array of shared table objects (one instance per distinct table) */
 const tablesByNpc = new Map();
+/** npcId -> the dump's table ids, for the map editor's drop table view. */
+const tableIdsByNpc = new Map();
+/** npcId -> the dump's name, used when the cache definition is not available. */
+const npcNames = new Map();
+/** A dump row object -> where it sits in the unmodified dump, for the editor's rate overrides. */
+const baseEntryIndexes = new WeakMap();
 /** shared table name -> [{ itemId, quantity, weight }] */
 const sharedTables = new Map();
 
@@ -138,10 +144,47 @@ function applyOverrides(dump, subtables, overrides) {
       console.error(`[NpcDrops] npc-drop-overrides.json changes unknown table '${tableId}'`);
       continue;
     }
+    // The map editor's rate edits and removals address the dump's own rows by their
+    // position, so apply them before anyone changes the arrays.
+    for (const [key, patch] of Object.entries(change.setEntries ?? {})) {
+      const match = /^(entries|tertiary):(\d+)$/.exec(key);
+      const entry = match ? table[match[1]]?.[Number(match[2])] : undefined;
+      if (!entry) continue;
+      if (Number.isFinite(patch.weight) && patch.weight > 0) entry.weight = patch.weight;
+      if (Number.isFinite(patch.out_of) && patch.out_of > 0) entry.out_of = patch.out_of;
+      if (Array.isArray(patch.quantity) && patch.quantity.length === 2) {
+        entry.quantity = patch.quantity.map(Number);
+      }
+      if (Number.isFinite(entry.weight) && Number.isFinite(entry.out_of) && entry.out_of > 0) {
+        entry.rarity = entry.weight / entry.out_of;
+      }
+    }
+    for (const field of ["entries", "tertiary"]) {
+      const removed = new Set(
+        (change.removeEntries ?? [])
+          .filter((row) => row && row.field === field && Number.isInteger(row.index))
+          .map((row) => row.index),
+      );
+      if (removed.size > 0 && table[field]) {
+        table[field] = table[field].filter((_entry, index) => !removed.has(index));
+      }
+    }
     for (const [key, field] of [["addEntries", "entries"], ["addTertiary", "tertiary"]]) {
       for (const entry of change[key] ?? []) {
         table[field] ??= [];
-        if (!table[field].some((existing) => existing.item_id === entry.item_id)) table[field].push(entry);
+        if (!table[field].some((existing) => existing.item_id === entry.item_id)) {
+          // Hand-written content overrides stay in place; only the editor's own rows
+          // disappear when the NPC is reverted.
+          table[field].push({ ...entry, __override: true });
+        }
+      }
+    }
+    for (const [key, field] of [["editorEntries", "entries"], ["editorTertiary", "tertiary"]]) {
+      for (const entry of change[key] ?? []) {
+        table[field] ??= [];
+        if (!table[field].some((existing) => existing.item_id === entry.item_id)) {
+          table[field].push({ ...entry, __override: true, __editor: true });
+        }
       }
     }
     // Sections the Wiki lists on the page but that are not this table's normal kill (a boss's
@@ -276,6 +319,8 @@ function correctAmoxliatl(table) {
 
 function loadDrops() {
   tablesByNpc.clear();
+  tableIdsByNpc.clear();
+  npcNames.clear();
   sharedTables.clear();
   unusableSubtableRows = 0;
 
@@ -292,6 +337,13 @@ function loadDrops() {
       "[NpcDrops] npc-drops.json has no `tables` section — regenerate it with the wiki dumper."
     );
     return { npcs: 0, tables: 0, shared: 0, unusableSubtableRows: 0 };
+  }
+  for (const [tableId, table] of Object.entries(tableById)) {
+    for (const field of ["entries", "tertiary"]) {
+      (table[field] || []).forEach((entry, index) => {
+        baseEntryIndexes.set(entry, { tableId, field, index });
+      });
+    }
   }
   const subtables = readJson(SUBTABLES_FILE) || {};
   applyOverrides(dump, subtables, readJson(OVERRIDES_FILE) || {});
@@ -310,6 +362,7 @@ function loadDrops() {
     if (!Number.isInteger(id) || !Array.isArray(npc.tables) || npc.tables.length === 0) {
       continue;
     }
+    if (typeof npc.name === "string") npcNames.set(id, npc.name);
     const resolved = [];
     for (const ref of npc.tables) {
       const table = tableById[ref];
@@ -321,6 +374,7 @@ function loadDrops() {
     }
     if (resolved.length > 0) {
       tablesByNpc.set(id, resolved);
+      tableIdsByNpc.set(id, npc.tables.filter((ref) => tableById[ref]));
       if (isBoss(id)) for (const table of resolved) table.boss = true;
     }
   }
@@ -364,6 +418,250 @@ function loadDrops() {
     unusableSubtableRows,
     assumedQuantityRows,
   };
+}
+
+/** One row of a table as the map editor shows it, with its address in the dump for edits. */
+function describeDropEntry(table, field, entry) {
+  const weight = Number.isFinite(entry.weight) && entry.weight > 0 ? entry.weight : undefined;
+  const kind = entry.always
+    ? "always"
+    : field === "tertiary"
+      ? "tertiary"
+      : entry.pre_roll
+        ? "preRoll"
+        : entry.separate_roll
+          ? "separate"
+          : weight !== undefined ? "main" : "unknown";
+  const outOf = weight === undefined
+    ? undefined
+    : kind === "main" ? table.main_max_roll : entry.out_of;
+  const base = baseEntryIndexes.get(entry);
+  const itemId = Number.isInteger(entry.item_id) ? entry.item_id : undefined;
+  return {
+    field,
+    ...(base ? { baseIndex: base.index } : {}),
+    ...(itemId === undefined ? {} : {
+      itemId,
+      name: entry.name || ItemDefinition.forId(itemId)?.getName?.() || `Item ${itemId}`,
+    }),
+    ...(itemId === undefined ? { name: entry.nothing ? "Nothing" : entry.shared_table || "Unknown" } : {}),
+    quantity: Array.isArray(entry.quantity) && entry.quantity.length >= 2
+      ? [Number(entry.quantity[0]), Number(entry.quantity[1])]
+      : [1, 1],
+    ...(weight === undefined ? {} : { weight }),
+    ...(Number.isFinite(outOf) ? { outOf } : {}),
+    kind,
+    ...(typeof entry.section === "string" ? { section: entry.section } : {}),
+    source: base ? "base" : entry.__editor === true ? "editor" : "manual",
+    ...(entry.__editor === true
+      ? { overrideEntry: Object.fromEntries(Object.entries(entry).filter(([key]) => !key.startsWith("__"))) }
+      : {}),
+  };
+}
+
+function describeNpcDrops(npcId) {
+  const id = Number(npcId);
+  if (!Number.isInteger(id) || id < 0) {
+    return undefined;
+  }
+  const tables = tablesByNpc.get(id) ?? [];
+  const ids = tableIdsByNpc.get(id) ?? [];
+  const npc = pluginApi?.core?.CacheDefinitions?.getNpc?.(id);
+  return {
+    npcId: id,
+    name: npc?.name ?? npc?.getName?.() ?? npcNames.get(id) ?? `NPC ${id}`,
+    tables: tables.map((table, index) => ({
+      id: ids[index],
+      label: table.label || table.table_name || ids[index],
+      ...(table.wiki_page ? { wikiPage: table.wiki_page } : {}),
+      ...(Number.isInteger(table.main_max_roll) ? { mainMaxRoll: table.main_max_roll } : {}),
+      rolls: Number.isInteger(table.rolls) ? table.rolls : 1,
+      entries: (table.entries ?? []).map((entry) => describeDropEntry(table, "entries", entry)),
+      tertiary: (table.tertiary ?? []).map((entry) => describeDropEntry(table, "tertiary", entry)),
+    })),
+  };
+}
+
+function positiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : undefined;
+}
+
+/** A row the editor adds to a table, keeping the fields other overrides put on it. */
+function normalizeAddedEntry(row) {
+  if (!row || typeof row !== "object") throw new Error("Invalid drop entry");
+  const itemId = Number(row.item_id);
+  if (!Number.isInteger(itemId) || itemId <= 0) throw new Error("Invalid drop item id");
+  const weight = positiveNumber(row.weight);
+  const outOf = positiveNumber(row.out_of);
+  if (weight === undefined || outOf === undefined) throw new Error("Invalid drop rate");
+  const quantity = Array.isArray(row.quantity) && row.quantity.length >= 2
+    ? [Math.max(1, Math.trunc(Number(row.quantity[0]))), Math.max(1, Math.trunc(Number(row.quantity[1])))]
+    : [1, 1];
+  return {
+    ...row,
+    item_id: itemId,
+    name: typeof row.name === "string" && row.name ? row.name : `Item ${itemId}`,
+    quantity: [Math.min(quantity[0], quantity[1]), Math.max(quantity[0], quantity[1])],
+    weight,
+    out_of: outOf,
+    rarity: weight / outOf,
+    section: typeof row.section === "string" && row.section ? row.section : "Editor",
+  };
+}
+
+/** Rebuilds one table's editor-owned override keys from a save request. */
+function buildTableOverrideChange(table, existing, request) {
+  if (request.reset === true) {
+    const kept = { ...(existing ?? {}) };
+    for (const key of ["editorEntries", "editorTertiary", "removeEntries", "setEntries"]) delete kept[key];
+    return kept;
+  }
+  const change = { ...(existing ?? {}) };
+
+  const addedEntries = Array.isArray(request.addedEntries) ? request.addedEntries.map(normalizeAddedEntry) : [];
+  const addedTertiary = Array.isArray(request.addedTertiary) ? request.addedTertiary.map(normalizeAddedEntry) : [];
+  if (addedEntries.length > 0) change.editorEntries = addedEntries;
+  else delete change.editorEntries;
+  if (addedTertiary.length > 0) change.editorTertiary = addedTertiary;
+  else delete change.editorTertiary;
+
+  const removed = new Map(
+    (change.removeEntries ?? [])
+      .filter((row) => row && row.field && Number.isInteger(row.index))
+      .map((row) => [`${row.field}:${row.index}`, { field: row.field, index: row.index }]),
+  );
+  for (const row of Array.isArray(request.removeEntries) ? request.removeEntries : []) {
+    if (!row || (row.field !== "entries" && row.field !== "tertiary") || !Number.isInteger(row.index)) continue;
+    if (!table[row.field]?.[row.index]) continue;
+    removed.set(`${row.field}:${row.index}`, { field: row.field, index: row.index });
+  }
+  if (removed.size > 0) change.removeEntries = [...removed.values()];
+  else delete change.removeEntries;
+
+  const sets = { ...(change.setEntries ?? {}) };
+  for (const [key, patch] of Object.entries(request.setEntries ?? {})) {
+    const match = /^(entries|tertiary):(\d+)$/.exec(key);
+    if (!match || !table[match[1]]?.[Number(match[2])] || !patch || typeof patch !== "object") continue;
+    const weight = positiveNumber(patch.weight);
+    const outOf = positiveNumber(patch.out_of);
+    if (weight === undefined && outOf === undefined) continue;
+    sets[key] = {
+      ...(weight === undefined ? {} : { weight }),
+      ...(outOf === undefined ? {} : { out_of: outOf }),
+    };
+  }
+  if (Object.keys(sets).length > 0) change.setEntries = sets;
+  else delete change.setEntries;
+
+  return change;
+}
+
+/** Reads the key order a hand-edited override file already uses, so saves keep it. */
+function overrideKeyOrder(raw) {
+  const order = {};
+  let section;
+  for (const line of String(raw).split(/\r?\n/)) {
+    const top = /^ "([^"]+)": \{$/.exec(line);
+    if (top) {
+      section = top[1];
+      order[section] ??= [];
+      continue;
+    }
+    if (/^ \}/.test(line)) {
+      section = undefined;
+      continue;
+    }
+    if (!section) continue;
+    const child = /^  "((?:[^"\\]|\\.)+)": /.exec(line);
+    if (child) {
+      try {
+        order[section].push(JSON.parse(`"${child[1]}"`));
+      } catch {
+        order[section].push(child[1]);
+      }
+    }
+  }
+  return order;
+}
+
+function orderedKeys(value, preferred) {
+  const keys = Object.keys(value);
+  const kept = (preferred ?? []).filter((key) => Object.hasOwn(value, key));
+  return [...kept, ...keys.filter((key) => !kept.includes(key))];
+}
+
+/** JSON with spaces after `:` and `,`, matching the hand-edited override file. */
+function compactJson(value) {
+  if (Array.isArray(value)) return `[${value.map(compactJson).join(", ")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value)
+      .map(([key, child]) => `${JSON.stringify(key)}: ${compactJson(child)}`)
+      .join(", ")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** Keeps the hand-edited override file's one-property-per-line layout on save. */
+function formatOverrides(overrides, order = {}) {
+  const lines = ["{"];
+  const top = Object.entries(overrides);
+  const grouped = new Set(["removeNpcs", "addNpcs", "tables", "subtables"]);
+  top.forEach(([key, value], index) => {
+    const comma = index < top.length - 1 ? "," : "";
+    if (value && typeof value === "object" && !Array.isArray(value) && grouped.has(key)) {
+      lines.push(` ${JSON.stringify(key)}: {`);
+      const children = orderedKeys(value, order[key]).map((childKey) => [childKey, value[childKey]]);
+      children.forEach(([childKey, childValue], childIndex) => {
+        lines.push(`  ${JSON.stringify(childKey)}: ${compactJson(childValue)}${childIndex < children.length - 1 ? "," : ""}`);
+      });
+      lines.push(` }${comma}`);
+    } else {
+      lines.push(` ${JSON.stringify(key)}: ${compactJson(value)}${comma}`);
+    }
+  });
+  lines.push("}");
+  return `${lines.join("\n")}\n`;
+}
+
+/** Applies a map-editor save to npc-drop-overrides.json. Returns the updated view. */
+function saveNpcDropTable(npcId, request) {
+  const id = Number(npcId);
+  const tableId = typeof request?.tableId === "string" ? request.tableId : "";
+  const dump = readJson(DROPS_FILE);
+  const table = dump?.tables?.[tableId];
+  const npc = dump?.npcs?.[id];
+  if (!Number.isInteger(id) || !table || !npc || !Array.isArray(npc.tables) || !npc.tables.includes(tableId)) {
+    throw new Error("Unknown NPC drop table");
+  }
+  const overridesFile = definitionPath(OVERRIDES_FILE);
+  const overridesRaw = fs.existsSync(overridesFile) ? fs.readFileSync(overridesFile, "utf8") : "{}\n";
+  const overrides = overridesRaw.trim() ? JSON.parse(overridesRaw) : {};
+  overrides.tables ??= {};
+  if (request?.resetAll === true) {
+    // Revert only the editor's keys: hand-written addEntries/addTertiary and
+    // removeSections are content, not editor state.
+    for (const id of npc.tables) {
+      const target = dump.tables[id];
+      const existing = overrides.tables[id];
+      if (!target || !existing) continue;
+      const change = buildTableOverrideChange(target, existing, { reset: true });
+      if (Object.keys(change).length === 0) delete overrides.tables[id];
+      else overrides.tables[id] = change;
+    }
+  } else {
+    const existing = overrides.tables[tableId];
+    const change = buildTableOverrideChange(table, existing, request ?? {});
+    if (Object.keys(change).length === 0) delete overrides.tables[tableId];
+    else overrides.tables[tableId] = change;
+  }
+  if (Object.keys(overrides.tables).length === 0) delete overrides.tables;
+
+  const file = overridesFile;
+  const temp = `${file}.tmp`;
+  fs.writeFileSync(temp, formatOverrides(overrides, overrideKeyOrder(overridesRaw)), "utf8");
+  fs.renameSync(temp, file);
+  return describeNpcDrops(id);
 }
 
 function randomInt(bound) {
@@ -618,7 +916,7 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
       } else if (hits(entry, entryMultiplier(table, entry, rules))) {
         drops.push(...resolveEntry(entry, player, context));
       }
-    } else if (Number.isInteger(entry.weight)) {
+    } else if (Number.isFinite(entry.weight) && entry.weight > 0) {
       main.push(entry);
     }
   }
@@ -910,10 +1208,46 @@ module.exports = {
       return true;
     }, PlayerRights.OWNER, "Reload NPC drops");
 
+    // The map editor's NPC inspector reads a table and saves edits to the overrides file.
+    // Both are development-only, like the rest of the map editor.
+    if (!api.core?.Server?.PRODUCTION) {
+      api.registerContentEndpoint?.("npc-drops", (_query, segments) => {
+        ensureDrops();
+        return describeNpcDrops(Number(segments[0]));
+      });
+      api.registerContentWriter?.("npc-drops", (_query, segments, body, method) => {
+        if (method !== "POST") return undefined;
+        let request;
+        try {
+          request = JSON.parse(body || "{}");
+        } catch {
+          throw new Error("Invalid drop table request");
+        }
+        const npcId = Number(segments[0]);
+        saveNpcDropTable(npcId, request);
+        stats = loadDrops();
+        return describeNpcDrops(npcId);
+      });
+    }
+
     api.log("registered", { lazy: true });
   },
   _test: { loadDrops, tablesByNpc, sharedTables },
 
   // Exposed for the smoke test.
-  __internals: { loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, tablesByNpc, sharedTables },
+  __internals: {
+    loadDrops,
+    rollTable,
+    rollOnce,
+    rollSharedTable,
+    placeDrops,
+    tablesByNpc,
+    sharedTables,
+    applyOverrides,
+    describeNpcDrops,
+    buildTableOverrideChange,
+    saveNpcDropTable,
+    formatOverrides,
+    overrideKeyOrder,
+  },
 };

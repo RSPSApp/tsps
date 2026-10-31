@@ -89,6 +89,8 @@ import type {
     EditModeSearchKind,
     EditModeSearchResult,
     EditModeNpcInteractions,
+    EditModeNpcDrops,
+    EditModeNpcDropSave,
     EditModeShop,
     EditModeTile,
     EditModeWorldDefinition,
@@ -450,6 +452,21 @@ export function parseBrowserHostNpcInteractions(contents: string): EditModeNpcIn
     return parsed as EditModeNpcInteractions;
 }
 
+/** Validates the shape the player-server drop endpoint returns. */
+export function parseNpcDrops(contents: string): EditModeNpcDrops {
+    const parsed = JSON.parse(contents) as Partial<EditModeNpcDrops> | undefined;
+    if (!parsed || !Number.isInteger(parsed.npcId) || typeof parsed.name !== "string" || !Array.isArray(parsed.tables)) {
+        throw new Error("Server provided invalid NPC drops");
+    }
+    for (const table of parsed.tables) {
+        if (!table || typeof table.id !== "string" || typeof table.label !== "string"
+            || !Array.isArray(table.entries) || !Array.isArray(table.tertiary)) {
+            throw new Error("Server provided invalid NPC drops");
+        }
+    }
+    return parsed as EditModeNpcDrops;
+}
+
 function requestBrowserHostShops(): Promise<EditModeShop[]> {
     const host = browserHostWindow();
     if (!host) return Promise.reject(new Error("Browser host is unavailable"));
@@ -508,6 +525,28 @@ async function loadLocalEditorData(resource = ""): Promise<string> {
     const response = await fetch(`${base}/api/world${resource ? `/${resource}` : ""}`);
     if (!response.ok) throw new Error(`Editor API returned ${response.status}`);
     return response.text();
+}
+
+async function loadNpcDrops(npcTypeId: number): Promise<EditModeNpcDrops> {
+    const base = getContentApiBase();
+    if (!base) throw new Error("Connect to a local development server to load drop tables");
+    const response = await fetch(`${base}/api/npc-drops/${npcTypeId}`);
+    if (!response.ok) throw new Error(`Drop table API returned ${response.status}`);
+    return parseNpcDrops(await response.text());
+}
+
+async function saveNpcDrops(npcTypeId: number, request: EditModeNpcDropSave): Promise<EditModeNpcDrops> {
+    const base = getContentApiBase();
+    if (!base) throw new Error("Connect to a local development server to save drop tables");
+    const response = await fetch(`${base}/api/npc-drops/${npcTypeId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+    });
+    if (!response.ok) {
+        throw new Error(`Saving the drop table failed (${response.status})`);
+    }
+    return parseNpcDrops(await response.text());
 }
 
 async function loadWorldDefinition(): Promise<EditModeWorldDefinition> {
@@ -1841,6 +1880,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         describeDefinition: (kind, id) => describeDefinition(client, kind, id),
         loadShops: () => browserHostWindow() ? requestBrowserHostShops() : loadLocalEditorData("shops").then(parseBrowserHostShops),
         loadNpcInteractions: () => browserHostWindow() ? requestBrowserHostNpcInteractions() : loadLocalEditorData("npc-interactions").then(parseBrowserHostNpcInteractions),
+        loadNpcDrops,
+        saveNpcDrops,
         loadPersistedNpcSpawnEdits,
         getNpcMenuOptions: (npcTypeId) => {
             const npc = client.npcTypeLoader?.load(npcTypeId);

@@ -4122,6 +4122,16 @@ export class PluginManager {
           console.error(`[plugins] ${pluginName} content endpoint rejected`, error);
         }
       },
+      registerContentWriter: (name, handler) => {
+        if (typeof name !== "string" || typeof handler !== "function") {
+          return;
+        }
+        try {
+          ContentApi.registerWriter(name, handler);
+        } catch (error) {
+          console.error(`[plugins] ${pluginName} content writer rejected`, error);
+        }
+      },
       registerCustomInterface: (definition) => {
         try {
           CustomInterfaceRegistry.register(definition as any);

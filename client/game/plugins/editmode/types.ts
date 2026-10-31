@@ -59,6 +59,58 @@ export interface EditModeNpcMenuOption {
 /** The on-disk npc-interactions.json object, keyed by NPC type id. */
 export type EditModeNpcInteractions = Record<string, Record<string, unknown>>;
 
+/** Which array of a drop table a row belongs to. */
+export type EditModeNpcDropField = "entries" | "tertiary";
+
+/** How a drop row is rolled; main rows share mainMaxRoll, the rest use weight/outOf. */
+export type EditModeNpcDropKind = "always" | "preRoll" | "separate" | "main" | "tertiary" | "unknown";
+
+export interface EditModeNpcDropEntry {
+    field: EditModeNpcDropField;
+    /** Position in npc-drops.json for a row that came from the dump. */
+    baseIndex?: number;
+    itemId?: number;
+    name: string;
+    quantity: [number, number];
+    weight?: number;
+    /** Effective denominator: mainMaxRoll for a weighted main row, out_of otherwise. */
+    outOf?: number;
+    kind: EditModeNpcDropKind;
+    section?: string;
+    /** base = wiki dump, editor = added by the map editor, manual = a hand-written override. */
+    source: "base" | "editor" | "manual";
+    /** The raw editor row, kept so saving preserves fields this panel does not edit. */
+    overrideEntry?: Record<string, unknown>;
+}
+
+export interface EditModeNpcDropTable {
+    id: string;
+    label: string;
+    wikiPage?: string;
+    mainMaxRoll?: number;
+    rolls: number;
+    entries: EditModeNpcDropEntry[];
+    tertiary: EditModeNpcDropEntry[];
+}
+
+export interface EditModeNpcDrops {
+    npcId: number;
+    name: string;
+    tables: EditModeNpcDropTable[];
+}
+
+export interface EditModeNpcDropSave {
+    tableId: string;
+    removeEntries: Array<{ field: EditModeNpcDropField; index: number }>;
+    setEntries: Record<string, { weight?: number; out_of?: number }>;
+    addedEntries: Array<Record<string, unknown>>;
+    addedTertiary: Array<Record<string, unknown>>;
+    /** Clears the selected table's editor overrides. */
+    reset?: boolean;
+    /** Clears the editor overrides for every table of the selected NPC. */
+    resetAll?: boolean;
+}
+
 export type EditModeWorldZoneTag = string;
 
 export interface EditModeBoundedWorldZone {
@@ -275,6 +327,10 @@ export interface EditModeHost {
     describeDefinition?(kind: EditModeSearchKind, id: number): EditModeDefinitionSummary | undefined;
     loadShops?(): Promise<EditModeShop[]>;
     loadNpcInteractions?(): Promise<EditModeNpcInteractions>;
+    /** The selected NPC's drop tables, for the drop-table inspector. */
+    loadNpcDrops?(npcTypeId: number): Promise<EditModeNpcDrops>;
+    /** Saves one table's edits to npc-drop-overrides.json and reloads the server's drops. */
+    saveNpcDrops?(npcTypeId: number, request: EditModeNpcDropSave): Promise<EditModeNpcDrops>;
     /** Saved npc-spawns-custom.json records, converted to editor edits. */
     loadPersistedNpcSpawnEdits?(): Promise<EditModeEdit[]>;
     getNpcMenuOptions?(npcTypeId: number): readonly EditModeNpcMenuOption[];

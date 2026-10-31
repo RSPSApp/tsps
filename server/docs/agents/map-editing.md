@@ -226,6 +226,11 @@ as objects, persisted to `npc-spawns.json` with `level` (plane) and `wanderRadiu
 `remove_npc` takes the spawn tile from `list_spawned_npcs` and finds the NPC wherever it has
 wandered.
 
+To edit what an NPC drops, click it in `?edit` and choose **Edit drop table**. The panel reads
+`GET /api/npc-drops/<npcId>` and saves to `npc-drop-overrides.json` through
+`POST /api/npc-drops/<npcId>`; **Revert drops to default** clears the editor's rows for that
+NPC. The data format and reload behaviour are in [npc-drops.md](../../npc-drops.md).
+
 ### Terrain
 
 | Tool | Purpose |

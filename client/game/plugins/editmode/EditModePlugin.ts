@@ -20,6 +20,8 @@ import {
     type EditModeTool,
     type EditModeWorldDefinition,
     type EditModeBoundedWorldZone,
+    type EditModeNpcDrops,
+    type EditModeNpcDropSave,
 } from "./types";
 
 type EditModePluginListener = () => void;
@@ -441,6 +443,14 @@ export class EditModePlugin {
 
     loadNpcInteractions() {
         return this.host?.loadNpcInteractions?.() ?? Promise.reject(new Error("NPC interaction data is unavailable"));
+    }
+
+    loadNpcDrops(npcTypeId: number): Promise<EditModeNpcDrops> {
+        return this.host?.loadNpcDrops?.(npcTypeId) ?? Promise.reject(new Error("NPC drop data is unavailable"));
+    }
+
+    saveNpcDrops(npcTypeId: number, request: EditModeNpcDropSave): Promise<EditModeNpcDrops> {
+        return this.host?.saveNpcDrops?.(npcTypeId, request) ?? Promise.reject(new Error("NPC drop saving is unavailable"));
     }
 
     /** The saved npc-spawns-custom.json patch as editor edits, for a fresh profile. */

@@ -45,6 +45,10 @@ import type {
     EditModeOverlaySwatch,
     EditModeSearchKind,
     EditModeNpcInteractions,
+    EditModeNpcDrops,
+    EditModeNpcDropEntry,
+    EditModeNpcDropField,
+    EditModeNpcDropTable,
     EditModeShop,
 } from "./types";
 import { BUILDING_SHAPES, BUILDING_STYLES, type BuildingShape, type BuildingStyle } from "./BuildingGenerator";
@@ -98,6 +102,25 @@ function stopClientInput(element: HTMLElement): void {
     for (const eventName of ["mousedown", "click", "keydown", "keyup"] as const) {
         element.addEventListener(eventName, (event) => event.stopPropagation());
     }
+}
+
+function formatDropQuantity(quantity: readonly number[]): string {
+    const min = Number(quantity[0] ?? 1);
+    const max = Number(quantity[1] ?? min);
+    return min === max ? `x${min}` : `x${min}-${max}`;
+}
+
+function dropRateChance(entry: EditModeNpcDropEntry): number | undefined {
+    if (entry.kind === "always") return 1;
+    if (!entry.weight || !entry.outOf || entry.weight <= 0 || entry.outOf <= 0) return undefined;
+    return entry.outOf / entry.weight;
+}
+
+function formatDropChance(chance: number | undefined): string {
+    if (chance === undefined) return "-";
+    if (chance === 1) return "Always";
+    if (chance >= 1000) return `1 in ${Math.round(chance).toLocaleString()}`;
+    return `1 in ${Math.round(chance * 100) / 100}`;
 }
 
 function createPanel(name: string, width = "360px"): HTMLDivElement {
@@ -223,6 +246,16 @@ class EditorChrome {
     private shopIconRetryTimer?: number;
     private shopIconRetryCount = 0;
     private shopPreviewScrollTop = 0;
+    private npcDropEditor?: HTMLElement;
+    private npcDropNpcId?: number;
+    private npcDropData?: EditModeNpcDrops;
+    private npcDropTableId?: string;
+    private npcDropLoading = false;
+    private npcDropError?: string;
+    private npcDropSearchToken = 0;
+    /** Base-row removals/sets per table, keyed `field:index`. */
+    private readonly npcDropRemoved = new Map<string, Map<string, { field: EditModeNpcDropField; index: number }>>();
+    private readonly npcDropSets = new Map<string, Map<string, { weight?: number; out_of?: number }>>();
     private overlaySwatches: readonly EditModeOverlaySwatch[] = [];
     private selectionImage?: { key: string; dataUrl: string; loading: boolean };
     private buildingStyle: BuildingStyle = "Varrock";
@@ -526,6 +559,7 @@ class EditorChrome {
         this.overlayPalette?.remove();
         this.closeShopBrowser();
         this.closeShopEditor();
+        this.closeNpcDropEditor();
     }
 
     private currentSearchMode(): EditModeSearchKind {
@@ -863,6 +897,9 @@ class EditorChrome {
                 createActionButton("Move NPC", createMoveIcon, () => this.plugin.moveSelection(), "M"),
                 createActionButton("Delete NPC", createTrashIcon, () =>
                     this.plugin.deleteSelection(), "Del",
+                ),
+                createActionButton("Edit drop table", createNpcIcon, () =>
+                    this.openNpcDropEditor(selection.locId),
                 ),
             );
         }
@@ -1403,6 +1440,464 @@ class EditorChrome {
         this.shopsDirty = true;
         this.syncSaveButton();
         this.renderShopEditor();
+    }
+
+    private npcDropRemovedFor(tableId: string): Map<string, { field: EditModeNpcDropField; index: number }> {
+        let removed = this.npcDropRemoved.get(tableId);
+        if (!removed) {
+            removed = new Map();
+            this.npcDropRemoved.set(tableId, removed);
+        }
+        return removed;
+    }
+
+    private npcDropSetsFor(tableId: string): Map<string, { weight?: number; out_of?: number }> {
+        let sets = this.npcDropSets.get(tableId);
+        if (!sets) {
+            sets = new Map();
+            this.npcDropSets.set(tableId, sets);
+        }
+        return sets;
+    }
+
+    private activeNpcDropTable(): EditModeNpcDropTable | undefined {
+        return this.npcDropData?.tables.find((table) => table.id === this.npcDropTableId);
+    }
+
+    private openNpcDropEditor(npcTypeId: number): void {
+        if (this.npcDropEditor && this.npcDropNpcId === npcTypeId) {
+            this.closeNpcDropEditor();
+            return;
+        }
+        this.closeNpcDropEditor();
+        this.npcDropNpcId = npcTypeId;
+        this.npcDropData = undefined;
+        this.npcDropTableId = undefined;
+        this.npcDropError = undefined;
+        this.npcDropLoading = true;
+        this.npcDropRemoved.clear();
+        this.npcDropSets.clear();
+        const panel = createPanel("npc-drop-editor", "440px");
+        Object.assign(panel.style, {
+            right: "12px",
+            top: TOP_BAR_CLEARANCE,
+            bottom: "12px",
+            left: "auto",
+            maxWidth: "calc(100vw - 32px)",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            zIndex: "10006",
+        });
+        this.npcDropEditor = panel;
+        this.renderNpcDropEditor();
+        void this.plugin.loadNpcDrops(npcTypeId).then(
+            (data) => {
+                if (this.npcDropNpcId !== npcTypeId) return;
+                this.npcDropData = data;
+                this.npcDropTableId = data.tables[0]?.id;
+                this.npcDropLoading = false;
+                this.renderNpcDropEditor();
+            },
+            (error) => {
+                if (this.npcDropNpcId !== npcTypeId) return;
+                this.npcDropLoading = false;
+                this.npcDropError = error instanceof Error ? error.message : String(error);
+                this.renderNpcDropEditor();
+            },
+        );
+    }
+
+    private closeNpcDropEditor(): void {
+        this.npcDropEditor?.remove();
+        this.npcDropEditor = undefined;
+        this.npcDropNpcId = undefined;
+        this.npcDropData = undefined;
+        this.npcDropTableId = undefined;
+        this.npcDropLoading = false;
+        this.npcDropError = undefined;
+        this.npcDropRemoved.clear();
+        this.npcDropSets.clear();
+    }
+
+    private renderNpcDropEditor(): void {
+        const panel = this.npcDropEditor;
+        if (!panel) return;
+        panel.replaceChildren();
+        const title = this.npcDropData?.name ?? (this.npcDropLoading ? "Drop table" : `NPC ${this.npcDropNpcId ?? ""}`);
+        const header = createHeader(`${title} - drops`, () => this.closeNpcDropEditor());
+        header.style.flex = "0 0 auto";
+        panel.appendChild(header);
+
+        if (this.npcDropLoading) {
+            const status = document.createElement("div");
+            status.textContent = "Loading drop table...";
+            status.style.color = "#94a3b8";
+            panel.appendChild(status);
+            return;
+        }
+        if (this.npcDropError) {
+            const error = document.createElement("div");
+            error.textContent = this.npcDropError;
+            error.style.color = "#fca5a5";
+            panel.appendChild(error);
+            return;
+        }
+        const data = this.npcDropData;
+        if (!data || data.tables.length === 0) {
+            const empty = document.createElement("div");
+            empty.textContent = "This NPC has no drop table. Add one through npc-drop-overrides.json.";
+            empty.style.color = "#94a3b8";
+            panel.appendChild(empty);
+            return;
+        }
+
+        // Keep the save/revert footer on screen; only the rows above it scroll.
+        const body = document.createElement("div");
+        Object.assign(body.style, {
+            flex: "1 1 auto",
+            minHeight: "0",
+            overflowY: "auto",
+            paddingRight: "4px",
+        });
+        panel.appendChild(body);
+
+        if (data.tables.length > 1) {
+            const select = document.createElement("select");
+            for (const table of data.tables) {
+                select.add(new Option(table.label, table.id, table.id === this.npcDropTableId, table.id === this.npcDropTableId));
+            }
+            Object.assign(select.style, INPUT_STYLE, { height: "30px", marginBottom: "8px" });
+            select.addEventListener("change", () => {
+                this.npcDropTableId = select.value;
+                this.renderNpcDropEditor();
+            });
+            body.appendChild(select);
+        }
+
+        const table = this.activeNpcDropTable();
+        if (!table) {
+            const unavailable = document.createElement("div");
+            unavailable.textContent = "Drop table is unavailable.";
+            body.appendChild(unavailable);
+            return;
+        }
+        const metadata = document.createElement("div");
+        metadata.textContent = `${table.label}${table.mainMaxRoll ? ` - pool ${table.mainMaxRoll}` : ""}`
+            + `${table.rolls > 1 ? ` - ${table.rolls} rolls` : ""}`;
+        metadata.style.color = "#94a3b8";
+        metadata.style.fontSize = "12px";
+        metadata.style.marginBottom = "8px";
+        body.appendChild(metadata);
+
+        const appendSection = (label: string, entries: EditModeNpcDropEntry[]): void => {
+            const heading = document.createElement("strong");
+            heading.textContent = label;
+            heading.style.display = "block";
+            heading.style.margin = "8px 0 4px";
+            body.appendChild(heading);
+            const list = document.createElement("div");
+            Object.assign(list.style, { display: "grid", gap: "3px" });
+            if (entries.length === 0) {
+                const empty = document.createElement("div");
+                empty.textContent = "Nothing here.";
+                empty.style.color = "#94a3b8";
+                list.appendChild(empty);
+            }
+            for (const entry of entries) {
+                const row = document.createElement("div");
+                Object.assign(row.style, {
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) 92px 28px",
+                    gap: "6px",
+                    alignItems: "center",
+                });
+                const name = document.createElement("div");
+                const chance = dropRateChance(entry);
+                name.textContent = `${entry.name} - ${formatDropQuantity(entry.quantity)}`;
+                name.title = `${entry.name}${entry.section ? ` (${entry.section})` : ""} - ${formatDropChance(chance)}`;
+                name.style.overflow = "hidden";
+                name.style.textOverflow = "ellipsis";
+                name.style.whiteSpace = "nowrap";
+                if (entry.source === "editor") name.style.color = "#93c5fd";
+                if (entry.source === "manual") name.style.color = "#c4b5fd";
+                const rate = document.createElement("input");
+                rate.type = "number";
+                rate.min = "1";
+                rate.step = "any";
+                rate.value = chance === undefined || entry.kind === "always" ? "" : String(Math.round(chance * 100) / 100);
+                rate.placeholder = entry.kind === "always" ? "Always" : "1 in";
+                rate.title = "Drop rate: 1 in N";
+                rate.setAttribute("aria-label", `Drop rate for ${entry.name}`);
+                rate.disabled = entry.source === "manual"
+                    || entry.kind === "always"
+                    || chance === undefined
+                    || (entry.kind === "main" && !table.mainMaxRoll);
+                if (entry.source === "manual") rate.title = "Hand-written override - edit npc-drop-overrides.json";
+                Object.assign(rate.style, INPUT_STYLE, { height: "28px", padding: "3px 5px" });
+                rate.addEventListener("change", () => this.setNpcDropRate(table, entry, Number(rate.value)));
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.textContent = "x";
+                remove.title = `Remove ${entry.name}`;
+                Object.assign(remove.style, {
+                    height: "28px",
+                    border: "0",
+                    borderRadius: "3px",
+                    color: "#fecaca",
+                    background: "rgba(239,68,68,0.18)",
+                    cursor: "pointer",
+                    fontSize: "16px",
+                });
+                remove.addEventListener("click", () => this.removeNpcDropEntry(table, entry));
+                if (entry.source === "manual") {
+                    remove.disabled = true;
+                    remove.title = "Hand-written override - edit npc-drop-overrides.json";
+                    remove.style.opacity = "0.4";
+                    remove.style.cursor = "not-allowed";
+                }
+                row.append(name, rate, remove);
+                list.appendChild(row);
+            }
+            body.appendChild(list);
+        };
+
+        appendSection("Main table", table.entries);
+        appendSection("Tertiary", table.tertiary);
+
+        const addLabel = document.createElement("strong");
+        addLabel.textContent = "Add item";
+        addLabel.style.display = "block";
+        addLabel.style.margin = "10px 0 4px";
+        const addField = document.createElement("select");
+        addField.add(new Option("Main table", "entries"));
+        addField.add(new Option("Tertiary", "tertiary"));
+        Object.assign(addField.style, INPUT_STYLE, { height: "30px", marginBottom: "4px" });
+        const search = document.createElement("input");
+        search.type = "search";
+        search.placeholder = "Search current-cache item name or ID";
+        search.setAttribute("aria-label", `Search items to add to ${data.name}'s drops`);
+        Object.assign(search.style, INPUT_STYLE);
+        const matches = document.createElement("div");
+        Object.assign(matches.style, { display: "grid", gap: "2px", maxHeight: "150px", marginTop: "4px", overflowY: "auto" });
+        search.addEventListener("input", () => {
+            const token = ++this.npcDropSearchToken;
+            const query = search.value.trim();
+            matches.replaceChildren();
+            if (!query) return;
+            void this.plugin.searchItems(query).then((items) => {
+                if (token !== this.npcDropSearchToken || !this.npcDropEditor) return;
+                for (const item of items.slice(0, 25)) {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.textContent = `${item.id} - ${item.name}`;
+                    Object.assign(button.style, {
+                        padding: "4px 6px",
+                        border: "0",
+                        borderRadius: "3px",
+                        color: "#cbd5e1",
+                        background: "rgba(255,255,255,0.06)",
+                        cursor: "pointer",
+                        font: "12px sans-serif",
+                        textAlign: "left",
+                    });
+                    button.addEventListener("click", () =>
+                        this.addNpcDropItem(table, item.id, item.name, addField.value as EditModeNpcDropField),
+                    );
+                    matches.appendChild(button);
+                }
+                if (!items.length) matches.textContent = "No matching items.";
+            });
+        });
+        body.append(addLabel, addField, search, matches);
+
+        const actions = document.createElement("div");
+        Object.assign(actions.style, {
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "6px",
+            flex: "0 0 auto",
+            marginTop: "10px",
+            paddingTop: "8px",
+            borderTop: "1px solid rgba(255,255,255,0.12)",
+        });
+        const save = document.createElement("button");
+        save.type = "button";
+        save.textContent = "Save table";
+        save.title = "Write this table's edits to npc-drop-overrides.json and reload drops";
+        Object.assign(save.style, {
+            height: "30px",
+            border: "1px solid #8b7138",
+            borderRadius: "4px",
+            color: "#f3db9b",
+            background: "#3c321f",
+            cursor: "pointer",
+            font: "13px sans-serif",
+        });
+        save.addEventListener("click", () => void this.saveNpcDropTable());
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.textContent = "Revert drops to default";
+        reset.title = "Remove every drop-table override the editor made for this NPC";
+        Object.assign(reset.style, {
+            height: "30px",
+            border: "1px solid rgba(239,68,68,0.45)",
+            borderRadius: "4px",
+            color: "#fecaca",
+            background: "rgba(239,68,68,0.16)",
+            cursor: "pointer",
+            font: "13px sans-serif",
+        });
+        reset.addEventListener("click", () => void this.revertNpcDrops());
+        actions.append(save, reset);
+        panel.appendChild(actions);
+    }
+
+    private setNpcDropRate(table: EditModeNpcDropTable, entry: EditModeNpcDropEntry, chance: number): void {
+        if (!Number.isFinite(chance) || chance < 1 || entry.kind === "always") {
+            this.renderNpcDropEditor();
+            return;
+        }
+        const weight = entry.kind === "main" ? (table.mainMaxRoll ?? 0) / chance : 1;
+        const outOf = entry.kind === "main" ? (table.mainMaxRoll ?? 0) : chance;
+        if (!(weight > 0) || !(outOf > 0)) {
+            this.renderNpcDropEditor();
+            return;
+        }
+        entry.weight = weight;
+        entry.outOf = outOf;
+        if (entry.source === "editor") {
+            if (entry.overrideEntry) {
+                entry.overrideEntry = {
+                    ...entry.overrideEntry,
+                    weight,
+                    out_of: outOf,
+                    rarity: weight / outOf,
+                };
+            }
+        } else if (entry.source === "base" && Number.isInteger(entry.baseIndex)) {
+            const key = `${entry.field}:${entry.baseIndex}`;
+            const patch = entry.kind === "main" ? { weight } : { weight, out_of: outOf };
+            this.npcDropSetsFor(table.id).set(key, patch);
+        }
+        this.renderNpcDropEditor();
+    }
+
+    private removeNpcDropEntry(table: EditModeNpcDropTable, entry: EditModeNpcDropEntry): void {
+        if (entry.source === "base" && Number.isInteger(entry.baseIndex)) {
+            this.npcDropRemovedFor(table.id).set(`${entry.field}:${entry.baseIndex}`, {
+                field: entry.field,
+                index: entry.baseIndex!,
+            });
+        }
+        const entries = entry.field === "entries" ? table.entries : table.tertiary;
+        const index = entries.indexOf(entry);
+        if (index >= 0) entries.splice(index, 1);
+        this.renderNpcDropEditor();
+    }
+
+    private addNpcDropItem(
+        table: EditModeNpcDropTable,
+        itemId: number,
+        itemName: string,
+        field: EditModeNpcDropField,
+    ): void {
+        const entries = field === "entries" ? table.entries : table.tertiary;
+        if ([...table.entries, ...table.tertiary].some((entry) => entry.itemId === itemId)) {
+            this.toast(`${itemName} is already on this table; edit its rate instead`);
+            return;
+        }
+        const main = field === "entries";
+        const outOf = main ? (table.mainMaxRoll ?? 128) : 100;
+        const weight = main ? outOf / 100 : 1;
+        const overrideEntry = {
+            item_id: itemId,
+            name: itemName,
+            quantity: [1, 1],
+            weight,
+            out_of: outOf,
+            rarity: weight / outOf,
+            section: "Editor",
+        };
+        entries.push({
+            field,
+            itemId,
+            name: itemName,
+            quantity: [1, 1],
+            weight,
+            outOf,
+            kind: main ? "main" : "tertiary",
+            section: "Editor",
+            source: "editor",
+            overrideEntry,
+        });
+        this.renderNpcDropEditor();
+    }
+
+    private async saveNpcDropTable(): Promise<void> {
+        const npcId = this.npcDropNpcId;
+        const table = this.activeNpcDropTable();
+        if (npcId === undefined || !table) return;
+        const removed = [...(this.npcDropRemoved.get(table.id)?.values() ?? [])];
+        const sets = Object.fromEntries(this.npcDropSets.get(table.id) ?? []);
+        const addedEntries = table.entries
+            .filter((entry) => entry.source === "editor")
+            .map((entry) => entry.overrideEntry)
+            .filter((entry): entry is Record<string, unknown> => !!entry);
+        const addedTertiary = table.tertiary
+            .filter((entry) => entry.source === "editor")
+            .map((entry) => entry.overrideEntry)
+            .filter((entry): entry is Record<string, unknown> => !!entry);
+        this.npcDropLoading = true;
+        this.renderNpcDropEditor();
+        try {
+            const data = await this.plugin.saveNpcDrops(npcId, {
+                tableId: table.id,
+                removeEntries: removed,
+                setEntries: sets,
+                addedEntries,
+                addedTertiary,
+            });
+            this.npcDropData = data;
+            this.npcDropRemoved.delete(table.id);
+            this.npcDropSets.delete(table.id);
+            this.npcDropLoading = false;
+            this.toast(`Saved ${table.label} for ${data.name}`);
+            this.renderNpcDropEditor();
+        } catch (error) {
+            this.npcDropLoading = false;
+            this.npcDropError = error instanceof Error ? error.message : String(error);
+            this.renderNpcDropEditor();
+        }
+    }
+
+    private async revertNpcDrops(): Promise<void> {
+        const npcId = this.npcDropNpcId;
+        const table = this.activeNpcDropTable();
+        if (npcId === undefined || !table) return;
+        if (!window.confirm("Remove every drop-table override for this NPC and restore the Wiki tables?")) return;
+        this.npcDropLoading = true;
+        this.renderNpcDropEditor();
+        try {
+            const data = await this.plugin.saveNpcDrops(npcId, {
+                tableId: table.id,
+                removeEntries: [],
+                setEntries: {},
+                addedEntries: [],
+                addedTertiary: [],
+                resetAll: true,
+            });
+            this.npcDropData = data;
+            this.npcDropRemoved.clear();
+            this.npcDropSets.clear();
+            this.npcDropLoading = false;
+            this.toast(`Reverted ${data.name} to its default drop tables`);
+            this.renderNpcDropEditor();
+        } catch (error) {
+            this.npcDropLoading = false;
+            this.npcDropError = error instanceof Error ? error.message : String(error);
+            this.renderNpcDropEditor();
+        }
     }
 
     /**

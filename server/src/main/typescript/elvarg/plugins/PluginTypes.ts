@@ -1204,6 +1204,15 @@ export interface PluginApi {
     handler: (query: URLSearchParams, segments: string[]) => unknown
   ): void;
   /**
+   * Serves a development-only write resource at /api/<name> on the game port,
+   * next to registerContentEndpoint. The handler receives the raw JSON body and
+   * the HTTP method; anything player-specific belongs on the game socket.
+   */
+  registerContentWriter(
+    name: string,
+    handler: (query: URLSearchParams, segments: string[], body: string, method: string) => unknown
+  ): void;
+  /**
    * Defines an interface that does not exist in the cache. The definition is served at
    * /api/interfaces/<groupId>; the client fetches it the first time the interface is
    * opened, so opening one only needs the usual sub-interface packet.

@@ -1,4 +1,4 @@
-import { createServer } from "http";
+import { createServer, type IncomingMessage } from "http";
 import { WebSocketServer } from "ws";
 import { GameConstants } from "../game/GameConstants";
 import { World } from "../game/World";
@@ -224,6 +224,27 @@ export function isConfiguredDeveloperUsername(username: string): boolean {
     .some((developer) => developer.trim() !== "" && developer.trim().toLowerCase() === name);
 }
 
+/** A local editor's write request; the content API is not a general upload endpoint. */
+const MAX_CONTENT_WRITE_BYTES = 2 * 1024 * 1024;
+
+function readRequestBody(request: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    request.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_CONTENT_WRITE_BYTES) {
+        reject(new Error("content request body is too large"));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.on("error", reject);
+  });
+}
+
 export class NetworkBuilder {
   public initialize(port: number): WebSocketServer | undefined {
     const browserHost = process.env.BROWSER_HOST === "1";
@@ -232,6 +253,15 @@ export class NetworkBuilder {
       : undefined;
     const http = createServer((request, response) => {
       response.setHeader("Access-Control-Allow-Origin", "*");
+      response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
+      response.setHeader("Access-Control-Allow-Headers", "Content-Type, If-None-Match");
+      response.setHeader("Access-Control-Max-Age", "600");
+      if (request.method === "OPTIONS") {
+        // The map editor is served from the client dev port and saves to this one.
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
       if (browserHostBridge) {
         if (request.method === "GET" && request.url === "/") {
           response.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -240,19 +270,43 @@ export class NetworkBuilder {
         }
         if (browserHostBridge.handle(request, response)) return;
       }
-      const content = ContentApi.resolve(
-        request.method ?? "GET",
-        request.url ?? "",
-        request.headers["if-none-match"]
-      );
-      if (content) {
+      const sendContent = (content: ReturnType<typeof ContentApi.resolve>) => {
+        if (!content) return false;
         response.statusCode = content.status;
         for (const [header, value] of Object.entries(content.headers)) {
           response.setHeader(header, value);
         }
         response.end(content.body);
+        return true;
+      };
+      const method = request.method ?? "GET";
+      if (
+        method !== "GET" &&
+        method !== "HEAD" &&
+        (request.url ?? "").startsWith(ContentApi.PREFIX)
+      ) {
+        // Writer resources need the body before ContentApi can dispatch them.
+        readRequestBody(request)
+          .then((body) => {
+            if (sendContent(ContentApi.resolve(method, request.url ?? "", request.headers["if-none-match"], body))) {
+              return;
+            }
+            response.statusCode = 404;
+            response.end();
+          })
+          .catch((error) => {
+            console.error("[network] failed to read content request body", error);
+            response.statusCode = 413;
+            response.end();
+          });
         return;
       }
+      const content = ContentApi.resolve(
+        method,
+        request.url ?? "",
+        request.headers["if-none-match"]
+      );
+      if (sendContent(content)) return;
       const gatewayTarget = GatewayTarget.resolve(request.url ?? "", port);
       if (gatewayTarget) {
         response.setHeader("Content-Type", gatewayTarget.contentType);

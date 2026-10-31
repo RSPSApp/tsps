@@ -56,6 +56,18 @@ Verification for this import: TypeScript build and 26 focused integration tests 
 | `tables.<id>.addEntries` / `addTertiary` | entries added to a table | the Abyssal Sire's pet, the Abyssal orphan |
 | `tables.<id>.removeSections` | sections of a table left out of every roll | Yama's Contract section (what his contracts reward, not a normal kill) |
 | `subtables` | shared tables the dumper doesn't export | the uncommon seed table (Obor, Bryophyta) |
+| `tables.<id>.editorEntries` / `editorTertiary` | rows the map editor added | written by the editor only |
+| `tables.<id>.removeEntries` | dump rows the map editor removed, by `{ field, index }` | written by the editor only |
+| `tables.<id>.setEntries` | dump row rates the map editor changed, keyed `field:index` | written by the editor only |
+
+The last three are the map editor's own state. "Revert drops to default" in the editor clears them and leaves the hand-written keys above intact. The editor calls `reloaddrops`'s loader after a save, so a change applies without restarting the server.
+
+### Editing drops in the map editor
+
+Open `?edit`, click an NPC, and choose **Edit drop table**. The panel lists the NPC's main and tertiary rows with their effective rate. A rate is edited as "1 in N": a weighted main row gets `weight = mainMaxRoll / N`, and an independent row gets `weight = 1, out_of = N`. **Add item** searches the current cache, **x** removes the row, and **Save table** writes `server/data/definitions/npc-drop-overrides.json`. **Revert drops to default** removes every row the editor added or changed for that NPC.
+
+The endpoint is development-only: `GET /api/npc-drops/<npcId>` serves the view and `POST /api/npc-drops/<npcId>` saves it. Both are registered by `NpcDrops.plugin.js` only when `Server.PRODUCTION` is false.
+
 
 ## The 2026-10-07 refresh
 

@@ -12,6 +12,7 @@ const plugin = require("../plugins/skills/PrayerUnlocks.plugin");
 
 let loginHook = null;
 let prayerDisabledHook = null;
+const customEventHooks = new Map();
 const itemActions = new Map();
 let defaultAttributes = [];
 let prompt = null;
@@ -22,6 +23,7 @@ plugin.register({
   persistAttribute(key, value) { defaultAttributes.push([key, value]); },
   onPlayerLogin(handler) { loginHook = handler; },
   onPrayerDisabled(handler) { prayerDisabledHook = handler; },
+  onCustomEvent(name, handler) { customEventHooks.set(name, handler); },
   onItemAction(name, actions) { itemActions.set(name, actions); },
   emitCustomEvent(name, event) { if (name === "prayer:unlocks-bypass" && bypassHook) bypassHook(event); },
   sendMultiChatboxPrompt(player, title, ...pairs) {
@@ -53,6 +55,7 @@ function player({ attributes = {}, items = [] } = {}) {
       },
     }),
     getPacketSender: () => ({ sendVarbit: (id, value) => varbits.push([id, value]) }),
+    busy: () => false,
     sendMessage: (text) => messages.push(text),
   };
 }
@@ -136,6 +139,43 @@ test("the arcane and torn scrolls unlock Augury and Preserve", () => {
     assert.deepEqual(p.varbits, [[varbit, 1]], name);
     assert.notEqual(denied(prayer, p).disabled, true, name);
   }
+});
+
+test("the admin unlock event sets the attribute and syncs the varbit", () => {
+  const p = player();
+  customEventHooks.get("prayer:unlock")({ player: p, prayer: PrayerData.RIGOUR });
+  assert.equal(p.getAttribute("prayer:rigour-unlocked"), true);
+  assert.deepEqual(p.varbits, [[5451, 1]]);
+  assert.notEqual(denied("RIGOUR", p).disabled, true);
+});
+
+test("PvP mode answers the unlock bypass, so presets keep their prayers", () => {
+  const pvpMode = require("../plugins/modes/PvpMode.plugin");
+  let bypass = null;
+  pvpMode.register({
+    getTaskManager: () => ({}),
+    registerCommand() {},
+    onPlayerDefeated() {},
+    onCustomEvent(name, handler) { if (name === "prayer:unlocks-bypass") bypass = handler; },
+    persistAttribute() {},
+    registerCustomInterface() {},
+    onCanBankItem() {},
+    onInterfaceActionButton() {},
+  });
+  assert.ok(bypass, "PvP mode listens for prayer:unlocks-bypass");
+  const event = { player: player(), prayer: PrayerData.PIETY, bypass: false };
+  bypass(event);
+  assert.equal(event.bypass, true);
+});
+
+test("a scroll does not open its prompt while the player is busy", () => {
+  prompt = null;
+  const p = player({ items: [ItemIds.DEXTEROUS_PRAYER_SCROLL] });
+  p.busy = () => true;
+  assert.equal(itemActions.get("Dexterous prayer scroll").Read({ player: p, itemId: ItemIds.DEXTEROUS_PRAYER_SCROLL }), true);
+  assert.equal(prompt, null, "no prompt");
+  assert.deepEqual(p.messages, ["You cannot do that right now."]);
+  assert.deepEqual(p.inventory, [ItemIds.DEXTEROUS_PRAYER_SCROLL], "the scroll stays");
 });
 
 test("a learned scroll is not consumed again", () => {

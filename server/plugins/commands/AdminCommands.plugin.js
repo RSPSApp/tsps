@@ -45,12 +45,6 @@ const ATTACK_RANGE_DEBUG_GRAPHIC = new Graphic(332, 0);
 const MAX_NPC_COMMAND_SPAWNS = 20;
 const INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
 const INFINITE_RUN_ENERGY_ATTRIBUTE = "admin:infinite-run-energy";
-const PRESERVE_UNLOCKED_ATTRIBUTE = "prayer:preserve-unlocked";
-const RIGOUR_UNLOCKED_ATTRIBUTE = "prayer:rigour-unlocked";
-const AUGURY_UNLOCKED_ATTRIBUTE = "prayer:augury-unlocked";
-const PRESERVE_UNLOCKED_VARBIT = 5453;
-const RIGOUR_UNLOCKED_VARBIT = 5451;
-const AUGURY_UNLOCKED_VARBIT = 5452;
 const RUNE_IDS = [554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 9075, 21880, 28929];
 const FULL_RUN_ENERGY = 100;
 // Short forms ::setlevel takes that aren't the start of the skill's name (att, str, pray are).
@@ -1542,17 +1536,9 @@ module.exports = {
     }, PlayerRights.ADMINISTRATOR, "Clear your inventory");
 
     api.registerCommand("unlockprayers", ({ player, parts }) => {
-      const type = parseIntArg(parts[1]);
-      if (type === 0) {
-        player.setAttribute(PRESERVE_UNLOCKED_ATTRIBUTE, true);
-      } else if (type === 1) {
-        player.setAttribute(RIGOUR_UNLOCKED_ATTRIBUTE, true);
-      } else if (type === 2) {
-        player.setAttribute(AUGURY_UNLOCKED_ATTRIBUTE, true);
-      }
-      player.getPacketSender().sendVarbit(PRESERVE_UNLOCKED_VARBIT, player.getAttribute(PRESERVE_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
-      player.getPacketSender().sendVarbit(RIGOUR_UNLOCKED_VARBIT, player.getAttribute(RIGOUR_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
-      player.getPacketSender().sendVarbit(AUGURY_UNLOCKED_VARBIT, player.getAttribute(AUGURY_UNLOCKED_ATTRIBUTE) === true ? 1 : 0);
+      const { PrayerData } = api.core;
+      const prayer = [PrayerData.PRESERVE, PrayerData.RIGOUR, PrayerData.AUGURY][parseIntArg(parts[1])];
+      api.emitCustomEvent("prayer:unlock", { player, prayer });
       return true;
     }, PlayerRights.OWNER, "Unlock prayer");
 

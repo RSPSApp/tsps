@@ -25,11 +25,17 @@ const AUGURY_UNLOCKED_VARBIT = 5452;
 const KINGS_RANSOM_STAGE_ATTRIBUTE = "quest.kings_ransom.stage";
 const KINGS_RANSOM_COMPLETE_STAGE = 85;
 
+// OSRS Wiki transcripts: Transcript:Dexterous prayer scroll, Transcript:Arcane prayer scroll and
+// Transcript:Torn prayer scroll.
 const SCROLL_INTRO = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods! Would you like to absorb its power? "
   + "This will consume the scroll.";
 const ALREADY_LEARNED = "You can make out some faded words on the ancient parchment. "
   + "It appears to be an archaic invocation of the gods. However there's nothing more for you to learn.";
+
+// No OSRS Wiki source: these two are our own wording for a locked prayer.
+const PRAYER_LOCKED = "You have not unlocked that prayer.";
+const KINGS_RANSOM_LOCKED = "Complete King's Ransom to unlock";
 
 let api = null;
 let core = null;
@@ -76,14 +82,22 @@ function prayerRequirements(event) {
   if (bypass.bypass === true) return;
   if (knightPrayer) {
     if (kingsRansomComplete(player)) return;
-    event.message = `Complete King's Ransom to unlock ${prayer.getPrayerName()}.`;
+    event.message = `${KINGS_RANSOM_LOCKED} ${prayer.getPrayerName()}.`;
     event.disabled = true;
     return;
   }
   if (player.getAttribute(scroll.attribute) !== true) {
-    event.message = "You have not unlocked that prayer.";
+    event.message = PRAYER_LOCKED;
     event.disabled = true;
   }
+}
+
+/** Admin command: grant a scroll prayer without going through the scroll. */
+function unlockPrayer({ player, prayer }) {
+  const scroll = scrolls().find((candidate) => candidate.prayer === prayer);
+  if (!scroll) return;
+  player.setAttribute(scroll.attribute, true);
+  sendUnlock(player, scroll);
 }
 
 function learnScroll(player, scroll) {
@@ -98,6 +112,10 @@ function learnScroll(player, scroll) {
 function readScroll(event) {
   const scroll = scrollFor(event.itemId);
   if (!scroll) return false;
+  if (event.player.busy()) {
+    event.player.sendMessage("You cannot do that right now.");
+    return true;
+  }
   if (event.player.getAttribute(scroll.attribute) === true) {
     event.player.sendMessage(ALREADY_LEARNED);
     return true;
@@ -126,6 +144,7 @@ module.exports = {
     pluginApi.persistAttribute(AUGURY_UNLOCKED_ATTRIBUTE, false);
     pluginApi.onPlayerLogin(syncUnlocks);
     pluginApi.onPrayerDisabled(prayerRequirements);
+    pluginApi.onCustomEvent("prayer:unlock", unlockPrayer);
     for (const name of SCROLL_ITEM_NAMES) {
       pluginApi.onItemAction(name, { Read: readScroll });
     }
@@ -137,6 +156,7 @@ module.exports._test = {
   readScroll,
   learnScroll,
   syncUnlocks,
+  unlockPrayer,
   kingsRansomComplete,
   scrolls,
 };

@@ -87,6 +87,7 @@ function mockApi() {
     npcHitModify: [],
     combatHitRoll: [],
     canBankItem: [],
+    canEquip: [],
   };
   const noop = () => {};
   const base = {
@@ -114,6 +115,8 @@ function mockApi() {
     onNpcHitModify: (h) => handlers.npcHitModify.push(h),
     onCombatHitRoll: h => handlers.combatHitRoll.push(h),
     onCanBankItem: h => handlers.canBankItem.push(h),
+    onCanEquip: h => handlers.canEquip.push(h),
+    getPluginConfig: (_key, fallback) => fallback,
     onItemOnItem: (h) => handlers.itemOnItem.push(h),
     onItemOnNpc: (h) => handlers.itemOnNpc.push(h),
     onItemOnObject: (...args) => handlers.itemOnObject.push(typeof args[0] === 'function' ? args[0] : args[2]),
@@ -146,11 +149,23 @@ function mockApi() {
   return { api, handlers };
 }
 
-test('Quests.plugin registers every quest through api.core without throwing', () => {
-  const { api } = mockApi();
+test('Quests.plugin registers every quest and enforces equipment requirements by default', () => {
+  const { api, handlers } = mockApi();
   const plugin = require('../plugins/quests/Quests.plugin');
   assert.equal(plugin.name, 'Quests');
   assert.doesNotThrow(() => plugin.register(api));
+  const messages = [];
+  const event = {
+    player: { getAttribute: () => undefined, sendMessage: message => messages.push(message) },
+    item: { getId: () => api.core.ItemIdentifiers.RUNE_PLATEBODY },
+    allow: null,
+  };
+  for (const handler of handlers.canEquip) handler(event);
+  assert.equal(event.allow, false);
+  assert.deepEqual(messages, [
+    'You have not earned the right to wear this yet.',
+    'You need to complete the Dragon Slayer I quest first.',
+  ]);
 });
 
 test('Lost City only warns about low combat when a starting skill is also missing', () => {

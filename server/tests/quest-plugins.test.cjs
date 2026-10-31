@@ -21968,6 +21968,9 @@ test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through
   const items = new Map();
   const varbits = new Map();
   const messages = [];
+  const animations = [];
+  const headbars = [];
+  let experience = 0;
   const sender = new Proxy({ sendVarbit: (id, value) => varbits.set(id, value) }, {
     get: (target, key) => key in target ? target[key] : key === 'getVarbit' ? () => 0 : () => sender,
   });
@@ -22002,9 +22005,16 @@ test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through
     getInventory: () => inventory,
     getPacketSender: () => sender,
     getDialogueManager: () => ({ startDialogues: () => {} }),
-    getSkillManager: () => ({ getExperience: () => 0, addExperience: () => {} }),
+    getSkillManager: () => ({
+      getExperience: () => experience,
+      addExperience: (_skill, amount) => { experience += amount; },
+    }),
     sendMessage: (message) => messages.push(message),
     isRegistered: () => false,
+  };
+  const target = {
+    performAnimation: (animation) => animations.push(animation?.getId?.() ?? animation?.id),
+    showHeadbar: (id, options) => headbars.push([id, options.fill]),
   };
 
   // Purple sweets are edible, but not the fish/meat/vegetables Aimeri accepts.
@@ -22019,12 +22029,17 @@ test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through
 
   for (let fed = 1; fed <= 5; fed++) {
     items.set(ids.COOKED_MEAT, 1);
-    const event = { player, npcId: npcs.BROTHER_AIMERI, itemId: ids.COOKED_MEAT, slot: -1, handled: false };
+    const event = {
+      player, target, npcId: npcs.BROTHER_AIMERI, itemId: ids.COOKED_MEAT, slot: -1, handled: false,
+    };
     handlers.itemOnNpc[0](event);
     assert.equal(event.handled, true);
     assert.equal(attributes.get('in-search-of-knowledge:aimeri-fed'), fed);
     assert.equal(varbits.get(8393), fed);
+    assert.equal(animations.at(-1), 829, 'Aimeri plays human_eat');
+    assert.deepEqual(headbars.at(-1), [0, fed * 6], 'the 30-wide headbar gains 6 per feed');
   }
+  assert.equal(headbars.at(-1)[1], 30);
 
   handlers.custom.get('npc-dialogue:line')[0]({
     player, npcId: npcs.BROTHER_AIMERI_2, text: "I'll keep my eyes open.",
@@ -22051,21 +22066,74 @@ test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through
   assert.equal(varbits.get(8399), 1);
   assert.equal(items.get(ids.TATTERED_SUN_PAGE), undefined);
 
+  const check = { player, itemId: ids.TOME_OF_THE_SUN, handled: false };
+  handlers.namedItemActions.get('Tome of the Sun').Check(check);
+  assert.equal(messages.at(-1), 'There are 3 pages missing.');
+
   attributes.set('in-search-of-knowledge:pages', { sun: 4, moon: 4, temple: 4 });
+  handlers.namedItemActions.get('Tome of the Sun').Check(check);
+  assert.equal(messages.at(-1), 'There are 0 pages missing. Perhaps Logosia would be interested in this?');
   items.set(ids.TOME_OF_THE_SUN, 1);
   items.set(ids.TOME_OF_THE_MOON, 1);
   items.set(ids.TOME_OF_THE_TEMPLE, 1);
   const handIn = { player, npcId: npcs.LOGOSIA, itemId: ids.TOME_OF_THE_SUN, slot: -1, handled: false };
   handlers.itemOnNpc[1](handIn);
   assert.equal(handIn.handled, true);
+  const action = (stepId) => {
+    const event = { player, npcId: npcs.LOGOSIA, stepId, kind: 'message', text: '', handled: false };
+    handlers.custom.get('npc-dialogue:action')[0](event);
+    return event;
+  };
+  const condition = (stepId, text) => handlers.condition.at(-1)({ player, npcId: npcs.LOGOSIA, stepId, text });
+
+  const show = action('5vCu67');
+  assert.deepEqual(show.box.items, [ids.TOME_OF_THE_SUN], 'the used tome is shown in its objectbox');
+  assert.equal(items.get(ids.TOME_OF_THE_SUN), 1, 'the tome leaves only after the box is continued');
+  assert.equal(condition('PtKwvk', 'If the player has not handed in all three tomes:'), true);
+  assert.equal(items.get(ids.TOME_OF_THE_SUN), undefined);
+
+  const two = action('6L2i6E');
+  assert.deepEqual(two.box.items, [ids.TOME_OF_THE_MOON, ids.TOME_OF_THE_TEMPLE]);
+  const again = {
+    player, npcId: npcs.LOGOSIA, text: 'Again, your donation to the library is appreciated', skip: false,
+  };
+  handlers.custom.get('npc-dialogue:line')[0](again);
+  assert.equal(again.skip, true, 'the extra transcript line is skipped');
+  assert.equal(attributes.get('quest.in_search_of_knowledge.stage'), 2);
+  assert.deepEqual(attributes.get('in-search-of-knowledge:tomes-returned'), { sun: 1, moon: 1, temple: 1 });
+  assert.equal(condition('phoFZJ', 'If the player has not handed in all three tomes.'), false);
+  assert.equal(condition('jgDFoB', 'If the player has handed in all three tomes.'), true);
+
+  const lamp = action('z_El-S');
+  assert.deepEqual(lamp.box.items, [ids.LAMP_OF_KNOWLEDGE]);
   assert.equal(attributes.get('quest.in_search_of_knowledge.stage'), 3);
   assert.equal(items.get(ids.LAMP_OF_KNOWLEDGE), 1);
-  assert.deepEqual(attributes.get('in-search-of-knowledge:tomes-returned'), { sun: 1, moon: 1, temple: 1 });
 
   attributes.set('in-search-of-knowledge:page-prevention', 1);
   const drops = { player, drops: [{ itemId: ids.TATTERED_SUN_PAGE }, { itemId: ids.COINS }] };
   handlers.custom.get('npc-drops:roll')[0](drops);
   assert.deepEqual(drops.drops.map((drop) => drop.itemId), [ids.COINS]);
+
+  // Forthos keeps one page, converted to the kind the player has fewest of.
+  attributes.set('in-search-of-knowledge:page-prevention', 0);
+  attributes.set('in-search-of-knowledge:pages', { sun: 4, moon: 1, temple: 3 });
+  const at = (x, y) => ({ getLocation: () => ({ getX: () => x, getY: () => y, getZ: () => 0 }) });
+  const inside = {
+    player, npc: at(1800, 9900),
+    drops: [
+      { itemId: ids.TATTERED_SUN_PAGE, amount: 1 },
+      { itemId: ids.TATTERED_TEMPLE_PAGE, amount: 1 },
+      { itemId: ids.COINS, amount: 100 },
+    ],
+  };
+  handlers.custom.get('npc-drops:roll')[0](inside);
+  assert.deepEqual(inside.drops.map((drop) => drop.itemId), [ids.TATTERED_MOON_PAGE, ids.COINS]);
+  const outside = {
+    player, npc: at(3000, 3500),
+    drops: [{ itemId: ids.TATTERED_SUN_PAGE, amount: 1 }, { itemId: ids.COINS, amount: 100 }],
+  };
+  handlers.custom.get('npc-drops:roll')[0](outside);
+  assert.deepEqual(outside.drops.map((drop) => drop.itemId), [ids.COINS]);
 
   // A full coin stack cannot pay for pages: keep the pages instead of clamping the payout.
   items.set(ids.COINS, 2147483647);
@@ -22090,6 +22158,11 @@ test('In Search of Knowledge feeds Aimeri, fills the tomes and completes through
   handlers.namedItemActions.get('Lamp of knowledge').Rub(rub);
   assert.equal(rub.handled, true);
   assert.equal(rewardRequest.minLevel, 40);
+  assert.equal(
+    rewardRequest.onConfirm(api.core.Skill.CONSTRUCTION, 'Construction'),
+    '<col=0000ff>Your wish has been granted!</col> You have been awarded 10,000 Construction experience!',
+  );
+  assert.equal(experience, 10000);
 
   handlers.custom.get('npc-dialogue:action')[0]({ player, npcId: npcs.LOGOSIA, stepId: 'WQyrhA' });
   assert.equal(attributes.get('in-search-of-knowledge:page-prevention'), 1);

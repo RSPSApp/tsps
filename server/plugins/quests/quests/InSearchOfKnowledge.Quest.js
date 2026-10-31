@@ -17,11 +17,17 @@
  * The varbits are mirrored from saved attributes so page/tome/fed progress survives a
  * relog (PacketSender's varp map is per session); the quest stage itself is persisted by
  * registerQuest. Behaviour follows the OSRS Wiki and Quick guide; the wording is from
- * Transcript:In Search of Knowledge and Transcript:Brother Aimeri.
+ * Transcript:In Search of Knowledge and Transcript:Brother Aimeri, checked against
+ * rsprox recording 1702 (rev 226).
+ *
+ * Not built: the tomes' Read option. Check and the page counters are implemented; the
+ * Wiki tome text is not. The food filter is ours: the Wiki asks for cooked fish, meat or
+ * vegetables, while the capture only exercises manta rays. The runtime's completion chat
+ * line and the miniquest counter (14162) belong in QuestRuntime, a separate change.
  */
 module.exports = function registerInSearchOfKnowledgeQuest(api) {
   const {
-    DialogueChainBuilder, ItemStatementDialogue, NpcDialogue, PlayerDialogue,
+    Animation, DialogueChainBuilder, NpcDialogue,
     ItemIdentifiers: Items, NpcIdentifiers: Npcs, ObjectIdentifiers: Objects,
   } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
@@ -72,6 +78,29 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
   const PAGE_VALUE = 1_000;
   const MAX_STACK_AMOUNT = 0x7fffffff;
 
+  const EAT_ANIMATION = 829; // human_eat
+  /** Captured: Aimeri's bar gains 6 of its 30-wide default headbar per feed. */
+  const FEED_HEADBAR = 0;
+  const FEED_HEADBAR_WIDTH = 30;
+  const FEED_HEADBAR_STEP = 6;
+  /** The Forthos Dungeon zone from the Quest Helper route (surface reds are outside it). */
+  const FORTHOS_BOUNDS = Object.freeze({ minX: 1792, maxX: 1856, minY: 9880, maxY: 9983, z: 0 });
+
+  /** Logosia's generated using-a-forthos-tome-on-logosia conditions and messages. */
+  const HANDIN_CONDITION_NOT_ALL = "PtKwvk";
+  const HANDIN_CONDITION_ONE_OTHER = "zmZYKl";
+  const HANDIN_CONDITION_TWO_OTHER = "CLmQgd";
+  const HANDIN_CONDITION_STILL_NOT_ALL = "phoFZJ";
+  const HANDIN_CONDITION_ALL = "jgDFoB";
+  const HANDIN_MESSAGE_SHOW = "5vCu67";
+  const HANDIN_MESSAGE_ONE = "tSjXLd";
+  const HANDIN_MESSAGE_TWO = "6L2i6E";
+  const HANDIN_MESSAGE_LAMP = "z_El-S";
+  const HANDIN_CONDITIONS = new Set([
+    HANDIN_CONDITION_NOT_ALL, HANDIN_CONDITION_ONE_OTHER, HANDIN_CONDITION_TWO_OTHER,
+    HANDIN_CONDITION_STILL_NOT_ALL, HANDIN_CONDITION_ALL,
+  ]);
+
   /**
    * Aimeri accepts cooked fish, meat and vegetables (Wiki). The cache only exposes
    * an Eat action, so classify by the item name: sweets, cakes, bread, fruit and
@@ -118,12 +147,19 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
 
   /** The tome whose "showing" transcript is playing, for its page-count condition. */
   const shownTome = new WeakMap();
+  /** Logosia's hand-in in progress: used tome and the boxes waiting to be continued. */
+  const pendingHandIn = new WeakMap();
 
   let quest;
 
   const isAimeri = (npcId) => npcId === AIMERI_INJURED || npcId === AIMERI_HEALED;
   const inventory = (player) => player.getInventory();
   const held = (player, itemId) => inventory(player).getAmount(itemId) > 0;
+  const banked = (player, itemId) => {
+    const banks = player.getBanks?.() ?? (player.getBank ? [player.getBank()] : []);
+    return banks.some((bank) => Number(bank?.getAmount?.(itemId) ?? 0) > 0);
+  };
+  const owns = (player, itemId) => held(player, itemId) || banked(player, itemId);
 
   function numberAttribute(player, key) {
     const value = Number(player.getAttribute(key));
@@ -223,7 +259,45 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
       || VEGETABLE_FOOD_NAME.test(name);
   }
 
-  function answerCondition({ npcId, player, text }) {
+  /** Completed, unreturned tomes still carried: what Logosia's hand-in can add to this one. */
+  function otherCompletedTomes(player) {
+    const pages = pagesOf(player);
+    const returned = returnedOf(player);
+    return TOMES.filter((entry) => pages[entry.kind] >= PAGES_REQUIRED
+      && returned[entry.kind] !== 1 && held(player, entry.tome));
+  }
+
+  function handInTome(player, entry) {
+    if (!entry || returnedOf(player)[entry.kind] === 1) return false;
+    if (!inventory(player).deleteNumber(entry.tome, 1)) return false;
+    markReturned(player, entry);
+    return true;
+  }
+
+  /**
+   * The capture hands a tome over when the player continues past its objectbox, not when
+   * the box appears. Conditions are resolved after that continue, so settle there.
+   */
+  function settlePendingHandIn(player) {
+    const pending = pendingHandIn.get(player);
+    if (!pending) return;
+    if (pending.usedTome) {
+      handInTome(player, pending.usedTome);
+      pending.usedTome = null;
+    }
+    if (pending.singleOther) {
+      handInTome(player, pending.singleOther);
+      pending.singleOther = null;
+      if (quest.getStage(player) < STAGE_HANDED_IN) quest.setStage(player, STAGE_HANDED_IN);
+    }
+    if (pending.multiOthers?.length) {
+      for (const entry of pending.multiOthers) handInTome(player, entry);
+      pending.multiOthers = null;
+      if (quest.getStage(player) < STAGE_HANDED_IN) quest.setStage(player, STAGE_HANDED_IN);
+    }
+  }
+
+  function answerCondition({ npcId, player, text, stepId }) {
     const lower = String(text ?? "").toLowerCase();
     if (isAimeri(npcId)) {
       if (lower.includes("if the player has food in inventory")) return hasFood(player);
@@ -243,6 +317,16 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
       return null;
     }
     if (npcId === LOGOSIA) {
+      if (HANDIN_CONDITIONS.has(stepId)) {
+        settlePendingHandIn(player);
+        const returned = returnedCount(player);
+        if (stepId === HANDIN_CONDITION_NOT_ALL || stepId === HANDIN_CONDITION_STILL_NOT_ALL) {
+          return returned < TOMES.length;
+        }
+        if (stepId === HANDIN_CONDITION_ONE_OTHER) return otherCompletedTomes(player).length === 1;
+        if (stepId === HANDIN_CONDITION_TWO_OTHER) return otherCompletedTomes(player).length === 2;
+        if (stepId === HANDIN_CONDITION_ALL) return returned >= TOMES.length;
+      }
       if (lower.includes("if the player is currently looking for more tome pages")) {
         return preventionOf(player) === 0;
       }
@@ -254,24 +338,84 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
     return null;
   }
 
+  /**
+   * The generated two-other branch ends in a "jump below" whose target the dump lost;
+   * the runtime resolves it to end, which skips Logosia's reward. Strip the jumps and let
+   * the sibling conditions run in order. The extra "Again..." line is not in the capture,
+   * so settle the other tomes there and skip it.
+   */
+  function stripHandInJumps(steps) {
+    return (steps ?? [])
+      .filter((step) => step?.type !== "jump")
+      .map((step) => (Array.isArray(step?.steps) ? { ...step, steps: stripHandInJumps(step.steps) } : step));
+  }
+
   function handleLine(event) {
-    if (!isAimeri(event.npcId) || event.text !== "I'll keep my eyes open.") return;
-    const { player } = event;
-    if (quest.getStage(player) !== 0 || fedOf(player) < AIMERI_FED) return;
-    quest.setStage(player, STAGE_STARTED);
-    player.sendMessage("You've started a new miniquest: <col=081190>In Search of Knowledge</col>");
+    if (isAimeri(event.npcId)) {
+      if (event.text !== "I'll keep my eyes open.") return;
+      const { player } = event;
+      if (quest.getStage(player) !== 0 || fedOf(player) < AIMERI_FED) return;
+      quest.setStage(player, STAGE_STARTED);
+      return;
+    }
+    if (event.npcId === LOGOSIA && event.text === "Again, your donation to the library is appreciated") {
+      const pending = pendingHandIn.get(event.player);
+      if (pending?.multiOthers?.length) {
+        settlePendingHandIn(event.player);
+        event.skip = true;
+      }
+    }
   }
 
   function handleAction(event) {
     if (event.npcId !== LOGOSIA || !event.player) return;
-    const { player } = event;
+    const { player, stepId } = event;
+    const pending = pendingHandIn.get(player);
+
+    if (pending) {
+      if (stepId === HANDIN_MESSAGE_SHOW) {
+        event.box = { items: [pending.usedTome.tome] };
+        event.handled = true;
+        return;
+      }
+      if (stepId === HANDIN_MESSAGE_ONE) {
+        const other = otherCompletedTomes(player)[0];
+        if (other) {
+          pending.singleOther = other;
+          event.box = { items: [other.tome] };
+          event.handled = true;
+        }
+        return;
+      }
+      if (stepId === HANDIN_MESSAGE_TWO) {
+        const others = otherCompletedTomes(player).slice(0, 2);
+        if (others.length === 2) {
+          pending.multiOthers = others;
+          event.box = { items: [others[0].tome, others[1].tome] };
+          event.handled = true;
+        }
+        return;
+      }
+      if (stepId === HANDIN_MESSAGE_LAMP) {
+        if (returnedCount(player) >= TOMES.length && !quest.isComplete(player)) {
+          if (quest.getStage(player) < STAGE_HANDED_IN) quest.setStage(player, STAGE_HANDED_IN);
+          // Live has no completion jingle or scroll for this miniquest.
+          quest.complete(player, { scroll: false });
+        }
+        event.box = { items: [LAMP_OF_KNOWLEDGE] };
+        event.handled = true;
+        pendingHandIn.delete(player);
+        return;
+      }
+    }
+
     // WQyrhA is the "no longer receive pages" message inside the stop choice; XWXpa4
     // the "now receive pages" message inside the start choice.
-    if (event.stepId === "WQyrhA") {
+    if (stepId === "WQyrhA") {
       setPrevention(player, 1);
       return;
     }
-    if (event.stepId === "XWXpa4") setPrevention(player, 0);
+    if (stepId === "XWXpa4") setPrevention(player, 0);
   }
 
   // ==========================================================================
@@ -284,7 +428,7 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
     );
   }
 
-  function feedAimeri(player, itemId, slot) {
+  function feedAimeri(player, itemId, slot, npc) {
     const fed = fedOf(player);
     if (fed >= AIMERI_FED) {
       say(player, AIMERI_HEALED, "No thanks, I'm not hungry anymore.");
@@ -295,8 +439,15 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
     else inv.deleteNumber(itemId, 1);
     const next = fed + 1;
     setFed(player, next);
-    player.sendMessage("You give Brother Aimeri some food.");
-    if (next >= AIMERI_FED) player.sendMessage("Brother Aimeri looks much better now.");
+    // Captured: Aimeri eats, his 30-wide headbar gains 6, and there is no chat line.
+    npc?.performAnimation?.(new Animation(EAT_ANIMATION));
+    npc?.showHeadbar?.(FEED_HEADBAR, {
+      fill: Math.min(FEED_HEADBAR_WIDTH, next * FEED_HEADBAR_STEP),
+      endFill: Math.min(FEED_HEADBAR_WIDTH, next * FEED_HEADBAR_STEP),
+    });
+    if (next >= AIMERI_FED) {
+      say(player, AIMERI_HEALED, "Thanks for helping me. Is there anything you'd like to know about this temple? If you find anything in here, show it to me and I'll tell you what I know about it.");
+    }
   }
 
   function useItemOnAimeri(event) {
@@ -306,7 +457,7 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
     const healed = event.npcId === AIMERI_HEALED || fedOf(player) >= AIMERI_FED;
     if (!healed) {
       if (isAimeriFood(itemId)) {
-        feedAimeri(player, itemId, event.slot);
+        feedAimeri(player, itemId, event.slot, event.target);
         return;
       }
       say(player, AIMERI_INJURED, "No thanks. I would rather eat fish, meat or vegetables.");
@@ -341,7 +492,11 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
     const entry = SHELF_BY_ID.get(objectId);
     if (!entry) return;
     event.handled = true;
-    if (held(player, entry.tome)) {
+    if (returnedOf(player)[entry.kind] === 1) {
+      player.sendMessage("Logosia already has that tome.");
+      return;
+    }
+    if (owns(player, entry.tome)) {
       player.sendMessage("You already have that tome.");
       return;
     }
@@ -382,17 +537,26 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
     const entry = TOME_BY_ID.get(event.itemId);
     if (!entry) return;
     event.handled = true;
-    const count = pagesOf(event.player)[entry.kind];
-    event.player.sendMessage(count >= PAGES_REQUIRED
-      ? `The ${entry.name} is complete.`
-      : `The ${entry.name} is missing ${PAGES_REQUIRED - count} page${PAGES_REQUIRED - count === 1 ? "" : "s"}.`);
+    const missing = PAGES_REQUIRED - pagesOf(event.player)[entry.kind];
+    if (missing === 0) {
+      event.player.sendMessage("There are 0 pages missing. Perhaps Logosia would be interested in this?");
+    } else if (missing === 1) {
+      event.player.sendMessage("There is 1 page missing.");
+    } else {
+      event.player.sendMessage(`There are ${missing} pages missing.`);
+    }
   }
 
   // ==========================================================================
   // Logosia: the tome hand-in and spare-page trade
   // ==========================================================================
 
-  function handInTomes(player, usedTomeId) {
+  /**
+   * The item-on-NPC entry point: play the generated hand-in variant and answer its
+   * conditions from the inventory/returned varbits. The capture's objectboxes are set on
+   * the variant's message steps in handleAction.
+   */
+  function startHandIn(player, usedTomeId, npc) {
     if (quest.isComplete(player)) {
       player.sendMessage("Logosia already has the tomes.");
       return;
@@ -403,52 +567,21 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
     }
     const used = TOME_BY_ID.get(usedTomeId);
     if (!used) return;
-    const pages = pagesOf(player);
-    if (pages[used.kind] < PAGES_REQUIRED) {
+    if (pagesOf(player)[used.kind] < PAGES_REQUIRED) {
       player.sendMessage(`The ${used.name} is missing pages. You should find them before showing it to Logosia.`);
       return;
     }
-    const returned = returnedOf(player);
-    const handIns = TOMES.filter((entry) =>
-      returned[entry.kind] !== 1 && pages[entry.kind] >= PAGES_REQUIRED && held(player, entry.tome));
-    if (handIns.length === 0) {
+    if (!held(player, used.tome) || returnedOf(player)[used.kind] === 1) {
       player.sendMessage("Logosia already has that tome.");
       return;
     }
-
-    player.sendMessage("You show Logosia the tome.");
-    for (const entry of handIns) {
-      inventory(player).deleteNumber(entry.tome, 1);
-      markReturned(player, entry);
+    pendingHandIn.set(player, { usedTome: used, singleOther: null, multiOthers: null });
+    const played = startTranscript(api, player, LOGOSIA, LOGOSIA_PAGE,
+      "using-a-forthos-tome-on-logosia", stripHandInJumps, npc);
+    if (!played) {
+      pendingHandIn.delete(player);
+      player.sendMessage("Logosia is not interested in that tome.");
     }
-    player.sendMessage(handIns.length > 1
-      ? "You hand Logosia the tomes."
-      : "You hand Logosia the tome.");
-
-    if (returnedCount(player) >= TOMES.length) {
-      quest.setStage(player, STAGE_HANDED_IN);
-      quest.complete(player);
-      showRewardDialogue(player);
-      return;
-    }
-
-    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-      new NpcDialogue(0, LOGOSIA, "I have not seen this before. Your donation to the library is appreciated.")
-    ));
-  }
-
-  function showRewardDialogue(player) {
-    const builder = new DialogueChainBuilder();
-    let index = 0;
-    builder.add(new NpcDialogue(index++, LOGOSIA,
-      "Your contributions to the library have been noticed. We would like to reward you for your assistance."));
-    builder.add(new ItemStatementDialogue(index++, LAMP_OF_KNOWLEDGE,
-      "You receive an experience lamp as a reward."));
-    builder.add(new NpcDialogue(index++, LOGOSIA,
-      "If you find any spare pages for these books I would be willing to give you 1,000 gold for each one. Duplicate sources of information are always useful."));
-    builder.add(new PlayerDialogue(index++, "I'll keep an eye out."));
-    builder.add(new NpcDialogue(index++, LOGOSIA, "Enough talk now, Shhhh!"));
-    player.getDialogueManager().startDialogues(builder);
   }
 
   function sellPages(player, itemId) {
@@ -476,7 +609,7 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
     if (event.npcId !== LOGOSIA) return;
     if (TOME_BY_ID.has(itemId)) {
       event.handled = true;
-      handInTomes(player, itemId);
+      startHandIn(player, itemId, event.target);
       return;
     }
     if (PAGE_IDS.has(itemId) && quest.isComplete(player)) {
@@ -508,7 +641,7 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
         const slot = player.getInventory().getSlotForItemId?.(itemId) ?? -1;
         if (slot >= 0) player.getInventory().deleteAtSlot(slot, 1);
         else player.getInventory().deleteNumber(itemId, 1);
-        return `You rub the lamp and feel more knowledgeable. You have been awarded ${LAMP_XP.toLocaleString("en-US")} ${name} XP!`;
+        return `<col=0000ff>Your wish has been granted!</col> You have been awarded ${LAMP_XP.toLocaleString("en-GB")} ${name} experience!`;
       },
     });
     return true;
@@ -518,10 +651,53 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
   // Page drops after asking Logosia to stop them
   // ==========================================================================
 
+  function inForthos(npc) {
+    const at = npc?.getLocation?.();
+    if (!at) return false;
+    const x = at.getX?.() ?? at.x;
+    const y = at.getY?.() ?? at.y;
+    const z = at.getZ?.() ?? at.z ?? 0;
+    return z === FORTHOS_BOUNDS.z
+      && x >= FORTHOS_BOUNDS.minX && x <= FORTHOS_BOUNDS.maxX
+      && y >= FORTHOS_BOUNDS.minY && y <= FORTHOS_BOUNDS.maxY;
+  }
+
+  function fewestPageEntry(player) {
+    const pages = pagesOf(player);
+    let best = TOMES[0];
+    for (const entry of TOMES) {
+      if (pages[entry.kind] < pages[best.kind]) best = entry;
+    }
+    return best;
+  }
+
+  /**
+   * The imported tables roll the three pages independently and on surface red dragons.
+   * The Wiki restricts them to Forthos kills, one page per kill, of the kind the player
+   * has fewest of. The per-NPC rates remain the dumper's concern.
+   */
   function filterPageDrops(event) {
-    if (!event?.player || preventionOf(event.player) !== 1 || !Array.isArray(event.drops)) return;
+    if (!event?.player || !Array.isArray(event.drops)) return;
+    const pageDrops = event.drops.filter((drop) => PAGE_IDS.has(drop?.itemId));
+    if (pageDrops.length === 0) return;
+    if (preventionOf(event.player) === 1 || !inForthos(event.npc)) {
+      for (let index = event.drops.length - 1; index >= 0; index--) {
+        if (PAGE_IDS.has(event.drops[index]?.itemId)) event.drops.splice(index, 1);
+      }
+      return;
+    }
+    const keep = pageDrops[0];
+    const target = fewestPageEntry(event.player);
+    keep.itemId = target.page;
+    keep.amount = 1;
+    let kept = false;
     for (let index = event.drops.length - 1; index >= 0; index--) {
-      if (PAGE_IDS.has(event.drops[index]?.itemId)) event.drops.splice(index, 1);
+      if (!PAGE_IDS.has(event.drops[index]?.itemId)) continue;
+      if (!kept && event.drops[index] === keep) {
+        kept = true;
+        continue;
+      }
+      event.drops.splice(index, 1);
     }
   }
 
@@ -547,12 +723,8 @@ module.exports = function registerInSearchOfKnowledgeQuest(api) {
       ];
     }
     const lines = [];
-    if (fedOf(player) < AIMERI_FED) {
-      lines.push("I should feed <col=800000>Brother Aimeri</col> five pieces of",
-        "cooked fish, meat or vegetables.");
-    }
     const pages = pagesOf(player);
-    if (TOMES.some((entry) => !held(player, entry.tome) && returnedOf(player)[entry.kind] !== 1)) {
+    if (TOMES.some((entry) => !owns(player, entry.tome) && returnedOf(player)[entry.kind] !== 1)) {
       lines.push("I should search the <col=800000>musty bookshelves</col> in the",
         "temple library for the three tomes.");
     }

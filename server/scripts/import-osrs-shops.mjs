@@ -29,7 +29,6 @@ const shopsFile = path.join(repoRoot, "server", "data", "definitions", "shops.js
 // Shops whose wiki currency is a bare "Points" and so needs a concrete key.
 const CURRENCY_OVERRIDES = {
   "Slayer Rewards": "SLAYER_POINTS",
-  "Bounty Hunter Shop (historical)": "BOUNTY HUNTER POINTS",
   "Bounty Hunter Store": "BOUNTY HUNTER POINTS",
   "Justine's stuff for the Last Shopper Standing": "LAST MAN STANDING POINTS",
   "Mahogany Homes Reward Shop": "MAHOGANY HOMES POINTS",
@@ -239,7 +238,9 @@ function main() {
   const rebuilt = [];
   const unmappedCurrencies = new Set();
   for (const [name, record] of Object.entries(byShop)) {
-    if (EXCLUDED.has(name) || REPLACED_BY_PLUGIN[name]) continue;
+    // Shops gone from the game stay in the dump (shop_info.removed) but must not
+    // be bound: they would take the Trade of the live shop on the same NPC.
+    if (EXCLUDED.has(name) || REPLACED_BY_PLUGIN[name] || record.shop_info?.removed) continue;
     const currency = currencyFor(name, record.shop_info);
     if (!CURRENCY_OVERRIDES[name] && currency === "POINTS") unmappedCurrencies.add(name);
     const id = idByName.has(name) ? idByName.get(name) : nextId++;
@@ -253,7 +254,8 @@ function main() {
     });
   }
 
-  // Keep core/legacy shops that the osrsreboxed dump does not describe.
+  // Keep core/legacy shops that the osrsreboxed dump does not describe. A dump
+  // shop skipped above is described, so its old entry is dropped, not kept.
   for (const shop of existing) {
     if (!byShop[shop.name]) rebuilt.push(shop);
   }

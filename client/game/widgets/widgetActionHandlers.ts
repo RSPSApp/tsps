@@ -20,6 +20,7 @@ import { isWidgetUseTarget } from "../../widgets/WidgetFlags";
 import { ClientState } from "../ClientState";
 import { createSelectedSpellOnWidgetPacket } from "../selectedSpellPackets";
 import type { WidgetActionEvent } from "./widgetActionPayload";
+import { spellWidgetChildSlot } from "./SpellSelectionController";
 
 /** bankside: the inventory panel shown beside the open bank. */
 const BANK_SIDE_GROUP = 15;
@@ -319,7 +320,7 @@ export function handleWidgetActionTargeting(
         const spellSelection = deps.resolveSpellSelectionFromWidget(
             event.widget,
             event.widget.uid,
-            childId,
+            spellWidgetChildSlot(event.widget),
             event.itemId ?? -1,
         );
 

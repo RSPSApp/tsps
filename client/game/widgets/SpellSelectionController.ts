@@ -18,6 +18,14 @@ export type SpellSelectionControllerDeps = {
     ) => void;
 };
 
+/**
+ * The child slot a selected spell widget sits in: its index under a dynamic parent, -1 for a
+ * static component, as the menu's target entry passes it. A component id is not a slot.
+ */
+export function spellWidgetChildSlot(widget: any): number {
+    return typeof widget?.childIndex === "number" ? widget.childIndex | 0 : -1;
+}
+
 /** Spell targeting selection state and onTargetEnter/Leave dispatch. */
 export class SpellSelectionController {
     constructor(private readonly deps: SpellSelectionControllerDeps) {}

@@ -23,6 +23,10 @@ export type ClickTarget = {
     // (same coordinate space as the GL renderer canvas), and optionally the target id.
     onClick?: (x?: number, y?: number, targetId?: string) => void;
     onMiddleClick?: (x?: number, y?: number, targetId?: string) => void;
+    // When true, onClick fires only for a release whose press this target received. A press
+    // the widget click path consumed never reaches the registry, so its release must not
+    // click whatever that press put under the pointer.
+    requiresPress?: boolean;
     contains?: (x: number, y: number) => boolean;
     onHoverChange?: (hover: boolean) => void;
 };
@@ -170,6 +174,7 @@ export class ClickRegistry {
         }
         if (!target) {
             target = this.pick(x, y);
+            if (target?.requiresPress) return false;
         }
         if (!target) {
             return false;

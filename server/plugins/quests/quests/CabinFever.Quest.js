@@ -247,7 +247,7 @@ module.exports = function registerCabinFeverQuest(api) {
 
   // The canister round kills the level 57 pirate it hits (52 hitpoints).
   const CANISTER_DAMAGE = 52;
-  const ENEMY_SHIP_BOUNDS = { minX: 1819, maxX: 1826, minY: 4825, maxY: 4839 };
+  const ENEMY_SHIP_BOUNDS = { minX: 1819, maxX: 1827, minY: 4824, maxY: 4843 };
 
   // Cache DB (table 0, column 19) completes Cabin Fever at varp 655 value 140.
   // Internal stages stay 0-9; this is the durable stage -> wire mapping.

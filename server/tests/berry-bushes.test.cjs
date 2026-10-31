@@ -9,9 +9,10 @@ const log = [];
 const tasks = [];
 const hooks = {};
 
-class Task {
-    constructor(delay) { this.delay = delay; this.running = true; }
-    stop() { this.running = false; }
+/** Like the real CountdownTask: a key, a delay, and the callback run once it is due. */
+class CountdownTask {
+    constructor(key, delay, onComplete) { this.key = key; this.delay = delay; this.onComplete = onComplete; }
+    execute() { this.onComplete(); }
 }
 class GameObject {
     constructor(id, location) { this.id = id; this.location = location; }
@@ -25,7 +26,7 @@ const location = { getX: () => 3272, getY: () => 3375, getZ: () => 0, clone() { 
 
 BerryBushes.register({
     core: {
-        Task, GameObject,
+        CountdownTask, GameObject,
         ObjectManager: { register: (o) => log.push(`add ${o.getId()}`), deregister: (o) => log.push(`remove ${o.getId()}`) },
         ObjectIdentifiers: { REDBERRY_BUSH_12: 23628, REDBERRY_BUSH_13: 23629, REDBERRY_BUSH_14: 23630, CADAVA_BUSH: 23625, CADAVA_BUSH_2: 23626, CADAVA_BUSH_3: 23627 },
         ItemIdentifiers: { REDBERRIES, CADAVA_BERRIES: 753 },
@@ -58,6 +59,8 @@ function click(object) {
 function runTask(expectedDelay) {
     const task = tasks.shift();
     assert.equal(task.delay, expectedDelay);
+    // An unkeyed task is stopped by any TaskManager.cancelTasks(undefined).
+    assert.ok(task.key && typeof task.key === 'object');
     log.length = 0;
     task.execute();
     return [...log];

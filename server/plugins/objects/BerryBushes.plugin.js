@@ -24,7 +24,6 @@ let core;
 let TaskManager;
 let bushes;
 let pickAnimation;
-let LaterTask;
 /** Tile key -> { original, current, generation }, for bushes that are not full. */
 const bushStates = new Map();
 /** Tiles with a pick under way this tick, so one berry is not picked twice. */
@@ -50,20 +49,12 @@ function bushesByName() {
   return bushes;
 }
 
-/** Runs `action` after `ticks`; not keyed to anyone, so a new click does not cancel it. */
+/**
+ * Runs `action` after `ticks`. Each task gets its own key: an unkeyed task matches any
+ * TaskManager.cancelTasks(undefined), which would silently stop a bush's regrow.
+ */
 function later(ticks, action) {
-  LaterTask ??= class extends core.Task {
-    constructor(delay, run) {
-      super(delay);
-      this.run = run;
-    }
-
-    execute() {
-      this.stop();
-      this.run();
-    }
-  };
-  TaskManager.submit(new LaterTask(ticks, action));
+  TaskManager.submit(new core.CountdownTask({}, ticks, action));
 }
 
 function bushFor(event) {

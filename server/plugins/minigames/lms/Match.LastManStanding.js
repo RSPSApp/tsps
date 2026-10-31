@@ -479,6 +479,11 @@ function prayerDisabled(event) {
   event.message = Common.message("prayerDisabled", { prayer: event.prayer.getPrayerName() ?? "That prayer" });
 }
 
+/** Wiki: every prayer the build qualifies for can be used, whatever the account unlocked. */
+function bypassPrayerUnlocks(event) {
+  if (gameOf(event.player)) event.bypass = true;
+}
+
 /** Wiki: run energy never runs out in a game. */
 function noDrain(entity, amount) {
   return gameOf(Common.asPlayer(entity)) ? 0 : amount;
@@ -522,6 +527,7 @@ function attachMatch(api) {
   api.onShouldDropItemsOnDeath(keepItems);
   api.onCanGainExperience(noExperience);
   api.onPrayerDisabled(prayerDisabled);
+  api.onCustomEvent("prayer:unlocks-bypass", bypassPrayerUnlocks);
   api.registerRunEnergyDrainModifier(noDrain);
 }
 

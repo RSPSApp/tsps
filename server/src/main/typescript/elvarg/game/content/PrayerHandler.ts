@@ -264,10 +264,10 @@ export class PrayerHandler {
             }
             return false;
         }
-        if (prayer === PrayerData.CHIVALRY && player.getSkillManager().getMaxLevel(Skill.DEFENCE) < 60) {
+        if (prayer === PrayerData.CHIVALRY && player.getSkillManager().getMaxLevel(Skill.DEFENCE) < 65) {
             if (msg) {
                 player.getPacketSender().sendVarbit(prayer.configId, 0);
-                player.sendMessage("You need a Defence level of at least 60 to use Chivalry.");
+                player.sendMessage("You need a Defence level of at least 65 to use Chivalry.");
             }
             return false;
         }

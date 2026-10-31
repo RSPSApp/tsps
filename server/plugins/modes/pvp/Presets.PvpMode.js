@@ -1,6 +1,5 @@
 const { GameConstants } = require("../../../src/main/typescript/elvarg/game/GameConstants");
 const { CacheDefinitions } = require("../../../src/main/typescript/elvarg/game/cache/CacheDefinitions");
-const { PrayerData, PrayerHandler } = require("../../../src/main/typescript/elvarg/game/content/PrayerHandler");
 const { SkillManager } = require("../../../src/main/typescript/elvarg/game/content/skill/SkillManager");
 const { CombatSpecial } = require("../../../src/main/typescript/elvarg/game/content/combat/CombatSpecial");
 const { CombatSpells } = require("../../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
@@ -667,9 +666,6 @@ function applyPreset(player, preset) {
   }
 
   sender.sendTabInterface(6, player.getSpellbook().getInterfaceId());
-  sender.sendConfig(709, PrayerHandler.canUse(player, PrayerData.PRESERVE, false) ? 1 : 0);
-  sender.sendConfig(711, PrayerHandler.canUse(player, PrayerData.RIGOUR, false) ? 1 : 0);
-  sender.sendConfig(713, PrayerHandler.canUse(player, PrayerData.AUGURY, false) ? 1 : 0);
 
   player.resetAttributes();
   sender.sendMessage("Preset loaded!");

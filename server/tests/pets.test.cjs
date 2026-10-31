@@ -646,6 +646,40 @@ test("the Penance Queen's death records the kill for the high gamble", () => {
   assert.equal(BarbarianAssault._test.honourOf(player), before + BarbarianAssault._test.QUEEN_KILL_HONOUR);
 });
 
+test("boss pet drops are single, data-driven and summonable", () => {
+  const { _test } = require("../plugins/npcs/NpcDrops.plugin");
+  _test.loadDrops();
+  const tables = new Map();
+  for (const list of _test.tablesByNpc.values()) for (const table of list) tables.set(table.table_id, table);
+  const sourceCount = (itemId) => [...tables.values()]
+    .filter((table) => (table.tertiary || []).some((entry) => entry.item_id === itemId)).length;
+
+  for (const [itemId, name] of [
+    [13262, "Abyssal orphan"], [13225, "TzRek-Jad"], [26348, "Nexling"],
+    [27590, "Muphin"], [12647, "Kalphite Princess"], [21992, "Vorki"],
+  ]) {
+    assert.equal(sourceCount(itemId), 1, `${name} has one tertiary source`);
+    assert.ok(Pets.__internals.PET_BY_ITEM_ID.has(itemId), `${name} summons from its drop`);
+  }
+
+  // Noon is the Grotesque Guardians' tertiary, in the boss plugin's own data table.
+  const gg = require("../plugins/bosses/data/grotesque-guardians.json").drops;
+  assert.equal(gg.tertiary.filter((entry) => entry.item_id === 21748).length, 1, "one Noon tertiary");
+  assert.ok(Pets.__internals.PET_BY_ITEM_ID.has(21748), "Noon summons from its drop");
+
+  // Beef, the Maggot marquess, Mr McGroot and Aggy are collection-log pets that had drop rows or
+  // a hunter source but no PETS entry before this; Beef, the Maggot marquess and Aggy drop.
+  for (const itemId of [33124, 33642, 34040, 34042]) assert.ok(Pets.__internals.PET_BY_ITEM_ID.has(itemId));
+  for (const itemId of [33124, 33642, 34042]) assert.ok(sourceCount(itemId) >= 1);
+
+  // Raid pets are delivered by their chests (CoX/ToB/ToA), not an NPC drop table; adding one
+  // here as well would award the pet twice.
+  for (const itemId of [20851, 22473, 27352]) {
+    assert.equal(sourceCount(itemId), 0, "chest-delivered, not an NPC drop");
+    assert.ok(Pets.__internals.PET_BY_ITEM_ID.has(itemId));
+  }
+});
+
 test("the other quest and activity pet sources stay explicit and single", () => {
   const caskets = require("../data/definitions/clue-caskets.json");
   assert.equal(caskets.tables.master.tertiary.filter(entry => entry.item_id === 19730).length, 1,

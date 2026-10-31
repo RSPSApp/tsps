@@ -16,7 +16,7 @@ const { Player } = require('../dist/game/entity/impl/player/Player');
 const { AccuracyFormulasDpsCalc } = require('../dist/game/content/combat/formula/AccuracyFormulasDpsCalc');
 const core = PluginManager.getCoreApi();
 
-let Common, Fight, Roof, Combat, Kills, tasks, onTaskAnswer, prayers, killTotal;
+let Common, Fight, Roof, Combat, Kills, tasks, onTaskAnswer, prayers, killTotal, dropEvents;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -30,6 +30,7 @@ before(async () => {
   onTaskAnswer = () => true;
   prayers = new Set();
   killTotal = undefined;
+  dropEvents = [];
   const api = new Proxy({
     core: { ...core, TaskManager: { submit: (task) => tasks.push(task) } },
     persistAttribute: () => {},
@@ -41,6 +42,7 @@ before(async () => {
     emitCustomEvent(name, event) {
       if (name === 'slayer:on-task') event.onTask = onTaskAnswer(event);
       if (name === 'combat-achievements:count') event.total = killTotal;
+      if (name.startsWith('npc-drops:')) dropEvents.push({ name, event });
     },
   }, { get: (target, key) => target[key] ?? (() => {}) });
   Common.init(api);
@@ -540,6 +542,36 @@ test('the kill: Dusk gives the pair 1,350 Slayer XP and the kill count; Dawn giv
   assert.equal(player.getAttribute(Common.KILLS_ATTRIBUTE), 1);
   assert.equal(player.messages.at(-1), Common.message('killCount', { kills: 4 }));
   killTotal = undefined;
+});
+
+test("Dusk's kill rolls the Wiki drop table, and Noon is one 1/3,000 tertiary", () => {
+  const drops = Common.data.drops;
+  assert.equal(drops.rolls, 2, 'two rolls, tertiary excluded (Wiki)');
+  assert.equal(drops.main_max_roll, 142);
+  const main = drops.entries.filter((entry) => Number.isFinite(entry.weight) && !entry.separate_roll);
+  assert.equal(main.reduce((sum, entry) => sum + entry.weight, 0), 142, 'the 142-slot pool');
+  const noon = drops.tertiary.filter((entry) => entry.item_id === 21748);
+  assert.equal(noon.length, 1);
+  assert.deepEqual([noon[0].weight, noon[0].out_of], [1, 3000]);
+
+  const dusk = fakeGuardian(Common.ids.npcs.duskPhase4, 1689, 4573);
+  const player = fakePlayer();
+  const { __internals } = require('../plugins/npcs/NpcDrops.plugin');
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    const rolled = __internals.rollTable(drops, player, dusk);
+    assert.ok(rolled.some((drop) => drop.itemId === 21726), 'granite dust is 100%');
+    assert.ok(rolled.some((drop) => drop.itemId === 21748), 'Noon rolls from the data');
+  } finally {
+    Math.random = original;
+  }
+
+  dropEvents = [];
+  Kills.guardianDeath({ npc: dusk, killer: player });
+  assert.deepEqual(dropEvents.map((event) => event.name), ['npc-drops:roll-table', 'npc-drops:roll', 'npc-drops:place']);
+  assert.equal(dropEvents[0].event.table, drops);
+  flush();
 });
 
 test('both are finished with a rock hammer at 9 or below, like the gargoyles', () => {

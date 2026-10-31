@@ -216,6 +216,12 @@ const PETS = [
   { enumName: "GULL", petId: NpcIdentifiers.GULL_7, morphId: 14932, itemId: 31285, dialogue: -1 },
   { enumName: "GULLIVER", petId: 14932, morphId: NpcIdentifiers.GULL_7, itemId: 31285, dialogue: -1,
     morphUnlock: { attribute: "pets:gull-fed", path: [], min: 50, name: "to feed Gull 50 raw or cooked fish" } },
+  // Beef, Maggot marquess, Mr McGroot and Aggy: the base NPC is the world follower (`isFollower`)
+  // and the `_2` id is the menagerie copy, the reverse of the older pet pairs (cache 241).
+  { enumName: "BEEF", petId: NpcIdentifiers.BEEF, houseNpcId: NpcIdentifiers.BEEF_2, morphId: 0, itemId: ItemIdentifiers.BEEF, dialogue: -1 },
+  { enumName: "MAGGOT_MARQUESS", petId: NpcIdentifiers.MAGGOT_MARQUESS, houseNpcId: NpcIdentifiers.MAGGOT_MARQUESS_2, morphId: 0, itemId: ItemIdentifiers.MAGGOT_MARQUESS, dialogue: -1 },
+  { enumName: "MR_MCGROOT", petId: NpcIdentifiers.MR_MCGROOT, houseNpcId: NpcIdentifiers.MR_MCGROOT_2, morphId: 0, itemId: ItemIdentifiers.MR_MCGROOT, dialogue: -1 },
+  { enumName: "AGGY", petId: NpcIdentifiers.AGGY, houseNpcId: NpcIdentifiers.AGGY_2, morphId: 0, itemId: ItemIdentifiers.AGGY, dialogue: -1 },
   // The Wiki requires claiming the elite Western Provinces reward, not just task completion.
   { enumName: "CHOMPY_CHICK", petId: NpcIdentifiers.CHOMPY_CHICK_2, morphId: 0, itemId: 13071, dialogue: -1,
     requiredDiaryReward: { diary: "western", tier: "elite" } },

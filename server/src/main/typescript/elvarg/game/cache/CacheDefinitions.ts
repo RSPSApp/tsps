@@ -1,5 +1,9 @@
 import { ArchiveVarBitTypeLoader } from "./codec/rs/config/vartype/bit/VarBitTypeLoader";
 import { ArchiveIdkTypeLoader } from "./codec/rs/config/idktype/IdkTypeLoader";
+import { ArchiveSequenceTypeLoader } from "./codec/rs/config/seqtype/SequenceTypeLoader";
+import { SequenceType } from "./codec/rs/config/seqtype/SequenceType";
+import { ArchiveSpotAnimTypeLoader } from "./codec/rs/config/spotanimtype/SpotAnimTypeLoader";
+import { SpotAnimType } from "./codec/rs/config/spotanimtype/SpotAnimType";
 import type { IdkType } from "./codec/rs/config/idktype/IdkType";
 import type { VarManager } from "./codec/rs/config/vartype/VarManager";
 import type { Archive } from "./codec/rs/cache/Archive";
@@ -45,12 +49,21 @@ export class CacheDefinitions {
         identKits: ArchiveIdkTypeLoader;
         items: PostProcessedObjTypeLoader;
         objects: ArchivedTypeLoader<LocType>;
+        sequences: ArchiveSequenceTypeLoader;
+        spotAnims: ArchiveSpotAnimTypeLoader;
         objArchives: ArchivedTypeLoader<ObjType>;
         archives: ArchivedDefinitionRegistry;
         archiveContext: ArchivedDefinitionContext;
         info: CacheInfo;
     };
     private static customItems = new Map<number, ServerCustomItem>();
+    /**
+     * Decoded definition overlays: a base definition from the cache plus the fields this project
+     * overrides. Kept apart from `customItems`, which is the item loader's own JSON pipeline, so a
+     * loc or npc overlay needs no encoder and no cache repack.
+     */
+    private static customDefinitions = new Map<string, { baseId: number; fields: Record<string, unknown> }>();
+    private static customDefinitionCache = new Map<string, unknown>();
     private static customItemTypes = new Map<number, ObjType>();
     private static customModels?: Array<{ id: number; data: string }>;
     private static dbArchive?: Archive;
@@ -95,6 +108,8 @@ export class CacheDefinitions {
             id => archives.getSource("obj", id), () => archives.getCount("obj"));
         this.state = {
             varbits: new ArchiveVarBitTypeLoader(info, configs.getArchive(ConfigType.DAT2.varbits)),
+            sequences: new ArchiveSequenceTypeLoader(info, configs.getArchive(ConfigType.DAT2.seqs)),
+            spotAnims: new ArchiveSpotAnimTypeLoader(info, configs.getArchive(ConfigType.DAT2.spotAnims)),
             identKits: new ArchiveIdkTypeLoader(info, configs.getArchive(ConfigType.DAT2.identkits)),
             npcs: new ArchivedTypeLoader(native.npc, NpcType,
                 id => archives.getSource("npc", id), () => archives.getCount("npc")),
@@ -113,7 +128,8 @@ export class CacheDefinitions {
     }
 
     static getNpc(id: number): NpcType {
-        return this.getState().npcs.load(id);
+        return this.applyCustomDefinition("npc", id, (baseId) => this.getState().npcs.load(baseId))
+            ?? this.getState().npcs.load(id);
     }
 
     static registerDefinitionArchives(bundles: readonly ArchivedDefinitionBundle[]): Record<ArchivedDefinitionKind, number[]> {
@@ -269,6 +285,36 @@ export class CacheDefinitions {
         return this.getGamevals().namesOf(GamevalKind.OBJ);
     }
 
+    /** Every named graphic: id -> gameval name. */
+    static getSpotanimNames(): ReadonlyMap<number, string> {
+        return this.getGamevals().namesOf(GamevalKind.SPOTANIM);
+    }
+
+    /** Every named varbit: id -> gameval name. */
+    static getVarbitNames(): ReadonlyMap<number, string> {
+        return this.getGamevals().namesOf(GamevalKind.VARBIT);
+    }
+
+    /** Every named db row: id -> gameval name. */
+    static getDbRowNames(): ReadonlyMap<number, string> {
+        return this.getGamevals().namesOf(GamevalKind.DBROW);
+    }
+
+    /** Every named db table: id -> gameval name. */
+    static getDbTableNames(): ReadonlyMap<number, string> {
+        return this.getGamevals().namesOf(GamevalKind.DBTABLE);
+    }
+
+    /** Every named varp: id -> gameval name. */
+    static getVarpNames(): ReadonlyMap<number, string> {
+        return this.getGamevals().namesOf(GamevalKind.VARP);
+    }
+
+    /** Every named inventory: id -> gameval name. */
+    static getInventoryNames(): ReadonlyMap<number, string> {
+        return this.getGamevals().namesOf(GamevalKind.INV);
+    }
+
     /** Every named NPC: id -> gameval name. */
     static getNpcNames(): ReadonlyMap<number, string> {
         return this.getGamevals().namesOf(GamevalKind.NPC);
@@ -399,6 +445,53 @@ export class CacheDefinitions {
         return this.getState().varbits.load(id);
     }
 
+    static getSeq(id: number): SequenceType {
+        return this.getState().sequences.load(id);
+    }
+
+    static getSeqCount(): number {
+        return this.getState().sequences.getCount();
+    }
+
+    static getSpotanimCount(): number {
+        return this.getState().spotAnims.getCount();
+    }
+
+    /**
+     * Whether a definition id exists, by asking the archive or the registry rather than by decoding:
+     * a loader answers an unknown id with a default object, which is indistinguishable from a real
+     * definition that happens to hold default values.
+     */
+    static hasDefinition(kind: string, id: number): boolean | undefined {
+        if (!Number.isInteger(id) || id < 0) return false;
+        const state = this.getState();
+        const counts = this.getCounts();
+        switch (kind) {
+            case "loc":
+                return this.hasCustomDefinition("loc", id) || id < counts.objects || state.archives.ids("loc").includes(id);
+            case "npc":
+                return this.hasCustomDefinition("npc", id) || id < counts.npcs || state.archives.ids("npc").includes(id);
+            case "item":
+                return this.hasCustomDefinition("item", id) || id < counts.items || this.customItems.has(id) || state.archives.ids("obj").includes(id);
+            case "varbit":
+                return state.varbits.archive.getFile(id) !== undefined;
+            case "seq":
+                return state.sequences.archive.getFile(id) !== undefined;
+            case "spotanim":
+                return state.spotAnims.archive.getFile(id) !== undefined;
+            case "dbro":
+                return this.getDbRow(id) !== undefined;
+            default:
+                // Structs, enums, db tables, varps, inventories, sprites, sounds and params cannot be
+                // proven absent from an empty result, so they answer "unknown" rather than a guess.
+                return undefined;
+        }
+    }
+
+    static getSpotanim(id: number): SpotAnimType {
+        return this.getState().spotAnims.load(id);
+    }
+
     static resolveNpc(id: number, vars: Pick<VarManager, "getVarp" | "getVarbit">): NpcType | undefined {
         let npc = this.getNpc(id);
         const seen = new Set<number>();
@@ -413,7 +506,8 @@ export class CacheDefinitions {
     static getItem(id: number): ObjType {
         const custom = this.customItemTypes.get(id);
         if (custom) return custom;
-        return this.getState().items.load(id);
+        return this.applyCustomDefinition("item", id, (baseId) => this.getState().items.load(baseId))
+            ?? this.getState().items.load(id);
     }
 
     static hasItem(id: number): boolean {
@@ -519,8 +613,50 @@ export class CacheDefinitions {
         return this.customModels ?? [];
     }
 
+    /** Registers overlay rows (`{ kind, id, baseId, fields }`); replaces any previous set. */
+    static registerCustomDefinitions(rows: readonly { kind: string; id: number; baseId: number; fields?: Record<string, unknown> }[]): number {
+        this.customDefinitions = new Map();
+        this.customDefinitionCache = new Map();
+        for (const row of rows) {
+            if (!row || !Number.isInteger(row.id) || !Number.isInteger(row.baseId)) continue;
+            if (!["loc", "npc", "item"].includes(row.kind)) continue;
+            this.customDefinitions.set(`${row.kind}:${row.id}`, { baseId: row.baseId, fields: { ...(row.fields ?? {}) } });
+        }
+        return this.customDefinitions.size;
+    }
+
+    static getCustomDefinitions(): Array<{ kind: string; id: number; baseId: number; fields: Record<string, unknown> }> {
+        return [...this.customDefinitions.entries()].map(([key, row]) => {
+            const [kind, id] = key.split(":");
+            return { kind, id: Number(id), baseId: row.baseId, fields: { ...row.fields } };
+        });
+    }
+
+    /** True when this id is authored here rather than read from the cache. */
+    static hasCustomDefinition(kind: string, id: number): boolean {
+        return this.customDefinitions.has(`${kind}:${id}`);
+    }
+
+    /**
+     * The overlay applied: the base definition cloned with its overridden fields. A shallow clone is
+     * enough because every overridable field is a scalar or a whole array.
+     */
+    private static applyCustomDefinition<T extends object>(kind: string, id: number, loadBase: (baseId: number) => T): T | undefined {
+        const row = this.customDefinitions.get(`${kind}:${id}`);
+        if (!row) return undefined;
+        const key = `${kind}:${id}`;
+        const cached = this.customDefinitionCache.get(key) as T | undefined;
+        if (cached) return cached;
+        const base = loadBase(row.baseId);
+        if (!base) return undefined;
+        const clone = Object.assign(Object.create(Object.getPrototypeOf(base)), base, row.fields) as T;
+        this.customDefinitionCache.set(key, clone);
+        return clone;
+    }
+
     static getObject(id: number): LocType {
-        return this.getState().objects.load(id);
+        return this.applyCustomDefinition("loc", id, (baseId) => this.getState().objects.load(baseId))
+            ?? this.getState().objects.load(id);
     }
 
     static getCounts(): { npcs: number; items: number; objects: number } {

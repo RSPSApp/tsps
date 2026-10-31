@@ -8,7 +8,18 @@ Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { DialogueManager } = require('../dist/game/model/dialogues/DialogueManager');
 const { getRegisteredQuests } = require('../plugins/quests/QuestRuntime');
-const core = PluginManager.getCoreApi();
+const realCore = PluginManager.getCoreApi();
+// Railing repairs run on a tick task; the test runs queued tasks itself.
+const queuedTasks = [];
+const core = { ...realCore, TaskManager: { submit: (task) => queuedTasks.push(task) } };
+function runQueuedTasks() {
+  while (queuedTasks.length) queuedTasks.shift().execute();
+}
+function withRandom(value, run) {
+  const random = Math.random;
+  Math.random = () => value;
+  try { return run(); } finally { Math.random = random; }
+}
 
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -47,6 +58,9 @@ function playerFixture(inventory = inventoryFixture()) {
   const configs = new Map();
   const interfaces = [];
   const xp = [];
+  const animations = [];
+  const chats = [];
+  const hits = [];
   let location = new core.Location(2567, 3460, 0);
   let manager;
   const sender = new Proxy({
@@ -63,6 +77,13 @@ function playerFixture(inventory = inventoryFixture()) {
     configs,
     interfaces,
     xp,
+    animations,
+    chats,
+    hits,
+    getIndex: () => 1,
+    performAnimation(animation) { animations.push(animation.getId?.() ?? animation.id); },
+    forceChat(text) { chats.push(text); return player; },
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (damage) => hits.push(...damage) }) }),
     getUsername: () => 'qh728-q027',
     getAttribute: (key) => attributes.get(key),
     setAttribute(key, value) { attributes.set(key, value); },
@@ -165,8 +186,24 @@ test('fresh stage 0 runs every mandatory Dwarf Cannon leg to the canonical varp 
     assert.equal(player.configs.get(0), 1, 'stage 1 is mirrored to canonical varp 0');
 
     const railingIds = [15590, 15591, 15592, 15593, 15594, 15595];
+    // fixing-the-railings-trying-to-fix-a-railing: a failed attempt keeps the railing.
+    assert.equal(object(player, railingIds[0], 'Inspect', { x: 0, y: 0, z: 0 }), true);
+    assert.deepEqual(player.messages.slice(-2), [
+      'This railing is broken and needs to be replaced.',
+      'You attempt to repalce the broken railing...',
+    ]);
+    assert.equal(player.animations.at(-1), 4190, 'mcannon_hammer_anim plays');
+    assert.equal(player.configs.get(2240), undefined, 'nothing is fixed before the animation ends');
+    withRandom(0.99, runQueuedTasks);
+    assert.equal(player.messages.at(-1), 'You wrench your back trying to handle the railings.');
+    assert.equal(player.chats.at(-1), 'Gah!');
+    assert.ok(player.hits.at(-1).getDamage() <= 2, 'a failure deals 0-2 damage');
+    assert.equal(inventory.getAmount(I.RAILING), 6, 'a failure keeps the railing');
+    assert.equal(player.configs.get(2240), undefined);
     for (const objectId of railingIds) {
       assert.equal(object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 }), true);
+      withRandom(0, runQueuedTasks);
+      assert.equal(player.messages.at(-1), 'This railing is now fixed.');
       if (objectId === railingIds[0]) {
         assert.equal(player.configs.get(2240), 1, 'the cache-backed fixed railing varbit changes');
         assert.equal(object(player, objectId, 'Inspect', { x: 0, y: 0, z: 0 }), true);

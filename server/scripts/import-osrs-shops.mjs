@@ -49,6 +49,11 @@ const REPLACED_BY_PLUGIN = {
   "Mixology Rewards": "the Mastering Mixology Omnishop",
   Sawmill: "the sawmill operators make planks, as captured",
   "Slayer Rewards": "the Slayer plugin, built from the cache's Slayer tables",
+  // The three below are opened from a loc or NPC op the plugin owns and sell in
+  // currencies held as raid/quest state, not in shops.json.
+  "Alliance Supplies": "the Fractured Archive Quartermaster (omnishop row tfa_midraid_supplies_shop)",
+  "Theatre of Blood Supplies": "the Theatre of Blood supply chests (interface 405, enums 1952/1953)",
+  "Useful Supplies": "The Blood Moon Rises Castle Drakan chest (omnishop row 16873)",
 };
 
 // Karamja gloves variants share their default store's NPC and option; bound

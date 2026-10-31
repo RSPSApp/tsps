@@ -55,7 +55,7 @@
     "debris": [[3055, 2832], [3060, 2861]]
   },
   "fight": {
-    "$comment": "Energy and essence are ten times the Wiki's (captured HUD). Per player: Wiki, from 2,600/2,500 solo to 1,800/1,700 each with 40 (solo captured 2683/2492).",
+    "$comment": "Energy and essence are ten times the Wiki's (captured HUD). Per player: Wiki, from 2,600/2,500 solo to 1,800/1,700 each with 40 (solo captured 2683/2492). regenPerTick is the captured solo rate; the fight scales it with max energy so the essence phase keeps the captured ~77 ticks whatever the crew size.",
     "energyPerPlayer": { "solo": 2683, "full": 1800 },
     "essencePerPlayer": { "solo": 2492, "full": 1700 },
     "introBar": { "from": 130, "to": 240, "step": 2 },
@@ -85,7 +85,8 @@
     "fireSpreads": 2,
     "fireBurnTicks": 2,
     "specialSpotTicks": [30, 60],
-    "specialSpotLifeTicks": 20,
+    "$specialSpotLifeTicks": "captures: the jumping spot lasts 42-45 ticks (and goes when Tempoross submerges)",
+    "specialSpotLifeTicks": 44,
     "spotMoveTicks": [60, 120],
     "crateMid": 8,
     "crateFull": 15,

@@ -294,7 +294,8 @@ export class NpcType extends Type {
         } else if (opcode === 100) {
             this.ambient = buffer.readByte();
         } else if (opcode === 101) {
-            this.contrast = buffer.readByte() * 5;
+            // Stored raw: the model light pass applies the client's `contrast * 5 + 850`.
+            this.contrast = buffer.readByte();
         } else if (opcode === 102) {
             if (
                 (this.cacheInfo.game === "oldschool" && this.cacheInfo.revision < 210) ||

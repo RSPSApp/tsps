@@ -49,6 +49,9 @@ class Fight {
     this.storm = 0;
     this.submerges = 0;
     this.enraged = false;
+    /** Fractional energy regen carried between ticks (group sizes scale it off the solo rate). */
+    this.regen = 0;
+    this.regenAt = -1;
     this.result = null;
     this.boss = null;
     this.hosts = [];
@@ -107,7 +110,9 @@ class Fight {
         if (this.storm >= F.stormMax) this.lose();
         break;
       case "submerged":
-        this.energy = Math.min(this.maxEnergy, this.energy + F.regenPerTick);
+        // The captured phase stays at 0 while the pools open (11 ticks), then regains 35 a tick
+        // for a solo 2683; the rate scales with the crew's maximum so the phase keeps its ~77 ticks.
+        if (this.ticks >= this.regenAt) this.regenEnergy();
         this.spots.tickSubmerged();
         if (this.energy >= this.maxEnergy) this.surface(false);
         break;
@@ -132,23 +137,49 @@ class Fight {
   // ------------------------------------------------------------------ phases
 
   surface(first) {
-    if (!first) {
-      if (this.submerges >= F.maxSurfacings) {
-        this.enraged = true;
-        this.cove.message(`<col=${Shared.RED}>Tempoross has gathered too much energy. The storm is out of control!</col>`);
-        this.hostsSay("Tempoross has gathered too much energy!");
-      }
+    // Captures: the ready form plays 8901 as it rises, and on the third down the enrage
+    // transition 8906 runs before the model turns into the enraged 10575 with 8908.
+    const enragedSurface = !first && this.submerges >= F.maxSurfacings;
+    if (enragedSurface) {
+      this.enraged = true;
+      this.cove.message(`<col=${Shared.RED}>Tempoross has gathered too much energy. The storm is out of control!</col>`);
+      this.hostsSay("Tempoross has gathered too much energy!");
     }
     this.phase = "surfaced";
     this.surfacedAt = this.ticks;
     if (first) this.firstSurfaceTick = this.ticks;
     this.energy = this.maxEnergy;
     this.storm = 0;
-    this.setBoss(this.enraged ? NPC.BOSS_ENRAGED : NPC.BOSS);
+    this.regen = 0;
+    this.regenAt = -1;
+    if (enragedSurface && this.submerges === F.maxSurfacings) {
+      this.setBoss(NPC.BOSS);
+      Shared.animate(this.boss, ANIM.BOSS_ENRAGED_TRANSITION);
+      Shared.later(this, 5, () => {
+        if (this.stopped || this.phase !== "surfaced" || !this.enraged) return;
+        this.setBoss(NPC.BOSS_ENRAGED);
+        Shared.animate(this.boss, ANIM.BOSS_ENRAGED_SPAWN);
+      });
+    } else if (this.enraged) {
+      this.setBoss(NPC.BOSS_ENRAGED);
+      Shared.animate(this.boss, ANIM.BOSS_ENRAGED_SPAWN);
+    } else {
+      this.setBoss(NPC.BOSS);
+      if (!first) Shared.animate(this.boss, ANIM.BOSS_SURFACE);
+    }
     this.spots.onSurface();
     this.attacks.onSurface();
     if (!this.enraged) this.hostsSay("Tempoross has surfaced, keep those cannons firing!");
     this.forEachPlayer((player) => this.sendHud(player));
+  }
+
+  /** Captured: 35 a tick solo; scaling with the maximum keeps a group's essence phase as long. */
+  regenEnergy() {
+    this.regen += (this.maxEnergy * F.regenPerTick) / F.energyPerPlayer.solo;
+    const whole = Math.floor(this.regen);
+    if (whole <= 0) return;
+    this.regen -= whole;
+    this.energy = Math.min(this.maxEnergy, this.energy + whole);
   }
 
   submerge() {
@@ -158,7 +189,10 @@ class Fight {
     this.energy = 0;
     this.storm = 0;
     this.enraged = false;
+    this.regen = 0;
+    this.regenAt = this.ticks + F.poolsActiveAfter;
     this.setBoss(NPC.BOSS_SUBMERGED);
+    Shared.animate(this.boss, ANIM.BOSS_SUBMERGE);
     this.cove.message(`<col=${Shared.CYAN}>Tempoross is vulnerable!</col>`);
     this.hostsSay("Tempoross has submerged, fish from the whirlpools!");
     this.attacks.onSubmerge();

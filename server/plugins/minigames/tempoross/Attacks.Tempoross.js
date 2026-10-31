@@ -106,9 +106,12 @@ class Attacks {
 
   waveHits() {
     const fight = this.fight;
-    if (fight.phase !== "surfaced") return;
-    fight.setBoss(fight.enraged ? NPC.BOSS_ENRAGED : NPC.BOSS);
-    Shared.animate(fight.boss, ANIM.BOSS_SPAWN);
+    // The wave still washes over the cove if Tempoross submerged while it rolled in; only the
+    // boss's own body/animation depends on it being up.
+    if (fight.phase === "surfaced") {
+      fight.setBoss(fight.enraged ? NPC.BOSS_ENRAGED : NPC.BOSS);
+      Shared.animate(fight.boss, ANIM.BOSS_SPAWN);
+    }
     for (const old of this.debris) this.cove.removeLoc(old);
     this.debris = DATA.cove.debris.map(([x, y]) => {
       this.cove.mapGraphic(GFX.WATER_SPLASH, this.cove.tile([x, y, 0]));

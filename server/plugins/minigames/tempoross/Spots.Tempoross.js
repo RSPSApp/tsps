@@ -98,6 +98,12 @@ class Spots {
   }
 
   onSubmerge() {
+    // Captures: the jumping spot goes when Tempoross submerges, not when its timer runs out.
+    if (this.special) {
+      this.cove.removeNpc(this.special.npc);
+      this.special = null;
+    }
+    this.nextSpecialAt = this.fight.ticks + Shared.randomInt(...F.specialSpotTicks);
     this.poolsOpenAt = this.fight.ticks + F.poolsActiveAfter;
   }
 

@@ -80,6 +80,16 @@ test("enum lookups reuse their lazy loader and still retry an unavailable archiv
     assert.equal(reads, 3);
 });
 
+test("npc contrast is decoded raw for the model light pass", () => {
+    const info = loadCacheList(loadCacheInfos()).latest;
+    const cache = CacheSystem.fromFiles(info, loadCache(info).files);
+    const factory = new Dat2CacheLoaderFactory(info, "dat2", cache);
+    const tempoross = factory.getNpcTypeLoader()!.load(10572);
+    // The renderer applies the client's `contrast * 5 + 850`; decoding opcode 101 with a
+    // further *5 (as the server-side copy does) made Tempoross and other dark NPCs too dark.
+    assert.equal(tempoross.contrast, -20, "Tempoross contrast stays raw");
+});
+
 test("loader getters reuse one instance per cache factory", () => {
     const info = loadCacheList(loadCacheInfos()).latest;
     const cache = CacheSystem.fromFiles(info, loadCache(info).files);

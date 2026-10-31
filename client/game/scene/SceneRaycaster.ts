@@ -600,7 +600,8 @@ export class SceneRaycaster {
 
                     for (let locIndex = 0; locIndex < locIds.length; locIndex++) {
                         const locId = locIds[locIndex] | 0;
-                        if (!(locId > 0)) continue;
+                        // Loc id 0 is a real loc (Dwarf Cannon's remains multiloc).
+                        if (!(locId >= 0)) continue;
                         const locType = this.getResolvedLocType(locId, resolvedLocTypes);
                         if (!locType || !this.isLocTypeInteractive(locType)) continue;
 

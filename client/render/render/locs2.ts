@@ -48,6 +48,7 @@ import { PlayerModelLoader } from "../../rs/config/player/PlayerModelLoader";
 import { decodeInteractionIndex } from "../../rs/interaction/InteractionIndex";
 import { getMapIndexFromTile, getMapPlaneId, getMapSquareId } from "../../rs/map/MapFileIndex";
 import { Model } from "../../rs/model/Model";
+import { LOC_OVERRIDE_KEEP_ID, LOC_OVERRIDE_REMOVED } from "../../rs/scene/LocOverride";
 import { ModelData } from "../../rs/model/ModelData";
 import { Scene } from "../../rs/scene/Scene";
 import { getUiScale } from "../../ui/UiScale";
@@ -217,10 +218,10 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
                 for (const id of added.replacedIds ?? []) {
                     host.locOverrides.delete(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`);
                 }
-            } else if (deletedLoc && (deletedLoc.id | 0) > 0) {
+            } else if (deletedLoc && (deletedLoc.id | 0) >= 0) {
                 // Suppress exactly the cache loc that was removed (a chopped tree, a door).
                 host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${deletedLoc.id | 0}`, {
-                    newId: 0,
+                    newId: LOC_OVERRIDE_REMOVED,
                 });
             } else {
                 // No id to key on: fall back to this tile's slot only, never every loc of the shape.
@@ -232,7 +233,7 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
             const locType =
                 wasAdded
                     ? host.osrsClient.locTypeLoader.load(added.locId | 0)
-                    : deletedLoc && (deletedLoc.id | 0) > 0
+                    : deletedLoc && (deletedLoc.id | 0) >= 0
                       ? host.osrsClient.locTypeLoader.load(deletedLoc.id | 0)
                       : undefined;
             const group = locType ? (isDoorLocType(locType) ? "door" : "loc") : "full";
@@ -302,7 +303,7 @@ export function onLocAnim(host: WebGLOsrsRendererHost,
             });
             if (!onAddedLoc) {
                 host.locOverrides.set(matchKey, {
-                    newId: -1,
+                    newId: LOC_OVERRIDE_KEEP_ID,
                     newRotation: rotation & 0x3,
                     seqId: animId | 0,
                     seqRandomStart: false,

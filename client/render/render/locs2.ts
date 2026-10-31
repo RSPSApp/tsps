@@ -364,16 +364,17 @@ export function reloadLocAnimationTile(host: WebGLOsrsRendererHost, tile: { x: n
         }
         const mapX = Math.floor((tile.x | 0) / 64);
         const mapY = Math.floor((tile.y | 0) / 64);
+        const locType = host.osrsClient.locTypeLoader.load(locId | 0);
+        const group = locType && isDoorLocType(locType) ? "door" : "loc";
+        // In an instance this rebuilds only the scene's locs, as a loc change does: rebuilding
+        // the whole scene for every animation (Tempoross' cannons fire every 2 ticks) kept
+        // superseding the build in flight, so new fires and the electrified cannon took
+        // half a minute to appear.
         if (host.instanceActive) {
-            host.scheduleInstanceLocRebuild();
+            host.scheduleInstanceLocUpdate(group);
             return;
         }
-        const locType = host.osrsClient.locTypeLoader.load(locId | 0);
-        host.scheduleLocGeometryUpdate(
-            mapX,
-            mapY,
-            locType && isDoorLocType(locType) ? "door" : "loc",
-        );
+        host.scheduleLocGeometryUpdate(mapX, mapY, group);
     
 }
 

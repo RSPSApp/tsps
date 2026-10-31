@@ -6,9 +6,11 @@
  *   2 a tick from 130 to 240; then Tempoross surfaces.
  * - surfaced: the storm rises 1 a tick (out of 350, and the fight is lost at 350); cannon
  *   fire drains energy; Tempoross attacks. At 0 energy it submerges.
- * - submerged: the storm is 0, energy comes back 35 a tick and the spirit pools open 11 ticks
- *   in. Fishing them drains essence; 0 essence wins. Full energy surfaces it again, and after
- *   the third time it is enraged: the storm races and the fight is soon lost.
+ * - submerged: the storm is 0; 11 ticks in the spirit pools open and energy starts coming back,
+ *   to full in 77 ticks (solo: 35 a tick). Fishing the pools drains essence; 0 essence wins.
+ *   Full energy surfaces it again, and after the third time it is enraged: the storm races and
+ *   the fight is soon lost.
+ * - Tempoross surfaces with `fsb_spawn` and submerges with `fsb_ready_to_whirl`.
  * Energy and essence are ten times the Wiki's numbers, as the HUD script takes them.
  */
 
@@ -40,6 +42,7 @@ class Fight {
     this.phase = "intro";
     this.ticks = 0;
     this.surfacedAt = -1;
+    this.submergedAt = -1;
     this.firstSurfaceTick = -1;
     this.introBar = F.introBar.from;
     this.maxEnergy = 0;
@@ -107,7 +110,9 @@ class Fight {
         if (this.storm >= F.stormMax) this.lose();
         break;
       case "submerged":
-        this.energy = Math.min(this.maxEnergy, this.energy + F.regenPerTick);
+        if (this.ticks - this.submergedAt > F.regenDelayTicks) {
+          this.energy = Math.min(this.maxEnergy, this.energy + this.regenPerTick());
+        }
         this.spots.tickSubmerged();
         if (this.energy >= this.maxEnergy) this.surface(false);
         break;
@@ -119,6 +124,15 @@ class Fight {
     this.attacks.tickFires();
     if (this.ticks >= HUD_DELAY && this.ticks % HUD_PERIOD === 0) this.forEachPlayer((player) => this.sendHud(player));
     return true;
+  }
+
+  /**
+   * Energy comes back to full in the same time whatever the crew (captured solo: 35 a tick of
+   * 2683). A flat 35 left a crew of several with minutes of essence fishing, so it never
+   * surfaced again.
+   */
+  regenPerTick() {
+    return Math.ceil(this.maxEnergy / F.regenFullTicks);
   }
 
   forEachPlayer(action) {
@@ -145,6 +159,7 @@ class Fight {
     this.energy = this.maxEnergy;
     this.storm = 0;
     this.setBoss(this.enraged ? NPC.BOSS_ENRAGED : NPC.BOSS);
+    Shared.animate(this.boss, ANIM.BOSS_SPAWN);
     this.spots.onSurface();
     this.attacks.onSurface();
     if (!this.enraged) this.hostsSay("Tempoross has surfaced, keep those cannons firing!");
@@ -154,11 +169,13 @@ class Fight {
   submerge() {
     if (this.phase !== "surfaced") return;
     this.phase = "submerged";
+    this.submergedAt = this.ticks;
     this.submerges += 1;
     this.energy = 0;
     this.storm = 0;
     this.enraged = false;
     this.setBoss(NPC.BOSS_SUBMERGED);
+    Shared.animate(this.boss, ANIM.BOSS_READY_TO_WHIRL);
     this.cove.message(`<col=${Shared.CYAN}>Tempoross is vulnerable!</col>`);
     this.hostsSay("Tempoross has submerged, fish from the whirlpools!");
     this.attacks.onSubmerge();

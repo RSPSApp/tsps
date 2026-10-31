@@ -145,11 +145,14 @@ about 2,600/2,500 per player solo down to 1,800/1,700 each with 40.
   and 10 points, Tempoross is 10572 again with seq `fsb_spawn`, water splashes (1843) and debris
   locs 41292-41295 appear. Untethering sends script 4069 (60).
 - **Lightning:** "A strong wind blows as clouds roll in..." (red); a cloud's shadow
-  (41006) shows below it, then fires (NPC 8643 "Fire" with loc 37582 on its 2x2) start.
+  (41006) shows below it; +13 Tempoross plays `fsb_lightening_cast` (8905); then fires (NPC 8643 "Fire" with loc 37582 on its 2x2) start.
+- **Surfacing:** every time (the first included) Tempoross becomes 10572 and plays `fsb_spawn`
+  (8897).
 - **Submerged:** when energy reaches 0: "Tempoross is vulnerable!" (cyan), Tempoross becomes
-  10574, the hosts say "Tempoross has submerged, fish from the whirlpools!", 11 ticks later the
-  pools become 10571. The storm resets. Energy then comes back 35 a tick; at full it surfaces
-  again ("Tempoross has surfaced, keep those cannons firing!") and the pools go inactive.
+  10574 with `fsb_ready_to_whirl` (8900), the hosts say "Tempoross has submerged, fish from the
+  whirlpools!", 11 ticks later the pools become 10571. The storm resets. Energy stays at 0 for
+  those 11 ticks, then comes back 35 a tick (solo: full in 77 ticks); at full it surfaces again
+  ("Tempoross has surfaced, keep those cannons firing!") and the pools go inactive.
 - **Enraged:** after the third surfacing: "Tempoross has gathered too much energy. The storm is
   out of control!" and the hosts say "Tempoross has gathered too much energy!".
 - **Win:** essence 0: "The skies clear as Tempoross retreats to the depths." (pink), "The
@@ -231,6 +234,11 @@ cooks half the catch, so their fishing is quicker than on a normal world:
   if any; its message to a loader ("The surge of lightning arcs from the cannon into you...")
   is the Wiki's trivia line.
 - **Spirit pool damage:** 10-120 a scatter (the Wiki's maximum of 12, ten times over).
+- **Energy regeneration for a crew:** every captured fight is solo (35 a tick of 2683). Ours
+  scales it with the maximum, so any crew gets the same 77 ticks; a flat 35 gave a crew of
+  several minutes of essence fishing.
+- **The jumping spot:** watched from start to end in captures 552 and 1858 it lasts 41-44
+  ticks; ours lasts 44.
 - **Enraged storm:** 12 a tick, so the loss comes ~30 ticks after the enrage, as captured.
 - **Messages with no capture:** "You have no harpoonfish to load.", "The crate holds <n>
   harpoonfish waiting to be fired." / "The crate is empty.", "You need a rope to tether

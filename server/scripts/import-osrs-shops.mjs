@@ -76,8 +76,6 @@ const UNBOUND = new Set([
 // NPC bindings that differ from the Wiki's shop owners: { optionSlot: [ids] }
 // to add, [ids] to drop from every slot.
 const NPC_OVERRIDES = {
-  // The Musa Point shop assistant trades too; the Wiki names only the keeper.
-  "Karamja General Store (Default)": { add: { 3: [2826] } },
   // Felix's Trade opens the Guardians of the Rift Omnishop; only the Temple of
   // the Eye quest copies of him keep this shop.
   "Temple Supplies": { remove: [11404] },

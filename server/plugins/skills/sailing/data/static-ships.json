@@ -30,8 +30,8 @@
     "configId": 13,
     "sizeX": 8,
     "sizeZ": 16,
-    "templateChunkX": 482,
-    "templateChunkY": 798,
+    "templateChunkX": 483,
+    "templateChunkY": 795,
     "deckLevel": 1,
     "walkable": "all",
     "hull": {
@@ -56,8 +56,8 @@
     "configId": 14,
     "sizeX": 8,
     "sizeZ": 16,
-    "templateChunkX": 484,
-    "templateChunkY": 798,
+    "templateChunkX": 483,
+    "templateChunkY": 795,
     "deckLevel": 1,
     "walkable": "all",
     "hull": {

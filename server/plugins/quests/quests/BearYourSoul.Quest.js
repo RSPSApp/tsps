@@ -26,7 +26,7 @@
  */
 module.exports = function registerBearYourSoulQuest(api) {
   const {
-    Animation, DialogueChainBuilder, EndDialogue, ItemIdentifiers: Items,
+    Animation, DialogueChainBuilder, EndDialogue, ItemIdentifiers: Items, ItemStatementDialogue,
     NpcDialogue, NpcIdentifiers: Npcs, PlayerDialogue,
   } = api.core;
   const { openBook, registerQuest, startTranscript } = require("../QuestRuntime");
@@ -44,7 +44,11 @@ module.exports = function registerBearYourSoulQuest(api) {
   const DAMAGED_SOUL_BEARER = Items.DAMAGED_SOUL_BEARER; // 19636
   const SOUL_BEARER = Items.SOUL_BEARER; // 19634
   const SPADE = Items.SPADE; // 952
-  const DIG_ANIMATION = new Animation(830);
+  const SEARCH_ANIMATION = new Animation(832); // human_pickuptable
+  const READ_ANIMATION = new Animation(1350); // human_readbook
+  const DIG_ANIMATION = new Animation(830); // human_dig
+  const DIG_SOUND = 1470;
+  const REPAIR_SOUND = 1595;
 
   const KEY_MASTER_PAGE = "Key Master";
   const KEY_MASTER_REPAIR_VARIANT = "during-bear-your-soul";
@@ -58,11 +62,10 @@ module.exports = function registerBearYourSoulQuest(api) {
   // The open centre of the Arceuus church; Quest Helper digs at (1699, 3794, 0).
   const CRYPT_ZONE = { minX: 1690, maxX: 1708, minY: 3784, maxY: 3804, levels: [0] };
 
-  const BOOK_FOUND_MESSAGE = "You search the bookshelf and find a copy of 'The Journey of Souls'.";
+  const BOOK_FOUND_MESSAGE = "You find:<br><col=00007f>The Journey of Souls, by Aretha.</col><br>You take a copy.";
   const BOOK_READ_MESSAGE = "The book referred to an artefact being buried in Kourend, but the author did not specify where it was buried. Maybe you could persuade her to change her mind.";
   const BEARER_FOUND_MESSAGE = "You have found the soul bearer.";
   const BEARER_ALREADY_FOUND_MESSAGE = "You have already found the soul bearer.";
-  const NO_SPACE_MESSAGE = "You don't have enough inventory space.";
   const AREATHA_REPAIRED_LINE = "I got it repaired by the Key Master";
   const AREATHA_REMINDER_LINE = "Use it carefully, traveller";
 
@@ -78,6 +81,25 @@ module.exports = function registerBearYourSoulQuest(api) {
   const ownsDamagedBearer = (player) => owns(player, DAMAGED_SOUL_BEARER);
   const ownsSoulBearer = (player) => owns(player, SOUL_BEARER);
   const stageOf = (player) => quest.getStage(player);
+
+  /** Runs one tick later when the task runtime exists, otherwise immediately. */
+  function later(player, ticks, action) {
+    const { CountdownTask, TaskManager } = api.core;
+    if (!CountdownTask || !TaskManager) {
+      action();
+      return;
+    }
+    TaskManager.submit(new CountdownTask(player, ticks, () => {
+      if (player.isRegistered?.() === false) return;
+      action();
+    }));
+  }
+
+  function showItemBox(player, itemId, text) {
+    player.getDialogueManager().startDialogues(
+      new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text))
+    );
+  }
 
   function inZone(zone, location) {
     if (!location) return false;
@@ -97,13 +119,14 @@ module.exports = function registerBearYourSoulQuest(api) {
     if (!inZone(LIBRARY_ZONE, location ?? player.getLocation?.())) return false;
     if (stageOf(player) !== STAGE_NOT_STARTED) return false;
     if (owns(player, SOUL_JOURNEY)) return false;
+    player.performAnimation?.(SEARCH_ANIMATION);
     if (inventory(player).isFull()) {
-      player.sendMessage(NO_SPACE_MESSAGE);
+      inventory(player).full();
       event.handled = true;
       return true;
     }
     inventory(player).adds(SOUL_JOURNEY, 1);
-    player.sendMessage(BOOK_FOUND_MESSAGE);
+    later(player, 1, () => showItemBox(player, SOUL_JOURNEY, BOOK_FOUND_MESSAGE));
     event.handled = true;
     return true;
   }
@@ -113,13 +136,17 @@ module.exports = function registerBearYourSoulQuest(api) {
     if (!String(event.option ?? "").toLowerCase().includes("read")) return false;
     const { player } = event;
     if (!has(player, SOUL_JOURNEY)) return false;
-    openBook(player, BOOK_TITLE, BOOK_PAGES);
-    if (stageOf(player) === STAGE_NOT_STARTED) {
-      quest.setStage(player, STAGE_BOOK_READ);
-      player.sendMessage(BOOK_READ_MESSAGE);
-    }
+    player.performAnimation?.(READ_ANIMATION);
+    openBook(player, BOOK_TITLE, BOOK_PAGES, () => finishReadingBook(player));
     event.handled = true;
     return true;
+  }
+
+  /** Live moves the stage and shows the hint only once the book is closed. */
+  function finishReadingBook(player) {
+    if (stageOf(player) !== STAGE_NOT_STARTED) return;
+    quest.setStage(player, STAGE_BOOK_READ);
+    showItemBox(player, SOUL_JOURNEY, BOOK_READ_MESSAGE);
   }
 
   // ==========================================================================
@@ -130,19 +157,13 @@ module.exports = function registerBearYourSoulQuest(api) {
     if (npcId !== ARETHA) return null;
     const value = String(text ?? "").toLowerCase();
     if (value.includes("not yet found the soul bearer")) {
-      return stageOf(player) === STAGE_BOOK_READ && !ownsDamagedBearer(player) && !quest.isComplete(player);
+      // Still askable after the directions (stage 2) until the bearer is dug up.
+      return stageOf(player) >= STAGE_BOOK_READ && !ownsDamagedBearer(player) && !quest.isComplete(player);
     }
     if (value.includes("started/completed the bear your soul miniquest")) {
       return ownsDamagedBearer(player) || quest.isComplete(player);
     }
     return null;
-  }
-
-  function handleChoice(event) {
-    if (event.npcId !== ARETHA) return;
-    if (stageOf(event.player) !== STAGE_BOOK_READ) return;
-    if (!String(event.option ?? "").startsWith("Yes please.")) return;
-    quest.setStage(event.player, STAGE_STARTED);
   }
 
   /**
@@ -152,9 +173,16 @@ module.exports = function registerBearYourSoulQuest(api) {
    */
   function handleDialogueLine(event) {
     if (event.npcId !== ARETHA) return;
-    const { player } = event;
-    if (!ownsDamagedBearer(player)) return;
     if (typeof event.text !== "string") return;
+    const { player } = event;
+    // Live moves 1 -> 2 after the Key Master line, just before this one.
+    if (stageOf(player) === STAGE_BOOK_READ && event.text.includes("Now, we buried the artefact")) {
+      event.before = () => {
+        if (stageOf(player) === STAGE_BOOK_READ) quest.setStage(player, STAGE_STARTED);
+      };
+      return;
+    }
+    if (!ownsDamagedBearer(player)) return;
     if (event.text.includes(AREATHA_REPAIRED_LINE)) {
       event.text = "About the soul bearer again... I've dug it up, but it's damaged.";
       return;
@@ -186,13 +214,14 @@ module.exports = function registerBearYourSoulQuest(api) {
       return true;
     }
     if (inventory(player).isFull()) {
-      player.sendMessage(NO_SPACE_MESSAGE);
+      inventory(player).full();
       event.handled = true;
       return true;
     }
     player.performAnimation?.(DIG_ANIMATION);
+    player.getPacketSender().sendSound(DIG_SOUND, 1, 0);
     inventory(player).adds(DAMAGED_SOUL_BEARER, 1);
-    player.sendMessage(BEARER_FOUND_MESSAGE);
+    showItemBox(player, DAMAGED_SOUL_BEARER, BEARER_FOUND_MESSAGE);
     event.handled = true;
     return true;
   }
@@ -223,8 +252,11 @@ module.exports = function registerBearYourSoulQuest(api) {
       return;
     }
     inventory(player).adds(SOUL_BEARER, 1);
+    // Live sends only the repair sound and item box here; the completion
+    // jingle, scroll and "Congratulations" line are not part of this miniquest.
+    player.getPacketSender().sendSound(REPAIR_SOUND, 1, 0);
     event.box = { items: [SOUL_BEARER] };
-    quest.complete(player);
+    quest.complete(player, { scroll: false, announce: false });
   }
 
   // ==========================================================================
@@ -286,7 +318,6 @@ module.exports = function registerBearYourSoulQuest(api) {
   api.onItemAction("Spade", { Dig: digForBearer });
   api.onNpcInteraction("Key Master", { "Talk-to": talkToKeyMaster });
   api.onNpcDialogueCondition(answerCondition);
-  api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
 };

@@ -145,6 +145,9 @@ function player({ holdDialogue = false } = {}) {
     }),
     sendMessage: (message) => messages.push(message),
     moveTo: (tile) => { location = tile; },
+    animations: [],
+    performAnimation: (animation) => p.animations.push(animation.getId()),
+    setForceMovement: (movement) => { p.forceMovement = movement; },
     getMovementQueue: () => movementQueue,
     isMovementBlocked: () => movementBlocked,
     isPlayer: () => true,
@@ -289,8 +292,10 @@ test('waterfall entry needs a worn amulet; the dungeon key, pillars, statue and 
   q.call('onObjectInteraction', objectEvent(p, ID.raft, 2509, 3493));
   q.tick(2);
   q.call('onItemOnObject', itemOnObject(p, ID.rock, ID.rope, 2512, 3468));
+  q.tick(1);
   assert.ok(p.getLocation().equals(new core.Location(2513, 3466, 0)), 'roped rock scripted crossing reaches the tree island');
   q.call('onItemOnObject', itemOnObject(p, ID.deadTree, ID.rope, 2512, 3465));
+  q.tick(3);
   assert.ok(p.getLocation().equals(new core.Location(2511, 3463, 0)), 'roped tree reaches the ledge');
 
   q.call('onObjectInteraction', objectEvent(p, ID.waterfallDoor, 2511, 3464));
@@ -732,6 +737,11 @@ test('rope crossing uses owner objects, leaves the base rock, and keeps two play
   a.moveTo(new core.Location(2512, 3476, 0));
   b.moveTo(new core.Location(2512, 3476, 0));
   q.call('onItemOnObject', itemOnObject(a, ID.rock, ID.rope, 2512, 3468));
+  assert.equal(a.animations.at(-1), 774, 'the rope is thrown first (human_throwrope, unverified)');
+  assert.ok(a.packets.some(([method, graphic, at]) => method === 'sendGraphic' && graphic.id === 67 && graphic.delay === 3
+    && at.getX() === 2512 && at.getY() === 3474), 'captured map_anim rope_piece at 2512,3474, delay 3');
+  assert.equal(MapObjects.getPrivateArea(a, 1997, rockLocation), null, 'the rope appears a tick after the throw');
+  q.tick(1);
   assert.ok(a.getLocation().equals(new core.Location(2513, 3466, 0)), 'scripted rope crossing reaches the captured tree tile');
   assert.equal(a.hasFlag('movement:ignore-clipping'), true, 'the crossing flag is scoped to the scripted steps');
   q.call('onWalkRoute', { player: a, destination: { x: 2512, y: 3476, z: 0 }, handled: false });
@@ -740,10 +750,17 @@ test('rope crossing uses owner objects, leaves the base rock, and keeps two play
   q.call('onObjectRoute', returnRoute);
   assert.deepEqual(returnRoute.destination, { x: 2513, y: 3466, z: 0 });
   q.call('onItemOnObject', itemOnObject(a, ID.rock, ID.rope, 2512, 3468));
+  q.tick(1);
   assert.ok(a.getLocation().equals(new core.Location(2512, 3476, 0)), 'scripted rope return reaches the north bank');
-  q.tick(39);
-  q.call('onItemOnObject', itemOnObject(b, ID.rock, ID.rope, 2512, 3468));
-  assert.ok(b.getLocation().equals(new core.Location(2513, 3466, 0)));
+  q.tick(2);
+  assert.equal(MapObjects.getPrivateArea(a, 1997, rockLocation), null, 'the rope is gone once the player has crossed it');
+  // Both cross again with their steps held, so the rope can be watched going behind them.
+  for (const crosser of [a, b]) {
+    crosser.moveTo(new core.Location(2512, 3476, 0));
+    crosser.getMovementQueue().addSteps = () => crosser.getMovementQueue();
+    q.call('onItemOnObject', itemOnObject(crosser, ID.rock, ID.rope, 2512, 3468));
+  }
+  q.tick(1);
   assert.ok(MapObjects.get(1996, rockLocation, null), 'the base rock is never globally deregistered');
   const ownedA = MapObjects.getPrivateArea(a, 1997, rockLocation);
   const ownedB = MapObjects.getPrivateArea(b, 1997, rockLocation);
@@ -777,18 +794,31 @@ test('rope crossing uses owner objects, leaves the base rock, and keeps two play
   assert.equal(PathFinder.calculateRoute(walker(2513, 3466), 1, 2512, 3476, 0, 0, 0, 0, false), 0,
     'there is no exact cache path back: the return is scripted');
 
-  q.tick(1); // A's 40-tick timeout fires; B has only just crossed
-  assert.equal(a.hasFlag('movement:ignore-clipping'), false, 'A timeout removes the scoped crossing flag');
-  assert.equal(MapObjects.getPrivateArea(a, 1997, rockLocation), null, 'A timeout removes only A roped rock');
-  assert.ok(MapObjects.getPrivateArea(b, 1997, rockLocation), 'A timeout does not remove B crossing');
+  // As captured, each piece goes once the player has passed it; the other player's rope stays.
+  const rope = (who, y) => MapObjects.getPrivateArea(who, 1998, new core.Location(2512, y, 0));
+  b.moveTo(new core.Location(2512, 3474, 0));
+  q.tick(1);
+  assert.equal(rope(b, 3475), null, 'the piece behind B goes');
+  assert.ok(rope(b, 3474), 'the piece under B stays');
+  assert.ok(rope(a, 3475), 'A keeps its own rope');
+  b.moveTo(new core.Location(2513, 3468, 0));
+  q.tick(1);
+  assert.equal(rope(b, 3469), null);
+  assert.equal(MapObjects.getPrivateArea(b, 1997, rockLocation), null, 'the rock reverts with the last piece');
+  assert.ok(MapObjects.getPrivateArea(a, 1997, rockLocation), 'only B rope went');
+  assert.ok(MapObjects.get(1996, rockLocation, null), 'the base rock stays');
   assert.equal(b.hasFlag('movement:ignore-clipping'), true, 'B keeps its own crossing flag');
-  assert.ok(MapObjects.get(1996, rockLocation, null), 'A timeout leaves the base rock');
   q.call('onPlayerLogout', { player: b });
-  assert.equal(MapObjects.getPrivateArea(b, 1997, rockLocation), null, 'B logout removes only B roped rock');
   assert.equal(b.hasFlag('movement:ignore-clipping'), false, 'B logout removes B scoped crossing flag');
-  assert.ok(MapObjects.get(1996, rockLocation, null), 'B logout leaves the base rock');
+  assert.ok(MapObjects.getPrivateArea(a, 1997, rockLocation), 'B logout leaves A rope');
+  q.tick(40); // A never moved on: its 40-tick fallback fires
+  assert.equal(a.hasFlag('movement:ignore-clipping'), false, 'A timeout removes the scoped crossing flag');
+  assert.equal(MapObjects.getPrivateArea(a, 1997, rockLocation), null, 'A timeout removes A roped rock');
+  assert.ok(MapObjects.get(1996, rockLocation, null), 'A timeout leaves the base rock');
   b.moveTo(new core.Location(2513, 3466, 0));
   q.call('onItemOnObject', itemOnObject(b, ID.deadTree, ID.rope, 2512, 3465));
+  assert.equal(b.animations.at(-1), 776, 'the climb down plays human_wading (unverified)');
+  q.tick(3);
   assert.ok(b.getLocation().equals(new core.Location(2511, 3463, 0)),
     'relog on the island can still use the tree without rope visuals or a recovery teleport');
 });
@@ -812,6 +842,8 @@ test('real MovementQueue walks the scripted crossing over both clipped tiles wit
     setFlag: (flag, enabled = true) => { if (enabled) flags.add(flag); else flags.delete(flag); return character; },
     removeFlag: (flag) => { flags.delete(flag); return character; },
     getMovementQueue: () => mq,
+    performAnimation() {},
+    getPacketSender: () => new Proxy({}, { get: (target, method) => () => target }),
   };
   mq = new MovementQueue(character);
   const q = register();
@@ -819,6 +851,7 @@ test('real MovementQueue walks the scripted crossing over both clipped tiles wit
   const beforeBank = RegionManager.getClipping(2512, 3475, 0, null);
   assert.ok(beforeCorner > 0 && beforeBank > 0, 'both crossing tiles are actually clipped in cache');
   q.call('onItemOnObject', itemOnObject(character, ID.rock, ID.rope, 2512, 3468));
+  q.tick(1);
   assert.equal(character.hasFlag('movement:ignore-clipping'), true);
   for (let i = 0; i < 14 && !state.location.equals(new core.Location(2513, 3466, 0)); i++) mq.process();
   assert.ok(state.location.equals(new core.Location(2513, 3466, 0)), 'real MovementQueue crosses both clipped tiles');

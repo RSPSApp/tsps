@@ -33,8 +33,8 @@
  */
 module.exports = function registerWaterfallQuest(api) {
   const {
-    ActionDialogue, DialogueChainBuilder, Equipment, Item, ItemDefinition, ItemIdentifiers,
-    ItemStatementDialogue, Location, NpcIdentifiers, Skill, StatementDialogue,
+    ActionDialogue, Animation, DialogueChainBuilder, Equipment, ForceMovement, Graphic, Item, ItemDefinition,
+    ItemIdentifiers, ItemStatementDialogue, Location, NpcIdentifiers, Skill, StatementDialogue,
   } = api.core;
   const { openBook, registerQuest } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
@@ -118,6 +118,25 @@ module.exports = function registerWaterfallQuest(api) {
     [2512, 3472], [2512, 3473], [2512, 3474], [2512, 3475], [2512, 3476],
   ];
   const WATERFALL_LEDGE = new Location(2511, 3463, 0);
+  // rsprox 1533 (rev 224, another player crossing south): tick 0 map_anim rope_piece at 2512,3474
+  // (delay 3); +1 the roped rock and the seven rope pieces; then one piece goes per tick behind the
+  // crossing player, 3475 first, and the rock reverts to 1996 with the last (3469).
+  const ROPE_PIECE_SPOTANIM = 67; // rope_piece
+  const ROPE_PIECE_DELAY = 3;
+  const ROPE_THROW_TILE_SOUTH = [2512, 3474];
+  // Unverified: the northward throw mirrors the captured southward one.
+  const ROPE_THROW_TILE_NORTH = [2512, 3470];
+  // Unverified animations (cache names; no capture shows the crossing player): the throw before the
+  // rope crossing, the swim out from the rock, the climb down from the dead tree, the barrel.
+  const THROW_ROPE_ANIM = 774; // human_throwrope
+  const SWIM_ANIM = 772; // human_swim
+  const WADING_ANIM = 776; // human_wading
+  const BARREL_ANIM = 4188; // barrel_fall_play
+  /** The dead tree to the ledge as one exact_move (unverified timing), as DragonSlayer's wall. */
+  const TREE_CLIMB_TICKS = 3;
+  const TREE_CLIMB_START_CYCLE = 30;
+  const TREE_CLIMB_END_CYCLE = 90;
+  const FACE_SOUTH = 2;
   const DOWNSTREAM_SHORE = new Location(2527, 3413, 0);
   const TOMB_LANDING = new Location(2555, 9844, 0);
   const WATERFALL_DUNGEON_LANDING = new Location(2575, 9861, 0);
@@ -458,10 +477,11 @@ module.exports = function registerWaterfallQuest(api) {
     });
   }
 
-  function travel(player, first, second, destination, onArrive) {
+  function travel(player, first, second, destination, onArrive, animation) {
     const token = { onArrive };
     travelLocks.set(player, token);
     player.getMovementQueue().reset().setBlockMovement(true);
+    if (animation !== undefined) player.performAnimation(new Animation(animation));
     Scenes.fade(player, true);
     StatementDialogue.send(player, first, false);
     Scenes.later(player, 2, () => {
@@ -475,6 +495,8 @@ module.exports = function registerWaterfallQuest(api) {
   }
 
   const crossingRopes = new WeakMap();
+  /** A thrown rope whose crossing starts next tick. */
+  const ropeThrows = new WeakMap();
   const crossingMoves = new WeakMap();
   // One in-progress travel beat per player. Closing the message any other way than
   // Continue (escape, a walk click) must still release the movement lock.
@@ -543,12 +565,37 @@ module.exports = function registerWaterfallQuest(api) {
   /** Remove this player's owned crossing scenery; the global map rock 1996 stays. */
   function clearCrossingRope(player) {
     finishCrossingMove(player);
+    removeCrossingRope(player);
+  }
+
+  function removeCrossingRope(player) {
     const state = crossingRopes.get(player);
     if (!state) return;
     crossingRopes.delete(player);
     const { ObjectManager } = api.core;
     ObjectManager.deregister(state.ropedRock, true);
     for (const rope of state.ropes) ObjectManager.deregister(rope, true);
+  }
+
+  /**
+   * As captured, each rope piece goes once the player has passed its tile, and the roped rock
+   * reverts with the last piece.
+   */
+  function retractCrossingRope(player, state, southward) {
+    if (crossingRopes.get(player) !== state) return;
+    const y = player.getLocation().getY();
+    const { ObjectManager } = api.core;
+    state.ropes = state.ropes.filter((rope) => {
+      const ropeY = rope.getLocation().getY();
+      if (southward ? ropeY <= y : ropeY >= y) return true;
+      ObjectManager.deregister(rope, true);
+      return false;
+    });
+    if (state.ropes.length === 0) {
+      removeCrossingRope(player);
+      return;
+    }
+    Scenes.later(player, 1, () => retractCrossingRope(player, state, southward));
   }
 
   /**
@@ -559,7 +606,7 @@ module.exports = function registerWaterfallQuest(api) {
    * clipType 0: registration is for client visibility/owned click identity, not
    * for collision. The global 1996 map anchor is never deregistered.
    */
-  function showCrossingRope(player) {
+  function showCrossingRope(player, southward) {
     if (crossingRopes.has(player)) return;
     const { GameObject, ObjectManager, Location } = api.core;
     const rockLocation = new Location(2512, 3468, 0);
@@ -568,7 +615,9 @@ module.exports = function registerWaterfallQuest(api) {
     const ropes = CROSSING_ROPE_TILES.map((y) =>
       new GameObject(CROSSING_ROPE_ID, new Location(2512, y, 0), 10, 2, null).setOwner(player));
     for (const rope of ropes) ObjectManager.register(rope, true);
-    crossingRopes.set(player, { ropedRock, ropes });
+    const state = { ropedRock, ropes };
+    crossingRopes.set(player, state);
+    Scenes.later(player, 1, () => retractCrossingRope(player, state, southward));
     Scenes.later(player, 40, () => clearCrossingRope(player));
   }
 
@@ -658,6 +707,8 @@ module.exports = function registerWaterfallQuest(api) {
   function handleLogout({ player }) {
     Scenes.cancel(player);
     travelLocks.delete(player);
+    treeClimbs.delete(player);
+    ropeThrows.delete(player);
     clearCrossingRope(player);
     player.getMovementQueue().setBlockMovement(false);
     Scenes.closeFade(player);
@@ -752,13 +803,35 @@ module.exports = function registerWaterfallQuest(api) {
   }
 
   function swimFromRock({ player }) {
-    travel(player, "You swim out into the water...", "...but the current is too strong, washing you downstream.", DOWNSTREAM_SHORE);
+    travel(player, "You swim out into the water...", "...but the current is too strong, washing you downstream.", DOWNSTREAM_SHORE,
+      undefined, SWIM_ANIM);
+  }
+
+  const treeClimbs = new WeakMap();
+
+  /** From the tree island down the rope to the ledge: an exact_move with the wading animation (unverified). */
+  function climbToLedge(player) {
+    if (treeClimbs.has(player) || travelLocks.has(player)) return;
+    const token = {};
+    treeClimbs.set(player, token);
+    const start = player.getLocation();
+    player.getMovementQueue().reset().setBlockMovement(true);
+    const offset = new Location(WATERFALL_LEDGE.getX() - start.getX(), WATERFALL_LEDGE.getY() - start.getY());
+    player.setForceMovement(new ForceMovement(start, offset, TREE_CLIMB_START_CYCLE, TREE_CLIMB_END_CYCLE, FACE_SOUTH, WADING_ANIM));
+    player.performAnimation(new Animation(WADING_ANIM, TREE_CLIMB_START_CYCLE));
+    Scenes.later(player, TREE_CLIMB_TICKS, () => {
+      if (treeClimbs.get(player) !== token) return;
+      treeClimbs.delete(player);
+      player.setForceMovement(null);
+      player.moveTo(WATERFALL_LEDGE);
+      player.getMovementQueue().setBlockMovement(false);
+      showStatement(player, "You tie the rope to the tree and climb down to the ledge below.");
+    });
   }
 
   function climbDeadTree({ player }) {
     if (hasItem(player, ROPE_ITEM_ID) || flag(player, ROPE_ON_TREE_ATTRIBUTE)) {
-      player.moveTo(WATERFALL_LEDGE);
-      showStatement(player, "You tie the rope to the tree and climb down to the ledge below.");
+      climbToLedge(player);
       return;
     }
     floodDownstream(player, [
@@ -769,7 +842,7 @@ module.exports = function registerWaterfallQuest(api) {
 
   function getInBarrel({ player }) {
     const message = "You climb into the barrel and push off the edge. You are carried down the river.";
-    travel(player, message, message, DOWNSTREAM_SHORE);
+    travel(player, message, message, DOWNSTREAM_SHORE, undefined, BARREL_ANIM);
   }
 
   function searchGolrieCrate({ player }) {
@@ -978,17 +1051,29 @@ module.exports = function registerWaterfallQuest(api) {
   function useRopeOnRock(event) {
     if (!CROSSING_ROCK_IDS.has(event.objectId) || event.itemId !== ROPE_ITEM_ID) return false;
     const { player } = event;
-    showCrossingRope(player);
+    const token = {};
+    ropeThrows.set(player, token);
+    removeCrossingRope(player);
     // Rope-on-rock from the north bank; from the island the same click returns.
-    walkCrossing(player, player.getLocation().getY() <= 3475 ? CROSSING_PATH_NORTH : CROSSING_PATH_SOUTH);
+    const southward = player.getLocation().getY() > 3475;
+    const [x, y] = southward ? ROPE_THROW_TILE_SOUTH : ROPE_THROW_TILE_NORTH;
+    player.getMovementQueue().reset();
+    player.performAnimation(new Animation(THROW_ROPE_ANIM));
+    player.getPacketSender().sendGraphic(new Graphic(ROPE_PIECE_SPOTANIM, ROPE_PIECE_DELAY), new Location(x, y, 0));
+    // As captured, the rope and the crossing start a tick after the throw.
+    Scenes.later(player, 1, () => {
+      if (ropeThrows.get(player) !== token) return;
+      ropeThrows.delete(player);
+      showCrossingRope(player, southward);
+      walkCrossing(player, southward ? CROSSING_PATH_SOUTH : CROSSING_PATH_NORTH);
+    });
     return true;
   }
 
   function useRopeOnTree(event) {
     if (event.objectId !== DEAD_TREE_ID || event.itemId !== ROPE_ITEM_ID) return false;
     setFlag(event.player, ROPE_ON_TREE_ATTRIBUTE);
-    event.player.moveTo(WATERFALL_LEDGE);
-    showStatement(event.player, "You tie the rope to the tree and climb down to the ledge below.");
+    climbToLedge(event.player);
     return true;
   }
 

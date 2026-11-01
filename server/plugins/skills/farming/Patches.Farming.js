@@ -602,7 +602,7 @@ function healthCheck(player, patch) {
         : crop.type === "CACTUS" ? crop.name.toLowerCase() : crop.type === "BUSH" ? "bush" : "tree";
     spam(player, `You examine the ${noun} for signs of disease and find that it is in perfect health.`);
     Services.cropRewards(player, crop);
-    core.PluginManager.emitCustomEvent("farming:check-health", { player, crop: crop.key, patch });
+    core.PluginManager.emitCustomEvent("farming:check-health", { player, crop: crop.key, type: crop.type, patch });
 }
 function hasSpaceFor(player, state) {
     const crop = Data.CROPS.get(state.crop);

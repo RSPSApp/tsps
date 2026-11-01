@@ -283,3 +283,19 @@ test("collection-log: a tier's Treasure Trails slots filled, as the real log kee
   PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: easy.items[0], silent: true });
   assert.ok(!done(f, "gain-10-unique-items-from-easy-clues"), "a slot already filled is no new one");
 });
+
+test("check-health: a grown crop's health checked, by its type (Check a grown fruit tree)", (t) => {
+  const f = pactsCharacter(t);
+  const Data = require("../plugins/skills/farming/Data.Farming");
+  const Patches = require("../plugins/skills/farming/Patches.Farming");
+  const patch = Data.CACHE.patches.find((each) => each.type === "FRUIT_TREE");
+  const state = Patches.stateFor(f.player, patch);
+  Object.assign(state, { crop: "APPLE", stage: 6, status: "grown", checked: false, lives: 6, weeds: 0, nextAt: Number.MAX_SAFE_INTEGER });
+  f.player.moveTo(new core.Location(patch.x, patch.y, patch.z));
+  t.mock.method(core.MapObjects, "get", () => null);
+  t.mock.method(core.ObjectDefinition, "forPlayer", () => ({ getInteractions: () => ["Check-health"] }));
+  PM.emitObjectInteraction({ player: f.player, object: { getId: () => patch.id, getLocation: () => new core.Location(patch.x, patch.y, patch.z), getDefinition: () => core.ObjectDefinition.forId(patch.id), getType: () => 10, getFace: () => 0, getPrivateArea: () => null }, objectId: patch.id, clickType: 1,
+    location: { x: patch.x, y: patch.y, z: patch.z }, sourceLocation: { x: patch.x, y: patch.y, z: patch.z }, handled: false });
+  assert.ok(f.messages.some((text) => /perfect health/.test(text)) || state.checked, `the real Farming checks it: ${f.messages}`);
+  assert.ok(done(f, "check-a-grown-fruit-tree"));
+});

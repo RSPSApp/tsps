@@ -614,6 +614,22 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const tier = match[2][0].toUpperCase() + match[2].slice(1).toLowerCase();
     return { trigger: { kind: "collection-log", category: `${tier} Treasure Trails`, count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
   }
+  // "Check the health of any fruit tree you've grown", "... of 5 Crystal Trees": a health check of a
+  // grown crop of that kind (the farming plugin's crop types). A cactus is only grown in the
+  // special patches and a redwood in the Farming Guild, so those places say nothing; any other
+  // place ("in Lletya", "in Marcellus's Patch") is left out.
+  if ((match = /^Check the health of (?:any |an? )?(\d+ )?(.+?)(?: you've grown| after growing one)?(?: in (?:Special patches|the Farming Guild))?\.?$/i.exec(description))) {
+    const kind = match[2].replace(/ \(Farming\)/i, "").replace(/ you've grown$/i, "").toLowerCase();
+    const types: Record<string, string> = {
+      "fruit tree": "FRUIT_TREE", "tree patch": "TREE", "calquat tree": "CALQUAT", "crystal trees": "CRYSTAL_TREE",
+      "crystal tree": "CRYSTAL_TREE", "redwood tree": "REDWOOD",
+    };
+    const count = match[1] ? Number(match[1]) : 1;
+    // A cactus is the crop itself: a potato cactus, of the same kind of patch, is not one.
+    if (kind === "cactus") return { trigger: { kind: "check-health", crops: ["CACTUS"], count } };
+    if (/\bin\b/i.test(kind) || !types[kind]) return {};
+    return { trigger: { kind: "check-health", types: [types[kind]], count } };
+  }
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {
     return { trigger: { kind: "clue", tier: match[2].toLowerCase(), count: Number(match[1]) } };

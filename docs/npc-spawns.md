@@ -185,6 +185,12 @@ The sync read a map line only when it began with `{{Map}}`, and only its first m
 The fix was applied to the data: those NPCs' Wiki spawns in the 7 affected map squares (126) were removed and synced again with the fixed script, which added back only 5 bloodvelds, where the God Wars Dungeon really lacks them; the 9 same-tile copies elsewhere were removed. The three bards at each camp stay: three different NPCs on one Wiki pin.
 
 
+## Audits
+
+- [NPC wander and aggression audit (2026-11-01)](audits/npc-wander-and-aggression.md) - every
+  spawned NPC id, the stationary/prop cases still on a positive radius, the service-NPC default
+  outliers, and the aggression-range code against the Wiki.
+
 ## Draynor jail (Prince Ali Rescue)
 
 Lady Keli, Prince Ali and Joe were spawned as their visible ids (11578, 11579, 11577), which never change, so Keli stayed in the jail after the player tied her up. Live spawns their nameless parents, keyed on the quest's varp 273, as rsprox recording 1723 shows for Keli. They're spawned as those now:

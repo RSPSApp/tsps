@@ -8,6 +8,7 @@
  * ctx.clanSettings and ctx.clanChannel read whichever of them was selected last.
  */
 import { OWN_CLAN_TYPE } from "../../../common/social/Clans";
+import { sendClanChannelAction } from "../../../network/ServerConnection";
 import { Opcodes } from "../Opcodes";
 import type { ClanChannel, ClanSettings, HandlerMap } from "./HandlerTypes";
 
@@ -211,11 +212,11 @@ export function registerClanOps(handlers: HandlerMap): void {
     });
 
     // Add user to ban list from channel (action - no return)
-    // Pops: clan, userSlot (in channel)
+    // Pops: userSlot (in channel), clan (clan_sidepanel_op's call)
     handlers.set(Opcodes.AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL, (ctx) => {
         ctx.intStackSize -= 2;
-        // This would send a server request to ban the user
-        // Implementation depends on server protocol
+        const slot = ctx.intStack[ctx.intStackSize];
+        sendClanChannelAction("ban", slot);
     });
 
     // Get affined member join date (runeday)
@@ -232,11 +233,12 @@ export function registerClanOps(handlers: HandlerMap): void {
     });
 
     // Set affined member muted status from channel (action - no return)
-    // Pops: clan, userSlot, muted (1 = mute, 0 = unmute)
+    // Pops: userSlot, muted (1 = mute, 0 = unmute), clan
     handlers.set(Opcodes.AFFINEDCLANSETTINGS_SETMUTED_FROMCHANNEL, (ctx) => {
         ctx.intStackSize -= 3;
-        // This would send a server request to mute/unmute the user
-        // Implementation depends on server protocol
+        const slot = ctx.intStack[ctx.intStackSize];
+        const muted = ctx.intStack[ctx.intStackSize + 1];
+        sendClanChannelAction("mute", slot, muted);
     });
 
     // Get affined member muted status
@@ -335,9 +337,8 @@ export function registerClanOps(handlers: HandlerMap): void {
     // Kick user from channel (action - no return)
     // Pops: userSlot
     handlers.set(Opcodes.ACTIVECLANCHANNEL_KICKUSER, (ctx) => {
-        ctx.intStackSize--; // Pop userSlot
-        // This would send a server request to kick the user
-        // Implementation depends on server protocol
+        const slot = ctx.intStack[--ctx.intStackSize];
+        sendClanChannelAction("kick", slot);
     });
 
     // Find online user slot by name

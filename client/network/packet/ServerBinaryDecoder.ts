@@ -13,7 +13,7 @@ import {
 } from "../../common/instance/InstanceTypes";
 import { SERVER_PACKET_LENGTHS, ServerPacketId } from "../../common/packets/ServerPacketId";
 import type { ProjectileLaunch } from "../../common/projectiles/ProjectileLaunch";
-import type { ClanChannelDeltaEvent, KeyedClanChannel } from "../../common/social/Clans";
+import type { ClanChannelDeltaEvent, ClanSettingsDeltaUpdate, KeyedClanChannel } from "../../common/social/Clans";
 import type { FriendsChatSnapshot } from "../../common/social/FriendsChat";
 import type { ClanSettings } from "../../rs/cs2/handlers/HandlerTypes";
 import type { WorldEntityBuildArea } from "../../common/worldentity/WorldEntityTypes";
@@ -1275,6 +1275,36 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 settings.parameters!.set(id, reader.readInt());
             }
             return { type: "clan_settings", payload: { clanType, settings } };
+        }
+
+        case ServerPacketId.CLAN_SETTINGS_DELTA: {
+            const clanType = reader.readSignedByte();
+            reader.readInt(); // updateNum: every delta applies, in order
+            const updates: ClanSettingsDeltaUpdate[] = [];
+            const count = reader.readShort();
+            for (let i = 0; i < count; i++) {
+                const kind = reader.readByte();
+                if (kind === 1) {
+                    updates.push({ type: "add_member", name: reader.readString(), joinRuneDay: reader.readShort() });
+                } else if (kind === 2) {
+                    updates.push({ type: "delete_member", index: reader.readShort() });
+                } else if (kind === 3) {
+                    updates.push({ type: "member_rank", index: reader.readShort(), rank: reader.readSignedByte() });
+                } else if (kind === 4) {
+                    updates.push({ type: "member_muted", index: reader.readShort(), muted: reader.readBoolean() });
+                } else if (kind === 5) {
+                    updates.push({
+                        type: "member_extra_info",
+                        index: reader.readShort(),
+                        value: reader.readInt(),
+                        startBit: reader.readByte(),
+                        endBit: reader.readByte(),
+                    });
+                } else {
+                    updates.push({ type: "int_setting", setting: reader.readShort(), value: reader.readInt() });
+                }
+            }
+            return { type: "clan_settings_delta", payload: { clanType, updates } };
         }
 
         case ServerPacketId.CLAN_CHANNEL_FULL: {

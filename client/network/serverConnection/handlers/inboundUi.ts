@@ -1,4 +1,4 @@
-import { applyClanChannelDelta } from "../../../common/social/Clans";
+import { applyClanChannelDelta, applyClanSettingsDelta } from "../../../common/social/Clans";
 import { ClientState } from "../../../game/ClientState";
 import {
     VARP_AREA_SOUNDS_VOLUME,
@@ -258,7 +258,12 @@ export function handleInboundUi(msg: any): boolean {
         }
         return true;
     }
-    if (msg.type === "clan_settings" || msg.type === "clan_channel" || msg.type === "clan_channel_delta") {
+    if (
+        msg.type === "clan_settings" ||
+        msg.type === "clan_settings_delta" ||
+        msg.type === "clan_channel" ||
+        msg.type === "clan_channel_delta"
+    ) {
         applyClanMessage(msg);
         for (const cb of state.clanListeners) {
             try {
@@ -337,6 +342,9 @@ function applyClanMessage(msg: any): void {
     if (msg.type === "clan_settings") {
         if (msg.payload.settings) settings.set(clanType, msg.payload.settings);
         else settings.delete(clanType);
+    } else if (msg.type === "clan_settings_delta") {
+        const held = settings.get(clanType);
+        if (held) settings.set(clanType, applyClanSettingsDelta(held, msg.payload.updates));
     } else if (msg.type === "clan_channel") {
         if (msg.payload.channel) channels.set(clanType, msg.payload.channel);
         else channels.delete(clanType);

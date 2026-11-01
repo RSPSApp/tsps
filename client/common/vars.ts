@@ -329,6 +329,7 @@ export const FEATURE_FLAG_LEAGUES = 1 << 1;
 export const ADVENTURE_PATHS_TRANSMIT_VARPS: readonly number[] = [2357, 2358, 2359, 2370];
 
 export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
+    3023, 3024, 3025, 3026, 3027, // clan_editing_0-4: the clan Rank Titles screen's edits
     VARP_OPTION_RUN, // Run toggle
     VARP_ATTACK_STYLE, // Combat attack style
     VARP_AUTO_RETALIATE, // Auto-retaliate toggle

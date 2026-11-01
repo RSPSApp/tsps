@@ -3,10 +3,11 @@ import assert from "assert";
 import {
     encodeClanChannelDelta,
     encodeClanChannelFull,
+    encodeClanSettingsDelta,
     encodeClanSettingsFull,
 } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
-import { applyClanChannelDelta } from "../common/social/Clans";
+import { applyClanChannelDelta, applyClanSettingsDelta } from "../common/social/Clans";
 import { registerClanOps } from "../rs/cs2/handlers/ClanOps";
 import { Opcodes } from "../rs/cs2/Opcodes";
 import type { HandlerMap } from "../rs/cs2/handlers/HandlerTypes";
@@ -51,6 +52,27 @@ assert.equal(own.parameters.get(6), 350);
 
 assert.deepEqual(decode(encodeClanSettingsFull(0, null)).payload, { clanType: 0, settings: null });
 assert.deepEqual(decode(encodeClanChannelFull(0, null)).payload, { clanType: 0, channel: null });
+
+const settingsDelta = decode(
+    encodeClanSettingsDelta(0, 4, [
+        { type: "add_member", name: "Bob", joinRuneDay: 8720 },
+        { type: "member_rank", index: 0, rank: 115 },
+        { type: "member_muted", index: 0, muted: false },
+        { type: "member_extra_info", index: 1, value: 1835, startBit: 0, endBit: 12 },
+        { type: "int_setting", setting: 8, value: 8715 },
+        { type: "delete_member", index: 1 },
+    ]),
+);
+assert.equal(settingsDelta.type, "clan_settings_delta");
+const changed = applyClanSettingsDelta(own, settingsDelta.payload.updates);
+assert.deepEqual(changed.memberNames, ["Zed", "Bob"]);
+assert.deepEqual(changed.memberRanks, [115, 0]);
+assert.deepEqual(changed.memberMuted, [false, false]);
+assert.deepEqual(changed.memberJoinDays, [8715, 8720]);
+assert.equal(changed.parameters?.get(8), 8715);
+assert.deepEqual(own.memberNames, ["Zed", "Amy"], "the old settings are not changed");
+const extra = applyClanSettingsDelta(own, [{ type: "member_extra_info", index: 0, value: 3, startBit: 1, endBit: 2 }]);
+assert.equal(extra.memberExtraInfo[0], 7, "only its own bits");
 
 const channel = decode(
     encodeClanChannelFull(0, {

@@ -2430,6 +2430,7 @@ export class PluginManager {
       encodeClanSettingsFull: require("../net/protocol/ClientProtocol").encodeClanSettingsFull,
       encodeClanChannelFull: require("../net/protocol/ClientProtocol").encodeClanChannelFull,
       encodeClanChannelDelta: require("../net/protocol/ClientProtocol").encodeClanChannelDelta,
+      encodeClanSettingsDelta: require("../net/protocol/ClientProtocol").encodeClanSettingsDelta,
       MOBILE_CLIENT_ATTRIBUTE: require("../net/protocol/ClientProtocol").MOBILE_CLIENT_ATTRIBUTE,
       XPDROPS_ENABLED_ATTRIBUTE: require("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE,
       encodeGameframeBootstrap: require("../net/protocol/ClientProtocol").encodeGameframeBootstrap,

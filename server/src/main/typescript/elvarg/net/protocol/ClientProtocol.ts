@@ -266,6 +266,7 @@ export type ClientMessage =
   | { type: "world_entity_option"; index: number; clickType: number }
   | { type: "chat"; text: string; messageType: "public" | "game" | "friends_chat"; autoChat?: boolean; style?: ChatStyle }
   | { type: "clan_chat"; clanType: number; text: string }
+  | { type: "clan_channel_action"; action: "kick" | "ban" | "mute"; slot: number; value: number }
   | { type: "friends_chat_action"; action: FriendsChatAction }
   | { type: "private_message"; recipient: string; text: string }
   | { type: "chat_filter"; publicMode: number; privateMode: number; tradeMode: number }
@@ -803,6 +804,11 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
         ? { type: "chat", messageType: "public", autoChat: true, text, ...(style && { style }) }
         : { type: "chat", messageType, text, ...(style && { style }) };
     }
+    case HighClientPacket.CLAN_CHANNEL_ACTION: {
+      const action = (["kick", "ban", "mute"] as const)[reader.byte()] ?? "kick";
+      const slot = reader.short();
+      return { type: "clan_channel_action", action, slot, value: reader.byte() };
+    }
     case HighClientPacket.FRIENDS_CHAT_ACTION: {
       const actionCode = reader.byte();
       const name = reader.string();
@@ -1252,6 +1258,28 @@ export function encodeClanChannelDelta(
     );
   }
   return encodeServerPacket(ServerPacketId.CLAN_CHANNEL_DELTA, Buffer.concat(parts));
+}
+
+export type ClanSettingsDeltaUpdate =
+  | { type: "add_member"; name: string; joinRuneDay: number }
+  | { type: "delete_member"; index: number }
+  | { type: "member_rank"; index: number; rank: number }
+  | { type: "member_muted"; index: number; muted: boolean }
+  | { type: "member_extra_info"; index: number; value: number; startBit: number; endBit: number }
+  | { type: "int_setting"; setting: number; value: number };
+
+export function encodeClanSettingsDelta(clanType: number, updateNum: number, updates: ClanSettingsDeltaUpdate[]): Buffer {
+  const parts: Buffer[] = [Buffer.from([clanType & 0xff]), i32(updateNum), u16(updates.length)];
+  for (const update of updates) {
+    if (update.type === "add_member") parts.push(Buffer.from([1]), string(update.name), u16(update.joinRuneDay));
+    else if (update.type === "delete_member") parts.push(Buffer.from([2]), u16(update.index));
+    else if (update.type === "member_rank") parts.push(Buffer.from([3]), u16(update.index), Buffer.from([update.rank & 0xff]));
+    else if (update.type === "member_muted") parts.push(Buffer.from([4]), u16(update.index), Buffer.from([update.muted ? 1 : 0]));
+    else if (update.type === "member_extra_info") {
+      parts.push(Buffer.from([5]), u16(update.index), i32(update.value), Buffer.from([update.startBit, update.endBit]));
+    } else parts.push(Buffer.from([6]), u16(update.setting), i32(update.value));
+  }
+  return encodeServerPacket(ServerPacketId.CLAN_SETTINGS_DELTA, Buffer.concat(parts));
 }
 
 export function encodeVarp(id: number, value: number): Buffer {

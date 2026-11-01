@@ -5,6 +5,7 @@
 
 const Core = require("./Core.Clans");
 const Formation = require("./Formation.Clans");
+const Management = require("./Management.Clans");
 const Settings = require("./Settings.Clans");
 const Store = require("./Store.Clans");
 const { FriendsChatManager } = require("../FriendsChatManager");
@@ -62,6 +63,7 @@ function login({ player }) {
     return;
   }
   const member = Core.memberOf(clan, Core.accountOf(player));
+  Core.noteSeen(clan, member);
   if (member.rank === Core.RANK_OWNER) {
     clan.ownerLastSeen = Date.now();
     Store.save();
@@ -117,6 +119,44 @@ function clickYourClan(event) {
   event.handled = true;
 }
 
+/** A channel user's right-click ops (clan_sidepanel_op), by their channel slot. */
+function channelAction(event) {
+  const { player, packet } = event;
+  if (packet.type !== "clan_channel_action") return;
+  event.handled = true;
+  const channel = Core.channelOf(player);
+  const own = channel && Core.memberOf(channel.clan, Core.accountOf(player));
+  const target = channel?.users[packet.slot];
+  if (!own || !target || target.player === player) return;
+  const { clan } = channel;
+  if (packet.action === "kick") {
+    if (own.rank < clan.kickRank || target.rank >= own.rank) {
+      player.sendMessage("You are not a high enough rank to kick that player.");
+      return;
+    }
+    Core.removeFromChannel(target.player);
+    Core.send(target.player, core.encodeClanChannelFull(Core.OWN_CLAN, null));
+    Core.sendNotice(target.player, "You have been kicked from the channel.");
+    return;
+  }
+  if (packet.action === "mute") {
+    const member = Core.memberOf(clan, Core.accountOf(target.player));
+    if (member && own.rank >= clan.kickRank && member.rank < own.rank) Core.setMemberMuted(clan, member, packet.value === 1);
+    return;
+  }
+  if (Core.memberOf(clan, Core.accountOf(target.player))) {
+    player.sendMessage("That player must be expelled from the clan before they can be banned.");
+    return;
+  }
+  if (own.rank < Core.permissionRank(clan, Core.SETTING_BAN)) {
+    player.sendMessage("You are not a high enough rank to ban players.");
+    return;
+  }
+  Core.setBanned(clan, [...(clan.banned ?? []), target.name]);
+  Core.removeFromChannel(target.player);
+  Core.send(target.player, core.encodeClanChannelFull(Core.OWN_CLAN, null));
+}
+
 function chat(event) {
   const { player, packet } = event;
   if (packet.type !== "clan_chat") return;
@@ -125,6 +165,15 @@ function chat(event) {
   const channel = Core.channelOf(player);
   if (!channel) {
     Core.sendNotice(player, "You are not currently in a clan channel.");
+    return;
+  }
+  const speaker = Core.memberOf(channel.clan, Core.accountOf(player));
+  if (speaker?.muted) {
+    Core.sendNotice(player, "You are muted in this clan's channel.");
+    return;
+  }
+  if ((speaker?.rank ?? -1) < channel.clan.talkRank) {
+    Core.sendNotice(player, "You are not a high enough rank to talk in this clan's channel.");
     return;
   }
   const text = FriendsChatManager.cleanMessage(packet.text, MAX_MESSAGE_LENGTH);
@@ -225,8 +274,12 @@ function recruitClanMember(player, target) {
     player.sendMessage("You can only recruit at the Clan Hub, or with a clan vexillum equipped.");
     return;
   }
-  if (Core.memberOf(clan, Core.accountOf(player)).rank < Core.RANK_ADMINISTRATOR) {
+  if (Core.memberOf(clan, Core.accountOf(player)).rank < Core.permissionRank(clan, Core.SETTING_RECRUIT)) {
     player.sendMessage("You are not a high enough rank to recruit.");
+    return;
+  }
+  if (Core.isBanned(clan, target.getUsername())) {
+    player.sendMessage(`${target.getUsername()} is banned from your clan.`);
     return;
   }
   if (clan.members.length >= Core.MAX_MEMBERS) {
@@ -315,13 +368,17 @@ module.exports = {
     emit = api.emitCustomEvent;
     Core.init(api.core);
     Settings.init(api.core);
+    Management.init(Settings.open);
     Formation.init(api);
     api.onCustomEvent("player:bootstrap-complete", login);
     api.onPlayerLogout(logout);
     api.onSocialPacket(chat);
+    api.onSocialPacket(channelAction);
     api.onInterfaceActionClick(clickYourClan);
     api.onInterfaceActionClick(Formation.clickPanel);
     api.onInterfaceActionClick(Settings.click);
+    api.onInterfaceActionClick(Management.click);
+    api.onCustomEvent("player:varp-transmit", Management.varpTransmitted);
     api.onPlayerOption(recruit);
     api.onPlayerMapSquareChange(mapSquareChanged);
     api.onCanEquip(vexillumChanging);

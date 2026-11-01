@@ -2,7 +2,7 @@
 
 The OSRS Clan system (`//` chat, the Your Clan tab), which is separate from the old Clan Chat, now
 called the Chat-channel ([social-chat-and-following.md](social-chat-and-following.md)). This page is
-the plan and the facts it relies on. Phases 1 and 2 are built; the rest is not.
+the plan and the facts it relies on. Phases 1 to 3 are built; the rest is not.
 
 ## Evidence
 
@@ -42,6 +42,25 @@ scripts and the Wiki, with these filled in by us:
 Settings (690) is captured in rsprox 2778: the `4289` and `4290` rows, and buttons `690:20` Members,
 `690:21` Applicants, `690:23` Permissions. Leave and Resign have no capture.
 
+## Evidence for ranks and permissions
+
+| Fact | Source |
+| --- | --- |
+| Members opens with varp 3021 = 16646144, then `IfSetEvents` on `693:19`, `20`, `11`, `13`, then scripts 4257 and 4258 with each online member's combat and total by slot | 2778, 2896, 3086 |
+| A row click (`693:11`, sub = slot) mounts 289 on `693:27` and runs 4316(title, current, 0, max, canExpel, popup); `ResumePCountDialog` answers rank + 1; the popup closes and a `ClanSettingsDelta` follows | 2896 ticks 31-40, 3086 |
+| The top of the range is the next rank below your own: 125 for an owner, 120 in a recording where the player is Deputy Owner | 2778, 2895 |
+| "You can only edit the ranks of players whose ranks are lower than yours." | 3084 tick 188 |
+| Login sends a delta of last seen (extra info bits 0-12, day less 6880) and setting 8, today | 3886 tick 664, 3086 tick 7 |
+| "X has been inactive for over 90 days. The new Clan Owner is Y." comes without a 7-day wait | decoded recordings |
+| Permission rows and their settings: `data/permissions.json`, generated from the pinned dumps' enums 3825-5731, `clan_permission_get` and the structs. Stored as rank + 2 | pinned dumps; 3886 |
+| Default ranks for rows with no minimum: rank 0 for notifications and coffer deposit, as 3886's clan has them; Administrator otherwise (ours) | 3886 |
+
+No capture holds a permission edit, ban, kick, mute, rename or title edit. Those follow the cache's
+scripts and the Wiki: `ACTIVECLANCHANNEL_KICKUSER` and friends now send `CLAN_CHANNEL_ACTION`, and
+Rank Titles has the client pass varps 3023-3027 (`clan_editing_0-4`, which mirror settings 1-5) to
+the server as the screen's scripts change them. All their refusals and prompts are ours. Ranks 96-104
+and 124 keep their default titles: their settings have no `clan_editing` varp in the dump.
+
 ## How tsps carries it
 
 - **Settings and channel state** use `CLAN_SETTINGS_FULL`, `CLAN_CHANNEL_FULL` and
@@ -73,26 +92,31 @@ in a clan channel." for `//` outside a channel, which has no capture.
 - The Clerk at the Clan Hub and the creation side panel (705): Invite in target mode, the name
   prompt, Cancel and Confirm, with five founders, 25 hours each, a unique name and one clan a day.
 - `Recruit`, around the hub or with a vexillum on, for Administrators and up; the target must accept aid.
-- Settings (690) with its rows, Leave Clan and Resign (7 days, undoable). An owner away 90 days
-  starts resigning. A clan with nobody left is deleted when the 7 days are up.
-- The Clerk's Items option. The other Settings rows and buttons say they aren't available yet.
+- Settings (690) with its rows, Leave Clan and Resign (7 days, undoable). An owner away 90 days is
+  replaced at once. A sole owner who resigns has the clan deleted when the 7 days are up.
+- The Clerk's Items option.
 
-### 3. Settings, ranks and permissions
+### 3. Settings, ranks and permissions (built)
 
-- Clan Settings interfaces: `clans_members` (693), `clans_permissions` (706), `clans_ranktitles` (695),
-  `clans_banned` (689), `clans_applicants` (699), `clans_board` (700), and `clans_info`'s editable rows.
-- `ClanSettingsDelta`, which live sends for changes (3886 tick 664). Phase 1 resends the full packet.
-- Talk, kick and ban rank enforcement; `ACTIVECLANCHANNEL_KICKUSER`,
-  `AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL`, `AFFINEDCLANSETTINGS_SETMUTED_FROMCHANNEL`, which are
-  empty on the client today. Refusal texts have no capture yet.
+- Members (693): ranks through the popup, expelling, the rank filters, combat and total columns.
+- Permissions (706): every rank row, with Permission access and each row's minimum. Rows for guest
+  rules and broadcast thresholds say they aren't available yet (phases 4 and 5).
+- Bans (689): add and unban, 100 names, outsiders only. Rank Titles (695).
+- Settings rows: Rename (owner, every 7 days), Talk in chat, Guests may listen.
+- Talk rank and mute enforced; kick, ban and mute from the channel list.
+- `ClanSettingsDelta` for ranks, members, mutes, permissions, titles and last seen.
+
+Not verified: dragging titles and clicking popup rows in the client. Those were driven through the
+packets, because the browser pane was hidden.
 
 ### 4. Guest clans
 
 - `///` and `/g`, chat type 44 and 46, interface 702, `find_listened`, the guest rules (Guests may
   listen, minimum levels), Find.
+- Applicants (699) and the recruitment board (700), captured in 2778: applying is a guest's action.
 
 ### 5. Around the clan
 
 - Broadcasts through `MessageClanChannelSystem` with their Notifications thresholds.
-- Clan Hall, coffer, events, recruitment board, cloak and vexillum.
+- Clan Hall, coffer, events, interests (691), the outfit (694), cloak and vexillum colours.
 - Gateway: map the three packets and type 41 and 43 in `gateway/`, whose `COVERAGE.md` drops clans.

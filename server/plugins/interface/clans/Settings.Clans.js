@@ -1,10 +1,11 @@
 /**
- * The Settings button's interface (clans_info, 690), filled as rsprox 2778 shows. Leaving and
- * resigning are here; their confirmations and messages have no capture, so the wording is ours
- * apart from the rows. The other rows and buttons are later phases (docs/clans.md).
+ * The Settings button's interface (clans_info, 690), filled as rsprox 2778 shows, and its rows.
+ * Edits have no capture, so their prompts and messages are ours (docs/clans.md).
  */
 
 const Core = require("./Core.Clans");
+const Management = require("./Management.Clans");
+const Store = require("./Store.Clans");
 
 const SETTINGS_GROUP = 690;
 const uid = (child) => (SETTINGS_GROUP << 16) | child;
@@ -16,7 +17,16 @@ const RESIGN_ROW = 13;
 const INTERESTS_ROW = 14;
 const TALK_ROW = 15;
 const GUESTS_ROW = 16;
+const MEMBERS_BUTTON = 20;
+const PERMISSIONS_BUTTON = 23;
+const TITLES_BUTTON = 24;
+const BANS_BUTTON = 25;
 const LEAVE_BUTTON = 26;
+const POPUP = 27;
+const MAX_NAME_LENGTH = 20;
+const RENAME_COOLDOWN_MS = 7 * 86400000; // Wiki: Clan Settings
+const STRUCT_TALK = 2954;
+const ENUM_3797_GUEST = "Guest";
 const STATIC_ROWS_SCRIPT = 4289; // clan_info_static
 const EDITABLE_ROW_SCRIPT = 4290; // clan_info_editable
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -57,8 +67,17 @@ function draw(player, clan) {
   sender.sendInterfaceDisplayState(uid(RESIGN_ROW), !isOwner);
   if (isOwner) row(ownershipRow(clan, Date.now()), RESIGN_ROW);
   row(`Interests:|${highlight("None")}`, INTERESTS_ROW);
-  row(`Talk in chat:|${highlight("Guest")}`, TALK_ROW);
+  row(`Talk in chat:|${highlight(rankName(clan.talkRank))}`, TALK_ROW);
   row(`Guests may listen in chat:|${highlight(clan.allowGuests ? "Permitted" : "Not permitted")}`, GUESTS_ROW, 0);
+}
+
+/** Only what a new clan's own Talk row can be set to without the title lookup the client does. */
+function rankName(rank) {
+  if (rank === -1) return ENUM_3797_GUEST;
+  if (rank === Core.RANK_OWNER) return "Owner";
+  if (rank === 125) return "Deputy Owner";
+  if (rank === Core.RANK_ADMINISTRATOR) return "Administrator";
+  return `Rank ${rank}+`;
 }
 
 function open(player) {
@@ -110,6 +129,58 @@ function clickLeave(player, clan) {
   });
 }
 
+function askRename(player, clan) {
+  if (Core.memberOf(clan, Core.accountOf(player))?.rank !== Core.RANK_OWNER) {
+    player.sendMessage("Only the clan's owner can rename it.");
+    return;
+  }
+  const waited = Date.now() - (clan.renamedAt ?? 0);
+  if (waited < RENAME_COOLDOWN_MS) {
+    player.sendMessage("A clan can only be renamed once every 7 days.");
+    return;
+  }
+  player.setEnteredSyntaxAction({ execute: (text) => rename(player, clan, String(text ?? "").trim()) });
+  player.getPacketSender().sendEnterInputPrompt("Enter your clan's new name:");
+}
+
+function rename(player, clan, name) {
+  if (!name || name.length > MAX_NAME_LENGTH || !/^[a-z0-9 _-]+$/i.test(name)) {
+    player.sendMessage(`Clan names are up to ${MAX_NAME_LENGTH} letters, numbers and spaces.`);
+    return;
+  }
+  if (Store.byName(name)) {
+    player.sendMessage("That name is taken.");
+    return;
+  }
+  clan.name = name;
+  clan.renamedAt = Date.now();
+  Core.refreshClan(clan);
+  draw(player, clan);
+}
+
+function hasPermissionAccess(player, clan) {
+  const own = Core.memberOf(clan, Core.accountOf(player));
+  if (own && own.rank >= Core.permissionRank(clan, Core.SETTING_PERMISSIONS)) return true;
+  player.sendMessage("You are not a high enough rank to change that.");
+  return false;
+}
+
+function clickTalkRow(player, clan) {
+  if (!hasPermissionAccess(player, clan)) return;
+  const own = Core.memberOf(clan, Core.accountOf(player));
+  Management.showRankPopup(player, "Talk in chat:", clan.talkRank, -1, own.rank, false, uid(POPUP), (rank) => {
+    Core.setRowRank(clan, Core.rowByStruct(STRUCT_TALK), rank);
+    draw(player, clan);
+  });
+}
+
+function clickGuestsRow(player, clan) {
+  if (!hasPermissionAccess(player, clan)) return;
+  clan.allowGuests = !clan.allowGuests;
+  Core.refreshClan(clan);
+  draw(player, clan);
+}
+
 function click(event) {
   if (event.groupId !== SETTINGS_GROUP) return;
   const { player, childId } = event;
@@ -122,6 +193,13 @@ function click(event) {
   if (!clan) return;
   if (childId === RESIGN_ROW) clickResign(player, clan);
   else if (childId === LEAVE_BUTTON) clickLeave(player, clan);
+  else if (childId === NAME_ROW) askRename(player, clan);
+  else if (childId === TALK_ROW) clickTalkRow(player, clan);
+  else if (childId === GUESTS_ROW) clickGuestsRow(player, clan);
+  else if (childId === MEMBERS_BUTTON) Management.openMembers(player, clan);
+  else if (childId === PERMISSIONS_BUTTON) Management.openPermissions(player);
+  else if (childId === TITLES_BUTTON) Management.openTitles(player, clan);
+  else if (childId === BANS_BUTTON) Management.openBans(player, clan);
   else player.sendMessage("That part of the clan settings is not available yet.");
 }
 

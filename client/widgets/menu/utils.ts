@@ -508,6 +508,16 @@ function applyScreenTransformToWidgetAbs(w: any, transform: RootRenderTransform)
         (w as any)._absLogicalY = logicalAbsY;
         w._absY = Math.round(logicalAbsY * transform.scaleY + transform.offsetY);
     }
+    if (typeof w.width === "number") {
+        const logicalX = typeof w._absLogicalX === "number" ? w._absLogicalX : 0;
+        w._absWidth = Math.max(1, Math.round((logicalX + w.width) * transform.scaleX + transform.offsetX) - w._absX);
+    }
+    if (typeof w.height === "number") {
+        const logicalY = typeof w._absLogicalY === "number" ? w._absLogicalY : 0;
+        w._absHeight = Math.max(1, Math.round((logicalY + w.height) * transform.scaleY + transform.offsetY) - w._absY);
+    }
+    w._absScaleX = transform.scaleX;
+    w._absScaleY = transform.scaleY;
 }
 
 /**

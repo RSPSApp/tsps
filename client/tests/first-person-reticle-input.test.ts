@@ -656,6 +656,17 @@ try {
         { overlayScaleX: 2, overlayScaleY: 2 } as any,
         { _absX: 920, _absY: 320, _absWidth: 72, _absHeight: 64 } as any,
     ), { x: 478, y: 176 }, "inventory clicks account for overlay scaling");
+    const scaledHitRoot = {
+        uid: 8100 << 16, x: 10, y: 10, width: 40, height: 30, type: 0,
+        __widgetRenderScaleX: 1.5, __widgetRenderScaleY: 2,
+        __widgetRenderOffsetX: 4, __widgetRenderOffsetY: 6,
+        children: [{ uid: (8100 << 16) | 1, x: 3, y: 4, width: 11, height: 7, type: 5 }],
+    };
+    const scaledHit = collectWidgetsAtPointAcrossRoots([scaledHitRoot], 25, 42, new Map(), () => [])[1];
+    assert.equal(scaledHit._absX, 24);
+    assert.equal(scaledHit._absY, 34);
+    assert.equal(scaledHit._absWidth, 16, "hit bounds use scaled right edge rounding");
+    assert.equal(scaledHit._absHeight, 14, "hit bounds use scaled bottom edge rounding");
     const nativeActions: any[] = [];
     const interaction = {
         clickedWidget: null as any, clickedWidgetParent: null, clickedWidgetHandled: false,
@@ -1169,4 +1180,3 @@ console.log("first-person reticle input ok");
     }
 }
 console.log("crosshair aim ok");
-

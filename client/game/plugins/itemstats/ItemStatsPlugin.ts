@@ -9,6 +9,7 @@ import type { ClientPlugin, WidgetOverlay, WidgetOverlayDrawContext } from "../C
 import { compareWornGear, readItemStats, type ItemStats, type WornItem } from "./itemStats";
 import { buildCombatStatGroups, type ItemStatsGroup, type ItemStatsRow } from "./itemStatsPresentation";
 import { canonicalItemId } from "../inventorytags/inventoryTags";
+import { collectWidgetsAtPointAcrossRoots } from "../../../widgets/menu/utils";
 import { foodStatsForName, potionStatsForName, runeStatsForName } from "./consumableStats";
 import {
     fallbackInteractionBounds,
@@ -69,26 +70,29 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             return this.signatureValue = "";
         }
         let hovered: typeof this.hovered;
-        const seen = new Set<any>();
-        const visit = (widget: any, inheritedHidden = false): void => {
-            if (!widget || seen.has(widget)) return;
-            seen.add(widget);
-            const hidden = inheritedHidden || widget.hidden === true || widget.isHidden === true;
-            if (hidden) return;
+        // Use the same live tree walk as widget input. It computes positions from
+        // current parent offsets and applies scroll/mount scissors, so culled widgets
+        // cannot leave stale _abs* bounds eligible for this overlay.
+        const roots = typeof manager.getInputRoots === "function" ? manager.getInputRoots() : [];
+        const hits = collectWidgetsAtPointAcrossRoots(
+            roots,
+            x,
+            y,
+            new Map<number, boolean>(),
+            (uid) => manager.getStaticChildrenByParentUid?.(uid) ?? [],
+            (containerUid) => {
+                const group = manager.interfaceParents?.get(containerUid)?.group;
+                return typeof group === "number" ? manager.getAllGroupRoots?.(group) ?? [] : [];
+            },
+        );
+        for (const widget of hits) {
+            const groupId = Number(widget.groupId ?? (Number(widget.uid) >>> 16));
+            if (!ITEM_GROUPS.includes(groupId as (typeof ITEM_GROUPS)[number])) continue;
             const id = Number(widget.itemId);
+            if (!Number.isInteger(id) || id < 0) continue;
             const wx = Number(widget._absX), wy = Number(widget._absY);
             const ww = Number(widget._absWidth), wh = Number(widget._absHeight);
-            if (Number.isInteger(id) && id >= 0 && ww > 0 && wh > 0 && x >= wx && y >= wy && x < wx + ww && y < wy + wh) {
-                // Later children are drawn above their parents, so retain the deepest hit.
-                hovered = { itemId: id, x: wx, y: wy, w: ww, h: wh };
-            }
-            for (const child of widget.children ?? []) visit(child, hidden);
-        };
-        for (const group of ITEM_GROUPS) {
-            for (const widget of manager.getWidgetsForGroup?.(group) ?? []) {
-                if (typeof widget?.uid === "number" && manager.isEffectivelyHidden?.(widget.uid)) continue;
-                visit(widget);
-            }
+            if (ww > 0 && wh > 0) hovered = { itemId: id, x: wx, y: wy, w: ww, h: wh };
         }
         this.hovered = hovered;
         this.interactionBounds = hovered ? this.interactionTextBounds() : undefined;

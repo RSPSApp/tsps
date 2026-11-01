@@ -16,6 +16,7 @@ import {
 import { ItemStatsPlugin } from "../game/plugins/itemstats/ItemStatsPlugin";
 import { GameState } from "../runelite/api/GameState";
 import { buildCombatStatGroups } from "../game/plugins/itemstats/itemStatsPresentation";
+import { BANKMAIN, INVENTORY } from "../runelite/api/gameval/InterfaceID";
 
 async function main(): Promise<void> {
 const item = (params: Record<number, number>) => ({ params: { get: (key: number) => params[key] } });
@@ -190,7 +191,7 @@ for (const [actionRect, pointer, expected] of [
         `panel ${JSON.stringify(panel)} overlaps action text ${JSON.stringify(actionRect)}`);
 }
 
-const hitWidget = { itemId: 100, _absX: 1300, _absY: 650, _absWidth: 50, _absHeight: 50 };
+const hitWidget = { groupId: INVENTORY, itemId: 100, x: 1300, y: 650, width: 50, height: 50, _absX: 1300, _absY: 650, _absWidth: 50, _absHeight: 50 };
 const labelWidget = {
     text: "<col=ffff00>Wield Bronze axe",
     _absX: 1304, _absY: 704, _absWidth: 196, _absHeight: 40,
@@ -206,6 +207,7 @@ const mouseoverTimer = {
 const testClient: any = {
     widgetManager: {
         rootInterface: 161,
+        getInputRoots: () => [hitWidget],
         getWidgetsForGroup: () => [hitWidget, labelWidget],
         getActiveTimerWidgets: () => [mouseoverTimer],
         getStaticChildrenByParentUid: (uid: number) => uid === 600 ? [labelWidget, optionWidget] : [],
@@ -260,6 +262,28 @@ assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature,
     "a stale canvas menu mirror does not suppress stats after OsrsClient closes the menu");
 testClient.renderer.canvas.__ui.menu.open = false;
 assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature, "show again after both menus close");
+
+// A bank item can overlap the bank header geometrically while sitting outside
+// the bank's scroll viewport. Nested container scissoring narrows it again.
+const clippedItem = { uid: (BANKMAIN << 16) | 3, groupId: BANKMAIN, parentUid: -1, itemId: 100, x: 0, y: -20, width: 50, height: 60 };
+const innerClip = { uid: 2, parentUid: 1, type: 0, x: 10, y: 5, width: 100, height: 30, children: [] };
+const bankClip = { uid: 1, parentUid: -1, type: 0, x: 1280, y: 655, width: 140, height: 60, children: [innerClip] };
+const mountedRoot = { uid: (BANKMAIN << 16), groupId: BANKMAIN, parentUid: -1, type: 0, x: 0, y: 0, width: 100, height: 30, children: [clippedItem] };
+testClient.widgetManager.interfaceParents = new Map([[2, { group: BANKMAIN }]]);
+testClient.widgetManager.getAllGroupRoots = (group: number) => group === BANKMAIN ? [mountedRoot] : [];
+testClient.widgetManager.getStaticChildrenByParentUid = (uid: number) => uid === 1 ? [innerClip] : [];
+testClient.widgetManager.getInputRoots = () => [bankClip];
+testClient.widgetManager.getWidgetsForGroup = () => [bankClip];
+testClient.inputManager.mouseY = 650;
+assert.equal(hitPlugin.widgetOverlay.signature(), "", "a row above the bank viewport cannot show a tooltip over its header");
+testClient.inputManager.mouseY = 665;
+assert.ok(hitPlugin.widgetOverlay.signature(), "the visible part of a partially clipped row remains hoverable");
+testClient.inputManager.mouseY = 695;
+assert.equal(hitPlugin.widgetOverlay.signature(), "", "nested container clips also constrain item hover");
+testClient.inputManager.mouseY = 665;
+testClient.widgetManager.getInputRoots = () => [hitWidget];
+testClient.widgetManager.getStaticChildrenByParentUid = () => [];
+testClient.widgetManager.interfaceParents.clear();
 await hitPlugin.stop();
 
 console.log("item stats read cache bonuses and describe consumables");

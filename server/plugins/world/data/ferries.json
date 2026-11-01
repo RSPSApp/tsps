@@ -1,5 +1,5 @@
 {
-  "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; rowing is seaslug_boat_travel 461. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too.",
+  "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; rowing is seaslug_boat_travel 461. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too. A fade route's minimap and busy pairs are the ticks the minimap goes off/on and varbit busy is set/cleared. here: per NPC name, a transcript's \"If not already at X:\" condition text and the base npc gameval standing at X (the option is hidden there).",
   "routes": {
     "barnaby-ardougne": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "to": [2680, 3274, 0] },
     "barnaby-brimhaven": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "to": [2768, 3227, 0] },
@@ -25,6 +25,9 @@
     "pirates-cove-bentley": { "style": "fade", "teleport": 3, "fadeIn": 6, "close": 9, "to": [2224, 3796, 2] },
     "ungael": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "message": { "at": 0, "text": "You board the boat and travel to Ungael.", "spam": true }, "to": [2277, 4034, 0] },
     "ungael-back": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "message": { "at": 0, "text": "You board the boat and travel to Rellekka.", "spam": true }, "to": [2640, 3697, 0] },
+    "varla-kastori": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "busy": [1, 5], "message": { "at": 3, "text": "Achilka takes you along the river to Kastori.", "spam": true }, "to": [1390, 3074, 0] },
+    "varla-tal-teklan": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "busy": [1, 5], "message": { "at": 3, "text": "Achilka takes you along the river to Tal Teklan.", "spam": true }, "to": [1257, 3126, 0] },
+    "varla-gloomthorn": { "style": "fade", "teleport": 3, "fadeIn": 5, "close": 7, "minimap": [1, 5], "busy": [1, 5], "message": { "at": 3, "text": "Achilka takes you along the river to the Gloomthorn Trail.", "spam": true }, "to": [1400, 3246, 0] },
     "fossil-island": { "style": "fade", "teleport": 2, "fadeIn": 3, "close": 5, "message": { "at": 2, "text": "You row to the expedition camp...", "spam": true }, "to": [3724, 3808, 0] },
     "fishing-platform": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_witchhaven_to_fishingpier_layer", "to": [2782, 3273, 0], "arrive": "You arrive at the fishing platform." },
     "witchaven": { "style": "rowing", "layer": "seaslug_boat_travel:seaslug_fishpier_to_witchhaven_layer", "to": [2719, 3303, 0], "arrive": "The boat arrives at Witchaven." }
@@ -58,7 +61,10 @@
     { "npc": "Mord Gunnars", "option": "Jatizso", "route": "jatizso", "gate": "fremennikIsles" },
     { "npc": "Mord Gunnars", "option": "Rellekka", "route": "jatizso-back", "gate": "fremennikIsles" },
     { "npc": "Maria Gunnars", "option": "Neitiznot", "route": "neitiznot", "gate": "fremennikIsles" },
-    { "npc": "Maria Gunnars", "option": "Rellekka", "route": "neitiznot-back", "gate": "fremennikIsles" }
+    { "npc": "Maria Gunnars", "option": "Rellekka", "route": "neitiznot-back", "gate": "fremennikIsles" },
+    { "npc": "Achilka", "option": "Kastori", "from": ["tlati_riverboat_owner_west", "tlati_riverboat_owner_north"], "route": "varla-kastori" },
+    { "npc": "Achilka", "option": "Tal Teklan", "from": ["tlati_riverboat_owner_south", "tlati_riverboat_owner_north"], "route": "varla-tal-teklan" },
+    { "npc": "Achilka", "option": "Gloomthorn Trail", "from": ["tlati_riverboat_owner_south", "tlati_riverboat_owner_west"], "route": "varla-gloomthorn" }
   ],
   "locs": [
     { "loc": "Fremennik Boat", "option": "Travel", "from": ["fremennik_boat_ungael"], "route": "ungael" }
@@ -87,7 +93,17 @@
     "fXfmZm": "jatizso-back",
     "wfwKsg": "neitiznot",
     "eYZMOo": "neitiznot-back",
-    "Ol1SOm": { "byNpc": { "viking_sailor": "miscellania", "misc_sailor": "miscellania-back" } }
+    "Ol1SOm": { "byNpc": { "viking_sailor": "miscellania", "misc_sailor": "miscellania-back" } },
+    "JHL4rr": "varla-tal-teklan",
+    "Fj-emV": "varla-kastori",
+    "WjyUrt": "varla-gloomthorn"
+  },
+  "here": {
+    "Achilka": {
+      "If not already at Kastori:": "tlati_riverboat_owner_south",
+      "If not already at Tal Teklan:": "tlati_riverboat_owner_west",
+      "If not already at Gloomthorn Trail:": "tlati_riverboat_owner_north"
+    }
   },
   "lines": [
     { "npc": "Veos", "after": "As you wish, I hope you don't get seasick, it is a long voyage.", "choices": { "I'd like to travel to Port Piscarilius, please.": "kourend-piscarilius", "I'd like to travel to Land's End, please.": "kourend-landsend", "Travel to Port Sarim.": "kourend-sarim", "Travel to Land's End.": "kourend-landsend" } },

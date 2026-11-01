@@ -1,6 +1,6 @@
 /** Romeo & Juliet: captured handovers, potion effects and private scenes. See docs/f2p-varrock-parity.md. */
 module.exports = function registerRomeoAndJulietQuest(api) {
-  const { Animation, Graphic, Location, World, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Animation, Graphic, Location, World, TaskManager, CountdownTask, TemplatedInstanceArea, DialogueChainBuilder, ActionDialogue, StatementDialogue, ItemIdentifiers, NpcIdentifiers } = api.core;
   const { registerQuest, startTranscript } = require("../QuestRuntime");
 
   const ROMEO_NPC_ID = NpcIdentifiers.ROMEO;
@@ -29,12 +29,6 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   const CADAVA_BERRIES_ITEM_ID = ItemIdentifiers.CADAVA_BERRIES;
   const JULIETS_MESSAGE_ITEM_ID = ItemIdentifiers.MESSAGE;
   const CADAVA_POTION_ITEM_ID = ItemIdentifiers.CADAVA_POTION;
-
-  const CADAVA_BUSH_LOC_IDS = new Set([
-    ObjectIdentifiers.CADAVA_BUSH,
-    ObjectIdentifiers.CADAVA_BUSH_2,
-    ObjectIdentifiers.CADAVA_BUSH_3,
-  ]);
 
   /** Message step ids from the "Romeo & Juliet" transcript. */
   const JULIET_GIVES_MESSAGE = "2xqCe8";
@@ -559,20 +553,6 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   }
   function restoreJuliet({player}) { player.getPacketSender().sendVarbit(JULIET_VARBIT,quest.isComplete(player)?2:quest.getStage(player)>=STAGE_JULIET_IN_CRYPT?1:0); }
 
-  // Pick Cadava berries from the bushes (reference locs 23625-23627).
-  function pickCadavaBerries(event) {
-    if (!CADAVA_BUSH_LOC_IDS.has(event.objectId)) return;
-    const action = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
-    if (action !== "pick-from") return;
-    event.handled = true;
-    if (event.player.getInventory().isFull()) {
-      event.player.sendMessage("You do not have room for any Cadava berries.");
-      return;
-    }
-    event.player.getInventory().adds(CADAVA_BERRIES_ITEM_ID, 1);
-    event.player.sendMessage("You pick some Cadava berries.");
-  }
-
   quest = registerQuest(api, {
     key: "romeo_and_juliet",
     name: "Romeo & Juliet",
@@ -592,7 +572,6 @@ module.exports = function registerRomeoAndJulietQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
-  api.onObjectInteraction(pickCadavaBerries);
   api.onItemAction(handleItemAction);
   api.persistAttribute(MESSAGE_ATTRIBUTE,0);
   api.persistAttribute(BERRIES_ATTRIBUTE,0);

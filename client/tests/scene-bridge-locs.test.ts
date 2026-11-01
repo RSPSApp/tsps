@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import { LocModelType } from "../rs/config/loctype/LocModelType";
 import { LocLoadType, SceneBuilder } from "../rs/scene/SceneBuilder";
+import { LOC_OVERRIDE_REMOVED } from "../rs/scene/LocOverride";
 import { CachePipeline } from "../../server/src/main/typescript/elvarg/game/cache/CachePipeline";
 import { CacheMaps } from "../../server/src/main/typescript/elvarg/game/cache/CacheMaps";
 
@@ -35,7 +36,7 @@ async function bridgeLocsUseTheServerPlane(): Promise<void> {
         const upper = decode().find(([plane, , , id]) => plane === 1 && id === 26680);
         assert.ok(upper, "an upper-level rockfall is stored on map plane 1");
         const [, x, y, , shape] = upper;
-        builder.setLocOverride(x, y, 0, -1, 0, undefined, undefined, undefined, undefined, undefined, shape as LocModelType);
+        builder.setLocOverride(x, y, 0, -1, LOC_OVERRIDE_REMOVED, undefined, undefined, undefined, undefined, undefined, shape as LocModelType);
         assert.ok(!decode().some(([plane, px, py, id]) => plane === 1 && px === x && py === y && id === 26680),
             "removed by the server on plane 0");
         builder.clearLocOverrides();

@@ -1,3 +1,5 @@
+import { LOC_OVERRIDE_REMOVED } from "../../rs/scene/LocOverride";
+
 /**
  * A tile keeps its locs in slots addressed by model type (shape) *and* rotation, so an object the
  * server adds or removes only replaces the cache loc in the same slot. Matching by shape alone
@@ -17,7 +19,8 @@ export function matchingLocSlotIds(
     const count = Math.min(ids.length, typeRots.length);
     for (let index = 0; index < count; index++) {
         const id = ids[index] | 0;
-        if (id <= 0) continue;
+        // Loc id 0 is a real loc (Dwarf Cannon's remains multiloc).
+        if (id < 0) continue;
         const typeRot = typeRots[index] | 0;
         if ((typeRot & 0x3f) !== (shape & 0x3f)) continue;
         if (((typeRot >> 6) & 0x3) !== (rotation & 0x3)) continue;
@@ -72,7 +75,7 @@ export function suppressShapeSlotAt(
     const base = `${x | 0},${y | 0},${level | 0},-1`;
     const existing = overrides.get(base);
     const key = typeof existing?.matchType === "number" && existing.matchType !== shape ? `${base},${shape}` : base;
-    const entry: LocSlotOverride = { newId: 0, matchType: shape & 0x3f };
+    const entry: LocSlotOverride = { newId: LOC_OVERRIDE_REMOVED, matchType: shape & 0x3f };
     if (rotation !== undefined) entry.matchRotation = rotation & 0x3;
     overrides.set(key, entry);
 }

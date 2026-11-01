@@ -1829,7 +1829,8 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                     const typeRots: number[] = [];
                     const pushLoc = (id: number, flags: number): void => {
                         const locId = id | 0;
-                        if (!(locId > 0)) return;
+                        // Loc id 0 is a real loc (a multiloc, rebuilt when its varp changes).
+                        if (!(locId >= 0)) return;
                         const packedTypeRot =
                             ((((flags | 0) >> 6) & 0x3) << 6) | ((flags | 0) & 0x3f);
                         const packed = packedTypeRot & 0xff;

@@ -6,6 +6,7 @@ import Denque from "denque";
 import { ClientState } from "../game/ClientState";
 import { MapManager } from "../game/MapManager";
 import { getMapSquareId } from "../rs/map/MapFileIndex";
+import { LOC_OVERRIDE_REMOVED } from "../rs/scene/LocOverride";
 
 (globalThis as any).self = globalThis;
 require.extensions[".glsl"] = (module, file) => { module.exports = fs.readFileSync(file, "utf8"); };
@@ -323,7 +324,7 @@ test("new object state cancels obsolete worker builds instead of waiting several
         const latest = started[2].input;
         assert.equal(latest.locOnly, resident, "a square still loading must rebuild terrain as well as objects");
         if (!resident) assert.equal(f.maps.loadingMapIds.has(f.mapId), true, "a replacement keeps the initial square marked as loading");
-        assert.ok([...latest.locOverrides.values()].some((override: any) => override.newId === 0), "the tree removal survives cancellation");
+        assert.ok([...latest.locOverrides.values()].some((override: any) => override.newId === LOC_OVERRIDE_REMOVED), "the tree removal survives cancellation");
         assert.deepEqual(latest.extraLocs.map((loc: any) => [loc.id, loc.x]), [[stumpId, tree.x], [fireId, newFire.x]],
             "the latest snapshot keeps the stump replacement and newest fire, without the removed fire");
         t.mock.timers.tick(400);

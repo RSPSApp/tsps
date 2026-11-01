@@ -5,8 +5,11 @@ import type { VarManager } from "../../rs/config/vartype/VarManager";
 import { Scene } from "../../rs/scene/Scene";
 import { isLowEndDevice } from "../../common/utils/DeviceUtil";
 
-/** Bump when SdMapData or the geometry the loader emits changes, so old entries stop matching. */
-export const CACHE_FORMAT = 5;
+/**
+ * Bump when SdMapData or the geometry the loader emits changes, so old entries stop matching.
+ * 6: loc id 0 is built (Dwarf Cannon's remains multiloc); format 5 squares left it out.
+ */
+export const CACHE_FORMAT = 6;
 // Desktop HD scenes can cover 64 squares before walking into the next scene.
 // Retain several scene windows rather than evicting the previous login's squares.
 export const MAX_SQUARES = isLowEndDevice ? 64 : 256;

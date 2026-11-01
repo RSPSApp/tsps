@@ -119,6 +119,9 @@ function makePlayer({ x = HUDON_ISLAND[0], y = HUDON_ISLAND[1], stage = 2 } = {}
     isRegistered: () => true,
     sendMessage: (text) => messages.push(String(text)),
     moveTo: (tile) => { location = tile; },
+    animations: [],
+    performAnimation(animation) { player.animations.push(animation.getId()); },
+    setForceMovement(movement) { player.forceMovement = movement; },
     give(id, amount = 1) { inventory.adds(id, amount); },
     wear(id) { worn.set(core.Equipment.AMULET_SLOT, id); },
   };
@@ -181,6 +184,7 @@ test('raft, roped rock (raw and roped ids), dead tree and amulet door reach the 
   assert.deepEqual(position(player), HUDON_ISLAND, 'raft lands on Hudon island');
 
   assert.equal(actOnObject(player, ROCK, ROPE, 2512, 3468), true, 'rope on the raw rock is handled');
+  assert.equal(player.animations.at(-1), 774, 'the rope is thrown first (human_throwrope)');
   pump();
   assert.ok(player.getMovementQueue().points.length > 0, 'the crossing is re-queued after the walk reset');
   walkQueued(player);
@@ -201,7 +205,11 @@ test('raft, roped rock (raw and roped ids), dead tree and amulet door reach the 
   assert.deepEqual(position(player), TREE_ISLAND);
 
   assert.equal(itemOnObject(player, DEAD_TREE, ROPE, 2512, 3465), true, 'rope on the dead tree is handled');
+  assert.equal(player.animations.at(-1), 776, 'the climb down plays human_wading');
+  assert.ok(player.forceMovement, 'the climb down is an exact move');
+  pump(3);
   assert.deepEqual(position(player), LEDGE, 'the dead tree lands on the ledge');
+  assert.equal(player.forceMovement, null);
   assert.equal(player.hasFlag(ATTRIBUTE_FLAG), false, 'no free water walking remains after the tree');
 
   assert.equal(objectClick(player, LEDGE_DOOR, 'Open', 2511, 3464), true, 'the ledge door is handled');

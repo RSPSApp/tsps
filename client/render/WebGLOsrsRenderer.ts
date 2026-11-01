@@ -300,7 +300,16 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     /** Dynamically spawned locs (LOC_ADD_CHANGE). Keyed by "x,y,level,shape". */
     public addedLocs: Map<
         string,
-        { locId: number; x: number; y: number; level: number; shape: number; rotation: number }
+        {
+            locId: number;
+            x: number;
+            y: number;
+            level: number;
+            shape: number;
+            rotation: number;
+            /** Cache locs this add replaced, so removing it restores them. */
+            replacedIds?: number[];
+        }
     > = new Map();
     // Track spawned locs not in base map data. The first three key fields are world x,y,level.
     public locSpawns: Map<string, { id: number; type: number; rotation: number }> = new Map();

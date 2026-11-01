@@ -41,6 +41,7 @@ import { MenuTargetType } from "../../rs/MenuEntry";
 import type { OverlayFloorType } from "../../rs/config/floortype/OverlayFloorType";
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
+import { matchingLocSlotIds, shapeSlotOverride, suppressShapeSlotAt } from "../loc/LocSlots";
 import { NpcModelLoader } from "../../rs/config/npctype/NpcModelLoader";
 import { NpcDrawPriority, NpcType } from "../../rs/config/npctype/NpcType";
 import { PlayerAppearance } from "../../rs/config/player/PlayerAppearance";
@@ -458,6 +459,29 @@ export function scheduleLocGeometryUpdate(host: WebGLOsrsRendererHost,
     
 }
 
+/**
+ * Cache locs in the slot a LOC_ADD_CHANGE addresses: the tile's locs with the same shape *and*
+ * rotation. Matching by shape alone removed unrelated scenery from the tile (the Grand Exchange's
+ * paving is rotation-1 NORMAL locs, so a rotation-0 fire erased a tile of floor, issue #1748).
+ */
+function addChangeSlotIds(
+    host: WebGLOsrsRendererHost,
+    tile: { x: number; y: number },
+    level: number,
+    shape: number,
+    rotation: number,
+): number[] {
+    const locs = host.getLocIdsAtTileAllLevels(tile.x, tile.y).filter(
+        (loc) => (loc.level | 0) === (level | 0),
+    );
+    return matchingLocSlotIds(
+        locs.map((loc) => loc.id),
+        locs.map((loc) => loc.typeRot ?? 0),
+        shape,
+        rotation,
+    );
+}
+
 export function onLocAddChange(host: WebGLOsrsRendererHost, 
         locId: number,
         tile: { x: number; y: number },
@@ -468,13 +492,20 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
 
         try {
             const key = `${tile.x},${tile.y},${level},${shape}`;
-            const overrideKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
             const existing = host.addedLocs.get(key);
-            const existingOverride = host.locOverrides.get(overrideKey);
-            const preservesOtherShapeRemoval =
-                existingOverride?.newId === 0 &&
-                typeof existingOverride.matchType === "number" &&
-                existingOverride.matchType !== shape;
+            // An instance's template hotspot is never removed by the server (building furniture
+            // only sends the new object), so there it is replaced by shape, at whatever rotation
+            // the hotspot was placed. In the main world the server removes what it replaces, so
+            // only the exact (shape, rotation) slot goes: the GE's paving is NORMAL locs of
+            // another rotation, and matching by shape alone erased a floor tile per fire
+            // (issue #1748).
+            const replaced = host.instanceActive ? [] : addChangeSlotIds(host, tile, level, shape, rotation);
+            const recorded = host.instanceActive
+                ? shapeSlotOverride(host.locOverrides, tile.x, tile.y, level, shape)?.newId === 0
+                : replaced.every(
+                      (id) => host.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === 0,
+                  );
+            // A replay of the same add needs no work once its replacements are suppressed.
             if (
                 existing?.locId === locId &&
                 existing.x === tile.x &&
@@ -482,20 +513,19 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
                 existing.level === level &&
                 existing.shape === shape &&
                 existing.rotation === rotation &&
-                existingOverride?.newId === 0 &&
-                (existingOverride.matchType === shape || preservesOtherShapeRemoval)
+                recorded
             ) {
                 return;
             }
-            host.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation });
+            host.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });
 
-            // Suppress the base cache-baked loc at this tile so it doesn't
-            // keep rendering alongside (or instead of) the new one - buildScene
-            // has no other way to know a cache loc was replaced/removed.
-            host.locOverrides.set(preservesOtherShapeRemoval ? `${overrideKey},${shape}` : overrideKey, {
-                newId: 0,
-                matchType: shape as LocModelType,
-            });
+            if (host.instanceActive) {
+                suppressShapeSlotAt(host.locOverrides, tile.x, tile.y, level, shape);
+            } else {
+                for (const id of replaced) {
+                    host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: 0 });
+                }
+            }
 
             const mapX = Math.floor(tile.x / 64);
             const mapY = Math.floor(tile.y / 64);

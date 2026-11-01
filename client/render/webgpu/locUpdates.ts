@@ -18,6 +18,7 @@ import { applyGamemodeWorldLocs } from "../render/streaming";
 import { RENDER_CONSTANTS } from "../render/constants";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import { isDoorLocType } from "../loc/SceneLocs";
+import { matchingLocSlotIds, shapeSlotOverride, suppressShapeSlotAt } from "../loc/LocSlots";
 import { getMapSquareId } from "../../rs/map/MapFileIndex";
 import type { LocChangeOptions, RegionReplacementEvent } from "../../game/GameRenderer";
 import type { WebGPURenderer } from "./WebGPURenderer";
@@ -88,19 +89,23 @@ export class LocUpdates {
         return "full";
     }
 
-    /** LOC_DEL carries no id: find it in the square's per-tile loc index (locs2.ts onLocDel). */
-    private idAt(tile: Tile, level: number, shape: number, rotation: number): number {
+    /** The tile's cache locs in the slot this shape/rotation addresses (locs2.ts onLocDel). */
+    private locSlotIdsAt(tile: Tile, level: number, shape: number, rotation: number): number[] {
         // By bounds: an instance scene is one square that spans several.
-        const square = this.r.mapManager.getMapForWorldTile(tile.x, tile.y);
-        if (!square) return -1;
+        const square = this.r.mapManager.getMapForWorldTile?.(tile.x, tile.y);
+        if (!square || typeof square.getLocIdsAtLocal !== "function") return [];
         const lx = tile.x - square.getRenderBaseWorldX();
         const ly = tile.y - square.getRenderBaseWorldY();
-        const typeRots = square.getLocTypeRotsAtLocal(level, lx, ly).slice();
-        const ids = square.getLocIdsAtLocal(level, lx, ly);
-        for (let i = 0; i < ids.length; i++) {
-            if ((typeRots[i] & 0x3f) === (shape & 0x3f) && ((typeRots[i] >> 6) & 3) === (rotation & 3)) return ids[i];
-        }
-        return -1;
+        const typeRots =
+            typeof square.getLocTypeRotsAtLocal === "function"
+                ? square.getLocTypeRotsAtLocal(level, lx, ly)
+                : [];
+        return matchingLocSlotIds(square.getLocIdsAtLocal(level, lx, ly), typeRots, shape, rotation);
+    }
+
+    /** The override that removes one cache loc at a tile (`newId: 0`, keyed by its id). */
+    private suppressLocAt(tile: Tile, level: number, id: number): void {
+        this.r.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id | 0}`, { newId: 0 });
     }
 
     /** Gamemode world loc/terrain changes, re-applied before every map build (streaming2.ts). */
@@ -150,48 +155,56 @@ export class LocUpdates {
 
     onLocAddChange(locId: number, tile: Tile, level: number, shape: number, rotation: number): void {
         const key = `${tile.x},${tile.y},${level},${shape}`;
-        const overrideKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
         const existing = this.r.addedLocs.get(key);
-        const existingOverride = this.r.locOverrides.get(overrideKey);
-        const preservesOtherShapeRemoval =
-            existingOverride?.newId === 0 &&
-            typeof existingOverride.matchType === "number" &&
-            existingOverride.matchType !== shape;
-        if (
-            existing?.locId === locId &&
-            existing.rotation === rotation &&
-            existingOverride?.newId === 0 &&
-            (existingOverride.matchType === shape || preservesOtherShapeRemoval)
-        ) {
+        // An instance's template hotspot is never removed by the server (build furniture only
+        // sends the new object), so there it is replaced by shape, at whatever rotation the
+        // hotspot was placed. In the main world the server removes what it replaces, so only the
+        // exact (shape, rotation) slot goes: the GE's paving is NORMAL locs of another rotation,
+        // and matching by shape alone erased a floor tile per fire (issue #1748).
+        const replaced = this.r.instanceActive ? [] : this.locSlotIdsAt(tile, level, shape, rotation);
+        const recorded = this.r.instanceActive
+            ? shapeSlotOverride(this.r.locOverrides, tile.x, tile.y, level, shape)?.newId === 0
+            : replaced.every(
+                  (id) => this.r.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === 0,
+              );
+        // A replay of the same add (the server re-sends while the object stands) needs no work
+        // once the replacements it suppresses are recorded.
+        if (existing?.locId === locId && existing.rotation === rotation && recorded) {
             return;
         }
-        this.r.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation });
-        // Suppress the cache loc at this tile, which the new one replaces.
-        this.r.locOverrides.set(preservesOtherShapeRemoval ? `${overrideKey},${shape}` : overrideKey, {
-            newId: 0,
-            matchType: shape,
-        });
+        this.r.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });
+        if (this.r.instanceActive) {
+            suppressShapeSlotAt(this.r.locOverrides, tile.x, tile.y, level, shape);
+        } else {
+            for (const id of replaced) this.suppressLocAt(tile, level, id);
+        }
         this.reloadTile(tile, this.groupOf(locId));
     }
 
     onLocDel(tile: Tile, level: number, shape: number, rotation: number): void {
-        const deletedId = this.idAt(tile, level, shape, rotation);
-        this.r.addedLocs.delete(`${tile.x},${tile.y},${level},${shape}`);
-        // Suppress the cache loc so a removed object (e.g. a chopped tree) disappears.
-        let overrideKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
-        let existingOverride = this.r.locOverrides.get(overrideKey);
-        if (typeof existingOverride?.matchType === "number" && existingOverride.matchType !== shape) {
-            overrideKey += `,${shape}`;
-            existingOverride = this.r.locOverrides.get(overrideKey);
+        const key = `${tile.x},${tile.y},${level},${shape}`;
+        const added = this.r.addedLocs.get(key);
+        const wasAdded = added !== undefined && (added.rotation & 0x3) === (rotation & 0x3);
+        this.r.addedLocs.delete(key);
+        if (wasAdded) {
+            // The object the server added is gone. Its add never removed the cache scenery at
+            // this tile, and whatever it did replace comes back.
+            for (const id of added.replacedIds ?? []) {
+                this.r.locOverrides.delete(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`);
+            }
+            this.reloadTile(tile, this.groupOf(added.locId));
+            return;
         }
-        if (
-            existingOverride?.newId !== 0 ||
-            typeof existingOverride.matchType !== "number" ||
-            existingOverride.matchType === shape
-        ) {
-            this.r.locOverrides.set(overrideKey, { newId: 0, matchType: shape });
+        // A cache object was removed: suppress that one loc so it disappears (e.g. a chopped tree).
+        const deleted = this.locSlotIdsAt(tile, level, shape, rotation);
+        if (deleted.length > 0) {
+            for (const id of deleted) this.suppressLocAt(tile, level, id);
+            this.reloadTile(tile, this.groupOf(deleted[0]));
+            return;
         }
-        this.reloadTile(tile, deletedId > 0 ? this.groupOf(deletedId) : "full");
+        // No id to key on: remove this tile's slot only, never every loc of the shape.
+        suppressShapeSlotAt(this.r.locOverrides, tile.x, tile.y, level, shape, rotation);
+        this.reloadTile(tile, "full");
     }
 
     onLocAnim(locId: number, tile: Tile, level: number, shape: number, rotation: number, animId: number): void {

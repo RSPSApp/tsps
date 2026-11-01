@@ -162,6 +162,13 @@ test('shared wall-door reach masks cover every operation and preserve other obje
     for (const shape of [2, 4, 9, 10, 11, 22]) {
       assert.equal(route({ shape }).blockAccessFlags, 0, `shape ${shape} retains its existing reach geometry`);
     }
+    const openLeaf = {
+      object: new GameObject(1544, new Location(3128, 3247, 0), 0, 2, null),
+      sourceLocation: { x: 3128, y: 3245, z: 0 }, clickType: 1, blockAccessFlags: 0, destination: null,
+      definition: { getName: () => 'Door', getInteractions: () => ['Close', null, null, null, null] },
+    };
+    h.routes[0](openLeaf);
+    assert.equal(openLeaf.blockAccessFlags, 0, 'an open leaf is closed from the doorway tile at its end (#1706)');
     const questRoute = { x: 300, y: 400, z: 1 };
     assert.equal(route({ destination: questRoute }).destination, questRoute, 'explicit plugin destinations remain intact');
     assert.equal(route({ blockAccessFlags: 0xa }).blockAccessFlags, 0xf, 'the door mask retains prior access restrictions');

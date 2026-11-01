@@ -1227,8 +1227,16 @@ function routeWallDoor(event) {
   const name = event.definition?.getName?.() ?? "";
   if (event.object?.getType?.() !== 0 ||
     (!DOOR_NAMES.has(name) && !/\b(?:doors?|doorway|gates?)\b/i.test(name))) return;
-  // A straight wall door is used across its face, never from either end of the wall.
+  // A closed straight wall door is used across its face, never from either end of the wall.
+  // An open leaf stands across the doorway instead, and the tile inside the doorway is at its
+  // end, so it keeps ordinary wall reach: closing it from inside doesn't walk the player out.
+  if (isOpenLeaf(event.definition)) return;
   event.blockAccessFlags = (event.blockAccessFlags ?? 0) | 0x5;
+}
+
+function isOpenLeaf(definition) {
+  const actions = definition?.getInteractions?.();
+  return hasAction(actions, "close") && !hasAction(actions, "open");
 }
 
 function registerWallDoorRoutes() {

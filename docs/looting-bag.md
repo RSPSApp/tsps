@@ -47,7 +47,9 @@ Both open `wilderness_lootingbag` in the side panel. The server sends the bag as
 
 Script 497 names the deposit ops Store-1, Store-5, Store-All and Store-X. The prices are each item's
 guide price (Wiki: a price check of the Grand Exchange value), sent per slot with script 1235. After
-each store the total and the prices are sent again.
+each store the total and the prices are sent again. In revision 241, script 1235 takes the inventory
+as an int and all 28 prices as longs, including the empty-slot `-1` values. Sending the prices as
+ints aborts the client script before the following setup script can draw the items.
 
 ## Using an item on the bag (captured)
 With the default setting the bag asks "How many do you want to deposit?" (`chatbox_multi_init`). The

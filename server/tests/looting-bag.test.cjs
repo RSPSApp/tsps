@@ -168,6 +168,9 @@ test("Check shows the bag's inv 516 with Examine only, and a click takes nothing
   assert.deepEqual(contents.map(({ id, amount }) => [id, amount]), [[KARAMBWAN, 1], [COINS, 7]]);
   assert.deepEqual(packets(p, "sendInterfaceFlagsRange")[0].slice(1), [(81 << 16) | 5, 0, 27, 1 << 10]);
   assert.ok(packets(p, "sendInterfaceScript").some(([, id, args]) => id === 495 && args[0] === "Looting bag" && args[1] === 0));
+  const prices = packets(p, "sendInterfaceScript").find(([, id]) => id === 1235)[2];
+  assert.deepEqual(prices, [BAG_INV, BigInt(core.ItemDefinition.forId(KARAMBWAN).getGrandExchangeValue()), 1n,
+    ...Array(26).fill(-1n)], "rev 241 expects one inventory int and 28 long prices");
   const value = core.ItemDefinition.forId(KARAMBWAN).getGrandExchangeValue() + 7;
   assert.ok(packets(p, "sendString").some(([, text]) => text === `Value: ${value.toLocaleString("en-US")} coins`));
 });
@@ -208,6 +211,11 @@ test("Deposit: Store-1/5/All/X and Examine, one bag slot per unstackable item (r
   assert.deepEqual(stored(bag).at(-1), { id: FIRE_RUNE, amount: 13, meta: null }, "Store-All");
   assert.equal(p.inv.count(FIRE_RUNE), 0);
   assert.ok(packets(p, "sendString").some(([, text]) => /^Bag value: [\d,]+ coins$/.test(text)));
+  for (const [, , args] of packets(p, "sendInterfaceScript").filter(([, id]) => id === 1235)) {
+    assert.equal(args[0], 93, "Deposit prices the player's inventory");
+    assert.equal(args.length, 29);
+    assert.ok(args.slice(1).every((price) => typeof price === "bigint"), "opening and updates send 28 longs");
+  }
 });
 
 test("the bag holds 28 slots: 'The bag's too full.' (rsprox 1545)", () => {

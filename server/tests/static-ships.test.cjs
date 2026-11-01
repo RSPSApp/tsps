@@ -466,6 +466,14 @@ test("Red Reef pirate ships send their captured deck locs and crew", () => {
         .WorldEntitySync.flush(fakePlayer(1, new Location(ship.boat.tileX, ship.boat.tileY, 0)));
       assert.equal(packets.filter((packet) => packet[0] === 134).length, CAPTURED_LOCS.length,
         `${id} sends one LOC_ADD_CHANGE per captured loc`);
+      const locPackets = packets.filter((packet) => packet[0] === 134);
+      // x/y are the deck scene's tiles: deckBase plus the template-zone local, so they line up
+      // with the rebuild's first template chunk. The capture's lines carry no op flags (8 bytes).
+      assert.deepEqual(locPackets.map((packet) => [
+        packet.readUInt16BE(2), packet.readUInt16BE(4), packet.readUInt16BE(6), packet[8], packet[1],
+      ]), CAPTURED_LOCS.map(([locId, x, y, level]) => [
+        locId, ship.boat.deckBaseX + x, ship.boat.deckBaseY + y, level, 8,
+      ]), `${id} sends its locs in the deck scene's tile frame`);
       assert.deepEqual(ship.npcs.map((npc) => npc.getId()).sort((a, b) => a - b),
         [15188, ...CREW[id]].sort((a, b) => a - b), `${id} holds its HP dummy and crew`);
       for (const npc of ship.npcs) assert.equal(BoatManager.getBoatAboard(npc), ship.boat);

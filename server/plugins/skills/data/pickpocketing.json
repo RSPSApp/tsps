@@ -486,8 +486,8 @@
       "level": 70,
       "xp": 131.8,
       "stunDamage": 3,
-      "low": 40,
-      "high": 170,
+      "low": 35,
+      "high": 160,
       "coinPouch": {"id": 22535, "coins": 80},
       "petBase": 125306,
       "always": [
@@ -506,8 +506,8 @@
       "level": 75,
       "xp": 133.3,
       "stunDamage": 1,
-      "low": 43,
-      "high": 175,
+      "low": 33,
+      "high": 140,
       "coinPouch": {"id": 22536, "coins": 300},
       "petBase": 106843,
       "first": [

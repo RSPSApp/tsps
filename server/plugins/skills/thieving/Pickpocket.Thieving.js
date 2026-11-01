@@ -6,8 +6,8 @@
  * plays the animation with its loot; a failure sends its message, and the 9-tick stun (8 without
  * pickpocketing) lands a tick later, the stun message and damage a tick after that.
  * Not modelled: the Wealthy citizen's urchin distraction, the H.A.M. camp's concussion and
- * ejection on a failure, and the Ardougne diary (+10% success, 56/84/140 coin pouches) as there
- * is no diary system yet.
+ * ejection on a failure, and the Ardougne diary's +10% success and 56/84/140 coin pouches (its
+ * medium tier is scoped to Ardougne, and nothing here defines that region yet).
  *
  * rsprox captures (recordings 335, 338, 339, 691, 2601, 3059, 3228 and Leagues/Grid Master 95,
  * 1723, 3275): every line is a spam message except a target's own `channel` (the Digsite

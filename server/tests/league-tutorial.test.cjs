@@ -188,6 +188,11 @@ async function walkThrough(player, steps) {
 }
 
 /** Opens a section's screen as its own plugin would: the task list floats, the area map is a modal. */
+async function openFloater(player, group) {
+  player.getPacketSender().sendSubInterface(FLOATER, group, 1);
+  await settle();
+}
+
 async function openSection(player, group) {
   if (group === 657) player.getPacketSender().sendSubInterface(FLOATER, 657, 1);
   else player.getPacketSender().sendInterface(group);
@@ -478,7 +483,17 @@ test("Demonic Pacts: its own walkthrough colour, an area step that needs no unlo
   await tick();
   assertPage(pacts, 11);
   assert.deepEqual(lastScript(pacts, 3185), [uid(656, 31)], "the Demonic Pacts button pulses");
-  assert.equal(click(pacts, uid(656, 32)), false);
+  assert.equal(click(pacts, uid(656, 32)), false, "the pact tree's own plugin opens it");
+  await openFloater(pacts, 647);
+  await walkThrough(pacts, 3);
+  assert.match(lastScript(pacts, 3413)[0], /unlock the central pact/, "237/01098: the third step waits for the central pact");
+  assert.deepEqual(lastScript(pacts, 3409), [uid(647, 14), 0, 0, 0, 0, 0, 2, 100, 1]);
+  await settle();
+  assert.equal(pacts.getAttribute("league:tutorial-stage"), 12, "still on the pacts walkthrough");
+  for (const handler of custom["league:pact-unlocked"]) handler({ player: pacts, node: 0 });
+  await openFloater(pacts, 647); // the tree back five ticks after the buy
+  assert.match(lastScript(pacts, 3413)[0], /another <col=ffffff>1 free pact point/);
+  await walkThrough(pacts, 2);
   await settle();
   assertPage(pacts, 13);
   click(pacts, uid(MAIN, 8));

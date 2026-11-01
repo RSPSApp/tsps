@@ -146,8 +146,13 @@ function renameText(text, rename) {
   return Object.keys(rename).sort((a, b) => b.length - a.length).reduce((out, from) => out.split(from).join(rename[from]), text);
 }
 
-/** Whether what the section waits for is already done: an area beyond the starting ones, or a relic. */
+/** Whether what the section waits for is already done: an area beyond the starting ones, a relic, a pact. */
 function alreadyDone(player, section) {
+  if (section === "pacts") {
+    const query = { player, pacts: [] };
+    Common.api.emitCustomEvent("league:pacts", query);
+    return (query.pacts ?? []).length > 0;
+  }
   if (section === "relics") {
     const query = { player, league: null, chosen: {} };
     Common.api.emitCustomEvent("league:relics", query);
@@ -203,14 +208,23 @@ function closeSectionScreen(player) {
 
 /** The section's walkthrough is over: on to the next page, unless it waits for an unlock still to come. */
 function walkthroughFinished({ player, key }) {
+  if (key === PACTS_AFTER_KEY) {
+    pactsAfterFinished(player);
+    return;
+  }
   const section = /^league-tutorial:(\w+)$/.exec(String(key ?? ""))?.[1];
   const flow = player ? flowOf(Common.leagueOf(player)) : null;
   const stage = flow ? activeStage(player) : null;
   if (!section || stage === null || sectionAt(flow, stage) !== section) return;
   if (!walkthroughSeen.has(player)) walkthroughSeen.set(player, new Set());
   walkthroughSeen.get(player).add(section);
-  const waits = section === "relics" || (section === "areas" && flow.areasNeedUnlock);
+  const waits = section === "relics" || section === "pacts" || (section === "areas" && flow.areasNeedUnlock);
   if (waits && !alreadyDone(player, section)) return; // the unlock moves it on
+  if (section === "pacts" && flow.walkthroughs.pactsAfter) {
+    // The central pact was bought before this page: its last steps follow at once.
+    showPactsAfter(player, Common.leagueOf(player));
+    return;
+  }
   if (section !== "relics") closeSectionScreen(player);
   sectionTarget.delete(player);
   present(player, nextPage(flow, resumeStage(flow, stage)));
@@ -227,12 +241,6 @@ function sectionClicked({ player, buttonId }) {
   const flow = flowOf(Common.leagueOf(player));
   const stage = activeStage(player);
   if (!section || !flow || stage === null || sectionAt(flow, stage) !== section) return false;
-  if (section === "pacts") {
-    // No walkthrough: its middle step waits on a pact tree this server does not have.
-    player.getPacketSender().sendInterfaceScript(data.pulse.stop, [uid(data.sections.pacts.highlight)]);
-    skip(player, section);
-    return false;
-  }
   pendingSection.set(player, section);
   Common.later(player, data.sections.waitTicks, () => {
     if (pendingSection.get(player) === section) skip(player, section);
@@ -261,6 +269,11 @@ function reactToOpen(player, { groupId, targetUid }) {
     return;
   }
   const section = sectionAt(flow, stage);
+  if (section === "pacts" && awaitingPactsAfter.has(player) && groupId === data.sections.pacts.interface) {
+    sectionTarget.set(player, targetUid);
+    showPactsAfter(player, Common.leagueOf(player));
+    return;
+  }
   if (SECTIONS.includes(section) && groupId === data.sections[section].interface) startWalkthrough(player, section, { groupId, targetUid });
 }
 
@@ -314,6 +327,44 @@ function areaUnlocked({ player }) {
   const stage = flow ? activeStage(player) : null;
   // Before the areas page it is simply counted when that page's walkthrough ends.
   if (stage === null || sectionAt(flow, stage) !== "areas" || pageOf(flow, stage)) return;
+  closeSectionScreen(player);
+  present(player, nextPage(flow, resumeStage(flow, stage)));
+}
+
+/**
+ * Demonic Pacts: buying the central pact closes the tree, which comes back five ticks later; the
+ * walkthrough's last steps (`pactsAfter`) run in it then, and the next page follows them
+ * (237/01098).
+ */
+const PACTS_AFTER_KEY = "league-tutorial:pacts-after";
+const awaitingPactsAfter = new WeakSet();
+
+function pactUnlocked({ player }) {
+  const flow = player ? flowOf(Common.leagueOf(player)) : null;
+  const stage = flow ? activeStage(player) : null;
+  if (stage === null || sectionAt(flow, stage) !== "pacts") return;
+  Common.api.emitCustomEvent("screen-highlight:close", { player });
+  if (!flow.walkthroughs.pactsAfter) {
+    sectionTarget.delete(player);
+    present(player, nextPage(flow, resumeStage(flow, stage)));
+    return;
+  }
+  awaitingPactsAfter.add(player);
+}
+
+function showPactsAfter(player, type) {
+  awaitingPactsAfter.delete(player);
+  const colour = Number(Common.core.CacheDefinitions.getStructParams(Common.league(type).struct)?.get(data.colourParam)) || Common.league(type).colour;
+  Common.api.emitCustomEvent("screen-highlight:show", {
+    player, key: PACTS_AFTER_KEY, host: uid(data.sections.pacts.host), hint: data.sections.pacts.hint, colour,
+    steps: renamed(type, flowOf(type).walkthroughs.pactsAfter),
+  });
+}
+
+function pactsAfterFinished(player) {
+  const flow = player ? flowOf(Common.leagueOf(player)) : null;
+  const stage = flow ? activeStage(player) : null;
+  if (stage === null || sectionAt(flow, stage) !== "pacts") return;
   closeSectionScreen(player);
   present(player, nextPage(flow, resumeStage(flow, stage)));
 }
@@ -402,6 +453,7 @@ function logout({ player }) {
   pendingSection.delete(player);
   sectionTarget.delete(player);
   walkthroughSeen.delete(player);
+  awaitingPactsAfter.delete(player);
 }
 
 /** Leagues II and IV borrow Leagues V's tutorial struct (747), whose pages name Leagues V: copies with their own name. */
@@ -433,6 +485,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("league:content-rows", content);
   api.onCustomEvent("league:area-unlocked", areaUnlocked);
   api.onCustomEvent("league:relic-unlocked", relicUnlocked);
+  api.onCustomEvent("league:pact-unlocked", pactUnlocked);
   api.onCustomEvent("interface:opened", interfaceOpened);
   api.onCustomEvent("interface:closed", interfaceClosed);
   api.onCustomEvent("screen-highlight:finished", walkthroughFinished);

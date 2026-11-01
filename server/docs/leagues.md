@@ -5,8 +5,8 @@ character per account, League Points, tasks, ranks, relic tiers and relics, area
 masteries and the league screens. Plugins: `plugins/modes/LeagueMode.plugin.js` (the profile,
 its league, XP rate, the tiers' passives, journal tab, Summary / Info / Rank, ranks, statistics
 and shared content), `LeaguePoints.plugin.js` (points), `LeagueTasks.plugin.js` (the task catalog, triggers and list), `LeagueRelics.plugin.js` (tiers and
-relics), `LeagueAreaUnlocks.plugin.js` (areas) and `LeagueCombatMasteries.plugin.js` (Raging
-Echoes' combat masteries); data in `plugins/modes/data/leagues.json`, `league-ranks.json`,
+relics), `LeagueAreaUnlocks.plugin.js` (areas), `LeagueCombatMasteries.plugin.js` (Raging
+Echoes' combat masteries) and `LeaguePacts.plugin.js` (Demonic Pacts' pact tree); data in `plugins/modes/data/leagues.json`, `league-ranks.json`,
 `league-relics.json`, `league-areas.json`, `league-boosted-drops.json` and
 `league-combat-masteries.json`, `league-tasks.json` (generated), `league-task-list.json` and
 `league-task-triggers.json`.
@@ -1250,6 +1250,51 @@ progress in `league:mastery-progress`.
   are not raised); 6 60% Prayer penetration:
   the roll bypasses the target's protection prayer and the damage then takes 40% of the usual
   reduction (0.6 + 0.4 x the core's constant).
+
+## Demonic Pacts
+
+`LeaguePacts.plugin.js` (units in `leaguepacts/`), data `plugins/modes/data/league-pacts.json`:
+Demonic Pacts' pact tree (Wiki Demonic_Pacts_League/Demonic_Pacts). Only a Demonic Pacts
+character has it; other plugins ask `league:pacts` { player } (pacts, earned, spendable, resets)
+and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> value).
+
+- **The tree is the cache's**: DB table `talent_tree` (216), 132 rows in row order, each a node
+  whose index is its bit in `combat_mastery_perm_0..5` (bit index % 32), with `linked_nodes` and
+  `effect` [effect id, value]. The table names no varbit, and the ids are not the varbits' order,
+  so the data's `effects` maps each of the 73 effect ids to the `talent_*` varbit its text
+  describes; the recordings confirm 18 of them (237/01098, 01158). A node's value adds to its
+  effect's varbit (`talent_prayer_pen_all` 15 -> 30 -> 75). Each node costs one point.
+- **The screen**, as recorded (237/01098, 01102, 01149): View Demonic Pacts (656:32) closes the main
+  modal, runs `league_border_pulse_stop` (3186) on the mastery highlight, mounts `talent_tree` (647)
+  in the floater, sends its events (frame 647:5 slot 11 OP1, data_layer 647:11 IF_SCRIPT_TRIGGER,
+  perm_floating_panel_content 647:20 OP1 + IF_SCRIPT_TRIGGER), then `talent_tree_init` (7892) [1]
+  and script 9397. A second click while it is open: "The Demonic Pacts interface is already open."
+  The frame's slot 11 closes it.
+- **A buy** is the data layer's script trigger, payload [1, component]: two components per node,
+  so the node is component / 2 (237/01098: 126 set bit 63). The first pact must be the central one
+  (node 0); later ones must link to one held, with a point left and fewer than 40 spent. Then, in
+  the recorded order: `talent_points_spent`, the unlock bit, the effect varbit, human_relic_unlock
+  with `leagues_6_mastery_unlock` at height 92, `pvp_icons_comlevelrange` (5224) with the combat
+  level, the tree closed, sounds 4215/4211/4213/4212 at 8/44/80/104, and the tree again five ticks
+  later. `league:pact-unlocked` { player, node, effect } follows.
+- **A reset** is the panel's script trigger (237/01158): the messagebox "Are you sure you want to
+  reset your pacts, this opportunity might not arise again.", then "Reset Pacts?" Yes / No; Yes
+  uses a reset and clears the bits, the points spent and every effect varbit: "Demonic Pacts have
+  been reset, you have N points to spend." Without a reset or a pact our own line says why.
+- **Points and resets** (Wiki): a new character gets the tutorial's first point (237/01098 sets
+  `talent_points_earned` on the Leagues-tab page, silently) and two free resets
+  (`talent_free_reset_1`); every pact task (the catalog's `pactTask`, 79) adds a point on
+  `league:task-completed`, after the task's own line: the earned varp, then "Congratulations,
+  you've earned a Demonic Pact! You now have N Demonic Pacts to spend." in 229628 (plural even at 1,
+  as recorded); the Hueycoatl's kill credit (its death or `combat-achievements:kill`) adds a reset
+  once, with `talent_huey_pact_reset` and its line (237/01167). Saved in `league:pacts` (node
+  indices), `league:pact-points`, `league:pact-resets` and `league:pact-rewards`; every login
+  resends the varps and varbits.
+- **The tutorial's pacts page** runs the recorded walkthrough in the tree (647:14): three steps, the
+  last waiting for the central pact; the tree comes back with two more, then the next page.
+- **Not here yet:** the echo bosses' three resets, the second free reset live gave later ("Yama has
+  taken kindly...", 238/01219, on a schedule not recorded), and Yama's one-off extra points
+  (Obsidian cape, echo item, moons item, Deep Delve: 237/01167's `talent_extra_retro_*`).
 
 ## Areas
 

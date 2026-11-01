@@ -24,8 +24,12 @@ module.exports = function registerShoveSpecialAttack(api) {
     }
 
     start(character, target) {
-      const rules = { attacker: character, target, chain: false, animate: true, attackDelay: character.getBaseAttackSpeed() + 1 };
+      const rules = { attacker: character, target, allow: true, chain: false, animate: true, attackDelay: character.getBaseAttackSpeed() + 1 };
       api.emitCustomEvent("combat:shove-rules", rules);
+      if (!rules.allow) {
+        cancelShove(character);
+        return;
+      }
       // Also blocked during the 1-tick grace period after a stun wears
       // off (see CombatFactory.stun) - Shove can't land on the same
       // target more than once every 6 ticks. Checked here, before any

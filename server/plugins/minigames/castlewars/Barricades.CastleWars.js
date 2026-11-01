@@ -60,6 +60,10 @@ function releaseDeadBarricade({ npc }) {
   game.releaseBarricade(npc);
 }
 
+function preventBarricadeShove(event) {
+  if (game.isBarricade(event.target)) event.allow = false;
+}
+
 function isBurning(npc) {
   return npc.getNpcTransformationId() !== -1;
 }
@@ -174,6 +178,7 @@ module.exports = function attachCastleWarsBarricades(api, castleWars) {
   World = api.getWorld();
   api.onItemAction("Barricade", { "Set-up": setupBarricade });
   api.onNpcDeath(releaseDeadBarricade);
+  api.onCustomEvent("combat:shove-rules", preventBarricadeShove);
   api.onNpcInteraction("Barricade", { Burn: requireManualBurn, Extinguish: extinguishBarricade });
   api.onItemOnNpc(useItemOnBarricade);
 };

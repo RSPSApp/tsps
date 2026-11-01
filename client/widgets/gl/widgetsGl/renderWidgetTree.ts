@@ -1088,6 +1088,23 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             widgetClip = calculateStandardClip(clip, x, y, width, height);
         }
 
+        // Refresh absolute bounds before culling. Overlays use these positions
+        // with the same inherited clips as widget rendering, including when a
+        // scroll moves a leaf fully outside the viewport.
+        const boundsStartMs = profileWidgetRender ? performance.now() : 0;
+        try {
+            const wAny = w as any;
+            if (w._absX !== x) w._absX = x;
+            if (w._absY !== y) w._absY = y;
+            if (wAny._absLogicalX !== logicalX) wAny._absLogicalX = logicalX;
+            if (wAny._absLogicalY !== logicalY) wAny._absLogicalY = logicalY;
+            if (wAny._absWidth !== width) wAny._absWidth = width;
+            if (wAny._absHeight !== height) wAny._absHeight = height;
+            wAny._absScaleX = rootScaleX;
+            wAny._absScaleY = rootScaleY;
+        } catch {}
+        if (profileWidgetRender) boundsMs += performance.now() - boundsStartMs;
+
         // Early cull check based on clip validity
         // Reference: UserComparator5.drawInterface line 172: if (!var10.isIf3 || var15 < var17 && var16 < var18)
         // IF3 widgets: only render if clip has positive area (var15 < var17 && var16 < var18)
@@ -1107,24 +1124,6 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             clipMs += performance.now() - clipStartMs;
         }
         // Note: IF1 widgets are NOT culled here - they rely on scissor clipping only.
-
-        // Record absolute widget position for drag math and viewport queries.
-        // Only write when values actually change to avoid per-frame property churn.
-        const boundsStartMs = profileWidgetRender ? performance.now() : 0;
-        try {
-            const wAny = w as any;
-            if (w._absX !== x) w._absX = x;
-            if (w._absY !== y) w._absY = y;
-            if (wAny._absLogicalX !== logicalX) wAny._absLogicalX = logicalX;
-            if (wAny._absLogicalY !== logicalY) wAny._absLogicalY = logicalY;
-            if (wAny._absWidth !== width) wAny._absWidth = width;
-            if (wAny._absHeight !== height) wAny._absHeight = height;
-            wAny._absScaleX = rootScaleX;
-            wAny._absScaleY = rootScaleY;
-        } catch {}
-        if (profileWidgetRender) {
-            boundsMs += performance.now() - boundsStartMs;
-        }
 
         // draw dragged widget last so it appears above everything else.
         // Preserve clip/offset so it still respects the same scissor bounds.

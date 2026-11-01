@@ -173,6 +173,11 @@ function plain(text: string): string {
   return out.replace(/\s+/g, " ").trim();
 }
 
+/** Wikitext to plain text that keeps each link's target ("[[Oathplate chest|chest]]" -> "Oathplate chest"), for triggers. */
+function plainTargets(text: string): string {
+  return plain(text.replace(/\[\[([^\]|#]*)(?:#[^\]|]*)?\|[^\]]*\]\]/g, (_m, target: string) => `[[${target}]]`));
+}
+
 function slug(text: string): string {
   return text.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -266,6 +271,17 @@ function npcNames(): Map<string, string> {
   return names;
 }
 
+/** The cache's item names, by lower-cased name (the first item of each name). */
+function itemNames(): Map<string, string> {
+  const names = new Map<string, string>();
+  const count = CacheDefinitions.getCounts().items;
+  for (let id = 0; id < count; id++) {
+    const name = CacheDefinitions.getItem(id)?.name;
+    if (name && name !== "null" && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
+  }
+  return names;
+}
+
 function questNames(): Map<string, string> {
   const names = new Map<string, string>();
   for (const file of fs.readdirSync(QUESTS_DIR)) {
@@ -315,7 +331,46 @@ function alternativesOf(description: string): string[] {
   return match[1].split(/,\s*|\s+or\s+/).map((part) => part.replace(/^(?:a |an |the )/i, "").trim()).filter(Boolean);
 }
 
-function deriveTrigger(name: string, description: string, npcs: Map<string, string>, quests: Map<string, string>): { trigger?: Trigger; unmapped?: string } {
+/** The cache names a trigger may name, each checked before it is written. */
+interface Names { npcs: Map<string, string>; quests: Map<string, string>; items: Map<string, string> }
+
+/** A condition in a task's description (where, how, how fast): not a plain count of the deed. */
+const CONDITION = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count|at once|in one|at the same time|in a row|whilst|before|after)\b/i;
+/** A place in it ("in the Fremennik Province", "on Ungael", "from Stonecutter Outpost"): needs the area unlocks. */
+const PLACE = /\b(in|on|at|inside|near|from|outside|under|beneath|with)\b (?:the |an? |your )?[A-Z]/;
+
+/** The cache item a task names, trying the forms a task's wording takes ("Oak Logs", "Shrimp" -> "Shrimps"). */
+function itemNamed(text: string, items: Map<string, string>, prefixes: string[] = [""]): string | null {
+  const base = text.replace(/,/g, "").trim();
+  const forms = [...new Set([...singulars(base), `${base}s`, `${base}es`])];
+  for (const prefix of prefixes) {
+    for (const form of forms) {
+      const item = items.get(`${prefix}${form}`.toLowerCase());
+      if (item) return item;
+    }
+  }
+  return null;
+}
+
+/** "Mine 5 Tin Ore", "Chop Some Logs", "Cook a Trout", "Fletch 150 Iron Arrows": the count and what is named. */
+function countAndSubject(rest: string): { count: number; subject: string } {
+  const match = /^(?:(\d[\d,]*)\s+|a |an |the |some |any )?(.+?)(?: (\d+) times)?$/i.exec(rest.trim());
+  const count = Number((match?.[1] ?? match?.[3] ?? "1").replace(/,/g, ""));
+  return { count, subject: match?.[2] ?? rest };
+}
+
+/**
+ * The making and gathering verbs, each with the item name forms its subject takes: a fish is caught
+ * raw ("Catch a Trout" -> "Raw trout"), the rest are named as made. Whatever skill makes the item,
+ * the `produce` kind counts it (docs/leagues.md, Tasks).
+ */
+const PRODUCE_VERBS: Record<string, string[]> = {
+  catch: ["Raw ", ""], chop: [""], mine: [""], cook: [""], craft: [""], fletch: [""], smelt: [""], smith: [""],
+  make: [""], create: [""], brew: [""], clean: [""], cut: [""],
+};
+
+function deriveTrigger(name: string, description: string, names: Names): { trigger?: Trigger; unmapped?: string } {
+  const { npcs, quests, items } = names;
   let match: RegExpExecArray | null;
   if ((match = /^Reach Level (\d+) ([A-Za-z]+)$/.exec(name)) && SKILLS[match[2].toLowerCase()]) {
     return { trigger: { kind: "level", skill: SKILLS[match[2].toLowerCase()], level: Number(match[1]) } };
@@ -341,7 +396,7 @@ function deriveTrigger(name: string, description: string, npcs: Map<string, stri
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.
     const condition = /\b(without|while|using|within|in under|with only|solo|duo|trio|wearing|wielding|less than|fewer than|must be|do not count)\b/i;
     const place = /\b(in|on|at|inside|near|from|outside|under|beneath)\b (?:the |an? )?[A-Z]/;
-    if (condition.test(description) || place.test(description.replace(subject, ""))) return { unmapped: name };
+    if (condition.test(description) || place.test(description.replace(subject, "")) || place.test(subject)) return { unmapped: name };
     const primary = npcNamed(subject, npcs);
     // The description may accept others for the same count: "Defeat Callisto or Artio 50 times",
     // "Defeat The Nightmare or Phosani's Nightmare 50 times combined". Every one must be a cache NPC.
@@ -352,9 +407,65 @@ function deriveTrigger(name: string, description: string, npcs: Map<string, stri
     return { trigger: { kind: "kill", npcs: names, count } };
   }
   if ((match = /^Complete (?:the )?(.+)$/.exec(name))) {
-    // "Complete the Observatory Quest" is the quest "Observatory Quest"; "Complete Gertrude's Cat quest" is "Gertrude's Cat".
-    const quest = quests.get(plainName(match[1])) ?? quests.get(plainName(match[1].replace(/ [Qq]uest$/, "")));
+    // "Complete the Observatory Quest" is the quest "Observatory Quest"; "Complete Gertrude's Cat quest" is "Gertrude's Cat";
+    // "Complete the Vale Totems miniquest" is the miniquest "Vale Totems".
+    const quest = quests.get(plainName(match[1])) ?? quests.get(plainName(match[1].replace(/ (?:[Mm]ini)?[Qq]uest$/, "")));
     if (quest) return { trigger: { kind: "quest", name: quest } };
+  }
+  // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
+  if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {
+    return { trigger: { kind: "clue", tier: match[2].toLowerCase(), count: Number(match[1]) } };
+  }
+  // A parenthesis with a space is a remark ("(not including Agility)"); one without is part of a name ("(c)", "(kp)").
+  const clean = (text: string) => text.replace(/\s*\([^)]*\s[^)]*\)/g, "").replace(/\.$/, "").trim();
+  // A condition, or a group the description names ("Chop any kind of logs", "Catch any butterfly"):
+  // no single item or NPC stands for it.
+  if (CONDITION.test(clean(description)) || /\bany\b/i.test(clean(description))) return {};
+  // The description's list: "Equip either a Saradomin Cape, a Guthix Cape or a Zamorak Cape" (any one),
+  // "Equip an Archer's Ring, a Berserker Ring, a Seer's Ring and a Warrior Ring" (all at once).
+  if (/^Equip /i.test(name) && (match = /^Equip (?:either )?(.+)$/i.exec(clean(description)))) {
+    const list = match[1];
+    const anyOf = / or /.test(list), allOf = / and /.test(list);
+    if (anyOf !== allOf && /,| or | and /.test(list)) {
+      const parts = list.split(/,\s*(?:or |and )?|\s+or\s+|\s+and\s+/).map((part) => part.replace(/^(?:an? |the |some |a pair of )/i, "").trim()).filter(Boolean);
+      const named = parts.map((part) => itemNamed(part, items));
+      if (named.length > 1 && named.every(Boolean)) return { trigger: { kind: anyOf ? "equip" : "equip-all", items: [...new Set(named as string[])] } };
+    }
+  }
+  // "Equip a Tyras helm": the cache item worn. A group ("an Elemental Staff", "a Dragon weapon") is no item.
+  if ((match = /^Equip (?:a |an |the |some |your )?(.+)$/i.exec(name))) {
+    if (PLACE.test(clean(description).replace(/^Equip (?:a |an |the |some |your )?/i, "").replace(match[1], ""))) return {};
+    const item = itemNamed(match[1], items);
+    return item ? { trigger: { kind: "equip", items: [item] } } : {};
+  }
+  // "Pickpocket a knight of varlamore 20 times": the NPC's pocket picked; the description's
+  // alternatives stand for the name ("Pickpocket a Citizen": "Pickpocket a Man or a Woman").
+  if ((match = /^Pickpocket (.+)$/i.exec(name))) {
+    const { count, subject } = countAndSubject(match[1]);
+    const said = /^(?:.*?\bpickpocket) (?:an? |the )?(.+?)(?: \d+ times)?$/i.exec(clean(description))?.[1] ?? subject;
+    const parts = said.split(/,\s*|\s+or\s+/).map((part) => part.replace(/^(?:an? |the )/i, "").trim()).filter(Boolean);
+    if (parts.some((part) => PLACE.test(part.replace(/^[A-Z]/, "x")))) return {};
+    const accepted = (parts.length > 1 ? parts : [subject]).map((part) => npcNamed(part, npcs));
+    if (accepted.some((npc) => npc === null)) return {};
+    return { trigger: { kind: "pickpocket", npcs: [...new Set(accepted as string[])], count } };
+  }
+  const verb = /^([A-Za-z]+) (.+)$/.exec(name);
+  const forms = verb ? PRODUCE_VERBS[verb[1].toLowerCase()] : undefined;
+  if (verb && forms) {
+    const { count, subject } = countAndSubject(verb[2]);
+    if (PLACE.test(subject) || PLACE.test(clean(description).split(" ").slice(1).join(" ").replace(new RegExp(subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), ""))) return {};
+    const lowerVerb = verb[1].toLowerCase();
+    // A herb is cleaned into its clean self: "Clean 15 Grimy Tarromin" counts the Tarromin.
+    const made = lowerVerb === "clean" ? subject.replace(/^Grimy /i, "") : subject;
+    if (lowerVerb === "catch") {
+      // A fish is caught raw; anything else caught is a creature hunted ("Catch 500 Chinchompas").
+      const fish = itemNamed(made, items, ["Raw "]);
+      if (fish) return { trigger: { kind: "produce", items: [fish], count } };
+      const creature = npcNamed(made, npcs);
+      if (creature) return { trigger: { kind: "hunt", npcs: [creature], count } };
+    }
+    const item = itemNamed(made, items, forms);
+    return item ? { trigger: { kind: "produce", items: [item], count } } : {};
   }
   return {};
 }
@@ -385,7 +496,7 @@ function ruleCategory(name: string, trigger?: Trigger): number {
  * the pact flag and the fuller description the trigger is derived from. A row the cache marks as not in this league is left out; every task must have
  * its Wiki row, and every Wiki row its task.
  */
-function cacheLeagueTasks(league: League, wikiRows: WikiRow[], npcs: Map<string, string>, quests: Map<string, string>, report: string[]): Task[] {
+function cacheLeagueTasks(league: League, wikiRows: WikiRow[], names: Names, report: string[]): Task[] {
   const wikiById = new Map<number, WikiRow>();
   for (const row of wikiRows) {
     if (wikiById.has(row.id)) throw new Error(`${league.key}: Wiki id ${row.id} is on two rows`);
@@ -403,7 +514,7 @@ function cacheLeagueTasks(league: League, wikiRows: WikiRow[], npcs: Map<string,
     if (plain(wiki.name).toLowerCase() !== row.name.toLowerCase()) renamed.push(`${row.position}: Wiki "${plain(wiki.name)}", cache "${row.name}"`);
     // The trigger reads the Wiki's description, which keeps what the cache's short one drops
     // ("Reach level 10 in any skill (not including Agility and Hitpoints)"); the task shows the cache's.
-    const derived = deriveTrigger(row.name, plain(wiki.description), npcs, quests);
+    const derived = deriveTrigger(row.name, plainTargets(wiki.description), names);
     const task: Task = {
       id: slug(row.name), wikiId: wiki.id, name: row.name, description: row.description, tier: row.tier, points: league.points[row.tier],
       area: row.area, category: row.category, categorySource: "cache",
@@ -471,6 +582,7 @@ async function main() {
   for (const league of LEAGUES) if (league.fromCache) league.points = cachePoints();
   const npcs = npcNames();
   const quests = questNames();
+  const names: Names = { npcs, quests, items: itemNames() };
 
   const rows = new Map<League, WikiRow[]>();
   for (const league of LEAGUES) {
@@ -492,7 +604,7 @@ async function main() {
   for (const league of LEAGUES) {
     const wikiRows = rows.get(league)!;
     if (league.fromCache) {
-      const tasks = cacheLeagueTasks(league, wikiRows, npcs, quests, report);
+      const tasks = cacheLeagueTasks(league, wikiRows, names, report);
       (output.leagues as Record<string, unknown>)[league.type] = {
         key: league.key, name: league.name, source: `https://oldschool.runescape.wiki/w/${league.page}`, fromCache: true, tasks,
       };
@@ -511,7 +623,7 @@ async function main() {
       seenIds.set(row.id, plain(row.name));
       const name = plain(row.name);
       const description = plain(row.description);
-      const derived = deriveTrigger(name, description, npcs, quests);
+      const derived = deriveTrigger(name, plainTargets(row.description), names);
       if (derived.unmapped) unmapped.push(derived.unmapped);
       const fromCache = cache.get(name.toLowerCase());
       const requirements = [plain(row.s), plain(row.other)].filter(Boolean).join("; ");

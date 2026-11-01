@@ -1413,8 +1413,24 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   lists the kill tasks it could not map. To map more: add a kind (a trigger kind is a few lines in Triggers.LeagueTasks),
   a rule in the generator, or an entry in the overlay; or have the plugin that knows the deed emit
   `league:complete-task`. Everything else in the catalog is visible and counts once mapped.
-- **Not mapped yet:** kills with a place or a condition, equipment, skilling counts, clue
-  scrolls, minigames and the Leagues tutorial task.
+- **Deeds** (`Actions.LeagueTasks.js`) listen to the events the skills already emit, counted per
+  task in `league:task-progress` (task id -> count) until done: `equip { items }` (any one worn)
+  and `equip-all { items }` (all at once) on `equipment:changed` and at login; `produce { items,
+  count }` from `skills:produced` (cooking, crafting, fletching, herblore, smithing, with its
+  `amount`), `fishing:success`, `woodcutting:success`, `mining:success` and
+  `runecrafting:success` (rolls x runes per essence), whatever the skill; `hunt { npcs, count }`
+  from `hunter:success`; `pickpocket { npcs, count }` from `thieving:success` (pickpockets only);
+  `clue { tier, count }` from `treasure-trails:casket-opened`. The generator derives them from the
+  name and the Wiki's description, read with its links' targets ("[[Oathplate chest|chest]]" is
+  the Oathplate chest): "Equip a/an X" and the description's list ("either A, B or C" any one, "A,
+  B and C" all); "Catch / Chop / Mine / Cook / Craft / Fletch / Smelt / Smith / Make / Create /
+  Brew / Clean / Cut [N] X" as an item made (a fish caught raw, a herb counted clean; a catch with
+  no raw fish is a creature hunted); "Pickpocket X [N times]" with the description's
+  alternatives; "N <tier> Clue Scroll(s)". A description naming a group ("any kind of logs"), a
+  place or a condition leaves the task unmapped; so does a parenthesis remark, while one without a
+  space is part of a name ("(c)", "(u)").
+- **Not mapped yet:** kills with a place or a condition, equipment sets the description does not
+  list, obtaining items, minigames, diaries, travel, emotes and the Leagues tutorial task.
 
 ## Developer commands
 

@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue"]);
   const npcNames = new Set();
   // The cache's own list (enum 5950's rows): a task it has by name takes its category.
   const cacheRows = new Map();
@@ -320,6 +320,70 @@ test("Demonic Pacts' list as captured: the row events to the cache list's last k
   hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: pacts });
   assert.equal(hooks[`button:${uid(TASKS, 41)}`]({ player: pacts, slot: 2 }), true, "the pact-task dropdown");
   assert.equal(pacts.sent.varbits.get(20357), 1, "league_task_filter_mastery_point");
+});
+
+/** The first cache item / NPC of that exact name. */
+function itemId(name) {
+  for (let id = 0; id < CacheDefinitions.getCounts().items; id++) if (CacheDefinitions.getItem(id)?.name === name) return id;
+  throw new Error(`no item "${name}"`);
+}
+function npcId(name) {
+  for (let id = 0; id < CacheDefinitions.getCounts().npcs; id++) if (CacheDefinitions.getNpc(id)?.name === name) return id;
+  throw new Error(`no NPC "${name}"`);
+}
+const emit = (name, payload) => { for (const handler of custom[name] ?? []) handler(payload); };
+
+test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, gathered, hunted, stolen and casket kinds", () => {
+  worldLeague = 6;
+  const doer = character("doer");
+  worldLeague = 4;
+  const tasks = catalog.leagues["6"].tasks;
+  const trigger = (id) => tasks.find((task) => task.id === id).trigger;
+  assert.deepEqual(trigger("equip-a-tyras-helm"), { kind: "equip", items: ["Tyras helm"] });
+  doer.getEquipment = () => ({ getItems: () => [{ getId: () => itemId("Tyras helm") }] });
+  emit("equipment:changed", { player: doer });
+  assert.ok(completed(doer).includes("equip-a-tyras-helm"), "worn: equipment:changed");
+  assert.deepEqual(trigger("equip-full-oathplate"), { kind: "equip-all", items: ["Oathplate helm", "Oathplate chest", "Oathplate legs"] }, "the Wiki's link targets, not its labels");
+  const worn = (...names) => (doer.getEquipment = () => ({ getItems: () => names.map((name) => ({ getId: () => itemId(name) })) }));
+  worn("Oathplate helm", "Oathplate chest");
+  emit("equipment:changed", { player: doer });
+  assert.ok(completed(doer).includes("equip-any-oathplate-piece") && !completed(doer).includes("equip-full-oathplate"), "a piece is not the set");
+  worn("Oathplate helm", "Oathplate chest", "Oathplate legs");
+  emit("equipment:changed", { player: doer });
+  assert.ok(completed(doer).includes("equip-full-oathplate"), "every piece at once");
+
+  assert.deepEqual(trigger("mine-5-tin-ore"), { kind: "produce", items: ["Tin ore"], count: 5 });
+  for (let i = 0; i < 4; i++) emit("mining:success", { player: doer, itemId: itemId("Tin ore") });
+  assert.equal(doer.getAttribute("league:task-progress")["mine-5-tin-ore"], 4, "progress kept");
+  assert.ok(!completed(doer).includes("mine-5-tin-ore"));
+  emit("mining:success", { player: doer, itemId: itemId("Tin ore") });
+  assert.ok(completed(doer).includes("mine-5-tin-ore"), "the fifth ore");
+  assert.equal(doer.getAttribute("league:task-progress")["mine-5-tin-ore"], undefined, "a done task keeps no count");
+
+  assert.deepEqual(trigger("clean-15-grimy-tarromin"), { kind: "produce", items: ["Tarromin"], count: 15 }, "a herb counts once clean");
+  emit("skills:produced", { player: doer, itemId: itemId("Tarromin"), amount: 15 });
+  assert.ok(completed(doer).includes("clean-15-grimy-tarromin"), "skills:produced, with its amount");
+  emit("fishing:success", { player: doer, itemId: itemId("Raw cod") });
+  assert.equal(doer.getAttribute("league:task-progress")["catch-10-cod"], 1, "a fish is caught raw");
+  assert.equal(trigger("chop-some-logs"), undefined, "\"any kind of logs\" is no single item");
+  emit("woodcutting:success", { player: doer, logId: itemId("Willow logs") });
+  assert.equal(doer.getAttribute("league:task-progress")["chop-100-willow-logs"], 1, "woodcutting:success by its log");
+
+  assert.deepEqual(trigger("pickpocket-a-citizen").npcs, ["Man", "Woman"], "the description's alternatives");
+  emit("thieving:success", { player: doer, method: "stall", target: "Woman" });
+  assert.ok(!completed(doer).includes("pickpocket-a-citizen"), "a stall is no pocket");
+  emit("thieving:success", { player: doer, method: "pickpocket", target: "Woman" });
+  assert.ok(completed(doer).includes("pickpocket-a-citizen"));
+
+  emit("hunter:success", { player: doer, method: "net", npcId: npcId("Baby impling") });
+  assert.ok(completed(doer).includes("catch-a-baby-impling"), "hunter:success by the creature");
+  emit("treasure-trails:casket-opened", { player: doer, tier: "easy" });
+  assert.ok(completed(doer).includes("1-easy-clue-scroll"));
+  assert.equal(doer.getAttribute("league:task-progress")["25-easy-clue-scrolls"], 1);
+
+  const main = character("plain-doer", "main");
+  emit("mining:success", { player: main, itemId: itemId("Tin ore") });
+  assert.deepEqual(main.getAttribute("league:task-progress") ?? {}, {}, "a main character counts nothing");
 });
 
 /** A real cache NPC dying to `player` through the death hook. */

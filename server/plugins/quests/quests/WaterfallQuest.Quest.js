@@ -557,9 +557,18 @@ module.exports = function registerWaterfallQuest(api) {
     pollCrossingMove(player, token, path.length + 6);
   }
 
-  /** Any ordinary walk request cancels the scoped crossing movement. */
+  /**
+   * The player chose something else: drop a thrown rope whose crossing hasn't started yet, and end
+   * a crossing in progress.
+   */
+  function cancelCrossing(player) {
+    ropeThrows.delete(player);
+    finishCrossingMove(player);
+  }
+
+  /** Any ordinary walk request cancels the scoped crossing movement, or the one about to start. */
   function cancelCrossingWalk(event) {
-    finishCrossingMove(event.player);
+    cancelCrossing(event.player);
   }
 
   /** Remove this player's owned crossing scenery; the global map rock 1996 stays. */
@@ -699,7 +708,7 @@ module.exports = function registerWaterfallQuest(api) {
 
   function widenHudonTalkRange(request) {
     if (request.clickType === 0) return;
-    finishCrossingMove(request.player);
+    cancelCrossing(request.player);
     if (request.npcId === HUDON_NPC_ID && stageOf(request.player) === STAGE_STARTED) request.range = 4;
   }
 
@@ -1175,7 +1184,7 @@ module.exports = function registerWaterfallQuest(api) {
   }
 
   function handleObjectInteraction(event) {
-    finishCrossingMove(event.player);
+    cancelCrossing(event.player);
     switch (event.objectId) {
       case LOG_RAFT_ID:
         boardRaft(event);
@@ -1229,7 +1238,7 @@ module.exports = function registerWaterfallQuest(api) {
   }
 
   function handleItemOnObject(event) {
-    finishCrossingMove(event.player);
+    cancelCrossing(event.player);
     const handled = usePebbleOnTombstone(event)
       || useRopeOnRock(event)
       || useRopeOnTree(event)

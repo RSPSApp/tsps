@@ -823,6 +823,25 @@ test('rope crossing uses owner objects, leaves the base rock, and keeps two play
     'relog on the island can still use the tree without rope visuals or a recovery teleport');
 });
 
+test('walking away in the tick after the rope throw cancels the crossing', () => {
+  const { RegionManager } = require('../dist/game/collision/RegionManager');
+  const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
+  RegionManager.init();
+  RegionManager.loadMapFiles(2512, 3470);
+  const q = register(), p = player();
+  q.quest.setStage(p, STAGE.started);
+  p.give(ID.rope, 1);
+  p.moveTo(new core.Location(2512, 3476, 0));
+  q.call('onItemOnObject', itemOnObject(p, ID.rock, ID.rope, 2512, 3468));
+  assert.equal(p.animations.at(-1), 774, 'the rope is thrown');
+  // An ordinary bank walk clicked before the crossing starts on the next tick.
+  q.call('onWalkRoute', { player: p, destination: { x: 2510, y: 3476, z: 0 }, handled: false });
+  q.tick(3);
+  assert.ok(p.getLocation().equals(new core.Location(2512, 3476, 0)), 'the player stays on the bank');
+  assert.equal(p.hasFlag('movement:ignore-clipping'), false, 'no free water walking');
+  assert.equal(MapObjects.getPrivateArea(p, 1997, new core.Location(2512, 3468, 0)), null, 'no rope is put up');
+});
+
 test('real MovementQueue walks the scripted crossing over both clipped tiles with scoped ignore-clipping', () => {
   const { RegionManager } = require('../dist/game/collision/RegionManager');
   const { MovementQueue } = require('../dist/game/model/movement/MovementQueue');

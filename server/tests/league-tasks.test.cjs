@@ -549,6 +549,11 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("check-a-grown-cactus"), { kind: "check-health", crops: ["CACTUS"], count: 1 });
   assert.deepEqual(trigger("check-the-health-of-5-crystal-trees"), { kind: "check-health", types: ["CRYSTAL_TREE"], count: 5 });
 
+  // Sets: every piece at once, a slot taking either; names as the cache spells them.
+  assert.deepEqual(trigger("equip-a-full-rune-set"), { kind: "equip-all", items: ["Rune platebody", "Rune full helm", ["Rune platelegs", "Rune plateskirt"]] });
+  assert.deepEqual(trigger("equip-a-full-blue-dragonhide-set").items, ["Blue d'hide body", "Blue d'hide chaps", "Blue d'hide vambraces"]);
+  assert.deepEqual(trigger("equip-a-seer-s-ring"), { kind: "equip", items: ["Seers ring"] });
+
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");
   assert.deepEqual(trigger("complete-the-shayzien-basic-agility-course").courses, ["shayzien-basic"], "the name's course where the link's is both");

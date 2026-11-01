@@ -358,6 +358,19 @@ const PICKED_CROPS: Map<string, string> = (() => {
   return new Map<string, string>(data.filter((plant: any) => plant.name !== "Nettles").map((plant: any) => [plant.name.toLowerCase(), plant.name]));
 })();
 
+/**
+ * Something worn, by the name a task gives it: as the cache spells it, else without the possessive's
+ * apostrophe ("Seer's Ring" is the Seers ring) or with vambraces in full ("Blue d'hide vambs").
+ */
+function wornNamed(text: string, items: Map<string, string>): string | null {
+  const forms = [text, text.replace(/'s\b/gi, "s"), text.replace(/\bvambs\b/i, "vambraces")];
+  for (const form of forms) {
+    const item = itemNamed(form, items);
+    if (item) return item;
+  }
+  return null;
+}
+
 /** A stall by a cache loc's name ("Bakery stall"), or null. */
 let stallNames: Map<string, string> | null = null;
 function stallNamed(text: string): string | null {
@@ -714,21 +727,31 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   // A condition, or a group the description names ("Chop any kind of logs", "Catch any butterfly"):
   // no single item or NPC stands for it.
   if (CONDITION.test(clean(description)) || /\bany\b/i.test(clean(description))) return {};
-  // The description's list: "Equip either a Saradomin Cape, a Guthix Cape or a Zamorak Cape" (any one),
-  // "Equip an Archer's Ring, a Berserker Ring, a Seer's Ring and a Warrior Ring" (all at once).
+  // The description's list: "Equip either a Saradomin Cape, a Zamorak Cape or a Guthix Cape" (any
+  // one), "Equip an Archer's Ring, a Berserker Ring, a Seer's Ring and a Warrior Ring" (all at
+  // once), "Equip an Adamant Platebody, a Adamant Full Helm and either some Adamant Platelegs or an
+  // Adamant Plateskirt" (all, the last either of two).
   if (/^Equip /i.test(name) && (match = /^Equip (?:either )?(.+)$/i.exec(clean(description)))) {
     const list = match[1];
-    const anyOf = / or /.test(list), allOf = / and /.test(list);
-    if (anyOf !== allOf && /,| or | and /.test(list)) {
-      const parts = list.split(/,\s*(?:or |and )?|\s+or\s+|\s+and\s+/).map((part) => part.replace(/^(?:an? |the |some |a pair of )/i, "").trim()).filter(Boolean);
-      const named = parts.map((part) => itemNamed(part, items));
-      if (named.length > 1 && named.every(Boolean)) return { trigger: { kind: anyOf ? "equip" : "equip-all", items: [...new Set(named as string[])] } };
+    const article = (part: string) => part.replace(/^(?:an? |the |some |a pair of )/i, "").trim();
+    const anyOf = / or /.test(list) && !/ and /.test(list);
+    if (anyOf && /,| or /.test(list)) {
+      const named = list.split(/,\s*(?:or )?|\s+or\s+/).map(article).filter(Boolean).map((part) => wornNamed(part, items));
+      if (named.length > 1 && named.every(Boolean)) return { trigger: { kind: "equip", items: [...new Set(named as string[])] } };
+    } else if (/ and /.test(list)) {
+      const slots = list.split(/,\s*(?:and )?|\s+and\s+/).map((part) => part.trim()).filter(Boolean).map((part) => {
+        const either = /^either (.+?) or (.+)$/i.exec(part);
+        if (!either) return wornNamed(article(part), items);
+        const options = [either[1], either[2]].map((each) => wornNamed(article(each), items));
+        return options.every(Boolean) ? (options as string[]) : null;
+      });
+      if (slots.length > 1 && slots.every(Boolean)) return { trigger: { kind: "equip-all", items: slots as Array<string | string[]> } };
     }
   }
   // "Equip a Tyras helm": the cache item worn. A group ("an Elemental Staff", "a Dragon weapon") is no item.
   if ((match = /^Equip (?:a |an |the |some |your )?(.+)$/i.exec(name))) {
     if (PLACE.test(clean(description).replace(/^Equip (?:a |an |the |some |your )?/i, "").replace(match[1], ""))) return {};
-    const item = itemNamed(match[1], items);
+    const item = wornNamed(match[1], items);
     return item ? { trigger: { kind: "equip", items: [item] } } : {};
   }
   // "Pickpocket a knight of varlamore 20 times": the NPC's pocket picked; the description's

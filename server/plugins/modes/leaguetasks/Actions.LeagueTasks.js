@@ -2,7 +2,8 @@
  * Awarding the tasks named by a deed rather than a kill or a level (docs/leagues.md, Tasks): each
  * kind listens to the events the skills and content already emit, so no task is named here.
  *
- * - `equip { items }`: any of the items worn, `equip-all { items }` every one of them at once, on
+ * - `equip { items }`: any of the items worn, `equip-all { items }` every one of them at once (an
+ *   entry that is a list takes any of its items), on
  *   `equipment:changed` (every worn-items refresh) and at login.
  * - `produce { items, count }`: that many of the items made or gathered, whatever the skill:
  *   `skills:produced` { itemId, amount } (cooking, crafting, fletching, herblore, smithing),
@@ -144,7 +145,8 @@ function checkWorn(player) {
   if (!tasks.length) return;
   const worn = new Set(player.getEquipment().getItems().filter((item) => item && item.getId() >= 0).map((item) => key(itemName(item.getId()))));
   for (const task of tasks) {
-    const wears = (item) => worn.has(key(item));
+    // An equip-all slot may take either of several ("either some platelegs or a plateskirt").
+    const wears = (item) => (Array.isArray(item) ? item.some((each) => worn.has(key(each))) : worn.has(key(item)));
     if (task.trigger.kind === "equip-all" ? task.trigger.items.every(wears) : task.trigger.items.some(wears)) Complete.complete(player, task.id, type);
   }
 }

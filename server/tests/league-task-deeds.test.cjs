@@ -299,3 +299,15 @@ test("check-health: a grown crop's health checked, by its type (Check a grown fr
   assert.ok(f.messages.some((text) => /perfect health/.test(text)) || state.checked, `the real Farming checks it: ${f.messages}`);
   assert.ok(done(f, "check-a-grown-fruit-tree"));
 });
+
+test("equip-all: a set worn at once, a slot taking either (Equip a Full Bronze Set, with the plateskirt)", async (t) => {
+  const f = pactsCharacter(t);
+  for (const name of ["Bronze platebody", "Bronze full helm", "Bronze plateskirt"]) {
+    f.player.getInventory().add(new core.Item(item(name)), true);
+  }
+  for (const name of ["Bronze platebody", "Bronze full helm"]) await inventoryOption(f, name, "Wear", 2, 2);
+  assert.ok(!done(f, "equip-a-full-bronze-set"), "not yet the legs");
+  await inventoryOption(f, "Bronze plateskirt", "Wear", 2, 2);
+  assert.equal(f.player.getEquipment().getItems().filter((each) => each && each.getId() >= 0).length, 3, `the real Equipment wears them: ${f.messages}`);
+  assert.ok(done(f, "equip-a-full-bronze-set"));
+});

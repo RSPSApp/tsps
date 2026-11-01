@@ -48,6 +48,17 @@ function theSkyFollowsTheAreaUnlessPicked(): void {
     assert.equal(Math.round(renderer.skyColor[0] * 255), 255, "a picked colour stays");
 }
 
+function roomsOffTheSurfaceMapSitInTheVoid(): void {
+    const theatre = host({ playerPosUni: new Float32Array([2008, 4762]) });
+    for (let frame = 0; frame < 60; frame++) updateSkyColor(theatre);
+    assert.deepEqual(Array.from(theatre.skyColor.slice(0, 3), (c: number) => Math.round(c * 255)), [0, 0, 0], "the Mime's theatre");
+
+    const surface = host({ playerPosUni: new Float32Array([3222, 3218]) });
+    for (let frame = 0; frame < 60; frame++) updateSkyColor(surface);
+    assert.equal(Math.round(surface.skyColor[0] * 255), 185, "Lumbridge keeps its sky");
+}
+
 instanceTilesUseTheirTemplateRegion();
 theSkyFollowsTheAreaUnlessPicked();
+roomsOffTheSurfaceMapSitInTheVoid();
 console.log("Environment sky tests passed");

@@ -3,7 +3,7 @@ import { AggressionTolerance } from "../../npc/AggressionTolerance";
 import { CREATION_MENU_LAST_ITEM_ATTRIBUTE } from "../../../../../net/packet/PacketSender";
 import { LOGIN_TOKENS_ATTRIBUTE } from "../../../../../net/login/LoginTokens";
 import { normalizeSailingState, type SailingState } from "../../../../content/sailing/SailingState";
-import { FightType } from "../../../../content/combat/FightType";
+import { COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE, FightType } from "../../../../content/combat/FightType";
 import { WeaponInterfaces } from "../../../../content/combat/WeaponInterfaces";
 import { Equipment } from "../../../../model/container/impl/Equipment";
 import { CombatSpells } from "../../../../content/combat/magic/CombatSpells";
@@ -756,6 +756,7 @@ export class PlayerSave {
         PlayerSave.persistAttribute(Player.BANK_QUANTITY_MODE_ATTRIBUTE, 0);
         PlayerSave.persistAttribute(Player.BANK_CUSTOM_QUANTITY_ATTRIBUTE, 0);
         PlayerSave.persistAttribute(Player.BANK_PLACEHOLDERS_ATTRIBUTE, false);
+        PlayerSave.persistAttribute(COMBAT_STYLE_BY_CATEGORY_ATTRIBUTE, {});
         playerSave.inventory = inventory.getCopiedItems();
         playerSave.equipment = player.getEquipment().getCopiedItems();
         playerSave.appearance = PlayerSave.sanitizeAppearance(player.getAppearance().getLook());

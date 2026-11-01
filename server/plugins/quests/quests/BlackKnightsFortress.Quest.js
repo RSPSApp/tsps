@@ -79,6 +79,8 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
   const V_GUARD_DISGUISED = "infiltrating-the-fortress-talking-to-the-guards-while-wearing-a-disguise";
   const V_GUARD_NOT_DISGUISED = "infiltrating-the-fortress-talking-to-the-guards-while-not-wearing-a-disguise";
   const V_DOOR_MAIN = "infiltrating-the-fortress-trying-to-open-the-sturdy-door-while-not-wearing-a-disguise";
+  /** The cat's head has its own rig: the human chat animations leave it broken (rsprox 469). */
+  const BLACK_CAT_CHATHEAD_ANIMATION = 567;
   const V_DOOR_MEETING = "sabotaging-the-potion-interrupting-the-black-knights-meeting";
   const V_GRILL = "listen-at-grill";
   const V_CABBAGE_BEFORE = "sabotaging-the-potion-using-any-item-on-the-hole-or-a-cabbage-before-overhearing-the-witch";
@@ -306,6 +308,8 @@ module.exports = function registerBlackKnightsFortressQuest(api) {
     if (text === "Where has Greldo got to with that magic cabbage!") event.after = () => pauseSabotage(player, state, 6, text);
     if (String(text).startsWith("Meow!")) {
       event.text = "Meow!";
+      event.speakerId = NpcIdentifiers.BLACK_CAT;
+      event.expression = BLACK_CAT_CHATHEAD_ANIMATION;
       event.after = () => {
         player.getDialogueManager().reset();
         StatementDialogue.send(player, "", false);

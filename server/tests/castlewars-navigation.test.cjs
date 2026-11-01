@@ -12,6 +12,7 @@ const createGame = require('../plugins/minigames/castlewars/Game.CastleWars');
 const attachFlags = require('../plugins/minigames/castlewars/Flags.CastleWars');
 const attachDoors = require('../plugins/minigames/castlewars/Doors.CastleWars');
 const attachNavigation = require('../plugins/minigames/castlewars/Navigation.CastleWars');
+const attachAreas = require('../plugins/minigames/castlewars/Areas.CastleWars');
 let game, registry, objectHandler, routeHandlers, customHandlers, startup, equip, unequip;
 
 before(() => {
@@ -227,6 +228,49 @@ test('both starting-room trapdoors intercept generic door handling and descend i
     customHandlers.get('door:toggle')(event);
     assert.equal(event.handled, true);
     assert.ok(p.getLocation().equals(new core.Location(...to)));
+  }
+});
+
+test('leaving either respawn room by ladder renews the idle allowance on return', (t) => {
+  attachAreas({
+    ...registry, registerArea() {}, onPlayerLogin() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {},
+  }, game);
+  attachNavigation(registry, game);
+  const ejected = [];
+  t.mock.method(game, 'returnToLobby', p => ejected.push(p));
+  for (const [team, ladder, trapdoor, at] of [
+    [game.TEAM.SARADOMIN, core.ObjectIdentifiers.LADDER_63, core.ObjectIdentifiers.TRAPDOOR_16, [2429, 3074, 1]],
+    [game.TEAM.ZAMORAK, core.ObjectIdentifiers.LADDER_64, core.ObjectIdentifiers.TRAPDOOR_17, [2370, 3133, 1]],
+  ]) {
+    const p = player(team, at);
+    const texts = [];
+    const previousEjections = ejected.length;
+    t.mock.method(p.getPacketSender(), 'sendString', (text, uid) => texts.push([text, uid]));
+    p.setAttribute(game.IDLE_TICKS_KEY, 8);
+    game.gameArea.process(p);
+    assert.equal(p.getAttribute(game.IDLE_TICKS_KEY), 7, 'idling still consumes the current allowance');
+
+    const up = { player: p, object: new core.GameObject(ladder, new core.Location(...at), 10, 0, null), handled: false };
+    customHandlers.get('ladders:climb')(up);
+    assert.equal(up.handled, true);
+    assert.equal(game.getTeamData(team).respawnBounds.inside(p.getLocation()), false);
+    for (let tick = 0; tick < 8; tick++) game.gameArea.process(p);
+    assert.equal(p.getAttribute(game.IDLE_TICKS_KEY), 200, 'time outside renews rather than pauses the allowance');
+    assert.deepEqual(texts.at(-1), ['', game.data.EJECT_TEXT_UID[team]], 'the warning is hidden outside');
+    assert.equal(ejected.length, previousEjections, 'time outside cannot eject the player');
+
+    const down = { player: p, object: new core.GameObject(trapdoor, new core.Location(at[0], at[1], 2), 22, 0, null), handled: false };
+    customHandlers.get('door:toggle')(down);
+    assert.equal(down.handled, true);
+    assert.equal(game.getTeamData(team).respawnBounds.inside(p.getLocation()), true);
+    game.gameArea.process(p);
+    assert.deepEqual(texts.at(-1), ['You have 02:00 to leave the respawn room.', game.data.EJECT_TEXT_UID[team]]);
+    for (let tick = 0; tick < 198; tick++) game.gameArea.process(p);
+    assert.equal(p.getAttribute(game.IDLE_TICKS_KEY), 1);
+    assert.equal(ejected.length, previousEjections, 'a returned player receives the full two-minute allowance');
+    game.gameArea.process(p);
+    assert.equal(ejected.at(-1), p, 'uninterrupted idling still ejects at the deadline');
+    assert.equal(p.messages.at(-1), 'You idled too long in the respawn room.');
   }
 });
 

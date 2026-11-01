@@ -50,6 +50,7 @@ import { getMapIndexFromTile, getMapPlaneId, getMapSquareId } from "../../rs/map
 import { Model } from "../../rs/model/Model";
 import { ModelData } from "../../rs/model/ModelData";
 import { Scene } from "../../rs/scene/Scene";
+import { locOverrideIdFromChange } from "../../rs/scene/LocOverride";
 import { getUiScale } from "../../ui/UiScale";
 import { ClickCrossOverlay } from "../../ui/devoverlay/ClickCrossOverlay";
 import { GroundItemOverlay } from "../../ui/devoverlay/GroundItemOverlay";
@@ -413,7 +414,7 @@ export function applyGamemodeWorldLocs(host: WebGLOsrsRendererHost, ): Set<numbe
             affectedMapIds.add(host.getMapIdForWorldTile(x, y));
 
             host.locOverrides.set(key, {
-                newId: change.newId | 0,
+                newId: locOverrideIdFromChange(change.newId),
                 newRotation:
                     typeof change.newRotation === "number" ? change.newRotation & 0x3 : undefined,
                 moveToX: typeof change.moveToX === "number" ? change.moveToX | 0 : undefined,

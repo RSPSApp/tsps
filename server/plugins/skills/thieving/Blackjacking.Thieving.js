@@ -78,9 +78,27 @@ function lure(event) {
   later(10, () => { if (npc.getFollowing() === player) npc.setFollowing(null); });
 }
 
-// Blackjack's chart and cited Jagex explanation: identical chance for all woods and targets.
-function successChance(level) {
-  return Math.max(0, Math.min(1, (1 + Math.floor(80 * (99 - level) / 98 + 240 * (level - 1) / 98 + 0.5)) / 256));
+/**
+ * The Wiki's knock-out charts, low/high out of 256, by the pickpocket target they belong to.
+ * Bandit (Pollnivneach) charts 80/240, measured over 31 million attempts. Menaphite Thug charts
+ * 78/240 on its own page, which is Mod Ash's "31% at level 1 ... 94% at level 99" (79/256 and
+ * 241/256); the Blackjack page plots the thug on the bandit's line, where 80/240 would be 31.6%.
+ */
+const KNOCKOUT_CHART = {
+  pollnivnian_bandit: [80, 240],
+  pollnivnian_bearded_bandit: [80, 240],
+  menaphite_thug: [78, 240],
+};
+const DEFAULT_KNOCKOUT_CHART = KNOCKOUT_CHART.pollnivnian_bandit;
+
+/** The target's own chart; `ready` has already limited the action to supported NPCs. */
+function knockoutChart(npcId) {
+  return KNOCKOUT_CHART[targetFor(npcId)?.key] ?? DEFAULT_KNOCKOUT_CHART;
+}
+
+/** Wiki (Module:Skilling success chart): low/high interpolated by level, out of 256. */
+function successChance(low, high, level) {
+  return Math.max(0, Math.min(1, (1 + Math.floor(low * (99 - level) / 98 + high * (level - 1) / 98 + 0.5)) / 256));
 }
 
 function knockOut(event) {
@@ -108,7 +126,8 @@ function knockOut(event) {
   player.getClickDelay().reset();
   player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(KNOCKOUT_ANIMATION)));
   player.getPacketSender().sendSound(KNOCKOUT_SOUND, 1, 0);
-  if (Math.random() >= successChance(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING))) {
+  const [low, high] = knockoutChart(event.npcId);
+  if (Math.random() >= successChance(low, high, player.getSkillManager().getCurrentLevel(core.Skill.THIEVING))) {
     spam(player, "Your blow only glances off the bandit's head.");
     npc.forceChat("I'll kill you for that!");
     const attempt = {};
@@ -159,4 +178,4 @@ module.exports = function attachBlackjacking(pluginApi) {
   api.onNpcsInteraction(TARGET_NAMES, { Lure: lure, "Knock-Out": knockOut });
   api.onCustomEvent("thieving:pickpocket-target", pickpocketTarget);
 };
-module.exports._test = { targetFor, ready, lure, knockOut, successChance, pickpocketTarget, unconscious, aggression };
+module.exports._test = { targetFor, ready, lure, knockOut, successChance, knockoutChart, pickpocketTarget, unconscious, aggression };

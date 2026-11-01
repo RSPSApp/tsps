@@ -241,6 +241,71 @@ test("the pay-dirt stops in the channel while both wheels are broken", () => {
   assert.equal(Mine.sackTotal(Mine.stateOf(p)), 1, "and it flows again");
 });
 
+test("the channel's water stops the tick after both wheels jam, and runs again after a repair (rsprox)", () => {
+  const p = player(3748, 5673);
+  const water = () => [
+    locAt(Machine.WATER_OVERLAY, [3743, 5660]),
+    locAt(Machine.WATER_OVERLAY, [3748, 5672]),
+    locAt(Machine.WATER_FOAM, [3744, 5672]),
+  ];
+  assert.ok(water().every(Boolean), "flowing from the start");
+  Machine.forceBreak({ player: p });
+  ticks(1);
+  assert.ok(water().every(Boolean), "one wheel still turns it");
+
+  Machine.forceBreak({ player: p });
+  assert.ok(water().every(Boolean), "removed only on the next tick");
+  ticks(1);
+  assert.ok(water().every((found) => !found), "all of it is gone");
+  ticks(6);
+  assert.ok(water().every((found) => !found), "and not re-sent while both are jammed");
+
+  const smith = player(3741, 5669);
+  smith.inventory.add({ getId: () => ItemIdentifiers.HAMMER, getAmount: () => 1 });
+  interact("Broken strut", "Hammer", { player: smith, objectId: Machine.BROKEN_STRUT, location: { x: 3742, y: 5669, z: 0 } });
+  withRandom(0, () => ticks(1));
+  ticks(3);
+  assert.ok(water().every(Boolean), "back on the next re-send");
+});
+
+test("Percy calls out a line every 6 ticks while a wheel is jammed, for one wheel or both (rsprox)", () => {
+  const p = player(3748, 5673);
+  const quiet = [1, 2, 3, 4, 5, 6].map((offset) => Machine.percyLines(60 + offset));
+  assert.deepEqual(quiet, [null, null, null, null, null, null], "silent while both wheels turn");
+
+  Machine.forceBreak({ player: p });
+  assert.equal(Machine.percyLines(61), null, "a break doesn't start the cycle");
+  assert.equal(Machine.percyLines(66), Machine.PERCY_ONE_BROKEN);
+  Machine.forceBreak({ player: p });
+  assert.equal(Machine.percyLines(72), Machine.PERCY_BOTH_BROKEN);
+  assert.equal(Machine.percyLines(73), null);
+});
+
+test("pay-dirt deposited while both wheels are jammed waits at the top of the channel (rsprox)", () => {
+  const p = player(3748, 5673);
+  Machine.forceBreak({ player: p });
+  Machine.forceBreak({ player: p });
+  p.inventory.add({ getId: () => Mine.PAY_DIRT, getAmount: () => 1 });
+  interact("Hopper", "Deposit", { player: p, objectId: Machine.HOPPER, location: { x: 3748, y: 5672, z: 0 } });
+  assert.equal(spawned.length, 0);
+  ticks(1);
+  assert.deepEqual([spawned[0].id, spawned[0].location.getX(), spawned[0].location.getY()], [6564, 3748, 5671],
+    "it appears the tick after the deposit");
+  ticks(20);
+  assert.deepEqual([spawned[0].location.getX(), spawned[0].location.getY()], [3748, 5671], "and stays put");
+  assert.equal(Mine.sackTotal(Mine.stateOf(p)), 0);
+
+  const smith = player(3741, 5669);
+  smith.inventory.add({ getId: () => ItemIdentifiers.HAMMER, getAmount: () => 1 });
+  interact("Broken strut", "Hammer", { player: smith, objectId: Machine.BROKEN_STRUT, location: { x: 3742, y: 5669, z: 0 } });
+  withRandom(0, () => ticks(1));
+  assert.equal(spawned[0].location.getY(), 5670, "it floats on once the water runs");
+  ticks(10);
+  assert.equal(spawned[0].removed, true);
+  assert.equal(Mine.sackTotal(Mine.stateOf(p)), 1);
+  assert.equal(spawned.length, 1, "the same pay-dirt, not a second one");
+});
+
 test("searching the sack gives the nuggets, then ore into the free slots", () => {
   const p = player(3748, 5660);
   const state = Mine.stateOf(p);

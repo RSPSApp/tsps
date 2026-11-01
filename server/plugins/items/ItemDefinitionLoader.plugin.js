@@ -175,10 +175,9 @@ function loadItemDefinitions() {
       mismatched++;
       continue;
     }
-    // "NONE" is the export's default, not a claim; keep the cache wearPos slot
-    // (e.g. Bronze sword 1277 is exported as NONE but wearPos 3).
-    const equipmentType = hydrateEquipmentType(rawDef.equipmentType);
-    if (equipmentType.getSlot() !== -1) def.equipmentType = equipmentType;
+    // The equipment slot is the cache wearPos (ItemDefinition), never the export's equipmentType:
+    // it marks ~800 unwearable items FULL_HELMET (packs, Eel sushi, Cog) and gives others the
+    // wrong slot (Torag's hammers as a helmet, Verac's brassard as a weapon).
     def.weaponInterface = hydrateWeaponInterface(rawDef.weaponInterface);
     // Two-handedness is the cache's (ItemDefinition), like stackable and tradeable.
     for (const property of [

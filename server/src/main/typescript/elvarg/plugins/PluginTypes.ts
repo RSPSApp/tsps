@@ -1475,6 +1475,7 @@ export interface PluginCoreApi {
   Priority: any;
   Projectile: any;
   Skill: any;
+  SkillManager: any;
   Item: any;
   Flag: any;
   Appearance: any;

@@ -81,10 +81,6 @@ const NPC_OVERRIDES = {
   "Temple Supplies": { remove: [11404] },
 };
 
-// Shops that list their stock-0 rows: Davon only buys his amulets, and a row
-// must exist for the shop to show and price them.
-const KEEP_ZERO_STOCK = new Set(["Davon's Amulet Store. (Default)"]);
-
 // Shops whose rows tsps lists in another order than the Wiki: these IDs come
 // first, in this order, then the remaining rows in the Wiki's order.
 const STOCK_ORDER = {
@@ -136,10 +132,13 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
+/** A stock amount, or null when the dump gives none. A listed 0 is a real entry: the shop shows
+ * it out of stock and buys it from players (Gerrant's raw fish). */
 function stockAmount(stock) {
   if (stock === "infinite") return INFINITE_STOCK;
+  if (stock === null || stock === undefined || String(stock).trim() === "") return null;
   const value = Number(stock);
-  return Number.isFinite(value) ? Math.floor(value) : 0;
+  return Number.isFinite(value) ? Math.floor(value) : null;
 }
 
 function currencyFor(name, info) {
@@ -153,8 +152,7 @@ function originalStock(name, items) {
   const prices = ITEM_PRICES[name] ?? {};
   for (const item of items ?? []) {
     const amount = stockAmount(item.stock);
-    if (!Number.isInteger(item.id) || item.id <= 0) continue;
-    if (amount < 0 || (amount === 0 && !KEEP_ZERO_STOCK.has(name))) continue;
+    if (!Number.isInteger(item.id) || item.id <= 0 || amount === null || amount < 0) continue;
     const entry = { id: item.id, amount };
     const restock = Number(item.restock_time);
     if (Number.isFinite(restock) && restock > 0) entry.restockTicks = restock;

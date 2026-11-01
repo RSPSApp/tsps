@@ -40,6 +40,12 @@ export interface InterfaceParent {
     // - 3: tab/sidemodal replacement (closed by IF_CLOSE)
     type: number;
     isModal?: boolean; // true if this interface captures all input
+    /**
+     * A main- or side-modal mount. OSRS lets a click on the world outside the
+     * mounted interface close it and still reach the world, unlike the chatbox
+     * modals (dialogues), which keep blocking input.
+     */
+    closeOnOutsideClick?: boolean;
 }
 
 /**
@@ -1903,8 +1909,14 @@ export class WidgetManager {
      * @param targetUid The widget UID to mount into
      * @param groupId The interface group to mount
      * @param type interface parent type (0=modal, 1=overlay, 3=tab/sidemodal replacement)
+     * @param closeOnOutsideClick a main/side modal, which a world click outside its content closes
      */
-    openSubInterface(targetUid: number, groupId: number, type: number = 0): void {
+    openSubInterface(
+        targetUid: number,
+        groupId: number,
+        type: number = 0,
+        closeOnOutsideClick: boolean = false,
+    ): void {
         const targetWidget = this.getWidgetByUid(targetUid);
         if (!targetWidget) {
             console.warn(
@@ -1932,7 +1944,7 @@ export class WidgetManager {
         }
 
         // Track the mounting
-        this.interfaceParents.set(targetUid, { group: groupId, type });
+        this.interfaceParents.set(targetUid, { group: groupId, type, closeOnOutsideClick });
         this.timerWidgetPaths = undefined;
         // PERF: Maintain reverse lookup for O(1) visibility checks
         this.groupToContainerUid.set(groupId, targetUid);

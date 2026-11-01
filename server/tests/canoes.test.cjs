@@ -11,7 +11,8 @@ const { Location } = require("../dist/game/model/Location");
 const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
 const { Item } = require("../dist/game/model/Item");
 const plugin = require("../plugins/world/Canoes.plugin");
-const { stations, TYPES } = plugin._test;
+const { stations, TYPES, CHOP_DELAY_TICKS } = plugin._test;
+const spawned = [];
 const axe = { id: 1359, requiredLevel: 41, tier: 6, animationId: 867 };
 const tasks = [];
 const events = [];
@@ -46,7 +47,12 @@ before(async () => {
       WorldDefinition: { isMembersWorld: () => members },
     },
     persistAttribute() {}, onObjectInteraction() {}, onNpcsInteraction() {}, onNpcDialogueCondition() {}, onInterfaceActionClick() {}, onCustomEvent() {}, onPlayerLogin() {}, onPlayerLogout() {},
-    spawnNpc: () => ({ getMovementQueue: () => ({ addSteps() {} }), isRegistered: () => false }), removeNpc() {},
+    spawnNpc: (spawn) => {
+      const npc = { spawn, flags: new Set(), steps: [], getMovementQueue: () => ({ addSteps: (at) => npc.steps.push(at) }), setFlag: (flag) => npc.flags.add(flag), isRegistered: () => false };
+      spawned.push(npc);
+      return npc;
+    },
+    removeNpc() {},
     emitCustomEvent: (name, event) => {
       if (name === "woodcutting:axe") event.axe = (event.itemId ? event.itemId === axe.id : event.player.hasAxe) ? axe : null;
       else events.push({ name, ...event });
@@ -82,7 +88,7 @@ function make(p, station, type) {
   const oldRandom = Math.random;
   Math.random = () => 0;
   try {
-    plugin._test.chop({ player: p, object: object(station) }); advance(2);
+    plugin._test.chop({ player: p, object: object(station) }); advance(CHOP_DELAY_TICKS + 2);
     plugin._test.shape({ player: p, object: object(station) }); choose(p, 416, type.button); advance(4);
     plugin._test.float({ player: p, object: object(station) }); advance(2);
   } finally { Math.random = oldRandom; }
@@ -138,8 +144,21 @@ test("a real map choice rows privately, lands, consumes the canoe and releases c
   const from = stations[6]; const to = stations[7]; const p = player(from);
   make(p, from, TYPES[3]);
   plugin._test.paddle({ player: p, object: object(from) }); choose(p, 952, 12);
+  spawned.length = 0;
+  let faced = null;
+  p.setPositionToFace = (at) => { faced = at; };
+  const varbit = (name) => p.getPacketSender().getVarbit(CacheDefinitions.getVarbitId(name));
   advance(2); assert.equal(p.location.getX(), 1817); assert.equal(p.blocked, true);
-  advance(26);
+  assert.deepEqual([faced.getX(), faced.getY()], [1816, 4515], "rowing faces west");
+  assert.equal(varbit("fov_clamp"), 1); assert.equal(varbit("draw_distance_max_override"), 1);
+  assert.equal(spawned.length, 4);
+  assert.ok(spawned.every((npc) => npc.flags.has("movement:ignore-clipping")));
+  advance(7);
+  assert.deepEqual(spawned.slice(4).map((npc) => [npc.spawn.x, npc.spawn.y]), [[1821, 4500]], "scenery_1 returns south on +7");
+  advance(3);
+  assert.deepEqual(spawned.slice(5).map((npc) => [npc.spawn.x, npc.spawn.y]).sort(), [[1819, 4505], [1820, 4501]]);
+  advance(16);
+  assert.equal(varbit("fov_clamp"), 0); assert.equal(varbit("draw_distance_max_override"), 0);
   assert.deepEqual([p.location.getX(), p.location.getY()], to.landing);
   assert.equal(p.area, null); assert.equal(p.blocked, false); assert.equal(plugin._test.state(p, from), 0);
   assert.match(p.messages.at(-1), /Your canoe sinks/);
@@ -193,7 +212,7 @@ test("carving rechecks its axe and location at the award tick", () => {
     const p = player(s);
     const random = Math.random; Math.random = () => 0;
     try {
-      plugin._test.chop({ player: p, object: object(s) }); advance(2);
+      plugin._test.chop({ player: p, object: object(s) }); advance(CHOP_DELAY_TICKS + 2);
       plugin._test.shape({ player: p, object: object(s) }); choose(p, 416, 11);
       interrupt(p); advance(4);
       assert.equal(p.xp, 0); assert.equal(plugin._test.state(p, s), 10); assert.equal(p.blocked, false);

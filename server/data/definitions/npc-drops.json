@@ -5739,6 +5739,7 @@
       "table_name": "Ancient Custodian Drops",
       "wiki_page": "Ancient Custodian",
       "main_max_roll": 124,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 532,
@@ -55486,6 +55487,7 @@
       "table_name": "Crushing hand Drops",
       "wiki_page": "Crushing hand",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -70983,6 +70985,7 @@
       "table_name": "Elder aquanite Drops",
       "wiki_page": "Elder aquanite",
       "main_max_roll": 22,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 532,
@@ -74878,6 +74881,7 @@
       "table_name": "Ent Drops",
       "wiki_page": "Ent",
       "main_max_roll": 128,
+      "rolls": 25,
       "entries": [
         {
           "item_id": 1511,
@@ -77340,6 +77344,7 @@
       "table_name": "Flaming pyrelord Drops",
       "wiki_page": "Flaming pyrelord",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25766,
@@ -106101,6 +106106,7 @@
       "table_name": "Infernal pyrelord Drops",
       "wiki_page": "Infernal pyrelord",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25766,
@@ -106690,6 +106696,7 @@
       "table_name": "Insatiable mutated Bloodveld Drops",
       "wiki_page": "Insatiable mutated Bloodveld",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 25769,
@@ -123448,6 +123455,7 @@
       "table_name": "Magma strykewyrm Drops",
       "wiki_page": "Magma strykewyrm",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 31726,
@@ -123951,6 +123959,7 @@
       "table_name": "Malevolent Mage Drops",
       "wiki_page": "Malevolent Mage",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -126058,6 +126067,7 @@
       "table_name": "Marble gargoyle Drops",
       "wiki_page": "Marble gargoyle",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -132927,6 +132937,7 @@
       "table_name": "Mutated Terrorbird Drops",
       "wiki_page": "Mutated Terrorbird",
       "main_max_roll": 64,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 526,
@@ -151534,6 +151545,7 @@
       "table_name": "Scavenger beast Drops",
       "wiki_page": "Scavenger beast",
       "main_max_roll": 18,
+      "rolls": 2,
       "entries": [
         {
           "item_id": 526,
@@ -193550,6 +193562,7 @@
       "table_name": "Vitreous Chilled Jelly Drops",
       "wiki_page": "Vitreous Chilled Jelly",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -193828,6 +193841,7 @@
       "table_name": "Vitreous Jelly Drops",
       "wiki_page": "Vitreous Jelly",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -194057,6 +194071,7 @@
       "table_name": "Vitreous Warped Jelly Drops",
       "wiki_page": "Vitreous Warped Jelly",
       "main_max_roll": 128,
+      "rolls": 3,
       "entries": [
         {
           "item_id": 23083,
@@ -194310,6 +194325,7 @@
       "table_name": "Vorkath Drops",
       "wiki_page": "Vorkath",
       "main_max_roll": 150,
+      "rolls": 2,
       "entries": [
         {
           "item_id": 22124,
@@ -209998,6 +210014,7 @@
       "table_name": "Zulrah Drops",
       "wiki_page": "Zulrah",
       "main_max_roll": 250,
+      "rolls": 2,
       "entries": [
         {
           "item_id": 12934,

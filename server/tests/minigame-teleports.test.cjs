@@ -26,6 +26,7 @@ function recordingPlayer(at = new Location(3222, 3218, 0)) {
     const log = (entry) => ticks[ticks.length - 1].push(entry);
     let location = at;
     let queued = 0;
+    let resets = 0;
     const attributes = new Map();
     const sender = {
         sendVarbit: (id, value) => (log(`varbit ${id}=${value}`), sender),
@@ -38,7 +39,7 @@ function recordingPlayer(at = new Location(3222, 3218, 0)) {
         getLocation: () => location,
         getMovementQueue: () => ({
             size: () => queued,
-            reset: () => {},
+            reset: () => { resets++; },
             setBlockMovement: (blocked) => (log(blocked ? 'locked' : 'free'), { reset: () => {} }),
         }),
         isRegistered: () => true,
@@ -62,6 +63,7 @@ function recordingPlayer(at = new Location(3222, 3218, 0)) {
         log,
         nextTick: () => ticks.push([]),
         walk: () => { queued = 1; },
+        resets: () => resets,
     };
 }
 
@@ -115,6 +117,20 @@ test('the home teleport cast plays out as in the OSRS captures, tick by tick', (
         24: ['varbit 12393=0', 'free', 'teleport 2609,3121', 'anim 65535', 'gfx -1', 'arrived'],
         25: ['anim 65535'],
     });
+});
+
+test('a moving home teleport click never starts the cast and never clears the walk', (t) => {
+    stubWorld(t)(() => {});
+    const { player, ticks, log, nextTick, walk, resets } = recordingPlayer();
+    walk();
+    assert.equal(
+        Sequence.startHomeTeleport(core, player, new Location(2609, 3121, 0), () => log('arrived')),
+        null,
+        'the cast only starts while standing still'
+    );
+    run(ticks, nextTick, 3);
+    assert.deepEqual(ticks.flat(), ['varbit 12393=0'], 'busy is cleared but no cast begins');
+    assert.equal(resets(), 0, "the player's walk is left alone");
 });
 
 test('walking interrupts the cast before its last ticks: no teleport, no cooldown', (t) => {

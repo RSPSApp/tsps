@@ -6,18 +6,19 @@
  * between the three docks for 30 coins, halved to 15 while any Karamja gloves
  * are worn. The Wiki's free ring of charos(a) route is not offered here.
  */
-const { Location } = require("../../src/main/typescript/elvarg/game/model/Location");
 const { ItemIdentifiers } = require("../../src/main/typescript/elvarg/util/ItemIdentifiers");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
+// shortcut: shared ferry fade timings; replace with Barnaby's exact sequence when a capture is available.
+const FERRY_ROUTES = require("./data/ferries.json").routes;
 
 const BASE_FARE = 30;
 const GLOVES_FARE = 15;
 
 // `variant` is the dock's Talk-to transcript in npc-dialogues.json.
 const PORTS = [
-  { name: "Ardougne", destination: new Location(2680, 3274, 0), variant: "standard-dialogue-if-the-player-is-on-the-dock-in-east-ardougne" },
-  { name: "Brimhaven", destination: new Location(2768, 3227, 0), variant: "standard-dialogue-if-the-player-is-on-the-dock-in-brimhaven" },
-  { name: "Rimmington", destination: new Location(2916, 3225, 0), variant: "standard-dialogue-if-the-player-is-on-the-dock-in-rimmington" },
+  { name: "Ardougne", route: "barnaby-ardougne", variant: "standard-dialogue-if-the-player-is-on-the-dock-in-east-ardougne" },
+  { name: "Brimhaven", route: "barnaby-brimhaven", variant: "standard-dialogue-if-the-player-is-on-the-dock-in-brimhaven" },
+  { name: "Rimmington", route: "barnaby-rimmington", variant: "standard-dialogue-if-the-player-is-on-the-dock-in-rimmington" },
 ];
 
 // The transcript's "You board the ship and sail to <port>." message steps.
@@ -35,7 +36,7 @@ const KARAMJA_GLOVES = new Set([
   ItemIdentifiers.KARAMJA_GLOVES_3_2,
 ].filter(Number.isInteger));
 
-let core = null;
+let api = null;
 
 function fareFor(player) {
   const gloves = player.getEquipment?.()?.get?.(Equipment.HANDS_SLOT)?.getId?.();
@@ -48,13 +49,15 @@ function sail(player, port, fare) {
     player.sendMessage("You don't have enough coins for that fare.");
     return;
   }
-  if (!core.TeleportHandler.checkReqs(player, port.destination)) {
+  if (!api.core.TeleportHandler.checkReqs(player, new api.core.Location(...FERRY_ROUTES[port.route].to))) {
     return;
   }
+  const voyage = { player, route: port.route, handled: false };
+  api.emitCustomEvent("ferries:travel", voyage);
+  if (!voyage.handled) return;
   inventory.deleteNumber(ItemIdentifiers.COINS, fare);
   inventory.refreshItems();
   player.sendMessage(`You pay ${fare} coins and board the ship.`);
-  core.TeleportHandler.teleport(player, port.destination, core.TeleportType.NORMAL, false);
 }
 
 function portNamed(name) {
@@ -94,8 +97,8 @@ module.exports = {
   name: "BarnabyFerry",
   members: true,
   _test: { fareFor, sail, sailToOption, selectDockVariant, answerFareCondition, boardFromDialogue, PORTS },
-  register(api) {
-    core = api.core;
+  register(pluginApi) {
+    api = pluginApi;
     api.onNpcInteraction("Captain Barnaby", { Ardougne: sailToOption, Brimhaven: sailToOption, Rimmington: sailToOption });
     api.onNpcDialogueVariant(selectDockVariant);
     api.onNpcDialogueCondition(answerFareCondition);

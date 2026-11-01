@@ -49,7 +49,8 @@ const HAMMER_ANIMATION_TICKS = 4;
 
 /**
  * The channel's flowing water as captured: overlays (10459) round its four sides, and small foams
- * (2018) at its corners, which are re-sent every 3 ticks.
+ * (2018) at its corners, all re-sent every 3 ticks while a wheel turns. The tick after the second
+ * wheel jams they are all removed, and they come back on the next re-send after a repair.
  */
 const WATER_OVERLAY = 10459;
 const WATER_FOAM = 2018;
@@ -62,7 +63,7 @@ const CHANNEL_WATER = [
   ...Array.from({ length: 5 }, (_, i) => [[3744 + i, 5660], 1]),
 ];
 const CHANNEL_FOAMS = [[[3744, 5660], 0], [[3744, 5672], 2], [[3748, 5660], 0], [[3748, 5671], 3]];
-const FOAM_TICKS = 3;
+const WATER_TICKS = 3;
 
 /** The pay-dirt floating down the channel (npc 6564), one tile a tick, as captured. */
 const FLOATING_PAY_DIRT = NpcIds.COL_FF9040_PAY_DIRT_COL;
@@ -72,11 +73,17 @@ const DEPOSIT_ANIMATION = 832;
 const DEPOSIT_SOUND = 2496;
 const CLEANED_SOUND = 2739;
 
-/** Percy's overhead lines (Wiki transcript) when a wheel or both break. */
+/**
+ * Percy's overhead lines (Wiki transcript) while a wheel, or both, are jammed. As captured, he calls
+ * one out every 6 ticks for as long as a wheel is jammed, picked at random from the lines for how
+ * many are: a wheel breaking doesn't start the cycle, it only changes his lines on the next one.
+ */
+const PERCY_TICKS = 6;
 const PERCY_ONE_BROKEN = ["We got us a jammed wheel!", "Ye'd better fix that wheel!", "Git yer hammer an' fix that wheel!"];
 const PERCY_BOTH_BROKEN = ["That water ain't flowing!", "Both them wheels be jammed!", "Git yer hammer an' fix them wheels!"];
 
 let pluginApi;
+let waterShown = false;
 const struts = STRUTS.map((spot) => ({ ...spot, broken: true, breaksAt: -1, foamLoc: null }));
 /** player -> their pay-dirt in the channel */
 const batches = new Map();
@@ -115,7 +122,12 @@ function breakStrut(strut) {
   strut.foamLoc = null;
   strut.broken = true;
   strut.breaksAt = -1;
-  percySays(isFlowing() ? PERCY_ONE_BROKEN : PERCY_BOTH_BROKEN);
+}
+
+/** The lines Percy picks from this tick, or null when he's quiet. */
+function percyLines(now) {
+  if (now % PERCY_TICKS !== 0 || !struts.some((strut) => strut.broken)) return null;
+  return isFlowing() ? PERCY_ONE_BROKEN : PERCY_BOTH_BROKEN;
 }
 
 function percySays(lines) {
@@ -195,7 +207,10 @@ function routeToHopper(event) {
   event.destination = { x: UPPER_HOPPER_APPROACH[0], y: UPPER_HOPPER_APPROACH[1], z: 0 };
 }
 
-/** Pay-dirt goes down the channel from the tick after it's deposited. */
+/**
+ * Pay-dirt appears at the top of the channel the tick after it's deposited, even when both wheels
+ * are jammed (as captured), and waits there until the water flows.
+ */
 function queueBatch(player, ores) {
   const queue = batches.get(player) ?? [];
   queue.push({ ores, npc: null, tiles: -1 });
@@ -210,11 +225,6 @@ function spawnFloating() {
 }
 
 function advance(batch) {
-  if (batch.tiles < 0) {
-    batch.tiles = 0;
-    batch.npc = spawnFloating();
-    return false;
-  }
   batch.tiles++;
   const [x, y] = CHANNEL_START;
   batch.npc?.moveTo(new Location(x, y - batch.tiles, 0));
@@ -243,10 +253,15 @@ function clean(player, batch) {
 }
 
 function tickBatches() {
-  if (!isFlowing()) return;
+  const flowing = isFlowing();
   for (const [player, queue] of batches) {
     for (const batch of [...queue]) {
-      if (!advance(batch)) continue;
+      if (batch.tiles < 0) {
+        batch.tiles = 0;
+        batch.npc = spawnFloating();
+        continue;
+      }
+      if (!flowing || !advance(batch)) continue;
       queue.splice(queue.indexOf(batch), 1);
       clean(player, batch);
     }
@@ -303,21 +318,39 @@ function searchSack({ player, objectId }) {
   ));
 }
 
-function spawnFoams() {
-  for (const [tile, face] of CHANNEL_FOAMS) ObjectManager.register(loc(WATER_FOAM, tile, CENTREPIECE, face), true);
+function waterLocs() {
+  return [
+    ...CHANNEL_WATER.map(([tile, face]) => loc(WATER_OVERLAY, tile, GROUND_DECORATION, face)),
+    ...CHANNEL_FOAMS.map(([tile, face]) => loc(WATER_FOAM, tile, CENTREPIECE, face)),
+  ];
+}
+
+function showWater() {
+  for (const water of waterLocs()) ObjectManager.register(water, true);
+  waterShown = true;
+}
+
+function hideWater() {
+  for (const water of waterLocs()) ObjectManager.deregister(water, true);
+  waterShown = false;
 }
 
 function start(now) {
-  for (const [tile, face] of CHANNEL_WATER) ObjectManager.register(loc(WATER_OVERLAY, tile, GROUND_DECORATION, face), true);
-  spawnFoams();
   for (const strut of struts) repairStrut(strut, now);
+  showWater();
 }
 
 function tick(now) {
-  if (now % FOAM_TICKS === 0) spawnFoams();
+  if (!isFlowing()) {
+    if (waterShown) hideWater();
+  } else if (now % WATER_TICKS === 0) {
+    showWater();
+  }
   for (const strut of struts) {
     if (!strut.broken && now >= strut.breaksAt) breakStrut(strut);
   }
+  const lines = percyLines(now);
+  if (lines) percySays(lines);
   for (const [player, work] of hammering) tickHammering(player, work, now);
   tickBatches();
 }
@@ -330,6 +363,7 @@ function forceBreak({ player }) {
 }
 
 module.exports = {
-  init, start, tick, deposit, routeToHopper, searchSack, hammerStrut, resume, forget, forceBreak, isFlowing,
-  struts, batches, HOPPER, SACK, BROKEN_STRUT, CHANNEL_TILES,
+  init, start, tick, percyLines, deposit, routeToHopper, searchSack, hammerStrut, resume, forget, forceBreak, isFlowing,
+  struts, batches, HOPPER, SACK, BROKEN_STRUT, CHANNEL_TILES, WATER_OVERLAY, WATER_FOAM,
+  PERCY_ONE_BROKEN, PERCY_BOTH_BROKEN,
 };

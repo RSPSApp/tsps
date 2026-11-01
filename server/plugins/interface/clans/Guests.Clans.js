@@ -1,0 +1,348 @@
+/**
+ * Guest clans (702), applying, the Applicants screen (699) and the recruitment board (700).
+ * Finding a clan and the screens follow rsprox 76 and 2778; joining a channel as a guest has no
+ * capture, so it follows the cache's scripts and the Wiki, with our wording (docs/clans.md).
+ */
+
+const Core = require("./Core.Clans");
+const Store = require("./Store.Clans");
+
+const GUEST_GROUP = 702;
+const GUEST_REFRESH = 2;
+const GUEST_CHAT_BUTTON = 8;
+const GUEST_INFO_BUTTON = 9;
+const GUEST_FIND_BUTTON = 10;
+const FIND_PROMPT_SCRIPT = 110; // with this mode, as rsprox 76 tick 7504
+const FIND_PROMPT_MODE = 7;
+const SIDE_BUTTON = 7;
+
+const FETCHING = 2; // clan_guest_affinitystatus while the settings arrive (rsprox 76 tick 7587)
+const FETCH_TICKS = 1;
+const BUTTON_TIMEOUT_TICKS = 5;
+const JOIN_DELAY_TICKS = 3;
+const GUEST_TIMEOUT_VARBIT = 12169; // clan_transmit_guest_timeout
+const LOAD_AS_GUEST_VARBIT = 12165; // clan_transmit_loadasguest
+const APPLYING_VARBIT = 12166; // clan_transmit_guestisapplying
+
+const APPLICANTS_GROUP = 699;
+const APPLICANT_BUTTONS = 1;
+const APPLICANT_LIST = 11;
+const BUTTON_BOARD = 0;
+const BUTTON_REFRESH = 1;
+const BUTTON_DECLINE = 2;
+const BUTTON_ACCEPT = 3;
+const BUTTON_INVITE = 4;
+const BUTTON_MIN_COMBAT = 5;
+const BUTTON_MIN_TOTAL = 6;
+const APPLICANT_ROWS = 20;
+const APPLICANT_INFO_SCRIPT = 4375;
+const APPLICANT_ROW_SCRIPT = 4376;
+const PAUSE_FLAG = 1;
+
+const BOARD_GROUP = 700;
+const BOARD_BUTTONS = 1;
+const BOARD_FILTERS = 5;
+const BOARD_LIST = 20;
+const BOARD_MY_CLAN = 0;
+const BOARD_ROWS = 45;
+const BOARD_ROW_SCRIPT = 4357;
+const LAST_BOARD_ENTRY = 89;
+const LAST_BOARD_FILTER = 15;
+const LAST_BOARD_BUTTON = 3;
+const MODAL_UID = (161 << 16) | 16;
+const uid = (group, child) => (group << 16) | child;
+
+let core = null;
+let later = null;
+let openSettingsFor = null;
+
+const selectedApplicant = new WeakMap();
+
+function init(apiCore, schedule, openSettings) {
+  core = apiCore;
+  later = schedule;
+  openSettingsFor = openSettings;
+}
+
+// ---------------------------------------------------------------- finding a clan
+
+function askFind(player) {
+  player.setEnteredSyntaxAction({ execute: (name) => find(player, String(name ?? "").trim()) });
+  player.getPacketSender().sendClientScript(FIND_PROMPT_SCRIPT, "Type the name of a clan to seek:", FIND_PROMPT_MODE);
+}
+
+function find(player, name) {
+  const clan = name ? Store.byName(name) : undefined;
+  if (!clan) {
+    player.getPacketSender().sendTypedMessage(115, "No clan could be found with that name.");
+    player.sendMessage("No clan could be found with that name.");
+    return;
+  }
+  viewClan(player, clan);
+}
+
+/** rsprox 76: fetching at once with the tab brought up, then the settings a moment later. */
+function viewClan(player, clan) {
+  discard(player);
+  player.getPacketSender().sendVarbit(Core.GUEST_CLAN_STATUS_VARBIT, FETCHING).sendTab(SIDE_BUTTON);
+  later(FETCH_TICKS, () => {
+    if (Core.isOnline(player) && Store.byName(clan.name) === clan) Core.addGuestViewer(player, clan);
+  });
+}
+
+function discard(player) {
+  Core.removeGuestViewer(player);
+  player.getPacketSender().sendVarbit(LOAD_AS_GUEST_VARBIT, 0).sendVarbit(APPLYING_VARBIT, 0);
+}
+
+// ---------------------------------------------------------------- the guest channel
+
+function guestRefusal(player, clan) {
+  if (!clan.allowGuests) return "This clan does not allow guests in its channel.";
+  if (Core.isBanned(clan, player.getUsername())) return "You are banned from this clan's channel.";
+  if (Core.clanOf(player) === clan) return "You are already a member of this clan.";
+  const rules = Core.guestRules(clan);
+  const skills = player.getSkillManager();
+  if (skills.getCombatLevel() < rules.combat) return `You need a combat level of ${rules.combat} to chat in this clan's channel.`;
+  if (skills.getTotalLevel() < rules.total) return `You need a total level of ${rules.total} to chat in this clan's channel.`;
+  return null;
+}
+
+function greyGuestButton(player) {
+  player.getPacketSender().sendVarbit(GUEST_TIMEOUT_VARBIT, 1);
+  later(BUTTON_TIMEOUT_TICKS, () => {
+    if (Core.isOnline(player)) player.getPacketSender().sendVarbit(GUEST_TIMEOUT_VARBIT, 0);
+  });
+}
+
+function toggleGuestChannel(player) {
+  const clan = Core.guestClanOf(player);
+  if (!clan) return;
+  if (Core.guestChannelOf(player)) {
+    greyGuestButton(player);
+    Core.removeFromGuestChannel(player);
+    return;
+  }
+  const refused = guestRefusal(player, clan);
+  if (refused) {
+    player.sendMessage(refused);
+    return;
+  }
+  greyGuestButton(player);
+  later(JOIN_DELAY_TICKS, () => {
+    if (Core.isOnline(player) && Core.guestClanOf(player) === clan) Core.joinGuestChannel(player, clan);
+  });
+}
+
+function clickGuestPanel(event) {
+  if (event.groupId !== GUEST_GROUP) return;
+  const { player, childId } = event;
+  event.handled = true;
+  if (childId === GUEST_CHAT_BUTTON) toggleGuestChannel(player);
+  else if (childId === GUEST_INFO_BUTTON) {
+    if (!Core.guestClanOf(player)) return;
+    player.getPacketSender().sendVarbit(LOAD_AS_GUEST_VARBIT, 1);
+    openSettingsFor(player);
+    player.getPacketSender().sendVarbit(APPLYING_VARBIT, applicantOf(Core.guestClanOf(player), player) ? 1 : 0);
+  } else if (childId === GUEST_FIND_BUTTON) {
+    if (Core.guestClanOf(player)) discard(player);
+    else askFind(player);
+  } else if (childId === GUEST_REFRESH) {
+    const clan = Core.guestClanOf(player);
+    if (clan) Core.addGuestViewer(player, clan);
+  }
+}
+
+// ---------------------------------------------------------------- applying
+
+function applicationRefusal(player, clan) {
+  if (Core.clanOf(player)) return "You are already in a clan.";
+  if (!clan.inviting) return "This clan is not inviting applications at the moment.";
+  if (Core.isBanned(clan, player.getUsername())) return "You are banned from this clan.";
+  const skills = player.getSkillManager();
+  if (skills.getCombatLevel() < (clan.applyMinCombat ?? 0)) return `You need a combat level of ${clan.applyMinCombat} to apply.`;
+  if (skills.getTotalLevel() < (clan.applyMinTotal ?? 0)) return `You need a total level of ${clan.applyMinTotal} to apply.`;
+  return null;
+}
+
+function applicantOf(clan, player) {
+  return (clan.applicants ?? []).find((entry) => entry.account === Core.accountOf(player));
+}
+
+/** rsprox 2778's applicant line: name, combat, total, then each skill's level. */
+function applicantStats(player) {
+  const skills = player.getSkillManager();
+  const levels = core.Skill.values().map((skill) => skills.getMaxLevel(skill));
+  return [player.getUsername(), skills.getCombatLevel(), skills.getTotalLevel(), ...levels].join("|");
+}
+
+function toggleApplication(player, clan) {
+  const sender = player.getPacketSender();
+  if (applicantOf(clan, player)) {
+    clan.applicants = clan.applicants.filter((entry) => entry.account !== Core.accountOf(player));
+    Store.save();
+    sender.sendVarbit(APPLYING_VARBIT, 0);
+    return;
+  }
+  const refused = applicationRefusal(player, clan);
+  if (refused) {
+    player.sendMessage(refused);
+    return;
+  }
+  clan.applicants = [...(clan.applicants ?? []), { account: Core.accountOf(player), name: player.getUsername(), stats: applicantStats(player) }];
+  Store.save();
+  sender.sendVarbit(APPLYING_VARBIT, 1);
+  for (const member of clan.members) {
+    if (member.rank < Core.permissionRank(clan, Core.SETTING_RECRUIT)) continue;
+    Core.onlinePlayer(member.account)?.sendMessage(`${player.getUsername()} has applied to join your clan.`);
+  }
+}
+
+// ---------------------------------------------------------------- Applicants
+
+function canRecruit(player, clan) {
+  const own = Core.memberOf(clan, Core.accountOf(player));
+  return !!own && own.rank >= Core.permissionRank(clan, Core.SETTING_RECRUIT);
+}
+
+function openApplicants(player, clan) {
+  const sender = player.getPacketSender();
+  sender.sendSubInterface(MODAL_UID, APPLICANTS_GROUP, 0);
+  sender
+    .sendInterfaceFlagsRange(uid(APPLICANTS_GROUP, APPLICANT_LIST), 0, APPLICANT_ROWS - 1, PAUSE_FLAG)
+    .sendInterfaceFlagsRange(uid(APPLICANTS_GROUP, APPLICANT_BUTTONS), 0, BUTTON_MIN_TOTAL, PAUSE_FLAG);
+  selectedApplicant.delete(player);
+  sender.sendClientScript(APPLICANT_INFO_SCRIPT, "");
+  const applicants = clan.applicants ?? [];
+  for (let row = 0; row < APPLICANT_ROWS; row++) {
+    sender.sendClientScript(APPLICANT_ROW_SCRIPT, row, applicants[row]?.name ?? "");
+  }
+}
+
+function settleApplicant(player, clan, accept) {
+  const chosen = selectedApplicant.get(player);
+  if (!chosen || !(clan.applicants ?? []).includes(chosen)) return;
+  clan.applicants = clan.applicants.filter((entry) => entry !== chosen);
+  selectedApplicant.delete(player);
+  const online = Core.onlinePlayer(chosen.account);
+  online?.getPacketSender().sendVarbit(APPLYING_VARBIT, 0);
+  if (!accept) {
+    Store.save();
+    online?.sendMessage(`Your application to ${clan.name} has been declined.`);
+  } else if (online && !Core.clanOf(online)) {
+    discard(online);
+    Core.addMember(clan, online);
+    player.sendMessage(`You have accepted ${chosen.name} into ${clan.name}.`);
+  } else if (!online && !Store.byMember(chosen.account) && clan.members.length < Core.MAX_MEMBERS) {
+    Core.addOfflineMember(clan, chosen.account, chosen.name);
+    player.sendMessage(`You have accepted ${chosen.name} into ${clan.name}.`);
+  } else {
+    Store.save();
+    player.sendMessage(`${chosen.name} can't join: they are already in a clan.`);
+  }
+  openApplicants(player, clan);
+}
+
+function askApplyMinimum(player, clan, key, title) {
+  player.setEnteredAmountAction({
+    acceptsZero: true,
+    execute(value) {
+      clan[key] = value;
+      Store.save();
+    },
+  });
+  player.getPacketSender().sendEnterAmountPrompt(title);
+}
+
+function clickApplicants(event) {
+  if (event.groupId !== APPLICANTS_GROUP) return;
+  const { player, childId, action } = event;
+  event.handled = true;
+  const clan = Core.clanOf(player);
+  if (!clan) return;
+  if (childId === APPLICANT_LIST) {
+    const chosen = (clan.applicants ?? [])[action];
+    selectedApplicant.set(player, chosen);
+    player.getPacketSender().sendClientScript(APPLICANT_INFO_SCRIPT, chosen?.stats ?? "");
+    return;
+  }
+  if (childId !== APPLICANT_BUTTONS) return;
+  if (action === BUTTON_BOARD) openBoard(player);
+  else if (action === BUTTON_REFRESH) openApplicants(player, clan);
+  else if (!canRecruit(player, clan)) player.sendMessage("You are not a high enough rank to do that.");
+  else if (action === BUTTON_ACCEPT) settleApplicant(player, clan, true);
+  else if (action === BUTTON_DECLINE) settleApplicant(player, clan, false);
+  else if (action === BUTTON_INVITE) toggleInviting(player, clan);
+  else if (action === BUTTON_MIN_COMBAT) askApplyMinimum(player, clan, "applyMinCombat", "Enter the minimum combat level:");
+  else if (action === BUTTON_MIN_TOTAL) askApplyMinimum(player, clan, "applyMinTotal", "Enter the minimum total level:");
+}
+
+/** rsprox 2778 tick 181; the line for turning it off is ours. */
+function toggleInviting(player, clan) {
+  clan.inviting = !clan.inviting;
+  Store.save();
+  for (const member of clan.members) {
+    Core.onlinePlayer(member.account)?.getPacketSender().sendVarbit(Core.RECRUITER_VARBIT, clan.inviting ? 1 : 0);
+  }
+  player.getPacketSender().sendTypedMessage(115, clan.inviting
+    ? "You are now inviting applications to this clan. Remember to turn this option off when you've finished!"
+    : "You are no longer inviting applications to this clan.");
+}
+
+// ---------------------------------------------------------------- the recruitment board
+
+function boardClans() {
+  return [...Store.all()].filter((clan) => clan.inviting).slice(0, BOARD_ROWS);
+}
+
+function boardRow(clan, now) {
+  const days = Math.max(0, Core.runeDay(now) - clan.creationTime);
+  return [clan.name, clan.members.length, days].join("|");
+}
+
+/** The object's View (rsprox 2778 tick 58) and its rows. */
+function openBoard(player) {
+  const sender = player.getPacketSender();
+  sender.sendSubInterface(MODAL_UID, BOARD_GROUP, 0);
+  sender
+    .sendInterfaceFlagsRange(uid(BOARD_GROUP, BOARD_LIST), 0, LAST_BOARD_ENTRY, PAUSE_FLAG)
+    .sendInterfaceFlagsRange(uid(BOARD_GROUP, BOARD_FILTERS), 0, LAST_BOARD_FILTER, PAUSE_FLAG)
+    .sendInterfaceFlagsRange(uid(BOARD_GROUP, BOARD_BUTTONS), 0, LAST_BOARD_BUTTON, PAUSE_FLAG);
+  const clans = boardClans();
+  const now = Date.now();
+  for (let row = 0; row < BOARD_ROWS; row++) {
+    sender.sendClientScript(BOARD_ROW_SCRIPT, row, clans[row] ? boardRow(clans[row], now) : "", 0);
+  }
+}
+
+function clickBoard(event) {
+  if (event.groupId !== BOARD_GROUP) return;
+  const { player, childId, action } = event;
+  event.handled = true;
+  if (childId === BOARD_BUTTONS && action === BOARD_MY_CLAN) {
+    const clan = Core.clanOf(player);
+    if (!clan) player.sendMessage("You are not in a clan.");
+    else if (!clan.inviting) {
+      player.getPacketSender().sendTypedMessage(115, "You should start inviting applications first. Remember to turn this option off when you've finished!");
+      openApplicants(player, clan);
+    } else openApplicants(player, clan);
+  } else if (childId === BOARD_LIST) {
+    const clan = boardClans()[Math.floor(action / 2)];
+    if (clan) {
+      player.getPacketSender().sendInterfaceRemoval();
+      viewClan(player, clan);
+    }
+  }
+}
+
+module.exports = {
+  applicantOf,
+  clickApplicants,
+  clickBoard,
+  clickGuestPanel,
+  discard,
+  init,
+  openApplicants,
+  openBoard,
+  toggleApplication,
+};

@@ -1158,6 +1158,8 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
                 11: "game",
                 41: "clan",
                 43: "game",
+                44: "clan",
+                46: "game",
                 101: "trade",
             };
             const text = reader.readString();

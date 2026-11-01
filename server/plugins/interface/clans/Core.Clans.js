@@ -7,6 +7,7 @@ const Store = require("./Store.Clans");
 const PERMISSIONS = require("./data/permissions.json");
 
 const OWN_CLAN = 0;
+const LISTENED_CLAN = -1;
 const CLAN_NOTICE_MESSAGE_TYPE = 43;
 const CHANNEL_INTRO = "To talk in your clan's channel, start each line of chat with // or /c.";
 
@@ -16,6 +17,8 @@ const GUEST_CLAN_STATUS_VARBIT = 12164;
 const NO_CLAN = 1;
 const CLAN_LOADED = 3;
 const HOME_WORLD_VARBIT = 12167; // clan_transmit_homeworld
+const GUEST_HOME_WORLD_VARBIT = 12168; // clan_transmit_guest_homeworld
+/** The clan is inviting applications (rsprox 2778 tick 181 sets it in varp 3019). */
 const RECRUITER_VARBIT = 12170; // clan_i_am_recruiter
 
 const RANK_RECRUIT = 0;
@@ -55,15 +58,31 @@ const STRUCT_TALK = 2954;
 const STRUCT_KICK = 2955;
 const COFFER_DEPOSIT_SETTING = 19;
 const PERMISSION_ROWS = PERMISSIONS.filter((row) => row.setting !== null && !row.special);
+/** Guest minimums share one setting: combat bits 0-6, total 7-18, QP 19-29 (clan_permissions_buttonresynch). */
+const GUEST_RULES_SETTING = 26;
+/** Plain values, with rsprox 3886's clan's numbers for the level-ups (66-69) and defaults otherwise. */
+const VALUE_DEFAULTS = { 31: 100000, 65: 100000, 66: 30, 67: 40, 68: 70, 69: 5, 98: 100000, 101: 0, 110: 0, 111: 0, 112: 0 };
 
 /** Channels by clan key, built as players join: { clan, updateNum, users: [{ player, rank, name }] }. */
 const channels = new Map();
 const channelOfPlayer = new Map();
+const guestChannelOfPlayer = new Map();
+/** Who has a clan up on Guest Clan: player -> clan, and clan key -> players. */
+const guestClanOfPlayer = new Map();
+const guestViewers = new Map();
 
 let core = null;
+let onJoined = () => {};
+let onLeft = () => {};
 
 function init(apiCore) {
   core = apiCore;
+}
+
+/** Who hears of a member joining or leaving: Broadcasts.Clans.js. */
+function setMembershipListeners(joined, left) {
+  onJoined = joined;
+  onLeft = left;
 }
 
 function runeDay(now = Date.now()) {
@@ -133,6 +152,24 @@ function titleSetting(clan, setting) {
   return clan.titles?.[setting] ?? (setting === RANK_TITLES_SETTING ? RECRUIT_TITLE : 0);
 }
 
+function settingValue(clan, setting) {
+  return clan.values?.[setting] ?? VALUE_DEFAULTS[setting] ?? 0;
+}
+
+function setSettingValue(clan, setting, value) {
+  clan.values = { ...clan.values, [setting]: value };
+  sendSettingsDelta(clan, [{ type: "int_setting", setting, value }]);
+}
+
+function guestRules(clan) {
+  const value = clan.values?.[GUEST_RULES_SETTING] ?? 0;
+  return { combat: value & 0x7f, total: (value >>> 7) & 0xfff, qp: (value >>> 19) & 0x7ff, iron: (value >>> 30) & 3 };
+}
+
+function setGuestRules(clan, rules) {
+  setSettingValue(clan, GUEST_RULES_SETTING, (rules.combat & 0x7f) | ((rules.total & 0xfff) << 7) | ((rules.qp & 0x7ff) << 19) | ((rules.iron & 3) << 30));
+}
+
 function memberExtraInfo(member) {
   return (member.lastSeenDay ?? LAST_SEEN_OFFSET) - LAST_SEEN_OFFSET;
 }
@@ -162,6 +199,8 @@ function settingsSnapshot(clan) {
       { id: HOME_WORLD_SETTING, value: WORLD },
       { id: LAST_SEEN_DAY_SETTING, value: runeDay() },
       ...PERMISSION_ROWS.map((row) => ({ id: row.setting, value: permissionRank(clan, row.setting) + 2 })),
+      { id: GUEST_RULES_SETTING, value: clan.values?.[GUEST_RULES_SETTING] ?? 0 },
+      ...Object.keys(VALUE_DEFAULTS).map((id) => ({ id: Number(id), value: settingValue(clan, Number(id)) })),
     ],
   };
 }
@@ -190,49 +229,117 @@ function sendNotice(player, text) {
   player.getPacketSender().sendTypedMessage(CLAN_NOTICE_MESSAGE_TYPE, text);
 }
 
-function sendDelta(channel, event) {
-  channel.updateNum++;
-  const packet = core.encodeClanChannelDelta(OWN_CLAN, channel.clan.key, channel.updateNum, [event]);
-  for (const { player } of channel.users) send(player, packet);
+function userClanType(user) {
+  return user.guest ? LISTENED_CLAN : OWN_CLAN;
 }
 
-function joinChannel(player, clan, member) {
-  if (channelOfPlayer.has(player)) return;
+function sendDelta(channel, event) {
+  channel.updateNum++;
+  for (const user of channel.users) {
+    send(user.player, core.encodeClanChannelDelta(userClanType(user), channel.clan.key, channel.updateNum, [event]));
+  }
+}
+
+function sendChannelFull(channel) {
+  const snapshot = channelSnapshot(channel);
+  for (const user of channel.users) send(user.player, core.encodeClanChannelFull(userClanType(user), snapshot));
+}
+
+function addUser(player, clan, user, seats) {
   let channel = channels.get(clan.key);
   if (!channel) {
     channel = { clan, updateNum: 0, users: [] };
     channels.set(clan.key, channel);
   }
-  const user = { player, rank: member.rank, name: member.name };
   sendDelta(channel, { type: "add", user: channelUser(user) });
   channel.users.push(user);
-  channelOfPlayer.set(player, channel);
-  send(player, core.encodeClanChannelFull(OWN_CLAN, channelSnapshot(channel)));
+  seats.set(player, channel);
+  send(player, core.encodeClanChannelFull(userClanType(user), channelSnapshot(channel)));
 }
 
-function removeFromChannel(player) {
-  const channel = channelOfPlayer.get(player);
+function joinChannel(player, clan, member) {
+  if (channelOfPlayer.has(player)) return;
+  addUser(player, clan, { player, rank: member.rank, name: member.name, guest: false }, channelOfPlayer);
+}
+
+function joinGuestChannel(player, clan) {
+  if (guestChannelOfPlayer.has(player)) return;
+  addUser(player, clan, { player, rank: RANK_ANYONE, name: player.getUsername(), guest: true }, guestChannelOfPlayer);
+}
+
+function removeUser(player, seats, guest) {
+  const channel = seats.get(player);
   if (!channel) return;
-  channelOfPlayer.delete(player);
-  const index = channel.users.findIndex((user) => user.player === player);
+  seats.delete(player);
+  const index = channel.users.findIndex((user) => user.player === player && user.guest === guest);
   channel.users.splice(index, 1);
   if (channel.users.length === 0) channels.delete(channel.clan.key);
   else sendDelta(channel, { type: "delete", index });
+}
+
+function removeFromChannel(player) {
+  removeUser(player, channelOfPlayer, false);
+}
+
+function removeFromGuestChannel(player) {
+  if (!guestChannelOfPlayer.has(player)) return;
+  removeUser(player, guestChannelOfPlayer, true);
+  send(player, core.encodeClanChannelFull(LISTENED_CLAN, null));
 }
 
 function channelOf(player) {
   return channelOfPlayer.get(player);
 }
 
+function guestChannelOf(player) {
+  return guestChannelOfPlayer.get(player);
+}
+
+function channelFor(clan) {
+  return channels.get(clan.key);
+}
+
+function guestClanOf(player) {
+  return guestClanOfPlayer.get(player);
+}
+
+/** The clan goes up on the player's Guest Clan tab: its settings, loaded status and home world. */
+function addGuestViewer(player, clan) {
+  guestClanOfPlayer.set(player, clan);
+  let viewers = guestViewers.get(clan.key);
+  if (!viewers) {
+    viewers = new Set();
+    guestViewers.set(clan.key, viewers);
+  }
+  viewers.add(player);
+  send(player, core.encodeClanSettingsFull(LISTENED_CLAN, settingsSnapshot(clan)));
+  player.getPacketSender().sendVarbit(GUEST_CLAN_STATUS_VARBIT, CLAN_LOADED).sendVarbit(GUEST_HOME_WORLD_VARBIT, WORLD);
+}
+
+function removeGuestViewer(player) {
+  removeFromGuestChannel(player);
+  const clan = guestClanOfPlayer.get(player);
+  if (!clan) return;
+  guestClanOfPlayer.delete(player);
+  guestViewers.get(clan.key)?.delete(player);
+  send(player, core.encodeClanSettingsFull(LISTENED_CLAN, null));
+  player.getPacketSender().sendVarbit(GUEST_CLAN_STATUS_VARBIT, NO_CLAN).sendVarbit(GUEST_HOME_WORLD_VARBIT, 0);
+}
+
+/** A login's starting point: nothing up on the Guest Clan tab, and the client told so. */
+function resetGuestView(player) {
+  send(player, core.encodeClanSettingsFull(LISTENED_CLAN, null));
+  send(player, core.encodeClanChannelFull(LISTENED_CLAN, null));
+  player.getPacketSender().sendVarbit(GUEST_CLAN_STATUS_VARBIT, NO_CLAN).sendVarbit(GUEST_HOME_WORLD_VARBIT, 0);
+}
+
 function sendClan(player, clan) {
   send(player, core.encodeClanSettingsFull(OWN_CLAN, clan ? settingsSnapshot(clan) : null));
-  const rank = clan ? memberOf(clan, accountOf(player))?.rank ?? RANK_RECRUIT : RANK_RECRUIT;
   player
     .getPacketSender()
     .sendVarbit(CLAN_STATUS_VARBIT, clan ? CLAN_LOADED : NO_CLAN)
-    .sendVarbit(GUEST_CLAN_STATUS_VARBIT, NO_CLAN)
     .sendVarbit(HOME_WORLD_VARBIT, clan ? WORLD : 0)
-    .sendVarbit(RECRUITER_VARBIT, clan && rank >= permissionRank(clan, SETTING_RECRUIT) ? 1 : 0);
+    .sendVarbit(RECRUITER_VARBIT, clan?.inviting ? 1 : 0);
 }
 
 /** The changes as live sends them, saved, to everyone online in the clan. */
@@ -244,6 +351,8 @@ function sendSettingsDelta(clan, updates) {
     const player = onlinePlayer(member.account);
     if (player) send(player, packet);
   }
+  const forViewers = core.encodeClanSettingsDelta(LISTENED_CLAN, clan.updateNum, updates);
+  for (const player of guestViewers.get(clan.key) ?? []) send(player, forViewers);
 }
 
 /** A channel member's rank follows their clan rank. */
@@ -251,12 +360,11 @@ function refreshChannel(clan) {
   const channel = channels.get(clan.key);
   if (!channel) return;
   for (const user of channel.users) {
-    const member = memberOf(clan, accountOf(user.player));
+    const member = user.guest ? null : memberOf(clan, accountOf(user.player));
     if (member) user.rank = member.rank;
   }
   channel.updateNum++;
-  const packet = core.encodeClanChannelFull(OWN_CLAN, channelSnapshot(channel));
-  for (const { player } of channel.users) send(player, packet);
+  sendChannelFull(channel);
 }
 
 /** Tells everyone online in the clan the whole clan again, for changes with no delta. */
@@ -267,6 +375,8 @@ function refreshClan(clan) {
     const player = onlinePlayer(member.account);
     if (player) sendClan(player, clan);
   }
+  const forViewers = core.encodeClanSettingsFull(LISTENED_CLAN, settingsSnapshot(clan));
+  for (const player of guestViewers.get(clan.key) ?? []) send(player, forViewers);
   refreshChannel(clan);
 }
 
@@ -274,10 +384,6 @@ function setMemberRank(clan, member, rank) {
   member.rank = rank;
   sendSettingsDelta(clan, [{ type: "member_rank", index: clan.members.indexOf(member), rank }]);
   refreshChannel(clan);
-  const player = onlinePlayer(member.account);
-  if (player) {
-    player.getPacketSender().sendVarbit(RECRUITER_VARBIT, rank >= permissionRank(clan, SETTING_RECRUIT) ? 1 : 0);
-  }
 }
 
 function setMemberMuted(clan, member, muted) {
@@ -361,13 +467,22 @@ function addMember(clan, player, rank = RANK_RECRUIT) {
   const member = newMember(player, rank);
   clan.members.push(member);
   sendSettingsDelta(clan, [{ type: "add_member", name: member.name, joinRuneDay: member.joinRuneDay }]);
+  onJoined(clan, member.name);
   enterClan(player, clan);
+}
+
+/** An application accepted while its maker is away. */
+function addOfflineMember(clan, account, name) {
+  const day = runeDay();
+  clan.members.push({ account, name, rank: RANK_RECRUIT, joinRuneDay: day, lastSeenDay: day, muted: false, leftChannel: false });
+  sendSettingsDelta(clan, [{ type: "add_member", name, joinRuneDay: day }]);
+  onJoined(clan, name);
 }
 
 /** The member's channel and clan go, whether they are online or not. */
 function removeMember(clan, account) {
   const index = clan.members.findIndex((member) => member.account === account);
-  clan.members.splice(index, 1);
+  const [removed] = clan.members.splice(index, 1);
   const player = onlinePlayer(account);
   if (player) {
     removeFromChannel(player);
@@ -375,6 +490,7 @@ function removeMember(clan, account) {
     sendClan(player, null);
   }
   sendSettingsDelta(clan, [{ type: "delete_member", index }]);
+  onLeft(clan, removed.name);
 }
 
 function isBanned(clan, name) {
@@ -382,6 +498,8 @@ function isBanned(clan, name) {
 }
 
 function deleteClan(clan) {
+  for (const player of [...(guestViewers.get(clan.key) ?? [])]) removeGuestViewer(player);
+  guestViewers.delete(clan.key);
   for (const member of clan.members) {
     const player = onlinePlayer(member.account);
     if (player) {
@@ -426,13 +544,19 @@ function settleOwnership(clan, now = Date.now()) {
 function reset() {
   channels.clear();
   channelOfPlayer.clear();
+  guestChannelOfPlayer.clear();
+  guestClanOfPlayer.clear();
+  guestViewers.clear();
   Store.reset();
 }
 
 module.exports = {
   CHANNEL_INTRO,
+  GUEST_CLAN_STATUS_VARBIT,
+  LISTENED_CLAN,
   MAX_MEMBERS,
   OWN_CLAN,
+  RECRUITER_VARBIT,
   RANK_ADMINISTRATOR,
   RANK_OWNER,
   RANK_RECRUIT,
@@ -444,16 +568,23 @@ module.exports = {
   SETTING_RECRUIT,
   SETTING_TITLES,
   accountOf,
+  addGuestViewer,
   addMember,
+  addOfflineMember,
+  channelFor,
   channelOf,
   clanOf,
   createClan,
   deleteClan,
   enterClan,
+  guestChannelOf,
+  guestClanOf,
+  guestRules,
   init,
   isBanned,
   isOnline,
   joinChannel,
+  joinGuestChannel,
   memberOf,
   noteSeen,
   onlinePlayer,
@@ -461,8 +592,11 @@ module.exports = {
   permissionRank,
   refreshClan,
   removeFromChannel,
+  removeFromGuestChannel,
+  removeGuestViewer,
   removeMember,
   reset,
+  resetGuestView,
   rowByStruct,
   rowRank,
   runeDay,
@@ -470,6 +604,10 @@ module.exports = {
   sendClan,
   sendNotice,
   setBanned,
+  setGuestRules,
+  setMembershipListeners,
+  setSettingValue,
+  settingValue,
   setMemberMuted,
   setMemberRank,
   setRowRank,

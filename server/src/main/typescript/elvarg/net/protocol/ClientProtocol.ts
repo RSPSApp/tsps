@@ -794,7 +794,7 @@ export function decodeClientPacket(frame: Buffer): ClientMessage {
       // Kind 3 is public chat the client's autochat timer repeats (chat_sendpublic type 1).
       const kind = reader.byte();
       if (kind === CHAT_KIND_CLAN) {
-        const clanType = reader.byte();
+        const clanType = (reader.byte() << 24) >> 24; // -1 is the listened guest clan
         return { type: "clan_chat", clanType, text: reader.string() };
       }
       const messageType = (["public", "game", "friends_chat"] as const)[kind] ?? "public";

@@ -70,4 +70,4 @@ function reset() {
   nextKey = 1;
 }
 
-module.exports = { create, remove, byName, byMember, save, reset };
+module.exports = { all, create, remove, byName, byMember, save, reset };

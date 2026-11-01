@@ -184,7 +184,7 @@ function clickPermission(player, clan, index) {
     return;
   }
   if (row.special) {
-    player.sendMessage("That setting is not available yet.");
+    clickSpecialRow(player, clan, row);
     return;
   }
   const current = Core.rowRank(clan, row);
@@ -197,6 +197,31 @@ function clickPermission(player, clan, index) {
     permissions(PERMISSION_POPUP), (rank) => {
       if (rank >= floor && rank <= own.rank) Core.setRowRank(clan, row, rank);
     });
+}
+
+/** Rows holding a value, not a rank; their settings are clan_permissions_buttonresynch's. */
+const GUESTS_LISTEN_STRUCT = 2957;
+const GUEST_RULE_STRUCTS = { 2958: "combat", 2959: "total", 2960: "qp", 2961: "iron" };
+const VALUE_STRUCTS = { 3109: 31, 854: 101, 4247: 65, 4678: 98, 4239: 66, 4240: 67, 4241: 68, 4238: 69, 4571: 111, 4570: 110, 4572: 112 };
+
+function askRowValue(player, row, onValue) {
+  player.setEnteredAmountAction({ acceptsZero: true, execute: onValue });
+  player.getPacketSender().sendEnterAmountPrompt(`${row.label}:`);
+}
+
+function clickSpecialRow(player, clan, row) {
+  if (row.struct === GUESTS_LISTEN_STRUCT) {
+    clan.allowGuests = !clan.allowGuests;
+    Core.refreshClan(clan);
+    return;
+  }
+  const rule = GUEST_RULE_STRUCTS[row.struct];
+  if (rule) {
+    askRowValue(player, row, (value) => Core.setGuestRules(clan, { ...Core.guestRules(clan), [rule]: value }));
+    return;
+  }
+  const setting = VALUE_STRUCTS[row.struct];
+  if (setting) askRowValue(player, row, (value) => Core.setSettingValue(clan, setting, value));
 }
 
 function clickPermissions(player, clan, event) {

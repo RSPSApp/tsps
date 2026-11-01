@@ -4,6 +4,7 @@
  */
 
 const Core = require("./Core.Clans");
+const Guests = require("./Guests.Clans");
 const Management = require("./Management.Clans");
 const Store = require("./Store.Clans");
 
@@ -17,7 +18,9 @@ const RESIGN_ROW = 13;
 const INTERESTS_ROW = 14;
 const TALK_ROW = 15;
 const GUESTS_ROW = 16;
+const LOAD_AS_GUEST_VARBIT = 12165; // clan_transmit_loadasguest
 const MEMBERS_BUTTON = 20;
+const APPLICANTS_BUTTON = 21;
 const PERMISSIONS_BUTTON = 23;
 const TITLES_BUTTON = 24;
 const BANS_BUTTON = 25;
@@ -34,6 +37,7 @@ const RUNE_DAY_EPOCH_MS = Date.UTC(2002, 1, 27);
 const DAY_MS = 86400000;
 
 let core = null;
+const guestView = new WeakSet();
 
 function init(apiCore) {
   core = apiCore;
@@ -83,8 +87,19 @@ function rankName(rank) {
 function open(player) {
   const clan = Core.clanOf(player);
   if (!clan) return;
+  guestView.delete(player);
+  player.getPacketSender().sendVarbit(LOAD_AS_GUEST_VARBIT, 0);
   Core.settleOwnership(clan);
   if (!Core.clanOf(player)) return;
+  player.getPacketSender().sendSubInterface(MODAL_UID, SETTINGS_GROUP, 0);
+  draw(player, clan);
+}
+
+/** Guest Clan's Info: the same screen, read-only but for Apply (clan_info_draw). */
+function openAsGuest(player) {
+  const clan = Core.guestClanOf(player);
+  if (!clan) return;
+  guestView.add(player);
   player.getPacketSender().sendSubInterface(MODAL_UID, SETTINGS_GROUP, 0);
   draw(player, clan);
 }
@@ -187,7 +202,13 @@ function click(event) {
   event.handled = true;
   const clan = Core.clanOf(player);
   if (childId === CLOSE_BUTTON) {
-    player.getPacketSender().sendInterfaceRemoval();
+    guestView.delete(player);
+    player.getPacketSender().sendVarbit(LOAD_AS_GUEST_VARBIT, 0).sendInterfaceRemoval();
+    return;
+  }
+  if (guestView.has(player)) {
+    const viewed = Core.guestClanOf(player);
+    if (viewed && childId === APPLICANTS_BUTTON) Guests.toggleApplication(player, viewed);
     return;
   }
   if (!clan) return;
@@ -196,6 +217,7 @@ function click(event) {
   else if (childId === NAME_ROW) askRename(player, clan);
   else if (childId === TALK_ROW) clickTalkRow(player, clan);
   else if (childId === GUESTS_ROW) clickGuestsRow(player, clan);
+  else if (childId === APPLICANTS_BUTTON) Guests.openApplicants(player, clan);
   else if (childId === MEMBERS_BUTTON) Management.openMembers(player, clan);
   else if (childId === PERMISSIONS_BUTTON) Management.openPermissions(player);
   else if (childId === TITLES_BUTTON) Management.openTitles(player, clan);
@@ -203,4 +225,4 @@ function click(event) {
   else player.sendMessage("That part of the clan settings is not available yet.");
 }
 
-module.exports = { click, init, open };
+module.exports = { click, init, open, openAsGuest };

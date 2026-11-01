@@ -3,14 +3,19 @@
  * Core.Clans.js holds the shared state; Formation.Clans.js and Settings.Clans.js their screens.
  */
 
+const Broadcasts = require("./Broadcasts.Clans");
 const Core = require("./Core.Clans");
 const Formation = require("./Formation.Clans");
+const Guests = require("./Guests.Clans");
 const Management = require("./Management.Clans");
 const Settings = require("./Settings.Clans");
 const Store = require("./Store.Clans");
 const { FriendsChatManager } = require("../FriendsChatManager");
 
 const CLAN_CHAT_MESSAGE_TYPE = 41;
+const GUEST_CHAT_MESSAGE_TYPE = 44;
+const GUEST_NOTICE_MESSAGE_TYPE = 46;
+const GUEST_INTRO = "To talk in this clan's channel, start each line of chat with /// or /g.";
 const MAX_MESSAGE_LENGTH = 80;
 const MAX_NAME_LENGTH = 20;
 
@@ -58,6 +63,7 @@ function login({ player }) {
     clan = Core.clanOf(player);
   }
   Core.sendClan(player, clan);
+  Core.resetGuestView(player);
   if (!clan) {
     Core.send(player, core.encodeClanChannelFull(Core.OWN_CLAN, null));
     return;
@@ -77,6 +83,7 @@ function login({ player }) {
 
 function logout({ player }) {
   Formation.endSession(player);
+  Core.removeGuestViewer(player);
   Core.removeFromChannel(player);
   const clan = Core.clanOf(player);
   if (clan && Core.memberOf(clan, Core.accountOf(player)).rank === Core.RANK_OWNER) {
@@ -134,6 +141,11 @@ function channelAction(event) {
       player.sendMessage("You are not a high enough rank to kick that player.");
       return;
     }
+    if (target.guest) {
+      Core.removeFromGuestChannel(target.player);
+      target.player.getPacketSender().sendTypedMessage(GUEST_NOTICE_MESSAGE_TYPE, "You have been kicked from the channel.");
+      return;
+    }
     Core.removeFromChannel(target.player);
     Core.send(target.player, core.encodeClanChannelFull(Core.OWN_CLAN, null));
     Core.sendNotice(target.player, "You have been kicked from the channel.");
@@ -144,7 +156,7 @@ function channelAction(event) {
     if (member && own.rank >= clan.kickRank && member.rank < own.rank) Core.setMemberMuted(clan, member, packet.value === 1);
     return;
   }
-  if (Core.memberOf(clan, Core.accountOf(target.player))) {
+  if (!target.guest) {
     player.sendMessage("That player must be expelled from the clan before they can be banned.");
     return;
   }
@@ -153,21 +165,22 @@ function channelAction(event) {
     return;
   }
   Core.setBanned(clan, [...(clan.banned ?? []), target.name]);
-  Core.removeFromChannel(target.player);
-  Core.send(target.player, core.encodeClanChannelFull(Core.OWN_CLAN, null));
+  Core.removeFromGuestChannel(target.player);
 }
 
 function chat(event) {
   const { player, packet } = event;
   if (packet.type !== "clan_chat") return;
   event.handled = true;
-  if (packet.clanType !== Core.OWN_CLAN) return;
-  const channel = Core.channelOf(player);
+  const isGuest = packet.clanType === Core.LISTENED_CLAN;
+  if (!isGuest && packet.clanType !== Core.OWN_CLAN) return;
+  const channel = isGuest ? Core.guestChannelOf(player) : Core.channelOf(player);
   if (!channel) {
-    Core.sendNotice(player, "You are not currently in a clan channel.");
+    if (isGuest) player.getPacketSender().sendTypedMessage(GUEST_NOTICE_MESSAGE_TYPE, "You are not currently in a guest clan channel.");
+    else Core.sendNotice(player, "You are not currently in a clan channel.");
     return;
   }
-  const speaker = Core.memberOf(channel.clan, Core.accountOf(player));
+  const speaker = isGuest ? null : Core.memberOf(channel.clan, Core.accountOf(player));
   if (speaker?.muted) {
     Core.sendNotice(player, "You are muted in this clan's channel.");
     return;
@@ -178,17 +191,16 @@ function chat(event) {
   }
   const text = FriendsChatManager.cleanMessage(packet.text, MAX_MESSAGE_LENGTH);
   if (!text || !FriendsChatManager.allowChat(player, text)) return;
-  const message = core.encodeChatMessage(
-    "clan",
-    text,
-    player.getUsername(),
-    channel.clan.name,
-    player.getIndex(),
-    CLAN_CHAT_MESSAGE_TYPE,
-  );
+  const line = (type) => core.encodeChatMessage("clan", text, player.getUsername(), channel.clan.name, player.getIndex(), type);
+  const forMembers = line(CLAN_CHAT_MESSAGE_TYPE);
+  const forGuests = line(GUEST_CHAT_MESSAGE_TYPE);
   for (const user of channel.users) {
-    if (!user.player.getRelations().hasIgnore(player.getLongUsername())) Core.send(user.player, message);
+    if (!user.player.getRelations().hasIgnore(player.getLongUsername())) Core.send(user.player, user.guest ? forGuests : forMembers);
   }
+}
+
+function viewBoard({ player }) {
+  Guests.openBoard(player);
 }
 
 // ---------------------------------------------------------------- the Clerk
@@ -369,6 +381,9 @@ module.exports = {
     Core.init(api.core);
     Settings.init(api.core);
     Management.init(Settings.open);
+    Guests.init(api.core, later, Settings.openAsGuest);
+    Broadcasts.init(api.core);
+    Core.setMembershipListeners(Broadcasts.joined, Broadcasts.left);
     Formation.init(api);
     api.onCustomEvent("player:bootstrap-complete", login);
     api.onPlayerLogout(logout);
@@ -378,6 +393,16 @@ module.exports = {
     api.onInterfaceActionClick(Formation.clickPanel);
     api.onInterfaceActionClick(Settings.click);
     api.onInterfaceActionClick(Management.click);
+    api.onInterfaceActionClick(Guests.clickGuestPanel);
+    api.onInterfaceActionClick(Guests.clickApplicants);
+    api.onInterfaceActionClick(Guests.clickBoard);
+    api.onObjectInteraction("Clan recruitment board", { View: viewBoard });
+    api.onPlayerLevelUp(Broadcasts.levelUp);
+    api.onPlayerDefeated(Broadcasts.defeated);
+    api.onCustomEvent("quest:completed", Broadcasts.questCompleted);
+    api.onCustomEvent("combat-achievements:completed", Broadcasts.combatTask);
+    api.onCustomEvent("collection-log:obtain", Broadcasts.collectionLog);
+    api.onCustomEvent("npc-drops:roll", Broadcasts.drops);
     api.onCustomEvent("player:varp-transmit", Management.varpTransmitted);
     api.onPlayerOption(recruit);
     api.onPlayerMapSquareChange(mapSquareChanged);

@@ -416,7 +416,7 @@ export class WebGPUMapSquare implements MapSquare {
 
     /** CPU-side height/flag data other systems sample (bridge camera, route finding). */
     tileRenderFlags!: Uint8Array[][];
-    objSurfaceHeights?: Int32Array;
+    objSurfaceHeights?: Int16Array[][];
     tileOverlays?: Int16Array[][];
     /** HD ground recipe grid copied from SdMapData, [level][x][y], full heightmap grid incl. border. */
     tileGroundMaterials?: Uint8Array[][];
@@ -752,6 +752,7 @@ export class WebGPUMapSquare implements MapSquare {
             this.setGroup("door", mapData);
         } else {
             this.setGroup("loc", mapData);
+            this.objSurfaceHeights = mapData.objSurfaceHeights;
             this.initAnimatedLocs(mapData, seqTypeLoader, cycle);
         }
     }

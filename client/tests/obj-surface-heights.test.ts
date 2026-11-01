@@ -19,18 +19,19 @@ function scene(locs: Record<string, unknown[]>) {
 }
 
 function aCrateRaisesItsTileToItsTallestSupportingModel(): void {
-    const packed = collectObjSurfaceHeights(scene({
+    const heights = collectObjSurfaceHeights(scene({
         "0,1,2": [loc(96, true), loc(120, true), loc(500, false)],
         "1,0,0": [loc(40, true)],
     }));
-    assert.equal(objSurfaceHeightAt(packed, 0, 1, 2), 120, "the tallest that supports items");
-    assert.equal(objSurfaceHeightAt(packed, 1, 0, 0), 40, "each level has its own");
+    assert.equal(objSurfaceHeightAt(heights, 0, 1, 2), 120, "the tallest that supports items");
+    assert.equal(objSurfaceHeightAt(heights, 1, 0, 0), 40, "each level has its own");
 }
 
 function everywhereElseStaysOnTheGround(): void {
-    const packed = collectObjSurfaceHeights(scene({ "0,1,1": [loc(500, false)], "0,2,2": [{ flags: 256, entity: {} }] }));
-    assert.equal(packed.length, 0, "a loc that doesn't support items, or has no model, adds nothing");
-    assert.equal(objSurfaceHeightAt(packed, 0, 1, 1), 0);
+    const heights = collectObjSurfaceHeights(scene({ "0,1,1": [loc(500, false)], "0,2,2": [{ flags: 256, entity: {} }] }));
+    assert.equal(objSurfaceHeightAt(heights, 0, 1, 1), 0, "a loc that doesn't support items adds nothing");
+    assert.equal(objSurfaceHeightAt(heights, 0, 2, 2), 0, "nor does one without a model");
+    assert.equal(objSurfaceHeightAt(heights, 9, 1, 1), 0, "a level the map square doesn't have");
     assert.equal(objSurfaceHeightAt(undefined, 0, 1, 1), 0, "a map square without the data");
 }
 

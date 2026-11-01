@@ -421,7 +421,7 @@ export class WebGLMapSquare {
     private npcVertexArray?: VertexArray;
     drawCallNpc?: DrawCallRange;
 
-    objSurfaceHeights?: Int32Array;
+    objSurfaceHeights?: Int16Array[][];
 
     npcEntityIds: number[] = [];
     npcIdleFrames: AnimationFrames[] = [];
@@ -1923,6 +1923,7 @@ export class WebGLMapSquare {
         }
 
         this.refreshLocSceneMetadata(mapData);
+        this.objSurfaceHeights = mapData.objSurfaceHeights;
         this.clearLocGeometry();
 
         const loadTime = time ?? this.timeLoaded;

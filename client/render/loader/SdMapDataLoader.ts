@@ -2214,7 +2214,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         const objSurfaceHeights = collectObjSurfaceHeights(scene);
 
         const transferables = [
-            objSurfaceHeights.buffer,
+            ...objSurfaceHeights.flat().map((buf) => buf.buffer),
             ...scene.tileRenderFlags.flat().map((buf) => buf.buffer),
             ...scene.tileOverlays.flat().map((buf) => buf.buffer),
             ...(sceneBuf.groundMaterials?.flat().map((column) => column.buffer) ?? []),

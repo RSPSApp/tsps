@@ -307,6 +307,7 @@ module.exports = function registerWitchsHouseQuest(api) {
 
   function searchFountain(event) {
     const { player } = event;
+    if (caughtPlayers.has(player)) return;
     if (held(player, SHED_KEY_ITEM_ID)) {
       startTranscript(api, player, BOY_NPC_ID, PAGE, "getting-past-the-witch-searching-the-fountain-in-the-garden-searching-the-fountain-again-whilst-holding-the-key");
       return;
@@ -589,6 +590,12 @@ module.exports = function registerWitchsHouseQuest(api) {
     queue.walkStep(noraPatrol.direction, 0);
   }
 
+  /** Only a player on the quest's way through the garden; the back door opens at this stage. */
+  function noraHunts(player) {
+    const stage = quest.getStage(player);
+    return stage >= STAGE_UNLOCKED_BACK_DOOR && stage < STAGE_COMPLETE;
+  }
+
   function noraSees(npc, player) {
     const from = npc.getLocation();
     const to = player.getLocation();
@@ -599,17 +606,18 @@ module.exports = function registerWitchsHouseQuest(api) {
   /** Back to the start: the magnet and mouse again, and the ball is gone (Wiki). */
   function sendToBoy(player) {
     caughtPlayers.delete(player);
+    player.getMovementQueue().setBlockMovement(false);
     if (player.isRegistered?.() === false) return;
     player.moveTo(new Location(CAUGHT_TILE.x, CAUGHT_TILE.y, CAUGHT_TILE.z));
     player.getInventory().deleteNumber(BALL_ITEM_ID, player.getInventory().getAmount(BALL_ITEM_ID));
     const stage = quest.getStage(player);
-    if (stage > STAGE_STARTED && stage < STAGE_DEFEATED_EXPERIMENT) quest.setStage(player, STAGE_STARTED);
+    if (stage >= STAGE_UNLOCKED_BACK_DOOR && stage < STAGE_DEFEATED_EXPERIMENT) quest.setStage(player, STAGE_STARTED);
   }
 
   function catchPlayer(npc, player) {
     caughtPlayers.add(player);
     noraPatrol.wait = CAUGHT_TELEPORT_TICKS;
-    player.getMovementQueue().reset();
+    player.getMovementQueue().setBlockMovement(true).reset();
     npc.setPositionToFace(player.getLocation());
     npc.forceChat("Stop! Thief!");
     TaskManager.submit(new CountdownTask(npc, CAUGHT_CAST_TICKS, () => {
@@ -629,14 +637,19 @@ module.exports = function registerWitchsHouseQuest(api) {
       return "WitchsGarden";
     }
 
-    process(mobile) {
+    postEnter(mobile) {
       if (!mobile.isNpc?.() || mobile.getId() !== NORA_NPC_ID) return;
       const npc = mobile.getAsNpc();
       npc.setScriptedMovement(true);
       npc.getMovementCoordinator?.().setRadius(0);
+    }
+
+    process(mobile) {
+      if (!mobile.isNpc?.() || mobile.getId() !== NORA_NPC_ID) return;
+      const npc = mobile.getAsNpc();
       walkNora(npc);
       for (const player of this.getPlayers()) {
-        if (!caughtPlayers.has(player) && noraSees(npc, player)) catchPlayer(npc, player);
+        if (!caughtPlayers.has(player) && noraHunts(player) && noraSees(npc, player)) catchPlayer(npc, player);
       }
     }
   }

@@ -807,8 +807,9 @@ class BarbarianAssaultMatch {
   }
 
   handleItemOnPlayer(player, target, itemId) {
-    if (this.ended || !this.players.has(player)) return false;
-    if (!this.players.has(target) || !data.HEALING_VIALS.includes(itemId)) return false;
+    if (this.ended || !this.players.has(player) || !this.players.has(target)) return false;
+    if (data.EGG_TRANSFER[itemId]) return this.transferEgg(player, target, itemId);
+    if (!data.HEALING_VIALS.includes(itemId)) return false;
     const state = this.players.get(player);
     if (!state || state.role !== data.ROLE.HEALER) return false;
     const dose = data.HEALING_VIALS.indexOf(itemId);
@@ -825,6 +826,34 @@ class BarbarianAssaultMatch {
     const next = dose + 1 < data.HEALING_VIALS.length ? data.HEALING_VIALS[dose + 1] : data.ITEM.HEALING_VIAL_EMPTY;
     Items.give(player, next, 1);
     player.sendMessage(`You heal ${target.getUsername?.() ?? "your teammate"}.`);
+    return true;
+  }
+
+  /**
+   * Hands a Queen egg to the next role in the chain. The egg keeps its arena
+   * ownership with whoever is holding it, so finish()/leave cleanup removes it
+   * from the current holder rather than the collector who first picked it up.
+   */
+  transferEgg(player, target, itemId) {
+    const transfer = data.EGG_TRANSFER[itemId];
+    const state = this.players.get(player);
+    const targetState = this.players.get(target);
+    if (!transfer || !state || !targetState) return false;
+    if (state.role !== transfer.from) {
+      player.sendMessage(`Only the ${data.ROLE_LABEL[transfer.from]} can pass that egg on.`);
+      return true;
+    }
+    if (targetState.role !== transfer.to) {
+      player.sendMessage(`Give the ${data.EGG_LABEL[itemId]} egg to the ${data.ROLE_LABEL[transfer.to]}.`);
+      return true;
+    }
+    if (!Items.transfer(player, target, itemId, 1)) {
+      if ((player.getInventory().getAmount(itemId) ?? 0) <= 0) return false;
+      target.sendMessage("You have no room for that egg.");
+      return true;
+    }
+    player.sendMessage(`You hand the ${data.EGG_LABEL[itemId]} egg to ${target.getUsername?.() ?? "your teammate"}.`);
+    target.sendMessage(`${player.getUsername?.() ?? "Your teammate"} hands you the ${data.EGG_LABEL[itemId]} egg.`);
     return true;
   }
 
@@ -1327,6 +1356,9 @@ class MatchArea extends (require("../../../src/main/typescript/elvarg/game/model
 
   getName() { return this.match?.arena?.name ?? "Barbarian Assault"; }
   allowSummonPet() { return false; }
+
+  /** Arena supplies must not leave the match through a teammate trade. */
+  canTrade() { return false; }
 
   postEnter(mobile) {
     super.postEnter(mobile);

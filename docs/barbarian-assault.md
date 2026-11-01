@@ -77,7 +77,19 @@ Points for waves 1-9 (Wiki formulas):
 Honour points are stored per role (cap 5,000) and mirrored to varbits 4759-4762;
 role levels are varbits 3251/3253/3254/3255. The reward shop uses the cache's
 `Honour Points` currency, charging the price in every role, and refuses the
-Queen-gated armour until the player has a Queen kill.
+Queen-gated armour until the player has a Queen kill. The stock and prices are a
+`shops` definition source registered by `Shop.BarbarianAssault.js`; the generated
+`shops.json` row keeps only its canonical empty stock and the Commander Connad
+binding, so reimporting the canonical data cannot erase the minigame shop.
+
+## Supplies
+
+Everything the arena hands out carries the untradeable and `barbarian-assault:arena`
+item meta. A match area refuses player trades (and a global trade guard covers a
+member outside the area), arena drops are refused, and cleanup removes only the
+arena-marked copies, so a player's own runes or penance gear are never taken.
+Reconnect cleanup uses the same marker, so it also removes arena runes that the
+old role-item id list missed.
 
 ## Mechanics
 
@@ -89,9 +101,11 @@ Queen-gated armour until the player has a Queen kill.
   one charge. Broken traps need a hammer and logs to fix.
 - Healer: poisoned food is used on a Penance Healer. The correct poison deals 4 and
   then 1 every five ticks; wrong food is refused with the Wiki message.
-- Queen: the collector takes yellow eggs, the healer dunks them in a poison crater,
-  the attacker adds spikes, the defender dunks them in a lava crater, and the
-  collector loads omega eggs. Eight omega hits kill her.
+- Queen: the collector takes yellow eggs, hands them to the healer (item-on-player),
+  the healer dunks them in a poison crater, the attacker adds spikes and hands the
+  egg to the defender, the defender dunks it in a lava crater, and the collector
+  loads the omega eggs. Each handoff moves cleanup ownership to the holder. Eight
+  omega hits kill her.
 
 ## Deliberate simplifications
 

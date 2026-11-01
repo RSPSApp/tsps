@@ -7,6 +7,7 @@ let api = null;
 let core = null;
 const given = new WeakMap();
 const spellStyle = new Map();
+const ARENA_ITEM_META = "barbarian-assault:arena";
 
 function init(pluginApi) {
   api = pluginApi;
@@ -26,29 +27,72 @@ function remember(player, itemId, amount) {
   entries.set(itemId, (entries.get(itemId) ?? 0) + amount);
 }
 
-/** Gives an arena item and records it, so cleanup only removes what the arena handed out. */
+/**
+ * Gives an arena item and records it, so cleanup only removes what the arena handed out.
+ * Arena supplies carry the untradeable item meta, so a teammate trade cannot move them
+ * off the match even if another transfer route is opened later.
+ */
 function give(player, itemId, amount = 1) {
   if (!player || !Number.isInteger(itemId) || amount <= 0) return false;
   const inventory = player.getInventory?.();
   if (!inventory) return false;
-  if (inventory.getFreeSlots?.() <= 0 && !inventory.contains?.(itemId)) {
-    inventory.full?.();
+  const meta = { [core.Item.UNTRADEABLE_META]: true, [ARENA_ITEM_META]: true };
+  const item = new core.Item(itemId, amount, meta);
+  const addable = inventory.getAddableAmount?.(item);
+  if (Number.isFinite(addable) && addable < amount) {
+    inventory.full?.(itemId);
     return false;
   }
-  inventory.adds(itemId, amount);
+  inventory.add(item, true);
   remember(player, itemId, amount);
   return true;
 }
 
-function giveAll(player, items) {
-  for (const [itemId, amount] of items) give(player, itemId, amount);
+/** Moves an arena item between teammates, keeping cleanup ownership with the holder. */
+function transfer(from, to, itemId, amount = 1) {
+  if (!from || !to || !Number.isInteger(itemId) || amount <= 0) return false;
+  const source = from.getInventory?.();
+  if (!source || (source.getAmount?.(itemId) ?? 0) < amount || !isTracked(from, itemId)) return false;
+  if (!give(to, itemId, amount)) return false;
+  removeTracked(from, itemId, amount);
+  const entries = given.get(from);
+  if (entries) {
+    const held = (entries.get(itemId) ?? 0) - amount;
+    if (held > 0) entries.set(itemId, held);
+    else entries.delete(itemId);
+  }
+  return true;
+}
+
+/** Whether this player still holds an item the arena handed out. */
+function isTracked(player, itemId) {
+  const entries = given.get(player);
+  return !!entries && (entries.get(itemId) ?? 0) > 0;
+}
+
+function isArenaItem(item) {
+  return item?.getMetaValue?.(ARENA_ITEM_META) === true
+    || item?.getMeta?.()?.[ARENA_ITEM_META] === true;
 }
 
 function removeTracked(player, itemId, amount) {
   const inventory = player?.getInventory?.();
   if (!inventory) return;
-  const current = inventory.getAmount?.(itemId) ?? 0;
-  if (current > 0) inventory.delete(itemId, Math.min(current, amount));
+  // Remove only the arena copies, never the player's own stack of the same id.
+  const items = inventory.getItems?.() ?? [];
+  let remaining = amount;
+  for (let slot = 0; slot < items.length && remaining > 0; slot++) {
+    const item = items[slot];
+    if (item?.getId?.() !== itemId || !isArenaItem(item)) continue;
+    const remove = Math.min(remaining, item.getAmount?.() ?? 0);
+    if (remove <= 0) continue;
+    inventory.deleteAtSlot?.(slot, remove);
+    remaining -= remove;
+  }
+}
+
+function giveAll(player, items) {
+  for (const [itemId, amount] of items) give(player, itemId, amount);
 }
 
 /** Removes only the copies this arena gave, never a player's own penance gear. */
@@ -66,9 +110,12 @@ function stripRoleItems(player) {
   const inventory = player?.getInventory?.();
   if (!inventory) return;
   given.delete(player);
-  for (const itemId of data.ROLE_ITEM_IDS) {
-    const current = inventory.getAmount?.(itemId) ?? 0;
-    if (current > 0) inventory.delete(itemId, current);
+  const items = inventory.getItems?.() ?? [];
+  for (let slot = 0; slot < items.length; slot++) {
+    const item = items[slot];
+    if (!isArenaItem(item)) continue;
+    const amount = item.getAmount?.() ?? 0;
+    if (amount > 0) inventory.deleteAtSlot?.(slot, amount);
   }
 }
 
@@ -148,7 +195,7 @@ function styleName(call) {
 }
 
 module.exports = {
-  init, give, giveAll, clear, stripRoleItems, roleItems,
+  init, give, giveAll, transfer, isTracked, clear, stripRoleItems, roleItems, ARENA_ITEM_META,
   openRoleHud, closeHud, setHudText, setHudPartner,
   healAmount, collectorCapacity, attackerBonus, defenderRange, attackStyle, styleName,
 };

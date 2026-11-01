@@ -182,6 +182,24 @@ const EGG_CALL = Object.freeze({
   [ITEM.BLUE_EGG]: CALL.BLUE,
 });
 
+/**
+ * The Queen's egg chain. Each egg is handed to the next role with item-on-player;
+ * the receiving role performs the next transformation.
+ */
+const EGG_TRANSFER = Object.freeze({
+  [ITEM.YELLOW_EGG]: { from: ROLE.COLLECTOR, to: ROLE.HEALER },
+  [ITEM.POISONED_EGG]: { from: ROLE.HEALER, to: ROLE.ATTACKER },
+  [ITEM.SPIKED_POISONED_EGG]: { from: ROLE.ATTACKER, to: ROLE.DEFENDER },
+  [ITEM.OMEGA_EGG]: { from: ROLE.DEFENDER, to: ROLE.COLLECTOR },
+});
+
+const EGG_LABEL = Object.freeze({
+  [ITEM.YELLOW_EGG]: "yellow",
+  [ITEM.POISONED_EGG]: "poisoned",
+  [ITEM.SPIKED_POISONED_EGG]: "spiked",
+  [ITEM.OMEGA_EGG]: "omega",
+});
+
 /** Poison call -> the poisoned food that damages Penance Healers. */
 const POISON_ITEM = Object.freeze({
   [CALL.TOFU]: ITEM.POISONED_TOFU,
@@ -374,7 +392,7 @@ module.exports = {
   ROLE, ROLES, ROLE_LABEL, PARTNER, ROLE_INTERFACE, ROLE_TEXT,
   HORN_ITEMS, COLLECTION_BAGS, ITEM, HEALING_VIALS, ROLE_ITEM_IDS,
   CALL, CALL_OPTIONS, CALL_LABEL, HORN_ACTION_CALL, STYLE_CALL, ARROW_CALL,
-  EGG_ITEM, EGG_CALL, POISON_ITEM, POISON_CALL, BAIT_ITEM, BAIT_CALL,
+  EGG_ITEM, EGG_CALL, EGG_TRANSFER, EGG_LABEL, POISON_ITEM, POISON_CALL, BAIT_ITEM, BAIT_CALL,
   NPC, PENANCE_IDS, WAVES, ROLE_CAPACITY, TEAM_SIZE,
   START_COUNTDOWN_SECONDS, INTERMISSION_SECONDS, CALL_CHANGE_TICKS,
   QUEEN_SPAWN_TICKS, QUEEN_EGG_TICKS, QUEEN_HITS,

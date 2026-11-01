@@ -98,7 +98,7 @@ function handleItemAction(event) {
       return;
     }
   }
-  if (data.ROLE_ITEM_IDS.has(itemId) && option === "Drop") {
+  if ((data.ROLE_ITEM_IDS.has(itemId) || Items.isTracked(event.player, itemId)) && option === "Drop") {
     event.player.sendMessage("You cannot drop that inside Barbarian Assault.");
     event.handled = true;
   }
@@ -190,6 +190,10 @@ function handleCanTeleport(event) {
   event.allow = false;
 }
 
+function handleCanTrade(event) {
+  if (matchOf(event.player) || matchOf(event.target)) event.allow = false;
+}
+
 function attach(pluginApi) {
   core = pluginApi.core;
   Points.attach(pluginApi);
@@ -214,6 +218,7 @@ function attach(pluginApi) {
   pluginApi.onPlayerLogout?.(handleLogout);
   pluginApi.onPlayerDisconnect?.(handleLogout);
   pluginApi.onCanTeleport?.(handleCanTeleport);
+  pluginApi.onCanTrade?.(handleCanTrade);
 }
 
 module.exports = {

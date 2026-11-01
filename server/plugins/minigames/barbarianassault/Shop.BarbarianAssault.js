@@ -5,9 +5,30 @@ const Points = require("./Points.BarbarianAssault");
 const Lobby = require("./Lobby.BarbarianAssault");
 
 const SHOP_ID = 1427;
+const SHOP_NAME = "Barbarian Assault Reward Shop";
+const SHOP_STOCK_AMOUNT = 100;
 const QUEEN_ITEMS = new Map(data.SHOP_STOCK.filter((entry) => entry.queen).map((entry) => [entry.id, entry]));
 
 let api = null;
+
+/**
+ * The generated shops.json row only carries the Commander Connad binding; the
+ * intentional minigame stock and prices are contributed as a plugin source, so
+ * reimporting the canonical data cannot erase them.
+ */
+function shopSource() {
+  return [{
+    id: SHOP_ID,
+    name: SHOP_NAME,
+    currency: "HONOUR POINTS",
+    originalStock: data.SHOP_STOCK.map(({ id, price }) => ({
+      id,
+      amount: SHOP_STOCK_AMOUNT,
+      restockTicks: 1,
+      price,
+    })),
+  }];
+}
 
 function pointsLine(player) {
   return data.ROLES
@@ -74,11 +95,12 @@ function purchase(event) {
 
 function attach(pluginApi) {
   api = pluginApi;
+  pluginApi.registerDefinitionSource?.("shops", { name: "barbarian-assault", load: shopSource });
   Lobby.setLevelPromptHandler((player) => levelPrompt(player));
   pluginApi.onCustomEvent?.("shop:buy-limit", buyLimit);
   pluginApi.onCustomEvent?.("shop:purchase", purchase);
 }
 
 module.exports = {
-  SHOP_ID, commanderTalk, levelPrompt, checkPoints, buyLimit, purchase, attach,
+  SHOP_ID, commanderTalk, levelPrompt, checkPoints, buyLimit, purchase, attach, shopSource,
 };

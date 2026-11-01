@@ -22,6 +22,8 @@
  *   combat cast) or `magic:item-spell-cast` { spell } (an alchemy), named
  *   by the server's own spell registries (CombatSpells, EffectSpells: ICE_BURST is Ice Burst,
  *   LOW_ALCHEMY Low Level Alchemy).
+ * - `steal { stalls, items?, count }`: a theft from one of the stalls (by its loc name), of one of
+ *   the items if listed, `thieving:success` { method: "stall", stall, itemId }.
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -48,7 +50,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map() };
+  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "equip" || trigger?.kind === "equip-all") entry.equip.push(task);
@@ -62,6 +64,7 @@ function indexOf(type) {
     else if (trigger?.kind === "bury" && trigger.any) entry.buryAny.push(task);
     else if (trigger?.kind === "bury") for (const item of trigger.items ?? []) add(entry.bury, item, task);
     else if (trigger?.kind === "burn-food") entry.burnFood.push(task);
+    else if (trigger?.kind === "steal") entry.steal.push(task);
     else if (trigger?.kind === "cast") for (const spell of trigger.spells ?? []) add(entry.cast, spell, task);
     else if (trigger?.kind === "agility-laps") for (const course of trigger.courses ?? []) add(entry.laps, course, task);
   }
@@ -157,8 +160,16 @@ function hunted({ player, npcId }) {
   if (player) count(player, "hunt", npcName(npcId));
 }
 
-function stole({ player, method, target }) {
-  if (player && method === "pickpocket") count(player, "pickpocket", target);
+function stole({ player, method, target, stall, itemId }) {
+  if (!player) return;
+  if (method === "pickpocket") count(player, "pickpocket", target);
+  if (method !== "stall") return;
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const stolen = key(itemName(itemId));
+  const tasks = indexOf(type).steal.filter((task) => task.trigger.stalls.some((each) => key(each) === key(stall))
+    && (!task.trigger.items || task.trigger.items.some((each) => key(each) === stolen)));
+  countTasks(player, type, tasks);
 }
 
 function casket({ player, tier }) {

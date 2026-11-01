@@ -231,3 +231,18 @@ test("cast: a combat spell's cost paid is its cast (Cast Ice Burst)", (t) => {
   assert.equal(inventory.getAmount(item("Death rune")), 0, "its runes paid");
   assert.ok(done(f, "cast-ice-burst"));
 });
+
+test("steal: a theft from the stall named (Steal From a Gem Stall)", async (t) => {
+  const f = pactsCharacter(t);
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.THIEVING, 99);
+  skills.setCurrentLevel(core.Skill.THIEVING, 99);
+  const stall = new core.GameObject(11731 /* Ardougne's gem stall, with Steal-from */, new core.Location(1668, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(stall, true);
+  t.after(() => core.ObjectManager.deregister(stall, true));
+  t.mock.method(Math, "random", () => 0);
+  await send(f, { type: "object_option", id: stall.getId(), x: 1668, y: 3136, action: "Steal-from" }, 12);
+  assert.ok(f.player.getInventory().getValidItems().length > 0, `the real Thieving steals: ${f.messages}`);
+  assert.ok(done(f, "steal-from-a-gem-stall"));
+});

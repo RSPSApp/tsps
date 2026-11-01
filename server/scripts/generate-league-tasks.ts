@@ -352,6 +352,20 @@ function itemNamed(text: string, items: Map<string, string>, prefixes: string[] 
   return null;
 }
 
+/** A stall by a cache loc's name ("Bakery stall"), or null. */
+let stallNames: Map<string, string> | null = null;
+function stallNamed(text: string): string | null {
+  if (!stallNames) {
+    stallNames = new Map();
+    const count = CacheDefinitions.getCounts().objects;
+    for (let id = 0; id < count; id++) {
+      const name = CacheDefinitions.getObject(id)?.name;
+      if (typeof name === "string" && /stall$/i.test(name) && !stallNames.has(name.toLowerCase())) stallNames.set(name.toLowerCase(), name);
+    }
+  }
+  return stallNames.get(text.toLowerCase()) ?? null;
+}
+
 /** "Mine 5 Tin Ore", "Chop Some Logs", "Cook a Trout", "Fletch 150 Iron Arrows": the count and what is named. */
 function countAndSubject(rest: string): { count: number; subject: string } {
   const match = /^(?:(\d[\d,]*)\s+|a |an |the |some |any )?(.+?)(?: (\d+) times)?$/i.exec(rest.trim());
@@ -593,6 +607,22 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   }
   // A parenthesis with a space is a remark ("(not including Agility)"); one without is part of a name ("(c)", "(kp)").
   const clean = (text: string) => text.replace(/\s*\([^)]*\s[^)]*\)/g, "").replace(/\.$/, "").trim();
+  // "Steal some bread" ("from a bakery stall"), "Steal From a Gem Stall", "Steal from a Fur Stall in
+  // Kandarin": a theft from that stall (a cache loc of the name), of that item if one is named, in
+  // that league area if one follows. Any other place, or a stall the cache doesn't name, is left out.
+  if (/^Steal /i.test(name)) {
+    const { area, text } = leagueAreaOf(clean(description));
+    const theft = /^Steal (?:(?:some |an? |the )?(.+?) )?from (?:an? |the )?(.+? [Ss]tall)$/i.exec(text);
+    if (!theft || PLACE.test(theft[2])) return {};
+    const stall = stallNamed(theft[2]);
+    const what = theft[1] ? (itemNamed(countAndSubject(theft[1]).subject, items) ?? itemNamed(`${countAndSubject(theft[1]).subject}s`, items)) : null;
+    if (!stall || (theft[1] && !what)) return {};
+    const count = countAndSubject(name.replace(/^Steal /i, "")).count;
+    const trigger: Trigger = { kind: "steal", stalls: [stall], count };
+    if (what) trigger.items = [what];
+    if (area !== null) trigger.area = area;
+    return { trigger };
+  }
   // "Cast Ice Burst" ("Cast the Ice Burst spell"), "Cast Low Level Alchemy", "Cast a Wave Spell" ("any
   // wave spell": the four): a spell whose cost is paid (magic:cast-committed). Combat spells and the
   // alchemies only, the spells the server names when they are cast; a teleport, a place ("outside

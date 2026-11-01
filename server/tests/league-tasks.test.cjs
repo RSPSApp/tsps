@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -524,6 +524,15 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("cast-a-wave-spell").spells, ["Wind Wave", "Water Wave", "Earth Wave", "Fire Wave"]);
   assert.equal(trigger("cast-claws-of-guthix"), undefined, "outside of the Mage Arena");
   assert.equal(trigger("cast-home-teleport"), undefined, "a teleport");
+
+  // Stalls: the stall a cache loc names, the item if named, the league area if one follows.
+  assert.deepEqual(trigger("steal-some-bread"), { kind: "steal", stalls: ["Bakery stall"], count: 1, items: ["Bread"] });
+  assert.deepEqual(trigger("steal-from-a-fur-stall"), { kind: "steal", stalls: ["Fur stall"], count: 1, area: 4 });
+  assert.equal(trigger("steal-from-the-fortis-spice-stall"), undefined, "no loc of that name");
+  emit("thieving:success", { player: doer, method: "stall", stall: "Bakery stall", itemId: itemId("Cake") });
+  assert.ok(!completed(doer).includes("steal-some-bread"), "another item from the stall");
+  emit("thieving:success", { player: doer, method: "stall", stall: "Bakery stall", itemId: itemId("Bread") });
+  assert.ok(completed(doer).includes("steal-some-bread"));
 
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");

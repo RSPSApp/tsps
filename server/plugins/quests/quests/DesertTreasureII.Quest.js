@@ -35,9 +35,32 @@ module.exports = function registerDesertTreasureII(api) {
   // Quest Helper's marker is on a cache wall tile. These adjacent southern tiles are clear.
   const FINAL_PLAYER_SPAWN = [32, 42];
   const FINAL_WIGHT_SPAWN = [3296, 6443];
-  const S = { STARTED: 1, VAULT: 2, DIG: 3, ROCKS: 4, GUARDIAN: 5, MACHINE: 6, VARDORVIS: 7, LEVIATHAN: 8, SUCELLUS: 9, WHISPERER: 10, FINALE: 11, COMPLETE: 12 };
+  const S = { STARTED: 1, VAULT: 2, DIG: 3, ROCKS: 4, GUARDIAN: 5, MACHINE: 6, CHAPTERS: 7, FINALE: 11, COMPLETE: 12 };
+  // Saves from before free chapter order kept the chapters as stages 7-10, always played
+  // Vardorvis, Leviathan, Sucellus, Whisperer (see migrateChapterStage).
+  const LEGACY_CHAPTER_STAGES = { 8: 1, 9: 2, 10: 3 };
+  // The four chapters "can be done in any order or progressed through concurrently" (Wiki).
+  // Each keeps its own varbit; the values come from rsprox 1703 and Quest Helper
+  // (DesertTreasureII.java:518-521). code is what the dt2_*_medallion slots record, statue the
+  // STATUES index; live raises dt2 (14862) by 2 when a chapter reaches entered, boss, killed,
+  // found and done (the last one only for a placed medallion).
+  const CHAPTERS = {
+    vardorvis: { code: 1, statue: 0, varbit: 15125, entered: 12, boss: 40, killed: 42, found: 54, done: 56 },
+    whisperer: { code: 2, statue: 1, varbit: 15126, entered: 8, boss: 42, killed: 44, found: 46, done: 48 },
+    sucellus: { code: 3, statue: 2, varbit: 15127, entered: 6, boss: 62, killed: 64, found: 68, done: 70 },
+    leviathan: { code: 4, statue: 3, varbit: 15128, entered: 6, boss: 40, killed: 42, found: 48, done: 50 },
+  };
+  const CHAPTER_KEYS = ["vardorvis", "leviathan", "sucellus", "whisperer"]; // the Wiki's chapter order
+  const CHAPTER_UNLOCKED = 2; // every chapter varbit 0 -> 2 on the Frostenhorn record tick (rsprox 1703)
+  const CHAPTERS_OPEN_PROGRESS = 42;
+  // dt2_first..fourth_medallion: the chapter code of each medallion, in the order placed. Placing
+  // the third fills the fourth with the remaining chapter (rsprox 1703).
+  const MEDALLION_SLOT_VARBITS = [15132, 15133, 15134, 15135];
+  // dt2_catalytic_guardian: 1 when the chapters open, 2 once the Guardian hears of the Scar (rsprox 1703).
+  const CATALYTIC_GUARDIAN_VARBIT = 15130;
   // Cache quest dbrow 2343, column 19 completes at 118; QuestHelper records the intervening milestones.
-  function nativeProgress(stage, player) {
+  function nativeProgress(rawStage, player) {
+    const stage = chapterStage(rawStage);
     const attr = key => player?.getAttribute(key);
     if (stage >= S.COMPLETE) return 118;
     if (stage === S.FINALE) {
@@ -45,14 +68,14 @@ module.exports = function registerDesertTreasureII(api) {
       if (attr(FINAL_WIGHTS_STARTED)) return 102 + 2 * (Number(attr(FINAL_WIGHT_INDEX)) || 0);
       return 100;
     }
-    if (stage === S.WHISPERER) {
-      if (attr(FINAL_FIGURE_DEFEATED)) return 94;
-      if (attr(FINAL_FIGURE_STARTED)) return 92;
-      if (attr(FINAL_CELL_ACTIVE)) return attr(FINAL_CELL_OPEN) ? 90 : 88;
-      if (attr(LASSAR)?.medallion) return 86;
-      return 76;
+    if (stage === S.CHAPTERS) {
+      if (player && inLastMedallionTrial(player)) {
+        if (attr(FINAL_FIGURE_DEFEATED)) return 94;
+        if (attr(FINAL_FIGURE_STARTED)) return 92;
+        if (attr(FINAL_CELL_ACTIVE)) return attr(FINAL_CELL_OPEN) ? 90 : 88;
+      }
+      return player ? chaptersProgress(player) : CHAPTERS_OPEN_PROGRESS;
     }
-    if (stage === S.SUCELLUS && attr(SUCELLUS_CELL_ENTERED)) return 68;
     if (stage === S.MACHINE) {
       if (attr(BANIKAN_LEFT)) return 40;
       if (Number(attr(SEARCHED_NAMES)) === 15) return 38;
@@ -66,48 +89,154 @@ module.exports = function registerDesertTreasureII(api) {
       if ((Number(attr("desert-treasure-ii:statues")) & 31) === 31) return 8;
       return attr(ATTR_SMITH_INTRO) ? 6 : 4;
     }
-    return ({ 0: 0, 2: 10, 3: 12, 4: 18, 5: 20, 7: 42, 8: 54, 9: 66 })[stage] ?? 0;
+    return ({ 0: 0, 2: 10, 3: 12, 4: 18, 5: 20 })[stage] ?? 0;
   }
-  const STRANGLEWOOD_COMPLETE = 56;
+  // 42, then 2 for every chapter milestone and pursuer meeting, whichever chapter it is in:
+  // 1703 (Vardorvis, Leviathan, Sucellus, Whisperer) reads 54, 66, 78 at each placed medallion
+  // and 86 with the fourth found. Applying it to other orders is inferred.
+  function chaptersProgress(player) {
+    let steps = Math.min(3, pursuerMeetings(player));
+    for (const key of CHAPTER_KEYS) {
+      const chapter = CHAPTERS[key];
+      const value = chapterValue(player, key);
+      steps += [chapter.entered, chapter.boss, chapter.killed, chapter.found].filter(at => value >= at).length;
+      if (chapterPlaced(player, key)) steps++;
+    }
+    return CHAPTERS_OPEN_PROGRESS + 2 * steps;
+  }
+  function stranglewoodProgress(player) {
+    // QuestHelper DT2_STRANGLEWOOD milestones drive the cache desk, boat and later scenery.
+    const progress = Number(player.getAttribute(VARDORVIS_PROGRESS)) || 0;
+    return [CHAPTER_UNLOCKED, 4, 6, 6, 8, 10, player.getAttribute(STRANGLEWOOD_CITY_ENTERED) ? 16 : 12, 18, 18, 22, 24, 24, 24,
+      34, 36, 36, 38, 42, 44, 48, 50, 52, 54][progress] ?? CHAPTER_UNLOCKED;
+  }
+  function ghorrockProgress(player) {
+    if (player.getAttribute(SUCELLUS_DEFEATED)) return CHAPTERS.sucellus.killed;
+    return Number(player.getAttribute(SUCELLUS_PRISON_PROGRESS)) || (player.getAttribute(SUCELLUS_ASSASSIN_GONE) ? 22
+      : player.getAttribute(SUCELLUS_CELL_ESCAPED) ? 20
+        : player.getAttribute(SUCELLUS_CELL_ENTERED) ? [8, 10, 10, 12, 14, 16, 18, 20][Number(player.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0]
+          : player.getAttribute(SUCELLUS_CAPTAIN_ACCEPTED) ? 6 : CHAPTER_UNLOCKED);
+  }
+  const CHAPTER_PROGRESS = {
+    vardorvis: stranglewoodProgress,
+    leviathan: (player) => Math.max(scarProgress(player), Number(player.getAttribute(SCAR_VARBIT_SENT)) || 0),
+    sucellus: ghorrockProgress,
+    whisperer: (player) => lassarProgress(player.getAttribute(LASSAR) ?? {}),
+  };
+  // A chapter's varbit value. Before the chapters open it is 0; a placed medallion, the finale
+  // and completion read the chapter's done value (post-quest logins: 56/48/70/50, rsprox 3285).
+  function chapterValue(player, key) {
+    const s = stage(player);
+    const chapter = CHAPTERS[key];
+    if (s < S.CHAPTERS) return 0;
+    if (s >= S.FINALE || chapterPlaced(player, key)) return chapter.done;
+    let value = Math.max(CHAPTER_UNLOCKED, CHAPTER_PROGRESS[key](player) || 0);
+    if (chapterBossStarted(player, key)) value = Math.max(value, chapter.boss);
+    if (chapterFound(player, key)) value = Math.max(value, chapter.found);
+    return Math.min(value, chapter.found);
+  }
+  const placedMask = (p) => Number(p?.getAttribute(STATUES_PLACED)) || 0;
+  const placedCount = (p) => CHAPTER_KEYS.filter(key => chapterPlaced(p, key)).length;
+  const chapterPlaced = (p, key) => (placedMask(p) & (1 << CHAPTERS[key].statue)) !== 0;
+  const chapterFound = (p, key) => ((Number(p?.getAttribute(MEDALLIONS_FOUND)) || 0) & (1 << CHAPTERS[key].statue)) !== 0
+    || chapterPlaced(p, key) || (stage(p) >= S.CHAPTERS && CHAPTER_PROGRESS[key](p) >= CHAPTERS[key].found);
+  const chapterBossStarted = (p, key) => ((Number(p?.getAttribute(BOSSES_STARTED)) || 0) & (1 << CHAPTERS[key].statue)) !== 0;
+  const chapterMedallion = (key) => STATUE_ITEMS[CHAPTERS[key].statue];
+  const chapterOfStatue = (index) => CHAPTER_KEYS.find(key => CHAPTERS[key].statue === index);
+  /** True while the player can work on this chapter: the chapters are open and its medallion isn't placed. */
+  function inChapter(p, key) {
+    return !!p && stage(p) === S.CHAPTERS && !chapterPlaced(p, key);
+  }
+  /** The chapter left once three medallions are placed; its medallion is the "last medallion". */
+  function lastChapter(p) {
+    return stage(p) === S.CHAPTERS && placedCount(p) === 3 ? CHAPTER_KEYS.find(key => !chapterPlaced(p, key)) : null;
+  }
+  const lastMedallion = (p) => { const key = lastChapter(p); return key ? chapterMedallion(key) : null; };
+  /** The Wiki's "Recidivism": the last medallion found, before the finale. */
+  function inLastMedallionTrial(p) {
+    const key = p && lastChapter(p);
+    return !!key && chapterFound(p, key);
+  }
+  function markMedallionFound(p, key) {
+    p.setAttribute(MEDALLIONS_FOUND, (Number(p.getAttribute(MEDALLIONS_FOUND)) || 0) | (1 << CHAPTERS[key].statue));
+    syncNativeProgress(p);
+  }
+  function markBossStarted(p, key) {
+    if (!CHAPTERS[key]) return;
+    p.setAttribute(BOSSES_STARTED, (Number(p.getAttribute(BOSSES_STARTED)) || 0) | (1 << CHAPTERS[key].statue));
+  }
+  function medallionSlots(p) {
+    const order = Number(p.getAttribute(MEDALLION_ORDER)) || 0;
+    const slots = MEDALLION_SLOT_VARBITS.map((_, index) => (order >> (3 * index)) & 7);
+    const filled = slots.filter(Boolean).length;
+    if (filled === 3 && !slots[3]) {
+      const rest = CHAPTER_KEYS.find(key => !slots.includes(CHAPTERS[key].code));
+      if (rest) slots[3] = CHAPTERS[rest].code;
+    }
+    return slots;
+  }
+  function recordMedallionPlaced(p, key) {
+    const order = Number(p.getAttribute(MEDALLION_ORDER)) || 0;
+    const slots = MEDALLION_SLOT_VARBITS.map((_, index) => (order >> (3 * index)) & 7);
+    if (slots.includes(CHAPTERS[key].code)) return;
+    const index = slots.indexOf(0);
+    if (index >= 0) p.setAttribute(MEDALLION_ORDER, order | (CHAPTERS[key].code << (3 * index)));
+  }
+  function openChapters(p) {
+    setStage(p, S.CHAPTERS);
+    p.setAttribute(VARDORVIS_PROGRESS, 0);
+    syncNativeProgress(p);
+  }
+  // Saves at the old stages 8-10. A stage only advanced when a medallion was placed (Sucellus'
+  // could be left for the Whisperer stage), so STATUES_PLACED already says which chapters are
+  // done; the fixed order gives their slots, and each placed medallion had its pursuer meeting.
+  function migrateChapterStage(p) {
+    if (LEGACY_CHAPTER_STAGES[quest.getStage(p)] === undefined) return;
+    CHAPTER_KEYS.filter(key => chapterPlaced(p, key)).forEach(key => recordMedallionPlaced(p, key));
+    p.setAttribute(PURSUER_EVENTS, Math.max(Number(p.getAttribute(PURSUER_EVENTS)) || 0, placedCount(p)));
+    quest.setStage(p, S.CHAPTERS);
+  }
   const nativeProgressSent = new WeakMap();
   function syncNativeProgress(player) {
     const value = nativeProgress(stage(player), player);
     const figurePortal = player?.getAttribute(FINAL_FIGURE_STARTED) === true
       && player?.getAttribute(FINAL_FIGURE_DEFEATED) !== true ? 1 : 0;
-    // QuestHelper DT2_STRANGLEWOOD milestones drive the cache desk, boat and later scenery.
-    const progress = Number(player.getAttribute(VARDORVIS_PROGRESS)) || 0;
-    // After the quest live sends 56 (rsprox 3285, 3344): the ritual site's rocks open to the post-quest fight.
-    const stranglewood = stage(player) === S.COMPLETE ? STRANGLEWOOD_COMPLETE
-      : [0, 4, 6, 6, 8, 10, player.getAttribute(STRANGLEWOOD_CITY_ENTERED) ? 16 : 12, 18, 18, 22, 24, 24, 24, 34, 36, 36, 38, 42, 44, 48, 50, 52, 54][progress] ?? 0;
-    const prison = Number(player.getAttribute(SUCELLUS_PRISON_PROGRESS)) || (player.getAttribute(SUCELLUS_ASSASSIN_GONE) ? 22
-      : player.getAttribute(SUCELLUS_CELL_ESCAPED) ? 20
-        : player.getAttribute(SUCELLUS_CELL_ENTERED) ? [8, 10, 10, 12, 14, 16, 18, 20][Number(player.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0]
-          : stage(player) >= S.SUCELLUS ? 2 : 0);
+    const chapters = CHAPTER_KEYS.map(key => chapterValue(player, key));
+    const slots = stage(player) >= S.CHAPTERS ? medallionSlots(player) : [0, 0, 0, 0];
+    const catalytic = stage(player) < S.CHAPTERS ? 0
+      : stage(player) >= S.FINALE || player.getAttribute(SCAR_GUARDIAN_ACCEPTED) ? 2 : 1;
     const statues = Number(player.getAttribute("desert-treasure-ii:statues")) || 0;
     const totems = Number(player.getAttribute(TOTEM_MASK)) || 0;
     const asked = Number(player.getAttribute(SEARCHED_NAMES)) || 0;
     const found = Number(player.getAttribute(GOLEM_FOUND)) || 0;
-    const state = `${value}:${stranglewood}:${prison}:${figurePortal}:${statues}:${totems}:${asked}:${found}`;
+    const state = `${value}:${chapters}:${slots}:${catalytic}:${figurePortal}:${statues}:${totems}:${asked}:${found}`;
     if (nativeProgressSent.get(player) === state) return;
     nativeProgressSent.set(player, state);
-    player.getPacketSender().sendVarbit(VAULT_PLAQUE_VARBIT, statues & 16 ? 1 : 0);
-    STATUE_VARBITS.forEach((varbit, index) => player.getPacketSender().sendVarbit(varbit, statues & (1 << index) ? 1 : 0));
-    player.getPacketSender().sendVarbit(TOTEM_MASK_VARBIT, totems);
-    TOTEMS.forEach((totem) => player.getPacketSender().sendVarbit(TOTEM_VARBITS[totem.kind], totems & totem.mask ? 1 : 0));
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VAULT_PLAQUE_VARBIT, statues & 16 ? 1 : 0);
+    STATUE_VARBITS.forEach((varbit, index) => sender.sendVarbit(varbit, statues & (1 << index) ? 1 : 0));
+    sender.sendVarbit(TOTEM_MASK_VARBIT, totems);
+    TOTEMS.forEach((totem) => sender.sendVarbit(TOTEM_VARBITS[totem.kind], totems & totem.mask ? 1 : 0));
     for (const record of Object.values(GOLEM_RECORDS)) {
-      if (record.varbit) player.getPacketSender().sendVarbit(record.varbit, asked & record.bit ? 2 : found & record.bit ? 1 : 0);
+      if (record.varbit) sender.sendVarbit(record.varbit, asked & record.bit ? 2 : found & record.bit ? 1 : 0);
     }
-    player.getPacketSender().sendVarbit(15125, stranglewood);
-    player.getPacketSender().sendVarbit(15127, prison);
-    player.getPacketSender().sendVarbit(14862, value);
+    CHAPTER_KEYS.forEach((key, index) => sender.sendVarbit(CHAPTERS[key].varbit, chapters[index]));
+    MEDALLION_SLOT_VARBITS.forEach((varbit, index) => sender.sendVarbit(varbit, slots[index]));
+    sender.sendVarbit(CATALYTIC_GUARDIAN_VARBIT, catalytic);
+    sender.sendVarbit(14862, value);
     // Cache loc 49497 transforms to the clickable return portal 48770 while
     // the Figure trial is active. QH records varbit 15159 returning 1→0 when
-    // the Whisperer chapter finishes.
-    player.getPacketSender().sendVarbit(15159, figurePortal);
+    // the last medallion's trial finishes.
+    sender.sendVarbit(15159, figurePortal);
   }
   const IDS = [I.VARDORVIS_MEDALLION, I.PERSERIYAS_MEDALLION, I.SUCELLUS_MEDALLION, I.WHISPERERS_MEDALLION];
   const STATUE_ITEMS = [I.VARDORVIS_MEDALLION, I.WHISPERERS_MEDALLION, I.SUCELLUS_MEDALLION, I.PERSERIYAS_MEDALLION];
   const STATUES_PLACED = "desert-treasure-ii:medallions-placed";
+  const MEDALLION_PLACED_SOUND = 7485;
+  const MEDALLIONS_FOUND = "desert-treasure-ii:medallions-found"; // bit = STATUES index
+  const BOSSES_STARTED = "desert-treasure-ii:bosses-started"; // bit = STATUES index
+  const MEDALLION_ORDER = "desert-treasure-ii:medallion-order"; // chapter codes, 3 bits per slot (varp 3954's layout)
+  const PURSUER_EVENTS = "desert-treasure-ii:pursuer-events"; // Mysterious Figure meetings, one per medallion before the last
   function preventBankingMedallions(event) {
     if (!IDS.includes(event.item?.getId?.())) return;
     event.allow = false;
@@ -655,6 +784,7 @@ module.exports = function registerDesertTreasureII(api) {
   const SCAR_PATH_COMPLETE = "desert-treasure-ii:scar-pathfinder-complete";
   const SCAR_TETHER_DESTROYED = "desert-treasure-ii:scar-tether-destroyed";
   const SCAR_VARBIT = 15128;
+  const SCAR_VARBIT_SENT = "desert-treasure-ii:scar-varbit-sent"; // session copy of the last dt2_scar sent
   const SCAR_MAZE_ONE_ENTERED = "desert-treasure-ii:scar-maze-one-entered";
   const SCAR_MAZE_TWO_ENTERED = "desert-treasure-ii:scar-maze-two-entered";
   const SCAR_GUARDIAN_ACCEPTED = "desert-treasure-ii:scar-guardian-accepted";
@@ -936,7 +1066,7 @@ module.exports = function registerDesertTreasureII(api) {
     canCastOnNpc(player, npc, spell) {
       if (!npc?.__dt2Totem) return null;
       if (player.getUsername() !== this.owner || npc.getOwner?.() !== player || !this.entities.includes(npc)
-        || stage(player) < S.MACHINE || stage(player) >= S.VARDORVIS
+        || stage(player) < S.MACHINE || stage(player) >= S.CHAPTERS
         || !player.getAttribute(GOLEM_INSPECTED) || !player.getAttribute(ALTAR_INSPECTED)) return false;
       if (!totemSpellIds.get(npc.__dt2Totem)?.has(spell?.spellId?.())) {
         // Wiki transcript "empowering the totems".
@@ -1721,7 +1851,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (!player || !kind || !allowed || !hit?.isAccurate?.()) return;
     const s = stage(player);
     const area = player.getAttribute(ATTR_WAR_ROOM);
-    if (s < S.MACHINE || s >= S.VARDORVIS || !(area instanceof WarRoomArea) || area.isDestroyed?.()
+    if (s < S.MACHINE || s >= S.CHAPTERS || !(area instanceof WarRoomArea) || area.isDestroyed?.()
       || !area.entities?.includes(target) || target.getOwner?.() !== player
       || !player.getAttribute(GOLEM_INSPECTED) || !player.getAttribute(ALTAR_INSPECTED)) return;
     const totem = TOTEMS.find((entry) => entry.kind === kind);
@@ -1780,7 +1910,7 @@ module.exports = function registerDesertTreasureII(api) {
     const kind = npc?.__dt2Totem;
     const area = player?.getAttribute?.(ATTR_WAR_ROOM);
     if (!kind || event.combatType !== api.core.CombatType.MAGIC || !player?.isPlayer?.()
-      || stage(player) < S.MACHINE || stage(player) >= S.VARDORVIS
+      || stage(player) < S.MACHINE || stage(player) >= S.CHAPTERS
       || !(area instanceof WarRoomArea) || !area.entities?.includes(npc) || npc.getOwner?.() !== player
       || !player.getAttribute(GOLEM_INSPECTED) || !player.getAttribute(ALTAR_INSPECTED)) return;
     const combat = player.getCombat?.();
@@ -2440,7 +2570,7 @@ module.exports = function registerDesertTreasureII(api) {
 
   const ruinsStarted = new WeakSet();
   function enterStranglewoodRuins(p) {
-    if (stage(p) !== S.VARDORVIS || Number(p.getAttribute(VARDORVIS_PROGRESS)) !== 6
+    if (!inChapter(p, "vardorvis") || Number(p.getAttribute(VARDORVIS_PROGRESS)) !== 6
       || p.getAttribute(STRANGLEWOOD_CITY_ENTERED) || ruinsStarted.has(p)) return;
     ruinsStarted.add(p);
     p.getMovementQueue?.().reset?.();
@@ -2461,7 +2591,7 @@ module.exports = function registerDesertTreasureII(api) {
       const x = location?.getX?.() ?? location?.x;
       const y = location?.getY?.() ?? location?.y;
       const z = location?.getZ?.() ?? location?.z ?? 0;
-      if (stage(player) !== S.WHISPERER || (!player.getAttribute(FINAL_CELL_ACTIVE)
+      if (!inLastMedallionTrial(player) || (!player.getAttribute(FINAL_CELL_ACTIVE)
         && !player.getAttribute(FINAL_FIGURE_DEFEATED))
         || z !== 0 || x < 3082 || x > 3122 || y < 9243 || y > 9271) return null;
       player.sendMessage("A strange magical force blocks your teleport. The escape barrier is the only way out.");
@@ -2470,7 +2600,7 @@ module.exports = function registerDesertTreasureII(api) {
     process(actor) {
       if (!actor?.isPlayer?.()) return;
       const player = actor.getAsPlayer?.() ?? actor;
-      if (stage(player) === S.WHISPERER && player.getHitpoints?.() > 0
+      if (inLastMedallionTrial(player) && player.getHitpoints?.() > 0
         && player.getAttribute(FINAL_CELL_ACTIVE) && player.getAttribute(FINAL_CELL_CHEST)
         && player.getAttribute(FINAL_FIGURE_STARTED) && !player.getAttribute(FINAL_FIGURE_DEFEATED)) {
         spawnFinalFigure(player);
@@ -2699,7 +2829,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (event.handled || event.clickType !== 1) return;
     const tile = sucellusSourceTile(event.player, event.location);
     const id = event.definition?.id ?? event.objectId;
-    if (stage(event.player) !== S.SUCELLUS || id !== SUCELLUS_MEDALLION_GATE
+    if (!inChapter(event.player, "sucellus") || id !== SUCELLUS_MEDALLION_GATE
       || tile?.x !== 3023 || tile.y !== 6425 || tile.z !== 0) return;
     // The shared door handler runs before the quest's object hook.
     const interaction = { ...event, option: "open" };
@@ -2711,7 +2841,7 @@ module.exports = function registerDesertTreasureII(api) {
     const area = player?.getAttribute(SUCELLUS_AREA);
     const tile = sucellusSourceTile(player, location);
     const id = definition?.id ?? objectId;
-    if (stage(player) !== S.SUCELLUS || area !== player.getPrivateArea?.() || !(area instanceof SucellusArea)
+    if (!inChapter(player, "sucellus") || area !== player.getPrivateArea?.() || !(area instanceof SucellusArea)
       || !player.getAttribute(SUCELLUS_PRISON_COMPLETE) || id !== SUCELLUS_BOSS_GATE
       || tile?.x !== 3039 || tile?.y !== 6433 || tile?.z !== 0 || !object) return false;
     const opened = new api.core.GameObject(
@@ -2723,7 +2853,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function saveSucellusPrisonCheckpoint(player, area) {
-    if (stage(player) !== S.SUCELLUS || player.getAttribute(SUCELLUS_DEFEATED)
+    if (!inChapter(player, "sucellus") || player.getAttribute(SUCELLUS_DEFEATED)
       || !player.getAttribute(SUCELLUS_CELL_ESCAPED) || player.getAttribute(SUCELLUS_AREA) !== area
       || player.getPrivateArea?.() !== area) return;
     const location = player.getLocation();
@@ -2942,7 +3072,7 @@ module.exports = function registerDesertTreasureII(api) {
 
   function pushScarPathRunner(event) {
     const { player, npc, npcId, definition, clickType } = event;
-    if (stage(player) !== S.LEVIATHAN) return;
+    if (!inChapter(player, "leviathan")) return;
     const area = player.getAttribute(ATTR_SCAR_MAZE_ONE);
     if (!(area instanceof ScarMazeOneArea) || area.isDestroyed?.() || area.pathRunner !== npc
       || npc?.getOwner?.() !== player) return;
@@ -2990,7 +3120,7 @@ module.exports = function registerDesertTreasureII(api) {
 
   function routeToScarPathRunner(event) {
     const area = event.player?.getAttribute?.(ATTR_SCAR_MAZE_ONE);
-    if (stage(event.player) === S.LEVIATHAN && area instanceof ScarMazeOneArea
+    if (inChapter(event.player, "leviathan") && area instanceof ScarMazeOneArea
       && area.pathRunner === event.npc && [N.CEREBRAL_PATHFINDER, N.CEREBRAL_PATHBREAKER].includes(event.npcId)) {
       event.range = 1;
     }
@@ -3020,7 +3150,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function talkCatalyticGuardian({ player: p, npcId }) {
-    if (stage(p) !== S.LEVIATHAN || p.getAttribute(ATTR_SCAR_AREA)) return false;
+    if (!inChapter(p, "leviathan") || p.getAttribute(ATTR_SCAR_AREA)) return false;
     talk(p, npcId, p.getAttribute(SCAR_GUARDIAN_ACCEPTED)
       ? "praefectus-classis-perseriya-talking-to-the-catalytic-guardian-talking-to-the-catalytic-guardian-after-exiting-the-scar-for-the-first-time"
       : "praefectus-classis-perseriya-talking-to-the-catalytic-guardian");
@@ -3257,7 +3387,7 @@ module.exports = function registerDesertTreasureII(api) {
 
   function handleScarMazeThreeObject(event, tile) {
     const p = event?.player;
-    if (!p || stage(p) !== S.LEVIATHAN || !tile || !p.getAttribute(SCAR_MAZE_THREE_ACTIVE)) return false;
+    if (!p || !inChapter(p, "leviathan") || !tile || !p.getAttribute(SCAR_MAZE_THREE_ACTIVE)) return false;
     const { objectId, definition } = event;
     const id = definition?.id ?? objectId;
     const area = p.getAttribute(ATTR_SCAR_MAZE_THREE);
@@ -3446,7 +3576,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function takeScarLightLure({ player: p, npc }) {
-    if (stage(p) !== S.LEVIATHAN || (!p.getAttribute(SCAR_GROWTH_LIVE) && !p.getAttribute("desert-treasure-ii:scar-leech-in-room"))) return false;
+    if (!inChapter(p, "leviathan") || (!p.getAttribute(SCAR_GROWTH_LIVE) && !p.getAttribute("desert-treasure-ii:scar-leech-in-room"))) return false;
     const owned = spawned.get(p);
     const mazeThree = owned?.scarMazeThreeLightLeeches?.includes(npc);
     if (!owned?.scarLightLeeches?.includes(npc) && !mazeThree) return false;
@@ -3487,7 +3617,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function touchScarEnergy({ player: p, objectId, definition, location }) {
-    if (stage(p) !== S.LEVIATHAN || !p.getAttribute(SCAR_GROWTH_LIVE)
+    if (!inChapter(p, "leviathan") || !p.getAttribute(SCAR_GROWTH_LIVE)
       || Number(p.getAttribute(SCAR_GROWTH_LURES)) < 4) return false;
     const tile = scarMazeSourceTile(p, location);
     if (!tile || tile.x < 2218 || tile.x > 2233 || tile.y < 6422 || tile.y > 6437) return false;
@@ -3524,7 +3654,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function inspectScarCatalyst({ player: p }) {
-    if (stage(p) !== S.LEVIATHAN || !p.getAttribute(SCAR_RIFT_LIVE)) return false;
+    if (!inChapter(p, "leviathan") || !p.getAttribute(SCAR_RIFT_LIVE)) return false;
     const progress = Number(p.getAttribute(SCAR_CATALYST_PROGRESS)) || 0;
     const order = scarCatalystOrder(p);
     if (progress >= order.length) {
@@ -3555,7 +3685,7 @@ module.exports = function registerDesertTreasureII(api) {
 
   function handleNerveOnCatalyst(event) {
     const { player: p, npcId, itemId } = event ?? {};
-    if (stage(p) !== S.LEVIATHAN || !p.getAttribute(SCAR_RIFT_LIVE)
+    if (!inChapter(p, "leviathan") || !p.getAttribute(SCAR_RIFT_LIVE)
       || npcId !== N.COL_00FFFF_CATALYST_COL) return false;
     event.handled = true;
     const progress = Number(p.getAttribute(SCAR_CATALYST_PROGRESS)) || 0;
@@ -3596,7 +3726,7 @@ module.exports = function registerDesertTreasureII(api) {
   function handleSucellusItemOnNpc(event) {
     const { player: p, itemId } = event ?? {};
     const npc = event?.npc ?? event?.target;
-    if (stage(p) !== S.SUCELLUS || itemId !== I.ARDER_MUSCA_POISON
+    if (!inChapter(p, "sucellus") || itemId !== I.ARDER_MUSCA_POISON
       || !npc?.__dt2Sucellus || npc.getOwner?.() !== p || !has(p, itemId)) return false;
     event.handled = true;
     if (npc.__dt2SucellusAwake) {
@@ -3620,7 +3750,7 @@ module.exports = function registerDesertTreasureII(api) {
 
   function handleSucellusGroundItemPickup(event) {
     const { player: p, groundItemId } = event ?? {};
-    if (groundItemId !== I.ODD_KEY || stage(p) !== S.SUCELLUS) return;
+    if (groundItemId !== I.ODD_KEY || !inChapter(p, "sucellus")) return;
     if (!p.getAttribute(SUCELLUS_DEFEATED)) {
       event.handled = true;
       return p.sendMessage("The odd key is still in Duke Sucellus' possession.");
@@ -3634,7 +3764,7 @@ module.exports = function registerDesertTreasureII(api) {
   function handleVardorvisGroundItemPickup(event) {
     const { player: p, groundItemId } = event;
     const area = p.getAttribute(ATTR_VARDORVIS_AREA);
-    if (groundItemId !== I.TEMPLE_KEY_3 || stage(p) !== S.VARDORVIS
+    if (groundItemId !== I.TEMPLE_KEY_3 || !inChapter(p, "vardorvis")
       || Number(p.getAttribute(VARDORVIS_PROGRESS)) !== 17 || !area || p.getPrivateArea?.() !== area) return;
     if (p.getInventory().getFreeSlots() < 1) {
       event.handled = true;
@@ -3645,7 +3775,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function handleDialogueLine(event) {
-    if (stage(event.player) === S.SUCELLUS && event.npcId === N.ASSASSIN_7) {
+    if (inChapter(event.player, "sucellus") && event.npcId === N.ASSASSIN_7) {
       if (event.text === "Eugh! I can't believe I'm doing this.") event.after = () => {
         const p = event.player;
         if (Number(p.getAttribute(SUCELLUS_CELL_PROGRESS)) !== 3) return;
@@ -3658,14 +3788,14 @@ module.exports = function registerDesertTreasureII(api) {
         api.emitCustomEvent("dt2:sucellus-prison-start", { player: event.player, area: event.player.getAttribute(SUCELLUS_AREA) });
       };
     }
-    if (stage(event.player) === S.SUCELLUS && event.npcId === N.CAPTAIN_MALLETA
+    if (inChapter(event.player, "sucellus") && event.npcId === N.CAPTAIN_MALLETA
       && event.text === "Lovely! Thank you for your time.") {
       event.after = () => {
         event.player.setAttribute(SUCELLUS_CAPTAIN_ACCEPTED, true);
         enterSucellusArea(event.player, false);
       };
     }
-    if (stage(event.player) === S.VARDORVIS) {
+    if (inChapter(event.player, "vardorvis")) {
       const progress = Number(event.player.getAttribute(VARDORVIS_PROGRESS)) || 0;
       if (event.npcId === N.ELISSA && progress === 0 && event.text === "Great! Thanks for the help.")
         event.after = () => event.player.setAttribute(VARDORVIS_PROGRESS, 1);
@@ -3686,7 +3816,7 @@ module.exports = function registerDesertTreasureII(api) {
       && event?.npcId === N.MYSTERIOUS_FIGURE_2 && event?.text === "Very well...") {
       event.after = () => spawnFinalFigure(event.player);
     }
-    if (stage(event?.player) !== S.LEVIATHAN) return;
+    if (!inChapter(event?.player, "leviathan")) return;
     if (![N.CATALYTIC_GUARDIAN, N.CATALYTIC_GUARDIAN_2].includes(event.npcId)) return;
     if (event.text === "Then may your death come quick, human. Good luck."
       || event.text === "Very well. Good luck.") {
@@ -3697,11 +3827,65 @@ module.exports = function registerDesertTreasureII(api) {
     }
   }
 
+  /** The Scar's dt2_scar value from the saved progress (re-sent at login). */
+  function scarProgress(p) {
+    return p.getAttribute(SCAR_LEVIATHAN_DEBRIS_SEARCHED) ? 48
+      : p.getAttribute(SCAR_PERSTEN_LEFT_SHIP) ? 46
+        : p.getAttribute(SCAR_LEVIATHAN_KILLED) ? 42
+          : p.getAttribute(SCAR_LEVIATHAN_READY) ? 38
+      : p.getAttribute(SCAR_PERSTEN_ROOM3_TALKED) ? 36
+        : p.getAttribute(SCAR_BOAT3_BURNED) ? 34
+          : p.getAttribute(SCAR_MAZE_THREE_ACTIVE) ? 32
+            : p.getAttribute(SCAR_PERSTEN_ROOM2_TALKED) ? 30
+      : p.getAttribute(SCAR_BOAT2_BURNED) ? 28
+        : p.getAttribute(SCAR_MAZE_TWO_ENTERED) ? 24
+          : p.getAttribute(SCAR_PERSTEN_ROOM1_TALKED) ? 22
+            : p.getAttribute(SCAR_BOAT_BURNED) ? 20
+              : p.getAttribute(SCAR_MAZE_ONE_ENTERED) ? 16
+                : p.getAttribute(SCAR_PERSTEN_TALKED) ? 14
+                  : p.getAttribute(SCAR_BOAT_TRIED) ? 10
+                    : p.getAttribute(SCAR_DEMONS_DEFEATED) ? 8
+                      : p.getAttribute(SCAR_GUARDIAN_ACCEPTED) ? 6 : 2;
+  }
   function setScarVarbit(p, value) {
+    p.setAttribute(SCAR_VARBIT_SENT, value);
     p.getPacketSender().sendVarbit(SCAR_VARBIT, value);
   }
 
+  // Saves from before the meetings were counted only kept the first one.
+  const pursuerMeetings = (p) => Math.max(Number(p.getAttribute(PURSUER_EVENTS)) || 0, p.getAttribute(ATTR_FIRST_MEDALLION_MEETING) ? 1 : 0);
+  const carriesUnplacedMedallion = (p) => CHAPTER_KEYS.some(key => !chapterPlaced(p, key) && has(p, chapterMedallion(key)));
+  // rsprox 1703, the second medallion: dt2_pursuer_overworld_combat appears west of the vault
+  // door, shouts and is pointed at by a hint arrow, with dt2 +2; the next door click enters
+  // the vault and she is gone. That she only waits there is what this capture shows.
+  const VAULT_PURSUER_TILE = [3506, 2971, 0];
+  function ambushAtVaultDoor(p) {
+    removeVaultPursuer(p);
+    const npc = api.spawnNpc({ id: N.MYSTERIOUS_FIGURE_4, x: VAULT_PURSUER_TILE[0], y: VAULT_PURSUER_TILE[1], z: VAULT_PURSUER_TILE[2],
+      wanderRadius: 0, owner: p, ownerOnly: true });
+    if (!npc) return;
+    let owned = spawned.get(p);
+    if (!owned) spawned.set(p, owned = {});
+    owned.vaultPursuer = npc;
+    npc.forceChat?.(`${p.getUsername()}! Hand over the medallion!`);
+    p.getPacketSender().sendEntityHint?.(npc);
+  }
+  function removeVaultPursuer(p) {
+    const owned = spawned.get(p);
+    if (!owned?.vaultPursuer) return;
+    api.removeNpc(owned.vaultPursuer);
+    owned.vaultPursuer = null;
+    p.getPacketSender().sendEntityHintRemoval?.(false);
+  }
+  function atSucellusExit(p) {
+    const location = p.getLocation?.();
+    const x = location?.getX?.() ?? location?.x;
+    const y = location?.getY?.() ?? location?.y;
+    const z = location?.getZ?.() ?? location?.z ?? 0;
+    return z === 0 && Math.abs(x - 2927) <= 3 && Math.abs(y - 10353) <= 3;
+  }
   function handleLogin({ player: p }) {
+    migrateChapterStage(p);
     recoverFromLostInstance(p);
     if (stage(p) === S.FINALE && p.getAttribute(FINAL_WIGHTS_STARTED) === true
       && !p.getAttribute(FINAL_WIGHTS_COMPLETE)) {
@@ -3714,9 +3898,9 @@ module.exports = function registerDesertTreasureII(api) {
     }
     syncNativeProgress(p);
     p.getPacketSender().sendVarbit(15116, Number(p.getAttribute(TOTEM_MASK)) || (p.getAttribute(TOTEMS_CHARGED) ? 15 : 0));
-    if (stage(p) === S.VARDORVIS && p.getAttribute(STRANGLEWOOD_CITY_ENTERED)
+    if (inChapter(p, "vardorvis") && p.getAttribute(STRANGLEWOOD_CITY_ENTERED)
       && Number(p.getAttribute(VARDORVIS_PROGRESS)) >= 6 && Number(p.getAttribute(VARDORVIS_PROGRESS)) <= 16) spawnSurfaceKasonde(p);
-    if (stage(p) === S.WHISPERER) {
+    if (inChapter(p, "whisperer")) {
       let state = p.getAttribute(LASSAR) ?? {};
       const location = p.getLocation?.();
       const x = location?.getX?.() ?? location?.x;
@@ -3736,7 +3920,9 @@ module.exports = function registerDesertTreasureII(api) {
       setLassar(p, state);
       ensurePrescott(p);
     }
-    if (stage(p) === S.SUCELLUS) {
+    // Logging out of Ghorrock Prison leaves the player at its exit (instanceExit); only a
+    // login there resumes the prison, since another chapter may be in progress elsewhere.
+    if (inChapter(p, "sucellus") && !chapterFound(p, "sucellus") && atSucellusExit(p)) {
       const escaped = p.getAttribute(SUCELLUS_CELL_ESCAPED) === true;
       const defeated = p.getAttribute(SUCELLUS_DEFEATED) === true;
       if (p.getAttribute(SUCELLUS_CELL_ENTERED) || escaped || defeated) {
@@ -3754,24 +3940,8 @@ module.exports = function registerDesertTreasureII(api) {
         }
       }
     }
-    if (stage(p) !== S.LEVIATHAN) return;
-    const value = p.getAttribute(SCAR_LEVIATHAN_DEBRIS_SEARCHED) ? 48
-      : p.getAttribute(SCAR_PERSTEN_LEFT_SHIP) ? 46
-        : p.getAttribute(SCAR_LEVIATHAN_KILLED) ? 42
-          : p.getAttribute(SCAR_LEVIATHAN_READY) ? 38
-      : p.getAttribute(SCAR_PERSTEN_ROOM3_TALKED) ? 36
-        : p.getAttribute(SCAR_BOAT3_BURNED) ? 34
-          : p.getAttribute(SCAR_MAZE_THREE_ACTIVE) ? 32
-            : p.getAttribute(SCAR_PERSTEN_ROOM2_TALKED) ? 30
-      : p.getAttribute(SCAR_BOAT2_BURNED) ? 28
-        : p.getAttribute(SCAR_MAZE_TWO_ENTERED) ? 24
-          : p.getAttribute(SCAR_PERSTEN_ROOM1_TALKED) ? 22
-            : p.getAttribute(SCAR_BOAT_BURNED) ? 20
-              : p.getAttribute(SCAR_MAZE_ONE_ENTERED) ? 16
-                : p.getAttribute(SCAR_PERSTEN_TALKED) ? 14
-                  : p.getAttribute(SCAR_BOAT_TRIED) ? 10
-                    : p.getAttribute(SCAR_DEMONS_DEFEATED) ? 8
-                      : p.getAttribute(SCAR_GUARDIAN_ACCEPTED) ? 6 : 2;
+    if (!inChapter(p, "leviathan")) return;
+    const value = scarProgress(p);
     setScarVarbit(p, value);
     p.getPacketSender().sendVarbit(SCAR_GROWTH_STEP_VARBIT, Number(p.getAttribute(SCAR_GROWTH_STEP)) || 0);
     if (p.getAttribute(SCAR_AXON_ROOM_COMPLETE)) p.setAttribute(SCAR_AXON_TERMINALS, SCAR_AXON_PATHS.length);
@@ -3941,7 +4111,7 @@ module.exports = function registerDesertTreasureII(api) {
   function routeSucellusVat(event) {
     const p = event.player;
     const area = p?.getAttribute(SUCELLUS_AREA);
-    if (stage(p) !== S.SUCELLUS || !(area instanceof SucellusArea) || area !== p.getPrivateArea?.()
+    if (!inChapter(p, "sucellus") || !(area instanceof SucellusArea) || area !== p.getPrivateArea?.()
       || ![O.FERMENTATION_VAT, O.FERMENTATION_VAT_2, O.FERMENTATION_VAT_3, O.FERMENTATION_VAT_4,
         O.FERMENTATION_VAT_5, O.FERMENTATION_VAT_6, O.FERMENTATION_VAT_7, O.FERMENTATION_VAT_8].includes(event.objectId)) return;
     const location = event.object?.getLocation?.();
@@ -4261,7 +4431,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You are returned to the Ancient Vault. Sliske's wight trial will restart when you enter again.");
       return;
     }
-    if (stage(p) !== S.WHISPERER) return;
+    if (!inChapter(p, "whisperer")) return;
     const finalFigure = spawned.get(p)?.finalFigure;
     if (finalFigure) {
       clearFinalFigureSpecial(p, finalFigure);
@@ -4319,7 +4489,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (!Array.isArray(exit) || exit.length !== 3) {
       // Saves from before the exit was kept: the stage says which instance it was.
       const s = stage(p);
-      exit = s >= S.DIG && s < S.VARDORVIS ? [3411, 9813, 0]
+      exit = s >= S.DIG && s < S.CHAPTERS ? [3411, 9813, 0]
         : s >= S.STARTED && (s < S.DIG || s >= S.FINALE) ? [3510, 2971, 0] : null;
       if (!exit) return;
     }
@@ -4328,6 +4498,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
   function handleLogout({ player: p }) {
     if (!p) return;
+    removeVaultPursuer(p);
     const ownedActors = spawned.get(p);
     if (ownedActors?.finalFigure) {
       clearFinalFigureSpecial(p, ownedActors.finalFigure);
@@ -4389,8 +4560,129 @@ module.exports = function registerDesertTreasureII(api) {
     spawned.delete(p);
   }
 
+  const CHAPTER_DONE_JOURNAL = {
+    vardorvis: "I returned Vardorvis' medallion to the Ancient Vault.",
+    leviathan: "I returned Perseriya's medallion to the Ancient Vault.",
+    sucellus: "I returned Sucellus' medallion to the Ancient Vault.",
+    whisperer: "I returned the Whisperer's medallion to the Ancient Vault.",
+  };
+  const CHAPTER_RETURN_JOURNAL = {
+    vardorvis: ["Return Vardorvis' medallion to its statue in the Ancient Vault."],
+    leviathan: ["Return Perseriya's medallion to its statue in the Ancient Vault."],
+    sucellus: ["Return Sucellus' medallion to its statue in the Ancient Vault."],
+    whisperer: ["Return the Whisperer's medallion to its statue in the Ancient Vault."],
+  };
+  const CHAPTER_JOURNAL = {
+    vardorvis: journalVardorvis, leviathan: journalLeviathan, sucellus: journalSucellus, whisperer: journalWhisperer,
+  };
+  function journalLastMedallionCell(player) {
+    if (!has(player, I.HAIR_CLIP_3)) return ["Search the bed in the temple prison cell for a hair clip."];
+    if (!player.getAttribute(FINAL_CELL_OPEN)) return ["Use the hair clip to pick the cell lock, then work out its four-number combination."];
+    if (!player.getAttribute(FINAL_CELL_CHEST)) return ["Escape the cell and search the chest in the eastern room for your equipment."];
+    if (!player.getAttribute(FINAL_FIGURE_DEFEATED)) return ["Inspect the altar in the western room and defeat the Mysterious Figure to recover the last medallion."];
+    return ["Return the last medallion to its statue in the Ancient Vault."];
+  }
+  function journalWhisperer(player) {
+    const lassar = player.getAttribute(LASSAR) ?? {};
+    if (!lassar.ramarno) return ["In Camdozaal, ask Ramarno whether he has seen the archaeologists investigating Lassar."];
+    if (!has(player, I.VERY_LONG_ROPE) && !lassar.ropeTied && !lassar.entered) return ["Speak to Prescott in Camdozaal about the Lassar sinkhole and take his very long rope."];
+    if (!lassar.ropeTied) return ["Tie Prescott's very long rope to the rock beside the sinkhole in Camdozaal."];
+    if (!lassar.entered) return ["Descend into the Lassar Undercity through the sinkhole."];
+    if (!lassar.blockerSchematic) return ["Search the Science District for the shadow blocker schematic."];
+    if (!lassar.greenKey && !lassar.greenKeyUsed || !lassar.purpleKey && !lassar.doorUnlocked) return ["Search the northern and southern Science District rooms for the green and purple shadow keys."];
+    if (!lassar.cameTo) return ["Approach the Sunken Cathedral south of the Residential District."];
+    if (!lassar.blackstone) return ["Show Ketla the Ring of visibility so she can make the blackstone fragment safe to use."];
+    if (!lassar.blockerDesigned) return ["Give Ketla the shadow blocker schematic, then take the finished device from her workbench."];
+    if (!lassar.blockerPlaced && !lassar.doorUnlocked) return ["Place the shadow blocker beside the locked doors in the Science District furnace house."];
+    if (!lassar.doorUnlocked) return ["Enter the shadow realm with the blackstone fragment, stay near the blocker, and unlock the furnace-house door with the purple key."];
+    if (!lassar.basicTorch) return ["Take the basic shadow torch schematic beyond the locked furnace-house door and have Ketla build the torch."];
+    if (!lassar.tentacles?.["2417,6413"]) return ["Burn the western residential tentacles with the basic shadow torch. Recall the furnace blocker with the blackstone fragment before leaving."];
+    if (!lassar.idolPlaced && !lassar.superiorTorch) return ["Find the revitalising idol schematic in the newly opened house, have Ketla build the idol, and place it beside the eastern teleporter."];
+    if (!lassar.tentacles?.["2424,6439"]) return ["Activate the eastern teleporter, return through the shadow puddle, and burn the tentacle barrier to reach the blue key."];
+    if (!lassar.superiorTorch) return ["Use the blue key and blocker to open the pub in the shadow realm, then take its superior torch schematic to Ketla."];
+    if (!lassar.animaPortal) return ["Use the superior torch to clear the deeper Science District tentacles, then have Ketla build an anima portal from the schematic."];
+    if (!lassar.plazaTentacle) return ["Use the superior torch to clear the plaza tentacles, then search the opened house for the white shadow key."];
+    if (!lassar.whiteKey) return ["Search the opened western palace house for the white shadow key."];
+    if (!lassar.braziersComplete && (!lassar.whiteBlockerPlaced || !lassar.whiteAnimaPlaced || !lassar.whiteIdolPlaced)) return ["Place the shadow blocker, anima portal and revitalising idol at the marked palace chest tiles."];
+    if (!lassar.braziersComplete) return [`Enter the Shadow Realm and light the four braziers around the palace chest (${Object.keys(lassar.braziers ?? {}).length}/4). Use the idol to restore sanity.`];
+    if (!lassar.perfectSchematicGiven) return ["Take the marked perfected-torch schematic from the palace chest and show it to Ketla."];
+    if (!lassar.pubRemnant) return ["Enter the shadow pub upstairs and touch the remnant to learn where the Silent Choir gathers."];
+    if (!lassar.redKeyUsed) return ["Clear the southern and western residential tentacles, take the red key, and open the square-room chest with a blocker beside it."];
+    if (!lassar.greenKeyUsed) return ["In the southern Science District, burn the small-house tentacles and use the green key on its chest for the second icon segment."];
+    if (!lassar.strangeIcon) return ["Combine the two icon segments into Prescott's strange icon."];
+    if (!lassar.iconPresented) return ["Show Ketla the strange icon before entering the cistern drain."];
+    if (!lassar.escapedVision) return ["Enter the Residential District drain, pass its icon-marked gate, descend the ladder and inspect the ancient pillar."];
+    if (!lassar.perfectTorch) return ["Take the perfected shadow torch from Ketla's workbench."];
+    if (!lassar.cathedralTentacles) return ["Enter the Shadow Realm and burn away the Sunken Cathedral tentacles with the perfected torch."];
+    if (!lassar.whispererDefeated) return ["Disturb the Odd Figure in the Sunken Cathedral and defeat the Whisperer."];
+    if (!lassar.medallion && !has(player, I.WHISPERERS_MEDALLION)) return ["Search the Whisperer's remains for her medallion."];
+    return ["Return the Whisperer's medallion to the Ancient Vault."];
+  }
+  function journalSucellus(player) {
+    if (player.getAttribute(SUCELLUS_DEFEATED)) {
+      if (!has(player, I.ODD_KEY)) return ["Pick up the odd key from Duke Sucellus, unlock the western door, and take his medallion from the chest."];
+      if (!player.getAttribute(SUCELLUS_WEST_ROOM)) return ["Use the odd key on the western door and search the chest beyond it."];
+      return ["Open the chest in the western room for Sucellus' medallion."];
+    }
+    if (!player.getAttribute(SUCELLUS_CELL_ESCAPED)) {
+      if (!player.getAttribute(SUCELLUS_CELL_ENTERED)) return ["Enter the heavy door beneath Weiss, convince Captain Malleta, then walk deeper into Ghorrock Prison."];
+      const cellProgress = Number(player.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0;
+      return [["Inspect the wall to speak to the prisoner in the next cell."], ["Search the skeleton for a letter."], ["Read the prisoner's letter."], ["Search the latrine bucket for a knife."], ["Pass the knife through the hole in the wall."], ["Search the bed with the chisel for a lockpick."], ["Pass the lockpick through the hole to escape."]][cellProgress] ?? ["Speak to the Assassin outside the cell."];
+    }
+    if (!player.getAttribute(SUCELLUS_PRISON_COMPLETE)) {
+      const journal = { player, lines: [] };
+      api.emitCustomEvent("dt2:sucellus-prison-journal", journal);
+      return journal.lines.length ? journal.lines : ["Finish the Assassin's conversation, then explore Ghorrock Prison for the keys to your equipment."];
+    }
+    if (!player.getAttribute(SUCELLUS_AREA)) return ["Return to Ghorrock Prison beneath Weiss."];
+    if ((Number(player.getAttribute(SUCELLUS_POISONS)) || 0) >= 2) return ["Use both Arder-musca poisons on Duke Sucellus, then defeat him."];
+    if ((Number(player.getAttribute(SUCELLUS_POISONS)) || 0) === 1) return ["Use the second Arder-musca poison on Duke Sucellus."];
+    if (player.getInventory().getAmount(I.ARDER_MUSCA_POISON) >= 2) return ["Use both Arder-musca poisons on Duke Sucellus to wake him."];
+    if (player.getInventory().getAmount(I.SALAX_SALT) < 12) return ["Mine 12 salax salt in the asylum. Each fermentation vat needs six salt and both ground mushroom powders."];
+    if (player.getInventory().getAmount(I.ARDER_POWDER) < 2 || player.getInventory().getAmount(I.MUSCA_POWDER) < 2) return ["Take the pestle and mortar, gather Arder and Musca mushrooms, and grind two of each into powder."];
+    return ["Add both powders and six salax salt to each of two fermentation vats, then empty both to collect the poisons."];
+  }
+  function journalLeviathan(player) {
+    if (!player.getAttribute(SCAR_GUARDIAN_ACCEPTED)) return ["Speak to the Catalytic Guardian in the Temple of the Eye about the Scar."];
+    if (!player.getAttribute(SCAR_DEMONS_DEFEATED)) return ["Defeat the Scarred demons near the rowboat."];
+    if (!player.getAttribute(SCAR_BOAT_TRIED)) return ["Try to board the rowboat at the Scar entrance."];
+    if (!player.getAttribute(SCAR_PERSTEN_TALKED)) return ["Speak to Wizard Persten about entering the Scar."];
+    if (!player.getAttribute(SCAR_MAZE_ONE_ENTERED)) return ["Enter the open passage in the north-west of the Scar."];
+    if (!player.getAttribute(SCAR_TETHER_DESTROYED)) return ["Guide the pathfinders through the maze and sever the Abyssal Tether."];
+    if ((Number(player.getAttribute(SCAR_CATALYST_PROGRESS)) || 0) < SCAR_CATALYST_RUNES.length) {
+      return ["Break nerve endings, combine runes, and disrupt the Catalyst with matching nerves."];
+    }
+    const repaired = player.getAttribute("desert-treasure-ii:scar-growth-repaired") ?? [];
+    if (repaired.length < SCAR_GROWTHS.length) return ["Take illuminating lures from the light leeches and repair the four damaged growths."];
+    if (!player.getAttribute("desert-treasure-ii:scar-growth-complete")) return ["Touch the six runic energies in their revealed order."];
+    if (!player.getAttribute(SCAR_BOAT_ROOM)) return ["Enter the southern passage to search the shipwreck chamber."];
+    if (!has(player, I.SLIMY_KEY)) return ["Search the north-west skeleton for the slimy key."];
+    if (!has(player, I.OLD_TABLET)) return ["Use the slimy key on the chest and read the old tablet."];
+    if (!player.getAttribute(SCAR_OLD_TABLET_READ)) return ["Read the old tablet before burning the shipwreck."];
+    if (!has(player, I.GUNPOWDER_2)) return ["Search the south-west skeleton for gunpowder."];
+    if (!has(player, I.TINDERBOX)) return ["Search the south-east crate for a tinderbox."];
+    if (!player.getAttribute(SCAR_BOAT_BURNED)) return ["Use the tinderbox on the shipwreck to ignite the gunpowder."];
+    if (!player.getAttribute(SCAR_PERSTEN_ROOM1_TALKED)) return ["Report the destroyed shipwreck to Wizard Persten."];
+    if (!player.getAttribute(SCAR_LEVIATHAN_READY)) return ["Complete the three Scar passages and report to Persten before boarding the ship."];
+    if (!player.getAttribute(SCAR_LEVIATHAN_KILLED)) return ["Defeat the Leviathan. Switch protection prayers when its colored projectiles land and dodge its special attacks."];
+    if (!player.getAttribute(SCAR_PERSTEN_LEFT_SHIP)) return ["Climb the northern handholds and cross the stepping stone to speak to Persten."];
+    if (!player.getAttribute(SCAR_LEVIATHAN_DEBRIS_SEARCHED)) return ["Search the debris by the ship for Perseriya's medallion."];
+    return ["Continue through the Scar and defeat the Leviathan."];
+  }
+  function journalVardorvis(player) {
+    const progress = Number(player.getAttribute(VARDORVIS_PROGRESS)) || 0;
+    if (progress === 0) return ["Speak to Elissa at the Digsite about Vardorvis."];
+    if (progress >= 22) return ["Return Vardorvis' medallion to its statue in the Ancient Vault."];
+    if (progress === 21) return ["Cross the barricade into Kasonde's hideout and search the north-east stone chest for Vardorvis' medallion."];
+    if (progress === 20) return ["Speak to the defeated Kasonde in the Stranglewood temple."];
+    if (progress === 19) return ["Defeat Kasonde in the temple. Dodge his potions and hide behind pillars when he charges an explosion."];
+    if (progress === 18) return ["Take the Temple key back to Kasonde in the Stranglewood temple."];
+    if (progress === 17) return ["Take the Temple key dropped by Vardorvis and leave the ritual site through the rocks."];
+    if (progress === 16) return ["Climb over the rocks into Vardorvis' ritual site and defeat him."];
+    return ["Follow Kasonde's trail and defeat Vardorvis."];
+  }
   function buildJournal(player) {
-    const s = quest.getStage(player);
+    const s = stage(player);
     if (s >= S.COMPLETE) return ["<str>I found the Elder Horn and stopped Sliske.</str>", "", "<col=ff0000>QUEST COMPLETE!</col>"];
     if (s >= S.FINALE) {
       if (player.getAttribute(FINAL_WIGHTS_COMPLETE)) return ["Speak to Azzanadra as Sliske's plan concludes."];
@@ -4398,111 +4690,19 @@ module.exports = function registerDesertTreasureII(api) {
       if (player.getAttribute("desert-treasure-ii:final-cutscene-started")) return ["Descend into the vault and stop Sliske taking the Elder Horn."];
       return ["Return to the Ancient Vault and speak to Asgarnia Smith."];
     }
-    if (s === S.WHISPERER && player.getAttribute(FINAL_FIGURE_DEFEATED)) return ["Return the Whisperer's medallion to the Ancient Vault."];
-    if (s === S.WHISPERER && player.getAttribute(FINAL_CELL_ACTIVE)) {
-      if (!has(player, I.HAIR_CLIP_3)) return ["Search the bed in the temple prison cell for a hair clip."];
-      if (!player.getAttribute(FINAL_CELL_OPEN)) return ["Use the hair clip to pick the cell lock, then work out its four-number combination."];
-      if (!player.getAttribute(FINAL_CELL_CHEST)) return ["Escape the cell and search the chest in the eastern room for your equipment."];
-      if (!player.getAttribute(FINAL_FIGURE_DEFEATED)) return ["Inspect the altar in the western room and defeat the Mysterious Figure to recover the last medallion."];
-      return ["Return the Whisperer's medallion to the Ancient Vault."];
-    }
-    if (s === S.WHISPERER) {
-      const lassar = player.getAttribute(LASSAR) ?? {};
-      if (!lassar.ramarno) return ["In Camdozaal, ask Ramarno whether he has seen the archaeologists investigating Lassar."];
-      if (!has(player, I.VERY_LONG_ROPE) && !lassar.ropeTied && !lassar.entered) return ["Speak to Prescott in Camdozaal about the Lassar sinkhole and take his very long rope."];
-      if (!lassar.ropeTied) return ["Tie Prescott's very long rope to the rock beside the sinkhole in Camdozaal."];
-      if (!lassar.entered) return ["Descend into the Lassar Undercity through the sinkhole."];
-      if (!lassar.blockerSchematic) return ["Search the Science District for the shadow blocker schematic."];
-      if (!lassar.greenKey && !lassar.greenKeyUsed || !lassar.purpleKey && !lassar.doorUnlocked) return ["Search the northern and southern Science District rooms for the green and purple shadow keys."];
-      if (!lassar.cameTo) return ["Approach the Sunken Cathedral south of the Residential District."];
-      if (!lassar.blackstone) return ["Show Ketla the Ring of visibility so she can make the blackstone fragment safe to use."];
-      if (!lassar.blockerDesigned) return ["Give Ketla the shadow blocker schematic, then take the finished device from her workbench."];
-      if (!lassar.blockerPlaced && !lassar.doorUnlocked) return ["Place the shadow blocker beside the locked doors in the Science District furnace house."];
-      if (!lassar.doorUnlocked) return ["Enter the shadow realm with the blackstone fragment, stay near the blocker, and unlock the furnace-house door with the purple key."];
-      if (!lassar.basicTorch) return ["Take the basic shadow torch schematic beyond the locked furnace-house door and have Ketla build the torch."];
-      if (!lassar.tentacles?.["2417,6413"]) return ["Burn the western residential tentacles with the basic shadow torch. Recall the furnace blocker with the blackstone fragment before leaving."];
-      if (!lassar.idolPlaced && !lassar.superiorTorch) return ["Find the revitalising idol schematic in the newly opened house, have Ketla build the idol, and place it beside the eastern teleporter."];
-      if (!lassar.tentacles?.["2424,6439"]) return ["Activate the eastern teleporter, return through the shadow puddle, and burn the tentacle barrier to reach the blue key."];
-      if (!lassar.superiorTorch) return ["Use the blue key and blocker to open the pub in the shadow realm, then take its superior torch schematic to Ketla."];
-      if (!lassar.animaPortal) return ["Use the superior torch to clear the deeper Science District tentacles, then have Ketla build an anima portal from the schematic."];
-      if (!lassar.plazaTentacle) return ["Use the superior torch to clear the plaza tentacles, then search the opened house for the white shadow key."];
-      if (!lassar.whiteKey) return ["Search the opened western palace house for the white shadow key."];
-      if (!lassar.braziersComplete && (!lassar.whiteBlockerPlaced || !lassar.whiteAnimaPlaced || !lassar.whiteIdolPlaced)) return ["Place the shadow blocker, anima portal and revitalising idol at the marked palace chest tiles."];
-      if (!lassar.braziersComplete) return [`Enter the Shadow Realm and light the four braziers around the palace chest (${Object.keys(lassar.braziers ?? {}).length}/4). Use the idol to restore sanity.`];
-      if (!lassar.perfectSchematicGiven) return ["Take the marked perfected-torch schematic from the palace chest and show it to Ketla."];
-      if (!lassar.pubRemnant) return ["Enter the shadow pub upstairs and touch the remnant to learn where the Silent Choir gathers."];
-      if (!lassar.redKeyUsed) return ["Clear the southern and western residential tentacles, take the red key, and open the square-room chest with a blocker beside it."];
-      if (!lassar.greenKeyUsed) return ["In the southern Science District, burn the small-house tentacles and use the green key on its chest for the second icon segment."];
-      if (!lassar.strangeIcon) return ["Combine the two icon segments into Prescott's strange icon."];
-      if (!lassar.iconPresented) return ["Show Ketla the strange icon before entering the cistern drain."];
-      if (!lassar.escapedVision) return ["Enter the Residential District drain, pass its icon-marked gate, descend the ladder and inspect the ancient pillar."];
-      if (!lassar.perfectTorch) return ["Take the perfected shadow torch from Ketla's workbench."];
-      if (!lassar.cathedralTentacles) return ["Enter the Shadow Realm and burn away the Sunken Cathedral tentacles with the perfected torch."];
-      if (!lassar.whispererDefeated) return ["Disturb the Odd Figure in the Sunken Cathedral and defeat the Whisperer."];
-      if (!lassar.medallion && !has(player, I.WHISPERERS_MEDALLION)) return ["Search the Whisperer's remains for her medallion."];
-      return ["Return the Whisperer's medallion to the Ancient Vault."];
-    }
-    if (s >= S.WHISPERER) return ["Search the Lassar Undercity and defeat the Whisperer."];
-    if (s >= S.SUCELLUS) {
-      if (player.getAttribute(SUCELLUS_DEFEATED)) {
-        if (!has(player, I.ODD_KEY)) return ["Pick up the odd key from Duke Sucellus, unlock the western door, and take his medallion from the chest."];
-        if (!player.getAttribute(SUCELLUS_WEST_ROOM)) return ["Use the odd key on the western door and search the chest beyond it."];
-        return ["Open the chest in the western room for Sucellus' medallion."];
+    if (s === S.CHAPTERS) {
+      if (inLastMedallionTrial(player) && player.getAttribute(FINAL_FIGURE_DEFEATED)) return ["Return the last medallion to its statue in the Ancient Vault."];
+      if (inLastMedallionTrial(player) && player.getAttribute(FINAL_CELL_ACTIVE)) return journalLastMedallionCell(player);
+      if (inLastMedallionTrial(player)) return ["Take the last medallion back to the Ancient Vault."];
+      // Free order: every chapter shows its own state, in the Wiki's order.
+      const lines = [];
+      for (const key of CHAPTER_KEYS) {
+        if (lines.length) lines.push("");
+        if (chapterPlaced(player, key)) lines.push(`<str>${CHAPTER_DONE_JOURNAL[key]}</str>`);
+        else if (chapterFound(player, key)) lines.push(...CHAPTER_RETURN_JOURNAL[key]);
+        else lines.push(...CHAPTER_JOURNAL[key](player));
       }
-      if (!player.getAttribute(SUCELLUS_CELL_ESCAPED)) {
-        if (!player.getAttribute(SUCELLUS_CELL_ENTERED)) return ["Enter the heavy door beneath Weiss, convince Captain Malleta, then walk deeper into Ghorrock Prison."];
-        const cellProgress = Number(player.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0;
-        return [["Inspect the wall to speak to the prisoner in the next cell."], ["Search the skeleton for a letter."], ["Read the prisoner's letter."], ["Search the latrine bucket for a knife."], ["Pass the knife through the hole in the wall."], ["Search the bed with the chisel for a lockpick."], ["Pass the lockpick through the hole to escape."]][cellProgress] ?? ["Speak to the Assassin outside the cell."];
-      }
-      if (!player.getAttribute(SUCELLUS_PRISON_COMPLETE)) {
-        const journal = { player, lines: [] };
-        api.emitCustomEvent("dt2:sucellus-prison-journal", journal);
-        return journal.lines.length ? journal.lines : ["Finish the Assassin's conversation, then explore Ghorrock Prison for the keys to your equipment."];
-      }
-      if (!player.getAttribute(SUCELLUS_AREA)) return ["Return to Ghorrock Prison beneath Weiss."];
-      if ((Number(player.getAttribute(SUCELLUS_POISONS)) || 0) >= 2) return ["Use both Arder-musca poisons on Duke Sucellus, then defeat him."];
-      if ((Number(player.getAttribute(SUCELLUS_POISONS)) || 0) === 1) return ["Use the second Arder-musca poison on Duke Sucellus."];
-      if (player.getInventory().getAmount(I.ARDER_MUSCA_POISON) >= 2) return ["Use both Arder-musca poisons on Duke Sucellus to wake him."];
-      if (player.getInventory().getAmount(I.SALAX_SALT) < 12) return ["Mine 12 salax salt in the asylum. Each fermentation vat needs six salt and both ground mushroom powders."];
-      if (player.getInventory().getAmount(I.ARDER_POWDER) < 2 || player.getInventory().getAmount(I.MUSCA_POWDER) < 2) return ["Take the pestle and mortar, gather Arder and Musca mushrooms, and grind two of each into powder."];
-      return ["Add both powders and six salax salt to each of two fermentation vats, then empty both to collect the poisons."];
-    }
-    if (s >= S.LEVIATHAN) {
-      if (!player.getAttribute(SCAR_DEMONS_DEFEATED)) return ["Defeat the Scarred demons near the rowboat."];
-      if (!player.getAttribute(SCAR_BOAT_TRIED)) return ["Try to board the rowboat at the Scar entrance."];
-      if (!player.getAttribute(SCAR_PERSTEN_TALKED)) return ["Speak to Wizard Persten about entering the Scar."];
-      if (!player.getAttribute(SCAR_MAZE_ONE_ENTERED)) return ["Enter the open passage in the north-west of the Scar."];
-      if (!player.getAttribute(SCAR_TETHER_DESTROYED)) return ["Guide the pathfinders through the maze and sever the Abyssal Tether."];
-      if ((Number(player.getAttribute(SCAR_CATALYST_PROGRESS)) || 0) < SCAR_CATALYST_RUNES.length) {
-        return ["Break nerve endings, combine runes, and disrupt the Catalyst with matching nerves."];
-      }
-      const repaired = player.getAttribute("desert-treasure-ii:scar-growth-repaired") ?? [];
-      if (repaired.length < SCAR_GROWTHS.length) return ["Take illuminating lures from the light leeches and repair the four damaged growths."];
-      if (!player.getAttribute("desert-treasure-ii:scar-growth-complete")) return ["Touch the six runic energies in their revealed order."];
-      if (!player.getAttribute(SCAR_BOAT_ROOM)) return ["Enter the southern passage to search the shipwreck chamber."];
-      if (!has(player, I.SLIMY_KEY)) return ["Search the north-west skeleton for the slimy key."];
-      if (!has(player, I.OLD_TABLET)) return ["Use the slimy key on the chest and read the old tablet."];
-      if (!player.getAttribute(SCAR_OLD_TABLET_READ)) return ["Read the old tablet before burning the shipwreck."];
-      if (!has(player, I.GUNPOWDER_2)) return ["Search the south-west skeleton for gunpowder."];
-      if (!has(player, I.TINDERBOX)) return ["Search the south-east crate for a tinderbox."];
-      if (!player.getAttribute(SCAR_BOAT_BURNED)) return ["Use the tinderbox on the shipwreck to ignite the gunpowder."];
-      if (!player.getAttribute(SCAR_PERSTEN_ROOM1_TALKED)) return ["Report the destroyed shipwreck to Wizard Persten."];
-      if (!player.getAttribute(SCAR_LEVIATHAN_READY)) return ["Complete the three Scar passages and report to Persten before boarding the ship."];
-      if (!player.getAttribute(SCAR_LEVIATHAN_KILLED)) return ["Defeat the Leviathan. Switch protection prayers when its colored projectiles land and dodge its special attacks."];
-      if (!player.getAttribute(SCAR_PERSTEN_LEFT_SHIP)) return ["Climb the northern handholds and cross the stepping stone to speak to Persten."];
-      if (!player.getAttribute(SCAR_LEVIATHAN_DEBRIS_SEARCHED)) return ["Search the debris by the ship for Perseriya's medallion."];
-      return ["Continue through the Scar and defeat the Leviathan."];
-    }
-    if (s === S.VARDORVIS) {
-      const progress = Number(player.getAttribute(VARDORVIS_PROGRESS)) || 0;
-      if (progress >= 22) return ["Return Vardorvis' medallion to its statue in the Ancient Vault."];
-      if (progress === 21) return ["Cross the barricade into Kasonde's hideout and search the north-east stone chest for Vardorvis' medallion."];
-      if (progress === 20) return ["Speak to the defeated Kasonde in the Stranglewood temple."];
-      if (progress === 19) return ["Defeat Kasonde in the temple. Dodge his potions and hide behind pillars when he charges an explosion."];
-      if (progress === 18) return ["Take the Temple key back to Kasonde in the Stranglewood temple."];
-      if (progress === 17) return ["Take the Temple key dropped by Vardorvis and leave the ritual site through the rocks."];
-      if (progress === 16) return ["Climb over the rocks into Vardorvis' ritual site and defeat him."];
-      return ["Follow Kasonde's trail and defeat Vardorvis."];
+      return lines;
     }
     if (s >= S.MACHINE) return ["Use the golem to learn the forgotten four's names."];
     if (s >= S.GUARDIAN) return ["Search the military installation beneath the Digsite."];
@@ -4513,27 +4713,32 @@ module.exports = function registerDesertTreasureII(api) {
     return ["I can start this quest by investigating the <col=800000>Ancient Vault</col> north-east of <col=800000>Nardah</col>."];
   }
 
-  const stage = (p) => quest.getStage(p);
-  function setLassar(p, state) {
-    if (state.entered && !Number.isFinite(Number(state.sanity))) state = { ...state, sanity: 100 };
-    p.setAttribute(LASSAR, state);
-    const sender = p.getPacketSender?.();
-    if (!sender?.sendVarbit) return;
-    const progress = state.medallion ? 46 : state.whispererDefeated ? 44 : state.cathedralEntered ? 42
+  // Old saves at stages 8-10 read as the open chapters until migrateChapterStage rewrites them.
+  const chapterStage = (s) => (LEGACY_CHAPTER_STAGES[s] !== undefined ? S.CHAPTERS : s);
+  const stage = (p) => chapterStage(quest.getStage(p));
+  /** dt2_lassar from the saved Lassar state. */
+  function lassarProgress(state) {
+    return state.medallion ? 46 : state.whispererDefeated ? 44 : state.cathedralEntered ? 42
       : state.perfectTorch ? 40 : state.escapedVision ? 38 : state.iconUsed ? 36 : state.pubRemnant ? 32
       : state.silentChoir ? 30 : state.perfectSchematicGiven ? 28 : state.fakeSchematicFound || state.perfectTorchSchematic ? 26
           : state.animaSchematic || state.animaSchematicFound ? 24 : state.superiorTorchSchematic || state.superiorSchematicFound ? 22
             : state.torchSchematic || state.torchSchematicFound ? 20 : state.blockerDesigned ? 18
               : state.blackstone ? 14 : state.ringShown ? 12 : state.cameTo ? 10 : state.entered ? 8
                 : state.ropeTied ? 6 : state.rope ? 4 : state.ramarno ? 2 : 0;
-    sender.sendVarbit(15126, progress);
+  }
+  function setLassar(p, state) {
+    if (state.entered && !Number.isFinite(Number(state.sanity))) state = { ...state, sanity: 100 };
+    p.setAttribute(LASSAR, state);
+    const sender = p.getPacketSender?.();
+    if (!sender?.sendVarbit) return;
+    sender.sendVarbit(15126, chapterValue(p, "whisperer"));
     LASSAR_TELEPORTER_VARBITS.forEach((varbit, index) => sender.sendVarbit(varbit, state.teleporters?.[index] ? 1 : 0));
     LASSAR_SCHEMATIC_VARBITS.forEach(([key, varbit]) => sender.sendVarbit(varbit, state[key] ? 1 : 0));
     sender.sendVarbit(15162, state.inShadow ? 1 : 0);
     sender.sendVarbit(15064, Math.max(0, Math.min(100, Number(state.sanity ?? (state.entered ? 100 : 0)) || 0)));
   }
   function placeLassarDevice(p, itemId, x, y, z = 0) {
-    if (stage(p) !== S.WHISPERER || z !== 0) return false;
+    if (!inChapter(p, "whisperer") || z !== 0) return false;
     const state = p.getAttribute(LASSAR) ?? {};
     const placements = [
       { item: I.SHADOW_BLOCKER, x: 2606, y: 6359, flag: "blockerPlaced", ready: () => state.blockerDesigned,
@@ -4699,7 +4904,7 @@ module.exports = function registerDesertTreasureII(api) {
       syncNativeProgress(p);
       rememberInstanceExit(p);
     }
-    if (!p || p.isPlayerBot?.() === true || stage(p) !== S.WHISPERER) return;
+    if (!p || p.isPlayerBot?.() === true || !inChapter(p, "whisperer")) return;
     ensureLassarPuddleUse();
     const lassarState = p.getAttribute(LASSAR) ?? {};
     syncWhispererRemains(p, lassarState);
@@ -4876,7 +5081,7 @@ module.exports = function registerDesertTreasureII(api) {
     talk(p, npcId, "familiar-faces-talking-to-terry-balando", S.DIG);
   }
   function talkBanikan({ player: p, npcId }) {
-    if (stage(p) < S.DIG || stage(p) >= S.VARDORVIS || npcId !== N.DR_BANIKAN) return false;
+    if (stage(p) < S.DIG || stage(p) >= S.CHAPTERS || npcId !== N.DR_BANIKAN) return false;
     if (stage(p) < S.ROCKS) return talk(p, npcId, "familiar-faces-talking-to-dr-banikan", S.ROCKS);
     if (stage(p) === S.ROCKS) return talk(p, npcId, "familiar-faces-talking-to-dr-banikan");
     if (stage(p) === S.GUARDIAN) return p.sendMessage("Defeat the Ancient Guardian in the military installation first.");
@@ -4981,7 +5186,7 @@ module.exports = function registerDesertTreasureII(api) {
       return;
     }
     const area = p?.getAttribute(ATTR_WAR_ROOM);
-    if (!packet || stage(p) < S.MACHINE || stage(p) >= S.VARDORVIS || !p.getAttribute(CELLS_INSERTED)
+    if (!packet || stage(p) < S.MACHINE || stage(p) >= S.CHAPTERS || !p.getAttribute(CELLS_INSERTED)
       || !p.getAttribute(PUZZLE_OPEN) || !area || area.isDestroyed?.() || p.getPrivateArea?.() !== area) return;
     if (packet.type === "widget_drag") {
       if ((packet.sourceWidgetId >>> 16) !== PUZZLE_GROUP || (packet.targetWidgetId >>> 16) !== PUZZLE_GROUP) return;
@@ -5034,9 +5239,8 @@ module.exports = function registerDesertTreasureII(api) {
         p.setAttribute(GOLEM_FOUND, (Number(p.getAttribute(GOLEM_FOUND)) || 0) | record.bit);
         syncNativeProgress(p);
       } else {
-        // Live sets 40 -> 42 as the Frostenhorn record opens (rsprox 1703).
-        setStage(p, S.VARDORVIS);
-        p.setAttribute(VARDORVIS_PROGRESS, 0);
+        // Live sets 40 -> 42 and opens all four chapters as the Frostenhorn record opens (rsprox 1703).
+        openChapters(p);
         p.setAttribute(ATTR, null);
       }
       openGolemRecord(p, term);
@@ -5044,7 +5248,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
   /** Kasonde's serum hand-over checks the bag before giving the potion (Wiki transcript). */
   function resolveSerumSpaceCondition({ player, stepId }) {
-    if (stepId !== SERUM_SPACE_CONDITION_STEP || stage(player) !== S.VARDORVIS) return null;
+    if (stepId !== SERUM_SPACE_CONDITION_STEP || !inChapter(player, "vardorvis")) return null;
     const carried = [I.UNFINISHED_SERUM, I.UNFINISHED_SERUM_2, I.STRANGLER_SERUM].some((id) => has(player, id));
     return !carried && player.getInventory().getFreeSlots() < 1;
   }
@@ -5055,19 +5259,19 @@ module.exports = function registerDesertTreasureII(api) {
     return /was not /i.test(text) ? !finished : finished;
   }
   function talkElissa({ player: p, npcId }) {
-    if (stage(p) !== S.VARDORVIS) return false;
+    if (!inChapter(p, "vardorvis")) return false;
     if (Number(p.getAttribute(VARDORVIS_PROGRESS)) > 0) return talk(p, npcId, "carnifex-maximus-vardorvis-talking-to-elissa-again");
     talk(p, npcId, "carnifex-maximus-vardorvis-talking-to-elissa");
   }
   function talkBarus({ player: p, npcId }) {
-    if (stage(p) !== S.VARDORVIS) return false;
+    if (!inChapter(p, "vardorvis")) return false;
     const progress = Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0;
     if (progress === 0) return p.sendMessage("Speak to Elissa at the Digsite about Vardorvis first.");
     if (progress > 1) return talk(p, npcId, "carnifex-maximus-vardorvis-talking-to-barus-talking-to-barus-again");
     talk(p, npcId, "carnifex-maximus-vardorvis-talking-to-barus");
   }
   function talkKasonde({ player: p, npcId }) {
-    if (stage(p) !== S.VARDORVIS) return false;
+    if (!inChapter(p, "vardorvis")) return false;
     const progress = Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0;
     const hideout = p.getAttribute(ATTR_STRANGLEWOOD_HIDEOUT);
     if (hideout) {
@@ -5131,7 +5335,7 @@ module.exports = function registerDesertTreasureII(api) {
       });
       return true;
     }
-    if (stage(p) === S.WHISPERER && [I.BLACKSTONE_FRAGMENT, I.BLACKSTONE_FRAGMENT_2, I.BLACKSTONE_FRAGMENT_3].includes(itemId)
+    if (inChapter(p, "whisperer") && [I.BLACKSTONE_FRAGMENT, I.BLACKSTONE_FRAGMENT_2, I.BLACKSTONE_FRAGMENT_3].includes(itemId)
       && (action === "activate" || action === "use") && has(p, itemId)) {
       const state = p.getAttribute(LASSAR) ?? {};
       const location = p.getLocation?.();
@@ -5204,7 +5408,7 @@ module.exports = function registerDesertTreasureII(api) {
       event.handled = true;
       return true;
     }
-    if (stage(p) === S.WHISPERER && [I.BLACKSTONE_FRAGMENT, I.BLACKSTONE_FRAGMENT_2, I.BLACKSTONE_FRAGMENT_3].includes(itemId)
+    if (inChapter(p, "whisperer") && [I.BLACKSTONE_FRAGMENT, I.BLACKSTONE_FRAGMENT_2, I.BLACKSTONE_FRAGMENT_3].includes(itemId)
       && action === "recall" && has(p, itemId)) {
       const state = p.getAttribute(LASSAR) ?? {};
       const next = { ...state };
@@ -5227,35 +5431,35 @@ module.exports = function registerDesertTreasureII(api) {
       event.handled = true;
       return true;
     }
-    if (stage(p) === S.LEVIATHAN && itemId === I.OLD_TABLET && action === "read"
+    if (inChapter(p, "leviathan") && itemId === I.OLD_TABLET && action === "read"
       && p.getAttribute(SCAR_BOAT_ROOM) && has(p, I.OLD_TABLET)) {
       p.setAttribute(SCAR_OLD_TABLET_READ, true);
       p.sendMessage("The old tablet describes the shipwreck and the gunpowder needed to destroy it.");
       event.handled = true;
       return true;
     }
-    if (stage(p) === S.LEVIATHAN && itemId === I.DAMP_TABLET && action === "read"
+    if (inChapter(p, "leviathan") && itemId === I.DAMP_TABLET && action === "read"
       && p.getAttribute("desert-treasure-ii:scar-boat-room-two") && has(p, I.DAMP_TABLET)) {
       p.setAttribute("desert-treasure-ii:scar-boat-room-two-tablet-read", true);
       p.sendMessage("The damp tablet describes the shipwreck and the gunpowder needed to destroy it.");
       event.handled = true;
       return true;
     }
-    if (stage(p) === S.LEVIATHAN && itemId === I.DAMP_TABLET_2 && action === "read"
+    if (inChapter(p, "leviathan") && itemId === I.DAMP_TABLET_2 && action === "read"
       && p.getAttribute(SCAR_BOAT3_ROOM) && has(p, I.DAMP_TABLET_2)) {
       p.setAttribute("desert-treasure-ii:scar-boat3-tablet-read", true);
       p.sendMessage("The damp tablet describes the shipwreck and the gunpowder needed to destroy it.");
       event.handled = true;
       return true;
     }
-    if (stage(p) === S.SUCELLUS && itemId === I.PRISONERS_LETTER && action === "read"
+    if (inChapter(p, "sucellus") && itemId === I.PRISONERS_LETTER && action === "read"
       && p.getAttribute(SUCELLUS_CELL_ENTERED) && (Number(p.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0) === 2) {
       p.setAttribute(SUCELLUS_CELL_PROGRESS, 3);
       p.sendMessage("You read the prisoner's letter. It describes how to signal the guard through the hole in the wall.");
       event.handled = true;
       return true;
     }
-    if (stage(p) !== S.VARDORVIS) return;
+    if (!inChapter(p, "vardorvis")) return;
     if (itemId === KASONDE_NOTE && action === "read"
       && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) === 3) {
       p.setAttribute(VARDORVIS_PROGRESS, 4);
@@ -5291,7 +5495,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
   function handleItemOnItem(event) {
     const { player: p, usedItemId: itemId1, usedWithItemId: itemId2 } = event;
-    if (stage(p) === S.WHISPERER) {
+    if (inChapter(p, "whisperer")) {
       const pair = new Set([itemId1, itemId2]);
       if (pair.has(I.ICON_SEGMENT) && pair.has(I.ICON_SEGMENT_2)
         && has(p, I.ICON_SEGMENT) && has(p, I.ICON_SEGMENT_2)) {
@@ -5304,7 +5508,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
     }
-    if (stage(p) === S.SUCELLUS && has(p, I.PESTLE_AND_MORTAR)) {
+    if (inChapter(p, "sucellus") && has(p, I.PESTLE_AND_MORTAR)) {
       const pair = new Set([itemId1, itemId2]);
       const powder = pair.has(I.MUSCA_MUSHROOM) ? I.MUSCA_POWDER
         : pair.has(I.ARDER_MUSHROOM) ? I.ARDER_POWDER : null;
@@ -5320,7 +5524,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
     }
-    if (stage(p) === S.LEVIATHAN && p.getAttribute(SCAR_RIFT_LIVE)) {
+    if (inChapter(p, "leviathan") && p.getAttribute(SCAR_RIFT_LIVE)) {
       const recipe = SCAR_NERVE_RECIPES.find(([first, second]) =>
         (itemId1 === first && itemId2 === second) || (itemId1 === second && itemId2 === first));
       if (recipe && has(p, recipe[0]) && has(p, recipe[1])) {
@@ -5331,7 +5535,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
     }
-    if (stage(p) !== S.VARDORVIS || (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) < 11) return false;
+    if (!inChapter(p, "vardorvis") || (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) < 11) return false;
     const pair = new Set([itemId1, itemId2]);
     if (pair.has(I.UNFINISHED_SERUM) && pair.has(I.KORBAL_HERB) && has(p, I.UNFINISHED_SERUM) && has(p, I.KORBAL_HERB)) {
       p.getInventory().deleteNumber(I.UNFINISHED_SERUM, 1);
@@ -5374,18 +5578,18 @@ module.exports = function registerDesertTreasureII(api) {
       && location?.y >= 9243 && location?.y <= 9271
       && ["escape", "quick-escape", "leave"].includes(option)) {
       const figureDefeated = p.getAttribute(FINAL_FIGURE_DEFEATED) === true;
-      if (s !== S.WHISPERER || (!figureDefeated && (!p.getAttribute(FINAL_CELL_ACTIVE)
+      if (!inLastMedallionTrial(p) || (!figureDefeated && (!p.getAttribute(FINAL_CELL_ACTIVE)
         || !p.getAttribute(FINAL_FIGURE_STARTED)))) {
         p.sendMessage("The escape barrier is only available during the Mysterious Figure's trial.");
         return true;
       }
       if (figureDefeated) {
-        if (!has(p, I.WHISPERERS_MEDALLION)) {
-          p.sendMessage("You need the Whisperer's medallion before leaving the temple.");
+        if (!has(p, lastMedallion(p))) {
+          p.sendMessage("You need the last medallion before leaving the temple.");
           return true;
         }
         p.moveTo(new api.core.Location(3175, 2887, 0));
-        p.sendMessage("You leave the temple with the Whisperer's medallion.");
+        p.sendMessage("You leave the temple with the last medallion.");
         return true;
       }
       api.sendMultiChatboxPrompt(p, "Leave the temple and abandon this attempt? The Mysterious Figure will be waiting when you return.",
@@ -5396,7 +5600,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (visibleId === FINAL_CELL_EXIT_PORTAL && location?.x === 3104 && location?.y === 9266
       && location?.z === 0 && option === "use") {
       const figureDefeated = p.getAttribute(FINAL_FIGURE_DEFEATED) === true;
-      if (s !== S.WHISPERER || (!figureDefeated && (!p.getAttribute(FINAL_CELL_ACTIVE)
+      if (!inLastMedallionTrial(p) || (!figureDefeated && (!p.getAttribute(FINAL_CELL_ACTIVE)
         || !p.getAttribute(FINAL_FIGURE_STARTED)))) {
         p.sendMessage("The portal is sealed until the Mysterious Figure's trial is active.");
         return true;
@@ -5408,17 +5612,17 @@ module.exports = function registerDesertTreasureII(api) {
         retreatFromFinalFigureCell(p);
         return true;
       }
-      if (!has(p, I.WHISPERERS_MEDALLION)) {
-        p.sendMessage("The portal remains sealed until you recover the Whisperer's medallion.");
+      if (!has(p, lastMedallion(p))) {
+        p.sendMessage("The portal remains sealed until you recover the last medallion.");
         return true;
       }
       p.moveTo(new api.core.Location(3175, 2887, 0));
-      p.sendMessage("You pass through the portal and leave the hideout with the Whisperer's medallion.");
+      p.sendMessage("You pass through the portal and leave the hideout with the last medallion.");
       return true;
     }
     if (visibleId === FINAL_FIGURE_RETURN_PORTAL && location?.x === 3175 && location?.y === 2887
       && location?.z === 0 && option === "use") {
-      if (stage(p) !== S.WHISPERER || !p.getAttribute(FINAL_CELL_ACTIVE)
+      if (!inLastMedallionTrial(p) || !p.getAttribute(FINAL_CELL_ACTIVE)
         || !p.getAttribute(FINAL_FIGURE_STARTED) || p.getAttribute(FINAL_FIGURE_DEFEATED)) {
         p.sendMessage("The portal is sealed until the Mysterious Figure's cell trial is active.");
         return true;
@@ -5428,17 +5632,18 @@ module.exports = function registerDesertTreasureII(api) {
       return true;
     }
     if (handleLassarObject(event, visibleId, option)) return true;
-    if (s === S.WHISPERER && [47578, 47579, 49555, 49556].includes(visibleId)
+    if (inChapter(p, "whisperer") && [47578, 47579, 49555, 49556].includes(visibleId)
       && p.getAttribute(LASSAR)?.whispererDefeated
       && (option === "search" || option === "take" || option === "inspect")) {
       const state = p.getAttribute(LASSAR) ?? {};
       if (!state.medallion && !has(p, I.WHISPERERS_MEDALLION)) p.getInventory().adds(I.WHISPERERS_MEDALLION, 1);
       setLassar(p, { ...state, medallion: true });
+      markMedallionFound(p, "whisperer");
       syncWhispererRemains(p, { ...state, medallion: true });
       p.sendMessage("You search the Whisperer's remains and recover her medallion.");
       return true;
     }
-    if (s === S.WHISPERER && visibleId === 48310 && p.getAttribute(LASSAR)?.medallion
+    if (inChapter(p, "whisperer") && visibleId === 48310 && p.getAttribute(LASSAR)?.medallion
       && (option === "exit" || option === "climb" || option === "leave")) {
       p.moveTo(new api.core.Location(2587, 6436, 0));
       p.sendMessage("You leave the Sunken Cathedral with the Whisperer's medallion.");
@@ -5458,7 +5663,7 @@ module.exports = function registerDesertTreasureII(api) {
     }
     if (!vaultTile && location?.x === 3511 && Math.abs(location.y - 2970) <= 1
       && [O.VAULT_DOOR_2, O.VAULT_DOOR_3].includes(objectId)
-      && s === S.WHISPERER && has(p, I.WHISPERERS_MEDALLION)
+      && inLastMedallionTrial(p) && has(p, lastMedallion(p))
       && !p.getAttribute(FINAL_CELL_ACTIVE) && !p.getAttribute(FINAL_FIGURE_DEFEATED)) {
       p.setAttribute("desert-treasure-ii:final-cell-pending", true);
       talk(p, N.MYSTERIOUS_FIGURE_2, "the-desert-treasure-entering-the-ancient-vault-with-the-last-medallion");
@@ -5489,7 +5694,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
     }
-    if (s === S.SUCELLUS) {
+    if (inChapter(p, "sucellus")) {
       const action = String(event.option ?? "").toLowerCase();
       const worldX = location?.x, worldY = location?.y, worldZ = location?.z ?? location?.getZ?.() ?? 0;
       if (!sucellusTile && objectId === 49513 && worldX === 2926 && worldY === 10354 && worldZ === 0) {
@@ -5629,6 +5834,7 @@ module.exports = function registerDesertTreasureII(api) {
           }
           event.handled = true;
           if (!has(p, I.SUCELLUS_MEDALLION)) p.getInventory().adds(I.SUCELLUS_MEDALLION, 1);
+          markMedallionFound(p, "sucellus");
           p.sendMessage("You open the chest and take Sucellus' medallion.");
           return true;
         }
@@ -5653,7 +5859,7 @@ module.exports = function registerDesertTreasureII(api) {
         }
       }
     }
-    if (s === S.LEVIATHAN && leviathanTile) {
+    if (inChapter(p, "leviathan") && leviathanTile) {
       if ([47594, 49210].includes(visibleId) && leviathanTile.x === 2091 && leviathanTile.y === 6380) {
         if (!p.getAttribute(SCAR_LEVIATHAN_KILLED)) { p.sendMessage("The Leviathan still bars your way."); return true; }
         const area = p.getAttribute(ATTR_LEVIATHAN_AREA);
@@ -5679,6 +5885,7 @@ module.exports = function registerDesertTreasureII(api) {
           }
           p.setAttribute(SCAR_LEVIATHAN_DEBRIS_SEARCHED, true);
           p.getInventory().adds(I.PERSERIYAS_MEDALLION, 1);
+          markMedallionFound(p, "leviathan");
           setScarVarbit(p, 48);
           p.sendMessage("You search the debris and find Perseriya's medallion.");
         } else p.sendMessage("You find nothing else in the debris.");
@@ -5687,7 +5894,7 @@ module.exports = function registerDesertTreasureII(api) {
     }
     if (touchScarEnergy(event)) return true;
     if (handleScarMazeThreeObject(event, scarMazeThreeTile)) return true;
-    if (s === S.LEVIATHAN && scarMazeTwoTile) {
+    if (inChapter(p, "leviathan") && scarMazeTwoTile) {
       if (objectId === O.PASSAGE_17 && scarMazeTwoTile.x === 1790 && scarMazeTwoTile.y === 6405) {
         const maze = p.getAttribute(ATTR_SCAR_MAZE_TWO);
         if (maze instanceof ScarMazeTwoArea && !maze.isDestroyed()) {
@@ -5847,7 +6054,7 @@ module.exports = function registerDesertTreasureII(api) {
         }
       }
     }
-    if (s === S.LEVIATHAN && objectId === 49209 && scarTile
+    if (inChapter(p, "leviathan") && objectId === 49209 && scarTile
       && [[2031, 6430], [2033, 6430]].some(([x, y]) => scarTile.x === x && scarTile.y === y)) {
       if (!p.getAttribute(SCAR_DEMONS_DEFEATED)) {
         p.sendMessage("The Scarred demons must be defeated before you cross these stones.");
@@ -5861,7 +6068,7 @@ module.exports = function registerDesertTreasureII(api) {
       event.handled = true;
       return true;
     }
-    if (s === S.LEVIATHAN && scarMazeTile && objectId === 49418
+    if (inChapter(p, "leviathan") && scarMazeTile && objectId === 49418
       && scarMazeTile.x === 2220 && scarMazeTile.y === 6402) {
       if (!p.getAttribute("desert-treasure-ii:scar-growth-complete")) {
         p.sendMessage("The passage remains sealed until the damaged growths restore the neural route.");
@@ -5881,13 +6088,13 @@ module.exports = function registerDesertTreasureII(api) {
       event.handled = true;
       return true;
     }
-    if (s === S.LEVIATHAN && scarMazeTile?.x === 2237 && scarMazeTile.y === 6443
+    if (inChapter(p, "leviathan") && scarMazeTile?.x === 2237 && scarMazeTile.y === 6443
       && objectId === O.NEURAL_TELEPORTER) {
       p.moveTo(p.getAttribute(ATTR_SCAR_MAZE_ONE).tile(22, 25, 0));
       p.sendMessage("The blue neural teleporter carries you back to the western corridor.");
       return true;
     }
-    if (s === S.LEVIATHAN && scarMazeTile?.x === 2177 && scarMazeTile.y === 6459
+    if (inChapter(p, "leviathan") && scarMazeTile?.x === 2177 && scarMazeTile.y === 6459
       && objectId === 49408) {
       const maze = p.getAttribute(ATTR_SCAR_MAZE_ONE);
       if (maze instanceof ScarMazeOneArea && !maze.isDestroyed()) {
@@ -5899,7 +6106,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
     }
-    if (s === S.LEVIATHAN && p.getAttribute(SCAR_BOAT_ROOM) && scarMazeTile) {
+    if (inChapter(p, "leviathan") && p.getAttribute(SCAR_BOAT_ROOM) && scarMazeTile) {
       if (objectId === 49425 && scarMazeTile.x === 2236 && scarMazeTile.y === 6402) {
         if (!has(p, I.TINDERBOX)) {
           p.getInventory().adds(I.TINDERBOX, 1);
@@ -5948,7 +6155,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
     }
-    if (s === S.LEVIATHAN && scarMazeTile && objectId === 49410
+    if (inChapter(p, "leviathan") && scarMazeTile && objectId === 49410
       && scarMazeTile.x === 2196 && scarMazeTile.y === 6454) {
       const maze = p.getAttribute(ATTR_SCAR_MAZE_ONE);
       const sourceY = p.getLocation().getY() - maze.getBaseY() + 6400;
@@ -5956,7 +6163,7 @@ module.exports = function registerDesertTreasureII(api) {
       event.handled = true;
       return true;
     }
-    if (s === S.LEVIATHAN && scarMazeTile && p.getAttribute(SCAR_TETHER_DESTROYED)) {
+    if (inChapter(p, "leviathan") && scarMazeTile && p.getAttribute(SCAR_TETHER_DESTROYED)) {
       if (objectId === 49415 && scarMazeTile.x === 2233 && scarMazeTile.y === 6461) {
         p.moveTo(p.getAttribute(ATTR_SCAR_MAZE_ONE).tile(29, 12, 0));
         p.sendMessage("The green neural teleporter carries you toward the catalyst chamber.");
@@ -6005,24 +6212,24 @@ module.exports = function registerDesertTreasureII(api) {
         return collectScarNerve(p, nerve.item, SCAR_NERVES_BROKEN, tileKey);
       }
     }
-    if (s === S.LEVIATHAN && scarMazeTile?.x === 2210 && scarMazeTile.y === 6433 && objectId === O.ABYSSAL_TETHER) {
+    if (inChapter(p, "leviathan") && scarMazeTile?.x === 2210 && scarMazeTile.y === 6433 && objectId === O.ABYSSAL_TETHER) {
       if (!p.getAttribute(SCAR_PATH_COMPLETE)) return p.sendMessage("Follow each pathfinder through the maze to reach the tether.");
       p.setAttribute(SCAR_TETHER_DESTROYED, true);
       p.getPacketSender().sendVarbit(15258, 1);
       p.sendMessage("The abyssal tether is severed. The teleporter to the catalyst room is now reachable.");
       return true;
     }
-    if (s === S.LEVIATHAN && scarMazeTile?.x === 2190 && scarMazeTile.y === 6412
+    if (inChapter(p, "leviathan") && scarMazeTile?.x === 2190 && scarMazeTile.y === 6412
       && !p.getAttribute(SCAR_TETHER_DESTROYED)) {
       return p.sendMessage("The abyssal tether still powers the barrier to this chamber.");
     }
-    if (s === S.LEVIATHAN && scarTile?.x === 2043 && scarTile.y === 6441
+    if (inChapter(p, "leviathan") && scarTile?.x === 2043 && scarTile.y === 6441
       && (definition?.id ?? objectId) === SCAR_PASSAGE_OPEN) {
       if (!p.getAttribute(SCAR_PERSTEN_TALKED)) return p.sendMessage("Speak to Wizard Persten before entering the Scar passage.");
       enterScarMazeOne(p);
       return true;
     }
-    if (s === S.LEVIATHAN && scarTile?.x === 2047 && scarTile.y === 6427
+    if (inChapter(p, "leviathan") && scarTile?.x === 2047 && scarTile.y === 6427
       && (definition?.id ?? objectId) === O.PASSAGE_15) {
       if (!p.getAttribute(SCAR_PERSTEN_ROOM1_TALKED)) {
         p.sendMessage("Speak to Persten about the first passage before entering the middle passage.");
@@ -6031,13 +6238,13 @@ module.exports = function registerDesertTreasureII(api) {
       enterScarMazeTwo(p);
       return true;
     }
-    if (s === S.LEVIATHAN && scarTile?.x === 2051 && scarTile.y === 6434
+    if (inChapter(p, "leviathan") && scarTile?.x === 2051 && scarTile.y === 6434
       && (definition?.id ?? objectId) === O.PASSAGE_16) {
       if (!p.getAttribute(SCAR_PERSTEN_ROOM2_TALKED)) return p.sendMessage("Speak to Persten about the second passage before entering the middle passage.");
       enterScarMazeThree(p);
       return true;
     }
-    if (s === S.LEVIATHAN && objectId === O.ROWBOAT_19 && scarTile?.x === 2065 && scarTile.y === 6435) {
+    if (inChapter(p, "leviathan") && objectId === O.ROWBOAT_19 && scarTile?.x === 2065 && scarTile.y === 6435) {
       if (p.getAttribute(SCAR_BOAT3_BURNED) && p.getAttribute("desert-treasure-ii:scar-persten-room3-talked")) {
         p.setAttribute(SCAR_LEVIATHAN_READY, true);
         setScarVarbit(p, 38);
@@ -6077,16 +6284,22 @@ module.exports = function registerDesertTreasureII(api) {
     }
     if (s >= S.STARTED && s < S.COMPLETE && [O.VAULT_DOOR_2, O.VAULT_DOOR_3].includes(objectId)
       && !vaultTile && Math.abs(location.x - 3511) <= 4 && Math.abs(location.y - 2970) <= 4) {
-      // The first return with Vardorvis' medallion is interrupted by the
-      // Mysterious Figure before the player enters the vault. Keep the
-      // transcript's final action as the point where the vault scene resumes.
-      if (s === S.VARDORVIS && has(p, I.VARDORVIS_MEDALLION)
-        && !p.getAttribute(ATTR_FIRST_MEDALLION_MEETING)) {
-        p.setAttribute(ATTR_FIRST_MEDALLION_MEETING, true);
-        p.setAttribute("desert-treasure-ii:first-medallion-meeting-pending", true);
-        talk(p, N.MYSTERIOUS_FIGURE_2, "carnifex-maximus-vardorvis-returning-the-first-medallion");
+      // Each medallion before the last meets the Mysterious Figure on its way back (Wiki:
+      // "Acquiring the second and third medallions may result in her ambushing you").
+      // The first return is the transcript's interrupted scene; the transcript's final action
+      // is where the vault scene resumes.
+      const meetings = pursuerMeetings(p);
+      if (s === S.CHAPTERS && !lastChapter(p) && meetings < Math.min(3, placedCount(p) + 1) && carriesUnplacedMedallion(p)) {
+        p.setAttribute(PURSUER_EVENTS, meetings + 1);
+        if (meetings === 0) {
+          p.setAttribute(ATTR_FIRST_MEDALLION_MEETING, true);
+          p.setAttribute("desert-treasure-ii:first-medallion-meeting-pending", true);
+          talk(p, N.MYSTERIOUS_FIGURE_2, "carnifex-maximus-vardorvis-returning-the-first-medallion");
+        } else ambushAtVaultDoor(p);
+        syncNativeProgress(p);
         return true;
       }
+      removeVaultPursuer(p);
       enterVault(p);
       return true;
     }
@@ -6140,7 +6353,7 @@ module.exports = function registerDesertTreasureII(api) {
       setStage(p, S.GUARDIAN);
       return true;
     }
-    if (s === S.VARDORVIS && objectId === KASONDE_DESK_LOC
+    if (inChapter(p, "vardorvis") && objectId === KASONDE_DESK_LOC
       && Math.abs(location.x - 1781) <= 2 && Math.abs(location.y - 3619) <= 2
       && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) >= 2) {
       const progress = Number(p.getAttribute(VARDORVIS_PROGRESS));
@@ -6155,7 +6368,7 @@ module.exports = function registerDesertTreasureII(api) {
       talk(p, N.GOLEM_3, "carnifex-maximus-vardorvis-searching-the-botanist-s-desk");
       return true;
     }
-    if (s === S.VARDORVIS && objectId === STRANGLEWOOD_BOAT_IN_LOC
+    if (inChapter(p, "vardorvis") && objectId === STRANGLEWOOD_BOAT_IN_LOC
       && Math.abs(location.x - 1227) <= 2 && Math.abs(location.y - 3469) <= 2) {
       const progress = Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0;
       if (progress < 4) {
@@ -6172,7 +6385,7 @@ module.exports = function registerDesertTreasureII(api) {
       if (p.getAttribute(STRANGLEWOOD_CITY_ENTERED)) spawnSurfaceKasonde(p);
       return true;
     }
-    if (s === S.VARDORVIS && [O.ENTRY_20, O.ENTRY_21].includes(objectId)
+    if (inChapter(p, "vardorvis") && [O.ENTRY_20, O.ENTRY_21].includes(objectId)
       && Math.abs(location.x - 1191) <= 2 && Math.abs(location.y - 3411) <= 2) {
       if ((Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) < 7) {
         return p.sendMessage("Talk to Kasonde before entering the hideout.");
@@ -6186,7 +6399,7 @@ module.exports = function registerDesertTreasureII(api) {
       leaveHideout(p);
       return true;
     }
-    if (s === S.VARDORVIS && objectId === O.ENTRY_21
+    if (inChapter(p, "vardorvis") && objectId === O.ENTRY_21
       && Math.abs(location.x - 1174) <= 2 && Math.abs(location.y - 3428) <= 2) {
       const progress = Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0;
       if ((progress >= 13 && progress <= 16) || (progress === 18 && has(p, I.TEMPLE_KEY_3)) || progress >= 19) {
@@ -6211,7 +6424,7 @@ module.exports = function registerDesertTreasureII(api) {
       return true;
     }
     const ritualTile = vardorvisSourceTile(p, location);
-    if (s === S.VARDORVIS && ritualTile && [VARDORVIS_ENTRY, O.ROCKS_139].includes(objectId)
+    if (inChapter(p, "vardorvis") && ritualTile && [VARDORVIS_ENTRY, O.ROCKS_139].includes(objectId)
       && ritualTile.x === 1118 && ritualTile.y === 3428) {
       if (option === "leave" || option === "climb-over") return leaveVardorvisArena(p);
       const progress = Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0;
@@ -6223,10 +6436,10 @@ module.exports = function registerDesertTreasureII(api) {
       }
       return p.sendMessage("There is nothing useful among the rocks yet.");
     }
-    if (s === S.VARDORVIS && ritualTile && [O.ENTRY_22, O.ENTRY_23].includes(objectId)) {
+    if (inChapter(p, "vardorvis") && ritualTile && [O.ENTRY_22, O.ENTRY_23].includes(objectId)) {
       return leaveVardorvisArena(p);
     }
-    if (s === S.VARDORVIS && objectId === VARDORVIS_ENTRY
+    if (inChapter(p, "vardorvis") && objectId === VARDORVIS_ENTRY
       && Math.abs(location.x - 1118) <= 2 && Math.abs(location.y - 3428) <= 2) {
       const progress = Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0;
       if (progress < 16) return p.sendMessage("The ritual site is too dangerous until you have prepared the Strangler serum.");
@@ -6240,7 +6453,7 @@ module.exports = function registerDesertTreasureII(api) {
       enterVardorvisArena(p);
       return true;
     }
-    if (s === S.VARDORVIS && objectId === KASONDE_MEDALLION_CHEST
+    if (inChapter(p, "vardorvis") && objectId === KASONDE_MEDALLION_CHEST
       && Math.abs(location.x - 1196) <= 2 && Math.abs(location.y - 3411) <= 2
       && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) >= 21) {
       if (!has(p, I.VARDORVIS_MEDALLION)) {
@@ -6251,10 +6464,11 @@ module.exports = function registerDesertTreasureII(api) {
         p.getInventory().adds(I.VARDORVIS_MEDALLION, 1);
       }
       p.setAttribute(VARDORVIS_PROGRESS, 22);
+      markMedallionFound(p, "vardorvis");
       p.sendMessage("You search Kasonde's chest and find Vardorvis' medallion.");
       return true;
     }
-    if (s === S.VARDORVIS && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) >= 11
+    if (inChapter(p, "vardorvis") && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) >= 11
       && (objectId === KORBAL_HERBS_LOC || visibleId === O.KORBAL_HERBS)) {
       if (!has(p, I.KORBAL_HERB) && p.getInventory().getFreeSlots() < 1) {
         p.sendMessage("You need inventory space for a Korbal herb.");
@@ -6265,7 +6479,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You pick a Korbal herb from the north-west of the Stranglewood.");
       return true;
     }
-    if (s === S.VARDORVIS && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) >= 11
+    if (inChapter(p, "vardorvis") && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) >= 11
       && (objectId === ARGIAN_BUSH_LOC || visibleId === O.ARGIAN_BUSH)) {
       if (!has(p, I.ARGIAN_BERRIES) && p.getInventory().getFreeSlots() < 1) {
         p.sendMessage("You need inventory space for Argian berries.");
@@ -6276,7 +6490,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You pick Argian berries from the south-west of the Stranglewood.");
       return true;
     }
-    if (s === S.VARDORVIS && objectId === STRANGLEWOOD_BOAT_OUT_LOC
+    if (inChapter(p, "vardorvis") && objectId === STRANGLEWOOD_BOAT_OUT_LOC
       && Math.abs(location.x - 1193) <= 2 && Math.abs(location.y - 3453) <= 2) {
       p.moveTo(new api.core.Location(1227, 3470, 0));
       p.sendMessage("You row back from the Stranglewood.");
@@ -6292,7 +6506,7 @@ module.exports = function registerDesertTreasureII(api) {
       leaveWarRoom(p);
       return true;
     }
-    if (s >= S.MACHINE && s < S.VARDORVIS && objectId === O.CRATE_302
+    if (s >= S.MACHINE && s < S.CHAPTERS && objectId === O.CRATE_302
       && roomTile?.x === 2780 && roomTile?.y === 6440) {
       const inventory = p.getInventory();
       const missing = 8 - inventory.getAmount(I.UNCHARGED_CELL_2) - inventory.getAmount(I.CHARGED_CELL);
@@ -6303,7 +6517,7 @@ module.exports = function registerDesertTreasureII(api) {
       itemStatement(p, UNCHARGED_CELL, "The crate is filled with uncharged cells. You take some.");
       return true;
     }
-    if (s >= S.MACHINE && s < S.VARDORVIS && [O.ALTAR_93, O.ALTAR_94, WAR_ROOM_ALTAR_LOC].includes(objectId)
+    if (s >= S.MACHINE && s < S.CHAPTERS && [O.ALTAR_93, O.ALTAR_94, WAR_ROOM_ALTAR_LOC].includes(objectId)
       && roomTile?.x === 2772 && roomTile?.y === 6441) {
       // The altar turns from Inspect (48929) to Imbue (48930) once the totems are empowered.
       if (option === "imbue") { imbueCells(p); return true; }
@@ -6311,7 +6525,7 @@ module.exports = function registerDesertTreasureII(api) {
       talk(p, N.DR_BANIKAN, "familiar-faces-inspecting-the-altar");
       return true;
     }
-    if (s >= S.MACHINE && s < S.VARDORVIS && [O.GOLEM, O.GOLEM_2, WAR_ROOM_GOLEM_LOC].includes(objectId)
+    if (s >= S.MACHINE && s < S.CHAPTERS && [O.GOLEM, O.GOLEM_2, WAR_ROOM_GOLEM_LOC].includes(objectId)
       && roomTile?.x === 2782 && roomTile?.y === 6443) {
       if (p.getAttribute(GOLEM_SOLVED)) {
         if (p.getAttribute(BANIKAN_LEFT) && Number(p.getAttribute(SEARCHED_NAMES)) === 15) {
@@ -6344,7 +6558,7 @@ module.exports = function registerDesertTreasureII(api) {
     }
     const lassarShadowBarrier = (lassarX === 2417 && lassarY === 6413)
       || (lassarX === 2424 && lassarY === 6439);
-    if (stage(p) === S.WHISPERER && lassar.inShadow && lassarShadowBarrier
+    if (inChapter(p, "whisperer") && lassar.inShadow && lassarShadowBarrier
       && [O.DOORS_21, O.DOORS_22, O.TENTACLE_4, O.TENTACLE_5, O.TENTACLE_6, O.TENTACLE_7].includes(objectId)
       && itemId === I.BASIC_SHADOW_TORCH) {
       event.handled = true;
@@ -6369,7 +6583,7 @@ module.exports = function registerDesertTreasureII(api) {
       }
       return true;
     }
-    if (stage(p) === S.WHISPERER && lassar.inShadow && itemId === I.SHADOW_BLOCKER
+    if (inChapter(p, "whisperer") && lassar.inShadow && itemId === I.SHADOW_BLOCKER
       && location?.x === 2649 && location?.y === 6406) {
       event.handled = true;
       if (!lassar.choirSouth || !lassar.choirWest || !lassar.redKey || !has(p, itemId)) {
@@ -6381,7 +6595,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You place the shadow blocker beside the red-key chest to hold back the lost souls.");
       return true;
     }
-    if (stage(p) === S.WHISPERER && itemId === I.SHADOW_BLOCKER && location?.x === 2574 && location?.y === 6449) {
+    if (inChapter(p, "whisperer") && itemId === I.SHADOW_BLOCKER && location?.x === 2574 && location?.y === 6449) {
       event.handled = true;
       if (!lassar.whiteKey || !has(p, itemId)) { p.sendMessage("The palace chest is still sealed. Find the white shadow key first."); return true; }
       p.getInventory().deleteNumber(I.SHADOW_BLOCKER, 1);
@@ -6389,7 +6603,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You place the shadow blocker in front of the palace chest.");
       return true;
     }
-    if (stage(p) === S.WHISPERER && itemId === I.ANIMA_PORTAL && location?.x === 2576 && location?.y === 6447) {
+    if (inChapter(p, "whisperer") && itemId === I.ANIMA_PORTAL && location?.x === 2576 && location?.y === 6447) {
       event.handled = true;
       if (!lassar.whiteKey || !has(p, itemId)) { p.sendMessage("The palace chest is still sealed. Find the white shadow key first."); return true; }
       p.getInventory().deleteNumber(I.ANIMA_PORTAL, 1);
@@ -6397,7 +6611,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You place the anima portal between the palace chest's braziers.");
       return true;
     }
-    if (stage(p) === S.WHISPERER && itemId === I.REVITALISING_IDOL && location?.x === 2578 && location?.y === 6445) {
+    if (inChapter(p, "whisperer") && itemId === I.REVITALISING_IDOL && location?.x === 2578 && location?.y === 6445) {
       event.handled = true;
       if (!lassar.whiteKey || !has(p, itemId)) { p.sendMessage("The palace chest is still sealed. Find the white shadow key first."); return true; }
       p.getInventory().deleteNumber(I.REVITALISING_IDOL, 1);
@@ -6405,7 +6619,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You place the revitalising idol south-east of the anima portal.");
       return true;
     }
-    if (stage(p) === S.WHISPERER && location?.x === 2922 && location.y === 5827 && itemId === I.VERY_LONG_ROPE
+    if (inChapter(p, "whisperer") && location?.x === 2922 && location.y === 5827 && itemId === I.VERY_LONG_ROPE
       && [49477, 48195, 48196, 48197].includes(objectId)) {
       event.handled = true;
       if (!lassar.ramarno || !has(p, I.VERY_LONG_ROPE)) {
@@ -6417,7 +6631,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You tie Prescott's very long rope to the sinkhole rock.");
       return true;
     }
-    if (stage(p) === S.WHISPERER && itemId === I.SHADOW_BLOCKER && has(p, itemId)
+    if (inChapter(p, "whisperer") && itemId === I.SHADOW_BLOCKER && has(p, itemId)
       && [48228, 48229, 48230, 48231, 48232, 48233, 48234, 48235, 48254, 48255, 48256, 48257, 48258, 48259, 48260, 48261, 48262, 48263, 48264, 48265, 48266, 48267, 48278, 48279, 48289, 48290].includes(objectId)
       && ((location?.x === 2606 && location?.y === 6359) || (location?.x === 2350 && location?.y === 6360)
         || (location?.x === 2641 && location?.y === 6428) || (location?.x === 2385 && location?.y === 6427)
@@ -6439,7 +6653,7 @@ module.exports = function registerDesertTreasureII(api) {
         : "You place the shadow blocker beside the furnace-house doors. It creates a small safe zone from the lost souls.");
       return true;
     }
-    if (stage(p) === S.WHISPERER && itemId === I.REVITALISING_IDOL && has(p, itemId)
+    if (inChapter(p, "whisperer") && itemId === I.REVITALISING_IDOL && has(p, itemId)
       && (location?.x === 2689 || location?.x === 2691) && location?.y === 6415
       && [49485, 48201, 48202, 48203].includes(objectId)) {
       event.handled = true;
@@ -6453,12 +6667,12 @@ module.exports = function registerDesertTreasureII(api) {
       return true;
     }
     const sucellusTile = sucellusSourceTile(p, location);
-    if (stage(p) === S.SUCELLUS && p.getAttribute(SUCELLUS_CELL_ESCAPED)
+    if (inChapter(p, "sucellus") && p.getAttribute(SUCELLUS_CELL_ESCAPED)
       && objectId === 49120 && sucellusTile?.x === 2945 && sucellusTile.y === 6389
       && sucellusTile.z === 2 && itemId === I.LOCKPICK_4 && has(p, I.LOCKPICK_4)) {
       return false;
     }
-    if (stage(p) === S.SUCELLUS && p.getAttribute(SUCELLUS_CELL_ENTERED)
+    if (inChapter(p, "sucellus") && p.getAttribute(SUCELLUS_CELL_ENTERED)
       && objectId === 49099 && sucellusTile?.x === 3040 && sucellusTile.y === 6370) {
       const cellProgress = Number(p.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0;
       if (itemId === I.KNIFE_5 && cellProgress >= 4 && has(p, I.KNIFE_5)) {
@@ -6483,7 +6697,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("The guard needs the knife or lockpick through the hole in the wall.");
       return true;
     }
-    if (stage(p) === S.SUCELLUS && sucellusTile
+    if (inChapter(p, "sucellus") && sucellusTile
       && [47536, 47537, 47538, 47539, 47540, 47541, 47542, 47543].includes(objectId)) {
       event.handled = true;
       const vats = { ...(p.getAttribute(SUCELLUS_VATS) ?? {}) };
@@ -6521,30 +6735,29 @@ module.exports = function registerDesertTreasureII(api) {
       const index = STATUES.get(objectId);
       const locations = [[3941, 9635], [3931, 9635], [3931, 9625], [3941, 9625]];
       const medal = STATUE_ITEMS[index];
-      const expectedStage = [S.VARDORVIS, S.WHISPERER, S.SUCELLUS, S.LEVIATHAN][index];
-      const legacySucellusMedallion = index === 2 && stage(p) === S.WHISPERER
-        && !((Number(p.getAttribute(STATUES_PLACED)) || 0) & (1 << index));
+      const key = chapterOfStatue(index);
+      // The last medallion is placed after the Mysterious Figure's trial (the Wiki's Recidivism).
+      const last = lastChapter(p) === key;
       if (vaultTile.x === locations[index][0] && vaultTile.y === locations[index][1]
-        && (stage(p) === expectedStage || legacySucellusMedallion) && itemId === medal && has(p, medal)) {
+        && inChapter(p, key) && (!last || p.getAttribute(FINAL_FIGURE_DEFEATED))
+        && itemId === medal && has(p, medal)) {
         event.handled = true;
         p.getInventory().deleteNumber(medal, 1);
-        const placed = (Number(p.getAttribute(STATUES_PLACED)) || 0) | (1 << index);
-        p.setAttribute(STATUES_PLACED, placed);
-        p.sendMessage(`You place ${index === 0 ? "Vardorvis'" : index === 1 ? "the Whisperer's" : index === 2 ? "Sucellus'" : "Perseriya's"} medallion on the statue.`);
-        if (placed === 15) setStage(p, S.FINALE);
-        else if (index === 0) {
-          setStage(p, S.LEVIATHAN);
-          setScarVarbit(p, 2);
-        }
-        else if (index === 3) setStage(p, S.SUCELLUS);
-        else if (index === 2 && !legacySucellusMedallion) setStage(p, S.WHISPERER);
+        p.setAttribute(STATUES_PLACED, placedMask(p) | (1 << index));
+        recordMedallionPlaced(p, key);
+        // rsprox 1703: the chapter's done value, dt2 +2 and the medallion slot on the same tick,
+        // with sound 7485 and an objectbox of the medallion.
+        p.getPacketSender().sendSound(MEDALLION_PLACED_SOUND, 0, 0);
+        itemStatement(p, medal, "You give the medallion to the statue.");
+        if (placedCount(p) === 4) setStage(p, S.FINALE);
+        syncNativeProgress(p);
         return true;
       }
     }
     const mazeTile = scarMazeSourceTile(p, location);
     const mazeTwoTile = scarMazeTwoSourceTile(p, location);
     const mazeThreeTile = scarMazeThreeSourceTile(p, location);
-    if (stage(p) === S.LEVIATHAN && mazeThreeTile && p.getAttribute(SCAR_MAZE_THREE_ACTIVE)) {
+    if (inChapter(p, "leviathan") && mazeThreeTile && p.getAttribute(SCAR_MAZE_THREE_ACTIVE)) {
       if (objectId === 49436 && itemId === I.ILLUMINATING_LURE) {
         const index = SCAR_LEECH_GROWTHS.findIndex(([x, y]) => x === mazeThreeTile.x && y === mazeThreeTile.y);
         if (index < 0 || !has(p, I.ILLUMINATING_LURE)) return false;
@@ -6587,7 +6800,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
     }
-    if (stage(p) === S.LEVIATHAN && mazeTwoTile && p.getAttribute(SCAR_NERVE_ROOM_TWO_ACTIVE)) {
+    if (inChapter(p, "leviathan") && mazeTwoTile && p.getAttribute(SCAR_NERVE_ROOM_TWO_ACTIVE)) {
       const nerve = SCAR_NERVE_REPAIRS_TWO.find(({ object, tile }) =>
         object === objectId && tile[0] === mazeTwoTile.x && tile[1] === mazeTwoTile.y);
       if (nerve) {
@@ -6615,7 +6828,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
     }
-    if (stage(p) === S.LEVIATHAN && p.getAttribute(SCAR_GROWTH_LIVE)
+    if (inChapter(p, "leviathan") && p.getAttribute(SCAR_GROWTH_LIVE)
       && objectId === 49436 && itemId === I.ILLUMINATING_LURE && mazeTile) {
       const growthIndex = SCAR_GROWTHS.findIndex(([x, y]) => x === mazeTile.x && y === mazeTile.y);
       if (growthIndex < 0 || !has(p, I.ILLUMINATING_LURE)) return false;
@@ -6631,7 +6844,7 @@ module.exports = function registerDesertTreasureII(api) {
       if (next.length === SCAR_GROWTHS.length) finishScarGrowthRepair(p);
       return true;
     }
-    if (stage(p) === S.LEVIATHAN && p.getAttribute(SCAR_BOAT_ROOM)
+    if (inChapter(p, "leviathan") && p.getAttribute(SCAR_BOAT_ROOM)
       && objectId === 49423 && mazeTile?.x === 2234 && mazeTile.y === 6407 && itemId === I.TINDERBOX) {
       event.handled = true;
       if (p.getAttribute(SCAR_BOAT_BURNED)) return p.sendMessage("The shipwreck has already been destroyed.");
@@ -6646,7 +6859,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You spread the gunpowder around the wreck and ignite it. The shipwreck burns away.");
       return true;
     }
-    if (stage(p) === S.LEVIATHAN && p.getAttribute("desert-treasure-ii:scar-boat-room-two")
+    if (inChapter(p, "leviathan") && p.getAttribute("desert-treasure-ii:scar-boat-room-two")
       && objectId === O.SHIPWRECK && mazeTwoTile?.x === 1786 && mazeTwoTile.y === 6453 && itemId === I.TINDERBOX) {
       event.handled = true;
       if (p.getAttribute(SCAR_BOAT2_BURNED)) {
@@ -6667,7 +6880,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You spread the gunpowder around the wreck and ignite it. The shipwreck burns away.");
       return true;
     }
-    if (stage(p) === S.LEVIATHAN && p.getAttribute(SCAR_BOAT3_ROOM)
+    if (inChapter(p, "leviathan") && p.getAttribute(SCAR_BOAT3_ROOM)
       && mazeThreeTile && objectId === O.SHIPWRECK && mazeThreeTile.x === 1912 && mazeThreeTile.y === 6454 && itemId === I.TINDERBOX) {
       event.handled = true;
       if (p.getAttribute(SCAR_BOAT3_BURNED)) return p.sendMessage("The shipwreck has already been destroyed.");
@@ -6679,7 +6892,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("You spread the gunpowder around the wreck and ignite it. The shipwreck burns away.");
       return true;
     }
-    if (stage(p) < S.MACHINE || stage(p) >= S.VARDORVIS) return;
+    if (stage(p) < S.MACHINE || stage(p) >= S.CHAPTERS) return;
     const roomTile = warRoomSourceTile(p, location);
     if ([O.GOLEM, O.GOLEM_2, WAR_ROOM_GOLEM_LOC].includes(objectId) && roomTile?.x === 2782 && roomTile?.y === 6443 && itemId === I.UNCHARGED_CELL_2) {
       event.handled = true;
@@ -6710,6 +6923,7 @@ module.exports = function registerDesertTreasureII(api) {
       whisperer: [N.THE_WHISPERER_3, 2656, 6370],
     };
     const [id, x, y] = table[key];
+    markBossStarted(p, key);
     let npcs = spawned.get(p);
     if (!npcs) spawned.set(p, npcs = {});
     if (key === "vardorvis") {
@@ -7042,17 +7256,22 @@ module.exports = function registerDesertTreasureII(api) {
   function talkSucellusWestAssassin({ player: p, npcId, npc }) {
     const owned = spawned.get(p);
     const area = p.getAttribute(SUCELLUS_AREA);
-    if (stage(p) !== S.SUCELLUS || npcId !== N.ASSASSIN_7 || !p.getAttribute(SUCELLUS_DEFEATED)
+    if (!inChapter(p, "sucellus") || npcId !== N.ASSASSIN_7 || !p.getAttribute(SUCELLUS_DEFEATED)
       || !p.getAttribute(SUCELLUS_WEST_ROOM) || p.getAttribute(SUCELLUS_WEST_ASSASSIN_TALKED)
       || !(area instanceof SucellusArea) || p.getPrivateArea?.() !== area
       || !owned?.sucellusWestAssassin || (npc && npc !== owned.sucellusWestAssassin)) return false;
     talk(p, npcId, "duke-sucellus-of-the-sixth-legion-talking-to-the-assassin-after-unlocking-the-asylum-office");
     return true;
   }
-  function handleBossTalk({ player: p, npcId, npc }) {
-    const s = stage(p);
-    if (s === S.VARDORVIS) { talk(p, npcId, "carnifex-maximus-vardorvis-talking-to-elissa"); return; }
-    if (s === S.LEVIATHAN) {
+  // The chapters can be in progress together, so the NPC talked to picks the chapter.
+  function talkVardorvisBoss(event) { return handleBossTalk({ ...event, chapter: "vardorvis" }); }
+  function talkLeviathanBoss(event) { return handleBossTalk({ ...event, chapter: "leviathan" }); }
+  function talkSucellusBoss(event) { return handleBossTalk({ ...event, chapter: "sucellus" }); }
+  function talkWhispererBoss(event) { return handleBossTalk({ ...event, chapter: "whisperer" }); }
+  function handleBossTalk({ player: p, npcId, npc, chapter }) {
+    if (!chapter || !inChapter(p, chapter)) return;
+    if (chapter === "vardorvis") { talk(p, npcId, "carnifex-maximus-vardorvis-talking-to-elissa"); return; }
+    if (chapter === "leviathan") {
       if (!p.getAttribute(SCAR_BOAT_TRIED)) return;
       if (p.getAttribute(SCAR_LEVIATHAN_KILLED) && p.getAttribute(SCAR_PERSTEN_AT_SHIP)) {
         p.setAttribute(SCAR_PERSTEN_LEFT_SHIP, true);
@@ -7086,11 +7305,11 @@ module.exports = function registerDesertTreasureII(api) {
       }
       return;
     }
-    if (s === S.SUCELLUS) {
+    if (chapter === "sucellus") {
       if (npc?.__dt2Sucellus && !npc.__dt2SucellusAwake) return p.sendMessage("The Duke is in a deep slumber. Weaken him with two Arder-musca poisons first.");
       return p.sendMessage("Duke Sucellus turns his attention to you.");
     }
-    if (s === S.WHISPERER) {
+    if (chapter === "whisperer") {
       const state = p.getAttribute(LASSAR) ?? {};
       if ([N.ODD_FIGURE, N.THE_WHISPERER, N.THE_WHISPERER_2, N.THE_WHISPERER_3, N.THE_WHISPERER_4].includes(npcId)) {
         if (!state.cathedralTentacles || !state.perfectTorch) {
@@ -7193,17 +7412,18 @@ module.exports = function registerDesertTreasureII(api) {
       talk(killer, N.SLISKE_2, "the-desert-treasure-aftermath");
       return;
     }
-    if (owned.finalFigure === npc && stage(killer) === S.WHISPERER) {
+    if (owned.finalFigure === npc && inLastMedallionTrial(killer)) {
       clearFinalFigureSpecial(killer, npc);
       owned.finalFigure = null;
       killer.setAttribute(FINAL_FIGURE_STARTED, false);
       killer.setAttribute(FINAL_FIGURE_DEFEATED, true);
       killer.setAttribute(FINAL_CELL_ACTIVE, false);
-      if (!has(killer, I.WHISPERERS_MEDALLION)) killer.getInventory().adds(I.WHISPERERS_MEDALLION, 1);
-      killer.sendMessage("The Mysterious Figure falls. You recover the Whisperer's medallion and can now return to the Ancient Vault.");
+      const medallion = lastMedallion(killer);
+      if (medallion && !has(killer, medallion)) killer.getInventory().adds(medallion, 1);
+      killer.sendMessage("The Mysterious Figure falls. You recover the last medallion and can now return to the Ancient Vault.");
       return;
     }
-    if (owned.whisperer === npc && stage(killer) === S.WHISPERER) {
+    if (owned.whisperer === npc && inChapter(killer, "whisperer")) {
       removeWhispererTentacles(npc);
       removeWhispererSouls(killer);
       npc.__dt2WhispererPendingVolleys = [];
@@ -7231,7 +7451,7 @@ module.exports = function registerDesertTreasureII(api) {
       }
       return;
     }
-    if (owned.leviathan === npc && stage(killer) === S.LEVIATHAN) {
+    if (owned.leviathan === npc && inChapter(killer, "leviathan")) {
       owned.leviathan = null;
       killer.setAttribute(ATTR, null);
       killer.setAttribute(SCAR_LEVIATHAN_KILLED, true);
@@ -7241,7 +7461,7 @@ module.exports = function registerDesertTreasureII(api) {
       killer.sendMessage("The Leviathan is defeated. Climb the northern handholds and cross the stepping stone to Persten's ship.");
       return;
     }
-    if (owned.sucellus === npc && stage(killer) === S.SUCELLUS) {
+    if (owned.sucellus === npc && inChapter(killer, "sucellus")) {
       owned.sucellus = null;
       killer.setAttribute(ATTR, null);
       killer.setAttribute(SUCELLUS_DEFEATED, true);
@@ -7303,7 +7523,7 @@ module.exports = function registerDesertTreasureII(api) {
       owned.scarSummonDemons = owned.scarSummonDemons.filter((demon) => demon !== npc);
       const left = owned.scarSummonDemons.filter((demon) => demon?.isRegistered?.() && demon.getHitpoints?.() > 0).length;
       killer.setAttribute(SCAR_SUMMON_DEMONS, left);
-      if (left === 0 && stage(killer) === S.LEVIATHAN) {
+      if (left === 0 && inChapter(killer, "leviathan")) {
         killer.setAttribute(SCAR_SUMMON_ROOM_COMPLETE, true);
         killer.getPacketSender().sendVarbit(15260, 1);
         revealScarBoatPassageTwo(killer);
@@ -7311,7 +7531,7 @@ module.exports = function registerDesertTreasureII(api) {
       }
       return;
     }
-    if (Array.isArray(owned.scarEnemies) && owned.scarEnemies.includes(npc) && stage(killer) === S.LEVIATHAN) {
+    if (Array.isArray(owned.scarEnemies) && owned.scarEnemies.includes(npc) && inChapter(killer, "leviathan")) {
       owned.scarEnemies = owned.scarEnemies.filter((enemy) => enemy !== npc);
       if (owned.scarEnemies.length === 0) {
         killer.setAttribute(SCAR_DEMONS_DEFEATED, true);
@@ -7320,7 +7540,7 @@ module.exports = function registerDesertTreasureII(api) {
       }
       return;
     }
-    if (owned.kasondeBoss === npc && stage(killer) === S.VARDORVIS) {
+    if (owned.kasondeBoss === npc && inChapter(killer, "vardorvis")) {
       owned.kasondeBoss = null;
       killer.setAttribute(VARDORVIS_PROGRESS, 20);
       const area = killer.getAttribute(ATTR_STRANGLEWOOD_TEMPLE);
@@ -7340,7 +7560,7 @@ module.exports = function registerDesertTreasureII(api) {
       }
       return;
     }
-    if (owned.vardorvis === npc && stage(killer) === S.VARDORVIS) {
+    if (owned.vardorvis === npc && inChapter(killer, "vardorvis")) {
       owned.vardorvis = null;
       owned.vardorvisDead = true;
       killer.setAttribute(VARDORVIS_PROGRESS, 17);
@@ -7353,7 +7573,7 @@ module.exports = function registerDesertTreasureII(api) {
     }
     if (Array.isArray(owned.templeEnemies) && owned.templeEnemies.includes(npc)) {
       owned.templeEnemies = owned.templeEnemies.filter((enemy) => enemy !== npc);
-      if (owned.templeEnemies.length === 0 && stage(killer) === S.VARDORVIS) {
+      if (owned.templeEnemies.length === 0 && inChapter(killer, "vardorvis")) {
         killer.setAttribute(VARDORVIS_PROGRESS, 13);
         const area = killer.getAttribute(ATTR_STRANGLEWOOD_TEMPLE);
         if (area instanceof StranglewoodTempleArea && !area.isDestroyed()) {
@@ -7369,11 +7589,9 @@ module.exports = function registerDesertTreasureII(api) {
       }
       return;
     }
-    const entries = [["guardian", S.GUARDIAN], ["vardorvis", S.VARDORVIS], ["leviathan", S.LEVIATHAN], ["sucellus", S.SUCELLUS], ["whisperer", S.WHISPERER]];
-    const key = entries.find(([name]) => owned[name] === npc)?.[0];
+    const key = ["guardian", ...CHAPTER_KEYS].find(name => owned[name] === npc);
     if (!key) return;
-    const idx = { vardorvis: 0, leviathan: 1, sucellus: 2, whisperer: 3 }[key];
-    if (idx === undefined) {
+    if (key === "guardian") {
       setStage(killer, S.MACHINE);
       const area = killer.getAttribute(ATTR_WAR_ROOM);
       if (area instanceof WarRoomArea && !area.isDestroyed()) {
@@ -7384,15 +7602,18 @@ module.exports = function registerDesertTreasureII(api) {
       killer.setAttribute(ATTR, null);
       return;
     }
-    if (!has(killer, IDS[idx])) killer.getInventory().adds(IDS[idx], 1);
     owned[key] = null;
+    if (!inChapter(killer, key)) return;
+    if (!has(killer, chapterMedallion(key))) killer.getInventory().adds(chapterMedallion(key), 1);
+    markMedallionFound(killer, key);
     killer.sendMessage("The medallion has fallen. Take it back to the Ancient Vault and place it on its statue.");
   }
   function progressBosses({ player: p, npcId }) {
-    const s = stage(p);
-    if (s === S.LEVIATHAN && [N.WIZARD_PERSTEN_5, N.WIZARD_PERSTEN_6, N.WIZARD_PERSTEN_7].includes(npcId)) return handleBossTalk({ player: p, npcId });
-    if (s === S.SUCELLUS && npcId === N.CAPTAIN_MALLETA) return talk(p, npcId, "duke-sucellus-of-the-sixth-legion-talking-to-captain-malleta");
-    if (s === S.WHISPERER && [N.KETLA, N.KETLA_2].includes(npcId)) {
+    if (inChapter(p, "leviathan") && [N.WIZARD_PERSTEN_5, N.WIZARD_PERSTEN_6, N.WIZARD_PERSTEN_7].includes(npcId)) {
+      return handleBossTalk({ player: p, npcId, chapter: "leviathan" });
+    }
+    if (inChapter(p, "sucellus") && npcId === N.CAPTAIN_MALLETA) return talk(p, npcId, "duke-sucellus-of-the-sixth-legion-talking-to-captain-malleta");
+    if (inChapter(p, "whisperer") && [N.KETLA, N.KETLA_2].includes(npcId)) {
       const state = p.getAttribute(LASSAR) ?? {};
       if (npcId === N.KETLA || npcId === N.KETLA_2) {
         if (state.fakeSchematicFound && !state.perfectSchematicGiven && has(p, I.PERFECTED_SHADOW_TORCH_SCHEMATIC_2))
@@ -7421,13 +7642,13 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function talkRamarno({ player: p, npcId }) {
-    if (stage(p) !== S.WHISPERER) return false;
+    if (!inChapter(p, "whisperer")) return false;
     const state = p.getAttribute(LASSAR) ?? {};
     if (state.entered) return p.sendMessage("Ramarno's directions brought you to the Lassar Undercity. Continue through its shadow devices.");
     talk(p, npcId, "the-whisperer-talking-to-ramarno");
   }
   function talkPrescott({ player: p, npcId }) {
-    if (stage(p) !== S.WHISPERER) return false;
+    if (!inChapter(p, "whisperer")) return false;
     const state = p.getAttribute(LASSAR) ?? {};
     if (!state.ramarno) return p.sendMessage("Prescott points you toward Ramarno by the Sacred Forge.");
     const variant = state.entered
@@ -7437,7 +7658,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function answerPrescottCondition({ player: p, npcId, stepId }) {
-    if (npcId !== N.PRESCOTT || stage(p) !== S.WHISPERER) return null;
+    if (npcId !== N.PRESCOTT || !inChapter(p, "whisperer")) return null;
     const state = p.getAttribute(LASSAR) ?? {};
     if (stepId === "kMM5yZ") return !state.ramarno;
     if (stepId === "yRRbfR") return Boolean(state.ramarno);
@@ -7447,7 +7668,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function answerKetlaCondition({ player: p, npcId, stepId }) {
-    if (stage(p) !== S.WHISPERER || ![N.KETLA, N.KETLA_2].includes(npcId)) return null;
+    if (!inChapter(p, "whisperer") || ![N.KETLA, N.KETLA_2].includes(npcId)) return null;
     if (stepId === "ZZryZO") return !has(p, I.RING_OF_VISIBILITY);
     if (stepId === "DTumBz") return has(p, I.RING_OF_VISIBILITY);
     return null;
@@ -7458,7 +7679,7 @@ module.exports = function registerDesertTreasureII(api) {
     const state = p.getAttribute(LASSAR) ?? {};
     // Wiki: a full energy restore and two-minute stamina effect, including
     // Ring of endurance, available only before the first Whisperer encounter.
-    if (stage(p) !== S.WHISPERER || !state.entered || state.cathedralEntered || state.whispererStarted || state.whispererDefeated) {
+    if (!inChapter(p, "whisperer") || !state.entered || state.cathedralEntered || state.whispererStarted || state.whispererDefeated) {
       p.sendMessage("The pool no longer offers its strange restorative power.");
       return true;
     }
@@ -7468,7 +7689,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function ensurePrescott(p) {
-    if (stage(p) !== S.WHISPERER || !(p.getAttribute(LASSAR) ?? {}).ramarno) return null;
+    if (!inChapter(p, "whisperer") || !(p.getAttribute(LASSAR) ?? {}).ramarno) return null;
     let owned = spawned.get(p);
     if (!owned) spawned.set(p, owned = {});
     if (owned.prescott?.isRegistered?.()) return owned.prescott;
@@ -7490,7 +7711,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
   function ensureLassarOddFigure(p) {
     const state = p.getAttribute(LASSAR) ?? {};
-    if (stage(p) !== S.WHISPERER || !state.cathedralTentacles || !state.perfectTorch
+    if (!inChapter(p, "whisperer") || !state.cathedralTentacles || !state.perfectTorch
       || state.whispererStarted || state.whispererDefeated) return null;
     let owned = spawned.get(p);
     if (!owned) spawned.set(p, owned = {});
@@ -7677,7 +7898,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (!attacker?.__dt2FinalFigure || !target?.isPlayer?.()) return;
     const owner = attacker.getOwner?.();
     if (!owner || target !== owner || spawned.get(owner)?.finalFigure !== attacker
-      || stage(owner) !== S.WHISPERER || attacker.__dt2FinalFigureSpecial) return;
+      || !inLastMedallionTrial(owner) || attacker.__dt2FinalFigureSpecial) return;
     attacker.__dt2FinalFigureAttacks = (attacker.__dt2FinalFigureAttacks ?? 0) + 1;
     if (attacker.__dt2FinalFigureAttacks >= FINAL_FIGURE_SPECIAL_ATTACKS) startFinalFigureSpecial(owner, attacker);
   }
@@ -7709,7 +7930,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
   function returnSucellusPrisonStash(request) {
     const { player } = request;
-    if (stage(player) !== S.SUCELLUS) return;
+    if (!inChapter(player, "sucellus")) return;
     const gear = player.getAttribute(SUCELLUS_PRISON_GEAR);
     if (!gear) {
       const inventory = player.getInventory();
@@ -7773,13 +7994,13 @@ module.exports = function registerDesertTreasureII(api) {
     if (overflow.length) player.sendMessage("Your belongings have been recovered. Supplies that would not fit were sent to your bank.");
   }
   function completeSucellusPrison({ player }) {
-    if (stage(player) !== S.SUCELLUS) return;
+    if (!inChapter(player, "sucellus")) return;
     player.setAttribute(SUCELLUS_PRISON_COMPLETE, true);
     player.setAttribute(SUCELLUS_PRISON_PROGRESS, 58);
     syncNativeProgress(player);
   }
   function resolveSucellusCellCondition({ player, npcId, text }) {
-    if (stage(player) !== S.SUCELLUS || npcId !== N.ASSASSIN_7) return null;
+    if (!inChapter(player, "sucellus") || npcId !== N.ASSASSIN_7) return null;
     const progress = Number(player.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0;
     if (text === "If the player has not read the letter:") return progress < 3;
     if (text === "If the player has read the letter:") return progress === 3;
@@ -7821,14 +8042,13 @@ module.exports = function registerDesertTreasureII(api) {
       // Live opens the Frostenhorn record and sets 40 -> 42 here (rsprox 1703).
       event.handled = true;
       event.end = true;
-      setStage(event.player, S.VARDORVIS);
-      event.player.setAttribute(VARDORVIS_PROGRESS, 0);
+      openChapters(event.player);
       event.player.setAttribute(ATTR, null);
       nextTick(event.player, () => openGolemRecord(event.player, "frostenhorn"));
       return;
     }
     const { player: p, stepId } = event;
-    if (stepId === "iXcugA" && stage(p) === S.SUCELLUS
+    if (stepId === "iXcugA" && inChapter(p, "sucellus")
       && p.getAttribute(SUCELLUS_DEFEATED) && p.getAttribute(SUCELLUS_WEST_ROOM)) {
       const owned = spawned.get(p);
       if (owned?.sucellusWestAssassin) {
@@ -7837,7 +8057,7 @@ module.exports = function registerDesertTreasureII(api) {
       }
       p.setAttribute(SUCELLUS_WEST_ASSASSIN_TALKED, true);
     }
-    if (stage(p) === S.VARDORVIS && Number(p.getAttribute(VARDORVIS_PROGRESS)) === 18 && stepId === "4muMDK") {
+    if (inChapter(p, "vardorvis") && Number(p.getAttribute(VARDORVIS_PROGRESS)) === 18 && stepId === "4muMDK") {
       const area = p.getAttribute(ATTR_STRANGLEWOOD_TEMPLE);
       if (!(area instanceof StranglewoodTempleArea) || area.isDestroyed() || !has(p, I.TEMPLE_KEY_3)) {
         event.handled = true;
@@ -7850,12 +8070,12 @@ module.exports = function registerDesertTreasureII(api) {
       p.setAttribute(VARDORVIS_PROGRESS, 19);
       spawnTempleKasonde(p, area);
     }
-    if (stage(p) === S.VARDORVIS && Number(p.getAttribute(VARDORVIS_PROGRESS)) === 20 && stepId === "ZEXv_C") {
+    if (inChapter(p, "vardorvis") && Number(p.getAttribute(VARDORVIS_PROGRESS)) === 20 && stepId === "ZEXv_C") {
       p.setAttribute(VARDORVIS_PROGRESS, 21);
       const owned = spawned.get(p);
       if (owned?.kasondeInjured) { api.removeNpc(owned.kasondeInjured); owned.kasondeInjured = null; }
     }
-    if (stage(p) === S.VARDORVIS && [13, 14].includes(Number(p.getAttribute(VARDORVIS_PROGRESS)))
+    if (inChapter(p, "vardorvis") && [13, 14].includes(Number(p.getAttribute(VARDORVIS_PROGRESS)))
       && ["ixrOLP", "e7yS62"].includes(stepId)) {
       if (![I.UNFINISHED_SERUM, I.UNFINISHED_SERUM_2, I.STRANGLER_SERUM].some(id => has(p, id))) {
         if (p.getInventory().getFreeSlots() < 1) {
@@ -7868,7 +8088,7 @@ module.exports = function registerDesertTreasureII(api) {
       }
       p.setAttribute(VARDORVIS_PROGRESS, 14);
     }
-    if (stage(p) === S.VARDORVIS && Number(p.getAttribute(VARDORVIS_PROGRESS)) === 6 && stepId === "nJRAbJ") {
+    if (inChapter(p, "vardorvis") && Number(p.getAttribute(VARDORVIS_PROGRESS)) === 6 && stepId === "nJRAbJ") {
       p.setAttribute(STRANGLEWOOD_CITY_ENTERED, true);
       // shortcut: adjacent house landing is inferred from the cache, calibrate against a live cutscene capture.
       p.moveTo(new api.core.Location(1193, 3405, 0));
@@ -7879,17 +8099,17 @@ module.exports = function registerDesertTreasureII(api) {
       if (owned?.banikan) { api.removeNpc(owned.banikan); delete owned.banikan; }
     }
     const lassar = p.getAttribute(LASSAR) ?? {};
-    if (stepId === "AYDmc1" && stage(p) === S.WHISPERER && has(p, I.PERFECTED_SHADOW_TORCH_SCHEMATIC_2)) {
+    if (stepId === "AYDmc1" && inChapter(p, "whisperer") && has(p, I.PERFECTED_SHADOW_TORCH_SCHEMATIC_2)) {
       p.getInventory().deleteNumber(I.PERFECTED_SHADOW_TORCH_SCHEMATIC_2, 1);
       setLassar(p, { ...lassar, perfectSchematicGiven: true, silentChoir: true });
     }
-    if (stepId === "1Y6l8H" && stage(p) === S.WHISPERER) {
+    if (stepId === "1Y6l8H" && inChapter(p, "whisperer")) {
       setLassar(p, { ...(p.getAttribute(LASSAR) ?? {}), visionStarted: true });
     }
-    if (stepId === "dUbk4i" && stage(p) === S.WHISPERER) {
+    if (stepId === "dUbk4i" && inChapter(p, "whisperer")) {
       p.moveTo(new api.core.Location(3232, 6308, 0));
     }
-    if (stepId === "8nNqFG" && stage(p) === S.WHISPERER) {
+    if (stepId === "8nNqFG" && inChapter(p, "whisperer")) {
       const current = p.getAttribute(LASSAR) ?? {};
       p.moveTo(new api.core.Location(2648, 6442, 0));
       setLassar(p, { ...current, escapedVision: true, perfectTorchSchematic: true });
@@ -7898,23 +8118,23 @@ module.exports = function registerDesertTreasureII(api) {
       setLassar(p, { ...lassar, ramarno: true });
     }
     if (stepId === LASSAR_ACTIONS.rope || stepId === LASSAR_ACTIONS.ropeAgain) {
-      if (stage(p) === S.WHISPERER && !has(p, I.VERY_LONG_ROPE)) {
+      if (inChapter(p, "whisperer") && !has(p, I.VERY_LONG_ROPE)) {
         p.getInventory().adds(I.VERY_LONG_ROPE, 1);
         p.sendMessage("Prescott gives you a very long rope.");
         setLassar(p, { ...lassar, ramarno: true, rope: true });
       }
     }
-    if (["JQeeJF", "foYwmu", "sBouA5"].includes(stepId) && stage(p) === S.WHISPERER && has(p, I.RING_OF_VISIBILITY)) {
+    if (["JQeeJF", "foYwmu", "sBouA5"].includes(stepId) && inChapter(p, "whisperer") && has(p, I.RING_OF_VISIBILITY)) {
       const current = p.getAttribute(LASSAR) ?? {};
       setLassar(p, { ...current, ringShown: true });
     }
-    if (["5mQjA2", "FLyW0o", "WWa1TU"].includes(stepId) && stage(p) === S.WHISPERER) {
+    if (["5mQjA2", "FLyW0o", "WWa1TU"].includes(stepId) && inChapter(p, "whisperer")) {
       const current = p.getAttribute(LASSAR) ?? {};
       if (!current.cameTo || !current.ringShown && !current.blackstone) return;
       if (!has(p, I.BLACKSTONE_FRAGMENT) && !has(p, I.BLACKSTONE_FRAGMENT_2) && !has(p, I.BLACKSTONE_FRAGMENT_3)) p.getInventory().adds(I.BLACKSTONE_FRAGMENT, 1);
       setLassar(p, { ...current, blackstone: true });
     }
-    if (stepId === "tOep7b" && stage(p) === S.WHISPERER) {
+    if (stepId === "tOep7b" && inChapter(p, "whisperer")) {
       const current = p.getAttribute(LASSAR) ?? {};
       if (has(p, I.SHADOW_BLOCKER_SCHEMATIC)) {
         p.getInventory().deleteNumber(I.SHADOW_BLOCKER_SCHEMATIC, 1);
@@ -7936,7 +8156,7 @@ module.exports = function registerDesertTreasureII(api) {
     if (stepId === "qEMxBM" && p.getAttribute("desert-treasure-ii:final-cell-pending")) {
       p.setAttribute("desert-treasure-ii:final-cell-pending", false);
       p.setAttribute(FINAL_CELL_ACTIVE, true);
-      p.getInventory().deleteNumber(I.WHISPERERS_MEDALLION, 1);
+      p.getInventory().deleteNumber(lastMedallion(p), 1);
       storeFinalCellGear(p);
       p.moveTo(new api.core.Location(3103, 9246, 0));
     }
@@ -7987,7 +8207,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("Sliske completes the spell and the Elder Horn vanishes in a burst of shadow.");
     }
     if (stepId === "xGIiPZ" && p.getAttribute(FINAL_WIGHTS_COMPLETE)) rewardFinalQuest(p);
-    if (stepId === "4b6oDl" && stage(p) === S.LEVIATHAN && p.getAttribute(SCAR_BOAT_TRIED)) {
+    if (stepId === "4b6oDl" && inChapter(p, "leviathan") && p.getAttribute(SCAR_BOAT_TRIED)) {
       const area = p.getAttribute(ATTR_SCAR_AREA);
       if (area instanceof ScarArea && !area.isDestroyed()) p.moveTo(area.tile(51, 43, 0));
     }
@@ -7997,7 +8217,7 @@ module.exports = function registerDesertTreasureII(api) {
     // The wiki transcript encodes this branch's continuation as a jump marker,
     // so it never emits the action id handled above. Record the conversation
     // when the player actually chooses the archaeologist question.
-    if (stage(p) !== S.WHISPERER || option !== "Have you seen any archeologists around here?") return;
+    if (!inChapter(p, "whisperer") || option !== "Have you seen any archeologists around here?") return;
     const state = p.getAttribute(LASSAR) ?? {};
     if (!state.ramarno) setLassar(p, { ...state, ramarno: true });
     ensurePrescott(p);
@@ -8009,11 +8229,11 @@ module.exports = function registerDesertTreasureII(api) {
     const x = location?.x, y = location?.y, z = location?.z ?? 0;
     if (visibleId === 48199 && option === "use"
       && LASSAR_PUDDLE_TILES.some(([px, py]) => px === x && py === y)
-      && stage(p) !== S.WHISPERER) {
+      && !inChapter(p, "whisperer")) {
       p.sendMessage("This black puddle only answers to the Blackstone fragment during the Whisperer chapter.");
       return true;
     }
-    if (stage(p) !== S.WHISPERER || !location) return false;
+    if (!inChapter(p, "whisperer") || !location) return false;
 
     // Prescott's route starts on the real Camdozaal sinkhole. Tying the rope
     // consumes his rope, and descending lands at Lassar's cache rope entrance.
@@ -8360,7 +8580,7 @@ module.exports = function registerDesertTreasureII(api) {
       return;
     }
     // Gate/Open is owned by Doors before the quest object hook runs.
-    if (stage(p) === S.WHISPERER && state.drainEntered
+    if (inChapter(p, "whisperer") && state.drainEntered
       && x === 2784 && y === 6287 && (location?.getZ?.() ?? location?.z) === 1
       && event.objectId === 48301 && event.clickType === 1) {
       if (!has(p, I.STRANGE_ICON)) {
@@ -8372,7 +8592,7 @@ module.exports = function registerDesertTreasureII(api) {
       // Leave the cache door's movement and collision to the shared handler.
       return;
     }
-    if (stage(p) === S.WHISPERER && state.inShadow && !state.pubOpened
+    if (inChapter(p, "whisperer") && state.inShadow && !state.pubOpened
       && (x === 2384 || x === 2385) && (y === 6427 || y === 6428)
       && [O.DOORS_21, O.DOORS_22, O.DOORS_29, O.DOORS_30, O.DOORS_31, O.DOORS_32].includes(event.objectId)
       && event.clickType === 1) {
@@ -8393,14 +8613,14 @@ module.exports = function registerDesertTreasureII(api) {
       // Let the shared Doors plugin swing the real cache leaves after this gate.
     }
     const barrier = (x === 2417 && y === 6413) || (x === 2424 && y === 6439);
-    if (stage(p) === S.WHISPERER && state.inShadow && barrier
+    if (inChapter(p, "whisperer") && state.inShadow && barrier
       && [O.DOORS_21, O.DOORS_22].includes(event.objectId) && event.clickType === 1
       && !state.tentacles?.[`${x},${y}`]) {
       p.sendMessage("Shadow tentacles cover the doors. Use the basic shadow torch on them.");
       event.handled = true;
       return;
     }
-    if (stage(p) !== S.WHISPERER || !state.inShadow || !location
+    if (!inChapter(p, "whisperer") || !state.inShadow || !location
       || x !== 2350 || y !== 6360 || event.objectId !== 48289
       || event.clickType !== 1) return;
     if (state.doorUnlocked) return;
@@ -8440,7 +8660,7 @@ module.exports = function registerDesertTreasureII(api) {
 
   function routeLassarSinkhole(event) {
     const location = event.object?.getLocation?.();
-    if (stage(event.player) !== S.WHISPERER || event.clickType !== 1 || !location
+    if (!inChapter(event.player, "whisperer") || event.clickType !== 1 || !location
       || location.getX() !== 2922 || location.getY() !== 5827 || location.getZ() !== 0
       || ![49477, 48195, 48196, 48197].includes(event.objectId)) return;
     // The cache rock occupies the only tile adjacent to the hole. Route the
@@ -8501,7 +8721,7 @@ module.exports = function registerDesertTreasureII(api) {
 
   function handleLassarGroundItemPickup(event) {
     const { player: p, groundItemId, location } = event;
-    if (stage(p) !== S.WHISPERER || ![I.BASIC_SHADOW_TORCH_SCHEMATIC, I.REVITALISING_IDOL_SCHEMATIC, I.SHADOW_KEY_2, I.SHADOW_KEY_3,
+    if (!inChapter(p, "whisperer") || ![I.BASIC_SHADOW_TORCH_SCHEMATIC, I.REVITALISING_IDOL_SCHEMATIC, I.SHADOW_KEY_2, I.SHADOW_KEY_3,
       I.SHADOW_KEY_4, I.SHADOW_BLOCKER_SCHEMATIC, I.SHADOW_KEY_5, I.SHADOW_KEY,
       I.SUPERIOR_SHADOW_TORCH_SCHEMATIC, I.ANIMA_PORTAL_SCHEMATIC].includes(groundItemId)) return;
     const state = p.getAttribute(LASSAR) ?? {};
@@ -8560,6 +8780,7 @@ module.exports = function registerDesertTreasureII(api) {
   api.persistAttribute(STRANGLEWOOD_CITY_ENTERED);
   api.persistAttribute(ATTR_SMITH_INTRO);
   api.persistAttribute(STATUES_PLACED);
+  [MEDALLIONS_FOUND, BOSSES_STARTED, MEDALLION_ORDER, PURSUER_EVENTS].forEach((key) => api.persistAttribute(key, 0));
   api.persistAttribute(ATTR_FIRST_MEDALLION_MEETING);
   [FINAL_CELL_ACTIVE, FINAL_CELL_SOLUTION, FINAL_CELL_GUESS, FINAL_CELL_ATTEMPTS, FINAL_CELL_OPEN, FINAL_CELL_GEAR,
     FINAL_CELL_CHEST, FINAL_FIGURE_STARTED, FINAL_FIGURE_DEFEATED, "desert-treasure-ii:final-cell-pending",
@@ -8648,12 +8869,12 @@ module.exports = function registerDesertTreasureII(api) {
   api.onNpcInteraction("Catalytic Guardian", { "Talk-to": talkCatalyticGuardian });
   api.onNpcInteraction("<col=00ffff>Catalyst</col>", { Observe: inspectScarCatalyst });
   api.onNpcInteraction("Light leech", { "Take-lure": takeScarLightLure });
-  api.onNpcInteraction("Vardorvis", { "Talk-to": handleBossTalk });
-  api.onNpcInteraction("The Leviathan", { "Talk-to": handleBossTalk });
-  api.onNpcInteraction("Duke Sucellus", { "Talk-to": handleBossTalk });
+  api.onNpcInteraction("Vardorvis", { "Talk-to": talkVardorvisBoss });
+  api.onNpcInteraction("The Leviathan", { "Talk-to": talkLeviathanBoss });
+  api.onNpcInteraction("Duke Sucellus", { "Talk-to": talkSucellusBoss });
   api.onNpcInteraction("Assassin", { "Talk-to": talkSucellusWestAssassin });
-  api.onNpcInteraction("The Whisperer", { "Talk-to": handleBossTalk });
-  api.onNpcInteraction("Odd Figure", { Disturb: handleBossTalk, "Talk-to": handleBossTalk });
+  api.onNpcInteraction("The Whisperer", { "Talk-to": talkWhispererBoss });
+  api.onNpcInteraction("Odd Figure", { Disturb: talkWhispererBoss, "Talk-to": talkWhispererBoss });
   api.onNpcDeath(handleDeath);
   api.registerNpcCombatMethodProvider(N.VARDORVIS_2, VardorvisCombat);
   api.registerNpcCombatMethodProvider(N.THE_FORSAKEN_ASSASSIN, FinalAssassinCombat);

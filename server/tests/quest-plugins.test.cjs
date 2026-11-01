@@ -7576,9 +7576,11 @@ test('Desert Treasure II requires each medallion on its matching Vault statue an
       deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
       adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
     }),
-    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+    getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, value) => varbits.set(id, value) : () => {} }),
+    getDialogueManager: () => ({ startDialogues: (chain) => boxes.push(chain), reset() {} }),
     moveTo(location) { this.location = location; }, sendMessage() {},
   };
+  const varbits = new Map(), boxes = [];
   quest.setStage(p, 7);
   attrs.set('desert-treasure-ii:vardorvis-progress', 22);
   attrs.set('desert-treasure-ii:first-medallion-meeting', true);
@@ -7592,11 +7594,16 @@ test('Desert Treasure II requires each medallion on its matching Vault statue an
   assert.equal(itemHooks[0](placement), true);
   assert.equal(placement.handled, true, 'the packet handler does not send the unhandled-item fallback');
   assert.equal(counts.get(I.VARDORVIS_MEDALLION), 0);
-  assert.equal(quest.getStage(p), 8);
+  assert.equal(quest.getStage(p), 7, 'the chapters stay open: any of the other three can come next');
   assert.equal(attrs.get('desert-treasure-ii:medallions-placed'), 1);
+  // rsprox 1703: dt2_stranglewood 54 -> 56, dt2 52 -> 54 and dt2_first_medallion 1 on the same tick.
+  assert.equal(varbits.get(15125), 56);
+  assert.equal(varbits.get(14862), 54);
+  assert.equal(varbits.get(15132), 1);
+  assert.equal(boxes.length, 1, 'the medallion shows in an objectbox');
 });
 
-test('Desert Treasure II consumes the four earned medallions in route order before the final vault', () => {
+test('Desert Treasure II takes the medallions in any order and the fourth only after the last-medallion trial', () => {
   const { api: base } = mockApi();
   const objectHooks = [], itemHooks = [];
   class TestInstance {
@@ -7637,9 +7644,11 @@ test('Desert Treasure II consumes the four earned medallions in route order befo
       deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
       adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
     }),
-    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+    getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, value) => varbits.set(id, value) : () => {} }),
+    getDialogueManager: () => ({ startDialogues() {}, reset() {} }),
     moveTo(location) { this.location = location; }, sendMessage() {},
   };
+  const varbits = new Map();
   quest.setStage(player, 7);
   const outerDoor = { player, objectId: O.VAULT_DOOR_2, location: { x: 3511, y: 2970, z: 0 } };
   assert.equal(objectHooks[0](outerDoor), true);
@@ -7651,20 +7660,104 @@ test('Desert Treasure II consumes the four earned medallions in route order befo
     itemHooks[0](event);
     return event;
   };
-  assert.equal(placement(49499, 0, I.VARDORVIS_MEDALLION).handled, true);
-  assert.equal(quest.getStage(player), 8);
-  assert.equal(placement(49505, 3, I.PERSERIYAS_MEDALLION).handled, true);
-  assert.equal(quest.getStage(player), 9);
+  // A different order from the captured one (Vardorvis, Leviathan, Sucellus, Whisperer).
+  attrs.set('desert-treasure-ii:medallions-found', 15);
   assert.equal(placement(49503, 2, I.SUCELLUS_MEDALLION).handled, true);
-  assert.equal(quest.getStage(player), 10);
+  assert.equal(quest.getStage(player), 7);
   assert.equal(placement(49501, 1, I.WHISPERERS_MEDALLION).handled, true);
+  assert.equal(placement(49499, 0, I.VARDORVIS_MEDALLION).handled, true);
+  assert.equal(quest.getStage(player), 7);
+  assert.deepEqual([15132, 15133, 15134, 15135].map(id => varbits.get(id)), [3, 2, 1, 4],
+    'placing the third medallion fills the fourth slot with the remaining chapter');
+  assert.equal(placement(49505, 3, I.PERSERIYAS_MEDALLION).handled, false,
+    'the last medallion waits for the Mysterious Figure\'s trial');
+  attrs.set('desert-treasure-ii:final-figure-defeated', true);
+  assert.equal(placement(49505, 3, I.PERSERIYAS_MEDALLION).handled, true);
   assert.equal(quest.getStage(player), 11);
   assert.equal(attrs.get('desert-treasure-ii:medallions-placed'), 15);
   assert.equal(quest.varbitValue(quest.getStage(player), player), 100,
     'the fourth earned medal opens the final quest milestone before the cutscene starts');
+  assert.deepEqual([15125, 15126, 15127, 15128].map(id => varbits.get(id)), [56, 48, 70, 50]);
   for (const medal of [I.VARDORVIS_MEDALLION, I.PERSERIYAS_MEDALLION, I.SUCELLUS_MEDALLION, I.WHISPERERS_MEDALLION]) {
     assert.equal(counts.get(medal), 0, `the ${medal} is consumed by its matching statue`);
   }
+});
+
+test('Desert Treasure II meets the Mysterious Figure at the vault door with the second and third medallions, in any chapter', () => {
+  const { api: base } = mockApi();
+  const objectHooks = [], spawnedNpcs = [], removed = [];
+  class TestInstance {
+    constructor() { this.entities = []; }
+    setChunk() {} enter() {} leave() {} postLeave() {}
+    getBaseX() { return 8192; } getBaseY() { return 1600; }
+    tile(x, y, z) { return { x: 8192 + x, y: 1600 + y, z }; }
+    add(npc) { this.entities.push(npc); } isDestroyed() { return false; } destroy() {}
+  }
+  const core = {
+    ...base.core,
+    TemplatedInstanceArea: TestInstance,
+    NPC: { create: (id, location) => ({ id, location, setOwner() {}, setOwnerOnly() {}, isNpc() { return true; }, getAsNpc() { return this; } }) },
+    World: { getAddNPCQueue: () => [], getRemoveNPCQueue: () => [] },
+  };
+  const api = new Proxy(base, {
+    get: (target, prop) => prop === 'core' ? core
+      : prop === 'onObjectInteraction' ? (handler) => objectHooks.push(handler)
+        : prop === 'spawnNpc' ? (spec) => { const npc = { ...spec, said: [], forceChat(text) { this.said.push(text); } }; spawnedNpcs.push(npc); return npc; }
+          : prop === 'removeNpc' ? (npc) => removed.push(npc)
+            : typeof target[prop] === 'function' ? target[prop].bind(target) : target[prop],
+  });
+  require('../plugins/quests/quests/DesertTreasureII.Quest')(api);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().at(-1);
+  const { ItemIdentifiers: I, ObjectIdentifiers: O, NpcIdentifiers: N } = core;
+  const attrs = new Map(), counts = new Map(), varbits = new Map();
+  const p = {
+    getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getUsername: () => 'Blurite Rock', getSkillManager: () => ({ getMaxLevel: () => 99 }),
+    getInventory: () => ({ getAmount: (id) => counts.get(id) ?? 0 }),
+    getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, value) => varbits.set(id, value) : () => {} }),
+    moveTo(location) { this.location = location; }, sendMessage() {},
+  };
+  const door = () => objectHooks[0]({ player: p, objectId: O.VAULT_DOOR_2, location: { x: 3511, y: 2970, z: 0 } });
+  quest.setStage(p, 7);
+  // The Whisperer's medallion placed first, then Sucellus' carried: the second medallion.
+  attrs.set('desert-treasure-ii:medallions-placed', 2);
+  attrs.set('desert-treasure-ii:pursuer-events', 1);
+  attrs.set('desert-treasure-ii:medallions-found', 6);
+  counts.set(I.SUCELLUS_MEDALLION, 1);
+  assert.equal(door(), true);
+  assert.equal(attrs.get('desert-treasure-ii:ancient-vault'), undefined, 'the Figure stops the player at the door');
+  assert.equal(spawnedNpcs.length, 1);
+  assert.equal(spawnedNpcs[0].id, N.MYSTERIOUS_FIGURE_4, 'dt2_pursuer_overworld_combat (12300), rsprox 1703');
+  assert.deepEqual([spawnedNpcs[0].x, spawnedNpcs[0].y], [3506, 2971]);
+  assert.deepEqual(spawnedNpcs[0].said, ['Blurite Rock! Hand over the medallion!']);
+  assert.equal(attrs.get('desert-treasure-ii:pursuer-events'), 2);
+  assert.equal(door(), true);
+  assert.ok(attrs.get('desert-treasure-ii:ancient-vault'), 'the next click enters the vault');
+  assert.deepEqual(removed, [spawnedNpcs[0]], 'and she is gone');
+  assert.equal(spawnedNpcs.length, 1, 'one meeting per medallion');
+});
+
+test('Desert Treasure II moves saves at the old chapter stages onto the open chapters', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/DesertTreasureII.Quest')(api);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().at(-1);
+  const attrs = new Map(), varbits = new Map();
+  const player = {
+    getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getUsername: () => 'dt2-migration-test', getLocation: () => ({ x: 3300, y: 3200, z: 0 }), moveTo() {},
+    getInventory: () => ({ getAmount: () => 0 }), sendMessage() {},
+    getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, value) => varbits.set(id, value) : () => {} }),
+  };
+  // Old stage 9 (Sucellus): Vardorvis and Perseriya placed, the first meeting seen.
+  quest.setStage(player, 9);
+  attrs.set('desert-treasure-ii:medallions-placed', 9);
+  attrs.set('desert-treasure-ii:first-medallion-meeting', true);
+  handlers.playerLogin.find(handler => handler.name === 'handleLogin')({ player });
+  assert.equal(quest.getStage(player), 7);
+  assert.deepEqual([15132, 15133, 15134, 15135].map(id => varbits.get(id)), [1, 4, 0, 0]);
+  assert.deepEqual([15125, 15126, 15127, 15128].map(id => varbits.get(id)), [56, 2, 2, 50]);
+  assert.equal(varbits.get(14862), 66, 'as live after the second placed medallion (rsprox 1703)');
+  assert.equal(attrs.get('desert-treasure-ii:pursuer-events'), 2);
 });
 
 test('Desert Treasure II plays the first-medallion ambush before re-entering the Ancient Vault', () => {
@@ -7806,7 +7899,11 @@ test('Desert Treasure II last medallion route traps the player, requires solving
       } }),
       moveTo(location) { this.location = location; }, sendMessage() {},
     };
-    quest.setStage(p, 10);
+    // Vardorvis, Sucellus and Perseriya are placed; the Whisperer's medallion is the last one.
+    quest.setStage(p, 7);
+    attrs.set('desert-treasure-ii:medallions-placed', 13);
+    attrs.set('desert-treasure-ii:medallions-found', 15);
+    attrs.set('desert-treasure-ii:pursuer-events', 3);
     assert.equal(objectHooks[0]({ player: p, objectId: core.ObjectIdentifiers.VAULT_DOOR_2, location: { x: 3511, y: 2970, z: 0 } }), true);
     assert.equal(transcripts.at(-1).variant, 'the-desert-treasure-entering-the-ancient-vault-with-the-last-medallion');
     customEvents.find(({ name }) => name === 'npc-dialogue:action').handler({ player: p, stepId: 'qEMxBM' });
@@ -11088,6 +11185,8 @@ test('DT2 prison relog resumes only the saved clear tile at the matching earned 
   ]) attributes.set(key, value);
   const login = handlers.playerLogin.find(handler => handler.name === 'handleLogin');
   const logout = handlers.playerLogout.find(handler => handler.name === 'handleLogout');
+  // Logging out of the prison leaves the player at its exit; logging in there resumes it.
+  player.location = { x: 2927, y: 10353, z: 0 };
   login({ player });
   let area = attributes.get('desert-treasure-ii:sucellus-area');
   assert.deepEqual([player.location.x, player.location.y, player.location.z], [5047, 6039, 2],
@@ -11373,6 +11472,8 @@ test('Desert Treasure II prison escape leads to the cache Duke arena and require
   // A rebuilt private area has no awake NPC/HP snapshot. Its spent recipe must
   // be replayable from the live cache suppliers instead of locking the quest.
   quest.setStage(player, 9);
+  attrs.set('desert-treasure-ii:medallions-placed', 3);
+  attrs.delete('desert-treasure-ii:medallions-found');
   attrs.set('desert-treasure-ii:sucellus-defeated', false);
   attrs.set('desert-treasure-ii:sucellus-encounter-started', true);
   attrs.set('desert-treasure-ii:sucellus-poisons', 2);
@@ -11381,6 +11482,7 @@ test('Desert Treasure II prison escape leads to the cache Duke arena and require
   attrs.delete('desert-treasure-ii:sucellus-area');
   const login = handlers.playerLogin.find(handler => handler.name === 'handleLogin');
   assert.ok(login, 'DT2 restores its private prison on player login');
+  player.moveTo({ x: 2927, y: 10353, z: 0 }); // where leaving the prison puts the player
   login({ player });
   const recoveredArea = attrs.get('desert-treasure-ii:sucellus-area');
   assert.notEqual(recoveredArea, area, 'login reconstructs the destroyed private encounter area');
@@ -11398,6 +11500,7 @@ test('Desert Treasure II prison escape leads to the cache Duke arena and require
   attrs.set('desert-treasure-ii:sucellus-mushrooms', { musca: 3, arder: 3 });
   attrs.set('desert-treasure-ii:sucellus-vats', { filled: { powders: [I.MUSCA_POWDER, I.ARDER_POWDER], salt: 6 } });
   attrs.delete('desert-treasure-ii:sucellus-area');
+  player.moveTo({ x: 2927, y: 10353, z: 0 });
   login({ player });
   assert.equal(attrs.get('desert-treasure-ii:sucellus-poisons'), 0);
   assert.deepEqual(attrs.get('desert-treasure-ii:sucellus-mushrooms'), { musca: 0, arder: 0 });
@@ -17407,11 +17510,25 @@ test('DT2 keeps internal stages separate from native progress and the cache comp
   const attrs = new Map(), sent = [];
   const player = { getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
     getPacketSender: () => new Proxy({ sendVarbit: (id, value) => sent.push([id, value]) }, { get: (target, key) => target[key] ?? (() => {}) }) };
-  for (const [stage, value] of [[0,0], [1,4], [2,10], [3,12], [4,18], [5,20], [6,24], [7,42], [8,54], [9,66], [10,76], [11,100], [12,118]]) {
+  for (const [stage, value] of [[0,0], [1,4], [2,10], [3,12], [4,18], [5,20], [6,24], [7,42], [11,100], [12,118]]) {
     quest.setStage(player, stage);
     assert.equal(quest.getStage(player), stage);
     assert.equal(sent.findLast(([id]) => id === 14862)[1], value);
   }
+  // In the chapters, dt2 counts milestones whichever chapter they are in: rsprox 1703 reads 54
+  // with Vardorvis' medallion placed after its pursuer meeting, 66 with Perseriya's too.
+  quest.setStage(player, 7);
+  attrs.set('desert-treasure-ii:medallions-placed', 1);
+  attrs.set('desert-treasure-ii:pursuer-events', 1);
+  assert.equal(quest.varbitValue(7, player), 54);
+  attrs.set('desert-treasure-ii:medallions-placed', 9);
+  attrs.set('desert-treasure-ii:pursuer-events', 2);
+  assert.equal(quest.varbitValue(7, player), 66);
+  attrs.set('desert-treasure-ii:medallions-placed', 6);
+  assert.equal(quest.varbitValue(7, player), 66, 'Whisperer and Sucellus first count the same as the captured order');
+  attrs.set('desert-treasure-ii:medallions-placed', 0);
+  attrs.set('desert-treasure-ii:pursuer-events', 0);
+  for (const old of [8, 9, 10]) assert.equal(quest.varbitValue(old, player), 42, 'old chapter stages read as the open chapters');
   assert.equal(quest.varbitValue(12, player), api.core.CacheDefinitions.getDbRow(2343).int(19));
   attrs.set('quest.desert_treasure_ii.stage', 1);
   attrs.set('desert-treasure-ii:smith-intro', true);
@@ -17684,7 +17801,9 @@ test('DT2 shared NPC hooks fall through outside their own chapter and cannot spa
       for (const name of ['Elissa','Barus','Kasonde','Ramarno','Prescott','Wizard Persten','Captain Malleta','Ketla','Catalytic Guardian'])
         assert.equal(handlers.npcInteractions.get(name)['Talk-to']({player,npcId:ids[name.toUpperCase().replaceAll(' ','_')]}),false,name+' retains its normal dialogue');
     }
+    // Only Vardorvis' chapter is left: the other chapters' NPCs keep their normal dialogue.
     quest.setStage(player,7);
+    attrs.set('desert-treasure-ii:medallions-placed', 14);
     for (const [name,id] of [['Wizard Persten',ids.WIZARD_PERSTEN_5],['Captain Malleta',ids.CAPTAIN_MALLETA],['Ketla',ids.KETLA]])
       assert.equal(handlers.npcInteractions.get(name)['Talk-to']({player,npcId:id}),false,'unrelated NPCs cannot trigger Vardorvis');
   } finally { runtime.startTranscript = original; }

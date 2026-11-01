@@ -39,13 +39,14 @@ library, Soul Altar, crypt and Taverley) has been done.
   sends sound 1595 and the repair item box, so the repair now calls
   `quest.complete(player, { scroll: false, announce: false })`.
 - **fixed** The shelf search used an invented chat message. It now plays
-  `human_pickuptable` (832) and shows item box 19637 on the next tick with the
-  live "You find:" text.
+  `human_pickuptable` (832), then sends the inventory add and item box 19637
+  together on the next tick with the live "You find:" text.
 - **fixed** Reading advanced the stage and sent a chat message as the book
   opened. It now plays `human_readbook` (1350), advances 0 -> 1 and shows item
   box 19637 only when the book is closed.
 - **fixed** The book had 8 uncoloured spreads. It now has the live 9 spreads
-  (pages 1-18), with `<col=7f0000>` headings and the Wiki/capture pagination.
+  (pages 1-18), with `<col=7f0000>` headings and the capture's `if_settext`
+  pagination.
 - **fixed** Digging sent a chat line. It now plays `human_dig` (830), sound 1470
   and item box 19636 ("You have found the soul bearer.").
 - **fixed** Aretha's directions branch was only offered at stage 1. It is now
@@ -69,8 +70,17 @@ library, Soul Altar, crypt and Taverley) has been done.
 
 Recording 1702 (revision 226) was used as the live reference. The stage order
 (0 -> 1 on book close, 1 -> 2 during Aretha, 2 -> 3 at the repair) and the
-Aretha/Key Master words matched. The book pagination and heading colours were
-taken from the Wiki's live interface screenshots for pages 1-18.
+Aretha/Key Master words matched. The book pagination is the recording's exact
+`if_settext` lines for pages 1-18; the Wiki's live interface screenshots were
+used only to confirm the heading colours.
+
+Two timing differences were found in the review and fixed:
+
+- Spread 2 (pages 3-4) now wraps as the capture sends it: `fetters of its
+  flesh-temple, and` / `from the constraints of the` / `material world, the soul
+  is at` / `last free.`
+- The shelf now plays 832 on tick N and sends the inventory add and item box
+  together on N+1, instead of adding the book on the search tick.
 
 A live handler run on slot 25 confirmed the corrected behaviour:
 

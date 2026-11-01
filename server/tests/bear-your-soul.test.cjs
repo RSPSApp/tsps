@@ -148,13 +148,16 @@ test('Bear Your Soul: library book, Aretha, crypt dig and Key Master repair', ()
   h.object('Bookshelf', 'Search');
   assert.equal(h.items.get(SOUL_JOURNEY) ?? 0, 0);
 
-  // The unread book comes from a library shelf once, with the pickup animation
-  // and an item box on the next tick.
+  // The unread book comes from a library shelf once: the search animation plays
+  // on this tick, then the inventory add and the item box land together on the
+  // next one.
   h.setLocation(1632, 3808, 0);
   assert.equal(h.object('Bookshelf', 'Search'), true);
-  assert.equal(h.items.get(SOUL_JOURNEY), 1);
+  assert.equal(h.items.get(SOUL_JOURNEY) ?? 0, 0);
+  assert.equal(h.dialogueChain, null);
   assert.ok(h.animations.includes(832));
   h.advance();
+  assert.equal(h.items.get(SOUL_JOURNEY), 1);
   const foundBox = h.dialogueChain.getDialogues().get(0);
   assert.equal(foundBox.getItemId(), SOUL_JOURNEY);
   assert.match(foundBox.getText(), /You find:.*The Journey of Souls, by Aretha/);
@@ -283,6 +286,16 @@ test('Bear Your Soul: journal and quest metadata', () => {
   assert.equal(pages[0][44], 'If a culture does not respect');
   assert.equal(pages[0][58], 'privilege to study the soul');
   assert.equal(pages[1][44], '<col=7f0000>The River</col>');
+  // Spread 2 (pages 3-4) wraps as recording 1702's if_settext lines do.
+  assert.deepEqual(
+    [55, 56, 57, 58].map((line) => pages[1][line]),
+    [
+      'fetters of its flesh-temple, and',
+      'from the constraints of the',
+      'material world, the soul is at',
+      'last free.',
+    ]
+  );
   assert.equal(pages[2][60], "<col=7f0000>The Guardian's Keeper</col>");
   assert.equal(pages[4][44], '<col=7f0000>The Soul Altar</col>');
   assert.equal(pages[5][60], '<col=7f0000>The Ensouled</col>');

@@ -125,8 +125,12 @@ module.exports = function registerBearYourSoulQuest(api) {
       event.handled = true;
       return true;
     }
-    inventory(player).adds(SOUL_JOURNEY, 1);
-    later(player, 1, () => showItemBox(player, SOUL_JOURNEY, BOOK_FOUND_MESSAGE));
+    // Live plays the search on this tick, then sends the inventory add and the
+    // item box together on the next.
+    later(player, 1, () => {
+      inventory(player).adds(SOUL_JOURNEY, 1);
+      showItemBox(player, SOUL_JOURNEY, BOOK_FOUND_MESSAGE);
+    });
     event.handled = true;
     return true;
   }

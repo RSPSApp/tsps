@@ -26,6 +26,8 @@
  *   the items if listed, `thieving:success` { method: "stall", stall, itemId }.
  * - `pick { plants, count }`: a field's crop picked (by the plant: Wheat for its grain),
  *   `world:picked` { plant }; `pick-each { plants: { plant: count } }`: each of them that many.
+ * - `collection-log { category, count }`: that many of the category's slots filled, asked of the
+ *   log (`collection-log:slots`) when one fills (`collection-log:new-item`) and at login.
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -52,7 +54,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [] };
+  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map(), steal: [], pick: new Map(), pickEach: [], collectionLog: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "equip" || trigger?.kind === "equip-all") entry.equip.push(task);
@@ -69,6 +71,7 @@ function indexOf(type) {
     else if (trigger?.kind === "steal") entry.steal.push(task);
     else if (trigger?.kind === "pick") for (const plant of trigger.plants ?? []) add(entry.pick, plant, task);
     else if (trigger?.kind === "pick-each") entry.pickEach.push(task);
+    else if (trigger?.kind === "collection-log") entry.collectionLog.push(task);
     else if (trigger?.kind === "cast") for (const spell of trigger.spells ?? []) add(entry.cast, spell, task);
     else if (trigger?.kind === "agility-laps") for (const course of trigger.courses ?? []) add(entry.laps, course, task);
   }
@@ -257,12 +260,37 @@ function picked({ player, plant }) {
   }
 }
 
+/** Each open `collection-log` task whose category has its count of slots filled completes. */
+function checkCollectionLog(player, type) {
+  const tasks = indexOf(type).collectionLog;
+  if (!tasks.length) return;
+  const done = new Set(Common.completedIds(player));
+  const slots = new Map();
+  for (const task of tasks) {
+    if (done.has(task.id)) continue;
+    const { category } = task.trigger;
+    if (!slots.has(category)) {
+      const query = { player, category, count: null };
+      Common.api.emitCustomEvent("collection-log:slots", query);
+      slots.set(category, Number(query.count) || 0);
+    }
+    if (slots.get(category) >= Number(task.trigger.count)) Complete.complete(player, task.id, type);
+  }
+}
+
+function logged({ player }) {
+  const type = player ? Common.leagueOf(player) : null;
+  if (type !== null) checkCollectionLog(player, type);
+}
+
 function lapped({ player, course, count: laps }) {
   if (player) count(player, "laps", course, Number(laps ?? 1) || 1);
 }
 
 function login({ player, league }) {
-  if (Common.catalog(league)) checkWorn(player);
+  if (!Common.catalog(league)) return;
+  checkWorn(player);
+  checkCollectionLog(player, league);
 }
 
 module.exports = function attach(api) {
@@ -278,6 +306,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("treasure-trails:casket-opened", casket);
   api.onCustomEvent("agility:lap", lapped);
   api.onCustomEvent("food:eaten", ate);
+  api.onCustomEvent("collection-log:new-item", logged);
   api.onCustomEvent("world:picked", picked);
   api.onCustomEvent("magic:cast-committed", cast);
   api.onCustomEvent("magic:item-spell-cast", cast);

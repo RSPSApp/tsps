@@ -607,6 +607,13 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const item = [said.subject, named.subject].map((subject) => itemNamed(subject, items) ?? itemNamed(subject, items, ["", "Cooked "]) ?? (kind === "drink" ? itemNamed(`${subject}(4)`, items) : null)).find(Boolean);
     return item ? { trigger: { kind, items: [item.replace(/\(\d\)$/, "")], count: Math.max(named.count, said.count) } } : {};
   }
+  // "Fill 15 slots in the Hard Clue section of the Collection Log", "Gain 10 unique items from
+  // Reward casket (easy)": that many of the tier's Treasure Trails collection log slots filled.
+  if ((match = /^Fill (\d+) slots in the (Beginner|Easy|Medium|Hard|Elite|Master) Clue section of the Collection Log\.?$/i.exec(description))
+    || (match = /^Gain (an?|\d+) unique items? from (?:an? )?Reward casket \((beginner|easy|medium|hard|elite|master)\)\.?$/i.exec(description))) {
+    const tier = match[2][0].toUpperCase() + match[2].slice(1).toLowerCase();
+    return { trigger: { kind: "collection-log", category: `${tier} Treasure Trails`, count: /^an?$/i.test(match[1]) ? 1 : Number(match[1]) } };
+  }
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {
     return { trigger: { kind: "clue", tier: match[2].toLowerCase(), count: Number(match[1]) } };

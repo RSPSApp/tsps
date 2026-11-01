@@ -269,3 +269,17 @@ test("pick: crops from a field, by the plant (Pick 6 flax; 6 wheat, 6 cabbages a
   assert.equal(f.player.getInventory().getAmount(item("Grain")), 1);
   assert.deepEqual(f.player.getAttribute("league:task-progress")["pick-6-wheat-6-cabbages-and-6-potatoes"], { Wheat: 1 }, "counted per plant: wheat's grain");
 });
+
+test("collection-log: a tier's Treasure Trails slots filled, as the real log keeps them", (t) => {
+  const f = pactsCharacter(t);
+  const Data = require("../plugins/achievements/collectionlog/Data.CollectionLog");
+  const easy = Data.tabs().flatMap((tab) => tab.categories).find((category) => category.name === "Easy Treasure Trails");
+  assert.ok(easy?.items.length >= 50, "the cache's Easy Treasure Trails category");
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: easy.items[0], silent: true });
+  assert.ok(done(f, "gain-a-unique-item-from-an-easy-clue"), "the first slot");
+  assert.ok(!done(f, "fill-5-easy-clue-collection-log-slots"));
+  for (const itemId of easy.items.slice(1, 5)) PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId, silent: true });
+  assert.ok(done(f, "fill-5-easy-clue-collection-log-slots"), "the fifth");
+  PM.emitCustomEvent("collection-log:obtain", { player: f.player, itemId: easy.items[0], silent: true });
+  assert.ok(!done(f, "gain-10-unique-items-from-easy-clues"), "a slot already filled is no new one");
+});

@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast", "steal", "pick", "pick-each", "collection-log"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -539,6 +539,10 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("pick-6-wheat-6-cabbages-and-6-potatoes"), { kind: "pick-each", plants: { Wheat: 6, Cabbage: 6, Potato: 6 } });
   assert.equal(trigger("pick-a-winter-sq-irk"), undefined);
   assert.equal(trigger("pick-up-snapegrass"), undefined);
+
+  // The clue tiers' collection log slots: "Fill 15 slots" and "Gain 10 unique items from Reward casket".
+  assert.deepEqual(trigger("fill-15-hard-clue-collection-log-slots"), { kind: "collection-log", category: "Hard Treasure Trails", count: 15 });
+  assert.deepEqual(trigger("gain-a-unique-item-from-a-master-clue"), { kind: "collection-log", category: "Master Treasure Trails", count: 1 });
 
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");

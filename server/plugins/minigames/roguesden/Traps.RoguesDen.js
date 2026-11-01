@@ -171,7 +171,9 @@ function tick(run, movement) {
 
 /** Flash powder on a Rogue Guard blinds it for ten ticks. */
 function useFlashPowder(event) {
-  const { player, npc, itemId } = event;
+  // Item-on-NPC carries the clicked NPC as `target` (UseItemPacketListener); `npc` only exists on
+  // the NPC-option route events, so reading it here made every normal powder use a no-op.
+  const { player, target: npc, itemId } = event;
   if (itemId !== Common.itemIds.flashPowder) return false;
   if (!Common.npcIds.guards.includes(npc?.getId?.())) return false;
   if (!npc || npc.getLocation().getDistance(player.getLocation()) > 6) return false;
@@ -181,6 +183,7 @@ function useFlashPowder(event) {
   stunGuard(npc, (run?.ticks ?? 0) + FLASH_STUN_TICKS);
   player.sendMessage(Common.message("flashBlind"));
   player.sendMessage(Common.message("guardBlinded"));
+  event.handled = true;
   return true;
 }
 

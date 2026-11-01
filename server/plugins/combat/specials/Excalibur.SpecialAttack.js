@@ -1,5 +1,5 @@
 module.exports = function registerExcaliburSpecialAttack(api) {
-  const { CombatMethod, CombatSpecial, CombatType, ItemIdentifiers, Skill } = api.core;
+  const { CombatMethod, CombatSpecial, CombatType, ItemIdentifiers, Skill, Sound, Sounds } = api.core;
 
   const DRAIN = 100;
   const DEFENCE_BOOST = 8;
@@ -20,6 +20,8 @@ module.exports = function registerExcaliburSpecialAttack(api) {
         return;
       }
       const skillManager = character.getAsPlayer().getSkillManager();
+      // Sanctuary's own sound (Wiki: Sanctuary.wav; rsprox gameval `sanctuary`).
+      Sounds.sendSound(character, Sound.EXCALIBUR_SPECIAL);
       const current = skillManager.getCurrentLevel(Skill.DEFENCE);
       const cap = skillManager.getMaxLevel(Skill.DEFENCE) + DEFENCE_BOOST;
       // Visible boosts do not stack; a stronger existing boost is preserved.

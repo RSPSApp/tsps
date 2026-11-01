@@ -1,5 +1,5 @@
 module.exports = function registerZamorakGodswordSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, PendingHit, Priority, Sounds } = api.core;
+  const { Animation, CombatFactory, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, PendingHit, Priority, Sound, Sounds } = api.core;
 
   const DRAIN = 50;
   const FREEZE_SECONDS = 19.2; // 32 ticks, as Ice Barrage
@@ -11,7 +11,7 @@ module.exports = function registerZamorakGodswordSpecialAttack(api) {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.playAreaSoundAt(character, Sound.GODSWORD_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

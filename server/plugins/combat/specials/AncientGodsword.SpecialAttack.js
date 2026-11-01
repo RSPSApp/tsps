@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerAncientGodswordSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, HitDamage, HitMask, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sounds, Task, TaskManager } = api.core;
+  const { Animation, CombatSpecial, Graphic, HitDamage, HitMask, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sound, Sounds, Task, TaskManager } = api.core;
 
   const DRAIN = 50;
   const SLASH_DEFENCE_BONUS_INDEX = 1;
@@ -18,7 +18,7 @@ module.exports = function registerAncientGodswordSpecialAttack(api) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
       character.performGraphic(GRAPHIC);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.playAreaSoundAt(character, Sound.GODSWORD_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

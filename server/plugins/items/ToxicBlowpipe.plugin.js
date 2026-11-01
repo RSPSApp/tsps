@@ -359,6 +359,7 @@ function combatMethod(special) {
         .sendProjectile();
       core.Sounds.sendSound(character, core.Sound.THROW_DART);
       if (this.special) {
+        core.Sounds.sendSound(character, core.Sound.TOXIC_BLOWPIPE_SPECIAL);
         const drainAmount = player.getCombatSpecial?.()?.getDrainAmount?.() ?? 50;
         core.CombatSpecial.drain(player, drainAmount);
       }

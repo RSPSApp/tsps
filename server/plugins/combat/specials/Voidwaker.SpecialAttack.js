@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerVoidwakerSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds } = api.core;
 
   const DRAIN = 50;
   const SPECIAL_ANIMATION = new Animation(11240);
@@ -10,9 +10,11 @@ module.exports = function registerVoidwakerSpecialAttack(api) {
   class VoidwakerCombatMethod extends MeleeCombatMethod {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
-      super.start(character, target);
       character.performAnimation(SPECIAL_ANIMATION);
       character.performGraphic(SPECIAL_VFX);
+      // Demonbane cast, then the thunder (rsprox 1698).
+      Sounds.sendSound(character, Sound.VOIDWAKER_SPECIAL_1);
+      Sounds.sendSound(character, Sound.VOIDWAKER_SPECIAL_2);
     }
 
     handleAfterHitEffects(hit) {

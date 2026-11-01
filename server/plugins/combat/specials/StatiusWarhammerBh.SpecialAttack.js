@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerStatiusWarhammerBhSpecialAttack(api) {
-  const { CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = api.core;
 
   const DRAIN = 35;
   const SPECIAL_VFX = new Graphic(844);
@@ -9,8 +9,12 @@ module.exports = function registerStatiusWarhammerBhSpecialAttack(api) {
   class StatiusWarhammerBhCombatMethod extends MeleeCombatMethod {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
-      super.start(character, target);
+      const animation = character.getAttackAnim(target);
+      if (animation !== -1) {
+        character.performAnimation(new Animation(animation));
+      }
       character.performGraphic(SPECIAL_VFX);
+      Sounds.playAreaSoundAt(character, Sound.DRAGON_WARHAMMER_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

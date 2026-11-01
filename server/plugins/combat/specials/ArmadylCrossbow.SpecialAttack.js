@@ -27,7 +27,7 @@ module.exports = function registerArmadylCrossbowSpecialAttack(api) {
       const player = character.getAsPlayer();
       CombatSpecial.drain(player, DRAIN);
       player.performAnimation(ANIMATION);
-      Sounds.sendSound(character, Sound.SHOOT_CROSSBOW);
+      Sounds.playAreaSoundAt(character, Sound.ARMADYL_CROSSBOW_SPECIAL, 1);
       Projectile.createProjectile(character, target, 301, 50, 70, 44, 35).sendProjectile();
       CombatFactory.decrementAmmo(player, target.getLocation(), 1);
     }

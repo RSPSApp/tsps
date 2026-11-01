@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerSaradominGodswordSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sounds } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sound, Sounds } = api.core;
 
   const DRAIN = 50;
   const SLASH_DEFENCE_BONUS_INDEX = 1;
@@ -18,7 +18,7 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
       character.performGraphic(GRAPHIC);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.playAreaSoundAt(character, Sound.GODSWORD_SPECIAL);
     }
 
     handleAfterHitEffects(hit) {

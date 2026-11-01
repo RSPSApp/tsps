@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerDragonClawSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Sounds } = api.core;
+  const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Sound, Sounds } = api.core;
 
   const DRAIN = 50;
   const HIT_COUNT = 4;
@@ -69,7 +69,11 @@ module.exports = function registerDragonClawSpecialAttack(api) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
       character.performGraphic(GRAPHIC);
-      Sounds.sendSound(character, character.getAttackSound());
+      // Slice and Dice: one area sound per hit, with the captured stagger (rsprox 4014).
+      Sounds.playAreaSoundAt(character, Sound.DRAGON_CLAWS_SPECIAL_1);
+      Sounds.playAreaSoundAt(character, Sound.DRAGON_CLAWS_SPECIAL_2);
+      Sounds.playAreaSoundAt(character, Sound.DRAGON_CLAWS_SPECIAL_3);
+      Sounds.playAreaSoundAt(character, Sound.DRAGON_CLAWS_SPECIAL_4);
     }
   }
 

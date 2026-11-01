@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerBurningClawsSpecialAttack(api) {
-  const { Animation, CombatSpecial, Graphic, HitDamage, HitMask, ItemIdentifiers, MeleeCombatMethod, Task, TaskManager } = api.core;
+  const { Animation, CombatSpecial, Graphic, HitDamage, HitMask, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds, Task, TaskManager } = api.core;
 
   const DRAIN = 35;
   const SPECIAL_ANIMATION = new Animation(11140);
@@ -67,9 +67,11 @@ module.exports = function registerBurningClawsSpecialAttack(api) {
   class BurningClawsCombatMethod extends MeleeCombatMethod {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
-      super.start(character, target);
       character.performAnimation(SPECIAL_ANIMATION);
       character.performGraphic(SPECIAL_VFX);
+      // Live (rsprox 3327): two synth sounds 29 and 60 cycles after the special starts.
+      Sounds.sendSound(character, Sound.BURNING_CLAWS_SPECIAL_1);
+      Sounds.sendSound(character, Sound.BURNING_CLAWS_SPECIAL_2);
     }
 
     handleAfterHitEffects(hit) {

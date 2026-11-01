@@ -2,7 +2,7 @@
 // 50% special energy, an 8-tick bind (4.8s) and a ~50% chance to poison for 4
 // damage. Both the bind and the poison apply on activation, hit or miss.
 module.exports = function registerAbyssalTentacleSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Misc, Sounds } = api.core;
+  const { Animation, CombatFactory, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Misc, Sound, Sounds } = api.core;
 
   const DRAIN = 50;
   const ACCURACY_MULTIPLIER = 1.25;
@@ -18,7 +18,7 @@ module.exports = function registerAbyssalTentacleSpecialAttack(api) {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
       character.performAnimation(ANIMATION);
-      Sounds.sendSound(character, character.getAttackSound());
+      Sounds.sendSound(character, Sound.WHIP_SPECIAL);
 
       // Binding Tentacle binds and poisons on activation, so even an inaccurate
       // special still applies both rolls.

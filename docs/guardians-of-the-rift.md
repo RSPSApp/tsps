@@ -162,6 +162,8 @@ Ticks from the rift opening:
 - **Closed barrier (`gotr_barrier_closed`, Leagues: worlds that lock the game):** mesbox "It looks
   like the rift is already being guarded. You must wait until they are done to join." Not used:
   only themed worlds can lock it.
+- **The barrier loc** swaps to `gotr_barrier_noentry` (53263) when the game ends and back to
+  `gotr_barrier` when the Portal Guardians close their rifts (capture 1840).
 - **From the full charge until the Portal Guardians close their rifts, from outside:** mesbox "It looks like the adventurers
   within are just finishing up. You must wait until they are done to join."
 - **Leaving through the barrier:** `gotr_is_playing` 0, game id 0, both energies 0,
@@ -279,7 +281,8 @@ Ticks from the rift opening:
     absorbs a small/moderate/high/immense amount of excess energy."
   - Cell tiers (Wiki): weak at air, mind and body; medium at water, cosmic and chaos; strong at
     earth, nature and law; overcharged at fire, death and blood.
-  - Portal talismans (Wiki): 1/250 an essence unless Toggle-talisman turned them off; "You
+  - Portal talismans (Wiki): 1/250 an essence unless Toggle-talisman turned them off, and they
+    stack past one (capture 566); "You
     discover a strange talisman during the runecrafting process!" (Leagues capture).
   - Combination runes and polyelemental stones aren't built.
 - **Portal talisman on its Guardian (Wiki):** enters even while the Guardian is dormant. It's
@@ -368,6 +371,8 @@ Ticks from the rift opening:
   - All guardians die at full power (Wiki). The HUD's "n/10" counts them.
 - **Players may place cells and assemble guardians in the lobby** (captured between games). Both
   the barriers and the guardians carry into the game.
+- **One charged cell at a time** (Wiki): Take on the weak cells refuses while one is held; the
+  refusal's wording ("You can only carry one charged cell at a time.") is ours.
 - Once the quest is done, Temple of the Eye no longer spawns its owner-only Cordelia, Felix, Tamara
   and Great Guardian. The minigame's world spawns stand there.
 
@@ -389,15 +394,19 @@ Ticks from the rift opening:
     rift guardians 3-6 by cell tier. Everyone attacks every 4 ticks. These are ours.
 - **Animations** (`npc-combat-defs.json`):
   - The creatures use their `gotr_abyssal_*` attack, defend and death sequences.
-  - Rift guardians use `rift_guardian_attack_melee` (beside the target) or `_attack_ranged`
-    (within 7), `rift_guardian_defend_melee` and `rift_guardian_death`.
+  - Elemental guardians (11414-11417) only fight beside a creature, with
+    `rift_guardian_attack_melee` and `_defend_melee`; catalytic ones (11408, 11411-11413) only at
+    range (within 7), with `_attack_ranged` and `_defend_ranged` (capture 1840). Both die with
+    `rift_guardian_death`.
+  - A hit that doesn't kill plays the target's defend sequence (9388/9391/9395 for the creatures).
   - Barrier NPCs have none. Every one has respawn 0.
   - The rift guardians' captured projectile has no graphic (spotanim -1), so none is drawn.
 - **Targets** (Wiki):
   - Creatures go for the nearest standing barrier, else the Great Guardian.
   - They fight back only against a rift guardian that struck them, while it's beside them.
   - Rift guardians go for the nearest creature within 10 tiles.
-- **The Great Guardian:** each creature hit drains its power. The busy world's barriers never let
+- **The Great Guardian** plays `9372` every 50 ticks of a game (capture 1840). The close's map anims
+  (2064 x3, sound 5406) aren't built. Each creature hit drains its power. The busy world's barriers never let
   one through, so the drain (leech 1, walker 2, abyssal guardian 3 a hit) is ours. At 0% the game
   is lost.
 - **At full power** every creature and rift guardian dies (Wiki).
@@ -466,10 +475,12 @@ Ticks from the rift opening:
 
 ## Existing code it touches
 
-- **Temple of the Eye (`plugins/quests/quests/TempleOfTheEye.Quest.js`)** runs the tutorial in
-  the same temple. Minigame handlers register first (plugins load by path) and step aside for
-  anyone who hasn't finished the quest, so the tutorial plays as before. Once the quest is done it
-  no longer spawns its owner-only Cordelia, Felix, Tamara and Great Guardian.
+- **Temple of the Eye (`plugins/quests/quests/TempleOfTheEye.Quest.js`)** runs its scenes on the
+  temple's two template squares, not here: the untouched temple at 2368-2431,5632-5695 and the
+  tutorial's at 2432-2495,5696-5759 (Quest Helper's tiles and capture 1693's cameras). Minigame
+  handlers register first (plugins load by path) and step aside for anyone who hasn't finished
+  the quest. A relog during the tutorial keeps its items (`Temple.login` only strips finished
+  players).
 - **Runecrafting (`plugins/skills/Runecrafting.plugin.js`):**
   - The essence pouches move to `runecrafting/Pouches.Runecrafting.js`.
   - It answers "runecrafting:altar-rune" so GotR crafts with its rune data.

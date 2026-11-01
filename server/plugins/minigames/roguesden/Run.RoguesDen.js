@@ -156,7 +156,13 @@ function finish(player, { reason = "left", logout = false, reward = false, silen
   player.setAttribute(RETURN_ATTRIBUTE, false);
   player.getMovementQueue?.().setBlockMovement?.(false);
 
-  if (logout) return;
+  if (logout) {
+    // This runs from the area's postLeave, before Player.onLogout saves: the player has to stand
+    // in the lobby already, or the save stores maze tiles after recovery was cleared and logging
+    // back in resumes a fresh run where the old one ended.
+    teleportLobby(player);
+    return;
+  }
 
   const leave = !silent;
   if (leave) {
@@ -252,12 +258,11 @@ function recoverOnLogin({ player }) {
 }
 
 function endOnLogout({ player }) {
+  // The area's postLeave has usually ended the run already; this only covers a player saved
+  // mid-run whose area was not tracked. finish moves to the lobby in its logout path.
   const run = runOf(player);
   if (!run) return;
   finish(player, { reason: "logout", logout: true });
-  const [x, y, z] = Common.DATA.lobby.entryTile;
-  const core = Common.core();
-  player.moveTo(new core.Location(x, y, z));
 }
 
 function attach(api) {

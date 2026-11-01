@@ -186,12 +186,11 @@ function shortcutDoor(event) {
 function searchTrap(event) {
   const { player, object } = event;
   if (String(event.option).toLowerCase() !== "search") return false;
-  const key = Common.keyOf(object.getLocation());
-  const run = Run.runOf(player);
-  const floor = Common.floorTraps.get(key);
-  const wall = Common.wallTraps.get(key);
-  const trap = floor ?? wall;
+  const floor = Common.floorTraps.get(Common.keyOf(object.getLocation()));
+  // Wall traps are indexed by the tile they face, so the click's own loc resolves to the record.
+  const trap = floor ?? Common.wallTrapFor(object);
   if (!trap) return false;
+  const run = Run.runOf(player);
   if (trap.disarmedBy === player) {
     player.sendMessage(Common.message("disarmTrap"));
     event.handled = true;

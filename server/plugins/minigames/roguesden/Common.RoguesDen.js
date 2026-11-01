@@ -28,6 +28,7 @@ const objectsById = new Map();
 const objectsByTile = new Map();
 const floorTraps = new Map();
 const wallTraps = new Map();
+const wallTrapObjects = new Map();
 const spinningTiles = new Set();
 const pendulumTiles = new Set();
 const floorBladeTiles = new Set();
@@ -103,13 +104,41 @@ function footprint(object, definition) {
   return tiles;
 }
 
-function addWallTrigger(map, object, id) {
+/**
+ * Indexes a wall obstacle by the tiles it faces, which is where it triggers. Every trigger tile
+ * of one wall shares a record, so disarming it covers the whole wall. `sources`, when given, also
+ * indexes the record by the wall's own tiles: a Search is clicked on those, not on the trigger.
+ */
+function addWallTrigger(map, object, id, sources = null) {
   const definition = core.CacheDefinitions.getObject(id);
   const face = object.getFace() & 3;
   const [dx, dy] = FACING[face];
-  for (const [x, y, z] of footprint(object, definition)) {
-    map.set(tileKey(x + dx, y + dy, z), { object, id, tile: [x, y, z], face });
+  const tiles = footprint(object, definition);
+  const trap = { object, id, face, triggers: [], disarmedBy: null };
+  for (const [x, y, z] of tiles) {
+    const key = tileKey(x + dx, y + dy, z);
+    trap.triggers.push(key);
+    map.set(key, trap);
   }
+  if (sources) {
+    sources.set(object, trap);
+    for (const [x, y, z] of tiles) sources.set(tileKey(x, y, z), trap);
+  }
+}
+
+/**
+ * The wall trap a Search was clicked on: the object itself, or the wall standing at its tile when
+ * the click carries another instance of it (the packet resolves its own loc).
+ */
+function wallTrapFor(object) {
+  const direct = wallTrapObjects.get(object);
+  if (direct) return direct;
+  for (const other of objectsByTile.get(keyOf(object.getLocation())) ?? []) {
+    if (other.getId() !== object.getId()) continue;
+    const trap = wallTrapObjects.get(other);
+    if (trap) return trap;
+  }
+  return null;
 }
 
 function addLedge(object, id) {
@@ -187,7 +216,7 @@ function scan() {
         case ids.wallSpikes:
         case ids.wallGas:
         case ids.wallCrusher:
-          addWallTrigger(wallTraps, object, id);
+          addWallTrigger(wallTraps, object, id, wallTrapObjects);
           break;
         case ids.spinningBlades:
           for (const [x, y, z] of footprint(object, core.CacheDefinitions.getObject(id))) spinningTiles.add(tileKey(x, y, z));
@@ -254,9 +283,12 @@ function rearmLeftTraps(player) {
   for (const trap of floorTraps.values()) {
     if (trap.disarmedBy === player && here !== tileKey(...trap.tile)) trap.disarmedBy = null;
   }
+  const seen = new Set();
   for (const map of [wallTraps, wallBlades]) {
-    for (const [triggerKey, trap] of map) {
-      if (trap.disarmedBy === player && here !== triggerKey) trap.disarmedBy = null;
+    for (const trap of map.values()) {
+      if (seen.has(trap)) continue;
+      seen.add(trap);
+      if (trap.disarmedBy === player && !trap.triggers.includes(here)) trap.disarmedBy = null;
     }
   }
 }
@@ -316,11 +348,11 @@ function weighted(entries) {
 module.exports = {
   DATA, FACING, init, scan,
   ids, itemIds, npcIds,
-  objectsById, objectsByTile, floorTraps, wallTraps, spinningTiles, pendulumTiles,
+  objectsById, objectsByTile, floorTraps, wallTraps, wallTrapObjects, spinningTiles, pendulumTiles,
   floorBladeTiles, wallBlades, wallSaws, ledges, grills, passageways, doors,
   mazeSafes, lobbySafes, chests,
   tileKey, keyOf, walkable, inBounds, inMaze, inLobby, inSafeRoom, inGrillRoom,
-  footprint, resetTrapFor, rearmLeftTraps,
+  footprint, wallTrapFor, resetTrapFor, rearmLeftTraps,
   level, maxLevel, setLevel, message, hasItem, freeSlots, give, take, randomInt, weighted,
   api: () => api,
   core: () => core,

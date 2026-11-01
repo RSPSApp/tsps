@@ -18,6 +18,7 @@ const Common = require("./Common.LeagueTasks");
 const Complete = require("./Complete.LeagueTasks");
 
 const LEVEL_KINDS = new Set(["level", "any-level", "total-level", "base-level", "combat-level"]);
+const CA_KINDS = new Set(["ca-tier", "ca-count", "ca-bosses", "ca-boss"]);
 /** League type -> { kills: Map(lower-cased npc name -> tasks), levels: tasks, quests: Map(plain quest name -> tasks) }. */
 const index = new Map();
 /** Player -> task id -> this tick's kill credit { tick, deaths, events, credited }. */
@@ -28,7 +29,7 @@ const plainName = (name) => String(name ?? "").toLowerCase().replace(/^the /, ""
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], diaries: [] };
+  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], diaries: [], achievements: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (!trigger) continue;
@@ -40,6 +41,8 @@ function indexOf(type) {
       }
     } else if (LEVEL_KINDS.has(trigger.kind)) {
       entry.levels.push(task);
+    } else if (CA_KINDS.has(trigger.kind)) {
+      entry.achievements.push(task);
     } else if (trigger.kind === "diary") {
       entry.diaries.push(task);
     } else if (trigger.kind === "experience") {
@@ -123,6 +126,42 @@ function checkDiaries(player) {
     Common.api.emitCustomEvent("diary:is-complete", query);
     if (query.complete === true) Complete.complete(player, task.id, type);
   }
+}
+
+/** A monster's name as either side spells it ("Nightmare, The", "the Giant Mole"), compared plainly. */
+const monsterKey = (name) => plainName(String(name ?? "").replace(/^(.*), the$/i, "the $1"));
+
+/** Combat Achievements: a tier reached, a count of tasks (or speed tasks), every task of one monster or of N. */
+function checkAchievements(player) {
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const tasks = indexOf(type).achievements;
+  if (!tasks.length) return;
+  const done = new Set(Common.completedIds(player));
+  const summary = { player, completed: 0, speed: 0, monsters: [] };
+  Common.api.emitCustomEvent("combat-achievements:summary", summary);
+  const finished = new Set((summary.monsters ?? []).map(monsterKey));
+  for (const task of tasks) {
+    if (done.has(task.id)) continue;
+    const trigger = task.trigger;
+    let reached = false;
+    if (trigger.kind === "ca-tier") {
+      const query = { player, tier: trigger.tier, unlocked: false };
+      Common.api.emitCustomEvent("combat-achievements:tier", query);
+      reached = query.unlocked === true;
+    } else if (trigger.kind === "ca-count") {
+      reached = (trigger.type === "speed" ? summary.speed : summary.completed) >= trigger.count;
+    } else if (trigger.kind === "ca-bosses") {
+      reached = finished.size >= trigger.count;
+    } else if (trigger.kind === "ca-boss") {
+      reached = finished.has(monsterKey(trigger.monster));
+    }
+    if (reached) Complete.complete(player, task.id, type);
+  }
+}
+
+function achievementCompleted({ player }) {
+  if (player) checkAchievements(player);
 }
 
 /** `diary:task` { player }: a diary task done (the diaries plugin, loaded first, has counted it). */
@@ -231,6 +270,7 @@ function login({ player, league }) {
   checkLevels(player);
   checkExperience(player);
   checkDiaries(player);
+  checkAchievements(player);
   checkQuests(player, league);
 }
 
@@ -241,6 +281,7 @@ module.exports = function attach(api) {
   api.onPlayerLevelUp(levelUp);
   api.onExperienceGained(experienceGained);
   api.onCustomEvent("diary:task", diaryTask);
+  api.onCustomEvent("combat-achievements:completed", achievementCompleted);
   api.onCustomEvent("quest:completed", questCompleted);
   api.onCustomEvent("league:login", login);
 };

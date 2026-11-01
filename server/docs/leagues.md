@@ -1549,6 +1549,14 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   every `diary:task` (the diaries plugin, loaded first, has counted it) and at login. A kill
   task's league area may come from its description too ("Defeat Callisto": "... in the
   Wilderness").
+- **Combat Achievements**: `ca-tier { tier }` ("Combat Achievements Easy Tier", the plugin's
+  `combat-achievements:tier`), `ca-count { count, type? }` ("100 Combat Achievements", "Complete
+  5 Speed Tasks"), `ca-bosses { count }` ("Complete all tasks for 3 bosses") and `ca-boss
+  { monster }` ("Kraken Combat Achievements": a monster of enum 3970, the plugin's list; a group
+  such as "all three Dagannoth Kings" is left unmapped), from the plugin's new
+  `combat-achievements:summary` { player } -> completed, speed, monsters, checked on
+  `combat-achievements:completed` and at login. "Within the areas you have unlocked" is not
+  checked.
 - **Not mapped yet:** kills with any other place or a condition, equipment sets the description
   does not list, obtaining items, minigames, diaries, travel, emotes and the Leagues tutorial task.
 

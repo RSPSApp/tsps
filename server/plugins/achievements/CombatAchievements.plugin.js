@@ -17,6 +17,8 @@
  *                                       and `claimed`: whether its rewards were claimed from Ghommal
  *   api.emitCustomEvent("combat-achievements:open", { player, collectionLogCategory? })
  *                                       the account summary's row; a collection log boss's button
+ *   answer "combat-achievements:summary" { player }  -> completed (tasks done), speed (speed tasks
+ *                                       done), monsters (names of the monsters with every task done)
  * and it emits "combat-achievements:completed" { player, task: { id, name, tier } }.
  *
  *   ::ca complete <task name|id>   finish a task through the real path
@@ -52,6 +54,18 @@ function onTier(request) {
   const status = Progress.tierStatus(request.player, tier);
   request.unlocked = status > 0;
   request.claimed = status === 2;
+}
+
+/** What the character has done, in totals (the Leagues' tasks ask). */
+function onSummary(request) {
+  const player = request?.player;
+  if (!player) return;
+  const done = Progress.completedTasks(player);
+  request.completed = done.length;
+  request.speed = done.filter((task) => task.type === Data.TYPE.SPEED).length;
+  request.monsters = [...Data.monsters().values()]
+    .filter((monster) => monster.tasks.length > 0 && Progress.monsterCount(player, monster) === monster.tasks.length)
+    .map((monster) => monster.name);
 }
 
 function onOpen({ player, collectionLogCategory }) {
@@ -114,7 +128,8 @@ module.exports = {
     api.onCustomEvent("combat-achievements:complete", onComplete);
     api.onCustomEvent("combat-achievements:open", onOpen);
     api.onCustomEvent("combat-achievements:tier", onTier);
+    api.onCustomEvent("combat-achievements:summary", onSummary);
     api.registerCommand("ca", caCommand, api.core.PlayerRights.ADMINISTRATOR, "Combat Achievements: ::ca complete <task> | kc <monster> <n> | reset");
   },
-  _test: { restore, onComplete, onTier, caCommand },
+  _test: { restore, onComplete, onTier, onSummary, caCommand },
 };

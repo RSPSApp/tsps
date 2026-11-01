@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss"]);
   const npcNames = new Set();
   // The cache's own list (enum 5950's rows): a task it has by name takes its category.
   const cacheRows = new Map();
@@ -396,6 +396,36 @@ test("a diary tier task completes when the diaries plugin says the tier is done"
     assert.ok(completed(diarist).includes(task.id));
   } finally {
     delete custom["diary:is-complete"];
+  }
+});
+
+test("Combat Achievement tasks: a tier, counts, speed tasks and a monster's every task", () => {
+  worldLeague = 6;
+  const warrior = character("caleague");
+  worldLeague = 4;
+  const tasks = catalog.leagues["6"].tasks;
+  const byName = (name) => tasks.find((task) => task.name === name);
+  assert.deepEqual(byName("Combat Achievements Easy Tier").trigger, { kind: "ca-tier", tier: "Easy" });
+  assert.deepEqual(byName("50 Combat Achievements").trigger, { kind: "ca-count", count: 50 });
+  assert.deepEqual(byName("Complete 5 Speed Tasks").trigger, { kind: "ca-count", count: 5, type: "speed" });
+  assert.deepEqual(byName("Mole Combat Achievements").trigger, { kind: "ca-boss", monster: "Giant Mole" }, "enum 3970's name");
+  assert.equal(byName("Hueycoatl Combat Achievements").trigger.monster, "Hueycoatl, The");
+  const state = { completed: 49, speed: 4, monsters: ["Giant Mole"], easy: false };
+  custom["combat-achievements:summary"] = [(query) => Object.assign(query, { completed: state.completed, speed: state.speed, monsters: state.monsters })];
+  custom["combat-achievements:tier"] = [(query) => { query.unlocked = query.tier === "Easy" && state.easy; }];
+  try {
+    const fire = () => { for (const handler of custom["combat-achievements:completed"]) handler({ player: warrior }); };
+    fire();
+    assert.ok(completed(warrior).includes(byName("Mole Combat Achievements").id), "the Giant Mole's every task");
+    assert.ok(!completed(warrior).includes(byName("50 Combat Achievements").id));
+    Object.assign(state, { completed: 50, speed: 5, easy: true });
+    fire();
+    for (const name of ["50 Combat Achievements", "Complete 5 Speed Tasks", "Combat Achievements Easy Tier", "Complete all tasks for 1 boss"]) {
+      assert.ok(completed(warrior).includes(byName(name).id), name);
+    }
+  } finally {
+    delete custom["combat-achievements:summary"];
+    delete custom["combat-achievements:tier"];
   }
 });
 

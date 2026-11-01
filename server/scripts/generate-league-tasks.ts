@@ -369,6 +369,19 @@ const PRODUCE_VERBS: Record<string, string[]> = {
   make: [""], create: [""], brew: [""], clean: [""], cut: [""],
 };
 
+/** The Combat Achievements' monsters by plain name (enum 3970: "Hueycoatl, The" is "hueycoatl"). */
+let caMonsterNames: Map<string, string> | null = null;
+function caMonsters(): Map<string, string> {
+  if (caMonsterNames) return caMonsterNames;
+  caMonsterNames = new Map();
+  for (const [key, name] of CacheDefinitions.getEnumValues(CA_MONSTER_ENUM)) {
+    if (Number(key) <= 0 || typeof name !== "string") continue;
+    caMonsterNames.set(name.replace(/, The$/i, "").toLowerCase(), name);
+  }
+  return caMonsterNames;
+}
+const CA_MONSTER_ENUM = 3970;
+
 /** A diary's name in a task to the diaries plugin's key (plugins/achievements/diaries). */
 const DIARIES: Array<[RegExp, string]> = [
   [/^ardougne$/, "ardougne"], [/^desert$/, "desert"], [/^falador$/, "falador"], [/^fremennik$/, "fremennik"],
@@ -469,6 +482,19 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
     const combat = excluding ? listed(excluding) : ["ATTACK", "STRENGTH", "DEFENCE", "MAGIC", "RANGED", "HITPOINTS"];
     const nonCombat = every.filter((skill) => !combat.includes(skill));
     return { trigger: { kind: "experience", skills: nonCombat, amount, count: match[4] ? Number(match[4]) : 1 } };
+  }
+  // Combat Achievements: "Combat Achievements Easy Tier" (its points reached), "100 Combat Achievements",
+  // "Complete 5 Speed Tasks", "Complete all tasks for 3 bosses", "Kraken Combat Achievements"
+  // (every task of that monster; the description names it as the plugin may: "for the Giant Mole").
+  if ((match = /^Combat Achievements (Easy|Medium|Hard|Elite|Master|Grandmaster) Tier$/i.exec(name))) return { trigger: { kind: "ca-tier", tier: match[1] } };
+  if ((match = /^(\d+) Combat Achievements$/i.exec(name))) return { trigger: { kind: "ca-count", count: Number(match[1]) } };
+  if ((match = /^Complete (\d+) Speed Tasks?$/i.exec(name))) return { trigger: { kind: "ca-count", count: Number(match[1]), type: "speed" } };
+  if ((match = /^Complete all tasks for (\d+) bosse?s?$/i.exec(name))) return { trigger: { kind: "ca-bosses", count: Number(match[1]) } };
+  if (/ Combat Achievements$/i.test(name) && ((match = /^Complete all of the Combat Achievements for (?:the )?(.+?)\.?$/i.exec(description))
+    || (match = /^Complete all (?:of )?the (.+?)(?: Combat Achievements)?\.?$/i.exec(description)))) {
+    // Only a monster the Combat Achievements list has (enum 3970); a group ("all three Dagannoth Kings") is none.
+    const monster = caMonsters().get(match[1].replace(/^the /i, "").toLowerCase());
+    return monster ? { trigger: { kind: "ca-boss", monster } } : {};
   }
   // "Complete the Easy Ardougne Diary", "Kourend and Kebos Hard Diary Tasks": every task of that tier
   // (the diaries plugin's keys).

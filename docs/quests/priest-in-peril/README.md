@@ -25,21 +25,21 @@ Newest first.
 
 - **fixed** Drezel skipped his "It's as I feared..." lines on the first blessing: the
   blessing was marked done at the message just before the "First time blessing water"
-  condition. Fixed in this PR (tests only; not replayed in-game).
+  condition. Fixed in #1817 (tests only; not replayed in-game).
 - **fixed** No golden key: the plugin's grant was removed, and the generated
   `monk_of_zamorak_paterdomus` row is a 1/1 tertiary with no quest condition, which NpcDrops
   skips. The hooded level 30 monk (3486/16273) now drops it on the ground from the King's
-  warning until the coffin is sealed. Fixed in this PR.
+  warning until the coffin is sealed. Fixed in #1817.
 - **fixed** The mausoleum half was missing, so the quest could only be finished through a
   Drezel shortcut. Monuments had no Study/Take-from/item use, there was no golden-to-iron
   key swap, the well, cell gate and coffin had no handlers, and talking to Drezel with the
-  golden key handed out blessed water. Reported in #1811 ("No monument contains a key"). Fixed in this PR.
+  golden key handed out blessed water. Reported in #1811 ("No monument contains a key"). Fixed in #1817.
 - **fixed** Varp 302 was sent as 3/3/4/5/8/61 for the plugin's 10-60 stages, so the world
   Temple Guardian (3487, shown at 0-2) was hidden and a private copy was spawned. The wire
   now follows Quest Helper: 1, 2, 3, 4, 5, 6, 7, 8, 10-59 (60 minus the essence still owed),
-  61. Old saves keep their meaning (an old 50 maps to 8). Fixed in this PR.
+  61. Old saves keep their meaning (an old 50 maps to 8). Fixed in #1817.
 - **fixed** Any monk kill put a golden key in the inventory, and an unreachable monk
-  "Talk-to" hook handed one out. Removed in this PR.
+  "Talk-to" hook handed one out. Removed in #1817.
 - **open** The north trapdoor (1579, 3405,3507) climbs straight down on Open. Live opens
   it (1581, Climb-down), and Quest Helper expects a "Yes." confirmation; `travel_to`'s leg
   was blocked on that difference. The confirmation's text is not sourced yet.

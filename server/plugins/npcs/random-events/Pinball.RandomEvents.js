@@ -98,7 +98,7 @@ module.exports = function attach(api, Events) {
       pickGlow();
     }
     room.owners++;
-    animatePosts(session);
+    animatePosts();
     Teleports.onEnd(session, () => {
       if (--room.owners > 0) return;
       room.objects.clear();
@@ -116,13 +116,15 @@ module.exports = function attach(api, Events) {
     room.glow = next;
   }
 
-  function animatePosts(session) {
+  // The glow is client state, so every player in the shared room is told when it moves.
+  function animatePosts() {
+    const sessions = Teleports.sessionsOfKind("pinball");
     room.objects.forEach((entry, key) => {
       const index = POSTS.findIndex(([tile]) => `${tile[0]},${tile[1]}` === key);
       const current = findPost(entry.location, [entry.active, entry.inactive]);
       if (!current) return;
       room.objects.set(key, { ...entry, object: current });
-      animate(session, current, index === room.glow ? GLOW_ON : GLOW_OFF);
+      for (const session of sessions) animate(session, current, index === room.glow ? GLOW_ON : GLOW_OFF);
     });
   }
 
@@ -159,7 +161,7 @@ module.exports = function attach(api, Events) {
         return true;
       }
       pickGlow();
-      animatePosts(session);
+      animatePosts();
     } else {
       session.data.score = 0;
     }

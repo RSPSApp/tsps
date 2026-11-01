@@ -1367,6 +1367,40 @@ test('Pinball glows the post with its animation and never swaps object ids', t =
   Teleports.finish(session);
 });
 
+test('Pinball moves the glowing post for every player in the shared room', t => {
+  const h = harness(t), p = h.player(), q = h.player();
+  const posts = Pinball._test.POSTS.map(([tile, inactive]) => {
+    const object = new FakeGameObject(inactive, new Location(tile[0], tile[1], 0), 10, 0);
+    h.api.core.ObjectManager.register(object);
+    return object;
+  });
+  for (const player of [p, q]) {
+    const npc = h.spawn(player, 15);
+    h.hooks.Flippa['Talk-to']({ player, npc, handled: false });
+    choose(h, player, 0);
+  }
+  const pSession = Teleports.sessionOf(p), qSession = Teleports.sessionOf(q);
+  Pinball._test.room.glow = 1;
+  p.objectAnimations = [];
+  q.objectAnimations = [];
+  h.hooks['object:Pinball Post'].Tag({ player: p, object: posts[1], handled: false });
+  assert.equal(Pinball._test.room.glow, 2, 'the shared target moves on from post2');
+  for (const player of [p, q]) {
+    const animations = player.objectAnimations ?? [];
+    assert.equal(animations.length, Pinball._test.POSTS.length, 'every post is updated for each player');
+    assert.ok(animations.some(([object, animation]) => object === posts[1] &&
+      animation === Pinball._test.GLOW_OFF), 'the old target stops glowing for both players');
+    assert.ok(animations.some(([object, animation]) => object === posts[2] &&
+      animation === Pinball._test.GLOW_ON), 'the new target glows for both players');
+  }
+  assert.equal(pSession.data.score, 1);
+  h.random(0.7);
+  h.hooks['object:Pinball Post'].Tag({ player: q, object: posts[2], handled: false });
+  assert.equal(qSession.data.score, 1, 'the other player scores on the post they can see glowing');
+  Teleports.finish(pSession);
+  Teleports.finish(qSession);
+});
+
 test('Pinball scores the glowing post, resets on others and pays at the cave exit', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 15);
   h.hooks.Flippa['Talk-to']({ player: p, npc, handled: false });

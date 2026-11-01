@@ -153,7 +153,11 @@ const CLOSE_ON_INTERFACE_CLOSE_ATTRIBUTE = "interface:close-on-interface-close";
 /** The combat tab (combat_interface) and its auto-retaliate and special attack buttons. */
 const COMBAT_INTERFACE = 593;
 const COMBAT_AUTO_RETALIATE_CHILD = 32;
-const COMBAT_SPECIAL_ATTACK_CHILD = 41;
+/**
+ * The combat tab's special attack bar. Rev 241 moved the visible bar to 57 (under 39); 41 is
+ * the older bar, now under a container the cache keeps hidden. 67 is the offhand bar.
+ */
+const COMBAT_SPECIAL_ATTACK_CHILDREN = new Set([41, 57]);
 const WORLD_INTERACTIONS = new Set([
   "move",
   "teleport",
@@ -766,7 +770,7 @@ export class ClientConnection {
                 172,
                 this.player.autoRetaliateReturn() ? 0 : 1,
               );
-            } else if (actionPacket.groupId === COMBAT_INTERFACE && actionPacket.childId === COMBAT_SPECIAL_ATTACK_CHILD) {
+            } else if (actionPacket.groupId === COMBAT_INTERFACE && COMBAT_SPECIAL_ATTACK_CHILDREN.has(actionPacket.childId)) {
               CombatSpecial.activate(this.player);
             } else if (WeaponInterfaceManager.handleStyleButton(this.player, actionPacket.groupId, actionPacket.childId)) {
               BonusManager.update(this.player);

@@ -1,6 +1,9 @@
 {
   "$comment": "NPC ferries, as rsprox recordings play them (226-239; see plugins/world/Ferries.plugin.js for which recording each comes from). A route is a travel style, its timings, its landing tile and its lines. ship_journey is interface 299 with script 1131's route arg; longship is misc_shipjourney 224 with a model animation; galleon is quest_lunar_galleon 431; fade is fade_overlay 174 / script 948; rowing is seaslug_boat_travel 461. Triggers: an NPC option (name, label, which dock by its base npc gameval or nearest tile), or a transcript step id from npc-dialogues.json. A loc option (locs: the visible loc's name and label, the loc by its base gameval) starts one too.",
   "routes": {
+    "barnaby-ardougne": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "to": [2680, 3274, 0] },
+    "barnaby-brimhaven": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "to": [2768, 3227, 0] },
+    "barnaby-rimmington": { "style": "fade", "teleport": 3, "fadeIn": 4, "close": 7, "sea": true, "to": [2916, 3225, 0] },
     "entrana": { "style": "ship_journey", "route": 1, "ticks": 14, "board": "After a quick search, the monk smiles at you and allows you to board.", "arrive": "The ship arrives at Entrana.", "to": [2834, 3331, 1] },
     "entrana-back": { "style": "ship_journey", "route": 2, "ticks": 14, "arrive": "The ship arrives at Port Sarim.", "to": [3048, 3231, 1] },
     "outpost": { "style": "ship_journey", "route": 10, "ticks": 11, "arrive": "The ship arrives at the Void Knight outpost.", "to": [2663, 2676, 1] },

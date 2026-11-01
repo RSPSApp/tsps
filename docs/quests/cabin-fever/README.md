@@ -36,7 +36,10 @@ crate/barrel respawns.
   required items first.
 - **fixed** Canister and cannonball ammo values were reversed against the cache
   transforms and Quest Helper (1 is a cannonball, 2 is a canister). A canister
-  hit now kills the pirate it catches and the NPC death records the crew hit.
+  hit now kills the pirate it catches and records the crew hit when the lethal
+  `HitDamage` is applied, not two ticks later in the NPC death task. Logging out
+  during the death animation therefore keeps the shot; the death handler only
+  clears the pending marker and cannot double-credit.
 - **fixed** The Book o' Piracy is granted once instead of unconditionally, is
   readable, and Bill still replaces a lost copy. Quest supplies are removed on
   completion and on the next login of a completed save, keeping rope, hammer,
@@ -66,7 +69,9 @@ crate/barrel respawns.
   fallback while pirates were out of the target box.
 - **Not checked:** a fully natural run, chest reachability, repeat dialogue,
   relog persistence, the 10,000-coin claim and the book reclaim.
-- **Focused tests:** `node --test tests/qh728-q009.test.cjs` — 13/13.
+- **Focused tests:** `node --test tests/qh728-q009.test.cjs` — 13/13, including
+  the real `HitQueue` boundary where the shooter logs out between impact and the
+  NPC death task.
 
 Tracked in issue [#728](https://github.com/RSPSApp/tsps/issues/728) active (q009);
 PRs: [#1100](https://github.com/RSPSApp/tsps/pull/1100).

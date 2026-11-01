@@ -12,6 +12,7 @@ require('node:test').before(async () => {
     require('node:path').resolve(__dirname, '..'));
 });
 const { PluginManager } = require('../dist/plugins/PluginManager');
+const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
 const groundItemDefinitions = require('../data/definitions/ground-items.json');
@@ -708,7 +709,7 @@ test('the Book o\' Piracy is readable, recoverable once and cleaned up with the 
   assert.equal(done.count(I.BOOK_O_PIRACY), 1);
 });
 
-test('a canister hit kills a pirate and the death records the crew hit', () => {
+test('a canister hit credits the crew before the death animation can be interrupted', () => {
   const originalRandom = Math.random;
   Math.random = () => 0;
   try {
@@ -716,21 +717,28 @@ test('a canister hit kills a pirate and the death records the crew hit', () => {
     const I = core.ItemIdentifiers;
     const N = core.NpcIdentifiers;
     const CANNON = 11213;
+    const CREW_HITS = 'cabin-fever:crew-hits';
+    let queue;
     const pirate = {
+      hp: 52,
       getId: () => N.PIRATE_27,
+      getRealId: () => N.PIRATE_27,
       getLocation: () => new core.Location(1823, 4831, 0),
-      getHitpoints: () => 52,
+      getHitpoints() { return this.hp; },
       isRegistered: () => true,
-      getCombat: () => ({
-        getHitQueue: () => ({
-          addPendingDamage: (hits) => {
-            for (const hit of hits) {
-              if ((hit.getDamage?.() ?? 0) >= 52) h.npcDeath(N.PIRATE_27, pirate);
-            }
-          },
-        }),
-      }),
+      isPlayer: () => false,
+      isNpc: () => true,
+      isUntargetable: () => false,
+      decrementHealth(hit) {
+        const lost = this.hp;
+        this.hp = 0;
+        hit.setHealthLost(lost);
+        return hit;
+      },
+      addTickHit() {},
+      getCombat: () => ({ addDamage() {}, getHitQueue: () => queue }),
     };
+    queue = new HitQueue(pirate);
     h.worldNpcs.push(pirate);
     h.quest.setStage(h.player, 7);
     h.player.getPacketSender().sendVarbit(1741, 0);
@@ -744,7 +752,17 @@ test('a canister hit kills a pirate and the death records the crew hit', () => {
     h.player.getInventory().adds(I.FUSE, 1);
     h.itemOnObject(I.FUSE, CANNON);
     h.object(CANNON, 'Fire!');
-    assert.equal(h.player.getAttribute('cabin-fever:crew-hits'), 1);
+    assert.equal(h.player.getAttribute(CREW_HITS) ?? 0, 0, 'the queued hit has not credited yet');
+
+    queue.process(1);
+    const savedCrewHits = h.player.getAttribute(CREW_HITS);
+    assert.equal(savedCrewHits, 1, 'credit is written when the lethal hit lands');
+
+    // Logout saves here, before the two-tick death task emits the NPC death.
+    h.player.isRegistered = () => false;
+    h.npcDeath(N.PIRATE_27, pirate);
+    assert.equal(pirate.hp, 0, 'the pirate still dies');
+    assert.equal(h.player.getAttribute(CREW_HITS), 1, 'the death event does not add a second credit');
   } finally {
     Math.random = originalRandom;
   }

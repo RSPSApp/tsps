@@ -621,22 +621,27 @@ module.exports = function registerCabinFeverQuest(api) {
     if (!target) return false;
     cannonTargets.set(target, player);
     const combat = target.getCombat?.();
-    // Attribute the kill to the player, so the NPC death task emits onNpcDeath.
+    // Attribute the kill to the player, so the NPC death task still runs.
     combat?.addDamage?.(player, CANISTER_DAMAGE);
-    combat?.getHitQueue?.().addPendingDamage?.([
-      new HitDamage(CANISTER_DAMAGE, HitMask.RED).setSource(player),
-    ]);
+    const hit = new HitDamage(CANISTER_DAMAGE, HitMask.RED).setSource(player);
+    // Credit on impact, not on the death task two ticks later: a shooter who
+    // logs out during the death animation must still save the successful shot.
+    hit.onApplied(() => {
+      cannonTargets.delete(target);
+      if ((target.getHitpoints?.() ?? 0) > 0) return;
+      if (quest.getStage(player) !== STAGE_FIRE) return;
+      setCrewHits(player, crewHits(player) + 1);
+    });
+    combat?.getHitQueue?.().addPendingDamage?.([hit]);
     return true;
   }
 
   function handleNpcDeath(event) {
     const { npc } = event;
     if (!npc) return;
-    const shooter = cannonTargets.get(npc);
-    if (!shooter) return;
+    // Impact already recorded the crew hit. Clear any marker so a pirate killed
+    // by something else cannot be mistaken for a canister kill.
     cannonTargets.delete(npc);
-    if (quest.getStage(shooter) !== STAGE_FIRE) return;
-    setCrewHits(shooter, crewHits(shooter) + 1);
   }
 
   // ==========================================================================

@@ -45,6 +45,16 @@ function applyStartingLevels(player, type) {
   }
 }
 
+/**
+ * The league's automatic quests (`startQuests`; Demonic Pacts: Druidic Ritual, Rune Mysteries and
+ * the rest the Wiki lists), at every login so a character made before the list gets them too; the
+ * quests already complete are left alone, and none gives experience (`league:complete-quests`).
+ */
+function completeStartQuests(player, type) {
+  const quests = Common.league(type).startQuests;
+  if (Array.isArray(quests) && quests.length) Common.api.emitCustomEvent("league:complete-quests", { player, quests });
+}
+
 /** The mode the Ironman plugin reports ("none" without one), or undefined when that plugin is not loaded. */
 function ironmanMode(player) {
   const query = { player };
@@ -74,6 +84,7 @@ function login({ player, isNewAccount }) {
   }
   sendVarbits(player, type);
   applyIronman(player);
+  completeStartQuests(player, type);
   Common.api.emitCustomEvent("league:login", { player, league: type });
 }
 

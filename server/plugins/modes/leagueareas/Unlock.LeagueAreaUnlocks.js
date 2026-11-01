@@ -29,13 +29,23 @@ function login({ player, league }) {
   if (!rules) return;
   if (Common.unlocked(player).length === 0) {
     player.setAttribute(Common.AREAS_ATTRIBUTE, [...rules.defaults]);
-    for (const area of rules.defaults) completeAreaContent(player, league, area);
   }
+  // Every unlocked area's content once: the defaults' on a new character, and any a character made
+  // before it existed (or saved before an unlock's fourteen ticks ran) has not had yet.
+  for (const area of Common.unlocked(player)) completeAreaContent(player, league, area);
   if (!Regions.isOpenAt(league, player, player.getLocation())) {
     player.moveTo(require("./Enforcement.LeagueAreaUnlocks").home(league, player));
   }
   player.getPacketSender().sendVarbit(Common.data.varbits.lastViewed, 0);
   sendState(player, league);
+}
+
+/** The areas whose quests, diary tasks and Combat Achievements were completed (area ids). */
+const CONTENT_ATTRIBUTE = "league:area-content";
+
+function contentGiven(player) {
+  const value = player.getAttribute(CONTENT_ATTRIBUTE);
+  return Array.isArray(value) ? value.map(Number) : [];
 }
 
 /**
@@ -44,6 +54,10 @@ function login({ player, league }) {
  */
 function completeAreaContent(player, type, areaId) {
   const rules = Common.league(type);
+  if (!rules?.quests && !rules?.diaryTasks && !rules?.combatAchievements) return;
+  const given = contentGiven(player);
+  if (given.includes(areaId)) return;
+  player.setAttribute(CONTENT_ATTRIBUTE, [...given, areaId]);
   for (const [diary, , task] of rules?.diaryTasks?.[areaId] ?? []) Common.api.emitCustomEvent("diary:task", { player, diary, task });
   for (const task of rules?.combatAchievements?.[areaId] ?? []) Common.api.emitCustomEvent("combat-achievements:complete", { player, task });
   const quests = rules?.quests?.[areaId];
@@ -191,6 +205,7 @@ function answerAreaAt(query) {
 
 module.exports = function attach(api) {
   api.persistAttribute(Common.AREAS_ATTRIBUTE, []);
+  api.persistAttribute(CONTENT_ATTRIBUTE, []);
   api.onCustomEvent("league:login", login);
   api.onCustomEvent("league:content-rows", contribute);
   api.onCustomEvent("league:points-changed", pointsChanged);

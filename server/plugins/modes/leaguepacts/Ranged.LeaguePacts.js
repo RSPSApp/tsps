@@ -25,7 +25,7 @@
  *   (talent_2h_melee_echos) rolls the player's melee accuracy and max hit against the target's
  *   ranged defence, and takes the bow and thrown echo pacts as if those were wielded.
  * - 15 talent_percentage_ranged_damage: +1% ranged max hit a node (registerRangedHitModifier),
- *   and each node's +10% accuracy in every style (the three attack-roll modifiers).
+ *   and each node's +10% accuracy in every style (General.LeaguePacts.js, summed with the rest).
  * - 17 talent_thrown_weapon_melee_str_scale: with a thrown weapon, ranged strength + 80% of the
  *   worn melee strength, rounded down (registerBonusProvider).
  * - 49 talent_ranged_strength_hp_difference: +1 ranged strength per 10 hitpoints between the
@@ -78,7 +78,6 @@ const ECHO_CHAIN_LIMIT = 4;
 /** talent_2h_melee_echos' chance (its text), for chains from a melee echo that names none. */
 const MELEE_ECHO_CHANCE = 0.05;
 
-const DAMAGE_PER_NODE_ACCURACY = 10;
 const CROSSBOW_DAMAGE_PERCENT = 70;
 const CROSSBOW_SLOWER_TICKS = 2;
 const BOW_FASTER_TICKS = 1;
@@ -88,10 +87,13 @@ const PRAYER_BOOST_PERMILLE = 1300;
 const STACK_CAP_FRACTION = 0.15;
 const EXTRA_THROW_RADIUS = 2;
 
-/** BonusManager.update's bonus array: attack 0-4, defence 5-9, then melee, ranged strength. */
-const RANGED_ATTACK_BONUS = 4;
-const MELEE_STRENGTH_BONUS = 10;
-const RANGED_STRENGTH_BONUS = 11;
+/** BonusManager.update's bonus array: the five attack bonuses, the five defence ones, then the others. */
+const OTHER_BONUSES = 10;
+let RANGED_ATTACK_BONUS;
+let MELEE_STRENGTH_BONUS;
+let RANGED_STRENGTH_BONUS;
+/** Player -> the hitpoints-difference strength its bonuses were last counted with. */
+const hpStrengthCounted = new WeakMap();
 
 /** Echo hits: { depth, chance, source }. */
 const echoes = new WeakMap();
@@ -149,11 +151,6 @@ function rangedPrayerLevel(entity, level, context) {
   return level + boosted - prayed;
 }
 
-/** Each talent_percentage_ranged_damage node's +10% accuracy, in every style. */
-function damageNodeAccuracy(entity, roll) {
-  const nodes = effect(entity, "talent_percentage_ranged_damage");
-  return nodes ? Math.floor((roll * (100 + nodes * DAMAGE_PER_NODE_ACCURACY)) / 100) : roll;
-}
 
 function stacksOf(player) {
   let stacks = bowStacks.get(player);
@@ -186,10 +183,16 @@ function applyBonuses({ player, bonuses }) {
     }
   }
   if (effect(player, "talent_ranged_strength_hp_difference")) {
-    const skills = player.getSkillManager();
-    const difference = Math.abs(skills.getCurrentLevel(core.Skill.HITPOINTS) - skills.getMaxLevel(core.Skill.HITPOINTS));
-    bonuses[RANGED_STRENGTH_BONUS] += Math.floor(difference / HITPOINTS_PER_STRENGTH);
+    const strength = hpStrength(player);
+    hpStrengthCounted.set(player, strength);
+    bonuses[RANGED_STRENGTH_BONUS] += strength;
   }
+}
+
+/** talent_ranged_strength_hp_difference: +1 ranged strength per 10 hitpoints between current and level. */
+function hpStrength(player) {
+  const skills = player.getSkillManager();
+  return Math.floor(Math.abs(skills.getCurrentLevel(core.Skill.HITPOINTS) - skills.getMaxLevel(core.Skill.HITPOINTS)) / HITPOINTS_PER_STRENGTH);
 }
 
 function attackSpeed(event) {
@@ -211,7 +214,10 @@ function hitRoll(event) {
     if (maxChance && (asMelee || wields(attacker, "thrown")) && Math.random() < maxChance / 100) event.forceMaxHit = true;
   }
   if (!isRanged(event.combatType)) return;
-  if (effect(attacker, "talent_ranged_strength_hp_difference")) core.BonusManager.update(attacker);
+  // The bonuses are counted again only when the hitpoints have moved the strength since the last count.
+  if (effect(attacker, "talent_ranged_strength_hp_difference") && hpStrengthCounted.get(attacker) !== hpStrength(attacker)) {
+    core.BonusManager.update(attacker);
+  }
   if (!againstNpc(target) || !wields(attacker, "crossbow")) return;
   if (effect(attacker, "talent_crossbow_max_hit")) event.forceMaxHit = true;
   if (!event.forceAccurate && effect(attacker, "talent_crossbow_double_accuracy_roll")
@@ -414,10 +420,10 @@ function pactsChanged({ player }) {
 
 module.exports = function attach(api) {
   core = api.core;
+  RANGED_ATTACK_BONUS = core.BonusManager.ATTACK_RANGE;
+  MELEE_STRENGTH_BONUS = OTHER_BONUSES + core.BonusManager.STRENGTH;
+  RANGED_STRENGTH_BONUS = OTHER_BONUSES + core.BonusManager.RANGED_STRENGTH;
   api.registerCombatEffectiveLevelModifier(rangedPrayerLevel);
-  api.registerMeleeAttackAccuracyModifier(damageNodeAccuracy);
-  api.registerRangedAttackAccuracyModifier(damageNodeAccuracy);
-  api.registerMagicAttackAccuracyModifier(damageNodeAccuracy);
   api.registerRangedHitModifier(rangedMaxHit);
   api.registerBonusProvider({ apply: applyBonuses });
   api.onAttackSpeed(attackSpeed);

@@ -7,6 +7,7 @@
  * varps and varbits Common sends.
  */
 const Common = require("./Common.LeaguePacts");
+const { triggerInts } = require("../../interface/widgetGroup");
 
 /** if_setevents bits: OP1, and IF_SCRIPT_TRIGGER (bit 23, as RSProx names it). */
 const FLAG_OP1 = 1 << 1;
@@ -14,26 +15,13 @@ const FLAG_SCRIPT_TRIGGER = 1 << 23;
 
 /** Players with the tree open. */
 const open = new WeakSet();
+/** Players whose tree comes back after a buy: anything opened in between cancels it. */
+const reopening = new WeakSet();
 
 function ui() {
   return Common.data.interface;
 }
 
-/** if_triggeroplocal arguments: ints as zigzag varints. */
-function triggerInts(argsData) {
-  const ints = [];
-  let value = 0;
-  let shift = 0;
-  for (const byte of argsData ?? []) {
-    value |= (byte & 0x7f) << shift;
-    shift += 7;
-    if ((byte & 0x80) !== 0) continue;
-    ints.push((value >>> 1) ^ -(value & 1));
-    value = 0;
-    shift = 0;
-  }
-  return ints;
-}
 
 /** The tree in the floater, as captured: the pulse stopped, its events, then its init scripts. */
 function show(player) {
@@ -105,11 +93,14 @@ function buy(player, index) {
   player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(buyAnimation)));
   player.performGraphic(new core.Graphic(core.CacheDefinitions.getSpotanimId(buyGraphic), 0, buyGraphicHeight));
   sender.sendInterfaceScript(scripts.combatLevel, [player.getSkillManager().getCombatLevel()]);
+  // The tree comes back only if it was up for the buy (not a command's), and nothing else opens first.
+  if (open.has(player)) reopening.add(player);
   close(player);
   for (const [sound, delay] of buySounds) sender.sendSound(sound, 1, delay);
   Common.api.emitCustomEvent("league:pact-unlocked", { player, node: index, effect: node.varbit });
   later(player, reopenTicks, () => {
-    if (Common.isPacts(player) && !open.has(player)) show(player);
+    if (!reopening.delete(player)) return;
+    if (Common.isPacts(player) && !open.has(player) && !(player.getInterfaceId?.() > 0)) show(player);
   });
   return true;
 }
@@ -177,7 +168,14 @@ function panelTriggered(event) {
 
 /** A league screen opening as the main modal closes the tree first, as recorded (rev 237 relics: if_closesub talent_tree). */
 function modalOpening({ player }) {
-  if (player) close(player);
+  if (!player) return;
+  reopening.delete(player);
+  close(player);
+}
+
+/** Another screen opened while the tree was due back: it stays closed. */
+function interfaceOpened({ player, groupId }) {
+  if (player && groupId !== ui().group) reopening.delete(player);
 }
 
 function interfaceClosed({ player, interfaceId }) {
@@ -186,6 +184,7 @@ function interfaceClosed({ player, interfaceId }) {
 
 function logout({ player }) {
   open.delete(player);
+  reopening.delete(player);
 }
 
 module.exports = function attach(api) {
@@ -196,6 +195,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(Common.uid(group, panel), panelTriggered);
   api.onCustomEvent("interface:closed", interfaceClosed);
   api.onCustomEvent("league:modal-opening", modalOpening);
+  api.onCustomEvent("interface:opened", interfaceOpened);
   api.onPlayerLogout(logout);
 };
 

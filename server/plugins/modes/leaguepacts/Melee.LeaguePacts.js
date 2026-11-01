@@ -6,8 +6,7 @@
  * Distances are between footprints (adjacent = 1 tile).
  *
  * - 14 talent_percentage_melee_damage: +1% melee max hit per point (`registerMeleeHitModifier`).
- *   Each such node also gives +10% accuracy in all combat styles (the three accuracy modifiers), as
- *   Magic.LeaguePacts.js does for its magic damage nodes.
+ *   Each node's +10% accuracy in all combat styles is General.LeaguePacts.js's, summed with the rest.
  * - 73 talent_melee_strength_prayer_bonus (+50% of the worn prayer bonus) and 77
  *   talent_multi_hit_str_increase (+20% of the current Strength level, with a weapon under 1kg or
  *   one-handed) add melee strength. Approximation: no hook adds strength bonus at roll time (the
@@ -79,8 +78,8 @@ const EFFECTS = {
 };
 
 const LIGHT_WEIGHT = 1000;
-/** Melee strength's place in an item's bonus array (after the five attack and five defence bonuses). */
-const MELEE_STRENGTH_INDEX = 10;
+/** An item's bonus array: the five attack bonuses, the five defence ones, then BonusManager's others. */
+const OTHER_BONUSES = 10;
 const PRAYER_STRENGTH_FRACTION = 0.5;
 const STRENGTH_LEVEL_FRACTION = 0.2;
 const MAX_HIT_DISTANCE_STEP = 3;
@@ -154,7 +153,7 @@ function isMeleeWeapon(item) {
   if (item === null || item.getEquipmentType?.()?.getSlot?.() !== core.Equipment.WEAPON_SLOT) return false;
   const bonuses = item.getBonuses() ?? [];
   const { BonusManager } = core;
-  const melee = Math.max(bonuses[BonusManager.ATTACK_STAB] ?? 0, bonuses[BonusManager.ATTACK_SLASH] ?? 0, bonuses[BonusManager.ATTACK_CRUSH] ?? 0, bonuses[MELEE_STRENGTH_INDEX] ?? 0);
+  const melee = Math.max(bonuses[BonusManager.ATTACK_STAB] ?? 0, bonuses[BonusManager.ATTACK_SLASH] ?? 0, bonuses[BonusManager.ATTACK_CRUSH] ?? 0, bonuses[OTHER_BONUSES + BonusManager.STRENGTH] ?? 0);
   return melee > 0 && melee > (bonuses[BonusManager.ATTACK_RANGE] ?? 0);
 }
 
@@ -168,20 +167,10 @@ function heavyWeaponsCarried(player) {
   return [...ids];
 }
 
-function bounds(entity) {
-  const location = entity.getLocation();
-  const size = Math.max(1, entity.getSize?.() | 0);
-  return { minX: location.getX(), minY: location.getY(), maxX: location.getX() + size - 1, maxY: location.getY() + size - 1 };
-}
-
-/** Tiles between two footprints: 1 adjacent, 0 overlapping. */
+/** Tiles between two footprints (Common.distance); no tile or another plane counts as none. */
 function distance(a, b) {
-  if (!a?.getLocation || !b?.getLocation) return 0;
-  const first = bounds(a);
-  const second = bounds(b);
-  const dx = Math.max(0, second.minX - first.maxX, first.minX - second.maxX);
-  const dy = Math.max(0, second.minY - first.maxY, first.minY - second.maxY);
-  return Math.max(dx, dy);
+  const tiles = Common.distance(a, b);
+  return Number.isFinite(tiles) ? tiles : 0;
 }
 
 const isMelee = (combatType) => combatType === core.CombatType.MELEE;
@@ -219,12 +208,20 @@ function meleeMaxHit(entity, maxHit) {
 }
 
 /** The overheal 67 spends: 5 hitpoints above the base level, if there are. */
+/** Player -> the tick its overheal was last spent, and what that bought: once per attack, however many rolls it makes. */
+const overhealSpent = new WeakMap();
+
 function spendOverheal(player) {
   if (!value(player, "overheal")) return 0;
+  const cycle = core.World.getProcessCycle?.() ?? 0;
+  const spent = overhealSpent.get(player);
+  // The same attack's other rolls (best-of rolls, a special's re-rolls) keep the bonus already paid for.
+  if (spent?.cycle === cycle) return spent.bonus;
   const hitpoints = player.getHitpoints();
   const base = player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS);
   if (hitpoints - base < OVERHEAL_COST) return 0;
   player.setHitpoints(hitpoints - OVERHEAL_COST);
+  overhealSpent.set(player, { cycle, bonus: OVERHEAL_MIN_HIT });
   return OVERHEAL_MIN_HIT;
 }
 
@@ -437,20 +434,11 @@ function damageApply({ target, hit }) {
   if (bonus > 0) hit.setDamage(hit.getDamage() + bonus);
 }
 
-/** The small melee damage nodes' +10% accuracy each, in every style. */
-function damageNodeAccuracy(entity, roll) {
-  if (!entity?.isPlayer?.() || !Common.effect(entity, "talent_percentage_melee_damage")) return roll;
-  const count = Common.pacts(entity).filter((index) => Common.nodes[index].varbit === "talent_percentage_melee_damage").length;
-  return roll * (1 + 0.1 * count);
-}
 
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   api.registerMeleeHitModifier(meleeMaxHit);
-  api.registerMeleeAttackAccuracyModifier(damageNodeAccuracy);
-  api.registerRangedAttackAccuracyModifier(damageNodeAccuracy);
-  api.registerMagicAttackAccuracyModifier(damageNodeAccuracy);
   api.onCustomEvent("combat:hit-rolled", rolled);
   api.onCombatAttackDistance(attackDistance);
   api.onAttackSpeed(attackSpeed);

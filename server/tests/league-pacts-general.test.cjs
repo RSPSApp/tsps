@@ -208,6 +208,18 @@ test("accuracy: +value% to all three attack rolls", () => {
   assert.equal(modifiers.meleeAccuracy(npcAt(3200, 3201), 10000), 10000);
 });
 
+test("accuracy adds up: each small damage node's +10% beside the accuracy pact, never multiplied", () => {
+  const Common = require("../plugins/modes/leaguepacts/Common.LeaguePacts");
+  const nodesOf = (varbit, count) => Common.nodes.filter((node) => node.varbit === varbit).slice(0, count).map((node) => node.index);
+  const melee = nodesOf("talent_percentage_melee_damage", 3);
+  const ranged = nodesOf("talent_percentage_ranged_damage", 3);
+  assert.deepEqual([melee.length, ranged.length], [3, 3]);
+  const { pacts } = cast("accuracy-sum", [...melee, ...ranged, NODES.accuracy25]);
+  for (const modifier of [modifiers.meleeAccuracy, modifiers.rangedAccuracy, modifiers.magicAccuracy]) {
+    assert.equal(modifier(pacts, 10000), 18500, "60% from six damage nodes + 25%, one sum");
+  }
+});
+
 test("Defence: +value levels in the melee and ranged defence level, 30% of it in the magic one", () => {
   const { pacts, others } = cast("defence", [NODES.defence5, NODES.defence15]);
   assert.equal(modifiers.meleeDefence(pacts, 100), 120);

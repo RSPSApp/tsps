@@ -236,6 +236,8 @@ test("a melee roll spends 5 overhealed hitpoints, if there are, for +5 min hit",
   holder.setHitpoints(110);
   assert.equal(hitRolled(holder, giant(1), 0, 30), 5);
   assert.equal(holder.getHitpoints(), 105);
+  assert.equal(hitRolled(holder, giant(1), 0, 30), 5, "the same attack's next roll (a best-of roll, a re-roll) keeps it");
+  assert.equal(holder.getHitpoints(), 105, "without paying again");
   for (const other of others) {
     other.setHitpoints(110);
     assert.equal(hitRolled(other, giant(1), 0, 30), 0);

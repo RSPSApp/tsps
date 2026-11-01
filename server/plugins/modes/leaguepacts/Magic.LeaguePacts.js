@@ -22,7 +22,7 @@
  *   no plugin event adds to the rune pouch). These runes do not chain into the rune pacts above.
  * - talent_percentage_magic_damage (registerMagicDamageBonusModifier): +N% magic damage, x3 with
  *   Tumeken's shadow wielded (its passive; x4 in the Tombs is not modelled); and (Wiki, 23 April 2026)
- *   each such node +10% accuracy in all styles (the three accuracy modifiers, a multiplier on the roll).
+ *   each such node +10% accuracy in all styles, which General.LeaguePacts.js sums with the rest.
  * - talent_water_spell_damage_high_hp (`combat:magic-max-hit`): water spells' max hit +20% x HP/max HP.
  * - talent_air_spell_damage_active_prayers (same): air spells' max hit +N% per active prayer.
  * - talent_earth_scale_defence_stat (same): earth spells' max hit +1 per N current Defence levels.
@@ -50,7 +50,6 @@ const FIRE_BURN_FRACTION = 0.06;
 const FIRE_BURN_DAMAGE_MULTIPLIER = 2;
 const WATER_HP_DAMAGE_PERCENT = 20;
 const WATER_HEAL_FRACTION = 0.6;
-const ACCURACY_PER_DAMAGE_NODE = 0.1;
 const SHADOW_DAMAGE_MULTIPLIER = 3;
 const ONE_HANDED_POWERED_MAX_HIT_PENALTY = 8;
 const TRADITIONAL_MIN_SPEED = 2;
@@ -168,12 +167,6 @@ function magicDamageBonus(entity, permille) {
   return permille + percent * 10 * shadow;
 }
 
-/** The small magic damage nodes' +10% accuracy each, in every style. */
-function damageNodeAccuracy(entity, roll) {
-  if (!isPlayer(entity) || !Common.effect(entity, "talent_percentage_magic_damage")) return roll;
-  const count = Common.pacts(entity).filter((index) => Common.nodes[index].varbit === "talent_percentage_magic_damage").length;
-  return roll * (1 + ACCURACY_PER_DAMAGE_NODE * count);
-}
 
 /** The max-hit pacts: water by hitpoints, air by prayers, earth by Defence, a one-handed powered staff's -8. */
 function maxHit(request) {
@@ -385,20 +378,18 @@ function chargeRegenerated(player, itemId) {
   }
 }
 
-function regenerated({ player, kind, itemId, amount = 1, combat }) {
+/** `league:pact-regenerated`: a rune's id in `itemId`; a charge names its weapon in `weaponId` (General's shape). */
+function regenerated({ player, kind, itemId, weaponId, amount = 1, combat }) {
   if (!isPlayer(player)) return;
   loadSpells();
   if (kind === "rune" && combat) runesRegenerated(player, itemId, Math.max(1, Math.floor(amount)));
-  else if (kind === "charge") chargeRegenerated(player, itemId);
+  else if (kind === "charge") chargeRegenerated(player, weaponId ?? itemId);
 }
 
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
   api.registerMagicDamageBonusModifier(magicDamageBonus);
-  api.registerMagicAttackAccuracyModifier(damageNodeAccuracy);
-  api.registerMeleeAttackAccuracyModifier(damageNodeAccuracy);
-  api.registerRangedAttackAccuracyModifier(damageNodeAccuracy);
   api.onCustomEvent("combat:magic-max-hit", maxHit);
   api.onCustomEvent("combat:hit-rolled", rolled);
   api.onCustomEvent("magic:cast-committed", castCommitted);

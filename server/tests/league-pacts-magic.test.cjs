@@ -122,8 +122,9 @@ const maxHit = (attacker, spellName, value = 100, target = null) =>
 const ticks = (n) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
 const level = (player, skill) => player.getSkillManager().getCurrentLevel(skill);
 const wield = (player, itemId) => player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(itemId, 1));
+/** As General sends it: a rune in `itemId`; a charge with `itemId` -1 and its weapon in `weaponId`. */
 const regen = (player, kind, itemId, amount = 1, combat = true) =>
-  query("league:pact-regenerated", { player, kind, itemId, amount, combat });
+  query("league:pact-regenerated", kind === "charge" ? { player, kind, itemId: -1, weaponId: itemId, amount, combat } : { player, kind, itemId, amount, combat });
 const I = () => core.ItemIdentifiers;
 
 function npc(id = HILL_GIANT) {

@@ -182,6 +182,21 @@ function sendState(player) {
   sender.sendVarbit(ids.varbits.hueycoatlReset, rewards(player).hueycoatl ? 1 : 0);
 }
 
+/**
+ * Tiles between two footprints (adjacent 1, overlapping 0),
+ * or Infinity when either has no tile or they stand on different planes. The pacts' distances.
+ */
+function distance(a, b) {
+  const from = a?.getLocation?.();
+  const to = b?.getLocation?.();
+  if (!from || !to || from.getZ() !== to.getZ()) return Number.POSITIVE_INFINITY;
+  const sizeA = Math.max(1, a.getSize?.() | 0);
+  const sizeB = Math.max(1, b.getSize?.() | 0);
+  return Math.max(0,
+    to.getX() - (from.getX() + sizeA - 1), from.getX() - (to.getX() + sizeB - 1),
+    to.getY() - (from.getY() + sizeA - 1), from.getY() - (to.getY() + sizeB - 1));
+}
+
 function message(key, values = {}) {
   return data.messages[key].text.replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
 }
@@ -191,7 +206,7 @@ function uid(group, child) {
 }
 
 module.exports = {
-  init, isPacts, forgetLeague, pacts, earned, resets, rewards, spendable, effects, effect, save, unlockBits, sendState, message, uid,
+  init, isPacts, forgetLeague, distance, pacts, earned, resets, rewards, spendable, effects, effect, save, unlockBits, sendState, message, uid,
   PACTS_ATTRIBUTE, POINTS_ATTRIBUTE, RESETS_ATTRIBUTE, REWARDS_ATTRIBUTE,
   get nodes() { return nodes; },
   get ids() { return ids; },

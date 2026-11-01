@@ -520,6 +520,11 @@ test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abys
   assert.ok(ours("combat-achievements:complete").some((payload) => payload.task === "Back to Our Roots"), "Varlamore's Combat Achievements at the start");
   assert.ok(ours("diary:task").some((payload) => payload.diary === "karamja" && payload.task === "travel-to-port-sarim-via-the-dock-east-of-musa-p"), "Karamja's diary tasks on its unlock");
   assert.deepEqual(ours("league:complete-quests").map((payload) => payload.quests[0]), ["Perilous Moons", "Shilo Village"], "Varlamore's quests at the start, then Karamja's");
+  hooks.onPlayerLogin({ player: pacts, username: "pactsareas", isNewAccount: false, profile: "league" });
+  assert.equal(ours("league:complete-quests").length, 2, "each area's content once, not again at the next login");
+  pacts.setAttribute("league:area-content", []);
+  hooks.onPlayerLogin({ player: pacts, username: "pactsareas", isNewAccount: false, profile: "league" });
+  assert.deepEqual(ours("league:complete-quests").slice(2).map((payload) => payload.quests[0]), ["Perilous Moons", "Shilo Village"], "a character saved before it existed gets its areas' content at login");
 
   pacts.setRegistered(true);
   openAreas(pacts);

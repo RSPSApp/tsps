@@ -11,8 +11,9 @@
  *   `combat:consume-charge`. Each proc then emits `league:pact-regenerated` { player, kind "rune" |
  *   "ammo" | "charge", itemId (the rune or ammunition, -1 for a charge), amount, combat, spell?,
  *   spellId?, weaponId? }, one per rune id for a cast.
- * - 12 `talent_all_style_accuracy`: +value% to the three attack rolls (the accuracy modifiers). The
- *   small damage nodes' own "+10% accuracy in all combat styles" is their units' (Melee, Ranged, Magic).
+ * - 12 `talent_all_style_accuracy`: +value% to the three attack rolls (the accuracy modifiers),
+ *   summed with the small damage nodes' "+10% accuracy in all combat styles" each (7, 14, 15), so
+ *   every pact's accuracy adds up.
  * - 13 `talent_defence_boost`: +value Defence levels in the defence rolls (the melee defence
  *   modifier, which the ranged roll shares, and 30% of it in the magic one). Approximated: the boost
  *   is invisible (the skills tab keeps the base level) and is added after the prayer multiplier; a
@@ -46,6 +47,9 @@ const Common = require("./Common.LeaguePacts");
 
 const REGENERATE = "talent_regen_ammo_chance";
 const ACCURACY = "talent_all_style_accuracy";
+/** The small damage nodes, each also +10% accuracy in all combat styles (their text). */
+const DAMAGE_NODE_EFFECTS = ["talent_percentage_magic_damage", "talent_percentage_melee_damage", "talent_percentage_ranged_damage"];
+const ACCURACY_PER_DAMAGE_NODE = 10;
 const DEFENCE_BOOST = "talent_defence_boost";
 const OFFHAND = "talent_offhand_stat_boost";
 const OVERHEAL = "talent_overhealing_via_talents";
@@ -103,17 +107,7 @@ function pvp(target) {
   return target?.isPlayer?.() === true;
 }
 
-/** Tiles between two entities' footprints (1 when adjacent), as CombatRange measures reach. */
-function distance(a, b) {
-  const from = a?.getLocation?.();
-  const to = b?.getLocation?.();
-  if (!from || !to || from.getZ() !== to.getZ()) return Number.POSITIVE_INFINITY;
-  const sizeA = Math.max(1, a.getSize?.() | 0);
-  const sizeB = Math.max(1, b.getSize?.() | 0);
-  return Math.max(0,
-    to.getX() - (from.getX() + sizeA - 1), from.getX() - (to.getX() + sizeB - 1),
-    to.getY() - (from.getY() + sizeA - 1), from.getY() - (to.getY() + sizeB - 1));
-}
+const distance = (a, b) => Common.distance(a, b);
 
 function emitRegenerated(payload) {
   api.emitCustomEvent("league:pact-regenerated", payload);
@@ -183,8 +177,14 @@ function regenerateCharge(request) {
 
 // ------------------------------------------------------------------ 12 accuracy, 13 Defence, 16 off-hand
 
+/**
+ * Every pact's accuracy as one sum, so they add up rather than multiply: talent_all_style_accuracy's
+ * percent, and each small magic, melee and ranged damage node's own "+10% accuracy in all combat
+ * styles" (a node gives its damage effect 1, so the effect is the node count).
+ */
 function accuracy(entity, roll) {
-  const percent = value(entity, ACCURACY);
+  const nodes = DAMAGE_NODE_EFFECTS.reduce((sum, name) => sum + value(entity, name), 0);
+  const percent = value(entity, ACCURACY) + nodes * ACCURACY_PER_DAMAGE_NODE;
   return percent > 0 ? Math.floor((roll * (100 + percent)) / 100) : roll;
 }
 

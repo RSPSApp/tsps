@@ -184,6 +184,21 @@ test("View Demonic Pacts opens the tree as captured; a bought node pays, sets it
   assert.equal(Common.pacts(pacts).length, 1);
 });
 
+test("the tree comes back after a buy only if it was up and nothing else opened since", () => {
+  const pacts = character("pactreopen");
+  const shown = () => pacts.sent.order.filter(([kind, , group]) => kind === "sub" && group === TREE).length;
+  Interface.buy(pacts, 0);
+  ticks(5);
+  assert.equal(shown(), 0, "a buy without the tree up (::pacts buy) opens nothing");
+  pacts.setAttribute(Common.POINTS_ATTRIBUTE, 5);
+  openTree(pacts);
+  const before = shown();
+  hooks[`button:${uid(TREE, 11)}`]({ player: pacts, scriptTrigger: true, argsData: trigger(1, Common.nodes[0].links[0] * 2) });
+  for (const handler of custom["interface:opened"] ?? []) handler({ player: pacts, groupId: 12, targetUid: 0, type: 0 });
+  ticks(5);
+  assert.equal(shown(), before, "the bank opened in between: it stays closed");
+});
+
 test("a league screen opening as the main modal closes the tree, as recorded", () => {
   const pacts = character("pactmodal");
   openTree(pacts);

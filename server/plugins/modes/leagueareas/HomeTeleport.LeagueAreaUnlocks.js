@@ -8,6 +8,9 @@
 const Common = require("./Common.LeagueAreaUnlocks");
 const { startHomeTeleport, castOf, BUSY_VARBIT } = require("../../combat/HomeTeleportSequence");
 
+/** Players with the home menu up: closing it any way (Esc, walking off, a pick) clears busy. */
+const menuOpen = new WeakSet();
+
 function rules(type) {
   return Common.league(type)?.homeTeleport ?? null;
 }
@@ -89,15 +92,22 @@ function cast(event) {
     new OptionDialogue(0, {
       executeOption(option) {
         player.getPacketSender().sendInterfaceRemoval();
-        player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+        menuClosed({ player });
         go(player, type, home, Number(option) === 1 ? "yama" : Number(option) === 2 ? "civitas" : null);
       },
     }, ...home.menu.options).setTitle(home.menu.title),
   ));
+  menuOpen.add(player);
+}
+
+function menuClosed({ player }) {
+  if (!player || !menuOpen.delete(player)) return;
+  player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
 }
 
 module.exports = function attach(api) {
   api.onSpellCast(cast);
+  api.onCustomEvent("interface:closed", menuClosed);
 };
 
 Object.assign(module.exports, { cast });

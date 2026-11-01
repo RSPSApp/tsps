@@ -80,7 +80,24 @@ function createWidgetGroup(groupId) {
   return { groupId, widgets, uid, add };
 }
 
+/** if_triggeroplocal (a script trigger's) arguments as the client packs them: ints as zigzag varints. */
+function triggerInts(argsData) {
+  const ints = [];
+  let value = 0;
+  let shift = 0;
+  for (const byte of argsData ?? []) {
+    value |= (byte & 0x7f) << shift;
+    shift += 7;
+    if ((byte & 0x80) !== 0) continue;
+    ints.push((value >>> 1) ^ -(value & 1));
+    value = 0;
+    shift = 0;
+  }
+  return ints;
+}
+
 module.exports = {
+  triggerInts,
   FLAG_OP1,
   FLAG_OP2,
   FLAG_OP3,

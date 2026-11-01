@@ -9,6 +9,7 @@
  * now send noted products to the bank."). Units ask `on(player, rowName)`.
  */
 const Common = require("./Common.LeagueRelics");
+const { triggerInts } = require("../../interface/widgetGroup");
 const Unlock = require("./Unlock.LeagueRelics");
 
 const TOGGLES_ATTRIBUTE = "league:relic-toggles";
@@ -16,21 +17,6 @@ const TOGGLES_ATTRIBUTE = "league:relic-toggles";
 let config = null;
 let ids = null;
 
-/** if_triggeroplocal arguments: ints as zigzag varints. */
-function triggerInts(argsData) {
-  const ints = [];
-  let value = 0;
-  let shift = 0;
-  for (const byte of argsData ?? []) {
-    value |= (byte & 0x7f) << shift;
-    shift += 7;
-    if ((byte & 0x80) !== 0) continue;
-    ints.push((value >>> 1) ^ -(value & 1));
-    value = 0;
-    shift = 0;
-  }
-  return ints;
-}
 
 function resolve() {
   if (ids) return ids;

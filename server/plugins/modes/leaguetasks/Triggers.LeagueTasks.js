@@ -29,7 +29,7 @@ const plainName = (name) => String(name ?? "").toLowerCase().replace(/^the /, ""
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], diaries: [], achievements: [] };
+  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], experienceBySkill: new Map(), diaries: [], achievements: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (!trigger) continue;
@@ -47,6 +47,7 @@ function indexOf(type) {
       entry.diaries.push(task);
     } else if (trigger.kind === "experience") {
       entry.experience.push(task);
+      for (const skill of trigger.skills ?? []) entry.experienceBySkill.set(skill, (entry.experienceBySkill.get(skill) ?? []).concat(task));
     } else if (trigger.kind === "level-up") {
       entry.levelUps.push(task);
     } else if (trigger.kind === "quest") {
@@ -97,22 +98,30 @@ function checkLevels(player) {
 }
 
 /** `experience { skills, amount, count }`: at least `amount` XP in `count` of the skills. */
-function checkExperience(player) {
+function checkExperience(player, gained = null) {
   const type = Common.leagueOf(player);
   if (type === null) return;
-  const tasks = indexOf(type).experience;
+  const entry = indexOf(type);
+  // An XP drop asks only the tasks counting its skill; the login asks them all.
+  const tasks = gained === null ? entry.experience : entry.experienceBySkill.get(gained) ?? [];
   if (!tasks.length) return;
-  const done = new Set(Common.completedIds(player));
   const manager = player.getSkillManager();
-  for (const task of tasks) {
-    if (done.has(task.id)) continue;
+  const reached = tasks.filter((task) => {
     const { skills: names, amount, count } = task.trigger;
-    const reached = names.filter((name) => {
+    return names.filter((name) => {
       const skill = skills().get(name);
       return skill && manager.getExperience(skill) >= amount;
-    }).length;
-    if (reached >= (Number(count) || 1)) Complete.complete(player, task.id, type);
-  }
+    }).length >= (Number(count) || 1);
+  });
+  if (!reached.length) return;
+  const done = new Set(Common.completedIds(player));
+  for (const task of reached) if (!done.has(task.id)) Complete.complete(player, task.id, type);
+}
+
+/** The Skill constant's name (ATTACK) for the Skill an XP drop names. */
+function skillName(skill) {
+  for (const [name, each] of skills()) if (each === skill) return name;
+  return null;
 }
 
 /** `diary { diary, tier }`: the diaries plugin says the tier is complete (`diary:is-complete`). */
@@ -169,8 +178,10 @@ function diaryTask({ player }) {
   if (player) checkDiaries(player);
 }
 
-function experienceGained({ player }) {
-  if (player) checkExperience(player);
+function experienceGained({ player, skill }) {
+  if (!player) return;
+  const name = skillName(skill);
+  if (name !== null) checkExperience(player, name);
 }
 
 function levelUp({ player, oldLevel, newLevel }) {

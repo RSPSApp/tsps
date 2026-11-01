@@ -61,11 +61,10 @@ function registeredQuests() {
 /** The `---` block at the top of a quest page, as plain `field: value` lines. */
 function statusBlock(file) {
   const text = readFileSync(file, "utf8");
-  // The checkout is CRLF on Windows; accept both so the index can be generated there.
-  const block = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+  const block = /^---\n([\s\S]*?)\n---/.exec(text);
   if (!block) throw new Error(`${relative(ROOT, file)} has no status block`);
   const fields = {};
-  for (const line of block[1].split(/\r?\n/)) {
+  for (const line of block[1].split("\n")) {
     const match = /^([a-z]+):\s*(.*?)\s*(#.*)?$/.exec(line);
     if (match) fields[match[1]] = match[2].replace(/^"(.*)"$/, "$1");
   }
@@ -73,7 +72,7 @@ function statusBlock(file) {
     throw new Error(`${relative(ROOT, file)}: status "${fields.status}" is not one of ${STATUSES.join(", ")}`);
   }
   // Open findings: list items under "## Findings" marked **open**.
-  const findings = /\r?\n## Findings\r?\n([\s\S]*?)(\r?\n## |$)/.exec(text)?.[1] ?? "";
+  const findings = /\n## Findings\n([\s\S]*?)(\n## |$)/.exec(text)?.[1] ?? "";
   fields.open = (findings.match(/^- \*\*open\*\*/gm) ?? []).length;
   return fields;
 }

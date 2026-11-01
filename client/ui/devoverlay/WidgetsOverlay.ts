@@ -756,15 +756,17 @@ export class WidgetsOverlay implements Overlay {
             return;
         }
 
-        // Low-end: cap the HUD at ~25 redraws/s. Dirty state stays queued in the widget
-        // manager, so skipping loses nothing; an open menu or a moved mouse (hover,
-        // mouse-over text, clicks) redraws immediately.
+        // Low-end: cap HUD redraws at ~25/s, while frame-synchronized input still
+        // reaches the persistent targets on every frame.
         if (isLowEndDevice) {
             const now = performance.now();
             const im: any = this.ctx.getGameContext?.()?.osrsClient?.inputManager;
             const mouse = im ? ((im.mouseX | 0) << 16) | (im.mouseY | 0) : 0;
             const urgent = (this.app.gl.canvas as any)?.__ui?.menu?.open || mouse !== this.lastDrawMouse;
-            if (!urgent && this.hasPresentedFrame && now - this.lastDrawAt < 40) return;
+            if (!urgent && this.hasPresentedFrame && now - this.lastDrawAt < 40) {
+                processWidgetUiInput(this.glRenderer, im);
+                return;
+            }
             this.lastDrawAt = now;
             this.lastDrawMouse = mouse;
         }

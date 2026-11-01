@@ -509,6 +509,14 @@ export class ClientBinaryEncoder {
         return this.buffer.toPacket(ClientPacketId.CHAT);
     }
 
+    encodeClanChat(text: string, clanType: number): Uint8Array {
+        this.buffer.reset();
+        this.buffer.writeByte(4);
+        this.buffer.writeByte(clanType);
+        this.buffer.writeString(text);
+        return this.buffer.toPacket(ClientPacketId.CHAT);
+    }
+
     encodeFriendsChatAction(payload: FriendsChatAction): Uint8Array {
         this.buffer.reset();
         const actionCodes: Record<FriendsChatAction["action"], FriendsChatActionCode> = {
@@ -704,6 +712,9 @@ export function encodeClientMessage(msg: { type: string; payload: any }): Uint8A
 
         case "chat":
             return clientEncoder.encodeChat(payload.text, payload.messageType, payload.chatType === AUTOCHAT_CHAT_TYPE, payload);
+
+        case "clan_chat":
+            return clientEncoder.encodeClanChat(payload.text, payload.clanType);
 
         case "friends_chat_action":
             return clientEncoder.encodeFriendsChatAction(payload);

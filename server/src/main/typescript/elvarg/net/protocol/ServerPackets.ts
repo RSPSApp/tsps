@@ -95,6 +95,9 @@ export const enum ServerPacketId {
     FRIENDS_CHAT_UPDATE = 121,
     CHAT_FILTER_SETTINGS = 122,
     TRIGGER_ONDIALOGABORT = 123, // runs every interface's onDialogAbort, closing chatbox prompts
+    CLAN_SETTINGS_FULL = 124,
+    CLAN_CHANNEL_FULL = 125,
+    CLAN_CHANNEL_DELTA = 126,
 
     // ========================================
     // WORLD UPDATES (130-149)
@@ -242,6 +245,9 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.FRIENDS_CHAT_UPDATE]: -2,
     [ServerPacketId.CHAT_FILTER_SETTINGS]: 3, // public(1) + private(1) + trade(1)
     [ServerPacketId.TRIGGER_ONDIALOGABORT]: 0,
+    [ServerPacketId.CLAN_SETTINGS_FULL]: -2,
+    [ServerPacketId.CLAN_CHANNEL_FULL]: -2,
+    [ServerPacketId.CLAN_CHANNEL_DELTA]: -2,
 
     [ServerPacketId.LOC_CHANGE]: -1,
     [ServerPacketId.LOC_ADD_CHANGE]: -1,

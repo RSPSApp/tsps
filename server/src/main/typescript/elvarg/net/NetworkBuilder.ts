@@ -650,6 +650,7 @@ export class ClientConnection {
             }
           }
           continue;
+        case "clan_chat":
         case "friends_chat_action":
         case "private_message":
         case "chat_filter":

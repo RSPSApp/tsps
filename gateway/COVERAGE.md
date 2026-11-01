@@ -43,6 +43,7 @@ sessions, so the browser wire format doesn't change.
 | 110 WIDGET_RUN_SCRIPT | VARP_*, UPDATE_INV_FULL, RUNCLIENTSCRIPT | mapped | 4–5 | script -1 = vars and inventories only |
 | 116 WIDGET_SET_QUEST_LIST | — | dropped | 4 | browser-only quest list widget |
 | 120 CHAT_MESSAGE | MESSAGE_GAME, PLAYER_INFO chat, MESSAGE_PRIVATE(_ECHO), MESSAGE_FRIENDCHANNEL | mapped | 3–6, 12 | public: one PLAYER_INFO chat block (overhead copy suppressed, crown from `<img=N>`) with the colour, effect and pattern tsps appends, and the autotyper flag for autochat; game/system types → MESSAGE_GAME; private in/out and friends chat → their packets with a gateway message counter and world 1. Mod private (7) and clan types have no tsps source |
+| 124 CLAN_SETTINGS_FULL, 125 CLAN_CHANNEL_FULL, 126 CLAN_CHANNEL_DELTA | — | dropped | — | tsps clans ([server/docs/clans.md](../server/docs/clans.md) phase 5); chat types 41 and 43 too |
 | 121 FRIENDS_CHAT_UPDATE | UPDATE_FRIENDLIST, UPDATE_IGNORELIST, UPDATE_FRIENDCHAT_CHANNEL_FULL_V2, FRIENDLIST_LOADED | mapped | 6 | the channel only goes when it changed; FRIENDLIST_LOADED once |
 | 122 CHAT_FILTER_SETTINGS | CHAT_FILTER_SETTINGS + _PRIVATECHAT | mapped | 6 | |
 | 123 TRIGGER_ONDIALOGABORT | TRIGGER_ONDIALOGABORT | mapped | 4 | |

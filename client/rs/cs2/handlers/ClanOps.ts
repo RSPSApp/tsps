@@ -4,9 +4,10 @@
  * ACTIVECLANSETTINGS_* - Access persistent clan configuration (members, ranks, permissions)
  * ACTIVECLANCHANNEL_* - Access active clan channel state (online users, worlds)
  *
- * These opcodes operate on the "active" clan which is set by FIND_LISTENED or FIND_AFFINED.
- * In this implementation, we use ctx.clanSettings and ctx.clanChannel directly.
+ * These opcodes operate on the "active" clan which is set by FIND_LISTENED or FIND_AFFINED:
+ * ctx.clanSettings and ctx.clanChannel read whichever of them was selected last.
  */
+import { OWN_CLAN_TYPE } from "../../../common/social/Clans";
 import { Opcodes } from "../Opcodes";
 import type { ClanChannel, ClanSettings, HandlerMap } from "./HandlerTypes";
 
@@ -41,20 +42,22 @@ function computeSortedIndices(names: string[]): number[] {
 export function registerClanOps(handlers: HandlerMap): void {
     // === Clan Settings ===
 
-    // Check if listened clan settings exist (own clan)
+    // Select the listened (guest) clan's settings
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANSETTINGS_FIND_LISTENED, (ctx) => {
+        ctx.selectClanSettings?.(true);
         const settings = getSettings(ctx);
         ctx.pushInt(settings ? 1 : 0);
     });
 
-    // Check if affined clan settings exist for given clan type
-    // Pops: clanType (0 = own clan, 1 = guest clan)
+    // Select the settings of a clan the player belongs to
+    // Pops: clanType (0 = own clan, 1 = group, which tsps doesn't have)
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANSETTINGS_FIND_AFFINED, (ctx) => {
-        ctx.intStackSize--; // Pop clanType (we only support one clan for now)
+        const clanType = ctx.intStack[--ctx.intStackSize];
+        ctx.selectClanSettings?.(false);
         const settings = getSettings(ctx);
-        ctx.pushInt(settings ? 1 : 0);
+        ctx.pushInt(clanType === OWN_CLAN_TYPE && settings ? 1 : 0);
     });
 
     // Get clan name
@@ -251,20 +254,22 @@ export function registerClanOps(handlers: HandlerMap): void {
 
     // === Clan Channel ===
 
-    // Check if listened clan channel exists (own clan)
+    // Select the listened (guest) clan's channel
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANCHANNEL_FIND_LISTENED, (ctx) => {
+        ctx.selectClanChannel?.(true);
         const channel = getChannel(ctx);
         ctx.pushInt(channel ? 1 : 0);
     });
 
-    // Check if affined clan channel exists for given clan type
-    // Pops: clanType (0 = own clan, 1 = guest clan)
+    // Select the channel of a clan the player belongs to
+    // Pops: clanType (0 = own clan, 1 = group, which tsps doesn't have)
     // Returns 1 if found, 0 if not
     handlers.set(Opcodes.ACTIVECLANCHANNEL_FIND_AFFINED, (ctx) => {
-        ctx.intStackSize--; // Pop clanType (we only support one channel for now)
+        const clanType = ctx.intStack[--ctx.intStackSize];
+        ctx.selectClanChannel?.(false);
         const channel = getChannel(ctx);
-        ctx.pushInt(channel ? 1 : 0);
+        ctx.pushInt(clanType === OWN_CLAN_TYPE && channel ? 1 : 0);
     });
 
     // Get clan channel name

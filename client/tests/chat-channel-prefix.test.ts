@@ -91,6 +91,29 @@ sendClan(
 );
 assert.equal(sentPacket, undefined);
 
+// chat_send's call for `//`: chat type 3, the player's own clan (rsprox 322).
+const clearedClanVarcs: Array<[number, string]> = [];
+sendClan(
+    {
+        stringStack: ["hello clan"],
+        stringStackSize: 1,
+        intStack: Int32Array.from([3, 0]),
+        intStackSize: 2,
+        varManager: {
+            setVarcString: (id: number, value: string) => clearedClanVarcs.push([id, value]),
+        },
+    } as any,
+    0,
+    null,
+);
+assert.ok(sentPacket);
+assert.deepEqual(decodeClientPacket(Buffer.from(sentPacket)), {
+    type: "clan_chat",
+    clanType: 0,
+    text: "hello clan",
+});
+assert.deepEqual(clearedClanVarcs, [[335, ""]]);
+
 sendPrivate(
     {
         stringStack: ["Alice", "Meet me in Lumbridge."],

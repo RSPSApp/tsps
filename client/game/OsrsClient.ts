@@ -1,3 +1,4 @@
+import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../common/social/Clans";
 import type { MinimapGeometry, SceneGeometry } from "./scene/SceneGeometry";
 import { vec3 } from "gl-matrix";
 import { closeOpenModal } from "./widgets/input/widgetKeyboardInput";
@@ -84,6 +85,7 @@ import {
     subscribeCombat,
     subscribeDisconnect,
     subscribeGroundItems,
+    subscribeClans,
     subscribeFriendsChat,
     subscribeHandshake,
     subscribeInventory,
@@ -248,6 +250,8 @@ import {
     getTransmitCycles,
     isTransmitProcessingNeeded,
     markChatTransmit,
+    markClanChannelTransmit,
+    markClanSettingsTransmit,
     markClanTransmit,
     markFriendTransmit,
     markInvTransmit,
@@ -1052,6 +1056,7 @@ export class OsrsClient {
     private groundItemMeshesPending = false;
     private unsubscribeChatMessages?: () => void;
     private unsubscribeFriendsChat?: () => void;
+    private unsubscribeClans?: () => void;
     private unsubscribeSkills?: () => void;
     private unsubscribeRunEnergy?: () => void;
     private unsubscribeNotifications?: () => void;
@@ -3326,6 +3331,17 @@ export class OsrsClient {
                 this.cs2Vm.context.friendsChatMinKick = channel?.minKickRank ?? 0;
                 markFriendTransmit();
                 markClanTransmit();
+            });
+        } catch {}
+        try {
+            this.unsubscribeClans = subscribeClans((clans) => {
+                const context = this.cs2Vm.context;
+                context.clanSettings = clans.settings.get(OWN_CLAN_TYPE) ?? null;
+                context.clanChannel = clans.channels.get(OWN_CLAN_TYPE) ?? null;
+                context.listenedClanSettings = clans.settings.get(LISTENED_CLAN_TYPE) ?? null;
+                context.listenedClanChannel = clans.channels.get(LISTENED_CLAN_TYPE) ?? null;
+                markClanSettingsTransmit();
+                markClanChannelTransmit();
             });
         } catch {}
         // Subscribe to loot notifications and display via CS2 notification system
@@ -8586,6 +8602,7 @@ export class OsrsClient {
             this.unsubscribeGroundItems,
             this.unsubscribeChatMessages,
             this.unsubscribeFriendsChat,
+            this.unsubscribeClans,
             this.unsubscribeSkills,
             this.unsubscribeRunEnergy,
             this.unsubscribeNotifications,

@@ -1,3 +1,4 @@
+import type { ClanState } from "../../common/social/Clans";
 import { PlayerSyncContext } from "../../game/sync/PlayerSyncContext";
 import { PlayerUpdateDecoder } from "../../game/sync/PlayerUpdateDecoder";
 import type { PlayerSyncFrame } from "../../game/sync/PlayerSyncTypes";
@@ -115,6 +116,7 @@ export const state = {
     lastSkillsState: undefined as InternalSkillsState | undefined,
     lastGroundItems: undefined as GroundItemsSnapshotPayload | undefined,
     lastFriendsChat: undefined as FriendsChatSnapshot | undefined,
+    clans: { settings: new Map(), channels: new Map() } as ClanState,
     lastRunEnergyState: undefined as RunEnergyState | undefined,
     lastSpellResult: undefined as SpellResultPayload | undefined,
     lastServerPath: undefined as { x: number; y: number }[] | undefined,
@@ -181,6 +183,7 @@ export const state = {
     tradeListeners: new Set<(state: TradeWindowState) => void>(),
     chatMessageListeners: new Set<(msg: ChatMessageEvent) => void>(),
     friendsChatListeners: new Set<(snapshot: FriendsChatSnapshot) => void>(),
+    clanListeners: new Set<(clans: ClanState) => void>(),
     notificationListeners: new Set<(event: NotificationEvent) => void>(),
     systemUpdateListeners: new Set<(info: { remainingCentis: number }) => void>(),
     groundItemListeners: new Set<(payload: GroundItemsServerPayload) => void>(),

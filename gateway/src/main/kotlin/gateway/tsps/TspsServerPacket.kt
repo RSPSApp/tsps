@@ -66,6 +66,9 @@ object TspsServerPacket {
     const val FRIENDS_CHAT_UPDATE = 121
     const val CHAT_FILTER_SETTINGS = 122
     const val TRIGGER_ONDIALOGABORT = 123
+    const val CLAN_SETTINGS_FULL = 124
+    const val CLAN_CHANNEL_FULL = 125
+    const val CLAN_CHANNEL_DELTA = 126
     const val LOC_CHANGE = 130
     const val SOUND = 131
     const val PLAY_JINGLE = 132
@@ -161,6 +164,9 @@ object TspsServerPacket {
             FRIENDS_CHAT_UPDATE to -2,
             CHAT_FILTER_SETTINGS to 3,
             TRIGGER_ONDIALOGABORT to 0,
+            CLAN_SETTINGS_FULL to -2,
+            CLAN_CHANNEL_FULL to -2,
+            CLAN_CHANNEL_DELTA to -2,
             LOC_CHANGE to -1,
             LOC_ADD_CHANGE to -1,
             LOC_DEL to -1,

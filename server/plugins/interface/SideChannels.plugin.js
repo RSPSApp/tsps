@@ -3,8 +3,7 @@
  * sets the selected varbit and mounts that tab's interface in the content pane (rsprox 2528, 75).
  * The choice is kept across logins (rsprox 3886 logs in on Your Clan, 2762 on Grouping).
  *
- * Your Clan and Guest Clan are the cache's own interfaces in their "No current clan" state:
- * tsps has no clans.
+ * Your Clan and Guest Clan are the cache's own interfaces; Clans.plugin.js feeds them.
  */
 
 const GROUP = 707;
@@ -12,11 +11,6 @@ const CONTENT_UID = (GROUP << 16) | 7;
 const TAB_SELECTED_VARBIT = 13071; // side_channels_tab_selected
 const TAB_ATTRIBUTE = "side-channels:tab";
 const CHAT_CHANNEL_TAB = 0;
-// clan_affinitystatus and its guest twin (script 4288): 0 Connecting, 1 No current clan. Live
-// clan members go through 2 and 3 once the login's clan packets arrive (rsprox 763).
-const CLAN_STATUS_VARBIT = 933;
-const GUEST_CLAN_STATUS_VARBIT = 12164;
-const NO_CLAN = 1;
 const CHAT_CHANNEL_GROUP = 7;
 /** Button component -> tab index and interface, by the rev 241 cache's 707:2-5. */
 const TABS = [
@@ -61,7 +55,6 @@ function selectTab(event) {
 
 /** The login and every later mount of 707 start on the chat-channel. */
 function restoreSelectedTab({ player }) {
-  player.getPacketSender().sendVarbit(CLAN_STATUS_VARBIT, NO_CLAN).sendVarbit(GUEST_CLAN_STATUS_VARBIT, NO_CLAN);
   if (selectedTab(player) !== CHAT_CHANNEL_TAB || replacements.has(player)) mountSelected(player);
 }
 

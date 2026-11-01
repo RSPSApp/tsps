@@ -151,6 +151,12 @@ test('the route sends live varp 302 values from start to completion', () => {
   assert.equal(h.stage(), 10);
   assert.ok(h.emit('door:toggle', { objectId: O.LARGE_DOOR_22 }).handled);
   assert.equal(lastPlayed().variant, 'at-the-temple');
+  assert.equal(h.wire(), 1, 'knocking alone agrees to nothing');
+  h.emit('npc-dialogue:line', { npcId: 12240, text: 'Hey... The dog!' }).after?.();
+  assert.equal(h.wire(), 1);
+  const request = h.emit('npc-dialogue:line', { npcId: 12240, text: 'Then please, deal with that dog for me.' });
+  assert.equal(h.wire(), 1, 'not before the player continues past the request');
+  request.after();
   assert.equal(h.wire(), 2, 'agreeing to kill the dog shows the guardian (3487 -> 7620 at 0-2)');
   h.kill(3487);
   assert.equal(h.wire(), 3);
@@ -281,4 +287,21 @@ test('only the hooded level 30 monk drops the golden key, from the King\'s warni
   h.player.setAttribute(STAGE, 46);
   h.kill(N.MONK_OF_ZAMORAK_17);
   assert.equal(h.grounds.length, 1, 'no key once the coffin is sealed');
+});
+
+test('the open north trapdoor climbs down beside the mausoleum ladder; the others are left to LocTeleports', () => {
+  const h = harness();
+  const climb = (objectId, x, y) => {
+    const request = { player: h.player, objectId, object: { getLocation: () => new core.Location(x, y, 0) }, handled: false };
+    for (const handler of h.custom.get('ladders:climb')) handler(request);
+    return request.handled;
+  };
+  const landings = [];
+  h.custom.set('ladders:climbDown', [({ destination }) => landings.push([destination.getX(), destination.getY()])]);
+  assert.equal(climb(O.TRAPDOOR_6, 3405, 3507), true);
+  assert.deepEqual(landings, [[3405, 9906]]);
+  assert.equal(climb(O.TRAPDOOR_6, 3097, 3468), false, "Edgeville's trapdoor is not the quest's");
+  assert.equal(climb(O.TRAPDOOR_13, 3422, 3485), false, "the church trapdoor's captured Climb-down is LocTeleports'");
+  assert.equal(climb(O.LADDER_216, 3405, 9907), false, "the mausoleum ladder's captured climb is LocTeleports'");
+  assert.equal(h.named.has('Trapdoor'), false, 'Open and Close play the captured loc swaps');
 });

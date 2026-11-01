@@ -97,11 +97,12 @@ module.exports = function registerPriestInPerilQuest(api) {
   const COMBAT_WARNING_STEP_ID = "0cBLcT";
   const RECOMMENDED_COMBAT_LEVEL = 15;
 
-  // The mausoleum trapdoors: 1579 north of the temple (over the mausoleum ladder)
-  // and 3432 inside the church.
-  const NORTH_TRAPDOOR_ID = ObjectIdentifiers.TRAPDOOR_4; // 1579 at 3405,3507
-  const CHURCH_TRAPDOOR_ID = ObjectIdentifiers.TRAPDOOR_12; // 3432 at 3422,3485
-  const MAUSOLEUM_LADDER_ID = ObjectIdentifiers.LADDER_216; // 17385 at 3405,9907
+  // The mausoleum trapdoors, closed and open: 1579/1581 north of the temple (over the
+  // mausoleum ladder) and 3432/3433 inside the church. LocTeleports plays their captured
+  // Open/Close swaps (loc-swaps.json), the church one's Climb-down and the mausoleum ladder.
+  const NORTH_TRAPDOOR_IDS = new Set([ObjectIdentifiers.TRAPDOOR_4, ObjectIdentifiers.TRAPDOOR_6]);
+  const NORTH_TRAPDOOR_OPEN_ID = ObjectIdentifiers.TRAPDOOR_6; // 1581
+  const CHURCH_TRAPDOOR_IDS = new Set([ObjectIdentifiers.TRAPDOOR_12, ObjectIdentifiers.TRAPDOOR_13]);
   const LARGE_DOOR_IDS = new Set([
     ObjectIdentifiers.LARGE_DOOR_21, // 3489
     ObjectIdentifiers.LARGE_DOOR_22, // 3490
@@ -143,10 +144,10 @@ module.exports = function registerPriestInPerilQuest(api) {
   // is ground decoration, so walkToObject cannot find a side to stand on).
   const NORTH_TRAPDOOR_APPROACH = { x: 3405, y: 3506, z: 0 };
   const CHURCH_TRAPDOOR_APPROACH = { x: 3421, y: 3485, z: 0 };
-  const MAUSOLEUM_LADDER_LOCATION = { x: 3405, y: 9907, z: 0 };
+  /** rsprox.net #365 and #4288: Climb-down lands beside the ladder below. */
   const NORTH_TRAPDOOR_LANDING = new Location(3405, 9906, 0);
-  const CHURCH_TRAPDOOR_LANDING = new Location(3422, 9885, 0);
-  const MAUSOLEUM_LADDER_LANDING = new Location(3405, 3506, 0);
+  /** The voice's last line before the player agrees to deal with the dog. */
+  const DOG_REQUEST_LINE = "Then please, deal with that dog for me.";
   const HOLY_BARRIER_LANDING = new Location(3423, 3485, 0);
   /** The cell gate's wall is on the east edge of its tile: Drezel's cell is east of it. */
   const CELL_OUTSIDE = new Location(3415, 3489, 2);
@@ -233,13 +234,13 @@ module.exports = function registerPriestInPerilQuest(api) {
    */
   function handleTrapdoorRoute(event) {
     const objectLocation = event.object?.getLocation?.();
-    if (event.objectId === NORTH_TRAPDOOR_ID && sameTile(objectLocation, NORTH_TRAPDOOR_LOCATION)) {
+    if (NORTH_TRAPDOOR_IDS.has(event.objectId) && sameTile(objectLocation, NORTH_TRAPDOOR_LOCATION)) {
       event.destination = adjacentTo(event.sourceLocation, NORTH_TRAPDOOR_LOCATION)
         ? { ...event.sourceLocation }
         : { ...NORTH_TRAPDOOR_APPROACH };
       return;
     }
-    if (event.objectId === CHURCH_TRAPDOOR_ID && sameTile(objectLocation, CHURCH_TRAPDOOR_LOCATION)) {
+    if (CHURCH_TRAPDOOR_IDS.has(event.objectId) && sameTile(objectLocation, CHURCH_TRAPDOOR_LOCATION)) {
       event.destination = adjacentTo(event.sourceLocation, CHURCH_TRAPDOOR_LOCATION)
         ? { ...event.sourceLocation }
         : { ...CHURCH_TRAPDOOR_APPROACH };
@@ -508,51 +509,16 @@ module.exports = function registerPriestInPerilQuest(api) {
   }
 
   /**
-   * The trapdoors north of the temple and inside the church drop into the
-   * mausoleum (the ladder at 3405,9907 is right below the north one). The
-   * generic Ladders fallback cannot pair a trapdoor's "Open" with the ladder,
-   * so climb down explicitly.
+   * The open north trapdoor's Climb-down, as captured (rsprox.net #365, #4288): the
+   * message and the floor animation, then the tile beside the mausoleum ladder. The
+   * capture sync left this one to the quest, so Ladders would only guess from the map.
    */
-  function handleTrapdoorOpen(event) {
-    const { player, objectId, location } = event;
-    if (objectId === NORTH_TRAPDOOR_ID && sameTile(location, NORTH_TRAPDOOR_LOCATION)) {
-      api.emitCustomEvent("ladders:climbDown", { player, destination: NORTH_TRAPDOOR_LANDING.clone() });
-      event.handled = true;
-      return true;
-    }
-    if (objectId === CHURCH_TRAPDOOR_ID && sameTile(location, CHURCH_TRAPDOOR_LOCATION)) {
-      api.emitCustomEvent("ladders:climbDown", { player, destination: CHURCH_TRAPDOOR_LANDING.clone() });
-      event.handled = true;
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Doors lists "Trapdoor" among its toggles and its Open hook registers before
-   * this quest's, so claim the two mausoleum trapdoors through "door:toggle",
-   * which runs before any generic door handling.
-   */
-  function claimTrapdoorToggle(request) {
-    if (request.handled) return;
-    handleTrapdoorOpen(request);
-  }
-
-  /**
-   * The mausoleum ladder (17385) is listed at many other places, and Monk's
-   * Friend claims every 17385 for its cave; claim this one through the Ladders
-   * "ladders:climb" extension point, which runs before the generic hooks.
-   */
-  function claimMausoleumClimb(request) {
-    if (request.objectId !== MAUSOLEUM_LADDER_ID) return;
+  function claimNorthTrapdoorClimb(request) {
+    if (request.handled || request.objectId !== NORTH_TRAPDOOR_OPEN_ID) return;
     const location = request.object?.getLocation?.();
-    if (!location || location.getX() !== MAUSOLEUM_LADDER_LOCATION.x || location.getY() !== MAUSOLEUM_LADDER_LOCATION.y) {
-      return;
-    }
-    api.emitCustomEvent("ladders:climbUp", {
-      player: request.player,
-      destination: MAUSOLEUM_LADDER_LANDING.clone(),
-    });
+    if (!location || location.getX() !== NORTH_TRAPDOOR_LOCATION.x || location.getY() !== NORTH_TRAPDOOR_LOCATION.y) return;
+    request.player.sendMessage("You climb down through the trapdoor...");
+    api.emitCustomEvent("ladders:climbDown", { player: request.player, destination: NORTH_TRAPDOOR_LANDING.clone() });
     request.handled = true;
   }
 
@@ -593,14 +559,24 @@ module.exports = function registerPriestInPerilQuest(api) {
       : agreedToKillDog(player)
         ? "at-the-temple-knocking-on-the-door-after-accepting-to-kill-the-dog"
         : "at-the-temple";
-    if (startTranscript(api, player, MYSTERIOUS_VOICE_NPC_ID, PAGE, variant)) {
-      if (!agreedToKillDog(player)) {
-        player.setAttribute(DOOR_ANSWERED_ATTRIBUTE, true);
-        // Agreeing to kill the dog is varp 302 value 2: it shows the guardian.
-        quest.setStage(player, stage);
-      }
-      request.handled = true;
-    }
+    if (startTranscript(api, player, MYSTERIOUS_VOICE_NPC_ID, PAGE, variant)) request.handled = true;
+  }
+
+  /**
+   * The player agrees to deal with the dog once past the voice's request, the end of
+   * the "King Roald sent me" branch; the other answers turn the player away. That is
+   * varp 302 value 2, which shows the guardian.
+   */
+  function agreeToKillDog(event) {
+    const { player, npcId, text } = event;
+    if (npcId !== MYSTERIOUS_VOICE_NPC_ID || text !== DOG_REQUEST_LINE) return;
+    if (quest.getStage(player) !== STAGE_STARTED || agreedToKillDog(player)) return;
+    const after = event.after;
+    event.after = () => {
+      after?.();
+      player.setAttribute(DOOR_ANSWERED_ATTRIBUTE, true);
+      quest.setStage(player, STAGE_STARTED);
+    };
   }
 
   function crossCellGate(player) {
@@ -808,13 +784,12 @@ module.exports = function registerPriestInPerilQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", fillEssenceLine);
   api.onCustomEvent("door:toggle", handleLargeDoor);
-  api.onCustomEvent("door:toggle", claimTrapdoorToggle);
-  api.onCustomEvent("ladders:climb", claimMausoleumClimb);
+  api.onCustomEvent("npc-dialogue:line", agreeToKillDog);
+  api.onCustomEvent("ladders:climb", claimNorthTrapdoorClimb);
   api.onNpcDeath(handleGuardianDeath);
   api.onNpcDeath(handleHoodedMonkDeath);
   api.onNpcInteraction(talkToUnlockedDrezel);
   api.onObjectRoute(handleTrapdoorRoute);
-  api.onObjectInteraction("Trapdoor", { Open: handleTrapdoorOpen });
   api.onObjectInteraction("Holy barrier", { "Pass-through": handleHolyBarrier });
   api.onObjectInteraction("Cell gate", { Open: openCellGate });
   api.onObjectInteraction("Coffin", { Open: openCoffin });

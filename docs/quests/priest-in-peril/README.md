@@ -23,6 +23,16 @@ first-blessing lines) is covered by tests but was not replayed in-game.
 
 Newest first.
 
+- **fixed** Both mausoleum trapdoors climbed straight down on Open, and the church one
+  (3432) landed at 3422,9885. The quest no longer claims them: LocTeleports plays the
+  captured Open/Close swaps (`loc-swaps.json`), the church Climb-down to 3440,9887 and the
+  mausoleum ladder. The quest keeps only the open north trapdoor's (1581) Climb-down,
+  which the capture sync left to it ("You climb down through the trapdoor...", 3405,9906;
+  rsprox.net #365, #4288). The captures show no confirmation prompt; Quest Helper's "Yes."
+  is out of date. Fixed in #1817.
+- **fixed** Varp 302 moved to 2 when the Mysterious Voice conversation started, so turning
+  the voice away also counted as agreeing. It now moves once the player continues past "Then please, deal
+  with that dog for me.". Fixed in #1817.
 - **fixed** Drezel skipped his "It's as I feared..." lines on the first blessing: the
   blessing was marked done at the message just before the "First time blessing water"
   condition. Fixed in #1817 (tests only; not replayed in-game).
@@ -40,11 +50,6 @@ Newest first.
   61. Old saves keep their meaning (an old 50 maps to 8). Fixed in #1817.
 - **fixed** Any monk kill put a golden key in the inventory, and an unreachable monk
   "Talk-to" hook handed one out. Removed in #1817.
-- **open** The north trapdoor (1579, 3405,3507) climbs straight down on Open. Live opens
-  it (1581, Climb-down), and Quest Helper expects a "Yes." confirmation; `travel_to`'s leg
-  was blocked on that difference. The confirmation's text is not sourced yet.
-- **open** Varp 302 moves to 2 when the Mysterious Voice conversation starts, not when the
-  player agrees to kill the dog; the "Nothing. Never mind." branch also counts as agreeing.
 - **open** The mausoleum's south gate (3444) opens without the golden key; the Wiki says it
   needs it. Not tested here: the account carried the key.
 - **open** The Wiki contradicts itself on the key monument: the Iron key page says south, but the
@@ -58,6 +63,21 @@ Newest first.
 ## Runs
 
 Newest first. A rerun adds an entry; it never rewrites an older one.
+
+### 2026-11-01 (follow-up) · agent · claude-opus-5-5
+
+- **Start:** the same server build with the trapdoor and knock fixes. Tester (quest complete)
+  for the trapdoors; a fresh headless account for the knock, placed beside King Roald with
+  `::tele` and started there (302: 0 → 1).
+- **Route:** knock > "Hi, I just moved in next door." (loops back to the menu) > "More..." >
+  "Nothing. Never mind.": 302 stayed 1. Knock > "King Roald sent me to check on Drezel.": 1 at
+  "Then please, deal with that dog for me.", 2 at the player's "Hmm...". A third knock played
+  "Have you dealt with that dog yet?". North trapdoor: Open ("The trapdoor opens...", 1579 →
+  1581), Close ("You close the trapdoor.", → 1579), Open, Climb-down ("You climb down through
+  the trapdoor...", 3405,9906). Mausoleum ladder up to 3405,3506. Church trapdoor: Open (3432 →
+  3433, no message), Close, Open, Climb-down to 3440,9887.
+- **Result:** all match the rsprox.net captures.
+- **Not checked:** the trapdoors before the quest; the swap sounds by ear.
 
 ### 2026-11-01 · agent · claude-opus-5-5
 

@@ -116,7 +116,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Perilous Moons | untested |  |  |  |  |
 | [Pirate's Treasure](pirates-treasure/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | Plague City | untested |  |  |  |  |
-| [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 2 |
+| [Priest in Peril](priest-in-peril/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 1 |
 | [Prince Ali Rescue](prince-ali-rescue/README.md) | ⚠️ passed with issues | 2026-10-29 | agent | grok-4.7 | 1 |
 | [Prying Times](prying-times/README.md) | untested |  |  |  |  |
 | [Rag and Bone Man I](rag-and-bone-man-i/README.md) | untested |  |  |  |  |

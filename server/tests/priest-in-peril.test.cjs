@@ -78,6 +78,7 @@ function harness() {
   const deaths = [];
   const statements = [];
   const grounds = [];
+  const areas = [];
   const fakeCore = { ...core, StatementDialogue: { send: (_player, text) => statements.push(text) } };
   const api = new Proxy({
     core: fakeCore,
@@ -87,6 +88,7 @@ function harness() {
     onItemOnObject: (handler) => itemOnObject.push(handler),
     onNpcInteraction: (handler) => npcInteraction.push(handler),
     onNpcDeath: (handler) => deaths.push(handler),
+    registerArea: (area) => areas.push(area),
     onCustomEvent(key, handler) { custom.set(key, [...(custom.get(key) ?? []), handler]); },
     emitCustomEvent(key, event) { for (const handler of custom.get(key) ?? []) handler(event); },
     getItemOnGroundManager: () => ({ registerLocation: (_player, item, at) => grounds.push([item.getId(), at.getX(), at.getY()]) }),
@@ -94,7 +96,7 @@ function harness() {
   require(root + '/plugins/quests/quests/PriestInPeril.Quest')(api);
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'priest_in_peril');
   const player = makePlayer();
-  const h = { grounds, custom, variants, conditions, named, itemOnObject, npcInteraction, deaths, statements, quest, player };
+  const h = { areas, grounds, custom, variants, conditions, named, itemOnObject, npcInteraction, deaths, statements, quest, player };
   h.emit = (key, event) => {
     const request = { player, handled: false, ...event };
     for (const handler of custom.get(key) ?? []) handler(request);
@@ -149,6 +151,7 @@ test('the route sends live varp 302 values from start to completion', () => {
   // Killing the guardian before the monks ask for it does nothing.
   h.kill(3487);
   assert.equal(h.stage(), 10);
+  player.moveTo(new core.Location(3408, 3488, 0));
   assert.ok(h.emit('door:toggle', { objectId: O.LARGE_DOOR_22 }).handled);
   assert.equal(lastPlayed().variant, 'at-the-temple');
   assert.equal(h.wire(), 1, 'knocking alone agrees to nothing');
@@ -304,4 +307,63 @@ test('the open north trapdoor climbs down beside the mausoleum ladder; the other
   assert.equal(climb(O.TRAPDOOR_13, 3422, 3485), false, "the church trapdoor's captured Climb-down is LocTeleports'");
   assert.equal(climb(O.LADDER_216, 3405, 9907), false, "the mausoleum ladder's captured climb is LocTeleports'");
   assert.equal(h.named.has('Trapdoor'), false, 'Open and Close play the captured loc swaps');
+});
+
+test('the mausoleum gate needs the golden key once, and the key monument refuses a second swap', () => {
+  const h = harness();
+  const gate = (y) => {
+    h.player.moveTo(new core.Location(3405, y, 0));
+    return h.emit('door:toggle', { objectId: O.GATE_70, object: { getLocation: () => new core.Location(3405, 9895, 0) } });
+  };
+  h.player.setAttribute(STAGE, 30);
+  assert.equal(gate(9896).handled, true, 'locked from the ladder side without the key');
+  assert.equal(lastPlayed().variant, 'pre-quest-attempting-to-open-the-gate');
+  assert.equal(gate(9894).handled, false, 'the monument side always opens');
+  h.player.inventory.adds(I.GOLDEN_KEY);
+  assert.equal(gate(9896).handled, false, 'the golden key opens it (Doors swings it)');
+  h.player.inventory.deleteNumber(I.GOLDEN_KEY);
+  assert.equal(gate(9896).handled, false, 'after the first time it needs no key');
+
+  h.player.inventory.adds(I.GOLDEN_KEY);
+  h.player.inventory.adds(I.IRON_KEY);
+  assert.ok(h.useOn(I.GOLDEN_KEY, O.MONUMENT_5, 3427, 9894, 0));
+  assert.equal(h.statements.at(-1), 'You have already swapped the golden key for the iron key.');
+  assert.equal(h.player.inventory.getAmount(I.GOLDEN_KEY), 1);
+});
+
+test('the guardian refuses attacks before the quest and every spell', () => {
+  const h = harness();
+  const messages = [];
+  let spell = null;
+  h.player.sendMessage = (text) => messages.push(text);
+  h.player.getCombat = () => ({ getSelectedSpell: () => spell });
+  const attacker = { isPlayer: () => true, getAsPlayer: () => h.player };
+  const guardian = { getId: () => 3487 };
+  const [area] = h.areas;
+  assert.equal(area.canAttack(attacker, guardian), false);
+  assert.equal(messages.at(-1), 'You have no reason to do that!');
+  h.player.setAttribute(STAGE, 10);
+  assert.equal(area.canAttack(attacker, guardian), null, 'melee and ranged are the normal combat rules');
+  spell = { id: 'wind strike' };
+  assert.equal(area.canAttack(attacker, guardian), false);
+  assert.equal(messages.at(-1), 'Your spells do not seem to affect it.');
+  assert.equal(area.canAttack(attacker, { getId: () => N.MONK_OF_ZAMORAK_17 }), null);
+});
+
+test('the temple doors walk the player through instead of standing open', () => {
+  const h = harness();
+  const door = () => h.emit('door:toggle', { objectId: O.LARGE_DOOR_22 });
+  h.player.setAttribute(STAGE, 10);
+  h.player.moveTo(new core.Location(3408, 3488, 0));
+  door();
+  assert.equal(h.player.getLocation().getX(), 3408, 'before the King is told the monks only answer');
+  h.player.setAttribute(STAGE, 30);
+  assert.ok(door().handled);
+  assert.equal(h.player.getLocation().getX(), 3409);
+  assert.ok(door().handled);
+  assert.equal(h.player.getLocation().getX(), 3408);
+  h.player.setAttribute(STAGE, 0);
+  h.player.moveTo(new core.Location(3409, 3489, 0));
+  assert.ok(door().handled);
+  assert.equal(h.player.getLocation().getX(), 3408, 'anyone inside can leave');
 });

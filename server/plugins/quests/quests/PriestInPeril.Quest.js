@@ -108,9 +108,23 @@ module.exports = function registerPriestInPerilQuest(api) {
     ObjectIdentifiers.LARGE_DOOR_22, // 3490
   ]);
   const CELL_GATE_ID = ObjectIdentifiers.CELL_GATE_7; // 3463 at 3415,3489,2
+  /** The mausoleum's first gate, south of the ladder room (3444 at 3405,9895). */
+  const MAUSOLEUM_GATE_ID = ObjectIdentifiers.GATE_70;
+  const MAUSOLEUM_GATE_LOCATION = { x: 3405, y: 9895, z: 0 };
+  /** Set once the golden key has opened the mausoleum gate: it no longer needs the key. */
+  const MAUSOLEUM_GATE_UNLOCKED_ATTRIBUTE = "priest-in-peril:mausoleum-gate-unlocked";
   const COFFIN_ID = ObjectIdentifiers.COFFIN_7; // 3480 at 3413,3486,2
   const WELL_ID = ObjectIdentifiers.WELL_6; // 3485 at 3423,9890,0
   const MYSTERIOUS_VOICE_NPC_ID = 12240;
+  /**
+   * The large doors' wall is on the east edge of x 3408: the temple is east of it. Live
+   * swings them open and shut again two ticks later (rsprox.net #365), so one player
+   * opening them never lets the next one in; the quest walks the player through instead.
+   */
+  const TEMPLE_DOOR_OUTSIDE_X = 3408;
+  const TEMPLE_DOOR_INSIDE_X = 3409;
+  /** The temple's ground floor (Quest Helper's temple zones). */
+  const TEMPLE_GROUND_FLOOR = { minX: 3409, maxX: 3419, minY: 3483, maxY: 3494 };
   const DOOR_ANSWERED_ATTRIBUTE = "priest-in-peril:door-answered";
 
   /**
@@ -154,6 +168,9 @@ module.exports = function registerPriestInPerilQuest(api) {
   const CELL_INSIDE = new Location(3416, 3489, 2);
   /** Drezel's cell spawn is on the temple's top floor; the mausoleum one is underground. */
   const MAUSOLEUM_MIN_Y = 9000;
+
+  /** The mausoleum's ladder room, where the guardian roams (north of gate 3444). */
+  const GUARDIAN_ROOM = new api.core.Boundary(3398, 3412, 9896, 9910, 0);
 
   let quest;
 
@@ -548,18 +565,35 @@ module.exports = function registerPriestInPerilQuest(api) {
     if (!LARGE_DOOR_IDS.has(request.objectId)) return;
     const { player } = request;
     const stage = quest.getStage(player);
+    const inside = inTemple(player);
+    if (stage >= STAGE_TOLD_KING_ROALD || inside) {
+      crossTempleDoor(player, inside);
+      request.handled = true;
+      return;
+    }
     if (stage < STAGE_STARTED) {
       startTranscript(api, player, MYSTERIOUS_VOICE_NPC_ID, PAGE, "pre-quest-at-the-temple-before-starting-the-quest");
       request.handled = true;
       return;
     }
-    if (stage >= STAGE_TOLD_KING_ROALD) return;
     const variant = stage >= STAGE_GUARDIAN_KILLED
       ? "you-killed-a-dog-letting-the-monks-know-you-did-the-deed"
       : agreedToKillDog(player)
         ? "at-the-temple-knocking-on-the-door-after-accepting-to-kill-the-dog"
         : "at-the-temple";
     if (startTranscript(api, player, MYSTERIOUS_VOICE_NPC_ID, PAGE, variant)) request.handled = true;
+  }
+
+  function inTemple(player) {
+    const location = player.getLocation();
+    return location.getZ() === 0
+      && location.getX() >= TEMPLE_GROUND_FLOOR.minX && location.getX() <= TEMPLE_GROUND_FLOOR.maxX
+      && location.getY() >= TEMPLE_GROUND_FLOOR.minY && location.getY() <= TEMPLE_GROUND_FLOOR.maxY;
+  }
+
+  function crossTempleDoor(player, inside) {
+    const location = player.getLocation();
+    player.moveTo(new Location(inside ? TEMPLE_DOOR_OUTSIDE_X : TEMPLE_DOOR_INSIDE_X, location.getY(), location.getZ()));
   }
 
   /**
@@ -577,6 +611,30 @@ module.exports = function registerPriestInPerilQuest(api) {
       player.setAttribute(DOOR_ANSWERED_ATTRIBUTE, true);
       quest.setStage(player, STAGE_STARTED);
     };
+  }
+
+  /**
+   * The mausoleum's first gate is "securely locked" until the hooded monk's golden key
+   * opens it; after that first time it needs no key (Wiki, Golden key). The monument
+   * side always opens, so nobody is shut in, and so does every later stage.
+   */
+  function handleMausoleumGate(request) {
+    if (request.handled || request.objectId !== MAUSOLEUM_GATE_ID) return;
+    const location = request.object?.getLocation?.();
+    if (!location || location.getX() !== MAUSOLEUM_GATE_LOCATION.x || location.getY() !== MAUSOLEUM_GATE_LOCATION.y) return;
+    const { player } = request;
+    if (quest.getStage(player) >= STAGE_CELL_UNLOCKED || player.getAttribute(MAUSOLEUM_GATE_UNLOCKED_ATTRIBUTE)) return;
+    if (player.getLocation().getY() < MAUSOLEUM_GATE_LOCATION.y) return;
+    if (held(player, GOLDEN_KEY_ITEM_ID)) {
+      player.setAttribute(MAUSOLEUM_GATE_UNLOCKED_ATTRIBUTE, true);
+      return;
+    }
+    playPage(player, "pre-quest-attempting-to-open-the-gate");
+    request.handled = true;
+  }
+
+  function inBank(player, itemId) {
+    return (player.getBanks?.() ?? []).some((bank) => bank?.contains?.(itemId));
   }
 
   function crossCellGate(player) {
@@ -714,6 +772,10 @@ module.exports = function registerPriestInPerilQuest(api) {
     const inventory = player.getInventory();
     if (monument.key) {
       if (itemId === GOLDEN_KEY_ITEM_ID) {
+        if (held(player, IRON_KEY_ITEM_ID) || inBank(player, IRON_KEY_ITEM_ID)) {
+          showStatement(player, "You have already swapped the golden key for the iron key.");
+          return true;
+        }
         inventory.deleteNumber(GOLDEN_KEY_ITEM_ID, 1);
         inventory.adds(IRON_KEY_ITEM_ID, 1);
         showSwap(player, GOLDEN_KEY_ITEM_ID, IRON_KEY_ITEM_ID, "You swap your Golden key for the iron key.");
@@ -753,6 +815,27 @@ module.exports = function registerPriestInPerilQuest(api) {
     return handled;
   }
 
+  /**
+   * The temple guardian before the quest, and against spells (Transcript:Priest in Peril):
+   * "You have no reason to do that!" and "Your spells do not seem to affect it."
+   */
+  class GuardianRoomArea extends api.core.Area {
+    getName() { return "Paterdomus mausoleum"; }
+    canAttack(attacker, target) {
+      if (!attacker?.isPlayer?.() || !TEMPLE_GUARDIAN_NPC_IDS.has(target?.getId?.())) return null;
+      const player = attacker.getAsPlayer();
+      if (!quest.isStarted(player)) {
+        player.sendMessage("You have no reason to do that!");
+        return false;
+      }
+      if (player.getCombat().getSelectedSpell()) {
+        player.sendMessage("Your spells do not seem to affect it.");
+        return false;
+      }
+      return null;
+    }
+  }
+
   function handleLogin({ player }) {
     refreshQuestList(player);
   }
@@ -777,13 +860,16 @@ module.exports = function registerPriestInPerilQuest(api) {
   api.persistAttribute(ESSENCE_HANDED_ATTRIBUTE, 0);
   api.persistAttribute(BLESSINGS_ATTRIBUTE, 0);
   api.persistAttribute(SOUVENIRS_ATTRIBUTE, 0);
+  api.persistAttribute(MAUSOLEUM_GATE_UNLOCKED_ATTRIBUTE, false);
 
+  api.registerArea(new GuardianRoomArea([GUARDIAN_ROOM]));
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", fillEssenceLine);
   api.onCustomEvent("door:toggle", handleLargeDoor);
+  api.onCustomEvent("door:toggle", handleMausoleumGate);
   api.onCustomEvent("npc-dialogue:line", agreeToKillDog);
   api.onCustomEvent("ladders:climb", claimNorthTrapdoorClimb);
   api.onNpcDeath(handleGuardianDeath);

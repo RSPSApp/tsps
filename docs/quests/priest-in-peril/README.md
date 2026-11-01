@@ -16,13 +16,26 @@ travel: travel_to
 A fresh account completed the quest by the Quest Helper route, watched in a client. The
 mausoleum half (monuments, key swap, well, cell gate, blessing, coffin) did not exist before
 this run and was added from the Wiki transcripts. Varp 302 now carries live OSRS's values,
-and the run checked them after every step. Open findings are small deviations; one fix (Drezel's
-first-blessing lines) is covered by tests but was not replayed in-game.
+and the run checked them after every step. Follow-up runs on fresh accounts checked the
+before-quest rules, the gate, the guardian and the fixes made after the first run. What stays
+open is outside the quest's code or has no source to settle it.
 
 ## Findings
 
 Newest first.
 
+- **fixed** The temple's large doors stayed open after a quester used them (Doors keeps
+  them open), so a player who hadn't started the quest could walk in. Live swings them shut
+  two ticks later (rsprox.net #365). The quest walks the player through instead: from stage 30, or
+  from inside at any stage. Fixed in #1817.
+- **fixed** The guardian could be attacked before the quest and was not immune to magic.
+  An Area over the ladder room refuses both with the transcript's "You have no reason to do
+  that!" and "Your spells do not seem to affect it.". Fixed in #1817.
+- **fixed** The mausoleum's first gate (3444) opened for anyone. It is now "securely locked"
+  until the golden key opens it once (Wiki, Golden key); the monument side and every stage
+  from the unlocked cell on open freely. Using the golden key on the key monument with an
+  iron key held or banked gives "You have already swapped the golden key for the iron key.".
+  Fixed in #1817.
 - **fixed** Both mausoleum trapdoors climbed straight down on Open, and the church one
   (3432) landed at 3422,9885. The quest no longer claims them: LocTeleports plays the
   captured Open/Close swaps (`loc-swaps.json`), the church Climb-down to 3440,9887 and the
@@ -35,7 +48,7 @@ Newest first.
   with that dog for me.". Fixed in #1817.
 - **fixed** Drezel skipped his "It's as I feared..." lines on the first blessing: the
   blessing was marked done at the message just before the "First time blessing water"
-  condition. Fixed in #1817 (tests only; not replayed in-game).
+  condition. Fixed in #1817 (replayed in the second follow-up).
 - **fixed** No golden key: the plugin's grant was removed, and the generated
   `monk_of_zamorak_paterdomus` row is a 1/1 tertiary with no quest condition, which NpcDrops
   skips. The hooded level 30 monk (3486/16273) now drops it on the ground from the King's
@@ -50,19 +63,44 @@ Newest first.
   61. Old saves keep their meaning (an old 50 maps to 8). Fixed in #1817.
 - **fixed** Any monk kill put a golden key in the inventory, and an unreachable monk
   "Talk-to" hook handed one out. Removed in #1817.
-- **open** The mausoleum's south gate (3444) opens without the golden key; the Wiki says it
-  needs it. Not tested here: the account carried the key.
-- **open** The Wiki contradicts itself on the key monument: the Iron key page says south, but the
-  infobox and all six golden item pages put the key on the north-east monument (3497). This
-  plugin follows the six item pages.
+- **open** The Wiki contradicts itself on the key monument: the Iron key and Golden key pages
+  say south, but the Monument infobox and all six golden item pages put the needle south and
+  the key north-east (3497). This plugin follows the seven. No capture uses a key on a
+  monument, and the cache has no item decoration on them to tell.
+- **open (minor)** Mysterious Voice 2's lines show under Mysterious Voice's name: the plugin
+  speaks through 12240, and no capture records the live door conversation's speakers.
+- **open (Doors)** Gate 3444 opens into loc 3445 (the other mausoleum gate, still "Open") at
+  3405,9894. Live adds the inactive leaf 3446 and an invisible wall (rsprox.net #365, #4288).
 - **open (data)** `monk_of_zamorak_paterdomus` is shared by all six monk ids (17/22/30) and its golden-key row
   carries no quest condition. Needs an osrsreboxed-db dumper fix.
-- **open (travel_to)** The temple staircase is 61190 here, 16671 in the live data (found by name),
-  and the down staircase lands at 3416,3493 instead of the live tile.
+- **open (travel_to)** `transports.json` has the temple's old stairs (16671 at 3418,3486 up,
+  landing 3417,3486 down). Rev 241 has `PATERDOMUS_SPIRALSTAIRS_M` (61190, 2x2 at 3417,3484) up
+  and 16673 at 3417,3493,1 down, which lands at 3416,3493; no capture confirms that landing.
 
 ## Runs
 
 Newest first. A rerun adds an entry; it never rewrites an older one.
+
+### 2026-11-01 (second follow-up) · agent · claude-opus-5-5
+
+- **Start:** two fresh headless accounts. Account A continued from the knock check (302 = 2);
+  account B started at 0. Placement and focused checks used `::tele`, and the King was talked to normally.
+  Declared aids on the test accounts: `::infhp`, `::master`, a dragon scimitar, Varrock teleport
+  tablets, a bucket, a hammer, runes.
+- **Account A:** gate 3444 without the key: "The gate is securely locked." (twice, gate shut).
+  Guardian killed in melee (302 → 3), King (→ 4), hooded monk: golden key on the ground, Drezel
+  (→ 5). The gate then opened with the key. Take-from with invulnerability off: the holy-power
+  message and 99 → 98 HP. Hammer on the north monument: item box "You swap your hammer for the
+  golden hammer.", the golden hammer back: "rather keep the valuable solid gold hammer". Golden
+  key on the north-east monument, bucket on the well, cell unlocked with murky water: Drezel's
+  "It's as I feared... purify this water..." and "I'll do that right away." played (→ 6).
+- **Account B (before the quest):** from inside the temple the door walked it out; a knock
+  gave "You knock at the door..." and "Doesn't seem like anyone's home." and stayed shut. North
+  trapdoor opened and climbed as captured; attacking the guardian: "You have no reason to do
+  that!"; gate 3444: "The gate is securely locked.". After starting the quest, Wind Strike on
+  the guardian: "Your spells do not seem to affect it.", no runes used, guardian at 45/45.
+- **Not checked:** the souvenirs other than the hammer; the second hammer's "already taken"
+  statement in-game (statement boxes don't reach the MCP dialogue reader; tests cover it).
 
 ### 2026-11-01 (follow-up) · agent · claude-opus-5-5
 
@@ -77,7 +115,8 @@ Newest first. A rerun adds an entry; it never rewrites an older one.
   the trapdoor...", 3405,9906). Mausoleum ladder up to 3405,3506. Church trapdoor: Open (3432 →
   3433, no message), Close, Open, Climb-down to 3440,9887.
 - **Result:** all match the rsprox.net captures.
-- **Not checked:** the trapdoors before the quest; the swap sounds by ear.
+- **Not checked:** the swap sounds by ear. (The trapdoors before the quest were checked in the
+  second follow-up.)
 
 ### 2026-11-01 · agent · claude-opus-5-5
 

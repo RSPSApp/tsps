@@ -2,7 +2,7 @@
 
 The OSRS Clan system (`//` chat, the Your Clan tab), which is separate from the old Clan Chat, now
 called the Chat-channel ([social-chat-and-following.md](social-chat-and-following.md)). This page is
-the plan and the facts it relies on. Phase 1 is built; the rest is not.
+the plan and the facts it relies on. Phases 1 and 2 are built; the rest is not.
 
 ## Evidence
 
@@ -22,6 +22,25 @@ the plan and the facts it relies on. Phase 1 is built; the rest is not.
 
 The recordings are revisions 229-235 and the cache is 241; ids here were checked against the cache's
 varbit config.
+
+## Evidence for the Clan Hub and Settings
+
+No recording in the archive holds clan creation (interface 705 has no hits), so the flow is the cache's
+scripts and the Wiki, with these filled in by us:
+
+- The Clerk's opening options "I'd like to form a clan." and "I have some questions.": the Wiki says
+  to talk to the Clerk and the transcript has no such line.
+- The invite prompts ("Help X form a clan?", "Join X?") and every message from the plugin.
+- Founders other than the creator start at rank 0. A former owner becomes Deputy Owner.
+- Name rule beyond uniqueness: up to 20 letters, numbers, spaces, `_` and `-`.
+- The hub's extent, and the Recruit option's slot (6).
+- The Clerk's Items option hands over a cloak and vexillum: the transcript names an interface we
+  don't have.
+- Hours are counted from when this ships: tsps has no saved playtime, so existing accounts start at zero.
+- The successor follows the Clan page (next rank, then longest in the clan); Clan Settings differs.
+
+Settings (690) is captured in rsprox 2778: the `4289` and `4290` rows, and buttons `690:20` Members,
+`690:21` Applicants, `690:23` Permissions. Leave and Resign have no capture.
 
 ## How tsps carries it
 
@@ -43,25 +62,25 @@ varbit config.
 - Your Clan: name, home world, member list with ranks and worlds, Chat and Leave buttons.
 - Login rejoin, leaving and rejoining the channel, remembered across logins.
 - Rank 0 titled Recruit; other titles wait for phase 3.
-- **Stand-in for creation:** `::clancreate <name>` and `::clanadd <player>`, owner rank only. No
-  player can make a clan until phase 2.
+- `::clancreate <name>` and `::clanadd <player>`, owner rank only, stay as testing shortcuts.
 
 Not checked against live: the channel staying left across a login, rank 0 for a new member (no
 source gives the default; rank 0 is common in the recordings), and the text "You are not currently
 in a clan channel." for `//` outside a channel, which has no capture.
 
-### 2. Clan Hub creation and leaving
+### 2. Clan Hub creation and leaving (built)
 
-- Clerk at the Clan Hub, the creation side panel (705): invite four founders, the 25-hour check,
-  name rules, one clan per day.
-- `Recruit` and accepting an invite; leaving the clan, with its confirm.
-- Resigning and ownership transfer. **The Wiki pages disagree on the successor**, so it needs a capture.
-- Settings button (`701:9`), which only says it is unavailable in phase 1.
+- The Clerk at the Clan Hub and the creation side panel (705): Invite in target mode, the name
+  prompt, Cancel and Confirm, with five founders, 25 hours each, a unique name and one clan a day.
+- `Recruit`, around the hub or with a vexillum on, for Administrators and up; the target must accept aid.
+- Settings (690) with its rows, Leave Clan and Resign (7 days, undoable). An owner away 90 days
+  starts resigning. A clan with nobody left is deleted when the 7 days are up.
+- The Clerk's Items option. The other Settings rows and buttons say they aren't available yet.
 
 ### 3. Settings, ranks and permissions
 
-- Clan Settings interfaces: `clans_members`, `clans_permissions`, `clans_ranktitles`,
-  `clans_banned`, `clans_info`.
+- Clan Settings interfaces: `clans_members` (693), `clans_permissions` (706), `clans_ranktitles` (695),
+  `clans_banned` (689), `clans_applicants` (699), `clans_board` (700), and `clans_info`'s editable rows.
 - `ClanSettingsDelta`, which live sends for changes (3886 tick 664). Phase 1 resends the full packet.
 - Talk, kick and ban rank enforcement; `ACTIVECLANCHANNEL_KICKUSER`,
   `AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL`, `AFFINEDCLANSETTINGS_SETMUTED_FROMCHANNEL`, which are

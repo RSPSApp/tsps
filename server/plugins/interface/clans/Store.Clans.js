@@ -44,6 +44,11 @@ function create(fields) {
   return clan;
 }
 
+function remove(clan) {
+  load().delete(clan.key);
+  save();
+}
+
 function all() {
   return load().values();
 }
@@ -65,4 +70,4 @@ function reset() {
   nextKey = 1;
 }
 
-module.exports = { create, byName, byMember, save, reset };
+module.exports = { create, remove, byName, byMember, save, reset };

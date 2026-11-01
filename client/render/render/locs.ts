@@ -41,6 +41,7 @@ import { MenuTargetType } from "../../rs/MenuEntry";
 import type { OverlayFloorType } from "../../rs/config/floortype/OverlayFloorType";
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
+import { matchingLocSlotIds, shapeSlotOverride, suppressShapeSlotAt } from "../loc/LocSlots";
 import { NpcModelLoader } from "../../rs/config/npctype/NpcModelLoader";
 import { NpcDrawPriority, NpcType } from "../../rs/config/npctype/NpcType";
 import { PlayerAppearance } from "../../rs/config/player/PlayerAppearance";
@@ -458,6 +459,67 @@ export function scheduleLocGeometryUpdate(host: WebGLOsrsRendererHost,
     
 }
 
+/**
+ * Cache locs in the slot a LOC_ADD_CHANGE addresses: the tile's locs with the same shape *and*
+ * rotation. Matching by shape alone removed unrelated scenery from the tile (the Grand Exchange's
+ * paving is rotation-1 NORMAL locs, so a rotation-0 fire erased a tile of floor, issue #1748).
+ */
+function addChangeSlotIds(
+    host: WebGLOsrsRendererHost,
+    tile: { x: number; y: number },
+    level: number,
+    shape: number,
+    rotation: number,
+): number[] {
+    const locs = host.getLocIdsAtTileAllLevels(tile.x, tile.y).filter(
+        (loc) => (loc.level | 0) === (level | 0),
+    );
+    return matchingLocSlotIds(
+        locs.map((loc) => loc.id),
+        locs.map((loc) => loc.typeRot ?? 0),
+        shape,
+        rotation,
+    );
+}
+
+/**
+ * Reconciles a replayed add with the scenery it replaced: keeps the recorded replacements, picks
+ * up a cache loc that has appeared in the slot since (a square that loaded late), and reapplies
+ * any suppression that went missing. Returns whether a rebuild is needed.
+ */
+function reconcileAdded(
+    host: WebGLOsrsRendererHost,
+    added: { locId: number; replacedIds?: number[] },
+    tile: { x: number; y: number },
+    level: number,
+    shape: number,
+    rotation: number,
+): boolean {
+    if (host.instanceActive) {
+        if (shapeSlotOverride(host.locOverrides, tile.x, tile.y, level, shape)?.newId === 0) {
+            return false;
+        }
+        suppressShapeSlotAt(host.locOverrides, tile.x, tile.y, level, shape);
+        return true;
+    }
+    let changed = false;
+    const recorded = new Set(added.replacedIds ?? []);
+    for (const id of recorded) {
+        if (host.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === 0) continue;
+        host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: 0 });
+        changed = true;
+    }
+    // The built index also holds the dynamic object itself; only other ids are cache locs.
+    for (const id of addChangeSlotIds(host, tile, level, shape, rotation)) {
+        if ((id | 0) === (added.locId | 0) || recorded.has(id)) continue;
+        host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: 0 });
+        recorded.add(id);
+        changed = true;
+    }
+    if (changed) added.replacedIds = [...recorded];
+    return changed;
+}
+
 export function onLocAddChange(host: WebGLOsrsRendererHost, 
         locId: number,
         tile: { x: number; y: number },
@@ -468,51 +530,65 @@ export function onLocAddChange(host: WebGLOsrsRendererHost,
 
         try {
             const key = `${tile.x},${tile.y},${level},${shape}`;
-            const overrideKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
             const existing = host.addedLocs.get(key);
-            const existingOverride = host.locOverrides.get(overrideKey);
-            const preservesOtherShapeRemoval =
-                existingOverride?.newId === 0 &&
-                typeof existingOverride.matchType === "number" &&
-                existingOverride.matchType !== shape;
+            const rebuild = () => {
+                const mapX = Math.floor(tile.x / 64);
+                const mapY = Math.floor(tile.y / 64);
+                // Locs on a boat deck belong to that boat's scene, which is rebuilt as a whole.
+                // Deck locs usually arrive after the scene itself.
+                const deckView = host.osrsClient?.worldViewManager?.findWorldViewAt(tile.x, tile.y);
+                if (deckView && host.worldEntityOverlays?.has(deckView.id)) {
+                    host.scheduleWorldEntityLocRebuild(deckView.id);
+                } else {
+                    const locType = host.osrsClient.locTypeLoader.load(locId | 0);
+                    const group = locType && isDoorLocType(locType) ? "door" : "loc";
+                    // An instance builds the new loc from extraLocs.
+                    if (host.instanceActive) host.scheduleInstanceLocUpdate(group);
+                    else host.scheduleLocGeometryUpdate(mapX, mapY, group);
+                }
+            };
+
+            // A replay of an object this square already placed keeps the replacements its first
+            // add recorded. The per-tile index describes the *built* scene, where the dynamic
+            // object is now what sits in the slot (the cache locs it replaced are gone), so
+            // deriving them again would overwrite the restore record and leak the original cache
+            // suppression on deletion.
             if (
                 existing?.locId === locId &&
                 existing.x === tile.x &&
                 existing.y === tile.y &&
                 existing.level === level &&
                 existing.shape === shape &&
-                existing.rotation === rotation &&
-                existingOverride?.newId === 0 &&
-                (existingOverride.matchType === shape || preservesOtherShapeRemoval)
+                existing.rotation === rotation
             ) {
+                if (reconcileAdded(host, existing, tile, level, shape, rotation)) rebuild();
                 return;
             }
-            host.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation });
 
-            // Suppress the base cache-baked loc at this tile so it doesn't
-            // keep rendering alongside (or instead of) the new one - buildScene
-            // has no other way to know a cache loc was replaced/removed.
-            host.locOverrides.set(preservesOtherShapeRemoval ? `${overrideKey},${shape}` : overrideKey, {
-                newId: 0,
-                matchType: shape as LocModelType,
-            });
+            // An instance's template hotspot is never removed by the server (building furniture
+            // only sends the new object), so there it is replaced by shape, at whatever rotation
+            // the hotspot was placed. In the main world the server removes what it replaces, so
+            // only the exact (shape, rotation) slot goes: the GE's paving is NORMAL locs of
+            // another rotation, and matching by shape alone erased a floor tile per fire
+            // (issue #1748).
+            const derived = host.instanceActive
+                ? []
+                : addChangeSlotIds(host, tile, level, shape, rotation);
+            // A different object taking over the same slot inherits what its predecessor replaced.
+            const replaced = Array.from(new Set([...(existing?.replacedIds ?? []), ...derived]));
+            host.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });
 
-            const mapX = Math.floor(tile.x / 64);
-            const mapY = Math.floor(tile.y / 64);
-            // Locs on a boat deck belong to that boat's scene, which is rebuilt as a whole.
-            // Deck locs usually arrive after the scene itself.
-            const deckView = host.osrsClient?.worldViewManager?.findWorldViewAt(tile.x, tile.y);
-            if (deckView && host.worldEntityOverlays?.has(deckView.id)) {
-                host.scheduleWorldEntityLocRebuild(deckView.id);
+            if (host.instanceActive) {
+                suppressShapeSlotAt(host.locOverrides, tile.x, tile.y, level, shape);
             } else {
-                const locType = host.osrsClient.locTypeLoader.load(locId | 0);
-                const group = locType && isDoorLocType(locType) ? "door" : "loc";
-                // An instance builds the new loc from extraLocs.
-                if (host.instanceActive) host.scheduleInstanceLocUpdate(group);
-                else host.scheduleLocGeometryUpdate(mapX, mapY, group);
+                for (const id of replaced) {
+                    host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`, { newId: 0 });
+                }
             }
+
+            rebuild();
             console.log(
-                `[WebGLRenderer] Loc add: ${locId} at (${tile.x}, ${tile.y}, ${level}) shape=${shape} -> map (${mapX}, ${mapY})`,
+                `[WebGLRenderer] Loc add: ${locId} at (${tile.x}, ${tile.y}, ${level}) shape=${shape} -> map (${Math.floor(tile.x / 64)}, ${Math.floor(tile.y / 64)})`,
             );
         } catch (err) {
             console.warn("onLocAddChange error", err);

@@ -423,11 +423,16 @@ function foregroundLoadsBeforeBackgroundAndPublishesTogether(): void {
 
 function duplicateLocReplayIsIgnored(): void {
     let refreshes = 0;
+    // The tile holds a cache loc in the same slot a fire (shape 10, rotation 1) addresses, so
+    // adding it suppresses that loc id; a replay needs no second rebuild.
+    const tileLoc = { id: 16011, level: 1, typeRot: (1 << 6) | 10 };
     const host = {
         addedLocs: new Map(),
         locOverrides: new Map(),
         instanceActive: false,
         osrsClient: { locTypeLoader: { load: () => undefined } },
+        getLocIdsAtTileAllLevels: (x: number, y: number) =>
+            x === 2431 && y === 3076 ? [tileLoc] : [],
         scheduleLocGeometryUpdate: () => {
             refreshes++;
         },
@@ -436,6 +441,7 @@ function duplicateLocReplayIsIgnored(): void {
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);
     assert.equal(refreshes, 1);
+    assert.deepEqual(host.locOverrides.get("2431,3076,1,16011"), { newId: 0 }, "the replaced loc is suppressed");
 
     host.locOverrides.clear();
     onLocAddChange(host, 411, { x: 2431, y: 3076 }, 1, 10, 1);

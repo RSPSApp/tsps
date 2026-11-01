@@ -116,7 +116,16 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     /** Dynamically spawned locs (LOC_ADD_CHANGE), keyed by "x,y,level,shape". */
     readonly addedLocs = new Map<
         string,
-        { locId: number; x: number; y: number; level: number; shape: number; rotation: number }
+        {
+            locId: number;
+            x: number;
+            y: number;
+            level: number;
+            shape: number;
+            rotation: number;
+            /** Cache locs this add replaced, so removing it restores them. */
+            replacedIds?: number[];
+        }
     >();
     readonly locSpawns: NonNullable<SdMapLoaderInput["locSpawns"]> = new Map();
     readonly terrainOverrides: NonNullable<SdMapLoaderInput["terrainOverrides"]> = new Map();

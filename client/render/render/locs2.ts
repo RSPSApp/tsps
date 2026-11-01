@@ -186,6 +186,7 @@ import {
     createProjectileProgram,
 } from "../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
+import { suppressShapeSlotAt } from "../loc/LocSlots";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
 
@@ -193,45 +194,47 @@ export function onLocDel(host: WebGLOsrsRendererHost, tile: { x: number; y: numb
 
         try {
             const key = `${tile.x},${tile.y},${level},${shape}`;
+            const added = host.addedLocs.get(key);
+            const wasAdded = added !== undefined && ((added.rotation | 0) & 0x3) === ((rotation | 0) & 0x3);
             host.addedLocs.delete(key);
 
-            // Suppress the base cache-baked loc at this tile so a deregistered
-            // object (e.g. a chopped tree) actually disappears - buildScene has
-            // no other way to know a cache loc was removed.
-            let overrideKey = `${tile.x | 0},${tile.y | 0},${level | 0},-1`;
-            let existingOverride = host.locOverrides.get(overrideKey);
-            if (typeof existingOverride?.matchType === "number" && existingOverride.matchType !== shape) {
-                overrideKey += `,${shape}`;
-                existingOverride = host.locOverrides.get(overrideKey);
-            }
-            if (
-                existingOverride?.newId !== 0 ||
-                typeof existingOverride.matchType !== "number" ||
-                existingOverride.matchType === shape
-            ) {
-                host.locOverrides.set(overrideKey, {
+            const deletedLoc =
+                wasAdded
+                    ? undefined
+                    : host.getLocIdsAtTileAllLevels(tile.x, tile.y).find((loc) => {
+                          if ((loc.level | 0) !== (level | 0)) return false;
+                          const typeRot = loc.typeRot;
+                          return (
+                              typeRot !== undefined &&
+                              ((typeRot | 0) & 0x3f) === ((shape | 0) & 0x3f) &&
+                              ((typeRot >> 6) & 0x3) === ((rotation | 0) & 0x3)
+                          );
+                      });
+
+            if (wasAdded) {
+                // The object the server added is gone. Its add never removed the cache scenery
+                // here, and whatever it did replace comes back.
+                for (const id of added.replacedIds ?? []) {
+                    host.locOverrides.delete(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`);
+                }
+            } else if (deletedLoc && (deletedLoc.id | 0) > 0) {
+                // Suppress exactly the cache loc that was removed (a chopped tree, a door).
+                host.locOverrides.set(`${tile.x | 0},${tile.y | 0},${level | 0},${deletedLoc.id | 0}`, {
                     newId: 0,
-                    matchType: shape as LocModelType,
                 });
+            } else {
+                // No id to key on: fall back to this tile's slot only, never every loc of the shape.
+                suppressShapeSlotAt(host.locOverrides, tile.x, tile.y, level, shape, rotation);
             }
 
             const mapX = Math.floor(tile.x / 64);
             const mapY = Math.floor(tile.y / 64);
-            // LOC_DEL does not carry an object id. Resolve it from the current
-            // per-tile loc index so deletes can stay on the same partial path.
-            const deletedLoc = host.getLocIdsAtTileAllLevels(tile.x, tile.y).find((loc) => {
-                if ((loc.level | 0) !== (level | 0)) return false;
-                const typeRot = loc.typeRot;
-                return (
-                    typeRot !== undefined &&
-                    ((typeRot | 0) & 0x3f) === ((shape | 0) & 0x3f) &&
-                    ((typeRot >> 6) & 0x3) === ((rotation | 0) & 0x3)
-                );
-            });
             const locType =
-                deletedLoc && (deletedLoc.id | 0) > 0
-                    ? host.osrsClient.locTypeLoader.load(deletedLoc.id | 0)
-                    : undefined;
+                wasAdded
+                    ? host.osrsClient.locTypeLoader.load(added.locId | 0)
+                    : deletedLoc && (deletedLoc.id | 0) > 0
+                      ? host.osrsClient.locTypeLoader.load(deletedLoc.id | 0)
+                      : undefined;
             const group = locType ? (isDoorLocType(locType) ? "door" : "loc") : "full";
             if (host.instanceActive) host.scheduleInstanceLocUpdate(group);
             else host.scheduleLocGeometryUpdate(mapX, mapY, group);

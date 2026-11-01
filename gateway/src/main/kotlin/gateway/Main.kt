@@ -22,7 +22,7 @@ fun main() {
     val config = gateway.config
     println("tsps gateway (revision ${gateway.revision}) on port ${config.gatewayPort}, tsps at ${config.tspsUrl}")
     println(
-        "RSProx target: jav_config_url http://127.0.0.1:${config.websocketPort}/gateway/jav_config.ws, " +
+        "RSProx target: jav_config_url http://${config.publicHost}:${config.websocketPort}/gateway/jav_config.ws, " +
             "game_server_port ${config.gatewayPort}, revision ${gateway.revision}, modulus ${gateway.rsa.modulus.toString(16)}",
     )
 }

@@ -266,6 +266,21 @@ test("a currency with a unit uses OSRS's wording: costs, buy-back and too few", 
 });
 
 
+test("Baba Yaga's Trade opens her post-Lunar Diplomacy shop", () => {
+  const shops = require("../data/definitions/shops.json");
+  const BabaYaga = require("../plugins/npcs/BabaYaga.plugin");
+  const opened = [];
+  let actions;
+  BabaYaga.register({
+    core: { ShopManager: { open: (...args) => opened.push(args) } },
+    onNpcInteraction: (name, handlers) => { if (name === "Baba Yaga") actions = handlers; },
+  });
+  const player = {};
+  actions.Trade({ player });
+  assert.equal(opened[0][0], player);
+  assert.match(shops.find(({ id }) => id === opened[0][1]).name, /^Baba Yaga's Magic Shop\. \(After Lunar Diplomacy\)$/);
+});
+
 const CustomShops = require("../plugins/interface/CustomShops.plugin");
 const CUSTOM_GROUP = 30009;
 const NOTED_TOGGLE_UID = (CUSTOM_GROUP << 16) | 6;

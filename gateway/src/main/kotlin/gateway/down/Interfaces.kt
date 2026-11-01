@@ -126,6 +126,8 @@ class Interfaces(
      * in on root 165 with the gameframe moved there and the welcome screen as a modal in 165:40,
      * and on Play closes it and moves the gameframe to the player's root. As the root alone, the
      * client had no game view: the login screen stayed behind it, with "Loading - please wait".
+     * Any other root change (a game client layout chosen in the settings) moves the mounts the
+     * same way.
      */
     private fun setRoot(group: Int) {
         val from = tree.root
@@ -134,9 +136,9 @@ class Interfaces(
         if (welcome) send(IfCloseSub(InterfaceTree.LOGIN_ROOT, InterfaceTree.WELCOME_SLOT))
         tree.setRoot(if (welcomeShown) InterfaceTree.LOGIN_ROOT else group)
         send(IfOpenTop(tree.root))
-        if (welcome || welcomeShown) {
-            for ((source, target) in tree.moves(from)) send(IfMoveSub(source ushr 16, source and 0xFFFF, target ushr 16, target and 0xFFFF))
-        }
+        // The browser moves tsps's mounts to a new root itself; the official client needs each one
+        // moved, as live does on Play and on a game client layout change.
+        for ((source, target) in tree.moves(from)) send(IfMoveSub(source ushr 16, source and 0xFFFF, target ushr 16, target and 0xFFFF))
         if (welcomeShown) openSub((InterfaceTree.LOGIN_ROOT shl 16) or InterfaceTree.WELCOME_SLOT, WELCOME_SCREEN, MODAL)
     }
 

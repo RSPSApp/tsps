@@ -40,7 +40,7 @@ function open({ player }) {
   for (const filter of Object.values(Common.data.filters)) {
     sender.sendInterfaceFlagsRange(uid(group, filter.component), filter.slots[0], filter.slots[1], FLAGS_OP1);
   }
-  sender.sendInterfaceFlagsRange(uid(group, rows), 0, Common.catalog(type).tasks.length, FLAGS_OP1);
+  sender.sendInterfaceFlagsRange(uid(group, rows), 0, Common.catalog(type).slots, FLAGS_OP1);
   sender.sendInterfaceFlagsRange(uid(group, menuFrame), menuFrameSlots[0], menuFrameSlots[1], FLAGS_OP1);
   viewing.add(player);
   return true;

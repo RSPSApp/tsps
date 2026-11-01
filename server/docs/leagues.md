@@ -1317,8 +1317,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
 
 - **The catalog** is `data/league-tasks.json`, **generated** by `scripts/generate-league-tasks.ts`
   (`yarn generate:league-tasks [--from <dir>] [--save <dir>] [--check]`) from the Wiki's
-  Trailblazer_Reloaded_League/Tasks and Raging_Echoes_League/Tasks pages (one `{{TRLTaskRow}}` /
-  `{{RELTaskRow}}` template per task in the raw wikitext: name, description, requirements, tier,
+  Trailblazer_Reloaded_League/Tasks, Raging_Echoes_League/Tasks and Demonic_Pacts_League/Tasks
+  pages (one `{{TRLTaskRow}}` / `{{RELTaskRow}}` / `{{DPLTaskRow}}` template per task in the raw wikitext: name, description, requirements, tier,
   region, the Wiki's id) and the rev 241 cache; never edit it by hand, change the generator and
   re-run it (same inputs, identical file; `--check` fails when the committed file is stale). A
   task has a stable string id (its name's slug; saves hold ids, so the list order is free to
@@ -1332,6 +1332,19 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   that share a name) takes the cache's, the rest a rule in the generator (`categorySource:
   "rule"`, ours). The Wiki's Trailblazer Reloaded id 1522 is on two tasks (The Frozen Door,
   Defeat Vardorvis); kept as the Wiki has it.
+- **Demonic Pacts' catalog is the cache's own list** (`fromCache: true`): this cache (rev 241) is
+  the Demonic Pacts cache, so its task enum 5950 and table 118 rows are that league's. The
+  generator reads them in position order: name, description, tier, area and category as the client
+  shows them, tier points from enum 2671 (10, 30, 80, 200, 400), and the position as the task's
+  `position`, its completion bit. Only rows marked in the league (column 34) are tasks: 1592 of the
+  1593 ("Equip a Dragon Crossbow", position 1431, is not), so a task past it keeps its position,
+  not its index. A missing column reads table 118's default, -1 (one task has no category). The
+  Wiki's Demonic_Pacts_League/Tasks page (`{{DPLTaskRow}}`) joins by its `id`, which is the cache
+  position for every row, for the requirements, `pactTask` (79 tasks that award a pact point) and
+  the description a trigger is derived from (it keeps "(not including Agility and Hitpoints)",
+  which the cache's shorter text drops); the cache's name wins where the Wiki's differs ("Fully
+  clear a dense jungle", the Wiki's "Chop a dense jungle"). The client needs no overrides for it,
+  so `league:content-rows` adds none.
 - **The list** (`league_tasks`, 657; `data/league-task-list.json` holds every id below). As the
   cache's scripts read it (3202 -> 3204 -> 9428): the rows come from enum 5950 (position -> a row
   of DB table 118: 0 name, 1 description, 32 tier, 34 "in this league", 35 category, 36 area),
@@ -1391,7 +1404,7 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   a rule in the generator, or an entry in the overlay; or have the plugin that knows the deed emit
   `league:complete-task`. Everything else in the catalog is visible and counts once mapped.
 - **Not mapped yet:** kills with a place or a condition, equipment, skilling counts, clue
-  scrolls, minigames, the Leagues tutorial task, and the Raging Echoes pacts (league 6's rows).
+  scrolls, minigames and the Leagues tutorial task.
 
 ## Developer commands
 

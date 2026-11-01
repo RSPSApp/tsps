@@ -17,7 +17,7 @@ let api = null;
 let core = null;
 let data = null;
 let leagues = null;
-/** League type -> { tasks, byId }. */
+/** League type -> { key, fromCache, tasks, slots (list positions), byId }. */
 const catalogs = new Map();
 
 function init(pluginApi) {
@@ -31,11 +31,14 @@ function init(pluginApi) {
   const overlay = read("league-task-triggers.json");
   data.tiers = catalog.tiers;
   for (const [type, league] of Object.entries(catalog.leagues)) {
+    // A task's completion bit: its place in the list, which is the cache's own position for the
+    // league the cache carries (`fromCache`; its list skips the rows not in that league).
     const tasks = league.tasks.map((task, index) => {
       const trigger = overlay[type]?.[task.id] ?? task.trigger ?? null;
-      return { ...task, index, trigger };
+      return { ...task, index: Number.isInteger(task.position) ? task.position : index, trigger };
     });
-    catalogs.set(Number(type), { key: league.key, tasks, byId: new Map(tasks.map((task) => [task.id, task])) });
+    const slots = tasks.reduce((most, task) => Math.max(most, task.index + 1), 0);
+    catalogs.set(Number(type), { key: league.key, fromCache: league.fromCache === true, tasks, slots, byId: new Map(tasks.map((task) => [task.id, task])) });
   }
 }
 

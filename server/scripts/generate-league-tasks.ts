@@ -1,10 +1,20 @@
-// Generates plugins/modes/data/league-tasks.json, the league task catalogs, from the OSRS Wiki.
+// Generates plugins/modes/data/league-tasks.json, the league task catalogs, from the OSRS Wiki and
+// the cache.
 //
 //   yarn generate:league-tasks [--from <dir>] [--save <dir>] [--check]
 //
-// Sources (one `{{TRLTaskRow|...}}` / `{{RELTaskRow|...}}` template per task in the raw wikitext):
+// Sources (one `{{TRLTaskRow|...}}` / `{{RELTaskRow|...}}` / `{{DPLTaskRow|...}}` template per task
+// in the raw wikitext):
 //   https://oldschool.runescape.wiki/w/Trailblazer_Reloaded_League/Tasks?action=raw  (league type 4)
 //   https://oldschool.runescape.wiki/w/Raging_Echoes_League/Tasks?action=raw         (league type 5)
+//   https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Tasks?action=raw         (league type 6)
+//
+// Demonic Pacts is the league the rev 241 cache carries, so its catalog is the cache's own list:
+// enum 5950's positions in order, each a row of DB table 118 with the name, description, tier, area
+// and category the client shows, and the position its completion bit. Only rows marked "in this
+// league" (column 34) are tasks. The Wiki's DPL rows give what the cache does not: requirements and
+// whether the task awards a pact point (`pactTask`). A DPL row's Wiki id is the cache position, which
+// joins the two; the cache's name wins where the Wiki spells a task differently.
 //
 // `--save <dir>` keeps the fetched wikitext as <dir>/<league key>.wikitext; `--from <dir>` reads those
 // instead of fetching, so a run can be repeated offline; `--check` regenerates and fails when the
@@ -56,17 +66,35 @@ const SKILLS: Record<string, string> = {
 };
 const MINIGAMES = /Barbarian Assault|Pest Control|Castle Wars|Fishing Trawler|Trouble Brewing|Tithe Farm|Wintertodt|Tempoross|Guardians of the Rift|Gnome Restaurant|Mage Training Arena|Volcanic Mine|Soul Wars|Blast Furnace|Giants' Foundry|Mahogany Homes|Hallowed Sepulchre|Temple Trek|Rogues' Den|Agility Arena|Nightmare Zone|Shades of Mort'ton|Last Man Standing|Burthorpe Games Room|Pyramid Plunder|Sorceress's Garden|Tears of Guthix|Rat Pits|Puro-Puro|Impetuous Impulses|Shooting Star|Gnome Ball|Ranging Guild|Stealing Artefacts|Farming Contract/i;
 
-interface League { type: number; key: string; name: string; page: string; template: string; points: Record<number, number> }
+/**
+ * What the client reads for a row without the column: table 118's default for its tier, category
+ * and area columns (32, 35, 36) is -1 (its config, archive 39 file 118), "in this league" (34) 0.
+ * One Demonic Pacts row has no category ("Store 10k bowstrings inside a bowstring spool").
+ */
+const TABLE_DEFAULT = -1;
+/** The enum of a tier's points the task list reads (tier -> points), the cache's current league. */
+const POINTS_ENUM = 2671;
+
+/**
+ * A league's sources. `fromCache`: the cache's own task list is this league's (the current league),
+ * so the tasks, their order and their tier points are read from it; `points` is then filled in.
+ */
+interface League { type: number; key: string; name: string; page: string; template: string; points: Record<number, number>; fromCache?: boolean }
 const LEAGUES: League[] = [
   { type: 4, key: "trailblazer-reloaded", name: "Trailblazer Reloaded", page: "Trailblazer_Reloaded_League/Tasks", template: "TRLTaskRow", points: { 1: 10, 2: 40, 3: 80, 4: 200, 5: 400 } },
   { type: 5, key: "raging-echoes", name: "Raging Echoes", page: "Raging_Echoes_League/Tasks", template: "RELTaskRow", points: { 1: 10, 2: 30, 3: 80, 4: 200, 5: 400 } },
+  { type: 6, key: "demonic-pacts", name: "Demonic Pacts", page: "Demonic_Pacts_League/Tasks", template: "DPLTaskRow", points: {}, fromCache: true },
 ];
 
-interface WikiRow { name: string; description: string; s: string; other: string; tier: string; region: string; id: number }
+interface WikiRow { name: string; description: string; s: string; other: string; tier: string; region: string; id: number; pactTask: boolean }
 interface Trigger { kind: string; [key: string]: unknown }
 interface Task {
   id: string; wikiId: number; name: string; description: string; tier: number; points: number; area: number;
   category: number; categorySource: "cache" | "rule"; requirements: string; skills: Array<{ skill: string; level: number }>;
+  /** The cache's list position (its completion bit), for a league whose list is the cache's. */
+  position?: number;
+  /** Completing it awards a Demonic Pact point (the Wiki's `pactTask=yes`). */
+  pactTask?: true;
   trigger?: Trigger;
 }
 
@@ -114,13 +142,14 @@ function parseRow(args: string[]): WikiRow {
   const positional: string[] = [];
   const named: Record<string, string> = {};
   for (const arg of args) {
-    const match = /^\s*([a-z]+)\s*=([\s\S]*)$/.exec(arg);
+    const match = /^\s*([A-Za-z]+)\s*=([\s\S]*)$/.exec(arg);
     if (match && !arg.trimStart().startsWith("[[") && !arg.trimStart().startsWith("{{")) named[match[1]] = match[2].trim();
     else positional.push(arg.trim());
   }
   const id = Number(named.id);
   if (positional.length < 2 || !Number.isInteger(id)) throw new Error(`Malformed task row: ${args.join("|").slice(0, 120)}`);
-  return { name: positional[0], description: positional[1], s: named.s ?? "", other: named.other ?? "", tier: (named.tier ?? "").toLowerCase(), region: named.region ?? "", id };
+  return { name: positional[0], description: positional[1], s: named.s ?? "", other: named.other ?? "", tier: (named.tier ?? "").toLowerCase(), region: named.region ?? "", id,
+    pactTask: /^yes$/i.test(named.pactTask ?? "") };
 }
 
 /** Wikitext to the plain text the client shows. */
@@ -160,6 +189,34 @@ function skillsOf(requirements: string): Array<{ skill: string; level: number }>
 // ---- the cache ------------------------------------------------------------------------------------
 
 interface CacheTask { category: number; area: number }
+
+/** A row of the cache's own list, by position: what the client shows for it. */
+interface CacheListRow { position: number; name: string; description: string; tier: number; area: number; category: number; inLeague: boolean }
+
+/** The cache's own task list in position order (enum 5950 -> table 118 rows). */
+function cacheList(): CacheListRow[] {
+  const list: CacheListRow[] = [];
+  const entries = [...CacheDefinitions.getEnumValues(TASK_ENUM).entries()].sort(([a], [b]) => a - b);
+  for (const [position, rowId] of entries) {
+    const row = typeof rowId === "number" ? CacheDefinitions.getDbRow(rowId) : undefined;
+    if (!row || row.tableId !== TASK_TABLE) throw new Error(`Enum ${TASK_ENUM} position ${position} is not a row of table ${TASK_TABLE}`);
+    const column = (id: number) => row.columns.get(id)?.[0];
+    list.push({
+      position, name: String(column(COLUMNS.name) ?? ""), description: String(column(COLUMNS.description) ?? ""),
+      tier: Number(column(COLUMNS.difficulty) ?? TABLE_DEFAULT), area: Number(column(COLUMNS.area) ?? TABLE_DEFAULT),
+      category: Number(column(COLUMNS.category) ?? TABLE_DEFAULT), inLeague: Number(column(COLUMNS.inCurrentLeague) ?? 0) === 1,
+    });
+  }
+  return list;
+}
+
+/** The cache's tier points (enum 2671). */
+function cachePoints(): Record<number, number> {
+  const points: Record<number, number> = {};
+  for (const [tier, value] of [...CacheDefinitions.getEnumValues(POINTS_ENUM).entries()].sort(([a], [b]) => a - b)) points[tier] = Number(value);
+  for (let tier = 1; tier < TIER_NAMES.length; tier++) if (!points[tier]) throw new Error(`Enum ${POINTS_ENUM} has no points for tier ${tier}`);
+  return points;
+}
 
 /** The tasks the cache's own list shows (the rows its task enum points at), by lower-cased name. */
 function cacheTasks(): Map<string, CacheTask> {
@@ -320,6 +377,62 @@ function ruleCategory(name: string, trigger?: Trigger): number {
   return CATEGORY.other;
 }
 
+// ---- the cache's own league -----------------------------------------------------------------------
+
+/**
+ * The tasks of the league the cache carries, in its list's order: the cache row gives the name,
+ * description, tier, area and category; the Wiki row of the same id (= position) the requirements,
+ * the pact flag and the fuller description the trigger is derived from. A row the cache marks as not in this league is left out; every task must have
+ * its Wiki row, and every Wiki row its task.
+ */
+function cacheLeagueTasks(league: League, wikiRows: WikiRow[], npcs: Map<string, string>, quests: Map<string, string>, report: string[]): Task[] {
+  const wikiById = new Map<number, WikiRow>();
+  for (const row of wikiRows) {
+    if (wikiById.has(row.id)) throw new Error(`${league.key}: Wiki id ${row.id} is on two rows`);
+    wikiById.set(row.id, row);
+  }
+  const tasks: Task[] = [];
+  const renamed: string[] = [];
+  const skipped: string[] = [];
+  for (const row of cacheList()) {
+    if (!row.inLeague) { skipped.push(`${row.position} "${row.name}"`); continue; }
+    const wiki = wikiById.get(row.position);
+    if (!wiki) throw new Error(`${league.key}: no Wiki row has id ${row.position} ("${row.name}")`);
+    wikiById.delete(row.position);
+    if (!TIER_NAMES[row.tier]) throw new Error(`${league.key}: position ${row.position} has tier ${row.tier}`);
+    if (plain(wiki.name).toLowerCase() !== row.name.toLowerCase()) renamed.push(`${row.position}: Wiki "${plain(wiki.name)}", cache "${row.name}"`);
+    // The trigger reads the Wiki's description, which keeps what the cache's short one drops
+    // ("Reach level 10 in any skill (not including Agility and Hitpoints)"); the task shows the cache's.
+    const derived = deriveTrigger(row.name, plain(wiki.description), npcs, quests);
+    const task: Task = {
+      id: slug(row.name), wikiId: wiki.id, name: row.name, description: row.description, tier: row.tier, points: league.points[row.tier],
+      area: row.area, category: row.category, categorySource: "cache",
+      requirements: [plain(wiki.s), plain(wiki.other)].filter(Boolean).join("; "), skills: skillsOf(wiki.s), position: row.position,
+    };
+    if (wiki.pactTask) task.pactTask = true;
+    if (derived.trigger) task.trigger = derived.trigger;
+    tasks.push(task);
+  }
+  if (wikiById.size) throw new Error(`${league.key}: Wiki rows with no task in the cache's list: ${[...wikiById.keys()].join(", ")}`);
+  for (const [id, group] of groupBy(tasks, (task) => task.id)) {
+    if (group.length > 1) throw new Error(`${league.key}: the cache names two tasks "${group[0].name}" (${id})`);
+  }
+  if (renamed.length) report.push(`${league.key}: named as the cache has them: ${renamed.join("; ")}`);
+  if (skipped.length) report.push(`${league.key}: cache rows not in this league: ${skipped.join("; ")}`);
+  return tasks;
+}
+
+function summarise(league: League, tasks: Task[], duplicateWikiIds: string[], unmapped: string[], report: string[]) {
+  const perTier = TIER_NAMES.slice(1).map((label, index) => `${label} ${tasks.filter((task) => task.tier === index + 1).length}`).join(", ");
+  const triggers = new Map<string, number>();
+  for (const task of tasks) if (task.trigger) triggers.set(task.trigger.kind, (triggers.get(task.trigger.kind) ?? 0) + 1);
+  const pacts = tasks.filter((task) => task.pactTask).length;
+  report.push(`${league.name}: ${tasks.length} tasks (${perTier}); ${tasks.reduce((sum, task) => sum + task.points, 0)} points; category from cache ${tasks.filter((task) => task.categorySource === "cache").length}, by rule ${tasks.filter((task) => task.categorySource === "rule").length}${pacts ? `; pact tasks ${pacts}` : ""}`);
+  report.push(`  triggers: ${[...triggers.entries()].map(([kind, count]) => `${kind} ${count}`).join(", ") || "none"}; without one ${tasks.filter((task) => !task.trigger).length}`);
+  if (duplicateWikiIds.length) report.push(`  Wiki ids used twice (the Wiki's error, kept as is): ${duplicateWikiIds.join("; ")}`);
+  if (unmapped.length) report.push(`  kill tasks without a matching cache NPC (${unmapped.length}): ${unmapped.join(" | ")}`);
+}
+
 // ---- main -----------------------------------------------------------------------------------------
 
 async function wikitextOf(league: League, options: { from?: string; save?: string }): Promise<string> {
@@ -355,6 +468,7 @@ async function main() {
 
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   const cache = cacheTasks();
+  for (const league of LEAGUES) if (league.fromCache) league.points = cachePoints();
   const npcs = npcNames();
   const quests = questNames();
 
@@ -366,7 +480,7 @@ async function main() {
   const areas = areaIds(cache, rows);
 
   const output: Record<string, unknown> = {
-    $comment: "Generated by server/scripts/generate-league-tasks.ts (yarn generate:league-tasks) from the OSRS Wiki's Trailblazer_Reloaded_League/Tasks and Raging_Echoes_League/Tasks pages and the rev 241 cache; never edit by hand (docs/leagues.md, Tasks). A task's position in its league's list is its completion bit for the client (script 9470); saves hold the string ids. `category` is the cache's where the current league's task table (118) has the task by name, else a rule in the generator (`categorySource`). `points` are the league's tier points; `areas` the client's area enum (3412) ids by the Wiki's region names. `trigger` is a derived, verified award trigger (docs/leagues.md lists the kinds); tasks without one await a mapping in league-task-triggers.json.",
+    $comment: "Generated by server/scripts/generate-league-tasks.ts (yarn generate:league-tasks) from the OSRS Wiki's Trailblazer_Reloaded_League/Tasks, Raging_Echoes_League/Tasks and Demonic_Pacts_League/Tasks pages and the rev 241 cache; never edit by hand (docs/leagues.md, Tasks). A task's position in its league's list is its completion bit for the client (script 9470): its `position` where the league is `fromCache` (Demonic Pacts, whose list is the cache's own, in the cache's order; `pactTask` marks the tasks that award a pact point), else its index; saves hold the string ids. `category` is the cache's where the current league's task table (118) has the task by name, else a rule in the generator (`categorySource`). `points` are the league's tier points; `areas` the client's area enum (3412) ids by the Wiki's region names. `trigger` is a derived, verified award trigger (docs/leagues.md lists the kinds); tasks without one await a mapping in league-task-triggers.json.",
     points: Object.fromEntries(LEAGUES.map((league) => [league.type, league.points])),
     tiers: TIER_NAMES.slice(1),
     categories: { 1: "Skill", 2: "Combat", 3: "Quest", 4: "Achievement", 5: "Minigame", 6: "Other" },
@@ -377,6 +491,14 @@ async function main() {
   const report: string[] = [];
   for (const league of LEAGUES) {
     const wikiRows = rows.get(league)!;
+    if (league.fromCache) {
+      const tasks = cacheLeagueTasks(league, wikiRows, npcs, quests, report);
+      (output.leagues as Record<string, unknown>)[league.type] = {
+        key: league.key, name: league.name, source: `https://oldschool.runescape.wiki/w/${league.page}`, fromCache: true, tasks,
+      };
+      summarise(league, tasks, [], [], report);
+      continue;
+    }
     const tasks: Task[] = [];
     const unmapped: string[] = [];
     const seenIds = new Map<number, string>();
@@ -416,13 +538,7 @@ async function main() {
     (output.leagues as Record<string, unknown>)[league.type] = {
       key: league.key, name: league.name, source: `https://oldschool.runescape.wiki/w/${league.page}`, tasks,
     };
-    const perTier = TIER_NAMES.slice(1).map((label, index) => `${label} ${tasks.filter((task) => task.tier === index + 1).length}`).join(", ");
-    const triggers = new Map<string, number>();
-    for (const task of tasks) if (task.trigger) triggers.set(task.trigger.kind, (triggers.get(task.trigger.kind) ?? 0) + 1);
-    report.push(`${league.name}: ${tasks.length} tasks (${perTier}); ${tasks.reduce((sum, task) => sum + task.points, 0)} points; category from cache ${tasks.filter((task) => task.categorySource === "cache").length}, by rule ${tasks.filter((task) => task.categorySource === "rule").length}`);
-    report.push(`  triggers: ${[...triggers.entries()].map(([kind, count]) => `${kind} ${count}`).join(", ") || "none"}`);
-    if (duplicateWikiIds.length) report.push(`  Wiki ids used twice (the Wiki's error, kept as is): ${duplicateWikiIds.join("; ")}`);
-    report.push(`  kill tasks without a matching cache NPC (${unmapped.length}): ${unmapped.join(" | ")}`);
+    summarise(league, tasks, duplicateWikiIds, unmapped, report);
   }
 
   const text = serialise(output);

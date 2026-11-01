@@ -124,14 +124,21 @@ function setLevel(player, skill, level) {
 const levelUp = (player, skill, level) => hooks.onPlayerLevelUp({ player, skill, oldLevel: setLevel(player, skill, level), newLevel: level });
 
 test("the catalog is sound: the Wiki's counts and points, unique ids, verified triggers", () => {
-  const expected = { 4: { tiers: [269, 390, 385, 390, 46], medium: 40, total: 145490 }, 5: { tiers: [224, 536, 437, 345, 47], medium: 30, total: 141080 } };
+  const expected = {
+    4: { tiers: [269, 390, 385, 390, 46], medium: 40, total: 145490 },
+    5: { tiers: [224, 536, 437, 345, 47], medium: 30, total: 141080 },
+    // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
+    6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
+  };
   const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest"]);
   const npcNames = new Set();
   // The cache's own list (enum 5950's rows): a task it has by name takes its category.
   const cacheRows = new Map();
-  for (const rowId of CacheDefinitions.getEnumValues(5950).values()) {
+  const cacheByPosition = new Map();
+  for (const [position, rowId] of CacheDefinitions.getEnumValues(5950)) {
     const row = CacheDefinitions.getDbRow(rowId);
     if (row) cacheRows.set(String(row.columns.get(0)?.[0]).toLowerCase(), row);
+    if (row) cacheByPosition.set(position, row);
   }
   assert.ok(cacheRows.size > 1500, "the cache's task list");
   for (const [type, league] of Object.entries(catalog.leagues)) {
@@ -141,12 +148,26 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     assert.equal(tasks.find((task) => task.tier === 2).points, expected[type].medium);
     assert.equal(new Set(tasks.map((task) => task.id)).size, tasks.length, "ids are unique");
     assert.ok(tasks.length <= 1984, "within the client's completion bits");
-    for (let i = 1; i < tasks.length; i++) assert.ok(tasks[i - 1].tier <= tasks[i].tier, "sorted by tier");
+    if (league.fromCache) {
+      // The cache's own list, in its order: a task's position is its completion bit and its row.
+      assert.equal(type, "6", "Demonic Pacts is the league this cache carries");
+      for (let i = 1; i < tasks.length; i++) assert.ok(tasks[i - 1].position < tasks[i].position, "in the cache's order");
+      for (const task of tasks) {
+        const row = cacheByPosition.get(task.position);
+        assert.equal(task.name, row.columns.get(0)?.[0], `${task.id}: the cache's name at ${task.position}`);
+        // A row without a column reads the table's default, -1 (one row has no category).
+        assert.deepEqual([task.tier, task.area, task.category], [32, 36, 35].map((column) => row.columns.get(column)?.[0] ?? -1), task.id);
+        assert.equal(task.wikiId, task.position, `${task.id}: the Wiki's id is the cache position`);
+      }
+      assert.equal(tasks.filter((task) => task.pactTask).length, expected[type].pacts, "the Wiki's pact tasks");
+    } else {
+      for (let i = 1; i < tasks.length; i++) assert.ok(tasks[i - 1].tier <= tasks[i].tier, "sorted by tier");
+    }
     for (const task of tasks) {
-      assert.ok([1, 2, 3, 4, 5, 6].includes(task.category) && Object.values(catalog.areas).includes(task.area), task.id);
+      assert.ok(([1, 2, 3, 4, 5, 6].includes(task.category) || (league.fromCache && task.category === -1)) && Object.values(catalog.areas).includes(task.area), task.id);
       const cached = cacheRows.get(task.name.toLowerCase());
       assert.equal(task.categorySource, cached ? "cache" : "rule", task.id);
-      if (cached) assert.equal(task.category, cached.columns.get(35)?.[0], `${task.id}: the cache's category`);
+      if (cached) assert.equal(task.category, cached.columns.get(35)?.[0] ?? -1, `${task.id}: the cache's category (the table's -1 without one)`);
       if (task.trigger) {
         assert.ok(kinds.has(task.trigger.kind), `${task.id}: ${task.trigger.kind}`);
         if (task.trigger.kind === "kill") {
@@ -189,6 +210,21 @@ test("login sends the league's catalog as enum and DB row overrides, the complet
   assert.equal(dataset(echoes, "enumOverrides").find((row) => row.enumId === 5950).entries.length, 1589);
   assert.deepEqual(dataset(echoes, "enumOverrides").find((row) => row.enumId === 2671).entries[1], [2, 30]);
   assert.equal(dataset(echoes, "dbRowOverrides")[0].rowId, 350000, "a league's rows have their own ids");
+});
+
+test("Demonic Pacts, the cache's own league: no catalog overrides, and a task's bit is its cache position", () => {
+  worldLeague = 6;
+  const pacts = character("pacts");
+  worldLeague = 4;
+  assert.equal(dataset(pacts, "enumOverrides")?.find((row) => row.enumId === 5950), undefined, "the client's own task enum stands");
+  assert.equal((dataset(pacts, "dbRowOverrides") ?? []).length, 0, "and its own rows");
+  const giant = catalog.leagues["6"].tasks.find((task) => task.id === "defeat-a-hill-giant");
+  const last = catalog.leagues["6"].tasks.at(-1);
+  assert.deepEqual([last.position, catalog.leagues["6"].tasks.length], [1592, 1592], "past the one row the cache leaves out of the league, a task keeps its cache position");
+  kill(pacts, "Hill Giant");
+  assert.deepEqual(completed(pacts), ["defeat-a-hill-giant"]);
+  assert.equal(pacts.sent.varps.get(bitVarp(giant.position)), 1 << (giant.position % 32), "the bit the client's script 9470 reads");
+  assert.equal(pacts.sent.messages.at(-1), "Congratulations, you've completed an easy task: <col=FE206A>Defeat a Hill Giant</col>.", "in the league's colour");
 });
 
 test("View Tasks opens the list with the captured events; the dropdowns set and keep their filter varbits", () => {

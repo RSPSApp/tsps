@@ -424,7 +424,7 @@ function startTendFire(player, log, object, activeSessions, amount = Infinity) {
     return false;
   }
 
-  if (!player.getLocation().isWithinInteractionDistance(object.getLocation())) {
+  if (!object.isWithinInteractionDistance(player.getLocation())) {
     return false;
   }
 
@@ -532,7 +532,7 @@ function tendFire(player, session, activeSessions) {
     stopFiremaking(activeSessions, player);
     return;
   }
-  if (!player.getLocation().isWithinInteractionDistance(object.getLocation())) {
+  if (!object.isWithinInteractionDistance(player.getLocation())) {
     stopFiremaking(activeSessions, player);
     return;
   }

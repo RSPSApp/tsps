@@ -162,6 +162,13 @@ test('shared wall-door reach masks cover every operation and preserve other obje
     for (const shape of [2, 4, 9, 10, 11, 22]) {
       assert.equal(route({ shape }).blockAccessFlags, 0, `shape ${shape} retains its existing reach geometry`);
     }
+    const openLeaf = {
+      object: new GameObject(1544, new Location(3128, 3247, 0), 0, 2, null),
+      sourceLocation: { x: 3128, y: 3245, z: 0 }, clickType: 1, blockAccessFlags: 0, destination: null,
+      definition: { getName: () => 'Door', getInteractions: () => ['Close', null, null, null, null] },
+    };
+    h.routes[0](openLeaf);
+    assert.equal(openLeaf.blockAccessFlags, 0, 'an open leaf is closed from the doorway tile at its end (#1706)');
     const questRoute = { x: 300, y: 400, z: 1 };
     assert.equal(route({ destination: questRoute }).destination, questRoute, 'explicit plugin destinations remain intact');
     assert.equal(route({ blockAccessFlags: 0xa }).blockAccessFlags, 0xf, 'the door mask retains prior access restrictions');
@@ -1816,6 +1823,25 @@ test('Pollnivneach curtains draw back in place into their cache Close loc and cl
     assert.deepEqual(h.click(1534, 3349, 2962, 1, 'Close', 'Curtain'), [
       ['deregister', 1534, 3349, 2962, 1],
       ['register', 1533, 3349, 2962, 1],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
+
+test('the gate on the road east of Varrock opens both leaves into their named open locs (11766/11767)', async () => {
+  await initializeMapCollisionOnce();
+  const ids = [11766, 11767, 11768, 11769, 11770, 11771];
+  const h = buildHarness({ cacheObjects: new Map(ids.map((id) => [id, CacheDefinitions.getObject(id)])) });
+  try {
+    h.place(11766, 3319, 3468, 2);
+    h.place(11767, 3319, 3467, 2);
+    // rsprox captures 1636 and 3226: both leaves go on one tick, swinging east.
+    assert.deepEqual(h.click(11766, 3319, 3468, 2, 'Open', 'Gate'), [
+      ['deregister', 11766, 3319, 3468, 2],
+      ['deregister', 11767, 3319, 3467, 2],
+      ['register', 11770, 3320, 3468, 1],
+      ['register', 11771, 3320, 3467, 3],
     ]);
   } finally {
     h.restore();

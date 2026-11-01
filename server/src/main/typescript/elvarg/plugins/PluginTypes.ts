@@ -1477,6 +1477,7 @@ export interface PluginCoreApi {
   Skill: any;
   Item: any;
   Flag: any;
+  Appearance: any;
   Direction: any;
   Equipment: any;
   Bank: any;

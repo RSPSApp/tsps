@@ -75,3 +75,9 @@ The generated files were replaced by osrsreboxed-db's 2026-10-07 dump, with the 
 - **The same 3,201 NPCs** have drops, and the shared tables are identical.
 - **One NPC changed:** the Sailing manta ray (15221) rolled both the monster and the Sailing manta ray tables on every kill. It now rolls only the Sailing one.
 - **Noted drops: 120 → 3,068.** Everything the Wiki marks noted now drops noted, not just the hand-picked lists (Corp's resource drops were one). The Kalphite Queen's and the Mad Angel's noted lists in code are now redundant but harmless.
+
+## Goblin energy potions (#1706)
+
+Goblins dropped energy potions on about a third of kills. osrsreboxed-db had cached the Goblin page mid-way through the 19 August 2026 drop-table change, with its energy potions as "Common" and no rate, so each became an independent 1/8 roll (three on table 1, two on table 2). The current page has Energy potion(3) and Energy potion(4) at 3/128 each on table 1 and Energy potion(2) at 13/128 on table 2, all inside the 128 pool.
+
+Imported from osrsreboxed-db [`c70ad220e7`](https://github.com/Bandit-HaxUnit/osrsreboxed-db/commit/c70ad220e7) (branch `fix/goblin-drop-rarities`, built on `2fe648dd71`, the export imported before), which re-fetches the page and regenerates; the same fix for master is [RSPSApp/osrsreboxed-db#27](https://github.com/RSPSApp/osrsreboxed-db/pull/27). Only `goblin_drop_table1` and `goblin_drop_table2` change, apart from `meta.generated`; `npc-drop-subtables.json` is byte-identical, and two runs match. The dumper now warns when several rows of one section have only a word rarity; six other tables trip it (the corrupted Gauntlet monsters, the elite Black Knight, Molanisk's energy potions, Nex) and are left for a check against their pages.

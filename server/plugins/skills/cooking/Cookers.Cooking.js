@@ -282,7 +282,7 @@ function cookTick(task) {
     }
 
     const object = MapObjects.get(session.objectId, session.location, session.privateArea);
-    if (!object || !player.getLocation().isWithinInteractionDistance(object.getLocation())) {
+    if (!object || !object.isWithinInteractionDistance(player.getLocation())) {
       stopCooking(player);
       continue;
     }

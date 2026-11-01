@@ -10,14 +10,17 @@
 //   --reach <tiles>      how far a spawn may be from its site (default 2)
 //   --min-watched <n>    sightings a site needs (default 3)
 //   --min-facing <share> how many standing sightings must agree on a facing (default 0.5)
-//   --only still|facing  make only one kind of change
+//   --only still|facing|wander  make only one kind of change
 //
 // A spawn is paired with the capture site of the same NPC nearest to it (see
 // npc-spawn-refine.cjs). When the NPC stood still in at least 90% of its sightings, the spawn
 // stops wandering (wanderRadius 0), and when more than half of those sightings agree on its facing
 // (NPCs that serve players turn towards them, so agreement is lower for them) and that differs
-// from what it gets now, it gets that direction. Sites the capture index labels (followers,
-// roaming NPCs, props, instances, special worlds) change nothing. Nothing is added or removed.
+// from what it gets now, it gets that direction. An NPC that walks and can't be attacked gets the
+// wanderRadius 90% of its sightings stayed within (at least 1), when that's less than it has now
+// (the loader's default is 5). Sites the capture
+// index labels (followers, roaming NPCs, props, instances, special worlds) change nothing, except
+// that an "unnamed" multinpc parent (Aubury) still gets its wanderRadius. Nothing is added or removed.
 //
 // Needs the cache in server/caches - run `yarn ensure-cache` first.
 import * as fs from "fs";
@@ -49,6 +52,13 @@ function applied(spawn: any, changes: { wanderRadius?: number; direction?: numbe
     return out;
 }
 
+/** Whether the NPC, or any form its multinpc parent shows, offers Attack. */
+function isAttackable(id: number): boolean {
+    const npc: any = CacheDefinitions.getNpc(id);
+    const forms = [id, ...((npc?.transforms ?? []) as number[]).filter((form) => form >= 0)];
+    return forms.some((form) => ((CacheDefinitions.getNpc(form) as any)?.actions ?? []).includes("Attack"));
+}
+
 async function main() {
     const sitesFile = argValue("--sites");
     if (!sitesFile) throw new Error("Give the capture sites with --sites <file> (rsprox_index.py npc-sites)");
@@ -69,26 +79,37 @@ async function main() {
     const changed = new Map<any, any>();
     for (const { spawn, site } of pairs) {
         const cacheDirection = (CacheDefinitions.getNpc(spawn.id) as any)?.spawnDirection ?? 6;
-        const changes = changesFor(spawn, site, { minWatched, facing: minFacing, defaultDirection: CACHE_TO_SPAWN_DIRECTION[cacheDirection & 7] });
-        if (only === "still") delete changes.direction;
+        const changes = changesFor(spawn, site, {
+            minWatched, facing: minFacing, defaultDirection: CACHE_TO_SPAWN_DIRECTION[cacheDirection & 7], attackable: isAttackable(spawn.id),
+        });
+        const wanders = (changes.wanderRadius ?? 0) > 0;
+        if (only === "still") { delete changes.direction; if (wanders) delete changes.wanderRadius; }
         if (only === "facing") delete changes.wanderRadius;
+        if (only === "wander") { delete changes.direction; if (!wanders) delete changes.wanderRadius; }
         if (Object.keys(changes).length) changed.set(spawn, { changes, site });
     }
 
-    const stillCount = [...changed.values()].filter((entry) => entry.changes.wanderRadius !== undefined).length;
+    const stillCount = [...changed.values()].filter((entry) => entry.changes.wanderRadius === 0).length;
+    const wanderCount = [...changed.values()].filter((entry) => (entry.changes.wanderRadius ?? 0) > 0).length;
     const facingCount = [...changed.values()].filter((entry) => entry.changes.direction !== undefined).length;
     console.log(`Spawns paired with a capture site: ${pairs.length} of ${spawns.length}; to change: ${changed.size}`
-        + ` (stand still: ${stillCount}, facing: ${facingCount})`);
-    const byName = new Map<string, { still: number; facing: Map<string, number> }>();
+        + ` (stand still: ${stillCount}, wander range: ${wanderCount}, facing: ${facingCount})`);
+    const byName = new Map<string, { still: number; wander: Map<number, number>; facing: Map<string, number> }>();
     for (const [spawn, { changes }] of changed) {
-        const row = byName.get(spawn.name) ?? { still: 0, facing: new Map() };
-        if (changes.wanderRadius !== undefined) row.still++;
+        const row = byName.get(spawn.name) ?? { still: 0, wander: new Map(), facing: new Map() };
+        if (changes.wanderRadius === 0) row.still++;
+        if ((changes.wanderRadius ?? 0) > 0) row.wander.set(changes.wanderRadius, (row.wander.get(changes.wanderRadius) ?? 0) + 1);
         if (changes.direction !== undefined) row.facing.set(DIRECTIONS[changes.direction], (row.facing.get(DIRECTIONS[changes.direction]) ?? 0) + 1);
         byName.set(spawn.name, row);
     }
-    for (const [name, row] of [...byName].sort((a, b) => (b[1].still + b[1].facing.size) - (a[1].still + a[1].facing.size)).slice(0, 40)) {
-        const facings = [...row.facing].map(([direction, count]) => `${count} ${direction}`).join(", ");
-        console.log(`  ${name}: ${row.still ? `stand still ${row.still}` : ""}${row.still && facings ? "; " : ""}${facings ? `face ${facings}` : ""}`);
+    const size = (row: { still: number; wander: Map<number, number>; facing: Map<string, number> }) => row.still + row.wander.size + row.facing.size;
+    for (const [name, row] of [...byName].sort((a, b) => size(b[1]) - size(a[1])).slice(0, 40)) {
+        const parts = [
+            row.still ? `stand still ${row.still}` : "",
+            row.wander.size ? `wander ${[...row.wander].map(([radius, count]) => `${count}x${radius}`).join(", ")}` : "",
+            row.facing.size ? `face ${[...row.facing].map(([direction, count]) => `${count} ${direction}`).join(", ")}` : "",
+        ].filter(Boolean);
+        console.log(`  ${name}: ${parts.join("; ")}`);
     }
     if (byName.size > 40) console.log(`  ... and ${byName.size - 40} more NPCs`);
 

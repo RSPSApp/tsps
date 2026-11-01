@@ -71,3 +71,23 @@ test("the Shayzien drill formation stands still: the rows face north, the Drill 
   const sergeant = spawns.find((spawn) => spawn.x === 1510 && spawn.y === 3647 && spawn.id === 6882);
   assert.deepEqual([sergeant.name, sergeant.direction, sergeant.wanderRadius], ["Drill Sergeant", undefined, 0], "faces the rows: south, the default");
 });
+
+test("an NPC that walks and can't be attacked gets the range its sightings stayed in, never wider", () => {
+  const spawn = { id: 1, name: "Bartender", x: 10, y: 10, level: 0 };
+  const walking = (fields) => site({ still_share: 0.12, range_p90: 2, ...fields });
+  assert.deepEqual(changesFor(spawn, walking({}), { attackable: false }), { wanderRadius: 2 }, "the default 5 tightens to 2");
+  assert.deepEqual(changesFor(spawn, walking({ range_p90: 0 }), { attackable: false }), { wanderRadius: 1 }, "a walker keeps at least 1");
+  assert.deepEqual(changesFor({ ...spawn, wanderRadius: 2 }, walking({}), { attackable: false }), {}, "already there");
+  assert.deepEqual(changesFor({ ...spawn, wanderRadius: 1 }, walking({}), { attackable: false }), {}, "never widened");
+  assert.deepEqual(changesFor(spawn, walking({ range_p90: 9 }), { attackable: false }), {}, "never past the default either");
+  assert.deepEqual(changesFor(spawn, walking({}), { attackable: true }), {}, "a monster's sightings include chases");
+  assert.deepEqual(changesFor(spawn, walking({ labels: ["unnamed"] }), { attackable: false }), { wanderRadius: 2 }, "a nameless multinpc parent (Aubury)");
+  assert.deepEqual(changesFor(spawn, walking({ labels: ["roaming"] }), { attackable: false }), {});
+});
+
+test("the Blue Moon Inn bartender and Aubury stay in their rooms (#1706)", () => {
+  const spawns = require("../data/definitions/npc-spawns.json");
+  const at = (name, x, y) => spawns.find((spawn) => spawn.name === name && spawn.x === x && spawn.y === y);
+  assert.equal(at("Bartender", 3226, 3399).wanderRadius, 2);
+  assert.equal(at("Aubury", 3253, 3402).wanderRadius, 3);
+});

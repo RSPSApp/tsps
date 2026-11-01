@@ -254,12 +254,6 @@ export class NPC extends Mobile {
             || Wilderness.isIn(player);
     }
 
-    public aggressionDistance(): number {
-        let attackDistance = CombatFactory.getMethod(this).attackDistance(this);
-
-        return Math.max(attackDistance, 3);
-    }
-
     public process() {
         if (this.getDefinition() != null) {
             // Queued impacts land before this NPC acts - see HitQueue.process.

@@ -75,6 +75,11 @@ function deckLocs(definition) {
 function specFor(definition) {
   const { locs, walkable } = templateLocations(definition);
   const additions = deckLocs(definition);
+  // A deck loc add replaces the template loc of the same shape on its tile (LOC_ADD_CHANGE), so
+  // the two don't both stand on the deck.
+  const replaced = (loc) => additions.some((add) =>
+    add.x === loc.x && add.y === loc.y && add.level === loc.level && add.shape === loc.shape);
+  const deckLocsOnTemplate = locs.filter((loc) => !replaced(loc));
   return {
     type: definition.id,
     configId: definition.configId,
@@ -89,9 +94,22 @@ function specFor(definition) {
     walkableDeck: (definition.walkableTiles ?? walkable)
       .map((tile) => Array.isArray(tile) ? { x: tile[0], y: tile[1] } : tile),
     boardingTile: definition.boardingTile,
-    locs: [...locs, ...additions],
+    locs: [...deckLocsOnTemplate, ...additions],
     syncLocs: additions,
   };
+}
+
+/**
+ * Spawns the NPCs the ship's data places on its deck (its HP-bar dummy and crew). They belong to
+ * the ship's owner; a public ship's crew are shared, as the ship is.
+ */
+function spawnDeckNpcs(ship, owner) {
+  const npcs = [];
+  for (const npc of ship.definition.deckNpcs ?? []) {
+    const spawned = addDeckNpc(ship, npc.id, npc.x, npc.y, owner, { shared: !owner, face: npc.face });
+    if (spawned) npcs.push(spawned);
+  }
+  return npcs;
 }
 
 /**
@@ -110,8 +128,11 @@ function spawn(id, { owner, ownerOnly = false, entityIndex, fineX, fineY, level 
   }, entityIndex);
   if (!boat) return undefined;
   boat.ownerOnly = ownerOnly;
-  const ship = { id, definition, boat, spec, hitpoints: definition.hitpoints, maxHitpoints: definition.hitpoints };
+  const ship = {
+    id, definition, boat, spec, hitpoints: definition.hitpoints, maxHitpoints: definition.hitpoints, npcs: [],
+  };
   ships.set(boat.entityIndex, ship);
+  ship.npcs = spawnDeckNpcs(ship, owner);
   return ship;
 }
 
@@ -151,11 +172,12 @@ function inRange(player, ship, range) {
  * Spawns an NPC on the ship's deck; it walks and is clicked like any deck actor. It's the owner's
  * alone unless `shared` (a public ship's crew, like a Barracuda Trial's master).
  */
-function addDeckNpc(ship, npcId, x, y, owner, { shared = false } = {}) {
+function addDeckNpc(ship, npcId, x, y, owner, { shared = false, face } = {}) {
   const location = deckLocation(ship, x, y);
   const npc = coreApi().PluginManager.spawnNpc({
     id: npcId, x: location.getX(), y: location.getY(), z: location.getZ(),
-    ...(shared ? {} : { owner, ownerOnly: true }),
+    ...(Number.isFinite(face) ? { face } : {}),
+    ...(shared || !owner ? {} : { owner, ownerOnly: true }),
   });
   if (!npc) return undefined;
   coreApi().BoatManager.getDeck(ship.boat)?.enter(npc);
@@ -235,6 +257,8 @@ function dispose(ship) {
   if (!ship) return;
   const deck = coreApi().BoatManager.getDeck(ship.boat);
   for (const player of deck?.getPlayers?.() ?? []) leave(player);
+  for (const npc of ship.npcs ?? []) coreApi().PluginManager.removeNpc(npc);
+  ship.npcs = [];
   for (const [index, previous] of returns) {
     if (previous.ship !== ship) continue;
     // Player.onLogout leaves the area before plugin logout hooks run, and quests may dispose

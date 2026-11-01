@@ -653,8 +653,10 @@ tooltip is 655:53.
   before the cache) at login and before the interface opens. Ids start at 200000 + league type
   x 1000; icons are borrowed from the cache's own relic in the same tier and slot. Demonic Pacts
   (`"6": { "fromCache": true }`) is read from the cache instead: its tiers, costs, passives and
-  relics come from struct 6436's enums, the relic keys are their names slugged, and no relic
-  hands out an item, since the cache does not say which do.
+  relics come from struct 6436's enums, the relic keys are their names slugged, and a relic's
+  item is its struct's param 2049 (param 1855 says it has one); such a relic unlocks only in a
+  bank or near the Leagues Tutor ("You must be within a bank or near the Leagues Tutor to unlock
+  this as it gives you items.", 237/01102), then the captured line and a "You receive ..." box.
 - **The flow, as captured.** The side panel's View Relics (656:44) opens 655 as the main modal
   with `if_setevents` on its slots (655:22, 0-23) and menu (655:6, 10-20). A slot click sets
   `league_relic_last_viewed` (10048) to tier x 3 + slot and runs the client's redraw scripts 3193
@@ -694,6 +696,37 @@ tooltip is 655:53.
 - **The catalog's padding.** The Wiki gives Trailblazer Reloaded's tiers 2 and 3 and Raging
   Echoes' tier 6 two relics each; the catalog fills the third slot (`crystal-of-memories`,
   `treasure-seeker-preview`, `last-stand-preview`). The previews get the real relic's effect.
+
+### Demonic Pacts' relics
+
+Each unit's head gives its hooks and what it leaves out; the relic toggles (655:38's script
+triggers) are `Toggles.LeagueRelics.js`, over the cache's `league_relic_effect_toggle` rows and
+varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/01104).
+
+| Tier | Relic | State |
+| --- | --- | --- |
+| 1 | Endless Harvest | done (Trailblazer Reloaded's unit; banking by toggle, resources never deplete) |
+| 1 | Barbarian Gathering | partial: second chance, Strength/Agility XP, bare-handed fishing; not bare-handed mining or woodcutting, baitless fishing, the Knapsack's storage |
+| 1 | Abundance | done |
+| 2 | Hotfoot | partial: cooked fish, smelted ore, laps counted twice with +25% XP, no failures; not the Agility XP for running, laps from marks or termites, the mark chance or the extra termites and shards (no Agility hooks) |
+| 2 | Friendly Forager | done (Raging Echoes' unit, plus Herblore at once; the recorded lines) |
+| 2 | Woodsman | partial: Fletching batches, log burning, Hunter catches; not the seed drops, rumour and sack doubling, implings' extra roll or the whistle's charges |
+| 3 | Bank Heist | done |
+| 3 | Evil Eye, Map of Alacrity | the item only (their destinations' coordinates are not in the cache) |
+| 4 | Transmute | its toggles and item only, no spells |
+| 4 | Conniving Clues | done |
+| 4 | Butler's Bell | the item only |
+| 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom; not the waived levels |
+| 5 | Larcenist | partial: not guards never catching you (no thieving hook), the Varlamore valuables |
+| 5 | Soul Harvest | partial: shards from bones, ashes (our 0.8 x XP; the Wiki gives none) and crops; not health checks, Runecraft or libation uses |
+| 6 | Grimoire | done (every prayer as well) |
+| 6 | Eternal Sustenance | done |
+| 6 | Culling Spree | partial: free perks, elite clues per superior; not the three-task choice, the second superior or the helmet's effects |
+| 7 | Flow State | partial: Fishing's pace only |
+| 7 | Reloaded | done (a pick from tiers 1 to 6) |
+| 8 | Executioner | done but for the 6-tile range (the axe's weapon profile is every league's) |
+| 8 | Minion | the item only (no thrall imps) |
+| 8 | Flask of Fervour | done but for PvP damage, impact graphics and its cooldown varp |
 
 ### Not in this cache
 

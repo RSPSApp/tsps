@@ -234,7 +234,8 @@ test("Friendly Forager: the pouch finds a herb on gathering, every 9 ticks, with
   const messages = [];
   who.relic.sendMessage = (text) => messages.push(text);
   itemActions.get("Forager's pouch").Check({ player: who.relic });
-  assert.match(messages.at(-1), /holds: .*guam/i);
+  assert.match(messages.at(-1), /^\d+ x Grimy /, "as recorded: the header, then a line per herb, as the item is named");
+  assert.ok(messages.includes("You look in your forager's pouch and see:"));
   const inPouch = total(who.relic);
   itemActions.get("Forager's pouch").Withdraw({ player: who.relic });
   assert.equal(total(who.relic), 0, "Withdraw empties it");

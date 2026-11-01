@@ -7,9 +7,8 @@ const { getWorldDefinition } = require("../../src/main/typescript/elvarg/game/de
  * Supplies the standalone local map editor with the server's loaded world definition
  * (spawn, zones, disabled plugins etc) via GET /api/world.
  * Uses the existing game server HTTP port and content API, including ETag revalidation;
- * /api/world/shops, /api/world/npc-interactions and /api/world/object-spawns supply
- * canonical JSON documents
- * for editing and downloading locally. `/api/world/npc-spawns` serves the persisted NPC
+ * /api/world/object-spawns supplies the canonical JSON document for editing and
+ * downloading locally. `/api/world/npc-spawns` serves the persisted NPC
  * spawns the editor renders, and `/api/world/npc-spawns-custom` serves the editor's
  * existing spawn patch (empty when none has been exported yet). All endpoints are read-only
  * and is registered only in development, never in production. Browser-host editors
@@ -22,9 +21,7 @@ module.exports = {
     api.registerContentEndpoint("world", (_query, segments) => {
       if (segments.length === 0) return getWorldDefinition();
       if (segments.length !== 1) return undefined;
-      const file = segments[0] === "shops" ? "shops.json"
-        : segments[0] === "npc-interactions" ? "npc-interactions.json"
-        : segments[0] === "object-spawns" ? "object-spawns.json"
+      const file = segments[0] === "object-spawns" ? "object-spawns.json"
         : segments[0] === "npc-spawns" ? "npc-spawns.json"
         : segments[0] === "npc-spawns-custom" ? "npc-spawns-custom.json" : undefined;
       if (!file) return undefined;

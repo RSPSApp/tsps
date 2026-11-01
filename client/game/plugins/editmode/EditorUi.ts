@@ -1357,7 +1357,7 @@ class EditorChrome {
             Object.assign(name.style, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
             const amount = document.createElement("input");
             amount.type = "number";
-            amount.min = "1";
+            amount.min = "0";
             amount.max = String(0x7fffffff);
             amount.value = String(entry.amount);
             amount.setAttribute("aria-label", `Amount of ${this.itemName(entry.id)}`);
@@ -1389,7 +1389,7 @@ class EditorChrome {
     }
 
     private setShopItemAmount(entry: EditModeShop["originalStock"][number], amount: number): void {
-        if (!Number.isInteger(amount) || amount < 1 || amount > 0x7fffffff) return;
+        if (!Number.isInteger(amount) || amount < 0 || amount > 0x7fffffff) return;
         entry.amount = amount;
         this.shopsDirty = true;
         this.syncSaveButton();

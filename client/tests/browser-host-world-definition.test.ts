@@ -28,7 +28,25 @@ assert.deepEqual(
         originalStock: [{ id: 995, amount: 1, price: 1 }],
     }],
 );
+assert.deepEqual(
+    parseBrowserHostShops(JSON.stringify([{
+        id: 1433,
+        name: "Davon's Amulet Store. (Default)",
+        currency: "COINS",
+        originalStock: [{ id: 1731, amount: 0, restockTicks: 200 }],
+        npcInteractions: [{ npcIds: [8680], optionSlot: 3 }],
+    }])),
+    [{
+        id: 1433,
+        name: "Davon's Amulet Store. (Default)",
+        currency: "COINS",
+        originalStock: [{ id: 1731, amount: 0, restockTicks: 200 }],
+        npcInteractions: [{ npcIds: [8680], optionSlot: 3 }],
+    }],
+    "A zero stock entry is valid in shops.json and must survive a load",
+);
 assert.throws(() => parseBrowserHostShops('[{"id":1,"name":"Bad","originalStock":[{"id":0,"amount":1}]}]'));
+assert.throws(() => parseBrowserHostShops('[{"id":1,"name":"Bad","originalStock":[{"id":995,"amount":-1}]}]'));
 
 const parsedWorld = {
     spawn: { x: 3089, y: 3524, z: 0 },

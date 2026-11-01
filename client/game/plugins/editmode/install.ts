@@ -428,7 +428,9 @@ export function parseBrowserHostShops(contents: string): EditModeShop[] {
             const stock = entry as Record<string, unknown>;
             const itemId = Number(stock.id);
             const amount = Number(stock.amount);
-            if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(amount) || amount <= 0 || amount > 0x7fffffff) {
+            // Zero is valid in shops.json (the server drops those entries when it loads the file),
+            // and the editor must round-trip them untouched.
+            if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(amount) || amount < 0 || amount > 0x7fffffff) {
                 throw new Error(`Shop ${id} stock ${stockIndex + 1} is invalid`);
             }
             return { ...stock, id: itemId, amount };

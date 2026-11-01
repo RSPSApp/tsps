@@ -17,6 +17,7 @@ import { HdPlugin } from "../../../game/plugins/hd/HdPlugin";
 import { InteractHighlightConfig } from "../../../game/plugins/interacthighlight/InteractHighlightConfig";
 import { InteractHighlightPlugin } from "../../../game/plugins/interacthighlight/InteractHighlightPlugin";
 import { InventoryTagsPlugin } from "../../../game/plugins/inventorytags/InventoryTagsPlugin";
+import { ItemRarityPlugin } from "../../../game/plugins/itemrarity/ItemRarityPlugin";
 import { MenuSwapperPlugin } from "../../../game/plugins/menuswapper/MenuSwapperPlugin";
 import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
 import { ObjectIndicatorsPlugin } from "../../../game/plugins/objectindicators/ObjectIndicatorsPlugin";
@@ -64,6 +65,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     MenuSwapperPlugin,
     // After Menu Swapper: its "Inventory tag" submenu joins the swapped menu.
     InventoryTagsPlugin,
+    ItemRarityPlugin,
     BankTagsPlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,

@@ -125,6 +125,7 @@ function harness(t, members = true) {
     onItemAction(name, actions) { hooks[name] = actions; },
     onItemOnObject(handler) { (hooks.itemOnObject ??= []).push(handler); },
     onItemOnNpc(handler) { (hooks.itemOnNpc ??= []).push(handler); },
+    onObjectRoute(handler) { (hooks.objectRoute ??= []).push(handler); },
     onObjectInteraction(a, b) {
       if (typeof a !== 'string') { (hooks.objectRaw ??= []).push(a); return; }
       const merged = { ...(hooks[`object:${a}`] ?? {}) };
@@ -165,6 +166,7 @@ function harness(t, members = true) {
       sendMessage: text => messages.push(text), forceChat(text) { p.chat = text; },
       setNpcTransformationId(id) { p.transformation = id; },
       performAnimation(animation) { p.animation = animation.getId(); },
+      setPositionToFace(location) { p.face = location; },
       moveTo(location) { p.location = location; }, setLocation(location) { p.location = location; },
       getEquipment: () => ({ containsNumber: () => false }),
       getBank: () => ({ containsNumber: () => false }),
@@ -1187,16 +1189,35 @@ test('Drill Demon accepts four matching exercises in a row for the camo top', t 
   choose(h, p, 0);
   const session = Teleports.sessionOf(p);
   assert.equal(p.location.getX(), 3163, 'drill arrival x');
-  assert.equal(p.location.getY(), 4819, 'drill arrival y');
+  assert.equal(p.location.getY(), 4820, 'drill arrival y');
   for (let i = 0; i < 4; i++) {
     const entry = [...session.data.matExercise.entries()].find(([, exercise]) => exercise === session.data.order);
     assert.ok(entry, 'a mat matches the order');
+    p.location = new Location(entry[0], 4820, 0);
     h.hooks['object:Exercise mat'].Use({ player: p, handled: false,
       object: { getLocation: () => new Location(entry[0], 4820, 0), getId: () => 1 } });
+    assert.ok(p.face.equals(new Location(entry[0], 4821, 0)), 'the exercise faces the sign');
   }
   assert.ok(p.rewards.includes(I.LAMP));
   assert.ok(p.rewards.includes(6654), 'camo top');
   assert.equal(Teleports.sessionOf(p), undefined);
+});
+
+test('Drill Demon walks onto the mat tile under the sign from either half of a mat', t => {
+  const h = harness(t);
+  assert.equal(h.hooks.objectRoute?.length, 1, 'the drill plugin registers the mat route');
+  for (const [x, y, id] of [[3160, 4819, 20810], [3160, 4820, 20810], [3162, 4819, 16508],
+    [3164, 4819, 9313], [3166, 4819, 20801]]) {
+    const route = { clickType: 1, objectId: id, object: { getLocation: () => new Location(x, y, 0) } };
+    for (const handler of h.hooks.objectRoute) handler(route);
+    assert.deepEqual(route.destination, { x, y: 4820, z: 0 }, `${x},${y}: walks onto the north tile`);
+  }
+  const other = { clickType: 1, objectId: 9315, object: { getLocation: () => new Location(3165, 4820, 0) } };
+  for (const handler of h.hooks.objectRoute) handler(other);
+  assert.equal(other.destination, undefined, 'sign posts keep the core route');
+  const look = { clickType: 2, objectId: 20810, object: { getLocation: () => new Location(3160, 4820, 0) } };
+  for (const handler of h.hooks.objectRoute) handler(look);
+  assert.equal(look.destination, undefined, 'only Use walks to the mat');
 });
 
 test('Drill Demon breaks the streak on a wrong mat', t => {
@@ -1205,6 +1226,7 @@ test('Drill Demon breaks the streak on a wrong mat', t => {
   choose(h, p, 0);
   const session = Teleports.sessionOf(p);
   const wrong = [...session.data.matExercise.entries()].find(([, exercise]) => exercise !== session.data.order);
+  p.location = new Location(wrong[0], 4820, 0);
   h.hooks['object:Exercise mat'].Use({ player: p, handled: false,
     object: { getLocation: () => new Location(wrong[0], 4820, 0), getId: () => 1 } });
   assert.equal(session.data.streak, 0);

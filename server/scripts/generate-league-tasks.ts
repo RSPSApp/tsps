@@ -369,6 +369,14 @@ const PRODUCE_VERBS: Record<string, string[]> = {
   make: [""], create: [""], brew: [""], clean: [""], cut: [""],
 };
 
+/** A diary's name in a task to the diaries plugin's key (plugins/achievements/diaries). */
+const DIARIES: Array<[RegExp, string]> = [
+  [/^ardougne$/, "ardougne"], [/^desert$/, "desert"], [/^falador$/, "falador"], [/^fremennik$/, "fremennik"],
+  [/^kandarin$/, "kandarin"], [/^karamja$/, "karamja"], [/^morytania$/, "morytania"], [/^wilderness$/, "wilderness"],
+  [/^varrock$/, "varrock"], [/^lumbridge( (&|and) draynor)?$/, "lumbridge"], [/^western( provinces)?$/, "western"],
+  [/^(kourend (&|and) kebos|kebos (&|and) kourend|kourend)$/, "kourend"],
+];
+
 /**
  * The league areas a task may name as its place, to the area ids the areas plugin's map uses
  * (plugins/modes/data/league-areas.json; the task list's own area enum numbers Kourend 10, the map 20).
@@ -417,8 +425,12 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
     const [named, count] = /^\d+$/.test(first) ? [second, Number(first)] : [first, second ? Number(second) : 1];
     // A league area as the place ("in Varlamore", "on Karamja", "within Morytania", "in the
     // Fremennik Province", "in Varlamore underground"): a kill there, the areas' own map deciding.
-    const { area, text: subject } = leagueAreaOf(named);
-    if (area !== null) description = leagueAreaOf(description).text;
+    const fromName = leagueAreaOf(named);
+    const subject = fromName.text;
+    // The description may give the area the name leaves out ("Defeat Hueycoatl 1 Time": "Defeat the Hueycoatl in Varlamore").
+    const fromDescription = leagueAreaOf(description.replace(/ \d+ times$/i, ""));
+    const area = fromName.area ?? fromDescription.area;
+    if (area !== null) description = fromDescription.text;
     // A condition in the description (where, how, how fast) is not a plain kill count: a place
     // ("in the Fremennik Province", "on Ungael") needs the area unlocks, which do not exist yet.
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.
@@ -457,6 +469,14 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
     const combat = excluding ? listed(excluding) : ["ATTACK", "STRENGTH", "DEFENCE", "MAGIC", "RANGED", "HITPOINTS"];
     const nonCombat = every.filter((skill) => !combat.includes(skill));
     return { trigger: { kind: "experience", skills: nonCombat, amount, count: match[4] ? Number(match[4]) : 1 } };
+  }
+  // "Complete the Easy Ardougne Diary", "Kourend and Kebos Hard Diary Tasks": every task of that tier
+  // (the diaries plugin's keys).
+  if ((match = /^(?:Complete the (Easy|Medium|Hard|Elite) (.+?) Diary|(.+?) (Easy|Medium|Hard|Elite) Diary Tasks)$/i.exec(name))) {
+    const tier = (match[1] ?? match[4]).toLowerCase();
+    const region = (match[2] ?? match[3]).toLowerCase();
+    const diary = DIARIES.find(([pattern]) => pattern.test(region))?.[1];
+    return diary ? { trigger: { kind: "diary", diary, tier } } : {};
   }
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {

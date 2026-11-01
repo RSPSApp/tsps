@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary"]);
   const npcNames = new Set();
   // The cache's own list (enum 5950's rows): a task it has by name takes its category.
   const cacheRows = new Map();
@@ -376,6 +376,27 @@ test("experience tasks: 25 million in a skill, and in 5 non-combat skills", () =
   assert.ok(!completed(grinder).includes(five.id), "Attack is a combat skill");
   xp(Skill.HERBLORE, 25000000);
   assert.ok(completed(grinder).includes(five.id));
+});
+
+test("a diary tier task completes when the diaries plugin says the tier is done", () => {
+  worldLeague = 6;
+  const diarist = character("diarist");
+  worldLeague = 4;
+  const task = catalog.leagues["6"].tasks.find((entry) => entry.id === "complete-the-easy-karamja-diary");
+  assert.deepEqual(task.trigger, { kind: "diary", diary: "karamja", tier: "easy" });
+  const kourend = catalog.leagues["6"].tasks.find((entry) => entry.name === "Kourend and Kebos Easy Diary Tasks");
+  assert.deepEqual(kourend.trigger, { kind: "diary", diary: "kourend", tier: "easy" });
+  let done = false;
+  custom["diary:is-complete"] = [(query) => { query.complete = done && query.diary === "karamja" && query.tier === "easy"; }];
+  try {
+    for (const handler of custom["diary:task"]) handler({ player: diarist, diary: "karamja", task: "x" });
+    assert.ok(!completed(diarist).includes(task.id));
+    done = true;
+    for (const handler of custom["diary:task"]) handler({ player: diarist, diary: "karamja", task: "y" });
+    assert.ok(completed(diarist).includes(task.id));
+  } finally {
+    delete custom["diary:is-complete"];
+  }
 });
 
 /** The first cache item / NPC of that exact name. */

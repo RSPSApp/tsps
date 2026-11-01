@@ -1524,6 +1524,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   <Skill> XP"; "... XP in a combat skill" takes the description's list (Prayer is in the 100
   million one's); "... in any non-combat skill" and "... in N non-combat skills" every skill but
   the six the description excludes (Sailing left out).
+- **Diaries**: `diary { diary, tier }` ("Complete the Easy Ardougne Diary", "Kourend and Kebos Hard
+  Diary Tasks"; the diaries plugin's keys), complete when `diary:is-complete` says so, checked after
+  every `diary:task` (the diaries plugin, loaded first, has counted it) and at login. A kill
+  task's league area may come from its description too ("Defeat Callisto": "... in the
+  Wilderness").
 - **Not mapped yet:** kills with any other place or a condition, equipment sets the description
   does not list, obtaining items, minigames, diaries, travel, emotes and the Leagues tutorial task.
 

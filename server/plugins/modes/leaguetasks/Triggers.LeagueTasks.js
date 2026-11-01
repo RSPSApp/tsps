@@ -28,7 +28,7 @@ const plainName = (name) => String(name ?? "").toLowerCase().replace(/^the /, ""
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [] };
+  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [], diaries: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (!trigger) continue;
@@ -40,6 +40,8 @@ function indexOf(type) {
       }
     } else if (LEVEL_KINDS.has(trigger.kind)) {
       entry.levels.push(task);
+    } else if (trigger.kind === "diary") {
+      entry.diaries.push(task);
     } else if (trigger.kind === "experience") {
       entry.experience.push(task);
     } else if (trigger.kind === "level-up") {
@@ -108,6 +110,24 @@ function checkExperience(player) {
     }).length;
     if (reached >= (Number(count) || 1)) Complete.complete(player, task.id, type);
   }
+}
+
+/** `diary { diary, tier }`: the diaries plugin says the tier is complete (`diary:is-complete`). */
+function checkDiaries(player) {
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const done = new Set(Common.completedIds(player));
+  for (const task of indexOf(type).diaries) {
+    if (done.has(task.id)) continue;
+    const query = { player, diary: task.trigger.diary, tier: task.trigger.tier, complete: false };
+    Common.api.emitCustomEvent("diary:is-complete", query);
+    if (query.complete === true) Complete.complete(player, task.id, type);
+  }
+}
+
+/** `diary:task` { player }: a diary task done (the diaries plugin, loaded first, has counted it). */
+function diaryTask({ player }) {
+  if (player) checkDiaries(player);
 }
 
 function experienceGained({ player }) {
@@ -210,6 +230,7 @@ function login({ player, league }) {
   if (!Common.catalog(league)) return;
   checkLevels(player);
   checkExperience(player);
+  checkDiaries(player);
   checkQuests(player, league);
 }
 
@@ -219,6 +240,7 @@ module.exports = function attach(api) {
   api.onCustomEvent("combat-achievements:kill", creditedKill);
   api.onPlayerLevelUp(levelUp);
   api.onExperienceGained(experienceGained);
+  api.onCustomEvent("diary:task", diaryTask);
   api.onCustomEvent("quest:completed", questCompleted);
   api.onCustomEvent("league:login", login);
 };

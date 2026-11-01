@@ -83,9 +83,20 @@ module.exports = function registerDesertTreasureII(api) {
       : player.getAttribute(SUCELLUS_CELL_ESCAPED) ? 20
         : player.getAttribute(SUCELLUS_CELL_ENTERED) ? [8, 10, 10, 12, 14, 16, 18, 20][Number(player.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0]
           : stage(player) >= S.SUCELLUS ? 2 : 0);
-    const state = `${value}:${stranglewood}:${prison}:${figurePortal}`;
+    const statues = Number(player.getAttribute("desert-treasure-ii:statues")) || 0;
+    const totems = Number(player.getAttribute(TOTEM_MASK)) || 0;
+    const asked = Number(player.getAttribute(SEARCHED_NAMES)) || 0;
+    const found = Number(player.getAttribute(GOLEM_FOUND)) || 0;
+    const state = `${value}:${stranglewood}:${prison}:${figurePortal}:${statues}:${totems}:${asked}:${found}`;
     if (nativeProgressSent.get(player) === state) return;
     nativeProgressSent.set(player, state);
+    player.getPacketSender().sendVarbit(VAULT_PLAQUE_VARBIT, statues & 16 ? 1 : 0);
+    STATUE_VARBITS.forEach((varbit, index) => player.getPacketSender().sendVarbit(varbit, statues & (1 << index) ? 1 : 0));
+    player.getPacketSender().sendVarbit(TOTEM_MASK_VARBIT, totems);
+    TOTEMS.forEach((totem) => player.getPacketSender().sendVarbit(TOTEM_VARBITS[totem.kind], totems & totem.mask ? 1 : 0));
+    for (const record of Object.values(GOLEM_RECORDS)) {
+      if (record.varbit) player.getPacketSender().sendVarbit(record.varbit, asked & record.bit ? 2 : found & record.bit ? 1 : 0);
+    }
     player.getPacketSender().sendVarbit(15125, stranglewood);
     player.getPacketSender().sendVarbit(15127, prison);
     player.getPacketSender().sendVarbit(14862, value);
@@ -106,7 +117,50 @@ module.exports = function registerDesertTreasureII(api) {
   // still dispatches their underlying object ids. The plaque is a separate
   // interaction and must also be read before the names are known.
   const STATUES = new Map([[49499, 0], [49501, 1], [49503, 2], [49505, 3]]);
-  const PREREQUISITES = ["desert_treasure_i", "secrets_of_the_north", "enakhras_lament", "temple_of_the_eye", "the_garden_of_death", "below_ice_mountain"];
+  // Statue plaques and their varbits, in STATUES index order (rsprox 1703): Vardorvis 15106,
+  // Whisperer 15109, Sucellus 15108, Perseriya 15107; the vault plaque is 15105 (bit 16).
+  const STATUE_TITLES = ["Carnifex Maximus Vardorvis", "The Whisperer", "Duke Sucellus of the Sixth Legion", "Praefectus Classis Perseriya"];
+  const STATUE_VARBITS = [15106, 15109, 15108, 15107];
+  const VAULT_PLAQUE_VARBIT = 15105;
+  const WOOD_PLAQUE_GROUP = 749;
+  const VAULT_PLAQUE_LINES = ["", "", "", "Let it be known that we, the ever faithful servants of the Empty Lord,",
+    "have bound this vault in his name. Here, his mighty treasures will be",
+    "forever safe from the soulless betrayers, and all others who would",
+    "dare oppose the might of the Empire.", "", "", "", ""];
+  // War-room totems (rsprox 1703): 15116 is the mask, each totem also has its own flag.
+  const TOTEM_VARBITS = { smoke: 15117, shadow: 15118, blood: 15119, ice: 15120 };
+  const TOTEM_MASK_VARBIT = 15116;
+  const TOTEM_FACE_TILE = [2773, 6442];
+  // War-room capture facts (rsprox 1703).
+  const UNCHARGED_CELL = 28402, CHARGED_CELL = 28403;
+  const CELL_CRATE_SOUND = 2582, ALTAR_IMBUE_SOUND = 2710, CELLS_INSERTED_SOUND = 2739, GOLEM_POWERED_SOUND = 4996;
+  const ALTAR_IMBUE_ANIM = 9361, ALTAR_IMBUE_GFX = 186;
+  const CLIMB_ROPE_ANIM = 828;
+  const PUZZLE_CELLS_COMPONENT = 35, PUZZLE_SQUARES_COMPONENT = 32, PUZZLE_BUTTON_COMPONENT = 4;
+  const PUZZLE_START = [0, 1, 2, 3, 4, 5, 6, 7];
+  const STONE_PLAQUE_GROUP = 748, STONE_PLAQUE_MODEL = 48280;
+  const GOLEM_FOUND = "desert-treasure-ii:golem-found";
+  // Golem records: stoneplaque lines ms1..ms11 (components 3..13) and the search varbit.
+  const GOLEM_RECORDS = {
+    vardorvis: { bit: 1, varbit: 15111, lines: ["Vardorvis", "", "Designation: Ally", "Race: Vampyre", "Rank: Carnifex Maximus",
+      "Status: Unknown (See Notes)", "Last Known Location: Lassar (See Notes)", "", "Notes:",
+      "Carnifex Maximus Vardorvis departed Lassar and travelled west in",
+      "pursuit of a high value target: Yonrith Lovakengj. Status unknown."] },
+    perseriya: { bit: 2, varbit: 15112, lines: ["Perseriya", "", "Designation: Ally", "Race: Siren", "Rank: Praefectus Classis",
+      "Status: Presumed Deceased (See Notes)", "Last Known Location: Eastern Sea (See Notes)", "", "Notes:",
+      "Praefectus Classis Perseriya's ship was lost to the Abyss at the", "Battle for the Eye. She is presumed deceased."] },
+    sucellus: { bit: 4, varbit: 15113, lines: ["Sucellus", "", "Designation: Ally", "Race: Cthonian", "Rank: Legatus (Acting Legatus Maximus)",
+      "Status: Alive", "Last Known Location: Ghorrock Prison", "", "Notes:",
+      "Duke Sucellus has taken informal command of the remaining forces of", "the Holy Empire."] },
+    whisperer: { bit: 8, varbit: 15114, lines: ["The Whisperer (True Name Classified)", "", "Designation: Ally", "Race: Siren", "Rank: Classified",
+      "Status: Presumed Deceased (See Notes)", "Last Known Location: Lassar (See Notes)", "", "Notes:",
+      "The Whisperer was stationed at Lassar when the fortress fell. No", "further contact received. Presumed deceased."] },
+    frostenhorn: { lines: ["Frostenhorn", "", "Designation: Artefact", "Status: Unknown (See Notes)", "Last Known Location: Senntisten (See Notes)",
+      "", "Notes:", "The Frostenhorn has been missing since the loss of the Pontifex",
+      "Maximus. It was removed from Senntisten by unknown individuals.", "Status unknown.", ""] },
+  };
+  const ALTAR_CHARGED_SOUND = 5346;
+  const PREREQUISITES = ["desert_treasure_i", "secrets_of_the_north", "enakhras_lament", "temple_of_the_eye", "the_garden_of_death", "below_ice_mountain", "his_faithful_servants"];
   const CELLS_INSERTED = "desert-treasure-ii:cells-inserted";
   const PUZZLE_OPEN = "desert-treasure-ii:puzzle-open";
   const CELL_POSITIONS = "desert-treasure-ii:cell-positions";
@@ -115,8 +169,15 @@ module.exports = function registerDesertTreasureII(api) {
   const ALTAR_INSPECTED = "desert-treasure-ii:altar-inspected";
   const TOTEMS_CHARGED = "desert-treasure-ii:totems-charged";
   const TOTEM_MASK = "desert-treasure-ii:totem-mask";
+  const INSTANCE_EXIT = "desert-treasure-ii:instance-exit";
+  // TemplatedInstanceArea allocates from chunk x 1024 (tile x 8192); nothing public is there.
+  const TEMPLATED_INSTANCE_MIN_X = 8192;
   const BANIKAN_BRIEFED = "desert-treasure-ii:banikan-briefed";
   const SEARCHED_NAMES = "desert-treasure-ii:searched-names";
+  const GOLEM_RECORD_OPEN = "desert-treasure-ii:golem-record-open";
+  const GOLEM_PROMPT_STEP = "cI7y6E";
+  const FROSTENHORN_RECORD_STEP = "-HvgV3";
+  const SERUM_SPACE_CONDITION_STEP = "szffOl";
   const BANIKAN_LEFT = "desert-treasure-ii:banikan-left";
   const VARDORVIS_PROGRESS = "desert-treasure-ii:vardorvis-progress";
   const STRANGLEWOOD_CITY_ENTERED = "desert-treasure-ii:city-entered";
@@ -723,6 +784,8 @@ module.exports = function registerDesertTreasureII(api) {
   let LeviathanArea;
   let SucellusArea;
   let WhispererArea;
+  const totemRushSpellIds = new Map(TOTEMS.map((totem) => [totem.kind,
+    new Set([api.core.CombatSpells[`${totem.kind.toUpperCase()}_RUSH`]?.spellId?.()].filter(Number.isInteger))]));
   const totemSpellIds = new Map(TOTEMS.map((totem) => [totem.kind, new Set(totem.spells.map((name) => api.core.CombatSpells[name]?.spellId?.()).filter(Number.isInteger))]));
   const LEVIATHAN_SHADOW_SPELL_IDS = new Set(["SHADOW_RUSH", "SHADOW_BURST", "SHADOW_BLITZ", "SHADOW_BARRAGE"]
     .map(name => api.core.CombatSpells[name].spellId()));
@@ -863,6 +926,10 @@ module.exports = function registerDesertTreasureII(api) {
     getName() { return "Ancient Vault war room (Desert Treasure II)"; }
     canAttack(attacker, target) {
       if (attacker?.__dt2Guardian) return false;
+      // Totems are cast on, never fought: they don't attack, and a weapon or autocast
+      // follow-up after the burst doesn't reach them.
+      if (attacker?.__dt2Totem) return false;
+      if (target?.__dt2Totem) return attacker?.getCombat?.()?.getCastSpell?.() != null;
       if (target?.__dt2Guardian) return attacker?.isPlayer?.() && attacker.getUsername() === this.owner;
       return null;
     }
@@ -872,7 +939,9 @@ module.exports = function registerDesertTreasureII(api) {
         || stage(player) < S.MACHINE || stage(player) >= S.VARDORVIS
         || !player.getAttribute(GOLEM_INSPECTED) || !player.getAttribute(ALTAR_INSPECTED)) return false;
       if (!totemSpellIds.get(npc.__dt2Totem)?.has(spell?.spellId?.())) {
-        player.sendMessage(`That totem requires a ${npc.__dt2Totem} burst spell or higher.`);
+        // Wiki transcript "empowering the totems".
+        const rush = totemRushSpellIds.get(npc.__dt2Totem)?.has(spell?.spellId?.());
+        player.sendMessage(rush ? "That spell isn't powerful enough to work on this totem." : "That kind of spell won't work on this totem.");
         return false;
       }
       return true;
@@ -1626,13 +1695,17 @@ module.exports = function registerDesertTreasureII(api) {
     if (!owned) spawned.set(player, owned = {});
     if (owned.totems?.every(npc => area.entities.includes(npc))) return owned.totems;
     const mask = Number(player.getAttribute(TOTEM_MASK)) || (player.getAttribute(TOTEMS_CHARGED) ? 15 : 0);
-    player.getPacketSender().sendVarbit(15116, mask);
+    syncNativeProgress(player);
     owned.totems = TOTEMS.map((totem) => {
       const npc = api.core.NPC.create(totem.inactive, area.tile(totem.x - 2760, totem.y - 6424, 0));
       npc.setOwner?.(player);
       npc.setOwnerOnly?.(true);
       npc.__skipDefaultRespawn = true;
       npc.__dt2Totem = totem.kind;
+      npc.setScriptedMovement?.(true);
+      // Live totems face the altar's centre and never turn to the caster (rsprox 1703).
+      npc.setFlag?.("combat:no-retaliate", true);
+      npc.setPositionToFace?.(area.tile(TOTEM_FACE_TILE[0] - 2760, TOTEM_FACE_TILE[1] - 6424, 0));
       npc.__dt2TotemCharged = Boolean(mask & totem.mask);
       if (npc.__dt2TotemCharged) npc.setNpcTransformationId?.(totem.active);
       area.add(npc);
@@ -1652,21 +1725,18 @@ module.exports = function registerDesertTreasureII(api) {
       || !area.entities?.includes(target) || target.getOwner?.() !== player
       || !player.getAttribute(GOLEM_INSPECTED) || !player.getAttribute(ALTAR_INSPECTED)) return;
     const totem = TOTEMS.find((entry) => entry.kind === kind);
-    if (!totem || !totemSpellIds.get(kind)?.has(spell?.spellId?.())) {
-      player.sendMessage(`That totem requires a ${kind} burst spell or higher.`);
-      return;
-    }
-    if (target.__dt2TotemCharged) return;
+    if (!totem || !totemSpellIds.get(kind)?.has(spell?.spellId?.()) || target.__dt2TotemCharged) return;
     const mask = (Number(player.getAttribute(TOTEM_MASK)) || 0) | totem.mask;
     player.setAttribute(TOTEM_MASK, mask);
-    player.getPacketSender().sendVarbit(15116, mask);
+    syncNativeProgress(player);
     target.__dt2TotemCharged = true;
     target.setNpcTransformationId?.(totem.active);
-    player.sendMessage(`The ${kind} totem ignites with ancient power.`);
+    player.sendMessage("You empower the totem.");
     const owned = spawned.get(player);
     if (owned?.totems?.every((npc) => npc?.__dt2TotemCharged)) {
       player.setAttribute(TOTEMS_CHARGED, true);
-      player.sendMessage("All four totems are active. The machine can now be powered.");
+      player.getPacketSender().sendSound(ALTAR_CHARGED_SOUND, 0, 0);
+      statement(player, "You empower the last totem and the altar begins to give off magical energy.");
     }
   }
 
@@ -1786,6 +1856,16 @@ module.exports = function registerDesertTreasureII(api) {
     hit.updateTotalDamage?.();
   }
 
+  function statement(p, text) {
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
+    p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+  }
+  function openVaultPlaque(p) {
+    const sender = p.getPacketSender();
+    // woodplaque:ms1..ms11 are components 3..13.
+    VAULT_PLAQUE_LINES.forEach((line, i) => sender.sendString(line, (WOOD_PLAQUE_GROUP << 16) | (3 + i)));
+    sender.sendInterface(WOOD_PLAQUE_GROUP);
+  }
   function enterVault(p) {
     // Live arrival is 3929,9631 on plane 1, three tiles west of Asgarnia Smith at 3932,9631 (rsprox capture 1703).
     const current = p.getAttribute(ATTR_VAULT_AREA);
@@ -2466,7 +2546,8 @@ module.exports = function registerDesertTreasureII(api) {
     area.postLeave(p, false);
     area.destroy();
     p.setAttribute(ATTR_STRANGLEWOOD_HIDEOUT, null);
-    p.moveTo(new api.core.Location(1187, 3411, 0));
+    // Live climbs out inside Kasonde's building, beside the Entry (rsprox 1703).
+    p.moveTo(new api.core.Location(1191, 3410, 0));
     return true;
   }
 
@@ -3621,6 +3702,7 @@ module.exports = function registerDesertTreasureII(api) {
   }
 
   function handleLogin({ player: p }) {
+    recoverFromLostInstance(p);
     if (stage(p) === S.FINALE && p.getAttribute(FINAL_WIGHTS_STARTED) === true
       && !p.getAttribute(FINAL_WIGHTS_COMPLETE)) {
       const activeArea = p.getPrivateArea?.();
@@ -4205,6 +4287,45 @@ module.exports = function registerDesertTreasureII(api) {
     }
     leaveWhispererScene(p);
   }
+  /** The public tile a player leaves a DT2 instance for, as a normal logout chooses it. */
+  function instanceExit(p, current) {
+    if (!current) return null;
+    if ([p.getAttribute(ATTR_VAULT_AREA), p.getAttribute(FINAL_ROOM)].includes(current)) return [3510, 2971, 0];
+    if (current === p.getAttribute(ATTR_WAR_ROOM)) return [3411, 9813, 0];
+    if (current === p.getAttribute(SUCELLUS_AREA)) return [2927, 10353, 0];
+    if ([ATTR_SCAR_AREA, ATTR_SCAR_MAZE_ONE, ATTR_SCAR_MAZE_TWO, ATTR_SCAR_MAZE_THREE, ATTR_LEVIATHAN_AREA]
+      .some((key) => current === p.getAttribute(key))) return [3610, 9473, 0];
+    if (current === p.getAttribute(WHISPERER_AREA)) return [2656, 6386, 0];
+    if (current === p.getAttribute(ATTR_STRANGLEWOOD_HIDEOUT)) return [1193, 3405, 0];
+    if (current === p.getAttribute(ATTR_STRANGLEWOOD_TEMPLE)) return [1174, 3427, 0];
+    if (current === p.getAttribute(ATTR_VARDORVIS_AREA)) return [1117, 3429, 0];
+    return null;
+  }
+  /**
+   * A server stop skips the logout hook, so the save keeps the instance's tile and the
+   * instance is gone on the next login (the client is left loading an empty map). Keep the
+   * exit of the instance the player is in, and send them there when they log in to one.
+   */
+  function rememberInstanceExit(p) {
+    const exit = instanceExit(p, p.getPrivateArea?.());
+    const saved = p.getAttribute(INSTANCE_EXIT);
+    if (exit && String(exit) !== String(saved)) p.setAttribute(INSTANCE_EXIT, exit);
+  }
+  function recoverFromLostInstance(p) {
+    const location = p.getLocation?.();
+    const x = location?.getX?.() ?? location?.x;
+    if (!(x >= TEMPLATED_INSTANCE_MIN_X) || p.getPrivateArea?.()) return;
+    let exit = p.getAttribute(INSTANCE_EXIT);
+    if (!Array.isArray(exit) || exit.length !== 3) {
+      // Saves from before the exit was kept: the stage says which instance it was.
+      const s = stage(p);
+      exit = s >= S.DIG && s < S.VARDORVIS ? [3411, 9813, 0]
+        : s >= S.STARTED && (s < S.DIG || s >= S.FINALE) ? [3510, 2971, 0] : null;
+      if (!exit) return;
+    }
+    p.setAttribute(INSTANCE_EXIT, null);
+    p.moveTo(new api.core.Location(...exit.map(Number)));
+  }
   function handleLogout({ player: p }) {
     if (!p) return;
     const ownedActors = spawned.get(p);
@@ -4226,6 +4347,8 @@ module.exports = function registerDesertTreasureII(api) {
       p.setAttribute(FINAL_WIGHTS_STARTED, false);
       p.setAttribute(FINAL_WIGHT_INDEX, 0);
     }
+    // Before the loop below clears the area attributes it compares against.
+    const exit = instanceExit(p, current);
     const returnToDigsite = current && current === p.getAttribute(ATTR_WAR_ROOM);
     const returnToPrison = current && current === p.getAttribute(SUCELLUS_AREA);
     if (returnToPrison) saveSucellusPrisonCheckpoint(p, current);
@@ -4253,12 +4376,8 @@ module.exports = function registerDesertTreasureII(api) {
       }
       p.setAttribute(key, null);
     }
-    if (returnToVaultEntrance) p.moveTo(new api.core.Location(3510, 2971, 0));
-    else if (returnToDigsite) p.moveTo(new api.core.Location(3411, 9813, 0));
-    else if (returnToPrison) p.moveTo(new api.core.Location(2927, 10353, 0));
-    else if (returnToGuardian) p.moveTo(new api.core.Location(3610, 9473, 0));
-    else if (returnToWhisperer) p.moveTo(new api.core.Location(2656, 6386, 0));
-    else if (stranglewoodExit) p.moveTo(new api.core.Location(...stranglewoodExit, 0));
+    if (exit) p.moveTo(new api.core.Location(...exit));
+    p.setAttribute(INSTANCE_EXIT, null);
     p.setAttribute(SCAR_PATH_COMPLETE, p.getAttribute(SCAR_TETHER_DESTROYED) === true);
     p.setAttribute(SCAR_RIFT_LIVE, false);
     p.setAttribute(SCAR_GROWTH_LIVE, false);
@@ -4576,7 +4695,10 @@ module.exports = function registerDesertTreasureII(api) {
     lassarShadowBarriers.delete(p);
   }
   function handleLassarProcess({ player: p }) {
-    if (p && stage(p) > 0) syncNativeProgress(p);
+    if (p && stage(p) > 0) {
+      syncNativeProgress(p);
+      rememberInstanceExit(p);
+    }
     if (!p || p.isPlayerBot?.() === true || stage(p) !== S.WHISPERER) return;
     ensureLassarPuddleUse();
     const lassarState = p.getAttribute(LASSAR) ?? {};
@@ -4777,21 +4899,75 @@ module.exports = function registerDesertTreasureII(api) {
     positions.forEach((position, index) => p.getPacketSender().sendVarbit(CELL_VARBITS[index], position));
   }
   function openGolemPuzzle(p) {
-    let positions = cellPositions(p);
-    if (!positions) {
-      // A fresh board is deliberately unsolved. These are eight distinct cache
-      // slots; the player must drag every cell into the correct 8x8 layout.
-      positions = [0, 9, 18, 27, 36, 45, 54, 63];
-    }
+    // Live starts the eight cells on squares 0-7 (rsprox 1703).
+    const positions = cellPositions(p) ?? PUZZLE_START.slice();
     syncCellPositions(p, positions);
     p.setAttribute(CELLS_INSERTED, true);
     p.setAttribute(PUZZLE_OPEN, true);
     p.getPacketSender().sendInterface(PUZZLE_GROUP);
   }
   function wrongGolemSolution(p) {
-    p.sendMessage("The machine crackles and shocks you. The cell arrangement is incorrect.");
+    p.getPacketSender().sendInterfaceRemoval();
+    p.setAttribute(PUZZLE_OPEN, false);
+    talk(p, N.GOLEM_3, "familiar-faces-failing-to-power-up-the-golem-machine");
+    // Wiki: a wrong arrangement shocks for 5-10 damage.
     const damage = 5 + Math.floor(Math.random() * 6);
     p.getCombat().getHitQueue().addPendingDamage([new api.core.HitDamage(damage, api.core.HitMask.RED)]);
+  }
+  function itemStatement(p, itemId, text, then) {
+    const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = api.core;
+    const chain = new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text));
+    if (then) chain.add(new ActionDialogue(1, { execute() { p.getDialogueManager().reset(); then(); } }));
+    p.getDialogueManager().startDialogues(chain);
+  }
+  function imbueCells(p) {
+    const inventory = p.getInventory();
+    if (inventory.getAmount(CHARGED_CELL) >= 8 || p.getAttribute(CELLS_INSERTED)) {
+      return statement(p, "You've already imbued enough cells using this altar.");
+    }
+    const amount = inventory.getAmount(UNCHARGED_CELL);
+    if (amount <= 0) return;
+    inventory.deleteNumber(UNCHARGED_CELL, amount);
+    inventory.adds(CHARGED_CELL, amount);
+    p.performAnimation(new api.core.Animation(ALTAR_IMBUE_ANIM));
+    p.performGraphic(new api.core.Graphic(ALTAR_IMBUE_GFX, api.core.GraphicHeight.SURGE_CAST));
+    p.getPacketSender().sendSound(ALTAR_IMBUE_SOUND, 0, 0);
+    itemStatement(p, CHARGED_CELL, "You use the altar to imbue your cells with ancient energy.");
+  }
+  function insertCells(p) {
+    p.getInventory().deleteNumber(CHARGED_CELL, 8);
+    p.setAttribute(CELLS_INSERTED, true);
+    syncNativeProgress(p);
+    p.getPacketSender().sendSound(CELLS_INSERTED_SOUND, 0, 0);
+    itemStatement(p, CHARGED_CELL, "You place eight cells into the grid on the back of the golem, but nothing happens. It looks like you'll need to work out which slots they go in.",
+      () => openGolemPuzzle(p));
+  }
+  function golemLines(p, lines, then) {
+    const { DialogueChainBuilder, NpcDialogue, ActionDialogue } = api.core;
+    const chain = new DialogueChainBuilder();
+    lines.forEach((line, i) => chain.add(new NpcDialogue(i, N.GOLEM_3, line)));
+    if (then) chain.add(new ActionDialogue(lines.length, { execute() { p.getDialogueManager().reset(); then(); } }));
+    p.getDialogueManager().startDialogues(chain);
+  }
+  function openGolemRecord(p, key) {
+    const record = GOLEM_RECORDS[key];
+    const sender = p.getPacketSender();
+    record.lines.forEach((line, i) => sender.sendString(line, (STONE_PLAQUE_GROUP << 16) | (3 + i)));
+    sender.sendInterfaceRawModel((STONE_PLAQUE_GROUP << 16) | 1, STONE_PLAQUE_MODEL);
+    sender.sendInterface(STONE_PLAQUE_GROUP);
+    p.setAttribute(GOLEM_RECORD_OPEN, key);
+  }
+  function closeGolemRecord({ player: p, interfaceId }) {
+    const key = p?.getAttribute?.(GOLEM_RECORD_OPEN);
+    if (!key || interfaceId !== STONE_PLAQUE_GROUP) return;
+    p.setAttribute(GOLEM_RECORD_OPEN, null);
+    if (key === "frostenhorn") return;
+    const record = GOLEM_RECORDS[key];
+    p.setAttribute(SEARCHED_NAMES, (Number(p.getAttribute(SEARCHED_NAMES)) || 0) | record.bit);
+    syncNativeProgress(p);
+    // The record itself was the interface; the transcript repeats it as a message first.
+    const variant = `familiar-faces-powering-up-the-golem-machine-${key === "whisperer" ? "the-whisperer-true-name-classified" : key}`;
+    startTranscript(api, p, N.GOLEM_3, PAGE, variant, (steps) => steps.filter((step, i) => !(i === 0 && step.type === "message")));
   }
   function onWidgetAction(event) {
     const p = event?.player, packet = event?.packet;
@@ -4811,8 +4987,12 @@ module.exports = function registerDesertTreasureII(api) {
       if ((packet.sourceWidgetId >>> 16) !== PUZZLE_GROUP || (packet.targetWidgetId >>> 16) !== PUZZLE_GROUP) return;
       const positions = cellPositions(p);
       const from = Number(packet.sourceSlot), to = Number(packet.targetSlot);
-      if (!positions || !Number.isInteger(from) || !Number.isInteger(to) || from < 0 || from > 63 || to < 0 || to > 63) return;
-      const cell = positions.indexOf(from);
+      if (!positions || !Number.isInteger(from) || !Number.isInteger(to) || to < 0 || to > 63) return;
+      // Live drags a cell from dt2_warmind_puzzle:cells (sub = cell number) onto :squares
+      // (sub = square), rsprox 1703; a square-to-square drag moves that square's cell.
+      const fromComponent = packet.sourceWidgetId & 0xffff;
+      const cell = fromComponent === PUZZLE_CELLS_COMPONENT ? (from < 8 ? from : -1) : positions.indexOf(from);
+      if ((packet.targetWidgetId & 0xffff) !== PUZZLE_SQUARES_COMPONENT) return;
       if (cell >= 0 && !positions.includes(to)) {
         positions[cell] = to;
         syncCellPositions(p, positions);
@@ -4820,15 +5000,20 @@ module.exports = function registerDesertTreasureII(api) {
       event.handled = true;
       return;
     }
-    if (packet.type !== "widget_action" || packet.groupId !== PUZZLE_GROUP || packet.childId !== 4) return;
+    if (packet.type !== "widget_action" || packet.groupId !== PUZZLE_GROUP || packet.childId !== PUZZLE_BUTTON_COMPONENT) return;
     event.handled = true;
     const positions = cellPositions(p);
-    if (!positions || !CELL_SOLUTION.every((value, index) => positions[index] === value)) return wrongGolemSolution(p);
+    // The cells are identical: any order that fills the solution's squares powers it.
+    const solved = positions && [...positions].sort((x, y) => x - y).join() === [...CELL_SOLUTION].sort((x, y) => x - y).join();
+    if (!solved) return wrongGolemSolution(p);
     p.setAttribute(GOLEM_SOLVED, true);
     p.setAttribute(PUZZLE_OPEN, false);
+    syncNativeProgress(p);
     p.getPacketSender().sendInterfaceRemoval();
-    p.sendMessage("The golem powers up. It asks you to specify a search term.");
-    promptGolemSearch(p);
+    p.getPacketSender().sendSound(GOLEM_POWERED_SOUND, 0, 0);
+    // The transcript carries on past its input prompt (cI7y6E); searchGolem plays the answer.
+    startTranscript(api, p, N.GOLEM_3, PAGE, "familiar-faces-powering-up-the-golem-machine",
+      (steps) => steps.slice(0, steps.findIndex((step) => step.id === GOLEM_PROMPT_STEP) + 1));
   }
   function promptGolemSearch(p) {
     p.setEnteredSyntaxAction({ execute: (term) => searchGolem(p, term) });
@@ -4836,28 +5021,33 @@ module.exports = function registerDesertTreasureII(api) {
   }
   function searchGolem(p, input) {
     const term = String(input ?? "").trim().toLowerCase();
-    const names = new Map([["vardorvis", 1], ["perseriya", 2], ["sucellus", 4], ["whisperer", 8]]);
+    // Own keys only: inherited names such as constructor/__proto__ are not records.
+    const record = Object.hasOwn(GOLEM_RECORDS, term) ? GOLEM_RECORDS[term] : null;
     const searched = Number(p.getAttribute(SEARCHED_NAMES)) || 0;
-    if (term === "frostenhorn") {
-      if (searched !== 15 || !p.getAttribute(BANIKAN_LEFT)) {
-        p.sendMessage("Error: Access to data denied.");
-        return promptGolemSearch(p);
+    const denied = term === "frostenhorn" && (searched !== 15 || !p.getAttribute(BANIKAN_LEFT));
+    if (!record || denied) {
+      // Wiki transcript "powering up the golem machine".
+      return golemLines(p, ["Checking...", denied ? "Error: Access to data denied." : "Error: No data found.",
+        "Please specify another search term."], () => promptGolemSearch(p));
+    }
+    golemLines(p, ["Checking...", "Data found. Outputting now."], () => {
+      if (record.bit) {
+        p.setAttribute(GOLEM_FOUND, (Number(p.getAttribute(GOLEM_FOUND)) || 0) | record.bit);
+        syncNativeProgress(p);
+      } else {
+        // Live sets 40 -> 42 as the Frostenhorn record opens (rsprox 1703).
+        setStage(p, S.VARDORVIS);
+        p.setAttribute(VARDORVIS_PROGRESS, 0);
+        p.setAttribute(ATTR, null);
       }
-      p.sendMessage("Data found. The golem reveals Banikan's search term: Frostenhorn.");
-      talk(p, N.GOLEM_3, "familiar-faces-operating-the-golem-to-find-out-what-dr-banikan-searched", S.VARDORVIS);
-      p.setAttribute(VARDORVIS_PROGRESS, 0);
-      p.setAttribute(ATTR, null);
-      return;
-    }
-    const bit = names.get(term);
-    if (!bit) {
-      p.sendMessage("Error: No data found.");
-      return promptGolemSearch(p);
-    }
-    p.setAttribute(SEARCHED_NAMES, searched | bit);
-    // shortcut: archive reports use chatbox messages until the cache's data interface is mapped.
-    const variant = `familiar-faces-powering-up-the-golem-machine-${term === "whisperer" ? "the-whisperer-true-name-classified" : term}`;
-    talk(p, N.GOLEM_3, variant);
+      openGolemRecord(p, term);
+    });
+  }
+  /** Kasonde's serum hand-over checks the bag before giving the potion (Wiki transcript). */
+  function resolveSerumSpaceCondition({ player, stepId }) {
+    if (stepId !== SERUM_SPACE_CONDITION_STEP || stage(player) !== S.VARDORVIS) return null;
+    const carried = [I.UNFINISHED_SERUM, I.UNFINISHED_SERUM_2, I.STRANGLER_SERUM].some((id) => has(player, id));
+    return !carried && player.getInventory().getFreeSlots() < 1;
   }
   function resolveGolemSearchCondition({ player, text }) {
     if (stage(player) !== S.MACHINE) return null;
@@ -5906,16 +6096,21 @@ module.exports = function registerDesertTreasureII(api) {
         || (objectId === O.PLAQUE_35 && vaultTile.x === 3944 && vaultTile.y === 9631))) {
       const bits = Number(p.getAttribute("desert-treasure-ii:statues")) || 0;
       const index = STATUES.get(objectId);
-      const next = index === undefined ? bits | 16 : bits | (1 << index);
-      p.setAttribute("desert-treasure-ii:statues", next);
-      if (next === 31) p.sendMessage("The plaque identifies the four generals: Vardorvis, Perseriya, Sucellus and the Whisperer.");
-      else if (index !== undefined) p.sendMessage(["The statue depicts Vardorvis.", "The statue depicts the Whisperer.", "The statue depicts Sucellus.", "The statue depicts Perseriya."][index]);
-      else p.sendMessage("You inspect the plaque. It describes the fallen empire and its four generals.");
+      p.setAttribute("desert-treasure-ii:statues", index === undefined ? bits | 16 : bits | (1 << index));
+      syncNativeProgress(p);
+      if (index === undefined) openVaultPlaque(p);
+      else statement(p, `The statue looks like it's meant to be holding something. A plaque on it reads: '${STATUE_TITLES[index]}'`);
       return true;
     }
     if (vaultTile && ([O.VAULT_DOOR, O.VAULT_DOOR_2, O.VAULT_DOOR_3].includes(objectId)
       || (objectId === O.STEPS_23 && vaultTile.x === 3925 && vaultTile.y === 9630))) {
       leaveVault(p);
+      return true;
+    }
+    if (objectId === O.ROPE_52 && location.x === 3404 && location.y === 9803 && location.z === 0 && option === "climb-up") {
+      // Live: reach-for-ladder, then up beside the winch on the third tick (rsprox 3229).
+      p.performAnimation(new api.core.Animation(CLIMB_ROPE_ANIM));
+      nextTicks(p, 2, () => p.moveTo(new api.core.Location(3383, 3418, 0)));
       return true;
     }
     if (objectId === O.WINCH_14 && location.x === 3384 && location.y === 3418 && location.z === 0 && option === "operate") {
@@ -6105,11 +6300,14 @@ module.exports = function registerDesertTreasureII(api) {
       if (p.getAttribute(CELLS_INSERTED) || missing <= 0) return p.sendMessage("You already have the cells needed for the machine.");
       if (!inventory.getAmount(I.UNCHARGED_CELL_2) && inventory.getFreeSlots() < 1) return p.sendMessage("You need a free inventory slot for the cells.");
       inventory.adds(I.UNCHARGED_CELL_2, missing);
-      p.sendMessage(`You search the crate and take ${missing} uncharged cells.`);
+      p.getPacketSender().sendSound(CELL_CRATE_SOUND, 0, 0);
+      itemStatement(p, UNCHARGED_CELL, "The crate is filled with uncharged cells. You take some.");
       return true;
     }
     if (s >= S.MACHINE && s < S.VARDORVIS && [O.ALTAR_93, O.ALTAR_94, WAR_ROOM_ALTAR_LOC].includes(objectId)
       && roomTile?.x === 2772 && roomTile?.y === 6441) {
+      // The altar turns from Inspect (48929) to Imbue (48930) once the totems are empowered.
+      if (option === "imbue") { imbueCells(p); return true; }
       p.setAttribute(ALTAR_INSPECTED, true);
       talk(p, N.DR_BANIKAN, "familiar-faces-inspecting-the-altar");
       return true;
@@ -6117,8 +6315,9 @@ module.exports = function registerDesertTreasureII(api) {
     if (s >= S.MACHINE && s < S.VARDORVIS && [O.GOLEM, O.GOLEM_2, WAR_ROOM_GOLEM_LOC].includes(objectId)
       && roomTile?.x === 2782 && roomTile?.y === 6443) {
       if (p.getAttribute(GOLEM_SOLVED)) {
-        if (p.getAttribute(BANIKAN_LEFT) && Number(p.getAttribute(SEARCHED_NAMES)) === 15) searchGolem(p, "frostenhorn");
-        else promptGolemSearch(p);
+        if (p.getAttribute(BANIKAN_LEFT) && Number(p.getAttribute(SEARCHED_NAMES)) === 15) {
+          talk(p, N.GOLEM_3, "familiar-faces-operating-the-golem-to-find-out-what-dr-banikan-searched");
+        } else golemLines(p, ["Please specify a search term."], () => promptGolemSearch(p));
         return true;
       }
       if (!p.getAttribute(GOLEM_INSPECTED)) {
@@ -6129,6 +6328,7 @@ module.exports = function registerDesertTreasureII(api) {
       if (!p.getAttribute(ALTAR_INSPECTED)) return p.sendMessage("Inspect the altar before operating the machine.");
       if (!p.getAttribute(TOTEMS_CHARGED)) return p.sendMessage("Cast the matching ancient burst spell or higher on each elemental totem.");
       if (p.getAttribute(CELLS_INSERTED)) { openGolemPuzzle(p); return true; }
+      if (p.getInventory().getAmount(CHARGED_CELL) >= 8) { insertCells(p); return true; }
       return p.sendMessage("Collect and charge eight cells before operating the golem.");
     }
     return false;
@@ -6491,11 +6691,7 @@ module.exports = function registerDesertTreasureII(api) {
       event.handled = true;
       if (!has(p, I.UNCHARGED_CELL_2)) return;
       if (!p.getAttribute(TOTEMS_CHARGED)) return p.sendMessage("Activate all four elemental totems before charging the cells.");
-      const inventory = p.getInventory();
-      if (!inventory.getAmount(I.CHARGED_CELL) && inventory.getAmount(I.UNCHARGED_CELL_2) > 1 && inventory.getFreeSlots() < 1) return p.sendMessage("You need a free inventory slot for the charged cells.");
-      p.getInventory().deleteNumber(I.UNCHARGED_CELL_2, 1);
-      p.getInventory().adds(I.CHARGED_CELL, 1);
-      p.sendMessage("The altar charges the cell.");
+      imbueCells(p);
       return;
     }
     if ([O.GOLEM, O.GOLEM_2, WAR_ROOM_GOLEM_LOC].includes(objectId) && roomTile?.x === 2782 && roomTile?.y === 6443 && itemId === I.CHARGED_CELL) {
@@ -6503,9 +6699,7 @@ module.exports = function registerDesertTreasureII(api) {
       if (!p.getAttribute(TOTEMS_CHARGED)) return p.sendMessage("Activate all four elemental totems before powering the machine.");
       if (p.getAttribute(CELLS_INSERTED)) return openGolemPuzzle(p);
       if (p.getInventory().getAmount(I.CHARGED_CELL) < 8) return p.sendMessage("You need all eight charged cells to power the golem.");
-      p.getInventory().deleteNumber(I.CHARGED_CELL, 8);
-      p.setAttribute(CELLS_INSERTED, true);
-      talk(p, N.GOLEM_3, "familiar-faces-inspecting-the-golem-machine-using-charged-cells-on-the-golem-machine");
+      insertCells(p);
       return true;
     }
   }
@@ -7608,7 +7802,32 @@ module.exports = function registerDesertTreasureII(api) {
     p.setAttribute(attribute, null);
   }
 
+  /** Runs `action` after `ticks` game ticks while the player is still online. */
+  function nextTicks(player, ticks, action) {
+    api.core.TaskManager.submit(new (class extends api.core.Task {
+      constructor() { super(ticks, player); }
+      execute() { this.stop(); if (player.isRegistered?.() !== false) action(); }
+    })());
+  }
+  /** Runs after the transcript that called it has closed its chatbox. */
+  function nextTick(player, action) { nextTicks(player, 1, action); }
   function handleDialogueAction(event) {
+    if (event?.stepId === GOLEM_PROMPT_STEP && event.player && stage(event.player) === S.MACHINE) {
+      // The transcript closes its chatbox after this step, which would take the prompt with it.
+      nextTick(event.player, () => promptGolemSearch(event.player));
+      return;
+    }
+    if (event?.stepId === FROSTENHORN_RECORD_STEP && event.player && stage(event.player) === S.MACHINE
+      && event.player.getAttribute(BANIKAN_LEFT)) {
+      // Live opens the Frostenhorn record and sets 40 -> 42 here (rsprox 1703).
+      event.handled = true;
+      event.end = true;
+      setStage(event.player, S.VARDORVIS);
+      event.player.setAttribute(VARDORVIS_PROGRESS, 0);
+      event.player.setAttribute(ATTR, null);
+      nextTick(event.player, () => openGolemRecord(event.player, "frostenhorn"));
+      return;
+    }
     const { player: p, stepId } = event;
     if (stepId === "iXcugA" && stage(p) === S.SUCELLUS
       && p.getAttribute(SUCELLUS_DEFEATED) && p.getAttribute(SUCELLUS_WEST_ROOM)) {
@@ -7769,7 +7988,6 @@ module.exports = function registerDesertTreasureII(api) {
       p.sendMessage("Sliske completes the spell and the Elder Horn vanishes in a burst of shadow.");
     }
     if (stepId === "xGIiPZ" && p.getAttribute(FINAL_WIGHTS_COMPLETE)) rewardFinalQuest(p);
-    if (stepId === "EDEdng" && stage(p) === S.MACHINE && p.getAttribute(CELLS_INSERTED)) openGolemPuzzle(p);
     if (stepId === "4b6oDl" && stage(p) === S.LEVIATHAN && p.getAttribute(SCAR_BOAT_TRIED)) {
       const area = p.getAttribute(ATTR_SCAR_AREA);
       if (area instanceof ScarArea && !area.isDestroyed()) p.moveTo(area.tile(51, 43, 0));
@@ -8337,6 +8555,8 @@ module.exports = function registerDesertTreasureII(api) {
   ["desert-treasure-ii:statues", CELLS_INSERTED, CELL_POSITIONS,
     GOLEM_SOLVED, SEARCHED_NAMES, BANIKAN_LEFT].forEach((key) => api.persistAttribute(key));
   api.persistAttribute(LASSAR);
+  api.persistAttribute(INSTANCE_EXIT, null);
+  api.persistAttribute(GOLEM_FOUND, 0);
   api.persistAttribute(VARDORVIS_PROGRESS);
   api.persistAttribute(STRANGLEWOOD_CITY_ENTERED);
   api.persistAttribute(ATTR_SMITH_INTRO);
@@ -8382,7 +8602,9 @@ module.exports = function registerDesertTreasureII(api) {
   api.onCanBankItem(preventBankingMedallions);
   api.onCustomEvent("player:widget-action", onWidgetAction);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
+  api.onCustomEvent("interface:closed", closeGolemRecord);
   api.onNpcDialogueCondition(resolveGolemSearchCondition);
+  api.onNpcDialogueCondition(resolveSerumSpaceCondition);
   api.onNpcDialogueCondition(resolveSucellusCellCondition);
   api.onCustomEvent("food:area", allowScarFood);
   api.onCustomEvent("dt2:sucellus-prison-return-stash", returnSucellusPrisonStash);

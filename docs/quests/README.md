@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-187 quests · ✅ passed: 31 · ⚠️ passed with issues: 22 · 🔄 in progress: 5 · ❌ failed: 1 · 🔁 needs recheck: 7 · untested: 121
+190 quests · ✅ passed: 31 · ⚠️ passed with issues: 22 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 7 · untested: 122
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -21,6 +21,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Animal Magnetism](animal-magnetism/README.md) | untested |  |  |  |  |
 | [Another Slice of H.A.M.](another-slice-of-ham/README.md) | 🔄 in progress |  | agent |  |  |
 | [At First Light](at-first-light/README.md) | ⚠️ passed with issues |  | agent |  | 1 |
+| [Bear Your Soul](bear-your-soul/README.md) | 🔄 in progress | 2026-10-31 | agent | DeepSeek V4.1 Flash |  |
 | [Below Ice Mountain](below-ice-mountain/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Beneath Cursed Sands](beneath-cursed-sands/README.md) | untested |  |  |  |  |
 | Between a Rock... | untested |  |  |  |  |
@@ -45,7 +46,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Defender of Varrock | untested |  |  |  |  |
 | [Demon Slayer](demon-slayer/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Desert Treasure I](desert-treasure-i/README.md) | untested |  |  |  |  |
-| Desert Treasure II - The Fallen Empire | untested |  |  |  |  |
+| [Desert Treasure II - The Fallen Empire](desert-treasure-ii/README.md) | 🔄 in progress | 2026-10-31 | agent | claude-opus-5-5 | 14 |
 | [Devious Minds](devious-minds/README.md) | untested |  |  |  |  |
 | [Doric's Quest](dorics-quest/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | [Dragon Slayer I](dragon-slayer-i/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
@@ -84,6 +85,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Icthlarin's Little Helper | untested |  |  |  |  |
 | Imp Catcher | untested |  |  |  |  |
 | [In Aid of the Myreque](in-aid-of-the-myreque/README.md) | untested |  |  |  |  |
+| In Search of Knowledge | untested |  |  |  |  |
 | [In Search of the Myreque](in-search-of-the-myreque/README.md) | untested |  |  |  |  |
 | [Jungle Potion](jungle-potion/README.md) | ✅ passed |  | agent |  |  |
 | [King's Ransom](kings-ransom/README.md) | untested |  |  |  |  |
@@ -188,6 +190,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Troubled Tortugans | untested |  |  |  |  |
 | [Twilight's Promise](twilights-promise/README.md) | untested |  |  |  |  |
 | Underground Pass | untested |  |  |  |  |
+| Vale Totems | untested |  |  |  |  |
 | [Vampyre Slayer](vampyre-slayer/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Wanted!](wanted/README.md) | untested |  |  |  |  |
 | Watchtower | untested |  |  |  |  |

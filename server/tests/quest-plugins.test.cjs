@@ -6648,15 +6648,19 @@ test('Desert Treasure II requires and solves the real eight-cell golem grid', ()
   const interactions = [];
   const widgetActions = [];
   const dialogueActions = [];
+  const closedHooks = [];
   const { api: base } = mockApi();
   const api = new Proxy(base, {
     get: (target, prop) => {
       if (prop === 'onObjectInteraction') return (handler) => objectInteractions.push(handler);
       if (prop === 'onItemOnObject') return (handler) => itemOnObject.push(handler);
       if (prop === 'onNpcInteraction') return (name, options) => interactions.push({ name, options });
+      // Next-tick tasks run at once here.
+      if (prop === 'core') return { ...target.core, TaskManager: { ...target.core.TaskManager, submit: (task) => task.execute() } };
       if (prop === 'onCustomEvent') return (name, handler) => {
         if (name === 'player:widget-action') widgetActions.push(handler);
         if (name === 'npc-dialogue:action') dialogueActions.push(handler);
+        if (name === 'interface:closed') closedHooks.push(handler);
       };
       return target[prop];
     },
@@ -6697,7 +6701,15 @@ test('Desert Treasure II requires and solves the real eight-cell golem grid', ()
       getPacketSender: () => packet, sendMessage: (message) => messages.push(message),
       setEnteredSyntaxAction(action) { this.syntaxAction = action; },
       getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => damages.push(...hits) }) }),
+      getDialogueManager: () => ({ startDialogues: (chain) => chains.push(chain), reset() {} }),
+      performAnimation() {}, performGraphic() {},
     };
+    const chains = [];
+    const entries = () => [...chains.at(-1).getDialogues().values()];
+    const textOf = (entry) => entry.text ?? entry.getText?.() ?? entry.message;
+    const lastStatement = () => textOf(entries()[0]);
+    const lastLines = () => entries().filter((entry) => entry.constructor.name === 'NpcDialogue').map(textOf);
+    const runLastAction = () => entries().filter((entry) => entry.constructor.name === 'ActionDialogue').forEach((entry) => entry.send(player));
     quest.setStage(player, 6);
     attrs.set('desert-treasure-ii:golem-inspected', true);
     attrs.set('desert-treasure-ii:altar-inspected', true);
@@ -6719,30 +6731,27 @@ test('Desert Treasure II requires and solves the real eight-cell golem grid', ()
     assert.equal(counts.get(I.UNCHARGED_CELL_2), 8, 'destroyed cells can be recovered from the crate');
     const altar = { x: 8204, y: 1617, z: 0 };
     const golem = { x: 8214, y: 1619, z: 0 };
+    const object = (objectId, location, option) => objectInteractions.find(h => h.name === 'handleObjectInteraction')({ player, objectId, location, option });
     const apply = (itemId, objectId, location) => {const event={player,itemId,objectId,location,handled:false};itemOnObject[0](event);assert.equal(event.handled,true, "cell interactions must suppress the generic Nothing interesting happens message");};
+    attrs.set('desert-treasure-ii:totems-charged', false);
     apply(I.UNCHARGED_CELL_2, O.ALTAR_93, altar);
     assert.equal(counts.get(I.UNCHARGED_CELL_2), 8, 'the altar needs the four activated totems');
     attrs.set('desert-treasure-ii:totems-charged', true);
-    freeSlots = 0;
-    apply(I.UNCHARGED_CELL_2, O.ALTAR_93, altar);
-    assert.equal(counts.get(I.UNCHARGED_CELL_2), 8, 'a full bag cannot consume a cell before creating its charged stack');
-    freeSlots = 1;
-    for (let i = 0; i < 7; i++) apply(I.UNCHARGED_CELL_2, O.ALTAR_93, altar);
-    assert.equal(counts.get(I.UNCHARGED_CELL_2), 1);
-    assert.equal(counts.get(I.CHARGED_CELL), 7);
-    apply(I.CHARGED_CELL, O.GOLEM, golem);
-    assert.equal(counts.get(I.CHARGED_CELL), 7, 'the grid cannot be started with fewer than eight cells');
-    apply(I.UNCHARGED_CELL_2, O.ALTAR_93, altar);
+    object(O.ALTAR_93, altar, 'imbue');
+    assert.equal(counts.get(I.UNCHARGED_CELL_2), 0, 'Imbue charges every cell at once (rsprox 1703)');
     assert.equal(counts.get(I.CHARGED_CELL), 8);
-    apply(I.CHARGED_CELL, O.GOLEM, golem);
-    assert.equal(counts.get(I.CHARGED_CELL), 0);
+    assert.match(lastStatement(), /imbue your cells with ancient energy/);
+    object(O.ALTAR_93, altar, 'imbue');
+    assert.match(lastStatement(), /already imbued enough cells/);
+    object(O.GOLEM, golem, 'inspect');
+    assert.equal(counts.get(I.CHARGED_CELL), 0, 'inspecting the golem with eight charged cells inserts them (rsprox 1703)');
     assert.equal(attrs.get('desert-treasure-ii:cells-inserted'), true);
-    dialogueActions[0]({ player, stepId: 'EDEdng' });
-    assert.equal(attrs.get('desert-treasure-ii:cells-inserted'), true);
+    assert.match(lastStatement(), /You place eight cells into the grid/);
+    runLastAction();
     assert.ok(packetCalls.some(([name, id]) => name === 'sendInterface' && id === 838));
-    let positions = attrs.get('desert-treasure-ii:cell-positions');
+    assert.deepEqual(attrs.get('desert-treasure-ii:cell-positions'), [0, 1, 2, 3, 4, 5, 6, 7], 'live starts the cells on squares 0-7');
     const solution = [16, 10, 27, 33, 52, 5, 62, 47];
-    const groupWidget = (838 << 16) | 32;
+    const cellsWidget = (838 << 16) | 35, squaresWidget = (838 << 16) | 32;
     const wrongPowerOn = { player, packet: { type: 'widget_action', groupId: 838, childId: 4, option: 'Power-on' }, handled: false };
     attrs.set('desert-treasure-ii:puzzle-open', false);
     widgetActions[0](wrongPowerOn);
@@ -6755,36 +6764,52 @@ test('Desert Treasure II requires and solves the real eight-cell golem grid', ()
     widgetActions[0](wrongPowerOn);
     assert.equal(wrongPowerOn.handled, true);
     assert.equal(damages.length, 1, 'a wrong arrangement shocks the player instead of advancing the quest');
-    for (let cell = 0; cell < 8; cell++) {
-      let current = attrs.get('desert-treasure-ii:cell-positions');
-      const target = solution[cell];
-      if (current.includes(target)) {
-        const empty = Array.from({ length: 64 }, (_, i) => i).find((i) => !current.includes(i));
-        widgetActions[0]({ player, packet: { type: 'widget_drag', sourceWidgetId: groupWidget, targetWidgetId: groupWidget, sourceSlot: target, targetSlot: empty }, handled: false });
-        current = attrs.get('desert-treasure-ii:cell-positions');
-      }
-      const source = current[cell];
-      widgetActions[0]({ player, packet: { type: 'widget_drag', sourceWidgetId: groupWidget, targetWidgetId: groupWidget, sourceSlot: source, targetSlot: target }, handled: false });
+    assert.equal(searches.at(-1), 'familiar-faces-failing-to-power-up-the-golem-machine');
+    attrs.set('desert-treasure-ii:puzzle-open', true);
+    // The drags a real client sent in rsprox 1703: dt2_warmind_puzzle:cells (sub = cell) onto :squares.
+    for (const [cell, square] of [[0, 16], [1, 10], [2, 27], [3, 33], [4, 52], [6, 62], [7, 47]]) {
+      widgetActions[0]({ player, packet: { type: 'widget_drag', sourceWidgetId: cellsWidget, targetWidgetId: squaresWidget, sourceSlot: cell, targetSlot: square }, handled: false });
     }
-    positions = attrs.get('desert-treasure-ii:cell-positions');
-    assert.deepEqual(positions, solution);
+    assert.deepEqual(attrs.get('desert-treasure-ii:cell-positions'), [16, 10, 27, 33, 52, 5, 62, 47]);
+    // Identical cells: two swapped are still a solved board.
+    const swapped = solution.slice(); [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+    attrs.set('desert-treasure-ii:cell-positions', swapped);
     const powerOn = { player, packet: { type: 'widget_action', groupId: 838, childId: 4, option: 'Power-on' }, handled: false };
     widgetActions[0](powerOn);
     assert.equal(powerOn.handled, true);
-    assert.equal(attrs.get('desert-treasure-ii:golem-solved'), true);
+    assert.equal(attrs.get('desert-treasure-ii:golem-solved'), true, 'any order of the identical cells powers the golem');
     assert.equal(quest.getStage(player), 6, 'solving the grid opens the next search stage, rather than skipping straight to a boss');
-    assert.ok(player.syntaxAction);
+    assert.equal(searches.at(-1), 'familiar-faces-powering-up-the-golem-machine');
+    dialogueActions.forEach((handler) => handler({ player, stepId: 'cI7y6E' }));
+    assert.ok(player.syntaxAction, 'the transcript prompt asks for a search term');
+    player.syntaxAction.execute('zaros');
+    assert.deepEqual(lastLines(), ['Checking...', 'Error: No data found.', 'Please specify another search term.']);
+    for (const term of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      runLastAction();
+      player.syntaxAction.execute(term);
+      assert.deepEqual(lastLines(), ['Checking...', 'Error: No data found.', 'Please specify another search term.'], `${term} is not a golem record`);
+      runLastAction();
+      assert.equal(quest.getStage(player), 6, `${term} must not advance the quest`);
+      assert.equal(attrs.get('desert-treasure-ii:golem-record-open') ?? null, null, `${term} must not open a record`);
+    }
     const previousTranscripts = searches.length;
     for (const term of ['Vardorvis', 'Perseriya', 'Sucellus', 'Whisperer']) {
-      objectInteractions.find(h => h.name === 'handleObjectInteraction')({ player, objectId: O.GOLEM, location: golem, option: 'Operate' });
+      runLastAction();
       player.syntaxAction.execute(term);
+      assert.deepEqual(lastLines(), ['Checking...', 'Data found. Outputting now.']);
+      runLastAction();
+      assert.ok(packetCalls.some(([name, id]) => name === 'sendInterface' && id === 748), 'the record opens the stoneplaque');
+      closedHooks.forEach((handler) => handler({ player, interfaceId: 748 }));
+      object(O.GOLEM, golem, 'inspect');
     }
     assert.equal(attrs.get('desert-treasure-ii:searched-names'), 15);
     assert.equal(searches.length - previousTranscripts, 4, 'each search must display its canonical NPC dialogue');
-    objectInteractions.find(h => h.name === 'handleObjectInteraction')({ player, objectId: O.GOLEM, location: golem, option: 'Operate' });
-    player.syntaxAction.execute('Vardorvis');
-    assert.equal(searches.length - previousTranscripts, 5, 'known reports can be read again after relog');
-    assert.equal(attrs.get('desert-treasure-ii:searched-names'), 15);
+    attrs.set('desert-treasure-ii:banikan-left', true);
+    const record = { player, stepId: '-HvgV3', kind: 'message', handled: false };
+    dialogueActions.forEach((handler) => handler(record));
+    assert.equal(record.handled, true, 'the Frostenhorn record replaces the transcript message');
+    assert.equal(quest.getStage(player), 7, 'the Frostenhorn record moves the quest on (rsprox 1703: 40 -> 42)');
+    assert.equal(attrs.get('desert-treasure-ii:golem-record-open'), 'frostenhorn');
   } finally {
     runtime.startTranscript = startTranscript;
   }
@@ -7003,7 +7028,7 @@ test('Desert Treasure II requires Kasonde dialogue and the full three-minute hid
     assert.equal(area.defended, true, 'Kasonde survives the documented three-minute holdout');
     assert.equal(objectHooks[0]({ player: p, objectId: core.ObjectIdentifiers.LADDER_439, location: area.tile(27, 28, 0) }), true);
     assert.equal(attrs.get('desert-treasure-ii:vardorvis-progress'), 9);
-    assert.deepEqual([p.location.getX(), p.location.getY(), p.location.getZ()], [1187, 3411, 0]);
+    assert.deepEqual([p.location.getX(), p.location.getY(), p.location.getZ()], [1191, 3410, 0], "live climbs out inside the building, beside the Entry (rsprox 1703)");
   } finally {
     runtime.startTranscript = startTranscript;
   }
@@ -7342,7 +7367,9 @@ test('Desert Treasure II requires the four matching ancient combat spells to cha
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
       getUsername: () => 'dt2-totem-test', moveTo(location) { this.location = location; },
       getPacketSender: () => new Proxy({}, { get: () => () => {} }), sendMessage(message) { messages.push(message); },
+      getDialogueManager: () => ({ startDialogues: (chain) => statements.push(chain) }),
     };
+    const statements = [];
     const O = core.ObjectIdentifiers;
     quest.setStage(p, 5);
     assert.equal(objectHooks[0]({ player: p, objectId: O.CREVICE_45, location: { x: 3411, y: 9811, z: 0 } }), true);
@@ -7378,6 +7405,12 @@ test('Desert Treasure II requires the four matching ancient combat spells to cha
       assert.equal(roll.forceAccurate, true, `${kind} activation casts are accurate`);
       magicHooks[0]({ attacker, target, spell, allowed: true, hit: { isAccurate: () => true } });
       assert.equal(target.__dt2TotemCharged, true, `${kind} matching hit activates its totem (messages: ${messages.join(' | ')})`);
+      assert.equal(messages.at(-1), 'You empower the totem.', 'live message (rsprox 1703)');
+      assert.equal(area.canAttack(target, p), false, 'a totem never attacks the player');
+      p.getCombat = () => ({ getCastSpell: () => null, getSelectedSpell: () => spell });
+      assert.equal(area.canAttack(p, target), false, 'a weapon or autocast follow-up cannot attack a totem');
+      p.getCombat = () => ({ getCastSpell: () => spell, getSelectedSpell: () => spell });
+      assert.equal(area.canAttack(p, target), true, 'the burst itself reaches the totem');
       assert.equal(target.transform, activeId);
       const damage = { setDamage(value) { this.value = value; } };
       damageHooks.forEach(handler => handler({ npc: target, hit: { isAccurate: () => true, getHits: () => [damage], updateTotalDamage() {} } }));
@@ -7391,6 +7424,7 @@ test('Desert Treasure II requires the four matching ancient combat spells to cha
       }
     }
     assert.equal(attrs.get('desert-treasure-ii:totems-charged'), true);
+    assert.equal(statements.length, 1, 'the last totem opens the altar statement');
     assert.equal(attrs.get('desert-treasure-ii:totem-mask'), 15, 'all four cache altar bits are persisted');
     attrs.set('desert-treasure-ii:war-room', null);
     objectHooks[0]({player:p, objectId:O.CREVICE_45, location:{x:3411,y:9811,z:0}});
@@ -7457,10 +7491,13 @@ test('Desert Treasure II enters the cache Ancient Vault and requires the four st
       getPrivateArea: () => attrs.get('desert-treasure-ii:ancient-vault'),
       getSpellbook: () => spellbook,
       getSkillManager: () => ({ getMaxLevel: () => 99 }),
-      getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+      getPacketSender: () => new Proxy({}, { get: (_t, name) => name === 'sendVarbit' ? (id, value) => { varbits.set(id, value); return {}; }
+        : name === 'sendInterface' ? (id) => { interfaces.push(id); return {}; } : () => ({}) }),
+      getDialogueManager: () => ({ startDialogues: (chain) => statements.push(chain) }),
       moveTo(location) { this.location = location; },
       sendMessage() {},
     };
+    const varbits = new Map(), interfaces = [], statements = [];
     const outerDoor = { player, objectId: O.VAULT_DOOR_2, location: { x: 3511, y: 2970, z: 0 } };
     assert.equal(objectInteractions.find(h => h.name === 'handleObjectInteraction')(outerDoor), true);
     assert.equal(quest.getStage(player), 0, 'the normal spellbook cannot open the ancient vault');
@@ -7483,12 +7520,16 @@ test('Desert Treasure II enters the cache Ancient Vault and requires the four st
       player, objectId: id, location: area.tile(x - 3904, y - 9600, 1),
     });
     assert.equal(inspect(49499, 3941, 9635), true);
+    assert.equal(varbits.get(15106), 1, 'the Vardorvis statue sets dt2_vault_statue_vardorvis (rsprox 1703)');
+    assert.equal(statements.length, 1, 'statues answer with a message box, not a chat message');
     assert.equal(interactions.find((entry) => entry.name === 'Asgarnia Smith').options['Talk-to']({ player, npcId: 1 }), undefined);
     assert.equal(quest.getStage(player), 1, 'the NPC sends the player to inspect the remaining objects');
     inspect(49501, 3931, 9635);
     inspect(49503, 3931, 9625);
     inspect(49505, 3941, 9625);
     inspect(O.PLAQUE_35, 3944, 9631);
+    assert.deepEqual([varbits.get(15105), varbits.get(15107), varbits.get(15108), varbits.get(15109)], [1, 1, 1, 1]);
+    assert.ok(interfaces.includes(749), 'the plaque opens woodplaque');
     interactions.find((entry) => entry.name === 'Asgarnia Smith').options['Talk-to']({ player, npcId: 1 });
     assert.equal(quest.getStage(player), 2, 'only the four statues and plaque advance the vault step');
     assert.equal(inspect(O.STEPS_23, 3925, 9630), true, 'the actual entrance steps let the player leave');
@@ -17601,10 +17642,14 @@ test('DT2 completes Banikan departure during dialogue and reveals the last searc
     handlers.custom.get('npc-dialogue:action')[0]({player,stepId:'T24jg_'});
     assert.equal(quest.varbitValue(6,player),40);
     handlers.objects.find(h => h.name === 'handleObjectInteraction')({player,objectId:49511,location:{x:8214,y:1619,z:0},option:'Operate'});
-    assert.equal(quest.getStage(player),7);
     const report = collect(variants[played.at(-1)]);
     assert.ok(report.some(step=>step.player==='Repeat last search.'));
-    assert.ok(report.some(step=>step.type==='message'&&step.text.split('\n')[0]==='Frostenhorn'),'the archived name must be shown');
+    const frost = report.find(step=>step.type==='message'&&step.text.split('\n')[0]==='Frostenhorn');
+    assert.ok(frost,'the archived name must be shown');
+    assert.equal(quest.getStage(player),6,'the stage moves when the record opens, not on Operate (rsprox 1703)');
+    const event = { player, stepId: frost.id, kind: 'message', handled: false };
+    handlers.custom.get('npc-dialogue:action').forEach((handler) => handler(event));
+    assert.equal(quest.getStage(player),7);
     assert.equal(quest.varbitValue(7,player),42);
   } finally { runtime.startTranscript = original; }
 });
@@ -22584,6 +22629,29 @@ test('In Search of Knowledge uses the real inventory for food eligibility and ca
   assert.equal(inventory.getAmount(ids.TATTERED_SUN_PAGE), 1);
   assert.equal(inventory.getAmount(ids.COINS), MAX_STACK_AMOUNT);
   assert.match(messages.at(-1), /room to carry/);
+});
+
+test('Desert Treasure II gives Kasonde\'s serum when the bag has a free slot (transcript condition szffOl)', () => {
+  const { api, handlers } = mockApi();
+  const runtime = require('../plugins/quests/QuestRuntime');
+  require('../plugins/quests/quests/DesertTreasureII.Quest')(api);
+  const quest = runtime.getRegisteredQuests().at(-1);
+  const attrs = new Map();
+  let free = 1;
+  const items = new Map();
+  const player = {
+    getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getInventory: () => ({ getFreeSlots: () => free, getAmount: (id) => items.get(id) ?? 0, contains: (id) => (items.get(id) ?? 0) > 0 }),
+    getEquipment: () => ({ getAmount: () => 0, contains: () => false }),
+    getPacketSender: () => new Proxy({}, { get: () => () => ({}) }),
+  };
+  quest.setStage(player, 7);
+  const ask = (stepId) => handlers.condition.map((handler) => handler({ player, stepId, text: 'If the player does not have enough inventory space:' }))
+    .find((answer) => typeof answer === 'boolean');
+  assert.equal(ask('szffOl'), false, 'one free slot is enough room for the potion');
+  free = 0;
+  assert.equal(ask('szffOl'), true, 'a full bag gets the "no room" branch');
+  assert.equal(ask('other'), undefined, 'other conditions are left to their owners');
 });
 
 test('In Search of Knowledge resumes the reward after the final tome is handed in', () => {

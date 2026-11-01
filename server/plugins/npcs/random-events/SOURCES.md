@@ -367,3 +367,14 @@ Mystery box and Book of Knowledge reward paths. From `client/`, `yarn tsx
 tests/widget-loader.test.ts` still checks the first batch's selectors against
 the current cache. Live-client appearance of the new interfaces remains to be
 checked visually.
+
+Drill Demon placement: [RSProx archive submission
+1846](https://rsprox.net/download/1846) (revision 227, 8 December 2024) is the
+only submission containing exercise mat loc 20810. Decoded with the revision-227
+protocol tables, its drill rebuild is zone 395/602 (base 3128,4768). NPC 337
+(Sergeant Damien) is at 3163,4822 and NPC 6743 at 3163,4820. The NPC update
+origin, which is the player's tile, is 3163,4820 on arrival and
+3160/3162/3164,4820 while exercising: the player stands on the north tile of a
+1x2 mat (its sign is at 4821) and faces the sign, so a mat click must walk the
+player onto that tile rather than play the emote from the gap between mats.
+The map's two halves of each mat are 1x1 type-22 locs at 4819 and 4820.

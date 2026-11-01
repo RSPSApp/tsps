@@ -28,8 +28,27 @@ function event({ level = 65, stage = 9, id = core.NpcIdentifiers.MENAPHITE_THUG 
 }
 function withRandom(value, run) { const original = Math.random; Math.random = () => value; try { run(); } finally { Math.random = original; } }
 function clear() { tasks.length = 0; log.length = 0; }
-test('knockout chart follows Blackjack/Jagex: low80 high240, independent of wood and NPC', () => {
-  assert.equal(B.successChance(1), 81 / 256); assert.equal(B.successChance(99), 241 / 256); assert.equal(B.successChance(65), 185 / 256);
+test("knockout chance uses each target's own chart; the blackjack's wood makes no difference", () => {
+  const N = core.NpcIdentifiers;
+  assert.deepEqual(B.knockoutChart(N.BANDIT_7), [80, 240], 'Bandit (Pollnivneach), measured over 31 million');
+  assert.deepEqual(B.knockoutChart(N.BANDIT_10), [80, 240], 'the bearded bandit shares it');
+  assert.deepEqual(B.knockoutChart(N.MENAPHITE_THUG), [78, 240], "Menaphite Thug, as its own page charts it");
+  assert.deepEqual(B.knockoutChart(N.MENAPHITE_THUG_2), [78, 240]);
+  // Mod Ash: "31% at level 1 ... 94% at level 99" is 79/256 and 241/256, so the thug's low is 78
+  // (80 would be 81/256, 31.6%).
+  assert.equal(B.successChance(78, 240, 1), 79 / 256);
+  assert.equal(B.successChance(78, 240, 99), 241 / 256);
+  assert.equal(B.successChance(78, 240, 45), 152 / 256);
+  assert.equal(B.successChance(80, 240, 45), 153 / 256, 'a bandit is a little likelier at the same level');
+});
+
+test('a knockout rolls the target chart: at level 70 the thug fails where the bandit succeeds', () => {
+  const between = 0.755; // between the thug's 193/256 and the bandit's 194/256
+  clear(); const thug = event({ level: 70 }); withRandom(between, () => B.knockOut(thug));
+  assert.equal(B.unconscious.has(thug.npc), false, 'thug 193/256: 0.755 misses');
+  assert.ok(log.some((line) => String(line).includes('glances off')));
+  clear(); const bandit = event({ level: 70, id: core.NpcIdentifiers.BANDIT_9 }); withRandom(between, () => B.knockOut(bandit));
+  assert.equal(B.unconscious.has(bandit.npc), true, 'bandit 194/256: the same roll lands');
 });
 test('quest training, target family and target-specific levels gate the action', () => {
   clear(); assert.equal(B.ready(event({ stage: 0 })), false); assert.equal(B.ready(event({ level: 64 })), false);

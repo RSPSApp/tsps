@@ -29,7 +29,7 @@ function login({ player, league }) {
   if (!rules) return;
   if (Common.unlocked(player).length === 0) {
     player.setAttribute(Common.AREAS_ATTRIBUTE, [...rules.defaults]);
-    for (const area of rules.defaults) completeAreaQuests(player, league, area);
+    for (const area of rules.defaults) completeAreaContent(player, league, area);
   }
   if (!Regions.isOpenAt(league, player, player.getLocation())) {
     player.moveTo(require("./Enforcement.LeagueAreaUnlocks").home(league, player));
@@ -38,9 +38,15 @@ function login({ player, league }) {
   sendState(player, league);
 }
 
-/** The league's quests for an area (Demonic Pacts' `quests`), completed through LeagueMode's `league:complete-quests`. */
-function completeAreaQuests(player, type, areaId) {
-  const quests = Common.league(type)?.quests?.[areaId];
+/**
+ * What a league completes with an area (Demonic Pacts): its diary tasks (`diary:task`), its Combat
+ * Achievements (`combat-achievements:complete`) and its quests (LeagueMode's `league:complete-quests`).
+ */
+function completeAreaContent(player, type, areaId) {
+  const rules = Common.league(type);
+  for (const [diary, , task] of rules?.diaryTasks?.[areaId] ?? []) Common.api.emitCustomEvent("diary:task", { player, diary, task });
+  for (const task of rules?.combatAchievements?.[areaId] ?? []) Common.api.emitCustomEvent("combat-achievements:complete", { player, task });
+  const quests = rules?.quests?.[areaId];
   if (Array.isArray(quests) && quests.length) Common.api.emitCustomEvent("league:complete-quests", { player, quests });
 }
 
@@ -97,7 +103,7 @@ function complete(player, type, area, slot) {
   const { varbits, notifications } = Common.data;
   const sender = player.getPacketSender();
   sender.sendVarbit(varbits.selection[slot], area.id);
-  completeAreaQuests(player, type, area.id);
+  completeAreaContent(player, type, area.id);
   player.sendMessage(Common.message("unlocked", { colour: Common.colourHex(type), area: area.name }));
   require("./Interface.LeagueAreaUnlocks").open({ player });
   const popup = notifications.areaUnlocked;

@@ -516,6 +516,10 @@ test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abys
   for (let tick = 0; tick < 14; tick++) core.TaskManager.process();
   assert.deepEqual(pacts.getAttribute("league:areas"), [VARLAMORE, KARAMJA]);
   assert.equal(pacts.sent.varbits.get(SELECTION[1]), KARAMJA);
+  const ours = (name) => emitted.filter(([event, payload]) => event === name && payload.player === pacts).map(([, payload]) => payload);
+  assert.ok(ours("combat-achievements:complete").some((payload) => payload.task === "Back to Our Roots"), "Varlamore's Combat Achievements at the start");
+  assert.ok(ours("diary:task").some((payload) => payload.diary === "karamja" && payload.task === "travel-to-port-sarim-via-the-dock-east-of-musa-p"), "Karamja's diary tasks on its unlock");
+  assert.deepEqual(ours("league:complete-quests").map((payload) => payload.quests[0]), ["Perilous Moons", "Shilo Village"], "Varlamore's quests at the start, then Karamja's");
 
   pacts.setRegistered(true);
   openAreas(pacts);

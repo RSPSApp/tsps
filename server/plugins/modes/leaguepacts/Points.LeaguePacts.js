@@ -17,6 +17,7 @@ function joined({ player, league }) {
 }
 
 function login({ player, league }) {
+  Common.forgetLeague(player);
   if (Number(league) === Common.data.league) Common.sendState(player);
 }
 

@@ -1169,44 +1169,6 @@ growth model has no tick-length seam, and Farming is under active work elsewhere
 crystal of memories (not in this cache). The ironman restriction is under "The league character"
 above: every league character is a standard Ironman.
 
-## The league tutorial
-
-Not implemented; what it takes, from the Leagues V recordings (osrs-captures 227/00196 and
-227/01718 are full runs, 227/00546 a logout at stage 0) and this cache. A league character is
-sent `league_tutorial_completed` 10037 = 12 (finished) at login until it exists.
-
-- **A stage machine on varbit 10037** (0 to 12; Leagues VI has two more). The server only sets
-  the varbit and (re)opens the interfaces: `league_tutorial` 653 as an overlay in 164:1 with its
-  click-blocker 653:1 unhidden, `mesoverlay` 263 in the chatbox (162:564), scripts 1974 "" and
-  2524 (-1, -1), then the modal `league_tutorial_main` 677 in 164:16; every stage change repeats
-  that block. The client draws each stage's title, body, buttons and graphic itself from the
-  league struct's param 1033 tutorial struct (enums keyed by 10037: Raging Echoes' struct 6211
-  points at struct 747 and enums 3379-3383). Check that Trailblazer Reloaded's struct 4699 still
-  carries them; if not, send them as `structOverrides` / `enumOverrides` like the relic catalog.
-- **First login** (00196): `orbs_disabled` 4084 = 1, `minimap_toggle` 0, a teleport to Lumbridge
-  (3221, 3216, 0), and the starting kit as the inventory (a dramen staff, bronze axe, pickaxe,
-  tinderbox, net, shrimp, bronze dagger and sword, wooden shield, shortbow, 25 bronze arrows, 25
-  air, 15 mind, 6 water, 4 earth and 2 body runes, a bucket, a pot, bread); the tutorial opens
-  after the welcome screen's Play (378:72). The dramen staff is simply in the kit; The Sage
-  (14143/14144 at 3222, 3213) talks only about combat achievement rewards and echo items in these
-  recordings (the Wiki's "claim a free dramen staff from The Sage" is Trailblazer Reloaded's).
-- **The stages:** 0->3 "Get Started" (677:9; sets `league_3_has_seen_cutscene` 13488 = 1); 3->4
-  the quest tab (164:54, script 3162 flashes the journal's Leagues tab); 4->5 the journal's
-  Leagues tab, which also awards "Open the Leagues Menu" (+10) and mounts the side panel (script
-  3185 highlights 656:35); 5->6 the panel's Tasks button (656:36) opens `league_tasks` 657 and a
-  `screenhighlight` 664 walkthrough (scripts 3408/3409/3413/2463/2465, continue 664:31); 6->7 its
-  last continue; 7->8 Areas (656:40) opens `trailblazer_areas` 512 with a walkthrough; 8->9 an
-  area unlocked; 9->10 Relics (656:44) opens 655 with a walkthrough; 10->11 the first relic's
-  item box; 11->12 "End Tutorial" (677:8), which awards "Complete the Leagues Tutorial" (+10), sets
-  `orbs_disabled` back to 0 and closes 677 then 653. "Exit Leagues" (677:8 at stage 0) was never
-  pressed in a recording.
-- **What it waits on:** the task list (657) and the tasks it awards (league tasks, #1358), and
-  the walkthroughs over the task list and the area interface (512, LeagueAreaUnlocks); a tutorial
-  that starts but cannot be finished is worse than none. Its guided first unlock is the area
-  plugin's "Not covered" item. A
-  new league character also skips Tutorial Island on live; this server sends every new account
-  there.
-
 ## Combat masteries (Raging Echoes)
 
 `LeagueCombatMasteries.plugin.js`, data `plugins/modes/data/league-combat-masteries.json`
@@ -1372,8 +1334,11 @@ area's quests complete on its unlock's +14 tick (237/01098's Karamja), the start
 the league's start: the data's `quests`, each area's Wiki list (Demonic_Pacts_League/Areas/<area>)
 with the quests they need nested under them, completed in reverse through LeagueMode's
 `league:complete-quests` { player, quests } as a Shattered Relics pack is (no XP, rewards kept;
-Recipe for Disaster's subquests left out). The areas' diary tasks and combat achievements that
-live also completed are not here yet.
+Recipe for Disaster's subquests left out). With them go the area's Achievement Diary tasks
+(`diaryTasks`, the Wiki's lists matched to the diaries plugin's task keys by their text; the
+Desert elite Kalphite Queen head and the Wilderness easy earth warrior have no task there) over
+`diary:task`, before the unlock's own line as recorded, and its Combat Achievements
+(`combatAchievements`, by name) over `combat-achievements:complete`.
 
 **Demonic Pacts' League Home Teleport** (`leagueareas/HomeTeleport.LeagueAreaUnlocks.js`, data
 `homeTeleport`; spellbook 218:5; 237/01098, 01107, 01149, 238/01248): Cast asks "Select an

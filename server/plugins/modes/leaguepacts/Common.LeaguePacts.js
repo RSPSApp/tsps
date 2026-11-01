@@ -27,6 +27,8 @@ let nodes = [];
 const effectVarbits = new Map();
 /** Varp / varbit gameval names -> ids. */
 const ids = { varps: {}, unlocked: [], varbits: {} };
+/** Player -> whether it plays Demonic Pacts (isPacts). */
+const leagueKnown = new WeakMap();
 /** Player -> effect varbit name -> value, rebuilt when the pacts change. */
 const effectCache = new WeakMap();
 
@@ -85,10 +87,26 @@ function loadNodes() {
 }
 
 /** Whether the character plays the league the tree belongs to. */
+/**
+ * Whether the character plays the league the tree belongs to. A character's league is fixed once
+ * it joins, and the effects ask on every roll, so the answer is kept per player for the session
+ * (a login asks again).
+ */
 function isPacts(player) {
+  if (!player) return false;
+  const known = leagueKnown.get(player);
+  if (known !== undefined) return known;
   const query = { player, league: null };
   api.emitCustomEvent("league:profile", query);
-  return query.league !== null && Number(query.league) === data.league;
+  const answer = query.league !== null && Number(query.league) === data.league;
+  // Only a settled answer is kept: before the login names the league, ask again next time.
+  if (query.league !== null) leagueKnown.set(player, answer);
+  return answer;
+}
+
+/** Forgets the kept answer (a login: the profile may have changed since the last session). */
+function forgetLeague(player) {
+  leagueKnown.delete(player);
 }
 
 function list(player, key) {
@@ -173,7 +191,7 @@ function uid(group, child) {
 }
 
 module.exports = {
-  init, isPacts, pacts, earned, resets, rewards, spendable, effects, effect, save, unlockBits, sendState, message, uid,
+  init, isPacts, forgetLeague, pacts, earned, resets, rewards, spendable, effects, effect, save, unlockBits, sendState, message, uid,
   PACTS_ATTRIBUTE, POINTS_ATTRIBUTE, RESETS_ATTRIBUTE, REWARDS_ATTRIBUTE,
   get nodes() { return nodes; },
   get ids() { return ids; },

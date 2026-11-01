@@ -1,6 +1,6 @@
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerZaryteCrossbowSpecialAttack(api) {
-  const { Animation, CombatFactory, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds } = api.core;
+  const { Animation, CombatFactory, CombatSpecial, ItemIdentifiers, PendingHit, Projectile, RangedCombatMethod, RangedWeapon, Sound, Sounds, WeaponProfiles } = api.core;
 
   const DRAIN = 75;
   const EVOKE_ACCURACY_MULTIPLIER = 2;
@@ -27,7 +27,27 @@ module.exports = function registerZaryteCrossbowSpecialAttack(api) {
       CombatSpecial.drain(player, DRAIN);
       player.performAnimation(ANIMATION);
       Sounds.sendSound(character, Sound.SHOOT_CROSSBOW);
-      Projectile.createProjectile(character, target, 301, 44, 35, 50, 70).sendProjectile();
+
+      // Evoke is a normal bolt shot with doubled accuracy: use the equipped bolt's travel
+      // spotanim on the crossbow's trajectory (44 + 5 a tile from 41). The old 301/44->35
+      // ended before it started, so the client clamped it to a single cycle at the player.
+      const profile = WeaponProfiles.ranged(player);
+      const shot = profile?.projectiles?.[0] ?? { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5 };
+      const distance = character.getLocation().getDistance(target.getLocation());
+      const end = RangedCombatMethod.projectileEnd(shot, distance);
+      const ammo = player.getCombat().getAmmunition();
+      const projectile = Projectile.createProjectile(
+        character,
+        target,
+        profile?.projectileId ?? ammo?.getProjectileId() ?? 27,
+        shot.delay,
+        end,
+        shot.startHeight,
+        shot.endHeight,
+      );
+      if (shot.angle != null) projectile.withAngle(shot.angle);
+      if (shot.progress != null) projectile.withProgress(shot.progress);
+      projectile.sendProjectile();
       CombatFactory.decrementAmmo(player, target.getLocation(), 1);
     }
   }

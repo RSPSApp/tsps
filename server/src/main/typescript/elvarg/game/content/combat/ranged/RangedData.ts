@@ -31,7 +31,7 @@ export class Ammunition {
     public static readonly ADAMANT_ARROW = new Ammunition(890, new Graphic(22, 0, GraphicHeight.HIGH), 13, 31, new Graphic(1108, 0, GraphicHeight.HIGH))
     public static readonly RUNE_ARROW = new Ammunition(892, new Graphic(24, 0, GraphicHeight.HIGH), 15, 50, new Graphic(1109, 0, GraphicHeight.HIGH))
     public static readonly ICE_ARROW = new Ammunition(78, new Graphic(25, 0, GraphicHeight.HIGH), 16, 58, new Graphic(1110, 0, GraphicHeight.HIGH))
-    public static readonly BROAD_ARROW = new Ammunition(4160, new Graphic(20, 0, GraphicHeight.HIGH), 11, 58, new Graphic(1112, 0, GraphicHeight.HIGH))
+    public static readonly BROAD_ARROW = new Ammunition(4160, new Graphic(325, 0, GraphicHeight.HIGH), 326, 58, new Graphic(1112, 0, GraphicHeight.HIGH))
     // Cache spotanims: AMETHYST_ARROW_LAUNCH 1385 / AMETHYST_ARROW_TRAVEL 1384.
     public static readonly AMETHYST_ARROW = new Ammunition(ItemIdentifiers.AMETHYST_ARROW, new Graphic(1385, 0, GraphicHeight.HIGH), 1384, 55)
     // RuneLite names these AIDE_ARROW_LAUNCH/TRAVEL; their recolours match the training
@@ -42,34 +42,34 @@ export class Ammunition {
     public static readonly DRAGON_ARROW = new Ammunition(11212, new Graphic(1116, 0, GraphicHeight.HIGH), 1120, 65, new Graphic(1111, 0, GraphicHeight.HIGH))
     public static readonly SEEKING_DRAGON_ARROW = new Ammunition(ItemIdentifiers.SEEKING_DRAGON_ARROW, new Graphic(1116, 0, GraphicHeight.HIGH), 1120, 60, new Graphic(1111, 0, GraphicHeight.HIGH))
 
-    public static readonly BRONZE_BOLT = new Ammunition(877, new Graphic(955, 0, GraphicHeight.HIGH), 27, 13)
-    public static readonly OPAL_BOLT = new Ammunition(879, new Graphic(955, 0, GraphicHeight.HIGH), 27, 20)
-    public static readonly ENCHANTED_OPAL_BOLT = new Ammunition(9236, new Graphic(955, 0, GraphicHeight.HIGH), 27, 20)
-    public static readonly IRON_BOLT = new Ammunition(9140, new Graphic(955, 0, GraphicHeight.HIGH), 27, 28)
-    public static readonly JADE_BOLT = new Ammunition(9335, new Graphic(955, 0, GraphicHeight.HIGH), 27, 31)
-    public static readonly ENCHANTED_JADE_BOLT = new Ammunition(9237, new Graphic(955, 0, GraphicHeight.HIGH), 27, 31)
-    public static readonly STEEL_BOLT = new Ammunition(9141, new Graphic(955, 0, GraphicHeight.HIGH), 27, 35)
-    public static readonly PEARL_BOLT = new Ammunition(880, new Graphic(955, 0, GraphicHeight.HIGH), 27, 38)
-    public static readonly ENCHANTED_PEARL_BOLT = new Ammunition(9238, new Graphic(955, 0, GraphicHeight.HIGH), 27, 38)
-    public static readonly MITHRIL_BOLT = new Ammunition(9142, new Graphic(955, 0, GraphicHeight.HIGH), 27, 40)
-    public static readonly TOPAZ_BOLT = new Ammunition(9336, new Graphic(955, 0, GraphicHeight.HIGH), 27, 50)
-    public static readonly ENCHANTED_TOPAZ_BOLT = new Ammunition(9239, new Graphic(955, 0, GraphicHeight.HIGH), 27, 50)
-    public static readonly ADAMANT_BOLT = new Ammunition(9143, new Graphic(955, 0, GraphicHeight.HIGH), 27, 60)
-    public static readonly SAPPHIRE_BOLT = new Ammunition(9337, new Graphic(955, 0, GraphicHeight.HIGH), 27, 65)
-    public static readonly ENCHANTED_SAPPHIRE_BOLT = new Ammunition(9240, new Graphic(955, 0, GraphicHeight.HIGH), 27, 65)
-    public static readonly EMERALD_BOLT = new Ammunition(9338, new Graphic(955, 0, GraphicHeight.HIGH), 27, 70)
-    public static readonly ENCHANTED_EMERALD_BOLT = new Ammunition(9241, new Graphic(955, 0, GraphicHeight.HIGH), 27, 70)
-    public static readonly RUBY_BOLT = new Ammunition(9339, new Graphic(955, 0, GraphicHeight.HIGH), 27, 75)
-    public static readonly ENCHANTED_RUBY_BOLT = new Ammunition(9242, new Graphic(955, 0, GraphicHeight.HIGH), 27, 75)
-    public static readonly BROAD_BOLT = new Ammunition(13280, new Graphic(955, 0, GraphicHeight.HIGH), 27, 100)
-    public static readonly RUNITE_BOLT = new Ammunition(9144, new Graphic(955, 0, GraphicHeight.HIGH), 27, 115)
-    public static readonly DIAMOND_BOLT = new Ammunition(9340, new Graphic(955, 0, GraphicHeight.HIGH), 27, 105)
-    public static readonly ENCHANTED_DIAMOND_BOLT = new Ammunition(9243, new Graphic(955, 0, GraphicHeight.HIGH), 27, 105)
-    public static readonly DRAGON_BOLT = new Ammunition(9341, new Graphic(955, 0, GraphicHeight.HIGH), 27, 117)
-    public static readonly ENCHANTED_DRAGON_BOLT = new Ammunition(9244, new Graphic(955, 0, GraphicHeight.HIGH), 27, 117)
-    public static readonly ONYX_BOLT = new Ammunition(9342, new Graphic(955, 0, GraphicHeight.HIGH), 27, 120)
-    public static readonly ENCHANTED_ONYX_BOLT = new Ammunition(9245, new Graphic(955, 0, GraphicHeight.HIGH), 27, 120)
-    public static readonly ENCHANTED_DRAGONSTONE_DRAGON_BOLT = new Ammunition(ItemIdentifiers.DRAGONSTONE_DRAGON_BOLTS_E_, new Graphic(955, 0, GraphicHeight.HIGH), 27, 122)
+    public static readonly BRONZE_BOLT = new Ammunition(877, null, 27, 13)
+    public static readonly OPAL_BOLT = new Ammunition(879, null, 27, 20)
+    public static readonly ENCHANTED_OPAL_BOLT = new Ammunition(9236, null, 27, 20)
+    public static readonly IRON_BOLT = new Ammunition(9140, null, 27, 28)
+    public static readonly JADE_BOLT = new Ammunition(9335, null, 27, 31)
+    public static readonly ENCHANTED_JADE_BOLT = new Ammunition(9237, null, 27, 31)
+    public static readonly STEEL_BOLT = new Ammunition(9141, null, 27, 35)
+    public static readonly PEARL_BOLT = new Ammunition(880, null, 27, 38)
+    public static readonly ENCHANTED_PEARL_BOLT = new Ammunition(9238, null, 27, 38)
+    public static readonly MITHRIL_BOLT = new Ammunition(9142, null, 27, 40)
+    public static readonly TOPAZ_BOLT = new Ammunition(9336, null, 27, 50)
+    public static readonly ENCHANTED_TOPAZ_BOLT = new Ammunition(9239, null, 27, 50)
+    public static readonly ADAMANT_BOLT = new Ammunition(9143, null, 27, 60)
+    public static readonly SAPPHIRE_BOLT = new Ammunition(9337, null, 27, 65)
+    public static readonly ENCHANTED_SAPPHIRE_BOLT = new Ammunition(9240, null, 27, 65)
+    public static readonly EMERALD_BOLT = new Ammunition(9338, null, 27, 70)
+    public static readonly ENCHANTED_EMERALD_BOLT = new Ammunition(9241, null, 27, 70)
+    public static readonly RUBY_BOLT = new Ammunition(9339, null, 27, 75)
+    public static readonly ENCHANTED_RUBY_BOLT = new Ammunition(9242, null, 27, 75)
+    public static readonly BROAD_BOLT = new Ammunition(13280, null, 27, 100)
+    public static readonly RUNITE_BOLT = new Ammunition(9144, null, 27, 115)
+    public static readonly DIAMOND_BOLT = new Ammunition(9340, null, 27, 105)
+    public static readonly ENCHANTED_DIAMOND_BOLT = new Ammunition(9243, null, 27, 105)
+    public static readonly DRAGON_BOLT = new Ammunition(9341, null, 27, 117)
+    public static readonly ENCHANTED_DRAGON_BOLT = new Ammunition(9244, null, 27, 117)
+    public static readonly ONYX_BOLT = new Ammunition(9342, null, 27, 120)
+    public static readonly ENCHANTED_ONYX_BOLT = new Ammunition(9245, null, 27, 120)
+    public static readonly ENCHANTED_DRAGONSTONE_DRAGON_BOLT = new Ammunition(ItemIdentifiers.DRAGONSTONE_DRAGON_BOLTS_E_, null, 27, 122)
 
     // Ascension bolts (Wiki: Ascension bolts, Diamond/Onyx ascension bolts): +53 ranged strength, +58 gem-tipped.
     // Travel spotanims from the cache: ascension_crossbowbolt_travel 4437, _onyx_ 4438, _diamond_ 4439. The cache has
@@ -117,7 +117,7 @@ export class Ammunition {
     ]
 
     private static dragonBolt(itemId: number): Ammunition {
-        return new Ammunition(itemId, new Graphic(955, 0, GraphicHeight.HIGH), 27, 122)
+        return new Ammunition(itemId, null, 27, 122)
     }
 
     // Launch/travel spotanims from the cache (BLACK_DART_*, AMETHYST_DART_*, II_DRAGON_DART_*); strengths from the Wiki.
@@ -173,21 +173,42 @@ export class Ammunition {
     public static readonly DRAGON_KNIFE_P2 = new Ammunition(ItemIdentifiers.DRAGON_KNIFE_P_PLUS_, null, 697, 30)
     public static readonly DRAGON_KNIFE_P3 = new Ammunition(ItemIdentifiers.DRAGON_KNIFE_P_PLUS_PLUS_, null, 697, 30)
 
-    public static readonly BRONZE_JAVELIN = new Ammunition(825, null, 200, 25)
-    public static readonly IRON_JAVELIN = new Ammunition(826, null, 201, 42)
-    public static readonly STEEL_JAVELIN = new Ammunition(827, null, 202, 64)
-    public static readonly MITHRIL_JAVELIN = new Ammunition(828, null, 203, 85)
-    public static readonly ADAMANT_JAVELIN = new Ammunition(829, null, 204, 107)
-    public static readonly RUNE_JAVELIN = new Ammunition(830, null, 205, 124)
-    public static readonly DRAGON_JAVELIN = new Ammunition(19484, null, 1301, 150)
-    public static readonly SILVTHRILL_JAVELIN = new Ammunition(ItemIdentifiers.SILVTHRILL_JAVELIN, null, 1301, 0)
-    public static readonly MORRIGANS_JAVELIN = new Ammunition(ItemIdentifiers.MORRIGANS_JAVELIN, null, 200, 145)
+    // Javelin travel spotanims: the cache's <metal>_javelin_travel (SpotanimID). The
+    // shared model is 3144; each metal is a recolour of it. All ballistae fire one.
+    // The poisoned variants are the same ammunition: 831-836 (p), 5642-5647 (p+),
+    // 5648-5653 (p++); amethyst 21320/21322/21324; dragon 19486/19488/19490.
+    public static readonly BRONZE_JAVELINS = Ammunition.javelins(825, [831, 5642, 5648], 200, 25)
+    public static readonly IRON_JAVELINS = Ammunition.javelins(826, [832, 5643, 5649], 201, 42)
+    public static readonly STEEL_JAVELINS = Ammunition.javelins(827, [833, 5644, 5650], 202, 64)
+    public static readonly MITHRIL_JAVELINS = Ammunition.javelins(828, [834, 5645, 5651], 203, 85)
+    public static readonly ADAMANT_JAVELINS = Ammunition.javelins(829, [835, 5646, 5652], 204, 107)
+    public static readonly RUNE_JAVELINS = Ammunition.javelins(830, [836, 5647, 5653], 205, 124)
+    // Amethyst javelin: 21318, +135 ranged strength (Wiki); travel 1386.
+    public static readonly AMETHYST_JAVELINS = Ammunition.javelins(ItemIdentifiers.AMETHYST_JAVELIN, [21320, 21322, 21324], 1386, 135)
+    public static readonly DRAGON_JAVELINS = Ammunition.javelins(19484, [19486, 19488, 19490], 1301, 150)
+    public static readonly BRONZE_JAVELIN = Ammunition.BRONZE_JAVELINS[0]
+    public static readonly IRON_JAVELIN = Ammunition.IRON_JAVELINS[0]
+    public static readonly STEEL_JAVELIN = Ammunition.STEEL_JAVELINS[0]
+    public static readonly MITHRIL_JAVELIN = Ammunition.MITHRIL_JAVELINS[0]
+    public static readonly ADAMANT_JAVELIN = Ammunition.ADAMANT_JAVELINS[0]
+    public static readonly RUNE_JAVELIN = Ammunition.RUNE_JAVELINS[0]
+    public static readonly AMETHYST_JAVELIN = Ammunition.AMETHYST_JAVELINS[0]
+    public static readonly DRAGON_JAVELIN = Ammunition.DRAGON_JAVELINS[0]
+    // A thrown weapon in its own right: its own model (35982), not a ballista javelin.
+    public static readonly SILVTHRILL_JAVELIN = new Ammunition(ItemIdentifiers.SILVTHRILL_JAVELIN, null, 3806, 0)
+    // Also thrown, not ballista ammunition: 1620, not a metal javelin's recolour.
+    public static readonly MORRIGANS_JAVELIN = new Ammunition(ItemIdentifiers.MORRIGANS_JAVELIN, null, 1620, 145)
+
+    /** One ammunition per item id (the base item first), all sharing a spotanim and strength. */
+    private static javelins(baseItemId: number, variantItemIds: number[], projectileId: number, strength: number): Ammunition[] {
+        return [baseItemId, ...variantItemIds].map((itemId) => new Ammunition(itemId, null, projectileId, strength));
+    }
 
     public static readonly TOKTZ_XIL_UL = new Ammunition(6522, null, 442, 58)
 
     public static readonly BOLT_RACK = new Ammunition(4740, null, 27, 55)
     // Cache spotanim dttd_bone_crossbowbolt_travel; fired only by the Dorgeshuun crossbow (Wiki: Bone bolts).
-    public static readonly BONE_BOLT = new Ammunition(ItemIdentifiers.BONE_BOLTS, new Graphic(955, 0, GraphicHeight.HIGH), 696, 49)
+    public static readonly BONE_BOLT = new Ammunition(ItemIdentifiers.BONE_BOLTS, null, 696, 49)
     public static readonly CRYSTAL_BOW = new Ammunition(ItemIdentifiers.CRYSTAL_BOW_FULL, null, CRYSTAL_BOW_PROJECTILE_ID, 0)
     // The Gauntlet's crystal and corrupted bows: no ammunition, the strength is on the bow.
     public static readonly GAUNTLET_BOW = new Ammunition(ItemIdentifiers.CRYSTAL_BOW_BASIC_, null, CRYSTAL_BOW_PROJECTILE_ID, 0)
@@ -445,7 +466,11 @@ export class RangedWeapon {
 
     public static readonly KARILS_CROSSBOW = new RangedWeapon([4734], [Ammunition.BOLT_RACK], RangedWeaponType.CROSSBOW)
 
-    public static readonly BALLISTA = new RangedWeapon([ItemIdentifiers.LIGHT_BALLISTA, ItemIdentifiers.HEAVY_BALLISTA, ItemIdentifiers.LIGHT_BALLISTA_4, ItemIdentifiers.HEAVY_BALLISTA_OR_], [Ammunition.BRONZE_JAVELIN, Ammunition.IRON_JAVELIN, Ammunition.STEEL_JAVELIN, Ammunition.MITHRIL_JAVELIN, Ammunition.ADAMANT_JAVELIN, Ammunition.RUNE_JAVELIN, Ammunition.DRAGON_JAVELIN], RangedWeaponType.BALLISTA)
+    public static readonly BALLISTA = new RangedWeapon([ItemIdentifiers.LIGHT_BALLISTA, ItemIdentifiers.HEAVY_BALLISTA, ItemIdentifiers.LIGHT_BALLISTA_4, ItemIdentifiers.HEAVY_BALLISTA_OR_], [
+        ...Ammunition.BRONZE_JAVELINS, ...Ammunition.IRON_JAVELINS, ...Ammunition.STEEL_JAVELINS,
+        ...Ammunition.MITHRIL_JAVELINS, ...Ammunition.ADAMANT_JAVELINS, ...Ammunition.RUNE_JAVELINS,
+        ...Ammunition.AMETHYST_JAVELINS, ...Ammunition.DRAGON_JAVELINS,
+    ], RangedWeaponType.BALLISTA)
     public static readonly SILVTHRILL_BALLISTA = new RangedWeapon([ItemIdentifiers.SILVTHRILL_BALLISTA], [Ammunition.SILVTHRILL_JAVELIN], RangedWeaponType.BALLISTA)
 
 

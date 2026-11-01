@@ -209,6 +209,8 @@ class Game {
     Common.varbit(player, "br_active_map_player", this.map.id);
     Common.varbit(player, "br_active_build_player", this.build);
     Common.varbit(player, "pvp_area_client", 1);
+    // The game's bypass replaces the earned prayer unlocks, so re-send what the client may use.
+    Common.api.emitCustomEvent("prayer:sync-unlocks", { player });
     player.sendMessage(Common.message("mode", { build: Loadouts.buildName(this.build) }));
     this.area.enter(player);
     player.moveTo(tile);
@@ -353,6 +355,8 @@ class Game {
     player.getMovementQueue().setBlockMovement(false);
     Common.core.PrayerHandler.deactivatePrayers(player);
     Stash.restore(player);
+    // Back to their own unlocks, whatever they had earned before the game.
+    Common.api.emitCustomEvent("prayer:sync-unlocks", { player });
     if (how !== "logout") {
       if (player.getArea() === this.area) this.area.leave(player, false);
       player.moveTo(lobbyTile());

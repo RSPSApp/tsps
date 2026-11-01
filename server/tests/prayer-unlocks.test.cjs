@@ -173,7 +173,8 @@ test("the admin unlock event sets the attribute and syncs the varbit", () => {
   assert.notEqual(denied("RIGOUR", p).disabled, true);
 });
 
-test("PvP mode answers the unlock bypass, so presets keep their prayers", () => {
+/** Registers the real PvP-mode plugin and returns its prayer:unlocks-bypass handler. */
+function registerPvpMode() {
   const pvpMode = require("../plugins/modes/PvpMode.plugin");
   let bypass = null;
   pvpMode.register({
@@ -187,9 +188,55 @@ test("PvP mode answers the unlock bypass, so presets keep their prayers", () => 
     onInterfaceActionButton() {},
   });
   assert.ok(bypass, "PvP mode listens for prayer:unlocks-bypass");
+  return bypass;
+}
+
+test("PvP mode answers the unlock bypass, so presets keep their prayers", () => {
+  const bypass = registerPvpMode();
   const event = { player: player(), prayer: PrayerData.PIETY, bypass: false };
   bypass(event);
   assert.equal(event.bypass, true);
+});
+
+test("a PvP-mode login shows the preset prayers unlocked without persisting the bypass", (t) => {
+  bypassHook = registerPvpMode();
+  try {
+    const { player: p, varbits } = nativePlayer(t);
+    loginHook({ player: p });
+
+    assert.deepEqual(varbits, [[3909, 8], [5453, 1], [5451, 1], [5452, 1]],
+      "the client is told every prayer is usable, as PrayerHandler already says");
+    assert.equal(p.getAttribute("prayer:rigour-unlocked"), undefined, "the bypass is not persisted");
+    assert.equal(p.getAttribute("prayer:preserve-unlocked"), undefined);
+    assert.notEqual(denied("RIGOUR", p).disabled, true);
+    assert.notEqual(denied("CHIVALRY", p).disabled, true);
+
+    // A preset load or an ordinary Prayer refresh must not overwrite the client state.
+    varbits.length = 0;
+    p.getSkillManager().updateSkill(Skill.PRAYER);
+    p.getSkillManager().setCurrentLevel(Skill.PRAYER, 98, true);
+    assert.deepEqual(varbits, [], "ordinary refreshes leave the unlock varbits alone");
+  } finally {
+    bypassHook = null;
+  }
+});
+
+test("a sync request re-sends the effective unlocks, bypass included", () => {
+  const p = player();
+  customEventHooks.get("prayer:sync-unlocks")({ player: p });
+  assert.deepEqual(p.varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0]],
+    "without a bypass or progress everything stays locked");
+  assert.equal(p.attrs.size, 0);
+
+  bypassHook = registerPvpMode();
+  try {
+    p.varbits.length = 0;
+    customEventHooks.get("prayer:sync-unlocks")({ player: p });
+    assert.deepEqual(p.varbits, [[3909, 8], [5453, 1], [5451, 1], [5452, 1]]);
+    assert.equal(p.attrs.size, 0, "the bypass never writes the earned attributes");
+  } finally {
+    bypassHook = null;
+  }
 });
 
 test("a scroll does not open its prompt while the player is busy", () => {

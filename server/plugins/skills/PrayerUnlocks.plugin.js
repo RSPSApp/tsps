@@ -12,6 +12,13 @@
  *
  * The Knight Waves activity is not implemented, so completing King's Ransom stands in for
  * it; when the activity exists this should read its completion instead.
+ *
+ * Events:
+ *  - "prayer:unlocks-bypass" { player, prayer, bypass } -> in: a mode or minigame that hands
+ *    the prayers out answers with bypass = true. It never writes the earned attributes.
+ *  - "prayer:unlock" { player, prayer } -> in: the admin command grants a scroll prayer.
+ *  - "prayer:sync-unlocks" { player } -> in: a bypass just started or ended, so re-send the
+ *    client flags for its new effective state.
  */
 
 const PRESERVE_UNLOCKED_ATTRIBUTE = "prayer:preserve-unlocked";
@@ -65,13 +72,35 @@ function kingsRansomComplete(player) {
   return (Number(player.getAttribute(KINGS_RANSOM_STAGE_ATTRIBUTE)) || 0) >= KINGS_RANSOM_COMPLETE_STAGE;
 }
 
+/**
+ * Modes and minigames that hand the prayers out (PvP-mode presets, Last Man Standing) answer
+ * this. The bypass is never persisted: it only changes the effective state while it applies.
+ */
+function unlocksBypassed(player, prayer) {
+  const event = { player, prayer, bypass: false };
+  api.emitCustomEvent("prayer:unlocks-bypass", event);
+  return event.bypass === true;
+}
+
+/** What the server lets the player use: earned scroll or quest progress, or a live bypass. */
+function scrollUnlocked(player, scroll) {
+  return player.getAttribute(scroll.attribute) === true || unlocksBypassed(player, scroll.prayer);
+}
+
+/** The varbit is shared by Chivalry and Piety, so a bypass on either reveals both. */
+function knightWavesUnlocked(player) {
+  return kingsRansomComplete(player)
+    || unlocksBypassed(player, core.PrayerData.CHIVALRY)
+    || unlocksBypassed(player, core.PrayerData.PIETY);
+}
+
 function sendUnlock(player, scroll) {
-  player.getPacketSender().sendVarbit(scroll.varbit, player.getAttribute(scroll.attribute) === true ? 1 : 0);
+  player.getPacketSender().sendVarbit(scroll.varbit, scrollUnlocked(player, scroll) ? 1 : 0);
 }
 
 function sendKnightWaves(player) {
   player.getPacketSender()
-    .sendVarbit(KNIGHT_WAVES_STATE_VARBIT, kingsRansomComplete(player) ? KNIGHT_WAVES_COMPLETE : 0);
+    .sendVarbit(KNIGHT_WAVES_STATE_VARBIT, knightWavesUnlocked(player) ? KNIGHT_WAVES_COMPLETE : 0);
 }
 
 function syncUnlocks({ player }) {
@@ -92,10 +121,8 @@ function prayerRequirements(event) {
   if (!knightPrayer && !scroll) return;
   // Bots have no quest or scroll progression; their loadouts already assume the unlocks.
   if (player.isPlayerBot?.() === true) return;
-  // Minigames that hand everyone the prayers (Last Man Standing) say so here.
-  const bypass = { player, prayer, bypass: false };
-  api.emitCustomEvent("prayer:unlocks-bypass", bypass);
-  if (bypass.bypass === true) return;
+  // Minigames that hand everyone the prayers (Last Man Standing) and PvP mode say so here.
+  if (unlocksBypassed(player, prayer)) return;
   if (knightPrayer) {
     if (kingsRansomComplete(player)) return;
     event.message = `${KINGS_RANSOM_LOCKED} ${prayer.getPrayerName()}.`;
@@ -161,6 +188,7 @@ module.exports = {
     pluginApi.onPlayerLogin(syncUnlocks);
     pluginApi.onPrayerDisabled(prayerRequirements);
     pluginApi.onCustomEvent("prayer:unlock", unlockPrayer);
+    pluginApi.onCustomEvent("prayer:sync-unlocks", syncUnlocks);
     pluginApi.onCustomEvent("quest:stage-changed", kingsRansomStageChanged);
     for (const name of SCROLL_ITEM_NAMES) {
       pluginApi.onItemAction(name, { Read: readScroll });
@@ -176,5 +204,8 @@ module.exports._test = {
   unlockPrayer,
   kingsRansomStageChanged,
   kingsRansomComplete,
+  unlocksBypassed,
+  scrollUnlocked,
+  knightWavesUnlocked,
   scrolls,
 };

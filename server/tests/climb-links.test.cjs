@@ -57,6 +57,17 @@ test("a trapdoor leads underground, 6400 tiles north, and the ladder there back 
     assert.deepEqual(lands(mapObject(3209, 9616, 0, 17385), ClimbLinks.UP, new Location(3208, 9616, 0)), [3210, 3216, 0]);
 });
 
+test('both open Castle Wars central trapdoors lead to their actual tunnel ladders', () => {
+    const { GameObject } = require('../dist/game/entity/impl/object/GameObject');
+    for (const [x, y, face, fromY, landingY] of [[2399, 3099, 3, 3100, 9500], [2400, 3108, 1, 3107, 9507]]) {
+        const closed = mapObject(x, y, 0, 1579);
+        assert.equal(closed.getFace(), face);
+        const open = new GameObject(1581, closed.getLocation(), closed.getType(), face, null);
+        assert.equal(ClimbLinks.climbs(open.getId(), ClimbLinks.DOWN), true);
+        assert.deepEqual(lands(open, ClimbLinks.DOWN, new Location(x, fromY, 0)), [x, landingY, 0]);
+    }
+});
+
 test('Top-floor and Bottom-floor go all the way (Lumbridge castle staircases)', () => {
     const bottom = mapObject(3204, 3207, 0, 56230);
     assert.deepEqual(lands(bottom, ClimbLinks.UP, new Location(3206, 3208, 0)), [3206, 3208, 1], 'Climb-up: one floor');

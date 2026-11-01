@@ -98,6 +98,43 @@ export type GLRenderOpts = {
     skipTooltip?: boolean;
 };
 
+/** Keep opted-in overlays beneath the context menu in the shared widget pass. */
+export function drawBeforeContextMenu(drawOverlay: (() => void) | undefined, drawMenu: () => void): void {
+    let overlayFailed = false;
+    let overlayError: unknown;
+    try { drawOverlay?.(); } catch (error) { overlayFailed = true; overlayError = error; }
+    drawMenu();
+    if (overlayFailed) console.error("Error drawing above-widget overlay:", overlayError);
+}
+
+/** Preserve each root's hook, then add a shared overlay at the final rendered root. */
+export function composeDrawAboveWidgets(
+    existing: (() => void) | undefined,
+    isLastRoot: boolean,
+    drawOverlay: (() => void) | undefined,
+): (() => void) | undefined {
+    if (!isLastRoot || !drawOverlay) return existing;
+    return () => {
+        try {
+            existing?.();
+        } finally {
+            drawOverlay();
+        }
+    };
+}
+
+/** Remove newly registered overlay bounds for bookkeeping in a later layer. */
+export function captureAppendedRects<T>(rects: T[], draw: () => void): T[] {
+    const initialLength = rects.length;
+    let appended: T[] = [];
+    try {
+        draw();
+    } finally {
+        appended = rects.splice(initialLength);
+    }
+    return appended;
+}
+
 /** A custom gameframe's rule to hide stock widgets. All specified fields must
  * match (uid, group, type, contentType). */
 export type WidgetRule = {

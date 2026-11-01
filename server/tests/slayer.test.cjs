@@ -1043,3 +1043,61 @@ test("leaving the Fight Cave clears a Jad task, with the Wiki's message and the 
   assert.equal(player.messages.at(-1), "You no longer have a slayer task as you left the fight cave.");
   assert.equal(varbit(player, "slayer_tasks_completed"), 7, "the streak is not reset");
 });
+
+test("native superior deaths keep three normal rolls and 550 XP; CoX scavengers keep two rolls", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
+  const Drops = require("../plugins/npcs/NpcDrops.plugin");
+  const Scavengers = require("../plugins/minigames/cox/Scavengers.ChambersOfXeric");
+  const depth = PluginManager.npcDeathHooks.length;
+  t.after(() => { PluginManager.npcDeathHooks.length = depth; });
+  Slayer.register(PluginManager.createApi("SuperiorDeathTest"));
+  const placed = [];
+  const api = {
+    ...PluginManager.createApi("SuperiorDropTest"),
+    getItemOnGroundManager: () => ({
+      registerLocation: (_player, item) => placed.push([item.getId(), item.getAmount()]),
+    }),
+    log() {},
+  };
+  Drops.register(api);
+  Scavengers(api);
+  t.mock.method(Math, "random", () => 0.1); // Normal loot hits; the rare unique tables miss.
+  let nextIndex = 1900;
+  function nativeKill(id, onTask = false, room = null) {
+    const player = new Player(null);
+    player.setIndex(nextIndex++);
+    player.setRegistered(true);
+    player.getSession = () => ({ sendClientPacket: () => true, write() {} });
+    player.getSkillManager().setMaxLevel(Skill.SLAYER, 99);
+    const xp = [];
+    t.mock.method(player.getSkillManager(), "addExperiences", (skill, amount) => xp.push([skill, amount]));
+    if (onTask) giveTask(player, 1, "Crawling Hands", 10);
+    const monster = PluginManager.spawnNpc({ id, x: 3420, y: 3560, z: 0, owner: player }, "SuperiorDeathTest");
+    if (room) monster.__coxRoom = room;
+    t.after(() => { core.World.getNpcs().remove(monster); player.setRegistered(false); });
+    monster.getCombat().addDamage(player, monster.getCurrentDefinition().getHitpoints());
+    monster.setHitpoints(0);
+    placed.length = 0;
+    const death = new NPCDeathTask(monster);
+    death.execute();
+    death.execute();
+    return { drops: placed.slice(), xp, player };
+  }
+  const hand = core.NpcIdentifiers.CRUSHING_HAND;
+  assert.equal(CacheDefinitions.getNpc(hand).name, "Crushing hand");
+  for (const onTask of [false, true]) {
+    const result = nativeKill(hand, onTask);
+    assert.deepEqual(result.drops, [
+      [core.ItemIdentifiers.BONES, 1],
+      ...Array.from({ length: 3 }, () => [core.ItemIdentifiers.LEATHER_GLOVES, 1]),
+    ], "one guaranteed bones drop and three independent normal loot rolls");
+    assert.deepEqual(result.xp, [[Skill.SLAYER, 550]], "superior XP is given once, on or off task");
+    if (onTask) assert.equal(varp(result.player, "slayer_count"), 9);
+  }
+  const scavenger = nativeKill(core.NpcIdentifiers.SCAVENGER_BEAST, false,
+    Object.create(Scavengers.ScavengerRoom.prototype));
+  assert.equal(scavenger.drops.filter(([id]) => id === core.ItemIdentifiers.BONES).length, 1);
+  assert.equal(scavenger.drops.filter(([id]) => id !== core.ItemIdentifiers.BONES).length, 2,
+    "the canonical two-roll table replaces CoX's extra-roll workaround");
+});

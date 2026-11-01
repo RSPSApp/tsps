@@ -47,6 +47,7 @@ before(() => {
       setup = actions['Set-up'];
     },
     onNpcDeath() {},
+    onCustomEvent: (...args) => itemActions.onCustomEvent(...args),
     onNpcInteraction(name, actions) { burn = actions.Burn; },
     onItemOnNpc(fn) {
       PluginManager.createApi('Castle Wars explosive regression').onItemOnNpc(fn);
@@ -63,6 +64,7 @@ before(() => {
   game.swapObject = (...args) => swaps.push(args);
   game.gameArea = { getPlayers: () => [] };
   Barricades(api, game);
+  require('../plugins/combat/specials/Shove.SpecialAttack')(PluginManager.createApi('Castle Wars shove regression'));
   Tunnels(api, game);
 });
 
@@ -101,6 +103,43 @@ test('the energy-barrier exit and nonblocking map objects allow immediate barric
     assert.equal(World.getAddNPCQueue().includes(npc), false);
     assert.equal(inventory.getItems()[0].getId(), -1, 'the first barricade was consumed');
     assert.equal(inventory.getItems()[2].getId(), core.ItemIdentifiers.BARRICADE, 'the clicked last barricade stays put');
+  }
+});
+
+test('Shove cannot stun or displace either team\'s intact or burning barricades', (t) => {
+  const tasks = [];
+  t.mock.method(TaskManager, 'submit', task => tasks.push(task));
+  for (const team of Object.values(data.TEAM)) {
+    t.mock.method(game, 'getTeamId', () => team);
+    const p = playerAt(t, 2427, 3078);
+    const npc = deployed(t, p);
+    const origin = npc.getLocation().clone();
+    p.moveTo(origin.transform(-1, 0));
+    for (const burning of [false, true]) {
+      npc.setNpcTransformationId(burning ? core.NpcIdentifiers.BARRICADE_2 : -1);
+      for (const id of [core.ItemIdentifiers.DRAGON_SPEAR, core.ItemIdentifiers.ZAMORAKIAN_SPEAR, core.ItemIdentifiers.ZAMORAKIAN_HASTA]) {
+        p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(id));
+        p.setSpecialPercentage(100);
+        p.setSpecialActivated(true);
+        tasks.length = 0;
+        core.CombatSpecial.getForWeaponId(id).getCombatMethod().start(p, npc);
+        for (const task of tasks) task.execute();
+        assert.ok(npc.getLocation().equals(origin), 'the registered barricade keeps its blocking tile');
+        assert.equal(npc.getTimers().has(core.TimerKey.STUN), false, 'no stun is applied');
+        assert.equal(p.getSpecialPercentage(), 100, 'a refused Shove spends no energy');
+        assert.equal(p.isSpecialActivated(), false, 'the refused special does not repeat each swing');
+        assert.ok(npc.hasFlag(core.NPC.BLOCKS_PLAYERS_FLAG));
+        assert.equal(game.teamBarricadeCount(team), 1);
+      }
+    }
+    game.releaseBarricade(npc);
+    World.getNpcs().remove(npc);
+    const goblin = new core.NPC(core.NpcIdentifiers.GOBLIN, origin);
+    p.setSpecialPercentage(100);
+    p.setSpecialActivated(true);
+    core.CombatSpecial.getForWeaponId(core.ItemIdentifiers.ZAMORAKIAN_HASTA).getCombatMethod().start(p, goblin);
+    assert.equal(goblin.getTimers().has(core.TimerKey.STUN), true, 'the barricade hook still permits ordinary targets');
+    assert.equal(p.getSpecialPercentage(), 75);
   }
 });
 

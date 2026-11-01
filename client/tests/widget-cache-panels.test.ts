@@ -85,14 +85,15 @@ import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/n
 
     // Native Castle Wars area packets must drive the cache's own HUD for both teams.
     const serverRoot = require('node:path').resolve(__dirname, '../../server');
+    const serverModules = serverRoot + '/src/main/typescript/elvarg';
     const clientRoot = process.cwd();
     process.chdir(serverRoot);
-    require(serverRoot + '/dist/Server').Server.installProductionPathResolver();
-    require(serverRoot + '/dist/game/cache/CachePipeline').CachePipeline.initialize(serverRoot);
-    const { PluginManager } = require(serverRoot + '/dist/plugins/PluginManager');
-    const { Player } = require(serverRoot + '/dist/game/entity/impl/player/Player');
-    const { World } = require(serverRoot + '/dist/game/World');
-    const { RegionManager } = require(serverRoot + '/dist/game/collision/RegionManager');
+    require(serverModules + '/Server').Server.installProductionPathResolver();
+    require(serverModules + '/game/cache/CachePipeline').CachePipeline.initialize(serverRoot);
+    const { PluginManager } = require(serverModules + '/plugins/PluginManager');
+    const { Player } = require(serverModules + '/game/entity/impl/player/Player');
+    const { World } = require(serverModules + '/game/World');
+    const { RegionManager } = require(serverModules + '/game/collision/RegionManager');
     const core = PluginManager.getCoreApi();
     RegionManager.init();
     RegionManager.loadMapFiles(2426, 3080);
@@ -171,6 +172,35 @@ import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/n
     World.getRemoveNPCQueue().splice(0);
     checkCastleHud(ZAMORAK, 0);
     checkCastleHud(SARADOMIN, 0);
+
+    // The server's autocast selector key must populate the native Ancient spell chooser.
+    const { Autocasting } = require(serverModules + '/game/content/combat/magic/Autocasting');
+    const { CombatSpells } = require(serverModules + '/game/content/combat/magic/CombatSpells');
+    require(serverRoot + '/plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+    player.setSpellbook(core.MagicSpellbook.ANCIENT);
+    cacheVm.context.varManager.setServerVarbit(4070, 1);
+    for (const weapon of [
+        core.ItemIdentifiers.MASTER_WAND, core.ItemIdentifiers.NIGHTMARE_STAFF,
+        core.ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF, core.ItemIdentifiers.ELDRITCH_NIGHTMARE_STAFF,
+        core.ItemIdentifiers.KODAI_WAND, core.ItemIdentifiers.ANCIENT_STAFF,
+    ]) {
+        player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(weapon));
+        for (const style of [23, 28]) {
+            player.getCombat().setAutocastSpell(null);
+            assert.equal(Autocasting.handleWidgetAction(player, 593, style), true);
+            wm.getGroup(201);
+            const root = wm.getWidgetByUid(201 << 16);
+            cacheVm.runScriptEvent({ args: root.onLoad, widget: root });
+            assert.equal(cacheVm.lastError, null);
+            const choices = wm.getWidgetByUid((201 << 16) | 1).children;
+            assert.deepEqual(choices.filter((child: any) => child && !child.hidden && child.childIndex > 0)
+                .map((child: any) => child.childIndex), Array.from({ length: 16 }, (_, i) => i + 31),
+                `weapon ${weapon}, style ${style} displays all sixteen Ancient combat spells`);
+            assert.equal(choices[46].actions[0], 'Ice Barrage');
+            Autocasting.handleWidgetAction(player, 201, 1, 46);
+            assert.equal(player.getCombat().getAutocastSpell(), CombatSpells.ICE_BARRAGE);
+        }
+    }
     process.chdir(clientRoot);
 }
 

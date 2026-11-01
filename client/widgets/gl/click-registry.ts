@@ -27,6 +27,9 @@ export type ClickTarget = {
     // the widget click path consumed never reaches the registry, so its release must not
     // click whatever that press put under the pointer.
     requiresPress?: boolean;
+    // For a target that acts on press: runs on release when the press landed on this target but
+    // never reached the registry (the widget click path consumed it). Receives the press position.
+    onReleaseWithoutPress?: (x?: number, y?: number, targetId?: string) => void;
     contains?: (x: number, y: number) => boolean;
     onHoverChange?: (hover: boolean) => void;
 };
@@ -160,7 +163,7 @@ export class ClickRegistry {
         return target.widgetUid !== undefined && !!this.widgetHiddenChecker?.(target.widgetUid);
     }
 
-    onPointerUp(x: number, y: number): boolean {
+    onPointerUp(x: number, y: number, pressX: number = x, pressY: number = y): boolean {
         // Use the stored active target (survives beginFrame clearing), fall back to pick
         let target: ClickTarget | undefined = this.activeTarget ?? undefined;
         // If activeTarget was cleared somehow, try to find by id as fallback
@@ -175,6 +178,13 @@ export class ClickRegistry {
         if (!target) {
             target = this.pick(x, y);
             if (target?.requiresPress) return false;
+            if (target?.onReleaseWithoutPress) {
+                if (this.pick(pressX, pressY) !== target) return false;
+                try {
+                    target.onReleaseWithoutPress(pressX, pressY, target.id);
+                } catch {}
+                return true;
+            }
         }
         if (!target) {
             return false;

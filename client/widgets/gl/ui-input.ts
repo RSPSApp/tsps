@@ -133,7 +133,7 @@ export class UIInputBridge {
         // clickMode3 returns to NONE the frame after mousedown even while held.
         if (this.lastClickMode2 === ClickMode.LEFT && clickMode2 === ClickMode.NONE) {
             if (!this.suppressUpUntilRelease) {
-                this.clicks.onPointerUp(mousePos.x, mousePos.y);
+                this.clicks.onPointerUp(mousePos.x, mousePos.y, clickPos.x, clickPos.y);
             } else {
                 // Consume exactly one up-transition, then clear.
                 this.suppressUpUntilRelease = false;

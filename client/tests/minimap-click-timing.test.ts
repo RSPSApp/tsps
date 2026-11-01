@@ -89,6 +89,67 @@ async function main() {
     input.clickMode2 = input.clickMode3 = ClickMode.LEFT;
     flushInput();
     assert.equal(sent.length, 1, "an overlapping orb consumes the press without walking");
+    input.clickMode2 = input.clickMode3 = ClickMode.NONE;
+    flushInput();
+
+    // A press the orb's widget consumed, released on the minimap beside it, is still the orb's.
+    input.clickMode2 = ClickMode.LEFT;
+    flushInput();
+    input.mouseX = 60;
+    input.clickMode2 = ClickMode.NONE;
+    flushInput();
+    assert.equal(sent.length, 1, "a consumed press on the orb cannot walk when released off it");
+    bridge.getClicks().unregister("orb");
+
+    // A drag-only widget over the minimap has no click target, so nothing above the minimap
+    // takes the release, but the real widget click path clears the press before the bridge (#1797).
+    const { processWidgetClickInput } = await import("../game/widgets/input/widgetClickInput");
+    const dragHandle = { uid: (160 << 16) | 99, groupId: 160, fileId: 99, childIndex: -1,
+        x: 0, y: 0, width: 200, height: 200, isDraggable: true };
+    const press = () => {
+        input.mouseX = input.saveClickX = input.leftClickX = 80;
+        input.mouseY = input.saveClickY = input.leftClickY = 100;
+        input.clickMode2 = input.clickMode3 = ClickMode.LEFT;
+        processWidgetClickInput(
+            { getTransmitCycles: () => ({ cycleCntr: 0 }),
+                getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }) } as any,
+            { cachedHoverHits: null } as any,
+            { input, collectFromAllRoots: () => [dragHandle], getWidgetFlags: () => 0 } as any,
+            { invalidateWidgetRender: noop, getWidgetByUid: noop } as any,
+            { clickedWidget: null, resolveClickedWidgetParent: noop,
+                handleTradeRequestChatClick: () => false, isWidgetDraggable: () => true } as any,
+            (() => ({ option: "", target: "" })) as any,
+            true,
+        );
+        assert.equal(input.clickMode3, ClickMode.NONE, "the widget click path consumed the press");
+    };
+    press();
+    flushInput();
+    assert.equal(sent.length, 1, "a consumed press sends nothing until release");
+    input.mouseX = 110;
+    input.clickMode2 = ClickMode.NONE;
+    flushInput();
+    assert.equal(sent.length, 2, "the release of a consumed press walks exactly once");
+    assert.equal(ClientState.destinationWorldX, 3195, "the walk goes to where the press landed");
+    assert.equal(ClientState.destinationWorldY, 3200);
+    flushInput();
+    assert.equal(sent.length, 2, "later frames do not repeat the walk");
+
+    // A consumed press outside the minimap mask, or cleared by a menu, cannot walk on release.
+    input.saveClickX = input.saveClickY = 0;
+    input.clickMode2 = ClickMode.LEFT;
+    flushInput();
+    input.mouseX = 120;
+    input.mouseY = 100;
+    input.clickMode2 = ClickMode.NONE;
+    flushInput();
+    assert.equal(sent.length, 2, "a press that began off the minimap cannot walk when released on it");
+    input.saveClickX = input.saveClickY = -1;
+    input.clickMode2 = ClickMode.LEFT;
+    flushInput();
+    input.clickMode2 = ClickMode.NONE;
+    flushInput();
+    assert.equal(sent.length, 2, "a press with no saved position cannot walk on release");
 
     // Exercise the actual frame-synchronized input owner and HUD cap, rather than
     // calling the bridge directly: a stationary press can fall between HUD redraws.
@@ -160,7 +221,7 @@ async function main() {
         realInput.cleanUp();
         writer.setSocket(null);
     }
-    console.log("minimap click timing: press, hold, release, mask and overlay passed");
+    console.log("minimap click timing: press, hold, release, mask, overlay and consumed press passed");
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

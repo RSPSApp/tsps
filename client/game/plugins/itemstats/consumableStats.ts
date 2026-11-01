@@ -34,7 +34,7 @@ const POTION_STATS: Record<string, PotionStats["skillBoosts"]> = {
         defence: { flat: 5, percent: 0.15 },
     },
     "ranging potion": { ranged: { flat: 4, percent: 0.1 } },
-    "super ranging potion": { ranged: { flat: 5, percent: 0.15 } },
+    "super ranging": { ranged: { flat: 5, percent: 0.15 } },
     "magic potion": { magic: { flat: 4, percent: 0 } },
     "super magic potion": { magic: { flat: 5, percent: 0.15 } },
 };

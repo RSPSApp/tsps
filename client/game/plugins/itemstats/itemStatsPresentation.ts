@@ -16,8 +16,10 @@ export function buildCombatStatGroups(stats: ItemStats, delta?: ItemStats): Item
     const makeRows = (keys: readonly (keyof ItemStats)[]): ItemStatsRow[] => keys
         .filter((key) => stats[key] !== 0 || (delta?.[key] ?? 0) !== 0)
         .map((key) => {
-            const difference = delta?.[key] ?? 0;
-            const value = `${stats[key]}${difference === 0 ? "" : ` (${difference > 0 ? "+" : ""}${difference})`}`;
+            const rawDifference = delta?.[key] ?? 0;
+            const difference = key === "magicDamage" ? Math.round(rawDifference * 10) / 10 : rawDifference;
+            const displayedStat = key === "magicDamage" ? Math.round(stats[key] * 10) / 10 : stats[key];
+            const value = `${displayedStat}${difference === 0 ? "" : ` (${difference > 0 ? "+" : ""}${difference})`}`;
             return { label: LABELS[key], value, delta: difference };
         });
     return [

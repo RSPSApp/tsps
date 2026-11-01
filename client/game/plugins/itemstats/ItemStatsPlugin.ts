@@ -11,6 +11,7 @@ import { buildCombatStatGroups, type ItemStatsGroup, type ItemStatsRow } from ".
 import { canonicalItemId } from "../inventorytags/inventoryTags";
 import { collectWidgetsAtPointAcrossRoots } from "../../../widgets/menu/utils";
 import { foodStatsForName, potionStatsForName, runeStatsForName } from "./consumableStats";
+import { formatPoisonImmunity, formatRestore } from "./foodStats";
 import {
     fallbackInteractionBounds,
     findInteractionTextBounds,
@@ -96,8 +97,9 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
         }
         this.hovered = hovered;
         this.interactionBounds = hovered ? this.interactionTextBounds() : undefined;
+        const wornSignature = this.currentWornSignature();
         return this.signatureValue = hovered
-            ? `${hovered.itemId}:${hovered.x}:${hovered.y}:${x}:${y}:${JSON.stringify(this.interactionBounds ?? null)}`
+            ? `${hovered.itemId}:${hovered.x}:${hovered.y}:${x}:${y}:${JSON.stringify(this.interactionBounds ?? null)}:${wornSignature}`
             : "";
     }
 
@@ -118,10 +120,10 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             const rows: ItemStatsRow[] = [];
             if (food.heal !== undefined) rows.push({ label: "Healing", value: typeof food.heal === "number" ? `${food.heal} HP` : `${food.heal.min}-${food.heal.max} HP` });
             for (const [skill, value] of Object.entries(food.boost ?? {})) rows.push({ label: `${capitalize(skill)} boost`, value: signed(value) });
-            for (const [skill, value] of Object.entries(food.restore ?? {})) rows.push({ label: `${capitalize(skill)} restored`, value: `${value}` });
+            for (const [skill, value] of Object.entries(food.restore ?? {})) rows.push({ label: `${capitalize(skill)} restored`, value: formatRestore(value) });
             if (food.runEnergy !== undefined) rows.push({ label: "Run energy", value: `${food.runEnergy}%` });
             if (food.stamina) rows.push({ label: "Stamina", value: "Effect" });
-            if (food.poisonImmunity !== undefined) rows.push({ label: "Poison immunity", value: `${food.poisonImmunity} min` });
+            if (food.poisonImmunity !== undefined) rows.push({ label: "Poison immunity", value: formatPoisonImmunity(food.poisonImmunity) });
             if (food.curePoison) rows.push({ label: "Poison", value: "Cured" });
             if (food.cureVenom) rows.push({ label: "Venom", value: "Cured" });
             if (food.special) rows.push({ label: "Special effect", value: food.special });
@@ -142,10 +144,9 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
                 rows.push({ label: "Run energy", value: `+${potion.runEnergy}%` });
             }
             if (potion.stamina) {
-                const energyPercent = Math.round(potion.stamina.energyPerMovementTick * 100);
                 rows.push({
                     label: "Stamina",
-                    value: `${formatDuration(potion.stamina.durationMs)}, ${energyPercent}% energy per movement tick`,
+                    value: `${formatDuration(potion.stamina.durationMs)}, ${potion.stamina.energyPerMovementTick} energy points per running tick`,
                 });
             }
             groups.push({ title: "Potion effects", rows });
@@ -239,6 +240,12 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             .filter(({ itemId: wornId }) => wornId >= 0)
             .map(({ slot, itemId: wornId }) => ({ slot, itemId: wornId }));
         return compareWornGear(candidate, worn, (id) => this.loadBaseItem(id));
+    }
+
+    private currentWornSignature(): string {
+        return this.client.equipment.getSlots()
+            .map(({ slot, itemId }) => `${slot}:${itemId}`)
+            .join(",");
     }
 
     private loadBaseItem(itemId: number): any {

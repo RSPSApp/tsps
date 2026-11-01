@@ -113,7 +113,10 @@ export function compareWornGear(
     subtractStats(after, replaced);
     addStats(after, readItemStats(candidate));
     const delta = emptyItemStats();
-    for (const key of ITEM_STAT_KEYS) delta[key] = after[key] - current[key];
+    for (const key of ITEM_STAT_KEYS) {
+        const difference = after[key] - current[key];
+        delta[key] = key === "magicDamage" ? Math.round(difference * 10) / 10 : difference;
+    }
     return { current, after, delta, slot };
 }
 

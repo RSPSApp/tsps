@@ -6,7 +6,7 @@ import {
     itemEquipSlots,
     readItemStats,
 } from "../game/plugins/itemstats/itemStats";
-import { foodStatsForName, potionStatsForName, runeStatsForName } from "../game/plugins/itemstats/consumableStats";
+import { FOOD_DEFINITIONS, foodStatsForName, potionStatsForName, runeStatsForName } from "../game/plugins/itemstats/consumableStats";
 import {
     fallbackInteractionBounds,
     findInteractionTextBounds,
@@ -14,6 +14,7 @@ import {
     positionTooltip,
 } from "../game/plugins/itemstats/tooltipPosition";
 import { ItemStatsPlugin } from "../game/plugins/itemstats/ItemStatsPlugin";
+import { formatPoisonImmunity, formatRestore, readFoodStats } from "../game/plugins/itemstats/foodStats";
 import { GameState } from "../runelite/api/GameState";
 import { buildCombatStatGroups } from "../game/plugins/itemstats/itemStatsPresentation";
 import { BANKMAIN, INVENTORY } from "../runelite/api/gameval/InterfaceID";
@@ -43,6 +44,20 @@ assert.deepEqual(readItemStats(helm), {
     prayer: 1,
 });
 assert.deepEqual(readItemStats(undefined).attackStab, 0);
+const magicDeltaComparison = compareWornGear(
+    item({ 1564: 0, 299: 7 }),
+    [{ slot: 0, itemId: 500 }],
+    (id) => id === 500 ? item({ 1564: 0, 299: 3 }) : undefined,
+);
+assert.equal(magicDeltaComparison?.delta.magicDamage, 0.4, "magic damage deltas use tenths without binary float artifacts");
+const magicRows = buildCombatStatGroups(readItemStats(item({ 1564: 0, 299: 7 })), magicDeltaComparison?.delta);
+assert.deepEqual(magicRows.find(({ title }) => title === "Other bonuses")?.rows.find(({ label }) => label === "Magic damage"), {
+    label: "Magic damage", value: "0.7 (+0.4)", delta: 0.4,
+});
+const floatMagicRows = buildCombatStatGroups({ ...readItemStats(undefined), magicDamage: 0.7 }, {
+    ...readItemStats(undefined), magicDamage: 0.39999999999999997,
+});
+assert.equal(floatMagicRows.find(({ title }) => title === "Other bonuses")?.rows[0].value, "0.7 (+0.4)");
 const combatGroups = buildCombatStatGroups(readItemStats(helm), {
     ...readItemStats(undefined),
     attackStab: 2,
@@ -106,6 +121,25 @@ assert.equal(shieldComparison?.after.defenceSlash, 12);
 assert.equal(foodStatsForName(" bread ")?.heal, 5);
 assert.deepEqual(foodStatsForName("Cave eel")?.heal, { min: 8, max: 12 });
 assert.equal(foodStatsForName("Anglerfish")?.special, "anglerfish");
+assert.equal(foodStatsForName("Strange fruit")?.poisonImmunity, 18);
+assert.equal(formatPoisonImmunity(foodStatsForName("Strange fruit")!.poisonImmunity!), "18 sec",
+    "Food.plugin passes poison immunity to PoisonClock in seconds");
+for (const definition of FOOD_DEFINITIONS) {
+    if (!Array.isArray(definition.bites)) continue;
+    for (const bite of definition.bites) {
+        assert.equal(foodStatsForName(bite)?.name, definition.name, `${bite} resolves through ${definition.name}'s bites list`);
+    }
+}
+assert.deepEqual(foodStatsForName("Rations")?.restore?.prayer, { percent: 0.25 });
+assert.deepEqual(foodStatsForName("Scarred scraps")?.restore?.prayer, { percent: 0.25 });
+assert.equal(formatRestore(foodStatsForName("Rations")!.restore!.prayer!), "25% of base");
+assert.equal(formatRestore(3), "+3");
+assert.equal(formatRestore({ flat: 2, percent: 0.25 }), "+2 + 25% of base");
+assert.equal(formatRestore({ percent: 0.1 }), "10% of base");
+assert.deepEqual(readFoodStats({
+    name: "Mixed restore",
+    restore: { prayer: { flat: 2, percent: 0.25 }, attack: 3, invalid: { percent: "bad" } as any },
+})?.restore, { prayer: { flat: 2, percent: 0.25 }, attack: 3 }, "normalize valid mixed restore forms and discard malformed runtime values");
 assert.equal(foodStatsForName("unknown food"), undefined);
 assert.deepEqual(potionStatsForName("Attack potion(4)")?.skillBoosts?.attack, { flat: 3, percent: 0.1 });
 assert.ok(potionStatsForName("Prayer potion(3)")?.unsupportedReason);
@@ -116,6 +150,7 @@ assert.deepEqual(potionStatsForName("Stamina potion(1)"), {
     runEnergy: 20,
     stamina: { durationMs: 120_000, energyPerMovementTick: 0.7 },
 });
+assert.deepEqual(potionStatsForName("Super ranging (4)")?.skillBoosts?.ranged, { flat: 5, percent: 0.15 });
 assert.equal(potionStatsForName("Unknown energy drink"), undefined);
 assert.deepEqual(runeStatsForName("Air rune"), {
     name: "Air rune", rune: "air", runeType: "elemental", providesElement: true,
@@ -212,6 +247,7 @@ const mouseoverTimer = {
     onTimer: [4725],
 };
 const testClient: any = {
+    equipment: { getSlots: () => [] },
     widgetManager: {
         rootInterface: 161,
         getInputRoots: () => [hitWidget],
@@ -238,6 +274,11 @@ await hitPlugin.start();
 const visibleSignature = hitPlugin.widgetOverlay.signature();
 assert.ok(visibleSignature.includes(JSON.stringify({ x: 1304, y: 704, w: 196, h: 40 })));
 assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature);
+testClient.equipment.getSlots = () => [{ slot: 0, itemId: 987 }];
+const changedWornSignature = hitPlugin.widgetOverlay.signature();
+assert.notEqual(changedWornSignature, visibleSignature, "a worn slot or item change invalidates the comparison tooltip");
+testClient.equipment.getSlots = () => [];
+assert.equal(hitPlugin.widgetOverlay.signature(), visibleSignature, "restoring worn gear restores the prior tooltip signature");
 assert.deepEqual((hitPlugin as any).interactionTextBounds(), {
     x: 1304, y: 704, w: 196, h: 40,
 });

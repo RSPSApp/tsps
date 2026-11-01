@@ -45,7 +45,8 @@ Guardian for the player and slides it with the world's own collision map:
 - the statue turns into the moving form and glides over five ticks, then either becomes the
   completed guardian (goal) or a statue again;
 - New-maze starts the next arena; Reset returns the statue to its start; Observe toggles the
-  overhead camera;
+  overhead camera. All three are used from the room, outside the maze, so a guardian-scoped
+  route reaches it across the walls instead of walking the player into them;
 - leaving or logging out removes the private guardian and resets the maze, but the five-maze
   streak is saved. The streak is what the Wiki says is retained when leaving the arena.
 

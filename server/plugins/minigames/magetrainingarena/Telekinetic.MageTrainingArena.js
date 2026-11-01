@@ -15,6 +15,8 @@ const Common = require("./Common.MageTrainingArena");
 const STREAK_ATTRIBUTE = "mage-training-arena:telekinetic-streak";
 const TELEKINETIC_GRAB_SPELL_ID = 1168;
 const MAZE_MOVE_CYCLES = 150;
+/** The theatre's reach for its guardian: its statues stand inside a maze the player is outside. */
+const GUARDIAN_REACH = 24;
 
 const sessions = new Map();
 
@@ -176,9 +178,13 @@ function newMaze({ player, npc }) {
 }
 
 /** The two Maze Guardian forms carry different cache names (one coloured), so match by id. */
+function isMazeGuardian(id) {
+  return id === Common.ids.npcs.mazeGuardian || id === Common.ids.npcs.mazeGuardianComplete;
+}
+
 function mazeGuardianAction(event) {
   const id = event.npc?.getId?.() ?? event.npcId;
-  if (id !== Common.ids.npcs.mazeGuardian && id !== Common.ids.npcs.mazeGuardianComplete) return;
+  if (!isMazeGuardian(id)) return;
   const action = event.definition?.getActions?.()?.[event.clickType - 1];
   const handled =
     action === "Observe" ? observe(event) :
@@ -186,6 +192,16 @@ function mazeGuardianAction(event) {
     action === "New-maze" ? newMaze(event) :
     false;
   if (handled) event.handled = true;
+}
+
+/**
+ * Observe and Reset are used from the maze room, outside the maze: the statue is reached across
+ * its walls rather than walked to.
+ */
+function mazeGuardianRoute(event) {
+  if (!isMazeGuardian(event.npc?.getId?.() ?? event.npcId)) return;
+  event.range = GUARDIAN_REACH;
+  event.ignoreProjectileClip = true;
 }
 
 // --- Casting Telekinetic Grab
@@ -333,14 +349,15 @@ function attach(api) {
   Common.registerRoom("telekinetic", area);
   api.onObjectInteraction("Telekinetic Teleport", { Enter: enterObject });
   api.onNpcInteraction(mazeGuardianAction);
+  api.onNpcRoute(mazeGuardianRoute);
   api.onSpellOnNpc(castTelekinetic);
   api.onPlayerLogout(forget);
 }
 
 module.exports = {
-  attach, enter, enterObject, observe, reset, newMaze, mazeGuardianAction, castTelekinetic, complete, moveStatue,
+  attach, enter, enterObject, observe, reset, newMaze, mazeGuardianAction, mazeGuardianRoute, isMazeGuardian, castTelekinetic, complete, moveStatue,
   startSession, removeSession, sessionOf, directionFor, randomMazeIndex, slide, canStep, updateOverlay, sendOverlay,
-  pointsComponent, streakComponent, defineArea, STREAK_ATTRIBUTE, TELEKINETIC_GRAB_SPELL_ID, MAZE_MOVE_CYCLES,
+  pointsComponent, streakComponent, defineArea, STREAK_ATTRIBUTE, TELEKINETIC_GRAB_SPELL_ID, MAZE_MOVE_CYCLES, GUARDIAN_REACH,
   get area() { return area; },
   get sessions() { return sessions; },
 };

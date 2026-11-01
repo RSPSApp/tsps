@@ -502,6 +502,34 @@ test('Telekinetic Grab awards the live 43 XP, not the old effect-spell value', (
   assert.equal(core.EffectSpells.TELEKINETIC_GRAB.baseExperience(), 43);
 });
 
+test('Observe, Reset and New-maze reach the Maze Guardian from outside its maze walls', () => {
+  const hooks = {};
+  const api = new Proxy({ core, persistAttribute: () => {} }, {
+    get: (target, key) => target[key] ?? ((handler) => { hooks[key] = handler; }),
+  });
+  Telekinetic.attach(api);
+  assert.equal(typeof hooks.onNpcRoute, 'function', 'the room registers a route override');
+
+  const route = (npcId) => {
+    const event = { player: fakePlayer(), npc: { getId: () => npcId }, npcId, range: 1, ignoreProjectileClip: false, handled: false };
+    hooks.onNpcRoute(event);
+    return event;
+  };
+
+  // Every maze room starts the player outside the walls, so a one-tile approach would stop short.
+  const furthest = Math.max(...Common.data.telekinetic.mazes.map(({ arrive: [ax, ay], start: [sx, sy] }) =>
+    Math.max(Math.abs(ax - sx), Math.abs(ay - sy))));
+  assert.ok(furthest > 1);
+  for (const npcId of [Common.ids.npcs.mazeGuardian, Common.ids.npcs.mazeGuardianComplete]) {
+    const event = route(npcId);
+    assert.ok(event.range > furthest, `guardian ${npcId} is reached from the furthest arrival tile`);
+    assert.equal(event.ignoreProjectileClip, true);
+  }
+  const other = route(Common.ids.npcs.telekineticGuardian);
+  assert.equal(other.range, 1, 'other NPCs keep the ordinary approach range');
+  assert.equal(other.ignoreProjectileClip, false);
+});
+
 // --- The Alchemists' Playground
 
 const playgroundTile = () => Common.data.alchemists.arrive;

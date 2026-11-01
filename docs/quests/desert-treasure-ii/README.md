@@ -2,7 +2,7 @@
 quest: Desert Treasure II - The Fallen Empire
 key: desert_treasure_ii
 status: in-progress
-tested: 2026-10-31
+tested: 2026-11-01
 tester: agent
 model: claude-opus-5-5
 commit: ff35e7634
@@ -13,17 +13,101 @@ travel: travel_to
 
 # Desert Treasure II - The Fallen Empire
 
-A watched progression run reached the Leviathan chapter (stage 8, wire 54): the opening chapter, the
-war room and the whole Vardorvis chapter play through, after the fixes below. The Scar route to the
-first shipwreck chamber is blocked, so the Leviathan, Sucellus, Whisperer and finale chapters are not
-tested. Many steps still differ from live OSRS; they are listed as open findings.
+A watched progression run reached the Leviathan chapter (stage 8, wire 54) on 2026-10-31. A
+second pass (2026-11-01, no in-game run) compared the code with rsprox capture 1703 step by step
+and fixed what differed, including the four chapters' free order. The Scar route to the first
+shipwreck chamber is still blocked at runtime, and the Leviathan, Sucellus, Whisperer and finale
+chapters have still never been played on this server.
 
 Live evidence: rsprox capture [1703](https://rsprox.net/database) (rev 226) is a full playthrough;
-[3229](https://rsprox.net/database) (rev 232) covers the Digsite steps.
+[3229](https://rsprox.net/database) (rev 232) covers the Digsite steps; 3276, 3285 and 3344 are
+logins after completion. rsprox.net has no other DT2 progress, and the user's 154 rev-241
+recordings only log in finished accounts.
+
+## Live contract
+
+From 1703 and Quest Helper (`DesertTreasureII.java:518-521`). Ids are rev 241's.
+
+- `dt2` 14862: 0-40 opening, 42 when the Frostenhorn record opens the chapters, then +2 for each
+  milestone in any chapter, 86 with the fourth medallion found, 88-96 the cell and Mysterious
+  Figure, 100 when Smith takes the last medallion, 102-110 the wights, 112 and 114 on the
+  aftermath's leave scenes, 118 complete.
+- Chapter varbits, all 0 -> 2 on the Frostenhorn tick (`dt2_catalytic_guardian` 15130 0 -> 1):
+
+  | Chapter | Varbit | entered | boss | killed | found | done |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Vardorvis | `dt2_stranglewood` 15125 | 12 | 40 | 42 | 54 | 56 |
+  | Leviathan | `dt2_scar` 15128 | 6 | 40 | 42 | 48 | 50 |
+  | Sucellus | `dt2_ghorrock` 15127 | 6 | 62 | 64 | 68 | 70 |
+  | Whisperer | `dt2_lassar` 15126 | 8 | 42 | 44 | 46 | 48 |
+
+  Each of these columns raises `dt2` by 2. So does a pursuer meeting, one each for the first
+  three medallions: the vault-door scene, then `dt2_pursuer_overworld_combat` (12300) saying
+  "&lt;name&gt;! Hand over the medallion!". 1703's third meeting was the POH ambush (15176).
+- `dt2_first..fourth_medallion` 15132-15135 hold chapter codes in placement order (1 Vardorvis,
+  2 Whisperer, 3 Sucellus, 4 Leviathan); placing the third fills the fourth with the remaining
+  chapter. The last medallion is never placed: Smith's smoke bomb takes it and sets its
+  chapter's done value.
+- After completion: 118/56/48/70/50, `dt2_ring_reward_given` 15138 = 1, `dt2_scoreboards` 15175
+  (owned by DesertTreasureScoreboards), `dt2_reward_lamp` 15123 = 1 after the first lamp.
+- Only one order (Vardorvis, Leviathan, Sucellus, Whisperer) is captured; every finished account
+  in the captures shows it. The Wiki says the chapters "can be done in any order or progressed
+  through concurrently", so the rules above are applied to every order: that part is inferred.
 
 ## Findings
 
 Newest first.
+
+- **fixed** (2026-11-01) The chapters can be done in any order, together: one open-chapters
+  stage, each chapter's own varbit, `dt2` derived from the milestones above, the medallion slots,
+  pursuer meetings by medallion count, and the last-medallion trial for whichever chapter is
+  fourth. Saves at the old stages 8-10 move over at login.
+- **fixed** (2026-11-01) The last medallion: Smith's betrayal plays at the vault door and its
+  smoke bomb (lnBBaf) takes the medallion (96 -> 100). The Figure is 12301 at 3095,9260 and drops
+  the medallion (94, picked up 96); the cell wakes at 3105,9247; 15159 stays 1 from 88 to 100;
+  the desert entry lands at 3087,9260.
+- **fixed** (2026-11-01) Completion gives `ring_of_shadows_uncharged` (28329), sets 15138, and
+  the first lamp sets 15123. `dt2` reads 110 with the wights dead, 112 (THImb4), 114 (aP86Oy).
+- **fixed** (2026-11-01) `dt2_lassar` 16-24 and 34, `dt2_scar` 36/38/40/44, and `dt2_ghorrock`
+  60/64/66 now follow 1703.
+- **fixed** (2026-11-01) Stranglewood: Kasonde's desk (objectbox_double, sound 2582), the note
+  (`note` 291, its twelve lines), the potion ("You drink the potion. It tastes horrible.", 829,
+  2401), the herb and berries (10094, 2581, 15136 = 2 / 15137 = 1, +2 each), the serum ("You mix
+  the herb/berries into the potion.", 363, 2608), drunk straight after mixing; the first arrival
+  at 1194,3452 under the "The Stranglewood" title (837); the barricade by exact move
+  1193,3400 <-> 3402.
+- **fixed** (2026-11-01) Opening: the start prompt and the door's message box; the rocks'
+  messages, sound 3600 and "That's the rocks cleared."; the war room lands at 2784,6427 and the
+  Guardian starts shielded (12337) at 2782,6432, 12336 unshielded, without invented messages.
+- **not a bug** The quest Vardorvis' prayer "bypass": the Wiki says his melee "is reduced by
+  roughly ~75% when Protect from Melee is active", which his combat method applies itself.
+- **not a bug** The quest Vardorvis' drop: 1703's kill rolls the boss table too (150 dragon dart
+  tips, kill count 1) besides the Temple key.
+- **not a bug** Varbit 15100 is `dt2_stranglewood_survival_time_remaining` (the hideout defence
+  timer), not the herb; the ingredients are 15136/15137 (fixed). 15110 is only set during
+  Banikan's arrival scene in the war room (24 -> 26), not a follower state.
+- **open** The Scar shipwreck route: the cache collision (an offline BFS over the copied
+  instance) connects the growth-room door, the x=2237 corridor, the 49413 teleporter and 49418
+  as live walks them, and no quest loc sits on that strip. The block happens at runtime and needs
+  a live check of the instance's clipping around 2227-2237, 6417-6442.
+- **open** (from 1703) Scar: burning a ship (op1 on 49423, then ejected to camp with 15258-15261
+  reset), the tablets (`stoneplaque` 748, `dt2_scar` 18/26/34), the "disturb this level" puzzle
+  messages, nerve endings and rifts, the shipwreck mesboxes, the electric room's safespots and
+  knock-out, Persten's 10 -> 12, the entry's 2 -> 4 and landing, the passage-3 smoke overlay
+  (839), and `15261` on entering 49418.
+- **open** (from 1703) Ghorrock: the key chests open without the clue steps in live; the lock
+  interfaces (`lockpicking` 811, `combination_lock` 809, `directional_lock` 810) and their
+  messages; Malleta's 2 -> 4 and the entry on the second 49513 click; the cell hole by op1; the
+  Jhallan defence (12354, five copies, timing); 15177-15179 and 15161; the vats' op1/op3/op4 and
+  fermentation; the Duke's wake/kill messages, kill count and the Odd key at 3039,6451; the
+  medallion objectbox; the cell note (`longscroll` 625); the third meeting in the POH.
+- **open** (from 1703) The last-medallion cell lock is `lockpicking` (811) with 15124; the Figure
+  fight starts when the altar dialogue ends (92), with the barriers 48781/48782 placed at
+  3099,9260 and the exit 3104,9266 swapped to its noop; escape lands at 3175,2888. The wights
+  start from the vault staircase 48797 (15158, 15174) and spawn together. The lamp's ring-charge
+  message box.
+- **open** The Stranglewood infection (HUD 836, `dt2_infection` 15099), the Strangled in the ruins
+  and the hideout defence (15100-15104: timer, chests, barriers, traps).
 
 - **open** The Scar north-west passage: from the damaged growth room only a dead-end pocket south of
   passage 49412 (2225,6421) is reachable; the shipwreck chamber entrance 49418 (2220,6402) and the blue
@@ -32,28 +116,23 @@ Newest first.
   Spot treasure scroll 23067); spare Scar nerves can't be discarded. Not quest code.
 - **open** The Wizards' Tower basement portal to the Temple of the Eye (43841, 3104,9574) has no handler
   ("You can't reach that!"); the run used the Minigame Teleport to Guardians of the Rift. Not quest code.
-- **open** Quest Vardorvis bypasses protection prayers on every attack (Wiki and Quest Helper: Protect from
-  Melee works except during specials); with his 50% lifesteal a magic player stalemates.
-- **open** Quest Vardorvis drops a Bronze javelin beside the Temple key.
-- **open** The Stranglewood barricade 49492 (1193,3401) doesn't block walking, and Climb-over flips the
-  player back to the side they came from. Live crosses with an exact move (1193,3402 to 3400).
-- **open** Strangler serum: tsps requires another talk to Kasonde before drinking; Quest Helper goes
-  straight from mixing to drinking. Several Stranglewood messages are invented (herb, serum, potion).
-- **open** The Stranglewood itself: live fades in with the text overlay (837), sets dt2 42 to 44 and
-  15125 10 to 12, opens the infection HUD (836, varbit 15099) and fills the ruins with Strangled; tsps
-  teleports to 1196,3450 with none of it. The hideout defence has no tumbler chests, satchels or detonator.
-- **open** Korbal herb: Quest Helper's varbit 15100 (ingredient taken = 2) is never sent.
-- **open** Kasonde's desk: live shows a two-item box (`objectbox_double`) with sound 2582; the potion note
-  opens `note` (291) with 12 lines; drinking the potion says "You drink the potion. It tastes horrible."
-  (anim 829, sound 2401). tsps uses invented chat lines.
-- **open** Chapters are stages 7-10 in a fixed order (Vardorvis, Leviathan, Sucellus, Whisperer); live
-  allows any order. Quest Helper (reorderable) points at the Whisperer first.
-- **open** At the Frostenhorn record live sets 15125/15126/15127/15128 to 2 and 15130 to 1; tsps leaves them 0.
-- **open** Opening chapter: no "Start the Desert Treasure II quest?" menu, door message box or
-  "I don't understand... How?" cutscene; the winch and Digsite rocks skip live's animations, sounds and
-  "That's the rocks cleared." line; the Ancient Guardian fight is hand-rolled (ids 12336/12337 swapped,
-  spawns on the player, invented messages, no exit loc or barrier, human block animation); Banikan isn't
-  a follower (12296, varbit 15110) and spawns on the player.
+- **superseded** (2026-11-01, see above) Quest Vardorvis "bypassing" protection prayers and
+  dropping a Bronze javelin: both match live.
+- **partly fixed** The Stranglewood barricade 49492 (1193,3401) now crosses by live's exact move;
+  it still doesn't block walking (collision, open).
+- **fixed** (2026-11-01) Strangler serum drunk straight after mixing; the herb, serum and potion
+  messages are live's.
+- **partly fixed** The Stranglewood arrival: title overlay and landing tile as live; the infection
+  HUD, Strangled and hideout defence are open (above).
+- **superseded** Korbal herb "15100": that varbit is the hideout timer; the ingredients are
+  15136/15137 (fixed).
+- **fixed** (2026-11-01) Kasonde's desk, note and potion as live.
+- **fixed** (2026-11-01) Chapters are no longer a fixed order, and the Frostenhorn record opens all
+  four chapter varbits and 15130.
+- **partly fixed** Opening chapter: the start prompt, door message box, rocks messages/sound and
+  the Guardian's ids, tiles and messages are live's (2026-11-01). Open: the "I don't
+  understand... How?" cutscene, the winch animation, the Guardian's exit/barrier locs
+  (48925/48926, exit 48924 after the kill) and its block animation.
 - **open** Transcript (data, not fixed here): Asgarnia Smith's last line reads "sigh*"; live is "\*sigh\*".
 - **fixed** Kasonde wouldn't give the unfinished serum with a free slot: the transcript's inventory-space
   condition (szffOl) was unanswered, so its "no room" branch always played.
@@ -103,3 +182,15 @@ Newest first.
   Scar shipwreck route.
 - **Not checked:** Leviathan, Sucellus, Whisperer and the finale; rewards, repeat talk and relog at
   completion; the opening cutscene and Guardian against live (open findings).
+
+### 2026-11-01 · agent · claude-opus-5-5 · source review, no run
+
+- **Method:** each chapter's code compared with rsprox 1703, packet by packet (messages,
+  varbits, interfaces, locs, NPC ids, tiles), ids checked against the rev-241 cache; behaviour
+  only Quest Helper or the Wiki describe is marked as such. No in-game run.
+- **Checks:** `node --test tests/quest-plugins.test.cjs` 414/415 (the Blood Moon Castle failure
+  is on main too), `dt2-scoreboards`, `dt2-sucellus-prison`, `vardorvis-scoreboard-dispatch`
+  all pass. New tests: free-order placement and slots, Smith taking the last medallion, the
+  second pursuer meeting, old-stage migration, `dt2` per milestone, the Stranglewood desk to
+  ingredients.
+

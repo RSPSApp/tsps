@@ -46,7 +46,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Defender of Varrock | untested |  |  |  |  |
 | [Demon Slayer](demon-slayer/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |
 | [Desert Treasure I](desert-treasure-i/README.md) | untested |  |  |  |  |
-| [Desert Treasure II - The Fallen Empire](desert-treasure-ii/README.md) | 🔄 in progress | 2026-10-31 | agent | claude-opus-5-5 | 14 |
+| [Desert Treasure II - The Fallen Empire](desert-treasure-ii/README.md) | 🔄 in progress | 2026-11-01 | agent | claude-opus-5-5 | 12 |
 | [Devious Minds](devious-minds/README.md) | untested |  |  |  |  |
 | [Doric's Quest](dorics-quest/README.md) | ✅ passed | 2026-10-25 | community |  |  |
 | [Dragon Slayer I](dragon-slayer-i/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  | 1 |

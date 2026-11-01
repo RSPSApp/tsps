@@ -61,7 +61,7 @@ export class Ammunition {
     public static readonly ENCHANTED_EMERALD_BOLT = new Ammunition(9241, null, 27, 70)
     public static readonly RUBY_BOLT = new Ammunition(9339, null, 27, 75)
     public static readonly ENCHANTED_RUBY_BOLT = new Ammunition(9242, null, 27, 75)
-    public static readonly BROAD_BOLT = new Ammunition(13280, null, 27, 100)
+    public static readonly BROAD_BOLT = new Ammunition(ItemIdentifiers.BROAD_BOLTS, null, 27, 100)
     public static readonly RUNITE_BOLT = new Ammunition(9144, null, 27, 115)
     public static readonly DIAMOND_BOLT = new Ammunition(9340, null, 27, 105)
     public static readonly ENCHANTED_DIAMOND_BOLT = new Ammunition(9243, null, 27, 105)
@@ -243,6 +243,55 @@ export class Ammunition {
     public static readonly IRIT_TAR = new Ammunition(ItemIdentifiers.IRIT_TAR, null, 33, 36)
     public static readonly TONALZTICS_OF_RALOS = new Ammunition(ItemIdentifiers.TONALZTICS_OF_RALOS, null, 2729, 0) // PROJANIM_GLAIVE_01_REGULAR
 
+    // Wiki: Blurite bolts, Silver bolts, Barbed bolts. The cache has no travel spotanim of their own.
+    public static readonly BLURITE_BOLT = new Ammunition(ItemIdentifiers.BLURITE_BOLTS, null, 27, 28)
+    public static readonly SILVER_BOLT = new Ammunition(ItemIdentifiers.SILVER_BOLTS, null, 27, 36)
+    public static readonly BARBED_BOLT = new Ammunition(ItemIdentifiers.BARBED_BOLTS, null, 27, 12)
+    // Wiki: the hunters' crossbow fires only kebbit bolts, its sunlight upgrade only antler bolts.
+    // HUNTER_XBOW_LAUNCH is the cache's launch; no travel spotanim is named for these bolts.
+    public static readonly KEBBIT_BOLT = new Ammunition(ItemIdentifiers.KEBBIT_BOLTS, new Graphic(955, 0, GraphicHeight.HIGH), 27, 28)
+    public static readonly LONG_KEBBIT_BOLT = new Ammunition(ItemIdentifiers.LONG_KEBBIT_BOLTS, new Graphic(955, 0, GraphicHeight.HIGH), 27, 38)
+    public static readonly SUNLIGHT_ANTLER_BOLT = new Ammunition(ItemIdentifiers.SUNLIGHT_ANTLER_BOLTS, null, 27, 0)
+    public static readonly MOONLIGHT_ANTLER_BOLT = new Ammunition(ItemIdentifiers.MOONLIGHT_ANTLER_BOLTS, null, 27, 0)
+    // OGRE_ARROW_LAUNCH/TRAVEL; the cache names no spotanim for brutal arrows, so they share them.
+    public static readonly OGRE_ARROW = new Ammunition(2866, new Graphic(243, 0, GraphicHeight.HIGH), 242, 22)
+    public static readonly BRONZE_BRUTAL = new Ammunition(4773, new Graphic(243, 0, GraphicHeight.HIGH), 242, 11)
+    public static readonly IRON_BRUTAL = new Ammunition(4778, new Graphic(243, 0, GraphicHeight.HIGH), 242, 13)
+    public static readonly STEEL_BRUTAL = new Ammunition(4783, new Graphic(243, 0, GraphicHeight.HIGH), 242, 19)
+    public static readonly BLACK_BRUTAL = new Ammunition(4788, new Graphic(243, 0, GraphicHeight.HIGH), 242, 22)
+    public static readonly MITHRIL_BRUTAL = new Ammunition(4793, new Graphic(243, 0, GraphicHeight.HIGH), 242, 34)
+    public static readonly ADAMANT_BRUTAL = new Ammunition(4798, new Graphic(243, 0, GraphicHeight.HIGH), 242, 45)
+    public static readonly RUNE_BRUTAL = new Ammunition(4803, new Graphic(243, 0, GraphicHeight.HIGH), 242, 60)
+
+    // Items that fire as another ammunition: same spotanims, same weapons. A poisoned shot's poison
+    // comes from the worn item (CombatPoisonData), so only the (p), (p+), (p++) ids and lit fire
+    // arrow ids are listed here. Amethyst broad bolts are broad bolts with a higher Slayer requirement.
+    static {
+        const variants: [Ammunition, number[]][] = [
+            [Ammunition.BRONZE_ARROW, [883, 5616, 5622, 942]],
+            [Ammunition.IRON_ARROW, [885, 5617, 5623, 2533]],
+            [Ammunition.STEEL_ARROW, [887, 5618, 5624, 2535]],
+            [Ammunition.MITHRIL_ARROW, [889, 5619, 5625, 2537]],
+            [Ammunition.ADAMANT_ARROW, [891, 5620, 5626, 2539]],
+            [Ammunition.RUNE_ARROW, [893, 5621, 5627, 2541]],
+            [Ammunition.AMETHYST_ARROW, [21332, 21334, 21336, 21330]],
+            [Ammunition.DRAGON_ARROW, [11227, 11228, 11229, 11222]],
+            [Ammunition.BRONZE_BOLT, [878, 6061, 6062]],
+            [Ammunition.BLURITE_BOLT, [9286, 9293, 9300]],
+            [Ammunition.IRON_BOLT, [9287, 9294, 9301]],
+            [Ammunition.SILVER_BOLT, [9292, 9299, 9306]],
+            [Ammunition.STEEL_BOLT, [9288, 9295, 9302]],
+            [Ammunition.MITHRIL_BOLT, [9289, 9296, 9303]],
+            [Ammunition.ADAMANT_BOLT, [9290, 9297, 9304]],
+            [Ammunition.RUNITE_BOLT, [9291, 9298, 9305]],
+            [Ammunition.DRAGON_BOLTS, [21924, 21926, 21928]],
+            [Ammunition.BROAD_BOLT, [ItemIdentifiers.AMETHYST_BROAD_BOLTS]],
+        ];
+        for (const [ammunition, itemIds] of variants) {
+            for (const itemId of itemIds) Ammunition.rangedAmmunition.set(itemId, ammunition);
+        }
+    }
+
     private readonly startGfx: Graphic | null;
     private readonly doubleStartGfx: Graphic | null;
     private readonly itemId: number;
@@ -422,34 +471,39 @@ export class RangedWeapon {
     public static readonly SCORCHING_BOW = new RangedWeapon([ItemIdentifiers.SCORCHING_BOW], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW, Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW], RangedWeaponType.SCORCHING_BOW)
     public static readonly DARK_BOW = new RangedWeapon([ItemIdentifiers.DARK_BOW, ItemIdentifiers.DARK_BOW_3, ItemIdentifiers.DARK_BOW_4, ItemIdentifiers.DARK_BOW_5, ItemIdentifiers.DARK_BOW_6, ItemIdentifiers.DARK_BOW_7, ItemIdentifiers.DARK_BOW_BH_, ItemIdentifiers.CORRUPTED_DARK_BOW, ItemIdentifiers.DARK_BOW_DEADMAN_], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.AMETHYST_ARROW, Ammunition.DRAGON_ARROW, Ammunition.SEEKING_DRAGON_ARROW], RangedWeaponType.LONGBOW)
 
+    // Wiki: the crossbow and the Phoenix crossbow fire only bronze bolts; the blurite crossbow bronze or blurite.
+    public static readonly CROSSBOW = new RangedWeapon([ItemIdentifiers.CROSSBOW, ItemIdentifiers.PHOENIX_CROSSBOW, 11165, 11167], [Ammunition.BRONZE_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly BLURITE_CROSSBOW = new RangedWeapon([ItemIdentifiers.BLURITE_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.BLURITE_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly HUNTERS_CROSSBOW = new RangedWeapon([ItemIdentifiers.HUNTERS_CROSSBOW], [Ammunition.KEBBIT_BOLT, Ammunition.LONG_KEBBIT_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly HUNTERS_SUNLIGHT_CROSSBOW = new RangedWeapon([ItemIdentifiers.HUNTERS_SUNLIGHT_CROSSBOW], [Ammunition.SUNLIGHT_ANTLER_BOLT, Ammunition.MOONLIGHT_ANTLER_BOLT], RangedWeaponType.CROSSBOW)
     public static readonly BRONZE_CROSSBOW = new RangedWeapon([9174], [Ammunition.BRONZE_BOLT], RangedWeaponType.CROSSBOW)
-    public static readonly IRON_CROSSBOW = new RangedWeapon([9177], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT], RangedWeaponType.CROSSBOW)
-    public static readonly STEEL_CROSSBOW = new RangedWeapon([9179], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT], RangedWeaponType.CROSSBOW)
-    public static readonly MITHRIL_CROSSBOW = new RangedWeapon([9181], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT], RangedWeaponType.CROSSBOW)
-    public static readonly ADAMANT_CROSSBOW = new RangedWeapon([9183], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT], RangedWeaponType.CROSSBOW)
-    public static readonly RUNE_CROSSBOW = new RangedWeapon([9185], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly IRON_CROSSBOW = new RangedWeapon([9177], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly STEEL_CROSSBOW = new RangedWeapon([9179], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly MITHRIL_CROSSBOW = new RangedWeapon([9181], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly ADAMANT_CROSSBOW = new RangedWeapon([9183], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly RUNE_CROSSBOW = new RangedWeapon([9185, ItemIdentifiers.RUNE_CROSSBOW_OR_], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT], RangedWeaponType.CROSSBOW)
     public static readonly DRAGON_CROSSBOW = new RangedWeapon([
-        ItemIdentifiers.DRAGON_CROSSBOW, ItemIdentifiers.DRAGON_CROSSBOW_2, ItemIdentifiers.DRAGON_CROSSBOW_3,
+        ItemIdentifiers.DRAGON_CROSSBOW, ItemIdentifiers.DRAGON_CROSSBOW_2, ItemIdentifiers.DRAGON_CROSSBOW_3, 28053,
         ItemIdentifiers.DRAGON_HUNTER_CROSSBOW, ItemIdentifiers.DRAGON_HUNTER_CROSSBOW_2, ItemIdentifiers.DRAGON_HUNTER_CROSSBOW_3,
         ItemIdentifiers.DRAGON_HUNTER_CROSSBOW_T_, ItemIdentifiers.DRAGON_HUNTER_CROSSBOW_T__2,
         ItemIdentifiers.DRAGON_HUNTER_CROSSBOW_B_, ItemIdentifiers.DRAGON_HUNTER_CROSSBOW_B__2,
-    ], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT, Ammunition.ENCHANTED_DRAGONSTONE_DRAGON_BOLT, ...Ammunition.ALL_DRAGON_BOLTS], RangedWeaponType.CROSSBOW)
+    ], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT, Ammunition.ENCHANTED_DRAGONSTONE_DRAGON_BOLT, ...Ammunition.ALL_DRAGON_BOLTS], RangedWeaponType.CROSSBOW)
     // Wiki: "metal bolts up to iron, except silver bolts", no tipped or (e) bolts, and bone bolts.
-    public static readonly DORGESHUUN_CROSSBOW = new RangedWeapon([ItemIdentifiers.DORGESHUUN_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.IRON_BOLT, Ammunition.BONE_BOLT], RangedWeaponType.CROSSBOW)
+    public static readonly DORGESHUUN_CROSSBOW = new RangedWeapon([ItemIdentifiers.DORGESHUUN_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.BLURITE_BOLT, Ammunition.IRON_BOLT, Ammunition.BONE_BOLT], RangedWeaponType.CROSSBOW)
     /** Fires only ascension bolts (Wiki: Ascension crossbows). */
     public static readonly ASCENSION_CROSSBOWS = new RangedWeapon([ItemIdentifiers.ASCENSION_CROSSBOWS], [Ammunition.ASCENSION_BOLT, Ammunition.DIAMOND_ASCENSION_BOLT, Ammunition.ENCHANTED_DIAMOND_ASCENSION_BOLT, Ammunition.ONYX_ASCENSION_BOLT, Ammunition.ENCHANTED_ONYX_ASCENSION_BOLT], RangedWeaponType.ASCENSION_CROSSBOWS)
-    public static readonly ARMADYL_CROSSBOW = new RangedWeapon([ItemIdentifiers.ARMADYL_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT, Ammunition.ENCHANTED_DRAGONSTONE_DRAGON_BOLT, ...Ammunition.ALL_DRAGON_BOLTS], RangedWeaponType.CROSSBOW)
-    public static readonly ZARYTE_CROSSBOW = new RangedWeapon([ItemIdentifiers.ZARYTE_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT, Ammunition.ENCHANTED_DRAGONSTONE_DRAGON_BOLT, ...Ammunition.ALL_DRAGON_BOLTS], RangedWeaponType.CROSSBOW)
+    public static readonly ARMADYL_CROSSBOW = new RangedWeapon([ItemIdentifiers.ARMADYL_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT, Ammunition.ENCHANTED_DRAGONSTONE_DRAGON_BOLT, ...Ammunition.ALL_DRAGON_BOLTS], RangedWeaponType.CROSSBOW)
+    public static readonly ZARYTE_CROSSBOW = new RangedWeapon([ItemIdentifiers.ZARYTE_CROSSBOW], [Ammunition.BRONZE_BOLT, Ammunition.OPAL_BOLT, Ammunition.BARBED_BOLT, Ammunition.BLURITE_BOLT, Ammunition.ENCHANTED_OPAL_BOLT, Ammunition.IRON_BOLT, Ammunition.SILVER_BOLT, Ammunition.JADE_BOLT, Ammunition.ENCHANTED_JADE_BOLT, Ammunition.STEEL_BOLT, Ammunition.PEARL_BOLT, Ammunition.ENCHANTED_PEARL_BOLT, Ammunition.MITHRIL_BOLT, Ammunition.TOPAZ_BOLT, Ammunition.ENCHANTED_TOPAZ_BOLT, Ammunition.ADAMANT_BOLT, Ammunition.SAPPHIRE_BOLT, Ammunition.ENCHANTED_SAPPHIRE_BOLT, Ammunition.EMERALD_BOLT, Ammunition.ENCHANTED_EMERALD_BOLT, Ammunition.RUBY_BOLT, Ammunition.ENCHANTED_RUBY_BOLT, Ammunition.RUNITE_BOLT, Ammunition.BROAD_BOLT, Ammunition.DIAMOND_BOLT, Ammunition.ENCHANTED_DIAMOND_BOLT, Ammunition.ONYX_BOLT, Ammunition.ENCHANTED_ONYX_BOLT, Ammunition.DRAGON_BOLT, Ammunition.ENCHANTED_DRAGON_BOLT, Ammunition.ENCHANTED_DRAGONSTONE_DRAGON_BOLT, ...Ammunition.ALL_DRAGON_BOLTS], RangedWeaponType.CROSSBOW)
 
-    public static readonly BRONZE_DART = new RangedWeapon([806], [Ammunition.BRONZE_DART], RangedWeaponType.DART)
-    public static readonly IRON_DART = new RangedWeapon([807], [Ammunition.IRON_DART], RangedWeaponType.DART)
-    public static readonly STEEL_DART = new RangedWeapon([808], [Ammunition.STEEL_DART], RangedWeaponType.DART)
-    public static readonly MITHRIL_DART = new RangedWeapon([809], [Ammunition.MITHRIL_DART], RangedWeaponType.DART)
-    public static readonly ADAMANT_DART = new RangedWeapon([810], [Ammunition.ADAMANT_DART], RangedWeaponType.DART)
-    public static readonly RUNE_DART = new RangedWeapon([811], [Ammunition.RUNE_DART], RangedWeaponType.DART)
-    public static readonly BLACK_DART = new RangedWeapon([ItemIdentifiers.BLACK_DART], [Ammunition.BLACK_DART], RangedWeaponType.DART)
-    public static readonly AMETHYST_DART = new RangedWeapon([ItemIdentifiers.AMETHYST_DART], [Ammunition.AMETHYST_DART], RangedWeaponType.DART)
-    public static readonly DRAGON_DART = new RangedWeapon([11230], [(Ammunition.DRAGON_DART)], RangedWeaponType.DART)
+    public static readonly BRONZE_DART = new RangedWeapon([806, 812, 5628, 5635], [Ammunition.BRONZE_DART], RangedWeaponType.DART)
+    public static readonly IRON_DART = new RangedWeapon([807, 813, 5629, 5636], [Ammunition.IRON_DART], RangedWeaponType.DART)
+    public static readonly STEEL_DART = new RangedWeapon([808, 814, 5630, 5637], [Ammunition.STEEL_DART], RangedWeaponType.DART)
+    public static readonly MITHRIL_DART = new RangedWeapon([809, 815, 5632, 5639], [Ammunition.MITHRIL_DART], RangedWeaponType.DART)
+    public static readonly ADAMANT_DART = new RangedWeapon([810, 816, 5633, 5640], [Ammunition.ADAMANT_DART], RangedWeaponType.DART)
+    public static readonly RUNE_DART = new RangedWeapon([811, 817, 5634, 5641], [Ammunition.RUNE_DART], RangedWeaponType.DART)
+    public static readonly BLACK_DART = new RangedWeapon([ItemIdentifiers.BLACK_DART, 3094, 5631, 5638], [Ammunition.BLACK_DART], RangedWeaponType.DART)
+    public static readonly AMETHYST_DART = new RangedWeapon([ItemIdentifiers.AMETHYST_DART, 25851, 25855, 25857], [Ammunition.AMETHYST_DART], RangedWeaponType.DART)
+    public static readonly DRAGON_DART = new RangedWeapon([11230, 11231, 11233, 11234], [(Ammunition.DRAGON_DART)], RangedWeaponType.DART)
     public static readonly BLISTERWOOD_STAKE = new RangedWeapon([ItemIdentifiers.BLISTERWOOD_STAKE], [Ammunition.BLISTERWOOD_STAKE], RangedWeaponType.DART)
 
 
@@ -464,7 +518,7 @@ export class RangedWeapon {
 
     public static readonly TOKTZ_XIL_UL = new RangedWeapon([6522], [Ammunition.TOKTZ_XIL_UL], RangedWeaponType.TOKTZ_XIL_UL)
 
-    public static readonly KARILS_CROSSBOW = new RangedWeapon([4734], [Ammunition.BOLT_RACK], RangedWeaponType.CROSSBOW)
+    public static readonly KARILS_CROSSBOW = new RangedWeapon([4734, 4934, 4935, 4936, 4937], [Ammunition.BOLT_RACK], RangedWeaponType.CROSSBOW)
 
     public static readonly BALLISTA = new RangedWeapon([ItemIdentifiers.LIGHT_BALLISTA, ItemIdentifiers.HEAVY_BALLISTA, ItemIdentifiers.LIGHT_BALLISTA_4, ItemIdentifiers.HEAVY_BALLISTA_OR_], [
         ...Ammunition.BRONZE_JAVELINS, ...Ammunition.IRON_JAVELINS, ...Ammunition.STEEL_JAVELINS,
@@ -486,7 +540,9 @@ export class RangedWeapon {
     public static readonly WILLOW_COMP_BOW = new RangedWeapon([10280], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly YEW_COMP_BOW = new RangedWeapon([10282], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly MAGIC_COMP_BOW = new RangedWeapon([10284], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW, Ammunition.ICE_ARROW, Ammunition.BROAD_ARROW, Ammunition.AMETHYST_ARROW], RangedWeaponType.SHORTBOW)
-    public static readonly COMP_OGRE_BOW = new RangedWeapon([4827], [Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW], RangedWeaponType.SHORTBOW)
+    // Wiki: ogre arrows and brutal arrows up to mithril.
+    public static readonly OGRE_BOW = new RangedWeapon([ItemIdentifiers.OGRE_BOW], [Ammunition.OGRE_ARROW, Ammunition.BRONZE_BRUTAL, Ammunition.IRON_BRUTAL, Ammunition.STEEL_BRUTAL, Ammunition.BLACK_BRUTAL, Ammunition.MITHRIL_BRUTAL], RangedWeaponType.SHORTBOW)
+    public static readonly COMP_OGRE_BOW = new RangedWeapon([4827], [Ammunition.OGRE_ARROW, Ammunition.BRONZE_BRUTAL, Ammunition.IRON_BRUTAL, Ammunition.STEEL_BRUTAL, Ammunition.BLACK_BRUTAL, Ammunition.MITHRIL_BRUTAL, Ammunition.ADAMANT_BRUTAL, Ammunition.RUNE_BRUTAL, Ammunition.BRONZE_ARROW, Ammunition.IRON_ARROW, Ammunition.STEEL_ARROW, Ammunition.MITHRIL_ARROW, Ammunition.ADAMANT_ARROW, Ammunition.RUNE_ARROW], RangedWeaponType.SHORTBOW)
     public static readonly CHINCHOMPA = new RangedWeapon([ItemIdentifiers.CHINCHOMPA_2], [Ammunition.CHINCHOMPA], RangedWeaponType.CHINCHOMPA)
     public static readonly RED_CHINCHOMPA = new RangedWeapon([ItemIdentifiers.RED_CHINCHOMPA_2], [Ammunition.RED_CHINCHOMPA], RangedWeaponType.CHINCHOMPA)
     public static readonly BLACK_CHINCHOMPA = new RangedWeapon([ItemIdentifiers.BLACK_CHINCHOMPA], [Ammunition.BLACK_CHINCHOMPA], RangedWeaponType.CHINCHOMPA)

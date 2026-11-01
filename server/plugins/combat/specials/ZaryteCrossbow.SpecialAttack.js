@@ -32,7 +32,7 @@ module.exports = function registerZaryteCrossbowSpecialAttack(api) {
       // spotanim on the crossbow's trajectory (44 + 5 a tile from 41). The old 301/44->35
       // ended before it started, so the client clamped it to a single cycle at the player.
       const profile = WeaponProfiles.ranged(player);
-      const shot = profile?.projectiles?.[0] ?? { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5 };
+      const shot = profile?.projectiles?.[0] ?? { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5, angle: 5, progress: 11 };
       const distance = character.getLocation().getDistance(target.getLocation());
       const end = RangedCombatMethod.projectileEnd(shot, distance);
       const ammo = player.getCombat().getAmmunition();

@@ -51,6 +51,9 @@ export interface WeaponCombatProfile {
 const DEFAULT_PROJECTILE: ProjectileProfile = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 40.75, endHeight: 36.5 };
 const THROWN_PROJECTILE: ProjectileProfile = { delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 40.75, endHeight: 36.5 };
 const DART_PROJECTILE: ProjectileProfile = { delay: 32, lengthAdjustment: 0, stepMultiplier: 5, startHeight: 35.5, endHeight: 36.5 };
+// RSProx captures (crossbowbolt_travel 27, dttd_bone_crossbowbolt_travel 696): every player bolt
+// flies at angle 5, progress 11.
+const CROSSBOW_PROJECTILE: ProjectileProfile = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5, angle: 5, progress: 11 };
 /** Wiki (Attack range): Longrange reaches 2 tiles further, and no weapon reaches past 10. */
 const LONGRANGE_EXTRA_TILES = 2;
 const MAX_ATTACK_RANGE = 10;
@@ -181,7 +184,7 @@ export class WeaponProfiles {
             attackDistance: 7,
             longRangeFightType: FightType.CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5 }],
+            projectiles: [CROSSBOW_PROJECTILE],
             fireSound: Sound.SHOOT_CROSSBOW,
             boltEffects: true,
         });
@@ -191,7 +194,7 @@ export class WeaponProfiles {
             attackDistance: 8,
             longRangeFightType: FightType.KARILS_CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5 }],
+            projectiles: [CROSSBOW_PROJECTILE],
             fireSound: Sound.SHOOT_CROSSBOW,
         });
         this.add(WeaponInterfaces.BLOWPIPE, {
@@ -331,7 +334,7 @@ export class WeaponProfiles {
             attackSpeed: 6,
             longRangeFightType: FightType.CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [{ delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5 }],
+            projectiles: [CROSSBOW_PROJECTILE],
             fireSound: Sound.SHOOT_CROSSBOW,
             boltEffects: true,
         });
@@ -345,7 +348,7 @@ export class WeaponProfiles {
             attackDistance: 6,
             longRangeFightType: FightType.CROSSBOW_LONGRANGE,
             hitDelays: [STANDARD_HIT],
-            projectiles: [DEFAULT_PROJECTILE],
+            projectiles: [CROSSBOW_PROJECTILE],
             fireSound: Sound.SHOOT_CROSSBOW,
             boltEffects: true,
             // Wiki (Ascension crossbows): the chance to trigger enchanted bolt effects is reduced by 50%.

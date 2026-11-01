@@ -35,6 +35,23 @@ The ballista's existing hit delay (`2 + floor((1 + d) / 6)` ticks) already match
 | Amethyst javelin | missing | `1386`, +135 ranged strength | `AMETHYST_JAVELIN_TRAVEL`; Wiki: Amethyst javelin |
 | Poisoned javelins | missing | p/p+/p++ variants for every metal, amethyst and dragon | Item IDs from `ItemIdentifiers`; the same ammunition and spotanim |
 | Crossbow bolts | every bolt played launch `955` (hunter crossbow) | no launch graphic | RSProx sends only the travel spotanim (27/696/1468); 955 is `HUNTER_XBOW_LAUNCH` |
+| Crossbow arc | angle 16, progress 64 (the `Projectile` defaults) | angle 5, progress 11 | RSProx `crossbowbolt_travel (27)` and `dttd_bone_crossbowbolt_travel (696)` |
+
+### Ammunition that should fire but didn't
+
+Worn items with no ammunition entry refused to fire with "You don't have any ammunition to fire".
+Rules are from the Wiki; ids and strengths from the cache.
+
+| Ammunition or weapon | Before | After |
+| --- | --- | --- |
+| Poisoned arrows, bolts and darts (p/p+/p++) | no entry | fire as the plain item; poison still comes from the worn item, and dragon bolts and amethyst darts now have a poison type |
+| Lit fire arrows | no entry | fire as the plain arrow, with its spotanims |
+| Broad bolts | on item `13280`, the Max cape | `11875`; amethyst broad bolts (`21316`) fire as broad bolts |
+| Blurite, silver and barbed bolts | no entry | added to the crossbows that fire them |
+| Crossbow, Phoenix crossbow, blurite crossbow | no weapon entry | bronze bolts only; blurite crossbow also fires blurite bolts |
+| Hunters' crossbow, hunters' sunlight crossbow | no weapon entry | kebbit bolts; antler bolts |
+| Ogre bow, ogre and brutal arrows | no entry | ogre bow fires ogre arrows and brutal arrows up to mithril; comp ogre bow fires all of them |
+| Karil's crossbow 100/75/50/25, rune crossbow (or), dragon crossbow (cr) | no weapon entry | same as the base weapon |
 
 ### One-cycle protection
 
@@ -54,11 +71,12 @@ flash at the caster. This is the class of bug behind #1808 (and the Zaryte cross
 
 These match the captures or the Wiki, so they were left alone:
 
-- **Arrows** (`10/9/11/12/13/15/16`): start 41, `46 + 5 × tiles`, angle 15, progress 11,
-  heights 163 -> 146. Heights now use the captured quarter values.
+- **Arrows** (`10/9/11/12/13/15/16`): start 41, `46 + 5 × tiles`, heights 163 -> 146. Heights
+  now use the captured quarter values. The capture's angle 15, progress 11 is not sent yet (see
+  remaining risk).
 - **Crossbows** (`27`): start 41, `46 + 5 × tiles`, angle 5, progress 11, heights 155 -> 146.
-- **Darts** (`226`–`231`, `34`, `1936`, `1122`): start 32, `32 + 5 × tiles`, angle 15,
-  progress 105, heights 142 -> 146.
+- **Darts** (`226`–`231`, `34`, `1936`, `1122`): start 32, `32 + 5 × tiles`, heights 142 -> 146.
+  The capture's angle 15, progress 105 is not sent yet (see remaining risk).
 - **Knives** (`212`–`218`, `697`): start 32, `32 + 5 × tiles`, heights 163 -> 146.
 - **Thrownaxes** (`35`–`41`, `1319`, `1623`): same thrown timing; dragon/Morrigan's IDs correct.
 - **Venator bow** (`2291`): start 31, `46 + 2 × tiles`, angle 255, progress 11, heights 156/146.
@@ -73,7 +91,7 @@ These match the captures or the Wiki, so they were left alone:
 
 ```
 cd server && npx tsc --build
-cd server && node --test tests/projectile-audit.test.cjs            # 7 pass
+cd server && node --test tests/projectile-audit.test.cjs            # 11 pass
 cd server && node --test tests/bow-specials.test.cjs                # 15 pass
 cd server && node --test tests/projectile-source-actor.test.cjs     # 3 pass
 cd server && node --test tests/thrown-weapons.test.cjs tests/ranged-magic-gaps.test.cjs  # 34 pass
@@ -91,5 +109,11 @@ and the Concentrated Shot launch (rune javelin `205`, end `71` at 9 tiles, impac
 - Poisoned javelins now resolve through the same `Ammunition` family, but no content path was
   exercised for each poison tier.
 - The damage/accuracy special-attack maths is unchanged; only its projectile was corrected.
+- Arrows and darts still send the `Projectile` default angle 16, progress 64 rather than their
+  captured arcs.
+- No capture shows kebbit, antler, blurite, silver, barbed or brutal shots, so their travel
+  spotanims are a nearby match (`27` for bolts, `242` for brutal arrows). Lit fire arrows fly as
+  plain arrows, not `FIRE_ARROW_TRAVEL` (17).
+- The comp ogre bow still also fires metal arrows, which the Wiki doesn't list for it.
 - Heights are quarter-tiles (packet values are `height × 4`); the captured values used here
   (163/146, 155/146, 142/146, 155/177) are exact.

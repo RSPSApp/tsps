@@ -80,22 +80,34 @@ function registerPointCurrency(api, name, aliases = []) {
   return handler;
 }
 
-function shopkeepers() {
-  const file = path.join(GameConstants.DEFINITIONS_DIRECTORY, "shops.json");
-  const shops = JSON.parse(fs.readFileSync(file, "utf8"));
-  const bindings = new Map();
+function readShops(fileName) {
+  return JSON.parse(fs.readFileSync(path.join(GameConstants.DEFINITIONS_DIRECTORY, fileName), "utf8"));
+}
 
-  for (const shop of shops) {
-    for (const trader of shop?.npcInteractions ?? []) {
-      const slot = Number(trader?.optionSlot);
-      if (!Number.isInteger(slot) || slot < 1 || slot > CLICK_FIELDS.length) continue;
-      for (const npcId of trader?.npcIds ?? []) {
-        if (!Number.isInteger(npcId) || npcId < 0) continue;
-        const key = `${npcId}:${slot}`;
-        const previous = bindings.get(key);
-        bindings.set(key, previous === undefined ? shop.id : previous === shop.id ? previous : null);
-      }
+/** "npcId:slot" for each NPC option that opens this shop. */
+function traderKeys(shop) {
+  const keys = [];
+  for (const trader of shop?.npcInteractions ?? []) {
+    const slot = Number(trader?.optionSlot);
+    if (!Number.isInteger(slot) || slot < 1 || slot > CLICK_FIELDS.length) continue;
+    for (const npcId of trader?.npcIds ?? []) {
+      if (Number.isInteger(npcId) && npcId >= 0) keys.push(`${npcId}:${slot}`);
     }
+  }
+  return keys;
+}
+
+function shopkeepers() {
+  const bindings = new Map();
+  for (const shop of readShops("shops.json")) {
+    for (const key of traderKeys(shop)) {
+      const previous = bindings.get(key);
+      bindings.set(key, previous === undefined ? shop.id : previous === shop.id ? previous : null);
+    }
+  }
+  // A custom shop is the world's own choice, so it takes the option over whatever shops.json has there.
+  for (const shop of readShops("custom-shops.json")) {
+    for (const key of traderKeys(shop)) bindings.set(key, shop.id);
   }
   return bindings;
 }
@@ -119,6 +131,7 @@ module.exports = {
     }
   },
   registerPointCurrency,
+  shopkeepers,
   ITEM_CURRENCIES,
   ITEM_CURRENCY_ALIASES,
   POINT_CURRENCIES,

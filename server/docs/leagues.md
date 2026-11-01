@@ -1351,6 +1351,11 @@ Yama's Lair sets `busy`, opens the portal (3274) on the tile, plays the fall two
 lands at +4 by the lair's exit, face down under the portal's second graphic. No cooldown was
 recorded; the usual teleport rules apply.
 
+**Automatic quests** (leagues.json `startQuests`; Wiki Demonic_Pacts_League, Auto-completed quests):
+Account completes Dragon Slayer I, Druidic Ritual, Rune Mysteries and the other 13 at every login
+through `league:complete-quests`, so a character made before the list gets them too; none gives
+experience (Unlocks' hook), and live's new character has only its starting levels (237/01098).
+
 **Yama's Lair** (Demonic Pacts' start, `start` 1503, 5602; 237/01098): its 24 NPCs are world
 spawns from that recording (`npc-spawns.json`, source `rsprox:237/01098`); the Glowing portal's
 Leave (`YamaExit.LeagueAreaUnlocks.js`, `exit`) goes to Civitas through the shadow fade.
@@ -1534,7 +1539,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   a rule in the generator, or an entry in the overlay; or have the plugin that knows the deed emit
   `league:complete-task`. Everything else in the catalog is visible and counts once mapped.
 - **Deeds** (`Actions.LeagueTasks.js`) listen to the events the skills already emit, counted per
-  task in `league:task-progress` (task id -> count) until done: `equip { items }` (any one worn)
+  task in `league:task-progress` (task id -> count) until done (a trigger with an `area` counts
+  only deeds done on its map there, where the player stands, `league:area-at`; a potion counts by
+  its name without doses); `tests/league-task-deeds.test.cjs` drives each kind through the plugin
+  doing the deed: `equip { items }` (any one worn)
   and `equip-all { items }` (all at once) on `equipment:changed` and at login; `produce { items,
   count }` from `skills:produced` (cooking, crafting, fletching, herblore, smithing, with its
   `amount`), `fishing:success`, `woodcutting:success`, `mining:success` and
@@ -1548,7 +1556,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `food:eaten` (a drink that is food), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
   the food restores, at full health too): "Eat / Drink a X" by the description's item or else the
   name's, a place ("in Auburn Valley", "from a bird bath") none. The generator derives them from the
-  name and the Wiki's description, read with its links' targets ("[[Oathplate chest|chest]]" is
+  name and the Wiki's description, read with its links' targets (what only restates the deed is
+  dropped first: "whilst fishing", a rune's "from Essence at the Fire Altar"; a produce task's
+  trailing league region is its `area`; a subject the name doesn't resolve is taken from the
+  description: "Clean a Grimy Guam" is the guam leaf; a tree chopped is its logs) ("[[Oathplate chest|chest]]" is
   the Oathplate chest): "Equip a/an X" and the description's list ("either A, B or C" any one, "A,
   B and C" all); "Catch / Chop / Mine / Cook / Craft / Fletch / Smelt / Smith / Make / Create /
   Brew / Clean / Cut [N] X" as an item made (a fish caught raw, a herb counted clean; a catch with

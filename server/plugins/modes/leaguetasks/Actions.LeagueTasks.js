@@ -18,6 +18,8 @@
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
+ * A trigger with an `area` counts only deeds done there (`league:area-at`, the player's tile).
+ *
  * Counts toward a task are kept per task in `league:task-progress` (task id -> count) until it
  * completes; a deed no open task accepts is not kept.
  */
@@ -67,7 +69,7 @@ function count(player, kind, name, amount = 1) {
   const tasks = indexOf(type)[kind].get(key(name));
   if (!tasks) return;
   const done = new Set(Common.completedIds(player));
-  const open = tasks.filter((task) => !done.has(task.id));
+  const open = tasks.filter((task) => !done.has(task.id) && inArea(player, type, task));
   if (!open.length) return;
   const progress = { ...progressOf(player) };
   const reached = [];
@@ -80,6 +82,19 @@ function count(player, kind, name, amount = 1) {
   }
   player.setAttribute(PROGRESS_ATTRIBUTE, progress);
   for (const task of reached) Complete.complete(player, task.id, type);
+}
+
+/**
+ * A task with an `area` (the areas plugin's id: "Chop 100 Maples in Tirannwn") counts only deeds
+ * done on its map there, where the player stands (`league:area-at`, as kill tasks).
+ */
+function inArea(player, type, task) {
+  if (task.trigger.area === undefined) return true;
+  const at = player.getLocation?.();
+  if (!at) return false;
+  const query = { x: at.getX(), y: at.getY(), league: type, area: null };
+  Common.api.emitCustomEvent("league:area-at", query);
+  return query.area === task.trigger.area;
 }
 
 function itemName(id) {

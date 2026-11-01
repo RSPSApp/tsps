@@ -436,8 +436,32 @@ function leagueAreaOf(text: string): { area: number | null; text: string } {
   return { area: null, text };
 }
 
-function deriveTrigger(name: string, description: string, names: Names): { trigger?: Trigger; unmapped?: string } {
+/**
+ * What a description says that is only the deed itself, not a condition: "whilst fishing" after a
+ * catch, "from Essence at the Fire Altar" after a rune crafted (a rune is only crafted at its altar,
+ * a Lava rune at the Fire Altar).
+ */
+function withoutRestatement(name: string, description: string): string {
+  let text = description.replace(/\s+(?:whilst|while) fishing(?=\.?$)/i, "");
+  if (/^Craft .*\bRunes?\b/i.test(name)) text = text.replace(/\s+(?:from Essence\s+)?at the [A-Za-z]+ Altar(?: \((?:Kourend|Zanaris)\))?(?=\.?$)/i, "");
+  return text;
+}
+
+/** A potion by its name without doses ("Attack potion" for "Attack potion(3)"), or null. */
+function potionNamed(text: string, items: Map<string, string>): string | null {
+  const base = text.replace(/,/g, "").trim();
+  for (const form of [...new Set([...singulars(base), base])]) {
+    for (const dose of ["(4)", "(3)", "(2)", "(1)"]) {
+      const item = items.get(`${form}${dose}`.toLowerCase());
+      if (item) return item.replace(/\(\d\)$/, "");
+    }
+  }
+  return null;
+}
+
+function deriveTrigger(name: string, rawDescription: string, names: Names): { trigger?: Trigger; unmapped?: string } {
   const { npcs, quests, items } = names;
+  let description = withoutRestatement(name, rawDescription);
   let match: RegExpExecArray | null;
   if ((match = /^Reach Level (\d+) ([A-Za-z]+)$/.exec(name)) && SKILLS[match[2].toLowerCase()]) {
     return { trigger: { kind: "level", skill: SKILLS[match[2].toLowerCase()], level: Number(match[1]) } };
@@ -596,20 +620,44 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
   const verb = /^([A-Za-z]+) (.+)$/.exec(name);
   const forms = verb ? PRODUCE_VERBS[verb[1].toLowerCase()] : undefined;
   if (verb && forms) {
-    const { count, subject } = countAndSubject(verb[2]);
-    if (PLACE.test(subject) || PLACE.test(clean(description).split(" ").slice(1).join(" ").replace(new RegExp(subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), ""))) return {};
+    // A trailing league region ("Chop 100 Maples in Tirannwn", "Catch 50 Karambwan on Karamja") is
+    // counted only there (`area`, as kill tasks); any other place is no plain count.
+    const named = leagueAreaOf(verb[2]);
+    const said = leagueAreaOf(clean(description));
+    const area = named.area ?? said.area;
+    const { count, subject } = countAndSubject(named.text);
     const lowerVerb = verb[1].toLowerCase();
-    // A herb is cleaned into its clean self: "Clean 15 Grimy Tarromin" counts the Tarromin.
-    const made = lowerVerb === "clean" ? subject.replace(/^Grimy /i, "") : subject;
-    if (lowerVerb === "catch") {
-      // A fish is caught raw; anything else caught is a creature hunted ("Catch 500 Chinchompas").
-      const fish = itemNamed(made, items, ["Raw "]);
-      if (fish) return { trigger: { kind: "produce", items: [fish], count } };
-      const creature = npcNamed(made, npcs);
-      if (creature) return { trigger: { kind: "hunt", npcs: [creature], count } };
+    const describedSubject = countAndSubject(said.text.replace(/^[A-Za-z]+ /, "")).subject;
+    const restDescription = said.text.split(" ").slice(1).join(" ");
+    if (PLACE.test(subject) || PLACE.test(restDescription.replace(new RegExp(subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "").replace(new RegExp(describedSubject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), ""))) return {};
+    if (CONDITION.test(said.text)) return {};
+    const withArea = (trigger: Trigger) => ({ trigger: area === null ? trigger : { ...trigger, area } });
+    // The name's subject, else the description's ("Clean a Grimy Guam": "a grimy guam leaf";
+    // "Mine 10 Silver": "10 silver ore").
+    for (const candidate of [subject, describedSubject]) {
+      // A herb is cleaned into its clean self: "Clean 15 Grimy Tarromin" counts the Tarromin.
+      const made = lowerVerb === "clean" ? candidate.replace(/^Grimy /i, "") : candidate;
+      if (lowerVerb === "catch") {
+        // A fish is caught raw; anything else caught is a creature hunted ("Catch 500 Chinchompas").
+        const fish = itemNamed(made, items, ["Raw "]);
+        if (fish) return withArea({ kind: "produce", items: [fish], count });
+        const creature = npcNamed(made.replace(/ \(Hunter\)$/i, ""), npcs);
+        if (creature) return withArea({ kind: "hunt", npcs: [creature], count });
+        continue;
+      }
+      if (lowerVerb === "chop") {
+        // A tree chopped is its logs ("Chop 100 Maples", "100 Maple tree"): never a "tree" item.
+        const tree = made.replace(/\s+trees?$/i, "").replace(/s$/i, "");
+        const logs = itemNamed(/logs?$/i.test(made) ? made : `${tree} logs`, items);
+        if (logs) return withArea({ kind: "produce", items: [logs], count });
+        continue;
+      }
+      // Something cooked is cooked: the description's "raw" is what goes on the fire.
+      const what = lowerVerb === "cook" ? made.replace(/^raw /i, "") : made;
+      const item = itemNamed(what, items, forms) ?? (/^(make|create|brew)$/.test(lowerVerb) ? potionNamed(what, items) : null);
+      if (item && !(lowerVerb === "cook" && /^Raw /.test(item))) return withArea({ kind: "produce", items: [item], count });
     }
-    const item = itemNamed(made, items, forms);
-    return item ? { trigger: { kind: "produce", items: [item], count } } : {};
+    return {};
   }
   return {};
 }
@@ -640,6 +688,9 @@ function ruleCategory(name: string, trigger?: Trigger): number {
  * the pact flag and the fuller description the trigger is derived from. A row the cache marks as not in this league is left out; every task must have
  * its Wiki row, and every Wiki row its task.
  */
+/** The cache league's tasks no rule maps, with the description the rules read (`--unmapped <file>`). */
+const unmappedRows: string[] = [];
+
 function cacheLeagueTasks(league: League, wikiRows: WikiRow[], names: Names, report: string[]): Task[] {
   const wikiById = new Map<number, WikiRow>();
   for (const row of wikiRows) {
@@ -666,6 +717,7 @@ function cacheLeagueTasks(league: League, wikiRows: WikiRow[], names: Names, rep
     };
     if (wiki.pactTask) task.pactTask = true;
     if (derived.trigger) task.trigger = derived.trigger;
+    else unmappedRows.push([task.id, row.name, plainTargets(wiki.description)].join("\t"));
     tasks.push(task);
   }
   if (wikiById.size) throw new Error(`${league.key}: Wiki rows with no task in the cache's list: ${[...wikiById.keys()].join(", ")}`);
@@ -719,7 +771,7 @@ function serialise(output: Record<string, unknown>): string {
 async function main() {
   const argv = process.argv.slice(2);
   const option = (flag: string) => { const index = argv.indexOf(flag); return index >= 0 ? argv[index + 1] : undefined; };
-  const options = { from: option("--from"), save: option("--save"), check: argv.includes("--check") };
+  const options = { from: option("--from"), save: option("--save"), check: argv.includes("--check"), unmapped: option("--unmapped") };
 
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   const cache = cacheTasks();
@@ -797,6 +849,7 @@ async function main() {
     summarise(league, tasks, duplicateWikiIds, unmapped, report);
   }
 
+  if (options.unmapped) fs.writeFileSync(options.unmapped, unmappedRows.join("\n") + "\n");
   const text = serialise(output);
   if (options.check) {
     // The file is LF (.gitattributes); a checkout that still turned it into CRLF compares the same.

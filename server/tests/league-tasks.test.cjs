@@ -493,6 +493,19 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.ok(completed(doer).includes("1-easy-clue-scroll"));
   assert.equal(doer.getAttribute("league:task-progress")["25-easy-clue-scrolls"], 1);
 
+  // Produce, as the descriptions say it: a restated "whilst fishing" or rune altar is no condition,
+  // a potion has no dose, the description names the herb, a tree chopped is its logs, a trailing
+  // league region is the task's area.
+  assert.deepEqual(trigger("catch-a-herring"), { kind: "produce", items: ["Raw herring"], count: 1 });
+  assert.deepEqual(trigger("craft-a-fire-rune"), { kind: "produce", items: ["Fire rune"], count: 1 });
+  assert.deepEqual(trigger("make-30-prayer-potions"), { kind: "produce", items: ["Prayer potion"], count: 30 });
+  assert.deepEqual(trigger("clean-a-grimy-guam"), { kind: "produce", items: ["Guam leaf"], count: 1 });
+  assert.deepEqual(trigger("chop-100-maples-in-tirannwn"), { kind: "produce", items: ["Maple logs"], count: 100, area: 7 });
+  assert.deepEqual(trigger("catch-a-swamp-lizard-in-morytania"), { kind: "hunt", npcs: ["Swamp lizard"], count: 1, area: 5 });
+  assert.equal(trigger("chop-some-logs"), undefined, "any logs is still no single item");
+  emit("woodcutting:success", { player: doer, logId: itemId("Maple logs") });
+  assert.equal(doer.getAttribute("league:task-progress")["chop-100-maples-in-tirannwn"], undefined, "not chopped in Tirannwn");
+
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");
   assert.deepEqual(trigger("complete-the-shayzien-basic-agility-course").courses, ["shayzien-basic"], "the name's course where the link's is both");

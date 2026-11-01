@@ -370,11 +370,18 @@ function skillLocked(player, statId) {
   return !unlocked(player).skills.includes(statId);
 }
 
-/** onCanGainExperience: no XP in a locked skill, nor from a bought pack's quests (Wiki /Unlocks). */
+/**
+ * onCanGainExperience: no XP from quests completed for the character, any league's (a bought pack,
+ * Demonic Pacts' automatic quests: live's new character has none of Perilous Moons' or Twilight's
+ * Promise's, 237/01098), nor in a Shattered Relics locked skill (Wiki /Unlocks).
+ */
 function lockedSkillExperience(event) {
   const { player, skill } = event;
-  if (!isShattered(player)) return;
-  if (completing.has(player) || skillLocked(player, Number(skill?.getClientId?.()))) event.allow = false;
+  if (completing.has(player)) {
+    event.allow = false;
+    return;
+  }
+  if (isShattered(player) && skillLocked(player, Number(skill?.getClientId?.()))) event.allow = false;
 }
 
 /** NPC name -> the boss unlock (its NPC id) that covers it, read once from the data. */

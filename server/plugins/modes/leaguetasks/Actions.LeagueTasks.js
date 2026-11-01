@@ -11,6 +11,10 @@
  * - `hunt { npcs, count }`: creatures caught, `hunter:success` { npcId }.
  * - `pickpocket { npcs, count }`: pockets picked, `thieving:success` { method: "pickpocket", target }.
  * - `clue { tier, count }`: reward caskets of the tier opened, `treasure-trails:casket-opened` { tier }.
+ * - `eat { items, count }`: the food eaten, `food:eaten` { itemId }; `drink { items, count }`: the
+ *   potion drunk (by its name, without doses), `potions:drunk` { name }, or a drink that is food
+ *   (moon-lite, a LizardKicker), `food:eaten`; `eat-heal { heal }`: a food that restores at least
+ *   that much, `food:eaten` { restores }.
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -23,10 +27,11 @@ const Complete = require("./Complete.LeagueTasks");
 /** Progress toward open counted tasks: task id -> count. */
 const PROGRESS_ATTRIBUTE = "league:task-progress";
 
-/** League type -> { equip: tasks, produce, hunt, pickpocket, clue, laps: Map(lower-cased name -> tasks) }. */
+/** League type -> { equip, eatHeal: tasks; produce, hunt, pickpocket, clue, laps, eat, drink: Map(lower-cased name -> tasks) }. */
 const index = new Map();
 
-const key = (name) => String(name ?? "").toLowerCase();
+/** Lower-cased, without a potion's doses ("Strength potion(4)" is the Strength potion). */
+const key = (name) => String(name ?? "").toLowerCase().replace(/\(\d\)$/, "");
 
 function add(map, name, task) {
   map.set(key(name), (map.get(key(name)) ?? []).concat(task));
@@ -34,7 +39,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map() };
+  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "equip" || trigger?.kind === "equip-all") entry.equip.push(task);
@@ -42,6 +47,8 @@ function indexOf(type) {
     else if (trigger?.kind === "hunt") for (const npc of trigger.npcs ?? []) add(entry.hunt, npc, task);
     else if (trigger?.kind === "pickpocket") for (const npc of trigger.npcs ?? []) add(entry.pickpocket, npc, task);
     else if (trigger?.kind === "clue") add(entry.clue, trigger.tier, task);
+    else if (trigger?.kind === "eat" || trigger?.kind === "drink") for (const item of trigger.items ?? []) add(entry[trigger.kind], item, task);
+    else if (trigger?.kind === "eat-heal") entry.eatHeal.push(task);
     else if (trigger?.kind === "agility-laps") for (const course of trigger.courses ?? []) add(entry.laps, course, task);
   }
   index.set(type, entry);
@@ -127,6 +134,22 @@ function casket({ player, tier }) {
   if (player) count(player, "clue", tier);
 }
 
+function ate({ player, itemId, restores }) {
+  if (!player) return;
+  const name = itemName(itemId);
+  count(player, "eat", name);
+  count(player, "drink", name);
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  for (const task of indexOf(type).eatHeal) {
+    if (Number(restores) >= Number(task.trigger.heal)) Complete.complete(player, task.id, type);
+  }
+}
+
+function drank({ player, itemId, name }) {
+  if (player) count(player, "drink", name ?? itemName(itemId));
+}
+
 function lapped({ player, course, count: laps }) {
   if (player) count(player, "laps", course, Number(laps ?? 1) || 1);
 }
@@ -147,6 +170,8 @@ module.exports = function attach(api) {
   api.onCustomEvent("thieving:success", stole);
   api.onCustomEvent("treasure-trails:casket-opened", casket);
   api.onCustomEvent("agility:lap", lapped);
+  api.onCustomEvent("food:eaten", ate);
+  api.onCustomEvent("potions:drunk", drank);
   api.onCustomEvent("league:login", login);
 };
 

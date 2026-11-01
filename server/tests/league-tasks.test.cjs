@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -508,6 +508,18 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.ok(!completed(doer).includes("jump-on-yama-s-stepping-stones-666-times"));
   emit("agility:lap", { player: doer, course: "yama-stepping-stones", laps: 666, count: 1 });
   assert.ok(completed(doer).includes("jump-on-yama-s-stepping-stones-666-times"), "the 666th stone");
+
+  // Eating and drinking: the food's item, a potion by its name (any dose), a food's restore.
+  assert.deepEqual(trigger("eat-an-onion"), { kind: "eat", items: ["Onion"], count: 1 });
+  assert.deepEqual(trigger("eat-a-rabbit").items, ["Cooked rabbit"], "the description's cooked rabbit");
+  assert.equal(trigger("drink-a-cup-of-tea-in-auburn-valley"), undefined, "a place is no item");
+  emit("food:eaten", { player: doer, itemId: itemId("Onion"), heal: 0, restores: 1 });
+  assert.ok(completed(doer).includes("eat-an-onion"), "food:eaten by the item");
+  assert.ok(!completed(doer).includes("eat-a-piece-of-food-that-restores-at-least-6-hitpoints"), "an onion restores 1");
+  emit("food:eaten", { player: doer, itemId: itemId("Trout"), heal: 0, restores: 7 });
+  assert.ok(completed(doer).includes("eat-a-piece-of-food-that-restores-at-least-6-hitpoints"), "what it restores, at full health too");
+  emit("potions:drunk", { player: doer, itemId: itemId("Strength potion(3)"), name: "Strength potion" });
+  assert.ok(completed(doer).includes("drink-a-strength-potion"));
 
   const main = character("plain-doer", "main");
   emit("mining:success", { player: main, itemId: itemId("Tin ore") });

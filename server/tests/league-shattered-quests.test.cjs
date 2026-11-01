@@ -202,5 +202,26 @@ test("league:complete-quests: Demonic Pacts' area lists, requirements first, unk
     unwatch.forEach((fn) => fn());
   }
   assert.deepEqual(order, ["Jungle Potion", "Shilo Village"]);
-  assert.equal(shilo.isComplete(player), true, "(the quests' XP is refused by Unlocks' experience hook, as for a pack)");
+  assert.equal(shilo.isComplete(player), true);
+});
+
+test("league:complete-quests gives none of the quests' experience: Varlamore's, as live starts a Demonic Pacts character", () => {
+  const player = new Player(null);
+  player.setUsername("varlamore-quests");
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  player.sendMessage = () => {};
+  const varlamore = require("../plugins/modes/data/league-areas.json").leagues["6"].quests["21"];
+  // Unlocks' experience hook, as the plugin attaches it, on the real experience pipeline.
+  const hooks = PluginManager.canGainExperienceHooks;
+  const attached = hooks.length;
+  Unlocks(new Proxy({ core, onCanGainExperience: (handler) => hooks.push({ handler }) }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const skills = player.getSkillManager();
+  const { Skill } = PluginManager.getCoreApi();
+  const before = ["SLAYER", "RUNECRAFTING", "HUNTER", "FISHING", "THIEVING"].map((name) => skills.getExperience(Skill[name]));
+  Unlocks._test.completeNamedQuests({ player, quests: varlamore });
+  assert.equal(QuestRuntime.questNamed("Perilous Moons").isComplete(player), true);
+  assert.deepEqual(["SLAYER", "RUNECRAFTING", "HUNTER", "FISHING", "THIEVING"].map((name) => skills.getExperience(Skill[name])), before,
+    "Perilous Moons' 40,000 Slayer and Twilight's Promise's Thieving held back");
+  hooks.length = attached;
 });

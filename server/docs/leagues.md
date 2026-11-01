@@ -1543,7 +1543,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `clue { tier, count }` from `treasure-trails:casket-opened`; `agility-laps { courses, count }`
   from `agility:lap` (its `count`: a lap reward of several counts them all; "Complete a lap of /
   N laps of the X Agility Course", the course from the description's link or, where that names
-  both Shayzien courses, the name; Yama's stepping stones). The generator derives them from the
+  both Shayzien courses, the name; Yama's stepping stones); `eat { items, count }` from
+  `food:eaten`, `drink { items, count }` from `potions:drunk` (the potion's name, any dose) or
+  `food:eaten` (a drink that is food), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
+  the food restores, at full health too): "Eat / Drink a X" by the description's item or else the
+  name's, a place ("in Auburn Valley", "from a bird bath") none. The generator derives them from the
   name and the Wiki's description, read with its links' targets ("[[Oathplate chest|chest]]" is
   the Oathplate chest): "Equip a/an X" and the description's list ("either A, B or C" any one, "A,
   B and C" all); "Catch / Chop / Mine / Cook / Craft / Fletch / Smelt / Smith / Make / Create /

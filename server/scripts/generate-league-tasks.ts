@@ -539,6 +539,23 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
   if ((match = /^Jump on Yama's stepping stones (\d+) times$/i.exec(name))) {
     return { trigger: { kind: "agility-laps", courses: ["yama-stepping-stones"], count: Number(match[1]) } };
   }
+  // "Eat a piece of food that restores at least 6 hitpoints": any food healing that much.
+  if ((match = /^Eat a piece of food that restores at least (\d+) hitpoints?$/i.exec(name))) {
+    return { trigger: { kind: "eat-heal", heal: Number(match[1]) } };
+  }
+  // "Eat an Onion" ("Eat an Onion, raw"), "Eat a Rabbit" ("Eat a cooked rabbit"), "Drink a Strength
+  // Potion": the item eaten or the potion drunk, by the description or else the name; a place
+  // ("in Auburn Valley", "from a bird bath") is no item. A potion is named without its doses.
+  if ((match = /^(Eat|Drink) (.+)$/i.exec(name))) {
+    const kind = match[1].toLowerCase() === "eat" ? "eat" : "drink";
+    const rest = description.replace(/\s*\([^)]*\s[^)]*\)/g, "").replace(/\.$/, "").trim().replace(/,.*$/, "");
+    if (PLACE.test(rest) || /\bfrom\b/i.test(rest)) return {};
+    const subjectOf = (text: string) => countAndSubject(text.replace(/^(?:Eat|Drink) /i, "").replace(/^(?:a cup of |a piece of |some of )/i, ""));
+    const named = subjectOf(match[2]);
+    const said = subjectOf(rest);
+    const item = [said.subject, named.subject].map((subject) => itemNamed(subject, items) ?? itemNamed(subject, items, ["", "Cooked "]) ?? (kind === "drink" ? itemNamed(`${subject}(4)`, items) : null)).find(Boolean);
+    return item ? { trigger: { kind, items: [item.replace(/\(\d\)$/, "")], count: Math.max(named.count, said.count) } } : {};
+  }
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {
     return { trigger: { kind: "clue", tier: match[2].toLowerCase(), count: Number(match[1]) } };

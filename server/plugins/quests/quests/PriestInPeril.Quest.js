@@ -85,6 +85,9 @@ module.exports = function registerPriestInPerilQuest(api) {
   const COMPLETE_ACTION_ID = "5wj46V";
   /** "You give Drezel some essence." message steps (last batch and partial ones). */
   const ESSENCE_MESSAGE_IDS = new Set(["4daSZa", "ViQ2ji"]);
+  const FINAL_ESSENCE_VARIANT = "giving-drezel-the-last-of-the-essence";
+  /** "You give Drezel some essence." in the final variant; a paid-in-full resume starts after it. */
+  const FINAL_ESSENCE_MESSAGE_ID = "4daSZa";
   /** "Drezel inspects the water. He then says some sort of prayer." */
   const BLESSING_MESSAGE_ID = "feQ9cD";
   const ESSENCE_REMAINING_BLANK = "[1-50]";
@@ -367,9 +370,11 @@ module.exports = function registerPriestInPerilQuest(api) {
   function mausoleumDrezelVariant(stage, player) {
     if (stage >= STAGE_COMPLETE) return { page: DREZEL_PAGE, variant: "standard-dialogue-after-priest-in-peril" };
     if (stage >= STAGE_REPAIRING_BARRIER) {
+      // Paid in full: talkToPaidMausoleumDrezel resumes after the hand-in.
+      if (essenceAllHandedIn(player)) return FINAL_ESSENCE_VARIANT;
       if (essenceCount(player) > 0) {
         return essenceHandedIn(player) + essenceCount(player) >= ESSENCE_REQUIRED
-          ? "giving-drezel-the-last-of-the-essence"
+          ? FINAL_ESSENCE_VARIANT
           : "repairing-the-barrier-bringing-drezel-essence";
       }
       if (NOTED_ESSENCE_ITEM_IDS.some((itemId) => held(player, itemId))) {
@@ -429,6 +434,22 @@ module.exports = function registerPriestInPerilQuest(api) {
     if (npcId !== DREZEL_NPC_ID || clickType !== 1 || inMausoleum(npc) || !needsUnlockedTalk(player)) return;
     event.handled = startTranscript(api, player, DREZEL_NPC_ID, PAGE, UNLOCK_VARIANT,
       (steps) => steps.slice(UNLOCK_OPENING_STEPS), npc);
+  }
+
+  function essenceAllHandedIn(player) {
+    return quest.getStage(player) === STAGE_REPAIRING_BARRIER && essenceHandedIn(player) >= ESSENCE_REQUIRED;
+  }
+
+  /**
+   * All 50 essence handed in but the conversation was cut before "Quest complete!":
+   * nothing more is owed, so resume the final conversation after the hand-in instead
+   * of asking for "0 more" or replaying "You give Drezel some essence".
+   */
+  function talkToPaidMausoleumDrezel(event) {
+    const { player, npc, npcId, clickType } = event;
+    if (npcId !== DREZEL_NPC_ID || clickType !== 1 || !inMausoleum(npc) || !essenceAllHandedIn(player)) return;
+    event.handled = startTranscript(api, player, DREZEL_NPC_ID, PAGE, FINAL_ESSENCE_VARIANT,
+      (steps) => steps.slice(steps.findIndex((step) => step?.id === FINAL_ESSENCE_MESSAGE_ID) + 1), npc);
   }
 
   /** Which transcript variant the speaker plays. */
@@ -881,6 +902,7 @@ module.exports = function registerPriestInPerilQuest(api) {
   api.onNpcDeath(handleGuardianDeath);
   api.onNpcDeath(handleHoodedMonkDeath);
   api.onNpcInteraction(talkToUnlockedDrezel);
+  api.onNpcInteraction(talkToPaidMausoleumDrezel);
   api.onObjectRoute(handleTrapdoorRoute);
   api.onObjectInteraction("Holy barrier", { "Pass-through": handleHolyBarrier });
   api.onObjectInteraction("Cell gate", { Open: openCellGate });

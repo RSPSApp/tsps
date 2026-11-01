@@ -237,6 +237,37 @@ test('the route sends live varp 302 values from start to completion', () => {
   assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);
 });
 
+test('an interrupted final hand-in resumes the completion without more essence', () => {
+  const h = harness();
+  const { player } = h;
+  h.player.setAttribute(STAGE, 55);
+  player.inventory.adds(I.RUNE_ESSENCE, 28);
+  assert.equal(h.talk(N.DREZEL, MAUSOLEUM), 'repairing-the-barrier-bringing-drezel-essence');
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: 'ViQ2ji', kind: 'message' });
+  player.inventory.adds(I.RUNE_ESSENCE, 22);
+  assert.equal(h.talk(N.DREZEL, MAUSOLEUM), 'giving-drezel-the-last-of-the-essence');
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '4daSZa', kind: 'message' });
+  // Logged out before "Quest complete!": paid in full, nothing left to carry.
+  assert.equal(player.inventory.getAmount(I.RUNE_ESSENCE), 0);
+  assert.equal(h.stage(), 55);
+
+  assert.deepEqual(h.talk(N.DREZEL, MAUSOLEUM), { handled: true });
+  const { variant, steps } = lastPlayed();
+  assert.equal(variant, 'giving-drezel-the-last-of-the-essence');
+  assert.ok(!steps.some((step) => step.id === '4daSZa'), 'the hand-in is not replayed');
+  assert.match(steps[0].text, /^Excellent! That should do it!/);
+  assert.ok(steps.some((step) => step.id === '5wj46V'), 'the completion action is still ahead');
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '5wj46V', kind: 'action' });
+  assert.ok(h.quest.isComplete(player));
+  assert.deepEqual(player.xp, [[core.Skill.PRAYER.getIndex(), 1406]]);
+  assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);
+
+  h.emit('npc-dialogue:action', { npcId: N.DREZEL, stepId: '5wj46V', kind: 'action' });
+  assert.notDeepEqual(h.talk(N.DREZEL, MAUSOLEUM), { handled: true }, 'after completion Drezel is back to normal');
+  assert.equal(player.xp.length, 1, 'the resumed completion pays once');
+  assert.equal(player.inventory.getAmount(I.WOLFBANE), 1);
+});
+
 test('the unlocked cell replays the blessing without the unlock opening', () => {
   const h = harness();
   h.player.setAttribute(STAGE, 43);

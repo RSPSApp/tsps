@@ -317,6 +317,10 @@ state on open and on **Refresh map**:
 So an agent build appears in the editor without a login, and the same edits appear in-game to
 logged-in players on scene rebuild (walk, teleport, relog).
 
+Save applies the budget below before anything leaves the editor: if any edited region would be
+over 65,533 bytes, nothing is saved and the regions are named, because the server skips an
+oversized `.pack` on load and the map would come out half edited.
+
 ## What looks right
 
 Read [map-building-notes.md](map-building-notes.md) before building anything bigger than a test

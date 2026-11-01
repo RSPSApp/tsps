@@ -218,7 +218,11 @@ function ejectIdlersFromSpawn(player, teamId) {
     inSpawn ? `You have ${formatTicks(idleTicks)} to leave the respawn room.` : "",
     data.EJECT_TEXT_UID[teamId]
   );
-  if (!inSpawn || player.isPlayerBot?.() === true) {
+  if (!inSpawn) {
+    game.resetIdleTicks(player);
+    return;
+  }
+  if (player.isPlayerBot?.() === true) {
     return;
   }
   if (idleTicks > 0) {

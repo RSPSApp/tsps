@@ -85,4 +85,67 @@ migrated.clearLegacyRememberedPassword();
 assert.equal(store.has("osrs.plugin.remember_login.v1"), false);
 
 assert.notEqual(LOGIN_FLAG_TOKEN, LOGIN_FLAG_REMEMBER);
+
+const defaultServerEnv = {
+    address: process.env.REACT_APP_DEFAULT_SERVER_ADDRESS,
+    name: process.env.REACT_APP_DEFAULT_SERVER_NAME,
+    secure: process.env.REACT_APP_DEFAULT_SERVER_SECURE,
+};
+process.env.REACT_APP_DEFAULT_SERVER_ADDRESS = "pc.example.ts.net:8443/game";
+process.env.REACT_APP_DEFAULT_SERVER_NAME = "TSPS";
+process.env.REACT_APP_DEFAULT_SERVER_SECURE = "true";
+(globalThis as any).window.location.hostname = "pc.example.ts.net";
+store.set(
+    "osrs:clientPreferences",
+    JSON.stringify({
+        version: 1,
+        lastServer: { name: "TSPS", address: "pc.example.ts.net:8443", secure: true },
+        rememberedLogins: {
+            "pc.example.ts.net:8443": { username: "Zezima", token: "old-path-token" },
+        },
+    }),
+);
+resetClientPreferencesCache();
+const migratedServer = new LoginState();
+assert.equal(migratedServer.serverAddress, "pc.example.ts.net:8443/game");
+assert.deepEqual(migratedServer.getRememberedLogin(), { username: "Zezima", token: "old-path-token" });
+assert.equal(
+    JSON.parse(store.get("osrs:clientPreferences")!).lastServer.address,
+    "pc.example.ts.net:8443/game",
+);
+assert.deepEqual(
+    JSON.parse(store.get("osrs:clientPreferences")!).rememberedLogins,
+    { "pc.example.ts.net:8443/game": { username: "Zezima", token: "old-path-token" } },
+);
+
+store.set(
+    "osrs:clientPreferences",
+    JSON.stringify({
+        version: 1,
+        lastServer: { name: "TSPS", address: "pc.example.ts.net:8443", secure: true },
+        rememberedLogins: {
+            "pc.example.ts.net:8443": { username: "Old", token: "old-path-token" },
+            "pc.example.ts.net:8443/game": { username: "Current", token: "current-path-token" },
+        },
+    }),
+);
+resetClientPreferencesCache();
+const existingPathLogin = new LoginState();
+assert.deepEqual(existingPathLogin.getRememberedLogin(), {
+    username: "Current",
+    token: "current-path-token",
+});
+assert.deepEqual(
+    JSON.parse(store.get("osrs:clientPreferences")!).rememberedLogins,
+    {
+        "pc.example.ts.net:8443": { username: "Old", token: "old-path-token" },
+        "pc.example.ts.net:8443/game": { username: "Current", token: "current-path-token" },
+    },
+);
+
+for (const [key, value] of Object.entries(defaultServerEnv)) {
+    const envKey = `REACT_APP_DEFAULT_SERVER_${key.toUpperCase()}`;
+    if (value === undefined) delete process.env[envKey];
+    else process.env[envKey] = value;
+}
 console.log("remembered login: ok");

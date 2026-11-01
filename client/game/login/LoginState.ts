@@ -6,6 +6,7 @@ import {
 } from "../../common/authentication";
 import {
     getBrowserHostWorldConfig,
+    getConfiguredDefaultServer,
     getConfiguredServers,
     getDefaultServerAddress,
     getDefaultServerName,
@@ -48,6 +49,15 @@ function isLocalOnlyServerAddress(address: string): boolean {
     );
 }
 
+function serverAddressAuthority(address: string): string {
+    return address.trim().toLowerCase().split(/[/?#]/, 1)[0] ?? "";
+}
+
+function serverAddressHasRootPath(address: string): boolean {
+    const path = address.trim().match(/^[^/?#]+([^?#]*)/)?.[1];
+    return !path || path === "/";
+}
+
 function isPageRunningLocally(): boolean {
     if (typeof window === "undefined") return false;
     const host = window.location.hostname.toLowerCase();
@@ -82,7 +92,7 @@ export class LoginState {
             this.serverIceServers = browserHostWorld.iceServers;
             return;
         }
-        const lastServer = getClientPreference("lastServer");
+        let lastServer = getClientPreference("lastServer");
         if (!lastServer) return;
 
         // A saved "localhost" target is only valid when the page itself is local.
@@ -90,6 +100,33 @@ export class LoginState {
         if (isLocalOnlyServerAddress(lastServer.address) && !isPageRunningLocally()) {
             updateClientPreferences({ lastServer: undefined });
             return;
+        }
+
+        const configuredDefault = getConfiguredDefaultServer();
+        if (
+            configuredDefault &&
+            lastServer.transport !== "webrtc" &&
+            lastServer.name === configuredDefault.name &&
+            lastServer.secure === configuredDefault.secure &&
+            serverAddressHasRootPath(lastServer.address) &&
+            !serverAddressHasRootPath(configuredDefault.address) &&
+            serverAddressAuthority(lastServer.address) === serverAddressAuthority(configuredDefault.address) &&
+            lastServer.address !== configuredDefault.address
+        ) {
+            const previousAddress = lastServer.address;
+            const rememberedLogins = getClientPreference("rememberedLogins");
+            const rememberedLogin = rememberedLogins[previousAddress];
+            lastServer = { ...lastServer, address: configuredDefault.address };
+            if (rememberedLogin && !rememberedLogins[configuredDefault.address]) {
+                const migratedLogins = {
+                    ...rememberedLogins,
+                    [configuredDefault.address]: rememberedLogin,
+                };
+                delete migratedLogins[previousAddress];
+                updateClientPreferences({ lastServer, rememberedLogins: migratedLogins });
+            } else {
+                updateClientPreferences({ lastServer });
+            }
         }
 
         // A saved local server from another dev runner must not override this

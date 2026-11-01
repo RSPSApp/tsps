@@ -1722,23 +1722,24 @@ module.exports = function registerDesertTreasureII(api) {
     }
   };
 
+  const WAR_ROOM_ARRIVAL = [24, 3, 0];
   function enterWarRoom(p) {
     const current = p.getAttribute(ATTR_WAR_ROOM);
     if (current instanceof WarRoomArea && !current.isDestroyed()) {
       current.enter(p);
-      p.moveTo(current.tile(23, 7, 0));
+      p.moveTo(current.tile(...WAR_ROOM_ARRIVAL));
       return current;
     }
     const area = new WarRoomArea(p.getUsername?.());
     area.enter(p);
     p.setAttribute(ATTR_WAR_ROOM, area);
-    // Source origin is chunk 345,803 = 2760,6424; the documented entrance
-    // lands beside the Ancient Guardian at 2783,6431.
-    p.moveTo(area.tile(23, 7, 0));
+    // Source origin is chunk 345,803 = 2760,6424. rsprox 1703 lands at 2784,6427 with the
+    // Guardian shielded (dt2_ancient_guardian_shield 12337) at 2782,6432.
+    p.moveTo(area.tile(...WAR_ROOM_ARRIVAL));
     let owned = spawned.get(p);
     if (!owned) spawned.set(p, owned = {});
     if (stage(p) === S.GUARDIAN && !owned.guardian) {
-      const guardian = api.core.NPC.create(N.ANCIENT_GUARDIAN_3, area.tile(23, 7, 0));
+      const guardian = api.core.NPC.create(N.ANCIENT_GUARDIAN_4, area.tile(22, 8, 0));
       guardian.setOwner?.(p);
       guardian.setOwnerOnly?.(true);
       guardian.__skipDefaultRespawn = true;
@@ -1779,10 +1780,10 @@ module.exports = function registerDesertTreasureII(api) {
     for (const damage of hit.getHits()) damage.setDamage(0);
     hit.updateTotalDamage();
     state.shielded = false;
-    npc.setNpcTransformationId(N.ANCIENT_GUARDIAN_4);
+    // rsprox 1703 transforms to dt2_ancient_guardian (12336) without a message.
+    npc.setNpcTransformationId(N.ANCIENT_GUARDIAN_3);
     npc.setMaxHitpoints(100);
     npc.setHitpoints(state.bodyHp);
-    player.sendMessage("The Guardian's shield crumbles. Keep attacking before it reforms!");
   }
 
   function processGuardian(area, player) {
@@ -1805,10 +1806,9 @@ module.exports = function registerDesertTreasureII(api) {
       if (!state.shielded) {
         state.bodyHp = boss.getHitpoints();
         state.shielded = true;
-        boss.setNpcTransformationId(N.ANCIENT_GUARDIAN_3);
+        boss.setNpcTransformationId(N.ANCIENT_GUARDIAN_4);
         boss.setMaxHitpoints(200);
         boss.setHitpoints(state.bodyHp + 20);
-        player.sendMessage("The Guardian's shield reforms.");
       } else boss.setHitpoints(Math.min(state.bodyHp + 100, boss.getHitpoints() + 20));
     }
     if (boss.calculateDistance(player) > 1) {
@@ -2015,6 +2015,17 @@ module.exports = function registerDesertTreasureII(api) {
     hit.updateTotalDamage?.();
   }
 
+  const ROCKS_MINE_TICKS = 4, ROCKS_CLEARED_SOUND = 3600;
+  const VAULT_DOOR_TOUCH = "You can feel the distinct energy of Ancient Magicks emanating from the door. You reach out and touch it. The symbol on the door starts to glow in response...";
+  function startAtVaultDoor(p) {
+    if (stage(p) !== 0) return;
+    quest.setStage(p, S.STARTED);
+    p.setAttribute(ATTR_SMITH_INTRO, false);
+    p.sendMessage(`You've started a new quest: <col=081190>${PAGE}</col>`);
+    const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = api.core;
+    p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, VAULT_DOOR_TOUCH))
+      .add(new ActionDialogue(1, { execute() { p.getDialogueManager().reset(); enterVault(p); } })));
+  }
   function statement(p, text) {
     const { DialogueChainBuilder, StatementDialogue } = api.core;
     p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
@@ -6391,9 +6402,8 @@ module.exports = function registerDesertTreasureII(api) {
         return !request.complete;
       });
       if (missingQuest) return p.sendMessage(`You must complete ${missingQuest.replaceAll("_", " ")} first.`);
-      quest.setStage(p, S.STARTED);
-      p.setAttribute(ATTR_SMITH_INTRO, false);
-      enterVault(p);
+      // rsprox 1703: the start prompt, then the door's message box before the vault fades in.
+      api.sendMultiChatboxPrompt(p, `Start the ${PAGE} quest?`, "Yes.", () => startAtVaultDoor(p), "No.", () => {});
       return true;
     }
     if (s >= S.STARTED && s < S.COMPLETE && [O.VAULT_DOOR_2, O.VAULT_DOOR_3].includes(objectId)
@@ -6470,9 +6480,18 @@ module.exports = function registerDesertTreasureII(api) {
         p.sendMessage("You need a pickaxe you can use to clear the rocks.");
         return true;
       }
+      // rsprox 1703: the swing message and pickaxe animation, then four ticks later the rocks go
+      // (dt2 18 -> 20), sound 3600 and the player's "That's the rocks cleared."
       p.performAnimation?.(pickaxe.animation);
-      p.sendMessage("You mine away the rocks and uncover a passage into the installation.");
+      p.sendMessage("You swing your pickaxe at the rocks...");
       setStage(p, S.GUARDIAN);
+      nextTicks(p, ROCKS_MINE_TICKS, () => {
+        p.performAnimation?.(new api.core.Animation(-1));
+        p.sendMessage("...and successfully mine them away.");
+        p.getPacketSender().sendSound(ROCKS_CLEARED_SOUND, 0, 0);
+        const { DialogueChainBuilder, PlayerDialogue } = api.core;
+        p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new PlayerDialogue(0, "That's the rocks cleared.")));
+      });
       return true;
     }
     if (inChapter(p, "vardorvis") && objectId === KASONDE_DESK_LOC

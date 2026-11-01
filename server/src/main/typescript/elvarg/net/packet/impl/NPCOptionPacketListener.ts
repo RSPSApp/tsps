@@ -142,15 +142,19 @@ export class NPCOptionPacketListener {
     if (!player || player.getHitpoints?.() <= 0 || player.busy?.()) return false;
     if (index < 0 || index >= World.getNpcs().capacityReturn()) return false;
     const npc = World.getNpcs().get(index);
-    // Utility spells (Telekinetic Grab in the Mage Training Arena) are scripted on non-attackable
-    // NPCs just as combat spells are: the fall-back keeps the same rune and XP handling.
-    const spell = CombatSpells.getCombatSpell(spellId) ?? EffectSpells.forSpellId(spellId);
+    // Utility spells (Telekinetic Grab in the Mage Training Arena) are scripted on NPCs just as
+    // combat spells are: the fall-back keeps the same rune and XP handling.
+    const combatSpell = CombatSpells.getCombatSpell(spellId);
+    const spell = combatSpell ?? EffectSpells.forSpellId(spellId);
     if (!npc || !spell || !BoatManager.rootLocation(player).isWithinDistance(BoatManager.rootLocation(npc), 24) || npc.getHitpoints?.() <= 0) {
       player.getMovementQueue().reset();
       return false;
     }
     const areaPermission = (npc.getPrivateArea?.() ?? npc.getArea?.())?.canCastOnNpc?.(player, npc, spell);
-    const allowed = areaPermission ?? !!npc.getCurrentDefinition?.(player)?.isAttackable?.();
+    // Only a CombatSpell may enter Combat.castSpellOn: an effect spell has no hits/maximumHit, so
+    // the combat method would throw on it. Utility spells stay on the scripted route, which also
+    // rejects them when no plugin takes the cast.
+    const allowed = !!combatSpell && (areaPermission ?? !!npc.getCurrentDefinition?.(player)?.isAttackable?.());
     if (!allowed) {
       player.getMovementQueue().reset();
       if (areaPermission === false) return false;

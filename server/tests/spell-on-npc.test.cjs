@@ -57,6 +57,53 @@ test('Telekinetic Grab is a scripted effect spell: no combat line of sight, 43 X
   }
 });
 
+test('a utility spell never enters combat, even on an attackable NPC', () => {
+  const previous = {
+    npcs: World.getNpcs,
+    los: RegionManager.canProjectileAttackTarget,
+    hookCount: PluginManager.spellOnNpcHooks.length,
+  };
+  let xp = 0, consumed = 0, combatCasts = 0, handleSpell = true;
+  const point = (x, y, z = 0) => ({ getX: () => x, getY: () => y, getZ: () => z, isWithinDistance(other, range) { return Math.max(Math.abs(x - other.getX()), Math.abs(y - other.getY())) <= range && z === other.getZ(); } });
+  const player = {
+    getHitpoints: () => 10, busy: () => false,
+    getLocation: () => point(100, 100), getPrivateArea: () => null, getArea: () => null,
+    getMovementQueue: () => ({ reset() {} }), setPositionToFace() {},
+    getSpellbook: () => MagicSpellbook.NORMAL,
+    // An effect spell in the combat slot would throw in MagicCombatMethod.hits.
+    getCombat: () => ({ reset() {}, setCastSpell() {}, castSpellOn() { combatCasts += 1; } }),
+    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences(skill, amount) { assert.equal(skill, Skill.MAGIC); xp += amount; } }),
+    getInventory: () => ({ getAmount: () => 1, deletes() { consumed += 1; } }),
+    getEquipment: () => ({ containsAllItem: () => true }),
+    sendMessage() {},
+  };
+  const npc = {
+    getId: () => 3029, getContentId: () => 3029, getLocation: () => point(101, 100),
+    getHitpoints: () => 10, getPrivateArea: () => null,
+    getArea: () => null, getOwner: () => null,
+    getCurrentDefinition: () => ({ isAttackable: () => true }),
+  };
+  World.getNpcs = () => ({ capacityReturn: () => 1, get: () => npc });
+  RegionManager.canProjectileAttackTarget = () => false;
+  PluginManager.spellOnNpcHooks.push({ pluginName: 'telekinetic-grab-attackable-test', handler(event) {
+    if (handleSpell && event.consumeRunes()) event.handled = true;
+  } });
+  try {
+    assert.equal(NPCOptionPacketListener.castSpell(player, 0, 1168), true);
+    assert.equal(xp, 43);
+    assert.equal(consumed, 2, 'the scripted route still takes the spell\'s runes once');
+    assert.equal(combatCasts, 0, 'the effect spell never reaches Combat.castSpellOn');
+
+    handleSpell = false;
+    assert.equal(NPCOptionPacketListener.castSpell(player, 0, 1168), false, 'no scripted hook means the cast is refused');
+    assert.equal(combatCasts, 0, 'and is not handed to combat instead');
+  } finally {
+    World.getNpcs = previous.npcs;
+    RegionManager.canProjectileAttackTarget = previous.los;
+    PluginManager.spellOnNpcHooks.length = previous.hookCount;
+  }
+});
+
 test('spell-on-NPC validates target and spell, consumes once, and preserves combat casts', () => {
   const previous = {
     npcs: World.getNpcs,

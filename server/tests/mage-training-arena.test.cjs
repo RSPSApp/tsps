@@ -48,8 +48,9 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
   const xp = [];
   const strings = new Map();
   const hidden = new Map();
+  const camera = [];
   const player = {
-    messages: [], attributes: {}, xp, strings, hidden, magic: 99, anims: 0, runEnergy: 100,
+    messages: [], attributes: {}, xp, strings, hidden, camera, magic: 99, anims: 0, runEnergy: 100,
     getLocation: () => tile,
     moveTo: (to) => { tile = to; },
     isRegistered: () => true,
@@ -63,6 +64,9 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
       sendSubInterface() {}, closeSubInterface() {}, sendSound() {}, sendRunEnergy() {},
       sendString: (text, id) => strings.set(id, text),
       sendInterfaceDisplayState: (id, hide) => hidden.set(id, hide),
+      sendCameraLookAt: (x, y, height, motion) => camera.push({ mode: 'look', x, y, height, motion }),
+      sendCameraMoveTo: (x, y, height, motion) => camera.push({ mode: 'move', x, y, height, motion }),
+      sendCameraReset: () => camera.push({ mode: 'reset' }),
     }),
     getInventory: () => ({
       getAmount: (id) => items.get(id) ?? 0,
@@ -528,6 +532,44 @@ test('Observe, Reset and New-maze reach the Maze Guardian from outside its maze 
   const other = route(Common.ids.npcs.telekineticGuardian);
   assert.equal(other.range, 1, 'other NPCs keep the ordinary approach range');
   assert.equal(other.ignoreProjectileClip, false);
+});
+
+test('Observe frames the active maze, not the one room the capture visited', () => {
+  testApi.spawnNpc = (definition) => fakeNpc(definition);
+  testApi.removeNpc = () => {};
+  const shot = (index) => {
+    const player = fakePlayer();
+    const session = Telekinetic.startSession(player, index);
+    assert.equal(Telekinetic.observe({ player, npc: session.npc }), true);
+    const calls = player.camera.slice();
+    Telekinetic.removeSession(player);
+    return {
+      maze: session.maze,
+      calls,
+      look: calls.find((call) => call.mode === 'look'),
+      move: calls.find((call) => call.mode === 'move'),
+    };
+  };
+
+  // The capture's only Observe is in maze 1: it looks at (3342,9716) from (3342,9717).
+  const captured = shot(1);
+  assert.deepEqual([captured.look.x, captured.look.y], [3342, 9716]);
+  assert.deepEqual([captured.move.x, captured.move.y, captured.move.height], [3342, 9717, 2275]);
+  assert.deepEqual(captured.calls.map((call) => call.mode), ['move', 'look'], 'the look angle comes from the new camera position');
+
+  const shots = Common.data.telekinetic.mazes.map((_, index) => shot(index));
+  for (const [index, { maze, look, move }] of shots.entries()) {
+    const [minX, maxX, , maxY] = maze.walls;
+    const x = Math.floor((minX + maxX) / 2);
+    assert.deepEqual([look.x, look.y], [x, maxY + 1], `maze ${index} looks at its own south edge`);
+    assert.deepEqual([move.x, move.y, move.height], [x, maxY + 2, 2275], `maze ${index} is viewed from its own south side`);
+  }
+
+  const near = shots[0];
+  const far = shots[6];
+  assert.ok(Math.abs(far.move.y - near.move.y) > 30, 'two distant mazes get different camera positions');
+  assert.notDeepEqual([near.move.x, near.move.y], [3342, 9717], 'maze 0 no longer uses maze 1 camera');
+  assert.notDeepEqual([far.move.x, far.move.y], [3342, 9717], 'maze 6 no longer uses maze 1 camera');
 });
 
 // --- The Alchemists' Playground

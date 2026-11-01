@@ -17,6 +17,8 @@ const TELEKINETIC_GRAB_SPELL_ID = 1168;
 const MAZE_MOVE_CYCLES = 150;
 /** The theatre's reach for its guardian: its statues stand inside a maze the player is outside. */
 const GUARDIAN_REACH = 24;
+/** Observe's camera height in the captured packet's 1/128-tile units (17.8 tiles above the maze). */
+const OBSERVE_HEIGHT = 2275;
 
 const sessions = new Map();
 
@@ -140,6 +142,17 @@ function enterObject({ player, objectId }) {
 
 // --- The guardian's options
 
+/**
+ * The captured overhead view, relative to the active maze: the camera stands two tiles south of
+ * the maze, centred on it, and looks at its southern edge. The capture (maze 1) has exactly
+ * these offsets, so each of the ten rooms is framed by its own walls rather than by maze 1's.
+ */
+function observeCamera(maze) {
+  const [minX, maxX, , maxY] = maze.walls;
+  const x = Math.floor((minX + maxX) / 2);
+  return { look: [x, maxY + 1, 0], move: [x, maxY + 2, OBSERVE_HEIGHT] };
+}
+
 /** Observe: the overhead view the Wiki and capture show; selecting it again restores the camera. */
 function observe({ player, npc }) {
   const session = sessionOf(player);
@@ -147,8 +160,10 @@ function observe({ player, npc }) {
   session.observed = !session.observed;
   const sender = player.getPacketSender();
   if (session.observed) {
-    sender.sendCameraLookAt?.(3342, 9716, 0, true);
-    sender.sendCameraMoveTo?.(3342, 9717, 2275, true);
+    const { look, move } = observeCamera(session.maze);
+    // The look angle is computed from where the camera is, so move it first.
+    sender.sendCameraMoveTo?.(...move, true);
+    sender.sendCameraLookAt?.(...look, true);
   } else {
     sender.sendCameraReset?.();
   }

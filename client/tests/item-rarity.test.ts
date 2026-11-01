@@ -26,9 +26,9 @@ const makeItem = (uid: number, itemId: number, x: number, extra: Record<string, 
     uid, itemId, itemQuantity: 1, _absX: x, _absY: 10, _absWidth: 36, _absHeight: 32, ...extra,
 });
 const groups: Record<number, any[]> = {
-    149: [{ uid: 149 << 16, children: [makeItem(1, 101, 0), makeItem(2, 102, 40), makeItem(3, 103, 80, { hidden: true }), makeItem(6, 106, 200), makeItem(7, 107, 240)] }],
+    149: [{ uid: 149 << 16, type: 0, _absX: 0, _absY: 0, _absWidth: 300, _absHeight: 42, children: [makeItem(1, 101, 0, { parentUid: 149 << 16 }), makeItem(2, 102, 40, { parentUid: 149 << 16 }), makeItem(3, 103, 80, { hidden: true, parentUid: 149 << 16 }), makeItem(6, 106, 200, { parentUid: 149 << 16 }), makeItem(7, 107, 240, { parentUid: 149 << 16 })] }],
     387: [makeItem(4, 104, 120)],
-    12: [makeItem(5, 105, 160)],
+    12: [makeItem(5, 105, 145, { _absY: 5, parentUid: -1 })],
 };
 const definitions: Record<number, { price: number }> = {
     101: { price: 50_000 }, 102: { price: 500_000 }, 103: { price: 5_000_000 },
@@ -37,7 +37,13 @@ const definitions: Record<number, { price: number }> = {
 const client: any = {
     gameState: GameState.LOGGED_IN,
     objTypeLoader: { load: (id: number) => definitions[id] },
-    widgetManager: { getWidgetsForGroup: (id: number) => groups[id] ?? [], isEffectivelyHidden: () => false },
+    widgetManager: {
+        getWidgetsForGroup: (id: number) => groups[id] ?? [], isEffectivelyHidden: () => false,
+        getInterfaceParentContainerUid: (groupId: number) => groupId === 12 ? 999 : undefined,
+        getWidgetByUid: (uid: number) => uid === 999
+            ? { uid, type: 0, parentUid: 998, _absX: 150, _absY: 10, _absWidth: 30, _absHeight: 30, scrollHeight: 100 }
+            : uid === 998 ? { uid, type: 0, parentUid: -1, _absX: 155, _absY: 15, _absWidth: 15, _absHeight: 15, scrollHeight: 40 } : undefined,
+    },
 };
 
 async function run(): Promise<void> {
@@ -56,7 +62,7 @@ async function run(): Promise<void> {
     config.setConfigValue(ItemRarityConfig, "rarePrice", 1_000_000);
     config.setConfigValue(ItemRarityConfig, "veryRarePrice", 10_000_000);
 
-    const calls: Array<{ key: string; x: number }> = [];
+    const calls: Array<{ key: string; x: number; y: number; w: number; h: number; uScale: number; vScale: number; uOffset: number; vOffset: number }> = [];
     const textures = new Map<string, { key: string }>();
     const outlinePixels: Uint8ClampedArray[] = [];
     const previousDocument = globalThis.document;
@@ -75,7 +81,7 @@ async function run(): Promise<void> {
     });
     const renderer: any = {
         getTexture: (key: string) => textures.get(key),
-        drawTexture: (texture: { key: string }, x: number) => calls.push({ key: texture.key, x }),
+        drawTexture: (texture: { key: string }, x: number, y: number, w: number, h: number, uScale: number, vScale: number, _tint: number, _color: unknown, _flipX: boolean, _flipY: boolean, _alpha: number, uOffset: number, vOffset: number) => calls.push({ key: texture.key, x, y, w, h, uScale, vScale, uOffset, vOffset }),
         drawRect() {},
         createTextureFromCanvas: (key: string) => {
             const texture = { key };
@@ -92,7 +98,13 @@ async function run(): Promise<void> {
     };
     const rects = plugin.widgetOverlay.draw({ renderer, itemImage: () => source } as any);
     assert.equal(rects.length, 4, "inventory, equipment and bank items are outlined, hidden and unquoted items are skipped");
-    assert.deepEqual(calls.map(({ x }) => x), [0, 40, 120, 160]);
+    assert.deepEqual(calls.map(({ x }) => x), [0, 40, 120, 155]);
+    assert.deepEqual([calls[0].x, calls[0].y, calls[0].w, calls[0].h, calls[0].uScale, calls[0].vScale, calls[0].uOffset, calls[0].vOffset], [0, 10, 36, 32, 1, 1, 0, 0], "items without clipping ancestors keep their full geometry and texture");
+    assert.deepEqual([calls[3].x, calls[3].y, calls[3].w, calls[3].h, calls[3].uScale, calls[3].vScale, calls[3].uOffset, calls[3].vOffset], [155, 15, 15, 15, 15 / 36, 15 / 32, 10 / 36, 10 / 32], "mounted and nested scroll clips crop all four edges without stretching the texture");
+    groups[12][0]._isDragActive = true;
+    assert.equal(plugin.widgetOverlay.draw({ renderer, itemImage: () => source } as any).at(-1)?.x, 145, "a dragged item bypasses ancestor clips like the renderer");
+    assert.deepEqual([calls.at(-1)?.w, calls.at(-1)?.h, calls.at(-1)?.uOffset, calls.at(-1)?.vOffset], [36, 32, 0, 0]);
+    delete groups[12][0]._isDragActive;
     assert.ok(!calls.some(({ x }) => x === 200), "an unquoted store-priced item is not treated as a GE-priced rarity");
     assert.ok(calls[0].key.endsWith(":66cc66:255"), "the 50,000 gp item uses the uncommon tier color at full opacity");
     assert.ok(calls[1].key.endsWith(":3399ff:255"), "the 500,000 gp item uses the rare tier color at full opacity");
@@ -104,6 +116,10 @@ async function run(): Promise<void> {
     assert.ok(calls.at(-4)?.key.endsWith(":66cc66:128"), "custom color alpha is included in the texture key");
     assert.ok(outlinePixels.at(-1)?.some((alpha, i) => i % 4 === 3 && alpha === 128), "custom color alpha is applied to outline pixels");
     config.setConfigValue(ItemRarityConfig, "uncommonColor", 0xff66cc66);
+    groups[149][0].children[0]._absY = 50;
+    assert.equal(plugin.widgetOverlay.draw({ renderer, itemImage: () => source } as any).length, 3, "a scrolled-out item with stale absolute bounds is not outlined");
+    groups[149][0].children[0]._absY = 10;
+    assert.equal(plugin.widgetOverlay.draw({ renderer, itemImage: () => source } as any).length, 4, "successive overlay draws retain visible items");
     config.setConfigValue(ItemRarityConfig, "minimumPrice", 0);
     const zeroMinimumRects = plugin.widgetOverlay.draw({ renderer, itemImage: () => source } as any);
     assert.equal(zeroMinimumRects.length, 4, "an item with no guide quote stays hidden when the minimum price is zero");

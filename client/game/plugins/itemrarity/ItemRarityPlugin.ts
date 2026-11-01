@@ -10,7 +10,7 @@ import type { WidgetOverlay, WidgetOverlayDrawContext } from "../ClientPluginMan
 import { canonicalItemId, colorHex, tagSpriteRgba } from "../inventorytags/inventoryTags";
 import { ItemRarityConfig, itemRarity, normalizeThreshold, type RarityTier, type RarityThresholds } from "./ItemRarityConfig";
 
-type RarityItem = { itemId: number; quantity: number; color: number; x: number; y: number; w: number; h: number };
+type RarityItem = { itemId: number; quantity: number; color: number; x: number; y: number; w: number; h: number; clip?: { x: number; y: number; w: number; h: number } };
 const GROUPS = [INVENTORY, WORNITEMS, BANKMAIN] as const;
 const MAX_TEXTURES = 512;
 const PREFIX = "itemrarity:";
@@ -100,25 +100,74 @@ export class ItemRarityPlugin extends Plugin {
         const groups = GROUPS.filter((_, i) => enabled[i] === true);
         const items: RarityItem[] = [];
         const seen = new Set<any>();
-        const visit = (widget: any, hidden: boolean): void => {
+        const widgets = new Map<number, any>();
+        for (const group of GROUPS) for (const widget of manager.getWidgetsForGroup?.(group) ?? []) {
+            if (typeof widget?.uid === "number") widgets.set(widget.uid, widget);
+        }
+        const visit = (widget: any, hidden: boolean, groupId: number): void => {
             if (!widget || seen.has(widget)) return;
             seen.add(widget);
             const isHidden = hidden || widget.hidden === true || widget.isHidden === true;
             if (isHidden) return;
             const itemId = Number.isInteger(widget.itemId) ? widget.itemId : -1;
-            if (itemId >= 0) {
+            if (itemId >= 0 && !(typeof widget.uid === "number" && manager.isEffectivelyHidden?.(widget.uid))) {
                 const tier = itemRarity(this.price(itemId), this.getThresholds());
                 const { _absX: x, _absY: y, _absWidth: w, _absHeight: h } = widget;
                 if (tier && [x, y, w, h].every(Number.isFinite) && w > 0 && h > 0) {
-                    items.push({ itemId, quantity: Math.max(1, widget.itemQuantity | 0), color: this.colors()[tier], x, y, w, h });
+                    let clip: RarityItem["clip"];
+                    let parentUid = widget.parentUid;
+                    const ancestors = new Set<number>();
+                    while (!widget._isDragActive && typeof parentUid === "number" && parentUid !== -1 && !ancestors.has(parentUid)) {
+                        ancestors.add(parentUid);
+                        const parent = widgets.get(parentUid) ?? manager.getWidgetByUid?.(parentUid);
+                        if (!parent) break;
+                        if (typeof parent.uid === "number" && manager.isEffectivelyHidden?.(parent.uid)) {
+                            clip = { x: 0, y: 0, w: 0, h: 0 };
+                            break;
+                        }
+                        if ([parent._absX, parent._absY, parent._absWidth, parent._absHeight].every(Number.isFinite)) {
+                            const px = parent._absX, py = parent._absY, pw = parent._absWidth, ph = parent._absHeight;
+                            const x0 = Math.max(clip?.x ?? px, px), y0 = Math.max(clip?.y ?? py, py);
+                            const right = Math.min(clip ? clip.x + clip.w : px + pw, px + pw);
+                            const bottom = Math.min(clip ? clip.y + clip.h : py + ph, py + ph);
+                            clip = { x: x0, y: y0, w: Math.max(0, right - x0), h: Math.max(0, bottom - y0) };
+                        }
+                        parentUid = parent.parentUid;
+                    }
+                    // Mounted interfaces have root widgets with parentUid=-1. Their mount
+                    // container still clips the entire interface, including nested scrolls.
+                    parentUid = widget._isDragActive ? undefined : manager.getInterfaceParentContainerUid?.(groupId);
+                    while (typeof parentUid === "number" && parentUid !== -1 && !ancestors.has(parentUid)) {
+                        ancestors.add(parentUid);
+                        const parent = widgets.get(parentUid) ?? manager.getWidgetByUid?.(parentUid);
+                        if (!parent) break;
+                        if (typeof parent.uid === "number" && manager.isEffectivelyHidden?.(parent.uid)) {
+                            clip = { x: 0, y: 0, w: 0, h: 0 };
+                            break;
+                        }
+                        if ([parent._absX, parent._absY, parent._absWidth, parent._absHeight].every(Number.isFinite)) {
+                            const px = parent._absX, py = parent._absY, pw = parent._absWidth, ph = parent._absHeight;
+                            const x0 = Math.max(clip?.x ?? px, px), y0 = Math.max(clip?.y ?? py, py);
+                            const right = Math.min(clip ? clip.x + clip.w : px + pw, px + pw);
+                            const bottom = Math.min(clip ? clip.y + clip.h : py + ph, py + ph);
+                            clip = { x: x0, y: y0, w: Math.max(0, right - x0), h: Math.max(0, bottom - y0) };
+                        }
+                        parentUid = parent.parentUid;
+                    }
+                    const visibleX = Math.max(x, clip?.x ?? x), visibleY = Math.max(y, clip?.y ?? y);
+                    const visibleRight = Math.min(x + w, clip ? clip.x + clip.w : x + w);
+                    const visibleBottom = Math.min(y + h, clip ? clip.y + clip.h : y + h);
+                    if (visibleRight > visibleX && visibleBottom > visibleY) {
+                        items.push({ itemId, quantity: Math.max(1, widget.itemQuantity | 0), color: this.colors()[tier], x, y, w, h, clip });
+                    }
                 }
             }
-            for (const child of widget.children ?? []) visit(child, isHidden);
+            for (const child of widget.children ?? []) visit(child, isHidden, groupId);
         };
         for (const group of groups) {
             for (const widget of manager.getWidgetsForGroup?.(group) ?? []) {
                 if (typeof widget?.uid === "number" && manager.isEffectivelyHidden?.(widget.uid)) continue;
-                visit(widget, false);
+                visit(widget, false, group);
             }
         }
         this.items = items;
@@ -156,8 +205,12 @@ export class ItemRarityPlugin extends Plugin {
                     }
                 }
             }
-            if (texture) renderer.drawTexture(texture, item.x, item.y, item.w, item.h);
-            rects.push({ x: item.x, y: item.y, w: item.w, h: item.h });
+            const x = Math.max(item.x, item.clip?.x ?? item.x), y = Math.max(item.y, item.clip?.y ?? item.y);
+            const right = Math.min(item.x + item.w, item.clip ? item.clip.x + item.clip.w : item.x + item.w);
+            const bottom = Math.min(item.y + item.h, item.clip ? item.clip.y + item.clip.h : item.y + item.h);
+            const w = right - x, h = bottom - y;
+            if (texture && w > 0 && h > 0) renderer.drawTexture(texture, x, y, w, h, w / item.w, h / item.h, 0, undefined, false, false, 1, (x - item.x) / item.w, (y - item.y) / item.h);
+            if (w > 0 && h > 0) rects.push({ x, y, w, h });
         }
         return rects;
     }

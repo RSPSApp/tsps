@@ -86,6 +86,10 @@ async function verifyEventWidgets() {
                 sendClientScript() { return this; },
                 sendString(text: string, uid: number) { manager.getWidgetByUid(uid)!.text = text; return this; },
                 sendItemOnInterfaces(uid: number, id: number) { manager.getWidgetByUid(uid)!.itemId = id; return this; },
+                sendInterfaceRawModel(uid: number, model: number) { manager.getWidgetByUid(uid)!.modelId = model; return this; },
+                sendGlobalGraphic() { return this; },
+                sendAreaSound() { return this; },
+                sendTypedMessage() { return this; },
                 sendInterfaceFlagsRange(uid: number, from: number, to: number, flags: number) {
                     for (let slot = from; slot <= to; slot++) manager.setWidgetFlagsByKey(uid, slot, flags);
                     return this;
@@ -97,6 +101,9 @@ async function verifyEventWidgets() {
         const dialogueManager = new DialogueManager(player);
         Events.initialize({
             core: { Location, DialogueChainBuilder, NpcDialogue, ActionDialogue, EndDialogue,
+                Graphic: require("../../server/dist/game/model/Graphic").Graphic,
+                NpcDefinition: require("../../server/dist/game/definition/NpcDefinition").NpcDefinition,
+                World: { forEachNetworkPlayer() {} },
                 NpcIdentifiers: require("../../server/dist/util/NpcIdentifiers").NpcIdentifiers,
                 ItemIdentifiers: require("../../server/dist/util/ItemIdentifiers").ItemIdentifiers,
                 MapObjects: { mapObjects: new Map(), getHash: () => 0 },

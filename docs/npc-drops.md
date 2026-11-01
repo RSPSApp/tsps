@@ -57,6 +57,18 @@ Verification for this import: TypeScript build and 26 focused integration tests 
 | `tables.<id>.removeSections` | sections of a table left out of every roll | Yama's Contract section (what his contracts reward, not a normal kill) |
 | `subtables` | shared tables the dumper doesn't export | the uncommon seed table (Obor, Bryophyta) |
 
+## A world's own edits
+
+The browser host's **Content > NPC Drops** tab saves to `npc-drops-custom.json`, the same way spawn edits go to `npc-spawns-custom.json`. It holds only that world's changes, isn't in the repo, and is applied before the overrides, so tsps's own fixes keep reaching a world that has edited its drops. "Revert drops to default" removes the NPC's tables from it.
+
+| Key | Does |
+| --- | --- |
+| `tables.<id>.setEntries` | dump row rates changed, keyed `field:index` |
+| `tables.<id>.removeEntries` | dump rows removed, by `{ field, index }` |
+| `tables.<id>.addEntries` / `addTertiary` | rows added |
+
+Rows are addressed by their position in the dump, so regenerating `npc-drops.json` can move a world's edits onto different rows. `hits()` only rolls whole-number `out_of` values, so independent rows keep whole-number rates; main rows may use fractional weights.
+
 ## The 2026-10-07 refresh
 
 The generated files were replaced by osrsreboxed-db's 2026-10-07 dump, with the earlier hand edits moved into the overrides. Loading both the old and the new files and comparing every NPC's tables showed:

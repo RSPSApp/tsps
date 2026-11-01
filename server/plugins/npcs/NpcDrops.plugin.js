@@ -31,6 +31,7 @@ const {
 const DROPS_FILE = "npc-drops.json";
 const SUBTABLES_FILE = "npc-drop-subtables.json";
 const OVERRIDES_FILE = "npc-drop-overrides.json";
+const CUSTOM_FILE = "npc-drops-custom.json";
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
 /** Brimstone key, Larran's key. */
@@ -154,6 +155,39 @@ function applyOverrides(dump, subtables, overrides) {
     }
   }
   for (const [name, table] of Object.entries(overrides.subtables ?? {})) subtables[name] ??= table;
+}
+
+/**
+ * A world's own edits, saved by the browser host's NPC Drops tab to npc-drops-custom.json and
+ * absent everywhere else. Rows are addressed by their position in the dump, so this runs before
+ * applyOverrides changes the arrays.
+ */
+function applyCustomDrops(dump, custom) {
+  for (const [tableId, edits] of Object.entries(custom.tables ?? {})) {
+    const table = dump.tables[tableId];
+    if (!table) {
+      console.error(`[NpcDrops] npc-drops-custom.json changes unknown table '${tableId}'`);
+      continue;
+    }
+    for (const [key, patch] of Object.entries(edits.setEntries ?? {})) {
+      const match = /^(entries|tertiary):(\d+)$/.exec(key);
+      const entry = match ? table[match[1]]?.[Number(match[2])] : undefined;
+      if (!entry) continue;
+      if (Number.isFinite(patch.weight) && patch.weight > 0) entry.weight = patch.weight;
+      if (Number.isFinite(patch.out_of) && patch.out_of > 0) entry.out_of = patch.out_of;
+      if (Number.isFinite(entry.weight) && entry.out_of > 0) entry.rarity = entry.weight / entry.out_of;
+    }
+    for (const field of ["entries", "tertiary"]) {
+      const removed = new Set((edits.removeEntries ?? []).filter((row) => row?.field === field).map((row) => row.index));
+      if (removed.size > 0 && table[field]) table[field] = table[field].filter((_entry, index) => !removed.has(index));
+    }
+    for (const [key, field] of [["addEntries", "entries"], ["addTertiary", "tertiary"]]) {
+      for (const entry of edits[key] ?? []) {
+        table[field] ??= [];
+        if (!table[field].some((existing) => existing.item_id === entry.item_id)) table[field].push(entry);
+      }
+    }
+  }
 }
 
 /**
@@ -294,6 +328,7 @@ function loadDrops() {
     return { npcs: 0, tables: 0, shared: 0, unusableSubtableRows: 0 };
   }
   const subtables = readJson(SUBTABLES_FILE) || {};
+  applyCustomDrops(dump, readJson(CUSTOM_FILE) || {});
   applyOverrides(dump, subtables, readJson(OVERRIDES_FILE) || {});
   applyWikiCorrections(tableById);
 
@@ -618,7 +653,7 @@ function rollOnce(table, entries, player, first = true, context = null, rules = 
       } else if (hits(entry, entryMultiplier(table, entry, rules))) {
         drops.push(...resolveEntry(entry, player, context));
       }
-    } else if (Number.isInteger(entry.weight)) {
+    } else if (Number.isFinite(entry.weight) && entry.weight > 0) {
       main.push(entry);
     }
   }
@@ -915,5 +950,5 @@ module.exports = {
   _test: { loadDrops, tablesByNpc, sharedTables },
 
   // Exposed for the smoke test.
-  __internals: { loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, tablesByNpc, sharedTables },
+  __internals: { loadDrops, rollTable, rollOnce, rollSharedTable, placeDrops, tablesByNpc, sharedTables, applyOverrides, applyCustomDrops },
 };

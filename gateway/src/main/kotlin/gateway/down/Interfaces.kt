@@ -127,7 +127,7 @@ class Interfaces(
      * and on Play closes it and moves the gameframe to the player's root. As the root alone, the
      * client had no game view: the login screen stayed behind it, with "Loading - please wait".
      * Any other root change (a game client layout chosen in the settings) moves the mounts the
-     * same way.
+     * same way, after setting the client's window mode to match.
      */
     private fun setRoot(group: Int) {
         val from = tree.root
@@ -135,6 +135,11 @@ class Interfaces(
         welcomeShown = group == WELCOME_SCREEN
         if (welcome) send(IfCloseSub(InterfaceTree.LOGIN_ROOT, InterfaceTree.WELCOME_SLOT))
         tree.setRoot(if (welcomeShown) InterfaceTree.LOGIN_ROOT else group)
+        // The client's window mode has to match the layout: fixed in a 765x503 canvas, resizable
+        // filling the window. Its script 3998 (run by the server, given 0 fixed, 1 resizable
+        // classic, 2 resizable modern) sets it, and does nothing when it already matches. The
+        // browser sizes itself, so tsps doesn't send it.
+        WINDOW_MODE_LAYOUT[tree.root]?.let { send(RunClientScript(SET_LAYOUT_SCRIPT, listOf(it))) }
         send(IfOpenTop(tree.root))
         // The browser moves tsps's mounts to a new root itself; the official client needs each one
         // moved, as live does on Play and on a game client layout change.
@@ -243,6 +248,10 @@ class Interfaces(
         /** Live's inventory events beyond tsps's: Use on ground items, NPCs, locs, players, items and components (11-16), and being a target (21). */
         const val INVENTORY_TARGET_EVENTS = (0x3F shl 11) or (1 shl 21)
         const val WELCOME_SCREEN = 378
+        const val SET_LAYOUT_SCRIPT = 3998
+
+        /** Each gameframe root's layout, as script 3998 takes it. */
+        val WINDOW_MODE_LAYOUT = mapOf(548 to 0, 161 to 1, 164 to 2)
         const val CUSTOM_INTERFACE_START = 30_000
         const val ARG_STRING = 0
         const val ARG_LONG = 2

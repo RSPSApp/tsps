@@ -143,6 +143,31 @@ assert.deepEqual(
     },
 );
 
+process.env.REACT_APP_DEFAULT_SERVER_ADDRESS = "game.example:8443/game?world=1";
+for (const address of [
+    "game.example:8443/?world=2",
+    "game.example:8443?world=2",
+    "game.example:8443/#world=2",
+    "game.example:8443#world=2",
+]) {
+    const rememberedLogin = { username: "World", token: "world-token" };
+    store.set(
+        "osrs:clientPreferences",
+        JSON.stringify({
+            version: 1,
+            lastServer: { name: "TSPS", address, secure: true },
+            rememberedLogins: { [address]: rememberedLogin },
+        }),
+    );
+    resetClientPreferencesCache();
+    const routedWorld = new LoginState();
+    assert.equal(routedWorld.serverAddress, address);
+    assert.deepEqual(routedWorld.getRememberedLogin(), rememberedLogin);
+    const preferences = JSON.parse(store.get("osrs:clientPreferences")!);
+    assert.equal(preferences.lastServer.address, address);
+    assert.deepEqual(preferences.rememberedLogins, { [address]: rememberedLogin });
+}
+
 for (const [key, value] of Object.entries(defaultServerEnv)) {
     const envKey = `REACT_APP_DEFAULT_SERVER_${key.toUpperCase()}`;
     if (value === undefined) delete process.env[envKey];

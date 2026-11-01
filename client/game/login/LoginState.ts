@@ -58,6 +58,10 @@ function serverAddressHasRootPath(address: string): boolean {
     return !path || path === "/";
 }
 
+function isLegacyBareServerAddress(address: string): boolean {
+    return /^[^/?#]+\/?$/.test(address.trim());
+}
+
 function isPageRunningLocally(): boolean {
     if (typeof window === "undefined") return false;
     const host = window.location.hostname.toLowerCase();
@@ -108,7 +112,7 @@ export class LoginState {
             lastServer.transport !== "webrtc" &&
             lastServer.name === configuredDefault.name &&
             lastServer.secure === configuredDefault.secure &&
-            serverAddressHasRootPath(lastServer.address) &&
+            isLegacyBareServerAddress(lastServer.address) &&
             !serverAddressHasRootPath(configuredDefault.address) &&
             serverAddressAuthority(lastServer.address) === serverAddressAuthority(configuredDefault.address) &&
             lastServer.address !== configuredDefault.address

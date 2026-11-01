@@ -490,6 +490,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     let zoneGroundOverlay: Pick<ZoneGroundOverlay, "setRects" | "invalidate"> | undefined;
     let zoneGroundManager: TerrainHost["overlayManager"];
     const editorRegionReplacements = new Map<number, EditorRegionReplacement>();
+    // Suppressions each editor delete created, so undo removes only its own.
+    const deletedLocOverrides = new Map<string, string[]>();
     let objectSpawns: ObjectSpawn[] | undefined = browserHostWindow() ? undefined : [];
     let objectSpawnPreviewPending = false;
     // Persisted NPC spawns are loaded per region in both modes: the browser
@@ -1712,7 +1714,23 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         onLocDel: (tile, level, shape, rotation) => {
             const renderer = terrainHost(client);
             renderer?.pendingLocUpdates?.add(renderer.getMapIdForWorldTile(tile.x, tile.y));
+            const overrides = locOverrideStore(client);
+            const before = new Set(overrides?.keys());
             client.onLocDel(tile, level, shape, rotation);
+            const added = [...(overrides?.keys() ?? [])].filter((key) => !before.has(key));
+            if (added.length === 0) return;
+            const slot = `${tile.x},${tile.y},${level},${shape},${rotation}`;
+            deletedLocOverrides.set(slot, [...(deletedLocOverrides.get(slot) ?? []), ...added]);
+        },
+        restoreLoc: (tile, level, shape, rotation) => {
+            const renderer = terrainHost(client);
+            const slot = `${tile.x},${tile.y},${level},${shape},${rotation}`;
+            const keys = deletedLocOverrides.get(slot);
+            if (!renderer || !keys) return;
+            deletedLocOverrides.delete(slot);
+            const overrides = locOverrideStore(client);
+            for (const key of keys) overrides?.delete(key);
+            reloadTile(renderer, { tileX: tile.x, tileY: tile.y, plane: level });
         },
         getLocPlacementShape: (locId) => {
             const base = client.locTypeLoader.load(locId);
@@ -2173,6 +2191,11 @@ function terrainHost(client: OsrsClient): TerrainHost | undefined {
     const backend = client.renderer as unknown as { interactionHost?: TerrainHost };
     const renderer = (backend.interactionHost ?? client.renderer) as unknown as TerrainHost | undefined;
     return renderer && renderer.terrainOverrides ? renderer : undefined;
+}
+
+/** Held by the renderer itself in both backends; WebGPU's interactionHost does not have it. */
+function locOverrideStore(client: OsrsClient): Map<string, unknown> | undefined {
+    return (client.renderer as unknown as { locOverrides?: Map<string, unknown> }).locOverrides;
 }
 
 function reloadTile(renderer: TerrainHost, tile: EditModeTile): void {

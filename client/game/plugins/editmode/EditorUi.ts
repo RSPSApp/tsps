@@ -32,7 +32,15 @@ import {
     createSpawnIcon,
     createTrashIcon,
     createWorldMapIcon,
+    createOverlayShapeIcon,
+    createRedoIcon,
+    createUndoIcon,
 } from "./EditorToolbar";
+import { getOverlayShapeTriangles } from "../../../rs/scene/SceneTileModel";
+import { OVERLAY_SHAPE_COUNT } from "./EditModePlugin";
+import { regionIdOf } from "./EditorCoordinates";
+import { MAX_REGION_PACK_PAYLOAD, oversizedRegionPacks } from "./RegionPack";
+import type { TileCorner } from "./TerrainHeight";
 import { WORLD_DEFINITION_MESSAGE } from "./hostProtocol/worldDefinitionMessage";
 import { CUSTOM_NPC_SPAWNS_MESSAGE, formatCustomNpcSpawns } from "./hostProtocol/npcSpawnMessage";
 import type {
@@ -120,6 +128,27 @@ function createHeader(titleText: string, onClose: () => void): HTMLDivElement {
     return header;
 }
 
+function createCompactButton(text: string, title: string, action: () => void): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = text;
+    button.title = title;
+    button.setAttribute("aria-label", title);
+    Object.assign(button.style, {
+        minHeight: "28px",
+        padding: "2px 8px",
+        border: "1px solid rgba(255,255,255,0.16)",
+        borderRadius: "4px",
+        color: "#cbd5e1",
+        background: "rgba(255,255,255,0.06)",
+        cursor: "pointer",
+        font: "12px sans-serif",
+        whiteSpace: "nowrap",
+    });
+    button.addEventListener("click", action);
+    return button;
+}
+
 function createActionButton(
     title: string,
     icon: () => SVGElement,
@@ -188,6 +217,9 @@ class EditorChrome {
     private selectionImage?: { key: string; dataUrl: string; loading: boolean };
     private buildingStyle: BuildingStyle = "Varrock";
     private buildingShape: BuildingShape = "Rectangle";
+    private heightStep = 4;
+    private heightSmoothing = 2;
+    private overlayShapePicker?: HTMLElement;
     private buildingFloors = 1;
     private lastVersion = -1;
 
@@ -220,7 +252,24 @@ class EditorChrome {
                 icon: () => this.createOverlaySwatchIcon(plugin.getConfig().overlayId),
                 action: () => this.toggleOverlayPalette(),
             },
+            { id: "terrain", label: "Paint tiles (R rotates the shape)", icon: createPaintIcon },
             { id: "path", label: "Draw path", icon: createPathIcon },
+            {
+                id: "undo",
+                label: "Undo (Ctrl+Z)",
+                icon: createUndoIcon,
+                action: () => {
+                    if (!this.plugin.undo()) this.toast("Nothing to undo");
+                },
+            },
+            {
+                id: "redo",
+                label: "Redo (Ctrl+Y)",
+                icon: createRedoIcon,
+                action: () => {
+                    if (!this.plugin.redo()) this.toast("Nothing to redo");
+                },
+            },
             {
                 id: "world-map",
                 label: "World map",
@@ -258,7 +307,7 @@ class EditorChrome {
             "select",
             (toolId) =>
                 this.plugin.setConfig({
-                    tool: toolId === "path" ? toolId : "select",
+                    tool: toolId === "path" || toolId === "terrain" ? toolId : "select",
                 }),
         );
 
@@ -318,6 +367,25 @@ class EditorChrome {
             this.setHeightLevel(Number(this.heightInput.value)),
         );
         const increment = this.createHeightButton("+", 1);
+        const coordinates = document.createElement("span");
+        coordinates.title = "Tile under the pointer: x, y, level, and its map region";
+        Object.assign(coordinates.style, { minWidth: "170px", marginLeft: "8px", color: "#cbd5e1", whiteSpace: "nowrap" });
+        this.plugin.setPointerTileListener((tile) => {
+            coordinates.textContent = tile
+                ? `${tile.tileX}, ${tile.tileY}, ${tile.plane} · Region ${regionIdOf(tile.tileX, tile.tileY)}`
+                : "";
+        });
+        const goTo = document.createElement("input");
+        goTo.type = "text";
+        goTo.placeholder = "Go to x, y or region";
+        goTo.title = "Enter x, y, x, y, level or a region id, then press Enter";
+        goTo.setAttribute("aria-label", "Go to coordinates or region");
+        Object.assign(goTo.style, INPUT_STYLE, { width: "130px", minWidth: "0", height: "28px", padding: "3px 6px" });
+        goTo.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter") return;
+            if (this.plugin.goToLocation(goTo.value)) goTo.blur();
+            else this.toast("Enter x, y, x, y, level or a region id");
+        });
         const renderAllLabel = document.createElement("label");
         Object.assign(renderAllLabel.style, {
             display: "flex",
@@ -408,6 +476,9 @@ class EditorChrome {
             decrement,
             this.heightInput,
             increment,
+            coordinates,
+            goTo,
+            createCompactButton("Select region", "Select the whole 64 x 64 region", () => this.plugin.selectRegion()),
         );
         this.savedNpcSpawnsKey = this.npcSpawnsKey();
         if (browserHostWindow()) {
@@ -418,6 +489,8 @@ class EditorChrome {
             Object.assign(save.style, {
                 height: "28px",
                 padding: "0 12px 0 16px",
+                flexShrink: "0",
+                whiteSpace: "nowrap",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "6px",
@@ -493,6 +566,7 @@ class EditorChrome {
         button.setAttribute("aria-label", `${delta < 0 ? "Decrease" : "Increase"} Height/Level`);
         Object.assign(button.style, {
             width: "28px",
+            flexShrink: "0",
             height: "28px",
             padding: "0",
             border: "1px solid rgba(255,255,255,0.2)",
@@ -565,6 +639,7 @@ class EditorChrome {
         if (this.overlayPalette) {
             this.overlayPalette.remove();
             this.overlayPalette = undefined;
+            this.overlayShapePicker = undefined;
             return;
         }
         this.palette.setVisible(false);
@@ -621,11 +696,115 @@ class EditorChrome {
                 showTexture();
             }
         };
+        this.overlayShapePicker = this.createOverlayShapePicker();
+        panel.appendChild(this.overlayShapePicker);
         appendSwatch(0, 0x27303a, "Clear");
         for (const swatch of this.overlaySwatches) {
             appendSwatch(swatch.id, swatch.colorRgb, swatch.name, swatch.textureId);
         }
         panel.appendChild(swatches);
+    }
+
+    /** The twelve overlay shapes at the current rotation; a repeat click rotates the picked one. */
+    private createOverlayShapePicker(): HTMLElement {
+        const picker = document.createElement("div");
+        picker.dataset.mapEditor = "overlay-shapes";
+        Object.assign(picker.style, { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", margin: "0 0 8px" });
+        this.fillOverlayShapePicker(picker);
+        return picker;
+    }
+
+    private fillOverlayShapePicker(picker: HTMLElement): void {
+        const { overlayId, overlayShape, overlayRotation } = this.plugin.getConfig();
+        const color = `#${(this.overlayColor(overlayId) & 0xffffff).toString(16).padStart(6, "0")}`;
+        const textureId = this.overlaySwatches.find((swatch) => swatch.id === overlayId)?.textureId;
+        const texture = textureId === undefined ? undefined : this.plugin.getOverlayTexture(textureId);
+        if (textureId !== undefined && !texture) {
+            window.setTimeout(() => {
+                if (picker.isConnected) this.fillOverlayShapePicker(picker);
+            }, 250);
+        }
+        const buttons = Array.from({ length: OVERLAY_SHAPE_COUNT }, (_, shape) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.title = shape === 0 ? "Full tile" : `Tile shape ${shape} (click again or press R to rotate)`;
+            button.setAttribute("aria-label", button.title);
+            button.setAttribute("aria-pressed", String(shape === overlayShape));
+            Object.assign(button.style, {
+                display: "grid",
+                placeItems: "center",
+                padding: "2px",
+                border: `2px solid ${shape === overlayShape ? "#60a5fa" : "rgba(255,255,255,0.2)"}`,
+                borderRadius: "4px",
+                background: "transparent",
+                cursor: "pointer",
+            });
+            button.appendChild(createOverlayShapeIcon(getOverlayShapeTriangles(shape, overlayRotation), color, texture));
+            button.addEventListener("click", () => {
+                this.plugin.setConfig(shape === overlayShape
+                    ? { overlayRotation: (overlayRotation + 1) & 3 }
+                    : { overlayShape: shape });
+            });
+            return button;
+        });
+        picker.replaceChildren(...buttons);
+    }
+
+    private createHeightControls(isSingleTile: boolean): HTMLElement {
+        const controls = document.createElement("div");
+        Object.assign(controls.style, { display: "grid", gap: "5px" });
+        const field = (label: string, title: string, value: number, max: number, onChange: (value: number) => void) => {
+            const row = document.createElement("label");
+            row.title = title;
+            Object.assign(row.style, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", color: "#cbd5e1" });
+            const input = document.createElement("input");
+            input.type = "number";
+            input.min = "0";
+            input.max = String(max);
+            input.value = String(value);
+            Object.assign(input.style, INPUT_STYLE, { width: "52px", padding: "3px 5px" });
+            input.addEventListener("change", () => {
+                const next = Math.max(0, Math.min(max, Math.trunc(Number(input.value)) || 0));
+                input.value = String(next);
+                onChange(next);
+            });
+            row.append(label, input);
+            return row;
+        };
+        const fields = document.createElement("div");
+        Object.assign(fields.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
+        fields.append(
+            field("Step", "Height change per click, in 1/16ths of a tile", this.heightStep, 64, (value) => { this.heightStep = value; }),
+            field("Smooth", "Rings of surrounding tiles that slope to meet the change", this.heightSmoothing, 8, (value) => { this.heightSmoothing = value; }),
+        );
+        const adjust = (direction: number, corner?: TileCorner) => this.plugin.adjustHeight(
+            direction * this.heightStep,
+            corner ? 0 : this.heightSmoothing,
+            corner,
+        );
+        const buttons = document.createElement("div");
+        Object.assign(buttons.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" });
+        buttons.append(
+            createCompactButton("Raise", "Raise the selection", () => adjust(1)),
+            createCompactButton("Lower", "Lower the selection", () => adjust(-1)),
+        );
+        controls.append(fields, buttons);
+        if (isSingleTile) {
+            // Laid out as seen from above, north at the top.
+            const corners = document.createElement("div");
+            Object.assign(corners.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" });
+            for (const [corner, name] of [["nw", "NW"], ["ne", "NE"], ["sw", "SW"], ["se", "SE"]] as const) {
+                const pair = document.createElement("div");
+                Object.assign(pair.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px" });
+                pair.append(
+                    createCompactButton(`${name} ▲`, `Raise only the ${name} corner`, () => adjust(1, corner)),
+                    createCompactButton(`${name} ▼`, `Lower only the ${name} corner`, () => adjust(-1, corner)),
+                );
+                corners.appendChild(pair);
+            }
+            controls.appendChild(corners);
+        }
+        return controls;
     }
 
     private npcSpawnsKey(): string {
@@ -670,11 +849,14 @@ class EditorChrome {
         this.pvpZonesInput.checked = state.config.showPvpZones;
         this.multiCombatZonesInput.checked = state.config.showMultiCombatZones;
         this.toolbar.setIcon("overlay", () => this.createOverlaySwatchIcon(state.config.overlayId));
+        if (this.overlayShapePicker) this.fillOverlayShapePicker(this.overlayShapePicker);
         this.toolbar.select(
             state.config.tool === "place"
                 ? "cache-search"
                   : state.config.tool === "path"
                   ? "path"
+                  : state.config.tool === "terrain"
+                  ? "terrain"
                   : state.config.tool === "wall"
                     ? "wall"
                   : "select",
@@ -789,9 +971,11 @@ class EditorChrome {
                 actions.appendChild(useOverlay);
             }
             actions.append(
+                this.createOverlayShapePicker(),
                 createActionButton("Paint overlay", createPaintIcon, () =>
                     this.plugin.paintSelection(),
                 ),
+                this.createHeightControls(!hasTileRange),
             );
         }
         if (selection.kind === "loc") {
@@ -806,6 +990,7 @@ class EditorChrome {
                 ),
             );
         }
+        if (selection.kind === "loc") actions.append(this.createHeightControls(true));
         if (selection.kind === "npc") {
             actions.append(
                 createActionButton("Duplicate NPC", createDuplicateIcon, () =>
@@ -1057,6 +1242,13 @@ class EditorChrome {
             if (!browserHostWindow()) this.plugin.setConfig({ saveObjectSpawns: false });
             const objectSpawns = this.plugin.exportObjectSpawns();
             const exported = this.plugin.exportModifiedRegionPacks();
+            // Saving only the regions that fit would leave the map half edited, so save none.
+            const oversized = oversizedRegionPacks(exported);
+            if (oversized.length > 0) {
+                const regions = oversized.map(({ regionId, payload }) => `${regionId} (${payload.toLocaleString()} bytes)`).join(", ");
+                this.toast(`Not saved: over the ${MAX_REGION_PACK_PAYLOAD.toLocaleString()} byte region limit: ${regions}. Undo or edit fewer tiles.`);
+                return;
+            }
             const world = this.plugin.getWorldDefinitionForSave();
             const customNpcs = this.plugin.getConfig().edits
                 .filter((edit) => edit.kind === "npc" || edit.kind === "npcDelete" || edit.kind === "npcWander")

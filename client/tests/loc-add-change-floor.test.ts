@@ -12,28 +12,52 @@ import { onLocDel } from "../render/render/locs2";
  * only replace the loc in its own (shape, rotation) slot.
  */
 
-// The slot rule on its own: shape 10 rotation 0 (a fire) must not touch shape 10 rotation 1
-// (the GE paving tile), and vice versa.
-{
-    const ids = [16010, 123, 55];
-    const typeRots = [(1 << 6) | 10, (0 << 6) | 10, (2 << 6) | 10];
-    assert.deepEqual(matchingLocSlotIds(ids, typeRots, 10, 0), [123], "only the same rotation matches");
-    assert.deepEqual(matchingLocSlotIds(ids, typeRots, 10, 1), [16010]);
-    assert.deepEqual(matchingLocSlotIds(ids, typeRots, 22, 0), [], "floor decorations are another shape");
-    assert.deepEqual(matchingLocSlotIds(ids, typeRots, 10, 3), []);
-}
+const FIRE = 26185;
+const TILE = { x: 3169, y: 3487 };
+const PAVING = 16010; // unnamed NORMAL loc, rotation 1, one per GE tile
+const CACHE_LOC = 123; // an object in the same slot as the fire
+const DYNAMIC = 5000; // an object the server spawns over CACHE_LOC
 
-// WebGPU path: a fire at 3169,3487 where the map has only the paving loc (id 16010, rotation 1).
-{
-    const locIds = [16010];
-    const typeRots = [(1 << 6) | 10];
-    const square = {
-        getLocIdsAtLocal: () => locIds,
+/** A map square whose per-tile loc index the test can advance to its post-build shape. */
+function stubSquare(ids: number[], typeRots: number[]) {
+    return {
+        ids,
+        typeRots,
+        getLocIdsAtLocal: () => ids,
         getLocTypeRotsAtLocal: () => typeRots,
         getRenderBaseWorldX: () => 3136,
         getRenderBaseWorldY: () => 3456,
     };
-    const reloads: string[] = [];
+}
+
+/** Replaces the square's index with the *built* scene: the dynamic loc, not the cache loc. */
+function advanceToBuiltScene(
+    square: ReturnType<typeof stubSquare>,
+    dynamicId = DYNAMIC,
+    rotation = 0,
+) {
+    square.ids.length = 0;
+    square.typeRots.length = 0;
+    square.ids.push(dynamicId);
+    square.typeRots.push((rotation << 6) | 10);
+}
+
+const tileKey = (id: number) => `${TILE.x},${TILE.y},0,${id}`;
+
+// The slot rule on its own: shape 10 rotation 0 (a fire) must not touch shape 10 rotation 1
+// (the GE paving tile), and vice versa.
+{
+    const ids = [PAVING, CACHE_LOC, 55];
+    const typeRots = [(1 << 6) | 10, (0 << 6) | 10, (2 << 6) | 10];
+    assert.deepEqual(matchingLocSlotIds(ids, typeRots, 10, 0), [CACHE_LOC], "only the same rotation matches");
+    assert.deepEqual(matchingLocSlotIds(ids, typeRots, 10, 1), [PAVING]);
+    assert.deepEqual(matchingLocSlotIds(ids, typeRots, 22, 0), [], "floor decorations are another shape");
+    assert.deepEqual(matchingLocSlotIds(ids, typeRots, 10, 3), []);
+}
+
+// WebGPU path.
+{
+    const square = stubSquare([PAVING], [(1 << 6) | 10]);
     const renderer: any = {
         addedLocs: new Map(),
         locOverrides: new Map(),
@@ -45,53 +69,105 @@ import { onLocDel } from "../render/render/locs2";
             loadingMapIds: new Set<number>(),
         },
         osrsClient: { locTypeLoader: { load: () => ({ seqId: -1, name: "crate" }) } },
-        queueLocReload: (x: number, y: number, group: string) => reloads.push(`${x},${y},${group}`),
+        queueLocReload: () => {},
     };
     const updates = new LocUpdates(renderer);
 
-    updates.onLocAddChange(26185, { x: 3169, y: 3487 }, 0, 10, 0);
+    // A fire on a tile whose only loc is paving of another rotation: nothing is suppressed.
+    updates.onLocAddChange(FIRE, TILE, 0, 10, 0);
     assert.equal(renderer.addedLocs.size, 1, "the fire is recorded");
     assert.deepEqual([...renderer.locOverrides.keys()], [], "the rotation-1 paving loc is left alone");
-    updates.dispose();
 
-    // The same add where the tile does hold the fire's own slot: that loc is replaced, and
-    // removing the fire later puts it back.
-    locIds.length = 0;
-    typeRots.length = 0;
-    locIds.push(123);
-    typeRots.push((0 << 6) | 10);
-    updates.onLocAddChange(26185, { x: 3169, y: 3487 }, 0, 10, 0);
-    assert.deepEqual(renderer.locOverrides.get("3169,3487,0,123"), { newId: 0 }, "the same-slot loc is replaced");
-    updates.onLocDel({ x: 3169, y: 3487 }, 0, 10, 0);
-    assert.equal(renderer.locOverrides.has("3169,3487,0,123"), false, "removing the fire restores it");
+    // A fire over an object in its own slot: that loc is suppressed, and removing the fire
+    // restores it.
+    square.ids.length = 0;
+    square.typeRots.length = 0;
+    square.ids.push(CACHE_LOC);
+    square.typeRots.push(10);
+    updates.onLocAddChange(FIRE, TILE, 0, 10, 0);
+    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 }, "the same-slot loc is replaced");
+    updates.onLocDel(TILE, 0, 10, 0);
+    assert.equal(renderer.locOverrides.has(tileKey(CACHE_LOC)), false, "removing the fire restores it");
+
+    // A replay after the square rebuilt: the index now describes the built scene (the dynamic
+    // object replaced the cache loc), so the recorded replacement must survive, and deleting the
+    // dynamic object must restore the cache loc.
+    square.ids.length = 0;
+    square.typeRots.length = 0;
+    square.ids.push(CACHE_LOC);
+    square.typeRots.push(10);
+    updates.onLocAddChange(DYNAMIC, TILE, 0, 10, 0);
+    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 });
+    advanceToBuiltScene(square);
+    updates.onLocAddChange(DYNAMIC, TILE, 0, 10, 0);
+    assert.deepEqual(
+        renderer.addedLocs.get(`${TILE.x},${TILE.y},0,10`).replacedIds,
+        [CACHE_LOC],
+        "a replay keeps the replacements the first add recorded",
+    );
+    assert.deepEqual(renderer.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 }, "the original suppression is kept");
+    assert.equal(renderer.locOverrides.has(tileKey(DYNAMIC)), false, "the dynamic id is never suppressed");
+    updates.onLocDel(TILE, 0, 10, 0);
+    assert.equal(renderer.locOverrides.has(tileKey(CACHE_LOC)), false, "deleting after a replay restores the cache loc");
+
+    // A different object taking over the slot without a delete inherits its predecessor's
+    // replacements, so the cache loc still comes back when the last one goes.
+    square.ids.length = 0;
+    square.typeRots.length = 0;
+    square.ids.push(CACHE_LOC);
+    square.typeRots.push(10);
+    updates.onLocAddChange(DYNAMIC, TILE, 0, 10, 0);
+    advanceToBuiltScene(square);
+    updates.onLocAddChange(DYNAMIC + 1, TILE, 0, 10, 0);
+    assert.deepEqual(
+        renderer.addedLocs.get(`${TILE.x},${TILE.y},0,10`).replacedIds,
+        [CACHE_LOC, DYNAMIC],
+        "the replacement record is carried over",
+    );
+    updates.onLocDel(TILE, 0, 10, 0);
+    assert.equal(renderer.locOverrides.has(tileKey(CACHE_LOC)), false, "the cache loc is restored");
+
     updates.dispose();
 }
 
-// WebGL path: the same two cases through the renderer's own handlers.
+// WebGL path: the same lifecycle through the renderer's own handlers.
 {
-    const tileLocs = [{ id: 16010, level: 0, typeRot: (1 << 6) | 10 }];
+    const square = stubSquare([PAVING], [(1 << 6) | 10]);
     const reloads: number[] = [];
     const host: any = {
         addedLocs: new Map(),
         locOverrides: new Map(),
         instanceActive: false,
         osrsClient: { locTypeLoader: { load: () => ({ seqId: -1, name: "crate" }) } },
-        getLocIdsAtTileAllLevels: () => tileLocs,
+        getLocIdsAtTileAllLevels: () =>
+            square.ids.map((id, index) => ({ id, level: 0, typeRot: square.typeRots[index] })),
         scheduleLocGeometryUpdate: () => reloads.push(1),
     };
 
-    onLocAddChange(host, 26185, { x: 3169, y: 3487 }, 0, 10, 0);
+    onLocAddChange(host, FIRE, TILE, 0, 10, 0);
     assert.equal(host.addedLocs.size, 1);
     assert.deepEqual([...host.locOverrides.keys()], [], "paving in another rotation slot stays");
 
-    tileLocs.push({ id: 123, level: 0, typeRot: (0 << 6) | 10 } as any);
-    onLocAddChange(host, 26185, { x: 3169, y: 3487 }, 0, 10, 0);
-    assert.deepEqual(host.locOverrides.get("3169,3487,0,123"), { newId: 0 });
+    square.ids.push(CACHE_LOC);
+    square.typeRots.push(10);
+    onLocAddChange(host, FIRE, TILE, 0, 10, 0);
+    assert.deepEqual(host.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 });
 
-    onLocDel(host, { x: 3169, y: 3487 }, 0, 10, 0);
-    assert.equal(host.locOverrides.has("3169,3487,0,123"), false, "the replaced loc comes back");
+    onLocDel(host, TILE, 0, 10, 0);
+    assert.equal(host.locOverrides.has(tileKey(CACHE_LOC)), false, "the replaced loc comes back");
     assert.equal(host.addedLocs.size, 0);
     assert.ok(reloads.length >= 3, "each change reloads geometry");
+
+    // Replay after the build, then delete: the cache loc is still restored.
+    const before = reloads.length;
+    onLocAddChange(host, DYNAMIC, TILE, 0, 10, 0);
+    assert.deepEqual(host.locOverrides.get(tileKey(CACHE_LOC)), { newId: 0 });
+    advanceToBuiltScene(square);
+    onLocAddChange(host, DYNAMIC, TILE, 0, 10, 0);
+    assert.equal(reloads.length, before + 1, "a replay with its suppressions in place needs no rebuild");
+    assert.deepEqual(host.addedLocs.get(`${TILE.x},${TILE.y},0,10`).replacedIds, [CACHE_LOC]);
+    onLocDel(host, TILE, 0, 10, 0);
+    assert.equal(host.locOverrides.has(tileKey(CACHE_LOC)), false, "deleting after a replay restores the cache loc");
 }
 
 // WebGL delete of a cache loc suppresses exactly that loc, not every loc of its shape.
@@ -102,14 +178,14 @@ import { onLocDel } from "../render/render/locs2";
         instanceActive: false,
         osrsClient: { locTypeLoader: { load: () => ({ seqId: -1, name: "Tree" }) } },
         getLocIdsAtTileAllLevels: () => [
-            { id: 1276, level: 0, typeRot: (0 << 6) | 10 },
-            { id: 16010, level: 0, typeRot: (1 << 6) | 10 },
+            { id: 1276, level: 0, typeRot: 10 },
+            { id: PAVING, level: 0, typeRot: (1 << 6) | 10 },
         ],
         scheduleLocGeometryUpdate: () => {},
     };
     onLocDel(host, { x: 3200, y: 3200 }, 0, 10, 0);
     assert.deepEqual(host.locOverrides.get("3200,3200,0,1276"), { newId: 0 }, "the chopped tree is removed");
-    assert.equal(host.locOverrides.has("3200,3200,0,16010"), false, "the paving beside it stays");
+    assert.equal(host.locOverrides.has(`3200,3200,0,${PAVING}`), false, "the paving beside it stays");
 }
 
 console.log("loc add/change floor checks passed");

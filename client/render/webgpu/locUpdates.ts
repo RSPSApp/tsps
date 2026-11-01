@@ -156,22 +156,28 @@ export class LocUpdates {
     onLocAddChange(locId: number, tile: Tile, level: number, shape: number, rotation: number): void {
         const key = `${tile.x},${tile.y},${level},${shape}`;
         const existing = this.r.addedLocs.get(key);
+        // A replay of an object this square already placed keeps the replacements its first add
+        // recorded. The per-tile index describes the *built* scene, where the dynamic object is
+        // now what sits in the slot (the cache locs it replaced are gone), so deriving them again
+        // would overwrite the restore record and leak the original cache suppression on deletion.
+        if (
+            existing !== undefined &&
+            (existing.locId | 0) === (locId | 0) &&
+            (existing.rotation & 0x3) === (rotation & 0x3)
+        ) {
+            if (this.reconcileAdded(existing, locId, tile, level, shape, rotation)) {
+                this.reloadTile(tile, this.groupOf(locId));
+            }
+            return;
+        }
         // An instance's template hotspot is never removed by the server (build furniture only
         // sends the new object), so there it is replaced by shape, at whatever rotation the
         // hotspot was placed. In the main world the server removes what it replaces, so only the
         // exact (shape, rotation) slot goes: the GE's paving is NORMAL locs of another rotation,
         // and matching by shape alone erased a floor tile per fire (issue #1748).
-        const replaced = this.r.instanceActive ? [] : this.locSlotIdsAt(tile, level, shape, rotation);
-        const recorded = this.r.instanceActive
-            ? shapeSlotOverride(this.r.locOverrides, tile.x, tile.y, level, shape)?.newId === 0
-            : replaced.every(
-                  (id) => this.r.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === 0,
-              );
-        // A replay of the same add (the server re-sends while the object stands) needs no work
-        // once the replacements it suppresses are recorded.
-        if (existing?.locId === locId && existing.rotation === rotation && recorded) {
-            return;
-        }
+        const derived = this.r.instanceActive ? [] : this.locSlotIdsAt(tile, level, shape, rotation);
+        // A different object taking over the same slot inherits what its predecessor replaced.
+        const replaced = Array.from(new Set([...(existing?.replacedIds ?? []), ...derived]));
         this.r.addedLocs.set(key, { locId, x: tile.x, y: tile.y, level, shape, rotation, replacedIds: replaced });
         if (this.r.instanceActive) {
             suppressShapeSlotAt(this.r.locOverrides, tile.x, tile.y, level, shape);
@@ -179,6 +185,42 @@ export class LocUpdates {
             for (const id of replaced) this.suppressLocAt(tile, level, id);
         }
         this.reloadTile(tile, this.groupOf(locId));
+    }
+
+    /**
+     * Reconciles a replayed add with the scenery it replaced: keeps the recorded replacements,
+     * picks up a cache loc that has appeared in the slot since (a square that loaded late), and
+     * reapplies any suppression that went missing. Returns whether a rebuild is needed.
+     */
+    private reconcileAdded(
+        added: { replacedIds?: number[] },
+        locId: number,
+        tile: Tile,
+        level: number,
+        shape: number,
+        rotation: number,
+    ): boolean {
+        if (this.r.instanceActive) {
+            if (shapeSlotOverride(this.r.locOverrides, tile.x, tile.y, level, shape)?.newId === 0) return false;
+            suppressShapeSlotAt(this.r.locOverrides, tile.x, tile.y, level, shape);
+            return true;
+        }
+        let changed = false;
+        const recorded = new Set(added.replacedIds ?? []);
+        for (const id of recorded) {
+            if (this.r.locOverrides.get(`${tile.x | 0},${tile.y | 0},${level | 0},${id}`)?.newId === 0) continue;
+            this.suppressLocAt(tile, level, id);
+            changed = true;
+        }
+        // The built index also holds the dynamic object itself; only other ids are cache locs.
+        for (const id of this.locSlotIdsAt(tile, level, shape, rotation)) {
+            if ((id | 0) === (locId | 0) || recorded.has(id)) continue;
+            this.suppressLocAt(tile, level, id);
+            recorded.add(id);
+            changed = true;
+        }
+        if (changed) added.replacedIds = [...recorded];
+        return changed;
     }
 
     onLocDel(tile: Tile, level: number, shape: number, rotation: number): void {

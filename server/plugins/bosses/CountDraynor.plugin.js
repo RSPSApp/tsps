@@ -92,10 +92,13 @@ function openCoffin({ player, object }) {
   display(O.COFFIN_9);
   later(area, 4, () => {
     if (area.isDestroyed()) return;
+    // rsprox 1710, 3275: the rising Count's model holds the coffin and its lid, so the loc goes.
+    player.getPacketSender().sendObjectRemoval(coffinObject(object, O.COFFIN_9));
     area.npc = pluginApi.spawnNpc({ id: N.COUNT_DRAYNOR_2, x: 3077, y: 9775, z: 0, owner: player, ownerOnly: true });
     area.add(area.npc);
     area.npc.performAnimation(new Animation(3114));
   });
+  later(area, 8, () => { if (!area.isDestroyed()) display(O.COFFIN_46); });
   later(area, 9, () => {
     if (area.isDestroyed()) return;
     if (area.npc) pluginApi.removeNpc(area.npc);

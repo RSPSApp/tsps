@@ -99,9 +99,14 @@ export function compareWornGear(
     const replaced = emptyItemStats();
     for (const worn of wornItems) {
         if (worn.itemId < 0) continue;
-        const stats = readItemStats(loadItem(worn.itemId));
+        const wornDefinition = loadItem(worn.itemId);
+        const stats = readItemStats(wornDefinition);
         addStats(current, stats);
-        if (replacementSlots.has(worn.slot)) addStats(replaced, stats);
+        const occupiedSlots = itemEquipSlots(wornDefinition);
+        occupiedSlots.add(worn.slot);
+        if ([...occupiedSlots].some((occupiedSlot) => replacementSlots.has(occupiedSlot))) {
+            addStats(replaced, stats);
+        }
     }
 
     const after = { ...current };

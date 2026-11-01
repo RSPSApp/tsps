@@ -4,7 +4,7 @@ This plugin reads combat bonus params stored in each item definition in the load
 
 Bonus parameter ids follow RuneLite's `ItemStats` mapping. Attack and defence bonuses use params 0-9, melee strength uses param 10, prayer uses param 11, ranged strength uses params 12 and 189, and magic damage uses param 299. The implementation also reads attack speed from param 14. Food effects come from the server's `food.json`; potion boosts and rune details use the plugin's local mappings.
 
-Comparison replaces the candidate's equipment slot and any additional slots listed in its cache definition, such as a shield slot for a two-handed weapon. It does not calculate set effects or conditional bonuses. The tooltip also shows supported food and potion effects and basic rune details. Unknown food and unsupported potion effects are not inferred. Items with no displayed stats or effects do not get a tooltip.
+Comparison replaces each worn item whose occupied cache slots overlap the candidate's slots. This handles both directions of two-handed swaps, such as a bow in slots 3 and 5 replacing a shield in slot 5, or a shield replacing that bow. The worn item's reported equipment slot is also included when its definition has no wear-position data. Each worn item is subtracted once, even when several slots overlap. It does not calculate set effects or conditional bonuses. The tooltip also shows supported food and potion effects and basic rune details. Unknown food and unsupported potion effects are not inferred. Items with no displayed stats or effects do not get a tooltip.
 
 The parameter mapping follows RuneLite's `ItemStats` data model. RuneLite's `ItemEquipmentStats.java` carries this BSD-2-Clause notice:
 

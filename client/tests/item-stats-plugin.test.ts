@@ -88,13 +88,20 @@ assert.equal(comparison?.after.defenceSlash, 20);
 assert.equal(compareWornGear(body, [], () => undefined)?.after.attackSlash, 12);
 assert.equal(compareWornGear(item({}), [], () => undefined), undefined);
 
-const twoHander = { wearPos: 3, wearPos2: 5, params: { get: () => undefined } };
-const twoHandComparison = compareWornGear(twoHander, [
+const bow = { wearPos: 3, wearPos2: 5, params: { get: (key: number) => key === 4 ? 8 : undefined } };
+const shield = { wearPos: 5, params: { get: (key: number) => key === 6 ? 12 : undefined } };
+const bowAndShield = new Map([[300, bow], [301, shield]]);
+const bowComparison = compareWornGear(bow, [
     { slot: 3, itemId: 102 },
-    { slot: 5, itemId: 100 },
-], (id) => items.get(id));
-assert.equal(twoHandComparison?.current.attackStab, 5);
-assert.equal(twoHandComparison?.after.attackStab, 0);
+    { slot: 5, itemId: 301 },
+], (id) => bowAndShield.get(id) ?? items.get(id));
+assert.equal(bowComparison?.after.defenceSlash, 0, "a two-handed bow replaces the shield in slot 5");
+assert.equal(bowComparison?.after.attackRanged, 8);
+const shieldComparison = compareWornGear(shield, [
+    { slot: 3, itemId: 300 },
+], (id) => bowAndShield.get(id));
+assert.equal(shieldComparison?.after.attackRanged, 0, "a shield replaces a worn two-handed bow via its secondary slot");
+assert.equal(shieldComparison?.after.defenceSlash, 12);
 
 assert.equal(foodStatsForName(" bread ")?.heal, 5);
 assert.deepEqual(foodStatsForName("Cave eel")?.heal, { min: 8, max: 12 });

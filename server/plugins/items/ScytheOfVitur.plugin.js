@@ -4,18 +4,24 @@
  * three on a 3x3 or larger. Each hit rolls its own accuracy and damage, and each
  * hit's max is half the one before, rounded down (47 -> 23 -> 11).
  *
- * Charging (Wiki): one vial of blood and 200 blood runes add 100 charges, up to
- * 20,000. One charge is spent per attack as long as at least one of the swing's
- * hits deals damage; at zero it reverts to the uncharged scythe, which still
- * attacks with its weaker uncharged stats. Uncharging clears the charges without
- * returning the materials - in OSRS only the vyre well returns them, and the
- * well is not modelled here.
+ * Charging (Wiki): the vyre well stores sets of 100 charges, each bought with one
+ * vial of blood and 200 blood runes. Charge-at moves them into a scythe, up to
+ * 20,000; using a charged scythe on the well deposits them back in whole sets.
+ * One charge is spent per attack as long as at least one of the swing's hits deals
+ * damage; at zero it reverts to the uncharged scythe, which still attacks with its
+ * weaker uncharged stats. Uncharging away from the well clears the charges without
+ * returning the materials.
  *
  * In multicombat the remaining hits can cleave adjacent targets in the forward 1x3 arc.
  */
 const MAX_CHARGES = 20000;
 const CHARGES_PER_VIAL = 100;
 const BLOOD_RUNES_PER_VIAL = 200;
+const WELL_MAX_CHARGES = 1000000;
+/** tob_lobby_well_contents: the well's sets of 100 charges, and 33085's empty/filled transform. */
+const WELL_VARBIT = 6455;
+const WELL_ATTRIBUTE = "scythe-of-vitur:vyre-well-charges";
+const WELL_OBJECT = "Vyre well";
 const CHARGE_META_KEY = "scythe-of-vitur-charges";
 const MAX_HITS = 3;
 const SCYTHES = new Set(["scythe of vitur", "holy scythe of vitur", "sanguine scythe of vitur"]);
@@ -29,7 +35,9 @@ let chargedIds = new Set();
 let unchargedByCharged = new Map();
 let chargedByUncharged = new Map();
 let bloodRuneId = -1;
-let vialOfBloodId = -1;
+/** The tradeable vial of blood (22446), then the noted one the well hands back. */
+let vialIds = [];
+let notedVialId = -1;
 
 function isScytheId(id) {
   return chargedIds.has(Number(id)) || chargedByUncharged.has(Number(id));
@@ -161,6 +169,207 @@ function resolveScythe(attacker) {
   return scytheMethod;
 }
 
+/** Vials may be noted (Wiki), so count and consume the unnoted ids before the noted one. */
+function vialCount(inventory) {
+  return vialIds.reduce((total, id) => total + inventory.getAmount(id), 0) + inventory.getAmount(notedVialId);
+}
+
+function takeVials(inventory, amount) {
+  let left = amount;
+  for (const id of [...vialIds, notedVialId]) {
+    if (left <= 0) break;
+    const taken = Math.min(left, inventory.getAmount(id));
+    if (taken > 0) {
+      inventory.deleteNumber(id, taken);
+      left -= taken;
+    }
+  }
+  return amount - left;
+}
+
+/** The well's stored charges are per player: its varbit is the player's own well state. */
+function wellCharges(player) {
+  const saved = Number(player.getAttribute?.(WELL_ATTRIBUTE));
+  return Number.isFinite(saved) ? Math.max(0, Math.min(WELL_MAX_CHARGES, Math.floor(saved))) : 0;
+}
+
+function publishWell(player, amount) {
+  const next = Math.max(0, Math.min(WELL_MAX_CHARGES, Math.floor(amount)));
+  player.setAttribute?.(WELL_ATTRIBUTE, next);
+  player.getPacketSender?.().sendVarbit?.(WELL_VARBIT, Math.floor(next / CHARGES_PER_VIAL));
+  return next;
+}
+
+function syncWell({ player }) {
+  player.getPacketSender?.().sendVarbit?.(WELL_VARBIT, Math.floor(wellCharges(player) / CHARGES_PER_VIAL));
+}
+
+/** Charge-at and item-on-well work on a scythe in either hand or inventory. */
+function findScythe(player) {
+  const equipped = player.getEquipment().get(core.Equipment.WEAPON_SLOT);
+  if (isScytheId(equipped?.getId?.())) return equipped;
+  for (const item of player.getInventory().getItems()) {
+    if (item && isScytheId(item.getId())) return item;
+  }
+  return null;
+}
+
+function addScytheCharges(player, item, amount) {
+  const added = Math.max(0, Math.min(Math.floor(amount), MAX_CHARGES - charges(item)));
+  if (added <= 0) return 0;
+  if (chargedByUncharged.has(item.getId())) item.setId(chargedByUncharged.get(item.getId()));
+  item.setMetaValue?.(CHARGE_META_KEY, charges(item) + added);
+  refresh(player);
+  return added;
+}
+
+/** Fill asks for sets (100 charges each); the transcript's "charges" are those sets. */
+function fillWellSets(player, requested) {
+  if (requested < 1) return;
+  const inventory = player.getInventory();
+  const sets = Math.min(
+    requested,
+    Math.floor((WELL_MAX_CHARGES - wellCharges(player)) / CHARGES_PER_VIAL),
+    vialCount(inventory),
+    Math.floor(inventory.getAmount(bloodRuneId) / BLOOD_RUNES_PER_VIAL)
+  );
+  if (sets < 1) {
+    player.sendMessage(`You need at least ${BLOOD_RUNES_PER_VIAL} blood runes and 1 vial of blood to start filling the well.`);
+    return;
+  }
+  takeVials(inventory, sets);
+  inventory.deleteNumber(bloodRuneId, sets * BLOOD_RUNES_PER_VIAL);
+  inventory.refreshItems();
+  publishWell(player, wellCharges(player) + sets * CHARGES_PER_VIAL);
+  // Transcript: "You fill the well with one charge" / "with [number] charges" (each is a set).
+  player.sendMessage(`You fill the well with ${sets === 1 ? "one" : sets.toLocaleString("en-US")} charge${sets === 1 ? "" : "s"}.`);
+}
+
+function fillWell({ player }) {
+  if (WELL_MAX_CHARGES - wellCharges(player) < CHARGES_PER_VIAL) {
+    player.sendMessage("The well is full.");
+    return true;
+  }
+  if (vialCount(player.getInventory()) < 1 || player.getInventory().getAmount(bloodRuneId) < BLOOD_RUNES_PER_VIAL) {
+    player.sendMessage(`You need at least ${BLOOD_RUNES_PER_VIAL} blood runes and 1 vial of blood to start filling the well.`);
+    return true;
+  }
+  player.sendMessage(
+    `Mixing 1 vial of blood with the power of ${BLOOD_RUNES_PER_VIAL} blood runes into this well will add ${CHARGES_PER_VIAL} charges per set.`
+  );
+  player.setEnteredAmountAction({
+    execute: (value) => fillWellSets(player, Math.floor(Number(value) || 0)),
+  });
+  player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+  return true;
+}
+
+function chargeScytheFromWell(player, requested) {
+  if (requested < 1) return;
+  const scythe = findScythe(player);
+  if (!scythe) {
+    player.sendMessage("You have nothing that can be charged here.");
+    return;
+  }
+  const amount = Math.min(requested, wellCharges(player), MAX_CHARGES - charges(scythe));
+  if (amount < 1) {
+    player.sendMessage(MAX_CHARGES - charges(scythe) < 1 ? "Your scythe cannot hold any more charges." : "The well is empty.");
+    return;
+  }
+  if (addScytheCharges(player, scythe, amount) < 1) return;
+  publishWell(player, wellCharges(player) - amount);
+  player.sendMessage(`You add ${amount.toLocaleString("en-US")} charges to your scythe.`);
+}
+
+function chargeAtWell({ player }) {
+  const scythe = findScythe(player);
+  if (!scythe) {
+    player.sendMessage("You have nothing that can be charged here.");
+    return true;
+  }
+  if (charges(scythe) >= MAX_CHARGES) {
+    player.sendMessage("Your scythe cannot hold any more charges.");
+    return true;
+  }
+  if (wellCharges(player) < 1) {
+    player.sendMessage("The well is empty.");
+    return true;
+  }
+  player.setEnteredAmountAction({
+    execute: (value) => chargeScytheFromWell(player, Math.floor(Number(value) || 0)),
+  });
+  player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+  return true;
+}
+
+/** Both payouts must fit together: each is a new stack or merges into one already held, never the same free slot. */
+function refundsFit(inventory, refunds) {
+  const items = inventory.getItems();
+  const newStacks = refunds.filter((refund) => !items.some((held) =>
+    held.getId() === refund.getId() && JSON.stringify(held.getMeta() ?? null) === JSON.stringify(refund.getMeta() ?? null)
+  )).length;
+  return newStacks <= inventory.getFreeSlots() && refunds.every((refund) =>
+    inventory.getAddableAmount(refund) >= refund.getAmount()
+  );
+}
+
+function emptyWell({ player }) {
+  const inventory = player.getInventory();
+  const sets = Math.floor(wellCharges(player) / CHARGES_PER_VIAL);
+  if (sets < 1) {
+    player.sendMessage("The well is empty.");
+    return true;
+  }
+  const runes = new core.Item(bloodRuneId, sets * BLOOD_RUNES_PER_VIAL);
+  const vials = new core.Item(notedVialId, sets);
+  if (!refundsFit(inventory, [runes, vials])) {
+    player.sendMessage("You don't have enough inventory space.");
+    return true;
+  }
+  inventory.add(runes, false);
+  inventory.add(vials, false);
+  inventory.refreshItems();
+  publishWell(player, 0);
+  player.sendMessage(
+    `You take ${runes.getAmount().toLocaleString("en-US")} blood runes and ${sets.toLocaleString("en-US")} vial${sets === 1 ? "" : "s"} of blood out of the well - which are magically converted to noted form.`
+  );
+  return true;
+}
+
+function checkWell({ player }) {
+  const sets = Math.floor(wellCharges(player) / CHARGES_PER_VIAL);
+  player.sendMessage(sets < 1
+    ? "The well is empty."
+    : `The well contains ${sets.toLocaleString("en-US")} set${sets === 1 ? "" : "s"} of ${CHARGES_PER_VIAL} charges.`);
+  return true;
+}
+
+/** Using a scythe on the well drains it in whole sets, as the Wiki describes. */
+function depositScythe(event) {
+  const { player, itemId, item } = event;
+  if (!isScytheId(itemId)) return false;
+  if (core.ObjectDefinition.forPlayer(event.objectId, player)?.getName?.() !== WELL_OBJECT) return false;
+  // Generic item-on-object hooks must mark the event themselves (the named overload does it).
+  event.handled = true;
+  const held = charges(item);
+  const deposit = Math.floor(held / CHARGES_PER_VIAL) * CHARGES_PER_VIAL;
+  if (deposit < CHARGES_PER_VIAL) {
+    player.sendMessage("Your scythe does not have enough charges to deposit.");
+    return true;
+  }
+  const room = WELL_MAX_CHARGES - wellCharges(player);
+  if (deposit > room) {
+    player.sendMessage("The well cannot hold any more charges.");
+    return true;
+  }
+  // Draining empties the scythe; the charges below the last whole set are not deposited.
+  swapToUncharged(player, item);
+  publishWell(player, wellCharges(player) + deposit);
+  refresh(player);
+  player.sendMessage(`You deposit ${deposit.toLocaleString("en-US")} charges into the well.`);
+  return true;
+}
+
 /** One vial of blood and 200 blood runes buy 100 charges, as many batches as the inventory affords (Wiki). */
 function chargeScythe(event) {
   const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
@@ -169,7 +378,7 @@ function chargeScythe(event) {
     return;
   }
   const otherId = Number(scythe === usedItem ? usedWithItemId : usedItemId);
-  if (otherId !== vialOfBloodId && otherId !== bloodRuneId) {
+  if (!vialIds.includes(otherId) && otherId !== bloodRuneId) {
     return;
   }
   const inventory = player.getInventory();
@@ -180,7 +389,7 @@ function chargeScythe(event) {
     return;
   }
   const batches = Math.min(
-    inventory.getAmount(vialOfBloodId),
+    vialCount(inventory),
     Math.floor(inventory.getAmount(bloodRuneId) / BLOOD_RUNES_PER_VIAL),
     Math.floor(room / CHARGES_PER_VIAL)
   );
@@ -189,7 +398,7 @@ function chargeScythe(event) {
     event.handled = true;
     return;
   }
-  inventory.deleteNumber(vialOfBloodId, batches);
+  takeVials(inventory, batches);
   inventory.deleteNumber(bloodRuneId, batches * BLOOD_RUNES_PER_VIAL);
   if (chargedByUncharged.has(scythe.getId())) {
     scythe.setId(chargedByUncharged.get(scythe.getId()));
@@ -205,7 +414,7 @@ function checkCharges({ player, item }) {
   return true;
 }
 
-/** Wiki: uncharging outside the vyre well loses the materials, and the well is not modelled. */
+/** Wiki: uncharging outside the vyre well loses the materials (the well's Empty returns them). */
 function uncharge({ player, item }) {
   if (charges(item) <= 0) {
     player.sendMessage("Your scythe has no charges to remove.");
@@ -219,7 +428,8 @@ function uncharge({ player, item }) {
 function initializeIds() {
   const I = core.ItemIdentifiers;
   bloodRuneId = I.BLOOD_RUNE;
-  vialOfBloodId = I.VIAL_OF_BLOOD_2;
+  vialIds = [I.VIAL_OF_BLOOD_2];
+  notedVialId = I.VIAL_OF_BLOOD_3;
   unchargedByCharged = new Map([
     [I.SCYTHE_OF_VITUR, I.SCYTHE_OF_VITUR_UNCHARGED_],
     [I.HOLY_SCYTHE_OF_VITUR, I.HOLY_SCYTHE_OF_VITUR_UNCHARGED_],
@@ -237,10 +447,19 @@ module.exports = {
     pluginApi = api;
     areas = api.getAreaManager();
     api.onServerStartup(initializeIds);
+    api.persistAttribute(WELL_ATTRIBUTE, 0);
     api.onItemAction("Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemAction("Holy Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemAction("Sanguine Scythe of Vitur", { Check: checkCharges, Uncharge: uncharge });
     api.onItemOnItem(chargeScythe, { noted: false });
+    api.onItemOnObject(depositScythe);
+    api.onObjectInteraction(WELL_OBJECT, {
+      "Charge-at": chargeAtWell,
+      Fill: fillWell,
+      Check: checkWell,
+      Empty: emptyWell,
+    });
+    api.onPlayerLogin(syncWell);
     api.registerCombatMethodResolver({ resolve: resolveScythe });
   },
   _test: {
@@ -252,9 +471,21 @@ module.exports = {
     chargeScythe,
     checkCharges,
     uncharge,
+    wellCharges,
+    fillWell,
+    fillWellWithSets: fillWellSets,
+    chargeAtWell,
+    chargeScytheFromWell,
+    emptyWell,
+    checkWell,
+    depositScythe,
+    findScythe,
     MAX_CHARGES,
     CHARGES_PER_VIAL,
     BLOOD_RUNES_PER_VIAL,
+    WELL_MAX_CHARGES,
+    WELL_VARBIT,
+    WELL_ATTRIBUTE,
     CHARGE_META_KEY,
   },
 };

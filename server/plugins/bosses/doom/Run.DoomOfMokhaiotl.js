@@ -45,6 +45,7 @@ const BOSS_GONE = 7;
 const HOLE_ANIM = 12477;
 const DESCENT_TEXT = "You jump further into the burrow...";
 const MUSIC = 828;
+const BOSS_NAME = "Doom of Mokhaiotl";
 const GAP_ROTATION = 1;
 
 /** The boss HUD (the BossHud plugin): the bar's colours, blue while the shield is up (capture). */
@@ -374,6 +375,7 @@ class DoomRun {
     Records.completed(player, this.level, ticks, this.startedAt === 1 && this.level === 8 ? this.runTicks : 0);
     const red = (text) => `<col=ef1020>${text}</col>`;
     const bestText = best > 0 && best <= ticks ? `. Personal best: ${red(formatTicks(best))}` : ` (new personal best)`;
+    if (!(best > 0 && best <= ticks)) Shared.api().emitCustomEvent("boss:personal-best", { player, boss: `${BOSS_NAME} (Delve level ${key})`, ticks });
     player.sendMessage(`Delve level: ${this.level} duration: ${red(formatTicks(ticks))}${bestText}`);
     player.sendMessage(`Total duration: ${red(formatTicks(this.runTicks))}`);
     const mine = Records.personal(player);

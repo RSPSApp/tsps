@@ -39,6 +39,7 @@ const POINTS = { PER_PERCENT: 8676, CAP: 570000, COMMON_CAP: 131071, TARGET_BONU
 const ITEM = { DARK_JOURNAL: 20899, OLMLET: 20851, KIT: 24670, DUST: 22386, TABLET: 21046, ELITE_CLUE: 12073 };
 const ATTR_TABLET = "cox:ancient-tablet";
 const ATTR_BEST = "cox:best-times";
+const RAID_NAME = "Chambers of Xeric";
 
 /** Weights: [Normal, Challenge Mode]. */
 const UNIQUES = [
@@ -175,6 +176,7 @@ function recordBest(player, raid, time) {
   if (bests[key] == null || raid.duration < bests[key]) {
     bests[key] = raid.duration;
     player.setAttribute(ATTR_BEST, bests);
+    Shared.api().emitCustomEvent("boss:personal-best", { player, boss: `${RAID_NAME}${raid.challenge ? " Challenge Mode" : ""}`, ticks: raid.duration });
     player.sendMessage(`New personal best: <col=ff0000>${time}</col>`);
   }
 }

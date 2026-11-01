@@ -22,6 +22,7 @@ const Hud = require("./Hud.Hueycoatl");
 const CombatAchievements = require("./CombatAchievements.Hueycoatl");
 
 const BODY_QUALIFY = 25;
+const BOSS_NAME = "Hueycoatl";
 const HEAD_TAIL_QUALIFY = 75;
 const TOTAL_QUALIFY = 75;
 const SMALL_TEAM = 5;
@@ -164,6 +165,7 @@ function announceKill(player, kills, ticks) {
   const best = Shared.counter(player, Shared.BEST_TICKS_ATTRIBUTE);
   if (!best || ticks < best) {
     player.setAttribute(Shared.BEST_TICKS_ATTRIBUTE, ticks);
+    api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
     player.sendMessage(`Fight duration: <col=ff0000>${Shared.formatTicks(ticks)}</col> (new personal best)`);
   } else {
     player.sendMessage(`Fight duration: <col=ff0000>${Shared.formatTicks(ticks)}</col>. Personal best: ${Shared.formatTicks(best)}`);

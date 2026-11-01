@@ -83,7 +83,8 @@ function recordClient(sender, state) {
     };
   };
   wrap("sendGraphic", (graphic, at) => {
-    state.client.graphics.push({ id: graphic.getId(), x: at.getX(), y: at.getY(), z: at.getZ() });
+    // PacketSender.sendGraphic reads `graphic.id`, so plain `{ id, delay, height }` objects are valid.
+    state.client.graphics.push({ id: graphic.getId?.() ?? graphic.id, x: at.getX(), y: at.getY(), z: at.getZ() });
     if (state.client.graphics.length > MAX_MESSAGES) state.client.graphics.shift();
   });
   wrap("sendVarbit", (id, value) => { state.client.varbits[id] = value; });

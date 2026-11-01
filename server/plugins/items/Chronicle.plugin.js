@@ -6,14 +6,16 @@
  * if bought back".
  *
  * rsprox 3203 (rev 232): every card in the inventory charges at once, the standard teleport plays
- * (714, spotanim 111), and the charges left show in red on landing. The landing varies by tile:
- * (3202,3355) and (3199,3356), inside the Wiki's 2-tile square on (3201,3355). "The book's powers
+ * (714, spotanim 111), and the charges left show in red on landing. The landing is any free tile
+ * in the Wiki's 2-tile square on (3201,3355); it landed on (3202,3355) and (3199,3356). "The book's powers
  * do not work in the Wilderness." and "Your book has N charges left." are also from that capture;
  * where it disagrees with the Wiki's "You have N charges left in your book." on landing, it wins.
  */
 const MAX_CHARGES = 1000;
 const CHARGES_ATTRIBUTE = "chronicle:charges";
-const LANDING_TILES = [[3202, 3355], [3199, 3356]];
+const LANDING_CENTRE = { x: 3201, y: 3355 };
+const LANDING_RADIUS = 2;
+const LANDING_ATTEMPTS = 16;
 const LANDING_COLOUR = "ef1020";
 
 let core;
@@ -70,8 +72,19 @@ function land(player) {
   player.sendMessage(`<col=${LANDING_COLOUR}>${landingMessage(left)}</col>`);
 }
 
+function landingTile() {
+  const { Location, Misc, RegionManager } = core;
+  for (let attempt = 0; attempt < LANDING_ATTEMPTS; attempt++) {
+    const dx = Misc.getRandom(LANDING_RADIUS * 2) - LANDING_RADIUS;
+    const dy = Misc.getRandom(LANDING_RADIUS * 2) - LANDING_RADIUS;
+    const tile = new Location(LANDING_CENTRE.x + dx, LANDING_CENTRE.y + dy, 0);
+    if (!RegionManager.blocked(tile, null)) return tile;
+  }
+  return new Location(LANDING_CENTRE.x, LANDING_CENTRE.y, 0);
+}
+
 function teleport({ player }) {
-  const { Location, TeleportHandler, TeleportType, Wilderness, Misc } = core;
+  const { TeleportHandler, TeleportType, Wilderness } = core;
   if (Wilderness.isIn(player)) {
     player.sendMessage("The book's powers do not work in the Wilderness.");
     return true;
@@ -80,8 +93,7 @@ function teleport({ player }) {
     player.sendMessage("Your book does not have any charges. Purchase some Teleport Cards from Diango.");
     return true;
   }
-  const [x, y] = LANDING_TILES[Misc.getRandom(LANDING_TILES.length - 1)];
-  const destination = new Location(x, y, 0);
+  const destination = landingTile();
   if (TeleportHandler.checkReqs(player, destination)) {
     TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false, () => land(player));
   }
@@ -90,7 +102,7 @@ function teleport({ player }) {
 
 module.exports = {
   name: "Chronicle",
-  _test: { MAX_CHARGES, CHARGES_ATTRIBUTE, LANDING_TILES, charges, chargeWithCards, checkCharges, teleport },
+  _test: { MAX_CHARGES, CHARGES_ATTRIBUTE, LANDING_CENTRE, LANDING_RADIUS, charges, chargeWithCards, checkCharges, teleport },
   register(api) {
     core = api.core;
     api.persistAttribute(CHARGES_ATTRIBUTE, 0);

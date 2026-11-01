@@ -8,18 +8,21 @@ Server.installProductionPathResolver();
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const Chronicle = require("../plugins/items/Chronicle.plugin");
 
-const { MAX_CHARGES, CHARGES_ATTRIBUTE, LANDING_TILES, charges, chargeWithCards, checkCharges, teleport } = Chronicle._test;
+const { MAX_CHARGES, CHARGES_ATTRIBUTE, LANDING_CENTRE, LANDING_RADIUS, charges, chargeWithCards, checkCharges, teleport } = Chronicle._test;
 
 const hooks = { action: null, onItem: null };
 const teleports = [];
 let wilderness = false;
 let reqsPass = true;
+let nextRandom = () => 0;
+let blocked = () => false;
 Chronicle.register({
   core: {
     ItemIdentifiers,
     Location: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } },
     Wilderness: { isIn: () => wilderness },
-    Misc: { getRandom: () => 0 },
+    Misc: { getRandom: (max) => nextRandom(max) },
+    RegionManager: { blocked: (tile) => blocked(tile) },
     TeleportType: { NORMAL: "normal" },
     TeleportHandler: {
       checkReqs: () => reqsPass,
@@ -101,11 +104,38 @@ test("a teleport lands outside the Champions' Guild and spends its charge on arr
   teleport({ player });
   assert.equal(teleports.length, 1);
   assert.equal(teleports[0].type, "normal");
-  assert.deepEqual([teleports[0].destination.x, teleports[0].destination.y], LANDING_TILES[0]);
   assert.equal(charges(player), 99, "nothing is spent until landing");
   teleports[0].onArrive();
   assert.equal(charges(player), 98);
   assert.equal(player.messages.at(-1), "<col=ef1020>Your book has 98 charges left.</col>");
+});
+
+test("it lands on a free tile in the 2-tile square, or the centre if it finds none (Wiki, rsprox 3203)", () => {
+  const landOn = () => {
+    teleports.length = 0;
+    teleport({ player: createPlayer(0, 5) });
+    const { x, y } = teleports[0].destination;
+    return [x, y];
+  };
+  const rolls = (...values) => { nextRandom = () => values.shift(); };
+
+  for (const captured of [[3202, 3355], [3199, 3356]]) {
+    rolls(captured[0] - LANDING_CENTRE.x + LANDING_RADIUS, captured[1] - LANDING_CENTRE.y + LANDING_RADIUS);
+    assert.deepEqual(landOn(), captured);
+  }
+
+  nextRandom = (max) => { assert.equal(max, LANDING_RADIUS * 2); return max; };
+  assert.deepEqual(landOn(), [3203, 3357], "the far corner of the square");
+
+  rolls(0, 0, 1, 1);
+  blocked = (tile) => tile.x === 3199;
+  assert.deepEqual(landOn(), [3200, 3354], "a blocked tile is rolled again");
+
+  nextRandom = () => 0;
+  blocked = () => true;
+  assert.deepEqual(landOn(), [LANDING_CENTRE.x, LANDING_CENTRE.y]);
+  blocked = () => false;
+  nextRandom = () => 0;
 });
 
 test("the Wilderness, no charges and a refused teleport all spend nothing", () => {

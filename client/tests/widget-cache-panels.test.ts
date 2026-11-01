@@ -82,6 +82,80 @@ import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/n
         assert.equal(cacheVm.context.varManager.getVarp(4560), 1,
             'Default remains selected: the last animation and locked cosmetics cannot be toggled');
     }
+
+    // The native Castle Wars area packets must drive the cache's own barricade text.
+    const serverRoot = require('node:path').resolve(__dirname, '../../server');
+    const clientRoot = process.cwd();
+    process.chdir(serverRoot);
+    require(serverRoot + '/dist/Server').Server.installProductionPathResolver();
+    require(serverRoot + '/dist/game/cache/CachePipeline').CachePipeline.initialize(serverRoot);
+    const { PluginManager } = require(serverRoot + '/dist/plugins/PluginManager');
+    const { Player } = require(serverRoot + '/dist/game/entity/impl/player/Player');
+    const { World } = require(serverRoot + '/dist/game/World');
+    const { RegionManager } = require(serverRoot + '/dist/game/collision/RegionManager');
+    const core = PluginManager.getCoreApi();
+    RegionManager.init();
+    RegionManager.loadMapFiles(2426, 3080);
+    let setUp: (event: any) => void;
+    const api = {
+        core,
+        getAreaManager: () => ({}), getBonusManager: () => ({}),
+        getObjectManager: () => ({ register() {}, deregister() {} }),
+        getRegionManager: () => RegionManager, getTaskManager: () => ({ submit() {} }),
+        getWorld: () => World,
+        registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {},
+        onCustomEvent() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {}, emitCustomEvent() {},
+        onItemAction(_name: string, actions: any) { setUp = actions['Set-up']; },
+        onNpcDeath() {}, onNpcInteraction() {}, onItemOnNpc() {},
+    };
+    const game = require(serverRoot + '/plugins/minigames/castlewars/Game.CastleWars')(api);
+    require(serverRoot + '/plugins/minigames/castlewars/Areas.CastleWars')(api, game);
+    require(serverRoot + '/plugins/minigames/castlewars/Barricades.CastleWars')(api, game);
+    game.isPlaying = () => true;
+    cacheVm.context.varManager.setServerVarbit(16207, 1); // A stale split-cap world must be reset.
+    const received: any[] = [];
+    const player = new Player(null, new core.Location(2426, 3081, 1));
+    player.getSession = () => ({ sendClientPacket(packet: Uint8Array) {
+        const message = decodeServerPacket(packet) as any;
+        received.push(message);
+        if (message.type === 'varbit') cacheVm.context.varManager.setServerVarbit(message.payload.varbitId, message.payload.value);
+        if (message.type === 'varp') cacheVm.context.varManager.setServerVarp(message.payload.varpId, message.payload.value);
+    }, write() {} });
+    player.getInventory().add(new core.Item(core.ItemIdentifiers.BARRICADE, 3));
+    const { SARADOMIN, ZAMORAK } = game.TEAM;
+    const checkBarricades = (team: string, count: number) => {
+        game.setTeamId(player, team);
+        game.gameArea.process(player);
+        const group = team === SARADOMIN ? 58 : 59;
+        wm.getGroup(group);
+        const listener = wm.getWidgetByUid((group << 16) | (group === 58 ? 20 : 19));
+        cacheVm.runScriptEvent({ args: listener.onVarTransmit, widget: listener });
+        assert.equal(cacheVm.lastError, null);
+        assert.equal(wm.getWidgetByUid((group << 16) | 15).text, `${count}/10 Barricades`,
+            `${team} sees its live count through native cache script ${group === 58 ? 887 : 888}`);
+    };
+    checkBarricades(SARADOMIN, 0);
+    setUp!({ player, slot: 0 });
+    const first = [...World.getNpcs()].find((npc: any) => game.isBarricade(npc));
+    assert.ok(first, 'the real inventory action placed a barricade');
+    checkBarricades(SARADOMIN, 1);
+    const unchanged = received.length;
+    checkBarricades(SARADOMIN, 1);
+    assert.equal(received.length, unchanged, 'unchanged area ticks do not resend HUD packets');
+    checkBarricades(ZAMORAK, 0);
+    player.moveTo(new core.Location(2423, 3076, 1));
+    setUp!({ player, slot: 0 });
+    checkBarricades(ZAMORAK, 1);
+    game.removeBarricade(first);
+    World.getNpcs().remove(first);
+    checkBarricades(SARADOMIN, 0);
+    checkBarricades(ZAMORAK, 1);
+    const remaining = [...World.getNpcs()].filter((npc: any) => game.isBarricade(npc));
+    game.resetMatchState();
+    for (const npc of remaining) World.getNpcs().remove(npc);
+    World.getRemoveNPCQueue().splice(0);
+    checkBarricades(ZAMORAK, 0);
+    process.chdir(clientRoot);
 }
 
 console.log("Cache panel scripts retain dynamic inventory items and 64-bit prices");

@@ -201,6 +201,8 @@ function sendGameVars(player, teamId) {
   for (const varbit of Object.values(data.TEAM_VARBIT)) {
     game.setVar(player, varbit, game.getTeamVar(teamId, varbit), true);
   }
+  game.setVar(player, data.STANDARD_WORLD_VARBIT, 0, true);
+  game.setVar(player, data.BARRICADE_COUNT_VARBIT, game.teamBarricadeCount(teamId), true);
   game.setVar(player, data.TIMER_VARP, game.gameMinutesLeft());
 }
 

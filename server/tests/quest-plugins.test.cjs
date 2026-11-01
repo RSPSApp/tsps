@@ -7805,7 +7805,7 @@ test('DT2 relog resumes the Scar only from its exit, so another chapter can be i
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
     getUsername: () => 'dt2-scar-relog-test', getLocation() { return this.location; }, moveTo(location) { this.location = location; },
     area: null, getArea() { return this.area; }, setArea(area) { this.area = area; },
-    getPrivateArea() { return this.area?.isPrivate?.() ? this.area : null; }, isPlayer: () => true, isNpc: () => false,
+    getPrivateArea() { return this.area; }, isPlayer: () => true, isNpc: () => false,
     getInventory: () => ({ getAmount: () => 0 }), sendMessage() {},
     getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, v) => varbits.set(id, v) : () => {} }),
   };
@@ -7818,7 +7818,20 @@ test('DT2 relog resumes the Scar only from its exit, so another chapter can be i
   assert.equal(varbits.get(15128), 10, 'the Scar varbit still goes out');
   player.location = new api.core.Location(3610, 9473, 0); // where leaving the Scar puts the player
   login({ player });
-  assert.ok(attrs.get('desert-treasure-ii:scar-area'), 'a login at the Scar exit resumes it');
+  const scar = attrs.get('desert-treasure-ii:scar-area');
+  assert.ok(scar, 'a login at the Scar exit resumes it');
+  // A real logout from inside: a tick in the instance, then Player.onLogout leaves the area
+  // before the quest's logout hook runs.
+  player.area = scar;
+  player.location = scar.tile(21, 33, 0);
+  handlers.playerProcess.forEach(h => h({ player }));
+  player.area = null;
+  handlers.playerLogout.forEach(h => h({ player }));
+  assert.deepEqual([player.location.getX(), player.location.getY(), player.location.getZ()], [3610, 9473, 0],
+    'logout lands at the Scar exit even after the native area detach');
+  login({ player });
+  assert.ok(attrs.get('desert-treasure-ii:scar-area'), 'and the next login rebuilds the Scar');
+  assert.notEqual(attrs.get('desert-treasure-ii:scar-area'), scar);
 });
 
 test('Desert Treasure II moves saves at the old chapter stages onto the open chapters', () => {

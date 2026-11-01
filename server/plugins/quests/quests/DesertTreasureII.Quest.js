@@ -4585,6 +4585,12 @@ module.exports = function registerDesertTreasureII(api) {
     const saved = p.getAttribute(INSTANCE_EXIT);
     if (exit && String(exit) !== String(saved)) p.setAttribute(INSTANCE_EXIT, exit);
   }
+  function rememberedExitInInstance(p) {
+    const location = p.getLocation?.();
+    const x = location?.getX?.() ?? location?.x;
+    const exit = p.getAttribute(INSTANCE_EXIT);
+    return x >= TEMPLATED_INSTANCE_MIN_X && Array.isArray(exit) && exit.length === 3 ? exit.map(Number) : null;
+  }
   function recoverFromLostInstance(p) {
     const location = p.getLocation?.();
     const x = location?.getX?.() ?? location?.x;
@@ -4623,7 +4629,9 @@ module.exports = function registerDesertTreasureII(api) {
       p.setAttribute(FINAL_WIGHT_INDEX, 0);
     }
     // Before the loop below clears the area attributes it compares against.
-    const exit = instanceExit(p, current);
+    // Player.onLogout leaves the area before this hook runs, so `current` is usually null by
+    // now: fall back to the exit remembered each tick while the player was still inside.
+    const exit = instanceExit(p, current) ?? rememberedExitInInstance(p);
     const returnToDigsite = current && current === p.getAttribute(ATTR_WAR_ROOM);
     const returnToPrison = current && current === p.getAttribute(SUCELLUS_AREA);
     if (returnToPrison) saveSucellusPrisonCheckpoint(p, current);

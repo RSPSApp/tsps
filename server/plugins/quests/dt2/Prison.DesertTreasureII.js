@@ -587,6 +587,7 @@ module.exports = function registerSucellusPrison(api) {
         return true;
       }
       event.handled = true;
+      advanceToAsylum(player);
       // The Duke's chamber is part of this same copied map. Land on its clear
       // south approach so the cache gate can be entered without leaving the
       // owner's prison instance.
@@ -594,6 +595,11 @@ module.exports = function registerSucellusPrison(api) {
       player.sendMessage("You leave the prison and enter the Duke's asylum.");
       return true;
     }
+  }
+
+  // rsprox 1703: dt2_ghorrock 58 -> 60 on the asylum entry (49100).
+  function advanceToAsylum(player) {
+    if (state(player) === 58) setState(player, 60);
   }
 
   function handlePrisonStairs(request) {
@@ -605,6 +611,7 @@ module.exports = function registerSucellusPrison(api) {
     const tile = eventTile({ object }, area);
     if (id !== 49100 || !isTile(tile, TILES.asylum)) return false;
     request.handled = true;
+    advanceToAsylum(player);
     api.emitCustomEvent("ladders:climbDown", {
       player,
       destination: areaLocation(area, 3039, 6431, 0),

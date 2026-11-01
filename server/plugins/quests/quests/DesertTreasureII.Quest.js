@@ -116,7 +116,8 @@ module.exports = function registerDesertTreasureII(api) {
       34, 36, 36, 38, 42, 44, 48, 50, 52, 54][progress] ?? CHAPTER_UNLOCKED;
   }
   function ghorrockProgress(player) {
-    if (player.getAttribute(SUCELLUS_DEFEATED)) return CHAPTERS.sucellus.killed;
+    // rsprox 1703: 64 at the kill, 66 once the Assassin in the west room has spoken.
+    if (player.getAttribute(SUCELLUS_DEFEATED)) return player.getAttribute(SUCELLUS_WEST_ASSASSIN_TALKED) ? 66 : CHAPTERS.sucellus.killed;
     return Number(player.getAttribute(SUCELLUS_PRISON_PROGRESS)) || (player.getAttribute(SUCELLUS_ASSASSIN_GONE) ? 22
       : player.getAttribute(SUCELLUS_CELL_ESCAPED) ? 20
         : player.getAttribute(SUCELLUS_CELL_ENTERED) ? [8, 10, 10, 12, 14, 16, 18, 20][Number(player.getAttribute(SUCELLUS_CELL_PROGRESS)) || 0]
@@ -2815,9 +2816,9 @@ module.exports = function registerDesertTreasureII(api) {
       p.setAttribute(ATTR_LEVIATHAN_AREA, area);
     } else area.enter(p);
     p.moveTo(area.tile(15, 41, 0));
-    setScarVarbit(p, p.getAttribute(SCAR_LEVIATHAN_DEBRIS_SEARCHED) ? 48
-      : p.getAttribute(SCAR_PERSTEN_LEFT_SHIP) ? 46
-        : p.getAttribute(SCAR_LEVIATHAN_KILLED) ? 42 : 40);
+    // rsprox 1703: 40 as the boss intro starts, under the "The Leviathan" title.
+    if (!p.getAttribute(SCAR_LEVIATHAN_KILLED) && !chapterBossStarted(p, "leviathan")) showChapterTitle(p, "The Leviathan");
+    setScarVarbit(p, Math.max(scarProgress(p), CHAPTERS.leviathan.boss));
     if (!p.getAttribute(SCAR_LEVIATHAN_KILLED)) spawnBoss(p, "leviathan");
     else {
       if (p.getAttribute(SCAR_SHIP_REACHED) || p.getAttribute(SCAR_PERSTEN_LEFT_SHIP)) p.moveTo(area.tile(42, 46, 0));
@@ -3450,7 +3451,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.moveTo(scar.tile(51, 43, 0));
       p.setAttribute(SCAR_MAZE_THREE_ACTIVE, false);
       p.setAttribute(SCAR_MEMORY_UNDERWATER, false);
-      setScarVarbit(p, p.getAttribute(SCAR_BOAT3_BURNED) ? 34 : 32);
+      setScarVarbit(p, p.getAttribute(SCAR_BOAT3_BURNED) ? 36 : 32);
       p.sendMessage("You leave the final passage and return to Persten's camp.");
       return true;
     }
@@ -3883,10 +3884,11 @@ module.exports = function registerDesertTreasureII(api) {
   function scarProgress(p) {
     return p.getAttribute(SCAR_LEVIATHAN_DEBRIS_SEARCHED) ? 48
       : p.getAttribute(SCAR_PERSTEN_LEFT_SHIP) ? 46
+        : p.getAttribute(SCAR_SHIP_REACHED) ? 44 // the stepping stone (rsprox 1703)
         : p.getAttribute(SCAR_LEVIATHAN_KILLED) ? 42
           : p.getAttribute(SCAR_LEVIATHAN_READY) ? 38
-      : p.getAttribute(SCAR_PERSTEN_ROOM3_TALKED) ? 36
-        : p.getAttribute(SCAR_BOAT3_BURNED) ? 34
+      : p.getAttribute(SCAR_PERSTEN_ROOM3_TALKED) ? 38
+        : p.getAttribute(SCAR_BOAT3_BURNED) ? 36
           : p.getAttribute(SCAR_MAZE_THREE_ACTIVE) ? 32
             : p.getAttribute(SCAR_PERSTEN_ROOM2_TALKED) ? 30
       : p.getAttribute(SCAR_BOAT2_BURNED) ? 28
@@ -5984,6 +5986,7 @@ module.exports = function registerDesertTreasureII(api) {
       if ([49529, 49210].includes(visibleId) && leviathanTile.x === 2096 && leviathanTile.y === 6382) {
         if (!p.getAttribute(SCAR_LEVIATHAN_KILLED)) { p.sendMessage("The stepping stone is out of reach while the Leviathan attacks."); return true; }
         p.setAttribute(SCAR_SHIP_REACHED, true);
+        setScarVarbit(p, 44);
         p.moveTo(p.getAttribute(ATTR_LEVIATHAN_AREA).tile(42, 46, 0));
         p.sendMessage("You cross the stepping stone to Persten's ship.");
         return true;
@@ -6359,7 +6362,6 @@ module.exports = function registerDesertTreasureII(api) {
     if (inChapter(p, "leviathan") && objectId === O.ROWBOAT_19 && scarTile?.x === 2065 && scarTile.y === 6435) {
       if (p.getAttribute(SCAR_BOAT3_BURNED) && p.getAttribute("desert-treasure-ii:scar-persten-room3-talked")) {
         p.setAttribute(SCAR_LEVIATHAN_READY, true);
-        setScarVarbit(p, 38);
         enterLeviathanArea(p);
         p.sendMessage("You board Persten's ship and sail toward the Leviathan's lair.");
         return true;
@@ -7009,7 +7011,7 @@ module.exports = function registerDesertTreasureII(api) {
       if (!has(p, I.GUNPOWDER_2) || !has(p, I.TINDERBOX)) return p.sendMessage("You need gunpowder and a tinderbox to destroy the shipwreck.");
       p.getInventory().deleteNumber(I.GUNPOWDER_2, 1);
       p.setAttribute(SCAR_BOAT3_BURNED, true);
-      setScarVarbit(p, 34);
+      setScarVarbit(p, 36);
       p.sendMessage("You spread the gunpowder around the wreck and ignite it. The shipwreck burns away.");
       return true;
     }
@@ -7403,7 +7405,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.setAttribute(SCAR_PERSTEN_TALKED, true);
       const scarArea = p.getAttribute(ATTR_SCAR_AREA);
       if (p.getAttribute(SCAR_BOAT3_BURNED)) {
-        setScarVarbit(p, 36);
+        setScarVarbit(p, 38);
         p.setAttribute(SCAR_PERSTEN_ROOM3_TALKED, true);
         talk(p, npcId, "praefectus-classis-perseriya-talking-to-wizard-persten-after-completing-the-third-passage");
       } else if (p.getAttribute(SCAR_BOAT2_BURNED)) {

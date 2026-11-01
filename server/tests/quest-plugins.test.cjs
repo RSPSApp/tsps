@@ -9693,7 +9693,7 @@ test('Desert Treasure II enters the Scar through the Catalytic Guardian and requ
     assert.equal(itemOnObjectHooks[0](burnThirdWreck), true);
     assert.equal(burnThirdWreck.handled, true);
     assert.equal(attrs.get('desert-treasure-ii:scar-boat3-burned'), true);
-    assert.equal(varbits.get(15128), 34);
+    assert.equal(varbits.get(15128), 36, 'rsprox 1703: burning the third ship is dt2_scar 36');
     const thirdCamp = area;
     thirdCamp.destroy();
     assert.equal(objectHooks[0]({ player, objectId: core.ObjectIdentifiers.FLESHY_STRAND, location: finalPassage.tile(23, 36, 0) }), true,
@@ -9704,7 +9704,7 @@ test('Desert Treasure II enters the Scar through the Catalytic Guardian and requ
       'the completed memory puzzle cannot intercept the final return to camp');
     interactions.find((entry) => entry.name === 'Wizard Persten').options['Talk-to']({ player, npcId: core.NpcIdentifiers.WIZARD_PERSTEN_5 });
     assert.equal(transcripts.at(-1), 'praefectus-classis-perseriya-talking-to-wizard-persten-after-completing-the-third-passage');
-    assert.equal(varbits.get(15128), 36);
+    assert.equal(varbits.get(15128), 38, 'and Persten after the third passage 38');
     assert.equal(objectHooks[0]({ player, objectId: core.ObjectIdentifiers.ROWBOAT_19,
       location: area.tile(65, 35, 0) }), true);
     const leviathan = attrs.get('desert-treasure-ii:leviathan-area');

@@ -77,7 +77,7 @@ The flames (56264) on the arena's mouth: Pass asks "Flee the fight? Yama will co
 | Standard attacks | A swing at an adjacent player (12146, landing a tick later), else magic for fire (12144, spot 3246, 3247 on the player) or ranged for shadow (12144, spot 3243, 3244), landing 3 ticks later. 46 at most; Protect from Melee lets 6 through, the other prayers block it all. They can poison (from 20). | capture, Wiki; how often he poisons (1 in 4) is an estimate |
 | Stance | After a melee hit he chases the player (magic defence -30); after magic or ranged he stands his ground (+60). | Wiki |
 | Phase 1 specials | Fire: a flaming rock from above (12145, spot 3253, projectile 3254), landing 6 ticks later and setting the player alight (burn 10). Shadow: a shadow spike (12145, spot 3256, projectile 3257), 6 ticks, draining prayer. | capture; their 46 max and the prayer drain (a third of the damage) are estimates |
-| Phase 2 specials | Meteor Strike (12148, spot 3270, the meteor marker 14182 two ticks in, the blast at six): death within a tile of its centre, 80 two tiles out, 40 three out, nothing further; burn 8. Shadow Stomp (12148, spot 3259, projectile 3260 two ticks in, the hit at five): up to 60, rooted 2 ticks, prayer drained. | capture, Wiki |
+| Phase 2 specials | Meteor Strike (12148, spot 3270, the meteor marker 14182 two ticks in, the blast at six): death within a tile of its centre, 80 two tiles out, 40 three out, nothing further; burn 8. Shadow Stomp (12148, spot 3259, projectile 3260 two ticks in, the hit at five): up to 80, rooted 2 ticks, prayer drained. | capture; Wiki infobox and contract table (the strategy page still says 60) |
 | Overheads | His lines with Meteor Strike and Shadow Stomp (and the phase 1 specials), from the transcript. | capture ("Colabi, infernus"), Wiki |
 | Layout | Arena floor, glyphs, flare tiles: `plugins/bosses/data/yama.json`. | capture |
 
@@ -130,7 +130,11 @@ When the crashes, the flares and the waves come is an estimate from the scim.gg 
 | 9 | His line: a perfect kill, a close one (a quarter of the player's hitpoints or less), or the usual. | capture ("Effective, if a bit cowardly."), transcript |
 | 11 | The loot, in front of the throne at (1503, 10088). | capture, Wiki |
 
-The loot is NpcDrops' roll of the Wiki table without its Contract section (what his contracts reward; `npc-drop-overrides.json` `removeSections`).
+The loot is NpcDrops' roll of the Wiki table without its Contract section (what his contracts reward; `npc-drop-overrides.json` `removeSections`). The export models the Wiki's conditional unique chain as independent separate rolls (horn 2/600, each armour piece 1/600, dossier 1/12, lockbox 1/33, shards 1/17), so the effective rates match but more than one can land on a kill where OSRS stops at the first success.
+
+### The Forgotten lockbox
+
+The 1/33 Forgotten lockbox (`Open`) rolls one reward from the Wiki's 403 chances: dragon bolts (unf) 125 or dragon darts 125/80, oathplate shards 14/11, dragon platelegs or plateskirt, 233,333 coins, or an oathplate helm/chest/legs. The messages are the Wiki transcript's. There is no rsprox capture of an opening: the Yama submissions (3389, 3386, 3347, 3340, 3284, 800, 799, 788, 3285, 2644) have none, and the database has no `Forgotten lockbox` item search. Entrana's "You can't open that here" is not implemented.
 
 ## Death
 
@@ -163,7 +167,7 @@ An instance scene is drawn from its REBUILD_REGION centre chunk less 6, not from
 
 ## Testing
 
-`node --test tests/yama.test.cjs`
+`node --test tests/yama.test.cjs tests/yama-lockbox-overflow.test.cjs`
 
 Developer commands: `::yamahp <hitpoints>` (1666 or 833 reach a phase change at his next attack), `::yamakill` (a hit of his remaining hitpoints from the player, in phase 3), `::yamajudgehp <hitpoints>`, `::yamajudgekill`.
 

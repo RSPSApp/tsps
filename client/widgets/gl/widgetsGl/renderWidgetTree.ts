@@ -1368,6 +1368,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         // not by the GL click registry. Ensure any previously-set handlers are cleared.
                         target.onDown = undefined;
                         target.onClick = undefined;
+                        target.requiresPress = undefined;
                         // Update primaryOption in-place if it exists, create if needed
                         if (primaryOptionText || primaryTarget) {
                             if (!target.primaryOption) {
@@ -1430,6 +1431,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                             hoverText: undefined,
                             primaryOption: undefined,
                             onClick: CANCEL_SELECTION_HANDLER,
+                            // The tap that selects a spell must not cancel it on release.
+                            requiresPress: true,
                             persist: true, // OSRS-style: persist for perf, visibility checked at query time
                             widgetUid: w.uid, // For OSRS-style visibility filtering during hit testing
                         };
@@ -1445,6 +1448,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         target.hoverText = undefined;
                         target.primaryOption = undefined;
                         target.onClick = CANCEL_SELECTION_HANDLER;
+                        target.requiresPress = true;
                         (w as any).__clickTargetId = target.id;
                     }
                     if (profileWidgetRender) {

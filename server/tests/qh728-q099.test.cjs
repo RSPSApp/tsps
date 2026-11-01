@@ -168,7 +168,7 @@ test('Ruff starts only at 15 Crafting, sets helper stage 5 on the start hook and
   assert.equal(p.varbits.get(STAGE_VARBIT), 10);
   // Out of stage, Gertrude Talk-to is released so another quest's handler can claim her.
   const fresh = player();
-  assert.equal(h.namedNpcs.get('Gertrude')['Talk-to']({ player: fresh, npcId: 3500 }), false);
+  assert.equal(h.namedNpcs.get('Gertrude')['Talk-to']({ player: fresh, npcId: N.GERTRUDE }), false);
 });
 
 test('Ruff inspection completion survives a closed conversation and relog: dog Interact replays the tail and reaches stage 35/route cook', () => {

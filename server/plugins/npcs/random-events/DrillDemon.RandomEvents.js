@@ -4,7 +4,9 @@
 // mat whose sign matches the order. Wrong mats only break the streak. Camouflage outfit
 // pieces, then the four exercise emotes with a lamp, then lamps. The training area, mats and
 // sign posts ship in the world data; the posts are swapped to the four exercise signs after
-// every attempt. See SOURCES.md.
+// every attempt. Every mat is a 1x2 pair of ground decorations at y=4819/4820 with its sign
+// at y=4821, so the player is walked onto the north tile and faces the sign before the
+// exercise. See SOURCES.md.
 const Flow = require("./DialogueFlow.RandomEvents");
 const Teleports = require("./Teleports.RandomEvents");
 const Rewards = require("./Rewards.RandomEvents");
@@ -16,7 +18,10 @@ const EXERCISES = [
   { name: "jogging", sign: 20805, animation: 824 },
 ];
 const MATS = [[3160, 20810], [3162, 16508], [3164, 9313], [3166, 20801]];
+const MAT_IDS = new Set(MATS.map(([, id]) => id));
 const SIGNS_Y = 4821;
+// The mat tile under each sign post; the player exercises on it, facing the sign.
+const MAT_ROW_Y = SIGNS_Y - 1;
 const SIGN_IDS = new Set([16502, 16477, 16478, 16507, 9314, 9315, 16506, 20805]);
 const OUTFIT = [6654, 6656, 6655];
 const NEEDED = 4;
@@ -52,7 +57,7 @@ module.exports = function attach(api, Events) {
         options: [
           ["Sir, yes sir!", () => teleport({
             kind: "drill",
-            arrive: { x: 3163, y: 4819, z: 0 },
+            arrive: { x: 3163, y: 4820, z: 0 },
             teleportRefusal: "I haven't dismissed you yet, Private!",
             onStart: start,
           })],
@@ -122,9 +127,21 @@ module.exports = function attach(api, Events) {
     if (!expected) return false;
     event.handled = true;
     const player = event.player;
+    // Route-to-mat has already walked the player onto the tile under the sign; the exercise is
+    // made facing that sign, as in the event area.
+    player.setPositionToFace(new Location(object.getLocation().getX(), SIGNS_Y, object.getLocation().getZ()));
     player.performAnimation(new api.core.Animation(expected.animation));
     judgement(session, expected);
     return true;
+  }
+
+  // Both halves of a mat are 1x1 ground decorations with the sign directly north. Walk the
+  // player onto the north tile instead of stopping in the gap between two mats, then the
+  // interaction runs on arrival. Live capture: rsprox 1846, event area 3128,4768.
+  function routeToMat(event) {
+    if (event.clickType !== 1 || !MAT_IDS.has(event.objectId)) return;
+    const location = event.object.getLocation();
+    event.destination = { x: location.getX(), y: MAT_ROW_Y, z: location.getZ() };
   }
 
   function judgement(session, exercise) {
@@ -157,5 +174,6 @@ module.exports = function attach(api, Events) {
   }
 
   api.onCustomEvent(Events.DEFINITIONS_EVENT, payload => payload.definitions.push(definition));
+  api.onObjectRoute(routeToMat);
   api.onObjectInteraction("Exercise mat", { Use: useMat });
 };

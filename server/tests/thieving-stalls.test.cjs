@@ -5,7 +5,7 @@ const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const Thieving = require('../plugins/skills/Thieving.plugin');
-const { handleStealFromStall: steal, STALLS, depleted, emptyStallId } = Thieving._test;
+const { handleStealFromStall: steal, STALLS, PORT_ROBERTS_STALLS, depleted, emptyStallId } = Thieving._test;
 const core = PluginManager.getCoreApi();
 const O = core.ObjectIdentifiers;
 const I = core.ItemIdentifiers;
@@ -18,7 +18,14 @@ core.ItemDefinition.forId = (id) => ({ getName: () => itemNames.get(id) ?? `item
 const testApi = {
     core: {
         ...core,
-        CacheDefinitions: { getLocNames: () => new Map([[O.BAKERY_STALL_2, 'dwarf_market_bakery'], [O.SILK_STALL_5, 'prif_marketstall_silk']]), getVarbitId: (name) => bits[name.replace("marketthief_", "")], getSeqId: (name) => { assert.equal(name, "human_pickuptable"); return 832; } },
+        CacheDefinitions: { getLocNames: () => new Map([
+            [O.BAKERY_STALL_2, 'dwarf_market_bakery'], [O.SILK_STALL_5, 'prif_marketstall_silk'],
+            [O.VEG_STALL_4, 'port_roberts_market_stall_veg'], [O.SILK_STALL_8, 'port_roberts_market_stall_silk'],
+            [O.FUR_STALL_9, 'port_roberts_market_stall_fur'], [O.FISH_STALL_9, 'port_roberts_market_stall_fish'],
+            [O.SILVER_STALL_7, 'port_roberts_market_stall_silver'], [O.SPICE_STALL_7, 'port_roberts_market_stall_spice'],
+            [O.GEM_STALL_11, 'port_roberts_market_stall_gems'], [O.ORE_STALL_2, 'port_roberts_market_stall_ore'],
+            [O.CANNONBALL_STALL, 'port_roberts_market_stall_cball'],
+        ]), getVarbitId: (name) => bits[name.replace("marketthief_", "")], getSeqId: (name) => { assert.equal(name, "human_pickuptable"); return 832; } },
         World: { getProcessCycle: () => tick, getNpcsNear: (at, radius, area) => npcs.filter((npc) => npc.getLocation().getDistance(at) <= radius && npc.area === area) },
         RegionManager: { canProjectileAttackBounds: (at) => npcs.find((npc) => npc.getLocation() === at).visible },
         TaskManager: { submit: (task) => { task.setRunning(true); tasks.push(task); } },
@@ -77,10 +84,15 @@ function npc(name, { visible = true, attackable = false, hp = 10, area = null, x
 }
 
 test('registers the cache names/options and resolves every reward symbol', () => {
-    assert.equal(hooks.get('Silver stall')['Steal-from'], steal);
-    assert.equal(hooks.get('Spice stall')['Steal-from'], steal);
-    assert.equal(hooks.get('Market stall')['Steal-From'], steal);
-    for (const stall of STALLS.values()) for (const [name] of stall.rewards) assert.ok(I[name] > 0, name);
+    for (const [name, option] of [
+        ['Silver stall', 'Steal-from'], ['Spice stall', 'Steal-from'], ['Market stall', 'Steal-From'],
+        ['Bakery stall', 'Steal-from'], ['Silk stall', 'Steal-from'], ['Tea stall', 'Steal-from'],
+        ['Fur stall', 'Steal-from'], ['Gem stall', 'Steal-from'], ['Gem Stall', 'Steal-from'],
+        ["Baker's stall", 'Steal-from'], ["Baker's Stall", 'Steal-from'], ['Seed Stall', 'Steal from'],
+        ['Fruit Stall', 'Steal-from'], ['Veg stall', 'Steal-from'], ['Fish stall', 'Steal-from'],
+        ['Ore stall', 'Steal-from'], ['Cannonball stall', 'Steal-from'],
+    ]) assert.equal(hooks.get(name)?.[option], steal, `${name} ${option}`);
+    for (const stall of [...STALLS.values(), ...PORT_ROBERTS_STALLS.values()]) for (const [name] of stall.rewards) assert.ok(I[name] > 0, name);
 });
 
 test('silver, spice and wine grant loot/XP and restock at their Wiki intervals', () => {
@@ -240,12 +252,66 @@ test('a depleted private stall remains resolvable and is removed when its instan
     }
 });
 
-test('Port Roberts stalls keep their stock instead of acquiring classic stall depletion', () => {
-    const stall = object(O.SILVER_STALL_7), who = player();
-    click(who, stall, 'Silver stall');
-    advance();
-    assert.equal(who.items.length, 1);
-    assert.equal(objects.length, 0);
+// Wiki: Port Roberts#Marketplace thieving and each stall's page. Nine stalls that reuse the
+// mainland names, so four of them (veg, fish, ore, cannonball) had no handler at all.
+test('every Port Roberts stall grants its own level, XP and stock without depleting', () => {
+    for (const [name, id, level, xp, item] of [
+        ['Veg stall', O.VEG_STALL_4, 2, 5, I.POTATO],
+        ['Silk stall', O.SILK_STALL_8, 20, 24, I.SILK],
+        ['Fur stall', O.FUR_STALL_9, 35, 38.5, I.BEAR_FUR],
+        ['Fish stall', O.FISH_STALL_9, 42, 49.5, I.RAW_SALMON],
+        ['Silver stall', O.SILVER_STALL_7, 50, 80, I.SILVER_ORE],
+        ['Spice stall', O.SPICE_STALL_7, 65, 110, I.SPICE],
+        ['Gem stall', O.GEM_STALL_11, 75, 129.5, I.UNCUT_SAPPHIRE],
+        ['Ore stall', O.ORE_STALL_2, 82, 191, I.IRON_ORE],
+        ['Cannonball stall', O.CANNONBALL_STALL, 87, 223, I.BRONZE_CANNONBALL],
+    ]) {
+        const who = player({ level }), stall = object(id);
+        const random = Math.random;
+        Math.random = () => 0; // The first listed reward.
+        try {
+            assert.equal(click(who, stall, name).handled, true, name);
+            assert.equal(who.items.length, 0, name + ': no immediate item');
+            advance();
+            assert.deepEqual(who.items.map((reward) => reward.getId()), [item], name);
+            assert.deepEqual(who.xp, [xp], name);
+            assert.deepEqual(who.varbits, [], name + ': no mainland theft bit');
+            assert.equal(objects.length, 0, name + ': keeps its stock');
+            assert.ok(!depleted.has(stall), name);
+            assert.equal(who.getAttribute('thieving:stall-thefts'), undefined, name + ': shops stay open');
+        } finally { Math.random = random; }
+    }
+});
+
+test('Port Roberts stalls need their own Thieving level', () => {
+    for (const [name, id, level] of [['Veg stall', O.VEG_STALL_4, 2], ['Ore stall', O.ORE_STALL_2, 82],
+        ['Cannonball stall', O.CANNONBALL_STALL, 87]]) {
+        const who = player({ level: level - 1 });
+        assert.equal(click(who, object(id), name).handled, true, name);
+        assert.deepEqual(who.messages, [`You need a Thieving level of at least ${level} to do this.`], name);
+        assert.equal(tasks.length, 0, name);
+    }
+});
+
+test('Port Roberts stalls allow one theft every five ticks, mainland stalls every two', () => {
+    for (const [name, id, ticks] of [['Ore stall', O.ORE_STALL_2, 5], ['Spice stall', O.SPICE_STALL_3, 2]]) {
+        const who = player();
+        let last = -Infinity;
+        who.getClickDelay = () => ({ elapsedTime: (ms) => tick * 600 - last >= ms, reset: () => { last = tick * 600; } });
+        const stall = object(id);
+        click(who, stall, name);
+        advance();
+        assert.equal(who.items.length, 1, name);
+        for (let waited = 1; waited < ticks; waited++) {
+            click(who, stall, name);
+            advance();
+            assert.equal(who.items.length, 1, `${name}: blocked ${waited} tick(s) after the theft`);
+        }
+        // A fresh stall: a mainland one is already depleted, which is not what is being measured here.
+        click(who, object(id), name);
+        advance();
+        assert.equal(who.items.length, 2, name);
+    }
 });
 
 test('standing under the baker remains a safe spot', () => {

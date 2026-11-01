@@ -366,6 +366,17 @@
     "native": false
   },
   {
+    "questKey": "daddys_home",
+    "sourceKey": "DaddysHome",
+    "variants": [
+      {
+        "helperVariant": "DADDYS_HOME",
+        "helperClass": "com.questhelper.helpers.miniquests.daddyshome.DaddysHome"
+      }
+    ],
+    "native": false
+  },
+  {
     "questKey": "darkness_of_hallowvale",
     "sourceKey": "DarknessOfHallowvale",
     "variants": [

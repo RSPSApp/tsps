@@ -167,6 +167,26 @@ function ownsHouse(request) {
   if (request?.player) request.owns = houseStateFor(request.player).owned !== false;
 }
 
+/**
+ * "construction:grant-house" { player, granted }: gives a starter house in Rimmington when the
+ * player has none (Daddy's Home). `granted` stays false if they already own one, so the caller
+ * can pay the Wiki's 1,000 coins instead.
+ */
+function grantHouse(request) {
+  if (!request?.player) return;
+  const house = houseStateFor(request.player);
+  if (house.owned !== false) {
+    request.granted = false;
+    return;
+  }
+  house.owned = true;
+  house.location = 1;
+  house.style = 0;
+  request.player.setAttribute(HOUSE_ATTRIBUTE, house);
+  syncHouseOptions(request.player);
+  request.granted = true;
+}
+
 function enterHouse(player, buildingMode) {
   if (houseStateFor(player).owned === false) {
     player.sendMessage("You do not own a house. Speak to an Estate agent to buy one.");
@@ -1360,6 +1380,7 @@ function attach(api) {
   api.onCustomEvent("spell:teleport-arrival", houseTeleportArrival);
   api.onCustomEvent("construction:house-tablet", houseTablet);
   api.onCustomEvent("construction:owns-house", ownsHouse);
+  api.onCustomEvent("construction:grant-house", grantHouse);
   api.onSpellDisabled(refuseHouseVengeance);
   api.onPlayerLogin(loginHouse);
   api.onPlayerMapSquareChange(recordRegionVisit);

@@ -1,11 +1,5 @@
 {
-  "$comment": "Exceptions to the cache's own answer, applied by AnimationStalls.plugin.js. Core measures every swing from its seq config (NpcAnimationScanner.getSequenceStall), so a weapon whose animation already withholds steps needs no row here - hunters' crossbows (seq 4230) and the polearm, salamander, chinchompa, obby-ring, banner, partisan and bulwark styles all do. Rows override the measured value by animation id or by equipped weapon id: kind none|partial|full, ticks (omit to keep the cache's length), holdsHits. Cite the source for every row.",
+  "$comment": "Exceptions to the cache's own answer, applied by AnimationStalls.plugin.js. Core measures only how long a swing animation stays on screen (NpcAnimationScanner.getSequenceStall), and every measured swing starts as a partial stall, so a seq the cache rates as stalling needs no row here. A row is only for a *live-verified full stall* the seq config cannot express, and its source must say where that evidence comes from. Rows override the measured value by animation id or by equipped weapon id: kind none|partial|full, ticks (omit to keep the cache's length), holdsHits. There are no current rows: the Wiki's 'Attack animation stalls' list does not distinguish full from partial stalls, and the leaf-bladed battleaxe's walk delay was fixed on 9 July 2020 (Wiki: Leaf-bladed battleaxe - Changes), so it is a partial stall like the rest.",
   "animations": {},
-  "weapons": {
-    "20727": {
-      "kind": "full",
-      "weapon": "Leaf-bladed battleaxe",
-      "source": "Wiki: Animation stall - Attack animation stalls. Its battleaxe seqs (395, 401) carry masks, so the client does not withhold steps for them and the cache alone rates the swing a partial stall."
-    }
-  }
+  "weapons": {}
 }

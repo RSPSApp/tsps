@@ -524,6 +524,19 @@ test('a volume slider released sets the stored volume from its trigger argument'
   assert.equal(applied.length, 0);
 });
 
+test('an All Settings volume slider stores its volume, not a click on its row', () => {
+  const { buttons } = registered();
+  const applied = [];
+  const player = { applyAudioSettingFromClient: (varp, value) => applied.push([varp, value]), getAttribute: () => undefined, setAttribute: () => {} };
+  const list = (134 << 16) | 20;
+  // Scripts 9260-9278 trigger the row with the setting (30: music) and the volume, zigzag varints.
+  assert.equal(buttons.get(list)({ player, buttonId: list, slot: 7, argsData: Buffer.from([60, 84]), scriptTrigger: true }), true);
+  assert.deepEqual(applied, [[168, 42]]);
+  // A setting that isn't a volume is left alone.
+  assert.equal(buttons.get(list)({ player, buttonId: list, slot: 7, argsData: Buffer.from([2, 84]), scriptTrigger: true }), false);
+  assert.equal(applied.length, 1);
+});
+
 test('the mute buttons save the volume and restore it, as live does', () => {
   const { buttons } = registered();
   const audio = { 168: 8, 169: 65, 872: 100, 3796: 100, 3109: 0, 3797: 0 };

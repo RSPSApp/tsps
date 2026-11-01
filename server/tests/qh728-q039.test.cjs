@@ -513,6 +513,68 @@ test('Completion and saved stages replay canonical varbit 334 through login', ()
   }
 });
 
+test('feud_var carries Quest Helper step numbers, not the saved stage, where they differ (#1711)', () => {
+  const { quest, cleanup } = registerQuestPlugin();
+  try {
+    const player = playerFixture();
+    // [saved stage, feud_var Quest Helper reads for the step that comes next]
+    const expected = [
+      [1, 1], [5, 5], [6, 6], [7, 7],
+      [8, 9],   // get the blackjack from Ali
+      [9, 9], [10, 10],
+      [11, 12], // talk to Ali for the second job
+      [12, 13], // hide behind the cactus
+      [13, 14], [14, 14], // the heist (door open is varbit 320)
+      [15, 15], [16, 16],
+      [17, 16], // traitor found (varbit 342), tell Ali
+      [18, 17], [19, 18],
+      [20, 22], // poison the drink
+      [22, 23], [23, 24], [24, 25], [25, 26], [26, 27], [27, 27], [28, 28],
+    ];
+    for (const [stage, wire] of expected) {
+      quest.setStage(player, stage);
+      assert.equal(quest.getStage(player), stage, `stage ${stage} is saved as is`);
+      assert.equal(player.varbits.get(334), wire, `stage ${stage} sends feud_var ${wire}`);
+    }
+  } finally {
+    cleanup();
+  }
+});
+
+test('The cactus answers at every stage and only the safe job advances (#1711)', () => {
+  const { quest, cleanup } = registerQuestPlugin();
+  try {
+    const I = core.ItemIdentifiers;
+    const player = playerFixture({ hands: 1059, head: I.DESERT_DISGUISE });
+    const hide = () => {
+      const event = {
+        player, objectId: core.ObjectIdentifiers.CACTUS_7, object: {},
+        definition: ObjectDefinition.forId(core.ObjectIdentifiers.CACTUS_7), clickType: 1, handled: false,
+      };
+      PluginManager.emitObjectInteraction(event);
+      return event;
+    };
+    for (const stage of [0, 11, 16, 28]) {
+      quest.setStage(player, stage);
+      transcriptCalls.length = 0;
+      assert.equal(hide().handled, true, `stage ${stage} plays the cactus transcript`);
+      assert.equal(transcriptCalls.at(-1)?.variant, 'staking-out-the-house-hiding-behind-the-cactus');
+      assert.equal(condition(player, 'SN-vhR'), true, `stage ${stage} takes the "feel a little silly" branch`);
+      action(player, 'KMB_VR');
+      assert.equal(quest.getStage(player), stage, `stage ${stage} is not advanced by the cactus`);
+    }
+    quest.setStage(player, 12);
+    assert.equal(hide().handled, true);
+    assert.equal(condition(player, 'SN-vhR'), false);
+    assert.equal(condition(player, '3PO7Fj'), true);
+    action(player, 'KMB_VR');
+    assert.equal(quest.getStage(player), 13);
+    assert.equal(player.varbits.get(334), 14, 'Quest Helper moves on to opening the door');
+  } finally {
+    cleanup();
+  }
+});
+
 test('Post-quest Ali the Operator falls through to the registered standard dialogue runner', () => {
   const { quest, cleanup } = registerQuestPlugin();
   const dialogueRunner = registerNpcDialogueRunner();

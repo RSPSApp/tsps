@@ -193,6 +193,13 @@ module.exports = function attach(api, Events) {
         session.data.keyCorrect = false;
         session.data.balloons = [];
         session.player.sendMessage("Welcome to ScapeRune. Speak to Prison Pete.");
+        // The event key is temporary: leaving by the chat option, teleport, death or logout
+        // must not leave it in the player's inventory (issue #1702).
+        Teleports.onEnd(session, () => {
+          if (session.player.getInventory().containsNumber(KEY)) {
+            session.player.getInventory().delete(KEY, 1);
+          }
+        });
         for (const [balloon, tile] of BALLOONS) {
           const npc = Teleports.spawnNpc(session, { id: balloon.id, x: tile[0], y: tile[1], z: 0, wanderRadius: 0 });
           if (npc) session.data.balloons.push({ npc, ...balloon });
@@ -220,7 +227,8 @@ module.exports = function attach(api, Events) {
     session.interfaceId = 273;
     const sender = player.getPacketSender();
     sender.sendInterface(273);
-    sender.sendInterfaceRawModel((273 << 16) | 3, needed.model);
+    // 273:4 is the model widget; 273:3 is the layer that contains it (yarn dump:widget 273).
+    sender.sendInterfaceRawModel((273 << 16) | 4, needed.model);
     sender.sendString("Pop the correct balloon animal to find a key", (273 << 16) | 2);
     player.sendMessage(`The lever reveals the shape of a ${needed.shape}.`);
     Teleports.later(session, 7, () => {
@@ -252,19 +260,17 @@ module.exports = function attach(api, Events) {
     }
     session.data.keyCorrect = balloon.shape === session.data.required.shape;
     player.getInventory().addItem(new api.core.Item(KEY, 1));
-    player.sendMessage("Great, now you've got a key! Bring it to Pete so he can try it on the doors.");
+    player.sendMessage("Great, now you've got a key! Bring it to me so I can try it on the doors.");
     return true;
   }
 
-  function giveKey(event) {
-    const session = Teleports.sessionOf(event.player);
-    if (!session || session.kind !== "prison") return false;
-    if (event.npcId !== N.PRISON_PETE) return false;
-    const source = event.itemId ?? event.sourceItemId;
-    if (source !== KEY) return false;
-    event.handled = true;
-    const player = event.player;
+  // Live OSRS takes the key on Talk-to, not on item use (rsprox 4067 at tick 5104/5105,
+  // rsprox 555): Pete says "Ooh, thanks!" and the key leaves the inventory. Item-on-NPC is
+  // kept as a second route because players also try it.
+  function handInKey(player, session) {
     player.getInventory().delete(KEY, 1);
+    // Either answer spends the shape the lever showed: the next key needs a fresh pull.
+    session.data.required = null;
     if (!session.data.keyCorrect) {
       session.data.barriers = Math.min(BARRIERS_MAX, session.data.barriers + 1);
       player.sendMessage("Aww, that was the wrong key! You must have popped the wrong sort of animal.");
@@ -275,9 +281,23 @@ module.exports = function attach(api, Events) {
     session.data.keyCorrect = false;
     if (session.data.correct >= 3) {
       player.sendMessage("Prison Pete: You did it, you got all the keys right! Thank you! You're my friend FOREVER!");
+      // Live lets Pete open the last door and the pair escape; the reward dialogue plays at
+      // the return tile a few ticks later, so no second Talk-to is needed.
+      Teleports.later(session, 3, () => reward(session));
       return true;
     }
-    player.sendMessage("Prison Pete: Hooray, you got the right one! Pull the lever again!");
+    player.sendMessage("Prison Pete: Hooray, you got the right one! Now pull the lever again and let's get the next portal unlocked!");
+    return true;
+  }
+
+  function giveKey(event) {
+    const session = Teleports.sessionOf(event.player);
+    if (!session || session.kind !== "prison") return false;
+    if (event.npcId !== N.PRISON_PETE) return false;
+    const source = event.itemId ?? event.sourceItemId;
+    if (source !== KEY) return false;
+    event.handled = true;
+    handInKey(event.player, session);
     return true;
   }
 
@@ -286,6 +306,10 @@ module.exports = function attach(api, Events) {
     if (!session || session.kind !== "prison" || event.npc.getId?.() !== N.PRISON_PETE) return false;
     const player = event.player;
     event.handled = true;
+    if (player.getInventory().containsNumber(KEY)) {
+      handInKey(player, session);
+      return true;
+    }
     if (session.data.correct >= 3) {
       reward(session);
       return true;

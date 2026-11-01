@@ -1,17 +1,18 @@
 /**
  * Animation stall exceptions (https://oldschool.runescape.wiki/w/Animation_stall).
  *
- * Core measures every swing from the cache itself: NpcAnimationScanner.getSequenceStall reads
- * the seq config the client uses to decide whether it withholds the actor's steps while the
- * animation plays, so a stalling attack animation needs no row here. This plugin is the layer
- * for the attacks that config cannot express — the Wiki's own list is explicitly not
- * exhaustive, and a weapon whose seq carries masks looks free to the client even when live
- * locks the player.
+ * Core measures how long a swing animation stays on screen from the seq config. Every measured
+ * swing starts as a partial stall: the client may withhold the actor's steps while it plays,
+ * but the server keeps walking the true tile and the client rubber-bands when it ends.
  *
- * Rows live in data/animation-stalls.json, keyed by animation id or by wielded weapon id.
+ * This plugin is only the layer for a *live-verified full stall* the seq config cannot express
+ * (movement, input and incoming hits held). The Wiki's own list is explicitly not exhaustive,
+ * but it also does not distinguish full from partial stalls, so a row needs evidence beyond the
+ * list. Rows live in data/animation-stalls.json, keyed by animation id or by wielded weapon id;
+ * there are no current rows.
  *
- * Not `members: true`: this tunes a mechanic rather than adding content, and the members
- * weapons it names cannot be wielded on a free-to-play world anyway.
+ * Not `members: true`: this tunes a mechanic rather than adding content, and any members row is
+ * unreachable on a free-to-play world anyway.
  */
 const STALLS = require("./data/animation-stalls.json");
 

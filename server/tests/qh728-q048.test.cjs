@@ -299,7 +299,7 @@ test('completion waits until all advertised reward items fit', () => {
   assert.equal(h.inventory.getAmount(I.STEW), 0);
 });
 
-test('production quest order routes Gertrude and the cache-backed mewing crate to Gertrude\'s Cat', () => {
+test('production quest order routes both Gertrude forms between her quests and preserves the mewing crate', () => {
   const core = PluginManager.getCoreApi();
   const N = core.NpcIdentifiers;
   useActualTranscripts = true;
@@ -358,6 +358,36 @@ test('production quest order routes Gertrude and the cache-backed mewing crate t
   tail.setStage(player, 3);
   const handinLines = talk(N.GERTRUDE);
   assert.ok(handinLines.some((line) => line.includes('You\'re back! Thank you!')), `the active q048 hand-in wins in production registration order: ${JSON.stringify(handinLines)} ${JSON.stringify(transcripts.at(-1))}`);
+
+  tail.setStage(player, 0);
+  for (let catStage = 0; catStage <= 6; catStage++) {
+    quest.setStage(player, catStage);
+    const npcId = catStage === 6 ? N.GERTRUDE_2 : N.GERTRUDE;
+    for (const ruffStage of [10, 15]) {
+      ruff.setStage(player, ruffStage);
+      transcripts.length = 0;
+      talk(npcId);
+      const transcript = transcripts.at(-1);
+      if (catStage > 0 && catStage < 6) {
+        assert.equal(transcript?.page, "Gertrude's Cat", `cat stage ${catStage} keeps its active conversation`);
+      } else {
+        assert.deepEqual(transcript, {
+          npcId, page: 'A Ruff Situation',
+          variant: ruffStage === 10 ? 'gertrude' : 'gertrude-talking-to-gertrude-again',
+        }, `cat stage ${catStage}, Ruff stage ${ruffStage}: lost-dog dialogue uses the current Gertrude form`);
+      }
+      assert.equal(quest.getStage(player), catStage, 'talking never resets the cat quest');
+      assert.equal(ruff.getStage(player), ruffStage, 'opening the menu does not advance Ruff');
+    }
+  }
+
+  for (const tailStage of [3, 4]) {
+    tail.setStage(player, tailStage);
+    transcripts.length = 0;
+    talk(N.GERTRUDE_2);
+    assert.equal(transcripts.at(-1)?.page, 'A Tail of Two Cats', 'the active Bob conversation keeps priority');
+    assert.equal(ruff.getStage(player), 15);
+  }
 
   quest.setStage(player, 4);
   const crateDefinition = core.NpcDefinition.forId(N.CRATE);

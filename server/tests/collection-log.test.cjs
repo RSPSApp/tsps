@@ -332,3 +332,20 @@ test("summary panels replace one another in both orders while other overlays sur
   assertOnly(621);
   assert.equal(Data.categoryByKey(Data.tabs()[0], player.getAttribute(Interface.CATEGORY_ATTRIBUTE)).name, "Zulrah");
 });
+
+test("every collection-log pet with a drop source is summonable", () => {
+  const allPets = Data.load().categoriesByStruct.get(535);
+  assert.ok(allPets, "All Pets category");
+  const petItems = new Set(allPets.items);
+  const { _test } = require("../plugins/npcs/NpcDrops.plugin");
+  _test.loadDrops();
+  const { PET_BY_ITEM_ID } = require("../plugins/npcs/Pets.plugin").__internals;
+  const tables = new Map();
+  for (const list of _test.tablesByNpc.values()) for (const table of list) tables.set(table.table_id, table);
+  const check = (entry, where) => {
+    if (!petItems.has(entry.item_id)) return;
+    assert.ok(PET_BY_ITEM_ID.has(entry.item_id), `${entry.name} (${entry.item_id}) from ${where} must summon`);
+  };
+  for (const table of tables.values()) for (const entry of table.tertiary || []) check(entry, table.table_id);
+  for (const entry of require("../plugins/bosses/data/grotesque-guardians.json").drops.tertiary) check(entry, "grotesque_guardians");
+});

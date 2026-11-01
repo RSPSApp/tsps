@@ -1,0 +1,63 @@
+{
+  "_source": "OSRS Wiki item pages: each item below is worn or wielded only after the whole quest it is listed under. Ornament (g/t/h/or) and poisoned copies carry the same requirement. Names are ItemIdentifiers constants; the bare name is the real item, so Last Man Standing copies and the (cr)/(bh) world variants are left out. Quests are matched by name through quest:is-complete.",
+  "_messages": "rsprox capture 3276 (rev 234, rune platebody without Dragon Slayer I): 'You have not earned the right to wear this yet.' then 'You need to complete the Dragon Slayer I quest first.' Capture 1768 (rev 227, dragon halberd) has 'wield' for a weapon. An entry's 'message' replaces both lines where the Wiki records the item's own text.",
+  "quests": [
+    {
+      "quest": "Dragon Slayer I",
+      "items": [
+        "RUNE_PLATEBODY", "RUNE_PLATEBODY_G_", "RUNE_PLATEBODY_T_",
+        "RUNE_PLATEBODY_H1_", "RUNE_PLATEBODY_H2_", "RUNE_PLATEBODY_H3_", "RUNE_PLATEBODY_H4_", "RUNE_PLATEBODY_H5_",
+        "GILDED_PLATEBODY", "SARADOMIN_PLATEBODY", "ZAMORAK_PLATEBODY", "GUTHIX_PLATEBODY",
+        "ARMADYL_PLATEBODY", "BANDOS_PLATEBODY", "ANCIENT_PLATEBODY", "DRAGONSTONE_PLATEBODY",
+        "DRAGON_PLATEBODY", "DRAGON_PLATEBODY_G_",
+        "GREEN_DHIDE_BODY", "GREEN_DHIDE_BODY_G_", "GREEN_DHIDE_BODY_T_", "GILDED_DHIDE_BODY"
+      ]
+    },
+    {
+      "quest": "Lost City",
+      "items": ["DRAGON_LONGSWORD", "DRAGON_DAGGER", "DRAGON_DAGGER_P_", "DRAGON_DAGGER_P_PLUS_", "DRAGON_DAGGER_P_PLUS_PLUS_"]
+    },
+    { "quest": "Heroes' Quest", "items": ["DRAGON_BATTLEAXE", "DRAGON_MACE"] },
+    { "quest": "Monkey Madness I", "items": ["DRAGON_SCIMITAR", "DRAGON_SCIMITAR_OR_"] },
+    { "quest": "Monkey Madness II", "items": ["HEAVY_BALLISTA", "HEAVY_BALLISTA_OR_"] },
+    { "quest": "Regicide", "items": ["DRAGON_HALBERD"] },
+    { "quest": "Legends' Quest", "items": ["DRAGON_SQ_SHIELD", "DRAGON_SQ_SHIELD_G_"] },
+    { "quest": "Desert Treasure I", "items": ["ANCIENT_STAFF"] },
+    { "quest": "Secrets of the North", "items": ["ANCIENT_SCEPTRE"] },
+    {
+      "quest": "The Fremennik Trials",
+      "items": [
+        "ARCHER_HELM", "BERSERKER_HELM", "FARSEER_HELM", "WARRIOR_HELM",
+        "FREMENNIK_HELM", "FREMENNIK_BLADE", "FREMENNIK_SHIELD",
+        "ROCK_SHELL_HELM", "ROCK_SHELL_PLATE", "ROCK_SHELL_LEGS",
+        "SKELETAL_HELM", "SKELETAL_TOP", "SKELETAL_BOTTOMS",
+        "SPINED_HELM", "SPINED_BODY", "SPINED_CHAPS"
+      ]
+    },
+    { "quest": "The Fremennik Isles", "items": ["HELM_OF_NEITIZNOT"] },
+    { "quest": "The Fremennik Exiles", "items": ["NEITIZNOT_FACEGUARD"] },
+    { "quest": "Death Plateau", "items": ["CLIMBING_BOOTS", "CLIMBING_BOOTS_G_"] },
+    { "quest": "Roving Elves", "items": ["CRYSTAL_BOW", "CRYSTAL_SHIELD"] },
+    { "quest": "Grim Tales", "items": ["DWARVEN_HELMET"] },
+    { "quest": "Elemental Workshop I", "items": ["ELEMENTAL_SHIELD"] },
+    { "quest": "Elemental Workshop II", "items": ["MIND_SHIELD", "ELEMENTAL_HELMET"] },
+    { "quest": "Recruitment Drive", "items": ["INITIATE_SALLET", "INITIATE_HAUBERK", "INITIATE_CUISSE"] },
+    { "quest": "The Slug Menace", "items": ["PROSELYTE_SALLET", "PROSELYTE_HAUBERK", "PROSELYTE_CUISSE", "PROSELYTE_TASSET"] },
+    { "quest": "Dragon Slayer II", "items": ["MYTHICAL_CAPE_2"] },
+    {
+      "quest": "Zogre Flesh Eaters",
+      "items": ["INOCULATION_BRACELET"],
+      "message": "You need to have completed the Zogre Flesh Eaters quest to wear a bracelet of inoculation."
+    },
+    {
+      "quest": "Wanted!",
+      "items": [
+        "WHITE_2H_SWORD", "WHITE_BATTLEAXE", "WHITE_CLAWS", "WHITE_DAGGER", "WHITE_DAGGER_P_",
+        "WHITE_DAGGER_P_PLUS_", "WHITE_DAGGER_P_PLUS_PLUS_", "WHITE_HALBERD", "WHITE_LONGSWORD",
+        "WHITE_MACE", "WHITE_MAGIC_STAFF", "WHITE_SCIMITAR", "WHITE_SWORD", "WHITE_WARHAMMER",
+        "WHITE_BOOTS", "WHITE_CHAINBODY", "WHITE_FULL_HELM", "WHITE_GLOVES", "WHITE_KITESHIELD",
+        "WHITE_MED_HELM", "WHITE_PLATEBODY", "WHITE_PLATELEGS", "WHITE_PLATESKIRT", "WHITE_SQ_SHIELD"
+      ]
+    }
+  ]
+}

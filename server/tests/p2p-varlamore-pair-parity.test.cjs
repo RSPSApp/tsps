@@ -197,7 +197,7 @@ test('Ruff uses native5/10/15/20/25 stages, parent den scenery, and all three de
   h.namedNpcs.get('Talia')['Talk-to']({ player: p, npcId: 16486 });
   continueToMenu(h,p); h.choose(p,'Yes.'); assert.equal(h.quest.getStage(p),5);
   h.continueUntil(p,()=>p.text === 'Gertrude.'); assert.equal(h.quest.getStage(p),10);
-  h.namedNpcs.get('Gertrude')['Talk-to']({ player:p, npcId:3500 }); assert.equal(h.quest.getStage(p),10); h.choose(p,'Ask about lost dogs.');
+  h.namedNpcs.get('Gertrude')['Talk-to']({ player:p, npcId:core.NpcIdentifiers.GERTRUDE }); assert.equal(h.quest.getStage(p),10); h.choose(p,'Ask about lost dogs.');
   h.continueUntil(p,()=>p.text.startsWith('Well, it would be nice')); assert.equal(h.quest.getStage(p),15);
   p.moveTo(new core.Location(3180,3425,0)); h.namedNpcs.get('Guard')['Talk-to']({player:p,npcId:16493});
   h.continueUntil(p,()=>p.text === 'Of course I can! Where did you want to go, girl?'); assert.equal(h.quest.getStage(p),20);

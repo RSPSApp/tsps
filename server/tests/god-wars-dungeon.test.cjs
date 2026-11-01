@@ -64,6 +64,9 @@ test("the Wiki's protection items count for their god, not for a god named insid
   assert.equal(Common.isGodItem(armadyl, 28537, "Corrupted armadyl godsword"), false);
   assert.equal(Common.isGodItem(saradomin, 23332, "Rune scimitar"), true);
   assert.equal(Common.isGodItem(saradomin, 1333, "Rune scimitar"), false);
+  // The 28 October 2026 update put the Rondache in the Wiki's Saradomin shield row.
+  assert.equal(Common.isGodItem(saradomin, 34719, "Rondache"), true);
+  assert.equal(Common.isGodItem(bandos, 34719, "Rondache"), false);
 });
 
 test("the count is of worn protection items, and Staff of Light counts for Saradomin and Zamorak", () => {

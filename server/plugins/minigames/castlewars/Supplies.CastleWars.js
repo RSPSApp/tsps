@@ -7,8 +7,6 @@
 const { boostSkill, restoreSkillToBaseWithFormula } = require("../../items/ConsumableEffects");
 
 const TAKE_FIVE_CLICK = 2;
-const SPECIAL_RESTORE_AT_ATTRIBUTE = "castlewars:special-restore-at";
-const SPECIAL_RESTORE_COOLDOWN_TICKS = 50;
 const POTION_AREA = "castle-wars";
 
 let api;
@@ -32,12 +30,6 @@ function giveSupply(player, itemId, amount, message) {
   player.sendMessage(message);
 }
 
-function chooseToolkitSupply(player) {
-  api.sendMultiChatboxPrompt(player, "Take a supply",
-    "Toolkit", () => giveSupply(player, core.ItemIdentifiers.TOOLKIT_2, 1, "You get a toolkit."),
-    "Special restore potion (4)", () => giveSupply(player, data.SPECIAL_RESTORE_DOSES[0], 1, "You get a Castlewars special restore potion."));
-}
-
 function takeSupply(event) {
   const { player, object, clickType } = event;
   const supply = data.SUPPLY_TABLES[object.getId()];
@@ -46,10 +38,6 @@ function takeSupply(event) {
   }
   event.handled = true;
   if (!game.requirePlaying(player)) return;
-  if (object.getId() === core.ObjectIdentifiers.TABLE_42) {
-    chooseToolkitSupply(player);
-    return;
-  }
   const [itemId, message] = supply;
   giveSupply(player, itemId, clickType === TAKE_FIVE_CLICK ? 5 : 1, message);
 }
@@ -81,31 +69,12 @@ function applyBrew(player) {
   api.emitCustomEvent("potions:apply-stamina", { player });
 }
 
-function applySpecialRestore(player) {
-  player.setSpecialPercentage(Math.min(100, player.getSpecialPercentage() + 25));
-  core.CombatSpecial.updateBar(player);
-  player.setAttribute(SPECIAL_RESTORE_AT_ATTRIBUTE, core.World.getProcessCycle() + SPECIAL_RESTORE_COOLDOWN_TICKS);
-}
-
 function registerSupplyPotions() {
   api.emitCustomEvent("potions:register", { name: "Castlewars brew", chains: [data.BREW_DOSES], area: POTION_AREA, emptyItemId: null, effect: applyBrew });
-  api.emitCustomEvent("potions:register", { name: "Castlewars special restore", chains: [data.SPECIAL_RESTORE_DOSES], area: POTION_AREA, emptyItemId: null, effect: applySpecialRestore, shareable: false });
 }
 
 function allowSupplyPotions(event) {
   if (event.area === POTION_AREA) event.inside = game.isPlaying(event.player);
-}
-
-function validateSpecialRestore(event) {
-  if (!data.SPECIAL_RESTORE_DOSES.includes(event.itemId)) return;
-  const ticks = (event.player.getAttribute(SPECIAL_RESTORE_AT_ATTRIBUTE) ?? 0) - core.World.getProcessCycle();
-  if (ticks > 0) {
-    event.allowed = false;
-    event.message = `You must wait ${Math.ceil(ticks * 0.6)} seconds before drinking another special restore potion.`;
-  } else if (event.player.getSpecialPercentage() >= 100) {
-    event.allowed = false;
-    event.message = "Your special attack energy is already full.";
-  }
 }
 
 /** A tap is mounted on a wall: use the cardinal tile in front, rather than reaching diagonally. */
@@ -140,5 +109,4 @@ module.exports = function attachCastleWarsSupplies(pluginApi, castleWars) {
   api.onServerStartup(registerSupplyPotions);
   api.onCustomEvent("castlewars:started-player", giveStartingPouch);
   api.onCustomEvent("potions:area", allowSupplyPotions);
-  api.onCustomEvent("potions:validate-drink", validateSpecialRestore);
 };

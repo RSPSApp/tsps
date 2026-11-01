@@ -165,37 +165,6 @@ test('Castlewars brew uses normal potion cooldowns and restores stats, prayer an
   assert.equal(p.getInventory().getItems()[0].getId(), data.BREW_DOSES[1], 'shared potion cooldown prevents double drinking');
 });
 
-test('special restore from the toolkit table restores 25% per dose, at most once per 30 seconds', (t) => {
-  const { p, messages } = player(t);
-  let tick = 100;
-  t.mock.method(core.World, 'getProcessCycle', () => tick);
-  p.setSpecialPercentage(0);
-  table(p, core.ObjectIdentifiers.TABLE_42);
-  assert.equal(choices[2], 'Special restore potion (4)');
-  choices[3]();
-  assert.equal(p.getInventory().getItems()[0].getId(), data.SPECIAL_RESTORE_DOSES[0]);
-  drink(p, data.SPECIAL_RESTORE_DOSES[0]);
-  assert.equal(p.getSpecialPercentage(), 25);
-  assert.equal(p.getInventory().getItems()[0].getId(), data.SPECIAL_RESTORE_DOSES[1]);
-  p.getTimers().cancel(core.TimerKey.POTION);
-  tick += 49;
-  drink(p, data.SPECIAL_RESTORE_DOSES[1]);
-  assert.equal(p.getSpecialPercentage(), 25);
-  assert.match(messages.at(-1), /must wait/);
-  tick++;
-  drink(p, data.SPECIAL_RESTORE_DOSES[1]);
-  assert.equal(p.getSpecialPercentage(), 50);
-  p.getTimers().cancel(core.TimerKey.POTION);
-  tick += 50;
-  p.setSpecialPercentage(90);
-  drink(p, data.SPECIAL_RESTORE_DOSES[2]);
-  assert.equal(p.getSpecialPercentage(), 100);
-  p.getTimers().cancel(core.TimerKey.POTION);
-  tick += 50;
-  drink(p, data.SPECIAL_RESTORE_DOSES[3]);
-  assert.equal(p.getInventory().getItems()[0].getId(), data.SPECIAL_RESTORE_DOSES[3], 'a full bar does not consume the potion');
-});
-
 test('game-only potions refuse drinking outside Castle Wars and while stunned', (t) => {
   const { p } = player(t, false);
   p.getInventory().setItem(0, new core.Item(data.BREW_DOSES[0], 1));
@@ -239,7 +208,7 @@ test('bucket routing stands directly next to a Castle Wars tap', (t) => {
 });
 
 test('cleanup includes buckets and every potion dose; Lanthus and ground supplies use corrected canonical spawns', () => {
-  for (const id of [core.ItemIdentifiers.BUCKET, core.ItemIdentifiers.BUCKET_OF_WATER, ...data.BREW_DOSES, ...data.SPECIAL_RESTORE_DOSES]) {
+  for (const id of [core.ItemIdentifiers.BUCKET, core.ItemIdentifiers.BUCKET_OF_WATER, ...data.BREW_DOSES]) {
     assert.equal(data.CLEANUP_ITEM_IDS.has(id), true);
     assert.equal(data.DEATH_REMOVE_ITEM_IDS.has(id), true);
   }

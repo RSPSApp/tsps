@@ -174,6 +174,6 @@ Log out normally and close RuneLite. Stop the gateway terminal, then stop TSPS a
 
 ## Implementation and troubleshooting
 
-- [Gateway](../tools/runelite-gateway/README.md): RSProt version, cache/framing details, configuration and focused checks.
-- [Client launcher](../tools/runelite-client/README.md): RuneLite/RSProx/renderer pins, signature verification and private runtime.
+- [Gateway](https://github.com/RSPSApp/tsps/blob/main/tools/runelite-gateway/README.md): RSProt version, cache/framing details, configuration and focused checks.
+- [Client launcher](https://github.com/RSPSApp/tsps/blob/main/tools/runelite-client/README.md): RuneLite/RSProx/renderer pins, signature verification and private runtime.
 - `-TraceInput` on the gateway and `-Diagnostics` on the client enable opt-in debugging; public/game chat text can appear in local logs. Normal launches leave these off. Do not publish private runtime keys, account databases or logs.

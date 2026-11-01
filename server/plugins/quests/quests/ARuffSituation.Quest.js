@@ -41,7 +41,7 @@ module.exports = function registerARuffSituationQuest(api) {
 
   const TALIA_NPC_ID = NpcIdentifiers.TALIA_2; // 16486
   const CHASE_NPC_ID = NpcIdentifiers.CHASE; // 16488
-  const GERTRUDE_NPC_ID = 3500; // Canonical Varrock Gertrude
+  const GERTRUDE_NPC_IDS = new Set([NpcIdentifiers.GERTRUDE, NpcIdentifiers.GERTRUDE_2]);
   const QUEST_GUARD_NPC_ID = NpcIdentifiers.GUARD_302; // 16493
   const STRAY_DOG_NPC_ID = NpcIdentifiers.STRAY_DOG_8; // 16504, Interact
   const STRAY_DOG_FOLLOWING_NPC_ID = NpcIdentifiers.STRAY_DOG_9; // 16505, Interact|Dismiss
@@ -712,7 +712,7 @@ module.exports = function registerARuffSituationQuest(api) {
 
   function talkGertrude(event) {
     const { player, npcId } = event;
-    if (![GERTRUDE_NPC_ID, 7284].includes(npcId)) return false;
+    if (!GERTRUDE_NPC_IDS.has(npcId)) return false;
     const tailStage = questStage(player, "a_tail_of_two_cats");
     if (tailStage === 3 || tailStage === 4) return false;
     const gertrudesCatStage = questStage(player, GERTRUDES_CAT_KEY);

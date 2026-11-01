@@ -37,6 +37,8 @@ function setup({ tasteOfHope = false } = {}) {
   const itemItemHooks = [];
   const dialogueConditionHooks = [];
   const groundHooks = [];
+  const itemActionHooks = [];
+  const npcDeathHooks = [];
   const loginHooks = [];
   const logoutHooks = [];
   const levels = new Map();
@@ -67,12 +69,16 @@ function setup({ tasteOfHope = false } = {}) {
     onPlayerLogin(fn) { loginHooks.push(fn); },
     onPlayerLogout(fn) { logoutHooks.push(fn); },
     onNpcHitModify() {},
-    onNpcDeath() {},
-    onItemAction() {},
+    onNpcDeath(fn) { npcDeathHooks.push(fn); },
+    onItemAction(first, second) {
+      if (typeof first === 'function') itemActionHooks.push(first);
+      else for (const fn of Object.values(second ?? {})) itemActionHooks.push(fn);
+    },
     spawnNpc(def) {
       const npc = {
         def,
         getId: () => def.id,
+        getOwner: () => def.owner,
         getLocation: () => new core.Location(def.x, def.y, def.z),
         setPositionToFace() {},
         isRegistered: () => true,
@@ -104,6 +110,7 @@ function setup({ tasteOfHope = false } = {}) {
   const items = new Map();
   const varbits = new Map();
   const messages = [];
+  const damage = [];
   const xp = [];
   let location = new core.Location(3595, 3310, 1);
   let freeSlots = 28;
@@ -133,7 +140,7 @@ function setup({ tasteOfHope = false } = {}) {
       getCombatLevel: () => 99,
       addExperiences(skill, amount) { xp.push({ skill, amount }); },
     }),
-    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {} }) }),
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage(hit) { damage.push(hit); } }) }),
     getLocation: () => location,
     moveTo(value) { location = new core.Location(value.getX(), value.getY(), value.getZ()); },
     getPrivateArea: () => null,
@@ -183,6 +190,29 @@ function setup({ tasteOfHope = false } = {}) {
     for (const hook of groundHooks) hook(event);
     return event;
   };
+  const itemAction = (itemId, option) => {
+    const event = { player, itemId, option, handled: false };
+    for (const hook of itemActionHooks) hook(event);
+    return event;
+  };
+  const npcDeath = (npcId, npc = null, killer = player) => {
+    const target = npc ?? spawned.findLast((entry) => entry.getId() === npcId) ?? {
+      getId: () => npcId,
+      getOwner: () => killer,
+    };
+    // NPCDeathTask's real event shape: killer/damagers/npc/npcId/location/remains.
+    const event = {
+      killer,
+      damagers: [killer],
+      npc: target,
+      npcId,
+      location: player.getLocation(),
+      remains: null,
+      handled: false,
+    };
+    for (const hook of npcDeathHooks) hook(event);
+    return event;
+  };
   const itemOnItem = (usedItemId, usedWithItemId) => {
     const event = { player, usedItemId, usedWithItemId };
     for (const hook of itemItemHooks) hook(event);
@@ -205,8 +235,9 @@ function setup({ tasteOfHope = false } = {}) {
   };
 
   return {
-    api, core, quest, tasteQuest, player, items, varbits, messages, xp, transcripts,
-    spawned, removed, action, choice, condition, answerCondition, object, npc, ground, itemOnObject, itemOnItem, login, emit,
+    api, core, quest, tasteQuest, player, items, varbits, messages, damage, xp, transcripts,
+    spawned, removed, action, choice, condition, answerCondition, object, npc, ground, itemOnObject, itemOnItem,
+    itemAction, npcDeath, login, emit,
     stage: () => quest.getStage(player),
     setSkill: (skill, level) => levels.set(skill, level),
     journal: () => quest.buildJournal(player, quest),
@@ -958,4 +989,215 @@ test('Sarius Guile is a real stage-240 Talk-to, split from the imported south sc
   assert.ok(talkSteps.some((step) => step.id === 'p6b9Lc'), 'the imported Sarius departure remains');
   assert.equal(h.stage(), 250, 'talking to Sarius completes the all-three sketch leg');
   assert.ok(h.removed.some((npc) => npc.getId() === SARIUS_ID), 'Sarius is released after stage 250');
+});
+
+test('a lost northern sketch is recoverable at the stage-250 hand-in step', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers;
+  h.setStage(200);
+  h.action('H84BAo'); // Safalaan's charcoal and sketch leg.
+  h.setStage(250);
+  h.items.set(I.PAPYRUS, 1);
+  h.setLocation(3556, 3379, 0);
+  h.itemOnItem(I.CHARCOAL, I.PAPYRUS);
+  assert.match(h.transcripts.at(-1).variant, /sketching-the-north-side$/);
+  h.action('40UwLv'); // Consume the papyrus.
+  h.action('stfs9v'); // Reissue castle sketch 1.
+  assert.equal(h.items.get(I.CASTLE_SKETCH_1), 1);
+  assert.equal(h.items.get(I.PAPYRUS) ?? 0, 0);
+  assert.equal(h.stage(), 250, 'the recovery does not move the stage backwards or forwards');
+});
+
+test('a lost western sketch is recoverable at the stage-250 hand-in step', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers;
+  h.setStage(200);
+  h.action('H84BAo'); // Safalaan's charcoal and sketch leg.
+  h.setStage(250);
+  h.items.set(I.CASTLE_SKETCH_1, 1);
+  h.items.set(I.PAPYRUS, 1);
+  h.setLocation(3522, 3357, 0);
+  h.itemOnItem(I.CHARCOAL, I.PAPYRUS);
+  assert.match(h.transcripts.at(-1).variant, /sketching-the-west-side$/);
+  h.action('5hTQYh'); // Consume the papyrus.
+  h.action('9HmeKD'); // Reissue castle sketch 2.
+  assert.equal(h.items.get(I.CASTLE_SKETCH_2), 1);
+  assert.equal(h.items.get(I.PAPYRUS) ?? 0, 0);
+  assert.equal(h.stage(), 250, 'the recovery does not move the stage backwards or forwards');
+});
+
+test('later objectives cannot be replayed out of order', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers;
+  h.setStage(0);
+
+  h.action('xIJysR');
+  h.action('IxTC2L');
+  h.action('w7RMRv');
+  h.action('3QAxxe');
+  h.action('CvqNxO');
+  h.action('lOyj8b');
+  h.action('K65B9f');
+  assert.equal(h.stage(), 0, 'no later action can move an unstarted quest');
+  assert.equal(h.items.get(I.SEALED_MESSAGE) ?? 0, 0);
+  assert.equal(h.items.get(I.CASTLE_SKETCH_3) ?? 0, 0);
+  assert.equal(h.items.get(I.LARGE_ORNATE_KEY) ?? 0, 0);
+  assert.equal(h.items.get(I.AIR_RUNE) ?? 0, 0);
+  assert.equal(h.damage.length, 0, 'no out-of-order damage is applied');
+
+  h.setStage(200);
+  h.object(18039); // Fireplace
+  h.object(18125); // Tapestry
+  assert.equal(h.stage(), 200);
+  assert.equal(h.transcripts.length, 0, 'the laboratory chain is not available before the sketches are done');
+});
+
+test('Aeonisig Raispher owns the post-Roald teleport instead of King Roald', () => {
+  const h = setup();
+  h.setStage(140);
+  h.setLocation(3224, 3473, 0);
+  h.npc(h.core.NpcIdentifiers.AEONISIG_RAISPHER_2);
+  assert.equal(h.transcripts.at(-1)?.page, 'Darkness of Hallowvale');
+  assert.equal(
+    h.transcripts.at(-1)?.variant,
+    'misthalin-diplomacy-talking-to-king-roald-again'
+  );
+  h.action('K65B9f');
+  assert.equal(h.stage(), 160);
+  assert.deepEqual(
+    [h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()],
+    [3439, 9896, 0],
+    'Aeonisig teleports the player back to Paterdomus'
+  );
+});
+
+test('Trader Sven keeps his black-market conversation through the named handler', () => {
+  const h = setup();
+  const event = h.npc(h.core.NpcIdentifiers.TRADER_SVEN);
+  assert.equal(event.handled, true);
+  assert.equal(h.transcripts.at(-1)?.page, 'Trader Sven');
+  assert.equal(h.transcripts.at(-1)?.variant, 'standard-dialogue');
+});
+
+test('Vanstrom lands five attacks and his death still resolves the ambush', () => {
+  const h = setup();
+  h.setStage(220);
+  h.setLocation(3572, 3331, 0);
+  h.action('LZKiDZ');
+  assert.equal(h.damage.length, 5, 'the ambush applies Vanstrom five attacks');
+  assert.ok(
+    h.spawned.some((npc) => npc.getId() === h.core.NpcIdentifiers.VANSTROM_KLAUSE_3),
+    'Vanstrom is present for the ambush'
+  );
+  assert.equal(h.stage(), 220);
+
+  const death = h.npcDeath(h.core.NpcIdentifiers.VANSTROM_KLAUSE_3);
+  assert.equal(death.player, undefined, 'the production death event has no player field');
+  assert.equal(death.killer, h.player, 'the killer is the owner of the ambush actor');
+  assert.equal(h.stage(), 240, 'the scene still resolves if Vanstrom dies');
+  assert.ok(h.spawned.some((npc) => npc.getId() === SARIUS_ID), 'Sarius arrives after the ambush');
+  assert.ok(h.removed.some((npc) => npc.getId() === h.core.NpcIdentifiers.VANSTROM_KLAUSE_3));
+});
+
+test('Vanstrom death is ignored for a killer who does not own the ambush actor', () => {
+  const h = setup();
+  h.setStage(220);
+  h.action('LZKiDZ');
+  const otherPlayer = { ...h.player, getUsername: () => 'not-the-owner', isPlayer: () => true };
+  h.npcDeath(h.core.NpcIdentifiers.VANSTROM_KLAUSE_3, null, otherPlayer);
+  assert.equal(h.stage(), 220, 'another player cannot advance the owner\'s ambush');
+});
+
+test('sealed message and sketch hand-ins clean up every copy they consume', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers;
+
+  h.setStage(250);
+  h.items.set(I.CASTLE_SKETCH_1, 2);
+  h.items.set(I.CASTLE_SKETCH_2, 2);
+  h.items.set(I.CASTLE_SKETCH_3, 2);
+  h.action('3RdQ7u');
+  assert.equal(h.stage(), 260);
+  for (const id of [I.CASTLE_SKETCH_1, I.CASTLE_SKETCH_2, I.CASTLE_SKETCH_3]) {
+    assert.equal(h.items.get(id) ?? 0, 0, `sketch ${id} is fully consumed`);
+  }
+
+  h.setStage(300);
+  h.items.set(I.SEALED_MESSAGE, 2);
+  h.action('xIJysR');
+  assert.equal(h.stage(), 310);
+  assert.equal(h.items.get(I.SEALED_MESSAGE) ?? 0, 0, 'the sealed message is fully consumed');
+});
+
+test('a lost sealed message is reissued by Safalaan and can be read before the hand-in', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers;
+  h.setStage(300);
+  h.npc(SAFALAAN_ID);
+  assert.equal(
+    h.transcripts.at(-1)?.variant,
+    'in-search-of-statuesque-evil-talking-to-safalaan-hallow-after-losing-the-sealed-message'
+  );
+  h.action('nvMPrA');
+  assert.equal(h.items.get(I.SEALED_MESSAGE), 1);
+
+  const read = h.itemAction(I.SEALED_MESSAGE, 'Read');
+  assert.equal(read.handled, true);
+  assert.equal(
+    h.transcripts.at(-1)?.variant,
+    'in-search-of-statuesque-evil-attempting-to-read-the-sealed-message'
+  );
+});
+
+test('quest item actions are owned by the quest and examine the right item', () => {
+  const h = setup();
+  const I = h.core.ItemIdentifiers;
+
+  const unrelated = h.itemAction(I.HAMMER, 'Look-at');
+  assert.equal(unrelated.handled, false, 'unrelated items stay with their owners');
+
+  const sketch = h.itemAction(I.CASTLE_SKETCH_1, 'Look-at');
+  assert.equal(sketch.handled, true);
+  assert.ok(h.messages.some((message) => /northern approach/i.test(message)));
+
+  h.setStage(290);
+  h.items.set(I.HAEMALCHEMY_VOLUME_1, 1);
+  const book = h.itemAction(I.HAEMALCHEMY_VOLUME_1, 'Read');
+  assert.equal(book.handled, true);
+  assert.equal(
+    h.transcripts.at(-1)?.variant,
+    'in-search-of-statuesque-evil-attempting-to-read-haemalchemy-volume-1'
+  );
+});
+
+test('the sickle-symbol rooftop route moves only after Ral gives the route', () => {
+  const h = setup();
+  h.setStage(65);
+  h.setLocation(3598, 3203, 1);
+  const jump = h.object(18070);
+  assert.equal(jump.handled, true);
+  assert.deepEqual(
+    [h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()],
+    [3598, 3201, 1]
+  );
+
+  h.setLocation(3595, 3203, 0);
+  h.object(17974); // Ladder up
+  assert.deepEqual(
+    [h.player.getLocation().getX(), h.player.getLocation().getY(), h.player.getLocation().getZ()],
+    [3595, 3205, 1]
+  );
+
+  h.object(18074); // First rooftop push-wall
+  assert.equal(h.varbits.get(2599), 2, 'pushing the wall transforms it for the client');
+
+  const blocked = setup();
+  blocked.setStage(10);
+  blocked.setLocation(3598, 3203, 1);
+  const early = blocked.object(18070);
+  assert.notEqual(early.handled, true, 'the route is closed before Ral gives the password');
+  assert.deepEqual(
+    [blocked.player.getLocation().getX(), blocked.player.getLocation().getY(), blocked.player.getLocation().getZ()],
+    [3598, 3203, 1]
+  );
 });

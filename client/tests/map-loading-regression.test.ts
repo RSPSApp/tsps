@@ -9,7 +9,7 @@ import { ClientState } from "../game/ClientState";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import { clearSessionCaches } from "../render/render/session";
 import { onLocAddChange } from "../render/render/locs";
-import { onLocDel, scheduleLocReload } from "../render/render/locs2";
+import { onLocDel, reloadLocAnimationTile, scheduleLocReload } from "../render/render/locs2";
 import { getMapSquareId } from "../rs/map/MapFileIndex";
 import { MapFileLoader } from "../rs/map/MapFileLoader";
 import { LocModelLoader } from "../rs/config/loctype/LocModelLoader";
@@ -99,7 +99,7 @@ async function instanceRebuildKeepsTheSceneUntilTheSwap(): Promise<void> {
         },
         addedLocs: new Map(), locOverrides: new Map(), locSpawns: new Map(),
         instanceActive: false, instanceTemplateChunks: null, instanceLocRebuildTimer: null,
-        instanceBuildSeq: 0, pendingInstanceScene: null,
+        instanceBuildSeq: 0, instanceAppliedBuild: 0, pendingInstanceScene: null,
         mapsToLoad: { items: [] as any[], clear() { this.items.length = 0; }, push(item: any) { this.items.push(item); }, toArray() { return this.items; } },
         pendingStreamMapsByGeneration: new Map(),
         mapManager: { loadingMapIds: new Set<number>(), mapSquares: new Map() },
@@ -125,6 +125,22 @@ async function instanceRebuildKeepsTheSceneUntilTheSwap(): Promise<void> {
     assert.deepEqual(host.mapsToLoad.items.map((map: any) => map.id), ["new"], "a superseded build is dropped");
     assert.equal(host.pendingInstanceScene?.id, "new");
     assert.ok(drawn.has("old") && cleared === 0, "still drawing the old scene until the new one is applied");
+
+    // Loc rebuilds of the same instance overlap when locs change every tick (Tempoross' cannons):
+    // each finished build is drawn, else none would be until the changes stopped, and one
+    // finishing after a newer build was drawn is dropped.
+    const chunks = host.instanceTemplateChunks;
+    const rebuilds = [1, 2, 3].map(() => doInstanceSceneBuild(host, chunks, 100, 100, 12, 12));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(builds.length, 5);
+    builds[2]({ mapX: 12, mapY: 12, id: "rebuild-1" });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(host.pendingInstanceScene?.id, "rebuild-1", "a build superseded while in flight is still drawn");
+    builds[4]({ mapX: 12, mapY: 12, id: "rebuild-3" });
+    builds[3]({ mapX: 12, mapY: 12, id: "rebuild-2" });
+    await Promise.all(rebuilds);
+    assert.equal(host.pendingInstanceScene?.id, "rebuild-3", "an older build finishing later is dropped");
+    assert.deepEqual(host.mapsToLoad.items.map((map: any) => map.id), ["rebuild-3"]);
 
     replaceSceneWithInstance(host, host.pendingInstanceScene);
     assert.equal(cleared, 1);
@@ -524,6 +540,15 @@ function instanceFurnitureReplacesOnlyItsHotspot(): void {
         host.instanceBuildsInFlight = 1;
         onLocAddChange(host, 13016, { x: 6439, y: 6443 }, 1, 0, 2);
         assert.equal(rebuilds, 1, "a change during a whole-scene build rebuilds the scene, which covers it");
+
+        // A loc animation (a Tempoross cannon firing every 2 ticks) rebuilds only the scene's
+        // locs too: a whole-scene rebuild per animation kept the scene's new locs from showing.
+        host.instanceBuildsInFlight = 0;
+        host.osrsClient.locTypeLoader = { load: () => ({ id: 41238, actions: [], name: "Harpoonfish cannon", seqId: -1 }) };
+        updates.length = 0;
+        reloadLocAnimationTile(host, { x: 6438, y: 6443 }, 41238);
+        assert.deepEqual(updates, ["100,100,loc"], "an instance loc animation rebuilds only the scene's locs");
+        assert.equal(rebuilds, 1);
     }
     builder.clearLocOverrides();
     builder.setLocOverride(2, 3, 0, -1, 0, undefined, undefined, undefined, undefined, undefined, 10);

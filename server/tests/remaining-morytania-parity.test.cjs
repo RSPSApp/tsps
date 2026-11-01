@@ -28,6 +28,7 @@ function harness(name, page = null, options = {}) {
   const api = new Proxy({
     core: {
       ...core,
+      PathFinder: Object.assign(Object.create(core.PathFinder), { calculateWalkRoute: (npc, x, y) => npc.getMovementQueue().addSteps?.(new core.Location(x, y, npc.getLocation().getZ())) }),
       World: { ...core.World, getNpcs: () => npcs, getNpcsNear: () => npcs, getPlayers: () => worldPlayers },
       TaskManager: {
         submit(task) { task.setRunning(true); tasks.push(task); },
@@ -57,7 +58,7 @@ function harness(name, page = null, options = {}) {
         isNpc: () => true, isPlayer: () => false,
         getAsNpc: () => npc, isRegistered: () => !npc.removed, getOwner: () => definition.owner,
         setPositionToFace: noop, forceChat: noop, performAnimation: noop, performGraphic: noop,
-        getMovementQueue: () => ({ reset() { return this; }, hasPendingWork: () => false, addFirstStep: to => { location = to; } }),
+        getMovementQueue: () => ({ reset() { return this; }, hasPendingWork: () => false, addFirstStep: to => { location = to; }, addSteps: to => { npc.walkingTo = to; } }),
         setNpcTransformationId: id => { npc.transformedId = id; }, setCombatXpMultiplier: noop,
         setHitpoints: hp => { npc.hitpoints = hp; return npc; }, getHitpoints: () => npc.hitpoints ?? 2000,
         getCombat: () => ({ reset: noop }),
@@ -439,7 +440,7 @@ test('Children cell scene places captured actors, walks Itzla and recovers on re
   assert.equal(h.quest.getStage(p), 20);
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [10172, 3399, 2]);
   h.tick(1);
-  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3203, 3473, 2]);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3203, 3474, 2]);
   assert.ok(!h.npcs.some(npc => npc.getId() === N.BANDIT_20 && !npc.removed && npc.getOwner?.() === p));
   h.action(p, N.SERGEANT_TOBYN, 'VS01WH');
   assert.equal(h.quest.getStage(p), 22);
@@ -751,7 +752,7 @@ test('Sins stage-dependent route objects are per-player, not global', () => {
   assert.equal(doorOverlay(early, 38071).length, 1, 'the other player keeps their overlay');
 });
 
-test('Children replay sends the captured delegation, eavesdrop and roof cameras with resets', () => {
+test('Children replay sends the captured delegation, eavesdrop and cell cameras with resets', () => {
   const h = harness('ChildrenOfTheSun', 'Children of the Sun'), p = player();
   const moves = () => p.log.filter(row => row[0] === 'sendCameraMoveTo');
   const resets = () => p.log.filter(row => row[0] === 'sendCameraReset').length;
@@ -765,19 +766,22 @@ test('Children replay sends the captured delegation, eavesdrop and roof cameras 
 
   h.quest.setStage(p, 8);
   h.action(p, N.GUARD_185, 'V-D092');
-  h.tick(3);
-  assert.ok(moves().some(row => row[1] === 3252 && row[2] === 3396), 'eavesdrop camera');
+  h.tick(1);
+  assert.ok(moves().some(row => row[1] === 3257 && row[2] === 3399), 'eavesdrop camera');
   const eavesdropResets = resets();
-  h.tick(18);
+  h.tick(30);
   assert.ok(resets() > eavesdropResets, 'eavesdrop camera resets');
 
   h.quest.setStage(p, 14);
   h.action(p, N.SERGEANT_TOBYN, 'PiLgte');
   h.tick(15);
-  assert.ok(moves().some(row => row[1] === 3207 && row[2] === 3471 && row[3] === 311), 'roof camera');
-  const roofResets = resets();
-  h.tick(25);
-  assert.ok(resets() > roofResets, 'roof camera resets');
+  assert.ok(!moves().some(row => row[1] === 3207 && row[2] === 3471), 'escorting to the roof does not start the cell camera');
+  h.action(p, N.SERGEANT_TOBYN, 'D5boc3');
+  h.tick(1);
+  assert.ok(moves().some(row => row[1] === 3207 && row[2] === 3471 && row[3] === 311), 'cell camera');
+  const cellResets = resets();
+  h.tick(34);
+  assert.ok(resets() > cellResets, 'cell camera resets');
 });
 
 test('Children camera timeline is cancelled and reset on logout', () => {
@@ -895,12 +899,12 @@ test('Children tail follows the collision-valid captured route to the door and o
     h.hooks.onPlayerProcess[0]({ player: p });
     const after = guard();
     if (!after) break;
-    if (h.quest.getStage(p) === 8 && (after.getLocation().getX() !== 3258 || after.getLocation().getY() !== 3400)) finishedEarly = true;
+    if (h.quest.getStage(p) === 8 && (after.getLocation().getX() !== 3256 || after.getLocation().getY() !== 3399)) finishedEarly = true;
     if (h.quest.getStage(p) === 8) break;
   }
   assert.equal(h.quest.getStage(p), 8, 'tail completed (not stuck at 3248,3391)');
   assert.equal(finishedEarly, false, 'tail does not finish at an early tile');
-  assert.deepEqual([guard().getLocation().getX(), guard().getLocation().getY()], [3258, 3400], 'guard reaches the door approach');
+  assert.deepEqual([guard().getLocation().getX(), guard().getLocation().getY()], [3256, 3399], 'guard reaches the door approach');
 
   const door = { player: p, objectId: 50048, location: { x: 3259, y: 3400 }, handled: false };
   h.emit('door:toggle', door);

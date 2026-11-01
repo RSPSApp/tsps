@@ -33,7 +33,9 @@ function harness(name) {
     }
     map.set(name, current);
   }
-  const api = new Proxy({ core: { ...core, World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: taskManager,
+  const api = new Proxy({ core: { ...core, PathFinder: Object.assign(Object.create(core.PathFinder), { calculateWalkRoute: (npc, x, y) => {
+    npc.getMovementQueue().addSteps(new core.Location(x, y, npc.getLocation().getZ()));
+  } }), World: { ...core.World, getNpcsNear: () => npcs }, TaskManager: taskManager,
     MultiChatboxPrompt: { getPending: p => p.prompt }, ObjectManager: objectManager },
     getTaskManager: () => taskManager,
     onNpcsInteraction: (names, actions) => names.forEach(name => attach(namedNpcs, name, actions)),
@@ -53,12 +55,36 @@ function harness(name) {
     sendMultiChatboxPrompt(p, title, ...pairs) { p.prompt = { title, options: pairs.filter((_, i) => i % 2 === 0), pairs }; return true; },
     spawnNpc(definition) {
       let location = new core.Location(definition.x, definition.y, definition.z), area = null;
+      const queue = {
+        points: [],
+        reset() { queue.points.length = 0; return queue; },
+        addSteps(to) {
+          npc.walkingTo = to;
+          let x = location.getX(), y = location.getY();
+          const z = to.getZ();
+          while (x !== to.getX() || y !== to.getY()) {
+            x += Math.sign(to.getX() - x);
+            y += Math.sign(to.getY() - y);
+            queue.points.push(new core.Location(x, y, z));
+          }
+          return queue;
+        },
+        addFirstStep(to) { queue.reset(); return queue.addSteps(to); },
+        hasPendingWork: () => queue.points.length > 0,
+        size: () => queue.points.length,
+        isMovings: () => queue.points.length > 0,
+        advance() {
+          const next = queue.points.shift();
+          if (next) location = next;
+        },
+      };
       const npc = { ...definition, animations: [], graphics: [], getId: () => definition.id, getIndex: () => npc.index,
         index: nextIndex++, setForceMovement: movement => {p.forceMovement=movement;}, getLocation: () => location, moveTo: to => { location = to; },
         getArea: () => area, setArea: value => { area = value; }, isNpc: () => true, isPlayer: () => false, getAsNpc: () => npc,
         isRegistered: () => !npc.removed, setPositionToFace: noop, forceChat: text => { npc.said = text; },
+        setScriptedMovement: value => { npc.scriptedMovement = value; },
         performAnimation: animation => npc.animations.push(animation.getId()), performGraphic: graphic => npc.graphics.push(graphic.id),
-        getMovementQueue: () => ({ reset() { return this; }, addSteps: to => { npc.walkingTo = to; } }),
+        getMovementQueue: () => queue,
         exactMove: (to, options) => { npc.exact = options; location = to; },
         setFollowing: target => { npc.following = target; }, setMobileInteraction: noop, setNpcTransformationId: id => { npc.transformed = id; },
         hitpoints: 100, getHitpoints: () => npc.hitpoints, heal: amount => { npc.hitpoints += amount; },
@@ -78,7 +104,7 @@ function harness(name) {
     line(p, npcId, text) { const event = { player: p, npcId, text, pages: [{ page: h.quest.name }] }; h.emit('npc-dialogue:line', event); return event; },
     action(p, npcId, stepId) { const event = { player: p, npcId, stepId, pages: [{ page: h.quest.name }] }; h.emit('npc-dialogue:action', event); return event; },
     talk(p, npcId) { const choice = (hooks.onNpcDialogueVariant ?? []).map(fn => fn({ player: p, npcId })).find(Boolean); assert.ok(choice); runtime.startTranscript(api, p, npcId, typeof choice === 'string' ? h.quest.name : choice.page, typeof choice === 'string' ? choice : choice.variant); },
-    tick(count) { while (count-- > 0) [...tasks].forEach(task => task.tick()); },
+    tick(count) { while (count-- > 0) { [...tasks].forEach(task => task.tick()); for (const npc of npcs) if (!npc.removed) npc.getMovementQueue().advance?.(); } },
     choose(p, text) { const prompt = p.prompt; assert.ok(prompt, `no menu for ${text}`); const index = prompt.options.findIndex(label => label === text); assert.ok(index >= 0, `missing ${text} in ${prompt.options}`); p.prompt = null; prompt.pairs[index * 2 + 1](); },
     continueUntil(p, predicate, limit = 80) { while (!predicate()) { assert.ok(limit-- > 0, `dialogue stalled at ${p.text}`); assert.ok(p.manager.getCurrent(), `dialogue ended at ${p.text}`); p.manager.advance(); } },
   }; return h;
@@ -1241,4 +1267,97 @@ test('Primio opens the canonical first-trip menu and flies both ways only after 
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1697, 3140, 0]);
   assert.equal(p.varbits.get(9652), 4, 'later Fortis trips keep the completed first-trip state');
   assert.equal(starts.length, 3, 'repeat flights do not replay the initial menu or arrival dialogue');
+});
+
+// ---------------------------------------------------------------------------
+// Children of the Sun - live scene spawns (RSProx 1637)
+// ---------------------------------------------------------------------------
+function childrenOfTheSun() {
+  const h = harness('ChildrenOfTheSun'), p = player();
+  return { h, p };
+}
+
+test('COTS delegation walks into the square and stops in the captured formation', () => {
+  const { h, p } = childrenOfTheSun();
+  h.quest.setStage(p, 2);
+  const before = h.npcs.length;
+  h.action(p, N.ALINA_2, 'wltzqo');
+  const spawned = h.npcs.slice(before);
+  assert.equal(spawned.length, 10, 'the delegation is ten NPCs, not just a camera move');
+  const byId = new Map(spawned.map(npc => [npc.getId(), npc]));
+  const origins = [
+    [N.PRINCE_ITZLA_ARKAN_2, 3233, 3430],
+    [N.SERVIUS_TEOKAN_OF_RALOS, 3233, 3429],
+    [N.FURIA_TULLUS, 3234, 3430],
+    [N.ENNIUS_TULLUS, 3234, 3429],
+    [N.KNIGHT_OF_VARLAMORE_3, 3232, 3430],
+    [N.KNIGHT_OF_VARLAMORE_4, 3232, 3429],
+    [N.KNIGHT_OF_VARLAMORE_5, 3234, 3430],
+    [N.KNIGHT_OF_VARLAMORE_6, 3234, 3429],
+    [N.KNIGHT_OF_VARLAMORE_7, 3236, 3430],
+    [N.KNIGHT_OF_VARLAMORE_8, 3236, 3429],
+  ];
+  const stops = [
+    [N.PRINCE_ITZLA_ARKAN_2, 3219, 3430],
+    [N.SERVIUS_TEOKAN_OF_RALOS, 3219, 3429],
+    [N.FURIA_TULLUS, 3220, 3430],
+    [N.ENNIUS_TULLUS, 3220, 3429],
+    [N.KNIGHT_OF_VARLAMORE_3, 3219, 3431],
+    [N.KNIGHT_OF_VARLAMORE_4, 3219, 3428],
+    [N.KNIGHT_OF_VARLAMORE_5, 3220, 3431],
+    [N.KNIGHT_OF_VARLAMORE_6, 3220, 3428],
+    [N.KNIGHT_OF_VARLAMORE_7, 3221, 3430],
+    [N.KNIGHT_OF_VARLAMORE_8, 3221, 3429],
+  ];
+  for (const [id, x, y] of origins) {
+    const npc = byId.get(id);
+    assert.ok(npc, `delegation member ${id} spawned`);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [x, y], `delegation ${id} starts at the captured origin`);
+    assert.ok(npc.getMovementQueue().hasPendingWork(), `delegation ${id} queues its walk instead of teleporting`);
+    assert.equal(npc.scriptedMovement, true, `delegation ${id} keeps the wander coordinator off its route`);
+  }
+  h.tick(1);
+  const itzla = byId.get(N.PRINCE_ITZLA_ARKAN_2);
+  assert.deepEqual([itzla.getLocation().getX(), itzla.getLocation().getY()], [3232, 3430], 'the delegation advances one tile per tick');
+  h.tick(20);
+  for (const [id, x, y] of stops) {
+    const npc = byId.get(id);
+    assert.ok(npc, `delegation member ${id} spawned`);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [x, y], `delegation ${id} stop`);
+    assert.equal(npc.getMovementQueue().hasPendingWork(), false, `delegation ${id} finished its walk`);
+  }
+});
+
+test('COTS guards use the captured posts, facings and wander paths', () => {
+  const { h, p } = childrenOfTheSun();
+  h.quest.setStage(p, 10);
+  p.moveTo(new core.Location(3211, 3437, 0));
+  h.line(p, N.SERGEANT_TOBYN, 'Right, we can work with that. Now get to it.');
+  const guards = h.npcs.filter(npc => [N.GUARD_187, N.GUARD_190, N.GUARD_193, N.GUARD_196,
+    N.GUARD_199, N.GUARD_202, N.GUARD_205, N.GUARD_208, N.GUARD_211, N.GUARD_214].includes(npc.getId()));
+  assert.equal(guards.length, 10);
+  const posts = new Map(guards.map(npc => [npc.getId(), npc]));
+  const leaning = posts.get(N.GUARD_196); // 12677, the guard on Lowe's north wall
+  assert.deepEqual([leaning.getLocation().getX(), leaning.getLocation().getY()], [3237, 3427]);
+  assert.equal(leaning.face, 6, 'leaning guard faces south, away from the wall');
+  assert.equal(leaning.wanderRadius, 0, 'the leaning guard stays put');
+  const patrol = posts.get(N.GUARD_199);
+  assert.ok(patrol.wanderRadius >= 3, 'real guards have a path to walk');
+  assert.equal(posts.get(N.GUARD_187).face, 4, 'bandit outside the tent faces east');
+  assert.equal(posts.get(N.GUARD_190).face, 7, 'bandit by the news stand faces south-east');
+});
+
+test('COTS door scene spawns the waiting bandits inside the house', () => {
+  const { h, p } = childrenOfTheSun();
+  h.quest.setStage(p, 8);
+  const before = h.npcs.length;
+  const event = { player: p, objectId: core.ObjectIdentifiers.DOOR_695, location: { x: 3259, y: 3400 }, handled: false };
+  h.emit('door:toggle', event);
+  assert.equal(event.handled, true);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3263, 3401]);
+  const spawned = h.npcs.slice(before);
+  assert.equal(spawned.length, 5, 'bag guard and four bandits appear for the eavesdrop');
+  assert.deepEqual(spawned.map(npc => npc.getId()).sort(), [N.GUARD_186, N.BANDIT_16, N.BANDIT_17, N.BANDIT_18, N.BANDIT_19].sort());
+  assert.deepEqual(spawned.map(npc => [npc.getLocation().getX(), npc.getLocation().getY()]).sort(),
+    [[3265, 3403], [3266, 3401], [3266, 3405], [3268, 3402], [3268, 3404]].sort());
 });

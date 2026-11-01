@@ -1797,6 +1797,31 @@ test('Varrock doors open across the actionless loc before their Close variant (1
   }
 });
 
+test('Pollnivneach curtains draw back in place into their cache Close loc and close again (1533 <-> 1534, issue #1708)', async () => {
+  await initializeMapCollisionOnce();
+  const h = buildHarness({ cacheObjects: new Map([1533, 1534].map((id) => [id, CacheDefinitions.getObject(id)])) });
+  try {
+    assert.ok(h.handlers.get('Curtain'), 'Curtain locs are handled as doors');
+    // Curtains are drawn back in place: same tile, same rotation, no door swing.
+    // Closed curtain placed by the cache at 3345,2955 (rotation 0).
+    assert.deepEqual(h.click(1533, 3345, 2955, 0, 'Open', 'Curtain'), [
+      ['deregister', 1533, 3345, 2955, 0],
+      ['register', 1534, 3345, 2955, 0],
+    ]);
+    assert.deepEqual(h.click(1534, 3345, 2955, 0, 'Close', 'Curtain'), [
+      ['deregister', 1534, 3345, 2955, 0],
+      ['register', 1533, 3345, 2955, 0],
+    ]);
+    // A curtain the cache places open (3349,2962, rotation 1) closes on its own tile too.
+    assert.deepEqual(h.click(1534, 3349, 2962, 1, 'Close', 'Curtain'), [
+      ['deregister', 1534, 3349, 2962, 1],
+      ['register', 1533, 3349, 2962, 1],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
+
 test("the Champions' Guild door swings without a separate open cache loc", async () => {
   await initializeMapCollisionOnce();
   const h = buildHarness({ cacheObjects: new Map([1805, 1806].map((id) => [id, CacheDefinitions.getObject(id)])) });

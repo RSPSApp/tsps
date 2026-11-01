@@ -541,10 +541,10 @@ export interface PluginAttackTimingEvent {
 
 /**
  * Raised once per attack to say how much the swing's animation holds the attacker
- * (Wiki: Animation stall). Core measures it from the cache's own seq config: an animation
- * with no masks and no priority of its own withholds the actor's steps in the client, which
- * is a `full` stall when they were standing still; one they started mid-path is `partial`,
- * because their true tile keeps moving under the animation (the PvP rubber band).
+ * (Wiki: Animation stall). Core measures its length from the cache's seq config and starts it
+ * `partial`: the client withholds the actor's steps while it plays, but the server keeps
+ * walking the true tile, so they rubber-band once it ends. A plugin promotes a swing to `full`
+ * (movement, input and incoming hits held) for content the seq config cannot express.
  */
 export interface PluginAnimationStallEvent {
   player: any;

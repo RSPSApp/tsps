@@ -45,6 +45,11 @@ function sessionOf(player) {
   return sessions.get(player);
 }
 
+/** Every active stay of `kind`, for shared rooms that must update all their players. */
+function sessionsOfKind(kind) {
+  return [...sessions.values()].filter(session => session.kind === kind);
+}
+
 /** Whether any teleport event is currently holding this player. */
 function hasSession(player) {
   return sessions.has(player);
@@ -262,6 +267,6 @@ function createAreas() {
 }
 
 module.exports = {
-  initialize, sessionOf, hasSession, begin, spawnNpc, spawnObject, onEnd, replaceObject, later,
+  initialize, sessionOf, sessionsOfKind, hasSession, begin, spawnNpc, spawnObject, onEnd, replaceObject, later,
   owns, grant, finish, departed, process, recover, shutdown, createAreas, returnToStart,
 };

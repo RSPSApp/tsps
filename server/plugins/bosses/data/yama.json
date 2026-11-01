@@ -704,7 +704,7 @@
         "delay": 0
       },
       "hitTicks": 5,
-      "maxHit": 60,
+      "maxHit": 80,
       "rootTicks": 2,
       "prayerDrainShare": 0.33
     },
@@ -988,6 +988,78 @@
     "wavesAfterFlaresTicks": [
       9,
       16
+    ]
+  },
+  "lockbox": {
+    "about": "Wiki: Forgotten lockbox (item 30763). One reward per opening, from the Wiki table's 403 chances: dragon bolts (unf) 125 at 60, dragon darts 125 at 60, oathplate shards 14 at 60, dragon darts 80 at 50, oathplate shards 11 at 50, dragon platelegs at 50, dragon plateskirt at 50, 233,333 coins at 20, and oathplate helm, chest or legs at 1 each. The messages are the Wiki transcript's.",
+    "item": 30763,
+    "entries": [
+      {
+        "itemId": 21930,
+        "amount": 125,
+        "weight": 60,
+        "message": "You open the forgotten lockbox and find 125x dragon bolts (unf)s inside!"
+      },
+      {
+        "itemId": 11230,
+        "amount": 125,
+        "weight": 60,
+        "message": "You open the forgotten lockbox and find 125 dragon darts inside!"
+      },
+      {
+        "itemId": 30765,
+        "amount": 14,
+        "weight": 60,
+        "message": "You open the forgotten lockbox and find 14x oathplate shardss inside!"
+      },
+      {
+        "itemId": 11230,
+        "amount": 80,
+        "weight": 50,
+        "message": "You open the forgotten lockbox and find 80 dragon darts inside!"
+      },
+      {
+        "itemId": 30765,
+        "amount": 11,
+        "weight": 50,
+        "message": "You open the forgotten lockbox and find 11x oathplate shardss inside!"
+      },
+      {
+        "itemId": 4087,
+        "amount": 1,
+        "weight": 50,
+        "message": "You open the forgotten lockbox and find 1x dragon platelegs inside!"
+      },
+      {
+        "itemId": 4585,
+        "amount": 1,
+        "weight": 50,
+        "message": "You open the forgotten lockbox and find 1 dragon plateskirt inside!"
+      },
+      {
+        "itemId": 995,
+        "amount": 233333,
+        "weight": 20,
+        "message": "You open the forgotten lockbox and find 233,333 coinss inside!"
+      },
+      {
+        "itemId": 30750,
+        "amount": 1,
+        "weight": 1,
+        "message": "You open the forgotten lockbox and find 1 oathplate helm inside!"
+      },
+      {
+        "itemId": 30753,
+        "amount": 1,
+        "weight": 1,
+        "message": "You open the forgotten lockbox and find 1 oathplate chest inside!"
+      },
+      {
+        "itemId": 30756,
+        "amount": 1,
+        "weight": 1,
+        "message": "You open the forgotten lockbox and find 1x oathplate legs inside!"
+      }
     ]
   },
   "kill": {

@@ -315,9 +315,10 @@ export class MovementQueue {
         if (this.player != null) {
             // Player related checks
 
-            // Wiki: Animation stall. A full stall holds the player still for the swing's
-            // animation. Deliberately silent: their click was not rejected, it is queued for
-            // the tick the animation releases (NetworkBuilder's stalled input).
+            // Wiki: Animation stall. Only a full stall holds the player still; a partial one is
+            // visual, so the server keeps walking their true tile underneath it. Deliberately
+            // silent: their click was not rejected, it is queued for the tick the stall releases
+            // (NetworkBuilder's stalled input).
             if (this.player.getCombat().isAnimationStalled()) {
                 return Mobility.ANIMATION_STALL;
             }

@@ -9,7 +9,8 @@
  *   +13 the hit: tethered players get "...the rope keeps you securely upright as the wave washes
  *   over you.", Tempoross is 10572 again with seq 8897, water splashes (1843) leave debris.
  * - lightning: "A strong wind blows as clouds roll in..." (red), a cloud shadow (41006) and
- *   sound 2186 under each strike; clouds grow at +6, charge at +11, strike at +15 (NPC 10581,
+ *   sound 2186 under each strike; clouds grow at +6, charge at +11, Tempoross casts
+ *   (`fsb_lightening_cast`) at +13, the clouds strike at +15 (NPC 10581,
  *   sound 4433) and at +16 each strike tile burns: Fire NPC 8643, spotanim 1840, loc 37582,
  *   sound 159. A fire spreads 40 ticks later with projectile 1839, twice at most.
  * - torrent: seq 8903, spotanim 1841 at Tempoross and projectile 1842 to a cannon, which is
@@ -43,6 +44,8 @@ class Attacks {
     this.fires = new Map();
     this.pending = [];
     this.debris = [];
+    /** Bumped by every wave, so a spread still in the air when it lands doesn't light. */
+    this.waves = 0;
   }
 
   setUp() {}
@@ -126,6 +129,7 @@ class Attacks {
       loseItems(player, "wave");
     });
     fight.tethers.breakSites();
+    this.waves += 1;
     this.clearFires();
     this.at(F.untetherAfterWave, () => {
       for (const player of [...fight.tethers.tethered.keys()]) fight.tethers.untether(player);
@@ -137,7 +141,7 @@ class Attacks {
   lightning() {
     const fight = this.fight;
     this.cove.message(`<col=${Shared.RED}>A strong wind blows as clouds roll in...</col>`);
-    Shared.animate(fight.boss, ANIM.BOSS_LIGHTNING);
+    this.at(L.cast, () => Shared.animate(fight.boss, ANIM.BOSS_LIGHTNING));
     const strikes = this.strikeTiles(Shared.randomInt(...F.strikes));
     for (const tile of strikes) {
       const shadow = this.cove.placeLoc(LOC.LIGHTNING_SHADOW, tile);
@@ -243,7 +247,10 @@ class Attacks {
       this.cove.projectile(GFX.FIRE_SPREAD, this.cove.tile([fire.x, fire.y, 0]), this.cove.tile([...to, 0]), {
         cycles: 60, startHeight: 1, endHeight: 0, slope: 30,
       });
-      this.at(2, () => this.ignite(to, fire.spreads));
+      const wave = this.waves;
+      this.at(2, () => {
+        if (this.waves === wave) this.ignite(to, fire.spreads);
+      });
     }
     if (now % F.fireBurnTicks !== 0) return;
     this.fight.forEachPlayer((player) => {

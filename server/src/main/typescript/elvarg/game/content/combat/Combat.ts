@@ -144,9 +144,11 @@ export class Combat {
 
     /**
      * Wiki: Animation stall. The cycle this character's swing animation releases them. A
-     * `partial` stall only keeps a click from cutting the animation away; a `full` stall also
-     * holds their clicks, their movement and any hit coming in, all released together on the
-     * cycle the client finishes playing the animation.
+     * `partial` stall only keeps a click from cutting the animation away - the server still
+     * processes movement, and the client withholds the actor's steps until the animation ends,
+     * then catches up (the rubber band). A `full` stall also holds their clicks, their movement
+     * and any hit coming in, all released together on the cycle the client finishes playing the
+     * animation. Only content declares one; seq config cannot.
      */
     private animationStall: {
         untilCycle: number;
@@ -186,14 +188,15 @@ export class Combat {
         if (!this.character.isPlayer()) return;
 
         const sequence = getSequenceStall(animationId);
-        const stepped = this.character.getMovementQueue().steppedThisWorldCycle();
         const event: PluginAnimationStallEvent = {
             player: this.character.getAsPlayer(),
             animationId,
             ticks: Math.min(Math.max(0, sequence.ticks), MAX_ANIMATION_STALL_TICKS),
-            // Someone who stepped this cycle keeps their steps: the client plays the animation
-            // over a true tile that has already moved, the rubber band the Wiki calls partial.
-            kind: sequence.cancelsOnStep || stepped || !sequence.blocks ? "partial" : "full",
+            // Every swing animation the client starts is a partial stall: it plays out even when
+            // a click drops the target. The seq's step withholding only decides what the client
+            // does visually; the server keeps walking the true tile underneath it. A full stall
+            // is content, and AnimationStalls.plugin.js rows declare it.
+            kind: "partial",
             holdsHits: true,
         };
         PluginManager.emitAnimationStall(event);

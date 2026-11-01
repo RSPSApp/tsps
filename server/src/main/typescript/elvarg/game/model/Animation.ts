@@ -3,7 +3,8 @@ import { Priority } from "./Priority";
 /**
  * How much an animation holds the character playing it (Wiki: Animation stall).
  * `full` blocks their actions and movement and stacks incoming hits until it ends;
- * `partial` only keeps a click from cutting the animation away; `none` is not tracked.
+ * `partial` only keeps a click from cutting the animation away - the true tile keeps
+ * moving and the client catches up visually when it ends; `none` is not tracked.
  */
 export type AnimationStallKind = "none" | "partial" | "full";
 

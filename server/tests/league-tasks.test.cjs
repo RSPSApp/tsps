@@ -338,6 +338,24 @@ test("a league modal sets busy, closes the task list first and clears busy as it
   assert.equal(panel.sent.varbits.has(12393), false, "once");
 });
 
+test("a kill with a league area counts only there: Defeat a Snake in Karamja", () => {
+  worldLeague = 6;
+  const hunter = character("areakiller");
+  worldLeague = 4;
+  const task = catalog.leagues["6"].tasks.find((entry) => entry.id === "defeat-a-snake-in-karamja");
+  assert.deepEqual(task.trigger, { kind: "kill", npcs: ["Snake"], count: 1, area: 2 }, "Karamja, the areas plugin's 2");
+  const areaAt = custom["league:area-at"];
+  custom["league:area-at"] = [(query) => { query.area = query.x === 2850 ? 2 : 21; }];
+  try {
+    hooks.onNpcDeath({ killer: hunter, npc: npc("Snake"), npcId: 0, location: { x: 1700, y: 3100, z: 0 } });
+    assert.ok(!completed(hunter).includes(task.id), "a snake in Varlamore is no Karamja snake");
+    hooks.onNpcDeath({ killer: hunter, npc: npc("Snake"), npcId: 0, location: { x: 2850, y: 3000, z: 0 } });
+    assert.ok(completed(hunter).includes(task.id));
+  } finally {
+    if (areaAt) custom["league:area-at"] = areaAt; else delete custom["league:area-at"];
+  }
+});
+
 /** The first cache item / NPC of that exact name. */
 function itemId(name) {
   for (let id = 0; id < CacheDefinitions.getCounts().items; id++) if (CacheDefinitions.getItem(id)?.name === name) return id;

@@ -369,6 +369,30 @@ const PRODUCE_VERBS: Record<string, string[]> = {
   make: [""], create: [""], brew: [""], clean: [""], cut: [""],
 };
 
+/**
+ * The league areas a task may name as its place, to the area ids the areas plugin's map uses
+ * (plugins/modes/data/league-areas.json; the task list's own area enum numbers Kourend 10, the map 20).
+ */
+const AREA_PLACES: Array<[RegExp, string]> = [
+  [/Varlamore/i, "varlamore"], [/Karamja/i, "karamja"], [/Asgarnia/i, "asgarnia"], [/Kandarin/i, "kandarin"],
+  [/Morytania/i, "morytania"], [/Tirannwn/i, "tirannwn"], [/(?:the )?Wilderness/i, "wilderness"],
+  [/(?:the )?Fremennik Provinces?/i, "fremennik"], [/(?:the )?(?:Kharidian )?Desert/i, "kharidian_desert"],
+  [/(?:Kebos and )?Kourend(?: and Kebos)?/i, "kourend"],
+];
+const AREA_IDS: Map<string, number> = (() => {
+  const areas = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/modes/data/league-areas.json"), "utf8")).areas;
+  return new Map(Object.entries(areas).map(([id, area]: [string, any]) => [area.key, Number(id)]));
+})();
+
+/** A trailing league area ("... in the Fremennik Province", "... on Karamja underground"): its map id and the text without it. */
+function leagueAreaOf(text: string): { area: number | null; text: string } {
+  for (const [pattern, key] of AREA_PLACES) {
+    const match = new RegExp(`\\s+(?:in|on|within) (?:the )?(?:${pattern.source})(?: underground)?\\.?$`, "i").exec(text);
+    if (match) return { area: AREA_IDS.get(key) ?? null, text: text.slice(0, match.index) };
+  }
+  return { area: null, text };
+}
+
 function deriveTrigger(name: string, description: string, names: Names): { trigger?: Trigger; unmapped?: string } {
   const { npcs, quests, items } = names;
   let match: RegExpExecArray | null;
@@ -390,7 +414,11 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
   if ((match = /^Reach Combat Level (\d+)$/.exec(name))) return { trigger: { kind: "combat-level", level: Number(match[1]) } };
   if ((match = /^(?:Defeat|Kill) (\d+) (.+)$/.exec(name)) || (match = /^(?:Defeat|Kill) (?:a |an |the |some )?(.+?)(?: (\d+) [Tt]imes)?$/.exec(name))) {
     const [, first, second] = match;
-    const [subject, count] = /^\d+$/.test(first) ? [second, Number(first)] : [first, second ? Number(second) : 1];
+    const [named, count] = /^\d+$/.test(first) ? [second, Number(first)] : [first, second ? Number(second) : 1];
+    // A league area as the place ("in Varlamore", "on Karamja", "within Morytania", "in the
+    // Fremennik Province", "in Varlamore underground"): a kill there, the areas' own map deciding.
+    const { area, text: subject } = leagueAreaOf(named);
+    if (area !== null) description = leagueAreaOf(description).text;
     // A condition in the description (where, how, how fast) is not a plain kill count: a place
     // ("in the Fremennik Province", "on Ungael") needs the area unlocks, which do not exist yet.
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.
@@ -404,7 +432,7 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
     if (accepted.some((npc) => npc === null)) return { unmapped: name };
     const names = [...new Set([primary, ...accepted].filter((npc): npc is string => npc !== null))];
     if (!names.length) return { unmapped: name };
-    return { trigger: { kind: "kill", npcs: names, count } };
+    return { trigger: area === null ? { kind: "kill", npcs: names, count } : { kind: "kill", npcs: names, count, area } };
   }
   if ((match = /^Complete (?:the )?(.+)$/.exec(name))) {
     // "Complete the Observatory Quest" is the quest "Observatory Quest"; "Complete Gertrude's Cat quest" is "Gertrude's Cat";

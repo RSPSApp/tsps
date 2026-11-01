@@ -1501,8 +1501,13 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   alternatives; "N <tier> Clue Scroll(s)". A description naming a group ("any kind of logs"), a
   place or a condition leaves the task unmapped; so does a parenthesis remark, while one without a
   space is part of a name ("(c)", "(u)").
-- **Not mapped yet:** kills with a place or a condition, equipment sets the description does not
-  list, obtaining items, minigames, diaries, travel, emotes and the Leagues tutorial task.
+- **Kills in a league area**: a kill task whose place is a league area ("Defeat a Snake in
+  Karamja", "on Karamja", "within Morytania", "in the Fremennik Province", "in Varlamore
+  underground") gets `area`, the areas plugin's id (`league-areas.json`; the task list's own enum
+  numbers Kourend 10, the map 20), and counts only kills whose tile `league:area-at` puts there
+  (the death's tile, or the player's for a credited kill).
+- **Not mapped yet:** kills with any other place or a condition, equipment sets the description
+  does not list, obtaining items, minigames, diaries, travel, emotes and the Leagues tutorial task.
 
 ## Developer commands
 

@@ -10,7 +10,9 @@
  * encounters emit for each rewarded player when no NPC dies (the Nightmare's ending transforms
  * her instead) and that some bosses emit beside a death, under the main boss's name for a singles
  * boss (Artio counts as Callisto). Within one tick, a task takes the larger of the two counts, so
- * a kill reported both ways counts once and several kills in one tick all count.
+ * a kill reported both ways counts once and several kills in one tick all count. A kill with an
+ * `area` counts only on the areas plugin's map there (`league:area-at`; the death's tile, or the
+ * player's for a credited kill).
  */
 const Common = require("./Common.LeagueTasks");
 const Complete = require("./Complete.LeagueTasks");
@@ -108,11 +110,11 @@ function npcName(npc) {
  * kill tasks that accept it: each task's progress takes this tick's larger count, then any task
  * that reached its count completes.
  */
-function credit(player, type, name, source, amount) {
+function credit(player, type, name, source, amount, tile = null) {
   const tasks = indexOf(type).kills.get(String(name ?? "").toLowerCase());
   if (!tasks || !(amount > 0)) return;
   const done = new Set(Common.completedIds(player));
-  const open = tasks.filter((task) => !done.has(task.id));
+  const open = tasks.filter((task) => !done.has(task.id) && inArea(task, type, tile ?? tileOf(player)));
   if (!open.length) return;
   const tick = Common.core.World.getProcessCycle?.() ?? 0;
   let perTask = tickCredit.get(player);
@@ -133,11 +135,26 @@ function credit(player, type, name, source, amount) {
   }
 }
 
+function tileOf(entity) {
+  const location = entity?.getLocation?.();
+  return location ? { x: location.getX(), y: location.getY() } : null;
+}
+
+/** A kill task with an `area` (the areas plugin's id) counts only kills on its map there. */
+function inArea(task, type, tile) {
+  if (task.trigger.area === undefined) return true;
+  if (!tile) return false;
+  const query = { x: tile.x, y: tile.y, league: type, area: null };
+  Common.api.emitCustomEvent("league:area-at", query);
+  return query.area === task.trigger.area;
+}
+
 function npcDeath(event) {
   const player = event?.killer;
   if (!player?.isPlayer?.() && !player?.getPacketSender) return;
   const type = Common.leagueOf(player);
-  if (type !== null) credit(player, type, npcName(event.npc), "deaths", 1);
+  const at = event.location ? { x: Number(event.location.x ?? event.location.getX?.()), y: Number(event.location.y ?? event.location.getY?.()) } : tileOf(event.npc);
+  if (type !== null) credit(player, type, npcName(event.npc), "deaths", 1, at);
 }
 
 /** `combat-achievements:kill` { player, monster, amount? }: a credited kill, from a death or a scripted ending. */

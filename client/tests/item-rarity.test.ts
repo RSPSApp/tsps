@@ -7,8 +7,50 @@ import { state } from "../network/serverConnection/state";
 import { ItemRarityConfig, itemRarity, normalizeThreshold } from "../game/plugins/itemrarity/ItemRarityConfig";
 import { ItemRarityPlugin } from "../game/plugins/itemrarity/ItemRarityPlugin";
 import { canonicalItemId } from "../game/plugins/inventorytags/inventoryTags";
+import { captureAppendedRects, composeDrawAboveWidgets, drawBeforeContextMenu } from "../widgets/gl/widgetsGl/glRenderOpts";
+import { WidgetsOverlay } from "../ui/devoverlay/WidgetsOverlay";
 
 const thresholds = { minimum: 100, common: 1_000, uncommon: 10_000, rare: 100_000, veryRare: 1_000_000 };
+const renderOrder: string[] = ["widget", "tooltip"];
+drawBeforeContextMenu(() => renderOrder.push("rarity"), () => renderOrder.push("menu"));
+assert.deepEqual(renderOrder, ["widget", "tooltip", "rarity", "menu"], "rarity draws above widgets and tooltips but the context menu draws over rarity");
+const rootCalls: string[] = [];
+const rootOne = composeDrawAboveWidgets(() => rootCalls.push("root-one"), false, () => rootCalls.push("rarity"));
+const rootTwo = composeDrawAboveWidgets(() => rootCalls.push("root-two"), true, () => rootCalls.push("rarity"));
+rootOne?.();
+rootTwo?.();
+assert.deepEqual(rootCalls, ["root-one", "root-two", "rarity"], "all root hooks remain intact and the shared rarity layer draws once at the final root");
+const menuAfterFailure: string[] = [];
+const previousConsoleError = console.error;
+console.error = () => {};
+drawBeforeContextMenu(() => { throw new Error("overlay failure"); }, () => menuAfterFailure.push("menu"));
+console.error = previousConsoleError;
+assert.deepEqual(menuAfterFailure, ["menu"], "an overlay failure is reported after the context menu still draws");
+const registeredRects = [{ x: 1, y: 2, w: 3, h: 4 }];
+const rarityRects = captureAppendedRects(registeredRects, () => registeredRects.push({ x: 9, y: 8, w: 7, h: 6 }));
+assert.deepEqual(registeredRects, [{ x: 1, y: 2, w: 3, h: 4 }], "menu-layer rects do not corrupt normal overlay bookkeeping");
+assert.deepEqual(rarityRects, [{ x: 9, y: 8, w: 7, h: 6 }], "menu-layer bounds are retained for dirty-region redraws");
+const overlayIntegrationOrder: string[] = [];
+const integratedMenuOverlay = {
+    signature: () => "rarity",
+    draw: () => { overlayIntegrationOrder.push("rarity"); return [{ x: 4, y: 5, w: 6, h: 7 }]; },
+    drawBeforeMenu: true,
+};
+const widgetsOverlay = new WidgetsOverlay({} as any, {
+    getGameContext: () => ({ osrsClient: { clientPlugins: { widgetOverlays: () => [integratedMenuOverlay] } } }),
+    } as any) as any;
+widgetsOverlay.glRenderer = { width: 100, height: 100, flush() {} };
+widgetsOverlay.widgetOverlayRects = [];
+widgetsOverlay.currentBeforeMenuOverlays = [integratedMenuOverlay];
+const rootHook = (label: string) => () => overlayIntegrationOrder.push(label);
+const firstRootHook = widgetsOverlay.drawAboveWidgetsForEntry({ renderOpts: { drawAboveWidgets: rootHook("first root hook") } }, false);
+const lastRootHook = widgetsOverlay.drawAboveWidgetsForEntry({ renderOpts: { drawAboveWidgets: rootHook("last root hook") } }, true);
+firstRootHook();
+lastRootHook();
+drawBeforeContextMenu(undefined, () => overlayIntegrationOrder.push("context menu"));
+widgetsOverlay.commitBeforeMenuOverlayRects();
+assert.deepEqual(overlayIntegrationOrder, ["first root hook", "last root hook", "rarity", "context menu"], "WidgetsOverlay preserves each root hook and draws rarity once before the final menu");
+assert.deepEqual(widgetsOverlay.widgetOverlayRects, [{ x: 4, y: 5, w: 7, h: 8 }], "WidgetsOverlay retains rarity bounds for dirty-region redraws");
 assert.equal(itemRarity(99, thresholds), undefined);
 assert.equal(itemRarity(100, thresholds), "COMMON");
 assert.equal(itemRarity(1_000, thresholds), "UNCOMMON");
@@ -127,8 +169,11 @@ async function run(): Promise<void> {
     config.setConfigValue(ItemRarityConfig, "minimumPrice", 1);
 
     client.menuOpen = true;
-    assert.equal(plugin.widgetOverlay.signature(), "", "rarity outlines are hidden while the world context menu is open");
-    assert.equal(plugin.widgetOverlay.draw({ renderer } as any).length, 0);
+    assert.equal(plugin.widgetOverlay.drawBeforeMenu, true, "rarity outlines use the render-tree hook before its context menu");
+    assert.equal(plugin.widgetOverlay.signature(), signature, "rarity outlines remain present while the world context menu is open");
+    const menuOpenCalls = calls.length;
+    assert.equal(plugin.widgetOverlay.draw({ renderer, itemImage: () => source } as any).length, 4, "rarity outlines continue drawing while the context menu is open");
+    assert.equal(calls.length, menuOpenCalls + 4, "all visible item outlines draw while the menu is open");
     client.menuOpen = false;
     client.renderer = { canvas: { __ui: { menu: { open: true } } } };
     assert.equal(plugin.widgetOverlay.signature(), signature, "a stale UI menu signal does not suppress rarity outlines");

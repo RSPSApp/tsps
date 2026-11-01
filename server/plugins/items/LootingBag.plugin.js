@@ -150,7 +150,7 @@ function sendTotals(player, bag, deposit) {
   const shown = deposit
     ? player.getInventory().getItems().slice(0, BAG_SIZE).map((item) => (item?.isValid?.() ? { id: item.getId() } : null))
     : entries;
-  const prices = Array.from({ length: BAG_SIZE }, (_, slot) => (shown[slot] ? price(shown[slot].id) : -1));
+  const prices = Array.from({ length: BAG_SIZE }, (_, slot) => BigInt(shown[slot] ? price(shown[slot].id) : -1));
   sender.sendInterfaceScript(PRICES_SCRIPT, [deposit ? PLAYER_INVENTORY : BAG_INVENTORY, ...prices]);
 }
 

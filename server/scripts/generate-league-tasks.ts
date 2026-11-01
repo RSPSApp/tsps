@@ -440,6 +440,24 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
     const quest = quests.get(plainName(match[1])) ?? quests.get(plainName(match[1].replace(/ (?:[Mm]ini)?[Qq]uest$/, "")));
     if (quest) return { trigger: { kind: "quest", name: quest } };
   }
+  // "Obtain 25 Million Agility XP", "... XP in a combat skill" (the description's list), "... in any
+  // non-combat skill", "... in 5 non-combat skills" (excluding the description's list): experience
+  // of at least that much in that many of the skills. Sailing is left out (it came after the leagues).
+  if ((match = /^Obtain (\d+) Million (?:([A-Za-z]+) XP|XP in (?:an?y? |a )?(combat|non-combat) skills?|XP in (\d+) non-combat skills)$/i.exec(name))) {
+    const amount = Number(match[1]) * 1_000_000;
+    const every = [...new Set(Object.values(SKILLS))].filter((skill) => skill !== "SAILING");
+    const listed = (text: string) => (text.split(/,\s*|\s+or\s+|\s*&\s*|\s+and\s+/).map((word) => SKILLS[word.trim().toLowerCase()]).filter(Boolean));
+    if (match[2]) {
+      const skill = SKILLS[match[2].toLowerCase()];
+      return skill ? { trigger: { kind: "experience", skills: [skill], amount, count: 1 } } : {};
+    }
+    const either = /either (.+?)\.?$/i.exec(description)?.[1];
+    const excluding = /excluding (.+?)\.?$/i.exec(description)?.[1];
+    if (match[3]?.toLowerCase() === "combat" && either) return { trigger: { kind: "experience", skills: listed(either), amount, count: 1 } };
+    const combat = excluding ? listed(excluding) : ["ATTACK", "STRENGTH", "DEFENCE", "MAGIC", "RANGED", "HITPOINTS"];
+    const nonCombat = every.filter((skill) => !combat.includes(skill));
+    return { trigger: { kind: "experience", skills: nonCombat, amount, count: match[4] ? Number(match[4]) : 1 } };
+  }
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {
     return { trigger: { kind: "clue", tier: match[2].toLowerCase(), count: Number(match[1]) } };

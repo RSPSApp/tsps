@@ -1,7 +1,7 @@
 /**
  * Awarding tasks from the game, driven by each task's `trigger` (the generator's, or the overlay's;
  * docs/leagues.md lists the kinds): kills of any NPC a task accepts, counted per task, level kinds
- * on `onPlayerLevelUp`, quests on `quest:completed` by name. Level and quest kinds are also checked
+ * on `onPlayerLevelUp`, experience totals on `onExperienceGained`, quests on `quest:completed` by name. Level and quest kinds are also checked
  * at login, so a character who already qualifies is not kept waiting for the next event; kills are
  * not (nothing was counted before). No task is named here: a new mapping is data.
  *
@@ -28,7 +28,7 @@ const plainName = (name) => String(name ?? "").toLowerCase().replace(/^the /, ""
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map() };
+  const entry = { kills: new Map(), levels: [], levelUps: [], quests: new Map(), experience: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (!trigger) continue;
@@ -40,6 +40,8 @@ function indexOf(type) {
       }
     } else if (LEVEL_KINDS.has(trigger.kind)) {
       entry.levels.push(task);
+    } else if (trigger.kind === "experience") {
+      entry.experience.push(task);
     } else if (trigger.kind === "level-up") {
       entry.levelUps.push(task);
     } else if (trigger.kind === "quest") {
@@ -87,6 +89,29 @@ function checkLevels(player) {
   for (const task of indexOf(type).levels) {
     if (levelReached(player, task.trigger)) Complete.complete(player, task.id);
   }
+}
+
+/** `experience { skills, amount, count }`: at least `amount` XP in `count` of the skills. */
+function checkExperience(player) {
+  const type = Common.leagueOf(player);
+  if (type === null) return;
+  const tasks = indexOf(type).experience;
+  if (!tasks.length) return;
+  const done = new Set(Common.completedIds(player));
+  const manager = player.getSkillManager();
+  for (const task of tasks) {
+    if (done.has(task.id)) continue;
+    const { skills: names, amount, count } = task.trigger;
+    const reached = names.filter((name) => {
+      const skill = skills().get(name);
+      return skill && manager.getExperience(skill) >= amount;
+    }).length;
+    if (reached >= (Number(count) || 1)) Complete.complete(player, task.id, type);
+  }
+}
+
+function experienceGained({ player }) {
+  if (player) checkExperience(player);
 }
 
 function levelUp({ player, oldLevel, newLevel }) {
@@ -184,6 +209,7 @@ function checkQuests(player, type) {
 function login({ player, league }) {
   if (!Common.catalog(league)) return;
   checkLevels(player);
+  checkExperience(player);
   checkQuests(player, league);
 }
 
@@ -192,6 +218,7 @@ module.exports = function attach(api) {
   api.onNpcDeath(npcDeath);
   api.onCustomEvent("combat-achievements:kill", creditedKill);
   api.onPlayerLevelUp(levelUp);
+  api.onExperienceGained(experienceGained);
   api.onCustomEvent("quest:completed", questCompleted);
   api.onCustomEvent("league:login", login);
 };

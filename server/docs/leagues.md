@@ -1519,6 +1519,11 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   underground") gets `area`, the areas plugin's id (`league-areas.json`; the task list's own enum
   numbers Kourend 10, the map 20), and counts only kills whose tile `league:area-at` puts there
   (the death's tile, or the player's for a credited kill).
+- **Experience** (`Triggers.LeagueTasks.js`): `experience { skills, amount, count }`, at least
+  `amount` XP in `count` of the skills, on `onExperienceGained` and at login. "Obtain N Million
+  <Skill> XP"; "... XP in a combat skill" takes the description's list (Prayer is in the 100
+  million one's); "... in any non-combat skill" and "... in N non-combat skills" every skill but
+  the six the description excludes (Sailing left out).
 - **Not mapped yet:** kills with any other place or a condition, equipment sets the description
   does not list, obtaining items, minigames, diaries, travel, emotes and the Leagues tutorial task.
 

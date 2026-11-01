@@ -91,6 +91,9 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // interior doors (DOOR_499 closed -> DOOR_498 open) are inverted: the open "Close"-only leaf
   // carries the lower id, so the ascending scan never sees the pair.
   SINGLE_DOOR_OPEN_IDS = new Map([
+    // Generic trapdoors have distinct open models, two ids after their closed variants.
+    [O.TRAPDOOR_4, O.TRAPDOOR_6],
+    [O.TRAPDOOR_5, O.TRAPDOOR_7],
     [O.LARGE_DOOR_11, O.LARGE_DOOR_14],
     [O.DOOR_180, O.DOOR_181],
     [O.DOOR_499, O.DOOR_498],
@@ -122,7 +125,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
 
   // Curtains do not swing: the open loc is a drawn-back curtain model (1534: 879/880 vs the
   // closed 1533's 884/885) that replaces the closed one on the same tile with the same rotation.
-  IN_PLACE_DOOR_IDS = new Set([O.CURTAIN_3]);
+  // These floor trapdoors likewise replace their model in place.
+  IN_PLACE_DOOR_IDS = new Set([O.CURTAIN_3, O.TRAPDOOR_4, O.TRAPDOOR_5]);
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.

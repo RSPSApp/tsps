@@ -1,4 +1,5 @@
 const path = require("path");
+const { initPvpTierLoadouts } = require("./behaviours/pvp/PvpTierLoadouts.PlayerBots");
 const { GameConstants } = require("../../src/main/typescript/elvarg/game/GameConstants");
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const { ObjectIds } = require("../../src/main/typescript/elvarg/util/IdEnums");
@@ -207,6 +208,7 @@ function registerDuelBotAcceptance(api) {
 module.exports = {
   name: "PlayerBots",
   register(api) {
+    initPvpTierLoadouts(api);
     registerDuelBotAcceptance(api);
     initPlayerBotStateCoreAccess(api);
     const { botApi, recentBotLogsByUsername } = createBotPluginLogging({

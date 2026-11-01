@@ -169,7 +169,8 @@ Clan Hall contents (`Contents.Clans.js`). No recording holds them, so ids are th
 Wiki's:
 
 - Party chest: 783 and 266, its inventories 916 (read through `invother_getobj`, so sent as 916 + 32768) and
-  92. Deposit needs setting 94; only Confirm commits, and closing returns what wasn't confirmed. Wiki: what's in
+  92. Deposit needs setting 94; only Confirm commits, and closing returns what wasn't confirmed. An offer is
+  saved with the player and returned at login, so a restart or crash can't lose it. Wiki: what's in
   the chest is lost when the last non-guest leaves.
 - Lever: 1,000 coins, setting 95. Balloons: objects 115-122 (123-130 have no Burst), gone after two minutes.
   Setting 96 and not being an Ironman decide who gets a drop. **Ours:** 16 to 64 balloons, a 50% chance, the

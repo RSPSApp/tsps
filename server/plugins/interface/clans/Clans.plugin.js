@@ -60,6 +60,7 @@ function later(ticks, action) {
 /** Live's order at login: settings, status, then the channel with its intro line (rsprox 3886, 763). */
 function login({ player }) {
   Formation.startSession(player);
+  Contents.restoreOffer(player);
   showRecruitOption(player);
   let clan = Core.clanOf(player);
   if (clan) {

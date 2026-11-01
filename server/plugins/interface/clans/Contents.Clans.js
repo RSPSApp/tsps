@@ -17,6 +17,8 @@ const OFFER_INV = 92; // partyroom_tempinv
 const CHEST_SIZE = 216; // Wiki: Clan Hall
 const OFFER_SIZE = 8;
 const MAX_STACK = 2147483647;
+/** What's offered and not yet confirmed, in the player's save: only here do the items still exist. */
+const OFFER_ATTRIBUTE = "clans:chest-offer";
 const LAST_INV_SLOT = 27;
 const MAIN_MODAL = (161 << 16) | 16;
 const SIDE_MODAL = (161 << 16) | 74;
@@ -68,6 +70,7 @@ function init(pluginApi, findHall) {
   api = pluginApi;
   core = pluginApi.core;
   hallOf = findHall;
+  pluginApi.persistAttribute(OFFER_ATTRIBUTE, []);
 }
 
 /** The hall's own staff and state, made when its first visitor arrives. */
@@ -99,6 +102,18 @@ function allowed(player, clan, setting) {
 
 function offerOf(player) {
   return openChests.get(player);
+}
+
+/** Beside every change to the offer, so no save can hold the inventory without the items. */
+function saveOffer(player, items) {
+  player.setAttribute(OFFER_ATTRIBUTE, items.map(({ id, amount }) => ({ id, amount })));
+}
+
+/** After a restart or crash the offer is all that's left of the items: they go back at login. */
+function restoreOffer(player) {
+  const items = player.getAttribute(OFFER_ATTRIBUTE) ?? [];
+  saveOffer(player, []);
+  for (const { id, amount } of items) giveBack(player, id, amount);
 }
 
 function invItems(items, size) {
@@ -182,6 +197,7 @@ function offer(player, slot, op) {
     inventory.delete(id, moved);
     if (stack) stack.amount += moved;
     else state.items.push({ id, amount: moved });
+    saveOffer(player, state.items);
     sendOffer(player);
   });
 }
@@ -196,6 +212,7 @@ function takeBack(player, slot, op) {
     giveBack(player, stack.id, moved);
     stack.amount -= moved;
     if (stack.amount === 0) state.items = state.items.filter((entry) => entry !== stack);
+    saveOffer(player, state.items);
     sendOffer(player);
   });
 }
@@ -226,6 +243,7 @@ function confirm(player) {
     else hall.chest.push({ id, amount });
   }
   state.items = [];
+  saveOffer(player, []);
   sendOffer(player);
   for (const [viewer, open] of openChests) if (open.hall === hall) sendChest(viewer, hall);
 }
@@ -235,6 +253,7 @@ function closeChest(player) {
   const state = offerOf(player);
   if (!state) return;
   openChests.delete(player);
+  saveOffer(player, []);
   for (const { id, amount } of state.items) giveBack(player, id, amount);
 }
 
@@ -462,6 +481,7 @@ module.exports = {
   playQuietly,
   pullLever,
   reset,
+  restoreOffer,
   searchBooks,
   setScheduler,
   sit,

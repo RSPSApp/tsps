@@ -18,6 +18,9 @@ const core = PluginManager.getCoreApi();
 
 before(async () => {
   await CachePipeline.initialize();
+  require('../plugins/bots/behaviours/pvp/PvpTierLoadouts.PlayerBots').initPvpTierLoadouts({
+    core: require('../dist/plugins/PluginManager').PluginManager.getCoreApi(),
+  });
   core.RegionManager.init();
   require('../plugins/items/ItemDefinitionLoader.plugin').register({
     log() {}, onPlayerLogin() {}, registerContentEndpoint() {},
@@ -124,6 +127,7 @@ test('the capped roster fills one per tick across combat bands and restores bots
 
   const api = {
     core: {
+      SkillManager: core.SkillManager,
       Task: class {},
       Item: class { constructor(id, amount) { this.amount = amount; } },
       ItemIdentifiers: { COINS: 995 },
@@ -560,15 +564,64 @@ test('every PvP build can wear what it names, and the researched builds keep the
   }
 });
 
-test('bot loadout bands use the same combat level as players', () => {
+test('bot loadout bands use the player calculation for every archetype and stat layout', () => {
+  const { SkillManager } = require('../dist/game/content/skill/SkillManager');
   const { combatLevelOf } = require('../plugins/bots/brain/SiteSpawner.PlayerBots');
   const { matchesHotspotCombatBand } = require('../plugins/bots/behaviours/policies/PvpLoadoutPolicy.PlayerBots').__testing;
-  for (const attack of [1, 50]) {
-    const stats = [attack, 1, 99, 65, 99, 1, 99];
-    assert.equal(require("../dist/game/content/skill/SkillManager").SkillManager.calculateCombatLevel(stats), 64);
-    assert.equal(archetypeCombatLevel(stats), 64);
-    assert.equal(combatLevelOf([attack, 99, 1, 65, 99, 99, 1]), 64);
-    assert.equal(matchesHotspotCombatBand(stats, { pvp: { combatLevelRange: { min: 64, max: 64 } } }), true);
-    assert.equal(matchesHotspotCombatBand(stats, { pvp: { combatLevelRange: { min: 65, max: 65 } } }), false);
+  const { PVP_LOADOUT_DEFINITIONS } = require('../plugins/bots/behaviours/pvp/PvpLoadoutRegistry.PlayerBots');
+  const statLines = [
+    [1, 1, 99, 65, 99, 1, 99],
+    [50, 1, 99, 65, 99, 1, 99],
+    [1, 1, 1, 10, 1, 1, 1],
+    [99, 99, 99, 99, 99, 99, 99],
+    ...PVP_LOADOUT_DEFINITIONS.archetypes.map(entry => entry.stats),
+  ];
+  for (const stats of statLines) {
+    const [attack, defence, strength, hp, ranged, prayer, magic] = stats;
+    const level = SkillManager.calculateCombatLevel(stats);
+    assert.equal(archetypeCombatLevel(stats), level, stats.join(','));
+    assert.equal(combatLevelOf([attack, strength, defence, hp, ranged, magic, prayer]), level, 'site stat order');
+    assert.equal(matchesHotspotCombatBand(stats, { pvp: { combatLevelRange: { min: level, max: level } } }), true);
+    assert.equal(matchesHotspotCombatBand(stats, { pvp: { combatLevelRange: { min: level + 1, max: level + 1 } } }), false);
   }
+});
+
+test('tier bands follow actual combat levels and retain profile restrictions at their boundaries', () => {
+  const { tierCombatLevel } = require('../plugins/bots/behaviours/pvp/PvpTierLoadouts.PlayerBots');
+  const { getPvpProfile } = require('../plugins/bots/behaviours/pvp/PvpProfileRegistry.PlayerBots');
+  const { PVP_LOADOUT_DEFINITIONS } = require('../plugins/bots/behaviours/pvp/PvpLoadoutRegistry.PlayerBots');
+  assert.deepEqual(TIER_BANDS, { novice: { min: 3, max: 80 }, intermediate: { min: 81, max: 100 }, veteran: { min: 101, max: 126 } });
+  const counts = { novice: 0, intermediate: 0, veteran: 0 };
+  for (const entry of PVP_LOADOUT_DEFINITIONS.archetypes) {
+    const level = archetypeCombatLevel(entry.stats);
+    const tier = Object.keys(TIER_BANDS).find(tier => level >= TIER_BANDS[tier].min && level <= TIER_BANDS[tier].max);
+    assert.ok(tier, entry.id);
+    counts[tier]++;
+  }
+  assert.deepEqual(counts, { novice: 32, intermediate: 37, veteran: 32 }, 'catalogue classified by unadjusted combat level');
+  const choiceCount = PVP_LOADOUT_DEFINITIONS.loadouts.reduce((sum, loadout) => sum + loadout.archetypes.length, 0);
+  const rosters = {};
+  for (const tier of Object.keys(TIER_BANDS)) {
+    rosters[tier] = new Set();
+    for (let index = 0; index < choiceCount; index++) {
+      const choice = pickTierChoice(tier, { index });
+      assert.ok(choice, tier);
+      rosters[tier].add(choice.archetypeId);
+    }
+  }
+  assert.deepEqual(Object.fromEntries(Object.entries(rosters).map(([tier, roster]) => [tier, roster.size])),
+    { novice: 30, intermediate: 17, veteran: 27 }, 'selectable rosters also apply profile requirements');
+  const byId = id => PVP_LOADOUT_DEFINITIONS.archetypes.find(entry => entry.id === id);
+  for (const id of ['zerker_venge_ags', 'ancient_gs_venge', 'zerker_dcb_ags', 'zerker_whip_claws', 'dark_bow_ags', 'ags_zerker']) {
+    assert.equal(archetypeCombatLevel(byId(id).stats), 100, id);
+    assert.equal(rosters.veteran.has(id), false, id + ' is below veteran combat level');
+  }
+  for (const id of ['zerker_venge_ags', 'zerker_dcb_ags']) assert.ok(rosters.intermediate.has(id), id);
+  for (const id of ['ancient_gs_venge', 'zerker_whip_claws', 'dark_bow_ags', 'ags_zerker'])
+    assert.equal(rosters.intermediate.has(id), false, id + ' still requires a higher profile');
+  const novice = getPvpProfile('novice');
+  for (const [id, level] of Object.entries({ initiate_msb_gmaul: 80, budget_venge_msb_gmaul: 80, f2p_rune_tank: 80, rigour_zerker: 100, granite_fifty_def: 100 }))
+    assert.equal(tierCombatLevel(byId(id), novice), level, id + ' includes novice HP adjustment');
+  for (const id of ['initiate_msb_gmaul', 'f2p_rune_tank']) assert.ok(rosters.novice.has(id), id);
+  assert.equal(rosters.novice.has('budget_venge_msb_gmaul'), false, 'profile restrictions still exclude the Vengeance build');
 });

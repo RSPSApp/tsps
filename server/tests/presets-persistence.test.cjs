@@ -607,6 +607,6 @@ test('preset combat levels in the list match the skill manager formula', () => {
   }
   for (const attack of [1, 50]) {
     assert.equal(presets._test.presetCombatLevel({ getStats: () => [attack, 1, 99, 65, 99, 1, 99] }), 64,
-      "G Mauler levels must match the equipment interface, not the old 65 calculation");
+      "preset list level matches SkillManager");
   }
 });

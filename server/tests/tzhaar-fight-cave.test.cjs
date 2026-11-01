@@ -12,16 +12,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const core = PluginManager.getCoreApi();
 
-let Plugin, Resurrection, hooks, events, diaryElite, onTaskAnswer;
-
-class FakeArea {
-  constructor() { this.members = new Set(); }
-  enter() {}
-  leave() {}
-  add() {}
-  destroy() {}
-  isDestroyed() { return false; }
-}
+let Plugin, Resurrection, hooks, events, diaryElite, onTaskAnswer, spawnNpc;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
@@ -29,7 +20,7 @@ before(async () => {
   Resurrection = require('../plugins/minigames/tzhaar/Resurrection.TzhaarFightCaves');
   hooks = {};
   const api = new Proxy({
-    core: { ...core, PrivateArea: FakeArea },
+    core,
     persistAttribute: () => {},
     emitCustomEvent(name, event) {
       events.push([name, event]);
@@ -37,11 +28,12 @@ before(async () => {
       if (name === 'diary:tokkul' && diaryElite) event.amount *= 2;
       if (name === 'slayer:on-task') event.onTask = onTaskAnswer === true;
     },
-    spawnNpc: () => null,
+    spawnNpc: (definition) => spawnNpc(definition),
     onObjectFirstClick: (id, handler) => { hooks.enter = hooks.enter ?? handler; },
     onObjectSecondClick: (id, handler) => { hooks.leave = handler; },
     onPlayerBeforeDeath: (handler) => { hooks.beforeDeath = handler; },
     onPlayerLogin: (handler) => { hooks.login = handler; },
+    onPlayerProcess: (handler) => { hooks.process = handler; },
     onCustomEvent: (name, handler) => { if (name === 'npc-drops:tertiary-chance') hooks.tertiary = [handler]; },
   }, { get: (target, key) => target[key] ?? (() => {}) });
   Plugin.register(api);
@@ -50,20 +42,24 @@ before(async () => {
 beforeEach(() => {
   events = [];
   diaryElite = false;
+  spawnNpc = () => null;
 });
 
 const loc = (x, y) => new core.Location(x, y, 0);
 
 function fakePlayer() {
   let tile = loc(2438, 5168);
+  let area = null;
   const inventory = [];
   const player = {
     messages: [], attributes: {}, levels: {}, sent: [], queue: 0, poison: 1, dialogues: [],
     getLocation: () => tile,
     moveTo: (to) => { tile = to; },
     isPlayer: () => true,
-    getArea: () => null,
-    setArea() {},
+    getIndex: () => 1,
+    getAsPlayer: () => player,
+    getArea: () => area,
+    setArea: (value) => { area = value; },
     sendMessage: (m) => player.messages.push(m),
     getAttribute: (k) => player.attributes[k],
     setAttribute: (k, v) => { player.attributes[k] = v; },
@@ -86,6 +82,56 @@ function fakePlayer() {
   };
   return player;
 }
+
+test('clearing wave 2 while its monsters are idle spawns wave 3 and continues past its split', (t) => {
+  let cycle = 0;
+  const npcs = [];
+  t.mock.method(core.World, 'getProcessCycle', () => cycle);
+  spawnNpc = ({ id, x, y }) => {
+    const npc = core.NPC.create(id, loc(x, y));
+    npcs.push(npc);
+    return npc;
+  };
+  const player = fakePlayer();
+  const tick = (count) => {
+    for (let i = 0; i < count; i++) {
+      cycle++;
+      hooks.process({ player });
+    }
+  };
+  hooks.enter({ player });
+  tick(6);
+  assert.deepEqual(npcs.map((npc) => npc.getId()), [core.NpcIdentifiers.TZ_KIH_3]);
+  npcs[0].setHitpoints(0);
+  tick(7);
+  const wave2 = npcs.slice(1);
+  assert.deepEqual(wave2.map((npc) => npc.getId()), [core.NpcIdentifiers.TZ_KIH_3, core.NpcIdentifiers.TZ_KIH_3]);
+
+  for (const npc of wave2) {
+    npc.getCombat().reset();
+    t.mock.method(npc.getCombat().getLastAttack(), 'hasElapsed', () => true);
+    npc.setHitpoints(5);
+    npc.process();
+    assert.equal(npc.getHitpoints(), 6, 'living idle NPCs still regenerate');
+    npc.setHitpoints(0);
+    npc.process(); // NPCs process before the player's wave check in World.process.
+  }
+  tick(7);
+  const tzKek = npcs.at(-1);
+  assert.equal(tzKek.getId(), core.NpcIdentifiers.TZ_KEK_3, 'wave 3 spawns its level-45 Tz-Kek');
+  assert.ok(wave2.every((npc) => npc.getHitpoints() === 0), 'dying NPCs stay at zero hitpoints');
+  tzKek.setHitpoints(0);
+  tick(1);
+  const children = npcs.slice(-2);
+  assert.deepEqual(children.map((npc) => npc.getId()), [core.NpcIdentifiers.TZ_KEK_5, core.NpcIdentifiers.TZ_KEK_5]);
+  tick(6);
+  assert.equal(player.getAttribute('tzhaar:fight-cave-wave'), 3, 'the split monsters still hold the wave');
+  children.forEach((npc) => npc.setHitpoints(0));
+  tick(7);
+  assert.equal(player.getAttribute('tzhaar:fight-cave-wave'), 4);
+  assert.deepEqual(npcs.slice(-2).map((npc) => npc.getId()), [core.NpcIdentifiers.TZ_KEK_3, core.NpcIdentifiers.TZ_KIH_3]);
+  hooks.leave({ player });
+});
 
 test('going back in right after leaving is never refused', () => {
   const player = fakePlayer();

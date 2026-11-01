@@ -1,0 +1,157 @@
+{
+  "packs": [
+    {"name": "Bait pack", "contents": [{"item": "FISHING_BAIT", "amount": 100}]},
+    {"name": "Feather pack", "contents": [{"item": "FEATHER", "amount": 100}]},
+    {"name": "Compost pack", "contents": [{"item": "COMPOST", "amount": 100}]},
+    {"name": "Plant pot pack", "contents": [{"item": "FILLED_PLANT_POT", "amount": 100}]},
+    {"name": "Sack pack", "contents": [{"item": "EMPTY_SACK", "amount": 100}]},
+    {"name": "Basket pack", "contents": [{"item": "BASKET", "amount": 100}]},
+    {"name": "Empty bucket pack", "contents": [{"item": "BUCKET", "amount": 100}]},
+    {"name": "Empty jug pack", "contents": [{"item": "JUG", "amount": 100}]},
+    {"name": "Empty vial pack", "contents": [{"item": "VIAL", "amount": 100}]},
+    {"name": "Water-filled vial pack", "contents": [{"item": "VIAL_OF_WATER", "amount": 100}]},
+    {"name": "Olive oil pack", "contents": [{"item": "OLIVE_OIL_4_", "amount": 100}]},
+    {"name": "Unfinished broad bolt pack", "contents": [{"item": "UNFINISHED_BROAD_BOLTS", "amount": 100}]},
+    {"name": "Broad arrowhead pack", "contents": [{"item": "BROAD_ARROWHEADS", "amount": 100}]},
+    {"name": "Soft clay pack", "contents": [{"item": "SOFT_CLAY", "amount": 100}]},
+    {"name": "Amylase pack", "contents": [{"item": "AMYLASE_CRYSTAL", "amount": 100}]},
+    {"name": "Eye of newt pack", "contents": [{"item": "EYE_OF_NEWT", "amount": 100}]},
+    {"name": "Box trap pack", "contents": [{"item": "BOX_TRAP", "amount": 100}]},
+    {"name": "Bird snare pack", "contents": [{"item": "BIRD_SNARE", "amount": 100}]},
+    {"name": "Magic imp box pack", "contents": [{"item": "MAGIC_BOX", "amount": 100}]},
+    {"name": "Bone bolt pack", "contents": [{"item": "BONE_BOLTS", "amount": 100}]},
+    {"name": "Sandworms pack", "contents": [{"item": "SANDWORMS", "amount": 100}]},
+    {"name": "Shark lure pack", "contents": [{"item": "SHARK_LURE", "amount": 100}]},
+    {"name": "Air rune pack", "contents": [{"item": "AIR_RUNE", "amount": 100}]},
+    {"name": "Water rune pack", "contents": [{"item": "WATER_RUNE", "amount": 100}]},
+    {"name": "Earth rune pack", "contents": [{"item": "EARTH_RUNE", "amount": 100}]},
+    {"name": "Fire rune pack", "contents": [{"item": "FIRE_RUNE", "amount": 100}]},
+    {"name": "Mind rune pack", "contents": [{"item": "MIND_RUNE", "amount": 100}]},
+    {"name": "Chaos rune pack", "contents": [{"item": "CHAOS_RUNE", "amount": 100}]},
+    {"name": "Tzhaar air rune pack", "contents": [{"item": "AIR_RUNE", "amount": 100}]},
+    {"name": "Tzhaar water rune pack", "contents": [{"item": "WATER_RUNE", "amount": 100}]},
+    {"name": "Tzhaar earth rune pack", "contents": [{"item": "EARTH_RUNE", "amount": 100}]},
+    {"name": "Tzhaar fire rune pack", "contents": [{"item": "FIRE_RUNE", "amount": 100}]},
+    {"name": "Essence pack", "contents": [{"item": "PURE_ESSENCE", "amount": 100}]},
+    {"name": "Catalytic rune pack", "contents": [{"item": "CHAOS_RUNE", "amount": 50}, {"item": "DEATH_RUNE", "amount": 50}, {"item": "BLOOD_RUNE", "amount": 50}]},
+    {"name": "Elemental rune pack", "contents": [{"item": "AIR_RUNE", "amount": 50}, {"item": "WATER_RUNE", "amount": 50}, {"item": "EARTH_RUNE", "amount": 50}, {"item": "FIRE_RUNE", "amount": 50}]},
+    {"name": "Adamant arrow pack", "contents": [{"item": "ADAMANT_ARROW", "amount": 50}]},
+    {"name": "Rune arrow pack", "contents": [{"item": "RUNE_ARROW", "amount": 50}]}
+  ],
+  "loot": [
+    {"name": "Casket", "items": ["CASKET"], "sound": 52, "message": "You open the casket. Inside you find {item}.", "article": true, "box": true, "tables": [
+        { "rolls": 1, "entries": [
+          {"item": "COINS", "weight": 10, "amount": [20, 20]},
+          {"item": "COINS", "weight": 10, "amount": [40, 40]},
+          {"item": "COINS", "weight": 10, "amount": [80, 80]},
+          {"item": "COINS", "weight": 10, "amount": [160, 160]},
+          {"item": "COINS", "weight": 10, "amount": [320, 320]},
+          {"item": "COINS", "weight": 10, "amount": [640, 640]},
+          {"item": "UNCUT_SAPPHIRE", "weight": 32, "amount": [1, 1]},
+          {"item": "UNCUT_EMERALD", "weight": 16, "amount": [1, 1]},
+          {"item": "UNCUT_RUBY", "weight": 8, "amount": [1, 1]},
+          {"item": "UNCUT_DIAMOND", "weight": 2, "amount": [1, 1]},
+          {"item": "COSMIC_TALISMAN", "weight": 8, "amount": [1, 1]},
+          {"item": "LOOP_HALF_OF_KEY", "weight": 1, "amount": [1, 1]},
+          {"item": "TOOTH_HALF_OF_KEY", "weight": 1, "amount": [1, 1]}
+        ] }
+    ] },
+    {"name": "Oyster", "message": "You open the oyster shell.", "tables": [
+        { "rolls": 1, "entries": [
+          {"item": "OYSTER_PEARL", "weight": 25, "amount": [1, 1]},
+          {"item": "EMPTY_OYSTER", "weight": 7, "amount": [1, 1]}
+        ] }
+    ] },
+    {"name": "Bag full of gems", "tables": [
+        { "rolls": 40, "entries": [
+          {"item": "UNCUT_SAPPHIRE", "weight": 50000000, "amount": [1, 1], "noted": true},
+          {"item": "UNCUT_EMERALD", "weight": 34500000, "amount": [1, 1], "noted": true},
+          {"item": "UNCUT_RUBY", "weight": 12000000, "amount": [1, 1], "noted": true},
+          {"item": "UNCUT_DIAMOND", "weight": 3000000, "amount": [1, 1], "noted": true},
+          {"item": "UNCUT_DRAGONSTONE", "weight": 500000, "amount": [1, 1], "noted": true},
+          {"item": "UNCUT_ONYX", "weight": 1, "amount": [1, 1], "noted": true}
+        ] }
+    ] },
+    {"name": "Hallowed sack", "tables": [
+        { "rolls": 5, "entries": [
+          {"item": "MONKS_ROBE_TOP", "weight": 1, "amount": [1, 1]},
+          {"item": "MONKS_ROBE", "weight": 1, "amount": [1, 1]},
+          {"item": "HOLY_SYMBOL", "weight": 1, "amount": [1, 1]},
+          {"item": "AIR_RUNE", "weight": 1, "amount": [500, 750]},
+          {"item": "FIRE_RUNE", "weight": 1, "amount": [500, 750]},
+          {"item": "CHAOS_RUNE", "weight": 1, "amount": [25, 50]},
+          {"item": "MITHRIL_BOLTS", "weight": 1, "amount": [50, 150]},
+          {"item": "PRAYER_POTION_2_", "weight": 1, "amount": [1, 1]},
+          {"item": "WHITE_LILY", "weight": 1, "amount": [1, 1]},
+          {"item": "COINS", "weight": 1, "amount": [1500, 3000]}
+        ] },
+        { "rolls": 1, "entries": [
+          {"item": "ADAMANT_2H_SWORD", "weight": 1, "amount": [1, 1]},
+          {"item": "ADAMANT_PLATEBODY", "weight": 1, "amount": [1, 1]},
+          {"item": "COSMIC_RUNE", "weight": 1, "amount": [60, 100]},
+          {"item": "DEATH_RUNE", "weight": 1, "amount": [60, 100]},
+          {"item": "NATURE_RUNE", "weight": 1, "amount": [60, 100]},
+          {"item": "ADAMANT_BOLTS", "weight": 1, "amount": [50, 200]},
+          {"item": "MONKFISH", "weight": 1, "amount": [1, 3], "noted": true},
+          {"item": "PRAYER_POTION_4_", "weight": 1, "amount": [1, 1]},
+          {"item": "GRIMY_RANARR_WEED", "weight": 1, "amount": [1, 2]},
+          {"item": "COINS", "weight": 1, "amount": [7500, 12500]}
+        ] },
+        { "rolls": 2, "entries": [
+          {"item": "RUNE_2H_SWORD", "weight": 1, "amount": [1, 1]},
+          {"item": "RUNE_PLATEBODY", "weight": 1, "amount": [1, 1]},
+          {"item": "LAW_RUNE", "weight": 1, "amount": [150, 250]},
+          {"item": "BLOOD_RUNE", "weight": 1, "amount": [150, 250]},
+          {"item": "SOUL_RUNE", "weight": 1, "amount": [150, 250]},
+          {"item": "RUNITE_BOLTS", "weight": 1, "amount": [100, 300]},
+          {"item": "MONKFISH", "weight": 1, "amount": [2, 6], "noted": true},
+          {"item": "SANFEW_SERUM_4_", "weight": 1, "amount": [1, 2]},
+          {"item": "RANARR_SEED", "weight": 1, "amount": [1, 2]},
+          {"item": "COINS", "weight": 1, "amount": [17500, 25000]}
+        ] }
+    ] },
+    {"name": "Spoils of War", "entrana": "You can't open this on Entrana.", "tables": [
+        { "rolls": 3, "entries": [
+          {"item": "PURE_ESSENCE", "weight": 1, "amount": [1000, 1000], "noted": true},
+          {"item": "ADAMANT_BOLTS", "weight": 1, "amount": [150, 170]},
+          {"item": "RUNITE_BOLTS", "weight": 1, "amount": [150, 170]},
+          {"item": "BLIGHTED_VENGEANCE_SACK", "weight": 1, "amount": [20, 30]},
+          {"item": "BLIGHTED_ANCIENT_ICE_SACK", "weight": 1, "amount": [10, 15]},
+          {"item": "BLIGHTED_KARAMBWAN", "weight": 1, "amount": [35, 45], "noted": true},
+          {"item": "BLIGHTED_ANGLERFISH", "weight": 1, "amount": [25, 35], "noted": true},
+          {"item": "BLIGHTED_MANTA_RAY", "weight": 1, "amount": [15, 25], "noted": true},
+          {"item": "BLIGHTED_SUPER_RESTORE_4_", "weight": 1, "amount": [4, 4], "noted": true}
+        ] }
+    ] },
+    {"name": "Hunter kit", "entrana": "Some forms of Hunter gear are not appreciated by the monks.", "tables": [
+        { "rolls": "all", "entries": [
+          {"item": "NOOSE_WAND", "weight": 1, "amount": [1, 1]},
+          {"item": "BUTTERFLY_NET", "weight": 1, "amount": [1, 1]},
+          {"item": "BIRD_SNARE", "weight": 1, "amount": [1, 1]},
+          {"item": "RABBIT_SNARE", "weight": 1, "amount": [1, 1]},
+          {"item": "TEASING_STICK", "weight": 1, "amount": [1, 1]},
+          {"item": "UNLIT_TORCH", "weight": 1, "amount": [1, 1]},
+          {"item": "IMPLING_JAR", "weight": 1, "amount": [1, 1]},
+          {"item": "BOX_TRAP", "weight": 1, "amount": [1, 1]},
+          {"item": "NET_TRAP", "weight": 1, "amount": [1, 1]}
+        ] }
+    ] },
+    {"name": "Dossier", "sound": 6765, "message": "You open the dossier and find {item} inside!", "box": true, "tables": [
+        { "rolls": 1, "entries": [
+          {"item": "CONTRACT_OF_BLOODIED_BLOWS", "weight": 260, "amount": [3, 3]},
+          {"item": "CONTRACT_OF_DIVINE_SEVERANCE", "weight": 260, "amount": [3, 3]},
+          {"item": "CONTRACT_OF_FORFEIT_BREATH", "weight": 260, "amount": [3, 3]},
+          {"item": "CONTRACT_OF_GLYPHIC_ATTENUATION", "weight": 260, "amount": [3, 3]},
+          {"item": "CONTRACT_OF_SENSORY_CLOUDING", "weight": 260, "amount": [3, 3]},
+          {"item": "CHASM_TELEPORT_SCROLL", "weight": 116, "amount": [15, 18]},
+          {"item": "RITE_OF_VILE_TRANSFERENCE", "weight": 116, "amount": [1, 1]},
+          {"item": "CONTRACT_OF_FAMILIAR_ACQUISITION", "weight": 65, "amount": [2, 2]},
+          {"item": "CONTRACT_OF_SHARD_ACQUISITION", "weight": 39, "amount": [1, 1]},
+          {"item": "CONTRACT_OF_WORM_ACQUISITION", "weight": 39, "amount": [1, 1]},
+          {"item": "CONTRACT_OF_CATALYST_ACQUISITION", "weight": 39, "amount": [1, 1]},
+          {"item": "CONTRACT_OF_HARMONY_ACQUISITION", "weight": 13, "amount": [1, 1]},
+          {"item": "CONTRACT_OF_OATHPLATE_ACQUISITION", "weight": 13, "amount": [1, 1]}
+        ] }
+    ] }
+  ]
+}

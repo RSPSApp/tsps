@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { Inventory } from "../rs/inventory/Inventory";
 import { deriveRawMenuEntriesForWidget } from "../widgets/menu/utils";
+import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
+import { encodeWidgetRunScript } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 
 // Exercise the cache's actual panels and long-price script, not just the VM opcode.
 {
@@ -25,6 +27,38 @@ import { deriveRawMenuEntriesForWidget } from "../widgets/menu/utils";
     assert.ok(wm.getWidgetByUid((464 << 16) | 2).children.some((child: any) =>
         child?.text?.includes('12,345,678,901')), 'guide-price text preserves a 64-bit total');
 
+    // Looting bag prices precede setup: wrong int arguments throw before it can draw the items.
+    wm.getGroup(81);
+    const runPacket = (packet: Uint8Array) => {
+        const { payload } = decodeServerPacket(packet) as any;
+        for (const [id, snapshot] of Object.entries(payload.inventories ?? {}) as [string, any][]) {
+            const inventory = new Inventory(snapshot.capacity);
+            inventory.setSnapshot(snapshot.slots);
+            cacheVm.context.inventories.set(Number(id), inventory);
+        }
+        if (payload.scriptId < 0) return;
+        cacheVm.run(cacheVm.context.loadScript(payload.scriptId),
+            payload.args.filter((arg: any) => typeof arg === 'number'),
+            payload.args.filter((arg: any) => typeof arg === 'string'), undefined,
+            payload.args.filter((arg: any) => typeof arg === 'bigint'));
+        assert.equal(cacheVm.lastError, null);
+    };
+    runPacket(encodeWidgetRunScript(-1, [], undefined, undefined, {
+        516: { capacity: 28, slots: [{ slot: 0, itemId: 995, quantity: 7 }, { slot: 1, itemId: 1333, quantity: 1 }] },
+    }));
+    runPacket(encodeWidgetRunScript(1235, [516, 1n, 12_345_678_901n, ...Array(26).fill(-1n)]));
+    runPacket(encodeWidgetRunScript(495, ['Looting bag', 0]));
+    const bagItems = wm.getWidgetByUid((81 << 16) | 5);
+    assert.equal(wm.getWidgetByUid((81 << 16) | 1).text, 'Looting bag');
+    assert.deepEqual(bagItems.children.slice(0, 2).map((child: any) => [child.itemId, child.itemQuantity]),
+        [[995, 7], [1333, 1]], 'Check draws the decoded bag inventory');
+    assert.ok(bagItems.children[1].onMouseRepeat.some((arg: any) =>
+        typeof arg === 'string' && arg.includes('12,345,678,901')), 'per-slot prices retain 64 bits');
+    runPacket(encodeWidgetRunScript(1235, [93, 42n, ...Array(27).fill(-1n)]));
+    runPacket(encodeWidgetRunScript(495, ['Add to bag', 1]));
+    assert.equal(bagItems.children[0].itemId, 1511, 'Deposit draws the backpack instead');
+    assert.equal(bagItems.children[0].actions[0], 'Store-1');
+
     wm.getGroup(218);
     const spellbook = wm.getWidgetByUid(218 << 16);
     for (const [book, child] of [[0, 6], [1, 108], [2, 109], [3, 153]]) {
@@ -48,6 +82,126 @@ import { deriveRawMenuEntriesForWidget } from "../widgets/menu/utils";
         assert.equal(cacheVm.context.varManager.getVarp(4560), 1,
             'Default remains selected: the last animation and locked cosmetics cannot be toggled');
     }
+
+    // Native Castle Wars area packets must drive the cache's own HUD for both teams.
+    const serverRoot = require('node:path').resolve(__dirname, '../../server');
+    const serverModules = serverRoot + '/src/main/typescript/elvarg';
+    const clientRoot = process.cwd();
+    process.chdir(serverRoot);
+    require(serverModules + '/Server').Server.installProductionPathResolver();
+    require(serverModules + '/game/cache/CachePipeline').CachePipeline.initialize(serverRoot);
+    const { PluginManager } = require(serverModules + '/plugins/PluginManager');
+    const { Player } = require(serverModules + '/game/entity/impl/player/Player');
+    const { World } = require(serverModules + '/game/World');
+    const { RegionManager } = require(serverModules + '/game/collision/RegionManager');
+    const core = PluginManager.getCoreApi();
+    RegionManager.init();
+    RegionManager.loadMapFiles(2426, 3080);
+    let setUp: (event: any) => void;
+    const api = {
+        core,
+        getAreaManager: () => ({}), getBonusManager: () => ({}),
+        getObjectManager: () => ({ register() {}, deregister() {} }),
+        getRegionManager: () => RegionManager, getTaskManager: () => ({ submit() {} }),
+        getWorld: () => World,
+        registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {},
+        onCustomEvent() {}, onPlayerDeath() {}, onShouldDropItemsOnDeath() {}, emitCustomEvent() {},
+        onItemAction(_name: string, actions: any) { setUp = actions['Set-up']; },
+        onNpcDeath() {}, onNpcInteraction() {}, onItemOnNpc() {},
+    };
+    const game = require(serverRoot + '/plugins/minigames/castlewars/Game.CastleWars')(api);
+    require(serverRoot + '/plugins/minigames/castlewars/Areas.CastleWars')(api, game);
+    require(serverRoot + '/plugins/minigames/castlewars/Barricades.CastleWars')(api, game);
+    game.isPlaying = () => true;
+    cacheVm.context.varManager.setServerVarbit(16207, 1); // A stale split-cap world must be reset.
+    const received: any[] = [];
+    const player = new Player(null, new core.Location(2426, 3081, 1));
+    player.getSession = () => ({ sendClientPacket(packet: Uint8Array) {
+        const message = decodeServerPacket(packet) as any;
+        received.push(message);
+        if (message.type === 'varbit') cacheVm.context.varManager.setServerVarbit(message.payload.varbitId, message.payload.value);
+        if (message.type === 'varp') cacheVm.context.varManager.setServerVarp(message.payload.varpId, message.payload.value);
+    }, write() {} });
+    player.getInventory().add(new core.Item(core.ItemIdentifiers.BARRICADE, 3));
+    const { SARADOMIN, ZAMORAK } = game.TEAM;
+    const castleStates = {
+        [SARADOMIN]: [75, 1, 1, 0, 1],
+        [ZAMORAK]: [40, 0, 0, 1, 0],
+    };
+    for (const team of [SARADOMIN, ZAMORAK]) {
+        Object.values(game.TEAM_VARBIT).forEach((varbit, i) => game.setTeamVar(team, varbit, castleStates[team][i]));
+    }
+    const checkCastleHud = (team: string, count: number) => {
+        game.setTeamId(player, team);
+        game.gameArea.process(player);
+        const group = team === SARADOMIN ? 58 : 59;
+        wm.getGroup(group);
+        const listener = wm.getWidgetByUid((group << 16) | (group === 58 ? 20 : 19));
+        cacheVm.runScriptEvent({ args: listener.onVarTransmit, widget: listener });
+        assert.equal(cacheVm.lastError, null);
+        assert.equal(wm.getWidgetByUid((group << 16) | 15).text, `${count}/10 Barricades`,
+            `${team} sees its live count through native cache script ${group === 58 ? 887 : 888}`);
+        const [health, unlocked, northSouth, eastWest, broken] = castleStates[team];
+        assert.deepEqual([5, 7, 9, 11, 13].map(child => wm.getWidgetByUid((group << 16) | child).text), [
+            `Health ${health}%`, unlocked ? '<col=ff0000>Unlocked</col>' : 'Locked',
+            northSouth ? '<col=ff0000>Cleared</col>' : 'Collapsed',
+            eastWest ? '<col=ff0000>Cleared</col>' : 'Collapsed',
+            broken ? '<col=ff0000>Destroyed</col>' : 'Operational',
+        ], `${team} sees its own doors, tunnels and catapult`);
+    };
+    checkCastleHud(SARADOMIN, 0);
+    setUp!({ player, slot: 0 });
+    const first = [...World.getNpcs()].find((npc: any) => game.isBarricade(npc));
+    assert.ok(first, 'the real inventory action placed a barricade');
+    checkCastleHud(SARADOMIN, 1);
+    const unchanged = received.length;
+    checkCastleHud(SARADOMIN, 1);
+    assert.equal(received.length, unchanged, 'unchanged area ticks do not resend HUD packets');
+    checkCastleHud(ZAMORAK, 0);
+    player.moveTo(new core.Location(2423, 3076, 1));
+    setUp!({ player, slot: 0 });
+    checkCastleHud(ZAMORAK, 1);
+    game.removeBarricade(first);
+    World.getNpcs().remove(first);
+    checkCastleHud(SARADOMIN, 0);
+    checkCastleHud(ZAMORAK, 1);
+    const remaining = [...World.getNpcs()].filter((npc: any) => game.isBarricade(npc));
+    game.resetMatchState();
+    castleStates[SARADOMIN] = castleStates[ZAMORAK] = [100, 0, 0, 0, 0];
+    for (const npc of remaining) World.getNpcs().remove(npc);
+    World.getRemoveNPCQueue().splice(0);
+    checkCastleHud(ZAMORAK, 0);
+    checkCastleHud(SARADOMIN, 0);
+
+    // The server's autocast selector key must populate the native Ancient spell chooser.
+    const { Autocasting } = require(serverModules + '/game/content/combat/magic/Autocasting');
+    const { CombatSpells } = require(serverModules + '/game/content/combat/magic/CombatSpells');
+    require(serverRoot + '/plugins/items/ItemDefinitionLoader.plugin').register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+    player.setSpellbook(core.MagicSpellbook.ANCIENT);
+    cacheVm.context.varManager.setServerVarbit(4070, 1);
+    for (const weapon of [
+        core.ItemIdentifiers.MASTER_WAND, core.ItemIdentifiers.NIGHTMARE_STAFF,
+        core.ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF, core.ItemIdentifiers.ELDRITCH_NIGHTMARE_STAFF,
+        core.ItemIdentifiers.KODAI_WAND, core.ItemIdentifiers.ANCIENT_STAFF,
+    ]) {
+        player.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(weapon));
+        for (const style of [23, 28]) {
+            player.getCombat().setAutocastSpell(null);
+            assert.equal(Autocasting.handleWidgetAction(player, 593, style), true);
+            wm.getGroup(201);
+            const root = wm.getWidgetByUid(201 << 16);
+            cacheVm.runScriptEvent({ args: root.onLoad, widget: root });
+            assert.equal(cacheVm.lastError, null);
+            const choices = wm.getWidgetByUid((201 << 16) | 1).children;
+            assert.deepEqual(choices.filter((child: any) => child && !child.hidden && child.childIndex > 0)
+                .map((child: any) => child.childIndex), Array.from({ length: 16 }, (_, i) => i + 31),
+                `weapon ${weapon}, style ${style} displays all sixteen Ancient combat spells`);
+            assert.equal(choices[46].actions[0], 'Ice Barrage');
+            Autocasting.handleWidgetAction(player, 201, 1, 46);
+            assert.equal(player.getCombat().getAutocastSpell(), CombatSpells.ICE_BARRAGE);
+        }
+    }
+    process.chdir(clientRoot);
 }
 
-console.log("Cache panel scripts retain dynamic inventory items and 64-bit prices");
+console.log("Cache panel scripts retain inventory items, 64-bit prices and native Castle Wars HUD state");

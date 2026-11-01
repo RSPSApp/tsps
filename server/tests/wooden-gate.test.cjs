@@ -1547,6 +1547,46 @@ test('the Tutorial Island survival gate swings open and closes back to its own p
   }
 });
 
+test('the Castle Wars central trapdoors open into climbable models on the same tiles', async () => {
+  await initializeMapCollisionOnce();
+  RegionManager.loadMapFiles(2399, 3099);
+  const ids = [1579, 1580, 1581, 1582];
+  const definitions = new Map(ids.map(id => [id, CacheDefinitions.getObject(id)]));
+  assert.deepEqual(definitions.get(1579).actions.filter(Boolean), ['Open']);
+  assert.deepEqual(definitions.get(1581).actions.filter(Boolean), ['Climb-down', 'Close']);
+  const traps = [[2399, 3099, 3], [2400, 3108, 1]].map(([x, y, face]) => {
+    const object = MapObjects.getType(new Location(x, y, 0), 22, null);
+    assert.equal(object.getId(), 1579, `the actual cache map trapdoor at ${x},${y}`);
+    assert.equal(object.getFace(), face);
+    return object;
+  });
+  const h = buildHarness({ cacheObjects: definitions, realMapObjects: true });
+  try {
+    for (const object of traps) {
+      const { x, y } = object.getLocation();
+      const face = object.getFace();
+      assert.deepEqual(h.click(1579, x, y, face, 'Open', 'Trapdoor', 22), [
+        ['deregister', 1579, x, y, face],
+        ['register', 1581, x, y, face],
+      ], 'opening preserves the floor decoration tile and orientation');
+      assert.deepEqual(h.click(1581, x, y, face, 'Close', 'Trapdoor', 22), [
+        ['deregister', 1581, x, y, face],
+        ['register', 1579, x, y, face],
+      ], 'Close restores the original cached trapdoor');
+    }
+    for (const [closed, opened] of [[1579, 1581], [1580, 1582]]) {
+      for (let face = 0; face < 4; face++) {
+        assert.deepEqual(h.click(closed, 100, 100, face, 'Open', 'Trapdoor', 22), [
+          ['deregister', closed, 100, 100, face], ['register', opened, 100, 100, face],
+        ], 'both cache variants preserve every floor-decoration rotation');
+        assert.deepEqual(h.click(opened, 100, 100, face, 'Close', 'Trapdoor', 22), [
+          ['deregister', opened, 100, 100, face], ['register', closed, 100, 100, face],
+        ]);
+      }
+    }
+  } finally { h.restore(); }
+});
+
 test('the Gnome Ball pitch gate 2394 rotates in place and closes back onto its wall', () => {
   const h = buildHarness();
   try {

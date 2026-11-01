@@ -46,7 +46,7 @@ import path = require("path");
 import { CachePipeline } from "../src/main/typescript/elvarg/game/cache/CachePipeline";
 import { CacheDefinitions } from "../src/main/typescript/elvarg/game/cache/CacheDefinitions";
 
-const { versionIds, alignLayers, parsePoint, parseInfoboxMaps, parseBox, inBoxes, nameKey, planAdditions, reconcileIdentities, squareOf, parseLocLines, locationName } = require("./npc-spawn-matching.cjs");
+const { versionIds, alignLayers, parsePoint, parseInfoboxMaps, parseBox, inBoxes, nameKey, planAdditions, reconcileIdentities, squareOf, parseLocLines, locationName, chooseWanderRadius } = require("./npc-spawn-matching.cjs");
 
 const WIKI_API = "https://oldschool.runescape.wiki/api.php";
 const USER_AGENT = "tsps-npc-spawns (https://github.com/RSPSApp/tsps)";
@@ -191,20 +191,25 @@ function chooseId(page: string, versions: Version[], tags: string[], overrides: 
     return [...all].sort((a, b) => (usage.get(b) ?? 0) - (usage.get(a) ?? 0))[0];
 }
 
-/** The wander radius existing spawns of `key` mostly have (undefined: the loader's default). */
-function commonRadius(spawns: Spawn[], matches: (spawn: Spawn) => boolean): { found: boolean; radius?: number } {
-    const counts = new Map<number | undefined, number>();
-    for (const spawn of spawns) if (matches(spawn)) counts.set(spawn.wanderRadius, (counts.get(spawn.wanderRadius) ?? 0) + 1);
-    if (counts.size === 0) return { found: false };
-    return { found: true, radius: [...counts].sort((a, b) => b[1] - a[1])[0][0] };
+/** Whether the NPC, or any form its multinpc parent shows, offers Attack. */
+function isAttackable(id: number): boolean {
+    const npc: any = CacheDefinitions.getNpc(id);
+    const forms = [id, ...((npc?.transforms ?? []) as number[]).filter((form) => form >= 0)];
+    return forms.some((form) => ((CacheDefinitions.getNpc(form) as any)?.actions ?? []).includes("Attack"));
 }
 
+/**
+ * The radius a new spawn inherits from the existing spawns: a non-attackable NPC's established
+ * explicit radius wins over the implicit default; otherwise the effective majority. Undefined
+ * means the loader's default.
+ */
 function wanderRadius(spawns: Spawn[], id: number, name: string): number | undefined {
-    const byId = commonRadius(spawns, (spawn) => spawn.id === id);
-    if (byId.found) return byId.radius;
-    const byName = commonRadius(spawns, (spawn) => nameKey(spawn.name) === nameKey(name));
-    if (byName.found) return byName.radius;
-    return (CacheDefinitions.getNpc(id) as any)?.walkSeqId === -1 ? 0 : undefined;
+    return chooseWanderRadius(
+        spawns,
+        { id, name },
+        { walkSeqId: (CacheDefinitions.getNpc(id) as any)?.walkSeqId, attackable: isAttackable(id) },
+        nameKey,
+    );
 }
 
 function readJson(file: string): any {

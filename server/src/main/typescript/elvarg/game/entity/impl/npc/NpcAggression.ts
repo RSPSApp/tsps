@@ -64,17 +64,16 @@ export class NpcAggression {
                 continue;
             }
 
-            // Make sure we have the proper distance to attack the player.
-            let distanceToPlayer = npc.getSpawnPosition().getDistance(player.getLocation());
+            // The Wiki's hunt range starts at the NPC's current south-west tile, not its spawn
+            // (Aggressiveness#Hunt range). A ranged or magic NPC can at least see as far as it
+            // can cast; the definition's huntRange is the floor (default 3, KQ 9).
+            const huntDistance = npc.getLocation().getDistance(player.getLocation());
 
             // Get the npc's combat method
-            let method: CombatMethod = CombatFactory.getMethod(npc);
+            const method: CombatMethod = CombatFactory.getMethod(npc);
+            const huntRange = Math.max(npcDefinition.getHuntRange(), method.attackDistance(npc));
 
-            // Get the max distance this npc can attack from.
-            // We should always attack if we're at least 3 tiles from the player.
-            let aggressionDistance = npc.aggressionDistance();
-
-            if (distanceToPlayer < npcDefinition.getCombatFollowDistance() && distanceToPlayer <= aggressionDistance) {
+            if (huntDistance <= huntRange) {
                 if (CombatFactory.canAttack(npc, method, player) == CanAttackResponse.CAN_ATTACK) {
                     npc.getCombat().attack(player);
                     break;

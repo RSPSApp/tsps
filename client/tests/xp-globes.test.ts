@@ -124,6 +124,34 @@ async function main(): Promise<void> {
     assert.deepEqual(calls, ["fill 60 0.50", "icon", "line 5 true", "line 2 false"], "background, icon, ring, progress arc");
     assert.deepEqual(placed, { w: 43, h: 46 }, "RuneLite: n * (size + overhang) + 10 * (n - 1) long, size + 2 overhangs high");
 
+    // #1612: a started globe still disappeared on mobile: the real overlay placer
+    // did not recognise toplevel_osm, so it never supplied a draw position.
+    const mobileScale = 1.6;
+    const mobileWidgets = new Map([
+        [1, { _absX: 0, _absY: 0, _absWidth: 1136, _absHeight: 640, width: 710, height: 400 }],
+        [26, { _absX: 0, _absY: 0, _absWidth: 1136, _absHeight: 640 }],
+        [49, { _absX: 0, _absY: 480, _absWidth: 830, _absHeight: 160 }],
+    ]);
+    client.widgetManager = {
+        rootInterface: 601,
+        getWidgetByUid: (uid: number) => (uid >>> 16) === 601 ? mobileWidgets.get(uid & 0xffff) : undefined,
+        isEffectivelyHidden: () => false,
+    };
+    const mobileOverlays = new OverlayRenderer(client, config);
+    const desktopPlace = context.place;
+    let mobilePlace: any;
+    context.place = (overlay: any, w: number, h: number) =>
+        mobilePlace = mobileOverlays.placeOverlay(overlay, w, h, { w: 1136, h: 640 });
+    calls.length = 0;
+    const mobileRects = plugin.widgetOverlay.draw(context);
+    assert.equal(mobileRects.length, 1, "mobile XP globes reach the actual overlay placement and draw path");
+    assert.deepEqual(calls, ["fill 60 0.50", "icon", "line 8 true", "line 3.2 false"]);
+    assert.equal(mobilePlace.scaleX, mobileScale, "mobile globes use the rendered viewport scale");
+    assert.ok(mobileRects[0].x >= 0 && mobileRects[0].y >= 0 &&
+        mobileRects[0].x + mobileRects[0].w <= 1136 && mobileRects[0].y + mobileRects[0].h <= 640,
+        "the globe remains inside a narrow phone viewport");
+    context.place = desktopPlace;
+
     // A second globe: a row, 10 px apart; flipped, a column.
     stat(SkillId.Cooking, 50);
     stat(SkillId.Cooking, 60);

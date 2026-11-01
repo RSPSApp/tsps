@@ -5,7 +5,7 @@ let KqWorker, WorkerDespawnTask, KalphiteQueenCombat, TransformTask, RevertTask;
 const rangedPrayerDrains = new WeakSet();
 
 const KQ_HITPOINTS = 255;
-const KQ_AGGRESSION = { aggressive: true, aggressiveTolerance: false, combatFollowDistance: 9 };
+const KQ_AGGRESSION = { aggressive: true, aggressiveTolerance: false, combatFollowDistance: 9, huntRange: 9 };
 const TRANSFORMATION_TICKS = 20;
 const AIRBORNE_TIMEOUT_TICKS = 2_000;
 const WORKER_LIFETIME_TICKS = 100;

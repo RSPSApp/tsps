@@ -21,6 +21,7 @@ import { drawTextGL } from "../../widgets/components/TextRenderer";
 import type { WidgetManager } from "../../widgets/WidgetManager";
 import type { WidgetNode } from "../../widgets/WidgetNode";
 import type { GameFrameDrawContext, WidgetOverlay } from "../../game/plugins/ClientPluginManager";
+import { captureAppendedRects, composeDrawAboveWidgets } from "../../widgets/gl/widgetsGl/glRenderOpts";
 import { Overlay, OverlayInitArgs, OverlayUpdateArgs, RenderPhase } from "./Overlay";
 import { isCurrentClientType, reportedClientType } from "../../rs/cs2/ClientType";
 
@@ -148,7 +149,10 @@ export class WidgetsOverlay implements Overlay {
     private widgetEntries: WidgetRenderEntry[] = [];
     /** Overlays for the current pass, drawn from inside the tree at an anchor widget. */
     private currentWidgetOverlays: WidgetOverlay[] | null = null;
+    private currentBeforeMenuOverlays: WidgetOverlay[] = [];
     private overlayDrawnThisPass = false;
+    private menuOverlayDrawnThisPass = false;
+    private beforeMenuOverlayRects: DirtyRect[] = [];
     private visible: Map<number, boolean> = new Map();
     private hasPresentedFrame: boolean = false;
 
@@ -827,7 +831,13 @@ export class WidgetsOverlay implements Overlay {
             this.ctx.getGameContext?.()?.osrsClient?.clientPlugins?.widgetOverlays?.() ?? [];
         // Below-widget overlays draw first in a full pass; the rest draw in or above the tree.
         const belowWidgetOverlays = allWidgetOverlays.filter((overlay) => overlay.drawBelowWidgets === true);
-        const widgetOverlays = allWidgetOverlays.filter((overlay) => overlay.drawBelowWidgets !== true);
+        const widgetOverlays = allWidgetOverlays.filter(
+            (overlay) => overlay.drawBelowWidgets !== true && overlay.drawBeforeMenu !== true,
+        );
+        const beforeMenuOverlays = allWidgetOverlays.filter(
+            (overlay) => overlay.drawBelowWidgets !== true && overlay.drawBeforeMenu === true,
+        );
+        this.currentBeforeMenuOverlays = beforeMenuOverlays;
 
         if (this.widgetEntries.length === 0) {
             const widgetManager = this.ctx.getWidgetManager?.();
@@ -916,7 +926,15 @@ export class WidgetsOverlay implements Overlay {
                 tradeOverlayDirty ||
                 !!gameFrame ||
                 overlaySetChanged ||
-                overlayNeedsFullRedraw;
+                overlayNeedsFullRedraw ||
+                // Before-menu overlays draw once a pass from inside the tree, clipped to the
+                // first dirty rect, so a partial pass could not put back the rest of them.
+                (beforeMenuOverlays.length > 0 &&
+                    (anyDirty ||
+                        preciseDirtyWidgets.length > 0 ||
+                        menuVisualDirty ||
+                        mouseOverTextDirty ||
+                        overlayDirtyRects.length > 0));
             const preciseDirtyCount = preciseDirtyWidgets.length | 0;
             const shouldRedraw =
                 anyDirty ||
@@ -1014,11 +1032,20 @@ export class WidgetsOverlay implements Overlay {
 
                     this.currentWidgetOverlays = widgetOverlays;
                     this.overlayDrawnThisPass = false;
+                    this.menuOverlayDrawnThisPass = false;
+                    this.beforeMenuOverlayRects = [];
                     for (const entry of this.widgetEntries) {
+                        const drawAboveWidgets = this.drawAboveWidgetsForEntry(
+                            entry,
+                            entry === this.widgetEntries[this.widgetEntries.length - 1],
+                        );
                         renderWidgetTreeGL(
                             this.glRenderer,
                             entry.root,
-                            entry.renderOpts,
+                            {
+                                ...entry.renderOpts,
+                                ...(drawAboveWidgets ? { drawAboveWidgets } : {}),
+                            },
                         );
                     }
                     // Anchor overlays (status bars) draw inside the tree so tooltips win;
@@ -1029,6 +1056,7 @@ export class WidgetsOverlay implements Overlay {
                     } else {
                         this.drawWidgetOverlays(widgetOverlays, true);
                     }
+                    this.commitBeforeMenuOverlayRects();
                     this.drawTradeAmountOverlay(widgetManager);
                     this.drawMouseOverText(mouseOverTextState);
                     this.rootSetChanged = false;
@@ -1054,6 +1082,8 @@ export class WidgetsOverlay implements Overlay {
                     }
                     this.currentWidgetOverlays = widgetOverlays;
                     this.overlayDrawnThisPass = false;
+                    this.menuOverlayDrawnThisPass = false;
+                    this.beforeMenuOverlayRects = [];
                     for (const dirtyRect of dirtyRects) {
                         const rootClip = {
                             x0: dirtyRect.x,
@@ -1062,20 +1092,22 @@ export class WidgetsOverlay implements Overlay {
                             y1: dirtyRect.y + dirtyRect.h,
                         };
 
-                        let renderedAnyRoot = false;
-                        for (const entry of this.widgetEntries) {
+                        const renderableEntries = this.widgetEntries.filter((entry) => {
                             const rootRect = this.getRootRect(widgetManager, entry.root);
-                            if (!rootRect || !this.rectsIntersect(rootRect, dirtyRect)) continue;
-                            renderedAnyRoot = true;
+                            return !!rootRect && this.rectsIntersect(rootRect, dirtyRect);
+                        });
+                        const entriesToRender = renderableEntries.length > 0
+                            ? renderableEntries
+                            : this.widgetEntries.slice(0, 1);
+                        for (const entry of entriesToRender) {
+                            const drawAboveWidgets = this.drawAboveWidgetsForEntry(
+                                entry,
+                                entry === entriesToRender[entriesToRender.length - 1],
+                            );
                             renderWidgetTreeGL(this.glRenderer, entry.root, {
                                 ...entry.renderOpts,
                                 rootClip,
-                            });
-                        }
-                        if (!renderedAnyRoot && this.widgetEntries.length > 0) {
-                            renderWidgetTreeGL(this.glRenderer, this.widgetEntries[0].root, {
-                                ...this.widgetEntries[0].renderOpts,
-                                rootClip,
+                                ...(drawAboveWidgets ? { drawAboveWidgets } : {}),
                             });
                         }
                     }
@@ -1091,6 +1123,7 @@ export class WidgetsOverlay implements Overlay {
                             this.drawWidgetOverlays(widgetOverlays, true);
                         }
                     }
+                    this.commitBeforeMenuOverlayRects();
                     this.drawTradeAmountOverlay(widgetManager);
                     const mouseOverTextRect = mouseOverTextState.rect;
                     if (
@@ -1178,6 +1211,31 @@ export class WidgetsOverlay implements Overlay {
         if (overlays.length === 0) return;
         this.overlayDrawnThisPass = true;
         this.drawWidgetOverlays(overlays, true);
+    }
+
+    /** The render tree calls this after widget content and tooltip widgets, just before its menu. */
+    private drawWidgetOverlaysBeforeMenu(): void {
+        if (this.menuOverlayDrawnThisPass) return;
+        this.menuOverlayDrawnThisPass = true;
+        const overlays = this.currentBeforeMenuOverlays;
+        if (overlays.length === 0) return;
+        this.beforeMenuOverlayRects = captureAppendedRects(this.widgetOverlayRects, () =>
+            this.drawWidgetOverlays(overlays, false),
+        );
+    }
+
+    private commitBeforeMenuOverlayRects(): void {
+        this.widgetOverlayRects.push(...this.beforeMenuOverlayRects);
+    }
+
+    private drawAboveWidgetsForEntry(entry: WidgetRenderEntry, isLastRenderedRoot: boolean): (() => void) | undefined {
+        const existing = entry.renderOpts.drawAboveWidgets;
+        const hasMenuOverlays = isLastRenderedRoot && this.currentBeforeMenuOverlays.length > 0;
+        return composeDrawAboveWidgets(
+            existing,
+            isLastRenderedRoot,
+            hasMenuOverlays ? () => this.drawWidgetOverlaysBeforeMenu() : undefined,
+        );
     }
 
     private buildGameFrameContext(glr: GLRenderer): GameFrameDrawContext {

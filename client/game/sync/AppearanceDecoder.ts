@@ -87,6 +87,7 @@ export interface DecodedAppearance {
     ammoQuantity: number;
     ammoItemId: number;
     ringItemId: number;
+    weaponQuantity: number;
 }
 
 /**
@@ -324,6 +325,9 @@ export function decodeAppearanceBinary(buffer: Uint8Array): DecodedAppearance | 
             equipment[9] = ringItemId;
         }
 
+        // 18. Stacked weapons need their quantity as well as the model's item id.
+        const weaponQuantity = reader.hasMore() ? Math.max(0, reader.readInt()) : 0;
+
         return {
             gender,
             headIconPk,
@@ -351,6 +355,7 @@ export function decodeAppearanceBinary(buffer: Uint8Array): DecodedAppearance | 
             ammoQuantity,
             ammoItemId,
             ringItemId,
+            weaponQuantity,
         };
     } catch (err) {
         console.warn("[AppearanceDecoder] Failed to decode binary appearance", err);

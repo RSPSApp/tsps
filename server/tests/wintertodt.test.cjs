@@ -110,7 +110,7 @@ function fakePlayer(name = 'Tester', { firemaking = 99, level = 99, x = 1631, y 
   const varbits = new Map();
   const attributes = new Map();
   const p = {
-    messages: [], spam: [], sounds: [], statements: [], scripts: [], interfaces: [], animations: [], splats: [], damage: [],
+    messages: [], spam: [], sounds: [], areaSounds: [], statements: [], scripts: [], interfaces: [], animations: [], splats: [], damage: [],
     xp: 0, xpBySkill: {}, hp: 99,
     location: new Location(x, y, 0),
     inventory: container(28),
@@ -149,6 +149,7 @@ function fakePlayer(name = 'Tester', { firemaking = 99, level = 99, x = 1631, y 
         sendProjectile: () => sender,
         sendGraphic: () => sender,
         sendSoundEffect: (id, loops, delay) => { p.sounds.push(delay ? [id, delay] : id); return sender; },
+        sendAreaSound: (id, x, y, level, loops, delay, radius) => { p.areaSounds.push([id, x, y, radius]); return sender; },
         sendTypedMessage: (type, text) => { p.spam.push(text); return sender; },
         sendInterfaceRemoval: () => sender,
       };
@@ -485,6 +486,8 @@ test("a small attack puts a brazier out and tells whoever was feeding it", () =>
   assert.equal(Corners.corner(SW).brazier, Shared.BRAZIER.LIT);
   ticks(1);
   assert.equal(Corners.corner(SW).brazier, Shared.BRAZIER.UNLIT);
+  const { x, y } = Shared.CORNERS[SW].brazier;
+  assert.deepEqual(player.areaSounds, [[Shared.SOUND.BRAZIER_OUT, x, y, 2]], 'capture: on the tick it goes out, range 2');
   assert.equal(player.messages.at(-1), Attacks.GONE_OUT_MESSAGE);
   assert.equal(Shared.actionOf(player), null);
 });
@@ -498,6 +501,8 @@ test('a large attack breaks the brazier and its shrapnel hits players beside it;
   Attacks.largeBrazierAttack(SW, { players: Round.playersInPrison, isActive: Round.isActive, broadcast: Round.broadcast });
   ticks(4);
   assert.equal(Corners.corner(SW).brazier, Shared.BRAZIER.BROKEN);
+  const { x, y } = Shared.CORNERS[SW].brazier;
+  assert.deepEqual(far.areaSounds, [[Shared.SOUND.BRAZIER_BREAK, x, y, 2]], 'capture: everyone in the prison is sent it');
   assert.ok(near.messages.includes(Attacks.SHRAPNEL_MESSAGE));
   assert.ok(!far.messages.includes(Attacks.SHRAPNEL_MESSAGE));
   hooks.objects.Brazier.Fix({ player: near, object: swBrazier });

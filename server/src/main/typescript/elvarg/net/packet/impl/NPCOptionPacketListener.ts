@@ -1,5 +1,6 @@
 import { World } from "../../../game/World";
 import { CombatSpells } from "../../../game/content/combat/magic/CombatSpells";
+import { EffectSpells } from "../../../game/content/combat/magic/EffectSpells";
 import { NpcInteractionManager } from "../../../game/entity/impl/npc/NpcInteractionManager";
 import { PluginManager } from "../../../plugins/PluginManager";
 import { Combat } from "../../../game/content/combat/Combat";
@@ -141,7 +142,9 @@ export class NPCOptionPacketListener {
     if (!player || player.getHitpoints?.() <= 0 || player.busy?.()) return false;
     if (index < 0 || index >= World.getNpcs().capacityReturn()) return false;
     const npc = World.getNpcs().get(index);
-    const spell = CombatSpells.getCombatSpell(spellId);
+    // Utility spells (Telekinetic Grab in the Mage Training Arena) are scripted on non-attackable
+    // NPCs just as combat spells are: the fall-back keeps the same rune and XP handling.
+    const spell = CombatSpells.getCombatSpell(spellId) ?? EffectSpells.forSpellId(spellId);
     if (!npc || !spell || !BoatManager.rootLocation(player).isWithinDistance(BoatManager.rootLocation(npc), 24) || npc.getHitpoints?.() <= 0) {
       player.getMovementQueue().reset();
       return false;
@@ -167,12 +170,15 @@ export class NPCOptionPacketListener {
     const privateArea = npc.getPrivateArea();
     const playerBoat = BoatManager.getBoatAboard(player);
     const npcBoat = BoatManager.getBoatAboard(npc);
+    // Telekinetic Grab reaches across the Theatre's maze walls; utility spells are not checked
+    // for a combat line of sight.
+    const needsLineOfSight = !(spell instanceof EffectSpells);
     if (playerLocation.getZ() !== targetLocation.getZ() ||
         !playerLocation.isWithinDistance(targetLocation, 10) ||
         (privateArea && privateArea !== player.getPrivateArea()) ||
         (npc.getOwner() && npc.getOwner() !== player) ||
         (npcBoat && npcBoat !== playerBoat) ||
-        !RegionManager.canProjectileAttackTarget(player, npc) ||
+        (needsLineOfSight && !RegionManager.canProjectileAttackTarget(player, npc)) ||
         !spell.canCastOnTarget(player, npc) || !spell.canCast(player, false)) return false;
 
     let consumed = false;

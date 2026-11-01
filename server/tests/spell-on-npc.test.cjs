@@ -8,6 +8,54 @@ const { NPCOptionPacketListener } = require('../dist/net/packet/impl/NPCOptionPa
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { RegionManager } = require('../dist/game/collision/RegionManager');
 const { Skill } = require('../dist/game/model/Skill');
+const { MagicSpellbook } = require('../dist/game/model/MagicSpellbook');
+
+test('Telekinetic Grab is a scripted effect spell: no combat line of sight, 43 XP, one rune set', () => {
+  const previous = {
+    npcs: World.getNpcs,
+    los: RegionManager.canProjectileAttackTarget,
+    hookCount: PluginManager.spellOnNpcHooks.length,
+  };
+  let xp = 0;
+  let consumed = 0;
+  const point = (x, y, z = 0) => ({ getX: () => x, getY: () => y, getZ: () => z, isWithinDistance(other, range) { return Math.max(Math.abs(x - other.getX()), Math.abs(y - other.getY())) <= range && z === other.getZ(); } });
+  const player = {
+    getHitpoints: () => 10, busy: () => false,
+    getLocation: () => point(100, 100), getPrivateArea: () => null, getArea: () => null,
+    getMovementQueue: () => ({ reset() {} }), setPositionToFace() {},
+    getSpellbook: () => MagicSpellbook.NORMAL,
+    getCombat: () => ({ reset() {}, setCastSpell() {} }),
+    getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences(skill, amount) { assert.equal(skill, Skill.MAGIC); xp += amount; } }),
+    getInventory: () => ({
+      getAmount: () => 1,
+      deletes() { consumed += 1; },
+    }),
+    getEquipment: () => ({ containsAllItem: () => true }),
+    sendMessage() {},
+  };
+  const npc = {
+    getId: () => 6777, getContentId: () => 6777, getLocation: () => point(101, 100),
+    getHitpoints: () => 1, getPrivateArea: () => null,
+    getArea: () => null, getOwner: () => null,
+    getCurrentDefinition: () => ({ isAttackable: () => false }),
+  };
+  World.getNpcs = () => ({ capacityReturn: () => 1, get: () => npc });
+  RegionManager.canProjectileAttackTarget = () => false;
+  PluginManager.spellOnNpcHooks.push({ pluginName: 'telekinetic-grab-test', handler(event) {
+    assert.equal(event.spellId, 1168);
+    assert.equal(event.handled, false);
+    if (event.consumeRunes()) event.handled = true;
+  } });
+  try {
+    assert.equal(NPCOptionPacketListener.castSpell(player, 0, 1168), true);
+    assert.equal(xp, 43);
+    assert.equal(consumed, 2, 'law and air runes are taken once');
+  } finally {
+    World.getNpcs = previous.npcs;
+    RegionManager.canProjectileAttackTarget = previous.los;
+    PluginManager.spellOnNpcHooks.length = previous.hookCount;
+  }
+});
 
 test('spell-on-NPC validates target and spell, consumes once, and preserves combat casts', () => {
   const previous = {

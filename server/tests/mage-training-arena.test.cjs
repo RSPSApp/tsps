@@ -12,13 +12,14 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const core = PluginManager.getCoreApi();
 
-let Common, Guardians, Lobby, Enchanting, Alchemists, Graveyard, Rewards, events, ironmanMode;
+let Common, Guardians, Lobby, Telekinetic, Enchanting, Alchemists, Graveyard, Rewards, events, ironmanMode, testApi;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   Common = require('../plugins/minigames/magetrainingarena/Common.MageTrainingArena');
   Guardians = require('../plugins/minigames/magetrainingarena/Guardians.MageTrainingArena');
   Lobby = require('../plugins/minigames/magetrainingarena/Lobby.MageTrainingArena');
+  Telekinetic = require('../plugins/minigames/magetrainingarena/Telekinetic.MageTrainingArena');
   Enchanting = require('../plugins/minigames/magetrainingarena/Enchanting.MageTrainingArena');
   Alchemists = require('../plugins/minigames/magetrainingarena/Alchemists.MageTrainingArena');
   Graveyard = require('../plugins/minigames/magetrainingarena/Graveyard.MageTrainingArena');
@@ -34,6 +35,7 @@ before(async () => {
       if (name === 'ironman:mode') event.mode = ironmanMode;
     },
   }, { get: (target, key) => target[key] ?? (() => {}) });
+  testApi = api;
   Common.init(api);
 });
 
@@ -47,7 +49,7 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
   const strings = new Map();
   const hidden = new Map();
   const player = {
-    messages: [], attributes: {}, xp, strings, hidden, magic: 99, anims: 0,
+    messages: [], attributes: {}, xp, strings, hidden, magic: 99, anims: 0, runEnergy: 100,
     getLocation: () => tile,
     moveTo: (to) => { tile = to; },
     isRegistered: () => true,
@@ -55,8 +57,10 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
     getAttribute: (k) => player.attributes[k],
     setAttribute: (k, v) => { player.attributes[k] = v; },
     getSkillManager: () => ({ getCurrentLevel: () => player.magic, addExperiences: (skill, amount) => xp.push(amount) }),
+    getRunEnergy: () => player.runEnergy,
+    setRunEnergy: (value) => { player.runEnergy = value; },
     getPacketSender: () => ({
-      sendSubInterface() {}, closeSubInterface() {}, sendSound() {},
+      sendSubInterface() {}, closeSubInterface() {}, sendSound() {}, sendRunEnergy() {},
       sendString: (text, id) => strings.set(id, text),
       sendInterfaceDisplayState: (id, hide) => hidden.set(id, hide),
     }),
@@ -84,6 +88,35 @@ function fakePlayer(x = 3363, y = 9644, z = 0) {
   return player;
 }
 
+function fakeNpc(definition) {
+  let tile = loc(definition.x, definition.y, definition.z ?? 0);
+  let id = definition.id;
+  const moves = [];
+  return {
+    definition,
+    moves,
+    getLocation: () => tile,
+    getId: () => id,
+    moveTo: (to) => { tile = to; },
+    exactMove: (to, options) => { tile = to; moves.push({ to, options }); },
+    setNpcTransformationId: (next) => { id = next; },
+  };
+}
+
+function telekineticEvent(player, npc, overrides = {}) {
+  let runes = 0;
+  const event = {
+    player,
+    npc,
+    spellId: Telekinetic.TELEKINETIC_GRAB_SPELL_ID,
+    handled: false,
+    consumeRunes: () => { runes += 1; return true; },
+    runes: () => runes,
+    ...overrides,
+  };
+  return event;
+}
+
 test('every id resolves from the cache', () => {
   const { npcs, locs, items, interfaces } = Common.ids;
   assert.deepEqual([npcs.entranceGuardian, npcs.enchantmentGuardian, npcs.hat], [5978, 5981, 7512]);
@@ -92,6 +125,8 @@ test('every id resolves from the cache', () => {
   assert.deepEqual([items.hatDull, items.hatEnergised, items.hatFull], [6885, 6886, 6887]);
   assert.deepEqual([items.cube, items.cylinder, items.icosahedron, items.pentamid, items.orb, items.dragonstone], [6899, 6898, 6900, 6901, 6902, 6903]);
   assert.deepEqual([interfaces.lobby, interfaces.enchanting], [553, 195]);
+  assert.deepEqual([locs.telekineticPortal, locs.telekineticWalls, locs.telekineticFinish], [23673, 10755, 23672]);
+  assert.deepEqual([npcs.telekineticGuardian, npcs.mazeGuardian, npcs.mazeGuardianMoving, npcs.mazeGuardianComplete], [5979, 6777, 6778, 6779]);
 });
 
 test('Pizazz Points stop at each type\'s cap', () => {
@@ -272,6 +307,199 @@ test('the jewellery enchant spells offer other items to the arena before refusin
   const fs = require('node:fs');
   const source = fs.readFileSync(path.join(__dirname, '..', 'plugins', 'skills', 'Spells.EnchantJewellery.js'), 'utf8');
   assert.match(source, /emitCustomEvent\("magic:enchant-item"/);
+});
+
+// --- The Telekinetic Theatre
+
+test('the ten Telekinetic mazes keep the Wiki/capture starts, goals and arrivals', () => {
+  const mazes = Common.data.telekinetic.mazes;
+  assert.equal(mazes.length, 10);
+  assert.equal(new Set(mazes.map((maze) => maze.goal.join(','))).size, 10);
+  for (const maze of mazes) {
+    const [minX, maxX, minY, maxY] = maze.walls;
+    const [sx, sy, sz] = maze.start;
+    const [gx, gy, gz] = maze.goal;
+    const [ax, ay, az] = maze.arrive;
+    assert.ok(sx > minX && sx < maxX && sy > minY && sy < maxY, `start inside ${maze.walls}`);
+    assert.ok(gx >= minX + 1 && gx <= maxX - 1 && gy >= minY + 1 && gy <= maxY - 1, `goal inside ${maze.walls}`);
+    assert.equal(sz, gz);
+    assert.equal(az, gz);
+    assert.ok(Number.isInteger(ax) && Number.isInteger(ay));
+  }
+  const startFor = (goal) => mazes.find((maze) => maze.goal.join(',') === goal).start;
+  assert.deepEqual(startFor('3339,9683,2'), [3348, 9674, 2]);
+  assert.deepEqual(startFor('3347,9714,0'), [3343, 9705, 0]);
+  assert.deepEqual(startFor('3341,9708,1'), [3350, 9717, 1]);
+  assert.deepEqual(startFor('3353,9680,1'), [3351, 9684, 1]);
+  assert.deepEqual(startFor('3345,9718,2'), [3346, 9718, 2]);
+});
+
+test('the statue slides away from the caster until a maze wall stops it; a corner wastes the cast', () => {
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3328, 9664, false);
+  const maze = Common.data.telekinetic.mazes.find((entry) => entry.goal.join(',') === '3339,9683,2');
+  assert.deepEqual(Telekinetic.directionFor(loc(3340, 9684, 2), maze.walls), [0, 1]);
+  assert.deepEqual(Telekinetic.directionFor(loc(3338, 9678, 2), maze.walls), [-1, 0]);
+  assert.deepEqual(Telekinetic.directionFor(loc(3343, 9673, 2), maze.walls), [0, -1]);
+  assert.deepEqual(Telekinetic.directionFor(loc(3349, 9678, 2), maze.walls), [1, 0]);
+  assert.equal(Telekinetic.directionFor(loc(3338, 9684, 2), maze.walls), null, 'corner');
+
+  let at = loc(...maze.start);
+  for (const direction of [[0, 1], [-1, 0], [0, -1], [-1, 0], [0, 1], [-1, 0], [0, -1], [-1, 0], [0, 1]]) {
+    at = Telekinetic.slide(at, direction);
+  }
+  assert.deepEqual([at.getX(), at.getY(), at.getZ()], maze.goal);
+});
+
+test('the Telekinetic Teleport needs Magic 33, starts one session, and leaving clears it', () => {
+  const spawned = [];
+  const removed = [];
+  testApi.spawnNpc = (definition) => {
+    const npc = fakeNpc(definition);
+    spawned.push(npc);
+    return npc;
+  };
+  testApi.removeNpc = (npc) => removed.push(npc);
+  const player = fakePlayer(3363, 3318, 0);
+  player.magic = 32;
+  Telekinetic.enter(player);
+  assert.equal(player.messages.at(-1), Common.message('level', { level: 33, room: 'Telekinetic Theatre' }));
+  assert.equal(spawned.length, 0);
+
+  player.magic = 33;
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    Telekinetic.enter(player);
+  } finally {
+    Math.random = original;
+  }
+  const maze = Common.data.telekinetic.mazes[0];
+  assert.equal(spawned.length, 1);
+  assert.deepEqual([spawned[0].getLocation().getX(), spawned[0].getLocation().getY(), spawned[0].getLocation().getZ()], maze.start);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], maze.arrive);
+  assert.equal(player.messages.at(-1), Common.message('telekineticEntered'));
+
+  Telekinetic.enter(player);
+  assert.equal(spawned.length, 1, 'a second entry joins the existing session');
+  Telekinetic.removeSession(player);
+  assert.equal(removed[0], spawned[0]);
+  assert.equal(Telekinetic.sessionOf(player), null);
+});
+
+test('Telekinetic Grab slides the guardian and a solved maze awards its points once', () => {
+  const spawned = [];
+  testApi.spawnNpc = (definition) => {
+    const npc = fakeNpc(definition);
+    spawned.push(npc);
+    return npc;
+  };
+  testApi.removeNpc = () => {};
+  const player = fakePlayer();
+  const session = Telekinetic.startSession(player, 8);
+  const npc = session.npc;
+  player.moveTo(loc(3340, 9684, 2));
+  const pending = [];
+  const originalLater = Common.later;
+  Common.later = (ticks, action) => pending.push({ ticks, action });
+  try {
+    const event = telekineticEvent(player, npc);
+    Telekinetic.castTelekinetic(event);
+    assert.equal(event.handled, true);
+    assert.equal(event.runes(), 1);
+    assert.equal(player.anims, 1);
+    assert.equal(npc.getId(), Common.ids.npcs.mazeGuardianMoving);
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY(), npc.getLocation().getZ()], [3348, 9683, 2]);
+    assert.equal(pending[0].ticks, 5);
+    pending.shift().action();
+    assert.equal(npc.getId(), Common.ids.npcs.mazeGuardian);
+
+    player.moveTo(loc(3338, 9684, 2));
+    const corner = telekineticEvent(player, npc);
+    Telekinetic.castTelekinetic(corner);
+    assert.equal(corner.runes(), 1);
+    assert.equal(pending.length, 0, 'a corner cast does not move the statue');
+    assert.deepEqual([npc.getLocation().getX(), npc.getLocation().getY()], [3348, 9683]);
+
+    session.solved = true;
+    const again = telekineticEvent(player, npc);
+    Telekinetic.castTelekinetic(again);
+    assert.equal(again.handled, true);
+    assert.equal(again.runes(), 0, 'a finished maze does not consume another cast');
+  } finally {
+    Common.later = originalLater;
+    Telekinetic.removeSession(player);
+  }
+});
+
+test('each maze gives 2 points and 250 XP; every fifth gives the 8-point, rune and energy bonus', () => {
+  testApi.spawnNpc = (definition) => fakeNpc(definition);
+  testApi.removeNpc = () => {};
+  const player = fakePlayer();
+  const session = Telekinetic.startSession(player, 8);
+  Telekinetic.complete(session);
+  assert.equal(Common.points(player, 'telekinetic'), 2);
+  assert.deepEqual(player.xp, [250]);
+  assert.equal(player.strings.get(Telekinetic.pointsComponent()), '2');
+  assert.equal(player.strings.get(Telekinetic.streakComponent()), '1');
+  assert.equal(player.messages.at(-1), Common.message('mazeComplete', { points: 2 }));
+
+  for (let i = 0; i < 4; i++) Telekinetic.complete(session);
+  assert.equal(Common.points(player, 'telekinetic'), 18, 'five mazes plus the 8-point bonus');
+  assert.equal(player.xp.reduce((sum, value) => sum + value, 0), 2250);
+  assert.equal(player.items.get(Common.ids.items.law), 10);
+  assert.equal(player.getRunEnergy(), 100);
+  assert.equal(player.getAttribute(Telekinetic.STREAK_ATTRIBUTE), 0);
+  assert.equal(player.strings.get(Telekinetic.pointsComponent()), '18');
+  assert.equal(player.strings.get(Telekinetic.streakComponent()), '0');
+  assert.equal(player.messages.at(-1), Common.message('mazeBonus', { points: 8, runes: 10 }));
+  Telekinetic.removeSession(player);
+});
+
+test('Reset returns the statue and keeps the streak; New-maze moves to the next arena', () => {
+  const spawned = [];
+  const removed = [];
+  testApi.spawnNpc = (definition) => {
+    const npc = fakeNpc(definition);
+    spawned.push(npc);
+    return npc;
+  };
+  testApi.removeNpc = (npc) => removed.push(npc);
+  const player = fakePlayer();
+  const session = Telekinetic.startSession(player, 0);
+  const npc = session.npc;
+  player.setAttribute(Telekinetic.STREAK_ATTRIBUTE, 3);
+  Telekinetic.removeSession(player);
+  assert.equal(removed[0], npc);
+  assert.equal(player.getAttribute(Telekinetic.STREAK_ATTRIBUTE), 3, 'leaving keeps the streak');
+
+  const next = Telekinetic.startSession(player, 0);
+  player.moveTo(loc(3350, 9690, 0));
+  next.npc.moveTo(loc(3347, 9678, 0));
+  Telekinetic.reset({ player, npc: next.npc });
+  assert.deepEqual([next.npc.getLocation().getX(), next.npc.getLocation().getY(), next.npc.getLocation().getZ()], Common.data.telekinetic.mazes[0].start);
+  assert.equal(next.npc.getId(), Common.ids.npcs.mazeGuardian);
+
+  next.solved = true;
+  const before = spawned.length;
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    Telekinetic.newMaze({ player, npc: next.npc });
+  } finally {
+    Math.random = original;
+  }
+  assert.equal(removed.at(-1), next.npc);
+  assert.equal(spawned.length, before + 1);
+  const following = Common.data.telekinetic.mazes[1];
+  assert.deepEqual([spawned.at(-1).getLocation().getX(), spawned.at(-1).getLocation().getY(), spawned.at(-1).getLocation().getZ()], following.start);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], following.arrive);
+  assert.equal(Telekinetic.sessionOf(player).mazeIndex, 1);
+  Telekinetic.removeSession(player);
+});
+
+test('Telekinetic Grab awards the live 43 XP, not the old effect-spell value', () => {
+  assert.equal(core.EffectSpells.TELEKINETIC_GRAB.baseExperience(), 43);
 });
 
 // --- The Alchemists' Playground

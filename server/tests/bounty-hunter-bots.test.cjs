@@ -549,13 +549,26 @@ test('every PvP build can wear what it names, and the researched builds keep the
     });
   }
   const builds = {
-    ags_pure: [88, 'melee'], range_pure: [74, 'range'], low_prayer_pure: [67, 'melee'], thirteen_def_pure: [84, 'melee'],
-    proselyte_pure: [89, 'melee'], rigour_zerker: [102, 'range'], granite_fifty_def: [102, 'melee'], defence_pure: [49, 'melee'],
-    f2p_magic_tank: [71, 'hybrid'], f2p_rune_tank: [82, 'melee'], max_melee_main: [126, 'melee'], max_range_tank: [126, 'range'],
+    ags_pure: [88, 'melee'], range_pure: [73, 'range'], low_prayer_pure: [66, 'melee'], thirteen_def_pure: [83, 'melee'],
+    proselyte_pure: [88, 'melee'], rigour_zerker: [101, 'range'], granite_fifty_def: [101, 'melee'], defence_pure: [48, 'melee'],
+    f2p_magic_tank: [70, 'hybrid'], f2p_rune_tank: [81, 'melee'], max_melee_main: [126, 'melee'], max_range_tank: [126, 'range'],
   };
   for (const [id, [level, style]] of Object.entries(builds)) {
     const entry = PVP_LOADOUT_DEFINITIONS.archetypes.find((archetype) => archetype.id === id);
     assert.deepEqual([archetypeCombatLevel(entry.stats), buildStyle(entry)], [level, style], id);
     assert.ok(PVP_LOADOUT_DEFINITIONS.loadouts.some((loadout) => loadout.archetypes.includes(id)), `${id} is in a loadout`);
+  }
+});
+
+test('bot loadout bands use the same combat level as players', () => {
+  const { combatLevelOf } = require('../plugins/bots/brain/SiteSpawner.PlayerBots');
+  const { matchesHotspotCombatBand } = require('../plugins/bots/behaviours/policies/PvpLoadoutPolicy.PlayerBots').__testing;
+  for (const attack of [1, 50]) {
+    const stats = [attack, 1, 99, 65, 99, 1, 99];
+    assert.equal(require("../dist/game/content/skill/SkillManager").SkillManager.calculateCombatLevel(stats), 64);
+    assert.equal(archetypeCombatLevel(stats), 64);
+    assert.equal(combatLevelOf([attack, 99, 1, 65, 99, 99, 1]), 64);
+    assert.equal(matchesHotspotCombatBand(stats, { pvp: { combatLevelRange: { min: 64, max: 64 } } }), true);
+    assert.equal(matchesHotspotCombatBand(stats, { pvp: { combatLevelRange: { min: 65, max: 65 } } }), false);
   }
 });

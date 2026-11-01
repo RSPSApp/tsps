@@ -109,7 +109,7 @@ function matchesHotspotCombatBand(stats, state) {
   if (!band) return true;
   // Match SkillManager.getCombatLevel, using the preset's seven combat stats.
   const [attack, defence, strength, hp, ranged, prayer, magic] = stats;
-  const base = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
+  const base = (defence + hp + Math.floor(prayer / 2)) * 0.25;
   const level = Math.min(126, Math.max(3, Math.floor(base + Math.max(
     (attack + strength) * 0.325,
     Math.floor(ranged * 1.5) * 0.325,

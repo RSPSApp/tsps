@@ -34,7 +34,7 @@ const COMBAT_SKILLS = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE, Skill.HITPOI
 
 /** SkillManager.getCombatLevel over [attack, strength, defence, hitpoints, ranged, magic, prayer]. */
 function combatLevelOf([attack, strength, defence, hp, ranged, magic, prayer]) {
-  const base = Math.floor((defence + hp + Math.floor(prayer / 2)) * 0.2535) + 1;
+  const base = (defence + hp + Math.floor(prayer / 2)) * 0.25;
   const best = Math.max((attack + strength) * 0.325, Math.floor(ranged * 1.5) * 0.325, Math.floor(magic * 1.5) * 0.325);
   return Math.min(126, Math.floor(base + best));
 }

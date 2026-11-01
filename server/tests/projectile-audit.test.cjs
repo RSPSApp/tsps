@@ -93,6 +93,43 @@ test("bow, crossbow and dart heights match the captured packet values", () => {
   assert.deepEqual(height(12926, WeaponInterfaces.BLOWPIPE, Ammunition.RUNE_DART), [142, 146], "rune_dart_travel");
 });
 
+test("Armadyl Eye keeps the captured flat 41 -> 75", () => {
+  const launched = [];
+  class FakeProjectile {
+    static createProjectile(...args) { launched.push(args); return new FakeProjectile(); }
+    withAngle() { return this; }
+    withProgress() { return this; }
+    sendProjectile() { return this; }
+  }
+  let registered;
+  const api = {
+    core: {
+      Animation: class {},
+      CombatFactory: { checkAmmo: () => true, decrementAmmo: () => {} },
+      CombatSpecial: { drain: () => {} },
+      ItemIdentifiers: { ARMADYL_CROSSBOW: 1 },
+      PendingHit: class {},
+      Projectile: FakeProjectile,
+      RangedCombatMethod,
+      RangedWeapon: { ARMADYL_CROSSBOW: {} },
+      Sound: { ARMADYL_CROSSBOW_SPECIAL: { id: 3892 } },
+      Sounds: { playAreaSoundAt: () => {} },
+    },
+    registerCombatSpecial: (spec) => { registered = spec; },
+  };
+  require("../plugins/combat/specials/ArmadylCrossbow.SpecialAttack")(api);
+  const player = { performAnimation: () => {} };
+  const character = {
+    isPlayer: () => true,
+    getAsPlayer: () => player,
+    performAnimation: () => {},
+    getLocation: () => ({ getDistance: () => 8 }),
+  };
+  const target = { getLocation: () => ({ getX: () => 0 }) };
+  registered.combatMethod.start(character, target);
+  assert.deepEqual(launched[0].slice(2), [301, 41, 75, 38.75, 36.5], "RSProx 3277 at 7 and 8 tiles");
+});
+
 test("Concentrated Shot fires the equipped javelin, and its burst lands with it", () => {
   const launched = [];
   const graphics = [];

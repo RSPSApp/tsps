@@ -6,10 +6,11 @@ module.exports = function registerArmadylCrossbowSpecialAttack(api) {
   const ARMADYL_EYE_ACCURACY_MULTIPLIER = 2;
   const ARMADYL_EYE_BOLT_CHANCE_MULTIPLIER = 2;
   const ANIMATION = new Animation(4230);
-  // SpotanimID.ACB_SPECIALATTACK. Captured (recording 3277): start 41, angle 5, progress 11,
-  // heights 155 -> 146, so it keeps the crossbow's 46 + 5 a tile arrival from 41.
+  // SpotanimID.ACB_SPECIALATTACK. Captured (recording 3277): start 41, end 75 at both 7 and
+  // 8 tiles, angle 5, progress 11, heights 155 -> 146. The special is a flat 75, not the
+  // normal crossbow's 46 + 5 a tile.
   const SPECIAL_PROJECTILE = 301;
-  const SHOT = { delay: 41, lengthAdjustment: 5, stepMultiplier: 5, startHeight: 38.75, endHeight: 36.5 };
+  const SHOT = { delay: 41, speed: 75, startHeight: 38.75, endHeight: 36.5, angle: 5, progress: 11 };
 
   class ArmadylCrossbowCombatMethod extends RangedCombatMethod {
     hits(character, target) {
@@ -42,7 +43,7 @@ module.exports = function registerArmadylCrossbowSpecialAttack(api) {
         end,
         SHOT.startHeight,
         SHOT.endHeight,
-      ).sendProjectile();
+      ).withAngle(SHOT.angle).withProgress(SHOT.progress).sendProjectile();
       CombatFactory.decrementAmmo(player, target.getLocation(), 1);
     }
   }

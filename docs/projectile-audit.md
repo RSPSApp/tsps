@@ -48,7 +48,7 @@ flash at the caster. This is the class of bug behind #1808 (and the Zaryte cross
 | --- | --- | --- |
 | Morrigan's javelin, Phantom Strike | `1622` (Araxxor's magic projectile) | `1620` (Morrigan's javelin travel) |
 | Zaryte crossbow, Evoke | `301`, `44` -> `35` (one-cycle) | equipped bolt's travel spotanim on the crossbow trajectory |
-| Armadyl crossbow, Armadyl Eye | `301`, `50` -> `70` | `301`, `41` -> `46 + 5 × tiles`, heights 155/146 (RSProx 3277) |
+| Armadyl crossbow, Armadyl Eye | `301`, `50` -> `70` | `301`, flat `41` -> `75`, angle 5, progress 11, heights 155/146 (captured at both 7 and 8 tiles) | RSProx 3277: `acb_specialattack (301)` |
 
 ## Audited and unchanged
 
@@ -73,7 +73,7 @@ These match the captures or the Wiki, so they were left alone:
 
 ```
 cd server && npx tsc --build
-cd server && node --test tests/projectile-audit.test.cjs            # 6 pass
+cd server && node --test tests/projectile-audit.test.cjs            # 7 pass
 cd server && node --test tests/bow-specials.test.cjs                # 15 pass
 cd server && node --test tests/projectile-source-actor.test.cjs     # 3 pass
 cd server && node --test tests/thrown-weapons.test.cjs tests/ranged-magic-gaps.test.cjs  # 34 pass

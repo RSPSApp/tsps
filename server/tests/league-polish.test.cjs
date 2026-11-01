@@ -183,6 +183,7 @@ test("a death Undying Retribution prevents never reaches a raid's death handler;
   const tier = tiers.findIndex((entry) => entry.relics.some((relic) => relic.key === "undying-retribution"));
   const slot = tiers[tier].relics.findIndex((relic) => relic.key === "undying-retribution") + 1;
   const league = character("undying", "league");
+  league.setAttribute("league:type", 4); // Trailblazer Reloaded's relic
   login(league);
   league.setAttribute("league:relics", { [tier]: slot });
   assert.equal(query("league:has-relic", { player: league, relic: "undying-retribution" }).active, true);

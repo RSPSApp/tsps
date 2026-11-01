@@ -17,11 +17,13 @@ Live OSRS runs Leagues on their own worlds, where an account plays a fresh chara
 world runs a league when its plugin config says so:
 
 ```json
-"pluginConfig": { "league:type": 4 }
+"pluginConfig": { "league:type": 6 }
 ```
 
 (every league the cache names in enum 2670: 1 Twisted, 2 Trailblazer, 3 Shattered Relics, 4
-Trailblazer Reloaded, 5 Raging Echoes, 6 Demonic Pacts; `world.local.json` can set it per
+Trailblazer Reloaded, 5 Raging Echoes, 6 Demonic Pacts, the league this cache carries and the
+data's `default`, which a league character takes when the config names a type the data does not
+know; `world.local.json` can set it per
 deployment, and `pluginConfig` `"league:start"`, an ISO date, says when the league began for the
 client's league clock). LeagueMode reads it at startup and claims the world's character profile
 (`api.setWorldProfile`, `GameConstants.WORLD_PROFILE`), so every login is the account's **league
@@ -1059,16 +1061,18 @@ picks the highest tier reached), applied by `league/Passives.LeagueMode.js` and
 `league/BoostedDrops.LeagueMode.js` to a league character of that league and to nobody else.
 Tier 1 counts once the character chose its first relic.
 
-- **XP rate** (both: 5x, 8x from tier 2, 12x from tier 5, 16x from tier 7): the
+- **XP rate** (5x; Raging Echoes 8x from tier 2, 12x from tier 5, 16x from tier 7; Demonic Pacts
+  8x, 12x and 16x from tiers 2, 4 and 6, as its tier structs' passive text says): the
   can-gain-experience hook's `multiplier`, as above.
-- **Combat XP** (Raging Echoes tier 3): Attack, Strength, Defence, Ranged, Magic, Hitpoints and
-  Prayer gains x2 on top of the league rate (multiplicative, as the Wiki says; Slayer is not
+- **Combat XP** (Raging Echoes tier 3 x2; Demonic Pacts tier 3 x1.5): Attack, Strength, Defence,
+  Ranged, Magic, Hitpoints and Prayer gains multiplied on top of the league rate (multiplicative, as the Wiki says; Slayer is not
   listed and not included).
 - **Run energy** (tier 1): the run energy drain modifier (`api.registerRunEnergyDrainModifier`)
   returns 0 for the character, so running never drains.
-- **Boosted drops** (Trailblazer Reloaded 2x/3x/4x/5x from tiers 1/4/6/8; Raging Echoes 2x then
-  5x from tier 4): `league-boosted-drops.json` is each league's Boosted drops page (fetched
-  2026-10-26), a source per Wiki row group with the NPC names it covers and the item names it
+- **Boosted drops** (Trailblazer Reloaded 2x/3x/4x/5x from tiers 1/4/6/8; Raging Echoes and
+  Demonic Pacts 2x then 5x from tier 4): `league-boosted-drops.json` is each league's Boosted drops
+  page (fetched 2026-10-26; Demonic Pacts' and the area Notable drops subpages it transcludes
+  2026-11-01), a source per Wiki row group with the NPC names it covers and the item names it
   boosts (group rows expanded by hand; N/A rows left out; rows one page lists carry `leagues`).
   NpcDrops asks `npc-drops:chance { player, npc, npcId, source, rules }` once per roll and the
   league pushes one rule `{ pattern, multiplier }` matching that source's items, which NpcDrops
@@ -1088,8 +1092,8 @@ Tier 1 counts once the character chose its first relic.
   Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's Locker, chewed bones,
   the Volcanic Mine ore pack, Pyramid Plunder, Tai Bwo Wannai, Shades of Mort'ton, and the
   pickpocketed blood shards (vyres) and teleport seeds (elves).
-- **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes 4x/8x from
-  tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
+- **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
+  Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
   the league multiplies `points` (floored). Wired, from the Raging Echoes League page's "Boosted
   minigame points" section (https://oldschool.runescape.wiki/w/Raging_Echoes_League; the
   Trailblazer Reloaded pages give no list, so both leagues use it): Pest Control
@@ -1099,7 +1103,7 @@ Tier 1 counts once the character chose its first relic.
   Warriors' Guild tokens, Hallowed marks, marks of grace, stardust. Not on this server: Barbarian
   Assault, Rogues' Den, Trouble Brewing, Tai Bwo Wannai favour, Motherlode nuggets, molch
   pearls, Mining Guild minerals, chompy kills.
-- **Slayer** (Trailblazer Reloaded tier 4, Raging Echoes tier 3): the Slayer plugin asks
+- **Slayer** (Trailblazer Reloaded tier 4, Raging Echoes and Demonic Pacts tier 3): the Slayer plugin asks
   `slayer:task-reward { player, master, freeTasks, multiplier }` as a task completes (the league
   sets `freeTasks` 0 and x5 the points; every master's, Mortimer's and Krystilia's included, the
   Wiki naming none) and `slayer:superior-spawn { player, npc, unlocked, chance }` on a task kill
@@ -1109,8 +1113,13 @@ Tier 1 counts once the character chose its first relic.
   capacity }` and the league answers unlocked with no limit, so every clue drops as a stackable
   box (the Wiki says stackable; live Leagues had no cap) before X Marks the Spot.
 
-Left out, with why: Raging Echoes' clue-step progress saved between clues (the trail runtime has
-no per-step save to carry across scrolls); Raging Echoes' one-minute farming ticks (Farming's
+Demonic Pacts' passives are Raging Echoes' but for the combat XP, from the tier structs' text in
+this cache (struct 6436's tier enum, param 1020). Its boosted drops rest on the drop tables this
+server has: the Wiki's "every Desert Treasure II boss drops every Soulreaper axe piece" is a boost
+on the pieces each boss already drops here, not a new drop.
+
+Left out, with why: Raging Echoes' and Demonic Pacts' clue-step progress saved between clues (the trail runtime has
+no per-step save to carry across scrolls); their one-minute farming ticks (Farming's
 growth model has no tick-length seam, and Farming is under active work elsewhere); the
 crystal of memories (not in this cache). The ironman restriction is under "The league character"
 above: every league character is a standard Ironman.

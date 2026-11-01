@@ -1,6 +1,6 @@
 {
-  "$comment": "Leagues (docs/leagues.md), used by plugins/modes/LeagueMode.plugin.js and LeaguePoints.plugin.js. A league character is the account's separate save a league world logs it into (persistence/PlayerProfile); world.json pluginConfig `league:type` names the league, and `default` only stands in for a type this data does not know. `ironmanMode` is the Ironman mode every league character plays as (the Wiki's 'Player restrictions'). Varbits, varps, scripts and texts are from rsprox Leagues V recordings (osrs-captures 227/00070, 227/00075, 227/00579); the leagues' own numbers (XP rates, starting levels; the relic tiers are league-relics.json) are the Wiki's (Trailblazer_Reloaded_League, Raging_Echoes_League and their /Relics pages). `struct` is the cache's league struct (enum 2670 by league type) whose params the client reads; `colour` is its param 2050 as an RGB int; `unlockSpotanim` is param 1021 and `name` param 858. `passives` are the relic tiers' passive effects (the Relics pages' Tier N bullets), each from the 1-based tier named by `fromTier` (a map picks the highest tier reached): `dropRate` multiplies the boosted drops (league-boosted-drops.json), `runEnergy` stops running from draining energy, `scrollBoxes` drops clue scrolls as scroll boxes without a limit, `minigamePoints` multiplies points asked over `minigame:points`, `slayer` gives Bigger and Badder, superiors 1 in `superiorChance`, task points x `pointsMultiplier` after `freeTasks` tasks, and `combatXp` multiplies the listed skills' XP (Raging Echoes only). Applied by league/Passives.LeagueMode.js and league/BoostedDrops.LeagueMode.js.",
-  "default": 4,
+  "$comment": "Leagues (docs/leagues.md), used by plugins/modes/LeagueMode.plugin.js and LeaguePoints.plugin.js. A league character is the account's separate save a league world logs it into (persistence/PlayerProfile); world.json pluginConfig `league:type` names the league, and `default` only stands in for a type this data does not know. `ironmanMode` is the Ironman mode every league character plays as (the Wiki's 'Player restrictions'). Varbits, varps, scripts and texts are from rsprox Leagues V recordings (osrs-captures 227/00070, 227/00075, 227/00579); the leagues' own numbers (XP rates, starting levels; the relic tiers are league-relics.json) are the Wiki's (Trailblazer_Reloaded_League, Raging_Echoes_League and their /Relics pages). `struct` is the cache's league struct (enum 2670 by league type) whose params the client reads; `colour` is its param 2050 as an RGB int; `unlockSpotanim` is param 1021 and `name` param 858. `passives` are the relic tiers' passive effects (the Relics pages' Tier N bullets), each from the 1-based tier named by `fromTier` (a map picks the highest tier reached): `dropRate` multiplies the boosted drops (league-boosted-drops.json), `runEnergy` stops running from draining energy, `scrollBoxes` drops clue scrolls as scroll boxes without a limit, `minigamePoints` multiplies points asked over `minigame:points`, `slayer` gives Bigger and Badder, superiors 1 in `superiorChance`, task points x `pointsMultiplier` after `freeTasks` tasks, and `combatXp` multiplies the listed skills' XP (Raging Echoes x2, Demonic Pacts x1.5). Applied by league/Passives.LeagueMode.js and league/BoostedDrops.LeagueMode.js.",
+  "default": 6,
   "varbits": {
     "account": 10031,
     "type": 10032,
@@ -207,7 +207,16 @@
       "unlockSpotanim": 3576,
       "_xp": "Wiki Demonic_Pacts_League/Relics: 8x at tier 2, 12x at tier 4, 16x at tier 6.",
       "xpMultiplier": { "base": 5, "fromTier": { "2": 8, "4": 12, "6": 16 } },
-      "startingLevels": { "HERBLORE": 3, "RUNECRAFTING": 5 }
+      "startingLevels": { "HERBLORE": 3, "RUNECRAFTING": 5 },
+      "_passives": "The tier structs' passive text in the rev 241 cache (struct 6436's tier enum, param 1020), as the relic interface shows it: tier 1 boosted drops x2, farming ticks every minute, minigame points x4, no run energy drain, clue scrolls as scroll boxes with saved step progress; tier 3 combat skills (Hitpoints and Prayer included) x1.5, Bigger and Badder free, Slayer task points x5 from the first task, superiors 1/50; tier 4 drops x5, minigame points x8. docs/leagues.md (Tier passives) lists the two left out.",
+      "passives": {
+        "dropRate": { "fromTier": { "1": 2, "4": 5 } },
+        "runEnergy": { "fromTier": 1 },
+        "scrollBoxes": { "fromTier": 1 },
+        "minigamePoints": { "fromTier": { "1": 4, "4": 8 } },
+        "slayer": { "fromTier": 3, "pointsMultiplier": 5, "freeTasks": 0, "biggerAndBadder": true, "superiorChance": 50 },
+        "combatXp": { "fromTier": 3, "multiplier": 1.5, "skills": ["ATTACK", "STRENGTH", "DEFENCE", "RANGED", "MAGIC", "HITPOINTS", "PRAYER"] }
+      }
     }
   }
 }

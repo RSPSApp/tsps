@@ -38,9 +38,10 @@ yarn sync:npc-spawns --box 2520,2170,2660,2310 --box 2560,8560,2640,8660 --tag W
 **Add-only.** Per NPC name and plane, a Wiki spawn with an existing one of that name within `--radius` is already there (closest pairs first), and leftover existing spawns **in the same 64×64 map square** still count, so only the difference in number is added there (the Wiki spawns furthest from any existing one). A spawn elsewhere on the map doesn't stand in for one missing here, so a whole-map run counts correctly. Nothing is moved or removed, so a second run adds nothing. In an area that already has its spawns, only real gaps show up: Lumbridge has 85 Wiki spawns and 84 existing, and the script would add 7. Added spawns carry `"source": "wiki"`, so they can be found and replaced by captured positions later.
 
 **Wander radius:**
-1. What existing spawns of that NPC mostly use (by id, else by name): 0 for fishing spots and bankers, as the old data set by hand.
-2. Otherwise 0 for an NPC without a walk animation in the cache.
-3. Otherwise the loader's default (5).
+1. For a non-attackable NPC, an established explicit radius wins over the implicit default when at least two explicit spawns agree and they are the majority: 0 for fishing spots, bankers, tool leprechauns and other stationary NPCs.
+2. Otherwise what existing spawns of that NPC mostly use, counting a missing radius as the loader's default 5 (by id, else by name).
+3. Otherwise 0 for an NPC without a walk animation in the cache.
+4. Otherwise the loader's default (5).
 
 The Wiki map's `r` only sizes its marker, so it isn't used: Mortimer's map has `r=4`, and he wanders one tile (rsprox captures).
 

@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
 const { AggressionTolerance } = require("../dist/game/entity/impl/npc/AggressionTolerance");
+const { NpcDefinition } = require("../dist/game/definition/NpcDefinition");
 const { Location } = require("../dist/game/model/Location");
 
 function holder() {
@@ -42,6 +43,15 @@ test("leaving both regions restarts the ten minutes and moves the regions", () =
   assert.equal(tolerance.finished(), true);
   tolerance.update(new Location(1750, 3470, 1));
   assert.equal(tolerance.finished(), false, "another plane is outside");
+});
+
+test("the hunt range defaults to the Wiki's seven tiles and can be overridden per NPC", () => {
+  const definition = new NpcDefinition();
+  assert.equal(definition.getHuntRange(), 7);
+  definition.setHuntRange(9);
+  assert.equal(definition.getHuntRange(), 9);
+  definition.setHuntRange(-1);
+  assert.equal(definition.getHuntRange(), 1, "a range below one would stop every hunt");
 });
 
 test("the state is a plain attribute, so a saved and reloaded player keeps their tolerance", () => {

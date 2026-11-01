@@ -64,17 +64,14 @@ export class NpcAggression {
                 continue;
             }
 
-            // Make sure we have the proper distance to attack the player.
-            let distanceToPlayer = npc.getSpawnPosition().getDistance(player.getLocation());
+            // The Wiki's hunt range starts at the NPC's current south-west tile, not its spawn,
+            // and is independent of its combat reach (Aggressiveness#Hunt range).
+            const huntDistance = npc.getLocation().getDistance(player.getLocation());
 
             // Get the npc's combat method
-            let method: CombatMethod = CombatFactory.getMethod(npc);
+            const method: CombatMethod = CombatFactory.getMethod(npc);
 
-            // Get the max distance this npc can attack from.
-            // We should always attack if we're at least 3 tiles from the player.
-            let aggressionDistance = npc.aggressionDistance();
-
-            if (distanceToPlayer < npcDefinition.getCombatFollowDistance() && distanceToPlayer <= aggressionDistance) {
+            if (huntDistance <= npcDefinition.getHuntRange()) {
                 if (CombatFactory.canAttack(npc, method, player) == CanAttackResponse.CAN_ATTACK) {
                     npc.getCombat().attack(player);
                     break;

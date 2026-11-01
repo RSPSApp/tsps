@@ -6,14 +6,16 @@ OSRS Wiki and the RSProx capture archive. Branch: `audit/npc-wander`, based on `
 
 The machine-readable results are next to this file:
 
-- [`npc-wander-census.csv`](npc-wander-census.csv) - one row for every spawned NPC id
-  (`id`, `name`, spawn count, walk animation, actions, radius distribution, sources, flags).
-- [`npc-wander-findings.csv`](npc-wander-findings.csv) - the 151 spawn rows this audit
-  recommends changing, with the current radius, the recommendation, confidence and evidence.
+- [`npc-wander-census-before.csv`](npc-wander-census-before.csv) - one row for every spawned
+  NPC id in the **pre-fix** snapshot (`id`, `name`, spawn count, walk animation, actions, radius
+  distribution, sources, flags).
+- [`npc-wander-findings.csv`](npc-wander-findings.csv) - the 151 spawn rows changed by this
+  branch, with the old radius, the new radius, confidence and evidence.
 
-Nothing in this branch changes gameplay or spawn data. The findings are stated as
-recommendations so they can be applied through the normal spawn pipeline (see
-[Root cause](#root-cause)).
+The 151 spawn rows were applied to `npc-spawns.json` in this branch, and the sync pipeline's
+radius inheritance was fixed so a later Wiki batch cannot reintroduce the same default-5 split.
+The analysis below describes the snapshot before those changes; the
+[Applied changes](#applied-changes) section records what was done.
 
 ## Scope and method
 
@@ -23,10 +25,12 @@ A row with no `wanderRadius` gets the loader's default of **5**
 (`NpcSpawnDefinitionLoader.DEFAULT_WANDER_RADIUS`), so the audit treats "missing" as a radius,
 not as "no wander".
 
-Adjacent finding (not part of this audit): the keyed row `ELENA_2` resolves to Elena 4257 at
-2592,3336, but the Wiki lists 4257 as the kidnapped Elena at 2541,9672 and the civilian at
-2592,3336 as 1102 (`ELENA`). That is a spawn-identity question, not a wander range, and is left
-for a separate check.
+Adjacent finding (not part of the wander audit): the keyed row `ELENA_2` resolved to Elena 4257
+at 2592,3336, but the Wiki lists 4257 as the kidnapped Elena at 2541,9672 and the civilian at
+2592,3336 as 1102 (`ELENA`). That is a spawn-identity question, not a wander range; the branch
+changes the key to `ELENA`.
+
+The counts below are the **pre-fix snapshot** the audit ran against.
 
 | Measure | Count |
 | --- | ---: |
@@ -65,6 +69,25 @@ Three sources were used for each decision:
 Limits: the RSProx archive is not a whole-map census, so "no capture" is not evidence of
 anything; and the Wiki does not publish a per-NPC wander radius. The recommendations therefore
 carry a confidence label, and the CSV keeps the evidence for each row.
+
+## Applied changes
+
+- **All 151 spawn rows** in `npc-wander-findings.csv`: 21 cache-definite, 72 high-confidence,
+  8 medium-high, 47 service-NPC outliers and the 3 wandering dogs. `npc-spawns.json` changes
+  only those rows; the one-spawn-per-line layout is preserved.
+- **`ELENA_2` -> `ELENA`** on the civilian Elena at 2592,3336 (identity, not wander).
+- **`sync-npc-spawns.ts`** now uses `chooseWanderRadius()` from `npc-spawn-matching.cjs`. A
+  non-attackable NPC's established explicit radius wins over the implicit default when at least
+  two explicit witnesses agree; otherwise the most common effective radius is used. Regression
+  tests are in `npc-spawns-sync.test.cjs`.
+- **Aggression range:** `NpcDefinition` now carries a `huntRange` (default 7), and
+  `NpcAggression` measures it from the NPC's current south-west tile instead of the spawn and
+  the old `max(attackDistance, 3)` / `< combatFollowDistance` cap. The unit test is in
+  `aggression-tolerance.test.cjs`.
+
+Verification in this branch: `tsc --build`; `node --test tests/aggression-tolerance.test.cjs`
+(5 pass); `node --test tests/npc-spawns-sync.test.cjs` (24 pass); the five NPC spawn, override,
+refine, facing and dormant suites (46 pass); and `tests/kalphite-queen.test.cjs` (19 pass).
 
 ## Wander findings
 
@@ -151,8 +174,8 @@ certain is that `0` contradicts the Wiki.
 
 - **43 ids contain both an explicit 0 and a positive radius.** Some are legitimate (one static
   quest copy among many wild spawns, e.g. a single Rat or Duck). Others are the regressions
-  listed above. The full list is in the census CSV under the `mixed-zero-positive` flag and in
-  the appendix.
+  listed above. The full list is in the pre-fix census CSV under the `mixed-zero-positive` flag
+  and in the appendix.
 - **245 ids have at least one default-5 spawn while their explicit spawns mostly use a smaller
   radius** (`default-outlier` in the census). That is the population the sync/refine pipeline
   should re-check; not all of them are wrong (wildlife and guard patrols genuinely vary).
@@ -164,7 +187,7 @@ certain is that `0` contradicts the Wiki.
 
 ## Root cause
 
-`sync-npc-spawns.ts` chooses a new spawn's radius with `commonRadius()`:
+`sync-npc-spawns.ts` used to choose a new spawn's radius with `commonRadius()`:
 
 ```ts
 function commonRadius(spawns, matches) {
@@ -185,24 +208,26 @@ never widens; it also cannot fix a spawn it never captured. The result is exactl
 seen in Tool Leprechauns, Soldiers, Monkey Archers, Corpses and Iron pickaxes: some rows were
 refined to 0, later Wiki rows kept 5.
 
-The durable fix belongs in the pipeline, not in a hand-edited output:
+The pipeline change applied here (`chooseWanderRadius()` in `npc-spawn-matching.cjs`):
 
-1. Make `commonRadius()` compare **effective** radii (`spawn.wanderRadius ?? DEFAULT`) and
-   prefer an explicit majority over the implicit default.
-2. After a Wiki batch, propagate an NPC's stable radius to new rows only when the evidence is
-   strong: at least two explicit witnesses, a majority of explicit spawns, and an NPC that
-   cannot be attacked. Emit the rest as a report for review.
-3. Add a regression fixture with a 0/5 split (the Tool Leprechaun case) to
-   `tests/npc-spawns-sync.test.cjs`, so a rerun cannot reintroduce default-5 rows.
-4. Keep `refine:npc-spawns` as the only source that *lowers* a radius from captures; the sync
-   pass should only copy an established radius, never invent a new one.
+1. It compares **effective** radii (`spawn.wanderRadius ?? DEFAULT`) and, for a non-attackable
+   NPC, lets an established explicit radius win over the implicit default when at least two
+   explicit witnesses agree and they are the majority of explicit rows.
+2. `sync:npc-spawns` uses it for new rows; the existing default-5 rows were corrected by the
+   151 data changes above.
+3. `tests/npc-spawns-sync.test.cjs` covers the 0/5 split, the single-witness case, attackable
+   NPCs, the name fallback and the no-walk fallback.
+4. `refine:npc-spawns` remains the only source that *lowers* a radius from captures; the sync
+   pass only copies an established radius, never invents a new one.
 
 `npc-spawns.json` is the canonical spawn data owned by the TSPS sync pipeline (it is not an
-osrsreboxed-db export; see [npc-spawns.md](../npc-spawns.md)), so applying the 151 rows is
-allowed. The same split will return on the next Wiki batch unless the sync logic is fixed.
+osrsreboxed-db export; see [npc-spawns.md](../npc-spawns.md)), so the 151 rows are applied
+directly. The `chooseWanderRadius()` change above is what stops the same split on the next Wiki
+batch.
 
-If the rows are applied, do it in this order: A and B first (they are unambiguous), then C and
-E once their sites are captured, and D after a review of the shops in question.
+The rows were applied in confidence order: A and B first (unambiguous), then C and D, then E.
+The `operator`, `Master Farmer` and `Male slave` recommendations in D remain the most
+judgement-based; they are labelled medium in the CSV so a later capture can confirm them.
 
 ## Aggression audit
 
@@ -220,7 +245,7 @@ three ranges:
 It also says an aggressive monster attacks a player whose combat level is at most twice the
 monster's level; most Wilderness monsters ignore the level check.
 
-What the server does:
+### Before this branch
 
 `NPC.isAggressiveTo`:
 
@@ -233,7 +258,7 @@ This matches the Wiki's level rule (and the Wilderness exception) for NPCs whose
 flag is set. Tolerance (10 minutes, two 21x21 regions, persisted across logout) also matches the
 Wiki's [Tolerance](https://oldschool.runescape.wiki/w/Tolerance) page.
 
-`NPC.aggressionDistance` and `NpcAggression.runAggression`:
+The old initiation check was:
 
 ```ts
 public aggressionDistance(): number {
@@ -247,7 +272,7 @@ if (distanceToPlayer < npcDefinition.getCombatFollowDistance() && distanceToPlay
 }
 ```
 
-The effective initiation range is therefore:
+The effective initiation range was:
 
 | NPC attack style | `attackDistance` | `aggressionDistance` | Effective range (`min(<7, <=aggro)`) |
 | --- | ---: | ---: | ---: |
@@ -255,33 +280,54 @@ The effective initiation range is therefore:
 | Ranged | 6 | 6 | **6 tiles from spawn** |
 | Magic | 10 | 10 | **6 tiles from spawn** (capped by `< 7`) |
 
-This does not match the Wiki:
+That did not match the Wiki:
 
 - The Wiki's aggression range is `max range + attack range` (8 for a melee NPC, 13 for a
-  6-tile ranger, 17 for a 10-tile mage), plus `size - 1`. The code uses
-  `max(attackDistance, 3)` and then caps at 6, so melee NPCs under-aggro badly and magic NPCs
-  cannot start a fight at 7-10 tiles even though they can cast that far.
-- Size is ignored. A size-2+ NPC's occupied tiles should extend the range; the code measures
-  from the south-west tile only.
-- The code uses the **spawn** position, which is the aggression-range origin, but this loop is
-  doing the **hunt** (searching for a target). The Wiki's hunt range is measured from the NPC's
-  current tile. An NPC that has wandered away from its spawn cannot aggro a player standing next
-  to it if that player is more than 3 tiles from the spawn.
-- `combatFollowDistance` (default 7, KQ overrides 9) is used as a hard aggro cap *and* as the
+  6-tile ranger, 17 for a 10-tile mage), plus `size - 1`. The old code used
+  `max(attackDistance, 3)` and then capped at 6, so melee NPCs under-aggroed badly and magic
+  NPCs could not start a fight at 7-10 tiles even though they could cast that far.
+- Size was ignored. A size-2+ NPC's occupied tiles should extend the range; the old code
+  measured from the south-west tile only.
+- The old code used the **spawn** position, which is the aggression-range origin, but this loop
+  is doing the **hunt** (searching for a target). The Wiki's hunt range is measured from the
+  NPC's current tile. An NPC that had wandered away from its spawn could not aggro a player
+  standing next to it if that player was more than 3 tiles from the spawn.
+- `combatFollowDistance` (default 7, KQ overrides 9) was used as a hard aggro cap *and* as the
   retreat max range. The Wiki says max range is the retreat boundary, not a cap on the hunt.
-  `NpcDefinition.retreats` is never hydrated, so the retreat path is currently dead for every
-  NPC; the 7 only survives as this cap.
+  `NpcDefinition.retreats` is never hydrated, so the retreat path is still dead for every NPC.
 
-Suggested correction (needs a gameplay decision, so it is not applied here):
+### After this branch
 
-1. Keep the Wiki's level rule and tolerance as they are.
-2. Give the hunt its own range, measured from the NPC's current south-west tile, with the
-   default 7 and per-NPC overrides. This is the value the aggression loop should use.
-3. If the aggression range is also needed (retaliation, "can be attacked from spawn"), compute
-   `max(range, attackDistance) + size - 1` from the static spawn and use it for that purpose,
-   not as the hunt range.
-4. Add tests for a melee NPC at 4-7 tiles from spawn, a magic NPC at 8-10 tiles, a size-2 NPC
-   approached from the north-east, and an NPC that has wandered away from its spawn.
+The hunt now has its own range on the NPC definition:
+
+```ts
+// NpcDefinition
+private huntRange: number = 7; // from the NPC's current south-west tile
+public getHuntRange(): number { return this.huntRange; }
+public setHuntRange(range: number): void { this.huntRange = Math.max(1, Math.trunc(range)); }
+
+// NpcAggression
+const huntDistance = npc.getLocation().getDistance(player.getLocation());
+if (huntDistance <= npcDefinition.getHuntRange()) {
+    ...
+}
+```
+
+This matches the Wiki's hunt-range definition: the search starts at the NPC's current
+south-west tile, not its spawn, and it is independent of the NPC's attack style. `canAttack`
+still enforces the real attack range, line of sight and size once combat starts. Per-NPC
+overrides can call `setHuntRange()`; the default is 7. The Kalphite Queen keeps its existing
+9-tile encounter range by setting `huntRange: 9` alongside `combatFollowDistance: 9`.
+
+A separate aggression-range formula (`max range + attack range + size - 1` from the static
+spawn) is not needed for hunting and is not implemented. `combatFollowDistance` remains the
+retreat/leash max range; `retreats` still needs hydrating before the retreat path can work. If a
+future retaliation feature needs "can be attacked from spawn", it should compute that formula
+from the spawn, not reuse the hunt range.
+
+The hunt-range default and clamping are covered in `aggression-tolerance.test.cjs`. The full
+melee/ranged/magic and size cases need a live combat harness rather than the unit test; that is
+the remaining verification gap.
 
 Data note: 10 spawned ids offer `Attack` but are absent from `monsters-complete.json`, so
 `isAggressive` is false for them. Nine are nameless multinpc parents whose transformed form

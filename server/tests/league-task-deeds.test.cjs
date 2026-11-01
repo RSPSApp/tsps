@@ -202,3 +202,32 @@ test("burn-food: food burnt on a fire (Burn Some Food)", async (t) => {
   assert.equal(f.player.getInventory().getAmount(item("Burnt shrimp")), 1, `the real Cooking burns it: ${f.messages}`);
   assert.ok(done(f, "burn-some-food"));
 });
+
+test("cast: a spell whose cost is paid, named by the server's registries (Cast Low Level Alchemy)", async (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.MAGIC, 99);
+  skills.setCurrentLevel(core.Skill.MAGIC, 99);
+  const inventory = f.player.getInventory();
+  inventory.add(new core.Item(item("Nature rune"), 1), true);
+  inventory.add(new core.Item(item("Fire rune"), 3), true);
+  inventory.add(new core.Item(item("Bronze dagger")), true);
+  const spell = core.CacheDefinitions.getSpellByName("Low Level Alchemy");
+  const slot = inventory.getSlotForItemId(item("Bronze dagger"));
+  await send(f, { type: "widget_target", sourceWidgetId: spell.widgetId, sourceItemId: spell.itemId, sourceSlot: -1, targetWidgetId: 149 << 16, targetItemId: item("Bronze dagger"), targetSlot: slot }, 4);
+  assert.equal(inventory.getAmount(item("Bronze dagger")), 0, `the real alchemy casts: ${f.messages}`);
+  assert.ok(done(f, "cast-low-level-alchemy"));
+});
+
+test("cast: a combat spell's cost paid is its cast (Cast Ice Burst)", (t) => {
+  const f = pactsCharacter(t);
+  const skills = f.player.getSkillManager();
+  skills.setMaxLevel(core.Skill.MAGIC, 99);
+  skills.setCurrentLevel(core.Skill.MAGIC, 99);
+  f.player.setSpellbook(core.MagicSpellbook.ANCIENT);
+  const inventory = f.player.getInventory();
+  for (const [rune, amount] of [["Death rune", 2], ["Chaos rune", 4], ["Water rune", 4]]) inventory.add(new core.Item(item(rune), amount), true);
+  assert.equal(core.CombatSpells.ICE_BURST.canCast(f.player, true), true, `the real cast: ${f.messages}`);
+  assert.equal(inventory.getAmount(item("Death rune")), 0, "its runes paid");
+  assert.ok(done(f, "cast-ice-burst"));
+});

@@ -18,6 +18,10 @@
  * - `burn { items, count }`: logs lit for a fire, `firemaking:success` { itemId }; `burn-food
  *   { count }`: food burnt cooking it, `cooking:burnt`; `bury { items | any, count }`: bones buried,
  *   `prayer:buried` { itemId } (by hand, not a bonecrusher's).
+ * - `cast { spells, count }`: a spell whose cost is paid, `magic:cast-committed` { spell } (a
+ *   combat cast) or `magic:item-spell-cast` { spell } (an alchemy), named
+ *   by the server's own spell registries (CombatSpells, EffectSpells: ICE_BURST is Ice Burst,
+ *   LOW_ALCHEMY Low Level Alchemy).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -44,7 +48,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [] };
+  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [], cast: new Map() };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "equip" || trigger?.kind === "equip-all") entry.equip.push(task);
@@ -58,6 +62,7 @@ function indexOf(type) {
     else if (trigger?.kind === "bury" && trigger.any) entry.buryAny.push(task);
     else if (trigger?.kind === "bury") for (const item of trigger.items ?? []) add(entry.bury, item, task);
     else if (trigger?.kind === "burn-food") entry.burnFood.push(task);
+    else if (trigger?.kind === "cast") for (const spell of trigger.spells ?? []) add(entry.cast, spell, task);
     else if (trigger?.kind === "agility-laps") for (const course of trigger.courses ?? []) add(entry.laps, course, task);
   }
   index.set(type, entry);
@@ -192,6 +197,30 @@ function buried({ player, itemId }) {
   if (type !== null) countTasks(player, type, indexOf(type).buryAny);
 }
 
+/** Spell object -> its name, from the server's spell registries' keys (ICE_BURST: "ice burst"). */
+let spellNames = null;
+const SPELL_ALIASES = { LOW_ALCHEMY: "low level alchemy", HIGH_ALCHEMY: "high level alchemy" };
+
+function spellName(spell) {
+  if (!spellNames) {
+    spellNames = new Map();
+    for (const registry of [Common.core.CombatSpells, Common.core.EffectSpells]) {
+      for (const key of Object.getOwnPropertyNames(registry ?? {})) {
+        const value = registry[key];
+        if (value && typeof value === "object" && typeof value.spellId === "function") {
+          spellNames.set(value, SPELL_ALIASES[key] ?? key.toLowerCase().replace(/_/g, " "));
+        }
+      }
+    }
+  }
+  return spellNames.get(spell) ?? null;
+}
+
+function cast({ player, spell }) {
+  const name = player ? spellName(spell) : null;
+  if (name) count(player, "cast", name);
+}
+
 function lapped({ player, course, count: laps }) {
   if (player) count(player, "laps", course, Number(laps ?? 1) || 1);
 }
@@ -213,6 +242,8 @@ module.exports = function attach(api) {
   api.onCustomEvent("treasure-trails:casket-opened", casket);
   api.onCustomEvent("agility:lap", lapped);
   api.onCustomEvent("food:eaten", ate);
+  api.onCustomEvent("magic:cast-committed", cast);
+  api.onCustomEvent("magic:item-spell-cast", cast);
   api.onCustomEvent("firemaking:success", burnt);
   api.onCustomEvent("cooking:burnt", burntFood);
   api.onCustomEvent("prayer:buried", buried);

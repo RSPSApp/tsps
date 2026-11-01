@@ -327,6 +327,9 @@ export class MagicOnItemPacketListener {
     if (policy.keepItem !== true) inventory.deleteAtSlot(slot, 1);
     if (!payment.free) this.consumeRunes(player, runes);
     player.setAttribute(MagicOnItemPacketListener.ALCH_NEXT_CAST_ATTRIBUTE, now + policy.castTicks);
+    // "magic:item-spell-cast" { player, spell }: an alchemy cast on an item (a league's "Cast Low
+    // Level Alchemy"); combat casts report "magic:cast-committed" instead.
+    PluginManager.emitCustomEvent("magic:item-spell-cast", { player, spell });
 
     player.performAnimation(new Animation(isHighAlch
       ? MagicOnItemPacketListener.HIGH_ALCH_ANIMATION

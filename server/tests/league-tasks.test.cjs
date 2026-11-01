@@ -131,7 +131,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps", "eat", "drink", "eat-heal", "burn", "burn-food", "bury", "cast"]);
   // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
   const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
   const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
@@ -518,6 +518,12 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   assert.deepEqual(trigger("bury-6-bones"), { kind: "bury", any: true, count: 6 });
   assert.deepEqual(trigger("bury-some-wyvern-or-dragon-bones"), { kind: "bury", items: ["Wyvern bones", "Dragon bones"], count: 1 });
   assert.equal(trigger("bury-some-wyrm-bones-near-a-wyrm-skeleton"), undefined, "a place is no plain count");
+
+  // Spells: combat spells and the alchemies by name, "any wave spell" the four; a teleport or a place is left out.
+  assert.deepEqual(trigger("cast-ice-burst"), { kind: "cast", spells: ["Ice Burst"], count: 1 });
+  assert.deepEqual(trigger("cast-a-wave-spell").spells, ["Wind Wave", "Water Wave", "Earth Wave", "Fire Wave"]);
+  assert.equal(trigger("cast-claws-of-guthix"), undefined, "outside of the Mage Arena");
+  assert.equal(trigger("cast-home-teleport"), undefined, "a teleport");
 
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");

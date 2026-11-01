@@ -593,6 +593,26 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   }
   // A parenthesis with a space is a remark ("(not including Agility)"); one without is part of a name ("(c)", "(kp)").
   const clean = (text: string) => text.replace(/\s*\([^)]*\s[^)]*\)/g, "").replace(/\.$/, "").trim();
+  // "Cast Ice Burst" ("Cast the Ice Burst spell"), "Cast Low Level Alchemy", "Cast a Wave Spell" ("any
+  // wave spell": the four): a spell whose cost is paid (magic:cast-committed). Combat spells and the
+  // alchemies only, the spells the server names when they are cast; a teleport, a place ("outside
+  // of the Mage Arena", "at a black dragon in Kandarin") or a condition is left out.
+  if ((match = /^Cast (?:an? |the )?(.+?)(?: [Ss]pell)?$/.exec(name))) {
+    const said = clean(description);
+    if (PLACE.test(said.replace(/^Cast /i, "")) || /\b(?:outside|at an?)\b/i.test(said) || CONDITION.test(said)) return {};
+    const tiers = ["Strike", "Bolt", "Blast", "Wave", "Surge"];
+    const any = /^Cast any (strike|bolt|blast|wave|surge) spell$/i.exec(said);
+    if (any) {
+      const tier = tiers.find((each) => each.toLowerCase() === any[1].toLowerCase())!;
+      return { trigger: { kind: "cast", spells: ["Wind", "Water", "Earth", "Fire"].map((element) => `${element} ${tier}`), count: 1 } };
+    }
+    const spell = match[1].replace(/^the /i, "");
+    const combat = /^(?:(?:Wind|Water|Earth|Fire) (?:Strike|Bolt|Blast|Wave|Surge)|(?:Smoke|Shadow|Blood|Ice) (?:Rush|Burst|Blitz|Barrage)|Saradomin Strike|Claws of Guthix|Flames of Zamorak|Iban Blast|Magic Dart|Crumble Undead)$/i;
+    const alchemy = /^(?:Low|High) Level Alchemy$/i;
+    if (!combat.test(spell) && !alchemy.test(spell)) return {};
+    if (!CacheDefinitions.getSpellByName(spell)) return {};
+    return { trigger: { kind: "cast", spells: [spell], count: 1 } };
+  }
   // "Burn 100 Willow Logs", "Burn Some Normal Logs" ("Burn some Logs"): those logs lit for a fire.
   // "Burn Some Food": anything burnt while cooking it.
   if (/^Burn Some Food$/i.test(name)) return { trigger: { kind: "burn-food", count: 1 } };

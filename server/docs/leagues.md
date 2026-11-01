@@ -1555,7 +1555,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `food:eaten`, `drink { items, count }` from `potions:drunk` (the potion's name, any dose) or
   `food:eaten` (a drink that is food), `burn { items, count }` from `firemaking:success`,
   `burn-food { count }` from Cooking's `cooking:burnt`, `bury { items | any, count }` from
-  Prayer's `prayer:buried` (by hand; pyre logs and a place are no plain count), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
+  Prayer's `prayer:buried` (by hand; pyre logs and a place are no plain count), `cast { spells,
+  count }` from `magic:cast-committed` (a combat cast) and `magic:item-spell-cast` (an alchemy),
+  named by the CombatSpells / EffectSpells keys (teleports, Lunar and Arceuus spells are not mapped:
+  the server names no cast of theirs), and `eat-heal { heal }` from `food:eaten`'s `restores` (what
   the food restores, at full health too): "Eat / Drink a X" by the description's item or else the
   name's, a place ("in Auburn Valley", "from a bird bath") none. The generator derives them from the
   name and the Wiki's description, read with its links' targets (what only restates the deed is

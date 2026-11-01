@@ -583,8 +583,8 @@ rule from the Wiki's Shattered Relics pages. They draw only for league type 3 (v
   Monkey Madness II's royal seed pod, Roving Elves' crystal bow, Drakan's medallion). A quest that
   fails to complete is logged and the rest go on. Names this server registers no quest for are
   skipped: Recipe for Disaster's subquests (its plugin keeps them internally, with no completion
-  API) and the miniquests (Alfred Grimhand's Barcrawl, Enter the Abyss, The Frozen Door,
-  Architectural Alliance). The packs' other content (Kourend favour, the Camelot training room's
+  API) and the miniquests (Alfred Grimhand's Barcrawl, The Frozen Door, Architectural
+  Alliance). Enter the Abyss is a registered miniquest, so Temple Knight II completes it. The packs' other content (Kourend favour, the Camelot training room's
   waves, Troll III's fire pits) isn't given.
 - **The Sage (NPC 11232):** a world running Shattered Relics spawns it at Catherby (2774, 3433,
   the Wiki's map; the main world's spawns don't have it). Talk-to plays its transcript. Its "Do I

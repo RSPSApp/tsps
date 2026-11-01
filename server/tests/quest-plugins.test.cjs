@@ -7639,8 +7639,8 @@ test('Desert Treasure II requires each medallion on its matching Vault statue an
   assert.equal(boxes.length, 1, 'the medallion shows in an objectbox');
 });
 
-test('Desert Treasure II takes the medallions in any order and the fourth only after the last-medallion trial', () => {
-  const { api: base } = mockApi();
+test('Desert Treasure II takes the medallions in any order and Smith takes the fourth after the last-medallion trial', () => {
+  const { api: base, handlers } = mockApi();
   const objectHooks = [], itemHooks = [];
   class TestInstance {
     constructor(width, height) { this.width = width; this.height = height; this.entities = []; }
@@ -7705,10 +7705,13 @@ test('Desert Treasure II takes the medallions in any order and the fourth only a
   assert.equal(quest.getStage(player), 7);
   assert.deepEqual([15132, 15133, 15134, 15135].map(id => varbits.get(id)), [3, 2, 1, 4],
     'placing the third medallion fills the fourth slot with the remaining chapter');
-  assert.equal(placement(49505, 3, I.PERSERIYAS_MEDALLION).handled, false,
-    'the last medallion waits for the Mysterious Figure\'s trial');
+  assert.equal(placement(49505, 3, I.PERSERIYAS_MEDALLION).handled, false, 'the last medallion is never placed on a statue');
   attrs.set('desert-treasure-ii:final-figure-defeated', true);
-  assert.equal(placement(49505, 3, I.PERSERIYAS_MEDALLION).handled, true);
+  assert.equal(placement(49505, 3, I.PERSERIYAS_MEDALLION).handled, false);
+  // rsprox 1703: Smith's smoke bomb (lnBBaf) takes the medallion, dt2 96 -> 100.
+  counts.set(I.PERSERIYAS_MEDALLION, 1);
+  handlers.custom.get('npc-dialogue:action').forEach(h => h({ player, stepId: 'lnBBaf' }));
+  assert.equal(counts.get(I.PERSERIYAS_MEDALLION), 0);
   assert.equal(quest.getStage(player), 11);
   assert.equal(attrs.get('desert-treasure-ii:medallions-placed'), 15);
   assert.equal(quest.varbitValue(quest.getStage(player), player), 100,
@@ -7943,7 +7946,7 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     assert.equal(objectHooks[0]({ player: p, objectId: core.ObjectIdentifiers.VAULT_DOOR_2, location: { x: 3511, y: 2970, z: 0 } }), true);
     assert.equal(transcripts.at(-1).variant, 'the-desert-treasure-entering-the-ancient-vault-with-the-last-medallion');
     customEvents.find(({ name }) => name === 'npc-dialogue:action').handler({ player: p, stepId: 'qEMxBM' });
-    assert.equal(p.location.x, 3103);
+    assert.deepEqual([p.location.x, p.location.y], [3105, 9247], 'rsprox 1703 wakes the player at 3105,9247');
     assert.equal(inventory.getAmount(995), 0, 'equipment is secured outside the prison cell');
     assert.equal(equipment.getAmount(1275), 0, 'worn equipment is secured outside the prison cell');
     const toggleCellGate = () => {
@@ -7984,7 +7987,7 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     const line = { player: p, npcId: core.NpcIdentifiers.MYSTERIOUS_FIGURE_2, text: 'Very well...' };
     customEvents.find(({ name }) => name === 'npc-dialogue:line').handler(line);
     line.after();
-    assert.equal(spawnedFigure.id, core.NpcIdentifiers.MYSTERIOUS_FIGURE_4);
+    assert.equal(spawnedFigure.id, core.NpcIdentifiers.MYSTERIOUS_FIGURE_5, 'dt2_pursuer_hideout_combat (12301)');
     assert.equal(spawnedFigure.maxHitpoints, 450);
     assert.equal(spawnedFigure.target, p, 'the Figure starts attacking only after the altar transcript ends');
     handlers.playerProcess.at(-1)({ player: p });
@@ -8097,8 +8100,8 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     p.location = new core.Location(3175, 2887, 0);
     p.hitpoints = 120;
     assert.equal(objectHooks[0]({ player: p, objectId: 49497, definition: { id: 48770 }, option: 'Use', location: { x: 3175, y: 2887, z: 0 } }), true,
-      'the cache-visible portal returns the player to the Figure cell');
-    assert.deepEqual([p.location.x, p.location.y, p.location.z], [3103, 9246, 0]);
+      'the cache-visible portal returns the player to the Figure');
+    assert.deepEqual([p.location.x, p.location.y, p.location.z], [3087, 9260, 0], 'beside the altar, as rsprox 1703');
     process();
     assert.equal(spawnedFigures.length, 4, 'returning to the cell respawns a fresh Figure after death');
     assert.equal(spawnedFigures[3].maxHitpoints, 450, 're-entry restores the canonical Figure hitpoints');
@@ -8136,7 +8139,10 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     assert.equal(spawnedFigure.maxHitpoints, 450, 'the portal retry begins a fresh Figure encounter');
     deathHooks[0]({ killer: p, npc: spawnedFigure });
     assert.equal(attrs.get('desert-treasure-ii:final-figure-defeated'), true);
-    assert.equal(inventory.getAmount(core.ItemIdentifiers.WHISPERERS_MEDALLION), 1);
+    assert.equal(inventory.getAmount(core.ItemIdentifiers.WHISPERERS_MEDALLION), 0, 'the medallion drops where she falls');
+    assert.equal(quest.varbitValue(7, p), 94);
+    inventory.adds(core.ItemIdentifiers.WHISPERERS_MEDALLION, 1);
+    assert.equal(quest.varbitValue(7, p), 96, 'picking it up is dt2 96 (rsprox 1703)');
     assert.equal(objectHooks[0]({ player: p, objectId: 48767, definition: { id: 48767 }, option: 'Use', location: { x: 3104, y: 9266, z: 0 } }), true,
       'after the Figure yields her medallion, the native cell Portal leads back outside');
     assert.deepEqual([p.location.x, p.location.y, p.location.z], [3175, 2887, 0],
@@ -8884,8 +8890,8 @@ test('Desert Treasure II handoff creates the four owned wight stages and grants 
     dialogueAction({ player: p, stepId: 'xGIiPZ' });
     assert.equal(quest.isComplete(p), true);
     assert.equal(inventory.getAmount(core.ItemIdentifiers.RING_OF_VISIBILITY), 0);
-    assert.equal(equipment.get(core.Equipment.RING_SLOT).getId(), core.ItemIdentifiers.RING_OF_SHADOWS,
-      'the earned Ring of Shadows replaces the visibility ring in its actual equipment slot');
+    assert.equal(equipment.get(core.Equipment.RING_SLOT).getId(), core.ItemIdentifiers.RING_OF_SHADOWS_UNCHARGED_,
+      'the earned (uncharged, rsprox 1703) Ring of Shadows replaces the visibility ring in its actual equipment slot');
     assert.equal(equipment.get(core.Equipment.SHIELD_SLOT).getId(), core.ItemIdentifiers.RUNE_KITESHIELD,
       'rewarding the ring preserves the shield slot');
     assert.equal(inventory.getAmount(core.ItemIdentifiers.RING_OF_SHADOWS), 0,
@@ -10040,7 +10046,7 @@ test('Desert Treasure II opens Lassar from Ramarno and Prescott, then gates the 
     assert.equal(state.teleporters.filter(Boolean).length, 6);
     assert.equal(state.entered, true);
     assert.equal(state.blackstone, true);
-    assert.equal(varbits.get(15126), 20, 'the Lassar progress varbit reflects the recovered basic-torch schematic');
+    assert.equal(varbits.get(15126), 18, 'picking up the basic-torch schematic is dt2_lassar 18 (rsprox 1703); showing it to Ketla is 20');
     assert.equal(varbits.get(15088), 1, 'the cache palace teleporter varbit follows the per-player activation');
     assert.equal(varbits.get(15090), 1, 'the cache cathedral teleporter varbit follows the per-player activation');
     counts.set(core.ItemIdentifiers.BASIC_SHADOW_TORCH_SCHEMATIC, 1);
@@ -17601,7 +17607,8 @@ test('DT2 ancient lamps offer only combat skills, require level 60, and consume 
   const { Skill, ItemIdentifiers: I } = api.core;
   const item = { getId: () => I.ANCIENT_LAMP }, items = [item];
   let level = 59, xp = 1000, blocked = false;
-  const player = { getAttribute: key => key === 'quest.desert_treasure_ii.stage' ? 12 : undefined,
+  const player = { getAttribute: key => key === 'quest.desert_treasure_ii.stage' ? 12 : undefined, setAttribute() {},
+    getPacketSender: () => new Proxy({}, { get: () => () => {} }),
     getInventory: () => ({ get: slot => items[slot], deleteAtSlot: slot => items.splice(slot,1) }),
     getSkillManager: () => ({ getMaxLevel: () => level, getExperience: () => xp, addExperience: (_skill, amount) => { if (!blocked) xp += amount; } }) };
   const event = { player, itemId: I.ANCIENT_LAMP, item, slot: 0, option: 'Rub' };

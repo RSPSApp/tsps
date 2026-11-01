@@ -58,6 +58,7 @@ module.exports = function registerDesertTreasureII(api) {
   const MEDALLION_SLOT_VARBITS = [15132, 15133, 15134, 15135];
   // dt2_catalytic_guardian: 1 when the chapters open, 2 once the Guardian hears of the Scar (rsprox 1703).
   const CATALYTIC_GUARDIAN_VARBIT = 15130;
+  const RING_REWARD_VARBIT = 15138, REWARD_LAMP_VARBIT = 15123;
   const STRANGLEWOOD_INGREDIENT_VARBITS = [15136, 15137]; // dt2_stranglewood_ingredient_1/_2 (rsprox 1703)
   // Cache quest dbrow 2343, column 19 completes at 118; QuestHelper records the intervening milestones.
   function nativeProgress(rawStage, player) {
@@ -65,13 +66,14 @@ module.exports = function registerDesertTreasureII(api) {
     const attr = key => player?.getAttribute(key);
     if (stage >= S.COMPLETE) return 118;
     if (stage === S.FINALE) {
-      if (attr(FINAL_WIGHTS_COMPLETE)) return 112;
+      // rsprox 1703: 110 with the four wights dead, 112 once the Mahjarrat leave (THImb4), 114 after Hazeel (aP86Oy).
+      if (attr(FINAL_WIGHTS_COMPLETE)) return Math.max(110, Number(attr(FINAL_AFTERMATH_PROGRESS)) || 0);
       if (attr(FINAL_WIGHTS_STARTED)) return 102 + 2 * (Number(attr(FINAL_WIGHT_INDEX)) || 0);
       return 100;
     }
     if (stage === S.CHAPTERS) {
       if (player && inLastMedallionTrial(player)) {
-        if (attr(FINAL_FIGURE_DEFEATED)) return 94;
+        if (attr(FINAL_FIGURE_DEFEATED)) return has(player, lastMedallion(player)) ? 96 : 94;
         if (attr(FINAL_FIGURE_STARTED)) return 92;
         if (attr(FINAL_CELL_ACTIVE)) return attr(FINAL_CELL_OPEN) ? 90 : 88;
       }
@@ -202,8 +204,9 @@ module.exports = function registerDesertTreasureII(api) {
   const nativeProgressSent = new WeakMap();
   function syncNativeProgress(player) {
     const value = nativeProgress(stage(player), player);
-    const figurePortal = player?.getAttribute(FINAL_FIGURE_STARTED) === true
-      && player?.getAttribute(FINAL_FIGURE_DEFEATED) !== true ? 1 : 0;
+    // dt2_hideout_entry: 1 from the cell (88) until Smith takes the medallion (100), rsprox 1703.
+    const figurePortal = inLastMedallionTrial(player) && [FINAL_CELL_ACTIVE, FINAL_FIGURE_STARTED, FINAL_FIGURE_DEFEATED]
+      .some(key => player.getAttribute(key) === true) ? 1 : 0;
     const chapters = CHAPTER_KEYS.map(key => chapterValue(player, key));
     const slots = stage(player) >= S.CHAPTERS ? medallionSlots(player) : [0, 0, 0, 0];
     const catalytic = stage(player) < S.CHAPTERS ? 0
@@ -213,7 +216,7 @@ module.exports = function registerDesertTreasureII(api) {
     const asked = Number(player.getAttribute(SEARCHED_NAMES)) || 0;
     const found = Number(player.getAttribute(GOLEM_FOUND)) || 0;
     const ingredients = [STRANGLEWOOD_HERB_TAKEN, STRANGLEWOOD_BERRIES_TAKEN].map(key => player.getAttribute(key) === true);
-    const state = `${value}:${chapters}:${slots}:${catalytic}:${ingredients}:${figurePortal}:${statues}:${totems}:${asked}:${found}`;
+    const state = `${value}:${chapters}:${slots}:${catalytic}:${ingredients}:${player.getAttribute(REWARD_LAMP_USED) === true}:${figurePortal}:${statues}:${totems}:${asked}:${found}`;
     if (nativeProgressSent.get(player) === state) return;
     nativeProgressSent.set(player, state);
     const sender = player.getPacketSender();
@@ -229,6 +232,10 @@ module.exports = function registerDesertTreasureII(api) {
     sender.sendVarbit(STRANGLEWOOD_INGREDIENT_VARBITS[1], ingredients[1] ? 1 : 0);
     MEDALLION_SLOT_VARBITS.forEach((varbit, index) => sender.sendVarbit(varbit, slots[index]));
     sender.sendVarbit(CATALYTIC_GUARDIAN_VARBIT, catalytic);
+    // dt2_ring_reward_given is 1 from completion on (rsprox 1703); DesertTreasureScoreboards
+    // owns dt2_scoreboards.
+    sender.sendVarbit(RING_REWARD_VARBIT, stage(player) >= S.COMPLETE ? 1 : 0);
+    sender.sendVarbit(REWARD_LAMP_VARBIT, player.getAttribute(REWARD_LAMP_USED) ? 1 : 0);
     sender.sendVarbit(14862, value);
     // Cache loc 49497 transforms to the clickable return portal 48770 while
     // the Figure trial is active. QH records varbit 15159 returning 1→0 when
@@ -238,6 +245,8 @@ module.exports = function registerDesertTreasureII(api) {
   const IDS = [I.VARDORVIS_MEDALLION, I.PERSERIYAS_MEDALLION, I.SUCELLUS_MEDALLION, I.WHISPERERS_MEDALLION];
   const STATUE_ITEMS = [I.VARDORVIS_MEDALLION, I.WHISPERERS_MEDALLION, I.SUCELLUS_MEDALLION, I.PERSERIYAS_MEDALLION];
   const STATUES_PLACED = "desert-treasure-ii:medallions-placed";
+  const FINAL_AFTERMATH_PROGRESS = "desert-treasure-ii:final-aftermath-progress";
+  const REWARD_LAMP_USED = "desert-treasure-ii:reward-lamp-used";
   const MEDALLION_PLACED_SOUND = 7485;
   const MEDALLIONS_FOUND = "desert-treasure-ii:medallions-found"; // bit = STATUES index
   const BOSSES_STARTED = "desert-treasure-ii:bosses-started"; // bit = STATUES index
@@ -2561,6 +2570,10 @@ module.exports = function registerDesertTreasureII(api) {
     spawnFinalWight(p, 0);
   }
 
+  function setFinalAftermath(p, value) {
+    if ((Number(p.getAttribute(FINAL_AFTERMATH_PROGRESS)) || 0) < value) p.setAttribute(FINAL_AFTERMATH_PROGRESS, value);
+    syncNativeProgress(p);
+  }
   function rewardFinalQuest(p) {
     if (quest.isComplete(p)) return;
     p.setAttribute(FINAL_WIGHTS_COMPLETE, true);
@@ -2573,8 +2586,9 @@ module.exports = function registerDesertTreasureII(api) {
         if (container.getAmount(id) > 0) container.deleteNumber(id, container.getAmount(id));
       }
     }
-    if (wornVisibility) equipment.set(ringSlot, new api.core.Item(I.RING_OF_SHADOWS, 1)).refreshItems();
-    else inventory.adds(I.RING_OF_SHADOWS, 1);
+    // rsprox 1703 gives ring_of_shadows_uncharged (28329).
+    if (wornVisibility) equipment.set(ringSlot, new api.core.Item(I.RING_OF_SHADOWS_UNCHARGED_, 1)).refreshItems();
+    else inventory.adds(I.RING_OF_SHADOWS_UNCHARGED_, 1);
     for (let i = 0; i < 3; i++) {
       if ((inventory.getFreeSlots?.() ?? 0) > 0) inventory.adds(I.ANCIENT_LAMP, 1);
       else {
@@ -3892,6 +3906,19 @@ module.exports = function registerDesertTreasureII(api) {
 
   // Saves from before the meetings were counted only kept the first one.
   const pursuerMeetings = (p) => Math.max(Number(p.getAttribute(PURSUER_EVENTS)) || 0, p.getAttribute(ATTR_FIRST_MEDALLION_MEETING) ? 1 : 0);
+  const CHAPTER_MEDALLION_NAMES = {
+    vardorvis: "Vardorvis' medallion", leviathan: "Perseriya's medallion", sucellus: "Sucellus' medallion", whisperer: "Whisperer's medallion",
+  };
+  // rsprox 1703, at the smoke bomb: the last chapter's done value, dt2 96 -> 100 and 15159 1 -> 0 on
+  // the tick the medallion leaves the inventory.
+  function giveSmithLastMedallion(p) {
+    const key = lastChapter(p);
+    p.getInventory().deleteNumber(chapterMedallion(key), 1);
+    p.setAttribute(STATUES_PLACED, placedMask(p) | (1 << CHAPTERS[key].statue));
+    recordMedallionPlaced(p, key);
+    setStage(p, S.FINALE);
+    syncNativeProgress(p);
+  }
   const carriesUnplacedMedallion = (p) => CHAPTER_KEYS.some(key => !chapterPlaced(p, key) && has(p, chapterMedallion(key)));
   // rsprox 1703, the second medallion: dt2_pursuer_overworld_combat appears west of the vault
   // door, shouts and is pointed at by a hint arrow, with dt2 +2; the next door click enters
@@ -4729,7 +4756,10 @@ module.exports = function registerDesertTreasureII(api) {
       return ["Return to the Ancient Vault and speak to Asgarnia Smith."];
     }
     if (s === S.CHAPTERS) {
-      if (inLastMedallionTrial(player) && player.getAttribute(FINAL_FIGURE_DEFEATED)) return ["Return the last medallion to its statue in the Ancient Vault."];
+      if (inLastMedallionTrial(player) && player.getAttribute(FINAL_FIGURE_DEFEATED)) {
+        return has(player, lastMedallion(player)) ? ["Take the last medallion back to the Ancient Vault."]
+          : ["Pick up the last medallion the Mysterious Figure dropped."];
+      }
       if (inLastMedallionTrial(player) && player.getAttribute(FINAL_CELL_ACTIVE)) return journalLastMedallionCell(player);
       if (inLastMedallionTrial(player)) return ["Take the last medallion back to the Ancient Vault."];
       // Free order: every chapter shows its own state, in the Wiki's order.
@@ -4755,13 +4785,16 @@ module.exports = function registerDesertTreasureII(api) {
   const chapterStage = (s) => (LEGACY_CHAPTER_STAGES[s] !== undefined ? S.CHAPTERS : s);
   const stage = (p) => chapterStage(quest.getStage(p));
   /** dt2_lassar from the saved Lassar state. */
+  // rsprox 1703's dt2_lassar ladder: 16 the blackstone fragment given, 18 the basic torch schematic
+  // picked up, 20 shown to Ketla, 22/24 the same for the superior one, 34 the icon parts fused.
+  // The blocker, idol and anima schematics don't move it.
   function lassarProgress(state) {
     return state.medallion ? 46 : state.whispererDefeated ? 44 : state.cathedralEntered ? 42
-      : state.perfectTorch ? 40 : state.escapedVision ? 38 : state.iconUsed ? 36 : state.pubRemnant ? 32
-      : state.silentChoir ? 30 : state.perfectSchematicGiven ? 28 : state.fakeSchematicFound || state.perfectTorchSchematic ? 26
-          : state.animaSchematic || state.animaSchematicFound ? 24 : state.superiorTorchSchematic || state.superiorSchematicFound ? 22
-            : state.torchSchematic || state.torchSchematicFound ? 20 : state.blockerDesigned ? 18
-              : state.blackstone ? 14 : state.ringShown ? 12 : state.cameTo ? 10 : state.entered ? 8
+      : state.perfectTorch ? 40 : state.escapedVision ? 38 : state.iconUsed ? 36 : state.strangeIcon ? 34 : state.pubRemnant ? 32
+        : state.silentChoir ? 30 : state.perfectSchematicGiven ? 28 : state.fakeSchematicFound || state.perfectTorchSchematic ? 26
+          : state.superiorTorchSchematic ? 24 : state.superiorSchematicFound ? 22
+            : state.torchSchematic ? 20 : state.torchSchematicFound ? 18
+              : state.blackstone ? 16 : state.ringShown ? 12 : state.cameTo ? 10 : state.entered ? 8
                 : state.ropeTied ? 6 : state.rope ? 4 : state.ramarno ? 2 : 0;
   }
   function setLassar(p, state) {
@@ -5402,6 +5435,9 @@ module.exports = function registerDesertTreasureII(api) {
           manager.addExperience(skill, 100000, false);
           if (manager.getExperience(skill) === before) return null;
           inventory.deleteAtSlot(slot, 1);
+          // dt2_reward_lamp is set by the first lamp used (rsprox 1703).
+          p.setAttribute(REWARD_LAMP_USED, true);
+          syncNativeProgress(p);
           return `You have been awarded 100,000 ${name} XP!`;
         },
       });
@@ -5703,8 +5739,8 @@ module.exports = function registerDesertTreasureII(api) {
         p.sendMessage("The portal is sealed until the Mysterious Figure's cell trial is active.");
         return true;
       }
-      p.moveTo(new api.core.Location(3103, 9246, 0));
-      p.sendMessage("You return through the portal to the temple cell and face the Mysterious Figure again.");
+      // rsprox 1703: dt2_hideout_entry lands beside the altar, where the Figure is waiting.
+      p.moveTo(new api.core.Location(3087, 9260, 0));
       return true;
     }
     if (handleLassarObject(event, visibleId, option)) return true;
@@ -6364,6 +6400,14 @@ module.exports = function registerDesertTreasureII(api) {
       // "Acquiring the second and third medallions may result in her ambushing you").
       // The first return is the transcript's interrupted scene; the transcript's final action
       // is where the vault scene resumes.
+      // The last medallion back from the Figure: Smith's betrayal plays as the vault opens, and its
+      // smoke bomb (lnBBaf) takes the medallion (rsprox 1703).
+      if (inLastMedallionTrial(p) && p.getAttribute(FINAL_FIGURE_DEFEATED) && has(p, lastMedallion(p))) {
+        enterVault(p);
+        p.setAttribute("desert-treasure-ii:final-cutscene-started", true);
+        talk(p, N.ASGARNIA_SMITH_3, "the-desert-treasure-disputes-of-the-mahjarrat"); // dt2_asgarnia_smith_cutscene
+        return true;
+      }
       const meetings = pursuerMeetings(p);
       if (s === S.CHAPTERS && !lastChapter(p) && meetings < Math.min(3, placedCount(p) + 1) && carriesUnplacedMedallion(p)) {
         p.setAttribute(PURSUER_EVENTS, meetings + 1);
@@ -6816,11 +6860,9 @@ module.exports = function registerDesertTreasureII(api) {
       const locations = [[3941, 9635], [3931, 9635], [3931, 9625], [3941, 9625]];
       const medal = STATUE_ITEMS[index];
       const key = chapterOfStatue(index);
-      // The last medallion is placed after the Mysterious Figure's trial (the Wiki's Recidivism).
-      const last = lastChapter(p) === key;
+      // The last medallion is never placed: Asgarnia Smith takes it (lnBBaf, rsprox 1703).
       if (vaultTile.x === locations[index][0] && vaultTile.y === locations[index][1]
-        && inChapter(p, key) && (!last || p.getAttribute(FINAL_FIGURE_DEFEATED))
-        && itemId === medal && has(p, medal)) {
+        && inChapter(p, key) && lastChapter(p) !== key && itemId === medal && has(p, medal)) {
         event.handled = true;
         p.getInventory().deleteNumber(medal, 1);
         p.setAttribute(STATUES_PLACED, placedMask(p) | (1 << index));
@@ -6829,7 +6871,6 @@ module.exports = function registerDesertTreasureII(api) {
         // with sound 7485 and an objectbox of the medallion.
         p.getPacketSender().sendSound(MEDALLION_PLACED_SOUND, 0, 0);
         itemStatement(p, medal, "You give the medallion to the statue.");
-        if (placedCount(p) === 4) setStage(p, S.FINALE);
         syncNativeProgress(p);
         return true;
       }
@@ -7498,9 +7539,12 @@ module.exports = function registerDesertTreasureII(api) {
       killer.setAttribute(FINAL_FIGURE_STARTED, false);
       killer.setAttribute(FINAL_FIGURE_DEFEATED, true);
       killer.setAttribute(FINAL_CELL_ACTIVE, false);
+      // rsprox 1703: the medallion drops where she falls (dt2 92 -> 94) and is picked up (94 -> 96).
       const medallion = lastMedallion(killer);
-      if (medallion && !has(killer, medallion)) killer.getInventory().adds(medallion, 1);
-      killer.sendMessage("The Mysterious Figure falls. You recover the last medallion and can now return to the Ancient Vault.");
+      if (medallion && !has(killer, medallion)) {
+        api.getItemOnGroundManager?.()?.registerLocation?.(killer, new Item(medallion, 1), npc.getLocation?.());
+        killer.sendMessage(`<col=ef1020>Untradeable drop: ${CHAPTER_MEDALLION_NAMES[lastChapter(killer)]}</col>`);
+      }
       return;
     }
     if (owned.whisperer === npc && inChapter(killer, "whisperer")) {
@@ -7859,7 +7903,8 @@ module.exports = function registerDesertTreasureII(api) {
     let owned = spawned.get(p);
     if (!owned) spawned.set(p, owned = {});
     if (owned.finalFigure?.isRegistered?.()) return owned.finalFigure;
-    owned.finalFigure = api.spawnNpc({ id: N.MYSTERIOUS_FIGURE_4, x: 3086, y: 9260, z: 0, wanderRadius: 0, owner: p, ownerOnly: true });
+    // rsprox 1703: dt2_pursuer_hideout_combat (12301) at 3095,9260.
+    owned.finalFigure = api.spawnNpc({ id: N.MYSTERIOUS_FIGURE_5, x: 3095, y: 9260, z: 0, wanderRadius: 0, owner: p, ownerOnly: true });
     if (owned.finalFigure) {
       owned.finalFigure.setMaxHitpoints?.(450);
       owned.finalFigure.setHitpoints?.(450);
@@ -8238,12 +8283,13 @@ module.exports = function registerDesertTreasureII(api) {
       p.setAttribute(FINAL_CELL_ACTIVE, true);
       p.getInventory().deleteNumber(lastMedallion(p), 1);
       storeFinalCellGear(p);
-      p.moveTo(new api.core.Location(3103, 9246, 0));
+      p.moveTo(new api.core.Location(3105, 9247, 0)); // rsprox 1703
     }
     if (stepId === "NoRYcT" && p.getAttribute("desert-treasure-ii:first-medallion-meeting-pending")) {
       p.setAttribute("desert-treasure-ii:first-medallion-meeting-pending", false);
       enterVault(p);
     }
+    if (stepId === "lnBBaf" && inLastMedallionTrial(p) && p.getAttribute(FINAL_FIGURE_DEFEATED)) giveSmithLastMedallion(p);
     if (stage(p) === S.FINALE) {
       const actors = spawned.get(p) ?? {};
       if (stepId === "lnBBaf") {
@@ -8286,6 +8332,8 @@ module.exports = function registerDesertTreasureII(api) {
     if (stepId === "acAj3M" && p.getAttribute(FINAL_WIGHTS_COMPLETE)) {
       p.sendMessage("Sliske completes the spell and the Elder Horn vanishes in a burst of shadow.");
     }
+    if (stepId === "THImb4" && p.getAttribute(FINAL_WIGHTS_COMPLETE)) setFinalAftermath(p, 112);
+    if (stepId === "aP86Oy" && p.getAttribute(FINAL_WIGHTS_COMPLETE)) setFinalAftermath(p, 114);
     if (stepId === "xGIiPZ" && p.getAttribute(FINAL_WIGHTS_COMPLETE)) rewardFinalQuest(p);
     if (stepId === "4b6oDl" && inChapter(p, "leviathan") && p.getAttribute(SCAR_BOAT_TRIED)) {
       const area = p.getAttribute(ATTR_SCAR_AREA);
@@ -8860,8 +8908,8 @@ module.exports = function registerDesertTreasureII(api) {
   api.persistAttribute(STRANGLEWOOD_CITY_ENTERED);
   api.persistAttribute(ATTR_SMITH_INTRO);
   api.persistAttribute(STATUES_PLACED);
-  [MEDALLIONS_FOUND, BOSSES_STARTED, MEDALLION_ORDER, PURSUER_EVENTS].forEach((key) => api.persistAttribute(key, 0));
-  [STRANGLEWOOD_HERB_TAKEN, STRANGLEWOOD_BERRIES_TAKEN].forEach((key) => api.persistAttribute(key, false));
+  [MEDALLIONS_FOUND, BOSSES_STARTED, MEDALLION_ORDER, PURSUER_EVENTS, FINAL_AFTERMATH_PROGRESS].forEach((key) => api.persistAttribute(key, 0));
+  [STRANGLEWOOD_HERB_TAKEN, STRANGLEWOOD_BERRIES_TAKEN, REWARD_LAMP_USED].forEach((key) => api.persistAttribute(key, false));
   api.persistAttribute(ATTR_FIRST_MEDALLION_MEETING);
   [FINAL_CELL_ACTIVE, FINAL_CELL_SOLUTION, FINAL_CELL_GUESS, FINAL_CELL_ATTEMPTS, FINAL_CELL_OPEN, FINAL_CELL_GEAR,
     FINAL_CELL_CHEST, FINAL_FIGURE_STARTED, FINAL_FIGURE_DEFEATED, "desert-treasure-ii:final-cell-pending",

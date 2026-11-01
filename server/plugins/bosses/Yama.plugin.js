@@ -13,6 +13,7 @@ const Fight = require("./yama/Fight.Yama");
 const Flares = require("./yama/Flares.Yama");
 const Judge = require("./yama/Judge.Yama");
 const Lockbox = require("./yama/Lockbox.Yama");
+const Dossier = require("./yama/Dossier.Yama");
 
 module.exports = {
   name: "Yama",
@@ -26,6 +27,7 @@ module.exports = {
     Flares.attachFlares(api);
     Judge.attachJudge(api);
     Lockbox.attachLockbox(api);
+    Dossier.attachDossier(api);
     require("./yama/Commands.Yama")(api);
   },
 };

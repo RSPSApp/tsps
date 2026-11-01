@@ -46,6 +46,7 @@ opened, and none of a soft clay, sandworm or shark lure pack at all.
 | Reward stack over the limit | The rest lands under the player (`forceAdd`) | Matches Yama's lockbox; not captured |
 | A dialogue is open | Closed by the click, including on a refusal | Oyster click closing the casket box, recording 1102 |
 | Entrana main island | Hunter kit: "Some forms of Hunter gear are not appreciated by the monks." Spoils of War: "You can't open this on Entrana." Item kept | Wiki; the Spoils line is ours, as the Wiki gives none |
+| Dossier from 100 Yama victories | The first one gives the rite, unless one was already received. A rolled rite becomes 15-18 chasm teleport scrolls once received. A refused open doesn't use up the guarantee | [Wiki](https://oldschool.runescape.wiki/w/Rite_of_vile_transference), via `Dossier.Yama.js` |
 | Collection log | Rewards are logged by unnoted id: uncut onyx, chasm teleport scroll, rite | Wiki (onyx); cache log contents |
 
 ### Not confirmed by a capture
@@ -57,8 +58,10 @@ opened, and none of a soft clay, sandworm or shark lure pack at all.
 
 ### Known differences from OSRS
 
-- Dossier: the Rite of vile transference is a flat 1/15. The guarantee at 100 Yama kills and the
-  scroll replacement when already owned aren't modelled.
+- Dossier: reading the rite isn't built, so having received one stands in for the Wiki's "owned or
+  used" (`yama:rite-received`). A rite that is destroyed stays received. A player who received the
+  rite before 100 victories gets ordinary rolls from then on; the Wiki doesn't say whether their first
+  dossier after 100 is forced to scrolls.
 - Elemental rune pack: the Wiki's pack table says 50 of each rune and the cache examine says 100.
   The table is used; nothing sells this pack here.
 

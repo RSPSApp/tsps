@@ -12,6 +12,10 @@ const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const { Inventory } = require("../dist/game/model/container/impl/Inventory");
 const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
 const DATA = require("../plugins/items/data/openable-items.json");
+const YamaCommon = require("../plugins/bosses/yama/Common.Yama");
+const { attachDossier, RITE_RECEIVED_ATTRIBUTE } = require("../plugins/bosses/yama/Dossier.Yama");
+
+const persisted = [];
 
 const AIR_RUNE = 556;
 const BONES = 526;
@@ -20,6 +24,9 @@ before(() => {
   CachePipeline.initialize(path.resolve(__dirname, ".."));
   require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
   require("../plugins/items/OpenableItems.plugin").register(PluginManager.createApi("OpenableItems"));
+  const yamaApi = PluginManager.createApi("Yama");
+  YamaCommon.init(yamaApi);
+  attachDossier({ ...yamaApi, persistAttribute: (key, value) => persisted.push([key, value]) });
 });
 
 function playerWith(id, { fill = false, amount = 1 } = {}) {
@@ -30,6 +37,9 @@ function playerWith(id, { fill = false, amount = 1 } = {}) {
     isTeleportingReturn: () => false,
     getHitpoints: () => 10,
     messages: [],
+    attributes: new Map(),
+    getAttribute: (key) => player.attributes.get(key),
+    setAttribute: (key, value) => player.attributes.set(key, value),
     sounds: [],
     closes: 0,
     getLocation: () => player.location,
@@ -364,4 +374,89 @@ test("rewards reach the collection log unnoted, and the Spoils pet roll awards t
   } finally {
     Math.random = random;
   }
+});
+
+const CONTRACT = ItemIdentifiers.CONTRACT_OF_BLOODIED_BLOWS; // The table's first entry.
+const RITE = ItemIdentifiers.RITE_OF_VILE_TRANSFERENCE;
+const SCROLLS = ItemIdentifiers.CHASM_TELEPORT_SCROLL;
+const FIRST_ROLL = 0;
+const RITE_ROLL = (1416 + 50) / 1740; // Inside the table's rite band, after contracts and scrolls.
+
+function openDossier(player, roll) {
+  const random = Math.random;
+  Math.random = () => roll;
+  try {
+    return open(player, 30803);
+  } finally {
+    Math.random = random;
+  }
+}
+function dossierPlayer(victories, received) {
+  const player = playerWith(30803);
+  player.setAttribute("yama:success-count", victories);
+  if (received) player.setAttribute(RITE_RECEIVED_ATTRIBUTE, true);
+  return player;
+}
+
+test("the rite is guaranteed from 100 Yama victories, not at 99", () => {
+  const at99 = dossierPlayer(99, false);
+  openDossier(at99, FIRST_ROLL);
+  assert.equal(at99.getInventory().getAmount(RITE), 0);
+  assert.equal(at99.getInventory().getAmount(CONTRACT), 3);
+  assert.equal(at99.getAttribute(RITE_RECEIVED_ATTRIBUTE), undefined);
+
+  for (const victories of [100, 150]) {
+    const player = dossierPlayer(victories, false);
+    openDossier(player, FIRST_ROLL);
+    assert.equal(player.getInventory().getAmount(RITE), 1, `no rite at ${victories} victories`);
+    assert.equal(player.getInventory().getAmount(CONTRACT), 0);
+    assert.equal(player.getAttribute(RITE_RECEIVED_ATTRIBUTE), true);
+    assert.equal(player.messages[0], "You open the dossier and find rite of vile transference inside!");
+  }
+});
+
+test("only the first dossier from 100 victories is guaranteed", () => {
+  const player = dossierPlayer(100, false);
+  openDossier(player, FIRST_ROLL);
+  player.getInventory().setItem(0, player.getInventory().forSlot(7)); // Keep the rite clear of the next one.
+  player.getInventory().setItem(7, new Item(30803, 1));
+  openDossier(player, FIRST_ROLL);
+  assert.equal(player.getInventory().getAmount(RITE), 1);
+  assert.equal(player.getInventory().getAmount(CONTRACT), 3);
+});
+
+test("a player who already received the rite gets no guarantee, and a rolled rite becomes scrolls", () => {
+  const rolled = dossierPlayer(100, true);
+  openDossier(rolled, RITE_ROLL);
+  assert.equal(rolled.getInventory().getAmount(RITE), 0);
+  const amount = rolled.getInventory().getAmount(SCROLLS);
+  assert.ok(amount >= 15 && amount <= 18, `${amount} scrolls`);
+
+  const ordinary = dossierPlayer(100, true);
+  openDossier(ordinary, FIRST_ROLL);
+  assert.equal(ordinary.getInventory().getAmount(RITE), 0);
+  assert.equal(ordinary.getInventory().getAmount(CONTRACT), 3);
+});
+
+test("a rite rolled before 100 victories counts as received", () => {
+  const player = dossierPlayer(5, false);
+  openDossier(player, RITE_ROLL);
+  assert.equal(player.getInventory().getAmount(RITE), 1);
+  assert.equal(player.getAttribute(RITE_RECEIVED_ATTRIBUTE), true);
+});
+
+test("a refused dossier doesn't use up the guarantee", () => {
+  const player = fullExceptSlot7(30803);
+  player.setAttribute("yama:success-count", 100);
+  openDossier(player, FIRST_ROLL);
+  assert.equal(player.getInventory().getAmount(30803), 1);
+  assert.equal(player.getAttribute(RITE_RECEIVED_ATTRIBUTE), undefined);
+});
+
+test("receiving the rite is saved, starting false, and the rite reaches the collection log", () => {
+  assert.deepEqual(persisted, [[RITE_RECEIVED_ATTRIBUTE, false]]);
+  const seen = [];
+  PluginManager.createApi("RiteLogTest").onCustomEvent("collection-log:obtain", (request) => seen.push(request.itemId));
+  openDossier(dossierPlayer(100, false), FIRST_ROLL);
+  assert.ok(seen.includes(RITE));
 });

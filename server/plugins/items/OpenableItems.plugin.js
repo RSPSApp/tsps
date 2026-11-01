@@ -161,7 +161,10 @@ function openLoot(container, { player, item, itemId, slot }) {
     return;
   }
   takeOne(inventory, slot, item);
-  const rewards = container.tables.flatMap(rollTable)
+  const rolled = container.tables.flatMap(rollTable);
+  // The owning content can change a roll: Yama's dossier guarantee, in Dossier.Yama.js.
+  api.emitCustomEvent("openable-items:rolled", { player, name: container.name, tables: container.tables, rolled });
+  const rewards = rolled
     .map(({ item: name, amount, noted }) => rewardItem(name, randomInt(amount[0], amount[1]), noted));
   for (const reward of rewards) give(player, inventory, slot, reward);
   inventory.refreshItems();

@@ -7785,6 +7785,42 @@ test('Desert Treasure II meets the Mysterious Figure at the vault door with the 
   assert.equal(spawnedNpcs.length, 1, 'one meeting per medallion');
 });
 
+test('DT2 relog resumes the Scar only from its exit, so another chapter can be in progress', () => {
+  const { api: base, handlers } = mockApi();
+  class TestInstance {
+    constructor(width, height) { this.width = width; this.height = height; this.entities = []; }
+    setChunk() {} enter() {} leave() {} postLeave() {} add(npc) { this.entities.push(npc); } isDestroyed() { return false; } destroy() {}
+    getBaseX() { return 8192; } getBaseY() { return 1600; } tile(x, y, z) { return new base.core.Location(8192 + x, 1600 + y, z); }
+  }
+  const core = { ...base.core, TemplatedInstanceArea: TestInstance,
+    NPC: { create: (id, location) => ({ id, location, setOwner() {}, setOwnerOnly() {}, isNpc() { return true; }, getAsNpc() { return this; } }) },
+    World: { ...base.core.World, getAddNPCQueue: () => [], getRemoveNPCQueue: () => [] } };
+  const api = new Proxy(base, { get: (target, prop) => prop === 'core' ? core
+    : typeof target[prop] === 'function' ? target[prop].bind(target) : target[prop] });
+  require('../plugins/quests/quests/DesertTreasureII.Quest')(api);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().at(-1);
+  const attrs = new Map(), varbits = new Map();
+  const player = {
+    location: new api.core.Location(2975, 5794, 0), // Camdozaal, by Prescott
+    getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getUsername: () => 'dt2-scar-relog-test', getLocation() { return this.location; }, moveTo(location) { this.location = location; },
+    area: null, getArea() { return this.area; }, setArea(area) { this.area = area; },
+    getPrivateArea() { return this.area?.isPrivate?.() ? this.area : null; }, isPlayer: () => true, isNpc: () => false,
+    getInventory: () => ({ getAmount: () => 0 }), sendMessage() {},
+    getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, v) => varbits.set(id, v) : () => {} }),
+  };
+  quest.setStage(player, 7);
+  for (const key of ['scar-guardian-accepted', 'scar-demons-defeated', 'scar-boat-tried']) attrs.set(`desert-treasure-ii:${key}`, true);
+  const login = handlers.playerLogin.find(handler => handler.name === 'handleLogin');
+  login({ player });
+  assert.deepEqual([player.location.getX(), player.location.getY()], [2975, 5794], 'a login at Lassar stays at Lassar');
+  assert.equal(attrs.get('desert-treasure-ii:scar-area'), undefined);
+  assert.equal(varbits.get(15128), 10, 'the Scar varbit still goes out');
+  player.location = new api.core.Location(3610, 9473, 0); // where leaving the Scar puts the player
+  login({ player });
+  assert.ok(attrs.get('desert-treasure-ii:scar-area'), 'a login at the Scar exit resumes it');
+});
+
 test('Desert Treasure II moves saves at the old chapter stages onto the open chapters', () => {
   const { api, handlers } = mockApi();
   require('../plugins/quests/quests/DesertTreasureII.Quest')(api);
@@ -7884,8 +7920,15 @@ test('Desert Treasure II last medallion route traps the player, requires solving
       sendProjectile() { projectiles.push(this); }
     },
   };
+  // Floor items as ItemOnGroundManager keeps them; expire() is the 300-tick despawn.
+  const ground = { items: [],
+    getGroundItem(owner, id, position) { return this.items.find(item => item.owner === owner && item.id === id
+      && item.position.getX() === position.getX() && item.position.getY() === position.getY()) ?? null; },
+    registerLocation(player, item, position, _area, options) { this.items.push({ owner: player.getUsername(), id: item.getId(), position, options }); },
+    expire() { this.items.length = 0; } };
   const api = new Proxy(base, {
     get: (target, prop) => prop === 'core' ? core
+      : prop === 'getItemOnGroundManager' ? () => ground
       : prop === 'onObjectInteraction' ? (handler) => objectHooks.push(handler)
         : prop === 'onCustomEvent' ? (name, handler) => customEvents.push({ name, handler })
           : prop === 'onNpcDeath' ? (handler) => deathHooks.push(handler)
@@ -8149,8 +8192,22 @@ test('Desert Treasure II last medallion route traps the player, requires solving
     deathHooks[0]({ killer: p, npc: spawnedFigure });
     assert.equal(attrs.get('desert-treasure-ii:final-figure-defeated'), true);
     assert.equal(inventory.getAmount(core.ItemIdentifiers.WHISPERERS_MEDALLION), 0, 'the medallion drops where she falls');
+    assert.deepEqual(ground.items.map(item => [item.id, item.position.getX(), item.position.getY(), item.options?.goesGlobal]),
+      [[core.ItemIdentifiers.WHISPERERS_MEDALLION, 3091, 9261, false]], 'owner-only, at the captured tile');
     assert.equal(quest.varbitValue(7, p), 94);
+    p.location = new core.Location(3091, 9261, 0);
+    cellArea.process(p);
+    assert.equal(ground.items.length, 1, 'one drop at a time');
+    ground.expire();
+    cellArea.process(p);
+    assert.equal(ground.items.length, 1, 'an expired (or restart-lost) drop comes back, so the cell never traps the player');
+    p.location = new core.Location(3175, 2887, 0);
+    assert.equal(objectHooks[0]({ player: p, objectId: 49497, definition: { id: 48770 }, option: 'Use', location: { x: 3175, y: 2887, z: 0 } }), true);
+    assert.deepEqual([p.location.x, p.location.y], [3087, 9260], 'the desert portal leads back while the medallion is unclaimed');
+    ground.expire();
     inventory.adds(core.ItemIdentifiers.WHISPERERS_MEDALLION, 1);
+    cellArea.process(p);
+    assert.equal(ground.items.length, 0, 'no duplicate once it is carried');
     assert.equal(quest.varbitValue(7, p), 96, 'picking it up is dt2 96 (rsprox 1703)');
     assert.equal(objectHooks[0]({ player: p, objectId: 48767, definition: { id: 48767 }, option: 'Use', location: { x: 3104, y: 9266, z: 0 } }), true,
       'after the Figure yields her medallion, the native cell Portal leads back outside');

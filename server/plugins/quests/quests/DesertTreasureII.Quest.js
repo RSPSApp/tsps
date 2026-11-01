@@ -2651,6 +2651,7 @@ module.exports = function registerDesertTreasureII(api) {
         spawnFinalFigure(player);
       }
       processFinalFigureSpecial(player, spawned.get(player)?.finalFigure);
+      ensureLastMedallionDrop(player);
     }
     postLeave(actor) {
       if (!actor?.isPlayer?.()) return;
@@ -3919,6 +3920,24 @@ module.exports = function registerDesertTreasureII(api) {
 
   // Saves from before the meetings were counted only kept the first one.
   const pursuerMeetings = (p) => Math.max(Number(p.getAttribute(PURSUER_EVENTS)) || 0, p.getAttribute(ATTR_FIRST_MEDALLION_MEETING) ? 1 : 0);
+  // rsprox 1703 drops the medallion at 3091,9261 when the Figure dies. It is owner-only and,
+  // since the cell can't be left without it, comes back whenever it is gone unclaimed: the
+  // floor drop expired, or a restart or relog lost it. One drop at a time, none once carried.
+  const LAST_MEDALLION_DROP_TILE = [3091, 9261, 0];
+  function lastMedallionUnclaimed(p) {
+    return !!p && inLastMedallionTrial(p) && p.getAttribute(FINAL_FIGURE_DEFEATED) === true && !has(p, lastMedallion(p));
+  }
+  function ensureLastMedallionDrop(p) {
+    if (!lastMedallionUnclaimed(p)) return false;
+    const manager = api.getItemOnGroundManager?.();
+    if (!manager?.registerLocation) return false;
+    const medallion = lastMedallion(p);
+    const tile = new api.core.Location(...LAST_MEDALLION_DROP_TILE);
+    const privateArea = p.getPrivateArea?.() ?? null;
+    if (manager.getGroundItem?.(p.getUsername(), medallion, tile, privateArea)) return false;
+    manager.registerLocation(p, new Item(medallion, 1), tile, privateArea, { goesGlobal: false });
+    return true;
+  }
   const CHAPTER_MEDALLION_NAMES = {
     vardorvis: "Vardorvis' medallion", leviathan: "Perseriya's medallion", sucellus: "Sucellus' medallion", whisperer: "Whisperer's medallion",
   };
@@ -3955,13 +3974,17 @@ module.exports = function registerDesertTreasureII(api) {
     owned.vaultPursuer = null;
     p.getPacketSender().sendEntityHintRemoval?.(false);
   }
-  function atSucellusExit(p) {
+  // Logging out of a chapter's instance leaves the player at its exit (instanceExit), and
+  // recoverFromLostInstance does the same after a restart: only a login there resumes it.
+  const SUCELLUS_EXIT = [2927, 10353, 0], SCAR_EXIT = [3610, 9473, 0];
+  function atInstanceExit(p, [ex, ey, ez]) {
     const location = p.getLocation?.();
     const x = location?.getX?.() ?? location?.x;
     const y = location?.getY?.() ?? location?.y;
     const z = location?.getZ?.() ?? location?.z ?? 0;
-    return z === 0 && Math.abs(x - 2927) <= 3 && Math.abs(y - 10353) <= 3;
+    return z === ez && Math.abs(x - ex) <= 3 && Math.abs(y - ey) <= 3;
   }
+  const atSucellusExit = (p) => atInstanceExit(p, SUCELLUS_EXIT);
   function handleLogin({ player: p }) {
     migrateChapterStage(p);
     recoverFromLostInstance(p);
@@ -4058,6 +4081,9 @@ module.exports = function registerDesertTreasureII(api) {
         p.getPacketSender().sendVarbit(SCAR_GROWTH_STEP_VARBIT, Number(p.getAttribute(SCAR_GROWTH_STEP)) || 0);
       }
     }
+    // The varbits above go out wherever the player is; the Scar itself only resumes at its exit,
+    // since another chapter may be in progress elsewhere.
+    if (!atInstanceExit(p, SCAR_EXIT)) return;
     if (p.getAttribute(SCAR_BOAT_TRIED) && !p.getAttribute(ATTR_SCAR_AREA)) enterScar(p);
     if (p.getAttribute(SCAR_LEVIATHAN_KILLED)) {
       enterLeviathanArea(p);
@@ -5747,8 +5773,9 @@ module.exports = function registerDesertTreasureII(api) {
     }
     if (visibleId === FINAL_FIGURE_RETURN_PORTAL && location?.x === 3175 && location?.y === 2887
       && location?.z === 0 && option === "use") {
-      if (!inLastMedallionTrial(p) || !p.getAttribute(FINAL_CELL_ACTIVE)
-        || !p.getAttribute(FINAL_FIGURE_STARTED) || p.getAttribute(FINAL_FIGURE_DEFEATED)) {
+      const unclaimed = lastMedallionUnclaimed(p);
+      if (!unclaimed && (!inLastMedallionTrial(p) || !p.getAttribute(FINAL_CELL_ACTIVE)
+        || !p.getAttribute(FINAL_FIGURE_STARTED) || p.getAttribute(FINAL_FIGURE_DEFEATED))) {
         p.sendMessage("The portal is sealed until the Mysterious Figure's cell trial is active.");
         return true;
       }
@@ -7561,9 +7588,7 @@ module.exports = function registerDesertTreasureII(api) {
       killer.setAttribute(FINAL_FIGURE_DEFEATED, true);
       killer.setAttribute(FINAL_CELL_ACTIVE, false);
       // rsprox 1703: the medallion drops where she falls (dt2 92 -> 94) and is picked up (94 -> 96).
-      const medallion = lastMedallion(killer);
-      if (medallion && !has(killer, medallion)) {
-        api.getItemOnGroundManager?.()?.registerLocation?.(killer, new Item(medallion, 1), npc.getLocation?.());
+      if (ensureLastMedallionDrop(killer)) {
         killer.sendMessage(`<col=ef1020>Untradeable drop: ${CHAPTER_MEDALLION_NAMES[lastChapter(killer)]}</col>`);
       }
       return;

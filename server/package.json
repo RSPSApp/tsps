@@ -46,6 +46,7 @@
     "test:projectile-origin": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/projectile-origin-smoke.ts",
     "test:agent-mcp": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/agent-mcp-smoke.ts",
     "dump:cs2": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-cs2.ts",
+    "generate:clan-permissions": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/generate-clan-permissions.ts",
     "dump:enum": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-enum.ts",
     "dump:seq": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-seq.ts",
     "dump:loc": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/dump-loc.ts",

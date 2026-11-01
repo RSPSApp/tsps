@@ -116,6 +116,15 @@ function player(name) {
         return this;
       },
       isSubInterfaceOpen: (group) => self.mounted.includes(group),
+      sendChatboxInterface(group) {
+        self.chatbox = group;
+        return this;
+      },
+      isChatboxInterface: (group) => self.chatbox === group,
+      closeInterface(group) {
+        if (self.chatbox === group) self.chatbox = -1;
+        return this;
+      },
       sendInterfaceFlagsRange(uid, start, end, flags) {
         self.flags = [uid, flags];
         return this;
@@ -227,7 +236,8 @@ beforeEach(() => {
       Task,
       TaskManager,
       PlayerRights,
-      ItemIdentifiers: { CLAN_CLOAK: 25712, CLAN_VEXILLUM: 25721, COINS: 995 },
+      ItemIdentifiers: require('../dist/util/ItemIdentifiers').ItemIdentifiers,
+      NpcIdentifiers: require('../dist/util/NpcIdentifiers').NpcIdentifiers,
       Skill: { values: () => [{ id: 0 }, { id: 1 }] },
       CacheDefinitions: {
         getEnumValues: (id) => new Map(id === 3799 ? [[0, 500]] : id === 3792 ? [[-1, 'x'], [0, 'F2P'], [5, 'PvP']] : [[-1, 'x'], [0, `A${id}`], [1, `B${id}`]]),
@@ -296,6 +306,11 @@ beforeEach(() => {
         }
       },
       ItemDefinition: { forId: (id) => ({ getName: () => `Item ${id}`, getValue: () => id, isTradeable: () => id !== UNTRADEABLE }) },
+      StatementDialogue: class {
+        constructor(index, text) {
+          this.text = text;
+        }
+      },
       DialogueChainBuilder: class {
         add(dialogue) {
           return dialogue;
@@ -341,6 +356,7 @@ beforeEach(() => {
     emitCustomEvent: (name, payload) => {
       hooks.emitted.push([name, payload]);
       if (name === 'ironman:mode') payload.mode = payload.player.ironman ?? 'none';
+      if (name === 'bank-pin:guard' && payload.player.pinLocked) payload.locked = true;
       // SideChannels mounting the panel at once, as it does when the tab is up.
       if (name === 'side-channels:replace-your-clan') payload.onMount?.();
     },
@@ -827,9 +843,14 @@ test('Members opens with its op flags and combat and total columns by slot (2896
   clickGroup(owner, 690, 20);
   assert.equal(owner.mounted.at(-1), 693);
   assert.equal(owner.configs.get(3021), 16646144);
-  assert.deepEqual(owner.scripts.find((script) => script[0] === 4257), [4257, '105|3|3']);
-  assert.deepEqual(owner.scripts.find((script) => script[0] === 4258), [4258, '1724|32|32']);
+  assert.deepEqual(owner.scripts.find((script) => script[0] === 4257), [4257, '105|3|3|'], 'a "|" after each slot, as 2778 has 47 for 47 members');
+  assert.deepEqual(owner.scripts.find((script) => script[0] === 4258), [4258, '1724|32|32|']);
   assert.equal(clan.members.length, 3);
+  const flags = [];
+  const sender = owner.getPacketSender;
+  owner.getPacketSender = () => ({ ...sender(), sendInterfaceFlagsRange(uid) { flags.push(uid & 0xffff); return this; }, sendConfig() { return this; }, sendSubInterface() { return this; }, sendClientScript() { return this; }, sendString() { return this; } });
+  clickGroup(owner, 690, 20);
+  assert.deepEqual(flags, [19, 20, 11, 13], 'not the name list, as 2778');
 });
 
 test('a rank is set through the popup, answered with rank + 1, as a delta (3086)', () => {
@@ -1080,7 +1101,7 @@ test('titles open from the settings, take the client\'s edits, and save', () => 
 test('Rename, Talk and Guests rows work for those allowed', () => {
   const { owner, member, clan } = clanOfThree();
   clickGroup(member, 690, 11);
-  assert.match(member.messages.at(-1), /Only the clan's owner/);
+  assert.match(member.messages.at(-1), /use Report/);
   clickGroup(owner, 690, 11);
   owner.syntaxAction.execute('Renamed');
   assert.equal(clan.name, 'Renamed');
@@ -1090,6 +1111,11 @@ test('Rename, Talk and Guests rows work for those allowed', () => {
   assert.equal(clan.allowGuests, false);
   clickGroup(member, 690, 16);
   assert.equal(clan.allowGuests, false);
+  clan.members[1].rank = 125;
+  clan.permissions = { ...clan.permissions, 12: 125 };
+  clickGroup(member, 690, 16);
+  assert.equal(clan.allowGuests, false, 'a Deputy Owner with Permission access, as 2895');
+  assert.match(member.messages.at(-1), /Only the clan's owner/);
   clickGroup(owner, 690, 15);
   owner.amountAction.execute(1);
   assert.equal(clan.talkRank, 0);
@@ -1121,7 +1147,53 @@ test('Find asks as rsprox 76 does, and says when nothing is found', () => {
   clickGroup(self, 702, 10);
   assert.deepEqual(self.scripts.at(-1), [110, 'Type the name of a clan to seek:', 7]);
   self.syntaxAction.execute('nothing');
-  assert.equal(self.messages.at(-1), 'No clan could be found with that name.');
+  assert.equal(self.dialogue.text, 'No clan could be found with that name.');
+  assert.deepEqual(self.notices, [[115, 'No clan could be found with that name.']]);
+  assert.deepEqual(self.messages, [], 'the box and its log line, no game message as well');
+  assert.deepEqual(self.sounds, [2277]);
+});
+
+test('anyone but the owner sees Report and read-only Talk and Guests rows (2895, 3084)', () => {
+  const { owner, member } = clanOfThree();
+  const rowsOf = (self) => self.scripts.filter((script) => script[0] === 4290);
+  clickGroup(member, 701, 9);
+  const rows = rowsOf(member);
+  assert.match(rows[0][1], /|Report$/);
+  assert.deepEqual(rows.map((row) => row[3]), [1, 1, 1, 0, 0], 'name, home world, interests, then talk and guests');
+  assert.deepEqual(member.hidden[1], true);
+  clickGroup(owner, 701, 9);
+  assert.deepEqual(rowsOf(owner).map((row) => row[3]), [1, 1, 1, 1, 1, 1]);
+});
+
+test('Settings redraws every 6 ticks while it is open, and one loop however often it opens (2778)', () => {
+  const { owner } = clanOfThree();
+  const draws = () => owner.scripts.filter((script) => script[0] === 4289).length;
+  clickGroup(owner, 701, 9);
+  assert.equal(draws(), 1);
+  runTicks(5);
+  assert.equal(draws(), 1);
+  runTicks(1);
+  assert.equal(draws(), 2);
+  clickGroup(owner, 701, 9);
+  assert.equal(draws(), 3);
+  runTicks(6);
+  assert.equal(draws(), 4, 'the earlier loop has stopped');
+  owner.mounted = [];
+  runTicks(12);
+  assert.equal(draws(), 4, 'closed');
+});
+
+test('a PIN not yet entered comes before Settings, and resume opens it (2778)', () => {
+  const owner = player('Owner');
+  createClan(owner);
+  owner.pinLocked = true;
+  click(owner, 9);
+  const guard = hooks.emitted.filter(([name]) => name === 'bank-pin:guard').at(-1)[1];
+  assert.equal(guard.feature, 'clan-info');
+  assert.equal(owner.mounted.includes(690), false);
+  guard.resume();
+  assert.equal(owner.mounted.at(-1), 690);
+  assert.equal(require('../plugins/interface/data/bank-pin.json').guardTitles['clan-info'], 'Clan Info');
 });
 
 test('finding a clan fetches, brings the tab up, then loads it as the listened clan', () => {
@@ -1234,8 +1306,15 @@ const pause = (self, groupId, childId, action) => {
 
 test('Applicants open with pause flags and empty rows (2778)', () => {
   const { owner } = clanOfThree();
+  clickGroup(owner, 701, 9);
   clickGroup(owner, 690, 21);
-  assert.equal(owner.mounted.at(-1), 699);
+  assert.equal(owner.closedSub, (161 << 16) | 16, '690 goes');
+  assert.equal(owner.chatbox, 293);
+  assert.equal(owner.scripts.at(-1).at(-1), 'Fetching your clan data...');
+  assert.equal(owner.mounted.at(-1), 663);
+  runTicks(1);
+  assert.equal(owner.chatbox, -1);
+  assert.equal(owner.mounted.at(-1), 699, 'a tick on, as 2778 tick 73 to 74');
   assert.deepEqual(owner.scripts.filter((script) => script[0] === 4375).at(-1), [4375, '']);
   assert.equal(owner.scripts.filter((script) => script[0] === 4376).length, 20);
 });
@@ -1247,6 +1326,8 @@ test('inviting flips clan_i_am_recruiter for the clan with the captured line (27
   assert.equal(owner.varbits.get(12170), 1);
   assert.equal(member.varbits.get(12170), 1);
   assert.deepEqual(owner.notices.at(-1), [115, "You are now inviting applications to this clan. Remember to turn this option off when you've finished!"]);
+  assert.equal(owner.dialogue.text, "You are now inviting applications to this clan.<br>Remember to turn this option off when you've finished!");
+  assert.equal(owner.closedSub, (161 << 16) | 16, 'the box replaces 699');
   const low = pause(member, 699, 1, 4);
   assert.equal(low.handled, true);
   assert.equal(clan.inviting, true, 'rank 0 cannot');
@@ -1267,6 +1348,7 @@ test('a guest applies from Info; the recruiters hear; accept adds them with the 
   assert.equal(self.varbits.get(12166), 1);
   assert.equal(owner.messages.at(-1), 'Guest has applied to join your clan.');
   clickGroup(owner, 690, 21);
+  runTicks(1);
   assert.deepEqual(owner.scripts.filter((script) => script[0] === 4376).at(-20), [4376, 0, 'Guest']);
   pause(owner, 699, 11, 0);
   assert.deepEqual(owner.scripts.at(-1), [4375, 'Guest|87|1275|1|1']);
@@ -1326,10 +1408,16 @@ test('minimums block applying, and the board lists clans that are inviting (2778
   assert.equal(self.scripts.find((script) => script[0] === 4357)[2], '');
 });
 
-test('the board\'s My clan opens Applicants with the captured nudge (2778)', () => {
+test('the board\'s My clan nudges with a box and closes the board, or fetches Applicants when inviting (2778)', () => {
   const { owner } = clanOfThree();
   pause(owner, 700, 1, 0);
   assert.deepEqual(owner.notices.at(-1), [115, "You should start inviting applications first. Remember to turn this option off when you've finished!"]);
+  assert.equal(owner.dialogue.text, "You should start inviting applications first.<br>Remember to turn this option off when you've finished!");
+  assert.equal(owner.mounted.includes(699), false);
+  assert.equal(owner.closedSub, (161 << 16) | 16);
+  StoreClans().byName('Blur').inviting = true;
+  pause(owner, 700, 1, 0);
+  runTicks(1);
   assert.equal(owner.mounted.at(-1), 699);
   const self = player('Guest');
   pause(self, 700, 1, 0);
@@ -1337,6 +1425,7 @@ test('the board\'s My clan opens Applicants with the captured nudge (2778)', () 
   pause(self, 700, 1, 2);
   assert.equal(self.mounted.at(-1), 700, 'Refresh');
   pause(owner, 700, 1, 1);
+  runTicks(1);
   assert.equal(owner.mounted.at(-1), 699, 'Applicants');
 });
 
@@ -1625,6 +1714,12 @@ test('an online applicant isn\'t accepted past the member cap, and stays an appl
   assert.equal(owner.messages.at(-1), 'Your clan is full.');
   assert.equal(clan.members.length, 500);
   assert.equal(clan.applicants.length, 1);
+});
+
+test("the hall's staff are its own, by the identifiers' names", () => {
+  const { owner } = clanOfThree();
+  inHall(owner);
+  assert.deepEqual(hooks.spawned.map((npc) => npc.id), [10734, 11651, 10739, 10748, 10756]);
 });
 
 test('a hall that refuses its visitor spawns nothing', () => {

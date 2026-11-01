@@ -16,6 +16,7 @@ const INTERESTS_GROUP = 691;
 const INTERESTS_LIST_UID = (INTERESTS_GROUP << 16) | 7;
 const INTERESTS_SCRIPT = 4263; // clan_interests(popup)
 const INTERESTS_SETTING = 7; // rsprox 3886 has 65535
+const INTERESTS_ENUM = 3792;
 const LAST_INTEREST = 15;
 const PROFILE_SETTING = 13; // Edit public profile
 
@@ -30,6 +31,7 @@ const EVENTS_CREATE = 5;
 const EVENTS_EDIT = 6;
 const EVENTS_LIST = 9;
 const EVENTS_EXIT = 21;
+const EDITING_EVENTS_ATTRIBUTE = "clans:editing-events";
 const EVENTS_ROW_SCRIPT = 4407; // clan_events_addevent(slot, canEdit, rank, ?, fields)
 const MAX_EVENTS = 10; // the list script's rows
 const ORGANISE_EVENTS_SETTING = 21;
@@ -153,7 +155,7 @@ function clickInterests(event) {
 }
 
 function interestNames(clan) {
-  const names = enumEntries(3792);
+  const names = enumEntries(INTERESTS_ENUM);
   const held = Core.settingValue(clan, INTERESTS_SETTING);
   return names.filter(([id]) => (held >> id) & 1).map(([, name]) => name);
 }
@@ -181,26 +183,27 @@ function openOutfit(player, clan) {
 }
 
 /** Wiki: Clan cloak and Clan vexillum, in the motif's colour order. */
-const CLOAKS = [25712, 25714, 25715, 25716, 25717, 25718, 25719, 25720];
-const VEXILLA = [25721, 25723, 25724, 25725, 25726, 25727, 25728, 25729];
+const COLOUR_SUFFIXES = ["", "_3", "_4", "_5", "_6", "_7", "_8", "_9"];
+const cloaks = () => COLOUR_SUFFIXES.map((suffix) => core.ItemIdentifiers[`CLAN_CLOAK${suffix}`]);
+const vexilla = () => COLOUR_SUFFIXES.map((suffix) => core.ItemIdentifiers[`CLAN_VEXILLUM${suffix}`]);
 const COLOUR_SHIFT = 20;
 const COLOUR_MASK = 0x3ff;
 
 function colourIndex(clan) {
   const stored = (Core.settingValue(clan, OUTFIT_SETTING) >> COLOUR_SHIFT) & COLOUR_MASK;
-  return Math.max(0, Math.min(CLOAKS.length - 1, stored - 1));
+  return Math.max(0, Math.min(COLOUR_SUFFIXES.length - 1, stored - 1));
 }
 
 function cloakFor(clan) {
-  return CLOAKS[colourIndex(clan)];
+  return cloaks()[colourIndex(clan)];
 }
 
 function vexillumFor(clan) {
-  return VEXILLA[colourIndex(clan)];
+  return vexilla()[colourIndex(clan)];
 }
 
 function isVexillum(id) {
-  return VEXILLA.includes(id);
+  return vexilla().includes(id);
 }
 
 /** Swaps what a member carries and wears for the clan's colour. */
@@ -209,7 +212,7 @@ function wearColours(player, clan) {
     let changed = false;
     container.getItems().forEach((item, slot) => {
       const id = item?.getId?.();
-      const wanted = CLOAKS.includes(id) ? cloakFor(clan) : VEXILLA.includes(id) ? vexillumFor(clan) : id;
+      const wanted = cloaks().includes(id) ? cloakFor(clan) : isVexillum(id) ? vexillumFor(clan) : id;
       if (wanted !== id) {
         container.setItem(slot, new core.Item(wanted, item.getAmount()));
         changed = true;
@@ -443,8 +446,8 @@ function clickEvents(event) {
   else if (!canOrganise(player, clan)) player.sendMessage("You are not a high enough rank to organise events.");
   else if (childId === EVENTS_CREATE) openForm(player, clan);
   else if (childId === EVENTS_EDIT) {
-    const editing = player.getAttribute("clans:editing-events") !== true;
-    player.setAttribute("clans:editing-events", editing);
+    const editing = player.getAttribute(EDITING_EVENTS_ATTRIBUTE) !== true;
+    player.setAttribute(EDITING_EVENTS_ATTRIBUTE, editing);
     player.getPacketSender().sendVarbit(EDITING_PERMITTED_VARBIT, editing ? 1 : 0);
     openEvents(player, clan);
   } else if (childId === EVENTS_LIST) {

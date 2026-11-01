@@ -15,7 +15,6 @@ const OP1_FLAG = 1 << 1;
 
 const MEMBERS_GROUP = 693;
 const members = (child) => (MEMBERS_GROUP << 16) | child;
-const MEMBER_NAME_LIST = 10;
 const MEMBER_COLUMN_1 = 11;
 const MEMBER_COLUMN_2 = 13;
 const MEMBER_HEADER_OPTIONS_1 = 19;
@@ -98,14 +97,17 @@ function showRankPopup(player, title, current, min, max, canExpel, popupUid, onC
 
 // ---------------------------------------------------------------- Members
 
-/** One value per member slot, for those online; the columns read them by slot (rsprox 2896 tick 21). */
+/**
+ * Each member slot's value then a "|", blank for those offline. Field N is slot N: in rsprox 2778
+ * Z-Kris is member 1 and has field 1, so a string starting "|" is just slot 0 being offline.
+ */
 function memberColumn(clan, valueOf) {
   return clan.members
     .map((member) => {
       const player = Core.onlinePlayer(member.account);
-      return player ? valueOf(player) : "";
+      return `${player ? valueOf(player) : ""}|`;
     })
-    .join("|");
+    .join("");
 }
 
 function sendMemberColumns(player, clan) {
@@ -123,8 +125,7 @@ function openMembers(player, clan) {
     .sendInterfaceFlagsRange(members(MEMBER_HEADER_OPTIONS_1), 1, LAST_HEADER_OPTION, OP1_FLAG)
     .sendInterfaceFlagsRange(members(MEMBER_HEADER_OPTIONS_2), 1, LAST_HEADER_OPTION, OP1_FLAG)
     .sendInterfaceFlagsRange(members(MEMBER_COLUMN_1), 0, LAST_MEMBER_SLOT, OP1_FLAG)
-    .sendInterfaceFlagsRange(members(MEMBER_COLUMN_2), 0, LAST_MEMBER_SLOT, OP1_FLAG)
-    .sendInterfaceFlagsRange(members(MEMBER_NAME_LIST), 0, LAST_MEMBER_SLOT, OP1_FLAG);
+    .sendInterfaceFlagsRange(members(MEMBER_COLUMN_2), 0, LAST_MEMBER_SLOT, OP1_FLAG);
   sendMemberColumns(player, clan);
   sender.sendString("Use the drop-down menus above to choose what data to see.", members(MEMBER_COMMENT));
 }
@@ -164,7 +165,7 @@ function chooseRankFilter(player, varbit, offset, rank) {
 function clickMembers(player, clan, event) {
   const { childId, slot } = event;
   if (childId === MEMBER_EXIT) openSettings(player);
-  else if (childId === MEMBER_COLUMN_1 || childId === MEMBER_COLUMN_2 || childId === MEMBER_NAME_LIST) clickMemberRow(player, clan, slot);
+  else if (childId === MEMBER_COLUMN_1 || childId === MEMBER_COLUMN_2) clickMemberRow(player, clan, slot);
   else if (childId === MEMBER_MIN_RANK) {
     showRankPopup(player, "Show ranks from:", -1, -1, Core.RANK_OWNER, false, members(MEMBER_POPUP),
       (rank) => chooseRankFilter(player, MIN_RANK_FILTER_VARBIT, 0, rank));

@@ -59,6 +59,15 @@ const LAST_BOARD_ENTRY = 89;
 const LAST_BOARD_FILTER = 15;
 const LAST_BOARD_BUTTON = 3;
 const MODAL_UID = (161 << 16) | 16;
+/** A messagebox's line goes in the chat log too, as this type (rsprox 2778 tick 67, 76 tick 7508). */
+const MESSAGEBOX_LOG_TYPE = 115;
+const NOT_FOUND_SOUND = 2277; // rsprox 76 tick 7508
+/** "Fetching your clan data...": the chatbox's 293 with the spinner 663 in it (rsprox 2778 tick 73). */
+const CHATBOX_CLEAR_SCRIPT = 2379;
+const FETCH_LAYER_GROUP = 293;
+const FETCH_SPINNER_GROUP = 663;
+const FETCH_SPINNER_SCRIPT = 4217;
+const FETCH_SPINNER_GRAPHIC = 3787;
 const uid = (group, child) => (group << 16) | child;
 
 let core = null;
@@ -77,6 +86,13 @@ function init(apiCore, schedule, openSettings, interestNames, dateText) {
   runeDateText = dateText;
 }
 
+/** Over whatever is in the chatbox, with its line logged; <br> is only for the box. */
+function messageBox(player, text) {
+  const { DialogueChainBuilder, StatementDialogue } = core;
+  player.getPacketSender().sendTypedMessage(MESSAGEBOX_LOG_TYPE, text.replace(/<br>/g, " "));
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+}
+
 // ---------------------------------------------------------------- finding a clan
 
 function askFind(player) {
@@ -87,8 +103,8 @@ function askFind(player) {
 function find(player, name) {
   const clan = name ? Store.byName(name) : undefined;
   if (!clan) {
-    player.getPacketSender().sendTypedMessage(115, "No clan could be found with that name.");
-    player.sendMessage("No clan could be found with that name.");
+    player.getPacketSender().sendSound(NOT_FOUND_SOUND, 255, 0);
+    messageBox(player, "No clan could be found with that name.");
     return;
   }
   viewClan(player, clan);
@@ -235,6 +251,22 @@ function openApplicants(player, clan) {
   }
 }
 
+/** Settings' Applications and the board's buttons: the screen goes, and Applicants comes a tick on. */
+function fetchApplicants(player, clan) {
+  const sender = player.getPacketSender();
+  sender.sendClientScript(CHATBOX_CLEAR_SCRIPT);
+  sender.closeSubInterface(MODAL_UID);
+  sender.sendChatboxInterface(FETCH_LAYER_GROUP);
+  sender.sendSubInterface(uid(FETCH_LAYER_GROUP, 2), FETCH_SPINNER_GROUP, 1);
+  sender.sendClientScript(FETCH_SPINNER_SCRIPT, uid(FETCH_LAYER_GROUP, 2), uid(FETCH_LAYER_GROUP, 1), FETCH_SPINNER_GRAPHIC, 10, 1000, 3000, 512, 1024, 0, 3, "Fetching your clan data...");
+  later(FETCH_TICKS, () => {
+    // Walking off closes the chatbox, and with it this.
+    if (!Core.isOnline(player) || !player.getPacketSender().isChatboxInterface(FETCH_LAYER_GROUP)) return;
+    player.getPacketSender().closeInterface(FETCH_LAYER_GROUP);
+    if (Core.clanOf(player) === clan) openApplicants(player, clan);
+  });
+}
+
 function settleApplicant(player, clan, accept) {
   const chosen = selectedApplicant.get(player);
   if (!chosen || !(clan.applicants ?? []).includes(chosen)) return;
@@ -304,9 +336,10 @@ function toggleInviting(player, clan) {
   for (const member of clan.members) {
     Core.onlinePlayer(member.account)?.getPacketSender().sendVarbit(Core.RECRUITER_VARBIT, clan.inviting ? 1 : 0);
   }
-  player.getPacketSender().sendTypedMessage(115, clan.inviting
-    ? "You are now inviting applications to this clan. Remember to turn this option off when you've finished!"
+  messageBox(player, clan.inviting
+    ? "You are now inviting applications to this clan.<br>Remember to turn this option off when you've finished!"
     : "You are no longer inviting applications to this clan.");
+  player.getPacketSender().closeSubInterface(MODAL_UID);
 }
 
 // ---------------------------------------------------------------- the recruitment board
@@ -377,9 +410,9 @@ function clickBoard(event) {
     const clan = Core.clanOf(player);
     if (!clan) player.sendMessage("You are not in a clan.");
     else if (!clan.inviting) {
-      player.getPacketSender().sendTypedMessage(115, "You should start inviting applications first. Remember to turn this option off when you've finished!");
-      openApplicants(player, clan);
-    } else openApplicants(player, clan);
+      messageBox(player, "You should start inviting applications first.<br>Remember to turn this option off when you've finished!");
+      player.getPacketSender().closeSubInterface(MODAL_UID);
+    } else fetchApplicants(player, clan);
   } else if (childId === BOARD_BUTTONS && action === BOARD_REFRESH) {
     openBoard(player);
   } else if (childId === BOARD_BUTTONS && action === BOARD_RESET) {
@@ -389,7 +422,7 @@ function clickBoard(event) {
     clickFilter(player, action);
   } else if (childId === BOARD_BUTTONS && action === BOARD_APPLICANTS) {
     const clan = Core.clanOf(player);
-    if (clan) openApplicants(player, clan);
+    if (clan) fetchApplicants(player, clan);
     else player.sendMessage("You are not in a clan.");
   } else if (childId === BOARD_LIST) {
     const clan = boardClans(player)[Math.floor(action / 2)];
@@ -406,6 +439,7 @@ module.exports = {
   clickBoard,
   clickGuestPanel,
   discard,
+  fetchApplicants,
   guestRefusal,
   init,
   openApplicants,

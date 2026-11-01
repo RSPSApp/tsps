@@ -39,12 +39,17 @@ const EDITABLE_ROW_SCRIPT = 4290; // clan_info_editable
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const RUNE_DAY_EPOCH_MS = Date.UTC(2002, 1, 27);
 const DAY_MS = 86400000;
+const REFRESH_TICKS = 6; // rsprox 2778 ticks 42, 48; 133, 139, 145, 151
 
 let core = null;
+let later = null;
 const guestView = new WeakSet();
+/** Each player's latest refresh loop, so reopening the screen doesn't start a second one. */
+const refreshLoops = new WeakMap();
 
-function init(apiCore) {
+function init(apiCore, schedule) {
   core = apiCore;
+  later = schedule;
 }
 
 const highlight = (text) => `<col=ffb83f>${text}</col>`;
@@ -60,24 +65,28 @@ function ownershipRow(clan, now) {
   return `Ownership:|You are resigning: ${highlight(`${days} days`)} left. ${highlight("Click here")} to stay.|Resignation`;
 }
 
-/** The rows in rsprox 2778's order; the last argument is -1, or 0 for the checkbox row. */
+/**
+ * The rows in rsprox 2778's order; the last argument is -1, or 0 for the checkbox row. For anyone but
+ * the owner the name offers Report, and Talk and Guests are 0, not editable (2895 and 3084, a Deputy
+ * Owner, even with Permission access at their rank).
+ */
 function draw(player, clan) {
   const sender = player.getPacketSender();
-  const row = (text, child, last = -1) => sender.sendClientScript(EDITABLE_ROW_SCRIPT, text, uid(child), 1, last);
-  const isOwner = Core.memberOf(clan, Core.accountOf(player))?.rank === Core.RANK_OWNER;
+  const row = (text, child, last = -1, editable = 1) => sender.sendClientScript(EDITABLE_ROW_SCRIPT, text, uid(child), editable, last);
+  const owner = isOwner(player, clan);
   sender.sendClientScript(
     STATIC_ROWS_SCRIPT,
     "Clan Size:<br>Owner:<br>Creation Date:",
     [clan.members.length, Core.ownerOf(clan)?.name ?? "", runeDateText(clan.creationTime)].map(highlight).join("<br>"),
   );
-  row(`Name:|${highlight(clan.name)}|Rename`, NAME_ROW);
+  row(`Name:|${highlight(clan.name)}|${owner ? "Rename" : "Report"}`, NAME_ROW);
   row("Home World:|---", HOME_WORLD_ROW);
-  sender.sendInterfaceDisplayState(uid(RESIGN_ROW), !isOwner);
-  if (isOwner) row(ownershipRow(clan, Date.now()), RESIGN_ROW);
+  sender.sendInterfaceDisplayState(uid(RESIGN_ROW), !owner);
+  if (owner) row(ownershipRow(clan, Date.now()), RESIGN_ROW);
   const interests = Screens.interestNames(clan);
   row(`Interests:|${interests.length ? interests.map(highlight).join(", ") : highlight("None")}`, INTERESTS_ROW);
-  row(`Talk in chat:|${highlight(rankName(clan.talkRank))}`, TALK_ROW);
-  row(`Guests may listen in chat:|${highlight(clan.allowGuests ? "Permitted" : "Not permitted")}`, GUESTS_ROW, 0);
+  row(`Talk in chat:|${highlight(rankName(clan.talkRank))}`, TALK_ROW, -1, owner ? 1 : 0);
+  row(`Guests may listen in chat:|${highlight(clan.allowGuests ? "Permitted" : "Not permitted")}`, GUESTS_ROW, 0, owner ? 1 : 0);
 }
 
 /** Only what a new clan's own Talk row can be set to without the title lookup the client does. */
@@ -89,6 +98,19 @@ function rankName(rank) {
   return `Rank ${rank}+`;
 }
 
+/** Live redraws the rows and the resign row's hide while the screen is up. */
+function keepDrawn(player, loop = {}) {
+  refreshLoops.set(player, loop);
+  later(REFRESH_TICKS, () => {
+    if (refreshLoops.get(player) !== loop || !Core.isOnline(player)) return;
+    if (!player.getPacketSender().isSubInterfaceOpen(SETTINGS_GROUP)) return;
+    const clan = guestView.has(player) ? Core.guestClanOf(player) : Core.clanOf(player);
+    if (!clan) return;
+    draw(player, clan);
+    keepDrawn(player, loop);
+  });
+}
+
 function open(player) {
   const clan = Core.clanOf(player);
   if (!clan) return;
@@ -98,6 +120,7 @@ function open(player) {
   if (!Core.clanOf(player)) return;
   player.getPacketSender().sendSubInterface(MODAL_UID, SETTINGS_GROUP, 0);
   draw(player, clan);
+  keepDrawn(player);
 }
 
 /** Guest Clan's Info: the same screen, read-only but for Apply (clan_info_draw). */
@@ -107,6 +130,7 @@ function openAsGuest(player) {
   guestView.add(player);
   player.getPacketSender().sendSubInterface(MODAL_UID, SETTINGS_GROUP, 0);
   draw(player, clan);
+  keepDrawn(player);
 }
 
 function confirm(player, title, onYes) {
@@ -161,8 +185,8 @@ function clickLeave(player, clan) {
 }
 
 function askRename(player, clan) {
-  if (Core.memberOf(clan, Core.accountOf(player))?.rank !== Core.RANK_OWNER) {
-    player.sendMessage("Only the clan's owner can rename it.");
+  if (!isOwner(player, clan)) {
+    player.sendMessage("To report this clan's name, use Report at the bottom of the screen.");
     return;
   }
   const waited = Date.now() - (clan.renamedAt ?? 0);
@@ -189,20 +213,20 @@ function rename(player, clan, name) {
   draw(player, clan);
 }
 
-function hasPermissionAccess(player, clan) {
-  const own = Core.memberOf(clan, Core.accountOf(player));
-  if (own && own.rank >= Core.permissionRank(clan, Core.SETTING_PERMISSIONS)) return true;
-  player.sendMessage("You are not a high enough rank to change that.");
+/** These rows are the owner's here; others with Permission access use the Permissions screen. */
+function ownerRow(player, clan) {
+  if (isOwner(player, clan)) return true;
+  player.sendMessage("Only the clan's owner can change that here.");
   return false;
 }
 
 function clickTalkRow(player, clan) {
-  if (!hasPermissionAccess(player, clan)) return;
+  if (!ownerRow(player, clan)) return;
   Management.askRowRank(player, clan, Core.rowByStruct(STRUCT_TALK), "Talk in chat:", uid(POPUP), () => draw(player, clan));
 }
 
 function clickGuestsRow(player, clan) {
-  if (!hasPermissionAccess(player, clan)) return;
+  if (!ownerRow(player, clan)) return;
   clan.allowGuests = !clan.allowGuests;
   Core.refreshClan(clan);
   draw(player, clan);
@@ -233,7 +257,7 @@ function click(event) {
   else if (childId === OUTFIT_BUTTON) Screens.openOutfit(player, clan);
   else if (childId === EVENTS_BUTTON) Screens.openEvents(player, clan);
   else if (childId === HALL_BUTTON) Screens.openHall(player, clan);
-  else if (childId === APPLICANTS_BUTTON) Guests.openApplicants(player, clan);
+  else if (childId === APPLICANTS_BUTTON) Guests.fetchApplicants(player, clan);
   else if (childId === MEMBERS_BUTTON) Management.openMembers(player, clan);
   else if (childId === PERMISSIONS_BUTTON) Management.openPermissions(player);
   else if (childId === TITLES_BUTTON) Management.openTitles(player, clan);

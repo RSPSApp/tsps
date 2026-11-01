@@ -47,11 +47,11 @@ const RHAPSODY_TRACK = 692;
 
 /** Positions are ours: beside what each stands by, as the Wiki describes the rooms. */
 const STAFF = [
-  { id: 1613, x: 1745, y: 5474 }, // Banker, by the deposit box
-  { id: 11651, x: 1747, y: 5468 }, // Hannibal, in the kitchen
-  { id: 10739, x: 1756, y: 5474 }, // Raqueel
-  { id: 10748, x: 1755, y: 5474 }, // Gem, at the bar
-  { id: 10756, x: 1746, y: 5458 }, // Gardener Jay Jr., in the garden
+  { npc: "BANKER_66", x: 1745, y: 5474 }, // the first of clan_hall_banker_0-3, by the deposit box
+  { npc: "HANNIBAL", x: 1747, y: 5468 }, // in the kitchen
+  { npc: "RAQUEEL", x: 1756, y: 5474 },
+  { npc: "GEM", x: 1755, y: 5474 }, // at the bar
+  { npc: "GARDENER_JAY_JR", x: 1746, y: 5458 }, // in the garden
 ];
 
 const SIT_SEQ = 1137; // human_sitting_chair
@@ -74,8 +74,8 @@ function init(pluginApi, findHall) {
 function furnish(hall) {
   hall.chest = [];
   hall.balloons = new Map();
-  hall.staff = STAFF.map((spot) => {
-    const npc = api.spawnNpc({ ...spot, z: 0, wanderRadius: 0 });
+  hall.staff = STAFF.map(({ npc: name, x, y }) => {
+    const npc = api.spawnNpc({ id: core.NpcIdentifiers[name], x, y, z: 0, wanderRadius: 0 });
     hall.add(npc);
     return npc;
   });

@@ -30,7 +30,7 @@ const SETTINGS_BUTTON = 9;
 const JOIN_DELAY_TICKS = 3;
 const BUTTON_TIMEOUT_TICKS = 5;
 
-const CLAN_HUB_CLERK = 10759;
+const CLAN_INFO_PIN_FEATURE = "clan-info"; // bank-pin.json's title for it
 /**
  * Every other slot belongs to something: 1-3 Attack, Trade, Follow; 4 and 6 the duel's; 7 the house
  * kick; 8 Report. Slot 5 is already "Recruit" on every player, for the bots (RegisterBotStatusInteractions),
@@ -125,10 +125,17 @@ function toggleChannel(player) {
   });
 }
 
+/** A PIN this session hasn't entered comes first, under "Clan Info" (rsprox 2778 ticks 38-42). */
+function openClanInfo(player) {
+  const pin = { player, feature: CLAN_INFO_PIN_FEATURE, resume: () => Settings.open(player) };
+  emit("bank-pin:guard", pin);
+  if (!pin.locked) Settings.open(player);
+}
+
 function clickYourClan(event) {
   if (event.groupId !== YOUR_CLAN_GROUP) return;
   if (event.childId === CHANNEL_BUTTON) toggleChannel(event.player);
-  else if (event.childId === SETTINGS_BUTTON) Settings.open(event.player);
+  else if (event.childId === SETTINGS_BUTTON) openClanInfo(event.player);
   else return;
   event.handled = true;
 }
@@ -217,6 +224,10 @@ function viewBoard({ player }) {
 
 // ---------------------------------------------------------------- the Clerk
 
+function isHubClerk(npcId) {
+  return npcId === core.NpcIdentifiers.CLERK_3;
+}
+
 function offerToForm(player, npc, npcId) {
   const { DialogueChainBuilder, OptionDialogue } = core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
@@ -232,14 +243,14 @@ function offerToForm(player, npc, npcId) {
 
 /** Only the hub's Clerk; a member has no use for forming, and hears the transcript as it is. */
 function talkToClerk({ player, npc, npcId }) {
-  if (npcId !== CLAN_HUB_CLERK || Core.clanOf(player)) return false;
+  if (!isHubClerk(npcId) || Core.clanOf(player)) return false;
   offerToForm(player, npc, npcId);
   return true;
 }
 
 /** Live picks these from an interface the transcript names but the cache's ids don't show. */
 function clerkItems({ player, npcId }) {
-  if (npcId !== CLAN_HUB_CLERK) return false;
+  if (!isHubClerk(npcId)) return false;
   if (!Core.clanOf(player)) {
     player.sendMessage("You need to be in a clan for that.");
     return true;
@@ -374,22 +385,26 @@ function reset() {
   Contents.reset();
 }
 
+function attachUnits(api) {
+  core = api.core;
+  emit = api.emitCustomEvent;
+  Core.init(api.core, api.emitCustomEvent);
+  Contents.init(api, Hall.hallOf);
+  Contents.setScheduler(later);
+  Settings.init(api.core, later);
+  Management.init(Settings.open);
+  Guests.init(api.core, later, Settings.openAsGuest, Screens.interestNames, Settings.runeDateText);
+  Broadcasts.init(api.core);
+  Hall.init(api.core);
+  Screens.init(api.core, Settings.open, enumEntries, Management.showRankPopup, Settings.runeDateText);
+  Core.setMembershipListeners(Broadcasts.joined, Broadcasts.left);
+  Formation.init(api);
+}
+
 module.exports = {
   name: "Clans",
   register(api) {
-    core = api.core;
-    emit = api.emitCustomEvent;
-    Core.init(api.core, api.emitCustomEvent);
-    Contents.init(api, Hall.hallOf);
-    Contents.setScheduler(later);
-    Settings.init(api.core);
-    Management.init(Settings.open);
-    Guests.init(api.core, later, Settings.openAsGuest, Screens.interestNames, Settings.runeDateText);
-    Broadcasts.init(api.core);
-    Hall.init(api.core);
-    Screens.init(api.core, Settings.open, enumEntries, Management.showRankPopup, Settings.runeDateText);
-    Core.setMembershipListeners(Broadcasts.joined, Broadcasts.left);
-    Formation.init(api);
+    attachUnits(api);
     api.onCustomEvent("player:bootstrap-complete", login);
     api.onPlayerLogout(logout);
     api.onSocialPacket(chat);

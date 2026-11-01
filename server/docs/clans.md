@@ -52,8 +52,20 @@ Settings (690) is captured in rsprox 2778: the `4289` and `4290` rows, and butto
 | "You can only edit the ranks of players whose ranks are lower than yours." | 3084 tick 188 |
 | Login sends a delta of last seen (extra info bits 0-12, day less 6880) and setting 8, today | 3886 tick 664, 3086 tick 7 |
 | "X has been inactive for over 90 days. The new Clan Owner is Y." comes without a 7-day wait | decoded recordings |
-| Permission rows and their settings: `data/permissions.json`, generated from the pinned dumps' enums 3825-5731, `clan_permission_get` and the structs. Stored as rank + 2 | pinned dumps; 3886 |
+| Permission rows and their settings: `data/permissions.json`, written by `yarn generate:clan-permissions` from the cache's enum 3825 and what it lists, the structs, and `clan_permission_get` (script 4456). `--check` compares without writing. Stored as rank + 2 | pinned dumps; 3886 |
 | Default ranks for rows with no minimum: rank 0 for notifications and coffer deposit, as 3886's clan has them; Administrator otherwise (ours) | 3886 |
+
+More from the same recordings:
+
+| Fact | Source |
+| --- | --- |
+| Column scripts 4257 and 4258 take each slot's value then a `|`, blank when offline: field N is slot N (Z-Kris is member 1 and has field 1) | 2778 ticks 49, 215; 2896 tick 21 |
+| A PIN not yet entered opens under "Clan Info" before Settings | 2778, 2896, 3084, 3086 |
+| Settings redraws its rows and the resign row's hide every 6 ticks while open | 2778 ticks 42, 48, 133-151 |
+| For a Deputy Owner the name row says Report, and Talk and Guests send 0, not editable, though Permission access was at their rank (setting 12 = 127). No capture shows other ranks, so we treat these rows as the owner's alone | 2895, 3084 |
+| Applications closes 690, mounts 293 and 663 in the chatbox with "Fetching your clan data...", and opens 699 a tick later | 2778 ticks 73-74, 2895 ticks 1428-1429 |
+| "List your clan" while not inviting closes the board with a messagebox; turning inviting on closes 699 the same way. Each box also logs its line as type 115 | 2778 ticks 67, 181 |
+| "No clan could be found with that name." is a messagebox with sound 2277, logged as type 115 | 76 tick 7508 |
 
 No capture holds a permission edit, ban, kick, mute, rename or title edit. Those follow the cache's
 scripts and the Wiki: `ACTIVECLANCHANNEL_KICKUSER` and friends now send `CLAN_CHANNEL_ACTION`, and

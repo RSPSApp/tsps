@@ -100,6 +100,26 @@ async function main(): Promise<void> {
     assert.equal(whipText[3], 0xffff9600, "over 1M: the high value colour");
     assert.equal(texts.find((t) => t[0].startsWith("Coins"))![3], 0xffffffff);
 
+    // Coverage: where the frame signature() built will draw, so moving labels redraw their own
+    // rects rather than the whole UI. Unknown until a draw has supplied the font.
+    const overlay = plugin.widgetOverlay as any;
+    assert.equal(overlay.coverage(), undefined, "no font yet: the UI redraws whole");
+    overlay.fontLoader = () => ({ measure: (text: string) => text.length * 6, maxAscent: 10, maxDescent: 3 });
+    assert.deepEqual(
+        overlay.coverage(),
+        texts.map((t) => ({ x: t[1] - 2, y: t[2] - 16, w: t[0].length * 6 + 6, h: 22 })),
+        "one rect per label: 2 px left of its baseline point, the text height above it, padded as draw() reports",
+    );
+    // Labels are formatted once per item, not every frame.
+    const cachedCoins = overlay.labels.get(coins);
+    assert.equal(cachedCoins?.text, "Coins (500)");
+    plugin.widgetOverlay.signature();
+    assert.equal(overlay.labels.get(coins), cachedCoins, "an unchanged item keeps its formatted label");
+    coins.quantity = 501;
+    plugin.widgetOverlay.signature();
+    assert.equal(overlay.labels.get(coins)?.text, "Coins (501)", "a changed quantity reformats");
+    coins.quantity = 500;
+
     store.update({ kind: "delta", serial: 2, upserts: [stack(SCIM, 1, 3201, 3201)], removes: [] } as any);
     frame = JSON.parse(plugin.widgetOverlay.signature());
     texts = frame[1];

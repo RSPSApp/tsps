@@ -166,9 +166,8 @@ function openMakeover(player, type) {
   }
   const { group, itemArea, colours, select, selectAndClose, burgerMenuFrame, typeVarbit, colourVarp, styleVarp } = ids();
   const sender = player.getPacketSender();
-  const look = player.getAppearance().getLook();
   const previous = sessions.get(player);
-  const saved = previous ? previous.saved : [...look];
+  const saved = previous ? previous.saved : [...player.getAppearance().getLook()];
   if (previous) {
     // Switching category starts from what is worn, as reopening the modal does.
     restoreLook(player, saved);
@@ -176,6 +175,8 @@ function openMakeover(player, type) {
     sender.sendInterfaceRemoval();
     previous.switching = false;
   }
+  // Read after the restore: setLookArray replaces the array, so an earlier reference holds the preview.
+  const look = player.getAppearance().getLook();
   const { slot, colourSlot } = category(type);
   const kits = styleKits(player, type);
   const current = Math.max(0, kits.indexOf(look[slot]));

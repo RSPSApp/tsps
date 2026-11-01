@@ -192,6 +192,26 @@ function completeQuests(player, name) {
   }
 }
 
+/**
+ * `league:complete-quests` { player, quests: [names] }: completes the named quests the way a pack
+ * does (no experience, the final rewards kept), in reverse list order, so a list written as the
+ * Wiki nests a quest's requirements under it completes the requirements first (Demonic Pacts'
+ * areas). Names this server registers no quest for are left out.
+ */
+function completeNamedQuests(request) {
+  const { player } = request ?? {};
+  if (!player || !Array.isArray(request.quests)) return;
+  const quests = [...new Set(request.quests)].reverse().map((name) => QuestRuntime.questNamed(name)).filter(Boolean);
+  completing.add(player);
+  try {
+    for (const quest of quests) {
+      if (!quest.isComplete(player)) completeQuest(player, quest);
+    }
+  } finally {
+    completing.delete(player);
+  }
+}
+
 // ---- What the client is sent ----
 
 function sendUnlocks(player) {
@@ -442,6 +462,7 @@ module.exports = function attach(api) {
   api.onCanGainExperience(lockedSkillExperience);
   api.onCanAttack(lockedBossAttack);
   api.onCustomEvent("league:boss-locked", bossLockedQuery);
+  api.onCustomEvent("league:complete-quests", completeNamedQuests);
   api.onInterfaceActionButton(buttonIds.tabs, pickTab);
   api.onInterfaceActionButton(buttonIds.list, pickEntry);
   api.onInterfaceActionButton(buttonIds.accept, accept);
@@ -449,4 +470,4 @@ module.exports = function attach(api) {
 };
 
 module.exports.unlocked = unlocked;
-module.exports._test = { questPrice, packQuests, completeQuests, entries, unlocked, skillLocked, bossOf, UNLOCKS_ATTRIBUTE };
+module.exports._test = { questPrice, packQuests, completeQuests, completeNamedQuests, entries, unlocked, skillLocked, bossOf, UNLOCKS_ATTRIBUTE };

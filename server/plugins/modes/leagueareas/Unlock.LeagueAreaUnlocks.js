@@ -29,12 +29,19 @@ function login({ player, league }) {
   if (!rules) return;
   if (Common.unlocked(player).length === 0) {
     player.setAttribute(Common.AREAS_ATTRIBUTE, [...rules.defaults]);
+    for (const area of rules.defaults) completeAreaQuests(player, league, area);
   }
   if (!Regions.isOpenAt(league, player, player.getLocation())) {
     player.moveTo(require("./Enforcement.LeagueAreaUnlocks").home(league, player));
   }
   player.getPacketSender().sendVarbit(Common.data.varbits.lastViewed, 0);
   sendState(player, league);
+}
+
+/** The league's quests for an area (Demonic Pacts' `quests`), completed through LeagueMode's `league:complete-quests`. */
+function completeAreaQuests(player, type, areaId) {
+  const quests = Common.league(type)?.quests?.[areaId];
+  if (Array.isArray(quests) && quests.length) Common.api.emitCustomEvent("league:complete-quests", { player, quests });
 }
 
 /** `league:content-rows`: the slots' task counts (script 3682 reads enum 5677's structs, param 1010). */
@@ -90,6 +97,7 @@ function complete(player, type, area, slot) {
   const { varbits, notifications } = Common.data;
   const sender = player.getPacketSender();
   sender.sendVarbit(varbits.selection[slot], area.id);
+  completeAreaQuests(player, type, area.id);
   player.sendMessage(Common.message("unlocked", { colour: Common.colourHex(type), area: area.name }));
   require("./Interface.LeagueAreaUnlocks").open({ player });
   const popup = notifications.areaUnlocked;

@@ -1314,9 +1314,13 @@ open from everywhere (overrides with `area: null`). Its first unlock, at 80 task
 (`firstPick`; any other area shows the details' message state with our line, the refusal live
 gave was not captured), then three picks at 200, 300 and 450: the cache's own thresholds (structs
 5971-5975). The unlock plays Raging Echoes' spotanims, as recorded, and the area teleport its own
-cast (`leagues_6_home_teleport_player_01..08` every three ticks from +1, landing at +23). Live
-also completed each area's quests and diary tasks on unlock (Wiki, and 237/01098's Karamja);
-that is not here yet.
+cast (`leagues_6_home_teleport_player_01..08` every three ticks from +1, landing at +23). An
+area's quests complete on its unlock's +14 tick (237/01098's Karamja), the starting Varlamore's at
+the league's start: the data's `quests`, each area's Wiki list (Demonic_Pacts_League/Areas/<area>)
+with the quests they need nested under them, completed in reverse through LeagueMode's
+`league:complete-quests` { player, quests } as a Shattered Relics pack is (no XP, rewards kept;
+Recipe for Disaster's subquests left out). The areas' diary tasks and combat achievements that
+live also completed are not here yet.
 
 **This cache's buttons** (rev 241, as the Leagues VI recordings use them): the details' teleport
 is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo_boss_map_button

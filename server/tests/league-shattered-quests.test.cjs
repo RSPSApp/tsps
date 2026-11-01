@@ -178,3 +178,29 @@ test("a character's own inventory is kept through a pack's completion", () => {
   assert.equal(player.getInventory().getAmount(1458), 1, "Troll Stronghold's law talisman joins them");
   assert.equal(QuestRuntime.questNamed("Death Plateau").isComplete(player), true);
 });
+
+test("league:complete-quests: Demonic Pacts' area lists, requirements first, unknown names left out", () => {
+  const player = new Player(null);
+  player.setUsername("area-quests");
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  player.sendMessage = () => {};
+  const order = [];
+  const shilo = QuestRuntime.questNamed("Shilo Village");
+  const potion = QuestRuntime.questNamed("Jungle Potion");
+  const karamja = require("../plugins/modes/data/league-areas.json").leagues["6"].quests["2"];
+  assert.deepEqual(karamja, ["Shilo Village", "Jungle Potion"], "the Wiki's Karamja list, the requirement under its quest");
+  const watch = (quest) => {
+    const complete = quest.complete.bind(quest);
+    quest.complete = (target, options) => (order.push(quest.name), complete(target, options));
+    return () => { delete quest.complete; };
+  };
+  const unwatch = [watch(shilo), watch(potion)];
+  try {
+    Unlocks._test.completeNamedQuests({ player, quests: [...karamja, "Recipe for Disaster/Freeing Pirate Pete"] });
+  } finally {
+    unwatch.forEach((fn) => fn());
+  }
+  assert.deepEqual(order, ["Jungle Potion", "Shilo Village"]);
+  assert.equal(shilo.isComplete(player), true, "(the quests' XP is refused by Unlocks' experience hook, as for a pack)");
+});

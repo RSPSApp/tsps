@@ -16,6 +16,7 @@ import { VarManager } from "../../rs/config/vartype/VarManager";
 import { getMapIndexFromTile, getMapSquareId } from "../../rs/map/MapFileIndex";
 import { Model } from "../../rs/model/Model";
 import { Scene } from "../../rs/scene/Scene";
+import { collectObjSurfaceHeights } from "../../rs/scene/ObjSurfaceHeights";
 import { LocLoadType } from "../../rs/scene/SceneBuilder";
 import { SceneTile } from "../../rs/scene/SceneTile";
 import { getIdFromTag } from "../../rs/scene/entity/EntityTag";
@@ -2210,7 +2211,10 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
 
         if (mapProfileEnabled) console.timeEnd(`load map ${mapX},${mapY}`);
 
+        const objSurfaceHeights = collectObjSurfaceHeights(scene);
+
         const transferables = [
+            objSurfaceHeights.buffer,
             ...scene.tileRenderFlags.flat().map((buf) => buf.buffer),
             ...scene.tileOverlays.flat().map((buf) => buf.buffer),
             ...(sceneBuf.groundMaterials?.flat().map((column) => column.buffer) ?? []),
@@ -2322,6 +2326,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 renderPosX,
                 renderPosY,
                 tileRenderFlags: scene.tileRenderFlags,
+                objSurfaceHeights,
                 tileOverlays: scene.tileOverlays,
                 groundMaterials: sceneBuf.groundMaterials,
                 groundColors: sceneBuf.groundColors,

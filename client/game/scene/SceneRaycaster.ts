@@ -533,7 +533,12 @@ export class SceneRaycaster {
             const maxZ = worldTileY + 1;
 
             const groundY = this.sampleHeightAt(worldTileX + 0.5, worldTileY + 0.5, level | 0);
-            const itemY = groundY;
+            const surfaceMap = this.getPreferredMapForWorldTile(worldTileX, worldTileY);
+            const itemY = groundY - (surfaceMap?.getObjSurfaceHeight?.(
+                level | 0,
+                worldTileX - (surfaceMap.getRenderBaseTileX?.() ?? surfaceMap.mapX * Scene.MAP_SQUARE_SIZE),
+                worldTileY - (surfaceMap.getRenderBaseTileY?.() ?? surfaceMap.mapY * Scene.MAP_SQUARE_SIZE),
+            ) ?? 0) / 128;
             const minY = itemY - 0.2;
             const maxY = itemY + 0.1;
 

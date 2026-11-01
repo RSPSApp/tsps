@@ -1,3 +1,4 @@
+import { objSurfaceHeightAt } from "../../rs/scene/ObjSurfaceHeights";
 import { CollisionMap } from "../../rs/scene/CollisionMap";
 import { MapGeometryUpload, mapGeometrySources } from "../MapGeometryUpload";
 import type { MapSquare } from "../../game/MapManager";
@@ -415,6 +416,7 @@ export class WebGPUMapSquare implements MapSquare {
 
     /** CPU-side height/flag data other systems sample (bridge camera, route finding). */
     tileRenderFlags!: Uint8Array[][];
+    objSurfaceHeights?: Int32Array;
     tileOverlays?: Int16Array[][];
     /** HD ground recipe grid copied from SdMapData, [level][x][y], full heightmap grid incl. border. */
     tileGroundMaterials?: Uint8Array[][];
@@ -539,6 +541,7 @@ export class WebGPUMapSquare implements MapSquare {
         square.collisionMaps = (mapData.collisionDatas ?? []).map(CollisionMap.fromData);
         square.tilePresenceByLevel = mapData.tilePresenceByLevel;
         square.tileRenderFlags = mapData.tileRenderFlags;
+        square.objSurfaceHeights = mapData.objSurfaceHeights;
         square.tileOverlays = mapData.tileOverlays;
         square.tileGroundMaterials = mapData.groundMaterials;
         square.tileGroundColors = mapData.groundColors;
@@ -796,6 +799,10 @@ export class WebGPUMapSquare implements MapSquare {
 
     canRender(frameCount: number): boolean {
         return frameCount - this.frameLoaded >= FRAME_RENDER_DELAY;
+    }
+
+    getObjSurfaceHeight(level: number, tileX: number, tileY: number): number {
+        return objSurfaceHeightAt(this.objSurfaceHeights, level, tileX + this.borderSize, tileY + this.borderSize);
     }
 
     getTileRenderFlag(level: number, tileX: number, tileY: number): number {

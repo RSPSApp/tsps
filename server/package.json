@@ -39,6 +39,7 @@
     "test:combat-xp": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/combat-xp-smoke.ts",
     "test:weapon-special-traits": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/weapon-special-traits-smoke.ts",
     "test:voice-chat": "yarn build && node --test tests/voice-chat.test.cjs",
+    "test:cache-editor": "yarn build && node --test tests/cache-editor.test.cjs",
     "test:protocol": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/login-protocol-harness.ts",
     "test:quest-list": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/quest-list-smoke.ts",
     "test:quest-runtime": "TS_NODE_COMPILER_OPTIONS='{\"target\":\"es2020\"}' ts-node ./scripts/quest-runtime-smoke.ts",

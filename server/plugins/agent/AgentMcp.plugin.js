@@ -67,6 +67,7 @@ function buildMcpServer(core) {
   require("./mcp/Social.AgentMcp")(ctx);
   require("./mcp/Testing.AgentMcp")(ctx);
   require("./mcp/QuestHelper.AgentMcp")(ctx);
+  require("./mcp/Cache.AgentMcp")(ctx);
   require("./mcp/Load.AgentMcp")(ctx);
   require("./mcp/Perf.AgentMcp")(ctx);
   require("./mcp/Vision.AgentMcp")(ctx);

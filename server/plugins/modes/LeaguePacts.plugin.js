@@ -18,5 +18,9 @@ module.exports = {
     require("./leaguepacts/Points.LeaguePacts")(api);
     require("./leaguepacts/Interface.LeaguePacts")(api);
     require("./leaguepacts/Commands.LeaguePacts")(api);
+    require("./leaguepacts/General.LeaguePacts")(api);
+    require("./leaguepacts/Melee.LeaguePacts")(api);
+    require("./leaguepacts/Ranged.LeaguePacts")(api);
+    require("./leaguepacts/Magic.LeaguePacts")(api);
   },
 };

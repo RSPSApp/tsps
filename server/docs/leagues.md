@@ -1292,6 +1292,26 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   resends the varps and varbits.
 - **The tutorial's pacts page** runs the recorded walkthrough in the tree (647:14): three steps, the
   last waiting for the central pact; the tree comes back with two more, then the next page.
+- **The effects** (`leaguepacts/General|Melee|Ranged|Magic.LeaguePacts.js`; each unit's head
+  lists its effects, hooks and readings): every one of the 73 reads its value from
+  `Common.effect(player, varbit)`, so what a pact gives is the node values the client also shows.
+  Shared within the plugin: Regenerate (General: `magic:spell-cost`/`magic:rune-saving`/
+  `magic:cast-committed` for runes, `ranged:ammo-saving` per shot, `combat:consume-charge`) emits
+  `league:pact-regenerated` { player, kind rune | ammo | charge, itemId, amount, combat, target?,
+  special? }, which the element pacts (Magic), the staff-charge rune pacts (Magic) and the regen
+  echo (Ranged) hear; every pact heal goes through `league:pact-heal` { player, amount } (General,
+  overhealing up to `talent_overhealing_via_talents`); a Ranged echo is Ranged's, also fired by
+  the two-handed melee pact over `league:pact-ranged-echo` { player, target, source }. Each small
+  damage node's "+10% accuracy in all combat styles" is applied by its own style's unit (7 Magic,
+  14 Melee, 15 Ranged); General has the +% accuracy pact. PvP (Wiki): stat boosts, attack speed
+  and melee range apply against players; Thorns, Echoes, Blindbag, reflect and the hit-forcing
+  pacts do not.
+- **Effects approximated** (the units' heads say how): the permanent Defence boost is invisible
+  in the skills tab (no per-skill boost floor in the restore code); off-hands are any shield-slot
+  item but the named shields; strength from prayer bonus and Strength level scales the max hit
+  rather than the bonus; min-hit pacts act only on hits past accuracy; the fire burn bounce uses
+  Burning claws' burn; Regenerate does not reach Dizana's quiver, salamander tar, the charged bows
+  without modelled charges, or the rune pouch (no event adds a rune to it).
 - **Not here yet:** the echo bosses' three resets, the second free reset live gave later ("Yama has
   taken kindly...", 238/01219, on a schedule not recorded), and Yama's one-off extra points
   (Obsidian cape, echo item, moons item, Deep Delve: 237/01167's `talent_extra_retro_*`).

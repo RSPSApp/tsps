@@ -72,11 +72,20 @@ const guestClanOfPlayer = new Map();
 const guestViewers = new Map();
 
 let core = null;
+let emit = () => {};
 let onJoined = () => {};
 let onLeft = () => {};
 
-function init(apiCore) {
+function init(apiCore, emitEvent = () => {}) {
   core = apiCore;
+  emit = emitEvent;
+}
+
+/** The Ironman plugin's answer: "none", "ironman", "ultimate", "hardcore" and so on. */
+function ironmanMode(player) {
+  const query = { player, mode: "none" };
+  emit("ironman:mode", query);
+  return query.mode ?? "none";
 }
 
 /** Who hears of a member joining or leaving: Broadcasts.Clans.js. */
@@ -572,6 +581,7 @@ module.exports = {
   SETTING_RECRUIT,
   SETTING_TITLES,
   accountOf,
+  ironmanMode,
   addGuestViewer,
   addMember,
   addOfflineMember,

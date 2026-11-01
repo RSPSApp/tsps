@@ -331,6 +331,7 @@ export const ADVENTURE_PATHS_TRANSMIT_VARPS: readonly number[] = [2357, 2358, 23
 export const TRANSMIT_VARPS: ReadonlySet<number> = new Set([
     3023, 3024, 3025, 3026, 3027, // clan_editing_0-4: the clan's Rank Titles and Hall settings edits
     733, 736, 737, // the same screen's edits for ranks 96-124, on varps the cache shares with a quest
+    675, // canoeing_menu, bits 14-15 of which are the clan party chest's chosen quantity
     VARP_OPTION_RUN, // Run toggle
     VARP_ATTACK_STYLE, // Combat attack style
     VARP_AUTO_RETALIATE, // Auto-retaliate toggle

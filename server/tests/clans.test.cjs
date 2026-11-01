@@ -19,11 +19,16 @@ const CLAN_SETTINGS_FULL = 124;
 const CLAN_CHANNEL_FULL = 125;
 const CLAN_CHANNEL_DELTA = 126;
 const CLAN_SETTINGS_DELTA = 127;
+const UNTRADEABLE = 13;
 
 let dir;
 let hooks;
 let online;
 let nextIndex = 1;
+
+function carried(id, amount) {
+  return { amount, getId: () => id, getAmount() { return this.amount; } };
+}
 
 function player(name) {
   const self = {
@@ -38,7 +43,36 @@ function player(name) {
     setAttribute: (key, value) => self.attributes.set(key, value),
     getLocation: () => self.location,
     moveTo: (location) => (self.movedTo = location),
-    getEquipment: () => ({ containsNumber: (id) => self.equipment.includes(id) }),
+    bag: [],
+    getInventory: () => ({
+      getItems: () => self.bag,
+      getAmount: (id) => self.bag.filter((item) => item.getId() === id).reduce((sum, item) => sum + item.getAmount(), 0),
+      containsNumber: (id) => self.bag.some((item) => item.getId() === id),
+      getFreeSlots: () => 28,
+      delete(id, amount) {
+        const item = self.bag.find((entry) => entry.getId() === id);
+        item.amount -= amount;
+        if (item.amount <= 0) self.bag.splice(self.bag.indexOf(item), 1);
+      },
+      adds(id, amount) {
+        const item = self.bag.find((entry) => entry.getId() === id);
+        if (item) item.amount += amount;
+        else self.bag.push(carried(id, amount));
+      },
+      setItem(slot, item) {
+        self.bag[slot] = carried(item.id, item.amount);
+      },
+      refreshItems: () => {},
+    }),
+    getEquipment: () => ({
+      containsNumber: (id) => self.equipment.includes(id),
+      getItems: () => self.equipment.map((id) => carried(id, 1)),
+      setItem(slot, item) {
+        self.equipment[slot] = item.id;
+      },
+      refreshItems: () => {},
+    }),
+    performAnimation: (animation) => (self.animation = animation.id),
     getDialogueManager: () => ({
       isActive: () => false,
       startDialogues(chain) {
@@ -47,7 +81,7 @@ function player(name) {
     }),
     setEnteredSyntaxAction: (action) => (self.syntaxAction = action),
     setEnteredAmountAction: (action) => (self.amountAction = action),
-    getSkillManager: () => ({ getCombatLevel: () => self.combat ?? 3, getTotalLevel: () => self.total ?? 32, getMaxLevel: () => 1 }),
+    getSkillManager: () => ({ getCombatLevel: () => self.combat ?? 3, getTotalLevel: () => self.total ?? 32, getMaxLevel: () => 1, getExperience: () => self.xp ?? 0 }),
     notices: [],
     messages: [],
     getUsername: () => name,
@@ -106,6 +140,14 @@ function player(name) {
       },
       sendConfig(id, value) {
         (self.configs ??= new Map()).set(id, value);
+        return this;
+      },
+      sendInventory(id, capacity, items) {
+        (self.invs ??= {})[id] = items;
+        return this;
+      },
+      sendSound(id) {
+        (self.sounds ??= []).push(id);
         return this;
       },
       sendTypedMessage(type, text) {
@@ -169,7 +211,7 @@ beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clans-'));
   process.env.TSPS_CLANS_FILE = path.join(dir, 'clans.json');
   online = [];
-  hooks = { custom: new Map(), commands: new Map(), clicks: [], emitted: [], npc: {} };
+  hooks = { custom: new Map(), commands: new Map(), clicks: [], emitted: [], npc: {}, spawned: [], removed: [], placed: [], ground: [] };
   Clans._reset();
   Clans.register({
     core: {
@@ -180,7 +222,8 @@ beforeEach(() => {
       ItemIdentifiers: { CLAN_CLOAK: 25712, CLAN_VEXILLUM: 25721, COINS: 995 },
       Skill: { values: () => [{ id: 0 }, { id: 1 }] },
       CacheDefinitions: {
-        getEnumValues: (id) => new Map(id === 3792 ? [[-1, 'x'], [0, 'F2P'], [5, 'PvP']] : [[-1, 'x'], [0, `A${id}`], [1, `B${id}`]]),
+        getEnumValues: (id) => new Map(id === 3799 ? [[0, 500]] : id === 3792 ? [[-1, 'x'], [0, 'F2P'], [5, 'PvP']] : [[-1, 'x'], [0, `A${id}`], [1, `B${id}`]]),
+        getStructParams: () => new Map([[1236, (698 << 16) | 9], [1239, 2000]]),
       },
       Boundary: class {
         constructor(...bounds) {
@@ -205,14 +248,46 @@ beforeEach(() => {
           this.entities = [];
         }
         enter(mobile) {
-          this.entities.push(mobile);
+          this.add(mobile);
           mobile.area = this;
         }
+        add(entity) {
+          this.entities.push(entity);
+        }
+        detach(entity) {
+          this.entities = this.entities.filter((other) => other !== entity);
+        }
+        getPlayers() {
+          return this.entities.filter((entity) => entity.getUsername);
+        }
         postLeave(mobile) {
-          this.entities = this.entities.filter((entity) => entity !== mobile);
+          this.detach(mobile);
         }
       },
-      ItemDefinition: { forId: (id) => ({ getName: () => `Item ${id}`, getValue: () => id }) },
+      GameObject: class {
+        constructor(id, location, type, face, area) {
+          Object.assign(this, { id, location, type, face, area });
+        }
+      },
+      ObjectManager: {
+        register: (object) => hooks.placed.push(object),
+        deregister: (object) => (hooks.placed = hooks.placed.filter((other) => other !== object)),
+        objectsAt: () => [],
+      },
+      RegionManager: { blocked: () => false },
+      ItemOnGround: class {
+        constructor(state, owner, location, item) {
+          Object.assign(this, { location, item });
+        }
+      },
+      GroundItemState: { SEEN_BY_EVERYONE: 1 },
+      ItemOnGroundManager: { register: (item) => hooks.ground.push(item) },
+      Animation: class {
+        constructor(id) {
+          this.id = id;
+        }
+      },
+      ItemDefinition: { forId: (id) => ({ getName: () => `Item ${id}`, getValue: () => id, isTradeable: () => id !== UNTRADEABLE }) },
       DialogueChainBuilder: class {
         add(dialogue) {
           return dialogue;
@@ -249,10 +324,18 @@ beforeEach(() => {
     onNpcInteraction: (name, actions) => (hooks.npc[name] = actions),
     onObjectInteraction: (name, actions) => ((hooks.objects ??= {})[name] = actions),
     onPlayerLevelUp: (handler) => (hooks.levelUp = handler),
+    onExperienceGained: (handler) => (hooks.experience = handler),
+    spawnNpc: (spot) => {
+      const npc = { ...spot };
+      hooks.spawned.push(npc);
+      return npc;
+    },
+    removeNpc: (npc) => hooks.removed.push(npc),
     onPlayerDefeated: (handler) => (hooks.defeated = handler),
     persistAttribute: () => {},
     emitCustomEvent: (name, payload) => {
       hooks.emitted.push([name, payload]);
+      if (name === 'ironman:mode') payload.mode = payload.player.ironman ?? 'none';
       // SideChannels mounting the panel at once, as it does when the tab is up.
       if (name === 'side-channels:replace-your-clan') payload.onMount?.();
     },
@@ -1298,17 +1381,16 @@ test('the coffer moves coins by rank, and every member hears the new total throu
   const coffer = hooks.objects['Clan Coffer'].Use;
   const held = pocket(owner, 5000);
   coffer({ player: owner });
-  answer(owner, 2);
+  assert.deepEqual(owner.mounted.slice(-2), [696, 697]);
+  clickGroup(owner, 697, 9);
   owner.amountAction.execute(2000);
   assert.equal(clan.coffer, 2000);
   assert.equal(held.coins, 3000);
   assert.deepEqual(sent(member, 128).at(-1), protocol.encodeClanVar(3, 2000));
-  coffer({ player: owner });
-  answer(owner, 1);
-  assert.equal(owner.mounted.at(-1), 696);
   clickGroup(owner, 696, 8);
   assert.equal(clan.coffer, 1000);
   assert.equal(held.coins, 4000);
+  assert.match(member.messages.at(-1), /Owner has withdrawn 1,000 coins/);
   clickGroup(owner, 696, 12);
   assert.equal(clan.coffer, 0);
   clickGroup(owner, 696, 7);
@@ -1466,4 +1548,285 @@ test('all eight title settings are sent, and ranks 96-124 save', () => {
   hooks.custom.get('player:varp-transmit')(edit);
   clickGroup(owner, 695, 13);
   assert.equal(CoreClans().titleSetting(clan, 103), 77);
+});
+
+// ---------------------------------------------------------------- the coffer's limits, guest rules
+
+test('an Ironman can\'t deposit, and no transaction moves over 50m', () => {
+  const { owner, clan } = clanOfThree();
+  const held = pocket(owner, 60000000);
+  hooks.objects['Clan Coffer'].Use({ player: owner });
+  owner.ironman = 'ironman';
+  clickGroup(owner, 697, 10);
+  assert.match(owner.messages.at(-1), /Ironmen can't deposit/);
+  assert.equal(clan.coffer ?? 0, 0);
+  owner.ironman = 'none';
+  clickGroup(owner, 697, 10);
+  assert.equal(clan.coffer, 50000000);
+  assert.equal(held.coins, 10000000);
+  clan.coffer = 70000000;
+  clickGroup(owner, 696, 12);
+  assert.equal(clan.coffer, 20000000);
+});
+
+test('guests need the clan\'s quest points and account type', () => {
+  const { clan } = clanOfThree();
+  const core = CoreClans();
+  const guest = player('Guesting');
+  core.setGuestRules(clan, { ...core.guestRules(clan), qp: 10 });
+  const Guests = require('../plugins/interface/clans/Guests.Clans');
+  assert.match(Guests.guestRefusal(guest, clan), /10 quest points/);
+  guest.attributes.set('quest.points', 10);
+  assert.equal(Guests.guestRefusal(guest, clan), null);
+  core.setGuestRules(clan, { ...core.guestRules(clan), iron: 1 });
+  assert.match(Guests.guestRefusal(guest, clan), /account type/);
+  guest.ironman = 'hardcore';
+  assert.equal(Guests.guestRefusal(guest, clan), null);
+  core.setGuestRules(clan, { ...core.guestRules(clan), iron: 2 });
+  assert.match(Guests.guestRefusal(guest, clan), /account type/);
+  guest.ironman = 'ultimate';
+  assert.equal(Guests.guestRefusal(guest, clan), null);
+});
+
+// ---------------------------------------------------------------- the remaining broadcasts
+
+function noticesOf(self) {
+  return self.notices.map(([, text]) => text);
+}
+
+test('personal bests, diaries, hardcore deaths and loot keys reach the channel by their own events', () => {
+  const { owner, member, clan } = clanOfThree();
+  hooks.custom.get('boss:personal-best')({ player: owner, boss: 'Zulrah', ticks: 100 });
+  assert.equal(noticesOf(member).at(-1), 'Owner has achieved a new Zulrah personal best: 1:00');
+  hooks.custom.get('diary:tier-complete')({ player: owner, diary: 'Varrock', tier: 'Hard' });
+  assert.equal(noticesOf(member).at(-1), 'Owner has completed the Hard Varrock diary.');
+  hooks.custom.get('ironman:hardcore-death')({ player: owner });
+  assert.match(noticesOf(member).at(-1), /Owner has died as a Hardcore/);
+  const told = member.notices.length;
+  hooks.custom.get('loot-keys:opened')({ player: owner, value: 99999 });
+  assert.equal(member.notices.length, told, 'under the minimum value');
+  hooks.custom.get('loot-keys:opened')({ player: owner, value: 100000 });
+  assert.match(noticesOf(member).at(-1), /Owner has opened a loot key worth 100,000 coins/);
+  hooks.custom.get('boss:personal-best')({ player: player('Stranger'), boss: 'Zulrah', ticks: 100 });
+  assert.equal(clan.members.length, 3);
+});
+
+test('post-99 XP tells each multiple of the interval, and only past 99', () => {
+  const { owner, member, clan } = clanOfThree();
+  const skill = { getName: () => 'Ranged' };
+  const gain = (after, experience) => {
+    owner.xp = after;
+    hooks.experience({ player: owner, skill, experience });
+  };
+  const told = () => member.notices.length;
+  const before = told();
+  gain(5000000, 10000000);
+  assert.equal(told(), before, 'below 99');
+  gain(14000000, 100);
+  assert.equal(told(), before, 'no multiple crossed');
+  gain(15000100, 1000);
+  assert.equal(noticesOf(member).at(-1), 'Owner has reached 15,000,000 XP in Ranged.');
+  CoreClans().setSettingValue(clan, 69, 10);
+  gain(19000000, 5000000);
+  assert.equal(told(), before + 1, 'the interval is now 10m');
+  gain(20000000, 1000000);
+  assert.equal(noticesOf(member).at(-1), 'Owner has reached 20,000,000 XP in Ranged.');
+});
+
+test('total and combat levels are told when they cross a mark', () => {
+  const { owner, member } = clanOfThree();
+  owner.combat = 91;
+  login(owner);
+  const skill = { getName: () => 'Attack' };
+  owner.combat = 92;
+  owner.total = 1875;
+  hooks.levelUp({ player: owner, skill, oldLevel: 50, newLevel: 51 });
+  const said = noticesOf(member);
+  assert.ok(said.includes('Owner has reached a total level of 1875.'));
+  assert.ok(said.includes('Owner has reached combat level 92.'));
+});
+
+// ---------------------------------------------------------------- cloak and vexillum colours
+
+/** Colour is the outfit setting's bits 20-29, one above its index. */
+const motif = (colour) => colour << 20;
+
+test('the Clerk hands out the clan\'s colour, and a new motif or a login changes what members hold', () => {
+  const { owner, clan } = clanOfThree();
+  CoreClans().setSettingValue(clan, 11, motif(4));
+  hooks.npc.Clerk.Items({ player: owner, npcId: CLERK });
+  assert.deepEqual(owner.bag.map((item) => item.getId()), [25716, 25725]);
+  owner.equipment = [25712];
+  CoreClans().setSettingValue(clan, 11, motif(8));
+  login(owner);
+  assert.deepEqual(owner.bag.map((item) => item.getId()), [25720, 25729]);
+  assert.deepEqual(owner.equipment, [25720]);
+});
+
+test('any colour of vexillum recruits and shows the option', () => {
+  const { owner } = clanOfThree();
+  owner.location = { getX: () => 3000, getY: () => 3000, getZ: () => 0 };
+  owner.equipment = [25725];
+  hooks.canEquip({ player: owner, item: { getId: () => 25725 } });
+  runTicks(1);
+  assert.equal(owner.option?.[1], 'Recruit');
+});
+
+// ---------------------------------------------------------------- Clan Hall contents
+
+function inHall(...players) {
+  for (const self of players) hooks.objects['Clan hall portal'].Enter({ player: self });
+}
+
+/** A real client's op arrives as `action`; only the agent MCP's packets fill in opId. */
+function op(self, groupId, childId, slot, action) {
+  const event = { player: self, groupId, childId, slot, action };
+  for (const handler of hooks.clicks) handler(event);
+  return event;
+}
+
+const CHEST = 46248;
+const CHEST_INV = 916 + 32768; // read with invother_getobj
+const openChest = (self) => hooks.objects.Chest.Open({ player: self, objectId: CHEST });
+
+test('the party chest offers on 266 and 783, and only Confirm commits', () => {
+  const { owner, member } = clanOfThree();
+  inHall(owner, member);
+  owner.bag.push(carried(4151, 1), carried(995, 100), carried(UNTRADEABLE, 1));
+  assert.equal(openChest(owner), true);
+  assert.deepEqual(owner.mounted.slice(-2), [783, 266]);
+  op(owner, 266, 0, 0, 2);
+  op(owner, 266, 0, 0, 5);
+  assert.deepEqual(owner.invs[92].slice(0, 2), [{ id: 4151, amount: 1 }, { id: 995, amount: 100 }]);
+  assert.equal(owner.bag.length, 1);
+  op(owner, 266, 0, 0, 2);
+  assert.match(owner.messages.at(-1), /can't go in the chest/);
+  op(owner, 783, 16, 0, 2);
+  assert.equal(owner.bag.at(-1).getId(), 4151, 'taken back');
+  assert.deepEqual(owner.invs[92][0], { id: 995, amount: 100 });
+  op(owner, 783, 17);
+  assert.deepEqual(owner.invs[CHEST_INV][0], { id: 995, amount: 100 });
+  assert.equal(owner.invs[92][0], null);
+  op(owner, 266, 0, 1, 2);
+  hooks.custom.get('interface:close')({ player: owner });
+  assert.equal(owner.area.chest.length, 1, 'unconfirmed stays out of the chest');
+  assert.equal(owner.bag.some((item) => item.getId() === 4151), true, 'and back in the pack');
+});
+
+test('the chest is refused below its rank, and elsewhere is not ours', () => {
+  const { owner, member, clan } = clanOfThree();
+  assert.equal(openChest(owner), false, 'not in a hall');
+  inHall(member);
+  clan.permissions = { ...clan.permissions, 94: 127 };
+  assert.equal(openChest(member), true);
+  assert.match(member.messages.at(-1), /high enough rank/);
+  assert.equal(hooks.objects.Chest.Open({ player: member, objectId: 1 }), false, 'another chest');
+});
+
+test('the op on the offer uses the screen\'s chosen quantity, and X prompts', () => {
+  const { owner } = clanOfThree();
+  inHall(owner);
+  owner.bag.push(carried(995, 100));
+  openChest(owner);
+  hooks.custom.get('player:varp-transmit')({ player: owner, varpId: 675, value: 1 << 14 });
+  op(owner, 266, 0, 0, 1);
+  assert.equal(owner.invs[92][0].amount, 5);
+  hooks.custom.get('player:varp-transmit')({ player: owner, varpId: 675, value: 2 << 14 });
+  op(owner, 266, 0, 0, 1);
+  assert.equal(owner.invs[92][0].amount, 100);
+  owner.bag.push(carried(995, 50));
+  op(owner, 266, 0, 0, 4);
+  owner.amountAction.execute(20);
+  assert.equal(owner.invs[92][0].amount, 120);
+});
+
+test('the lever costs 1,000 and needs its rank; balloons drop a stack and leave after two minutes', () => {
+  const { owner, member, clan } = clanOfThree();
+  inHall(owner, member);
+  const pull = hooks.objects.Lever.Pull;
+  pull({ player: owner });
+  assert.match(owner.messages.at(-1), /chest is empty/);
+  owner.bag.push(carried(4151, 1));
+  openChest(owner);
+  op(owner, 266, 0, 0, 2);
+  op(owner, 783, 17);
+  pull({ player: owner });
+  assert.match(owner.messages.at(-1), /need 1,000 coins/);
+  clan.permissions = { ...clan.permissions, 95: 127 };
+  pull({ player: member });
+  assert.match(member.messages.at(-1), /high enough rank/);
+  clan.permissions = { ...clan.permissions, 95: 0 };
+  owner.bag.push(carried(995, 1500));
+  pull({ player: owner });
+  assert.equal(owner.bag.at(-1).getAmount(), 500);
+  assert.match(member.messages.at(-1), /balloons/i);
+  assert.ok(hooks.placed.length >= 16);
+  assert.ok(hooks.placed.every((balloon) => balloon.id >= 115 && balloon.id <= 122 && balloon.area === owner.area));
+
+  const random = Math.random;
+  const burst = hooks.objects['Party Balloon'].Burst;
+  const at = (balloon) => ({ x: balloon.location.x, y: balloon.location.y, z: 0 });
+  try {
+    Math.random = () => 0;
+    const first = hooks.placed[0];
+    member.ironman = 'ironman';
+    burst({ player: member, location: at(first) });
+    assert.equal(hooks.ground.length, 0, 'no drops for an Ironman');
+    assert.equal(hooks.placed.includes(first), false);
+    member.ironman = 'none';
+    burst({ player: member, location: at(hooks.placed[0]) });
+    assert.equal(hooks.ground[0].item.id, 4151);
+    assert.equal(owner.area.chest.length, 0);
+  } finally {
+    Math.random = random;
+  }
+  runTicks(200);
+  assert.equal(hooks.placed.length, 0, 'gone after two minutes');
+});
+
+test('the chest empties when the last non-guest leaves, and the staff go with the last visitor', () => {
+  const { owner, clan } = clanOfThree();
+  inHall(owner);
+  assert.equal(hooks.spawned.length, 5);
+  const hall = owner.area;
+  hall.chest.push({ id: 4151, amount: 1 });
+  const guest = player('Guesting');
+  seek(guest, 'Blur');
+  hooks.objects['Clan hall portal']['Enter-guest']({ player: guest });
+  hall.postLeave(owner, false);
+  assert.equal(hall.chest.length, 0);
+  assert.equal(hooks.removed.length, 0, 'a guest is still there');
+  hall.postLeave(guest, false);
+  assert.equal(hooks.removed.length, 5);
+  assert.equal(clan.members.length, 3);
+});
+
+test('Entertain lets the hall hear the piano, and Play-quietly doesn\'t', () => {
+  const { owner, member } = clanOfThree();
+  inHall(owner, member);
+  const piano = hooks.objects.Piano;
+  piano.Entertain({ player: owner });
+  assert.equal(owner.mounted.at(-1), 698);
+  assert.equal(owner.scripts.at(-1)[0], 4321);
+  op(owner, 698, 9);
+  assert.deepEqual(member.sounds, [2000]);
+  assert.equal(owner.sounds, undefined, 'the client played its own');
+  piano['Play-quietly']({ player: owner });
+  op(owner, 698, 9);
+  assert.deepEqual(member.sounds, [2000]);
+  piano['Background-music']({ player: owner });
+  assert.deepEqual(hooks.emitted.at(-1)[1].trackId, 692);
+});
+
+test('hall furniture answers only in a hall', () => {
+  const { owner } = clanOfThree();
+  const { Stool, Dummy, Bookcase } = hooks.objects;
+  assert.equal(Stool['Sit-on']({ player: owner }), false);
+  assert.equal(Dummy.Attack({ player: owner }), false);
+  assert.equal(Bookcase.Search({ player: owner }), false);
+  inHall(owner);
+  assert.equal(Stool['Sit-on']({ player: owner }), true);
+  assert.equal(owner.animation, 1137);
+  assert.equal(Dummy.Attack({ player: owner }), true);
+  assert.equal(Bookcase.Search({ player: owner }), true);
 });

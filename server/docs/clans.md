@@ -2,7 +2,7 @@
 
 The OSRS Clan system (`//` chat, the Your Clan tab), which is separate from the old Clan Chat, now
 called the Chat-channel ([social-chat-and-following.md](social-chat-and-following.md)). This page is
-the plan and the facts it relies on. Phases 1 to 4 are built, and most of phase 5.
+the plan and the facts it relies on. All five phases are built; what could only be tested so far, or isn't possible from the evidence, is at the end.
 
 ## Evidence
 
@@ -116,7 +116,7 @@ packets, because the browser pane was hidden.
 - `///` and `/g`: `chat_sendclan` with chat type 4, delivered as type 44. Guests hear the channel;
   members see them at rank -1 and can kick and ban them.
 - Permissions: Guests may listen, and guest minimum combat, total, QP and Iron status. **QP and Iron
-  status are stored and shown but not enforced.**
+  status are enforced at the channel, the Ironman plugin answering `ironman:mode`.**
 - Applying from Info, with Withdraw. Applicants (699) as rsprox 2778 shows: inviting flips
   `clan_i_am_recruiter` (varp 3019 bit 29), rows, stats line, accept and decline, offline accept.
 - The recruitment board (700, from loc 41730/41728 "View"): clans inviting, with Size and Created days.
@@ -143,7 +143,7 @@ Built:
 - Interests (691): the list toggles on the server, Save stores setting 7 (rsprox 3886 has 65535), Settings
   and the board show them, and the board's filters mark wanted, unwanted or neither through varps 807 and 808.
 - Outfit (694): `script4432` answers with the edited value, stored in setting 11, which the Settings
-  button draws. **Cloaks and vexilla don't take its colours yet.**
+  button draws. Cloaks and vexilla take its colour: the Clerk hands out that variant, and a new motif or a login swaps what a member carries and wears. No capture shows the motif's icons on the items, so they don't appear.
 - Events (703, 704): list, Edit mode, create, save, delete, rank to view, up to 10 and 30 days. The
   form's values are ours to choose: the cache's dropdown components have no script here that fills
   them, so lists are chatbox options, and date, world and duration are prompts.
@@ -153,11 +153,29 @@ Built:
 
 These screens have no recording anywhere in the archive, so all of it is from the cache's scripts.
 
-Not built:
+Clan Hall contents (`Contents.Clans.js`). No recording holds them, so ids are the cache's and rules the
+Wiki's:
 
-- Clan Hall contents: party chest and balloons, piano, decorations.
-- Broadcasts for personal bests, post-99 XP, diaries, hardcore deaths and loot keys: tsps has no event
-  for them, or only a query. Their rows save but do nothing.
-- **Gateway.** New ids are registered so frames are skipped, but clans don't reach the official client.
-  Mapping them needs rsprot's clan messages and a JDK 17 toolchain, which this machine doesn't have,
-  so the Kotlin hasn't been compiled either.
+- Party chest: 783 and 266, its inventories 916 (read through `invother_getobj`, so sent as 916 + 32768) and
+  92. Deposit needs setting 94; only Confirm commits, and closing returns what wasn't confirmed. Wiki: what's in
+  the chest is lost when the last non-guest leaves.
+- Lever: 1,000 coins, setting 95. Balloons: objects 115-122 (123-130 have no Burst), gone after two minutes.
+  Setting 96 and not being an Ironman decide who gets a drop. **Ours:** 16 to 64 balloons, a 50% chance, the
+  whole stack dropping, and that they fill the main room.
+- Coffer: the side panel 697 for deposits; Ironmen can't deposit, 50m a transaction, and a withdrawal tells
+  members. **Ours:** the wording.
+- Piano: 698 and script 4321. Entertain sends each clicked note, from enum 3799, to the hall; Play-quietly
+  doesn't; Background-music unlocks Rhapsody. **Keyboard keys play only for the player**: they stay in the
+  client's script and send nothing.
+- Staff: Banker, Hannibal, Raqueel, Gem and Gardener Jay Jr. **Ours:** where they stand; the Wiki gives only
+  rooms. Stools and benches sit, the dummy hits with no XP, bookcases are searched. **Ours:** those lines.
+
+Broadcasts: `boss:personal-best` (18 fights, not ToA, Tempoross or the Sepulchre), post-99 XP from
+`onExperienceGained`, `diary:tier-complete`, `ironman:hardcore-death`, `loot-keys:opened`, and combat and total
+level marks. **Ours:** hardcore death and loot key wording; total level every 25, as tsps's own level-up message.
+
+Gateway (`gateway/.../down/Clans.kt`, `gateway/COVERAGE.md`): 124-128 and clan chat both ways, kick, ban and mute.
+It compiles on JDK 17 and its tests decode through RSProx's 241 decoders, but **nothing has run against the
+official client**. No recording shows `VarClan`, guest chat upstream, or kick, ban and mute, so those rest on
+rsprot and the scripts. The gateway restarts update numbers from the last full update, because live's delta carries
+the count it applies on top of and tsps's is one higher.

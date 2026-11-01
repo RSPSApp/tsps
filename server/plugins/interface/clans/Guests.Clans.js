@@ -16,6 +16,9 @@ const FIND_PROMPT_SCRIPT = 110; // with this mode, as rsprox 76 tick 7504
 const FIND_PROMPT_MODE = 7;
 const SIDE_BUTTON = 7;
 
+const QUEST_POINTS_ATTRIBUTE = "quest.points";
+/** enum 3828: 1 Any Ironman, 2 UIM only, 3 HCIM only. */
+const IRON_RULES = { 1: ["ironman", "ultimate", "hardcore"], 2: ["ultimate"], 3: ["hardcore"] };
 const FETCHING = 2; // clan_guest_affinitystatus while the settings arrive (rsprox 76 tick 7587)
 const FETCH_TICKS = 1;
 const BUTTON_TIMEOUT_TICKS = 5;
@@ -115,6 +118,9 @@ function guestRefusal(player, clan) {
   const skills = player.getSkillManager();
   if (skills.getCombatLevel() < rules.combat) return `You need a combat level of ${rules.combat} to chat in this clan's channel.`;
   if (skills.getTotalLevel() < rules.total) return `You need a total level of ${rules.total} to chat in this clan's channel.`;
+  if ((player.getAttribute(QUEST_POINTS_ATTRIBUTE) ?? 0) < rules.qp) return `You need ${rules.qp} quest points to chat in this clan's channel.`;
+  const needed = IRON_RULES[rules.iron];
+  if (needed && !needed.includes(Core.ironmanMode(player))) return "Your account type can't chat in this clan's channel.";
   return null;
 }
 
@@ -396,6 +402,7 @@ module.exports = {
   clickBoard,
   clickGuestPanel,
   discard,
+  guestRefusal,
   init,
   openApplicants,
   openBoard,

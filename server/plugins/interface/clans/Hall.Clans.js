@@ -4,6 +4,7 @@
  * and their ops are the cache's and the rules the Wiki's (docs/clans.md).
  */
 
+const Contents = require("./Contents.Clans");
 const Core = require("./Core.Clans");
 const Store = require("./Store.Clans");
 
@@ -19,14 +20,21 @@ const COFFER_WITHDRAW_SETTING = 20;
 const COFFER_VAR = 3; // %varclan_3, which clan_storage_main_drawcoins shows
 
 const COFFER_GROUP = 696;
+const COFFER_SIDE_GROUP = 697;
 const MODAL_UID = (161 << 16) | 16;
+const SIDE_MODAL_UID = (161 << 16) | 74;
 const WITHDRAW_BUTTONS = { 7: 1, 8: 1000, 9: 1000000, 10: 10000000 };
 const WITHDRAW_X = 11;
 const WITHDRAW_ALL = 12;
+const DEPOSIT_BUTTONS = { 5: 1, 6: 1000, 7: 1000000, 8: 10000000 };
+const DEPOSIT_X = 9;
+const DEPOSIT_ALL = 10;
+const MAX_TRANSACTION = 50000000; // Wiki: Clan Hall
 const MAX_COINS = 2147483647;
 
 let core = null;
 const halls = new Map();
+const hallOfPlayer = new Map();
 
 function init(apiCore) {
   core = apiCore;
@@ -44,14 +52,27 @@ function hallFor(clan) {
         return false;
       }
       postLeave(mobile, logout) {
+        hallOfPlayer.delete(mobile);
+        const visitors = this.getPlayers().filter((visitor) => visitor !== mobile);
+        // Wiki: the chest's items are lost when the last non-guest leaves.
+        if (!visitors.some((visitor) => Core.clanOf(visitor) === clan)) this.chest = [];
+        if (visitors.length === 0) {
+          Contents.clear(this);
+          halls.delete(clan.key);
+        }
         super.postLeave(mobile, logout);
         if (logout) mobile.moveTo(new Location(...HUB_ARRIVAL));
-        if ((this.entities ?? []).length === 0) halls.delete(clan.key);
       }
     })();
     halls.set(clan.key, hall);
+    Contents.furnish(hall);
   }
   return hall;
+}
+
+/** The hall a player stands in, and whose: Contents.Clans.js asks. */
+function hallOf(player) {
+  return hallOfPlayer.get(player) ?? null;
 }
 
 function enter(player, clan, rank) {
@@ -64,11 +85,12 @@ function enter(player, clan, rank) {
     player.sendMessage("This clan's hall is locked.");
     return;
   }
-  if ((hall.entities ?? []).length >= (clan.hall?.players ?? MAX_HALL_PLAYERS)) {
+  if (hall.getPlayers().length >= (clan.hall?.players ?? MAX_HALL_PLAYERS)) {
     player.sendMessage("This clan's hall is full.");
     return;
   }
   hall.enter(player);
+  hallOfPlayer.set(player, { hall, clan });
   player.moveTo(new core.Location(...HALL_ARRIVAL));
 }
 
@@ -119,7 +141,7 @@ function canUse(player, clan, setting) {
 
 function openCoffer(player, clan) {
   Core.sendVarClan(player, COFFER_VAR, coins(clan));
-  player.getPacketSender().sendSubInterface(MODAL_UID, COFFER_GROUP, 0);
+  player.getPacketSender().sendSubInterface(MODAL_UID, COFFER_GROUP, 0).sendSubInterface(SIDE_MODAL_UID, COFFER_SIDE_GROUP, 3);
 }
 
 function sendCofferToAll(clan) {
@@ -135,9 +157,13 @@ function deposit(player, clan, amount) {
     player.sendMessage("You are not a high enough rank to deposit into the coffer.");
     return;
   }
+  if (Core.ironmanMode(player) !== "none") {
+    player.sendMessage("Ironmen can't deposit into the coffer.");
+    return;
+  }
   const inventory = player.getInventory();
   const carried = inventory.getAmount(core.ItemIdentifiers.COINS);
-  const moved = Math.min(amount, carried, MAX_COINS - coins(clan));
+  const moved = Math.min(amount, carried, MAX_COINS - coins(clan), MAX_TRANSACTION);
   if (moved <= 0) {
     player.sendMessage(carried <= 0 ? "You have no coins to deposit." : "The coffer can't hold any more.");
     return;
@@ -154,7 +180,7 @@ function withdraw(player, clan, amount) {
   }
   const inventory = player.getInventory();
   const room = MAX_COINS - inventory.getAmount(core.ItemIdentifiers.COINS);
-  const moved = Math.min(amount, coins(clan), room);
+  const moved = Math.min(amount, coins(clan), room, MAX_TRANSACTION);
   if (moved <= 0) {
     player.sendMessage(coins(clan) <= 0 ? "The coffer is empty." : "You can't carry any more coins.");
     return;
@@ -166,6 +192,9 @@ function withdraw(player, clan, amount) {
   clan.coffer = coins(clan) - moved;
   inventory.adds(core.ItemIdentifiers.COINS, moved);
   sendCofferToAll(clan);
+  // Wiki: a withdrawal notifies the members.
+  const notice = `${player.getUsername()} has withdrawn ${moved.toLocaleString("en-GB")} coins from the coffer.`;
+  for (const member of clan.members) Core.onlinePlayer(member.account)?.sendMessage(notice);
 }
 
 function askAmount(player, title, onAmount) {
@@ -173,35 +202,38 @@ function askAmount(player, title, onAmount) {
   player.getPacketSender().sendEnterAmountPrompt(title);
 }
 
-/** The side panel (697) would replace the inventory; here its deposit is a prompt. */
 function useCoffer({ player }) {
   const clan = hallClan(player);
   if (!clan) {
     player.sendMessage("Only members of the clan can use its coffer.");
     return true;
   }
-  const { DialogueChainBuilder, OptionDialogue } = core;
-  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
-    new OptionDialogue(0, {
-      executeOption(option) {
-        player.getPacketSender().sendInterfaceRemoval();
-        if (Number(option) === 1) openCoffer(player, clan);
-        else if (Number(option) === 2) askAmount(player, "Enter an amount to deposit in the coffer:", (amount) => deposit(player, clan, amount));
-      },
-    }, "View or withdraw.", "Deposit coins.").setTitle(`The coffer holds ${coins(clan).toLocaleString("en-GB")} coins.`),
-  ));
+  openCoffer(player, clan);
   return true;
 }
 
+function clickCofferSide(player, clan, childId) {
+  const carried = player.getInventory().getAmount(core.ItemIdentifiers.COINS);
+  if (DEPOSIT_BUTTONS[childId]) deposit(player, clan, DEPOSIT_BUTTONS[childId]);
+  else if (childId === DEPOSIT_ALL) deposit(player, clan, carried);
+  else if (childId === DEPOSIT_X) askAmount(player, "Enter an amount to deposit in the coffer:", (amount) => deposit(player, clan, amount));
+}
+
 function clickCoffer(event) {
-  if (event.groupId !== COFFER_GROUP) return;
+  if (event.groupId !== COFFER_GROUP && event.groupId !== COFFER_SIDE_GROUP) return;
   const { player, childId } = event;
   event.handled = true;
   const clan = hallClan(player);
   if (!clan) return;
-  if (WITHDRAW_BUTTONS[childId]) withdraw(player, clan, WITHDRAW_BUTTONS[childId]);
+  if (event.groupId === COFFER_SIDE_GROUP) clickCofferSide(player, clan, childId);
+  else if (WITHDRAW_BUTTONS[childId]) withdraw(player, clan, WITHDRAW_BUTTONS[childId]);
   else if (childId === WITHDRAW_ALL) withdraw(player, clan, coins(clan));
   else if (childId === WITHDRAW_X) askAmount(player, "Enter an amount to withdraw:", (amount) => withdraw(player, clan, amount));
 }
 
-module.exports = { clickCoffer, enterGuest, enterOwn, init, leave, useCoffer };
+function reset() {
+  halls.clear();
+  hallOfPlayer.clear();
+}
+
+module.exports = { clickCoffer, enterGuest, enterOwn, hallOf, init, leave, reset, useCoffer };

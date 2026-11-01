@@ -4,6 +4,7 @@
  */
 
 const Broadcasts = require("./Broadcasts.Clans");
+const Contents = require("./Contents.Clans");
 const Core = require("./Core.Clans");
 const Formation = require("./Formation.Clans");
 const Guests = require("./Guests.Clans");
@@ -66,6 +67,8 @@ function login({ player }) {
   }
   Core.sendClan(player, clan);
   Core.resetGuestView(player);
+  if (clan) Screens.wearColours(player, clan);
+  Broadcasts.noteCombat(player);
   if (!clan) {
     Core.send(player, core.encodeClanChannelFull(Core.OWN_CLAN, null));
     return;
@@ -85,6 +88,7 @@ function login({ player }) {
 
 function logout({ player }) {
   Formation.endSession(player);
+  Contents.closeChest(player);
   Core.removeGuestViewer(player);
   Core.removeFromChannel(player);
   const clan = Core.clanOf(player);
@@ -239,9 +243,9 @@ function clerkItems({ player, npcId }) {
     player.sendMessage("You need to be in a clan for that.");
     return true;
   }
-  const { ItemIdentifiers } = core;
   const inventory = player.getInventory();
-  for (const id of [ItemIdentifiers.CLAN_CLOAK, ItemIdentifiers.CLAN_VEXILLUM]) {
+  const clan = Core.clanOf(player);
+  for (const id of [Screens.cloakFor(clan), Screens.vexillumFor(clan)]) {
     if (player.getEquipment().containsNumber(id) || inventory.containsNumber(id)) continue;
     if (inventory.getFreeSlots() < 1) {
       player.sendMessage("You need more inventory space for that.");
@@ -265,7 +269,7 @@ function refreshRecruitOption(player) {
   if (player.isPlayerBot?.() === true) return;
   const location = player.getLocation();
   const inHubSquare = location.getX() >> 6 === CLAN_HUB.minX >> 6 && location.getY() >> 6 === CLAN_HUB.minY >> 6;
-  const shown = inHubSquare || player.getEquipment().containsNumber(core.ItemIdentifiers.CLAN_VEXILLUM);
+  const shown = inHubSquare || wearsVexillum(player);
   player.getPacketSender().sendPlayerOption(RECRUIT_OPTION_SLOT, shown ? "Recruit" : "", false);
 }
 
@@ -273,9 +277,13 @@ function mapSquareChanged({ player }) {
   refreshRecruitOption(player);
 }
 
+function wearsVexillum(player) {
+  return player.getEquipment().getItems?.().some((item) => Screens.isVexillum(item?.getId?.())) ?? false;
+}
+
 /** These hooks ask before the change, so look again on the next tick. */
 function vexillumChanging({ player, item }) {
-  if (item?.getId?.() !== core.ItemIdentifiers.CLAN_VEXILLUM) return;
+  if (!Screens.isVexillum(item?.getId?.())) return;
   later(1, () => {
     if (Core.isOnline(player)) refreshRecruitOption(player);
   });
@@ -284,12 +292,11 @@ function vexillumChanging({ player, item }) {
 /** Live: at the hub, or anywhere with a vexillum on for a clan that is recruiting (Wiki: Clan). */
 function recruitClanMember(player, target) {
   const clan = Core.clanOf(player);
-  const { ItemIdentifiers } = core;
   if (!clan) {
     player.sendMessage("You are not in a clan.");
     return;
   }
-  if (!inClanHub(player) && !player.getEquipment().containsNumber(ItemIdentifiers.CLAN_VEXILLUM)) {
+  if (!inClanHub(player) && !wearsVexillum(player)) {
     player.sendMessage("You can only recruit at the Clan Hub, or with a clan vexillum equipped.");
     return;
   }
@@ -378,6 +385,8 @@ function addMemberCommand({ player, parts }) {
 function reset() {
   Core.reset();
   Formation.reset();
+  Hall.reset();
+  Contents.reset();
 }
 
 module.exports = {
@@ -385,7 +394,9 @@ module.exports = {
   register(api) {
     core = api.core;
     emit = api.emitCustomEvent;
-    Core.init(api.core);
+    Core.init(api.core, api.emitCustomEvent);
+    Contents.init(api, Hall.hallOf);
+    Contents.setScheduler(later);
     Settings.init(api.core);
     Management.init(Settings.open);
     Guests.init(api.core, later, Settings.openAsGuest, Screens.interestNames, Settings.runeDateText);
@@ -409,6 +420,18 @@ module.exports = {
     api.onObjectInteraction("Clan hall portal", { Enter: Hall.enterOwn, "Enter-member": Hall.enterOwn, "Enter-guest": Hall.enterGuest });
     api.onObjectInteraction("Portal", { Leave: Hall.leave });
     api.onObjectInteraction("Clan Coffer", { Use: Hall.useCoffer });
+    api.onObjectInteraction("Chest", { Open: Contents.openChest, "Check-permissions": Contents.checkPermissions });
+    api.onObjectInteraction("Lever", { Pull: Contents.pullLever });
+    api.onObjectInteraction("Party Balloon", { Burst: Contents.burst });
+    api.onObjectInteraction("Piano", { Entertain: Contents.entertain, "Play-quietly": Contents.playQuietly, "Background-music": Contents.backgroundMusic });
+    api.onObjectInteraction("Stool", { "Sit-on": Contents.sit });
+    api.onObjectInteraction("Wooden bench", { "Sit-on": Contents.sit });
+    api.onObjectInteraction("Dummy", { Attack: Contents.hitDummy });
+    api.onObjectInteraction("Bookcase", { Search: Contents.searchBooks });
+    api.onInterfaceActionClick(Contents.clickChest);
+    api.onInterfaceActionClick(Contents.clickPiano);
+    api.onCustomEvent("player:varp-transmit", Contents.varpTransmitted);
+    api.onCustomEvent("interface:close", Contents.interfaceClosed);
     api.onInterfaceActionClick(Hall.clickCoffer);
     api.onInterfaceActionClick(Screens.clickInterests);
     api.onInterfaceActionClick(Screens.clickEvents);
@@ -421,6 +444,11 @@ module.exports = {
     api.onCustomEvent("combat-achievements:completed", Broadcasts.combatTask);
     api.onCustomEvent("collection-log:obtain", Broadcasts.collectionLog);
     api.onCustomEvent("npc-drops:roll", Broadcasts.drops);
+    api.onExperienceGained(Broadcasts.experience);
+    api.onCustomEvent("boss:personal-best", Broadcasts.personalBest);
+    api.onCustomEvent("diary:tier-complete", Broadcasts.diaryTier);
+    api.onCustomEvent("ironman:hardcore-death", Broadcasts.hardcoreDeath);
+    api.onCustomEvent("loot-keys:opened", Broadcasts.lootKey);
     api.onCustomEvent("player:varp-transmit", Management.varpTransmitted);
     api.onPlayerOption(recruit);
     api.onPlayerMapSquareChange(mapSquareChanged);

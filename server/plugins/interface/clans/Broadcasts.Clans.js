@@ -12,7 +12,17 @@ const LOOT_SETTING = 29;
 const LEVEL_SETTING = 30;
 const COMBAT_TASK_SETTING = 100;
 const COLLECTION_LOG_SETTING = 58;
+const PERSONAL_BEST_SETTING = 59;
 const PK_SETTING = 60;
+const DIARY_SETTING = 62;
+const HARDCORE_DEATH_SETTING = 63;
+const POST_99_XP_SETTING = 64;
+const LOOT_KEY_SETTING = 97;
+const POST_99_INTERVAL = 69; // in millions
+const LOOT_KEY_MINIMUM_VALUE = 98;
+const XP_AT_99 = 13034431;
+const MILLION = 1000000;
+const TOTAL_LEVEL_STEP = 25; // rsprox has 1875; SkillLevelUp.plugin.js's step
 // How far apart level-ups are told: every 10 from this level, every 5 from this, every 1 from this.
 const LEVEL_TENS_FROM = 66;
 const LEVEL_FIVES_FROM = 67;
@@ -48,9 +58,63 @@ function levelIsTold(clan, level) {
   return value(LEVEL_TENS_FROM) > 0 && level >= value(LEVEL_TENS_FROM) && level % 10 === 0;
 }
 
-function levelUp({ player, skill, newLevel }) {
+function levelUp({ player, skill, oldLevel, newLevel }) {
   const clan = clanFor(player);
-  if (clan && levelIsTold(clan, newLevel)) tell(clan, LEVEL_SETTING, `${player.getUsername()} has reached ${skill.getName()} level ${newLevel}.`);
+  if (!clan) return;
+  const name = player.getUsername();
+  if (levelIsTold(clan, newLevel)) tell(clan, LEVEL_SETTING, `${name} has reached ${skill.getName()} level ${newLevel}.`);
+  const skills = player.getSkillManager();
+  const total = skills.getTotalLevel();
+  const reached = Math.floor(total / TOTAL_LEVEL_STEP) * TOTAL_LEVEL_STEP;
+  if (reached > total - (newLevel - oldLevel)) tell(clan, LEVEL_SETTING, `${name} has reached a total level of ${reached}.`);
+  const combat = skills.getCombatLevel();
+  if (lastCombat.has(player) && combat > lastCombat.get(player)) tell(clan, LEVEL_SETTING, `${name} has reached combat level ${combat}.`);
+  lastCombat.set(player, combat);
+}
+
+const lastCombat = new WeakMap();
+
+function noteCombat(player) {
+  lastCombat.set(player, player.getSkillManager().getCombatLevel());
+}
+
+function experience({ player, skill, experience: gained }) {
+  const clan = clanFor(player);
+  if (!clan) return;
+  const after = player.getSkillManager().getExperience(skill);
+  if (after <= XP_AT_99) return;
+  const step = Math.max(1, Core.settingValue(clan, POST_99_INTERVAL)) * MILLION;
+  const reached = Math.floor(after / step) * step;
+  if (reached > after - gained && reached > XP_AT_99) {
+    tell(clan, POST_99_XP_SETTING, `${player.getUsername()} has reached ${reached.toLocaleString("en-GB")} XP in ${skill.getName()}.`);
+  }
+}
+
+function formatTicks(ticks) {
+  const seconds = Math.round(ticks * 0.6);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function personalBest({ player, boss, ticks }) {
+  const clan = clanFor(player);
+  if (clan) tell(clan, PERSONAL_BEST_SETTING, `${player.getUsername()} has achieved a new ${boss} personal best: ${formatTicks(ticks)}`);
+}
+
+function diaryTier({ player, diary, tier }) {
+  const clan = clanFor(player);
+  if (clan) tell(clan, DIARY_SETTING, `${player.getUsername()} has completed the ${tier} ${diary} diary.`);
+}
+
+function hardcoreDeath({ player }) {
+  const clan = clanFor(player);
+  if (clan) tell(clan, HARDCORE_DEATH_SETTING, `${player.getUsername()} has died as a Hardcore Ironman.`);
+}
+
+function lootKey({ player, value }) {
+  const clan = clanFor(player);
+  if (clan && value >= Core.settingValue(clan, LOOT_KEY_MINIMUM_VALUE)) {
+    tell(clan, LOOT_KEY_SETTING, `${player.getUsername()} has opened a loot key worth ${value.toLocaleString("en-GB")} coins.`);
+  }
 }
 
 function questCompleted({ player, quest }) {
@@ -116,4 +180,20 @@ function left(clan, name) {
   tell(clan, JOIN_LEAVE_SETTING, `${name} has left the clan.`);
 }
 
-module.exports = { collectionLog, combatTask, defeated, drops, init, joined, left, levelUp, questCompleted };
+module.exports = {
+  collectionLog,
+  combatTask,
+  defeated,
+  diaryTier,
+  drops,
+  experience,
+  hardcoreDeath,
+  init,
+  joined,
+  left,
+  levelUp,
+  lootKey,
+  noteCombat,
+  personalBest,
+  questCompleted,
+};

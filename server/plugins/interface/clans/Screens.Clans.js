@@ -168,10 +168,55 @@ function openOutfit(player, clan) {
   // script4432 answers with the edited value itself.
   popupAnswer(player, (value) => {
     Core.setSettingValue(clan, OUTFIT_SETTING, value);
+    for (const member of clan.members) {
+      const online = Core.onlinePlayer(member.account);
+      if (online) wearColours(online, clan);
+    }
     openSettings(player);
   });
   sender.sendSubInterface(POPUP_UID, OUTFIT_GROUP, 1);
   sender.sendClientScript(OUTFIT_SCRIPT, POPUP_UID);
+}
+
+/** Wiki: Clan cloak and Clan vexillum, in the motif's colour order. */
+const CLOAKS = [25712, 25714, 25715, 25716, 25717, 25718, 25719, 25720];
+const VEXILLA = [25721, 25723, 25724, 25725, 25726, 25727, 25728, 25729];
+const COLOUR_SHIFT = 20;
+const COLOUR_MASK = 0x3ff;
+
+function colourIndex(clan) {
+  const stored = (Core.settingValue(clan, OUTFIT_SETTING) >> COLOUR_SHIFT) & COLOUR_MASK;
+  return Math.max(0, Math.min(CLOAKS.length - 1, stored - 1));
+}
+
+function cloakFor(clan) {
+  return CLOAKS[colourIndex(clan)];
+}
+
+function vexillumFor(clan) {
+  return VEXILLA[colourIndex(clan)];
+}
+
+function isVexillum(id) {
+  return VEXILLA.includes(id);
+}
+
+/** Swaps what a member carries and wears for the clan's colour. */
+function wearColours(player, clan) {
+  const swap = (container) => {
+    let changed = false;
+    container.getItems().forEach((item, slot) => {
+      const id = item?.getId?.();
+      const wanted = CLOAKS.includes(id) ? cloakFor(clan) : VEXILLA.includes(id) ? vexillumFor(clan) : id;
+      if (wanted !== id) {
+        container.setItem(slot, new core.Item(wanted, item.getAmount()));
+        changed = true;
+      }
+    });
+    if (changed) container.refreshItems();
+  };
+  swap(player.getInventory());
+  swap(player.getEquipment());
 }
 
 // ---------------------------------------------------------------- Events
@@ -439,6 +484,10 @@ function varpTransmitted(event) {
 }
 
 module.exports = {
+  cloakFor,
+  isVexillum,
+  vexillumFor,
+  wearColours,
   clickEvents,
   clickForm,
   clickHall,

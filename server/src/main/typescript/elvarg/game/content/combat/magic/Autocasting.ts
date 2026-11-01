@@ -76,7 +76,7 @@ export class Autocasting {
 
     /** What varp 664 is set to when the selector opens, for this spellbook and weapon. */
     public static selectorList(spellbook: MagicSpellbook, weaponId: number): number {
-        if (spellbook === MagicSpellbook.ANCIENT) return weaponId;
+        if (spellbook === MagicSpellbook.ANCIENT) return ItemIdentifiers.ANCIENT_STAFF;
         if (spellbook === MagicSpellbook.ARCEUUS) return this.SELECTOR_ARCEUUS;
         if (weaponId === ItemIdentifiers.SLAYERS_STAFF || weaponId === ItemIdentifiers.SLAYERS_STAFF_E_) {
             return this.SELECTOR_SLAYERS_STAFF;

@@ -118,6 +118,12 @@
   "16314": {"npc_id": 16314, "name": "Mad Angel", "wiki_page": "Mad Angel", "tables": ["mad_angel"]},
   "16315": {"npc_id": 16315, "name": "Mad Angel", "wiki_page": "Mad Angel", "tables": ["mad_angel"]}
  },
+ "bossNpcs": {
+  "$comment": "Bosses the cache does not mark with param 1361, so NpcDrops' boss rare multiplier would skip them. Yama is not in monsters-complete yet and its NPC carries no params; Araxxor and the Shellbane gryphon are Wiki bosses whose cache rows omit the param. Remove an id once the cache (or the dump) marks it.",
+  "124": "Yama",
+  "13668": "Araxxor",
+  "14860": "Shellbane gryphon"
+ },
  "tables": {
   "abyssal_sire": {"addTertiary": [{"item_id": 13262, "name": "Abyssal orphan", "quantity": [1, 1], "weight": 1, "out_of": 2560, "rarity": 0.000390625, "section": "Tertiary", "notes": ["1/2,560 per Abyssal Sire kill; 5/128 when using an unsired on the Font of Consumption."]}], "why": "The Abyssal orphan pet, which the dump leaves out (activity pets, 2026-10-04)."},
   "yama": {"removeSections": ["Contract"], "why": "The Wiki page's Contract section lists what each of Yama's contracts rewards; a normal kill drops none of it (Wiki: Yama, Contracts)."}

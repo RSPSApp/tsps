@@ -1822,6 +1822,25 @@ test('Pollnivneach curtains draw back in place into their cache Close loc and cl
   }
 });
 
+test('the gate on the road east of Varrock opens both leaves into their named open locs (11766/11767)', async () => {
+  await initializeMapCollisionOnce();
+  const ids = [11766, 11767, 11768, 11769, 11770, 11771];
+  const h = buildHarness({ cacheObjects: new Map(ids.map((id) => [id, CacheDefinitions.getObject(id)])) });
+  try {
+    h.place(11766, 3319, 3468, 2);
+    h.place(11767, 3319, 3467, 2);
+    // rsprox captures 1636 and 3226: both leaves go on one tick, swinging east.
+    assert.deepEqual(h.click(11766, 3319, 3468, 2, 'Open', 'Gate'), [
+      ['deregister', 11766, 3319, 3468, 2],
+      ['deregister', 11767, 3319, 3467, 2],
+      ['register', 11770, 3320, 3468, 1],
+      ['register', 11771, 3320, 3467, 3],
+    ]);
+  } finally {
+    h.restore();
+  }
+});
+
 test("the Champions' Guild door swings without a separate open cache loc", async () => {
   await initializeMapCollisionOnce();
   const h = buildHarness({ cacheObjects: new Map([1805, 1806].map((id) => [id, CacheDefinitions.getObject(id)])) });

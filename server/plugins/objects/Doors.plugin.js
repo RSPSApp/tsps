@@ -385,9 +385,12 @@ function buildDoorCatalog() {
     // Gameval names can identify the open leaf even when its id comes first
     // (canafis_door_ground_open / canafis_door_ground). Keep paired gates with
     // their family handler and require a matching, Close-only cache definition.
+    // A leaf of a same-model double door (fai_varrock_member_gatel/r 11766/11767) also has a
+    // gameval-named open loc; leave it to the pairing below, which registers both leaves.
     const namedOpenId = namedOpenLeaf(id);
     const namedOpen = namedOpenId == null ? null : core.CacheDefinitions.getObject(namedOpenId);
     if (
+      !isSameModelLeafPair(id, id + 1) && !isSameModelLeafPair(id - 1, id) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(id) &&
       !DOUBLE_DOOR_FAMILY_IDS_BY_ID.has(namedOpenId) &&
       namedOpen?.name === def.name &&
@@ -469,6 +472,37 @@ function buildDoorCatalog() {
     if (!SINGLE_DOOR_OPEN_IDS.has(left) && !SINGLE_DOOR_OPEN_IDS.has(left + 1)) addSameModelDoubleDoor(left, left + 1);
   }
   return { closedToOpen, openToClosed };
+}
+
+// Two consecutive locs that are the closed leaves of one same-model double door: same name and
+// models, both offering only "Open", and each with a gameval-named open loc.
+function isSameModelLeafPair(a, b) {
+  const left = core.CacheDefinitions.getObject(a);
+  const right = core.CacheDefinitions.getObject(b);
+  if (!left || !right || left.name !== right.name) return false;
+  if (!Array.isArray(left.models) || left.models.length === 0) return false;
+  if (JSON.stringify(left.models) !== JSON.stringify(right.models)) return false;
+  const openOnly = (def) => hasAction(def.actions, "open") && !hasAction(def.actions, "close");
+  if (!openOnly(left) || !openOnly(right)) return false;
+  const names = core.CacheDefinitions.getLocNames();
+  return isMirroredLeafName(names.get(a), names.get(b)) && namedOpenLeaf(a) != null && namedOpenLeaf(b) != null;
+}
+
+// The two gameval names differ only by the leaf's side: gatel/gater, _left/_right, door/doorl,
+// face/face_mirr. Neighbouring variants (archeuus_door_double_left_green/_red) are not leaves.
+const LEAF_SIDE_SUFFIXES = new Set(["l|r", "left|right", "|l", "|r", "|_mirr", "|_mirror"]);
+function isMirroredLeafName(a, b) {
+  if (!a || !b || a === b) return false;
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let end = 0;
+  while (end < a.length - start && end < b.length - start && a[a.length - 1 - end] === b[b.length - 1 - end]) end++;
+  // Back the shared tail off a letter at a time: left_closed/right_closed share "t_closed".
+  for (; end >= 0; end--) {
+    const [x, y] = [a.slice(start, a.length - end), b.slice(start, b.length - end)].sort();
+    if (LEAF_SIDE_SUFFIXES.has(`${x}|${y}`)) return true;
+  }
+  return false;
 }
 
 // The open loc the cache's gameval names for a closed leaf (fai_varrock_member_gatel ->

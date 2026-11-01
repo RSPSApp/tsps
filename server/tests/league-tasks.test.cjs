@@ -506,6 +506,11 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   emit("woodcutting:success", { player: doer, logId: itemId("Maple logs") });
   assert.equal(doer.getAttribute("league:task-progress")["chop-100-maples-in-tirannwn"], undefined, "not chopped in Tirannwn");
 
+  // A boss in its own lair: the place only says where it lives (a Combat Achievements monster).
+  assert.deepEqual(trigger("defeat-vorkath-50-times"), { kind: "kill", npcs: ["Vorkath"], count: 50 });
+  assert.deepEqual(trigger("defeat-sarachnis-50-times"), { kind: "kill", npcs: ["Sarachnis"], count: 50 });
+  assert.equal(trigger("defeat-vorkath-15-times-without-leaving"), undefined, "its condition still stands");
+
   // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
   assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");
   assert.deepEqual(trigger("complete-the-shayzien-basic-agility-course").courses, ["shayzien-basic"], "the name's course where the link's is both");

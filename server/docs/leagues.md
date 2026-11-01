@@ -1559,7 +1559,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   name and the Wiki's description, read with its links' targets (what only restates the deed is
   dropped first: "whilst fishing", a rune's "from Essence at the Fire Altar"; a produce task's
   trailing league region is its `area`; a subject the name doesn't resolve is taken from the
-  description: "Clean a Grimy Guam" is the guam leaf; a tree chopped is its logs) ("[[Oathplate chest|chest]]" is
+  description: "Clean a Grimy Guam" is the guam leaf; a tree chopped is its logs; a boss "in" its
+  own lair, a Combat Achievements monster, is just its kills: "Defeat Vorkath on Ungael 50 times") ("[[Oathplate chest|chest]]" is
   the Oathplate chest): "Equip a/an X" and the description's list ("either A, B or C" any one, "A,
   B and C" all); "Catch / Chop / Mine / Cook / Craft / Fletch / Smelt / Smith / Make / Create /
   Brew / Clean / Cut [N] X" as an item made (a fish caught raw, a herb counted clean; a catch with

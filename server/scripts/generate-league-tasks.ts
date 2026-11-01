@@ -490,6 +490,13 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     const fromDescription = leagueAreaOf(description.replace(/ \d+ times$/i, ""));
     const area = fromName.area ?? fromDescription.area;
     if (area !== null) description = fromDescription.text;
+    // A boss in its own lair ("Defeat Vorkath on Ungael 50 times", "Sarachnis in the Forthos
+    // Dungeon", "the Giant Mole beneath Falador"): the place only says where it lives. A boss is a
+    // Combat Achievements monster (enum 3970), and lives in one place.
+    const bossName = subject.replace(/^the /i, "").toLowerCase();
+    if (caMonsters().has(bossName)) {
+      description = description.replace(/\s+(?:in|on|at|inside|beneath|under|underneath) (?:the )?[A-Z][^.]*?(?=(?: \d+ times?)?\.?$)/, "");
+    }
     // A condition in the description (where, how, how fast) is not a plain kill count: a place
     // ("in the Fremennik Province", "on Ungael") needs the area unlocks, which do not exist yet.
     // "(must be of one difficulty, normal and awakened together do not count)" is one too.

@@ -143,3 +143,23 @@ test("produce with an area: logs chopped in Varlamore count for Varlamore's task
   assert.equal((away.player.getAttribute("league:task-progress") ?? {})["chop-20-magic-logs-in-varlamore"], undefined, "not outside Varlamore");
 });
 
+
+/** A real NPC of the cache's name dying to the player through the engine's death task. */
+function kill(f, name) {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
+  const id = core.CacheDefinitions.getNpcId(name) ?? [...Array(20000).keys()].find((each) => core.CacheDefinitions.getNpc(each)?.name === name);
+  assert.ok(id !== undefined && id !== null, `no NPC ${name}`);
+  const at = f.player.getLocation();
+  const npc = new NPC(id, new core.Location(at.getX() + 1, at.getY(), at.getZ()));
+  npc.getCombat().addDamage(f.player, 1);
+  const task = new NPCDeathTask(npc);
+  task.execute();
+  task.execute();
+}
+
+test("kill: a boss in its own lair counts its kills (Defeat Sarachnis in the Forthos Dungeon 50 times)", (t) => {
+  const f = pactsCharacter(t);
+  kill(f, "Sarachnis");
+  assert.equal((f.player.getAttribute("league:task-kills") ?? {})["defeat-sarachnis-50-times"], 1, JSON.stringify(f.player.getAttribute("league:task-kills")));
+});

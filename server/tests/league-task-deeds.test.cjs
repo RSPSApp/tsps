@@ -246,3 +246,26 @@ test("steal: a theft from the stall named (Steal From a Gem Stall)", async (t) =
   assert.ok(f.player.getInventory().getValidItems().length > 0, `the real Thieving steals: ${f.messages}`);
   assert.ok(done(f, "steal-from-a-gem-stall"));
 });
+
+/** A plant picked from a field through the real Pickable plugin (never depleting). */
+async function pickPlant(t, f, objectId, option = "Pick") {
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const plant = new core.GameObject(objectId, new core.Location(1667, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(plant, true);
+  try {
+    await send(f, { type: "object_option", id: objectId, x: 1667, y: 3136, action: option }, 4);
+  } finally {
+    core.ObjectManager.deregister(plant, true);
+  }
+}
+
+test("pick: crops from a field, by the plant (Pick 6 flax; 6 wheat, 6 cabbages and 6 potatoes)", async (t) => {
+  const f = pactsCharacter(t);
+  t.mock.method(Math, "random", () => 0.99);
+  for (let i = 0; i < 6; i++) await pickPlant(t, f, core.ObjectIdentifiers.FLAX);
+  assert.equal(f.player.getInventory().getAmount(item("Flax")), 6, `the real Pickable picks: ${f.messages}`);
+  assert.ok(done(f, "pick-6-flax"));
+  await pickPlant(t, f, core.ObjectIdentifiers.WHEAT);
+  assert.equal(f.player.getInventory().getAmount(item("Grain")), 1);
+  assert.deepEqual(f.player.getAttribute("league:task-progress")["pick-6-wheat-6-cabbages-and-6-potatoes"], { Wheat: 1 }, "counted per plant: wheat's grain");
+});

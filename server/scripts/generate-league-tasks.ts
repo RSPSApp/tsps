@@ -352,6 +352,12 @@ function itemNamed(text: string, items: Map<string, string>, prefixes: string[] 
   return null;
 }
 
+/** The server's pickable plants (plugins/objects/data/pickables.json), by lower-cased name: Wheat (its grain), Flax... */
+const PICKED_CROPS: Map<string, string> = (() => {
+  const data = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../plugins/objects/data/pickables.json"), "utf8")).pickables;
+  return new Map<string, string>(data.filter((plant: any) => plant.name !== "Nettles").map((plant: any) => [plant.name.toLowerCase(), plant.name]));
+})();
+
 /** A stall by a cache loc's name ("Bakery stall"), or null. */
 let stallNames: Map<string, string> | null = null;
 function stallNamed(text: string): string | null {
@@ -622,6 +628,23 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
     if (what) trigger.items = [what];
     if (area !== null) trigger.area = area;
     return { trigger };
+  }
+  // "Pick 6 flax", "Pick some Sweetcorn from a Field": that crop picked from a field (the server's
+  // pickable plants); "Pick 6 wheat, 6 cabbage, and 6 potatoes": each of them that many. A place, or
+  // a plant picked elsewhere (a minigame's sq'irks, a ground item "picked up"), is left out.
+  if ((match = /^Pick (?!up )(.+)$/i.exec(name))) {
+    const said = clean(description).replace(/^Pick /i, "").replace(/ from an? (?:Field|[A-Za-z]+ \(scenery\))$/i, "").replace(/ from an? field$/i, "");
+    if (PLACE.test(said) || CONDITION.test(said)) return {};
+    const crop = (text: string) => {
+      const { count, subject } = countAndSubject(text.trim());
+      const lower = subject.toLowerCase();
+      const item = [lower, lower.replace(/es$/, ""), lower.replace(/s$/, "")].map((form) => PICKED_CROPS.get(form)).find(Boolean);
+      return item ? { item, count } : null;
+    };
+    const parts = said.split(/,\s*(?:and\s+)?|\s+and\s+/).filter(Boolean).map(crop);
+    if (!parts.length || parts.some((part) => part === null)) return {};
+    if (parts.length === 1) return { trigger: { kind: "pick", plants: [parts[0]!.item], count: parts[0]!.count } };
+    return { trigger: { kind: "pick-each", plants: Object.fromEntries(parts.map((part) => [part!.item, part!.count])) } };
   }
   // "Cast Ice Burst" ("Cast the Ice Burst spell"), "Cast Low Level Alchemy", "Cast a Wave Spell" ("any
   // wave spell": the four): a spell whose cost is paid (magic:cast-committed). Combat spells and the

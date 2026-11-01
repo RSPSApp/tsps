@@ -582,8 +582,10 @@ export class PlayerSession {
         ? {
             startDeltaX: forceMovement.getStart().getX() - location.getX(),
             startDeltaY: forceMovement.getStart().getY() - location.getY(),
-            endDeltaX: forceMovement.getEnd().getX(),
-            endDeltaY: forceMovement.getEnd().getY(),
+            // The end tile from the current one, as the start is: a slide whose player is already
+            // on its end tile (moved there the same tick, as live jumps a stepping stone) ends at 0.
+            endDeltaX: forceMovement.getStart().getX() + forceMovement.getEnd().getX() - location.getX(),
+            endDeltaY: forceMovement.getStart().getY() + forceMovement.getEnd().getY() - location.getY(),
             startCycleOffset: forceMovement.getSpeed(),
             endCycleOffset: forceMovement.getReverseSpeed(),
             direction: [1024, 1536, 0, 512][forceMovement.getDirection()] ?? forceMovement.getDirection(),

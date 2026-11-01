@@ -131,7 +131,11 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
     // Demonic Pacts: the cache's own list less its one row not in the league (Equip a Dragon Crossbow).
     6: { tiers: [213, 513, 449, 371, 46], medium: 30, total: 146040, pacts: 79 },
   };
-  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss"]);
+  const kinds = new Set(["kill", "level", "any-level", "level-up", "total-level", "base-level", "combat-level", "quest", "equip", "equip-all", "produce", "hunt", "pickpocket", "clue", "experience", "diary", "ca-tier", "ca-count", "ca-bosses", "ca-boss", "agility-laps"]);
+  // The agility plugin's course keys (and Yama's stepping stones, the Leagues lair's own course).
+  const courseDir = path.join(__dirname, "../plugins/skills/agility/courses");
+  const courseKeys = new Set(["yama-stepping-stones", ...require("fs").readdirSync(courseDir)
+    .flatMap((file) => [...require("fs").readFileSync(path.join(courseDir, file), "utf8").matchAll(/^\s*key: "([^"]+)"/gm)].map((match) => match[1]))]);
   const npcNames = new Set();
   // The cache's own list (enum 5950's rows): a task it has by name takes its category.
   const cacheRows = new Map();
@@ -171,6 +175,7 @@ test("the catalog is sound: the Wiki's counts and points, unique ids, verified t
       if (cached) assert.equal(task.category, cached.columns.get(35)?.[0] ?? -1, `${task.id}: the cache's category (the table's -1 without one)`);
       if (task.trigger) {
         assert.ok(kinds.has(task.trigger.kind), `${task.id}: ${task.trigger.kind}`);
+        for (const course of task.trigger.courses ?? []) assert.ok(courseKeys.has(course), `${task.id}: course ${course}`);
         if (task.trigger.kind === "kill") {
           assert.ok(Array.isArray(task.trigger.npcs) && task.trigger.npcs.length > 0, task.id);
           for (const npc of task.trigger.npcs) npcNames.add(npc);
@@ -487,6 +492,22 @@ test("deeds award Demonic Pacts tasks from the skills' own events: worn, made, g
   emit("treasure-trails:casket-opened", { player: doer, tier: "easy" });
   assert.ok(completed(doer).includes("1-easy-clue-scroll"));
   assert.equal(doer.getAttribute("league:task-progress")["25-easy-clue-scrolls"], 1);
+
+  // Laps: the agility plugin's course keys; a lap reward of several laps counts them all.
+  assert.deepEqual(trigger("complete-10-laps-of-the-varlamore-agility-course"), { kind: "agility-laps", courses: ["wyrm-basic", "wyrm-advanced"], count: 10 }, "either Colossal Wyrm course");
+  assert.deepEqual(trigger("complete-the-shayzien-basic-agility-course").courses, ["shayzien-basic"], "the name's course where the link's is both");
+  assert.equal(trigger("complete-the-prifddinas-agility-course-in-1-10"), undefined, "a timed lap is no count");
+  emit("agility:lap", { player: doer, course: "wyrm-basic", laps: 6, count: 6 });
+  emit("agility:lap", { player: doer, course: "wyrm-advanced", laps: 3, count: 3 });
+  assert.equal(doer.getAttribute("league:task-progress")["complete-10-laps-of-the-varlamore-agility-course"], 9);
+  emit("agility:lap", { player: doer, course: "wyrm-advanced", laps: 4, count: 1 });
+  assert.ok(completed(doer).includes("complete-10-laps-of-the-varlamore-agility-course"));
+  // Yama's stepping stones: a stone is a lap.
+  assert.deepEqual(trigger("jump-on-yama-s-stepping-stones-666-times"), { kind: "agility-laps", courses: ["yama-stepping-stones"], count: 666 });
+  for (let stone = 1; stone < 666; stone++) emit("agility:lap", { player: doer, course: "yama-stepping-stones", laps: stone, count: 1 });
+  assert.ok(!completed(doer).includes("jump-on-yama-s-stepping-stones-666-times"));
+  emit("agility:lap", { player: doer, course: "yama-stepping-stones", laps: 666, count: 1 });
+  assert.ok(completed(doer).includes("jump-on-yama-s-stepping-stones-666-times"), "the 666th stone");
 
   const main = character("plain-doer", "main");
   emit("mining:success", { player: main, itemId: itemId("Tin ore") });

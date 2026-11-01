@@ -267,7 +267,7 @@ function completeLap(player, course) {
     player.getPacketSender().sendVarbit(HIGHLIGHTED_COURSE_VARBIT, 0);
     player.getPacketSender().sendClientScript(END_LAP_SCRIPT, lapClock(), Math.max(1, reward.count | 0) - 1);
   }
-  pluginApi.emitCustomEvent("agility:lap", { player, course: course.key, laps: laps[course.key] });
+  pluginApi.emitCustomEvent("agility:lap", { player, course: course.key, laps: laps[course.key], count: Math.max(1, reward.count | 0) });
   if (course.diaryTask) {
     pluginApi.emitCustomEvent("diary:task", { player, ...course.diaryTask });
   }

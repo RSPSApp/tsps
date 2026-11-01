@@ -1351,6 +1351,21 @@ Yama's Lair sets `busy`, opens the portal (3274) on the tile, plays the fall two
 lands at +4 by the lair's exit, face down under the portal's second graphic. No cooldown was
 recorded; the usual teleport rules apply.
 
+**Yama's Lair** (Demonic Pacts' start, `start` 1503, 5602; 237/01098): its 24 NPCs are world
+spawns from that recording (`npc-spawns.json`, source `rsprox:237/01098`); the Glowing portal's
+Leave (`YamaExit.LeagueAreaUnlocks.js`, `exit`) goes to Civitas through the shadow fade.
+**Yama's stepping stones** (`YamaStones.LeagueAreaUnlocks.js`, data `stones`; 673 jumps in
+237/01098, the Wiki's Yama's_Lair): no start, end or laps, a count of stones
+(`league:yama-stones`, announced every tenth). A jump reaches a stone 2-3 tiles off (4 from the
+shore tiles the recording used), else "I can't reach that!", and resolves on the click's own tick:
+the player is on the stone with `human_yama_shortjump01`'s slide from the stone left (PlayerSession
+writes an exact-move's end from the current tile, as the protocol does), and the next tick's
+start clears the slide before that tick's click, so a stone a tick. The stone left burns for six
+ticks (`league_6_yama_agil_fire_npc`, six at most): landing on it hits 1 with "The stone burns your
+feet…" and no experience, yet counts. Otherwise 3.6 Agility experience, which the recording's
+level-ups give at the starting 5x (about 18; the Wiki says 8). Each stone is the course's lap
+(`agility:lap`, course `yama-stepping-stones`), for "Jump on Yama's stepping stones 666 times".
+
 **This cache's buttons** (rev 241, as the Leagues VI recordings use them): the details' teleport
 is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo_boss_map_button
 82 and confirm_frame 60 have no op on this client), and script 3668's components are rev 237's
@@ -1525,7 +1540,10 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `amount`), `fishing:success`, `woodcutting:success`, `mining:success` and
   `runecrafting:success` (rolls x runes per essence), whatever the skill; `hunt { npcs, count }`
   from `hunter:success`; `pickpocket { npcs, count }` from `thieving:success` (pickpockets only);
-  `clue { tier, count }` from `treasure-trails:casket-opened`. The generator derives them from the
+  `clue { tier, count }` from `treasure-trails:casket-opened`; `agility-laps { courses, count }`
+  from `agility:lap` (its `count`: a lap reward of several counts them all; "Complete a lap of /
+  N laps of the X Agility Course", the course from the description's link or, where that names
+  both Shayzien courses, the name; Yama's stepping stones). The generator derives them from the
   name and the Wiki's description, read with its links' targets ("[[Oathplate chest|chest]]" is
   the Oathplate chest): "Equip a/an X" and the description's list ("either A, B or C" any one, "A,
   B and C" all); "Catch / Chop / Mine / Cook / Craft / Fletch / Smelt / Smith / Make / Create /

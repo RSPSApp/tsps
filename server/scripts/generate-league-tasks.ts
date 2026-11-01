@@ -383,6 +383,28 @@ function caMonsters(): Map<string, string> {
 const CA_MONSTER_ENUM = 3970;
 
 /** A diary's name in a task to the diaries plugin's key (plugins/achievements/diaries). */
+/** Agility course names as tasks give them (without "Rooftop") -> the agility plugin's course keys. */
+const AGILITY_COURSES: Array<[RegExp, string[]]> = [
+  [/^al kharid$/, ["alkharid"]],
+  [/^ardougne$/, ["ardougne"]],
+  [/^barbarian outpost$/, ["barbarian"]],
+  [/^canifis$/, ["canifis"]],
+  [/^draynor(?: village)?$/, ["draynor"]],
+  [/^falador$/, ["falador"]],
+  [/^gnome stronghold$/, ["gnome"]],
+  [/^pollnivneach$/, ["pollnivneach"]],
+  [/^prifddinas$/, ["prifddinas"]],
+  [/^rellekka$/, ["rellekka"]],
+  [/^seers'? village$/, ["seers"]],
+  [/^shayzien basic$/, ["shayzien-basic"]],
+  [/^shayzien advanced$/, ["shayzien-advanced"]],
+  [/^varrock$/, ["varrock"]],
+  [/^werewolf$/, ["werewolf"]],
+  [/^wilderness$/, ["wilderness"]],
+  [/^ape atoll$/, ["ape-atoll"]],
+  [/^colossal wyrm$/, ["wyrm-basic", "wyrm-advanced"]],
+];
+
 const DIARIES: Array<[RegExp, string]> = [
   [/^ardougne$/, "ardougne"], [/^desert$/, "desert"], [/^falador$/, "falador"], [/^fremennik$/, "fremennik"],
   [/^kandarin$/, "kandarin"], [/^karamja$/, "karamja"], [/^morytania$/, "morytania"], [/^wilderness$/, "wilderness"],
@@ -503,6 +525,19 @@ function deriveTrigger(name: string, description: string, names: Names): { trigg
     const region = (match[2] ?? match[3]).toLowerCase();
     const diary = DIARIES.find(([pattern]) => pattern.test(region))?.[1];
     return diary ? { trigger: { kind: "diary", diary, tier } } : {};
+  }
+  // "Complete a lap of the Canifis Rooftop Agility Course", "Complete 10 laps of the Colossal Wyrm
+  // Agility Course": laps of the agility plugin's course (either Colossal Wyrm course). A timed lap
+  // ("in 1:10 or less") is not a lap count. Yama's stepping stones count each stone as a lap.
+  // The description's course is its link's target ("Shayzien Agility Course" for either Shayzien
+  // course), so the name's ("Complete the Shayzien Basic Agility Course") is tried after it.
+  if ((match = /^Complete (a|\d+) laps? of the (.+?) Agility Course$/i.exec(description.replace(/\.$/, "")))) {
+    const course = (place: string | undefined) => place && AGILITY_COURSES.find(([pattern]) => pattern.test(place.replace(/ Rooftop$/i, "").toLowerCase()))?.[1];
+    const courses = course(match[2]) || course(/^Complete (?:the |\d+ laps of the )?(.+?) Agility Course$/i.exec(name)?.[1]);
+    return courses ? { trigger: { kind: "agility-laps", courses, count: match[1] === "a" ? 1 : Number(match[1]) } } : {};
+  }
+  if ((match = /^Jump on Yama's stepping stones (\d+) times$/i.exec(name))) {
+    return { trigger: { kind: "agility-laps", courses: ["yama-stepping-stones"], count: Number(match[1]) } };
   }
   // "1 Easy Clue Scroll", "25 Elite Clue Scrolls": a reward casket of that tier opened.
   if ((match = /^(\d+) (Beginner|Easy|Medium|Hard|Elite|Master) Clue Scrolls?$/i.exec(name))) {

@@ -563,6 +563,88 @@ test("Yama's Lair's Glowing portal leads to Civitas through the recorded fade", 
   leaver.setRegistered(false);
 });
 
+test("Yama's stepping stones: a jump a tick, the stone left on fire, a burn on a burning one, the count", () => {
+  const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
+  ObstacleRunner.init({ core, getTaskManager: () => core.TaskManager });
+  const YamaStones = require("../plugins/modes/leagueareas/YamaStones.LeagueAreaUnlocks");
+  worldLeague = 6;
+  const jumper = character("stonejumper");
+  worldLeague = 4;
+  jumper.setRegistered(true);
+  const loc = core.CacheDefinitions.getLocId("league_6_yama_steppingstone");
+  const stone = (x, y) => ({ player: jumper, objectId: loc, object: { getId: () => loc, getLocation: () => at(x, y) } });
+  const ticks = (n) => { for (let i = 0; i < n; i++) core.TaskManager.process(); };
+  const agility = () => jumper.getSkillManager().getExperience(core.Skill.AGILITY);
+  const laps = () => emitted.filter(([name, payload]) => name === "agility:lap" && payload.player === jumper).map(([, payload]) => payload);
+
+  // From the shore, four tiles on (recorded from 1490, 5598).
+  jumper.moveTo(at(1490, 5598));
+  const route = { ...stone(1486, 5598), destination: { x: 1495, y: 5598, z: 0 } };
+  YamaStones.route(route);
+  assert.deepEqual(route.destination, { x: 1490, y: 5598, z: 0 }, "jumped to from where it stands");
+  assert.equal(YamaStones.jump(stone(1486, 5598)), true);
+  ticks(3);
+  assert.ok(jumper.getLocation().equals(at(1486, 5598)), "on the first stone");
+  const first = agility();
+  assert.ok(first > 0, "experience for a jump");
+  assert.equal(jumper.getAttribute("league:yama-stones"), 1);
+
+  // Too far between stones (four tiles): the engine's refusal.
+  assert.equal(YamaStones.jump(stone(1481, 5597)), true);
+  assert.equal(jumper.sent.messages.at(-1), "I can't reach that!");
+  assert.ok(jumper.getLocation().equals(at(1486, 5598)));
+
+  // On, then straight back to the stone just left: it burns, no experience, still counted.
+  YamaStones.jump(stone(1484, 5596));
+  ticks(3);
+  assert.ok(jumper.getLocation().equals(at(1484, 5596)));
+  const before = agility();
+  const queue = jumper.getCombat().getHitQueue();
+  const burns = [];
+  const addPending = queue.addPendingDamage.bind(queue);
+  queue.addPendingDamage = (hits) => (burns.push(...hits.map((each) => each.getDamage())), addPending(hits));
+  YamaStones.jump(stone(1486, 5598));
+  ticks(3);
+  assert.equal(jumper.sent.messages.at(-1), "The stone burns your feet as it was recently submurged in lava.");
+  assert.equal(agility(), before, "no experience off a burning stone");
+  assert.deepEqual(burns, [1], "the burn hits for 1, as recorded");
+  assert.equal(jumper.getAttribute("league:yama-stones"), 3, "a burning stone still counts");
+
+  // The fires go out after six ticks: back again is a clean jump.
+  ticks(7);
+  YamaStones.jump(stone(1484, 5596));
+  ticks(3);
+  assert.ok(agility() > before, "the fire has gone out");
+
+  // A stone a tick, as live: a jump lands at the start of the next tick, before that tick's
+  // click, so each click is from the stone just reached.
+  ticks(7);
+  jumper.sent.messages.length = 0;
+  YamaStones.jump(stone(1486, 5598));
+  const path = [[1484, 5596], [1481, 5597], [1479, 5599]];
+  const landings = [];
+  for (const [x, y] of path) {
+    ticks(1);
+    YamaStones.jump(stone(x, y));
+    landings.push(`${jumper.getLocation().getX()},${jumper.getLocation().getY()}`);
+  }
+  ticks(4);
+  assert.ok(!jumper.sent.messages.includes("I can't reach that!"), "each in reach of the stone just reached");
+  assert.ok(jumper.getLocation().equals(at(1479, 5599)), `the run of stones, landing on each: ${landings}`);
+
+  // Every tenth stone is announced; each is the course's lap for the tasks.
+  jumper.setAttribute("league:yama-stones", 9);
+  ticks(7);
+  YamaStones.jump(stone(1478, 5602));
+  ticks(3);
+  assert.equal(jumper.sent.messages.at(-1), "Your Yama's stepping stone count is: <col=ff0000>10</col>.");
+  assert.deepEqual({ course: laps().at(-1).course, laps: laps().at(-1).laps }, { course: "yama-stepping-stones", laps: 10 });
+
+  const echoes = character("echoesjumper");
+  assert.equal(YamaStones.jump({ ...stone(1486, 5598), player: echoes }), false, "only a Demonic Pacts character's");
+  jumper.setRegistered(false);
+});
+
 test("Demonic Pacts' League Home Teleport: Civitas with the league's cast and its map graphics, Yama's Lair through the portal", () => {
   worldLeague = 6;
   const homer = character("pactshome");

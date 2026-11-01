@@ -15,7 +15,7 @@
  * post-quest transforms (e.g. 11871 Drunken Ali) switch at index 28, which is
  * why completion writes 28.
  *
- * Stages (varbit 334):
+ * Saved stages (the client's varbit 334 value differs for some; see FEUD_VAR_BY_STAGE):
  *   0 not started             15 have the jewels
  *   1 asked by Ali Morrisane  16 looking for the traitor
  *   2 learnt of the feud      17 told Ali the Operator
@@ -131,6 +131,33 @@ module.exports = function registerTheFeudQuest(api) {
   const STAGE_MAYOR = 26;
   const STAGE_FINAL = 27;
   const STAGE_COMPLETE = 28;
+
+  /**
+   * The feud_var value the client sees for each stage above, where it differs.
+   * The stages name the step just finished; feud_var names the step to do next.
+   * Mapping follows Quest Helper's TheFeud.java steps: 9 get the blackjack, 12 talk
+   * to Ali for the second job, 13 hide behind the cactus, 14 the whole heist (door
+   * open is feud_var_mayorsdoor), 16 the traitor (found is feud_found_trait), 17 the
+   * snake, 18 the dung, 22 poison the drink, then 23-27. The cache transforms on
+   * feud_var only switch at 28. Unlisted stages are sent as they are.
+   */
+  const FEUD_VAR_BY_STAGE = new Map([
+    [STAGE_POCKET_TWO, 9],
+    [STAGE_POCKET_THREE, 12],
+    [STAGE_SAFE_JOB, 13],
+    [STAGE_STAKED_OUT, 14],
+    [STAGE_INSIDE, 14],
+    [STAGE_TRAITOR_TOLD, 16],
+    [STAGE_POISON_PLAN, 17],
+    [STAGE_SNAKE_GIVEN, 18],
+    [STAGE_POISON_MADE, 22],
+    [STAGE_POISONED, 23],
+    [STAGE_REPORTED, 24],
+    [STAGE_TOUGH_GUY, 25],
+    [STAGE_CHAMPION, 26],
+    [STAGE_MAYOR, 27],
+  ]);
+  const feudVarValue = (stage) => FEUD_VAR_BY_STAGE.get(stage) ?? stage;
 
   const ALI_MORRISANE_ID = NpcIdentifiers.ALI_MORRISANE; // 3533
   const DRUNKEN_ALI_ID = NpcIdentifiers.DRUNKEN_ALI; // 3534
@@ -1340,8 +1367,9 @@ module.exports = function registerTheFeudQuest(api) {
   function hideBehindCactus(event) {
     const { player, objectId } = event;
     if (objectId !== CACTUS_OBJECT_ID) return false;
-    const current = stage(player);
-    if (current < STAGE_SAFE_JOB || current > STAGE_STAKED_OUT) return false;
+    // Every stage plays the transcript: its first branch (SN-vhR) is the "I'd feel a
+    // little silly" line before the safe job and after the robbery, and KMB_VR only
+    // advances the stage from STAGE_SAFE_JOB.
     event.handled = true;
     startTranscript(api, player, OPERATOR_ID, PAGE, "staking-out-the-house-hiding-behind-the-cactus");
     return true;
@@ -1909,6 +1937,7 @@ module.exports = function registerTheFeudQuest(api) {
     name: "The Feud",
     varpId: 435,
     varbitId: VARBIT_FEUD_VAR,
+    varbitValue: feudVarValue,
     startedValue: STAGE_STARTED,
     completionValue: STAGE_COMPLETE,
     questPoints: 1,

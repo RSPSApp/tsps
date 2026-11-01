@@ -19,5 +19,6 @@ module.exports = {
     require("./leagueareas/Interface.LeagueAreaUnlocks")(api);
     require("./leagueareas/Enforcement.LeagueAreaUnlocks")(api);
     require("./leagueareas/Commands.LeagueAreaUnlocks")(api);
+    require("./leagueareas/HomeTeleport.LeagueAreaUnlocks")(api);
   },
 };

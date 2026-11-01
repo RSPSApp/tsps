@@ -1322,6 +1322,15 @@ with the quests they need nested under them, completed in reverse through League
 Recipe for Disaster's subquests left out). The areas' diary tasks and combat achievements that
 live also completed are not here yet.
 
+**Demonic Pacts' League Home Teleport** (`leagueareas/HomeTeleport.LeagueAreaUnlocks.js`, data
+`homeTeleport`; spellbook 218:5; 237/01098, 01107, 01149, 238/01248): Cast asks "Select an
+option" with "Yama's lair." and "Civitas illa Fortis.", its other ops go straight there.
+Civitas plays the area teleport's cast, whose steps also put `leagues_6_home_teleport_spotanim_0N`
+on the caster's tile as a map graphic (the shared HomeTeleportSequence's new `mapGraphic`);
+Yama's Lair sets `busy`, opens the portal (3274) on the tile, plays the fall two ticks on and
+lands at +4 by the lair's exit, face down under the portal's second graphic. No cooldown was
+recorded; the usual teleport rules apply.
+
 **This cache's buttons** (rev 241, as the Leagues VI recordings use them): the details' teleport
 is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo_boss_map_button
 82 and confirm_frame 60 have no op on this client), and script 3668's components are rev 237's

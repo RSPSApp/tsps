@@ -532,6 +532,45 @@ test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abys
   pacts.setRegistered(false);
 });
 
+test("Demonic Pacts' League Home Teleport: Civitas with the league's cast and its map graphics, Yama's Lair through the portal", () => {
+  worldLeague = 6;
+  const homer = character("pactshome");
+  worldLeague = 4;
+  homer.setRegistered(true);
+  const graphics = [];
+  const sendLocal = core.World.sendLocalGraphics;
+  core.World.sendLocalGraphics = (id, at) => graphics.push([id, at.getX(), at.getY()]);
+  try {
+    const cast = (opId) => hooks.onSpellCast({ player: homer, spellName: "League Home Teleport", spellWidget: uid(218, 5), spellItemId: -1, opId, handled: false });
+    homer.moveTo(at(3222, 3218));
+    cast(3);
+    core.TaskManager.process();
+    core.TaskManager.process();
+    assert.equal(homer.getAnimation()?.getId(), 13764, "leagues_6_home_teleport_player_01 at +1");
+    assert.deepEqual(graphics[0], [3755, 3222, 3218], "leagues_6_home_teleport_spotanim_01 on the tile");
+    for (let tick = 2; tick < 24; tick++) core.TaskManager.process();
+    const landed = homer.getLocation();
+    assert.ok(Math.abs(landed.getX() - 1666) <= 1 && Math.abs(landed.getY() - 3136) <= 1, `Civitas: ${landed.getX()}, ${landed.getY()}`);
+
+    graphics.length = 0;
+    cast(2);
+    assert.deepEqual(graphics[0].slice(0, 1), [3274], "the portal opens under the caster");
+    assert.equal(homer.sent.varbits.get(12393), 1, "busy");
+    for (let tick = 0; tick < 4; tick++) core.TaskManager.process();
+    const lair = homer.getLocation();
+    assert.ok(Math.abs(lair.getX() - 1502) <= 1 && Math.abs(lair.getY() - 5592) <= 1, `Yama's Lair: ${lair.getX()}, ${lair.getY()}`);
+    assert.equal(homer.getAnimation()?.getId(), 12152, "human_yama_portal_fall_on_face");
+    assert.equal(homer.sent.varbits.get(12393), 0);
+  } finally {
+    core.World.sendLocalGraphics = sendLocal;
+    homer.setRegistered(false);
+  }
+  const echoes = character("echoeshome");
+  const event = { player: echoes, spellName: "League Home Teleport", opId: 3, handled: false };
+  hooks.onSpellCast(event);
+  assert.equal(event.handled, false, "another league's character is not handled here");
+});
+
 test("a reload restores the unlocks and their varbits", () => {
   const league = character("reloader");
   completeTasks(league, 60);

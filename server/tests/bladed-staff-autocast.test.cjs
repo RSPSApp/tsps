@@ -9,6 +9,7 @@ const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Autocasting } = require("../dist/game/content/combat/magic/Autocasting");
 const { FightType } = require("../dist/game/content/combat/FightType");
 const { WeaponInterfaces } = require("../dist/game/content/combat/WeaponInterfaces");
@@ -129,4 +130,46 @@ test("bladed staves refuse the ancient selector but keep standard and Arceuus au
   const arceuus = switching(MagicSpellbook.ARCEUUS, ItemIdentifiers.KODAI_WAND,
     ItemIdentifiers.TOXIC_STAFF_OF_THE_DEAD, CombatSpells.SKELETAL_GRASP);
   assert.equal(arceuus.getCombat().getAutocastSpell(), CombatSpells.SKELETAL_GRASP);
+});
+
+test("native Zuriel and LMS staff copies can select an Ancient autocast", async (t) => {
+  const core = PluginManager.getCoreApi();
+  const common = require('../plugins/minigames/lms/Common.LastManStanding');
+  common.init({ core });
+  require('../plugins/minigames/lms/Items.LastManStanding').registerAliases();
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const cases = [
+    ...['zuriels_staff', 'zuriels_staff_bh', 'br_zuriels_staff', 'br_kodai_wand']
+      .map(name => ({ name, id: core.CacheDefinitions.getObjId(name), allowed: true, equips: true })),
+    { name: 'inactive Zuriel', id: core.CacheDefinitions.getObjId('zuriels_staff_bh_inactive'), allowed: false, equips: false },
+    { name: 'Harmonised Nightmare', id: ItemIdentifiers.HARMONISED_NIGHTMARE_STAFF, allowed: false, equips: true },
+    { name: 'Staff of the Dead', id: ItemIdentifiers.STAFF_OF_THE_DEAD, allowed: false, equips: true },
+  ];
+  for (const { name, id, allowed, equips } of cases) {
+    assert.ok(id > 0, `${name} exists in the active cache`);
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel);
+    const p = new Player(session, new core.Location(2426, 3081, 1));
+    p.setUsername(`autocast_${name}`);
+    p.setSpellbook(MagicSpellbook.ANCIENT);
+    p.setRegistered(true);
+    session.setPlayer(p);
+    t.after(() => p.setRegistered(false));
+    for (const skill of [Skill.ATTACK, Skill.MAGIC, Skill.DEFENCE, Skill.HITPOINTS]) p.getSkillManager().setLevel(skill, 99);
+    p.getInventory().setItem(0, new Item(id));
+    const connection = new ClientConnection(channel);
+    connection.player = p;
+    const send = async packet => { await connection.dispatch([packet]); connection.processTurnPackets(); };
+    await send({ type: 'inventory_action', widgetId: 149 << 16, slot: 0, itemId: id, option: 'Wield', optionIndex: 2 });
+    assert.equal(p.getEquipment().getWeapon().getId(), equips ? id : -1, `${name}: native equipment eligibility`);
+    assert.equal(Autocasting.canAutocast(p, CombatSpells.ICE_BARRAGE), allowed, `${name}: Ancient Magicks capability`);
+    await send({ type: 'widget_action', widgetId: (593 << 16) | 28, groupId: 593, childId: 28, buttonNum: 1 });
+    assert.equal(p.getPacketSender().isSubInterfaceOpen(201), allowed, `${name}: native selector eligibility`);
+    if (!allowed) continue;
+    await send({ type: 'widget_action', widgetId: (201 << 16) | 1, groupId: 201, childId: 1, slot: 46, buttonNum: 1 });
+    assert.equal(p.getCombat().getAutocastSpell(), CombatSpells.ICE_BARRAGE, `${name} accepts the selected Ancient spell`);
+    assert.equal(CombatFactory.getMethod(p), CombatFactory.MAGIC_COMBAT);
+  }
 });

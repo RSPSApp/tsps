@@ -29,7 +29,7 @@ before(() => {
   RegionManager.init();
   new NpcDefinitionLoader().load();
   core = PluginManager.getCoreApi();
-  hooks = { objects: new Map(), npcs: new Map(), items: new Map(), events: {}, death: [], drops: [], npcDeath: [], playerHit: [], npcHit: [] };
+  hooks = { objects: new Map(), npcs: new Map(), items: new Map(), events: {}, death: [], drops: [], npcDeath: [], playerHit: [], npcHit: [], canBank: [] };
   const api = {
     core,
     persistAttribute() {},
@@ -43,6 +43,8 @@ before(() => {
     onShouldDropItemsOnDeath: (fn) => hooks.drops.push(fn),
     onPlayerLogin() {},
     onPlayerLogout: (fn) => (hooks.logout ??= []).push(fn),
+    onPlayerDisconnect: (fn) => (hooks.disconnect ??= []).push(fn),
+    onCanBank: (fn) => hooks.canBank.push(fn),
     onInterfaceActionClick: (fn) => { hooks.click = fn; },
     onCustomEvent: (name, fn) => { const prior = hooks.events[name]; hooks.events[name] = prior ? (e) => { prior(e); fn(e); } : fn; },
     emitCustomEvent: (name, payload) => {
@@ -513,4 +515,50 @@ test('Upgrades: an imbue keeps what the item carries (a charged ring of sufferin
   button('upgrades', { player: p, slot: 0, opId: 1 });
   assert.equal(p.inventory.slots[0].id, 20657);
   assert.deepEqual(p.inventory.slots[0].meta, { 'ring-of-suffering': 1000, preset: true });
+});
+
+test('a dropped connection during the entry fade cancels the dream and refunds the fee too', () => {
+  const p = fakePlayer({ quests: QUESTS() });
+  Common.setCoffer(p, 5000);
+  Common.setPreparedDream(p, { mode: 'endurance', difficulty: 'normal' });
+  Dream.start(p);
+  assert.equal(Common.coffer(p), 4000);
+  ticks(1);
+  for (const fn of hooks.disconnect) fn({ player: p, username: 'Dreamer', source: 'connection-lost' });
+  p.isRegistered = () => false;
+  ticks(3);
+  assert.equal(Dream.dreams.has(p), false);
+  assert.equal(Common.coffer(p), 5000, 'the fee is back');
+  assert.deepEqual(Common.preparedDream(p), { mode: 'endurance', difficulty: 'normal' });
+  assert.deepEqual([p.location.getX(), p.location.getY()], [2608, 3116], 'never moved into the arena');
+});
+
+test('a dropped connection inside a dream ends it, pays its points and leaves nothing in the instance', () => {
+  const p = dreamer();
+  ticks(Common.data.arena.firstSpawnTicks);
+  const [boss] = Dream.dreams.get(p).npcs;
+  Dream.bossDied({ npc: boss });
+  const earned = varbit(p, 'nzone_currentpoints');
+  assert.ok(earned > 0, 'a boss was killed before the connection dropped');
+  assert.equal(Dream.dreams.has(p), true);
+  for (const fn of hooks.disconnect) fn({ player: p, username: 'Dreamer', source: 'connection-lost' });
+  assert.equal(Dream.dreams.has(p), false);
+  assert.equal(varbit(p, 'nzone_currentpoints'), 0);
+  assert.equal(Common.points(p), earned, 'the dream is paid as it ends');
+  assert.deepEqual([p.location.getX(), p.location.getY()], [2608, 3115], 'saved by Dominic');
+});
+
+test('banking is refused inside a dream and allowed outside it', () => {
+  const outside = fakePlayer();
+  const allowed = { player: outside, allow: true };
+  for (const fn of hooks.canBank) fn(allowed);
+  assert.equal(allowed.allow, true, 'no dream, no refusal');
+  assert.equal(outside.messages.includes(Common.message('noBank')), false);
+
+  const p = dreamer();
+  const refused = { player: p, allow: true, source: 'open' };
+  for (const fn of hooks.canBank) fn(refused);
+  assert.equal(refused.allow, false);
+  assert.ok(p.messages.includes(Common.message('noBank')));
+  Dream.wake({ player: p });
 });

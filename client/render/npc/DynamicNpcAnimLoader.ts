@@ -71,6 +71,8 @@ export class DynamicNpcAnimLoader {
     private geometryTypeCache = new WeakMap<NpcType, number>();
     private readonly modelAppearances = new Map<number, string>();
     private contentContext?: string;
+    private contextKey?: string;
+    private readonly contextInputs = { textures: -1, customModels: -1, models: -1, revision: -1 };
     private opaqueSceneBuf: SceneBuffer | undefined;
     private alphaSceneBuf: SceneBuffer | undefined;
 
@@ -118,10 +120,29 @@ export class DynamicNpcAnimLoader {
     getTextureIdIndexMap(): Map<number, number> | undefined { return this.textureIdIndexMap; }
 
     getContextKey(): string {
-        const content = `${this.textureIdIndexMap?.size ?? 0}:${CustomModelRegistry.revision}:${(this.modelLoader ?? this.npcModelLoader?.modelLoader)?.revision ?? 0}`;
+        // Read for every actor every frame: the strings are rebuilt only when an input changes.
+        const textures = this.textureIdIndexMap?.size ?? 0;
+        const customModels = CustomModelRegistry.revision;
+        const models = (this.modelLoader ?? this.npcModelLoader?.modelLoader)?.revision ?? 0;
+        const inputs = this.contextInputs;
+        if (
+            this.contextKey !== undefined &&
+            inputs.textures === textures &&
+            inputs.customModels === customModels &&
+            inputs.models === models &&
+            inputs.revision === this.revision
+        ) {
+            return this.contextKey;
+        }
+        const content = `${textures}:${customModels}:${models}`;
         if (this.contentContext !== undefined && this.contentContext !== content) this.clear();
         this.contentContext = content;
-        return `${this.revision}:${content}`;
+        inputs.textures = textures;
+        inputs.customModels = customModels;
+        inputs.models = models;
+        inputs.revision = this.revision;
+        this.contextKey = `${this.revision}:${content}`;
+        return this.contextKey;
     }
 
     getCachedGeometry(key: string): DynamicNpcFrameGeometry | undefined {

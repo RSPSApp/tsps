@@ -72,6 +72,50 @@ const WIDGET_OVERLAY_ANCHORS = new Set<number>([
     (164 << 16) | 70, // ToplevelPreEoc.SIDE_BACKGROUND
 ]);
 
+export type OverlayRedrawPlan = {
+    /** The overlays drawn differ from last pass (a plugin toggled): everything redraws. */
+    setChanged: boolean;
+    /** A changed overlay cannot say where it draws: everything redraws. */
+    needsFullRedraw: boolean;
+    /** Where the changed overlays were and will be, when every one of them could say. */
+    dirtyRects: DirtyRect[];
+};
+
+/**
+ * Decides how the overlays' changes since the last pass redraw. Polls every overlay's
+ * signature (and records it): a changed overlay with `coverage()` contributes its previous and
+ * coming rects, one without forces a full redraw.
+ */
+export function planWidgetOverlayRedraw(
+    overlays: readonly WidgetOverlay[],
+    previous: readonly WidgetOverlay[],
+    signatures: WeakMap<WidgetOverlay, string>,
+    rects: WeakMap<WidgetOverlay, DirtyRect[]>,
+    clamp: (x: number, y: number, w: number, h: number) => DirtyRect | undefined,
+): OverlayRedrawPlan {
+    const setChanged =
+        overlays.length !== previous.length || overlays.some((overlay, i) => overlay !== previous[i]);
+    const dirtyRects: DirtyRect[] = [];
+    let needsFullRedraw = false;
+    for (const overlay of overlays) {
+        const signature = overlay.signature();
+        if (signature === signatures.get(overlay)) continue;
+        signatures.set(overlay, signature);
+        if (needsFullRedraw) continue;
+        const coverage = overlay.coverage?.();
+        if (!coverage) {
+            needsFullRedraw = true;
+            continue;
+        }
+        for (const rect of rects.get(overlay) ?? []) dirtyRects.push(rect);
+        for (const r of coverage) {
+            const rect = clamp(Math.floor(r.x), Math.floor(r.y), Math.ceil(r.w) + 1, Math.ceil(r.h) + 1);
+            if (rect) dirtyRects.push(rect);
+        }
+    }
+    return { setChanged, needsFullRedraw, dirtyRects };
+}
+
 type DirtyRect = {
     x: number;
     y: number;
@@ -124,9 +168,14 @@ export class WidgetsOverlay implements Overlay {
     private rootSetChanged: boolean = true;
 
     private lastMenuVisualSignature: string = "";
-    private lastWidgetOverlaySignature: string = "";
+    /** The overlays drawn last pass, in order: a different set redraws the whole UI. */
+    private lastWidgetOverlays: WidgetOverlay[] = [];
+    /** Each overlay's signature and device rects as of its last draw, for partial overlay redraws. */
+    private readonly lastOverlaySignatures = new WeakMap<WidgetOverlay, string>();
+    private readonly lastOverlayRects = new WeakMap<WidgetOverlay, DirtyRect[]>();
+    /** Device rects the above-widget overlays drew last. */
     private widgetOverlayRects: DirtyRect[] = [];
-    /** Device rects the below-widget overlays drew last full pass. */
+    /** Device rects the below-widget overlays drew last. */
     private belowWidgetOverlayRects: DirtyRect[] = [];
     private lastMenuVisualRect?: DirtyRect;
     private lastTradeAmountOverlaySignature: string = "";
@@ -183,6 +232,9 @@ export class WidgetsOverlay implements Overlay {
         this.hasPresentedFrame = false;
         this.rootSetChanged = true;
         this.lastRootSignature = "";
+        this.lastWidgetOverlays = [];
+        this.widgetOverlayRects = [];
+        this.belowWidgetOverlayRects = [];
         this.lastMenuVisualSignature = "";
         this.lastMenuVisualRect = undefined;
         this.lastTradeAmountOverlaySignature = "";
@@ -849,31 +901,50 @@ export class WidgetsOverlay implements Overlay {
             const mouseOverTextDirty =
                 mouseOverTextState.signature !== this.lastMouseOverTextSignature;
 
+            // A changed overlay redraws where it was and where it will be when it can say so
+            // (coverage); one that cannot redraws the whole UI, as does a different set of
+            // overlays. Ground item labels move with the camera every frame, so this is what
+            // keeps walking and turning from repainting the whole HUD.
+            const {
+                setChanged: overlaySetChanged,
+                needsFullRedraw: overlayNeedsFullRedraw,
+                dirtyRects: overlayDirtyRects,
+            } = planWidgetOverlayRedraw(
+                allWidgetOverlays,
+                this.lastWidgetOverlays,
+                this.lastOverlaySignatures,
+                this.lastOverlayRects,
+                (x, y, w, h) => this.clampRectToCanvas(x, y, w, h),
+            );
+
             // Force a full redraw only for root set changes.
             // The Choose Option menu is drawn as part of the shared widget overlay. When it is
             // open, partial dirty-rect redraws can visibly blink as hover/click state changes
             // every frame. Redraw the full overlay for the duration of the menu instead.
-            let widgetOverlaySignature = "";
-            for (const overlay of allWidgetOverlays) widgetOverlaySignature += overlay.signature() + "|";
             const forceFullRedraw =
                 !this.hasPresentedFrame ||
                 this.rootSetChanged ||
                 menuOpen ||
                 tradeOverlayDirty ||
                 !!gameFrame ||
-                widgetOverlaySignature !== this.lastWidgetOverlaySignature ||
-                // A partial pass would clear what a below-widget overlay drew in its dirty rects.
-                (belowWidgetOverlays.length > 0 &&
-                    (anyDirty || preciseDirtyWidgets.length > 0 || menuVisualDirty || mouseOverTextDirty)) ||
+                overlaySetChanged ||
+                overlayNeedsFullRedraw ||
+                // Before-menu overlays draw once a pass from inside the tree, clipped to the
+                // first dirty rect, so a partial pass could not put back the rest of them.
                 (beforeMenuOverlays.length > 0 &&
-                    (anyDirty || preciseDirtyWidgets.length > 0 || menuVisualDirty || mouseOverTextDirty));
+                    (anyDirty ||
+                        preciseDirtyWidgets.length > 0 ||
+                        menuVisualDirty ||
+                        mouseOverTextDirty ||
+                        overlayDirtyRects.length > 0));
             const preciseDirtyCount = preciseDirtyWidgets.length | 0;
             const shouldRedraw =
                 anyDirty ||
                 preciseDirtyCount > 0 ||
                 forceFullRedraw ||
                 menuVisualDirty ||
-                mouseOverTextDirty;
+                mouseOverTextDirty ||
+                overlayDirtyRects.length > 0;
 
             const consumedRootIndices: number[] = [];
 
@@ -910,6 +981,7 @@ export class WidgetsOverlay implements Overlay {
                     if (this.lastMouseOverTextRect) dirtyRects.push(this.lastMouseOverTextRect);
                     if (mouseOverTextState.rect) dirtyRects.push(mouseOverTextState.rect);
                 }
+                for (const rect of overlayDirtyRects) dirtyRects.push(rect);
                 if (!renderFull) {
                     if (dirtyRects.length === 0) {
                         renderFull = true;
@@ -947,14 +1019,10 @@ export class WidgetsOverlay implements Overlay {
                         gameFrame.drawGameFrame(this.buildGameFrameContext(this.glRenderer));
                         this.glRenderer.flush();
                     }
-                    if (belowWidgetOverlays.length > 0) {
-                        this.drawWidgetOverlays(belowWidgetOverlays, true);
-                        this.belowWidgetOverlayRects = this.widgetOverlayRects;
-                        this.widgetOverlayRects = [];
-                        this.glRenderer.flush();
-                    } else {
-                        this.belowWidgetOverlayRects = [];
-                    }
+                    this.belowWidgetOverlayRects =
+                        belowWidgetOverlays.length > 0
+                            ? this.drawWidgetOverlays(belowWidgetOverlays, true, [])
+                            : [];
                     try {
                         const roots = (sharedUi as any).__widgetRoots;
                         if (roots) {
@@ -1000,6 +1068,19 @@ export class WidgetsOverlay implements Overlay {
                     // bounds into dirtyRects so an open menu no longer forces a full widget pass.
                     for (const dirtyRect of dirtyRects) {
                         this.clearOffscreenRect(dirtyRect);
+                    }
+                    // Below-widget overlays draw whole; scissored to each cleared rect they put
+                    // back only what the clear took, before the widgets go on top again.
+                    if (belowWidgetOverlays.length > 0) {
+                        const gl = this.glRenderer.gl;
+                        const canvasW = this.glRenderer.width | 0;
+                        const canvasH = this.glRenderer.height | 0;
+                        gl.enable(gl.SCISSOR_TEST);
+                        for (const rect of dirtyRects) {
+                            gl.scissor(rect.x, canvasH - (rect.y + rect.h), rect.w, rect.h);
+                            this.belowWidgetOverlayRects = this.drawWidgetOverlays(belowWidgetOverlays, true, []);
+                        }
+                        gl.scissor(0, 0, canvasW, canvasH);
                     }
                     this.currentWidgetOverlays = widgetOverlays;
                     this.overlayDrawnThisPass = false;
@@ -1060,7 +1141,7 @@ export class WidgetsOverlay implements Overlay {
                 this.presentOverlayCanvas(renderFull, dirtyRects);
 
                 this.lastMenuVisualSignature = menuVisualState.signature;
-                this.lastWidgetOverlaySignature = widgetOverlaySignature;
+                this.lastWidgetOverlays = allWidgetOverlays;
                 this.lastMenuVisualRect = menuVisualState.rect;
                 this.lastTradeAmountOverlaySignature = tradeOverlaySignature;
                 this.lastMouseOverTextSignature = mouseOverTextState.signature;
@@ -1079,9 +1160,14 @@ export class WidgetsOverlay implements Overlay {
         }
     }
 
-    private drawWidgetOverlays(overlays: WidgetOverlay[], resetRects = true): void {
+    /**
+     * Draws the overlays and returns the device rects they covered, remembering each overlay's
+     * own rects for its next partial redraw. Without `into`, the rects are the above-widget
+     * overlay rects (`widgetOverlayRects`), replaced or appended to.
+     */
+    private drawWidgetOverlays(overlays: WidgetOverlay[], resetRects = true, into?: DirtyRect[]): DirtyRect[] {
         const glr = this.glRenderer;
-        if (!glr) return;
+        if (!glr) return into ?? this.widgetOverlayRects;
         const context = {
             renderer: glr,
             fontLoader: this.ctx.getFontLoader?.() || (() => undefined),
@@ -1094,8 +1180,10 @@ export class WidgetsOverlay implements Overlay {
                     h: glr.height,
                 }),
         };
-        if (resetRects) this.widgetOverlayRects = [];
+        if (!into && resetRects) this.widgetOverlayRects = [];
+        const out = into ?? this.widgetOverlayRects;
         for (const overlay of overlays) {
+            const rects: DirtyRect[] = [];
             for (const r of overlay.draw(context)) {
                 const rect = this.clampRectToCanvas(
                     Math.floor(r.x),
@@ -1103,10 +1191,13 @@ export class WidgetsOverlay implements Overlay {
                     Math.ceil(r.w) + 1,
                     Math.ceil(r.h) + 1,
                 );
-                if (rect) this.widgetOverlayRects.push(rect);
+                if (rect) rects.push(rect);
             }
+            this.lastOverlayRects.set(overlay, rects);
+            for (const rect of rects) out.push(rect);
         }
         glr.flush();
+        return out;
     }
 
     /**

@@ -2,7 +2,7 @@
 # Quest test status
 
 Every quest the server registers, with the latest result recorded in its page here. How to
-test a quest is in [server/docs/agents/quest-testing.md](../../server/docs/agents/quest-testing.md);
+test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
 190 quests · ✅ passed: 31 · ⚠️ passed with issues: 22 · 🔄 in progress: 7 · ❌ failed: 1 · 🔁 needs recheck: 7 · untested: 122

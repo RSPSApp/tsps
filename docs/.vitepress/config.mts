@@ -37,7 +37,7 @@ export default defineConfig({
                 text: 'Documentation',
                 items: [
                     { text: 'Architecture', link: '/ARCHITECTURE' },
-                    { text: 'Gamemodes', link: '/gamemodes' },
+                    { text: 'Plugins', link: 'https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/plugins.md' },
                     { text: 'Extrascripts', link: '/extrascripts' },
                     { text: 'World configuration', link: '/world-configuration' },
                 ],

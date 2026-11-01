@@ -122,7 +122,7 @@ Superior slayer monster): an imbued heart (1/8), dust battlestaff (7/16) or mist
 table is equally likely; here each table is rolled on its own. Before the roll the plugin asks
 `drops:chance` { player, source: "superior-slayer-monster", rules } and a rule whose pattern
 matches one of a table's items multiplies that table's chance (a league's boosted drops,
-[server/docs/leagues.md](../server/docs/leagues.md)). Whether a task kill brings a superior at all
+[server/docs/leagues.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/leagues.md)). Whether a task kill brings a superior at all
 is asked first on `slayer:superior-spawn` { player, npc, unlocked, chance }: Bigger and Badder's
 bit and 1 in 200, which a listener may unlock or shorten; the toggle-off always holds.
 
@@ -199,7 +199,7 @@ fail. The worktree client returned HTTP 200 on port 3149 and the game server lis
   Spria give none), times 5, 15, 25, 35 or 50 on every 10th, 50th, 100th, 250th or 1,000th task.
   Both numbers are asked first on `slayer:task-reward` { player, master, freeTasks, multiplier }
   (Mortimer's completions ask too): a listener may lower the free tasks or multiply the points
-  (a league's tier passive, [server/docs/leagues.md](../server/docs/leagues.md)).
+  (a league's tier passive, [server/docs/leagues.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/leagues.md)).
 
 ### Other rules
 

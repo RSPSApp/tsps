@@ -2704,7 +2704,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                             if (osrsClient.menuOpen || uiMenu?.open) return;
                             osrsClient.minimapZoom = 4;
                         },
-                        onClick: (clickX?: number, clickY?: number) => {
+                        onDown: (clickX?: number, clickY?: number) => {
                             if (clickX === undefined || clickY === undefined) return;
                             if (!containsMinimapPoint(clickX, clickY)) return;
 

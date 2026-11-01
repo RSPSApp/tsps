@@ -129,6 +129,8 @@ function usePortal(event) {
   const floor = Data.floorByObject("portal", event.object?.getId?.());
   if (!floor) return false;
   const { player } = event;
+  // Wiki: floors 1-3 also allow the portal at a high enough combat level before the reward is
+  // claimed (26, 51, 76), so the first portal opening "right away" at 26+ is intended.
   const highEnough = floor.portalCombat != null && player.getSkillManager().getCombatLevel() >= floor.portalCombat;
   if (!Data.isClaimed(player, floor) && !highEnough) {
     player.sendMessage("You must have completed this level to take this shortcut.");

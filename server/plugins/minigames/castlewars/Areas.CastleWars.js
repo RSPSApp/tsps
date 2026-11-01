@@ -198,9 +198,11 @@ function sendGameVars(player, teamId) {
     game.setVar(player, data.SCORE_VARBIT[team], game.score[team], true);
     game.setVar(player, data.FLAG_VARBIT[team], game.flagStatus[team], true);
   }
-  for (const varbit of Object.values(data.TEAM_VARBIT)) {
-    game.setVar(player, varbit, game.getTeamVar(teamId, varbit), true);
+  for (const [status, varbit] of Object.entries(data.TEAM_VARBIT)) {
+    game.setVar(player, data.TEAM_HUD_VARBIT[teamId][status], game.getTeamVar(teamId, varbit), true);
   }
+  game.setVar(player, data.STANDARD_WORLD_VARBIT, 0, true);
+  game.setVar(player, data.BARRICADE_COUNT_VARBIT, game.teamBarricadeCount(teamId), true);
   game.setVar(player, data.TIMER_VARP, game.gameMinutesLeft());
 }
 

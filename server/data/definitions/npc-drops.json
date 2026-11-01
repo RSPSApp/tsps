@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generated": "2026-10-24",
+    "generated": "2026-11-01",
     "source": "https://oldschool.runescape.wiki",
     "license": "CC BY-NC-SA 3.0 \u2014 content from the Old School RuneScape Wiki",
     "id_space": "osrs cache ids (item and npc ids from the osrsreboxed databases)",
@@ -86758,18 +86758,6 @@
           "section": "Weapons and armour"
         },
         {
-          "item_id": 559,
-          "name": "Body rune",
-          "quantity": [
-            7,
-            7
-          ],
-          "weight": 5,
-          "out_of": 128,
-          "rarity": 0.0390625,
-          "section": "Runes and ammunition"
-        },
-        {
           "item_id": 555,
           "name": "Water rune",
           "quantity": [
@@ -86779,6 +86767,18 @@
           "weight": 6,
           "out_of": 128,
           "rarity": 0.046875,
+          "section": "Runes and ammunition"
+        },
+        {
+          "item_id": 559,
+          "name": "Body rune",
+          "quantity": [
+            7,
+            7
+          ],
+          "weight": 5,
+          "out_of": 128,
+          "rarity": 0.0390625,
           "section": "Runes and ammunition"
         },
         {
@@ -86809,36 +86809,12 @@
           "item_id": 995,
           "name": "Coins",
           "quantity": [
-            5,
-            5
+            15,
+            15
           ],
           "weight": 28,
           "out_of": 128,
           "rarity": 0.21875,
-          "section": "Coins"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            9,
-            9
-          ],
-          "weight": 3,
-          "out_of": 128,
-          "rarity": 0.0234375,
-          "section": "Coins"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            15,
-            15
-          ],
-          "weight": 3,
-          "out_of": 128,
-          "rarity": 0.0234375,
           "section": "Coins"
         },
         {
@@ -86883,18 +86859,6 @@
           "section": "Other"
         },
         {
-          "item_id": 10999,
-          "name": "Goblin book",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 2,
-          "out_of": 128,
-          "rarity": 0.015625,
-          "section": "Other"
-        },
-        {
           "item_id": 288,
           "name": "Goblin mail",
           "quantity": [
@@ -86916,6 +86880,42 @@
           "weight": 3,
           "out_of": 128,
           "rarity": 0.0234375,
+          "section": "Other"
+        },
+        {
+          "item_id": 3010,
+          "name": "Energy potion(3)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 128,
+          "rarity": 0.0234375,
+          "section": "Other"
+        },
+        {
+          "item_id": 3008,
+          "name": "Energy potion(4)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 3,
+          "out_of": 128,
+          "rarity": 0.0234375,
+          "section": "Other"
+        },
+        {
+          "item_id": 10999,
+          "name": "Goblin book",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 2,
+          "out_of": 128,
+          "rarity": 0.015625,
           "section": "Other"
         },
         {
@@ -86953,48 +86953,6 @@
           "out_of": 128,
           "rarity": 0.0078125,
           "section": "Other"
-        },
-        {
-          "item_id": 3014,
-          "name": "Energy potion(1)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
-        },
-        {
-          "item_id": 3012,
-          "name": "Energy potion(2)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
-        },
-        {
-          "item_id": 3008,
-          "name": "Energy potion(4)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
         }
       ],
       "tertiary": [
@@ -87197,24 +87155,12 @@
           "item_id": 995,
           "name": "Coins",
           "quantity": [
-            1,
-            1
+            8,
+            8
           ],
           "weight": 34,
           "out_of": 128,
           "rarity": 0.265625,
-          "section": "Coins"
-        },
-        {
-          "item_id": 995,
-          "name": "Coins",
-          "quantity": [
-            3,
-            3
-          ],
-          "weight": 13,
-          "out_of": 128,
-          "rarity": 0.1015625,
           "section": "Coins"
         },
         {
@@ -87254,9 +87200,28 @@
           "section": "Coins"
         },
         {
-          "nothing": true,
-          "weight": 8,
-          "out_of": 128
+          "item_id": 3012,
+          "name": "Energy potion(2)",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 13,
+          "out_of": 128,
+          "rarity": 0.1015625,
+          "section": "Other"
+        },
+        {
+          "item_id": 288,
+          "name": "Goblin mail",
+          "quantity": [
+            1,
+            1
+          ],
+          "weight": 10,
+          "out_of": 128,
+          "rarity": 0.078125,
+          "section": "Other"
         },
         {
           "item_id": 2347,
@@ -87271,6 +87236,11 @@
           "section": "Other"
         },
         {
+          "nothing": true,
+          "weight": 8,
+          "out_of": 128
+        },
+        {
           "item_id": 10999,
           "name": "Goblin book",
           "quantity": [
@@ -87281,21 +87251,6 @@
           "out_of": 128,
           "rarity": 0.015625,
           "section": "Other"
-        },
-        {
-          "item_id": 288,
-          "name": "Goblin mail",
-          "quantity": [
-            1,
-            1
-          ],
-          "weight": 10,
-          "out_of": 128,
-          "rarity": 0.078125,
-          "section": "Other",
-          "notes": [
-            "Colour received depends on the goblin mail worn."
-          ]
         },
         {
           "item_id": 1987,
@@ -87339,34 +87294,6 @@
           "out_of": 128,
           "rarity": 0.015625,
           "section": "Herbs"
-        },
-        {
-          "item_id": 3014,
-          "name": "Energy potion(1)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
-        },
-        {
-          "item_id": 3012,
-          "name": "Energy potion(2)",
-          "quantity": [
-            1,
-            1
-          ],
-          "separate_roll": true,
-          "weight": 1,
-          "out_of": 8,
-          "rarity": 0.125,
-          "section": "Other",
-          "assumed_rarity": true
         }
       ],
       "tertiary": [

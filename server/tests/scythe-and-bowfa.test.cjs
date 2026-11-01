@@ -49,6 +49,7 @@ class Item {
     }
     getId() { return this.id; }
     getAmount() { return this.amount; }
+    getMeta() { return undefined; }
 }
 class MeleeCombatMethod {}
 class PendingHit {
@@ -155,15 +156,18 @@ function chargeableItem(id, amount = 0) {
     };
 }
 
-function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = ItemIdentifiers.VIAL_OF_BLOOD_2 } = {}) {
-    const items = new Array(14).fill(null).map(() => ({ getId: () => -1 }));
-    items[Equipment.WEAPON_SLOT] = weapon;
+function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = ItemIdentifiers.VIAL_OF_BLOOD_2, occupied = 0 } = {}) {
+    const equipment = new Array(14).fill(null).map(() => ({ getId: () => -1 }));
+    equipment[Equipment.WEAPON_SLOT] = weapon;
     const counts = new Map([
         [ItemIdentifiers.BLOOD_RUNE, runes],
         [vialId, vials],
         [ItemIdentifiers.VIAL_OF_BLOOD_3, notedVials],
     ]);
     const amountOf = (id) => counts.get(id) ?? 0;
+    // Each stack a player holds takes one inventory slot; `occupied` models items the test does not.
+    const heldStacks = new Set([...counts].filter(([, amount]) => amount > 0).map(([id]) => id));
+    const freeSlots = () => 28 - heldStacks.size - occupied;
     const messages = [];
     const varbits = new Map();
     let enteredAmount = null;
@@ -172,12 +176,16 @@ function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = I
         get vials() { return amountOf(ItemIdentifiers.VIAL_OF_BLOOD_2); },
         getAmount: amountOf,
         deleteNumber(id, amount = 1) {
-            counts.set(id, Math.max(0, amountOf(id) - amount));
+            const left = Math.max(0, amountOf(id) - amount);
+            counts.set(id, left);
+            if (left < 1) heldStacks.delete(id);
         },
-        getItems: () => items,
-        getAddableAmount: (item) => item.getAmount(),
+        getItems: () => [...heldStacks].map((id) => ({ getId: () => id, getMeta: () => undefined })),
+        getFreeSlots: freeSlots,
+        getAddableAmount: (item) => heldStacks.has(item.getId()) || freeSlots() > 0 ? item.getAmount() : 0,
         add(item) {
             counts.set(item.getId(), amountOf(item.getId()) + item.getAmount());
+            heldStacks.add(item.getId());
         },
         refreshItems() {},
     };
@@ -185,7 +193,7 @@ function chargePlayer(weapon, { runes = 0, vials = 0, notedVials = 0, vialId = I
     const entity = {
         isPlayer: () => true,
         getAsPlayer: () => entity,
-        getEquipment: () => ({ get: (slot) => items[slot], getItems: () => items, refreshItems: () => {} }),
+        getEquipment: () => ({ get: (slot) => equipment[slot], getItems: () => equipment, refreshItems: () => {} }),
         getInventory: () => inventory,
         getAttribute: (key) => attributes.get(key),
         setAttribute: (key, value) => attributes.set(key, value),
@@ -368,6 +376,28 @@ test('Empty returns whole sets as blood runes and noted vials of blood (Wiki)', 
     assert.equal(loaded.inventory.getAmount(ItemIdentifiers.BLOOD_RUNE), 400);
     assert.equal(loaded.inventory.getAmount(ItemIdentifiers.VIAL_OF_BLOOD_3), 2);
     assert.match(loaded.messages.at(-1), /You take 400 blood runes and 2 vials of blood out of the well/);
+});
+
+test('Empty refuses when both payouts would share the last free slot, and keeps the well', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_), { occupied: 27 });
+    loaded.entity.setAttribute(Scythe._test.WELL_ATTRIBUTE, 100);
+    assert.equal(Scythe._test.emptyWell({ player: loaded.entity }), true);
+
+    assert.equal(Scythe._test.wellCharges(loaded.entity), 100, 'the well keeps its charges');
+    assert.equal(loaded.inventory.getAmount(ItemIdentifiers.BLOOD_RUNE), 0);
+    assert.equal(loaded.inventory.getAmount(ItemIdentifiers.VIAL_OF_BLOOD_3), 0);
+    assert.match(loaded.messages.at(-1), /enough inventory space/);
+    assert.doesNotMatch(loaded.messages.at(-1), /You take/);
+});
+
+test('Empty fits one payout into the last free slot when the other merges into a held stack', () => {
+    const loaded = chargePlayer(chargeableItem(ItemIdentifiers.SCYTHE_OF_VITUR_UNCHARGED_), { runes: 15, occupied: 26 });
+    loaded.entity.setAttribute(Scythe._test.WELL_ATTRIBUTE, 250);
+    assert.equal(Scythe._test.emptyWell({ player: loaded.entity }), true);
+
+    assert.equal(Scythe._test.wellCharges(loaded.entity), 0);
+    assert.equal(loaded.inventory.getAmount(ItemIdentifiers.BLOOD_RUNE), 415, 'the runes join the held stack');
+    assert.equal(loaded.inventory.getAmount(ItemIdentifiers.VIAL_OF_BLOOD_3), 2, 'the noted vials take the free slot');
 });
 
 test('login restores the well varbit so the placed loc shows its filled form', () => {

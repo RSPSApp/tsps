@@ -302,6 +302,17 @@ function chargeAtWell({ player }) {
   return true;
 }
 
+/** Both payouts must fit together: each is a new stack or merges into one already held, never the same free slot. */
+function refundsFit(inventory, refunds) {
+  const items = inventory.getItems();
+  const newStacks = refunds.filter((refund) => !items.some((held) =>
+    held.getId() === refund.getId() && JSON.stringify(held.getMeta() ?? null) === JSON.stringify(refund.getMeta() ?? null)
+  )).length;
+  return newStacks <= inventory.getFreeSlots() && refunds.every((refund) =>
+    inventory.getAddableAmount(refund) >= refund.getAmount()
+  );
+}
+
 function emptyWell({ player }) {
   const inventory = player.getInventory();
   const sets = Math.floor(wellCharges(player) / CHARGES_PER_VIAL);
@@ -311,7 +322,7 @@ function emptyWell({ player }) {
   }
   const runes = new core.Item(bloodRuneId, sets * BLOOD_RUNES_PER_VIAL);
   const vials = new core.Item(notedVialId, sets);
-  if (inventory.getAddableAmount(runes) < runes.getAmount() || inventory.getAddableAmount(vials) < vials.getAmount()) {
+  if (!refundsFit(inventory, [runes, vials])) {
     player.sendMessage("You don't have enough inventory space.");
     return true;
   }

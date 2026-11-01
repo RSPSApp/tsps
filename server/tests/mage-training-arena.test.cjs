@@ -572,6 +572,35 @@ test('Observe frames the active maze, not the one room the capture visited', () 
   assert.notDeepEqual([far.move.x, far.move.y], [3342, 9717], 'maze 6 no longer uses maze 1 camera');
 });
 
+test('New-maze restores the camera Observe left overlooking the finished maze', () => {
+  testApi.spawnNpc = (definition) => fakeNpc(definition);
+  testApi.removeNpc = () => {};
+  const player = fakePlayer();
+  const session = Telekinetic.startSession(player, 0);
+  Telekinetic.observe({ player, npc: session.npc });
+  assert.equal(session.observed, true);
+  const observed = player.camera.length;
+  assert.equal(player.camera.at(-1).mode, 'look', 'Observe leaves the camera on the maze');
+
+  Telekinetic.complete(session);
+  const original = Math.random;
+  Math.random = () => 0;
+  try {
+    assert.equal(Telekinetic.newMaze({ player, npc: session.npc }), true);
+  } finally {
+    Math.random = original;
+  }
+
+  assert.equal(player.camera.length, observed + 1);
+  assert.equal(player.camera.at(-1).mode, 'reset', 'New-maze restores the player camera');
+  const next = Telekinetic.sessionOf(player);
+  assert.equal(next.mazeIndex, 1);
+  assert.equal(next.observed, false, 'the replacement session does not inherit the old camera state');
+  const reset = player.camera.length;
+  Telekinetic.removeSession(player);
+  assert.equal(player.camera.length, reset, 'the replacement has no stale camera to reset');
+});
+
 // --- The Alchemists' Playground
 
 const playgroundTile = () => Common.data.alchemists.arrive;

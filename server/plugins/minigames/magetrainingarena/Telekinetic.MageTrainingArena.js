@@ -184,8 +184,8 @@ function reset({ player, npc }) {
 function newMaze({ player, npc }) {
   const session = sessionOf(player);
   if (!session || session.npc !== npc || !session.solved) return false;
-  if (session.npc) Common.api.removeNpc(session.npc);
-  sessions.delete(player);
+  // Retire the old session through the normal path so its observed camera is reset.
+  removeSession(player);
   const next = randomMazeIndex(session.mazeIndex);
   if (!startSession(player, next)) return true;
   player.moveTo(Common.toLocation(Common.data.telekinetic.mazes[next].arrive));

@@ -452,6 +452,16 @@ module.exports = function registerPriestInPerilQuest(api) {
   }
 
   /**
+   * Doors lists "Trapdoor" among its toggles and its Open hook registers before
+   * this quest's, so claim the two mausoleum trapdoors through "door:toggle",
+   * which runs before any generic door handling.
+   */
+  function claimTrapdoorToggle(request) {
+    if (request.handled) return;
+    handleTrapdoorOpen(request);
+  }
+
+  /**
    * The mausoleum ladder (17385) is listed at many other places, and Monk's
    * Friend claims every 17385 for its cave; claim this one through the Ladders
    * "ladders:climb" extension point, which runs before the generic hooks.
@@ -483,13 +493,19 @@ module.exports = function registerPriestInPerilQuest(api) {
   /**
    * Knocking the large door: the Mysterious Voice asks about the dog before the
    * kill and thanks the player after it. Once the King has been told, the door
-   * just opens (the doors plugin's normal toggle).
+   * just opens (the doors plugin's normal toggle). Before the quest nobody
+   * answers and the door stays shut.
    */
   function handleLargeDoor(request) {
     if (!LARGE_DOOR_IDS.has(request.objectId)) return;
     const { player } = request;
     const stage = quest.getStage(player);
-    if (stage < STAGE_STARTED || stage >= STAGE_TOLD_KING_ROALD) return;
+    if (stage < STAGE_STARTED) {
+      startTranscript(api, player, MYSTERIOUS_VOICE_NPC_ID, PAGE, "pre-quest-at-the-temple-before-starting-the-quest");
+      request.handled = true;
+      return;
+    }
+    if (stage >= STAGE_TOLD_KING_ROALD) return;
     const variant = stage >= STAGE_GUARDIAN_KILLED
       ? "you-killed-a-dog-letting-the-monks-know-you-did-the-deed"
       : player.getAttribute(DOOR_ANSWERED_ATTRIBUTE)
@@ -535,6 +551,7 @@ module.exports = function registerPriestInPerilQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", fillEssenceLine);
   api.onCustomEvent("door:toggle", handleLargeDoor);
+  api.onCustomEvent("door:toggle", claimTrapdoorToggle);
   api.onCustomEvent("ladders:climb", claimMausoleumClimb);
   api.onNpcDeath(handleGuardianDeath);
   api.onNpcDeath(handleMonkDeath);

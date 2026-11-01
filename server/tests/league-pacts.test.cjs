@@ -184,6 +184,17 @@ test("View Demonic Pacts opens the tree as captured; a bought node pays, sets it
   assert.equal(Common.pacts(pacts).length, 1);
 });
 
+test("a league screen opening as the main modal closes the tree, as recorded", () => {
+  const pacts = character("pactmodal");
+  openTree(pacts);
+  pacts.sent.order.length = 0;
+  for (const handler of custom["league:modal-opening"]) handler({ player: pacts, group: 655 });
+  assert.ok(pacts.sent.order.some(([kind, group]) => kind === "close" && group === TREE));
+  pacts.sent.messages.length = 0;
+  openTree(pacts);
+  assert.ok(!pacts.sent.messages.includes("The Demonic Pacts interface is already open."), "it opens again");
+});
+
 test("a pact task gives a point with the captured line; sharing an effect adds up; the cap on spending", () => {
   const pacts = character("pacttasker");
   const giant = require("../plugins/modes/data/league-tasks.json").leagues["6"].tasks.find((task) => task.id === "defeat-a-hill-giant");

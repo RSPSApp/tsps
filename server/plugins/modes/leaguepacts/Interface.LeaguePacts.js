@@ -175,6 +175,11 @@ function panelTriggered(event) {
   return true;
 }
 
+/** A league screen opening as the main modal closes the tree first, as recorded (rev 237 relics: if_closesub talent_tree). */
+function modalOpening({ player }) {
+  if (player) close(player);
+}
+
 function interfaceClosed({ player, interfaceId }) {
   if (interfaceId === ui().group) open.delete(player);
 }
@@ -190,6 +195,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(Common.uid(group, dataLayer), dataLayerTriggered);
   api.onInterfaceActionButton(Common.uid(group, panel), panelTriggered);
   api.onCustomEvent("interface:closed", interfaceClosed);
+  api.onCustomEvent("league:modal-opening", modalOpening);
   api.onPlayerLogout(logout);
 };
 

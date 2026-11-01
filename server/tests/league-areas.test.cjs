@@ -159,7 +159,7 @@ test("a new league character starts with Misthalin and Karamja; a main character
 });
 
 test("login leaves leagues without area rules untouched, including saved area state after reload", () => {
-  for (const type of [1, 2, 3, 6]) {
+  for (const type of [1, 2, 3]) {
     for (const savedAreas of [null, [MISTHALIN, KARAMJA, ASGARNIA]]) {
       const name = `no-areas-${type}-${savedAreas ? "saved" : "new"}`;
       const player = character(name, "league", { login: false });
@@ -331,7 +331,7 @@ test("View Areas opens the interface as captured; an area's details show its sta
   assert.equal(args[0], MISTHALIN);
   assert.deepEqual(args.slice(1, 4), [uid(AREAS, 14), uid(AREAS, 39), uid(AREAS, 38)]);
   assert.equal(args[11], 1, "unlocked: the details offer Teleport");
-  assert.deepEqual(args.slice(12, 15), [uid(AREAS, 66), uid(AREAS, 65), uid(AREAS, 12)]);
+  assert.deepEqual(args.slice(12, 15), [uid(AREAS, 68), uid(AREAS, 67), uid(AREAS, 12)], "rev 237: league_tab_info_scrollbar, _content, confirm");
   assert.equal(args[23], "");
 
   viewArea(league, ASGARNIA);
@@ -350,10 +350,10 @@ test("View Areas opens the interface as captured; an area's details show its sta
   const forger = character("forger");
   completeTasks(forger, 60);
   assert.equal(viewArea(forger, ASGARNIA), false, "a shield click without View Areas is ignored");
-  assert.equal(hooks[`button:${uid(AREAS, 60)}`]({ player: forger }), false, "so is a confirm");
+  assert.equal(hooks[`button:${uid(AREAS, 62)}`]({ player: forger }), false, "so is a confirm");
   assert.deepEqual(forger.getAttribute("league:areas"), [1, 2]);
   openAreas(forger);
-  assert.equal(hooks[`button:${uid(AREAS, 60)}`]({ player: forger }), true);
+  assert.equal(hooks[`button:${uid(AREAS, 62)}`]({ player: forger }), true);
   assert.equal(forger.sent.messages.at(-1), "Select an area first.");
 });
 
@@ -361,7 +361,7 @@ test("a pick needs the next slot's tasks, then plays the captured unlock; at mos
   const league = character("picker");
   openAreas(league);
   viewArea(league, ASGARNIA);
-  const confirm = () => hooks[`button:${uid(AREAS, 60)}`]({ player: league });
+  const confirm = () => hooks[`button:${uid(AREAS, 62)}`]({ player: league });
 
   emitted.length = 0;
   completeTasks(league, 59);
@@ -448,10 +448,10 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   league.setRegistered(true);
   openAreas(league);
   viewArea(league, ASGARNIA);
-  assert.equal(hooks[`button:${uid(AREAS, 82)}`]({ player: league }), false, "locked: nothing happens");
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: league }), false, "locked: nothing happens");
   viewArea(league, KARAMJA);
   const start = league.getLocation().clone();
-  assert.equal(hooks[`button:${uid(AREAS, 82)}`]({ player: league }), true);
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: league }), true);
   assert.equal(league.sent.removals, 1, "the modal closes");
   for (let tick = 0; tick < 26; tick++) core.TaskManager.process();
   const landed = league.getLocation();
@@ -461,7 +461,7 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   inCombat = true;
   openAreas(league);
   viewArea(league, MISTHALIN);
-  assert.equal(hooks[`button:${uid(AREAS, 82)}`]({ player: league }), false);
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: league }), false);
   assert.equal(league.sent.messages.at(-1), "You can't teleport while in combat.");
   assert.equal(league.sent.removals, 1, "a refusal in combat keeps the interface open");
   inCombat = false;
@@ -474,7 +474,7 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   echoes.setRegistered(true);
   openAreas(echoes);
   viewArea(echoes, KARAMJA);
-  assert.equal(hooks[`button:${uid(AREAS, 82)}`]({ player: echoes }), true);
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: echoes }), true);
   const from = echoes.getLocation().clone();
   core.TaskManager.process();
   core.TaskManager.process();
@@ -485,6 +485,51 @@ test("the details' Teleport casts to an unlocked area's hub (the cache's coord),
   core.TaskManager.process();
   assert.ok(!echoes.getLocation().equals(from), "landed at +21");
   echoes.setRegistered(false);
+});
+
+test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abyss open, Karamja first at 80 tasks, its own cast", () => {
+  worldLeague = 6;
+  const pacts = character("pactsareas");
+  worldLeague = 4;
+  assert.deepEqual(pacts.getAttribute("league:areas"), [VARLAMORE], "Varlamore, the only default");
+  assert.deepEqual(SELECTION.map((varbit) => pacts.sent.varbits.get(varbit)), [VARLAMORE, 0, 0, 0, 0, 0]);
+  const open = (x, y) => query("league:area-at", { x, y, player: pacts });
+  assert.equal(open(3222, 3218).area, MISTHALIN, "Lumbridge is Misthalin's");
+  assert.equal(query("league:areas", { player: pacts }).next?.tasks, 80, "the cache's own thresholds");
+  assert.equal(areaAt(2412, 4434, { league: 6 }), null, "Zanaris is open from everywhere");
+  assert.equal(areaAt(3040, 4839, { league: 6 }), null, "and the Abyss");
+  assert.equal(areaAt(2412, 4434, { league: 5 }), MISTHALIN, "Raging Echoes keeps them Misthalin's");
+  assert.equal(areaAt(1150, 3420, { league: 6 }), VARLAMORE, "the Stranglewood counts as Varlamore");
+
+  openAreas(pacts);
+  completeTasks(pacts, 80);
+  viewArea(pacts, ASGARNIA);
+  let [, args] = pacts.sent.scripts.at(-1);
+  assert.deepEqual([args[11], args[23]], [3, "Your first new area must be Karamja."], "the first pick is Karamja's");
+  viewArea(pacts, MISTHALIN);
+  assert.equal(pacts.sent.scripts.at(-1)[1][11], 3, "Misthalin is no area of this league");
+  viewArea(pacts, KARAMJA);
+  assert.equal(pacts.sent.scripts.at(-1)[1][11], 2, "Karamja can be unlocked");
+  assert.equal(hooks[`button:${uid(AREAS, 62)}`]({ player: pacts }), true);
+  assert.equal(pacts.getAnimation()?.getId(), 8792, "trailblazer_league_area_unlock_emote");
+  assert.equal(pacts.getGraphic()?.getId(), core.CacheDefinitions.getSpotanimId("league_5_area_unlock_emote_spotanim_karamja"), "Raging Echoes' spotanim, as recorded");
+  for (let tick = 0; tick < 14; tick++) core.TaskManager.process();
+  assert.deepEqual(pacts.getAttribute("league:areas"), [VARLAMORE, KARAMJA]);
+  assert.equal(pacts.sent.varbits.get(SELECTION[1]), KARAMJA);
+
+  pacts.setRegistered(true);
+  openAreas(pacts);
+  viewArea(pacts, KARAMJA);
+  assert.equal(hooks[`button:${uid(AREAS, 84)}`]({ player: pacts }), true, "select_button teleports");
+  const from = pacts.getLocation().clone();
+  core.TaskManager.process();
+  core.TaskManager.process();
+  assert.equal(pacts.getAnimation()?.getId(), 13764, "leagues_6_home_teleport_player_01 at +1");
+  for (let tick = 2; tick < 23; tick++) core.TaskManager.process();
+  assert.ok(pacts.getLocation().equals(from), "still casting at +22");
+  core.TaskManager.process();
+  assert.ok(!pacts.getLocation().equals(from), "landed at +23");
+  pacts.setRegistered(false);
 });
 
 test("a reload restores the unlocks and their varbits", () => {

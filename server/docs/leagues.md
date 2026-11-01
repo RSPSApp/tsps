@@ -230,6 +230,12 @@ another league left in the client.
 
 ## Panels
 
+Every league screen opened as the main modal (Summary, Info, Rank, the areas, the relics) does so
+in the Leagues VI recordings' wire order (237/01104): varbit `busy` (12393) to 1, an open task list
+closed (its close script 9431), script 2524, the modal, its events; closing it, by any route,
+sets `busy` back to 0 (`league/Modals.LeagueMode.js`, over `league:modal-opening` { player, group }).
+Live kept `busy` at 1 while a confirm's modal waited to reopen; here a close always clears it.
+
 The side panel's three top buttons, each opening its interface as the main modal with the click
 events on its menu frame, as captured (227/00075, 227/01845, 227/00579); the client draws the rest
 from varps and the league struct, so the server sends nothing else (`league/Panels.LeagueMode.js`,
@@ -632,6 +638,12 @@ A quest the character had started keeps its quest items when a pack completes it
 `LeagueRelics.plugin.js`, data `plugins/modes/data/league-relics.json`: eight tiers a league,
 each with a point cost, a passive and three relics (Wiki); a tier's pick is permanent. A
 character's picks live in `league:relics` (tier index -> slot 1-3).
+
+On this cache (rev 241, as the Leagues VI recordings 237/01098, 01102, 01104 show) the unlock is
+`confirm_button` 655:51 (rev 227's confirm_text 50 has no op now), the open adds IF_SCRIPT_TRIGGER
+(bit 23) on `toggles` 655:38 (the relic effect toggles), script 3193 takes rev 237's components
+and, after the two structs, the relic's description and the tier's passive text, and 3181's
+tooltip is 655:53.
 
 - **The catalog.** The cache's relic interface (655) reads the league struct's tier enum (param
   870), tier structs (877 cost, 878 relic enum, 2045 passive struct) and relic structs (879 name,
@@ -1250,6 +1262,21 @@ Wilderness and Kourend; Raging Echoes 90, 200 and 400, Varlamore among them (Wik
 slot can be filled, a pick is permanent, and the unlocks live in `league:areas` (area ids in
 unlock order). An area the league does not offer (Varlamore on a Trailblazer Reloaded world) stays
 locked for good.
+
+**Demonic Pacts** (Wiki Demonic_Pacts_League/Areas, recordings 237/01098, 01102, 01104, 01107,
+01149) starts in Varlamore alone; Misthalin is never open, while Zanaris and the Abyssal Area are
+open from everywhere (overrides with `area: null`). Its first unlock, at 80 tasks, must be Karamja
+(`firstPick`; any other area shows the details' message state with our line, the refusal live
+gave was not captured), then three picks at 200, 300 and 450: the cache's own thresholds (structs
+5971-5975). The unlock plays Raging Echoes' spotanims, as recorded, and the area teleport its own
+cast (`leagues_6_home_teleport_player_01..08` every three ticks from +1, landing at +23). Live
+also completed each area's quests and diary tasks on unlock (Wiki, and 237/01098's Karamja);
+that is not here yet.
+
+**This cache's buttons** (rev 241, as the Leagues VI recordings use them): the details' teleport
+is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo_boss_map_button
+82 and confirm_frame 60 have no op on this client), and script 3668's components are rev 237's
+(the data's `_rev241`). The screen opens as the other league modals do (Panels, below).
 
 - **The areas** are the cache's: DB table `region_data` (82) gives each area its id (1 Misthalin,
   2 Karamja, 3 Asgarnia, 4 Kandarin, 5 Morytania, 6 Kharidian Desert, 7 Tirannwn, 8 Fremennik,

@@ -106,6 +106,11 @@ function close({ player }) {
   return true;
 }
 
+/** A league screen opening as the main modal closes the list first, as captured (rev 237: 1104). */
+function modalOpening({ player }) {
+  if (player) close({ player });
+}
+
 function login({ player, league }) {
   if (Common.catalog(league)) sendFilters(player);
 }
@@ -119,4 +124,5 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(uid(group, Common.data.interface.search.component), searchClick);
   api.onInterfaceActionButton(uid(group, closeChild), close);
   api.onCustomEvent("league:login", login);
+  api.onCustomEvent("league:modal-opening", modalOpening);
 };

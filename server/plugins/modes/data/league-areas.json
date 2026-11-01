@@ -23,12 +23,14 @@
     "openButton": [656, 40],
     "menuFrame": 7,
     "menuFrameSlots": [10, 18],
+    "_rev241": "The Leagues VI recordings (237: 1098, 1102, 1104, 1107, 1149) and this cache (241) moved the buttons: the details' teleport is select_button 512:84 (rev 227's echo_boss_map_button 512:82 is the echo boss's map), the unlock confirm_button 512:62 (only it has an op now; rev 227 sent confirm_frame 512:60), and script 3668 (league_areas_show_detailed) takes league_maps 14, league_shields 39, league_names 38, league_area_details 42, name_shield 43, name_header 44, description 80, select_button 84, select_back 85, league_area_icon 91, the state, then league_tab_info_scrollbar 68, league_tab_info_content 67, confirm 12, confirm_overlay 58, confirm_universe 59, confirm_frame 60, confirm_text 61, confirm_button 62, confirm_cancel 63, loading 41, header 36 and a string. The open runs script 2524 (-1, -3) before the modal.",
+    "modalSize": [2524, [-1, -3]],
     "nameHeader": 44,
-    "teleportButton": 82,
-    "confirm": 60,
+    "teleportButton": 84,
+    "confirm": 62,
     "viewScript": 3668,
-    "viewScriptComponentsBefore": [14, 39, 38, 41, 42, 43, 78, 82, 83, 89],
-    "viewScriptComponentsAfter": [66, 65, 12, 56, 57, 58, 59, 60, 61, 40, 36],
+    "viewScriptComponentsBefore": [14, 39, 38, 42, 43, 44, 80, 84, 85, 91],
+    "viewScriptComponentsAfter": [68, 67, 12, 58, 59, 60, 61, 62, 63, 41, 36],
     "states": { "locked": 0, "unlocked": 1, "available": 2, "message": 3, "full": 4 },
     "unlockAnimation": 8792,
     "unlockSounds": [[2353, 24], [2344, 116], [2330, 241], [2331, 273]],
@@ -48,6 +50,7 @@
     "notLeague": { "text": "Only a league character can unlock areas.", "source": "ours" },
     "locked": { "text": "You haven't unlocked that area yet.", "source": "ours" },
     "inCombat": { "text": "You can't teleport while in combat.", "source": "ours" },
+    "firstPick": { "text": "Your first new area must be Karamja.", "source": "ours: the Wiki has Karamja as Demonic Pacts' first unlock; live's refusal was not captured" },
     "selectFirst": { "text": "Select an area first.", "source": "ours" },
     "areaUsage": { "text": "Use ::areas [id or name] to unlock an area, or ::areas alone to list yours.", "source": "ours" },
     "areaList": { "text": "{league}: {areas}. Next unlock at {next} tasks ({tasks} done). You are in {here}.", "source": "ours" },
@@ -81,6 +84,33 @@
         ],
         "lockTick": 18,
         "landTick": 21
+      }
+    },
+    "6": {
+      "_comment": "Demonic Pacts (Wiki Demonic_Pacts_League/Areas): every character starts in Varlamore (the Stranglewood counts as Varlamore); Misthalin is never open, but Zanaris and the Abyssal Area are open from everywhere. The first unlock, at 80 tasks, is Karamja (Wiki: 'will unlock Karamja for free when they achieve their first region unlock'; recording 237/01098 picks it through the confirm, league_area_selection_1 0 -> 2); then three picks at 200, 300 and 450 from the other eight, the cache's own thresholds (enum 5677's structs 5971-5975, param 1010: 0, 80, 200, 300, 450). The unlock played Raging Echoes' spotanims (237/01098 league_5_area_unlock_emote_spotanim_karamja), though this cache has league_6 ones. The area teleport as captured (237: 1102, 1104): leagues_6_home_teleport_player_01..08 at +1, +4, +7, +10, +13, +16, +19 and +22, landing at +23.",
+      "defaults": [21],
+      "thresholds": [80, 200, 300, 450],
+      "firstPick": 2,
+      "areas": [2, 3, 4, 5, 6, 7, 8, 11, 20, 21],
+      "spotanimPrefix": "league_5_area_unlock_emote_spotanim_",
+      "overrides": [
+        { "rect": [17, 53, 19, 53], "area": 21 },
+        { "_comment": "Zanaris", "rect": [37, 68, 38, 69], "area": null },
+        { "_comment": "The Abyssal Area (Runecrafting's inner ring 3040, 4839)", "rect": [47, 75, 47, 76], "area": null }
+      ],
+      "teleportCast": {
+        "steps": [
+          { "tick": 1, "animation": 13764 },
+          { "tick": 4, "animation": 13766 },
+          { "tick": 7, "animation": 13768 },
+          { "tick": 10, "animation": 13770 },
+          { "tick": 13, "animation": 13772 },
+          { "tick": 16, "animation": 13774 },
+          { "tick": 19, "animation": 13776 },
+          { "tick": 22, "animation": 13817 }
+        ],
+        "lockTick": 22,
+        "landTick": 23
       }
     }
   },

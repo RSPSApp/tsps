@@ -322,6 +322,22 @@ test("Demonic Pacts' list as captured: the row events to the cache list's last k
   assert.equal(pacts.sent.varbits.get(20357), 1, "league_task_filter_mastery_point");
 });
 
+test("a league modal sets busy, closes the task list first and clears busy as it closes (rev 237 wire order)", () => {
+  worldLeague = 6;
+  const panel = character("modals");
+  worldLeague = 4;
+  hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: panel });
+  panel.sent.order.length = 0;
+  assert.equal(hooks[`button:${uid(SIDE_PANEL, 7)}`]({ player: panel }), true, "the Summary");
+  assert.deepEqual(panel.sent.order.slice(0, 3), [["varbit", 12393, 1], ["close", TASKS], ["script", 9431]], "busy, then the floater and its close script");
+  assert.deepEqual(panel.sent.order.find(([kind, id]) => kind === "script" && id === 2524), ["script", 2524, -1, -1], "then 2524 before the modal");
+  for (const handler of custom["interface:closed"]) handler({ player: panel, interfaceId: 529 });
+  assert.equal(panel.sent.varbits.get(12393), 0, "closing it clears busy");
+  panel.sent.varbits.delete(12393);
+  for (const handler of custom["interface:closed"]) handler({ player: panel, interfaceId: 529 });
+  assert.equal(panel.sent.varbits.has(12393), false, "once");
+});
+
 /** The first cache item / NPC of that exact name. */
 function itemId(name) {
   for (let id = 0; id < CacheDefinitions.getCounts().items; id++) if (CacheDefinitions.getItem(id)?.name === name) return id;

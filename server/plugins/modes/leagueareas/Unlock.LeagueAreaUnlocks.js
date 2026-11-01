@@ -55,6 +55,9 @@ function refusal(player, type, areaId) {
   const next = Common.nextSlot(type, player);
   if (next === null) return "noMoreAreas";
   if (Common.tasks(player) < next.tasks) return "moreTasks";
+  // A league whose first pick is fixed (Demonic Pacts' Karamja): the slot after the defaults takes only it.
+  const { firstPick, defaults } = Common.league(type);
+  if (Number.isInteger(firstPick) && next.slot === defaults.length && area.id !== firstPick) return "firstPick";
   return null;
 }
 
@@ -65,7 +68,8 @@ function state(player, type, areaId) {
   switch (refusal(player, type, areaId)) {
     case null: return states.available;
     case "noMoreAreas": return states.full;
-    case "notInLeague": return states.message;
+    case "notInLeague":
+    case "firstPick": return states.message;
     default: return states.locked;
   }
 }

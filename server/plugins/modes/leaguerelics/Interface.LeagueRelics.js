@@ -9,6 +9,8 @@ const Unlock = require("./Unlock.LeagueRelics");
 
 const { FLAG_OP1 } = require("../../interface/widgetGroup");
 const SLOTS_PER_TIER = 3;
+/** if_setevents IF_SCRIPT_TRIGGER (bit 23, as RSProx names it): the relic effect toggles' script triggers. */
+const FLAG_SCRIPT_TRIGGER = 1 << 23;
 
 /**
  * Players who opened the interface through View Relics: the slot they last viewed (-1 none) and
@@ -28,11 +30,13 @@ function open({ player }) {
   // Read before the modal replaces the bank as the main interface.
   const bankOpen = Common.core.Bank.isOpen(player);
   Common.api.emitCustomEvent("league:send-content", { player });
+  Common.api.emitCustomEvent("league:modal-opening", { player, group });
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(ui().modalSize[0], ui().modalSize[1]);
   sender.sendInterface(group);
   sender.sendInterfaceFlagsRange(Unlock.uid(group, clickzones), clickzoneSlots[0], clickzoneSlots[1], FLAG_OP1);
   sender.sendInterfaceFlagsRange(Unlock.uid(group, menuFrame), menuFrameSlots[0], menuFrameSlots[1], FLAG_OP1);
+  sender.sendInterfaceFlagsRange(Unlock.uid(group, ui().toggles), -1, -1, FLAG_SCRIPT_TRIGGER);
   viewing.set(player, { slot: -1, bankOpen });
   return true;
 }
@@ -50,11 +54,16 @@ function view({ player, slot }) {
   const sender = player.getPacketSender();
   state.slot = index;
   sender.sendVarbit(Common.data.lastViewedVarbit, index);
+  // This cache's script takes the relic's description and the tier's passive text after the structs.
+  const relic = Common.relic(type, tier, relicSlot);
+  const passive = Common.catalog(type).tiers[tier]?.passive ?? "";
   sender.sendInterfaceScript(viewScript, [
     ...viewScriptComponents.map((child) => Unlock.uid(group, child)),
     viewScriptState,
     structs.relicStruct,
     structs.passiveStruct,
+    String(relic.description ?? ""),
+    String(passive),
   ]);
   sender.sendInterfaceScript(toggleScript, [...toggleScriptComponents.map((child) => Unlock.uid(group, child)), 0, 1]);
   return true;

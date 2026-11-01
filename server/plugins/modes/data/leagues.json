@@ -40,6 +40,10 @@
     "_comment": "The structs, enums and DB rows a league needs that the cache does not carry are sent together as one structOverrides / enumOverrides / dbRowOverrides payload (GamemodeContentStore replaces the whole set on each payload). Virtual struct and enum ids start at virtualIdBase + league type x 1000; each unit keeps its own offsets (relics 0-199, ranks 900-901). The tasks' DB rows have their own ids (league-task-list.json virtualRowBase) and replace the cache's task enums 5950 and 2671.",
     "virtualIdBase": 200000
   },
+  "modals": {
+    "_comment": "The league screens opened as the main modal (areas, relics, Summary, Info, Rank), as the Leagues VI recordings send them (rev 237: 1098, 1102, 1104, in wire order): varbit busy (12393) 0 -> 1, an open league floater closed (the task list, with its script 9431), script 2524, the modal, its events; busy 1 -> 0 when it closes (Modals.LeagueMode.js). Live left busy at 1 while a confirm's modal waited to reopen; here any close clears it.",
+    "busyVarbit": 12393
+  },
   "panels": {
     "_comment": "The side panel's Summary / Info / Rank buttons (656:7, 656:2, 656:10), as captured (227/00075 sub 88831, 227/01845, 227/00579): each opens its interface as the main modal with if_setevents OP1 on its menu frame; the Summary also plays sound 2266 and runs script 7741 on its stats row 2 (Time Played) with '(Click to reveal)' until the row (529:23 slot 2) is clicked, then with the time played in the captured shape ('17 days, 2 hours', '19 hours, 46 minutes', '17 days, 58 minutes'). Every other row the panels draw comes from varps and the league struct.",
     "_modalSize": "Script 2524 sizes the next modal; live ran it before each panel opened: (-1, -1) for the Summary and Rank, (-1, -3) for the Info panel (227/00579, 227/01845).",

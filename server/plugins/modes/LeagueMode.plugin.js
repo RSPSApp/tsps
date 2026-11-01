@@ -19,6 +19,7 @@ module.exports = {
     require("./league/Account.LeagueMode")(api);
     require("./league/Content.LeagueMode")(api);
     require("./league/Journal.LeagueMode")(api);
+    require("./league/Modals.LeagueMode")(api);
     require("./league/Panels.LeagueMode")(api);
     require("./league/Rank.LeagueMode")(api);
     require("./league/Statistics.LeagueMode")(api);

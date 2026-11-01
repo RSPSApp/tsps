@@ -1,5 +1,6 @@
 import { Player } from "../../../entity/impl/player/Player";
 import { MagicSpellbook } from "../../../model/MagicSpellbook";
+import { ItemAliases } from "../../../model/ItemAliases";
 import { ItemIdentifiers } from "../../../../util/ItemIdentifiers";
 import { FightStyle } from "../FightStyle";
 import { FightType } from "../FightType";
@@ -24,6 +25,7 @@ export class Autocasting {
         ItemIdentifiers.KODAI_WAND, ItemIdentifiers.MASTER_WAND, ItemIdentifiers.ANCIENT_STAFF,
         ItemIdentifiers.NIGHTMARE_STAFF, ItemIdentifiers.VOLATILE_NIGHTMARE_STAFF,
         ItemIdentifiers.ELDRITCH_NIGHTMARE_STAFF,
+        ItemIdentifiers.ZURIELS_STAFF, ItemIdentifiers.ZURIELS_STAFF_BH_,
     ]);
 
     private static readonly AUTOCAST_SPELLS = new Map<number, CombatSpell>([
@@ -146,7 +148,9 @@ export class Autocasting {
         const weapon = player.getEquipment().getWeapon();
         const weaponId = weapon.getId();
         if (spellbook === MagicSpellbook.ANCIENT &&
-            !this.ANCIENT_SPELL_AUTOCAST_STAFFS.has(weaponId) && !Barrows.hasDamnedSet(player, "ahrims")) {
+            !this.ANCIENT_SPELL_AUTOCAST_STAFFS.has(weaponId) &&
+            !this.ANCIENT_SPELL_AUTOCAST_STAFFS.has(ItemAliases.baseOf(weaponId) ?? -1) &&
+            !Barrows.hasDamnedSet(player, "ahrims")) {
             return "You can only autocast regular offensive spells with this staff.";
         }
         if (spellbook === MagicSpellbook.NORMAL && weaponId === ItemIdentifiers.ANCIENT_STAFF) {

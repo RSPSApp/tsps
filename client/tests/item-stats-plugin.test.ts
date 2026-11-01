@@ -14,7 +14,7 @@ import {
     positionTooltip,
 } from "../game/plugins/itemstats/tooltipPosition";
 import { ItemStatsPlugin } from "../game/plugins/itemstats/ItemStatsPlugin";
-import { formatPoisonImmunity, formatRestore, readFoodStats } from "../game/plugins/itemstats/foodStats";
+import { findFoodDefinition, formatPoisonImmunity, formatRestore, readFoodStats } from "../game/plugins/itemstats/foodStats";
 import { GameState } from "../runelite/api/GameState";
 import { buildCombatStatGroups } from "../game/plugins/itemstats/itemStatsPresentation";
 import { BANKMAIN, INVENTORY } from "../runelite/api/gameval/InterfaceID";
@@ -121,6 +121,22 @@ assert.equal(shieldComparison?.after.defenceSlash, 12);
 assert.equal(foodStatsForName(" bread ")?.heal, 5);
 assert.deepEqual(foodStatsForName("Cave eel")?.heal, { min: 8, max: 12 });
 assert.equal(foodStatsForName("Anglerfish")?.special, "anglerfish");
+assert.equal(foodStatsForName("Smelly kebab")?.heal, 18, "the later area-specific duplicate is the registered record");
+assert.equal(foodStatsForName("Smelly kebab")?.area, "vampyrium");
+assert.equal(foodStatsForName("Mysterious jerky")?.area, "vampyrium");
+assert.equal(foodStatsForName("Rations")?.area, "ghorrock-prison");
+assert.equal(foodStatsForName("Scarred scraps")?.area, "the-scar");
+assert.equal(foodStatsForName("Blighted manta ray")?.wildernessOnly, true);
+const aliasCollisions = [
+    { name: "Earlier", bites: ["Shared bite", "Old finish"], heal: 1 },
+    { name: "Shared bite", heal: 2 },
+    { name: "Later", bites: ["Shared bite", "New finish"], heal: 3 },
+];
+assert.equal(findFoodDefinition("Shared bite", aliasCollisions)?.name, "Later",
+    "later bite aliases replace both earlier aliases and canonical names like repeated Map.set calls");
+assert.equal(findFoodDefinition("New finish", aliasCollisions)?.name, "Later");
+assert.equal(findFoodDefinition("Old finish", aliasCollisions)?.name, "Earlier",
+    "a later record only replaces names it registers");
 assert.equal(foodStatsForName("Strange fruit")?.poisonImmunity, 18);
 assert.equal(formatPoisonImmunity(foodStatsForName("Strange fruit")!.poisonImmunity!), "18 sec",
     "Food.plugin passes poison immunity to PoisonClock in seconds");

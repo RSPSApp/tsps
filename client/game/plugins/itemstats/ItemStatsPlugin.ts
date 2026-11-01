@@ -127,6 +127,8 @@ export class ItemStatsPlugin extends Plugin implements ClientPlugin {
             if (food.curePoison) rows.push({ label: "Poison", value: "Cured" });
             if (food.cureVenom) rows.push({ label: "Venom", value: "Cured" });
             if (food.special) rows.push({ label: "Special effect", value: food.special });
+            if (food.area) rows.push({ label: "Area restriction", value: food.area });
+            if (food.wildernessOnly) rows.push({ label: "Availability", value: "Wilderness only" });
             if (rows.length) groups.push({ title: "Food effects", rows });
             if (food.requiresContext) groups.push({ title: "Limits", rows: [{ label: "Some effects depend on player state", value: "See item use" }] });
         }

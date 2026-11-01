@@ -47,14 +47,22 @@ export interface FoodStats {
     cureVenom?: boolean;
     followUp?: Record<string, unknown>;
     special?: string;
+    area?: string;
+    wildernessOnly?: boolean;
     requiresContext: boolean;
 }
 
-/** Finds a food record by its canonical cache item name, ignoring case and outer whitespace. */
+/** Finds the last food record registered for a canonical name or bite name. */
 export function findFoodDefinition(name: string, definitions: readonly FoodDefinition[]): FoodDefinition | undefined {
     const key = normalizeName(name);
-    return definitions.find((definition) => normalizeName(definition.name) === key
-        || (Array.isArray(definition.bites) && definition.bites.some((bite) => typeof bite === "string" && normalizeName(bite) === key)));
+    const definitionsByName = new Map<string, FoodDefinition>();
+    for (const definition of definitions) {
+        const names = Array.isArray(definition.bites) ? definition.bites : [definition.name];
+        for (const biteName of names) {
+            if (typeof biteName === "string") definitionsByName.set(normalizeName(biteName), definition);
+        }
+    }
+    return definitionsByName.get(key);
 }
 
 /** Returns known food effects without inventing values for effects that need player context. */
@@ -82,6 +90,8 @@ export function readFoodStats(definition: FoodDefinition | undefined): FoodStats
         ...(typeof definition.cureVenom === "boolean" ? { cureVenom: definition.cureVenom } : {}),
         ...(definition.then ? { followUp: { ...definition.then } } : {}),
         ...(definition.special ? { special: definition.special } : {}),
+        ...(typeof definition.area === "string" ? { area: definition.area } : {}),
+        ...(typeof definition.wildernessOnly === "boolean" ? { wildernessOnly: definition.wildernessOnly } : {}),
         requiresContext: !knownEffects || typeof definition.heal === "object" || Boolean(definition.then || definition.special),
     };
 }

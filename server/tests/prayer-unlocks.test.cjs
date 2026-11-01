@@ -7,6 +7,8 @@ Server.installProductionPathResolver();
 
 const { PrayerData } = require("../dist/game/content/PrayerHandler");
 const { ItemIds } = require("../dist/util/IdEnums");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { Skill } = require("../dist/game/model/Skill");
 
 const plugin = require("../plugins/skills/PrayerUnlocks.plugin");
 
@@ -64,6 +66,28 @@ function denied(prayer, p) {
   const event = { player: p, prayer: PrayerData[prayer] };
   prayerDisabledHook(event);
   return event;
+}
+
+/**
+ * A real Player/SkillManager with the packet sender recorded, so the test proves
+ * the native refresh paths no longer write the prayer-tab unlock varbits.
+ */
+function nativePlayer(t) {
+  const player = new Player(null);
+  const varbits = [];
+  const sender = new Proxy({}, {
+    get: (_target, name) => (...args) => {
+      if (name === "sendVarbit") varbits.push([args[0], args[1]]);
+      return sender;
+    },
+  });
+  t.mock.method(player, "getPacketSender", () => sender);
+  t.mock.method(player, "sendMessage", () => {});
+  player.setRegistered(true);
+  player.getSkillManager().setMaxLevel(Skill.PRAYER, 99, false);
+  player.getSkillManager().setMaxLevel(Skill.DEFENCE, 99, false);
+  player.getSkillManager().setCurrentLevel(Skill.PRAYER, 99, false);
+  return { player, varbits };
 }
 
 function read(name, p, itemId) {
@@ -187,12 +211,63 @@ test("a learned scroll is not consumed again", () => {
   assert.match(p.messages.at(-1), /nothing more for you to learn/);
 });
 
-test("logging in sends the three unlock varbits", () => {
+test("logging in sends the unlock varbits, including the Knight Waves state", () => {
   const p = player({
-    attributes: { "prayer:rigour-unlocked": true, "prayer:augury-unlocked": false },
+    attributes: {
+      "prayer:rigour-unlocked": true, "prayer:augury-unlocked": false,
+      "quest.kings_ransom.stage": 85,
+    },
   });
   loginHook({ player: p });
-  assert.deepEqual(p.varbits, [[5453, 0], [5451, 1], [5452, 0]]);
+  assert.deepEqual(p.varbits, [[3909, 8], [5453, 0], [5451, 1], [5452, 0]]);
+});
+
+test("King's Ransom completion reveals Chivalry and Piety to the client", () => {
+  const p = player();
+  const stageChanged = customEventHooks.get("quest:stage-changed");
+  assert.ok(stageChanged, "the plugin follows King's Ransom's stage");
+
+  // QuestRuntime saves the stage before emitting the event.
+  p.setAttribute("quest.kings_ransom.stage", 84);
+  stageChanged({ player: p, key: "kings_ransom", stage: 84 });
+  assert.deepEqual(p.varbits, [[3909, 0]], "still in progress");
+
+  p.setAttribute("quest.kings_ransom.stage", 85);
+  stageChanged({ player: p, key: "kings_ransom", stage: 85 });
+  assert.deepEqual(p.varbits, [[3909, 0], [3909, 8]], "complete");
+
+  stageChanged({ player: p, key: "cooks_assistant", stage: 85 });
+  assert.equal(p.varbits.length, 2, "another quest's stage is ignored");
+});
+
+test("a native Prayer login refresh and drain keep a player without scrolls locked", (t) => {
+  const { player: p, varbits } = nativePlayer(t);
+  loginHook({ player: p });
+  assert.deepEqual(varbits, [[3909, 0], [5453, 0], [5451, 0], [5452, 0]]);
+
+  varbits.length = 0;
+  // Player.onLogin, a level-up and the prayer-point drain all call these.
+  p.getSkillManager().updateSkill(Skill.PRAYER);
+  p.getSkillManager().updateSkill(Skill.DEFENCE);
+  p.getSkillManager().setCurrentLevel(Skill.PRAYER, 98, true);
+
+  assert.deepEqual(varbits, [], "core no longer writes the unlock varbits");
+  assert.equal(denied("RIGOUR", p).disabled, true, "the server still denies Rigour");
+  assert.equal(denied("CHIVALRY", p).disabled, true, "and Chivalry");
+});
+
+test("a native Prayer refresh and drain cannot wipe an earned scroll unlock", (t) => {
+  const { player: p, varbits } = nativePlayer(t);
+  p.setAttribute("prayer:rigour-unlocked", true);
+  loginHook({ player: p });
+  assert.deepEqual(varbits, [[3909, 0], [5453, 0], [5451, 1], [5452, 0]]);
+
+  varbits.length = 0;
+  p.getSkillManager().updateSkill(Skill.PRAYER);
+  p.getSkillManager().setCurrentLevel(Skill.PRAYER, 50, true);
+
+  assert.deepEqual(varbits, [], "the earned unlock is not overwritten");
+  assert.notEqual(denied("RIGOUR", p).disabled, true);
 });
 
 test("the plugin starts every unlock locked", () => {

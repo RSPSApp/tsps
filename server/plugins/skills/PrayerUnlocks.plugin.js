@@ -21,7 +21,11 @@ const AUGURY_UNLOCKED_ATTRIBUTE = "prayer:augury-unlocked";
 const PRESERVE_UNLOCKED_VARBIT = 5453;
 const RIGOUR_UNLOCKED_VARBIT = 5451;
 const AUGURY_UNLOCKED_VARBIT = 5452;
+// The client reveals Chivalry and Piety when KR_KNIGHTWAVES_STATE reaches 8.
+const KNIGHT_WAVES_STATE_VARBIT = 3909;
+const KNIGHT_WAVES_COMPLETE = 8;
 
+const KINGS_RANSOM_KEY = "kings_ransom";
 const KINGS_RANSOM_STAGE_ATTRIBUTE = "quest.kings_ransom.stage";
 const KINGS_RANSOM_COMPLETE_STAGE = 85;
 
@@ -65,8 +69,20 @@ function sendUnlock(player, scroll) {
   player.getPacketSender().sendVarbit(scroll.varbit, player.getAttribute(scroll.attribute) === true ? 1 : 0);
 }
 
+function sendKnightWaves(player) {
+  player.getPacketSender()
+    .sendVarbit(KNIGHT_WAVES_STATE_VARBIT, kingsRansomComplete(player) ? KNIGHT_WAVES_COMPLETE : 0);
+}
+
 function syncUnlocks({ player }) {
+  sendKnightWaves(player);
   for (const scroll of scrolls()) sendUnlock(player, scroll);
+}
+
+/** King's Ransom stands in for the Knight Waves, so its stage drives the varbit. */
+function kingsRansomStageChanged({ player, key }) {
+  if (key !== KINGS_RANSOM_KEY) return;
+  sendKnightWaves(player);
 }
 
 function prayerRequirements(event) {
@@ -145,6 +161,7 @@ module.exports = {
     pluginApi.onPlayerLogin(syncUnlocks);
     pluginApi.onPrayerDisabled(prayerRequirements);
     pluginApi.onCustomEvent("prayer:unlock", unlockPrayer);
+    pluginApi.onCustomEvent("quest:stage-changed", kingsRansomStageChanged);
     for (const name of SCROLL_ITEM_NAMES) {
       pluginApi.onItemAction(name, { Read: readScroll });
     }
@@ -157,6 +174,7 @@ module.exports._test = {
   learnScroll,
   syncUnlocks,
   unlockPrayer,
+  kingsRansomStageChanged,
   kingsRansomComplete,
   scrolls,
 };

@@ -7,6 +7,26 @@ the yes/no invitation. In cache revision 241 the invitation is NPC 6744 (`FLIPPA
 with `Talk-to` and `Dismiss`; NPC 5427 (`FLIPPA`) is the two-tile room variant
 with only `Talk-To`, whose spelling does not match the invitation action hook.
 
+RSProx recordings **1844** (revision 227, Leagues V) and **1098** (revision 237,
+Leagues VI) show the accepted event end to end:
+
+- The player arrives on **1972,5046**. Room NPCs 5427 Flippa and 5428 Tilt spawn at
+  **1973,5041** and **1971,5041** (Flippa facing west, Tilt east); 6744 follows the
+  player in, then disappears after Tilt speaks.
+- Tilt, not a game message, gives the instructions as an NPC dialogue:
+  "You poke 10 flashing pillars, right? You NOT poke other pillars, right? Okay,
+  you go play now." Talking to either room NPC repeats the Wiki transcript's
+  alternating player/NPC lines before and after ten points. No per-poke score
+  messages are sent.
+- The room places only the inactive post ids 8982/8984/9079/9081/9258. The glow is
+  `loc_anim` **4005** (`pinball_post`) on that object; **4006**
+  (`pinball_post_inactive`) stops it. The object id itself never changes, so the
+  plugin animates the map object instead of swapping it for 8983/8994/8995/9080/9259.
+- The tenth correct tag sends "Congratulations, you have won!" and "You may now
+  leave the game area."; leaving pays the noted gem through the shared reward path,
+  preceded by "You were awarded five sapphires/rubies!" (or the matching
+  emeralds/diamonds line).
+
 This plugin adapts existing implementations rather than inventing event control flow.
 Full upstream notices are retained in [LICENSES.txt](LICENSES.txt).
 

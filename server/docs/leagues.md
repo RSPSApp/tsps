@@ -1376,6 +1376,16 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `league:task-filters` and re-sent at login, as the recordings show (10034 = 1, 11692 = 13). A
   row click is the client's expand/collapse and gets no reply; the close button (657:3) closes
   the floater. Clicks count only after View Tasks opened the list.
+- **The Leagues VI flow** (rev 237/238 recordings 1098, 1102, 1104, 1105; this cache's list):
+  the events go out in the order tier, completed, mastery, type, area, skill, rows, menu frame.
+  The mastery dropdown (657:41, enum 5944, `league_task_filter_mastery_point` 20357) is the
+  pact-task filter. The rows' events end at the list enum's last key (Demonic Pacts 0-1592, the
+  cache's list; Raging Echoes' recordings 0-1589, its task count, which a league we send keeps),
+  then `league_task_override_task_wipe` (9404). The search bar (657:45) sets
+  `league_tasks_is_searching` 17310 and `league_tasks_search_listen_for_keyboard` 17311 to 1 and
+  runs `chatdefault_stopinput` (2157); the typing is the client's. A close during a search resets
+  both, closes the floater and runs `chatdefault_restoreinput` (2158); every close then runs script
+  9431.
 - **Completing** a task (`Complete.LeagueTasks.js`, `league:complete-task { player, id }`): a league
   character, a task of its league, not yet done; the completion bit goes out first (the points
   varp's redraw then shows the tick), `league:award-task` pays the points and shows the popup,

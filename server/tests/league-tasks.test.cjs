@@ -97,7 +97,8 @@ function character(name, profile = "league", { login = true } = {}) {
         case "sendInterfaceFlagsRange": return (...args) => (sent.flags.push(args), sender);
         case "sendContentData": return (source, datasets) => (sent.content.push(datasets), sender);
         case "sendInterfaceRemoval": return () => (sent.removals++, sender);
-        case "closeInterface": return (group) => (sent.closed.push(group), sender);
+        case "closeInterface": return (group) => (sent.closed.push(group), sent.order.push(["close", group]), sender);
+        case "sendInterfaceScript": return (id, args = []) => (sent.order.push(["script", id, ...args]), sender);
         default: return () => sender;
       }
     },
@@ -237,9 +238,9 @@ test("View Tasks opens the list with the captured events; the dropdowns set and 
   assert.equal(league.sent.removals, 1, "the main modal is closed first");
   assert.deepEqual(league.sent.subs.at(-1), [FLOATER, TASKS, 1], "league_tasks in the toplevel floater as an overlay");
   assert.deepEqual(league.sent.flags, [
-    [uid(TASKS, 37), 1, 7, OP1], [uid(TASKS, 38), 1, 8, OP1], [uid(TASKS, 39), 1, 15, OP1], [uid(TASKS, 40), 1, 7, OP1], [uid(TASKS, 42), 1, 4, OP1],
+    [uid(TASKS, 37), 1, 7, OP1], [uid(TASKS, 42), 1, 4, OP1], [uid(TASKS, 41), 1, 4, OP1], [uid(TASKS, 38), 1, 8, OP1], [uid(TASKS, 39), 1, 15, OP1], [uid(TASKS, 40), 1, 7, OP1],
     [uid(TASKS, 18), 0, 1480, OP1], [uid(TASKS, 6), 10, 18, OP1],
-  ], "if_setevents as captured, on this cache's dropdown lists and rows (the rows up to the task count)");
+  ], "if_setevents as captured, in the Leagues VI order, on this cache's dropdown lists and rows (the rows up to the task count)");
   assert.equal(hooks[`button:${uid(TASKS, 37)}`]({ player: league, slot: 3 }), true);
   assert.equal(league.sent.varbits.get(10033), 2, "captured: dropdown slot 3 -> league_task_filter_tier 2");
   assert.equal(hooks[`button:${uid(TASKS, 38)}`]({ player: league, slot: 2 }), true);
@@ -292,6 +293,33 @@ test("a kill awards its task once: the completion bit first, then the points, th
   const before = { ...league.getAttribute("league:task-kills") };
   kill(league, "Unicorn");
   assert.deepEqual(league.getAttribute("league:task-kills"), before, "a kill no task accepts counts for nothing");
+});
+
+test("Demonic Pacts' list as captured: the row events to the cache list's last key, the override wipe, the search and its close", () => {
+  worldLeague = 6;
+  const pacts = character("searcher");
+  worldLeague = 4;
+  assert.equal(hooks[`button:${uid(TASKS, 45)}`]({ player: pacts }), false, "the search bar of a closed list");
+  pacts.sent.order.length = 0;
+  assert.equal(hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: pacts }), true);
+  assert.deepEqual(pacts.sent.flags.find(([id]) => id === uid(TASKS, 18)), [uid(TASKS, 18), 0, 1592, OP1], "rev 237: tasks_background 0-1592");
+  assert.deepEqual(pacts.sent.order.filter(([kind]) => kind === "script"), [["script", 9404]], "league_task_override_task_wipe after the events");
+
+  pacts.sent.order.length = 0;
+  assert.equal(hooks[`button:${uid(TASKS, 45)}`]({ player: pacts }), true);
+  assert.deepEqual(pacts.sent.order, [["varbit", 17310, 1], ["varbit", 17311, 1], ["script", 2157]], "searching, the keyboard, chatdefault_stopinput");
+  pacts.sent.order.length = 0;
+  assert.equal(hooks[`button:${uid(TASKS, 3)}`]({ player: pacts }), true);
+  assert.deepEqual(pacts.sent.order, [["varbit", 17310, 0], ["varbit", 17311, 0], ["close", TASKS], ["script", 2158], ["script", 9431]], "the captured close of a search");
+
+  hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: pacts });
+  pacts.sent.order.length = 0;
+  hooks[`button:${uid(TASKS, 3)}`]({ player: pacts });
+  assert.deepEqual(pacts.sent.order, [["close", TASKS], ["script", 9431]], "a close without a search");
+
+  hooks[`button:${uid(SIDE_PANEL, 36)}`]({ player: pacts });
+  assert.equal(hooks[`button:${uid(TASKS, 41)}`]({ player: pacts, slot: 2 }), true, "the pact-task dropdown");
+  assert.equal(pacts.sent.varbits.get(20357), 1, "league_task_filter_mastery_point");
 });
 
 /** A real cache NPC dying to `player` through the death hook. */

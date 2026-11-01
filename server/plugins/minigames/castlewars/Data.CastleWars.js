@@ -45,6 +45,7 @@ function buildData(core) {
     TIMER_VARP: 380, // seconds until start in the waiting room, minutes remaining in game
     FLAG_VARBIT: { [TEAM.SARADOMIN]: 143, [TEAM.ZAMORAK]: 153 },
     SCORE_VARBIT: { [TEAM.SARADOMIN]: 145, [TEAM.ZAMORAK]: 155 },
+    TEAM_PLAYING_VARBIT: { [TEAM.SARADOMIN]: 144, [TEAM.ZAMORAK]: 154 },
     BARRICADE_COUNT_VARBIT: 16198, // castlewars_barricades_inside (the total on standard worlds)
     STANDARD_WORLD_VARBIT: 16207, // castlewars_world_client: shared cap, rather than inside/outside
     // Each team's own castle status (main door, side door, tunnels, catapult), read by the same scripts.

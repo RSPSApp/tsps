@@ -13,6 +13,7 @@ const HALL_ARRIVAL = [1759, 5486, 0]; // below the exit portal at 1759,5488
 const HUB_ARRIVAL = [3185, 3470, 0]; // beside the hub's portal at 3186,3471
 
 const ENTER_HALL_SETTING = 23;
+const MAX_HALL_PLAYERS = 2000; // Wiki: Clan Settings
 const COFFER_DEPOSIT_SETTING = 19;
 const COFFER_WITHDRAW_SETTING = 20;
 const COFFER_VAR = 3; // %varclan_3, which clan_storage_main_drawcoins shows
@@ -58,7 +59,16 @@ function enter(player, clan, rank) {
     player.sendMessage("You are not a high enough rank to enter this clan's hall.");
     return;
   }
-  hallFor(clan).enter(player);
+  const hall = hallFor(clan);
+  if (clan.hall?.locked) {
+    player.sendMessage("This clan's hall is locked.");
+    return;
+  }
+  if ((hall.entities ?? []).length >= (clan.hall?.players ?? MAX_HALL_PLAYERS)) {
+    player.sendMessage("This clan's hall is full.");
+    return;
+  }
+  hall.enter(player);
   player.moveTo(new core.Location(...HALL_ARRIVAL));
 }
 

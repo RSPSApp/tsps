@@ -46,6 +46,10 @@ const BOARD_LIST = 20;
 const BOARD_MY_CLAN = 0; // "List your clan" (rsprox 2778 tick 67)
 const BOARD_APPLICANTS = 1; // by the buttons' order on screen; only the first is captured
 const BOARD_REFRESH = 2;
+const BOARD_RESET = 3;
+const BOARD_WANTED_VARP = 807; // read by clan_board_filterupdate
+const BOARD_UNWANTED_VARP = 808;
+const INTERESTS_SETTING = 7;
 const BOARD_ROWS = 45;
 const BOARD_ROW_SCRIPT = 4357;
 const LAST_BOARD_ENTRY = 89;
@@ -57,13 +61,17 @@ const uid = (group, child) => (group << 16) | child;
 let core = null;
 let later = null;
 let openSettingsFor = null;
+let interestNamesFor = () => [];
+let runeDateText = (day) => String(day);
 
 const selectedApplicant = new WeakMap();
 
-function init(apiCore, schedule, openSettings) {
+function init(apiCore, schedule, openSettings, interestNames, dateText) {
   core = apiCore;
   later = schedule;
   openSettingsFor = openSettings;
+  interestNamesFor = interestNames;
+  runeDateText = dateText;
 }
 
 // ---------------------------------------------------------------- finding a clan
@@ -293,13 +301,51 @@ function toggleInviting(player, clan) {
 
 // ---------------------------------------------------------------- the recruitment board
 
-function boardClans() {
-  return [...Store.all()].filter((clan) => clan.inviting).slice(0, BOARD_ROWS);
+const boardFilters = new WeakMap();
+
+/** Interests a clan must and mustn't list: the green and red marks (clan_board_filterupdate). */
+function filtersOf(player) {
+  return boardFilters.get(player) ?? { wanted: 0, unwanted: 0 };
 }
 
-function boardRow(clan, now) {
-  const days = Math.max(0, Core.runeDay(now) - clan.creationTime);
-  return [clan.name, clan.members.length, days].join("|");
+function boardClans(player) {
+  const { wanted, unwanted } = filtersOf(player);
+  return [...Store.all()]
+    .filter((clan) => {
+      const interests = Core.settingValue(clan, INTERESTS_SETTING);
+      return clan.inviting && (interests & wanted) === wanted && (interests & unwanted) === 0;
+    })
+    .slice(0, BOARD_ROWS);
+}
+
+/** clan_board_addline's fields: name, size, created, its sort key, interests, then the minimums. */
+function boardRow(clan) {
+  const interests = interestNamesFor(clan).join(", ") || "No interests listed";
+  return [clan.name, clan.members.length, runeDateText(clan.creationTime), clan.creationTime, interests, clan.applyMinCombat ?? 0, clan.applyMinTotal ?? 0].join("|");
+}
+
+function sendBoardFilters(player) {
+  const { wanted, unwanted } = filtersOf(player);
+  player.getPacketSender().sendConfig(BOARD_WANTED_VARP, wanted).sendConfig(BOARD_UNWANTED_VARP, unwanted);
+}
+
+/** Each click moves on: nothing, wanted, unwanted. */
+function clickFilter(player, interest) {
+  const bit = 1 << interest;
+  const { wanted, unwanted } = filtersOf(player);
+  if (wanted & bit) boardFilters.set(player, { wanted: wanted & ~bit, unwanted: unwanted | bit });
+  else if (unwanted & bit) boardFilters.set(player, { wanted, unwanted: unwanted & ~bit });
+  else boardFilters.set(player, { wanted: wanted | bit, unwanted });
+  listBoard(player);
+}
+
+function listBoard(player) {
+  sendBoardFilters(player);
+  const sender = player.getPacketSender();
+  const clans = boardClans(player);
+  for (let row = 0; row < BOARD_ROWS; row++) {
+    sender.sendClientScript(BOARD_ROW_SCRIPT, row, clans[row] ? boardRow(clans[row]) : "", 0);
+  }
 }
 
 /** The object's View (rsprox 2778 tick 58) and its rows. */
@@ -310,11 +356,7 @@ function openBoard(player) {
     .sendInterfaceFlagsRange(uid(BOARD_GROUP, BOARD_LIST), 0, LAST_BOARD_ENTRY, PAUSE_FLAG)
     .sendInterfaceFlagsRange(uid(BOARD_GROUP, BOARD_FILTERS), 0, LAST_BOARD_FILTER, PAUSE_FLAG)
     .sendInterfaceFlagsRange(uid(BOARD_GROUP, BOARD_BUTTONS), 0, LAST_BOARD_BUTTON, PAUSE_FLAG);
-  const clans = boardClans();
-  const now = Date.now();
-  for (let row = 0; row < BOARD_ROWS; row++) {
-    sender.sendClientScript(BOARD_ROW_SCRIPT, row, clans[row] ? boardRow(clans[row], now) : "", 0);
-  }
+  listBoard(player);
 }
 
 function clickBoard(event) {
@@ -330,12 +372,17 @@ function clickBoard(event) {
     } else openApplicants(player, clan);
   } else if (childId === BOARD_BUTTONS && action === BOARD_REFRESH) {
     openBoard(player);
+  } else if (childId === BOARD_BUTTONS && action === BOARD_RESET) {
+    boardFilters.delete(player);
+    listBoard(player);
+  } else if (childId === BOARD_FILTERS) {
+    clickFilter(player, action);
   } else if (childId === BOARD_BUTTONS && action === BOARD_APPLICANTS) {
     const clan = Core.clanOf(player);
     if (clan) openApplicants(player, clan);
     else player.sendMessage("You are not in a clan.");
   } else if (childId === BOARD_LIST) {
-    const clan = boardClans()[Math.floor(action / 2)];
+    const clan = boardClans(player)[Math.floor(action / 2)];
     if (clan) {
       player.getPacketSender().sendInterfaceRemoval();
       viewClan(player, clan);

@@ -6,6 +6,7 @@
 const Core = require("./Core.Clans");
 const Guests = require("./Guests.Clans");
 const Management = require("./Management.Clans");
+const Screens = require("./Screens.Clans");
 const Store = require("./Store.Clans");
 
 const SETTINGS_GROUP = 690;
@@ -19,6 +20,9 @@ const INTERESTS_ROW = 14;
 const TALK_ROW = 15;
 const GUESTS_ROW = 16;
 const LOAD_AS_GUEST_VARBIT = 12165; // clan_transmit_loadasguest
+const OUTFIT_BUTTON = 5;
+const EVENTS_BUTTON = 19;
+const HALL_BUTTON = 22;
 const MEMBERS_BUTTON = 20;
 const APPLICANTS_BUTTON = 21;
 const PERMISSIONS_BUTTON = 23;
@@ -45,7 +49,7 @@ function init(apiCore) {
 
 const highlight = (text) => `<col=ffb83f>${text}</col>`;
 
-function creationDate(day) {
+function runeDateText(day) {
   const date = new Date(RUNE_DAY_EPOCH_MS + day * DAY_MS);
   return `${String(date.getUTCDate()).padStart(2, "0")}-${MONTHS[date.getUTCMonth()]}-${date.getUTCFullYear()}`;
 }
@@ -64,13 +68,14 @@ function draw(player, clan) {
   sender.sendClientScript(
     STATIC_ROWS_SCRIPT,
     "Clan Size:<br>Owner:<br>Creation Date:",
-    [clan.members.length, Core.ownerOf(clan)?.name ?? "", creationDate(clan.creationTime)].map(highlight).join("<br>"),
+    [clan.members.length, Core.ownerOf(clan)?.name ?? "", runeDateText(clan.creationTime)].map(highlight).join("<br>"),
   );
   row(`Name:|${highlight(clan.name)}|Rename`, NAME_ROW);
   row("Home World:|---", HOME_WORLD_ROW);
   sender.sendInterfaceDisplayState(uid(RESIGN_ROW), !isOwner);
   if (isOwner) row(ownershipRow(clan, Date.now()), RESIGN_ROW);
-  row(`Interests:|${highlight("None")}`, INTERESTS_ROW);
+  const interests = Screens.interestNames(clan);
+  row(`Interests:|${interests.length ? interests.map(highlight).join(", ") : highlight("None")}`, INTERESTS_ROW);
   row(`Talk in chat:|${highlight(rankName(clan.talkRank))}`, TALK_ROW);
   row(`Guests may listen in chat:|${highlight(clan.allowGuests ? "Permitted" : "Not permitted")}`, GUESTS_ROW, 0);
 }
@@ -217,12 +222,16 @@ function click(event) {
   else if (childId === NAME_ROW) askRename(player, clan);
   else if (childId === TALK_ROW) clickTalkRow(player, clan);
   else if (childId === GUESTS_ROW) clickGuestsRow(player, clan);
+  else if (childId === INTERESTS_ROW) Screens.openInterests(player, clan);
+  else if (childId === OUTFIT_BUTTON) Screens.openOutfit(player, clan);
+  else if (childId === EVENTS_BUTTON) Screens.openEvents(player, clan);
+  else if (childId === HALL_BUTTON) Screens.openHall(player, clan);
   else if (childId === APPLICANTS_BUTTON) Guests.openApplicants(player, clan);
   else if (childId === MEMBERS_BUTTON) Management.openMembers(player, clan);
   else if (childId === PERMISSIONS_BUTTON) Management.openPermissions(player);
   else if (childId === TITLES_BUTTON) Management.openTitles(player, clan);
   else if (childId === BANS_BUTTON) Management.openBans(player, clan);
-  else player.sendMessage("That part of the clan settings is not available yet.");
+  else if (childId === HOME_WORLD_ROW) player.sendMessage("Clans here have one home world: this server's.");
 }
 
-module.exports = { click, init, open, openAsGuest };
+module.exports = { click, init, open, openAsGuest, runeDateText };

@@ -179,6 +179,9 @@ beforeEach(() => {
       PlayerRights,
       ItemIdentifiers: { CLAN_CLOAK: 25712, CLAN_VEXILLUM: 25721, COINS: 995 },
       Skill: { values: () => [{ id: 0 }, { id: 1 }] },
+      CacheDefinitions: {
+        getEnumValues: (id) => new Map(id === 3792 ? [[-1, 'x'], [0, 'F2P'], [5, 'PvP']] : [[-1, 'x'], [0, `A${id}`], [1, `B${id}`]]),
+      },
       Boundary: class {
         constructor(...bounds) {
           this.bounds = bounds;
@@ -229,7 +232,13 @@ beforeEach(() => {
         getPlayers: () => ({ search: (match) => online.find(match) ?? null }),
       },
     },
-    onCustomEvent: (name, handler) => hooks.custom.set(name, handler),
+    onCustomEvent: (name, handler) => {
+      const earlier = hooks.custom.get(name);
+      hooks.custom.set(name, (event) => {
+        earlier?.(event);
+        handler(event);
+      });
+    },
     onPlayerLogout: (handler) => (hooks.logout = handler),
     onSocialPacket: (handler) => (hooks.social = hooks.social ?? []).push(handler),
     onInterfaceActionClick: (handler) => hooks.clicks.push(handler),
@@ -609,8 +618,8 @@ test('Settings opens 690 with the rows in rsprox 2778 order', () => {
   assert.match(rows[2][1], /resign/);
   assert.deepEqual(rows[5].slice(3), [1, 0], 'the checkbox row');
   assert.match(owner.scripts.find((script) => script[0] === 4289)[2], /<col=ffb83f>1<\/col><br><col=ffb83f>Owner<\/col><br><col=ffb83f>\d\d-[A-Z][a-z]{2}-20\d\d<\/col>/);
-  assert.equal(clickGroup(owner, 690, 19).handled, true);
-  assert.match(owner.messages.at(-1), /not available yet/);
+  assert.equal(clickGroup(owner, 690, 12).handled, true);
+  assert.match(owner.messages.at(-1), /one home world/);
 });
 
 test('a member sees no resign row, and leaving takes them out', () => {
@@ -1170,7 +1179,7 @@ test('minimums block applying, and the board lists clans that are inviting (2778
   assert.equal(self.mounted.at(-1), 700);
   const row = self.scripts.find((script) => script[0] === 4357);
   assert.equal(row[1], 0);
-  assert.match(row[2], /^Blur\|3\|0$/);
+  assert.match(row[2], /^Blur\|3\|\d\d-[A-Z][a-z]{2}-20\d\d\|\d+\|No interests listed\|90\|0$/);
   clan.inviting = false;
   self.scripts.length = 0;
   hooks.objects['Clan recruitment board'].View({ player: self });
@@ -1312,4 +1321,149 @@ test('the coffer moves coins by rank, and every member hears the new total throu
   const outsider = player('Outsider');
   coffer({ player: outsider });
   assert.match(outsider.messages.at(-1), /Only members/);
+});
+
+// ---------------------------------------------------------------- the last screens
+
+test('interests toggle on the server, save on submit (1), and cancel (0) drops them', () => {
+  const { owner, member, clan } = clanOfThree();
+  const interest = (who, slot) => { for (const handler of hooks.clicks) handler({ player: who, groupId: 691, childId: 7, slot }); };
+  clickGroup(member, 690, 14);
+  assert.match(member.messages.at(-1), /high enough rank/);
+  clickGroup(owner, 690, 14);
+  assert.equal(owner.mounted.at(-1), 691);
+  assert.deepEqual(owner.scripts.at(-1), [4263, (690 << 16) | 27]);
+  interest(owner, 5);
+  assert.equal(owner.configs.get(3023), 32);
+  owner.amountAction.execute(0);
+  assert.equal(CoreClans().settingValue(clan, 7), 0, 'cancelled');
+  clickGroup(owner, 690, 14);
+  interest(owner, 5);
+  interest(owner, 0);
+  owner.amountAction.execute(1);
+  assert.equal(CoreClans().settingValue(clan, 7), 33);
+  assert.match(owner.scripts.filter((script) => script[0] === 4290).at(-3)[1], /F2P.*PvP/);
+});
+
+test('board filters mark wanted, then unwanted, then neither, and filter the rows', () => {
+  const { owner, clan } = clanOfThree();
+  clan.inviting = true;
+  clan.values = { ...clan.values, 7: 1 };
+  hooks.objects['Clan recruitment board'].View({ player: owner });
+  const rows = () => owner.scripts.filter((script) => script[0] === 4357).slice(-45);
+  assert.match(rows()[0][2], /^Blur/);
+  pause(owner, 700, 5, 5);
+  assert.equal(owner.configs.get(807), 32);
+  assert.equal(rows()[0][2], '', 'wants PvP');
+  pause(owner, 700, 5, 5);
+  assert.equal(owner.configs.get(808), 32);
+  assert.match(rows()[0][2], /^Blur/);
+  pause(owner, 700, 5, 0);
+  pause(owner, 700, 5, 0);
+  assert.equal(rows()[0][2], '', 'doesn\'t want F2P');
+  pause(owner, 700, 1, 3);
+  assert.deepEqual([owner.configs.get(807), owner.configs.get(808)], [0, 0], 'Reset');
+  assert.match(rows()[0][2], /^Blur/);
+});
+
+test('the outfit saves the value script 4432 answers with', () => {
+  const { owner, member, clan } = clanOfThree();
+  clickGroup(member, 690, 5);
+  assert.match(member.messages.at(-1), /high enough rank/);
+  clickGroup(owner, 690, 5);
+  assert.equal(owner.mounted.at(-1), 694);
+  assert.equal(owner.configs.get(3023), 1049601);
+  owner.amountAction.execute(2100000);
+  assert.equal(CoreClans().settingValue(clan, 11), 2100000);
+});
+
+function formField(self, childId, ...answers) {
+  clickGroup(self, 704, childId);
+  for (const answer of answers) {
+    if (self.dialogue) { const open = self.dialogue; self.dialogue = null; open.handler.executeOption(answer); }
+    else if (typeof answer === 'string') self.syntaxAction.execute(answer);
+    else self.amountAction.execute(answer);
+  }
+}
+
+test('an event is created through the form, listed, edited and deleted', () => {
+  const { owner, member, clan } = clanOfThree();
+  clickGroup(member, 690, 19);
+  clickGroup(member, 703, 5);
+  assert.match(member.messages.at(-1), /organise events/);
+  clickGroup(owner, 690, 19);
+  assert.equal(owner.mounted.at(-1), 703);
+  clickGroup(owner, 703, 5);
+  assert.equal(owner.mounted.at(-1), 704);
+  assert.equal(owner.varbits.get(12224), 0);
+  formField(owner, 9, 2);
+  assert.equal(owner.varbits.get(12219), 1);
+  formField(owner, 7, 45);
+  assert.equal(owner.varbits.get(12221), CoreClans().runeDay() + 30, 'no further than 30 days');
+  formField(owner, 19, 0);
+  assert.equal(owner.varbits.get(12222), 1);
+  formField(owner, 17, 330);
+  assert.equal(owner.varbits.get(12216), 330);
+  formField(owner, 12, 'nope');
+  assert.match(owner.messages.at(-1), /HH:MM/);
+  formField(owner, 12, '18:30');
+  assert.equal(owner.varbits.get(12223), 1110);
+  formField(owner, 21, 101);
+  assert.equal(owner.varbits.get(10986), 101);
+  clickGroup(owner, 704, 23);
+  assert.equal(clan.events.length, 1);
+  assert.equal(owner.mounted.at(-1), 703);
+  const row = owner.scripts.filter((script) => script[0] === 4407).at(-10);
+  assert.deepEqual(row.slice(1, 4), [0, 1, 100]);
+  clan.events[0].rank = 100;
+  clickGroup(member, 690, 19);
+  assert.equal(member.scripts.filter((script) => script[0] === 4407).at(-10)[5], '', 'above their rank');
+  assert.match(row[5], /\|18:30\|1\|330\|/);
+  assert.match(row[5], /\|Owner$/);
+  clickGroup(owner, 703, 6);
+  assert.equal(owner.varbits.get(12200), 1, 'Edit mode');
+  for (const handler of hooks.clicks) handler({ player: owner, groupId: 703, childId: 9, slot: 0 });
+  assert.equal(owner.varbits.get(12224), 1);
+  formField(owner, 17, 331);
+  clickGroup(owner, 704, 23);
+  assert.equal(clan.events[0].world, 331);
+  for (const handler of hooks.clicks) handler({ player: owner, groupId: 703, childId: 9, slot: 0 });
+  clickGroup(owner, 704, 24);
+  assert.deepEqual(clan.events, []);
+  assert.equal(JSON.parse(fs.readFileSync(process.env.TSPS_CLANS_FILE, 'utf8')).clans[0].events.length, 0);
+});
+
+test('hall settings take the client\'s edits, and lock and cap the hall', () => {
+  const { owner, member, clan } = clanOfThree();
+  clickGroup(member, 690, 22);
+  assert.equal(member.varbits.get(12200), 0, 'read only');
+  clickGroup(member, 692, 5);
+  assert.equal(clan.hall, undefined);
+  clickGroup(owner, 690, 22);
+  assert.equal(owner.mounted.at(-1), 692);
+  assert.equal(owner.varbits.get(12200), 1);
+  assert.equal(owner.configs.get(3027), 2000 << 2);
+  const edit = { player: owner, varpId: 3027, value: (1 << 1) | (2 << 2) | (3 << 13), handled: false };
+  hooks.custom.get('player:varp-transmit')(edit);
+  assert.equal(edit.handled, true);
+  clickGroup(owner, 692, 5);
+  assert.deepEqual(clan.hall, { locked: true, players: 2, theme: 3 });
+  assert.equal(owner.mounted.at(-1), 690);
+  const portal = hooks.objects['Clan hall portal'].Enter;
+  portal({ player: member });
+  assert.equal(member.messages.at(-1), "This clan's hall is locked.");
+  clan.hall.locked = false;
+  clan.hall.players = 1;
+  portal({ player: owner });
+  portal({ player: member });
+  assert.equal(member.messages.at(-1), "This clan's hall is full.");
+});
+
+test('all eight title settings are sent, and ranks 96-124 save', () => {
+  const { owner, clan } = clanOfThree();
+  clickGroup(owner, 690, 24);
+  const edit = { player: owner, varpId: 736, value: 77, handled: false };
+  hooks.custom.get('player:varp-transmit')(edit);
+  clickGroup(owner, 695, 13);
+  assert.equal(CoreClans().titleSetting(clan, 103), 77);
 });

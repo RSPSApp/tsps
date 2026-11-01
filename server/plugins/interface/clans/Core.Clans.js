@@ -40,7 +40,7 @@ const OWNER_ABSENT_MS = 90 * DAY_MS;
 /** script 4302: bits 0-9 hold rank 0's title, an index into enum 3797 (24 Recruit). */
 const RANK_TITLES_SETTING = 1;
 const RECRUIT_TITLE = 24;
-const TITLE_SETTINGS = [1, 2, 3, 4, 5];
+const TITLE_SETTINGS = [1, 2, 3, 4, 5, 102, 103, 104];
 const HOME_WORLD_SETTING = 6;
 const LAST_SEEN_DAY_SETTING = 8; // today's day, sent with a member's last seen (rsprox 3886 tick 664)
 /** A member's extra info bits 0-12 are their last seen day, less this (rsprox 3886: 1835 on day 8715). */
@@ -61,7 +61,7 @@ const PERMISSION_ROWS = PERMISSIONS.filter((row) => row.setting !== null && !row
 /** Guest minimums share one setting: combat bits 0-6, total 7-18, QP 19-29 (clan_permissions_buttonresynch). */
 const GUEST_RULES_SETTING = 26;
 /** Plain values, with rsprox 3886's clan's numbers for the level-ups (66-69) and defaults otherwise. */
-const VALUE_DEFAULTS = { 31: 100000, 65: 100000, 66: 30, 67: 40, 68: 70, 69: 5, 98: 100000, 101: 0, 110: 0, 111: 0, 112: 0 };
+const VALUE_DEFAULTS = { 7: 0, 11: 1049601, 31: 100000, 65: 100000, 66: 30, 67: 40, 68: 70, 69: 5, 98: 100000, 101: 0, 110: 0, 111: 0, 112: 0 };
 
 /** Channels by clan key, built as players join: { clan, updateNum, users: [{ player, rank, name }] }. */
 const channels = new Map();

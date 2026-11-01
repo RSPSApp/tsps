@@ -2,7 +2,7 @@
 
 The OSRS Clan system (`//` chat, the Your Clan tab), which is separate from the old Clan Chat, now
 called the Chat-channel ([social-chat-and-following.md](social-chat-and-following.md)). This page is
-the plan and the facts it relies on. Phases 1 to 4 are built, and part of phase 5.
+the plan and the facts it relies on. Phases 1 to 4 are built, and most of phase 5.
 
 ## Evidence
 
@@ -115,15 +115,14 @@ packets, because the browser pane was hidden.
   then loaded (tick 7587), Chat and Leave, Info, Discard.
 - `///` and `/g`: `chat_sendclan` with chat type 4, delivered as type 44. Guests hear the channel;
   members see them at rank -1 and can kick and ban them.
-- Permissions: Guests may listen, and guest minimum combat, total and QP. **QP and Iron status are
-  stored and shown but not enforced.**
+- Permissions: Guests may listen, and guest minimum combat, total, QP and Iron status. **QP and Iron
+  status are stored and shown but not enforced.**
 - Applying from Info, with Withdraw. Applicants (699) as rsprox 2778 shows: inviting flips
   `clan_i_am_recruiter` (varp 3019 bit 29), rows, stats line, accept and decline, offline accept.
 - The recruitment board (700, from loc 41730/41728 "View"): clans inviting, with Size and Created days.
 
 Ours, with no capture: the guest channel's refusals and intro, declining and its message, minimum
-combat and total prompts, and button subs 2, 5 and 6 on 699 and 1 and 2 on 700. The board's interest
-filters do nothing yet because clans have no interests.
+combat and total prompts, and button subs 2, 5 and 6 on 699 and 1 to 3 on 700.
 
 ### 5. Around the clan (part built)
 
@@ -141,14 +140,24 @@ Built:
   restores the inventory tab when the modal closes.
 - Every Notifications and guest value row in Permissions saves and displays.
 
-Not built, with no capture to go on:
+- Interests (691): the list toggles on the server, Save stores setting 7 (rsprox 3886 has 65535), Settings
+  and the board show them, and the board's filters mark wanted, unwanted or neither through varps 807 and 808.
+- Outfit (694): `script4432` answers with the edited value, stored in setting 11, which the Settings
+  button draws. **Cloaks and vexilla don't take its colours yet.**
+- Events (703, 704): list, Edit mode, create, save, delete, rank to view, up to 10 and 30 days. The
+  form's values are ours to choose: the cache's dropdown components have no script here that fills
+  them, so lists are chatbox options, and date, world and duration are prompts.
+- Hall settings (692): lock and player cap, enforced at the portal; the theme is saved. The Home World
+  toggle saves nothing, since tsps has one world.
+- Rank Titles for every rank: ranks 96-124 use varps 733, 736 and 737, shared with a quest's names.
 
-- Events (703, 704), interests (691), outfit (694, and cloak and vexillum colours), Hall settings
-  (692). Their Settings buttons say so.
+These screens have no recording anywhere in the archive, so all of it is from the cache's scripts.
+
+Not built:
+
 - Clan Hall contents: party chest and balloons, piano, decorations.
 - Broadcasts for personal bests, post-99 XP, diaries, hardcore deaths and loot keys: tsps has no event
-  for them, or only a query. Multi-threshold rows for those save but do nothing.
-- Titles for ranks 96-104 and 124.
+  for them, or only a query. Their rows save but do nothing.
 - **Gateway.** New ids are registered so frames are skipped, but clans don't reach the official client.
   Mapping them needs rsprot's clan messages and a JDK 17 toolchain, which this machine doesn't have,
   so the Kotlin hasn't been compiled either.

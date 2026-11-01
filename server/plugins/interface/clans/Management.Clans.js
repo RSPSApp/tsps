@@ -56,6 +56,10 @@ const TITLE_VARPS = [
   [3025, 3],
   [3026, 4],
   [3027, 5],
+  // Ranks 96-124's titles borrow these varps on the cache's own varbits, and settings 102-104.
+  [733, 102],
+  [736, 103],
+  [737, 104],
 ];
 
 /** Enum 3795's ranks that can be assigned, lowest first. */

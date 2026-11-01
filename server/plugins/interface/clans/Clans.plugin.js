@@ -8,6 +8,7 @@ const Core = require("./Core.Clans");
 const Formation = require("./Formation.Clans");
 const Guests = require("./Guests.Clans");
 const Hall = require("./Hall.Clans");
+const Screens = require("./Screens.Clans");
 const Management = require("./Management.Clans");
 const Settings = require("./Settings.Clans");
 const Store = require("./Store.Clans");
@@ -200,6 +201,11 @@ function chat(event) {
   }
 }
 
+/** The cache enum's entries, without its title (key -1), as [key, name] by key. */
+function enumEntries(id) {
+  return [...core.CacheDefinitions.getEnumValues(id)].filter(([key, name]) => key >= 0 && name).sort((a, b) => a[0] - b[0]);
+}
+
 function viewBoard({ player }) {
   Guests.openBoard(player);
 }
@@ -382,9 +388,10 @@ module.exports = {
     Core.init(api.core);
     Settings.init(api.core);
     Management.init(Settings.open);
-    Guests.init(api.core, later, Settings.openAsGuest);
+    Guests.init(api.core, later, Settings.openAsGuest, Screens.interestNames, Settings.runeDateText);
     Broadcasts.init(api.core);
     Hall.init(api.core);
+    Screens.init(api.core, Settings.open, enumEntries, Management.showRankPopup, Settings.runeDateText);
     Core.setMembershipListeners(Broadcasts.joined, Broadcasts.left);
     Formation.init(api);
     api.onCustomEvent("player:bootstrap-complete", login);
@@ -403,6 +410,11 @@ module.exports = {
     api.onObjectInteraction("Portal", { Leave: Hall.leave });
     api.onObjectInteraction("Clan Coffer", { Use: Hall.useCoffer });
     api.onInterfaceActionClick(Hall.clickCoffer);
+    api.onInterfaceActionClick(Screens.clickInterests);
+    api.onInterfaceActionClick(Screens.clickEvents);
+    api.onInterfaceActionClick(Screens.clickForm);
+    api.onInterfaceActionClick(Screens.clickHall);
+    api.onCustomEvent("player:varp-transmit", Screens.varpTransmitted);
     api.onPlayerLevelUp(Broadcasts.levelUp);
     api.onPlayerDefeated(Broadcasts.defeated);
     api.onCustomEvent("quest:completed", Broadcasts.questCompleted);

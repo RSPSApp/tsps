@@ -58,6 +58,7 @@ module.exports = function registerDesertTreasureII(api) {
   const MEDALLION_SLOT_VARBITS = [15132, 15133, 15134, 15135];
   // dt2_catalytic_guardian: 1 when the chapters open, 2 once the Guardian hears of the Scar (rsprox 1703).
   const CATALYTIC_GUARDIAN_VARBIT = 15130;
+  const STRANGLEWOOD_INGREDIENT_VARBITS = [15136, 15137]; // dt2_stranglewood_ingredient_1/_2 (rsprox 1703)
   // Cache quest dbrow 2343, column 19 completes at 118; QuestHelper records the intervening milestones.
   function nativeProgress(rawStage, player) {
     const stage = chapterStage(rawStage);
@@ -107,7 +108,9 @@ module.exports = function registerDesertTreasureII(api) {
   function stranglewoodProgress(player) {
     // QuestHelper DT2_STRANGLEWOOD milestones drive the cache desk, boat and later scenery.
     const progress = Number(player.getAttribute(VARDORVIS_PROGRESS)) || 0;
-    return [CHAPTER_UNLOCKED, 4, 6, 6, 8, 10, player.getAttribute(STRANGLEWOOD_CITY_ENTERED) ? 16 : 12, 18, 18, 22, 24, 24, 24,
+    // 24, then +2 for each ingredient picked (rsprox 1703: herb 24 -> 26, berries 26 -> 28).
+    if (progress === 11) return 24 + 2 * [STRANGLEWOOD_HERB_TAKEN, STRANGLEWOOD_BERRIES_TAKEN].filter(key => player.getAttribute(key)).length;
+    return [CHAPTER_UNLOCKED, 4, 6, 6, 8, 10, player.getAttribute(STRANGLEWOOD_CITY_ENTERED) ? 16 : 12, 18, 18, 22, 24, 24, 28,
       34, 36, 36, 38, 42, 44, 48, 50, 52, 54][progress] ?? CHAPTER_UNLOCKED;
   }
   function ghorrockProgress(player) {
@@ -209,7 +212,8 @@ module.exports = function registerDesertTreasureII(api) {
     const totems = Number(player.getAttribute(TOTEM_MASK)) || 0;
     const asked = Number(player.getAttribute(SEARCHED_NAMES)) || 0;
     const found = Number(player.getAttribute(GOLEM_FOUND)) || 0;
-    const state = `${value}:${chapters}:${slots}:${catalytic}:${figurePortal}:${statues}:${totems}:${asked}:${found}`;
+    const ingredients = [STRANGLEWOOD_HERB_TAKEN, STRANGLEWOOD_BERRIES_TAKEN].map(key => player.getAttribute(key) === true);
+    const state = `${value}:${chapters}:${slots}:${catalytic}:${ingredients}:${figurePortal}:${statues}:${totems}:${asked}:${found}`;
     if (nativeProgressSent.get(player) === state) return;
     nativeProgressSent.set(player, state);
     const sender = player.getPacketSender();
@@ -221,6 +225,8 @@ module.exports = function registerDesertTreasureII(api) {
       if (record.varbit) sender.sendVarbit(record.varbit, asked & record.bit ? 2 : found & record.bit ? 1 : 0);
     }
     CHAPTER_KEYS.forEach((key, index) => sender.sendVarbit(CHAPTERS[key].varbit, chapters[index]));
+    sender.sendVarbit(STRANGLEWOOD_INGREDIENT_VARBITS[0], ingredients[0] ? 2 : 0);
+    sender.sendVarbit(STRANGLEWOOD_INGREDIENT_VARBITS[1], ingredients[1] ? 1 : 0);
     MEDALLION_SLOT_VARBITS.forEach((varbit, index) => sender.sendVarbit(varbit, slots[index]));
     sender.sendVarbit(CATALYTIC_GUARDIAN_VARBIT, catalytic);
     sender.sendVarbit(14862, value);
@@ -309,6 +315,8 @@ module.exports = function registerDesertTreasureII(api) {
   const SERUM_SPACE_CONDITION_STEP = "szffOl";
   const BANIKAN_LEFT = "desert-treasure-ii:banikan-left";
   const VARDORVIS_PROGRESS = "desert-treasure-ii:vardorvis-progress";
+  const STRANGLEWOOD_HERB_TAKEN = "desert-treasure-ii:stranglewood-herb-taken";
+  const STRANGLEWOOD_BERRIES_TAKEN = "desert-treasure-ii:stranglewood-berries-taken";
   const STRANGLEWOOD_CITY_ENTERED = "desert-treasure-ii:city-entered";
   const SUCELLUS_AREA = "desert-treasure-ii:sucellus-area";
   const WHISPERER_AREA = "desert-treasure-ii:whisperer-area";
@@ -404,6 +412,15 @@ module.exports = function registerDesertTreasureII(api) {
   const STRANGLEWOOD_BOAT_OUT_LOC = O.ROWBOAT_17;
   const KASONDE_NOTE = I.POTION_NOTE;
   const KASONDE_POTION = I.STRANGE_POTION_3;
+  const NOTE_GROUP = 291;
+  const KASONDE_NOTE_LINES = ["The latest test seems to be successful, but 'seems' is the",
+    "key word here. Samples from the Stranglewood are", "unsurprisingly in short supply, so proving my theory is",
+    "difficult. Still, if all goes well, while it won't fully protect", "from infection, this potion should provide some defence",
+    "against the Strangler parasite.", "", "With the potion sorted, the only thing left now is the",
+    "boat. There's a small bay south of Quidamortem that", "should be a suitable place to row out from. I'll arrange",
+    "for the boat to be sent there.", ""];
+  const DRINK_ANIM = 829, DRINK_SOUND = 2401;
+  const MIX_SERUM_ANIM = 363, MIX_SERUM_SOUND = 2608;
   const VARDORVIS_ENTRY = 49495;
   const KASONDE_MEDALLION_CHEST = 49496;
   const STRANGLEWOOD_BARRICADE_LOC = 49492;
@@ -618,6 +635,8 @@ module.exports = function registerDesertTreasureII(api) {
       return hits;
     }
   }
+  // The combat method applies the Wiki's "reduced by roughly ~75% when Protect from Melee is
+  // active" itself, so the engine's full protection block is skipped for his hits.
   function vardorvisHitRoll(event) {
     if (event.attacker?.__dt2Vardorvis) event.bypassProtectionPrayer = true;
   }
@@ -2614,14 +2633,33 @@ module.exports = function registerDesertTreasureII(api) {
     }
   }
 
+  const BARRICADE_CROSS_TICKS = 2, BARRICADE_CROSS_ANIM = 839;
+  const PICK_INGREDIENT_ANIM = 10094, PICK_INGREDIENT_SOUND = 2581;
+  // rsprox 1703: picking_low_short (10094) and sound 2581, then the ingredient's varbit
+  // (dt2_stranglewood_ingredient_1 15136 = 2, _2 15137 = 1), dt2_stranglewood +2 and an objectbox.
+  function pickStranglewoodIngredient(p, key, itemId, text) {
+    p.performAnimation?.(new api.core.Animation(PICK_INGREDIENT_ANIM));
+    p.getPacketSender().sendSound(PICK_INGREDIENT_SOUND, 0, 0);
+    p.setAttribute(key, true);
+    if (Number(p.getAttribute(VARDORVIS_PROGRESS)) === 11 && has(p, I.KORBAL_HERB) && has(p, I.ARGIAN_BERRIES)) p.setAttribute(VARDORVIS_PROGRESS, 12);
+    syncNativeProgress(p);
+    itemStatement(p, itemId, text);
+  }
   function crossStranglewoodBarricade({ player: p, objectId, location }) {
     if (objectId !== STRANGLEWOOD_BARRICADE_LOC || location.x !== 1193 || location.y !== 3401) return false;
     if (!p.getAttribute(STRANGLEWOOD_CITY_ENTERED)) {
       p.sendMessage("Follow Kasonde's voice from the ruins before crossing the barricade.");
       return true;
     }
+    // rsprox 1703: an exact move over the barricade, 1193,3400 <-> 1193,3402 in two ticks,
+    // human_walk_style (839) facing the way across.
+    const north = p.getLocation().getY() <= 3401;
+    const { ForceMovement, ForceMovementTask, TaskManager, Location } = api.core;
+    const start = new Location(1193, north ? 3400 : 3402, 0);
     p.getMovementQueue?.().reset?.();
-    p.moveTo(new api.core.Location(1193, p.getLocation().getY() <= 3401 ? 3405 : 3399, 0));
+    p.moveTo(start);
+    TaskManager.submit(new ForceMovementTask(p, BARRICADE_CROSS_TICKS, new ForceMovement(start.clone(), new Location(0, north ? 2 : -2, 0),
+      0, BARRICADE_CROSS_TICKS * 30, north ? 0 : 2, BARRICADE_CROSS_ANIM)));
     return true;
   }
 
@@ -5119,6 +5157,40 @@ module.exports = function registerDesertTreasureII(api) {
     const damage = 5 + Math.floor(Math.random() * 6);
     p.getCombat().getHitQueue().addPendingDamage([new api.core.HitDamage(damage, api.core.HitMask.RED)]);
   }
+  // rsprox 1703: human_herbing_vial (363), sound 2608 and an objectbox of the result.
+  function mixStranglerSerum(p, resultId, text) {
+    p.performAnimation?.(new api.core.Animation(MIX_SERUM_ANIM));
+    p.getPacketSender().sendSound(MIX_SERUM_SOUND, 0, 0);
+    itemStatement(p, resultId, text);
+  }
+  // dt2_textoverlay (837), as live titles the Stranglewood and each boss (rsprox 1703): opened on
+  // overlay_atmosphere, faded in with script 7057 over its back and front layers, the text on
+  // component 12 and its eight shadows (4-11), faded out with 7059 eight ticks later and closed.
+  const OVERLAY_ATMOSPHERE = (161 << 16) | 1;
+  const TEXT_OVERLAY_GROUP = 837, TEXT_OVERLAY_COMPONENTS = [12, 4, 5, 6, 7, 8, 9, 10, 11];
+  const TEXT_OVERLAY_FADE_IN = 7057, TEXT_OVERLAY_FADE_OUT = 7059;
+  function showChapterTitle(p, text) {
+    const sender = p.getPacketSender();
+    const uid = (component) => (TEXT_OVERLAY_GROUP << 16) | component;
+    sender.sendSubInterface?.(OVERLAY_ATMOSPHERE, TEXT_OVERLAY_GROUP, 1);
+    sender.sendClientScript?.(TEXT_OVERLAY_FADE_IN, 0, 0, 0, 0, 0, uid(1));
+    sender.sendClientScript?.(TEXT_OVERLAY_FADE_IN, 0, 0, 0, 0, 0, uid(13));
+    TEXT_OVERLAY_COMPONENTS.forEach(component => sender.sendString(text, uid(component)));
+    sender.sendClientScript?.(TEXT_OVERLAY_FADE_IN, 0, 0, 0, 255, 50, uid(13));
+    nextTicks(p, 8, () => TEXT_OVERLAY_COMPONENTS.forEach(component =>
+      p.getPacketSender().sendClientScript?.(TEXT_OVERLAY_FADE_OUT, 0, 255, 50, uid(component))));
+    nextTicks(p, 13, () => p.getPacketSender().closeSubInterface?.(OVERLAY_ATMOSPHERE));
+  }
+  function doubleItemStatement(p, firstItemId, secondItemId, text) {
+    const { DialogueChainBuilder, DoubleItemStatementDialogue } = api.core;
+    p.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new DoubleItemStatementDialogue(0, firstItemId, secondItemId, text)));
+  }
+  // Kasonde's note opens `note` (291), its twelve lines as captured (rsprox 1703); line1 is component 5.
+  function openKasondeNote(p) {
+    const sender = p.getPacketSender();
+    KASONDE_NOTE_LINES.forEach((line, i) => sender.sendString(line, (NOTE_GROUP << 16) | (5 + i)));
+    sender.sendInterface(NOTE_GROUP);
+  }
   function itemStatement(p, itemId, text, then) {
     const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = api.core;
     const chain = new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text));
@@ -5460,10 +5532,9 @@ module.exports = function registerDesertTreasureII(api) {
       return true;
     }
     if (!inChapter(p, "vardorvis")) return;
-    if (itemId === KASONDE_NOTE && action === "read"
-      && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) === 3) {
-      p.setAttribute(VARDORVIS_PROGRESS, 4);
-      p.sendMessage("You read the botanist's note. It explains how to use the strange potion to enter the Stranglewood.");
+    if (itemId === KASONDE_NOTE && action === "read") {
+      if ((Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) === 3) p.setAttribute(VARDORVIS_PROGRESS, 4);
+      openKasondeNote(p);
       event.handled = true;
       return true;
     }
@@ -5477,18 +5548,23 @@ module.exports = function registerDesertTreasureII(api) {
       if (progress === 4 && has(p, KASONDE_POTION)) {
         p.getInventory().deleteNumber(KASONDE_POTION, 1);
         p.setAttribute(VARDORVIS_PROGRESS, 5);
-        p.sendMessage("You drink the strange potion. Its effects prepare you to enter the Stranglewood.");
+        // rsprox 1703: human_eat (829), sound 2401.
+        p.performAnimation?.(new api.core.Animation(DRINK_ANIM));
+        p.getPacketSender().sendSound(DRINK_SOUND, 0, 0);
+        p.sendMessage("You drink the potion. It tastes horrible.");
         event.handled = true;
         return true;
       }
     }
     if (itemId === I.STRANGLER_SERUM && action === "drink") {
       event.handled = true;
-      if (!has(p, I.STRANGLER_SERUM) || (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) < 15
-        || !p.getAttribute(SERUM_DISCUSSED)) return p.sendMessage("Talk to Kasonde about the completed serum before drinking it.");
+      // rsprox 1703 drinks it straight after mixing, as Quest Helper does (no talk in between).
+      if (!has(p, I.STRANGLER_SERUM) || (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) < 15) return true;
       p.getInventory().deleteNumber(I.STRANGLER_SERUM, 1);
-      p.setAttribute(VARDORVIS_PROGRESS, 16);
-      p.sendMessage("You drink the Strangler serum. It lets you approach the ritual site.");
+      if ((Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) < 16) p.setAttribute(VARDORVIS_PROGRESS, 16);
+      p.performAnimation?.(new api.core.Animation(DRINK_ANIM));
+      p.getPacketSender().sendSound(DRINK_SOUND, 0, 0);
+      p.sendMessage("You drink the potion. It somehow tastes even worse than the last one.");
       return true;
     }
     return false;
@@ -5541,7 +5617,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.getInventory().deleteNumber(I.UNFINISHED_SERUM, 1);
       p.getInventory().deleteNumber(I.KORBAL_HERB, 1);
       p.getInventory().adds(I.UNFINISHED_SERUM_2, 1);
-      p.sendMessage("You add the Korbal herb to the unfinished serum.");
+      mixStranglerSerum(p, I.UNFINISHED_SERUM_2, "You mix the herb into the potion.");
       return true;
     }
     if (pair.has(I.UNFINISHED_SERUM_2) && pair.has(I.ARGIAN_BERRIES) && has(p, I.UNFINISHED_SERUM_2) && has(p, I.ARGIAN_BERRIES)) {
@@ -5549,7 +5625,7 @@ module.exports = function registerDesertTreasureII(api) {
       p.getInventory().deleteNumber(I.ARGIAN_BERRIES, 1);
       p.getInventory().adds(I.STRANGLER_SERUM, 1);
       p.setAttribute(VARDORVIS_PROGRESS, 15);
-      p.sendMessage("You mix the Argian berries into the serum and make a Strangler serum.");
+      mixStranglerSerum(p, I.STRANGLER_SERUM, "You mix the berries into the potion.");
       return true;
     }
     return false;
@@ -6365,7 +6441,9 @@ module.exports = function registerDesertTreasureII(api) {
       }
       for (const id of missing) p.getInventory().adds(id, 1);
       if (progress === 2) p.setAttribute(VARDORVIS_PROGRESS, 3);
-      talk(p, N.GOLEM_3, "carnifex-maximus-vardorvis-searching-the-botanist-s-desk");
+      // rsprox 1703: sound 2582 and objectbox_double with the note and the potion.
+      p.getPacketSender().sendSound(CELL_CRATE_SOUND, 0, 0);
+      doubleItemStatement(p, KASONDE_NOTE, KASONDE_POTION, "You find a note and a potion in the desk.");
       return true;
     }
     if (inChapter(p, "vardorvis") && objectId === STRANGLEWOOD_BOAT_IN_LOC
@@ -6380,8 +6458,12 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
       talk(p, N.GOLEM_3, "carnifex-maximus-vardorvis-travelling-to-the-stranglewood-for-the-first-time");
-      if (progress < 6) p.setAttribute(VARDORVIS_PROGRESS, 6);
-      p.moveTo(new api.core.Location(1196, 3450, 0));
+      if (progress < 6) {
+        p.setAttribute(VARDORVIS_PROGRESS, 6);
+        showChapterTitle(p, "The Stranglewood");
+      }
+      // rsprox 1703 lands the first arrival at 1194,3452.
+      p.moveTo(new api.core.Location(1194, 3452, 0));
       if (p.getAttribute(STRANGLEWOOD_CITY_ENTERED)) spawnSurfaceKasonde(p);
       return true;
     }
@@ -6475,8 +6557,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
       if (!has(p, I.KORBAL_HERB)) p.getInventory().adds(I.KORBAL_HERB, 1);
-      if (Number(p.getAttribute(VARDORVIS_PROGRESS)) === 11 && has(p, I.KORBAL_HERB) && has(p, I.ARGIAN_BERRIES)) p.setAttribute(VARDORVIS_PROGRESS, 12);
-      p.sendMessage("You pick a Korbal herb from the north-west of the Stranglewood.");
+      pickStranglewoodIngredient(p, STRANGLEWOOD_HERB_TAKEN, I.KORBAL_HERB, "You pick a herb.");
       return true;
     }
     if (inChapter(p, "vardorvis") && (Number(p.getAttribute(VARDORVIS_PROGRESS)) || 0) >= 11
@@ -6486,8 +6567,7 @@ module.exports = function registerDesertTreasureII(api) {
         return true;
       }
       if (!has(p, I.ARGIAN_BERRIES)) p.getInventory().adds(I.ARGIAN_BERRIES, 1);
-      if (Number(p.getAttribute(VARDORVIS_PROGRESS)) === 11 && has(p, I.KORBAL_HERB) && has(p, I.ARGIAN_BERRIES)) p.setAttribute(VARDORVIS_PROGRESS, 12);
-      p.sendMessage("You pick Argian berries from the south-west of the Stranglewood.");
+      pickStranglewoodIngredient(p, STRANGLEWOOD_BERRIES_TAKEN, I.ARGIAN_BERRIES, "You pick some berries from the bush.");
       return true;
     }
     if (inChapter(p, "vardorvis") && objectId === STRANGLEWOOD_BOAT_OUT_LOC
@@ -8781,6 +8861,7 @@ module.exports = function registerDesertTreasureII(api) {
   api.persistAttribute(ATTR_SMITH_INTRO);
   api.persistAttribute(STATUES_PLACED);
   [MEDALLIONS_FOUND, BOSSES_STARTED, MEDALLION_ORDER, PURSUER_EVENTS].forEach((key) => api.persistAttribute(key, 0));
+  [STRANGLEWOOD_HERB_TAKEN, STRANGLEWOOD_BERRIES_TAKEN].forEach((key) => api.persistAttribute(key, false));
   api.persistAttribute(ATTR_FIRST_MEDALLION_MEETING);
   [FINAL_CELL_ACTIVE, FINAL_CELL_SOLUTION, FINAL_CELL_GUESS, FINAL_CELL_ATTEMPTS, FINAL_CELL_OPEN, FINAL_CELL_GEAR,
     FINAL_CELL_CHEST, FINAL_FIGURE_STARTED, FINAL_FIGURE_DEFEATED, "desert-treasure-ii:final-cell-pending",

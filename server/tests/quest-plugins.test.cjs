@@ -6842,7 +6842,7 @@ test('Desert Treasure II starts the Vardorvis trail through Elissa, Barus, the b
         deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
         adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
       }),
-      getPacketSender: () => new Proxy({}, { get: () => () => {} }),
+      getPacketSender: () => new Proxy({}, { get: () => () => {} }), getDialogueManager: () => ({ startDialogues() {}, reset() {} }), performAnimation() {},
       moveTo(location) { this.location = location; },
       sendMessage() {},
     };
@@ -6888,11 +6888,55 @@ test('Desert Treasure II starts the Vardorvis trail through Elissa, Barus, the b
     assert.equal(counts.get(potionId), 0);
     const boat = objectInteractions.find(h => h.name === 'handleObjectInteraction')({ player, objectId: 49491, location: { x: 1227, y: 3469, z: 0 } });
     assert.equal(boat, true);
-    assert.deepEqual([player.location.getX(), player.location.getY(), player.location.getZ()], [1196, 3450, 0]);
+    assert.deepEqual([player.location.getX(), player.location.getY(), player.location.getZ()], [1194, 3452, 0],
+      'the first arrival lands where rsprox 1703 does');
     assert.equal(attrs.get('desert-treasure-ii:vardorvis-progress'), 6);
   } finally {
     runtime.startTranscript = startTranscript;
   }
+});
+
+test('DT2 Stranglewood desk, note, potion and ingredients send what rsprox 1703 captured', () => {
+  const { api, handlers } = mockApi();
+  require('../plugins/quests/quests/DesertTreasureII.Quest')(api);
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests().at(-1);
+  const { ItemIdentifiers: I } = api.core;
+  const attrs = new Map(), counts = new Map(), varbits = new Map(), strings = new Map(), sounds = [], boxes = [], messages = [], anims = [];
+  let opened;
+  const player = {
+    getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
+    getInventory: () => ({ getAmount: id => counts.get(id) ?? 0, getFreeSlots: () => 28,
+      deleteNumber: (id, n) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - n)), adds: (id, n) => counts.set(id, (counts.get(id) ?? 0) + n) }),
+    getPacketSender: () => new Proxy({}, { get: (_, name) => name === 'sendVarbit' ? (id, v) => varbits.set(id, v)
+      : name === 'sendString' ? (text, uid) => strings.set(uid, text) : name === 'sendSound' ? id => sounds.push(id)
+        : name === 'sendInterface' ? id => { opened = id; } : () => {} }),
+    getDialogueManager: () => ({ startDialogues: chain => boxes.push(chain), reset() {} }),
+    performAnimation: anim => anims.push(anim.getId?.() ?? anim.id ?? anim), sendMessage: text => messages.push(text), moveTo() {},
+  };
+  quest.setStage(player, 7);
+  attrs.set('desert-treasure-ii:vardorvis-progress', 2);
+  handlers.objects.find(h => h.name === 'handleObjectInteraction')({ player, objectId: 49490, location: { x: 1781, y: 3619, z: 0 } });
+  assert.equal(boxes.length, 1, 'objectbox_double with the note and the potion');
+  assert.equal(sounds.at(-1), 2582);
+  const itemAction = handlers.itemAction.find(h => h.name === 'handleItemAction');
+  itemAction({ player, itemId: I.POTION_NOTE, option: 'Read' });
+  assert.equal(opened, 291);
+  assert.equal(strings.get((291 << 16) | 5), "The latest test seems to be successful, but 'seems' is the");
+  assert.equal(strings.get((291 << 16) | 16), '');
+  itemAction({ player, itemId: I.STRANGE_POTION_3, option: 'Drink' });
+  assert.equal(messages.at(-1), 'You drink the potion. It tastes horrible.');
+  assert.equal(sounds.at(-1), 2401);
+  handlers.playerProcess.forEach(h => h({ player }));
+  assert.equal(varbits.get(15125), 10);
+  attrs.set('desert-treasure-ii:vardorvis-progress', 11);
+  handlers.objects.find(h => h.name === 'handleObjectInteraction')({ player, objectId: 49494, location: { x: 1155, y: 3447, z: 0 } });
+  assert.equal(varbits.get(15136), 2, 'dt2_stranglewood_ingredient_1');
+  assert.equal(varbits.get(15125), 26, 'the herb raises dt2_stranglewood 24 -> 26');
+  assert.equal(sounds.at(-1), 2581);
+  handlers.objects.find(h => h.name === 'handleObjectInteraction')({ player, objectId: 49493, location: { x: 1155, y: 3447, z: 0 } });
+  assert.equal(varbits.get(15137), 1, 'dt2_stranglewood_ingredient_2');
+  assert.equal(attrs.get('desert-treasure-ii:vardorvis-progress'), 12);
+  assert.equal(varbits.get(15125), 28);
 });
 
 test('DT2 enters the barricaded house through its ruins scene and restores Kasonde across relog', () => {
@@ -7051,7 +7095,7 @@ test('DT2 hideout landing can reach Kasonde and the cache ladder through the rea
   } finally { area.destroy(); }
 });
 
-test('Desert Treasure II makes the Strangler serum with the two real ingredients and requires Kasonde dialogue', () => {
+test('Desert Treasure II makes the Strangler serum with the two real ingredients and drinks it at once', () => {
   const { api: base, handlers } = mockApi();
   let combine, itemAction;
   const interactions = [];
@@ -7076,7 +7120,7 @@ test('Desert Treasure II makes the Strangler serum with the two real ingredients
         getAmount: (id) => counts.get(id) ?? 0,
         deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
         adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
-      }), getPacketSender: () => new Proxy({}, { get: () => () => {} }), sendMessage() {},
+      }), getPacketSender: () => new Proxy({}, { get: () => () => {} }), getDialogueManager: () => ({ startDialogues() {}, reset() {} }), performAnimation() {}, sendMessage() {},
     };
     quest.setStage(p, 7);
     assert.equal(combine({ player: p, usedItemId: I.UNFINISHED_SERUM, usedWithItemId: I.KORBAL_HERB }), true);
@@ -7084,15 +7128,7 @@ test('Desert Treasure II makes the Strangler serum with the two real ingredients
     assert.equal(combine({ player: p, usedItemId: I.UNFINISHED_SERUM_2, usedWithItemId: I.ARGIAN_BERRIES }), true);
     assert.equal(counts.get(I.STRANGLER_SERUM), 1);
     assert.equal(attrs.get('desert-treasure-ii:vardorvis-progress'), 15);
-    assert.equal(itemAction({ player: p, itemId: I.STRANGLER_SERUM, option: 'Drink' }), undefined,
-      'Kasonde must explain the completed serum before it can be drunk');
-    interactions.find((entry) => entry.name === 'Kasonde').options['Talk-to']({ player: p, npcId: N.KASONDE });
-    assert.equal(attrs.get('desert-treasure-ii:kasonde-serum-discussed'), undefined, 'opening the advice does not complete it');
-    const advice = { player: p, npcId: N.KASONDE, text: "We're running out of time! I'm running out of time! Drink that potion. It should strengthen your immunity against the Strangler. Now go!" };
-    handlers.custom.get('npc-dialogue:line')[0](advice);
-    assert.equal(attrs.get('desert-treasure-ii:kasonde-serum-discussed'), undefined);
-    advice.after();
-    assert.equal(attrs.get('desert-treasure-ii:kasonde-serum-discussed'), true);
+    // rsprox 1703 drinks the serum straight after mixing it, with no talk to Kasonde in between.
     assert.equal(itemAction({ player: p, itemId: I.STRANGLER_SERUM, option: 'Drink' }), true);
     assert.equal(counts.get(I.STRANGLER_SERUM), 0);
     assert.equal(attrs.get('desert-treasure-ii:vardorvis-progress'), 16);
@@ -7152,7 +7188,7 @@ test('Desert Treasure II requires both Stranglewood ingredients and defeating te
         deleteNumber: (id, amount) => counts.set(id, Math.max(0, (counts.get(id) ?? 0) - amount)),
         adds: (id, amount) => counts.set(id, (counts.get(id) ?? 0) + amount),
       }),
-      getPacketSender: () => new Proxy({}, { get: () => () => {} }), sendMessage() {},
+      getPacketSender: () => new Proxy({}, { get: () => () => {} }), getDialogueManager: () => ({ startDialogues() {}, reset() {} }), performAnimation() {}, sendMessage() {},
     };
     quest.setStage(p, 7);
     const interact = (objectId, x, y) => objectHooks[0]({ player: p, objectId, location: { x, y, z: 0 } });
@@ -20850,6 +20886,9 @@ test('DT2 Kasonde uses melee/ranged basics, healing, avoidable potions and pilla
     GameObject:class{constructor(id,tile){this.id=id;this.tile=tile}},ObjectManager:{deregister:o=>removed.push(o)},
     World:{getProcessCycle:()=>cycle,getAddNPCQueue:()=>[],getRemoveNPCQueue:()=>[]},
     Projectile:class{sendProjectile(){}static createProjectile(){return {sendProjectile(){}}}},
+    // The barricade's exact move lands at once here; the real task moves over two ticks.
+    ForceMovementTask:class{constructor(player,ticks,movement){this.player=player;this.movement=movement;}},
+    TaskManager:{...base.core.TaskManager,submit:task=>{if(!task.movement)return base.core.TaskManager.submit(task);const s=task.movement.getStart(),e=task.movement.getEnd();task.player.moveTo(new base.core.Location(s.getX()+e.getX(),s.getY()+e.getY(),s.getZ()));}},
     CombatFactory:{poisonEntity:(...a)=>venom.push(a)},CombatRange:{canReach:()=>lineOpen},PrayerHandler:{deactivatePrayer:(p,id)=>prayers.push(id)},
   };
   const api=new Proxy(base,{get:(t,k)=>k==='core'?core:k==='registerNpcCombatMethodProvider'?(id,C)=>{if(id===core.NpcIdentifiers.KASONDE_7)Combat=C}:t[k]});
@@ -20876,8 +20915,9 @@ test('DT2 Kasonde uses melee/ranged basics, healing, avoidable potions and pilla
   handlers.objects.find(h => h.name === 'handleObjectInteraction')({player:p,objectId:core.ObjectIdentifiers.STAIRS_254,option:'Climb-up',location:area.tile(7,0,0)});assert.deepEqual([p.location.getX(),p.location.getY()],[1174,3428],'real temple stairs leave the instance');
   const crossing={player:p,objectId:49492,option:'Climb-over',location:{x:1193,y:3401},definition:{getName:()=> 'Barricade'}};
   p.moveTo(new core.Location(1193,3399,0));handlers.objects.forEach(h=>h(crossing));assert.equal(p.location.getY(),3399,'the arrival scene must unlock the city');
-  attrs.set('desert-treasure-ii:city-entered',true);handlers.objects.forEach(h=>h(crossing));assert.equal(p.location.getY(),3405,'returning reaches the medallion chest side');
-  handlers.objects.forEach(h=>h(crossing));assert.equal(p.location.getY(),3399,'players can leave the city without replaying its arrival');
+  // rsprox 1703 crosses with an exact move between 1193,3400 and 1193,3402.
+  attrs.set('desert-treasure-ii:city-entered',true);handlers.objects.forEach(h=>h(crossing));assert.equal(p.location.getY(),3402,'returning reaches the medallion chest side');
+  handlers.objects.forEach(h=>h(crossing));assert.equal(p.location.getY(),3400,'players can leave the city without replaying its arrival');
   assert.equal(attrs.get('desert-treasure-ii:vardorvis-progress'),20,'crossing never resets quest progress');
   assert.match(quest.buildJournal(p).join(' '),/Speak to the defeated Kasonde/);
   attrs.set('desert-treasure-ii:vardorvis-progress',21);assert.match(quest.buildJournal(p).join(' '),/north-east stone chest/);

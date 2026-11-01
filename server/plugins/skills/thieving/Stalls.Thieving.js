@@ -17,6 +17,9 @@ const SILENT_GUARDS = new Set(["guard dog"]);
 // shortcut: a five-tile lookout range, verify the exact radius against a live stall capture.
 const LOOKOUT_RADIUS = 5;
 const depleted = new WeakMap();
+// Mainland stalls allow a theft every two ticks; Port Roberts' every five (below).
+const STEAL_DELAY_MS = 1000;
+const PORT_ROBERTS_STEAL_DELAY_MS = 3000;
 
 const STALLS = new Map([
   [
@@ -97,6 +100,42 @@ STALLS.set("Baker's stall", STALLS.get("Bakery stall"));
 STALLS.set("Baker's Stall", STALLS.get("Bakery stall"));
 STALLS.set("Gem Stall", STALLS.get("Gem stall"));
 
+/**
+ * Port Roberts' market (Wiki: Port Roberts#Marketplace thieving): nine stalls that reuse the
+ * mainland stalls' names, so each is keyed by its cache loc name instead. They have their own
+ * levels, XP and stock, never deplete, and allow a theft every five ticks instead of two; their
+ * shops stay open to a recent thief, so a theft there marks no merchant (and no cache varbit).
+ * The guards' rotation and the jail are separate content.
+ */
+const PORT_ROBERTS_STALLS = new Map([
+  ["port_roberts_market_stall_veg", { level: 2, xp: 5, petBase: 206777, rewards: [
+    ["POTATO", 1, 3], ["CABBAGE", 1, 2], ["ONION", 1, 2], ["TOMATO", 1, 2], ["GARLIC", 1, 1],
+  ] }],
+  ["port_roberts_market_stall_silk", { level: 20, xp: 24, petBase: 36490, rewards: [["SILK", 1, 1, "You steal a piece of silk."]] }],
+  ["port_roberts_market_stall_fur", { level: 35, xp: 38.5, petBase: 36490, rewards: [["BEAR_FUR", 1, 7], ["GREY_WOLF_FUR", 1, 1]] }],
+  ["port_roberts_market_stall_fish", { level: 42, xp: 49.5, petBase: 36490, rewards: [
+    ["RAW_SALMON", 1, 170], ["RAW_TUNA", 1, 62], ["RAW_LOBSTER", 1, 12],
+    ["RAW_SWORDTIP_SQUID", 1, 7], ["RAW_GIANT_KRILL", 1, 4], ["RAW_HADDOCK", 1, 1],
+  ] }],
+  ["port_roberts_market_stall_silver", { level: 50, xp: 80, petBase: 36490, rewards: [
+    ["SILVER_ORE", 1, 6], ["SILVER_BAR", 1, 3], ["TIARA", 1, 1],
+  ] }],
+  ["port_roberts_market_stall_spice", { level: 65, xp: 110, petBase: 36490, rewards: [["SPICE", 1, 1]] }],
+  ["port_roberts_market_stall_gems", { level: 75, xp: 129.5, petBase: 36490, rewards: [
+    ["UNCUT_SAPPHIRE", 1, 210], ["SAPPHIRE", 1, 105], ["UNCUT_EMERALD", 1, 34], ["EMERALD", 1, 17],
+    ["UNCUT_RUBY", 1, 10], ["RUBY", 1, 5], ["UNCUT_DIAMOND", 1, 2], ["DIAMOND", 1, 1],
+  ] }],
+  ["port_roberts_market_stall_ore", { level: 82, xp: 191, petBase: 36490, rewards: [
+    ["IRON_ORE", 1, 25], ["COAL", 1, 15], ["SILVER_ORE", 1, 10], ["GOLD_ORE", 1, 10],
+    ["MITHRIL_ORE", 1, 10], ["ADAMANTITE_ORE", 1, 4], ["RUNITE_ORE", 1, 1],
+  ] }],
+  ["port_roberts_market_stall_cball", { level: 87, xp: 223, petBase: 36490, rewards: [
+    ["BRONZE_CANNONBALL", 1, 79], ["IRON_CANNONBALL", 1, 64], ["STEEL_CANNONBALL", 1, 56],
+    ["MITHRIL_CANNONBALL", 1, 24], ["ADAMANT_CANNONBALL", 1, 24], ["RUNE_CANNONBALL", 1, 8],
+    ["DRAGON_CANNONBALL", 1, 1],
+  ] }],
+].map(([loc, stall]) => [loc, { depletes: false, marksMerchant: false, stealDelayMs: PORT_ROBERTS_STEAL_DELAY_MS, owners: [], ...stall }]));
+
 function randomReward(rewards) {
   const totalWeight = rewards.reduce((sum, [, , weight]) => sum + weight, 0);
   let roll = Math.floor(Math.random() * totalWeight);
@@ -137,8 +176,6 @@ function emptyStallId(object) {
 }
 
 function depleteStall(object, ticks) {
-  // Port Roberts stalls never deplete; their automatic theft/jail activity is separate content.
-  if ([core.ObjectIdentifiers.SILK_STALL_8, core.ObjectIdentifiers.FUR_STALL_9, core.ObjectIdentifiers.SILVER_STALL_7, core.ObjectIdentifiers.SPICE_STALL_7, core.ObjectIdentifiers.GEM_STALL_11].includes(object.getId())) return;
   if (depleted.has(object)) return;
   depleted.set(object, core.World.getProcessCycle());
   const empty = new core.GameObject(emptyStallId(object), object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea()).setOwner(object.getOwner());
@@ -256,6 +293,11 @@ function samePlace(location, from) {
   return !!from && here.x !== undefined && here.x === from.x && here.y === from.y && here.z === from.z;
 }
 
+/** A stall's identity: Port Roberts' nine reuse the mainland names, the cache loc name separates them. */
+function stallFor(object, name) {
+  return PORT_ROBERTS_STALLS.get(core.CacheDefinitions.getLocNames().get(object.getId())) ?? STALLS.get(name);
+}
+
 function finishTheft(event, stall) {
   const { player, object } = event;
   if (object.getPrivateArea()?.isDestroyed()) return;
@@ -267,14 +309,14 @@ function finishTheft(event, stall) {
   if (reward.getAmount() > request.stored) player.getInventory().addItem(new core.Item(reward.getId(), reward.getAmount() - request.stored));
   player.getSkillManager().addExperiences(core.Skill.THIEVING, stall.xp);
   spam(player, message ?? stealLine(reward));
-  rememberTheft(player, stall, theftVarbitKey(object, stall));
+  if (stall.marksMerchant !== false) rememberTheft(player, stall, theftVarbitKey(object, stall));
   pluginApi.emitCustomEvent("thieving:success", { player, skill: core.Skill.THIEVING, petBase: stall.petBase, method: "stall",
     stall: event.definition.getName(), itemId: reward.getId(), location: object.getLocation() });
   const ticks = object.getId() === core.ObjectIdentifiers.BAKERY_STALL_2 ? 16 : stall.respawnTicks;
   // Content may keep the stall stocked ("thieving:deplete-stall", a league relic) and ask for another go ("thieving:done").
   const depletion = { player, object, handled: false };
   pluginApi.emitCustomEvent("thieving:deplete-stall", depletion);
-  if (!depletion.handled) depleteStall(object, ticks);
+  if (!depletion.handled && stall.depletes !== false) depleteStall(object, ticks);
   const done = { player, kind: "stall", object, succeeded: true, again: false };
   pluginApi.emitCustomEvent("thieving:done", done);
   // A repeat only while the player stands where they stole from.
@@ -285,7 +327,7 @@ function finishTheft(event, stall) {
 }
 
 function handleStealFromStall(event) {
-  const stall = STALLS.get(event.definition.getName());
+  const stall = stallFor(event.object, event.definition.getName());
   if (!stall) {
     return;
   }
@@ -301,7 +343,7 @@ function handleStealFromStall(event) {
     event.handled = true;
     return;
   }
-  if (!event.repeat && !player.getClickDelay().elapsedTime(1000)) {
+  if (!event.repeat && !player.getClickDelay().elapsedTime(stall.stealDelayMs ?? STEAL_DELAY_MS)) {
     event.handled = true;
     return;
   }
@@ -343,7 +385,12 @@ function attach(api) {
   api.onObjectInteraction("Baker's Stall", { "Steal-from": handleStealFromStall });
   api.onObjectInteraction("Seed Stall", { "Steal from": handleStealFromStall });
   api.onObjectInteraction("Fruit Stall", { "Steal-from": handleStealFromStall });
+  // Port Roberts (their cache loc names pick the Port Roberts definition).
+  api.onObjectInteraction("Veg stall", { "Steal-from": handleStealFromStall });
+  api.onObjectInteraction("Fish stall", { "Steal-from": handleStealFromStall });
+  api.onObjectInteraction("Ore stall", { "Steal-from": handleStealFromStall });
+  api.onObjectInteraction("Cannonball stall", { "Steal-from": handleStealFromStall });
 }
 
 module.exports = attach;
-module.exports._test = { handleStealFromStall, stealLine, STALLS, depleted, emptyStallId, merchantInteraction, login, logout, THEFT_ATTRIBUTE };
+module.exports._test = { handleStealFromStall, stealLine, STALLS, PORT_ROBERTS_STALLS, depleted, emptyStallId, merchantInteraction, login, logout, THEFT_ATTRIBUTE };

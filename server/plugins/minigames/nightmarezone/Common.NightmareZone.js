@@ -187,6 +187,7 @@ function talk(player, pages, { at = {}, done, menu } = {}) {
     const option = new OptionDialogue(index++, {
       executeOption(choice) {
         player.getPacketSender().sendInterfaceRemoval();
+        manager.reset();
         options[Number(choice) - 1]?.[1](); // options are one-based
       },
     }, ...options.map(([text]) => text));

@@ -102,7 +102,7 @@ shrines 41236 at (3035, 2827) and (3039, 2873); cannons 41238-41241; ammunition 
 | Varbits | tempoross_tethered 11895 (0 none, 1 north totem, 2 west mast, 3 east mast, 4 south totem); tempoross_current_points 11897; tempoross_rewardpermits 11936 |
 | Varps | total_tempoross_kills 2934 |
 | Client scripts | 4074 HUD update; 4068 wave overlay show; 4069 wave overlay hide |
-| Seqs | tether 8868, tether loop 8869, untether 8870, cannon firing 8871/8872, lightning cloud 8875-8881, torrent 8882, disabled cannon 8883/8884 |
+| Seqs | tether 8868, tether loop 8869, untether 8870, cannon firing 8871/8872, lightning cloud 8875-8881, torrent 8882, disabled cannon 8883/8884; boss spawn 8897, ready-to-whirl 8900, whirl-to-ready 8901, tidal wave 8902, torrent cast 8903, death 8904, lightning cast 8905, enraged transition 8906, enraged spawn 8908 |
 | Spotanims | fishing spot splash 3, harpoonfish projectiles 525 (cooked) / 528 (raw) / 1837 (crystallised), impact 1838, fire spread 1839, fire spawn 1840, torrent 1841/1842, water splash 1843, tether 1844/1845/1846 |
 
 The masts and totem poles are multilocs on varbit 11895: a player tethered to that site sees
@@ -146,15 +146,17 @@ about 2,600/2,500 per player solo down to 1,800/1,700 each with 40.
   locs 41292-41295 appear. Untethering sends script 4069 (60).
 - **Lightning:** "A strong wind blows as clouds roll in..." (red); a cloud's shadow
   (41006) shows below it; +13 Tempoross plays `fsb_lightening_cast` (8905); then fires (NPC 8643 "Fire" with loc 37582 on its 2x2) start.
-- **Surfacing:** every time (the first included) Tempoross becomes 10572 and plays `fsb_spawn`
-  (8897).
+- **Surfacing:** the first rise plays `fsb_spawn` (8897); every rise after a submerge plays
+  `fsb_whirl_to_ready` (8901).
 - **Submerged:** when energy reaches 0: "Tempoross is vulnerable!" (cyan), Tempoross becomes
   10574 with `fsb_ready_to_whirl` (8900), the hosts say "Tempoross has submerged, fish from the
   whirlpools!", 11 ticks later the pools become 10571. The storm resets. Energy stays at 0 for
   those 11 ticks, then comes back 35 a tick (solo: full in 77 ticks); at full it surfaces again
-  ("Tempoross has surfaced, keep those cannons firing!") and the pools go inactive.
+  with 8901 ("Tempoross has surfaced, keep those cannons firing!") and the pools go inactive.
 - **Enraged:** after the third surfacing: "Tempoross has gathered too much energy. The storm is
-  out of control!" and the hosts say "Tempoross has gathered too much energy!".
+  out of control!" and the hosts say "Tempoross has gathered too much energy!". The first
+  enrage plays `fsb_enraged_transition` (8906) on the ready form, then five ticks later becomes
+  10575 with `fsb_enraged_spawn` (8908); later enraged surfacings are 10575 + 8908 directly.
 - **Win:** essence 0: "The skies clear as Tempoross retreats to the depths." (pink), "The
   Spirit Anglers will ferry you back to the Ruins of Unkah in 20 seconds.", "Subdued in
   <time>. Personal best: <time>.", "Points: <n>. Personal best: <n>.", "Reward permits: <n>.

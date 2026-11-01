@@ -243,6 +243,99 @@ function loaderFixture() {
     return { renderer, resolve, reject, mapId, maps, leaveTarget: () => { target = false; } };
 }
 
+test("new object state cancels obsolete worker builds instead of waiting several build times", async (t) => {
+    const { Pool } = require("threads");
+    const { RenderDataWorkerPool } = require("../game/worker/RenderDataWorkerPool");
+    const { LocUpdates } = require("../render/webgpu/locUpdates");
+    const treeId = 1276, stumpId = 1342, fireId = 26185;
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const settle = async () => {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        t.mock.timers.tick(0); // threads dispatches pool tasks through a zero-delay timer.
+        await new Promise<void>(resolve => setImmediate(resolve));
+    };
+    for (const scene of ["resident", "loading", "instance"]) {
+        const resident = scene !== "loading";
+        const f = loaderFixture();
+        if (!resident) f.maps.removeMap(48, 55);
+        f.maps.loadingMapIds.add(f.mapId);
+        const tree = { x: 3080, y: 3540 }, oldFire = { x: 3082, y: 3540 }, newFire = { x: 3084, y: 3540 };
+        f.maps.getMapForWorldTile = (x: number, y: number) => resident ? {
+            getRenderBaseWorldX: () => 3072, getRenderBaseWorldY: () => 3520,
+            getLocIdsAtLocal: () => x === tree.x && y === tree.y ? [treeId] : [],
+            getLocTypeRotsAtLocal: () => [10],
+        } as any : undefined;
+        const started: Array<{ input: any; id: number }> = [];
+        const cancelled: number[] = [];
+        const jobs = new Map<number, { timer: ReturnType<typeof setTimeout>; reject: (error: Error) => void }>();
+        const worker = {
+            load: (_loader: unknown, input: any, id: number) => {
+                started.push({ input, id });
+                return new Promise((resolve, reject) => {
+                    // A deterministic 400 ms build, close to the measured warm cache cost.
+                    const timer = setTimeout(() => { jobs.delete(id); resolve({ ...input }); }, 400);
+                    jobs.set(id, { timer, reject });
+                });
+            },
+            cancelLoad: async (id: number) => {
+                const job = jobs.get(id);
+                if (!job) return;
+                clearTimeout(job.timer);
+                jobs.delete(id);
+                cancelled.push(id);
+                job.reject(new DOMException("Cancelled", "AbortError"));
+            },
+        };
+        const pool = Pool(() => Promise.resolve(worker), 1);
+        const r = f.renderer;
+        Object.assign(r, {
+            locOverrides: new Map(), locSpawns: new Map(), addedLocs: new Map(),
+            terrainOverrides: new Map(), mapRegionReplacements: new Map(), worldEntityOverlays: new Map(),
+            loadMapData: WebGPURenderer.prototype.loadMapData,
+            loadInstancePartial: WebGPURenderer.prototype.loadInstancePartial,
+            getExtraLocs: WebGPURenderer.prototype.getExtraLocs,
+            queueLocReload: WebGPURenderer.prototype.queueLocReload,
+        });
+        if (scene === "instance") Object.assign(r, {
+            instanceActive: true, instanceSceneMap: { mapX: 48, mapY: 55 }, instanceTemplateChunks: [[[]]],
+        });
+        Object.assign(r.osrsClient, {
+            loadedCache: {}, locTypeLoader: { load: (id: number) => ({ id, name: "Tree", actions: [] }) },
+            workerPool: new RenderDataWorkerPool(pool, (pool as any).workers, 1),
+        });
+        const updates = r.locUpdates = new LocUpdates(r);
+        const initial = scene === "instance" ? r.loadInstancePartial("loc") : r.loadMapData(48, 55, 1);
+        await settle();
+        assert.equal(started.length, 1);
+        updates.onLocDel(tree, 0, 10, 0);
+        updates.onLocAddChange(stumpId, tree, 0, 10, 0);
+        updates.onLocAddChange(fireId, oldFire, 0, 10, 0);
+        t.mock.timers.tick(25);
+        await settle();
+        assert.deepEqual(cancelled, [started[0].id], "the obsolete running build releases the real worker pool");
+        assert.equal(started.length, 2, "the current state starts before the old 400 ms build finishes");
+        updates.onLocDel(oldFire, 0, 10, 0);
+        updates.onLocAddChange(fireId, newFire, 0, 10, 0);
+        t.mock.timers.tick(25);
+        await settle();
+        assert.equal(cancelled.length, 2);
+        assert.equal(started.length, 3);
+        const latest = started[2].input;
+        assert.equal(latest.locOnly, resident, "a square still loading must rebuild terrain as well as objects");
+        if (!resident) assert.equal(f.maps.loadingMapIds.has(f.mapId), true, "a replacement keeps the initial square marked as loading");
+        assert.ok([...latest.locOverrides.values()].some((override: any) => override.newId === 0), "the tree removal survives cancellation");
+        assert.deepEqual(latest.extraLocs.map((loc: any) => [loc.id, loc.x]), [[stumpId, tree.x], [fireId, newFire.x]],
+            "the latest snapshot keeps the stump replacement and newest fire, without the removed fire");
+        t.mock.timers.tick(400);
+        await settle();
+        await initial;
+        assert.equal(r.mapsToLoad.length, 1, "only the latest geometry reaches upload, after 450 ms rather than three serial builds");
+        assert.equal(r.mapsToLoad.peekFront().locVersion, updates.version(48, 55));
+        assert.equal(r.mapsToLoad.peekFront().instance === true, scene === "instance");
+        updates.dispose();
+    }
+});
+
 test("WebGPU stays busy while workers build or finished maps await upload", async () => {
     const f = loaderFixture();
     const busy = () => WebGPURenderer.prototype.hasPendingMapStreamingWork.call(f.renderer);

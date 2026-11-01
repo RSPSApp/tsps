@@ -378,7 +378,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             else void this.loadInstancePartial(group);
             return;
         }
-        void this.loadMapData(mapX, mapY, undefined, group === "full" ? undefined : group);
+        const partial = this.mapManager.getMap(mapX, mapY) && group !== "full" ? group : undefined;
+        void this.loadMapData(mapX, mapY, undefined, partial);
     }
 
     /**
@@ -393,7 +394,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const epoch = this.mapLoadEpoch;
         const locVersion = this.locUpdates.version(mapX, mapY);
         const current = () => epoch === this.mapLoadEpoch && this.instanceActive &&
-            this.instanceTemplateChunks === templateChunks;
+            this.instanceTemplateChunks === templateChunks && this.locUpdates.version(mapX, mapY) === locVersion;
         try {
             const mapData = await this.loadSceneData({
                 mapX,
@@ -451,7 +452,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         });
         try {
             const mapData = await this.loadSceneData(input, () => epoch === this.mapLoadEpoch &&
-                !this.instanceActive && (streamGeneration === undefined || this.mapManager.isMapInTargetGrid(mapX, mapY)));
+                !this.instanceActive && this.locUpdates.version(mapX, mapY) === locVersion &&
+                (streamGeneration === undefined || this.mapManager.isMapInTargetGrid(mapX, mapY)));
             if (epoch !== this.mapLoadEpoch || this.instanceActive) return;
             if (streamGeneration !== undefined && !this.mapManager.isMapInTargetGrid(mapX, mapY)) {
                 this.mapManager.loadingMapIds.delete(getMapSquareId(mapX, mapY));
@@ -592,10 +594,13 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         const epoch = this.mapLoadEpoch;
         const controller = new AbortController();
         this.cancelObsoleteSceneBuilds();
+        const mapId = input.instance ? undefined : getMapSquareId(input.mapX, input.mapY);
         this.sceneBuilds.set(controller, {
             current: () => epoch === this.mapLoadEpoch && (!current || current()),
-            mapId: input.instance ? undefined : getMapSquareId(input.mapX, input.mapY),
+            mapId,
         });
+        // Cancelling an older build clears its loading marker; this replacement still owns it.
+        if (mapId !== undefined && !this.mapManager.getMap(input.mapX, input.mapY)) this.mapManager.loadingMapIds.add(mapId);
         this.pendingMapBuilds++;
         try {
             return await this.osrsClient.workerPool.queueLoad<SdMapLoaderInput, SdMapData | undefined, SdMapDataLoader>(

@@ -479,7 +479,7 @@ class HeadlessClient(private val host: String, private val port: Int) {
     }
 
     /** RSProx reads NPC types to decode some NPC_INFO blocks; M1 decodes none of those. */
-    private object NoCache : Cache {
+    internal object NoCache : Cache {
         override fun getNpcType(id: Int): NpcType? = null
 
         override fun listNpcTypes(): Collection<NpcType> = emptyList()

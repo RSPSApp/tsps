@@ -42,8 +42,12 @@ sessions, so the browser wire format doesn't change.
 | 109 / 111 / 112 WIDGET_SET_FLAGS* | IF_SETEVENTS_V2 | mapped | 4 | old op bits 1–10 move to events2 |
 | 110 WIDGET_RUN_SCRIPT | VARP_*, UPDATE_INV_FULL, RUNCLIENTSCRIPT | mapped | 4–5 | script -1 = vars and inventories only |
 | 116 WIDGET_SET_QUEST_LIST | — | dropped | 4 | browser-only quest list widget |
-| 120 CHAT_MESSAGE | MESSAGE_GAME, PLAYER_INFO chat, MESSAGE_PRIVATE(_ECHO), MESSAGE_FRIENDCHANNEL | mapped | 3–6, 12 | public: one PLAYER_INFO chat block (overhead copy suppressed, crown from `<img=N>`) with the colour, effect and pattern tsps appends, and the autotyper flag for autochat; game/system types → MESSAGE_GAME; private in/out and friends chat → their packets with a gateway message counter and world 1. Mod private (7) and clan types have no tsps source |
-| 124 CLAN_SETTINGS_FULL, 125 CLAN_CHANNEL_FULL, 126 CLAN_CHANNEL_DELTA, 127 CLAN_SETTINGS_DELTA, 128 CLAN_VAR | — | dropped | — | tsps clans ([server/docs/clans.md](../server/docs/clans.md) phase 5); chat types 41 and 43 too |
+| 120 CHAT_MESSAGE | MESSAGE_GAME, PLAYER_INFO chat, MESSAGE_PRIVATE(_ECHO), MESSAGE_FRIENDCHANNEL, MESSAGE_CLANCHANNEL | mapped | 3–6, 12 | public: one PLAYER_INFO chat block (overhead copy suppressed, crown from `<img=N>`) with the colour, effect and pattern tsps appends, and the autotyper flag for autochat; game/system types → MESSAGE_GAME; private in/out, friends chat and clan chat (41 own clan, 44 guest clan: clan types 0 and -1) → their packets with a gateway message counter and world 1. Clan notices 43 and 46 stay MESSAGE_GAME, as the live intro notice is; live's MESSAGE_CLANCHANNEL_SYSTEM is for broadcasts, which tsps doesn't send. Mod private (7) has no tsps source |
+| 124 CLAN_SETTINGS_FULL | CLANSETTINGS_FULL | mapped | — | display names, no hashes (flags 2), as live; a null clan is the leave form. Loot and coin share ranks are 0, which tsps doesn't have. The owner and replacement slots are dropped: the packet has no field for them |
+| 125 CLAN_CHANNEL_FULL | CLANCHANNEL_FULL | mapped | — | display names, no version, as live; a null channel is the leave form |
+| 126 CLAN_CHANNEL_DELTA | CLANCHANNEL_DELTA | mapped | — | add and delete user. Live's update number is the count the delta applies on top of, tsps's the count after it, so the gateway counts from the last full update and ignores tsps's. Dropped when no channel with that key is up |
+| 127 CLAN_SETTINGS_DELTA | CLANSETTINGS_DELTA | mapped | — | add member (V2), delete member, rank, muted, extra info, int setting; numbered as 126, owner 0 as live. Dropped before a full update |
+| 128 CLAN_VAR | VARCLAN_ENABLE, VARCLAN | mapped | — | int values; enabled once, before the first. No recording has a VARCLAN, so that it needs enabling is unconfirmed |
 | 121 FRIENDS_CHAT_UPDATE | UPDATE_FRIENDLIST, UPDATE_IGNORELIST, UPDATE_FRIENDCHAT_CHANNEL_FULL_V2, FRIENDLIST_LOADED | mapped | 6 | the channel only goes when it changed; FRIENDLIST_LOADED once |
 | 122 CHAT_FILTER_SETTINGS | CHAT_FILTER_SETTINGS + _PRIVATECHAT | mapped | 6 | |
 | 123 TRIGGER_ONDIALOGABORT | TRIGGER_ONDIALOGABORT | mapped | 4 | |
@@ -87,7 +91,8 @@ sessions, so the browser wire format doesn't change.
 | OPOBJ1–5 / OPOBJ6 / OPOBJT | 102, 43, 103, 56, 82 / 104 / 94 or 79 | mapped | 5 | |
 | OPWORLDENTITY1–5 | 220–224 | mapped | 9 | (boats aren't drawn yet, see 142/143) |
 | OPWORLDENTITY6 | — | dropped | 9 | 241 sends a type id, tsps reads an index |
-| MESSAGE_PUBLIC / CLIENT_CHEAT | 190 CHAT | mapped | 2–3 | public (0), autotyper (1 → autochat) and friends chat (2); colour, effect and pattern are appended for tsps; clan types dropped. CLIENT_CHEAT: `::cmd`, autocomplete requests dropped |
+| MESSAGE_PUBLIC / CLIENT_CHEAT | 190 CHAT | mapped | 2–3 | public (0), autotyper (1 → autochat) and friends chat (2); colour, effect and pattern are appended for tsps. Clan chat: type 3 with clan type 0 → kind 4 clan 0, type 4 (guest) → kind 4 clan -1, without colour or effect, which tsps's clan chat has no field for; other clan types dropped. CLIENT_CHEAT: `::cmd`, autocomplete requests dropped |
+| CLANCHANNEL_KICKUSER, AFFINEDCLANSETTINGS_ADDBANNED_FROMCHANNEL, AFFINEDCLANSETTINGS_SETMUTED_FROMCHANNEL | 181 CLAN_CHANNEL_ACTION | mapped | — | action 0 kick, 1 ban, 2 mute, by channel slot. Only for clan id 0: tsps's packet means the player's own channel, so other clan ids are dropped rather than acting on the wrong one |
 | MESSAGE_PRIVATE | 197 | mapped | 6 | |
 | FRIENDLIST / IGNORELIST ADD / DEL, FRIENDCHAT_* | 196 FRIENDS_CHAT_ACTION | mapped | 6 | join, leave, kick, rank and the list edits share one tsps packet |
 | CHAT_SETFILTER | 198 | mapped | 6 | |
@@ -97,4 +102,4 @@ sessions, so the browser wire format doesn't change.
 | trade interface buttons | 180 TRADE_ACTION | mapped | 9 | accept/decline (335:10/13, 334:13/14/32), Offer/Remove ×1/5/10/All on 336:0 and 335:25, and X through the count dialog (script 108) the gateway opens itself |
 | WINDOW_STATUS | — | dropped | 4 | tsps picks the root from the saved layout setting, as for the browser |
 | MAP_BUILD_COMPLETE | — | dropped | 2 | gateway-only signal |
-| EVENT_*, IDLE, REFLECTION_CHECK_REPLY, SEND_PING_REPLY, CONNECTION_TELEMETRY, DETECT_MODIFIED_CLIENT, MEMBERSHIP_PROMOTION_ELIGIBILITY, RSEVEN_STATUS, SOUND_JINGLEEND, BUG_REPORT, HISCORE_REQUEST, IF_CRMVIEW_OP, EXIT_FREECAM, CLAN_* | — | dropped | 1 | no tsps handler; clans don't exist in tsps |
+| EVENT_*, IDLE, REFLECTION_CHECK_REPLY, SEND_PING_REPLY, CONNECTION_TELEMETRY, DETECT_MODIFIED_CLIENT, MEMBERSHIP_PROMOTION_ELIGIBILITY, RSEVEN_STATUS, SOUND_JINGLEEND, BUG_REPORT, HISCORE_REQUEST, IF_CRMVIEW_OP, EXIT_FREECAM, CLANCHANNEL_FULL_REQUEST, CLANSETTINGS_FULL_REQUEST | — | dropped | 1 | no tsps handler; tsps sends clan state unasked |

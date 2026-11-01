@@ -29,6 +29,8 @@ const DOOR_NAMES = new Set([
   "Gate", "Metal gate", "Doorway", "Tree Door", "Storeroom Door", "Ardougne Wall Door",
   "Vitur door", "Myrmel door", "Shadum door", "Jovkai door", "Chained door", "Trapdoor",
   "Longhall door", "Prison door",
+  // Pollnivneach curtains: closed 1533 "Open" -> open 1534 "Close" (closed id + 1, cache-derived).
+  "Curtain",
 ]);
 
 // Always name locs by their core.ObjectIdentifiers property (O.DOOR_358), never a raw id: the
@@ -46,7 +48,7 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   LARGE_DOOR_101_OPEN: 39254,
 });
 
-let SELF_OPENING_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
+let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
 
@@ -117,6 +119,10 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LONGHALL_DOOR, O.LONGHALL_DOOR_3],
     [O.LONGHALL_DOOR_2, O.LONGHALL_DOOR_4],
   ]);
+
+  // Curtains do not swing: the open loc is a drawn-back curtain model (1534: 879/880 vs the
+  // closed 1533's 884/885) that replaces the closed one on the same tile with the same rotation.
+  IN_PLACE_DOOR_IDS = new Set([O.CURTAIN_3]);
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.
@@ -898,9 +904,10 @@ function handleMappedDoor(player, object, objectId, location) {
   const nextId = open ? closedId : openId;
   const type = Number(activeObject.getType?.() ?? activeObject.type ?? 0);
   const rotation = Number(activeObject.getFace?.() ?? activeObject.face ?? 0) & 0x3;
+  const inPlace = IN_PLACE_DOOR_IDS.has(closedId);
   const nextRotation = open ? ((rotation + 1) & 0x3) : rotation;
   const offsetIndex = type === 9 ? ((nextRotation + 1) & 0x3) : nextRotation;
-  const [dx, dy] = COORD_OFFSETS[offsetIndex] ?? [0, 0];
+  const [dx, dy] = inPlace ? [0, 0] : (COORD_OFFSETS[offsetIndex] ?? [0, 0]);
   const previousObject = activeObject;
   const nextObject = open && existingState?.closed?.[0]
     ? objectFromSnapshot(existingState.closed[0])
@@ -912,7 +919,7 @@ function handleMappedDoor(player, object, objectId, location) {
         activeLocation.getZ?.() ?? activeLocation.z ?? 0
       ),
       type,
-      open ? ((rotation - 1) & 0x3) : ((rotation + 1) & 0x3),
+      inPlace ? rotation : open ? ((rotation - 1) & 0x3) : ((rotation + 1) & 0x3),
       privateArea
     );
 

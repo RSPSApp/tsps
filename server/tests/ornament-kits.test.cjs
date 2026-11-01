@@ -186,3 +186,67 @@ test("the makeover editor refuses to open while busy, in combat or in a dialogue
   assert.equal(MakeOverMage._test.canOpenMakeover({ ...player, getDialogueManager: () => ({ isActive: () => true }) }, combat), false);
   assert.equal(MakeOverMage._test.canOpenMakeover({ ...player, getPacketSender: () => ({ hasInterruptibleInterface: () => true }) }, combat), false);
 });
+
+test("the makeover interface previews styles and colours, keeps them on Confirm and restores them on close", () => {
+  const Makeover = require("../plugins/npcs/Makeover.plugin");
+  const { Appearance } = require("../dist/game/model/Appearance");
+  const ids = { makeover: 516, "makeover:item_area": (516 << 16) | 7, "makeover:colours": (516 << 16) | 24,
+    "makeover:select": (516 << 16) | 27, "makeover:select_and_close": (516 << 16) | 28,
+    "makeover:burger_menu_frame": (516 << 16) | 31 };
+  // Torso styles 0-2 as dbrows 100-102 (type a kits 18, 24, 105), 29 torso colours.
+  const rows = new Map([[100, 18], [101, 24], [102, 105]]);
+  const enums = new Map([[5495, new Map([[0, 100], [1, 101], [2, 102]])], [789, new Map(Array.from({ length: 29 }, (_, i) => [i, i]))]]);
+  const CacheDefinitions = {
+    getInterfaceId: (name) => ids[name], getComponentId: (name) => ids[name],
+    getVarbitId: () => 4130, getVarpId: (name) => (name === "makeover_colour" ? 3789 : 3788), getSpotanimId: () => 2372,
+    getEnumValues: (id) => enums.get(id) ?? new Map(),
+    getDbRow: (id) => ({ tableId: 65, int: () => rows.get(id) }),
+    getDbColumn: (table, column) => (column === "player_kit_id_type_a" ? 1 : 2),
+  };
+  const buttons = new Map();
+  let closed = null;
+  const tasks = [];
+  Makeover.register({
+    core: { CacheDefinitions, Appearance, Equipment: { HEAD_SLOT: 0 }, Graphic: class {},
+      Task: class { constructor() {} stop() { this.stopped = true; } }, TaskManager: { submit: (task) => tasks.push(task) } },
+    onNpcInteraction() {},
+    onInterfaceActionButton: (uid, handler) => buttons.set(uid, handler),
+    onCustomEvent: (name, handler) => { if (name === "interface:closed") closed = handler; },
+  });
+  const sent = [];
+  const messages = [];
+  const look = [0, 3, 18, 26, 34, 38, 42, 14, 2, 14, 5, 4, 0];
+  const player = {
+    getAppearance: () => ({ isMale: () => true, getLook: () => look, setLook: (slot, value) => { look[slot] = value; },
+      setLookArray: (values) => values.forEach((value, slot) => { look[slot] = value; }) }),
+    getEquipment: () => ({ getItems: () => [] }),
+    sendMessage: (message) => messages.push(message),
+    getPacketSender: () => ({
+      sendConfig: (id, value) => sent.push(["varp", id, value]),
+      sendVarbit: (id, value) => sent.push(["varbit", id, value]),
+      sendInterface: (id) => sent.push(["open", id]),
+      sendInterfaceFlagsRange: (uid, from, to) => sent.push(["events", uid & 0xffff, from, to]),
+      sendInterfaceRemoval: () => closed({ player, interfaceId: 516 }),
+    }),
+  };
+
+  assert.equal(Makeover.openMakeover(player, Makeover.TYPES.TOP), true);
+  assert.deepEqual(sent.slice(0, 4), [["varp", 3789, 14], ["varbit", 4130, 3], ["varp", 3788, 0], ["open", 516]]);
+  assert.deepEqual(sent.find((row) => row[0] === "events" && row[1] === 7), ["events", 7, 0, 15]);
+  assert.deepEqual(sent.find((row) => row[0] === "events" && row[1] === 24), ["events", 24, 0, 58]);
+
+  buttons.get(ids["makeover:item_area"])({ player, slot: 10 });
+  buttons.get(ids["makeover:colours"])({ player, slot: 6 });
+  assert.equal(look[Appearance.CHEST], 105);
+  assert.equal(look[Appearance.TORSO_COLOUR], 3);
+  player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(look[Appearance.CHEST], 18, "closing without Confirm puts the old top back");
+  assert.equal(look[Appearance.TORSO_COLOUR], 14);
+  assert.equal(tasks[0].stopped, true);
+
+  Makeover.openMakeover(player, Makeover.TYPES.TOP);
+  buttons.get(ids["makeover:item_area"])({ player, slot: 5 });
+  buttons.get(ids["makeover:select_and_close"])({ player, slot: 9 });
+  assert.equal(look[Appearance.CHEST], 24, "Confirm keeps the new top");
+  assert.deepEqual(messages, []);
+});

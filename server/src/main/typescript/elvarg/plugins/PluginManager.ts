@@ -2401,6 +2401,7 @@ export class PluginManager {
       Skill: require(`${model}/Skill`).Skill,
       Item: require(`${model}/Item`).Item,
       Flag: require(`${model}/Flag`).Flag,
+      Appearance: require(`${model}/Appearance`).Appearance,
       Direction: require(`${model}/Direction`).Direction,
       Equipment: require(`${model}/container/impl/Equipment`).Equipment,
       Bank: require(`${model}/container/impl/Bank`).Bank,

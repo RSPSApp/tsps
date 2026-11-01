@@ -35,6 +35,7 @@ export class ItemRarityPlugin extends Plugin {
     private signatureValue = "";
 
     readonly widgetOverlay: WidgetOverlay = {
+        drawBeforeMenu: true,
         signature: () => this.snapshot(),
         draw: (context) => this.draw(context),
     };
@@ -91,8 +92,7 @@ export class ItemRarityPlugin extends Plugin {
     private snapshot(): string {
         const client: any = this.client;
         const manager = client?.widgetManager;
-        const menuOpen = client.menuOpen;
-        if (!this.isStarted() || !manager || client.gameState !== GameState.LOGGED_IN || menuOpen) {
+        if (!this.isStarted() || !manager || client.gameState !== GameState.LOGGED_IN) {
             this.items = [];
             return this.signatureValue = "";
         }

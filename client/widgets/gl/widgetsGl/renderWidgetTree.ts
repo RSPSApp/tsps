@@ -44,7 +44,7 @@ import {
 } from "./interactionMenuCache";
 import type { CachedClickTarget, WidgetClickMeta } from "./clickTypes";
 import { dropStaleClickTarget } from "./clickTypes";
-import type { GLRenderOpts } from "./glRenderOpts";
+import { drawBeforeContextMenu, type GLRenderOpts } from "./glRenderOpts";
 import { drawLine, drawThickLine } from "./drawLines";
 import { renderArcWidget } from "./arcWidget";
 import { drawScrollBar } from "./scrollbarDraw";
@@ -3798,25 +3798,25 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         // Temple Trekking outlines left as-is for now
     }
 
-    opts.drawAboveWidgets?.();
-
     // GL-based context menu (Choose Option) devoverlay via component
-    try {
-        const menuOverlayStartMs = profileWidgetRender ? performance.now() : 0;
-        drawChooseOptionMenu(glr, {
-            fontLoader: opts.fontLoader,
-            requestRender: requestRender,
-            onExamine: (w) => {
-                try {
-                    (glr.canvas as any).__ui?.setDetails?.(w);
-                } catch {}
-            },
-            menuState: (opts.game?.osrsClient as any)?.menuState,
-        });
-        if (profileWidgetRender) {
-            menuOverlayMs += performance.now() - menuOverlayStartMs;
-        }
-    } catch {}
+    drawBeforeContextMenu(opts.drawAboveWidgets, () => {
+        try {
+            const menuOverlayStartMs = profileWidgetRender ? performance.now() : 0;
+            drawChooseOptionMenu(glr, {
+                fontLoader: opts.fontLoader,
+                requestRender: requestRender,
+                onExamine: (w) => {
+                    try {
+                        (glr.canvas as any).__ui?.setDetails?.(w);
+                    } catch {}
+                },
+                menuState: (opts.game?.osrsClient as any)?.menuState,
+            });
+            if (profileWidgetRender) {
+                menuOverlayMs += performance.now() - menuOverlayStartMs;
+            }
+        } catch {}
+    });
     glr.flush();
     opts.afterMenuDrawn?.();
 

@@ -305,26 +305,48 @@ function defenderRange(player) {
   return data.DEFENDER_LURE_RANGE[Math.min(Points.level(player, data.ROLE.DEFENDER), 5) - 1];
 }
 
-/**
- * The call a player's current combat setup satisfies. Ranged checks the
- * BA arrows first (Wiki: Bullet/Field/Blunt/Barbed), magic checks the spell
- * element, melee falls back to its fight style.
- */
-function attackStyle(player) {
-  // A loaded bow is the attacker's active style; the BA arrow decides it even
-  // when a spell happens to remain selected from an earlier action.
-  const ammo = player?.getEquipment?.()?.get?.(core.Equipment.AMMUNITION_SLOT)?.getId?.();
-  if (ammo != null && data.ARROW_CALL[ammo]) return data.ARROW_CALL[ammo];
+/** The combat type of the method that will make this swing. */
+function combatType(player, method) {
+  const active = method ?? (typeof core.CombatFactory?.getMethod === "function"
+    ? core.CombatFactory.getMethod(player)
+    : null);
+  return typeof active?.type === "function" ? active.type() : null;
+}
 
-  const spell = player?.getCombat?.()?.getSelectedSpell?.();
-  const fromSpell = spell ? spellStyle.get(spell) : null;
-  if (fromSpell) return fromSpell;
-
+/** The call a melee fight style selects. */
+function fightStyleCall(player) {
+  const styles = core.FightStyle;
+  if (!styles) return data.CALL.CONTROLLED;
   const style = player?.getFightType?.()?.getStyle?.();
-  if (style === core.FightStyle?.ACCURATE) return data.CALL.ACCURATE;
-  if (style === core.FightStyle?.AGGRESSIVE) return data.CALL.AGGRESSIVE;
-  if (style === core.FightStyle?.DEFENSIVE) return data.CALL.DEFENSIVE;
+  if (style === styles.ACCURATE) return data.CALL.ACCURATE;
+  if (style === styles.AGGRESSIVE) return data.CALL.AGGRESSIVE;
+  if (style === styles.DEFENSIVE) return data.CALL.DEFENSIVE;
   return data.CALL.CONTROLLED;
+}
+
+/**
+ * The call a player's current attack satisfies.
+ *
+ * The active combat method owns the style. A melee swing reads its fight type
+ * even while arena arrows sit in the quiver, and a spell reads its element even
+ * when a bow is also worn. Only a ranged attack from a bow maps the BA arrow
+ * (Wiki: Bullet/Field/Blunt/Barbed); melee falls back to its fight style.
+ *
+ * `method` is the method the combat engine resolved for this swing; callers
+ * that do not have it let the factory resolve the same one.
+ */
+function attackStyle(player, method = null) {
+  const type = combatType(player, method);
+  const types = core.CombatType;
+  if (types && type === types.RANGED && bowFiresArrows(player)) {
+    const ammo = player?.getEquipment?.()?.get?.(core.Equipment.AMMUNITION_SLOT)?.getId?.();
+    if (ammo != null && data.ARROW_CALL[ammo]) return data.ARROW_CALL[ammo];
+  } else if (types && type === types.MAGIC) {
+    const spell = player?.getCombat?.()?.getSelectedSpell?.();
+    const fromSpell = spell ? spellStyle.get(spell) : null;
+    if (fromSpell) return fromSpell;
+  }
+  return fightStyleCall(player);
 }
 
 function styleName(call) {

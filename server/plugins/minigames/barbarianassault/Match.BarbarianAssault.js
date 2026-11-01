@@ -669,7 +669,7 @@ class BarbarianAssaultMatch {
     this.completeWave(true);
   }
 
-  handleCanAttack(player, target) {
+  handleCanAttack(player, target, method = null) {
     if (this.ended || this.phase !== PHASE.WAVE) return true;
     const meta = this.npcMeta.get(target);
     if (!meta) return true;
@@ -682,7 +682,7 @@ class BarbarianAssaultMatch {
       if (state?.role !== data.ROLE.ATTACKER) return true;
       if (this.isStunned(target)) return false;
       const expected = this.calls[data.ROLE.ATTACKER]?.heard;
-      const style = Items.attackStyle(player);
+      const style = Items.attackStyle(player, method);
       if (expected && style !== expected) {
         if (this.elapsedTicks - (state.lastWrongTick ?? -100) >= 4) {
           state.lastWrongTick = this.elapsedTicks;

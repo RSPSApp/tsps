@@ -143,7 +143,7 @@ function handleGroundItemPickup(event) {
 function handleCanAttack(event) {
   const player = event.attacker?.getAsPlayer?.();
   const match = matchOf(player);
-  if (match && match.handleCanAttack(player, event.target?.getAsNpc?.()) === false) event.allow = false;
+  if (match && match.handleCanAttack(player, event.target?.getAsNpc?.(), event.method) === false) event.allow = false;
 }
 
 function handleDealtDamage({ player, target, hit }) {

@@ -330,6 +330,8 @@ function cookOne(player, session) {
     Common.api.emitCustomEvent("skills:produced", { player, skill: Skill.COOKING, itemId: cookable.cooked, amount: 1, xp: cookable.xp, kind: "cook" });
   } else {
     player.getInventory().addItem(new Item(session.cookable.burnt, 1));
+    // "cooking:burnt" { player, rawId, itemId }: the food burnt (a league's "Burn Some Food").
+    Common.api.emitCustomEvent("cooking:burnt", { player, rawId: session.cookable.raw, itemId: session.cookable.burnt });
     Common.spam(player, burnMessage(cookable));
     countCook(player, true);
   }

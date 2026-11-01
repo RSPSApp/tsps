@@ -365,7 +365,7 @@ function countAndSubject(rest: string): { count: number; subject: string } {
  * the `produce` kind counts it (docs/leagues.md, Tasks).
  */
 const PRODUCE_VERBS: Record<string, string[]> = {
-  catch: ["Raw ", ""], chop: [""], mine: [""], cook: [""], craft: [""], fletch: [""], smelt: [""], smith: [""],
+  catch: ["Raw ", ""], chop: [""], mine: [""], cook: ["", "Cooked "], craft: [""], fletch: [""], smelt: [""], smith: [""],
   make: [""], create: [""], brew: [""], clean: [""], cut: [""],
 };
 
@@ -430,7 +430,7 @@ const AREA_IDS: Map<string, number> = (() => {
 /** A trailing league area ("... in the Fremennik Province", "... on Karamja underground"): its map id and the text without it. */
 function leagueAreaOf(text: string): { area: number | null; text: string } {
   for (const [pattern, key] of AREA_PLACES) {
-    const match = new RegExp(`\\s+(?:in|on|within) (?:the )?(?:${pattern.source})(?: underground)?\\.?$`, "i").exec(text);
+    const match = new RegExp(`\\s+(?:anywhere )?(?:in|on|within) (?:the )?(?:${pattern.source})(?: underground)?\\.?$`, "i").exec(text);
     if (match) return { area: AREA_IDS.get(key) ?? null, text: text.slice(0, match.index) };
   }
   return { area: null, text };
@@ -593,6 +593,28 @@ function deriveTrigger(name: string, rawDescription: string, names: Names): { tr
   }
   // A parenthesis with a space is a remark ("(not including Agility)"); one without is part of a name ("(c)", "(kp)").
   const clean = (text: string) => text.replace(/\s*\([^)]*\s[^)]*\)/g, "").replace(/\.$/, "").trim();
+  // "Burn 100 Willow Logs", "Burn Some Normal Logs" ("Burn some Logs"): those logs lit for a fire.
+  // "Burn Some Food": anything burnt while cooking it.
+  if (/^Burn Some Food$/i.test(name)) return { trigger: { kind: "burn-food", count: 1 } };
+  if ((match = /^Burn (.+)$/i.exec(name))) {
+    const named = countAndSubject(match[1]);
+    const said = countAndSubject(clean(description).replace(/^Burn /i, ""));
+    // Pyre logs go on a funeral pyre (the Shades of Mort'ton minigame), not a plain fire.
+    if (CONDITION.test(clean(description)) || PLACE.test(said.subject) || /coloured|firelighter|pyre/i.test(description)) return {};
+    const logs = [said.subject, named.subject].map((subject) => itemNamed(subject, items)).find((item) => item && /logs$/i.test(item));
+    return logs ? { trigger: { kind: "burn", items: [logs], count: named.count } } : {};
+  }
+  // "Bury 6 bones" ("Bury 6 Remains of any kind"): any bones; "Bury Some Wyvern or Dragon Bones"
+  // ("either some wyvern bones or some dragon bones"): any of those; a place is no plain count.
+  if ((match = /^Bury (.+)$/i.exec(name))) {
+    const named = countAndSubject(match[1]);
+    const said = clean(description).replace(/^Bury /i, "");
+    if (PLACE.test(said) || /\bnear\b/i.test(said) || CONDITION.test(said)) return {};
+    if (/^(?:\d+ )?Remains of any kind$/i.test(said)) return { trigger: { kind: "bury", any: true, count: named.count } };
+    const parts = said.replace(/^either /i, "").split(/\s+or\s+|,\s*/).map((part) => countAndSubject(part).subject);
+    const bones = parts.map((part) => itemNamed(part, items) ?? itemNamed(`${part}s`, items));
+    return bones.length && bones.every(Boolean) ? { trigger: { kind: "bury", items: [...new Set(bones as string[])], count: named.count } } : {};
+  }
   // A condition, or a group the description names ("Chop any kind of logs", "Catch any butterfly"):
   // no single item or NPC stands for it.
   if (CONDITION.test(clean(description)) || /\bany\b/i.test(clean(description))) return {};

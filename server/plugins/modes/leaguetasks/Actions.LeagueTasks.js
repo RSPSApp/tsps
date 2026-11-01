@@ -15,6 +15,9 @@
  *   potion drunk (by its name, without doses), `potions:drunk` { name }, or a drink that is food
  *   (moon-lite, a LizardKicker), `food:eaten`; `eat-heal { heal }`: a food that restores at least
  *   that much, `food:eaten` { restores }.
+ * - `burn { items, count }`: logs lit for a fire, `firemaking:success` { itemId }; `burn-food
+ *   { count }`: food burnt cooking it, `cooking:burnt`; `bury { items | any, count }`: bones buried,
+ *   `prayer:buried` { itemId } (by hand, not a bonecrusher's).
  * - `agility-laps { courses, count }`: laps of any of the courses (the agility plugin's keys),
  *   `agility:lap` { course, count }; Yama's stepping stones count each stone as a lap.
  *
@@ -41,7 +44,7 @@ function add(map, name, task) {
 
 function indexOf(type) {
   if (index.has(type)) return index.get(type);
-  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [] };
+  const entry = { equip: [], produce: new Map(), hunt: new Map(), pickpocket: new Map(), clue: new Map(), laps: new Map(), eat: new Map(), drink: new Map(), eatHeal: [], burn: new Map(), bury: new Map(), buryAny: [], burnFood: [] };
   for (const task of Common.catalog(type).tasks) {
     const trigger = task.trigger;
     if (trigger?.kind === "equip" || trigger?.kind === "equip-all") entry.equip.push(task);
@@ -51,6 +54,10 @@ function indexOf(type) {
     else if (trigger?.kind === "clue") add(entry.clue, trigger.tier, task);
     else if (trigger?.kind === "eat" || trigger?.kind === "drink") for (const item of trigger.items ?? []) add(entry[trigger.kind], item, task);
     else if (trigger?.kind === "eat-heal") entry.eatHeal.push(task);
+    else if (trigger?.kind === "burn") for (const item of trigger.items ?? []) add(entry.burn, item, task);
+    else if (trigger?.kind === "bury" && trigger.any) entry.buryAny.push(task);
+    else if (trigger?.kind === "bury") for (const item of trigger.items ?? []) add(entry.bury, item, task);
+    else if (trigger?.kind === "burn-food") entry.burnFood.push(task);
     else if (trigger?.kind === "agility-laps") for (const course of trigger.courses ?? []) add(entry.laps, course, task);
   }
   index.set(type, entry);
@@ -66,8 +73,12 @@ function progressOf(player) {
 function count(player, kind, name, amount = 1) {
   const type = Common.leagueOf(player);
   if (type === null || !(amount > 0)) return;
-  const tasks = indexOf(type)[kind].get(key(name));
-  if (!tasks) return;
+  countTasks(player, type, indexOf(type)[kind].get(key(name)), amount);
+}
+
+/** `amount` toward each of `tasks` still open (and done in its area); the ones reaching their count complete. */
+function countTasks(player, type, tasks, amount = 1) {
+  if (!tasks?.length) return;
   const done = new Set(Common.completedIds(player));
   const open = tasks.filter((task) => !done.has(task.id) && inArea(player, type, task));
   if (!open.length) return;
@@ -165,6 +176,22 @@ function drank({ player, itemId, name }) {
   if (player) count(player, "drink", name ?? itemName(itemId));
 }
 
+function burnt({ player, itemId }) {
+  if (player) count(player, "burn", itemName(itemId));
+}
+
+function burntFood({ player }) {
+  const type = player ? Common.leagueOf(player) : null;
+  if (type !== null) countTasks(player, type, indexOf(type).burnFood);
+}
+
+function buried({ player, itemId }) {
+  if (!player) return;
+  count(player, "bury", itemName(itemId));
+  const type = Common.leagueOf(player);
+  if (type !== null) countTasks(player, type, indexOf(type).buryAny);
+}
+
 function lapped({ player, course, count: laps }) {
   if (player) count(player, "laps", course, Number(laps ?? 1) || 1);
 }
@@ -186,6 +213,9 @@ module.exports = function attach(api) {
   api.onCustomEvent("treasure-trails:casket-opened", casket);
   api.onCustomEvent("agility:lap", lapped);
   api.onCustomEvent("food:eaten", ate);
+  api.onCustomEvent("firemaking:success", burnt);
+  api.onCustomEvent("cooking:burnt", burntFood);
+  api.onCustomEvent("prayer:buried", buried);
   api.onCustomEvent("potions:drunk", drank);
   api.onCustomEvent("league:login", login);
 };

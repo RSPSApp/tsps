@@ -163,3 +163,42 @@ test("kill: a boss in its own lair counts its kills (Defeat Sarachnis in the For
   kill(f, "Sarachnis");
   assert.equal((f.player.getAttribute("league:task-kills") ?? {})["defeat-sarachnis-50-times"], 1, JSON.stringify(f.player.getAttribute("league:task-kills")));
 });
+
+/** An inventory item's option, as the client clicks it. */
+async function inventoryOption(f, name, option, optionIndex = 1, count = 4) {
+  const id = item(name);
+  await send(f, { type: "inventory_action", slot: f.player.getInventory().getSlotForItemId(id), itemId: id, widgetId: 149 << 16, option, optionIndex }, count);
+}
+
+test("bury: bones buried by hand count, any kind for 'Bury 6 bones' and the named ones for theirs", async (t) => {
+  const f = pactsCharacter(t);
+  f.player.getInventory().add(new core.Item(item("Dragon bones")), true);
+  await inventoryOption(f, "Dragon bones", "Bury");
+  assert.equal(f.player.getInventory().getAmount(item("Dragon bones")), 0, `the real Prayer buries it: ${f.messages}`);
+  assert.ok(done(f, "bury-some-wyvern-or-dragon-bones"));
+  assert.equal(f.player.getAttribute("league:task-progress")["bury-6-bones"], 1);
+});
+
+test("burn: logs lit for a fire (Burn Some Normal Logs)", async (t) => {
+  const f = pactsCharacter(t);
+  core.RegionManager.loadMapFiles(1666, 3136);
+  f.player.getInventory().add(new core.Item(item("Tinderbox")), true);
+  f.player.getInventory().add(new core.Item(item("Logs")), true);
+  t.mock.method(Math, "random", () => 0);
+  await send(f, { type: "inventory_use_on", itemId: item("Tinderbox"), slot: 0, target: { kind: "inventory", slot: 1 } }, 10);
+  assert.equal(f.player.getInventory().getAmount(item("Logs")), 0, `the real Firemaking lights it: ${f.messages}`);
+  assert.ok(done(f, "burn-some-normal-logs"));
+});
+
+test("burn-food: food burnt on a fire (Burn Some Food)", async (t) => {
+  const f = pactsCharacter(t);
+  core.RegionManager.loadMapFiles(1666, 3136);
+  const range = new core.GameObject(core.ObjectIdentifiers.FIRE, new core.Location(1667, 3136, 0), 10, 0, null);
+  core.ObjectManager.register(range, true);
+  t.after(() => core.ObjectManager.deregister(range, true));
+  f.player.getInventory().add(new core.Item(item("Raw shrimps")), true);
+  t.mock.method(Math, "random", () => 0); // a roll of 0 is under any burn chance
+  await send(f, { type: "item_on_object", itemId: item("Raw shrimps"), slot: 0, widgetId: 149 << 16, objectId: range.getId(), x: 1667, y: 3136 }, 10);
+  assert.equal(f.player.getInventory().getAmount(item("Burnt shrimp")), 1, `the real Cooking burns it: ${f.messages}`);
+  assert.ok(done(f, "burn-some-food"));
+});

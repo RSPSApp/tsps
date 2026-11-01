@@ -32,6 +32,7 @@ const DROPS_FILE = "npc-drops.json";
 const SUBTABLES_FILE = "npc-drop-subtables.json";
 const OVERRIDES_FILE = "npc-drop-overrides.json";
 const CUSTOM_FILE = "npc-drops-custom.json";
+const MAX_STACK = 2147483647;
 const CURRENCY_IDS = new Set([995, 6529, 21555]);
 const RING_OF_WEALTH_TABLES = new Set(["rareDrop", "gem", "megaRare"]);
 /** Brimstone key, Larran's key. */
@@ -157,6 +158,13 @@ function applyOverrides(dump, subtables, overrides) {
   for (const [name, table] of Object.entries(overrides.subtables ?? {})) subtables[name] ??= table;
 }
 
+/** `[min, max]`, equal for a fixed amount; both must fit an item stack. */
+function isDropQuantity(quantity) {
+  return Array.isArray(quantity) && quantity.length === 2
+    && Number.isInteger(quantity[0]) && quantity[0] >= 1
+    && Number.isInteger(quantity[1]) && quantity[1] >= quantity[0] && quantity[1] <= MAX_STACK;
+}
+
 /**
  * A world's own edits, saved by the browser host's NPC Drops tab to npc-drops-custom.json and
  * absent everywhere else. Rows are addressed by their position in the dump, so this runs before
@@ -176,6 +184,12 @@ function applyCustomDrops(dump, custom) {
       if (Number.isFinite(patch.weight) && patch.weight > 0) entry.weight = patch.weight;
       if (Number.isFinite(patch.out_of) && patch.out_of > 0) entry.out_of = patch.out_of;
       if (Number.isFinite(entry.weight) && entry.out_of > 0) entry.rarity = entry.weight / entry.out_of;
+      if (isDropQuantity(patch.quantity)) {
+        entry.quantity = patch.quantity;
+        // rollQuantity prefers these over `quantity`, so the edit would never roll.
+        delete entry.quantity_alternatives;
+        delete entry.quantity_selection;
+      }
     }
     for (const field of ["entries", "tertiary"]) {
       const removed = new Set((edits.removeEntries ?? []).filter((row) => row?.field === field).map((row) => row.index));

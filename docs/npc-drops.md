@@ -63,11 +63,13 @@ The browser host's **Content > NPC Drops** tab saves to `npc-drops-custom.json`,
 
 | Key | Does |
 | --- | --- |
-| `tables.<id>.setEntries` | dump row rates changed, keyed `field:index` |
+| `tables.<id>.setEntries` | dump row rates (`weight`, `out_of`) and `quantity` changed, keyed `field:index` |
 | `tables.<id>.removeEntries` | dump rows removed, by `{ field, index }` |
 | `tables.<id>.addEntries` / `addTertiary` | rows added |
 
 Rows are addressed by their position in the dump, so regenerating `npc-drops.json` can move a world's edits onto different rows. `hits()` only rolls whole-number `out_of` values, so independent rows keep whole-number rates; main rows may use fractional weights.
+
+`quantity` is `[min, max]`, whole numbers from 1, with `min` equal to `max` for a fixed amount; anything else is ignored and the row keeps its quantity. It replaces the row's conditional amounts (`quantity_alternatives`), such as more ashes at a preferred location, so the edited amount applies on every kill. Non-stackable items land as one ground item each, so a large quantity on an unnoted item floods the tile.
 
 ## The 2026-10-07 refresh
 

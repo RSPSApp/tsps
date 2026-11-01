@@ -80,10 +80,10 @@ carry a confidence label, and the CSV keeps the evidence for each row.
   non-attackable NPC's established explicit radius wins over the implicit default when at least
   two explicit witnesses agree; otherwise the most common effective radius is used. Regression
   tests are in `npc-spawns-sync.test.cjs`.
-- **Aggression range:** `NpcDefinition` now carries a `huntRange` (default 7), and
-  `NpcAggression` measures it from the NPC's current south-west tile instead of the spawn and
-  the old `max(attackDistance, 3)` / `< combatFollowDistance` cap. The unit test is in
-  `aggression-tolerance.test.cjs`.
+- **Aggression range:** `NpcDefinition` now carries a `huntRange` (default 3), and
+  `NpcAggression` measures it from the NPC's current south-west tile instead of the spawn,
+  using `max(huntRange, attackDistance)` and dropping the old `< combatFollowDistance` cap. The
+  unit test is in `aggression-tolerance.test.cjs`.
 
 Verification in this branch: `tsc --build`; `node --test tests/aggression-tolerance.test.cjs`
 (5 pass); `node --test tests/npc-spawns-sync.test.cjs` (24 pass); the five NPC spawn, override,
@@ -302,22 +302,32 @@ The hunt now has its own range on the NPC definition:
 
 ```ts
 // NpcDefinition
-private huntRange: number = 7; // from the NPC's current south-west tile
+private huntRange: number = 3; // from the NPC's current south-west tile
 public getHuntRange(): number { return this.huntRange; }
 public setHuntRange(range: number): void { this.huntRange = Math.max(1, Math.trunc(range)); }
 
 // NpcAggression
 const huntDistance = npc.getLocation().getDistance(player.getLocation());
-if (huntDistance <= npcDefinition.getHuntRange()) {
+const huntRange = Math.max(npcDefinition.getHuntRange(), method.attackDistance(npc));
+if (huntDistance <= huntRange) {
     ...
 }
 ```
 
+| Attack style | Before | After |
+| --- | --- | --- |
+| Melee | 3 tiles from spawn | 3 tiles from the current tile |
+| Ranged | 6 tiles from spawn | 6 tiles from the current tile |
+| Magic | 6 tiles from spawn (capped by `< 7`) | 10 tiles from the current tile |
+
 This matches the Wiki's hunt-range definition: the search starts at the NPC's current
-south-west tile, not its spawn, and it is independent of the NPC's attack style. `canAttack`
-still enforces the real attack range, line of sight and size once combat starts. Per-NPC
-overrides can call `setHuntRange()`; the default is 7. The Kalphite Queen keeps its existing
-9-tile encounter range by setting `huntRange: 9` alongside `combatFollowDistance: 9`.
+south-west tile, not its spawn. The old 3-tile value is kept as the default because the Wiki
+gives no global hunt number and the Edgeville report is about over-aggro, not under-aggro; a
+ranged or magic NPC can still see as far as it can cast (`attackDistance` is a floor). `canAttack`
+still enforces the real attack range, line of sight and size once combat starts. Using 3 rather
+than the 7-tile retreat max range also avoids worsening the Edgeville skeleton chain in #1764.
+Per-NPC overrides can call `setHuntRange()`; the default is 3. The Kalphite Queen keeps its
+existing 9-tile encounter range by setting `huntRange: 9` alongside `combatFollowDistance: 9`.
 
 A separate aggression-range formula (`max range + attack range + size - 1` from the static
 spawn) is not needed for hunting and is not implemented. `combatFollowDistance` remains the

@@ -45,9 +45,9 @@ test("leaving both regions restarts the ten minutes and moves the regions", () =
   assert.equal(tolerance.finished(), false, "another plane is outside");
 });
 
-test("the hunt range defaults to the Wiki's seven tiles and can be overridden per NPC", () => {
+test("the hunt range defaults to three tiles and can be overridden per NPC", () => {
   const definition = new NpcDefinition();
-  assert.equal(definition.getHuntRange(), 7);
+  assert.equal(definition.getHuntRange(), 3);
   definition.setHuntRange(9);
   assert.equal(definition.getHuntRange(), 9);
   definition.setHuntRange(-1);

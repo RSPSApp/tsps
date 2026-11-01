@@ -67,7 +67,7 @@ export class NpcDefinition {
     /** Retreat/leash max range; the Wiki's "almost always seven tiles". */
     private combatFollowDistance: number = 7;
     /** Where an aggressive NPC searches for a target, from its current south-west tile. */
-    private huntRange: number = 7;
+    private huntRange: number = 3;
     private actions: string[] = [];
     private cacheHydrated: boolean = false;
     

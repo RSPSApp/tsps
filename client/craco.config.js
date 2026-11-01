@@ -63,8 +63,12 @@ module.exports = {
         configure: (webpackConfig) => {
             // Share only the pure collision/motion helper with the server plugin.
             const motionPath = path.resolve(appRoot, "../server/plugins/world/ContinuousMotion.FreeMovement.js");
+            const foodDataPath = path.resolve(appRoot, "../server/plugins/items/data/food.json");
             for (const plugin of webpackConfig.resolve.plugins ?? []) {
-                if (plugin.constructor.name === "ModuleScopePlugin") plugin.allowedFiles.add(motionPath);
+                if (plugin.constructor.name === "ModuleScopePlugin") {
+                    plugin.allowedFiles.add(motionPath);
+                    plugin.allowedFiles.add(foodDataPath);
+                }
             }
             const jsXxhashPath = path.resolve(appRoot, "node_modules/js-xxhash");
             const glslLoader = {

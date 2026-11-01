@@ -83,11 +83,31 @@ function route(npc, x, y) {
 
 // ------------------------------------------------------------------ hits
 
+const CREATURE_BLOCKS = new Map([[11405, 9395], [11406, 9391], [11407, 9388]]);
+const WEAK_ELEMENTAL_GUARDIAN = 11414;
+const OVERCHARGED_ELEMENTAL_GUARDIAN = 11417;
+const RIFT_GUARDIANS = new Set([11408, 11411, 11412, 11413]);
+
 /** A roll at the target: four in ten miss (rsprox captures), the rest hit 1 to `maxHit`. */
 function hit(target, maxHit) {
   const damage = Math.random() < HIT_CHANCE ? Shared.random(1, maxHit) : 0;
   Shared.damageNpc(target, damage);
+  const block = blockSequence(target);
+  if (block && target.getHitpoints() > 0) target.performAnimation(new (Shared.core().Animation)(block));
   return damage;
+}
+
+/** Capture 1840: elemental guardians are 11414-11417, the catalytic ones 11408 and 11411-11413. */
+function isElementalGuardian(npc) {
+  return npc.getId() >= WEAK_ELEMENTAL_GUARDIAN && npc.getId() <= OVERCHARGED_ELEMENTAL_GUARDIAN;
+}
+
+/** Each hit's flinch (capture 1840); the defs' block anim only reaches the combat system. */
+function blockSequence(npc) {
+  const creature = CREATURE_BLOCKS.get(npc.getId());
+  if (creature) return creature;
+  if (isElementalGuardian(npc)) return Shared.seq("rift_guardian_defend_melee");
+  return RIFT_GUARDIANS.has(npc.getId()) ? Shared.seq("rift_guardian_defend_ranged") : null;
 }
 
 function animate(npc, name) {
@@ -216,7 +236,7 @@ function nearestCreature(from, fromSize, range) {
 }
 
 module.exports = {
-  KINDS, batchSize, pickKind, gap, tileOf, sizeOf, hit, animate, route, struckBy, nearestCreature, creatures, clear,
+  KINDS, batchSize, pickKind, gap, tileOf, sizeOf, hit, isElementalGuardian, animate, route, struckBy, nearestCreature, creatures, clear,
   attach(pluginApi) {
     api = pluginApi;
     Game.on("attack", attackBegins);

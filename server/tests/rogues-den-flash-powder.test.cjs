@@ -29,6 +29,7 @@ let seen;
 before(async () => {
   await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(ROOT);
   new (require('../dist/game/definition/loader/impl/NpcDefinitionLoader').NpcDefinitionLoader)().load();
+  require('../dist/game/collision/RegionManager').RegionManager.init();
 
   ({ Player } = require('../dist/game/entity/impl/player/Player'));
   ({ NPC } = require('../dist/game/entity/impl/npc/NPC'));
@@ -81,7 +82,7 @@ test('the real item-on-NPC packet blinds a Rogue Guard with flash powder', () =>
     useOnNpc(player, guard);
 
     assert.equal(player.getInventory().getAmount(FLASH_POWDER), 0, 'one dose is consumed');
-    assert.equal(guard.__roguesDenStunnedUntil, 10, 'the guard is blinded for ten ticks');
+    assert.equal(guard.__roguesDenStunnedUntil, World.getProcessCycle() + 10, 'ten ticks on the shared world clock');
     assert.deepEqual(messages, [
       'You throw the flash powder at the rogue guard.',
       'The rogue guard is blinded!',
@@ -106,5 +107,48 @@ test('using the powder on a non-guard NPC is not consumed and stays unhandled', 
     assert.equal(seen[0].handled, false, 'the event is left unhandled');
   } finally {
     World.getNpcs().remove(brian);
+  }
+});
+
+test('guard blindness follows the shared world clock, not each player\'s run age', () => {
+  const Run = require('../plugins/minigames/roguesden/Run.RoguesDen');
+  const Traps = require('../plugins/minigames/roguesden/Traps.RoguesDen');
+  const at = [3061, 4985, 1];
+  const caster = account(...at).player;
+  const fresh = account(...at).player;
+  const older = account(...at).player;
+  const guard = new NPC(ROGUE_GUARD, new Location(...at));
+
+  const casterRun = Run.start(caster);
+  const freshRun = Run.start(fresh);
+  const olderRun = Run.start(older);
+  casterRun.ticks = 100;
+  freshRun.ticks = 1;
+  olderRun.ticks = 120;
+  for (const player of [caster, fresh, older]) player.getLocalNpcs().push(guard);
+
+  try {
+    assert.equal(
+      Traps.useFlashPowder({ player: caster, target: guard, itemId: FLASH_POWDER, handled: false }),
+      true,
+    );
+    assert.equal(guard.__roguesDenStunnedUntil, World.getProcessCycle() + 10,
+      'the deadline is the guard\'s, on the shared world clock');
+
+    Run.tick(fresh);
+    assert.ok(Run.runOf(fresh), 'a fresh run is protected while the guard is blinded');
+    Run.tick(older);
+    assert.ok(Run.runOf(older), 'an older run is protected by the same deadline');
+
+    guard.__roguesDenStunnedUntil = World.getProcessCycle();
+    Run.tick(fresh);
+    assert.equal(Run.runOf(fresh), null, 'the fresh run is caught once the shared deadline passes');
+    Run.tick(older);
+    assert.equal(Run.runOf(older), null, 'the older run is caught too');
+  } finally {
+    for (const player of [caster, fresh, older]) {
+      Run.finish(player, { reason: 'left', silent: true });
+      player.getLocalNpcs().length = 0;
+    }
   }
 });

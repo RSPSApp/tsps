@@ -110,39 +110,85 @@ function lobbyChance(player) {
   return low + (level - 50) * (high - low) / 49;
 }
 
-function lobbyAttempt(player, tries) {
-  if (!player.isRegistered?.()) return;
+const SAFE_RANGE = 1;
+/** The one Crack chain in flight per player; a second Crack or a new walk replaces/stops it. */
+const attempts = new WeakMap();
+
+/** Stops any chain the player already has, so retries never stack on repeated clicks. */
+function cancelAttempt(player) {
+  const attempt = attempts.get(player);
+  if (!attempt) return;
+  attempts.delete(player);
+  attempt.task?.stop();
+}
+
+/** The clicked safe still stands where it was, and the player is still at it. */
+function stillAtSafe(attempt) {
+  const { player, object, objectId, location } = attempt;
+  if (!player.isRegistered?.() || !object) return false;
+  if (!Common.core().MapObjects.stillStands(player, objectId, location, object)) return false;
+  return player.getLocation().isWithinDistance(location, SAFE_RANGE);
+}
+
+function scheduleRetry(attempt, tries) {
+  const core = Common.core();
+  const { player } = attempt;
+  // Keyed by the player's index, the same key MovementQueue.walkToReset cancels: any new walk
+  // (or another interaction) drops the pending retry.
+  const task = new (class extends core.Task {
+    constructor() { super(Common.DATA.lobbySafe.retryTicks, player.getIndex(), false); }
+    execute() {
+      this.stop();
+      if (attempts.get(player) !== attempt) return;
+      lobbyAttempt(attempt, tries - 1);
+    }
+  })();
+  attempt.task = task;
+  core.TaskManager.submit(task);
+}
+
+function lobbyAttempt(attempt, tries) {
+  const { player } = attempt;
+  if (attempts.get(player) !== attempt || !stillAtSafe(attempt)) {
+    if (attempts.get(player) === attempt) attempts.delete(player);
+    return;
+  }
   if (Math.random() < lobbyChance(player)) {
+    attempts.delete(player);
     if (!lootLobbySafe(player)) return;
     player.getSkillManager().addExperience(Common.core().Skill.THIEVING, Common.DATA.lobbySafe.xp);
     player.sendMessage(Common.message("lobbySafeSuccess"));
     return;
   }
   if (Math.random() < Common.DATA.lobbySafe.trapChance || tries <= 1) {
+    attempts.delete(player);
     player.sendMessage(Common.message("lobbySafeFail"));
     spawnLobbyTrap(player);
     damage(player, Common.randomInt(...Common.DATA.lobbySafe.damage));
     return;
   }
-  const core = Common.core();
-  core.TaskManager.submit(new (class extends core.Task {
-    constructor() { super(Common.DATA.lobbySafe.retryTicks, player, false); }
-    execute() {
-      this.stop();
-      lobbyAttempt(player, tries - 1);
-    }
-  })());
+  scheduleRetry(attempt, tries);
 }
 
 function crackLobby(event) {
-  const { player } = event;
+  const { player, object } = event;
   event.handled = true;
   if (Common.maxLevel(player, "THIEVING") < Common.DATA.lobbySafe.level) {
     player.sendMessage(Common.message("lobbySafeLevel"));
     return true;
   }
+  cancelAttempt(player);
+  if (!object?.getLocation) return true;
+  const attempt = {
+    player,
+    object,
+    objectId: object.getId(),
+    location: object.getLocation().clone(),
+    task: null,
+  };
+  attempts.set(player, attempt);
   player.sendMessage(Common.message("safeSearch"));
-  lobbyAttempt(player, 3);
+  lobbyAttempt(attempt, 3);
   return true;
 }
 

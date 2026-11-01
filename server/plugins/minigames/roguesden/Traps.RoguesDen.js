@@ -31,12 +31,15 @@ function near(guard, player) {
   return a && a.getZ() === b.getZ() && Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY())) <= GUARD_RANGE;
 }
 
-function guardStunned(guard, tick) {
-  return (guard.__roguesDenStunnedUntil ?? 0) > tick;
+// Guard blindness belongs to the guard, not to a run: one shared deadline that every nearby
+// player compares against the same world clock, whatever their own run's age.
+function guardStunned(guard) {
+  return (guard.__roguesDenStunnedUntil ?? 0) > Common.core().World.getProcessCycle();
 }
 
 function stunGuard(npc, ticks) {
-  npc.__roguesDenStunnedUntil = Math.max(npc.__roguesDenStunnedUntil ?? 0, ticks);
+  const until = Common.core().World.getProcessCycle() + ticks;
+  npc.__roguesDenStunnedUntil = Math.max(npc.__roguesDenStunnedUntil ?? 0, until);
 }
 
 function guardsCatch(run) {
@@ -44,7 +47,7 @@ function guardsCatch(run) {
   for (const npc of localNpcs(player)) {
     if (!Common.npcIds.guards.includes(npc.getId?.())) continue;
     if (!near(npc, player)) continue;
-    if (guardStunned(npc, run.ticks)) continue;
+    if (guardStunned(npc)) continue;
     Run.caught(player, Common.message("guardEject"));
     return true;
   }
@@ -179,8 +182,7 @@ function useFlashPowder(event) {
   if (!npc || npc.getLocation().getDistance(player.getLocation()) > 6) return false;
   if (!Common.hasItem(player, Common.itemIds.flashPowder)) return false;
   Common.take(player, Common.itemIds.flashPowder, 1);
-  const run = Run.runOf(player);
-  stunGuard(npc, (run?.ticks ?? 0) + FLASH_STUN_TICKS);
+  stunGuard(npc, FLASH_STUN_TICKS);
   player.sendMessage(Common.message("flashBlind"));
   player.sendMessage(Common.message("guardBlinded"));
   event.handled = true;

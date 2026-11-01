@@ -22,7 +22,7 @@ The plugin lives under `areas/` so that its "Ladder" handler runs before the gen
   - The channel's water only shows while a wheel turns. When both are jammed it is removed, and it comes back after a repair.
 - **The struts:**
   - A broken strut is repaired with a hammer. Each tick there's a 12% chance of a repair at Smithing 1, up to 27% at 99, for 1.5 Smithing XP per level (Wiki).
-  - Percy calls out his transcript's overhead lines when a wheel, or both, breaks.
+  - While a wheel is jammed, Percy calls out one of his transcript's overhead lines every 6 ticks, from the lines for one wheel or for both.
 - **The sack** gives the nuggets first, then each ore into the free inventory slots. Varbit 5558 is its count, which the HUD and the sack loc (26688, empty or full) both read.
 - **Rockfalls** (26679/26680) are mined away for 10 XP (Wiki). They come back down later and hit whoever stands on the tile for 1-4 (Wiki), moving them off it.
 - **Prospector Percy's unlocks** run through his Wiki transcript. The plugin answers its "If the player..." conditions (`api.onNpcDialogueCondition`) and makes each purchase on its "You pay Percy N nuggets." step:
@@ -84,6 +84,11 @@ Bold is captured; the rest are OpenRune's.
   - The strut was fixed 6 ticks after the first swing.
   - The fixed strut 26669 (rotation 0), the wheel 26671 (rotation 0) and the foam 2016 (rotation 1) were sent, with Smithing XP.
 - **Where:** the northern strut is at (3742, 5669), its wheel at (3743, 5668) and its foam at (3743, 5671). The southern strut's foam is at (3743, 5665).
+
+- **Percy:** while a wheel is jammed he says a random line every 6 ticks, on a cycle that a break doesn't restart (a break at tick 165 was followed by a line at 166, one at 1444 by 1446).
+  - One wheel: "We got us a jammed wheel!", "Ye'd better fix that wheel!", "Git yer hammer an' fix that wheel!".
+  - Both: "That water ain't flowing!", "Both them wheels be jammed!", "Git yer hammer an' fix them wheels!". The next line after the second break already comes from these.
+  - He stops once both are repaired.
 
 ### The crates
 

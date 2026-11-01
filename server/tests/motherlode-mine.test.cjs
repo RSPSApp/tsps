@@ -268,6 +268,19 @@ test("the channel's water stops the tick after both wheels jam, and runs again a
   assert.ok(water().every(Boolean), "back on the next re-send");
 });
 
+test("Percy calls out a line every 6 ticks while a wheel is jammed, for one wheel or both (rsprox)", () => {
+  const p = player(3748, 5673);
+  const quiet = [1, 2, 3, 4, 5, 6].map((offset) => Machine.percyLines(60 + offset));
+  assert.deepEqual(quiet, [null, null, null, null, null, null], "silent while both wheels turn");
+
+  Machine.forceBreak({ player: p });
+  assert.equal(Machine.percyLines(61), null, "a break doesn't start the cycle");
+  assert.equal(Machine.percyLines(66), Machine.PERCY_ONE_BROKEN);
+  Machine.forceBreak({ player: p });
+  assert.equal(Machine.percyLines(72), Machine.PERCY_BOTH_BROKEN);
+  assert.equal(Machine.percyLines(73), null);
+});
+
 test("pay-dirt deposited while both wheels are jammed waits at the top of the channel (rsprox)", () => {
   const p = player(3748, 5673);
   Machine.forceBreak({ player: p });

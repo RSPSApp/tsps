@@ -73,7 +73,12 @@ const DEPOSIT_ANIMATION = 832;
 const DEPOSIT_SOUND = 2496;
 const CLEANED_SOUND = 2739;
 
-/** Percy's overhead lines (Wiki transcript) when a wheel or both break. */
+/**
+ * Percy's overhead lines (Wiki transcript) while a wheel, or both, are jammed. As captured, he calls
+ * one out every 6 ticks for as long as a wheel is jammed, picked at random from the lines for how
+ * many are: a wheel breaking doesn't start the cycle, it only changes his lines on the next one.
+ */
+const PERCY_TICKS = 6;
 const PERCY_ONE_BROKEN = ["We got us a jammed wheel!", "Ye'd better fix that wheel!", "Git yer hammer an' fix that wheel!"];
 const PERCY_BOTH_BROKEN = ["That water ain't flowing!", "Both them wheels be jammed!", "Git yer hammer an' fix them wheels!"];
 
@@ -117,7 +122,12 @@ function breakStrut(strut) {
   strut.foamLoc = null;
   strut.broken = true;
   strut.breaksAt = -1;
-  percySays(isFlowing() ? PERCY_ONE_BROKEN : PERCY_BOTH_BROKEN);
+}
+
+/** The lines Percy picks from this tick, or null when he's quiet. */
+function percyLines(now) {
+  if (now % PERCY_TICKS !== 0 || !struts.some((strut) => strut.broken)) return null;
+  return isFlowing() ? PERCY_ONE_BROKEN : PERCY_BOTH_BROKEN;
 }
 
 function percySays(lines) {
@@ -339,6 +349,8 @@ function tick(now) {
   for (const strut of struts) {
     if (!strut.broken && now >= strut.breaksAt) breakStrut(strut);
   }
+  const lines = percyLines(now);
+  if (lines) percySays(lines);
   for (const [player, work] of hammering) tickHammering(player, work, now);
   tickBatches();
 }
@@ -351,6 +363,7 @@ function forceBreak({ player }) {
 }
 
 module.exports = {
-  init, start, tick, deposit, routeToHopper, searchSack, hammerStrut, resume, forget, forceBreak, isFlowing,
+  init, start, tick, percyLines, deposit, routeToHopper, searchSack, hammerStrut, resume, forget, forceBreak, isFlowing,
   struts, batches, HOPPER, SACK, BROKEN_STRUT, CHANNEL_TILES, WATER_OVERLAY, WATER_FOAM,
+  PERCY_ONE_BROKEN, PERCY_BOTH_BROKEN,
 };

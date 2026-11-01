@@ -63,9 +63,14 @@ serves the jav_config and world list RSProx needs on its own port.
    Each worktree has its own ports and target. The modulus stays the same while
    `gateway/keys/rsa.txt` exists.
 
-   For players on other machines, set `PUBLIC_HOST` in the root `.env` to the IP address or
-   domain they reach the server at; the jav_config and world list then give it instead of
-   127.0.0.1. Both `WEBSOCKET_PORT` (HTTP) and `GATEWAY_PORT` (game) must be reachable.
+   For players on other machines, set two things in the root `.env`:
+   - `PUBLIC_HOST`: the IP address or domain they reach the server at. The jav_config and world
+     list give it instead of 127.0.0.1.
+   - `GATEWAY_BIND_HOST=0.0.0.0` (or one interface's address): the gateway's game listener
+     otherwise only takes connections from this machine. Behind NAT or a domain, `PUBLIC_HOST`
+     needn't be an address of this machine, so the two are separate.
+
+   Both `WEBSOCKET_PORT` (HTTP) and `GATEWAY_PORT` (game) must be reachable.
 3. In RSProx, pick the target and RuneLite as the client, and launch it. Log in with a tsps
    account; unknown names are created, as in the browser.
 

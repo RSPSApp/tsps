@@ -20,7 +20,7 @@ fun main() {
     Runtime.getRuntime().addShutdownHook(Thread { println("dropped: ${DropCounter.summary()}") })
 
     val config = gateway.config
-    println("tsps gateway (revision ${gateway.revision}) on port ${config.gatewayPort}, tsps at ${config.tspsUrl}")
+    println("tsps gateway (revision ${gateway.revision}) on ${config.bindHost}:${config.gatewayPort}, tsps at ${config.tspsUrl}")
     println(
         "RSProx target: jav_config_url http://${config.publicHost}:${config.websocketPort}/gateway/jav_config.ws, " +
             "game_server_port ${config.gatewayPort}, revision ${gateway.revision}, modulus ${gateway.rsa.modulus.toString(16)}",

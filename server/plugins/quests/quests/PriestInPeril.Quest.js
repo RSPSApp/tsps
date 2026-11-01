@@ -17,7 +17,7 @@ module.exports = function registerPriestInPerilQuest(api) {
   const {
     Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, Location,
     StatementDialogue, ItemStatementDialogue, DoubleItemStatementDialogue, DialogueChainBuilder,
-    HitDamage, HitMask, Item,
+    HitDamage, HitMask, Item, ItemDefinition,
   } = api.core;
   const { registerQuest, startTranscript, startDialogue, refreshQuestList } = require("../QuestRuntime");
 
@@ -795,6 +795,12 @@ module.exports = function registerPriestInPerilQuest(api) {
     if (!monument.items.includes(itemId)) return false;
     if (souvenirsTaken(player) & bit) {
       showStatement(player, `You have already taken the Golden ${monument.name}.`);
+      return true;
+    }
+    // Only a last item or an unstacked one frees the slot the golden souvenir takes.
+    const freesSlot = inventory.getAmount(itemId) === 1 || ItemDefinition.forId(itemId)?.isStackable?.() !== true;
+    if (inventory.isFull() && !freesSlot) {
+      inventory.full();
       return true;
     }
     inventory.deleteNumber(itemId, 1);

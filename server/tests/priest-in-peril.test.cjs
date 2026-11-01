@@ -43,8 +43,14 @@ function makePlayer() {
     sendConfig(id, value) { if (id === VARP) configs.push(value); return sender; },
   }, { get: (target, key) => (key in target ? target[key] : () => sender) });
   const inventory = {
+    capacity: Infinity,
+    fullMessages: 0,
     getAmount: (id) => items.get(id) ?? 0,
-    isFull: () => false,
+    // Slots as the real Inventory counts them: one per stack, one per unstacked item.
+    usedSlots: () => [...items].reduce((sum, [id, amount]) =>
+      sum + (core.ItemDefinition.forId(id)?.isStackable?.() ? 1 : amount), 0),
+    isFull: () => inventory.usedSlots() >= inventory.capacity,
+    full() { inventory.fullMessages++; return inventory; },
     adds(id, amount = 1) { items.set(id, inventory.getAmount(id) + amount); return inventory; },
     deleteNumber(id, amount = 1) {
       const left = inventory.getAmount(id) - amount;
@@ -274,6 +280,31 @@ test('monuments guard their items until the coffin is sealed and give one souven
   assert.equal(h.statements.at(-1), 'A monument dedicated to the fallen.');
   h.player.inventory.adds(I.BUCKET);
   assert.equal(h.useOn(I.BUCKET, ...WELL), false, 'after the quest the well fills an ordinary bucket of water');
+});
+
+test('a full inventory keeps a stacked monument item until the souvenir fits', () => {
+  for (const [item, golden, monument, x, y] of [
+    [I.FEATHER, I.GOLDEN_FEATHER, O.MONUMENT_3, 3427, 9890],
+    [I.NEEDLE, I.GOLDEN_NEEDLE, O.MONUMENT_4, 3423, 9884],
+  ]) {
+    const h = harness();
+    const inv = h.player.inventory;
+    h.player.setAttribute(STAGE, 40);
+    inv.capacity = 28;
+    inv.adds(item, 10);
+    inv.adds(I.BUCKET, 27);
+    assert.ok(inv.isFull());
+    assert.ok(h.useOn(item, monument, x, y, 0));
+    assert.equal(inv.fullMessages, 1);
+    assert.equal(inv.getAmount(item), 10, 'the stack is untouched');
+    assert.equal(inv.getAmount(golden), 0);
+    assert.equal(h.player.getAttribute('priest-in-peril:souvenirs') ?? 0, 0, 'the souvenir stays untaken');
+
+    inv.deleteNumber(I.BUCKET, 1);
+    assert.ok(h.useOn(item, monument, x, y, 0));
+    assert.equal(inv.getAmount(item), 9);
+    assert.equal(inv.getAmount(golden), 1, 'the retry with a free slot gets the souvenir');
+  }
 });
 
 test('only the hooded level 30 monk drops the golden key, from the King\'s warning to the coffin', () => {

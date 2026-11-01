@@ -1260,6 +1260,10 @@ export function encodeClanChannelDelta(
   return encodeServerPacket(ServerPacketId.CLAN_CHANNEL_DELTA, Buffer.concat(parts));
 }
 
+export function encodeClanVar(id: number, value: number): Buffer {
+  return encodeServerPacket(ServerPacketId.CLAN_VAR, Buffer.concat([u16(id), i32(value)]));
+}
+
 export type ClanSettingsDeltaUpdate =
   | { type: "add_member"; name: string; joinRuneDay: number }
   | { type: "delete_member"; index: number }

@@ -253,6 +253,8 @@ export interface HandlerContext {
     /** Which clan the commands above read: false the player's own, true the listened guest clan. */
     selectClanSettings?: (listened: boolean) => void;
     selectClanChannel?: (listened: boolean) => void;
+    /** %varclan values, as the server sends them. */
+    clanVars?: Map<number, number>;
 
     // Event context (for magic argument substitution)
     eventContext: EventContext;

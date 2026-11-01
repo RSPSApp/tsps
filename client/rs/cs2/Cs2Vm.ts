@@ -219,6 +219,7 @@ export interface Cs2Context {
     listenedClanChannel?: ClanChannel | null;
     activeClanSettingsIsListened?: boolean;
     activeClanChannelIsListened?: boolean;
+    clanVars?: Map<number, number>;
 
     // Stats/skills (indices 0-22 for OSRS skills)
     getStatLevel?: (skillId: number) => number;
@@ -921,6 +922,9 @@ export class Cs2Vm {
                 return vm.context.activeClanChannelIsListened
                     ? vm.context.listenedClanChannel
                     : vm.context.clanChannel;
+            },
+            get clanVars() {
+                return vm.context.clanVars;
             },
             selectClanSettings: (listened) => {
                 vm.context.activeClanSettingsIsListened = listened;

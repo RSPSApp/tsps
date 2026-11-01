@@ -229,6 +229,10 @@ function sendNotice(player, text) {
   player.getPacketSender().sendTypedMessage(CLAN_NOTICE_MESSAGE_TYPE, text);
 }
 
+function sendVarClan(player, id, value) {
+  send(player, core.encodeClanVar(id, value));
+}
+
 function userClanType(user) {
   return user.guest ? LISTENED_CLAN : OWN_CLAN;
 }
@@ -603,6 +607,7 @@ module.exports = {
   send,
   sendClan,
   sendNotice,
+  sendVarClan,
   setBanned,
   setGuestRules,
   setMembershipListeners,

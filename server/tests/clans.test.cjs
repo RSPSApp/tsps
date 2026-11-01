@@ -37,6 +37,7 @@ function player(name) {
     getAttribute: (key) => self.attributes.get(key),
     setAttribute: (key, value) => self.attributes.set(key, value),
     getLocation: () => self.location,
+    moveTo: (location) => (self.movedTo = location),
     getEquipment: () => ({ containsNumber: (id) => self.equipment.includes(id) }),
     getDialogueManager: () => ({
       isActive: () => false,
@@ -176,8 +177,38 @@ beforeEach(() => {
       Task,
       TaskManager,
       PlayerRights,
-      ItemIdentifiers: { CLAN_CLOAK: 25712, CLAN_VEXILLUM: 25721 },
+      ItemIdentifiers: { CLAN_CLOAK: 25712, CLAN_VEXILLUM: 25721, COINS: 995 },
       Skill: { values: () => [{ id: 0 }, { id: 1 }] },
+      Boundary: class {
+        constructor(...bounds) {
+          this.bounds = bounds;
+        }
+      },
+      Location: class {
+        constructor(x, y, z) {
+          Object.assign(this, { x, y, z });
+        }
+      },
+      Item: class {
+        constructor(id, amount) {
+          Object.assign(this, { id, amount });
+        }
+        getAmount() {
+          return this.amount;
+        }
+      },
+      PrivateArea: class {
+        constructor() {
+          this.entities = [];
+        }
+        enter(mobile) {
+          this.entities.push(mobile);
+          mobile.area = this;
+        }
+        postLeave(mobile) {
+          this.entities = this.entities.filter((entity) => entity !== mobile);
+        }
+      },
       ItemDefinition: { forId: (id) => ({ getName: () => `Item ${id}`, getValue: () => id }) },
       DialogueChainBuilder: class {
         add(dialogue) {
@@ -1154,6 +1185,10 @@ test('the board\'s My clan opens Applicants with the captured nudge (2778)', () 
   const self = player('Guest');
   pause(self, 700, 1, 0);
   assert.equal(self.messages.at(-1), 'You are not in a clan.');
+  pause(self, 700, 1, 2);
+  assert.equal(self.mounted.at(-1), 700, 'Refresh');
+  pause(owner, 700, 1, 1);
+  assert.equal(owner.mounted.at(-1), 699, 'Applicants');
 });
 
 // ---------------------------------------------------------------- broadcasts
@@ -1198,4 +1233,83 @@ test('joining and leaving are told to those in the channel', () => {
   assert.deepEqual(owner.notices.at(-1), [43, 'Late has joined the clan.']);
   CoreClans().removeMember(clan, 'late');
   assert.deepEqual(member.notices.at(-1), [43, 'Late has left the clan.']);
+});
+
+// ---------------------------------------------------------------- Clan Hall and coffer
+
+function pocket(self, coins) {
+  const held = { coins };
+  self.getInventory = () => ({
+    getAmount: () => held.coins,
+    getFreeSlots: () => 28,
+    delete: (id, amount) => (held.coins -= amount),
+    adds: (id, amount) => (held.coins += amount),
+  });
+  return held;
+}
+
+test('the hall portal takes members and guests to their clan\'s own hall, and the exit back', () => {
+  const { owner, member, clan } = clanOfThree();
+  const portal = hooks.objects['Clan hall portal'];
+  portal.Enter({ player: owner });
+  assert.deepEqual([owner.movedTo.x, owner.movedTo.y, owner.movedTo.z], [1759, 5486, 0]);
+  portal['Enter-member']({ player: member });
+  assert.equal(owner.area, member.area, 'the same private hall');
+  const stranger = player('Stranger');
+  portal.Enter({ player: stranger });
+  assert.equal(stranger.messages.at(-1), 'You are not in a clan.');
+  portal['Enter-guest']({ player: stranger });
+  assert.match(stranger.messages.at(-1), /as a guest/);
+  seek(stranger, 'Blur');
+  portal['Enter-guest']({ player: stranger });
+  assert.equal(stranger.area, owner.area);
+  clan.permissions = { ...clan.permissions, 23: 0 };
+  const other = player('Other2');
+  seek(other, 'Blur');
+  portal['Enter-guest']({ player: other });
+  assert.match(other.messages.at(-1), /high enough rank/);
+  assert.equal(hooks.objects.Portal.Leave({ player: owner, objectId: 1 }), false, 'another portal');
+  assert.equal(hooks.objects.Portal.Leave({ player: owner, objectId: 41617 }), true);
+  assert.deepEqual([owner.movedTo.x, owner.movedTo.y], [3185, 3470]);
+  owner.area.postLeave(owner, true);
+});
+
+test('each clan has its own hall', () => {
+  const a = player('Aye');
+  const b = player('Bee');
+  createClan(a, 'Aye Clan');
+  createClan(b, 'Bee Clan');
+  hooks.objects['Clan hall portal'].Enter({ player: a });
+  hooks.objects['Clan hall portal'].Enter({ player: b });
+  assert.notEqual(a.area, b.area);
+});
+
+test('the coffer moves coins by rank, and every member hears the new total through varclan 3', () => {
+  const { owner, member, clan } = clanOfThree();
+  const coffer = hooks.objects['Clan Coffer'].Use;
+  const held = pocket(owner, 5000);
+  coffer({ player: owner });
+  answer(owner, 2);
+  owner.amountAction.execute(2000);
+  assert.equal(clan.coffer, 2000);
+  assert.equal(held.coins, 3000);
+  assert.deepEqual(sent(member, 128).at(-1), protocol.encodeClanVar(3, 2000));
+  coffer({ player: owner });
+  answer(owner, 1);
+  assert.equal(owner.mounted.at(-1), 696);
+  clickGroup(owner, 696, 8);
+  assert.equal(clan.coffer, 1000);
+  assert.equal(held.coins, 4000);
+  clickGroup(owner, 696, 12);
+  assert.equal(clan.coffer, 0);
+  clickGroup(owner, 696, 7);
+  assert.equal(owner.messages.at(-1), 'The coffer is empty.');
+  pocket(member, 10);
+  clan.coffer = 500;
+  clickGroup(member, 696, 7);
+  assert.match(member.messages.at(-1), /high enough rank to withdraw/);
+  assert.equal(JSON.parse(fs.readFileSync(process.env.TSPS_CLANS_FILE, 'utf8')).clans[0].coffer !== undefined, true);
+  const outsider = player('Outsider');
+  coffer({ player: outsider });
+  assert.match(outsider.messages.at(-1), /Only members/);
 });

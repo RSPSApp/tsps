@@ -7,6 +7,7 @@ const Broadcasts = require("./Broadcasts.Clans");
 const Core = require("./Core.Clans");
 const Formation = require("./Formation.Clans");
 const Guests = require("./Guests.Clans");
+const Hall = require("./Hall.Clans");
 const Management = require("./Management.Clans");
 const Settings = require("./Settings.Clans");
 const Store = require("./Store.Clans");
@@ -383,6 +384,7 @@ module.exports = {
     Management.init(Settings.open);
     Guests.init(api.core, later, Settings.openAsGuest);
     Broadcasts.init(api.core);
+    Hall.init(api.core);
     Core.setMembershipListeners(Broadcasts.joined, Broadcasts.left);
     Formation.init(api);
     api.onCustomEvent("player:bootstrap-complete", login);
@@ -397,6 +399,10 @@ module.exports = {
     api.onInterfaceActionClick(Guests.clickApplicants);
     api.onInterfaceActionClick(Guests.clickBoard);
     api.onObjectInteraction("Clan recruitment board", { View: viewBoard });
+    api.onObjectInteraction("Clan hall portal", { Enter: Hall.enterOwn, "Enter-member": Hall.enterOwn, "Enter-guest": Hall.enterGuest });
+    api.onObjectInteraction("Portal", { Leave: Hall.leave });
+    api.onObjectInteraction("Clan Coffer", { Use: Hall.useCoffer });
+    api.onInterfaceActionClick(Hall.clickCoffer);
     api.onPlayerLevelUp(Broadcasts.levelUp);
     api.onPlayerDefeated(Broadcasts.defeated);
     api.onCustomEvent("quest:completed", Broadcasts.questCompleted);

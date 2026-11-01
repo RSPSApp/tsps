@@ -99,6 +99,7 @@ export const enum ServerPacketId {
     CLAN_CHANNEL_FULL = 125,
     CLAN_CHANNEL_DELTA = 126,
     CLAN_SETTINGS_DELTA = 127,
+    CLAN_VAR = 128, // id(2) + value(4): %varclan
 
     // ========================================
     // WORLD UPDATES (130-149)
@@ -250,6 +251,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.CLAN_CHANNEL_FULL]: -2,
     [ServerPacketId.CLAN_CHANNEL_DELTA]: -2,
     [ServerPacketId.CLAN_SETTINGS_DELTA]: -2,
+    [ServerPacketId.CLAN_VAR]: 6,
 
     [ServerPacketId.LOC_CHANGE]: -1,
     [ServerPacketId.LOC_ADD_CHANGE]: -1,

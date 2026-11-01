@@ -5,6 +5,7 @@ import {
     encodeClanChannelFull,
     encodeClanSettingsDelta,
     encodeClanSettingsFull,
+    encodeClanVar,
 } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 import { decodeServerPacket } from "../network/packet/ServerBinaryDecoder";
 import { applyClanChannelDelta, applyClanSettingsDelta } from "../common/social/Clans";
@@ -74,6 +75,8 @@ assert.deepEqual(own.memberNames, ["Zed", "Amy"], "the old settings are not chan
 const extra = applyClanSettingsDelta(own, [{ type: "member_extra_info", index: 0, value: 3, startBit: 1, endBit: 2 }]);
 assert.equal(extra.memberExtraInfo[0], 7, "only its own bits");
 
+assert.deepEqual(decode(encodeClanVar(3, 2000)).payload, { id: 3, value: 2000 });
+
 const channel = decode(
     encodeClanChannelFull(0, {
         key: 9,
@@ -133,5 +136,13 @@ assert.equal(context.listened, true);
 assert.equal(run(Opcodes.ACTIVECLANSETTINGS_GETAFFINEDCOUNT), 0, "the guest clan, which is empty");
 assert.equal(run(Opcodes.ACTIVECLANSETTINGS_FIND_AFFINED, [0]), 1);
 assert.equal(run(Opcodes.ACTIVECLANSETTINGS_GETAFFINEDCOUNT), 2);
+
+const profile = (clanVars?: Map<number, number>): number => {
+    const ctx: any = { clanVars, pushInt: (value: number) => (ctx.pushed = value) };
+    handlers.get(Opcodes.CLANPROFILE_FIND)!(ctx, 0, null as any);
+    return ctx.pushed;
+};
+assert.equal(profile(), 0);
+assert.equal(profile(new Map([[3, 0]])), 1);
 
 console.log("clan-packets: ok");

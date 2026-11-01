@@ -254,6 +254,11 @@ export function registerClanOps(handlers: HandlerMap): void {
         }
     });
 
+    // True once the server has sent %varclan values (the coffer's screen checks it).
+    handlers.set(Opcodes.CLANPROFILE_FIND, (ctx) => {
+        ctx.pushInt(ctx.clanVars?.size ? 1 : 0);
+    });
+
     // === Clan Channel ===
 
     // Select the listened (guest) clan's channel

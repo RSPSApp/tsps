@@ -31,6 +31,8 @@ export type ClanSettingsDeltaUpdate =
 export interface ClanState {
     settings: Map<number, ClanSettings>;
     channels: Map<number, KeyedClanChannel>;
+    /** %varclan values, which belong to the player's own clan. */
+    vars: Map<number, number>;
 }
 
 /** A delta for another channel than the one held is ignored; a full update always follows a join. */

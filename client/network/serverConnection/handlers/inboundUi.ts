@@ -262,7 +262,8 @@ export function handleInboundUi(msg: any): boolean {
         msg.type === "clan_settings" ||
         msg.type === "clan_settings_delta" ||
         msg.type === "clan_channel" ||
-        msg.type === "clan_channel_delta"
+        msg.type === "clan_channel_delta" ||
+        msg.type === "clan_var"
     ) {
         applyClanMessage(msg);
         for (const cb of state.clanListeners) {
@@ -337,6 +338,10 @@ export function handleInboundUi(msg: any): boolean {
 }
 
 function applyClanMessage(msg: any): void {
+    if (msg.type === "clan_var") {
+        state.clans.vars.set(msg.payload.id, msg.payload.value);
+        return;
+    }
     const { clanType } = msg.payload;
     const { settings, channels } = state.clans;
     if (msg.type === "clan_settings") {

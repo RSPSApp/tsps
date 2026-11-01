@@ -1309,6 +1309,9 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             return { type: "clan_settings_delta", payload: { clanType, updates } };
         }
 
+        case ServerPacketId.CLAN_VAR:
+            return { type: "clan_var", payload: { id: reader.readShort(), value: reader.readInt() } };
+
         case ServerPacketId.CLAN_CHANNEL_FULL: {
             const clanType = reader.readSignedByte();
             if (!reader.readBoolean()) {

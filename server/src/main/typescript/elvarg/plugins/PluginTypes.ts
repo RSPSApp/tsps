@@ -1509,6 +1509,7 @@ export interface PluginCoreApi {
   encodeClanChannelFull: typeof import("../net/protocol/ClientProtocol").encodeClanChannelFull;
   encodeClanChannelDelta: typeof import("../net/protocol/ClientProtocol").encodeClanChannelDelta;
   encodeClanSettingsDelta: typeof import("../net/protocol/ClientProtocol").encodeClanSettingsDelta;
+  encodeClanVar: typeof import("../net/protocol/ClientProtocol").encodeClanVar;
   MOBILE_CLIENT_ATTRIBUTE: typeof import("../net/protocol/ClientProtocol").MOBILE_CLIENT_ATTRIBUTE;
   XPDROPS_ENABLED_ATTRIBUTE: typeof import("../net/protocol/ClientProtocol").XPDROPS_ENABLED_ATTRIBUTE;
   encodeGameframeBootstrap: typeof import("../net/protocol/ClientProtocol").encodeGameframeBootstrap;

@@ -43,7 +43,9 @@ const BOARD_GROUP = 700;
 const BOARD_BUTTONS = 1;
 const BOARD_FILTERS = 5;
 const BOARD_LIST = 20;
-const BOARD_MY_CLAN = 0;
+const BOARD_MY_CLAN = 0; // "List your clan" (rsprox 2778 tick 67)
+const BOARD_APPLICANTS = 1; // by the buttons' order on screen; only the first is captured
+const BOARD_REFRESH = 2;
 const BOARD_ROWS = 45;
 const BOARD_ROW_SCRIPT = 4357;
 const LAST_BOARD_ENTRY = 89;
@@ -326,6 +328,12 @@ function clickBoard(event) {
       player.getPacketSender().sendTypedMessage(115, "You should start inviting applications first. Remember to turn this option off when you've finished!");
       openApplicants(player, clan);
     } else openApplicants(player, clan);
+  } else if (childId === BOARD_BUTTONS && action === BOARD_REFRESH) {
+    openBoard(player);
+  } else if (childId === BOARD_BUTTONS && action === BOARD_APPLICANTS) {
+    const clan = Core.clanOf(player);
+    if (clan) openApplicants(player, clan);
+    else player.sendMessage("You are not in a clan.");
   } else if (childId === BOARD_LIST) {
     const clan = boardClans()[Math.floor(action / 2)];
     if (clan) {

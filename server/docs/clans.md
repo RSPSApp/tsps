@@ -2,7 +2,7 @@
 
 The OSRS Clan system (`//` chat, the Your Clan tab), which is separate from the old Clan Chat, now
 called the Chat-channel ([social-chat-and-following.md](social-chat-and-following.md)). This page is
-the plan and the facts it relies on. Phases 1 to 3 are built; the rest is not.
+the plan and the facts it relies on. Phases 1 to 4 are built, and part of phase 5.
 
 ## Evidence
 
@@ -109,14 +109,46 @@ in a clan channel." for `//` outside a channel, which has no capture.
 Not verified: dragging titles and clicking popup rows in the client. Those were driven through the
 packets, because the browser pane was hidden.
 
-### 4. Guest clans
+### 4. Guest clans (built)
 
-- `///` and `/g`, chat type 44 and 46, interface 702, `find_listened`, the guest rules (Guests may
-  listen, minimum levels), Find.
-- Applicants (699) and the recruitment board (700), captured in 2778: applying is a guest's action.
+- Guest Clan (702): Find with the prompt and failure line from rsprox 76 (tick 7504-7508), fetching
+  then loaded (tick 7587), Chat and Leave, Info, Discard.
+- `///` and `/g`: `chat_sendclan` with chat type 4, delivered as type 44. Guests hear the channel;
+  members see them at rank -1 and can kick and ban them.
+- Permissions: Guests may listen, and guest minimum combat, total and QP. **QP and Iron status are
+  stored and shown but not enforced.**
+- Applying from Info, with Withdraw. Applicants (699) as rsprox 2778 shows: inviting flips
+  `clan_i_am_recruiter` (varp 3019 bit 29), rows, stats line, accept and decline, offline accept.
+- The recruitment board (700, from loc 41730/41728 "View"): clans inviting, with Size and Created days.
 
-### 5. Around the clan
+Ours, with no capture: the guest channel's refusals and intro, declining and its message, minimum
+combat and total prompts, and button subs 2, 5 and 6 on 699 and 1 and 2 on 700. The board's interest
+filters do nothing yet because clans have no interests.
 
-- Broadcasts through `MessageClanChannelSystem` with their Notifications thresholds.
-- Clan Hall, coffer, events, interests (691), the outfit (694), cloak and vexillum colours.
-- Gateway: map the three packets and type 41 and 43 in `gateway/`, whose `COVERAGE.md` drops clans.
+### 5. Around the clan (part built)
+
+Built:
+
+- Broadcasts, in the words of rsprox's `MessageClanChannelSystem` lines, sent as type 43 to channel
+  members at each Notifications rank: level-ups (with the 10s, 5s and 1s thresholds), quests, combat
+  tasks, new collection log items, drops over the value threshold, joining and leaving. PK wording
+  is ours; the recordings' PK line names loot we don't have.
+- Clan Hall: the hub portal (41724) into the cache's own map at 1728-1791, 5440-5503, as a private
+  area per clan with Enter, Enter-member, Enter-guest and the rank check, and the exit (41617). Arrival
+  tiles are ours.
+- Coffer (41626, screen 696): deposit by prompt, withdraw by buttons, rank-checked, shared by
+  `%varclan_3` through a new `CLAN_VAR` packet. **The side panel (697) isn't used**: nothing here
+  restores the inventory tab when the modal closes.
+- Every Notifications and guest value row in Permissions saves and displays.
+
+Not built, with no capture to go on:
+
+- Events (703, 704), interests (691), outfit (694, and cloak and vexillum colours), Hall settings
+  (692). Their Settings buttons say so.
+- Clan Hall contents: party chest and balloons, piano, decorations.
+- Broadcasts for personal bests, post-99 XP, diaries, hardcore deaths and loot keys: tsps has no event
+  for them, or only a query. Multi-threshold rows for those save but do nothing.
+- Titles for ranks 96-104 and 124.
+- **Gateway.** New ids are registered so frames are skipped, but clans don't reach the official client.
+  Mapping them needs rsprot's clan messages and a JDK 17 toolchain, which this machine doesn't have,
+  so the Kotlin hasn't been compiled either.

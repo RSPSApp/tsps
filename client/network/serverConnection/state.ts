@@ -116,7 +116,7 @@ export const state = {
     lastSkillsState: undefined as InternalSkillsState | undefined,
     lastGroundItems: undefined as GroundItemsSnapshotPayload | undefined,
     lastFriendsChat: undefined as FriendsChatSnapshot | undefined,
-    clans: { settings: new Map(), channels: new Map() } as ClanState,
+    clans: { settings: new Map(), channels: new Map(), vars: new Map() } as ClanState,
     lastRunEnergyState: undefined as RunEnergyState | undefined,
     lastSpellResult: undefined as SpellResultPayload | undefined,
     lastServerPath: undefined as { x: number; y: number }[] | undefined,

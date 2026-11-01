@@ -20,10 +20,13 @@ number.
 
 `pluginConfig` `"NpcDrops:bossRareMultiplier"` makes bosses' rare drops that many times likelier.
 `1` (or leaving it out) is the OSRS rate; at `2` a 1/512 unique is 1/256, at `3` 1/171, at `5`
-1/102. It covers every drop rarer than 1/100 that a boss rolls on its own: uniques, pets, jars,
-visages and clue scrolls. Common loot keeps its rate. Bosses are the NPCs the game cache marks
-as bosses. Raid chests (Chambers of Xeric, Theatre of Blood, Tombs of Amascut) and other
-reward chests are not affected.
+1/102. It covers every unique or pre-roll row a boss drops that is rarer than 1/10, and every
+other drop rarer than 1/100: pets, jars, visages and clue scrolls. Common loot keeps its rate:
+on the weighted main roll the boosted rows are rolled separately instead of taking chance from
+the rest of the table, so a very high multiplier can drop a rare alongside the main roll. Bosses
+are the NPCs the game cache marks as bosses, plus the few `npc-drop-overrides.json` lists
+because the cache omits their marker. Raid chests (Chambers of Xeric, Theatre of Blood, Tombs of
+Amascut) and other reward chests are not affected.
 
 ```json
 {

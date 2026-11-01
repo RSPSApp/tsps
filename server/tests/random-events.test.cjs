@@ -1371,7 +1371,7 @@ test('Evil Bob island fishing, uncooking and feeding pays 650 Fishing XP', t => 
 function apiSkillMagic(h) { return h.api.core.Skill.MAGIC; }
 function apiSkillFishing(h) { return h.api.core.Skill.FISHING; }
 
-test('Prison Pete pays out after three correct balloon keys', t => {
+test('Prison Pete takes each key on Talk-to and pays out after three correct ones', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p, 17);
   h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
   choose(h, p, 0);
@@ -1379,21 +1379,46 @@ test('Prison Pete pays out after three correct balloon keys', t => {
   for (let round = 0; round < 3; round++) {
     assert.equal(fireRaw(h, 'objectRaw', { player: p,
       object: { getId: () => 24296, getLocation: () => new Location(2094, 4464, 0) } }), true);
+    const needed = session.data.required;
+    // The cache's prisonpete interface puts the animal model on 273:4 (273:3 is its layer).
+    assert.equal(p.models.get((273 << 16) | 4), needed.model, 'the lever shows the required shape');
     h.ticks(6);
     assert.equal(p.interfaceId, 273, 'lever preview remains visible for six ticks');
     h.ticks(1);
     assert.equal(p.interfaceId, -1, 'session timer still closes the lever preview at seven ticks');
-    const needed = session.data.required;
     const balloon = session.data.balloons.find(entry => entry.shape === needed.shape);
     assert.equal(fireNpcClick(h, balloon.id, 1, { player: p, npc: balloon.npc, npcId: balloon.id }), true);
     assert.equal(session.data.keyCorrect, true);
     p.slots[0] = new Item(6966, 1);
-    assert.equal(fireRaw(h, 'itemOnNpc', { player: p, itemId: 6966, npcId: N.PRISON_PETE }), true);
+    // Live: Talk-to Pete while carrying the key, no item-on-NPC action (rsprox 4067, 555).
+    const promptsBefore = h.prompts.length;
+    h.hooks['Prison Pete']['Talk-to']({ player: p, npc: { getId: () => N.PRISON_PETE }, handled: false });
+    assert.equal(p.getInventory().containsNumber(6966), false, 'Pete takes the key');
+    assert.equal(session.data.required, null, 'the spent shape cannot be popped again before the lever');
+    assert.equal(h.prompts.length, promptsBefore, 'carrying a key talks Pete into taking it, not the intro options');
   }
   assert.equal(session.data.correct, 3);
-  h.hooks['Prison Pete']['Talk-to']({ player: p, npc: { getId: () => N.PRISON_PETE }, handled: false });
+  h.ticks(3);
   assert.notEqual(p.rewards.at(-1), 6966, 'the key was handed over, not kept');
   assert.ok(p.rewards.length >= 1);
+  assert.equal(Teleports.sessionOf(p), undefined);
+  assert.ok(p.location.equals(new Location(3222, 3222, 0)), 'the pair escape to the return tile');
+});
+
+test('leaving the prison removes the event key', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p, 17);
+  h.hooks['Evil Bob']['Talk-to']({ player: p, npc, handled: false });
+  choose(h, p, 0);
+  const session = Teleports.sessionOf(p);
+  assert.equal(fireRaw(h, 'objectRaw', { player: p,
+    object: { getId: () => 24296, getLocation: () => new Location(2094, 4464, 0) } }), true);
+  const needed = session.data.required;
+  const balloon = session.data.balloons.find(entry => entry.shape === needed.shape);
+  fireNpcClick(h, balloon.id, 1, { player: p, npc: balloon.npc, npcId: balloon.id });
+  p.slots[0] = new Item(6966, 1);
+  assert.equal(p.getInventory().containsNumber(6966), true);
+  Teleports.finish(session, { message: 'You leave the prison.' });
+  assert.equal(p.getInventory().containsNumber(6966), false, 'the temporary key did not survive the event');
   assert.equal(Teleports.sessionOf(p), undefined);
 });
 

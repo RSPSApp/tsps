@@ -2690,6 +2690,51 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         );
                         return capturedMask.contains(localX, localY);
                     };
+                    const walkToMinimapPoint = (clickX?: number, clickY?: number) => {
+                        if (clickX === undefined || clickY === undefined) return;
+                        if (!containsMinimapPoint(clickX, clickY)) return;
+
+                        // Calculate click offset from minimap center (in screen pixels)
+                        const offsetX = clickX - capturedMinimapCenterX;
+                        const offsetY = clickY - capturedMinimapCenterY;
+
+                        // Inverse of the flag position calculation:
+                        // Flag uses θ = -cameraYaw / 326.11
+                        // Inverse rotation matrix: [cos(θ), sin(θ); -sin(θ), cos(θ)]
+                        const theta = -capturedCameraYaw / 326.11;
+                        const cos = Math.cos(theta);
+                        const sin = Math.sin(theta);
+
+                        // Inverse rotation to get world-relative pixel offset
+                        const relPixelX = offsetX * cos + offsetY * sin;
+                        const relPixelY = -offsetX * sin + offsetY * cos;
+
+                        // Convert from pixels to tiles (4 pixels per tile, scaled by zoom)
+                        const relTileX = relPixelX / (4 * capturedAdjustedZoom);
+                        const relTileY = relPixelY / (4 * capturedAdjustedZoom);
+
+                        // Calculate target world tile
+                        // Flag uses: relTileY = worldY - destWorldY, so destWorldY = worldY - relTileY
+                        const targetTileX = Math.round(capturedWorldX + relTileX);
+                        const targetTileY = Math.round(capturedWorldY - relTileY);
+
+                        // Convert to local coordinates for menuAction
+                        const localX = (targetTileX - (ClientState.baseX | 0)) | 0;
+                        const localY = (targetTileY - (ClientState.baseY | 0)) | 0;
+
+                        // Send walk command via menuAction
+                        menuAction(
+                            localX,
+                            localY,
+                            MenuOpcode.WalkHere,
+                            0, // identifier
+                            -1, // itemId
+                            "Walk here",
+                            "",
+                            clickX | 0,
+                            clickY | 0,
+                        );
+                    };
 
                     clicks.register({
                         id: `minimap:click-to-walk`,
@@ -2704,51 +2749,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                             if (osrsClient.menuOpen || uiMenu?.open) return;
                             osrsClient.minimapZoom = 4;
                         },
-                        onDown: (clickX?: number, clickY?: number) => {
-                            if (clickX === undefined || clickY === undefined) return;
-                            if (!containsMinimapPoint(clickX, clickY)) return;
-
-                            // Calculate click offset from minimap center (in screen pixels)
-                            const offsetX = clickX - capturedMinimapCenterX;
-                            const offsetY = clickY - capturedMinimapCenterY;
-
-                            // Inverse of the flag position calculation:
-                            // Flag uses θ = -cameraYaw / 326.11
-                            // Inverse rotation matrix: [cos(θ), sin(θ); -sin(θ), cos(θ)]
-                            const theta = -capturedCameraYaw / 326.11;
-                            const cos = Math.cos(theta);
-                            const sin = Math.sin(theta);
-
-                            // Inverse rotation to get world-relative pixel offset
-                            const relPixelX = offsetX * cos + offsetY * sin;
-                            const relPixelY = -offsetX * sin + offsetY * cos;
-
-                            // Convert from pixels to tiles (4 pixels per tile, scaled by zoom)
-                            const relTileX = relPixelX / (4 * capturedAdjustedZoom);
-                            const relTileY = relPixelY / (4 * capturedAdjustedZoom);
-
-                            // Calculate target world tile
-                            // Flag uses: relTileY = worldY - destWorldY, so destWorldY = worldY - relTileY
-                            const targetTileX = Math.round(capturedWorldX + relTileX);
-                            const targetTileY = Math.round(capturedWorldY - relTileY);
-
-                            // Convert to local coordinates for menuAction
-                            const localX = (targetTileX - (ClientState.baseX | 0)) | 0;
-                            const localY = (targetTileY - (ClientState.baseY | 0)) | 0;
-
-                            // Send walk command via menuAction
-                            menuAction(
-                                localX,
-                                localY,
-                                MenuOpcode.WalkHere,
-                                0, // identifier
-                                -1, // itemId
-                                "Walk here",
-                                "",
-                                clickX | 0,
-                                clickY | 0,
-                            );
-                        },
+                        onDown: walkToMinimapPoint,
+                        // A widget over the minimap can consume the press first (#1797).
+                        onReleaseWithoutPress: walkToMinimapPoint,
                     });
                 } // end if (playerState)
             }

@@ -4866,8 +4866,7 @@ export class OsrsClient {
                 const displaySlot = EquipToDisplaySlot[equipSlot];
                 if (displaySlot !== undefined) {
                     const qtyRaw = equipQty?.[equipSlot] ?? 0;
-                    const quantity =
-                        equipSlot === EquipmentSlot.AMMO ? Math.max(1, Number(qtyRaw) | 0) : 1;
+                    const quantity = Math.max(1, Number(qtyRaw) | 0);
                     slots.push({ slot: displaySlot, itemId, quantity });
                 }
             }

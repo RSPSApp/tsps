@@ -2603,6 +2603,7 @@ export function encodePlayerAppearance(
   int(appearance.equipQty?.[13] ?? 0);
   int(appearance.equip[13] ?? -1);
   int(appearance.equip[12] ?? -1);
+  int(appearance.equipQty?.[3] ?? 0);
   return Buffer.from(bytes);
 }
 

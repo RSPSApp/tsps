@@ -680,6 +680,7 @@ export class PlayerSyncManager {
                     })(),
                     equipQty: (() => {
                         const equipQty = new Array<number>(14).fill(0);
+                        equipQty[3] = Math.max(0, decoded.weaponQuantity | 0);
                         equipQty[10] = Math.max(0, decoded.ammoQuantity | 0);
                         return equipQty;
                     })(),
